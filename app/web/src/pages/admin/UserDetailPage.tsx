@@ -167,7 +167,7 @@ export default function AdminUserDetailPage() {
         </div>
 
         <AdminCard title="Companies" description={`${user.companies.length} membership${user.companies.length === 1 ? '' : 's'}`} bodyClassName="px-0 pb-0 pt-3">
-          <FlushTable rows={user.companies} columns={cols} rowKey={(c) => c.id} initialSort={{ key: 'name', dir: 'asc' }} empty="Not in any company. Use Actions → Add to a company." />
+          <FlushTable rows={user.companies} columns={cols} rowKey={(c) => c.id} initialSort={{ key: 'name', dir: 'asc' }} empty="Not in any company. Use Actions > Add to a company." />
         </AdminCard>
 
         <AdminCard title="Recent runs they started" description={PERIOD_LABELS[period]} bodyClassName="px-0 pb-0 pt-3">
@@ -182,7 +182,7 @@ export default function AdminUserDetailPage() {
           remove.reset();
         }}
         title={removing ? `Remove ${user.name} from ${removing.name}?` : ''}
-        description="They lose access to this company’s websites, runs and reports. Their account stays."
+        description="They lose access to this company's websites, runs and reports. Their account stays."
         confirmLabel="Remove"
         danger
         pending={remove.isPending}

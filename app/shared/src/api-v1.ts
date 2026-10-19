@@ -3,8 +3,8 @@ import type { RunCredits } from './api';
 
 /**
  * B5-11 / area 12 G-5 (v4.18): the read API over a company's own data, and B3-7 "is this page publishable?" as an endpoint.
- * Design note: `app/API.md` → "Read API v1". This file holds what the server and the web app share — the key format, the request
- * schemas, the answer types and the pure rules (pagination cursors, the finding comparison) — so they are unit-tested here once.
+ * Design note: `app/API.md` -> "Read API v1". This file holds what the server and the web app share, the key format, the request
+ * schemas, the answer types and the pure rules (pagination cursors, the finding comparison), so they are unit-tested here once.
  */
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -14,7 +14,7 @@ import type { RunCredits } from './api';
 export const API_KEY = {
   /** every key starts with this, so a leaked key is recognisable in a log or a scanner */
   prefix: 'asc_',
-  /** 256 bits, base64url → 43 characters after the prefix */
+  /** 256 bits, base64url -> 43 characters after the prefix */
   tokenBytes: 32,
   /** the part of the key shown in the list after creation (`asc_` + 8 characters): enough to tell keys apart, useless to an attacker */
   displayLength: 12,
@@ -26,7 +26,7 @@ export const API_KEY = {
   perMinute: 120,
   /** publish checks per 10 minutes per key */
   publishChecksPer10Min: 30,
-  /** G4: run starts a minute per key — the same ceiling as the app's own "start a run" route */
+  /** G4: run starts a minute per key, the same ceiling as the app's own "start a run" route */
   runsPerMinute: 30,
 } as const;
 
@@ -55,11 +55,11 @@ export const IDEMPOTENCY = { header: 'idempotency-key', replayHeader: 'idempoten
 export const idempotencyKeyOk = (v: unknown): v is string => typeof v === 'string' && IDEMPOTENCY.re.test(v);
 
 const KEY_RE = /^asc_[A-Za-z0-9_-]{43}$/;
-/** true for something shaped like one of our keys — checked before any lookup, so junk never reaches the database */
+/** true for something shaped like one of our keys, checked before any lookup, so junk never reaches the database */
 export const isApiKeyToken = (v: unknown): v is string => typeof v === 'string' && KEY_RE.test(v);
 export const keyDisplayPrefix = (token: string): string => token.slice(0, API_KEY.displayLength);
 
-/** `Authorization: Bearer asc_…` → the key; anything else (no header, another scheme, a malformed key) → null */
+/** `Authorization: Bearer asc_...` -> the key; anything else (no header, another scheme, a malformed key) -> null */
 export function bearerKey(header: unknown): string | null {
   if (typeof header !== 'string') return null;
   const m = /^Bearer\s+(\S+)\s*$/i.exec(header);
@@ -221,7 +221,7 @@ export interface RunV1 {
   createdAt: string;
   completedAt: string | null;
   reportCount: number;
-  /** credits (app/docs/CREDITS.md): quoted, charged, state, capped — as the app's own Run (the provider cost is never sent) */
+  /** credits (app/docs/CREDITS.md): quoted, charged, state, capped, as the app's own Run (the provider cost is never sent) */
   credits: RunCredits;
 }
 
@@ -243,7 +243,7 @@ export interface ReportV1 {
   summary: Record<string, string | number | boolean | null>;
   receivedAt: string;
   scheduled: boolean;
-  /** the delivery rule: false for a draft that failed its quality check, a refused plan, evidence the engine could not read, … */
+  /** the delivery rule: false for a draft that failed its quality check, a refused plan, evidence the engine could not read, ... */
   ready: { ok: boolean; code: string | null; reason: string | null };
   files: ReportFileV1[];
 }
@@ -312,7 +312,7 @@ const SEV: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, i
 /**
  * The findings of one audit for the API. `prev` are the rows of the previous audit **of the same report type** (or none);
  * `oneReading(f)` is the dashboards' R74 rule (a finding resting on one outside reading that is not seen again is "no longer seen",
- * never "fixed"). Order: the audit's own impact order where it exists, else severity then pages — the same order the app shows.
+ * never "fixed"). Order: the audit's own impact order where it exists, else severity then pages, the same order the app shows.
  */
 export function findingsV1(cur: readonly FindingRowIn[], prev: readonly FindingRowIn[] | null, oneReading: (f: FindingRowIn) => boolean): FindingV1[] {
   const prevBy = new Map((prev ?? []).map((f) => [str(f.finding_key), f]));

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// L4 (FIX_PLAN): mailboxes connected with OAuth. No live flow is ever run here — the HTTP layer is stubbed, so this checks the token
+// L4 (FIX_PLAN): mailboxes connected with OAuth. No live flow is ever run here, the HTTP layer is stubbed, so this checks the token
 // refresh, the revoke, the provider branch (Gmail messages.send vs Microsoft Graph sendMail) and what is offered when the installation
 // has no OAuth app of its own.
 const env = vi.hoisted(() => {
@@ -84,7 +84,7 @@ describe('what this installation offers (L4)', () => {
     const m = await import('../src/services/mailOauth');
     const ms = m.mailProviderInfo().find((p) => p.id === 'ms_graph')!;
     expect(ms.enabled).toBe(false);
-    // D-12 (re-rating 2026-10-17): customer text names no setting or file ("MS_OAUTH_CLIENT_ID … in app/.env" was shown on the tab)
+    // D-12 (re-rating 2026-10-17): customer text names no setting or file ("MS_OAUTH_CLIENT_ID ... in app/.env" was shown on the tab)
     expect(ms.disabledWhy).toMatch(/Microsoft 365 sign-in is not set up on this installation/);
     expect(ms.disabledWhy).not.toMatch(/MS_OAUTH|CLIENT_ID|SECRET|\.env/);
     expect(ms.disabledWhy).toMatch(/app password/);

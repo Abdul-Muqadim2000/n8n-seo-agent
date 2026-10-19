@@ -73,7 +73,7 @@ export const router = createBrowserRouter([
     // shown while the first lazy page module loads
     hydrateFallbackElement: <PageLoader fullPage />,
     children: [
-      // G15: a report shared through an expiring link — no account, no layout of the app, read-only
+      // G15: a report shared through an expiring link, no account, no layout of the app, read-only
       { path: '/share/:token', lazy: page(() => import('@/pages/share/SharedReportPage')) },
       {
         element: <PublicOnly />,

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import middleware, { csp } from '../../middleware';
 
-// deploy/gcp — the Vercel Routing Middleware in front of the static build: the page's CSP names the API origin (direct uploads), and
+// deploy/gcp, the Vercel Routing Middleware in front of the static build: the page's CSP names the API origin (direct uploads), and
 // a proxied request carries the shared secret the API host's Caddy checks before it believes X-Real-IP / X-Forwarded-Host.
 
 afterEach(() => vi.unstubAllEnvs());

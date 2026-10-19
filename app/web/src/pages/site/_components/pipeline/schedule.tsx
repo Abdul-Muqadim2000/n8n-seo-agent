@@ -96,11 +96,11 @@ export function RecentActivity({ data }: { data: PipelineData }) {
               </a>
               <span className="text-ink-3">
                 {' '}
-                (“{d.keyword}”{d.ladderId ? (
+                ("{d.keyword}"{d.ladderId ? (
                   <>
                     ,{' '}
                     <Link to={paths.ladder(org.id, site.id, d.ladderId)} className="relative z-[1] hover:text-accent-text transition-colors duration-150 ease-brand">
-                      {d.head ? `ladder “${d.head}”` : 'its ladder'}
+                      {d.head ? `ladder "${d.head}"` : 'its ladder'}
                     </Link>
                   </>
                 ) : null}

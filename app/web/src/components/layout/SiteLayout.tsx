@@ -12,7 +12,7 @@ import { useProviders } from '@/lib/queries';
 import { verifyLockedDescription } from '@/lib/verify-copy';
 import { isClientRole } from '@seo/shared';
 
-/** /o/:orgId/sites/:siteId/* — the site header; data pages wait for domain verification (their API answers 403 before). */
+/** /o/:orgId/sites/:siteId/*: the site header; data pages wait for domain verification (their API answers 403 before). */
 export function SiteLayout() {
   const { siteId = '' } = useParams();
   const { org, sites, can, role } = useOrgCtx();

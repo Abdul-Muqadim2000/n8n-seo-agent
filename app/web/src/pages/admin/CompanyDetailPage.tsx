@@ -95,18 +95,18 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
         </Num>
       ),
     },
-    { key: 'paid', header: 'Paid', align: 'right', sortValue: (e) => e.paidUsd, cell: (e) => (e.paidUsd ? <Money value={e.paidUsd} /> : <Num className="text-ink-3">–</Num>) },
+    { key: 'paid', header: 'Paid', align: 'right', sortValue: (e) => e.paidUsd, cell: (e) => (e.paidUsd ? <Money value={e.paidUsd} /> : <Num className="text-ink-3">-</Num>) },
     {
       key: 'note',
       header: 'Note',
       cell: (e) => (
         <span className="block min-w-[160px] max-w-[320px] text-[13px] leading-snug">
-          {e.note || (e.ref?.mode ? modeLabel(e.ref.mode) : '–')}
+          {e.note || (e.ref?.mode ? modeLabel(e.ref.mode) : '-')}
           {e.ref?.domain && <span className="block font-mono text-[11px] text-ink-3">{e.ref.domain}</span>}
         </span>
       ),
     },
-    { key: 'actor', header: 'By', hideOnMobile: true, cell: (e) => <span className="text-[13px] text-ink-2">{e.actor ?? (e.kind === 'usage' ? 'run' : '–')}</span> },
+    { key: 'actor', header: 'By', hideOnMobile: true, cell: (e) => <span className="text-[13px] text-ink-2">{e.actor ?? (e.kind === 'usage' ? 'run' : '-')}</span> },
     { key: 'after', header: 'Balance after', align: 'right', sortValue: (e) => e.balanceAfter, cell: (e) => <Num>{units === 'usd' ? money(e.balanceAfter * cvNow, { digits: 2 }) : credits(e.balanceAfter)}</Num> },
   ];
 
@@ -120,7 +120,7 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
   const siteCols: Column<AdminSiteRow>[] = [
     { key: 'domain', header: 'Website', sortValue: (s) => s.domain, cell: (s) => <span className="font-mono text-[13px]">{s.domain}</span> },
     { key: 'verified', header: 'Verified', cell: (s) => (s.verified ? <StatusBadge tone="good">Verified</StatusBadge> : <StatusBadge tone="warning">Not verified</StatusBadge>) },
-    { key: 'tracking', header: 'Tracking', hideOnMobile: true, cell: (s) => <span className="text-[13px] text-ink-2">{s.trackingStatus || '–'}</span> },
+    { key: 'tracking', header: 'Tracking', hideOnMobile: true, cell: (s) => <span className="text-[13px] text-ink-2">{s.trackingStatus || '-'}</span> },
     { key: 'cost', header: 'Cost', align: 'right', sortValue: (s) => s.cost.totalUsd, cell: (s) => <CostSplitCell cost={s.cost} /> },
     { key: 'since', header: 'Added', hideOnMobile: true, sortValue: (s) => s.createdAt, cell: (s) => <Num className="text-ink-2">{fmtDate(s.createdAt)}</Num> },
   ];
@@ -231,8 +231,8 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
             <p className="text-sm font-medium text-ink">Enforce credits</p>
             <p className="mt-0.5 text-[13px] leading-snug text-ink-3">
               {c.credits.enforced
-                ? 'On: an analysis is refused when the balance cannot cover it, and the websites’ schedules pause when credits run out (they resume when credits are added). The dollar budget does not apply.'
-                : 'Off: credits are counted for every run, but nothing is refused or paused for a low balance. The monthly dollar budget (provider cost) and the company’s own credit limits can still stop a run.'}
+                ? 'On: an analysis is refused when the balance cannot cover it, and the websites\' schedules pause when credits run out (they resume when credits are added). The dollar budget does not apply.'
+                : 'Off: credits are counted for every run, but nothing is refused or paused for a low balance. The monthly dollar budget (provider cost) and the company\'s own credit limits can still stop a run.'}
             </p>
           </div>
           <Switch checked={c.credits.enforced} onCheckedChange={() => setDlg({ type: 'enforce' })} label="Enforce credits" />
@@ -247,7 +247,7 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
           <AbsorbedCard c={c} />
         </div>
 
-        <DailyCostChart daily={c.daily} loading={loading} description={`${PERIOD_LABELS[period]}: this company’s cost by provider and the payments recorded.`} />
+        <DailyCostChart daily={c.daily} loading={loading} description={`${PERIOD_LABELS[period]}: this company's cost by provider and the payments recorded.`} />
 
         <div className="grid gap-4 xl:grid-cols-2">
           <AdminCard title="Cost by mode" description={PERIOD_LABELS[period]} bodyClassName="px-0 pb-0 pt-3">
@@ -350,7 +350,7 @@ function PlanCard({ c }: { c: AdminCompanyDetail }) {
           <p>No plan: the company runs on its welcome credits and the packs it buys.</p>
         )}
         <p>
-          A new plan’s first month is granted at once (once per calendar month); a changed amount applies from the next 1st. Unused plan credits{' '}
+          A new plan's first month is granted at once (once per calendar month); a changed amount applies from the next 1st. Unused plan credits{' '}
           {settings.data ? (settings.data.planRollover ? 'roll over one month, then expire.' : 'expire at the end of their month.') : 'follow the rollover setting.'}
         </p>
       </div>
@@ -404,7 +404,7 @@ function WaitingRequests({ c, onConfirm }: { c: AdminCompanyDetail; onConfirm: (
       hideOnMobile: true,
       cell: (r) => (
         <span className="block min-w-[140px] text-[13px] text-ink-2">
-          {r.requestedBy ?? '–'}
+          {r.requestedBy ?? '-'}
           {r.note && <span className="block text-xs text-ink-3">{r.note}</span>}
         </span>
       ),
@@ -587,7 +587,7 @@ function MembersCard({ c }: { c: AdminCompanyDetail }) {
           remove.reset();
         }}
         title={removing ? `Remove ${removing.name} from ${c.name}?` : ''}
-        description="They lose access to this company’s websites, runs and reports. Their account stays."
+        description="They lose access to this company's websites, runs and reports. Their account stays."
         confirmLabel="Remove"
         danger
         pending={remove.isPending}
@@ -636,7 +636,7 @@ function EditCompanyDialog({ c, onClose }: { c: AdminCompanyDetail; onClose: () 
       open
       onOpenChange={(o) => !o && onClose()}
       title={`Edit ${c.name}`}
-      description="The monthly budget caps what the company’s runs may cost us each calendar month; runs over it are refused."
+      description="The monthly budget caps what the company's runs may cost us each calendar month; runs over it are refused."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>

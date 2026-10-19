@@ -82,7 +82,7 @@ export const monitorSettingsSchema = z.object({
   aiPromptsMax: z.number().int().min(3).max(AI_PROMPTS_MAX).default(AI_PROMPTS_DEFAULT),
   /** v4.9: the daily AI Pulse (ChatGPT, Gemini and Google AI Mode on the whole panel, Tuesday to Sunday) */
   aiPulse: z.boolean().default(true),
-  /** G6 (2026-10-18): the buyer roles the panel is written for (e.g. CFO, IT manager) — empty: the writer picks */
+  /** G6 (2026-10-18): the buyer roles the panel is written for (e.g. CFO, IT manager), empty: the writer picks */
   aiPersonas: stringList(6, 40),
   /** G6: extra markets the panel is asked in, as country-language (e.g. SA-en, AE-ar); the website's own market is always included */
   aiMarkets: z.array(z.string().trim().regex(/^[A-Za-z]{2}([-_ ][A-Za-z]{2,3})?$/, 'Use a country code and a language, e.g. SA-en')).max(5).default([]),
@@ -157,7 +157,7 @@ export const keywordInput = z
       .object({ id: z.string().trim().min(3).max(64), rung: z.number().int().min(0).max(10), head: z.string().trim().max(120).default(''), pageNo: z.number().int().min(0).max(100).default(0) })
       .optional(),
     /** v4.12: an AI answer target (AI visibility "Write the page"): the question AI answers without you, the searches it runs first, the pages it
-     *  cites and the businesses it names — the page is written to be the one it cites */
+     *  cites and the businesses it names, the page is written to be the one it cites */
     aiTarget: z
       .object({
         question: z.string().trim().min(8).max(300),
@@ -322,7 +322,7 @@ export const profileFields = z.object({
   serviceAreas: stringList(20, 80),
   mapUrl: optUrl,
   logoUrl: optUrl,
-  // G31: the house style every page follows — stored on the same profile row, applied in the writing prompts and checked before delivery
+  // G31: the house style every page follows, stored on the same profile row, applied in the writing prompts and checked before delivery
   style: z
     .object({
       brandForm: opt(160),
@@ -371,7 +371,7 @@ export const backlinksInput = z.object({
   siteId,
   country,
   competitors: domainList(3),
-  /** v4.10: free sources and our own link check only — no DataForSEO, no AI drafts, $0 */
+  /** v4.10: free sources and our own link check only, no DataForSEO, no AI drafts, $0 */
   freeOnly: z.boolean().default(false),
   emailCopy,
 });
@@ -423,7 +423,7 @@ export function parseRunInput(body: unknown): { success: true; data: RunInput } 
 }
 
 // ---------- site admin (Site Admin workflow) ----------
-/** B7-5: the engine refuses nested repetition (it can hang a run) and an invalid expression (v5/code/Admin_Action.js) — so does the form */
+/** B7-5: the engine refuses nested repetition (it can hang a run) and an invalid expression (v5/code/Admin_Action.js), so does the form */
 export const CONTENT_GROUPS_MAX = 12;
 export const contentGroupSchema = z.object({
   name: z.string().trim().min(1, 'Name the group').max(60),
@@ -491,7 +491,7 @@ export const adminActionSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('ai_prompts'),
-    // G6 (2026-10-18): the panel manager — add up to 500 (text, or a question with its buyer role / cluster / stage / market / pin: the CSV
+    // G6 (2026-10-18): the panel manager, add up to 500 (text, or a question with its buyer role / cluster / stage / market / pin: the CSV
     // import), edit in place (new wording becomes a new question; the engine switches the old one off), off / on, pin / unpin
     add: z.array(z.union([aiQuestionText, aiQuestionSchema])).max(AI_PROMPTS_MAX, `At most ${AI_PROMPTS_MAX} questions at once`).default([]),
     remove: z.array(z.string().trim().min(1).max(300)).max(AI_PROMPTS_MAX).default([]),
@@ -549,14 +549,14 @@ export const siteAutomationFormSchema = z.object({
 });
 export type SiteAutomationForm = z.output<typeof siteAutomationFormSchema>;
 
-/** PATCH …/automation: any of the fields. */
+/** PATCH .../automation: any of the fields. */
 export const siteAutomationSchema = siteAutomationFormSchema
   .partial()
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to change', path: ['defaultMode'] });
 export type SiteAutomationInput = z.output<typeof siteAutomationSchema>;
 
 // ---------- keyword check (PIPELINE_FEATURE_SPEC.md §5.2) ----------
-/** POST …/sites/:siteId/keywords/assess: one keyword (the SEO engine takes 2-100 characters); the country defaults to the website's. */
+/** POST .../sites/:siteId/keywords/assess: one keyword (the SEO engine takes 2-100 characters); the country defaults to the website's. */
 export const keywordAssessSchema = z.object({
   keyword: z
     .string({ message: 'Enter a keyword' })
@@ -580,7 +580,7 @@ export function fieldErrors(error: z.ZodError): Record<string, string> {
 
 // ---------- link uploads (v4.10: Search Console Links exports, other tools' backlink CSVs; link-import.ts) ----------
 export const linkImportSchema = z.object({
-  /** the CSV text (Search Console: Links → Export external links → Latest links / More sample links, or Top linking sites → Download CSV) */
+  /** the CSV text (Search Console: Links -> Export external links -> Latest links / More sample links, or Top linking sites -> Download CSV) */
   csv: z.string().min(10, 'The file is empty').max(15_000_000, 'The file is larger than 15 MB: export the "Latest links" table only'),
   fileName: z.string().trim().max(200).optional(),
 });

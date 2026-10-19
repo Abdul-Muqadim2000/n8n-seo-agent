@@ -5,7 +5,7 @@ import { digestOpen, digestProspect, isDigestEmail, parseDigest } from './digest
 // (two requests, labelled lines, an anonymised reply address per request), saved here so the parser is tested without a mailbox.
 const NOW = new Date('2026-10-13T08:00:00Z');
 const SAMPLE = [
-  'SOURCE OF SOURCES — Daily digest for Monday 13 October 2026',
+  'SOURCE OF SOURCES, Daily digest for Monday 13 October 2026',
   '',
   'Did someone forward this to you? Sign up for free.',
   '',
@@ -36,9 +36,9 @@ const SAMPLE = [
 
 describe('journalist digests (L5)', () => {
   it('recognises a digest by its sender, and by its subject when the sender is unusual', () => {
-    expect(isDigestEmail('noreply@email.sosresponse.com', 'Source of Sources — 13 Oct')).toBe(true);
+    expect(isDigestEmail('noreply@email.sosresponse.com', 'Source of Sources, 13 Oct')).toBe(true);
     expect(isDigestEmail('haro@helpareporter.com', 'HARO: Morning edition')).toBe(true);
-    expect(isDigestEmail('digest@mail.example.com', '[HARO] Daily queries — morning')).toBe(true);
+    expect(isDigestEmail('digest@mail.example.com', '[HARO] Daily queries, morning')).toBe(true);
     expect(isDigestEmail('editor@gulfbusiness.com', 'Re: your e-invoicing guide')).toBe(false);
   });
 
@@ -61,7 +61,7 @@ describe('journalist digests (L5)', () => {
   });
 
   it('nothing is invented from an e-mail that is not a digest', () => {
-    expect(parseDigest('Hello, thanks for your note — happy to add the link next week. Best, Layla', NOW)).toEqual([]);
+    expect(parseDigest('Hello, thanks for your note, happy to add the link next week. Best, Layla', NOW)).toEqual([]);
     expect(parseDigest('', NOW)).toEqual([]);
   });
 

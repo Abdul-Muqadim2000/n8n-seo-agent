@@ -1,6 +1,6 @@
 // One queue (benchmark pass of 2026-10-14, criterion REP 3.3). The rubric's 10 for this criterion is a **single** list across the
 // audit, tracking, AI and link modules ranked by **impact x confidence / effort**; a list per module is a 5. The app already builds
-// one list (`server/src/services/recommendations.ts` returns every module's items in one array) — what it lacked was the ranking.
+// one list (`server/src/services/recommendations.ts` returns every module's items in one array), what it lacked was the ranking.
 // It sorted by a hand-set `priority` and then by category, so a technical fix always sat above a search opportunity worth ten times
 // the clicks, and nothing told the reader why one line came before another.
 //
@@ -25,7 +25,7 @@ export type EffortBand = keyof typeof EFFORT_BANDS;
 export const CONFIDENCE = {
   /** read from the customer's own Search Console / GA4 / our own fetch of their page */
   measured: { value: 0.8, label: 'measured on your own data' },
-  /** from an index, a benchmark or a competitor set — right in shape, uncertain in size */
+  /** from an index, a benchmark or a competitor set, right in shape, uncertain in size */
   modelled: { value: 0.5, label: 'modelled from an index or a benchmark' },
   /** no quantity at all: a rule that holds generally, applied here */
   rule: { value: 0.25, label: 'a general rule, not measured here' },
@@ -50,7 +50,7 @@ export function impactFromClicks(clicksPerMonth: number): number {
  * Impact 0-10 from the weight the technical audit already gave a finding (`_impact.js` `IMP.rank`: severity x share of pages
  * affected x the Search Console clicks and impressions of those pages x where they sit, capped at the property's own totals).
  * That weight runs from about 0 to about 150, so it is brought onto the 0-10 scale on the same log shape as clicks: a weight of
- * 60 reads 10, 10 reads 5.8, 3 reads 3.4. The audit's order is never changed by this — only expressed in the queue's units.
+ * 60 reads 10, 10 reads 5.8, 3 reads 3.4. The audit's order is never changed by this, only expressed in the queue's units.
  */
 export const IMPACT_AUDIT_CEILING = 60;
 export function impactFromAuditWeight(weight: number): number {
@@ -67,7 +67,7 @@ export function impactFromPoints(points: number): number {
 
 /** What `recommend()` hands the queue for one item. */
 export interface ScoreInput {
-  /** 0-10, from one of the `impactFrom*` rules above. `null` means we have no quantity — then `reason` is required. */
+  /** 0-10, from one of the `impactFrom*` rules above. `null` means we have no quantity, then `reason` is required. */
   impact: number | null;
   /** where the quantity came from; decides how much the impact is trusted */
   confidence: ConfidenceClass;
@@ -76,7 +76,7 @@ export interface ScoreInput {
   basis: string;
   /** required when `impact` is null: why this one cannot be ranked yet */
   reason?: string;
-  /** this item gates the measurement of the others (no Search Console, no tracking) — it is not ranked against them, it comes first */
+  /** this item gates the measurement of the others (no Search Console, no tracking), it is not ranked against them, it comes first */
   blocking?: boolean;
 }
 
@@ -91,7 +91,7 @@ export type RecommendationScore =
       /** 1-5 */
       effort: number;
       effortLabel: string;
-      /** impact x confidence / effort, 1 dp — what the queue is ordered by */
+      /** impact x confidence / effort, 1 dp, what the queue is ordered by */
       value: number;
       basis: string;
       blocking?: boolean;
@@ -101,7 +101,7 @@ export type RecommendationScore =
 /** The sentence the UI puts under a ranked item, so the order is never a mystery. */
 export function scoreNote(s: RecommendationScore): string {
   if (!s.ranked) return `Not ranked: ${s.reason}.`;
-  return `Worth ${s.value} — impact ${s.impact}/10 (${s.basis}), ${Math.round(s.confidence * 100)}% confidence (${s.confidenceLabel}), ${s.effortLabel} of work.`;
+  return `Worth ${s.value}, impact ${s.impact}/10 (${s.basis}), ${Math.round(s.confidence * 100)}% confidence (${s.confidenceLabel}), ${s.effortLabel} of work.`;
 }
 
 export function scoreOf(input: ScoreInput): RecommendationScore {
@@ -181,7 +181,7 @@ export function ruleScoreFor(id: string): ScoreInput | undefined {
 export type QueueBand = 'blocking' | 'ranked' | 'unranked';
 
 export const BAND_NOTE: Record<QueueBand, string> = {
-  blocking: 'Do these first — until they are done, nothing below can be measured on your own data.',
+  blocking: 'Do these first: until they are done, nothing below can be measured on your own data.',
   ranked: 'Ranked by what it is worth: impact x confidence / effort.',
   unranked: 'Worth doing, but we have no measured quantity to rank them by yet.',
 };

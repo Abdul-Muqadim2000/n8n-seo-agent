@@ -4,8 +4,8 @@ import { rows, updateRows } from '../n8n/client';
 import type { AuditFindingRow } from '@seo/shared';
 
 // G11 + G25 (2026-10-13, system review FIX_PLAN.md): the daily key-page watch and Google's view of the same pages, as the technical page
-// shows them — and the "I fixed this" request that makes the engine re-check one finding within a day instead of at the next monthly audit.
-// The engine owns the data (n8n Data Table seo_page_watch, written by `SEO Agent — Page Watch` every morning and by the weekly URL
+// shows them, and the "I fixed this" request that makes the engine re-check one finding within a day instead of at the next monthly audit.
+// The engine owns the data (n8n Data Table seo_page_watch, written by `SEO Agent, Page Watch` every morning and by the weekly URL
 // Inspection rotation); this app reads it and writes the one field that asks for a re-check.
 
 const s = (v: unknown) => (v == null ? '' : String(v));
@@ -62,7 +62,7 @@ export function watchView(watchRows: PageWatchRow[], now = new Date()): PageWatc
   };
 }
 
-/** G25: Google's index view over the watched pages — the ones nobody asked about are counted apart, never as "fine". */
+/** G25: Google's index view over the watched pages, the ones nobody asked about are counted apart, never as "fine". */
 export function indexCoverage(watchRows: PageWatchRow[], quota = 2000): IndexCoverage | null {
   if (!watchRows.length) return null;
   const pages = watchRows.map(watchedPage);
@@ -90,7 +90,7 @@ export function nextWatchMessage(now = new Date()): string {
   const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), WATCH_HOUR_UTC, 45, 0));
   if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
   const hours = Math.max(1, Math.round((next.getTime() - now.getTime()) / 36e5));
-  return `The daily key-page watch re-checks this one in about ${hours} ${hours === 1 ? 'hour' : 'hours'} (every morning 05:45 UTC) and the result appears here — it does not wait for the next monthly audit.`;
+  return `The daily key-page watch re-checks this one in about ${hours} ${hours === 1 ? 'hour' : 'hours'} (every morning 05:45 UTC) and the result appears here. It does not wait for the next monthly audit.`;
 }
 
 /**
@@ -111,7 +111,7 @@ export async function requestRecheck(domain: string, auditId: string, findingKey
     max: 2,
     fresh: true,
   });
-  if (!found.length) throw notFound('That issue is not stored for this audit any more — run a new audit to get its current state.');
+  if (!found.length) throw notFound('That issue is not stored for this audit any more: run a new audit to get its current state.');
   const requestedAt = now.toISOString();
   await updateRows(
     'auditFindings',

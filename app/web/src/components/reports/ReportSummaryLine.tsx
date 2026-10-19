@@ -32,7 +32,7 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
     }
     case 'keyword_strategy':
       parts.push(
-        tx(s, 'startWith') && `start with “${tx(s, 'startWith')}”`,
+        tx(s, 'startWith') && `start with "${tx(s, 'startWith')}"`,
         nm(s, 'priority') != null && `${nm(s, 'priority')} priority keywords`,
         nm(s, 'quickWins') != null && `${nm(s, 'quickWins')} quick wins`,
         nm(s, 'researched') != null && `${compactNumber(nm(s, 'researched'))} researched`,
@@ -54,7 +54,7 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
       if (tx(s, 'refused')) badge = <StatusBadge tone={tx(s, 'refused') === 'duplicate' ? 'warning' : 'critical'}>{tx(s, 'refused') === 'duplicate' ? 'Not planned: ladder exists' : 'Not planned: not realistic'}</StatusBadge>;
       else if (tx(s, 'feasibility')) badge = /^(GO|AVOID)/i.test(tx(s, 'feasibility')) ? <VerdictBadge verdict={tx(s, 'feasibility')} /> : <StatusBadge tone="neutral">{tx(s, 'feasibility')}</StatusBadge>;
       parts.push(
-        tx(s, 'head') && `“${tx(s, 'head')}”`,
+        tx(s, 'head') && `"${tx(s, 'head')}"`,
         !tx(s, 'refused') && tx(s, 'plan'),
         !tx(s, 'refused') && nm(s, 'pages') != null && `${nm(s, 'pages')} pages`,
         nm(s, 'writeNow') ? `${nm(s, 'writeNow')} written now` : null,
@@ -62,7 +62,7 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
       break;
     case 'rank_tracker':
       parts.push(
-        tx(s, 'head') && `“${tx(s, 'head')}”`,
+        tx(s, 'head') && `"${tx(s, 'head')}"`,
         nm(s, 'positions') != null && `${nm(s, 'positions')} pages checked`,
         nm(s, 'gains') ? `${nm(s, 'gains')} up` : null,
         nm(s, 'drops') ? `${nm(s, 'drops')} down` : null,
@@ -72,7 +72,7 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
       break;
     case 'site_tracker':
       parts.push(
-        // R113: the list line follows the significance test too — a change the test calls not real is "within normal variation"
+        // R113: the list line follows the significance test too, a change the test calls not real is "within normal variation"
         nm(s, 'clicks') != null && `${compactNumber(nm(s, 'clicks'))} clicks${nm(s, 'clicksPct') != null ? ` (${signed(nm(s, 'clicksPct')!)}%)` : tx(s, 'clicksChange') ? ` (${tx(s, 'clicksChange')})` : ''}`,
         nm(s, 'impressions') != null && `${compactNumber(nm(s, 'impressions'))} impressions`,
         nm(s, 'sessions') != null && `${compactNumber(nm(s, 'sessions'))} organic sessions`,
@@ -94,7 +94,7 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
       );
       break;
     case 'ai_pulse':
-      parts.push(nm(s, 'alerts') ? `${nm(s, 'alerts')} change(s) in today’s AI answers` : 'no change', nm(s, 'mentionRate') != null && `named in ${pctText(nm(s, 'mentionRate'))} of ${nm(s, 'samples') ?? 0} answers`);
+      parts.push(nm(s, 'alerts') ? `${nm(s, 'alerts')} change(s) in today's AI answers` : 'no change', nm(s, 'mentionRate') != null && `named in ${pctText(nm(s, 'mentionRate'))} of ${nm(s, 'samples') ?? 0} answers`);
       break;
     case 'ai_growth':
       parts.push(s.dryRun === true ? 'dry run: nothing submitted' : nm(s, 'submitted') ? `${nm(s, 'submitted')} page(s) sent to Bing / IndexNow` : null, nm(s, 'avgScore') != null && `key pages ${nm(s, 'avgScore')}/100 AI-ready`, nm(s, 'earned') ? `${nm(s, 'earned')} page(s) AI cites without you` : null, nm(s, 'targets') ? `${nm(s, 'targets')} question(s) queued` : null);

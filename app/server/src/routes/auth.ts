@@ -121,7 +121,7 @@ export async function authRoutes(app: FastifyInstance) {
       await auditUser(req, user, { action: 'auth.login.failed', outcome: 'failure', details: { method: 'password', reason: 'wrong password' } });
       throw new HttpError(401, 'Wrong e-mail or password.', 'bad_credentials');
     }
-    // admin panel: a suspended account is told so — only after the right password, so the answer reveals nothing to a guesser
+    // admin panel: a suspended account is told so, only after the right password, so the answer reveals nothing to a guesser
     if (user.suspendedAt) {
       await auditUser(req, user, { action: 'auth.login.failed', outcome: 'failure', details: { method: 'password', reason: 'account suspended' } });
       throw suspendedError();

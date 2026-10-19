@@ -61,7 +61,7 @@ export default function AdminCompaniesPage() {
       header: units === 'usd' ? 'Credits left / used ($)' : 'Credits left / used',
       align: 'right',
       sortValue: (r) => r.credits.balance,
-      // credits (app/docs/CREDITS.md): the Credits / USD switch — left at list price, used at list price and what that work cost us
+      // credits (app/docs/CREDITS.md): the Credits / USD switch, left at list price, used at list price and what that work cost us
       cell: (r) =>
         units === 'usd' ? (
           <span className="inline-flex flex-col items-end leading-tight">
@@ -118,7 +118,7 @@ export default function AdminCompaniesPage() {
           initialSort={{ key: 'cost', dir: 'desc' }}
           pageSize={25}
           searchable
-          searchPlaceholder="Search companies…"
+          searchPlaceholder="Search companies..."
           searchText={(r) => `${r.name} ${r.slug} ${r.kind}`}
           onRowClick={(r) => navigate(withPeriod(adminPaths.company(r.id), period))}
           toolbar={

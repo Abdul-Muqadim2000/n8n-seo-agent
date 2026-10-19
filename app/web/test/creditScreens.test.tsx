@@ -14,7 +14,7 @@ import { ApiRequestError } from '@/lib/api';
 import { toCredits } from '@/lib/credits';
 import { PRICES } from '@/lib/prices';
 
-// Credits (app/docs/CREDITS.md): the forms, settings, onboarding and website pages price everything in credits — no provider cost in
+// Credits (app/docs/CREDITS.md): the forms, settings, onboarding and website pages price everything in credits, no provider cost in
 // dollars, no dollar "monthly budget". These tests hold the screens to it.
 
 const SRC = join(__dirname, '..', 'src');

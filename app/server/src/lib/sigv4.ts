@@ -2,7 +2,7 @@ import { createHash, createHmac } from 'node:crypto';
 
 /**
  * AWS Signature Version 4 for S3-compatible storage (G4 export: AWS S3, Google Cloud Storage's XML API with HMAC keys, Cloudflare R2).
- * https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html — written here instead of pulling in an SDK of a
+ * https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html, written here instead of pulling in an SDK of a
  * few megabytes for one PUT; checked in sigv4.test.ts against the signature AWS publishes for its "GET Object" example.
  */
 

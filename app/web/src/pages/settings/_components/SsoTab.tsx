@@ -19,8 +19,8 @@ import { ScimCard } from './ScimCard';
 import { SettingsCard } from './SettingsCard';
 
 /**
- * G1: single sign-on (Company settings → Single sign-on): the e-mail domains the company proves by DNS, its identity provider (OIDC
- * or SAML 2.0), a test sign-in, then switching it on and — for owners — making it required. SCIM provisioning sits below.
+ * G1: single sign-on (Company settings -> Single sign-on): the e-mail domains the company proves by DNS, its identity provider (OIDC
+ * or SAML 2.0), a test sign-in, then switching it on and, for owners, making it required. SCIM provisioning sits below.
  */
 export function SsoTab() {
   const { org, can } = useOrgCtx();
@@ -106,7 +106,7 @@ function DomainsCard({ data }: { data: SsoOverview }) {
             add.mutate(domain, { onSuccess: () => setDomain(''), onError: (er) => toast.error(errorMessage(er)) });
           }}
         >
-          <Field label="Add a domain" hint="The part after @ in your colleagues’ addresses." className="min-w-0 flex-1">
+          <Field label="Add a domain" hint="The part after @ in your colleagues' addresses." className="min-w-0 flex-1">
             {(p) => <Input {...p} value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="example.com" />}
           </Field>
           <Button type="submit" variant="secondary" loading={add.isPending} disabled={!domain.trim()}>
@@ -281,7 +281,7 @@ function SwitchesCard({ data }: { data: SsoOverview }) {
       <CardBody className="divide-y divide-line">
         <SwitchRow
           title="Single sign-on is on"
-          description={c.lastTest?.ok ? `People with an address on ${verified.join(', ') || 'a verified domain'} can use “Sign in with SSO”.` : 'Run a successful test sign-in first.'}
+          description={c.lastTest?.ok ? `People with an address on ${verified.join(', ') || 'a verified domain'} can use "Sign in with SSO".` : 'Run a successful test sign-in first.'}
           checked={c.enabled}
           disabled={!c.lastTest?.ok && !c.enabled}
           onCheckedChange={(v) => run({ enabled: v })}

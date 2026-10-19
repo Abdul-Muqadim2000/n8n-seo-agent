@@ -24,9 +24,9 @@ import { latestReport } from './runs';
 import { creditsOfUsd } from './admin/settings';
 
 // The "New keyword ladder" flow (PIPELINE_FEATURE_SPEC.md §5): the keyword check of one typed keyword (n8n's Keyword Check,
-// SEOagentAssess — paid: DataForSEO ~$0.02-0.05 a check) and the recommended keywords from the website's latest keyword strategy
-// (free). Order of a check: the stored answer of the last 7 days (free, no call) → the daily limit and the budget under the
-// company's lock (keywordCheckStore.reserveCheck) → n8n → the answer stored with its cost, or the error mapped for people.
+// SEOagentAssess, paid: DataForSEO ~$0.02-0.05 a check) and the recommended keywords from the website's latest keyword strategy
+// (free). Order of a check: the stored answer of the last 7 days (free, no call) -> the daily limit and the budget under the
+// company's lock (keywordCheckStore.reserveCheck) -> n8n -> the answer stored with its cost, or the error mapped for people.
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const num = (v: unknown): number | null => (v == null || v === '' || typeof v === 'boolean' || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -60,7 +60,7 @@ export function assessBody(o: { site: Pick<SiteRow, 'domain' | 'business'>; keyw
 export type AssessOutcome = { ok: true; raw: Record<string, unknown>; costUsd: number } | { ok: false; error: HttpError; reachedEngine: boolean };
 
 /**
- * n8n's answer for people. `reachedEngine`: the engine may have spent money on it (DataForSEO calls ran) — such a failure counts in
+ * n8n's answer for people. `reachedEngine`: the engine may have spent money on it (DataForSEO calls ran), such a failure counts in
  * the daily limit; a refusal before any paid call (validation, limit, workflow off, key refused, not reachable) does not.
  */
 export function interpretAssess(res: AssessCallResult): AssessOutcome {
@@ -107,7 +107,7 @@ async function siteServices(domain: string): Promise<string[]> {
   return rows.map((r) => str(r.service));
 }
 
-/** POST …/keywords/assess: the stored answer of the last 7 days (free), else one paid check. */
+/** POST .../keywords/assess: the stored answer of the last 7 days (free), else one paid check. */
 export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>, input: KeywordAssessInput): Promise<KeywordCheck> {
   const { org, site, user } = a;
   requireVerified(site);
@@ -136,7 +136,7 @@ export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>
   return toKeywordCheck(await finishCheck(id, outcome.raw, outcome.costUsd), false);
 }
 
-/** GET …/keywords/recommended: the keywords of the website's latest keyword strategy report, marked when a ladder covers them. */
+/** GET .../keywords/recommended: the keywords of the website's latest keyword strategy report, marked when a ladder covers them. */
 export async function recommendedKeywords(org: OrgRow, site: SiteRow, now = Date.now()): Promise<RecommendedKeywords> {
   const [latest, rows] = await Promise.all([latestReport(org.id, site.id, ['keyword_strategy']), siteRows<LadderRow>('ladders', site.domain, { max: 2000 }).catch(() => [] as LadderRow[])]);
   if (!latest) return { reportId: null, receivedAt: null, ageDays: null, stale: false, reach: null, country: null, keywords: [] };

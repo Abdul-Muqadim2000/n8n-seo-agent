@@ -85,7 +85,7 @@ export function SectionHeading({
   as?: 'h1' | 'h2' | 'h3';
   id?: string;
   className?: string;
-  /** md: section title (32–44px); lg: page title (40–60px) */
+  /** md: section title (32-44px); lg: page title (40-60px) */
   size?: 'md' | 'lg';
   /** extra content under the lead (buttons, links) */
   children?: ReactNode;

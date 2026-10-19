@@ -96,7 +96,7 @@ export function pipelineNotices(
     out.push({
       id: `active:${same.id}`,
       tone: 'warning',
-      title: keyed ? `“${input.keyword?.trim()}” is already being worked on` : `A ${MODES[mode].title.toLowerCase()} for this website is already running`,
+      title: keyed ? `"${input.keyword?.trim()}" is already being worked on` : `A ${MODES[mode].title.toLowerCase()} for this website is already running`,
       body: `It was started ${f.ago(same.createdAt)} and has not finished yet. Starting it again does the same work twice and is charged twice; its results appear on the run page when it is done.`,
       short: 'Already running',
       confirm: 'Start another one anyway',
@@ -128,12 +128,12 @@ export function pipelineNotices(
       if (autoId === 'ai_visibility')
         effect = sameUtcMonth(next, now)
           ? `This run is a full run (Claude, the brand question, new questions and the market-wide index included), so the automatic runs later in ${monthOf(now)} reuse those instead of paying for them again.`
-          : `The next automatic run is the month’s full run as usual.`;
+          : `The next automatic run is the month's full run as usual.`;
       else if (autoId === 'backlinks')
         effect = `${
           sameUtcMonth(next, now)
             ? `This run is the full monthly report, so the automatic runs later in ${monthOf(now)} only watch for lost and spammy links.`
-            : `The next automatic run is the month’s full report as usual.`
+            : `The next automatic run is the month's full report as usual.`
         } It also refreshes the link gap, which the automatic runs then leave for about 3 months.`;
       else if (autoId === 'audit')
         effect =
@@ -161,10 +161,10 @@ export function pipelineNotices(
       out.push({
         id: `written:${kw}`,
         tone: 'warning',
-        title: done.status === 'published' ? `You already have a page for “${done.keyword}”` : `A page for “${done.keyword}” was already written`,
+        title: done.status === 'published' ? `You already have a page for "${done.keyword}"` : `A page for "${done.keyword}" was already written`,
         body:
           (done.status === 'published'
-            ? `It is live at ${shortUrl(done.publishedUrl) || 'your website'}${done.startedAt ? ` (written ${f.day(done.startedAt)}${by})` : ''}. To improve it, put its address in “Existing page” and the run rewrites it instead.`
+            ? `It is live at ${shortUrl(done.publishedUrl) || 'your website'}${done.startedAt ? ` (written ${f.day(done.startedAt)}${by})` : ''}. To improve it, put its address in "Existing page" and the run rewrites it instead.`
             : `It was written ${done.startedAt ? `on ${f.day(done.startedAt)}` : 'earlier'}${by} and is waiting to be published: publish that one rather than writing it again.`) +
           ' A second page for the same search competes with the first in Google (keyword cannibalization), and usually neither ranks well.',
         short: 'Page already written',
@@ -187,7 +187,7 @@ export function pipelineNotices(
             `${monday ? `It is one of the posts the ${f.day(monday)} run writes` : `It waits in the queue${cadence?.state === 'on' ? ' for a coming Monday' : ' (weekly posts are off)'}`}: ${queued.why}. ` +
             `Writing it now takes it off the queue, so it is not written twice${monday ? ' and that run writes the next topic instead' : ''}.` +
             (queued.ladder
-              ? ` It is written as page ${queued.ladder.pageNo} of your keyword ladder “${queued.ladder.head}”: linked to the ladder’s other pages and tracked every Monday.`
+              ? ` It is written as page ${queued.ladder.pageNo} of your keyword ladder "${queued.ladder.head}": linked to the ladder's other pages and tracked every Monday.`
               : queued.existingPageUrl
                 ? ` The pipeline plans it as an update of ${shortUrl(queued.existingPageUrl)}, which already ranks for it.`
                 : ''),
@@ -198,8 +198,8 @@ export function pipelineNotices(
         out.push({
           id: `ladder:${kw}`,
           tone: 'info',
-          title: `This is a page of your keyword ladder “${planned.head}”`,
-          body: `It is written as that ladder page (page ${planned.pageNo}): linked to the ladder’s other pages, tracked every Monday, and taken off the pipeline’s queue so it is not written twice.`,
+          title: `This is a page of your keyword ladder "${planned.head}"`,
+          body: `It is written as that ladder page (page ${planned.pageNo}): linked to the ladder's other pages, tracked every Monday, and taken off the pipeline's queue so it is not written twice.`,
           short: 'Ladder page',
         });
     }
@@ -213,8 +213,8 @@ export function pipelineNotices(
       out.push({
         id: `ladder-exists:${kw}`,
         tone: 'warning',
-        title: `You already have a ladder for “${l.head}”`,
-        body: `It has ${l.pages} pages: ${l.published} published${l.planned.length ? `, ${l.planned.length} still to write` : ''}. A second ladder plans and writes the same pages again: double cost, and pages that compete with each other in Google. To write its next page now, use “Write now” on the Pipeline page.`,
+        title: `You already have a ladder for "${l.head}"`,
+        body: `It has ${l.pages} pages: ${l.published} published${l.planned.length ? `, ${l.planned.length} still to write` : ''}. A second ladder plans and writes the same pages again. That means double cost, and pages that compete with each other in Google. To write its next page now, use "Write now" on the Pipeline page.`,
         short: 'Ladder already exists',
         confirm: 'Plan a second ladder anyway',
         link: { label: 'Open the pipeline', page: 'pipeline' },
@@ -223,14 +223,14 @@ export function pipelineNotices(
       const near = hits.find((h) => h.head);
       const pages = hits
         .filter((h) => h.keywords.length)
-        .map((h) => `${h.keywords.slice(0, 3).map((k) => `“${k}”`).join(', ')} in “${h.ladder.head}”`)
+        .map((h) => `${h.keywords.slice(0, 3).map((k) => `"${k}"`).join(', ')} in "${h.ladder.head}"`)
         .join('; ');
       out.push({
         id: `ladder-overlap:${kw}`,
         tone: 'warning',
-        title: `“${input.keyword?.trim()}” overlaps your ladder “${(near ?? hits[0]).ladder.head}”`,
+        title: `"${input.keyword?.trim()}" overlaps your ladder "${(near ?? hits[0]).ladder.head}"`,
         body:
-          (near ? `It is almost the same search as the main keyword of your ladder “${near.ladder.head}”. ` : `It is almost the same search as pages your ladders already plan: ${pages}. `) +
+          (near ? `It is almost the same search as the main keyword of your ladder "${near.ladder.head}". ` : `It is almost the same search as pages your ladders already plan: ${pages}. `) +
           'A new ladder would write pages that compete with those in Google, and usually neither ranks well. Choose a different main keyword, or let the existing ladder cover it.',
         short: 'Overlaps a ladder',
         confirm: 'Plan this ladder anyway',
@@ -244,28 +244,28 @@ export function pipelineNotices(
         body:
           'The rank tracker checks every page of the ladder each Monday. ' +
           (data.queue.pagesPerWeek > 0
-            ? `After the pages written now, your weekly blog posts continue with the ladder’s next pages (${data.queue.pagesPerWeek} a week, ladder pages first).`
-            : 'Weekly blog posts are off, so its other pages wait on the Pipeline page until you click “Write now” or set posts per week.'),
+            ? `After the pages written now, your weekly blog posts continue with the ladder's next pages (${data.queue.pagesPerWeek} a week, ladder pages first).`
+            : 'Weekly blog posts are off, so its other pages wait on the Pipeline page until you click "Write now" or set posts per week.'),
         short: 'Joins the pipeline',
       });
   }
 
   // ---- R42 (2026-10-16, re-rating 2026-10-15): the pile-up limit, before a page is written on request ----
   // The weekly posts stop while `maxWaiting` pages wait to be published (the pile-up guard, Cadence_Plan.js). A run started here is the
-  // person's explicit request, so it is never blocked — but it is told: the live "ai consulting" ladder wrote a 4th waiting page at a
+  // person's explicit request, so it is never blocked, but it is told: the live "ai consulting" ladder wrote a 4th waiting page at a
   // limit of 3 and said nothing. A page counts once it is written and not live (a draft that failed its quality check included).
   const writesPage = (mode === 'ladder' && !!kw) || (mode === 'keyword' && !!kw && input.receiveContent !== false);
   const waiting = data.queue.waiting ?? [];
   const maxWaiting = Math.max(1, Number(data.automation?.maxWaiting) || 3);
   if (writesPage && !same && waiting.length >= maxWaiting) {
-    const names = waiting.slice(0, 4).map((w) => `“${w.keyword}”`).join(', ') + (waiting.length > 4 ? ` and ${waiting.length - 4} more` : '');
+    const names = waiting.slice(0, 4).map((w) => `"${w.keyword}"`).join(', ') + (waiting.length > 4 ? ` and ${waiting.length - 4} more` : '');
     out.push({
       id: `pileup:${kw}`,
       tone: 'warning',
       title: `${waiting.length} page${waiting.length === 1 ? ' is' : 's are'} already waiting to be published`,
       body:
         `${names} ${waiting.length === 1 ? 'is' : 'are'} written and not live yet, and your limit is ${maxWaiting}: the weekly posts are paused until fewer pages wait. ` +
-        `This run writes ${mode === 'ladder' ? 'the ladder’s first page' : 'one more page'} on top of them (page ${waiting.length + 1} waiting). Publish the waiting pages first, or start it anyway.`,
+        `This run writes ${mode === 'ladder' ? "the ladder's first page" : 'one more page'} on top of them (page ${waiting.length + 1} waiting). Publish the waiting pages first, or start it anyway.`,
       short: `${waiting.length} pages already waiting`,
       confirm: 'Write it anyway',
       link: { label: 'Open the pipeline', page: 'pipeline' },

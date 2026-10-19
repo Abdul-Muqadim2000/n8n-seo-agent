@@ -15,7 +15,7 @@ const asEngine = (c: ReturnType<typeof estimateAiPanelCost>) => ({
   half_width: c.halfWidth,
 });
 
-describe('estimateAiPanelCost — the engine\'s golden cases', () => {
+describe('estimateAiPanelCost, the engine\'s golden cases', () => {
   it('has the engine\'s prices, pulse engines, limits and fixed figures', () => {
     expect(AI_PANEL_PRICE).toEqual(AI_PANEL_COST_CASES.prices);
     expect([...AI_PANEL_PULSE_ENGINES]).toEqual([...AI_PANEL_COST_CASES.pulse_engines]);

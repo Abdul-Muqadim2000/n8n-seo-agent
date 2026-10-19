@@ -42,11 +42,11 @@ async function runningCheck(tx: Parameters<Parameters<typeof db.transaction>[0]>
 }
 
 /**
- * Whether a new check may start (pure): the same keyword is being checked → 409; the company's daily limit (every check started today,
- * UTC, failed ones included) → 429; then the monthly budget (402) and the platform's daily ceiling (429) with the check's estimate.
+ * Whether a new check may start (pure): the same keyword is being checked -> 409; the company's daily limit (every check started today,
+ * UTC, failed ones included) -> 429; then the monthly budget (402) and the platform's daily ceiling (429) with the check's estimate.
  */
 export function checkRefusal(o: { keyword: string; running: boolean; today: number; spent: number; budget: number; platformToday: number; platformDaily: number }): HttpError | null {
-  if (o.running) return new HttpError(409, `“${o.keyword}” is being checked right now. Its answer appears in a few seconds.`, 'check_running');
+  if (o.running) return new HttpError(409, `"${o.keyword}" is being checked right now. Its answer appears in a few seconds.`, 'check_running');
   if (o.today >= KEYWORD_CHECK.perCompanyPerDay)
     return new HttpError(
       429,

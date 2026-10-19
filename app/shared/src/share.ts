@@ -1,7 +1,7 @@
 // Expiring share links for one report (G15, system review 2026-10-11 FIX_PLAN; criterion REP 3.7 "Client sharing").
 // A report can be shown to somebody with no account through a link that expires. The rules are the same on both sides, so they live here:
 //   * the link carries a 256-bit random token; only its SHA-256 hash is stored, so a database copy does not hand out working links;
-//   * it is scoped to exactly ONE report — never a dashboard, never a list, never another report's files;
+//   * it is scoped to exactly ONE report, never a dashboard, never a list, never another report's files;
 //   * it is read-only and expires (14 days by default, the owner may pick 1-90), and it can be revoked at any time;
 //   * who created it, when, and when it was last opened are recorded.
 // Nothing here talks to a database: the server's shareLinks service and the app's Share control both use these rules.
@@ -58,7 +58,7 @@ export function shareUsable(row: ShareRowLike | null | undefined, now: Date = ne
   return shareState(row, now) === 'live';
 }
 
-/** The message somebody sees when a link no longer works — the same words wherever it is shown, and never a hint about the report. */
+/** The message somebody sees when a link no longer works, the same words wherever it is shown, and never a hint about the report. */
 export function shareRefusal(state: ShareState | 'missing'): string {
   if (state === 'revoked') return 'This link has been turned off by the person who shared it.';
   if (state === 'expired') return 'This link has expired. Ask the person who shared it for a new one.';
@@ -90,7 +90,7 @@ export interface ShareLink {
  *
  * The delivery rule (B-R1, `report-delivery.ts`) refuses to e-mail a report a run marked not ready, with no override even on a
  * manual send. A share link is the same report leaving the company by another door, so it answers to the same honesty: the link is
- * not blocked — an owner may well want a colleague to look at a draft — but the reader is told, in the run's own words, before they
+ * not blocked, an owner may well want a colleague to look at a draft, but the reader is told, in the run's own words, before they
  * read a single figure.
  */
 export interface SharedCaveat {
@@ -135,7 +135,7 @@ export interface SharedReport {
   files: { id: string; kind: string; fileName: string; mimeType: string; size: number }[];
   /** the company's name, so the reader knows whose report this is (no other company data is exposed) */
   orgName: string;
-  /** B-R2: that company's own mark — its business name and logo, and nothing else of its profile */
+  /** B-R2: that company's own mark, its business name and logo, and nothing else of its profile */
   brand: SharedBrand;
   /** B-R2: what the run said about itself when it is not finished work, else null */
   caveat: SharedCaveat | null;

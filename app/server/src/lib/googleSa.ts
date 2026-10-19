@@ -2,7 +2,7 @@ import { createSign } from 'node:crypto';
 import { outbound, safeError } from './netGuard';
 
 /**
- * A Google access token for a CUSTOMER's service account (G4 BigQuery export) — the JWT-bearer flow
+ * A Google access token for a CUSTOMER's service account (G4 BigQuery export), the JWT-bearer flow
  * (https://developers.google.com/identity/protocols/oauth2/service-account#httprest). Not the engine's own service account
  * (services/google.ts): that one reads Search Console for every company; this one writes into one company's BigQuery and nothing else.
  */

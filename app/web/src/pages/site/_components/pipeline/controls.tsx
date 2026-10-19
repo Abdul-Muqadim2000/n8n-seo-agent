@@ -1,5 +1,5 @@
 import { useEngineCal } from '@/lib/engine-cal';
-// The person's controls over the keyword ladders (admins): Auto / Manual, Pause / Resume, the priority order, delete — and the
+// The person's controls over the keyword ladders (admins): Auto / Manual, Pause / Resume, the priority order, delete, and the
 // website's pipeline settings. Everything is written to the SEO engine's ladder settings and read by the Monday run.
 import { PRICES } from '@/lib/prices';
 import { useState, type ReactNode } from 'react';
@@ -44,13 +44,13 @@ export function LadderModeSwitch({ ladder, size = 'sm', className }: { ladder: P
     update.mutate(
       { ladderId: ladder.id, mode },
       {
-        onSuccess: () => toast.success(mode === 'manual' ? `“${ladder.head}” is Manual: each page waits for your OK` : `“${ladder.head}” is Auto: its pages are written on Mondays`),
+        onSuccess: () => toast.success(mode === 'manual' ? `"${ladder.head}" is Manual: each page waits for your OK` : `"${ladder.head}" is Auto: its pages are written on Mondays`),
         onError: (e) => toast.error(errorMessage(e)),
         onSettled: () => setPending(null),
       },
     );
   };
-  return <Segmented label={`Writing mode of the keyword ladder “${ladder.head}”`} size={size} value={value} onChange={change} options={MODE_OPTIONS(size)} disabled={update.isPending} className={className} />;
+  return <Segmented label={`Writing mode of the keyword ladder "${ladder.head}"`} size={size} value={value} onChange={change} options={MODE_OPTIONS(size)} disabled={update.isPending} className={className} />;
 }
 
 /** Pause / Resume for one ladder (not for a won ladder: nothing more is written for it anyway). */
@@ -64,7 +64,7 @@ export function LadderPauseButton({ ladder, size = 'sm' }: { ladder: Pick<Ladder
     update.mutate(
       { ladderId: ladder.id, status: paused ? 'active' : 'paused' },
       {
-        onSuccess: () => toast.success(paused ? `“${ladder.head}” resumed: back in its place in the order` : `“${ladder.head}” paused: no new pages, positions are still checked`),
+        onSuccess: () => toast.success(paused ? `"${ladder.head}" resumed: back in its place in the order` : `"${ladder.head}" paused: no new pages, positions are still checked`),
         onError: (e) => toast.error(errorMessage(e)),
       },
     );
@@ -86,17 +86,17 @@ export function LadderMoveButtons({ cards, index }: { cards: LadderCard[]; index
     ids.splice(index, 1);
     ids.splice(to, 0, c.id);
     reorder.mutate(ids, {
-      onSuccess: () => toast.success(`“${c.head}” is now number ${to + 1}`),
+      onSuccess: () => toast.success(`"${c.head}" is now number ${to + 1}`),
       onError: (e) => toast.error(errorMessage(e)),
     });
   };
   const btn = 'size-8';
   return (
     <span className="inline-flex gap-1">
-      <Button variant="secondary" size="icon" className={btn} disabled={index === 0 || reorder.isPending} onClick={() => move(index - 1)} aria-label={`Move “${c.head}” up`} title="Move up: gets the weekly posts earlier">
+      <Button variant="secondary" size="icon" className={btn} disabled={index === 0 || reorder.isPending} onClick={() => move(index - 1)} aria-label={`Move "${c.head}" up`} title="Move up: gets the weekly posts earlier">
         <ArrowUp className="size-4" />
       </Button>
-      <Button variant="secondary" size="icon" className={btn} disabled={index === cards.length - 1 || reorder.isPending} onClick={() => move(index + 1)} aria-label={`Move “${c.head}” down`} title="Move down: gets the weekly posts later">
+      <Button variant="secondary" size="icon" className={btn} disabled={index === cards.length - 1 || reorder.isPending} onClick={() => move(index + 1)} aria-label={`Move "${c.head}" down`} title="Move down: gets the weekly posts later">
         <ArrowDown className="size-4" />
       </Button>
     </span>
@@ -115,7 +115,7 @@ export function DeleteLadderButton({ ladder }: { ladder: Pick<LadderCard, 'id' |
     remove.mutate(ladder.id, {
       onSuccess: () => {
         setOpen(false);
-        toast.success(`The keyword ladder “${ladder.head}” was deleted`);
+        toast.success(`The keyword ladder "${ladder.head}" was deleted`);
         navigate(paths.site(org.id, site.id, 'pipeline'), { replace: true });
       },
     });
@@ -127,7 +127,7 @@ export function DeleteLadderButton({ ladder }: { ladder: Pick<LadderCard, 'id' |
       <Dialog
         open={open}
         onOpenChange={setOpen}
-        title={`Delete the keyword ladder “${ladder.head}”?`}
+        title={`Delete the keyword ladder "${ladder.head}"?`}
         description="This cannot be undone. To work on this keyword again later, plan a new ladder."
         footer={
           <>

@@ -403,7 +403,7 @@ body {
 .alv-stagger > :nth-child(11) { --stagger-i: 10; }
 .alv-stagger > :nth-child(n + 12) { --stagger-i: 11; }
 /* The brand mark's wave (components/brand/AlaventraMark): a band of light runs along the rays from the sun to the wing tip.
-   Only opacity changes — the rays never move. Speed, spacing and the resting opacity come from the component (--alv-ray-*). */
+   Only opacity changes; the rays never move. Speed, spacing and the resting opacity come from the component (--alv-ray-*). */
 .alv-mark-wave .alv-mark-ray {
   opacity: var(--alv-ray-rest, 0.4);
   animation: var(--alv-ray-anim, alv-ray) var(--alv-ray-dur, 1.6s) ease-in-out infinite;

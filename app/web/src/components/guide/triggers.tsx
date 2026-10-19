@@ -4,7 +4,7 @@ import { Tooltip } from '@/components/ui/overlay';
 import { cn } from '@/lib/utils';
 import { useGuides, type OpenGuide } from './GuideProvider';
 
-// "Show me how" — the one trigger used everywhere the app asks a person for something it cannot get itself. Three shapes for three
+// "Show me how", the one trigger used everywhere the app asks a person for something it cannot get itself. Three shapes for three
 // places: a chip next to a heading or a callout, a text link inside a field hint, and an icon button where there is no room at all.
 
 export interface GuideButtonProps extends OpenGuide {

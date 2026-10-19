@@ -6,13 +6,13 @@ import { cn } from '@/lib/utils';
 export const BRAND_NAME = 'Alaventra';
 
 /**
- * Document title in the brand pattern: pageTitle('Overview', 'techand.ai') → "Overview · techand.ai — Alaventra". G5: inside an agency's
+ * Document title in the brand pattern: pageTitle('Overview', 'techand.ai') -> "Overview · techand.ai | Alaventra". G5: inside an agency's
  * white-label portal the product name is the agency's (`productName()`), never ours.
  */
 export function pageTitle(...parts: (string | null | undefined | false)[]): string {
   const head = parts.filter(Boolean).join(' · ');
   const name = productName();
-  return head ? `${head} — ${name}` : name;
+  return head ? `${head} | ${name}` : name;
 }
 
 /** The app icon (white mark on Alaventra Blue), for small square spots. Decorative: the name is always next to it. */
@@ -32,7 +32,7 @@ export function BrandMark({ className }: { className?: string }) {
 }
 
 /**
- * G5: an agency's mark in the portal — its logo (the dark-background version on dark, else the light one on a white tile), or its
+ * G5: an agency's mark in the portal, its logo (the dark-background version on dark, else the light one on a white tile), or its
  * initials and name when it has none or the logo fails to load. Always looks finished.
  */
 export function AgencyLockup({ name, logoUrl, logoDarkUrl, initials, className }: { name: string; logoUrl: string | null; logoDarkUrl: string | null; initials: string; className?: string }) {

@@ -267,7 +267,7 @@ function MembershipDialog({ user, onClose }: { user: AdminUserRow; onClose: () =
               }}
               disabled={companies.isPending}
             >
-              <option value="">{companies.isPending ? 'Loading…' : 'Choose a company'}</option>
+              <option value="">{companies.isPending ? 'Loading...' : 'Choose a company'}</option>
               {list.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -360,7 +360,7 @@ function DeleteUserDialog({ user, onClose, afterDelete }: { user: AdminUserRow; 
                 <span className="block text-[13px] text-ink-3">
                   {v === 'keep'
                     ? 'Their websites, runs, reports and credits stay; you can add someone to them later.'
-                    : 'Their websites (with the engine’s keyword ladders), runs, reports and credit ledgers are deleted.'}
+                    : 'Their websites (with the engine\'s keyword ladders), runs, reports and credit ledgers are deleted.'}
                 </span>
               </span>
             </label>

@@ -13,7 +13,7 @@ export interface HistoryLine {
   slot?: number;
 }
 
-/** Rows keyed by day: { day, k0: 12, k1: 51, … } */
+/** Rows keyed by day: { day, k0: 12, k1: 51, ... } */
 export function historyRows(lines: readonly HistoryLine[]) {
   const byDay = new Map<string, Record<string, unknown>>();
   lines.forEach((l, i) => {
@@ -61,7 +61,7 @@ export function PositionHistoryCard({ title, description, lines, actions, loadin
       table={{
         columns: [
           { key: 'day', label: 'Checked', format: (v) => fmtDate(String(v)) },
-          ...lines.map((l, i) => ({ key: `raw${i}`, label: l.label, align: 'right' as const, format: (v: unknown) => (typeof v === 'number' ? posText(v) : '–') })),
+          ...lines.map((l, i) => ({ key: `raw${i}`, label: l.label, align: 'right' as const, format: (v: unknown) => (typeof v === 'number' ? posText(v) : '-') })),
         ],
         rows: [...rows].reverse(),
       }}

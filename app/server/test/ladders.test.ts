@@ -120,7 +120,7 @@ describe('ladder pages: states', () => {
     // 3 pages, 2 of them still to write (the set-aside one is neither planned nor waiting nor written)
     expect(ab.cards[0].counts).toEqual({ total: 3, published: 0, waiting: 0, writing: 0, planned: 2 });
     // no Monday is promised for it, even though the mirror's queue still carried it
-    expect(ab.cards[0].next.text).toBe('Writes page 1: “erp software dubai”');
+    expect(ab.cards[0].next.text).toBe('Writes page 1: "erp software dubai"');
     expect(ab.details.get('l1')!.timeline.filter((e) => e.kind === 'next' && /facts erp/.test(e.text))).toEqual([]);
   });
 
@@ -141,7 +141,7 @@ describe('ladder cards: status, next step, priority', () => {
     const b = buildLadders(src({ ladders: ladder('l1', 'erp dubai', 3) }), sched({ picks: [pick('erp dubai part 1', 'l1', 1), pick('other topic', 'x', 1), pick('erp dubai part 2', 'l1', 2)] }), { now: NOW });
     const c = b.cards[0];
     expect([c.status, c.statusText]).toEqual(['planning', 'Planned: 4 pages, none written yet.']);
-    expect(c.next).toEqual({ kind: 'write', text: 'Writes page 1: “erp dubai part 1”', at: MONDAYS[0] });
+    expect(c.next).toEqual({ kind: 'write', text: 'Writes page 1: "erp dubai part 1"', at: MONDAYS[0] });
     expect(c.months).toBe('6-9');
     // rank checks: 4 keywords x 4.33 weeks x $0.015, plus the 2 pages written in the next 4 weeks
     // (B-R3: the price of a page comes from the one cost table now, never typed into a test)
@@ -150,12 +150,12 @@ describe('ladder cards: status, next step, priority', () => {
     const future = b.details.get('l1')!.timeline.filter((e) => e.future);
     expect(future.map((e) => [e.at, e.text])).toEqual([
       ['2026-10-05T12:00:00.000Z', 'Rank check of 4 keywords'],
-      [MONDAYS[0], 'Writes page 1: “erp dubai part 1”'],
-      [MONDAYS[2], 'Writes page 2: “erp dubai part 2”'],
+      [MONDAYS[0], 'Writes page 1: "erp dubai part 1"'],
+      [MONDAYS[2], 'Writes page 2: "erp dubai part 2"'],
     ]);
     // weekly posts off: nothing dated, the person can still write it
     const off = buildLadders(src({ ladders: ladder('l1', 'erp dubai', 3) }), sched({ picks: [], cadenceRuns: [], perRun: 0 }), { now: NOW });
-    expect(off.cards[0].next).toEqual({ kind: 'write', text: 'Next page: “erp dubai part 1”. Weekly posts are off: use Write now', at: null });
+    expect(off.cards[0].next).toEqual({ kind: 'write', text: 'Next page: "erp dubai part 1". Weekly posts are off: use Write now', at: null });
   });
 
   it('priority: oldest first without settings; beyond 2 active Auto ladders they are queued', () => {
@@ -239,12 +239,12 @@ describe('timeline and traffic', () => {
 
   it('past events: planned, written, published, first top 10 / top 3, drops of 5+ places', () => {
     expect(d.timeline.filter((e) => !e.future).map((e) => [e.kind, e.text])).toEqual([
-      ['planned', 'Ladder planned: 2 pages towards “e invoicing in uae”'],
-      ['written', '“peppol uae” written'],
-      ['published', '“peppol uae” published at techand.ai/peppol'],
-      ['top10', '“peppol uae” reached the top 10 (#8)'],
-      ['top3', '“peppol uae” reached the top 3 (#2)'],
-      ['drop', '“peppol uae” dropped from #2 to #9'],
+      ['planned', 'Ladder planned: 2 pages towards "e invoicing in uae"'],
+      ['written', '"peppol uae" written'],
+      ['published', '"peppol uae" published at techand.ai/peppol'],
+      ['top10', '"peppol uae" reached the top 10 (#8)'],
+      ['top3', '"peppol uae" reached the top 3 (#2)'],
+      ['drop', '"peppol uae" dropped from #2 to #9'],
     ]);
   });
 
@@ -265,7 +265,7 @@ describe('timeline and traffic', () => {
     expect(b.clicks28d).toBe(9);
   });
 
-  it('cost so far: a plan made outside the app at its list price, the rank checks, the app’s runs for the ladder', () => {
+  it('cost so far: a plan made outside the app at its list price, the rank checks, the app\'s runs for the ladder', () => {
     expect(d.creditsSoFar).toBe(Math.round((MODES.ladder.costUsd + 10 * 0.015) * 60 * 100) / 100);
     const withRuns = buildLadders(
       src({
@@ -283,7 +283,7 @@ describe('timeline and traffic', () => {
 });
 
 describe('needs you', () => {
-  it('pages to publish per ladder (oldest first), the pile-up, overlaps and duplicates, Manual ladders’ next page', () => {
+  it('pages to publish per ladder (oldest first), the pile-up, overlaps and duplicates, Manual ladders\' next page', () => {
     const b = buildLadders(
       src({
         ladders: [
@@ -312,13 +312,13 @@ describe('needs you', () => {
       ['approve', 'approve:c', 'info'],
     ]);
     const pub = items[1];
-    expect(pub.title).toBe('Publish 2 pages of “e invoicing in uae”');
-    expect(pub.detail).toBe('“uae e invoicing penalties” (waiting 10 days), “peppol uae” (waiting 3 days). Put each page on your website, then report its address so tracking starts.');
+    expect(pub.title).toBe('Publish 2 pages of "e invoicing in uae"');
+    expect(pub.detail).toBe('"uae e invoicing penalties" (waiting 10 days), "peppol uae" (waiting 3 days). Put each page on your website, then report its address so tracking starts.');
     expect(pub.action).toEqual({ label: 'I published it', mode: 'published', prefill: { keyword: 'uae e invoicing penalties' } });
     // the near-identical main keyword is a duplicate; the ladder further down the list is the one to look at
-    expect([items[3].title, items[3].action?.ladderId]).toEqual(['Two ladders for “e invoicing in uae”', 'b']);
-    expect(items[4].title).toBe('“e invoicing in uae” and “payroll software uae” overlap');
-    expect(items[4].detail).toContain('“uae e invoicing penalties”, “uae e-invoicing penalty”');
+    expect([items[3].title, items[3].action?.ladderId]).toEqual(['Two ladders for "e invoicing in uae"', 'b']);
+    expect(items[4].title).toBe('"e invoicing in uae" and "payroll software uae" overlap');
+    expect(items[4].detail).toContain('"uae e invoicing penalties", "uae e-invoicing penalty"');
     expect(items[5].action).toMatchObject({ mode: 'keyword', prefill: { keyword: 'uae e-invoicing penalty', pageType: 'Guide', ladder: { id: 'c', rung: 1, head: 'payroll software uae', pageNo: 1 } } });
     expect(b.cards.map((c) => [c.id, c.status, c.mode])).toEqual([
       ['a', 'needs_you', 'auto'],
@@ -357,10 +357,10 @@ describe('cards and Needs you from the cadence mirror', () => {
     ]);
     const approve = ladderNeedsYou(b).find((i) => i.kind === 'approve')!;
     expect(approve.writeNow).toMatchObject({ keyword: 'payroll uae part 1', source: 'ladder', ladder: { id: 'm', rung: 1, head: 'payroll uae', pageNo: 1 } });
-    expect(b.details.get('a')!.timeline.filter((e) => e.future).map((e) => e.text)).toEqual(['Writes page 1: “erp dubai part 1”', 'Writes page 2: “erp dubai part 2”']);
+    expect(b.details.get('a')!.timeline.filter((e) => e.future).map((e) => e.text)).toEqual(['Writes page 1: "erp dubai part 1"', 'Writes page 2: "erp dubai part 2"']);
   });
 
-  it('the pile-up guard: nothing dated, the ladders need you; last Monday’s skipped run shows until a page is published', () => {
+  it('the pile-up guard: nothing dated, the ladders need you; last Monday\'s skipped run shows until a page is published', () => {
     const logs = ['x one', 'x two', 'x three'].map((k) => log({ keyword: k, started_at: ago(12) }));
     const b = build({ logs });
     expect(b.cards.map((c) => [c.status, c.next.kind])).toEqual([
@@ -369,10 +369,10 @@ describe('cards and Needs you from the cadence mirror', () => {
     ]);
     expect(b.cards.every((c) => !b.details.get(c.id)!.timeline.some((e) => e.future))).toBe(true);
     expect(ladderNeedsYou(b).find((i) => i.kind === 'pileup')?.title).toBe('Weekly posts stopped: 3 written pages waiting for publication');
-    expect(ladderNeedsYou(b).find((i) => i.kind === 'pileup')?.detail).toContain('Waiting: “x one”, “x two”, “x three”.');
+    expect(ladderNeedsYou(b).find((i) => i.kind === 'pileup')?.detail).toContain('Waiting: "x one", "x two", "x three".');
     const last = build({}, MONDAYS.slice(0, 2), { lastRunPileup: { at: ago(5), waiting: 3, max: 3 } });
     const item = ladderNeedsYou(last).find((i) => i.kind === 'pileup')!;
-    expect([item.title, item.detail.startsWith('Last Monday’s run wrote nothing')]).toEqual(['Last Monday’s posts were skipped: 3 written pages waited for publication', true]);
+    expect([item.title, item.detail.startsWith('Last Monday\'s run wrote nothing')]).toEqual(['Last Monday\'s posts were skipped: 3 written pages waited for publication', true]);
     expect(last.cards[0].status).toBe('planning');
   });
 

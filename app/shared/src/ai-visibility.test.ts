@@ -57,7 +57,7 @@ describe('estimateAiVisibilityCost', () => {
 
 describe('the AI pulse schedule', () => {
   const pulse = AUTOMATIONS.find((a) => a.id === 'ai_pulse')!;
-  it('runs every day except Monday at 06:30, in n8n’s time zone', () => {
+  it('runs every day except Monday at 06:30, in n8n\'s time zone', () => {
     expect(pulse.workflow).toBe('SEOagentAIPulse1');
     // Sunday 2026-10-11 07:00 UTC -> next run Tuesday 13th 06:30 UTC (Monday is skipped)
     expect(nextScheduledRun(pulse.schedule, 'UTC', new Date('2026-10-11T07:00:00Z')).toISOString()).toBe('2026-10-13T06:30:00.000Z');
@@ -163,7 +163,7 @@ describe('aiSampleRate / aiPrecisionTable (B8-7)', () => {
     expect(row(20, 'weekly_pulse').headline!).toBeLessThan(row(20, 'weekly').headline!);
     expect(row(8, 'weekly').perQuestionEnough).toBe(true);   // 4 a question: just at the floor
     expect(t.rows.map((x) => x.panel)).toEqual([8, 8, 20, 20, 50, 50, 100, 100, 200, 200, 500, 500]);
-    // G6: above 50 questions the pulse is a rotating sample, so a question collects fewer pulse answers — but the headline still narrows
+    // G6: above 50 questions the pulse is a rotating sample, so a question collects fewer pulse answers, but the headline still narrows
     expect(row(500, 'weekly_pulse').answersPerQuestion).toBeLessThan(row(50, 'weekly_pulse').answersPerQuestion);
     expect(row(500, 'weekly_pulse').headline!).toBeLessThan(row(50, 'weekly_pulse').headline!);
   });

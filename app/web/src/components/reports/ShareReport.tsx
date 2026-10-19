@@ -12,7 +12,7 @@ import { CopyButton } from '@/components/ui/misc';
 import { Dialog } from '@/components/ui/overlay';
 
 /**
- * G15: "Share this report" — an expiring, revocable, read-only link for somebody with no account.
+ * G15: "Share this report": an expiring, revocable, read-only link for somebody with no account.
  * The link is shown once (only its hash is stored), the owner picks how long it lasts, every live link is listed with when it was last
  * opened, and any of them can be turned off here. Admins and owners only: a viewer can read a report but not hand it outside.
  */
@@ -85,7 +85,7 @@ export function ShareReport({ reportId }: { reportId: string }) {
           {create.isError && <Callout tone="critical">{errorMessage(create.error)}</Callout>}
 
           {fresh?.url && (
-            <Callout tone="good" title="Copy it now — it is shown only once">
+            <Callout tone="good" title="Copy it now, it is shown only once">
               <span className="block break-all font-mono text-[12px] text-ink">{fresh.url}</span>
               <span className="mt-2 flex flex-wrap items-center gap-2">
                 <CopyButton text={fresh.url} label="Copy the link" />
@@ -96,7 +96,7 @@ export function ShareReport({ reportId }: { reportId: string }) {
 
           <div>
             <h3 className="mb-2 text-[13px] font-medium text-ink-3">Links for this report</h3>
-            {list.isLoading && <p className="text-[13px] text-ink-3">Loading…</p>}
+            {list.isLoading && <p className="text-[13px] text-ink-3">Loading...</p>}
             {list.isError && <Callout tone="warning">{errorMessage(list.error)}</Callout>}
             {list.data && live.length === 0 && <p className="text-[13px] text-ink-3">No live link. Nobody outside your company can open this report.</p>}
             <ul className="space-y-2">

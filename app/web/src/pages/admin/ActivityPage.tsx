@@ -74,7 +74,7 @@ export default function AdminActivityPage() {
       header: 'Details',
       cell: (r) => {
         const entries = Object.entries(r.details ?? {});
-        if (!entries.length) return <span className="text-ink-3">–</span>;
+        if (!entries.length) return <span className="text-ink-3">-</span>;
         return (
           <span className="block min-w-[200px] max-w-[380px] font-mono text-[11px] leading-relaxed text-ink-2">
             {entries.slice(0, 4).map(([k, v]) => (
@@ -115,7 +115,7 @@ export default function AdminActivityPage() {
           initialSort={{ key: 'at', dir: 'desc' }}
           pageSize={50}
           searchable
-          searchPlaceholder="Search admin, action, target…"
+          searchPlaceholder="Search admin, action, target..."
           searchText={(r) => `${r.actor} ${r.action} ${actionLabel(r.action)} ${r.target.label} ${r.target.type}`}
         />
       )}

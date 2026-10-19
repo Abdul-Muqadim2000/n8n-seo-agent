@@ -42,7 +42,7 @@ export interface OrgAccess {
  *
  * G5 (app/docs/WHITE_LABEL.md §4): in an agency's client workspace the role comes from what the person holds there AND in its agency
  * (`clientWorkspaceRole`): agency owners / admins reach every client, members / viewers only clients they were assigned to, client
- * people their client role — never anything from an agency membership that is gone or switched off. Client roles rank below viewer,
+ * people their client role, never anything from an agency membership that is gone or switched off. Client roles rank below viewer,
  * so a route that asks for viewer or more refuses them; the portal's routes pass `min: 'client_viewer'` explicitly. On a portal host,
  * every company outside that agency is a 404.
  */

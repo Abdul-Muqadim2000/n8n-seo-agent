@@ -262,14 +262,14 @@ function RunRow({ run, now }: { run: Run; now: number }) {
           </div>
         </div>
       </td>
-      <td className="hidden px-3 py-3 text-ink-2 md:table-cell">{run.siteDomain ?? <span className="text-ink-3">–</span>}</td>
+      <td className="hidden px-3 py-3 text-ink-2 md:table-cell">{run.siteDomain ?? <span className="text-ink-3">-</span>}</td>
       <td className="hidden px-3 py-3 sm:table-cell">
         <RunStatusBadge status={run.status} />
         {run.status === 'failed' && run.error && <p className="mt-1 max-w-[220px] truncate text-xs text-critical-text" title={run.error}>{run.error}</p>}
       </td>
       <td className="hidden whitespace-nowrap px-3 py-3 text-ink-2 sm:table-cell" title={fmtDateTime(run.createdAt)}>
         {fmtAgo(run.createdAt)}
-        <span className="hidden text-xs text-ink-3 lg:block">{run.userName ? `by ${run.userName}` : '–'}</span>
+        <span className="hidden text-xs text-ink-3 lg:block">{run.userName ? `by ${run.userName}` : '-'}</span>
       </td>
       <td className="hidden px-3 py-3 md:table-cell">
         {active ? (
@@ -282,7 +282,7 @@ function RunRow({ run, now }: { run: Run; now: number }) {
         ) : run.completedAt ? (
           <RunChip icon={<Clock />}>{fmtMinutes(elapsed)}</RunChip>
         ) : (
-          <span className="tabular text-ink-2">–</span>
+          <span className="tabular text-ink-2">-</span>
         )}
       </td>
       <td className="hidden px-3 py-3 text-right text-ink-2 lg:table-cell">

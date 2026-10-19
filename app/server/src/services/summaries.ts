@@ -32,7 +32,7 @@ export function summarize(stage: string, p: P): Summary {
       put('page', str(p.recommended_page));
       put('ladderRung', num(p.ladder_rung));
       put('qa', str(p.qa_summary));
-      // R11 (re-rating, 2026-10-13): a page the quality gate failed twice is a draft — the run list says so, not only the report
+      // R11 (re-rating, 2026-10-13): a page the quality gate failed twice is a draft, the run list says so, not only the report
       if (p.qa_not_ready === true) put('notReadyToPublish', true);
       put('volume', num(obj(p.keyword_data).search_volume));
       put('difficulty', num(obj(p.keyword_data).keyword_difficulty));
@@ -147,7 +147,7 @@ export function summarize(stage: string, p: P): Summary {
       const m = obj(p.summary);
       put('referringDomains', num(obj(p.coverage).union) ?? num(m.referring_domains));   // v4.10: all sources merged
       put('backlinks', num(m.backlinks));
-      put('lost', arr(p.lost).filter((l) => !obj(l).pending).length);   // confirmed losses; "reported lost — checking" is not yet lost
+      put('lost', arr(p.lost).filter((l) => !obj(l).pending).length);   // confirmed losses; "reported lost, checking" is not yet lost
       put('importantLost', len(p.important_lost));
       put('spammy', len(p.spammy));
       put('prospects', len(p.prospects));
@@ -214,7 +214,7 @@ export function titleFor(stage: string, p: P): string {
 }
 
 /**
- * What the run reported spending — **all** of it.
+ * What the run reported spending, **all** of it.
  *
  * B-R3: this used to read `run_ledger.dataforseo_usd` only, and the comment beside it said Claude could not be reported. That is no
  * longer true: since the engine's cost kit (`v5/code/_cost_cal.js`, 2026-10-13) every run prices its own model calls and puts them
@@ -233,7 +233,7 @@ export function ledgerCost(p: P): { usd: number; estimated: boolean; partial: bo
   if (dfs == null && ai == null && direct == null) return null;
   const estimated = l.ai_cost_estimated === true || obj(l.ai_cost).estimated === true || (num(l.dataforseo_estimated_usd) ?? 0) > 0;
   // R102 / R115: a ledger with no model-call figure at all ("ai_usd" absent or null) did not report its model calls, so what it
-  // carries is the search data only — partial, never the run's whole cost. `ai_usd: 0` is a real $0 (an audit calls no model) and is
+  // carries is the search data only, partial, never the run's whole cost. `ai_usd: 0` is a real $0 (an audit calls no model) and is
   // not flagged. A bare `cost_usd` (the old monitor callbacks) is DataForSEO money only, so it is partial too; and it is a fallback,
   // not an addend: when the ledger has its own search-data figure, `cost_usd` is the same money and must not be counted twice.
   const partial = ai == null;
@@ -246,7 +246,7 @@ export function ledgerCost(p: P): { usd: number; estimated: boolean; partial: bo
  * so showing anything else would mean telling the customer one figure while holding back another.
  *
  * Read defensively: it is set in the engine's *Rate Limit* node, which runs after the API front door has already answered 202, so
- * it can only reach the app on a callback — and the engine's callback builders name their fields one by one. Where a stage does not
+ * it can only reach the app on a callback, and the engine's callback builders name their fields one by one. Where a stage does not
  * carry it yet, the app simply keeps its own pre-flight estimate and says so; nothing here breaks when the field is missing.
  */
 export function engineCostEstimate(p: P): { usd: number; basis: string } | null {

@@ -3,7 +3,7 @@ import { cmsRequest, type CmsHttpRequest, type CmsHttpResponse } from '../http';
 
 /**
  * The connector interface (app/docs/CMS_PUBLISHING.md §4). One module per CMS; adding AEM, Sanity, Shopify or HubSpot is a new file
- * here and a kind in shared `CMS_KINDS` — the service, the routes, the rule and the UI do not change.
+ * here and a kind in shared `CMS_KINDS`, the service, the routes, the rule and the UI do not change.
  */
 
 /** What a connector gets: the connection's address, user, the opened secret and its non-secret settings. */
@@ -55,7 +55,7 @@ export interface PushResult {
   id: string;
   url: string;
   status: CmsRemoteStatus;
-  /** what the customer should know (fields the CMS did not take, images not uploaded…) */
+  /** what the customer should know (fields the CMS did not take, images not uploaded...) */
   notes: string[];
   media?: Record<string, { id: string; url: string }>;
 }
@@ -104,7 +104,7 @@ export async function call(r: CmsHttpRequest, what: string, cms: string): Promis
   if (res.status === 401) throw new CmsError(`${cms} refused the credentials (401) while trying to ${what}. Test the connection and paste a new secret if it was revoked.`, 401);
   if (res.status === 403) throw new CmsError(`${cms} says this account may not ${what} (403)${detail ? `: ${detail}` : ''}.`, 403);
   if (res.status === 404) throw new CmsError(`${cms} could not find what it needed to ${what} (404)${detail ? `: ${detail}` : ''}.`, 404);
-  if (res.status >= 300 && res.status < 400) throw new CmsError(`${cms} redirected to ${res.headers.location ?? 'another address'} — use that address in the connection.`, res.status);
+  if (res.status >= 300 && res.status < 400) throw new CmsError(`${cms} redirected to ${res.headers.location ?? 'another address'}. Use that address in the connection.`, res.status);
   if (res.status === 429) throw new CmsError(`${cms} is limiting requests (429). Try again in a minute.`, 429);
   throw new CmsError(`${cms} answered ${res.status} while trying to ${what}${detail ? `: ${detail}` : ''}.`, res.status);
 }

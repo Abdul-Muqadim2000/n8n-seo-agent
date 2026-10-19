@@ -12,7 +12,7 @@ export interface OrgContextValue {
 
 export const OrgContext = createContext<OrgContextValue | null>(null);
 
-/** Inside /o/:orgId — the company, the user's role and the company's websites. */
+/** Inside /o/:orgId: the company, the user's role and the company's websites. */
 export function useOrgCtx(): OrgContextValue {
   const v = useContext(OrgContext);
   if (!v) throw new Error('useOrgCtx outside OrgLayout');
@@ -28,7 +28,7 @@ export interface SiteContextValue {
 }
 export const SiteContext = createContext<SiteContextValue | null>(null);
 
-/** Inside /o/:orgId/sites/:siteId — the website. */
+/** Inside /o/:orgId/sites/:siteId: the website. */
 export function useSiteCtx(): SiteContextValue {
   const v = useContext(SiteContext);
   if (!v) throw new Error('useSiteCtx outside SiteLayout');

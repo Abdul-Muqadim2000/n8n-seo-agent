@@ -32,7 +32,7 @@ describe("a schedule's spend is not the matched run's (D-3)", () => {
     expect(actual).toBeCloseTo(0.1185, 4);
   });
 
-  it('a weekly report with on_demand: false never counts; the run’s own report does', () => {
+  it('a weekly report with on_demand: false never counts; the run\'s own report does', () => {
     expect(callbackCostCountsForRun('site_tracker', { stage: 'site_tracker', on_demand: false, run_ledger: { dataforseo_usd: 0.031, ai_usd: 0.0491 } })).toBe(false);
     expect(callbackCostCountsForRun('site_tracker', { stage: 'site_tracker', on_demand: true, run_ledger: { dataforseo_usd: 0.031, ai_usd: 0.0491 } })).toBe(true);
     expect(callbackCostCountsForRun('ladder_plan', { stage: 'ladder_plan', run_ledger: { dataforseo_usd: 0.1615, ai_usd: 0.1478 } })).toBe(true);

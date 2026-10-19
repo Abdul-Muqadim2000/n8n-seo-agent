@@ -3,8 +3,8 @@
 // opens the matching guide (web/src/components/guide), so nobody has to leave and search for the answer.
 //
 // The guides are data, not components: the same text renders in the panel, copies to the clipboard and goes into an e-mail to the
-// colleague who actually manages the DNS. Bodies use a tiny inline markup — **bold** for what to click, `code` for values to type,
-// [label](https://url) for links — and {{placeholders}} for the real values of the site (its domain, the record to add, the key
+// colleague who actually manages the DNS. Bodies use a tiny inline markup, **bold** for what to click, `code` for values to type,
+// [label](https://url) for links, and {{placeholders}} for the real values of the site (its domain, the record to add, the key
 // file). Rendering is in web/src/components/guide/rich.tsx; the plain-text form is `guideText` below.
 
 export type GuideArea = 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company' | 'security' | 'integrations' | 'agency';
@@ -95,7 +95,7 @@ export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[
   { id: 'company', label: 'Your company in Alaventra', description: 'Budget, team and who may do what' },
   { id: 'security', label: 'Sign-in and security', description: 'Two-step verification, single sign-on and provisioning' },
   { id: 'integrations', label: 'Connecting your tools', description: 'Slack and Teams, Jira / Linear / Asana, your warehouse, Looker Studio and AI assistants' },
-  { id: 'agency', label: 'Your agency portal', description: 'Your brand, your domain and your clients’ access' },
+  { id: 'agency', label: 'Your agency portal', description: 'Your brand, your domain and your clients\' access' },
 ];
 
 const V = {
@@ -115,7 +115,7 @@ export const GUIDES = [
     id: 'search-console-property',
     area: 'google',
     title: 'Set up Search Console for your website',
-    why: 'Search Console is Google’s own record of your site: the searches you appear for, what is indexed and what Google could not read. Almost every report here is better with it.',
+    why: 'Search Console is Google\'s own record of your site: the searches you appear for, what is indexed and what Google could not read. Almost every report here is better with it.',
     where: 'Google Search Console',
     who: 'Anyone with a Google account, plus someone who can edit DNS for the best kind of property',
     minutes: 10,
@@ -128,13 +128,13 @@ export const GUIDES = [
       },
       {
         title: 'Add a property for {{domain}}',
-        body: 'Click the property switcher at the top left, then **Add property**. Choose **Domain** if you can edit DNS — one property then covers http, https, www and every subdomain. Choose **URL prefix** only when you cannot touch DNS.',
+        body: 'Click the property switcher at the top left, then **Add property**. Choose **Domain** if you can edit DNS: one property then covers http, https, www and every subdomain. Choose **URL prefix** only when you cannot touch DNS.',
         note: 'A Domain property is worth the extra step: with a URL-prefix property, https://{{domain}} and https://www.{{domain}} are two separate properties with two separate histories.',
       },
       {
         title: 'Prove the domain is yours to Google',
         body: 'For a **Domain** property Google gives you one TXT record to add at your DNS provider. For a **URL prefix** property you can instead upload an HTML file, add a meta tag or use an existing Google Analytics tag.',
-        note: 'This is Google’s own check and separate from proving ownership inside Alaventra — but the work is the same kind, and the guide for the DNS record walks through the providers.',
+        note: 'This is Google\'s own check and separate from proving ownership inside Alaventra, but the work is the same kind (the guide for the DNS record walks through the providers).',
       },
       {
         title: 'Give it a few days, then come back',
@@ -143,8 +143,8 @@ export const GUIDES = [
     ],
     done: 'The property for {{domain}} appears in the property switcher, and **Performance** shows rows within a few days.',
     trouble: [
-      { q: 'Someone set this up years ago and I cannot get in', a: 'Ask them to open **Settings → Users and permissions → Add user** and add you as an **Owner**. If nobody can get in at all, add a new Domain property yourself — a domain can have several owners.' },
-      { q: 'Verification keeps failing', a: 'The record is almost always right but not yet live. Wait, then press Google’s **Verify** again. Records usually appear within minutes but can take a couple of hours.' },
+      { q: 'Someone set this up years ago and I cannot get in', a: 'Ask them to open **Settings > Users and permissions > Add user** and add you as an **Owner**. If nobody can get in at all, add a new Domain property yourself: a domain can have several owners.' },
+      { q: 'Verification keeps failing', a: 'The record is almost always right but not yet live. Wait, then press Google\'s **Verify** again. Records usually appear within minutes but can take a couple of hours.' },
     ],
     related: ['search-console-access', 'dns-txt-record'],
     keywords: ['gsc', 'google search console', 'property', 'webmaster'],
@@ -161,14 +161,14 @@ export const GUIDES = [
     steps: [
       {
         title: 'Open the property for {{domain}}',
-        body: 'Open **Search Console** and pick the property for {{domain}} in the switcher at the top left. No property yet? Set one up first — there is a guide for that.',
+        body: 'Open **Search Console** and pick the property for {{domain}} in the switcher at the top left. No property yet? Set one up first; there is a guide for that.',
         link: { label: 'Open Search Console', href: 'https://search.google.com/search-console' },
       },
       { title: 'Go to Users and permissions', body: 'Click **Settings** in the left menu, then **Users and permissions**.' },
       {
         title: 'Add our reading address as a user',
         body: 'Click **Add user** and paste this address into **Email address**:',
-        copy: [{ label: 'Address to add', value: '{{serviceAccount}}', hint: 'Paste into Search Console’s “Email address” box' }],
+        copy: [{ label: 'Address to add', value: '{{serviceAccount}}', hint: 'Paste into Search Console\'s "Email address" box' }],
         note: 'It is a service account, not a person: it has no inbox, so it never gets or sends mail. It reads your property and nothing else.',
       },
       {
@@ -176,11 +176,11 @@ export const GUIDES = [
         body: 'Choose **Full** and click **Add**. Full is what lets us read sitemaps and whether your pages are indexed; **Restricted** hides both. Nothing is ever changed, submitted or removed in your account.',
         warn: 'Pick **Full**, not **Owner**: ownership is yours, and we never need it.',
       },
-      { title: 'Come back and press “Check again”', body: 'Alaventra re-reads the connection straight away and shows the property name and permission it found.' },
+      { title: 'Come back and press "Check again"', body: 'Alaventra re-reads the connection straight away and shows the property name and permission it found.' },
     ],
     done: 'The Google data card shows **Connected**, your property and permission **Full**.',
     trouble: [
-      { q: 'The Add user button is greyed out', a: 'Only an **owner** of the property can add users. Search Console shows who the owners are on the same page — ask one of them, or send them this guide.' },
+      { q: 'The Add user button is greyed out', a: 'Only an **owner** of the property can add users. Search Console shows who the owners are on the same page. Ask one of them, or send them this guide.' },
       { q: 'Alaventra says the access is restricted', a: 'Open the same screen, click the three dots next to our address and change the permission from **Restricted** to **Full**.' },
       { q: 'We have several properties for the same site', a: 'The **Domain** property (no https:// in front of the name) is the one to use: it covers www, the bare domain and every subdomain.' },
     ],
@@ -193,23 +193,23 @@ export const GUIDES = [
     requires: 'google_signin',
     title: 'Prove the website is yours with your Google account',
     why: 'The fastest of the three ways to prove ownership: if your own Google account is already a verified owner in Search Console, there is nothing to add anywhere.',
-    where: 'Alaventra, then Google’s sign-in screen',
+    where: 'Alaventra, then Google\'s sign-in screen',
     who: 'Whoever is a verified owner in Search Console',
     minutes: 1,
     vars: [V.domain],
     steps: [
-      { title: 'Press “Verify with Google”', body: 'You go to Google’s own sign-in screen. Choose the account that is an **owner** of {{domain}} in Search Console.' },
+      { title: 'Press "Verify with Google"', body: 'You go to Google\'s own sign-in screen. Choose the account that is an **owner** of {{domain}} in Search Console.' },
       {
         title: 'Allow the read-only check',
         body: 'Google asks whether Alaventra may see your Search Console properties. That permission is read-only: we check that your account owns {{domain}} and read nothing else at this point.',
       },
-      { title: 'You come back verified', body: 'The website unlocks immediately. The next step is connecting the data itself, which is a separate, equally short job.' },
+      { title: 'You come back verified', body: 'The website is usable straight away. The next step is connecting the data itself, which is a separate, equally short job.' },
     ],
-    done: '{{domain}} shows as verified, with “Google (Search Console owner)” as the method.',
+    done: '{{domain}} shows as verified, with "Google (Search Console owner)" as the method.',
     trouble: [
       {
         q: 'Google says my account is not an owner',
-        a: 'Being able to *see* a property is not the same as owning it. Ask a current owner to open **Settings → Users and permissions → Add user** and add you as **Owner** — or use the DNS record or the meta tag instead, which prove the same thing without Google.',
+        a: 'Being able to *see* a property is not the same as owning it. Ask a current owner to open **Settings > Users and permissions > Add user** and add you as **Owner**, or use the DNS record or the meta tag instead, which prove the same thing without Google.',
       },
       { q: 'Another company already verified this website', a: 'A website belongs to one company here. Ask the owner of that company to invite you, or contact your platform administrator.' },
     ],
@@ -220,7 +220,7 @@ export const GUIDES = [
     id: 'ga4-access',
     area: 'google',
     title: 'Let Alaventra read your Google Analytics',
-    why: 'Analytics turns rankings into money: visits from search, which pages they land on, and the sign-ups, leads or sales that follow. It is optional — everything else works without it.',
+    why: 'Analytics turns rankings into money: visits from search, which pages they land on, and the sign-ups, leads or sales that follow. It is optional: everything else works without it.',
     where: 'Google Analytics (GA4)',
     who: 'An administrator of the GA4 property',
     minutes: 3,
@@ -228,26 +228,26 @@ export const GUIDES = [
     steps: [
       {
         title: 'Open Analytics and go to Admin',
-        body: 'Open **Google Analytics** and click **Admin** — the gear at the bottom left. Make sure the property shown is the one that measures {{domain}}.',
+        body: 'Open **Google Analytics** and click **Admin** (the gear at the bottom left). Make sure the property shown is the one that measures {{domain}}.',
         link: { label: 'Open Google Analytics', href: 'https://analytics.google.com/' },
       },
       { title: 'Open Property access management', body: 'In the **Property** column, click **Property access management**.' },
       {
         title: 'Add our reading address as a Viewer',
         body: 'Click **+** at the top right, then **Add users**, and paste this address:',
-        copy: [{ label: 'Address to add', value: '{{serviceAccount}}', hint: 'Paste into Analytics’ “Email addresses” box' }],
-        note: 'Untick **Notify new users by email** — a service account has no inbox.',
+        copy: [{ label: 'Address to add', value: '{{serviceAccount}}', hint: 'Paste into Analytics\' "Email addresses" box' }],
+        note: 'Untick **Notify new users by email**: a service account has no inbox.',
       },
       {
         title: 'Choose the Viewer role and click Add',
         body: 'Viewer can read reports and nothing else: it cannot change settings, edit events or delete anything.',
       },
-      { title: 'Come back and press “Check again”', body: 'Alaventra lists the properties it can now read. Pick the one that measures {{domain}} — the one whose web stream points at your domain is marked and listed first.' },
+      { title: 'Come back and press "Check again"', body: 'Alaventra lists the properties it can now read. Pick the one that measures {{domain}}. The one whose web stream points at your domain is marked and listed first.' },
     ],
     done: 'The Google data card shows **Connected** with your property name under Google Analytics 4.',
     trouble: [
       { q: 'I cannot see Property access management', a: 'You need the **Administrator** role on that property. The person who set Analytics up has it, and the same screen lists them.' },
-      { q: 'Several properties look alike', a: 'Open **Admin → Data streams** and check which one has a web stream for {{domain}}. You can also paste the property ID here by hand.' },
+      { q: 'Several properties look alike', a: 'Open **Admin > Data streams** and check which one has a web stream for {{domain}}. You can also paste the property ID here by hand.' },
       { q: 'We use Universal Analytics', a: 'Universal Analytics stopped collecting data in 2023 and cannot be read. You need a GA4 property with its own tag on the site.' },
     ],
     related: ['ga4-property-id', 'search-console-access'],
@@ -262,11 +262,11 @@ export const GUIDES = [
     minutes: 2,
     vars: [V.domain],
     steps: [
-      { title: 'Open Admin → Property details', body: 'In **Google Analytics**, click **Admin** (the gear, bottom left), then **Property details** in the Property column.', link: { label: 'Open Google Analytics', href: 'https://analytics.google.com/' } },
+      { title: 'Open Admin > Property details', body: 'In **Google Analytics**, click **Admin** (the gear, bottom left), then **Property details** in the Property column.', link: { label: 'Open Google Analytics', href: 'https://analytics.google.com/' } },
       {
         title: 'Copy the number at the top right',
         body: 'The **PROPERTY ID** is nine or ten digits, for example `123456789`. Paste it here.',
-        warn: 'It is not the `G-XXXXXXX` measurement ID — that one sits on your website and cannot be used to read reports.',
+        warn: 'It is not the `G-XXXXXXX` measurement ID: that one sits on your website and cannot be used to read reports.',
       },
       { title: 'Check it is the right property', body: 'In **Data streams**, the stream of that property should show {{domain}} as its website URL.' },
     ],
@@ -278,25 +278,25 @@ export const GUIDES = [
     id: 'search-console-links-export',
     area: 'google',
     title: 'Export the links Google knows about',
-    why: 'Google sees links no public index has, but its API will not hand them over. The export is the one way to add Google’s own view to your link ledger — and it shows how much of it the other sources already cover.',
+    why: 'Google sees links no public index has, but its API will not hand them over. The export is the one way to add Google\'s own view to your link ledger, and it shows how much of it the other sources already cover.',
     where: 'Google Search Console',
     minutes: 3,
     vars: [V.domain],
     steps: [
-      { title: 'Open Links in Search Console', body: 'Open **Search Console**, pick the property for {{domain}} and click **Links** at the bottom of the left menu.', link: { label: 'Open Search Console → Links', href: 'https://search.google.com/search-console/links' } },
+      { title: 'Open Links in Search Console', body: 'Open **Search Console**, pick the property for {{domain}} and click **Links** at the bottom of the left menu.', link: { label: 'Open Search Console > Links', href: 'https://search.google.com/search-console/links' } },
       {
         title: 'Export the external links',
-        body: 'Click **Export external links** at the top right and choose **Latest links** — the most recent links Google found, with the date it crawled each one.',
+        body: 'Click **Export external links** at the top right and choose **Latest links** (the most recent links Google found, with the date it crawled each one).',
         note: '**More sample links** works too, and so does a backlink CSV from any other tool. Ahrefs Webmaster Tools is free for a site you have verified.',
       },
-      { title: 'Download the CSV', body: 'Choose **Download CSV**. If you pick Google Sheets instead, open the sheet and use **File → Download → Comma-separated values**.' },
+      { title: 'Download the CSV', body: 'Choose **Download CSV**. If you pick Google Sheets instead, open the sheet and use **File > Download > Comma-separated values**.' },
       { title: 'Upload it here', body: 'Press **Add Search Console links** and choose the file. A new upload of the same kind replaces the old one, so you can refresh it whenever you like.' },
-      { title: 'Repeat every few months', body: 'Links come and go. An upload every quarter keeps Google’s view of your links fresh in the ledger.' },
+      { title: 'Repeat every few months', body: 'Links come and go. An upload every quarter keeps Google\'s view of your links fresh in the ledger.' },
     ],
     done: 'The source list shows the row count and the date of your upload, and the next full backlink check includes those links.',
     trouble: [
-      { q: 'The file is bigger than 15 MB', a: 'Export **Latest links** on its own rather than the whole links report — the top-linking-sites table is far smaller than every page.' },
-      { q: 'I only see “Top linking sites”', a: 'That table works as well. It gives domains rather than pages, which is enough for the ledger to find links no other source had.' },
+      { q: 'The file is bigger than 15 MB', a: 'Export **Latest links** on its own rather than the whole links report: the top-linking-sites table is far smaller than every page.' },
+      { q: 'I only see "Top linking sites"', a: 'That table works as well. It gives domains rather than pages, which is enough for the ledger to find links no other source had.' },
     ],
     related: ['search-console-access', 'bing-webmaster'],
     keywords: ['backlinks', 'csv', 'export links', 'latest links'],
@@ -305,16 +305,16 @@ export const GUIDES = [
     id: 'search-console-checkin',
     area: 'google',
     title: 'The monthly Search Console check-in',
-    why: 'Three things in Search Console are invisible to any API: a manual penalty, a security problem, and Google’s reasons for leaving pages out of the index. Two minutes a month catches the rare thing that would otherwise undo a year of work.',
+    why: 'Three things in Search Console are invisible to any API: a manual penalty, a security problem, and Google\'s reasons for leaving pages out of the index. Two minutes a month catches the rare thing that would otherwise undo a year of work.',
     where: 'Google Search Console',
     minutes: 5,
     vars: [V.domain],
     steps: [
-      { title: 'Open Manual actions', body: 'In **Search Console**, with {{domain}} selected, open **Security & Manual Actions → Manual actions**. “No issues detected” is what you want to see.', link: { label: 'Open Search Console', href: 'https://search.google.com/search-console' } },
+      { title: 'Open Manual actions', body: 'In **Search Console**, with {{domain}} selected, open **Security & Manual Actions > Manual actions**. "No issues detected" is what you want to see.', link: { label: 'Open Search Console', href: 'https://search.google.com/search-console' } },
       { title: 'Open Security issues', body: 'Same menu, **Security issues**. Hacked content and malware warnings show here first, usually before anything is visible on the site.' },
       {
         title: 'Look at the Pages report',
-        body: 'Open **Indexing → Pages**. The lower half lists why pages are not indexed. Big numbers under “Crawled – currently not indexed” or “Discovered – currently not indexed” are worth reporting.',
+        body: 'Open **Indexing > Pages**. The lower half lists why pages are not indexed. Big numbers under "Crawled, currently not indexed" or "Discovered, currently not indexed" are worth reporting.',
       },
       { title: 'Answer the two questions here', body: 'Come back, open the check-in and say what you saw. Anything you report is carried into the audit and the weekly report, so the advice accounts for it.' },
     ],
@@ -330,23 +330,23 @@ export const GUIDES = [
     title: 'Add the DNS record that proves the domain is yours',
     why: 'Nothing about a website is shown here until the company proves it owns it. A TXT record is the strongest proof and needs no change to the website itself.',
     where: 'Your domain registrar or DNS provider',
-    who: 'Whoever manages DNS — often not the same person who edits the website',
+    who: 'Whoever manages DNS, often not the same person who edits the website',
     minutes: 10,
     vars: [V.domain, V.dnsHost, V.dnsValue],
     steps: [
       {
         title: 'Find where your DNS is managed',
-        body: 'That is the registrar you bought {{domain}} from, or wherever you pointed it since — Cloudflare, your hosting panel, your agency.',
-        note: 'Not sure? Look the domain up on [ICANN Lookup](https://lookup.icann.org) — it names the registrar, and the “Name Servers” line tells you who actually serves the DNS.',
+        body: 'That is the registrar you bought {{domain}} from, or wherever you pointed it since (Cloudflare, your hosting panel, your agency).',
+        note: 'Not sure? Look the domain up on [ICANN Lookup](https://lookup.icann.org). It names the registrar, and the "Name Servers" line tells you who actually serves the DNS.',
       },
       {
         title: 'Open the DNS records for {{domain}}',
         body: 'Every provider calls this screen something slightly different.',
         choices: [
-          { label: 'Cloudflare', body: 'Pick the domain, then **DNS → Records → Add record**.' },
-          { label: 'GoDaddy', body: 'Open **Domain portfolio**, click the domain, then **DNS → Add New Record**.' },
-          { label: 'Namecheap', body: 'Open **Domain List → Manage → Advanced DNS → Add New Record**.' },
-          { label: 'Squarespace', body: 'Open **Domains**, click the domain, then **DNS → DNS settings → Add record** (domains bought from Google Domains moved here).' },
+          { label: 'Cloudflare', body: 'Pick the domain, then **DNS > Records > Add record**.' },
+          { label: 'GoDaddy', body: 'Open **Domain portfolio**, click the domain, then **DNS > Add New Record**.' },
+          { label: 'Namecheap', body: 'Open **Domain List > Manage > Advanced DNS > Add New Record**.' },
+          { label: 'Squarespace', body: 'Open **Domains**, click the domain, then **DNS > DNS settings > Add record** (domains bought from Google Domains moved here).' },
           { label: 'cPanel / Plesk', body: 'Open the **Zone Editor** (cPanel) or **DNS Settings** (Plesk) for the domain and add a record.' },
           { label: 'Somewhere else', body: 'Look for **DNS**, **Zone editor**, **Name servers** or **Advanced DNS**. Every provider has one, and the three values below are all you need.' },
         ],
@@ -362,8 +362,8 @@ export const GUIDES = [
         warn: 'Most providers add the domain to whatever you type in the host box. If the saved record ends up reading `{{domain}}.{{domain}}`, put `@` in that box instead.',
       },
       {
-        title: 'Save it, then press “Check now” here',
-        body: 'New records are usually live within minutes, sometimes after an hour or two. You can close this and come back — nothing is lost.',
+        title: 'Save it, then press "Check now" here',
+        body: 'New records are usually live within minutes, sometimes after an hour or two. You can close this and come back; nothing is lost.',
       },
       { title: 'Leave the record in place', body: 'It stays as the standing proof of ownership. Deleting it later can unverify the website.' },
     ],
@@ -371,7 +371,7 @@ export const GUIDES = [
     trouble: [
       {
         q: 'It still says the record was not found',
-        a: 'Check it from outside your own network with [DNS Checker](https://dnschecker.org) (choose TXT), or run `dig TXT {{domain}} +short` in a terminal. If the value does not show there yet, it is propagation — wait and press Check now again.',
+        a: 'Check it from outside your own network with [DNS Checker](https://dnschecker.org) (choose TXT), or run `dig TXT {{domain}} +short` in a terminal. If the value does not show there yet, it is propagation. Wait and press Check now again.',
       },
       { q: 'There is already a TXT record on the domain', a: 'Add a second one. A domain can have any number of TXT records; they do not replace each other. Do not paste our value into the existing record.' },
       { q: 'My provider only offers a "value" box with quotes', a: 'Paste the value without the quotes. Providers that need quotes add them themselves when they save.' },
@@ -383,8 +383,8 @@ export const GUIDES = [
     id: 'meta-tag',
     area: 'ownership',
     title: 'Add the verification tag to your homepage',
-    why: 'The way to prove ownership when you can edit the website but not its DNS. One line in the homepage, and it can come out again once the website is verified — though leaving it costs nothing.',
-    where: 'Your website’s homepage',
+    why: 'The way to prove ownership when you can edit the website but not its DNS. One line in the homepage, and it can come out again once the website is verified, though leaving it costs nothing.',
+    where: 'Your website\'s homepage',
     who: 'Whoever can edit the site or its theme',
     minutes: 10,
     vars: [V.domain, V.metaTag],
@@ -396,24 +396,24 @@ export const GUIDES = [
       },
       {
         title: 'Paste it into the <head> of https://{{domain}}/',
-        body: 'It has to be in the homepage’s own HTML, before the closing `</head>`.',
+        body: 'It has to be in the homepage\'s own HTML, before the closing `</head>`.',
         choices: [
-          { label: 'WordPress', body: 'Your SEO plugin has a box for exactly this: **Yoast → Settings → Site features → Webmaster tools**, or **Rank Math → General Settings → Webmaster Tools**. Otherwise use a header-scripts plugin or your theme’s “header code” setting.' },
-          { label: 'Shopify', body: 'Open **Online Store → Themes → … → Edit code** and paste it into `theme.liquid`, just below the opening `<head>` tag.' },
-          { label: 'Wix', body: 'Open **Settings → Custom code → Add custom code**, paste the tag, place it in the **Head**, and apply it to all pages.' },
-          { label: 'Squarespace', body: 'Open **Settings → Developer tools → Code injection** and paste it into the **Header** box.' },
-          { label: 'Webflow', body: 'Open **Site settings → Custom code** and paste it into **Head code**, then publish.' },
+          { label: 'WordPress', body: 'Your SEO plugin has a box for exactly this: **Yoast > Settings > Site features > Webmaster tools**, or **Rank Math > General Settings > Webmaster Tools**. Otherwise use a header-scripts plugin or your theme\'s "header code" setting.' },
+          { label: 'Shopify', body: 'Open **Online Store > Themes > ... > Edit code** and paste it into `theme.liquid`, just below the opening `<head>` tag.' },
+          { label: 'Wix', body: 'Open **Settings > Custom code > Add custom code**, paste the tag, place it in the **Head**, and apply it to all pages.' },
+          { label: 'Squarespace', body: 'Open **Settings > Developer tools > Code injection** and paste it into the **Header** box.' },
+          { label: 'Webflow', body: 'Open **Site settings > Custom code** and paste it into **Head code**, then publish.' },
           { label: 'Hand-coded site', body: 'Paste it into the `<head>` of your `index.html` or the layout template the homepage uses, and deploy.' },
         ],
       },
       { title: 'Publish, and clear any cache', body: 'Caching plugins and CDNs happily serve the old homepage for a while. Purge the cache if you have one.' },
-      { title: 'Press “Check now” here', body: 'We read https://{{domain}}/ and https://www.{{domain}}/ and look for the tag.' },
+      { title: 'Press "Check now" here', body: 'We read https://{{domain}}/ and https://www.{{domain}}/ and look for the tag.' },
     ],
-    done: '{{domain}} shows as verified. The tag can stay — it is invisible to visitors.',
+    done: '{{domain}} shows as verified. The tag can stay: it is invisible to visitors.',
     trouble: [
       {
         q: 'The check does not find it, but I can see it on the page',
-        a: 'Open the page source (**Ctrl+U** / **⌘+⌥+U**) rather than the inspector and search for the tag. If it is not in the source, it is being inserted by JavaScript — a tag manager, for instance — and our check reads the raw HTML. Put it in the page itself.',
+        a: 'Open the page source (**Ctrl+U** / **⌘+⌥+U**) rather than the inspector and search for the tag. If it is not in the source, it is being inserted by JavaScript (a tag manager, for instance), and our check reads the raw HTML. Put it in the page itself.',
       },
       { q: 'My homepage redirects somewhere else', a: 'Put the tag on the page the redirect lands on too. If https://{{domain}}/ sends visitors to /en/ or to www, both need it.' },
     ],
@@ -426,15 +426,15 @@ export const GUIDES = [
     id: 'indexnow-key-file',
     area: 'website',
     title: 'Add the IndexNow key file to your site',
-    why: 'One small text file, once. After it, every new or changed page is announced to Bing — and so to Copilot and ChatGPT search — plus Yandex, Naver and Seznam, the same week instead of whenever a crawler happens by.',
-    where: 'Your website’s files',
+    why: 'One small text file, once. After it, every new or changed page is announced to Bing (and so to Copilot and ChatGPT search), plus Yandex, Naver and Seznam, the same week instead of whenever a crawler happens by.',
+    where: 'Your website\'s files',
     who: 'Whoever can put a file at the root of the site',
     minutes: 10,
     vars: [V.domain, V.indexNowKey, V.indexNowFile, V.indexNowUrl],
     steps: [
       {
         title: 'Make the file',
-        body: 'A plain text file named after the key, containing that key and nothing else — no quotes, no line about what it is.',
+        body: 'A plain text file named after the key, containing that key and nothing else: no quotes, no line about what it is.',
         copy: [
           { label: 'File name', value: '{{indexNowFile}}' },
           { label: 'The only line inside it', value: '{{indexNowKey}}' },
@@ -445,24 +445,24 @@ export const GUIDES = [
         body: 'It has to answer at exactly this address:',
         copy: [{ label: 'Where it must live', value: '{{indexNowUrl}}' }],
         choices: [
-          { label: 'WordPress', body: 'Upload it to the folder that holds `wp-config.php` with your host’s file manager or FTP — **not** the media library, which puts files under `/wp-content/uploads/`. An IndexNow plugin can also host the file for you.' },
+          { label: 'WordPress', body: 'Upload it to the folder that holds `wp-config.php` with your host\'s file manager or FTP, **not** the media library, which puts files under `/wp-content/uploads/`. An IndexNow plugin can also host the file for you.' },
           { label: 'Next.js / Nuxt / Astro', body: 'Drop it in the `public/` folder and deploy. It is then served from the root.' },
-          { label: 'Apache / nginx / plain hosting', body: 'Put it in the web root — the folder that holds `index.html` — with FTP, SFTP or the host’s file manager.' },
+          { label: 'Apache / nginx / plain hosting', body: 'Put it in the web root (the folder that holds `index.html`) with FTP, SFTP or the host\'s file manager.' },
           { label: 'Webflow', body: 'Webflow cannot serve a file at the root. Skip this: your pages still reach Bing through the sitemap, a little more slowly.' },
-          { label: 'Shopify / Wix / Squarespace', body: 'These platforms do not let you add a file at the root either. Skip it — nothing else about the weekly run changes.' },
+          { label: 'Shopify / Wix / Squarespace', body: 'These platforms do not let you add a file at the root either. Skip it; nothing else about the weekly run changes.' },
         ],
       },
       {
         title: 'Open the address in a browser',
         body: 'You should see the key as plain text, over https, with no redirect and no page design around it.',
-        warn: 'A “404 not found”, a login screen or your site’s styled 404 page all mean the file is not at the root yet.',
+        warn: 'A "404 not found", a login screen or your site\'s styled 404 page all mean the file is not at the root yet.',
       },
-      { title: 'Press “Check the file” here', body: 'We fetch it and compare it with the key. From then on the Monday AI growth run submits your new and updated pages automatically.' },
+      { title: 'Press "Check the file" here', body: 'We fetch it and compare it with the key. From then on the Monday AI growth run submits your new and updated pages automatically.' },
     ],
     done: 'The panel says IndexNow is ready, and the next weekly run reports how many pages it sent.',
     trouble: [
-      { q: 'The browser downloads the file instead of showing it', a: 'That is fine — the content is what matters, not how the browser chooses to show it.' },
-      { q: 'I get my site’s 404 page', a: 'The file is in a subfolder. The address must have nothing between the domain and the file name.' },
+      { q: 'The browser downloads the file instead of showing it', a: 'That is fine: the content is what matters, not how the browser chooses to show it.' },
+      { q: 'I get my site\'s 404 page', a: 'The file is in a subfolder. The address must have nothing between the domain and the file name.' },
     ],
     related: ['bing-webmaster', 'publish-page'],
     keywords: ['indexnow', 'bing', 'key file', 'crawl', 'ai search'],
@@ -471,7 +471,7 @@ export const GUIDES = [
     id: 'ai-crawler-access',
     area: 'website',
     title: 'Let the AI assistants read your site',
-    why: 'An assistant can only name a page its crawler is allowed to fetch. A crawler turned away at the door is the one problem no amount of good content fixes — and most sites block one by accident.',
+    why: 'An assistant can only name a page its crawler is allowed to fetch. A crawler turned away at the door is the one problem no amount of good content fixes, and most sites block one by accident.',
     where: 'Your robots.txt and your CDN or firewall',
     who: 'Whoever can edit the site files and the CDN rules',
     minutes: 15,
@@ -479,12 +479,12 @@ export const GUIDES = [
     steps: [
       {
         title: 'Open your robots.txt',
-        body: 'It is a plain text file at the root of the site. If it answers 404, nothing is blocked by it — but it is worth adding one anyway.',
+        body: 'It is a plain text file at the root of the site. If it answers 404, nothing is blocked by it, but it is worth adding one anyway.',
         copy: [{ label: 'The address to open', value: 'https://{{domain}}/robots.txt' }],
       },
       {
         title: 'Decide which crawlers you want',
-        body: 'They fall into two groups, and the table above says which ones can reach you today. **Answer crawlers** fetch a page because someone asked a question right now — those are the ones that get you cited. **Training crawlers** collect pages to train a model, which is a separate decision and costs you nothing in visibility if you refuse.',
+        body: 'They fall into two groups, and the table above says which ones can reach you today. **Answer crawlers** fetch a page because someone asked a question right now; those are the ones that get you cited. **Training crawlers** collect pages to train a model, which is a separate decision and costs you nothing in visibility if you refuse.',
         note: 'Refusing the training crawlers while allowing the answer crawlers is a perfectly normal position, and the report never pushes you either way.',
       },
       {
@@ -495,9 +495,9 @@ export const GUIDES = [
       },
       {
         title: 'Check the firewall or CDN too',
-        body: 'This is the one people miss: robots.txt can say yes while Cloudflare, a WAF or a bot-protection rule turns the crawler away. The homepage test above is exactly that check — a crawler marked “turned away” with a status like 403 is being blocked by your edge, not by robots.txt.',
+        body: 'This is the one people miss: robots.txt can say yes while Cloudflare, a WAF or a bot-protection rule turns the crawler away. The homepage test above is exactly that check: a crawler marked "turned away" with a status like 403 is being blocked by your edge, not by robots.txt.',
         choices: [
-          { label: 'Cloudflare', body: 'Open **Security → Bots** and let verified bots through, then check **Security → WAF** for a rule that matches the user agent. Super Bot Fight Mode blocks most AI crawlers by default.' },
+          { label: 'Cloudflare', body: 'Open **Security > Bots** and let verified bots through, then check **Security > WAF** for a rule that matches the user agent. Super Bot Fight Mode blocks most AI crawlers by default.' },
           { label: 'Another CDN or WAF', body: 'Look for bot management, rate limiting or a user-agent rule, and allow the crawlers you chose. Your host can usually see which rule produced the 403.' },
           { label: 'No CDN', body: 'Then robots.txt is the only gate, and there is nothing else to change.' },
         ],
@@ -511,7 +511,7 @@ export const GUIDES = [
     done: 'Every crawler you chose shows as allowed, and the homepage test returns 200 for each of them.',
     trouble: [
       { q: 'We have no robots.txt at all', a: 'Then nothing is blocked by it. Adding one is still worth it: it is where your sitemap is announced and where these rules will live when you need them.' },
-      { q: 'A crawler is allowed but still turned away', a: 'That is the CDN or firewall, not robots.txt. The status in the homepage test — 403, 429, a challenge page — tells your host which rule to look for.' },
+      { q: 'A crawler is allowed but still turned away', a: 'That is the CDN or firewall, not robots.txt. The status in the homepage test (403, 429 or a challenge page) tells your host which rule to look for.' },
     ],
     related: ['indexnow-key-file', 'fix-pack'],
     keywords: ['robots.txt', 'llms.txt', 'gptbot', 'crawler', 'blocked', 'cloudflare', 'ai'],
@@ -520,7 +520,7 @@ export const GUIDES = [
     id: 'publish-page',
     area: 'website',
     title: 'Publish a page Alaventra wrote',
-    why: 'A written page earns nothing until it is live. Publishing it as planned — same slug, same links, same images — is what lets the rest of the plan and the rank tracking follow it.',
+    why: 'A written page earns nothing until it is live. Publishing it as planned (same slug, same links, same images) is what lets the rest of the plan and the rank tracking follow it.',
     where: 'Your CMS',
     minutes: 20,
     vars: [V.domain],
@@ -545,11 +545,11 @@ export const GUIDES = [
       },
       {
         title: 'Set the title, the description and the images',
-        body: 'Copy the SEO title and the meta description from `meta.json` into your SEO plugin’s fields. The image plan names each image, where it goes and its alt text — add them before publishing, not after.',
+        body: 'Copy the SEO title and the meta description from `meta.json` into your SEO plugin\'s fields. The image plan names each image, where it goes and its alt text. Add them before publishing, not after.',
       },
       {
         title: 'Publish, then tell Alaventra',
-        body: 'Use **I published a page** and paste its address on {{domain}}. We read the live page — title, description, structured data, images, internal links — report anything the CMS dropped, and start tracking its position.',
+        body: 'Use **I published a page** and paste its address on {{domain}}. We read the live page (title, description, structured data, images, internal links), report anything the CMS dropped, and start tracking its position.',
       },
     ],
     done: 'The page shows as published in the content list, and the rank tracker begins reporting its position the following Monday.',
@@ -565,7 +565,7 @@ export const GUIDES = [
     id: 'wordpress-application-password',
     area: 'website',
     title: 'Connect WordPress with an application password',
-    why: 'With it Alaventra puts a written page into WordPress for you — as a draft by default — with its slug, excerpt, featured image and SEO fields, and updates the same post when you send it again.',
+    why: 'With it Alaventra puts a written page into WordPress for you, as a draft by default, with its slug, excerpt, featured image and SEO fields, and updates the same post when you send it again.',
     where: 'Your WordPress admin',
     who: 'A WordPress user with the Editor or Administrator role (Administrator if the pages should keep their structured data)',
     minutes: 5,
@@ -578,28 +578,28 @@ export const GUIDES = [
       },
       {
         title: 'Create an application password',
-        body: 'Go to **Users → Profile** (or **Users → All users → the user → Edit**), scroll to **Application Passwords**, type `Alaventra` as the name and click **Add New Application Password**.',
+        body: 'Go to **Users > Profile** (or **Users > All users > the user > Edit**), scroll to **Application Passwords**, type `Alaventra` as the name and click **Add New Application Password**.',
         link: { label: 'How application passwords work (WordPress.org)', href: 'https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/' },
-        warn: 'WordPress shows the password once. Copy it now — if you lose it, revoke it and create another.',
+        warn: 'WordPress shows the password once. Copy it now. If you lose it, revoke it and create another.',
       },
       {
         title: 'Fill in the connection in Alaventra',
-        body: 'In **Website settings → Publishing → Connect a CMS → WordPress**, enter the site address (for example `https://{{domain}}`, not the /wp-admin address), the **user name** (not the e-mail) and the application password. Choose posts or pages, and the categories and tags new posts should get.',
+        body: 'In **Website settings > Publishing > Connect a CMS > WordPress**, enter the site address (for example `https://{{domain}}`, not the /wp-admin address), the **user name** (not the e-mail) and the application password. Choose posts or pages, and the categories and tags new posts should get.',
       },
       {
         title: 'Test the connection',
         body: 'Click **Test connection**. Alaventra signs in, checks the user may create and publish posts, and looks for Yoast SEO or Rank Math fields it can fill.',
         choices: [
           { label: 'Yoast SEO', body: 'The SEO title and meta description go straight into Yoast when the site exposes its fields to the REST API. If it does not, the description goes into the excerpt and Alaventra tells you to paste the title into Yoast.' },
-          { label: 'Rank Math', body: 'The same: Rank Math’s fields are filled when they are open to the REST API (Rank Math → General Settings → Others → Headless CMS Support), otherwise the excerpt carries the description.' },
+          { label: 'Rank Math', body: 'The same: Rank Math\'s fields are filled when they are open to the REST API (Rank Math > General Settings > Others > Headless CMS Support), otherwise the excerpt carries the description.' },
           { label: 'No SEO plugin', body: 'The meta description goes into the excerpt, which most themes print as the description.' },
         ],
       },
     ],
-    done: 'The connection shows **Connected** with the user’s name. On a written page, **Send to CMS as draft** creates a draft you can open in WordPress.',
+    done: 'The connection shows **Connected** with the user\'s name. On a written page, **Send to CMS as draft** creates a draft you can open in WordPress.',
     trouble: [
-      { q: 'The test says no WordPress REST API answered', a: 'Use the site’s own address. A security plugin (Wordfence, iThemes) or the host can block `/wp-json`: allow it for signed-in requests.' },
-      { q: 'The test says the password was refused', a: 'Application passwords need HTTPS and WordPress 5.6 or newer. Some hosts strip the Authorization header — ask them to pass it through, or add the rule they give you to .htaccess.' },
+      { q: 'The test says no WordPress REST API answered', a: 'Use the site\'s own address. A security plugin (Wordfence, iThemes) or the host can block `/wp-json`: allow it for signed-in requests.' },
+      { q: 'The test says the password was refused', a: 'Application passwords need HTTPS and WordPress 5.6 or newer. Some hosts strip the Authorization header. Ask them to pass it through, or add the rule they give you to .htaccess.' },
       { q: 'Publishing live fails but drafts work', a: 'The user may create but not publish. Make it an Editor or Administrator.' },
     ],
     related: ['publish-page', 'cms-webhook'],
@@ -609,15 +609,15 @@ export const GUIDES = [
     id: 'webflow-api-token',
     area: 'website',
     title: 'Connect Webflow: an API token and the collection id',
-    why: 'With them Alaventra creates the page as an item of your blog collection — a draft by default — and publishes it only when an owner or admin chooses to.',
+    why: 'With them Alaventra creates the page as an item of your blog collection (a draft by default) and publishes it only when an owner or admin chooses to.',
     where: 'Webflow site settings and the Designer',
-    who: 'A Webflow workspace member who can manage the site’s integrations',
+    who: 'A Webflow workspace member who can manage the site\'s integrations',
     minutes: 5,
     vars: [V.domain],
     steps: [
       {
         title: 'Create a site API token',
-        body: 'Open the site’s **Site settings → Apps & integrations → API access → Generate API token**. Name it `Alaventra` and give it **CMS: read and write**. Copy the token.',
+        body: 'Open the site\'s **Site settings > Apps & integrations > API access > Generate API token**. Name it `Alaventra` and give it **CMS: read and write**. Copy the token.',
         link: { label: 'Webflow: site tokens', href: 'https://developers.webflow.com/data/reference/authentication/site-token' },
         warn: 'Webflow shows the token once. Anyone with it can change your CMS, so paste it only into Alaventra.',
       },
@@ -627,12 +627,12 @@ export const GUIDES = [
       },
       {
         title: 'Connect and test',
-        body: 'In **Website settings → Publishing → Connect a CMS → Webflow**, paste the token and the collection id, then **Test connection**. Alaventra reads the collection’s fields.',
+        body: 'In **Website settings > Publishing > Connect a CMS > Webflow**, paste the token and the collection id, then **Test connection**. Alaventra reads the collection\'s fields.',
       },
       {
         title: 'Map the fields once',
         body: 'Choose the **rich-text** field that holds the article, and the plain-text fields for the meta description, the SEO title, the excerpt and the author if your collection has them. The name and the slug are filled for you.',
-        note: 'Images are not uploaded to Webflow: add the featured image in the item. The file and its alt text are in the page’s downloads.',
+        note: 'Images are not uploaded to Webflow: add the featured image in the item. The file and its alt text are in the page\'s downloads.',
       },
       {
         title: 'Tell Alaventra the address pattern',
@@ -651,7 +651,7 @@ export const GUIDES = [
     id: 'contentful-cma-token',
     area: 'website',
     title: 'Connect Contentful: a content management token',
-    why: 'With it Alaventra creates the page as an entry of your article content type — a draft by default — and publishes the entry only when an owner or admin chooses to.',
+    why: 'With it Alaventra creates the page as an entry of your article content type, a draft by default, and publishes the entry only when an owner or admin chooses to.',
     where: 'Contentful web app',
     who: 'A Contentful user with access to the space and its environment',
     minutes: 8,
@@ -659,17 +659,17 @@ export const GUIDES = [
     steps: [
       {
         title: 'Create a content management token',
-        body: 'In Contentful open **Settings → CMA tokens → Create personal access token**, name it `Alaventra` and copy it. It must be a management token, not a Content Delivery API key.',
+        body: 'In Contentful open **Settings > CMA tokens > Create personal access token**, name it `Alaventra` and copy it. It must be a management token, not a Content Delivery API key.',
         link: { label: 'Contentful: authentication', href: 'https://www.contentful.com/developers/docs/references/authentication/' },
         warn: 'Contentful shows the token once, and it acts with your own permissions. A dedicated user with access to one space only is safer.',
       },
       {
         title: 'Note the three ids',
-        body: 'The **space id** is in **Settings → General settings**. The **environment** is usually `master`. The **content type id** is shown in **Content model → your article type** (for example `blogPost`).',
+        body: 'The **space id** is in **Settings > General settings**. The **environment** is usually `master`. The **content type id** is shown in **Content model > your article type** (for example `blogPost`).',
       },
       {
         title: 'Connect and test',
-        body: 'In **Website settings → Publishing → Connect a CMS → Contentful**, paste the token and the ids, then **Test connection**. Alaventra reads the content type’s fields and your default locale.',
+        body: 'In **Website settings > Publishing > Connect a CMS > Contentful**, paste the token and the ids, then **Test connection**. Alaventra reads the content type\'s fields and your default locale.',
       },
       {
         title: 'Map the fields once',
@@ -683,7 +683,7 @@ export const GUIDES = [
     ],
     done: 'The connection shows **Connected** with the content type, and a page sent as a draft appears in Contentful as a draft entry.',
     trouble: [
-      { q: 'The test says no such space, environment or content type', a: 'One of the three ids is wrong, or the token’s user has no access to that space or environment.' },
+      { q: 'The test says no such space, environment or content type', a: 'One of the three ids is wrong, or the token\'s user has no access to that space or environment.' },
       { q: 'Publishing fails with a validation error', a: 'A required field of the content type is not mapped. Map a field to it, or make it optional in the content model.' },
     ],
     related: ['publish-page', 'cms-webhook'],
@@ -693,7 +693,7 @@ export const GUIDES = [
     id: 'cms-webhook',
     area: 'website',
     title: 'Receive pages through a signed webhook',
-    why: 'For any stack Alaventra does not connect to directly — another headless CMS, a static site, a bot that opens a pull request — the whole page arrives as signed JSON at an address of yours.',
+    why: 'For any stack Alaventra does not connect to directly (another headless CMS, a static site, a bot that opens a pull request), the whole page arrives as signed JSON at an address of yours.',
     where: 'Your own endpoint',
     who: 'A developer who can deploy a small endpoint',
     minutes: 30,
@@ -705,7 +705,7 @@ export const GUIDES = [
       },
       {
         title: 'Connect it in Alaventra and copy the secret',
-        body: 'In **Website settings → Publishing → Connect a CMS → Webhook**, enter the address. Alaventra shows a signing secret starting `whsec_` **once** — store it with your endpoint.',
+        body: 'In **Website settings > Publishing > Connect a CMS > Webhook**, enter the address. Alaventra shows a signing secret starting `whsec_` **once**. Store it with your endpoint.',
       },
       {
         title: 'Check the signature on every request',
@@ -722,13 +722,13 @@ export const GUIDES = [
       },
       {
         title: 'Answer with what you did',
-        body: 'Answer `2xx`, ideally with JSON `{"id": "…", "url": "…", "status": "draft"}` (or `"published"`). Alaventra keeps the id and the address and shows them on the page.',
+        body: 'Answer `2xx`, ideally with JSON `{"id": "...", "url": "...", "status": "draft"}` (or `"published"`). Alaventra keeps the id and the address and shows them on the page.',
         note: 'Pages on {{domain}} that you publish are checked live and tracked once you, or this answer, say they are live.',
       },
     ],
     done: 'Test connection sends a signed `cms.test` event and your endpoint answers 2xx.',
     trouble: [
-      { q: 'The signature never matches', a: 'Sign the raw body exactly as received, before any JSON parsing or re-serialisation, and use the timestamp header’s value as it is.' },
+      { q: 'The signature never matches', a: 'Sign the raw body exactly as received, before any JSON parsing or re-serialisation, and use the timestamp header\'s value as it is.' },
       { q: 'The secret is lost', a: 'Remove the connection and add it again: a new secret is made and shown once.' },
     ],
     related: ['publish-page'],
@@ -738,7 +738,7 @@ export const GUIDES = [
     id: 'bing-webmaster',
     area: 'website',
     title: 'Add your site to Bing Webmaster Tools',
-    why: 'Free, and it pays twice: Bing shares link data that costs money elsewhere, and Microsoft Copilot answers from Bing’s index — so being in it is part of being in AI answers.',
+    why: 'Free, and it pays twice: Bing shares link data that costs money elsewhere, and Microsoft Copilot answers from Bing\'s index, so being in it is part of being in AI answers.',
     where: 'Bing Webmaster Tools',
     minutes: 5,
     vars: [V.domain],
@@ -747,10 +747,10 @@ export const GUIDES = [
       {
         title: 'Import from Search Console',
         body: 'Choose **Import your sites from Google Search Console**. It carries the verification across, so there is nothing to add to your DNS or your site.',
-        note: 'Prefer not to connect the two? Add {{domain}} by hand instead and verify it the same way as in Search Console — a DNS record or a meta tag.',
+        note: 'Prefer not to connect the two? Add {{domain}} by hand instead and verify it the same way as in Search Console (a DNS record or a meta tag).',
       },
       { title: 'Submit your sitemap', body: 'Open **Sitemaps** and add `https://{{domain}}/sitemap.xml` if it is not already listed.' },
-      { title: 'Give it a few days', body: 'Bing’s link data starts arriving within a week or two, and the backlink check picks it up on its own from then on.' },
+      { title: 'Give it a few days', body: 'Bing\'s link data starts arriving within a week or two, and the backlink check picks it up on its own from then on.' },
     ],
     done: '{{domain}} is listed in Bing Webmaster Tools, and the backlink source list stops saying Bing has nothing.',
     related: ['indexnow-key-file', 'search-console-links-export'],
@@ -760,23 +760,23 @@ export const GUIDES = [
     id: 'fix-pack',
     area: 'website',
     title: 'Apply the fix pack from an audit',
-    why: 'An audit lists what is wrong; the fix pack is the work already done — the files to upload and the snippets to paste, so the fixing is minutes rather than an afternoon.',
-    where: 'Your website’s files and CMS',
+    why: 'An audit lists what is wrong; the fix pack is the work already done (the files to upload and the snippets to paste), so the fixing is minutes rather than an afternoon.',
+    where: 'Your website\'s files and CMS',
     minutes: 30,
     vars: [V.domain],
     steps: [
       { title: 'Download the fix pack', body: 'It is attached to the audit report as a zip: `robots.txt`, `llms.txt`, a list of redirects, structured-data snippets and `internal-links.csv`.' },
       {
         title: 'Upload robots.txt and llms.txt',
-        body: 'Both belong at the root of {{domain}}. Compare `robots.txt` with the one you already have before replacing it — the pack keeps your rules and adds what was missing.',
+        body: 'Both belong at the root of {{domain}}. Compare `robots.txt` with the one you already have before replacing it: the pack keeps your rules and adds what was missing.',
         warn: 'Never upload a `robots.txt` you have not read. One wrong `Disallow:` line can take a site out of Google.',
       },
-      { title: 'Add the redirects', body: 'Each line is an address that answers 404 and the page it should go to instead. Add them wherever your redirects live — the CMS, a plugin, your server config.' },
-      { title: 'Paste the structured data', body: 'Each snippet is a `<script type="application/ld+json">` block for one page. Paste it into that page’s head or your SEO plugin’s schema field.' },
+      { title: 'Add the redirects', body: 'Each line is an address that answers 404 and the page it should go to instead. Add them wherever your redirects live (the CMS, a plugin, your server config).' },
+      { title: 'Paste the structured data', body: 'Each snippet is a `<script type="application/ld+json">` block for one page. Paste it into that page\'s head or your SEO plugin\'s schema field.' },
       { title: 'Add the internal links', body: '`internal-links.csv` names, per page, the link to add and the text to use. These are the cheapest ranking gains in the pack: existing pages pointing at the pages you want to rank.' },
       { title: 'Re-run the audit', body: 'The next audit compares itself with the last one and shows exactly what you fixed.' },
     ],
-    done: 'The next audit’s health score rises and the findings you fixed appear under “fixed since the last audit”.',
+    done: 'The next audit\'s health score rises and the findings you fixed appear under "fixed since the last audit".',
     related: ['publish-page'],
     keywords: ['robots.txt', 'llms.txt', 'redirects', 'schema', 'internal links', 'audit'],
   },
@@ -786,22 +786,22 @@ export const GUIDES = [
     id: 'mailbox-connect',
     area: 'mailbox',
     title: 'Connect the mailbox your pitches go out from',
-    why: 'Link building is asking real people for a link. Those asks have to come from your own address so the replies reach you and the thread looks like what it is — a message from your company, not from a tool.',
-    where: 'Company settings → Mailboxes',
+    why: 'Link building is asking real people for a link. Those asks have to come from your own address so the replies reach you and the thread looks like what it is: a message from your company, not from a tool.',
+    where: 'Company settings > Mailboxes',
     who: 'An admin of the company, using a real mailbox someone reads',
     minutes: 5,
     steps: [
       {
         title: 'Pick the mailbox',
-        body: 'Use an address a person actually reads, on your own domain — `name@your-company.com`, not `info@` and not a free Gmail address. Replies, out-of-office notices and bounces all come back to it.',
+        body: 'Use an address a person actually reads, on your own domain (`name@your-company.com`), not `info@` and not a free Gmail address. Replies, out-of-office notices and bounces all come back to it.',
       },
       {
         title: 'Choose how to connect it',
         body: 'Microsoft 365 and Gmail connect on their own sign-in screen with no password to store. Any other host connects with an app password.',
         choices: [
           { label: 'Microsoft 365', body: 'One click. You grant sending and reading the replies to your own pitches; nothing but a renewable permission is stored, and disconnecting withdraws it.' },
-          { label: 'Gmail / Workspace', body: 'One click for sending. Google treats inbox access as a restricted scope, so replies are read by you in Gmail rather than shown here — the app says so before you connect.' },
-          { label: 'Anything else', body: 'An app password plus your host’s SMTP and IMAP servers. There is a guide for finding those.' },
+          { label: 'Gmail / Workspace', body: 'One click for sending. Google treats inbox access as a restricted scope, so replies are read by you in Gmail rather than shown here; the app says so before you connect.' },
+          { label: 'Anything else', body: 'An app password plus your host\'s SMTP and IMAP servers. There is a guide for finding those.' },
         ],
       },
       {
@@ -842,11 +842,11 @@ export const GUIDES = [
       },
       {
         title: 'Copy the 16 characters',
-        body: 'Google shows it once. Copy it straight into the password box here — the spaces do not matter.',
+        body: 'Google shows it once. Copy it straight into the password box here; the spaces do not matter.',
         warn: 'If you lose it, you cannot look it up: delete that app password and make another.',
       },
       {
-        title: 'Use Google’s servers',
+        title: 'Use Google\'s servers',
         body: 'The form fills these in for you; this is what they should say.',
         copy: [
           { label: 'SMTP (sending)', value: 'smtp.gmail.com' },
@@ -875,9 +875,9 @@ export const GUIDES = [
     steps: [
       {
         title: 'Let the mailbox send with a password',
-        body: 'An administrator opens the **Microsoft 365 admin center → Users → Active users**, picks the person, then **Mail → Manage email apps**, and ticks **Authenticated SMTP**.',
+        body: 'An administrator opens the **Microsoft 365 admin center > Users > Active users**, picks the person, then **Mail > Manage email apps**, and ticks **Authenticated SMTP**.',
         link: { label: 'Open the Microsoft 365 admin center', href: 'https://admin.microsoft.com' },
-        warn: 'Microsoft is retiring password-based SMTP — the dates have moved before and may move again. The one-click Microsoft 365 connection does not depend on it.',
+        warn: 'Microsoft is retiring password-based SMTP. The dates have moved before and may move again. The one-click Microsoft 365 connection does not depend on it.',
       },
       {
         title: 'Create an app password',
@@ -886,8 +886,8 @@ export const GUIDES = [
         note: 'No **App password** option means the administrator has disabled them. Connect with one click instead.',
       },
       {
-        title: 'Use Microsoft’s servers',
-        body: 'Port 587 with STARTTLS for sending — tick nothing for “SSL from the start”.',
+        title: 'Use Microsoft\'s servers',
+        body: 'Port 587 with STARTTLS for sending, tick nothing for "SSL from the start".',
         copy: [
           { label: 'SMTP (sending)', value: 'smtp.office365.com' },
           { label: 'SMTP port', value: '587' },
@@ -898,7 +898,7 @@ export const GUIDES = [
     ],
     done: 'The mailbox saves with a green test, and the sender starts at five pitches a day.',
     trouble: [
-      { q: 'The test says authentication is unsuccessful', a: 'Authenticated SMTP is still off for that mailbox, or the change has not reached the server yet — it can take up to an hour. Ask your administrator to confirm the tick.' },
+      { q: 'The test says authentication is unsuccessful', a: 'Authenticated SMTP is still off for that mailbox, or the change has not reached the server yet (it can take up to an hour). Ask your administrator to confirm the tick.' },
       { q: 'Our policy forbids app passwords', a: 'Then use the one-click Microsoft 365 connection: it stores a permission instead of a password and can be withdrawn at any time.' },
     ],
     related: ['mailbox-connect', 'email-authentication'],
@@ -914,12 +914,12 @@ export const GUIDES = [
     steps: [
       {
         title: 'Look them up',
-        body: 'Search for your host’s name plus `SMTP IMAP settings`, or open your webmail’s settings and look for **POP/IMAP**, **External access** or **Mail clients**. Your hosting panel usually shows them next to the mailbox.',
+        body: 'Search for your host\'s name plus `SMTP IMAP settings`, or open your webmail\'s settings and look for **POP/IMAP**, **External access** or **Mail clients**. Your hosting panel usually shows them next to the mailbox.',
       },
       {
         title: 'Note the four values',
         body: 'The sending server and its port, the reading server and its port. Common pairs: `smtp.your-host.com` on **465** with SSL from the start, or on **587** with STARTTLS; `imap.your-host.com` on **993**.',
-        note: 'Port 465 means “SSL from the start” — tick it. Port 587 means STARTTLS — leave it unticked.',
+        note: 'Port 465 means "SSL from the start", so tick it. Port 587 means STARTTLS, leave it unticked.',
       },
       {
         title: 'Check the user name',
@@ -927,12 +927,12 @@ export const GUIDES = [
       },
       {
         title: 'Use an app password where the host offers one',
-        body: 'Anywhere with two-factor sign-in — Zoho, Fastmail, Yahoo, iCloud — a normal password is refused. Create an app password in the account’s security settings.',
+        body: 'Anywhere with two-factor sign-in (Zoho, Fastmail, Yahoo, iCloud), a normal password is refused. Create an app password in the account\'s security settings.',
       },
     ],
     done: 'The connection test passes for both sending and reading.',
     trouble: [
-      { q: 'Sending works, reading does not', a: 'IMAP is often switched off by default. Turn it on in the mailbox’s settings — without it, replies cannot stop a sequence.' },
+      { q: 'Sending works, reading does not', a: 'IMAP is often switched off by default. Turn it on in the mailbox\'s settings. Without it, replies cannot stop a sequence.' },
       { q: 'The host blocks outside programs entirely', a: 'Some providers only allow their own apps. You will need a mailbox elsewhere on the same domain.' },
     ],
     related: ['mailbox-connect', 'email-authentication'],
@@ -942,7 +942,7 @@ export const GUIDES = [
     id: 'email-authentication',
     area: 'mailbox',
     title: 'Check your domain is allowed to send mail (SPF, DKIM, DMARC)',
-    why: 'Three DNS records decide whether a stranger’s mail server believes your message is really from you. Without them, good pitches quietly land in spam and you never know.',
+    why: 'Three DNS records decide whether a stranger\'s mail server believes your message is really from you. Without them, good pitches quietly land in spam and you never know.',
     where: 'Your DNS provider',
     who: 'Whoever manages DNS',
     minutes: 20,
@@ -955,22 +955,22 @@ export const GUIDES = [
       {
         title: 'SPF: who may send for you',
         body: 'One TXT record on {{domain}} listing your mail host, for example `v=spf1 include:_spf.google.com ~all` for Workspace or `include:spf.protection.outlook.com` for Microsoft 365.',
-        warn: 'A domain must have exactly one SPF record. If one exists, add the new `include:` to it — never add a second record.',
+        warn: 'A domain must have exactly one SPF record. If one exists, add the new `include:` to it, never add a second record.',
       },
       {
         title: 'DKIM: the signature',
-        body: 'Your mail host generates it and tells you which records to add. In Google Workspace it is **Apps → Google Workspace → Gmail → Authenticate email**; in Microsoft 365 it is **Defender → Policies → Email authentication → DKIM**.',
+        body: 'Your mail host generates it and tells you which records to add. In Google Workspace it is **Apps > Google Workspace > Gmail > Authenticate email**; in Microsoft 365 it is **Defender > Policies > Email authentication > DKIM**.',
       },
       {
         title: 'DMARC: what to do with the rest',
         body: 'A TXT record at `_dmarc.{{domain}}`. Start gently with `v=DMARC1; p=none; rua=mailto:you@{{domain}}`, read the reports for a few weeks, then tighten it.',
-        note: 'Already on `p=reject`? Good — just make sure the mailbox you connect sends through a host your SPF and DKIM cover.',
+        note: 'Already on `p=reject`? Good. Just make sure the mailbox you connect sends through a host your SPF and DKIM cover.',
       },
     ],
     done: 'The mailbox panel shows SPF, DKIM and DMARC as found, and pitches stop landing in spam.',
     trouble: [
       { q: 'We send from several tools', a: 'They all belong in the one SPF record, as separate `include:` entries. Ten is the hard limit on lookups.' },
-      { q: 'Changes do not show up', a: 'DNS caches. Wait an hour and check again, and clear the lookup tool’s cache if it has one.' },
+      { q: 'Changes do not show up', a: 'DNS caches. Wait an hour and check again, and clear the lookup tool\'s cache if it has one.' },
     ],
     related: ['mailbox-connect', 'dns-txt-record'],
     keywords: ['spf', 'dkim', 'dmarc', 'spam', 'deliverability'],
@@ -981,19 +981,19 @@ export const GUIDES = [
     id: 'business-profile',
     area: 'business',
     title: 'Fill in your business profile',
-    why: 'Google and the AI assistants both ask the same question about a page: who wrote this, and why should anyone believe them. The profile answers it once — a real byline, an author box, an expert reviewer, your address and schema — on every page that follows.',
-    where: 'Website settings → Business profile',
+    why: 'Google and the AI assistants both ask the same question about a page: who wrote this, and why should anyone believe them. The profile answers it once (a real byline, an author box, an expert reviewer, your address and schema) on every page that follows.',
+    where: 'Website settings > Business profile',
     who: 'Someone who knows who at your company should be the public expert',
     minutes: 20,
     steps: [
       {
         title: 'Choose a real author',
-        body: 'One person at your company who genuinely knows the subject, and who is willing to have their name on it. A founder, the head of the practice, a senior consultant. Not “the team”, not a made-up persona.',
-        warn: 'Inventing an author is the one thing in here that can actively hurt you. Google’s guidance and every AI fact check look for a person who exists elsewhere on the web.',
+        body: 'One person at your company who genuinely knows the subject, and who is willing to have their name on it. A founder, the head of the practice, a senior consultant. Not "the team", not a made-up persona.',
+        warn: 'Inventing an author is the one thing in here that can actively hurt you. Google\'s guidance and every AI fact check look for a person who exists elsewhere on the web.',
       },
       {
         title: 'Write the credentials, not the adjectives',
-        body: 'The credentials box is for checkable experience: “12 years in VAT compliance, led 40 ERP rollouts, chartered accountant”. The pages draw on it when they explain why an answer is trustworthy.',
+        body: 'The credentials box is for checkable experience: "12 years in VAT compliance, led 40 ERP rollouts, chartered accountant". The pages draw on it when they explain why an answer is trustworthy.',
       },
       {
         title: 'Point the byline at a real page',
@@ -1002,7 +1002,7 @@ export const GUIDES = [
       },
       {
         title: 'Add an expert reviewer where it matters',
-        body: 'In regulated or technical subjects — tax, law, health, finance, security — a named reviewer carries real weight. Each page then says who checked it, in words and in its structured data.',
+        body: 'In regulated or technical subjects (tax, law, health, finance, security), a named reviewer carries real weight. Each page then says who checked it, in words and in its structured data.',
       },
       {
         title: 'Get the address exactly right',
@@ -1025,8 +1025,8 @@ export const GUIDES = [
     id: 'business-facts',
     area: 'business',
     title: 'Write business facts a page can actually cite',
-    why: 'Every number in a published page has to come from somewhere. These facts are that somewhere — and anything a page cannot source gets marked for you to confirm instead of being quietly invented.',
-    where: 'Website settings → Business',
+    why: 'Every number in a published page has to come from somewhere. These facts are that somewhere, and anything a page cannot source gets marked for you to confirm instead of being quietly invented.',
+    where: 'Website settings > Business',
     minutes: 15,
     steps: [
       {
@@ -1035,12 +1035,12 @@ export const GUIDES = [
       },
       {
         title: 'Keep each one verifiable',
-        body: 'A fact that is on your website, in a contract or on a certificate is usable. “Market-leading” is not a fact and will never appear in a page.',
+        body: 'A fact that is on your website, in a contract or on a certificate is usable. "Market-leading" is not a fact and will never appear in a page.',
       },
       {
         title: 'Include the numbers you want quoted',
-        body: 'If you want “trusted by 120 finance teams in the UAE” to appear, write it here. If it is not here, the page says something vaguer or nothing at all.',
-        note: 'Prices and legal thresholds are treated carefully: an amount the facts do not carry is published as “[Confirm: …]” rather than as a number.',
+        body: 'If you want "trusted by 120 finance teams in the UAE" to appear, write it here. If it is not here, the page says something vaguer or nothing at all.',
+        note: 'Prices and legal thresholds are treated carefully: an amount the facts do not carry is published as "[Confirm: ...]" rather than as a number.',
       },
       {
         title: 'Keep it current',
@@ -1056,24 +1056,24 @@ export const GUIDES = [
     area: 'business',
     title: 'Set your style guide',
     why: 'It is the difference between pages that read like your company and pages that read like software. Written once, applied to every draft and checked again before you see it.',
-    where: 'Website settings → Business profile',
+    where: 'Website settings > Business profile',
     minutes: 10,
     steps: [
       {
         title: 'Write your name exactly as it is written',
-        body: 'Capitals, ampersands, spacing — `Northwind & Co`, not “Northwind and Co” and not “northwindco”. Titles, meta descriptions and body text all follow it, and a draft that gets your own name wrong is a real quality finding.',
+        body: 'Capitals, ampersands, spacing: `Northwind & Co`, not "Northwind and Co" and not "northwindco". Titles, meta descriptions and body text all follow it, and a draft that gets your own name wrong is a real quality finding.',
       },
       {
         title: 'Add the wrong spellings you keep seeing',
         body: 'The forms other people use for you. They are caught and corrected before the draft reaches you.',
         note: 'Your name inside a link, a slug or an e-mail address is left alone, and an ordinary sentence that happens to contain the same words is not treated as your name.',
       },
-      { title: 'Choose British or American spelling', body: 'Your choice wins over the country a page targets. Leave it on “follow the market” and each page uses the spelling of the country it is written for.' },
+      { title: 'Choose British or American spelling', body: 'Your choice wins over the country a page targets. Leave it on "follow the market" and each page uses the spelling of the country it is written for.' },
       {
         title: 'Ban the words you never want to read',
-        body: 'Hype words, a competitor’s trademark, internal jargon. They are counted and listed in the quality check rather than silently rewritten.',
+        body: 'Hype words, a competitor\'s trademark, internal jargon. They are counted and listed in the quality check rather than silently rewritten.',
       },
-      { title: 'Say how you want to sound', body: 'One line — “plain, direct, no hype; we explain the rule before the product” — does more than a page of adjectives. Exclamation marks are counted when your tone says no hype.' },
+      { title: 'Say how you want to sound', body: 'One line such as "plain, direct, no hype; we explain the rule before the product" does more than a page of adjectives. Exclamation marks are counted when your tone says no hype.' },
     ],
     done: 'The quality check on the next page reports the style check as passed, or names exactly what it changed.',
     related: ['business-profile', 'business-facts'],
@@ -1099,7 +1099,7 @@ export const GUIDES = [
       {
         title: 'Leave out the ones that only look like competitors',
         body: 'Marketplaces, directories, review sites and Wikipedia rank for everything and compete with nobody. A giant twenty times your size makes every gap look hopeless and hides the real ones.',
-        warn: 'Use the bare domain — `competitor.com`, not a long URL with https:// and a path.',
+        warn: 'Use the bare domain, `competitor.com`, not a long URL with https:// and a path.',
       },
       { title: 'Stay at three', body: 'Three is what the reports compare. More dilutes every number and uses more credits to check.' },
     ],
@@ -1111,14 +1111,14 @@ export const GUIDES = [
     id: 'brand-names',
     area: 'business',
     title: 'Tell the AI monitor what your company is called',
-    why: 'The monitor reads AI answers looking for you. A short name is the problem: “northwind” matches a dozen unrelated companies, and the result is either credit you did not earn or a miss nobody notices.',
-    where: 'Website settings → Monitors',
+    why: 'The monitor reads AI answers looking for you. A short name is the problem: "northwind" matches a dozen unrelated companies, and the result is either credit you did not earn or a miss nobody notices.',
+    where: 'Website settings > Monitors',
     minutes: 5,
     vars: [V.domain],
     steps: [
       {
         title: 'Write the full legal and trading names',
-        body: 'The way an AI assistant would write them in a sentence — “Acme Tax Technologies”, “Acme Tax LLC” — rather than the label in front of {{domain}} on its own.',
+        body: 'The way an AI assistant would write them in a sentence ("Acme Tax Technologies", "Acme Tax LLC"), rather than the label in front of {{domain}} on its own.',
       },
       { title: 'Add the forms people really use', body: 'Abbreviations, the old name after a rebrand, the name with and without the legal suffix, the product name if it is better known than the company.' },
       {
@@ -1131,20 +1131,20 @@ export const GUIDES = [
     related: ['competitors'],
     keywords: ['brand', 'mentions', 'ai visibility', 'name'],
   },
-  // G6 (2026-10-18): the AI question panel at scale — who asks, where, and a question list you already have
+  // G6 (2026-10-18): the AI question panel at scale, who asks, where, and a question list you already have
   {
     id: 'ai-buyer-roles',
     area: 'business',
     title: 'Choose the buyer roles your AI questions speak for',
     why: 'A CFO and an IT manager ask an assistant different questions about the same product, and AI names different companies to each. Writing the panel per role shows where you are visible to the people who decide, and where you are not.',
-    where: 'Website settings → Tracking & monitors → AI visibility',
+    where: 'Website settings > Tracking & monitors > AI visibility',
     minutes: 10,
     vars: [V.domain],
     steps: [
       { title: 'List who signs off a purchase', body: 'The two to four people involved when a company buys what {{domain}} sells: the one who pays (**CFO**, **Finance manager**), the one who runs it (**IT manager**, **Operations lead**), the one who decides (**Founder**, **Managing director**).' },
-      { title: 'Use the words they use for themselves', body: 'Job titles as they appear on LinkedIn in your market, one to three words each — `CFO`, `Finance manager`, `IT manager`. At most six.' },
+      { title: 'Use the words they use for themselves', body: 'Job titles as they appear on LinkedIn in your market, one to three words each (`CFO`, `Finance manager`, `IT manager`). At most six.' },
       { title: 'Type them under Buyer roles', body: 'One per entry. The next weekly run writes its new questions for each role in turn; questions you already track keep the role they have (edit them in **Your question panel** on the AI visibility page).' },
-      { title: 'Read the result by role', body: 'After the run, the AI visibility page groups the answers **By buyer role**, each with its range. A role with too few answers for a rate needs more questions — raise the panel size.' },
+      { title: 'Read the result by role', body: 'After the run, the AI visibility page groups the answers **By buyer role**, each with its range. A role with too few answers for a rate needs more questions: raise the panel size.' },
     ],
     done: 'The AI visibility page shows a row per buyer role, and the question panel can be filtered by role.',
     related: ['ai-markets', 'ai-panel-import', 'brand-names'],
@@ -1155,11 +1155,11 @@ export const GUIDES = [
     area: 'business',
     title: 'Ask the AI questions in your other markets',
     why: 'AI answers depend on where the buyer is: the same question asked from Riyadh and from Dubai names different companies. Each market you add is asked from that country, in its language.',
-    where: 'Website settings → Tracking & monitors → AI visibility',
+    where: 'Website settings > Tracking & monitors > AI visibility',
     minutes: 5,
     steps: [
       { title: 'Write each market as a country and a language', body: 'The two-letter country code, a dash, the two-letter language: `SA-en` (Saudi Arabia, English), `AE-ar` (the UAE, Arabic), `GB-en` (the United Kingdom). Your own market is always included.' },
-      { title: 'Add at most five', body: 'Type them under **Other markets**. Every market gets its share of the panel, so more markets with the same panel size means fewer questions per market — raise the panel size with them.' },
+      { title: 'Add at most five', body: 'Type them under **Other markets**. Every market gets its share of the panel, so more markets with the same panel size means fewer questions per market, so raise the panel size with them.' },
       { title: 'Check the questions it writes', body: 'The next weekly run writes questions for each market in that language. Find them in **Your question panel** with the Market filter, and switch off any that do not fit.' },
     ],
     done: 'The AI visibility page shows a row per market, and the market filter of the question panel lists them.',
@@ -1171,18 +1171,18 @@ export const GUIDES = [
     id: 'ai-panel-import',
     area: 'business',
     title: 'Import your own AI question list',
-    why: 'If your team already knows what buyers ask — from sales calls, support tickets or another tool — import the list instead of typing it. Every question is asked weekly on every engine you track.',
-    where: 'AI visibility → Your question panel → Import a question list',
+    why: 'If your team already knows what buyers ask (from sales calls, support tickets or another tool), import the list instead of typing it. Every question is asked weekly on every engine you track.',
+    where: 'AI visibility > Your question panel > Import a question list',
     minutes: 10,
     steps: [
       { title: 'Put one question per row in a spreadsheet', body: 'Write each one the way a buyer would ask an assistant, 10 to 300 characters. Up to 500 rows a file.' },
       { title: 'Add the columns you want', body: 'The first row names the columns, in any order: **question** (required), **buyer role**, **cluster** (the topic), **stage** (`awareness`, `consideration` or `decision`), **market** (`SA-en`), **pinned** (`yes` to ask it first and keep it when the panel is made smaller).', copy: [{ label: 'The header row', value: 'question,buyer role,cluster,stage,market,pinned', hint: 'Paste into the first row of the sheet' }] },
-      { title: 'Save it as CSV', body: 'In Excel or Google Sheets: **File → Download / Save as → CSV**. A semicolon or tab separated file works too.' },
+      { title: 'Save it as CSV', body: 'In Excel or Google Sheets: **File > Download / Save as > CSV**. A semicolon or tab separated file works too.' },
       { title: 'Import it', body: 'On the AI visibility page, **Choose a file**. The app shows how many questions are ready and names every line with a problem before anything is saved; then **Import**.' },
     ],
-    done: 'The imported questions appear in the panel marked “You”, and the next weekly run asks them.',
+    done: 'The imported questions appear in the panel marked "You", and the next weekly run asks them.',
     trouble: [
-      { q: 'Some lines were refused', a: 'Each refused line says why — too short, a stage that is not one of the three, a market not written as country-language. Fix those cells and import the file again: questions already imported are not duplicated.' },
+      { q: 'Some lines were refused', a: 'Each refused line says why (too short, a stage that is not one of the three, a market not written as country-language). Fix those cells and import the file again: questions already imported are not duplicated.' },
       { q: 'The panel did not grow', a: 'The panel size in Website settings is the most questions tracked. Raise it, or switch off questions you no longer need.' },
     ],
     related: ['ai-buyer-roles', 'ai-markets'],
@@ -1192,8 +1192,8 @@ export const GUIDES = [
     id: 'keywords-to-track',
     area: 'business',
     title: 'Choose the keywords to track',
-    why: 'These are the searches whose positions are checked every week. Picking the ones that lead to money — rather than the ones with the biggest numbers — is what makes the rank report worth reading.',
-    where: 'Website settings → Tracking',
+    why: 'These are the searches whose positions are checked every week. Picking the ones that lead to money, rather than the ones with the biggest numbers, is what makes the rank report worth reading.',
+    where: 'Website settings > Tracking',
     minutes: 15,
     vars: [V.domain],
     steps: [
@@ -1203,7 +1203,7 @@ export const GUIDES = [
       },
       {
         title: 'Add the searches you nearly win',
-        body: 'Search Console shows searches where you sit at positions 11 to 20 — one page from the first. Those move fastest and are already in the dashboard once tracking runs.',
+        body: 'Search Console shows searches where you sit at positions 11 to 20 (one page from the first). Those move fastest and are already in the dashboard once tracking runs.',
       },
       {
         title: 'Mix short and long',
@@ -1225,14 +1225,14 @@ export const GUIDES = [
     id: 'budget',
     area: 'company',
     title: 'Credits: see them, limit them, top them up',
-    why: 'Everything Alaventra does is paid in credits from one balance: the automatic work each website gets every week and the analyses your team starts. Knowing where they go — and setting limits — means the work never stops by surprise.',
-    where: 'Company settings → Credits',
+    why: 'Everything Alaventra does is paid in credits from one balance: the automatic work each website gets every week and the analyses your team starts. Knowing where they go, and setting limits, means the work never stops by surprise.',
+    where: 'Company settings > Credits',
     who: 'Anyone can look; the owner sets the limits; an owner or admin buys packs',
     minutes: 5,
     steps: [
       {
         title: 'See what you have and where it goes',
-        body: 'The **Credits** page shows the balance, what running analyses are holding, how long the credits will last at your pace, and this month’s use split between **autopilot** (the websites’ schedules) and **on-demand** (analyses people start). Each website shows what its automatic work will use a month.',
+        body: 'The **Credits** page shows the balance, what running analyses are holding, how long the credits will last at your pace, and this month\'s use split between **autopilot** (the websites\' schedules) and **on-demand** (analyses people start). Each website shows what its automatic work will use a month.',
       },
       {
         title: 'Know how an analysis is charged',
@@ -1240,23 +1240,23 @@ export const GUIDES = [
       },
       {
         title: 'Set your limits',
-        body: 'Under **Limits**, set a monthly limit for **on-demand** analyses and another for **autopilot**. Leave **Keep credits for autopilot** on so a busy week of analyses cannot use the credits the websites’ schedules need for the rest of the month.',
+        body: 'Under **Limits**, set a monthly limit for **on-demand** analyses and another for **autopilot**. Leave **Keep credits for autopilot** on so a busy week of analyses cannot use the credits the websites\' schedules need for the rest of the month.',
       },
       {
         title: 'Buy a pack before you run low',
         body: 'Press **Buy credits** and pick a pack. The Alaventra team confirms the request and sends the invoice; the credits are added for 12 months. You can cancel a request while it is waiting.',
-        note: 'Credits are used soonest-expiring first: welcome credits, then a plan’s monthly credits (they roll over one month), then packs.',
+        note: 'Credits are used soonest-expiring first: welcome credits, then a plan\'s monthly credits (they roll over one month), then packs.',
       },
       {
         title: 'Know what happens at zero',
-        body: 'New analyses are refused with the reason, and each website’s automatic work pauses. It resumes by itself as soon as credits are added or a new month starts. Owners and admins get an e-mail when credits run low, run out and when the work resumes.',
+        body: 'New analyses are refused with the reason, and each website\'s automatic work pauses. It resumes by itself as soon as credits are added or a new month starts. Owners and admins get an e-mail when credits run low, run out and when the work resumes.',
       },
     ],
     done: 'The Credits page shows a runway that covers the month, with your limits set and the autopilot forecast for every website fitting inside them.',
     trouble: [
       {
         q: 'An analysis was refused although there are credits left',
-        a: 'Part of the balance is kept for the websites’ automatic work this month, or the on-demand limit is reached. The message names which; raise the limit, add credits or switch **Keep credits for autopilot** off.',
+        a: 'Part of the balance is kept for the websites\' automatic work this month, or the on-demand limit is reached. The message names which; raise the limit, add credits or switch **Keep credits for autopilot** off.',
       },
     ],
     related: ['invite-team'],
@@ -1267,7 +1267,7 @@ export const GUIDES = [
     area: 'company',
     title: 'Invite your team',
     why: 'Most of the setup needs someone else: the person with DNS, the person who edits the website, the expert whose name goes on the pages. Inviting them beats forwarding screenshots.',
-    where: 'Company settings → Team',
+    where: 'Company settings > Team',
     who: 'An admin or the owner',
     minutes: 3,
     steps: [
@@ -1278,7 +1278,7 @@ export const GUIDES = [
       { title: 'Send the invitation', body: 'Enter the address and the role. They get a link that joins them straight to this company.' },
       {
         title: 'Or send them a single guide',
-        body: 'For a one-off job — adding a DNS record, say — every guide here has **Send to a colleague**, which puts the whole thing in an e-mail with your values already filled in. No account needed.',
+        body: 'For a one-off job (adding a DNS record, say), every guide here has **Send to a colleague**, which puts the whole thing in an e-mail with your values already filled in. No account needed.',
       },
     ],
     done: 'The team list shows them as a member, and work that needed them stops waiting.',
@@ -1291,13 +1291,13 @@ export const GUIDES = [
     area: 'integrations',
     title: 'Send alerts to a Slack channel',
     why: 'Alerts, failed analyses and finished reports land in the channel your team already reads, instead of waiting for someone to open Alaventra. One address per channel, so alerts and wins can go to different places.',
-    where: 'Slack (api.slack.com) and Company settings → Integrations',
+    where: 'Slack (api.slack.com) and Company settings > Integrations',
     who: 'Someone allowed to add apps to your Slack workspace',
     minutes: 5,
     steps: [
       {
         title: 'Create a small Slack app',
-        body: 'Open **Your Apps**, press **Create New App** → **From scratch**, name it `Alaventra` and pick your workspace. It needs no other setting.',
+        body: 'Open **Your Apps**, press **Create New App** > **From scratch**, name it `Alaventra` and pick your workspace. It needs no other setting.',
         link: { label: 'Open Slack apps', href: 'https://api.slack.com/apps' },
       },
       {
@@ -1311,7 +1311,7 @@ export const GUIDES = [
       },
       {
         title: 'Add it in Alaventra',
-        body: 'In **Company settings → Integrations → Alerts and events**, press **Add an endpoint**, choose **Slack channel**, paste the address, pick the events, and press **Test**.',
+        body: 'In **Company settings > Integrations > Alerts and events**, press **Add an endpoint**, choose **Slack channel**, paste the address, pick the events, and press **Test**.',
       },
     ],
     done: 'The test message appears in the channel within a few seconds.',
@@ -1327,18 +1327,18 @@ export const GUIDES = [
     area: 'integrations',
     title: 'Send alerts to a Microsoft Teams channel',
     why: 'Alerts, failed analyses and finished reports appear as cards in a Teams channel. Microsoft retired the old Office 365 connectors in favour of Workflows; this sets up the Workflows way.',
-    where: 'Microsoft Teams (Workflows) and Company settings → Integrations',
+    where: 'Microsoft Teams (Workflows) and Company settings > Integrations',
     who: 'A member of the Teams channel who may create workflows',
     minutes: 6,
     steps: [
       {
         title: 'Open Workflows on the channel',
-        body: 'In Teams, open the channel, press the **…** next to its name and choose **Workflows**.',
+        body: 'In Teams, open the channel, press the **...** next to its name and choose **Workflows**.',
       },
       {
         title: 'Use the webhook template',
         body: 'Pick **Post to a channel when a webhook request is received**, give it a name such as `Alaventra`, confirm the team and channel, and press **Add workflow**.',
-        link: { label: 'Microsoft’s instructions', href: 'https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498' },
+        link: { label: 'Microsoft\'s instructions', href: 'https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498' },
       },
       {
         title: 'Copy the address',
@@ -1346,10 +1346,10 @@ export const GUIDES = [
       },
       {
         title: 'Add it in Alaventra',
-        body: 'In **Company settings → Integrations → Alerts and events**, press **Add an endpoint**, choose **Microsoft Teams channel**, paste the address, pick the events, and press **Test**.',
+        body: 'In **Company settings > Integrations > Alerts and events**, press **Add an endpoint**, choose **Microsoft Teams channel**, paste the address, pick the events, and press **Test**.',
       },
     ],
-    done: 'A card titled “Test event” appears in the channel.',
+    done: 'A card titled "Test event" appears in the channel.',
     trouble: [{ q: 'The test is refused as not a Teams address', a: 'Older connector addresses (webhook.office.com) still work; anything else must be the Workflows address Teams showed you.' }],
     related: ['slack-webhook'],
     keywords: ['teams', 'microsoft', 'workflows', 'power automate', 'alerts'],
@@ -1358,8 +1358,8 @@ export const GUIDES = [
     id: 'webhook-signature',
     area: 'integrations',
     title: 'Receive events in your own system',
-    why: 'A signed JSON message for every event — finished runs, alerts, new audit findings, ranking moves — so your own tools, Zapier, Make or n8n can act on it. The signature proves the message came from Alaventra.',
-    where: 'Your own system, then Company settings → Integrations',
+    why: 'A signed JSON message for every event (finished runs, alerts, new audit findings, ranking moves), so your own tools (Zapier, Make or n8n) can act on it. The signature proves the message came from Alaventra.',
+    where: 'Your own system, then Company settings > Integrations',
     who: 'A developer, or whoever runs your automation tool',
     minutes: 15,
     steps: [
@@ -1369,7 +1369,7 @@ export const GUIDES = [
       },
       {
         title: 'Add it as Signed JSON',
-        body: 'In **Company settings → Integrations → Alerts and events**, add an endpoint with **Signed JSON**. Copy the `whsec_` secret it shows: it is shown once.',
+        body: 'In **Company settings > Integrations > Alerts and events**, add an endpoint with **Signed JSON**. Copy the `whsec_` secret it shows: it is shown once.',
       },
       {
         title: 'Check the signature',
@@ -1384,7 +1384,7 @@ export const GUIDES = [
         body: 'Answer with any 2xx within 10 seconds and do the work afterwards. A retried event keeps its `X-Alaventra-Delivery` id, so you can ignore one you have already handled.',
       },
     ],
-    done: '**Test** shows “delivered” and your system logged one message with a valid signature.',
+    done: '**Test** shows "delivered" and your system logged one message with a valid signature.',
     related: ['slack-webhook', 'mcp-assistant'],
     keywords: ['webhook', 'hmac', 'signature', 'zapier', 'make', 'n8n', 'json', 'events'],
   },
@@ -1392,8 +1392,8 @@ export const GUIDES = [
     id: 'jira-api-token',
     area: 'integrations',
     title: 'Connect Jira Cloud',
-    why: 'Each audit finding or recommendation can become one Jira ticket, with the evidence, the example pages and the fix written in — and its state shows back beside the finding.',
-    where: 'Atlassian account settings and Company settings → Integrations',
+    why: 'Each audit finding or recommendation can become one Jira ticket, with the evidence, the example pages and the fix written in, and its state shows back beside the finding.',
+    where: 'Atlassian account settings and Company settings > Integrations',
     who: 'A Jira user who can create issues in the project',
     minutes: 5,
     steps: [
@@ -1409,14 +1409,14 @@ export const GUIDES = [
       },
       {
         title: 'Connect it in Alaventra',
-        body: 'In **Company settings → Integrations → Issue trackers**, press **Connect** beside Jira Cloud and fill in your Jira address (like `https://your-company.atlassian.net`), the account e-mail, the token, the key and the type.',
+        body: 'In **Company settings > Integrations > Issue trackers**, press **Connect** beside Jira Cloud and fill in your Jira address (like `https://your-company.atlassian.net`), the account e-mail, the token, the key and the type.',
       },
       {
         title: 'Create a first ticket',
         body: 'Open the **Technical** page of a website and press **Create ticket** beside a finding. The ticket key appears there with its status.',
       },
     ],
-    done: 'Jira Cloud shows “Connected”, and the first ticket opens in Jira with the evidence and the fix.',
+    done: 'Jira Cloud shows "Connected", and the first ticket opens in Jira with the evidence and the fix.',
     trouble: [
       { q: 'It says the project has no such issue type', a: 'The message lists the types the project has. Type one of them exactly.' },
       { q: 'It says the token was refused', a: 'Tokens can expire or be revoked. Create a new one and use **Replace**.' },
@@ -1429,13 +1429,13 @@ export const GUIDES = [
     area: 'integrations',
     title: 'Connect Linear',
     why: 'Each audit finding or recommendation can become one Linear issue in your team, written in Markdown with the evidence and the fix, and its state shows back in Alaventra.',
-    where: 'Linear settings and Company settings → Integrations',
+    where: 'Linear settings and Company settings > Integrations',
     who: 'A member of the Linear team',
     minutes: 3,
     steps: [
       {
         title: 'Create a personal API key',
-        body: 'In Linear open **Settings → Account → Security & access**, then **Personal API keys** → **New API key**, name it `Alaventra` and copy it. It starts with `lin_api_`.',
+        body: 'In Linear open **Settings > Account > Security & access**, then **Personal API keys** > **New API key**, name it `Alaventra` and copy it. It starts with `lin_api_`.',
         link: { label: 'Open Linear settings', href: 'https://linear.app/settings/account/security' },
       },
       {
@@ -1444,10 +1444,10 @@ export const GUIDES = [
       },
       {
         title: 'Connect it in Alaventra',
-        body: 'In **Company settings → Integrations → Issue trackers**, press **Connect** beside Linear, paste the key and the team key.',
+        body: 'In **Company settings > Integrations > Issue trackers**, press **Connect** beside Linear, paste the key and the team key.',
       },
     ],
-    done: 'Linear shows “Connected” with the team’s name.',
+    done: 'Linear shows "Connected" with the team\'s name.',
     related: ['jira-api-token', 'asana-pat'],
     keywords: ['linear', 'issue', 'ticket', 'api key'],
   },
@@ -1456,7 +1456,7 @@ export const GUIDES = [
     area: 'integrations',
     title: 'Connect Asana',
     why: 'Each audit finding or recommendation can become one Asana task in a project, with the evidence and the fix in its description, and its completion shows back in Alaventra.',
-    where: 'Asana developer console and Company settings → Integrations',
+    where: 'Asana developer console and Company settings > Integrations',
     who: 'A member of the Asana project',
     minutes: 4,
     steps: [
@@ -1471,10 +1471,10 @@ export const GUIDES = [
       },
       {
         title: 'Connect it in Alaventra',
-        body: 'In **Company settings → Integrations → Issue trackers**, press **Connect** beside Asana and paste the token and the project id.',
+        body: 'In **Company settings > Integrations > Issue trackers**, press **Connect** beside Asana and paste the token and the project id.',
       },
     ],
-    done: 'Asana shows “Connected” with the project’s name.',
+    done: 'Asana shows "Connected" with the project\'s name.',
     related: ['jira-api-token', 'linear-api-key'],
     keywords: ['asana', 'task', 'pat', 'personal access token'],
   },
@@ -1482,8 +1482,8 @@ export const GUIDES = [
     id: 's3-access-keys',
     area: 'integrations',
     title: 'Export to S3, Google Cloud Storage or Cloudflare R2',
-    why: 'Your rankings, Search Console and GA4 figures, audit findings, AI visibility, backlinks and analyses land as files in your own bucket every day or week — ready for Snowflake, Redshift, Databricks or any BI tool.',
-    where: 'Your cloud console and Company settings → Integrations',
+    why: 'Your rankings, Search Console and GA4 figures, audit findings, AI visibility, backlinks and analyses land as files in your own bucket every day or week, ready for Snowflake, Redshift, Databricks or any BI tool.',
+    where: 'Your cloud console and Company settings > Integrations',
     who: 'Someone who manages your cloud storage',
     minutes: 15,
     steps: [
@@ -1502,26 +1502,26 @@ export const GUIDES = [
           },
           {
             label: 'Google Cloud Storage',
-            body: 'Give a service account **Storage Object Creator** on the bucket, then under **Cloud Storage → Settings → Interoperability** create an **HMAC key** for it. Copy the access key and the secret.',
+            body: 'Give a service account **Storage Object Creator** on the bucket, then under **Cloud Storage > Settings > Interoperability** create an **HMAC key** for it. Copy the access key and the secret.',
             link: { label: 'Google: HMAC keys', href: 'https://cloud.google.com/storage/docs/authentication/managing-hmackeys' },
           },
           {
             label: 'Cloudflare R2',
-            body: 'In **R2 → Manage API tokens** create a token with **Object Read & Write** limited to the bucket. Copy the access key id, the secret access key and your account id.',
+            body: 'In **R2 > Manage API tokens** create a token with **Object Read & Write** limited to the bucket. Copy the access key id, the secret access key and your account id.',
             link: { label: 'Cloudflare: R2 API tokens', href: 'https://developers.cloudflare.com/r2/api/tokens/' },
           },
         ],
       },
       {
         title: 'Add the destination in Alaventra',
-        body: 'In **Company settings → Integrations → Data export**, press **Add a destination**, choose the storage, the bucket, a folder, NDJSON or CSV, the tables and the schedule, and paste the keys. Alaventra writes one small test file before saving.',
+        body: 'In **Company settings > Integrations > Data export**, press **Add a destination**, choose the storage, the bucket, a folder, NDJSON or CSV, the tables and the schedule, and paste the keys. Alaventra writes one small test file before saving.',
       },
       {
         title: 'Read the newest folder',
         body: 'Files arrive as `<folder>/<table>/dt=<date>/<table>-<run>.ndjson`. Each run is a full copy, so your queries read the newest `dt` folder.',
       },
     ],
-    done: '**Run now** shows “Done” with the rows of each table, and the files are in the bucket.',
+    done: '**Run now** shows "Done" with the rows of each table, and the files are in the bucket.',
     trouble: [{ q: 'It says AccessDenied', a: 'The key may not write to that bucket or folder. Check the policy names the bucket and allows putting objects.' }],
     related: ['bigquery-service-account', 'looker-studio-connector'],
     keywords: ['s3', 'aws', 'gcs', 'google cloud storage', 'r2', 'cloudflare', 'export', 'warehouse', 'snowflake', 'redshift'],
@@ -1530,8 +1530,8 @@ export const GUIDES = [
     id: 'bigquery-service-account',
     area: 'integrations',
     title: 'Export to BigQuery',
-    why: 'Six tables — rankings, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks and the analyses you ran — are loaded into your own BigQuery dataset on a schedule, with a documented schema.',
-    where: 'Google Cloud console and Company settings → Integrations',
+    why: 'Six tables (rankings, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks and the analyses you ran) are loaded into your own BigQuery dataset on a schedule, with a documented schema.',
+    where: 'Google Cloud console and Company settings > Integrations',
     who: 'Someone with IAM rights in your Google Cloud project',
     minutes: 15,
     steps: [
@@ -1542,20 +1542,20 @@ export const GUIDES = [
       },
       {
         title: 'Create a service account for Alaventra',
-        body: 'In **IAM & Admin → Service accounts**, create one named `alaventra-export`. Give it **BigQuery Job User** on the project and **BigQuery Data Editor** on the dataset only.',
+        body: 'In **IAM & Admin > Service accounts**, create one named `alaventra-export`. Give it **BigQuery Job User** on the project and **BigQuery Data Editor** on the dataset only.',
         link: { label: 'Open service accounts', href: 'https://console.cloud.google.com/iam-admin/serviceaccounts' },
       },
       {
         title: 'Download its JSON key',
-        body: 'Open the service account → **Keys → Add key → Create new key → JSON**. A file downloads. Keep it private; you will paste it once.',
+        body: 'Open the service account > **Keys > Add key > Create new key > JSON**. A file downloads. Keep it private; you will paste it once.',
         warn: 'If your organisation blocks key creation, ask an administrator for an exception for this one account, or use the S3-compatible export to Google Cloud Storage instead.',
       },
       {
         title: 'Add the destination in Alaventra',
-        body: 'In **Company settings → Integrations → Data export**, press **Add a destination**, choose **BigQuery**, fill in the project id and dataset, paste the whole JSON key and choose the tables and schedule. Alaventra checks it can see the dataset before saving.',
+        body: 'In **Company settings > Integrations > Data export**, press **Add a destination**, choose **BigQuery**, fill in the project id and dataset, paste the whole JSON key and choose the tables and schedule. Alaventra checks it can see the dataset before saving.',
       },
     ],
-    done: '**Run now** shows “Done”, and tables named like `alaventra_rank_history` appear in the dataset.',
+    done: '**Run now** shows "Done", and tables named like `alaventra_rank_history` appear in the dataset.',
     trouble: [{ q: 'It says the dataset does not exist', a: 'Check the project id and dataset id, and that the service account was given access to that dataset.' }],
     related: ['s3-access-keys', 'looker-studio-connector'],
     keywords: ['bigquery', 'google cloud', 'service account', 'warehouse', 'export', 'json key'],
@@ -1564,7 +1564,7 @@ export const GUIDES = [
     id: 'looker-studio-connector',
     area: 'integrations',
     title: 'Add Alaventra to Looker Studio',
-    why: 'Chart your rankings, Search Console and GA4 figures, audit findings, AI visibility and backlinks in Looker Studio, beside the rest of your company’s reporting, refreshed from Alaventra.',
+    why: 'Chart your rankings, Search Console and GA4 figures, audit findings, AI visibility and backlinks in Looker Studio, beside the rest of your company\'s reporting, refreshed from Alaventra.',
     where: 'Alaventra, Google Apps Script and Looker Studio',
     who: 'Whoever builds your Looker Studio reports (the first step needs an Alaventra owner or admin)',
     minutes: 15,
@@ -1572,16 +1572,16 @@ export const GUIDES = [
     steps: [
       {
         title: 'Create a read-only API key',
-        body: 'In **Company settings → API access**, create a key named `Looker Studio` with only **Read** ticked. Copy it.',
+        body: 'In **Company settings > API access**, create a key named `Looker Studio` with only **Read** ticked. Copy it.',
       },
       {
         title: 'Install the connector',
-        body: 'Alaventra’s connector is a small Google Apps Script. Create a new project at script.google.com, paste the files from Alaventra’s `integrations/looker-studio` folder, then **Deploy → New deployment → Add-on / Looker Studio connector**, as its README describes.',
+        body: 'Alaventra\'s connector is a small Google Apps Script. Create a new project at script.google.com, paste the files from Alaventra\'s `integrations/looker-studio` folder, then **Deploy > New deployment > Add-on / Looker Studio connector**, as its README describes.',
         link: { label: 'Open Apps Script', href: 'https://script.google.com/home' },
       },
       {
         title: 'Add it as a data source',
-        body: 'In Looker Studio, **Create → Data source**, search for your deployed connector, paste the API key when asked, and fill in your Alaventra address, the website and the table.',
+        body: 'In Looker Studio, **Create > Data source**, search for your deployed connector, paste the API key when asked, and fill in your Alaventra address, the website and the table.',
         copy: [{ label: 'Alaventra address', value: '{{appUrl}}' }],
       },
       {
@@ -1597,16 +1597,16 @@ export const GUIDES = [
     id: 'mcp-assistant',
     area: 'integrations',
     title: 'Connect Claude or ChatGPT to your SEO data',
-    why: 'Ask an AI assistant about your websites, audits, rankings and reports — and, if you allow it, let it start analyses for you, using your company’s credits and with the same checks as the app.',
-    where: 'Company settings → API access, and your assistant’s settings',
+    why: 'Ask an AI assistant about your websites, audits, rankings and reports and, if you allow it, let it start analyses for you, using your company\'s credits and with the same checks as the app.',
+    where: 'Company settings > API access, and your assistant\'s settings',
     who: 'An owner or admin (for the key); anyone for the assistant',
     minutes: 5,
     vars: [{ key: 'appUrl', label: 'Your Alaventra address', example: 'https://app.alaventra.example' }],
     steps: [
       {
         title: 'Create a key for the assistant',
-        body: 'In **Company settings → API access**, create a key. Tick only **Read** for questions; tick **Start analyses** as well if the assistant may start runs.',
-        warn: 'A key with **Start analyses** uses your company’s credits. The assistant is told to show you the price in credits first and never to accept a duplicate warning you have not seen.',
+        body: 'In **Company settings > API access**, create a key. Tick only **Read** for questions; tick **Start analyses** as well if the assistant may start runs.',
+        warn: 'A key with **Start analyses** uses your company\'s credits. The assistant is told to show you the price in credits first and never to accept a duplicate warning you have not seen.',
       },
       {
         title: 'Add Alaventra to the assistant',
@@ -1615,12 +1615,12 @@ export const GUIDES = [
         choices: [
           { label: 'Claude Code', body: 'Run `claude mcp add --transport http alaventra <the MCP address> --header "Authorization: Bearer <your key>"`.' },
           { label: 'Claude Desktop', body: 'Add a server to **claude_desktop_config.json** that runs `npx -y mcp-remote <the MCP address> --header Authorization:<Bearer your key>`; the snippet on the Integrations page is ready to copy.' },
-          { label: 'OpenAI API', body: 'Add a tool of type `mcp` with the address and an `Authorization` header to your Responses API call. ChatGPT’s own app connectors accept only OAuth, so a key cannot be pasted there yet.' },
+          { label: 'OpenAI API', body: 'Add a tool of type `mcp` with the address and an `Authorization` header to your Responses API call. ChatGPT\'s own app connectors accept only OAuth, so a key cannot be pasted there yet.' },
         ],
       },
       {
         title: 'Ask something',
-        body: 'Try “Which high-severity findings are new on my site since the last audit?” or, with a run key, “Preview a technical audit of my site”.',
+        body: 'Try "Which high-severity findings are new on my site since the last audit?" or, with a run key, "Preview a technical audit of my site".',
       },
     ],
     done: 'The assistant lists your websites when asked.',
@@ -1632,14 +1632,14 @@ export const GUIDES = [
     id: 'two-step-verification',
     area: 'security',
     title: 'Turn on two-step verification',
-    why: 'A password alone is one leak away from someone else reading your company’s reports and starting paid runs. With a second step, a stolen password is not enough.',
-    where: 'Your account → Two-step verification',
+    why: 'A password alone is one leak away from someone else reading your company\'s reports and starting paid runs. With a second step, a stolen password is not enough.',
+    where: 'Your account > Two-step verification',
     who: 'Everyone, for their own account',
     minutes: 4,
     steps: [
       {
         title: 'Choose how you will confirm it is you',
-        body: 'An **authenticator app** on your phone shows a new 6-digit code every 30 seconds. A **passkey** uses your laptop’s fingerprint or face unlock, your phone, or a security key. You can set up both; either works at sign-in.',
+        body: 'An **authenticator app** on your phone shows a new 6-digit code every 30 seconds. A **passkey** uses your laptop\'s fingerprint or face unlock, your phone, or a security key. You can set up both; either works at sign-in.',
         choices: [
           { label: 'Authenticator app', body: 'Install one if you have none: **Google Authenticator**, **Microsoft Authenticator**, **1Password** or **Authy** all work. Company phones often have one already.' },
           { label: 'Passkey', body: 'Nothing to install on a recent Mac, Windows PC, iPhone or Android phone. A hardware key (YubiKey or similar) works too.' },
@@ -1647,7 +1647,7 @@ export const GUIDES = [
       },
       {
         title: 'Set it up',
-        body: 'Open **Your account**, find **Two-step verification** and press **Set up an authenticator app** (scan the QR code, then type the code the app shows) or **Add a passkey** (follow your browser’s prompt).',
+        body: 'Open **Your account**, find **Two-step verification** and press **Set up an authenticator app** (scan the QR code, then type the code the app shows) or **Add a passkey** (follow your browser\'s prompt).',
         note: 'If you cannot scan the code, type the key shown under it into the app as a "time-based" account.',
       },
       {
@@ -1658,7 +1658,7 @@ export const GUIDES = [
     ],
     done: 'Your account shows **Two-step verification: On**, and the next sign-in asks for a code after your password.',
     trouble: [
-      { q: 'The code is always rejected', a: 'The phone’s clock is off. Set date and time to **automatic** on the phone, then use the newest code. A code works once and only for about a minute.' },
+      { q: 'The code is always rejected', a: 'The phone\'s clock is off. Set date and time to **automatic** on the phone, then use the newest code. A code works once and only for about a minute.' },
       { q: 'I lost my phone', a: 'Sign in with a recovery code, then remove the old app and set up the new phone. Out of codes: ask your company owner.' },
     ],
     related: ['require-two-step'],
@@ -1669,11 +1669,11 @@ export const GUIDES = [
     area: 'security',
     title: 'Require two-step verification for your whole company',
     why: 'One member with a reused password is enough for someone to read every report. Requiring a second step closes that for everyone at once.',
-    where: 'Company settings → Security',
+    where: 'Company settings > Security',
     who: 'An owner or admin (who already uses two-step verification)',
     minutes: 5,
     steps: [
-      { title: 'Turn it on for yourself first', body: 'The switch stays locked until your own account has two-step verification — otherwise it would lock you out on the next click.' },
+      { title: 'Turn it on for yourself first', body: 'The switch stays locked until your own account has two-step verification; otherwise it would lock you out on the next click.' },
       {
         title: 'Tell the team before you switch it on',
         body: 'Members without a second step see a page asking them to set one up the next time they open the company. Nothing is lost; they just cannot see anything until they do. **Send to a colleague** sends them the setup guide.',
@@ -1692,22 +1692,22 @@ export const GUIDES = [
     id: 'sso-domain',
     area: 'security',
     title: 'Prove your e-mail domain for single sign-on',
-    why: 'Single sign-on and provisioning only ever act on addresses at domains your company has proven it controls — so no other company can claim your colleagues.',
+    why: 'Single sign-on and provisioning only ever act on addresses at domains your company has proven it controls, so no other company can claim your colleagues.',
     where: 'Your DNS provider',
     who: 'Whoever manages DNS for your domain (often IT)',
     minutes: 10,
     vars: [V.domain, { key: 'dnsValue', label: 'Value of the record', example: 'alaventra-sso=abc123def456' }],
     steps: [
-      { title: 'Add the domain in Alaventra', body: 'Company settings → **Single sign-on** → **Add a domain**: type `{{domain}}` (the part after @ in your colleagues’ addresses). Public mail providers such as gmail.com cannot be claimed.' },
+      { title: 'Add the domain in Alaventra', body: 'Company settings > **Single sign-on** > **Add a domain**: type `{{domain}}` (the part after @ in your colleagues\' addresses). Public mail providers such as gmail.com cannot be claimed.' },
       {
         title: 'Add a TXT record at your DNS provider',
         body: 'Create a record of type **TXT** at the domain itself (host `@`, or `{{domain}}`), with this value. Leave any other TXT records (SPF, Google, Microsoft) as they are.',
         copy: [{ label: 'TXT value', value: '{{dnsValue}}', hint: 'Value / Content / Text' }],
         choices: [
-          { label: 'Cloudflare', body: '**DNS → Records → Add record**, type TXT, name `@`, paste the value, **Save**.' },
-          { label: 'GoDaddy', body: '**My Products → DNS → Add New Record**, type TXT, name `@`, paste the value, **Save**.' },
-          { label: 'Route 53', body: '**Hosted zones → {{domain}} → Create record**, type TXT, leave the name empty, paste the value in quotes, **Create records**.' },
-          { label: 'Azure DNS', body: '**DNS zones → {{domain}} → + Record set**, type TXT, name `@`, paste the value, **OK**.' },
+          { label: 'Cloudflare', body: '**DNS > Records > Add record**, type TXT, name `@`, paste the value, **Save**.' },
+          { label: 'GoDaddy', body: '**My Products > DNS > Add New Record**, type TXT, name `@`, paste the value, **Save**.' },
+          { label: 'Route 53', body: '**Hosted zones > {{domain}} > Create record**, type TXT, leave the name empty, paste the value in quotes, **Create records**.' },
+          { label: 'Azure DNS', body: '**DNS zones > {{domain}} > + Record set**, type TXT, name `@`, paste the value, **OK**.' },
         ],
       },
       { title: 'Check it', body: 'Back in Alaventra press **Check now**. Records usually appear within minutes; some providers take up to an hour.' },
@@ -1721,28 +1721,28 @@ export const GUIDES = [
     id: 'scim-provisioning',
     area: 'security',
     title: 'Provision people automatically (SCIM)',
-    why: 'Joiners get access without an invitation, and a leaver switched off in your identity provider loses access here at once — no one has to remember to remove them.',
-    where: 'Company settings → Single sign-on, then your identity provider',
+    why: 'Joiners get access without an invitation, and a leaver switched off in your identity provider loses access here at once, so no one has to remember to remove them.',
+    where: 'Company settings > Single sign-on, then your identity provider',
     who: 'An administrator of your identity provider, with an owner or admin of your company in Alaventra',
     minutes: 15,
     vars: [{ key: 'scimUrl', label: 'SCIM base URL', example: 'https://app.alaventra.example/api/scim/v2' }],
     steps: [
       { title: 'Verify your e-mail domain first', body: 'Provisioning only creates people whose addresses are on your verified domains (see **Prove your e-mail domain**).' },
-      { title: 'Create a provisioning token', body: 'Company settings → **Single sign-on** → Provisioning: name it after your provider and **Create token**. Copy it at once: it is shown only once.' },
+      { title: 'Create a provisioning token', body: 'Company settings > **Single sign-on** > Provisioning: name it after your provider and **Create token**. Copy it at once: it is shown only once.' },
       {
         title: 'Point your identity provider at Alaventra',
         body: 'Give it the base URL and the token (as a Bearer / HTTP header token).',
         copy: [{ label: 'SCIM base URL', value: '{{scimUrl}}' }],
         choices: [
-          { label: 'Okta', body: 'In the Alaventra app: **General → App Settings → Provisioning: SCIM**, then **Provisioning → Integration**: SCIM connector base URL = the URL above, unique identifier `userName`, actions Push New Users / Push Profile Updates / Push Groups, authentication **HTTP Header** with the token. Then **To App**: enable Create, Update and Deactivate.' },
-          { label: 'Microsoft Entra ID', body: 'Enterprise application → **Provisioning → Get started → Automatic**: Tenant URL = the URL above, Secret token = the token, **Test Connection**, **Save**, then **Start provisioning**.' },
+          { label: 'Okta', body: 'In the Alaventra app: **General > App Settings > Provisioning: SCIM**, then **Provisioning > Integration**: SCIM connector base URL = the URL above, unique identifier `userName`, actions Push New Users / Push Profile Updates / Push Groups, authentication **HTTP Header** with the token. Then **To App**: enable Create, Update and Deactivate.' },
+          { label: 'Microsoft Entra ID', body: 'Enterprise application > **Provisioning > Get started > Automatic**: Tenant URL = the URL above, Secret token = the token, **Test Connection**, **Save**, then **Start provisioning**.' },
         ],
       },
-      { title: 'Map groups to roles', body: 'Push the groups you use (for example “Alaventra Admins”). They appear under **Groups and roles**: choose the role each gives. A person gets the highest role of their groups; owners are never changed.' },
+      { title: 'Map groups to roles', body: 'Push the groups you use (for example "Alaventra Admins"). They appear under **Groups and roles**: choose the role each gives. A person gets the highest role of their groups; owners are never changed.' },
     ],
     done: 'People you assign in your provider appear in the Team list marked **SCIM**, and switching one off shows them as **Deactivated**.',
     trouble: [
-      { q: 'Users are refused with “not on one of this company’s verified domains”', a: 'Verify that domain first, or assign only people with addresses on your verified domains.' },
+      { q: 'Users are refused with "not on one of this company\'s verified domains"', a: 'Verify that domain first, or assign only people with addresses on your verified domains.' },
       { q: 'Okta says the user already exists', a: 'They are already a member (invited earlier). Okta matches them by userName and updates them from then on.' },
     ],
     related: ['sso-identity-provider', 'sso-domain'],
@@ -1752,8 +1752,8 @@ export const GUIDES = [
     id: 'sso-identity-provider',
     area: 'security',
     title: 'Connect your identity provider (single sign-on)',
-    why: 'Your people sign in with the account your IT team already manages, with its MFA and its leaver process — nobody keeps a separate password for Alaventra.',
-    where: 'Your identity provider’s admin console, then Company settings → Single sign-on',
+    why: 'Your people sign in with the account your IT team already manages, with its MFA and its leaver process, so nobody keeps a separate password for Alaventra.',
+    where: 'Your identity provider\'s admin console, then Company settings > Single sign-on',
     who: 'An administrator of your identity provider, with an owner or admin of your company in Alaventra',
     minutes: 20,
     vars: [
@@ -1773,23 +1773,23 @@ export const GUIDES = [
           { label: 'SAML entity ID / audience', value: '{{entityId}}' },
         ],
         choices: [
-          { label: 'Okta (OIDC)', body: '**Applications → Create App Integration → OIDC → Web Application**. Sign-in redirect URI: the value above. Grant type: Authorization Code. Copy the **Client ID**, **Client secret** and your Okta domain (issuer `https://<you>.okta.com`).' },
-          { label: 'Okta (SAML)', body: '**Applications → Create App Integration → SAML 2.0**. Single sign-on URL: the ACS URL; Audience URI: the entity ID; Name ID format **EmailAddress**; attribute `email` = user.email. Then **View SAML setup instructions**: copy the IdP SSO URL, the issuer and the certificate.' },
-          { label: 'Microsoft Entra ID (OIDC)', body: '**App registrations → New registration**, redirect URI (Web) = the value above. **Certificates & secrets → New client secret**. Issuer: `https://login.microsoftonline.com/<tenant id>/v2.0`. Under **Token configuration** add the optional claim **email**.' },
-          { label: 'Microsoft Entra ID (SAML)', body: '**Enterprise applications → New application → Create your own → non-gallery**, then **Single sign-on → SAML**: Identifier = the entity ID, Reply URL = the ACS URL. Download **Certificate (Base64)**; copy **Login URL** and **Microsoft Entra Identifier**.' },
-          { label: 'Google Workspace (SAML)', body: 'Admin console → **Apps → Web and mobile apps → Add custom SAML app**. Copy the **SSO URL**, **Entity ID** and **Certificate**; ACS URL and Entity ID = the values above; Name ID **Basic Information → Primary email**.' },
+          { label: 'Okta (OIDC)', body: '**Applications > Create App Integration > OIDC > Web Application**. Sign-in redirect URI: the value above. Grant type: Authorization Code. Copy the **Client ID**, **Client secret** and your Okta domain (issuer `https://<you>.okta.com`).' },
+          { label: 'Okta (SAML)', body: '**Applications > Create App Integration > SAML 2.0**. Single sign-on URL: the ACS URL; Audience URI: the entity ID; Name ID format **EmailAddress**; attribute `email` = user.email. Then **View SAML setup instructions**: copy the IdP SSO URL, the issuer and the certificate.' },
+          { label: 'Microsoft Entra ID (OIDC)', body: '**App registrations > New registration**, redirect URI (Web) = the value above. **Certificates & secrets > New client secret**. Issuer: `https://login.microsoftonline.com/<tenant id>/v2.0`. Under **Token configuration** add the optional claim **email**.' },
+          { label: 'Microsoft Entra ID (SAML)', body: '**Enterprise applications > New application > Create your own > non-gallery**, then **Single sign-on > SAML**: Identifier = the entity ID, Reply URL = the ACS URL. Download **Certificate (Base64)**; copy **Login URL** and **Microsoft Entra Identifier**.' },
+          { label: 'Google Workspace (SAML)', body: 'Admin console > **Apps > Web and mobile apps > Add custom SAML app**. Copy the **SSO URL**, **Entity ID** and **Certificate**; ACS URL and Entity ID = the values above; Name ID **Basic Information > Primary email**.' },
         ],
         note: 'For SAML you can also point your IdP at the metadata URL: {{metadataUrl}}',
       },
-      { title: 'Enter the IdP’s values in Alaventra', body: 'Company settings → **Single sign-on** → Identity provider: paste the issuer, client ID and secret (OIDC) or the entity ID, SSO URL and certificate (SAML), choose whether first sign-ins create accounts and with which role, and **Save**.' },
+      { title: 'Enter the IdP\'s values in Alaventra', body: 'Company settings > **Single sign-on** > Identity provider: paste the issuer, client ID and secret (OIDC) or the entity ID, SSO URL and certificate (SAML), choose whether first sign-ins create accounts and with which role, and **Save**.' },
       { title: 'Run a test sign-in', body: 'Press **Test sign-in** and sign in at your provider with an account on your verified domain. Nothing is created; the result appears under **Last test**.' },
-      { title: 'Switch it on — and, when ready, require it', body: 'Turn on **Single sign-on is on**. Once everyone has tried it, an owner can turn on **Require single sign-on**: passwords then stop working on your domains (owners keep theirs as the way in if the provider is down).' },
+      { title: 'Switch it on, then require it when ready', body: 'Turn on **Single sign-on is on**. Once everyone has tried it, an owner can turn on **Require single sign-on**: passwords then stop working on your domains (owners keep theirs as the way in if the provider is down).' },
     ],
     done: 'The last test is green, single sign-on is on, and colleagues reach Alaventra through **Sign in with SSO**.',
     trouble: [
       { q: 'The test says no e-mail address was sent', a: 'Add the **email** claim (OIDC) or an `email` attribute / EmailAddress Name ID (SAML) in your provider.' },
-      { q: '“audience mismatch” or “Recipient”', a: 'The entity ID or ACS URL in your provider differs from ours by a character. Copy them again from this page.' },
-      { q: '“Invalid signature”', a: 'The certificate pasted here is not the one your provider signs with (often after a rotation). Paste the current one.' },
+      { q: '"audience mismatch" or "Recipient"', a: 'The entity ID or ACS URL in your provider differs from ours by a character. Copy them again from this page.' },
+      { q: '"Invalid signature"', a: 'The certificate pasted here is not the one your provider signs with (often after a rotation). Paste the current one.' },
     ],
     related: ['sso-domain', 'scim-provisioning'],
     keywords: ['sso', 'saml', 'oidc', 'okta', 'entra', 'azure ad', 'google workspace', 'identity provider', 'single sign-on'],
@@ -1798,8 +1798,8 @@ export const GUIDES = [
   {
     id: 'crawler-logs-upload',
     area: 'website',
-    title: 'Upload your server’s access log',
-    why: 'Your access log is the only record of what Googlebot and the AI crawlers really fetched on {{domain}} — which pages, how often, and what your server answered. One file is enough to start.',
+    title: 'Upload your server\'s access log',
+    why: 'Your access log is the only record of what Googlebot and the AI crawlers really fetched on {{domain}} (which pages, how often, and what your server answered). One file is enough to start.',
     where: 'Your web server or hosting panel',
     who: 'Whoever can download files from the server or the hosting panel',
     minutes: 10,
@@ -1811,17 +1811,17 @@ export const GUIDES = [
         choices: [
           { label: 'Nginx', body: 'On the server: `/var/log/nginx/access.log` and the rotated `access.log.*.gz` beside it.' },
           { label: 'Apache', body: '`/var/log/apache2/access.log` (Debian, Ubuntu) or `/var/log/httpd/access_log` (Red Hat, CentOS), plus the rotated files.' },
-          { label: 'IIS (Windows)', body: '`C:\\inetpub\\logs\\LogFiles\\W3SVC1\\` — one `u_ex*.log` file per day. The W3C format is read as it is.' },
-          { label: 'cPanel', body: 'Open **Metrics → Raw Access**, then download the archive for {{domain}}. It is already gzip.' },
-          { label: 'Plesk', body: 'Open **Websites & Domains → Logs**, filter on access logs and download them.' },
+          { label: 'IIS (Windows)', body: '`C:\\inetpub\\logs\\LogFiles\\W3SVC1\\`, one `u_ex*.log` file per day. The W3C format is read as it is.' },
+          { label: 'cPanel', body: 'Open **Metrics > Raw Access**, then download the archive for {{domain}}. It is already gzip.' },
+          { label: 'Plesk', body: 'Open **Websites & Domains > Logs**, filter on access logs and download them.' },
           { label: 'Managed WordPress hosts', body: 'Kinsta, WP Engine and similar hosts keep access logs but show only the last lines in their panel. Ask their support for the raw access logs of the last 30 days.' },
           { label: 'Amazon CloudFront', body: 'Standard logs land in the S3 bucket you chose. Download the `.gz` files of the days you want and upload them as they are.' },
         ],
       },
       {
         title: 'Keep the visitor address in the log',
-        body: 'Crawlers are proved by their address, so the log must hold the visitor’s address, not your CDN’s or load balancer’s.',
-        warn: 'Behind Cloudflare or a load balancer the default log shows the proxy. Log `CF-Connecting-IP` or `X-Forwarded-For` (Nginx: the `realip` module; Apache: `mod_remoteip`), or send Cloudflare’s own logs with Logpush instead.',
+        body: 'Crawlers are proved by their address, so the log must hold the visitor\'s address, not your CDN\'s or load balancer\'s.',
+        warn: 'Behind Cloudflare or a load balancer the default log shows the proxy. Log `CF-Connecting-IP` or `X-Forwarded-For` (Nginx: the `realip` module; Apache: `mod_remoteip`), or send Cloudflare\'s own logs with Logpush instead.',
       },
       {
         title: 'Upload it on the Crawlers page',
@@ -1832,7 +1832,7 @@ export const GUIDES = [
     ],
     done: 'The Crawlers page shows requests per crawler, with how many were proved to be the real crawler.',
     trouble: [
-      { q: 'Every Googlebot request shows as “unchecked”', a: 'The log holds your proxy’s address. See step 2, or use Cloudflare Logpush.' },
+      { q: 'Every Googlebot request shows as "unchecked"', a: 'The log holds your proxy\'s address. See step 2, or use Cloudflare Logpush.' },
       { q: 'Lines were counted as unreadable', a: 'We read Apache and Nginx combined or common logs, IIS / W3C extended logs and JSON lines. A custom format with the date first or no quotes around the request is not read; switch the log back to combined for the days you upload.' },
       { q: 'What happens to the addresses of people', a: 'Requests from people are counted and dropped. The file itself is deleted as soon as it has been read.' },
     ],
@@ -1842,8 +1842,8 @@ export const GUIDES = [
   {
     id: 'crawler-logs-cloudflare',
     area: 'website',
-    title: 'Send Cloudflare’s logs automatically (Logpush)',
-    why: 'With Logpush Cloudflare sends every request for {{domain}} to Alaventra within minutes, with the visitor’s real address, so the Crawlers page stays current without anyone uploading files.',
+    title: 'Send Cloudflare\'s logs automatically (Logpush)',
+    why: 'With Logpush Cloudflare sends every request for {{domain}} to Alaventra within minutes, with the visitor\'s real address, so the Crawlers page stays current without anyone uploading files.',
     where: 'Cloudflare dashboard',
     who: 'A Cloudflare account member who may edit Logpush jobs (Logs Write)',
     minutes: 10,
@@ -1852,11 +1852,11 @@ export const GUIDES = [
       {
         title: 'Create a push key here',
         body: 'On the Crawlers page press **Create push key** and copy it. It is shown once; a new key replaces the old one at once.',
-        warn: 'Logpush of HTTP requests is a Cloudflare Enterprise feature. On other plans, upload your server’s access log instead.',
+        warn: 'Logpush of HTTP requests is a Cloudflare Enterprise feature. On other plans, upload your server\'s access log instead.',
       },
       {
         title: 'Start a Logpush job in Cloudflare',
-        body: 'Open your domain in Cloudflare, then **Analytics & Logs → Logpush → Create a Logpush job**. Choose the **HTTP destination**.',
+        body: 'Open your domain in Cloudflare, then **Analytics & Logs > Logpush > Create a Logpush job**. Choose the **HTTP destination**.',
         link: { label: 'Cloudflare: HTTP destination', href: 'https://developers.cloudflare.com/logs/logpush/logpush-job/enable-destinations/http/' },
       },
       {
@@ -1871,9 +1871,9 @@ export const GUIDES = [
       },
       { title: 'Save', body: 'Cloudflare sends a small test file first; Alaventra accepts it, and the job turns on. The Crawlers page shows the time of the last push.' },
     ],
-    done: 'The Crawlers page shows “Last push” a few minutes old and the request counts start to grow.',
+    done: 'The Crawlers page shows "Last push" a few minutes old and the request counts start to grow.',
     trouble: [
-      { q: 'Cloudflare says “error validating destination”', a: 'The key in the address is wrong or was replaced. Create a new key here and paste it again.' },
+      { q: 'Cloudflare says "error validating destination"', a: 'The key in the address is wrong or was replaced. Create a new key here and paste it again.' },
       { q: 'Requests stopped arriving', a: 'Check the job is enabled in Cloudflare and that nobody created a new key here since.' },
     ],
     related: ['crawler-logs-upload', 'crawler-logs-drain'],
@@ -1898,7 +1898,7 @@ export const GUIDES = [
           { label: 'Header name', value: '{{logHeader}}' },
         ],
         choices: [
-          { label: 'Vercel', body: '**Team Settings → Drains → Add Drain**, data type **Logs**, sources static, lambda and edge, destination **Custom endpoint**. Format NDJSON or JSON, and under **Custom headers** add `{{logHeader}}: your key`.', link: { label: 'Vercel: drains', href: 'https://vercel.com/docs/drains/using-drains' } },
+          { label: 'Vercel', body: '**Team Settings > Drains > Add Drain**, data type **Logs**, sources static, lambda and edge, destination **Custom endpoint**. Format NDJSON or JSON, and under **Custom headers** add `{{logHeader}}: your key`.', link: { label: 'Vercel: drains', href: 'https://vercel.com/docs/drains/using-drains' } },
           { label: 'Fastly', body: 'Add an **HTTPS** logging endpoint with the URL above, a custom header named `{{logHeader}}` with your key, JSON log line format and content type `application/x-ndjson`. Use the log format below.', link: { label: 'Fastly: HTTPS logging', href: 'https://www.fastly.com/documentation/guides/integrations/logging-endpoints/log-streaming-https/' } },
           { label: 'Akamai DataStream 2', body: 'Create a stream with a **Custom HTTPS** destination, JSON format, and a custom header `{{logHeader}}` with your key. Include client IP, request time, host, method, path, query string, status code, total bytes, user agent and turnaround time.', link: { label: 'Akamai: custom HTTPS endpoint', href: 'https://techdocs.akamai.com/datastream2/docs/stream-custom-https' } },
           { label: 'Anything else', body: 'Any service that can POST JSON lines with a custom header works. Each line needs a time, the client address, the path, the status and the user agent; we recognise the usual names (`timestamp`, `client_ip`, `path`, `status`, `user_agent` and many others).' },
@@ -1911,7 +1911,7 @@ export const GUIDES = [
       },
       { title: 'Save and test', body: 'Most services send a test request when you save. The Crawlers page shows the time of the last push.' },
     ],
-    done: 'The Crawlers page shows “Last push” a few minutes old.',
+    done: 'The Crawlers page shows "Last push" a few minutes old.',
     trouble: [{ q: 'The test fails with 401', a: 'The header name or the key is wrong. The header must be exactly `{{logHeader}}`, the value the key and nothing else.' }],
     related: ['crawler-logs-upload', 'crawler-logs-cloudflare'],
     keywords: ['vercel', 'fastly', 'akamai', 'log drain', 'datastream', 'server log', 'bots'],
@@ -1922,8 +1922,8 @@ export const GUIDES = [
     area: 'agency',
     title: 'Put your client portal on your own domain',
     why: 'Your clients sign in at an address with your name in it, such as seo.youragency.com, and never see ours.',
-    where: 'Your DNS provider, then Company settings → Portal address',
-    who: 'Whoever manages DNS for your agency’s domain',
+    where: 'Your DNS provider, then Company settings > Portal address',
+    who: 'Whoever manages DNS for your agency\'s domain',
     minutes: 15,
     vars: [
       { key: 'host', label: 'Your portal address', example: 'seo.youragency.com' },
@@ -1941,10 +1941,10 @@ export const GUIDES = [
           { label: 'Value', value: '{{txtValue}}', hint: 'Value / Content / Text' },
         ],
         choices: [
-          { label: 'Cloudflare', body: '**DNS → Records → Add record**, type TXT, paste the name and the value, **Save**.' },
-          { label: 'GoDaddy', body: '**My Products → DNS → Add New Record**, type TXT, name = the part before your domain, paste the value, **Save**.' },
-          { label: 'Namecheap', body: '**Domain List → Manage → Advanced DNS → Add New Record**, TXT Record, host = the part before your domain, paste the value, tick to save.' },
-          { label: 'Route 53', body: '**Hosted zones → your domain → Create record**, type TXT, record name = the part before your domain, the value in quotes, **Create records**.' },
+          { label: 'Cloudflare', body: '**DNS > Records > Add record**, type TXT, paste the name and the value, **Save**.' },
+          { label: 'GoDaddy', body: '**My Products > DNS > Add New Record**, type TXT, name = the part before your domain, paste the value, **Save**.' },
+          { label: 'Namecheap', body: '**Domain List > Manage > Advanced DNS > Add New Record**, TXT Record, host = the part before your domain, paste the value, tick to save.' },
+          { label: 'Route 53', body: '**Hosted zones > your domain > Create record**, type TXT, record name = the part before your domain, the value in quotes, **Create records**.' },
         ],
       },
       {
@@ -1972,19 +1972,19 @@ export const GUIDES = [
     id: 'portal-email-auth',
     area: 'agency',
     title: 'Send client e-mails from your own address',
-    why: 'Report e-mails and invitations to your clients come from your agency’s address — and only once your domain tells mail servers it allows it, so they land in the inbox and not in spam.',
-    where: 'Your mail provider and DNS, then Company settings → Client e-mail',
-    who: 'Whoever manages your mail domain’s DNS',
+    why: 'Report e-mails and invitations to your clients come from your agency\'s address, and only once your domain tells mail servers it allows it, so they land in the inbox and not in spam.',
+    where: 'Your mail provider and DNS, then Company settings > Client e-mail',
+    who: 'Whoever manages your mail domain\'s DNS',
     minutes: 20,
     vars: [{ key: 'domain', label: 'Your mail domain', example: 'youragency.com' }],
     steps: [
-      { title: 'Connect the mailbox', body: 'Company settings → **Mailboxes**: connect the address you want clients to see, for example `reports@{{domain}}`.' },
+      { title: 'Connect the mailbox', body: 'Company settings > **Mailboxes**: connect the address you want clients to see, for example `reports@{{domain}}`.' },
       {
         title: 'Publish SPF',
         body: 'Your domain needs one TXT record starting with `v=spf1` that names your mail provider and ends in `~all` or `-all` (never `+all`).',
         choices: [
-          { label: 'Google Workspace', body: 'TXT at `@`: `v=spf1 include:_spf.google.com ~all`', link: { label: 'Google’s SPF help', href: 'https://support.google.com/a/answer/33786' } },
-          { label: 'Microsoft 365', body: 'TXT at `@`: `v=spf1 include:spf.protection.outlook.com -all`', link: { label: 'Microsoft’s SPF help', href: 'https://learn.microsoft.com/en-us/defender-office-365/email-authentication-spf-configure' } },
+          { label: 'Google Workspace', body: 'TXT at `@`: `v=spf1 include:_spf.google.com ~all`', link: { label: 'Google\'s SPF help', href: 'https://support.google.com/a/answer/33786' } },
+          { label: 'Microsoft 365', body: 'TXT at `@`: `v=spf1 include:spf.protection.outlook.com -all`', link: { label: 'Microsoft\'s SPF help', href: 'https://learn.microsoft.com/en-us/defender-office-365/email-authentication-spf-configure' } },
         ],
       },
       {
@@ -1992,11 +1992,11 @@ export const GUIDES = [
         body: 'Your mail provider gives you a DKIM record (a TXT or CNAME under `<selector>._domainkey.{{domain}}`). Add it, then switch signing on in the provider.',
         note: 'If your provider uses a selector that is not one of the common ones, type it in **DKIM selector** so we look in the right place.',
       },
-      { title: 'Choose it as the sender', body: 'Company settings → **Client e-mail**: pick the mailbox and **Save**. We check SPF and DKIM; until both pass, e-mails go out from our address under your agency’s name.' },
+      { title: 'Choose it as the sender', body: 'Company settings > **Client e-mail**: pick the mailbox and **Save**. We check SPF and DKIM; until both pass, e-mails go out from our address under your agency\'s name.' },
     ],
     done: 'Client e-mail shows **Verified** beside the mailbox, and the next invitation comes from your address.',
     trouble: [
-      { q: 'SPF says “weak”', a: 'Your record ends in `+all` or `?all`, which lets anyone send as you. Change it to `~all` or `-all`.' },
+      { q: 'SPF says "weak"', a: 'Your record ends in `+all` or `?all`, which lets anyone send as you. Change it to `~all` or `-all`.' },
       { q: 'DKIM is not found', a: 'Signing may still be off in your provider, or it uses another selector: enter the selector shown in its DKIM settings.' },
     ],
     related: ['email-authentication', 'mailbox-connect'],
@@ -2006,8 +2006,8 @@ export const GUIDES = [
     id: 'portal-branding',
     area: 'agency',
     title: 'Brand the portal as your own',
-    why: 'Your clients see your name, your logo and your colour on every page, report and e-mail — the work is presented as yours.',
-    where: 'Company settings → Branding',
+    why: 'Your clients see your name, your logo and your colour on every page, report and e-mail: the work is presented as yours.',
+    where: 'Company settings > Branding',
     minutes: 5,
     steps: [
       { title: 'Host your logo', body: 'Put an SVG or PNG of your logo on your own website or CDN at an **https** address. A transparent background works best; add a second one drawn for dark backgrounds if you have it.' },
@@ -2022,12 +2022,12 @@ export const GUIDES = [
     id: 'invite-clients',
     area: 'agency',
     title: 'Give a client access to their portal',
-    why: 'Your client follows their own websites — dashboards, reports, recommendations — and approves pages and outreach before they go out, without seeing your other clients or your credits.',
-    where: 'The client’s workspace → Company settings → Team',
+    why: 'Your client follows their own websites, dashboards, reports and recommendations, and approves pages and outreach before they go out, without seeing your other clients or your credits.',
+    where: 'The client\'s workspace > Company settings > Team',
     minutes: 3,
     steps: [
-      { title: 'Open the client’s workspace', body: 'From **Clients**, open the client and go to **Company settings → Team → Invite people**.' },
-      { title: 'Pick the role', body: '**Client viewer** reads everything in the portal. **Client approver** also approves pages and outreach. Your own team is added from the agency’s Clients page, not here.' },
+      { title: 'Open the client\'s workspace', body: 'From **Clients**, open the client and go to **Company settings > Team > Invite people**.' },
+      { title: 'Pick the role', body: '**Client viewer** reads everything in the portal. **Client approver** also approves pages and outreach. Your own team is added from the agency\'s Clients page, not here.' },
       { title: 'Send the link', body: 'They get an e-mail from your agency (or you copy the link). It opens on your portal address when you have one.' },
     ],
     done: 'They appear in the Team list with their client role.',
@@ -2123,7 +2123,7 @@ export function plainText(markup: string): string {
     .replace(/`([^`]+)`/g, '$1');
 }
 
-/** The whole guide as plain text — for the clipboard and for the e-mail to the colleague who has to do it. */
+/** The whole guide as plain text, for the clipboard and for the e-mail to the colleague who has to do it. */
 export function guideText(guide: Guide, vars: GuideVars = {}): string {
   const g = fillGuide(guide, vars);
   const out: string[] = [g.title, '', plainText(g.why), ''];
@@ -2142,14 +2142,14 @@ export function guideText(guide: Guide, vars: GuideVars = {}): string {
   if (g.done) out.push(`You know it worked when: ${plainText(g.done)}`, '');
   if (g.trouble?.length) {
     out.push('If it does not work');
-    for (const t of g.trouble) out.push(`- ${plainText(t.q)} — ${plainText(t.a)}`);
+    for (const t of g.trouble) out.push(`- ${plainText(t.q)}${/[?.!]$/.test(plainText(t.q)) ? '' : ':'} ${plainText(t.a)}`);
     out.push('');
   }
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /**
- * Guides matching a search box query, best first. Every word has to match the start of a word somewhere in the guide — a search for
+ * Guides matching a search box query, best first. Every word has to match the start of a word somewhere in the guide, a search for
  * "app password" must not return the fix pack because its text happens to contain "happens".
  */
 export function searchGuides(query: string): Guide[] {

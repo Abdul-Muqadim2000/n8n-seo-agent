@@ -3,10 +3,10 @@ import { brandInitials, brandLogoUrl, sharedBrand } from './brand';
 import { shareCaveat } from './share';
 import { deliveryDecision } from './report-delivery';
 
-// B-R2 — white-label-lite. Two rules a client-facing page depends on: a logo URL we are willing to render, and a brand that is never
+// B-R2, white-label-lite. Two rules a client-facing page depends on: a logo URL we are willing to render, and a brand that is never
 // empty. Plus the caveat a shared report carries when the run that made it said it was not finished work.
 
-describe('brandLogoUrl — https, a real host, and nothing that only matters inside markup', () => {
+describe('brandLogoUrl, https, a real host, and nothing that only matters inside markup', () => {
   it('takes an ordinary https logo, with a path, a query, a port or none of them', () => {
     for (const url of [
       'https://techand.ai/logo.png',
@@ -82,12 +82,12 @@ describe('the mark a client sees', () => {
   });
 });
 
-describe('shareCaveat — a shared report says what the run said about itself', () => {
+describe('shareCaveat, a shared report says what the run said about itself', () => {
   it('says nothing about a finished report', () => {
     expect(shareCaveat(deliveryDecision({ stage: 'site_audit', status: 'completed', payload: { health_score: 83 } }))).toBeNull();
   });
 
-  it('warns that a page which failed its quality rounds is a draft, in the run’s own words', () => {
+  it('warns that a page which failed its quality rounds is a draft, in the run\'s own words', () => {
     const c = shareCaveat(deliveryDecision({ stage: 'content', status: 'completed', payload: { qa_not_ready: true, qa_reasons: ['3 placeholders left'] } }));
     expect(c?.code).toBe('not_ready');
     expect(c?.title).toBe('A draft, not finished work');
@@ -101,7 +101,7 @@ describe('shareCaveat — a shared report says what the run said about itself', 
     expect(shareCaveat(deliveryDecision({ stage: 'ai_visibility_started', status: 'completed', payload: {} }))?.code).toBe('interim');
   });
 
-  it('says nothing about the company’s own delivery settings — they are not about this report', () => {
+  it('says nothing about the company\'s own delivery settings, they are not about this report', () => {
     for (const code of ['delivery_off', 'no_channel', 'stage_not_chosen', 'already_delivered', 'something_new'])
       expect(shareCaveat({ deliver: false, reason: 'x', code })).toBeNull();
   });

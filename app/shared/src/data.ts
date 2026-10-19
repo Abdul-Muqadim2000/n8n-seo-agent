@@ -74,7 +74,7 @@ export interface TrackingConnection {
   lastRunAt: string | null;
   lastStatus: string | null;
   keywords: string[];
-  /** the engine's weekly reports for this site are delivered to this app (false: still to an older address — save tracking once) */
+  /** the engine's weekly reports for this site are delivered to this app (false: still to an older address, save tracking once) */
   reportsToThisApp: boolean;
 }
 
@@ -154,7 +154,7 @@ export interface SearchData {
   queries: QueryPoint[];
   periods: string[];
   trends: TrendPoint[];
-  /** G12: what to mark on the charts — pages published, audit fixes, Google updates, data breaks (oldest first) */
+  /** G12: what to mark on the charts, pages published, audit fixes, Google updates, data breaks (oldest first) */
   annotations: ChartAnnotation[];
   /** G12: the data breaks this window straddles, so a before / after comparison can say it is not comparable */
   dataBreaks: { name: string; start: string; end: string; detail: string }[];
@@ -185,7 +185,7 @@ export interface SerpFeatures {
   localPack: { shown: boolean | null; ours: boolean | null };
   video: boolean | null;
   shopping: boolean | null;
-  /** the short labels the tables show ("AI Overview (cites you)", "Snippet (yours)", "PAA", …) */
+  /** the short labels the tables show ("AI Overview (cites you)", "Snippet (yours)", "PAA", ...) */
   labels: string[];
 }
 
@@ -202,7 +202,7 @@ export interface SerpReading {
   features: SerpFeatures;
   /** our modelled share of the clicks page 1 offers (null = the check failed) */
   shareOfVoice: number | null;
-  /** how that share is modelled — shown wherever the number is shown; it is not measured clicks */
+  /** how that share is modelled, shown wherever the number is shown; it is not measured clicks */
   method: string;
   above: SerpCompetitor[];
   competitors: SerpCompetitor[];
@@ -338,7 +338,7 @@ export interface Finding {
   recheck: FindingRecheck | null;
 }
 
-/** G11 (2026-10-13, FIX_PLAN): "I fixed this" asks the daily key-page watch to judge this one finding again — within a day, not at the
+/** G11 (2026-10-13, FIX_PLAN): "I fixed this" asks the daily key-page watch to judge this one finding again, within a day, not at the
  *  next monthly audit. `requested` = waiting for tonight's watch; `fixed` / `still_open` = it was judged on the site's key pages;
  *  `not_checked` = the watch cannot judge it without the full audit (and says so). */
 export type RecheckState = 'requested' | 'fixed' | 'still_open' | 'not_checked';
@@ -543,7 +543,7 @@ export interface AiGroup {
   leader: string;
 }
 
-/** v4.12: one key page — can AI assistants read and quote it (0-100), Bing's crawl, when it was sent to Bing / IndexNow */
+/** v4.12: one key page, can AI assistants read and quote it (0-100), Bing's crawl, when it was sent to Bing / IndexNow */
 export interface AiPageStat {
   url: string;
   kind: string;
@@ -598,7 +598,7 @@ export interface AiEarnedPage {
   /** the outreach draft / forum reply (from seo_link_prospects) */
   draft: { subject: string; body: string } | null;
 }
-/** v4.12: is the IndexNow key file on the site? (POST …/ai/indexnow/check) */
+/** v4.12: is the IndexNow key file on the site? (POST .../ai/indexnow/check) */
 export interface IndexNowCheck {
   verified: boolean;
   keyUrl: string;
@@ -676,7 +676,7 @@ export interface AiData {
     /** v4.12: the exact third-party pages the answer cited */
     citedUrls: { url: string; title: string }[];
   }[];
-  /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the weekly AI growth loop — null until its first run */
+  /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the weekly AI growth loop, null until its first run */
   growth: AiGrowth | null;
   /** from the latest AI visibility report (when it was delivered to the app) */
   report: {
@@ -744,7 +744,7 @@ export interface BacklinkRef {
   /** 0-1 (0-3 from the analyst / 3) */
   relevance: number | null;
   note: string;
-  /** dfs, bing, gsc, ga4, cc, wiki, hn, news, web, import — every source that ever reported it */
+  /** dfs, bing, gsc, ga4, cc, wiki, hn, news, web, import, every source that ever reported it */
   sources: string[];
   firstSeen: string;
   lastSeen: string;
@@ -991,7 +991,7 @@ export interface QueueItem {
   ladder: { id: string; rung: number; head: string; pageNo: number } | null;
   /** v4.12: the AI target the page is written for */
   aiTarget?: { targetId: string; question: string; kind: 'answer' | 'refresh' } | null;
-  /** v4.16 (B4-3): the clicks this page lost in 28 days — what put a `decay` refresh where it is in the queue */
+  /** v4.16 (B4-3): the clicks this page lost in 28 days, what put a `decay` refresh where it is in the queue */
   decayLost?: number;
 }
 
@@ -1087,7 +1087,7 @@ export type LadderStatus = 'planning' | 'writing' | 'climbing' | 'won' | 'paused
 export type LadderMode = 'auto' | 'manual';
 export type PlanType = 'direct' | 'short' | 'full';
 /** planned · writing (run in progress) · waiting (written, not published) · published · gated (main page waiting for support) ·
- *  set_aside (R16: the keyword rule refused this planned page — a competitor's brand, a government portal or an off-topic search —
+ *  set_aside (R16: the keyword rule refused this planned page, a competitor's brand, a government portal or an off-topic search -
  *  so the Monday runs skip it and nothing is written for it; the engine marks the row `set_aside` with the reason) */
 export type LadderPageState = 'planned' | 'writing' | 'waiting' | 'published' | 'gated' | 'set_aside';
 
@@ -1117,7 +1117,7 @@ export interface LadderPage {
   volume: number | null;
   kd: number | null;
   supporting: string[];
-  /** R111: written, but the draft did not pass the quality check — fix it and run it again (never "I published it") */
+  /** R111: written, but the draft did not pass the quality check, fix it and run it again (never "I published it") */
   needsFix?: boolean;
   qaReasons?: string[];
 }
@@ -1177,7 +1177,7 @@ export interface LadderDetail extends LadderCard {
   /** about how many credits this ladder has used so far (its runs, its pages, its rank checks) */
   creditsSoFar: number;
   expectedVisitsTop3: number | null;
-  /** G12: the events marked on this ladder's charts — its pages going live, audit fixes, Google updates, data breaks */
+  /** G12: the events marked on this ladder's charts, its pages going live, audit fixes, Google updates, data breaks */
   annotations: ChartAnnotation[];
   /** G12: what each of this ladder's page changes did, against the site's other pages */
   changeTests: PageChangeTest[];
@@ -1202,7 +1202,7 @@ export interface ThisWeekItem {
   at: string;
   automation: import('./constants').AutomationId;
   title: string;
-  /** what it touches, e.g. "2 ladders, 18 pages" or "'accredited service provider…' for ladder 'e invoicing in uae'" */
+  /** what it touches, e.g. "2 ladders, 18 pages" or "'accredited service provider...' for ladder 'e invoicing in uae'" */
   detail: string;
   running: boolean;
 }

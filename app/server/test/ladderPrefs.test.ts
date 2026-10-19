@@ -45,7 +45,7 @@ beforeEach(() => {
   n8n.upserts = [];
 });
 
-describe('ladder_plan callback → the flow’s choices', () => {
+describe('ladder_plan callback gives the flow\'s choices', () => {
   it('only the plan of a ladder run with choices, when pages were planned', () => {
     expect(ladderPrefsOf('ladder_plan', plan(), run({ mode: 'manual', first: true }))).toEqual({ ladderId: 'lad_new', prefs: { mode: 'manual', first: true } });
     // refused: a duplicate or a keyword that is not realistic
@@ -87,7 +87,7 @@ describe('ladder_plan callback → the flow’s choices', () => {
     ]);
   });
 
-  it('applyLadderPrefs writes the website’s rows only; nothing when the ladder has no rows (refused or not stored)', async () => {
+  it('applyLadderPrefs writes the website\'s rows only; nothing when the ladder has no rows (refused or not stored)', async () => {
     expect(await applyLadderPrefs(site, 'lad_new', { first: true })).toBe(true);
     expect(n8n.upserts.map((u) => [u.filters.map((f) => f.value), u.data.priority])).toEqual([
       [['lad_new', 'techand.ai'], 1],
@@ -102,7 +102,7 @@ describe('ladder_plan callback → the flow’s choices', () => {
 
 describe('who may set them', () => {
   const input = RUN_SCHEMAS.ladder.parse({ mode: 'ladder', siteId: SITE, keyword: 'odoo partner uae', country: 'United Arab Emirates', ladderPrefs: { mode: 'manual', first: true } });
-  it('admins and owners keep them; members and below lose them (the website’s defaults apply)', () => {
+  it('admins and owners keep them; members and below lose them (the website\'s defaults apply)', () => {
     expect((inputForRole(input, 'admin') as typeof input).ladderPrefs).toEqual({ mode: 'manual', first: true });
     expect((inputForRole(input, 'owner') as typeof input).ladderPrefs).toEqual({ mode: 'manual', first: true });
     expect((inputForRole(input, 'member') as typeof input).ladderPrefs).toBeUndefined();

@@ -11,7 +11,7 @@ import { replyReadBody } from './replyFacts';
 // v4.13 Link Builder jobs (index.ts runs them on timers; LINK_BUILDER_JOBS=false switches them off):
 // - sender (every minute): per mailbox at most one e-mail per run, inside its sending window (Mon-Fri, its hours, its time zone), within the
 //   warm-up and daily limits, 4-9 minutes apart; before each e-mail the opt-out list and the prospect's status are checked again;
-// - inbox (every 3 minutes): new messages in INBOX matched to our sequences (Message-ID → address → domain + subject); bounces, automatic
+// - inbox (every 3 minutes): new messages in INBOX matched to our sequences (Message-ID -> address -> domain + subject); bounces, automatic
 //   replies (out of office reschedules), people (the conversation stops, the Reply Reader classifies it and suggests an answer);
 // - automatic approval (every 10 minutes) for websites whose owner chose it; sequences without a reply end after their last e-mail.
 // L5 (2026-10-13): the same inbox pass reads journalist digests (HARO / Source of Sources) and writes every request that is still open
@@ -108,7 +108,7 @@ export async function senderTick(log: Log, now = new Date()): Promise<number> {
             break;
           }
         }
-        if (q.step === 0) {   // L1: the recipient's domain must accept mail at all — an address with no mail server is suppressed, never sent to
+        if (q.step === 0) {   // L1: the recipient's domain must accept mail at all, an address with no mail server is suppressed, never sent to
           const mx = await mxCheck(q.toEmail);
           if (!mx.ok) {
             await suppress(q.orgId, 'email', q.toEmail, mx.via === 'none' ? 'no mail server for the domain (MX)' : 'not a valid address');
@@ -210,7 +210,7 @@ async function handleIncoming(mb: MailboxRow, m: Incoming, log: Log): Promise<vo
   await db.update(schema.outreachSequences).set({ status: 'stopped', error: 'Another person at this site replied', nextAt: null, updatedAt: now })
     .where(and(eq(schema.outreachSequences.orgId, q.orgId), eq(schema.outreachSequences.prospectDomain, q.prospectDomain), inArray(schema.outreachSequences.status, ACTIVE), sql`${schema.outreachSequences.id} <> ${q.id}`));
   if (cls === 'unsubscribe' || cls === 'declined') { await suppress(q.orgId, 'email', m.from, cls === 'unsubscribe' ? 'asked not to be contacted' : 'declined'); if (m.from !== q.toEmail) await suppress(q.orgId, 'email', q.toEmail, cls); }
-  await setProspectStatus(site.domain, q.prospectDomain, q.prospectType, won ? 'won' : cls === 'unsubscribe' || cls === 'declined' ? 'rejected' : 'replied', cls === 'wants_payment' ? 'asked for payment — not pursued (paid links must be sponsored)' : cls === 'link_swap' ? 'asked for a link swap' : undefined, log);
+  await setProspectStatus(site.domain, q.prospectDomain, q.prospectType, won ? 'won' : cls === 'unsubscribe' || cls === 'declined' ? 'rejected' : 'replied', cls === 'wants_payment' ? 'asked for payment, not pursued (paid links must be sponsored)' : cls === 'link_swap' ? 'asked for a link swap' : undefined, log);
   log.info({ sequence: q.id, cls }, 'outreach reply read');
 }
 
@@ -238,7 +238,7 @@ export async function pollTick(log: Log): Promise<number> {
     for (const mb of mbs) {
       // L4: an OAuth mailbox is read through its provider's API (Microsoft 365 only; Gmail's inbox scope is restricted by Google)
       if (isOauthMailbox(mb)) { read += await pollApiMailbox(mb, log); continue; }
-      // L5: the inbox is read even before anything has been sent — the journalist digests arrive there.
+      // L5: the inbox is read even before anything has been sent, the journalist digests arrive there.
       let conn; try { conn = connOf(mb); } catch { continue; }
       const c = imapClient(conn);
       try {
@@ -292,7 +292,7 @@ export async function autoApproveTick(log: Log): Promise<number> {
 /** A person's answer written in the app, sent now in the same thread from the sequence's mailbox (counts toward the daily total). */
 export async function sendManual(q: OutreachSequenceRow, body: string, log: Log): Promise<void> {
   const mb = q.mailboxId ? await db.query.mailboxes.findFirst({ where: eq(schema.mailboxes.id, q.mailboxId) }) : undefined;
-  if (!mb || mb.status === 'error') throw new Error('The mailbox of this conversation is not connected: check company settings → Mailboxes.');
+  if (!mb || mb.status === 'error') throw new Error('The mailbox of this conversation is not connected: check company settings > Mailboxes.');
   const c = await sentCounts(mb.id, new Date(Date.now() - 864e5));
   if (c.total >= mb.dailyMax) throw new Error(`This mailbox has sent its ${mb.dailyMax} e-mails for today: try again tomorrow.`);
   const thread = await db.select().from(schema.outreachMessages).where(eq(schema.outreachMessages.sequenceId, q.id)).orderBy(schema.outreachMessages.at);

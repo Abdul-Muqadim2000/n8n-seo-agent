@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// G1 phase 4 — single sign-on, through the real app on a real Postgres, against a mock OIDC issuer and a SAML IdP with a locally
+// G1 phase 4, single sign-on, through the real app on a real Postgres, against a mock OIDC issuer and a SAML IdP with a locally
 // generated key and certificate: domain proof, configuration, the test sign-in, JIT provisioning, the protocol checks (state, nonce,
 // PKCE, audience, issuer, recipient, signature, expiry, replay, unsolicited answers), enforcement with the owner's break-glass, and
 // isolation between companies.
@@ -193,10 +193,10 @@ describe('OIDC', () => {
     expect((await co.owner.get(`/api/orgs/${co.org.id}/sso`)).body.connection).toMatchObject({ enabled: false, lastTest: null });
   });
 
-  it('asks for the person’s own second step when the company does not count its IdP as one', async () => {
+  it('asks for the person\'s own second step when the company does not count its IdP as one', async () => {
     const co = await oidcCompany('owner@strict-sso.test', 'Strict SSO', 'strict-sso.test');
     await co.owner.put(`/api/orgs/${co.org.id}/security`, { requireMfa: false, mfaTrustGoogle: false, mfaTrustSso: false, idleTimeoutMinutes: null, auditRetentionDays: 365 });
-    // the owner's address is on the domain? no — give a member a factor and an SSO identity
+    // the owner's address is on the domain? no, give a member a factor and an SSO identity
     const m = new Client(app);
     await oidcRound(m, { email: 'mfa@strict-sso.test' }, { sub: 'mfa1', email: 'mfa@strict-sso.test' });
     const start = await m.post('/api/me/mfa/passkeys/options');
@@ -301,7 +301,7 @@ describe('SAML 2.0', () => {
 });
 
 describe('enforcement', () => {
-  it('only an owner with two-step verification enforces; then passwords are refused on the domain except the owner’s', async () => {
+  it('only an owner with two-step verification enforces; then passwords are refused on the domain except the owner\'s', async () => {
     const co = await oidcCompany('owner@enforce.test', 'Enforce Co', 'enforce.test');
     // a member on the domain with a password, signed in before enforcement
     const inv = await co.owner.post(`/api/orgs/${co.org.id}/invitations`, { email: 'pat@enforce.test', role: 'admin' });

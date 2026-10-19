@@ -32,9 +32,9 @@ export const ranked = (p: number | null | undefined): p is number => p != null &
 export type Bucket = 'top3' | 'top10' | 'top20' | 'top50' | 'out' | 'unknown';
 export const BUCKETS: { key: Bucket; label: string }[] = [
   { key: 'top3', label: 'Top 3' },
-  { key: 'top10', label: '4–10' },
-  { key: 'top20', label: '11–20' },
-  { key: 'top50', label: '21–50' },
+  { key: 'top10', label: '4-10' },
+  { key: 'top20', label: '11-20' },
+  { key: 'top50', label: '21-50' },
   { key: 'out', label: 'Not in top 50' },
   { key: 'unknown', label: 'Not checked yet' },
 ];
@@ -113,12 +113,12 @@ export function PositionMove({ prev, cur, digits = 0, className, showFirst }: { 
         </span>
       );
     default:
-      return <span className={cn(base, mutedCls)}>–</span>;
+      return <span className={cn(base, mutedCls)}>-</span>;
   }
 }
 
 /**
- * A Google position as a small pill on the blue ramp: top 3 solid brand blue, 4–10 brand tint, 11–50 neutral, not ranked / not
+ * A Google position as a small pill on the blue ramp: top 3 solid brand blue, 4-10 brand tint, 11-50 neutral, not ranked / not
  * checked quiet. The text is always the position itself (colour only adds weight). `avg` shows one decimal (Search Console).
  */
 export function PositionPill({ p, text, avg, className }: { p: number | null | undefined; text?: string; avg?: boolean; className?: string }) {

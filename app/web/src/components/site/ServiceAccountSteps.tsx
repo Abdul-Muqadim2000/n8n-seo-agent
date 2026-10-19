@@ -49,7 +49,7 @@ export function SearchConsoleSteps({ email, domain }: { email: string | null; do
             property yet? Add one (a Domain property is best) and verify it in Search Console first.
           </>,
           <>
-            Go to <Ui>Settings</Ui> → <Ui>Users and permissions</Ui>.
+            Go to <Ui>Settings</Ui>, then <Ui>Users and permissions</Ui>.
           </>,
           <>
             Click <Ui>Add user</Ui> and paste this e-mail address:
@@ -83,7 +83,7 @@ export function Ga4Steps({ email }: { email: string | null }) {
             Under <Ui>Property</Ui>, open <Ui>Property access management</Ui>.
           </>,
           <>
-            Click <Ui>+</Ui> → <Ui>Add users</Ui>, paste the same e-mail address, choose the <Ui>Viewer</Ui> role and click <Ui>Add</Ui>.
+            Click <Ui>+</Ui>, then <Ui>Add users</Ui>, paste the same e-mail address, choose the <Ui>Viewer</Ui> role and click <Ui>Add</Ui>.
           </>,
         ]}
       />

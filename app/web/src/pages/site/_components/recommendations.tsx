@@ -25,10 +25,10 @@ export const PRIORITY_ORDER: Priority[] = ['high', 'medium', 'low'];
 const PRIO_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
 /**
- * REP 3.3 (benchmark pass 2026-10-14): the one queue's order is `queueOrder` in `@seo/shared` — blocking setup first, then by
+ * REP 3.3 (benchmark pass 2026-10-14): the one queue's order is `queueOrder` in `@seo/shared`, blocking setup first, then by
  * impact x confidence / effort, then the items nothing has measured yet. The server already returns them in that order; this
- * keeps a client-side list (a filtered view, an older cached payload) in the same one. Rows with no score at all — written
- * before the queue existed — fall back to the old priority-then-category order among themselves.
+ * keeps a client-side list (a filtered view, an older cached payload) in the same one. Rows with no score at all, written
+ * before the queue existed, fall back to the old priority-then-category order among themselves.
  */
 export function sortRecommendations(recs: readonly Recommendation[]): Recommendation[] {
   if (!recs.some((r) => r.score)) return [...recs].sort((a, b) => (PRIO_RANK[a.priority] ?? 3) - (PRIO_RANK[b.priority] ?? 3) || CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));

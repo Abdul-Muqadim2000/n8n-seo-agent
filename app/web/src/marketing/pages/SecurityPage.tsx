@@ -36,7 +36,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
       'Invitations by link, which admins can revoke',
       'Every request checked against your role on the server, not only in the browser',
       'Signing in with Google to an unconfirmed account removes its old password and sessions',
-      'An agency’s client logins reach only that client’s own workspace — never other clients, credits or settings',
+      'An agency\'s client logins reach only that client\'s own workspace, never other clients, credits or settings',
     ],
   },
   {
@@ -65,7 +65,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
     icon: Building2,
     title: 'Data isolation',
     items: [
-      'Each company’s websites, runs, reports and files are kept apart',
+      'Each company\'s websites, runs, reports and files are kept apart',
       'Website data appears only after ownership is verified',
       'Deleting a website or company also removes its plans from the automation engine',
       'Server logs you send keep crawler requests only: visits by people are dropped as the file is read, no address is stored, and the file is deleted once read',
@@ -77,7 +77,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
     items: [
       'Proof by Search Console ownership, a DNS TXT record or a meta tag',
       'One verified owner per domain',
-      'Proof must come from a person — Alaventra’s own Google access never counts',
+      'Proof must come from a person. Alaventra\'s own Google access never counts',
       'A GA4 property is accepted only when it measures the verified domain',
       'An agency portal address is proven with its own DNS record, checked again every few hours, and stops being served when the proof disappears',
       'Certificates are only issued for portal addresses that are verified',
@@ -88,7 +88,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
     title: 'Keys, secrets and connections',
     items: [
       'API keys shown once; only a hash is stored, with an expiry, and each can be revoked',
-      'Keys read by default — starting analyses is a separate permission, always within your credits and limits',
+      'Keys read by default; starting analyses is a separate permission, always within your credits and limits',
       'Mailbox passwords and sign-in grants, CMS and tracker tokens, storage keys and webhook addresses encrypted at rest and never shown again',
       'Outgoing connections only to public https addresses of the tool you connected',
       'Every webhook signed with your own secret and a timestamp, so your systems can tell it came from us',
@@ -110,8 +110,8 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
     title: 'Spend controls',
     items: [
       'The price in credits before every analysis, held while it runs and never exceeded',
-      'Credits and limits checked before any work — under a lock, so analyses started together cannot overshoot',
-      'A platform-wide daily ceiling above every company’s limits',
+      'Credits and limits checked before any work, under a lock, so analyses started together cannot overshoot',
+      'A platform-wide daily ceiling above every company\'s limits',
       'Results reused where nothing has changed, so nothing is charged twice',
     ],
   },
@@ -129,9 +129,9 @@ const ROLE_ROWS: { action: string; allowed: [boolean, boolean, boolean, boolean]
 ];
 
 const GOOGLE_STEPS = [
-  { title: 'You add Alaventra as a user', body: 'In Search Console and GA4, you add Alaventra’s service account to the properties you choose — nothing else.' },
+  { title: 'You add Alaventra as a user', body: 'In Search Console and GA4, you add Alaventra\'s service account to the properties you choose, nothing else.' },
   { title: 'Alaventra reads, read-only', body: 'Search performance, index coverage, sitemaps and traffic. Alaventra asks Google for read access only, so it cannot change your settings.' },
-  { title: 'You stay in charge', body: 'Remove the service account in Google at any time to stop access. Error messages never list other customers’ properties.' },
+  { title: 'You stay in charge', body: 'Remove the service account in Google at any time to stop access. Error messages never list other customers\' properties.' },
 ];
 
 const FAQS: FaqItem[] = [
@@ -141,7 +141,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'What access does Alaventra need to Google?',
-    a: 'Read-only access to Search Console and GA4, through a service account you add as a user to the properties you choose. To prove ownership with Google, you sign in yourself; Alaventra’s own access never counts as proof.',
+    a: 'Read-only access to Search Console and GA4, through a service account you add as a user to the properties you choose. To prove ownership with Google, you sign in yourself; Alaventra\'s own access never counts as proof.',
   },
   {
     q: 'Who can see our data?',
@@ -153,7 +153,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'Do you support single sign-on and SCIM?',
-    a: 'Yes. Any SAML 2.0 or OIDC provider — Okta, Microsoft Entra ID, Google Workspace and others — on e-mail domains you prove with a DNS record, and SCIM 2.0 so your provider creates and switches off accounts. An owner can make single sign-on required for your domain.',
+    a: 'Yes. Any SAML 2.0 or OIDC provider (Okta, Microsoft Entra ID, Google Workspace and others) on e-mail domains you prove with a DNS record, and SCIM 2.0 so your provider creates and switches off accounts. An owner can make single sign-on required for your domain.',
   },
   {
     q: 'Is there an audit log?',
@@ -165,7 +165,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'Can you go through our security questionnaire?',
-    a: 'Send it through the contact form with the topic “Security review or questionnaire”, or by e-mail, and a person on the team will go through it with you.',
+    a: 'Send it through the contact form with the topic "Security review or questionnaire", or by e-mail, and a person on the team will go through it with you.',
   },
 ];
 

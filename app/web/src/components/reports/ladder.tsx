@@ -37,7 +37,7 @@ const feasTone = (status: string): Tone => {
 const months = (v: unknown) => {
   const m = (Array.isArray(v) ? v : []).map(Number).filter(Number.isFinite);
   if (!m.length) return '';
-  return m.length > 1 && m[0] !== m[m.length - 1] ? `Months ${m[0]}–${m[m.length - 1]}` : `Month ${m[0]}`;
+  return m.length > 1 && m[0] !== m[m.length - 1] ? `Months ${m[0]} to ${m[m.length - 1]}` : `Month ${m[0]}`;
 };
 
 /** a month count inside a plan range like "2-4" */
@@ -79,13 +79,13 @@ export function LadderReport({ report }: { report: ReportDetail }) {
         eyebrow={country || undefined}
         title={
           refused ? (
-            <>Not planned: “{headKw}”</>
+            <>Not planned: "{headKw}"</>
           ) : pagesTotal != null ? (
             <>
-              A {pagesTotal}-page ladder to rank for “{headKw}”
+              A {pagesTotal}-page ladder to rank for "{headKw}"
             </>
           ) : (
-            <>Ladder plan for “{headKw}”</>
+            <>Ladder plan for "{headKw}"</>
           )
         }
         description={
@@ -114,21 +114,21 @@ export function LadderReport({ report }: { report: ReportDetail }) {
         }
         stats={
           <>
-            <HeroStat label="Searches / month" value={num(head.volume) != null ? <CountUp value={num(head.volume)!} format={(v) => n(Math.round(v))} /> : '–'} hint={num(head.cpc) != null ? `Cost per click ${usd(head.cpc)}` : 'Cost per click –'} />
-            <HeroStat label="Difficulty" value={num(head.kd) != null ? String(num(head.kd)) : '–'} hint="Keyword difficulty, 0-100" />
+            <HeroStat label="Searches / month" value={num(head.volume) != null ? <CountUp value={num(head.volume)!} format={(v) => n(Math.round(v))} /> : '-'} hint={num(head.cpc) != null ? `Cost per click ${usd(head.cpc)}` : 'Cost per click -'} />
+            <HeroStat label="Difficulty" value={num(head.kd) != null ? String(num(head.kd)) : '-'} hint="Keyword difficulty, 0-100" />
             <HeroStat label="Your position" value={num(head.your_position) ? `#${num(head.your_position)}` : <WordValue>Not ranking</WordValue>} hint="Google, today" />
             {!refused && (
-              // D-6 (re-rating 2026-10-17): the hero showed the plan's "2–4 months" in its badge and the writing model's "~5 months" in
+              // D-6 (re-rating 2026-10-17): the hero showed the plan's "2-4 months" in its badge and the writing model's "~5 months" in
               // this tile. One duration: the plan's modelled range (the badge's), with the model's own guess only as a note beside it.
               <HeroStat
                 label="Time to rank"
                 value={
                   str(p.months) ? (
-                    <WordValue>{str(p.months).replace('-', '\u2013')} months</WordValue>
+                    <WordValue>{str(p.months)} months</WordValue>
                   ) : num(feas.time_to_rank_months) != null ? (
                     <WordValue>~{num(feas.time_to_rank_months)} months</WordValue>
                   ) : (
-                    '\u2013'
+                    '-'
                   )
                 }
                 hint={[
@@ -259,7 +259,7 @@ function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; di
   // B2-1 (2026-10-15): `reach_info` is the site-wide measurement; `reach` is what THIS plan was measured against, which is the reach for
   // this topic when there was enough on-topic evidence to measure one. The two are shown as what they are, never as each other.
   const ta = obj(p.topic_authority);
-  // B2-4 / B2-5 (2026-10-15): the results pages the run read — which searches Google answers with the same pages (so one page covers
+  // B2-4 / B2-5 (2026-10-15): the results pages the run read, which searches Google answers with the same pages (so one page covers
   // them all), what could not be compared, and how many different websites own the main keyword's own results page.
   const scl = obj(p.serp_clusters);
   const dv = obj(p.serp_diversity);
@@ -277,7 +277,7 @@ function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; di
       <ul className="space-y-2.5 text-sm leading-relaxed text-ink-2">
         {siteReach != null && (
           <li>
-            <span className="font-medium text-ink">Your website’s reach: difficulty {siteReach}.</span> That is the difficulty it already wins ({how}
+            <span className="font-medium text-ink">Your website's reach: difficulty {siteReach}.</span> That is the difficulty it already wins ({how}
             {info.cached === true && str(info.cached_at) ? `, measured ${fmtDate(str(info.cached_at))}` : ''}).
           </li>
         )}
@@ -291,7 +291,7 @@ function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; di
         )}
         {difficulty && (
           <li>
-            <span className="font-medium text-ink">{DIFFICULTY_LABEL[difficulty]}.</span> {kd != null ? `The main keyword’s difficulty is ${kd}${reach != null ? ` against your reach of ${reach}` : ''}. ` : ''}
+            <span className="font-medium text-ink">{DIFFICULTY_LABEL[difficulty]}.</span> {kd != null ? `The main keyword's difficulty is ${kd}${reach != null ? ` against your reach of ${reach}` : ''}. ` : ''}
             {DIFFICULTY_HINT[difficulty]}
           </li>
         )}
@@ -301,7 +301,7 @@ function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; di
             {p.stretch === true ? ' (stretch)' : ''}:
           </span>{' '}
           {str(p.order) ? `${str(p.order).replace(/^\w/, (c) => c.toUpperCase())}.` : PLAN_ORDER_TEXT[planType]}
-          {str(p.months) && ` Expected about ${str(p.months).replace('-', '–')} months until the main keyword ranks.`}
+          {str(p.months) && ` Expected about ${str(p.months)} months until the main keyword ranks.`}
         </li>
         {(num(scl.asked) ?? 0) > 0 && str(scl.note) && (
           <li>
@@ -332,7 +332,7 @@ function Refusal({ refusal, keyword, alternatives, country, siteId }: { refusal:
   const reason = str(refusal.reason);
   if (reason === 'duplicate')
     return (
-      <Callout tone="warning" title={`Not planned: you already have a ladder for “${str(refusal.head) || keyword}”`}>
+      <Callout tone="warning" title={`Not planned: you already have a ladder for "${str(refusal.head) || keyword}"`}>
         <p>One search needs one page: a second ladder would write pages that compete with the first in Google. No pages were planned or written; continue the existing ladder instead.</p>
         {siteId && str(refusal.ladder_id) && (
           <ButtonLink to={paths.ladder(org.id, siteId, str(refusal.ladder_id))} variant="secondary" size="sm" className="mt-2">
@@ -342,7 +342,7 @@ function Refusal({ refusal, keyword, alternatives, country, siteId }: { refusal:
       </Callout>
     );
   return (
-    <Callout tone="critical" title={`Not planned: “${keyword}” is not realistic for your website`}>
+    <Callout tone="critical" title={`Not planned: "${keyword}" is not realistic for your website`}>
       <p>{str(refusal.message) || 'People searching it look for one particular website or brand, or the check advised against it. No pages were planned.'}</p>
       {alternatives.length > 0 && (
         <div className="mt-2">
@@ -361,9 +361,9 @@ function Alternatives({ items, country, siteId }: { items: string[]; country: st
     <ul className="mt-1.5 space-y-1.5">
       {items.map((a) => (
         <li key={a} className="flex flex-wrap items-center justify-between gap-2">
-          <span className="min-w-0 break-words text-ink">{a.replace(/^["“”]+|["“”]+$/g, '')}</span>
+          <span className="min-w-0 break-words text-ink">{a.replace(/^["\"\"]+|["""]+$/g, '')}</span>
           {siteId && can('member') && (
-            <ButtonLink to={paths.newLadder(org.id, siteId, { keyword: a.replace(/["“”]/g, ''), tab: 'check', ...(isCountry(country) ? { country } : {}) })} variant="secondary" size="sm" icon={<Search className="size-3.5" />}>
+            <ButtonLink to={paths.newLadder(org.id, siteId, { keyword: a.replace(/["\"\"]/g, ''), tab: 'check', ...(isCountry(country) ? { country } : {}) })} variant="secondary" size="sm" icon={<Search className="size-3.5" />}>
               Check this one
             </ButtonLink>
           )}
@@ -381,14 +381,14 @@ function Excluded({ items, siteId }: { items: P[]; siteId: string | null }) {
       <ul className="divide-y divide-line">
         {items.slice(0, 20).map((x, i) => (
           <li key={`${str(x.keyword)}-${i}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 text-sm">
-            <span className="min-w-0 break-words text-ink">“{str(x.keyword)}”</span>
+            <span className="min-w-0 break-words text-ink">"{str(x.keyword)}"</span>
             <span className="text-[13px] text-ink-3">
               {siteId && str(x.ladder_id) ? (
                 <Link to={paths.ladder(org.id, siteId, str(x.ladder_id))} className="text-accent-text hover:underline transition-colors duration-150 ease-brand">
-                  ladder “{str(x.head) || str(x.ladder_id)}”
+                  ladder "{str(x.head) || str(x.ladder_id)}"
                 </Link>
               ) : (
-                <>ladder “{str(x.head)}”</>
+                <>ladder "{str(x.head)}"</>
               )}
               {str(x.as) ? ` (${str(x.as).replace(/_/g, ' ')})` : ''}
             </span>
@@ -435,7 +435,7 @@ function PageRow({ page, country, siteId, writingNow }: { page: P; country: stri
           </span>
           <span className="inline-flex items-center gap-1">
             <BarChart3 className="size-3.5" aria-hidden />
-            KD {num(page.kd) ?? '–'}
+            KD {num(page.kd) ?? '-'}
           </span>
           <span className="inline-flex items-center gap-1">
             <MousePointerClick className="size-3.5" aria-hidden />
@@ -488,7 +488,7 @@ function Timeline({ items }: { items: P[] }) {
                   className="absolute inset-y-0 flex items-center rounded-md bg-accent px-2 text-xs font-medium text-accent-ink"
                   style={{ left: `${((start - 1) / max) * 100}%`, width: `${Math.max(8, ((end - start + 1) / max) * 100)}%` }}
                 >
-                  <span className="truncate">{start === end ? `M${start}` : `M${start}–${end}`}</span>
+                  <span className="truncate">{start === end ? `M${start}` : `M${start}-${end}`}</span>
                 </div>
               </div>
             </div>
@@ -522,7 +522,7 @@ function LinkMap({ links }: { links: P[] }) {
   return (
     <Block title="Link map" description="Internal links to add as each page goes live: up to the top page, sideways to a sibling" icon={<Network />}>
       <SectionTitle className="sr-only">Links</SectionTitle>
-      <DataTable rows={links} columns={cols} rowKey={(r, i) => `${str(r.from)}-${str(r.to)}-${i}`} pageSize={12} dense searchable searchPlaceholder="Filter by page…" searchText={(r) => `${str(r.from)} ${str(r.to)}`} />
+      <DataTable rows={links} columns={cols} rowKey={(r, i) => `${str(r.from)}-${str(r.to)}-${i}`} pageSize={12} dense searchable searchPlaceholder="Filter by page..." searchText={(r) => `${str(r.from)} ${str(r.to)}`} />
     </Block>
   );
 }

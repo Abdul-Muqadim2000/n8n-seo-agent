@@ -6,9 +6,9 @@ import { Drawn, MockBadge } from './parts';
 // text, the three e-mails with their timing, the checks it passed and the reply that came back.
 
 const STEPS: { when: string; title: string }[] = [
-  { when: 'Tue', title: 'First e-mail — quotes their resource page' },
-  { when: '+4 working days', title: 'Follow-up 1 — a new detail' },
-  { when: '+8 more', title: 'Follow-up 2 — who is the right person?' },
+  { when: 'Tue', title: 'First e-mail: quotes their resource page' },
+  { when: '+4 working days', title: 'Follow-up 1: a new detail' },
+  { when: '+8 more', title: 'Follow-up 2: who is the right person?' },
 ];
 
 const CHECKS = ['Only facts on file', 'Quotes their page', 'One link', 'Postal address + opt-out'];
@@ -36,7 +36,7 @@ export function OutreachMockup({ className }: { className?: string }) {
         </div>
         <div className="mk-pop rounded-lg border border-line bg-page px-3 py-2" style={{ ['--mk-i' as string]: 1 }}>
           <dt className="text-[10.5px] text-ink-3">Our page · link text</dt>
-          <dd className="mt-0.5 truncate">/guides/vat-checklist · the guide’s title</dd>
+          <dd className="mt-0.5 truncate">/guides/vat-checklist · the guide's title</dd>
         </div>
       </dl>
 
@@ -67,7 +67,7 @@ export function OutreachMockup({ className }: { className?: string }) {
           <MessageSquareReply className="size-3.5 text-accent-text" />
           Reply read: interested
         </span>
-        <span className="mt-1 block text-[11.5px] text-ink-2">“Happy to add it — can you send a one-line description?” · answer suggested, sequence stopped</span>
+        <span className="mt-1 block text-[11.5px] text-ink-2">"Happy to add it. Can you send a one-line description?" · answer suggested, sequence stopped</span>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">

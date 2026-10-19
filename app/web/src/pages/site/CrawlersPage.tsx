@@ -1,5 +1,5 @@
 // Crawlers (gap #6, app/docs/LOG_ANALYTICS.md): what Googlebot, Bingbot and the AI crawlers actually requested on the website, read
-// from its own access logs — every request checked against the vendor's published address list or DNS, spoofers counted apart,
+// from its own access logs, every request checked against the vendor's published address list or DNS, spoofers counted apart,
 // pages Google or AI never fetched, crawl budget spent on redirects / errors / parameter URLs, and the pages AI assistants fetched
 // because a person asked.
 import { useState } from 'react';
@@ -44,7 +44,7 @@ export default function CrawlersPage() {
       <PageHeader
         icon={<ScanSearch />}
         title="Crawlers"
-        description={`What Googlebot and the AI crawlers really requested on ${site.domain}, from your own server logs — every crawler checked against its vendor's addresses.`}
+        description={`What Googlebot and the AI crawlers really requested on ${site.domain}, from your own server logs, with every crawler checked against its vendor's addresses.`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Segmented label="Period" size="sm" value={days} onChange={setDays} options={CRAWLER_LIMITS.windows.map((w) => ({ value: String(w) as Days, label: `${w} days` }))} />
@@ -101,9 +101,9 @@ export function Crawlers({ d, orgId, siteId, domain, admin, member, loading, onU
       {reading.length > 0 && <Callout tone="info" title={`Reading ${plural(reading.length, 'log file')}`}>The figures update by themselves when it is done.</Callout>}
       <SummaryHero
         tone="blue"
-        eyebrow={<HeroEyebrow tag="Server logs">{`${fmtDay(d.from)} – ${fmtDay(d.to)} · data from ${fmtDay(d.dataFrom)} to ${fmtDay(d.dataTo)}`}</HeroEyebrow>}
+        eyebrow={<HeroEyebrow tag="Server logs">{`${fmtDay(d.from)} to ${fmtDay(d.to)} · data from ${fmtDay(d.dataFrom)} to ${fmtDay(d.dataTo)}`}</HeroEyebrow>}
         title={title}
-        description={`${proved != null ? `${proved} of crawler requests were proved to come from the vendor.` : 'No crawler request could be checked against the vendors’ address lists yet.'} ${t.spoofed ? `${n(t.spoofed)} more only pretended to be a crawler and are left out of every figure.` : 'Nothing pretended to be a crawler.'}`}
+        description={`${proved != null ? `${proved} of crawler requests were proved to come from the vendor.` : 'No crawler request could be checked against the vendors\' address lists yet.'} ${t.spoofed ? `${n(t.spoofed)} more only pretended to be a crawler and are left out of every figure.` : 'Nothing pretended to be a crawler.'}`}
         aside={top ? <HeroNextStep title={top.title} actions={top.link === 'technical' ? <HeroLink to={`/o/${orgId}/sites/${siteId}/technical`}>Technical health</HeroLink> : top.link === 'ai' ? <HeroLink to={`/o/${orgId}/sites/${siteId}/ai`}>AI visibility</HeroLink> : undefined} /> : undefined}
         stats={
           <>
@@ -119,14 +119,14 @@ export function Crawlers({ d, orgId, siteId, domain, admin, member, loading, onU
         <MetricCard
           icon={<Gauge />}
           label="Pages Googlebot fetched"
-          value={cov.source === 'inventory' ? `${n(cov.fetchedByGoogle)} / ${n(cov.inventory)}` : '–'}
+          value={cov.source === 'inventory' ? `${n(cov.fetchedByGoogle)} / ${n(cov.inventory)}` : '-'}
           info="Pages of your site (the weekly page inventory) Googlebot requested at least once in the period."
           meta={cov.source === 'inventory' ? `${plural(cov.inventory - cov.fetchedByGoogle, 'page')} not fetched` : 'The page list arrives with the weekly site report'}
         />
         <MetricCard
           icon={<Bot />}
           label="Pages AI crawlers fetched"
-          value={cov.source === 'inventory' ? `${n(cov.fetchedByAi)} / ${n(cov.inventory)}` : '–'}
+          value={cov.source === 'inventory' ? `${n(cov.fetchedByAi)} / ${n(cov.inventory)}` : '-'}
           info="Pages any AI crawler or AI fetch requested at least once in the period."
           meta={cov.source === 'inventory' ? `${plural(cov.inventory - cov.fetchedByAi, 'page')} never read by AI` : undefined}
         />
@@ -134,14 +134,14 @@ export function Crawlers({ d, orgId, siteId, domain, admin, member, loading, onU
           icon={<ShieldAlert />}
           tone={d.waste.share != null && d.waste.share >= 0.2 ? 'warning' : 'blue'}
           label="Googlebot on redirects and errors"
-          value={d.waste.share != null ? ratioPct(d.waste.share, 0) : '–'}
+          value={d.waste.share != null ? ratioPct(d.waste.share, 0) : '-'}
           info="Share of Googlebot's requests that hit a redirect, a 4xx, a 5xx or a URL with parameters. A request can be in two of those."
           meta={`${n(d.waste.redirects)} redirects · ${n(d.waste.clientErrors)} 4xx · ${n(d.waste.serverErrors)} 5xx · ${n(d.waste.paramHits)} parameter URLs`}
         />
         <MetricCard
           icon={<Timer />}
           label="Answer time for Googlebot"
-          value={d.bots.find((b) => b.bot === 'googlebot')?.avgMs != null ? `${n(d.bots.find((b) => b.bot === 'googlebot')!.avgMs!)} ms` : '–'}
+          value={d.bots.find((b) => b.bot === 'googlebot')?.avgMs != null ? `${n(d.bots.find((b) => b.bot === 'googlebot')!.avgMs!)} ms` : '-'}
           info="Average time your server took to answer Googlebot, when the log records it (Nginx $request_time, Apache %D, IIS time-taken, Cloudflare OriginResponseDurationMs)."
         />
       </div>
@@ -194,7 +194,7 @@ function NoLogsYet({ d, orgId, siteId, domain, admin, member, onUpload }: { d: C
         tone="blue"
         eyebrow={<HeroEyebrow tag="Server logs">Not connected yet</HeroEyebrow>}
         title={reading ? 'Your log is being read' : 'See what Google and the AI crawlers really fetch'}
-        description="Search Console shows what Google decided; your access log shows what its crawler and every AI crawler actually asked for — and which of them were impostors. Send one log to start."
+        description="Search Console shows what Google decided; your access log shows what its crawler and every AI crawler actually asked for, and which of them were impostors. Send one log to start."
       />
       <div className="grid gap-3 md:grid-cols-3">
         <ActionCard icon={<Upload />} title="Upload an access log" description="Apache, Nginx, IIS, CloudFront or JSON lines. Plain or gzip." action={member ? <Button size="sm" onClick={onUpload}>Upload a log</Button> : undefined} meta={<GuideButton id="crawler-logs-upload" vars={{ domain }} label="Where is my log?" />} />
@@ -256,10 +256,10 @@ function BotsTable({ d }: { d: CrawlerData }) {
     { key: 'kind', header: 'Kind', hideOnMobile: true, cell: (b) => <span className="text-ink-2">{BOT_KIND_LABELS[b.kind]}</span> },
     { key: 'hits', header: 'Requests', align: 'right', sortValue: (b) => b.hits, cell: (b) => <span className="tabular">{n(b.hits)}</span> },
     { key: 'verified', header: 'Identity', cell: (b) => <StatusBadge tone={VERIFY_TONE(b).tone}>{VERIFY_TONE(b).label}</StatusBadge> },
-    { key: 'spoofed', header: 'Spoofed', align: 'right', sortValue: (b) => b.spoofed, cell: (b) => <span className="tabular">{b.spoofed ? n(b.spoofed) : '–'}</span> },
+    { key: 'spoofed', header: 'Spoofed', align: 'right', sortValue: (b) => b.spoofed, cell: (b) => <span className="tabular">{b.spoofed ? n(b.spoofed) : '-'}</span> },
     { key: 'pages', header: 'Paths', align: 'right', hideOnMobile: true, sortValue: (b) => b.pages, cell: (b) => <span className="tabular">{n(b.pages)}</span> },
     { key: 'errors', header: '3xx / 4xx / 5xx', align: 'right', hideOnMobile: true, sortValue: (b) => b.s3xx + b.s4xx + b.s5xx, cell: (b) => <span className="tabular">{`${n(b.s3xx)} / ${n(b.s4xx)} / ${n(b.s5xx)}`}</span> },
-    { key: 'ms', header: 'Avg. answer', align: 'right', hideOnMobile: true, sortValue: (b) => b.avgMs ?? -1, cell: (b) => <span className="tabular">{b.avgMs != null ? `${n(b.avgMs)} ms` : '–'}</span> },
+    { key: 'ms', header: 'Avg. answer', align: 'right', hideOnMobile: true, sortValue: (b) => b.avgMs ?? -1, cell: (b) => <span className="tabular">{b.avgMs != null ? `${n(b.avgMs)} ms` : '-'}</span> },
     { key: 'last', header: 'Last seen', hideOnMobile: true, sortValue: (b) => b.lastSeen ?? '', cell: (b) => <span className="tabular text-ink-2">{fmtDay(b.lastSeen)}</span> },
   ];
   return (
@@ -286,7 +286,7 @@ function BotsTable({ d }: { d: CrawlerData }) {
 function PageGaps({ title, description, rows, which, source, error }: { title: string; description: string; rows: CrawlerPageGap[]; which: 'google' | 'ai'; source: 'inventory' | 'none'; error: string | null }) {
   const cols: Column<CrawlerPageGap>[] = [
     { key: 'path', header: 'Page', cell: (p) => <span className="break-all text-ink" title={p.title || undefined}>{p.path}</span> },
-    { key: 'clicks', header: 'Clicks', align: 'right', sortValue: (p) => p.clicks ?? -1, cell: (p) => <span className="tabular">{p.clicks != null ? n(p.clicks) : '–'}</span> },
+    { key: 'clicks', header: 'Clicks', align: 'right', sortValue: (p) => p.clicks ?? -1, cell: (p) => <span className="tabular">{p.clicks != null ? n(p.clicks) : '-'}</span> },
     { key: 'last', header: 'Last fetched', sortValue: (p) => (which === 'google' ? p.lastGoogle : p.lastAi) ?? '', cell: (p) => <span className="tabular text-ink-2">{(which === 'google' ? p.lastGoogle : p.lastAi) ? fmtDay(which === 'google' ? p.lastGoogle : p.lastAi) : 'Never in your logs'}</span> },
   ];
   return (
@@ -350,7 +350,7 @@ function NewPages({ d }: { d: CrawlerData }) {
   ];
   return (
     <Panel icon={<Sparkles />} title="New pages, first seen" description="Pages Googlebot fetched for the first time in your logs during the period" flush>
-      <DataTable rows={d.newPages} rowKey={(r) => r.path} columns={cols} dense pageSize={8} empty="No new page — or the logs do not go back far enough to say what is new." />
+      <DataTable rows={d.newPages} rowKey={(r) => r.path} columns={cols} dense pageSize={8} empty="No new page, or the logs do not go back far enough to say what is new." />
     </Panel>
   );
 }
@@ -385,7 +385,7 @@ function Spoofed({ d }: { d: CrawlerData }) {
   const cols: Column<CrawlerData['spoofed'][number]>[] = [
     { key: 'label', header: 'Pretended to be', cell: (r) => <span className="text-ink">{r.label}</span> },
     { key: 'hits', header: 'Requests', align: 'right', sortValue: (r) => r.hits, cell: (r) => <span className="tabular">{n(r.hits)}</span> },
-    { key: 'nets', header: 'Networks', cell: (r) => <span className="font-mono text-xs text-ink-2">{r.topNetworks.join(', ') || '–'}</span> },
+    { key: 'nets', header: 'Networks', cell: (r) => <span className="font-mono text-xs text-ink-2">{r.topNetworks.join(', ') || '-'}</span> },
   ];
   return (
     <Panel icon={<ShieldAlert />} iconTone="warning" title="Impostors" description="A crawler's name from an address that is not the vendor's: left out of every other figure" flush>

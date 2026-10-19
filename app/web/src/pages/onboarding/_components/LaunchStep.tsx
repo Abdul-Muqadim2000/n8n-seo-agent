@@ -54,7 +54,7 @@ export function LaunchStep() {
   // credits (app/docs/CREDITS.md): the schedules' month from the same rows as the settings card and the Credits page (autopilotRows)
   const monthly = autopilotMonthlyUsd(m, plan.blogsPerWeek);
   // D-2: the runs this step starts, priced and timed exactly as their tool forms and the budget check price them (the engine's own
-  // calibration, read here without the company layout) — not the shipped MODES table, which said $0.09 beside the form's $0.11
+  // calibration, read here without the company layout), not the shipped MODES table, which said $0.09 beside the form's $0.11
   const auditRun = { reportType: 'site_audit' } as const;
   // credits (app/docs/CREDITS.md): each run is quoted (and held) on its own, so starting now uses the sum of their quotes; blog posts
   // and monitors are autopilot (see the monthly estimate)
@@ -274,7 +274,7 @@ export function LaunchStep() {
         </div>
         {overCredits && (
           <Callout tone="warning" title="Not enough credits to start all of this now">
-            Analyses that need more credits than are available are refused. {org.role === 'owner' || org.role === 'admin' ? 'Add credits in Company settings → Credits' : 'Ask an owner or admin of your company to add credits'}, or
+            Analyses that need more credits than are available are refused. {org.role === 'owner' || org.role === 'admin' ? 'Add credits in Company settings > Credits' : 'Ask an owner or admin of your company to add credits'}, or
             untick the extras above.
           </Callout>
         )}
@@ -289,13 +289,13 @@ export function LaunchStep() {
               </Button>
             }
           >
-            Tracking reads your website’s data, so ownership must be confirmed first. You can also finish now and verify later from Website settings.
+            Tracking reads your website's data, so ownership must be confirmed first. You can also finish now and verify later from Website settings.
           </Callout>
         )}
         {!country && (
           <Callout
             tone="warning"
-            title="Choose the website’s main country"
+            title="Choose the website's main country"
             action={
               <Button size="sm" variant="secondary" onClick={() => go('business')}>
                 Open business details

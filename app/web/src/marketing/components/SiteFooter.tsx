@@ -19,7 +19,7 @@ export function SiteFooter() {
             </Link>
             <p className="mt-5 font-display text-lg font-semibold tracking-[-0.01em] text-ink">{site.descriptor}</p>
             <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
-              Research, content, technical audits, AI search visibility and backlinks — one weekly loop for every website you run.
+              Research, content, technical audits, AI search visibility and backlinks in one weekly loop for every website you run.
             </p>
             <Link to={signedIn ? '/' : '/signup'} className="group mt-6 inline-flex min-h-10 items-center gap-1.5 text-[14px] font-medium text-accent-text hover:text-accent-hover sm:min-h-0">
               {signedIn ? 'Open app' : 'Start free'}

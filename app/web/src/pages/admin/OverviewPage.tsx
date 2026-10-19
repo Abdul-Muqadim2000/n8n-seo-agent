@@ -64,7 +64,7 @@ export default function AdminOverviewPage() {
       <AdminPageHeader
         icon={<LayoutDashboard />}
         title="Overview"
-        description={o ? `${PERIOD_LABELS[period]}${o.from ? ` · ${fmtDate(o.from)} – ${fmtDate(o.to)}` : ` · up to ${fmtDate(o.to)}`} · UTC` : PERIOD_LABELS[period]}
+        description={o ? `${PERIOD_LABELS[period]}${o.from ? ` · ${fmtDate(o.from)} to ${fmtDate(o.to)}` : ` · up to ${fmtDate(o.to)}`} · UTC` : PERIOD_LABELS[period]}
       />
       {q.isPending ? (
         <OverviewSkeleton />
@@ -88,7 +88,7 @@ export default function AdminOverviewPage() {
               value={<CountUp value={o.money.cost.totalUsd} format={(v) => money(v, { digits: 2 })} />}
               info={
                 <>
-                  What customers’ runs cost at Claude and DataForSEO, attributed run by run. {money(o.money.cost.claudeEstimatedUsd)} of the Claude part is estimated (
+                  What customers' runs cost at Claude and DataForSEO, attributed run by run. {money(o.money.cost.claudeEstimatedUsd)} of the Claude part is estimated (
                   {Math.round((estimatedShare(o.money.cost) ?? 0) * 100)}%).
                 </>
               }
@@ -113,7 +113,7 @@ export default function AdminOverviewPage() {
               label="Credits outstanding"
               icon={<Coins />}
               value={units === 'usd' ? <CountUp value={o.credits.book?.remainingListUsd ?? 0} format={(v) => money(v, { digits: 2 })} /> : <CountUp value={o.credits.outstanding} format={credits} />}
-              info={units === 'usd' ? 'Every company’s balance now at list price: what customers can still spend. Serving it will cost us about a third of it.' : 'The sum of every company’s balance now: credits granted and not yet used.'}
+              info={units === 'usd' ? 'Every company\'s balance now at list price: what customers can still spend. Serving it will cost us about a third of it.' : 'The sum of every company\'s balance now: credits granted and not yet used.'}
               meta={
                 <SplitLine
                   items={
@@ -176,7 +176,7 @@ export default function AdminOverviewPage() {
                 Claude {money(o.unattributed.claudeUsd)} · DataForSEO {money(o.unattributed.dataforseoUsd)}
               </span>
               <p className="mt-auto border-t border-line pt-2.5 text-xs leading-snug text-ink-3">
-                Engine spend on deleted websites, test runs and the engine’s own checks. Counted in “attributed” on the provider cards, not in any company’s cost.
+                Engine spend on deleted websites, test runs and the engine's own checks. Counted in "attributed" on the provider cards, not in any company's cost.
               </p>
             </Card>
             <MetricCard
@@ -184,8 +184,8 @@ export default function AdminOverviewPage() {
               icon={<Inbox />}
               tone={waiting.length ? 'warning' : 'blue'}
               to={withPeriod(adminPaths.creditRequests, period)}
-              value={requests.isError ? '–' : <CountUp value={waiting.length} format={(v) => Math.round(v).toLocaleString('en-US')} />}
-              info="Packs customers asked for with “Buy credits”. Invoice each one, then confirm it: the credits are added and the payment counts as revenue."
+              value={requests.isError ? '-' : <CountUp value={waiting.length} format={(v) => Math.round(v).toLocaleString('en-US')} />}
+              info="Packs customers asked for with &quot;Buy credits&quot;. Invoice each one, then confirm it: the credits are added and the payment counts as revenue."
               meta={
                 requests.isError ? (
                   'Could not read the requests'
@@ -205,7 +205,7 @@ export default function AdminOverviewPage() {
 
           <AdminCard
             title="Top companies by cost"
-            description={`${PERIOD_LABELS[period]}: what each company’s runs cost us and what it paid.`}
+            description={`${PERIOD_LABELS[period]}: what each company's runs cost us and what it paid.`}
             info={<EstimatedTip />}
             actions={
               <Link to={withPeriod(adminPaths.companies, period)} className="text-[13px] font-medium text-accent-text hover:underline">

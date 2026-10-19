@@ -32,7 +32,7 @@ import { aiData, alertsData, backlinksData, contentData, previousOfType, ranking
 import { latestReport, reportsList } from './runs';
 
 // Next steps for a website, from everything stored about it: setup gaps, Search Console opportunities, open audit issues, AI
-// answers lost to competitors, links to reclaim, pages to publish, ladder rungs to write — plus the actions the SEO engine itself
+// answers lost to competitors, links to reclaim, pages to publish, ladder rungs to write, plus the actions the SEO engine itself
 // recommended in its latest weekly reports. Every item says why (evidence) and carries the one action that does it.
 
 export interface SiteBundle {
@@ -85,7 +85,7 @@ export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle
 
 const PAGE_TYPES = new Set<string>(PAGE_TYPE_VALUES);
 
-/** An n8n API body (snake_case) → the app's tool link (mode + camelCase prefill). */
+/** An n8n API body (snake_case) -> the app's tool link (mode + camelCase prefill). */
 export function actionFromApiBody(body: Record<string, unknown> | null, label: string): RecommendationAction | undefined {
   if (!body) return undefined;
   let mode = String(body.mode ?? 'keyword') as ModeId;
@@ -142,33 +142,33 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   if (tracked && snap && !snap.ga4.connected)
     add({ id: 'setup:ga4', category: 'setup', priority: 'medium', title: 'Connect Google Analytics 4', detail: 'GA4 adds organic sessions, engagement and key events (leads, sales) to the weekly report.', action: { label: 'Connect GA4', page: 'settings/verification' } });
   if (x.settings.readiness.score < 70)
-    add({ id: 'setup:profile', category: 'setup', priority: x.settings.readiness.score < 40 ? 'high' : 'medium', title: 'Complete the E-E-A-T profile', detail: `Every page gets a byline, an author box, Person / LocalBusiness schema and an expert reviewer from it — strong trust signals for Google and AI answers.${x.ai.growth ? ' The AI outreach drafts and AI answer pages use it too: until it is complete they carry [brackets] for you to fill in.' : ''}`, evidence: `${x.settings.readiness.score}% complete · missing: ${x.settings.readiness.missing.slice(0, 4).join(', ')}`, action: { label: 'Complete the profile', page: 'settings/profile' } });
+    add({ id: 'setup:profile', category: 'setup', priority: x.settings.readiness.score < 40 ? 'high' : 'medium', title: 'Complete the E-E-A-T profile', detail: `Every page gets a byline, an author box, Person / LocalBusiness schema and an expert reviewer from it. These are strong trust signals for Google and AI answers.${x.ai.growth ? ' The AI outreach drafts and AI answer pages use it too: until it is complete they carry [brackets] for you to fill in.' : ''}`, evidence: `${x.settings.readiness.score}% complete · missing: ${x.settings.readiness.missing.slice(0, 4).join(', ')}`, action: { label: 'Complete the profile', page: 'settings/profile' } });
   if (!x.technical.audits.length)
     add({ id: 'setup:audit', category: 'technical', priority: 'high', title: 'Run the first technical audit', detail: 'Crawl, probes and scoring with a fix pack (robots.txt, llms.txt, redirects, schema, internal links). Later audits show what changed.', action: { label: 'Run audit', mode: 'audit', prefill: { reportType: 'site_audit' } } });
   if (!x.ai.runs.length)
     add({ id: 'setup:ai', category: 'ai', priority: 'medium', title: 'Take an AI-visibility baseline', detail: 'See whether ChatGPT, Perplexity, Gemini, Claude and Google AI name your company for the questions your buyers ask.', action: { label: 'Check AI visibility', mode: 'ai_visibility' } });
-  // v4.12 (AI_GROWTH_SPEC.md): the AI growth loop's two owner steps — the IndexNow key file, and the outreach drafts to send
+  // v4.12 (AI_GROWTH_SPEC.md): the AI growth loop's two owner steps, the IndexNow key file, and the outreach drafts to send
   const g = x.ai.growth;
   if (g && !g.submitted.indexnow.verified && g.submitted.indexnow.key)
     add({ id: 'ai:indexnow', category: 'ai', priority: 'medium', title: 'Add one small file so new pages reach Bing the same week', detail: `Put ${g.submitted.indexnow.key}.txt (it contains only that key) at the root of ${site.domain}. From then on the weekly AI growth run sends every new or updated page to Bing (ChatGPT search, Copilot), Yandex, Naver and the other IndexNow engines.`, evidence: g.submitted.indexnow.keyUrl, action: { label: 'Get the file', page: 'ai' } });
   const ready = g ? g.earned.filter((e) => e.drafted && e.kind !== 'competitor' && e.mentionsUs !== true && (!e.status || e.status === 'new')) : [];
   const readyHosts = [...new Set(ready.map((e) => e.host))];
   if (readyHosts.length)
-    add({ id: 'ai:outreach', category: 'ai', priority: 'high', title: `${readyHosts.length} outreach draft${readyHosts.length === 1 ? '' : 's'} ready for pages AI cites`, detail: 'AI answers rely on these articles, lists and threads, and they do not name you yet — being named there is the strongest way into the answers. Each draft asks to be included (or answers the thread as you). Send it from your own mailbox, then mark it as sent.', evidence: readyHosts.slice(0, 4).join(', '), action: { label: 'Review the drafts', page: 'ai' } });
+    add({ id: 'ai:outreach', category: 'ai', priority: 'high', title: `${readyHosts.length} outreach draft${readyHosts.length === 1 ? '' : 's'} ready for pages AI cites`, detail: 'AI answers rely on these articles, lists and threads, and they do not name you yet. Being named there is the strongest way into the answers. Each draft asks to be included (or answers the thread as you). Send it from your own mailbox, then mark it as sent.', evidence: readyHosts.slice(0, 4).join(', '), action: { label: 'Review the drafts', page: 'ai' } });
   // v4.13 Link Builder: pitches to approve, the mailbox they need, replies to answer, listings competitors have
   const L = x.links;
   if (L && L.repliesWaiting)
-    add({ id: 'links:replies', category: 'backlinks', priority: 'high', title: `${L.repliesWaiting} link-building repl${L.repliesWaiting === 1 ? 'y' : 'ies'} waiting for your answer`, detail: 'Someone answered your pitch. A suggested answer is ready: edit it and send it in the same thread — a quick answer is what turns a reply into a link.', action: { label: 'Answer', page: 'links' } });
+    add({ id: 'links:replies', category: 'backlinks', priority: 'high', title: `${L.repliesWaiting} link-building repl${L.repliesWaiting === 1 ? 'y' : 'ies'} waiting for your answer`, detail: 'Someone answered your pitch. A suggested answer is ready: edit it and send it in the same thread. A quick answer is what turns a reply into a link.', action: { label: 'Answer', page: 'links' } });
   if (L && L.drafted && !L.mailbox)
-    add({ id: 'links:mailbox', category: 'backlinks', priority: 'high', title: 'Connect your mailbox to send the link pitches', detail: `${L.drafted} pitch${L.drafted === 1 ? ' is' : 'es are'} drafted. They go out from your own address (company settings → Mailboxes) after you approve them — never from ours.`, action: { label: 'See the pitches', page: 'links' } });
+    add({ id: 'links:mailbox', category: 'backlinks', priority: 'high', title: 'Connect your mailbox to send the link pitches', detail: `${L.drafted} pitch${L.drafted === 1 ? ' is' : 'es are'} drafted. They go out from your own address (company settings > Mailboxes) after you approve them, never from ours.`, action: { label: 'See the pitches', page: 'links' } });
   else if (L && L.drafted)
-    add({ id: 'links:approve', category: 'backlinks', priority: 'high', title: `${L.drafted} link-building pitch${L.drafted === 1 ? '' : 'es'} ready for your approval`, detail: 'Each one is written for one site — a dead link to replace, a list that leaves you out, a mention without a link — with the right page of yours and the right person. Read, edit and approve: they go out from your mailbox, a few a day.', action: { label: 'Review the pitches', page: 'links' } });
+    add({ id: 'links:approve', category: 'backlinks', priority: 'high', title: `${L.drafted} link-building pitch${L.drafted === 1 ? '' : 'es'} ready for your approval`, detail: 'Each one is written for one site (a dead link to replace, a list that leaves you out, a mention without a link) with the right page of yours and the right person. Read, edit and approve: they go out from your mailbox, a few a day.', action: { label: 'Review the pitches', page: 'links' } });
   for (const l of (L?.listingsMissing ?? []).slice(0, 2))
-    add({ id: `links:listing:${l.name}`, category: 'backlinks', priority: 'medium', title: `Get listed on ${l.name}`, detail: `${l.competitors.join(' and ')} ${l.competitors.length === 1 ? 'is' : 'are'} there and you are not. You add this listing yourself — the submission page and a ready description are on the Link building page.`, action: { label: 'Open the checklist', page: 'links' } });
+    add({ id: `links:listing:${l.name}`, category: 'backlinks', priority: 'medium', title: `Get listed on ${l.name}`, detail: `${l.competitors.join(' and ')} ${l.competitors.length === 1 ? 'is' : 'are'} there and you are not. You add this listing yourself. The submission page and a ready description are on the Link building page.`, action: { label: 'Open the checklist', page: 'links' } });
   if (!x.backlinks.snapshots.length)
     add({ id: 'setup:backlinks', category: 'backlinks', priority: 'low', title: 'Check your backlinks', detail: 'Lost and spammy links, a link gap against competitors and outreach drafts for the best prospects.', action: { label: 'Check backlinks', mode: 'backlinks' } });
   if (x.alerts.checkinDue)
-    add({ id: 'setup:checkin', category: 'setup', priority: 'medium', title: 'Monthly Search Console check-in', detail: 'Two questions (manual action? security issue?) and the Pages report — the parts of Search Console the API cannot see.', action: { label: 'Do the check-in', mode: 'checkin' } });
+    add({ id: 'setup:checkin', category: 'setup', priority: 'medium', title: 'Monthly Search Console check-in', detail: 'Two questions (manual action? security issue?) and the Pages report, the parts of Search Console the API cannot see.', action: { label: 'Do the check-in', mode: 'checkin' } });
 
   // ---------- search opportunities (latest Search Console period) ----------
   const period = x.search.periods[0];
@@ -216,7 +216,7 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       priority: 'high',
       title: `Recover the clicks lost on "${q.query}"`,
       detail: 'Clicks fell by half or more against the previous period. Check the ranking page for changes, competitors and SERP features.',
-      evidence: `${q.prevClicks} → ${q.clicks} clicks · position ${fmtPos(q.prevPosition)} → ${fmtPos(q.position)}`,
+      evidence: `${q.prevClicks} to ${q.clicks} clicks, position ${fmtPos(q.prevPosition)} to ${fmtPos(q.position)}`,
       action: { label: 'Refresh the page', mode: 'keyword', prefill: { keyword: q.query, ...(q.page && urlOnHost(q.page, site.domain) ? { existingPageUrl: q.page } : {}) } },
     }, {
       // nothing modelled here: the clicks were earned and then were not
@@ -232,7 +232,7 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
     const fixDraft = a.type === 'fix_draft';   // R111: the engine's action for a page whose last quality round failed
     const cat: RecommendationCategory = a.source === 'ai_visibility' ? 'ai' : a.source === 'rank_tracker' ? 'rankings' : a.type === 'publish' || fixDraft ? 'content' : 'search';
     let action: RecommendationAction | undefined = actionFromApiBody(a.apiBody, fixDraft ? 'Run it again' : a.source === 'ai_visibility' ? 'Write the answer page' : 'Run it');
-    // never "Report the published URL" for a draft that failed its quality check — the button is a fresh run of the page
+    // never "Report the published URL" for a draft that failed its quality check, the button is a fresh run of the page
     if (!action && fixDraft && a.keyword) action = { label: 'Run it again', mode: 'keyword', prefill: { keyword: a.keyword } };
     if (action?.mode === 'published' && fixDraft) action = { label: 'Run it again', mode: 'keyword', prefill: { keyword: a.keyword ?? '' } };
     if (!action && a.type === 'publish' && a.keyword) action = { label: 'Report the published URL', mode: 'published', prefill: { keyword: a.keyword, ...(a.url ? { publishedUrl: a.url } : {}) } };
@@ -244,7 +244,7 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
       category: cat,
       priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
-      title: a.action.length > 140 ? a.action.slice(0, 137) + '…' : a.action,
+      title: a.action.length > 140 ? a.action.slice(0, 137) + '...' : a.action,
       detail: a.why,
       evidence: `from the ${a.source.replace('_', ' ')} report`,
       action,
@@ -260,13 +260,13 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   // ---------- technical ----------
   const t = x.technical;
   const latestAudit = t.audits[t.audits.length - 1];
-  // R66: a score drop only within one report type — a full report after a technical audit is a different scale, not a fall
+  // R66: a score drop only within one report type, a full report after a technical audit is a different scale, not a fall
   const prevAudit = previousOfType(t.audits, t.audits.length - 1);
   if (latestAudit && prevAudit && latestAudit.healthScore < prevAudit.healthScore - 2)
     add({ id: 'tech:score-drop', category: 'technical', priority: 'high', title: `Health score fell from ${prevAudit.healthScore} to ${latestAudit.healthScore}`, detail: 'New issues appeared since the previous audit. Start with the new critical and high findings.', action: { label: 'See what changed', page: 'technical' } });
   // G26 (2026-10-12, FIX_PLAN): the findings arrive in the audit's own impact order (services/data.ts), so these are the six that matter most,
   // and each one carries the line the audit used to rank it. Where the audit weighted them, its three highest-impact findings are the "high"
-  // ones here too — otherwise a Critical on a page nobody visits would be pushed above the index blocker on the pages that earn the traffic,
+  // ones here too, otherwise a Critical on a page nobody visits would be pushed above the index blocker on the pages that earn the traffic,
   // and the app would disagree with its own report.
   const techOpen = t.findings.filter((f) => f.status !== 'fixed' && /^(critical|high)$/i.test(f.severity));
   const techWeighted = techOpen.filter((f) => f.impact != null);
@@ -283,7 +283,7 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
     }, f.impact != null
       ? { impact: impactFromAuditWeight(Number(f.impact)), confidence: f.impactBasis ? 'measured' : 'modelled', effort: 'session', basis: f.impactBasis || `the audit weighted this finding at ${f.impact}` }
       // G26 weighted nothing for this row (an audit written before it, or no Search Console): the severity alone is not a quantity
-      : { impact: null, confidence: 'rule', effort: 'session', basis: '', reason: `the audit could not weigh it — ${f.severity} severity on ${f.affectedCount || 'some'} page(s), with no traffic figure behind it` });
+      : { impact: null, confidence: 'rule', effort: 'session', basis: '', reason: `the audit could not weigh it: ${f.severity} severity on ${f.affectedCount || 'some'} page(s), with no traffic figure behind it` });
   if (latestAudit && Date.now() - Date.parse(latestAudit.auditedAt) > 45 * 864e5)
     add({ id: 'tech:stale', category: 'technical', priority: 'low', title: 'Re-audit the site', detail: 'The last audit is more than 45 days old; the monthly scheduler re-audits only when the sitemap changed.', action: { label: 'Run audit', mode: 'audit' } });
 
@@ -303,7 +303,7 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       id: `ai:gap:${g.prompt.slice(0, 80)}`,
       category: 'ai',
       priority: 'medium',
-      title: `Win the AI answer: "${g.prompt.length > 110 ? g.prompt.slice(0, 107) + '…' : g.prompt}"`,
+      title: `Win the AI answer: "${g.prompt.length > 110 ? g.prompt.slice(0, 107) + '...' : g.prompt}"`,
       detail: g.competitors.length ? `AI names ${g.competitors.slice(0, 3).join(', ')} here and not you.` : 'AI answers this without naming you.',
       evidence: g.sources.length ? `sources AI relies on: ${g.sources.slice(0, 3).join(', ')}` : undefined,
       action: { label: 'See the answers', page: 'ai' },
@@ -322,9 +322,9 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       basis: `authority ${l.domainRank} in the backlink index, and our own two checks of the page agree it is gone`,
     });
   for (const r of (bl.report?.reclaim ?? []).slice(0, 2))
-    add({ id: `bl:reclaim:${r.brokenUrl}`, category: 'backlinks', priority: 'medium', title: `Redirect ${r.brokenUrl.replace(/^https?:\/\/[^/]+/, '') || '/'} — ${r.links} link(s) point to a broken page`, detail: `A 301 redirect to ${r.redirectTo.replace(/^https?:\/\/[^/]+/, '') || '/'} keeps the value of those links.`, evidence: r.domains.slice(0, 3).join(', '), action: { label: 'Open backlinks', page: 'backlinks' } });
+    add({ id: `bl:reclaim:${r.brokenUrl}`, category: 'backlinks', priority: 'medium', title: `Redirect ${r.brokenUrl.replace(/^https?:\/\/[^/]+/, '') || '/'}: ${r.links} link(s) point to a broken page`, detail: `A 301 redirect to ${r.redirectTo.replace(/^https?:\/\/[^/]+/, '') || '/'} keeps the value of those links.`, evidence: r.domains.slice(0, 3).join(', '), action: { label: 'Open backlinks', page: 'backlinks' } });
   if (lastBl && lastBl.spammyNew > 2)
-    add({ id: 'bl:spam', category: 'backlinks', priority: 'low', title: `${lastBl.spammyNew} new spammy link(s) — nothing to do unless they keep coming`, detail: 'Google ignores most link spam on its own; disavow only after a manual action or for a paid-link pattern you did not create.', action: { label: 'Review links', page: 'backlinks' } });
+    add({ id: 'bl:spam', category: 'backlinks', priority: 'low', title: `${lastBl.spammyNew} new spammy link(s): nothing to do unless they keep coming`, detail: 'Google ignores most link spam on its own; disavow only after a manual action or for a paid-link pattern you did not create.', action: { label: 'Review links', page: 'backlinks' } });
   const missingLists = (bl.latest?.lists ?? []).filter((l) => !l.named && l.competitors.length);
   if (missingLists.length)
     add({ id: 'bl:lists', category: 'backlinks', priority: 'medium', title: `Get onto ${missingLists.length} "best of" list(s) that name your competitors`, detail: 'Lists and comparisons are what AI answers and searchers read first. Each has an outreach draft with the facts the editor needs.', evidence: missingLists.slice(0, 2).map((l) => `${l.domain}: ${l.competitors.join(', ')}`).join(' · '), action: { label: 'Open the pipeline', page: 'backlinks' } });
@@ -335,7 +335,7 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   if (followups.length)
     add({ id: 'bl:followup', category: 'backlinks', priority: 'medium', title: `${followups.length} follow-up e-mail(s) are due`, detail: 'No reply and no link yet. One short follow-up roughly doubles the replies; the second is the last.', evidence: followups.slice(0, 3).map((p) => p.prospectDomain).join(', '), action: { label: 'Open the pipeline', page: 'backlinks' } });
   if (lastBl && lastBl.unionDomains != null && !bl.imports.some((i) => i.source.startsWith('gsc')))
-    add({ id: 'bl:gsc-import', category: 'backlinks', priority: 'low', title: "Add Google's own list of your links", detail: 'Search Console shows a sample of the links Google knows; its API cannot read them. Export "Latest links" (Links → Export external links) and upload the CSV: the monitor checks every page and shows how much of Google\'s view each source covers.', action: { label: 'Open backlinks', page: 'backlinks' } });
+    add({ id: 'bl:gsc-import', category: 'backlinks', priority: 'low', title: "Add Google's own list of your links", detail: 'Search Console shows a sample of the links Google knows; its API cannot read them. Export "Latest links" (Links, then Export external links) and upload the CSV: the monitor checks every page and shows how much of Google\'s view each source covers.', action: { label: 'Open backlinks', page: 'backlinks' } });
 
   // ---------- content ----------
   const now = Date.now();
@@ -359,7 +359,7 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       add({ id: `rank:next:${l.ladderId}`, category: 'rankings', priority: 'medium', title: `Next rung of "${l.headKeyword}": ${next.keyword}`, detail: `Rung ${next.rung} of the ladder (${next.pageType || 'page'}). Each published rung adds internal links and topical authority for the head term. The pipeline writes it with the ladder's links and marks it, so the Monday cadence moves on.`, evidence: `${l.published} of ${l.pages} pages published`, action: { label: 'Open the ladder', page: `pipeline/ladders/${l.ladderId}` } });
   }
   for (const k of x.rankings.keywords.filter((k) => k.previousPosition && k.latestPosition != null && (k.latestPosition === 0 || k.latestPosition - k.previousPosition >= 5)).slice(0, 3))
-    add({ id: `rank:drop:${k.keyword}`, category: 'rankings', priority: 'medium', title: `"${k.keyword}" dropped`, detail: 'Check the ranking page and what moved above it.', evidence: `position ${k.previousPosition} → ${k.latestPosition === 0 ? 'out of the top 50' : k.latestPosition}`, action: { label: 'Refresh the page', mode: 'keyword', prefill: { keyword: k.keyword, ...(k.url && urlOnHost(k.url, site.domain) ? { existingPageUrl: k.url } : {}) } } });
+    add({ id: `rank:drop:${k.keyword}`, category: 'rankings', priority: 'medium', title: `"${k.keyword}" dropped`, detail: 'Check the ranking page and what moved above it.', evidence: `position ${k.previousPosition} to ${k.latestPosition === 0 ? 'out of the top 50' : k.latestPosition}`, action: { label: 'Refresh the page', mode: 'keyword', prefill: { keyword: k.keyword, ...(k.url && urlOnHost(k.url, site.domain) ? { existingPageUrl: k.url } : {}) } } });
 
   // One queue: blocking setup first, then by impact x confidence / effort, then the items nothing measured yet (`queue.ts`).
   return queueOrder(out).slice(0, 60);
@@ -426,7 +426,7 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
     site: { domain: site.domain, trackingStatus: site.trackingStatus, verified: !!site.verifiedAt },
     // G12 / G29: the overview chart carries the same event marks and the same lineage as the search page (computed once, in searchData)
     search: { latest, series, seriesKind: m.length ? 'weekly' : 'daily', annotations: x.search.annotations, lineage: x.search.lineage },
-    // R66: one score scale per line — the series holds the latest audit's own report type only (a full report weighs other findings)
+    // R66: one score scale per line, the series holds the latest audit's own report type only (a full report weighs other findings)
     health: { latest: audits[audits.length - 1] ?? null, series: audits.filter((a) => a.reportType === audits[audits.length - 1]?.reportType).map((a) => ({ auditedAt: a.auditedAt, healthScore: a.healthScore })) },
     ai: { latest: aiRuns[aiRuns.length - 1] ?? null, series: aiRuns.map((r) => ({ checkedAt: r.checkedAt, mentionRate: r.mentionRate, citationRate: r.citationRate, shareOfVoice: r.shareOfVoice })) },
     backlinks: {

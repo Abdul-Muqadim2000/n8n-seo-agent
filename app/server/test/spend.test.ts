@@ -6,7 +6,7 @@ import { assertBudget, budgetRefusal, orgSpendSince } from '../src/services/spen
 
 // The company's spend counts its runs and its keyword checks: the same locked budget check refuses a run or a check that would go
 // over the monthly budget (402), and the platform's daily ceiling (429). A fake query object stands in for the database: it answers
-// each `select … from <table>` with that table's total, so the test sees which tables are summed.
+// each `select ... from <table>` with that table's total, so the test sees which tables are summed.
 
 function fakeDb(totals: { runs: number; checks: number }) {
   const from: string[] = [];
@@ -42,7 +42,7 @@ describe('spend: runs and keyword checks', () => {
     await expect(assertBudget(fakeDb({ runs: 99, checks: 99 }).q, org(25), 0, 'This run')).resolves.toBeUndefined();
   });
 
-  it('budgetRefusal: 402 over the company budget, 429 over the platform’s day, else null', () => {
+  it('budgetRefusal: 402 over the company budget, 429 over the platform\'s day, else null', () => {
     const base = { what: 'This run', estimated: 1.8, spent: 10, budget: 25, platformToday: 5, platformDaily: 40 };
     expect(budgetRefusal(base)).toBeNull();
     expect(budgetRefusal({ ...base, spent: 23.5 })?.statusCode).toBe(402);

@@ -43,10 +43,10 @@ const MINUS = '−';
 
 /**
  * Dollars for the panel: 2 decimals, 4 under $1 (a run costs cents, and $0.0042 vs $0.0400 matters), thousands separated, a real minus
- * sign for losses. null / NaN = "–" (never $0.00 for a figure nobody measured).
+ * sign for losses. null / NaN = "-" (never $0.00 for a figure nobody measured).
  */
 export function money(v: number | null | undefined, opts: { digits?: number } = {}): string {
-  if (v == null || !Number.isFinite(v)) return '–';
+  if (v == null || !Number.isFinite(v)) return '-';
   const abs = Math.abs(v);
   const digits = opts.digits ?? (abs > 0 && abs < 1 ? 4 : 2);
   // formatUsd's digits, with thousands separators (formatUsd itself has none)
@@ -54,21 +54,21 @@ export function money(v: number | null | undefined, opts: { digits?: number } = 
   return v < 0 && Number(abs.toFixed(digits)) !== 0 ? MINUS + s : s;
 }
 
-/** money with a sign either way ("+$12.00", "−$3.50") — for changes and ledger amounts */
+/** money with a sign either way ("+$12.00", "−$3.50"), for changes and ledger amounts */
 export function signedMoney(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return '–';
+  if (v == null || !Number.isFinite(v)) return '-';
   return v > 0 ? `+${money(v)}` : money(v);
 }
 
 /** Credits: up to 2 decimals, thousands separated. */
 export function credits(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return '–';
+  if (v == null || !Number.isFinite(v)) return '-';
   const s = Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
   return v < 0 && s !== '0' ? MINUS + s : s;
 }
 
 export function signedCredits(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return '–';
+  if (v == null || !Number.isFinite(v)) return '-';
   return v > 0 ? `+${credits(v)}` : credits(v);
 }
 
@@ -79,9 +79,9 @@ export function marginPct(v: number | null | undefined): string {
   return `${v < 0 && s !== '0' ? MINUS : ''}${s}%`;
 }
 
-/** billed ÷ attributed, "1.04×"; "–" when either side is missing */
+/** billed ÷ attributed, "1.04×"; "-" when either side is missing */
 export function ratioLabel(r: number | null | undefined): string {
-  return r == null || !Number.isFinite(r) ? '–' : `${r.toFixed(2)}×`;
+  return r == null || !Number.isFinite(r) ? '-' : `${r.toFixed(2)}×`;
 }
 
 /** the share of Claude cost that is an estimate (0..1), null when there was no Claude cost */
@@ -120,7 +120,7 @@ export function aggregateByMode(rows: AdminRunRow[]): AdminModeCost[] {
   return [...by.values()].sort((a, b) => b.cost.totalUsd - a.cost.totalUsd || b.runs - a.runs);
 }
 
-/** "credits.granted" → "Credits granted", "user.sessions_revoked" → "User sessions revoked" */
+/** "credits.granted" -> "Credits granted", "user.sessions_revoked" -> "User sessions revoked" */
 export function actionLabel(action: string): string {
   const s = action.replace(/[._-]+/g, ' ').trim().toLowerCase();
   return s ? s[0]!.toUpperCase() + s.slice(1) : action;
@@ -128,8 +128,8 @@ export function actionLabel(action: string): string {
 
 /** A detail value of an activity row as short text (objects as compact JSON). */
 export function detailText(v: unknown): string {
-  if (v == null) return '–';
-  if (typeof v === 'string') return v || '–';
+  if (v == null) return '-';
+  if (typeof v === 'string') return v || '-';
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
   try {
     return JSON.stringify(v);
@@ -210,9 +210,9 @@ export function packEconomics(p: CreditPack, s: Pick<PlatformSettings, 'creditVa
   return { priceUsd: priced.priceUsd, perCreditUsd: priced.perCreditUsd, multiple, belowMarkup: multiple < s.markup - 1e-9 };
 }
 
-/** "2.7×" — a margin multiple without trailing zeros */
+/** "2.7×", a margin multiple without trailing zeros */
 export function multipleLabel(m: number): string {
-  return `${Number.isFinite(m) ? Number(m.toFixed(2)) : '–'}×`;
+  return `${Number.isFinite(m) ? Number(m.toFixed(2)) : '-'}×`;
 }
 
 /** "60 credits per $1 of provider cost; a credit sells for $0.05 and costs us $0.0167" */

@@ -63,7 +63,7 @@ export const inDays = (iso: string) => {
 };
 export const validDate = (iso: string | null | undefined): iso is string => !!iso && Number.isFinite(Date.parse(iso));
 
-/** The engine's page type text ("Guide-style Service Page (…)") as one of the form's page types. */
+/** The engine's page type text ("Guide-style Service Page (...)") as one of the form's page types. */
 export function asPageType(t: string): PageType {
   if ((PAGE_TYPE_VALUES as readonly string[]).includes(t)) return t as PageType;
   if (/pillar|hub/i.test(t)) return 'Pillar Page';
@@ -116,8 +116,8 @@ export const PLAN_HINT: Record<PlanType, string> = {
   full: 'rung by rung from easy to hard, the main page last',
 };
 
-/** "9-12" → "9–12 months" */
-export const monthsText = (m: string | null | undefined) => (m ? `${m.replace('-', '–')} months` : '');
+/** "9-12" -> "9-12 months" */
+export const monthsText = (m: string | null | undefined) => (m ? `${m.replace('-', '-')} months` : '');
 
 export const rungLabel = (rung: number) => (rung >= 4 ? 'Main page' : `Rung ${rung}`);
 

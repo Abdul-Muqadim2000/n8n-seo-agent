@@ -117,7 +117,7 @@ const Env = z.object({
   /** G5: the portal-host re-check timer (off on a second server or in tests) */
   PORTAL_JOBS: bool(true),
   /** deploy/gcp: where browsers and machines reach THIS server directly when the web front end runs elsewhere (Vercel), e.g.
-   *  https://api.alaventra.com — the addresses shown for machine endpoints (log push, SCIM) use it; empty = APP_URL */
+   *  https://api.alaventra.com, the addresses shown for machine endpoints (log push, SCIM) use it; empty = APP_URL */
   PUBLIC_API_URL: str(''),
   /** deploy/gcp: the parent domain the session cookie is shared on (app.<domain> and api.<domain>), e.g. alaventra.com; applied only
    *  on hosts inside it (an agency portal host keeps host-only cookies); empty = host-only everywhere */
@@ -125,7 +125,7 @@ const Env = z.object({
   /** deploy/gcp: browser origins allowed to call this API across origins WITH cookies (the front end on another host, for direct
    *  uploads), comma-separated full origins, e.g. https://app.alaventra.com; empty = no cross-origin access at all */
   CORS_ORIGINS: str(''),
-  /** admin panel: an Anthropic Admin API key (sk-ant-admin…) to read what Claude really billed (cost report); empty = not shown */
+  /** admin panel: an Anthropic Admin API key (sk-ant-admin...) to read what Claude really billed (cost report); empty = not shown */
   ANTHROPIC_ADMIN_API_KEY: str(''),
   /** admin panel: the DataForSEO API login / password (the engine's own, in n8n/.env) to read the account balance; empty = the
    *  balance movement recorded in the engine's run ledger is used instead */
@@ -181,7 +181,7 @@ export const config = {
     redirectUri: `${e.APP_URL}/api/auth/google/callback`,
   },
   // D-12 (re-rating 2026-10-17): the app's own name in what it says to customers (MCP server title, account e-mails). It was
-  // SEO_BRAND — the engine's report brand, read from n8n/.env and "Dev SEO" by default — so every MCP client of this install was told
+  // SEO_BRAND, the engine's report brand, read from n8n/.env and "Dev SEO" by default, so every MCP client of this install was told
   // it was talking to "Dev SEO". The product is Alaventra (web/src/components/layout/Brand.tsx BRAND_NAME).
   brand: 'Alaventra',
   mail: {

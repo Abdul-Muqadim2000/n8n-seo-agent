@@ -45,7 +45,7 @@ export function IntegrationsMockup({ className }: { className?: string }) {
         </li>
         <li className="mk-pop flex items-center gap-2.5 px-4 py-3 @min-[26rem]:px-5" style={{ ['--mk-i' as string]: 3 }}>
           <BellRing className="size-3.5 shrink-0 text-ink-3" />
-          <span className="min-w-0 flex-1 truncate text-[11.5px]">#seo-wins · peppol uae moved 12 → 4</span>
+          <span className="min-w-0 flex-1 truncate text-[11.5px]">#seo-wins · peppol uae moved 12 to 4</span>
           <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-ink-2">Delivered</span>
         </li>
       </ul>

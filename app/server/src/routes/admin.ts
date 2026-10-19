@@ -54,7 +54,7 @@ export async function adminRoutes(app: FastifyInstance) {
   const list = async (orgId?: string): Promise<AdminOrg[]> => {
     const since = monthStart();
     const orgs = orgId ? await db.query.organizations.findMany({ where: eq(schema.organizations.id, orgId) }) : await db.query.organizations.findMany();
-    // a run counts at what it cost (settled), then the engine's estimate, then the app's — never only the app's reservation; a
+    // a run counts at what it cost (settled), then the engine's estimate, then the app's, never only the app's reservation; a
     // search-data-only figure counts for no less than the whole-run estimate (the same rule as services/spend.ts and countedRunCost)
     const counts = await execRows<{ org_id: string; members: number; sites: number; runs: number; est: number }>(db, sql`
       select o.id as org_id,
@@ -386,7 +386,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return r;
   });
 
-  // credits (app/docs/CREDITS.md): the guard's pass now, instead of at its next 10-minute tick — after confirming a payment, so the
+  // credits (app/docs/CREDITS.md): the guard's pass now, instead of at its next 10-minute tick, after confirming a payment, so the
   // company's paused schedules resume at once (also what scripts/credits_e2e.py drives)
   // credits: bring the companies that are not on credits yet onto them as a new company would be (idempotent; app/docs/CREDITS.md)
   app.post('/api/admin/credits/align', { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
@@ -426,7 +426,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return activity(parse(adminActivityQuerySchema, req.query ?? {}).limit);
   });
 
-  // ---------- credits: the customers' "Buy credits" requests (fulfilled through POST …/credits with `requestId`) ----------
+  // ---------- credits: the customers' "Buy credits" requests (fulfilled through POST .../credits with `requestId`) ----------
   app.get('/api/admin/credit-requests', async (req): Promise<AdminPurchaseRequest[]> => {
     guard(req);
     const status = String((req.query as { status?: string }).status ?? 'pending');

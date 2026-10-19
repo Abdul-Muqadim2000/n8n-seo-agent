@@ -28,10 +28,10 @@ import { createRun } from './runs';
 import { customerError } from '../lib/customerError';
 
 // "Choose keywords for me" (PIPELINE_FEATURE_SPEC.md §7): for a website that switched it on (the '_site' row's auto_start), when fewer
-// Auto ladders are being written than its limit, start the next recommended keyword that is easy or reachable for the website — on
+// Auto ladders are being written than its limit, start the next recommended keyword that is easy or reachable for the website, on
 // the company owner's behalf, through the same run path as a person (createRun: the locked budget check, the platform's daily
 // ceiling). Off unless the server runs with AUTO_START_LADDERS=true (index.ts timer, every 6 hours). Never automatic: going over the
-// budget (402 → skipped), a keyword a ladder covers, a keyword started automatically before, more than one start a week per website.
+// budget (402 -> skipped), a keyword a ladder covers, a keyword started automatically before, more than one start a week per website.
 
 export const AUTO_START = {
   everyMs: 6 * 3600_000,
@@ -54,7 +54,7 @@ export interface AutoStartState {
   /** the pile-up guard holds: pages wait to be published, so nothing new is written */
   pileup: boolean;
   trackingPaused: boolean;
-  /** topic fit of keywords the website checked recently (normalised keyword → 0 / 1 / 2 / null) */
+  /** topic fit of keywords the website checked recently (normalised keyword -> 0 / 1 / 2 / null) */
   fitOf: Map<string, number | null>;
   now: number;
 }

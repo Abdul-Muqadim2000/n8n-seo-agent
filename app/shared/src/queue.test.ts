@@ -1,4 +1,4 @@
-// REP 3.3 (benchmark pass of 2026-10-14): the one queue. What these tests hold to is the rule the benchmark programme sets —
+// REP 3.3 (benchmark pass of 2026-10-14): the one queue. What these tests hold to is the rule the benchmark programme sets,
 // a number only where something was measured, a named reason where it was not, and one order for the whole app.
 import { describe, expect, it } from 'vitest';
 import {

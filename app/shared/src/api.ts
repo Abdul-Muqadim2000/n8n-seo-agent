@@ -153,7 +153,7 @@ export interface Run {
   requestId: string | null;
   error: string | null;
   /**
-   * credits (app/docs/CREDITS.md): what the run is quoted, holds and is charged, in credits — the customer's only figure for it. The
+   * credits (app/docs/CREDITS.md): what the run is quoted, holds and is charged, in credits, the customer's only figure for it. The
    * provider cost behind it (the old `estimatedCostUsd` / `actualCostUsd` / engine estimate fields) stays in the database and the
    * platform admin panel (`AdminRunRow`); it is never sent to a customer.
    */
@@ -246,7 +246,7 @@ export interface Invitation {
   expiresAt: string;
   /** only returned right after creation, so the inviter can copy it */
   inviteUrl?: string;
-  /** D-10: right after creation — whether this server e-mails invitations at all (no mail account = the link is the only way) */
+  /** D-10: right after creation, whether this server e-mails invitations at all (no mail account = the link is the only way) */
   emailed?: boolean;
 }
 
@@ -274,7 +274,7 @@ export interface AdminOrg {
   monthRuns: number;
 }
 
-// ---------- G21 (2026-10-13): the delivery rate — did what should have run, run, and did it reach the customer? ----------
+// ---------- G21 (2026-10-13): the delivery rate, did what should have run, run, and did it reach the customer? ----------
 /** One side of a week: runs that started, runs that were delivered, and everything in between. */
 export interface DeliveryCount {
   started: number;
@@ -287,7 +287,7 @@ export interface DeliveryCount {
   stuck: number;
   /** still going: left out of the rate rather than counted against it */
   inFlight: number;
-  /** delivered + failed + noReport + stuck — what the rate is taken over */
+  /** delivered + failed + noReport + stuck, what the rate is taken over */
   settled: number;
   ratePct: number | null;
 }
@@ -331,7 +331,7 @@ export interface DeliveryReport {
   notes: string[];
 }
 
-/** v4.10: the result of a link upload (POST …/backlinks/import) */
+/** v4.10: the result of a link upload (POST .../backlinks/import) */
 export interface LinkImportSummary {
   source: string;
   label: string;

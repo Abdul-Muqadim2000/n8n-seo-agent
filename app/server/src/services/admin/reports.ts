@@ -54,7 +54,7 @@ export function moneyOf(cost: CostSplit, revenueUsd: number, listValueUsd: numbe
   return { cost, revenueUsd: revenue, marginUsd: margin, marginPct: revenue > 0 ? Math.round((margin / revenue) * 1000) / 10 : null, listValueUsd: r2(Math.max(0, listValueUsd)) };
 }
 
-/** the credits really debited for one cost event (its debit, plus any re-pricing of it), from credit_ledger — never recomputed at
+/** the credits really debited for one cost event (its debit, plus any re-pricing of it), from credit_ledger, never recomputed at
  *  today's settings */
 const debitedFor = (eventKey: SQL) =>
   sql`(select coalesce(-sum(c.credits), 0) from ${schema.creditLedger} c where c.ref_key = 'cost:' || ${eventKey} or c.ref_key like 'cost:' || ${eventKey} || ':%')`;

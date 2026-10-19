@@ -28,7 +28,7 @@ import { creditsForRuns } from './runCredits';
 import { customerError } from '../lib/customerError';
 
 /**
- * G4 (2026-10-17) — event webhooks: several endpoints per company, each subscribed to event types and websites, delivered as
+ * G4 (2026-10-17), event webhooks: several endpoints per company, each subscribed to event types and websites, delivered as
  * HMAC-signed JSON, as a Slack message or as a Teams card, retried with backoff, logged. Design note: app/docs/INTEGRATIONS.md §2, §5.
  *
  * Reused, not re-made: the signature is report delivery's `signBody` (HMAC-SHA256 over `<timestamp>.<body>`, the same two headers);
@@ -81,7 +81,7 @@ async function ownSiteIds(orgId: string, ids: string[]): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
-/** Creates an endpoint. A signed-JSON endpoint gets a signing secret, returned here once (`whsec_…`) and never again. */
+/** Creates an endpoint. A signed-JSON endpoint gets a signing secret, returned here once (`whsec_...`) and never again. */
 export async function createEndpoint(org: OrgRow, user: UserRow, body: unknown): Promise<{ endpoint: WebhookEndpointView; secret: string | null }> {
   const v = parse(webhookEndpointSchema, body);
   requireSecrets();
@@ -211,7 +211,7 @@ export async function attempt(id: string): Promise<void> {
     await db.update(schema.webhookEndpoints).set({ consecutiveFailures: 0, lastSuccessAt: now }).where(eq(schema.webhookEndpoints.id, ep.id));
     return;
   }
-  // 410 Gone: the receiver says the address is retired (Slack and Teams answer this way for a removed webhook) — stop at once
+  // 410 Gone: the receiver says the address is retired (Slack and Teams answer this way for a removed webhook), stop at once
   const gone = res.status === 410;
   const next = gone ? null : nextAttemptAt(attempts, now);
   await db
@@ -265,7 +265,7 @@ export async function emit(org: Pick<OrgRow, 'id' | 'name'>, site: Pick<SiteRow,
 }
 
 /**
- * A run as an event carries it. credits (app/docs/CREDITS.md): its credits (quoted, charged — null until the charge settles — and the
+ * A run as an event carries it. credits (app/docs/CREDITS.md): its credits (quoted, charged, null until the charge settles, and the
  * state), never its provider cost; an error naming a dollar balance or a provider reads as a capacity limit.
  */
 export const runSummary = (r: Pick<RunRow, 'id' | 'orgId' | 'siteId' | 'mode' | 'title' | 'status' | 'error' | 'createdAt' | 'completedAt'>, credits: RunCredits | null) => ({
@@ -340,7 +340,7 @@ export async function testEndpoint(org: OrgRow, id: unknown): Promise<SendResult
   const type = (ep.events[0] as WebhookEvent) ?? 'report.ready';
   const e = envelope(org, null, type, {
     test: true,
-    report: { id: '00000000-0000-0000-0000-000000000000', title: 'Test event — this is what an Alaventra event looks like', stage: 'site_tracker', stageLabel: 'Weekly site report', url: appUrl(`/o/${org.id}/settings/integrations`) },
+    report: { id: '00000000-0000-0000-0000-000000000000', title: 'Test event: this is what an Alaventra event looks like', stage: 'site_tracker', stageLabel: 'Weekly site report', url: appUrl(`/o/${org.id}/settings/integrations`) },
     run: { title: 'Test analysis', url: appUrl(`/o/${org.id}/runs`) },
     alerts: [{ level: 'medium', text: 'Test alert: nothing is wrong.' }],
     findings: [{ title: 'Test finding', severity: 'Low', category: 'Test' }],

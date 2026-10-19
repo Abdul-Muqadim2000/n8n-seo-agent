@@ -10,7 +10,7 @@ import { MfaChallengeForm, type FactorInput } from './MfaChallengeForm';
 export const COMPANY_MFA_CODES = ['mfa_enrolment_required', 'mfa_verification_required'];
 
 /**
- * G1: the full page a member sees when their company requires two-step verification and this session has not passed it — set one
+ * G1: the full page a member sees when their company requires two-step verification and this session has not passed it. Set one
  * up, or confirm with the one they have. Nothing of the company loads until then (the server refuses every company route).
  */
 export function CompanyMfaGate({ error }: { error: ApiRequestError }) {

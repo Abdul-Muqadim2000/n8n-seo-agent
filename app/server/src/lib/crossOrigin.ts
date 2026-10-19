@@ -5,10 +5,10 @@ import { config } from '../config';
  * deploy/gcp (the web front end on Vercel, this server on api.<domain>): what a split between two hosts of ONE site needs.
  *
  * Most requests come through the front end's own /api proxy (same origin: nothing here applies). Large uploads go to api.<domain>
- * directly, because a proxy in front has body-size and time limits — so for those the browser makes a cross-origin request WITH the
+ * directly, because a proxy in front has body-size and time limits, so for those the browser makes a cross-origin request WITH the
  * session cookie:
  *  - the cookie must reach api.<domain>: it is set with Domain=<COOKIE_DOMAIN> (app.<domain> and api.<domain> are the same site, so
- *    SameSite=Lax still sends it) — but only on hosts inside that domain: an agency's portal host keeps host-only cookies;
+ *    SameSite=Lax still sends it), but only on hosts inside that domain: an agency's portal host keeps host-only cookies;
  *  - the browser must be allowed to read the answer: CORS with credentials, for the listed origins only (CORS_ORIGINS), never `*`;
  *  - CSRF stays what it was: a state-changing request needs X-Requested-With, which a cross-site form cannot send and a cross-origin
  *    script can send only after a preflight this server answers for the listed origins alone.

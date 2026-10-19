@@ -199,7 +199,7 @@ export function PublishedForm({ initialSiteId, prefill }: ToolFormProps) {
         aside={<GuideButton id="publish-page" vars={{ domain: site?.domain }} label="How to publish one" />}
       >
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
-        <TextField label="Page address" reg={form.register('publishedUrl')} error={errMsg(e.publishedUrl)} inputMode="url" placeholder={site ? `https://${site.domain}/…` : 'https://…'} hint={site ? `The live URL on ${site.domain}.` : 'The live URL.'} />
+        <TextField label="Page address" reg={form.register('publishedUrl')} error={errMsg(e.publishedUrl)} inputMode="url" placeholder={site ? `https://${site.domain}/...` : 'https://...'} hint={site ? `The live URL on ${site.domain}.` : 'The live URL.'} />
         <TextField label="Target keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. dubai accounting software pricing" hint="The keyword the page was written for (the one in its report)." />
         <CheckList items={['Live (HTTP 200) and indexable', 'Title and meta description', 'One H1, canonical', 'Structured data, author and date', 'Images and alt text', 'Internal links to and from it']} />
         <EmailCopyField reg={form.register('emailCopy')} />
@@ -276,8 +276,8 @@ export function CheckinForm({ initialSiteId, prefill }: ToolFormProps) {
         aside={<GuideButton id="search-console-checkin" vars={{ domain: site?.domain }} label="Where do I look?" />}
       >
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
-        {yesNo('manualAction', 'Manual actions', 'Search Console → Security & Manual Actions → Manual actions.')}
-        {yesNo('securityIssue', 'Security issues', 'Search Console → Security & Manual Actions → Security issues.')}
+        {yesNo('manualAction', 'Manual actions', 'Search Console > Security & Manual Actions > Manual actions.')}
+        {yesNo('securityIssue', 'Security issues', 'Search Console > Security & Manual Actions > Security issues.')}
         {(v.manualAction || v.securityIssue) && (
           <Callout tone="warning">Describe what Search Console shows in the notes below. Fixing a manual action and requesting a review comes before any other SEO work.</Callout>
         )}
@@ -285,7 +285,7 @@ export function CheckinForm({ initialSiteId, prefill }: ToolFormProps) {
 
       <FormCard title="Pages report" description="Optional, and the most useful part: why Google does not index some pages.">
         <ol className="space-y-2 text-[13px] leading-snug text-ink-2">
-          {['Search Console → Indexing → Pages → Export (top right) → Download CSV.', 'Unzip the download and upload Table.csv. Chart.csv, or the URL list of one reason, also work.'].map((x, i) => (
+          {['Search Console > Indexing > Pages > Export (top right) > Download CSV.', 'Unzip the download and upload Table.csv. Chart.csv, or the URL list of one reason, also work.'].map((x, i) => (
             <li key={i} className="flex items-start gap-2.5">
               <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-accent-soft font-display text-[11px] font-semibold text-accent-text" aria-hidden>
                 {i + 1}

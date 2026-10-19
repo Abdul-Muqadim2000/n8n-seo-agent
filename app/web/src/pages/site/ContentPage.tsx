@@ -90,7 +90,7 @@ const SOURCE_ICON: Record<string, ReactNode> = {
 };
 const isLive = (i: ContentItem) => i.status === 'published' || !!i.publishedUrl;
 
-/** keyword → newest generated page report (to offer its files next to the pipeline item) */
+/** keyword -> newest generated page report (to offer its files next to the pipeline item) */
 function reportsByKeyword(reports: readonly Report[]) {
   const m = new Map<string, Report>();
   for (const r of reports) {
@@ -139,7 +139,7 @@ function Content({ d }: { d: ContentData }) {
             <HeroNextStep
               icon={<Inbox />}
               eyebrow={`Next step · ${oldestDays != null ? `${oldestDays} ${oldestDays === 1 ? 'day' : 'days'} waiting` : 'waiting'}`}
-              title={`Publish “${oldest.keyword}”, then report its address`}
+              title={`Publish "${oldest.keyword}", then report its address`}
               actions={
                 <>
                   <ButtonLink to={tool('published', { keyword: oldest.keyword, ...(oldest.existingPageUrl ? { publishedUrl: oldest.existingPageUrl } : {}) })} size="sm" variant="secondary">
@@ -174,9 +174,9 @@ function Content({ d }: { d: ContentData }) {
         <Callout tone="warning" title={`${plural(stale.length, 'page has', 'pages have')} been waiting more than a week`}>
           {stale
             .slice(0, 4)
-            .map((i) => `“${i.keyword}”`)
+            .map((i) => `"${i.keyword}"`)
             .join(', ')}
-          {stale.length > 4 ? ` and ${stale.length - 4} more` : ''}. Publish {stale.length === 1 ? 'it' : 'them'}, then use “Report published URL” so the engine checks the page and starts tracking it.
+          {stale.length > 4 ? ` and ${stale.length - 4} more` : ''}. Publish {stale.length === 1 ? 'it' : 'them'}, then use "Report published URL" so the engine checks the page and starts tracking it.
           <div className="mt-2">
             <GuideButton id="publish-page" vars={{ domain: site.domain }} label="Show me how to publish one" />
           </div>
@@ -242,7 +242,7 @@ function Content({ d }: { d: ContentData }) {
           </Card>
         ) : view === 'board' ? (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <BoardColumn title="Written — waiting to publish" icon={<Clock />} tone="warning" count={shown.filter((i) => !isLive(i)).length}>
+            <BoardColumn title="Written, waiting to publish" icon={<Clock />} tone="warning" count={shown.filter((i) => !isLive(i)).length}>
               {shown
                 .filter((i) => !isLive(i))
                 .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
@@ -290,7 +290,7 @@ function Content({ d }: { d: ContentData }) {
   );
 }
 
-/** G2: keyword → its newest CMS item */
+/** G2: keyword -> its newest CMS item */
 function cmsByKeyword(items: readonly CmsItemView[]) {
   const m = new Map<string, CmsItemView>();
   for (const i of items) {
@@ -408,11 +408,11 @@ function PipelineTable({ rows, reports, cms, onUnpublish }: { rows: ContentItem[
   const columns: Column<ContentItem>[] = [
     { key: 'keyword', header: 'Keyword', sortValue: (r) => r.keyword, cell: (r) => <span className="font-medium text-ink">{r.keyword}</span> },
     { key: 'source', header: 'Source', sortValue: (r) => r.source, cell: (r) => <SourceLine item={r} /> },
-    { key: 'pageType', header: 'Page type', hideOnMobile: true, sortValue: (r) => r.pageType, cell: (r) => (r.pageType ? <Kind>{r.pageType}</Kind> : '–') },
+    { key: 'pageType', header: 'Page type', hideOnMobile: true, sortValue: (r) => r.pageType, cell: (r) => (r.pageType ? <Kind>{r.pageType}</Kind> : '-') },
     { key: 'status', header: 'Status', sortValue: (r) => (isLive(r) ? 1 : 0), cell: (r) => (isLive(r) ? <StatusBadge tone="good">Live</StatusBadge> : <Badge tone="accent" icon={<CalendarClock className="size-3" aria-hidden />}>Waiting</Badge>) },
-    { key: 'cms', header: 'CMS', hideOnMobile: true, sortValue: (r) => cms.get(r.keyword.toLowerCase())?.remoteStatus ?? '', cell: (r) => { const c = cms.get(r.keyword.toLowerCase()); return c ? <CmsBadge item={c} /> : <span className="text-ink-3">–</span>; } },
+    { key: 'cms', header: 'CMS', hideOnMobile: true, sortValue: (r) => cms.get(r.keyword.toLowerCase())?.remoteStatus ?? '', cell: (r) => { const c = cms.get(r.keyword.toLowerCase()); return c ? <CmsBadge item={c} /> : <span className="text-ink-3">-</span>; } },
     { key: 'startedAt', header: 'Started', sortValue: (r) => r.startedAt, cell: (r) => <span className="text-[13px] text-ink-2">{fmtDate(r.startedAt)}</span> },
-    { key: 'publishedAt', header: 'Published', hideOnMobile: true, sortValue: (r) => r.publishedAt || '', cell: (r) => <span className="text-[13px] text-ink-2">{r.publishedAt ? fmtDate(r.publishedAt) : '–'}</span> },
+    { key: 'publishedAt', header: 'Published', hideOnMobile: true, sortValue: (r) => r.publishedAt || '', cell: (r) => <span className="text-[13px] text-ink-2">{r.publishedAt ? fmtDate(r.publishedAt) : '-'}</span> },
     {
       key: 'url',
       header: 'URL',
@@ -424,7 +424,7 @@ function PipelineTable({ rows, reports, cms, onUnpublish }: { rows: ContentItem[
             {urlPath(r.publishedUrl)}
           </a>
         ) : (
-          '–'
+          '-'
         ),
     },
     {
@@ -433,7 +433,7 @@ function PipelineTable({ rows, reports, cms, onUnpublish }: { rows: ContentItem[
       hideOnMobile: true,
       cell: (r) => {
         const rep = reports.get(r.keyword.toLowerCase());
-        return rep ? <FileLinks orgId={org.id} files={rep.files} /> : <span className="text-ink-3">–</span>;
+        return rep ? <FileLinks orgId={org.id} files={rep.files} /> : <span className="text-ink-3">-</span>;
       },
     },
     {
@@ -464,8 +464,8 @@ function UnpublishDialog({ item, onClose }: { item: ContentItem; onClose: () => 
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      title={`Mark “${item.keyword}” as not published?`}
-      description="Use this when the page was taken down or reported by mistake. It moves back to “waiting to publish”, the ladder rung goes back to written, and weekly checks stop treating it as live. The page itself is not touched."
+      title={`Mark "${item.keyword}" as not published?`}
+      description="Use this when the page was taken down or reported by mistake. It moves back to &quot;waiting to publish&quot;, the ladder rung goes back to written, and weekly checks stop treating it as live. The page itself is not touched."
       footer={
         <>
           <DialogClose asChild>
@@ -480,7 +480,7 @@ function UnpublishDialog({ item, onClose }: { item: ContentItem; onClose: () => 
                 {
                   onSuccess: (r) => {
                     if (r.ok) {
-                      toast.success(`“${item.keyword}” marked as not published`);
+                      toast.success(`"${item.keyword}" marked as not published`);
                       onClose();
                     } else toast.error(r.error ?? 'The website admin workflow did not apply the change');
                   },
@@ -526,14 +526,14 @@ function CadenceCard({ cadence, on }: { cadence: ContentData['cadence']; on: boo
           <span className="font-display text-3xl leading-none font-semibold tracking-[-0.01em] text-ink">
             <CountUp value={on ? cadence!.pagesPerWeek : 0} />
           </span>
-          <span className="text-sm text-ink-2">{on ? (cadence!.pagesPerWeek === 1 ? 'post per week' : 'posts per week') : 'posts per week — off'}</span>
+          <span className="text-sm text-ink-2">{on ? (cadence!.pagesPerWeek === 1 ? 'post per week' : 'posts per week') : 'posts per week (off)'}</span>
           {cadence?.status === 'paused' && <StatusBadge tone="warning">Paused</StatusBadge>}
         </div>
       </div>
       <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
         {on
-          ? 'Each Monday the engine picks the next pages in this order: the next rung of your keyword ladder, queries in striking distance (positions 4–20), then rising Google Trends searches. Each post arrives as HTML, Markdown and meta.json, ready to publish.'
-          : `Turn on 1–3 posts a week and the engine writes them every Monday from your ladder, striking-distance queries and rising searches — about ${PRICES.page()} per post.`}
+          ? 'Each Monday the engine picks the next pages in this order: the next rung of your keyword ladder, queries in striking distance (positions 4-20), then rising Google Trends searches. Each post arrives as HTML, Markdown and meta.json, ready to publish.'
+          : `Turn on 1-3 posts a week and the engine writes them every Monday from your ladder, striking-distance queries and rising searches, at about ${PRICES.page()} per post.`}
       </p>
     </Panel>
   );
@@ -666,7 +666,7 @@ function CaseStudies({ items }: { items: CaseStudy[] }) {
             className="py-8"
             icon={<Briefcase className="size-5" />}
             title="No case studies yet"
-            description="A case study turns one client result into proof: its own page now, and evidence that every later page can cite — one of the strongest trust signals for Google and AI answers."
+            description="A case study turns one client result into proof: its own page now, and evidence that every later page can cite. It is one of the strongest trust signals for Google and AI answers."
             action={<ToolButton mode="case_study" variant="primary">Write a case study</ToolButton>}
           />
         </Card>
@@ -689,9 +689,9 @@ function GeneratedTable({ reports, orgId }: { reports: Report[]; orgId: string }
         </Link>
       ),
     },
-    { key: 'verdict', header: 'Verdict', sortValue: (r) => s(r.summary.verdict), cell: (r) => (s(r.summary.verdict) ? <StatusBadge tone={verdictTone(s(r.summary.verdict))}>{verdictLabel(s(r.summary.verdict))}</StatusBadge> : '–') },
-    { key: 'score', header: 'Score', align: 'right', sortValue: (r) => n(r.summary.score), cell: (r) => n(r.summary.score) ?? '–' },
-    { key: 'page', header: 'Page type', hideOnMobile: true, sortValue: (r) => s(r.summary.page), cell: (r) => (s(r.summary.page) ? <Kind className="h-auto max-w-[18rem] whitespace-normal py-0.5 leading-snug">{s(r.summary.page)}</Kind> : '–') },
+    { key: 'verdict', header: 'Verdict', sortValue: (r) => s(r.summary.verdict), cell: (r) => (s(r.summary.verdict) ? <StatusBadge tone={verdictTone(s(r.summary.verdict))}>{verdictLabel(s(r.summary.verdict))}</StatusBadge> : '-') },
+    { key: 'score', header: 'Score', align: 'right', sortValue: (r) => n(r.summary.score), cell: (r) => n(r.summary.score) ?? '-' },
+    { key: 'page', header: 'Page type', hideOnMobile: true, sortValue: (r) => s(r.summary.page), cell: (r) => (s(r.summary.page) ? <Kind className="h-auto max-w-[18rem] whitespace-normal py-0.5 leading-snug">{s(r.summary.page)}</Kind> : '-') },
     { key: 'kind', header: 'Contains', hideOnMobile: true, cell: (r) => <span className="text-[13px] text-ink-2">{r.summary.hasPage ? 'Report + page' : 'Keyword report'}</span> },
     { key: 'receivedAt', header: 'Delivered', sortValue: (r) => r.receivedAt, cell: (r) => <span className="text-[13px] text-ink-3" title={fmtDate(r.receivedAt)}>{fmtAgo(r.receivedAt)}</span> },
     { key: 'files', header: 'Downloads', cell: (r) => <FileLinks orgId={orgId} files={r.files} /> },
@@ -706,7 +706,7 @@ function GeneratedTable({ reports, orgId }: { reports: Report[]; orgId: string }
       searchPlaceholder="Search pages"
       searchText={(r) => `${r.title} ${s(r.summary.keyword)}`}
       pageSize={10}
-      empty={<span>No pages generated yet. Use “Write a page” for a keyword to get the report and the finished page.</span>}
+      empty={<span>No pages generated yet. Use "Write a page" for a keyword to get the report and the finished page.</span>}
       className={cn(!reports.length && 'opacity-90')}
     />
   );

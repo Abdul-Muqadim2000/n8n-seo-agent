@@ -131,7 +131,7 @@ const base = '/api/orgs/00000000-0000-0000-0000-000000000001/sites/00000000-0000
 const assess = (payload: unknown) => app.inject({ method: 'POST', url: base + '/keywords/assess', payload: payload as object });
 
 describe('keyword check', () => {
-  it('asks n8n once with the website’s context and stores the answer with its reported cost', async () => {
+  it('asks n8n once with the website\'s context and stores the answer with its reported cost', async () => {
     const r = await assess({ keyword: '  E Invoicing Software UAE ' });
     expect(r.statusCode).toBe(200);
     expect(st.calls).toHaveLength(1);
@@ -239,7 +239,7 @@ describe('recommended keywords', () => {
     expect(r.json()).toEqual({ reportId: null, receivedAt: null, ageDays: null, stale: false, reach: null, country: null, keywords: [] });
   });
 
-  it('the latest report’s keywords, best first, overlaps with the website’s ladders marked; stale after 90 days', async () => {
+  it('the latest report\'s keywords, best first, overlaps with the website\'s ladders marked; stale after 90 days', async () => {
     st.role = 'viewer';
     st.strategy = {
       report: { id: 'rep-1', receivedAt: new Date(Date.now() - 10 * 864e5).toISOString() },

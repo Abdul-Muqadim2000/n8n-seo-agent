@@ -7,7 +7,7 @@ import { creditPacksSchema, DEFAULT_CREDIT_PACKS, type CreditPack, type CreditPu
 // only the people in PLATFORM_ADMIN_EMAILS reach it; customers never see these figures.
 //
 // Money words used throughout, so nothing on screen is ambiguous:
-//   cost      what a customer's operations cost US at the providers — Claude (Anthropic) and DataForSEO — attributed run by run
+//   cost      what a customer's operations cost US at the providers, Claude (Anthropic) and DataForSEO, attributed run by run
 //   billed    what the providers actually charged the platform (Anthropic Admin cost report, DataForSEO balance movement), platform-wide
 //   revenue   money a customer paid, recorded by an admin when credits are granted (`paidUsd`); there is no card billing yet
 //   margin    revenue − cost
@@ -32,7 +32,7 @@ export interface CostSplit {
 }
 
 /**
- * Every credit movement of a company (or the platform) over a period, each with the dollars behind it — what the admin panel's
+ * Every credit movement of a company (or the platform) over a period, each with the dollars behind it, what the admin panel's
  * Credits / USD switch shows (app/docs/CREDITS.md). Credits at their list value use the credit value in force when each was used.
  */
 export interface CreditBook {
@@ -62,7 +62,7 @@ export interface CreditBook {
   /** what runs would have used beyond their quotes: not charged, the cost was ours */
   absorbed: number;
   absorbedListUsd: number;
-  /** the balance NOW (whatever the period), at list value — what customers can still spend — and what serving it will cost us */
+  /** the balance NOW (whatever the period), at list value, what customers can still spend, and what serving it will cost us */
   remaining: number;
   remainingListUsd: number;
   remainingCostUsd: number;
@@ -354,7 +354,7 @@ export const adminCreditSchema = z
     credits: z.number().finite().min(-1_000_000).max(1_000_000),
     paidUsd: z.number().finite().min(0).max(1_000_000).default(0),
     note: z.string().trim().max(500).default(''),
-    /** grant: how long the credits last — 'pack' = the pack expiry (12 months), 'never', or a number of days */
+    /** grant: how long the credits last, 'pack' = the pack expiry (12 months), 'never', or a number of days */
     expires: z.union([z.enum(['pack', 'never']), z.number().int().min(1).max(3650)]).default('pack'),
     /** fulfils this purchase request (the customer's "Buy credits") */
     requestId: z.string().uuid().optional(),

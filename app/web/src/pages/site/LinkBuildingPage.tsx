@@ -33,7 +33,7 @@ export default function LinkBuildingPage() {
       <PageHeader
         icon={<Handshake />}
         title="Link building"
-        description={`Pitches to sites worth a link to ${site.domain}, sent from your own mailbox once you approve them — then the replies, the listings you can add yourself and what each won link did.`}
+        description={`Pitches to sites worth a link to ${site.domain}, sent from your own mailbox once you approve them. Then the replies, the listings you can add yourself and what each won link did.`}
         actions={
           admin ? (
             <Button icon={<Search className="size-4" />} onClick={() => setRunOpen(true)}>
@@ -51,14 +51,14 @@ export default function LinkBuildingPage() {
 }
 
 /** A "go to that section" link inside the hero (looks like HeroLink, scrolls instead of navigating). */
-// L7: two subject styles per batch, the reply rate of each — and nothing called better before there is enough to read.
+// L7: two subject styles per batch, the reply rate of each, and nothing called better before there is enough to read.
 function SubjectAb({ ab }: { ab: LinkBuildingData['subjectAb'] }) {
   const cols: Column<LinkBuildingData['subjectAb']['rows'][number]>[] = [
     { key: 'variant', header: 'Style', cell: (r) => <span className="text-ink">{r.variant}{ab.leader === r.variant ? ' · ahead' : ''}</span> },
-    { key: 'subject', header: 'Example subject', cell: (r) => <span className="text-ink-2">{r.subject || '–'}</span> },
+    { key: 'subject', header: 'Example subject', cell: (r) => <span className="text-ink-2">{r.subject || '-'}</span> },
     { key: 'sent', header: 'First e-mails', align: 'right', sortValue: (r) => r.sent, cell: (r) => <span className="tabular">{r.sent}</span> },
     { key: 'replied', header: 'Replies', align: 'right', sortValue: (r) => r.replied, cell: (r) => <span className="tabular">{r.replied}</span> },
-    { key: 'rate', header: 'Reply rate', align: 'right', sortValue: (r) => r.replyRate ?? -1, cell: (r) => <span className="tabular">{r.replyRate != null ? formatPercent(r.replyRate) : '–'}</span> },
+    { key: 'rate', header: 'Reply rate', align: 'right', sortValue: (r) => r.replyRate ?? -1, cell: (r) => <span className="tabular">{r.replyRate != null ? formatPercent(r.replyRate) : '-'}</span> },
   ];
   return (
     <div className="space-y-2">
@@ -83,7 +83,7 @@ function HeroJump({ to, children }: { to: string; children: string }) {
       )}
     >
       {children}
-      <span aria-hidden>→</span>
+      <span aria-hidden>then</span>
     </button>
   );
 }
@@ -99,7 +99,7 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
   const pitches = (n: number) => plural(n, 'pitch', 'pitches');
 
   const title = k.wonMonth
-    ? `${plural(k.wonMonth, 'link')} won this month${counts.drafted ? ` — ${pitches(counts.drafted)} ready for you` : ''}`
+    ? `${plural(k.wonMonth, 'link')} won this month${counts.drafted ? ` (${pitches(counts.drafted)} ready for you)` : ''}`
     : toAnswer
       ? `${plural(toAnswer, 'reply', 'replies')} to answer`
       : counts.drafted
@@ -143,7 +143,7 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
               can('admin') ? (
                 <>
                   <ButtonLink size="sm" variant="secondary" to={paths.settings(org.id, 'mailboxes')} icon={<Mail className="size-3.5" />}>
-                    Company settings → Mailboxes
+                    Company settings &gt; Mailboxes
                   </ButtonLink>
                   <GuideButton id="mailbox-connect" label="How to connect it" />
                 </>
@@ -196,20 +196,20 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
             deltaLabel="this month"
             meta={`${plural(k.contactedDomains, 'site')} contacted in all`}
           />
-          {/* B11-1: a rate is shown only once there is enough to read one from — under the floor the counts and what is still
+          {/* B11-1: a rate is shown only once there is enough to read one from, under the floor the counts and what is still
               needed take its place, the same rule the subject-line test below already applies. */}
           <MetricCard
             icon={<MessageSquareReply />}
             label="Reply rate"
-            info={`People who replied ÷ conversations started. Out-of-office and other automatic replies are not counted. No rate is shown under ${k.rates.reply.min} conversations: a reply or two says nothing about a rate. Link outreach usually gets 4–9% replies, journalist pitches about 13%.`}
-            value={k.replyRate != null ? <CountUp value={k.replyRate} format={(v) => formatPercent(v)} /> : '–'}
+            info={`People who replied ÷ conversations started. Out-of-office and other automatic replies are not counted. No rate is shown under ${k.rates.reply.min} conversations: a reply or two says nothing about a rate. Link outreach usually gets 4-9% replies, journalist pitches about 13%.`}
+            value={k.replyRate != null ? <CountUp value={k.replyRate} format={(v) => formatPercent(v)} /> : '-'}
             meta={k.replyRate != null ? `${k.replied} replied · ${k.positive} positive` : k.rates.reply.note}
           />
           <MetricCard
             icon={<Target />}
             label="Win rate"
-            info={`Sites that linked ÷ sites contacted, once ${k.rates.win.min} sites have been contacted. Links are rare by nature: the one published funnel with its arithmetic shown puts it at roughly 13 links per 1,000 sites e-mailed (Hunter, 2026), so a quiet month is normal. Bounces above 2% hurt your mailbox's reputation — that limit cannot be measured under ${k.rates.bounce.min} e-mails, so no bounce rate is shown until then.`}
-            value={k.winRate != null ? <CountUp value={k.winRate} format={(v) => formatPercent(v)} /> : '–'}
+            info={`Sites that linked ÷ sites contacted, once ${k.rates.win.min} sites have been contacted. Links are rare by nature: the one published funnel with its arithmetic shown puts it at roughly 13 links per 1,000 sites e-mailed (Hunter, 2026), so a quiet month is normal. Bounces above 2% hurt your mailbox's reputation, but that limit cannot be measured under ${k.rates.bounce.min} e-mails, so no bounce rate is shown until then.`}
+            value={k.winRate != null ? <CountUp value={k.winRate} format={(v) => formatPercent(v)} /> : '-'}
             meta={
               k.bounceRate != null && k.bounceRate > 2 ? (
                 <StatusBadge tone="warning">{formatPercent(k.bounceRate)} bounced</StatusBadge>
@@ -224,8 +224,8 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
             icon={<CalendarClock />}
             label="Days to link"
             info="The median number of days between the first e-mail and the link going live."
-            value={k.medianDaysToLink != null ? <CountUp value={k.medianDaysToLink} /> : '–'}
-            meta="median, first e-mail → link live"
+            value={k.medianDaysToLink != null ? <CountUp value={k.medianDaysToLink} /> : '-'}
+            meta="median, first e-mail to link live"
           />
         </div>
         {k.byType.length > 0 && (

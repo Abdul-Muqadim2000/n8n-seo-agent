@@ -57,8 +57,8 @@ export function AiVisibilityMockup({ className }: { className?: string }) {
       </div>
       <div className="mt-5 grid grid-cols-3 gap-2.5">
         {[
-          { l: 'Mention rate', v: '34%', r: '27–41%', d: '6' },
-          { l: 'Citation rate', v: '19%', r: '13–26%', d: '3' },
+          { l: 'Mention rate', v: '34%', r: '27-41%', d: '6' },
+          { l: 'Citation rate', v: '19%', r: '13-26%', d: '3' },
           { l: 'Share of voice', v: '22%', r: '#2 of 5', d: '4' },
         ].map((k, i) => (
           <div key={k.l} className="mk-pop rounded-lg border border-line bg-page p-2.5 sm:p-3" style={{ ['--mk-i' as string]: i }}>

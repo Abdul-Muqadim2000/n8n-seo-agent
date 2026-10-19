@@ -34,7 +34,7 @@ export function useSitePage() {
   };
 }
 
-/** First load → skeleton; failed with nothing to show → error with retry; otherwise the content (old data is kept on refetch). */
+/** First load -> skeleton; failed with nothing to show -> error with retry; otherwise the content (old data is kept on refetch). */
 export function DataGate<T>({ q, skeleton, children }: { q: UseQueryResult<T, unknown>; skeleton?: ReactNode; children: (data: T) => ReactNode }) {
   if (q.data !== undefined) return <>{children(q.data)}</>;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
@@ -182,7 +182,7 @@ export function FilterChips<T extends string>({ value, onChange, options, label,
 }
 
 /** A short list of neutral chips with "+N". */
-export function Chips({ items, max = 4, className, empty = '–' }: { items: readonly string[]; max?: number; className?: string; empty?: ReactNode }) {
+export function Chips({ items, max = 4, className, empty = '-' }: { items: readonly string[]; max?: number; className?: string; empty?: ReactNode }) {
   if (!items.length) return <span className="text-ink-3">{empty}</span>;
   const shown = items.slice(0, max);
   const rest = items.length - shown.length;
@@ -299,7 +299,7 @@ export function Panel({
   );
 }
 
-/** "View all →" style link for card footers. */
+/** "View all ->" style link for card footers. */
 export function MoreLink({ to, children }: { to: string; children: ReactNode }) {
   return (
     <Link to={to} className="group/more inline-flex items-center gap-1 text-[13px] font-medium text-accent-text decoration-accent-text/40 underline-offset-4 hover:underline transition-colors duration-150 ease-brand">

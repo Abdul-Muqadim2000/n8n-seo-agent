@@ -30,7 +30,7 @@ export default function AiVisibilityPage() {
       <PageHeader
         icon={<Bot />}
         title="AI visibility"
-        description={`Is ${site.domain} named when buyers ask ChatGPT, Gemini, Perplexity, Claude and Google’s AI — and what is it worth? Your questions are asked every day on the fast engines and fully every Monday.`}
+        description={`Is ${site.domain} named when buyers ask ChatGPT, Gemini, Perplexity, Claude and Google's AI? And what is that worth? Your questions are asked every day on the fast engines and fully every Monday.`}
         actions={
           <ToolButton mode="ai_visibility" variant="primary" icon={<Bot className="size-4" />}>
             Run an AI visibility check
@@ -55,7 +55,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       <EmptyState
         icon={<Bot className="size-5" />}
         title="No AI visibility check yet"
-        description={`The check asks your buyers’ questions on ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews (Copilot optional), and shows who gets named, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth. About ${quoteLabel(estimateAiVisibilityCost().fullRun + estimateAiVisibilityCost().weekly / 4.33)} for the first full check.`}
+        description={`The check asks your buyers' questions on ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews (Copilot optional), and shows who gets named, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth. About ${quoteLabel(estimateAiVisibilityCost().fullRun + estimateAiVisibilityCost().weekly / 4.33)} for the first full check.`}
         action={
           <>
             <ToolButton mode="ai_visibility" variant="primary">
@@ -112,7 +112,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
                 value={<CountUp value={L.mentionRate} format={(v) => pct(v)} />}
                 delta={<Delta value={mentionDelta} suffix=" pts" />}
                 trend={<Sparkline data={runs.map((r) => ({ v: r.mentionRate }))} dataKey="v" />}
-                hint={L.mentionLo != null && L.mentionHi != null ? `95% range ${pct(L.mentionLo, 0)}–${pct(L.mentionHi, 0)} · ${compactNumber(L.samples)} answers in 7 days` : `of ${compactNumber(L.answers)} answers to ${L.prompts} questions`}
+                hint={L.mentionLo != null && L.mentionHi != null ? `95% range ${pct(L.mentionLo, 0)} to ${pct(L.mentionHi, 0)} · ${compactNumber(L.samples)} answers in 7 days` : `of ${compactNumber(L.answers)} answers to ${L.prompts} questions`}
               />
               <HeroStat
                 label="Share of voice"
@@ -131,10 +131,10 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
               />
               <HeroStat
                 label="AI visits (28 days)"
-                value={L.aiSessions != null ? <CountUp value={L.aiSessions} format={compactNumber} /> : '–'}
+                value={L.aiSessions != null ? <CountUp value={L.aiSessions} format={compactNumber} /> : '-'}
                 delta={L.aiSessions != null && P?.aiSessions != null && P.aiSessions > 0 ? <Delta value={(100 * (L.aiSessions - P.aiSessions)) / P.aiSessions} suffix="%" /> : undefined}
                 trend={runs.some((r) => r.aiSessions != null) ? <Sparkline data={runs.filter((r) => r.aiSessions != null).map((r) => ({ v: r.aiSessions }))} dataKey="v" /> : undefined}
-                hint={L.aiSessions != null ? `${compactNumber(L.aiConversions ?? 0)} key events${L.aiRevenue ? ` · ${compactNumber(L.aiRevenue)} revenue` : ''} from ChatGPT, Gemini, Perplexity …` : L.runKind ? 'Connect GA4 to see visits and revenue from AI' : 'From the next weekly run (GA4 visits and revenue from AI)'}
+                hint={L.aiSessions != null ? `${compactNumber(L.aiConversions ?? 0)} key events${L.aiRevenue ? ` · ${compactNumber(L.aiRevenue)} revenue` : ''} from ChatGPT, Gemini, Perplexity ...` : L.runKind ? 'Connect GA4 to see visits and revenue from AI' : 'From the next weekly run (GA4 visits and revenue from AI)'}
               />
             </>
           ) : undefined
@@ -142,7 +142,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       />
 
       {(brief?.headline || brief?.summary) && (
-        <Panel title="This week’s AI summary" icon={<Sparkles />} description={d.report ? `Weekly AI visibility report · ${fmtAgo(d.report.receivedAt)}` : undefined}>
+        <Panel title="This week's AI summary" icon={<Sparkles />} description={d.report ? `Weekly AI visibility report · ${fmtAgo(d.report.receivedAt)}` : undefined}>
           {!brief?.summary && brief?.headline && <p className="text-sm font-medium text-ink">{brief.headline}</p>}
           {brief?.summary && <p className="max-w-4xl text-sm leading-relaxed text-ink-2">{brief.summary}</p>}
         </Panel>
@@ -154,17 +154,17 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
             label="AI visibility score"
             icon={<Gauge />}
             visual={L.visibilityScore != null ? <ScoreRing label="AI visibility score" value={L.visibilityScore} tone="accent" display={<CountUp value={L.visibilityScore} format={(v) => v.toFixed(0)} />} suffix="/100" size={68} /> : undefined}
-            value="–"
+            value="-"
             delta={L.visibilityScore != null && P?.visibilityScore != null ? <Delta value={L.visibilityScore - P.visibilityScore} suffix="" /> : undefined}
             sparkline={runs.some((r) => r.visibilityScore != null) ? <Sparkline data={runs.filter((r) => r.visibilityScore != null).map((r) => ({ v: r.visibilityScore }))} dataKey="v" /> : undefined}
-            meta="Named, how high in the list, linked — weighted by how often each question is asked"
+            meta="Whether you are named, how high and whether you are linked, weighted by how often each question is asked"
           />
           <MetricCard
             label="Assistants that know you"
             icon={<BadgeCheck />}
-            info="“Knows your brand” asks each assistant directly what it knows about you — a brand it does not know is rarely recommended."
+            info="&quot;Knows your brand&quot; asks each assistant directly what it knows about you. A brand it does not know is rarely recommended."
             visual={askedBrand.length ? <ScoreRing label="Assistants that know your brand" value={(knownBrand / askedBrand.length) * 100} tone="accent" display={`${knownBrand}/${askedBrand.length}`} valueText={`${knownBrand} of ${askedBrand.length}`} size={68} /> : undefined}
-            value="–"
+            value="-"
             meta={askedBrand.length ? `${knownBrand} of ${askedBrand.length} assistants asked know your brand${engines.length > askedBrand.length ? ` · ${engines.length - askedBrand.length} not asked` : ''}` : 'Asked on the monthly full run'}
           />
           <MetricCard
@@ -172,7 +172,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
             icon={<ScanSearch />}
             info="Share of your tracked searches where Google shows an AI Overview"
             visual={<ScoreRing label="AI Overview shown" value={L.aioPresence} tone="accent" display={<CountUp value={L.aioPresence} format={(v) => pct(v, 0)} />} valueText={pct(L.aioPresence, 0)} size={68} />}
-            value="–"
+            value="-"
             delta={<Delta value={diff(L.aioPresence, P?.aioPresence)} suffix=" pts" />}
             meta={`You cited in AI Overviews: ${pct(L.aioCitationRate)}`}
           />
@@ -181,7 +181,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
             icon={access ? access.ok ? <ShieldCheck /> : <ShieldAlert /> : <ShieldCheck />}
             tone={access ? (access.ok ? 'good' : 'critical') : 'blue'}
             info="An assistant can only cite a page its crawler may fetch"
-            value={access ? (access.ok ? 'Allowed' : 'Blocked') : '–'}
+            value={access ? (access.ok ? 'Allowed' : 'Blocked') : '-'}
             meta={
               access ? (
                 <span className={cn('inline-flex items-start gap-1.5 font-medium', access.ok ? 'text-good-text' : 'text-critical-text')}>
@@ -248,7 +248,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       {d.latest && d.latest.gaps.length > 0 && <Gaps d={d} />}
 
       {d.report && d.report.actions.length > 0 && (
-        <Panel title="What to do next" description="The engine’s actions from the latest AI visibility report" icon={<Lightbulb />} flush>
+        <Panel title="What to do next" description="The engine's actions from the latest AI visibility report" icon={<Lightbulb />} flush>
           <EngineActionList actions={d.report.actions} />
         </Panel>
       )}
@@ -259,7 +259,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       {d.latest?.index && <DiscoveryPanel index={d.latest.index} tracked={d.prompts.map((p) => p.prompt)} />}
 
       {d.latest && (
-        <Panel title="Sources AI trusts" icon={<Library />} description="Domains the assistants cite for your questions — being mentioned there is how you get into the answers" flush>
+        <Panel title="Sources AI trusts" icon={<Library />} description="Domains the assistants cite for your questions. Being mentioned there is how you get into the answers" flush>
           <div className="px-4 pb-4">
             <SourcesTable sources={d.latest.sources} />
           </div>
@@ -284,7 +284,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
                   ))}
                 </ul>
               ) : (
-                <p className="text-[13px] leading-relaxed text-ink-2">No page of yours is cited yet. Pages that answer one question directly, with sources and a clear author, are the ones assistants quote — see “What to do next”.</p>
+                <p className="text-[13px] leading-relaxed text-ink-2">No page of yours is cited yet. Pages that answer one question directly, with sources and a clear author, are the ones assistants quote. See "What to do next".</p>
               )}
             </Panel>
             {d.latest.market && <MarketView market={d.latest.market} domain={site.domain} />}
@@ -312,9 +312,9 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
 /** The hero's headline: how often AI answers name you, and the change since the previous run. */
 function aiHeadline(rate: number | null, delta: number | null, fallback?: string): string {
   if (rate == null) return fallback || 'Your latest AI visibility report';
-  const change = delta == null ? '' : delta >= 0.05 ? ` — up ${delta.toFixed(1)} pts` : delta <= -0.05 ? ` — down ${Math.abs(delta).toFixed(1)} pts` : ' — no change';
-  if (rate <= 0) return `You’re not named in AI answers yet${change}`;
-  return `You’re named in ${pct(rate)} of AI answers${change}`;
+  const change = delta == null ? '' : delta >= 0.05 ? `, up ${delta.toFixed(1)} pts` : delta <= -0.05 ? `, down ${Math.abs(delta).toFixed(1)} pts` : ', no change';
+  if (rate <= 0) return `You're not named in AI answers yet${change}`;
+  return `You're named in ${pct(rate)} of AI answers${change}`;
 }
 
 /** The engine's top action, as the hero's next step (same form and prefill as its button in "What to do next"). */
@@ -376,7 +376,7 @@ function RunsTrend({ runs, daily, loading, className }: { runs: AiRun[]; daily: 
           { key: 'mentionRate', label: 'Named', align: 'right', format: (v) => pct(Number(v)) },
           { key: 'citationRate', label: 'Cited', align: 'right', format: (v) => pct(Number(v)) },
           ...(m === 'daily' ? [] : [{ key: 'shareOfVoice', label: 'SoV', align: 'right' as const, format: (v: unknown) => pct(Number(v)) }, { key: 'aioPresence', label: 'AIO shown', align: 'right' as const, format: (v: unknown) => pct(Number(v)) }]),
-          { key: 'visibilityScore', label: 'Score', align: 'right', format: (v) => (v == null ? '–' : Number(v).toFixed(0)) },
+          { key: 'visibilityScore', label: 'Score', align: 'right', format: (v) => (v == null ? '-' : Number(v).toFixed(0)) },
           { key: 'answers', label: 'Answers', align: 'right' },
           ...(m === 'daily' ? [] : [{ key: 'credits', label: 'Credits', align: 'right' as const, format: (v: unknown) => formatCredits(Number(v), { unit: false }) }]),
         ],
@@ -453,14 +453,14 @@ function EngineTable({ engines }: { engines: AiEngineStat[] }) {
         </span>
       ),
     },
-    { key: 'ci', header: '95% range', hideOnMobile: true, sortValue: (e) => (e.ci ? e.ci[1] - e.ci[0] : 999), cell: (e) => (e.ci ? <span className="tabular text-[13px] text-ink-2">{pct(e.ci[0], 0)}–{pct(e.ci[1], 0)}</span> : <span className="text-ink-3">–</span>) },
+    { key: 'ci', header: '95% range', hideOnMobile: true, sortValue: (e) => (e.ci ? e.ci[1] - e.ci[0] : 999), cell: (e) => (e.ci ? <span className="tabular text-[13px] text-ink-2">{pct(e.ci[0], 0)} to {pct(e.ci[1], 0)}</span> : <span className="text-ink-3">-</span>) },
     { key: 'knows', header: 'Knows your brand', sortValue: (e) => (e.knowsBrand == null ? -1 : e.knowsBrand ? 1 : 0), cell: (e) => <YesNo value={e.knowsBrand} unknown="Not asked" /> },
     { key: 'errors', header: 'Errors', align: 'right', hideOnMobile: true, sortValue: (e) => e.errors, cell: (e) => (e.errors ? <span className="text-warning-text">{e.errors}</span> : <span className="text-ink-3">0</span>) },
   ];
   return (
     <>
       <DataTable rows={engines} columns={columns} rowKey={(e) => e.key} dense pageSize={20} />
-      <p className="mt-2 text-xs text-ink-3">“Knows your brand” asks each assistant directly what it knows about you — a brand it does not know is rarely recommended. The 95% range is where the true rate most likely lies; it narrows as answers add up.</p>
+      <p className="mt-2 text-xs text-ink-3">"Knows your brand" asks each assistant directly what it knows about you. A brand it does not know is rarely recommended. The 95% range is where the true rate most likely lies; it narrows as answers add up.</p>
     </>
   );
 }
@@ -547,9 +547,9 @@ function SourcesTable({ sources }: { sources: Source[] }) {
         </a>
       ),
     },
-    { key: 'kind', header: 'Kind', sortValue: (s) => s.kind, cell: (s) => (s.kind ? <Kind>{titleCase(s.kind)}</Kind> : '–') },
+    { key: 'kind', header: 'Kind', sortValue: (s) => s.kind, cell: (s) => (s.kind ? <Kind>{titleCase(s.kind)}</Kind> : '-') },
     { key: 'citations', header: 'Citations', align: 'right', sortValue: (s) => s.citations, cell: (s) => s.citations },
-    { key: 'engines', header: 'Cited by', hideOnMobile: true, sortValue: (s) => s.engines.length, cell: (s) => <span className="text-[13px] text-ink-2">{s.engines.join(', ') || '–'}</span> },
+    { key: 'engines', header: 'Cited by', hideOnMobile: true, sortValue: (s) => s.engines.length, cell: (s) => <span className="text-[13px] text-ink-2">{s.engines.join(', ') || '-'}</span> },
     { key: 'topics', header: 'For questions about', hideOnMobile: true, cell: (s) => <Chips items={s.topics} max={2} /> },
   ];
   return <DataTable rows={sources} columns={columns} rowKey={(s) => s.domain} initialSort={{ key: 'citations', dir: 'desc' }} dense pageSize={10} empty="No sources cited in the latest run." />;
@@ -558,7 +558,7 @@ function SourcesTable({ sources }: { sources: Source[] }) {
 function MarketView({ market, domain }: { market: NonNullable<NonNullable<AiData['latest']>['market']>; domain: string }) {
   const items = [...market.top.filter((t) => t.domain !== domain).map((t) => ({ label: t.domain, value: t.mentions, sub: '' })), ...(market.you ? [{ label: domain, value: market.you.mentions, sub: '' }] : [])].sort((a, b) => b.value - a.value);
   return (
-    <Panel title="Market view" icon={<Globe />} description={`AI mentions for “${market.keyword}” across the market · ${fmtDate(market.checkedAt)}`}>
+    <Panel title="Market view" icon={<Globe />} description={`AI mentions for "${market.keyword}" across the market · ${fmtDate(market.checkedAt)}`}>
       <div className="mb-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         <FigureTile label="Mentions in AI answers" value={compactNumber(market.totalMentions)} />
         <FigureTile label="AI search volume" value={compactNumber(market.aiSearchVolume)} />

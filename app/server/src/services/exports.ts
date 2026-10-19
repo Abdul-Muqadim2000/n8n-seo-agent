@@ -37,11 +37,11 @@ import { creditsForRuns } from './runCredits';
 import { customerError } from '../lib/customerError';
 
 /**
- * G4 (2026-10-17) — the warehouse / BI export. Design note: app/docs/INTEGRATIONS.md §6.
+ * G4 (2026-10-17), the warehouse / BI export. Design note: app/docs/INTEGRATIONS.md §6.
  *
  * Six tables (`EXPORT_TABLES`, one documented schema in shared/src/integrations.ts) leave the app as a full snapshot per run:
  *  - to S3-compatible storage as NDJSON or CSV, one object per table, `<prefix>/<table>/dt=YYYY-MM-DD/<table>-<run>.<ext>`, signed
- *    with SigV4 (lib/sigv4.ts) — AWS S3 (virtual-hosted), Google Cloud Storage's XML API with HMAC keys, Cloudflare R2 (path-style);
+ *    with SigV4 (lib/sigv4.ts), AWS S3 (virtual-hosted), Google Cloud Storage's XML API with HMAC keys, Cloudflare R2 (path-style);
  *    https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html
  *  - to BigQuery with a resumable-upload load job, NEWLINE_DELIMITED_JSON, the documented schema, WRITE_TRUNCATE (a re-run replaces,
  *    never duplicates); https://cloud.google.com/bigquery/docs/reference/api-uploads ,
@@ -121,7 +121,7 @@ async function companyRows(org: OrgRow, t: ExportTable, exportedAt: string): Pro
   return { rows: out.slice(0, max), truncated: out.length > max };
 }
 
-/** `GET /api/v1/websites/:id/tables/:table` — one website's rows in the export schema, oldest first, filterable by date. */
+/** `GET /api/v1/websites/:id/tables/:table`, one website's rows in the export schema, oldest first, filterable by date. */
 export async function tableRowsV1(org: Pick<OrgRow, 'id'>, site: SiteRow, table: unknown, q: Record<string, unknown>): Promise<PageV1<Out> & { table: string; columns: { name: string; type: string; description: string }[] }> {
   const t = exportTable(table);
   if (!t) throw notFound('Unknown table: use one of rank_history, site_metrics, audit_findings, ai_visibility, backlinks, runs');
@@ -293,7 +293,7 @@ export async function connectExport(org: OrgRow, user: UserRow, body: unknown) {
     const { accessKeyId, secretAccessKey, kind: _k, name: _n, ...rest } = b;
     cfg = rest;
     secret = { accessKeyId, secretAccessKey };
-    hint = `key ${accessKeyId.slice(0, 4)}…${accessKeyId.slice(-4)}`;
+    hint = `key ${accessKeyId.slice(0, 4)}...${accessKeyId.slice(-4)}`;
   } else {
     const { serviceAccountJson, kind: _k, name: _n, ...rest } = b;
     cfg = { ...rest, serviceAccount: serviceAccountJson.client_email };

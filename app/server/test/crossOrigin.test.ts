@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// deploy/gcp — the web front end on app.<domain> (Vercel), this server on api.<domain>. Most requests come through the front end's own
+// deploy/gcp, the web front end on app.<domain> (Vercel), this server on api.<domain>. Most requests come through the front end's own
 // /api proxy; large uploads go to api.<domain> directly. What that needs, and what it must never open up:
 //  - the session cookie is shared on the parent domain (COOKIE_DOMAIN) for hosts inside it, and stays host-only anywhere else;
 //  - CORS with credentials for the listed front-end origin only, preflights answered before any session work;

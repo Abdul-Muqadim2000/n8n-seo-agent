@@ -8,7 +8,7 @@ import { deleteIntegration, integrationOf, integrationsOverview } from '../servi
 import { connectExport, listExportRuns, runExport, testExport, updateExport } from '../services/exports';
 
 /**
- * G4 (2026-10-17) — Company settings → Integrations (app/docs/INTEGRATIONS.md). Session routes; every one needs the admin role
+ * G4 (2026-10-17), Company settings -> Integrations (app/docs/INTEGRATIONS.md). Session routes; every one needs the admin role
  * (an integration sends the company's data out of the app or writes into its tools), except creating a ticket and reading its
  * state, which a member may do (it is part of acting on a finding, like "I fixed this").
  */

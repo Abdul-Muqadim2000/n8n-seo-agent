@@ -16,7 +16,7 @@ import { api } from './api';
 import { qk } from './queries';
 
 /**
- * G4 (2026-10-17, app/docs/INTEGRATIONS.md): the queries of Company settings → Integrations and of the "Create ticket" buttons.
+ * G4 (2026-10-17, app/docs/INTEGRATIONS.md): the queries of Company settings -> Integrations and of the "Create ticket" buttons.
  * Kept out of queries.ts so the integrations stay one file to read.
  */
 

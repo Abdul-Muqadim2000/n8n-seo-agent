@@ -2,7 +2,7 @@
 // of a site at once, so a before / after comparison alone proves nothing (P1: measuring a change needs a control or a counterfactual;
 // P2: even the most reliable test type SearchPilot publishes wins only about two times in three). The Link Builder has always measured
 // a won link against a control group of the site's OTHER pages over the same weeks; this is the same comparison for a PAGE CHANGE,
-// and the same implementation as the engine's `n8n/seo-agent/v5/code/_change_test.js` — the two must agree to the decimal.
+// and the same implementation as the engine's `n8n/seo-agent/v5/code/_change_test.js`, the two must agree to the decimal.
 // The verdicts are graded and deliberately weak. Nothing here ever says a change CAUSED anything.
 
 export type ChangeVerdict = 'likely_helped' | 'possibly_helped' | 'no_effect_yet' | 'too_early' | 'cant_tell';
@@ -12,7 +12,7 @@ export const CHANGE_VERDICT_LABELS: Record<ChangeVerdict, string> = {
   possibly_helped: 'Possibly helped',
   no_effect_yet: 'No clear effect yet',
   too_early: 'Too early to tell',
-  cant_tell: 'Can’t tell',
+  cant_tell: 'Can\'t tell',
 };
 
 export const CHANGE_VERDICT_TONES: Record<ChangeVerdict, 'good' | 'neutral' | 'warning'> = {
@@ -24,7 +24,7 @@ export const CHANGE_VERDICT_TONES: Record<ChangeVerdict, 'good' | 'neutral' | 'w
 };
 
 export const CHANGE_TEST_METHOD =
-  'Each change is dated and read against a control group: the same page’s average Google position before and after, minus what the site’s other pages did over the same weeks. That removes the part of the move that was the season, the market or a Google update. “Likely helped” means the page beat its control group by more than twice the spread of the control group itself and nothing else changed on that page in the same four weeks; “possibly helped” means it beat the control group by less than that; “no clear effect yet” means it did not. A control group narrows the alternatives: it is never proof of cause.';
+  'Each change is dated and read against a control group: the same page\'s average Google position before and after, minus what the site\'s other pages did over the same weeks. That removes the part of the move that was the season, the market or a Google update. "Likely helped" means the page beat its control group by more than twice the spread of the control group itself and nothing else changed on that page in the same four weeks; "possibly helped" means it beat the control group by less than that; "no clear effect yet" means it did not. A control group narrows the alternatives: it is never proof of cause.';
 
 /** a change read before this many weeks says "too early": Google needs weeks to settle */
 export const CHANGE_MIN_WEEKS = 6;
@@ -121,7 +121,7 @@ export function changeTest(input: ChangeTestInput): ChangeTestResult {
   const note =
     (joint ? (kind === 'link' ? 'another link to this page within 4 weeks (credit shared); ' : 'another change to this page within 4 weeks (credit shared); ') : '') +
     (others.length < CHANGE_MIN_OTHERS ? 'few other pages to compare with; ' : '') +
-    `position ${basePosition} → ${position} vs the site’s other pages ${controlChange >= 0 ? '+' : ''}${controlChange}`;
+    `position ${basePosition} to ${position} vs the site's other pages ${controlChange >= 0 ? '+' : ''}${controlChange}`;
   return { weeks, basePosition, position, pageChange, controlChange, controlSpread, controlPages: others.length, effect, verdict, verdictLabel: CHANGE_VERDICT_LABELS[verdict], note };
 }
 

@@ -24,7 +24,7 @@ const SIZE = {
   lg: 'size-11 rounded-xl [&_svg]:size-5',
 } as const;
 
-/** IconTile: a lucide icon on a rounded tinted square — the visual anchor of headers, cards and list rows (decorative, aria-hidden). */
+/** IconTile: a lucide icon on a rounded tinted square, which is the visual anchor of headers, cards and list rows (decorative, aria-hidden). */
 export function IconTile({ children, tone = 'blue', size = 'md', className }: { children: ReactNode; tone?: IconTileTone; size?: keyof typeof SIZE; className?: string }) {
   return (
     <span className={cn('inline-flex shrink-0 items-center justify-center [&_svg]:shrink-0', TONE[tone], SIZE[size], className)} aria-hidden>

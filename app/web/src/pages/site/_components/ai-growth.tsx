@@ -1,5 +1,5 @@
 // AI growth (v4.12, n8n/seo-agent/AI_GROWTH_SPEC.md): what the weekly loop did so the website gets named and cited in AI answers, and what
-// to do next — pages sent to Bing / IndexNow, the key pages' AI readiness, the exact pages AI cites without naming the business (with outreach
+// to do next, pages sent to Bing / IndexNow, the key pages' AI readiness, the exact pages AI cites without naming the business (with outreach
 // drafts), the questions queued for an AI answer page, the entity check.
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
@@ -20,7 +20,7 @@ import { urlPath } from './format';
 import { FigureTile } from './visuals';
 import { engineLabel } from './ai';
 
-const KIND: Record<string, string> = { list: '“Best of” list', article: 'Article', news: 'News', review: 'Review site', forum: 'Forum thread', video: 'Video', social: 'Social post', official: 'Official list', encyclopedia: 'Encyclopedia', competitor: 'Competitor page' };
+const KIND: Record<string, string> = { list: '"Best of" list', article: 'Article', news: 'News', review: 'Review site', forum: 'Forum thread', video: 'Video', social: 'Social post', official: 'Official list', encyclopedia: 'Encyclopedia', competitor: 'Competitor page' };
 /** the prospect statuses of an earned page (seo_link_prospects), in the person's words */
 const EARNED_STATUS: Record<string, { label: string; tone: Tone }> = { new: { label: 'To send', tone: 'accent' }, contacted: { label: 'Sent', tone: 'neutral' }, replied: { label: 'Replied', tone: 'accent' }, won: { label: 'Names you', tone: 'good' }, rejected: { label: 'Declined', tone: 'neutral' }, ignored: { label: 'Not a fit', tone: 'neutral' } };
 const STATUS_TONE: Record<string, Tone> = { won: 'good', contacted: 'accent', new: 'neutral', declined: 'neutral', queued: 'accent', writing: 'accent', written: 'accent', skipped: 'neutral' };
@@ -71,7 +71,7 @@ export function AiGrowthSection({ growth }: { growth: AiGrowth | null }) {
           value={sent}
           hint={!g.submitted.bing.enabled ? 'Bing key not set' : !g.submitted.bing.inAccount ? 'site not in the Bing account' : sent ? 'new and updated pages this week' : 'nothing new to send this week'}
         />
-        <FigureTile icon={<FileCheck2 />} label="Key pages AI-ready" value={g.avgScore != null ? `${g.avgScore}/100` : '–'} hint={`${g.pagesChecked} page(s) checked this week`} />
+        <FigureTile icon={<FileCheck2 />} label="Key pages AI-ready" value={g.avgScore != null ? `${g.avgScore}/100` : '-'} hint={`${g.pagesChecked} page(s) checked this week`} />
         <FigureTile icon={<Megaphone />} label="Pages citing others, not you" value={g.earned.filter((e) => e.kind !== 'competitor' && e.mentionsUs !== true).length} hint={`${new Set(g.earned.filter((e) => e.drafted && e.kind !== 'competitor').map((e) => e.host)).size} site(s) with an outreach draft`} />
         <FigureTile icon={<PenSquare />} label="AI pages this month" value={`${g.writtenThisMonth} / ${g.pagesPerMonth}`} hint={`${g.targets.filter((t) => t.status === 'queued').length} question(s) queued`} />
       </div>
@@ -84,11 +84,11 @@ export function AiGrowthSection({ growth }: { growth: AiGrowth | null }) {
           <p className="text-[13px] leading-relaxed text-ink-2">
             {g.entity.found ? (
               <>
-                Wikidata item <b className="text-ink">{g.entity.qid}</b> lists your website as its official website — knowledge graphs and AI can resolve your business.
+                Wikidata item <b className="text-ink">{g.entity.qid}</b> lists your website as its official website, so knowledge graphs and AI can resolve your business.
               </>
             ) : (
               <>
-                No Wikidata item has your website as its official website{g.entity.byName.length ? ` (similar names: ${g.entity.byName.slice(0, 3).map((x) => x.label + (x.description ? ` — ${x.description}` : '')).join('; ')})` : ''}. Wikidata accepts organisations that independent sources (press, registries) cover: once you have that coverage, create the item with your website, founding date and location.
+                No Wikidata item has your website as its official website{g.entity.byName.length ? ` (similar names: ${g.entity.byName.slice(0, 3).map((x) => x.label + (x.description ? ` (${x.description})` : '')).join('; ')})` : ''}. Wikidata accepts organisations that independent sources (press, registries) cover: once you have that coverage, create the item with your website, founding date and location.
               </>
             )}
           </p>
@@ -207,7 +207,7 @@ function EarnedPanel({ earned }: { earned: AiEarnedPage[] }) {
     {
       key: 'names',
       header: 'Names',
-      cell: (e) => (e.mentionsUs === true ? <StatusBadge tone="good">You</StatusBadge> : <span className="block min-w-[7rem] text-xs text-ink-2">{e.competitorsNamed.join(', ') || (e.mentionsUs === false ? 'not you' : '–')}</span>),
+      cell: (e) => (e.mentionsUs === true ? <StatusBadge tone="good">You</StatusBadge> : <span className="block min-w-[7rem] text-xs text-ink-2">{e.competitorsNamed.join(', ') || (e.mentionsUs === false ? 'not you' : '-')}</span>),
     },
     { key: 'status', header: 'Status', cell: (e) => { const st = EARNED_STATUS[e.mentionsUs === true ? 'won' : e.status || 'new'] ?? EARNED_STATUS.new; return <Badge tone={st.tone}>{e.drafted || st.label !== 'To send' ? st.label : 'No draft yet'}</Badge>; } },
   ];
@@ -261,7 +261,7 @@ function TargetsPanel({ targets, perMonth }: { targets: AiTargetStat[]; perMonth
           ))}
         </ul>
       ) : (
-        <p className="text-[13px] text-ink-2">No lost questions this week — AI names you for every tracked question.</p>
+        <p className="text-[13px] text-ink-2">No lost questions this week. AI names you for every tracked question.</p>
       )}
     </Panel>
   );
@@ -285,8 +285,8 @@ function PagesPanel({ pages }: { pages: AiPageStat[] }) {
       cell: (p) => (p.status >= 200 && p.status < 300 && p.score != null ? <Meter value={p.score} tone={scoreTone(p.score)} label={`${p.score}/100`} className="min-w-28" /> : <StatusBadge tone="critical">{p.status ? `HTTP ${p.status}` : 'no answer'}</StatusBadge>),
     },
     { key: 'updated', header: 'Updated', sortValue: (p) => p.updatedOn, cell: (p) => <span className="text-xs text-ink-2">{p.updatedOn ? fmtDate(p.updatedOn) : 'no date'}</span> },
-    { key: 'bing', header: 'Bing', cell: (p) => <span className="text-xs text-ink-2">{p.bingCrawledAt ? `crawled ${fmtDate(p.bingCrawledAt)}` : p.submittedAt ? `sent ${fmtDate(p.submittedAt)}` : '–'}</span> },
-    { key: 'fix', header: 'Fix first', cell: (p) => <span className="text-[13px] text-ink-2">{p.issues[0] ?? 'Nothing — ready to be quoted'}</span> },
+    { key: 'bing', header: 'Bing', cell: (p) => <span className="text-xs text-ink-2">{p.bingCrawledAt ? `crawled ${fmtDate(p.bingCrawledAt)}` : p.submittedAt ? `sent ${fmtDate(p.submittedAt)}` : '-'}</span> },
+    { key: 'fix', header: 'Fix first', cell: (p) => <span className="text-[13px] text-ink-2">{p.issues[0] ?? 'Nothing, it is ready to be quoted'}</span> },
   ];
   return (
     <Panel title="Can AI read and quote your key pages?" icon={<ShieldCheck />} description="The raw page as AI fetchers get it (no JavaScript): the answer first, a visible update date, question headings, sourced figures" flush>

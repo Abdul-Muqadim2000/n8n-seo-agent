@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// B-R2 — what `sharedReport()` hands a client: the company's own mark, the run's own caveat, and still nothing else of that company.
+// B-R2, what `sharedReport()` hands a client: the company's own mark, the run's own caveat, and still nothing else of that company.
 // The database and the n8n client are mocked; the service's own decisions are the real ones.
 
 const st = vi.hoisted(() => ({
@@ -105,7 +105,7 @@ describe('the mark on a shared report', () => {
     expect(st.profileCalls).toEqual([]);
   });
 
-  it('still renders when the engine is unreachable — a logo is never worth a broken page', async () => {
+  it('still renders when the engine is unreachable, a logo is never worth a broken page', async () => {
     st.profileError = new Error('connect ECONNREFUSED');
     const r = await run();
     expect(r?.brand).toEqual({ name: 'Northwind Trading', logoUrl: null, initials: 'NT' });
@@ -136,7 +136,7 @@ describe('the caveat on a shared report', () => {
     expect((await run())?.caveat).toBeNull();
   });
 
-  it('tells the reader when the run marked the work a draft — the same rule the delivery refuses on', async () => {
+  it('tells the reader when the run marked the work a draft, the same rule the delivery refuses on', async () => {
     st.report = { qa_not_ready: true, qa_reasons: ['3 placeholders left', 'word count 3,952 for 2,100'] };
     const c = (await run())?.caveat;
     expect(c?.code).toBe('not_ready');

@@ -3,8 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createClientSchema } from '@seo/shared';
 
-// G5 (app/docs/WHITE_LABEL.md) — agencies and their client workspaces through the real app on a real Postgres: the role matrix
-// (inherited, assigned, client people), isolation in every direction (client ↔ client, client → agency, other agency, a person who
+// G5 (app/docs/WHITE_LABEL.md), agencies and their client workspaces through the real app on a real Postgres: the role matrix
+// (inherited, assigned, client people), isolation in every direction (client ↔ client, client -> agency, other agency, a person who
 // left), what a client person may and may not reach, cost figures stripped, documents rebranded, approvals and the rule that
 // enforces them, the overview and its export, and the audit trail.
 

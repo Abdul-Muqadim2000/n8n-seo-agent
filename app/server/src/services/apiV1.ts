@@ -40,7 +40,7 @@ import { crawlerData } from './crawlers/analytics';
  *
  * Every handler takes a `V1Ctx` that names ONE company, resolved from the API key (or the session + membership) before the handler
  * runs, and every query below carries `org_id = ctx.org.id`. A website / run / report / file of another company is therefore not
- * found — the same 404 as one that does not exist. The n8n Data Tables are keyed by domain, so they are read only for a website this
+ * found, the same 404 as one that does not exist. The n8n Data Tables are keyed by domain, so they are read only for a website this
  * company verified (a verified domain belongs to one company). The REST routes and the MCP tools both call these functions.
  */
 
@@ -177,8 +177,8 @@ export async function getAudit(ctx: V1Ctx, websiteId: unknown, auditId: unknown,
 
 /** What search and AI crawlers requested on the website, from its own access logs: the same answer as the app's Crawlers page. */
 /**
- * G6 (2026-10-18): the AI question panel's latest weekly figures per segment — engine, topic cluster, buyer role, market and funnel
- * stage (and the cross tables) — each with its answer count, its 95% range, "enough" (12 answers or more), share of voice and the
+ * G6 (2026-10-18): the AI question panel's latest weekly figures per segment, engine, topic cluster, buyer role, market and funnel
+ * stage (and the cross tables), each with its answer count, its 95% range, "enough" (12 answers or more), share of voice and the
  * change the Benjamini-Hochberg screen called real; plus the panel it was measured on (size, composition, how much of it was asked the
  * week before, the precision it reaches). What the AI visibility page charts, for BI tools and agents.
  */
@@ -212,7 +212,7 @@ export async function getCrawlers(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
 
 // ---------------- runs ----------------
 
-/** credits (app/docs/CREDITS.md): a run as an API / MCP caller reads it — its credits, never what it cost at the providers */
+/** credits (app/docs/CREDITS.md): a run as an API / MCP caller reads it, its credits, never what it cost at the providers */
 export function toRunV1(r: RunRow, credits: RunCredits): RunV1 {
   return {
     id: r.id,
@@ -264,7 +264,7 @@ export async function getRun(ctx: V1Ctx, runId: unknown): Promise<{ run: RunV1 &
 
 // ---------------- reports ----------------
 
-/** the payload keys `deliveryDecision` reads — selected instead of whole payloads, so a page of 100 reports stays small */
+/** the payload keys `deliveryDecision` reads, selected instead of whole payloads, so a page of 100 reports stays small */
 const readyPayload = sql<Record<string, unknown>>`jsonb_build_object(
   'stage', ${schema.reports.payload}->'stage', 'status', ${schema.reports.payload}->'status', 'error', ${schema.reports.payload}->'error',
   'validation_error', ${schema.reports.payload}->'validation_error', 'qa_not_ready', ${schema.reports.payload}->'qa_not_ready',

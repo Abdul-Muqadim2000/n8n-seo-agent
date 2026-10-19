@@ -16,7 +16,7 @@ import { fmtAgo, fmtDate } from '@/lib/utils';
 import { SettingsCard } from './SettingsCard';
 
 /**
- * B5-11 (v4.18) — the company's API keys (app/API.md "Read API v1"); G4 (2026-10-17) added the write permissions.
+ * B5-11 (v4.18), the company's API keys (app/API.md "Read API v1"); G4 (2026-10-17) added the write permissions.
  * A key reads this company's websites, audits and findings, runs, reports and files, and can run the free publish check. Only a key
  * given "start runs" can start an analysis (it uses the company's credits), and only one given "admin" can manage webhooks and exports;
  * either acts as the person who made it. The key is shown once, right after it is made; afterwards only its first characters are.
@@ -68,7 +68,7 @@ export function ApiKeysTab() {
 
   const columns: Column<ApiKeyView>[] = [
     { key: 'name', header: 'Name', cell: (k) => <span className="font-medium">{k.name}</span> },
-    { key: 'prefix', header: 'Key', cell: (k) => <code className="font-mono text-xs">{k.prefix}…</code> },
+    { key: 'prefix', header: 'Key', cell: (k) => <code className="font-mono text-xs">{k.prefix}...</code> },
     { key: 'scopes', header: 'Can', cell: (k) => <span className="text-sm text-ink-2">{k.scopes.map((s) => API_SCOPE_SHORT[s]).join(' · ')}</span> },
     { key: 'state', header: 'Status', cell: (k) => <StatusBadge tone={STATE_TONE[k.state]}>{STATE_LABEL[k.state]}</StatusBadge> },
     { key: 'lastUsedAt', header: 'Last used', cell: (k) => (k.lastUsedAt ? fmtAgo(k.lastUsedAt) : 'Never'), sortValue: (k) => k.lastUsedAt ?? '' },
@@ -88,7 +88,7 @@ export function ApiKeysTab() {
   return (
     <div className="max-w-4xl space-y-5">
       {fresh && (
-        <Callout tone="good" title={`Your new key "${fresh.name}" — copy it now`} action={<Button size="sm" variant="secondary" onClick={() => setFresh(null)}>Done</Button>}>
+        <Callout tone="good" title={`Your new key "${fresh.name}": copy it now`} action={<Button size="sm" variant="secondary" onClick={() => setFresh(null)}>Done</Button>}>
           <p className="mb-2">This is the only time the whole key is shown. We keep only a fingerprint of it, so we cannot show it again.</p>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <code className="min-w-0 max-w-full break-all rounded-md border bg-surface-2 px-2 py-1 font-mono text-xs">{fresh.token}</code>
@@ -115,7 +115,7 @@ export function ApiKeysTab() {
           </fieldset>
           {scopes.some((s) => API_WRITE_SCOPES.includes(s)) && (
             <Callout tone="warning" title="This key can change things">
-              {scopes.includes('run') && <p>It can start analyses, which use the company’s credits, and create tickets in your issue tracker. Every run it starts shows the key’s name.</p>}
+              {scopes.includes('run') && <p>It can start analyses, which use the company's credits, and create tickets in your issue tracker. Every run it starts shows the key's name.</p>}
               {scopes.includes('admin') && <p>It can add and remove event webhooks and start data exports.</p>}
               <p>It acts as you: if you leave the company or lose the role, it stops working for these.</p>
             </Callout>
@@ -139,7 +139,7 @@ export function ApiKeysTab() {
         </CardFooter>
       </SettingsCard>
 
-      <SettingsCard icon={<ShieldCheck />} title="Your keys" description="A key reads only this company's data. Only a key with “start runs” can use the company’s credits.">
+      <SettingsCard icon={<ShieldCheck />} title="Your keys" description="A key reads only this company's data. Only a key with &quot;start runs&quot; can use the company's credits.">
         <CardBody>
           {data.items.length ? (
             <DataTable rows={data.items} columns={columns} rowKey={(k) => k.id} pageSize={20} />
@@ -149,8 +149,8 @@ export function ApiKeysTab() {
         </CardBody>
         <CardFooter>
           <p className="text-sm text-ink-2">
-            Send it as <code className="font-mono">Authorization: Bearer asc_…</code> to <code className="font-mono">/api/v1</code>. Up to {API_KEY.perMinute} requests a minute per key.
-            AI assistants that speak MCP can connect to <code className="font-mono">/api/v1/mcp</code> with the same key — the setup for Claude and ChatGPT is under Integrations.
+            Send it as <code className="font-mono">Authorization: Bearer asc_...</code> to <code className="font-mono">/api/v1</code>. Up to {API_KEY.perMinute} requests a minute per key.
+            AI assistants that speak MCP can connect to <code className="font-mono">/api/v1/mcp</code> with the same key. The setup for Claude and ChatGPT is under Integrations.
           </p>
         </CardFooter>
       </SettingsCard>

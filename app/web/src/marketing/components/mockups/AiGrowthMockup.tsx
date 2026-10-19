@@ -57,14 +57,14 @@ export function AiGrowthMockup({ className }: { className?: string }) {
             <FileText className="size-3.5 text-accent-text" />
             Next answer page
           </span>
-          <span className="mt-1 block text-[11.5px] text-ink-2">“How long does VAT registration take?” — lost on 3 of 5 engines</span>
+          <span className="mt-1 block text-[11.5px] text-ink-2">"How long does VAT registration take?" Lost on 3 of 5 engines</span>
         </div>
         <div className="mk-pop rounded-lg border border-line bg-page p-3" style={{ ['--mk-i' as string]: 8 }}>
           <span className="flex items-center gap-1.5 text-[11.5px] font-semibold">
             <Quote className="size-3.5 text-accent-text" />
             Cited without you
           </span>
-          <span className="mt-1 block text-[11.5px] text-ink-2">A “best firms” list names 3 competitors · pitch drafted</span>
+          <span className="mt-1 block text-[11.5px] text-ink-2">A "best firms" list names 3 competitors · pitch drafted</span>
         </div>
       </div>
 

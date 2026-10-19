@@ -50,7 +50,7 @@ function ChartTooltip({ active, payload, label, series, xFormat }: TipProps & { 
           return (
             <div key={i} className="flex items-center gap-2">
               <span className="size-2 shrink-0 rounded-full" style={{ background: p.color }} aria-hidden />
-              <span className="font-semibold tabular text-ink">{Number.isFinite(v) ? (s?.format ? s.format(v) : compactNumber(v)) : '–'}</span>
+              <span className="font-semibold tabular text-ink">{Number.isFinite(v) ? (s?.format ? s.format(v) : compactNumber(v)) : '-'}</span>
               <span className="truncate text-ink-3">{s?.label ?? String(p.name ?? '')}</span>
             </div>
           );
@@ -170,7 +170,7 @@ function SimpleTable({ view }: { view: TableView }) {
             <tr key={i} className="border-b border-line transition-colors duration-100 last:border-0 hover:bg-surface-2/60">
               {view.columns.map((c) => (
                 <td key={c.key} className={cn('px-2 py-1.5 text-ink', c.align === 'right' && 'text-right tabular')}>
-                  {c.format ? c.format(r[c.key], r) : String(r[c.key] ?? '–')}
+                  {c.format ? c.format(r[c.key], r) : String(r[c.key] ?? '-')}
                 </td>
               ))}
             </tr>
@@ -212,7 +212,7 @@ export function AnnotationLegend({ annotations, data, xKey, className }: { annot
         <li key={`${m.a.kind}-${m.a.date}-${i}`} className="flex items-start gap-1.5" title={m.a.detail || undefined}>
           <span className={cn('mt-px inline-flex size-[14px] shrink-0 items-center justify-center rounded-full text-[9px] font-semibold', m.a.tone === 'warning' ? 'bg-warning-soft text-warning-text' : 'bg-accent-soft text-accent-text')}>{i + 1}</span>
           <span>
-            <span className="tabular">{m.a.date === m.a.dateEnd ? fmtDay(m.a.date) : `${fmtDay(m.a.date)}–${fmtDay(m.a.dateEnd)}`}</span> {m.a.label}
+            <span className="tabular">{m.a.date === m.a.dateEnd ? fmtDay(m.a.date) : `${fmtDay(m.a.date)} to ${fmtDay(m.a.dateEnd)}`}</span> {m.a.label}
           </span>
         </li>
       ))}
@@ -220,7 +220,7 @@ export function AnnotationLegend({ annotations, data, xKey, className }: { annot
   );
 }
 
-/** G29: one line of lineage under a figure or a chart — source, period, sample, and how the number was arrived at. */
+/** G29: one line of lineage under a figure or a chart: source, period, sample, and how the number was arrived at. */
 export function LineageNote({ lineage: l, className }: { lineage: Lineage | Lineage[] | null | undefined; className?: string }) {
   const list = (Array.isArray(l) ? l : l ? [l] : []).filter(Boolean);
   if (!list.length) return null;

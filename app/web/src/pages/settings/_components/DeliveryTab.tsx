@@ -28,10 +28,10 @@ import { fmtAgo } from '@/lib/utils';
 import { SettingsCard } from './SettingsCard';
 
 /**
- * B-R1 — where this company's finished reports go.
+ * B-R1, where this company's finished reports go.
  *
  * Reports used to wait in the app until somebody logged in. This is the page that changes that: a schedule, an e-mail list and a
- * webhook. The one thing it deliberately does not offer is a way to push a report the run marked not ready — a page that failed its
+ * webhook. The one thing it deliberately does not offer is a way to push a report the run marked not ready, a page that failed its
  * quality check or a verdict the engine could not read stays in the app with its reason, and the log at the bottom names it.
  */
 
@@ -85,7 +85,7 @@ export function DeliveryTab() {
         icon={<Send />}
         title="When reports go out"
         description="Reports always appear in Alaventra. This decides whether they are also sent to you."
-        info="A report the analysis itself marked as not ready — a page that failed its quality check, a plan the engine refused, a verdict it could not check — is never sent. It stays here with the reason on it."
+        info="A report the analysis itself marked as not ready (a page that failed its quality check, a plan the engine refused, a verdict it could not check) is never sent. It stays here with the reason on it."
         actions={on ? <Badge>{deliveryScheduleLabel(draft)}</Badge> : undefined}
       >
         <CardBody className="space-y-4">
@@ -163,7 +163,7 @@ export function DeliveryTab() {
         </CardBody>
       </SettingsCard>
 
-      <SettingsCard icon={<Mail />} title="By e-mail" description="A message with each report’s figures, its files and the links that open it.">
+      <SettingsCard icon={<Mail />} title="By e-mail" description="A message with each report's figures, its files and the links that open it.">
         <CardBody className="space-y-4">
           {!data?.mailReady && (
             <Callout tone="warning" title="No mail account on this server">
@@ -209,7 +209,7 @@ export function DeliveryTab() {
                     disabled={!owner}
                     value={draft.webhook.url}
                     onChange={(e) => set({ webhook: { ...draft.webhook, url: e.target.value } })}
-                    placeholder="https://hooks.slack.com/services/…"
+                    placeholder="https://hooks.slack.com/services/..."
                   />
                 )}
               </Field>
@@ -219,7 +219,7 @@ export function DeliveryTab() {
                 hint={
                   data?.signingReady && secret === undefined
                     ? `A secret is stored. Type a new one to replace it, or clear the box to remove it.`
-                    : `With one set, every body is signed as ${DELIVERY.signatureHeader} over “<timestamp>.<body>”, so your receiver can tell the message is ours.`
+                    : `With one set, every body is signed as ${DELIVERY.signatureHeader} over "<timestamp>.<body>", so your receiver can tell the message is ours.`
                 }
               >
                 {(p) => <Input {...p} type="password" disabled={!owner} value={secret ?? ''} placeholder={data?.signingReady ? '••••••••' : ''} onChange={(e) => setSecret(e.target.value)} />}
@@ -262,14 +262,14 @@ function DeliveryLog({ rows }: { rows: DeliveryRecord[] }) {
   if (!rows.length)
     return (
       <CardBody>
-        <EmptyState icon={<Share2 className="size-5" />} title="Nothing has been sent yet" description="Once delivery is on, every report that goes out — and every one held back — is listed here." />
+        <EmptyState icon={<Share2 className="size-5" />} title="Nothing has been sent yet" description="Once delivery is on, every report that goes out, and every one held back, is listed here." />
       </CardBody>
     );
   const columns: Column<DeliveryRecord>[] = [
     { key: 'createdAt', header: 'When', cell: (r) => fmtAgo(r.createdAt), sortValue: (r) => r.createdAt },
-    { key: 'reportTitle', header: 'Report', cell: (r) => r.reportTitle || '—' },
+    { key: 'reportTitle', header: 'Report', cell: (r) => r.reportTitle || '-' },
     { key: 'channel', header: 'Channel', cell: (r) => (r.channel === 'email' ? 'E-mail' : 'Webhook'), hideOnMobile: true },
-    { key: 'target', header: 'To', cell: (r) => <span className="block max-w-[22ch] truncate">{r.target || '—'}</span>, hideOnMobile: true },
+    { key: 'target', header: 'To', cell: (r) => <span className="block max-w-[22ch] truncate">{r.target || '-'}</span>, hideOnMobile: true },
     {
       key: 'status',
       header: 'Result',

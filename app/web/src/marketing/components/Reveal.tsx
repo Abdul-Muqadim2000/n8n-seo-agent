@@ -24,7 +24,7 @@ export function useInView<T extends Element>(ref: RefObject<T | null>, { rootMar
   return seen;
 }
 
-/** A plain wrapper kept for layout (`as`, classes): content is visible from the first paint — the marketing site has no entrance
+/** A plain wrapper kept for layout (`as`, classes): content is visible from the first paint; the marketing site has no entrance
  *  animation. `index` is accepted for older call sites and ignored. */
 export function Reveal({
   as: Tag = 'div',

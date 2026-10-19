@@ -25,7 +25,7 @@ export async function ladderRoutes(app: FastifyInstance) {
   };
   const limit = { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } };
 
-  // Auto / Manual, Pause / Resume of one ladder → its card as it is now
+  // Auto / Manual, Pause / Resume of one ladder -> its card as it is now
   app.patch('/api/orgs/:orgId/sites/:siteId/ladders/:ladderId', limit, async (req): Promise<LadderCard> => {
     const a = await guard(req);
     const ladderId = ladderIdOf(req);
@@ -36,7 +36,7 @@ export async function ladderRoutes(app: FastifyInstance) {
     return card;
   });
 
-  // the new priority order (every ladder once) → the cards in that order
+  // the new priority order (every ladder once) -> the cards in that order
   app.put('/api/orgs/:orgId/sites/:siteId/ladders/order', limit, async (req): Promise<LadderCard[]> => {
     const a = await guard(req);
     const { ladderIds } = parse(ladderOrderSchema, req.body);
@@ -51,7 +51,7 @@ export async function ladderRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  // the website's defaults (the '_site' row) → the settings as they are now
+  // the website's defaults (the '_site' row) -> the settings as they are now
   app.patch('/api/orgs/:orgId/sites/:siteId/automation', limit, async (req): Promise<SiteAutomation> => {
     const a = await guard(req);
     const body = parse(siteAutomationSchema, req.body);

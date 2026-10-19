@@ -14,7 +14,7 @@ import {
 } from '../services/cms/service';
 
 /**
- * G2 — CMS publishing (app/docs/CMS_PUBLISHING.md §6). Connections are website settings (admins change them, everybody in the
+ * G2, CMS publishing (app/docs/CMS_PUBLISHING.md §6). Connections are website settings (admins change them, everybody in the
  * company sees them without their secrets); a page goes out as a draft from a member, live only from an owner or admin who ticked
  * the confirmation. Every route is scoped to the caller's company and the report's own website.
  */

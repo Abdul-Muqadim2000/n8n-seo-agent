@@ -7,7 +7,7 @@ import type { SessionRow } from '../db/schema';
 import { notFound } from '../lib/errors';
 import { auditUser } from '../services/audit';
 
-/** G1: "Where you're signed in" — the person's own sessions, sign one device out, or every other one. */
+/** G1: "Where you're signed in", the person's own sessions, sign one device out, or every other one. */
 const view = (s: SessionRow, currentId: string | null): SessionView => ({
   id: s.publicId,
   current: s.id === currentId,

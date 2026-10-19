@@ -45,7 +45,7 @@ import { suspendedError } from '../auth/session';
 import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
 
 /**
- * R100: what the engine will reserve for this request — its own rolling figures (`engineCostTable`), the shipped table only when
+ * R100: what the engine will reserve for this request, its own rolling figures (`engineCostTable`), the shipped table only when
  * n8n cannot be read. The budget check holds this number, so it must be the engine's, not a mirror of its defaults.
  */
 export const estimateCost = async (input: RunInput): Promise<number> =>
@@ -99,7 +99,7 @@ export { monthSpend, monthStart } from './spend';
 
 /**
  * What a role may ask for: a new ladder's Auto / Manual and its place in the order (`ladderPrefs`) are ladder settings, so admins
- * only — a member's choices are dropped and the website's defaults apply, as for any ladder.
+ * only, a member's choices are dropped and the website's defaults apply, as for any ladder.
  */
 export function inputForRole(input: RunInput, role: Role): RunInput {
   if (input.mode === 'ladder' && input.ladderPrefs && !roleAtLeast(role, 'admin')) return { ...input, ladderPrefs: undefined };
@@ -111,7 +111,7 @@ export interface CreateRunOptions {
   startedBy?: 'person' | 'auto';
   /** G4: the API key that asks (stored on the run; the run is still the key creator's, `a.user`) */
   apiKeyId?: string | null;
-  /** G4: the caller's Idempotency-Key and the hash of its request — checked under the company lock, before the budget */
+  /** G4: the caller's Idempotency-Key and the hash of its request, checked under the company lock, before the budget */
   idempotency?: { key: string; hash: string } | null;
 }
 
@@ -138,7 +138,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   const { org, user } = a;
   const auto = opts.startedBy === 'auto';
   if (org.disabled) throw forbidden('This company is disabled. Contact the platform administrator.');
-  // admin panel: a suspended person starts nothing — through the app, an API key or MCP (their keys act as them), or auto-start
+  // admin panel: a suspended person starts nothing, through the app, an API key or MCP (their keys act as them), or auto-start
   if (user.suspendedAt) throw suspendedError();
   if (config.requireEmailVerification && !user.emailVerifiedAt) throw forbidden('Verify your e-mail address before starting runs (check your inbox, or resend the link from your account page).');
 
@@ -237,11 +237,11 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   }
   // B-A6 (2026-10-15): the engine recognised a repeat of a request already running, did not start a second run and did not spend
   // again, and answered with the FIRST run's id. Two of our rows would then carry one request id, and a callback matches the newest
-  // of them — so the repeat row would take the result and the original would stay pending for ever. The repeat never existed as a
+  // of them, so the repeat row would take the result and the original would stay pending for ever. The repeat never existed as a
   // run, so we do not keep a row claiming it did (INVARIANTS Rule 4): we drop ours and hand back the run that is really going.
   if (repeatResolvesToOriginal(res) && res.requestId) {
     // (`res.requestId` is restated for the type checker: `repeatResolvesToOriginal` already proves it is a non-empty string, but a
-    // boolean return cannot narrow it, and `eq(column, string | null)` matches no drizzle overload — the server typecheck fails on it.)
+    // boolean return cannot narrow it, and `eq(column, string | null)` matches no drizzle overload, the server typecheck fails on it.)
     const original = await db.query.runs.findFirst({
       where: and(eq(schema.runs.orgId, org.id), eq(schema.runs.requestId, res.requestId), ne(schema.runs.id, run.id)),
       orderBy: asc(schema.runs.createdAt),
@@ -251,7 +251,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
       return { run: original, replayed: true };
     }
     // the first run is not ours (started outside this app, or already cleaned up): keep this row, it is the only one that can
-    // receive the callback — but never claim it started work the engine did not do.
+    // receive the callback, but never claim it started work the engine did not do.
   }
 
   const [accepted] = await db
@@ -261,7 +261,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     .returning();
 
   // a page written from the app: the content log (cadence skips it, "waiting to publish", the publish check finds it) and, for a
-  // ladder page, the ladder row (no longer "planned") — the same bookkeeping the cadence and the ladder runs do inside n8n
+  // ladder page, the ladder row (no longer "planned"), the same bookkeeping the cadence and the ladder runs do inside n8n
   if (input.mode === 'keyword' && input.receiveContent && site) await recordPageInEngine(site, input, accepted.requestId ?? '').catch(() => undefined);
 
   if (input.mode === 'track' && site) {
@@ -323,7 +323,7 @@ async function recordPageInEngine(site: SiteRow, input: Extract<RunInput, { mode
 }
 
 /**
- * R116 (2026-10-16): what an expired run says. The old sentence claimed "the run may have failed in n8n (ops were e-mailed)" — but the
+ * R116 (2026-10-16): what an expired run says. The old sentence claimed "the run may have failed in n8n (ops were e-mailed)", but the
  * app cannot know an e-mail was sent: the engine's failure watcher (engineFailures.ts) closes a run whose execution FAILED long before
  * this, so a run that reaches the expiry is one whose execution ended without a word to us (a refusal posted nowhere, a stop, a lost
  * callback). It says what is known and nothing more.
@@ -368,11 +368,11 @@ export interface LadderPageLink {
 }
 
 /**
- * What a ladder page run is given besides the keyword: the internal links (as the Content Cadence builds them — the top page and one
+ * What a ladder page run is given besides the keyword: the internal links (as the Content Cadence builds them, the top page and one
  * sibling, or every rung page for the top page itself) and the word target the ladder's verdict set for it.
  *
  * P2-7 (Phase 2 live check, 2026-10-12): the target used to be lost. A "Write now" run never runs the competitor analysis and has no
- * verdict of its own, so the writer invented its own length — run 442 wrote 3,864 words for a page the verdict had set at 2,100 (+84%).
+ * verdict of its own, so the writer invented its own length, run 442 wrote 3,864 words for a page the verdict had set at 2,100 (+84%).
  * `seo_ladders.target_words` stores it; the engine clamps the brief to it (`ladder_words` -> *Parse Brief*).
  * Pure, so the harness-style situations are unit-tested; `ladderLinks` only fetches the rows.
  */
@@ -390,7 +390,7 @@ export function ladderPageContext(rows: LadderRow[], rung: number, keyword: stri
   const mine = rows.find((r) => normKeyword(r.keyword) === k) ?? rows.find((r) => Number(r.rung) === rung);
   const words = Number(mine?.target_words) || Number(top?.target_words) || 0;
   // R15 (re-rating, 2026-10-13): the URL this ladder planned for the page. Exec 521 delivered `service-industry-erp-software-uae` while
-  // the row said `/service-industry-erp-software/` — the row's own link map, the siblings' up-links and the Rank Tracker all use the row,
+  // the row said `/service-industry-erp-software/`, the row's own link map, the siblings' up-links and the Rank Tracker all use the row,
   // so the engine keeps the planned slug (`ladder_target_url` -> *Parse Brief*) instead of publishing at a URL nothing points at.
   const planned = String(mine?.target_url ?? '').trim();
   return {
@@ -460,14 +460,14 @@ export const isScheduledCallback = (stage: string, body: Record<string, unknown>
 /**
  * D-3 (re-rating 2026-10-17): whether a callback's spend belongs to the run row it matched. A scheduled report never does: the Rank
  * Tracker's weekly run (exec 785, $0.116) posted one report per ladder with the request id of the run that planned each ladder, and
- * every one of them was added to that old run — the 2026-10-08 "Ladder: peppol uae" run went 0.1185 → 0.1905 → 0.3065. A run's
+ * every one of them was added to that old run, the 2026-10-08 "Ladder: peppol uae" run went 0.1185 -> 0.1905 -> 0.3065. A run's
  * cost counts once, on the run that spent it.
  */
 export const callbackCostCountsForRun = (stage: string, body: Record<string, unknown>): boolean => !isScheduledCallback(stage, body);
 
 /**
  * How one callback moves its run (pure, so it is tested without a database). A `rejected` callback closes the run as failed with the
- * engine's own sentence — R116: an on-demand monitor the run guard refused after its "started" note now posts exactly that
+ * engine's own sentence, R116: an on-demand monitor the run guard refused after its "started" note now posts exactly that
  * (`{stage:'rejected', status:'rejected', error, request_id}`), so the customer reads why instead of waiting for a report that never
  * comes. A final stage completes it; anything else marks an accepted run as running. A completed run is never reopened.
  */
@@ -560,8 +560,8 @@ export async function ingestCallback(
   // a refused plan or evidence the engine could not read is held with its reason), and a delivery that goes wrong is logged, never
   // allowed to lose the callback we have just stored.
   void deliverReport(org.id, reportId, deliveryLog).catch(() => undefined);
-  // G4: the company's event webhooks (run.completed / report.ready / alert.raised / audit.finding.new / rank.changed …), derived from
-  // this callback after it is stored — like delivery, an event that goes wrong never loses the callback
+  // G4: the company's event webhooks (run.completed / report.ready / alert.raised / audit.finding.new / rank.changed ...), derived from
+  // this callback after it is stored, like delivery, an event that goes wrong never loses the callback
   void emitForCallback(org, site, { id: reportId, title: stored.title, stage, status, receivedAt: stored.receivedAt, scheduled: stored.scheduled, runId: run?.id ?? null }, payload, run).catch(() => undefined);
   // the rank tracker says a ladder is won (main keyword top 3 in 4 checks): its settings row says so, so the cadence stops writing it
   // and the app keeps showing Won once the tracker stops checking it (not for a ladder the person paused)

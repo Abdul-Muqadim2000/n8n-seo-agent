@@ -112,7 +112,7 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
         </Callout>
       ))}
       {alerts.length > 0 && (
-        <Callout tone="warning" title="This week’s alerts">
+        <Callout tone="warning" title="This week's alerts">
           <ul className="list-disc space-y-0.5 pl-4">
             {alerts.map((a) => (
               <li key={a}>{a}</li>
@@ -138,14 +138,14 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
               <HeroChip icon={<CheckCircle2 />}>Search Console{S?.gsc.property || d.connection.gscProperty ? ` · ${S?.gsc.property ?? d.connection.gscProperty}` : ''}</HeroChip>
             ) : (
               <HeroChip icon={<TriangleAlert />} to={page('settings/verification')} title={S?.gsc.error ?? undefined}>
-                Search Console not connected — connect
+                Search Console is not connected. Connect it
               </HeroChip>
             )}
             {gaOn ? (
               <HeroChip icon={<CheckCircle2 />}>Analytics{S?.ga4.propertyId || d.connection.ga4PropertyId ? ` · ${S?.ga4.propertyId ?? d.connection.ga4PropertyId}` : ''}</HeroChip>
             ) : (
               <HeroChip icon={<TriangleAlert />} to={page('settings/tracking')}>
-                Analytics not connected — choose a property
+                Analytics is not connected. Choose a property
               </HeroChip>
             )}
             {S && (
@@ -160,14 +160,14 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
           <>
             <HeroStat
               label="Clicks"
-              value={cur ? <CountUp value={cur.clicks} format={compactNumber} /> : '–'}
+              value={cur ? <CountUp value={cur.clicks} format={compactNumber} /> : '-'}
               delta={<Delta value={S?.gsc.deltas.clicksPct ?? pctChange(cur?.clicks, prev?.clicks)} />}
               trend={<Sparkline data={gDaily} dataKey="clicks" />}
               hint={prev ? `Previously ${compactNumber(prev.clicks)}` : undefined}
             />
             <HeroStat
               label="Impressions"
-              value={cur ? <CountUp value={cur.impressions} format={compactNumber} /> : '–'}
+              value={cur ? <CountUp value={cur.impressions} format={compactNumber} /> : '-'}
               delta={<Delta value={S?.gsc.deltas.impressionsPct ?? pctChange(cur?.impressions, prev?.impressions)} />}
               trend={<Sparkline data={gDaily} dataKey="impressions" />}
               hint={prev ? `Previously ${compactNumber(prev.impressions)}` : undefined}
@@ -175,14 +175,14 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
             <HeroStat
               label="Click-through rate"
               info="Share of impressions that became a click"
-              value={cur ? <CountUp value={cur.ctr} format={(v) => ratioPct(v, 2)} /> : '–'}
+              value={cur ? <CountUp value={cur.ctr} format={(v) => ratioPct(v, 2)} /> : '-'}
               delta={<Delta value={S?.gsc.deltas.ctrPts ?? (cur && prev ? (cur.ctr - prev.ctr) * 100 : null)} suffix=" pts" digits={2} />}
               hint={prev ? `from ${ratioPct(prev.ctr, 2)}` : 'Share of impressions that became a click'}
             />
             <HeroStat
               label="Average position"
               info="A rise means you moved up"
-              value={cur && cur.position > 0 ? <CountUp value={cur.position} format={(v) => v.toFixed(1)} /> : '–'}
+              value={cur && cur.position > 0 ? <CountUp value={cur.position} format={(v) => v.toFixed(1)} /> : '-'}
               delta={<Delta value={posDelta} suffix="" />}
               trend={<Sparkline data={gDaily} dataKey="position" invert />}
               hint={prev && prev.position > 0 ? `Previously ${prev.position.toFixed(1)} · a rise means you moved up` : 'A rise means you moved up'}
@@ -192,13 +192,13 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
       />
 
       {S?.brief?.summary && (
-        <Panel title="The week in brief" icon={<Sparkles />} description={`Weekly report of ${fmtDate(S.receivedAt)}`} info="Written by the engine from this week’s Search Console, Analytics, Trends and rank data">
+        <Panel title="The week in brief" icon={<Sparkles />} description={`Weekly report of ${fmtDate(S.receivedAt)}`} info="Written by the engine from this week's Search Console, Analytics, Trends and rank data">
           <p className="max-w-4xl text-sm leading-relaxed text-ink-2">{S.brief.summary}</p>
         </Panel>
       )}
 
       <section>
-        <SectionHeading icon={<BarChart3 />} title="Google Analytics 4 — organic search" description="Visits that came from organic search, same 28 days" />
+        <SectionHeading icon={<BarChart3 />} title="Google Analytics 4: organic search" description="Visits that came from organic search, same 28 days" />
         {gaOn && org1 ? (
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <MetricCard
@@ -230,7 +230,7 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
               label="Organic share"
               icon={<PieChart />}
               visual={share != null ? <ScoreRing label="Organic share" value={share} tone="accent" display={<CountUp value={share} format={(v) => pct(v, 0)} />} valueText={pct(share, 0)} size={68} /> : undefined}
-              value="–"
+              value="-"
               meta={S?.ga4.total ? `of ${compactNumber(S.ga4.total.sessions)} sessions from all channels${S.ga4.totalPrev ? ` (previously ${compactNumber(S.ga4.totalPrev.sessions)})` : ''}` : 'of all sessions'}
             />
           </div>
@@ -290,7 +290,7 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
           icon={<Search />}
           title="Queries"
           description="Every query Search Console reported in a weekly report, with its live Google position for tracked keywords"
-          info="Avg. position is Search Console’s average over 28 days; Live is this week’s live Google check for keywords you track."
+          info="Avg. position is Search Console's average over 28 days; Live is this week's live Google check for keywords you track."
         />
         <Card className="p-4">
           {d.queries.length ? <QueryExplorer queries={d.queries} periods={d.periods} /> : <EmptyState className="py-8" icon={<Search className="size-5" />} title="No query data yet" description="Queries arrive with the first weekly report once Search Console is connected." />}
@@ -379,7 +379,7 @@ function ChangeTests({ tests, lineage: l }: { tests: SearchData['changeTests']; 
       header: 'Position',
       align: 'right',
       sortValue: (r) => r.position,
-      cell: (r) => (r.basePosition ? <span className="tabular">{r.basePosition.toFixed(1)} → {r.position.toFixed(1)}</span> : <span className="text-ink-3">–</span>),
+      cell: (r) => (r.basePosition ? <span className="tabular">{r.basePosition.toFixed(1)} to {r.position.toFixed(1)}</span> : <span className="text-ink-3">-</span>),
     },
     {
       key: 'verdict',
@@ -397,7 +397,7 @@ function ChangeTests({ tests, lineage: l }: { tests: SearchData['changeTests']; 
     <Panel
       title="Did your changes help?"
       icon={<FlaskConical />}
-      description={`Each page of ${site.domain} that went live, read against the website’s other pages over the same weeks`}
+      description={`Each page of ${site.domain} that went live, read against the website's other pages over the same weeks`}
       info={CHANGE_TEST_METHOD}
       flush
       footer={<LineageNote lineage={l} />}
@@ -430,7 +430,7 @@ function GscDailyChart({ rows, range, loading, annotations, lineage: l }: { rows
   return (
     <ChartCard
       title={<ChartTitle icon={<MousePointerClick />}>Search Console, daily</ChartTitle>}
-      description={range ? `${range} — the previous and the current 28 days` : 'Daily values from the latest weekly report'}
+      description={range ? `${range} (the previous and the current 28 days)` : 'Daily values from the latest weekly report'}
       loading={loading}
       actions={<MetricSwitch label="Metric" value={m} onChange={setM} options={[{ value: 'clicks', label: 'Clicks' }, { value: 'impressions', label: 'Impressions' }, { value: 'position', label: 'Position' }]} />}
       table={{
@@ -438,7 +438,7 @@ function GscDailyChart({ rows, range, loading, annotations, lineage: l }: { rows
           { key: 'date', label: 'Day', format: (v) => fmtDate(String(v)) },
           { key: 'clicks', label: 'Clicks', align: 'right' },
           { key: 'impressions', label: 'Impressions', align: 'right' },
-          { key: 'position', label: 'Avg. position', align: 'right', format: (v) => (v == null ? '–' : Number(v).toFixed(1)) },
+          { key: 'position', label: 'Avg. position', align: 'right', format: (v) => (v == null ? '-' : Number(v).toFixed(1)) },
         ],
         rows: [...rows].reverse(),
       }}
@@ -506,7 +506,7 @@ function LandingTable({ rows }: { rows: Landing[] }) {
     { key: 'sessions', header: 'Sessions', align: 'right', sortValue: (r) => r.sessions, cell: (r) => compactNumber(r.sessions) },
     { key: 'prevSessions', header: 'Before', align: 'right', hideOnMobile: true, sortValue: (r) => r.prevSessions, cell: (r) => <span className="text-ink-2">{compactNumber(r.prevSessions)}</span> },
     { key: 'delta', header: 'Change', align: 'right', sortValue: (r) => r.delta, cell: (r) => <Delta value={r.delta} suffix="" digits={0} /> },
-    { key: 'engaged', header: 'Engagement', align: 'right', hideOnMobile: true, sortValue: (r) => (r.sessions ? r.engaged / r.sessions : 0), cell: (r) => (r.sessions ? pct((r.engaged / r.sessions) * 100, 0) : '–') },
+    { key: 'engaged', header: 'Engagement', align: 'right', hideOnMobile: true, sortValue: (r) => (r.sessions ? r.engaged / r.sessions : 0), cell: (r) => (r.sessions ? pct((r.engaged / r.sessions) * 100, 0) : '-') },
     { key: 'keyEvents', header: 'Key events', align: 'right', sortValue: (r) => r.keyEvents, cell: (r) => compactNumber(r.keyEvents) },
   ];
   return (
@@ -555,7 +555,7 @@ function TrendsSection({ trends }: { trends: TrendPoint[] }) {
                 <div className="mt-3 flex items-end gap-4">
                   <div>
                     <div className="text-xs text-ink-3">Change</div>
-                    <div className="font-display text-xl font-semibold text-ink">{t.changePct != null && Number.isFinite(t.changePct) ? `${t.changePct > 0 ? '+' : ''}${Math.round(t.changePct)}%` : '–'}</div>
+                    <div className="font-display text-xl font-semibold text-ink">{t.changePct != null && Number.isFinite(t.changePct) ? `${t.changePct > 0 ? '+' : ''}${Math.round(t.changePct)}%` : '-'}</div>
                   </div>
                   <div>
                     <div className="text-xs text-ink-3">Interest now / avg.</div>
@@ -617,7 +617,7 @@ const W_OPTIONS: { value: WMetric; label: string; series: Series }[] = [
   { value: 'impressions', label: 'Impressions', series: { key: 'impressions', label: 'Impressions' } },
   { value: 'position', label: 'Position', series: { key: 'position', label: 'Average position', format: (v) => v.toFixed(1) } },
   { value: 'sessions', label: 'Sessions', series: { key: 'sessions', label: 'Organic sessions' } },
-  { value: 'striking', label: 'Striking', series: { key: 'striking', label: 'Queries at positions 4–20' } },
+  { value: 'striking', label: 'Striking', series: { key: 'striking', label: 'Queries at positions 4-20' } },
 ];
 
 function WeeklyHistory({ metrics, loading, annotations, lineage: l }: { metrics: MetricsPoint[]; loading: boolean; annotations?: SearchData['annotations']; lineage?: Lineage }) {
@@ -638,7 +638,7 @@ function WeeklyHistory({ metrics, loading, annotations, lineage: l }: { metrics:
           { key: 'clicks', label: 'Clicks', align: 'right' },
           { key: 'impressions', label: 'Impr.', align: 'right', format: (v) => compactNumber(Number(v)) },
           { key: 'ctr', label: 'CTR', align: 'right', format: (v) => ratioPct(Number(v)) },
-          { key: 'position', label: 'Pos.', align: 'right', format: (v) => (v == null ? '–' : Number(v).toFixed(1)) },
+          { key: 'position', label: 'Pos.', align: 'right', format: (v) => (v == null ? '-' : Number(v).toFixed(1)) },
           { key: 'sessions', label: 'Sessions', align: 'right' },
           { key: 'queries', label: 'Queries', align: 'right' },
           { key: 'striking', label: 'Striking', align: 'right' },

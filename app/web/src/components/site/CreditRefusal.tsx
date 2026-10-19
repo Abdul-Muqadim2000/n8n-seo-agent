@@ -17,7 +17,7 @@ export function creditRefusalTitle(e: ApiRequestError): string {
   return 'Not enough credits';
 }
 
-/** The refusal as a callout: the rule as the title, the server's sentence, and the way to Settings → Credits. */
+/** The refusal as a callout: the rule as the title, the server's sentence, and the way to Settings -> Credits. */
 export function CreditRefusal({ orgId, error, className }: { orgId: string; error: ApiRequestError; className?: string }) {
   return (
     <Callout

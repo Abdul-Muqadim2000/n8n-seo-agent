@@ -23,7 +23,7 @@ import {
   workedExample,
 } from '../src/pages/admin/lib';
 
-// The platform admin panel (/admin, 2026-10-18): the rules it derives itself — the period in the URL, money and credit figures, the
+// The platform admin panel (/admin, 2026-10-18): the rules it derives itself, the period in the URL, money and credit figures, the
 // cost-by-mode roll-up and the settings' worked example.
 
 describe('period in the URL', () => {
@@ -51,8 +51,8 @@ describe('money', () => {
     expect(money(-0.00001)).toBe('$0.0000');
   });
   it('never turns a missing figure into $0', () => {
-    expect(money(null)).toBe('–');
-    expect(money(Number.NaN)).toBe('–');
+    expect(money(null)).toBe('-');
+    expect(money(Number.NaN)).toBe('-');
   });
   it('signs changes', () => {
     expect(signedMoney(2)).toBe('+$2.00');
@@ -66,7 +66,7 @@ describe('credits and ratios', () => {
     expect(credits(1234.567)).toBe('1,234.57');
     expect(credits(-50)).toBe('−50');
     expect(signedCredits(24)).toBe('+24');
-    expect(credits(null)).toBe('–');
+    expect(credits(null)).toBe('-');
   });
   it('says "no revenue" rather than inventing a margin percentage', () => {
     expect(marginPct(null)).toBe('no revenue');
@@ -75,7 +75,7 @@ describe('credits and ratios', () => {
   });
   it('shows a ratio only when both sides exist', () => {
     expect(ratioLabel(1.0412)).toBe('1.04×');
-    expect(ratioLabel(null)).toBe('–');
+    expect(ratioLabel(null)).toBe('-');
   });
   it('previews the balance after a grant, an adjustment and a refund', () => {
     expect(balanceAfter(10, 'grant', 90)).toBe(100);
@@ -161,7 +161,7 @@ describe('activity rows', () => {
     expect(actionLabel('credits.granted')).toBe('Credits granted');
     expect(actionLabel('user.sessions_revoked')).toBe('User sessions revoked');
     expect(detailText({ a: 1 })).toBe('{"a":1}');
-    expect(detailText(null)).toBe('–');
+    expect(detailText(null)).toBe('-');
     expect(detailText(false)).toBe('false');
   });
 });

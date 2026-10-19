@@ -28,7 +28,7 @@ import { useCmsConnections, useCreateCmsConnection, useDeleteCmsConnection, useT
 import { fmtAgo } from '@/lib/utils';
 
 /**
- * G2 — Website settings → Publishing (app/docs/CMS_PUBLISHING.md §7). Connect WordPress, Webflow, Contentful or a signed webhook,
+ * G2, Website settings -> Publishing (app/docs/CMS_PUBLISHING.md §7). Connect WordPress, Webflow, Contentful or a signed webhook,
  * test it, map the fields once. Secrets are write-only here: the server answers `hasSecret` and nothing else.
  */
 
@@ -52,7 +52,7 @@ export function PublishingSettings({ admin }: { admin: boolean }) {
   return (
     <div className="max-w-3xl space-y-5">
       {secret && (
-        <Callout tone="good" title="Your webhook’s signing secret — copy it now" action={<Button size="sm" variant="secondary" onClick={() => setSecret(null)}>Done</Button>}>
+        <Callout tone="good" title="Your webhook's signing secret: copy it now" action={<Button size="sm" variant="secondary" onClick={() => setSecret(null)}>Done</Button>}>
           <p className="mb-2">This is the only time it is shown. Your endpoint checks every request with it.</p>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <code className="min-w-0 max-w-full break-all rounded-md border border-line bg-surface-2 px-2 py-1 font-mono text-xs">{secret}</code>
@@ -71,7 +71,7 @@ export function PublishingSettings({ admin }: { admin: boolean }) {
             <EmptyState
               icon={<Plug className="size-5" />}
               title="No CMS connected"
-              description="Connect WordPress, Webflow or Contentful — or any other stack through a signed webhook — and send written pages from their report instead of copying them by hand."
+              description="Connect WordPress, Webflow or Contentful (or any other stack through a signed webhook) and send written pages from their report instead of copying them by hand."
               action={admin ? <Button icon={<Plus className="size-4" />} onClick={() => setAdding(true)}>Connect a CMS</Button> : <span className="text-sm text-ink-3">Ask an admin of your company to connect one.</span>}
             />
           </CardBody>
@@ -189,7 +189,7 @@ function FieldMapping({ c, admin }: { c: CmsConnectionView; admin: boolean }) {
   return (
     <fieldset className="space-y-3 rounded-lg border border-line p-4">
       <legend className="px-1 text-sm font-medium text-ink">Field mapping</legend>
-      <p className="text-[13px] text-ink-3">{c.kind === 'webflow' ? 'The name and the slug are filled for you. ' : ''}Leave a field on “Not sent” when your CMS has nothing for it.</p>
+      <p className="text-[13px] text-ink-3">{c.kind === 'webflow' ? 'The name and the slug are filled for you. ' : ''}Leave a field on "Not sent" when your CMS has nothing for it.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         {ours.map((f) => (
           <Field key={f.id} label={f.label} hint={f.hint || undefined}>
@@ -260,7 +260,7 @@ function EditDefaults({ c }: { c: CmsConnectionView }) {
       <Field label="Name" optional>
         {(p) => <Input {...p} value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} />}
       </Field>
-      <Field label="Address of a live page" optional error={errors.publicUrlTemplate} hint={`With {slug}, e.g. https://${site.domain}/blog/{slug}/ — empty: the address the plan chose`}>
+      <Field label="Address of a live page" optional error={errors.publicUrlTemplate} hint={`With {slug}, e.g. https://${site.domain}/blog/{slug}/. Leave empty and we use the address the plan chose`}>
         {(p) => <Input {...p} value={pattern} placeholder={`https://${site.domain}/blog/{slug}/`} onChange={(e) => setPattern(e.target.value)} />}
       </Field>
       {c.kind === 'wordpress' && (
@@ -381,7 +381,7 @@ function ConnectDialog({ onClose, onSecret }: { onClose: () => void; onSecret: (
             </Field>
           )}
           {kind === 'webflow' && (
-            <Field label="Collection id" error={errors.collectionId} hint="24 letters and digits, from the collection’s settings">
+            <Field label="Collection id" error={errors.collectionId} hint="24 letters and digits, from the collection's settings">
               {(p) => <Input {...p} value={f.collectionId ?? ''} onChange={set('collectionId')} className="font-mono" />}
             </Field>
           )}
@@ -398,10 +398,10 @@ function ConnectDialog({ onClose, onSecret }: { onClose: () => void; onSecret: (
               </Field>
             </>
           )}
-          <Field label="Address of a live page" optional error={errors.publicUrlTemplate} className="sm:col-span-2" hint={`With {slug}, e.g. https://${site.domain}/blog/{slug}/ — so the live page can be checked and tracked. Empty: the address the plan chose.`}>
+          <Field label="Address of a live page" optional error={errors.publicUrlTemplate} className="sm:col-span-2" hint={`With {slug}, e.g. https://${site.domain}/blog/{slug}/. This lets the live page can be checked and tracked. Empty: the address the plan chose.`}>
             {(p) => <Input {...p} value={f.publicUrlTemplate ?? ''} placeholder={`https://${site.domain}/blog/{slug}/`} onChange={set('publicUrlTemplate')} />}
           </Field>
-          <Field label="Name" optional className="sm:col-span-2" hint="e.g. “Main blog” when you connect more than one">
+          <Field label="Name" optional className="sm:col-span-2" hint="e.g. &quot;Main blog&quot; when you connect more than one">
             {(p) => <Input {...p} value={f.label ?? ''} maxLength={60} onChange={set('label')} />}
           </Field>
         </div>

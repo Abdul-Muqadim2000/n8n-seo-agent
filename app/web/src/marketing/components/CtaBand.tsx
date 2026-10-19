@@ -19,7 +19,7 @@ const CTA_FACTS = ['Free to set up', 'First site check on day one', 'Price shown
  * the risk, the entry price, and the brand mark rising from the bottom edge as a faint, slowly waving watermark.
  */
 export function CtaBand({
-  title = 'Your product is ready. Let’s get it found.',
+  title = 'Your product is ready. Let\'s get it found.',
   lead = 'Connect your website in minutes and get your first site check today. You see the price of every run in credits before it starts, and nothing goes live without your OK.',
   primary = { label: 'Start free', to: '/signup' },
   secondary = { label: 'Book a demo', to: '/contact?topic=sales' },

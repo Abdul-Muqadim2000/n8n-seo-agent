@@ -10,7 +10,7 @@ import { articleBody, call, CmsError, obj, str, type CmsConnector, type ConnCtx,
 const CMS = 'WordPress';
 const STATUSES = 'publish,future,draft,pending,private';
 
-/** "https://blog.example.org" or ".../wp-json" → the REST root. */
+/** "https://blog.example.org" or ".../wp-json" -> the REST root. */
 export const wpApi = (baseUrl: string): string => baseUrl.replace(/\/+$/, '').replace(/\/wp-json$/i, '') + '/wp-json';
 const auth = (c: ConnCtx) => ({ authorization: 'Basic ' + Buffer.from(`${c.username}:${c.secret}`, 'utf8').toString('base64') });
 const type = (c: ConnCtx) => (c.settings.postType === 'pages' ? 'pages' : 'posts');
@@ -29,7 +29,7 @@ const toRemote = (p: Record<string, unknown>): RemoteItem => ({
   status: str(p.status) === 'publish' ? 'published' : 'draft',
 });
 
-/** Category / tag names → ids, creating the missing ones (exact name match, case-insensitive). */
+/** Category / tag names -> ids, creating the missing ones (exact name match, case-insensitive). */
 async function termIds(c: ConnCtx, taxonomy: 'categories' | 'tags', names: string[], notes: string[]): Promise<number[]> {
   const ids: number[] = [];
   for (const name of names) {
@@ -57,7 +57,7 @@ export const wordpress: CmsConnector = {
     if (me.status === 404 || (me.status === 200 && !obj(me.json).id))
       return { ok: false, message: `No WordPress REST API answered at ${wpApi(c.baseUrl)}. Check the address (the site's own address, not /wp-admin) and that the REST API is not blocked by a security plugin.` };
     if (me.status === 401)
-      return { ok: false, message: 'WordPress refused the user name or the application password. Create a new application password for this user (Users → Profile → Application Passwords) and paste it again.' };
+      return { ok: false, message: 'WordPress refused the user name or the application password. Create a new application password for this user (Users > Profile > Application Passwords) and paste it again.' };
     if (me.status < 200 || me.status >= 300) return { ok: false, message: `WordPress answered ${me.status} when asked who this user is.` };
     const user = obj(me.json);
     const caps = obj(user.capabilities);
@@ -125,7 +125,7 @@ export const wordpress: CmsConnector = {
             notes.push(`The alt text of ${im.fileName} could not be set: add "${im.alt}" in the media library.`),
           );
       } catch (e) {
-        notes.push(`${im.fileName} was not uploaded (${(e as Error).message}) — add it in WordPress.`);
+        notes.push(`${im.fileName} was not uploaded (${(e as Error).message}). Add it in WordPress.`);
       }
     }
     const hero = o.images.find((im) => im.purpose === 'hero') ?? o.images[0];

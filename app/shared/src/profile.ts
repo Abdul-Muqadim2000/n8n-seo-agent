@@ -19,7 +19,7 @@ export const PROFILE_CHECKS: { label: string; why: string; done: (p: ProfileLike
   { label: 'Author bio', why: 'author box', done: (p) => has(p.author?.bio) },
   { label: 'Author credentials and experience', why: 'shows real expertise', done: (p) => has(p.author?.credentials) },
   { label: 'Author page on your site', why: 'links the byline to a real person', done: (p) => has(p.author?.url) },
-  { label: 'Author profile links (LinkedIn, …)', why: 'Person schema Google can match', done: (p) => !!p.author?.sameAs?.length },
+  { label: 'Author profile links (LinkedIn, ...)', why: 'Person schema Google can match', done: (p) => !!p.author?.sameAs?.length },
   { label: 'Company name', why: 'Organization schema', done: (p) => has(p.businessName) },
   { label: 'Business address', why: 'contact block and local pages', done: (p) => has(p.address?.street) && has(p.address?.city) },
   { label: 'Phone', why: 'contact block', done: (p) => has(p.phone) },

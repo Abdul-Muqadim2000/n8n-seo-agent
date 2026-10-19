@@ -19,7 +19,7 @@ type P = { orgId: string; runId: string; reportId: string; fileId: string; share
 /**
  * A generated file as a response. Generated files are untrusted content: shown inline only as PDF or plain text, everything else
  * downloads; the content type follows the stored kind (never n8n's MIME, which could say text/html for a .txt). The same handling is
- * used for a company's own files and for the files of a shared report (G15) — one implementation, one set of headers.
+ * used for a company's own files and for the files of a shared report (G15), one implementation, one set of headers.
  */
 export function sendFile(reply: FastifyReply, f: Pick<FileRow, 'kind' | 'fileName' | 'data'>, download: boolean) {
   const inline = !download && (f.kind === 'pdf' || f.kind === 'txt' || f.kind === 'md' || f.kind === 'json' || f.kind === 'csv');
@@ -134,7 +134,7 @@ export async function runRoutes(app: FastifyInstance) {
 
   /**
    * B-R1: send one report now, to the channels the company set up. Admins only (it sends mail in the company's name), and it still
-   * goes through the same readiness decision as an automatic delivery — "send it anyway" is not offered, because a report the run
+   * goes through the same readiness decision as an automatic delivery, "send it anyway" is not offered, because a report the run
    * marked not ready is not a report yet, whoever asks.
    */
   app.post('/api/orgs/:orgId/reports/:reportId/deliver', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
@@ -148,7 +148,7 @@ export async function runRoutes(app: FastifyInstance) {
   // ---- G15: expiring, revocable, read-only links to ONE report, for somebody with no account ----
   // The owner's side needs the admin role (a viewer can read a report but must not hand it outside the company); the public side needs
   // nothing but the token, so both of its routes are rate-limited by IP and say the same thing for a wrong, a revoked and an expired
-  // token — a guess learns nothing. GET only: there is no shared write anywhere.
+  // token, a guess learns nothing. GET only: there is no shared write anywhere.
 
   app.post('/api/orgs/:orgId/reports/:reportId/shares', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
     const p = req.params as P;

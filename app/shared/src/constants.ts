@@ -67,9 +67,9 @@ export const AI_ENGINES = [
   { value: 'claude', label: 'Claude' },
   { value: 'ai_overview', label: 'Google AI Overviews' },
   { value: 'ai_mode', label: 'Google AI Mode' },
-  /** v4.12: Bing's Copilot Search summary (DataForSEO Bing results) — opt-in: Bing shows it for few searches */
+  /** v4.12: Bing's Copilot Search summary (DataForSEO Bing results), opt-in: Bing shows it for few searches */
   { value: 'copilot', label: 'Microsoft Copilot (Bing; few searches show it)' },
-  /** G6 (2026-10-18): what an app or agent built on the models answers (DataForSEO LLM Responses with web search) — opt-in */
+  /** G6 (2026-10-18): what an app or agent built on the models answers (DataForSEO LLM Responses with web search), opt-in */
   { value: 'chatgpt_api', label: 'ChatGPT API (GPT with web search)' },
   { value: 'gemini_api', label: 'Gemini API (with Google Search)' },
 ] as const;
@@ -336,9 +336,9 @@ export const STAGE_LABELS: Record<string, string> = {
 
 /** Monthly cost of the background monitors per site (HANDOVER.md §1, v4.6 reuse rules; AI visibility: estimateAiVisibilityCost, v4.9). */
 export const MONITOR_COSTS = {
-  /** the defaults (20 questions, all six engines, daily pulse on) — see estimateAiVisibilityCost */
+  /** the defaults (20 questions, all six engines, daily pulse on), see estimateAiVisibilityCost */
   aiVisibilityMonthly: 0,
-  /** v4.12: the AI growth loop with its default AI pages — see estimateAiGrowthCost */
+  /** v4.12: the AI growth loop with its default AI pages, see estimateAiGrowthCost */
   aiGrowthMonthly: 0,
   /** v4.10 (BACKLINKS_SPEC.md §6): the monthly full run $0.51 (DataForSEO incl. link details, anchors, pages, competitors' new links,
    *  bulk authority; Link Analyst; outreach) + 3.33 light weeks at $0.09; the free sources and the link check cost nothing */
@@ -352,7 +352,7 @@ export const MONITOR_COSTS = {
   weeksPerMonth: 4.33,
 };
 
-/** DataForSEO price per question on each AI engine — the one table, ./ai-panel.ts (mirrors the engine's AIP.PRICE, golden cases in both). */
+/** DataForSEO price per question on each AI engine, the one table, ./ai-panel.ts (mirrors the engine's AIP.PRICE, golden cases in both). */
 export const AI_ENGINE_COST: Record<AiEngine, number> = { ...AI_PANEL_PRICE };
 /** The engines the daily AI Pulse asks (n8n Pulse_Plan.js CONFIG.pulse_engines), Tuesday to Sunday. */
 export const AI_PULSE_ENGINES: readonly AiEngine[] = AI_PANEL_PULSE_ENGINES;
@@ -371,7 +371,7 @@ export function aiPulseQuestions(panel: number): number {
  * the Answer Analyst and the brief), the month's full run (Claude, the AI-answer database index and question discovery) and the daily pulse.
  */
 export function estimateAiVisibilityCost(o: { prompts?: number; engines?: readonly AiEngine[]; pulse?: boolean; pulseMode?: AiPulseMode | string; pulsePerWeek?: number | null } = {}): { weekly: number; fullRun: number; pulse: number; total: number } {
-  // G6 (2026-10-18): one formula — ./ai-panel.ts estimateAiPanelCost, the mirror of the engine's AIP.cost (golden cases on both sides)
+  // G6 (2026-10-18): one formula, ./ai-panel.ts estimateAiPanelCost, the mirror of the engine's AIP.cost (golden cases on both sides)
   const c = estimateAiPanelCost({ panel: o.prompts ?? AI_PROMPTS_DEFAULT, engines: o.engines && o.engines.length ? o.engines : AI_DEFAULT_ENGINES, pulse: o.pulse, pulseMode: o.pulseMode, pulsePerWeek: o.pulsePerWeek });
   return { weekly: c.month.weekly, fullRun: c.month.fullExtra, pulse: c.month.pulse, total: c.month.total };
 }
@@ -426,7 +426,7 @@ export interface AutomationInfo {
   settingsTab: string;
   /**
    * R103 (2026-10-16): when this schedule first existed (its n8n workflow's `createdAt`, UTC, read from the instance on 2026-10-15). A fire
-   * due before it is not a missed fire — the delivery rate counted 57 of its 72 "missed" fires before the workflow was even created.
+   * due before it is not a missed fire, the delivery rate counted 57 of its 72 "missed" fires before the workflow was even created.
    */
   since?: string;
 }
@@ -436,7 +436,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     id: 'ai_visibility',
     title: 'AI visibility check',
     summary: 'Asks your buyer questions on ChatGPT, Gemini, Perplexity and Google AI (Claude once a month): mentions with their 95% range, citations, share of voice, how AI describes you, AI visits and revenue (GA4), AI crawler access.',
-    cadence: 'Every Monday · Claude, new questions and the market-wide index on the month’s first run',
+    cadence: 'Every Monday · Claude, new questions and the market-wide index on the month\'s first run',
     schedule: { kind: 'weekly', weekday: 1, hour: 7, minute: 0 },
     workflow: 'SEOagentAIVisib1',
     since: '2026-10-02T12:32:00.000Z',
@@ -470,7 +470,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
     id: 'backlinks',
     title: 'Backlink monitor',
     summary: 'Watches for lost and spammy links every week; once a month a full report with broken-link reclaim, unlinked mentions and outreach drafts (link gap each quarter).',
-    cadence: 'Every Monday · full report on the month’s first run',
+    cadence: 'Every Monday · full report on the month\'s first run',
     schedule: { kind: 'weekly', weekday: 1, hour: 7, minute: 30 },
     workflow: 'SEOagentBacklnk1',
     since: '2026-10-02T12:32:00.000Z',
@@ -481,7 +481,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
   {
     id: 'link_builder',
     title: 'Link builder',
-    summary: 'Finds new link opportunities (journalist requests, dead links to replace, resource pages, competitors’ lost links), checks each site and finds the right person, picks your page and the link text, and drafts a short e-mail sequence for you to approve and send from your own mailbox; tracks the listings you can add yourself and what each won link did.',
+    summary: 'Finds new link opportunities (journalist requests, dead links to replace, resource pages, competitors\' lost links), checks each site and finds the right person, picks your page and the link text, and drafts a short e-mail sequence for you to approve and send from your own mailbox; tracks the listings you can add yourself and what each won link did.',
     cadence: 'Every Monday 11:00 · after the backlink monitor and the AI growth loop',
     schedule: { kind: 'weekly', weekday: 1, hour: 11, minute: 0 },
     workflow: 'SEOagentLinkBld1',
@@ -504,7 +504,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
   {
     id: 'site_tracker',
     title: 'Weekly site report',
-    summary: 'Search Console, GA4, Google Trends and live rank checks of your tracked keywords, with the week’s actions.',
+    summary: 'Search Console, GA4, Google Trends and live rank checks of your tracked keywords, with the week\'s actions.',
     cadence: 'Every Monday · trends reused for 25 days',
     schedule: { kind: 'weekly', weekday: 1, hour: 9, minute: 0 },
     workflow: 'SEOagentSiteTrk1',
@@ -516,7 +516,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
   {
     id: 'content_cadence',
     title: 'Blog posts',
-    summary: 'Writes your weekly posts: the next keyword-ladder page first, then queries close to page one, then rising searches — each a researched, QA-checked page.',
+    summary: 'Writes your weekly posts: the next keyword-ladder page first, then queries close to page one, then rising searches, each a researched, QA-checked page.',
     cadence: 'Every Monday · as many posts as you set per week',
     schedule: { kind: 'weekly', weekday: 1, hour: 10, minute: 0 },
     workflow: 'SEOagentCadence1',
@@ -539,7 +539,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
 ];
 
 /**
- * R103 (2026-10-16): every n8n schedule the delivery rate measures — the nine automations above plus the tenth, the daily key-page watch
+ * R103 (2026-10-16): every n8n schedule the delivery rate measures, the nine automations above plus the tenth, the daily key-page watch
  * (`SEOagentPageWch1`, build_site_tracker.py: `days`, interval 1, 05:45 in n8n's timezone, every day). Page Watch is not an automation a
  * website switches on (it has no report stage and no settings tab of its own), so it is not in `AUTOMATIONS`; it is a schedule all the
  * same, and a schedule that does not fire is a missed fire.

@@ -1,9 +1,9 @@
 // The draft gate (L2, system review of 2026-10-11): the checks every outreach e-mail passes before it may be sent. The n8n Link Builder runs
 // the same rules when it drafts (n8n/seo-agent/v5/code/_draft_qa.js, node "LB Draft QA"): a draft that fails is kept as `needs_edit` with its
-// reasons. This copy is the send-time gate — a person may edit a held draft in the app, and nothing goes out until every check passes. The two
+// reasons. This copy is the send-time gate, a person may edit a held draft in the app, and nothing goes out until every check passes. The two
 // files must change together (as Cadence_Plan.js and server/src/services/cadence.ts do).
 // What it refuses: a claim about the business the facts do not carry (only when the facts are given; the engine already wraps those in
-// [Owner: confirm — …]), anything left in brackets for the owner, an address that is not on the prospect's own domain, a first e-mail that
+// [Owner: confirm, ...]), anything left in brackets for the owner, an address that is not on the prospect's own domain, a first e-mail that
 // quotes nothing from their page, no link / more than one link / a link that is not our chosen page on our canonical host, a competitor, a
 // government site or a bare homepage as the recipient, an e-mail that is too long, and SEO / AI jargon or hype.
 
@@ -120,7 +120,7 @@ export function draftGate(d: DraftInput, ctx: DraftContext): DraftVerdict {
   if (!steps[0]!.subject.trim()) add('the first e-mail has no subject');
   // 1. nothing left for the owner to fill in
   for (const st of steps) for (const b of bracketsIn(st.body + ' ' + st.subject)) add(`needs you: ${b.slice(0, 80)}`);
-  // 2. claims the facts do not carry (only when the facts are at hand; the engine wraps them in [Owner: confirm — …] while drafting)
+  // 2. claims the facts do not carry (only when the facts are at hand; the engine wraps them in [Owner: confirm, ...] while drafting)
   if (s(ctx.facts).trim()) {
     const F = s(ctx.facts).toLowerCase().replace(/[^a-z0-9%$€£]+/g, ' ');
     const keyOf = (m: string) => {

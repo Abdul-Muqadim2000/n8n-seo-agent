@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AUDIT_ACTIONS } from '@seo/shared';
 
-// G1 phase 2 — the customer-visible audit log, through the real app on a real Postgres: what is written by whom, who may read it
+// G1 phase 2, the customer-visible audit log, through the real app on a real Postgres: what is written by whom, who may read it
 // (admins of that company only), filters and paging, the CSV export (formula-safe, itself audited), the append-only trigger,
 // retention, and that nothing secret is ever stored.
 
@@ -113,7 +113,7 @@ describe('what is written', () => {
 });
 
 describe('who may read it', () => {
-  it('owners and admins of that company only; filters and paging; never another company’s events', async () => {
+  it('owners and admins of that company only; filters and paging; never another company\'s events', async () => {
     const { owner, org } = await company('boss@iso.test', 'Iso One');
     const viewer = await join(owner.c, org.id, 'view@iso.test', 'viewer');
     const member = await join(owner.c, org.id, 'm@iso.test', 'member');

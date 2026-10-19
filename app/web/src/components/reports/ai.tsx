@@ -41,7 +41,7 @@ function AnswerCell({ value }: { value: string }) {
 /** B8-6: a question's week, with the range and the "too few answers" state the engine sends (`win.ci`, `win.enough`). */
 function WeekWin({ q }: { q: P }) {
   const w = questionWin({ winRate: num(q.win_rate), samples: num(q.samples) ?? 0, win: has(q.win) ? obj(q.win) : null });
-  if (!w.samples) return <span className="text-xs text-ink-3">–</span>;
+  if (!w.samples) return <span className="text-xs text-ink-3">-</span>;
   if (!w.enough || w.rate == null)
     return (
       <span className="text-xs text-ink-3" title={w.why}>
@@ -52,13 +52,13 @@ function WeekWin({ q }: { q: P }) {
   return (
     <span className="tabular text-[13px] text-ink">
       {pct(w.rate, 0)}
-      {w.ci && <span className="block text-xs text-ink-3">{`${pct(w.ci[0], 0)}–${pct(w.ci[1], 0)} · ${w.samples} answers`}</span>}
+      {w.ci && <span className="block text-xs text-ink-3">{`${pct(w.ci[0], 0)} to ${pct(w.ci[1], 0)} · ${w.samples} answers`}</span>}
     </span>
   );
 }
 
 const ptsDelta = (v: unknown) => (num(v) == null ? undefined : <Delta value={num(v)} suffix=" pts" digits={1} label="vs last check" />);
-const pctCount = (v: unknown) => (num(v) != null ? <CountUp value={num(v)!} format={(x) => pct(x)} /> : '–');
+const pctCount = (v: unknown) => (num(v) != null ? <CountUp value={num(v)!} format={(x) => pct(x)} /> : '-');
 
 export function AiVisibilityReport({ report }: { report: ReportDetail }) {
   const p = report.payload;
@@ -93,7 +93,7 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
   const failed = num(m.errors) ? ` · ${num(m.errors)} request${num(m.errors) === 1 ? '' : 's'} failed` : '';
   const mentionHint =
     arr<number>(m.mention_ci).length === 2
-      ? `95% range ${pct(arr<number>(m.mention_ci)[0], 0)}–${pct(arr<number>(m.mention_ci)[1], 0)} · ${num(m.samples) ?? num(m.answered) ?? 0} answers${delta.significant === true ? ' · real change' : delta.significant === false ? ' · change within noise' : ''}${failed}`
+      ? `95% range ${pct(arr<number>(m.mention_ci)[0], 0)} to ${pct(arr<number>(m.mention_ci)[1], 0)} · ${num(m.samples) ?? num(m.answered) ?? 0} answers${delta.significant === true ? ' · real change' : delta.significant === false ? ' · change within noise' : ''}${failed}`
       : `${num(m.mentioned) ?? 0} of ${num(m.answered) ?? 0} answers${failed}`;
 
   return (
@@ -116,9 +116,9 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
             <HeroStat label="Share of voice" value={pctCount(m.share_of_voice)} delta={ptsDelta(delta.share_of_voice)} hint="Your mentions among all brands named" />
             <HeroStat
               label="AI knows your brand"
-              value={num(brand.answered) ? `${num(brand.known) ?? 0} / ${num(brand.answered)}` : m.brand_known === true ? 'Yes' : m.brand_known === false ? 'No' : '–'}
-              // B8-10: a count with its denominator and its range — no verdict from one answer per assistant
-              hint={num(brand.answered) ? `assistants asked directly named you${arr<number>(brand.ci).length === 2 ? ` · 95% range ${pct(arr<number>(brand.ci)[0], 0)}–${pct(arr<number>(brand.ci)[1], 0)}` : ''}` : undefined}
+              value={num(brand.answered) ? `${num(brand.known) ?? 0} / ${num(brand.answered)}` : m.brand_known === true ? 'Yes' : m.brand_known === false ? 'No' : '-'}
+              // B8-10: a count with its denominator and its range, no verdict from one answer per assistant
+              hint={num(brand.answered) ? `assistants asked directly named you${arr<number>(brand.ci).length === 2 ? ` · 95% range ${pct(arr<number>(brand.ci)[0], 0)} to ${pct(arr<number>(brand.ci)[1], 0)}` : ''}` : undefined}
             />
           </>
         }
@@ -131,7 +131,7 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <MetricCard icon={<Sparkles />} label="Google AI Overviews shown" value={pctCount(m.aio_presence)} meta={`on your buyer questions · cite you ${pct(m.aio_citation_rate)}`} />
         <MetricCard icon={<MessagesSquare />} label="Answers collected" value={`${num(m.answered) ?? 0} / ${num(m.asked) ?? 0}`} meta={num(m.errors) ? `${num(m.errors)} failed and will be retried` : 'questions × assistants'} />
-        <MetricCard icon={<ListOrdered />} label="Average rank when named" value={num(m.avg_rank) ? `#${num(m.avg_rank)}` : '–'} meta="position in the answer's list of brands" className="col-span-2 lg:col-span-1" />
+        <MetricCard icon={<ListOrdered />} label="Average rank when named" value={num(m.avg_rank) ? `#${num(m.avg_rank)}` : '-'} meta="position in the answer's list of brands" className="col-span-2 lg:col-span-1" />
       </div>
       <AiV49Blocks p={p} domain={domain} />
 
@@ -222,7 +222,7 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
                         </span>
                       </td>
                       <td className="px-2 py-2 text-right tabular">{pct(e.citation_rate)}</td>
-                      <td className="px-2 py-2">{e.knows_brand === true ? <StatusBadge tone="good">Yes</StatusBadge> : e.knows_brand === false ? <StatusBadge tone="warning">No</StatusBadge> : <span className="text-xs text-ink-3">–</span>}</td>
+                      <td className="px-2 py-2">{e.knows_brand === true ? <StatusBadge tone="good">Yes</StatusBadge> : e.knows_brand === false ? <StatusBadge tone="warning">No</StatusBadge> : <span className="text-xs text-ink-3">-</span>}</td>
                     </tr>
                   );
                 })}
@@ -303,7 +303,7 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
         <Block
           icon={<Users />}
           title="Market view"
-          description={`Who AI mentions most for “${str(market.keyword)}” across all its answers (${n(market.total_mentions)} mentions, ${n(market.ai_search_volume)} AI searches)${market.carried === true ? ' · monthly data' : ''}`}
+          description={`Who AI mentions most for "${str(market.keyword)}" across all its answers (${n(market.total_mentions)} mentions, ${n(market.ai_search_volume)} AI searches)${market.carried === true ? ' · monthly data' : ''}`}
         >
           <ShareBars items={objs(market.top).map((t) => ({ label: str(t.domain), value: num(t.mentions) ?? 0 }))} valueFormat={(v) => `${n(v)} mentions`} />
           {market.you == null && <p className="mt-3 text-[13px] text-ink-3">{domain || 'Your site'} is not among the domains AI mentions for this topic yet.</p>}
@@ -330,16 +330,16 @@ function AiV49Blocks({ p, domain }: { p: P; domain: string }) {
     <div className="space-y-5">
       <Facts
         items={[
-          { icon: <Gauge />, label: 'AI visibility score', value: num(m.visibility_score) != null ? `${Math.round(num(m.visibility_score)!)}/100` : '–', hint: 'named, how high in the list, linked; weighted by demand' },
-          { icon: <Smile />, label: 'Sentiment', value: num(m.sentiment_score) != null ? `${num(m.sentiment_score)! > 0 ? '+' : ''}${num(m.sentiment_score)}` : '–', hint: `${num(per.positive) ?? 0} positive · ${num(per.negative) ?? 0} negative` },
-          // G10 (fix plan of 2026-10-11): "not checked" is not "nothing wrong" — without a fact sheet on file no claim can be judged
+          { icon: <Gauge />, label: 'AI visibility score', value: num(m.visibility_score) != null ? `${Math.round(num(m.visibility_score)!)}/100` : '-', hint: 'named, how high in the list, linked; weighted by demand' },
+          { icon: <Smile />, label: 'Sentiment', value: num(m.sentiment_score) != null ? `${num(m.sentiment_score)! > 0 ? '+' : ''}${num(m.sentiment_score)}` : '-', hint: `${num(per.positive) ?? 0} positive · ${num(per.negative) ?? 0} negative` },
+          // G10 (fix plan of 2026-10-11): "not checked" is not "nothing wrong", without a fact sheet on file no claim can be judged
           {
             icon: <AlertTriangle />,
             label: 'Wrong claims',
             value: str(per.fact_check) && str(per.fact_check) !== 'checked' ? 'not checked' : n(m.accuracy_issues ?? 0),
             hint: str(per.fact_check) && str(per.fact_check) !== 'checked' ? str(per.fact_check_note) || 'fill in your business profile and the next run checks every answer against it' : 'about you, against your business profile',
           },
-          { icon: <PieChart />, label: 'Market-wide share', value: num(idx.sov) != null ? pct(idx.sov) : '–', hint: num(idx.answers_citing_you) ? `${n(idx.answers_citing_you)} AI answers cite you` : 'AI-answer database, monthly' },
+          { icon: <PieChart />, label: 'Market-wide share', value: num(idx.sov) != null ? pct(idx.sov) : '-', hint: num(idx.answers_citing_you) ? `${n(idx.answers_citing_you)} AI answers cite you` : 'AI-answer database, monthly' },
         ]}
       />
       {t.connected === true && (
@@ -348,7 +348,7 @@ function AiV49Blocks({ p, domain }: { p: P; domain: string }) {
             items={[
               { icon: <Users />, label: 'AI visits', value: n(t.sessions), hint: num(t.change_pct) != null ? `${num(t.change_pct)! >= 0 ? '+' : ''}${num(t.change_pct)}% vs before` : undefined },
               { label: 'Key events', value: n(t.key_events), hint: `${pct(t.conv_rate)} convert (organic ${pct(t.organic_conv_rate)})` },
-              { label: 'Revenue', value: num(t.revenue) ? n(t.revenue) : '–' },
+              { label: 'Revenue', value: num(t.revenue) ? n(t.revenue) : '-' },
               { label: 'Share of all visits', value: pct(t.share_of_sessions) },
             ]}
           />
@@ -406,7 +406,7 @@ function AiV49Blocks({ p, domain }: { p: P; domain: string }) {
   );
 }
 
-/** G6 (2026-10-18): the weekly report's segments — topic, buyer role and market, each rate with its 95% range or "too few answers",
+/** G6 (2026-10-18): the weekly report's segments, topic, buyer role and market, each rate with its 95% range or "too few answers",
  *  the moves a Benjamini-Hochberg screen called real, and how precise the panel is. Absent on reports before G6. */
 function AiSegmentBlocks({ p }: { p: P }) {
   const seg = obj(p.segments);
@@ -420,7 +420,7 @@ function AiSegmentBlocks({ p }: { p: P }) {
     return (
       <p className="text-[13px] text-ink-2">
         <span className="font-medium text-ink">{title}: </span>
-        {r.map((s) => (s.enough ? `${str(s.key)} ${num(s.rate)}% (${(s.ci as number[] | undefined)?.join('–') ?? ''}%, ${n(s.n)} answers)` : `${str(s.key)} too few answers (${n(s.n)})`)).join(' · ')}
+        {r.map((s) => (s.enough ? `${str(s.key)} ${num(s.rate)}% (${(s.ci as number[] | undefined)?.join('-') ?? ''}%, ${n(s.n)} answers)` : `${str(s.key)} too few answers (${n(s.n)})`)).join(' · ')}
       </p>
     );
   };
@@ -451,14 +451,14 @@ export function AiPulseReport({ report }: { report: ReportDetail }) {
     <Stagger className="space-y-5">
       <ReportHero
         report={report}
-        title={alerts.length ? `${alerts.length} real ${alerts.length === 1 ? 'change' : 'changes'} in today’s AI answers` : 'No real change in today’s AI answers'}
+        title={alerts.length ? `${alerts.length} real ${alerts.length === 1 ? 'change' : 'changes'} in today's AI answers` : 'No real change in today\'s AI answers'}
         description={`Named in ${pct(p.mention_rate)} of ${n(p.samples)} answers from ChatGPT, Gemini and Google AI Mode (and Copilot when chosen).`}
         aside={num(p.visibility_score) != null ? <ScoreMark score={Math.round(num(p.visibility_score)!)} label="Visibility score" /> : undefined}
         stats={
           <>
-            <HeroStat label="Named today" value={pctCount(p.mention_rate)} hint={ci.length === 2 ? `95% range ${pct(ci[0], 0)}–${pct(ci[1], 0)}` : undefined} />
+            <HeroStat label="Named today" value={pctCount(p.mention_rate)} hint={ci.length === 2 ? `95% range ${pct(ci[0], 0)} to ${pct(ci[1], 0)}` : undefined} />
             <HeroStat label="Your pages cited" value={pctCount(p.citation_rate)} />
-            <HeroStat label="Visibility score" value={num(p.visibility_score) != null ? `${Math.round(num(p.visibility_score)!)}/100` : '–'} />
+            <HeroStat label="Visibility score" value={num(p.visibility_score) != null ? `${Math.round(num(p.visibility_score)!)}/100` : '-'} />
             <HeroStat label="Answers" value={n(p.samples)} hint="ChatGPT, Gemini and Google AI Mode" />
           </>
         }
@@ -492,9 +492,9 @@ export function AiPulseReport({ report }: { report: ReportDetail }) {
 }
 
 
-const EARNED_KIND: Record<string, string> = { list: '“Best of” list', article: 'Article', news: 'News', review: 'Review site', forum: 'Forum thread', video: 'Video', social: 'Social post', official: 'Official list', encyclopedia: 'Encyclopedia', competitor: 'Competitor page' };
+const EARNED_KIND: Record<string, string> = { list: '"Best of" list', article: 'Article', news: 'News', review: 'Review site', forum: 'Forum thread', video: 'Video', social: 'Social post', official: 'Official list', encyclopedia: 'Encyclopedia', competitor: 'Competitor page' };
 
-/** v4.12 (AI_GROWTH_SPEC.md): the weekly AI growth loop — done for you, what to do next, earned media, key pages, questions to win. */
+/** v4.12 (AI_GROWTH_SPEC.md): the weekly AI growth loop, done for you, what to do next, earned media, key pages, questions to win. */
 export function AiGrowthReport({ report }: { report: ReportDetail }) {
   const p = report.payload;
   const sub = obj(p.submitted), bing = obj(sub.bing), inx = obj(sub.indexnow);
@@ -564,7 +564,7 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
                   <span className="block text-xs text-ink-3">{EARNED_KIND[str(e.kind)] ?? str(e.kind)} · cited {n(e.citations)}× · {strs(e.engines).map((k) => engineName(k, {})).join(', ')}</span>
                   <span className="block text-ink-2">{str(e.action)}</span>
                 </span>
-                <span className="shrink-0 text-xs text-ink-2">{e.mentions_us === true ? <StatusBadge tone="good">Names you</StatusBadge> : strs(e.competitors_named).join(', ') || '—'}</span>
+                <span className="shrink-0 text-xs text-ink-2">{e.mentions_us === true ? <StatusBadge tone="good">Names you</StatusBadge> : strs(e.competitors_named).join(', ') || '-'}</span>
               </li>
             ))}
           </ul>
@@ -579,7 +579,7 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
                   <ExternalLink href={str(x.url)}>{shortUrl(str(x.url))}</ExternalLink>
                   <span className="block text-ink-2">{strs(x.issues)[0] ?? 'Ready to be quoted'}</span>
                 </span>
-                <span className="shrink-0 tabular text-ink-2">{(num(x.status) ?? 0) >= 200 && (num(x.status) ?? 0) < 300 ? `${num(x.score) ?? 0}/100` : `HTTP ${num(x.status) ?? '–'}`}</span>
+                <span className="shrink-0 tabular text-ink-2">{(num(x.status) ?? 0) >= 200 && (num(x.status) ?? 0) < 300 ? `${num(x.score) ?? 0}/100` : `HTTP ${num(x.status) ?? '-'}`}</span>
               </li>
             ))}
           </ul>

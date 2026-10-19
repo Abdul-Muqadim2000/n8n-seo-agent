@@ -30,7 +30,7 @@ import { baseUrlFor, senderFor } from './portalMail';
 import { createShareForDelivery } from './shareLinks';
 
 /**
- * B-R1 — report delivery (benchmark programme 2026-10-15, area 12 §4 G-1, §5(a) a3 and §7).
+ * B-R1, report delivery (benchmark programme 2026-10-15, area 12 §4 G-1, §5(a) a3 and §7).
  *
  * Until now a finished report waited in the app to be visited. All six benchmarked tools push it instead, and the area's own
  * conclusion is blunt: *"until a Monday report arrives somewhere the customer already is... every other improvement in this area is
@@ -39,7 +39,7 @@ import { createShareForDelivery } from './shareLinks';
  * be forwarded to somebody with no account.
  *
  * What it will not do is the part worth reading twice. `deliveryDecision` (in `@seo/shared`, tested on its own) refuses any report
- * the run marked not ready — a failed quality gate, a refused plan, a verdict the engine could not check, evidence it could not
+ * the run marked not ready, a failed quality gate, a refused plan, a verdict the engine could not check, evidence it could not
  * read. A held report keeps a row in the delivery log with its reason, so it is visible without being pushed. Refusing is the
  * behaviour the benchmark names as ours to keep, not a limitation to work around.
  *
@@ -210,7 +210,7 @@ async function sendEmail(org: OrgRow, s: DeliverySettings, payload: DeliveryPayl
       subject: deliverySubject(payload),
       lines: deliveryLines(payload),
       action: payload.reports.length === 1 ? { label: 'Open the report', url: payload.reports[0]!.shareUrl ?? payload.reports[0]!.url } : undefined,
-      footer: 'You receive this because your company turned report delivery on. An owner can change it in Settings → Report delivery.',
+      footer: 'You receive this because your company turned report delivery on. An owner can change it in Settings > Report delivery.',
       reports: payload.reports,
       attachments,
       // G5: an agency's client hears from the agency (name, reply-to, its own verified mailbox)
@@ -327,7 +327,7 @@ export async function deliverReport(orgId: string, reportId: string, log: Log, o
   // the readiness rule applies even to a delivery somebody asked for by hand: `force` skips the settings, never the refusal
   const decision = opts.force ? deliveryDecision(candidateOf(report)) : deliveryDecisionFor(candidateOf(report), s);
   if (!decision.deliver) {
-    // a report held because delivery is off at all is not worth a row in the log — there is nothing to tell anyone about
+    // a report held because delivery is off at all is not worth a row in the log, there is nothing to tell anyone about
     if (decision.code !== 'delivery_off' && decision.code !== 'no_channel' && decision.code !== 'stage_not_chosen')
       await record({ orgId, reportId, channel: s.webhook.enabled ? 'webhook' : 'email', status: 'held', kind, reason: decision.reason, title: report.title });
     return { delivered: false, reason: decision.reason, outcomes: [] };
@@ -485,7 +485,7 @@ export async function sendTest(org: OrgRow, log: Log): Promise<SendOutcome[]> {
         reportId: '00000000-0000-0000-0000-000000000000',
         stage: 'site_tracker',
         stageLabel: stageLabel('site_tracker'),
-        title: 'Test delivery — this is what a report looks like',
+        title: 'Test delivery: this is what a report looks like',
         siteDomain: null,
         receivedAt: new Date().toISOString(),
         scheduled: true,

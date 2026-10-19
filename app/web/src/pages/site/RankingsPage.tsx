@@ -58,7 +58,7 @@ interface Kw {
   best: number | null;
   lastChecked: string | null;
   history: RankPoint[];
-  /** G6: the results page of the latest check — the features it showed, who is above us, the share of voice, the mobile reading */
+  /** G6: the results page of the latest check, the features it showed, who is above us, the share of voice, the mobile reading */
   serp?: SerpReading | null;
 }
 
@@ -99,7 +99,7 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
       <EmptyState
         icon={<Activity className="size-5" />}
         title="No keywords tracked yet"
-        description="Plan a keyword ladder — winnable long-tail pages first, then the head term — and every page is checked on Google weekly. Or add the keywords you care about to weekly tracking."
+        description="Plan a keyword ladder (winnable long-tail pages first, then the head term) and every page is checked on Google weekly. Or add the keywords you care about to weekly tracking."
         action={
           <>
             <ToolButton mode="ladder" variant="primary">
@@ -143,8 +143,8 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
         stats={
           <>
             <HeroStat label="Keywords checked weekly" value={<CountUp value={all.length} />} hint={`${plural(ladderPages, 'ladder page')} · ${plural(d.keywords.length, 'site keyword')}${lastCheck ? ` · last check ${fmtAgo(lastCheck)}` : ''}`} />
-            <HeroStat label="In the top 10" value={<CountUp value={top10} />} hint={`${counts.top3} in the top 3 — page 1 of Google`} />
-            <HeroStat label="In the top 50" value={<CountUp value={top50} />} hint={`${counts.top20} at 11–20, close to page 1`} />
+            <HeroStat label="In the top 10" value={<CountUp value={top10} />} hint={`${counts.top3} in the top 3 (page 1 of Google)`} />
+            <HeroStat label="In the top 50" value={<CountUp value={top50} />} hint={`${counts.top20} at 11-20, close to page 1`} />
             <HeroStat
               label="Movement since the last check"
               value={
@@ -252,7 +252,7 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
           onOpenChange={(o) => !o && setDialog(null)}
           wide
           title={dialog.keyword}
-          description={dialog.source === 'ladder' ? `Ladder “${dialog.ladder}”, rung ${dialog.rung}` : 'Site keyword from weekly tracking'}
+          description={dialog.source === 'ladder' ? `Ladder "${dialog.ladder}", rung ${dialog.rung}` : 'Site keyword from weekly tracking'}
           footer={
             can('member') && (
               <ButtonLink to={tool('keyword', { keyword: dialog.keyword, ...(dialog.url && ranked(dialog.latest) ? { existingPageUrl: dialog.url } : {}) })} size="sm">
@@ -267,7 +267,7 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
             items={[
               { label: 'Latest position', value: <span className="inline-flex items-center gap-2"><PositionPill p={dialog.latest} /> <PositionMove prev={dialog.prev} cur={dialog.latest} /></span> },
               { label: 'Best position', value: posText(dialog.best) },
-              { label: 'Ranking page', value: dialog.url ? <ExternalLink href={dialog.url}>{urlPath(dialog.url)}</ExternalLink> : '–' },
+              { label: 'Ranking page', value: dialog.url ? <ExternalLink href={dialog.url}>{urlPath(dialog.url)}</ExternalLink> : '-' },
               { label: 'Last checked', value: dialog.lastChecked ? fmtDate(dialog.lastChecked) : 'not checked yet' },
               ...(dialog.serp?.mobile ? [{ label: 'On a phone', value: <span className="inline-flex items-center gap-2"><PositionPill p={dialog.serp.mobile.position} /> <span className="text-[13px] text-ink-3">checked {fmtDate(dialog.serp.mobile.checkedAt)}</span></span> }] : []),
               ...(dialog.serp && dialog.serp.shareOfVoice != null ? [{ label: 'Share of voice', value: <span className="inline-flex items-center gap-2"><ShareOfVoice value={dialog.serp.shareOfVoice} /> <span className="text-[13px] text-ink-3">estimated, not measured clicks</span></span> }] : []),
@@ -287,7 +287,7 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
 
 /** The hero's headline: how many keywords reach page 1 (or the top 50) and how they moved. */
 function rankingsHeadline(n: number, top10: number, top50: number, up: number, down: number): string {
-  const moved = up || down ? ` — ${up} up, ${down} down` : '';
+  const moved = up || down ? `: ${up} up, ${down} down` : '';
   if (top10) return `${top10} of ${plural(n, 'keyword')} on page 1 of Google${moved}`;
   if (top50) return `${top50} of ${plural(n, 'keyword')} in the top 50, none on page 1 yet${moved}`;
   return `None of your ${plural(n, 'keyword')} is in the top 50 yet${moved}`;
@@ -313,8 +313,8 @@ function NextRung({ ladders }: { ladders: Ladder[] }) {
   return (
     <HeroNextStep
       icon={written ? <Send /> : <PenSquare />}
-      eyebrow={`Next step · ladder “${l.headKeyword}”, rung ${r.rung}`}
-      title={written ? `Publish “${r.keyword}” and report its URL` : `${r.pageExists ? 'Improve' : 'Write'} the page for “${r.keyword}”`}
+      eyebrow={`Next step · ladder "${l.headKeyword}", rung ${r.rung}`}
+      title={written ? `Publish "${r.keyword}" and report its URL` : `${r.pageExists ? 'Improve' : 'Write'} the page for "${r.keyword}"`}
       actions={
         <>
           {written ? (
@@ -365,7 +365,7 @@ function HistoryExplorer({ all, loading, className }: { all: Kw[]; loading: bool
                 value=""
                 onChange={(e) => e.target.value && setPicked((p) => [...p, { keyword: e.target.value, slot: freeSlot() }])}
               >
-                <option value="">Add a keyword…</option>
+                <option value="">Add a keyword...</option>
                 {options.map((k) => (
                   <option key={k.id} value={k.keyword}>
                     {k.keyword} ({posText(k.latest)})
@@ -465,7 +465,7 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
             <Flag className="size-4" />
           </span>
           <div className="pt-1">
-            <h4 className="text-sm font-semibold text-ink">Goal — “{ladder.headKeyword}”</h4>
+            <h4 className="text-sm font-semibold text-ink">Goal: "{ladder.headKeyword}"</h4>
             <p className="text-xs text-ink-3">The head term: every rung below links up to its top page and builds the authority to rank for it.</p>
           </div>
         </li>
@@ -487,10 +487,10 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
               <div className="flex flex-wrap items-baseline gap-x-2 pt-1">
                 <h4 className="text-sm font-semibold text-ink">
                   Rung {rung}
-                  {rung === 1 ? ' — long-tail' : rung === top && groups.length > 1 ? ' — closest to the head term' : ''}
+                  {rung === 1 ? ' (long-tail)' : rung === top && groups.length > 1 ? ' (closest to the head term)' : ''}
                 </h4>
                 <span className="text-xs text-ink-3">
-                  {months ? `aim: months ${months.replace('-', '–')} · ` : ''}
+                  {months ? `aim: months ${months.replace('-', '-')} · ` : ''}
                   {rows.filter((r) => r.status === 'published').length} of {rows.length} published
                 </span>
               </div>
@@ -588,7 +588,7 @@ function featureChips(serp: SerpReading | null | undefined, fallback: string[]):
 }
 
 function ShareOfVoice({ value }: { value: number | null }) {
-  if (value == null) return <span className="text-[13px] text-ink-3">–</span>;
+  if (value == null) return <span className="text-[13px] text-ink-3">-</span>;
   return <span className="tabular text-[13px] text-ink-2" title="An estimate of the clicks page 1 offers, weighted by position and by the features on the page. Not measured clicks.">{value}%</span>;
 }
 
@@ -676,19 +676,19 @@ function KeywordTable({ rows, onOpen }: { rows: TrackedKeyword[]; onOpen: (k: Tr
       header: 'Ranking page',
       hideOnMobile: true,
       sortValue: (r) => r.url,
-      cell: (r) => (r.url ? <span className="block max-w-[14rem] truncate text-[13px] text-ink-2" title={r.url}>{urlPath(r.url)}</span> : <span className="text-ink-3">–</span>),
+      cell: (r) => (r.url ? <span className="block max-w-[14rem] truncate text-[13px] text-ink-2" title={r.url}>{urlPath(r.url)}</span> : <span className="text-ink-3">-</span>),
     },
     { key: 'serp', header: 'Search features', hideOnMobile: true, cell: (r) => <Chips items={featureChips(r.serp, r.serpFeatures)} max={2} /> },
     { key: 'sov', header: 'Share of voice', align: 'right', hideOnMobile: true, sortValue: (r) => r.serp?.shareOfVoice ?? null, cell: (r) => <ShareOfVoice value={r.serp?.shareOfVoice ?? null} /> },
-    { key: 'mobile', header: 'Mobile', align: 'right', hideOnMobile: true, sortValue: (r) => posSort(r.serp?.mobile?.position ?? null), cell: (r) => (r.serp?.mobile ? <PositionPill p={r.serp.mobile.position} /> : <span className="text-[13px] text-ink-3">–</span>) },
-    { key: 'checked', header: 'Checked', hideOnMobile: true, sortValue: (r) => r.lastChecked ?? '', cell: (r) => <span className="whitespace-nowrap text-[13px] text-ink-3">{r.lastChecked ? fmtAgo(r.lastChecked) : '–'}</span> },
+    { key: 'mobile', header: 'Mobile', align: 'right', hideOnMobile: true, sortValue: (r) => posSort(r.serp?.mobile?.position ?? null), cell: (r) => (r.serp?.mobile ? <PositionPill p={r.serp.mobile.position} /> : <span className="text-[13px] text-ink-3">-</span>) },
+    { key: 'checked', header: 'Checked', hideOnMobile: true, sortValue: (r) => r.lastChecked ?? '', cell: (r) => <span className="whitespace-nowrap text-[13px] text-ink-3">{r.lastChecked ? fmtAgo(r.lastChecked) : '-'}</span> },
   ];
   return (
     <>
       <DataTable rows={rows} columns={columns} rowKey={(r, i) => `${r.keyword}|${i}`} initialSort={{ key: 'latest', dir: 'asc' }} searchable searchPlaceholder="Search keywords" onRowClick={onOpen} dense />
       <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-3">
         <Info className="mt-px size-3.5 shrink-0" aria-hidden />
-        “&gt;50” means not in the top 50 results; “check failed” is retried next week. Select a row for its history. {compactNumber(rows.filter((r) => ranked(r.latestPosition)).length)} of {rows.length} rank in the top 50. Share of voice is an estimate of the clicks page 1 offers, not measured clicks; mobile is checked weekly for the main keywords of a ladder.
+        "&gt;50" means not in the top 50 results; "check failed" is retried next week. Select a row for its history. {compactNumber(rows.filter((r) => ranked(r.latestPosition)).length)} of {rows.length} rank in the top 50. Share of voice is an estimate of the clicks page 1 offers, not measured clicks; mobile is checked weekly for the main keywords of a ladder.
       </p>
     </>
   );

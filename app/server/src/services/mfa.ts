@@ -108,7 +108,7 @@ export async function beginTotp(user: UserRow): Promise<TotpEnrolment> {
 
 /**
  * Step 2: the first code from the app switches the method on. Returns fresh recovery codes when the person had no unused ones (their
- * first factor) — shown once.
+ * first factor), shown once.
  */
 export async function confirmTotp(user: UserRow, code: string, nowMs = Date.now()): Promise<{ recoveryCodes: string[] | null }> {
   if (!user.mfaTotpPending) throw badRequest('Start again: scan a new QR code first.');

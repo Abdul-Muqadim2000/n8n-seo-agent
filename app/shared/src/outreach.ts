@@ -22,10 +22,10 @@ export interface LinkImpactRow extends DtRow {
   position: number | null; clicks: number | null; page_change: number | null; control_change: number | null; control_spread: number | null; effect: number | null;
   /** likely_helped | possibly_helped | no_effect_yet | too_early | cant_tell */
   verdict: string; note: string; keyword: string; updated_at: string;
-  /** G12 (2026-10-13): what was read — `link` (a won link; ref_domain set) or `page_change` (a page that went live or was rewritten).
+  /** G12 (2026-10-13): what was read, `link` (a won link; ref_domain set) or `page_change` (a page that went live or was rewritten).
    * Rows written before this change have neither, and are link readings. */
   kind?: string;
-  /** G12: a page change says what changed — published | rewritten */
+  /** G12: a page change says what changed, published | rewritten */
   change?: string;
 }
 export const LINK_OUTREACH_TABLE_COLUMNS = ['site_id', 'domain', 'prospect_domain', 'type', 'status', 'score', 'fit', 'fit_reason', 'checks_json', 'page_url', 'page_title', 'evidence', 'contacts_json',
@@ -38,7 +38,7 @@ export const REPLY_CLASSES = ['says_linked', 'interested', 'question', 'wants_pa
 export type ReplyClass = (typeof REPLY_CLASSES)[number];
 export const REPLY_LABEL: Record<ReplyClass, string> = { says_linked: 'Says the link is live', interested: 'Interested', question: 'Has a question', wants_payment: 'Asks for payment', link_swap: 'Asks for a link swap',
   not_now: 'Not now', declined: 'Declined', unsubscribe: 'Asked not to be contacted', wrong_person: 'Wrong person', out_of_office: 'Out of office', other: 'Replied' };
-/** scheduled (approved, waiting for the window) → active (sent, waiting for the next step) → replied | bounced | stopped | won | finished (no reply) | failed */
+/** scheduled (approved, waiting for the window) -> active (sent, waiting for the next step) -> replied | bounced | stopped | won | finished (no reply) | failed */
 export const SEQUENCE_STATUSES = ['scheduled', 'active', 'paused', 'replied', 'bounced', 'stopped', 'won', 'finished', 'failed'] as const;
 export type SequenceStatus = (typeof SEQUENCE_STATUSES)[number];
 export const SEQUENCE_LABEL: Record<SequenceStatus, string> = { scheduled: 'Scheduled', active: 'Sent, waiting', paused: 'Paused', replied: 'Replied', bounced: 'Bounced', stopped: 'Stopped', won: 'Won', finished: 'No reply', failed: 'Failed' };
@@ -48,7 +48,7 @@ export interface OutreachStep {
   step: number; waitDays: number; subject: string; body: string;
   /** L7: the other subject the writer wrote for this pitch, in the other style (only on the first step, and only when it passed the same checks) */
   subjectAlt?: string;
-  /** L7: which of the two styles this pitch carries — A names what we found, B asks the one question */
+  /** L7: which of the two styles this pitch carries, A names what we found, B asks the one question */
   variant?: string;
 }
 export interface OutreachContact { email: string; kind: 'person' | 'editorial' | 'general' | 'other'; own: boolean; sourceUrl: string }
@@ -94,7 +94,7 @@ export interface DnsCheck { spf: 'pass' | 'missing' | 'weak'; dmarc: 'pass' | 'm
 export interface LinkSettings { mode: 'approve' | 'auto'; mailboxId: string | null; autoDailyMax: number }
 export const DEFAULT_LINK_SETTINGS: LinkSettings = { mode: 'approve', mailboxId: null, autoDailyMax: 5 };
 export interface LinkBuildingKpis { wonMonth: number; wonAll: number; sentMonth: number; contactedDomains: number; replied: number; positive: number;
-  /** B11-1: null until the sample reaches `OUTREACH_RATE_MIN` — the page shows `rates.*.note` instead of an invented percentage */
+  /** B11-1: null until the sample reaches `OUTREACH_RATE_MIN`, the page shows `rates.*.note` instead of an invented percentage */
   replyRate: number | null; winRate: number | null; bounceRate: number | null;
   /** B11-1: the same three figures with what they were counted over and whether they may be read at all */
   rates: { reply: RateRead; win: RateRead; bounce: RateRead };
@@ -111,10 +111,10 @@ export interface LinkBuildingData {
   lastRun: string | null; suppressed: number; canSend: { ok: boolean; why: string };
 }
 
-// ---- L7: subject-line A/B (mirrors n8n/seo-agent/v5/code/_ab.js — the two must change together) ----
-// The engine gives every batch two subjects in different styles and hands them out in turn (A, B, A, B …), so both go out about as often.
+// ---- L7: subject-line A/B (mirrors n8n/seo-agent/v5/code/_ab.js, the two must change together) ----
+// The engine gives every batch two subjects in different styles and hands them out in turn (A, B, A, B ...), so both go out about as often.
 // Here they are read back: first e-mails sent per style, people who replied, and the reply rate. **Under SUBJECT_AB_MIN_SENDS first
-// e-mails per style nothing may be called better** — at a dozen sends a few points of difference is noise, so the counts are shown with
+// e-mails per style nothing may be called better**, at a dozen sends a few points of difference is noise, so the counts are shown with
 // "not enough sends yet" instead of a winner. Measuring never changes what is sent: a person approves every pitch.
 export const SUBJECT_AB_MIN_SENDS = 30;
 export const SUBJECT_AB_MIN_GAP = 2;
@@ -158,7 +158,7 @@ export function subjectAbStats(sequences: SubjectAbInput[]): SubjectAbRead {
 }
 
 // ---- rules ----
-/** first e-mails a mailbox may send today: 5 in its first week, 10 in the second, then the set cap (at most 30) — steady volume builds trust */
+/** first e-mails a mailbox may send today: 5 in its first week, 10 in the second, then the set cap (at most 30), steady volume builds trust */
 export function warmupCap(startedAt: Date, now: Date, cap: number): number {
   const weeks = Math.floor((now.getTime() - startedAt.getTime()) / (7 * 864e5));
   return Math.max(0, Math.min(30, weeks <= 0 ? Math.min(5, cap) : weeks === 1 ? Math.min(10, cap) : cap));
@@ -204,7 +204,7 @@ export function consentGate(country: string, email: string): ConsentGate {
 /** the lines every e-mail ends with: who is writing, from where, and how to stop it (CAN-SPAM, GDPR Art. 14, PECR)
  *
  *  **B11-3 (2026-10-15, benchmark area 11).** The postal address used to go out on the FIRST e-mail only, and the two follow-ups
- *  carried the signature and the opt-out without it. CAN-SPAM's requirements are written per **message** — "Include your valid
+ *  carried the signature and the opt-out without it. CAN-SPAM's requirements are written per **message**, "Include your valid
  *  physical postal address" is one of the seven, and the Act's definition of a commercial electronic mail message covers every
  *  message whose primary purpose is commercial advertising, not only the first one in a thread
  *  (https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business). A link pitch is such a message and so
@@ -214,7 +214,7 @@ export function consentGate(country: string, email: string): ConsentGate {
  */
 export function footerLines(m: { name: string; title: string; company: string; postalAddress: string }, opts: { firstEmail: boolean; country: string; foundOn?: string }): string[] {
   const who = [m.name, m.title].filter(Boolean).join(', ');
-  const lines = ['', '—', [who, m.company].filter(Boolean).join(' · ')];
+  const lines = ['', '--', [who, m.company].filter(Boolean).join(' · ')];
   if (m.postalAddress) lines.push(m.postalAddress);   // B11-3: every commercial message, not only the first
   if (opts.firstEmail && EU_UK.has(String(opts.country || '').toUpperCase()) && opts.foundOn) lines.push(`I found your address on ${opts.foundOn}.`);
   lines.push(opts.firstEmail ? 'If you would rather not hear from me, reply "no" and I won\'t write again.' : 'Reply "no" and I won\'t write again.');
@@ -222,8 +222,8 @@ export function footerLines(m: { name: string; title: string; company: string; p
 }
 
 // ---- B11-1 (2026-10-15, benchmark area 11): a rate is measured, or it says it is not yet ------------------------------------
-// The Link building page printed a reply rate, a win rate and a bounce rate from whatever had been sent — "33.3%" off one reply in
-// three, and a red "50.0% bounced" badge off a single bounce in two e-mails — on the same screen as the subject-line A/B, which
+// The Link building page printed a reply rate, a win rate and a bounce rate from whatever had been sent, "33.3%" off one reply in
+// three, and a red "50.0% bounced" badge off a single bounce in two e-mails, on the same screen as the subject-line A/B, which
 // refuses to name a better subject under 30 first e-mails per style. The discipline was in one corner of the page and nowhere else
 // (INVARIANTS rule 1: a figure is measured, modelled, or not available, and says which).
 // The floors are derived, not chosen:
@@ -231,7 +231,7 @@ export function footerLines(m: { name: string; title: string; company: string; p
 //    sends the rate cannot land on the threshold it is judged against: it can only be 0% or something far above it.
 //  * **reply, 20.** The smallest list size the published data even separates is 21-50 (Hunter, State of Cold Email, 31M e-mails:
 //    6.2% for lists of 21-50 against 2.4% for 500+). Under 20 first e-mails there is no rate to compare with it.
-//  * **win, 25 contacted sites.** The only published link-building funnel with its arithmetic shown is Hunter's own — 1,000
+//  * **win, 25 contacted sites.** The only published link-building funnel with its arithmetic shown is Hunter's own, 1,000
 //    prospects e-mailed, ~50 replies, ~13 published links, a 1.3% prospect-to-backlink rate
 //    (https://hunter.io/blog/link-building-outreach-guide/, April 2026). At rates like that even 25 sites expects well under one
 //    link, so the figure is shown with that base rate beside it and never on its own.
@@ -241,7 +241,7 @@ export type OutreachRateKind = keyof typeof OUTREACH_RATE_MIN;
 export interface RateRead {
   /** the percentage, or null when the sample is too small to read one from */
   value: number | null;
-  /** measured (enough sample) or not available (not enough yet) — never modelled: this one is counted or it is withheld */
+  /** measured (enough sample) or not available (not enough yet), never modelled: this one is counted or it is withheld */
   basis: 'measured' | 'unavailable';
   hits: number;
   sample: number;
@@ -257,7 +257,7 @@ export function outreachRate(kind: OutreachRateKind, hits: number, sample: numbe
   const counted = `${h} of ${n} ${n === 1 ? unit.replace(/s$/, '') : unit}`;
   if (n < min) {
     return { value: null, basis: 'unavailable', hits: h, sample: n, min,
-      note: n === 0 ? `Nothing to count yet: ${unit} start this at ${min}.` : `${counted} so far — too few to read a rate from (${min} needed).` };
+      note: n === 0 ? `Nothing to count yet: ${unit} start this at ${min}.` : `${counted} so far, too few to read a rate from (${min} needed).` };
   }
   return { value: Math.round((1000 * Math.min(h, n)) / n) / 10, basis: 'measured', hits: h, sample: n, min, note: `${counted}.` };
 }
@@ -297,12 +297,12 @@ export function parseReturnDate(text: string, now: Date): Date | null {
 
 // ---- which stored outreach draft may still be offered (P34-1, 2026-10-12) ----
 // The AI Growth report of 2026-10-12 counted eight "outreach drafts written" and printed a pitch to a government portal signed with the
-// website's domain — drafts written on 2026-10-02, before the gates that refuse government sites, competitors and bare homepages and
+// website's domain, drafts written on 2026-10-02, before the gates that refuse government sites, competitors and bare homepages and
 // that take the business name from the site model. Nothing had written them that week: the counter read the stored prospect row.
 // Every writer now stamps `drafted_at`. A stored draft with no stamp, or one from before the gates, is **superseded**: it is not shown,
 // not counted and not offered to the owner; the engine clears it on its next run and says so in the row's note. A draft that was
 // already sent (the prospect is contacted or won) is part of the record and is never withdrawn.
-// The engine applies the identical rule in n8n/seo-agent/v5/code/_drafts.js — the two must stay in step.
+// The engine applies the identical rule in n8n/seo-agent/v5/code/_drafts.js, the two must stay in step.
 export const DRAFT_GATES_AT = '2026-10-12';
 export interface StoredDraftRow {
   outreach_subject?: string | null; outreach_body?: string | null; drafted_at?: string | null;

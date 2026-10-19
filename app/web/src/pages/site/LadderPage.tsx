@@ -141,8 +141,8 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
           <div className="space-y-1 rounded-xl border border-warning/40 bg-warning-soft/50 px-4 py-3">
             {(l.overlaps ?? []).map((o) => (
               <WarnLine key={o.ladderId}>
-                Overlap: shares {o.keywords.length === 1 ? 'a keyword' : `${o.keywords.length} keywords`} with the ladder “{o.head}” ({o.keywords.slice(0, 4).join(', ')}
-                {o.keywords.length > 4 ? ', …' : ''}). Two pages for one search compete with each other.
+                Overlap: shares {o.keywords.length === 1 ? 'a keyword' : `${o.keywords.length} keywords`} with the ladder "{o.head}" ({o.keywords.slice(0, 4).join(', ')}
+                {o.keywords.length > 4 ? ', ...' : ''}). Two pages for one search compete with each other.
               </WarnLine>
             ))}
           </div>
@@ -267,7 +267,7 @@ function Timeline({ events }: { events: LadderTimelineEvent[] }) {
   );
   const row = (e: LadderTimelineEvent, i: number) => (
     <li key={`${e.kind}-${e.at}-${i}`} className="relative grid grid-cols-[4.5rem_1.5rem_minmax(0,1fr)] items-start gap-x-2 py-1.5">
-      <span className={cn('pt-0.5 text-xs tabular', e.future ? 'text-ink-3' : 'text-ink-2')}>{validDate(e.at) ? fmtDay(e.at) : '–'}</span>
+      <span className={cn('pt-0.5 text-xs tabular', e.future ? 'text-ink-3' : 'text-ink-2')}>{validDate(e.at) ? fmtDay(e.at) : '-'}</span>
       <span
         className={cn(
           'relative z-[1] flex size-6 items-center justify-center rounded-full border ring-4 ring-surface',
@@ -335,7 +335,7 @@ function PositionResults({ ladder: l }: { ladder: LadderDetail }) {
           description={
             checks.length
               ? `Checked ${checks.length === 1 ? 'once' : `on ${checks.length} days`} since ${fmtDate(checks[0])}. Pages usually need a few weeks after they go live; the easy pages show up first. The chart starts with the first page in the top 50.`
-              : 'The rank check runs every Monday. Positions show up here once the ladder’s pages are checked.'
+              : 'The rank check runs every Monday. Positions show up here once the ladder\'s pages are checked.'
           }
         />
       </Panel>
@@ -360,7 +360,7 @@ function Traffic({ ladder: l }: { ladder: LadderDetail }) {
           className="py-8"
           icon={<MousePointerClick className="size-5" />}
           title="No clicks yet"
-          description="Clicks and impressions of the ladder’s live pages show up here once Search Console reports them, usually a few weeks after a page is published."
+          description="Clicks and impressions of the ladder's live pages show up here once Search Console reports them, usually a few weeks after a page is published."
         />
       </Panel>
     );
@@ -377,7 +377,7 @@ function Traffic({ ladder: l }: { ladder: LadderDetail }) {
     <div className="grid gap-4 md:grid-cols-2">
       <ChartCard
         title={<ChartTitle icon={<MousePointerClick />}>Clicks from Google</ChartTitle>}
-        description="Visits to the ladder’s pages, per period"
+        description="Visits to the ladder's pages, per period"
         table={table('clicks', 'Clicks')}
         footer={
           <div className="space-y-1.5">
@@ -388,7 +388,7 @@ function Traffic({ ladder: l }: { ladder: LadderDetail }) {
       >
         <TimeSeriesChart data={rows} xKey="periodEnd" series={[{ key: 'clicks', label: 'Clicks' }]} height={180} area annotations={l.annotations} />
       </ChartCard>
-      <ChartCard title={<ChartTitle icon={<Eye />}>Times shown on Google</ChartTitle>} description="Impressions of the ladder’s pages, per period" table={table('impressions', 'Impressions')}>
+      <ChartCard title={<ChartTitle icon={<Eye />}>Times shown on Google</ChartTitle>} description="Impressions of the ladder's pages, per period" table={table('impressions', 'Impressions')}>
         <TimeSeriesChart data={rows} xKey="periodEnd" series={[{ key: 'impressions', label: 'Impressions', color: 'var(--series-1)' }]} height={180} area annotations={l.annotations} />
       </ChartCard>
     </div>
@@ -397,7 +397,7 @@ function Traffic({ ladder: l }: { ladder: LadderDetail }) {
 
 /**
  * G12 (2026-10-13, FIX_PLAN; criterion 3.4): what publishing each of this ladder's pages did, against the site's other pages over the
- * same weeks. Graded wording only — a control group narrows the alternatives, it never proves a cause.
+ * same weeks. Graded wording only: a control group narrows the alternatives, it never proves a cause.
  */
 function ChangeReadings({ ladder: l }: { ladder: LadderDetail }) {
   const tests = l.changeTests ?? [];
@@ -406,7 +406,7 @@ function ChangeReadings({ ladder: l }: { ladder: LadderDetail }) {
     <Panel
       icon={<FlaskConical />}
       title="Did publishing these pages help?"
-      description="Each page’s own move on Google, minus what the rest of the website did over the same weeks."
+      description="Each page's own move on Google, minus what the rest of the website did over the same weeks."
       info={CHANGE_TEST_METHOD}
       footer={<LineageNote lineage={l.lineage?.find((x) => /^Did publishing/.test(x.figure))} />}
     >

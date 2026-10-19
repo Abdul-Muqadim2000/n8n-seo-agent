@@ -65,7 +65,7 @@ export default function AdminCostsPage() {
 
   const reconCols: Column<ReconRow>[] = [
     { key: 'label', header: 'Provider', cell: (r) => <span className={r.key === 'total' ? 'font-semibold' : 'font-medium'}>{r.label}</span> },
-    { key: 'companies', header: 'Companies’ runs', align: 'right', cell: (r) => <Money value={r.companies} /> },
+    { key: 'companies', header: 'Companies\' runs', align: 'right', cell: (r) => <Money value={r.companies} /> },
     { key: 'unattributed', header: 'Not tied to a company', align: 'right', cell: (r) => <Money value={r.unattributed} /> },
     { key: 'attributed', header: 'Attributed', align: 'right', cell: (r) => <Money value={r.attributed} className="text-ink" /> },
     {
@@ -77,7 +77,7 @@ export default function AdminCostsPage() {
     },
     { key: 'billed', header: 'Billed', align: 'right', cell: (r) => (r.billed == null ? <Num className="text-ink-3">not available</Num> : <Money value={r.billed} className="text-ink" />) },
     { key: 'ratio', header: 'Billed ÷ attributed', align: 'right', cell: (r) => <Num>{ratioLabel(r.ratio)}</Num> },
-    { key: 'gap', header: 'Gap', align: 'right', hideOnMobile: true, cell: (r) => (r.billed == null ? <Num className="text-ink-3">–</Num> : <Money value={r.billed - r.attributed} />) },
+    { key: 'gap', header: 'Gap', align: 'right', hideOnMobile: true, cell: (r) => (r.billed == null ? <Num className="text-ink-3">-</Num> : <Money value={r.billed - r.attributed} />) },
   ];
 
   const modeCols: Column<AdminModeCost>[] = [
@@ -131,7 +131,7 @@ export default function AdminCostsPage() {
           <AdminCard
             title="Billed vs attributed"
             info={<EstimatedTip />}
-            description="Attributed = the cost the engine tied to runs (companies’ runs plus what it could not tie to a company). Billed = what the provider charged. A gap is spend nobody ran through the app, or pricing drift."
+            description="Attributed = the cost the engine tied to runs (companies' runs plus what it could not tie to a company). Billed = what the provider charged. A gap is spend nobody ran through the app, or pricing drift."
             bodyClassName="px-0 pb-0 pt-3"
           >
             <FlushTable rows={recon} columns={reconCols} rowKey={(r) => r.key} />
@@ -142,7 +142,7 @@ export default function AdminCostsPage() {
               <dl className="space-y-2.5 text-sm">
                 {[
                   { label: 'Revenue (payments recorded)', value: money(o.money.revenueUsd) },
-                  { label: 'Cost of companies’ runs', value: money(o.money.cost.totalUsd) },
+                  { label: 'Cost of companies\' runs', value: money(o.money.cost.totalUsd) },
                   { label: 'Margin', value: `${money(o.money.marginUsd)} · ${marginPct(o.money.marginPct)}`, strong: true },
                   { label: 'Usage at list price', value: money(o.money.listValueUsd) },
                   { label: 'Not tied to a company (our own cost)', value: money(o.unattributed.totalUsd) },

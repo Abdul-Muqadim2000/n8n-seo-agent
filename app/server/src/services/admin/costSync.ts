@@ -12,30 +12,30 @@ import { execRows, tsv } from './sqlRows';
 // What every operation cost us, one row per settled cost unit (`cost_events`), and the credits it used.
 //
 // Sources, in the order they are trusted:
-//   1. engine   — a settled row of the engine's own run ledger (n8n Data Table `seo_run_ledger`, status `done`): Claude (`ai_usd`) and
+//   1. engine, a settled row of the engine's own run ledger (n8n Data Table `seo_run_ledger`, status `done`): Claude (`ai_usd`) and
 //                 DataForSEO (`dfs_usd`) as the run settled them, with how much of it was estimated. One event per execution id.
-//   2. app      — an app run the ledger does not cover (the ledger could not be read, or no row of it can be tied to the run an hour
+//   2. app, an app run the ledger does not cover (the ledger could not be read, or no row of it can be tied to the run an hour
 //                 after it finished): the run's settled `actual_cost_usd`, split as below.
-//   3. keyword_check — the app's keyword checks (the engine reported their cost on the answer; its `assess` rows keyed `app:<company>`
+//   3. keyword_check, the app's keyword checks (the engine reported their cost on the answer; its `assess` rows keyed `app:<company>`
 //                 are left out of 1., so each check is counted once).
 //
 // Which app run an engine row belongs to. `runs.request_id` is the id of the engine's API front door (SEOagentAPIentry,
 // n8n/seo-agent/build_api.py `request_id = $execution.id`), NOT the execution that does the work and writes the ledger row (the main
-// workflow, a monitor, a spawned ladder page — each its own execution id). What ties them is the callbacks: every callback names the
+// workflow, a monitor, a spawned ladder page, each its own execution id). What ties them is the callbacks: every callback names the
 // execution that built it (`execution_id`; monitors also `run_ledger.run_id`, v5/code/_ledger_cb.js) and carries the run's
 // `request_id`, so a report stored on a run maps that execution id to the run. Only callbacks whose spend counts for the run
 // (`callbackCostCountsForRun`: never a schedule's report that reuses an old run's request id) are used. `runs.request_id` itself is
 // kept as a second key for an engine that writes its ledger row under the front door's id.
 //
-// Attribution of an engine row, in order: its execution id maps to an app run (above) → that run's company, website and person (origin
-// app); its key is `parent:<execution id>` (an on-demand monitor started by a run) → whatever the parent resolves to; its key is
-// `app:<company id>` → that company, when the company existed by then; else its `domain` (or the `site_…` id in an internal key such as
-// `cadence:site_x`) is a website verified BEFORE the row settled, of a company created before it → that company (origin schedule);
+// Attribution of an engine row, in order: its execution id maps to an app run (above) -> that run's company, website and person (origin
+// app); its key is `parent:<execution id>` (an on-demand monitor started by a run) -> whatever the parent resolves to; its key is
+// `app:<company id>` -> that company, when the company existed by then; else its `domain` (or the `site_...` id in an internal key such as
+// `cadence:site_x`) is a website verified BEFORE the row settled, of a company created before it -> that company (origin schedule);
 // else unattributed (org null). A cost made unattributed by its company's deletion (`detached_from`) is never attributed again.
 //
 // No double count: an engine event and an app event never stand for the same run. Rows stored before their run could be tied are
 // linked on every sync (back-fill). Before an app run is counted from its own figure, an unlinked engine event keyed `app:<company>`
-// that started within the run's window (2 minutes before it to 5 minutes after it finished) is linked to it instead — the engine's
+// that started within the run's window (2 minutes before it to 5 minutes after it finished) is linked to it instead, the engine's
 // figure is preferred. When an engine row is tied to a run that already has an app event, the app event is deleted and the credits it
 // used are given back (`reprice:` entry, dated at the original event) before the engine event debits its own. A row the engine settles
 // again with a different figure (new `settled_at`) updates its event, and the credit difference is written as its own entry
@@ -44,7 +44,7 @@ import { execRows, tsv } from './sqlRows';
 // Splitting an app run's settled cost: by the run_ledger of the callbacks that counted for it (the same callbacks `actual_cost_usd` was
 // summed from) when they add up to it; else, when the run reported search data only (`actual_cost_partial`), all of it is DataForSEO and
 // the Claude part is 'not reported'; else it is split by the engine's cost table for that mode (the share of Claude in what the mode
-// reserves) and marked 'estimated' — never presented as measured.
+// reserves) and marked 'estimated', never presented as measured.
 // ---------------------------------------------------------------------------------------------------------------------------------
 
 export interface LedgerRow {
@@ -101,7 +101,7 @@ export interface RunRef {
 export interface Lookups {
   /** app runs by an engine execution id (from their callbacks) or by their own request id */
   runsByExec: Map<string, RunRef>;
-  /** verified websites by domain and by the engine's site id (`site_…`), with when they were verified */
+  /** verified websites by domain and by the engine's site id (`site_...`), with when they were verified */
   sitesByDomain: Map<string, { id: string; orgId: string; verifiedAt: Date }>;
   sitesByEngineId: Map<string, { id: string; orgId: string; verifiedAt: Date }>;
   /** every company, with when it was created */
@@ -333,7 +333,7 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
       ]),
     );
 
-    // engine execution ids → app runs: what the callbacks name (execution_id, run_ledger.run_id), then the runs' own request ids. Asked
+    // engine execution ids -> app runs: what the callbacks name (execution_id, run_ledger.run_id), then the runs' own request ids. Asked
     // for the ids of this read AND of the stored events not yet tied to a run (the back-fill).
     const ids = [
       ...new Set(
@@ -370,7 +370,7 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
       );
       return { credits: Number(d?.c ?? 0), entries: Number(d?.n ?? 0) };
     };
-    // credits (app/docs/CREDITS.md): what one cost event may be charged — nothing for a run that failed, and an on-demand run never
+    // credits (app/docs/CREDITS.md): what one cost event may be charged, nothing for a run that failed, and an on-demand run never
     // beyond the quote it was started at (its other events' charges counted); a schedule's event at its full price
     const runCharge = async (eventKey: string, runId: string | null, raw: number): Promise<{ credits: number; failed: boolean }> => {
       if (!runId) return { credits: raw, failed: false };

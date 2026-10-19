@@ -41,12 +41,12 @@ import { connectorFor, CmsError, type ConnCtx, type ImageWithBytes, type RemoteI
 import { CmsHttpError } from './http';
 
 /**
- * G2 — publishing written pages to the customer's CMS (app/docs/CMS_PUBLISHING.md).
+ * G2, publishing written pages to the customer's CMS (app/docs/CMS_PUBLISHING.md).
  *
- * The order of a publish is the point of this file: the rule first (`cmsReadiness`, shared and unit-tested — no override), the
+ * The order of a publish is the point of this file: the rule first (`cmsReadiness`, shared and unit-tested, no override), the
  * role, then the item's lease (so two clicks cannot create two posts), the CMS asked whether the item exists (adopted by slug when
  * our table lost it), a live item never silently replaced by a "draft", the push, the record, and only after a page is really live
- * the engine's "I published a page" run — which writes the content log, the ladder row and lowers the pile-up guard's count.
+ * the engine's "I published a page" run, which writes the content log, the ladder row and lowers the pile-up guard's count.
  */
 
 type Log = Pick<FastifyBaseLogger, 'info' | 'warn'> | null | undefined;
@@ -379,8 +379,7 @@ async function imagesWithBytes(orgId: string, page: CmsPage): Promise<ImageWithB
 
 /**
  * After a page is live: the engine's "I published a page" run (mode `published`, free). It reads the live page, marks the content
- * log row and the ladder row published, and the pile-up guard counts one page fewer. The address must be on the website's domain —
- * the engine refuses any other — so a CMS address elsewhere (a Webflow staging domain, a headless CMS without a pattern) is said.
+ * log row and the ladder row published, and the pile-up guard counts one page fewer. The address must be on the website's domain, * the engine refuses any other, so a CMS address elsewhere (a Webflow staging domain, a headless CMS without a pattern) is said.
  */
 async function tellEngine(a: OrgAccess, site: SiteRow, page: CmsPage, url: string, log?: Log): Promise<{ told: boolean; runId: string | null; note: string }> {
   if (!url || !urlOnDomain(url, site.domain))
@@ -424,7 +423,7 @@ export async function publishReport(a: OrgAccess, reportId: unknown, body: unkno
   if (!blockers.length && (conn.kind === 'webflow' || conn.kind === 'contentful')) {
     const problems = fieldMapProblems(conn.kind, settings.fieldMap ?? {}, settings.remoteFields ?? []);
     if (!settings.remoteFields?.length) problems.unshift('Test the connection first: the fields of your CMS have not been read yet');
-    if (problems.length) blockers = [{ code: 'not_ready', message: `Finish the field mapping in Website settings → Publishing: ${problems.join('; ')}.` }];
+    if (problems.length) blockers = [{ code: 'not_ready', message: `Finish the field mapping in Website settings > Publishing: ${problems.join('; ')}.` }];
   }
   if (blockers.length) {
     const row = await record({ ...base, status: 'blocked', blockers: blockers as unknown as Record<string, unknown>[], error: blockers[0]!.message });
@@ -579,7 +578,7 @@ export async function annotatePublishNeeds(orgId: string, siteId: string, items:
   for (const it of publish) {
     const keyword = typeof it.action?.prefill?.keyword === 'string' ? (it.action.prefill.keyword as string) : '';
     const held = keyword ? drafts.get(norm(keyword)) : undefined;
-    if (held) it.detail += ` A ${held.remoteStatus === 'published' ? 'live page' : 'draft'} of “${keyword}” is in ${held.connectionLabel}.`;
+    if (held) it.detail += ` A ${held.remoteStatus === 'published' ? 'live page' : 'draft'} of "${keyword}" is in ${held.connectionLabel}.`;
     if (!state.connections.length || !keyword || held?.remoteStatus === 'published') continue;
     const [r] = await db
       .select({ id: schema.reports.id })

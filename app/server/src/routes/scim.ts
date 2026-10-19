@@ -34,7 +34,7 @@ declare module 'fastify' {
   }
 }
 
-/** G1 SCIM 2.0 — the protocol at /api/scim/v2 (bearer token only) and the admin side in the app. Design: app/docs/IDENTITY.md §5. */
+/** G1 SCIM 2.0, the protocol at /api/scim/v2 (bearer token only) and the admin side in the app. Design: app/docs/IDENTITY.md §5. */
 export async function scimRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------ admin (session, owners and admins)
   app.get('/api/orgs/:orgId/scim', async (req) => {
@@ -91,7 +91,7 @@ async function scimProtocol(app: FastifyInstance) {
   // every request: a company's token, nothing else (no cookie, no CSRF header)
   app.addHook('onRequest', async (req: FastifyRequest) => {
     const a = await authenticateScim(scimBearer(req.headers.authorization));
-    if (!a) throw new ScimError(401, 'A valid provisioning token is required (Authorization: Bearer scim_…)');
+    if (!a) throw new ScimError(401, 'A valid provisioning token is required (Authorization: Bearer scim_...)');
     req.scim = a;
   });
 

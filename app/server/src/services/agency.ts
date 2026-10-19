@@ -47,8 +47,8 @@ export function toOrg(o: OrgRow, role: Role, ctx: { agency?: OrgRow | null; bran
     industry: o.industry,
     size: o.size,
     website: o.website,
-    // credits (app/docs/CREDITS.md): the dollar budget is the platform's own guard in provider cost — 0 for everyone but a platform
-    // admin (a company's limits are in Settings → Credits)
+    // credits (app/docs/CREDITS.md): the dollar budget is the platform's own guard in provider cost, 0 for everyone but a platform
+    // admin (a company's limits are in Settings -> Credits)
     monthlyBudgetUsd: ctx.platformAdmin && !isClientRole(role) ? o.monthlyBudgetUsd : 0,
     disabled: o.disabled,
     onboardingStep: o.onboardingStep,
@@ -246,7 +246,7 @@ export async function assignStaff(req: FastifyRequest, a: OrgAccess, client: Org
   if (!am || am.deactivatedAt) throw notFound('Not a member of the agency');
   if (am.role === 'owner' || am.role === 'admin') throw badRequest('Owners and admins of the agency reach every client already.');
   const existing = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.orgId, client.id), eq(schema.memberships.userId, userId)) });
-  if (existing && isClientRole(existing.role)) throw conflict('This person is one of the client’s own people in this workspace.');
+  if (existing && isClientRole(existing.role)) throw conflict('This person is one of the client\'s own people in this workspace.');
   const who = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
   if (role === null) {
     if (existing) await db.delete(schema.memberships).where(and(eq(schema.memberships.orgId, client.id), eq(schema.memberships.userId, userId)));

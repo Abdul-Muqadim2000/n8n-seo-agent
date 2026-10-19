@@ -17,7 +17,7 @@ import { useMembers, useSaveSecurityPolicy, useSecurityPolicy } from '@/lib/quer
 import { RoleChip, SettingsCard } from './SettingsCard';
 
 /**
- * G1: the company's security policy (Company settings → Security): two-step verification for everyone and what counts as a second
+ * G1: the company's security policy (Company settings -> Security): two-step verification for everyone and what counts as a second
  * step, and who has it. Admins and the owner change it; a change asks the person to confirm it is them (step-up).
  */
 export function SecurityTab() {
@@ -52,7 +52,7 @@ export function SecurityTab() {
         <CardBody className="divide-y divide-line">
           {!me.user.mfaEnabled && !policy.data.requireMfa && admin && (
             <Callout tone="info" className="mb-3">
-              Turn on two-step verification for your own account first (Your account → Two-step verification); then you can require it for everyone.
+              Turn on two-step verification for your own account first (Your account &gt; Two-step verification); then you can require it for everyone.
             </Callout>
           )}
           <SwitchRow
@@ -64,7 +64,7 @@ export function SecurityTab() {
           />
           <SwitchRow
             title="Single sign-on counts as two-step"
-            description="Sign-ins through your company’s identity provider count, because it enforces its own MFA."
+            description="Sign-ins through your company's identity provider count, because it enforces its own MFA."
             checked={draft.mfaTrustSso}
             disabled={!admin || !draft.requireMfa}
             onCheckedChange={(v) => set({ mfaTrustSso: v })}

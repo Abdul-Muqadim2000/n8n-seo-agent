@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AUTOMATIONS, SCHEDULES, type AutomationInfo } from '@seo/shared';
 import { SCHEDULE_GRACE_MINUTES, STUCK_MINUTES, TARGET_PCT, alertDelivery, deliveryReport, onDemandWeek, scheduleState, scheduledTimes, scheduledWeek, weekStart, weeksBack } from '../src/services/delivery';
 
-// G21 (2026-10-13, system review FIX_PLAN G21): the delivery rate — did what should have run, run, and did it reach the customer?
+// G21 (2026-10-13, system review FIX_PLAN G21): the delivery rate, did what should have run, run, and did it reach the customer?
 // Nothing measured either before this. The arithmetic is tested on its own: a week where every schedule fired and every run was
 // delivered, and a week where the Mac slept through a Monday (D25a) so three schedules left no execution behind.
 
@@ -77,7 +77,7 @@ describe('G21 delivery rate: on-demand runs', () => {
   });
 });
 
-describe('G21 delivery rate: missed schedules (D25a — the Mac sleeps)', () => {
+describe('G21 delivery rate: missed schedules (D25a: the Mac sleeps)', () => {
   const from = MONDAY('2026-10-12T00:00:00Z'), to = MONDAY('2026-10-19T00:00:00Z'), now = MONDAY('2026-10-19T00:00:00Z');
   const fired = (at: string, status = 'success') => ({ id: at, workflowId: 'x', status, startedAt: at, mode: 'trigger' });
   // Monday 2026-10-12 09:00 New York = 13:00 UTC (EDT)
@@ -135,7 +135,7 @@ describe('G21 delivery rate: ops alerts and the channel that carried them (R6)',
     expect(a.ratePct).toBe(50); // deduped is a deliberate non-send and is left out of the four settled rows
   });
 
-  it('the state the re-rating found — three rows, all pending — reads 0%, not "no alerts"', () => {
+  it('the state the re-rating found, three rows, all pending, reads 0%, not "no alerts"', () => {
     expect(alertDelivery([{ delivered: 'pending' }, { delivered: 'pending' }, { delivered: '' }])).toMatchObject({ total: 3, delivered: 0, pending: 3, ratePct: 0 });
   });
 
@@ -236,7 +236,7 @@ describe('R103 delivery rate: schedules are counted from the day they existed, a
     expect(r.missed[0].expectedAt).toBe('2026-10-13T09:45:00.000Z');
   });
 
-  it('a Test Runner or on-demand execution near the due time does not hide a missed fire — only mode "trigger" counts', () => {
+  it('a Test Runner or on-demand execution near the due time does not hide a missed fire, only mode "trigger" counts', () => {
     const from = new Date('2026-10-12T00:00:00Z'), to = new Date('2026-10-19T00:00:00Z');
     const testRun = { id: 't', workflowId: 'x', status: 'success', startedAt: '2026-10-12T13:20:00.000Z', mode: 'integrated' };
     const r = scheduledWeek([WEEKLY], { SEOagentSiteTrk1: [testRun] }, TZ, from, to, new Date('2026-10-19T00:00:00Z'));

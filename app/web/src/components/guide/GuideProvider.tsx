@@ -3,13 +3,13 @@ import type { GuideVars } from '@seo/shared/guides';
 import type { GuideFinish, GuideState } from './GuidePanel';
 
 // One panel for the whole app: any component can ask for a guide by id, with the real values of the website it is talking about.
-// The panel itself is a separate chunk — nothing of it is loaded until someone asks for help.
+// The panel itself is a separate chunk, so nothing of it is loaded until someone asks for help.
 
 const GuidePanel = lazy(() => import('./GuidePanel'));
 
 export interface OpenGuide {
   id: string;
-  /** the real domain, record, key file… that the guide shows (falls back to its examples) */
+  /** the real domain, record, key file... that the guide shows (falls back to its examples) */
   vars?: GuideVars;
   /** the button at the end that carries on in the app, e.g. "Check now" */
   finish?: GuideFinish;

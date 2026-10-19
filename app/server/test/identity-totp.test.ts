@@ -17,7 +17,7 @@ describe('HOTP (RFC 4226 appendix D)', () => {
     [7, '162583'],
     [8, '399871'],
     [9, '520489'],
-  ])('counter %i → %s', (c, v) => expect(hotp(RFC_SECRET, c)).toBe(v));
+  ])('counter %i gives %s', (c, v) => expect(hotp(RFC_SECRET, c)).toBe(v));
 });
 
 describe('TOTP (RFC 6238 appendix B, SHA-1, 8 digits)', () => {
@@ -28,7 +28,7 @@ describe('TOTP (RFC 6238 appendix B, SHA-1, 8 digits)', () => {
     [1234567890, '89005924'],
     [2000000000, '69279037'],
     [20000000000, '65353130'],
-  ])('T=%i → %s', (t, v) => expect(hotp(RFC_SECRET, Math.floor(t / 30), 8)).toBe(v));
+  ])('T=%i gives %s', (t, v) => expect(hotp(RFC_SECRET, Math.floor(t / 30), 8)).toBe(v));
 });
 
 describe('base32 (RFC 4648)', () => {

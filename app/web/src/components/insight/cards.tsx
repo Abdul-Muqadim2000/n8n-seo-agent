@@ -39,7 +39,7 @@ const CLICK_CARD =
   'cursor-pointer transition-[box-shadow,border-color,translate,background-color] duration-200 ease-brand hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised has-[.card-link:active]:translate-y-0 has-[.card-link:focus-visible]:shadow-[var(--ring)]';
 
 /**
- * MetricCard: one number that matters — icon tile, label (+ InfoTip for how it is measured), value, delta vs a named period,
+ * MetricCard: one number that matters: icon tile, label (+ InfoTip for how it is measured), value, delta vs a named period,
  * optional sparkline, and a meta line with the facts behind it. `visual` (e.g. a ScoreRing) replaces the big value.
  * `onClick` / `to` make the whole card a link with a hover lift and an arrow.
  */
@@ -115,8 +115,8 @@ export function MetricCard({
 }
 
 /**
- * SummaryHero: the page's one solid panel (ink by default, or Alaventra Blue) — eyebrow, a headline sentence that says how things
- * are, a supporting line, 2–4 HeroStats and the primary next step. Children switch to on-dark colours through the surface context.
+ * SummaryHero: the page's one solid panel (ink by default, or Alaventra Blue): eyebrow, a headline sentence that says how things
+ * are, a supporting line, 2-4 HeroStats and the primary next step. Children switch to on-dark colours through the surface context.
  */
 export function SummaryHero({
   tone = 'ink',
@@ -134,7 +134,7 @@ export function SummaryHero({
   description?: ReactNode;
   /** a visual on the right (ScoreRing) */
   aside?: ReactNode;
-  /** 2–4 <HeroStat>s */
+  /** 2-4 <HeroStat>s */
   stats?: ReactNode;
   /** primary next step (+ a secondary link) */
   actions?: ReactNode;
@@ -263,7 +263,7 @@ const ITEM_ICON: Partial<Record<IconTileTone, ReactNode>> = {
 };
 
 /**
- * InsightItem: one finding / recommendation / alert as a list row — tone-coloured icon tile, meta chips (priority, category), title,
+ * InsightItem: one finding / recommendation / alert as a list row: tone-coloured icon tile, meta chips (priority, category), title,
  * one line, the action, and an optional expandable detail. Render inside a `<ul className="divide-y divide-line">`.
  */
 export function InsightItem({
@@ -328,7 +328,7 @@ export function InsightItem({
 }
 
 /**
- * ActionCard: a standalone card for "do this next" / "go here" — icon tile, title, one line, optional meta and action. With `to` /
+ * ActionCard: a standalone card for "do this next" / "go here": icon tile, title, one line, optional meta and action. With `to` /
  * `onClick` the whole card is the link (hover lift, arrow nudges); an `action` button stays separately clickable.
  */
 export function ActionCard({ icon, tone = 'blue', title, description, meta, action, onClick, to, className }: { icon: ReactNode; tone?: IconTileTone; title: string; description?: ReactNode; meta?: ReactNode; action?: ReactNode; className?: string } & Go) {

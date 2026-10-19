@@ -59,7 +59,7 @@ describe('two-step codes as typed', () => {
     expect(stepUpSchema.safeParse({ method: 'sms', code: '123456' }).success).toBe(false);
   });
   it('masks the address on the second-step page', () => {
-    expect(maskEmail('dana@northwind.test')).toBe('d…a@northwind.test');
+    expect(maskEmail('dana@northwind.test')).toBe('d...a@northwind.test');
     expect(maskEmail('jo@x.io')).toBe('j@x.io');
   });
 });
@@ -89,7 +89,7 @@ describe('the company security policy', () => {
     expect(sessionMeetsMfa(p, { ...s, authMethod: 'sso', ssoOrgId: 'o2' }, 'o1')).toBe(false);
     expect(sessionMeetsMfa({ ...p, mfaTrustSso: false }, { ...s, authMethod: 'sso', ssoOrgId: 'o1' }, 'o1')).toBe(false);
   });
-  it('takes the strictest idle timeout of a person’s companies', () => {
+  it('takes the strictest idle timeout of a person\'s companies', () => {
     expect(strictestIdle([])).toBeNull();
     expect(strictestIdle([DEFAULT_SECURITY_POLICY])).toBeNull();
     expect(strictestIdle([{ ...DEFAULT_SECURITY_POLICY, idleTimeoutMinutes: 240 }, DEFAULT_SECURITY_POLICY, { ...DEFAULT_SECURITY_POLICY, idleTimeoutMinutes: 30 }])).toBe(30);
@@ -188,7 +188,7 @@ describe('SCIM inputs', () => {
     expect(parseScimFilter('displayName eq "Team \\"A\\""')).toEqual({ attr: 'displayName', value: 'Team "A"' });
     for (const f of ['userName sw "a"', 'userName eq "a" or userName eq "b"', 'title eq "x"', 'userName eq a']) expect(parseScimFilter(f), f).toBe('invalid');
   });
-  it('reads Entra’s string booleans and only our token shape', () => {
+  it('reads Entra\'s string booleans and only our token shape', () => {
     expect(scimBool('False')).toBe(false);
     expect(scimBool('true')).toBe(true);
     expect(scimBool(false)).toBe(false);

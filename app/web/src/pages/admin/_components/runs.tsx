@@ -109,13 +109,13 @@ export function RunsTable({ rows, flush, hideCompany, empty, pageSize = 1000 }: 
       ),
     },
     { key: 'cost', header: 'Cost', align: 'right', sortValue: (r) => r.cost?.totalUsd ?? -1, cell: (r) => <CostSplitCell cost={r.cost} /> },
-    // credits (app/docs/CREDITS.md): the Credits / USD switch — what the run was billed at list price (the cost column beside it is ours)
+    // credits (app/docs/CREDITS.md): the Credits / USD switch, what the run was billed at list price (the cost column beside it is ours)
     {
       key: 'credits',
       header: units === 'usd' ? 'Billed ($)' : 'Credits',
       align: 'right',
       sortValue: (r) => r.credits ?? -1,
-      cell: (r) => <Num title={r.credits != null ? `${credits(r.credits)} credits` : undefined}>{units === 'usd' && cv != null ? (r.credits == null ? '–' : money(r.credits * cv)) : credits(r.credits)}</Num>,
+      cell: (r) => <Num title={r.credits != null ? `${credits(r.credits)} credits` : undefined}>{units === 'usd' && cv != null ? (r.credits == null ? '-' : money(r.credits * cv)) : credits(r.credits)}</Num>,
     },
   ];
   const props = { rows, columns, rowKey: (r: AdminRunRow) => r.id, pageSize, empty: empty ?? 'No runs match.' };

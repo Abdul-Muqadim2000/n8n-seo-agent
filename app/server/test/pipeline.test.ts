@@ -28,7 +28,7 @@ describe('pipeline: pages already written', () => {
     expect(w.map((x) => x.keyword)).toEqual(['old page']);
   });
 
-  it('ladder pages being written or published count, the content log’s date wins', () => {
+  it('ladder pages being written or published count, the content log\'s date wins', () => {
     const w = writtenPages([log({ keyword: 'rung two' })], [lad({ keyword: 'rung two', status: 'writing' }), lad({ keyword: 'rung three', status: 'published', target_url: 'https://x.com/r3' }), lad({ keyword: 'rung four' })], NOW);
     expect(w.map((x) => [x.keyword, x.status, x.startedAt !== ''])).toEqual([
       ['rung two', 'started', true],
@@ -69,8 +69,8 @@ describe('pipeline: ladder plans that planned nothing', () => {
       NOW,
     );
     expect(items.map((i) => [i.id, i.title, i.action?.runId])).toEqual([
-      ['refused:a', '“cleartax login” was not planned', 'run-a'],
-      ['refused:b', '“E-invoicing in the UAE” was not planned', 'run-b'],
+      ['refused:a', '"cleartax login" was not planned', 'run-a'],
+      ['refused:b', '"E-invoicing in the UAE" was not planned', 'run-b'],
     ]);
     expect(items[1].detail).toMatch(/already have a keyword ladder/);
     expect(items[0].detail).toMatch(/not realistic/);

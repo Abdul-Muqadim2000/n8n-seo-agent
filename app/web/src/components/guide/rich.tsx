@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ExternalLink } from '@/components/ui/misc';
 import { cn } from '@/lib/utils';
 
-// The guides' inline markup (@seo/shared guides.ts): **what to click**, `what to type`, [label](https://link). Deliberately tiny —
+// The guides' inline markup (@seo/shared guides.ts): **what to click**, `what to type`, [label](https://link). Deliberately tiny,
 // it keeps the content plain data that also copies cleanly into an e-mail.
 
 const TOKEN = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)\s]+\))/g;

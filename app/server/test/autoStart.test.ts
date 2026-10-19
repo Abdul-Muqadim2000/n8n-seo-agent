@@ -136,7 +136,7 @@ describe('auto-start: one website', () => {
     };
   };
 
-  it('starts a ladder run as the owner with the website’s business details, one page, no e-mail, no preferences', async () => {
+  it('starts a ladder run as the owner with the website\'s business details, one page, no e-mail, no preferences', async () => {
     const d = deps();
     const r = await autoStartForSite(org, site, d, NOW);
     expect(r).toMatchObject({ runId: 'run-1', keyword: 'odoo partner uae' });

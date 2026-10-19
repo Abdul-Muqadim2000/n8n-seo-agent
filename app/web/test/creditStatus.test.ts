@@ -3,7 +3,7 @@ import { DEFAULT_CREDIT_LIMITS, type BillingFeatureRow, type BillingOverview, ty
 import { bannerKey, creditBanner, daysText, featureTotals, lotTerms, pausedByLimit, statusLabel, statusTone } from '@/pages/settings/_components/credits/status';
 
 // The Credits tab, the sidebar pill and the banner read a company's credit standing through one set of words (status.ts), so the
-// three never disagree — and a company whose credits are only counted is never told it is "out of credits".
+// three never disagree, and a company whose credits are only counted is never told it is "out of credits".
 
 type Standing = Parameters<typeof creditBanner>[0];
 const month: BillingOverview['month'] = { month: '2026-10', autopilotUsed: 300, onDemandUsed: 40, autopilotForecast: 1500, planMonthly: null, planRenewsOn: null };

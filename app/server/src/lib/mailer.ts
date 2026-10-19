@@ -87,7 +87,7 @@ export async function sendMail(m: Mail, log: { info: (o: object, msg: string) =>
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
-// B-R1 — report delivery
+// B-R1, report delivery
 // ---------------------------------------------------------------------------------------------------------------------------
 // Reports go out through their own transport, for one reason: `ACCOUNT_EMAILS` governs verification and reset links and is off on
 // this stack, while a customer who asked for their Monday report by e-mail asked for something else entirely. A report message is
@@ -139,7 +139,7 @@ export async function sendReportMail(
     log.info({ to: m.to, subject: m.subject, reports: m.reports.length }, 'report not e-mailed (no SMTP configured)');
     return false;
   }
-  const held = m.lines.filter((l) => l.startsWith('Not sent — '));
+  const held = m.lines.filter((l) => /^Not sent(?: \u2014|:|,) /.test(l));
   const html = `<!doctype html><html><body style="margin:0;background:#f6f6f3;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#0b0b0b">
 <div style="max-width:620px;margin:0 auto;padding:32px 20px"><div style="font-weight:700;font-size:16px;margin-bottom:20px">${esc(brandName)}</div>
 <p style="margin:0 0 18px;line-height:1.55;font-size:15px">${esc(m.lines[0] ?? '')}</p>

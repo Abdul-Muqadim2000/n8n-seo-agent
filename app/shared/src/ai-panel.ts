@@ -1,4 +1,4 @@
-// G6 (2026-10-18, n8n/seo-agent/AI_VISIBILITY_SPEC.md §10): the AI question panel at enterprise scale — the app's half of the engine's
+// G6 (2026-10-18, n8n/seo-agent/AI_VISIBILITY_SPEC.md §10): the AI question panel at enterprise scale, the app's half of the engine's
 // AIP kit (n8n/seo-agent/v5/code/_ai_panel.js). ONE cost formula: this file mirrors AIP.cost value for value, and both are held to the same
 // golden cases (n8n/seo-agent/v5/data/ai_panel_cost_cases.json, copied by the engine build to ./ai-panel-cost-cases.generated.ts; the engine
 // runs them in harness S211, the app in cost.aipanel.test.ts). Change a price or a rule on one side and the other side's test fails.
@@ -164,7 +164,7 @@ const parseJ = (t: unknown): unknown => { if (t && typeof t === 'object') return
 const rec = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const nn = (v: unknown): number | null => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 
-/** The compact segments_json of a stored row (one array per segment, the columns named once) → rows with their ranges. */
+/** The compact segments_json of a stored row (one array per segment, the columns named once) -> rows with their ranges. */
 export function aiSegmentsFromJson(json: unknown): AiSegments | null {
   const x = rec(parseJ(json));
   if (!Array.isArray(x.rows)) return null;
@@ -180,7 +180,7 @@ export function aiSegmentsFromJson(json: unknown): AiSegments | null {
   return { rows, minAnswers: min, family: x.family ? { method: String(f.method ?? ''), q: Number(f.q) || 0, tests: Number(f.tests) || 0, rejected: Number(f.rejected) || 0, note: String(f.note ?? '') } : null,
     moves: (Array.isArray(x.moves) ? x.moves : []).map((m) => { const o = rec(m); return { dim: String(o.dim ?? ''), key: String(o.key ?? ''), rate: nn(o.rate), delta: Number(o.delta) || 0, n: Number(o.n) || 0 }; }) };
 }
-/** The panel_json of a stored row → what the app shows (the question ids stay on the server). */
+/** The panel_json of a stored row -> what the app shows (the question ids stay on the server). */
 export function aiPanelFromJson(json: unknown): AiPanelInfo | null {
   const x = rec(parseJ(json)); if (!Object.keys(x).length) return null;
   const comp = rec(x.composition), hw = rec(x.half_width), me = rec(hw.measured), ac = rec(hw.achievable), ov = x.overlap_with_previous ? rec(x.overlap_with_previous) : null;
@@ -216,7 +216,7 @@ function csvLines(text: string): string[][] {
 }
 
 /**
- * The owner's question list as CSV (a spreadsheet export): one question per line; the header names the columns in any order —
+ * The owner's question list as CSV (a spreadsheet export): one question per line; the header names the columns in any order,
  * question (required), buyer role, cluster, stage (awareness / consideration / decision), market (country-language, e.g. SA-en), pinned
  * (yes / no). Without a header the first column is the question. At most 500 rows; duplicates (same text) are skipped.
  */

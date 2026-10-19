@@ -33,18 +33,18 @@ import { integrationOf, requireSecrets, toIntegrationView, toIssueView } from '.
 import { loadBundle, recommend } from './recommendations';
 
 /**
- * G4 (2026-10-17) — issue trackers: an audit finding or a recommendation becomes ONE ticket in Jira Cloud, Linear or Asana, with the
+ * G4 (2026-10-17), issue trackers: an audit finding or a recommendation becomes ONE ticket in Jira Cloud, Linear or Asana, with the
  * evidence, the example pages and the fix; the remote key is kept, its state is read back, and a second push answers the first
  * ticket. Design note: app/docs/INTEGRATIONS.md §2.
  *
  * Vendor request shapes (each one mocked from these pages in issueTrackers.test.ts):
- *  - Jira Cloud REST v3 — POST /rest/api/3/issue, GET /rest/api/3/issue/{key}?fields=status, GET /rest/api/3/project/{key},
+ *  - Jira Cloud REST v3, POST /rest/api/3/issue, GET /rest/api/3/issue/{key}?fields=status, GET /rest/api/3/project/{key},
  *    GET /rest/api/3/issue/createmeta/{project}/issuetypes; Basic auth `email:api_token`
  *    https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post
  *    https://developer.atlassian.com/cloud/jira/platform/basic-auth-for-rest-apis/
- *  - Linear GraphQL — POST https://api.linear.app/graphql, `Authorization: <personal API key>`, `issueCreate`, `issue(id)`, `teams`
+ *  - Linear GraphQL, POST https://api.linear.app/graphql, `Authorization: <personal API key>`, `issueCreate`, `issue(id)`, `teams`
  *    https://linear.app/developers/graphql
- *  - Asana REST — POST /api/1.0/tasks, GET /api/1.0/tasks/{gid}, GET /api/1.0/projects/{gid}; `Authorization: Bearer <PAT>`
+ *  - Asana REST, POST /api/1.0/tasks, GET /api/1.0/tasks/{gid}, GET /api/1.0/projects/{gid}; `Authorization: Bearer <PAT>`
  *    https://developers.asana.com/reference/createtask
  */
 
@@ -331,7 +331,7 @@ async function recommendationContent(org: OrgRow, site: SiteRow, id: string): Pr
 const CREATING_STALE_MS = 2 * 60_000;
 
 /**
- * Pushes a finding or a recommendation to the company's tracker — once. The `issue_links` row is inserted (status `creating`) BEFORE
+ * Pushes a finding or a recommendation to the company's tracker, once. The `issue_links` row is inserted (status `creating`) BEFORE
  * the vendor call, under the unique (company, source) index, so two pushes at the same moment cannot both reach the vendor.
  */
 export async function createIssue(a: OrgAccess, body: unknown): Promise<{ existing: boolean; issue: IssueLinkView }> {
@@ -342,7 +342,7 @@ export async function createIssue(a: OrgAccess, body: unknown): Promise<{ existi
   const trackers = (await db.select().from(schema.integrations).where(and(eq(schema.integrations.orgId, a.org.id), inArray(schema.integrations.kind, [...TRACKER_KINDS])))) as IntegrationRow[];
   const tracker = b.kind ? trackers.find((t) => t.kind === b.kind) : trackers.length === 1 ? trackers[0] : undefined;
   if (!tracker)
-    throw new HttpError(400, trackers.length ? 'Choose which tracker the ticket goes to' : 'Connect Jira, Linear or Asana first (Company settings → Integrations)', 'tracker_missing', trackers.length ? { kind: 'Choose one' } : undefined);
+    throw new HttpError(400, trackers.length ? 'Choose which tracker the ticket goes to' : 'Connect Jira, Linear or Asana first (Company settings > Integrations)', 'tracker_missing', trackers.length ? { kind: 'Choose one' } : undefined);
   const kind = tracker.kind as TrackerKind;
   const sourceKey = issueSourceKey(site.id, b.source.type === 'finding' ? { type: 'finding', findingKey: b.source.findingKey } : { type: 'recommendation', id: b.source.id });
 

@@ -1,4 +1,4 @@
-// Link building — "Ready to send": the drafted pitches waiting for a person (LINK_BUILDER_SPEC.md §2), each with why this site, our page
+// Link building, "Ready to send": the drafted pitches waiting for a person (LINK_BUILDER_SPEC.md §2), each with why this site, our page
 // and the link text to ask for, the contact, and the review dialog (edit, consent, footer preview, approve).
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -154,7 +154,7 @@ function DraftCard({ x, d, onOpen }: { x: OutreachDraft; d: LinkBuildingData; on
         )}
         {x.deadLink && (
           <p className="text-ink-2 [overflow-wrap:anywhere]">
-            <span className="font-medium text-ink">Dead link on their page:</span> {x.deadLink.anchor ? `“${x.deadLink.anchor}” → ` : ''}
+            <span className="font-medium text-ink">Dead link on their page:</span> {x.deadLink.anchor ? `"${x.deadLink.anchor}", link to ` : ''}
             <span className="text-ink-3">{x.deadLink.url}</span>
           </p>
         )}
@@ -169,7 +169,7 @@ function DraftCard({ x, d, onOpen }: { x: OutreachDraft; d: LinkBuildingData; on
               {urlPath(x.targetUrl)}
             </ExternalLink>
           ) : (
-            '–'
+            '-'
           )}
           {x.targetReason && <span className="block text-xs text-ink-3 [overflow-wrap:anywhere]">{x.targetReason}</span>}
         </dd>
@@ -376,7 +376,7 @@ function ApproveDialog({ x, d, onClose }: { x: OutreachDraft; d: LinkBuildingDat
           {steps.map((s, i) => {
             const subject = i === 0 ? s.subject : replySubject(steps[0]?.subject ?? '');
             const w = words(s.body);
-            const target = i === 0 ? '80–130 words work best' : '40–70 words work best';
+            const target = i === 0 ? '80-130 words work best' : '40-70 words work best';
             return (
               <li key={i} className="rounded-xl border border-line p-4">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -392,7 +392,7 @@ function ApproveDialog({ x, d, onClose }: { x: OutreachDraft; d: LinkBuildingDat
                 </div>
                 <div className="space-y-3">
                   {i === 0 ? (
-                    <Field label="Subject" hint={`${s.subject.trim().length} characters · 36–50 work best`}>
+                    <Field label="Subject" hint={`${s.subject.trim().length} characters · 36-50 work best`}>
                       {(f) => <Input {...f} value={s.subject} maxLength={140} readOnly={!member} onChange={(e) => setStep(i, { subject: e.target.value })} />}
                     </Field>
                   ) : (

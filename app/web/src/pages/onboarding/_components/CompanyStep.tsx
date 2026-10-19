@@ -17,7 +17,7 @@ import { useWizard } from './wizard';
 type Values = z.input<typeof createOrgSchema>;
 type Output = z.output<typeof createOrgSchema>;
 
-export const sizeLabel = (s: string) => (s === 'Just me' ? s : `${s.replace('-', '–')} people`);
+export const sizeLabel = (s: string) => (s === 'Just me' ? s : `${s.replace('-', '-')} people`);
 
 const FORM_ID = 'onboarding-company';
 
@@ -58,8 +58,8 @@ export function CompanyStep() {
   return (
     <StepFrame
       step="company"
-      title={org ? 'Your company' : 'Welcome. Let’s set up your company'}
-      description="This creates your company’s workspace: its websites, reports and team live here. You can invite colleagues once setup is done."
+      title={org ? 'Your company' : 'Welcome. Let\'s set up your company'}
+      description="This creates your company's workspace: its websites, reports and team live here. You can invite colleagues once setup is done."
       primary={{ label: 'Continue', form: FORM_ID, loading: create.isPending || update.isPending }}
     >
       {unfinished.length > 0 && (
@@ -87,7 +87,7 @@ export function CompanyStep() {
           <Field label="Company size" optional error={errors.size?.message}>
             {(p) => (
               <Select {...p} {...form.register('size')}>
-                <option value="">Choose…</option>
+                <option value="">Choose...</option>
                 {COMPANY_SIZES.map((s) => (
                   <option key={s} value={s}>
                     {sizeLabel(s)}

@@ -6,8 +6,8 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { CrawlerData, SitePageRow } from '@seo/shared';
 
-// Server-log and AI-crawler analytics end to end against a real Postgres (app/docs/LOG_ANALYTICS.md): upload and push → spool →
-// worker → crawler rows + daily totals → the Crawlers answer, the CSV, the read API; isolation between companies, roles, CSRF,
+// Server-log and AI-crawler analytics end to end against a real Postgres (app/docs/LOG_ANALYTICS.md): upload and push -> spool ->
+// worker -> crawler rows + daily totals -> the Crawlers answer, the CSV, the read API; isolation between companies, roles, CSRF,
 // duplicates, retention, the right to delete, the IP-list refresh guard, and a large file that must not block the server.
 // Runs when TEST_DATABASE_URL names a throwaway database (the runner also sets DATABASE_URL to it, CRAWLER_JOBS=false).
 

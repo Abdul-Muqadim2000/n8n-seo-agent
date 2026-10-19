@@ -9,8 +9,8 @@ import { badRequest, conflict, forbidden, HttpError, notFound } from '../lib/err
 import { audit } from './audit';
 
 /**
- * G5 (WHITE_LABEL.md §2, §4): the agency asks the client to approve an item — a written page (its report) or one outreach draft
- * (prospect and type) — and a client approver decides. A decision is a record; with "client approval required" on the workspace, a
+ * G5 (WHITE_LABEL.md §2, §4): the agency asks the client to approve an item, a written page (its report) or one outreach draft
+ * (prospect and type), and a client approver decides. A decision is a record; with "client approval required" on the workspace, a
  * live CMS publish of that page and an outreach approval of that draft are refused until an approved decision exists.
  */
 
@@ -121,7 +121,7 @@ async function own(orgId: string, id: string): Promise<PortalApprovalRow> {
 }
 
 export async function decideApproval(req: FastifyRequest, a: OrgAccess, id: string, body: { decision: 'approved' | 'changes_requested'; note: string }): Promise<ApprovalView> {
-  if (a.role !== 'client_approver') throw forbidden('Only the client’s approvers decide.');
+  if (a.role !== 'client_approver') throw forbidden('Only the client\'s approvers decide.');
   const r = await own(a.org.id, id);
   if (r.status !== 'pending') throw conflict('This was already decided or withdrawn.');
   if (body.decision === 'changes_requested' && !body.note.trim()) throw badRequest('Say what should change.', { note: 'Say what should change' });
@@ -152,6 +152,6 @@ export async function requireClientApproval(org: Pick<OrgRow, 'id' | 'kind' | 'c
     orderBy: desc(schema.portalApprovals.requestedAt),
   });
   if (latest?.status === 'approved') return;
-  const why = !latest ? 'Ask the client to approve it first (Approvals).' : latest.status === 'pending' ? 'It is waiting for the client’s approval.' : 'The client asked for changes.';
+  const why = !latest ? 'Ask the client to approve it first (Approvals).' : latest.status === 'pending' ? 'It is waiting for the client\'s approval.' : 'The client asked for changes.';
   throw new HttpError(409, `This client approves ${kind === 'page' ? 'pages before they go live' : 'outreach before it is sent'}. ${why}`, 'client_approval_required');
 }

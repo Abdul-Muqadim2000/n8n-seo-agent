@@ -12,7 +12,7 @@ describe('R102 / R115: a figure without the model calls is partial', () => {
     expect(f.basis).toContain('did not report its model calls');
     expect(f.basis).not.toContain('and the model calls it made');
   });
-  it('shows the engine’s whole-run estimate instead when it is higher than the partial figure', () => {
+  it('shows the engine\'s whole-run estimate instead when it is higher than the partial figure', () => {
     const f = runCostEstimate({ mode: 'keyword', actualCostUsd: 0.0221, actualCostPartial: true, engineCostEstimateUsd: 0.84 });
     expect(f.source).toBe('engine');
     expect(f.usd).toBe(0.84);

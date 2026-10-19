@@ -87,7 +87,7 @@ describe('export: one schema, typed rows, both formats', () => {
     expect(toCsv(cols, [{ title: 'Say "hi", world', n: -3 }, { title: '=HYPERLINK("x")', n: null }])).toBe('title,n\r\n"Say ""hi"", world",-3\r\n"\'=HYPERLINK(""x"")",\r\n');
   });
 
-  it('object names are Hive-style partitions; storage endpoints are the provider’s own', () => {
+  it('object names are Hive-style partitions; storage endpoints are the provider\'s own', () => {
     expect(exportObjectKey('alaventra', 'runs', 'r1', new Date('2026-10-17T03:00:00Z'), 'csv')).toBe('alaventra/runs/dt=2026-10-17/runs-r1.csv');
     expect(storageEndpoint({ provider: 'aws', region: 'eu-west-1' })).toBe('https://s3.eu-west-1.amazonaws.com');
     expect(storageEndpoint({ provider: 'aws', region: 'mars' })).toBeNull();
@@ -95,7 +95,7 @@ describe('export: one schema, typed rows, both formats', () => {
     expect(storageEndpoint({ provider: 'other', region: 'auto', endpoint: 'https://s3.wasabisys.com' })).toBe('https://s3.wasabisys.com');
   });
 
-  it('destinations: the S3 form checks the provider’s fields; BigQuery takes the whole key file', () => {
+  it('destinations: the S3 form checks the provider\'s fields; BigQuery takes the whole key file', () => {
     expect(s3DestinationSchema.safeParse({ kind: 's3', provider: 'r2', accountId: 'nope', bucket: 'b-1', accessKeyId: 'AKID12345', secretAccessKey: 'x'.repeat(20) }).success).toBe(false);
     const s3 = s3DestinationSchema.parse({ kind: 's3', provider: 'aws', region: 'eu-west-1', bucket: 'nw-seo', prefix: '/exports/', accessKeyId: 'AKID12345', secretAccessKey: 'x'.repeat(20) });
     expect([s3.prefix, s3.tables.length, s3.schedule]).toEqual(['exports', EXPORT_TABLES.length, 'daily']);

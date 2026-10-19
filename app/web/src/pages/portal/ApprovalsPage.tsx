@@ -17,7 +17,7 @@ import { useApprovalCandidates, useApprovalMutations, useApprovals } from '@/lib
 import { fmtAgo } from '@/lib/utils';
 
 /**
- * G5 (WHITE_LABEL.md §2, §4): what the agency asked the client to approve — written pages and outreach drafts — and the client's
+ * G5 (WHITE_LABEL.md §2, §4): what the agency asked the client to approve, written pages and outreach drafts, and the client's
  * decisions. Client approvers approve or ask for changes; client viewers follow along; the agency asks and withdraws. With "client
  * approval required" on, the agency cannot publish a page live or send an outreach draft until it is approved here.
  */
@@ -153,7 +153,7 @@ function ApprovalItem({ a, canDecide, staff }: { a: ApprovalView; canDecide: boo
             <p className="text-[13px] text-ink-2">
               {a.status === 'approved' ? 'Approved' : 'Changes asked'} {fmtAgo(a.decidedAt)}
               {a.decidedBy ? ` by ${a.decidedBy}` : ''}
-              {a.decisionNote ? `: “${a.decisionNote}”` : ''}
+              {a.decisionNote ? `: "${a.decisionNote}"` : ''}
             </p>
           )}
           {canDecide && a.status === 'pending' && (

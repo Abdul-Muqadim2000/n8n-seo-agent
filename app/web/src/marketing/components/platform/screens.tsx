@@ -178,7 +178,7 @@ const CHANGES: { tone: 'good' | 'warning' | 'accent'; label: string; text: strin
   { tone: 'accent', label: 'New', text: 'Cited in AI Overviews for 2 more buyer questions' },
 ];
 const NEXT = [
-  { t: 'Refresh “invoice approval workflow”', c: 'about 24 credits' },
+  { t: 'Refresh "invoice approval workflow"', c: 'about 24 credits' },
   { t: 'Reclaim the lost link with an outreach draft', c: 'about 3 credits' },
 ];
 

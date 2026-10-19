@@ -19,7 +19,7 @@ import { BuyCreditsCard } from './BuyCredits';
 import { LimitsCard } from './LimitsCard';
 import { daysText, featureTotals, lotTerms, pausedByLimit, statusLabel, statusTone } from './status';
 
-// Company settings → Credits (app/docs/CREDITS.md §2): the balance and how long it lasts, this month's autopilot and on-demand use,
+// Company settings -> Credits (app/docs/CREDITS.md §2): the balance and how long it lasts, this month's autopilot and on-demand use,
 // each website's forecast, usage by feature and by day, the credit lots and their expiry, buying credits, the company's limits and
 // the activity. Every figure is in credits; the only dollars are the prices of the packs.
 
@@ -81,7 +81,7 @@ function CreditsHero({ b }: { b: BillingOverview }) {
   const { can } = useOrgCtx();
   const used = b.month.autopilotUsed + b.month.onDemandUsed;
   const description = !b.enforced
-    ? 'Credits are counted for your company but do not stop anything: analyses and your websites’ automatic work run whatever the balance.'
+    ? 'Credits are counted for your company but do not stop anything: analyses and your websites\' automatic work run whatever the balance.'
     : b.runwayDays != null
       ? `Lasts ${daysText(b.runwayDays)} at your current use${b.runsOutOn ? ` · runs out on ${fmtDate(b.runsOutOn)}` : ''}.`
       : 'Nothing is using credits at the moment, so the balance stays as it is.';
@@ -109,7 +109,7 @@ function CreditsHero({ b }: { b: BillingOverview }) {
           <HeroStat
             label="Kept for autopilot"
             value={<CountUp value={b.reservedForAutopilot} format={credits} />}
-            hint={b.limits.reserveForAutopilot ? 'What your websites’ schedules still need this month.' : 'Off: on-demand analyses may use every credit.'}
+            hint={b.limits.reserveForAutopilot ? 'What your websites\' schedules still need this month.' : 'Off: on-demand analyses may use every credit.'}
           />
           <HeroStat label="Used this month" value={<CountUp value={used} format={credits} />} hint={`${credits(b.month.autopilotUsed)} autopilot · ${credits(b.month.onDemandUsed)} on-demand`} />
         </>
@@ -124,12 +124,12 @@ function Notices({ b }: { b: BillingOverview }) {
   if (b.status === 'paused')
     notes.push(
       pausedByLimit(b) ? (
-        <Callout key="paused" tone="warning" title="Your websites’ automatic work is paused">
-          It reached this month’s autopilot limit of {credits(b.limits.autopilotMonthly ?? 0)}. It resumes by itself on the 1st, or as soon as {can('owner') ? 'you raise' : 'an owner raises'} the
+        <Callout key="paused" tone="warning" title="Your websites' automatic work is paused">
+          It reached this month's autopilot limit of {credits(b.limits.autopilotMonthly ?? 0)}. It resumes by itself on the 1st, or as soon as {can('owner') ? 'you raise' : 'an owner raises'} the
           limit below.
         </Callout>
       ) : (
-        <Callout key="paused" tone="critical" title="Your websites’ automatic work is paused: out of credits">
+        <Callout key="paused" tone="critical" title="Your websites' automatic work is paused: out of credits">
           Weekly reports, monitors and blog posts resume by themselves when credits are added.
         </Callout>
       ),
@@ -137,7 +137,7 @@ function Notices({ b }: { b: BillingOverview }) {
   else if (b.enforced && b.status === 'empty')
     notes.push(
       <Callout key="empty" tone="critical" title="You are out of credits">
-        New analyses cannot start, and your websites’ automatic work pauses until credits are added.
+        New analyses cannot start, and your websites' automatic work pauses until credits are added.
       </Callout>,
     );
   if (b.expiringSoon)
@@ -159,7 +159,7 @@ function MonthCard({ b }: { b: BillingOverview }) {
   const apMax = Math.max(m.autopilotForecast, apLimit ?? 0, m.autopilotUsed);
   const over = apLimit != null && m.autopilotUsed >= apLimit;
   return (
-    <SettingsCard icon={<CalendarDays />} title="This month" description={`${monthLabel(m.month)} so far: what your websites’ schedules and your own analyses used.`}>
+    <SettingsCard icon={<CalendarDays />} title="This month" description={`${monthLabel(m.month)} so far: what your websites' schedules and your own analyses used.`}>
       <CardBody className="space-y-5">
         <ProgressBar
           label="Autopilot"
@@ -218,7 +218,7 @@ function siteState(s: BillingSiteRow): ReactNode {
 function SitesCard({ sites }: { sites: BillingSiteRow[] }) {
   const { org } = useOrgCtx();
   return (
-    <SettingsCard icon={<Globe />} title="Autopilot by website" description="What each website’s schedules are forecast to use a month, from its settings, and what they used this month.">
+    <SettingsCard icon={<Globe />} title="Autopilot by website" description="What each website's schedules are forecast to use a month, from its settings, and what they used this month.">
       <CardBody>
         {sites.length ? (
           <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
@@ -235,14 +235,14 @@ function SitesCard({ sites }: { sites: BillingSiteRow[] }) {
                   <p className="text-xs text-ink-3">
                     About <span className="font-mono">{credits(s.forecastMonthly)}</span> a month · <span className="font-mono">{credits(s.usedThisMonth)}</span> used this month
                   </p>
-                  {s.pausedForCredits && <p className="text-xs text-critical-text">Paused: out of credits — resumes when credits are added.</p>}
+                  {s.pausedForCredits && <p className="text-xs text-critical-text">Paused: out of credits. It resumes when credits are added.</p>}
                 </div>
                 {siteState(s)}
               </li>
             ))}
           </ul>
         ) : (
-          <EmptyState icon={<Globe className="size-5" />} title="No websites yet" description="Each website’s weekly reports and monitors use credits as they run; their forecast appears here." className="py-8" />
+          <EmptyState icon={<Globe className="size-5" />} title="No websites yet" description="Each website's weekly reports and monitors use credits as they run; their forecast appears here." className="py-8" />
         )}
       </CardBody>
     </SettingsCard>
@@ -275,7 +275,7 @@ function UsageCharts({ b, loading }: { b: BillingOverview; loading: boolean }) {
         <EmptyState
           icon={<ChartNoAxesColumn className="size-5" />}
           title="No credits used this month yet"
-          description="Usage by feature and by day appears here as soon as your websites’ schedules run or someone starts an analysis."
+          description="Usage by feature and by day appears here as soon as your websites' schedules run or someone starts an analysis."
           action={
             can('member') ? (
               <Link to={paths.tools(org.id)} className="text-sm font-medium text-accent-text underline-offset-2 hover:underline">
@@ -423,9 +423,9 @@ function HowCreditsWork({ b }: { b: BillingOverview }) {
   const items: ReactNode[] = [
     'Every analysis shows its price in credits before it starts, and holds that price while it runs.',
     'When it finishes it is charged what it really used, and never more than the price it showed. An analysis that fails is free.',
-    'Your websites’ automatic work (weekly reports, monitors, blog posts) uses credits as it runs. If credits run out it pauses, and it resumes by itself when credits are added.',
+    'Your websites\' automatic work (weekly reports, monitors, blog posts) uses credits as it runs. If credits run out it pauses, and it resumes by itself when credits are added.',
     b.limits.reserveForAutopilot
-      ? 'Analyses you start leave alone the credits your websites’ schedules still need this month.'
+      ? 'Analyses you start leave alone the credits your websites\' schedules still need this month.'
       : 'Analyses you start may use every credit, including what the schedules will need later this month.',
     'Credits are used soonest-expiring first.',
   ];

@@ -53,7 +53,7 @@ export async function startRun(body: Record<string, unknown>, orgId: string): Pr
 }
 
 export interface AssessCallResult {
-  /** answered: n8n's HTTP status and JSON (200 answer, 400 invalid, 429 limit, 502 DataForSEO failed, …); unreachable: never arrived */
+  /** answered: n8n's HTTP status and JSON (200 answer, 400 invalid, 429 limit, 502 DataForSEO failed, ...); unreachable: never arrived */
   kind: 'answered' | 'unreachable' | 'timeout';
   status: number;
   json: Record<string, unknown>;
@@ -85,7 +85,7 @@ export async function assessCall(body: Record<string, unknown>, orgId: string, t
   return { kind: 'answered', status: res.status, json: json && typeof json === 'object' && !Array.isArray(json) ? json : {}, error: null };
 }
 
-/** B3-7: the Publish Check (SEOagentPubCheck) — a supplied page through the content gate's deterministic half; free, writes nothing. */
+/** B3-7: the Publish Check (SEOagentPubCheck), a supplied page through the content gate's deterministic half; free, writes nothing. */
 export async function publishCheckCall(body: Record<string, unknown>, orgId: string, timeoutMs = 30000): Promise<AssessCallResult> {
   if (!config.n8n.webhookKey) return { kind: 'unreachable', status: 0, json: {}, error: 'The SEO engine is not configured (SEO_API_KEY missing)' };
   let res: Response;

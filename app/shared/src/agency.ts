@@ -60,7 +60,7 @@ export function clientWorkspaceRole(o: {
 
 /** inviting into a company: client roles only in client workspaces, staff roles never there (staff come by assignment) */
 export function inviteRoleProblem(kind: OrgKind, role: string): string | null {
-  if (kind === 'client') return isClientRole(role) ? null : 'People of the agency are added to a client by assigning them from the agency. Invite the client’s people as client viewer or client approver.';
+  if (kind === 'client') return isClientRole(role) ? null : 'People of the agency are added to a client by assigning them from the agency. Invite the client\'s people as client viewer or client approver.';
   return isClientRole(role) ? 'Client roles exist only in client workspaces.' : null;
 }
 
@@ -80,7 +80,7 @@ export interface Rgb {
   b: number;
 }
 
-/** `#rrggbb` or `#rgb` → numbers; anything else → null (no names, no functions: nothing typed reaches a stylesheet as text) */
+/** `#rrggbb` or `#rgb` -> numbers; anything else -> null (no names, no functions: nothing typed reaches a stylesheet as text) */
 export function parseHex(v: unknown): Rgb | null {
   const s = String(v ?? '').trim();
   const m6 = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(s);
@@ -97,7 +97,7 @@ const lin = (v: number) => {
 };
 /** WCAG 2.x relative luminance */
 export const luminance = (c: Rgb): number => 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b);
-/** WCAG 2.x contrast ratio, 1–21 */
+/** WCAG 2.x contrast ratio, 1-21 */
 export function contrastRatio(a: Rgb | string, b: Rgb | string): number {
   const x = typeof a === 'string' ? parseHex(a) : a;
   const y = typeof b === 'string' ? parseHex(b) : b;
@@ -270,7 +270,7 @@ export function brandTokens(accentHex: string): BrandTokens | null {
 
 /**
  * The stylesheet that applies a brand: the light tokens on `:root`, the dark ones under the app's two dark selectors (the OS setting
- * unless the person picked light, and an explicit dark pick) — the same structure as index.css, so dark mode never breaks. Only our
+ * unless the person picked light, and an explicit dark pick), the same structure as index.css, so dark mode never breaks. Only our
  * computed `#hex` / `rgba()` values are written; the agency's input never reaches it as text.
  */
 export function brandCss(t: BrandTokens, scope = ':root'): string {
@@ -305,7 +305,7 @@ const emailOrEmpty = z
   .max(200)
   .refine((v) => v === '' || /^[^@\s<>"]+@[^@\s<>"]+\.[a-z]{2,}$/i.test(v), 'Enter a valid e-mail address');
 
-/** what an agency sets (Company settings → Branding) */
+/** what an agency sets (Company settings -> Branding) */
 export const brandingSchema = z.object({
   /** the switch: off = clients see the app as it is (Alaventra) with the agency's name only where it is a fact */
   whiteLabel: z.boolean().default(false),
@@ -409,7 +409,7 @@ export const PORTAL_DOMAIN = {
   lapseAfterFailures: 3,
 } as const;
 
-/** `https://SEO.Agency.com:443/x` → `seo.agency.com`; null when it is not a host name we could serve */
+/** `https://SEO.Agency.com:443/x` -> `seo.agency.com`; null when it is not a host name we could serve */
 export function normalizeHost(v: unknown): string | null {
   let s = String(v ?? '').trim().toLowerCase();
   if (!s || s.length > 253) return null;
@@ -468,7 +468,7 @@ export const portalMailSchema = z.object({
   /** the display name on e-mails to clients (the address stays the platform's unless a custom From is set) */
   senderName: plainName(80).default(''),
   replyTo: emailOrEmpty.default(''),
-  /** an SMTP / OAuth mailbox the agency connected (Company settings → Mailboxes); null = the platform's address */
+  /** an SMTP / OAuth mailbox the agency connected (Company settings -> Mailboxes); null = the platform's address */
   fromMailboxId: z.string().uuid().nullable().default(null),
   /** the DKIM selector to look for, when it is not one of the common ones */
   dkimSelector: z
@@ -514,10 +514,10 @@ export const senderDisplayName = (v: string): string => v.replace(/["\\\r\n<>]/g
 // Clients, staff, overview
 // ---------------------------------------------------------------------------------------------------------------------------
 
-// credits (app/docs/CREDITS.md): no dollar budget is asked for any more — a client workspace is limited by its credits (Settings →
+// credits (app/docs/CREDITS.md): no dollar budget is asked for any more, a client workspace is limited by its credits (Settings ->
 // Credits); the server keeps the platform's default dollar guard on the row
 export const createClientSchema = z.object({
-  name: plainName(120).refine((v) => v.length >= 2, 'Enter the client’s name'),
+  name: plainName(120).refine((v) => v.length >= 2, 'Enter the client\'s name'),
   website: z.string().trim().max(200).default(''),
 });
 export const staffAssignSchema = z.object({ role: z.enum(ASSIGNABLE_ROLES).nullable() });
@@ -663,7 +663,7 @@ export interface ApprovalCandidate {
 // ---------------------------------------------------------------------------------------------------------------------------
 
 /**
- * Key names that carry what something cost us. Never shown to a customer — credits (app/docs/CREDITS.md): since 2026-10-19 not to the
+ * Key names that carry what something cost us. Never shown to a customer, credits (app/docs/CREDITS.md): since 2026-10-19 not to the
  * company's own people either, only to the platform admin panel. Beside the cost / ledger / budget words: the engine's run ledger and
  * its parts (`by_node`, `ai_nodes`, `ai_cost*`, `dataforseo_*`, `dfs_*`, `run_cost_estimate_*`, `cost_basis`). Google Ads CPC
  * (`cpc`, `cpc_usd`, `primary_cpc`) is keyword data, not our cost: always kept.
@@ -694,7 +694,7 @@ export interface PayloadCredits {
 }
 
 /**
- * A report payload as every customer gets it — the company's own people, API / MCP callers and client people alike: no provider cost
+ * A report payload as every customer gets it, the company's own people, API / MCP callers and client people alike: no provider cost
  * at any depth (`clientSafePayload`), plus `credits_used` / `credits_state` (null when unknown). The stored payload is untouched.
  */
 export function customerSafePayload(payload: Record<string, unknown>, credits: PayloadCredits | null = null): Record<string, unknown> {

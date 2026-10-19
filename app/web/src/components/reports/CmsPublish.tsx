@@ -16,8 +16,8 @@ import { fmtDateTime } from '@/lib/utils';
 import { Block } from './kit';
 
 /**
- * G2 — "Publish to your CMS" on a written page (app/docs/CMS_PUBLISHING.md §7). It shows every reason the page may not go out (the
- * server decides; this only mirrors it), sends a draft, and — for owners and admins, after an explicit confirmation — publishes live.
+ * G2, "Publish to your CMS" on a written page (app/docs/CMS_PUBLISHING.md §7). It shows every reason the page may not go out (the
+ * server decides; this only mirrors it), sends a draft, and, for owners and admins, after an explicit confirmation, publishes live.
  * There is no override: a blocked page is fixed and run again, not forced.
  */
 export function CmsPublishPanel({ report }: { report: ReportDetail }) {
@@ -141,7 +141,7 @@ export function CmsPublishPanel({ report }: { report: ReportDetail }) {
               ) : (
                 <span>Not in {conn.label} yet.</span>
               )}
-              {conn.status !== 'ok' && <StatusBadge tone="warning">{conn.status === 'error' ? 'The connection’s last test failed' : 'Connection not tested yet'}</StatusBadge>}
+              {conn.status !== 'ok' && <StatusBadge tone="warning">{conn.status === 'error' ? 'The connection\'s last test failed' : 'Connection not tested yet'}</StatusBadge>}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {s.canDraft && !live && (
@@ -183,7 +183,7 @@ export function CmsPublishPanel({ report }: { report: ReportDetail }) {
           open
           onOpenChange={(o) => !o && (setConfirming(false), setTicked(false))}
           title={live ? 'Update the live page?' : 'Publish this page live?'}
-          description={`It goes live in ${conn.label}${url ? ` at ${url}` : ''}, under your company’s name.`}
+          description={`It goes live in ${conn.label}${url ? ` at ${url}` : ''}, under your company's name.`}
           footer={
             <>
               <Button variant="ghost" onClick={() => setConfirming(false)}>

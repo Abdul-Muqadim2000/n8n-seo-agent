@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { DELIVERY, deliveryDecision, deliveryWebhookBody, type DeliveryPayload } from '@seo/shared';
 import { settingsOf, signBody, verifyBody } from '../src/services/reportDelivery';
 
-// B-R1 — report delivery. The decision itself is tested in `@seo/shared` (`report-delivery.test.ts`, 38 cases); what is tested here
+// B-R1, report delivery. The decision itself is tested in `@seo/shared` (`report-delivery.test.ts`, 38 cases); what is tested here
 // is the server's own half: reading a company's stored settings, and signing a webhook body so a receiver can tell it is ours.
 
-describe('settingsOf — a company that has never touched the setting', () => {
+describe('settingsOf: a company that has never touched the setting', () => {
   it('delivers nothing until somebody asks for it', () => {
     const s = settingsOf({ deliverySettings: {}, deliveryWebhookSecret: '' });
     expect(s.frequency).toBe('off');
@@ -22,7 +22,7 @@ describe('settingsOf — a company that has never touched the setting', () => {
     expect(s.hour).toBe(8);
   });
 
-  it('falls back to “off” when the stored row makes no sense at all', () => {
+  it('falls back to "off" when the stored row makes no sense at all', () => {
     expect(settingsOf({ deliverySettings: { frequency: 'hourly' } as never, deliveryWebhookSecret: '' }).frequency).toBe('off');
   });
 
@@ -84,7 +84,7 @@ describe('the body that goes over the wire', () => {
     const b = deliveryWebhookBody(payload) as { text: string; held: { code: string }[]; reports: { figures: Record<string, unknown> }[] };
     expect(b.text).toContain('Health score: 83');
     expect(b.text).toContain('https://app.example.com/share/tok');
-    expect(b.text).toContain('Not sent — Page: erp software uae');
+    expect(b.text).toMatch(/Not sent(?: \u2014|:|,) Page: erp software uae/);
     expect(b.held[0]!.code).toBe('not_ready');
     expect(b.reports[0]!.figures.healthScore).toBe(83);
   });

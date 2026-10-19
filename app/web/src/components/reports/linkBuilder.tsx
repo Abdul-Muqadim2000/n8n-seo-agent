@@ -18,7 +18,7 @@ const LISTING: Record<string, { label: string; tone: Tone }> = {
   listed: { label: 'Listed, no link seen', tone: 'accent' },
   missing: { label: 'Not listed', tone: 'warning' },
   submitted: { label: 'Submitted', tone: 'accent' },
-  unknown: { label: 'Can’t check automatically', tone: 'neutral' },
+  unknown: { label: 'Can\'t check automatically', tone: 'neutral' },
   ignored: { label: 'Not relevant', tone: 'neutral' },
 };
 const VERDICT: Record<string, { label: string; tone: Tone }> = {
@@ -26,7 +26,7 @@ const VERDICT: Record<string, { label: string; tone: Tone }> = {
   possibly_helped: { label: 'Possibly helped', tone: 'accent' },
   no_effect_yet: { label: 'No measurable effect yet', tone: 'neutral' },
   too_early: { label: 'Too early', tone: 'neutral' },
-  cant_tell: { label: 'Can’t tell', tone: 'neutral' },
+  cant_tell: { label: 'Can\'t tell', tone: 'neutral' },
 };
 const tag = (t: { label: string; tone: Tone }) => (t.tone === 'neutral' ? <Badge>{t.label}</Badge> : <StatusBadge tone={t.tone}>{t.label}</StatusBadge>);
 
@@ -117,7 +117,7 @@ export function LinkBuilderReport({ report }: { report: ReportDetail }) {
           title="Assets that earn links in your market"
           icon={<Lightbulb />}
           description="The kinds of page your competitors have earned links with, with the pages that prove it"
-          info="Read from the pages of your competitors that have the most websites linking to them. Making one of these is real work, and no asset is a promise of links — it is the best-evidenced bet in your market."
+          info="Read from the pages of your competitors that have the most websites linking to them. Making one of these is real work, and no asset is a promise of links. It is the best-evidenced bet in your market."
           flush
         >
           <ul className="divide-y divide-line text-[13px]">
@@ -172,14 +172,14 @@ export function LinkBuilderReport({ report }: { report: ReportDetail }) {
           title="What your links did"
           icon={<BarChart3 />}
           description="The page each won link points to, against your pages without a new link"
-          info="We say “likely helped”, never “caused”: the page's position is compared with your other pages over the same weeks, so site-wide swings cancel out."
+          info="We say &quot;likely helped&quot;, never &quot;caused&quot;: the page's position is compared with your other pages over the same weeks, so site-wide swings cancel out."
           flush
         >
           <ul className="divide-y divide-line text-[13px]">
             {impact.map((r, i) => (
               <li key={i} className="flex flex-col gap-1 px-5 py-2.5 sm:flex-row sm:items-center sm:gap-3">
                 <span className="min-w-0 text-ink [overflow-wrap:anywhere]">
-                  {str(r.ref_domain)} → {str(r.target_url) ? shortUrl(str(r.target_url)) : 'your page'}
+                  {str(r.ref_domain)} to {str(r.target_url) ? shortUrl(str(r.target_url)) : 'your page'}
                 </span>
                 <span className="flex shrink-0 items-center gap-2 sm:ml-auto">
                   <span className="text-xs text-ink-3">{num(r.weeks) ?? 0} weeks</span>

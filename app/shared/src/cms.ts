@@ -4,14 +4,14 @@ import { findOpenBrackets, type OpenBracket } from './placeholders';
 import { deliveryDecision } from './report-delivery';
 
 /**
- * G2 — publishing a written page to the customer's CMS (app/docs/CMS_PUBLISHING.md).
+ * G2, publishing a written page to the customer's CMS (app/docs/CMS_PUBLISHING.md).
  *
  * This file holds what the server and the browser must agree on, and what is worth testing without a network: the kinds of CMS, the
  * settings and their schemas, **the rule that decides whether a page may leave the app** (`cmsReadiness`), the page package every
  * connector publishes from, the address of a live page, the field mapping and the generic webhook's body.
  *
- * The rule refuses by default. A page the run marked not ready is never sent anywhere — it is the delivery rule of B-R1
- * (`deliveryDecision`), called unchanged — and a page with text left for the owner (`[Confirm: …]`, `[Owner: …]`, `[Price]`,
+ * The rule refuses by default. A page the run marked not ready is never sent anywhere, it is the delivery rule of B-R1
+ * (`deliveryDecision`), called unchanged, and a page with text left for the owner (`[Confirm: ...]`, `[Owner: ...]`, `[Price]`,
  * `[Author Name]`) is never sent either, as a draft or live. There is no override, for any role.
  */
 
@@ -40,7 +40,7 @@ export const CMS_KIND_INFO: Record<CmsKind, CmsKindInfo> = {
   wordpress: {
     id: 'wordpress',
     label: 'WordPress',
-    description: 'Posts or pages through the WordPress REST API, signed in with an application password. Categories, tags, the featured image and your SEO plugin’s fields when it exposes them.',
+    description: 'Posts or pages through the WordPress REST API, signed in with an application password. Categories, tags, the featured image and your SEO plugin\'s fields when it exposes them.',
     guide: 'wordpress-application-password',
     secretLabel: 'Application password',
     needsBaseUrl: true,
@@ -50,7 +50,7 @@ export const CMS_KIND_INFO: Record<CmsKind, CmsKindInfo> = {
   webflow: {
     id: 'webflow',
     label: 'Webflow',
-    description: 'An item in one of your CMS collections (Data API v2), with your collection’s fields mapped once.',
+    description: 'An item in one of your CMS collections (Data API v2), with your collection\'s fields mapped once.',
     guide: 'webflow-api-token',
     secretLabel: 'Site API token',
     needsBaseUrl: false,
@@ -70,7 +70,7 @@ export const CMS_KIND_INFO: Record<CmsKind, CmsKindInfo> = {
   webhook: {
     id: 'webhook',
     label: 'Webhook (any other stack)',
-    description: 'The whole page package as signed JSON to an address of yours — a headless CMS, a build pipeline or a bot that opens a pull request.',
+    description: 'The whole page package as signed JSON to an address of yours (a headless CMS, a build pipeline or a bot that opens a pull request).',
     guide: 'cms-webhook',
     secretLabel: 'Signing secret',
     needsBaseUrl: true,
@@ -116,7 +116,7 @@ const SOURCE_IDS = CMS_SOURCE_FIELDS.map((f) => f.id) as [CmsSourceField, ...Cms
 export interface CmsRemoteField {
   id: string;
   name: string;
-  /** the CMS's own type name (Webflow: PlainText, RichText…; Contentful: Symbol, Text, RichText…) */
+  /** the CMS's own type name (Webflow: PlainText, RichText...; Contentful: Symbol, Text, RichText...) */
   type: string;
   required: boolean;
 }
@@ -145,7 +145,7 @@ export function fieldMapProblems(kind: CmsKind, map: CmsFieldMap, remote: readon
     const label = CMS_SOURCE_FIELDS.find((f) => f.id === src)?.label ?? src;
     const f = byId.get(dst);
     if (!f) {
-      out.push(`${label}: the field "${dst}" is not in the ${kind === 'webflow' ? 'collection' : 'content type'} any more — test the connection again`);
+      out.push(`${label}: the field "${dst}" is not in the ${kind === 'webflow' ? 'collection' : 'content type'} any more. Test the connection again`);
       continue;
     }
     if (kind === 'webflow' && (dst === 'name' || dst === 'slug')) {
@@ -155,12 +155,12 @@ export function fieldMapProblems(kind: CmsKind, map: CmsFieldMap, remote: readon
     if (used.has(dst)) out.push(`${f.name} is mapped twice (${used.get(dst)} and ${label})`);
     used.set(dst, label);
     if (kind === 'contentful' && f.type === 'RichText')
-      out.push(`${label} → ${f.name}: Contentful Rich Text is a document model, not HTML — map the article to a long-text (Markdown) field`);
+      out.push(`${label} (${f.name}): Contentful Rich Text is a document model, not HTML. Map the article to a long-text (Markdown) field`);
     else if ((src === 'body_html' || src === 'body_markdown') && !HTML_TYPES[kind].includes(f.type))
-      out.push(`${label} → ${f.name}: a ${f.type} field cannot hold a whole article`);
-    else if (src === 'updated' && !DATE_TYPES[kind].includes(f.type)) out.push(`${label} → ${f.name}: a ${f.type} field cannot hold a date`);
+      out.push(`${label} (${f.name}): a ${f.type} field cannot hold a whole article`);
+    else if (src === 'updated' && !DATE_TYPES[kind].includes(f.type)) out.push(`${label} (${f.name}): a ${f.type} field cannot hold a date`);
     else if (src !== 'body_html' && src !== 'body_markdown' && src !== 'updated' && !TEXT_TYPES[kind].includes(f.type) && !(kind === 'contentful' && f.type === 'Symbol'))
-      out.push(`${label} → ${f.name}: a ${f.type} field cannot hold text`);
+      out.push(`${label} (${f.name}): a ${f.type} field cannot hold text`);
   }
   if (kind === 'contentful') {
     if (!map.title) out.push('Choose the field that holds the title');
@@ -172,7 +172,7 @@ export function fieldMapProblems(kind: CmsKind, map: CmsFieldMap, remote: readon
   const filled = new Set(Object.values(map).filter(Boolean));
   for (const f of remote)
     if (f.required && !filled.has(f.id) && !(kind === 'webflow' && (f.id === 'name' || f.id === 'slug')))
-      out.push(`${f.name} is required in your CMS and nothing fills it — map a field to it or make it optional there`);
+      out.push(`${f.name} is required in your CMS and nothing fills it. Map a field to it or make it optional there`);
   return out;
 }
 
@@ -266,9 +266,9 @@ const contentfulCreate = z.object({
   kind: z.literal('contentful'),
   label: trimmed(60).default(''),
   secret: trimmed(400).min(20, 'Paste the content management token'),
-  spaceId: z.string().trim().regex(/^[a-z0-9]{6,64}$/i, 'The space id is letters and digits (Settings → General settings)'),
+  spaceId: z.string().trim().regex(/^[a-z0-9]{6,64}$/i, 'The space id is letters and digits (Settings > General settings)'),
   environment: z.string().trim().regex(/^[A-Za-z0-9_.-]{1,64}$/, 'Letters, digits, dots, dashes').default('master'),
-  contentTypeId: z.string().trim().regex(/^[A-Za-z0-9_.-]{1,64}$/, 'The content type id (Content model → the type → its id)'),
+  contentTypeId: z.string().trim().regex(/^[A-Za-z0-9_.-]{1,64}$/, 'The content type id (Content model > the type > its id)'),
   fieldMap: fieldMapSchema,
   publicUrlTemplate: urlTemplate,
 });
@@ -325,9 +325,9 @@ export interface CmsImage {
   mimeType: string;
   alt: string;
   caption: string;
-  /** hero | section | … */
+  /** hero | section | ... */
   purpose: string;
-  /** the path the article's HTML uses for it (images/…webp) */
+  /** the path the article's HTML uses for it (images/...webp) */
   path: string;
 }
 
@@ -366,7 +366,7 @@ export const slugify = (v: string): string =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 90);
 
-/** The engine's callback (stage `content`) → the one package every connector publishes from. */
+/** The engine's callback (stage `content`) > the one package every connector publishes from. */
 export function cmsPage(payload: P): CmsPage {
   const meta = obj(payload.meta);
   const plan = arr(meta.images).map(obj);
@@ -425,14 +425,14 @@ export function cmsPage(payload: P): CmsPage {
 const visibleText = (t: string): string => t.replace(/<script\b[\s\S]*?<\/script>/gi, ' ').replace(/<style\b[\s\S]*?<\/style>/gi, ' ');
 
 /**
- * Every bracket left for a person (a gap to fill or a review note to confirm), once each with its count — through the ONE detector
+ * Every bracket left for a person (a gap to fill or a review note to confirm), once each with its count, through the ONE detector
  * the engine's Content QA and the delivery rule use (`findOpenBrackets`, placeholders.ts), so the CMS gate cannot disagree with them.
  */
 export function findCmsPlaceholders(texts: readonly string[]): OpenBracket[] {
   const m = new Map<string, OpenBracket>();
   for (const raw of texts)
     for (const b of findOpenBrackets(visibleText(raw || ''))) {
-      const token = b.token.length > 120 ? `${b.token.slice(0, 117)}…]` : b.token;
+      const token = b.token.length > 120 ? `${b.token.slice(0, 117)}...]` : b.token;
       const had = m.get(token);
       m.set(token, { token, kind: b.kind, count: (had?.count ?? 0) + b.count });
     }
@@ -503,7 +503,7 @@ export function cmsReadiness(c: CmsCandidate, page: CmsPage = cmsPage(c.payload 
       const total = ph.reduce((t, x) => t + x.count, 0);
       blockers.push({
         code: 'placeholders',
-        message: `${total} ${total === 1 ? 'placeholder is' : 'placeholders are'} still in the page — fill ${total === 1 ? 'it' : 'them'} in (or remove ${total === 1 ? 'it' : 'them'}) and run the page again before it goes to your CMS.`,
+        message: `${total} ${total === 1 ? 'placeholder is' : 'placeholders are'} still in the page. Fill ${total === 1 ? 'it' : 'them'} in (or remove ${total === 1 ? 'it' : 'them'}) and run the page again before it goes to your CMS.`,
         items: ph.slice(0, 40),
       });
     }

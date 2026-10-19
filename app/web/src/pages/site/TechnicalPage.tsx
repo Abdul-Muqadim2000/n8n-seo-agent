@@ -45,7 +45,7 @@ export default function TechnicalPage() {
       <PageHeader
         icon={<Gauge />}
         title="Technical health"
-        description="Crawl results, health score and every issue the audits found — what is new, what is still open and what you fixed."
+        description="Crawl results, health score and every issue the audits found: what is new, what is still open and what you fixed."
         actions={
           <>
             {audits.length > 1 && (
@@ -107,7 +107,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
     );
 
   const sel: AuditPoint = audits.find((a) => a.auditId === d.selectedAuditId) ?? audits[audits.length - 1];
-  // R66: compare only with the audit the server chose — the previous one of the same report type. The old fallback to the list
+  // R66: compare only with the audit the server chose, the previous one of the same report type. The old fallback to the list
   // neighbour is gone: a full report and a technical audit score different findings on different weights, so the neighbour of the
   // other type is not a baseline (it gave "25 new issues" and "down from 83 to 70").
   const prev: AuditPoint | null = audits.find((a) => a.auditId === d.previousAuditId) ?? null;
@@ -147,7 +147,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
               <HeroStat label="Fixed since the last audit" value={<CountUp value={st.fixed ?? 0} />} hint={`audit of ${fmtDate(prev.auditedAt)}`} />
               <HeroStat label="New issues" value={<CountUp value={st.new ?? 0} />} hint="found for the first time" />
               <HeroStat label="Still open" value={<CountUp value={st.open ?? 0} />} hint="found by both audits" />
-              <HeroStat label="Health score change" value={scoreDelta != null ? `${scoreDelta > 0 ? '+' : ''}${scoreDelta} pts` : '–'} hint={`${prev.healthScore} → ${sel.healthScore} of 100`} />
+              <HeroStat label="Health score change" value={scoreDelta != null ? `${scoreDelta > 0 ? '+' : ''}${scoreDelta} pts` : '-'} hint={`${prev.healthScore} to ${sel.healthScore} of 100`} />
             </>
           ) : undefined
         }
@@ -167,7 +167,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
           delta={<Delta value={scoreDelta} suffix=" pts" digits={0} />}
           deltaLabel={prev ? `vs ${fmtDate(prev.auditedAt)}` : 'first audit'}
           sparkline={<Sparkline data={trend.map((a) => ({ healthScore: a.healthScore }))} dataKey="healthScore" />}
-          info="80 and above is good, 60–79 needs work, below 60 is poor"
+          info="80 and above is good, 60-79 needs work, below 60 is poor"
           meta={
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <StatusBadge tone={tone === 'accent' ? 'neutral' : tone}>{grade}</StatusBadge>
@@ -297,10 +297,10 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
 /** The hero's headline: the score and what needs fixing first. */
 function healthHeadline(a: AuditPoint): string {
   const head = `Health ${a.healthScore}/100`;
-  if (a.critical) return `${head} — ${plural(a.critical, 'critical issue')}${a.high ? ` and ${a.high} high` : ''} to fix`;
-  if (a.high) return `${head} — ${plural(a.high, 'high-severity issue')} to fix`;
-  if (a.medium) return `${head} — no critical issues, ${plural(a.medium, 'medium issue')} left`;
-  return `${head} — no critical or high issues`;
+  if (a.critical) return `${head}: ${plural(a.critical, 'critical issue')}${a.high ? ` and ${a.high} high` : ''} to fix`;
+  if (a.high) return `${head}: ${plural(a.high, 'high-severity issue')} to fix`;
+  if (a.medium) return `${head}: no critical issues, ${plural(a.medium, 'medium issue')} left`;
+  return `${head}: no critical or high issues`;
 }
 
 /** Severities of one audit as status-coloured buckets (these colours are status: always with the words in the legend). */
@@ -411,7 +411,7 @@ function CategoryChart({ rows, loading }: { rows: TechnicalData['byCategory']; l
           categoryWidth={132}
           categoryFormat={(v) => {
             const s = String(v ?? '');
-            return s.length > 20 ? `${s.slice(0, 19)}…` : s;
+            return s.length > 20 ? `${s.slice(0, 19)}...` : s;
           }}
         />
       ) : (
@@ -440,7 +440,7 @@ function FindingsTable({ findings: all, hasPrevious, auditId }: { findings: Find
   const [cat, setCat] = useState('all');
   const [showMinor, setShowMinor] = useState(false);
   // G18-2 (2026-10-12, FIX_PLAN §3.9): the minor band is folded into one line, exactly as the audit report folds it (the same rule, from
-  // the stored severity and impact). Nothing is removed — the folded rows open with one click, and the counts above include them.
+  // the stored severity and impact). Nothing is removed, the folded rows open with one click, and the counts above include them.
   const { main, minor } = useMemo(() => foldMinor(all), [all]);
   const findings = showMinor ? all : main;
   const minorId = 'minor-findings';
@@ -474,7 +474,7 @@ function FindingsTable({ findings: all, hasPrevious, auditId }: { findings: Find
       sortValue: (f) => f.affectedCount,
       cell: (f) => (
         <span className="inline-flex flex-col items-end">
-          {f.affectedCount > 0 ? f.affectedCount.toLocaleString('en-US') : f.status === 'fixed' ? '0' : '–'}
+          {f.affectedCount > 0 ? f.affectedCount.toLocaleString('en-US') : f.status === 'fixed' ? '0' : '-'}
           {f.previousCount != null && f.previousCount !== f.affectedCount && <Delta value={f.affectedCount - f.previousCount} suffix="" digits={0} upIsGood={false} className="text-[11px]" />}
         </span>
       ),
@@ -483,7 +483,7 @@ function FindingsTable({ findings: all, hasPrevious, auditId }: { findings: Find
     // G11 (2026-10-13): mark it fixed and the daily key-page watch judges that one finding again the next morning
     { key: 'recheck', header: 'Fix check', sortValue: (f: Finding) => f.recheck?.state ?? '', cell: (f: Finding) => <RecheckCell finding={f} auditId={auditId} /> },
     ...(ticketing
-      ? [{ key: 'ticket', header: 'Ticket', cell: (f: Finding) => (f.status === 'fixed' || !f.key ? <span className="text-ink-3">—</span> : <TicketButton siteId={site.id} source={{ type: 'finding', auditId, findingKey: f.key }} />) }]
+      ? [{ key: 'ticket', header: 'Ticket', cell: (f: Finding) => (f.status === 'fixed' || !f.key ? <span className="text-ink-3">-</span> : <TicketButton siteId={site.id} source={{ type: 'finding', auditId, findingKey: f.key }} />) }]
       : []),
   ];
 
@@ -498,8 +498,8 @@ function FindingsTable({ findings: all, hasPrevious, auditId }: { findings: Find
             onToggle={() => setShowMinor(!showMinor)}
             controls={minorId}
             variant="link"
-            label={`Minor items (${minor.length}) — show them in the table`}
-            openLabel={`Minor items (${minor.length}) — hide them again`}
+            label={`Minor items (${minor.length}): show them in the table`}
+            openLabel={`Minor items (${minor.length}): hide them again`}
           />
           <p className="mt-1 text-xs text-ink-3">{minorFoldNote(minor.length)}</p>
         </div>
@@ -581,7 +581,7 @@ function WatchPanel({ watch, coverage }: { watch: PageWatch | null; coverage: In
         title="Daily key-page watch"
         icon={<Eye />}
         iconTone="neutral"
-        description="Checks your most important pages every morning — status, noindex, canonical, title and robots.txt"
+        description="Checks your most important pages every morning for status, noindex, canonical, title and robots.txt"
       >
         <p className="text-sm text-ink-2">
           It starts once this website is tracked: every morning the engine fetches your key pages (home page, the menu, the pages Search Console brings impressions for, the pages your keyword ladders own) and tells you the same day when one disappears, is set to noindex, starts redirecting, changes its canonical or its title, or when robots.txt changes.
@@ -598,7 +598,7 @@ function WatchPanel({ watch, coverage }: { watch: PageWatch | null; coverage: In
       description={
         watch.running
           ? `${plural(watch.pagesWatched, 'key page')} checked every morning · last check ${fmtDate(watch.lastCheckedAt)}`
-          : `Last check ${watch.lastCheckedAt ? fmtDate(watch.lastCheckedAt) : 'unknown'} — the watch has not run since`
+          : `Last check ${watch.lastCheckedAt ? fmtDate(watch.lastCheckedAt) : 'unknown'}. The watch has not run since`
       }
       flush
     >
@@ -609,7 +609,7 @@ function WatchPanel({ watch, coverage }: { watch: PageWatch | null; coverage: In
           icon={<Eye />}
           tone="blue"
           meta={watch.pagesNotChecked ? `${watch.pagesNotChecked} could not be read in the last check` : 'free: one plain request per page'}
-          info="The key pages come from your site model and page inventory. One plain request each, no paid API — so this can run every day."
+          info="The key pages come from your site model and page inventory. One plain request each, no paid API, so this can run every day."
         />
         <MetricCard
           label="Changes in the last 7 days"
@@ -621,7 +621,7 @@ function WatchPanel({ watch, coverage }: { watch: PageWatch | null; coverage: In
         />
         <MetricCard
           label="In Google's index"
-          value={coverage && coverage.checked ? `${coverage.indexed}/${coverage.checked}` : '—'}
+          value={coverage && coverage.checked ? `${coverage.indexed}/${coverage.checked}` : '-'}
           icon={<FileSearch />}
           tone={coverage && coverage.notIndexed ? 'warning' : 'blue'}
           meta={coverage ? (coverage.notChecked ? `${coverage.notChecked} not checked yet` : 'every key page inspected') : 'Search Console not connected'}
@@ -697,7 +697,7 @@ function RecheckCell({ finding, auditId }: { finding: Finding; auditId: string }
       </span>
     );
   }
-  if (finding.status === 'fixed' || !can('member')) return <span className="text-ink-3">—</span>;
+  if (finding.status === 'fixed' || !can('member')) return <span className="text-ink-3">-</span>;
   return (
     <Button size="sm" variant="ghost" loading={ask.isPending} onClick={() => ask.mutate()}>
       I fixed this

@@ -72,7 +72,7 @@ export default function AdminCreditRequestsPage() {
       sortValue: (r) => r.requestedBy ?? '',
       cell: (r) => (
         <span className="block min-w-[150px] max-w-[260px] text-[13px] text-ink-2">
-          {r.requestedBy ?? '–'}
+          {r.requestedBy ?? '-'}
           {r.note && <span className="block text-xs text-ink-3">{r.note}</span>}
         </span>
       ),
@@ -121,7 +121,7 @@ export default function AdminCreditRequestsPage() {
       <AdminPageHeader
         icon={<Inbox />}
         title="Credit requests"
-        description="Packs customers asked for with “Buy credits”. Invoice each one, then confirm it once paid: the pack is added and the payment counts as revenue."
+        description="Packs customers asked for with &quot;Buy credits&quot;. Invoice each one, then confirm it once paid: the pack is added and the payment counts as revenue."
         actions={
           <Segmented
             size="sm"
@@ -160,7 +160,7 @@ export default function AdminCreditRequestsPage() {
           initialSort={{ key: 'when', dir: 'desc' }}
           pageSize={25}
           searchable
-          searchPlaceholder="Search companies or people…"
+          searchPlaceholder="Search companies or people..."
           searchText={(r) => `${r.orgName} ${r.requestedBy ?? ''} ${r.packId} ${r.note}`}
           toolbar={
             <p className="ml-auto flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-3">
@@ -184,7 +184,7 @@ export default function AdminCreditRequestsPage() {
           setCancelling(null);
           cancel.reset();
         }}
-        title={cancelling ? `Cancel ${cancelling.orgName}’s request for ${credits(cancelling.credits)} credits?` : ''}
+        title={cancelling ? `Cancel ${cancelling.orgName}'s request for ${credits(cancelling.credits)} credits?` : ''}
         description="The customer sees it as cancelled and can ask again. No credits are added."
         confirmLabel="Cancel request"
         danger

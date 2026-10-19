@@ -78,7 +78,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.decorateRequest('session', null);
   app.decorateRequest('portal', null);
 
-  // G5 (app/docs/WHITE_LABEL.md §2): the host decides the tenant before anything else — a verified portal host sets `req.portal`,
+  // G5 (app/docs/WHITE_LABEL.md §2): the host decides the tenant before anything else, a verified portal host sets `req.portal`,
   // a lapsed one (and, with strict hosts, any unknown one) gets a plain 421 and nothing of the app; on a portal host our own icons
   // and social images are not served (the page names the agency, not us)
   app.addHook('onRequest', async (req, reply) => {
@@ -127,7 +127,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     const status = (err as FastifyError).statusCode ?? 500;
     if (status === 429) return reply.status(429).send({ error: 'Too many attempts. Please wait a minute and try again.', code: 'rate_limited' });
     if (status >= 400 && status < 500) return reply.status(status).send({ error: err.message, code: (err as FastifyError).code });
-    // unique-constraint races (two companies verifying the same domain at once, …)
+    // unique-constraint races (two companies verifying the same domain at once, ...)
     if ((err as unknown as { code?: string }).code === '23505') return reply.status(409).send({ error: 'This already exists.', code: 'conflict' });
     req.log.error({ err }, 'request failed');
     return reply.status(500).send({ error: 'Something went wrong on our side. Please try again.', code: 'internal' });

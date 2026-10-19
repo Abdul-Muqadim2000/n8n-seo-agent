@@ -54,7 +54,7 @@ export function AgencyPortalMockup({ className }: { className?: string }) {
       <div className="mk-pop mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line p-3" style={{ ['--mk-i' as string]: 4 }}>
         <span className="min-w-0 text-[11.5px]">
           <span className="block font-semibold">Page: corporate tax guide</span>
-          <span className="block text-ink-3">Waiting for the client’s approver</span>
+          <span className="block text-ink-3">Waiting for the client's approver</span>
         </span>
         <span className="inline-flex h-7 items-center rounded-md bg-accent px-2.5 text-[11.5px] font-medium text-accent-ink">Approve</span>
       </div>

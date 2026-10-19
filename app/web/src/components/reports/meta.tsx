@@ -115,7 +115,7 @@ export function isVerdictOnly(r: ReportLike): boolean {
 }
 
 /**
- * What a report is ("Weekly site report", "Keyword verdict" …). Pass the report to tell content reports apart: "Page / keyword report"
+ * What a report is ("Weekly site report", "Keyword verdict" ...). Pass the report to tell content reports apart: "Page / keyword report"
  * is only right when a page was written.
  */
 export const stageLabel = (stage: string, report?: ReportLike) => {
@@ -124,7 +124,7 @@ export const stageLabel = (stage: string, report?: ReportLike) => {
 };
 export const modeTitle = (mode: string) => (isModeId(mode) ? MODES[mode].title : mode);
 
-/** Page types the engine writes in reports ("Location Page", "Comparison Page", "Guide-style Service Page (…)") mapped to the form's options. */
+/** Page types the engine writes in reports ("Location Page", "Comparison Page", "Guide-style Service Page (...)") mapped to the form's options. */
 export function normalizePageType(v: unknown): PageType {
   const s = String(v ?? '').toLowerCase();
   const exact = PAGE_TYPE_VALUES.find((p) => p.toLowerCase() === s);
@@ -149,7 +149,7 @@ export function keywordPrefill(k: { keyword: string; pageType?: unknown; country
   return out;
 }
 
-/** An engine `api_body` (snake_case, as n8n takes it) → the app's form values for that mode. */
+/** An engine `api_body` (snake_case, as n8n takes it) -> the app's form values for that mode. */
 export function prefillFromApiBody(body: Record<string, unknown>): { mode: ModeId; prefill: Record<string, unknown> } | null {
   const mode = String(body.mode ?? '');
   if (mode === 'keyword') {

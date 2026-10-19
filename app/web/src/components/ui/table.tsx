@@ -31,7 +31,7 @@ export function DataTable<T>({
   initialSort,
   pageSize = 20,
   searchable,
-  searchPlaceholder = 'Search…',
+  searchPlaceholder = 'Search...',
   searchText,
   empty,
   onRowClick,
@@ -176,7 +176,7 @@ export function DataTable<T>({
                       c.className,
                     )}
                   >
-                    {c.cell ? c.cell(r) : String((r as Record<string, unknown>)[c.key] ?? '–')}
+                    {c.cell ? c.cell(r) : String((r as Record<string, unknown>)[c.key] ?? '-')}
                   </td>
                 ))}
               </tr>
@@ -194,7 +194,7 @@ export function DataTable<T>({
       {pages > 1 && (
         <div className="mt-3 flex items-center justify-between text-[13px] text-ink-3">
           <span className="tabular">
-            {current * pageSize + 1}–{Math.min(sorted.length, (current + 1) * pageSize)} of {sorted.length}
+            {current * pageSize + 1}-{Math.min(sorted.length, (current + 1) * pageSize)} of {sorted.length}
           </span>
           <div className="flex items-center gap-1.5">
             <span className="mr-1 hidden tabular sm:inline">

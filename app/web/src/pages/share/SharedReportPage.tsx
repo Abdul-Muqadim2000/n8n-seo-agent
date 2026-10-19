@@ -17,12 +17,12 @@ import { StageIcon, stageLabel } from '@/components/reports/meta';
  * Read-only by construction: this page can only ask for that one report and its files, there is nothing to sign in to, no navigation
  * into the app, and no action that changes anything. A wrong, revoked or expired token shows the server's one-line reason.
  *
- * B-R2 (white-label-lite): the page belongs to the company whose report it is — their name and logo at the head of it and in the
+ * B-R2 (white-label-lite): the page belongs to the company whose report it is, their name and logo at the head of it and in the
  * browser tab, our own mark reduced to one line in the footer. The two things that are ours and stay ours are the ones a reader
  * needs: that the link expires and can be turned off, and the run's own caveat when the report is not finished work.
  */
 
-// A headline key is written the way the app writes it everywhere else ("healthScore" -> "Health score"), never as the stored key —
+// A headline key is written the way the app writes it everywhere else ("healthScore" -> "Health score"), never as the stored key,
 // a client should not have to read our field names. The few keys that no rule can make readable are named outright.
 const NAMED: Record<string, string> = { qa: 'Quality check', eeatScore: 'E-E-A-T score', aiOverviews: 'AI Overviews', aiSessions: 'AI sessions', url: 'URL' };
 const label = (k: string) =>
@@ -32,7 +32,7 @@ const label = (k: string) =>
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .toLowerCase()
     .replace(/^./, (c) => c.toUpperCase());
-const value = (v: string | number | boolean | null) => (v === true ? 'yes' : v === false ? 'no' : v === null || v === '' ? '—' : typeof v === 'number' ? v.toLocaleString('en-GB') : String(v));
+const value = (v: string | number | boolean | null) => (v === true ? 'yes' : v === false ? 'no' : v === null || v === '' ? '-' : typeof v === 'number' ? v.toLocaleString('en-GB') : String(v));
 
 export default function SharedReportPage() {
   const { token = '' } = useParams();
@@ -100,8 +100,8 @@ export default function SharedReportPage() {
             )}
 
             <Callout tone="info" title="A shared copy of one report">
-              This link stops working on {fmtDate(report.expiresAt)}, and the person who shared it can turn it off at any time. It shows this report only — nothing
-              else of {brandName || 'the company'}'s data — and nothing here can be changed.
+              This link stops working on {fmtDate(report.expiresAt)}, and the person who shared it can turn it off at any time. It shows this report only: nothing
+              else of {brandName || 'the company'}'s data is shown, and nothing here can be changed.
             </Callout>
 
             {Object.keys(report.summary ?? {}).length > 0 && (
@@ -160,7 +160,7 @@ export default function SharedReportPage() {
         )}
       </main>
 
-      {/* B-R2: our own mark, one line, under the customer's report — never above it. G5: under a white-label agency, theirs (and
+      {/* B-R2: our own mark, one line, under the customer's report, never above it. G5: under a white-label agency, theirs (and
           ours only when they chose "Powered by") */}
       <footer className="mt-auto border-t border-line">
         {agency ? (

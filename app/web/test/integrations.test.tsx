@@ -13,7 +13,7 @@ import { qk } from '@/lib/queries';
 import { ThemeProvider } from '@/lib/theme';
 import { text } from './renderReport';
 
-// G4 (app/docs/INTEGRATIONS.md): Company settings → Integrations and the "Create ticket" button, rendered with the contexts they
+// G4 (app/docs/INTEGRATIONS.md): Company settings -> Integrations and the "Create ticket" button, rendered with the contexts they
 // really get. What must hold: every connector shows its state, no secret is ever on the page, a company that cannot store secrets is
 // told so, a member sees no admin screen, and a finding with a ticket shows the ticket's key and state.
 
@@ -34,8 +34,8 @@ const overview = (over: Partial<IntegrationsOverview> = {}): IntegrationsOvervie
     { id: 'd-2', endpointId: 'ep-2', endpointName: 'Warehouse', eventId: 'e2', eventType: 'rank.changed', status: 'gave_up', attempts: 2, lastStatusCode: 410, lastError: 'hooks.northwind.example answered 410', createdAt: '2026-10-17T09:00:00.000Z', deliveredAt: null, nextAttemptAt: null },
   ],
   integrations: [
-    { id: 'i-1', kind: 'jira', name: 'Jira Cloud', config: { siteUrl: 'https://northwind.atlassian.net', projectKey: 'SEO', projectName: 'Website' }, secretHint: 'token …a1b2', status: 'ok', lastError: '', lastCheckedAt: '2026-10-17T09:00:00.000Z', lastRunAt: null, nextRunAt: null, createdAt: '2026-10-17T08:00:00.000Z' },
-    { id: 'i-2', kind: 's3', name: 'R2', config: { provider: 'r2', bucket: 'nw-seo', prefix: 'alaventra', format: 'ndjson', tables: ['rank_history', 'runs'], schedule: 'daily', hour: 3 }, secretHint: 'key AKID…1234', status: 'ok', lastError: '', lastCheckedAt: null, lastRunAt: '2026-10-17T03:00:00.000Z', nextRunAt: '2026-10-18T03:00:00.000Z', createdAt: '2026-10-17T08:00:00.000Z' },
+    { id: 'i-1', kind: 'jira', name: 'Jira Cloud', config: { siteUrl: 'https://northwind.atlassian.net', projectKey: 'SEO', projectName: 'Website' }, secretHint: 'token ...a1b2', status: 'ok', lastError: '', lastCheckedAt: '2026-10-17T09:00:00.000Z', lastRunAt: null, nextRunAt: null, createdAt: '2026-10-17T08:00:00.000Z' },
+    { id: 'i-2', kind: 's3', name: 'R2', config: { provider: 'r2', bucket: 'nw-seo', prefix: 'alaventra', format: 'ndjson', tables: ['rank_history', 'runs'], schedule: 'daily', hour: 3 }, secretHint: 'key AKID...1234', status: 'ok', lastError: '', lastCheckedAt: null, lastRunAt: '2026-10-17T03:00:00.000Z', nextRunAt: '2026-10-18T03:00:00.000Z', createdAt: '2026-10-17T08:00:00.000Z' },
   ],
   exportRuns: [{ id: 'x-1', integrationId: 'i-2', trigger: 'schedule', status: 'ok', tables: [{ table: 'rank_history', rows: 120, bytes: 9000, object: 'alaventra/rank_history/dt=2026-10-17/rank_history-x-1.ndjson', truncated: false, error: '' }], startedAt: '2026-10-17T03:00:00.000Z', finishedAt: '2026-10-17T03:00:05.000Z', error: '' }],
   issues: [],
@@ -62,10 +62,10 @@ function render(node: ReactNode, role: Role = 'owner', seed?: (qc: QueryClient) 
   );
 }
 
-describe('Company settings → Integrations', () => {
+describe('Company settings, Integrations', () => {
   it('shows every connector with its state, routing and logs', () => {
     const t = render(<IntegrationsView data={overview()} />);
-    for (const s of ['Alerts and events', '#seo-alerts', 'Slack', 'Signed JSON', 'every website', 'northwind.example', 'answered 410 Gone', 'Delivery log', 'Gave up', 'Issue trackers', 'Jira Cloud', 'Website · token …a1b2', 'Linear', 'Asana', 'Data export', 'nw-seo/alaventra', 'Daily, 03:00 UTC', 'rank_history: 120 rows', 'Looker Studio', 'AI assistants (MCP)'])
+    for (const s of ['Alerts and events', '#seo-alerts', 'Slack', 'Signed JSON', 'every website', 'northwind.example', 'answered 410 Gone', 'Delivery log', 'Gave up', 'Issue trackers', 'Jira Cloud', 'Website · token ...a1b2', 'Linear', 'Asana', 'Data export', 'nw-seo/alaventra', 'Daily, 03:00 UTC', 'rank_history: 120 rows', 'Looker Studio', 'AI assistants (MCP)'])
       expect(t, s).toContain(s);
   });
 
@@ -73,14 +73,14 @@ describe('Company settings → Integrations', () => {
     const t = render(<IntegrationsView data={overview()} />);
     expect(t).not.toMatch(/hooks\.slack\.com\/services/);
     expect(t).not.toMatch(/whsec_|ATATT|lin_api_[A-Za-z0-9]{6}/);
-    expect(t).toContain('hooks.slack.com …Xk9z');
+    expect(t).toContain('hooks.slack.com ...Xk9z');
   });
 
   it('a server without the encryption key says nothing can be connected', () => {
     expect(render(<IntegrationsView data={overview({ secretsReady: false, endpoints: [], integrations: [], deliveries: [], exportRuns: [] })} />)).toContain('Connections cannot be stored on this server yet');
   });
 
-  it('the AI-assistant snippets carry this app’s MCP address', () => {
+  it('the AI-assistant snippets carry this app\'s MCP address', () => {
     const s = mcpSnippets('https://app.example.com');
     expect(s.claudeCode).toContain('https://app.example.com/api/v1/mcp');
     expect(JSON.parse(s.claudeDesktop).mcpServers.alaventra.args).toContain('https://app.example.com/api/v1/mcp');
@@ -104,7 +104,7 @@ describe('Create ticket', () => {
   it('a button once a tracker is connected', () => {
     expect(render(<TicketButton siteId="site-1" source={src} />, 'member', issues([], [{ kind: 'jira', name: 'Jira Cloud', target: 'Website', status: 'ok' }]))).toContain('Create ticket');
   });
-  it('the ticket’s key and its state in the tracker once it exists — for a viewer too', () => {
+  it('the ticket\'s key and its state in the tracker once it exists, for a viewer too', () => {
     const issue = { id: 'l1', websiteId: 'site-1', kind: 'jira', sourceKey: 'finding:site-1:content|no h1', sourceTitle: 'Pages with no H1', remoteKey: 'SEO-42', remoteUrl: 'https://northwind.atlassian.net/browse/SEO-42', remoteStatus: 'In Review', remoteState: 'in_progress', status: 'created', createdAt: '', syncedAt: '' };
     const t = render(<TicketButton siteId="site-1" source={src} />, 'viewer', issues([issue], [{ kind: 'jira', name: 'Jira Cloud', target: 'Website', status: 'ok' }]));
     expect(t).toContain('SEO-42');

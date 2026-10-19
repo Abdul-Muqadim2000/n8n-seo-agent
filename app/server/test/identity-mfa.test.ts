@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// G1 phase 1 — two-step verification, end to end through the real app (buildApp) on a real Postgres (PGlite) with every migration:
+// G1 phase 1, two-step verification, end to end through the real app (buildApp) on a real Postgres (PGlite) with every migration:
 // enrolment, the sign-in second step, replay and brute-force limits, recovery codes, passkeys with real signatures, step-up, and the
 // company's "require two-step verification" policy. Design: app/docs/IDENTITY.md.
 
@@ -94,7 +94,7 @@ describe('sign-in with two-step verification', () => {
     const t = await withTotp('signin@northwind.test');
     const { c, r } = await login('signin@northwind.test');
     expect(r.status).toBe(200);
-    expect(r.body).toMatchObject({ mfaRequired: true, methods: ['totp', 'recovery'], emailHint: 's…n@northwind.test' });
+    expect(r.body).toMatchObject({ mfaRequired: true, methods: ['totp', 'recovery'], emailHint: 's...n@northwind.test' });
     expect(c.jar.has('sid')).toBe(false);
     expect((await c.get('/api/me')).body).toBeNull();
     // the code the enrolment used is spent
@@ -133,7 +133,7 @@ describe('sign-in with two-step verification', () => {
     expect((await b.c.post('/api/auth/mfa/verify', { method: 'recovery', code: one })).status).toBe(401);
   });
 
-  it('the challenge cookie of one person cannot complete another person’s sign-in', async () => {
+  it('the challenge cookie of one person cannot complete another person\'s sign-in', async () => {
     const a = await withTotp('alice@northwind.test');
     await withTotp('bob@northwind.test');
     const bob = await login('bob@northwind.test');
@@ -151,7 +151,7 @@ describe('sign-in with two-step verification', () => {
 });
 
 describe('passkeys (WebAuthn, real signatures)', () => {
-  it('registers a passkey, signs in with it, refuses a wrong origin, a replayed challenge and another person’s key', async () => {
+  it('registers a passkey, signs in with it, refuses a wrong origin, a replayed challenge and another person\'s key', async () => {
     const s = await signUp(app, 'passkey@northwind.test');
     const auth = new SoftAuthenticator('localhost', 'http://localhost:5173');
     const opts = await s.c.post('/api/me/mfa/passkeys/options');
@@ -184,7 +184,7 @@ describe('passkeys (WebAuthn, real signatures)', () => {
     expect((await x.c.post('/api/auth/mfa/verify', { method: 'webauthn', response: other.assert(o3.body) })).status).toBe(401);
   });
 
-  it('removing a passkey needs step-up, only works on one’s own, and renames stay per person', async () => {
+  it('removing a passkey needs step-up, only works on one\'s own, and renames stay per person', async () => {
     const s = await signUp(app, 'pk2@northwind.test');
     const auth = new SoftAuthenticator('localhost', 'http://localhost:5173');
     const opts = await s.c.post('/api/me/mfa/passkeys/options');

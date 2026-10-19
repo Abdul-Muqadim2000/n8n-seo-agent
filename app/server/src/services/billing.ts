@@ -521,7 +521,7 @@ export interface AlignResult {
 
 /**
  * Brings the companies that existed before credits onto them, exactly as a company signing up today is (app/docs/CREDITS.md §1): the
- * welcome credits (never twice — the same `signup:<company>` key a new company's grant uses; never to an agency's client workspace or a
+ * welcome credits (never twice, the same `signup:<company>` key a new company's grant uses; never to an agency's client workspace or a
  * disabled company, as for new ones) and credits enforced. Careful by design:
  *   - it follows the platform settings as they are: no welcome credits when they are 0, no enforcement when new companies are not
  *     enforced;

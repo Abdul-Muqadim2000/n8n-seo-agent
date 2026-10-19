@@ -24,7 +24,7 @@ function shownDetails(e: AuditEventView): Record<string, unknown> {
 const ACTOR_KIND: Record<string, string> = { scim: 'Provisioning', system: 'System', platform_admin: 'Platform administrator' };
 
 /**
- * G1: the company's audit log (Company settings → Audit log): who did what, when and from where — sign-ins, two-step changes, team
+ * G1: the company's audit log (Company settings -> Audit log): who did what, when and from where, sign-ins, two-step changes, team
  * and role changes, websites, settings, API keys, sharing, single sign-on. Read-only, newest first; CSV export for a SIEM or an
  * auditor. Owners and admins only (the server refuses everyone else).
  */
@@ -128,8 +128,8 @@ export function AuditTab() {
                           </StatusBadge>
                         )}
                       </td>
-                      <td className="max-w-[200px] truncate px-3 py-2 text-ink-2">{e.targetLabel ?? '—'}</td>
-                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink-3">{e.ip ?? '—'}</td>
+                      <td className="max-w-[200px] truncate px-3 py-2 text-ink-2">{e.targetLabel ?? '-'}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink-3">{e.ip ?? '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -164,9 +164,9 @@ export function AuditTab() {
               </>
             ) : null}
             <dt className="text-ink-3">IP address</dt>
-            <dd className="font-mono text-xs text-ink">{open.ip ?? '—'}</dd>
+            <dd className="font-mono text-xs text-ink">{open.ip ?? '-'}</dd>
             <dt className="text-ink-3">Browser</dt>
-            <dd className="break-all text-xs text-ink-2">{open.userAgent ?? '—'}</dd>
+            <dd className="break-all text-xs text-ink-2">{open.userAgent ?? '-'}</dd>
             <dt className="text-ink-3">Action</dt>
             <dd className="font-mono text-xs text-ink-2">{open.action}</dd>
             {Object.keys(shownDetails(open)).length > 0 && (

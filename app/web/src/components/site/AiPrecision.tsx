@@ -6,8 +6,8 @@ import { cn } from '@/lib/utils';
 
 /**
  * What the latest AI visibility run measured, for the precision table beside the settings: its answers counted over the week, the
- * pulse's share of them, and the panel's questions — the brand question is asked only on the monthly full run and on-demand runs
- * (AI_Plan.js), so it is taken off there. No run yet → null, and the table stays "Modelled".
+ * pulse's share of them, and the panel's questions, the brand question is asked only on the monthly full run and on-demand runs
+ * (AI_Plan.js), so it is taken off there. No run yet -> null, and the table stays "Modelled".
  */
 export function aiMeasuredFrom(d: Pick<AiData, 'runs' | 'latest'> | null | undefined): AiMeasuredSample | null {
   const run = d?.runs?.length ? d.runs[d.runs.length - 1] : null;
@@ -24,7 +24,7 @@ export interface AiMeasuredSample {
   checkedAt?: string;
 }
 
-const pts = (v: number | null) => (v == null ? '–' : `±${Math.round(v)} pts`);
+const pts = (v: number | null) => (v == null ? '-' : `±${Math.round(v)} pts`);
 
 export function AiPrecisionTable({ panel, engines, pulse, measured, className }: { panel: number; engines: readonly AiEngine[]; pulse: boolean; measured?: AiMeasuredSample | null; className?: string }) {
   const t = aiPrecisionTable({ panel, engines, pulse, measured });
@@ -35,7 +35,7 @@ export function AiPrecisionTable({ panel, engines, pulse, measured, className }:
     <div className={cn('rounded-lg border border-line p-3', className)}>
       <p className="text-[13px] font-medium text-ink">How precise the figures can be</p>
       <p className="mt-0.5 text-xs text-ink-3">
-        AI answers change from one ask to the next, so every rate is a range. This is how far “named in” can be off at 95%, for the whole panel and for one question,
+        AI answers change from one ask to the next, so every rate is a range. This is how far "named in" can be off at 95%, for the whole panel and for one question,
         at its widest (a rate near 50%; rates near 0% or 100% are tighter).
       </p>
       <div className="mt-2 overflow-x-auto">
@@ -68,7 +68,7 @@ export function AiPrecisionTable({ panel, engines, pulse, measured, className }:
                           {r.current && <span className="block text-[11px] font-medium">your setting</span>}
                         </>
                       ) : (
-                        '–'
+                        '-'
                       )}
                     </td>
                   );

@@ -1,6 +1,6 @@
-// Company settings → Mailboxes: connect or change the mailbox link-building pitches go out from (LINK_BUILDER_SPEC.md §2). SMTP + IMAP with an
+// Company settings -> Mailboxes: connect or change the mailbox link-building pitches go out from (LINK_BUILDER_SPEC.md §2). SMTP + IMAP with an
 // app password; the server logs in to both before it saves anything, and the password is never shown again.
-// L4 (2026-10-13): a mailbox connected with Microsoft 365 or Gmail (OAuth) has no password and no server settings — this dialog then
+// L4 (2026-10-13): a mailbox connected with Microsoft 365 or Gmail (OAuth) has no password and no server settings, this dialog then
 // edits only the signature, the postal address, the window and the limits, and says where the connection itself is changed.
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
@@ -77,7 +77,7 @@ const PROVIDERS: Provider[] = [
     imapHost: 'imap.zoho.com',
     imapPort: 993,
     imapSecure: true,
-    help: 'Turn on IMAP access in Zoho Mail settings and create an application-specific password (Zoho Accounts → Security) if two-factor sign-in is on. EU accounts use smtp.zoho.eu and imap.zoho.eu.',
+    help: 'Turn on IMAP access in Zoho Mail settings and create an application-specific password (Zoho Accounts > Security) if two-factor sign-in is on. EU accounts use smtp.zoho.eu and imap.zoho.eu.',
   },
   {
     id: 'fastmail',
@@ -89,7 +89,7 @@ const PROVIDERS: Provider[] = [
     imapHost: 'imap.fastmail.com',
     imapPort: 993,
     imapSecure: true,
-    help: 'Create an app password in Settings → Privacy & Security → Manage app passwords, with access to IMAP and SMTP.',
+    help: 'Create an app password in Settings > Privacy & Security > Manage app passwords, with access to IMAP and SMTP.',
   },
   {
     id: 'other',
@@ -101,7 +101,7 @@ const PROVIDERS: Provider[] = [
     imapHost: '',
     imapPort: 993,
     imapSecure: true,
-    help: 'Your provider’s SMTP (sending) and IMAP (reading replies) settings. Port 465 uses SSL from the start; port 587 uses STARTTLS (untick SSL).',
+    help: 'Your provider\'s SMTP (sending) and IMAP (reading replies) settings. Port 465 uses SSL from the start; port 587 uses STARTTLS (untick SSL).',
   },
 ];
 const providerOf = (host: string) => PROVIDERS.find((p) => p.smtpHost && p.smtpHost === host.trim().toLowerCase())?.id ?? 'other';
@@ -127,7 +127,7 @@ const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
 // editing: the password is optional (empty = keep the current one)
 const editSchema = mailboxSchema.extend({ password: z.union([z.literal(''), z.string().min(4, 'At least 4 characters').max(400)]).optional() });
-// L4: an OAuth mailbox has no password and no server settings — only who it signs as, where it sends from and when
+// L4: an OAuth mailbox has no password and no server settings, only who it signs as, where it sends from and when
 const oauthSchema = mailboxSchema.omit({ password: true, smtpHost: true, imapHost: true, username: true }).partial({ smtpPort: true, imapPort: true, smtpSecure: true, imapSecure: true });
 
 function defaults(mb: MailboxView | null, company: string): Values {
@@ -390,7 +390,7 @@ export function MailboxDialog({ orgId, company, mailbox, onClose }: { orgId: str
             <Field label="All e-mails a day" hint="At most 50, follow-ups and answers included" error={e.dailyMax?.message}>
               {(f) => <Input {...f} type="number" inputMode="numeric" min={1} max={50} {...register('dailyMax', { valueAsNumber: true })} />}
             </Field>
-            <Field label="Label" optional hint="Only you see it, e.g. “Sales”" error={e.label?.message}>
+            <Field label="Label" optional hint="Only you see it, e.g. &quot;Sales&quot;" error={e.label?.message}>
               {(f) => <Input {...f} maxLength={60} {...register('label')} />}
             </Field>
           </div>

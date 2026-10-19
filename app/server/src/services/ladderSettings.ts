@@ -84,7 +84,7 @@ function write(site: { domain: string }, ladders: LadderRow[], existing: LadderS
     : { ladderId, insert: true, data: newLadderRow(site, ladderId, ladders, now, change) };
 }
 
-/** Writes for one ladder's mode / status (PATCH …/ladders/:ladderId), with the priorities that keep the order as it is. */
+/** Writes for one ladder's mode / status (PATCH .../ladders/:ladderId), with the priorities that keep the order as it is. */
 export function ladderSettingsWrites(o: { site: { domain: string }; ladders: LadderRow[]; settings: LadderSettingsRow[]; ladderId: string; change: LadderSettingsInput; now: string }): SettingsWrite[] {
   const of = settingsByLadder(o.settings);
   const change: Record<string, unknown> = {};
@@ -104,7 +104,7 @@ export function ladderSettingsWrites(o: { site: { domain: string }; ladders: Lad
   return [...writes.entries()].map(([id, c]) => write(o.site, o.ladders, of.get(id), id, c, o.now));
 }
 
-/** Writes for a new order (PUT …/ladders/order): priorities 1..n, only where they change. Every ladder of the website once. */
+/** Writes for a new order (PUT .../ladders/order): priorities 1..n, only where they change. Every ladder of the website once. */
 export function ladderOrderWrites(o: { site: { domain: string }; ladders: LadderRow[]; settings: LadderSettingsRow[]; ladderIds: string[]; now: string }): SettingsWrite[] {
   const ids = new Set(o.ladders.filter((r) => r.ladder_id).map((r) => r.ladder_id));
   if (o.ladderIds.length !== ids.size || o.ladderIds.some((id) => !ids.has(id)))
@@ -157,7 +157,7 @@ export function ladderPrefsWrites(o: { site: { domain: string }; ladders: Ladder
   return [...out.values()];
 }
 
-/** The '_site' row for new defaults (PATCH …/automation): the changed columns, or the whole row (current values + change) when new. */
+/** The '_site' row for new defaults (PATCH .../automation): the changed columns, or the whole row (current values + change) when new. */
 export function automationWrite(o: { site: { domain: string }; settings: LadderSettingsRow[]; change: SiteAutomationInput; now: string }): { data: Record<string, unknown>; insert: boolean; automation: SiteAutomation } {
   const cur = siteAutomation(o.settings);
   const next: SiteAutomation = {

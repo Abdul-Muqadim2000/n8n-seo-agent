@@ -2,7 +2,7 @@ import { estimateAiPanelCost } from './ai-panel';
 import { estimateAiGrowthCost, estimateAiVisibilityCost, MONITOR_COSTS } from './constants';
 import type { MonitorSettings } from './schemas';
 
-// What a website's schedules (its "autopilot") use a month, row by row — one function for the settings card the customer sees, the
+// What a website's schedules (its "autopilot") use a month, row by row, one function for the settings card the customer sees, the
 // Credits page's forecast and the server's reserve for the schedules (app/docs/CREDITS.md), so the three never disagree. Amounts are the
 // provider cost in USD; screens turn them into credits with the company's credit rate.
 

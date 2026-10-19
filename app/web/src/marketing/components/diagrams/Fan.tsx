@@ -21,7 +21,7 @@ export function useSize<T extends Element>() {
   return [ref, size] as const;
 }
 
-/** Curved connectors between `count` evenly spaced rows on one side and the middle of the other side ('in': many → one, 'out': one → many),
+/** Curved connectors between `count` evenly spaced rows on one side and the middle of the other side ('in': many to one, 'out': one to many),
  *  with dashes flowing towards the right. Place it in a grid cell as tall as the rows it connects. */
 export function Fan({ count, direction, ink, className }: { count: number; direction: 'in' | 'out'; ink?: boolean; className?: string }) {
   const [ref, { w, h }] = useSize<HTMLDivElement>();

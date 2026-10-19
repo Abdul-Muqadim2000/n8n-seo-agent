@@ -106,7 +106,7 @@ function SettingsForm({ s }: { s: PlatformSettings }) {
             render={({ field }) => (
               <SwitchRow
                 title="Enforce credits for new companies"
-                description="On: a new company’s runs are refused when its balance cannot cover them. Off: credits are counted but never block a run. Existing companies keep their own setting."
+                description="On: a new company's runs are refused when its balance cannot cover them. Off: credits are counted but never block a run. Existing companies keep their own setting."
                 checked={!!field.value}
                 onCheckedChange={field.onChange}
               />
@@ -156,7 +156,7 @@ function SettingsForm({ s }: { s: PlatformSettings }) {
       <SettingsCard
         icon={<Package />}
         title="Packs and expiry"
-        description="The packs customers can ask for on their Credits page, and how long credits last. A discount lowers the margin on that pack’s credits below the markup."
+        description="The packs customers can ask for on their Credits page, and how long credits last. A discount lowers the margin on that pack's credits below the markup."
       >
         <div className="px-5 py-4">
           <div className="hidden gap-3 pb-1.5 text-xs font-medium text-ink-3 sm:grid sm:grid-cols-[minmax(0,1fr)_120px_100px_minmax(0,1.2fr)_36px]">
@@ -199,7 +199,7 @@ function SettingsForm({ s }: { s: PlatformSettings }) {
                         )}
                       </>
                     ) : (
-                      <span className="text-ink-3">–</span>
+                      <span className="text-ink-3">-</span>
                     )}
                   </div>
                   <div className="col-span-2 flex justify-end sm:col-span-1 sm:pt-0.5">
@@ -238,7 +238,7 @@ function SettingsForm({ s }: { s: PlatformSettings }) {
             render={({ field }) => (
               <SwitchRow
                 title="Plan credits roll over one month"
-                description="On: a plan’s unused monthly credits stay one more month, then expire. Off: they expire at the end of their month. Applies to plan credits granted from now on."
+                description="On: a plan's unused monthly credits stay one more month, then expire. Off: they expire at the end of their month. Applies to plan credits granted from now on."
                 checked={!!field.value}
                 onCheckedChange={field.onChange}
               />

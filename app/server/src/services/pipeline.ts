@@ -56,7 +56,7 @@ import { loadBundle, recommend, type SiteBundle } from './recommendations';
 import { latestReport, monthSpend, reportsList } from './runs';
 
 // The pipeline of one website: every automation n8n runs for it (Mondays and the 1st of the month), whether it is on, when it runs
-// next, what it did last, and the posts the Content Cadence will write next — computed with the cadence's own rules by the mirror
+// next, what it did last, and the posts the Content Cadence will write next, computed with the cadence's own rules by the mirror
 // in cadence.ts (v5/code/Cadence_Plan.js): the keyword ladders in priority order (Auto, active, at most N at a time, the main page
 // after its support), then striking-distance queries and rising searches when opportunity posts are Auto; nothing while too many
 // pages wait to be published; nothing written in the last 90 days, no brand queries.
@@ -68,8 +68,8 @@ export type WaitingEntry = PipelineData['queue']['waiting'][number];
 
 /**
  * Pages written and not published (the content log; every age), oldest first.
- * R111 (2026-10-16): a row the engine marked `not_ready` (its last quality round failed) still waits — the pile-up guard counts
- * it — but carries `needsFix` and the QA reasons, so nothing downstream offers to publish it.
+ * R111 (2026-10-16): a row the engine marked `not_ready` (its last quality round failed) still waits, the pile-up guard counts
+ * it, but carries `needsFix` and the QA reasons, so nothing downstream offers to publish it.
  */
 export function waitingPages(logs: ContentLogRow[], now = Date.now()): WaitingEntry[] {
   return logs
@@ -86,7 +86,7 @@ export function waitingPages(logs: ContentLogRow[], now = Date.now()): WaitingEn
     .sort((a, b) => b.days - a.days);
 }
 
-/** R111: the Publish step of the growth loop — drafts that failed their quality check are "needs a fix", never "to publish". */
+/** R111: the Publish step of the growth loop, drafts that failed their quality check are "needs a fix", never "to publish". */
 export function publishStage(waiting: WaitingEntry[], publishedCount: number): PipelineStage {
   const ready = waiting.filter((w) => !w.needsFix);
   const fix = waiting.filter((w) => w.needsFix);
@@ -100,7 +100,7 @@ export function publishStage(waiting: WaitingEntry[], publishedCount: number): P
       ? 'Every written page is live'
       : [
           ready.length ? 'Publish them on your site, then report each URL so tracking starts' : '',
-          fix.length ? `${fix.map((w) => `“${w.keyword}”`).slice(0, 3).join(', ')} did not pass the quality check: fix ${fix.length === 1 ? 'it' : 'them'} and run ${fix.length === 1 ? 'it' : 'them'} again` : '',
+          fix.length ? `${fix.map((w) => `"${w.keyword}"`).slice(0, 3).join(', ')} did not pass the quality check: fix ${fix.length === 1 ? 'it' : 'them'} and run ${fix.length === 1 ? 'it' : 'them'} again` : '',
         ]
           .filter(Boolean)
           .join('. '),
@@ -167,7 +167,7 @@ async function scheduledHistory(): Promise<Record<string, ExecutionSummary[]>> {
 
 /**
  * R104: the Pipeline's "last run" is the schedule's own last fire, with its real time; a result that came from an on-demand or test run
- * is named as one, and a due time with no fire is "missed on <date>" — instead of the newest row of any origin under a "next run
+ * is named as one, and a due time with no fire is "missed on <date>", instead of the newest row of any origin under a "next run
  * Monday" as if the schedule worked. Without the engine's history the automation is left as the app's own rows describe it.
  */
 export function withScheduleTruth(list: AutomationStatus[], history: Record<string, ExecutionSummary[]>, tz: string, now = new Date()): AutomationStatus[] {
@@ -256,7 +256,7 @@ export function refusedPlans(reports: Pick<Report, 'id' | 'runId' | 'stage' | 's
       id: `refused:${r.id}`,
       kind: 'failed',
       severity: 'info',
-      title: `“${head}” was not planned`,
+      title: `"${head}" was not planned`,
       detail:
         why === 'duplicate'
           ? 'You already have a keyword ladder for this search: one search needs one page, so no second ladder was made. Continue the existing one.'
@@ -319,7 +319,7 @@ function thisWeekItems(
           .filter(Boolean)
           .join(' · ');
       case 'content_cadence':
-        if (running) return 'Writing this week’s posts';
+        if (running) return 'Writing this week\'s posts';
         if (at !== nextCadence) return 'The next posts in the queue';
         return cadenceDetail(p.queue.next, p.plan, p.build);
       case 'audit':
@@ -341,23 +341,23 @@ export function cadenceDetail(next: QueueItem[], plan: CadenceWeek, build: Pick<
   if (plan.pausedReason === 'pileup') {
     // R111: a draft that failed its quality check is counted (it waits) but labelled, and it is never told to be published
     const fix = new Set((build.waiting ?? []).filter((w) => w.needsFix).map((w) => normKeyword(w.keyword)));
-    const label = (k: string) => (fix.has(normKeyword(k)) ? `“${k}” (needs a fix)` : `“${k}”`);
+    const label = (k: string) => (fix.has(normKeyword(k)) ? `"${k}" (needs a fix)` : `"${k}"`);
     const anyFix = plan.waitingKeywords.some((k) => fix.has(normKeyword(k)));
     return (
       `Writes nothing: ${plural(plan.waitingPublish, 'written page')} waiting for publication (pile-up guard, limit ${plan.config.maxWaiting})` +
-      (plan.waitingKeywords.length ? `: ${plan.waitingKeywords.slice(0, 4).map(label).join(', ')}${plan.waitingKeywords.length > 4 ? ' …' : ''}` : '') +
+      (plan.waitingKeywords.length ? `: ${plan.waitingKeywords.slice(0, 4).map(label).join(', ')}${plan.waitingKeywords.length > 4 ? ' ...' : ''}` : '') +
       (anyFix ? '. Publish the ready ones and fix the others, then run them again, to continue' : '. Publish them to continue')
     );
   }
-  if (next.length) return next.map((q) => (q.ladder ? `“${q.keyword}” for ladder “${q.ladder.head}”` : `“${q.keyword}” (${q.source === 'striking' ? 'close to page one' : 'rising search'})`)).join(' · ');
+  if (next.length) return next.map((q) => (q.ladder ? `"${q.keyword}" for ladder "${q.ladder.head}"` : `"${q.keyword}" (${q.source === 'striking' ? 'close to page one' : 'rising search'})`)).join(' · ');
   const why: string[] = [];
   if (plan.awaitingApproval.length)
     why.push(
       plan.awaitingApproval.length === 1
-        ? `the next page of the Manual ladder “${plan.awaitingApproval[0].ladder?.head || headOf(plan.awaitingApproval[0].ladder?.id ?? '')}” waits for your OK`
+        ? `the next page of the Manual ladder "${plan.awaitingApproval[0].ladder?.head || headOf(plan.awaitingApproval[0].ladder?.id ?? '')}" waits for your OK`
         : `${plan.awaitingApproval.length} pages of Manual ladders wait for your OK`,
     );
-  if (plan.waitingForSupport.length) why.push(`the main page of “${headOf(plan.waitingForSupport[0])}” waits until half of its supporting pages are live`);
+  if (plan.waitingForSupport.length) why.push(`the main page of "${headOf(plan.waitingForSupport[0])}" waits until half of its supporting pages are live`);
   if (plan.suggestions.length) why.push('opportunity posts are Manual: they are suggestions');
   return why.length ? `Nothing to write automatically: ${why.join('; ')}` : 'Nothing in the queue to write';
 }
@@ -466,9 +466,9 @@ export async function ladderDetailData(org: OrgRow, site: SiteRow, ladderId: str
       ? lineage('Position on Google over time', 'serp', { period: lineagePeriod(checks[0], checks[checks.length - 1]), sample: lineageSample(checks.length, 'weekly checks, one results page each'), basis: 'one_sample', note: 'one country and one device at one moment' })
       : lineageUnknown('Position on Google over time', 'this ladder has not been checked on Google yet'),
     d.traffic.points.length
-      ? lineage('Clicks and impressions of this ladder’s pages', 'gsc', { period: lineagePeriod(d.traffic.points[0]!.periodEnd, d.traffic.points[d.traffic.points.length - 1]!.periodEnd), sample: lineageSample(d.traffic.points.length, 'stored 28-day periods'), basis: 'measured' })
-      : lineageUnknown('Clicks and impressions of this ladder’s pages', 'Search Console has not reported traffic for these pages yet'),
-    lineage('Expected visits in the top 3', 'model', { period: 'per month, once the pages rank', sample: lineageSample(d.counts.total, 'planned pages'), basis: 'modelled', note: 'searches after results-page click loss × a top-3 click share — modelled, never measured clicks' }),
+      ? lineage('Clicks and impressions of this ladder\'s pages', 'gsc', { period: lineagePeriod(d.traffic.points[0]!.periodEnd, d.traffic.points[d.traffic.points.length - 1]!.periodEnd), sample: lineageSample(d.traffic.points.length, 'stored 28-day periods'), basis: 'measured' })
+      : lineageUnknown('Clicks and impressions of this ladder\'s pages', 'Search Console has not reported traffic for these pages yet'),
+    lineage('Expected visits in the top 3', 'model', { period: 'per month, once the pages rank', sample: lineageSample(d.counts.total, 'planned pages'), basis: 'modelled', note: 'searches after results-page click loss × a top-3 click share (modelled, never measured clicks)' }),
     changeTests.length
       ? lineage('Did publishing this page help?', 'gsc_history', { period: lineagePeriod(from, to), sample: lineageSample(changeTests.length, 'page changes read'), basis: 'measured', note: CHANGE_TEST_METHOD })
       : lineageUnknown('Did publishing this page help?', 'no page of this ladder has a recorded publish date yet'),
@@ -701,7 +701,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       title: 'Write',
       state: pagesPerWeek ? 'active' : 'waiting',
       headline: pagesPerWeek ? `${pagesPerWeek} post(s) every Monday` : 'Weekly posts off',
-      detail: queue.next.length ? `Next: ${queue.next.map((q) => q.keyword).join(', ')}` : queue.later.length ? `${queue.later.length} topics ready` : 'No topics yet — plan a ladder or wait for Search Console data',
+      detail: queue.next.length ? `Next: ${queue.next.map((q) => q.keyword).join(', ')}` : queue.later.length ? `${queue.later.length} topics ready` : 'No topics yet: plan a ladder or wait for Search Console data',
       action: { label: 'Posts per week', page: 'settings/tracking' },
     },
     publishStage(queue.waiting, x.content.items.filter((c) => c.status === 'published').length),

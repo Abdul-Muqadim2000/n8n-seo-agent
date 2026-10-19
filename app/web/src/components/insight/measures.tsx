@@ -22,8 +22,8 @@ const RING_TRACK = {
 } as const;
 
 /**
- * ScoreRing: a 0–100 score (or any value against `max`) as a ring that draws itself in; `tone="auto"` colours it by the score
- * (80+ good, 60+ warning, below critical — say the grade in words next to it). Centre shows `display` (default: the rounded value).
+ * ScoreRing: a 0-100 score (or any value against `max`) as a ring that draws itself in; `tone="auto"` colours it by the score
+ * (80+ good, 60+ warning, below critical, say the grade in words next to it). Centre shows `display` (default: the rounded value).
  */
 export function ScoreRing({
   value,
@@ -95,7 +95,7 @@ export function ScoreRing({
       </svg>
       <span className="absolute inset-0 flex flex-col items-center justify-center leading-none" aria-hidden>
         <span className={cn('font-display font-semibold tracking-[-0.01em]', dark ? 'text-on-ink' : 'text-ink')} style={{ fontSize: Math.round(size * (suffix ? 0.27 : 0.25)) }}>
-          {has ? (display ?? Math.round(value)) : '–'}
+          {has ? (display ?? Math.round(value)) : '-'}
         </span>
         {suffix && has && <span className={cn('mt-1 text-[10px] font-medium', surface === 'blue' ? 'text-on-ink' : dark ? 'text-on-ink-2' : 'text-ink-3')}>{suffix}</span>}
       </span>
@@ -103,7 +103,7 @@ export function ScoreRing({
   );
 }
 
-/** ProgressBar: a labelled Meter — label on the left, "3 of 6" on the right, the bar under them. */
+/** ProgressBar: a labelled Meter: label on the left, "3 of 6" on the right, the bar under them. */
 export function ProgressBar({ value, max = 100, label, valueLabel, tone = 'accent', className }: { value: number; max?: number; label?: ReactNode; valueLabel?: ReactNode; tone?: 'accent' | 'good' | 'warning' | 'critical'; className?: string }) {
   const pctValue = max > 0 ? (value / max) * 100 : 0;
   return (
@@ -128,7 +128,7 @@ export interface Step {
   icon?: ReactNode;
 }
 
-/** ProgressSteps: a setup checklist as numbered step cards — done steps turn green and drop their action. */
+/** ProgressSteps: a setup checklist as numbered step cards: done steps turn green and drop their action. */
 export function ProgressSteps({ steps, className }: { steps: Step[]; className?: string }) {
   return (
     <ol className={cn('grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3', className)}>
@@ -157,7 +157,7 @@ export function ProgressSteps({ steps, className }: { steps: Step[]; className?:
   );
 }
 
-/** The sequential blue ramp, light → strong (dark mode reverses the hex values so the last step is always the most salient). */
+/** The sequential blue ramp, light -> strong (dark mode reverses the hex values so the last step is always the most salient). */
 export const SEQ = ['var(--seq-1)', 'var(--seq-2)', 'var(--seq-3)', 'var(--seq-4)', 'var(--seq-5)', 'var(--seq-6)'] as const;
 
 /**

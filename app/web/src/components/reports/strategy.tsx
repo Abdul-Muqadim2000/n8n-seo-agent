@@ -52,13 +52,13 @@ function RankLink({ keyword, country, siteId, label = 'Rank for this keyword', p
 const DIFF_RANK: Record<string, number> = { easy: 0, reachable: 1, hard: 2, very_hard: 3, not_realistic: 4 };
 
 /**
- * G8 (2026-10-13): a traffic number must say where it comes from — `calibrated` from this website's own measured Search Console
+ * G8 (2026-10-13): a traffic number must say where it comes from, `calibrated` from this website's own measured Search Console
  * impressions and clicks for that exact search, `modelled` from the provider's monthly volume, or no estimate at all.
  */
 function TrafficPotential({ k }: { k: P }) {
   const basis = str(k.traffic_basis);
   const value = n(k.traffic_potential);
-  if (num(k.traffic_potential) == null) return <span className="text-ink-3">–</span>;
+  if (num(k.traffic_potential) == null) return <span className="text-ink-3">-</span>;
   if (!basis || basis === 'unknown') return <span className="tabular">{value}</span>;
   return (
     <span className="inline-flex items-center gap-1.5" title={str(k.traffic_note) || undefined}>
@@ -77,7 +77,7 @@ function ForYou({ k, compact }: { k: P; compact?: boolean }) {
     <span className="inline-flex flex-wrap items-center gap-1.5" title={str(k.label) || undefined}>
       <DifficultyBadge difficulty={d} compact={compact} />
       {compact ? (
-        plan && plan !== 'none' && <span className="whitespace-nowrap text-xs text-ink-3">{`${PLAN_CHOICE_LABEL[plan]}${str(k.months) ? ` · ${str(k.months).replace('-', '–')} mo` : ''}`}</span>
+        plan && plan !== 'none' && <span className="whitespace-nowrap text-xs text-ink-3">{`${PLAN_CHOICE_LABEL[plan]}${str(k.months) ? ` · ${str(k.months).replace('-', '-')} mo` : ''}`}</span>
       ) : (
         <PlanBadge plan={plan} months={str(k.months)} />
       )}
@@ -153,7 +153,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
       : []),
     { key: 'volume', header: 'Volume', align: 'right', sortValue: (r) => num(r.volume), cell: (r) => <VolumeBar value={num(r.volume)} max={maxVolume} text={n(r.volume)} /> },
     { key: 'kd', header: 'KD', align: 'right', sortValue: (r) => num(r.kd), cell: (r) => <KdMeter value={num(r.kd)} /> },
-    { key: 'cpc', header: 'CPC', align: 'right', sortValue: (r) => num(r.cpc), cell: (r) => (num(r.cpc) == null ? '–' : usd(r.cpc)), hideOnMobile: true },
+    { key: 'cpc', header: 'CPC', align: 'right', sortValue: (r) => num(r.cpc), cell: (r) => (num(r.cpc) == null ? '-' : usd(r.cpc)), hideOnMobile: true },
     { key: 'traffic_potential', header: 'Traffic potential', align: 'right', sortValue: (r) => num(r.traffic_potential), cell: (r) => <TrafficPotential k={r} />, hideOnMobile: true },
     { key: 'opportunity', header: 'Opportunity', align: 'right', sortValue: (r) => num(r.opportunity), cell: (r) => <span className="font-semibold text-accent-text tabular">{n(r.opportunity)}</span> },
     { key: 'ai_search_volume', header: 'AI volume', align: 'right', sortValue: (r) => num(r.ai_search_volume), cell: (r) => n(r.ai_search_volume), hideOnMobile: true },
@@ -168,7 +168,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
 
   const reachText =
     reach != null
-      ? `“For your site”: your website already wins searches up to difficulty ${reach}. Easy = up to ${reach + 5} (or you already rank in the top 20), reachable = up to ${reach + 20}, hard = up to ${reach + 40}, very hard above.`
+      ? `"For your site": your website already wins searches up to difficulty ${reach}. Easy = up to ${reach + 5} (or you already rank in the top 20), reachable = up to ${reach + 20}, hard = up to ${reach + 40}, very hard above.`
       : null;
   const startKw = str(start.keyword);
 
@@ -177,7 +177,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         eyebrow={country || undefined}
-        title={startKw ? <>Start with “{startKw}”</> : num(summary.relevant) != null ? `${n(summary.relevant)} keywords fit your business` : 'Your keyword strategy'}
+        title={startKw ? <>Start with "{startKw}"</> : num(summary.relevant) != null ? `${n(summary.relevant)} keywords fit your business` : 'Your keyword strategy'}
         description={`${n(summary.keywords_researched)} keywords researched, ${n(summary.relevant)} relevant to your business in ${n(summary.clusters)} topic clusters${priority.length ? `; ${priority.length} priority keywords and ${quick.length} quick wins below` : ''}.`}
         aside={
           startKw && can('member') ? (
@@ -196,10 +196,10 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
         }
         stats={
           <>
-            <HeroStat label="Keywords researched" value={num(summary.keywords_researched) != null ? <CountUp value={num(summary.keywords_researched)!} /> : '–'} hint="From several sources" />
-            <HeroStat label="Reviewed by AI for relevance" value={num(summary.ai_reviewed) != null ? <CountUp value={num(summary.ai_reviewed)!} /> : '–'} />
-            <HeroStat label="Relevant to your business" value={num(summary.relevant) != null ? <CountUp value={num(summary.relevant)!} /> : '–'} />
-            <HeroStat label="Topic clusters" value={num(summary.clusters) != null ? <CountUp value={num(summary.clusters)!} /> : '–'} hint={plan.length ? `${plan.length} pages in the content plan` : undefined} />
+            <HeroStat label="Keywords researched" value={num(summary.keywords_researched) != null ? <CountUp value={num(summary.keywords_researched)!} /> : '-'} hint="From several sources" />
+            <HeroStat label="Reviewed by AI for relevance" value={num(summary.ai_reviewed) != null ? <CountUp value={num(summary.ai_reviewed)!} /> : '-'} />
+            <HeroStat label="Relevant to your business" value={num(summary.relevant) != null ? <CountUp value={num(summary.relevant)!} /> : '-'} />
+            <HeroStat label="Topic clusters" value={num(summary.clusters) != null ? <CountUp value={num(summary.clusters)!} /> : '-'} hint={plan.length ? `${plan.length} pages in the content plan` : undefined} />
           </>
         }
       />
@@ -214,7 +214,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
 
       {(followUps.content === true || followUps.audit === true) && (
         <Callout tone="info" title="More reports are on the way">
-          {followUps.content === true && <>The keyword report{start.keyword ? <> for “{str(start.keyword)}”</> : ''} follows as its own report. </>}
+          {followUps.content === true && <>The keyword report{start.keyword ? <> for "{str(start.keyword)}"</> : ''} follows as its own report. </>}
           {followUps.audit === true && <>The website audit you asked for follows separately.</>}
         </Callout>
       )}
@@ -248,8 +248,8 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
                 className="mt-4"
                 items={[
                   { icon: <Search />, label: 'Searches / month', value: n(start.volume) },
-                  { icon: <BarChart3 />, label: 'Difficulty', value: num(start.kd) != null ? String(num(start.kd)) : '–' },
-                  { icon: <MousePointerClick />, label: 'Cost per click', value: num(start.cpc) != null ? usd(start.cpc) : '–' },
+                  { icon: <BarChart3 />, label: 'Difficulty', value: num(start.kd) != null ? String(num(start.kd)) : '-' },
+                  { icon: <MousePointerClick />, label: 'Cost per click', value: num(start.cpc) != null ? usd(start.cpc) : '-' },
                   { icon: <TrendingUp />, label: 'Traffic potential', value: <TrafficPotential k={start} />, hint: str(start.traffic_note) || undefined },
                 ]}
               />
@@ -269,7 +269,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
                 <KeyValue
                   items={[
                     { label: 'Your position', value: num(live.your_position) != null ? <PositionPill value={num(live.your_position)} text={`#${num(live.your_position)}`} /> : 'Not in the top results' },
-                    { label: 'AI Overview', value: live.ai_overview === true ? 'Shown' : live.ai_overview === false ? 'Not shown' : '–' },
+                    { label: 'AI Overview', value: live.ai_overview === true ? 'Shown' : live.ai_overview === false ? 'Not shown' : '-' },
                   ]}
                 />
                 {strs(live.top_domains).length > 0 && (
@@ -313,7 +313,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
                 key={i}
                 icon={<Zap />}
                 title={str(q.keyword)}
-                description={`${n(q.volume)} searches · KD ${num(q.kd) ?? '–'} · ${str(q.page_type) || 'page'}`}
+                description={`${n(q.volume)} searches · KD ${num(q.kd) ?? '-'} · ${str(q.page_type) || 'page'}`}
                 meta={asDifficulty(q.difficulty_for_you) ? <ForYou k={q} compact /> : undefined}
                 action={<KeywordActions keyword={str(q.keyword)} pageType={q.page_type} country={country} siteId={siteId} />}
                 actionPosition="side"
@@ -331,7 +331,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
           info={
             str(sc.page_check) === 'search console page'
               ? 'No page list is on file for this website yet, so "no page answers it" was judged on the page Search Console reports.'
-              : 'A search counts as unanswered when no page of your website matches it — your sitemap and the pages Search Console knows about.'
+              : 'A search counts as unanswered when no page of your website matches it (your sitemap and the pages Search Console knows about).'
           }
           flush
         >
@@ -438,7 +438,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
                         <p className="text-xs text-ink-3">{str(c.topic)}</p>
                         <p className="mt-0.5 font-medium text-ink">{str(c.primary_keyword)}</p>
                         <p className="mt-1 text-xs text-ink-3">
-                          {str(c.page_type)} · {num(c.keyword_count) ?? '–'} keywords · {n(c.total_volume)} searches
+                          {str(c.page_type)} · {num(c.keyword_count) ?? '-'} keywords · {n(c.total_volume)} searches
                         </p>
                         {asDifficulty(c.difficulty_for_you) && (
                           <div className="mt-1.5">

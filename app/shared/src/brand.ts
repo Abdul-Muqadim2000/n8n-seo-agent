@@ -2,7 +2,7 @@
 //
 // The leader for this area, AgencyAnalytics, sells a *white-labeled client portal*: "Branded Logo", "Branded Color Scheme", "Client
 // Branding" and a custom domain; SE Ranking sells the same shape as a +$69/month Agency Pack add-on. We do not sell to agencies, so
-// the custom domain is deliberately out of scope (BENCHMARKS_2026-10-14 §5(c) c1) and so is client messaging inside a report (c4 —
+// the custom domain is deliberately out of scope (BENCHMARKS_2026-10-14 §5(c) c1) and so is client messaging inside a report (c4,
 // the leader has not shipped it either). What is left is the half a direct customer actually needs: somebody opening a shared report
 // must see at a glance that it is *their supplier's* report about *their* website, and must never meet a broken page because a logo
 // URL went stale.
@@ -34,7 +34,7 @@ const MAX_URL = 512;
  *
  * **https only.** The app's CSP allows `'self'`, `data:` and `https:` images, an `http:` one is blocked as mixed content on a live
  * install, and a `data:` or `javascript:` string is not a logo however it reached the profile. Whitespace, angle brackets, quotes and
- * a backslash — the characters that would only ever matter if the string were concatenated into markup — disqualify it outright. The
+ * a backslash, the characters that would only ever matter if the string were concatenated into markup, disqualify it outright. The
  * host must be a dotted name: no credentials (`user@host` in an image URL is a phishing shape, not a logo), no bare `localhost`, no
  * IPv6 literal and no IP address, because a client's browser should be asked for a company's logo, not for something on a network.
  *
@@ -67,7 +67,7 @@ export function brandInitials(name: unknown): string {
 
 /**
  * The brand to show with one report: the business profile's name and logo where the company filled them in, the company's name in
- * the app otherwise. A company that has filled in nothing still gets a name — the one it signed up with.
+ * the app otherwise. A company that has filled in nothing still gets a name, the one it signed up with.
  */
 export function sharedBrand(o: { orgName?: unknown; businessName?: unknown; logoUrl?: unknown }): SharedBrand {
   const trim = (v: unknown) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, MAX_NAME) : '');

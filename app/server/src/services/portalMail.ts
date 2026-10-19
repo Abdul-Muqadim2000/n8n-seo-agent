@@ -26,9 +26,8 @@ import { isOauthMailbox, sendRawViaApi } from './mailOauth';
 import { agencyPortalHost, portalUrl } from './portalHosts';
 
 /**
- * G5 (WHITE_LABEL.md §1.5, §2): what e-mails to an agency's clients look like and who they come from — the agency's name as the
- * sender, its reply-to, and a custom From only through a mailbox the agency connected whose domain publishes SPF and a DKIM key —
- * and which address links in them open (the agency's portal host when it has one).
+ * G5 (WHITE_LABEL.md §1.5, §2): what e-mails to an agency's clients look like and who they come from, the agency's name as the
+ * sender, its reply-to, and a custom From only through a mailbox the agency connected whose domain publishes SPF and a DKIM key, * and which address links in them open (the agency's portal host when it has one).
  */
 
 /** the agency behind a company (itself, or a client workspace's parent) */
@@ -97,7 +96,7 @@ export async function senderFor(org: OrgRow | null): Promise<BrandedSender> {
 
 /**
  * For a person's own account e-mails (verification, password): the agency's sender when every company they belong to is a client
- * workspace of one white-label agency — a client's people never get an e-mail in our name. Anyone else: the app's own.
+ * workspace of one white-label agency, a client's people never get an e-mail in our name. Anyone else: the app's own.
  */
 export async function senderForUser(userId: string): Promise<{ sender: BrandedSender; baseUrl: string }> {
   const rows = await db
@@ -111,7 +110,7 @@ export async function senderForUser(userId: string): Promise<{ sender: BrandedSe
   return { sender: await senderFor(null), baseUrl: config.appUrl };
 }
 
-// ---- settings (Company settings → Client e-mail, agency admins) ----
+// ---- settings (Company settings -> Client e-mail, agency admins) ----
 
 export async function mailView(agency: OrgRow): Promise<PortalMailView> {
   const s = portalMailOf(agency.portalMail);

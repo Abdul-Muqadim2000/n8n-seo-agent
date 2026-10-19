@@ -56,12 +56,12 @@ export function creditBanner(b: Standing): { tone: 'warning' | 'critical'; title
     return pausedByLimit(b)
       ? {
           tone: 'warning',
-          title: 'Your websites’ automatic work is paused',
-          body: `It used this month’s autopilot limit of ${formatCredits(b.limits.autopilotMonthly)}. It resumes by itself on the 1st, or as soon as an owner raises the limit.`,
+          title: 'Your websites\' automatic work is paused',
+          body: `It used this month's autopilot limit of ${formatCredits(b.limits.autopilotMonthly)}. It resumes by itself on the 1st, or as soon as an owner raises the limit.`,
         }
       : {
           tone: 'critical',
-          title: 'Your websites’ automatic work is paused: out of credits',
+          title: 'Your websites\' automatic work is paused: out of credits',
           body: 'Weekly reports, monitors and blog posts resume by themselves when credits are added.',
         };
   }
@@ -70,20 +70,20 @@ export function creditBanner(b: Standing): { tone: 'warning' | 'critical'; title
     return {
       tone: 'critical',
       title: 'You are out of credits',
-      body: 'New analyses cannot start, and your websites’ automatic work pauses until credits are added.',
+      body: 'New analyses cannot start, and your websites\' automatic work pauses until credits are added.',
     };
   const left = b.runwayDays != null ? daysText(b.runwayDays) : null;
   if (b.status === 'critical')
     return {
       tone: 'critical',
       title: left ? `Credits run out in ${left}` : 'Credits are almost used up',
-      body: 'When they do, new analyses cannot start and your websites’ automatic work pauses until credits are added.',
+      body: 'When they do, new analyses cannot start and your websites\' automatic work pauses until credits are added.',
     };
   if (b.status === 'low')
     return {
       tone: 'warning',
       title: 'Credits are running low',
-      body: left ? `At your current use they last ${left}${b.runsOutOn ? ` and run out around ${fmtDate(b.runsOutOn)}` : ''}.` : 'Add credits so your websites’ automatic work keeps running.',
+      body: left ? `At your current use they last ${left}${b.runsOutOn ? ` and run out around ${fmtDate(b.runsOutOn)}` : ''}.` : 'Add credits so your websites\' automatic work keeps running.',
     };
   return null;
 }

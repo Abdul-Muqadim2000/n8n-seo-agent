@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { AuthCard, safeNext } from './shared';
 import { SecondStep } from './SecondStep';
 
-/** G1: /login/mfa — the second step after "Continue with Google" or single sign-on (the server redirects here with a challenge cookie). */
+/** G1: /login/mfa, the second step after "Continue with Google" or single sign-on (the server redirects here with a challenge cookie). */
 export default function MfaPage() {
   const [params] = useSearchParams();
   const next = safeNext(params.get('next'));

@@ -29,9 +29,9 @@ import { pgIso } from './pgTime';
 import { rangeStatus } from './ranges';
 
 /**
- * The Crawlers page (and `/api/v1/websites/:id/crawlers`): every figure is read from the site's own rows — daily totals for counts
+ * The Crawlers page (and `/api/v1/websites/:id/crawlers`): every figure is read from the site's own rows, daily totals for counts
  * and trends, the per-path daily rows for coverage and first-seen, the raw rows (only as old as the retention setting) for parameter
- * patterns and spoofers' networks — and joined with the engine's page inventory (`seo_pages`). Days are UTC.
+ * patterns and spoofers' networks, and joined with the engine's page inventory (`seo_pages`). Days are UTC.
  */
 
 const AI_KINDS: BotKind[] = ['ai_training', 'ai_search', 'ai_user'];

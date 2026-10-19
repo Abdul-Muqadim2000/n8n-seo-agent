@@ -4,7 +4,7 @@ import { cleanDomain, domainOk, VERIFICATION_META_NAME, VERIFICATION_TXT_PREFIX,
 import { publicLookup } from '../lib/netGuard';
 
 // Proof that a company owns a domain before it sees the domain's data: a DNS TXT record or a meta tag on the homepage (this
-// module), or "Verify with Google" — the person's own Google account owns the property in Search Console (services/google.ts
+// module), or "Verify with Google", the person's own Google account owns the property in Search Console (services/google.ts
 // gscOwnerCheck, through the OAuth callback). The engine's service account seeing a property proves nothing about who asks.
 
 export interface VerifyOutcome {

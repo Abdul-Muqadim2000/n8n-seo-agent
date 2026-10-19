@@ -1,8 +1,8 @@
 // G29 (2026-10-13, system review FIX_PLAN.md; criterion 3.11): where a number came from, over what period, and how big the sample
-// was — as structured fields beside the value, rendered as a short note or a tooltip rather than cluttering the figure.
+// was, as structured fields beside the value, rendered as a short note or a tooltip rather than cluttering the figure.
 // The vocabulary is the engine's (`n8n/seo-agent/v5/code/_lineage.js`): the two must say the same words, so a figure reads the same
 // in the Monday e-mail and on the dashboard. A modelled or uncalibrated number must say so; where the lineage is genuinely unknown
-// the note reads "source not recorded" — never a borrowed source.
+// the note reads "source not recorded", never a borrowed source.
 
 export const LINEAGE_MISSING = 'source not recorded';
 
@@ -37,7 +37,7 @@ export const LINEAGE_SOURCES = {
 
 export type LineageSource = keyof typeof LINEAGE_SOURCES;
 
-/** how the figure was arrived at — the same words G6 / G8 / G28 already use */
+/** how the figure was arrived at, the same words G6 / G8 / G28 already use */
 export const LINEAGE_BASIS = {
   measured: 'measured',
   calibrated: 'calibrated against your own measured data',
@@ -61,7 +61,7 @@ export interface Lineage {
   sample: string;
   basis: LineageBasis;
   basisLabel: string;
-  /** anything else worth one clause (what the source cannot see, which property, …) */
+  /** anything else worth one clause (what the source cannot see, which property, ...) */
   note: string;
 }
 
@@ -108,7 +108,7 @@ export function lineageNote(l: Lineage | null | undefined): string {
   return parts.filter(Boolean).join(' · ');
 }
 
-/** "2026-09-15 to 2026-10-12 (28 days)" — the period a figure covers, never an empty claim */
+/** "2026-09-15 to 2026-10-12 (28 days)", the period a figure covers, never an empty claim */
 export function lineagePeriod(start: string | null | undefined, end: string | null | undefined): string {
   const a = s(start).slice(0, 10);
   const b = s(end).slice(0, 10);

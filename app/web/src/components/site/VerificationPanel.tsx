@@ -107,7 +107,7 @@ export function VerificationPanel({
     return (
       <Callout tone="critical" title={`Another company has already verified ${site.domain}`}>
         A website can belong to one company only. If it is yours, ask the owner of that company to invite you, or contact the platform administrator. You can delete this
-        website from your company in Website settings → Delete.
+        website from your company in Website settings, then Delete.
       </Callout>
     );
 
@@ -186,7 +186,7 @@ export function VerificationPanel({
           <div className="space-y-4">
             <StepList
               steps={[
-                <>Press “Verify with Google” and choose the Google account that is an <strong>owner</strong> of {site.domain} in Search Console.</>,
+                <>Press "Verify with Google" and choose the Google account that is an <strong>owner</strong> of {site.domain} in Search Console.</>,
                 <>Allow read-only access to Search Console. We only check that you own the property; nothing is changed.</>,
                 <>You come back here verified. Then connect the data: add our service account to Search Console and GA4 (the next step shows how).</>,
               ]}
@@ -199,7 +199,7 @@ export function VerificationPanel({
           <div className="space-y-4">
             <StepList
               steps={[
-                <>Sign in where you manage your domain's DNS (GoDaddy, Cloudflare, Namecheap, your hosting panel…).</>,
+                <>Sign in where you manage your domain's DNS (GoDaddy, Cloudflare, Namecheap, your hosting panel...).</>,
                 <>Add a new record with these values:</>,
               ]}
             />
@@ -212,9 +212,9 @@ export function VerificationPanel({
                 </tbody>
               </table>
             </div>
-            <StepList start={3} steps={[<>Save it, then press “Check now”.</>]} />
+            <StepList start={3} steps={[<>Save it, then press "Check now".</>]} />
             <p className="text-[13px] leading-relaxed text-ink-3">
-              Some providers want “@” instead of the domain as the host. New records usually appear within minutes but can take up to an hour or two; you can leave this
+              Some providers want "@" instead of the domain as the host. New records usually appear within minutes but can take up to an hour or two; you can leave this
               page and check later. Keep the record in place.
             </p>
           </div>
@@ -236,9 +236,9 @@ export function VerificationPanel({
               steps={[
                 <>
                   Paste it inside the <code className="font-mono text-[13px]">&lt;head&gt;</code> of your homepage, https://{site.domain}/. In WordPress, use your SEO
-                  plugin's “webmaster verification” or a header-code setting.
+                  plugin's "webmaster verification" or a header-code setting.
                 </>,
-                <>Publish the change, then press “Check now”.</>,
+                <>Publish the change, then press "Check now".</>,
               ]}
             />
             <p className="text-[13px] leading-relaxed text-ink-3">

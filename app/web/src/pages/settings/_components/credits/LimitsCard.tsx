@@ -59,7 +59,7 @@ export function LimitsCard({ b }: { b: BillingOverview }) {
 
   const autopilotHint = `When the schedules reach it they pause until the 1st of next month (or until the limit is raised). This month they used ${formatCredits(b.month.autopilotUsed)} of about ${formatCredits(b.month.autopilotForecast)} forecast.`;
   const onDemandHint = `Analyses that would pass it are refused until the 1st. Used this month: ${formatCredits(b.month.onDemandUsed)}.`;
-  const reserveText = 'On-demand analyses cannot use the credits your websites’ schedules still need this month, so the automatic work keeps running.';
+  const reserveText = 'On-demand analyses cannot use the credits your websites\' schedules still need this month, so the automatic work keeps running.';
 
   return (
     <SettingsCard

@@ -9,9 +9,9 @@ import { HttpError } from '../lib/errors';
 // advisory lock, so parallel requests cannot all pass the same check.
 //
 // B-R3 (benchmark area 13 §3.1): **what a run cost beats what we guessed it would cost.** A finished run used to keep counting at
-// its reservation for the rest of the month, so a month of runs was held against the budget at the app's old table — which measured
+// its reservation for the rest of the month, so a month of runs was held against the budget at the app's old table, which measured
 // 1.3x to 2.5x above the money and refused two real runs at "$5.74 of $6". A run now counts at, in order: what it reported
-// spending, then the engine's own calibrated estimate, then ours — the same order the customer sees on the run itself. The keyword
+// spending, then the engine's own calibrated estimate, then ours, the same order the customer sees on the run itself. The keyword
 // check has worked this way since v4.8; this brings runs into line with it.
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -69,16 +69,16 @@ export async function monthSpend(orgId: string): Promise<number> {
 }
 
 /**
- * Whether something that costs about `estimated` may start: over the company's monthly budget → 402, over the platform's daily
- * ceiling → 429, else null. `what` names it in the message ("This run", "This keyword check").
+ * Whether something that costs about `estimated` may start: over the company's monthly budget -> 402, over the platform's daily
+ * ceiling -> 429, else null. `what` names it in the message ("This run", "This keyword check").
  */
 export function budgetRefusal(o: { what: string; estimated: number; spent: number; budget: number; platformToday: number; platformDaily: number }): HttpError | null {
   if (o.estimated <= 0) return null;
   if (o.spent + o.estimated > o.budget)
     return new HttpError(
       402,
-      // credits (app/docs/CREDITS.md): the dollar budget is the platform's own guard and its figures are provider cost — never shown
-      `${o.what} would go over your company's monthly usage limit. Contact support to raise it, or see Settings → Credits.`,
+      // credits (app/docs/CREDITS.md): the dollar budget is the platform's own guard and its figures are provider cost, never shown
+      `${o.what} would go over your company's monthly usage limit. Contact support to raise it, or see Settings > Credits.`,
       'budget',
     );
   if (o.platformToday + o.estimated > o.platformDaily)

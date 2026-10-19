@@ -116,5 +116,5 @@ export const outbound = (req: OutRequest): Promise<OutResponse> => transport.sen
 /** An error message fit for a log line and the UI: no address query strings, no tokens, cut short. */
 export function safeError(err: unknown): string {
   const m = String((err as Error)?.message || err || 'unknown error');
-  return m.replace(/https?:\/\/\S+/g, (x) => x.replace(/[?#].*$/, '').replace(/\/[^/]{24,}/g, '/…')).slice(0, 300);
+  return m.replace(/https?:\/\/\S+/g, (x) => x.replace(/[?#].*$/, '').replace(/\/[^/]{24,}/g, '/...')).slice(0, 300);
 }

@@ -1,4 +1,4 @@
-// Link building — the conversations: sequences going out (step x of n, next send, pause / resume / stop, edit the unsent e-mails, the
+// Link building, the conversations: sequences going out (step x of n, next send, pause / resume / stop, edit the unsent e-mails, the
 // thread) and the replies (class, summary, the reply, the suggested answer sent in the same thread, won / not a fit).
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -254,7 +254,7 @@ function EditDialog({ q, onClose }: { q: OutreachSequence; onClose: () => void }
                 {i > 0 && <span className="ml-2 text-xs font-normal text-ink-3">{s.waitDays} working days after the previous one, only if there is no reply</span>}
               </p>
               {i === 0 ? (
-                <Field label="Subject" hint={`${s.subject.trim().length} characters · 36–50 work best`}>
+                <Field label="Subject" hint={`${s.subject.trim().length} characters · 36-50 work best`}>
                   {(f) => <Input {...f} value={s.subject} maxLength={140} onChange={(e) => setSteps((all) => all.map((x, j) => (j === i ? { ...x, subject: e.target.value } : x)))} />}
                 </Field>
               ) : (
@@ -377,7 +377,7 @@ function ReplyRow({ q, d }: { q: OutreachSequence; d: LinkBuildingData }) {
           </div>
           {q.replySummary && <p className="mt-1 text-sm text-ink">{q.replySummary}</p>}
           {note && <p className="mt-1 text-[13px] text-ink-3">{note}</p>}
-          {won && <p className="mt-1 text-[13px] text-ink-3">Our link check confirms the link on their page; its effect on your page shows under “What your links did” after six weeks.</p>}
+          {won && <p className="mt-1 text-[13px] text-ink-3">Our link check confirms the link on their page; its effect on your page shows under "What your links did" after six weeks.</p>}
 
           {lastIn && (
             <div className="mt-2.5 rounded-lg border border-accent-text/20 bg-surface px-3 py-2.5">

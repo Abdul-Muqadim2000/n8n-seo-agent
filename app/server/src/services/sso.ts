@@ -79,7 +79,7 @@ export function certInfo(pem: string): SsoCertInfo {
   }
 }
 
-/** a pasted certificate (PEM, or the bare base64 most IdPs show) → PEM, or a 400 */
+/** a pasted certificate (PEM, or the bare base64 most IdPs show) -> PEM, or a 400 */
 export function normalizeCert(input: string): string {
   const body = input.replace(/-----(BEGIN|END) CERTIFICATE-----/g, '').replace(/\s+/g, '');
   if (!/^[A-Za-z0-9+/=]{100,}$/.test(body)) throw badRequest('That does not look like a certificate. Paste the X.509 signing certificate (PEM or base64).', { 'saml.certificates': 'Not a certificate' });
@@ -284,7 +284,7 @@ export async function connectionForEmail(email: string): Promise<{ conn: SsoConn
 
 /**
  * Must this address sign in through its company's identity provider? Null when not (no enforced connection for its domain, or the
- * person is an owner of that company — the break-glass account). Checked before any password is.
+ * person is an owner of that company, the break-glass account). Checked before any password is.
  */
 export async function ssoRequiredFor(email: string, userId: string | null): Promise<{ orgName: string; url: string } | null> {
   const hit = await connectionForEmail(email);
@@ -447,7 +447,7 @@ export interface SsoIdentity {
   name: string;
 }
 
-/** the OIDC callback: the code, our state (bound to this browser by the cookie), PKCE and nonce → the person */
+/** the OIDC callback: the code, our state (bound to this browser by the cookie), PKCE and nonce -> the person */
 export async function completeOidc(req: FastifyRequest): Promise<{ conn: SsoConnectionRow; flow: FlowData; identity: SsoIdentity }> {
   const q = req.query as Record<string, string>;
   const cookie = req.cookies[SSO_COOKIE];
@@ -473,7 +473,7 @@ export async function completeOidc(req: FastifyRequest): Promise<{ conn: SsoConn
   }
 }
 
-/** the SAML ACS: a signed assertion for a request we issued → the person */
+/** the SAML ACS: a signed assertion for a request we issued -> the person */
 export async function completeSaml(req: FastifyRequest, connId: string): Promise<{ conn: SsoConnectionRow; flow: FlowData; identity: SsoIdentity }> {
   const body = (req.body ?? {}) as Record<string, string>;
   const conn = await db.query.ssoConnections.findFirst({ where: eq(schema.ssoConnections.id, connId) });

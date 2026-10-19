@@ -2,9 +2,9 @@ import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { rebrandText } from '@seo/shared';
 
 /**
- * G5 (WHITE_LABEL.md §6): a document the engine produced, as a white-label client person gets it — the engine's report brand and our
+ * G5 (WHITE_LABEL.md §6): a document the engine produced, as a white-label client person gets it, the engine's report brand and our
  * own name replaced by the agency's product name. Word files and zips are rewritten entry by entry (a small ZIP reader / writer:
- * stored and deflated entries, no ZIP64, no encryption — anything else is returned unchanged and flagged); HTML / Markdown / text /
+ * stored and deflated entries, no ZIP64, no encryption, anything else is returned unchanged and flagged); HTML / Markdown / text /
  * CSV / JSON as text. **PDF is never rewritten** (its text is glyph-encoded inside compressed streams): `pdf` answers `rewritable:
  * false` and the portal offers the branded print view instead.
  */
@@ -12,7 +12,7 @@ import { rebrandText } from '@seo/shared';
 export type RebrandKind = 'pdf' | 'docx' | 'doc' | 'html' | 'md' | 'json' | 'zip' | 'csv' | 'txt' | 'image' | 'other';
 export interface Rebranded {
   data: Buffer;
-  /** false: this kind cannot be rewritten safely (PDF, old .doc, an unreadable zip) — do not serve it to a white-label client */
+  /** false: this kind cannot be rewritten safely (PDF, old .doc, an unreadable zip), do not serve it to a white-label client */
   rewritable: boolean;
   changed: boolean;
 }

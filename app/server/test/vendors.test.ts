@@ -147,7 +147,7 @@ describe('SigV4 (S3-compatible storage)', () => {
     expect(objectUrl({ ...base, provider: 'r2' }, 'a.ndjson')).toBe(`https://${'f'.repeat(32)}.r2.cloudflarestorage.com/nw-seo/a.ndjson`);
     expect(objectUrl({ ...base, provider: 'gcs' }, 'a.ndjson')).toBe('https://storage.googleapis.com/nw-seo/a.ndjson');
   });
-  it('PUT: signed, with the body hash; the store’s XML error is read back', async () => {
+  it('PUT: signed, with the body hash; the store\'s XML error is read back', async () => {
     const sent = script({ status: 200 }, { status: 403, text: '<?xml version="1.0"?><Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>' });
     const c = { provider: 'r2' as const, region: 'auto', accountId: 'f'.repeat(32), endpoint: '', bucket: 'nw-seo', prefix: 'p', format: 'ndjson' as const };
     await putObject(c, { accessKeyId: 'AKID12345', secretAccessKey: 'secret-secret-secret' }, 'p/x.ndjson', Buffer.from('{"a":1}\n'), 'application/x-ndjson');
@@ -186,7 +186,7 @@ describe('BigQuery load job', () => {
     expect(sent[3]!.url).toBe(`https://bigquery.googleapis.com/bigquery/v2/projects/acme-analytics/jobs/${jobId}?location=EU`);
   });
 
-  it('a job that finished with an error is an error, with BigQuery’s reason', async () => {
+  it('a job that finished with an error is an error, with BigQuery\'s reason', async () => {
     script({ status: 200, json: { access_token: 'ya29.t' } }, { status: 200, headers: { location: session } }, { status: 200, json: {} }, { status: 200, json: { status: { state: 'DONE', errorResult: { reason: 'invalid', message: 'Provided Schema does not match Table' } } } });
     await expect(loadIntoBigQuery(cfg, key, t, Buffer.from('{}\n'), { pollMs: 0 })).rejects.toThrow('Provided Schema does not match Table');
   });

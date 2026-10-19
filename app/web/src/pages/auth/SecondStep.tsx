@@ -17,7 +17,7 @@ export function SecondStep({ methods, emailHint, next, onCancel }: { methods: Mf
     const { next: serverNext, recoveryCodesLeft, ...me } = r;
     qc.setQueryData(qk.me, me);
     if (recoveryCodesLeft != null)
-      toast.warning(`${recoveryCodesLeft} recovery code${recoveryCodesLeft === 1 ? '' : 's'} left`, { description: 'Make new ones under Your account → Two-step verification.' });
+      toast.warning(`${recoveryCodesLeft} recovery code${recoveryCodesLeft === 1 ? '' : 's'} left`, { description: 'Make new ones under Your account > Two-step verification.' });
     navigate(next ?? serverNext ?? '/', { replace: true });
   };
   return (

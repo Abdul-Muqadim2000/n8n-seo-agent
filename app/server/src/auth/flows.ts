@@ -84,7 +84,7 @@ export async function deleteFlow(id: string): Promise<void> {
 }
 
 /**
- * Records a one-time id (a SAML assertion id) until `until`. Returns false when it was recorded before — a replay. The primary key
+ * Records a one-time id (a SAML assertion id) until `until`. Returns false when it was recorded before, a replay. The primary key
  * makes this atomic: two requests carrying the same assertion cannot both insert it.
  */
 export async function markSeenOnce(key: string, until: Date): Promise<boolean> {

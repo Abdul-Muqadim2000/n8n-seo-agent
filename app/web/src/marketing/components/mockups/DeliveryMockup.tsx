@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2, Link2, Mail, Paperclip, Webhook } from 'lu
 import { cn } from '@/lib/utils';
 import { Drawn } from './parts';
 
-// A delivered report as it arrives (sample data): the figures in the message, the files attached, the link anyone can open — and,
+// A delivered report as it arrives (sample data): the figures in the message, the files attached, the link anyone can open, and,
 // underneath, the one report that was deliberately not sent and the reason why.
 
 const FIGURES: { label: string; value: string }[] = [
@@ -15,7 +15,7 @@ const FIGURES: { label: string; value: string }[] = [
 export function DeliveryMockup({ className }: { className?: string }) {
   return (
     <Drawn
-      label="A weekly report arriving by e-mail with sample data: the subject line, the report’s clicks, impressions, change and actions as a small table, a PDF attached, a link anyone can open, and below it one report held back because the page did not pass its quality check."
+      label="A weekly report arriving by e-mail with sample data: the subject line, the report's clicks, impressions, change and actions as a small table, a PDF attached, a link anyone can open, and below it one report held back because the page did not pass its quality check."
       className={cn('@container overflow-hidden rounded-xl border border-line bg-surface text-ink shadow-overlay', className)}
     >
       <div className="border-b border-line px-4 pt-4 pb-3.5 @min-[26rem]:px-5">
@@ -25,7 +25,7 @@ export function DeliveryMockup({ className }: { className?: string }) {
             <Mail className="size-3.5" />
           </span>
           <span className="min-w-0">
-            <span className="block font-display text-[14px] leading-snug font-semibold">Weekly tracking report — example.com</span>
+            <span className="block font-display text-[14px] leading-snug font-semibold">Weekly tracking report: example.com</span>
             <span className="mt-1 block text-[10.5px] text-ink-3">To you and two colleagues · every Monday at 08:00</span>
           </span>
         </div>
@@ -62,7 +62,7 @@ export function DeliveryMockup({ className }: { className?: string }) {
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning-text/20 bg-warning-soft p-3">
           <AlertTriangle className="mt-px size-3.5 shrink-0 text-warning-text" />
           <span className="min-w-0 text-[11px] leading-snug text-ink-2">
-            <span className="font-medium">Not sent — Page: erp software uae.</span> The page did not pass the quality check, so it is waiting in Alaventra rather than going out as finished work.
+            <span className="font-medium">Not sent. Page: erp software uae.</span> The page did not pass the quality check, so it is waiting in Alaventra rather than going out as finished work.
           </span>
         </div>
       </div>

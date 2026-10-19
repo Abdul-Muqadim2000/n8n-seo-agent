@@ -110,8 +110,8 @@ export async function orgRoutes(app: FastifyInstance) {
     if (body.confirm.trim() !== a.org.name) throw badRequest('Type the company name to confirm', { confirm: 'Does not match the company name' });
     // G5: an agency goes only after its client workspaces; a client workspace only by the agency's owner
     if (a.org.kind === 'agency' && (await db.query.organizations.findFirst({ where: eq(schema.organizations.parentOrgId, a.org.id) })))
-      throw conflict('Delete this agency’s client workspaces first.', 'agency_has_clients');
-    if (a.org.kind === 'client' && !(await canDeleteClient(a.user, a.org))) throw forbidden('Only the agency’s owner can delete a client workspace.');
+      throw conflict('Delete this agency\'s client workspaces first.', 'agency_has_clients');
+    if (a.org.kind === 'client' && !(await canDeleteClient(a.user, a.org))) throw forbidden('Only the agency\'s owner can delete a client workspace.');
     if (a.org.kind === 'client' && a.org.parentOrgId)
       await audit(req, a.org.parentOrgId, { action: 'agency.client_deleted', target: { type: 'company', id: a.org.id, label: a.org.name } });
     await deleteCompany(a.org, req.log);
@@ -129,11 +129,11 @@ export async function orgRoutes(app: FastifyInstance) {
     return orgView(o, a.role, isPlatformAdmin(a.user));
   });
 
-  // credits (app/docs/CREDITS.md): the dollar budget is the platform's own guard in provider cost — set by a platform admin only; a
+  // credits (app/docs/CREDITS.md): the dollar budget is the platform's own guard in provider cost, set by a platform admin only; a
   // company's own spending limits are its credit limits (PUT /api/orgs/:orgId/billing/limits)
   app.patch('/api/orgs/:orgId/budget', async (req) => {
     const a = await orgAccess(req, (req.params as { orgId: string }).orgId, 'owner');
-    if (!isPlatformAdmin(a.user)) throw forbidden('Limits are in Settings → Credits.');
+    if (!isPlatformAdmin(a.user)) throw forbidden('Limits are in Settings > Credits.');
     const body = parse(z.object({ monthlyBudgetUsd: z.number().min(0).max(100000) }), req.body);
     const [o] = await db.update(schema.organizations).set({ monthlyBudgetUsd: body.monthlyBudgetUsd }).where(eq(schema.organizations.id, a.org.id)).returning();
     if (o.monthlyBudgetUsd !== a.org.monthlyBudgetUsd)
@@ -141,18 +141,18 @@ export async function orgRoutes(app: FastifyInstance) {
     return orgView(o, a.role, isPlatformAdmin(a.user));
   });
 
-  // R100: the prices the forms show before a run and the budget check holds — the engine's own rolling figures (read from its store,
+  // R100: the prices the forms show before a run and the budget check holds, the engine's own rolling figures (read from its store,
   // cached), or the shipped table, labelled, when n8n cannot be read. `modes` is each mode's request-free price under that source;
   // clients with form values call `estimateRunCost(mode, values, calibration)` for the exact figure.
   app.get('/api/orgs/:orgId/costs', async (req): Promise<CostTableInfo & { creditRate: number; modes: Record<string, number> }> => {
     await orgAccess(req, (req.params as { orgId: string }).orgId);
     const info = await engineCostTable();
-    // credits (app/docs/CREDITS.md): screens show every price in credits — `creditRate` credits per unit of these figures
+    // credits (app/docs/CREDITS.md): screens show every price in credits, `creditRate` credits per unit of these figures
     const rate = creditRate(await settingsRow());
     return { ...info, creditRate: rate, modes: Object.fromEntries(MODE_IDS.map((m) => [m, modeCostUsd(m, info.calibration)])) };
   });
 
-  // credits (app/docs/CREDITS.md): GET /api/orgs/:orgId/usage (the month in provider dollars) was removed 2026-10-19 — the Credits page
+  // credits (app/docs/CREDITS.md): GET /api/orgs/:orgId/usage (the month in provider dollars) was removed 2026-10-19, the Credits page
   // (GET /api/orgs/:orgId/billing) replaced it
 
   // ---------- B-R1: report delivery ----------
@@ -202,7 +202,7 @@ export async function orgRoutes(app: FastifyInstance) {
             .leftJoin(schema.users, eq(schema.invitations.invitedBy, schema.users.id))
             .where(and(eq(schema.invitations.orgId, a.org.id), isNull(schema.invitations.acceptedAt), isNull(schema.invitations.revokedAt), gt(schema.invitations.expiresAt, new Date())))
             .orderBy(desc(schema.invitations.createdAt));
-    // G1: who has two-step verification — owners and admins see it (the company's security posture is theirs to manage)
+    // G1: who has two-step verification, owners and admins see it (the company's security posture is theirs to manage)
     const admin = roleAtLeast(a.role, 'admin');
     const keyed = admin
       ? new Set((await db.selectDistinct({ id: schema.webauthnCredentials.userId }).from(schema.webauthnCredentials).where(inArray(schema.webauthnCredentials.userId, members.map((r) => r.u.id)))).map((r) => r.id))
@@ -257,8 +257,8 @@ export async function orgRoutes(app: FastifyInstance) {
         to: body.email,
         subject: `${a.user.name} invited you to ${a.org.name} on ${sender.brandName}`,
         lines: isClientRole(body.role)
-          ? [`${a.user.name} invited you to ${sender.brandName}, the SEO portal of ${a.org.name}.`, body.role === 'client_approver' ? 'You will see your websites’ dashboards and reports, and approve pages and outreach before they go out.' : 'You will see your websites’ dashboards, reports and recommendations.']
-          : [`${a.user.name} invited you to join ${a.org.name} as ${body.role}.`, 'You will see the SEO dashboards, reports and analyses of the company’s websites.'],
+          ? [`${a.user.name} invited you to ${sender.brandName}, the SEO portal of ${a.org.name}.`, body.role === 'client_approver' ? 'You will see your websites\' dashboards and reports, and approve pages and outreach before they go out.' : 'You will see your websites\' dashboards, reports and recommendations.']
+          : [`${a.user.name} invited you to join ${a.org.name} as ${body.role}.`, 'You will see the SEO dashboards, reports and analyses of the company\'s websites.'],
         action: { label: 'Accept the invitation', url: inviteUrl },
         footer: 'The invitation works for 7 days.',
         sender,
@@ -288,10 +288,10 @@ export async function orgRoutes(app: FastifyInstance) {
     if (!isUuid(p.userId)) throw notFound('Member not found');
     const target = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.orgId, a.org.id), eq(schema.memberships.userId, p.userId)) });
     if (!target) throw notFound('Member not found');
-    if (target.role === 'owner') throw forbidden('The owner’s role cannot be changed.');
+    if (target.role === 'owner') throw forbidden('The owner\'s role cannot be changed.');
     if (target.userId === a.user.id) throw badRequest('You cannot change your own role.');
     // G5: a client person stays a client person; an agency member's access to a client is changed from the agency's Clients page
-    if (a.org.kind === 'client' && !isClientRole(target.role)) throw badRequest('Agency staff are given access to a client from the agency’s Clients page.');
+    if (a.org.kind === 'client' && !isClientRole(target.role)) throw badRequest('Agency staff are given access to a client from the agency\'s Clients page.');
     if (isClientRole(target.role) !== isClientRole(body.role) || (a.org.kind !== 'client' && isClientRole(body.role)))
       throw badRequest(isClientRole(target.role) ? 'Choose client viewer or client approver.' : 'Client roles exist only in client workspaces.');
     await db.update(schema.memberships).set({ role: body.role }).where(and(eq(schema.memberships.orgId, a.org.id), eq(schema.memberships.userId, p.userId)));

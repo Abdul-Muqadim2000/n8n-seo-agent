@@ -14,7 +14,7 @@ import { TrackersCard } from './TrackersCard';
 import { WebhooksCard } from './WebhooksCard';
 
 /**
- * G4 (2026-10-17, app/docs/INTEGRATIONS.md) — Company settings → Integrations: alerts and events to Slack / Teams / your systems,
+ * G4 (2026-10-17, app/docs/INTEGRATIONS.md), Company settings -> Integrations: alerts and events to Slack / Teams / your systems,
  * issue trackers, the warehouse export, and how to connect Looker Studio and AI assistants. Owners and admins only: every one of
  * these sends the company's data out of the app or writes into its tools.
  */
@@ -54,11 +54,11 @@ export function ConnectToolsCard({ data }: { data: IntegrationsOverview }) {
       >
         <CardBody className="space-y-2 text-sm text-ink-2">
           <p>
-            Alaventra’s Looker Studio connector reads the same tables as the data export, one website at a time, with a read-only API key. Create the key under{' '}
+            Alaventra's Looker Studio connector reads the same tables as the data export, one website at a time, with a read-only API key. Create the key under{' '}
             <Link to={paths.settings(org.id, 'api')} className="font-medium text-accent-text hover:underline">
               API access
             </Link>{' '}
-            (only “Read”), then follow the guide to add the connector.
+            (only "Read"), then follow the guide to add the connector.
           </p>
           <p className="text-ink-3">Your app address for the connector: <code className="font-mono">{data.appUrl}</code></p>
         </CardBody>
@@ -66,8 +66,8 @@ export function ConnectToolsCard({ data }: { data: IntegrationsOverview }) {
       <SettingsCard
         icon={<Bot />}
         title="AI assistants (MCP)"
-        description="Ask Claude or ChatGPT about your SEO data, and let them start analyses with the company’s credits."
-        info="A key with only “Read” lets an assistant read. A key with “Start analyses” also lets it start runs: it must preview the price in credits first and may not accept a duplicate warning you have not seen. Every run it starts shows the key’s name."
+        description="Ask Claude or ChatGPT about your SEO data, and let them start analyses with the company's credits."
+        info="A key with only &quot;Read&quot; lets an assistant read. A key with &quot;Start analyses&quot; also lets it start runs: it must preview the price in credits first and may not accept a duplicate warning you have not seen. Every run it starts shows the key's name."
         actions={<GuideButton id="mcp-assistant" vars={{ appUrl: data.appUrl }} />}
       >
         <CardBody className="space-y-4">

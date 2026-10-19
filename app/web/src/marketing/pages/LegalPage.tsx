@@ -63,7 +63,7 @@ function SectionBody({ s, n }: { s: LegalSection; n: number }) {
         <span>{s.title}</span>
         <a
           href={`#${s.id}`}
-          aria-label={`Link to “${s.title}”`}
+          aria-label={`Link to "${s.title}"`}
           className="inline-flex size-6 items-center justify-center self-center rounded-md text-ink-3 opacity-0 transition-[opacity,color] duration-150 ease-brand hover:text-accent-text focus-visible:opacity-100 group-hover/sec:opacity-100 [@media(hover:none)]:hidden"
         >
           <Hash className="size-4" aria-hidden />
@@ -160,9 +160,9 @@ function LegalDocument({ doc }: { doc: LegalDoc }) {
           >
             <FilePenLine className="mt-0.5 size-5 shrink-0 text-warning-text" aria-hidden />
             <div>
-              <p className="text-[15px] font-semibold text-ink">Draft — to be reviewed by counsel before launch</p>
+              <p className="text-[15px] font-semibold text-ink">Draft: to be reviewed by counsel before launch</p>
               <p className="mt-1 text-[14px] leading-relaxed text-ink-2">
-                This page shows the planned structure with placeholder text. It is not yet a binding policy, and the sections marked “To do” are still to be written.
+                This page shows the planned structure with placeholder text. It is not yet a binding policy, and the sections marked "To do" are still to be written.
               </p>
             </div>
           </div>

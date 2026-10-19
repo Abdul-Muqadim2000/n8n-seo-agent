@@ -14,7 +14,7 @@ import {
   type TrendRow,
 } from '@seo/shared';
 
-// The app's mirror of the Content Cadence (n8n/seo-agent/v5/code/Cadence_Plan.js, v4.8 — the source of truth): which pages the
+// The app's mirror of the Content Cadence (n8n/seo-agent/v5/code/Cadence_Plan.js, v4.8, the source of truth): which pages the
 // Monday run writes for one website, and why it writes nothing. Pure functions, rule for rule the same as n8n, so the Pipeline page
 // ("This week", the ladder cards' next step, Needs you) never says a page will be written when n8n would not write it:
 // - per ladder (seo_ladder_settings; no row = the website's default mode, else Auto; status active; priority by oldest start date):
@@ -28,21 +28,21 @@ import {
 //   week. A keyword waits when a content-log row of the last 120 days has any status but published (every content run writes one:
 //   the ladder's page runs, the app's "Write now", the cadence), or a ladder row is still 'writing' and its keyword has no
 //   published page; R111 (2026-10-16): a row `not_ready` (the page's last quality round failed) counts too, and is named in
-//   `needsFix` — it leaves the queue by being fixed and run again, never by being published as it is;
+//   `needsFix`, it leaves the queue by being fixed and run again, never by being published as it is;
 // - R87 (2026-10-16): a ladder whose MAIN keyword row says `set_aside` (n8n writes it back with the reason: the Rank Tracker's
-//   *Mark Set Aside* and the cadence's *Ladder Marks*) is paused — none of its rungs is written or queued, the reason is in
+//   *Mark Set Aside* and the cadence's *Ladder Marks*) is paused, none of its rungs is written or queued, the reason is in
 //   `headSetAside`;
 // - v4.16 (B4-3, benchmark area 4): a page the Site Tracker's decay test confirmed is losing traffic (seo_pages.decay_state ===
 //   'decaying') is queued as a REFRESH ahead of striking distance and rising trends, ranked by the clicks actually lost, at most
 //   CADENCE.decayPerWeek a week, and never if that page was refreshed in the last CADENCE.decayRefreshDays days. 'seasonal',
-//   'watch' and 'too_small' are never written — a quiet month is not a reason to rewrite a page;
+//   'watch' and 'too_small' are never written, a quiet month is not a reason to rewrite a page;
 // - opportunity posts (the refreshes above, then Search Console striking distance, then rising Google Trends searches) only when opportunities is Auto;
 //   when Manual they are suggestions (the first 5);
 // - Manual ladders are never written: each one's next eligible page waits for approval;
 // - skips keywords written in the last 90 days (or published), ladder rows marked writing / published, brand queries;
-// - v4.12 (AI_GROWTH_SPEC.md): the AI page of the week — the most valuable queued AI target (seo_ai_targets) as a new answer page or a refresh,
+// - v4.12 (AI_GROWTH_SPEC.md): the AI page of the week, the most valuable queued AI target (seo_ai_targets) as a new answer page or a refresh,
 //   on top of the blog posts, at most one a week and ai_pages_month a month, not while the pile-up guard holds; Manual opportunities -> a suggestion.
-// - v4.15 (D11, SITE_MODEL_SPEC.md): one search, one page — a candidate whose search a LIVE page of the website already answers
+// - v4.15 (D11, SITE_MODEL_SPEC.md): one search, one page, a candidate whose search a LIVE page of the website already answers
 //   (the page inventory seo_pages, matched like SM.matchPage in n8n/seo-agent/v5/code/_site_model.js) is never written as a second
 //   page: a ladder page becomes a refresh of that page, an opportunity post is left out and named in `coveredByLivePages`.
 
@@ -89,7 +89,7 @@ const pageTerms = (v: unknown) => [...new Set(pageTokens(v).filter((t) => t.leng
 const pagePath = (u: unknown) => String(u || '').replace(/^https?:\/\/[^/]*/i, '') || '/';
 export const PAGE_MATCH_MIN = 0.75;
 export interface PageMatch { url: string; title: string; matchedBy: 'query' | 'slug' | 'title'; score: number }
-/** The page that already answers `keyword`, or null — impressions for the exact query first, then 75% of its words in the slug or title. */
+/** The page that already answers `keyword`, or null, impressions for the exact query first, then 75% of its words in the slug or title. */
 export function matchPage(pages: SitePageRow[], keyword: string): PageMatch | null {
   const want = pageTerms(keyword);
   if (!want.length || !pages.length) return null;
@@ -128,7 +128,7 @@ export interface CadenceInput {
   /** v4.12: the AI growth loop's targets (queued ones are written) and the AI pages a month (0 = none, or AI visibility / growth off) */
   aiTargets?: AiTargetRow[];
   aiPagesPerMonth?: number;
-  /** v4.15 (D11): the website's page inventory (seo_pages) — the pages it already has */
+  /** v4.15 (D11): the website's page inventory (seo_pages), the pages it already has */
   pages?: SitePageRow[];
 }
 
@@ -173,7 +173,7 @@ export interface CadenceLadder {
   eligible: QueueItem[];
   /** what the coming run does with it */
   role: 'active' | 'queued' | 'manual' | 'paused' | 'won' | 'done';
-  /** R87: '' or why the ladder is paused — its main keyword's row says `set_aside` (the stored reason) */
+  /** R87: '' or why the ladder is paused, its main keyword's row says `set_aside` (the stored reason) */
   headSetAside: string;
 }
 
@@ -208,7 +208,7 @@ function ladderItem(l: LadderRow): QueueItem {
   return {
     keyword: l.keyword,
     source: 'ladder',
-    why: `Keyword ladder “${l.head_keyword || ''}”, ${rung === 4 ? 'the main page' : `rung ${rung}`}: the next planned page towards the main keyword`,
+    why: `Keyword ladder "${l.head_keyword || ''}", ${rung === 4 ? 'the main page' : `rung ${rung}`}: the next planned page towards the main keyword`,
     pageType: l.page_type || 'Service Page',
     existingPageUrl: l.page_exists === true || String(l.page_exists) === 'true' ? l.target_url || '' : '',
     ladder: { id: l.ladder_id, rung, head: l.head_keyword || '', pageNo: num(l.page_no) },
@@ -230,7 +230,7 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
   for (const l of lrows) if (ladderWritten(l.status) || l.status === 'published') recent.add(norm(l.keyword));
   // R16 (2026-10-13, FIX_PLAN §3.11): only a row that still says `planned` is open. n8n now also writes `set_aside` on a stored rung the
   // keyword rule refuses (a competitor's brand, a government portal, an off-topic search) and names the reason in its weekly note, so
-  // such a row drops out of this mirror as well — the app never promises a page the Monday run will not write (Cadence_Plan.js).
+  // such a row drops out of this mirror as well, the app never promises a page the Monday run will not write (Cadence_Plan.js).
   const open = (l: LadderRow) => String(l.status || 'planned') === 'planned' && !recent.has(norm(l.keyword));
   const settingOf = new Map(input.settings.filter((r) => r.ladder_id && String(r.ladder_id) !== LADDER_SITE_ROW).map((r) => [String(r.ladder_id), r]));
 
@@ -257,7 +257,7 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
       const published = support.filter((r) => r.status === 'published' || publishedKw.has(norm(r.keyword))).length;
       const gateOpen = planType === 'direct' || !support.length || published * 2 >= support.length || (headPosition != null && headPosition >= 1 && headPosition <= CADENCE.gateHeadPosition);
       const ordered = planType === 'direct' ? [...rows.filter(isTop), ...rows.filter((r) => !isTop(r))] : rows;
-      // R87 (Cadence_Plan.js `head_aside`): a ladder whose main keyword is set aside is paused — its rungs only climb towards it
+      // R87 (Cadence_Plan.js `head_aside`): a ladder whose main keyword is set aside is paused, its rungs only climb towards it
       const headSetAside = top && String(top.status || '') === 'set_aside' ? String((top as LadderRow & { status_note?: string }).status_note || '') || 'its main keyword was set aside' : '';
       const remaining = headSetAside ? [] : ordered.filter(open);
       const eligible = remaining.filter((r) => !isTop(r) || gateOpen);
@@ -313,9 +313,9 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     opps.push({
       keyword: x.q!.query,
       source: 'decay',
-      why: `This page is losing traffic: ${x.lost} clicks lost in 28 days (${num(x.row.prev_clicks)} → ${num(x.row.clicks)})${
+      why: `This page is losing traffic: ${x.lost} clicks lost in 28 days (${num(x.row.prev_clicks)} to ${num(x.row.clicks)})${
         String(x.row.decay_kind || '') === 'clickthrough' ? ', and it is still shown as often, so the title and description come first' : ''
-      } — refreshed, not written again.`,
+      }. It is refreshed, not written again.`,
       pageType: 'Guide',
       existingPageUrl: x.row.url,
       ladder: null,
@@ -359,7 +359,7 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
       opps.push({
         keyword: rq,
         source: 'trend',
-        why: `Rising related search for “${t.keyword}” (Google Trends, ${t.change_pct > 0 ? '+' : ''}${t.change_pct}% vs the 12-month average)`,
+        why: `Rising related search for "${t.keyword}" (Google Trends, ${t.change_pct > 0 ? '+' : ''}${t.change_pct}% vs the 12-month average)`,
         pageType: 'Guide',
         existingPageUrl: '',
         ladder: null,
@@ -378,7 +378,7 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
       })
       .slice(0, CADENCE.suggestions);
   }
-  // D11: one search, one page — a candidate a live page of the website already answers is refreshed (ladder) or left out (opportunity post)
+  // D11: one search, one page, a candidate a live page of the website already answers is refreshed (ladder) or left out (opportunity post)
   const inventory = (input.pages || []).filter((p) => p && p.url);
   const coveredByLivePages: CadencePlan['coveredByLivePages'] = [];
   const seen = new Set<string>();
@@ -392,7 +392,7 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     coveredByLivePages.push({ keyword: c.keyword, source: c.source, url: hit.url });
     if (c.source !== 'ladder') return false;
     c.existingPageUrl = hit.url;
-    c.why += ` — ${hit.url} already answers this search, so it is refreshed, not written again`;
+    c.why += `. ${hit.url} already answers this search, so it is refreshed, not written again`;
     return true;
   });
 
@@ -400,10 +400,10 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
   // Every page written and not published counts, each keyword once: the content-log rows that say `written` (in the last 120 days) and
   // the ladder rows still 'writing' whose keyword has such a row and no published page.
   // R1 (2026-10-13, the re-rating run): `written` in the content log is the only proof that a page exists. A `started` row is a run that
-  // opened the row and never finished, and a ladder row saying `writing` is a promise, not a page — live, a page run the budget guard
+  // opened the row and never finished, and a ladder row saying `writing` is a promise, not a page, live, a page run the budget guard
   // refused left row 19 "writing" with a `started` log row, and this guard counted it among 6 pages waiting and paused the site.
   const freshW = (t: unknown) => { const x = ms(t); return x > 0 && now - x < CADENCE.waitingDays * 864e5; };
-  // R111 (Cadence_Plan.js `WAITS`): a draft whose last quality round failed (`not_ready`) is written and not live, so it counts — labelled
+  // R111 (Cadence_Plan.js `WAITS`): a draft whose last quality round failed (`not_ready`) is written and not live, so it counts, labelled
   const waits = (st: unknown) => st === 'written' || st === 'not_ready';
   const isWritten = (l: ContentLogRow) => waits(l.status) || l.status === 'published' || !!String(l.published_url ?? '').trim();
   const waitingMap = new Map<string, { keyword: string; writtenAt: string; needsFix: boolean }>();
@@ -448,7 +448,7 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     const pk = picks[i];
     if (pk.source !== 'ladder' || pk.aiTarget) continue;
     const t = (input.aiTargets ?? []).find((x) => x.status === 'queued' && x.kind !== 'refresh' && (sameSearch(x.keyword, pk.keyword) || sameSearch(pk.keyword, x.keyword)));
-    if (t) picks[i] = { ...pk, why: `${pk.why} — written to answer “${t.question}” in AI answers`, aiTarget: { targetId: t.target_id, question: t.question, kind: 'answer' } };
+    if (t) picks[i] = { ...pk, why: `${pk.why}. Written to answer "${t.question}" in AI answers`, aiTarget: { targetId: t.target_id, question: t.question, kind: 'answer' } };
   }
   const aiQueue = (input.aiTargets ?? [])
     .filter((t) => t.status === 'queued' && t.keyword && !(t.kind !== 'refresh' && lrows.some((l) => sameSearch(t.keyword, l.keyword) || sameSearch(l.keyword, t.keyword))) && (t.kind === 'refresh' ? !!t.page_url && !refreshedRecently.has(keyOfU(t.page_url)) : !recent.has(norm(t.keyword)) && !ladderKw.has(norm(t.keyword))) && !picks.some((p) => norm(p.keyword) === norm(t.keyword)))
@@ -458,7 +458,7 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     ? {
         keyword: aiTop.keyword,
         source: aiTop.kind === 'refresh' ? 'ai_refresh' : 'ai_answer',
-        why: `AI answers “${aiTop.question}” without you${aiTop.competitors ? ` (it names ${String(aiTop.competitors).split(', ').slice(0, 3).join(', ')})` : ''}${aiTop.kind === 'refresh' ? `: refresh ${aiTop.page_url}` : ': a new answer page'}`,
+        why: `AI answers "${aiTop.question}" without you${aiTop.competitors ? ` (it names ${String(aiTop.competitors).split(', ').slice(0, 3).join(', ')})` : ''}${aiTop.kind === 'refresh' ? `: refresh ${aiTop.page_url}` : ': a new answer page'}`,
         pageType: aiTop.kind === 'refresh' ? 'Service Page' : aiTop.page_type || 'Guide',
         existingPageUrl: aiTop.kind === 'refresh' ? aiTop.page_url : '',
         ladder: null,
@@ -515,7 +515,7 @@ export interface CadenceWeek extends CadencePlan {
 
 /**
  * The coming Monday runs, one after the other: each run's picks are logged as written (content log 'written' at the run), as the
- * real runs do, so later runs move on — and stop once the pile-up guard holds. Nothing is assumed to get published or to rank.
+ * real runs do, so later runs move on, and stop once the pile-up guard holds. Nothing is assumed to get published or to rank.
  * Without runs (weekly posts off), one plan at `now` shows what would be written.
  */
 export function simulateCadence(input: CadenceInput, runs: string[], now = Date.now()): CadenceWeek[] {

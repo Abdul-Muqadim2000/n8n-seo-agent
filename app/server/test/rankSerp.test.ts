@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { RankHistoryRow } from '@seo/shared';
 import { rankSeries, serpReading } from '../src/services/data';
 
-// G6 (2026-10-12, system review FIX_PLAN): every rank check stores the whole results page it read — the features it showed, the
-// top-10 domains, the competitors' positions, a modelled share of voice and a snapshot as proof — plus a weekly mobile reading of
+// G6 (2026-10-12, system review FIX_PLAN): every rank check stores the whole results page it read, the features it showed, the
+// top-10 domains, the competitors' positions, a modelled share of voice and a snapshot as proof, plus a weekly mobile reading of
 // the ladder's main keywords. The app must read that back without letting a mobile reading into the desktop position series, and
 // without ever turning "not known" into "no".
 
@@ -51,7 +51,7 @@ const competitors = JSON.stringify({
   ],
   shares: [{ domain: 'cleartax.com', pct: 21.4 }],
   tracked: ['cleartax.com', 'zoho.com'],
-  method: 'modelled: clicks by position from a published CTR curve … Not measured clicks.',
+  method: 'modelled: clicks by position from a published CTR curve ... Not measured clicks.',
 });
 
 const snapshot = JSON.stringify({
@@ -65,7 +65,7 @@ const snapshot = JSON.stringify({
 
 const full = row({ features_json: features(), competitors_json: competitors, snapshot_json: snapshot, share_of_voice: 13.6 });
 
-describe('G6 — the results page stored with every rank check', () => {
+describe('G6: the results page stored with every rank check', () => {
   it('reads the features, the competitors, the share of voice and the proof of the latest check', () => {
     const r = serpReading([full])!;
     expect(r.features.aiOverview.shown).toBe(true);

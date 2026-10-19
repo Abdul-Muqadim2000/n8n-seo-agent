@@ -25,10 +25,10 @@ export const typeIcon = (t: string) => TYPE_ICON[t] ?? <Link2 />;
 export const CONTACT_KIND: Record<OutreachContact['kind'], string> = { person: 'Named person', editorial: 'Editorial inbox', general: 'General inbox', other: 'Other address' };
 
 /** The link text we ask for (never a keyword). */
-export const ANCHOR_LABEL: Record<string, string> = { brand: 'Your brand name', title: 'The page’s title', url: 'The page’s address', 'as before': 'The same text as before' };
+export const ANCHOR_LABEL: Record<string, string> = { brand: 'Your brand name', title: 'The page\'s title', url: 'The page\'s address', 'as before': 'The same text as before' };
 export const anchorLabel = (a: string) => ANCHOR_LABEL[a] ?? (a ? a : ANCHOR_LABEL.brand!);
 export const ANCHOR_INFO =
-  'We never ask for a keyword as the link text: Google names optimised link text in requested links as link spam. Your brand or the page’s title is what an editor would write anyway.';
+  'We never ask for a keyword as the link text: Google names optimised link text in requested links as link spam. Your brand or the page\'s title is what an editor would write anyway.';
 
 export function SequenceBadge({ status }: { status: SequenceStatus }) {
   const tone: Tone = status === 'won' ? 'good' : status === 'replied' ? 'accent' : status === 'paused' ? 'warning' : status === 'bounced' || status === 'failed' ? 'critical' : 'neutral';
@@ -70,7 +70,7 @@ export const VERDICT: Record<string, { label: string; tone: Tone }> = {
   possibly_helped: { label: 'Possibly helped', tone: 'accent' },
   no_effect_yet: { label: 'No measurable effect yet', tone: 'neutral' },
   too_early: { label: 'Too early', tone: 'neutral' },
-  cant_tell: { label: 'Can’t tell', tone: 'neutral' },
+  cant_tell: { label: 'Can\'t tell', tone: 'neutral' },
 };
 export const verdictOf = (v: string) => VERDICT[v] ?? { label: titleCase(v || 'unknown'), tone: 'neutral' as Tone };
 
@@ -80,8 +80,8 @@ export function sendingMailbox(d: Pick<LinkBuildingData, 'settings' | 'mailboxes
 }
 
 const pad = (h: number) => `${String(h).padStart(2, '0')}:00`;
-/** "Mon–Fri 08:00–17:00 (Asia/Dubai)" */
-export const windowText = (m: Pick<MailboxView, 'windowStart' | 'windowEnd' | 'timezone'>) => `Mon–Fri ${pad(m.windowStart)}–${pad(m.windowEnd)} (${m.timezone})`;
+/** "Mon-Fri 08:00-17:00 (Asia/Dubai)" */
+export const windowText = (m: Pick<MailboxView, 'windowStart' | 'windowEnd' | 'timezone'>) => `Mon-Fri ${pad(m.windowStart)}-${pad(m.windowEnd)} (${m.timezone})`;
 
 /** Scrolls to a section of the page (instant under reduced motion). */
 export function jumpTo(id: string) {
