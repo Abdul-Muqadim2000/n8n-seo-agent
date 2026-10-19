@@ -86,36 +86,6 @@
   "SEOagentPageWch1"
  ],
  "default_tz": "America/New_York",
- "deploy_guard": {
-  "fri_2026-10-16_12:00Z_today": {
-   "inside": false,
-   "window_utc": "Mon 11:00-16:00"
-  },
-  "mon_2026-10-19_10:59Z_before": {
-   "inside": false,
-   "window_utc": "Mon 11:00-16:00"
-  },
-  "mon_2026-10-19_12:00Z_summer": {
-   "inside": true,
-   "window_utc": "Mon 11:00-16:00"
-  },
-  "mon_2026-10-19_16:30Z_after": {
-   "inside": false,
-   "window_utc": "Mon 11:00-16:00"
-  },
-  "mon_2026-11-02_11:30Z_winter_before": {
-   "inside": false,
-   "window_utc": "Mon 12:00-17:00"
-  },
-  "mon_2026-11-02_16:30Z_winter": {
-   "inside": true,
-   "window_utc": "Mon 12:00-17:00"
-  },
-  "tue_2026-10-20_12:00Z": {
-   "inside": false,
-   "window_utc": "Mon 11:00-16:00"
-  }
- },
  "exec_limit": 250,
  "growth_dry_run": {
   "Submit IndexNow": {

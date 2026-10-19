@@ -1642,6 +1642,15 @@
     "waitBetweenTries": 5000
    }
   ],
+  "SEO Agent \u2014 Cycle Dispatcher": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Executions (Cycle)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
   "SEO Agent \u2014 Error Handler": [
    {
     "allowed": false,
