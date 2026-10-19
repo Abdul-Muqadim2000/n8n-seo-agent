@@ -216,10 +216,12 @@ services:
       APP_URL: https://${APP_HOST:-app.${DOMAIN}}
       # where browsers and machines reach this server directly (uploads, log push, SCIM)
       PUBLIC_API_URL: https://api.${DOMAIN}
-      APP_EXTRA_HOSTS: api.${DOMAIN}${APP_EXTRA_HOSTS_MORE:-}
+      # the business site (alaventra.com -> www) serves the same web build, so its /login and /signup call the API from those hosts;
+      # without them the strict portal-host rule answered 421 "This address is not served here" (2026-10-19)
+      APP_EXTRA_HOSTS: api.${DOMAIN},${DOMAIN},www.${DOMAIN}${APP_EXTRA_HOSTS_MORE:-}
       # app.<domain> and api.<domain> share the session cookie (same site), so a direct upload to api.<domain> is signed in
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-${DOMAIN}}
-      CORS_ORIGINS: https://${APP_HOST:-app.${DOMAIN}}${CORS_ORIGINS_MORE:-}
+      CORS_ORIGINS: https://${APP_HOST:-app.${DOMAIN}},https://${DOMAIN},https://www.${DOMAIN}${CORS_ORIGINS_MORE:-}
       # Caddy is the one proxy in front (it rewrites X-Forwarded-For to the visitor's address, also for Vercel's proxied requests)
       TRUST_PROXY: '1'
       N8N_BASE_URL: http://n8n:5678
