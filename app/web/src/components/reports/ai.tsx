@@ -485,7 +485,7 @@ export function AiPulseReport({ report }: { report: ReportDetail }) {
           </ul>
         </Block>
       )}
-      <p className="text-xs text-ink-3">The AI pulse asks your tracked questions every day except Monday; Monday's AI visibility report adds these answers to its figures. A message is sent only when a change is beyond normal answer-to-answer variation.</p>
+      <p className="text-xs text-ink-3">The AI pulse asks your tracked questions every day except the day of your weekly run; the next weekly AI visibility report adds these answers to its figures. A message is sent only when a change is beyond normal answer-to-answer variation.</p>
       <CreditsCard p={p} />
     </Stagger>
   );
@@ -586,7 +586,7 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
       {targets.length > 0 && (
-        <Block title="Questions to win" icon={<Search />} description="The Monday content run writes the most valuable one each week">
+        <Block title="Questions to win" icon={<Search />} description="The weekly content run picks the most valuable one">
           <ul className="divide-y divide-line text-[13px]">
             {targets.slice(0, 10).map((t, i) => (
               <li key={i} className="flex items-start justify-between gap-3 py-2">

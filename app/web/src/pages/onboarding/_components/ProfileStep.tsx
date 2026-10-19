@@ -27,7 +27,7 @@ export function ProfileStep() {
         </>
       }
       back={() => go('business')}
-      skip={{ label: 'Skip for now', onClick: () => go('tracking') }}
+      skip={{ label: 'Skip for now', onClick: () => go('keyword') }}
       primary={verified ? { label: 'Save and continue', form: FORM_ID, loading: isPending } : undefined}
     >
       {!verified ? (
@@ -65,11 +65,11 @@ export function ProfileStep() {
             savedReadiness={settings.data?.profile ? settings.data.readiness : null}
             layout="aside"
             emptyIsSkip
-            onSkip={() => go('tracking')}
+            onSkip={() => go('keyword')}
             onSubmit={async (v) => {
               await save(v);
               profileSavedToast();
-              go('tracking');
+              go('keyword');
             }}
           />
         </div>

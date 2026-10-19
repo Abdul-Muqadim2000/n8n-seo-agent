@@ -7,6 +7,7 @@ import { compactNumber, formatPercent, titleCase, type AiAccess, type AiGroup, t
 import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -20,10 +21,11 @@ const pct0 = (v: number) => formatPercent(v, 0);
 /** Visits, key events and revenue that AI assistants send (GA4, last 28 days). */
 export function AiTrafficPanel({ traffic }: { traffic: AiTraffic | null }) {
   const { can, page } = useSitePage();
+  const day = useCycleDay();
   if (!traffic)
     return (
       <Panel title="What AI visits are worth" icon={<Coins />} description="Visits, key events and revenue from ChatGPT, Perplexity, Gemini, Copilot, Claude and other assistants (GA4)">
-        <p className="text-[13px] text-ink-2">Shown from the next weekly AI visibility run (Monday 07:00), when GA4 is connected for this website.</p>
+        <p className="text-[13px] text-ink-2">Shown from the next weekly AI visibility run{day.name ? ` (${day.name})` : ''}, when GA4 is connected for this website.</p>
       </Panel>
     );
   if (!traffic.connected)

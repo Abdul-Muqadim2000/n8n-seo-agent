@@ -1,6 +1,6 @@
 import { useEngineCal } from '@/lib/engine-cal';
 // The person's controls over the keyword ladders (admins): Auto / Manual, Pause / Resume, the priority order, delete, and the
-// website's pipeline settings. Everything is written to the SEO engine's ladder settings and read by the Monday run.
+// website's pipeline settings. Everything is written to the SEO engine's ladder settings and read by the website's weekly run.
 import { PRICES } from '@/lib/prices';
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
@@ -8,8 +8,8 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { ArrowDown, ArrowUp, Hand, PauseCircle, Play, Settings2, Trash2, Zap } from 'lucide-react';
-import { MAX_ACTIVE_LADDERS, MAX_WAITING_PAGES, siteAutomationFormSchema, type LadderCard, type LadderMode, type SiteAutomation, type SiteAutomationForm } from '@seo/shared';
-import { Button } from '@/components/ui/button';
+import { AUTOPILOT_LEVELS, DEFAULT_AUTOPILOT_LEVEL, MAX_ACTIVE_LADDERS, MAX_WAITING_PAGES, siteAutomationFormSchema, type LadderCard, type LadderMode, type SiteAutomation, type SiteAutomationForm } from '@seo/shared';
+import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { Field, Select } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 
 /** One plain sentence per mode. */
 export const MODE_HELP: Record<LadderMode, string> = {
-  auto: 'Auto: its pages are written on Mondays, in priority order.',
+  auto: 'Auto: its pages are written in your weekly run, in priority order.',
   manual: 'Manual: each page waits for your OK under Needs you.',
 };
 
@@ -44,7 +44,7 @@ export function LadderModeSwitch({ ladder, size = 'sm', className }: { ladder: P
     update.mutate(
       { ladderId: ladder.id, mode },
       {
-        onSuccess: () => toast.success(mode === 'manual' ? `"${ladder.head}" is Manual: each page waits for your OK` : `"${ladder.head}" is Auto: its pages are written on Mondays`),
+        onSuccess: () => toast.success(mode === 'manual' ? `"${ladder.head}" is Manual: each page waits for your OK` : `"${ladder.head}" is Auto: its pages are written in your weekly run`),
         onError: (e) => toast.error(errorMessage(e)),
         onSettled: () => setPending(null),
       },
@@ -143,7 +143,7 @@ export function DeleteLadderButton({ ladder }: { ladder: Pick<LadderCard, 'id' |
         <div className="space-y-3 text-sm leading-relaxed text-ink-2">
           <p className="font-medium text-ink">Removed from the SEO engine:</p>
           <ul className="list-disc space-y-1 pl-5">
-            <li>the plan: {ladder.counts.total} pages, and the pages not written yet are no longer written on Mondays;</li>
+            <li>the plan: {ladder.counts.total} pages, and the pages not written yet are no longer written;</li>
             <li>its settings (Auto / Manual, priority);</li>
             <li>its weekly rank checks and its position history.</li>
           </ul>
@@ -160,7 +160,7 @@ export function DeleteLadderButton({ ladder }: { ladder: Pick<LadderCard, 'id' |
 }
 
 // ---------- the website's pipeline settings ----------
-const DEFAULTS: SiteAutomation = { defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 };
+const DEFAULTS: SiteAutomation = { defaultMode: 'auto', opportunities: 'manual', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 };
 type Form = SiteAutomationForm;
 const range = (r: { min: number; max: number }) => Array.from({ length: r.max - r.min + 1 }, (_, i) => r.min + i);
 
@@ -194,6 +194,7 @@ function PipelineSettingsDialog({ automation, autoStartEnabled, onClose }: { aut
   const { org } = useOrgCtx();
   const { site } = useSiteCtx();
   const save = useUpdateAutomation(org.id, site.id);
+  const level = automation.autopilotLevel ?? DEFAULT_AUTOPILOT_LEVEL;
   const current: Form = {
     defaultMode: automation.defaultMode,
     opportunities: automation.opportunities,
@@ -205,23 +206,23 @@ function PipelineSettingsDialog({ automation, autoStartEnabled, onClose }: { aut
   const submit = handleSubmit((v) =>
     save.mutate(v, {
       onSuccess: () => {
-        toast.success('Pipeline settings saved: the next Monday run uses them');
+        toast.success('Pipeline settings saved: your next weekly run uses them');
         onClose();
       },
       onError: (e) => toast.error(errorMessage(e)),
     }),
   );
-  const isDefault = (Object.keys(current) as (keyof Form)[]).every((k) => current[k] === DEFAULTS[k]);
+  const isDefault = (['defaultMode', 'maxActiveLadders', 'maxWaiting'] as const).every((k) => current[k] === DEFAULTS[k]);
   return (
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
       title="Pipeline settings"
-      description={`How the weekly run works for ${site.domain}. Changes count from the next Monday.`}
+      description={`How the weekly run works for ${site.domain}. Changes count from your next weekly run.`}
       footer={
         <>
           {!isDefault && (
-            <Button variant="ghost" className="mr-auto" onClick={() => reset({ defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 }, { keepDefaultValues: true })}>
+            <Button variant="ghost" className="mr-auto" onClick={() => reset({ ...current, defaultMode: 'auto', maxActiveLadders: 2, maxWaiting: 3 }, { keepDefaultValues: true })}>
               Use the recommended values
             </Button>
           )}
@@ -235,31 +236,18 @@ function PipelineSettingsDialog({ automation, autoStartEnabled, onClose }: { aut
       }
     >
       <form onSubmit={submit} className="divide-y divide-line">
-        <SettingRow title="New keyword ladders" help="Auto writes their pages on Mondays; Manual waits for your OK on each page. You can change it per ladder." className="pt-0">
+        <SettingRow title="New keyword ladders" help="Auto writes their pages in your weekly run; Manual waits for your OK on each page. You can change it per ladder." className="pt-0">
           <Controller name="defaultMode" control={control} render={({ field }) => <Segmented label="New keyword ladders" value={field.value} onChange={field.onChange} options={MODE_OPTIONS('md')} />} />
         </SettingRow>
-        <SettingRow title="Opportunity posts" help="Posts for searches close to page one and rising searches. Auto fills the weekly posts the ladders leave free; Manual only suggests them.">
-          <Controller name="opportunities" control={control} render={({ field }) => <Segmented label="Opportunity posts" value={field.value} onChange={field.onChange} options={MODE_OPTIONS('md')} />} />
-        </SettingRow>
         <SettingRow
-          title="Choose keywords for me"
-          help={`When fewer ladders than your limit are being written, start the next recommended keyword that is easy or reachable for your site. Each new ladder uses about ${PRICES.ladderStart()} plus its weekly pages.`}
+          title="How much we do on our own"
+          help={`Level ${level}: ${AUTOPILOT_LEVELS.find((l) => l.level === level)?.label ?? ''}. What is written besides your keywords, and whether we may propose and start new keywords.`}
         >
-          <Controller
-            name="autoStartLadders"
-            control={control}
-            render={({ field }) => (
-              <span className="flex flex-col items-start gap-1 sm:items-end">
-                <span className="inline-flex items-center gap-2">
-                  <Switch checked={field.value} onCheckedChange={field.onChange} label="Choose keywords for me" />
-                  <span className="text-[13px] text-ink-2">{field.value ? 'On' : 'Off'}</span>
-                </span>
-                {field.value && !autoStartEnabled && <span className="max-w-[14rem] text-xs leading-snug text-ink-3 sm:text-right">Automatic starts are not switched on for this platform yet: the setting is kept and applies once they are.</span>}
-              </span>
-            )}
-          />
+          <ButtonLink to={paths.site(org.id, site.id, 'settings/autopilot')} variant="secondary" size="sm" onClick={onClose}>
+            Change the level
+          </ButtonLink>
         </SettingRow>
-        <SettingRow title="Ladders written at the same time" help="Focus wins: the first ladders in the order get the weekly posts, the others wait as Queued. Recommended: 2.">
+        <SettingRow title="Keywords written at the same time" help="Focus wins: the first keywords in the order get the weekly pages, the others wait as Queued. Recommended: 2.">
           <Controller
             name="maxActiveLadders"
             control={control}

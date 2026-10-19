@@ -2,10 +2,10 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Receipt, ShieldAlert } from 'lucide-react';
-import { AI_ENGINES, autopilotMonthlyUsd, formatCredits, GOALS, type Run } from '@seo/shared';
+import { CalendarClock, Receipt, ShieldAlert } from 'lucide-react';
+import { AI_ENGINES, AUTOPILOT_LEVELS, autopilotMonthlyUsd, autopilotRows, formatCredits, GOALS, MONITOR_COSTS, type Run } from '@seo/shared';
 import { useEngineCal } from '@/lib/engine-cal';
-import { runCost, runMinutes } from '@/lib/prices';
+import { runCost } from '@/lib/prices';
 import { creditsLabel, quoteCredits, quoteLabel } from '@/lib/credits';
 import { CreditRefusal, isCreditRefusal } from '@/components/site/CreditRefusal';
 import { EmailVerifyNotice } from '@/components/site/EmailVerifyNotice';
@@ -15,16 +15,17 @@ import { trackDefaults, type TrackFormOutput } from '@/components/site/TrackingF
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout, Skeleton } from '@/components/ui/feedback';
-import { Checkbox } from '@/components/ui/field';
 import { IconTile } from '@/components/insight';
 import { GuideButton } from '@/components/guide';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
-import { qk, useBilling, useGoogleConnection, useOnboardingStep, useSiteData, useStartRun } from '@/lib/queries';
+import { qk, useBilling, useGoogleConnection, useOnboardingStep, useSiteData, useStartRun, useUpdateAutomation } from '@/lib/queries';
+import { browserTimezone, siteWeekdayName, todayWeekdayName } from '@/lib/cycle-day';
 import { cn } from '@/lib/utils';
 import { sizeLabel } from './CompanyStep';
 import { StepFrame } from './WizardShell';
-import { clearTrackingDraft, readTrackingDraft, useWizardSite, type StepId } from './wizard';
+import { launchRequests } from './launch-plan';
+import { clearTrackingDraft, readKeywordDraft, readTrackingDraft, useWizardSite, type KeywordPick, type StepId } from './wizard';
 
 const JS_MAX_PAGES = 500;
 
@@ -39,8 +40,7 @@ export function LaunchStep() {
   const billing = useBilling(org.id);
   const startRun = useStartRun(org.id);
   const onboarding = useOnboardingStep(org.id);
-  const [auditNow, setAuditNow] = useState(true);
-  const [aiNow, setAiNow] = useState(true);
+  const automation = useUpdateAutomation(org.id, site.id);
   const [busy, setBusy] = useState<null | 'launch' | 'finish'>(null);
   const [error, setError] = useState<unknown>(null);
 
@@ -51,14 +51,26 @@ export function LaunchStep() {
   }, [site, settings.data]);
 
   const m = plan.monitors;
+  // the "Your first keyword" step: the keyword(s) chosen, how pages are written for them, and the autopilot level
+  const kw = useMemo(() => readKeywordDraft(site.id), [site.id]);
+  const picks: KeywordPick[] = kw?.picks ?? [];
+  const level = kw?.level ?? AUTOPILOT_LEVELS[1].level;
+  const levelInfo = AUTOPILOT_LEVELS.find((l) => l.level === level)!;
+  const writing = picks.some((p) => p.mode === 'auto');
+  const weekday = siteWeekdayName(site) ?? todayWeekdayName();
   // credits (app/docs/CREDITS.md): the schedules' month from the same rows as the settings card and the Credits page (autopilotRows)
-  const monthly = autopilotMonthlyUsd(m, plan.blogsPerWeek);
-  // D-2: the runs this step starts, priced and timed exactly as their tool forms and the budget check price them (the engine's own
-  // calibration, read here without the company layout), not the shipped MODES table, which said $0.09 beside the form's $0.11
-  const auditRun = { reportType: 'site_audit' } as const;
-  // credits (app/docs/CREDITS.md): each run is quoted (and held) on its own, so starting now uses the sum of their quotes; blog posts
-  // and monitors are autopilot (see the monthly estimate)
-  const nowCredits = quoteCredits(runCost('track')) + (auditNow ? quoteCredits(runCost('audit', auditRun)) : 0) + (aiNow ? quoteCredits(runCost('ai_visibility')) : 0);
+  const monthly = autopilotMonthlyUsd(m, plan.blogsPerWeek, { level, writing });
+  // today: "Track my site" (the first report) and the first cycle's checks, which start at once (cycle 0 is also the website's monthly
+  // cycle, so the monthly audit runs in it); the cycle's checks are autopilot spend, shown as an estimate
+  const rows = autopilotRows(m, plan.blogsPerWeek, { level, writing });
+  const firstChecksUsd = rows
+    .filter((r) => r.on && r.id !== 'blog_posts' && r.id !== 'research' && r.id !== 'site_report')
+    .reduce((t, r) => t + (r.id === 'audit' ? r.usd : r.usd / MONITOR_COSTS.weeksPerMonth), 0);
+  // a ladder start: its plan and, for "Write a page each week", the first page today; "Ask me before each page" writes nothing at start
+  const ladderUsd = (p: KeywordPick) =>
+    p.mode === 'auto' ? runCost('ladder', { pagesNow: 1 }) : Math.max(0.01, runCost('ladder', { pagesNow: 1 }) - runCost('keyword', { receiveContent: true, receiveReport: true }));
+  // credits (app/docs/CREDITS.md): each run is quoted (and held) on its own, so starting now uses the sum of their quotes
+  const nowCredits = quoteCredits(runCost('track')) + picks.reduce((t, p) => t + quoteCredits(ladderUsd(p)), 0);
   const b = billing.data;
   const metered = !!b && (b.enforced || b.limits.onDemandMonthly != null);
   const available = b ? Math.max(0, b.onDemandAvailable) : 0;
@@ -91,39 +103,29 @@ export function LaunchStep() {
     setError(null);
     setBusy('launch');
     try {
-      const run = await startRun.mutateAsync({
-        mode: 'track',
-        siteId: site.id,
-        country,
-        keywords: plan.keywords,
-        ga4PropertyId: plan.ga4PropertyId,
-        blogsPerWeek: plan.blogsPerWeek,
-        competitors: plan.competitors,
-        monitors: plan.monitors,
-        emailCopy: true,
-      });
+      const req = launchRequests({ site, plan, picks, level, timezone: browserTimezone() });
+      const run = await startRun.mutateAsync(req.track);
       if (run.status === 'failed') throw new Error(run.error || 'The SEO engine did not accept the request. Try again in a minute.');
-      const extras: string[] = [];
-      if (auditNow) {
-        const pages = m.auditJs ? Math.min(m.auditPages, JS_MAX_PAGES) : m.auditPages;
-        const ok = await extraRun(
-          { mode: 'audit', siteId: site.id, country, reportType: 'site_audit', crawlPages: pages, crawlJs: m.auditJs, competitors: plan.competitors, emailCopy: true },
-          'technical audit',
-        );
-        if (ok) extras.push('technical audit');
+      // the autopilot level (the website's own setting); the first cycle reads it
+      try {
+        await automation.mutateAsync(req.automation);
+      } catch (e) {
+        toast.error('The autopilot level was not saved', { description: `${errorMessage(e)} Set it again in Website settings, Autopilot.` });
       }
-      if (aiNow) {
-        const ok = await extraRun({ mode: 'ai_visibility', siteId: site.id, country, topics: [], competitors: plan.competitors, emailCopy: true }, 'AI visibility baseline');
-        if (ok) extras.push('AI visibility baseline');
+      // the chosen keyword(s): one keyword ladder each; "Ask me before each page" writes nothing at start (the server's rule for Manual)
+      const started: string[] = [];
+      for (const body of req.ladders) {
+        const ok = await extraRun(body, `plan for "${String(body.keyword)}"`);
+        if (ok) started.push(String(body.keyword));
       }
       await finishOnboarding();
       clearTrackingDraft(site.id);
       qc.invalidateQueries({ queryKey: qk.sites(org.id) });
       qc.invalidateQueries({ queryKey: qk.site(site.id) });
       toast.success(`Tracking started for ${site.domain}`, {
-        description: `The first report arrives in a few minutes${extras.length ? `; the ${extras.join(' and ')} within about 20 minutes` : ''}. A copy goes to ${me.user.email}.`,
+        description: `The first report arrives in a few minutes${started.length ? `; the plan for ${started.map((k) => `"${k}"`).join(' and ')} in about 5 to 10 minutes` : ''}. Then every ${weekday}.`,
       });
-      navigate(paths.site(org.id, site.id, 'overview'));
+      navigate(paths.site(org.id, site.id, 'pipeline'));
     } catch (e) {
       setError(e);
     } finally {
@@ -147,10 +149,10 @@ export function LaunchStep() {
     <StepFrame
       step="launch"
       title="Review and start"
-      description="Here is everything we will use. Change anything with Edit, then start tracking: the first report arrives within minutes, then every Monday."
+      description={`Here is everything we will use. Change anything with Edit, then start: your first checks begin today, then your week repeats every ${weekday}.`}
       back={() => go('tracking')}
       skip={{ label: 'Finish without tracking', onClick: finishWithout, loading: busy === 'finish', disabled: busy === 'launch' }}
-      primary={{ label: 'Start tracking', onClick: launch, loading: busy === 'launch', disabled: !verified || !country || busy === 'finish' }}
+      primary={{ label: picks.length ? 'Start' : 'Start tracking', onClick: launch, loading: busy === 'launch', disabled: !verified || !country || busy === 'finish' }}
     >
       <div className="space-y-6">
         <dl className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
@@ -209,7 +211,29 @@ export function LaunchStep() {
               <span className="text-ink-3">Not set up (or still being saved); pages carry no author byline until it is</span>
             )}
           </Row>
-          <Row label="Keywords" step="tracking" go={go}>
+          <Row label="Your keyword" step="keyword" go={go}>
+            {picks.length ? (
+              <span className="block space-y-1">
+                {picks.map((p) => (
+                  <span key={p.keyword} className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{p.keyword}</span>
+                    <Badge tone={p.mode === 'auto' ? 'accent' : 'neutral'}>{p.mode === 'auto' ? 'A page each week' : 'Asks before each page'}</Badge>
+                  </span>
+                ))}
+              </span>
+            ) : level === 3 ? (
+              <span className="text-ink-3">None yet: we choose one from the research and tell you two days before it starts</span>
+            ) : (
+              <span className="text-warning-text">None yet: nothing is written until you choose one (the Pipeline asks you)</span>
+            )}
+          </Row>
+          <Row label="Autopilot" step="keyword" go={go}>
+            <span className="block">
+              Level {level}: {levelInfo.label}
+            </span>
+            <span className="block text-ink-3">{levelInfo.summary}</span>
+          </Row>
+          <Row label="Other keywords" step="tracking" go={go}>
             {plan.keywords.length ? (
               <span className="flex flex-wrap gap-1.5">
                 {plan.keywords.slice(0, 8).map((k) => (
@@ -218,11 +242,11 @@ export function LaunchStep() {
                 {plan.keywords.length > 8 && <Badge>+{plan.keywords.length - 8} more</Badge>}
               </span>
             ) : (
-              <span className="text-ink-3">None listed; we track what Search Console reports</span>
+              <span className="text-ink-3">None listed; we watch what Search Console reports</span>
             )}
           </Row>
-          <Row label="Blog posts" step="tracking" go={go}>
-            {plan.blogsPerWeek ? `${plan.blogsPerWeek} a week, delivered every Monday` : 'None'}
+          <Row label="Pages a week" step="tracking" go={go}>
+            {plan.blogsPerWeek ? `${plan.blogsPerWeek} a week for your keyword, every ${weekday}` : 'None'}
           </Row>
           <Row label="Monitors" step="tracking" go={go}>
             <span className="block">AI visibility: {m.aiVisibility ? `on · ${m.aiPromptsMax} questions · ${engines.join(', ') || 'no engines'}${m.aiPulse ? ' · daily pulse' : ''}` : 'off'}</span>
@@ -233,31 +257,35 @@ export function LaunchStep() {
           </Row>
           <Row label="Estimated credits" step="tracking" go={go} highlight>
             <span className="font-semibold">{creditsLabel(monthly)} a month</span>
-            <span className="text-ink-3"> for weekly tracking, monitors and blog posts</span>
+            <span className="text-ink-3"> for the weekly checks{writing && plan.blogsPerWeek ? ' and the pages for your keyword' : ''}</span>
           </Row>
         </dl>
 
-        <fieldset className="space-y-2.5">
-          <legend className="mb-3 text-sm font-semibold text-ink">Also start right away</legend>
-          <div className="rounded-lg border border-line px-4 py-3 transition-colors duration-150 ease-brand hover:border-line-strong has-[:checked]:border-accent-text/50 has-[:checked]:bg-accent-soft/60">
-            <Checkbox
-              checked={auditNow}
-              onChange={(e) => setAuditNow(e.target.checked)}
-              disabled={!verified}
-              label="Run a technical audit now"
-              description={`About ${runMinutes('audit', auditRun)} minutes, about ${quoteLabel(runCost('audit', auditRun))}. Health score, issues by priority and a fix pack, without waiting for the 1st of the month.`}
-            />
+        {/* what happens today, then every week (plan §5.2) */}
+        <div className="flex items-start gap-3 rounded-lg border border-line bg-surface px-4 py-3.5 text-[13px] leading-relaxed text-ink-2">
+          <IconTile size="sm">
+            <CalendarClock />
+          </IconTile>
+          <div className="min-w-0 flex-1 space-y-1.5 pt-0.5">
+            <p>
+              <span className="font-semibold text-ink">Today:</span> your first checks (about {creditsLabel(firstChecksUsd + runCost('track'))})
+              {picks.map((p, i) => (
+                <span key={p.keyword}>
+                  {i === 0 ? ' and ' : ' and '}
+                  {p.mode === 'auto' ? `the first page for "${p.keyword}"` : `the plan for "${p.keyword}"`} (about {quoteLabel(ladderUsd(p))})
+                </span>
+              ))}
+              .
+            </p>
+            <p>
+              <span className="font-semibold text-ink">Then every {weekday}:</span> the weekly checks
+              {writing && plan.blogsPerWeek ? `, and ${plan.blogsPerWeek === 1 ? 'a page' : `${plan.blogsPerWeek} pages`} for your keyword` : ''}, about {creditsLabel(monthly)} a month.
+            </p>
+            {writing && plan.blogsPerWeek > 0 && <p className="text-ink-3">The first page counts as this week's page, so the next one is written next {weekday}.</p>}
+            {picks.some((p) => p.mode === 'manual') && <p className="text-ink-3">For a keyword where we ask first, the plan is made today and each page waits for your OK.</p>}
+            {!picks.length && level !== 3 && <p className="text-ink-3">No pages are written until you choose a keyword. The checks run anyway.</p>}
           </div>
-          <div className="rounded-lg border border-line px-4 py-3 transition-colors duration-150 ease-brand hover:border-line-strong has-[:checked]:border-accent-text/50 has-[:checked]:bg-accent-soft/60">
-            <Checkbox
-              checked={aiNow}
-              onChange={(e) => setAiNow(e.target.checked)}
-              disabled={!verified}
-              label="Take an AI visibility baseline now"
-              description={`About ${runMinutes('ai_visibility')} minutes, about ${quoteLabel(runCost('ai_visibility'))}. Where AI assistants name you today, so later changes can be measured against it.`}
-            />
-          </div>
-        </fieldset>
+        </div>
 
         {/* credits note */}
         <div className="flex items-start gap-3 rounded-lg border border-line bg-surface-2 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
@@ -266,8 +294,8 @@ export function LaunchStep() {
           </IconTile>
           <div className="min-w-0 flex-1 pt-0.5">
             <p>
-              <span className="font-semibold text-ink">Starting now uses about {formatCredits(nowCredits)}</span>
-              {metered && <> · {formatCredits(available)} available</>}.
+              <span className="font-semibold text-ink">What you start now uses about {formatCredits(nowCredits)}</span>
+              {metered && <> · {formatCredits(available)} available</>}. The weekly checks are counted in the monthly estimate.
             </p>
             {metered && <CreditsBar available={available} add={nowCredits} />}
           </div>
@@ -275,7 +303,7 @@ export function LaunchStep() {
         {overCredits && (
           <Callout tone="warning" title="Not enough credits to start all of this now">
             Analyses that need more credits than are available are refused. {org.role === 'owner' || org.role === 'admin' ? 'Add credits in Company settings > Credits' : 'Ask an owner or admin of your company to add credits'}, or
-            untick the extras above.
+            start without a keyword for now and choose it later from the Pipeline.
           </Callout>
         )}
 

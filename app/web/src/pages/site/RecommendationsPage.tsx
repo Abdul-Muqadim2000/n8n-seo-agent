@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { ArrowDownCircle, HelpCircle, Lightbulb, ListFilter, OctagonAlert, Scale, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { queueBands, type Priority, type QueueBand, type Recommendation, type RecommendationCategory } from '@seo/shared';
 import { useRecommendations } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { cn } from '@/lib/utils';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
@@ -46,6 +47,7 @@ export default function RecommendationsPage() {
 
 function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetching: boolean }) {
   const { site } = useSitePage();
+  const day = useCycleDay(site);
   const [cat, setCat] = useState<CatFilter>('all');
   const [prio, setPrio] = useState<PrioFilter>('all');
   // REP 3.3: one queue, ordered by what each step is worth. Grouping by priority or area stays available, but the default is the
@@ -78,7 +80,7 @@ function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetch
       <EmptyState
         icon={<Lightbulb className="size-5" />}
         title="No recommendations right now"
-        description="They come from the weekly tracking report, technical audits, rank checks, AI visibility and backlink monitors. Start one of them, or check back after Monday's runs."
+        description={`They come from the weekly tracking report, technical audits, rank checks, AI visibility and backlink monitors. Start one of them, or check back after ${day.name ? `the weekly run on ${day.name}` : 'the next weekly run'}.`}
         action={
           <>
             <ToolButton mode="audit" variant="primary">

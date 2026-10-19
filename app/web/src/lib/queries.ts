@@ -99,6 +99,14 @@ import type {
   CreditLimits,
   CreditPurchaseRequest,
   AdminPurchaseRequest,
+  ComingUpDecisionResult,
+  ComingUpView,
+  ContentFeedbackResult,
+  CycleWeekdayResult,
+  KeywordProposalList,
+  KeywordProposalView,
+  ResearchStartResult,
+  SiteCycleView,
 } from '@seo/shared';
 import type { z } from 'zod';
 import { api, ApiRequestError, directCredentials, directUrl } from './api';
@@ -529,12 +537,15 @@ export function useUpdateAutomation(orgId: string, siteId: string) {
 
 // ---------- choosing the keyword of a new ladder (PIPELINE_FEATURE_SPEC.md §5) ----------
 /** The website's recommended keywords (its latest keyword strategy report; free). */
-export const useRecommendedKeywords = (orgId: string, siteId: string) =>
+export const useRecommendedKeywords = (orgId: string, siteId: string, opts?: { enabled?: boolean; poll?: boolean }) =>
   useQuery({
     queryKey: qk.siteData(siteId, 'keywords-recommended'),
     queryFn: () => api<RecommendedKeywords>(`/api/orgs/${orgId}/sites/${siteId}/keywords/recommended`),
     retry: noRetryOn4xx,
     staleTime: 60_000,
+    enabled: opts?.enabled ?? true,
+    // keyword-first: while the background research runs, look again every 10 s (the onboarding step and the new-ladder page wait on it)
+    refetchInterval: opts?.poll ? (q) => (q.state.data?.status === 'running' ? 10_000 : false) : undefined,
   });
 
 /** Checks one keyword for the website (paid, about $0.05; the same keyword of the last 7 days is answered free). */
@@ -545,6 +556,109 @@ export function useAssessKeyword(orgId: string, siteId: string) {
     onSuccess: (check) => {
       // a paid check counts in the month's spend
       if (!check.cached) qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'usage'] });
+    },
+  });
+}
+
+// ---------- keyword-first: the website's cycle, Coming up, keyword proposals, research, feedback (API.md, 2026-10-19) ----------
+/** Everything on the website's dashboards that a keyword-first decision can change (the pipeline, Coming up, proposals, the cycle). */
+const refreshAutopilot = (qc: ReturnType<typeof useQueryClient>, siteId: string) => qc.invalidateQueries({ queryKey: [...qk.site(siteId), 'data'] });
+
+/** The website's weekly cycle: its weekday, the next cycles and the jobs of the current one. */
+export const useSiteCycle = (orgId: string, siteId: string, enabled = true) =>
+  useQuery({
+    queryKey: qk.siteData(siteId, 'cycle'),
+    queryFn: () => api<SiteCycleView>(`/api/orgs/${orgId}/sites/${siteId}/cycle`),
+    enabled,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+
+/** Moves the website's weekly cycle to another weekday (admins). 409 `cycle_not_started` before its first cycle. */
+export function useSetCycleWeekday(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (weekday: number) => api<CycleWeekdayResult>(`/api/orgs/${orgId}/sites/${siteId}/cycle`, { method: 'PATCH', body: { weekday } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.site(siteId) });
+      qc.invalidateQueries({ queryKey: qk.sites(orgId) });
+      return refreshAutopilot(qc, siteId);
+    },
+  });
+}
+
+/** The latest "Coming up" plan (made two days before each cycle) with the client's decisions on it. */
+export const useComingUp = (orgId: string, siteId: string, enabled = true) =>
+  useQuery({
+    queryKey: qk.siteData(siteId, 'coming-up'),
+    queryFn: () => api<ComingUpView>(`/api/orgs/${orgId}/sites/${siteId}/coming-up`),
+    enabled,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+
+/** Skip or approve one item of the "Coming up" plan, for this cycle or always. 409 once the cycle started. */
+export function useComingUpDecision(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { itemKey: string; decision: 'skip' | 'approve'; scope: 'cycle' | 'always' }) =>
+      api<ComingUpDecisionResult>(`/api/orgs/${orgId}/sites/${siteId}/coming-up/decisions`, { method: 'POST', body }),
+    onSuccess: (r) => {
+      // the item at once (the server's answer), then everything that depends on it
+      qc.setQueryData<ComingUpView>(qk.siteData(siteId, 'coming-up'), (d) =>
+        d ? { ...d, items: d.items.map((i) => (i.itemKey === r.item.itemKey ? r.item : i)), suggestions: d.suggestions.map((i) => (i.itemKey === r.item.itemKey ? r.item : i)) } : d,
+      );
+      return refreshAutopilot(qc, siteId);
+    },
+  });
+}
+
+/** The keywords we propose (levels 1-2: suggestions) or announced (level 3: they start on their own unless changed). */
+export const useKeywordProposals = (orgId: string, siteId: string, enabled = true) =>
+  useQuery({
+    queryKey: qk.siteData(siteId, 'keyword-proposals'),
+    queryFn: () => api<KeywordProposalList>(`/api/orgs/${orgId}/sites/${siteId}/keyword-proposals`),
+    enabled,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+
+export type ProposalAction = { id: string; action: 'approve' } | { id: string; action: 'skip' } | { id: string; action: 'swap'; keyword: string };
+export type ProposalResult = { proposal: KeywordProposalView; runId?: string; next?: KeywordProposalView | null };
+
+/** Approve now, skip, or start a different keyword instead (409 `keyword_not_suitable` carries the keyword check). */
+export function useProposalAction(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: ProposalAction) =>
+      api<ProposalResult>(`/api/orgs/${orgId}/sites/${siteId}/keyword-proposals/${a.id}/${a.action}`, { method: 'POST', body: a.action === 'swap' ? { keyword: a.keyword } : {} }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org', orgId, 'runs'] });
+      qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'usage'] });
+      return refreshAutopilot(qc, siteId);
+    },
+  });
+}
+
+/** Starts the website's keyword research in the background (free once, at setup). 409 `research_not_free` otherwise. */
+export function useStartResearch(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<ResearchStartResult>(`/api/orgs/${orgId}/sites/${siteId}/research/start`, { method: 'POST', body: {} }),
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.siteData(siteId, 'keywords-recommended') }),
+  });
+}
+
+/** "Not what I wanted" on a written page. The answer says whether it dropped the website's autopilot level. */
+export function useContentFeedback(orgId: string, reportId: string, siteId?: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { reason: string }) => api<ContentFeedbackResult>(`/api/orgs/${orgId}/reports/${reportId}/feedback`, { method: 'POST', body: { verdict: 'reject', reason: body.reason } }),
+    onSuccess: () => {
+      if (!siteId) return;
+      qc.invalidateQueries({ queryKey: qk.site(siteId) });
+      qc.invalidateQueries({ queryKey: qk.sites(orgId) });
+      return refreshAutopilot(qc, siteId);
     },
   });
 }

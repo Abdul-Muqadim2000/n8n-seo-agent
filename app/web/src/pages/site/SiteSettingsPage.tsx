@@ -1,8 +1,11 @@
 import { useState, type ReactNode } from 'react';
+import { AutopilotLevelPicker } from '@/components/site/AutopilotLevel';
+import { useCycleDay } from '@/lib/cycle-day';
+import { YourWeek } from './_components/pipeline/your-week';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Building2, CalendarClock, FolderTree, KeyRound, PauseCircle, PenSquare, PlayCircle, Radar, Settings, ShieldAlert, Plus, Trash2 } from 'lucide-react';
+import { Bot, Building2, CalendarClock, FolderTree, KeyRound, PauseCircle, PenSquare, PlayCircle, Radar, Settings, ShieldAlert, Plus, Trash2 } from 'lucide-react';
 import { cleanDomain, CONTENT_GROUPS_MAX, contentGroupSchema, type AdminResult, type ContentGroup, type MonitorSettings, type SiteSettingsData } from '@seo/shared';
 import { creditsLabel, quoteLabel } from '@/lib/credits';
 import { EmailVerifyNotice } from '@/components/site/EmailVerifyNotice';
@@ -34,7 +37,8 @@ import { fmtAgo, fmtDate } from '@/lib/utils';
 const TABS = [
   { id: 'business', label: 'Business details', description: 'What the engine knows about your business. Every page, report and AI-visibility question starts here.' },
   { id: 'verification', label: 'Verification & Google', description: 'Ownership of the website and the Search Console and GA4 connection.' },
-  { id: 'tracking', label: 'Tracking & monitors', description: 'Weekly tracking, blog posts per week and the growth monitors, with the credits they use.' },
+  { id: 'tracking', label: 'Tracking & monitors', description: 'Weekly tracking, pages a week for your keyword and the growth monitors, with the credits they use.' },
+  { id: 'autopilot', label: 'Autopilot', description: 'How much we do on our own, and the weekday your weekly run starts on.' },
   { id: 'profile', label: 'Author & profile', description: 'The author, reviewer and business details behind every byline, author box and schema.' },
   { id: 'publishing', label: 'Publishing', description: 'Your CMS: written pages go to it as drafts from their report, and live only when an owner or admin chooses.' },
   { id: 'danger', label: 'Delete', description: 'Remove this website from your company.' },
@@ -50,6 +54,8 @@ export default function SiteSettingsPage() {
   const admin = can('admin');
   const tabs = TABS.filter((t) => t.id !== 'danger' || admin);
   const current = tabs.find((t) => t.id === tab);
+  // older links (and the server's Needs-you items) name the autopilot tab "automation"
+  if (tab === 'automation') return <Navigate to={paths.site(org.id, site.id, 'settings/autopilot')} replace />;
   if (!current) return <Navigate to={paths.site(org.id, site.id, 'settings/business')} replace />;
 
   return (
@@ -77,6 +83,8 @@ function TabContent({ tab, admin }: { tab: TabId; admin: boolean }) {
       return site.verifiedAt ? <TrackingTab admin={admin} /> : <VerifyFirst what="Tracking and the growth monitors" />;
     case 'profile':
       return site.verifiedAt ? <ProfileTab admin={admin} /> : <VerifyFirst what="The author and business profile" />;
+    case 'autopilot':
+      return site.verifiedAt ? <AutopilotTab admin={admin} /> : <VerifyFirst what="The autopilot settings" />;
     case 'publishing':
       return site.verifiedAt ? <PublishingSettings admin={admin} /> : <VerifyFirst what="Publishing to your CMS" />;
     case 'danger':
@@ -202,6 +210,7 @@ function TrackingTab({ admin }: { admin: boolean }) {
 function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: boolean }) {
   const { org, me } = useOrgCtx();
   const { site } = useSiteCtx();
+  const day = useCycleDay();
   const track = useTrackRun();
   const t = data.tracking;
   const tracked = t.tracked || site.trackingStatus !== 'not_started';
@@ -222,7 +231,7 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
           <CardHeader
             icon={<HeaderTile icon={<CalendarClock />} />}
             title="Start weekly tracking"
-            description="Every Monday: Search Console, GA4, Google Trends and live rank checks, with a short list of what to do next. The first report arrives within minutes."
+            description="Each week: Search Console, GA4, Google Trends and live rank checks, with a short list of what to do next. The first report arrives within minutes, and your week starts that day."
           />
           <CardBody>
             <TrackingForm
@@ -281,7 +290,7 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
         <CardHeader
           icon={<HeaderTile icon={<KeyRound />} />}
           title="Keywords and Google Analytics"
-          description={`Saving runs the tracker once with these settings and sends a fresh report (about ${quoteLabel(0.1)}). Blog posts and monitors stay as set above.`}
+          description={`Saving runs the tracker once with these settings and sends a fresh report (about ${quoteLabel(0.1)}). Pages a week and monitors stay as set above.`}
         />
         <CardBody>
           <TrackingForm
@@ -305,6 +314,7 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
 function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; paused: boolean; admin: boolean }) {
   const { org } = useOrgCtx();
   const { site } = useSiteCtx();
+  const day = useCycleDay();
   const action = useSiteAdmin(org.id, site.id);
   const t = data.tracking;
   const toggle = () =>
@@ -314,7 +324,7 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
         onSuccess: (r: AdminResult) =>
           r.ok
             ? toast.success(paused ? 'Tracking resumed' : 'Tracking paused', {
-                description: paused ? 'The next report arrives on Monday.' : 'No weekly reports, monitors or blog posts until you resume.',
+                description: paused ? `The next report arrives ${day.on}.` : 'No weekly reports, monitors or pages until you resume.',
               })
             : toast.error(r.error ?? 'The change was not applied'),
         onError: (e) => toast.error(errorMessage(e)),
@@ -325,7 +335,7 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
       <CardHeader
         icon={<HeaderTile icon={<CalendarClock />} />}
         title="Weekly tracking"
-        description="Search Console, GA4, Trends and rank checks every Monday."
+        description={`Search Console, GA4, Trends and rank checks ${day.every}.`}
         actions={paused ? <StatusBadge tone="warning">Paused</StatusBadge> : <StatusBadge tone="good">Active</StatusBadge>}
       />
       <CardBody className="flex-1">
@@ -341,7 +351,7 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
       </CardBody>
       {admin && (
         <CardFooter className="justify-between">
-          <p className="text-[13px] text-ink-3">{paused ? 'Nothing runs while paused.' : 'Pausing stops weekly reports, monitors and blog posts.'}</p>
+          <p className="text-[13px] text-ink-3">{paused ? 'Nothing runs while paused.' : 'Pausing stops weekly reports, monitors and pages.'}</p>
           <Button
             variant="secondary"
             size="sm"
@@ -360,6 +370,7 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
 function CadenceCard({ current, status, admin }: { current: number; status: string | null; admin: boolean }) {
   const { org } = useOrgCtx();
   const { site } = useSiteCtx();
+  const day = useCycleDay();
   const action = useSiteAdmin(org.id, site.id);
   const [value, setValue] = useState(String(Math.min(3, Math.max(0, current))));
   const n = Number(value);
@@ -369,7 +380,7 @@ function CadenceCard({ current, status, admin }: { current: number; status: stri
       {
         onSuccess: (r: AdminResult) =>
           r.ok
-            ? toast.success(n ? `${n} blog ${n === 1 ? 'post' : 'posts'} a week from next Monday` : 'Blog posts turned off')
+            ? toast.success(n ? `${n} ${n === 1 ? 'page' : 'pages'} a week for your keyword, from your next weekly run` : 'Weekly pages turned off')
             : toast.error(r.error ?? 'The change was not applied'),
         onError: (e) => toast.error(errorMessage(e)),
       },
@@ -378,8 +389,8 @@ function CadenceCard({ current, status, admin }: { current: number; status: stri
     <Card className="flex flex-col">
       <CardHeader
         icon={<HeaderTile icon={<PenSquare />} />}
-        title="Blog posts per week"
-        description="Each post is a full, researched and quality-checked page, delivered every Monday as HTML and Markdown for you to publish."
+        title="Pages a week for your keyword"
+        description={`Each page is a full, researched and quality-checked page for a keyword you chose, delivered ${day.every} as HTML and Markdown for you to publish.`}
         actions={status && status !== 'active' && current > 0 ? <Badge>{status}</Badge> : undefined}
       />
       <CardBody className="flex-1 space-y-3">
@@ -391,11 +402,11 @@ function CadenceCard({ current, status, admin }: { current: number; status: stri
         <p className="text-sm text-ink-2">
           {n ? (
             <>
-              About <span className="font-medium text-ink">{creditsLabel(blogMonthlyCost(n))}</span> a month. Topics come from your keyword plan, queries close to page one and
-              rising trends.
+              About <span className="font-medium text-ink">{creditsLabel(blogMonthlyCost(n))}</span> a month, while a keyword you chose has pages to write. Other chances (pages close to page
+              one, rising searches) follow your autopilot level.
             </>
           ) : (
-            'No blog posts. Tracking and monitors keep running.'
+            'No weekly pages. Tracking and monitors keep running.'
           )}
         </p>
       </CardBody>
@@ -577,6 +588,57 @@ function ContentGroupsCard({ initial, admin }: { initial: ContentGroup[]; admin:
   );
 }
 
+// ---------------- autopilot (keyword-first, SCHEDULING_KEYWORDS_PLAN.md §5.5, §4.2) ----------------
+
+function AutopilotTab({ admin }: { admin: boolean }) {
+  const { org } = useOrgCtx();
+  const { site } = useSiteCtx();
+  const pipeline = useSiteData(org.id, site.id, 'pipeline');
+  const settings = useSiteData(org.id, site.id, 'settings');
+  if (pipeline.isPending || settings.isPending)
+    return (
+      <div className="grid gap-5 lg:grid-cols-2" aria-busy>
+        <Skeleton className="h-96" />
+        <Skeleton className="h-64" />
+      </div>
+    );
+  if (pipeline.isError || settings.isError)
+    return (
+      <Card>
+        <ErrorState error={pipeline.error ?? settings.error} onRetry={() => (pipeline.refetch(), settings.refetch())} title="Could not load the autopilot settings" />
+      </Card>
+    );
+  const d = pipeline.data;
+  const level = d.autopilot?.level ?? d.automation?.autopilotLevel ?? site.autopilotLevel ?? 2;
+  // a keyword the client chose (Auto, not won or paused) still has pages to write: the forecast counts the weekly pages
+  const writing = (d.ladderCards ?? []).some((c) => c.mode !== 'manual' && c.status !== 'won' && c.status !== 'paused' && c.counts.planned > 0 && !(d.autopilot?.notChosen ?? []).includes(c.id));
+  return (
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-start">
+      <Card>
+        <CardHeader
+          icon={<HeaderTile icon={<Bot />} />}
+          title="How much should we do on our own?"
+          description="Whatever the level, two days before each weekly run you see what is coming up and can skip anything. The topic check always runs: nothing outside your business is written."
+        />
+        <CardBody>
+          <AutopilotLevelPicker
+            key={level}
+            orgId={org.id}
+            siteId={site.id}
+            level={level}
+            dropped={d.autopilot?.dropped ?? null}
+            monitors={settings.data.monitors}
+            pagesPerWeek={settings.data.cadence?.pagesPerWeek ?? site.blogsPerWeek}
+            writing={writing}
+            admin={admin}
+          />
+        </CardBody>
+      </Card>
+      <YourWeek cycle={d.cycle} compact />
+    </div>
+  );
+}
+
 // ---------------- profile ----------------
 
 function ProfileTab({ admin }: { admin: boolean }) {
@@ -653,7 +715,7 @@ function DangerTab() {
       <CardHeader title="Delete this website" icon={<HeaderTile icon={<Trash2 />} tone="critical" />} />
       <CardBody className="space-y-3 text-sm leading-relaxed text-ink-2">
         <p>
-          This removes <strong className="font-medium text-ink">{site.domain}</strong> from {org.name} and stops its weekly tracking, monitors and blog posts in the SEO
+          This removes <strong className="font-medium text-ink">{site.domain}</strong> from {org.name} and stops its weekly tracking, monitors and pages in the SEO
           engine. To add it again later you would need to verify it again.
         </p>
         <Note>

@@ -4,6 +4,7 @@ import { Activity, ArrowDownRight, ArrowRight, ArrowUpDown, ArrowUpRight, BarCha
 import { PAGE_TYPE_VALUES, compactNumber, type Ladder, type LadderRung, type RankPoint, type RankingsData, type SerpReading, type TrackedKeyword } from '@seo/shared';
 import { paths } from '@/lib/paths';
 import { useSiteData } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { BarsChart, ChartCard, SERIES_COLORS, Sparkline } from '@/components/charts';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -23,13 +24,14 @@ import { ChartTitle, DashSkeleton, HeroEyebrow } from './_components/visuals';
 
 export default function RankingsPage() {
   const { org, site } = useSitePage();
+  const day = useCycleDay(site);
   const q = useSiteData(org.id, site.id, 'rankings');
   return (
     <div>
       <PageHeader
         icon={<Activity />}
         title="Rankings"
-        description="Live Google positions for your keyword ladders and tracked keywords, checked every Monday."
+        description={`Live Google positions for your keyword ladders and tracked keywords, checked ${day.every}.`}
         actions={
           <>
             <ToolButton mode="ladder" icon={<Plus className="size-4" />}>
@@ -91,6 +93,7 @@ function collect(d: RankingsData): Kw[] {
 
 function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
   const { can, tool, page } = useSitePage();
+  const day = useCycleDay();
   const all = useMemo(() => collect(d), [d]);
   const [dialog, setDialog] = useState<Kw | null>(null);
 
@@ -136,7 +139,7 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
       {/* where the keywords rank now and how they moved since the last weekly check */}
       <SummaryHero
         tone="blue"
-        eyebrow={<HeroEyebrow tag="Google rankings">{`${plural(all.length, 'keyword')} checked every Monday${lastCheck ? ` · last check ${fmtAgo(lastCheck)}` : ''}`}</HeroEyebrow>}
+        eyebrow={<HeroEyebrow tag="Google rankings">{`${plural(all.length, 'keyword')} checked ${day.every}${lastCheck ? ` · last check ${fmtAgo(lastCheck)}` : ''}`}</HeroEyebrow>}
         title={rankingsHeadline(all.length, top10, top50, up, down)}
         description={`${up} moved up or entered the top 50, ${down} moved down or left it since the last check. Ladder pages climb rung by rung as they are written and published.`}
         aside={<NextRung ladders={d.ladders} />}
@@ -277,7 +280,7 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
           {dialog.history.length ? (
             <PositionHistoryCard title="Position history" lines={[{ key: dialog.keyword, label: dialog.keyword, history: sortByDate(dialog.history, (h) => h.checkedAt) }]} height={220} />
           ) : (
-            <p className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-ink-2">No checks yet: the rank tracker runs every Monday at 08:00.</p>
+            <p className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-ink-2">No checks yet: the rank tracker runs {day.every}.</p>
           )}
         </Dialog>
       )}
@@ -335,6 +338,7 @@ function NextRung({ ladders }: { ladders: Ladder[] }) {
 
 /** Up to five keywords on one chart; each keeps its colour while others are added or removed. */
 function HistoryExplorer({ all, loading, className }: { all: Kw[]; loading: boolean; className?: string }) {
+  const day = useCycleDay();
   const withHistory = useMemo(() => all.filter((k) => k.history.length > 0).sort((a, b) => posSort(a.latest) - posSort(b.latest)), [all]);
   const [picked, setPicked] = useState<{ keyword: string; slot: number }[]>(() => withHistory.slice(0, 3).map((k, i) => ({ keyword: k.keyword, slot: i })));
   const lines: HistoryLine[] = picked.flatMap((p): HistoryLine[] => {
@@ -347,7 +351,7 @@ function HistoryExplorer({ all, loading, className }: { all: Kw[]; loading: bool
   if (!withHistory.length)
     return (
       <Card className={cn('flex items-center justify-center', className)}>
-        <EmptyState icon={<LineChart className="size-5" />} title="No position history yet" description="The rank tracker checks every ladder page and tracked keyword on Google each Monday; the chart fills from the first check." />
+        <EmptyState icon={<LineChart className="size-5" />} title="No position history yet" description={`The rank tracker checks every ladder page and tracked keyword on Google ${day.every}; the chart fills from the first check.`} />
       </Card>
     );
 
@@ -407,6 +411,7 @@ function rungStatus(status: string) {
 
 function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: LadderRung) => void }) {
   const { org, site, can, tool } = useSitePage();
+  const day = useCycleDay(site);
   const detail = paths.ladder(org.id, site.id, ladder.ladderId);
   const groups = useMemo(() => {
     const m = new Map<number, LadderRung[]>();
@@ -520,7 +525,7 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
                       </div>
                       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
                         {r.history.length === 0 && r.latestPosition == null ? (
-                          <span className="text-xs text-ink-3">{r.status === 'published' ? 'first check next Monday' : 'not ranked yet'}</span>
+                          <span className="text-xs text-ink-3">{r.status === 'published' ? `first check ${day.on}` : 'not ranked yet'}</span>
                         ) : (
                           <>
                         <div className="text-right">
@@ -597,12 +602,13 @@ function ShareOfVoice({ value }: { value: number | null }) {
  * one moment, a check that could not be read claims nothing, and sources Google did not load are "not known", never "no".
  */
 function SerpPanel({ serp }: { serp: SerpReading | null }) {
+  const day = useCycleDay();
   if (!serp) return null;
   const f = serp.features;
   if (f.unavailable)
     return (
       <p className="mt-4 rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-ink-2">
-        The results page could not be read in the last check, so nothing is claimed about it. It is checked again next Monday.
+        The results page could not be read in the last check, so nothing is claimed about it. It is checked again {day.on}.
       </p>
     );
   const seen = f.checkedAt ? fmtDate(f.checkedAt) : null;

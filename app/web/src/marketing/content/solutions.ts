@@ -42,10 +42,10 @@ export const solutions: Solution[] = [
     helps: [
       { feature: 'agency-portal', title: 'A portal for every client, under your name', body: 'A workspace per client, one table of every client website, client logins with approvals, and your brand on your own address.' },
       { feature: 'enterprise', title: 'One workspace per client', body: 'Each client company has its own websites, team, credits and data, with roles for your staff and theirs.' },
-      { feature: 'reports', title: 'Reports ready to send', body: 'Full SEO reports as PDF or Word, and a Monday report for every website.' },
+      { feature: 'reports', title: 'Reports ready to send', body: 'Full SEO reports as PDF or Word, and a weekly report for every website on its own weekday.' },
       { feature: 'integrations', title: 'Client data in your own BI', body: 'Every client\'s rankings, traffic, audits and AI visibility exported to BigQuery or your storage, or charted in Looker Studio.' },
       { feature: 'ai-visibility', title: 'AI visibility per client', body: 'Mention rate and share of voice against each client\'s own competitors, with ranges.' },
-      { feature: 'autopilot', title: 'The same loop for every website', body: 'Weekly cadence per website, Auto where you trust it and Manual where the client signs off.' },
+      { feature: 'autopilot', title: 'The same loop for every website', body: 'Pages only for the keywords each client chose, an autopilot level per website, and "Coming up" two days ahead so a client can skip or approve before anything is written.' },
     ],
     outcomes: [
       'Every client website on the same weekly loop',
@@ -57,6 +57,7 @@ export const solutions: Solution[] = [
       { q: 'Can clients see their own data?', a: 'Yes. Invite them to their client workspace as a viewer or an approver; they see their websites, reports and recommendations in a portal under your name, and nothing from other clients or from your credits.' },
       { q: 'Can the portal carry our brand and domain?', a: 'Yes. Switch on white-label for your name, logo and colour, add your own address such as seo.youragency.com with two DNS records, and send client e-mails from your own mailbox once its SPF and DKIM check out.' },
       { q: 'How do I keep each client\'s spending in check?', a: 'Every analysis shows its price in credits first and is never charged more. Each client company has its own credits and its own monthly limits for analyses and for the automatic work.' },
+      { q: 'Will pages be written that a client did not ask for?', a: 'No. Pages are written automatically only for keywords the client chose, and each website has its own autopilot level. Two days before every weekly cycle, "Coming up" lists what will be written, with Skip and Approve, in the app and by e-mail.' },
       { q: 'Do I need access to each client\'s Search Console?', a: 'The client adds Alaventra\'s service account as a user, and the website owner proves ownership once.' },
     ],
     showcase: {
@@ -80,7 +81,7 @@ export const solutions: Solution[] = [
       { title: 'Blind spots', body: 'Lost links, indexing problems and AI answers change without anyone noticing.' },
     ],
     helps: [
-      { feature: 'autopilot', title: 'A weekly cadence that runs itself', body: 'Blog posts per week, picked in a fixed order and written with QA, with a "Needs you" queue for approvals.' },
+      { feature: 'autopilot', title: 'A weekly cadence that runs itself', body: 'Pages a week for the keywords you choose, written with QA, the plan shown in "Coming up" two days ahead and a "Needs you" queue for approvals.' },
       { feature: 'keyword-ladders', title: 'Content with a destination', body: 'Keyword ladders climb to the head terms your business needs, one supporting page at a time.' },
       { feature: 'technical-audits', title: 'Audits with a fix pack', body: 'Monthly audits show what changed, and the fix pack goes straight to your developers.' },
       { feature: 'site-tracking', title: 'One weekly view', body: 'Search Console, GA4 and Trends together, with striking-distance keywords called out.' },
@@ -91,9 +92,10 @@ export const solutions: Solution[] = [
     ],
     outcomes: [
       'A planned, steady publishing rhythm',
+      'Pages only for the keywords you choose, at the autopilot level you set',
       'Approvals where you want them and automation everywhere else',
       'Technical issues found and packaged for developers each month',
-      'Changes in rankings, links and AI answers reported every Monday',
+      'Changes in rankings, links and AI answers reported every week',
     ],
     faqs: [
       { q: 'Do we need SEO expertise to use Alaventra?', a: 'No. Every verdict and recommendation explains itself in plain language, and the pipeline tells you what to do next.' },
@@ -103,7 +105,7 @@ export const solutions: Solution[] = [
     showcase: {
       feature: 'autopilot',
       title: 'One page that says what happens next.',
-      body: 'This week\'s posts, the decisions waiting for your team and every schedule with its next run, on one pipeline page per website.',
+      body: 'This week\'s pages for your keywords, what is coming up next, the decisions waiting for your team and every schedule with its next run, on one pipeline page per website.',
     },
   },
   {
@@ -122,7 +124,7 @@ export const solutions: Solution[] = [
     ],
     helps: [
       { feature: 'ai-visibility', title: 'Visibility in AI answers', body: 'Up to 500 buyer questions by topic, buyer role and market across six AI engines (nine on request), with share of voice against named competitors and AI referral revenue from GA4.' },
-      { feature: 'ai-growth', title: 'Onto the shortlist, week by week', body: 'The questions you lose become answer pages, new pages reach Bing the same week, and the review and list pages AI cites without you become pitches.' },
+      { feature: 'ai-growth', title: 'Onto the shortlist, week by week', body: 'The questions you lose become suggested answer pages, new pages reach Bing the same week, and the review and list pages AI cites without you become pitches.' },
       { feature: 'keyword-ladders', title: 'A route to the head term', body: 'Supporting pages on easier, related keywords climb to the category term.' },
       { feature: 'content', title: 'Pages with real expertise', body: 'Author and reviewer, experience notes, case studies and schema on every page.' },
       { feature: 'backlinks', title: 'Links that count', body: 'Nine link sources, links checked by Alaventra itself and scored prospects.' },
@@ -166,7 +168,7 @@ export const solutions: Solution[] = [
       { feature: 'enterprise', title: 'One account for every brand', body: 'Separate companies for separate brands, with one team and one login.' },
       { feature: 'link-building', title: 'The local listings that matter', body: 'Google Business Profile, Bing Places, Apple Business and the directories in your country, checked for your listing, with a ready description to paste.' },
       { feature: 'guided-setup', title: 'Set up without an agency', body: 'Search Console, Analytics, the records on your domain: each one is a short guide with your own values, written for the provider you actually use.' },
-      { feature: 'report-delivery', title: 'You do not have to remember to look', body: 'The Monday report arrives in your inbox with the numbers in the message, and nothing arrives that the analysis itself flagged as not ready.' },
+      { feature: 'report-delivery', title: 'You do not have to remember to look', body: 'The weekly report arrives in your inbox with the numbers in the message, and nothing arrives that the analysis itself flagged as not ready.' },
     ],
     outcomes: [
       'Consistent business details on every local page',

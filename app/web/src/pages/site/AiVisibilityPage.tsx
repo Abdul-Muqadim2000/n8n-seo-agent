@@ -4,6 +4,7 @@ import { AI_ENGINE_VALUES, compactNumber, estimateAiVisibilityCost, titleCase, t
 import { formatCredits, quoteLabel } from '@/lib/credits';
 import { AiPrecisionTable } from '@/components/site/AiPrecision';
 import { useSiteData } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { ChartCard, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
 import { Badge } from '@/components/ui/badge';
@@ -24,13 +25,14 @@ import { ChartTitle, DashSkeleton, FigureTile, HeroEyebrow, RankedBars } from '.
 
 export default function AiVisibilityPage() {
   const { org, site } = useSitePage();
+  const day = useCycleDay(site);
   const q = useSiteData(org.id, site.id, 'ai');
   return (
     <div>
       <PageHeader
         icon={<Bot />}
         title="AI visibility"
-        description={`Is ${site.domain} named when buyers ask ChatGPT, Gemini, Perplexity, Claude and Google's AI? And what is that worth? Your questions are asked every day on the fast engines and fully every Monday.`}
+        description={`Is ${site.domain} named when buyers ask ChatGPT, Gemini, Perplexity, Claude and Google's AI? And what is that worth? Your questions are asked every day on the fast engines and fully ${day.every}.`}
         actions={
           <ToolButton mode="ai_visibility" variant="primary" icon={<Bot className="size-4" />}>
             Run an AI visibility check
@@ -237,7 +239,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
 
       {d.latest && d.latest.engines.length > 0 && (
         <section>
-          <SectionHeading icon={<Bot />} title="By engine" description="Each assistant over the past 7 days (Monday's run plus the daily pulse on ChatGPT, Gemini and Google AI Mode). Claude is asked on the monthly full run; its result is carried between runs." />
+          <SectionHeading icon={<Bot />} title="By engine" description="Each assistant over the past 7 days (the weekly run plus the daily pulse on ChatGPT, Gemini and Google AI Mode). Claude is asked on the monthly full run; its result is carried between runs." />
           <Card className="p-4">
             <EngineTable engines={d.latest.engines} />
           </Card>

@@ -176,7 +176,7 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
             <EmptyState
               icon={<ClipboardCheck className="size-5" />}
               title="No check-in recorded yet"
-              description="Once a month, record whether Search Console shows a manual action or a security issue, and upload the Pages report export. Issues are raised as alerts here, and a reminder goes out with the Monday report when it is due."
+              description="Once a month, record whether Search Console shows a manual action or a security issue, and upload the Pages report export. Issues are raised as alerts here, and a reminder goes out with the weekly report when it is due."
               action={
                 <ToolButton mode="checkin" variant="primary">
                   Record the first check-in
@@ -282,7 +282,7 @@ function AlertList({ alerts }: { alerts: ConsoleAlert[] }) {
             description={
               alerts.length
                 ? 'Every alert received for this website is resolved.'
-                : 'When Google e-mails a Search Console notice for this website (a manual action, a security issue, indexing or Core Web Vitals problems), it appears here and in the Monday report.'
+                : 'When Google e-mails a Search Console notice for this website (a manual action, a security issue, indexing or Core Web Vitals problems), it appears here and in the weekly report.'
             }
           />
         )}

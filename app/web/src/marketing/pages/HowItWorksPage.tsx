@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import {
   ArrowRight,
   Calculator,
+  CalendarCheck,
   CalendarClock,
   ChartLine,
   ChartNoAxesColumnIncreasing,
@@ -13,6 +14,7 @@ import {
   Search,
   Send,
   SlidersHorizontal,
+  ThumbsDown,
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
@@ -56,8 +58,10 @@ const STAGES: Stage[] = [
     icon: Search,
     title: 'Research and choose keywords',
     short: 'A verdict, difficulty for your site and a plan type',
-    body: 'The searches your website already appears for come first: the ones no page of yours answers, and the ones you rank just off page one. Alaventra adds candidates from your pages, your competitors and search data, or you type your own. Each one gets a verdict with its reasons, its difficulty for your site and the plan it takes: Direct, Short or Full.',
+    body: 'We ask one question: what would a customer type into Google to find a business like yours? Type your own ideas, or pick from suggestions built from the searches your website already appears for, your pages, your competitors and search data. Each one gets a verdict with its reasons, its difficulty for your site and the plan it takes: Direct, Short or Full. Pages are written only for the keywords you choose.',
     points: [
+      'Your chances in plain words: "Good chance", "Takes a few months" or "Hard for your website now", with the searches a month and the credits a page',
+      'The research behind your first suggestions is free, once per website, at setup',
       'Difficulty measured against your own domain, not a generic score',
       'Traffic estimates calibrated against your own impressions and clicks where you rank, and marked measured or modelled',
       'Topic fit, so you chase only keywords your business can own',
@@ -71,8 +75,13 @@ const STAGES: Stage[] = [
     icon: ChartNoAxesColumnIncreasing,
     title: 'Climb with ladders and the content engine',
     short: 'Supporting pages first, written in your authors\' names',
-    body: 'Pick a keyword to climb and Alaventra plans the ladder: easier supporting pages first, each linking up to the head term. Every week the content engine writes the next pages, drafted, critiqued, edited and checked.',
-    points: ['Two ladders written at once by default, in your priority order', 'Hub, case study, local and video page types', 'Writing pauses when too many drafts wait to be published'],
+    body: 'Pick a keyword to climb and Alaventra plans the ladder: easier supporting pages first, each linking up to the head term. On your website\'s weekday the content engine writes the next pages, drafted, critiqued, edited and checked.',
+    points: [
+      'Two days before, "Coming up" shows every page that will be written, why and its credits',
+      'Two ladders written at once by default, in your priority order',
+      'Hub, case study, local and video page types',
+      'Writing pauses when too many drafts wait to be published',
+    ],
     visual: <LadderMockup />,
     link: { to: '/platform/keyword-ladders', label: 'Explore keyword ladders' },
   },
@@ -97,15 +106,47 @@ const STAGES: Stage[] = [
     icon: ChartLine,
     title: 'Track, grow and learn',
     short: 'Rankings, traffic, AI answers and links, every week',
-    body: 'Rankings, Search Console, GA4, AI answers and backlinks are checked on a fixed schedule. The questions you lose in AI answers become pages to write, link openings become pitches you approve, the Monday report shows what changed, and what worked shapes next week\'s plan.',
+    body: 'Rankings, Search Console, GA4, AI answers and backlinks are checked every week on your website\'s own weekday. The questions you lose in AI answers become suggested pages, link openings become pitches you approve, the weekly report shows what changed, and what worked shapes next week\'s plan.',
     points: [
-      'Striking-distance keywords move up the queue',
+      'Striking-distance keywords suggested, each with its credits',
       'Alerts only on real changes: AI answers are tested, links checked twice',
-      'Link pitches drafted every Monday, sent from your own mailbox once you approve them',
+      'Link pitches drafted every week, sent from your own mailbox once you approve them',
       'Prioritised recommendations, each ready to run',
     ],
     visual: <ReportMockup />,
     link: { to: '/platform/site-tracking', label: 'Explore site tracking' },
+  },
+];
+
+const LEVELS = [
+  {
+    n: 1,
+    title: 'Only my keywords',
+    body: 'We write pages for the keywords you chose. Everything else is a suggestion with its credits, and waits for your OK.',
+  },
+  {
+    n: 2,
+    title: 'My keywords and keep my pages healthy',
+    body: 'Also refreshes the pages you already have, on your topics, when they lose visitors or sit close to page one. New topics wait for your OK.',
+    tag: 'Default',
+  },
+  {
+    n: 3,
+    title: 'Full autopilot',
+    body: 'Also new topics and new keywords. Each new keyword is announced two days before it starts, and you can change it or skip it.',
+  },
+];
+
+const LEVEL_POINTS = [
+  {
+    icon: CalendarCheck,
+    title: '"Coming up", two days ahead',
+    body: 'Before every weekly cycle: each page that will be written, why and its credits. Skip anything automatic, approve or skip anything waiting for your OK. In the app and by e-mail.',
+  },
+  {
+    icon: ThumbsDown,
+    title: '"Not what I wanted"',
+    body: 'On every written page. If two of the last five pages the autopilot chose on its own are turned down, it drops back to Only my keywords and tells you why.',
   },
 ];
 
@@ -143,7 +184,7 @@ function Hero() {
               From a connected site to a weekly loop.
             </h1>
             <p className="mt-6 max-w-xl animate-fade-up text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl" style={{ animationDelay: '140ms' }}>
-              Connect a website once. Alaventra researches, plans, writes, checks and tracks on a fixed weekly schedule, and asks your team only for the decisions that need a person.
+              Connect a website and choose the keywords you want to be found for. Alaventra researches, plans, writes, checks and tracks every week from the day you sign up, writes only for your keywords and asks your team only for the decisions that need a person.
             </p>
             <div className="mt-9 flex animate-fade-up flex-wrap gap-3" style={{ animationDelay: '210ms' }}>
               <ButtonLink to="/signup" size="lg" className="group">
@@ -189,7 +230,7 @@ function Hero() {
               className="group mt-1 flex items-center gap-3 rounded-xl bg-ink-surface px-4 py-3.5 text-[13.5px] text-on-ink transition-opacity duration-150 ease-brand hover:opacity-95"
             >
               <CalendarClock className="size-4 shrink-0 text-accent-on-ink" aria-hidden />
-              <span className="min-w-0 flex-1">Then it repeats: daily, every Monday and every month</span>
+              <span className="min-w-0 flex-1">Then it repeats: daily, on your weekday and every month</span>
               <ArrowRight className="size-4 shrink-0 text-accent-on-ink transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
             </a>
           </nav>
@@ -254,7 +295,7 @@ function Journey() {
       <SectionHeading
         eyebrow="Step by step"
         title="Five stages. Then a weekly rhythm."
-        lead="The first week sets things up. Every week after that, the same loop runs on its own, and each pass starts from what the last one learned."
+        lead="Your week starts the day you sign up: the first checks run as soon as setup is finished. Every 7 days after that, on the same weekday, the same loop runs on its own, and each pass starts from what the last one learned."
       />
       <ol className="mt-16 space-y-20 sm:mt-20 sm:space-y-28">
         {STAGES.map((s, i) => (
@@ -271,12 +312,39 @@ function Week() {
       <Section tone="ink" spacing="lg">
         <SectionHeading
           eyebrow="A week with Alaventra"
-          title="The schedule that runs while you work."
-          lead="A daily check of your key pages and of AI answers, a Monday of checks, writing and outreach, and a monthly audit. Work that would only repeat an unchanged result is skipped, and a run that was missed still happens, marked as late."
+          title="Your week starts the day you sign up."
+          lead="A daily check of your key pages and of AI answers, one day a week of checks, writing and outreach on your website's own weekday, the plan two days before it, and a monthly audit. Work that would only repeat an unchanged result is skipped, and a run that was missed still happens, marked as late."
         />
         <WeekSchedule className="mt-14 sm:mt-16" />
       </Section>
     </div>
+  );
+}
+
+function Levels() {
+  return (
+    <Section tone="surface" bordered spacing="lg">
+      <SectionHeading
+        eyebrow="Keyword-first"
+        title="We write only for keywords you choose."
+        lead='During setup we ask "How much should we do on our own?" Pick a level now and change it any time in the website settings. Until you choose a keyword, the checks run and nothing is written.'
+      />
+      <ol className="mt-12 grid gap-4 md:grid-cols-3">
+        {LEVELS.map((l, i) => (
+          <Reveal as="li" key={l.n} index={i} className={cn('flex flex-col rounded-xl border bg-page p-5 sm:p-6', l.tag ? 'border-accent' : 'border-line')}>
+            <span className="flex items-center justify-between gap-3">
+              <span className="inline-flex size-8 items-center justify-center rounded-full bg-accent-soft font-mono text-[13px] font-medium text-accent-text tabular">{l.n}</span>
+              {l.tag && <span className="rounded-full bg-accent px-2.5 py-0.5 text-[11.5px] font-medium text-accent-ink">{l.tag}</span>}
+            </span>
+            <span className="mt-4 font-display text-[17px] font-semibold tracking-[-0.01em] text-ink">{l.title}</span>
+            <span className="mt-2 text-[14px] leading-relaxed text-ink-2">{l.body}</span>
+          </Reveal>
+        ))}
+      </ol>
+      <div className="mt-12">
+        <PointList items={LEVEL_POINTS} />
+      </div>
+    </Section>
   );
 }
 
@@ -344,7 +412,7 @@ export default function HowItWorksPage() {
   useSeo({
     title: 'How it works',
     description:
-      'How Alaventra runs your SEO: connect and verify your site, choose keywords, climb with ladders and the content engine, publish and verify, then track and learn on a fixed weekly schedule, with Auto or Manual for every step and the price in credits shown first.',
+      'How Alaventra runs your SEO: connect your site, choose the keywords you want, climb with ladders and the content engine, publish and verify, then track and learn every week from the day you sign up, with three autopilot levels and the plan shown two days ahead.',
     path: '/how-it-works',
   });
   return (
@@ -352,6 +420,7 @@ export default function HowItWorksPage() {
       <Hero />
       <Journey />
       <Week />
+      <Levels />
       <Modes />
       <Cost />
       <CtaBand title="Start the loop on your own site." />

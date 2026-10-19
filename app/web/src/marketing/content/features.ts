@@ -106,44 +106,61 @@ export const features: Feature[] = [
     slug: 'autopilot',
     name: 'Autopilot pipeline',
     shortName: 'Autopilot',
-    tagline: 'A weekly growth loop that plans, writes and checks. You approve what matters.',
+    tagline: 'A weekly loop that writes for the keywords you choose. You see the plan before anything is written.',
     summary:
-      'Alaventra runs your SEO as a weekly loop. Each Monday it picks the next posts (a ladder rung first, then pages that are measurably losing traffic, then keywords close to page one, then rising trends), writes them, notices what you published and puts every decision that needs a person in one queue. Each step runs on Auto or waits for you.',
+      'Alaventra runs your SEO as a weekly loop that starts the day you sign up. It writes pages only for the keywords you chose, at the level of autopilot you pick, and two days before each week\'s work it shows you the plan in "Coming up", so you can skip or approve every item. It notices what you published and puts every decision that needs a person in one queue.',
     icon: Workflow,
     benefits: [
-      'Blog posts per week set per website, picked in a fixed order: ladder rung, a page losing traffic, striking distance, rising trend',
-      'A page that is really losing traffic gets a refresh written for it, ranked by the clicks it is actually losing',
-      'Auto or Manual for every step, per ladder and per website',
-      'A "Needs you" queue for briefs, pages and decisions waiting on a person',
+      'We write only for keywords you choose: type your own, or pick from suggestions that show your chances, the searches a month, why we suggest it and the credits a page. Until you choose, the checks run and nothing is written',
+      'Three levels for "How much should we do on our own?": Only my keywords; My keywords and keep my pages healthy (the default, which also refreshes your existing pages on your topics that lose visitors or sit close to page one); Full autopilot (also new topics and new keywords)',
+      '"Coming up" two days before every weekly cycle: each page that will be written, why and about how many credits. Skip anything automatic, approve or skip anything waiting for your OK. In the app and by e-mail',
+      'On full autopilot, a new keyword is announced two days before it starts, and you can change it or skip it',
+      '"Not what I wanted" on every written page: if two of the last five pages the autopilot chose on its own are turned down, it drops back to Only my keywords and tells you',
+      'Your week starts the day you sign up: the first checks run when setup is finished, then every 7 days on that weekday in your time zone. You can move the weekday',
+      'Pages a week for your keywords, from 0 to 3, with the credits a month shown before you save, and Auto or Manual per ladder and per website',
+      'A "Needs you" queue for keywords to choose, pages and decisions waiting on a person',
       'A 4-week calendar and every schedule with its next and last run',
       'Notices when a planned page goes live and moves the plan on',
       'A pile-up guard: no new pages while too many wait to be published. Every written page counts, ladder pages included, and they are named',
-      'The queue never offers a page you already have: a search one of your live pages answers is queued as a refresh of that page',
-      'An AI answer page of the week when a question your buyers ask AI assistants is being lost (on top of the blog posts, two a month by default, never while drafts pile up)',
-      'A scheduled run that did not fire (the server was down, say) still runs once it is back, that same week, and its report says it ran late',
+      'The plan never offers a page you already have: a search one of your live pages answers becomes a refresh of that page',
+      'A scheduled run that did not fire (the server was down, say) still runs once it is back, and its report says it ran late',
     ],
     steps: [
-      { title: 'Set the pace', body: 'Choose blog posts per week, the default mode (Auto or Manual), and how many ladders are written at once.' },
-      { title: 'Alaventra picks the work', body: 'Every Monday the next ladder rung comes first, then any page losing traffic, then keywords just off page one, then rising trends.' },
-      { title: 'Write, check, queue', body: 'Pages are written and checked. Anything set to Manual waits in "Needs you" until someone approves it.' },
-      { title: 'Publish and learn', body: 'When a planned page goes live, Alaventra notices, tracks its rank and plans the next step.' },
+      { title: 'Choose your keywords', body: 'Answer "What would a customer type into Google to find a business like yours?", or pick from suggestions with your chances, searches a month and the credits a page.' },
+      { title: 'Pick a level', body: 'Only my keywords, My keywords and keep my pages healthy, or Full autopilot. Change it at any time in the website\'s settings.' },
+      { title: 'See it coming', body: 'Two days before each weekly cycle, "Coming up" lists every page that will be written, why and its credits. Skip or approve each one.' },
+      { title: 'Write, check and learn', body: 'Pages are written and checked on your weekday. When a planned page goes live, Alaventra notices, tracks its rank and plans the next step.' },
     ],
     facts: [
-      { value: 'Weekly', label: 'cadence, planned every Monday' },
-      { value: 4, suffix: '-week', label: 'calendar of upcoming work' },
-      { value: 2, label: 'ladders written at once by default' },
+      { value: 3, label: 'autopilot levels, from only your keywords to full autopilot' },
+      { value: 2, suffix: ' days', label: 'notice in "Coming up" before each week\'s writing' },
+      { value: 'Day 1', label: 'is the day you sign up, then every 7 days' },
     ],
     faqs: [
-      { q: 'What happens on Auto?', a: 'Alaventra writes and prepares the work on schedule without waiting. Every page still shows in the pipeline, and you can pause a ladder at any time.' },
-      { q: 'What happens on Manual?', a: 'The step waits in "Needs you" until someone on your team approves it. Nothing is written before that.' },
+      {
+        q: 'Will Alaventra write about topics I did not choose?',
+        a: 'Only if you ask it to. On Only my keywords, it writes pages for the keywords you chose and nothing else; everything else is a suggestion with a price and a "Write it" button. On My keywords and keep my pages healthy, it also refreshes pages you already have, on your topics, when they lose visitors or sit close to page one. Only Full autopilot adds new topics and new keywords, and even then each one shows in "Coming up" first and a new keyword is announced two days before it starts.',
+      },
+      {
+        q: 'What if I have not chosen a keyword yet?',
+        a: 'Nothing is written. Tracking, AI visibility, backlinks and the audit still run, and "Needs you" asks for your first keyword with fresh suggestions. You can choose during setup or any time later.',
+      },
+      {
+        q: 'What is "Coming up"?',
+        a: 'Two days before each weekly cycle, the plan of what will be written: each page with the reason it was chosen and about how many credits it uses. Automatic items have Skip; items that wait for your OK have Approve and Skip. It is on the pipeline page and arrives by e-mail once a week.',
+      },
+      { q: 'What happens on Auto or Manual?', a: 'On Auto, a ladder\'s pages are written on your weekday without waiting. On Manual, each page waits in "Needs you" until someone on your team approves it. Nothing is written before that.' },
+      {
+        q: 'Which day does the work run?',
+        a: 'Your week starts the day you finish setting up a website: the first checks run then, and every 7 days after that on the same weekday, from 06:00 in your website\'s time zone. You can move the weekday in the website\'s settings. Monthly work, like the technical audit, runs in the first weekly cycle on or after the day of the month the website started.',
+      },
       {
         q: 'Does Alaventra publish to my site by itself?',
         a: 'Not by itself. It sends written pages to your WordPress, Webflow or Contentful (or any other stack through a signed webhook) as drafts, and an owner or admin chooses when one goes live. A page that failed its quality check, or still has text left for you to fill in, is never sent. Alaventra then checks the live page and tracks it. If you would rather not, publishing is one of the done-for-you services on the pricing page.',
       },
-      { q: 'Can I change the pace later?', a: 'Yes. Posts per week, the default mode and the ladder limits are website settings you can change at any time.' },
       {
         q: 'What if a scheduled run is missed?',
-        a: 'It still happens. Every quarter of an hour Alaventra looks for runs that were due and did not start, and starts each one once. A Monday run missed on Monday is still that week\'s run later in the week, and its report opens by saying it ran late and when it was due, so a late figure is never mistaken for an on-time one.',
+        a: 'It still happens. Alaventra keeps looking for runs that were due and did not start, and starts each one once, so a weekly cycle missed on its day still runs later that week. Its report opens by saying it ran late and when it was due, so a late figure is never mistaken for an on-time one.',
       },
     ],
     related: ['keyword-ladders', 'content', 'site-tracking'],
@@ -153,8 +170,8 @@ export const features: Feature[] = [
     screen: 'pipeline',
     story: {
       eyebrow: 'The weekly loop',
-      title: 'Every week starts from what the last one learned.',
-      body: 'Research, plan, write, publish, track and learn run in the same order for every website. Last week\'s rankings and Search Console data decide which posts come next, and anything that needs a person waits in one queue instead of in someone\'s inbox.',
+      title: 'Your keywords, your level, no surprises.',
+      body: 'Research, plan, write, publish, track and learn run in the same order for every website, on the weekday it started. Pages are written for the keywords you chose, the level you picked decides what else may be done on its own, and the plan arrives two days early so nothing is written you could not see first.',
     },
   },
   {
@@ -177,6 +194,8 @@ export const features: Feature[] = [
       'Every traffic estimate says whether it was measured on your own site or modelled from provider volume',
       'Searches Google answers with the same pages are grouped, so one page targets the whole group',
       'A topic radius with every research run: the topics within reach for your site, the ones that are a stretch and the evidence behind each verdict',
+      'Suggestions in plain words when you set up a website: "Good chance", "Takes a few months" or "Hard for your website now", with the searches a month, why we suggest it, the plan and about how many credits a page',
+      'The research behind your first suggestions is free, once per website, at setup: it starts in the background while you fill in the rest',
     ],
     steps: [
       { title: 'Describe the business', body: 'Your website, market and goals set the context for every keyword Alaventra looks at.' },
@@ -198,7 +217,11 @@ export const features: Feature[] = [
         q: 'What are Direct, Short and Full plans?',
         a: 'Direct: one strong page can rank. Short: a few supporting pages come first. Full: a complete ladder of supporting pages that climbs to the keyword.',
       },
-      { q: 'Can I bring my own keywords?', a: 'Yes. Type a keyword and Alaventra checks it, or let it recommend keywords from discovery.' },
+      { q: 'Can I bring my own keywords?', a: 'Yes. Type a keyword and Alaventra checks it in a few seconds, or pick from the keywords it suggests. Pages are written automatically only for keywords you choose.' },
+      {
+        q: 'What do I see when I set up a website?',
+        a: 'One question: "What would a customer type into Google to find a business like yours?" Type up to three ideas and each is checked, or take our suggestions. Each one shows your chances in plain words ("Good chance", "Takes a few months" or "Hard for your website now"), about how many people search it a month, why we suggest it, the plan (how many pages over how many months) and about how many credits a page. Pick one, or choose later: until you do, the checks run and nothing is written.',
+      },
       { q: 'Which markets are covered?', a: 'You choose the country for each run; volumes and results come from that market.' },
       {
         q: 'How does my own Search Console data change the research?',
@@ -237,6 +260,8 @@ export const features: Feature[] = [
       'Two of your pages competing for one search are flagged, with both named and the one Google shows today',
       'Your page\'s own drop is told apart from a reshuffle of the whole results page, and the site that took your place is named',
       'Share of voice across your keywords weighted by your real Search Console impressions',
+      'Choosing the keyword is the go-ahead for its ladder: "Write a page each week" (Auto) or "Ask me before each page" (Manual), with your weekday named',
+      'Ladders start only on keywords you chose. On Full autopilot, a keyword Alaventra picks is announced two days before its ladder starts, and you can change it or skip it',
       'Auto or Manual per ladder, with a priority order',
       'Two active ladders at a time by default, so effort is not spread thin',
       'No keyword overlap between ladders, so your own pages never compete',
@@ -251,7 +276,7 @@ export const features: Feature[] = [
       { title: 'Choose the keyword', body: 'Pick a recommended keyword or type your own. Alaventra shows the reach for your site and the plan type.' },
       { title: 'Get the plan', body: 'See the rungs, the order they are written in and how they link to each other.' },
       { title: 'Climb', body: 'Rungs are written and published one by one, and every position is checked weekly.' },
-      { title: 'Reach the top', body: 'When the head term ranks, the ladder is marked as won and the next one moves up.' },
+      { title: 'Reach the top', body: 'When the head term ranks, the ladder is marked as won and your next queued ladder starts. With none queued, you get fresh suggestions for your next keyword.' },
     ],
     facts: [
       { value: 2, label: 'active ladders at a time by default' },
@@ -268,8 +293,12 @@ export const features: Feature[] = [
         q: 'What is the pile-up guard?',
         a: 'If too many written pages are waiting to be published, Alaventra pauses new writing until you catch up, so drafts do not pile up.',
       },
-      { q: 'How many ladders can I run?', a: 'As many as you plan. By default two are written at once, in your priority order, and you can change the limit.' },
-      { q: 'What does Auto or Manual change?', a: 'On Auto, rungs are written on schedule. On Manual, each rung waits for approval in "Needs you".' },
+      { q: 'How many ladders can I run?', a: 'As many as you plan. By default two are written at once, in your priority order, and you can change the limit. A queued ladder planned more than two months ago gets a fresh keyword check before it starts, so it is never written on stale results.' },
+      {
+        q: 'Can Alaventra choose the keyword for me?',
+        a: 'It suggests keywords at every level, each with your chances, the searches a month and the credits a page, and you start the ladder. Only on Full autopilot does it start one itself: the keyword is announced two days before, with Approve now, Pick a different one and Skip.',
+      },
+      { q: 'What does Auto or Manual change?', a: 'On Auto, rungs are written on your website\'s weekday, and each one shows in "Coming up" two days before. On Manual, each rung waits for approval in "Needs you".' },
       {
         q: 'Do you track AI Overviews?',
         a: 'Yes. Every rank check records whether an AI Overview was on the page and whether it cited your site, with the time it was seen. AI Overviews vary between searches, so Alaventra reports what the check saw rather than claiming the search always looks that way.',
@@ -470,7 +499,7 @@ export const features: Feature[] = [
       'Google Trends for your topics and live rank checks that also record the search features on the page and who ranks above you',
       'Striking-distance keywords: close to page one and worth a push',
       'Your own keyword list gets a weekly ranking report of its own: the ten whose reading is oldest are checked live, the rest are read from the check already taken, and every keyword the week\'s limit did not reach is listed with the date it was last read',
-      'A weekly report every Monday with the changes that matter',
+      'A weekly report with the changes that matter, on your website\'s own weekday',
       'Notices when you publish a page from the plan',
       'A weekly list of the pages your site has, so the advice says "refresh this page" instead of "publish another one"',
       'Pages losing traffic are tested, not guessed: a fall counts only when it is beyond chance and the page is not simply quieter at this time of year than it was last year',
@@ -488,11 +517,11 @@ export const features: Feature[] = [
       { title: 'Connect', body: 'Add Alaventra\'s service account to Search Console and choose your GA4 property.' },
       { title: 'Collect', body: 'Search, traffic, trends and live rankings are gathered every week.' },
       { title: 'Compare', body: 'Week over week, with striking-distance keywords called out.' },
-      { title: 'Act', body: 'Recommendations and posts flow straight into the pipeline.' },
+      { title: 'Act', body: 'Recommendations flow into the pipeline, each with its credits, and pages for your keywords are planned from them.' },
     ],
     facts: [
       { value: 3, label: 'Google sources: Search Console, GA4 and Trends' },
-      { value: 'Weekly', label: 'report, every Monday' },
+      { value: 'Weekly', label: 'report, on your website\'s weekday' },
       { value: 'Live', label: 'rank checks where Search Console has no data' },
     ],
     faqs: [
@@ -503,7 +532,7 @@ export const features: Feature[] = [
       },
       {
         q: 'What is a striking-distance keyword?',
-        a: 'A keyword where your page already ranks just below the top results. Small improvements there tend to pay off fastest, so the pipeline picks them early.',
+        a: 'A keyword where your page already ranks just below the top results. Small improvements there tend to pay off fastest, so they are suggested early. On the level that keeps your pages healthy, a page of yours on your topics that sits close to page one is strengthened in the weekly cycle, after it has appeared in "Coming up".',
       },
       { q: 'How often is the data refreshed?', a: 'Every week, with live rank checks for keywords Search Console does not report.' },
       {
@@ -582,7 +611,7 @@ export const features: Feature[] = [
       { q: 'Can AI crawlers reach my site?', a: 'Every week Alaventra checks robots.txt for each AI crawler, your llms.txt file and whether your CDN blocks them.' },
       {
         q: 'Does it do anything about what it finds?',
-        a: 'Yes, that is AI growth. Every Monday, after the visibility run, the questions you lose become pages to write or refresh, new pages go to Bing and IndexNow, your key pages are checked for what AI assistants need to quote them, and the pages AI cites without naming you become pitches.',
+        a: 'Yes, that is AI growth. Every week, after the visibility run, the questions you lose become suggested pages to write or refresh, new pages go to Bing and IndexNow, your key pages are checked for what AI assistants need to quote them, and the pages AI cites without naming you become pitches.',
       },
     ],
     related: ['ai-growth', 'content', 'reports'],
@@ -601,13 +630,13 @@ export const features: Feature[] = [
     shortName: 'AI growth',
     tagline: 'The weekly work that gets you named and cited in AI answers.',
     summary:
-      'Measuring AI visibility tells you where you stand; AI growth acts on it every Monday. New and updated pages go to Bing and IndexNow, your key pages are checked for what AI assistants need in order to quote them, the questions you lose become pages to write or refresh, and the exact pages AI cites without naming you become pitches.',
+      'Measuring AI visibility tells you where you stand; AI growth acts on it every week. New and updated pages go to Bing and IndexNow, your key pages are checked for what AI assistants need in order to quote them, the questions you lose become suggested pages to write or refresh, and the exact pages AI cites without naming you become pitches.',
     icon: Rocket,
     benefits: [
       'New and updated pages sent to Bing Webmaster Tools every week (the index Microsoft Copilot answers from) and through IndexNow once your key file is up',
       'An AI-readiness score for your key pages: reachable, indexable, the text there before any script runs, the answer in the first lines, a visible update date, question headings and figures with linked sources',
       'Schema and llms.txt are reported but never scored, because there is no good evidence they change AI answers',
-      'Every question you lose becomes one action: a new answer page, a refresh of the page that already ranks for it, or the keyword-ladder page for the same search (never two pages for one search)',
+      'Every question you lose becomes one suggestion: a new answer page, a refresh of the page that already ranks for it, or the keyword-ladder page for the same search (never two pages for one search)',
       'Answer pages written by the content engine with the answer first, a section for each search the AI runs before it answers, sources AI already trusts and a visible "Updated" date',
       'Earned media: the exact pages AI cited when it did not name you, the competitors they name, the action that fits each one and a pitch drafted for you to review',
       'A page that starts naming you is marked won, and you hear about it',
@@ -617,13 +646,13 @@ export const features: Feature[] = [
     steps: [
       { title: 'See what you lose', body: 'The weekly AI visibility run names the questions where competitors are named and you are not.' },
       { title: 'Get indexed where AI looks', body: 'New and updated pages go to Bing and IndexNow, and your key pages are scored for AI readiness.' },
-      { title: 'Win the answer', body: 'Lost questions become answer pages or refreshes, written on the same rules as every page: one search, one page, and no new writing while drafts pile up.' },
+      { title: 'Win the answer', body: 'Lost questions become suggested answer pages or refreshes, each with its credits. They are written when you approve one (or on Full autopilot, after they appear in "Coming up"), on the same rules as every page: one search, one page, and no new writing while drafts pile up.' },
       { title: 'Earn the mention', body: 'The pages AI cites without you become checked pitches that wait for your approval.' },
     ],
     facts: [
-      { value: 'Weekly', label: 'every Monday, after the AI visibility run' },
+      { value: 'Weekly', label: 'after the AI visibility run, on your weekday' },
       { value: 12, label: 'key pages scored for AI readiness each week, at most' },
-      { value: 2, label: 'AI answer pages a month by default, from 0 to 8' },
+      { value: 2, label: 'AI answer pages suggested a month by default, from 0 to 8' },
     ],
     faqs: [
       {
@@ -640,7 +669,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Does AI growth use extra credits?',
-        a: 'The checks, the Bing and IndexNow submissions and the Wikidata check use no credits. Answer pages are written like any other page and the credits they use a month are shown in the settings before you switch them on; set AI answer pages to 0 a month and only the drafted pitches remain.',
+        a: 'The checks, the Bing and IndexNow submissions and the Wikidata check use no credits. Answer pages are suggestions, each with its price in credits and a "Write it" button, and use credits only when one is written: when you approve it, or on Full autopilot, where it shows in "Coming up" first and can be skipped. The drafted pitches use a few credits a week.',
       },
       {
         q: 'Will you send the pitches for us?',
@@ -795,7 +824,7 @@ export const features: Feature[] = [
       'What each won link did: the page compared with your other pages over the same weeks ("likely helped", never "caused"), and the whole week as one PDF',
     ],
     steps: [
-      { title: 'Find', body: 'Every Monday, new openings from journalists, resource and list pages, broken links, podcasts and directories, each fetched and checked on its own page.' },
+      { title: 'Find', body: 'Every week, new openings from journalists, resource and list pages, broken links, podcasts and directories, each fetched and checked on its own page.' },
       { title: 'Prepare', body: 'A contact on their own site, the page of yours that fits, the link text to ask for and a drafted sequence that passed its checks.' },
       { title: 'Approve', body: 'You read, edit and approve each sequence. An owner can let checked ones go automatically, within daily limits.' },
       { title: 'Send and follow up', body: 'From your own mailbox, in one thread, stopping the moment they reply. A won link is confirmed by Alaventra\'s own link check.' },
@@ -852,13 +881,13 @@ export const features: Feature[] = [
     slug: 'reports',
     name: 'Reports and alerts',
     shortName: 'Reports',
-    tagline: 'A full SEO report on demand, a Monday report every week and alerts that matter.',
+    tagline: 'A full SEO report on demand, a weekly report and alerts that matter.',
     summary:
-      'Get a full SEO report as PDF or Word whenever you need one, a Monday report with what changed, Search Console alerts as soon as Google sends them and a monthly check-in for what the API cannot see. Every finding comes with a prioritised recommendation.',
+      'Get a full SEO report as PDF or Word whenever you need one, a weekly report with what changed, Search Console alerts as soon as Google sends them and a monthly check-in for what the API cannot see. Every finding comes with a prioritised recommendation.',
     icon: FileText,
     benefits: [
       'A full SEO report as PDF or Word',
-      'A Monday report: rankings, traffic, AI visibility and links in one read',
+      'A weekly report: rankings, traffic, AI visibility and links in one read',
       'A Search Console alert watcher for Google\'s notification e-mails',
       'A monthly check-in for manual actions and security issues',
       'One to-do list across audits, search, rankings, AI answers and links, ranked by what each step is worth, not by which part of the system found it',
@@ -880,7 +909,7 @@ export const features: Feature[] = [
     ],
     facts: [
       { value: 2, label: 'report formats: PDF and Word' },
-      { value: 'Monday', label: 'report, every week' },
+      { value: 'Weekly', label: 'report, on your website\'s weekday' },
       { value: 14, label: 'days a share link lasts by default (1 to 90, revocable)' },
       { value: 1, label: 'check-in a month for what Google\'s API cannot see' },
     ],
@@ -914,7 +943,7 @@ export const features: Feature[] = [
     screen: 'report',
     story: {
       title: 'Reports people actually read.',
-      body: 'The Monday report puts rankings, traffic, AI visibility and links on one page, with what changed and what to do next. Full reports export as PDF or Word for everyone who was not in the room.',
+      body: 'The weekly report puts rankings, traffic, AI visibility and links on one page, with what changed and what to do next. Full reports export as PDF or Word for everyone who was not in the room.',
     },
   },
   {
@@ -989,7 +1018,7 @@ export const features: Feature[] = [
     ],
     steps: [
       { title: 'Choose when and where', body: 'A frequency, the people who should receive it, a webhook if your team lives in one, and which reports you actually want.' },
-      { title: 'A report finishes', body: 'The work runs on its own schedule: the Monday tracking report, the monthly audit, a page that was written for you.' },
+      { title: 'A report finishes', body: 'The work runs on each website\'s own week: the weekly tracking report, the monthly audit, a page that was written for you.' },
       { title: 'It is checked before it is sent', body: 'Anything the analysis marked as not ready stays here. Everything else goes out with its figures, its files and its link.' },
       { title: 'You read it where you already were', body: 'In your inbox or your team channel. Open the full report in Alaventra, or forward the link to somebody without an account.' },
     ],
@@ -1186,7 +1215,7 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'For agencies',
       title: 'Your clients see your work, under your name.',
-      body: 'A logo on a shared page is not a portal. Clients get their own login, their own websites and a say before anything goes live, and everything they see, from the sign-in page to the Monday e-mail, is yours.',
+      body: 'A logo on a shared page is not a portal. Clients get their own login, their own websites and a say before anything goes live, and everything they see, from the sign-in page to the weekly e-mail, is yours.',
     },
   },
 ];

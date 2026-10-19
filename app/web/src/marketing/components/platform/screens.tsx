@@ -12,7 +12,6 @@ import {
   ListChecks,
   RefreshCcw,
   ShieldCheck,
-  Target,
   TrendingUp,
   Workflow,
   type LucideIcon,
@@ -60,14 +59,14 @@ function MockButton({ children, primary }: { children: ReactNode; primary?: bool
 
 // ---------------------------------------------------------------------------------------------------------------------
 const THIS_WEEK = [
-  { kw: 'invoice software for small teams', why: 'Ladder rung 3', icon: Flag, badge: <MockBadge tone="accent">Writing</MockBadge> },
-  { kw: 'invoice approval checklist', why: 'Striking distance · #12', icon: Target, badge: <MockBadge tone="good">Ready</MockBadge> },
+  { kw: 'invoice software for small teams', why: 'Your keyword · ladder rung 3', icon: Flag, badge: <MockBadge tone="accent">Writing</MockBadge> },
+  { kw: 'invoice approval workflow', why: 'Your page · losing visitors', icon: RefreshCcw, badge: <MockBadge tone="good">Ready</MockBadge> },
 ];
 const NEEDS_YOU = [
-  { what: 'Approve the page', kw: 'best invoice automation tools', action: 'Approve' },
-  { what: 'Choose the next keyword', kw: '3 recommended for your site', action: 'Review' },
+  { what: 'Coming up: a new topic', kw: 'invoice approval checklist · about 51 credits', action: 'Approve' },
+  { what: 'Choose your next keyword', kw: '3 suggestions with your chances', action: 'Review' },
 ];
-const ALWAYS_ON = ['AI Pulse · daily', 'Rank tracking · Mon', 'Audit · monthly'];
+const ALWAYS_ON = ['AI Pulse · daily', 'Rank tracking · Wed', 'Audit · monthly'];
 // 4-week calendar: posts per week (filled = written, hollow = planned)
 const WEEKS = [
   { w: 'Wk 41', posts: [true, false] },
@@ -76,17 +75,17 @@ const WEEKS = [
   { w: 'Wk 44', posts: [false, false] },
 ];
 
-/** The pipeline page: this week's posts, the "Needs you" queue, schedules that are always on and a 4-week calendar (sample data). */
+/** The pipeline page: this week's pages for the keywords the customer chose, the "Needs you" queue, schedules that are always on and a 4-week calendar (sample data). */
 export function PipelineMockup({ className }: { className?: string }) {
   return (
     <Drawn
-      label="A pipeline with sample data: two posts this week, a ladder rung being written and a striking-distance page ready; two decisions waiting in Needs you; AI Pulse, rank tracking and the monthly audit always on; a four-week calendar of two posts a week."
+      label="A pipeline with sample data, on the level that keeps your pages healthy: two pages this week, a rung of the keyword you chose being written and a refresh of one of your pages that is losing visitors ready; two decisions waiting in Needs you, a new topic to approve from Coming up and your next keyword to choose; AI Pulse, rank tracking on the website's own weekday and the monthly audit always on; a four-week calendar of two pages a week."
       className={cn(shell, className)}
     >
       <ScreenHead
         icon={Workflow}
         title="Pipeline"
-        meta="yourbrand.com · 2 posts a week"
+        meta="yourbrand.com · Keep my pages healthy · 2 a week"
         right={
           <span className="inline-flex items-center gap-1 rounded-full border border-line bg-page p-0.5 text-[10.5px] font-medium">
             <span className="rounded-full bg-accent px-2 py-0.5 text-accent-ink">Auto</span>
@@ -98,7 +97,7 @@ export function PipelineMockup({ className }: { className?: string }) {
         <div className={cn(sub, 'p-3')}>
           <span className="flex items-center justify-between text-[11.5px] font-semibold">
             This week
-            <span className="font-mono text-[10px] font-normal text-ink-3">Mon 10:00</span>
+            <span className="font-mono text-[10px] font-normal text-ink-3">Wed 06:00</span>
           </span>
           <ul className="mt-2.5 space-y-2">
             {THIS_WEEK.map((r, i) => (
@@ -182,16 +181,16 @@ const NEXT = [
   { t: 'Reclaim the lost link with an outreach draft', c: 'about 3 credits' },
 ];
 
-/** The Monday report: headline numbers, what changed and the next steps, exportable as PDF or Word (sample data). */
+/** The weekly report: headline numbers, what changed and the next steps, exportable as PDF or Word (sample data). */
 export function ReportMockup({ className }: { className?: string }) {
   return (
     <Drawn
-      label="A Monday report with sample data: clicks, average position and AI mention rate with their changes; three changes of the week; two recommended next steps with their price in credits; export as PDF or Word."
+      label="A weekly report with sample data: clicks, average position and AI mention rate with their changes; three changes of the week; two recommended next steps with their price in credits; export as PDF or Word."
       className={cn(shell, className)}
     >
       <ScreenHead
         icon={FileText}
-        title="Monday report"
+        title="Weekly report"
         meta="yourbrand.com · week 41"
         right={
           <span className="flex gap-1.5">
@@ -320,7 +319,7 @@ const LIVE_CHECKS = ['Found in your sitemap', 'Title and meta description', 'Aut
 export function PublishCheckMockup({ className }: { className?: string }) {
   return (
     <Drawn
-      label="A live check of a published page with sample data: found in the sitemap, title and meta description, author box and reviewer, schema, three images with alt text and links up the ladder all pass; rank tracking starts on Monday."
+      label="A live check of a published page with sample data: found in the sitemap, title and meta description, author box and reviewer, schema, three images with alt text and links up the ladder all pass; rank tracking starts in the website's next weekly cycle."
       className={cn(shell, className)}
     >
       <ScreenHead icon={CircleCheck} title="Live page check" meta="yourbrand.com/blog/invoice-approval-workflow" right={<MockBadge tone="good">Published</MockBadge>} />
@@ -336,7 +335,7 @@ export function PublishCheckMockup({ className }: { className?: string }) {
         <span className="flex items-center gap-2 text-[11.5px]">
           <Clock className="size-3.5 text-accent-text" />
           <span>
-            Rank tracking starts <span className="font-medium">Monday 08:00</span>
+            Rank tracking starts <span className="font-medium">in your next cycle</span>
           </span>
         </span>
         <span className="flex gap-1.5">

@@ -30,17 +30,18 @@ export const pricingTiers: PricingTier[] = [
     period: 'per month',
     monthly: 39, // keep equal to `price`
     monthlyCredits: 780, // = monthly price ÷ $0.05
-    description: 'One website, the whole loop: research, a page a week, monthly audits and the Monday report.',
+    description: 'One website, the whole loop: research, a page a week for the keywords you choose, monthly audits and the weekly report.',
     // ?plan= is ignored by the sign-up page today; it records which plan the visitor came from
     cta: { label: 'Start free', to: '/signup?plan=starter' },
     features: [
       '1 website',
       'Keyword research, verdicts and difficulty for your site',
       'One active keyword ladder',
-      'A page a week, written, checked and ready to publish',
+      'A page a week for the keywords you choose, written, checked and ready to publish',
+      'Three autopilot levels, and "Coming up" two days before anything is written',
       'Monthly technical audit with a fix pack',
       'Search Console, GA4 and Trends tracking, with weekly rank checks',
-      'Monday report, alerts and share links',
+      'A weekly report on your website\'s own weekday, alerts and share links',
       'Reports delivered by e-mail or webhook, on your schedule',
       'Alerts in Slack or Teams, and findings as Jira, Linear or Asana tickets',
       'A step-by-step guide for every setup task',
@@ -61,7 +62,7 @@ export const pricingTiers: PricingTier[] = [
       'Up to 3 websites',
       'Up to three pages a week, with the autopilot pipeline and several ladders',
       'AI search visibility: 50 questions per website by topic, buyer role and market, and the daily AI Pulse (up to 500; a bigger panel uses extra credits, shown before you save)',
-      'AI growth every week: new pages to Bing and IndexNow, AI-readiness checks, answer pages and earned media',
+      'AI growth every week: new pages to Bing and IndexNow, AI-readiness checks, suggested answer pages and earned media',
       'Backlinks from every source, with Alaventra\'s own link checks',
       'Crawler analytics from your server logs: Google and the AI crawlers, each one checked',
       'Link building: prospects, contacts and pitches from your own mailbox',
@@ -195,13 +196,13 @@ export const servicePackages: ServicePackage[] = [
     name: 'Setup, done for you',
     price: '$199', // PLACEHOLDER, confirm
     period: 'one-off',
-    description: 'We do the connecting and the first run, so your first Monday report is a real one.',
+    description: 'We do the connecting and the first run, so your first weekly report is a real one.',
     includes: [
       'Ownership proved and Search Console and GA4 connected',
       'Your business profile, author and style guide filled in from one 30-minute call',
       'Tracking, keywords, competitors and the monitors you want switched on',
       'The IndexNow file and your outreach mailbox set up',
-      'Your first technical audit and your first keyword ladder, explained on a call',
+      'Your first keyword chosen with you, and your first technical audit and keyword ladder explained on a call',
     ],
     turnaround: 'Within five working days of getting access', // PLACEHOLDER, confirm
     needs: 'An admin seat in your Alaventra company, plus whoever can edit DNS or your website for one of the steps.',
@@ -304,7 +305,12 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
   {
     group: 'Automation',
     rows: [
-      { label: 'Weekly content cadence', hint: 'Pages written, checked and ready to publish', values: ['1 a week', 'Up to 3 a week', 'Custom'] },
+      { label: 'Weekly content cadence', hint: 'Pages for the keywords you choose, written, checked and ready to publish', values: ['1 a week', 'Up to 3 a week', 'Custom'] },
+      { label: 'Pages only for keywords you choose', hint: 'Typed by you or picked from suggestions with your chances, searches a month and credits a page; nothing is written until you choose', values: [true, true, true] },
+      { label: 'Three autopilot levels', hint: 'Only my keywords; My keywords and keep my pages healthy; Full autopilot', values: [true, true, true] },
+      { label: '"Coming up" before every week', hint: 'Two days ahead: every page that will be written, why and its credits, with Skip or Approve; in the app and by e-mail', values: [true, true, true] },
+      { label: 'New keywords announced two days ahead', hint: 'On Full autopilot; change or skip a keyword before it starts', values: [true, true, true] },
+      { label: 'Your own weekly cycle', hint: 'Starts the day you sign up, then every 7 days on that weekday in your time zone; you can move the weekday', values: [true, true, true] },
       { label: 'Autopilot pipeline (Auto / Manual)', hint: 'Several ladders, "Needs you" queue, 4-week calendar', values: [false, true, true] }, // PLACEHOLDER, confirm
     ],
   },
@@ -319,7 +325,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews; Copilot and the ChatGPT and Gemini APIs on request', values: [false, '50 a website included, up to 500', 'Up to 500 questions'] }, // a bigger panel uses extra credits, shown before saving
       { label: 'Questions by buyer role and market', hint: 'Rates per topic, buyer role and market with 95% ranges; import your own list as CSV', values: [false, true, true] }, // PLACEHOLDER, confirm
       { label: 'Daily AI Pulse', hint: 'Alerts only on statistically real changes', values: [false, true, true] },
-      { label: 'AI growth, every week', hint: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win queued', values: [false, true, true] },
+      { label: 'AI growth, every week', hint: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win suggested', values: [false, true, true] },
       { label: 'Earned media', hint: 'The exact pages AI cites without naming you, with a draft for each', values: [false, true, true] },
       { label: 'Crawler analytics from your server logs', hint: 'Googlebot and the AI crawlers, each checked against its company\'s addresses; impostors apart', values: [false, true, true] }, // PLACEHOLDER, confirm
       { label: 'Backlinks from every source', hint: 'Nine sources, every link checked by Alaventra', values: [false, true, true] }, // PLACEHOLDER, confirm
@@ -334,7 +340,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
   {
     group: 'Reports and alerts',
     rows: [
-      { label: 'Monday report', values: [true, true, true] },
+      { label: 'Weekly report', hint: 'On your website\'s own weekday, after that week\'s checks', values: [true, true, true] },
       { label: 'Charts marked with what happened', hint: 'Pages you published, technical fixes, Google updates and breaks in Google\'s own data', values: [true, true, true] },
       { label: 'Where every figure came from', hint: 'Each number names its source, its period and when it was read', values: [true, true, true] },
       { label: 'Alerts only when a change is real', hint: 'A fall is called a fall once it is beyond normal week-to-week variation', values: [true, true, true] },
@@ -418,7 +424,11 @@ export const pricingFaqs: FaqItem[] = [
   },
   {
     q: 'What uses credits?',
-    a: 'Two things, from the same balance: the automatic work for each website (the weekly report, AI visibility and the daily AI Pulse, AI growth, backlinks, link building, the monthly audit and the scheduled blog posts), and the analyses you or your team start in the app, through the API or from an AI assistant. Each website shows what its automatic work will use a month, and the Credits page splits what was used between the two.',
+    a: 'Two things, from the same balance: the automatic work for each website (the weekly report, AI visibility and the daily AI Pulse, AI growth, backlinks, link building, the monthly audit and the pages written for the keywords you chose), and the analyses you or your team start in the app, through the API or from an AI assistant. Each website shows what its automatic work will use a month, and the Credits page splits what was used between the two.',
+  },
+  {
+    q: 'Will pages be written that I did not ask for?',
+    a: 'No. Pages are written automatically only for keywords you chose, and the level you pick decides what else may be done on its own: Only my keywords, My keywords and keep my pages healthy (refreshes of your existing pages on your topics), or Full autopilot. Two days before each week\'s work, "Coming up" lists every page with its credits, and you can skip any of them.',
   },
   {
     q: 'Will I be charged more than the price shown?',

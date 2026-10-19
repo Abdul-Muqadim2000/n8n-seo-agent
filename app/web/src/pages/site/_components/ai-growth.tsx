@@ -10,6 +10,7 @@ import { fmtAgo, fmtDate } from '@/lib/utils';
 import type { AiEarnedPage, AiGrowth, AiPageStat, AiTargetStat, IndexNowCheck } from '@seo/shared';
 import { api, errorMessage } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -27,11 +28,12 @@ const STATUS_TONE: Record<string, Tone> = { won: 'good', contacted: 'accent', ne
 
 export function AiGrowthSection({ growth }: { growth: AiGrowth | null }) {
   const { can, page } = useSitePage();
+  const day = useCycleDay();
   if (!growth)
     return (
       <Panel title="AI growth" icon={<Rocket />} description="The weekly work that gets you named and cited in AI answers">
         <p className="text-[13px] leading-relaxed text-ink-2">
-          Runs every Monday at 09:30, after the AI visibility check: it sends new and updated pages to Bing and IndexNow, checks your key pages can be read and quoted by AI, lists the exact pages AI cites without naming you (with outreach drafts) and queues the questions to win for the Monday content run. The first results appear here after its first run.
+          Runs {day.every}, after the AI visibility check: it sends new and updated pages to Bing and IndexNow, checks your key pages can be read and quoted by AI, lists the exact pages AI cites without naming you (with outreach drafts) and queues the questions to win for the weekly content run. The first results appear here after its first run.
         </p>
         {can('admin') && (
           <div className="mt-3">
@@ -224,7 +226,7 @@ function TargetsPanel({ targets, perMonth }: { targets: AiTargetStat[]; perMonth
   const { tool, can } = useSitePage();
   const shown = targets.filter((t) => t.status !== 'skipped').slice(0, 10);
   return (
-    <Panel title="Questions to win" icon={<Target />} description={perMonth > 0 ? `The Monday content run writes the most valuable one each week (${perMonth} a month)` : 'AI pages are off: write them from here'}>
+    <Panel title="Questions to win" icon={<Target />} description={perMonth > 0 ? `The weekly content run picks the most valuable one (${perMonth} a month)` : 'AI pages are off: write them from here'}>
       {shown.length ? (
         <ul className="divide-y divide-line">
           {shown.map((t) => (
