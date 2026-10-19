@@ -88,7 +88,9 @@ parts.push(h2('The plan in one page') + kv([
   ['Traffic potential', planned ? '~' + num(st.traffic_potential_total) + ' visits/month across the ladder once the pages rank in the top 3' : '—'],
   // R1 (2026-10-13): the plan used to call these pages written and promise them as page content before the page run had even started — and a
   // run the day's AI budget refused then left nothing behind but a ladder row saying "writing" (live: execution 500).
-  ['Started now', L.held && (L.held.pages || []).length ? 'none — held by the website\'s limits: ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '. The Content Cadence writes '
+  // keyword-first R-K7 (2026-10-19): a Manual ladder writes nothing at start, and its pages wait for the client's OK (never "when the limit clears")
+  ['Started now', (L.limits || {}).manual_hold === true ? 'none: this ladder is Manual, so each page waits for your OK (approve it on the Pipeline page or in the weekly "Coming up" plan)'
+    : L.held && (L.held.pages || []).length ? 'none — held by the website\'s limits: ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '. The Content Cadence writes '
     + (L.held.pages.length === 1 ? 'it' : 'them') + ' when the limit clears.' : (L.write_now || []).length ? (L.write_now || []).map(w => '"' + esc(w.keyword) + '" (rung ' + w.rung + ')').join(', ') + ' — started as its own page run; each arrives as its own report. A run the day\'s AI budget refuses writes nothing and puts the page back to "planned" for the next weekly run.' : 'none'],
   ['Tracking', planned ? 'Positions checked ' + esc((L.tracker || {}).cadence || 'weekly') + '; progress e-mail with the next rung; once the top page holds the top 3 for 4 checks it is checked monthly' : 'nothing to track']
 ]) + ((L.notes || []).filter(n => !(L.refusal && n === L.refusal.message)).length ? '<div class="note">' + L.notes.filter(n => !(L.refusal && n === L.refusal.message)).map(esc).join('<br>') + '</div>' : ''));
