@@ -349,7 +349,7 @@ engine and of this repository.
   release), `site.ts` (name, e-mail addresses, navigation, integrations), `images.ts` (every photo). How to add a capability:
   `web/CONVENTIONS.md` → "Business site".
 - **PLACEHOLDER — confirm before launch** (marked `// PLACEHOLDER` in the code): every price, plan limit, the annual discount and the
-  billing answers in `pricing.ts`; the `@alaventra.example` e-mail addresses in `site.ts` (the contact form opens a `mailto:`);
+  billing answers in `pricing.ts`; the `@alaventra.com` e-mail addresses in `site.ts` (the contact form opens a `mailto:`; the mailboxes must exist);
   the Unsplash photos in `images.ts`; the privacy policy and terms in `marketing/components/company/legal.ts` (drafts for counsel).
   Copy uses capability facts only — no invented customers, logos, ratings or results.
 

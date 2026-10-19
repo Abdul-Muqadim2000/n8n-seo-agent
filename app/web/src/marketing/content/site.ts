@@ -5,10 +5,10 @@ import { solutions } from './solutions';
 export const site = {
   name: 'Alaventra',
   descriptor: 'Enterprise-grade autonomous SEO.',
-  salesEmail: 'sales@alaventra.example', // PLACEHOLDER, confirm the real sales address
-  supportEmail: 'support@alaventra.example', // PLACEHOLDER, confirm the real support address
-  partnersEmail: 'partners@alaventra.example', // PLACEHOLDER, confirm the real partnerships address
-  securityEmail: 'security@alaventra.example', // PLACEHOLDER, confirm the real security address
+  salesEmail: 'sales@alaventra.com',
+  supportEmail: 'support@alaventra.com',
+  partnersEmail: 'partners@alaventra.com',
+  securityEmail: 'security@alaventra.com',
   copyright: '© 2026 Alaventra',
 } as const;
 

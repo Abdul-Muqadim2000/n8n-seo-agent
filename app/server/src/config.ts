@@ -70,9 +70,9 @@ const Env = z.object({
   MS_OAUTH_TENANT: str('common'),
 
   /** account e-mails: where "Help and support" points (default: the contact page's support topic) and the support address
-   *  named in them and used as their Reply-To (empty: none named, replies go to the From address) */
+   *  named in them and used as their Reply-To (default support@alaventra.com; set it empty to name none) */
   SUPPORT_URL: str(''),
-  SUPPORT_EMAIL: str(''),
+  SUPPORT_EMAIL: str('support@alaventra.com'),
 
   SEO_BRAND: str('Alaventra'),
   SEO_MAIL_FROM: str(''),

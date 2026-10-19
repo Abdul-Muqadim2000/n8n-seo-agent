@@ -1568,7 +1568,7 @@ export const GUIDES = [
     where: 'Alaventra, Google Apps Script and Looker Studio',
     who: 'Whoever builds your Looker Studio reports (the first step needs an Alaventra owner or admin)',
     minutes: 15,
-    vars: [{ key: 'appUrl', label: 'Your Alaventra address', example: 'https://app.alaventra.example' }],
+    vars: [{ key: 'appUrl', label: 'Your Alaventra address', example: 'https://app.alaventra.com' }],
     steps: [
       {
         title: 'Create a read-only API key',
@@ -1601,7 +1601,7 @@ export const GUIDES = [
     where: 'Company settings > API access, and your assistant\'s settings',
     who: 'An owner or admin (for the key); anyone for the assistant',
     minutes: 5,
-    vars: [{ key: 'appUrl', label: 'Your Alaventra address', example: 'https://app.alaventra.example' }],
+    vars: [{ key: 'appUrl', label: 'Your Alaventra address', example: 'https://app.alaventra.com' }],
     steps: [
       {
         title: 'Create a key for the assistant',
@@ -1725,7 +1725,7 @@ export const GUIDES = [
     where: 'Company settings > Single sign-on, then your identity provider',
     who: 'An administrator of your identity provider, with an owner or admin of your company in Alaventra',
     minutes: 15,
-    vars: [{ key: 'scimUrl', label: 'SCIM base URL', example: 'https://app.alaventra.example/api/scim/v2' }],
+    vars: [{ key: 'scimUrl', label: 'SCIM base URL', example: 'https://app.alaventra.com/api/scim/v2' }],
     steps: [
       { title: 'Verify your e-mail domain first', body: 'Provisioning only creates people whose addresses are on your verified domains (see **Prove your e-mail domain**).' },
       { title: 'Create a provisioning token', body: 'Company settings > **Single sign-on** > Provisioning: name it after your provider and **Create token**. Copy it at once: it is shown only once.' },
@@ -1757,10 +1757,10 @@ export const GUIDES = [
     who: 'An administrator of your identity provider, with an owner or admin of your company in Alaventra',
     minutes: 20,
     vars: [
-      { key: 'redirectUri', label: 'Sign-in redirect URI (OIDC)', example: 'https://app.alaventra.example/api/sso/oidc/callback' },
-      { key: 'acsUrl', label: 'ACS URL (SAML)', example: 'https://app.alaventra.example/api/sso/saml/<id>/acs' },
-      { key: 'entityId', label: 'Entity ID / audience (SAML)', example: 'https://app.alaventra.example/api/sso/saml/<id>' },
-      { key: 'metadataUrl', label: 'SP metadata URL (SAML)', example: 'https://app.alaventra.example/api/sso/saml/<id>/metadata' },
+      { key: 'redirectUri', label: 'Sign-in redirect URI (OIDC)', example: 'https://app.alaventra.com/api/sso/oidc/callback' },
+      { key: 'acsUrl', label: 'ACS URL (SAML)', example: 'https://app.alaventra.com/api/sso/saml/<id>/acs' },
+      { key: 'entityId', label: 'Entity ID / audience (SAML)', example: 'https://app.alaventra.com/api/sso/saml/<id>' },
+      { key: 'metadataUrl', label: 'SP metadata URL (SAML)', example: 'https://app.alaventra.com/api/sso/saml/<id>/metadata' },
     ],
     steps: [
       { title: 'Choose OIDC or SAML', body: '**OpenID Connect** is quicker (a client ID and secret). Choose **SAML 2.0** if your IT standard asks for it. Both are equally secure here.' },
@@ -1847,7 +1847,7 @@ export const GUIDES = [
     where: 'Cloudflare dashboard',
     who: 'A Cloudflare account member who may edit Logpush jobs (Logs Write)',
     minutes: 10,
-    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.alaventra.example/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Alaventra-Log-Key' }],
+    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.alaventra.com/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Alaventra-Log-Key' }],
     steps: [
       {
         title: 'Create a push key here',
@@ -1887,7 +1887,7 @@ export const GUIDES = [
     where: 'Your CDN or hosting dashboard',
     who: 'Whoever manages the CDN or hosting account',
     minutes: 15,
-    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.alaventra.example/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Alaventra-Log-Key' }],
+    vars: [V.domain, { key: 'logEndpoint', label: 'Where the logs go', example: 'https://app.alaventra.com/api/ingest/logs/your-website-id' }, { key: 'logHeader', label: 'The header that carries the key', example: 'X-Alaventra-Log-Key' }],
     steps: [
       { title: 'Create a push key here', body: 'On the Crawlers page press **Create push key** and copy it. It is shown once.' },
       {
