@@ -366,7 +366,12 @@ Every weekly workflow's plan node gets the same input contract (shared through `
 - The dispatcher starts the jobs within 5 minutes.
 - **Safety net:** a tracked, active site with no `seo_cycles` row is adopted by the dispatcher at the next sweep (anchor = now), and the
   adoption is logged. A failed call from the app can therefore only delay the start, never lose it.
-- The app calls it right after the `track` run is accepted (`app/server/src/services/runs.ts:267-282`).
+- ~~The app calls it right after the `track` run is accepted~~ (superseded 2026-10-19, E4): **"Track my site" writes the row itself**, after
+  the `seo_sites` row is saved, with the same builder (`CYC.cycleRow`): `anchor_at` = the request's `tracking_started_at` (the kickoff's
+  window, else now), `tz` = its `timezone` (else the engine zone), `skip_jobs` = `site_tracker`. An existing row keeps its anchor, weekday,
+  due times and status; only an empty zone (or the engine zone of an adopted row) is filled. The kickoff stays for `force` and ops; the app
+  does not call it. A domain with ladders and no `seo_sites` row is adopted as a **rank-tracking-only** cycle (only `rank_tracker` runs)
+  until "Track my site" makes it the normal cycle, same anchor.
 - The Launch step's own audit and AI-visibility runs are **removed**: cycle 0 runs them, with the scheduled semantics, so nothing runs
   twice and nothing is forced to "full" by accident.
 
@@ -522,6 +527,9 @@ Onboarding asks **"How much should we do on our own?"**. The answer is stored pe
 Rules for every level:
 - **Levels 1 and 2 write nothing until the client has chosen at least one ladder** (any status except archived: a won ladder still
   tells us their topics). Level 3 needs no ladder: the system announces one (§5.7) and may keep existing pages healthy meanwhile.
+  **An approval is the client's choice** (2026-10-19, E4): an item the client approved in "Coming up" for this cycle (`seo_skips`
+  `approve`) is written even while the site waits for its first keyword. Skips still beat approvals, `pages_per_week` still bounds it, and
+  the pile-up guard still holds it; what was approved and not written is listed with the reason (`approved_not_written`).
 - **The fit gate always runs** (own brand, other brands, government, off topic, too broad). At level 3 it is the only filter, so it runs
   on every source.
 - **`pages_per_week` bounds everything automatic.** 0 means nothing is written at any level (today a site with 0 still got AI pages). At
@@ -838,7 +846,7 @@ mirrors the constants in `v5/code/_cycle.js` and `Cadence_Plan.js`.
 
 | Table | Written by | Read by | Notes |
 |---|---|---|---|
-| `seo_cycles` | Site Kickoff, Cycle Dispatcher | dispatcher, AI Pulse, the app (calendar), the deploy guard | one row per site; `next_preview_at` = `next_due_at` − 48 h |
+| `seo_cycles` | "Track my site", Site Kickoff (`force` / ops), Cycle Dispatcher (one builder, `CYC.cycleRow` / `newCycleRow`) | dispatcher, AI Pulse, the app (calendar), the deploy guard | one row per site; `next_preview_at` = `next_due_at` − 48 h |
 | `seo_cycle_jobs` | dispatcher (record-then-start, then outcome) | dispatcher, the app (last runs, missed, gave up), the deploy guard | key `<cycle_key>:<job>`; 120 days kept |
 | `seo_skips` | **the app** (n8n public API, like `seo_ladder_settings`) | Content Cadence (real and preview runs) | key `<site_id>:<cycle_key or always>:<item_key>` |
 | `seo_ladder_settings` | the app (as today) and the ladder run | Content Cadence | `chosen_by` on ladder rows, `autopilot_level` on the `_site` row |
