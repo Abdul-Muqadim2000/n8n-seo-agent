@@ -1,4 +1,6 @@
-// Plans for /pricing and the Home teaser. Every feature line maps to a real capability; prices and limits are not decided yet.
+// Plans for /pricing and the Home teaser. Every feature line maps to a real capability. A plan's price buys its monthly credits at the
+// credit's list price ($0.05), and each plan's credits cover its own automatic work as measured (app/docs/CREDITS.md §5, 2026-10-19):
+// Starter 231 of its 780 credits, Growth (3 websites, everything on, 3 pages a week) 5,254 of its 5,980. The services stay placeholders.
 import type { FaqItem } from './features';
 
 export interface PricingTier {
@@ -24,18 +26,18 @@ export const pricingTiers: PricingTier[] = [
   {
     id: 'starter',
     name: 'Starter',
-    price: '$39', // PLACEHOLDER — confirm
-    period: 'per month', // PLACEHOLDER — confirm
-    monthly: 39, // PLACEHOLDER — confirm (keep equal to `price`)
-    monthlyCredits: 780, // PLACEHOLDER — confirm (= monthly price ÷ $0.05)
+    price: '$39',
+    period: 'per month',
+    monthly: 39, // keep equal to `price`
+    monthlyCredits: 780, // = monthly price ÷ $0.05
     description: 'One website, the whole loop: research, a page a week, monthly audits and the Monday report.',
     // ?plan= is ignored by the sign-up page today; it records which plan the visitor came from
     cta: { label: 'Start free', to: '/signup?plan=starter' },
     features: [
-      '1 website', // PLACEHOLDER — confirm
+      '1 website',
       'Keyword research, verdicts and difficulty for your site',
-      'One active keyword ladder', // PLACEHOLDER — confirm
-      'A page a week, written, checked and ready to publish', // PLACEHOLDER — confirm
+      'One active keyword ladder',
+      'A page a week, written, checked and ready to publish',
       'Monthly technical audit with a fix pack',
       'Search Console, GA4 and Trends tracking, with weekly rank checks',
       'Monday report, alerts and share links',
@@ -47,18 +49,18 @@ export const pricingTiers: PricingTier[] = [
   {
     id: 'growth',
     name: 'Growth',
-    price: '$129', // PLACEHOLDER — confirm
-    period: 'per month', // PLACEHOLDER — confirm
-    monthly: 129, // PLACEHOLDER — confirm (keep equal to `price`)
-    monthlyCredits: 2580, // PLACEHOLDER — confirm (= monthly price ÷ $0.05)
+    price: '$299',
+    period: 'per month',
+    monthly: 299, // keep equal to `price`
+    monthlyCredits: 5980, // = monthly price ÷ $0.05
     description: 'Everything the engine does, on up to three websites — including AI answers and backlinks.',
     cta: { label: 'Start free', to: '/signup?plan=growth' },
     highlighted: true,
     includesPrevious: 'Everything in Starter, plus:',
     features: [
-      'Up to 3 websites', // PLACEHOLDER — confirm
-      'Up to three pages a week, with the autopilot pipeline and several ladders', // PLACEHOLDER — confirm
-      'AI search visibility: up to 500 questions by topic, buyer role and market, and the daily AI Pulse', // PLACEHOLDER — confirm the plan limit (the panel's usage is priced by its size, shown before saving)
+      'Up to 3 websites',
+      'Up to three pages a week, with the autopilot pipeline and several ladders',
+      'AI search visibility: 50 questions per website by topic, buyer role and market, and the daily AI Pulse (up to 500; a bigger panel uses extra credits, shown before you save)',
       'AI growth every week: new pages to Bing and IndexNow, AI-readiness checks, answer pages and earned media',
       'Backlinks from every source, with Alaventra’s own link checks',
       'Crawler analytics from your server logs: Google and the AI crawlers, each one checked',
@@ -90,20 +92,20 @@ export const pricingTiers: PricingTier[] = [
 ];
 
 /** Discount for annual billing, as a fraction of the monthly price. */
-export const annualDiscount = 0.2; // PLACEHOLDER — confirm
+export const annualDiscount = 0; // no annual discount: a credit costs the same whichever way a plan is paid (the Annual switch is hidden at 0)
 
 /** Monthly-equivalent price when billed annually, rounded to whole dollars. */
 export const annualMonthly = (monthly: number): number => Math.round(monthly * (1 - annualDiscount));
 
 /** one line under the plans: the work is paid in credits */
 export const pricingUsageNote =
-  'The work itself is paid in credits. Each plan adds its credits on the 1st of every month, and you can buy a pack whenever you need more. Every analysis shows its price in credits before it starts and never uses more.'; // PLACEHOLDER — confirm the billing model (plan credits vs the plan's own limits)
+  'The work itself is paid in credits. Each plan adds its credits on the 1st of every month, and you can buy a pack whenever you need more. Every analysis shows its price in credits before it starts and never uses more.';
 
 /**
  * Credits (app/docs/CREDITS.md). Customer words only: a credit, its list price, what uses credits and the rules around them.
  * Never name what a run costs Alaventra, a markup or a margin on this page.
  */
-export const creditListPriceUsd = 0.05; // PLACEHOLDER — confirm
+export const creditListPriceUsd = 0.05;
 
 export interface CreditPackOffer {
   credits: number;
@@ -113,18 +115,18 @@ export interface CreditPackOffer {
 
 /** The packs a company can ask for on its Credits page — list price, no discount (DEFAULT_CREDIT_PACKS in shared/src/billing.ts). */
 export const creditPacks: CreditPackOffer[] = [
-  { credits: 500, price: '$25' }, // PLACEHOLDER — confirm
-  { credits: 2000, price: '$100' }, // PLACEHOLDER — confirm
-  { credits: 5000, price: '$250' }, // PLACEHOLDER — confirm
-  { credits: 20000, price: '$1,000' }, // PLACEHOLDER — confirm
+  { credits: 500, price: '$25' },
+  { credits: 2000, price: '$100' },
+  { credits: 5000, price: '$250' },
+  { credits: 20000, price: '$1,000' },
 ];
 
 /** how long a pack's credits last */
-export const creditPackValidity = '12 months'; // PLACEHOLDER — confirm
+export const creditPackValidity = '12 months';
 
 /** one line under the packs: buying is a request today, confirmed and invoiced by the team (no card checkout yet) */
 export const creditPacksNote =
-  'Ask for a pack on the Credits page in the app. The Alaventra team confirms it and sends the invoice, and the credits are added to your company. New companies start with 200 welcome credits, valid for 90 days.'; // PLACEHOLDER — confirm (welcome credits and their expiry)
+  'Ask for a pack on the Credits page in the app. The Alaventra team confirms it and sends the invoice, and the credits are added to your company. New companies start with 200 welcome credits, valid for 90 days.';
 
 /** "How credits work" on /pricing — each line is how the product works today (app/docs/CREDITS.md §1). */
 export const creditRules: { title: string; body: string }[] = [
@@ -302,7 +304,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
   {
     group: 'Automation',
     rows: [
-      { label: 'Weekly content cadence', hint: 'Pages written, checked and ready to publish', values: ['1 a week', 'Up to 3 a week', 'Custom'] }, // PLACEHOLDER — confirm
+      { label: 'Weekly content cadence', hint: 'Pages written, checked and ready to publish', values: ['1 a week', 'Up to 3 a week', 'Custom'] },
       { label: 'Autopilot pipeline (Auto / Manual)', hint: 'Several ladders, “Needs you” queue, 4-week calendar', values: [false, true, true] }, // PLACEHOLDER — confirm
     ],
   },
@@ -314,7 +316,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Daily key-page check and pre-release check', hint: 'Your build asks whether a release candidate is safe to publish', values: [true, true, true] },
       { label: 'What only appears after JavaScript', hint: 'Key pages read twice, so content a crawler cannot see is flagged', values: [true, true, true] },
       { label: 'Search Console, GA4 and Trends', values: [true, true, true] },
-      { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews; Copilot and the ChatGPT and Gemini APIs on request', values: [false, 'Up to 500 questions', 'Up to 500 questions'] }, // PLACEHOLDER — confirm the plan limits
+      { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews; Copilot and the ChatGPT and Gemini APIs on request', values: [false, '50 a website included, up to 500', 'Up to 500 questions'] }, // a bigger panel uses extra credits, shown before saving
       { label: 'Questions by buyer role and market', hint: 'Rates per topic, buyer role and market with 95% ranges; import your own list as CSV', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Daily AI Pulse', hint: 'Alerts only on statistically real changes', values: [false, true, true] },
       { label: 'AI growth, every week', hint: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win queued', values: [false, true, true] },
@@ -349,8 +351,8 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
   {
     group: 'Platform and control',
     rows: [
-      { label: 'Websites', values: ['1', 'Up to 3', 'Custom'] }, // PLACEHOLDER — confirm
-      { label: 'Credits included every month', hint: 'Added on the 1st; unused ones roll over one month. Packs of extra credits last 12 months', values: ['780', '2,580', 'Custom'] }, // PLACEHOLDER — confirm (= monthly price ÷ $0.05)
+      { label: 'Websites', values: ['1', 'Up to 3', 'Custom'] },
+      { label: 'Credits included every month', hint: 'Added on the 1st; unused ones roll over one month. Packs of extra credits last 12 months', values: ['780', '5,980', 'Custom'] },
       { label: 'Roles and invitations', hint: 'Owner, admin, member and viewer', values: [true, true, true] },
       { label: 'Two-step verification', hint: 'Authenticator app, passkeys or a security key, and recovery codes; a company can require it for everyone', values: [true, true, true] },
       { label: 'Signed-in devices and idle sign-out', hint: 'Sign a device out; end idle sessions after the time your company sets', values: [true, true, true] },
@@ -460,7 +462,7 @@ export const pricingFaqs: FaqItem[] = [
   },
   {
     q: 'How much is annual billing?',
-    a: 'Annual billing is priced below twelve monthly payments; the toggle above shows the monthly equivalent for each plan.', // PLACEHOLDER — confirm
+    a: 'The same as twelve monthly payments: a plan\'s credits cost the same per credit whether you pay monthly or for the year, and they arrive on the 1st of every month either way.',
   },
   {
     q: 'What is the free-sources backlink mode?',

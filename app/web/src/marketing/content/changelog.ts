@@ -15,6 +15,20 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-19',
+    title: 'Plan prices',
+    summary:
+      'Each plan now includes the credits its own automatic work uses, with room left for the analyses you start: Starter is $39 a month with 780 credits, Growth $299 a month with 5,980 credits.',
+    highlights: [
+      'Starter $39 a month: 780 credits, for one website with tracking, the monthly audit and a page a week, and room for about ten more pages or forty keyword verdicts',
+      'Growth $299 a month: 5,980 credits, enough for three websites with everything on (AI visibility with a 50-question panel and the daily pulse, AI growth, backlinks and link building) and three pages a week, with room for the analyses you start',
+      'Packs at the same price per credit: 500 credits for $25 up to 20,000 for $1,000, valid 12 months',
+      'One price per credit, monthly or yearly: there is no separate annual price',
+    ],
+    features: [],
+    labels: ['Billing'],
+  },
+  {
+    date: '2026-10-19',
     title: 'Credits',
     summary:
       'Everything Alaventra does is now priced in credits, from one balance per company: the work it runs on its own for each website every week and the analyses you start. Every analysis shows its price before it starts, holds it while it runs and is charged what it really used — never more, and nothing if it fails.',

@@ -119,10 +119,11 @@ balance = Σ lots' remaining − debt.
 ## 5. Open — the owner's
 
 - **Card payments** (Stripe Checkout + auto top-up): the request flow is the stand-in. Auto top-up needs a card on file.
-- **Plan prices**: a plan's monthly credits should cover its websites' autopilot forecast. Measured with the shipped defaults
-  (`autopilotRows`, 2026-10-19): one website with every monitor on and the default AI panel, no blog posts ≈ **1,533 credits a month
-  (≈ $77 at list price)** — the daily AI pulse alone is ≈ 917 and AI visibility ≈ 425; two blog posts a week add ≈ 436; a 20-question
-  panel brings the whole website to ≈ 1,191 with two posts a week. The marketing plan prices ($39 / $129) are placeholders and do
-  not cover a default website's autopilot at 3×.
+- ~~Plan prices~~ **decided 2026-10-19** (the owner): **Starter $39 / month = 780 credits**, **Growth $299 / month = 5,980 credits**,
+  no annual discount (a credit is $0.05 however it is paid, so every plan credit is exactly 3× its provider cost). Sized from the measured
+  autopilot (`autopilotRows`): Starter (1 website, tracking + monthly audit + 1 page a week) uses ≈ 231 a month, leaving ≈ 550 for
+  analyses; Growth (3 websites with everything on, the 50-question panel and the daily pulse, 3 pages a week) uses ≈ 5,254, leaving
+  ≈ 720. A bigger AI panel, more pages or more websites use extra credits (packs). The admin sets a company's plan credits in /admin →
+  company → Plan (780 or 5,980). Still placeholders: the done-for-you service prices and some per-plan feature limits.
 - **Pack discounts** (0% now — exactly 3×), welcome credits and their expiry, pack expiry.
 - Card-style receipts / invoices (today: the admin records the payment on the grant).

@@ -396,7 +396,7 @@ export function CostMockup({ className }: { className?: string }) {
       <div className="mk-pop mt-3 rounded-lg border border-line p-3" style={pop(4)}>
         <span className="flex items-baseline justify-between text-[11.5px]">
           <span className="font-semibold">Credits available</span>
-          <span className="font-mono text-ink-2 tabular">1,240 of 2,580</span>
+          <span className="font-mono text-ink-2 tabular">1,240 of 5,980</span>
         </span>
         <span className="mt-2 block h-2 overflow-hidden rounded-full bg-surface-2">
           <span className="mk-grow-x block h-full w-[48%] rounded-full bg-accent" />
