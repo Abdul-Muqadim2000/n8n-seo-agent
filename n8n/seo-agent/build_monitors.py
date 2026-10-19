@@ -819,37 +819,46 @@ LA.sticky("""## SEO Agent — Link Builder API (v4.13)
 LA.write('SEO_Agent_Link_Builder_API.json')
 
 # =============================================================================
-# 5c. SITE KICKOFF (2026-10-19): a website's first weekly cycle on the day its tracking starts, not on the next Monday. The web app calls it
-#     once "Track my site" is set up; a platform admin can call it for a website already tracked. Answered at once (202), then each weekly
-#     job the website has switched on starts through its workflow's own Manual Run, one after the other, in Monday's order. Nothing in the
-#     scheduled workflows changes: the door and the work are separate workflows (the Link Builder API's rule).
+# 5c. SITE KICKOFF (2026-10-19; rewritten the same day for the per-website cycle, SCHEDULING_KEYWORDS_PLAN.md §4.7 / §14.3): the web app
+#     calls it once "Track my site" is set up. It no longer starts the weekly jobs itself - a restart killed its chain of waiting
+#     sub-workflows and nobody resumed it - it writes the website's seo_cycles row (anchor, time zone, cycle 0 due now, what the app already
+#     ran) and the Cycle Dispatcher (build_cycle.py) starts cycle 0 within five minutes with the scheduled semantics. Answered after the
+#     write, so the answer carries the cycle key and the due time; a refusal is answered 409 with its reason, a failed save 500.
 # =============================================================================
-from ladder_common import CADENCE_TABLE, CADENCE_COLS
-KO = WF('SEOagentKickoff1', 'SEO Agent — Site Kickoff', 'kickoff', 10800)
+from ladder_common import CYCLES_TABLE, CYCLES_COLS, CATCHUP_SRC
+_KO_TZ = (ENV.get('GENERIC_TIMEZONE') or '').strip() or 'America/New_York'   # the engine's zone: the default for a website that sends none
+_KO_COLS = json.dumps([c for c, _t in CYCLES_COLS])
+def _ko_src(f):
+    """A kickoff node's source with the catch-up's time rule and the cycle kit inlined (the dispatcher's own newCycleRow builds the row)."""
+    s = (rd('code/' + f).replace('/*__CATCHUP__*/', CATCHUP_SRC).replace('/*__CYCLE__*/', rd('code/_cycle.js').rstrip('\n'))
+         .replace('__TZ__', _KO_TZ).replace('__CYCLES_COLS__', _KO_COLS))
+    assert '/*__' not in s and '__TZ__' not in s and '__CYCLES_COLS__' not in s, f + ': placeholder left'
+    return s
+KO = WF('SEOagentKickoff1', 'SEO Agent — Site Kickoff', 'kickoff', 120)
 KO.node('Site Kickoff API', 'n8n-nodes-base.webhook', 2, {'httpMethod': 'POST', 'path': 'seo-site-kickoff', 'authentication': 'headerAuth', 'responseMode': 'responseNode', 'options': {}}, at(0, 4), webhookId=str(uuid.uuid5(NS, 'kickoff:webhook')), credentials=API_KEY_CRED)
-KO.code('Kickoff Validate', 'Kickoff_Validate.js', at(1, 4)); KO.iff('Kickoff OK?', '{{ $json.ok }}', at(2, 4))
-KO.node('Respond Kickoff Accepted', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: true, status: 'accepted', stage: 'site_kickoff_started', request_id: $json.request_id, domain: $json.domain, site_id: $json.site_id, dry_run: $json.dry_run }) }}", 'options': {'responseCode': 202}}, at(3, 3))
+KO.code('Kickoff Validate', _ko_src('Kickoff_Validate.js'), at(1, 4)); KO.iff('Kickoff OK?', '{{ $json.ok }}', at(2, 4))
 KO.node('Respond Kickoff Bad Request', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': '={{ JSON.stringify({ ok: false, error: $json.error }) }}', 'options': {'responseCode': 400}}, at(3, 5))
-KO.ensure('Ensure Cache (Kickoff)', CACHE_TABLE, CACHE_COLS, at(4, 3))
-KO.load('Load Sites (Kickoff)', SITES_TABLE, at(5, 3))
-KO.load('Load Monitors (Kickoff)', MONITORS_TABLE, at(6, 3))
-KO.load('Load Cadence (Kickoff)', CADENCE_TABLE, at(7, 3))
-KO.node('Load Kickoff Record', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'kickoff'), at(8, 3), **LOAD)
-KO.code('Kickoff Plan', 'Kickoff_Plan.js', at(9, 3)); KO.iff('Anything To Start?', '{{ !$json.nothing_to_do }}', at(10, 3))
-# the record is written BEFORE the first start (a second call while the first cycle runs is refused); a dry run records nothing
-KO.code('Kickoff Record Row', "// one seo_cache row per website: when its first cycle was started and which jobs (a dry run writes none)\nconst jobs = $('Kickoff Plan').all().map(i => i.json);\nconst j = jobs[0] || {};\nif (j.dry_run) return [{ json: { skip_record: true } }];\nreturn [{ json: { key: 'kickoff:' + j.site_id, kind: 'kickoff', site_id: j.site_id, value: JSON.stringify({ at: new Date().toISOString(), jobs: jobs.map(x => x.job), request_id: j.request_id }), updated_at: new Date().toISOString() } }];", at(11, 2))
-KO.iff('Record It?', '{{ !$json.skip_record }}', at(12, 2))
-KO.node('Save Kickoff Record', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(13, 1), onError='continueRegularOutput')
-KO.code('Kickoff Jobs', "// the jobs again (the record's save outputs the saved row): one item per Manual Run, in Monday's order\nreturn $('Kickoff Plan').all();", at(14, 2))
-# one after the other (each run passes its own gate and ledger; waiting keeps two of this site's jobs from running at once)
-KO.node('Start Weekly Job', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': '={{ $json.workflow_id }}'}, 'mode': 'each', 'options': {'waitForSubWorkflow': True}}, at(15, 2), onError='continueRegularOutput')
-KO.chain('Site Kickoff API', 'Kickoff Validate', 'Kickoff OK?'); KO.link('Kickoff OK?', 'Respond Kickoff Accepted', 0); KO.link('Kickoff OK?', 'Respond Kickoff Bad Request', 1)
-# answer first, then start (a sub-workflow started before the webhook answers runs no node: live 2026-10-11, executions 295 / 297)
-KO.chain('Respond Kickoff Accepted', 'Ensure Cache (Kickoff)', 'Load Sites (Kickoff)', 'Load Monitors (Kickoff)', 'Load Cadence (Kickoff)', 'Load Kickoff Record', 'Kickoff Plan', 'Anything To Start?')
-KO.link('Anything To Start?', 'Kickoff Record Row', 0); KO.link('Kickoff Record Row', 'Record It?'); KO.link('Record It?', 'Save Kickoff Record', 0); KO.link('Record It?', 'Kickoff Jobs', 1)
-KO.link('Save Kickoff Record', 'Kickoff Jobs'); KO.link('Kickoff Jobs', 'Start Weekly Job')
-KO.sticky("""## SEO Agent — Site Kickoff (2026-10-19)
-`POST /webhook/seo-site-kickoff` (header X-API-Key, credential **SEO API Key**): `{ domain | site_id, jobs?, force?, dry_run?, request_id? }` (`jobs`: only these, e.g. leaving out what the customer already ran today) → 202 at once. Then, for a website the engine tracks and that is not paused, each weekly job it has switched on starts through its workflow's own **Manual Run**, one after the other, in Monday's order: AI visibility → backlinks (the full check) → AI growth → the Content Cadence → the Link Builder. Their reports arrive through the website's own callback, and each run records its spend under `schedule:<mode>` (the company's autopilot). Once per website (`seo_cache` `kickoff:<site_id>`, written before the first start); `force: true` starts it again. `dry_run: true` starts only AI Growth (no Bing / IndexNow submission) and the Content Cadence (plans, writes nothing) and records nothing.""", [-40, -300], 900, 200, 6)
+KO.ensure('Ensure Cycles (Kickoff)', CYCLES_TABLE, CYCLES_COLS, at(3, 3))
+KO.load('Load Sites (Kickoff)', SITES_TABLE, at(4, 3))
+KO.load('Load Cycles (Kickoff)', CYCLES_TABLE, at(5, 3))
+KO.code('Kickoff Plan', _ko_src('Kickoff_Plan.js'), at(6, 3)); KO.iff('Kickoff Refused?', '{{ $json.refused === true }}', at(7, 3))
+KO.node('Respond Kickoff Refused', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: false, status: 'refused', stage: 'site_kickoff_refused', code: $json.code, error: $json.reason, domain: $json.domain, site_id: $json.site_id, request_id: $json.request_id }) }}", 'options': {'responseCode': 409}}, at(8, 2))
+KO.iff('Kickoff Dry Run?', '{{ $json.dry_run === true }}', at(8, 4))
+KO.node('Respond Kickoff Dry Run', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: true, status: 'dry_run', stage: 'site_kickoff_dry_run', site_id: $json.site_id, domain: $json.domain, cycle_key: $json.cycle_key, next_due_at: $json.next_due_at, exists: $json.exists, would_write: $json.row, request_id: $json.request_id }) }}", 'options': {'responseCode': 200}}, at(9, 3))
+# the row, exact seo_cycles columns (a Data Table upsert maps every input field), upserted by site_id
+KO.code('Kickoff Cycle Row', "// the website's seo_cycles row as the plan built it, exact columns (upserted by site_id)\nconst COLS = " + _KO_COLS + ";\nconst r = $('Kickoff Plan').first().json.row || {};\nreturn [{ json: Object.fromEntries(COLS.map(c => [c, r[c]])) }];", at(9, 5))
+KO.node('Save Kickoff Cycle', DT_TYPE, DT_VERSION, dt_upsert_params(CYCLES_TABLE, CYCLES_COLS, 'site_id'), at(10, 5), onError='continueRegularOutput', alwaysOutputData=True)
+KO.code('Kickoff Saved', "// the answer is given only after the row is saved: a save that failed is a 500 with the reason (nothing will start), never a 202\nconst p = $('Kickoff Plan').first().json; const s = $input.first().json || {};\nconst ok = !s.error && (String(s.site_id || '') === p.site_id || Number(s.id) > 0);\nconst { row, ...rest } = p;\nreturn [{ json: { ...rest, saved: ok, error: ok ? '' : 'the cycle row of ' + p.domain + ' could not be saved (' + String((s.error && (s.error.message || s.error)) || 'no row came back').slice(0, 160) + '): nothing will start; send the kickoff again' } }];", at(11, 5))
+KO.iff('Kickoff Saved?', '{{ $json.saved === true }}', at(12, 5))
+KO.node('Respond Kickoff Accepted', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: true, status: 'accepted', stage: 'site_kickoff_started', site_id: $json.site_id, cycle_key: $json.cycle_key, next_due_at: $json.next_due_at, domain: $json.domain, request_id: $json.request_id }) }}", 'options': {'responseCode': 202}}, at(13, 4))
+KO.node('Respond Kickoff Failed', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: false, status: 'error', stage: 'site_kickoff_failed', error: $json.error, site_id: $json.site_id, request_id: $json.request_id }) }}", 'options': {'responseCode': 500}}, at(13, 6))
+KO.chain('Site Kickoff API', 'Kickoff Validate', 'Kickoff OK?'); KO.link('Kickoff OK?', 'Ensure Cycles (Kickoff)', 0); KO.link('Kickoff OK?', 'Respond Kickoff Bad Request', 1)
+KO.chain('Ensure Cycles (Kickoff)', 'Load Sites (Kickoff)', 'Load Cycles (Kickoff)', 'Kickoff Plan', 'Kickoff Refused?')
+KO.link('Kickoff Refused?', 'Respond Kickoff Refused', 0); KO.link('Kickoff Refused?', 'Kickoff Dry Run?', 1)
+KO.link('Kickoff Dry Run?', 'Respond Kickoff Dry Run', 0); KO.link('Kickoff Dry Run?', 'Kickoff Cycle Row', 1)
+KO.chain('Kickoff Cycle Row', 'Save Kickoff Cycle', 'Kickoff Saved', 'Kickoff Saved?'); KO.link('Kickoff Saved?', 'Respond Kickoff Accepted', 0); KO.link('Kickoff Saved?', 'Respond Kickoff Failed', 1)
+KO.sticky("""## SEO Agent — Site Kickoff (2026-10-19; the per-website cycle, SCHEDULING_KEYWORDS_PLAN.md §4.7)
+`POST /webhook/seo-site-kickoff` (header X-API-Key, credential **SEO API Key**): `{ domain | site_id, anchor_at?, tz?, skip_jobs?, jobs?, force?, dry_run?, request_id? }`. For a website the engine tracks and that is not paused, it writes the website's **`seo_cycles`** row: `anchor_at` (default now; within the last 6 days), the owner's time zone `tz` (default the engine's; an unknown zone is refused 400), weekday = the anchor's local weekday, cycles at 06:00 local, monthly day = the anchor's day (at most the 28th), **cycle 0 due at the anchor**, and `skip_jobs` (what the app already ran; the old `jobs` = only these, so every other job is skipped in cycle 0). The **Cycle Dispatcher** starts cycle 0 within five minutes, job by job, with the scheduled semantics. Answer **202** `{ ok, status: 'accepted', stage: 'site_kickoff_started', site_id, cycle_key, next_due_at }` once the row is saved; **409** with the reason when refused (not tracked, paused, already started without `force`); **500** when the save failed; `dry_run: true` writes nothing and answers 200 with the row it would write. `force: true` starts cycle 0 again from the new anchor (the same local day is the same cycle, so a job already done is not run twice).""", [-40, -300], 900, 240, 6)
 KO.write('SEO_Agent_Site_Kickoff.json')
 
 # =============================================================================
