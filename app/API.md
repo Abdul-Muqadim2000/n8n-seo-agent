@@ -738,3 +738,60 @@ usual and read by the Pipeline (`detected`), the ladder detail and the site-repo
 | PATCH | /api/admin/orgs/:orgId | `orgBudgetSchema` | `AdminOrg` |
 | GET | /api/admin/delivery | | `DeliveryReport` — runs delivered / runs started per week (app runs and the nine schedules), the schedule fires that left no execution behind (D25a) and how every ops alert went out (G21) |
 | POST | /api/admin/users/reset-link | `{ email }` | `{ url, expiresInHours, name }` — a password reset link to hand over (no e-mails on the platform) |
+
+### Admin panel (`/admin`, 2026-10-18; contract `shared/src/admin.ts`, server `server/src/services/admin/`)
+Every route below: platform admins only (verified e-mail on `PLATFORM_ADMIN_EMAILS`; 401 signed out, 403 anybody else), the usual CSRF
+header on mutations, and every mutation is written to the admin activity log (`admin_audit`). `period` is one of `month` (calendar
+month to date, UTC — the default), `last_month`, `7d`, `30d`, `90d`, `all`; all windows are UTC (`services/admin/period.ts` `periodRange`).
+Money words: **cost** = what a company's operations cost us at Claude + DataForSEO (from `cost_events`), **billed** = what the providers
+charged the platform, **revenue** = payments recorded with credit grants, **margin** = revenue − cost.
+
+| Method | Path | Body / query | Returns |
+|---|---|---|---|
+| GET | /api/admin/overview | `?period` | `AdminOverview` — people, companies, websites, runs, money (all cost incl. unattributed), unattributed cost, credits, daily series, `bills` (`ProviderBill` for anthropic + dataforseo), the engine-ledger sync state, top 5 companies. Invariant: `money.cost.totalUsd` = Σ companies' cost + `unattributed.totalUsd` |
+| GET | /api/admin/companies | `adminListQuerySchema` (`?period&q`) | `AdminCompanyRow[]` (most cost first; `q` searches name / slug) |
+| GET | /api/admin/companies/:id | `?period` | `AdminCompanyDetail` (members, websites with their cost, cost by mode, daily, the 20 newest runs, the 100 newest credit entries) |
+| PATCH | /api/admin/companies/:id | `adminCompanyUpdateSchema` (`monthlyBudgetUsd`, `disabled`, `creditsEnforced`, `name`) | `AdminCompanyDetail`; also written to the company's own audit log (`company.admin_changed`) |
+| GET | /api/admin/companies/:id/credits | | `CreditEntry[]` newest first, each with `balanceAfter` |
+| POST | /api/admin/companies/:id/credits | `adminCreditSchema` (`kind` grant / adjust / refund, `credits`, `paidUsd` grants only, `note`) | `CreditEntry` |
+| DELETE | /api/admin/companies/:id | `{ confirm: <slug> }` (`adminDeleteCompanySchema`) | `{ ok }` — the same deletion as the owner's (verified websites stop in the engine first; an unreachable engine is logged, the deletion goes on); 409 `agency_has_clients`; its cost history stays as unattributed |
+| GET | /api/admin/export/companies.csv | `?period` | `text/csv`: every company with the money and credit columns; text cells that start with `= + - @`, tab or CR are prefixed with `'` |
+| GET | /api/admin/users | `?period&q` | `AdminUserRow[]` (cost = runs the person started; schedules belong to the company) |
+| POST | /api/admin/users | `adminCreateUserSchema` (`email`, `name`, `orgId` + `role` or `newCompanyName`, `markVerified`) | `AdminCreatedUser` — no password is set: `setPasswordUrl` is a 72-hour reset link to hand over. With `newCompanyName` the person owns the new company (sign-up credits apply). 409 `email_taken` |
+| PATCH | /api/admin/users/:id | `adminUpdateUserSchema` (`name`, `suspended`, `markVerified: true`) | `AdminUserRow`. Suspending deletes every session; 400 for your own account, 409 `last_platform_admin` |
+| DELETE | /api/admin/users/:id | `{ soleCompanies?: 'delete' \| 'keep' }` (`adminDeleteUserSchema`) | `{ ok, deletedCompanies, keptCompanies }`. 409 `sole_owner` (+ `companies`) while the person is the only owner of a company with other members; 409 `sole_member_companies` (+ `companies`) until the admin chooses what happens to companies the person is the only member of; 400 for yourself |
+| POST | /api/admin/users/:id/sessions/revoke | | `{ ok, revoked }` |
+| PUT | /api/admin/users/:id/memberships | `adminMembershipSchema` (`orgId`, `role`) | `AdminUserRow` — adds the person or changes the role; 409 `last_owner` when it would leave the company without an owner; client workspaces are refused (their people are managed by the agency) |
+| DELETE | /api/admin/users/:id/memberships/:orgId | | `AdminUserRow`; 409 `last_owner` |
+| GET | /api/admin/runs | `adminRunsQuerySchema` (`period`, `q`, `orgId`, `status` all / failed / running / done, `origin` all / app / schedule, `cursor`, `limit` ≤ 200) | `AdminRunsPage` — app runs and the engine's own work that belongs to no run (schedules, keyword checks; their `id` is the cost event key, `orgId` `''` / `orgName` "Unattributed" when no company could be tied), newest first; `nextCursor` until the last page |
+| POST | /api/admin/costs/sync | `?full=1` re-reads the whole ledger | `AdminCostSyncResult` — runs the cost sync now (it also runs every 10 minutes, reading what settled since the last read minus a day; a full re-read once a day) |
+| GET | /api/admin/settings | | `PlatformSettings` |
+| PUT | /api/admin/settings | `platformSettingsSchema` (`creditValueUsd`, `markup`, `signupCredits`, `enforceForNewCompanies`) | `PlatformSettings` |
+| GET | /api/admin/activity | `?limit` (≤ 500, default 100) | `AdminActivityRow[]` newest first |
+
+**Where the cost comes from** (`services/admin/costSync.ts`): every 10 minutes the server reads the engine's settled `seo_run_ledger`
+rows into `cost_events` (one per execution id) and attributes each. A run's `request_id` is the engine front door's execution id, not the
+execution that writes the ledger row, so rows are tied to runs through the run's callbacks (each names its `execution_id`; monitors also
+`run_ledger.run_id`; scheduled reports that reuse an old run's request id are ignored), then through `request_id`. Order: that run →
+its company / website / person; key `parent:<id>` → whatever the parent resolves to; key `app:<company>` → that company (if it existed
+by then); else the row's `domain` (or the `site_…` id in an internal key) = a website verified **before** the row settled → its
+company; else unattributed. Rows stored before their run's callback arrived are linked on later syncs. App runs the ledger does not
+cover (it cannot be read, or nothing ties a row to the run an hour after it finished, not even an unlinked `app:<company>` row that
+started in the run's window) count from their own settled `actual_cost_usd`, split by their callbacks' `run_ledger`; keyword checks
+count from `keyword_checks` (their engine rows are left out). An engine row and an app figure never both count for one run: the engine
+row replaces the app figure and its credits are given back. A row the engine settles again with a different figure (newer
+`settled_at`) updates its event and debits the difference. A deleted company's costs stay unattributed for good (`detached_from`), its
+credit entries stay with `org_id` null and `org_name`, and its revenue stays in the totals (`AdminOverview.deletedCompanies`).
+**Credits:** each cost event of a company debits `creditsFor(cost)` once (unique `ref_key`), from the deploy of migration 0014 on
+(`platform_settings.credits_since`) and never for money spent before the company existed; runs and modes show the credits actually
+debited. A suspended person's API keys start nothing (403 `key_owner_suspended`), and the API's dry run answers `credits`
+(`{ enforced, needed, available, held, enough }`). **Billed:**
+Anthropic from the Admin API cost report when `ANTHROPIC_ADMIN_API_KEY` is set; DataForSEO from the fall of the balance between the
+engine's readings in the period (+ the live balance when `SEO_DATAFORSEO_LOGIN` / `_PASSWORD` are set); `source: 'unavailable'` with a
+sentence otherwise.
+
+**Credit enforcement** (`organizations.credits_enforced`, off by default): a run (form, API, "Choose keywords for me") or a keyword check
+whose estimated credits exceed the balance minus what in-flight work holds is refused with **402 `credits`**: "Your company has no credits
+left for this run …". A **suspended** account gets **403 `account_suspended`** ("This account is suspended. Contact support.") on every
+sign-in (password, Google → `/login?error=account_suspended`, SSO, the second step, portal hand-off) and **401 `account_suspended`** on a
+leftover session.

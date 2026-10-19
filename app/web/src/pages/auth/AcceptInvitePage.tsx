@@ -48,7 +48,7 @@ export default function AcceptInvitePage() {
         // D-11: they joined from this invitation (signing up from it joins at once): the way in, not a dead end
         <div className="space-y-3">
           <Callout tone="good" title={`You joined ${i.orgName}`}>
-            You are a member as {ROLE_LABELS[i.role].toLowerCase()}.
+            Your role: {ROLE_LABELS[i.role].toLowerCase()}.
           </Callout>
           <ButtonLink to={paths.org(i.joinedOrgId)} size="lg" className="w-full">
             Open {i.orgName}

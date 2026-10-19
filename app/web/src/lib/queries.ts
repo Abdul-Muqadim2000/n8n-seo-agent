@@ -4,7 +4,6 @@ import type {
   ApiKeyView,
   PublishCheckInput,
   PublishCheckResult,
-  AdminOrg,
   DeliveryReport,
   AdminResult,
   AiData,
@@ -78,7 +77,26 @@ import type {
   PortalDomainView,
   PortalMailView,
   StaffAccess,
+  AdminActivityRow,
+  AdminCompanyDetail,
+  AdminCompanyRow,
+  AdminCostSyncResult,
+  AdminCreatedUser,
+  AdminOverview,
+  AdminPeriod,
+  AdminRunsPage,
+  AdminUserRow,
+  CreditEntry,
+  PlatformSettings,
+  adminCompanyUpdateSchema,
+  adminCreateUserSchema,
+  adminCreditSchema,
+  adminDeleteUserSchema,
+  adminMembershipSchema,
+  adminUpdateUserSchema,
+  platformSettingsSchema,
 } from '@seo/shared';
+import type { z } from 'zod';
 import { api, ApiRequestError, directCredentials, directUrl } from './api';
 
 // One hook per endpoint (API.md). Query keys: ['me'], ['org', orgId, ...], ['site', siteId, ...].
@@ -725,20 +743,104 @@ export function useReports(orgId: string, filters: { siteId?: string; stage?: st
 export const useReport = (orgId: string, reportId: string | undefined) =>
   useQuery({ queryKey: qk.report(orgId, reportId ?? ''), queryFn: () => api<ReportDetail>(`/api/orgs/${orgId}/reports/${reportId}`), enabled: !!reportId, staleTime: Infinity, retry: noRetryOn4xx });
 
-// ---------- platform admin ----------
-export const useAdminOrgs = (enabled: boolean) => useQuery({ queryKey: ['admin', 'orgs'], queryFn: () => api<AdminOrg[]>('/api/admin/orgs'), enabled });
+// ---------- platform admin (/admin; contract in shared/src/admin.ts) ----------
+/** every admin figure is derived from the same records: a change anywhere refreshes all of them (the delivery report is its own) */
+const isAdminData = (q: { queryKey: readonly unknown[] }) => q.queryKey[0] === 'admin' && q.queryKey[1] !== 'delivery';
+function useAdminMutation<TVars, TRes>(fn: (v: TVars) => Promise<TRes>, forget?: (v: TVars) => (readonly unknown[])[]) {
+  const qc = useQueryClient();
+  // not awaited: a delete refetches the list the open page reads, which unmounts that page's dialog; awaiting the refetch would drop
+  // the caller's own onSuccess (toast, navigate away) because its component is gone by then (found in the 2026-10-18 browser pass)
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (_r, v) => {
+      // a deleted record's own queries are left out: the open page is leaving, and refetching it would only answer 404
+      const gone = forget?.(v) ?? [];
+      const isGone = (key: readonly unknown[]) => gone.some((g) => JSON.stringify(key.slice(0, g.length)) === JSON.stringify(g));
+      void qc.invalidateQueries({ predicate: (q) => isAdminData(q) && !isGone(q.queryKey) });
+    },
+  });
+}
+const qsOf = (o: Record<string, string | number | null | undefined>) => {
+  const s = new URLSearchParams(Object.entries(o).filter(([, v]) => v != null && v !== '').map(([k, v]) => [k, String(v)])).toString();
+  return s ? `?${s}` : '';
+};
+
+export const useAdminOverview = (period: AdminPeriod) =>
+  useQuery({ queryKey: ['admin', 'overview', period], queryFn: () => api<AdminOverview>(`/api/admin/overview${qsOf({ period })}`), placeholderData: keepPreviousData, retry: noRetryOn4xx });
+
+export const useAdminCompanies = (period: AdminPeriod, enabled = true) =>
+  useQuery({ queryKey: ['admin', 'companies', period], queryFn: () => api<AdminCompanyRow[]>(`/api/admin/companies${qsOf({ period })}`), placeholderData: keepPreviousData, enabled, retry: noRetryOn4xx });
+
+export const useAdminCompany = (id: string, period: AdminPeriod) =>
+  useQuery({ queryKey: ['admin', 'company', id, period], queryFn: () => api<AdminCompanyDetail>(`/api/admin/companies/${id}${qsOf({ period })}`), placeholderData: keepPreviousData, retry: noRetryOn4xx });
+
+export const useAdminCompanyCredits = (id: string) =>
+  useQuery({ queryKey: ['admin', 'credits', id], queryFn: () => api<CreditEntry[]>(`/api/admin/companies/${id}/credits`), retry: noRetryOn4xx });
+
+export const useAdminUpdateCompany = () =>
+  useAdminMutation(({ id, ...body }: { id: string } & z.input<typeof adminCompanyUpdateSchema>) => api<AdminCompanyRow>(`/api/admin/companies/${id}`, { method: 'PATCH', body }));
+
+export const useAdminCompanyCredit = () =>
+  useAdminMutation(({ id, ...body }: { id: string } & z.output<typeof adminCreditSchema>) => api<CreditEntry>(`/api/admin/companies/${id}/credits`, { method: 'POST', body }));
+
+export const useAdminDeleteCompany = () =>
+  useAdminMutation(
+    ({ id, confirm }: { id: string; confirm: string }) => api<{ ok: boolean }>(`/api/admin/companies/${id}`, { method: 'DELETE', body: { confirm } }),
+    ({ id }) => [
+      ['admin', 'company', id],
+      ['admin', 'credits', id],
+    ],
+  );
+
+export const useAdminUsers = (period: AdminPeriod) =>
+  useQuery({ queryKey: ['admin', 'users', period], queryFn: () => api<AdminUserRow[]>(`/api/admin/users${qsOf({ period })}`), placeholderData: keepPreviousData, retry: noRetryOn4xx });
+
+export const useAdminCreateUser = () => useAdminMutation((body: z.output<typeof adminCreateUserSchema>) => api<AdminCreatedUser>('/api/admin/users', { method: 'POST', body }));
+
+export const useAdminUpdateUser = () =>
+  useAdminMutation(({ id, ...body }: { id: string } & z.input<typeof adminUpdateUserSchema>) => api<AdminUserRow>(`/api/admin/users/${id}`, { method: 'PATCH', body }));
+
+/** 409 `sole_owner` / `sole_member_companies` carry `companies` (ApiRequestError.data); the latter is resent with `soleCompanies` */
+export const useAdminDeleteUser = () =>
+  useAdminMutation(({ id, ...body }: { id: string } & z.input<typeof adminDeleteUserSchema>) =>
+    api<{ deletedCompanies?: { id: string; name: string }[]; keptCompanies?: { id: string; name: string }[] }>(`/api/admin/users/${id}`, { method: 'DELETE', body }),
+  );
+
+/** re-reads the engine's cost ledger now (it is otherwise read on a schedule) */
+export const useAdminCostSync = () => useAdminMutation((_: void) => api<AdminCostSyncResult>('/api/admin/costs/sync', { method: 'POST', body: {} }));
+
+export const useAdminRevokeSessions = () => useAdminMutation((id: string) => api<{ ok: boolean; revoked?: number }>(`/api/admin/users/${id}/sessions/revoke`, { method: 'POST' }));
+
+export const useAdminSetMembership = () =>
+  useAdminMutation(({ userId, ...body }: { userId: string } & z.output<typeof adminMembershipSchema>) => api<{ ok: boolean }>(`/api/admin/users/${userId}/memberships`, { method: 'PUT', body }));
+
+export const useAdminRemoveMembership = () =>
+  useAdminMutation(({ userId, orgId }: { userId: string; orgId: string }) => api<{ ok: boolean }>(`/api/admin/users/${userId}/memberships/${orgId}`, { method: 'DELETE' }));
+
+export type AdminRunFilters = { period: AdminPeriod; q?: string; orgId?: string; status?: 'all' | 'failed' | 'running' | 'done'; origin?: 'all' | 'app' | 'schedule'; limit?: number };
+
+/** the runs across every company, newest first, a page at a time (`nextCursor`) */
+export const useAdminRuns = (f: AdminRunFilters, enabled = true) =>
+  useInfiniteQuery({
+    queryKey: ['admin', 'runs', f],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => api<AdminRunsPage>(`/api/admin/runs${qsOf({ ...f, q: f.q?.trim() || undefined, cursor: pageParam })}`),
+    getNextPageParam: (last) => last.nextCursor,
+    placeholderData: keepPreviousData,
+    enabled,
+    retry: noRetryOn4xx,
+  });
+
+export const useAdminSettings = () => useQuery({ queryKey: ['admin', 'settings'], queryFn: () => api<PlatformSettings>('/api/admin/settings'), retry: noRetryOn4xx });
+
+export const useAdminSaveSettings = () => useAdminMutation((body: z.output<typeof platformSettingsSchema>) => api<PlatformSettings>('/api/admin/settings', { method: 'PUT', body }));
+
+export const useAdminActivity = (limit: number) =>
+  useQuery({ queryKey: ['admin', 'activity', limit], queryFn: () => api<AdminActivityRow[]>(`/api/admin/activity${qsOf({ limit })}`), placeholderData: keepPreviousData, retry: noRetryOn4xx });
 
 /** G21: runs delivered / runs started per week, the schedule fires that left no execution behind, and how ops alerts went out. */
 export const useAdminDelivery = (enabled: boolean) =>
   useQuery({ queryKey: ['admin', 'delivery'], queryFn: () => api<DeliveryReport>('/api/admin/delivery'), enabled, staleTime: 60_000 });
-
-export function useAdminUpdateOrg() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ orgId, ...body }: { orgId: string; monthlyBudgetUsd: number; disabled?: boolean }) => api<AdminOrg>(`/api/admin/orgs/${orgId}`, { method: 'PATCH', body }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'orgs'] }),
-  });
-}
 
 // ---------- G1 identity: two-step verification, security policy ----------
 type NewCodes = { newRecoveryCodes: string[] | null };

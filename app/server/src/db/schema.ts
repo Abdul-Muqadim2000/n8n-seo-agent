@@ -40,6 +40,8 @@ export const users = pgTable(
     mfaTotpEnabledAt: ts('mfa_totp_enabled_at'),
     /** the last accepted RFC 6238 time step: a code is accepted once, never again (replay) */
     mfaTotpLastStep: integer('mfa_totp_last_step'),
+    /** admin panel (0014): a platform administrator suspended the account — no sign-in by any method, every session refused */
+    suspendedAt: ts('suspended_at'),
   },
   (t) => [uniqueIndex('users_email_idx').on(t.email), uniqueIndex('users_google_sub_idx').on(t.googleSub)],
 );
@@ -325,6 +327,8 @@ export const organizations = pgTable(
     portalMail: jsonb('portal_mail').$type<Record<string, unknown>>().notNull().default({}),
     /** client workspace: a live publish / an outreach send waits for the client's approval */
     clientApproval: boolean('client_approval').notNull().default(false),
+    /** admin panel (0014): runs are refused when the company's credits cannot cover them (off = credits are counted, never block) */
+    creditsEnforced: boolean('credits_enforced').notNull().default(false),
   },
   (t) => [uniqueIndex('organizations_slug_idx').on(t.slug), uniqueIndex('organizations_hook_idx').on(t.hookToken), index('organizations_parent_idx').on(t.parentOrgId)],
 );
@@ -505,6 +509,9 @@ export const runs = pgTable(
     index('runs_org_request_idx').on(t.orgId, t.requestId),
     index('runs_site_idx').on(t.siteId),
     index('runs_org_idem_idx').on(t.orgId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
+    // admin panel (0014): the cost sync looks runs up by the engine's request id, and the people page by the person
+    index('runs_request_idx').on(t.requestId),
+    index('runs_user_idx').on(t.userId),
   ],
 );
 
@@ -1217,6 +1224,133 @@ export const botIpRanges = pgTable('bot_ip_ranges', {
   error: text('error').notNull().default(''),
 });
 
+// ---------- platform admin panel (0014, shared/src/admin.ts) ----------
+
+/**
+ * A company's credits, one signed entry per movement: `grant` (an admin added credits; `paidUsd` = the revenue recorded with it),
+ * `adjust` (an admin corrected the balance, + or -), `usage` (a settled cost, debited once — `refKey` names the cost event it came
+ * from, unique, so a sync that runs twice cannot debit twice), `refund` (usage given back). Balance = the sum.
+ */
+export const creditLedger = pgTable(
+  'credit_ledger',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** the order the entries were written in (running balance) */
+    seq: bigserial('seq', { mode: 'number' }).notNull(),
+    /** null once the company was deleted: its grants stay as revenue history (shown under "deleted companies") */
+    orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'set null' }),
+    /** the company's name when the entry was written, for display after it is gone */
+    orgName: text('org_name').notNull().default(''),
+    kind: text('kind').notNull(),
+    credits: doublePrecision('credits').notNull(),
+    paidUsd: doublePrecision('paid_usd').notNull().default(0),
+    note: text('note').notNull().default(''),
+    ref: jsonb('ref').$type<Record<string, unknown> | null>(),
+    /** usage: `cost:<cost event key>` (or `reprice:<key>` for the give-back when the engine's figure replaced the app's) */
+    refKey: text('ref_key'),
+    actorUserId: uuid('actor_user_id'),
+    actorEmail: text('actor_email'),
+    createdAt: created(),
+  },
+  (t) => [
+    index('credit_ledger_org_idx').on(t.orgId, t.seq),
+    index('credit_ledger_org_created_idx').on(t.orgId, t.createdAt),
+    uniqueIndex('credit_ledger_ref_key_idx').on(t.refKey).where(sql`${t.refKey} is not null`),
+  ],
+);
+
+/**
+ * One settled cost unit, whoever caused it (services/admin/costSync.ts): an engine ledger row (`seo_run_ledger`, source 'engine'), an
+ * app run the ledger does not cover (source 'app', from the run's settled cost), or a keyword check (source 'keyword_check').
+ * `eventKey` is the one identity: `engine:<execution id>`, `run:<runs.id>`, `kc:<keyword_checks.id>`. `orgId` null = unattributed
+ * (no company could be tied to it; a deleted company's costs fall back to it too).
+ */
+export const costEvents = pgTable(
+  'cost_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventKey: text('event_key').notNull(),
+    source: text('source').notNull(),
+    engineRunId: text('engine_run_id'),
+    runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
+    orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'set null' }),
+    siteId: uuid('site_id').references(() => sites.id, { onDelete: 'set null' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    domain: text('domain').notNull().default(''),
+    mode: text('mode').notNull().default(''),
+    /** app | schedule */
+    origin: text('origin').notNull().default('schedule'),
+    /** the engine row's key (`app:<org>`, `schedule:<mode>`, `parent:<id>`, `ladder:<id>` …): kept for the record */
+    engineKey: text('engine_key').notNull().default(''),
+    claudeUsd: doublePrecision('claude_usd').notNull().default(0),
+    claudeEstimatedUsd: doublePrecision('claude_estimated_usd').notNull().default(0),
+    dataforseoUsd: doublePrecision('dataforseo_usd').notNull().default(0),
+    /** measured | partly estimated | estimated | not reported */
+    certainty: text('certainty').notNull().default('measured'),
+    /** the DataForSEO balance read when the engine row was reserved and when it settled (0 = not read): what the account really moved */
+    balanceBefore: doublePrecision('balance_before').notNull().default(0),
+    balanceAfter: doublePrecision('balance_after').notNull().default(0),
+    startedAt: ts('started_at'),
+    occurredAt: ts('occurred_at').notNull(),
+    syncedAt: ts('synced_at').defaultNow().notNull(),
+    /** the engine row's `settled_at` as read: a row settled again (a new settled_at with a new figure) is re-priced, never ignored */
+    engineSettledAt: text('engine_settled_at').notNull().default(''),
+    /** the company's name when its company was deleted (services/companyDelete.ts): such a cost is never attributed to anybody again */
+    detachedFrom: text('detached_from'),
+  },
+  (t) => [
+    uniqueIndex('cost_events_key_idx').on(t.eventKey),
+    index('cost_events_user_idx').on(t.userId),
+    index('cost_events_site_idx').on(t.siteId),
+    uniqueIndex('cost_events_engine_run_idx').on(t.engineRunId).where(sql`${t.engineRunId} is not null`),
+    index('cost_events_org_at_idx').on(t.orgId, t.occurredAt),
+    index('cost_events_at_idx').on(t.occurredAt),
+    index('cost_events_run_idx').on(t.runId),
+  ],
+);
+
+/** The panel's settings: one row (id 1). The engine-ledger sync keeps its own state on it too (never sent to the browser). */
+export const platformSettings = pgTable('platform_settings', {
+  id: integer('id').primaryKey().default(1),
+  creditValueUsd: doublePrecision('credit_value_usd').notNull(),
+  markup: doublePrecision('markup').notNull(),
+  signupCredits: doublePrecision('signup_credits').notNull().default(0),
+  enforceForNewCompanies: boolean('enforce_for_new_companies').notNull().default(false),
+  /** when credits started being counted (the deploy of 0014): costs settled before it are shown as cost but debit no credits, so
+   *  existing companies do not start with a negative balance for runs from before credits existed */
+  creditsSince: ts('credits_since').defaultNow().notNull(),
+  updatedAt: ts('updated_at'),
+  updatedBy: text('updated_by'),
+  ledgerSyncedAt: ts('ledger_synced_at'),
+  ledgerSyncOk: boolean('ledger_sync_ok').notNull().default(false),
+  ledgerSyncNote: text('ledger_sync_note').notNull().default(''),
+  ledgerRows: integer('ledger_rows').notNull().default(0),
+  /** the newest `settled_at` already read: the next sync reads from a day before it */
+  ledgerWatermark: text('ledger_watermark'),
+  /** the last full re-read of the ledger (the others read from the watermark minus a day) */
+  ledgerFullAt: ts('ledger_full_at'),
+});
+
+/** What platform administrators did in the panel (credits, users, companies, settings). Internal; no foreign keys (history stays). */
+export const adminAudit = pgTable(
+  'admin_audit',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    at: ts('at').defaultNow().notNull(),
+    actorUserId: uuid('actor_user_id'),
+    actorEmail: text('actor_email').notNull(),
+    action: text('action').notNull(),
+    targetType: text('target_type').notNull(),
+    targetId: text('target_id'),
+    targetLabel: text('target_label').notNull().default(''),
+    details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+  },
+  (t) => [index('admin_audit_at_idx').on(t.at)],
+);
+
+export type CreditEntryRow = typeof creditLedger.$inferSelect;
+export type CostEventRow = typeof costEvents.$inferSelect;
+export type PlatformSettingsRow = typeof platformSettings.$inferSelect;
 export type LogSourceRow = typeof logSources.$inferSelect;
 export type LogIngestRow = typeof logIngests.$inferSelect;
 export type ApiKeyRow = typeof apiKeys.$inferSelect;

@@ -179,7 +179,7 @@ export async function autoStartForSite(org: OrgRow, site: SiteRow, deps: AutoSta
     const run = await deps.start({ user: owner, org, role: 'owner' }, parsed.data);
     return { runId: run.id, keyword: decision.start.keyword, reason: run.status === 'failed' ? `the SEO engine did not accept it: ${run.error ?? ''}` : decision.reason };
   } catch (err) {
-    if (err instanceof HttpError && (err.statusCode === 402 || err.statusCode === 429)) return { runId: null, keyword: decision.start.keyword, reason: err.statusCode === 402 ? 'it would go over the monthly budget' : err.message };
+    if (err instanceof HttpError && (err.statusCode === 402 || err.statusCode === 429)) return { runId: null, keyword: decision.start.keyword, reason: err.statusCode === 402 ? (err.code === 'credits' ? 'the company has no credits left for it' : 'it would go over the monthly budget') : err.message };
     throw err;
   }
 }

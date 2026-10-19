@@ -32,7 +32,6 @@ import type { OrgRow } from '../db/schema';
 import { randomToken, sha256, slugify } from '../lib/crypto';
 import { badRequest, conflict, forbidden, notFound, parse } from '../lib/errors';
 import { siteRows } from '../n8n/client';
-import { stopInEngine } from './sites';
 import { monitorsFromRow } from '../services/data';
 import { engineCostTable } from '../services/engineCost';
 import { sendMail } from '../lib/mailer';
@@ -42,6 +41,8 @@ import { canDeleteClient, dropAssignments, orgView, toOrg } from '../services/ag
 import { baseUrlFor, senderFor } from '../services/portalMail';
 import { deliveryOverview, listDeliveries, saveSettings, sendTest } from '../services/reportDelivery';
 import { monthStart } from '../services/runs';
+import { applyNewCompanyCredits } from '../services/admin/credits';
+import { deleteCompany } from '../services/companyDelete';
 
 // G5: the company answer (with its kind, agency and brand) lives in services/agency.ts
 export { toOrg };
@@ -77,6 +78,8 @@ export async function orgRoutes(app: FastifyInstance) {
         })
         .returning();
       await tx.insert(schema.memberships).values({ orgId: o.id, userId: user.id, role: 'owner', provisionedBy: 'owner' });
+      // admin panel: sign-up credits and credit enforcement as the platform settings say for new companies
+      await applyNewCompanyCredits(tx, o);
       return o;
     });
     await audit(req, org.id, { action: 'company.created', target: { type: 'company', id: org.id, label: org.name } });
@@ -117,11 +120,7 @@ export async function orgRoutes(app: FastifyInstance) {
     if (a.org.kind === 'client' && !(await canDeleteClient(a.user, a.org))) throw forbidden('Only the agency’s owner can delete a client workspace.');
     if (a.org.kind === 'client' && a.org.parentOrgId)
       await audit(req, a.org.parentOrgId, { action: 'agency.client_deleted', target: { type: 'company', id: a.org.id, label: a.org.name } });
-    // stop the weekly workflows of its verified websites (their history in n8n stays), then remove everything of the company
-    // every verified website: its weekly runs, ladders and monitors stop in the engine (history stays)
-    const owned = await db.query.sites.findMany({ where: eq(schema.sites.orgId, a.org.id) });
-    for (const s of owned.filter((x) => x.verifiedAt)) await stopInEngine(s, req.log);
-    await db.delete(schema.organizations).where(eq(schema.organizations.id, a.org.id));
+    await deleteCompany(a.org, req.log);
     return { ok: true };
   });
 

@@ -4,6 +4,7 @@ import { config } from '../config';
 import type { UserRow } from '../db/schema';
 import { mfaMethods } from '../services/mfa';
 import { createFlow } from './flows';
+import { suspendedError } from './session';
 
 /**
  * G1: the second half of a sign-in. When the person has two-step verification, a proven first factor (password, Google, SSO) opens
@@ -21,6 +22,8 @@ export interface PendingSignIn {
 
 /** null when the person has no second factor (the caller creates the session); otherwise the challenge for the page */
 export async function startMfaChallenge(reply: FastifyReply, user: UserRow, p: PendingSignIn): Promise<MfaChallenge | null> {
+  // a suspended account is refused before the second step is even offered
+  if (user.suspendedAt) throw suspendedError();
   const methods = await mfaMethods(user);
   if (!methods.length) return null;
   const token = await createFlow('mfa_login', { userId: user.id, data: { method: p.method, ssoOrgId: p.ssoOrgId ?? null, next: p.next ?? '/' }, ttlMinutes: MFA.flowMinutes });

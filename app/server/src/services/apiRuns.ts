@@ -21,6 +21,8 @@ import {
 import { z } from 'zod';
 import type { OrgAccess } from '../auth/access';
 import type { SiteRow } from '../db/schema';
+import { db, schema } from '../db';
+import { eq } from 'drizzle-orm';
 import { badRequest, HttpError, validationError } from '../lib/errors';
 import { getRun, requireScope, siteOf, toRunV1, type V1Ctx } from './apiV1';
 import { pipelineData } from './pipeline';
@@ -28,6 +30,7 @@ import { createRunWithMeta, estimateCost, findIdempotentRun } from './runs';
 import { creatorMembership } from './apiKeys';
 import { audit } from './audit';
 import { monthSpend } from './spend';
+import { creditCheck, type CreditCheck } from './admin/credits';
 
 /**
  * G4 (2026-10-17) — the write API: start any analysis a form can start (`POST /api/v1/runs`, MCP `start_run`).
@@ -54,6 +57,16 @@ export async function actorOf(ctx: V1Ctx, scope: ApiScope): Promise<OrgAccess> {
     return ctx.actor;
   }
   const m = await creatorMembership(ctx.org.id, ctx.key?.createdBy ?? null);
+  if (!m && ctx.key?.createdBy) {
+    let creator: { suspendedAt: Date | null } | undefined;
+    try {
+      creator = await db.query.users.findFirst({ where: eq(schema.users.id, ctx.key.createdBy), columns: { suspendedAt: true } });
+    } catch {
+      creator = undefined; // the general answer below still refuses the key
+    }
+    if (creator?.suspendedAt)
+      throw new HttpError(403, `The person who created this API key is suspended, so the key cannot ${scope === 'admin' ? 'manage integrations' : 'start work'}. Revoke it and create a new one.`, 'key_owner_suspended');
+  }
   if (!m || !roleAtLeast(m.role as Role, need))
     throw new HttpError(
       403,
@@ -98,7 +111,7 @@ export interface StartAnswer {
   status: 200 | 201;
   replayed: boolean;
   body:
-    | { dryRun: true; mode: ModeId; estimate: { usd: number; minutes: number }; notices: PipelineNotice[]; needsAcknowledge: string[]; budget: { spentUsd: number; budgetUsd: number; remainingUsd: number } }
+    | { dryRun: true; mode: ModeId; estimate: { usd: number; minutes: number }; notices: PipelineNotice[]; needsAcknowledge: string[]; budget: { spentUsd: number; budgetUsd: number; remainingUsd: number }; credits: CreditCheck }
     | { run: RunV1 & { input: Record<string, unknown> }; notices: PipelineNotice[] };
 }
 
@@ -141,6 +154,8 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
         notices,
         needsAcknowledge: open.map((n) => n.id),
         budget: { spentUsd: round(spent), budgetUsd: ctx.org.monthlyBudgetUsd, remainingUsd: round(Math.max(0, ctx.org.monthlyBudgetUsd - spent)) },
+        // admin panel: whether the company's credits would let it start (`enough` is false only when credits are enforced and short)
+        credits: await creditCheck(db, ctx.org, estimate),
       },
     };
   }

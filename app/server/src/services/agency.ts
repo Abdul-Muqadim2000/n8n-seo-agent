@@ -30,6 +30,7 @@ import { badRequest, conflict, forbidden, notFound } from '../lib/errors';
 import { audit } from './audit';
 import { agencyOf, brandForOrg } from './brandOf';
 import { monthStart, orgSpendSince } from './spend';
+import { applyNewCompanyCredits } from './admin/credits';
 
 /**
  * G5 (app/docs/WHITE_LABEL.md): agencies and their client workspaces. A client workspace is an ordinary company with a parent; the
@@ -194,6 +195,8 @@ export async function createClient(req: FastifyRequest, a: OrgAccess, body: { na
       parentOrgId: a.org.id,
     })
     .returning();
+  // admin panel: credit enforcement as the platform settings say for new companies (a client workspace gets no sign-up credits)
+  await applyNewCompanyCredits(db, o);
   await audit(req, a.org.id, { action: 'agency.client_created', target: { type: 'company', id: o.id, label: o.name }, details: { monthlyBudgetUsd: budget } });
   await audit(req, o.id, { action: 'company.created', target: { type: 'company', id: o.id, label: o.name }, details: { agency: a.org.name } });
   return o;

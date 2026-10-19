@@ -5,6 +5,7 @@ import type { KeywordCheckRow, OrgRow, SiteRow, UserRow } from '../db/schema';
 import { HttpError } from '../lib/errors';
 import { config } from '../config';
 import { budgetRefusal, dayStart, lockCompany, orgSpendSince, platformSpendSince } from './spend';
+import { assertCredits } from './admin/credits';
 
 // The keyword_checks rows (keywordChecks.ts decides; this file only reads and writes the database).
 
@@ -76,6 +77,7 @@ export async function reserveCheck(o: { org: OrgRow; site: SiteRow; user: UserRo
       platformDaily: config.platformDailySpendUsd,
     });
     if (refusal) throw refusal;
+    await assertCredits(tx, o.org, KEYWORD_CHECK.estimateUsd, 'This keyword check');
     const [row] = await tx
       .insert(schema.keywordChecks)
       .values({ orgId: o.org.id, siteId: o.site.id, userId: o.user.id, keyword: o.keyword, country: o.country, status: 'pending', costUsd: KEYWORD_CHECK.estimateUsd })

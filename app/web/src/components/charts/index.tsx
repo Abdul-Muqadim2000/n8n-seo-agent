@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import { Bar, BarChart, CartesianGrid, Line, LineChart, Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ComposedChart, Line, LineChart, Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from 'recharts';
 import { BarChart3, Table2 } from 'lucide-react';
 import { compactNumber, lineageNote, type ChartAnnotation, type Lineage } from '@seo/shared';
 import { cn, fmtDay } from '@/lib/utils';
@@ -18,6 +18,8 @@ export interface Series {
   /** a CSS colour; defaults to the slot of the series' position */
   color?: string;
   format?: (v: number) => string;
+  /** the legend swatch of this series when a chart mixes bars and a line (defaults to the chart's) */
+  shape?: 'line' | 'rect';
 }
 
 type Row = Record<string, unknown>;
@@ -73,7 +75,7 @@ export function Legend({ series, shape = 'line' }: { series: Series[]; shape?: '
             ctx?.focus && ctx.focus !== s.key && 'opacity-50',
           )}
         >
-          <span className={cn('shrink-0', shape === 'line' ? 'h-0.5 w-3 rounded-full' : 'size-2.5 rounded-[3px]')} style={{ background: colorOf(s, i) }} aria-hidden />
+          <span className={cn('shrink-0', (s.shape ?? shape) === 'line' ? 'h-0.5 w-3 rounded-full' : 'size-2.5 rounded-[3px]')} style={{ background: colorOf(s, i) }} aria-hidden />
           {s.label}
         </span>
       ))}
@@ -395,6 +397,71 @@ export function BarsChart({
           />
         ))}
       </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ---------- stacked columns + one line on the same scale (e.g. cost by provider per day, and revenue) ----------
+/**
+ * Stacked columns with one line over them. Only for measures in the same unit (one y-axis, dataviz rule): the line must be readable
+ * against the stack's total, e.g. revenue against cost. Colours follow the series order: the bars take the first slots, the line the next.
+ */
+export function StackedBarsLineChart({
+  data,
+  xKey,
+  bars,
+  line,
+  height = 260,
+  yFormat = compactNumber,
+  xFormat = (v: unknown) => fmtDay(String(v)),
+}: {
+  data: Row[];
+  xKey: string;
+  bars: Series[];
+  line: Series;
+  height?: number;
+  yFormat?: (v: number) => string;
+  xFormat?: (v: unknown) => string;
+}) {
+  const focus = useSeriesFocus();
+  const last = bars.length - 1;
+  const lineColor = colorOf(line, bars.length);
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }} barCategoryGap="24%">
+        <CartesianGrid vertical={false} stroke="var(--grid)" strokeWidth={1} />
+        <XAxis dataKey={xKey} tickFormatter={xFormat} tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: 'var(--axis)' }} tickMargin={8} minTickGap={24} />
+        <YAxis tickFormatter={(v: number) => yFormat(v)} tick={AXIS_TICK} tickLine={false} axisLine={false} tickMargin={6} width={52} />
+        <Tooltip cursor={{ fill: 'var(--accent-soft)', fillOpacity: 0.6 }} content={(p: TipProps) => <ChartTooltip {...p} series={[...bars, line]} xFormat={xFormat} />} />
+        {bars.map((s, i) => (
+          <Bar
+            key={s.key}
+            dataKey={s.key}
+            name={s.label}
+            fill={colorOf(s, i)}
+            fillOpacity={dim(focus, s.key)}
+            stackId="stack"
+            maxBarSize={24}
+            radius={i === last ? [4, 4, 0, 0] : 0}
+            stroke="var(--surface)"
+            strokeWidth={2}
+            isAnimationActive={false}
+          />
+        ))}
+        <Line
+          type="linear"
+          dataKey={line.key}
+          name={line.label}
+          stroke={lineColor}
+          strokeWidth={2}
+          strokeOpacity={dim(focus, line.key)}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          dot={data.length <= 2 ? { r: 4, fill: lineColor, stroke: 'var(--surface)', strokeWidth: 2 } : false}
+          activeDot={{ r: 5, fill: lineColor, stroke: 'var(--surface)', strokeWidth: 2 }}
+          isAnimationActive={false}
+        />
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

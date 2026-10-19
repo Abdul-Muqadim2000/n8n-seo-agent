@@ -162,6 +162,9 @@ describe('auto-start: one website', () => {
   it('over the budget (402): skipped, nothing else thrown; other errors surface', async () => {
     const over = deps({ start: async () => Promise.reject(new HttpError(402, 'over', 'budget')) });
     expect(await autoStartForSite(org, site, over, NOW)).toEqual({ runId: null, keyword: 'odoo partner uae', reason: 'it would go over the monthly budget' });
+    // admin panel: out of credits is said as such, not as a budget
+    const broke = deps({ start: async () => Promise.reject(new HttpError(402, 'no credits', 'credits')) });
+    expect((await autoStartForSite(org, site, broke, NOW)).reason).toBe('the company has no credits left for it');
     const broken = deps({ start: async () => Promise.reject(new Error('db down')) });
     await expect(autoStartForSite(org, site, broken, NOW)).rejects.toThrow('db down');
   });

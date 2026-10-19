@@ -157,6 +157,26 @@ report, rebranded document and e-mail; the portal can live on the agency's own h
 on-demand TLS through the operator's proxy) and e-mails can come from the agency's own verified mailbox (**Client e-mail**). Design,
 threat model (tenant isolation, domain takeover), operator setup and what is deliberately not built: **`docs/WHITE_LABEL.md`**.
 
+## Platform admin panel (`/admin`, 2026-10-18)
+For the people on `PLATFORM_ADMIN_EMAILS` (verified address): every company and person, what their operations really cost us at Claude
+and DataForSEO, the credits they have and used, revenue and margin, the runs (app and schedules), settings and an activity log.
+Contract `shared/src/admin.ts`, server `server/src/services/admin/`, endpoints in `API.md` → "Admin panel".
+- **Cost** comes from `cost_events`: the engine's settled run-ledger rows (read every 10 minutes, `POST /api/admin/costs/sync` on
+  demand), attributed through the run's callbacks (they name the engine execution), the `parent:` key, the `app:` key or a domain
+  verified before the money was spent; app runs and keyword checks the ledger does not
+  cover count from the app's own settled figures; never both for one run. Without the engine (it is not reachable from a laptop) the
+  panel still works from the app's runs and says so.
+- **Credits** (the customer-facing unit): a run uses `cost × markup ÷ creditValueUsd` credits (Settings; default $0.10 a credit, ×3),
+  debited once per cost event; admins grant (recording the payment as revenue), adjust and refund. Costs from before the deploy of
+  migration 0014 debit nothing. **Enforcement is off by default** for every company (credits are counted, never block); switch it on
+  per company, or for new companies in Settings (with optional sign-up credits). With it on, a run or keyword check the balance cannot
+  cover is refused with "Your company has no credits left for this run …".
+- **People**: create (no password: a 72-hour set-password link to hand over), rename, mark verified, **suspend** (no sign-in by any
+  method, sessions ended: "This account is suspended. Contact support."), revoke sessions, add to / remove from companies, delete (refused
+  while the person is the only owner of a company with other members). An admin cannot suspend or delete themselves or the last admin.
+- **Billed vs attributed**: set `ANTHROPIC_ADMIN_API_KEY` (an `sk-ant-admin…` key) to read Claude's real bill, and the engine's
+  `SEO_DATAFORSEO_LOGIN` / `SEO_DATAFORSEO_PASSWORD` for the live DataForSEO balance; both optional (`.env.example`).
+
 ## Cost figures: one table (B-R3)
 
 `shared/src/cost.ts` is the only place a per-mode price is written down, and it mirrors the engine's own calibrated defaults

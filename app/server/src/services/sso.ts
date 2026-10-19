@@ -5,6 +5,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import * as oidc from 'openid-client';
 import { SAML, ValidateInResponseTo, type CacheProvider, type Profile } from '@node-saml/node-saml';
 import {
+  ACCOUNT_SUSPENDED,
   ssoEmailDomain,
   policyOf,
   SSO,
@@ -542,6 +543,8 @@ export async function finishSso(req: FastifyRequest, reply: FastifyReply, conn: 
   // the person: by the IdP's stable subject first, then by address
   const known = await db.query.ssoIdentities.findFirst({ where: and(eq(schema.ssoIdentities.connectionId, conn.id), eq(schema.ssoIdentities.subject, id.subject)) });
   let user = known ? await db.query.users.findFirst({ where: eq(schema.users.id, known.userId) }) : await db.query.users.findFirst({ where: eq(schema.users.email, id.email) });
+  // admin panel: a suspended account is refused before anything is provisioned or confirmed for it
+  if (user?.suspendedAt) throw new SsoFailure('account_suspended', ACCOUNT_SUSPENDED.message, flow, conn);
   let provisioned = false;
   if (!user) {
     if (!conn.jitEnabled) throw new SsoFailure('sso_not_provisioned', `${id.email} has no account in ${org.name}. Ask an admin to invite you.`, flow, conn);

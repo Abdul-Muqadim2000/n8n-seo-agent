@@ -374,6 +374,12 @@ function CheckPanel({ initialKeyword, initialCountry, ladders, onChoose }: { ini
 
 function CheckError({ error }: { error: unknown }) {
   const { org, can } = useOrgCtx();
+  if (error instanceof ApiRequestError && error.status === 402 && error.code === 'credits')
+    return (
+      <Callout tone="critical" title="Not enough credits for this check">
+        {error.message}
+      </Callout>
+    );
   if (error instanceof ApiRequestError && error.status === 402)
     return (
       <Callout

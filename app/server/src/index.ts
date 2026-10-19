@@ -13,6 +13,7 @@ import { expireStaleRuns } from './services/runs';
 import { startPortalJobs } from './services/portalHosts';
 import { webhookTick } from './services/webhooks';
 import { exportTick } from './services/exports';
+import { startCostSync } from './services/admin/costSync';
 
 async function main() {
   await runMigrations();
@@ -75,7 +76,10 @@ async function main() {
   const crawlerTimers = startCrawlerJobs(app.log);
   // G5: verified portal hosts re-checked (lapse after repeated failures); PORTAL_JOBS=false stops it
   const stopPortalJobs = startPortalJobs(app.log);
+  // admin panel: what every run cost (engine ledger -> cost_events) and the credits it used, every 10 minutes; ADMIN_COST_SYNC=false stops it
+  const stopCostSync = config.admin.costSync ? startCostSync(app.log) : () => undefined;
   const stop = async () => {
+    stopCostSync();
     for (const t of crawlerTimers) clearInterval(t);
     stopPortalJobs();
     for (const t of lbTimers) clearInterval(t);

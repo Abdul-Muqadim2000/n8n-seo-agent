@@ -35,3 +35,4 @@ export * from './identity';
 export * from './cms';
 export * from './crawlers';
 export * from './agency';
+export * from './admin';

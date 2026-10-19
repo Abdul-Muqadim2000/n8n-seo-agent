@@ -38,6 +38,8 @@ import { deliverReport } from './reportDelivery';
 import { emitForCallback, emitRunsFailed } from './webhooks';
 import { engineCostTable } from './engineCost';
 import { assertBudget, lockCompany } from './spend';
+import { assertCredits } from './admin/credits';
+import { suspendedError } from '../auth/session';
 import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
 
 /**
@@ -134,6 +136,8 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   const { org, user } = a;
   const auto = opts.startedBy === 'auto';
   if (org.disabled) throw forbidden('This company is disabled. Contact the platform administrator.');
+  // admin panel: a suspended person starts nothing — through the app, an API key or MCP (their keys act as them), or auto-start
+  if (user.suspendedAt) throw suspendedError();
   if (config.requireEmailVerification && !user.emailVerifiedAt) throw forbidden('Verify your e-mail address before starting runs (check your inbox, or resend the link from your account page).');
 
   let site: SiteRow | null = null;
@@ -191,6 +195,8 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
       }
     }
     await assertBudget(tx, org, estimated, 'This run');
+    // admin panel: only for a company whose credits are enforced (off by default), under the same lock as the budget
+    await assertCredits(tx, org, estimated, 'This run');
     const [row] = await tx
       .insert(schema.runs)
       .values({

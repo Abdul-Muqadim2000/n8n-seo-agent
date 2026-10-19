@@ -104,7 +104,21 @@ export const router = createBrowserRouter([
           { path: '/onboarding', lazy: page(() => import('@/pages/onboarding/OnboardingPage')) },
           { path: '/onboarding/:orgId/:step?', lazy: page(() => import('@/pages/onboarding/OnboardingPage')) },
           { path: '/account', lazy: page(() => import('@/pages/settings/AccountPage')) },
-          { path: '/admin', lazy: page(() => import('@/pages/settings/PlatformAdminPage')) },
+          {
+            path: '/admin',
+            lazy: page(() => import('@/pages/admin/AdminLayout')),
+            children: [
+              { index: true, lazy: page(() => import('@/pages/admin/OverviewPage')) },
+              { path: 'companies', lazy: page(() => import('@/pages/admin/CompaniesPage')) },
+              { path: 'companies/:companyId', lazy: page(() => import('@/pages/admin/CompanyDetailPage')) },
+              { path: 'users', lazy: page(() => import('@/pages/admin/UsersPage')) },
+              { path: 'users/:userId', lazy: page(() => import('@/pages/admin/UserDetailPage')) },
+              { path: 'runs', lazy: page(() => import('@/pages/admin/RunsPage')) },
+              { path: 'costs', lazy: page(() => import('@/pages/admin/CostsPage')) },
+              { path: 'activity', lazy: page(() => import('@/pages/admin/ActivityPage')) },
+              { path: 'settings', lazy: page(() => import('@/pages/admin/SettingsPage')) },
+            ],
+          },
           // G5: after Google / single sign-on on the app's own address, back to an agency's portal address
           { path: '/portal-handoff', lazy: page(() => import('@/pages/auth/PortalHandoffPage')) },
           {
