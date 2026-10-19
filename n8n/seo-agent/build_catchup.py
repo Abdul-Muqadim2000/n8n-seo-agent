@@ -53,7 +53,8 @@ CONFIG = {'next_gap_hours': {'daily': 2, 'weekly': 12, 'monthly': 48},
           'confirm_minutes': 10, 'stale_plan_minutes': 10, 'count_on_demand': False}
 SWEEP = 'Sweep (every 15 min)'
 SWEEP_CRON = '7,22,37,52 * * * *'
-NOT_GENERATED = ('SEO_Agent_v3_original_export.json', 'SEO_Agent_Test_Callback_Receiver.json')
+NOT_GENERATED = ('SEO_Agent_v3_original_export.json', 'SEO_Agent_Test_Callback_Receiver.json',
+                 'SEO_Agent_Cycle_Dispatcher.json')   # 2026-10-19: its 5-minute sweep is durable by itself (Instance Started + its own table), never caught up
 
 
 def cron_of(iv, where):
