@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   API_SCOPE_ROLE,
   estimateRunMinutes,
+  formatCredits,
   idempotencyKeyOk,
   IDEMPOTENCY,
   MODES,
@@ -30,7 +31,8 @@ import { createRunWithMeta, estimateCost, findIdempotentRun } from './runs';
 import { creatorMembership } from './apiKeys';
 import { audit } from './audit';
 import { monthSpend } from './spend';
-import { creditCheck, type CreditCheck } from './billing';
+import { creditCheck, quoteCredits, type CreditCheck } from './billing';
+import { settingsRow } from './admin/settings';
 
 /**
  * G4 (2026-10-17) — the write API: start any analysis a form can start (`POST /api/v1/runs`, MCP `start_run`).
@@ -138,7 +140,7 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
   let notices: PipelineNotice[] = [];
   if (site?.verifiedAt && NOTICE_MODES.includes(input.mode)) {
     const data = await pipelineData(ctx.org, site).catch(() => null);
-    notices = pipelineNotices(input.mode, input as never, data, { costUsd: estimate });
+    notices = pipelineNotices(input.mode, input as never, data, { costLabel: estimate > 0 ? formatCredits(quoteCredits(estimate, await settingsRow())) : undefined });
   }
   const open = unconfirmed(notices, extras.data.acknowledge);
 

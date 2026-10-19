@@ -1,4 +1,5 @@
-import { estimateRunCost as est, estimateRunMinutes, formatUsd, keyCost as kc, MONITOR_COSTS, type CostKey, type ModeId } from '@seo/shared';
+import { estimateRunCost as est, estimateRunMinutes, keyCost as kc, MONITOR_COSTS, type CostKey, type ModeId } from '@seo/shared';
+import { creditsLabel, quoteLabel } from './credits';
 import { engineCal } from './engine-cal';
 
 // R100: every figure follows the engine's own calibration when the app could read it (lib/engine-cal.ts), the shipped table otherwise
@@ -15,9 +16,11 @@ export const runMinutes = (mode: ModeId, values: Record<string, unknown> = {}): 
 
 /**
  * Prices shown inside sentences, all read from the shared cost table (`@seo/shared` cost.ts, which follows the engine's own
- * calibration) so one run shows one figure on every screen. Never type a "$0.00" literal into a component (R99, CONVENTIONS.md).
+ * calibration) so one run shows one figure on every screen, in credits. Never type a price literal into a component (R99, CONVENTIONS.md).
  */
-const usd = (n: number) => formatUsd(n);
+// credits (app/docs/CREDITS.md): every sentence names the price in credits — an analysis at its quote, a monthly figure as is
+const usd = (n: number) => quoteLabel(n);
+const perMonth = (n: number) => creditsLabel(n);
 
 export const PRICES = {
   /** one written page (a content run) */
@@ -41,7 +44,7 @@ export const PRICES = {
   /** the full backlink check (the monthly run) */
   backlinksFull: () => usd(keyCost('backlinks')),
   /** the Link Builder over a month */
-  linkBuilderMonthly: () => usd(MONITOR_COSTS.linkBuilderMonthly),
+  linkBuilderMonthly: () => perMonth(MONITOR_COSTS.linkBuilderMonthly),
   /** extra cost of writing `n` pages now */
   pages: (n: number) => usd(n * keyCost('content')),
 };

@@ -26,6 +26,7 @@ import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useProviders, useSiteData, useUsage } from '@/lib/queries';
 import { paths } from '@/lib/paths';
+import { quoteLabel } from '@/lib/credits';
 import { useStartRun } from '@/lib/queries';
 import { cn, fmtAgo } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/badge';
@@ -299,7 +300,7 @@ export function usePipelineNotices(mode: ModeId, site: Site | null, values: Noti
   const q = useSiteData(org.id, site?.id ?? '', 'pipeline', undefined, { enabled: on, staleTime: 30_000 });
   // another website's data while this one loads would warn about the wrong pages
   const data = on && !q.isPlaceholderData ? q.data : undefined;
-  const notices = pipelineNotices(mode, values, data, { fmt: NOTICE_FORMAT, costUsd: cost });
+  const notices = pipelineNotices(mode, values, data, { fmt: NOTICE_FORMAT, costLabel: cost > 0 ? quoteLabel(cost) : undefined });
   const [acked, setAcked] = useState<string[]>([]);
   const unconfirmed = notices.filter((n) => n.confirm && !acked.includes(n.id));
   const toggle = (id: string, on: boolean) => setAcked((a) => (on ? [...a, id] : a.filter((x) => x !== id)));

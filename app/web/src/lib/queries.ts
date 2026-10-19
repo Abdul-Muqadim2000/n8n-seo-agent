@@ -95,6 +95,11 @@ import type {
   adminMembershipSchema,
   adminUpdateUserSchema,
   platformSettingsSchema,
+  BillingOverview,
+  CreditActivityPage,
+  CreditLimits,
+  CreditPurchaseRequest,
+  AdminPurchaseRequest,
 } from '@seo/shared';
 import type { z } from 'zod';
 import { api, ApiRequestError, directCredentials, directUrl } from './api';
@@ -215,6 +220,54 @@ export function useOnboardingStep(orgId: string) {
       qc.setQueryData(qk.org(orgId), org);
       qc.invalidateQueries({ queryKey: qk.me });
     },
+  });
+}
+
+// ---------- credits (app/docs/CREDITS.md) ----------
+export const useBilling = (orgId: string, opts: { enabled?: boolean } = {}) =>
+  useQuery({ queryKey: [...qk.org(orgId), 'billing'], queryFn: () => api<BillingOverview>(`/api/orgs/${orgId}/billing`), enabled: opts.enabled ?? true, staleTime: 60_000, retry: noRetryOn4xx });
+
+export const useCreditActivity = (orgId: string, origin: 'all' | 'autopilot' | 'on_demand' | 'account') =>
+  useInfiniteQuery({
+    queryKey: [...qk.org(orgId), 'billing', 'activity', origin],
+    queryFn: ({ pageParam }) => api<CreditActivityPage>(`/api/orgs/${orgId}/billing/activity?origin=${origin}&limit=50${pageParam ? `&cursor=${pageParam}` : ''}`),
+    initialPageParam: '' as string,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+
+export function useSetCreditLimits(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreditLimits) => api<CreditLimits>(`/api/orgs/${orgId}/billing/limits`, { method: 'PUT', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'billing'] }),
+  });
+}
+
+export function useRequestCredits(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { packId: string; note?: string }) => api<CreditPurchaseRequest>(`/api/orgs/${orgId}/billing/requests`, { method: 'POST', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'billing'] }),
+  });
+}
+
+export function useCancelCreditRequest(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<CreditPurchaseRequest>(`/api/orgs/${orgId}/billing/requests/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'billing'] }),
+  });
+}
+
+// the platform admin's side of "Buy credits"
+export const useAdminCreditRequests = (status: 'pending' | 'all' = 'pending') =>
+  useQuery({ queryKey: ['admin', 'credit-requests', status], queryFn: () => api<AdminPurchaseRequest[]>(`/api/admin/credit-requests?status=${status}`), retry: noRetryOn4xx });
+
+export function useCancelAdminCreditRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<AdminPurchaseRequest>(`/api/admin/credit-requests/${id}/cancel`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'credit-requests'] }),
   });
 }
 

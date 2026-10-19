@@ -65,12 +65,13 @@ describe('pipeline notices', () => {
   });
 
   it('a monitor the schedule runs: info with next run and what the manual run changes', () => {
-    const [n] = pipelineNotices('ai_visibility', {}, data(), { now: NOW, costUsd: 0.87 });
+    const [n] = pipelineNotices('ai_visibility', {}, data(), { now: NOW, costLabel: '53 credits' });
     expect(n.tone).toBe('info');
     expect(n.confirm).toBeUndefined();
     expect(n.body).toContain('does not move or cancel the schedule');
     expect(n.body).toContain('later in October reuse');
-    expect(n.body).toContain('$0.87');
+    expect(n.body).toContain('53 credits');
+    expect(n.body).not.toMatch(/\$/);
     expect(n.link?.reportId).toBe('rep-1');
   });
 

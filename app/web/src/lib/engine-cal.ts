@@ -12,10 +12,14 @@ import { OrgContext } from './context';
  * Until it arrives (or when the engine cannot be read) the shared table's shipped figures are used, exactly as before.
  */
 let current: EngineCalibration | null = null;
+/** credits (app/docs/CREDITS.md): credits per unit of the cost figures, from the same answer (null until it arrives) */
+let rate: number | null = null;
 const listeners = new Set<() => void>();
 
 /** the calibration the price helpers use right now (null = the shipped table) */
 export const engineCal = (): EngineCalibration | null => current;
+/** the company's credit rate right now (null = not read yet: lib/credits.ts uses the platform default) */
+export const engineCreditRate = (): number | null => rate;
 
 const subscribe = (cb: () => void) => {
   listeners.add(cb);
@@ -39,18 +43,19 @@ export function useEngineCal(orgId?: string | null): EngineCalibration | null {
   const id = ctx?.org.id ?? orgId ?? params.orgId ?? null;
   const q = useQuery({
     queryKey: ['engine-costs', id],
-    queryFn: () => api<{ calibration?: EngineCalibration | null }>(`/api/orgs/${id}/costs`),
+    queryFn: () => api<{ calibration?: EngineCalibration | null; creditRate?: number }>(`/api/orgs/${id}/costs`),
     // G5: a client person never reads what runs cost (the route refuses them): the shipped table stays in use
     enabled: !!id && !(ctx && isClientRole(ctx.role)),
     staleTime: 5 * 60_000,
     retry: false,
   });
   const next = q.data?.calibration ?? null;
+  const nextRate = typeof q.data?.creditRate === 'number' && q.data.creditRate > 0 ? q.data.creditRate : null;
   useEffect(() => {
-    if (next && next !== current) {
-      current = next;
-      listeners.forEach((f) => f());
-    }
-  }, [next]);
+    let changed = false;
+    if (next && next !== current) (current = next), (changed = true);
+    if (nextRate != null && nextRate !== rate) (rate = nextRate), (changed = true);
+    if (changed) listeners.forEach((f) => f());
+  }, [next, nextRate]);
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }

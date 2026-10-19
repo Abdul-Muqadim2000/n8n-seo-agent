@@ -1,6 +1,5 @@
 import { AUTOMATIONS, MODES, type AutomationId, type ModeId } from './constants';
 import type { PipelineData, QueueItem } from './data';
-import { formatUsd } from './format';
 import { keywordsOverlap } from './ladders';
 
 // What a manual run means for the website's automatic pipeline, shown on the tool forms before the run starts: nobody pays twice
@@ -82,7 +81,7 @@ export function pipelineNotices(
   mode: ModeId,
   input: NoticeInput,
   data: PipelineData | null | undefined,
-  opts: { now?: Date; fmt?: NoticeFormat; costUsd?: number } = {},
+  opts: { now?: Date; fmt?: NoticeFormat; /** credits (app/docs/CREDITS.md): the run's price as the customer reads it, e.g. "12 credits" */ costLabel?: string } = {},
 ): PipelineNotice[] {
   if (!data || !NOTICE_MODES.includes(mode)) return [];
   const now = opts.now ?? new Date();
@@ -141,7 +140,7 @@ export function pipelineNotices(
           next.getTime() - now.getTime() < 25 * 864e5
             ? `The automatic audit on ${f.day(nextIso)} then skips this website (it was audited less than 25 days before); the one after compares with this audit.`
             : `The automatic audit on ${f.day(nextIso)} still runs when your site changed, and compares with this audit.`;
-      const cost = opts.costUsd ? ` This run costs about ${formatUsd(opts.costUsd)} on top of the automatic ones.` : '';
+      const cost = opts.costLabel ? ` This run uses about ${opts.costLabel} on top of the automatic ones.` : '';
       out.push({
         id: `auto:${autoId}`,
         tone: 'info',
