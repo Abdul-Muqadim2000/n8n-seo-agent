@@ -1,0 +1,691 @@
+[
+  {
+    "id": "SEOagentKickoff1",
+    "name": "SEO Agent — Site Kickoff",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 10800,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "seo-site-kickoff",
+          "authentication": "headerAuth",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "3df0d01f-4d02-5840-abe1-4b3a37130eb8",
+        "name": "Site Kickoff API",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          880
+        ],
+        "webhookId": "92e153eb-555c-5120-a449-bbe851c7bf40",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "SEOcredApiHeader",
+            "name": "SEO API Key"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Site Kickoff (POST /webhook/seo-site-kickoff, header X-API-Key; app/docs/CREDITS.md + the web app when \"Track my site\" is set up):\n// { domain | site_id, force?, dry_run?, request_id? } — answered at once (accepted); the website's first weekly cycle then starts as\n// separate executions through each workflow's own Manual Run.\nconst raw = $input.first().json || {}; const b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst yes = (v) => /^(true|1|yes|on)$/i.test(String(v ?? ''));\nconst domain = normD(b.domain); const site_id = String(b.site_id || '').trim();\nconst errors = []; if (!domain && !site_id) errors.push('domain or site_id is required');\nreturn [{ json: { ok: !errors.length, error: errors.join('; '), domain, site_id, force: yes(b.force), dry_run: yes(b.dry_run), request_id: String(b.request_id || ('kickoff-' + $execution.id)) } }];\n"
+        },
+        "id": "f45d8c33-2fd5-5239-a0b8-f1cb6115fb08",
+        "name": "Kickoff Validate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          220,
+          880
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "555fd030-36b8-5fed-8904-406972f1f187",
+                "leftValue": "={{ $json.ok }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "6d6850c1-3a96-5bb4-847b-9354bef6928b",
+        "name": "Kickoff OK?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          440,
+          880
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: true, status: 'accepted', stage: 'site_kickoff_started', request_id: $json.request_id, domain: $json.domain, site_id: $json.site_id, dry_run: $json.dry_run }) }}",
+          "options": {
+            "responseCode": 202
+          }
+        },
+        "id": "f766956d-517e-51f6-a1b9-418639efdb22",
+        "name": "Respond Kickoff Accepted",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "21a288df-67a5-5450-94e9-a2ccfbf37b68",
+        "name": "Respond Kickoff Bad Request",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          1100
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_cache",
+          "columns": {
+            "column": [
+              {
+                "name": "key",
+                "type": "string"
+              },
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "value",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "d031aac8-f092-5aff-8275-14a2ebd5b05c",
+        "name": "Ensure Cache (Kickoff)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          660
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_sites"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "6ba96e5b-7ef3-55be-bf6f-ca9447948639",
+        "name": "Load Sites (Kickoff)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          660
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_monitors"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "a639bb3e-e20d-5f03-a596-9a931588fdec",
+        "name": "Load Monitors (Kickoff)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          660
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cadence"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "0ccc09fd-2508-5543-bca5-36afb9580c62",
+        "name": "Load Cadence (Kickoff)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1540,
+          660
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "kind",
+                "condition": "eq",
+                "keyValue": "kickoff"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "4e26d44b-2c33-599c-9885-2d9705c37e5c",
+        "name": "Load Kickoff Record",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1760,
+          660
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Site Kickoff: which of the website's weekly jobs start now, in Monday's order, each through its workflow's own Manual Run.\n// A Manual Run given one site runs that job even when the site has it switched off (and the cadence even for a paused site), so the\n// site's own settings are read HERE and only what it has on is started. Refused, with the reason: a website the engine does not\n// track, a paused one, one already kicked off (unless `force`). A dry run starts only the two workflows that honour `dry_run` (AI Growth:\n// no Bing / IndexNow submission; the Content Cadence: plans, writes nothing) — the catch-up's rule — and records nothing.\nconst v = $('Kickoff Validate').first().json;\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst flag = (x, dflt) => (x === undefined || x === null || x === '') ? dflt : !(x === false || /^(false|0|no|off)$/i.test(String(x)));\nconst want = v.domain || v.site_id;\nconst site = rowsOf('Load Sites (Kickoff)').find(s => normD(s.domain) === v.domain || String(s.site_id || '') === (v.site_id || v.domain));\nconst refuse = (reason) => [{ json: { nothing_to_do: true, reason, domain: v.domain || '', site_id: v.site_id || '', request_id: v.request_id, dry_run: v.dry_run } }];\nif (!site) return refuse('\"' + want + '\" is not tracked by the engine (start \"Track my site\" first)');\nconst domain = normD(site.domain), site_id = String(site.site_id);\nif (String(site.status || 'active') === 'paused') return refuse(domain + ' is paused: its automatic work does not start');\nconst done = rowsOf('Load Kickoff Record').find(r => r.key === 'kickoff:' + site_id);\nif (done && !v.force && !v.dry_run) return refuse(domain + ' was already kicked off (' + (done.updated_at || 'earlier') + '); send force: true to start its cycle again');\nconst m = rowsOf('Load Monitors (Kickoff)').find(r => r.site_id === site_id) || {};\nconst c = rowsOf('Load Cadence (Kickoff)').find(r => r.site_id === site_id);\nconst ai = flag(m.ai_visibility, true);\nconst base = { domain, site_id, trigger: 'kickoff', request_id: v.request_id };\n// Monday's order: AI visibility 07:00 (writes the question panel the pulse and AI Growth read), backlinks 07:30, AI Growth 09:30,\n// the Content Cadence 10:00, the Link Builder 11:00. The Site Tracker already ran when tracking was set up; the Rank Tracker has nothing\n// to check before a ladder exists; the monthly audit keeps its own schedule.\nconst jobs = [\n  { job: 'ai_visibility', workflow_id: 'SEOagentAIVisib1', on: ai, why: 'AI visibility is off', dry: false },\n  { job: 'backlinks', workflow_id: 'SEOagentBacklnk1', on: flag(m.backlinks, true), why: 'the backlink monitor is off', dry: false, extra: { light: false } },\n  { job: 'ai_growth', workflow_id: 'SEOagentAIGrow1', on: ai && flag(m.ai_growth, true), why: 'AI growth is off', dry: true },\n  { job: 'content_cadence', workflow_id: 'SEOagentCadence1', on: !!c && String(c.status || 'active') !== 'off' && Number(c.pages_per_week) > 0, why: 'no blog posts a week are set', dry: true },\n  { job: 'link_builder', workflow_id: 'SEOagentLinkBld1', on: flag(m.link_builder, true), why: 'link building is off', dry: false, extra: { free_only: false } },\n];\nconst start = jobs.filter(j => j.on && (!v.dry_run || j.dry));\nconst skipped = jobs.filter(j => !j.on).map(j => j.job + ': ' + j.why).concat(v.dry_run ? jobs.filter(j => j.on && !j.dry).map(j => j.job + ': not started in a dry run (it would spend)') : []);\nif (!start.length) return refuse('nothing to start for ' + domain + (skipped.length ? ' (' + skipped.join('; ') + ')' : ''));\nreturn start.map((j, i) => ({ json: { ...base, ...(j.extra || {}), ...(v.dry_run ? { dry_run: true } : {}), workflow_id: j.workflow_id, job: j.job, order: i + 1, of: start.length, skipped } }));\n"
+        },
+        "id": "a531f66d-4932-574e-8eda-af7836a47830",
+        "name": "Kickoff Plan",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1980,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "48252d62-27f1-58b4-9d79-162de83d1df0",
+                "leftValue": "={{ !$json.nothing_to_do }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "fc79b9f7-ed85-5dab-a7e9-749904497434",
+        "name": "Anything To Start?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2200,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// one seo_cache row per website: when its first cycle was started and which jobs (a dry run writes none)\nconst jobs = $('Kickoff Plan').all().map(i => i.json);\nconst j = jobs[0] || {};\nif (j.dry_run) return [{ json: { skip_record: true } }];\nreturn [{ json: { key: 'kickoff:' + j.site_id, kind: 'kickoff', site_id: j.site_id, value: JSON.stringify({ at: new Date().toISOString(), jobs: jobs.map(x => x.job), request_id: j.request_id }), updated_at: new Date().toISOString() } }];"
+        },
+        "id": "2539ed18-f37f-55d8-b085-f6a273927965",
+        "name": "Kickoff Record Row",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2420,
+          440
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "64565828-529a-5280-b49a-0cc1007e9704",
+                "leftValue": "={{ !$json.skip_record }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "fd569308-4a6c-528f-8c5c-6dd5a90d6522",
+        "name": "Record It?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2640,
+          440
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "={{ $json.key }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "key",
+                "displayName": "key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "value",
+                "displayName": "value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "updated_at",
+                "displayName": "updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "3143cd20-6111-5bfb-b745-07546f688a3f",
+        "name": "Save Kickoff Record",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2860,
+          220
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// the jobs again (the record's save outputs the saved row): one item per Manual Run, in Monday's order\nreturn $('Kickoff Plan').all();"
+        },
+        "id": "6241cd9d-b95c-55dc-9b4d-5db4883afb3d",
+        "name": "Kickoff Jobs",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3080,
+          440
+        ]
+      },
+      {
+        "parameters": {
+          "source": "database",
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $json.workflow_id }}"
+          },
+          "mode": "each",
+          "options": {
+            "waitForSubWorkflow": true
+          }
+        },
+        "id": "de462eda-86d2-5a20-a434-b0e165f7a024",
+        "name": "Start Weekly Job",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          3300,
+          440
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Site Kickoff (2026-10-19)\n`POST /webhook/seo-site-kickoff` (header X-API-Key, credential **SEO API Key**): `{ domain | site_id, force?, dry_run?, request_id? }` → 202 at once. Then, for a website the engine tracks and that is not paused, each weekly job it has switched on starts through its workflow's own **Manual Run**, one after the other, in Monday's order: AI visibility → backlinks (the full check) → AI growth → the Content Cadence → the Link Builder. Their reports arrive through the website's own callback, and each run records its spend under `schedule:<mode>` (the company's autopilot). Once per website (`seo_cache` `kickoff:<site_id>`, written before the first start); `force: true` starts it again. `dry_run: true` starts only AI Growth (no Bing / IndexNow submission) and the Content Cadence (plans, writes nothing) and records nothing.",
+          "height": 200,
+          "width": 900,
+          "color": 6
+        },
+        "id": "b163c65c-ac89-5fcc-ba31-a364d1e5dc55",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -300
+        ]
+      }
+    ],
+    "connections": {
+      "Site Kickoff API": {
+        "main": [
+          [
+            {
+              "node": "Kickoff Validate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Kickoff Validate": {
+        "main": [
+          [
+            {
+              "node": "Kickoff OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Kickoff OK?": {
+        "main": [
+          [
+            {
+              "node": "Respond Kickoff Accepted",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Kickoff Bad Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Respond Kickoff Accepted": {
+        "main": [
+          [
+            {
+              "node": "Ensure Cache (Kickoff)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Cache (Kickoff)": {
+        "main": [
+          [
+            {
+              "node": "Load Sites (Kickoff)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Sites (Kickoff)": {
+        "main": [
+          [
+            {
+              "node": "Load Monitors (Kickoff)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Monitors (Kickoff)": {
+        "main": [
+          [
+            {
+              "node": "Load Cadence (Kickoff)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Cadence (Kickoff)": {
+        "main": [
+          [
+            {
+              "node": "Load Kickoff Record",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Kickoff Record": {
+        "main": [
+          [
+            {
+              "node": "Kickoff Plan",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Kickoff Plan": {
+        "main": [
+          [
+            {
+              "node": "Anything To Start?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Anything To Start?": {
+        "main": [
+          [
+            {
+              "node": "Kickoff Record Row",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Kickoff Record Row": {
+        "main": [
+          [
+            {
+              "node": "Record It?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Record It?": {
+        "main": [
+          [
+            {
+              "node": "Save Kickoff Record",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Kickoff Jobs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Kickoff Record": {
+        "main": [
+          [
+            {
+              "node": "Kickoff Jobs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Kickoff Jobs": {
+        "main": [
+          [
+            {
+              "node": "Start Weekly Job",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

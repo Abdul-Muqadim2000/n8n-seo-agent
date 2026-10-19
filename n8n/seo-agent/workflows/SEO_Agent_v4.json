@@ -1623,7 +1623,7 @@
       },
       {
         "parameters": {
-          "fromEmail": "Alaventra <devaicondeveloper3@gmail.com>",
+          "fromEmail": "Alaventra <noreply@alaventra.com>",
           "toEmail": "={{ $json.email }}",
           "subject": "=Your {{ $json.report_type }} for \"{{ $json.keyword }}\" — {{ $json.brand }}",
           "emailFormat": "html",
@@ -2001,7 +2001,7 @@
       },
       {
         "parameters": {
-          "fromEmail": "Alaventra <devaicondeveloper3@gmail.com>",
+          "fromEmail": "Alaventra <noreply@alaventra.com>",
           "toEmail": "={{ $json.email }}",
           "subject": "={{ $json.report_title || 'Site Audit' }} for {{ $json.domain }}: {{ $json.health_score }}/100 — {{ $json.brand || 'Dev SEO' }}",
           "emailFormat": "html",
@@ -6516,7 +6516,7 @@
       },
       {
         "parameters": {
-          "fromEmail": "Alaventra <devaicondeveloper3@gmail.com>",
+          "fromEmail": "Alaventra <noreply@alaventra.com>",
           "toEmail": "={{ $json.email }}",
           "subject": "=Your keyword ladder plan for \"{{ $json.keyword }}\" — {{ $json.brand }}",
           "emailFormat": "html",
