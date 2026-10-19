@@ -73,6 +73,14 @@ const Env = z.object({
    *  named in them and used as their Reply-To (default support@alaventra.com; set it empty to name none) */
   SUPPORT_URL: str(''),
   SUPPORT_EMAIL: str('support@alaventra.com'),
+  /** invoices of paid credit purchases (app/docs/CREDITS.md "Invoices"): the seller as printed on them. The legal name, the
+   *  address (lines separated by "|"), a tax / VAT number when registered (empty = none printed), the billing contact (empty = the
+   *  support address) and the number prefix (ALV-2026-0001). */
+  INVOICE_ISSUER_NAME: str('Alaventra'),
+  INVOICE_ISSUER_ADDRESS: str(''),
+  INVOICE_TAX_ID: str(''),
+  INVOICE_EMAIL: str(''),
+  INVOICE_PREFIX: str('ALV'),
 
   SEO_BRAND: str('Alaventra'),
   SEO_MAIL_FROM: str(''),
@@ -192,6 +200,13 @@ export const config = {
   support: {
     url: (e.SUPPORT_URL || `${e.APP_URL.replace(/\/+$/, '')}/contact?topic=support`).trim(),
     email: /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e.SUPPORT_EMAIL.trim()) ? e.SUPPORT_EMAIL.trim() : '',
+  },
+  invoice: {
+    name: e.INVOICE_ISSUER_NAME.trim() || 'Alaventra',
+    lines: e.INVOICE_ISSUER_ADDRESS.split('|').map((l) => l.trim()).filter(Boolean),
+    taxId: e.INVOICE_TAX_ID.trim(),
+    email: /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e.INVOICE_EMAIL.trim()) ? e.INVOICE_EMAIL.trim() : '',
+    prefix: (e.INVOICE_PREFIX.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || 'ALV').slice(0, 8),
   },
   mail: {
     from: e.SEO_MAIL_FROM || (e.SEO_SMTP_USER ? `${e.SEO_BRAND} <${e.SEO_SMTP_USER}>` : ''),

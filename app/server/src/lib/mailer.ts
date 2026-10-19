@@ -32,6 +32,8 @@ export interface Mail {
   preheader?: string;
   /** a small table of facts (company, role, valid until...) under the paragraphs */
   details?: { label: string; value: string }[];
+  /** files sent with it (an invoice PDF) */
+  attachments?: { filename: string; content: Buffer; contentType?: string }[];
 }
 
 /** G5: one message as handed to a transport */
@@ -43,7 +45,7 @@ export interface MailPayload {
   text: string;
   replyTo?: string;
   headers?: Record<string, string>;
-  attachments?: { filename: string; content: Buffer }[];
+  attachments?: { filename: string; content: Buffer; contentType?: string }[];
 }
 
 /** G5 (services/portalMail.ts `senderFor`): who a message comes from and under which name */
@@ -212,7 +214,16 @@ export async function sendMail(m: Mail, log: { info: (o: object, msg: string) =>
   }
   try {
     const replyTo = replyToOf(m.sender);
-    const msg: MailPayload = { from: m.sender?.from || config.mail.from, to: m.to, subject: m.subject, html, text, headers: TRANSACTIONAL_HEADERS, ...(replyTo ? { replyTo } : {}) };
+    const msg: MailPayload = {
+      from: m.sender?.from || config.mail.from,
+      to: m.to,
+      subject: m.subject,
+      html,
+      text,
+      headers: TRANSACTIONAL_HEADERS,
+      ...(replyTo ? { replyTo } : {}),
+      ...(m.attachments?.length ? { attachments: m.attachments } : {}),
+    };
     if (m.sender?.via) await m.sender.via(msg);
     else await t.sendMail(msg);
     return true;

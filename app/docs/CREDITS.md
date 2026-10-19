@@ -66,8 +66,29 @@ credits pay that debt first.
 ### Buying credits
 
 There is no card payment yet. **Buy credits** on the Credits page sends a request for a pack (owner / admin; at most 3 waiting); the
-platform admins get an e-mail; the Alaventra team invoices it and confirms it in /admin → company, which adds the pack (12 months)
-and records the payment as revenue. The customer can cancel a waiting request.
+platform admins get an e-mail; the Alaventra team sends the payment details and, once paid, confirms it in /admin → company, which adds
+the pack (12 months), records the payment as revenue and **issues the invoice** (below). The customer can cancel a waiting request.
+
+### Invoices and credit e-mails (`services/invoices.ts`, migration 0017)
+
+- **Every grant that records a payment (`paidUsd > 0`) issues an invoice**, with or without a request, in the same transaction as its
+  ledger entry: a paid grant never exists without its invoice. Numbered per calendar year with no gaps, `ALV-2026-0001`, allocated
+  under a platform-wide lock (`invoices.year` + `seq`, unique). Everything printed (company name, billed-to addresses, the seller, the
+  line) is copied onto the row, so the PDF reads the same after a rename or a settings change. The ledger entry carries
+  `ref.invoice = { id, number }`.
+- **The PDF** (pdf-lib, A4, standard Helvetica, the e-mail logo PNG): seller, billed to (company + its owners and admins), number,
+  issue / payment date, one line (credits, unit price, amount), totals, "PAID", balance due $0.00. Characters Helvetica cannot draw
+  (a name in Arabic script) print as "?"; the e-mail body carries the real name.
+- **E-mails** (the account transport, `ACCOUNT_EMAILS`): a paid grant e-mails "Payment received: invoice …" with the PDF attached
+  to every owner and admin (not those switched off by SCIM); a free grant, a refund or a correction up sends a short "credits added"
+  note with the new balance; a correction down sends nothing. The admin dialog's **"E-mail the company"** tick (default on, off for
+  adjustments) skips it; the invoice is issued either way. `ref.notified` records who got it, or why nobody did.
+- The customer sees **Invoices** on the Credits page (any member; PDF download). The admin sees them on the company page, downloads
+  them and **sends one again** to today's owners and admins.
+- Seller details: `INVOICE_ISSUER_NAME` (default Alaventra), `INVOICE_ISSUER_ADDRESS` (lines separated by `|`), `INVOICE_TAX_ID`
+  (empty = none printed, and the invoice says no tax was charged), `INVOICE_EMAIL` (empty = `SUPPORT_EMAIL`), `INVOICE_PREFIX` (ALV).
+- Not covered: plan credits granted on the 1st (no payment is recorded with them, so no invoice and no e-mail), tax / VAT
+  calculation, credit notes for a refunded payment.
 
 ### Companies that existed before credits (migration 0016, `alignExistingCompanies`)
 
@@ -107,6 +128,8 @@ signing up today is, once (`platform_settings.credits_aligned_at`):
 | `POST /api/admin/credits/align` · `POST /api/admin/credits/guard` | platform admin | bring companies not on credits onto them (idempotent) · run the guard now |
 | `POST /api/admin/companies/:id/credits` `{ kind: 'grant', credits, paidUsd, expires: 'pack'\|'never'\|days, requestId? }` | platform admin | fulfils a request when `requestId` is given |
 | `GET /api/admin/credit-requests?status=pending\|all`, `POST /api/admin/credit-requests/:id/cancel` | platform admin | the requests |
+| `GET /api/orgs/:orgId/billing/invoices/:id/pdf` | viewer + | the company's own invoice as a PDF (list: `BillingOverview.invoices`) |
+| `GET /api/admin/companies/:id/invoices` · `GET /api/admin/invoices/:id/pdf` · `POST /api/admin/invoices/:id/send` | platform admin | the invoices, a PDF, send one again |
 
 ## 4. Data (migrations 0015, 0016)
 
@@ -126,4 +149,6 @@ balance = Σ lots' remaining − debt.
   ≈ 720. A bigger AI panel, more pages or more websites use extra credits (packs). The admin sets a company's plan credits in /admin →
   company → Plan (780 or 5,980). Still placeholders: the done-for-you service prices and some per-plan feature limits.
 - **Pack discounts** (0% now — exactly 3×), welcome credits and their expiry, pack expiry.
-- Card-style receipts / invoices (today: the admin records the payment on the grant).
+- ~~Receipts / invoices~~ **built 2026-10-20** (section "Invoices and credit e-mails"). Still the owner's: the seller's legal name,
+  address and tax / VAT number on the invoice (`INVOICE_*` in `app/.env`; until set it prints "Alaventra" with no address), and whether
+  VAT must be charged (the invoice then needs a tax line).

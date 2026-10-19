@@ -365,6 +365,7 @@ keyword data and stays.
 | PUT | /api/orgs/:orgId/billing/limits | owner | `CreditLimits` `{ onDemandMonthly, autopilotMonthly, reserveForAutopilot }` |
 | POST | /api/orgs/:orgId/billing/requests | admin + | `{ packId, note }` → a pack request (at most 3 waiting) |
 | DELETE | /api/orgs/:orgId/billing/requests/:id | admin + | cancels a waiting request |
+| GET | /api/orgs/:orgId/billing/invoices/:invoiceId/pdf | viewer + | the invoice as a PDF (the company's own only; the list is `BillingOverview.invoices`) |
 | GET | /api/orgs/:orgId/costs | viewer + | the cost table plus `creditRate` (credits per unit of its figures) — what the forms turn into quotes |
 
 **A run** (`Run.credits`, `RunV1.credits`, `RunCredits` in `shared/src/api.ts`): `{ quoted, charged, state, capped }` —
@@ -806,7 +807,10 @@ charged the platform, **revenue** = payments recorded with credit grants, **marg
 | GET | /api/admin/companies/:id | `?period` | `AdminCompanyDetail` (members, websites with their cost, cost by mode, daily, the 20 newest runs, the 100 newest credit entries) |
 | PATCH | /api/admin/companies/:id | `adminCompanyUpdateSchema` (`monthlyBudgetUsd`, `disabled`, `creditsEnforced`, `name`) | `AdminCompanyDetail`; also written to the company's own audit log (`company.admin_changed`) |
 | GET | /api/admin/companies/:id/credits | | `CreditEntry[]` newest first, each with `balanceAfter` |
-| POST | /api/admin/companies/:id/credits | `adminCreditSchema` (`kind` grant / adjust / refund, `credits`, `paidUsd` grants only, `note`) | `CreditEntry` |
+| POST | /api/admin/companies/:id/credits | `adminCreditSchema` (`kind` grant / adjust / refund, `credits`, `paidUsd` grants only, `note`, `notify` default true) | `CreditEntry`; a grant with `paidUsd > 0` issues an invoice (`ref.invoice`); `ref.notified` = who was e-mailed, or why nobody was |
+| GET | /api/admin/companies/:id/invoices | | `InvoiceView[]` newest first |
+| GET | /api/admin/invoices/:id/pdf | | the invoice as a PDF |
+| POST | /api/admin/invoices/:id/send | | e-mails it again (PDF attached) to the company's owners and admins of today → `InvoiceView`; 409 when nobody could be reached |
 | DELETE | /api/admin/companies/:id | `{ confirm: <slug> }` (`adminDeleteCompanySchema`) | `{ ok }` — the same deletion as the owner's (verified websites stop in the engine first; an unreachable engine is logged, the deletion goes on); 409 `agency_has_clients`; its cost history stays as unattributed |
 | GET | /api/admin/export/companies.csv | `?period` | `text/csv`: every company with the money and credit columns; text cells that start with `= + - @`, tab or CR are prefixed with `'` |
 | GET | /api/admin/users | `?period&q` | `AdminUserRow[]` (cost = runs the person started; schedules belong to the company) |
