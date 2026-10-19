@@ -1,0 +1,30 @@
+{
+ "_doc": "Written by build_site_tracker.py from app/shared/src/cycles.ts (the engine-app contract, SCHEDULING_KEYWORDS_PLAN.md \u00a714). The harness (scenarios_keyword_first.js) holds Cadence Plan to it; do not edit by hand.",
+ "source": "app/shared/src/cycles.ts",
+ "cycle_norm_body": "String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()",
+ "auto_sources": {
+  "1": [
+   "ladder"
+  ],
+  "2": [
+   "ladder",
+   "decay",
+   "striking",
+   "ai_refresh"
+  ],
+  "3": [
+   "ladder",
+   "decay",
+   "striking",
+   "ai_refresh",
+   "trend",
+   "ai_answer"
+  ]
+ },
+ "default_level": 2,
+ "chosen_by": [
+  "client_picked",
+  "client_typed",
+  "system_announced"
+ ]
+}
