@@ -1837,6 +1837,34 @@ add_node('Save Monitors (Track)', DT_TYPE, DT_VERSION, dt_upsert_params(MONITORS
 disconnect('Save Cadence (Track)', 'Tracker Payload (Track)')
 for a, b in [('Save Cadence (Track)', 'Ensure Monitors Table (Track)'), ('Ensure Monitors Table (Track)', 'Load Monitors (Track)'), ('Load Monitors (Track)', 'Monitor Row (Track)'), ('Monitor Row (Track)', 'Save Monitors (Track)'), ('Save Monitors (Track)', 'Tracker Payload (Track)')]:
     connect(a, b)
+# ---------- keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §2.2 item 5 / §5.2 / §14.1 / §14.5): Track my site and the request fields ----------
+# * Track my site reads the stored seo_sites row first, so a re-save keeps a site its owner or the credit guard paused `paused` (it used to
+#   write `status: active` on every save: un-pausing by accident). Resuming is Site Admin's `resume`. *Site Row (Track)* reads this node by name.
+# * Normalize Input takes four new fields, each read by its EXACT key (pick() matches keys fuzzily, so a new word must not be a substring
+#   another pick() looks for: none of "chosen", "ladder_mode", "services", "timezone" contains one):
+#     chosen_by   - who chose a ladder's keyword (client_typed | client_picked | system_announced; anything else = '', read as client_typed);
+#     ladder_mode - the mode a ladder is started in (auto | manual; a Manual ladder writes nothing at start);
+#     services    - what the client sells ("What do you sell?"), stored by Track my site as declared_services, plus `services_given`
+#                   (false when the request had no services at all, so a re-save without them leaves the stored list alone);
+#     timezone    - the website's IANA time zone; Track my site ignores it (the Site Kickoff takes it), an invalid zone becomes ''.
+_ecK = pos('Ensure Cadence Table (Track)')
+disconnect('Ensure Cadence Table (Track)', 'Site Row (Track)')
+add_node('Load Site (Track)', DT_TYPE, DT_VERSION, dt_get_where_params(SITES_TABLE, 'site_id', 'eq', SITE18), [_ecK[0] + 220, _ecK[1] - 160], LOAD18)
+connect('Ensure Cadence Table (Track)', 'Load Site (Track)'); connect('Load Site (Track)', 'Site Row (Track)')
+patch('Normalize Input', "const ladder_links = Array.isArray(p2.ladder_links)",
+      "// keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §14.5): exact keys only (see build_v4.py)\n"
+      "const KF_CHOSEN = ['client_typed', 'client_picked', 'system_announced'].includes(String(p2.chosen_by || '').trim().toLowerCase()) ? String(p2.chosen_by).trim().toLowerCase() : '';\n"
+      "const KF_LADDER_MODE = ['auto', 'manual'].includes(String(p2.ladder_mode || '').trim().toLowerCase()) ? String(p2.ladder_mode).trim().toLowerCase() : '';\n"
+      "const KF_SERVICES_GIVEN = Array.isArray(p2.services) || typeof p2.services === 'string';\n"
+      "const KF_SERVICES = (Array.isArray(p2.services) ? p2.services : String(p2.services || '').split(/[\\n,;]+/)).map(x => String(x == null ? '' : x).replace(/\\s+/g, ' ').trim().slice(0, 80)).filter(x => x.length >= 2).filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i).slice(0, 30);\n"
+      "const KF_TZ = (() => { const t = String(p2.timezone || '').trim(); if (!t || t.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\\-]*(\\/[A-Za-z0-9_+\\-]+)*$/.test(t)) return ''; try { new Intl.DateTimeFormat('en-US', { timeZone: t }); return t; } catch (e) { return ''; } })();\n"
+      "const ladder_links = Array.isArray(p2.ladder_links)")
+patch('Normalize Input', "    pipeline_source: String(p2.pipeline_source || ''),",
+      "    pipeline_source: String(p2.pipeline_source || ''),\n    chosen_by: KF_CHOSEN,\n    ladder_mode: KF_LADDER_MODE,\n    services: KF_SERVICES,\n    services_given: KF_SERVICES_GIVEN,\n    timezone: KF_TZ,")
+assert "'Load Site (Track)'" in rd('code/Site_Row_Track.js') and 'declared_services' in rd('code/Site_Row_Track.js'), 'keyword-first: Track my site does not keep a pause or store the declared services'
+assert "('declared_services', 'string')" in open(os.path.join(HERE0, 'ladder_common.py'), encoding='utf-8').read(), 'keyword-first: seo_sites has no declared_services column'
+assert 'declared_services:' in rd('code/_site_model.js') and "'declared_services'];" in rd('code/_site_model.js'), 'keyword-first: the site model does not write declared_services back (SM.toRow)'
+log('Keyword-first, Track my site and the request (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.2 / §14): Normalize Input takes chosen_by, ladder_mode, services (+ services_given) and timezone by their exact keys; Track my site reads the stored row first (Load Site (Track)) so a re-save keeps a paused site paused, and stores the declared services (seo_sites.declared_services), which the site model merges into its services and writes back unchanged')
 # ---------- D. audit: brand & entity check (between the Search Console step and the scoring) ----------
 patch('Analyze Probes', "        sitemap_urls: locs.length,\n", "        sitemap_urls: locs.length,\n        robots_txt: robotsText.slice(0, 20000),\n        ai_crawlers_blocked: aiBlocked,\n        llms_txt_present: llms.status === 200 && llms.body.length > 100 && !/<html/i.test(llms.body),\n")
 SITE_AUDIT19 = "={{ 'site_' + String($('Check Crawl').first().json.domain || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-') }}"

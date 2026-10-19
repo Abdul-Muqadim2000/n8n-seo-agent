@@ -57,7 +57,11 @@ SITES_COLS = [('site_id', 'string'), ('domain', 'string'), ('gsc_property', 'str
               ('accreditation', 'string'), ('model_updated_at', 'string'),
               # B7-5 (W3-D, 2026-10-17): content groups -- a JSON list [{name, pattern}] of regexes over page paths, set through Site Admin
               # (action content_groups); the Site Tracker reports each group's Search Console clicks with the same statistical bar
-              ('content_groups_json', 'string')]
+              ('content_groups_json', 'string'),
+              # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §5.2 / §14.1): the services the client declared ("What do you sell?" on Track my site), a JSON
+              # list. Written by Track my site only; the site model (SM.from) merges it into its services and SM.toRow writes it back unchanged, so
+              # the weekly Site Tracker never overwrites it. Read by the fit gate (protected words, topics) and the keyword research (seeds).
+              ('declared_services', 'string')]
 # v4.15 (G19): the site's page inventory -- one row per site and URL (sitemap, Search Console, AI Growth key pages, publish detection), filled
 # by D11; `queries_json` holds the Search Console queries the page gets impressions for. SM.matchPage() reads it.
 PAGES_TABLE = 'seo_pages'
