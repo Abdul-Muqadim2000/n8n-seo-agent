@@ -1509,7 +1509,9 @@ await guard('pipeline', async () => {
   p = await plan({ ladders: [...A(), ...B({ a: 'writing' })], settings: [set('lad_A', { priority: 2 }), set('lad_B', { priority: 1, mode: 'manual' })] });
   console.log('   manual ->', p.kws.join(' | '), '| awaiting:', JSON.stringify(p.first.awaiting_approval));
   check('manual ladder not written', p.picks.every(x => x.ladder_id === 'lad_A') && p.kws.length === 3, p.kws);
-  check('manual ladder next page awaiting approval', eq(p.first.awaiting_approval, [{ ladder_id: 'lad_B', head: 'vat software uae', keyword: 'vat software uae guide', rung: 1, page_no: 2, page_type: 'Guide', existing_page_url: '' }]), JSON.stringify(p.first.awaiting_approval));
+  // keyword-first (2026-10-19): each entry also carries its item key (the "Coming up" plan's), the price of the page and who chose the ladder
+  check('manual ladder next page awaiting approval', eq(p.first.awaiting_approval.map(({ item_key, est_usd, chosen_by, ...core }) => core), [{ ladder_id: 'lad_B', head: 'vat software uae', keyword: 'vat software uae guide', rung: 1, page_no: 2, page_type: 'Guide', existing_page_url: '' }])
+    && p.first.awaiting_approval[0].item_key === 'vat software uae guide' && p.first.awaiting_approval[0].est_usd > 0 && p.first.awaiting_approval[0].chosen_by === '', JSON.stringify(p.first.awaiting_approval));
   const cnm = await run('Cadence Note', [{ json: {} }]); scanHtml('cadence note (manual ladder)', cnm[0].json.html);
   check('cadence note carries the pipeline facts', cnm[0].json.awaiting_approval.length === 1 && /Ready for your approval/.test(cnm[0].json.html) && cnm[0].json.paused_reason === '' && Array.isArray(cnm[0].json.queued_ladders), JSON.stringify(Object.keys(cnm[0].json)));
   // 4. focus: three Auto ladders, max_active 2 (default) -> the newest waits; a fully written ladder frees its slot; max_active 3 writes all
@@ -1564,11 +1566,13 @@ await guard('pipeline', async () => {
   check('max_waiting 5 from the _site row', p.kws.length === 3, p.kws);
   // 9. opportunities manual: no striking / trend picks, listed as suggestions
   if (!queryRows || !trendRows) throw new Error('S10 did not produce query / trend rows');
-  const pa = await plan({ queries: queryRows, trends: trendRows });
-  const pm = await plan({ queries: queryRows, trends: trendRows, settings: [siteSet({ opportunities: 'manual' })] });
+  // keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.5): `opportunities` decides nothing any more; the autopilot level does. Full
+  // autopilot (3) writes the opportunities on its own, level 1 suggests exactly that list (and, with no ladder chosen, waits for the first keyword)
+  const pa = await plan({ queries: queryRows, trends: trendRows, settings: [siteSet({ autopilot_level: 3 })] });
+  const pm = await plan({ queries: queryRows, trends: trendRows, settings: [siteSet({ opportunities: 'manual', autopilot_level: 1 })] });
   console.log('   opportunities auto ->', pa.kws.join(' | '), '| manual suggestions ->', (pm.status ? pm.status.suggestions : []).map(s => s.keyword + ' [' + s.source + ']').join(' | '));
-  check('opportunities manual: nothing written', !pm.picks.length && pm.status && pm.status.suggestions.length >= 3, JSON.stringify(pm.first).slice(0, 300));
-  check('suggestions = what Auto would write', eq(pm.status.suggestions.slice(0, 3).map(s => s.keyword), pa.kws) && pm.status.suggestions.every(s => ['striking', 'trend'].includes(s.source)), JSON.stringify(pm.status.suggestions.map(s => s.keyword)));
+  check('level 1 (stored opportunities manual): nothing written, the site waits for its first keyword', !pm.picks.length && pm.status && pm.status.suggestions.length >= 3 && pm.status.waiting_for_keyword === true, JSON.stringify(pm.first).slice(0, 300));
+  check('suggestions = what full autopilot would write', eq(pm.status.suggestions.slice(0, 3).map(s => s.keyword), pa.kws) && pm.status.suggestions.every(s => ['striking', 'trend'].includes(s.source) && s.auto === false && s.item_key && s.est_usd > 0), JSON.stringify(pm.status.suggestions.map(s => s.keyword)));
   const pml = await plan({ ladders: A(), queries: queryRows, trends: trendRows, pages: 3, settings: [siteSet({ opportunities: 'manual' })] });
   check('opportunities manual with a ladder: ladder pages only, suggestions on the picks', pml.picks.every(x => x.source === 'ladder') && pml.picks[0].suggestions.length > 0, pml.kws);
   // 10. no settings rows: same picks as the v4.7 plan (frozen copy in harness/legacy/)
@@ -1577,17 +1581,28 @@ await guard('pipeline', async () => {
   const projBody = (b) => { if (!b || typeof b !== 'object') return b; const { ladder_target_url: _planned, ...rest } = b; return rest; };
   const proj = (items) => items.filter(x => !x.json.nothing_to_do).map(x => { const j = x.json; return { keyword: j.keyword, source: j.source, page_type: j.page_type, existing: j.existing_page_url, ladder_id: j.ladder_id, rung: j.rung, page_no: j.page_no, why: j.why, request_id: j.request_id, pages: j.pages_per_week, upcoming: j.upcoming, dry_run: j.dry_run, body: projBody(j.body) }; });   // R1 (2026-10-13): pending_publish is compared on its own below — v4.7 listed every `started` row, R1 only the pages the content log says were `written`
   check('R15: a ladder page the cadence spawns carries the URL its ladder row planned, so the page keeps that slug', pml.picks.every(x => x.body.ladder_target_url === slug(x.keyword)) && pml.picks.length > 0, JSON.stringify(pml.picks.map(x => [x.keyword, x.body.ladder_target_url])));
+  // keyword-first (2026-10-19): v4.7 wrote striking-distance and trend posts on its own, which is full autopilot (level 3) now; the
+  // comparison runs at level 3 (the _site row is the only setting), and a missing settings table is the defaults (level 2), below
+  const L3 = [siteSet({ autopilot_level: 3 })];
   const same12 = async (label, o, extra) => {
-    const n = await plan(o); const old = await run('legacy:Cadence_Plan_v4_7', [{ json: {} }]);
+    const n = await plan({ settings: L3, ...o }); mock('Load Ladder Settings', EMPTY); const old = await run('legacy:Cadence_Plan_v4_7', [{ json: {} }]);
     console.log('   ' + label + ' -> new:', n.kws.join(' | '), '| v4.7:', old.filter(x => !x.json.nothing_to_do).map(x => x.json.keyword).join(' | '), '| candidates', n.first.candidates, 'vs', old[0].json.candidates);
-    check('no settings = v4.7: ' + label, n.picks.length > 0 && eq(proj(n.items), proj(old)) && (!extra || extra(n, old)), JSON.stringify(proj(n.items)).slice(0, 200) + ' VS ' + JSON.stringify(proj(old)).slice(0, 200));
+    check('level 3 = v4.7: ' + label, n.picks.length > 0 && eq(proj(n.items), proj(old)) && (!extra || extra(n, old)), JSON.stringify(proj(n.items)).slice(0, 200) + ' VS ' + JSON.stringify(proj(old)).slice(0, 200));
     return n;
   };
-  await same12('S12 fixture (one ladder, striking, trends)', { trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12 }, (n, old) => n.first.candidates === old[0].json.candidates - 1);   // the gated main page is the only candidate less
-  await same12('scheduled, 3 pages', { pages: 3, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12 });
+  // R-K7 (keyword-first, 2026-10-19): S12's ladder rows were stored moments ago with a page `writing`, which is a ladder START in this cycle and
+  // counts against this week's pages; the v4.7 comparison is about the picking rules, so the ladder is dated as started a month ago here
+  // (the day-one budget itself is harness/scenarios_keyword_first.js)
+  const oldLadderRows = ladderRows.map(r => ({ json: { ...r.json, start_date: '2026-09-01T00:00:00.000Z' } }));
+  await same12('S12 fixture (one ladder, striking, trends)', { trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: oldLadderRows, queries: queryRows, trends: trendRows, logs: logRows12 }, (n, old) => n.first.candidates === old[0].json.candidates - 1);   // the gated main page is the only candidate less
+  await same12('scheduled, 3 pages', { pages: 3, ladders: oldLadderRows, queries: queryRows, trends: trendRows, logs: logRows12 });
+  const fresh12 = await plan({ pages: 3, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12, settings: L3 });
+  check('R-K7: the same ladder started moments ago spends one of this week\'s 3 pages (its first page is being written)', fresh12.picks.length === 2 && fresh12.first.budget.spent === 1 && /ladder start/.test(fresh12.first.budget.spent_keywords[0].how), JSON.stringify({ k: fresh12.kws, b: fresh12.first.budget }));
   await same12('no ladder, dry run', { trigger: { domain: D, pages: 3, dry_run: true }, queries: queryRows, trends: trendRows, logs: logRows12 }, (n, old) => n.first.candidates === old[0].json.candidates && n.first.dry_run === true);
   const missing = [{ json: { error: { message: 'Data table with name "seo_ladder_settings" not found' } } }];
-  await same12('settings / rank tables missing', { trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12, settings: missing, ranks: missing });
+  const nMiss = await plan({ trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12, settings: missing, ranks: missing });
+  const nDef = await plan({ trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12 });
+  check('settings / rank tables missing = the defaults (level 2): the same picks as no settings rows at all', nMiss.picks.length > 0 && eq(proj(nMiss.items), proj(nDef.items)) && nMiss.first.level === 2, JSON.stringify(proj(nMiss.items)).slice(0, 200));
   // R1 (2026-10-13): the publish reminder is the one field that differs from v4.7 on purpose — v4.7 reminded about every log row with
   // status `started`, which is a run that was opened and may never have written a page; R1 reminds only about the pages the log says
   // were `written`. The stored row below says `written`, so the reminder is the same one the customer used to get.
@@ -1597,9 +1612,11 @@ await guard('pipeline', async () => {
     eq((nPending.first.pending_publish || []).map(x => x.keyword), ['wms uae']) && !(oldPending[0].json.pending_publish || []).length,
     JSON.stringify({ now: nPending.first.pending_publish, v47: oldPending[0].json.pending_publish }));
   const n0 = await plan({ trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12 });
-  check('no settings: new fields empty', n0.picks.every(x => x.paused_reason === '' && !x.awaiting_approval.length && !x.suggestions.length && !x.queued_ladders.length && !x.won_ladders.length && x.opportunities === 'auto' && x.max_waiting === 3), JSON.stringify(n0.first).slice(0, 300));
+  // keyword-first: with no settings the level is 2, the ladder (chosen by the client: no chooser on file) is written, and the opportunities
+  // level 2 does not write on its own are suggestions now
+  check('no settings: the pipeline fields are their defaults (level 2, nothing waiting, the opportunities as suggestions)', n0.picks.every(x => x.paused_reason === '' && !x.awaiting_approval.length && x.suggestions.every(sg => ['striking', 'trend'].includes(sg.source) && sg.auto === false) && !x.queued_ladders.length && !x.won_ladders.length && x.opportunities === 'auto' && x.max_waiting === 3 && x.level === 2 && x.waiting_for_keyword === false) && n0.picks.some(x => x.source === 'ladder'), JSON.stringify(n0.first).slice(0, 300));
   const cn0 = await run('Cadence Note', [{ json: {} }]);
-  check('no settings: note has no pipeline sections', !/Ready for your approval|Suggested posts|Queued ladders|waiting for support|Won/.test(cn0[0].json.html), cn0[0].json.html.slice(0, 200));
+  check('no settings: note has no pipeline sections but the suggestions', !/Ready for your approval|Queued ladders|waiting for support|Won/.test(cn0[0].json.html), cn0[0].json.html.slice(0, 200));
   mock('Manual Run', EMPTY); mock('Load Cadence', EMPTY); const noCad = await run('Cadence Plan', [{ json: {} }]);
   check('a site without a cadence still gets nothing', noCad.length === 1 && noCad[0].json.nothing_to_do && !noCad[0].json.report_only, JSON.stringify(noCad[0].json));
   // two ladders, no settings rows: the older ladder first (priority by start date) — a deliberate change from the v4.7 rung interleave
@@ -1664,7 +1681,7 @@ await guard('pipeline phase 3', async () => {
   const EMPTY = [{ json: {} }];
   const keysOf = (o) => JSON.stringify(Object.keys(o || {}).sort());
   const CACHE_COLS = JSON.stringify(['key', 'kind', 'site_id', 'value', 'updated_at'].sort());
-  const SET_COLS = JSON.stringify(['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at'].sort());
+  const SET_COLS = JSON.stringify(['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at', 'chosen_by', 'autopilot_level'].sort());   // + keyword-first (2026-10-19)
   // the overlap rule of the web app (app/shared/src/ladders.ts), to check the n8n side independently
   const STOPW = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);
   const toks = (s) => [...new Set(String(s).toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 1 && !STOPW.has(t)).map(t => t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '')).filter(Boolean))];
@@ -2002,10 +2019,13 @@ await guard('pipeline phase 3', async () => {
   check('assess: a realistic on-topic keyword gets no alternatives', eq(b.alternatives, []), JSON.stringify(b.alternatives));
   b = await answer(AR(), [{ json: { output: '```json\n{"fit": 1, "navigational": false, "alternatives": []}\n```' } }]);
   check('assess: a fenced JSON answer from the model is read', b.fit === 1 && b.navigational === false, JSON.stringify(b));
-  b = await answer(AR({ intent: 'navigational', keyword: 'xero login' }), [{ json: { error: { message: 'Overloaded' } } }]);
+  b = await answer(AR({ keyword: 'erp support dubai' }), [{ json: { error: { message: 'Overloaded' } } }]);
   // R3 (2026-10-13): the fit that cannot be read is in the LABEL, not only in `warnings`, and the Claude call is charged even when its
   // answer could not be parsed (live: exec 488 shipped fit null and reported the AI part of the cost as nothing).
-  check('assess: Claude failed -> fit null in the label as well, navigational from the keyword data, a warning, and the model still charged', b.fit === null && b.fit_known === false && /topic check unavailable/.test(b.label) && b.navigational === true && b.difficulty_for_you === 'not_realistic' && b.warnings.some(w => /topic check unavailable: Overloaded/.test(w)) && b.cost_usd === 0.0235, JSON.stringify(b));
+  check('assess: Claude failed on a keyword the fit gate lets through -> fit null in the label as well, a warning, and the model still charged', b.fit === null && b.fit_known === false && /topic check unavailable/.test(b.label) && b.fit_source === 'unknown' && b.warnings.some(w => /topic check unavailable: Overloaded/.test(w)) && b.cost_usd === 0.0235, JSON.stringify(b));
+  b = await answer(AR({ intent: 'navigational', keyword: 'xero login' }), [{ json: { error: { message: 'Overloaded' } } }]);
+  // keyword-first R-K4 (2026-10-19): the deterministic gate decides a refusal whatever the model did - fit 0 and known, navigational from the data
+  check('assess: Claude failed, the fit gate refuses ("xero login") -> fit 0 from the gate, known, navigational, not realistic, the model still charged', b.fit === 0 && b.fit_known === true && b.fit_source === 'gate' && b.fit_gate.ok === false && b.navigational === true && b.difficulty_for_you === 'not_realistic' && /not a fit/.test(b.label) && b.cost_usd === 0.0235, JSON.stringify(b));
   b = await answer(AR({ intent: 'navigational', keyword: 'northwind erp' }), [{ json: { error: { message: 'Overloaded' } } }]);
   check('assess: the site\'s own brand is never "another company"', b.navigational === false && b.difficulty_for_you !== 'not_realistic', JSON.stringify(b));
   mock('Assess Validate', [{ json: v }]); mock('Load Assess Cache', EMPTY);
@@ -2702,7 +2722,8 @@ await guard('ai growth', async () => {
   // ---- (g) the Content Cadence: one AI page a week within the month's allowance, extra to the blog posts; the target marked writing ----
   const targetRow = (o) => ({ json: { target_id: 'ait_x_' + o.id, site_id: SITE, domain: D, question: o.q, keyword: o.k, kind: o.kind || 'answer', page_url: o.url || '', page_type: o.pt || 'Guide', fanout: 'a search | another search', sources_json: JSON.stringify([{ u: 'https://gulfnews.com/x', t: 'X' }]), competitors: 'zoho.com, cleartax.com', value: o.v, status: 'queued' } });
   const cadLoads = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: o.pages == null ? 1 : o.pages, status: 'active' } }]); mock('Load Ladders', [...M.ladders(), { json: { ladder_id: 'lad_1', domain: D, head_keyword: 'e invoicing in uae', rung: 1, page_no: 1, keyword: 'peppol accredited provider uae', page_type: 'Guide', target_url: 'https://northwind-erp.com/peppol-accredited-provider-uae/', page_exists: false, status: 'planned' } }]); mock('Load Query History', [{ json: {} }]); mock('Load Trends', [{ json: {} }]);
-    mock('Load Content Log', o.logs || [{ json: {} }]); mock('Load Ladder Settings', o.settings || [{ json: {} }]); mock('Load Main Keyword Ranks', [{ json: {} }]);
+    // keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.5): the AI page ON TOP of the pages a week is full autopilot (level 3)
+    mock('Load Content Log', o.logs || [{ json: {} }]); mock('Load Ladder Settings', o.settings || [{ json: { ladder_id: '_site', site_id: SITE, domain: D, autopilot_level: 3 } }]); mock('Load Main Keyword Ranks', [{ json: {} }]);
     mock('Load AI Targets (Cadence)', o.targets || [targetRow({ id: 1, q: 'Odoo or Business Central for UAE e-invoicing?', k: 'odoo vs business central uae', v: 2.1, pt: 'Comparison Page' }), targetRow({ id: 2, q: 'Which companies help UAE businesses with e-invoicing?', k: 'e invoicing in uae', kind: 'refresh', url: WWW + '/e-invoicing-uae/', v: 3.4 })]);
     mock('Load Monitors (Cadence)', o.monitors || [{ json: { site_id: SITE, ai_visibility: true, ai_growth: true, ai_pages_month: '' } }]); };
   cadLoads(); const cpl = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
@@ -2717,9 +2738,10 @@ await guard('ai growth', async () => {
   const cpl3 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
   check('cadence: AI pages off (0 a month) and no blog cadence -> nothing', cpl3.length === 1 && cpl3[0].nothing_to_do === true, JSON.stringify(cpl3));
   cadLoads({ pages: 0 }); const cpl4 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
-  check('cadence: a site without a blog cadence still gets its AI page', cpl4.length === 1 && /^ai_/.test(cpl4[0].source), JSON.stringify(cpl4.map(x => x.source)));
-  cadLoads({ settings: [{ json: { ladder_id: '_site', site_id: SITE, domain: D, opportunities: 'manual' } }] }); const cpl5 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
-  check('cadence: Manual opportunities -> the AI page is a suggestion, not written', !cpl5.some(x => /^ai_/.test(x.source)) && cpl5.some(x => (x.suggestions || []).some(sg => sg.target_id === 'ait_x_2')), JSON.stringify(cpl5.map(x => [x.source, (x.suggestions || []).length])));
+  // keyword-first (2026-10-19): this is the hole the Techand page came through — a site set to 0 pages a week still got its AI page
+  check('cadence: a site set to 0 pages a week gets no AI page either, even at full autopilot (pages_per_week bounds everything)', cpl4.length === 1 && cpl4[0].nothing_to_do === true && !/^ai_/.test(cpl4[0].source || ''), JSON.stringify(cpl4.map(x => x.source || x.reason)));
+  cadLoads({ settings: [{ json: { ladder_id: '_site', site_id: SITE, domain: D, opportunities: 'auto', autopilot_level: 1 } }] }); const cpl5 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
+  check('cadence: level 1 (a stored opportunities auto changes nothing) -> the AI page is a suggestion with its AI target, not written', !cpl5.some(x => /^ai_/.test(x.source)) && cpl5.some(x => (x.suggestions || []).some(sg => sg.target_id === 'ait_x_2' && sg.ai_target && sg.ai_target.question && sg.source === 'ai_refresh' && sg.auto === false)), JSON.stringify(cpl5.map(x => [x.source, (x.suggestions || []).length])));
   cadLoads({ logs: ['a', 'b', 'c'].map(k => ({ json: { site_id: SITE, domain: D, keyword: 'waiting ' + k, source: 'ladder', status: 'written', started_at: ago(5) } })) }); const cpl6 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);   // R1 (2026-10-13): `written` is what makes a page wait for publication
   check('cadence: the pile-up guard (3 unpublished pages) holds the AI page too', !cpl6.some(x => /^ai_/.test(x.source) && !x.nothing_to_do), JSON.stringify(cpl6.map(x => [x.source, x.paused_reason])));
   cadLoads({ targets: [targetRow({ id: 9, q: 'Which accredited Peppol providers work in Dubai?', k: 'accredited peppol provider dubai', v: 5 })] }); const cpl7 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
@@ -3593,7 +3615,7 @@ await guard('one site model (FIX_PLAN G19)', async () => {
   check('SM.pageRows writes exactly the seo_pages columns', m1.page_rows.length === 3 && m1.page_rows.every(r => eq(Object.keys(r).sort(), [...TC.PAGES].sort())) && m1.page_rows[0].url === INS, JSON.stringify(Object.keys(m1.page_rows[0])));
 
   // ---- 5. SM.toRow: exactly the seo_sites columns the model owns ----
-  const MODEL_COLS = ['canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];
+  const MODEL_COLS = ['canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at', 'declared_services'];   // + keyword-first (2026-10-19)
   check('SM.toRow writes only seo_sites columns and every model column (sync_tables.py adds them to the live table)',
     Object.keys(p1.row).every(k => TC.SITES.includes(k)) && MODEL_COLS.every(k => k in p1.row) && eq(p1.columns, ['site_id', 'domain', ...MODEL_COLS]) && JSON.parse(p1.row.nap_json).city === 'Dubai', JSON.stringify(Object.keys(p1.row)));
 
@@ -4521,7 +4543,8 @@ await guard('d11-existing-pages', async () => {
     mock('Load Ladders', [lrow(1, 1, 'uae e invoicing fines', 'planned')]);
     mock('Load Query History', EMPTY);
     mock('Load Trends', [{ json: { site_id: SITE, domain: D, keyword: 'e invoicing', direction: 'rising', rising: KW + ' (+120%)', change_pct: 120, checked_at: daysAgo(2) } }]);
-    mock('Load Content Log', EMPTY); mock('Load Ladder Settings', EMPTY); mock('Load Main Keyword Ranks', EMPTY);
+    // keyword-first (2026-10-19): a rising search is a new topic, written on its own at full autopilot (level 3) only
+    mock('Load Content Log', EMPTY); mock('Load Ladder Settings', [{ json: { ladder_id: '_site', site_id: SITE, domain: D, autopilot_level: 3 } }]); mock('Load Main Keyword Ranks', EMPTY);
     mock('Load Pages (Cadence)', pages.length ? pages.map(p => ({ json: { ...p, site_id: SITE, id: 1 } })) : EMPTY);
     const r = await run('Cadence Plan', store['Load Pages (Cadence)']);
     return { picks: r.filter(x => !x.json.nothing_to_do).map(x => x.json), first: r[0].json };
@@ -11346,7 +11369,9 @@ await guard('b4-decay-tested-stored-and-written', async () => {
     mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: o.pages == null ? 1 : o.pages, status: 'active' } }]);
     mock('Load Ladders', o.ladders || [{ json: {} }]); mock('Load Trends', [{ json: {} }]);
     mock('Load Query History', o.queries || [{ json: { site_id: SITE, domain: D, period_end: '2026-10-07', query: 'erp pricing uae', position: 8, impressions: 400, clicks: 5, page: W + '/erp-pricing/' } }]);
-    mock('Load Content Log', o.logs || [{ json: {} }]); mock('Load Ladder Settings', o.settings || [{ json: {} }]); mock('Load Main Keyword Ranks', [{ json: {} }]);
+    // keyword-first (2026-10-19): no ladder here, so the refresh is written on its own at full autopilot (level 3); level 2 with a chosen
+    // ladder and an in-topic page is harness/scenarios_keyword_first.js
+    mock('Load Content Log', o.logs || [{ json: {} }]); mock('Load Ladder Settings', o.settings || [{ json: { ladder_id: '_site', site_id: SITE, domain: D, autopilot_level: 3 } }]); mock('Load Main Keyword Ranks', [{ json: {} }]);
     mock('Load AI Targets (Cadence)', [{ json: {} }]); mock('Load Monitors (Cadence)', [{ json: { site_id: SITE, ai_visibility: false, ai_growth: false } }]);
     mock('Load Pages (Cadence)', o.pageRows || [pageRow(P_DECAY)]);
     mock('Manual Run', [{ json: {} }]);
@@ -18383,6 +18408,7 @@ await guard('S166 B8-8 B8-9 B8-10 the build carries the three engine fixes in bo
 await require('./scenarios_fa3')({ H, run, mock, store, guard, reset, begin });
 // G6 (2026-10-18): the AI question panel at enterprise scale — up to 500 questions, split runs, the pulse's rotating sample (harness/scenarios_g6.js)
 await require('./scenarios_g6')({ H, run, mock, store, guard, reset, begin });
+await require('./scenarios_keyword_first')({ H, run, mock, store, guard, reset, begin });   // keyword-first autopilot (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5 / §9 KF)
 
 // ===================================================================================
 // S180-S183 (2026-10-17, defect-fix agent F-B — re-rating 2026-10-17 part 2, executor B: execs 739 / 767, docs/system-review-2026-10-17/
