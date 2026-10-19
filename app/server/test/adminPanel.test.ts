@@ -110,7 +110,10 @@ describe('the guard', () => {
 describe('settings and credits', () => {
   it('settings: defaults, validation, saved with who changed them, logged', async () => {
     const s = (await boss.get('/api/admin/settings')).body;
-    expect(s).toMatchObject({ creditValueUsd: 0.1, markup: 3, signupCredits: 0, enforceForNewCompanies: false });
+    // credits (0015, app/docs/CREDITS.md): $0.05 a credit at 3x, 200 welcome credits, enforced for new companies, four packs at list price
+    expect(s).toMatchObject({ creditValueUsd: 0.05, markup: 3, signupCredits: 200, enforceForNewCompanies: true, packExpiryMonths: 12, planRollover: true, signupExpiryDays: 90 });
+    expect(s.creditPacks.map((p: { credits: number }) => p.credits)).toEqual([500, 2000, 5000, 20000]);
+    // the rest of this file was written against the earlier baseline: $0.10 a credit, no welcome credits, nothing enforced
     expect((await boss.put('/api/admin/settings', { ...s, markup: 0.5 })).status).toBe(400);
     const saved = (await boss.put('/api/admin/settings', { creditValueUsd: 0.1, markup: 3, signupCredits: 0, enforceForNewCompanies: false })).body;
     expect(saved.updatedBy).toBe('boss@admin.test');
@@ -423,7 +426,8 @@ describe('credit enforcement', () => {
     expect((await c.post(`/api/orgs/${org.id}/runs`, verdict)).status).toBe(200);
     const second = await c.post(`/api/orgs/${org.id}/runs`, verdict);
     expect(second.status).toBe(402);
-    expect(second.body.error).toMatch(/held by work still running/);
+    expect(second.body.error).toMatch(/held by analyses still running/);
+    expect(second.body.error).not.toMatch(/\$/); // credits only: never a dollar figure
     // the keyword check path is held to it too
     const owner = await db.query.users.findFirst({ where: eq(schema.users.email, 'paid@enforce.test') });
     const o = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, org.id) });
@@ -439,7 +443,7 @@ describe('credit enforcement', () => {
     expect(o!.creditsEnforced).toBe(true);
     const entries = (await boss.get(`/api/admin/companies/${org.id}/credits`)).body;
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ kind: 'grant', credits: 50, paidUsd: 0, note: 'Sign-up credits' });
+    expect(entries[0]).toMatchObject({ kind: 'grant', credits: 50, paidUsd: 0, note: 'Welcome credits' });
     await boss.put('/api/admin/settings', { creditValueUsd: 0.1, markup: 3, signupCredits: 0, enforceForNewCompanies: false });
   });
 });

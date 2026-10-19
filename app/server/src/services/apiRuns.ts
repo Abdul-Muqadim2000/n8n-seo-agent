@@ -30,7 +30,7 @@ import { createRunWithMeta, estimateCost, findIdempotentRun } from './runs';
 import { creatorMembership } from './apiKeys';
 import { audit } from './audit';
 import { monthSpend } from './spend';
-import { creditCheck, type CreditCheck } from './admin/credits';
+import { creditCheck, type CreditCheck } from './billing';
 
 /**
  * G4 (2026-10-17) — the write API: start any analysis a form can start (`POST /api/v1/runs`, MCP `start_run`).

@@ -70,9 +70,9 @@ async function costByOrg(r: PeriodRange): Promise<Map<string | null, CostSplit>>
 
 export async function companyRows(r: PeriodRange, opts: { q?: string; ids?: string[] } = {}): Promise<AdminCompanyRow[]> {
   const like = opts.q ? `%${opts.q.replace(/[\\%_]/g, (c) => '\\' + c)}%` : null;
-  const orgs = await execRows<{ id: string; name: string; slug: string; kind: string; created_at: string; disabled: boolean; monthly_budget_usd: number; credits_enforced: boolean }>(
+  const orgs = await execRows<{ id: string; name: string; slug: string; kind: string; created_at: string; disabled: boolean; monthly_budget_usd: number; credits_enforced: boolean; plan_monthly_credits: number }>(
     db,
-    sql`select id, name, slug, kind, created_at, disabled, monthly_budget_usd, credits_enforced from ${schema.organizations}
+    sql`select id, name, slug, kind, created_at, disabled, monthly_budget_usd, credits_enforced, plan_monthly_credits from ${schema.organizations}
         where true ${like ? sql`and (name ilike ${like} or slug ilike ${like})` : sql``}
         ${opts.ids ? (opts.ids.length ? sql`and id in (${sql.join(opts.ids.map((i) => sql`${i}::uuid`), sql`, `)})` : sql`and false`) : sql``}`,
   );
@@ -112,6 +112,7 @@ export async function companyRows(r: PeriodRange, opts: { q?: string; ids?: stri
         lastRunAt: iso(c?.last_run),
         credits: { balance: balances.get(o.id) ?? 0, grantedInPeriod: cr.granted, usedInPeriod: cr.used, enforced: !!o.credits_enforced },
         money: moneyOf(split, cr.paid, cr.listValueUsd),
+        planMonthlyCredits: Number(o.plan_monthly_credits ?? 0),
       };
     })
     .sort((a, b) => b.money.cost.totalUsd - a.money.cost.totalUsd || a.name.localeCompare(b.name));

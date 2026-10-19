@@ -370,11 +370,31 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
       );
       return { credits: Number(d?.c ?? 0), entries: Number(d?.n ?? 0) };
     };
+    // credits (app/docs/CREDITS.md): what one cost event may be charged — nothing for a run that failed, and an on-demand run never
+    // beyond the quote it was started at (its other events' charges counted); a schedule's event at its full price
+    const runCharge = async (eventKey: string, runId: string | null, raw: number): Promise<{ credits: number; failed: boolean }> => {
+      if (!runId) return { credits: raw, failed: false };
+      const [run] = await execRows<{ status: string; quoted: number | null; other: number }>(
+        tx,
+        sql`select ru.status, ru.quoted_credits as quoted,
+              coalesce((select -sum(c.credits) from ${schema.creditLedger} c where c.kind = 'usage' and c.ref->>'runId' = ${runId}
+                and c.ref_key is distinct from ${'cost:' + eventKey} and c.ref_key not like ${'cost:' + eventKey + ':%'}), 0)::float as other
+            from ${schema.runs} ru where ru.id = ${runId}::uuid`,
+      );
+      if (!run) return { credits: raw, failed: false };
+      if (run.status === 'failed') return { credits: 0, failed: true };
+      if (run.quoted == null) return { credits: raw, failed: false };
+      return { credits: Math.round(Math.min(raw, Math.max(0, Number(run.quoted) - Number(run.other))) * 100) / 100, failed: false };
+    };
+    const originOf = (o: string | null | undefined) => (o === 'app' ? 'on_demand' : 'autopilot');
     const relink = async (engineRunId: string, prev: Stored, a: Attribution) => {
       await tx
         .update(schema.costEvents)
         .set({ orgId: a.orgId, siteId: a.siteId, userId: a.userId, runId: a.runId, origin: a.origin, syncedAt: new Date() })
         .where(eq(schema.costEvents.engineRunId, engineRunId));
+      // the credits it already used follow it (who started it decides autopilot / on-demand)
+      await tx.execute(sql`update ${schema.creditLedger} set ref = coalesce(ref, '{}'::jsonb) || ${JSON.stringify({ origin: originOf(a.origin), runId: a.runId })}::jsonb
+        where kind = 'usage' and (ref_key = ${'cost:' + prev.eventKey} or ref_key like ${'cost:' + prev.eventKey + ':%'})`);
       stored.set(engineRunId, { ...prev, ...a });
     };
 
@@ -397,15 +417,16 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
           const now = stored.get(engineRunId)!;
           stored.set(engineRunId, { ...now, settledAt, total });
           const done = await debitedSoFar(prev.eventKey);
-          if (now.orgId && done.entries > 0) {
-            const delta = Math.round((creditsFor(total, s) - done.credits) * 100) / 100;
+          const target = await runCharge(prev.eventKey, now.runId, creditsFor(total, s));
+          if (now.orgId && done.entries > 0 && !target.failed) {
+            const delta = Math.round((target.credits - done.credits) * 100) / 100;
             if (delta !== 0)
               await addCreditEntry(tx, {
                 orgId: now.orgId,
                 kind: 'usage',
                 credits: -delta,
                 note: `Re-priced: the engine settled this ${str(row.mode).replace(/_/g, ' ') || 'run'} again`,
-                ref: { runId: now.runId, engineRunId, mode: str(row.mode) || null, domain: str(row.domain) || null, creditValueUsd: s.creditValueUsd },
+                ref: { runId: now.runId, engineRunId, mode: str(row.mode) || null, domain: str(row.domain) || null, creditValueUsd: s.creditValueUsd, origin: originOf(now.origin) },
                 refKey: `cost:${prev.eventKey}:${settledAt}`,
                 at: occurredOf(row),
               });
@@ -522,7 +543,7 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
           kind: 'usage',
           credits: done.credits,
           note: "Re-priced: the engine's own figure replaced the app's for this run",
-          ref: { runId: null, engineRunId: null, mode: null, domain: null },
+          ref: { runId: null, engineRunId: null, mode: null, domain: null, origin: 'on_demand' },
           refKey: `reprice:${r.event_key}`,
           at: date(r.occurred_at) ?? undefined,
         });
@@ -563,27 +584,51 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
     // ---- 5. credits: one usage debit per event of a company, once; from the deploy of credits on, never for money spent before the
     //      company existed; an event too small to round to 0.01 credit is not looked at again and again ----
     const minCost = (0.005 * s.creditValueUsd) / s.markup;
-    const toDebit = await execRows<{ event_key: string; org_id: string; run_id: string | null; engine_run_id: string | null; mode: string; domain: string; total: number; occurred_at: string }>(
+    const toDebit = await execRows<{ event_key: string; org_id: string; run_id: string | null; engine_run_id: string | null; mode: string; domain: string; total: number; occurred_at: string; origin: string }>(
       tx,
-      sql`select e.event_key, e.org_id, e.run_id, e.engine_run_id, e.mode, e.domain, (e.claude_usd + e.dataforseo_usd)::float as total, e.occurred_at
+      sql`select e.event_key, e.org_id, e.run_id, e.engine_run_id, e.mode, e.domain, (e.claude_usd + e.dataforseo_usd)::float as total, e.occurred_at, e.origin
           from ${schema.costEvents} e join ${schema.organizations} o on o.id = e.org_id
           where (e.claude_usd + e.dataforseo_usd) >= ${minCost} and e.occurred_at >= ${tsv(s.creditsSince)} and e.occurred_at >= o.created_at
             and not exists (select 1 from ${schema.creditLedger} c where c.ref_key = 'cost:' || e.event_key)`,
     );
     for (const e of toDebit) {
-      const credits = creditsFor(Number(e.total), s);
-      if (credits <= 0) continue;
+      const raw = creditsFor(Number(e.total), s);
+      if (raw <= 0) continue;
+      const c = await runCharge(e.event_key, e.run_id, raw);
+      const absorbed = Math.round((raw - c.credits) * 100) / 100;
+      const what = e.mode ? `${e.mode.replace(/_/g, ' ')}${e.domain ? ` · ${e.domain}` : ''}` : '';
       const row = await addCreditEntry(tx, {
         orgId: e.org_id,
         kind: 'usage',
-        credits: -credits,
-        note: e.mode ? `Used by ${e.mode.replace(/_/g, ' ')}${e.domain ? ` · ${e.domain}` : ''}` : 'Used',
-        ref: { runId: e.run_id, engineRunId: e.engine_run_id, mode: e.mode || null, domain: e.domain || null, creditValueUsd: s.creditValueUsd },
+        // a failed run's event is recorded at 0 (written once, so it is not looked at again); a quote's ceiling keeps the rest
+        credits: -c.credits,
+        note: c.failed ? `Not charged: the run failed${what ? ` (${what})` : ''}` : what ? `Used by ${what}${absorbed > 0 ? ' (capped at its quote)' : ''}` : 'Used',
+        ref: { runId: e.run_id, engineRunId: e.engine_run_id, mode: e.mode || null, domain: e.domain || null, creditValueUsd: s.creditValueUsd, origin: originOf(e.origin), ...(absorbed > 0 ? { absorbed } : {}) },
         refKey: `cost:${e.event_key}`,
         at: date(e.occurred_at) ?? undefined,
       });
       if (row) res.debits++;
     }
+
+    // ---- 6. a run that failed after its credits were taken: they are returned, once ----
+    const failedRuns = await execRows<{ run_id: string; org_id: string; used: number; mode: string; at: string }>(
+      tx,
+      sql`select c.ref->>'runId' as run_id, c.org_id, (-sum(c.credits))::float as used, max(ru.mode) as mode, max(ru.completed_at)::text as at
+          from ${schema.creditLedger} c join ${schema.runs} ru on ru.id::text = c.ref->>'runId'
+          where c.kind = 'usage' and ru.status = 'failed' and c.org_id is not null
+            and not exists (select 1 from ${schema.creditLedger} f where f.ref_key = 'failed:' || (c.ref->>'runId'))
+          group by c.ref->>'runId', c.org_id having sum(c.credits) < 0`,
+    );
+    for (const f of failedRuns)
+      await addCreditEntry(tx, {
+        orgId: f.org_id,
+        kind: 'usage',
+        credits: Math.round(Number(f.used) * 100) / 100,
+        note: 'Returned: the run failed',
+        ref: { runId: f.run_id, mode: f.mode || null, origin: 'on_demand', creditValueUsd: s.creditValueUsd },
+        refKey: `failed:${f.run_id}`,
+        lot: { source: 'refund', expiresAt: null },
+      });
 
     // ---- sync state: the newest settled_at read becomes the next read's watermark ----
     let watermark = s.ledgerWatermark ?? '';

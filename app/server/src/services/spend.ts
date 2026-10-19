@@ -77,7 +77,8 @@ export function budgetRefusal(o: { what: string; estimated: number; spent: numbe
   if (o.spent + o.estimated > o.budget)
     return new HttpError(
       402,
-      `${o.what} (about $${o.estimated.toFixed(2)}) would go over your company's monthly budget ($${o.spent.toFixed(2)} of $${o.budget.toFixed(2)} used). An owner can raise the budget in Settings → Usage, or ask the platform administrator.`,
+      // credits (app/docs/CREDITS.md): the dollar budget is the platform's own guard and its figures are provider cost — never shown
+      `${o.what} would go over your company's monthly usage limit. Contact support to raise it, or see Settings → Credits.`,
       'budget',
     );
   if (o.platformToday + o.estimated > o.platformDaily)
@@ -97,4 +98,12 @@ export async function assertBudget(tx: Tx, org: OrgRow, estimated: number, what:
   const platformToday = await platformSpendSince(tx, dayStart());
   const refusal = budgetRefusal({ what, estimated, spent, budget: org.monthlyBudgetUsd, platformToday, platformDaily: config.platformDailySpendUsd });
   if (refusal) throw refusal;
+}
+
+/** The platform's daily ceiling alone (a company held by its credits instead of a dollar budget): throws 429. */
+export async function assertPlatformCapacity(tx: Tx, estimated: number): Promise<void> {
+  if (estimated <= 0) return;
+  const platformToday = await platformSpendSince(tx, dayStart());
+  if (platformToday + estimated > config.platformDailySpendUsd)
+    throw new HttpError(429, "The platform has reached today's analysis capacity. Please try again tomorrow, or contact support.", 'platform_capacity');
 }

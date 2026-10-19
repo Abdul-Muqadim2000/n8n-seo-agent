@@ -19,6 +19,7 @@ import { hostGate } from './services/portalHosts';
 import { portalIndexHtml } from './services/portalShell';
 import { triesBearer } from '@seo/shared';
 import { adminRoutes } from './routes/admin';
+import { billingRoutes } from './routes/billing';
 import { authRoutes } from './routes/auth';
 import { dataRoutes } from './routes/data';
 import { hookRoutes } from './routes/hooks';
@@ -160,6 +161,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(runRoutes);
   await app.register(hookRoutes);
   await app.register(adminRoutes);
+  await app.register(billingRoutes);
   await app.register(linkBuilderRoutes);
   await app.register(crawlerRoutes);
   await app.register(crawlerStreamRoutes);

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { emailField } from './schemas';
+import { creditPacksSchema, DEFAULT_CREDIT_PACKS, type CreditPack, type CreditPurchaseRequest } from './billing';
 
 // ---------- Platform admin panel (/admin, 2026-10-18) ----------
 // The contract between the server (`app/server/src/routes/admin.ts`) and the web panel (`app/web/src/pages/admin/`). Internal:
@@ -114,6 +115,8 @@ export interface AdminCompanyRow {
   lastRunAt: string | null;
   credits: CreditSummary;
   money: MoneySummary;
+  /** credits granted on the 1st of every month (0 = no plan) */
+  planMonthlyCredits: number;
 }
 
 export interface AdminMember {
@@ -145,13 +148,27 @@ export interface CreditEntry {
   id: string;
   createdAt: string;
   /** grant = an admin added credits; adjust = an admin corrected the balance (+/-); usage = a run used them; refund = usage given back */
-  kind: 'grant' | 'adjust' | 'usage' | 'refund';
+  kind: 'grant' | 'adjust' | 'usage' | 'refund' | 'expire' | 'plan';
   credits: number; // signed: grants positive, usage negative
   paidUsd: number; // revenue recorded with a grant (0 for free / promotional credits and for every other kind)
   note: string;
   /** usage: the run / engine row it came from, and `creditValueUsd` = the credit value in force when it was debited (its list value
    *  never moves with a later price change) */
-  ref: { runId?: string | null; engineRunId?: string | null; mode?: string | null; domain?: string | null; creditValueUsd?: number | null } | null;
+  ref: {
+    runId?: string | null;
+    engineRunId?: string | null;
+    mode?: string | null;
+    domain?: string | null;
+    creditValueUsd?: number | null;
+    /** usage: autopilot (a schedule) or on_demand (someone started it) */
+    origin?: 'autopilot' | 'on_demand' | null;
+    /** grant / plan: where the credits came from (billing.ts CreditSource) */
+    source?: string | null;
+    /** usage: credits the run would have used beyond its quote (not charged) */
+    absorbed?: number | null;
+    lots?: { lotId: string; credits: number }[];
+    [k: string]: unknown;
+  } | null;
   actor: string | null; // admin e-mail for grant / adjust / refund
   balanceAfter: number;
 }
@@ -222,6 +239,14 @@ export interface PlatformSettings {
   signupCredits: number;
   /** whether a newly created company has credit enforcement on */
   enforceForNewCompanies: boolean;
+  /** the packs customers can ask for (billing.ts) */
+  creditPacks: CreditPack[];
+  /** months a bought pack's credits last */
+  packExpiryMonths: number;
+  /** a plan's unused monthly credits stay one more month (else they expire at the end of their month) */
+  planRollover: boolean;
+  /** days welcome credits last (0 = they never expire) */
+  signupExpiryDays: number;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -288,6 +313,10 @@ export const adminCreditSchema = z
     credits: z.number().finite().min(-1_000_000).max(1_000_000),
     paidUsd: z.number().finite().min(0).max(1_000_000).default(0),
     note: z.string().trim().max(500).default(''),
+    /** grant: how long the credits last — 'pack' = the pack expiry (12 months), 'never', or a number of days */
+    expires: z.union([z.enum(['pack', 'never']), z.number().int().min(1).max(3650)]).default('pack'),
+    /** fulfils this purchase request (the customer's "Buy credits") */
+    requestId: z.string().uuid().optional(),
   })
   .refine((b) => b.credits !== 0, { message: 'Enter a number of credits', path: ['credits'] })
   .refine((b) => b.kind === 'adjust' || b.credits > 0, { message: 'Must be more than 0', path: ['credits'] })
@@ -298,6 +327,8 @@ export const adminCompanyUpdateSchema = z.object({
   disabled: z.boolean().optional(),
   creditsEnforced: z.boolean().optional(),
   name: z.string().trim().min(2).max(120).optional(),
+  /** the company's plan: credits granted on the 1st of every month (0 = no plan) */
+  planMonthlyCredits: z.number().int().min(0).max(10_000_000).optional(),
 });
 
 export const platformSettingsSchema = z.object({
@@ -305,13 +336,21 @@ export const platformSettingsSchema = z.object({
   markup: z.number().min(1).max(100),
   signupCredits: z.number().min(0).max(1_000_000),
   enforceForNewCompanies: z.boolean(),
+  creditPacks: creditPacksSchema.default(DEFAULT_CREDIT_PACKS),
+  packExpiryMonths: z.number().int().min(1).max(60).default(12),
+  planRollover: z.boolean().default(true),
+  signupExpiryDays: z.number().int().min(0).max(3650).default(90),
 });
 
 export const DEFAULT_PLATFORM_SETTINGS: Omit<PlatformSettings, 'updatedAt' | 'updatedBy'> = {
-  creditValueUsd: 0.1,
+  creditValueUsd: 0.05,
   markup: 3,
-  signupCredits: 0,
-  enforceForNewCompanies: false,
+  signupCredits: 200,
+  enforceForNewCompanies: true,
+  creditPacks: DEFAULT_CREDIT_PACKS,
+  packExpiryMonths: 12,
+  planRollover: true,
+  signupExpiryDays: 90,
 };
 
 /** Credits a run of this cost uses, at these settings (2 decimals, never negative). One formula for the server and the panel. */
@@ -347,3 +386,9 @@ export interface AdminCostSyncResult {
 }
 
 export const emptyCostSplit = (): CostSplit => ({ claudeUsd: 0, dataforseoUsd: 0, totalUsd: 0, claudeEstimatedUsd: 0 });
+
+/** A customer's "Buy credits" request, as the panel lists it (fulfilled with a grant that records the payment). */
+export interface AdminPurchaseRequest extends CreditPurchaseRequest {
+  orgId: string | null;
+  orgName: string;
+}

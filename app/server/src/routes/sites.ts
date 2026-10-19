@@ -32,6 +32,7 @@ import type { SiteRow } from '../db/schema';
 import { randomToken } from '../lib/crypto';
 import { badRequest, conflict, HttpError, notFound, parse } from '../lib/errors';
 import { deleteRows, ensureTable, insertRows, invalidateSite, siteAdmin, siteRows } from '../n8n/client';
+import { invalidateForecast } from '../services/billing';
 import { assertGa4ForDomain, findGscProperty, gscOwnerCheck, listGa4Properties } from '../services/google';
 import { routeSiteToApp } from '../services/runs';
 import { fetchPublicText, verify } from '../services/verify';
@@ -365,8 +366,9 @@ export async function siteRoutes(app: FastifyInstance) {
     if (r.affected === 0 && a.action === 'prospect') throw notFound(`${a.prospectDomain} is not in the link-prospect list.`);
     // mirror what the app shows about the site
     const patch: Partial<SiteRow> = {};
-    if (a.action === 'pause') patch.trackingStatus = 'paused';
-    if (a.action === 'resume') patch.trackingStatus = 'active';
+    // a person's pause / resume replaces the credit guard's (it never resumes what a person paused)
+    if (a.action === 'pause') Object.assign(patch, { trackingStatus: 'paused', creditsPausedAt: null, creditsPausedReason: null });
+    if (a.action === 'resume') Object.assign(patch, { trackingStatus: 'active', creditsPausedAt: null, creditsPausedReason: null });
     if (a.action === 'cadence') patch.blogsPerWeek = a.pagesPerWeek;
     if (a.action === 'monitors') {
       if (a.competitors) patch.competitors = a.competitors;
@@ -374,6 +376,7 @@ export async function siteRoutes(app: FastifyInstance) {
     }
     if (Object.keys(patch).length) await db.update(schema.sites).set({ ...patch, updatedAt: new Date() }).where(eq(schema.sites.id, site.id));
     invalidateSite(site.domain);
+    invalidateForecast(site.orgId); // the schedules' credit forecast follows the settings
     return { ok: true, action: a.action, affected: r.affected, error: null };
   });
 }

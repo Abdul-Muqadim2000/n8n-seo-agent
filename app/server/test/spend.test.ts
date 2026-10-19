@@ -46,7 +46,8 @@ describe('spend: runs and keyword checks', () => {
     const base = { what: 'This run', estimated: 1.8, spent: 10, budget: 25, platformToday: 5, platformDaily: 40 };
     expect(budgetRefusal(base)).toBeNull();
     expect(budgetRefusal({ ...base, spent: 23.5 })?.statusCode).toBe(402);
-    expect(budgetRefusal({ ...base, spent: 23.5 })?.message).toMatch(/^This run \(about \$1\.80\) would go over your company's monthly budget \(\$23\.50 of \$25\.00 used\)/);
+    expect(budgetRefusal({ ...base, spent: 23.5 })?.message).toMatch(/^This run would go over your company's monthly usage limit/);
+    expect(budgetRefusal({ ...base, spent: 23.5 })?.message).not.toMatch(/\$/); // provider cost is never shown (app/docs/CREDITS.md)
     expect(budgetRefusal({ ...base, platformToday: 39 })?.statusCode).toBe(429);
     expect(budgetRefusal({ ...base, estimated: 0, spent: 99 })).toBeNull();
   });

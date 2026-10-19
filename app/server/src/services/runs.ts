@@ -37,8 +37,8 @@ import { applyLadderPrefs, markLadderWon } from './ladderSettings';
 import { deliverReport } from './reportDelivery';
 import { emitForCallback, emitRunsFailed } from './webhooks';
 import { engineCostTable } from './engineCost';
-import { assertBudget, lockCompany } from './spend';
-import { assertCredits } from './admin/credits';
+import { assertBudget, assertPlatformCapacity, lockCompany } from './spend';
+import { assertCredits, siteForecasts } from './billing';
 import { suspendedError } from '../auth/session';
 import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
 
@@ -177,6 +177,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     if (targetWords) body.ladder_words = targetWords;
     if (targetUrl) body.ladder_target_url = targetUrl;   // R15: the page keeps the URL the ladder planned for it
   }
+  await siteForecasts(org.id).catch(() => []); // warm the schedules' forecast outside the lock (the credit check reads it)
   // budget checks and the insert under one lock per company, so parallel requests (runs and keyword checks) cannot all pass the same
   // check; the month counts runs and keyword checks, the platform's daily ceiling every company (spend.ts)
   const created = await db.transaction(async (tx) => {
@@ -194,9 +195,11 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
         return { row: prior, replayed: true };
       }
     }
-    await assertBudget(tx, org, estimated, 'This run');
-    // admin panel: only for a company whose credits are enforced (off by default), under the same lock as the budget
-    await assertCredits(tx, org, estimated, 'This run');
+    // credits (app/docs/CREDITS.md): a company whose credits are enforced is held by its credits (balance, the credits kept for its
+    // schedules, its own on-demand limit); the dollar budget is the platform's own guard for the others. Both under the company's lock.
+    if (!org.creditsEnforced) await assertBudget(tx, org, estimated, 'This run');
+    else await assertPlatformCapacity(tx, estimated);
+    const quoted = await assertCredits(tx, org, estimated, 'This run');
     const [row] = await tx
       .insert(schema.runs)
       .values({
@@ -208,6 +211,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
         status: 'submitting',
         input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}) } as unknown as Record<string, unknown>,
         estimatedCostUsd: estimated,
+        quotedCredits: quoted > 0 ? quoted : null,
         etaMinutes: etaFor(input),
         apiKeyId: opts.apiKeyId ?? null,
         idempotencyKey: opts.idempotency?.key ?? null,

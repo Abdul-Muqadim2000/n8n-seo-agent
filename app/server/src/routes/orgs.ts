@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   countedRunCost,
+  creditRate,
   createOrgSchema,
   estimateMonitoringCost,
   MODE_IDS,
@@ -42,6 +43,7 @@ import { baseUrlFor, senderFor } from '../services/portalMail';
 import { deliveryOverview, listDeliveries, saveSettings, sendTest } from '../services/reportDelivery';
 import { monthStart } from '../services/runs';
 import { applyNewCompanyCredits } from '../services/admin/credits';
+import { settingsRow } from '../services/admin/settings';
 import { deleteCompany } from '../services/companyDelete';
 
 // G5: the company answer (with its kind, agency and brand) lives in services/agency.ts
@@ -149,10 +151,12 @@ export async function orgRoutes(app: FastifyInstance) {
   // R100: the prices the forms show before a run and the budget check holds — the engine's own rolling figures (read from its store,
   // cached), or the shipped table, labelled, when n8n cannot be read. `modes` is each mode's request-free price under that source;
   // clients with form values call `estimateRunCost(mode, values, calibration)` for the exact figure.
-  app.get('/api/orgs/:orgId/costs', async (req): Promise<CostTableInfo & { modes: Record<string, number> }> => {
+  app.get('/api/orgs/:orgId/costs', async (req): Promise<CostTableInfo & { creditRate: number; modes: Record<string, number> }> => {
     await orgAccess(req, (req.params as { orgId: string }).orgId);
     const info = await engineCostTable();
-    return { ...info, modes: Object.fromEntries(MODE_IDS.map((m) => [m, modeCostUsd(m, info.calibration)])) };
+    // credits (app/docs/CREDITS.md): screens show every price in credits — `creditRate` credits per unit of these figures
+    const rate = creditRate(await settingsRow());
+    return { ...info, creditRate: rate, modes: Object.fromEntries(MODE_IDS.map((m) => [m, modeCostUsd(m, info.calibration)])) };
   });
 
   app.get('/api/orgs/:orgId/usage', async (req): Promise<Usage> => {

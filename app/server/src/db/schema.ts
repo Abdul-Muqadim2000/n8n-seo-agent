@@ -1,3 +1,4 @@
+import type { CreditPack } from '@seo/shared';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
@@ -329,6 +330,15 @@ export const organizations = pgTable(
     clientApproval: boolean('client_approval').notNull().default(false),
     /** admin panel (0014): runs are refused when the company's credits cannot cover them (off = credits are counted, never block) */
     creditsEnforced: boolean('credits_enforced').notNull().default(false),
+    /** credits (0015): the company's own limits (shared/src/billing.ts `CreditLimits`, read with `creditLimitsOf`) */
+    creditLimits: jsonb('credit_limits').$type<Record<string, unknown>>().notNull().default({}),
+    /** credits granted on the 1st of every month (0 = no plan), set by a platform admin */
+    planMonthlyCredits: doublePrecision('plan_monthly_credits').notNull().default(0),
+    /** the last month (YYYY-MM) the plan credits were granted for, so a restart never grants a month twice */
+    planGrantedMonth: text('plan_granted_month'),
+    /** the last low-balance notice sent (ok | low | critical | empty | paused) and when, so a level is announced once */
+    creditAlertLevel: text('credit_alert_level').notNull().default('ok'),
+    creditAlertAt: ts('credit_alert_at'),
   },
   (t) => [uniqueIndex('organizations_slug_idx').on(t.slug), uniqueIndex('organizations_hook_idx').on(t.hookToken), index('organizations_parent_idx').on(t.parentOrgId)],
 );
@@ -456,6 +466,11 @@ export const sites = pgTable(
     trackingStartedAt: ts('tracking_started_at'),
     /** v4.13 Link Builder: approve each sequence or send automatically (owner), which mailbox, how many a day */
     linkSettings: jsonb('link_settings').$type<{ mode?: 'approve' | 'auto'; mailboxId?: string | null; autoDailyMax?: number }>().notNull().default({}),
+    /** credits (0015): when the credit guard paused this website's schedules (out of credits / autopilot limit); it resumes them itself.
+     *  Null = not paused for credits (a pause by a person is never undone by the guard). */
+    creditsPausedAt: ts('credits_paused_at'),
+    /** 'balance' | 'autopilot_limit' */
+    creditsPausedReason: text('credits_paused_reason'),
     createdAt: created(),
     updatedAt: ts('updated_at').defaultNow().notNull(),
   },
@@ -483,6 +498,9 @@ export const runs = pgTable(
     error: text('error'),
     /** what the app reserved before the run, from the one table in shared/src/cost.ts */
     estimatedCostUsd: doublePrecision('estimated_cost_usd').notNull().default(0),
+    /** credits (0015): the price the customer was quoted before it started — what it is held at while it runs, and the most it is
+     *  ever charged (null for runs from before credits were quoted) */
+    quotedCredits: doublePrecision('quoted_credits'),
     actualCostUsd: doublePrecision('actual_cost_usd'),
     /** B-R3: the engine's own calibrated figure for this run (`run_cost_estimate_usd` on a callback) and the sentence behind it.
      *  The app shows the engine's number whenever it has one - it is calibrated on measured runs and ours is only a mirror. */
@@ -1329,7 +1347,61 @@ export const platformSettings = pgTable('platform_settings', {
   ledgerWatermark: text('ledger_watermark'),
   /** the last full re-read of the ledger (the others read from the watermark minus a day) */
   ledgerFullAt: ts('ledger_full_at'),
+  /** credits (0015): the packs customers can ask for (shared/src/billing.ts `CreditPack[]`), how long they last, plan rollover */
+  creditPacks: jsonb('credit_packs').$type<CreditPack[]>(),
+  packExpiryMonths: integer('pack_expiry_months').notNull().default(12),
+  planRollover: boolean('plan_rollover').notNull().default(true),
+  signupExpiryDays: integer('signup_expiry_days').notNull().default(90),
 });
+
+/**
+ * Credits (0015, app/docs/CREDITS.md): a lot of credits a company received — a plan month, a pack, a grant, welcome credits, a refund —
+ * with what is left of it and when it expires. The ledger (`credit_ledger`) stays the one record of every movement and the balance is
+ * its sum; the lots say which credits a debit used (soonest-expiring first) and which expire when. Invariant, per company:
+ * balance = Σ remaining − debt, where debt is what was used beyond every lot (paid down first by the next lot).
+ */
+export const creditLots = pgTable(
+  'credit_lots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** plan | pack | grant | signup | refund | adjust | migrated */
+    source: text('source').notNull(),
+    credits: doublePrecision('credits').notNull(),
+    remaining: doublePrecision('remaining').notNull(),
+    expiresAt: ts('expires_at'),
+    note: text('note').notNull().default(''),
+    /** the ledger entry that created it */
+    ledgerId: uuid('ledger_id'),
+    createdAt: created(),
+  },
+  (t) => [index('credit_lots_org_idx').on(t.orgId, t.expiresAt)],
+);
+
+/** A customer's "Buy credits": a pack asked for, fulfilled by a platform admin with a grant that records the payment. */
+export const creditPurchaseRequests = pgTable(
+  'credit_purchase_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'set null' }),
+    orgName: text('org_name').notNull().default(''),
+    packId: text('pack_id').notNull(),
+    credits: doublePrecision('credits').notNull(),
+    priceUsd: doublePrecision('price_usd').notNull(),
+    note: text('note').notNull().default(''),
+    /** pending | fulfilled | cancelled */
+    status: text('status').notNull().default('pending'),
+    requestedBy: uuid('requested_by').references(() => users.id, { onDelete: 'set null' }),
+    requestedByEmail: text('requested_by_email'),
+    resolvedAt: ts('resolved_at'),
+    resolvedBy: text('resolved_by'),
+    ledgerId: uuid('ledger_id'),
+    createdAt: created(),
+  },
+  (t) => [index('credit_purchase_requests_org_idx').on(t.orgId, t.createdAt), index('credit_purchase_requests_status_idx').on(t.status)],
+);
 
 /** What platform administrators did in the panel (credits, users, companies, settings). Internal; no foreign keys (history stays). */
 export const adminAudit = pgTable(
@@ -1351,6 +1423,8 @@ export const adminAudit = pgTable(
 export type CreditEntryRow = typeof creditLedger.$inferSelect;
 export type CostEventRow = typeof costEvents.$inferSelect;
 export type PlatformSettingsRow = typeof platformSettings.$inferSelect;
+export type CreditLotRow = typeof creditLots.$inferSelect;
+export type CreditPurchaseRequestRow = typeof creditPurchaseRequests.$inferSelect;
 export type LogSourceRow = typeof logSources.$inferSelect;
 export type LogIngestRow = typeof logIngests.$inferSelect;
 export type ApiKeyRow = typeof apiKeys.$inferSelect;

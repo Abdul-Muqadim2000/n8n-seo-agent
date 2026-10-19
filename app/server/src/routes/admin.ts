@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { audit } from '../services/audit';
 import type { FastifyInstance } from 'fastify';
 import { orgBudgetSchema, type AdminOrg } from '@seo/shared';
@@ -26,6 +26,7 @@ import {
   platformSettingsSchema,
   type AdminCreatedUser,
   type CreditEntry,
+  type AdminPurchaseRequest,
 } from '@seo/shared';
 import { conflict, HttpError } from '../lib/errors';
 import { adminAudit } from '../services/admin/audit';
@@ -33,7 +34,8 @@ import { addCreditEntry, creditBalance, listCreditEntries } from '../services/ad
 import { syncCosts } from '../services/admin/costSync';
 import { periodRange } from '../services/admin/period';
 import { activity, companiesCsv, companyDetail, companyRows, overview, runsPage, userRows } from '../services/admin/reports';
-import { getSettings, saveSettings } from '../services/admin/settings';
+import { getSettings, saveSettings, settingsRow } from '../services/admin/settings';
+import { grantPlanCredits, requestView } from '../services/billing';
 import { createUser, deleteUser, removeMembership, SET_PASSWORD_HOURS, setMembership, updateUser, userOrThrow } from '../services/admin/users';
 import { deleteCompany } from '../services/companyDelete';
 import { deleteUserSessions } from '../auth/session';
@@ -163,6 +165,7 @@ export async function adminRoutes(app: FastifyInstance) {
     if (body.disabled !== undefined) patch.disabled = body.disabled;
     if (body.creditsEnforced !== undefined) patch.creditsEnforced = body.creditsEnforced;
     if (body.name !== undefined) patch.name = body.name;
+    if (body.planMonthlyCredits !== undefined) patch.planMonthlyCredits = body.planMonthlyCredits;
     const changed = Object.fromEntries(Object.entries(patch).filter(([k, v]) => (org as Record<string, unknown>)[k] !== v));
     if (Object.keys(changed).length) {
       await db.update(schema.organizations).set(changed).where(eq(schema.organizations.id, org.id));
@@ -172,8 +175,11 @@ export async function adminRoutes(app: FastifyInstance) {
         action: 'company.admin_changed',
         actor: { type: 'platform_admin', userId: req.user?.id ?? null, label: req.user?.email ?? 'platform administrator' },
         target: { type: 'company', id: org.id },
-        details: changed,
+        // the dollar budget is provider cost: never in the customer's own audit log (app/docs/CREDITS.md)
+        details: Object.fromEntries(Object.entries(changed).filter(([k]) => k !== 'monthlyBudgetUsd')),
       });
+      // a new plan's first month is granted now, not at the guard's next pass
+      if (changed.planMonthlyCredits) await grantPlanCredits().catch((err) => req.log.warn({ err: String(err) }, 'plan credits failed'));
     }
     return (await companyDetail(periodOf(req.query), org.id))!;
   });
@@ -188,16 +194,38 @@ export async function adminRoutes(app: FastifyInstance) {
     const admin = guard(req);
     const org = await orgOrThrow((req.params as { id: string }).id);
     const body = parse(adminCreditSchema, req.body ?? {});
+    const s = await settingsRow();
+    const request = body.requestId
+      ? await db.query.creditPurchaseRequests.findFirst({ where: and(eq(schema.creditPurchaseRequests.id, body.requestId), eq(schema.creditPurchaseRequests.orgId, org.id)) })
+      : null;
+    if (body.requestId && (!request || request.status !== 'pending')) throw conflict('That request is not waiting any more.', 'request_resolved');
+    if (request && body.kind !== 'grant') throw badRequest('A request is fulfilled with a grant.', { kind: 'Choose grant' });
+    // a grant's credits last as chosen: the pack expiry (default), never, or a number of days
+    const expiresAt =
+      body.kind !== 'grant' || body.expires === 'never'
+        ? null
+        : body.expires === 'pack'
+          ? new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + s.packExpiryMonths, new Date().getUTCDate()))
+          : new Date(Date.now() + body.expires * 86_400_000);
+    const source = request || body.paidUsd > 0 ? 'pack' : 'grant';
     // an adjustment down may take the balance below zero only on purpose: it is written as asked, and the panel shows the result
     const row = await addCreditEntry(db, {
       orgId: org.id,
       kind: body.kind,
       credits: body.credits,
+      ref: body.kind === 'grant' ? { source, ...(request ? { requestId: request.id } : {}) } : null,
+      lot: body.kind === 'grant' ? { source, expiresAt } : undefined,
+      refKey: request ? `request:${request.id}` : null,
       paidUsd: body.kind === 'grant' ? body.paidUsd : 0,
       note: body.note || (body.kind === 'grant' ? (body.paidUsd > 0 ? 'Credits bought' : 'Credits granted') : body.kind === 'refund' ? 'Credits refunded' : 'Balance corrected'),
       actor: { userId: admin.id, email: admin.email },
     });
     if (!row) throw new HttpError(500, 'The credits could not be written.');
+    if (request)
+      await db
+        .update(schema.creditPurchaseRequests)
+        .set({ status: 'fulfilled', resolvedAt: new Date(), resolvedBy: admin.email, ledgerId: row.id })
+        .where(eq(schema.creditPurchaseRequests.id, request.id));
     const balance = await creditBalance(db, org.id);
     await adminAudit(req, `credits.${body.kind === 'grant' ? 'granted' : body.kind === 'refund' ? 'refunded' : 'adjusted'}`, { type: 'company', id: org.id, label: org.name }, {
       credits: row.credits,
@@ -344,4 +372,30 @@ export async function adminRoutes(app: FastifyInstance) {
     guard(req);
     return activity(parse(adminActivityQuerySchema, req.query ?? {}).limit);
   });
+
+  // ---------- credits: the customers' "Buy credits" requests (fulfilled through POST …/credits with `requestId`) ----------
+  app.get('/api/admin/credit-requests', async (req): Promise<AdminPurchaseRequest[]> => {
+    guard(req);
+    const status = String((req.query as { status?: string }).status ?? 'pending');
+    const rows = await db.query.creditPurchaseRequests.findMany({
+      where: status === 'all' ? undefined : eq(schema.creditPurchaseRequests.status, status),
+      orderBy: desc(schema.creditPurchaseRequests.createdAt),
+      limit: 200,
+    });
+    return rows.map((r) => ({ ...requestView(r), orgId: r.orgId, orgName: r.orgName }));
+  });
+
+  app.post('/api/admin/credit-requests/:id/cancel', async (req): Promise<AdminPurchaseRequest> => {
+    const admin = guard(req);
+    const [row] = await db
+      .update(schema.creditPurchaseRequests)
+      .set({ status: 'cancelled', resolvedAt: new Date(), resolvedBy: admin.email })
+      .where(and(eq(schema.creditPurchaseRequests.id, (req.params as { id: string }).id), eq(schema.creditPurchaseRequests.status, 'pending')))
+      .returning()
+      .catch(() => []);
+    if (!row) throw notFound('No waiting request with this id.');
+    await adminAudit(req, 'credits.request_cancelled', { type: 'company', id: row.orgId, label: row.orgName }, { credits: row.credits, packId: row.packId });
+    return { ...requestView(row), orgId: row.orgId, orgName: row.orgName };
+  });
 }
+

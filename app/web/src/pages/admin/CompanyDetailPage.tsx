@@ -25,7 +25,7 @@ import { AdminCard, CompanyStatus, FlushTable, ConfirmDialog, CostSplitCell, Cre
 import { RunsTable } from './_components/runs';
 import { adminPaths, credits, marginPct, modeLabel, money, PERIOD_LABELS, signedCredits, withPeriod } from './lib';
 
-const KIND_LABEL: Record<CreditEntry['kind'], string> = { grant: 'Grant', adjust: 'Adjustment', usage: 'Usage', refund: 'Refund' };
+const KIND_LABEL: Record<CreditEntry['kind'], string> = { grant: 'Grant', adjust: 'Adjustment', usage: 'Usage', refund: 'Refund', plan: 'Plan credits', expire: 'Expired' };
 
 export default function AdminCompanyDetailPage() {
   const { companyId = '' } = useParams();

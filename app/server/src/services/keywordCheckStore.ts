@@ -5,7 +5,7 @@ import type { KeywordCheckRow, OrgRow, SiteRow, UserRow } from '../db/schema';
 import { HttpError } from '../lib/errors';
 import { config } from '../config';
 import { budgetRefusal, dayStart, lockCompany, orgSpendSince, platformSpendSince } from './spend';
-import { assertCredits } from './admin/credits';
+import { assertCredits } from './billing';
 
 // The keyword_checks rows (keywordChecks.ts decides; this file only reads and writes the database).
 
@@ -72,7 +72,8 @@ export async function reserveCheck(o: { org: OrgRow; site: SiteRow; user: UserRo
       running: await runningCheck(tx, o.site.id, o.keyword),
       today: Number(n),
       spent: (await orgSpendSince(tx, o.org.id)).total,
-      budget: o.org.monthlyBudgetUsd,
+      // a company held by its credits has no dollar budget of its own (the credit check below decides)
+      budget: o.org.creditsEnforced ? Number.POSITIVE_INFINITY : o.org.monthlyBudgetUsd,
       platformToday: await platformSpendSince(tx, dayStart()),
       platformDaily: config.platformDailySpendUsd,
     });

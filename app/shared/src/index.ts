@@ -36,3 +36,5 @@ export * from './cms';
 export * from './crawlers';
 export * from './agency';
 export * from './admin';
+export * from './billing';   // credits: what customers see and pay (app/docs/CREDITS.md)
+export * from './autopilot'; // one breakdown of a website's schedules, for the settings card, the forecast and the reserve

@@ -179,7 +179,7 @@ describe('keyword check', () => {
     const r = await assess({ keyword: 'e invoicing software uae' });
     expect(r.statusCode).toBe(402);
     expect(r.json()).toMatchObject({ code: 'budget' });
-    expect(r.json().error).toMatch(/This keyword check \(about \$0\.05\) would go over/);
+    expect(r.json().error).toMatch(/This keyword check would go over/);
     expect(st.calls).toHaveLength(0);
   });
 

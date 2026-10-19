@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { DEFAULT_PLATFORM_SETTINGS, type PlatformSettings } from '@seo/shared';
+import { creditPacksSchema, DEFAULT_CREDIT_PACKS, DEFAULT_PLATFORM_SETTINGS, type PlatformSettings } from '@seo/shared';
 import { db, schema } from '../../db';
 import type { PlatformSettingsRow } from '../../db/schema';
 
@@ -21,6 +21,10 @@ export const toSettings = (r: PlatformSettingsRow): PlatformSettings => ({
   markup: r.markup,
   signupCredits: r.signupCredits,
   enforceForNewCompanies: r.enforceForNewCompanies,
+  creditPacks: creditPacksSchema.safeParse(r.creditPacks).data ?? DEFAULT_CREDIT_PACKS,
+  packExpiryMonths: r.packExpiryMonths,
+  planRollover: r.planRollover,
+  signupExpiryDays: r.signupExpiryDays,
   updatedAt: r.updatedAt?.toISOString() ?? null,
   updatedBy: r.updatedBy ?? null,
 });

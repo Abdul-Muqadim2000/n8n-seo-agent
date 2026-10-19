@@ -133,6 +133,8 @@ const Env = z.object({
   SEO_DATAFORSEO_PASSWORD: str(''),
   /** admin panel: the engine-ledger cost sync (every 10 minutes; off on a second server or in tests) */
   ADMIN_COST_SYNC: bool(true),
+  /** credits (app/docs/CREDITS.md): plan credits, expiry, pausing schedules out of credits, low-balance notices; false stops it */
+  CREDIT_GUARD: bool(true),
 });
 
 const parsed = Env.safeParse(process.env);
@@ -235,6 +237,7 @@ export const config = {
     anthropicAdminKey: e.ANTHROPIC_ADMIN_API_KEY,
     dataforseo: { login: e.SEO_DATAFORSEO_LOGIN, password: e.SEO_DATAFORSEO_PASSWORD, enabled: !!(e.SEO_DATAFORSEO_LOGIN && e.SEO_DATAFORSEO_PASSWORD) },
     costSync: e.ADMIN_COST_SYNC,
+    creditGuard: e.CREDIT_GUARD,
   },
   portal: {
     cnameTarget: e.PORTAL_CNAME_TARGET.toLowerCase().replace(/\.$/, ''),

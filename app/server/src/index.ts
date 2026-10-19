@@ -14,6 +14,7 @@ import { startPortalJobs } from './services/portalHosts';
 import { webhookTick } from './services/webhooks';
 import { exportTick } from './services/exports';
 import { startCostSync } from './services/admin/costSync';
+import { startCreditGuard } from './services/billing';
 
 async function main() {
   await runMigrations();
@@ -78,8 +79,11 @@ async function main() {
   const stopPortalJobs = startPortalJobs(app.log);
   // admin panel: what every run cost (engine ledger -> cost_events) and the credits it used, every 10 minutes; ADMIN_COST_SYNC=false stops it
   const stopCostSync = config.admin.costSync ? startCostSync(app.log) : () => undefined;
+  // credits (app/docs/CREDITS.md): plan credits, expiry, pausing / resuming schedules, low-balance notices
+  const stopCreditGuard = config.admin.creditGuard ? startCreditGuard(app.log) : () => undefined;
   const stop = async () => {
     stopCostSync();
+    stopCreditGuard();
     for (const t of crawlerTimers) clearInterval(t);
     stopPortalJobs();
     for (const t of lbTimers) clearInterval(t);

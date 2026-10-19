@@ -1,8 +1,7 @@
 import { desc, eq, sql } from 'drizzle-orm';
-import { creditsFor, type CreditEntry } from '@seo/shared';
+import { type CreditEntry, type CreditSource } from '@seo/shared';
 import { db, schema } from '../../db';
 import type { CreditEntryRow, OrgRow } from '../../db/schema';
-import { HttpError } from '../../lib/errors';
 import { settingsRow } from './settings';
 import { execRows, tsv } from './sqlRows';
 
@@ -31,10 +30,71 @@ export interface NewCreditEntry {
   refKey?: string | null;
   actor?: { userId: string | null; email: string } | null;
   at?: Date;
+  /** a positive entry becomes a lot (billing: soonest-expiring first): where it came from and when it expires (default: by kind, never) */
+  lot?: { source?: CreditSource; expiresAt?: Date | null };
+  /** an `expire` entry: the lot it empties (it never draws on any other) */
+  lotId?: string;
 }
 
-/** Writes one entry; with a `refKey` that was already used nothing is written and null comes back. */
+const LOT_SOURCE: Record<string, CreditSource> = { grant: 'grant', refund: 'refund', adjust: 'adjust', usage: 'refund', plan: 'plan' };
+
+/**
+ * Writes one entry and keeps the company's lots in step with it (one transaction, under the company's lock): a positive entry pays down
+ * any debt first and the rest becomes a lot; a negative one draws on the lots still valid at its date, soonest-expiring first, and what
+ * no lot covers becomes debt. With a `refKey` that was already used nothing is written and null comes back.
+ */
 export async function addCreditEntry(q: Q, e: NewCreditEntry): Promise<CreditEntryRow | null> {
+  if (q === db) return db.transaction((tx) => addCreditEntry(tx, e));
+  await (q as Tx).execute(sql`select pg_advisory_xact_lock(hashtext(${e.orgId}))`);
+  const row = await insertEntry(q, e);
+  if (row && row.credits !== 0) await applyToLots(q as Tx, row, e);
+  return row;
+}
+
+async function applyToLots(tx: Tx, row: CreditEntryRow, e: NewCreditEntry): Promise<void> {
+  const L = schema.creditLots;
+  if (row.credits > 0) {
+    // debt = what was used beyond every lot = Σ remaining − balance, measured before this entry
+    const [sums] = await execRows<{ rem: number; bal: number }>(tx, sql`
+      select coalesce((select sum(remaining) from ${L} where org_id = ${e.orgId}::uuid), 0)::float as rem,
+             coalesce((select sum(credits) from ${schema.creditLedger} where org_id = ${e.orgId}::uuid and id <> ${row.id}::uuid), 0)::float as bal`);
+    const debt = Math.max(0, r2(Number(sums?.rem ?? 0) - Number(sums?.bal ?? 0)));
+    const remaining = r2(row.credits - Math.min(row.credits, debt));
+    await tx.insert(L).values({
+      orgId: e.orgId,
+      source: e.lot?.source ?? LOT_SOURCE[row.kind] ?? 'grant',
+      credits: row.credits,
+      remaining,
+      expiresAt: e.lot?.expiresAt ?? null,
+      note: row.note,
+      ledgerId: row.id,
+      ...(e.at ? { createdAt: e.at } : {}),
+    });
+    return;
+  }
+  let need = r2(-row.credits);
+  if (e.lotId) {
+    await tx.update(L).set({ remaining: sql`greatest(0, ${L.remaining} - ${need})` }).where(eq(L.id, e.lotId));
+    return;
+  }
+  const at = e.at ?? row.createdAt;
+  const lots = await tx
+    .select({ id: L.id, remaining: L.remaining })
+    .from(L)
+    .where(sql`${L.orgId} = ${e.orgId}::uuid and ${L.remaining} > 0 and (${L.expiresAt} is null or ${L.expiresAt} > ${at.toISOString()}::timestamptz)`)
+    .orderBy(sql`${L.expiresAt} asc nulls last`, L.createdAt);
+  const used: { lotId: string; credits: number }[] = [];
+  for (const lot of lots) {
+    if (need <= 0) break;
+    const take = r2(Math.min(lot.remaining, need));
+    await tx.update(L).set({ remaining: r2(lot.remaining - take) }).where(eq(L.id, lot.id));
+    used.push({ lotId: lot.id, credits: take });
+    need = r2(need - take);
+  }
+  if (used.length) await tx.update(schema.creditLedger).set({ ref: { ...((row.ref as Record<string, unknown>) ?? {}), lots: used } }).where(eq(schema.creditLedger.id, row.id));
+}
+
+async function insertEntry(q: Q, e: NewCreditEntry): Promise<CreditEntryRow | null> {
   const rows = await q
     .insert(schema.creditLedger)
     .values({
@@ -79,64 +139,30 @@ export async function listCreditEntries(orgId: string, limit = 200): Promise<Cre
 }
 
 /**
- * What the company's in-flight work already holds, in credits: runs not failed and not yet settled into a cost event (the last 24
- * hours — a run that never reported a cost stops holding credits after a day), and keyword checks not yet settled. Each is held at
- * its best estimate (the engine's, else the app's).
+ * What the company's in-flight on-demand work holds, in credits: runs not failed and not yet settled into a cost event (the last 24
+ * hours — a run that never reported a cost stops holding credits after a day), and keyword checks not yet settled. A run is held at its
+ * quote (the most it can be charged); a finished run whose cost is known at that cost, never above the quote.
  */
 export async function inFlightCredits(q: Q, orgId: string, s: { creditValueUsd: number; markup: number }): Promise<number> {
-  const [r] = await execRows<{ usd: number }>(q, sql`
+  const rate = s.creditValueUsd > 0 ? s.markup / s.creditValueUsd : 0;
+  const [r] = await execRows<{ c: number }>(q, sql`
     select (
-      coalesce((select sum(case when ru.actual_cost_usd is not null and not ru.actual_cost_partial and ru.status = 'completed' then ru.actual_cost_usd
-                                else coalesce(ru.engine_cost_estimate_usd, ru.estimated_cost_usd) end)
+      coalesce((select sum(case
+          when ru.actual_cost_usd is not null and not ru.actual_cost_partial and ru.status = 'completed'
+            then least(ru.actual_cost_usd * ${rate}::float, coalesce(ru.quoted_credits, ru.actual_cost_usd * ${rate}::float))
+          else coalesce(ru.quoted_credits, coalesce(ru.engine_cost_estimate_usd, ru.estimated_cost_usd) * ${rate}::float) end)
         from ${schema.runs} ru
         where ru.org_id = ${orgId} and ru.status <> 'failed' and ru.created_at > now() - interval '24 hours'
           and not exists (select 1 from ${schema.costEvents} ce where ce.run_id = ru.id)), 0)
-      + coalesce((select sum(k.cost_usd) from ${schema.keywordChecks} k
+      + coalesce((select sum(k.cost_usd) * ${rate}::float from ${schema.keywordChecks} k
         where k.org_id = ${orgId} and k.status in ('pending', 'done') and k.created_at > now() - interval '24 hours'
           and not exists (select 1 from ${schema.costEvents} ce where ce.event_key = 'kc:' || k.id::text)), 0)
-    )::float as usd`);
-  return creditsFor(Number(r?.usd ?? 0), s);
+    )::float as c`);
+  return r2(Number(r?.c ?? 0));
 }
 
-/**
- * The credit check of a run / keyword check, inside the transaction that holds the company's lock (spend.ts `lockCompany`), so two
- * parallel starts cannot both spend the same credits. Nothing happens unless the company's credits are enforced.
- */
-export interface CreditCheck {
-  enforced: boolean;
-  /** credits this work would use at its estimate */
-  needed: number;
-  /** balance minus what in-flight work holds */
-  available: number;
-  held: number;
-  /** false only when enforced and the credits cannot cover it */
-  enough: boolean;
-}
-
-/** Whether the company's credits cover work estimated at `estimatedUsd` (the dry run of the API answers it as is). */
-export async function creditCheck(q: Q, org: Pick<OrgRow, 'id' | 'creditsEnforced'>, estimatedUsd: number): Promise<CreditCheck> {
-  const s = await settingsRow(q);
-  const needed = estimatedUsd > 0 ? creditsFor(estimatedUsd, s) : 0;
-  const balance = await creditBalance(q, org.id);
-  const held = await inFlightCredits(q, org.id, s);
-  const available = r2(balance - held);
-  return { enforced: org.creditsEnforced, needed, available, held, enough: !org.creditsEnforced || needed <= 0 || needed <= available };
-}
-
-export async function assertCredits(tx: Tx, org: OrgRow, estimatedUsd: number, what: string): Promise<void> {
-  if (!org.creditsEnforced || !(estimatedUsd > 0)) return;
-  const { needed: need, available, held, enough } = await creditCheck(tx, org, estimatedUsd);
-  if (!enough)
-    throw new HttpError(
-      402,
-      available <= 0
-        ? `Your company has no credits left for ${what.toLowerCase()} (it needs about ${need} credits${held > 0 ? `; ${held} are held by work still running` : ''}). Ask the platform administrator for more credits.`
-        : `Your company has no credits left for ${what.toLowerCase()}: it needs about ${need} credits and ${available} are available${held > 0 ? ` (${held} more are held by work still running)` : ''}. Ask the platform administrator for more credits.`,
-      'credits',
-      undefined,
-      { creditsNeeded: need, creditsAvailable: available },
-    );
-}
+// The credit check of a run / keyword check (balance, the credits kept for the schedules, the company's own limits) is
+// services/billing.ts `creditCheck` / `assertCredits`.
 
 /**
  * A company that was just created: credit enforcement as the platform settings say for new companies, and the sign-up credits as a
@@ -147,7 +173,16 @@ export async function applyNewCompanyCredits(q: Q, org: Pick<OrgRow, 'id' | 'kin
   const s = await settingsRow(q);
   if (s.enforceForNewCompanies) await q.update(schema.organizations).set({ creditsEnforced: true }).where(eq(schema.organizations.id, org.id));
   if (s.signupCredits > 0 && org.kind !== 'client')
-    await addCreditEntry(q, { orgId: org.id, kind: 'grant', credits: s.signupCredits, paidUsd: 0, note: 'Sign-up credits', refKey: `signup:${org.id}` });
+    await addCreditEntry(q, {
+      orgId: org.id,
+      kind: 'grant',
+      credits: s.signupCredits,
+      paidUsd: 0,
+      note: 'Welcome credits',
+      ref: { source: 'signup' },
+      refKey: `signup:${org.id}`,
+      lot: { source: 'signup', expiresAt: s.signupExpiryDays > 0 ? new Date(Date.now() + s.signupExpiryDays * 86_400_000) : null },
+    });
 }
 
 /** credits granted / used in a window, per company. `used` = what runs used (usage debits, re-pricing included; never below 0) — an
