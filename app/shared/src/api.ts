@@ -104,6 +104,12 @@ export interface Site {
   trackingStatus: TrackingStatus;
   trackingStartedAt: string | null;
   createdAt: string;
+  /** keyword-first (2026-10-19; always set by the server): the website's IANA time zone ('' = the engine's), what it sells, the weekday
+   * of its weekly cycle (0 Sunday - 6; null = the weekday tracking started on) and its autopilot level */
+  timezone?: string;
+  services?: string[];
+  cycleWeekday?: number | null;
+  autopilotLevel?: import('./cycles').AutopilotLevel;
 }
 
 export interface SiteVerificationInfo {

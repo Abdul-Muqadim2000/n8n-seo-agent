@@ -115,6 +115,15 @@ export const siteBusinessSchema = z.object({
   businessFacts: opt(2000),
   competitors: domainList(3),
   brandNames: stringList(10, 80),
+  /** keyword-first (§5.2): "What do you sell?", the main services or products; sent to the engine with "Track my site" */
+  services: z.array(z.string().trim().min(2, 'At least 2 characters').max(80, 'At most 80 characters')).max(30, 'At most 30').optional(),
+  /** keyword-first (§4.2): the website's IANA time zone (the owner's browser zone in onboarding); its cycles run at 06:00 there */
+  timezone: z
+    .string()
+    .trim()
+    .max(64)
+    .refine((v) => v === '' || isValidTimezone(v), 'Unknown time zone')
+    .optional(),
 });
 export const createSiteSchema = siteBusinessSchema.extend({ domain: domainField });
 export const updateSiteSchema = siteBusinessSchema.partial().extend({

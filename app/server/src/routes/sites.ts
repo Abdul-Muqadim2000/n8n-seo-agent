@@ -61,6 +61,10 @@ export function toSite(s: SiteRow): Site {
     trackingStatus: s.trackingStatus as Site['trackingStatus'],
     trackingStartedAt: s.trackingStartedAt?.toISOString() ?? null,
     createdAt: s.createdAt.toISOString(),
+    timezone: s.timezone,
+    services: s.services,
+    cycleWeekday: s.cycleWeekday ?? null,
+    autopilotLevel: (s.autopilotLevel === 1 || s.autopilotLevel === 3 ? s.autopilotLevel : 2) as Site['autopilotLevel'],
   };
 }
 
@@ -147,6 +151,8 @@ export async function siteRoutes(app: FastifyInstance) {
         businessFacts: body.businessFacts,
         competitors: body.competitors,
         brandNames: body.brandNames,
+        ...(body.services ? { services: body.services } : {}),
+        ...(body.timezone ? { timezone: body.timezone } : {}),
         verificationToken: randomToken(18),
       })
       .returning();
