@@ -1262,8 +1262,8 @@ add_node('Page Track', 'n8n-nodes-base.form', 2.5, {'formFields': {'values': [
     copy.deepcopy(COUNTRY_FIELD),
     {'fieldLabel': 'Search terms to track (optional)', 'fieldType': 'textarea', 'placeholder': 'One per line, up to 20: the searches you care about. Keyword-ladder terms are tracked automatically.'},
     {'fieldLabel': 'GA4 property ID (optional)', 'placeholder': 'e.g. 123456789 (Analytics → Admin → Property details). Leave empty: it is detected from the site URL once access is granted.'},
-    {'fieldLabel': 'Email me the weekly report', 'fieldType': 'email', 'placeholder': 'Required: the first report arrives within minutes, then every Monday', 'requiredField': True}
-]}, 'options': {'formTitle': 'Track my site', 'formDescription': 'Every Monday: clicks, impressions, positions and traffic from your own Search Console and Google Analytics, the keywords within reach of page 1, pages losing traffic, whether your new pages are indexed, search trends, and what to do next. The first report explains which Google account to add so real data flows in.'}}, [448, 760])
+    {'fieldLabel': 'Email me the weekly report', 'fieldType': 'email', 'placeholder': 'Required: the first report arrives within minutes, then once a week on the weekday you set this up', 'requiredField': True}
+]}, 'options': {'formTitle': 'Track my site', 'formDescription': 'Once a week, on the weekday you set this up: clicks, impressions, positions and traffic from your own Search Console and Google Analytics, the keywords within reach of page 1, pages losing traffic, whether your new pages are indexed, search trends, and what to do next. The first report explains which Google account to add so real data flows in.'}}, [448, 760])
 connect('Page Track', 'Normalize Input')
 nodes['Unmatched Choice']['parameters']['jsCode'] = "throw new Error('Please choose one of the 7 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword / Track my site).');"
 patch('Normalize Input', "else if (choice.includes('rank my site') || choice.includes('ladder')) mode = 'ladder';", "else if (choice.includes('rank my site') || choice.includes('ladder')) mode = 'ladder';\nelse if (choice.includes('track')) mode = 'track';")
@@ -1285,19 +1285,19 @@ add_node('Tracker Payload (Track)', 'n8n-nodes-base.code', 2, {'jsCode': rd('cod
 add_node('Start Site Tracker', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentSiteTrk1'}, 'mode': 'once', 'options': {'waitForSubWorkflow': False}}, [TX + 880, TY], {'onError': 'continueRegularOutput'})
 if_node('Via Webhook (Track)?', "{{ !!$('Normalize Input').first().json.via_webhook }}", [TX + 1100, TY])
 add_node('Build Track Response', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Build_Track_Response.js')}, [TX + 1320, TY - 120])
-add_node('Tracking Started', 'n8n-nodes-base.form', 2.5, {'operation': 'completion', 'completionTitle': "=Tracking is set up for {{ $('Normalize Input').first().json.domain }}", 'completionMessage': "=Your first performance report is being prepared now and will be e-mailed to {{ $('Normalize Input').first().json.email }} within a few minutes, then every Monday. It tells you which Google account to add to Search Console and Google Analytics so your real search data flows in. You can close this page.", 'options': {}}, [TX + 1320, TY + 120])
+add_node('Tracking Started', 'n8n-nodes-base.form', 2.5, {'operation': 'completion', 'completionTitle': "=Tracking is set up for {{ $('Normalize Input').first().json.domain }}", 'completionMessage': "=Your first performance report is being prepared now and will be e-mailed to {{ $('Normalize Input').first().json.email }} within a few minutes, then once a week on today's weekday. It tells you which Google account to add to Search Console and Google Analytics so your real search data flows in. You can close this page.", 'options': {}}, [TX + 1320, TY + 120])
 for a, b in [('Ensure Sites Table (Track)', 'Site Row (Track)'), ('Site Row (Track)', 'Save Site (Track)'), ('Save Site (Track)', 'Tracker Payload (Track)'), ('Tracker Payload (Track)', 'Start Site Tracker'), ('Start Site Tracker', 'Via Webhook (Track)?'), ('Build Track Response', 'Has Callback?')]:
     connect(a, b)
 connect('Via Webhook (Track)?', 'Build Track Response', 0); connect('Via Webhook (Track)?', 'Tracking Started', 1)
 nodes['Note 1']['parameters']['content'] = nodes['Note 1']['parameters']['content'].replace("· **Rank my site for a keyword** (ladder).", "· **Rank my site for a keyword** (ladder) · **Track my site** (weekly Search Console / GA4 / Trends report through the Site Tracker workflow).")
 sticky("""### Track my site (form option / API mode `track`, v4.3)
-Registers the site in the Data Table `seo_sites` (upsert by site id: domain, country, search terms to track, GA4 property id, e-mail / callback) and starts **SEO Agent — Site Tracker** at once for this site; the tracker then runs every Monday. The form ends on "Tracking is set up"; API callers get `stage: site_tracker_setup` and later one `stage: site_tracker` callback per weekly report. Domains with a keyword ladder are tracked automatically.""", TX - 60, TY - 420, 900, 240, 5)
+Registers the site in the Data Table `seo_sites` (upsert by site id: domain, country, search terms to track, GA4 property id, e-mail / callback) and starts **SEO Agent — Site Tracker** at once for this site; the tracker then runs once a week in the website's own cycle (from the day tracking starts, 2026-10-19). The form ends on "Tracking is set up"; API callers get `stage: site_tracker_setup` and later one `stage: site_tracker` callback per weekly report. Domains with a keyword ladder are tracked automatically.""", TX - 60, TY - 420, 900, 240, 5)
 log('Site tracking (v4.3): start option "Track my site (rankings & traffic)" + form page (domain, country, search terms, GA4 property id, e-mail); API mode "track" (keywords, ga4_property_id); rows upserted into seo_sites and the Site Tracker workflow started at once; completion page / callback stage site_tracker_setup')
 
 
 # =============================================================================
 # 13. CONTENT CADENCE + "I PUBLISHED A PAGE" (v4.3): blog package on every content run (article HTML + Markdown + meta.json, CMS-agnostic),
-#     configurable blog posts per week per site (seo_cadence; written every Monday by SEO Agent — Content Cadence), published-URL feedback
+#     configurable blog posts per week per site (seo_cadence; written each week in the website's cycle by SEO Agent — Content Cadence), published-URL feedback
 #     (live publish check, content log, ladder row, link suggestions), internal spawns exempt from the per-address rate limit.
 # =============================================================================
 from ladder_common import LOG_TABLE, LOG_COLS, CADENCE_TABLE, CADENCE_COLS, QUERY_TABLE, dt_get_all_params, dt_upsert_params_keys, dt_update_params
@@ -1329,7 +1329,7 @@ add_node('Page Published', 'n8n-nodes-base.form', 2.5, {'formFields': {'values':
     {'fieldLabel': 'Website Domain', 'placeholder': 'example.com', 'requiredField': True},
     {'fieldLabel': 'Keyword of the page', 'placeholder': 'the keyword the page was written for (as in the e-mail subject)', 'requiredField': True},
     {'fieldLabel': 'Published page URL', 'placeholder': 'https://example.com/blog/your-new-page/', 'requiredField': True}
-]}, 'options': {'formTitle': 'I published a page', 'formDescription': 'Tell us where the page went live. We check the live page (title, meta description, H1, canonical, schema, indexability), record it, suggest pages to link from, and the trackers follow its indexing and positions from the next Monday.', 'buttonLabel': 'Record it'}}, [448, 960])
+]}, 'options': {'formTitle': 'I published a page', 'formDescription': 'Tell us where the page went live. We check the live page (title, meta description, H1, canonical, schema, indexability), record it, suggest pages to link from, and the trackers follow its indexing and positions from the next weekly report.', 'buttonLabel': 'Record it'}}, [448, 960])
 connect('Page Published', 'Normalize Input')
 nodes['Unmatched Choice']['parameters']['jsCode'] = "throw new Error('Please choose one of the 8 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword / Track my site / I published a page).');"
 patch('Normalize Input', "else if (choice.includes('track')) mode = 'track';", "else if (choice.includes('track')) mode = 'track';\nelse if (choice.includes('published')) mode = 'published';")
@@ -1374,12 +1374,12 @@ add_node('Cadence Row (Track)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ca
 add_node('Save Cadence (Track)', DT_TYPE, DT_VERSION, dt_upsert_params(CADENCE_TABLE, CADENCE_COLS, 'site_id'), [TX + 770, TY - 160], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
 disconnect('Ensure Sites Table (Track)', 'Site Row (Track)'); connect('Ensure Sites Table (Track)', 'Ensure Cadence Table (Track)'); connect('Ensure Cadence Table (Track)', 'Site Row (Track)')
 disconnect('Save Site (Track)', 'Tracker Payload (Track)'); connect('Save Site (Track)', 'Cadence Row (Track)'); connect('Cadence Row (Track)', 'Save Cadence (Track)'); connect('Save Cadence (Track)', 'Tracker Payload (Track)')
-nodes['Tracking Started']['parameters']['completionMessage'] = "=Your first performance report is being prepared now and will be e-mailed to {{ $('Normalize Input').first().json.email }} within a few minutes, then every Monday. {{ $('Normalize Input').first().json.blogs_per_week ? 'Every Monday the Content Cadence also writes ' + $('Normalize Input').first().json.blogs_per_week + ' blog page(s) for you (HTML + Markdown + meta.json); publish them and report the links with \"I published a page\". ' : '' }}The report tells you which Google account to add to Search Console and Google Analytics so your real search data flows in. You can close this page."
+nodes['Tracking Started']['parameters']['completionMessage'] = "=Your first performance report is being prepared now and will be e-mailed to {{ $('Normalize Input').first().json.email }} within a few minutes, then once a week on today's weekday. {{ $('Normalize Input').first().json.blogs_per_week ? 'Each week the Content Cadence also writes up to ' + $('Normalize Input').first().json.blogs_per_week + ' blog page(s) for you (HTML + Markdown + meta.json); publish them and report the links with \"I published a page\". ' : '' }}The report tells you which Google account to add to Search Console and Google Analytics so your real search data flows in. You can close this page."
 # ---------- E. notes ----------
 nodes['Note 1']['parameters']['content'] = nodes['Note 1']['parameters']['content'].replace("· **Track my site** (weekly Search Console / GA4 / Trends report through the Site Tracker workflow).", "· **Track my site** (weekly Search Console / GA4 / Trends report through the Site Tracker workflow; blog posts per week through the Content Cadence workflow) · **I published a page** (publish check + tracking of the live URL).")
 sticky("""### Blog package, content cadence and "I published a page" (v4.3)
 Every content run now also delivers the article as **HTML + Markdown + meta.json** (`Blog Package`: title, slug, meta description, keywords, headings, internal links, schema, word count, content score, publish checklist) by e-mail and in the callback (`markdown`, `html`, `meta`). The owner publishes in **any CMS**.
-"Track my site" takes **blog posts per week** (0-3 → `seo_cadence`); the workflow **SEO Agent — Content Cadence** writes them every Monday (ladder rung → striking-distance query → rising trend) and logs them in `seo_content_log`.
+"Track my site" takes **blog posts per week** (0-3 → `seo_cadence`); the workflow **SEO Agent — Content Cadence** writes them each week in the website's own cycle (ladder rung → striking-distance query → rising trend) and logs them in `seo_content_log`.
 "I published a page" (form / API `mode: published`): fetches the live page, checks title / meta description / H1 / canonical / noindex / JSON-LD / length, upserts the content-log row with the URL, marks the ladder row published with the real URL, suggests pages to link from; the Site Tracker inspects the page and tracks the keyword from the next Monday. Internal spawns (`ladder:` / `cadence:` keys) do not consume the owner's 6 public runs per day.""", TX - 60, TY + 160, 1100, 300, 5)
 log('Content cadence + published pages (v4.3): blog package (article HTML, Markdown, meta.json) on every content run; "Blog posts per week" on Track my site (seo_cadence, written weekly by SEO Agent — Content Cadence); "I published a page" form option / API mode published (live publish check, content log, ladder row, link suggestions); internal spawns exempt from the per-address rate limit; reporting a published page is free')
 
@@ -9877,11 +9877,23 @@ log('One picture of the results page and of our own pages (2026-10-16, re-rating
 #       published by apply_env.py; the time zone it was built with is the one n8n/compose.yml gives n8n; the credential exists in
 #       sync_credentials.py; and apply_env.py's Monday guard refuses inside the window and lets a deploy through outside it (self-test,
 #       summer and winter time).
+#     * **2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8, owner decision D2): the weekly crons are gone.** A website's week starts the day it
+#       set up and repeats every 7 days at 06:00 in its own time zone; the Cycle Dispatcher starts each job of a cycle through the
+#       workflow's own *Manual Run* (`trigger: 'cycle'`). The catch-up keeps the two daily crons (AI Pulse, Page Watch); the dispatcher's own
+#       sweep is never replayed (NOT_REPLAYED). And a forgotten Monday cron fails the build: none of the seven weekly workflows nor the
+#       Audit Scheduler may carry a Schedule Trigger, each keeps a *Manual Run* that feeds the path a cycle needs, and each plan node
+#       (the cadence's is E3's Cadence_Plan.js) reads the cycle run through ST.cycleOf.
 # 99. A TEST RUN THAT SUBMITS TO BING (R94's companion). AI Growth submits to Bing Webmaster and IndexNow, so the re-rating could not run it
 #     at all. `dry_run: true` on its manual entry (only a catch-up test passes it) keeps SubmitUrlBatch and IndexNow unsent - the request
 #     nodes hand on what WOULD have been sent, the IF in front of each submit refuses a dry item, and the report says "DRY RUN - nothing
 #     was submitted" first. Proved here on the generated AI Growth workflow; harness S129 runs the nodes.
 # =============================================================================
+_CYCLE_JOBS98 = {'SEOagentAIVisib1': 'AI Plan', 'SEOagentBacklnk1': 'BL Plan', 'SEOagentTracker1': 'Tracker Plan', 'SEOagentSiteTrk1': 'Site Plan',
+                 'SEOagentAIGrow1': 'Growth Plan', 'SEOagentCadence1': 'Cadence Plan', 'SEOagentLinkBld1': 'LB Plan', 'SEOagentAuditSc1': 'Audit Candidates'}
+_CYCLE_DAILY98 = ('SEOagentAIPulse1', 'SEOagentPageWch1')
+_CYCLE_NOT_REPLAYED98 = ('SEOagentCycleDsp',)
+
+
 def _b98_catchup():
     """Runs right after the four sub-builds (the catch-up reads their generated workflows), before every lint that walks workflows/."""
     import ast as _ast98, datetime as _dt98
@@ -9893,15 +9905,44 @@ def _b98_catchup():
     _by98 = {n['name']: n for n in _cu98['nodes']}
     _out98 = lambda c, nd: [t['node'] for lst in ((c.get(nd) or {}).get('main') or []) for t in (lst or [])]
     # ---------- A. the schedule table is every generated schedule, each with a manual entry on the schedule's own path ----------
-    _sched98 = {}
+    _sched98, _allwf98 = {}, {}
     for _f98 in sorted(os.listdir(_wd98)):
         if not _f98.endswith('.json') or _f98 in _NOT_GENERATED69 or _f98 == _wire98['workflow']['file']:
             continue
         for _w98 in json.load(open(os.path.join(_wd98, _f98), encoding='utf-8')):
             _t98 = [n for n in _w98['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
-            if _t98:
+            if _t98 and _w98['id'] not in _CYCLE_NOT_REPLAYED98:
                 _sched98[_w98['id']] = (_w98, _t98[0]['name'])
+            _allwf98[_w98['id']] = _w98
     _baked98 = {s['id']: s for s in _wire98['schedules']}
+    # ---------- 2026-10-19: the seven weekly workflows and the Audit Scheduler run in each website's cycle - no cron, a Manual Run, a cycle-aware plan ----------
+    assert sorted(_baked98) == sorted(_CYCLE_DAILY98), 'cycle (2026-10-19): the catch-up must carry the two daily crons only, it carries %s' % sorted(_baked98)
+    _cycwf98 = {}
+    for _cid98, _plan98 in _CYCLE_JOBS98.items():
+        assert _cid98 in _allwf98, 'cycle (2026-10-19): the weekly workflow %s was not generated' % _cid98
+        _cw98 = _allwf98[_cid98]
+        _tr98 = [n['name'] for n in _cw98['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
+        assert not _tr98, 'cycle (2026-10-19): %s (%s) has a Schedule Trigger again (%s) - a weekly job runs in each website\'s own cycle, never on a shared cron' % (_cw98['name'], _cid98, _tr98)
+        _mr98 = [n for n in _cw98['nodes'] if n['name'] == 'Manual Run' and n['type'] == 'n8n-nodes-base.executeWorkflowTrigger']
+        assert len(_mr98) == 1 and _out98(_cw98['connections'], 'Manual Run'), 'cycle (2026-10-19): %s has no Manual Run the dispatcher can start' % _cid98
+        _seen98, _todo98 = set(), ['Manual Run']
+        while _todo98:
+            _nd98 = _todo98.pop()
+            if _nd98 in _seen98: continue
+            _seen98.add(_nd98); _todo98.extend(_out98(_cw98['connections'], _nd98))
+        _pn98 = next((n for n in _cw98['nodes'] if n['name'] == _plan98), None)
+        assert _pn98 is not None and _plan98 in _seen98, 'cycle (2026-10-19): %s - the Manual Run does not reach its plan node %s' % (_cid98, _plan98)
+        if _cid98 != 'SEOagentCadence1':   # the cadence's plan node reads the cycle in E3's Cadence_Plan.js
+            assert 'ST.cycleOf(' in _pn98['parameters']['jsCode'] and 'const ST = (() => {' in _pn98['parameters']['jsCode'], \
+                'cycle (2026-10-19): %s - its plan node %s does not read the cycle run (ST.cycleOf)' % (_cid98, _plan98)
+        # the callback of a cycle run carries trigger / cycle_key / cycle_date (Callback Ledger puts them on the item): a POST that sends the
+        # whole item carries them as they are, a POST with an explicit body must spread them in
+        _posts98 = [n for n in _cw98['nodes'] if n['type'] == 'n8n-nodes-base.httpRequest' and n['name'].startswith('POST ') and '$json.callback_url' in str(n['parameters'].get('url'))]
+        for _pn in _posts98:
+            _jb98 = str(_pn['parameters'].get('jsonBody') or '')
+            assert _jb98 == '={{ JSON.stringify($json) }}' or ("$json.trigger === 'cycle' ? { trigger: 'cycle', cycle_key: $json.cycle_key" in _jb98 and 'cycle_date: $json.cycle_date' in _jb98), \
+                'cycle (2026-10-19): %s / %s posts an explicit callback body without the cycle fields (trigger, cycle_key, cycle_date)' % (_cid98, _pn['name'])
+        _cycwf98[_cid98] = {'name': _cw98['name'], 'plan': _plan98, 'manual_run': 'Manual Run', 'callback_posts': sorted(_pn['name'] for _pn in _posts98)}
     assert sorted(_sched98) == sorted(_baked98), 'R94: the catch-up carries %s but the generated schedules are %s' % (sorted(_baked98), sorted(_sched98))
     for _id98, (_w98, _tn98) in _sched98.items():
         _c98 = _w98['connections']
@@ -9992,10 +10033,13 @@ def _b98_catchup():
         _growth98[_sub98] = {'gate': _if98, 'expr': _lv98}
     assert 'dry_run_note' in _gn98['Growth Report']['parameters']['jsCode'], 'R94: the AI Growth report does not say it was a dry run'
     _wire98.update({'deploy_guard': _guard98, 'growth_dry_run': _growth98, 'record_then_start': True,
-                    'published': sorted(_baked98), 'compose_tz_default': _tzm98.group(1)})
+                    'published': sorted(_baked98), 'compose_tz_default': _tzm98.group(1),
+                    # 2026-10-19: the weekly workflows that run in each website's cycle (no cron; Manual Run -> plan), for the harness
+                    'cycle_workflows': _cycwf98, 'daily_crons': list(_CYCLE_DAILY98), 'not_replayed': list(_CYCLE_NOT_REPLAYED98)})
     json.dump(_wire98, open(os.path.join(HERE0, 'harness', 'catchup_wiring.json'), 'w'), indent=1, sort_keys=True)
     print('R94: the Schedule Catch-up carries the %d generated schedules (%s), records before it starts, and every target is published; '
           'apply_env.py refuses a Monday deploy (%d guard cases); AI Growth submits nothing on a dry run' % (len(_baked98), _wire98['tz'], len(_guard98)))
+    print('cycle (2026-10-19): %d weekly workflows carry no cron and are started by the website\'s cycle through Manual Run; the catch-up keeps %s' % (len(_cycwf98), ', '.join(_CYCLE_DAILY98)))
 
 
 log('A schedule that never fired, and a restart that threw its fire away (2026-10-16, re-rating 2026-10-15 R94, High). In the 21 days to 2026-10-15 the Rank Tracker, the Site Tracker, AI Growth, the Content Cadence and the Link Builder had 8 due fires and none fired; the cause, read in n8n\'s own code, is that a cron fire lives only in memory and every restart, deploy or re-publish re-arms the schedule for its next future time, so the 2026-10-12 16:38 deploy restart threw away the five Monday runs the Mac\'s sleep had pushed past it. New workflow SEO Agent - Schedule Catch-up (build_catchup.py, SEOagentCatchUp1; kit v5/code/_catchup.js): n8n\'s Instance Started event plus an hourly sweep read each of the ten schedules\' latest due time in GENERIC_TIMEZONE, the workflow\'s executions with mode trigger through n8n\'s public API (an on-demand run does not count - an owner decision) and the catch-up\'s own seo_cache records, and start a missed fire ONCE through the workflow\'s own manual entry with no site, recording catchup:<workflow>:<due ISO> before the start; only fires due in the last 36 h (weekly / monthly) or 20 h (daily), never before the catch-up first ran, at most three a sweep 60 s apart and never more than the run guard has room for; a fire the schedule still holds is left to it until 6 h late so a week never runs twice. apply_env.py refuses a deploy on Monday 07:00-12:00 in the schedules\' time zone (--force-monday overrides), n8n/compose.yml sets GENERIC_TIMEZONE explicitly (America/New_York, what it was while unset), sync_credentials.py writes the n8n API credential from N8N_API_KEY, and AI Growth gained dry_run: true, which sends nothing to Bing or IndexNow and says so in the report (section 99)')
