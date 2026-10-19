@@ -1404,6 +1404,45 @@ export const creditPurchaseRequests = pgTable(
   (t) => [index('credit_purchase_requests_org_idx').on(t.orgId, t.createdAt), index('credit_purchase_requests_status_idx').on(t.status)],
 );
 
+/**
+ * The invoice of a paid credit purchase (app/docs/CREDITS.md "Invoices"): one per paid grant (`ledgerId` unique), numbered per year
+ * without gaps (`year` + `seq`, allocated under a lock), with everything printed on it copied in, so the PDF reads the same after the
+ * company is renamed or deleted, or the issuer's details change.
+ */
+export const invoices = pgTable(
+  'invoices',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** ALV-2026-0001 */
+    number: text('number').notNull(),
+    year: integer('year').notNull(),
+    seq: integer('seq').notNull(),
+    orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'set null' }),
+    orgName: text('org_name').notNull(),
+    ledgerId: uuid('ledger_id').notNull(),
+    requestId: uuid('request_id'),
+    credits: doublePrecision('credits').notNull(),
+    amountUsd: doublePrecision('amount_usd').notNull(),
+    currency: text('currency').notNull().default('USD'),
+    description: text('description').notNull(),
+    /** who it is addressed to: the company's owners and admins when it was issued */
+    billedTo: jsonb('billed_to').$type<string[]>().notNull().default([]),
+    /** the seller as printed: name, address lines, tax id, e-mail (config INVOICE_*) */
+    issuer: jsonb('issuer').$type<{ name: string; lines: string[]; taxId: string; email: string }>().notNull(),
+    note: text('note').notNull().default(''),
+    issuedAt: ts('issued_at').defaultNow().notNull(),
+    issuedBy: text('issued_by').notNull().default(''),
+    emailedAt: ts('emailed_at'),
+    emailedTo: jsonb('emailed_to').$type<string[]>().notNull().default([]),
+  },
+  (t) => [
+    uniqueIndex('invoices_number_idx').on(t.number),
+    uniqueIndex('invoices_year_seq_idx').on(t.year, t.seq),
+    uniqueIndex('invoices_ledger_idx').on(t.ledgerId),
+    index('invoices_org_idx').on(t.orgId, t.issuedAt),
+  ],
+);
+
 /** What platform administrators did in the panel (credits, users, companies, settings). Internal; no foreign keys (history stays). */
 export const adminAudit = pgTable(
   'admin_audit',
@@ -1426,6 +1465,7 @@ export type CostEventRow = typeof costEvents.$inferSelect;
 export type PlatformSettingsRow = typeof platformSettings.$inferSelect;
 export type CreditLotRow = typeof creditLots.$inferSelect;
 export type CreditPurchaseRequestRow = typeof creditPurchaseRequests.$inferSelect;
+export type InvoiceRow = typeof invoices.$inferSelect;
 export type LogSourceRow = typeof logSources.$inferSelect;
 export type LogIngestRow = typeof logIngests.$inferSelect;
 export type ApiKeyRow = typeof apiKeys.$inferSelect;

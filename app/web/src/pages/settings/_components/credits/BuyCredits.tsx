@@ -46,7 +46,7 @@ export function BuyCreditsCard({ b, id }: { b: BillingOverview; id?: string }) {
       title="Buy credits"
       description={
         admin
-          ? 'Choose a pack. The Alaventra team confirms your request and sends the invoice; the credits are added to your balance when it is confirmed.'
+          ? 'Choose a pack. The Alaventra team sends you the payment details; when the payment is confirmed, the credits are added to your balance and the invoice is e-mailed to your owners and admins.'
           : 'Ask an owner or admin of your company to buy credits.'
       }
     >

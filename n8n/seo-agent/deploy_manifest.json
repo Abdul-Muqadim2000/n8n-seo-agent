@@ -23,7 +23,8 @@
     "SEO_Agent_Reply_Reader.json",
     "SEO_Agent_Prerelease.json",
     "SEO_Agent_Schedule_Catchup.json",
-    "SEO_Agent_Publish_Check.json"
+    "SEO_Agent_Publish_Check.json",
+    "SEO_Agent_Site_Kickoff.json"
   ],
   "publish": [
     "SEOagentV4Full01",
@@ -46,7 +47,8 @@
     "SEOagentReplyRd1",
     "SEOagentPreRel1",
     "SEOagentCatchUp1",
-    "SEOagentPubCheck"
+    "SEOagentPubCheck",
+    "SEOagentKickoff1"
   ],
   "publish_when_imap": [
     "SEOagentConsole1"

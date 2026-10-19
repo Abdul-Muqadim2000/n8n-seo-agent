@@ -819,6 +819,40 @@ LA.sticky("""## SEO Agent — Link Builder API (v4.13)
 LA.write('SEO_Agent_Link_Builder_API.json')
 
 # =============================================================================
+# 5c. SITE KICKOFF (2026-10-19): a website's first weekly cycle on the day its tracking starts, not on the next Monday. The web app calls it
+#     once "Track my site" is set up; a platform admin can call it for a website already tracked. Answered at once (202), then each weekly
+#     job the website has switched on starts through its workflow's own Manual Run, one after the other, in Monday's order. Nothing in the
+#     scheduled workflows changes: the door and the work are separate workflows (the Link Builder API's rule).
+# =============================================================================
+from ladder_common import CADENCE_TABLE, CADENCE_COLS
+KO = WF('SEOagentKickoff1', 'SEO Agent — Site Kickoff', 'kickoff', 10800)
+KO.node('Site Kickoff API', 'n8n-nodes-base.webhook', 2, {'httpMethod': 'POST', 'path': 'seo-site-kickoff', 'authentication': 'headerAuth', 'responseMode': 'responseNode', 'options': {}}, at(0, 4), webhookId=str(uuid.uuid5(NS, 'kickoff:webhook')), credentials=API_KEY_CRED)
+KO.code('Kickoff Validate', 'Kickoff_Validate.js', at(1, 4)); KO.iff('Kickoff OK?', '{{ $json.ok }}', at(2, 4))
+KO.node('Respond Kickoff Accepted', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: true, status: 'accepted', stage: 'site_kickoff_started', request_id: $json.request_id, domain: $json.domain, site_id: $json.site_id, dry_run: $json.dry_run }) }}", 'options': {'responseCode': 202}}, at(3, 3))
+KO.node('Respond Kickoff Bad Request', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': '={{ JSON.stringify({ ok: false, error: $json.error }) }}', 'options': {'responseCode': 400}}, at(3, 5))
+KO.ensure('Ensure Cache (Kickoff)', CACHE_TABLE, CACHE_COLS, at(4, 3))
+KO.load('Load Sites (Kickoff)', SITES_TABLE, at(5, 3))
+KO.load('Load Monitors (Kickoff)', MONITORS_TABLE, at(6, 3))
+KO.load('Load Cadence (Kickoff)', CADENCE_TABLE, at(7, 3))
+KO.node('Load Kickoff Record', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'kickoff'), at(8, 3), **LOAD)
+KO.code('Kickoff Plan', 'Kickoff_Plan.js', at(9, 3)); KO.iff('Anything To Start?', '{{ !$json.nothing_to_do }}', at(10, 3))
+# the record is written BEFORE the first start (a second call while the first cycle runs is refused); a dry run records nothing
+KO.code('Kickoff Record Row', "// one seo_cache row per website: when its first cycle was started and which jobs (a dry run writes none)\nconst jobs = $('Kickoff Plan').all().map(i => i.json);\nconst j = jobs[0] || {};\nif (j.dry_run) return [{ json: { skip_record: true } }];\nreturn [{ json: { key: 'kickoff:' + j.site_id, kind: 'kickoff', site_id: j.site_id, value: JSON.stringify({ at: new Date().toISOString(), jobs: jobs.map(x => x.job), request_id: j.request_id }), updated_at: new Date().toISOString() } }];", at(11, 2))
+KO.iff('Record It?', '{{ !$json.skip_record }}', at(12, 2))
+KO.node('Save Kickoff Record', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(13, 1), onError='continueRegularOutput')
+KO.code('Kickoff Jobs', "// the jobs again (the record's save outputs the saved row): one item per Manual Run, in Monday's order\nreturn $('Kickoff Plan').all();", at(14, 2))
+# one after the other (each run passes its own gate and ledger; waiting keeps two of this site's jobs from running at once)
+KO.node('Start Weekly Job', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': '={{ $json.workflow_id }}'}, 'mode': 'each', 'options': {'waitForSubWorkflow': True}}, at(15, 2), onError='continueRegularOutput')
+KO.chain('Site Kickoff API', 'Kickoff Validate', 'Kickoff OK?'); KO.link('Kickoff OK?', 'Respond Kickoff Accepted', 0); KO.link('Kickoff OK?', 'Respond Kickoff Bad Request', 1)
+# answer first, then start (a sub-workflow started before the webhook answers runs no node: live 2026-10-11, executions 295 / 297)
+KO.chain('Respond Kickoff Accepted', 'Ensure Cache (Kickoff)', 'Load Sites (Kickoff)', 'Load Monitors (Kickoff)', 'Load Cadence (Kickoff)', 'Load Kickoff Record', 'Kickoff Plan', 'Anything To Start?')
+KO.link('Anything To Start?', 'Kickoff Record Row', 0); KO.link('Kickoff Record Row', 'Record It?'); KO.link('Record It?', 'Save Kickoff Record', 0); KO.link('Record It?', 'Kickoff Jobs', 1)
+KO.link('Save Kickoff Record', 'Kickoff Jobs'); KO.link('Kickoff Jobs', 'Start Weekly Job')
+KO.sticky("""## SEO Agent — Site Kickoff (2026-10-19)
+`POST /webhook/seo-site-kickoff` (header X-API-Key, credential **SEO API Key**): `{ domain | site_id, jobs?, force?, dry_run?, request_id? }` (`jobs`: only these, e.g. leaving out what the customer already ran today) → 202 at once. Then, for a website the engine tracks and that is not paused, each weekly job it has switched on starts through its workflow's own **Manual Run**, one after the other, in Monday's order: AI visibility → backlinks (the full check) → AI growth → the Content Cadence → the Link Builder. Their reports arrive through the website's own callback, and each run records its spend under `schedule:<mode>` (the company's autopilot). Once per website (`seo_cache` `kickoff:<site_id>`, written before the first start); `force: true` starts it again. `dry_run: true` starts only AI Growth (no Bing / IndexNow submission) and the Content Cadence (plans, writes nothing) and records nothing.""", [-40, -300], 900, 200, 6)
+KO.write('SEO_Agent_Site_Kickoff.json')
+
+# =============================================================================
 # 6. REPLY READER (v4.13): the web app sends one reply to a link-building e-mail; Claude Haiku classifies it and suggests the answer;
 #    pages named in the reply are checked for our link at once (synchronous; POST /webhook/seo-reply-read, header X-API-Key)
 # =============================================================================

@@ -33,6 +33,7 @@ import { sendMail } from '../lib/mailer';
 import { siteAdmin, siteRows } from '../n8n/client';
 import { addCreditEntry, creditBalance, inFlightCredits } from './admin/credits';
 import { settingsRow } from './admin/settings';
+import { billingContacts, listInvoices } from './invoices';
 import { execRows, tsv } from './admin/sqlRows';
 import { monitorsFromRow } from './data';
 
@@ -312,6 +313,7 @@ export async function billingOverview(org: OrgRow, now = new Date()): Promise<Bi
     : null;
 
   const requests = await db.query.creditPurchaseRequests.findMany({ where: eq(schema.creditPurchaseRequests.orgId, org.id), orderBy: desc(schema.creditPurchaseRequests.createdAt), limit: 10 });
+  const invoices = await listInvoices(org.id);
   const runway = org.creditsEnforced ? runwayDays(st.available, st.dailyBurn) : null;
   return {
     enforced: org.creditsEnforced,
@@ -347,6 +349,7 @@ export async function billingOverview(org: OrgRow, now = new Date()): Promise<Bi
     expiringSoon,
     packs: packsOf(s).map((p) => pricePack(p, s.creditValueUsd)),
     requests: requests.map(requestView),
+    invoices,
     creditValueUsd: s.creditValueUsd,
     packExpiryMonths: s.packExpiryMonths,
     planRolloverMonths: s.planRollover ? 1 : 0,
@@ -494,14 +497,6 @@ async function setPaused(site: SiteRow, reason: 'balance' | 'autopilot_limit' | 
   return true;
 }
 
-async function owners(orgId: string): Promise<string[]> {
-  const rows = await db
-    .select({ email: schema.users.email })
-    .from(schema.memberships)
-    .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
-    .where(and(eq(schema.memberships.orgId, orgId), inArray(schema.memberships.role, ['owner', 'admin'])));
-  return rows.map((r) => r.email);
-}
 
 const NOTICE: Record<Exclude<CreditStatus, 'ok'>, { subject: string; line: (st: CreditState) => string }> = {
   low: { subject: 'Your credits will run out within a week', line: (st) => `You have ${formatCredits(st.available)} available and use about ${formatCredits(st.dailyBurn)} a day, so they last about ${Math.floor(st.available / st.dailyBurn)} more days.` },
@@ -635,7 +630,7 @@ async function guardPass(log: Log, now: Date): Promise<GuardResult> {
           const n = level !== 'ok' && worse ? NOTICE[level as Exclude<CreditStatus, 'ok'>] : null;
           const subject = n ? n.subject : 'Automatic work has resumed';
           const line = n ? n.line(st) : 'Credits were added, so your websites\' automatic work runs again from its next scheduled time.';
-          for (const to of await owners(org.id)) {
+          for (const to of await billingContacts(org.id)) {
             await sendMail({ to, subject: `${subject} · ${org.name}`, lines: [line], action: { label: 'Open Credits', url: `${config.appUrl}/o/${org.id}/settings/credits` } }, log).catch(() => false);
             out.notices++;
           }

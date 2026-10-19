@@ -164,6 +164,23 @@ export interface CreditPurchaseRequest {
   resolvedAt: string | null;
 }
 
+/**
+ * The invoice of a paid credit purchase (app/docs/CREDITS.md "Invoices"): issued when a platform admin records a payment with a
+ * grant, numbered per year without gaps (`ALV-2026-0001`), e-mailed as a PDF to the company's owners and admins and kept for download.
+ */
+export interface InvoiceView {
+  id: string;
+  number: string;
+  issuedAt: string;
+  credits: number;
+  amountUsd: number;
+  /** the line on the invoice ("2,000 credits, valid until 19 Oct 2027") */
+  description: string;
+  /** when it was last e-mailed (null = not yet, or no address could take it), and to whom */
+  emailedAt: string | null;
+  emailedTo: string[];
+}
+
 export interface BillingOverview {
   enforced: boolean;
   /** all lots together, minus anything used beyond them */
@@ -202,6 +219,8 @@ export interface BillingOverview {
   expiringSoon: { credits: number; on: string } | null;
   packs: PricedPack[];
   requests: CreditPurchaseRequest[];
+  /** the company's invoices, newest first (the last 24) */
+  invoices: InvoiceView[];
   creditValueUsd: number;
   /** months a bought pack lasts, and months a plan's unused credits roll over (0 = none) */
   packExpiryMonths: number;

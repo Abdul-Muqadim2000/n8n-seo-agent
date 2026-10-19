@@ -311,7 +311,29 @@ CACHE_COLS = [('key', 'string'), ('kind', 'string'), ('site_id', 'string'), ('va
 LADDER_SETTINGS_TABLE = 'seo_ladder_settings'
 LADDER_SETTINGS_COLS = [('ladder_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('head_keyword', 'string'), ('mode', 'string'), ('priority', 'number'), ('status', 'string'),
                         ('plan_type', 'string'), ('reach', 'number'), ('source', 'string'), ('opportunities', 'string'), ('auto_start', 'boolean'), ('max_active', 'number'), ('max_waiting', 'number'),
-                        ('created_at', 'string'), ('updated_at', 'string')]
+                        ('created_at', 'string'), ('updated_at', 'string'),
+                        # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §5.5 / §14): who chose a ladder's keyword (client_typed | client_picked |
+                        # system_announced; '' = client_typed) and, on the '_site' row, the website's autopilot level (1 | 2 | 3; empty = 2)
+                        ('chosen_by', 'string'), ('autopilot_level', 'number')]
+
+# ---- the per-website 7-day cycle (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4 / §7 / §14; app mirror app/shared/src/cycles.ts) ----
+# seo_cycles: one row per website (upsert by site_id), written by the Site Kickoff and the Cycle Dispatcher. Times are ISO UTC; tz is IANA;
+# cycle_weekday 0-6 (Sunday 0) in tz; local_time 'HH:MM'; monthly_day 1-28; current_key 'cyc:<site_id>:<YYYY-MM-DD>' (the local due date).
+CYCLES_TABLE = 'seo_cycles'
+CYCLES_COLS = [('site_id', 'string'), ('domain', 'string'), ('anchor_at', 'string'), ('tz', 'string'), ('cycle_weekday', 'number'), ('local_time', 'string'),
+               ('monthly_day', 'number'), ('next_due_at', 'string'), ('next_preview_at', 'string'), ('current_key', 'string'), ('status', 'string'),
+               ('skip_jobs', 'string'), ('last_cycle_at', 'string'), ('last_monthly_key', 'string'), ('adopted', 'boolean'), ('updated_at', 'string')]
+# seo_cycle_jobs: one row per website x cycle x job (upsert by key = '<cycle_key>:<job>'), written by the dispatcher BEFORE it starts the job
+# (record-then-start). status: starting | running | done | skipped | refused | failed | gave_up; ledger_key 'cycle:<cycle_key>:<job>'.
+CYCLE_JOBS_TABLE = 'seo_cycle_jobs'
+CYCLE_JOBS_COLS = [('key', 'string'), ('site_id', 'string'), ('cycle_key', 'string'), ('job', 'string'), ('workflow_id', 'string'), ('status', 'string'),
+                   ('attempts', 'number'), ('run_id', 'string'), ('ledger_key', 'string'), ('monthly', 'boolean'), ('reason', 'string'), ('due_at', 'string'),
+                   ('started_at', 'string'), ('finished_at', 'string'), ('updated_at', 'string')]
+# seo_skips: the client's decisions on the "Coming up" plan, written by the app; read by the Content Cadence. key '<site_id>:<cycle_key|always>:<item_key>',
+# item_key = the normalised keyword (lower case, non-alphanumerics -> one space); decision skip | approve; scope cycle | always.
+SKIPS_TABLE = 'seo_skips'
+SKIPS_COLS = [('key', 'string'), ('site_id', 'string'), ('cycle_key', 'string'), ('item_key', 'string'), ('decision', 'string'), ('scope', 'string'),
+              ('by', 'string'), ('created_at', 'string')]
 
 def dt_get_recent_params(table, key, condition, value, limit, order_col='createdAt', direction='DESC'):
     """Get at most `limit` rows matching one condition, newest first (bounded load for tables that only grow, e.g. the rank history)."""

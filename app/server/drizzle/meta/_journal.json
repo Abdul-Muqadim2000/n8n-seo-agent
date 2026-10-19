@@ -120,6 +120,13 @@
       "when": 1792415589414,
       "tag": "0016_credits_existing_companies",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792423474075,
+      "tag": "0017_invoices",
+      "breakpoints": true
     }
   ]
 }
