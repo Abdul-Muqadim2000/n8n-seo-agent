@@ -41,7 +41,7 @@ const PRINCIPLES: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Hand,
     title: 'You stay in control',
-    body: 'Auto or Manual for every step and every keyword ladder. On Manual, work waits in "Needs you" until a person approves it, and nothing is published without your team.',
+    body: 'Pages are written only for the keywords you choose, at the autopilot level you pick, and the plan shows two days before anything is written. Auto or Manual for every step and every keyword ladder, and nothing is published without your team.',
   },
   {
     icon: Wallet,
@@ -141,7 +141,7 @@ function Inside() {
   return (
     <Section tone="ink" spacing="lg" aria-labelledby="inside-title">
       <div className="flex flex-wrap items-end justify-between gap-6">
-        <SectionHeading id="inside-title" eyebrow="What's inside" title="One system, from the first keyword to the Monday report." />
+        <SectionHeading id="inside-title" eyebrow="What's inside" title="One system, from the first keyword to the weekly report." />
         <Reveal>
           <ArrowLink to="/platform" onInk>
             Explore the platform

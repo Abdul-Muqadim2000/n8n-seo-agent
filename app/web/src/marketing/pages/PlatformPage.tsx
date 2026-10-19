@@ -9,7 +9,7 @@ import { ArrowLink, jumpTo, lowerFirst, useScrollSpy } from '../components/platf
 import { CapabilityCount, capabilityCount, featureBySlug, features, type Feature } from '../content/features';
 import { useSeo } from '../useSeo';
 
-const HERO_FACTS = [`${features.length} capabilities`, 'Auto or Manual for every step', 'Price shown before every run'];
+const HERO_FACTS = [`${features.length} capabilities`, 'Pages only for keywords you choose', 'Auto or Manual for every step', 'Price shown before every run'];
 
 /** which capabilities carry each step of the weekly loop */
 const LOOP_MAP: Record<string, string[]> = {
@@ -288,7 +288,7 @@ function LoopSection() {
           <SectionHeading
             eyebrow="The growth loop"
             title={`How the ${capabilityCount} fit together.`}
-            lead="Every website runs the same six steps every week. Each capability carries one or more of them, and each loop starts from what the last one learned."
+            lead="Every website runs the same six steps every week, on its own weekday from the day it was set up. Pages are written only for the keywords you choose, and the plan shows in Coming up two days before. Each capability carries one or more of the steps, and each loop starts from what the last one learned."
           />
           <ol className="mt-10 divide-y divide-line-on-ink border-y border-line-on-ink">
             {LOOP_STEPS.map((s, i) => (
