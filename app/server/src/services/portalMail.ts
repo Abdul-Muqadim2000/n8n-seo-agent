@@ -85,13 +85,14 @@ export async function senderFor(org: OrgRow | null): Promise<BrandedSender> {
   const name = senderDisplayName(s.senderName || brand.name) || brand.name;
   const replyTo = s.replyTo || brand.supportEmail || undefined;
   const buttonColor = brand.accent ? (brandTokens(brand.accent)?.light.accent ?? null) : null;
+  const look = { whiteLabel: true, logoUrl: brand.logoUrl, footerText: brand.footerText, supportEmail: brand.supportEmail || s.replyTo || null };
   if (s.fromMailboxId) {
     const mb = await db.query.mailboxes.findFirst({ where: and(eq(schema.mailboxes.id, s.fromMailboxId), eq(schema.mailboxes.orgId, agency.id)) });
     if (mb && mb.status === 'active' && fromCheckPasses(s.fromCheck) && s.fromCheck?.email === mb.fromEmail.toLowerCase() && checkFresh(s.fromCheck))
-      return { brand, brandName: brand.name, buttonColor, from: `"${name}" <${mb.fromEmail}>`, replyTo, via: (m) => sendViaMailbox(mb, m) };
+      return { brand, brandName: brand.name, buttonColor, ...look, from: `"${name}" <${mb.fromEmail}>`, replyTo, via: (m) => sendViaMailbox(mb, m) };
   }
   const platform = addressOf(config.mail.from);
-  return { brand, brandName: brand.name, buttonColor, from: platform ? `"${name}" <${platform}>` : config.mail.from, replyTo };
+  return { brand, brandName: brand.name, buttonColor, ...look, from: platform ? `"${name}" <${platform}>` : config.mail.from, replyTo };
 }
 
 /**

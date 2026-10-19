@@ -69,6 +69,11 @@ const Env = z.object({
   MS_OAUTH_CLIENT_SECRET: str(),
   MS_OAUTH_TENANT: str('common'),
 
+  /** account e-mails: where "Help and support" points (default: the contact page's support topic) and the support address
+   *  named in them and used as their Reply-To (empty: none named, replies go to the From address) */
+  SUPPORT_URL: str(''),
+  SUPPORT_EMAIL: str(''),
+
   SEO_BRAND: str('Alaventra'),
   SEO_MAIL_FROM: str(''),
   SEO_SMTP_HOST: str(''),
@@ -184,6 +189,10 @@ export const config = {
   // SEO_BRAND, the engine's report brand, read from n8n/.env and "Dev SEO" by default, so every MCP client of this install was told
   // it was talking to "Dev SEO". The product is Alaventra (web/src/components/layout/Brand.tsx BRAND_NAME).
   brand: 'Alaventra',
+  support: {
+    url: (e.SUPPORT_URL || `${e.APP_URL.replace(/\/+$/, '')}/contact?topic=support`).trim(),
+    email: /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e.SUPPORT_EMAIL.trim()) ? e.SUPPORT_EMAIL.trim() : '',
+  },
   mail: {
     from: e.SEO_MAIL_FROM || (e.SEO_SMTP_USER ? `${e.SEO_BRAND} <${e.SEO_SMTP_USER}>` : ''),
     host: e.SEO_SMTP_HOST,
