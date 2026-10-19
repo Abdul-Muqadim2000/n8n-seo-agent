@@ -180,3 +180,11 @@ user `bebfe4001@smtp-brevo.com`, SMTP key (owner placed it), `SEO_MAIL_FROM=Alav
 `brevo1/brevo2._domainkey`, DMARC `p=none`. Loaded with `load_secrets.sh --apply`, stack restarted; test from the production app container:
 SMTP login OK, `250 2.0.0 OK: queued` to the owner's Gmail. Engine credentials (incl. SMTP) rewritten on production n8n with
 `deploy_engine.py --credentials`. Vercel env needs no mail keys (the frontend sends nothing).
+
+**2026-10-19 ~11:00 UTC — production data wiped for a fresh start (owner's request).** Before: 12 companies / 16 users (all dev test
+data incl. Techand Test Co, 238 reports) and techand.ai's n8n Data Table rows. Backups first: `gs://alaventra-prod-backups/pg/2026-10-19/
+{app,n8n}-2026-10-19T105051Z.dump` (14-day lifecycle) + disk snapshot `alaventra-data-before-wipe-20261019` (kept until deleted by hand).
+App DB: every public table TRUNCATEd except `bot_ip_ranges` (vendor crawler IP lists), the audit-log triggers disabled only inside that
+transaction and verified enabled again; n8n: all 36 data tables emptied (0 rows, structures kept) and executions cleared; workflows 26
+(24 active), credentials 13 kept. API healthy afterwards. Everyone signs up again on alaventra.com (e-mail verification is on).
+The laptop's dev databases were not touched.
