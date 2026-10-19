@@ -121,7 +121,7 @@ export function Switch({ checked, onCheckedChange, disabled, id, label }: { chec
   );
 }
 
-/** A row with a title/description and a switch — for settings lists. */
+/** A row with a title/description and a switch for settings lists. */
 export function SwitchRow({ title, description, checked, onCheckedChange, disabled, extra }: { title: ReactNode; description?: ReactNode; checked: boolean; onCheckedChange: (v: boolean) => void; disabled?: boolean; extra?: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 py-3">

@@ -16,7 +16,7 @@ import { useMfaStatus, usePasskeyOptions, usePasskeyRegister, usePasskeyRemove, 
 import { downloadText, fmtAgo, fmtDate } from '@/lib/utils';
 import { SettingsCard } from './SettingsCard';
 
-/** G1: the person's own second factors — authenticator app, passkeys, recovery codes (Your account → Two-step verification). */
+/** G1: the person's own second factors, authenticator app, passkeys, recovery codes (Your account -> Two-step verification). */
 export function TwoStepSection() {
   const status = useMfaStatus();
   const [codes, setCodes] = useState<string[] | null>(null);
@@ -84,7 +84,7 @@ function TotpRow({ s, onCodes }: { s: MfaStatus; onCodes: (c: string[]) => void 
       icon={<Smartphone />}
       on={s.totp.enabled}
       title="Authenticator app"
-      detail={s.totp.enabled ? `On since ${fmtDate(s.totp.enabledAt!)}` : s.totpAvailable ? 'A 6-digit code from Google Authenticator, Microsoft Authenticator, 1Password…' : 'Not available on this server yet (it has no key to store app secrets). Use a passkey.'}
+      detail={s.totp.enabled ? `On since ${fmtDate(s.totp.enabledAt!)}` : s.totpAvailable ? 'A 6-digit code from Google Authenticator, Microsoft Authenticator, 1Password...' : 'Not available on this server yet (it has no key to store app secrets). Use a passkey.'}
       >
       {s.totp.enabled ? (
         <Button size="sm" variant="ghost" onClick={remove} loading={disable.isPending}>
@@ -122,7 +122,7 @@ function TotpDialog({ enrol, onClose, onCodes }: { enrol: TotpEnrolment | null; 
             {/* a QR code must stay dark on light to scan: it sits on a white tile in both themes */}
             <img src={`data:image/svg+xml;utf8,${encodeURIComponent(enrol.qrSvg)}`} alt="QR code to scan with your authenticator app" className="size-44 shrink-0 rounded-lg border border-line bg-white p-2" />
             <div className="min-w-0 space-y-2 text-sm text-ink-2">
-              <p>Cannot scan it? Add an account by hand, choose “time-based”, and type this key:</p>
+              <p>Cannot scan it? Add an account by hand, choose "time-based", and type this key:</p>
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <code className="min-w-0 max-w-full break-all rounded-md border bg-surface-2 px-2 py-1 font-mono text-xs">{enrol.secret.match(/.{1,4}/g)?.join(' ')}</code>
                 <CopyButton text={enrol.secret} label="Copy key" />

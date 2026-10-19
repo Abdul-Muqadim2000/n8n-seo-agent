@@ -48,7 +48,7 @@ function CopyLink({ anchor, title }: { anchor: string; title: string }) {
       <button
         type="button"
         onClick={copy}
-        aria-label={`Copy link to “${title}”`}
+        aria-label={`Copy link to "${title}"`}
         className={cn(
           'mk-tap inline-flex size-7 items-center justify-center rounded-md text-ink-3 transition-[opacity,color,background-color] duration-150 ease-brand hover:bg-surface-2 hover:text-ink',
           'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100 [@media(hover:none)]:opacity-100',
@@ -178,7 +178,7 @@ export default function ChangelogPage() {
     <>
       <PageHero
         eyebrow="Changelog"
-        title="What’s new in Alaventra."
+        title="What's new in Alaventra."
         lead="Every release in plain language: what changed, and what it means for your team."
         watermark
         containerClassName="pb-12 sm:pb-16"

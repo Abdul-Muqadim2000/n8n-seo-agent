@@ -17,7 +17,7 @@ import ClientsPage from '@/pages/agency/ClientsPage';
 import ApprovalsPage from '@/pages/portal/ApprovalsPage';
 import { text } from './renderReport';
 
-// G5 (app/docs/WHITE_LABEL.md): what a client person and an agency see, rendered to HTML in Node — the agency's mark instead of ours,
+// G5 (app/docs/WHITE_LABEL.md): what a client person and an agency see, rendered to HTML in Node, the agency's mark instead of ours,
 // the portal's pages and nothing else, the agency's clients table, approvals for an approver.
 
 const brand = effectiveBrand({ name: 'North Agency', branding: { whiteLabel: true, productName: 'North Insights', accent: '#0f766e', supportEmail: 'help@north.example.com' } })!;
@@ -98,7 +98,7 @@ describe('the client portal', () => {
       expect(portalPathAllowed(p), p.join('/')).toBe(false);
   });
 
-  it('the sidebar of a client viewer: the agency’s mark, the portal’s pages, nothing of tools, runs, costs or settings', () => {
+  it('the sidebar of a client viewer: the agency\'s mark, the portal\'s pages, nothing of tools, runs, costs or settings', () => {
     setPortalBrand(brand);
     const t = shell(
       <Routes>
@@ -119,7 +119,7 @@ describe('the client portal', () => {
       expect(t, s).not.toContain(s);
   });
 
-  it('agency staff in a client workspace keep the full app, with the way back to the agency and the client’s approvals', () => {
+  it('agency staff in a client workspace keep the full app, with the way back to the agency and the client\'s approvals', () => {
     const t = shell(
       <Routes>
         <Route path="/o/:orgId" element={<OrgLayout />}>
@@ -142,7 +142,7 @@ describe('the client portal', () => {
 
 const ctx = (org: Org, role: Role) => ({ me: me(role), org, role, sites: [site], can: makeCan(role) });
 
-describe('the agency’s clients page', () => {
+describe('the agency\'s clients page', () => {
   const rows: AgencyOverviewRow[] = [
     { clientId: 'c1', clientName: 'Acme', siteId: 's1', domain: 'acme.example.com', verified: true, tracking: 'active', healthScore: 83, healthAt: '2026-10-10T00:00:00.000Z', rankGains: 4, rankDrops: 1, clicksPct: 12.5, aiVisibility: 41, aiMentionRate: 0.2, alerts14d: 2, approvalsWaiting: 1, spentUsd: 3.2, budgetUsd: 25 },
     { clientId: 'c2', clientName: 'Beta Foods', siteId: null, domain: null, verified: false, tracking: null, healthScore: null, healthAt: null, rankGains: null, rankDrops: null, clicksPct: null, aiVisibility: null, aiMentionRate: null, alerts14d: 0, approvalsWaiting: 0, spentUsd: 0, budgetUsd: 25 },

@@ -2,7 +2,7 @@ import type { LogFormat } from '@seo/shared';
 import { isCloudflareIp, isPrivateIp, normalizeIp } from './ranges';
 
 /**
- * Access-log lines → request records (app/docs/LOG_ANALYTICS.md §2). Three families, detected from the first lines:
+ * Access-log lines -> request records (app/docs/LOG_ANALYTICS.md §2). Three families, detected from the first lines:
  *  - combined: Apache / Nginx "combined" and "common", with or without a leading vhost, with trailing extras (request time,
  *    "$http_x_forwarded_for")
  *  - w3c:      IIS / W3C extended and CloudFront standard logs (a `#Fields:` header names the columns; spaces or tabs)
@@ -32,7 +32,7 @@ export type LineResult = { kind: 'record'; rec: LogRecord } | { kind: 'skip' } |
 
 const MONTHS: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 
-/** "10/Oct/2026:13:55:36 +0000" → Date */
+/** "10/Oct/2026:13:55:36 +0000" -> Date */
 export function parseClfTime(s: string): Date | null {
   const m = /^(\d{1,2})\/([A-Za-z]{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?\s*([+-])(\d{2}):?(\d{2})$/.exec(s.trim());
   if (!m) return null;
@@ -131,7 +131,7 @@ export function parseCombined(line: string): LineResult {
   const close = open >= 0 ? line.indexOf(']', open) : -1;
   if (open < 0 || close < 0) return { kind: 'bad', reason: 'not an access-log line' };
   const head = line.slice(0, open).trim().split(/\s+/);
-  // ip ident user | vhost ip ident user (Apache vhost_combined, "%v:%p %h …")
+  // ip ident user | vhost ip ident user (Apache vhost_combined, "%v:%p %h ...")
   const ipTok = head.length >= 4 ? head[head.length - 3] : head[0];
   const host = head.length >= 4 ? head[0].replace(/:\d+$/, '') : null;
   const at = parseClfTime(line.slice(open + 2, close));

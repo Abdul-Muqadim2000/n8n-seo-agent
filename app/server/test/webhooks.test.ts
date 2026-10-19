@@ -96,7 +96,7 @@ describe('the SSRF guard', () => {
   });
 
   it('refuses a public-looking name that resolves to a private address, at connect time', async () => {
-    // localhost.  resolves to 127.0.0.1 — the name passes the first check only if written oddly; the lookup still refuses it
+    // localhost.  resolves to 127.0.0.1, the name passes the first check only if written oddly; the lookup still refuses it
     await expect(realSend({ url: 'https://127.0.0.1.nip.io/hook', method: 'POST', body: '{}', timeoutMs: 3000 })).rejects.toThrow(/private address|ENOTFOUND|EAI_AGAIN|timed out/);
   });
 });

@@ -36,19 +36,19 @@ import { creditCheck, quoteCredits, type CreditCheck } from './billing';
 import { settingsRow } from './admin/settings';
 
 /**
- * G4 (2026-10-17) — the write API: start any analysis a form can start (`POST /api/v1/runs`, MCP `start_run`).
+ * G4 (2026-10-17), the write API: start any analysis a form can start (`POST /api/v1/runs`, MCP `start_run`).
  * Design note: app/docs/INTEGRATIONS.md §4.
  *
  * Nothing here is a second copy of the app's run path. The body is validated by the forms' own schemas (`parseRunInput`), the run is
- * created by the same `createRunWithMeta` the form route calls — the company lock, the budget check, the platform ceiling, the
- * engine's front door, the ladder-page and tracking bookkeeping — and the duplicate warnings are the forms' own `pipelineNotices`,
+ * created by the same `createRunWithMeta` the form route calls, the company lock, the budget check, the platform ceiling, the
+ * engine's front door, the ladder-page and tracking bookkeeping, and the duplicate warnings are the forms' own `pipelineNotices`,
  * computed here on the same pipeline data the page reads. What is added is only what a machine caller needs that a person has:
  * an identity (the key's creator, re-checked), an explicit acknowledgement in place of the form's tick box, a dry run, and an
  * Idempotency-Key in place of a person not pressing the button twice.
  */
 
 /**
- * Who acts. A session acts as the signed-in person; a key acts as the person who created it — who must STILL be a member with the
+ * Who acts. A session acts as the signed-in person; a key acts as the person who created it, who must STILL be a member with the
  * role the scope needs (a key must not outlive its creator's access). The answer is the same `OrgAccess` the form routes use.
  */
 export async function actorOf(ctx: V1Ctx, scope: ApiScope): Promise<OrgAccess> {
@@ -101,7 +101,7 @@ export const requestHash = (input: RunInput, acknowledge: string[]): string =>
 
 /** `websiteId` (the v1 name) is accepted for the forms' `siteId`; the v1 extras are not form fields. */
 export function formBodyOf(body: unknown): Record<string, unknown> {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) throw badRequest('Send a JSON object: { "mode": …, "websiteId": …, … }', { mode: 'Required' });
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw badRequest('Send a JSON object: { "mode": ..., "websiteId": ..., ... }', { mode: 'Required' });
   const { websiteId, acknowledge: _a, dryRun: _d, ...rest } = body as Record<string, unknown>;
   return websiteId !== undefined && rest.siteId === undefined ? { ...rest, siteId: websiteId } : rest;
 }
@@ -158,7 +158,7 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
         notices,
         needsAcknowledge: open.map((n) => n.id),
         // whether the company's credits would let it start (`enough` is false when the balance, the credits kept for the schedules or
-        // the company's own on-demand limit would refuse it — the same check the start makes)
+        // the company's own on-demand limit would refuse it, the same check the start makes)
         credits: await creditCheck(db, ctx.org, estimate),
       },
     };
@@ -180,7 +180,7 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
   if (!replayed)
     await audit(ctx.req ?? null, ctx.org.id, {
       action: 'run.started_via_api',
-      actor: { type: 'user', userId: actor.user.id, label: ctx.key ? `${actor.user.email} via API key ${ctx.key.name} (${ctx.key.prefix}…)` : actor.user.email },
+      actor: { type: 'user', userId: actor.user.id, label: ctx.key ? `${actor.user.email} via API key ${ctx.key.name} (${ctx.key.prefix}...)` : actor.user.email },
       target: { type: 'run', id: run.id, label: run.title },
       outcome: run.status === 'failed' ? 'failure' : 'success',
       // credits (app/docs/CREDITS.md): the audit log is read by the company: its quote, never the provider estimate

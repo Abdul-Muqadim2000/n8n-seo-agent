@@ -42,7 +42,7 @@ const STAGES: Stage[] = [
     icon: Plug,
     title: 'Connect your site',
     short: 'Verify ownership, connect Search Console and GA4',
-    body: 'Add the website and prove it is yours — through Search Console, a DNS TXT record or a meta tag. Then add Alaventra’s service account to Search Console and choose your GA4 property.',
+    body: 'Add the website and prove it is yours, through Search Console, a DNS TXT record or a meta tag. Then add Alaventra\'s service account to Search Console and choose your GA4 property.',
     points: [
       'Website data appears only after ownership is verified',
       'Search Console and GA4 read through a service account you add as a user',
@@ -56,7 +56,7 @@ const STAGES: Stage[] = [
     icon: Search,
     title: 'Research and choose keywords',
     short: 'A verdict, difficulty for your site and a plan type',
-    body: 'The searches your website already appears for come first — the ones no page of yours answers, and the ones you rank just off page one. Alaventra adds candidates from your pages, your competitors and search data, or you type your own. Each one gets a verdict with its reasons, its difficulty for your site and the plan it takes: Direct, Short or Full.',
+    body: 'The searches your website already appears for come first: the ones no page of yours answers, and the ones you rank just off page one. Alaventra adds candidates from your pages, your competitors and search data, or you type your own. Each one gets a verdict with its reasons, its difficulty for your site and the plan it takes: Direct, Short or Full.',
     points: [
       'Difficulty measured against your own domain, not a generic score',
       'Traffic estimates calibrated against your own impressions and clicks where you rank, and marked measured or modelled',
@@ -70,8 +70,8 @@ const STAGES: Stage[] = [
     id: 'climb',
     icon: ChartNoAxesColumnIncreasing,
     title: 'Climb with ladders and the content engine',
-    short: 'Supporting pages first, written in your authors’ names',
-    body: 'Pick a keyword to climb and Alaventra plans the ladder: easier supporting pages first, each linking up to the head term. Every week the content engine writes the next pages — drafted, critiqued, edited and checked.',
+    short: 'Supporting pages first, written in your authors\' names',
+    body: 'Pick a keyword to climb and Alaventra plans the ladder: easier supporting pages first, each linking up to the head term. Every week the content engine writes the next pages, drafted, critiqued, edited and checked.',
     points: ['Two ladders written at once by default, in your priority order', 'Hub, case study, local and video page types', 'Writing pauses when too many drafts wait to be published'],
     visual: <LadderMockup />,
     link: { to: '/platform/keyword-ladders', label: 'Explore keyword ladders' },
@@ -81,7 +81,7 @@ const STAGES: Stage[] = [
     icon: Send,
     title: 'Publish and verify',
     short: 'Drafts in your CMS; you choose what goes live; Alaventra checks the live page',
-    body: 'Send the page to WordPress, Webflow, Contentful or your own endpoint as a draft, or take the blog package — HTML, Markdown and meta.json. An owner or admin publishes it live. Alaventra notices the new page and checks it live: metadata, schema, images and links.',
+    body: 'Send the page to WordPress, Webflow, Contentful or your own endpoint as a draft, or take the blog package: HTML, Markdown and meta.json. An owner or admin publishes it live. Alaventra notices the new page and checks it live: metadata, schema, images and links.',
     points: [
       'Nothing goes live without an owner or admin choosing it',
       'A page that failed its checks is never sent to your CMS',
@@ -97,7 +97,7 @@ const STAGES: Stage[] = [
     icon: ChartLine,
     title: 'Track, grow and learn',
     short: 'Rankings, traffic, AI answers and links, every week',
-    body: 'Rankings, Search Console, GA4, AI answers and backlinks are checked on a fixed schedule. The questions you lose in AI answers become pages to write, link openings become pitches you approve, the Monday report shows what changed, and what worked shapes next week’s plan.',
+    body: 'Rankings, Search Console, GA4, AI answers and backlinks are checked on a fixed schedule. The questions you lose in AI answers become pages to write, link openings become pitches you approve, the Monday report shows what changed, and what worked shapes next week\'s plan.',
     points: [
       'Striking-distance keywords move up the queue',
       'Alerts only on real changes: AI answers are tested, links checked twice',
@@ -111,14 +111,14 @@ const STAGES: Stage[] = [
 
 const MODE_POINTS = [
   { icon: SlidersHorizontal, title: 'Per website and per ladder', body: 'Set a default mode for the website, then switch any keyword ladder to Auto or Manual.' },
-  { icon: Inbox, title: 'One queue for decisions', body: '“Needs you” collects everything waiting on a person: briefs, pages and choices.' },
+  { icon: Inbox, title: 'One queue for decisions', body: '"Needs you" collects everything waiting on a person: briefs, pages and choices.' },
   { icon: Send, title: 'Publishing stays with you', body: 'Auto prepares the work; your team publishes. Alaventra then checks the live page.' },
   { icon: Pause, title: 'Pause at any time', body: 'Pause a ladder, change the weekly pace or switch the daily AI Pulse off for a website.' },
 ];
 
 const COST_POINTS = [
-  { icon: Calculator, title: 'The price before every analysis', body: 'Every form shows the analysis’s price in credits and its time before you start it — and it is never charged more.' },
-  { icon: Wallet, title: 'Limits checked first', body: 'Credits and limits are checked before any work begins, and owners set each company’s monthly limits.' },
+  { icon: Calculator, title: 'The price before every analysis', body: 'Every form shows the analysis\'s price in credits and its time before you start it, and it is never charged more.' },
+  { icon: Wallet, title: 'Limits checked first', body: 'Credits and limits are checked before any work begins, and owners set each company\'s monthly limits.' },
   { icon: RefreshCcw, title: 'Nothing charged twice', body: 'Results that cannot have changed are reused. Audits are skipped when the sitemap has not changed.' },
   { icon: Coins, title: 'Free where it can be', body: 'A free-sources mode for backlinks uses no credits, and the daily AI Pulse is optional per website.' },
 ];
@@ -252,7 +252,7 @@ function Journey() {
   return (
     <Section tone="surface" bordered>
       <SectionHeading
-        eyebrow="The journey"
+        eyebrow="Step by step"
         title="Five stages. Then a weekly rhythm."
         lead="The first week sets things up. Every week after that, the same loop runs on its own, and each pass starts from what the last one learned."
       />
@@ -272,7 +272,7 @@ function Week() {
         <SectionHeading
           eyebrow="A week with Alaventra"
           title="The schedule that runs while you work."
-          lead="A daily check of your key pages and of AI answers, a Monday of checks, writing and outreach, and a monthly audit. Work that would only repeat an unchanged result is skipped, and a run that was missed still happens — marked as late."
+          lead="A daily check of your key pages and of AI answers, a Monday of checks, writing and outreach, and a monthly audit. Work that would only repeat an unchanged result is skipped, and a run that was missed still happens, marked as late."
         />
         <WeekSchedule className="mt-14 sm:mt-16" />
       </Section>
@@ -304,7 +304,7 @@ function Modes() {
           <SectionHeading
             eyebrow="Auto or Manual"
             title="You approve, or it runs."
-            lead="Choose for each website and each keyword ladder. Auto does the step on schedule. Manual stops it in “Needs you” until someone on your team approves."
+            lead='Choose for each website and each keyword ladder. Auto does the step on schedule. Manual stops it in "Needs you" until someone on your team approves.'
           />
           <div className="mt-12">
             <PointList items={MODE_POINTS} />
@@ -329,7 +329,7 @@ function Cost() {
           <SectionHeading
             eyebrow="Credits"
             title="You see the price before anything runs."
-            lead="Every analysis is priced in credits first, checked against your company’s credits and limits, never charged more than that price and never charged twice when its result cannot have changed."
+            lead="Every analysis is priced in credits first, checked against your company's credits and limits, never charged more than that price and never charged twice when its result cannot have changed."
           />
           <div className="mt-12">
             <PointList items={COST_POINTS} />
@@ -344,7 +344,7 @@ export default function HowItWorksPage() {
   useSeo({
     title: 'How it works',
     description:
-      'How Alaventra runs your SEO: connect and verify your site, choose keywords, climb with ladders and the content engine, publish and verify, then track and learn on a fixed weekly schedule — with Auto or Manual for every step and the price in credits shown first.',
+      'How Alaventra runs your SEO: connect and verify your site, choose keywords, climb with ladders and the content engine, publish and verify, then track and learn on a fixed weekly schedule, with Auto or Manual for every step and the price in credits shown first.',
     path: '/how-it-works',
   });
   return (

@@ -56,13 +56,13 @@ const SOURCE_GROUPS: { title: string; items: { name: string; use: string }[] }[]
     ],
   },
   {
-    title: 'Your team’s tools',
+    title: 'Your team\'s tools',
     items: [
       { name: 'Slack and Microsoft Teams', use: 'alerts, finished work and ranking moves, routed per channel' },
       { name: 'Jira, Linear and Asana', use: 'one ticket per audit finding or recommendation, its state read back' },
       { name: 'BigQuery, Amazon S3, Google Cloud Storage and Cloudflare R2', use: 'six tables exported daily or weekly' },
       { name: 'Looker Studio', use: 'the same tables in your reports' },
-      { name: 'Claude and ChatGPT (MCP)', use: 'ask about your data and start analyses with your company’s credits' },
+      { name: 'Claude and ChatGPT (MCP)', use: 'ask about your data and start analyses with your company\'s credits' },
     ],
   },
   {
@@ -109,7 +109,7 @@ function Hero() {
               {CapabilityCount} capabilities. One system.
             </h1>
             <p className="mt-6 max-w-xl animate-fade-up text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl" style={{ animationDelay: '140ms' }}>
-              Research, keyword ladders, content, audits, tracking, AI search visibility, backlinks and link building — each strong on its own, and together one weekly loop your team can trust.
+              Research, keyword ladders, content, audits, tracking, AI search visibility, backlinks and link building. Each is strong on its own, and together they make one weekly loop your team can trust.
             </p>
             <div className="mt-9 flex animate-fade-up flex-wrap gap-3" style={{ animationDelay: '210ms' }}>
               <ButtonLink to="/signup" size="lg" className="group">

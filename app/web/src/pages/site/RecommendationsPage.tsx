@@ -25,7 +25,7 @@ export default function RecommendationsPage() {
       <PageHeader
         icon={<Lightbulb />}
         title="Recommendations"
-        description="Every next step the SEO engine sees for this website, from tracking, audits, rankings, AI answers and backlinks — most important first."
+        description="Every next step the SEO engine sees for this website, from tracking, audits, rankings, AI answers and backlinks. The most important come first."
         actions={<RunAnalysisMenu />}
       />
       <DataGate
@@ -49,7 +49,7 @@ function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetch
   const [cat, setCat] = useState<CatFilter>('all');
   const [prio, setPrio] = useState<PrioFilter>('all');
   // REP 3.3: one queue, ordered by what each step is worth. Grouping by priority or area stays available, but the default is the
-  // queue itself — the whole point of the criterion is that a customer reads one list, not one list per area.
+  // queue itself, the whole point of the criterion is that a customer reads one list, not one list per area.
   const scored = recs.some((r) => r.score);
   const [groupBy, setGroupBy] = useState<GroupBy>(scored ? 'worth' : 'priority');
   const sorted = useMemo(() => sortRecommendations(recs), [recs]);
@@ -78,7 +78,7 @@ function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetch
       <EmptyState
         icon={<Lightbulb className="size-5" />}
         title="No recommendations right now"
-        description="They come from the weekly tracking report, technical audits, rank checks, AI visibility and backlink monitors. Start one of them, or check back after Monday’s runs."
+        description="They come from the weekly tracking report, technical audits, rank checks, AI visibility and backlink monitors. Start one of them, or check back after Monday's runs."
         action={
           <>
             <ToolButton mode="audit" variant="primary">

@@ -22,7 +22,7 @@ export function ProfileStep() {
       description="Google and AI assistants favour pages written by real, qualified people from a real business (E-E-A-T: experience, expertise, authority, trust). Add your author and business details once; every page then gets a byline, an author box and the right schema."
       why={
         <>
-          <strong className="font-medium text-ink">Fill in what is true today</strong> and leave the rest empty. You can complete it any time in Website settings → Author
+          <strong className="font-medium text-ink">Fill in what is true today</strong> and leave the rest empty. You can complete it any time in Website settings &gt; Author
           &amp; profile.
         </>
       }
@@ -40,7 +40,7 @@ export function ProfileStep() {
             </Button>
           }
         >
-          The profile is stored with your website’s data, which opens once ownership is confirmed. Skip this step for now and add it later from Website settings.
+          The profile is stored with your website's data, which opens once ownership is confirmed. Skip this step for now and add it later from Website settings.
         </Callout>
       ) : settings.isPending ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]" aria-busy>

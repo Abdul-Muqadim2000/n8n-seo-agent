@@ -12,7 +12,7 @@ import { qk } from '@/lib/queries';
 import { ThemeProvider } from '@/lib/theme';
 import { text } from './renderReport';
 
-// Company settings → Credits, the sidebar pill and the banner (app/docs/CREDITS.md §2), rendered with the contexts they really get.
+// Company settings -> Credits, the sidebar pill and the banner (app/docs/CREDITS.md §2), rendered with the contexts they really get.
 // What must hold: every figure is in credits (dollars only on the packs), owners buy and set limits, viewers only read, and a client
 // person of an agency sees none of it.
 
@@ -81,10 +81,10 @@ function render(node: ReactNode, role: Role = 'owner', data: BillingOverview = o
   );
 }
 
-describe('Company settings → Credits', () => {
+describe('Company settings, Credits', () => {
   it('shows the balance, runway, month, websites, lots and packs, in credits', () => {
     const t = render(<CreditsTab />);
-    for (const s of ['Running low', 'Lasts about 5 days at your current use', 'runs out on 24 Oct 2026', 'Available now', 'Held by running analyses', 'Kept for autopilot', 'Your plan adds 2,000 credits a month', 'next credits on 1 Nov 2026', 'northwind.example', 'Paused: out of credits — resumes when credits are added', 'Usage by feature', 'Usage by day', 'Credit pack', 'Never expires', '150 credits expire on 31 Oct 2026', '$25.00', '$100.00', 'Waiting for confirmation', 'Save limits', 'Keep credits for autopilot', 'Packs last 12 months'])
+    for (const s of ['Running low', 'Lasts about 5 days at your current use', 'runs out on 24 Oct 2026', 'Available now', 'Held by running analyses', 'Kept for autopilot', 'Your plan adds 2,000 credits a month', 'next credits on 1 Nov 2026', 'northwind.example', 'Paused: out of credits. It resumes when credits are added', 'Usage by feature', 'Usage by day', 'Credit pack', 'Never expires', '150 credits expire on 31 Oct 2026', '$25.00', '$100.00', 'Waiting for confirmation', 'Save limits', 'Keep credits for autopilot', 'Packs last 12 months'])
       expect(t, s).toContain(s);
   });
 

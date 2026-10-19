@@ -256,7 +256,7 @@ export interface ShellProps {
   submitLabel?: string;
   /** a reason the run cannot start (shown instead of enabling the button) */
   blocked?: ReactNode;
-  /** the form values the pipeline notices compare (keyword, existing page, …) */
+  /** the form values the pipeline notices compare (keyword, existing page, ...) */
   values?: NoticeInput;
   /** applies the pipeline's own plan for a keyword (existing page to improve) to the form */
   onUsePlan?: (plan: NonNullable<PipelineNotice['usePlan']>) => void;
@@ -375,7 +375,7 @@ function ToolIntro({ mode, cost, eta, extras }: { mode: ModeId; cost: number; et
 
 /**
  * credits (app/docs/CREDITS.md): what on-demand analyses may use now (all rules applied: balance, credits kept for autopilot, the
- * company's on-demand limit), this run's quote on top, and what is left after it — a warning line when the quote is more than that
+ * company's on-demand limit), this run's quote on top, and what is left after it, a warning line when the quote is more than that
  * (the server refuses such runs; this only says so in advance). A company whose credits are not enforced and that set no on-demand
  * limit has nothing to meter: it sees what it used this month.
  */
@@ -740,7 +740,7 @@ export function DomainTagsField({
           max={max}
           placeholder="competitor.com"
           normalize={cleanDomain}
-          validate={(d) => (!domainOk(d) ? `“${d}” is not a public website address` : ownDomain && d === cleanDomain(ownDomain) ? 'That is your own website' : null)}
+          validate={(d) => (!domainOk(d) ? `"${d}" is not a public website address` : ownDomain && d === cleanDomain(ownDomain) ? 'That is your own website' : null)}
         />
       )}
     </Field>

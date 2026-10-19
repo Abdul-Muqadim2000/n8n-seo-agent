@@ -223,7 +223,7 @@ export function ProfileForm({
               onChange={field.onChange}
               max={max}
               validate={urlValidator}
-              placeholder="https://www.linkedin.com/in/…, then Enter"
+              placeholder="https://www.linkedin.com/in/..., then Enter"
             />
           )}
         </Field>
@@ -283,7 +283,7 @@ export function ProfileForm({
         />
       </Group>
 
-      <Group title="Expert reviewer" description="Optional. Someone qualified who checks pages before they go live; pages then show “Reviewed by”. Leave empty if no one reviews.">
+      <Group title="Expert reviewer" description="Optional. Someone qualified who checks pages before they go live; pages then show &quot;Reviewed by&quot;. Leave empty if no one reviews.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Name" optional error={errors.reviewer?.name?.message}>
             {(p) => <Input {...p} {...register('reviewer.name')} />}
@@ -319,7 +319,7 @@ export function ProfileForm({
           </Field>
         </div>
         <Field label="Map link" optional hint="Your Google Maps link." error={errors.mapUrl?.message}>
-          {(p) => <Input {...p} type="url" placeholder="https://maps.google.com/?cid=…" {...register('mapUrl')} />}
+          {(p) => <Input {...p} type="url" placeholder="https://maps.google.com/?cid=..." {...register('mapUrl')} />}
         </Field>
       </Group>
 
@@ -374,13 +374,13 @@ export function ProfileForm({
 
       <Group
         title="How you write"
-        description="Your house style. Every page we write follows it, and the quality check reports a draft that breaks it — your own name written the wrong way is corrected before delivery, the rest is advice next to the page."
+        description="Your house style. Every page we write follows it, and the quality check reports a draft that breaks it. Your own name written the wrong way is corrected before delivery, and the rest is advice next to the page."
         guide={<GuideButton id="style-guide" label="How to fill this in" />}
       >
         <Field
           label="How your brand name is written"
           optional
-          hint="Exactly as it must appear, for example Northwind & Co — never “Northwind and Co” or “northwindco”."
+          hint="Exactly as it must appear, for example Northwind & Co, never &quot;Northwind and Co&quot; or &quot;northwindco&quot;."
           error={errors.style?.brandForm?.message}
         >
           {(p) => <Input {...p} placeholder="Northwind & Co" {...register('style.brandForm')} />}
@@ -392,7 +392,7 @@ export function ProfileForm({
             <Field
               label="Other spellings of your name to catch"
               optional
-              hint="Spelling variants of your name (for example “Northwind and Co”, “northwindco”) are caught already. Add anything else people get wrong."
+              hint="Spelling variants of your name (for example &quot;Northwind and Co&quot;, &quot;northwindco&quot;) are caught already. Add anything else people get wrong."
               error={errorText(fieldState.error)}
             >
               {(p) => (
@@ -411,7 +411,7 @@ export function ProfileForm({
           )}
         />
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Spelling" optional hint="Leave on “Follow the market” and each page uses the spelling of the country it targets." error={errors.style?.spelling?.message}>
+          <Field label="Spelling" optional hint="Leave on &quot;Follow the market&quot; and each page uses the spelling of the country it targets." error={errors.style?.spelling?.message}>
             {(p) => (
               <Select {...p} {...register('style.spelling')}>
                 <option value="">Follow the market the page targets</option>
@@ -445,7 +445,7 @@ export function ProfileForm({
           )}
         />
         <Field label="Other style rules" optional hint="Anything else every page must follow." error={errors.style?.notes?.message}>
-          {(p) => <Textarea {...p} rows={3} placeholder="Write dates as 14 March 2026. Never call customers “clients”." {...register('style.notes')} />}
+          {(p) => <Textarea {...p} rows={3} placeholder="Write dates as 14 March 2026. Never call customers &quot;clients&quot;." {...register('style.notes')} />}
         </Field>
       </Group>
     </fieldset>

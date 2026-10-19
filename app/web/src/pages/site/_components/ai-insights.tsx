@@ -53,14 +53,14 @@ export function AiTrafficPanel({ traffic }: { traffic: AiTraffic | null }) {
     <Panel
       title="What AI visits are worth"
       icon={<Coins />}
-      description={`GA4, ${t.period ? `${fmtDate(t.period.start)} – ${fmtDate(t.period.end)}` : 'last 28 days'}. Google AI Overviews and AI Mode count as organic search in GA4.`}
+      description={`GA4, ${t.period ? `${fmtDate(t.period.start)} to ${fmtDate(t.period.end)}` : 'last 28 days'}. Google AI Overviews and AI Mode count as organic search in GA4.`}
       flush
     >
       <div className="grid grid-cols-2 gap-2.5 px-4 pb-4 sm:grid-cols-4">
         <FigureTile icon={<Users />} label="AI visits" value={compactNumber(t.sessions)} hint={t.changePct != null ? `${t.changePct >= 0 ? '+' : ''}${t.changePct}% vs the 28 days before` : 'no earlier period'} />
         <FigureTile icon={<Target />} label="Key events" value={compactNumber(t.keyEvents)} hint={`${pct0(t.convRate)} of AI visits convert`} />
-        <FigureTile icon={<Coins />} label="Revenue" value={t.revenue ? compactNumber(t.revenue) : '–'} hint={t.revenue ? 'in the property’s currency' : 'no purchases recorded'} />
-        <FigureTile icon={<Scale />} label="vs organic search" value={better ? `${better.toFixed(1)}×` : '–'} hint={`organic converts at ${pct0(t.organicConvRate)} · AI is ${formatPercent(t.shareOfSessions, 1)} of all visits`} />
+        <FigureTile icon={<Coins />} label="Revenue" value={t.revenue ? compactNumber(t.revenue) : '-'} hint={t.revenue ? 'in the property\'s currency' : 'no purchases recorded'} />
+        <FigureTile icon={<Scale />} label="vs organic search" value={better ? `${better.toFixed(1)}×` : '-'} hint={`organic converts at ${pct0(t.organicConvRate)} · AI is ${formatPercent(t.shareOfSessions, 1)} of all visits`} />
       </div>
       <div className="grid grid-cols-1 gap-4 border-t border-line p-4 lg:grid-cols-2">
         <DataTable
@@ -74,7 +74,7 @@ export function AiTrafficPanel({ traffic }: { traffic: AiTraffic | null }) {
             { key: 'sessions', header: 'Visits', align: 'right', sortValue: (a) => a.sessions, cell: (a) => <span className="tabular">{compactNumber(a.sessions)}</span> },
             { key: 'prev', header: 'Before', align: 'right', hideOnMobile: true, sortValue: (a) => a.prevSessions, cell: (a) => <span className="tabular text-ink-3">{compactNumber(a.prevSessions)}</span> },
             { key: 'ke', header: 'Key events', align: 'right', sortValue: (a) => a.keyEvents, cell: (a) => <span className="tabular">{compactNumber(a.keyEvents)}</span> },
-            { key: 'rev', header: 'Revenue', align: 'right', hideOnMobile: true, sortValue: (a) => a.revenue, cell: (a) => <span className="tabular">{a.revenue ? compactNumber(a.revenue) : '–'}</span> },
+            { key: 'rev', header: 'Revenue', align: 'right', hideOnMobile: true, sortValue: (a) => a.revenue, cell: (a) => <span className="tabular">{a.revenue ? compactNumber(a.revenue) : '-'}</span> },
           ]}
           initialSort={{ key: 'sessions', dir: 'desc' }}
         />
@@ -151,7 +151,7 @@ export function PerceptionPanel({ perception }: { perception: AiPerception | nul
                 <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-ink-3">
                   {i.new && <StatusBadge tone="critical">New</StatusBadge>}
                   {i.engines.join(', ')}
-                  {i.questions[0] ? ` · “${i.questions[0]}”` : ''}
+                  {i.questions[0] ? ` · "${i.questions[0]}"` : ''}
                 </span>
               </li>
             ))}
@@ -202,7 +202,7 @@ export function AccessPanel({ access }: { access: AiAccess | null }) {
       key: 'fetch',
       header: 'Homepage test',
       sortValue: (b) => (b.fetchBlocked ? 1 : 0),
-      cell: (b) => (b.fetchStatus == null ? <span className="text-xs text-ink-3">–</span> : b.fetchBlocked ? <StatusBadge tone="critical">Turned away ({b.fetchStatus || 'no answer'})</StatusBadge> : <span className="tabular text-[13px] text-ink-2">{b.fetchStatus}</span>),
+      cell: (b) => (b.fetchStatus == null ? <span className="text-xs text-ink-3">-</span> : b.fetchBlocked ? <StatusBadge tone="critical">Turned away ({b.fetchStatus || 'no answer'})</StatusBadge> : <span className="tabular text-[13px] text-ink-2">{b.fetchStatus}</span>),
     },
   ];
   return (
@@ -235,7 +235,7 @@ export function AccessPanel({ access }: { access: AiAccess | null }) {
       <div className="px-4 pb-4">
         <DataTable rows={answer} columns={columns} rowKey={(b) => b.bot} dense pageSize={10} />
         <p className="mt-2 text-xs text-ink-3">
-          Training crawlers ({training.map((b) => `${b.bot}${b.allowed ? '' : ' – blocked'}`).join(', ')}) are your choice: blocking them keeps your content out of model training but does not remove you from AI answers. The homepage test runs from our server, so a block seen there is a likely firewall or CDN rule (e.g. “block AI bots”).
+          Training crawlers ({training.map((b) => `${b.bot}${b.allowed ? '' : ' (blocked)'}`).join(', ')}) are your choice: blocking them keeps your content out of model training but does not remove you from AI answers. The homepage test runs from our server, so a block seen there is a likely firewall or CDN rule (e.g. "block AI bots").
         </p>
       </div>
     </Panel>
@@ -274,8 +274,8 @@ export function GroupsPanel({ stages, clusters }: { stages: AiGroup[]; clusters:
             { key: 'key', header: view === 'stage' ? 'Stage' : 'Topic', sortValue: (g) => g.key, cell: (g) => <span className="font-medium text-ink">{titleCase(g.key)}</span> },
             { key: 'q', header: 'Questions', align: 'right', sortValue: (g) => g.questions, cell: (g) => <span className="tabular">{g.questions}</span> },
             { key: 'm', header: 'Named in', align: 'right', sortValue: (g) => g.mentionRate, cell: (g) => <span className="tabular">{pct0(g.mentionRate)}</span> },
-            { key: 'v', header: 'AI searches / mo', align: 'right', hideOnMobile: true, sortValue: (g) => g.volume, cell: (g) => <span className="tabular">{g.volume ? compactNumber(g.volume) : '–'}</span> },
-            { key: 'l', header: 'Named most instead', hideOnMobile: true, sortValue: (g) => g.leader, cell: (g) => <span className="text-[13px] text-ink-2">{g.leader || '–'}</span> },
+            { key: 'v', header: 'AI searches / mo', align: 'right', hideOnMobile: true, sortValue: (g) => g.volume, cell: (g) => <span className="tabular">{g.volume ? compactNumber(g.volume) : '-'}</span> },
+            { key: 'l', header: 'Named most instead', hideOnMobile: true, sortValue: (g) => g.leader, cell: (g) => <span className="text-[13px] text-ink-2">{g.leader || '-'}</span> },
           ]}
           initialSort={{ key: 'v', dir: 'desc' }}
         />
@@ -294,12 +294,12 @@ export function IndexPanel({ index, domain }: { index: AiIndex | null; domain: s
     <Panel
       icon={<Globe />}
       title="Market-wide: every AI answer"
-      description={`How often answers across the AI-answer database (Google AI Overviews${x.platforms.includes('chat_gpt') ? ' and ChatGPT' : ''}) cite each business — far more questions than your tracked ones · ${x.carried ? 'monthly, ' : ''}${fmtDate(x.checkedAt)}`}
+      description={`How often answers across the AI-answer database (Google AI Overviews${x.platforms.includes('chat_gpt') ? ' and ChatGPT' : ''}) cite each business (far more questions than your tracked ones) · ${x.carried ? 'monthly, ' : ''}${fmtDate(x.checkedAt)}`}
     >
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        <FigureTile icon={<PieChart />} label="Your share" value={x.sov != null ? formatPercent(x.sov, 1) : '–'} hint="of the answers citing you or a competitor" />
+        <FigureTile icon={<PieChart />} label="Your share" value={x.sov != null ? formatPercent(x.sov, 1) : '-'} hint="of the answers citing you or a competitor" />
         <FigureTile icon={<Link2 />} label="Answers citing you" value={compactNumber(x.answersCitingYou)} hint="real questions in the database" />
-        {byName && <FigureTile icon={<AtSign />} label="Named without a link" value={compactNumber(byName.mentions)} hint={`answers that say “${byName.label.replace(/^“|” by name$/g, '')}”`} />}
+        {byName && <FigureTile icon={<AtSign />} label="Named without a link" value={compactNumber(byName.mentions)} hint={`answers that say "${byName.label.replace(/^"|" by name$/g, '')}"`} />}
       </div>
       {shares.length > 1 && (
         <div className="mt-4">
@@ -337,7 +337,7 @@ export function DiscoveryPanel({ index, tracked }: { index: AiIndex | null; trac
     admin.mutate(
       { action: 'ai_prompts', add: [q.length < 10 ? `${q}?` : q], remove: [] },
       {
-        onSuccess: (r) => (r.ok ? (setAdded((a) => [...a, q]), toast.success('Question added — asked from the next run')) : toast.error(r.error ?? 'The question was not saved')),
+        onSuccess: (r) => (r.ok ? (setAdded((a) => [...a, q]), toast.success('Question added. It is asked from the next run')) : toast.error(r.error ?? 'The question was not saved')),
         onError: (e) => toast.error(errorMessage(e)),
         onSettled: () => setPending(null),
       },
@@ -353,7 +353,7 @@ export function DiscoveryPanel({ index, tracked }: { index: AiIndex | null; trac
                 <span className="font-medium text-ink">{f.query}</span>
                 <span className="block text-xs text-ink-3">
                   {f.count}× · {f.engines.join(', ')}
-                  {f.questions[0] ? ` · for “${f.questions[0]}”` : ''}
+                  {f.questions[0] ? ` · for "${f.questions[0]}"` : ''}
                 </span>
               </li>
             ))}

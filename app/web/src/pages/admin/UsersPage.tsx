@@ -116,7 +116,7 @@ export default function AdminUsersPage() {
           initialSort={{ key: 'last', dir: 'desc' }}
           pageSize={25}
           searchable
-          searchPlaceholder="Search name, e-mail, company…"
+          searchPlaceholder="Search name, e-mail, company..."
           searchText={(u) => `${u.name} ${u.email} ${u.companies.map((c) => c.name).join(' ')}`}
           onRowClick={(u) => navigate(withPeriod(adminPaths.user(u.id), period))}
           toolbar={
@@ -216,7 +216,7 @@ function AddUserDialog({ onClose }: { onClose: () => void }) {
             <Field label="Company" error={err.orgId?.message}>
               {(p) => (
                 <Select {...p} disabled={companies.isPending} {...form.register('orgId', { setValueAs: (v: string) => v || undefined })}>
-                  <option value="">{companies.isPending ? 'Loading…' : 'Choose a company'}</option>
+                  <option value="">{companies.isPending ? 'Loading...' : 'Choose a company'}</option>
                   {(companies.data ?? [])
                     .slice()
                     .sort((a, b) => a.name.localeCompare(b.name))

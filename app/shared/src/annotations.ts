@@ -1,10 +1,10 @@
 // G12 (2026-10-13, system review FIX_PLAN.md; criteria 3.5 and 2.12): the events every chart is marked with, computed from data the
-// app already holds — pages that went live (`seo_content_log.published_at`), technical audits with the findings they cleared
+// app already holds, pages that went live (`seo_content_log.published_at`), technical audits with the findings they cleared
 // (`seo_audits`), and the dated registry of Google updates and data breaks.
 //
 // The registry itself lives in ONE place: `n8n/seo-agent/v5/data/seo_events.json`. `build_v4.py` inlines it into the engine
 // (`v5/code/_annotations.js`, `_site_stats.js`) and writes `seo-events.generated.ts` next to this file, so the Monday e-mail and the
-// dashboard mark the same dates. To add a Google update, edit that JSON and run the build — never this file.
+// dashboard mark the same dates. To add a Google update, edit that JSON and run the build, never this file.
 import { SEO_EVENTS, type SeoEvent } from './seo-events.generated';
 
 export type AnnotationKind = 'publish' | 'fix' | 'google_update' | 'data_break' | 'link';
@@ -83,7 +83,7 @@ export function buildAnnotations(input: AnnotationInput): ChartAnnotation[] {
     const ps = prev ? Number(prev.healthScore) : NaN;
     const fixed = Number.isFinite(now) && Number.isFinite(was) ? was - now : null;
     const detail = [
-      Number.isFinite(hs) ? (Number.isFinite(ps) ? `health ${ps} → ${hs}` : `health ${hs}/100`) : '',
+      Number.isFinite(hs) ? (Number.isFinite(ps) ? `health ${ps} to ${hs}` : `health ${hs}/100`) : '',
       fixed == null
         ? ''
         : fixed > 0

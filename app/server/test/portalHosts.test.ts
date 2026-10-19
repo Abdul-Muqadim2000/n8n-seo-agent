@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// G5 (app/docs/WHITE_LABEL.md §2, §5) — the portal host: the DNS proof (TXT + CNAME), one owner per host, a released host cannot be
+// G5 (app/docs/WHITE_LABEL.md §2, §5), the portal host: the DNS proof (TXT + CNAME), one owner per host, a released host cannot be
 // taken over with an old record, re-checks that lapse a host, strict hosts (421), the on-demand TLS ask, tenant resolution by host
 // (a person on one agency's portal reaches nothing else), host-only cookies, the session hand-off, and branded e-mail senders.
 

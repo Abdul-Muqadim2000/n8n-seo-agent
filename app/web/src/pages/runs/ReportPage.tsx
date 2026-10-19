@@ -74,7 +74,7 @@ export default function ReportPage() {
                 Open the run
               </ButtonLink>
             )}
-            {/* G5: a printable page of the report — in a white-label portal, the PDF a client keeps (the engine's PDF names the engine) */}
+            {/* G5: a printable page of the report, in a white-label portal, the PDF a client keeps (the engine's PDF names the engine) */}
             <Button variant="secondary" size="sm" icon={<Printer className="size-4" />} onClick={() => window.print()} data-print-hide>
               Save as PDF
             </Button>

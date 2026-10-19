@@ -57,7 +57,7 @@ const discountLabel = `Save ${Math.round(annualDiscount * 100)}%`;
 
 const ALL_PLANS = ['Search Console, GA4 and Trends tracking', 'The price in credits before every analysis', 'Roles and invitations', 'Monthly audits with a fix pack'];
 
-/** The jobs one subscription covers — each is a capability on /platform, not a claim about another product. */
+/** The jobs one subscription covers. Each is a capability on /platform, not a claim about another product. */
 const REPLACES = ['Keyword research', 'Rank tracking', 'Site crawler', 'Content writing with SEO QA', 'AI answer tracking', 'Backlink index', 'Outreach'];
 
 const COST_ICONS: LucideIcon[] = [Calculator, Wallet, Gauge, Recycle, Link2];
@@ -205,7 +205,7 @@ function Plans({ billing, setBilling }: { billing: Billing; setBilling: (b: Bill
         align="center"
         eyebrow="Pricing"
         title="Start small. Grow when it works."
-        lead="Setting up is free. Every plan writes the pages, not just a list of keywords — and every analysis shows its price in credits before it starts."
+        lead="Setting up is free. Every plan writes the pages for you, and every analysis shows its price in credits before it starts."
         containerClassName="pb-12 sm:pb-14"
       >
         <div className="mt-9 flex justify-center">
@@ -269,7 +269,7 @@ function Credits() {
         id="credits-title"
         eyebrow="How credits work"
         title="One balance. The price before every analysis."
-        lead="Everything Alaventra does for you is paid in credits — the work it runs on its own each week and the analyses you start. Your plan adds credits every month, and packs top them up when you need more."
+        lead="Everything Alaventra does for you is paid in credits: the work it runs on its own each week and the analyses you start. Your plan adds credits every month, and packs top them up when you need more."
       />
       <ul className="mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
         {creditRules.map((r, i) => (
@@ -573,7 +573,7 @@ function CostMockup() {
       </div>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:ml-10">
         {[
-          { t: 'Monthly audit', d: 'Skipped — sitemap unchanged since the last audit', i: 3 },
+          { t: 'Monthly audit', d: 'Skipped, sitemap unchanged since the last audit', i: 3 },
           { t: 'Backlink check', d: 'Free sources only', i: 4 },
         ].map((r) => (
           <div key={r.t} className="mk-pop flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 shadow-card" style={{ ['--mk-i' as string]: r.i }}>

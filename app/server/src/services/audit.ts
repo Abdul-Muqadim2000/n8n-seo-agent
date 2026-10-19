@@ -16,7 +16,7 @@ import type { AuditEventRow, UserRow } from '../db/schema';
 
 /**
  * G1: the one way into the customer-visible audit log (app/docs/IDENTITY.md §6). Routes call `audit()` (one company) or
- * `auditUser()` (every company the person belongs to — sign-ins, two-step changes, passwords). Details pass through
+ * `auditUser()` (every company the person belongs to, sign-ins, two-step changes, passwords). Details pass through
  * `safeAuditDetails`, which drops anything that looks like a secret whatever the caller hands in.
  */
 
@@ -79,7 +79,7 @@ export async function auditUser(req: FastifyRequest | null, user: UserRow, e: Au
 }
 
 /**
- * credits (app/docs/CREDITS.md): the company reads its audit log — a detail that names a provider cost or the platform's dollar guard
+ * credits (app/docs/CREDITS.md): the company reads its audit log, a detail that names a provider cost or the platform's dollar guard
  * (keys ending in Usd / _usd, or naming a budget; every detail of a `company.budget_changed` row) is left out of what it reads and
  * exports. Older rows carry them (`run.started_via_api` had `estimatedUsd`, `agency.client_created` had `monthlyBudgetUsd`).
  */

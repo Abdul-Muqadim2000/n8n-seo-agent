@@ -10,10 +10,10 @@ import { usePublishCheck } from '@/lib/queries';
 import { Panel } from './kit';
 
 /**
- * B3-7 (v4.18) — "Check a page before you publish". The same deterministic quality gate a page written by the engine must pass
+ * B3-7 (v4.18), "Check a page before you publish". The same deterministic quality gate a page written by the engine must pass
  * (placeholders, invented prices, unsourced figures, coverage, readability, answer-first), over a page the person pastes. Free, and
  * nothing is stored: the verdict is shown here and nowhere else. What the check could not judge (the editor's review is a model call,
- * coverage needs competitor pages, figures need their sources) is listed as such — never counted as a pass.
+ * coverage needs competitor pages, figures need their sources) is listed as such, never counted as a pass.
  */
 export function PublishCheckPanel({ orgId, siteId }: { orgId: string; siteId: string }) {
   const check = usePublishCheck(orgId, siteId);
@@ -38,7 +38,7 @@ export function PublishCheckPanel({ orgId, siteId }: { orgId: string; siteId: st
     <Panel
       icon={<ClipboardCheck />}
       title="Check a page before you publish"
-      description="Paste any page — written here, by your team or by another tool — and get the verdict our own pages must pass, with every reason named. Free; nothing is stored."
+      description="Paste any page (written here, by your team or by another tool) and get the verdict our own pages must pass, with every reason named. Free; nothing is stored."
     >
       <div className="space-y-4">
         <Field label="The search this page is for" error={fields.keyword}>
@@ -112,7 +112,7 @@ export function PublishCheckVerdict({ r }: { r: PublishCheckResult }) {
           <ul className="space-y-1 text-sm text-ink-2">
             {r.not_checked.map((n) => (
               <li key={n.check}>
-                <span className="font-medium text-ink">{n.check.replace(/_/g, ' ')}</span> — {n.reason}
+                <span className="font-medium text-ink">{n.check.replace(/_/g, ' ')}</span>: {n.reason}
               </li>
             ))}
           </ul>

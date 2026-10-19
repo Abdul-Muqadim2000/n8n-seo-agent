@@ -1,6 +1,6 @@
 // The capabilities registry: the single source the marketing pages render from (Home grid, Platform mega-menu, /platform,
 // /platform/<slug>, footer). Add every new product functionality here (CLAUDE.md). Copy rules: customer language, plain and
-// specific, capability facts only — no invented customers, ratings or results.
+// specific, capability facts only: no invented customers, ratings or results.
 import {
   Briefcase,
   Building2,
@@ -81,13 +81,13 @@ export interface Feature {
   /** two or three sentences: feature page lead */
   summary: string;
   icon: LucideIcon;
-  /** 4–6 bullets */
+  /** 4-6 bullets */
   benefits: string[];
-  /** 3–4 steps */
+  /** 3-4 steps */
   steps: Step[];
   /** 3 capability facts */
   facts: Fact[];
-  /** 3–4 questions */
+  /** 3-4 questions */
   faqs: FaqItem[];
   related: string[];
   image: ImageKey;
@@ -108,24 +108,24 @@ export const features: Feature[] = [
     shortName: 'Autopilot',
     tagline: 'A weekly growth loop that plans, writes and checks. You approve what matters.',
     summary:
-      'Alaventra runs your SEO as a weekly loop. Each Monday it picks the next posts — a ladder rung first, then pages that are measurably losing traffic, then keywords close to page one, then rising trends — writes them, notices what you published and puts every decision that needs a person in one queue. Each step runs on Auto or waits for you.',
+      'Alaventra runs your SEO as a weekly loop. Each Monday it picks the next posts (a ladder rung first, then pages that are measurably losing traffic, then keywords close to page one, then rising trends), writes them, notices what you published and puts every decision that needs a person in one queue. Each step runs on Auto or waits for you.',
     icon: Workflow,
     benefits: [
       'Blog posts per week set per website, picked in a fixed order: ladder rung, a page losing traffic, striking distance, rising trend',
-      'A page that is really losing traffic is refreshed, not just reported — ranked by the clicks it is actually losing',
+      'A page that is really losing traffic gets a refresh written for it, ranked by the clicks it is actually losing',
       'Auto or Manual for every step, per ladder and per website',
-      'A “Needs you” queue for briefs, pages and decisions waiting on a person',
+      'A "Needs you" queue for briefs, pages and decisions waiting on a person',
       'A 4-week calendar and every schedule with its next and last run',
       'Notices when a planned page goes live and moves the plan on',
-      'A pile-up guard: no new pages while too many wait to be published — every written page counts, ladder pages included, and they are named',
+      'A pile-up guard: no new pages while too many wait to be published. Every written page counts, ladder pages included, and they are named',
       'The queue never offers a page you already have: a search one of your live pages answers is queued as a refresh of that page',
-      'An AI answer page of the week when a question your buyers ask AI assistants is being lost — on top of the blog posts, two a month by default, never while drafts pile up',
-      'A scheduled run that did not fire — the server was down, say — still runs once it is back, that same week, and its report says it ran late',
+      'An AI answer page of the week when a question your buyers ask AI assistants is being lost (on top of the blog posts, two a month by default, never while drafts pile up)',
+      'A scheduled run that did not fire (the server was down, say) still runs once it is back, that same week, and its report says it ran late',
     ],
     steps: [
-      { title: 'Set the pace', body: 'Choose blog posts per week, the default mode — Auto or Manual — and how many ladders are written at once.' },
+      { title: 'Set the pace', body: 'Choose blog posts per week, the default mode (Auto or Manual), and how many ladders are written at once.' },
       { title: 'Alaventra picks the work', body: 'Every Monday the next ladder rung comes first, then any page losing traffic, then keywords just off page one, then rising trends.' },
-      { title: 'Write, check, queue', body: 'Pages are written and checked. Anything set to Manual waits in “Needs you” until someone approves it.' },
+      { title: 'Write, check, queue', body: 'Pages are written and checked. Anything set to Manual waits in "Needs you" until someone approves it.' },
       { title: 'Publish and learn', body: 'When a planned page goes live, Alaventra notices, tracks its rank and plans the next step.' },
     ],
     facts: [
@@ -135,7 +135,7 @@ export const features: Feature[] = [
     ],
     faqs: [
       { q: 'What happens on Auto?', a: 'Alaventra writes and prepares the work on schedule without waiting. Every page still shows in the pipeline, and you can pause a ladder at any time.' },
-      { q: 'What happens on Manual?', a: 'The step waits in “Needs you” until someone on your team approves it. Nothing is written before that.' },
+      { q: 'What happens on Manual?', a: 'The step waits in "Needs you" until someone on your team approves it. Nothing is written before that.' },
       {
         q: 'Does Alaventra publish to my site by itself?',
         a: 'Not by itself. It sends written pages to your WordPress, Webflow or Contentful (or any other stack through a signed webhook) as drafts, and an owner or admin chooses when one goes live. A page that failed its quality check, or still has text left for you to fill in, is never sent. Alaventra then checks the live page and tracks it. If you would rather not, publishing is one of the done-for-you services on the pricing page.',
@@ -143,7 +143,7 @@ export const features: Feature[] = [
       { q: 'Can I change the pace later?', a: 'Yes. Posts per week, the default mode and the ladder limits are website settings you can change at any time.' },
       {
         q: 'What if a scheduled run is missed?',
-        a: 'It still happens. Every quarter of an hour Alaventra looks for runs that were due and did not start, and starts each one once. A Monday run missed on Monday is still that week’s run later in the week, and its report opens by saying it ran late and when it was due, so a late figure is never mistaken for an on-time one.',
+        a: 'It still happens. Every quarter of an hour Alaventra looks for runs that were due and did not start, and starts each one once. A Monday run missed on Monday is still that week\'s run later in the week, and its report opens by saying it ran late and when it was due, so a late figure is never mistaken for an on-time one.',
       },
     ],
     related: ['keyword-ladders', 'content', 'site-tracking'],
@@ -154,7 +154,7 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'The weekly loop',
       title: 'Every week starts from what the last one learned.',
-      body: 'Research, plan, write, publish, track and learn run in the same order for every website. Last week’s rankings and Search Console data decide which posts come next, and anything that needs a person waits in one queue instead of in someone’s inbox.',
+      body: 'Research, plan, write, publish, track and learn run in the same order for every website. Last week\'s rankings and Search Console data decide which posts come next, and anything that needs a person waits in one queue instead of in someone\'s inbox.',
     },
   },
   {
@@ -163,7 +163,7 @@ export const features: Feature[] = [
     shortName: 'Keyword research',
     tagline: 'Find the keywords worth your time, with a clear verdict for each one.',
     summary:
-      'Alaventra discovers keywords from your site, your competitors and real search data, then gives each one a verdict. It weighs difficulty for your site — not a generic score — along with topic fit and the plan it takes to rank: Direct, Short or Full.',
+      'Alaventra discovers keywords from your site, your competitors and real search data, then gives each one a verdict. It weighs difficulty for your site (not a generic score) along with topic fit and the plan it takes to rank: Direct, Short or Full.',
     icon: Search,
     benefits: [
       'Keyword discovery from your pages, your competitors and search data',
@@ -191,7 +191,7 @@ export const features: Feature[] = [
     ],
     faqs: [
       {
-        q: 'What does “difficulty for your site” mean?',
+        q: 'What does "difficulty for your site" mean?',
         a: 'Generic difficulty scores ignore who is trying to rank. Alaventra compares the competition for a keyword with your own site and tells you whether it is within reach now or only after supporting pages.',
       },
       {
@@ -227,25 +227,25 @@ export const features: Feature[] = [
     icon: ChartNoAxesColumnIncreasing,
     benefits: [
       'A plan of supporting pages that climbs to your head term',
-      'Pages written in order, each linking up the ladder — only to rungs that are already live',
+      'Pages written in order, each linking up the ladder, only to rungs that are already live',
       'Weekly rank tracking for every rung and for the head term, with a reminder the week a rung goes live and its link can be added',
-      'The keywords you named when you set tracking up are tracked too, in their own weekly report with the same depth — and a keyword that is also a rung is checked once, with the ladder',
+      'The keywords you named when you set tracking up are tracked too, in their own weekly report with the same depth, and a keyword that is also a rung is checked once, with the ladder',
       'Every check records the whole results page: AI Overview (and whether it cites you), featured snippet, People Also Ask, local pack and video',
       'The other sites on page one with their positions, the competitors ranking above you and a share-of-voice estimate per keyword',
       'Your main keywords are checked on a phone as well as on a desktop, because the two rarely match',
       'The top ten results are kept with every check, so you can see what the page looked like when the position was read',
       'Two of your pages competing for one search are flagged, with both named and the one Google shows today',
-      'Your page’s own drop is told apart from a reshuffle of the whole results page, and the site that took your place is named',
+      'Your page\'s own drop is told apart from a reshuffle of the whole results page, and the site that took your place is named',
       'Share of voice across your keywords weighted by your real Search Console impressions',
       'Auto or Manual per ladder, with a priority order',
       'Two active ladders at a time by default, so effort is not spread thin',
       'No keyword overlap between ladders, so your own pages never compete',
-      'A rung you already have a page for is planned as an improvement of that page, with its real address — never as a second page',
+      'A rung you already have a page for is planned as an improvement of that page, with its real address, never as a second page',
       'Searches Google answers with the same pages become one page, not two: before planning, Alaventra reads the results page for each supporting keyword and groups the ones that share them',
-      'A keyword whose results page could not be read is named in the plan and left in its own group — it is never merged or quietly dropped',
+      'A keyword whose results page could not be read is named in the plan and left in its own group, and is never merged or quietly dropped',
       'How many different websites own the results page for your head term is counted and stated, and a page owned by a few of them is reflected in how realistic the plan says it is',
-      'Your topic radius with every plan: which topics are within reach for your site today, which are a stretch and why — the difficulty against the level you already win, a position you already hold, a page you already have, a service you sell',
-      'A ladder that has not moved for weeks comes back with a proposal: improve the page you already have, write the easier keyword first, change the order, or stop — with the evidence behind it. It is a suggestion; your plan is never rewritten for you',
+      'Your topic radius with every plan: which topics are within reach for your site today, which are a stretch and why (the difficulty against the level you already win, a position you already hold, a page you already have, a service you sell)',
+      'A ladder that has not moved for weeks comes back with a proposal: improve the page you already have, write the easier keyword first, change the order, or stop, with the evidence behind it. It is a suggestion; your plan is never rewritten for you',
     ],
     steps: [
       { title: 'Choose the keyword', body: 'Pick a recommended keyword or type your own. Alaventra shows the reach for your site and the plan type.' },
@@ -262,14 +262,14 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Why not write the main page first?',
-        a: 'For a hard keyword, a new page rarely ranks on its own. Supporting pages on related, easier keywords build relevance and internal links first. If you need the main page now, choose “Write it first”.',
+        a: 'For a hard keyword, a new page rarely ranks on its own. Supporting pages on related, easier keywords build relevance and internal links first. If you need the main page now, choose "Write it first".',
       },
       {
         q: 'What is the pile-up guard?',
         a: 'If too many written pages are waiting to be published, Alaventra pauses new writing until you catch up, so drafts do not pile up.',
       },
       { q: 'How many ladders can I run?', a: 'As many as you plan. By default two are written at once, in your priority order, and you can change the limit.' },
-      { q: 'What does Auto or Manual change?', a: 'On Auto, rungs are written on schedule. On Manual, each rung waits for approval in “Needs you”.' },
+      { q: 'What does Auto or Manual change?', a: 'On Auto, rungs are written on schedule. On Manual, each rung waits for approval in "Needs you".' },
       {
         q: 'Do you track AI Overviews?',
         a: 'Yes. Every rank check records whether an AI Overview was on the page and whether it cited your site, with the time it was seen. AI Overviews vary between searches, so Alaventra reports what the check saw rather than claiming the search always looks that way.',
@@ -288,7 +288,7 @@ export const features: Feature[] = [
     visual: 'ladder',
     story: {
       title: 'Hard keywords are won with structure, not one page.',
-      body: 'Search engines trust sites that cover a topic in depth. A ladder builds that depth in a deliberate order — easier pages first, each linking up — so the page for your head term arrives with relevance and internal links already behind it.',
+      body: 'Search engines trust sites that cover a topic in depth. A ladder builds that depth in a deliberate order (easier pages first, each linking up) so the page for your head term arrives with relevance and internal links already behind it.',
     },
   },
   {
@@ -297,32 +297,32 @@ export const features: Feature[] = [
     shortName: 'Content',
     tagline: 'Long-form pages written, critiqued and edited by AI, with SEO QA before you see them.',
     summary:
-      'Every page goes through a writer, a critic and an editor, then an SEO check that measures it against the best page in the results and compares it, word for word, with the pages it was researched from and with your own. Pages carry real expertise signals — an author byline, an expert reviewer, your experience notes and schema — and arrive as a publish-ready package with their three images already made.',
+      'Every page goes through a writer, a critic and an editor, then an SEO check that measures it against the best page in the results and compares it, word for word, with the pages it was researched from and with your own. Pages carry real expertise signals (an author byline, an expert reviewer, your experience notes and schema) and arrive as a publish-ready package with their three images already made.',
     icon: PenLine,
     benefits: [
       'Writer, critic and editor passes, then an SEO quality check',
       'E-E-A-T built in: author byline and box, expert reviewer, experience notes and schema',
-      'Your house style, stored once and followed: how your name is written, British or American spelling, words to avoid and the tone — your own name written the wrong way is corrected before delivery',
+      'Your house style, stored once and followed: how your name is written, British or American spelling, words to avoid and the tone. Your own name written the wrong way is corrected before delivery',
       'Page types for hub and pillar pages, case studies, local (city) pages and video pages',
-      'Three images produced with every page — a title card and two section cards made from the page itself, with the alt text, file names and the social image',
+      'Three images produced with every page: a title card and two section cards made from the page itself, with the alt text, file names and the social image',
       'An originality check against every competitor page the research read and against your own pages: more than 15% of a page matching one of them comes back for a rewrite, with the passage shown',
       'A coverage target taken from the best page in the results, not an average, with the subtopics it covers and yours still missing',
-      'A blog package as HTML, Markdown and meta.json — or sent straight to your CMS: WordPress, Webflow, Contentful, or any other stack through a signed webhook',
+      'A blog package as HTML, Markdown and meta.json, or sent straight to your CMS: WordPress, Webflow, Contentful, or any other stack through a signed webhook',
       'Drafts by default: only an owner or admin publishes a page live, after confirming it; sending again updates the same post, never a second one',
-      'A page that did not pass its quality check, or still holds a bracket left for you, cannot be sent to your CMS — the gaps are listed instead',
+      'A page that did not pass its quality check, or still holds a bracket left for you, cannot be sent to your CMS; the gaps are listed instead',
       'Links only to pages that are already live, with link text that reads like a title; pages still to come are listed as links to add later',
       'Every figure looked up in the source the page cites, and a source without independent authority cited at most once',
       'A live check of the published page: schema, images, links and metadata',
       'One search, one page: a search a live page of yours already answers is written as a refresh of that page',
-      'Check any page before you publish: paste a page — or send it from your build — and get the same quality verdict our own pages must pass (placeholders, invented prices, unsourced figures, coverage, readability, a direct answer first), with every reason named and what could not be checked. Free, and nothing is stored',
+      'Check any page before you publish: paste a page (or send it from your build) and get the same quality verdict our own pages must pass (placeholders, invented prices, unsourced figures, coverage, readability, a direct answer first), with every reason named and what could not be checked. Free, and nothing is stored',
       'Refreshed pages re-check their facts: the cited sources are read again, and figures a source no longer states are flagged',
       'Readability measured against the pages that rank for your search, not against a fixed score',
     ],
     steps: [
       { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile, your case studies and your style guide.' },
-      { title: 'Write and critique', body: 'A draft, a critic’s review and an editor’s pass that acts on it.' },
+      { title: 'Write and critique', body: 'A draft, a critic\'s review and an editor\'s pass that acts on it.' },
       { title: 'Check', body: 'SEO checks on every page, against a coverage target read off the best page in the results. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm. A page that repeats a competitor or one of your own pages goes back for a rewrite.' },
-      { title: 'Publish and verify', body: 'Send the page to your CMS as a draft — or publish it live if you are an owner or admin — or take the package. Alaventra checks the page once it is live and starts tracking it.' },
+      { title: 'Publish and verify', body: 'Send the page to your CMS as a draft (or publish it live if you are an owner or admin), or take the package. Alaventra checks the page once it is live and starts tracking it.' },
     ],
     facts: [
       { value: 3, label: 'passes: writer, critic and editor' },
@@ -337,24 +337,24 @@ export const features: Feature[] = [
       { q: 'Who is shown as the author?', a: 'The author and expert reviewer from your business profile, with a byline, an author box and Person schema.' },
       {
         q: 'Can I tell it how we write?',
-        a: 'Yes. Your profile holds a style guide: exactly how your name is written (Tech&, never “Tech and” or “techand”), British or American spelling, the words you never want used and the tone. Every page is written to it, and the quality check reads the finished draft against it. Your own name written the wrong way is a real finding and is corrected before you see the page; the spelling variant, the banned words and the tone are reported beside the page as advice, and never hold a page back on their own.',
+        a: 'Yes. Your profile holds a style guide: exactly how your name is written (Tech&, never "Tech and" or "techand"), British or American spelling, the words you never want used and the tone. Every page is written to it, and the quality check reads the finished draft against it. Your own name written the wrong way is a real finding and is corrected before you see the page; the spelling variant, the banned words and the tone are reported beside the page as advice, and never hold a page back on their own.',
       },
       {
         q: 'Which spelling do the pages use?',
-        a: 'The spelling of the country each page targets, unless your style guide names one — then that wins everywhere. The report says which rule was used.',
+        a: 'The spelling of the country each page targets, unless your style guide names one; then that wins everywhere. The report says which rule was used.',
       },
       {
         q: 'Can Alaventra publish to our CMS?',
-        a: 'Yes — to WordPress (with Yoast SEO or Rank Math fields when your site exposes them), Webflow and Contentful, and to anything else through a signed webhook. Pages go as drafts by default; only an owner or admin can publish one live, and only after ticking a confirmation. Pages that did not pass the quality check, or still have text to fill in, are refused with the reasons.',
+        a: 'Yes, to WordPress (with Yoast SEO or Rank Math fields when your site exposes them), Webflow and Contentful, and to anything else through a signed webhook. Pages go as drafts by default; only an owner or admin can publish one live, and only after ticking a confirmation. Pages that did not pass the quality check, or still have text to fill in, are refused with the reasons.',
       },
-      { q: 'What is the blog package?', a: 'The article as HTML and Markdown, the three images as WebP files, plus a meta.json file with the title, description, slug, schema and the image list — ready for any CMS.' },
+      { q: 'What is the blog package?', a: 'The article as HTML and Markdown, the three images as WebP files, plus a meta.json file with the title, description, slug, schema and the image list, ready for any CMS.' },
       {
         q: 'How do you know the page is not copied?',
         a: 'Every finished draft is compared with the competitor pages the research read and with your own pages, in runs of eight words. More than 15% matching a single page fails the quality check and the page is rewritten; the report tells you which page, by how much and which passage.',
       },
       {
         q: 'Where do the images come from?',
-        a: 'They are generated from the page itself — a title card with your business name and two cards that lay out the points of a section — at the planned sizes and file names, with the alt text. Swap any of them for a photo of your own; the file name and alt text stay.',
+        a: 'They are generated from the page itself (a title card with your business name and two cards that lay out the points of a section), at the planned sizes and file names, with the alt text. Swap any of them for a photo of your own; the file name and alt text stay.',
       },
     ],
     related: ['keyword-ladders', 'autopilot', 'technical-audits'],
@@ -362,14 +362,14 @@ export const features: Feature[] = [
     visual: 'content',
     story: {
       title: 'Pages that show real expertise.',
-      body: 'Readers and search engines look for experience, expertise and trust. Alaventra writes from your business profile, names a real author and reviewer, cites your own case studies, marks every figure it cannot verify for you to confirm — and checks that the finished page is not a rewording of the pages it researched or of a page you already have.',
+      body: 'Readers and search engines look for experience, expertise and trust. Alaventra writes from your business profile, names a real author and reviewer, cites your own case studies, marks every figure it cannot verify for you to confirm, and checks that the finished page is not a rewording of the pages it researched or of a page you already have.',
     },
   },
   {
     slug: 'technical-audits',
     name: 'Technical audits',
     shortName: 'Technical audits',
-    tagline: 'Crawl the site, read Search Console and get a fix pack, not just a list of problems.',
+    tagline: 'Crawl the site, read Search Console and get a fix pack with the files to change.',
     summary:
       'Alaventra crawls up to 1,000 pages, JavaScript included, and combines what it finds with Search Console index coverage and sitemaps, the Core Web Vitals your real visitors measured and a brand and entity check. The fix list is ordered by the traffic each issue puts at risk, every audit ends with a fix pack your developers can apply, and monthly audits show what changed since the last one.',
     icon: ScanSearch,
@@ -380,16 +380,16 @@ export const features: Feature[] = [
       'A daily check of your key pages: you hear the same day when one disappears, is set to noindex, starts redirecting or changes its canonical, title or robots.txt',
       'A pre-release check your build can call: the same page checks run against a staging address or a list of URLs and answer pass or fail, so a release never takes a page out of Google',
       'Mark a fix done and that one issue is re-checked the next morning, not at the next monthly audit',
-      'The fix pack comes with a guide for putting each file where it belongs — robots.txt, llms.txt, redirects, schema and the internal links',
-      'Google’s own view of every key page — indexed or not, the canonical Google chose, its last crawl, mobile usability and rich results',
+      'The fix pack comes with a guide for putting each file where it belongs: robots.txt, llms.txt, redirects, schema and the internal links',
+      'Google\'s own view of every key page: indexed or not, the canonical Google chose, its last crawl, mobile usability and rich results',
       'What crawlers see before JavaScript runs: your key pages read twice, so anything only a browser can see is named',
       'The same before-and-after comparison runs across the crawl, on up to 25 pages, not only on your key pages',
       'Hreflang checks for the language versions of your pages',
-      'With GA4 connected, the fix list can weigh each problem by the key events of the pages it affects — and says which weight it used',
-      'The pre-release check takes a severity threshold and a list of the changes you meant to make, and fails only on what is left — with a ready recipe for your build pipeline',
-      'Every audit and finding — severity, evidence, the pages checked, new or fixed since the last audit — readable from your own scripts, BI tool or AI assistant through a read-only API',
+      'With GA4 connected, the fix list can weigh each problem by the key events of the pages it affects, and says which weight it used',
+      'The pre-release check takes a severity threshold and a list of the changes you meant to make, and fails only on what is left, with a ready recipe for your build pipeline',
+      'Every audit and finding (severity, evidence, the pages checked, new or fixed since the last audit), readable from your own scripts, BI tool or AI assistant through a read-only API',
       'A fix list ordered by the traffic each issue puts at risk, with the reason shown',
-      'The smallest items folded into one “minor items” line, so the list you read is the list to act on',
+      'The smallest items folded into one "minor items" line, so the list you read is the list to act on',
       'A brand and entity check',
       'A fix pack: robots.txt, llms.txt, redirects, schema and an internal-links CSV',
       'Monthly scheduled audits with what changed since the last audit',
@@ -398,7 +398,7 @@ export const features: Feature[] = [
     steps: [
       { title: 'Crawl', body: 'Up to 1,000 pages, rendered with JavaScript where the content needs it.' },
       { title: 'Combine', body: 'Crawl findings meet Search Console coverage, sitemaps, the speed your real visitors measured and entity data.' },
-      { title: 'Prioritise', body: 'Issues are ranked by the traffic they put at risk — index blockers first, cosmetics never — and each one says why it ranks there.' },
+      { title: 'Prioritise', body: 'Issues are ranked by the traffic they put at risk (index blockers first, cosmetics never), and each one says why it ranks there.' },
       { title: 'Fix', body: 'Download the fix pack and hand it to your developers.' },
       { title: 'Watch', body: 'Your key pages are checked every morning, and marking a fix done has it re-checked within a day.' },
       { title: 'Check before you ship', body: 'Your build calls the pre-release check on the staging address and gets a pass or fail before the release goes out.' },
@@ -418,7 +418,7 @@ export const features: Feature[] = [
       { q: 'Does it handle JavaScript sites?', a: 'Yes. Pages can be rendered with JavaScript, so content that loads in the browser is audited too.' },
       {
         q: 'Would I know if my pages only work with JavaScript?',
-        a: 'Yes. Your key pages are read twice in every audit: once exactly as a crawler receives them, before any script runs, and once after. The report puts the title, main heading, canonical link, robots rule, link count and text length of both readings side by side and says which reading each number came from, so anything only a browser can see is named — it is invisible to the AI crawlers behind ChatGPT, Perplexity and Claude, which do not run JavaScript. A page we could not read both ways is reported as not checked, with the reason, never as fine.',
+        a: 'Yes. Your key pages are read twice in every audit: once exactly as a crawler receives them, before any script runs, and once after. The report puts the title, main heading, canonical link, robots rule, link count and text length of both readings side by side and says which reading each number came from, so anything only a browser can see is named, because it is invisible to the AI crawlers behind ChatGPT, Perplexity and Claude, which do not run JavaScript. A page we could not read both ways is reported as not checked, with the reason, never as fine.',
       },
       {
         q: 'Where do the speed figures come from?',
@@ -426,11 +426,11 @@ export const features: Feature[] = [
       },
       {
         q: 'What does the daily check of my key pages look at?',
-        a: 'Every morning Alaventra fetches your most important pages — the home page, the pages in your menu, the pages Search Console brings impressions for and the pages your keyword ladders own — and compares the HTTP status, a redirect that appeared, the noindex tag, the canonical and the title with yesterday’s reading, plus your robots.txt. A change that matters becomes an alert the same day; an unchanged page says nothing. A page it could not read is reported as not checked, never as fine.',
+        a: 'Every morning Alaventra fetches your most important pages (the home page, the pages in your menu, the pages Search Console brings impressions for and the pages your keyword ladders own) and compares the HTTP status, a redirect that appeared, the noindex tag, the canonical and the title with yesterday\'s reading, plus your robots.txt. A change that matters becomes an alert the same day; an unchanged page says nothing. A page it could not read is reported as not checked, never as fine.',
       },
       {
         q: 'Can we check a release before it goes live?',
-        a: 'Yes. Your build can call the pre-release check with a staging address or a list of URLs, and it answers pass or fail in a form a build pipeline can read: which URL failed and which check — the page not answering, a redirect that appeared, a noindex tag, robots.txt blocking it, a missing or wrong canonical, no title or no H1. On a staging address a deliberate noindex or a blocking robots.txt is reported as a warning that names the live page instead of a failure. The check only reads: it never changes anything in your account, and whatever a staging address cannot answer — whether Google has indexed a URL it has never seen, the speed real visitors measure, positions — is reported as not checked, with the reason.',
+        a: 'Yes. Your build can call the pre-release check with a staging address or a list of URLs, and it answers pass or fail in a form a build pipeline can read: which URL failed and which check (the page not answering, a redirect that appeared, a noindex tag, robots.txt blocking it, a missing or wrong canonical, no title or no H1). On a staging address a deliberate noindex or a blocking robots.txt is reported as a warning that names the live page instead of a failure. The check only reads: it never changes anything in your account, and whatever a staging address cannot answer (whether Google has indexed a URL it has never seen, the speed real visitors measure, positions) is reported as not checked, with the reason.',
       },
       {
         q: 'I fixed something. Do I have to wait for the next audit?',
@@ -438,7 +438,7 @@ export const features: Feature[] = [
       },
       {
         q: 'How do you know whether Google has indexed a page?',
-        a: 'Alaventra asks Search Console’s URL Inspection about your key pages: whether the page is in the index and why not, which canonical Google chose against the one your page names, when Google last crawled it, mobile usability and the rich results it detected. Google allows 2,000 of these a day per property, so the pages rotate with the oldest inspection first — and whatever a run did not reach is shown as not checked rather than assumed fine.',
+        a: 'Alaventra asks Search Console\'s URL Inspection about your key pages: whether the page is in the index and why not, which canonical Google chose against the one your page names, when Google last crawled it, mobile usability and the rich results it detected. Google allows 2,000 of these a day per property, so the pages rotate with the oldest inspection first, and whatever a run did not reach is shown as not checked rather than assumed fine.',
       },
       {
         q: 'How is the fix list ordered?',
@@ -446,7 +446,7 @@ export const features: Feature[] = [
       },
       {
         q: 'What happens to the tiny issues?',
-        a: 'They are folded into one “minor items” line with the count — a title one character too long, the link count of a navigation page, a cosmetic tag. Nothing is removed: they still count in the score, they are stored with the audit, and they open with one click in the app and sit in that one line in the report.',
+        a: 'They are folded into one "minor items" line with the count: a title one character too long, the link count of a navigation page, a cosmetic tag. Nothing is removed: they still count in the score, they are stored with the audit, and they open with one click in the app and sit in that one line in the report.',
       },
     ],
     related: ['site-tracking', 'content', 'reports'],
@@ -454,7 +454,7 @@ export const features: Feature[] = [
     visual: 'audit',
     story: {
       title: 'Findings your developers can apply the same day.',
-      body: 'An audit only helps once it is fixed, and only if you fix the right thing first. Issues are ranked by the traffic they put at risk, every audit delivers the files developers need, and the next audit shows what changed — so progress is visible, not assumed.',
+      body: 'An audit only helps once it is fixed, and only if you fix the right thing first. Issues are ranked by the traffic they put at risk, every audit delivers the files developers need, and the next audit shows what changed, so progress is visible, not assumed.',
     },
   },
   {
@@ -463,21 +463,21 @@ export const features: Feature[] = [
     shortName: 'Site tracking',
     tagline: 'Search Console, GA4 and Google Trends in one weekly view, with what to do next.',
     summary:
-      'Connect Search Console and GA4 once. Every week Alaventra pulls clicks, impressions, positions and conversions, follows Google Trends for your topics and checks live rankings, then points at striking-distance keywords — the ones close to page one.',
+      'Connect Search Console and GA4 once. Every week Alaventra pulls clicks, impressions, positions and conversions, follows Google Trends for your topics and checks live rankings, then points at striking-distance keywords, the ones close to page one.',
     icon: ChartLine,
     benefits: [
       'Google Search Console and GA4, connected through a service account',
       'Google Trends for your topics and live rank checks that also record the search features on the page and who ranks above you',
       'Striking-distance keywords: close to page one and worth a push',
-      'Your own keyword list gets a weekly ranking report of its own: the ten whose reading is oldest are checked live, the rest are read from the check already taken, and every keyword the week’s limit did not reach is listed with the date it was last read',
+      'Your own keyword list gets a weekly ranking report of its own: the ten whose reading is oldest are checked live, the rest are read from the check already taken, and every keyword the week\'s limit did not reach is listed with the date it was last read',
       'A weekly report every Monday with the changes that matter',
       'Notices when you publish a page from the plan',
-      'A weekly list of the pages your site has, so the advice says “refresh this page” instead of “publish another one”',
+      'A weekly list of the pages your site has, so the advice says "refresh this page" instead of "publish another one"',
       'Pages losing traffic are tested, not guessed: a fall counts only when it is beyond chance and the page is not simply quieter at this time of year than it was last year',
-      'Every chart marked with what happened: pages you published, technical fixes, Google updates and breaks in Google’s own data',
+      'Every chart marked with what happened: pages you published, technical fixes, Google updates and breaks in Google\'s own data',
       'After a page goes live, its trend is compared with the rest of your website, so you hear whether the change likely helped',
       'Discover and Google News traffic shown where your site has it',
-      'Group your pages — blog, services, product — and see how each group does, judged on the same statistical bar as every alert',
+      'Group your pages (blog, services, product) and see how each group does, judged on the same statistical bar as every alert',
       'Brand demand in one place: branded searches, direct visits and visits from AI assistants side by side, each with its source',
       'The latest days on their own line, marked as still being collected',
       'Your own dated notes as marks on the charts',
@@ -485,7 +485,7 @@ export const features: Feature[] = [
       'Every connection has a guide: Search Console, Analytics and the property ID, step by step, with your own values ready to copy',
     ],
     steps: [
-      { title: 'Connect', body: 'Add Alaventra’s service account to Search Console and choose your GA4 property.' },
+      { title: 'Connect', body: 'Add Alaventra\'s service account to Search Console and choose your GA4 property.' },
       { title: 'Collect', body: 'Search, traffic, trends and live rankings are gathered every week.' },
       { title: 'Compare', body: 'Week over week, with striking-distance keywords called out.' },
       { title: 'Act', body: 'Recommendations and posts flow straight into the pipeline.' },
@@ -496,10 +496,10 @@ export const features: Feature[] = [
       { value: 'Live', label: 'rank checks where Search Console has no data' },
     ],
     faqs: [
-      { q: 'What access does Alaventra need?', a: 'You add Alaventra’s service account as a user in Search Console and GA4. It reads your data; it does not change your settings.' },
+      { q: 'What access does Alaventra need?', a: 'You add Alaventra\'s service account as a user in Search Console and GA4. It reads your data; it does not change your settings.' },
       {
         q: 'What if nobody here has done this before?',
-        a: 'Every ask in Alaventra has a “Show me how” button next to it. It opens the job as numbered steps you tick off, with your own values in copy boxes, the page to open, and tabs for the provider or CMS you actually use. If the person who can do it is someone else — whoever manages your DNS, usually — one button sends them the whole thing by e-mail, values filled in, no account needed.',
+        a: 'Every ask in Alaventra has a "Show me how" button next to it. It opens the job as numbered steps you tick off, with your own values in copy boxes, the page to open, and tabs for the provider or CMS you actually use. If the person who can do it is someone else (whoever manages your DNS, usually), one button sends them the whole thing by e-mail, values filled in, no account needed.',
       },
       {
         q: 'What is a striking-distance keyword?',
@@ -508,7 +508,7 @@ export const features: Feature[] = [
       { q: 'How often is the data refreshed?', a: 'Every week, with live rank checks for keywords Search Console does not report.' },
       {
         q: 'When does a drop become an alert?',
-        a: 'When the change is real: a fall is only called a fall once it is beyond normal week-to-week variation. On a small site, where a big percentage can be chance, you still get the alert — worded as something to watch, with both weeks’ counts named so you can see how small the numbers are.',
+        a: 'When the change is real: a fall is only called a fall once it is beyond normal week-to-week variation. On a small site, where a big percentage can be chance, you still get the alert, worded as something to watch, with both weeks\' counts named so you can see how small the numbers are.',
       },
       {
         q: 'How does Alaventra know I published a planned page?',
@@ -516,11 +516,11 @@ export const features: Feature[] = [
       },
       {
         q: 'Why is my chart marked in mid-September 2025?',
-        a: 'That is when Google stopped serving a hundred results on one page, which removed most SEO tools from the counts. Impressions fell and average positions improved on nearly every website without anything changing on the site, so figures either side of that week are not comparable. Charts mark it, along with Google’s ranking updates, the pages you published and the technical fixes you made.',
+        a: 'That is when Google stopped serving a hundred results on one page, which removed most SEO tools from the counts. Impressions fell and average positions improved on nearly every website without anything changing on the site, so figures either side of that week are not comparable. Charts mark it, along with Google\'s ranking updates, the pages you published and the technical fixes you made.',
       },
       {
         q: 'Can Alaventra tell me whether a change worked?',
-        a: 'It compares the page you changed with the rest of your website over the same weeks, which removes the part of the move that was the season or a Google update, and reports “likely helped”, “possibly helped”, “no clear effect yet” or “can’t tell”. It never claims a change caused a move: a comparison like this narrows the alternatives, it does not prove a cause.',
+        a: 'It compares the page you changed with the rest of your website over the same weeks, which removes the part of the move that was the season or a Google update, and reports "likely helped", "possibly helped", "no clear effect yet" or "can\'t tell". It never claims a change caused a move: a comparison like this narrows the alternatives, it does not prove a cause.',
       },
     ],
     related: ['reports', 'keyword-ladders', 'technical-audits'],
@@ -535,32 +535,32 @@ export const features: Feature[] = [
     slug: 'ai-visibility',
     name: 'AI search visibility',
     shortName: 'AI visibility',
-    tagline: 'See how often ChatGPT, Gemini, Perplexity, Claude and Google’s AI name and cite you.',
+    tagline: 'See how often ChatGPT, Gemini, Perplexity, Claude and Google\'s AI name and cite you.',
     summary:
-      'Alaventra asks a panel of up to 500 real buyer questions — by topic, buyer role and market — to six AI engines (nine with Copilot and the ChatGPT and Gemini APIs) and records who is named and cited. A daily AI Pulse watches for changes and alerts only when they are statistically real, and GA4 shows the visits and revenue AI answers send you.',
+      'Alaventra asks a panel of up to 500 real buyer questions (by topic, buyer role and market) to six AI engines (nine with Copilot and the ChatGPT and Gemini APIs) and records who is named and cited. A daily AI Pulse watches for changes and alerts only when they are statistically real, and GA4 shows the visits and revenue AI answers send you.',
     icon: Sparkles,
     benefits: [
-      'A panel of up to 500 buyer questions, written for each buyer role and market from real AI-answer data, Google’s “People also ask”, your Search Console queries and your competitors’ topics — every one checked so it never names another company or a government service',
-      'Rates per topic, buyer role, market and engine, each with its 95% range — and “too few answers” where a group has not been asked enough to say',
+      'A panel of up to 500 buyer questions, written for each buyer role and market from real AI-answer data, Google\'s "People also ask", your Search Console queries and your competitors\' topics, every one checked so it never names another company or a government service',
+      'Rates per topic, buyer role, market and engine, each with its 95% range, and "too few answers" where a group has not been asked enough to say',
       'Import your own question list as CSV, pin the questions that matter, edit, re-word or switch any question off',
       'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews, with Microsoft Copilot and the ChatGPT and Gemini APIs on request',
-      'A big panel is asked in full every week and as a rotating sample every morning, so every topic and buyer role is in every daily reading — and the credits it uses a month and the precision it buys are shown before you save',
+      'A big panel is asked in full every week and as a rotating sample every morning, so every topic and buyer role is in every daily reading, and the credits it uses a month and the precision it buys are shown before you save',
       'Mention rate, citation rate and share of voice against competitors, with 95% ranges',
       'A daily AI Pulse that alerts only on statistically real changes',
       'Visits, key events and revenue from AI referrals in GA4',
       'Answer Analyst for sentiment and wrong claims, plus AI crawler access and llms.txt',
       'Every rate counts the answers that came back, and the report names any request that failed and was sent again',
-      'Wrong claims are checked against your business facts — with no profile on file the report says “not checked”, never “nothing wrong”',
+      'Wrong claims are checked against your business facts. With no profile on file, the report says "not checked", never "nothing wrong"',
       'The one file that gets new pages to Bing (and so to Copilot) comes with a guide for whichever platform your site runs on',
-      'Every alert is a tested change: a drop in one assistant is judged on that assistant’s own answers, all of one week’s alerts are corrected together so a quiet week stays quiet, and every rate shows its range — each buyer question’s and brand recognition included',
+      'Every alert is a tested change: a drop in one assistant is judged on that assistant\'s own answers, all of one week\'s alerts are corrected together so a quiet week stays quiet, and every rate shows its range (each buyer question\'s and brand recognition included)',
       'See how precise your AI visibility figures will be for each number of questions, with or without the daily check, before you choose',
       'When AI gets a fact about your business wrong, you see the wrong claim, the true answer from your profile and the pages that carry it, with a correction drafted for you to review. Nothing is sent without you, and with no true fact on file we ask you for it instead of guessing',
-      'Every key page is also checked the way ChatGPT, Perplexity and Claude’s fetchers see it, so a firewall rule that quietly turns AI assistants away is flagged as a high-priority fix',
-      'For real Copilot citations we point you to Bing’s own AI Performance report — and say plainly that it has no API, so it is never blended into our numbers',
+      'Every key page is also checked the way ChatGPT, Perplexity and Claude\'s fetchers see it, so a firewall rule that quietly turns AI assistants away is flagged as a high-priority fix',
+      'For real Copilot citations we point you to Bing\'s own AI Performance report, and say plainly that it has no API, so it is never blended into our numbers',
     ],
     steps: [
       { title: 'Build the panel', body: 'Up to 500 questions your buyers ask, by topic, buyer role, market and stage.' },
-      { title: 'Ask every engine', body: 'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews — plus Copilot and the ChatGPT and Gemini APIs if you want them — on a schedule.' },
+      { title: 'Ask every engine', body: 'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews (plus Copilot and the ChatGPT and Gemini APIs if you want them) on a schedule.' },
       { title: 'Measure', body: 'Mentions, citations and share of voice, each with a 95% range so noise is not news.' },
       { title: 'Act', body: 'Value-ranked actions, the sources AI engines trust and the claims to correct.' },
     ],
@@ -582,7 +582,7 @@ export const features: Feature[] = [
       { q: 'Can AI crawlers reach my site?', a: 'Every week Alaventra checks robots.txt for each AI crawler, your llms.txt file and whether your CDN blocks them.' },
       {
         q: 'Does it do anything about what it finds?',
-        a: 'Yes — that is AI growth. Every Monday, after the visibility run, the questions you lose become pages to write or refresh, new pages go to Bing and IndexNow, your key pages are checked for what AI assistants need to quote them, and the pages AI cites without naming you become pitches.',
+        a: 'Yes, that is AI growth. Every Monday, after the visibility run, the questions you lose become pages to write or refresh, new pages go to Bing and IndexNow, your key pages are checked for what AI assistants need to quote them, and the pages AI cites without naming you become pitches.',
       },
     ],
     related: ['ai-growth', 'content', 'reports'],
@@ -592,23 +592,23 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'One panel, up to nine engines',
       title: 'The same questions, asked everywhere, on a schedule.',
-      body: 'Every engine gets the same buyer questions. Answers are read for who is named, who is cited and what is said about you, and every rate carries a 95% range — so a real change stands out from day-to-day noise.',
+      body: 'Every engine gets the same buyer questions. Answers are read for who is named, who is cited and what is said about you, and every rate carries a 95% range, so a real change stands out from day-to-day noise.',
     },
   },
   {
     slug: 'ai-growth',
     name: 'AI growth',
     shortName: 'AI growth',
-    tagline: 'The weekly work that gets you named and cited in AI answers — not just a score.',
+    tagline: 'The weekly work that gets you named and cited in AI answers.',
     summary:
       'Measuring AI visibility tells you where you stand; AI growth acts on it every Monday. New and updated pages go to Bing and IndexNow, your key pages are checked for what AI assistants need in order to quote them, the questions you lose become pages to write or refresh, and the exact pages AI cites without naming you become pitches.',
     icon: Rocket,
     benefits: [
-      'New and updated pages sent to Bing Webmaster Tools every week — the index Microsoft Copilot answers from — and through IndexNow once your key file is up',
+      'New and updated pages sent to Bing Webmaster Tools every week (the index Microsoft Copilot answers from) and through IndexNow once your key file is up',
       'An AI-readiness score for your key pages: reachable, indexable, the text there before any script runs, the answer in the first lines, a visible update date, question headings and figures with linked sources',
       'Schema and llms.txt are reported but never scored, because there is no good evidence they change AI answers',
-      'Every question you lose becomes one action: a new answer page, a refresh of the page that already ranks for it, or the keyword-ladder page for the same search — never two pages for one search',
-      'Answer pages written by the content engine with the answer first, a section for each search the AI runs before it answers, sources AI already trusts and a visible “Updated” date',
+      'Every question you lose becomes one action: a new answer page, a refresh of the page that already ranks for it, or the keyword-ladder page for the same search (never two pages for one search)',
+      'Answer pages written by the content engine with the answer first, a section for each search the AI runs before it answers, sources AI already trusts and a visible "Updated" date',
       'Earned media: the exact pages AI cited when it did not name you, the competitors they name, the action that fits each one and a pitch drafted for you to review',
       'A page that starts naming you is marked won, and you hear about it',
       'A monthly check of whether Wikidata knows your business, by name and by official website',
@@ -617,7 +617,7 @@ export const features: Feature[] = [
     steps: [
       { title: 'See what you lose', body: 'The weekly AI visibility run names the questions where competitors are named and you are not.' },
       { title: 'Get indexed where AI looks', body: 'New and updated pages go to Bing and IndexNow, and your key pages are scored for AI readiness.' },
-      { title: 'Win the answer', body: 'Lost questions become answer pages or refreshes, written on the same rules as every page — one search, one page, and no new writing while drafts pile up.' },
+      { title: 'Win the answer', body: 'Lost questions become answer pages or refreshes, written on the same rules as every page: one search, one page, and no new writing while drafts pile up.' },
       { title: 'Earn the mention', body: 'The pages AI cites without you become checked pitches that wait for your approval.' },
     ],
     facts: [
@@ -628,11 +628,11 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Does sending pages to Bing get us into ChatGPT?',
-        a: 'We do not claim that. Bing’s index is the one Microsoft Copilot answers from; ChatGPT, Gemini, Perplexity and Claude read other indexes. Getting a new page into Bing the same week is a cheap, safe step — the rest of AI growth works on your pages and on the third-party pages those other assistants already quote.',
+        a: 'We do not claim that. Bing\'s index is the one Microsoft Copilot answers from; ChatGPT, Gemini, Perplexity and Claude read other indexes. Getting a new page into Bing the same week is a cheap, safe step. The rest of AI growth works on your pages and on the third-party pages those other assistants already quote.',
       },
       {
         q: 'What is IndexNow, and what do we have to do?',
-        a: 'A shared way to tell search engines that a page changed. Alaventra gives each website its own key; you put one small text file at the root of your site — the guide shows how for your platform — and press “Check the file”. Until it is there, pages still go to Bing through Bing Webmaster Tools.',
+        a: 'A shared way to tell search engines that a page changed. Alaventra gives each website its own key; you put one small text file at the root of your site (the guide shows how for your platform), and press "Check the file". Until it is there, pages still go to Bing through Bing Webmaster Tools.',
       },
       {
         q: 'What makes a page ready for AI answers?',
@@ -644,7 +644,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Will you send the pitches for us?',
-        a: 'Each pitch goes through link building: it is checked, waits for your approval by default and is sent from your own mailbox. Nothing is sent without a person’s yes unless an owner allows checked pitches to go automatically, within daily limits.',
+        a: 'Each pitch goes through link building: it is checked, waits for your approval by default and is sent from your own mailbox. Nothing is sent without a person\'s yes unless an owner allows checked pitches to go automatically, within daily limits.',
       },
     ],
     related: ['ai-visibility', 'content', 'link-building'],
@@ -660,13 +660,13 @@ export const features: Feature[] = [
     slug: 'crawler-analytics',
     name: 'Crawler analytics',
     shortName: 'Crawlers',
-    tagline: 'What Googlebot and the AI crawlers really fetched on your site — and which of them were impostors.',
+    tagline: 'What Googlebot and the AI crawlers really fetched on your site, and which of them were impostors.',
     summary:
-      'Search Console tells you what Google decided. Your server logs tell you what its crawler, and every AI crawler, actually asked for. Upload a log or let Cloudflare or your log drain send it, and Alaventra shows every crawler’s requests, checks each one against the addresses its company publishes, and points at the pages nobody fetched and the requests wasted on redirects and errors.',
+      'Search Console tells you what Google decided. Your server logs tell you what its crawler, and every AI crawler, actually asked for. Upload a log or let Cloudflare or your log drain send it, and Alaventra shows every crawler\'s requests, checks each one against the addresses its company publishes, and points at the pages nobody fetched and the requests wasted on redirects and errors.',
     icon: Radar,
     benefits: [
       'Googlebot, Bingbot and Applebot, and the AI crawlers: GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-SearchBot, Claude-User, PerplexityBot, Perplexity-User, Google-Agent, Amazonbot, Common Crawl, Bytespider and Meta',
-      'Every crawler checked against its company’s published address list or by DNS — a request that only borrows a crawler’s name is counted apart, never as the real thing',
+      'Every crawler checked against its company\'s published address list or by DNS. A request that only borrows a crawler\'s name is counted apart, never as the real thing',
       'Pages Google or the AI crawlers did not fetch, most-visited first, and the requests spent on redirects, errors and parameter URLs',
       'The pages ChatGPT, Claude and Perplexity fetched because someone asked them a question',
       'Upload Apache, Nginx, IIS, CloudFront or JSON logs, or have Cloudflare Logpush, Vercel, Fastly or Akamai send them automatically',
@@ -675,7 +675,7 @@ export const features: Feature[] = [
     steps: [
       { title: 'Send your logs', body: 'Upload a file from your server or hosting panel, or give your CDN the push key once and it sends every request within minutes.' },
       { title: 'Every crawler is checked', body: 'Each request that calls itself a crawler is checked against the addresses its company publishes. Impostors go in their own column.' },
-      { title: 'Compared with your pages', body: 'The requests are matched with your site’s page list, so pages no crawler fetched stand out — most-visited first.' },
+      { title: 'Compared with your pages', body: 'The requests are matched with your site\'s page list, so pages no crawler fetched stand out, most-visited first.' },
       { title: 'Act on it', body: 'Each finding links to the audit or the AI visibility view that fixes it, and every figure exports to CSV or the API.' },
     ],
     facts: [
@@ -686,15 +686,15 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Why not just trust the user agent?',
-        a: 'Because anyone can write “Googlebot” or “GPTBot” in a request. Alaventra checks the address each request came from against the list Google, Microsoft, Apple, OpenAI, Anthropic, Perplexity, Amazon and Common Crawl publish, or confirms it by DNS. A crawler whose company publishes no way to check it is shown as claimed, not verified.',
+        a: 'Because anyone can write "Googlebot" or "GPTBot" in a request. Alaventra checks the address each request came from against the list Google, Microsoft, Apple, OpenAI, Anthropic, Perplexity, Amazon and Common Crawl publish, or confirms it by DNS. A crawler whose company publishes no way to check it is shown as claimed, not verified.',
       },
       {
         q: 'Which logs can we send?',
-        a: 'Apache and Nginx access logs, IIS and CloudFront logs, and JSON lines — plain or gzip, up to 1 GB a file. Or let Cloudflare Logpush (an Enterprise feature), Vercel, Fastly or Akamai send them automatically with a key you create in the app.',
+        a: 'Apache and Nginx access logs, IIS and CloudFront logs, and JSON lines, plain or gzip, up to 1 GB a file. Or let Cloudflare Logpush (an Enterprise feature), Vercel, Fastly or Akamai send them automatically with a key you create in the app.',
       },
       {
-        q: 'What happens to our visitors’ data?',
-        a: 'Requests by people are counted and dropped as the file is read; the file itself is deleted as soon as it has been read. For crawlers we keep the time, the page, the status, the size and the answer time — never an address, and never the values in a URL’s parameters. You choose how long the details are kept, and can delete them all at once.',
+        q: 'What happens to our visitors\' data?',
+        a: 'Requests by people are counted and dropped as the file is read; the file itself is deleted as soon as it has been read. For crawlers we keep the time, the page, the status, the size and the answer time, but never an address and never the values in a URL\'s parameters. You choose how long the details are kept, and can delete them all at once.',
       },
       {
         q: 'Is Google-Extended in the report?',
@@ -707,7 +707,7 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'Why it matters',
       title: 'An AI assistant can only name a page its crawler has read.',
-      body: 'Rankings and AI answers both start with a fetch. Your logs are the only record of which fetches happened — and of how many requests that looked like Googlebot were someone else.',
+      body: 'Rankings and AI answers both start with a fetch. Your logs are the only record of which fetches happened, and of how many requests that looked like Googlebot were someone else.',
     },
   },
   {
@@ -724,9 +724,9 @@ export const features: Feature[] = [
       'Lost only after two misses, with the reason',
       'SEO, referral and brand value for every link',
       'Link-farm pages and search-results pages are written off, so your best links are the ones that really help',
-      'Upload Google’s own export of your links, or a backlink file from another tool, and it joins the ledger — with a guide for the export',
+      'Upload Google\'s own export of your links, or a backlink file from another tool, and it joins the ledger, with a guide for the export',
       'The link gap, unlinked mentions of your name and broken links pointing at you, scored as prospects with their contacts',
-      'A competitor’s own sister domains and sites off your topics stay out of the prospect list, with the reason shown',
+      'A competitor\'s own sister domains and sites off your topics stay out of the prospect list, with the reason shown',
       'Prospects go straight to link building, which drafts the pitch and sends it from your own mailbox once you approve it',
       'A free-sources mode that uses no credits',
     ],
@@ -749,7 +749,7 @@ export const features: Feature[] = [
       { q: 'Can I import links from other tools?', a: 'Yes. Upload the Search Console links export or a backlink CSV from another tool, and Alaventra merges it into the ledger.' },
       {
         q: 'Which links are called your best?',
-        a: 'Only links that really pass value. A page that sells links, a scraped directory and a search-results page that happens to list you are written off whatever their authority score says, so they never head the list — they stay in the ledger, with the reason, and they are never suggested for outreach or disavowal.',
+        a: 'Only links that really pass value. A page that sells links, a scraped directory and a search-results page that happens to list you are written off whatever their authority score says. They never head the list, they stay in the ledger with the reason, and they are never suggested for outreach or disavowal.',
       },
       {
         q: 'What does the free-sources mode include?',
@@ -757,7 +757,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Does Alaventra send the outreach?',
-        a: 'Link building does: it drafts each pitch, checks it, and once you approve it sends it from your own mailbox, with the follow-ups in the same thread. The sending rules — office hours, a gentle start, your postal address and an opt-out in every e-mail, consent where the law asks for it — are on the link-building page.',
+        a: 'Link building does: it drafts each pitch, checks it, and once you approve it sends it from your own mailbox, with the follow-ups in the same thread. The sending rules (office hours, a gentle start, your postal address and an opt-out in every e-mail, consent where the law asks for it) are on the link-building page.',
       },
     ],
     related: ['link-building', 'ai-visibility', 'reports'],
@@ -776,29 +776,29 @@ export const features: Feature[] = [
     shortName: 'Link building',
     tagline: 'Pitches worth sending, from your own mailbox, to sites that could really link to you.',
     summary:
-      'Every week Alaventra finds the openings — journalist requests, resource pages, broken links, lists that leave you out, podcasts that take guests, directories worth being on — checks each one on its own page, finds a contact on that site’s own domain and drafts a short sequence that points at the right page of yours. You approve it, it goes out from your own mailbox, and the replies come back read, with an answer suggested.',
+      'Every week Alaventra finds the openings (journalist requests, resource pages, broken links, lists that leave you out, podcasts that take guests, directories worth being on), checks each one on its own page, finds a contact on that site\'s own domain and drafts a short sequence that points at the right page of yours. You approve it, it goes out from your own mailbox, and the replies come back read, with an answer suggested.',
     icon: Handshake,
     benefits: [
-      'New openings every week: journalist requests (public ones and the HARO and Source of Sources digests in your inbox), resource pages, broken links on pages about your topics, your competitors’ broken links, podcasts that take guests and lists that leave you out',
+      'New openings every week: journalist requests (public ones and the HARO and Source of Sources digests in your inbox), resource pages, broken links on pages about your topics, your competitors\' broken links, podcasts that take guests and lists that leave you out',
       'Your own old addresses that now return an error, found in the web archive, with the redirect to add so the links still pointing at them count again',
-      'Every prospect checked on its own page first: gone, selling links, off your topics, in another language, a competitor or a government portal — set aside with the reason',
-      'Up to three contacts per site, on that site’s own domain — never a no-reply, privacy or jobs address — each with the page it was found on',
-      'The right page of yours to point to and the link text to ask for: your brand, the page’s title or its address — never a keyword',
+      'Every prospect checked on its own page first: gone, selling links, off your topics, in another language, a competitor or a government portal; each one is set aside with the reason',
+      'Up to three contacts per site, on that site\'s own domain (never a no-reply, privacy or jobs address), each with the page it was found on',
+      'The right page of yours to point to and the link text to ask for: your brand, the page\'s title or its address; never a keyword',
       'A short sequence per prospect: a first e-mail that quotes their page, then two follow-ups four and eight working days later in the same thread',
-      'Every draft checked before you see it: nothing claimed that your profile does not carry, something quoted from their page, one link, short, one clear ask — a draft that fails waits for your edit',
+      'Every draft checked before you see it: nothing claimed that your profile does not carry, something quoted from their page, one link, short, one clear ask. A draft that fails waits for your edit',
       'Sent from your own mailbox on weekdays inside its office hours, starting slowly and spaced minutes apart, with your name, company, postal address and a one-line opt-out in every e-mail',
       'A consent check for the countries that need one, an address with no mail server set aside before anything is sent, and an opt-out list honoured for good',
-      'Replies read for you: interested, a question, out of office until a date, a “no”, a request for payment — with a suggested answer, and their page checked for your link straight away',
+      'Replies read for you: interested, a question, out of office until a date, a "no", a request for payment, with a suggested answer, and their page checked for your link straight away',
       'Two subject lines tested side by side, with no winner named until enough have gone out to mean anything',
-      'What kind of page earns links in your market — a data study, a free tool, a template or a guide — with the competitor pages that prove it',
-      'A checklist of the directories and marketplaces worth being on, what we found on each and a ready description to paste — you submit, we check',
-      'What each won link did: the page compared with your other pages over the same weeks — “likely helped”, never “caused” — and the whole week as one PDF',
+      'What kind of page earns links in your market (a data study, a free tool, a template or a guide), with the competitor pages that prove it',
+      'A checklist of the directories and marketplaces worth being on, what we found on each and a ready description to paste. You submit, we check',
+      'What each won link did: the page compared with your other pages over the same weeks ("likely helped", never "caused"), and the whole week as one PDF',
     ],
     steps: [
-      { title: 'Find', body: 'Every Monday, new openings from journalists, resource and list pages, broken links, podcasts and directories — each fetched and checked on its own page.' },
+      { title: 'Find', body: 'Every Monday, new openings from journalists, resource and list pages, broken links, podcasts and directories, each fetched and checked on its own page.' },
       { title: 'Prepare', body: 'A contact on their own site, the page of yours that fits, the link text to ask for and a drafted sequence that passed its checks.' },
       { title: 'Approve', body: 'You read, edit and approve each sequence. An owner can let checked ones go automatically, within daily limits.' },
-      { title: 'Send and follow up', body: 'From your own mailbox, in one thread, stopping the moment they reply. A won link is confirmed by Alaventra’s own link check.' },
+      { title: 'Send and follow up', body: 'From your own mailbox, in one thread, stopping the moment they reply. A won link is confirmed by Alaventra\'s own link check.' },
     ],
     facts: [
       { value: 3, label: 'e-mails at most per prospect: a pitch and two follow-ups' },
@@ -808,7 +808,7 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Does Alaventra place links for us?',
-        a: 'No — and no tool should: Google counts automated link creation as spam. Alaventra does everything around the human yes. It finds the openings, checks them, finds the contact, drafts the pitch and tracks the result; a person approves what is sent, and the other website decides whether to link.',
+        a: 'No, and no tool should: Google counts automated link creation as spam. Alaventra does everything around the human yes. It finds the openings, checks them, finds the contact, drafts the pitch and tracks the result; a person approves what is sent, and the other website decides whether to link.',
       },
       {
         q: 'Who gets pitched?',
@@ -816,15 +816,15 @@ export const features: Feature[] = [
       },
       {
         q: 'Is it legal to e-mail these people?',
-        a: 'Every e-mail carries your name, company, postal address and a working opt-out, and an opt-out is honoured for good. Recipients where prior consent is expected — Germany, Austria and Saudi Arabia, and named people in the UAE — are held until you tick that you have their consent or already work together, and addresses in the EU and the UK get a line saying where we found them. That is how the product behaves, not legal advice; the consent list can be made stricter.',
+        a: 'Every e-mail carries your name, company, postal address and a working opt-out, and an opt-out is honoured for good. Recipients where prior consent is expected (Germany, Austria and Saudi Arabia, and named people in the UAE) are held until you tick that you have their consent or already work together, and addresses in the EU and the UK get a line saying where we found them. That is how the product behaves, not legal advice; the consent list can be made stricter.',
       },
       {
         q: 'Do I have to hand over my mailbox password?',
-        a: 'No. Microsoft 365 and Gmail can be connected on their own sign-in screen, where you grant exactly two things: sending, and (for Microsoft 365) reading the replies to your own pitches. Nothing but a renewable permission is stored, it is encrypted, and it is withdrawn when you disconnect the mailbox. Google treats inbox access as a restricted scope, so a Gmail mailbox sends and you read its replies in Gmail — the app says so before you connect it. An app password still works for any mail host.',
+        a: 'No. Microsoft 365 and Gmail can be connected on their own sign-in screen, where you grant exactly two things: sending, and (for Microsoft 365) reading the replies to your own pitches. Nothing but a renewable permission is stored, it is encrypted, and it is withdrawn when you disconnect the mailbox. Google treats inbox access as a restricted scope, so a Gmail mailbox sends and you read its replies in Gmail, the app says so before you connect it. An app password still works for any mail host.',
       },
       {
         q: 'What happens when someone replies?',
-        a: 'The sequence stops at once, and so does every other one to that website. The reply is read and sorted — interested, a question, out of office, a “no”, a request for payment, a link swap — with a one-line summary and a suggested answer you can edit and send in the same thread. Out of office moves the next step after their return date; a bounce or a “no” puts the address on your opt-out list.',
+        a: 'The sequence stops at once, and so does every other one to that website. The reply is read and sorted (interested, a question, out of office, a "no", a request for payment, a link swap), with a one-line summary and a suggested answer you can edit and send in the same thread. Out of office moves the next step after their return date; a bounce or a "no" puts the address on your opt-out list.',
       },
       {
         q: 'How fast does it send?',
@@ -832,11 +832,11 @@ export const features: Feature[] = [
       },
       {
         q: 'Will you ever pay for a link?',
-        a: 'No. A reply asking for payment is flagged and not pursued — a paid link has to be marked sponsored and passes no ranking value — and an offer to swap links is flagged too.',
+        a: 'No. A reply asking for payment is flagged and not pursued (a paid link has to be marked sponsored and passes no ranking value), and an offer to swap links is flagged too.',
       },
       {
         q: 'Do you decide which subject line is better?',
-        a: 'Only once there is enough to read. Every batch gets two subject lines in different styles and they go out in equal numbers; you see the e-mails sent and the replies for each. Under thirty sends per line the page says “not enough sends yet” instead of naming a winner, because at that size a few points of difference is noise.',
+        a: 'Only once there is enough to read. Every batch gets two subject lines in different styles and they go out in equal numbers; you see the e-mails sent and the replies for each. Under thirty sends per line the page says "not enough sends yet" instead of naming a winner, because at that size a few points of difference is noise.',
       },
     ],
     related: ['backlinks', 'ai-growth', 'content'],
@@ -845,7 +845,7 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'Why it matters',
       title: 'Links are earned one yes at a time.',
-      body: 'The links that help are the ones a real person chose to add. Alaventra spends the effort where a yes is likely — a site on your topic, a page of yours they will want to link to, a contact who reads the mail — and keeps your mailbox and your name in good standing while it does.',
+      body: 'The links that help are the ones a real person chose to add. Alaventra spends the effort where a yes is likely (a site on your topic, a page of yours they will want to link to, a contact who reads the mail), and keeps your mailbox and your name in good standing while it does.',
     },
   },
   {
@@ -859,9 +859,9 @@ export const features: Feature[] = [
     benefits: [
       'A full SEO report as PDF or Word',
       'A Monday report: rankings, traffic, AI visibility and links in one read',
-      'A Search Console alert watcher for Google’s notification e-mails',
+      'A Search Console alert watcher for Google\'s notification e-mails',
       'A monthly check-in for manual actions and security issues',
-      'One to-do list across audits, search, rankings, AI answers and links — ranked by what each step is worth, not by which part of the system found it',
+      'One to-do list across audits, search, rankings, AI answers and links, ranked by what each step is worth, not by which part of the system found it',
       'Every step shows the figure behind it, how confident Alaventra is and how much work it is; a step nothing has measured yet says so instead of being given a score',
       'Prioritised recommendations you can start with one click',
       'Every number says where it came from, over what period and from how big a sample',
@@ -874,15 +874,15 @@ export const features: Feature[] = [
     ],
     steps: [
       { title: 'Collect', body: 'Search, traffic, AI answers, links and audits feed one picture of each website.' },
-      { title: 'Explain', body: 'What changed, why it matters, how sure Alaventra is — and where each number came from.' },
-      { title: 'Recommend', body: 'One list of next steps across every area, ranked by impact, confidence and effort — each one ready to run.' },
+      { title: 'Explain', body: 'What changed, why it matters, how sure Alaventra is, and where each number came from.' },
+      { title: 'Recommend', body: 'One list of next steps across every area, ranked by impact, confidence and effort, each one ready to run.' },
       { title: 'Share', body: 'Send one report as a link that expires, under your own name and logo, or export it as PDF or Word. Past runs keep their report and files.' },
     ],
     facts: [
       { value: 2, label: 'report formats: PDF and Word' },
       { value: 'Monday', label: 'report, every week' },
       { value: 14, label: 'days a share link lasts by default (1 to 90, revocable)' },
-      { value: 1, label: 'check-in a month for what Google’s API cannot see' },
+      { value: 1, label: 'check-in a month for what Google\'s API cannot see' },
     ],
     faqs: [
       {
@@ -891,21 +891,21 @@ export const features: Feature[] = [
       },
       {
         q: 'What can somebody with a share link see?',
-        a: 'That one report and its documents, read-only — its headline figures, the website it is about, when it was produced and where each number came from, under your own name and logo. Nothing else: no other report, no dashboard, no list, none of your settings or team, and nothing on the page can be changed. You see when the link was last opened, and turning it off takes one click.',
+        a: 'That one report and its documents, read-only: its headline figures, the website it is about, when it was produced and where each number came from, under your own name and logo. Nothing else: no other report, no dashboard, no list, none of your settings or team, and nothing on the page can be changed. You see when the link was last opened, and turning it off takes one click.',
       },
       {
         q: 'Can a shared report carry our branding?',
         a: 'Yes. A shared report shows your business name and logo at the head of the page and in the browser tab, and our name sits in one line in the footer. Both come from the business profile you already fill in for your website, so there is nothing extra to keep up to date; a company that has not added a logo gets its initials instead, and a logo that fails to load never breaks the page.',
       },
-      { q: 'What does the Search Console alert watcher do?', a: 'It reads Google’s Search Console notification e-mails for your websites and turns them into alerts in Alaventra.' },
+      { q: 'What does the Search Console alert watcher do?', a: 'It reads Google\'s Search Console notification e-mails for your websites and turns them into alerts in Alaventra.' },
       { q: 'What is the monthly check-in?', a: 'A short checklist for what Google does not expose through its API, such as manual actions and security issues.' },
       {
         q: 'Are recommendations ranked?',
-        a: 'Yes, and it is one list, not one list per area. Every step carries what it is worth — the impact, how confident Alaventra is in the figure behind it, and how much work it is — and the list is ordered by all three. Setup steps that have to happen before anything can be measured come first and say why. A step with no measured figure behind it is put at the bottom with the reason, rather than given a number nobody can defend. Each step can be started as a run with its price in credits shown first.',
+        a: 'Yes, and it is one list, not one list per area. Every step carries what it is worth (the impact, how confident Alaventra is in the figure behind it, and how much work it is), and the list is ordered by all three. Setup steps that have to happen before anything can be measured come first and say why. A step with no measured figure behind it is put at the bottom with the reason, rather than given a number nobody can defend. Each step can be started as a run with its price in credits shown first.',
       },
       {
         q: 'Can I see where a number came from?',
-        a: 'Yes. Every figure in a report and on a dashboard carries its source, the period it covers and the size of the sample behind it, with a “Where these numbers come from” table at the end of each report. A number that was calculated rather than counted says “modelled, not measured”, and if a figure ever reaches a report without its source it says “source not recorded” instead of borrowing one.',
+        a: 'Yes. Every figure in a report and on a dashboard carries its source, the period it covers and the size of the sample behind it, with a "Where these numbers come from" table at the end of each report. A number that was calculated rather than counted says "modelled, not measured", and if a figure ever reaches a report without its source it says "source not recorded" instead of borrowing one.',
       },
     ],
     related: ['site-tracking', 'technical-audits', 'enterprise'],
@@ -923,21 +923,21 @@ export const features: Feature[] = [
     shortName: 'Guided setup',
     tagline: 'Every step we ask of you, with your own values and the page to open.',
     summary:
-      'SEO work stalls at the same place every time: the part that happens in someone else’s account. Wherever Alaventra needs something from you — a Google permission, a DNS record, a file on your site, a mailbox — the ask carries a guide through that one job, with your own values ready to copy and a way to hand it to whoever can do it.',
+      'SEO work stalls at the same place every time: the part that happens in someone else\'s account. Wherever Alaventra needs something from you (a Google permission, a DNS record, a file on your site, a mailbox), the ask carries a guide through that one job, with your own values ready to copy and a way to hand it to whoever can do it.',
     icon: LifeBuoy,
     benefits: [
       'A guide beside every ask: Search Console and Analytics access, proving the domain is yours, the IndexNow file, your links export, letting the AI crawlers in, mailboxes and their SPF, DKIM and DMARC records, publishing a page, applying a fix pack, your business profile and style guide',
-      'Your own values, never a placeholder: the record for your domain, your key file, the exact address to add — each in a box you copy from',
+      'Your own values, never a placeholder: the record for your domain, your key file, the exact address to add, each in a box you copy from',
       'Written for the provider you actually use: Cloudflare, GoDaddy, Namecheap or cPanel for DNS; WordPress, Shopify, Wix, Squarespace or Webflow for the website',
-      'Tick the steps off as you go — close it, come back tomorrow, and it opens where you stopped',
+      'Tick the steps off as you go. Close it, come back tomorrow, and it opens where you stopped',
       'Send the whole guide to the colleague who has to do it, values filled in, with no account needed at their end',
       'Each one ends with how to tell it worked, what to try when it did not, and the button in Alaventra that checks',
     ],
     steps: [
-      { title: 'Alaventra asks for one thing', body: 'A permission, a record, a file — with the reason it is needed and what it unlocks next.' },
+      { title: 'Alaventra asks for one thing', body: 'A permission, a record or a file, with the reason it is needed and what it makes possible next.' },
       { title: 'Open the guide beside the ask', body: 'That one job as numbered steps, with your values, the page to open and the tab for your provider.' },
       { title: 'Do it, or pass it on', body: 'Tick the steps off yourself, or e-mail the guide to whoever manages your DNS, your website or your mailbox.' },
-      { title: 'Alaventra checks the result', body: 'The button at the end runs the check — verified, connected, file found — so nobody is left guessing whether it worked.' },
+      { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
       { value: 27, label: 'guides, one for each thing we ask of you' },
@@ -947,15 +947,15 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Do we need a developer?',
-        a: 'For most of it, no: the Google permissions, the business details and the mailbox are all done in a browser by whoever has the account. A DNS record or a file at the root of the site usually needs the person who manages those — the guide is written for them too, and goes to them in one click.',
+        a: 'For most of it, no: the Google permissions, the business details and the mailbox are all done in a browser by whoever has the account. A DNS record or a file at the root of the site usually needs the person who manages those. The guide is written for them too and goes to them in one click.',
       },
       {
         q: 'Our website is run by an agency. Does that work?',
         a: 'Yes. Every guide can be sent as an e-mail with your values already in it, so the agency gets the exact steps without an account here. You still see in Alaventra whether the job landed, because the same guide ends with the check.',
       },
       {
-        q: 'What if the provider’s screen looks different?',
-        a: 'Providers move things. The guides name what to look for rather than only where it used to be, keep separate instructions for the common providers and CMSs, and end with an “if it does not work” list for the things that usually go wrong.',
+        q: 'What if the provider\'s screen looks different?',
+        a: 'Providers move things. The guides name what to look for rather than only where it used to be, keep separate instructions for the common providers and CMSs, and end with an "if it does not work" list for the things that usually go wrong.',
       },
       {
         q: 'Is this only for the first week?',
@@ -975,20 +975,20 @@ export const features: Feature[] = [
     slug: 'report-delivery',
     name: 'Report delivery',
     shortName: 'Delivery',
-    tagline: 'Your reports arrive where you already are — and the ones that are not ready do not.',
+    tagline: 'Your reports arrive where you already are, and the ones that are not ready do not.',
     summary:
-      'A report nobody opens is worth nothing. Every finished report can be sent to you as it arrives, or collected into a daily, weekly or monthly summary: by e-mail with its figures and its files, or to a webhook your team already watches. And the report an analysis itself marked as not ready is never sent — it waits in Alaventra with the reason on it.',
+      'A report nobody opens is worth nothing. Every finished report can be sent to you as it arrives, or collected into a daily, weekly or monthly summary: by e-mail with its figures and its files, or to a webhook your team already watches. And the report an analysis itself marked as not ready is never sent; it waits in Alaventra with the reason on it.',
     icon: Send,
     benefits: [
-      'As each report arrives, or one summary a day, a week or a month — on the day and at the hour you choose',
-      'By e-mail with the report’s own figures in the message, its PDF and documents attached, and a link that opens it',
+      'As each report arrives, or one summary a day, a week or a month, on the day and at the hour you choose',
+      'By e-mail with the report\'s own figures in the message, its PDF and documents attached, and a link that opens it',
       'To a webhook as JSON your systems can read, which Slack, Teams and Discord also render as a message',
       'Every message can carry an expiring, revocable link so a report can be forwarded to a client or a colleague with no account',
       'A report that failed its own quality check, a plan the engine refused or a figure it could not verify is held back, and the reason is stated rather than hidden',
-      'A log of everything sent, everything held and everything that failed — so you can tell the difference between quiet and broken',
+      'A log of everything sent, everything held and everything that failed, so you can tell the difference between quiet and broken',
     ],
     steps: [
-      { title: 'Choose when and where', body: 'A frequency, the people who should receive it, a webhook if your team lives in one — and which reports you actually want.' },
+      { title: 'Choose when and where', body: 'A frequency, the people who should receive it, a webhook if your team lives in one, and which reports you actually want.' },
       { title: 'A report finishes', body: 'The work runs on its own schedule: the Monday tracking report, the monthly audit, a page that was written for you.' },
       { title: 'It is checked before it is sent', body: 'Anything the analysis marked as not ready stays here. Everything else goes out with its figures, its files and its link.' },
       { title: 'You read it where you already were', body: 'In your inbox or your team channel. Open the full report in Alaventra, or forward the link to somebody without an account.' },
@@ -1000,8 +1000,8 @@ export const features: Feature[] = [
     ],
     faqs: [
       {
-        q: 'What does “not ready” actually mean?',
-        a: 'It is the analysis’s own verdict, not a guess by the delivery. A written page that used up its quality rounds and still failed, a keyword plan the engine refused to make, a verdict it could not check because the search results could not be read, a run that was rejected. Each of those is still in Alaventra, with what went wrong on it — it is simply not pushed to anyone as finished work.',
+        q: 'What does "not ready" actually mean?',
+        a: 'It is the analysis\'s own verdict, not a guess by the delivery. A written page that used up its quality rounds and still failed, a keyword plan the engine refused to make, a verdict it could not check because the search results could not be read, a run that was rejected. Each of those is still in Alaventra, with what went wrong on it; it is simply not pushed to anyone as finished work.',
       },
       {
         q: 'Can somebody outside the company read the report?',
@@ -1013,7 +1013,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Will this send me something every day?',
-        a: 'Only what you ask for. You can pick the reports you care about — the weekly tracking report but not every rank check, say — and collect the rest into one summary. The default is off: nothing is sent until you switch a channel on.',
+        a: 'Only what you ask for. You can pick the reports you care about (the weekly tracking report but not every rank check, say), and collect the rest into one summary. The default is off: nothing is sent until you switch a channel on.',
       },
     ],
     related: ['reports', 'site-tracking', 'enterprise'],
@@ -1022,30 +1022,30 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'Why it matters',
       title: 'The best report is the one that reached you.',
-      body: 'Work that lands in a dashboard waits to be discovered. Work that lands in your inbox or your team channel gets read, argued with and acted on — which is the only way an SEO programme ever turns into traffic.',
+      body: 'Work that lands in a dashboard waits to be discovered. Work that lands in your inbox or your team channel gets read, argued with and acted on, which is the only way an SEO programme ever turns into traffic.',
     },
   },
   {
     slug: 'integrations',
     name: 'Integrations and API',
     shortName: 'Integrations',
-    tagline: 'Alerts in Slack or Teams, findings as tickets, your data in your warehouse — and an API your assistant can work with.',
+    tagline: 'Alerts in Slack or Teams, findings as tickets, your data in your warehouse, and an API your assistant can work with.',
     summary:
-      'Alaventra fits into the tools your team already runs on. Alerts and finished work go to the Slack or Teams channel you choose, an audit finding becomes one ticket in Jira, Linear or Asana, and your rankings, traffic, audits, AI visibility and backlinks land in BigQuery, S3 or Looker Studio. Scripts and AI assistants can read everything and, with your permission, start analyses using your company’s credits.',
+      'Alaventra fits into the tools your team already runs on. Alerts and finished work go to the Slack or Teams channel you choose, an audit finding becomes one ticket in Jira, Linear or Asana, and your rankings, traffic, audits, AI visibility and backlinks land in BigQuery, S3 or Looker Studio. Scripts and AI assistants can read everything and, with your permission, start analyses using your company\'s credits.',
     icon: Plug,
     benefits: [
-      'Alerts, failed runs, finished reports, new audit findings and ranking moves sent to Slack or Microsoft Teams — each channel gets only the events you pick',
+      'Alerts, failed runs, finished reports, new audit findings and ranking moves sent to Slack or Microsoft Teams; each channel gets only the events you pick',
       'Every event also as signed JSON for your own systems, Zapier, Make or n8n, retried when your side is down, with a delivery log',
-      'Any audit finding or recommendation sent to Jira, Linear or Asana as one ticket with the evidence, the example pages and the fix — and its state shown back next to the finding',
+      'Any audit finding or recommendation sent to Jira, Linear or Asana as one ticket with the evidence, the example pages and the fix, and its state shown back next to the finding',
       'Rankings, weekly Search Console and GA4 figures, audit findings, AI visibility, backlinks and analyses exported every day or week to BigQuery, Amazon S3, Google Cloud Storage or Cloudflare R2',
       'A Looker Studio connector for the same tables, read with a read-only key',
-      'An API and an MCP server: assistants like Claude and ChatGPT read your data and, with a key you allow to, start analyses — with the same credit, duplicate and price checks as the app',
+      'An API and an MCP server: assistants like Claude and ChatGPT read your data and, with a key you allow to, start analyses, with the same credit, duplicate and price checks as the app',
     ],
     steps: [
       { title: 'Connect a channel or a tracker', body: 'Paste a Slack or Teams address, or a Jira, Linear or Asana token. Alaventra checks it with the tool before anything is saved.' },
       { title: 'Pick what goes where', body: 'Alerts to one channel, wins to another; tickets on the findings you choose; the tables you want, daily or weekly.' },
       { title: 'Work happens in your tools', body: 'Your team reads the alert where it already works, fixes the ticket in its own tracker and charts the data in its own BI.' },
-      { title: 'Every send is logged', body: 'Delivered, retried or held back — each event, ticket and export has a record you can read.' },
+      { title: 'Every send is logged', body: 'Delivered, retried or held back: each event, ticket and export has a record you can read.' },
     ],
     facts: [
       { value: 7, label: 'event types to route to Slack, Teams or your systems' },
@@ -1055,15 +1055,15 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Can an AI assistant spend our credits?',
-        a: 'Only with a key you created for that, and only within your company’s credits and limits. A key can read by default; starting analyses is a separate permission. Every start goes through the same checks as the app: the price in credits, your balance and limits, and the warning when the work duplicates something already planned or running — which the assistant must show you rather than accept on its own.',
+        a: 'Only with a key you created for that, and only within your company\'s credits and limits. A key can read by default; starting analyses is a separate permission. Every start goes through the same checks as the app: the price in credits, your balance and limits, and the warning when the work duplicates something already planned or running, which the assistant must show you rather than accept on its own.',
       },
       {
         q: 'Will the same finding be ticketed twice?',
-        a: 'No. One finding is one ticket: pushing it again, by anyone, opens the ticket already made. Its state — to do, in progress, done — is read back from your tracker and shown beside the finding.',
+        a: 'No. One finding is one ticket: pushing it again, by anyone, opens the ticket already made. Its state (to do, in progress, done) is read back from your tracker and shown beside the finding.',
       },
       {
         q: 'Where are our tokens kept?',
-        a: 'Encrypted, and never shown again after you paste them — not even to an owner. Alaventra only ever connects to the tool’s own public address, and every message it sends is logged without the secret.',
+        a: 'Encrypted, and never shown again after you paste them, not even to an owner. Alaventra only ever connects to the tool\'s own public address, and every message it sends is logged without the secret.',
       },
       {
         q: 'What does the export contain?',
@@ -1076,7 +1076,7 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'Why it matters',
       title: 'SEO work that lives where the rest of the work lives.',
-      body: 'Findings only get fixed when they reach the backlog, and numbers only get trusted when they sit next to the rest of the business’s numbers. Alaventra sends both there, and lets your assistant ask and act without a login.',
+      body: 'Findings only get fixed when they reach the backlog, and numbers only get trusted when they sit next to the rest of the business\'s numbers. Alaventra sends both there, and lets your assistant ask and act without a login.',
     },
   },
   {
@@ -1085,12 +1085,12 @@ export const features: Feature[] = [
     shortName: 'Enterprise',
     tagline: 'Workspaces, roles, single sign-on, an audit log and credit limits for every company you run.',
     summary:
-      'Run every company and website from one account. Invite your team with roles — or let your identity provider sign them in and provision them — require two-step verification, see who did what in the audit log, prove you own each website before its data is shown and set credit limits per company. Each company’s data is kept apart from every other.',
+      'Run every company and website from one account. Invite your team with roles (or let your identity provider sign them in and provision them), require two-step verification, see who did what in the audit log, prove you own each website before its data is shown and set credit limits per company. Each company\'s data is kept apart from every other.',
     icon: Building2,
     benefits: [
       'Multi-company workspaces with four roles: owner, admin, member and viewer',
       'Invitations and Google sign-in',
-      'Single sign-on with SAML 2.0 or OIDC (Okta, Microsoft Entra ID, Google Workspace) on your verified e-mail domains — and, when you are ready, required',
+      'Single sign-on with SAML 2.0 or OIDC (Okta, Microsoft Entra ID, Google Workspace) on your verified e-mail domains, and, when you are ready, required',
       'SCIM provisioning: people created, updated and switched off from your identity provider, groups mapped to roles',
       'Two-step verification with an authenticator app, passkeys or a security key, which a company can require for everyone',
       'An audit log of sign-ins, team, settings, keys and sharing that nobody can edit, with CSV export',
@@ -1098,14 +1098,14 @@ export const features: Feature[] = [
       'Website ownership verified through Search Console, a DNS TXT record or a meta tag',
       'The price in credits before every analysis, credits per company and the limits you set',
       'Data isolation per company',
-      'API keys per company: shown once, with an expiry, revocable at any time, read-only unless you allow a key to start analyses, and never able to reach another company’s data',
+      'API keys per company: shown once, with an expiry, revocable at any time, read-only unless you allow a key to start analyses, and never able to reach another company\'s data',
       'No repeated work: results are reused where nothing changed',
     ],
     steps: [
       { title: 'Create a workspace', body: 'One company per brand or client, each with its own websites and data.' },
       { title: 'Verify your websites', body: 'Prove ownership through Search Console, DNS or a meta tag.' },
       { title: 'Invite the team', body: 'Give each person the role they need, from viewer to owner.' },
-      { title: 'Set the limits', body: 'See the price in credits before every analysis and set each company’s credit limits.' },
+      { title: 'Set the limits', body: 'See the price in credits before every analysis and set each company\'s credit limits.' },
     ],
     facts: [
       { value: 4, label: 'roles: owner, admin, member and viewer' },
@@ -1117,14 +1117,14 @@ export const features: Feature[] = [
       { q: 'How is website ownership verified?', a: 'Through Search Console ownership, a DNS TXT record or a meta tag. Each domain has one verified owner.' },
       {
         q: 'How is spending kept under control?',
-        a: 'Every analysis shows its price in credits before it starts and is never charged more. Owners set monthly limits for analyses and for the automatic work, and can keep credits aside for each website’s automatic work. Results that cannot have changed are reused instead of charged again.',
+        a: 'Every analysis shows its price in credits before it starts and is never charged more. Owners set monthly limits for analyses and for the automatic work, and can keep credits aside for each website\'s automatic work. Results that cannot have changed are reused instead of charged again.',
       },
-      { q: 'Is our data visible to other companies?', a: 'No. Each company’s websites, runs and reports are isolated, and access depends on your role in that company.' },
+      { q: 'Is our data visible to other companies?', a: 'No. Each company\'s websites, runs and reports are isolated, and access depends on your role in that company.' },
       {
         q: 'Can we sign in with our identity provider?',
         a: 'Yes. Prove your e-mail domain with a DNS record, connect Okta, Microsoft Entra ID, Google Workspace or any SAML 2.0 / OIDC provider, test a sign-in, and switch it on. An owner can then require it: passwords stop working for your domain, and owners keep theirs, protected by two-step verification, in case your provider is down. With SCIM, your provider also creates and switches off accounts.',
       },
-      { q: 'Can we see who changed what?', a: 'Owners and admins see an audit log of sign-ins, two-step changes, team and role changes, websites, settings, API keys and sharing — who, when and from which address — and can export it as CSV. Nothing in it can be edited or deleted.' },
+      { q: 'Can we see who changed what?', a: 'Owners and admins see an audit log of sign-ins, two-step changes, team and role changes, websites, settings, API keys and sharing (who, when and from which address) and can export it as CSV. Nothing in it can be edited or deleted.' },
     ],
     related: ['reports', 'autopilot', 'site-tracking'],
     image: 'brightOffice',
@@ -1140,20 +1140,20 @@ export const features: Feature[] = [
     shortName: 'Client portal',
     tagline: 'A workspace per client, client logins and a portal under your own name and domain.',
     summary:
-      'Agencies keep every client in a workspace of its own, see every client website in one table, and give each client a portal of their websites — dashboards, reports, recommendations and the pages waiting for their approval. With white-label on, the portal, the reports, the documents and the e-mails your clients get carry your name, your logo, your colour and your own address.',
+      'Agencies keep every client in a workspace of its own, see every client website in one table, and give each client a portal of their websites: dashboards, reports, recommendations and the pages waiting for their approval. With white-label on, the portal, the reports, the documents and the e-mails your clients get carry your name, your logo, your colour and your own address.',
     icon: Briefcase,
     benefits: [
-      'A workspace per client — its own websites, credits, reports and logins — and your team switching between them',
+      'A workspace per client (its own websites, credits, reports and logins) and your team switching between them',
       'One table of every client website: health, rankings movement, clicks, AI visibility, alerts, approvals waiting and credits used, with a CSV export',
       'Client logins as viewer or approver: their websites, reports and recommendations, and nothing of your other clients, your credits or your settings',
       'Client approval before a page goes live or an outreach e-mail is sent, when you want it',
-      'Your name, logo and colour in place of ours — with every text kept readable to WCAG AA in light and dark mode — and “Powered by” off unless you switch it on',
+      'Your name, logo and colour in place of ours (with every text kept readable to WCAG AA in light and dark mode), and "Powered by" off unless you switch it on',
       'The portal on your own address, such as seo.youragency.com, proven with a DNS record and checked again every few hours',
       'Invitations and scheduled reports sent under your name, and from your own mailbox once its SPF and DKIM check out',
     ],
     steps: [
       { title: 'Turn on agency mode', body: 'The owner switches the company to an agency. Owners and admins reach every client; members see the clients you assign.' },
-      { title: 'Create a workspace per client', body: 'Its own websites, credits and reports. Verify the client’s website and start tracking as usual.' },
+      { title: 'Create a workspace per client', body: 'Its own websites, credits and reports. Verify the client\'s website and start tracking as usual.' },
       { title: 'Brand it and give it your address', body: 'Your name, logo and colour, then two DNS records for your portal address and, if you like, your own sender.' },
       { title: 'Invite the client', body: 'As a viewer, or as an approver who signs off pages and outreach before they go out.' },
     ],
@@ -1164,12 +1164,12 @@ export const features: Feature[] = [
     ],
     faqs: [
       {
-        q: 'Can one client see another client’s data?',
-        a: 'No. Each client is a separate workspace and a client login reaches only its own. Its people see their websites’ dashboards, reports, recommendations and approvals — not your other clients, not your credits, not your settings.',
+        q: 'Can one client see another client\'s data?',
+        a: 'No. Each client is a separate workspace and a client login reaches only its own. Its people see their websites\' dashboards, reports, recommendations and approvals, not your other clients, not your credits, not your settings.',
       },
       {
         q: 'Will my clients see the Alaventra name?',
-        a: 'Not with white-label on: the portal, report pages, shared reports, the documents they download and the e-mails they get carry your name. A small “Powered by Alaventra” line appears only if you switch it on. PDFs the analyses produce are replaced by a printable page of the report under your brand.',
+        a: 'Not with white-label on: the portal, report pages, shared reports, the documents they download and the e-mails they get carry your name. A small "Powered by Alaventra" line appears only if you switch it on. PDFs the analyses produce are replaced by a printable page of the report under your brand.',
       },
       {
         q: 'How does the portal get onto our own domain?',
@@ -1177,7 +1177,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Do clients sign in with their own company accounts?',
-        a: 'Yes. They can use a password with two-step verification, or Google or their company’s single sign-on, and any two-step requirement you set for their workspace applies.',
+        a: 'Yes. They can use a password with two-step verification, or Google or their company\'s single sign-on, and any two-step requirement you set for their workspace applies.',
       },
     ],
     related: ['enterprise', 'reports', 'report-delivery'],
@@ -1186,7 +1186,7 @@ export const features: Feature[] = [
     story: {
       eyebrow: 'For agencies',
       title: 'Your clients see your work, under your name.',
-      body: 'A logo on a shared page is not a portal. Clients get their own login, their own websites and a say before anything goes live — and everything they see, from the sign-in page to the Monday e-mail, is yours.',
+      body: 'A logo on a shared page is not a portal. Clients get their own login, their own websites and a say before anything goes live, and everything they see, from the sign-in page to the Monday e-mail, is yours.',
     },
   },
 ];

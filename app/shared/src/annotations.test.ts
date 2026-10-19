@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildAnnotations, dataBreaksIn, DATA_BREAKS, GOOGLE_UPDATES, inWindow, SEO_EVENTS_UPDATED } from './annotations';
 
 // G12 (2026-10-13, system review FIX_PLAN; criteria 3.5 / 2.12): the charts are marked with what happened, from stored rows and the
-// dated registry — and with nothing else. The engine's own scenario S56 checks the same rules on its copy of this logic.
+// dated registry, and with nothing else. The engine's own scenario S56 checks the same rules on its copy of this logic.
 describe('chart annotations (G12)', () => {
   const window = { from: '2026-09-01', to: '2026-10-13' };
 
@@ -31,7 +31,7 @@ describe('chart annotations (G12)', () => {
     }).filter((m) => m.kind === 'fix');
     expect(marks).toHaveLength(1);
     expect(marks[0]!.label).toBe('Audit fixes: 6 findings gone');
-    expect(marks[0]!.detail).toBe('health 64 → 81 · 6 fewer findings than the audit before');
+    expect(marks[0]!.detail).toBe('health 64 to 81 · 6 fewer findings than the audit before');
   });
 
   it('says "Technical audit" when there is nothing to compare with, and counts findings that came back', () => {

@@ -17,10 +17,10 @@ const toDate = (v: string | null | undefined): Date | null => {
 /** "Oct 2026" for "2026-10" or a full date. */
 export function fmtMonth(v: string | null | undefined): string {
   const d = toDate(v);
-  return d ? format(d, 'MMM yyyy') : (v ?? '–');
+  return d ? format(d, 'MMM yyyy') : (v ?? '-');
 }
 
-/** "Oct '26" — compact month for chart axes. */
+/** "Oct '26", compact month for chart axes. */
 export function fmtMonthShort(v: unknown): string {
   const d = toDate(typeof v === 'string' ? v : null);
   return d ? format(d, "MMM ''yy") : String(v ?? '');
@@ -46,17 +46,17 @@ export function dateLabelFormat(values: readonly (string | null | undefined)[]):
   const clash = new Set(days).size < days.length;
   return (v) => {
     const d = toDate(v);
-    return d ? format(d, clash ? 'd MMM yyyy, HH:mm' : 'd MMM yyyy') : '–';
+    return d ? format(d, clash ? 'd MMM yyyy, HH:mm' : 'd MMM yyyy') : '-';
   };
 }
 
-/** "3 Oct – 30 Oct 2026" */
+/** "3 Oct, 30 Oct 2026" */
 export function fmtRange(start: string | null | undefined, end: string | null | undefined): string {
   const a = toDate(start);
   const b = toDate(end);
-  if (!a || !b) return '–';
+  if (!a || !b) return '-';
   const sameYear = a.getFullYear() === b.getFullYear();
-  return `${format(a, sameYear ? 'd MMM' : 'd MMM yyyy')} – ${format(b, 'd MMM yyyy')}`;
+  return `${format(a, sameYear ? 'd MMM' : 'd MMM yyyy')} to ${format(b, 'd MMM yyyy')}`;
 }
 
 export function daysSince(v: string | null | undefined): number | null {
@@ -100,7 +100,7 @@ export function hostOf(url: string | null | undefined): string {
 
 export const isUrl = (s: string | null | undefined): s is string => !!s && /^https?:\/\//i.test(s);
 
-/** A plural noun: plural(3, 'page') → "3 pages". */
+/** A plural noun: plural(3, 'page') -> "3 pages". */
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 }

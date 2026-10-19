@@ -5,7 +5,7 @@ import type { CmsHttpRequest, CmsHttpResponse } from '../src/services/cms/http';
 
 // G2: the CMS publishing routes end to end against a real Postgres (the migrations, the real app with its session, CSRF and role
 // checks), with only the CMS's HTTP API and the engine's run start replaced. Run it with a throwaway database:
-//   CMS_DB_TEST=1 DATABASE_URL=postgres://… npx vitest run test/cmsRoutes.test.ts
+//   CMS_DB_TEST=1 DATABASE_URL=postgres://... npx vitest run test/cmsRoutes.test.ts
 // Without CMS_DB_TEST it is skipped (the unit tests above cover the rule and the request shapes without a database).
 
 const DB = process.env.CMS_DB_TEST === '1';

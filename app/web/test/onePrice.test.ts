@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { estimateRunCost, estimateRunMinutes, MODE_IDS, type ModeId } from '@seo/shared';
 import { runCost, runMinutes } from '@/lib/prices';
 
-// D-2 (re-rating 2026-10-17): one run showed two prices — the tools card "about $0.20" beside its form's "$0.18", the onboarding launch
+// D-2 (re-rating 2026-10-17): one run showed two prices, the tools card "about $0.20" beside its form's "$0.18", the onboarding launch
 // step's audit "$0.09" beside "$0.11", the ladder card "~8 min" beside the form's "about 18 min". The cards and the launch step read
 // MODES[].costUsd (the shipped table) and MODES[].etaMinutes (the base time without the pages written), the forms the engine's
 // calibrated estimate. One rule now: a screen names a mode's price and time only through lib/prices.ts (runCost / runMinutes / PRICES).

@@ -32,7 +32,7 @@ export function ResetLinkCard({ className }: { className?: string }) {
           create.mutate({ email: email.trim().toLowerCase() });
         }}
       >
-        <Field label="User’s e-mail" className="min-w-[240px] flex-1">
+        <Field label="User's e-mail" className="min-w-[240px] flex-1">
           {(p) => <Input {...p} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" />}
         </Field>
         <Button type="submit" variant="secondary" loading={create.isPending} disabled={!email.includes('@')}>
@@ -57,7 +57,7 @@ export function ResetLinkCard({ className }: { className?: string }) {
   );
 }
 
-// G21 (2026-10-13, FIX_PLAN G21): runs delivered / runs started per week — for the runs the app starts and for the nine schedules —
+// G21 (2026-10-13, FIX_PLAN G21): runs delivered / runs started per week, for the runs the app starts and for the nine schedules,
 // with the schedule fires that left no execution behind (D25a: a Mac-hosted stack misses a Monday whenever the machine sleeps) and the
 // channel that carried each ops alert (R6). Internal only: this page is for operators, so it is not on the business site.
 const ratePct = (v: number | null) => (v == null ? 'unmeasured' : `${v.toFixed(1)}%`);   // R106: null is "not measured", never 0% or a dash
@@ -135,9 +135,9 @@ export function DeliveryCard({ enabled, className }: { enabled: boolean; classNa
       description="Of everything that should have run, how much reached the customer. A run counts as delivered only when it finished and at least one report arrived; a schedule counts only when the engine really ran it."
       info={
         <InfoTip label="How the delivery rate is measured">
-          Runs started in the app come from this platform’s own run records. The scheduled side compares each automation’s own clock (
-          {report?.timezone ?? 'the engine’s timezone'}) with the engine’s execution history: a fire with no execution within 90 minutes is a{' '}
-          <strong>missed schedule</strong> — this stack runs on a Mac and misses a schedule whenever the machine sleeps through it. Runs still going are left out of
+          Runs started in the app come from this platform's own run records. The scheduled side compares each automation's own clock (
+          {report?.timezone ?? 'the engine\'s timezone'}) with the engine's execution history: a fire with no execution within 90 minutes is a{' '}
+          <strong>missed schedule</strong>: this stack runs on a Mac and misses a schedule whenever the machine sleeps through it. Runs still going are left out of
           the rate rather than counted against it; runs that never finished are counted against it.
         </InfoTip>
       }
@@ -162,7 +162,7 @@ export function DeliveryCard({ enabled, className }: { enabled: boolean; classNa
                 label="Missed schedules, last 6 weeks"
                 icon={<AlarmClock />}
                 value={<CountUp value={missedTotal} format={compactNumber} />}
-                meta={missedTotal ? 'A schedule fired no execution — see below.' : 'Every schedule fired.'}
+                meta={missedTotal ? 'A schedule fired no execution (see below).' : 'Every schedule fired.'}
               />
               <MetricCard
                 label="Alerts delivered"

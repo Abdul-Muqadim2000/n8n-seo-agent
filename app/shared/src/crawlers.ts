@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Gap #6 (2026-10-17, MARKET_BENCHMARK.md §5): server-log and AI-crawler analytics — what search engines and AI fetchers actually
+ * Gap #6 (2026-10-17, MARKET_BENCHMARK.md §5): server-log and AI-crawler analytics, what search engines and AI fetchers actually
  * request on the customer's site. Design note: `app/docs/LOG_ANALYTICS.md`. This file holds what the server and the web app share:
  * the crawler registry (which user agent is which bot, and how each one can be proved), the published IP-list sources, the limits,
  * the pure path rules, and the answer types of the Crawlers page and `/api/v1/websites/:id/crawlers`.
@@ -12,13 +12,13 @@ import { z } from 'zod';
 // ---------------------------------------------------------------------------------------------------------------------------
 
 /**
- * search      — builds a search index (Googlebot, Bingbot, Applebot)
- * ai_training — collects pages to train or ground models (GPTBot, ClaudeBot, CCBot, Bytespider, Meta-ExternalAgent, Amazonbot)
- * ai_search   — builds an AI search index (OAI-SearchBot, Claude-SearchBot, PerplexityBot)
- * ai_user     — fetches a page because a person asked an assistant something right now (ChatGPT-User, Claude-User, Perplexity-User,
+ * search     , builds a search index (Googlebot, Bingbot, Applebot)
+ * ai_training, collects pages to train or ground models (GPTBot, ClaudeBot, CCBot, Bytespider, Meta-ExternalAgent, Amazonbot)
+ * ai_search  , builds an AI search index (OAI-SearchBot, Claude-SearchBot, PerplexityBot)
+ * ai_user    , fetches a page because a person asked an assistant something right now (ChatGPT-User, Claude-User, Perplexity-User,
  *               Google-Agent, Meta-ExternalFetcher): the closest thing to a demand signal a log holds
- * seo_tool    — SEO tools' crawlers (Ahrefs, Semrush, Majestic)
- * other       — anything else that calls itself a bot
+ * seo_tool   , SEO tools' crawlers (Ahrefs, Semrush, Majestic)
+ * other      , anything else that calls itself a bot
  */
 export const BOT_KINDS = ['search', 'ai_training', 'ai_search', 'ai_user', 'seo_tool', 'other'] as const;
 export type BotKind = (typeof BOT_KINDS)[number];
@@ -103,7 +103,7 @@ const GENERIC_BOT = /(?:^|[\s;(/+])[\w.-]*(?:bot|crawler|spider|slurp)(?:[\s/;)+
 // device names that end in "bot" (Cubot phones) are people, not crawlers
 const NOT_A_BOT = /\bcubot\b/i;
 
-/** The crawler a user agent claims to be, or null for a person's browser. A claim only — the IP decides whether it is true. */
+/** The crawler a user agent claims to be, or null for a person's browser. A claim only, the IP decides whether it is true. */
 export function classifyUserAgent(ua: string | null | undefined): BotDef | null {
   const s = String(ua ?? '');
   if (!s || s === '-') return null;
@@ -130,10 +130,10 @@ export const VERIFY_METHOD_LABELS: Record<VerifyMethod, string> = {
 };
 
 /**
- * verified  — the address is on the vendor's list (or its DNS name is the vendor's and resolves back to it)
- * spoofed   — it says it is a crawler that can be checked, and the check failed: someone else using the name
- * claimed   — the vendor publishes no way to check it (Bytespider, Meta, SEO tools, unknown bots): the name is taken on trust
- * unchecked — it could have been checked but was not: no address in the log, a private or CDN address, or DNS did not answer
+ * verified , the address is on the vendor's list (or its DNS name is the vendor's and resolves back to it)
+ * spoofed  , it says it is a crawler that can be checked, and the check failed: someone else using the name
+ * claimed  , the vendor publishes no way to check it (Bytespider, Meta, SEO tools, unknown bots): the name is taken on trust
+ * unchecked, it could have been checked but was not: no address in the log, a private or CDN address, or DNS did not answer
  */
 export const VERIFICATIONS = ['verified', 'spoofed', 'claimed', 'unchecked'] as const;
 export type Verification = (typeof VERIFICATIONS)[number];
@@ -151,7 +151,7 @@ export const ROBOTS_ONLY_TOKENS = [
 export const CRAWLER_LIMITS = {
   /** one uploaded file (plain or gzip) */
   uploadMaxBytes: 1024 * 1024 * 1024,
-  /** one push from Cloudflare Logpush / a log drain (Cloudflare's max_upload_bytes counts uncompressed: 5 MB–1 GB; set ≤ 100 MB) */
+  /** one push from Cloudflare Logpush / a log drain (Cloudflare's max_upload_bytes counts uncompressed: 5 MB to 1 GB; set ≤ 100 MB) */
   pushMaxBytes: 100 * 1024 * 1024,
   /** lines read from one ingest at most (a 20-million-line file is several GB; split it) */
   maxLines: 20_000_000,
@@ -196,7 +196,7 @@ export function pathKind(path: string): PathKind {
   return ASSET.test(p) ? 'asset' : 'page';
 }
 
-/** "/a/b?utm_source=x&page=2" → { path: "/a/b", queryKeys: "page,utm_source" } (names only, sorted — never the values) */
+/** "/a/b?utm_source=x&page=2" -> { path: "/a/b", queryKeys: "page,utm_source" } (names only, sorted, never the values) */
 export function splitTarget(target: string): { path: string; queryKeys: string } {
   let t = String(target || '/');
   // an absolute URL in the request line (proxies, some CDNs): keep the path

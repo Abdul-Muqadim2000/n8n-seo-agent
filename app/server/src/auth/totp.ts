@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { MFA } from '@seo/shared';
 
-// RFC 6238 time-based one-time passwords (HMAC-SHA-1, 6 digits, 30-second steps — what Google Authenticator, Microsoft
+// RFC 6238 time-based one-time passwords (HMAC-SHA-1, 6 digits, 30-second steps, what Google Authenticator, Microsoft
 // Authenticator, 1Password, Authy and every other app default to), on top of RFC 4226 HOTP. No dependency: the algorithm is a page
 // long and is tested against the RFC's own vectors (test/identity-totp.test.ts).
 

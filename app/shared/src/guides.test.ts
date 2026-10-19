@@ -33,8 +33,8 @@ describe('the catalogue', () => {
   });
 
   it('only points at guides that exist', () => {
-    for (const g of all) for (const r of g.related ?? []) expect(guideById(r), `${g.id} → ${r}`).toBeDefined();
-    for (const [rec, id] of Object.entries(GUIDE_FOR_RECOMMENDATION)) expect(guideById(id), `${rec} → ${id}`).toBeDefined();
+    for (const g of all) for (const r of g.related ?? []) expect(guideById(r), `${g.id} to ${r}`).toBeDefined();
+    for (const [rec, id] of Object.entries(GUIDE_FOR_RECOMMENDATION)) expect(guideById(id), `${rec} to ${id}`).toBeDefined();
   });
 
   it('declares every placeholder it uses, and uses every one it declares', () => {
@@ -76,7 +76,7 @@ describe('the catalogue', () => {
 
 describe('fillText', () => {
   const g = guideById('dns-txt-record')!;
-  it('uses the caller’s value', () => {
+  it("uses the caller's value", () => {
     expect(fillText('Add it to {{domain}}', g, { domain: 'techand.ai' })).toBe('Add it to techand.ai');
   });
   it('falls back to the declared example', () => {

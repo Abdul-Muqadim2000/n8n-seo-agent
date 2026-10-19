@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { COST_TABLE, CRAWL_BASE_PAGES, CRAWL_JS_MULT, crawlFactor, estimateRunCost, estimateRunCostParts } from './cost';
 
 // B-9 (re-rating 2026-10-17): exec 739 asked for a JavaScript crawl of up to 200 pages (DataForSEO quoted $0.36, 4x the plain crawl)
-// and the pre-run figure was $0.11 — the crawl row was one plain 200-page crawl whatever the form said.
-describe('B-9 — the audit estimate follows the pages and JavaScript the form asks for', () => {
+// and the pre-run figure was $0.11, the crawl row was one plain 200-page crawl whatever the form said.
+describe('B-9, the audit estimate follows the pages and JavaScript the form asks for', () => {
   it('a 200-page plain crawl is the table row, unchanged', () => {
     expect(crawlFactor(200, false)).toBe(1);
     expect(estimateRunCost('audit', { crawlPages: 200, crawlJs: false })).toBe(estimateRunCost('audit', {}));
@@ -24,7 +24,7 @@ describe('B-9 — the audit estimate follows the pages and JavaScript the form a
     expect(estimateRunCost('keyword', { crawlPages: 1000, crawlJs: true })).toBe(estimateRunCost('keyword', {}));
   });
   const KIT = join(__dirname, '../../../n8n/seo-agent/v5/code/_cost_cal.js');
-  it.skipIf(!existsSync(KIT))('uses the engine’s own constants and crawl price (CC.crawlFactor, DFS_EST.crawl)', () => {
+  it.skipIf(!existsSync(KIT))('uses the engine\'s own constants and crawl price (CC.crawlFactor, DFS_EST.crawl)', () => {
     const src = readFileSync(KIT, 'utf8');
     const m = src.match(/const CRAWL_BASE_PAGES = (\d+), CRAWL_JS_MULT = (\d+);/);
     expect(m).not.toBeNull();

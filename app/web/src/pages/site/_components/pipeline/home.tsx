@@ -98,7 +98,7 @@ export function ThisWeek({ data }: { data: PipelineData }) {
                 <RunningBadge />
                 <Link to={paths.run(org.id, r.id)} className="min-w-0 font-medium text-ink hover:text-accent-text hover:underline transition-colors duration-150 ease-brand">
                   {MODES[r.mode]?.title ?? r.mode}
-                  {r.keyword ? `: “${r.keyword}”` : ''}
+                  {r.keyword ? `: "${r.keyword}"` : ''}
                 </Link>
                 <span className="text-xs text-ink-3">started {fmtAgo(r.createdAt)}</span>
               </li>
@@ -174,7 +174,7 @@ export function needsYouOf(data: PipelineData): NeedsYouItem[] {
       id: `publish:${w.keyword}`,
       kind: 'publish' as const,
       severity: w.days >= 7 ? ('warning' as const) : ('info' as const),
-      title: `Publish “${w.keyword}”`,
+      title: `Publish "${w.keyword}"`,
       detail: `Written ${w.days === 0 ? 'today' : w.days === 1 ? 'yesterday' : `${w.days} days ago`}. A page only ranks once it is live on your site; tell us its address and tracking starts.`,
       action: { label: 'I published it', mode: 'published' as const, prefill: { keyword: w.keyword } },
     }));
@@ -408,7 +408,7 @@ export function HowItWorks({ data, cards }: { data: PipelineData; cards: LadderC
             </IconTile>
             <span className="min-w-0">
               <span className="block font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">How a keyword ladder works</span>
-              <span className="mt-0.5 block text-[13px] leading-snug font-normal text-ink-3">Six steps, with {site.domain}’s own numbers. It takes months, not weeks.</span>
+              <span className="mt-0.5 block text-[13px] leading-snug font-normal text-ink-3">Six steps, with {site.domain}'s own numbers. It takes months, not weeks.</span>
             </span>
           </>
         }
@@ -445,7 +445,7 @@ export function HowItWorks({ data, cards }: { data: PipelineData; cards: LadderC
           </ol>
           <p className="mt-3 flex items-start gap-2 text-xs leading-snug text-ink-3">
             <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-            Pages that reach the top 10 usually take 2–6 months. Progress shows first as pages going live and positions moving up.
+            Pages that reach the top 10 usually take 2-6 months. Progress shows first as pages going live and positions moving up.
           </p>
         </div>
       </CollapsePanel>

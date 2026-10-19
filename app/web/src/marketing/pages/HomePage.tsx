@@ -51,7 +51,7 @@ const COMPARE: { job: string; byHand: string; withUs: string }[] = [
   {
     job: 'Showing up in AI answers',
     byHand: 'No idea whether ChatGPT recommends you or a competitor.',
-    withUs: 'The questions your buyers ask AI, checked every day — and pages written to win them.',
+    withUs: 'The questions your buyers ask AI, checked every day, and pages written to win them.',
   },
   {
     job: 'Knowing it works',
@@ -64,7 +64,7 @@ const COMPARE: { job: string; byHand: string; withUs: string }[] = [
 const SURFACES: { icon: LucideIcon; name: string; what: string }[] = [
   { icon: Search, name: 'Google search', what: 'Pages written for what your buyers search, with positions checked every week' },
   { icon: Sparkles, name: 'Google AI Overviews and AI Mode', what: 'Checked for your name and your links' },
-  { icon: MessageSquare, name: 'ChatGPT', what: 'Asked your buyers’ questions every day' },
+  { icon: MessageSquare, name: 'ChatGPT', what: 'Asked your buyers\' questions every day' },
   { icon: Bot, name: 'Gemini, Perplexity and Claude', what: 'Asked the same questions, next to your competitors' },
   { icon: Globe, name: 'Bing and Copilot', what: 'New and updated pages sent to Bing every week, and through IndexNow once your key file is up' },
   { icon: Link2, name: 'Other websites', what: 'Every link to you checked, and the sites that should link to you found' },
@@ -77,7 +77,7 @@ const PLATFORM_FACTS: Fact[] = [
   { value: 1000, label: 'pages per crawl, JavaScript included' },
 ];
 
-// what happens when, from sign-up on — work Alaventra does, never a promised Google position
+// what happens when, from sign-up on: work Alaventra does, never a promised Google position
 const TIMELINE = [
   {
     when: 'Day 1',
@@ -87,7 +87,7 @@ const TIMELINE = [
   {
     when: 'Week 1',
     title: 'SEO on a schedule',
-    body: 'New pages every week, your Google positions checked and your AI answers watched — all without anyone chasing it.',
+    body: 'New pages every week, your Google positions checked and your AI answers watched, all without anyone chasing it.',
   },
   {
     when: 'Month 1',
@@ -105,19 +105,19 @@ const ENTERPRISE = [
   { icon: Users, title: 'Roles and invitations', body: 'Owner, admin, member and viewer, per company. Invite with a link; sign in with Google or e-mail.' },
   { icon: BadgeCheck, title: 'Verified ownership', body: 'Data appears only after you prove a website is yours: Search Console, a DNS TXT record or a meta tag.' },
   { icon: Wallet, title: 'Credits and limits', body: 'Every analysis shows its price in credits before it starts and never uses more; owners set monthly limits.' },
-  { icon: Lock, title: 'Data isolation', body: 'Each company’s websites, runs and reports are kept apart, and access follows your role.' },
-  { icon: Fingerprint, title: 'Single sign-on and SCIM', body: 'Okta, Microsoft Entra ID, Google Workspace or any SAML 2.0 / OIDC provider — required if you like — and accounts provisioned from it.' },
+  { icon: Lock, title: 'Data isolation', body: 'Each company\'s websites, runs and reports are kept apart, and access follows your role.' },
+  { icon: Fingerprint, title: 'Single sign-on and SCIM', body: 'Okta, Microsoft Entra ID, Google Workspace or any SAML 2.0 / OIDC provider (required if you like), and accounts provisioned from it.' },
   { icon: ScrollText, title: 'Two-step and an audit log', body: 'Authenticator apps, passkeys or security keys, required company-wide if you choose, and a log of who did what that nobody can edit.' },
 ];
 
 const FAQS: FaqItem[] = [
   {
     q: 'What does SEO actually do for my business?',
-    a: 'SEO gets your website shown when people search Google — or ask ChatGPT — for what you sell. Those visitors are already looking for something like yours, and you do not pay for every click the way you do with ads. Alaventra does the work that gets you there: finding the right searches, writing the pages, fixing the site and tracking the results.',
+    a: 'SEO gets your website shown when people search Google (or ask ChatGPT) for what you sell. Those visitors are already looking for something like yours, and you do not pay for every click the way you do with ads. Alaventra does the work that gets you there: finding the right searches, writing the pages, fixing the site and tracking the results.',
   },
   {
     q: 'How fast will I see results?',
-    a: 'You can connect a website, check it and have your first page written on day one, and the weekly schedule starts that same week. Moving up on Google takes longer — usually weeks to a few months, depending on how hard the search is. Nobody can honestly promise a position on Google, and we don’t. What we do promise is that the work starts on day one and every Monday you see what moved.',
+    a: 'You can connect a website, check it and have your first page written on day one, and the weekly schedule starts that same week. Moving up on Google takes longer, usually weeks to a few months, depending on how hard the search is. Nobody can honestly promise a position on Google, and we don\'t. What we do promise is that the work starts on day one and every Monday you see what moved.',
   },
   {
     q: 'Do we need an SEO specialist to use Alaventra?',
@@ -125,18 +125,18 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'What is the difference between Auto and Manual?',
-    a: 'On Auto, Alaventra does the step on schedule. On Manual, the step waits in “Needs you” until someone on your team approves it. You choose per ladder and per website.',
+    a: 'On Auto, Alaventra does the step on schedule. On Manual, the step waits in "Needs you" until someone on your team approves it. You choose per ladder and per website.',
   },
   {
     q: 'Does Alaventra publish to our website?',
     a: 'Only when you say so. Written pages go to your WordPress, Webflow or Contentful as drafts; an owner or admin publishes one live with a confirmation. Alaventra then checks the live page and tracks it.',
   },
-  { q: 'Which AI engines do you check?', a: 'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews — plus Microsoft Copilot and the ChatGPT and Gemini APIs if you want them — with a panel of up to 500 buyer questions by topic, buyer role and market.' },
+  { q: 'Which AI engines do you check?', a: 'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews, plus Microsoft Copilot and the ChatGPT and Gemini APIs if you want them, with a panel of up to 500 buyer questions by topic, buyer role and market.' },
   {
     q: 'How do you keep spending under control?',
     a: 'Everything is paid in credits. Every analysis shows its price before it starts, is never charged more and is free if it fails; owners set monthly limits and can keep credits aside for the automatic work. Results that cannot have changed are reused instead of charged again.',
   },
-  { q: 'Is our data kept separate?', a: 'Yes. Every company’s websites, runs and reports are isolated, and website data appears only after ownership is verified.' },
+  { q: 'Is our data kept separate?', a: 'Yes. Every company\'s websites, runs and reports are isolated, and website data appears only after ownership is verified.' },
 ];
 
 /** Section-level text link with an arrow that nudges on hover. */
@@ -209,7 +209,7 @@ function Hero() {
           </div>
           <div className="animate-fade-up" style={{ animationDelay: '140ms' }}>
             <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl">
-              Alaventra is SEO that runs itself. It finds what your buyers search on Google and ask ChatGPT, writes the pages that answer them, fixes what holds your site back — and shows you every week that more people are finding you.
+              Alaventra is SEO that runs itself. It finds what your buyers search on Google and ask ChatGPT, writes the pages that answer them, fixes what holds your site back, and shows you every week that more people are finding you.
             </p>
           </div>
           <div className="mt-9 flex flex-wrap justify-center gap-3 animate-fade-up" style={{ animationDelay: '210ms' }}>
@@ -317,10 +317,10 @@ function WhyAlaventra() {
           <SectionHeading
             eyebrow="Why Alaventra"
             title="A great product is half the job. People have to find it."
-            lead="Most buyers start with a Google search or a question to ChatGPT. If you are not in those answers, you do not exist for them. Alaventra puts your business there — and keeps it there, week after week."
+            lead="Most buyers start with a Google search or a question to ChatGPT. If you are not in those answers, you do not exist for them. Alaventra puts your business there and keeps it there, week after week."
           >
             <ButtonLink to="/signup" size="lg" className="group">
-              Get found — start free
+              Get found: start free
               <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
             </ButtonLink>
           </SectionHeading>
@@ -420,7 +420,7 @@ function Timeline() {
         <div className="max-w-2xl">
           <p className="font-display text-lg font-semibold tracking-[-0.01em] text-ink">The sooner you start, the sooner it compounds.</p>
           <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2">
-            Setting up is free and takes minutes. Google decides when a page moves up — usually weeks to a few months — so every week you wait is a week your competitors keep.
+            Setting up is free and takes minutes. Google decides when a page moves up (usually weeks to a few months), so every week you wait is a week your competitors keep.
           </p>
         </div>
         <ButtonLink to="/signup" size="lg" className="group w-full shrink-0 sm:w-auto">
@@ -453,13 +453,13 @@ function bentoWide(n: number): Set<number> {
 }
 
 function CapabilityGrid() {
-  // bento: some cards span two columns on wide screens — as many as it takes (one to three) for every row of three to be full,
+  // bento: some cards span two columns on wide screens: as many as it takes (one to three) for every row of three to be full,
   // each starting a row and spread out, so the grid stays even whatever the number of capabilities
   const wide = bentoWide(features.length);
   return (
     <Section tone="page" id="platform" bordered>
       <div className="flex flex-wrap items-end justify-between gap-6">
-        <SectionHeading eyebrow={`Platform · ${CapabilityCount} capabilities`} title="Everything SEO takes. One place." lead="Each part works on its own. Together they run your SEO every week — from finding what people search for to the Monday report." />
+        <SectionHeading eyebrow={`Platform · ${CapabilityCount} capabilities`} title="Everything SEO takes. One place." lead="Each part works on its own. Together they run your SEO every week, from finding what people search for to the Monday report." />
         <Reveal>
           <ArrowLink to="/platform">Explore the platform</ArrowLink>
         </Reveal>
@@ -509,7 +509,7 @@ function AiSpotlight() {
         <div>
           <SectionHeading
             eyebrow="AI search visibility"
-            title="Find out if ChatGPT recommends you — and fix it when it doesn’t."
+            title="Find out if ChatGPT recommends you, and fix it when it doesn't."
             lead="More and more buyers ask an AI assistant for a shortlist before they ever search. Alaventra asks the same questions every day and shows where you are named, linked or missing."
           />
           <div className="mt-9">
@@ -568,7 +568,7 @@ function BacklinksSpotlight() {
       <SectionHeading
         align="center"
         eyebrow="Backlinks from every source"
-        title="See every site that links to you — and the ones that should."
+        title="See every site that links to you, and the ones that should."
         lead="Links from other websites are one of the strongest signals Google uses. Alaventra gathers them from nine sources, visits each linking page itself and finds the sites that should link to you next."
       />
       <Reveal className="mt-14 sm:mt-16">
@@ -578,7 +578,7 @@ function BacklinksSpotlight() {
         {[
           { t: 'Checked, not assumed', b: 'Rel, placement, noindex and canonical read from the live page.' },
           { t: 'Valued three ways', b: 'SEO, referral and brand value for every referring site.' },
-          { t: 'Pitches you approve', b: 'Scored prospects with a contact on their own site and a checked pitch with two follow-ups — sent from your own mailbox once you approve it.' },
+          { t: 'Pitches you approve', b: 'Scored prospects with a contact on their own site and a checked pitch with two follow-ups, sent from your own mailbox once you approve it.' },
         ].map((x, i) => (
           <Reveal key={x.t} index={i}>
             <p className="font-display text-[15px] font-semibold text-ink">{x.t}</p>
@@ -630,7 +630,7 @@ function WhoItsFor() {
     <Section tone="page" spacing="lg">
       <div className="grid grid-cols-1 items-center gap-14 lg:grid-cols-2 lg:gap-16">
         <div>
-          <SectionHeading eyebrow="Who it’s for" title="For the teams that own organic growth." lead="Agencies running many clients, marketing teams without a full SEO function, B2B companies, businesses with many locations and enterprise teams with their own sign-in and data stack." />
+          <SectionHeading eyebrow="Who it's for" title="For the teams that own organic growth." lead="Agencies running many clients, marketing teams without a full SEO function, B2B companies, businesses with many locations and enterprise teams with their own sign-in and data stack." />
           <ul className="mt-10 divide-y divide-line border-y border-line">
             {solutions.map((s, i) => (
               <Reveal as="li" key={s.slug} index={i}>
@@ -699,7 +699,7 @@ function PricingTeaser() {
       <Reveal className="mx-auto mt-10 max-w-5xl rounded-xl border border-line bg-page px-6 py-5 text-center">
         <p className="text-[15px] font-medium text-ink">Nobody on the team to do this?</p>
         <p className="mx-auto mt-1.5 max-w-2xl text-[14px] leading-relaxed text-ink-2">
-          We can connect the accounts for you, publish the finished pages on your site — any CMS, or a pull request for a React codebase — and fix what the audit finds.
+          We can connect the accounts for you, publish the finished pages on your site (any CMS, or a pull request for a React codebase) and fix what the audit finds.
         </p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
           <ArrowLink to="/pricing#done-for-you">See the done-for-you packages</ArrowLink>
@@ -730,7 +730,7 @@ function FaqSection() {
 
 export default function HomePage() {
   useSeo({
-    title: 'Get found on Google and ChatGPT — SEO that runs itself',
+    title: 'Get found on Google and ChatGPT: SEO that runs itself',
     description: 'You built the product; Alaventra brings the traffic. It finds what your buyers search for, writes the pages, fixes your site and tracks Google and AI answers every week.',
     path: '/',
   });

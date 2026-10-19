@@ -22,7 +22,7 @@ import { pgDate } from './pgTime';
 import { Verifier, type Dns } from './verify';
 
 /**
- * One ingest (an uploaded file or a pushed batch) → crawler rows + daily totals (app/docs/LOG_ANALYTICS.md §4). Streams the spool
+ * One ingest (an uploaded file or a pushed batch) -> crawler rows + daily totals (app/docs/LOG_ANALYTICS.md §4). Streams the spool
  * file (gzip or plain) line by line, keeps only crawler requests, verifies them in batches of 2,000 and writes each batch with one
  * multi-row insert, so a file of a million lines never holds more than one batch in memory and never blocks the event loop for long
  * (every batch awaits the database). A person's request is counted and dropped: no row, no address.

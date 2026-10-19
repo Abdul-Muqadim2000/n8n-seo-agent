@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// G1 phase 3 — "Where you're signed in" and the company idle timeout, through the real app on a real Postgres.
+// G1 phase 3, "Where you're signed in" and the company idle timeout, through the real app on a real Postgres.
 
 vi.hoisted(() => {
   process.env.IDENTITY_KEY = 'ab'.repeat(32); // a test-only key
@@ -31,7 +31,7 @@ const idleFor = async (email: string, minutes: number) =>
   db.update(schema.sessions).set({ lastSeenAt: new Date(Date.now() - minutes * 60_000) }).where(eq(schema.sessions.userId, await userId(email)));
 
 describe('your devices', () => {
-  it('lists this person’s sessions (this one first, with a readable device), revokes one, then every other', async () => {
+  it('lists this person\'s sessions (this one first, with a readable device), revokes one, then every other', async () => {
     const a = await signUp(app, 'dev@sess.test');
     const phone = new Client(app, { ua: IPHONE, ip: '198.51.100.7' });
     await phone.post('/api/auth/login', { email: 'dev@sess.test', password: PW });
@@ -62,7 +62,7 @@ describe('your devices', () => {
 });
 
 describe('company idle timeout', () => {
-  it('signs a session out after the strictest timeout of the person’s companies, and says why', async () => {
+  it('signs a session out after the strictest timeout of the person\'s companies, and says why', async () => {
     const owner = await signUp(app, 'idle@sess.test');
     const org = (await owner.c.post('/api/orgs', { name: 'Idle Co' })).body;
     const policy = { requireMfa: false, mfaTrustGoogle: false, mfaTrustSso: true, idleTimeoutMinutes: 15, auditRetentionDays: 365 };

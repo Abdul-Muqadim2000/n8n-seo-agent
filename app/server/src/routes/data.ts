@@ -17,7 +17,7 @@ export async function dataRoutes(app: FastifyInstance) {
     requireVerified(a.site);
     return a;
   };
-  // G5 (WHITE_LABEL.md §4): the dashboards of the client portal — open to client people, without a cost figure in them
+  // G5 (WHITE_LABEL.md §4): the dashboards of the client portal, open to client people, without a cost figure in them
   const portal = (req: Parameters<typeof siteAccess>[0]) => guard(req, 'client_viewer');
   const shown = <T,>(role: Role, data: T): T => (isClientRole(role) ? clientSafePayload(data) : data);
 
@@ -43,7 +43,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return shown(a.role, await technicalData(a.org, a.site, auditId && auditId.length < 80 ? auditId : undefined));
   });
   // G11 (2026-10-13, FIX_PLAN): "I fixed this" on a technical finding. The engine's daily key-page watch judges that one finding again on
-  // the website's key pages the next morning and writes the answer back on the finding row — days instead of waiting for the next monthly
+  // the website's key pages the next morning and writes the answer back on the finding row, days instead of waiting for the next monthly
   // audit. Nothing is claimed here: the app only records the request.
   app.post('/api/orgs/:orgId/sites/:siteId/technical/findings/recheck', { config: { rateLimit: { max: 60, timeWindow: '10 minutes' } } }, async (req) => {
     const p = req.params as P;

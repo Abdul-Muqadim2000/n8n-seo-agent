@@ -25,7 +25,7 @@ function applied(settings: LadderSettingsRow[], writes: SettingsWrite[]): Ladder
 }
 
 describe('ladder settings: one ladder (PATCH)', () => {
-  it('a ladder without a row gets a whole row: mode set, status active, the next priority — and so does each ladder ahead of it', () => {
+  it('a ladder without a row gets a whole row: mode set, status active, the next priority, and so does each ladder ahead of it', () => {
     expect(ladderOrder(ladders, [])).toEqual(['lad_a', 'lad_b', 'lad_c']);
     const w = ladderSettingsWrites({ site, ladders, settings: [], ladderId: 'lad_b', change: { mode: 'manual' }, now: NOW });
     expect(w.map((x) => [x.ladderId, x.insert, x.data.priority, x.data.mode])).toEqual([
@@ -68,7 +68,7 @@ describe('ladder settings: one ladder (PATCH)', () => {
     expect(ladderOrder(ladders, applied(settings, w))).toEqual(['lad_c', 'lad_a', 'lad_b']);
   });
 
-  it('only real columns go to n8n; never the app’s own fields', () => {
+  it('only real columns go to n8n; never the app\'s own fields', () => {
     expect(settingsData({ ladder_id: 'x', priority: 1, bogus: 1, mode: undefined })).toEqual({ ladder_id: 'x', priority: 1 });
     const names = new Set<string>(LADDER_SETTINGS_COLUMNS.map((c) => c.name));
     for (const w of ladderSettingsWrites({ site, ladders, settings: [], ladderId: 'lad_c', change: { mode: 'auto', status: 'active' }, now: NOW })) expect(Object.keys(w.data).every((k) => names.has(k))).toBe(true);
@@ -106,7 +106,7 @@ describe('ladder settings: order, won, website defaults', () => {
     expect([e.insert, e.data, e.automation]).toEqual([false, { opportunities: 'manual', max_waiting: 5, updated_at: NOW }, { defaultMode: 'manual', opportunities: 'manual', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 5 }]);
   });
 
-  it('a ladder that is not one of the website’s is a 404', () => {
+  it('a ladder that is not one of the website\'s is a 404', () => {
     expect(() => assertLadderOfSite(ladders, 'lad_a')).not.toThrow();
     for (const id of ['lad_other', '_site', '']) expect(() => assertLadderOfSite(ladders, id)).toThrow(expect.objectContaining({ statusCode: 404 }));
   });

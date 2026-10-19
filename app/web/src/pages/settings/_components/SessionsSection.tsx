@@ -12,7 +12,7 @@ import { SettingsCard } from './SettingsCard';
 
 const METHOD: Record<SessionView['authMethod'], string> = { password: 'Password', google: 'Google', sso: 'Single sign-on' };
 
-/** G1: "Where you're signed in" — every device with a live session; sign one out, or every other one. */
+/** G1: "Where you're signed in", every device with a live session; sign one out, or every other one. */
 export function SessionsSection() {
   const sessions = useSessions();
   const revoke = useRevokeSession();
@@ -22,7 +22,7 @@ export function SessionsSection() {
   return (
     <SettingsCard
       icon={<MonitorSmartphone />}
-      title="Where you’re signed in"
+      title="Where you're signed in"
       description="Devices with an open session. Sign out any you do not recognise, then change your password."
       actions={
         otherCount > 0 ? (

@@ -3,7 +3,7 @@ import { MODE_IDS, MODES, MONITOR_COSTS } from './constants';
 import { APP_ESTIMATE_BASIS, COST_TABLE, costKeys, estimateRunCost, estimateRunCostParts, keyCost, modeCostUsd, runCostEstimate, type CostKey } from './cost';
 
 describe('one table, not two', () => {
-  it('every mode’s listed price is the table’s price', () => {
+  it('every mode\'s listed price is the table\'s price', () => {
     for (const id of MODE_IDS) expect(MODES[id].costUsd).toBe(estimateRunCost(id, {}));
   });
 
@@ -12,7 +12,7 @@ describe('one table, not two', () => {
     expect(MONITOR_COSTS.auditMonthly).toBe(modeCostUsd('audit'));
   });
 
-  it('a key’s price is its Claude money plus its search-data money', () => {
+  it('a key\'s price is its Claude money plus its search-data money', () => {
     for (const [key, row] of Object.entries(COST_TABLE)) expect(keyCost(key as CostKey)).toBeCloseTo(row.ai + row.dfs, 6);
   });
 
@@ -26,7 +26,7 @@ describe('one table, not two', () => {
   });
 });
 
-describe('the figures are the engine’s calibrated ones, not the 2026-10-02 table', () => {
+describe('the figures are the engine\'s calibrated ones, not the 2026-10-02 table', () => {
   // the old table against the measurements in BENCHMARKS_2026-10-14.md area 13 §3.1
   it('a one-page keyword ladder is no longer $1.80', () => {
     const now = estimateRunCost('ladder', { pagesNow: 1 });
@@ -78,7 +78,7 @@ describe('the figures are the engine’s calibrated ones, not the 2026-10-02 tab
   });
 });
 
-describe('the app defers to the engine’s figure the moment it arrives', () => {
+describe('the app defers to the engine\'s figure the moment it arrives', () => {
   const base = { mode: 'keyword' as const, estimatedCostUsd: 0.84 };
 
   it('uses our own table before the engine has said anything, and labels it an estimate', () => {
@@ -89,7 +89,7 @@ describe('the app defers to the engine’s figure the moment it arrives', () => 
     expect(f.basis).toBe(APP_ESTIMATE_BASIS);
   });
 
-  it('prefers the engine’s calibrated figure over ours', () => {
+  it('prefers the engine\'s calibrated figure over ours', () => {
     const f = runCostEstimate({ ...base, engineCostEstimateUsd: 0.62, engineCostBasis: 'Claude $0.58 (calibrated); search data $0.04 (calibrated)' });
     expect(f.source).toBe('engine');
     expect(f.usd).toBe(0.62);

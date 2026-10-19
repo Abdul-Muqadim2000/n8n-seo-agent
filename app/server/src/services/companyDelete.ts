@@ -6,7 +6,7 @@ import { stopInEngine } from '../routes/sites';
 
 /**
  * Removes a company and everything of it (the owner's "Delete company" and the platform admin's). Every verified website first stops
- * in the engine — its weekly runs, ladders and monitors (history in n8n stays); an engine that cannot be reached is logged and the
+ * in the engine, its weekly runs, ladders and monitors (history in n8n stays); an engine that cannot be reached is logged and the
  * deletion goes on (stopInEngine never throws), as it always has. Its cost history stays in the admin panel as unattributed cost
  * (cost_events.org_id is set null, `detached_from` keeps its name); its credit entries stay as history with org_id null.
  */

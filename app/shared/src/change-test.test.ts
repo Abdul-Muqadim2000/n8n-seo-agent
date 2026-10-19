@@ -14,7 +14,7 @@ describe('change test (G12)', () => {
     expect(r.controlChange).toBe(0.8);
     expect(r.effect).toBe(22.2);
     expect(r.controlPages).toBe(5);
-    expect(r.note).toContain('position 35 → 12');
+    expect(r.note).toContain('position 35 to 12');
   });
 
   it('reads a page with no impressions either side as "can\'t tell", never as "no effect"', () => {
@@ -51,7 +51,7 @@ describe('change test (G12)', () => {
   });
 
   it('keeps every verdict graded and never claims a cause', () => {
-    expect(Object.values(CHANGE_VERDICT_LABELS)).toEqual(['Likely helped', 'Possibly helped', 'No clear effect yet', 'Too early to tell', 'Can’t tell']);
+    expect(Object.values(CHANGE_VERDICT_LABELS)).toEqual(['Likely helped', 'Possibly helped', 'No clear effect yet', 'Too early to tell', 'Can\'t tell']);
     for (const l of Object.values(CHANGE_VERDICT_LABELS)) expect(CAUSAL.test(l)).toBe(false);
     expect(CAUSAL.test(CHANGE_TEST_METHOD)).toBe(false);
     expect(CHANGE_TEST_METHOD).toContain('never proof of cause');

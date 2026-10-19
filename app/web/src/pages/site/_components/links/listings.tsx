@@ -1,4 +1,4 @@
-// Link building — what the person does on their own: listings to add (nothing is submitted for you), redirects for old URLs that 404,
+// Link building, what the person does on their own: listings to add (nothing is submitted for you), redirects for old URLs that 404,
 // and what won links did for their pages (against a control; never "caused").
 import { toast } from 'sonner';
 import { ArrowRight, BarChart3, ClipboardList, CornerDownRight, ExternalLink as ExternalIcon, Undo2 } from 'lucide-react';
@@ -22,13 +22,13 @@ const LISTING: Record<string, { label: string; tone: Tone; tile: IconTileTone }>
   listed: { label: 'Listed, no link seen', tone: 'accent', tile: 'blue' },
   missing: { label: 'Not listed', tone: 'warning', tile: 'warning' },
   submitted: { label: 'Submitted', tone: 'accent', tile: 'blue' },
-  unknown: { label: 'Can’t check automatically', tone: 'neutral', tile: 'neutral' },
+  unknown: { label: 'Can\'t check automatically', tone: 'neutral', tile: 'neutral' },
   ignored: { label: 'Not relevant', tone: 'neutral', tile: 'neutral' },
 };
 const listingOf = (s: string) => LISTING[s] ?? LISTING.unknown!;
 /** what a status means, under the listing */
 const LISTING_NOTE: Record<string, string> = {
-  unknown: 'Can’t check automatically: the site blocks bots — check it yourself.',
+  unknown: 'Can\'t check automatically: the site blocks bots, so check it yourself.',
   listed: 'You are listed, but we did not see a link to your website: add it to your profile.',
   submitted: 'We look for your listing every week and mark it linked once it is live.',
   linked: 'Your profile links to your website.',
@@ -124,12 +124,12 @@ function ListingRow({ l }: { l: Listing }) {
           )}
           {member && open && (
             <Button size="sm" variant="secondary" loading={busy('submitted')} onClick={() => mark('submitted', 'marked submitted')}>
-              I’ve submitted
+              I've submitted
             </Button>
           )}
           {member && (open || l.status === 'submitted') && (
             <Button size="sm" variant="ghost" loading={busy('listed')} onClick={() => mark('listed', 'marked listed')}>
-              I’m listed
+              I'm listed
             </Button>
           )}
           {member && l.status !== 'linked' && l.status !== 'ignored' && (
@@ -182,7 +182,7 @@ export function Redirects({ d }: { d: LinkBuildingData }) {
   );
 }
 
-const pos = (v: number | null) => (v == null ? '–' : v.toFixed(1).replace(/\.0$/, ''));
+const pos = (v: number | null) => (v == null ? '-' : v.toFixed(1).replace(/\.0$/, ''));
 /** "+2.4 places" (positions: a fall in the number is a gain) */
 const places = (v: number | null) => (v == null ? null : `${v < 0 ? '+' : v > 0 ? '−' : '±'}${Math.abs(v).toFixed(1).replace(/\.0$/, '')} ${Math.abs(v) === 1 ? 'place' : 'places'}`);
 
@@ -193,7 +193,7 @@ export function Impact({ d }: { d: LinkBuildingData }) {
         title="What your links did"
         icon={<BarChart3 />}
         description={d.impact.length ? `${d.impact.length} won ${d.impact.length === 1 ? 'link' : 'links'} followed in Search Console` : 'The position of the page each won link points to'}
-        info="From the day our check first found the link live, we compare the page's Search Console position with your other pages that got no new link (the control), at 6, 10 and 16 weeks. Site-wide swings and Google updates cancel out. We say “likely helped”, never “caused”: rankings have many causes."
+        info="From the day our check first found the link live, we compare the page's Search Console position with your other pages that got no new link (the control), at 6, 10 and 16 weeks. Site-wide swings and Google updates cancel out. We say &quot;likely helped&quot;, never &quot;caused&quot;: rankings have many causes."
         flush
       >
         {d.impact.length ? (
@@ -217,14 +217,14 @@ export function Impact({ d }: { d: LinkBuildingData }) {
                   }
                   title={
                     <>
-                      {r.refDomain} <span className="font-normal text-ink-3">→</span> {r.targetUrl ? <ExternalLink href={r.targetUrl}>{urlPath(r.targetUrl)}</ExternalLink> : 'your page'}
+                      {r.refDomain} <span className="font-normal text-ink-3">to</span> {r.targetUrl ? <ExternalLink href={r.targetUrl}>{urlPath(r.targetUrl)}</ExternalLink> : 'your page'}
                     </>
                   }
                   description={
                     <span className="block space-y-0.5">
                       <span className="block">
-                        Position {pos(r.basePosition)} → {pos(r.position)}
-                        {r.keyword ? ` for “${r.keyword}”` : ''}
+                        Position {pos(r.basePosition)} to {pos(r.position)}
+                        {r.keyword ? ` for "${r.keyword}"` : ''}
                         {places(r.effect) ? ` · ${places(r.effect)} beyond your other pages` : ''}
                       </span>
                       {r.note && <span className="block [overflow-wrap:anywhere]">{r.note}</span>}

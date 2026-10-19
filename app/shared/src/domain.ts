@@ -33,7 +33,7 @@ export function urlOnDomain(url: string, domain: string): boolean {
   return h === d || h.endsWith('.' + d);
 }
 
-/** True when the URL is on the domain itself (www or not), not a subdomain — the rule Normalize Input uses for an existing page. */
+/** True when the URL is on the domain itself (www or not), not a subdomain, the rule Normalize Input uses for an existing page. */
 export function urlOnHost(url: string, domain: string): boolean {
   const m = String(url || '').match(/^https?:\/\/(?:[^@/?#]*@)?([^/?#:]+)/i);
   return !!m && m[1].toLowerCase().replace(/^www\./, '') === cleanDomain(domain);

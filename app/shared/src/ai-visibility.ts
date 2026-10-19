@@ -16,7 +16,7 @@ export const AI_PULSE_DAYS_PER_WEEK = 6;
 /** the panel sizes the precision table compares, besides the site's own */
 export const AI_PRECISION_PANELS = [8, 20, 50, 100, 200, 500] as const;   // G6 (2026-10-18): the panel holds up to 500
 
-/** 95% Wilson range of k out of n, in percent rounded to 0.1 — the engine's `wilson` exactly. null without a sample. */
+/** 95% Wilson range of k out of n, in percent rounded to 0.1, the engine's `wilson` exactly. null without a sample. */
 export function wilsonRange(k: number, n: number, z = 1.96): [number, number] | null {
   if (!n || n <= 0) return null;
   const kk = Math.max(0, Math.min(n, k));
@@ -55,7 +55,7 @@ export function questionWin(q: { winRate: number | null; samples: number; win?: 
   const enough = typeof w?.enough === 'boolean' ? w.enough : n >= AI_MIN_QUESTION_SAMPLES;
   const why = typeof w?.why === 'string' && w.why ? w.why
     : !n ? 'no answer came back for this question this week'
-    : enough ? '' : `measured on ${n} answer${n === 1 ? '' : 's'} only — a rate needs ${AI_MIN_QUESTION_SAMPLES} before it says anything`;
+    : enough ? '' : `measured on ${n} answer${n === 1 ? '' : 's'} only; a rate needs ${AI_MIN_QUESTION_SAMPLES} before it says anything`;
   return { rate, samples: n, ci, enough, why };
 }
 
@@ -76,9 +76,9 @@ const pulseEngines = (engines: readonly AiEngine[]) => AI_PULSE_ENGINES.filter((
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
 /**
- * Answers per question per week. Measured when the latest run is given (its 7-day sample over its buyer questions — the engine's own
+ * Answers per question per week. Measured when the latest run is given (its 7-day sample over its buyer questions, the engine's own
  * figure, failed requests and AI Overviews Google did not show already left out); modelled otherwise (one answer per weekly engine per
- * question, six pulse mornings on the fast engines, every request answered — an upper bound, and it says so).
+ * question, six pulse mornings on the fast engines, every request answered, an upper bound, and it says so).
  */
 export function aiSampleRate(o: {
   engines?: readonly AiEngine[];
@@ -106,7 +106,7 @@ export function aiSampleRate(o: {
   }
   return {
     weeklyPerQuestion: wE, pulsePerQuestion: modelPulse, answerRate: 1, basis: 'modelled', pulseBasis: pulseOn ? 'modelled' : 'off',
-    why: `modelled before any run: ${wE} weekly engine${wE === 1 ? '' : 's'}${pulseOn ? ` and ${pE} pulse engine${pE === 1 ? '' : 's'} on ${AI_PULSE_DAYS_PER_WEEK} mornings` : ''}, every request answered — real runs lose some (failed requests, searches with no AI Overview), so the true range is a little wider`,
+    why: `modelled before any run: ${wE} weekly engine${wE === 1 ? '' : 's'}${pulseOn ? ` and ${pE} pulse engine${pE === 1 ? '' : 's'} on ${AI_PULSE_DAYS_PER_WEEK} mornings` : ''}; every request is assumed answered, but real runs lose some (failed requests, searches with no AI Overview), so the true range is a little wider`,
   };
 }
 

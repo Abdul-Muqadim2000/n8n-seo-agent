@@ -99,7 +99,7 @@ describe('ladder status', () => {
     expect(ladderStatus({ ...base, pages: [page({ state: 'waiting', writtenAt: ago(9) }), page()] }).statusText).toContain('waiting to be published');
   });
 
-  it('needs you: a page waiting 7+ days, or the website’s pile-up of waiting pages', () => {
+  it('needs you: a page waiting 7+ days, or the website\'s pile-up of waiting pages', () => {
     const late = ladderStatus({ ...base, pages: [page({ state: 'waiting', writtenAt: ago(9) }), page()] });
     expect(late.status).toBe('needs_you');
     expect(late.statusText).toContain('the oldest for 9 days');
@@ -113,7 +113,7 @@ describe('ladder status', () => {
 });
 
 describe('ladder controls: request schemas', () => {
-  it('one ladder: Auto / Manual and Pause / Resume only — the system’s statuses (won, stuck, queued) are refused', async () => {
+  it('one ladder: Auto / Manual and Pause / Resume only, the system\'s statuses (won, stuck, queued) are refused', async () => {
     const { ladderSettingsSchema } = await import('./schemas');
     expect(ladderSettingsSchema.parse({ mode: 'manual' })).toEqual({ mode: 'manual' });
     expect(ladderSettingsSchema.parse({ status: 'paused', mode: 'auto', extra: 1 })).toEqual({ status: 'paused', mode: 'auto' });

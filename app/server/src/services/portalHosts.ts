@@ -56,14 +56,14 @@ export function reservedHosts(): string[] {
   for (const h of [...ownHosts(), config.portal.cnameTarget].filter(Boolean)) {
     if (!h || h === 'localhost' || /^[\d.:[\]]+$/.test(h)) continue;
     out.add(h);
-    // app.alaventra.app → alaventra.app as well: nobody gets a sibling of the platform's own host
+    // app.alaventra.app -> alaventra.app as well: nobody gets a sibling of the platform's own host
     const parts = h.split('.');
     if (parts.length > 2) out.add(parts.slice(-2).join('.'));
   }
   return [...out];
 }
 
-// ---- host → tenant, cached: every request asks ----
+// ---- host -> tenant, cached: every request asks ----
 type HostEntry = { orgId: string; status: 'verified' | 'lapsed' };
 let cache: { at: number; map: Map<string, HostEntry> } | null = null;
 const CACHE_MS = 30_000;
@@ -98,7 +98,7 @@ export async function classifyHost(raw: string | undefined): Promise<HostClass> 
 
 /**
  * The first hook of every request (pages and API): sets `req.portal` on a verified portal host; refuses a lapsed portal host always,
- * and any unknown host when strict hosts are on — with a plain 421 and nothing of the app, so nobody can serve our sign-in page
+ * and any unknown host when strict hosts are on, with a plain 421 and nothing of the app, so nobody can serve our sign-in page
  * under a name we never verified.
  */
 export async function hostGate(req: FastifyRequest, reply: FastifyReply): Promise<boolean> {

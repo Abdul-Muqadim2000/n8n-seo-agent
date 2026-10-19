@@ -23,13 +23,13 @@ import { Chips, DataGate, FilterChips, MetricSwitch, Kind, Panel, SectionHeading
 import { countBy, diff, fmtMonthShort, lastTwo, plural, sortByDate, timeAxisFormat, urlPath } from './_components/format';
 import { ChartTitle, DashSkeleton, HeroChip, HeroEyebrow } from './_components/visuals';
 
-// v4.10 (n8n/seo-agent/BACKLINKS_SPEC.md): DataForSEO is one source among several — Bing Webmaster Tools, the Search Console export you
-// upload, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, news and web search — and every important link is checked on
+// v4.10 (n8n/seo-agent/BACKLINKS_SPEC.md): DataForSEO is one source among several, Bing Webmaster Tools, the Search Console export you
+// upload, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, news and web search, and every important link is checked on
 // its page by our own crawler: lost means "checked twice and gone", with the reason.
 
 const SOURCE_LABEL: Record<string, string> = { dfs: 'DataForSEO', bing: 'Bing', gsc: 'Search Console', ga4: 'GA4 visits', cc: 'Common Crawl', wiki: 'Wikipedia', hn: 'Hacker News', news: 'News', web: 'Web search', import: 'Upload' };
 const sourceLabel = (s: string) => SOURCE_LABEL[s] ?? titleCase(s);
-const REASON_LABEL: Record<string, string> = { link_removed: 'Link removed', page_gone: 'Page gone', domain_gone: 'Site gone', not_seen: 'Not seen for 4 months', reported_lost: 'Reported lost — checking' };
+const REASON_LABEL: Record<string, string> = { link_removed: 'Link removed', page_gone: 'Page gone', domain_gone: 'Site gone', not_seen: 'Not seen for 4 months', reported_lost: 'Reported lost, being checked' };
 /** How bad a loss is: a removed link or a gone page is serious, a whole site gone critical, not seen for months a warning. */
 const REASON_TONE: Record<string, Tone> = { link_removed: 'serious', page_gone: 'serious', domain_gone: 'critical', not_seen: 'warning', reported_lost: 'neutral' };
 const VERIFY: Record<string, { tone: Tone; label: string }> = {
@@ -53,7 +53,7 @@ export default function BacklinksPage() {
       <PageHeader
         icon={<Link2 />}
         title="Backlinks"
-        description={`Who links to ${site.domain} — from every source we can read, each important link checked on its page — what you lost and why, and the sites worth winning next.`}
+        description={`Who links to ${site.domain}, from every source we can read, with each important link checked on its page. What you lost and why, and the sites worth winning next.`}
         actions={
           <>
             {r?.prospectsCsvFileId && (
@@ -140,8 +140,8 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
         <SummaryHero
           tone="blue"
           eyebrow={<HeroEyebrow tag="Backlinks">{L.mode === 'free' ? `Free-sources check of ${fmtDate(L.checkedAt)} (no DataForSEO, no credits used); changes ${since}.` : `${titleCase(L.mode || 'light')} check of ${fmtDate(L.checkedAt)}; changes ${since}.`}</HeroEyebrow>}
-          title={`${compactNumber(referring)} referring ${referring === 1 ? 'site' : 'sites'} — ${compactNumber(L.newLinks)} new, ${compactNumber(L.lostLinks)} lost since the last check`}
-          description={union != null ? `Merged from every source we can read, each important link checked on its page. DataForSEO alone sees ${D ? compactNumber(D.referringDomains) : '–'}${D && D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}.` : `${compactNumber(D?.referringDomainsNofollow ?? 0)} of them nofollow only.`}
+          title={`${compactNumber(referring)} referring ${referring === 1 ? 'site' : 'sites'}: ${compactNumber(L.newLinks)} new, ${compactNumber(L.lostLinks)} lost since the last check`}
+          description={union != null ? `Merged from every source we can read, each important link checked on its page. DataForSEO alone sees ${D ? compactNumber(D.referringDomains) : '-'}${D && D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}.` : `${compactNumber(D?.referringDomainsNofollow ?? 0)} of them nofollow only.`}
           actions={
             Object.keys(perSource).length > 0 ? (
               <>
@@ -163,11 +163,11 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
                 value={<CountUp value={referring} format={compactNumber} />}
                 delta={<Delta value={union != null ? diff(union, prevUnion) : diff(D?.referringDomains, DP?.referringDomains)} suffix="" digits={0} />}
                 trend={<Sparkline data={sparkUnion} dataKey="v" />}
-                hint={union != null ? `all sources · DataForSEO: ${D ? compactNumber(D.referringDomains) : '–'}${D && D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}` : `${compactNumber(D?.referringDomainsNofollow ?? 0)} nofollow only`}
+                hint={union != null ? `all sources · DataForSEO: ${D ? compactNumber(D.referringDomains) : '-'}${D && D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}` : `${compactNumber(D?.referringDomainsNofollow ?? 0)} nofollow only`}
               />
-              <HeroStat label="Best links" info="SEO value 50+ (authority, relevance, placement, follow, checked live)" value={L.bestLinks != null ? <CountUp value={L.bestLinks} /> : '–'} hint="SEO value 50+ (authority, relevance, placement, follow, checked live)" />
-              <HeroStat label="Checked on the page" value={L.verifiedLive != null ? <CountUp value={L.verifiedLive} /> : '–'} hint={L.atRisk ? `${L.atRisk} missed once — checked again next week` : 'links our crawler found where they should be'} />
-              <HeroStat label="Visits from links" value={L.referralVisits != null ? <CountUp value={L.referralVisits} format={compactNumber} /> : '–'} hint="GA4 referrals, past year" />
+              <HeroStat label="Best links" info="SEO value 50+ (authority, relevance, placement, follow, checked live)" value={L.bestLinks != null ? <CountUp value={L.bestLinks} /> : '-'} hint="SEO value 50+ (authority, relevance, placement, follow, checked live)" />
+              <HeroStat label="Checked on the page" value={L.verifiedLive != null ? <CountUp value={L.verifiedLive} /> : '-'} hint={L.atRisk ? `${L.atRisk} missed once and will be checked again next week` : 'links our crawler found where they should be'} />
+              <HeroStat label="Visits from links" value={L.referralVisits != null ? <CountUp value={L.referralVisits} format={compactNumber} /> : '-'} hint="GA4 referrals, past year" />
             </>
           }
         />
@@ -179,16 +179,16 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
             label="Spam score"
             icon={<ShieldAlert />}
             tone={D ? (D.spamScore >= 50 ? 'serious' : D.spamScore >= 30 ? 'warning' : 'good') : 'blue'}
-            info="DataForSEO’s spam score of your link profile, 0–100: lower is better"
+            info="DataForSEO's spam score of your link profile, 0-100: lower is better"
             visual={D ? <ScoreRing label="Spam score" value={D.spamScore} tone={D.spamScore >= 50 ? 'critical' : D.spamScore >= 30 ? 'warning' : 'good'} display={<CountUp value={D.spamScore} />} suffix="/100" size={68} /> : undefined}
-            value="–"
+            value="-"
             delta={<Delta value={diff(D?.spamScore, DP?.spamScore)} suffix="" digits={0} upIsGood={false} />}
             meta={
               D ? (
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   {D.spamScore >= 50 ? <StatusBadge tone="serious">High</StatusBadge> : D.spamScore >= 30 ? <StatusBadge tone="warning">Elevated</StatusBadge> : <StatusBadge tone="good">Low</StatusBadge>}
                   <span>
-                    {D.spammyNew} spammy new {D.spammyNew === 1 ? 'link' : 'links'} · DataForSEO, 0–100{D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}
+                    {D.spammyNew} spammy new {D.spammyNew === 1 ? 'link' : 'links'} · DataForSEO, 0-100{D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}
                   </span>
                 </span>
               ) : (
@@ -202,7 +202,7 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
             tone={lostRefs ? 'serious' : 'blue'}
             info="Lost means checked twice on the page and gone, with the reason"
             value={<CountUp value={lostRefs} />}
-            meta={atRiskRefs ? `${atRiskRefs} more missed once — checked again next week` : lostRefs ? 'in the link ledger: each checked twice on its page and gone' : 'every link checked twice is still there'}
+            meta={atRiskRefs ? `${atRiskRefs} more missed once and will be checked again next week` : lostRefs ? 'in the link ledger: each checked twice on its page and gone' : 'every link checked twice is still there'}
           />
           <MetricCard label="New links" icon={<Sparkles />} value={<CountUp value={d.latest?.new.length ?? 0} />} meta={L.newLinks > (d.latest?.new.length ?? 0) ? `listed in the New tab · ${compactNumber(L.newLinks)} new in all since the previous check` : 'since the previous check'} />
           <MetricCard label="Prospects to contact" icon={<Send />} info="Scored by value × likelihood; drafted outreach e-mails are in the pipeline below" value={<CountUp value={openProspects} />} meta={`${plural(d.prospects.length, 'prospect')} in the outreach pipeline`} />
@@ -216,14 +216,14 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
           icon={<Link2 />}
           title="Links"
           description="Every referring site with its SEO, visits and brand value, and what our crawler found on the page"
-          info="SEO value is what a link passes in search, visits what it sends, brand the earned media and sources AI cites — each 0–100."
+          info="SEO value is what a link passes in search, visits what it sends, brand the earned media and sources AI cites. Each is scored 0-100."
         />
         <Card className="px-4 pb-4">
           {live.length > 0 && (
             <div className="border-b border-line px-1 pt-4 pb-4">
               <div className="mb-2 flex items-center gap-1 text-xs font-medium text-ink-2">
                 SEO value of your live links
-                <InfoTip label="About link value">Every live link scored 0–100 for what it passes in search: authority, relevance, placement and follow, checked on the page.</InfoTip>
+                <InfoTip label="About link value">Every live link scored 0-100 for what it passes in search: authority, relevance, placement and follow, checked on the page.</InfoTip>
               </div>
               <DistributionBar label="Live links by SEO value" segments={valueSegments(live)} />
             </div>
@@ -231,7 +231,7 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
           <LinkTabs d={d} live={live} />
           {drShown && (
             <p className="mt-3 text-xs text-ink-3">
-              DR: <a className="underline" href="https://ahrefs.com/" target="_blank" rel="noopener noreferrer">Domain Rating by Ahrefs</a>. Authority: DataForSEO rank, 0–1,000.
+              DR: <a className="underline" href="https://ahrefs.com/" target="_blank" rel="noopener noreferrer">Domain Rating by Ahrefs</a>. Authority: DataForSEO rank, 0-1,000.
             </p>
           )}
         </Card>
@@ -273,8 +273,8 @@ function valueSegments(rows: BacklinkRef[]) {
   const n = (lo: number, hi: number) => rows.filter((x) => x.seoValue >= lo && x.seoValue < hi).length;
   return [
     { label: '75+', value: n(75, 1000), color: SEQ[5] },
-    { label: '50–74', value: n(50, 75), color: SEQ[3] },
-    { label: '25–49', value: n(25, 50), color: SEQ[1] },
+    { label: '50-74', value: n(50, 75), color: SEQ[3] },
+    { label: '25-49', value: n(25, 50), color: SEQ[1] },
     { label: 'Under 25', value: n(-1000, 25), color: 'var(--surface-3)' },
   ];
 }
@@ -292,7 +292,7 @@ function Coverage({ d }: { d: BacklinksData }) {
     .map((k) => ({ label: sourceLabel(k), value: c?.perSource[k] ?? 0, sub: c?.onlyIn[k] ? `${c.onlyIn[k]} only here` : undefined }));
   const status: { name: string; ok: boolean | null; text: string; guide?: string }[] = [
     { name: 'Bing Webmaster Tools', guide: 'bing-webmaster', ok: st ? (st.bing.enabled ? st.bing.connected : null) : null, text: !st ? 'after the next full check' : !st.bing.enabled ? 'not set up on this server (a free API key)' : st.bing.connected ? `${st.bing.links} links read` : st.bing.inAccount === false ? 'add the site in Bing Webmaster Tools (import it from Search Console)' : st.bing.error || 'not connected' },
-    { name: 'Search Console export', guide: 'search-console-links-export', ok: gscUpload ? true : false, text: gscUpload ? `${gscUpload.rows} rows, uploaded ${fmtDate(gscUpload.importedAt)}` : 'not uploaded — Google’s own sample of your links' },
+    { name: 'Search Console export', guide: 'search-console-links-export', ok: gscUpload ? true : false, text: gscUpload ? `${gscUpload.rows} rows, uploaded ${fmtDate(gscUpload.importedAt)}` : 'not uploaded (Google\'s own sample of your links)' },
     { name: 'GA4 referrals', guide: 'ga4-access', ok: st ? st.ga4.connected : null, text: !st ? 'after the next check' : st.ga4.connected ? `${compactNumber(st.ga4.visits)} visits from ${st.ga4.sources} sites` : st.ga4.property ? st.ga4.error || 'no answer' : 'connect GA4 in tracking settings' },
     { name: 'Common Crawl web graph', ok: d.linkGraph ? true : null, text: d.linkGraph ? `release ${d.linkGraph.release}` : 'the monthly job has not written this site yet' },
   ];
@@ -301,7 +301,7 @@ function Coverage({ d }: { d: BacklinksData }) {
       <SectionHeading
         icon={<Network />}
         title="Where your links come from"
-        description="No index sees every link. Merging the free sources with DataForSEO — and measuring against Google’s own sample — shows how complete the picture is."
+        description="No index sees every link. Merging the free sources with DataForSEO and measuring against Google's own sample shows how complete the picture is."
         actions={
           can('member') ? (
             <Button variant="secondary" size="sm" icon={<FileUp className="size-4" />} onClick={() => setUpload(true)}>
@@ -315,7 +315,7 @@ function Coverage({ d }: { d: BacklinksData }) {
           {c ? <ShareBars items={rows} valueFormat={(v: number) => String(v)} /> : <p className="text-[13px] text-ink-3">Run a backlink check to merge the sources.</p>}
           {c && c.gscSample > 0 && (
             <p className="mt-4 text-[13px] text-ink-2">
-              Of the <b>{c.gscSample}</b> sites in Google’s own sample, DataForSEO sees <b>{c.dfsSeesGoogle ?? 0}%</b>; another source confirms {c.allSeeGoogle ?? 0}%.
+              Of the <b>{c.gscSample}</b> sites in Google's own sample, DataForSEO sees <b>{c.dfsSeesGoogle ?? 0}%</b>; another source confirms {c.allSeeGoogle ?? 0}%.
             </p>
           )}
           {c && <p className="mt-2 text-xs text-ink-3">{c.verified} {c.verified === 1 ? 'link' : 'links'} checked on their page{c.blocked ? ` · ${c.blocked} pages block bots (never counted as lost)` : ''}{c.social ? ` · ${c.social} social profiles (not counted)` : ''}</p>}
@@ -372,7 +372,7 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
       open
       onOpenChange={(o) => !o && onClose()}
       title="Add Search Console links"
-      description="Google’s API has no links, so its sample comes in as a file. The monitor merges it and checks every page itself."
+      description="Google's API has no links, so its sample comes in as a file. The monitor merges it and checks every page itself."
       footer={
         <Button onClick={send} loading={imp.isPending} icon={<FileUp className="size-4" />}>
           Upload
@@ -381,7 +381,7 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
     >
       <ol className="mb-3 list-decimal space-y-1 pl-5 text-[13px] text-ink-2">
         <li>
-          In <ExternalLink href="https://search.google.com/search-console/links">Search Console → Links</ExternalLink>, choose <b>Export external links → Latest links</b> (or More sample links), then <b>Download CSV</b>.
+          In <ExternalLink href="https://search.google.com/search-console/links">Search Console &gt; Links</ExternalLink>, choose <b>Export external links &gt; Latest links</b> (or More sample links), then <b>Download CSV</b>.
         </li>
         <li>Upload the file here. A new upload of the same kind replaces the old one.</li>
       </ol>
@@ -505,14 +505,14 @@ function RefTable({ rows, empty, search, sortKey = 'seo' }: { rows: BacklinkRef[
       align: 'right',
       sortValue: (x) => x.seoValue,
       cell: (x) => (
-        <span className="inline-flex items-center gap-1.5 whitespace-nowrap tabular" title="SEO / visits / brand value, 0–100">
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap tabular" title="SEO / visits / brand value, 0-100">
           <span className={cn('inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-full px-1.5 text-xs font-semibold', x.seoValue >= 75 ? 'bg-accent text-accent-ink' : x.seoValue >= 50 ? 'bg-accent-soft text-accent-text ring-1 ring-accent/25' : 'bg-surface-2 text-ink')}>{x.seoValue}</span>
           <span className="text-ink-3">· {x.referralValue} · {x.brandValue}</span>
         </span>
       ),
     },
-    { key: 'type', header: 'Link', hideOnMobile: true, sortValue: (x) => x.linkType, cell: (x) => <span className="whitespace-nowrap text-[13px] text-ink-2">{[x.linkType && titleCase(x.linkType.replace('_', ' ')), x.rel && x.rel !== 'follow' ? x.rel : '', x.placement && x.placement !== 'body' ? x.placement : ''].filter(Boolean).join(' · ') || '—'}</span> },
-    { key: 'anchor', header: 'Anchor', hideOnMobile: true, sortValue: (x) => x.anchor, cell: (x) => <span className="block max-w-[12rem] truncate text-[13px] text-ink-2" title={x.anchor}>{x.anchor || <span className="text-ink-3">—</span>}</span> },
+    { key: 'type', header: 'Link', hideOnMobile: true, sortValue: (x) => x.linkType, cell: (x) => <span className="whitespace-nowrap text-[13px] text-ink-2">{[x.linkType && titleCase(x.linkType.replace('_', ' ')), x.rel && x.rel !== 'follow' ? x.rel : '', x.placement && x.placement !== 'body' ? x.placement : ''].filter(Boolean).join(' · ') || '-'}</span> },
+    { key: 'anchor', header: 'Anchor', hideOnMobile: true, sortValue: (x) => x.anchor, cell: (x) => <span className="block max-w-[12rem] truncate text-[13px] text-ink-2" title={x.anchor}>{x.anchor || <span className="text-ink-3">-</span>}</span> },
     {
       key: 'authority',
       header: 'Authority',
@@ -520,12 +520,12 @@ function RefTable({ rows, empty, search, sortKey = 'seo' }: { rows: BacklinkRef[
       sortValue: (x) => x.dr ?? (x.authority ? x.authority / 10 : x.ccRank ? Math.max(0, 70 - 10 * Math.log10(x.ccRank)) : 0),
       cell: (x) => (
         <span className="whitespace-nowrap tabular" title={x.ccRank ? `Common Crawl: #${x.ccRank.toLocaleString('en-GB')} of ~133M domains` : undefined}>
-          {x.authority || (x.ccRank ? `CC #${compactNumber(x.ccRank)}` : '–')}
+          {x.authority || (x.ccRank ? `CC #${compactNumber(x.ccRank)}` : '-')}
           {x.dr != null && <span className="text-ink-3"> · DR {x.dr}</span>}
         </span>
       ),
     },
-    { key: 'visits', header: 'Visits', align: 'right', hideOnMobile: true, sortValue: (x) => x.visits, cell: (x) => (x.visits ? compactNumber(x.visits) : '–') },
+    { key: 'visits', header: 'Visits', align: 'right', hideOnMobile: true, sortValue: (x) => x.visits, cell: (x) => (x.visits ? compactNumber(x.visits) : '-') },
     {
       key: 'check',
       header: 'Check',
@@ -546,7 +546,7 @@ function LostTable({ rows }: { rows: BacklinkRef[] }) {
     { key: 'from', header: 'From', sortValue: (x) => x.refDomain, cell: (x) => <ExternalLink href={x.fromUrl || `https://${x.refDomain}`} className="font-medium">{x.refDomain}</ExternalLink> },
     { key: 'reason', header: 'Why', sortValue: (x) => x.lostReason, cell: (x) => <StatusBadge tone={REASON_TONE[x.lostReason] ?? 'serious'}>{REASON_LABEL[x.lostReason] ?? (x.lostReason || 'Lost')}</StatusBadge> },
     { key: 'to', header: 'Pointed to', hideOnMobile: true, cell: (x) => <span className="text-[13px] text-ink-2">{urlPath(x.toUrl)}</span> },
-    { key: 'authority', header: 'Authority', align: 'right', sortValue: (x) => x.authority, cell: (x) => x.authority || '–' },
+    { key: 'authority', header: 'Authority', align: 'right', sortValue: (x) => x.authority, cell: (x) => x.authority || '-' },
     { key: 'when', header: 'Lost', sortValue: (x) => x.lostAt, cell: (x) => <span className="whitespace-nowrap text-xs text-ink-3">{fmtDate(x.lostAt)}</span> },
   ];
   return <DataTable rows={rows} columns={columns} rowKey={(x) => x.refDomain} initialSort={{ key: 'when', dir: 'desc' }} dense pageSize={10} empty="No link lost: every link checked twice is still there." />;
@@ -583,7 +583,7 @@ function PagesPanel({ pages, reclaim }: { pages: NonNullable<BacklinksData['late
     <Panel title="Your most-linked pages" icon={<FileText />} description="Where the links land; a linked page that no longer loads loses them">
       {reclaim.length > 0 && (
         <Callout tone="warning" className="mb-3">
-          {reclaim.map((r) => `${urlPath(r.brokenUrl)} (${r.links} links) → 301 to ${urlPath(r.redirectTo)}`).join(' · ')}
+          {reclaim.map((r) => `${urlPath(r.brokenUrl)} (${r.links} links) redirected with a 301 to ${urlPath(r.redirectTo)}`).join(' · ')}
         </Callout>
       )}
       {pages.length ? (
@@ -617,7 +617,7 @@ function Opportunities({ d }: { d: BacklinksData }) {
   const tabs = [
     { key: 'mentions', label: 'Unlinked mentions', count: mentions.length },
     { key: 'lists', label: '"Best of" lists', count: lists.filter((l) => !l.linked).length },
-    { key: 'compnew', label: 'Competitors’ new links', count: compNew.length },
+    { key: 'compnew', label: 'Competitors\' new links', count: compNew.length },
     { key: 'gap', label: 'Link gap', count: gap.length },
   ];
   return (
@@ -645,7 +645,7 @@ function Opportunities({ d }: { d: BacklinksData }) {
                         <span className="text-xs text-ink-3">{m.domain}</span>
                         {m.verified ? <StatusBadge tone="good">Checked: names you, no link</StatusBadge> : <Badge>Not checked</Badge>}
                       </div>
-                      {m.context && <p className="mt-1 line-clamp-2 text-xs text-ink-3">…{m.context}…</p>}
+                      {m.context && <p className="mt-1 line-clamp-2 text-xs text-ink-3">...{m.context}...</p>}
                     </li>
                   ))}
                 </ul>
@@ -683,7 +683,7 @@ function Opportunities({ d }: { d: BacklinksData }) {
                   { key: 'site', header: 'Site', sortValue: (c) => c.domain, cell: (c) => <ExternalLink href={c.url || `https://${c.domain}`} className="font-medium">{c.domain}</ExternalLink> },
                   { key: 'comp', header: 'Linked to', cell: (c) => <span className="text-[13px] text-ink-2">{c.competitor}</span> },
                   { key: 'when', header: 'When', sortValue: (c) => c.firstSeen, cell: (c) => <span className="text-xs text-ink-3">{fmtDate(c.firstSeen)}</span> },
-                  { key: 'auth', header: 'Authority', align: 'right', sortValue: (c) => c.domainRank, cell: (c) => c.domainRank || '–' },
+                  { key: 'auth', header: 'Authority', align: 'right', sortValue: (c) => c.domainRank, cell: (c) => c.domainRank || '-' },
                 ]}
               />
             </TabPanel>
@@ -787,9 +787,9 @@ function LinkTable({ rows, empty }: { rows: BacklinkLink[]; empty: string }) {
     { key: 'anchor', header: 'Anchor', hideOnMobile: true, sortValue: (l) => l.anchor, cell: (l) => <span className="block max-w-[14rem] truncate text-[13px] text-ink-2" title={l.anchor}>{l.anchor || <span className="text-ink-3">(no text)</span>}</span> },
     { key: 'to', header: 'To', hideOnMobile: true, sortValue: (l) => l.toUrl, cell: (l) => <span className="text-[13px] text-ink-2">{urlPath(l.toUrl)}</span> },
     { key: 'follow', header: 'Type', sortValue: (l) => (l.dofollow ? 1 : 0), cell: (l) => <Kind>{l.dofollow ? 'dofollow' : 'nofollow'}</Kind> },
-    { key: 'rank', header: 'Authority', align: 'right', sortValue: (l) => l.domainRank, cell: (l) => l.domainRank || '–' },
+    { key: 'rank', header: 'Authority', align: 'right', sortValue: (l) => l.domainRank, cell: (l) => l.domainRank || '-' },
     { key: 'spam', header: 'Spam', align: 'right', sortValue: (l) => l.spam, cell: (l) => (l.spam >= 50 ? <StatusBadge tone="serious">{l.spam}</StatusBadge> : l.spam) },
-    { key: 'seen', header: 'Seen', hideOnMobile: true, sortValue: (l) => l.lastSeen, cell: (l) => <span className="whitespace-nowrap text-xs text-ink-3">{fmtDate(l.firstSeen)} → {fmtDate(l.lastSeen)}</span> },
+    { key: 'seen', header: 'Seen', hideOnMobile: true, sortValue: (l) => l.lastSeen, cell: (l) => <span className="whitespace-nowrap text-xs text-ink-3">{fmtDate(l.firstSeen)} to {fmtDate(l.lastSeen)}</span> },
   ];
   return <DataTable rows={rows} columns={columns} rowKey={(l, i) => `${l.fromUrl}-${i}`} initialSort={{ key: 'rank', dir: 'desc' }} dense pageSize={10} empty={empty} />;
 }
@@ -798,7 +798,7 @@ type Gap = NonNullable<BacklinksData['report']>['gap'][number];
 function GapTable({ rows }: { rows: Gap[] }) {
   const columns: Column<Gap>[] = [
     { key: 'domain', header: 'Domain', sortValue: (g) => g.domain, cell: (g) => <ExternalLink href={`https://${g.domain}`} className="font-medium">{g.domain}</ExternalLink> },
-    { key: 'rank', header: 'Authority', align: 'right', sortValue: (g) => g.rank, cell: (g) => g.rank || '–' },
+    { key: 'rank', header: 'Authority', align: 'right', sortValue: (g) => g.rank, cell: (g) => g.rank || '-' },
     { key: 'spam', header: 'Spam', align: 'right', sortValue: (g) => g.spam, cell: (g) => (g.spam >= 50 ? <StatusBadge tone="serious">{g.spam}</StatusBadge> : g.spam) },
     { key: 'linksTo', header: 'Links to', cell: (g) => <Chips items={g.linksTo} max={3} /> },
     { key: 'source', header: 'Found by', hideOnMobile: true, sortValue: (g) => g.source, cell: (g) => <Kind>{g.source === 'both' ? 'DataForSEO + Common Crawl' : g.source === 'cc' ? 'Common Crawl' : 'DataForSEO'}</Kind> },
@@ -1010,7 +1010,7 @@ function ProspectDialog({ p, onClose }: { p: Prospect; onClose: () => void }) {
       />
       {bodyText ? (
         <div className="space-y-3">
-          {follow && <Callout tone="info">No reply yet: follow-up {p.followupStep} of 2 is drafted (same thread). The first e-mail was “{p.outreachSubject}”.</Callout>}
+          {follow && <Callout tone="info">No reply yet: follow-up {p.followupStep} of 2 is drafted (same thread). The first e-mail was "{p.outreachSubject}".</Callout>}
           <div>
             <div className="mb-1 flex items-center justify-between">
               <span className="text-[13px] font-medium text-ink">Subject</span>
@@ -1033,7 +1033,7 @@ function ProspectDialog({ p, onClose }: { p: Prospect; onClose: () => void }) {
             </div>
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-surface-2 px-3 py-2 font-sans text-sm leading-relaxed text-ink-2">{bodyText}</pre>
           </div>
-          <p className="text-xs text-ink-3">Drafted by the engine — read it, check the contact and send it from your own mailbox. Mark it contacted: follow-ups are drafted after 7 and 14 days without a link.</p>
+          <p className="text-xs text-ink-3">Drafted by the engine. Read it, check the contact and send it from your own mailbox. Mark it contacted: follow-ups are drafted after 7 and 14 days without a link.</p>
         </div>
       ) : (
         <p className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-ink-2">No outreach e-mail for this prospect; reclaims are fixed on your own site with a 301 redirect.</p>

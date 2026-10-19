@@ -152,7 +152,7 @@ function AgencyBrandingTab() {
         <CardBody className="space-y-5">
           <SwitchRow
             title="White-label"
-            description="On: your clients see your name, logo and colour, and not ours. Off: they see the app as it is, with your company’s name."
+            description="On: your clients see your name, logo and colour, and not ours. Off: they see the app as it is, with your company's name."
             checked={draft.whiteLabel}
             disabled={!admin}
             onCheckedChange={(v) => set({ whiteLabel: v })}
@@ -176,8 +176,8 @@ function AgencyBrandingTab() {
             </Field>
           </div>
           <SwitchRow
-            title="Show “Powered by Alaventra”"
-            description="A small line in the portal’s footer and on the sign-in page. Off by default."
+            title="Show &quot;Powered by Alaventra&quot;"
+            description="A small line in the portal's footer and on the sign-in page. Off by default."
             checked={draft.poweredBy}
             disabled={!admin}
             onCheckedChange={(v) => set({ poweredBy: v })}
@@ -194,7 +194,7 @@ function AgencyBrandingTab() {
       <SettingsCard icon={<ShieldCheck />} title="Preview and contrast" description="How the portal draws your brand, and the contrast every text keeps.">
         <CardBody className="space-y-4">
           <BrandPreview name={name} logoUrl={draft.logoUrl || null} logoDarkUrl={draft.logoDarkUrl || null} accent={/^#[0-9a-f]{6}$/i.test(draft.accent) ? draft.accent : '#2e4bff'} />
-          {/^#[0-9a-f]{6}$/i.test(draft.accent) ? <ContrastReport accent={draft.accent} /> : <p className="text-[13px] text-ink-3">Without a colour of your own the portal keeps the app’s blue.</p>}
+          {/^#[0-9a-f]{6}$/i.test(draft.accent) ? <ContrastReport accent={draft.accent} /> : <p className="text-[13px] text-ink-3">Without a colour of your own the portal keeps the app's blue.</p>}
         </CardBody>
       </SettingsCard>
     </div>
@@ -230,26 +230,26 @@ function ClientBrandingTab() {
         <CardBody>
           <SwitchRow
             title="Client approval required"
-            description="A page cannot be published live, and an outreach draft cannot be approved for sending, until the client’s approver has approved it under Approvals."
+            description="A page cannot be published live, and an outreach draft cannot be approved for sending, until the client's approver has approved it under Approvals."
             checked={org.clientApproval}
             disabled={!admin || settings.isPending}
             onCheckedChange={(v) => settings.mutate({ clientApproval: v }, { onSuccess: () => toast.success(v ? 'Client approval is now required' : 'Client approval is no longer required'), onError: (e) => toast.error(errorMessage(e)) })}
           />
         </CardBody>
       </SettingsCard>
-      <SettingsCard icon={<Palette />} title="This client’s brand" description="Leave a field empty to use the agency’s." actions={<GuideButton id="portal-branding" />}>
+      <SettingsCard icon={<Palette />} title="This client's brand" description="Leave a field empty to use the agency's." actions={<GuideButton id="portal-branding" />}>
         <CardBody className="space-y-4">
-          {!agencyBrand && <Callout tone="info">White-label is off for your agency, so this client sees the app as it is. Turn it on under the agency’s Company settings → Branding.</Callout>}
+          {!agencyBrand && <Callout tone="info">White-label is off for your agency, so this client sees the app as it is. Turn it on under the agency's Company settings &gt; Branding.</Callout>}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Product name" error={errors.productName} optional hint={agencyBrand ? `Default: ${agencyBrand.name}` : undefined}>
               {(p) => <Input {...p} value={draft.productName} onChange={(e) => set({ productName: e.target.value })} disabled={!admin} maxLength={60} />}
             </Field>
             <ColourField value={draft.accent} onChange={(v) => set({ accent: v })} error={errors.accent} />
             <Field label="Logo address" error={errors.logoUrl} optional>
-              {(p) => <Input {...p} value={draft.logoUrl} onChange={(e) => set({ logoUrl: e.target.value })} placeholder="https://…" disabled={!admin} inputMode="url" />}
+              {(p) => <Input {...p} value={draft.logoUrl} onChange={(e) => set({ logoUrl: e.target.value })} placeholder="https://..." disabled={!admin} inputMode="url" />}
             </Field>
             <Field label="Logo for dark backgrounds" error={errors.logoDarkUrl} optional>
-              {(p) => <Input {...p} value={draft.logoDarkUrl} onChange={(e) => set({ logoDarkUrl: e.target.value })} placeholder="https://…" disabled={!admin} inputMode="url" />}
+              {(p) => <Input {...p} value={draft.logoDarkUrl} onChange={(e) => set({ logoDarkUrl: e.target.value })} placeholder="https://..." disabled={!admin} inputMode="url" />}
             </Field>
           </div>
           <BrandPreview
@@ -446,10 +446,10 @@ export function ClientMailTab() {
             <Field label="Sender name" hint="Default: your product name." optional>
               {(p) => <Input {...p} value={draft.senderName} onChange={(e) => setDraft((d) => ({ ...d, senderName: e.target.value }))} disabled={!admin} maxLength={80} />}
             </Field>
-            <Field label="Reply-to" hint="Where your clients’ replies go. Default: the support e-mail of your brand." optional>
+            <Field label="Reply-to" hint="Where your clients' replies go. Default: the support e-mail of your brand." optional>
               {(p) => <Input {...p} type="email" value={draft.replyTo} onChange={(e) => setDraft((d) => ({ ...d, replyTo: e.target.value }))} disabled={!admin} placeholder="team@youragency.com" />}
             </Field>
-            <Field label="Send from" hint={v.mailboxes.length ? 'Your own address, once its SPF and DKIM verify.' : 'Connect a mailbox first (Company settings → Mailboxes).'}>
+            <Field label="Send from" hint={v.mailboxes.length ? 'Your own address, once its SPF and DKIM verify.' : 'Connect a mailbox first (Company settings > Mailboxes).'}>
               {(p) => (
                 <Select {...p} value={draft.fromMailboxId ?? ''} onChange={(e) => setDraft((d) => ({ ...d, fromMailboxId: e.target.value || null }))} disabled={!admin}>
                   <option value="">Our address, with your sender name</option>

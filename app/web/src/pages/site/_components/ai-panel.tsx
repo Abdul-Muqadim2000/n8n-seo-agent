@@ -1,8 +1,8 @@
-// G6 (2026-10-18, n8n/seo-agent/AI_VISIBILITY_SPEC.md §10): the AI question panel at enterprise scale on the AI visibility page —
+// G6 (2026-10-18, n8n/seo-agent/AI_VISIBILITY_SPEC.md §10): the AI question panel at enterprise scale on the AI visibility page,
 //  * SegmentsSection: how often AI names the business per topic cluster, buyer role, market, engine and funnel stage, each rate with its
 //    95% range (a whisker over the bar), "too few answers" instead of a rate under 12 answers, share of voice, and the moves the
 //    Benjamini-Hochberg screen called real; plus how precise this panel is (measured and achievable half-widths).
-//  * PanelManager: up to 500 questions — filters by cluster / buyer role / market / status / an engine's result, add (one per line, with
+//  * PanelManager: up to 500 questions, filters by cluster / buyer role / market / status / an engine's result, add (one per line, with
 //    a role / cluster / market for all of them), import a CSV, edit, re-word, switch off / on, pin / unpin, and track the real AI
 //    questions the engine suggests. Every change goes through Site Admin `ai_prompts` (the engine's AI_Prompt_Rows_Admin.js).
 import { useMemo, useRef, useState, type ReactNode } from 'react';
@@ -41,8 +41,8 @@ function RangeBars({ rows, dim }: { rows: AiSegment[]; dim: string }) {
     <ul className="space-y-1" aria-label="Named in, with the 95% range">
       {rows.map((s) => {
         const tip = s.enough && s.rate != null && s.ci
-          ? `${segLabel(dim, s.key)}: named in ${s.rate}% of ${s.n} answers (95% range ${s.ci[0]}–${s.ci[1]}%)${s.sov != null ? `, ${s.sov}% share of voice` : ''}${s.leader ? `; named most instead: ${s.leader}` : ''}`
-          : `${segLabel(dim, s.key)}: ${s.n} answers — too few for a rate (${AI_SEGMENT_MIN} needed)`;
+          ? `${segLabel(dim, s.key)}: named in ${s.rate}% of ${s.n} answers (95% range ${s.ci[0]}-${s.ci[1]}%)${s.sov != null ? `, ${s.sov}% share of voice` : ''}${s.leader ? `; named most instead: ${s.leader}` : ''}`
+          : `${segLabel(dim, s.key)}: ${s.n} answers, which is too few for a rate (${AI_SEGMENT_MIN} needed)`;
         return (
           <li key={s.key} tabIndex={0} title={tip} aria-label={tip}
             className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-lg px-2 py-1.5 text-sm outline-none transition-colors duration-150 ease-brand hover:bg-surface-2/60 focus-visible:ring-2 focus-visible:ring-accent sm:grid-cols-[minmax(0,12rem)_1fr_15.5rem]">
@@ -61,7 +61,7 @@ function RangeBars({ rows, dim }: { rows: AiSegment[]; dim: string }) {
             <span className="order-2 whitespace-nowrap text-right tabular text-[13px] text-ink sm:order-3">
               {s.enough && s.rate != null ? (
                 <>
-                  {s.rate}%<span className="ml-1 text-xs text-ink-3">{s.ci ? `${s.ci[0]}–${s.ci[1]}` : ''} · {compactNumber(s.n)}</span>
+                  {s.rate}%<span className="ml-1 text-xs text-ink-3">{s.ci ? `${s.ci[0]}-${s.ci[1]}` : ''} · {compactNumber(s.n)}</span>
                   {s.significant && s.delta != null && (
                     <Badge tone={s.delta > 0 ? 'good' : 'serious'} className="ml-1.5" icon={s.delta > 0 ? <ArrowUpRight className="size-3" aria-hidden /> : <ArrowDownRight className="size-3" aria-hidden />}>
                       {s.delta > 0 ? '+' : ''}{s.delta} pts
@@ -92,17 +92,17 @@ export function SegmentsSection({ segments, panel }: { segments: AiSegments | nu
     { key: 'q', header: 'Questions', align: 'right', sortValue: (s) => s.questions, cell: (s) => <span className="tabular">{s.questions}</span> },
     { key: 'n', header: 'Answers', align: 'right', sortValue: (s) => s.n, cell: (s) => <span className="tabular">{compactNumber(s.n)}</span> },
     { key: 'rate', header: 'Named in', align: 'right', sortValue: (s) => (s.enough ? s.rate : -1), cell: (s) => (s.enough && s.rate != null ? <span className="tabular">{s.rate}%</span> : <span className="text-xs text-ink-3">too few answers</span>) },
-    { key: 'ci', header: '95% range', align: 'right', hideOnMobile: true, cell: (s) => <span className="tabular text-ink-2">{s.enough && s.ci ? `${s.ci[0]}–${s.ci[1]}%` : '–'}</span> },
-    { key: 'sov', header: 'Share of voice', align: 'right', hideOnMobile: true, sortValue: (s) => s.sov ?? -1, cell: (s) => <span className="tabular">{s.sov != null ? `${s.sov}%` : '–'}</span> },
-    { key: 'leader', header: 'Named most instead', hideOnMobile: true, cell: (s) => <span className="text-ink-2">{s.leader || '–'}</span> },
-    { key: 'chg', header: 'Change', align: 'right', sortValue: (s) => s.delta ?? 0, cell: (s) => (s.delta == null ? <span className="text-ink-3">–</span> : <span className={cn('tabular', s.significant ? 'font-semibold text-ink' : 'text-ink-3')}>{s.delta > 0 ? '+' : ''}{s.delta} pts{s.significant ? '' : ' · noise'}</span>) },
+    { key: 'ci', header: '95% range', align: 'right', hideOnMobile: true, cell: (s) => <span className="tabular text-ink-2">{s.enough && s.ci ? `${s.ci[0]}-${s.ci[1]}%` : '-'}</span> },
+    { key: 'sov', header: 'Share of voice', align: 'right', hideOnMobile: true, sortValue: (s) => s.sov ?? -1, cell: (s) => <span className="tabular">{s.sov != null ? `${s.sov}%` : '-'}</span> },
+    { key: 'leader', header: 'Named most instead', hideOnMobile: true, cell: (s) => <span className="text-ink-2">{s.leader || '-'}</span> },
+    { key: 'chg', header: 'Change', align: 'right', sortValue: (s) => s.delta ?? 0, cell: (s) => (s.delta == null ? <span className="text-ink-3">-</span> : <span className={cn('tabular', s.significant ? 'font-semibold text-ink' : 'text-ink-3')}>{s.delta > 0 ? '+' : ''}{s.delta} pts{s.significant ? '' : ' · noise'}</span>) },
   ];
   return (
     <Panel
       title="By topic, buyer role and market"
       icon={<Layers />}
       description="How often AI answers name you in each part of your panel, with the 95% range. A change is called real only when it clears a false-discovery-rate screen across every segment."
-      info={`Each row counts this week's answers on the weekly engines plus the daily pulse's answers to the same questions. Under ${AI_SEGMENT_MIN} answers a row shows "too few answers" instead of a rate. Changes are tested only when last week asked the same questions on the same engines, and corrected together (Benjamini–Hochberg, 10% false discovery rate).`}
+      info={`Each row counts this week's answers on the weekly engines plus the daily pulse's answers to the same questions. Under ${AI_SEGMENT_MIN} answers a row shows "too few answers" instead of a rate. Changes are tested only when last week asked the same questions on the same engines, and corrected together (Benjamini-Hochberg, 10% false discovery rate).`}
       actions={<Button size="sm" variant="ghost" onClick={() => setAsTable((v) => !v)}>{asTable ? 'Show chart' : 'Show table'}</Button>}
     >
       <div className="space-y-3 px-5 pb-5 pt-3">
@@ -117,10 +117,10 @@ export function SegmentsSection({ segments, panel }: { segments: AiSegments | nu
         {hw && (
           <p className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] leading-snug text-ink-2">
             <span className="font-medium text-ink">How precise this is: </span>
-            {hw.measured.headline != null ? `the headline “named in” is measured to ±${hw.measured.headline} points` : 'no headline rate this week'}
+            {hw.measured.headline != null ? `the headline "named in" is measured to ±${hw.measured.headline} points` : 'no headline rate this week'}
             {hw.measured.medianCluster != null ? `, a typical topic to ±${hw.measured.medianCluster}` : ''}. With {panel?.setting ?? panel?.size} questions
             {hw.achievable.perWeek ? ` and each asked ${hw.achievable.perWeek === 6 ? 'every pulse morning' : `on ${hw.achievable.perWeek} pulse morning${hw.achievable.perWeek === 1 ? '' : 's'} a week`}` : ''} the panel can reach ±{hw.achievable.headline} on the headline and ±{hw.achievable.cluster} on a 12-question topic (95%, at the widest).
-            {panel?.overlapWithPrevious?.share != null && ` ${Math.round(panel.overlapWithPrevious.share * 100)}% of the questions were asked last week too${panel.overlapWithPrevious.same === false ? ' — too few for a week-on-week change, so none is shown' : ''}.`}
+            {panel?.overlapWithPrevious?.share != null && ` ${Math.round(panel.overlapWithPrevious.share * 100)}% of the questions were asked last week too${panel.overlapWithPrevious.same === false ? ': too few for a week-on-week change, so none is shown' : ''}.`}
             {panel && panel.executions > 1 && ` The weekly run is asked over ${panel.executions} parts.`}
           </p>
         )}
@@ -188,7 +188,7 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
   };
 
   const resultBadge = (v?: string) =>
-    v === 'cited' ? <StatusBadge tone="good">Cited</StatusBadge> : v === 'named' ? <StatusBadge tone="good">Named</StatusBadge> : v === 'absent' ? <StatusBadge tone="serious">Not named</StatusBadge> : v === 'none' ? <span className="text-xs text-ink-3">No answer</span> : <span className="text-xs text-ink-3">–</span>;
+    v === 'cited' ? <StatusBadge tone="good">Cited</StatusBadge> : v === 'named' ? <StatusBadge tone="good">Named</StatusBadge> : v === 'absent' ? <StatusBadge tone="serious">Not named</StatusBadge> : v === 'none' ? <span className="text-xs text-ink-3">No answer</span> : <span className="text-xs text-ink-3">-</span>;
 
   const columns: Column<Prompt>[] = [
     {
@@ -206,9 +206,9 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
         </div>
       ),
     },
-    { key: 'persona', header: 'Buyer role', hideOnMobile: true, sortValue: (p) => p.persona, cell: (p) => <span className="text-[13px] text-ink-2">{p.persona || '–'}</span> },
-    { key: 'market', header: 'Market', hideOnMobile: true, sortValue: (p) => p.market, cell: (p) => (p.market ? <Kind>{p.market}</Kind> : '–') },
-    { key: 'volume', header: 'AI searches / mo', align: 'right', hideOnMobile: true, sortValue: (p) => p.volume ?? -1, cell: (p) => <span className="tabular text-[13px]">{p.volume != null ? compactNumber(p.volume) : '–'}</span> },
+    { key: 'persona', header: 'Buyer role', hideOnMobile: true, sortValue: (p) => p.persona, cell: (p) => <span className="text-[13px] text-ink-2">{p.persona || '-'}</span> },
+    { key: 'market', header: 'Market', hideOnMobile: true, sortValue: (p) => p.market, cell: (p) => (p.market ? <Kind>{p.market}</Kind> : '-') },
+    { key: 'volume', header: 'AI searches / mo', align: 'right', hideOnMobile: true, sortValue: (p) => p.volume ?? -1, cell: (p) => <span className="tabular text-[13px]">{p.volume != null ? compactNumber(p.volume) : '-'}</span> },
     { key: 'origin', header: 'From', hideOnMobile: true, sortValue: (p) => originLabel(p), cell: (p) => <span className="text-[13px] text-ink-2">{originLabel(p)}</span> },
     { key: 'result', header: engine ? `On ${engineLabel(engine)}` : 'Latest run', sortValue: (p) => resultOf.get(p.promptId) ?? '', cell: (p) => resultBadge(resultOf.get(p.promptId)) },
     { key: 'status', header: 'Status', sortValue: (p) => (isTracked(p) ? 0 : p.status === 'refused' ? 1 : 2), cell: (p) => (isTracked(p) ? <StatusBadge tone="good">Tracked</StatusBadge> : p.status === 'refused' ? <StatusBadge tone="warning">Refused</StatusBadge> : <Badge icon={<Power className="size-3" aria-hidden />}>Off</Badge>) },
@@ -259,7 +259,7 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
         />
         <p className="text-xs text-ink-3">
           {tracked.length} of {setting ?? tracked.length} questions tracked
-          {isAdmin && setting != null && tracked.length < setting && ' — the next weekly run writes the rest'}
+          {isAdmin && setting != null && tracked.length < setting && ' (the next weekly run writes the rest)'}
           {isAdmin && <> · <ButtonLink to={page('settings/tracking')} variant="link" size="sm">Change the panel size</ButtonLink></>}
         </p>
       </div>
@@ -270,11 +270,11 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
         <PickFilter label="Result on" value={engine} onChange={setEngine} options={engines} format={engineLabel} allLabel="Any engine" />
       </div>
       {editing && <EditQuestion p={editing} onClose={() => setEditing(null)} onSave={(body, msg) => { send(body, msg); setEditing(null); }} />}
-      <DataTable rows={rows} columns={columns} rowKey={(p) => p.promptId} dense pageSize={25} searchable searchPlaceholder="Search the questions…" searchText={(p) => [p.prompt, p.cluster, p.persona, p.market].join(' ')}
+      <DataTable rows={rows} columns={columns} rowKey={(p) => p.promptId} dense pageSize={25} searchable searchPlaceholder="Search the questions..." searchText={(p) => [p.prompt, p.cluster, p.persona, p.market].join(' ')}
         empty={status === 'refused' ? 'No question was refused: every question the engine wrote passed the keyword rule.' : 'No questions match these filters.'} />
       {status === 'refused' && refused.length > 0 && (
         <Callout tone="info" title="Why questions are refused">
-          The engine never asks a question that names your own website, another company, a government service or a login task — answers to those say nothing about your visibility. Each refused question shows the rule it broke; switch one on if you want it anyway, and it becomes your own question.
+          The engine never asks a question that names your own website, another company, a government service or a login task, because answers to those say nothing about your visibility. Each refused question shows the rule it broke; switch one on if you want it anyway, and it becomes your own question.
         </Callout>
       )}
       {isAdmin && <AddQuestions busy={admin.isPending && !pendingId} onAdd={(add, msg) => send({ add }, msg)} />}
@@ -364,12 +364,12 @@ function AddQuestions({ busy, onAdd }: { busy: boolean; onAdd: (add: Record<stri
     const items = draft.split('\n').map((s) => s.trim()).filter(Boolean);
     if (!items.length) return setError('Enter at least one question');
     const short = items.find((s) => s.length < 10);
-    if (short) return setError(`“${short}” is too short: questions need at least 10 characters`);
+    if (short) return setError(`"${short}" is too short: questions need at least 10 characters`);
     if (items.find((s) => s.length > 300)) return setError('Keep each question under 300 characters');
     if (items.length > 500) return setError('Add at most 500 questions at a time');
     if (market.trim() && !/^[A-Za-z]{2}([-_ ][A-Za-z]{2,3})?$/.test(market.trim())) return setError('Market: a country code and a language, e.g. SA-en');
     setError(null);
-    onAdd(items.map((prompt) => ({ prompt, persona: persona.trim(), cluster: cluster.trim().toLowerCase(), stage: '', market: market.trim(), pinned })), `${items.length === 1 ? 'Question' : `${items.length} questions`} added — asked from the next weekly run`);
+    onAdd(items.map((prompt) => ({ prompt, persona: persona.trim(), cluster: cluster.trim().toLowerCase(), stage: '', market: market.trim(), pinned })), `${items.length === 1 ? 'Question' : `${items.length} questions`} added. It is asked from the next weekly run`);
     setDraft('');
   };
   const readFile = async (f: File | undefined) => {
@@ -382,7 +382,7 @@ function AddQuestions({ busy, onAdd }: { busy: boolean; onAdd: (add: Record<stri
     <div className="grid gap-4 lg:grid-cols-2">
       <div className="space-y-3 rounded-xl border border-dashed border-line-strong p-4">
         <Field label="Add buyer questions" hint="One per line, the way a buyer would ask an assistant. The role, topic and market below apply to all of them." error={error ?? undefined}>
-          {(p) => <Textarea {...p} rows={4} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Which … should I hire for …?" />}
+          {(p) => <Textarea {...p} rows={4} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Which ... should I hire for ...?" />}
         </Field>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Buyer role" optional>{(p) => <Input {...p} value={persona} maxLength={40} onChange={(e) => setPersona(e.target.value)} placeholder="e.g. CFO" />}</Field>
@@ -399,7 +399,7 @@ function AddQuestions({ busy, onAdd }: { busy: boolean; onAdd: (add: Record<stri
           <p className="text-[13px] font-medium text-ink">Import a question list (CSV)</p>
           <GuideButton id="ai-panel-import" variant="link" label="How should the file look?" />
         </div>
-        <p className="text-[13px] leading-snug text-ink-3">Columns: question, buyer role, cluster, stage, market, pinned — only the question is required. Up to 500 questions a file.</p>
+        <p className="text-[13px] leading-snug text-ink-3">Columns: question, buyer role, cluster, stage, market, pinned. Only the question is required. Up to 500 questions a file.</p>
         <input ref={file} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="sr-only" onChange={(e) => { void readFile(e.target.files?.[0]); e.target.value = ''; }} aria-label="Choose a CSV file" />
         <Button variant="secondary" icon={<FileUp className="size-4" />} onClick={() => file.current?.click()}>Choose a file</Button>
         {csv && (
@@ -413,7 +413,7 @@ function AddQuestions({ busy, onAdd }: { busy: boolean; onAdd: (add: Record<stri
             {csv.rows.length > 0 && (
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setCsv(null)}>Cancel</Button>
-                <Button loading={busy} onClick={() => { onAdd(csv.rows, `${csv.rows.length} questions imported — asked from the next weekly run`); setCsv(null); }}>Import {csv.rows.length}</Button>
+                <Button loading={busy} onClick={() => { onAdd(csv.rows, `${csv.rows.length} questions imported. They are asked from the next weekly run`); setCsv(null); }}>Import {csv.rows.length}</Button>
               </div>
             )}
           </div>

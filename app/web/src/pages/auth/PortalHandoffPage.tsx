@@ -32,5 +32,5 @@ export default function PortalHandoffPage() {
         </Button>
       </AuthCard>
     );
-  return <PageLoader fullPage label="Opening your portal…" />;
+  return <PageLoader fullPage label="Opening your portal..." />;
 }

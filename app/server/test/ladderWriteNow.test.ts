@@ -3,7 +3,7 @@ import type { LadderRow } from '@seo/shared';
 import { ladderPageContext } from '../src/services/runs';
 
 // P2-7 (Phase 2 live check, 2026-10-12): "Write now" for the main page of the "erp software uae" ladder wrote 3,864 words although the
-// ladder's verdict had asked for a service page of about 2,100 — the run has no competitor analysis and no verdict of its own, so nothing
+// ladder's verdict had asked for a service page of about 2,100, the run has no competitor analysis and no verdict of its own, so nothing
 // remembered that number. The ladder row stores it (`target_words`) and the body carries it to the engine as `ladder_words`, where
 // *Parse Brief* clamps the brief to it.
 
@@ -39,7 +39,7 @@ describe('the "Write now" body of a ladder page', () => {
     expect(ladderPageContext(ROWS, 1, 'erp software dubai').links.map((l) => l.role)).toEqual(['top', 'sibling']);
   });
 
-  // R15 (re-rating, 2026-10-13): the page also keeps the URL its own row planned — exec 521 delivered
+  // R15 (re-rating, 2026-10-13): the page also keeps the URL its own row planned, exec 521 delivered
   // `service-industry-erp-software-uae` while the row (and every link pointing at it) said `/service-industry-erp-software/`
   it('carries the URL the ladder planned for this page, and nothing when the row has none or it is not a URL', () => {
     expect(ladderPageContext(ROWS, 4, 'erp software uae').targetUrl).toBe('https://www.techand.ai/erp-software-uae/');

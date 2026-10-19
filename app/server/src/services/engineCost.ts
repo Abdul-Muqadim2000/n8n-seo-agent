@@ -6,7 +6,7 @@ import { rows } from '../n8n/client';
 // `cost` (`v5/code/_cost_cal.js` `estOf`). A written page was shown at about $0.84 while the engine held $1.40 for it.
 //
 // So the app reads those same rows through the n8n public Data Table API it already uses for the dashboards and applies the same
-// formula (`estOf` in shared/src/cost.ts). One formula, the engine's own inputs. Cached for five minutes — the figures move by one
+// formula (`estOf` in shared/src/cost.ts). One formula, the engine's own inputs. Cached for five minutes, the figures move by one
 // settle at a time. When n8n cannot be read the last good reading is used, and when there never was one the shipped table, and the
 // result says which it is (`source`), so a figure on screen is never presented as the engine's when it is the table's.
 
@@ -22,7 +22,7 @@ const EMPTY: EngineCalibration = { ai: {}, dfs: {} };
 const shipped = (why: string): CostTableInfo => ({
   source: 'table',
   asOf: null,
-  basis: `The engine’s figures could not be read (${why}), so these are the shipped estimates for each kind of run.`,
+  basis: `The engine's figures could not be read (${why}), so these are the shipped estimates for each kind of run.`,
   calibration: EMPTY,
 });
 
@@ -40,7 +40,7 @@ async function read(): Promise<CostTableInfo> {
       { source: 'engine', asOf: at, basis: 'What the engine will reserve for this run (no run of these kinds has settled yet, so its shipped estimates apply).', calibration };
 }
 
-/** The engine's current cost figures, or — labelled as such — the shipped table. Never throws. */
+/** The engine's current cost figures, or, labelled as such, the shipped table. Never throws. */
 export async function engineCostTable(opts: { fresh?: boolean } = {}): Promise<CostTableInfo> {
   if (!opts.fresh && last && Date.now() - last.at < TTL_MS) return last.info;
   if (!inflight)

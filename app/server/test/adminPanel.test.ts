@@ -220,7 +220,7 @@ describe('the cost sync', () => {
     expect(by('engine:e3')).toMatchObject({ orgId: ids.org, runId: null, siteId: ids.site, origin: 'schedule' });
     expect(by('engine:e4')).toMatchObject({ orgId: null, origin: 'schedule' });
     expect(ev.some((e) => e.eventKey === 'engine:e5' || e.eventKey === 'engine:e6' || e.eventKey === `run:${ids.r1}`)).toBe(false);
-    // one usage debit per event of the company: 0.5 → 15 credits, 0.5 → 15, 0.05 → 1.5
+    // one usage debit per event of the company: 0.5 -> 15 credits, 0.5 -> 15, 0.05 -> 1.5
     expect(await credits(ids.org)).toBeCloseTo(-31.5, 6);
     expect((await debits('cost:engine:e1'))[0]).toMatchObject({ orgName: 'Cost Co', credits: -15 });
   });
@@ -240,7 +240,7 @@ describe('the cost sync', () => {
     expect(reads[reads.length - 1]).toBeNull();
   });
 
-  it('an engine row stored before its run’s callback arrived is linked to the run later (back-fill), never counted twice', async () => {
+  it('an engine row stored before its run\'s callback arrived is linked to the run later (back-fill), never counted twice', async () => {
     const r3 = await appRun({ requestId: 'fd8', mode: 'audit', cost: 0.2, completedMin: 90, status: 'running' });
     const early = [...ledger(), { run_id: 'e8', key: `app:${ids.org}`, mode: 'audit', status: 'done', ai_usd: 0, dfs_usd: 0.2, measured_usd: 0.2, estimated_usd: 0, settled_at: ago(89).toISOString(), created_at: ago(95).toISOString() }];
     await syncCosts({ readLedger: reader(() => early) });
@@ -331,7 +331,7 @@ describe('the cost sync', () => {
     await db.delete(schema.sites).where(eq(schema.sites.id, late.id));
   });
 
-  it('the runs page: app runs and the engine’s own work, newest first, one cursor, nothing repeated', async () => {
+  it('the runs page: app runs and the engine\'s own work, newest first, one cursor, nothing repeated', async () => {
     const all = (await boss.get('/api/admin/runs?period=all&limit=200')).body;
     const seen: string[] = [];
     let cursor: string | null = null;
@@ -362,7 +362,7 @@ describe('the cost sync', () => {
     expect(anth).toMatchObject({ source: 'unavailable', billedUsd: null });
     expect(anth.note).toMatch(/ANTHROPIC_ADMIN_API_KEY/);
     const dfs = o.bills.find((b: { provider: string }) => b.provider === 'dataforseo');
-    // 20 → 19.8, 19.8 → 19.75: the balance fell by 0.25
+    // 20 -> 19.8, 19.8 -> 19.75: the balance fell by 0.25
     expect(dfs).toMatchObject({ source: 'engine-ledger' });
     expect(dfs.billedUsd).toBeCloseTo(0.25, 6);
     expect(o.daily.length).toBeGreaterThan(0);
@@ -476,7 +476,7 @@ describe('suspension', () => {
     expect(acts).toEqual(expect.arrayContaining(['user.suspended', 'user.unsuspended']));
   });
 
-  it('a suspended person’s API keys start nothing (REST and MCP go through the same check)', async () => {
+  it('a suspended person\'s API keys start nothing (REST and MCP go through the same check)', async () => {
     const { c, org, userId: uid } = await company('keyed@actor.test', 'Keyed Co');
     const key = (await c.post(`/api/orgs/${org.id}/api-keys`, { name: 'ci', scopes: ['read', 'run'] })).body;
     expect(key.token).toBeTruthy();
@@ -500,7 +500,7 @@ describe('suspension', () => {
     expect((await db.query.users.findFirst({ where: eq(schema.users.id, bossId) }))!.suspendedAt).toBeNull();
   });
 
-  it('revokes a person’s sessions on request', async () => {
+  it('revokes a person\'s sessions on request', async () => {
     const u = await signUp(app, 'many@sessions.test');
     await new Client(app).post('/api/auth/login', { email: 'many@sessions.test', password: PW });
     const r = (await boss.post(`/api/admin/users/${await userId('many@sessions.test')}/sessions/revoke`)).body;

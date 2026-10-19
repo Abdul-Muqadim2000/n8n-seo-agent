@@ -2,8 +2,8 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// G1 phase 5 — SCIM 2.0 through the real app on a real Postgres, the way Okta and Microsoft Entra ID call it: token auth, the
-// filter → create → patch → deactivate → delete life cycle, Entra's PATCH shapes, groups mapped to roles, the owner protected,
+// G1 phase 5, SCIM 2.0 through the real app on a real Postgres, the way Okta and Microsoft Entra ID call it: token auth, the
+// filter -> create -> patch -> deactivate -> delete life cycle, Entra's PATCH shapes, groups mapped to roles, the owner protected,
 // verified domains only, and isolation between companies (a token reaches one company and nothing else).
 
 vi.hoisted(() => {
@@ -106,7 +106,7 @@ describe('authentication', () => {
 });
 
 describe('users (the Okta life cycle)', () => {
-  it('filter → create → read → deactivate (access stops) → reactivate → delete (deprovisioned)', async () => {
+  it('filter then create then read then deactivate (access stops) then reactivate then delete (deprovisioned)', async () => {
     const co = await company('own@scim-okta.test', 'Scim Okta', 'scim-okta.test');
     const s = idp(co.token);
     expect((await s.get('/Users?filter=userName%20eq%20%22sam%40scim-okta.test%22&startIndex=1&count=100')).body).toMatchObject({ totalResults: 0, Resources: [] });
@@ -159,7 +159,7 @@ describe('users (the Okta life cycle)', () => {
     expect(log.map((e: { action: string }) => e.action)).toEqual(expect.arrayContaining(['scim.user_created', 'scim.user_deactivated', 'scim.user_reactivated', 'scim.token_created']));
   });
 
-  it('only provisions addresses on the company’s verified domains, and never touches the owner', async () => {
+  it('only provisions addresses on the company\'s verified domains, and never touches the owner', async () => {
     const co = await company('own@scim-guard.test', 'Scim Guard', 'scim-guard.test');
     const s = idp(co.token);
     expect((await s.post('/Users', userBody('x@elsewhere.test'))).body).toMatchObject({ status: '400', scimType: 'invalidValue' });
@@ -172,7 +172,7 @@ describe('users (the Okta life cycle)', () => {
     expect((await s.get('/Users/not-a-uuid')).status).toBe(404);
   });
 
-  it('accepts Microsoft Entra ID’s PATCH shapes (string booleans, paths, add / replace)', async () => {
+  it('accepts Microsoft Entra ID\'s PATCH shapes (string booleans, paths, add / replace)', async () => {
     const co = await company('own@scim-entra.test', 'Scim Entra', 'scim-entra.test');
     const s = idp(co.token);
     const u = (await s.post('/Users', userBody('ada@scim-entra.test', { externalId: 'e-1' }))).body;
@@ -196,8 +196,8 @@ describe('users (the Okta life cycle)', () => {
   });
 });
 
-describe('groups → roles', () => {
-  it('a group mapped to a role sets its members’ role; leaving it falls back; outsiders cannot be added', async () => {
+describe('groups gives roles', () => {
+  it('a group mapped to a role sets its members\' role; leaving it falls back; outsiders cannot be added', async () => {
     const co = await company('own@scim-groups.test', 'Scim Groups', 'scim-groups.test');
     const s = idp(co.token);
     const a = (await s.post('/Users', userBody('a@scim-groups.test'))).body;

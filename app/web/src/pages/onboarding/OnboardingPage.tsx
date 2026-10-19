@@ -16,8 +16,8 @@ import { WebsiteStep } from './_components/WebsiteStep';
 import { StepMessage, WizardShell } from './_components/WizardShell';
 import { isStep, SITE_STEPS, stepIndex, WizardContext, type StepId, type WizardValue } from './_components/wizard';
 
-// /onboarding                    → a new company (first sign-in, or "New company" from the menu)
-// /onboarding/:orgId/:step?      → the steps of an existing company; without a step it resumes at the stored one
+// /onboarding                    -> a new company (first sign-in, or "New company" from the menu)
+// /onboarding/:orgId/:step?      -> the steps of an existing company; without a step it resumes at the stored one
 
 const STEP_COMPONENTS: Record<StepId, () => ReactNode> = {
   company: CompanyStep,

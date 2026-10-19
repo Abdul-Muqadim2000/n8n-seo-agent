@@ -92,7 +92,7 @@ describe('Crawlers page', () => {
     expect(t).toContain('Googlebot made 70 requests, AI crawlers 40, in the last 30 days');
     expect(t).toContain('92% of crawler requests were proved');
     expect(t).toContain('9 more only pretended to be a crawler');
-    for (const s of ['Pages Googlebot did not fetch', '/pricing', 'Crawl budget Googlebot spent badly', '/api/broken', 'page,utm_source', 'ChatGPT-User, Claude-User', 'Impostors', '45.133.1.0/24', 'Claimed', 'Proved', '/old-landing', 'Key asl_AbCdEfGh… active', 'Replace the key', 'Delete all log data', 'Export CSV']) expect(t).toContain(s);
+    for (const s of ['Pages Googlebot did not fetch', '/pricing', 'Crawl budget Googlebot spent badly', '/api/broken', 'page,utm_source', 'ChatGPT-User, Claude-User', 'Impostors', '45.133.1.0/24', 'Claimed', 'Proved', '/old-landing', 'Key asl_AbCdEfGh... active', 'Replace the key', 'Delete all log data', 'Export CSV']) expect(t).toContain(s);
     expect(html).toContain('/o/org-1/sites/site-1/technical');
     expect(t).not.toContain('NaN');
     expect(t).not.toContain('undefined');
@@ -100,8 +100,8 @@ describe('Crawlers page', () => {
   it('when no request could be proved the hero says so instead of printing a dash for a number', () => {
     const none: CrawlerData = { ...full, totals: { ...full.totals, hits: 5, verifiedShare: null, spoofed: 5 } };
     const t = text(wrap(<Crawlers d={none} {...props} admin member />));
-    expect(t).toContain('No crawler request could be checked against the vendors’ address lists yet.');
-    expect(t).not.toMatch(/– of crawler requests/);
+    expect(t).toContain('No crawler request could be checked against the vendors\' address lists yet.');
+    expect(t).not.toMatch(/- of crawler requests/);
     expect(t).toContain('5 more only pretended to be a crawler');
   });
   it('a viewer sees everything but cannot upload, create a key or delete', () => {

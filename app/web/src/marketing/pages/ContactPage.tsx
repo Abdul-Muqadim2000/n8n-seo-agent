@@ -56,13 +56,13 @@ const schema = z.object({
     .trim()
     .refine((v) => v === '' || /^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/\S*)?$/i.test(v), 'Enter a website like yourcompany.com, or leave it empty.'),
   topic: z.enum(TOPIC_IDS),
-  message: z.string().trim().min(20, 'Tell us a little more — at least 20 characters.').max(2000, 'Keep the message under 2,000 characters.'),
+  message: z.string().trim().min(20, 'Tell us a little more, at least 20 characters.').max(2000, 'Keep the message under 2,000 characters.'),
 });
 type Values = z.infer<typeof schema>;
 
 function mailtoFor(v: Values) {
   const t = topicOf(v.topic);
-  const subject = `${t.label} — ${v.company}`;
+  const subject = `${t.label}: ${v.company}`;
   const body = [`Name: ${v.name}`, `E-mail: ${v.email}`, `Company: ${v.company}`, v.website ? `Website: ${v.website}` : null, `Topic: ${t.label}`, '', v.message]
     .filter((l) => l !== null)
     .join('\r\n');
@@ -205,7 +205,7 @@ export default function ContactPage() {
       <PageHero
         eyebrow="Contact"
         title="Talk to us."
-        lead="Questions about plans, onboarding or running many websites — write to us and a person will answer."
+        lead="Questions about plans, onboarding or running many websites. Write to us and a person will answer."
         watermark
         containerClassName="pb-12 sm:pb-16"
       />
@@ -272,7 +272,7 @@ export default function ContactPage() {
             <Reveal index={2} className="rounded-xl border border-line bg-page p-6 sm:p-7">
               <IconTile icon={ShieldCheck} size="sm" />
               <h2 className="mt-4 font-display text-base font-semibold text-ink">Reviewing Alaventra?</h2>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">Choose “Security review or questionnaire” as the topic, or read how Alaventra protects your data first.</p>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">Choose "Security review or questionnaire" as the topic, or read how Alaventra protects your data first.</p>
               <ArrowLink to="/security" className="mt-4 text-[14px]">
                 Security at Alaventra
               </ArrowLink>
@@ -282,7 +282,7 @@ export default function ContactPage() {
               <Link to="/login" className="font-medium text-accent-text underline-offset-4 hover:underline">
                 Sign in
               </Link>{' '}
-              — your company, websites and runs are all there. Prefer e-mail? Write to{' '}
+              and your company, websites and runs are all there. Prefer e-mail? Write to{' '}
               <a href={`mailto:${site.salesEmail}`} className="font-medium text-accent-text underline-offset-4 hover:underline">
                 {site.salesEmail}
               </a>

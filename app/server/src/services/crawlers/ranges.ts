@@ -64,7 +64,7 @@ function v6ToBig(ip: string): bigint | null {
   return n;
 }
 
-/** "::ffff:1.2.3.4" → "1.2.3.4"; "[2001:db8::1]" → "2001:db8::1"; anything that is not an address → null */
+/** "::ffff:1.2.3.4" -> "1.2.3.4"; "[2001:db8::1]" -> "2001:db8::1"; anything that is not an address -> null */
 export function normalizeIp(raw: string | null | undefined): string | null {
   if (!raw) return null;
   let s = String(raw).trim();
@@ -209,7 +209,7 @@ export function rangeStatus(): { id: string; label: string; url: string; fetched
 
 const norm = (p: string) => (p.includes('/') ? p : p.includes(':') ? `${p}/128` : `${p}/32`);
 
-/** One vendor file → its prefixes (the same rules as app/scripts/refresh_bot_ranges.py). Throws when it holds none. */
+/** One vendor file -> its prefixes (the same rules as app/scripts/refresh_bot_ranges.py). Throws when it holds none. */
 export function parseRangeFile(body: string, format: 'json' | 'html-json' | 'text'): { creationTime: string | null; prefixes: string[] } {
   if (format === 'text') {
     const prefixes = body

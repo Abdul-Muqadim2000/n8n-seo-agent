@@ -1,5 +1,5 @@
 // The admin panel's Credits / USD switch (app/docs/CREDITS.md): every credit figure in the panel shows either the credits or the
-// dollars behind them — what was paid for credits bought, the list value of credits given or used, what the used work cost us at the
+// dollars behind them, what was paid for credits bought, the list value of credits given or used, what the used work cost us at the
 // providers, and what the credits still outstanding are worth and will cost to serve. The choice is the admin's own and is kept in this
 // browser (localStorage, in try/catch: a private window simply starts in credits).
 import { useSyncExternalStore } from 'react';
@@ -61,7 +61,7 @@ export function UnitsToggle({ className }: { className?: string }) {
 /** a credit amount as the switch says: credits, or their dollars at `usdPerCredit` (or an exact dollar figure when one is known) */
 export function creditOrUsd(units: AdminUnits, n: number | null | undefined, usd: number | null | undefined): string {
   if (units === 'usd') return money(usd ?? null, { digits: 2 });
-  return n == null ? '–' : `${credits(n)} cr`;
+  return n == null ? '-' : `${credits(n)} cr`;
 }
 
 interface Line {

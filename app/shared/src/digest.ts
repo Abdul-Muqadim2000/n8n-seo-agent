@@ -87,7 +87,7 @@ export function parseDigest(text: string, now = new Date()): DigestRequest[] {
 export const digestOpen = (r: DigestRequest, now = new Date()): boolean => !r.deadline || r.deadline >= now.toISOString().slice(0, 10);
 
 /** The prospect row the SEO engine reads (seo_link_prospects, upsert by site + prospect_domain + type). An anonymised request has no
- *  outlet domain, so it is keyed by the service and the query's own id — the engine then leaves out the checks that need a real domain. */
+ *  outlet domain, so it is keyed by the service and the query's own id, the engine then leaves out the checks that need a real domain. */
 export function digestProspect(r: DigestRequest, o: { siteId: string; domain: string; service: string; now?: Date }): Record<string, unknown> {
   const at = (o.now ?? new Date()).toISOString();
   return {

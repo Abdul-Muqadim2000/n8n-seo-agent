@@ -15,10 +15,10 @@ const toDate = (v: string | Date | null | undefined): Date | null => {
 /** "3 Oct 2026" */
 export function fmtDate(v: string | Date | null | undefined): string {
   const d = toDate(v);
-  return d ? format(d, 'd MMM yyyy') : '–';
+  return d ? format(d, 'd MMM yyyy') : '-';
 }
 
-/** "3 Oct" — for chart axes */
+/** "3 Oct", for chart axes */
 export function fmtDay(v: string | Date | null | undefined): string {
   const d = toDate(v);
   return d ? format(d, 'd MMM') : '';
@@ -27,13 +27,13 @@ export function fmtDay(v: string | Date | null | undefined): string {
 /** "3 Oct 2026, 14:05" */
 export function fmtDateTime(v: string | Date | null | undefined): string {
   const d = toDate(v);
-  return d ? format(d, 'd MMM yyyy, HH:mm') : '–';
+  return d ? format(d, 'd MMM yyyy, HH:mm') : '-';
 }
 
 /** "5 minutes ago" */
 export function fmtAgo(v: string | Date | null | undefined): string {
   const d = toDate(v);
-  return d ? formatDistanceToNowStrict(d, { addSuffix: true }) : '–';
+  return d ? formatDistanceToNowStrict(d, { addSuffix: true }) : '-';
 }
 
 export function fmtBytes(n: number): string {

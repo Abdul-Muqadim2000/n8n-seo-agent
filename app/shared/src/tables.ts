@@ -61,7 +61,7 @@ export interface TrendRow extends DtRow {
   site_id: string; domain: string; keyword: string; checked_at: string; period_end: string; direction: string; change_pct: number;
   peak_date: string; latest: number; average: number; rising: string; top: string;
 }
-/** v4.15 (D11, SITE_MODEL_SPEC.md): the website's page inventory, written weekly by the Site Tracker — what the site already has */
+/** v4.15 (D11, SITE_MODEL_SPEC.md): the website's page inventory, written weekly by the Site Tracker, what the site already has */
 export interface SitePageRow extends DtRow {
   site_id: string; url: string; title: string; h1: string; source: string; lastmod: string; queries_json: string; updated_at: string;
   /**
@@ -89,7 +89,7 @@ export interface ProfileRow extends DtRow {
   opening_hours: string; price_range: string; service_areas: string; map_url: string; author_name: string;
   author_job_title: string; author_credentials: string; author_bio: string; author_url: string; author_image_url: string;
   author_same_as: string; author_knows_about: string; reviewer_name: string; reviewer_job_title: string; reviewer_url: string;
-  /** G31: the stored style guide — the brand's written form, wrong forms to catch, the spelling variant, words to avoid, the tone, other rules */
+  /** G31: the stored style guide, the brand's written form, wrong forms to catch, the spelling variant, words to avoid, the tone, other rules */
   style_brand_form: string; style_brand_wrong: string; style_spelling: string; style_avoid: string; style_tone: string; style_notes: string;
   updated_at: string; request_id: string;
 }
@@ -123,7 +123,7 @@ export interface AiAnswerRow extends DtRow {
   site_id: string; domain: string; run_id: string; checked_at: string; prompt_id: string; prompt: string; kind: string;
   topic: string; engine: string; answered: boolean; mentioned: boolean; cited: boolean; rank: number; our_urls: string;
   competitors: string; sources: string; excerpt: string; cost: number; error: string;
-  /** v4.9: weekly | full | pulse | on_demand; sentiment toward the business; brands named in order; wrong claims ("claim → fact" | …); the searches the engine ran (" | ") */
+  /** v4.9: weekly | full | pulse | on_demand; sentiment toward the business; brands named in order; wrong claims ("claim -> fact" | ...); the searches the engine ran (" | ") */
   run_kind: string; sentiment: string; brands: string; issues: string; fanout: string;
   /** v4.12: the exact third-party pages cited (JSON [{u, t}]) */
   cited_urls: string;
@@ -140,7 +140,7 @@ export interface AiVisibilityRow extends DtRow {
   /** G6 (2026-10-18): rates per engine x cluster x buyer role x market x stage (compact: one array per segment), the panel asked, the executions it took */
   segments_json?: string; panel_json?: string; chunks?: number | null;
 }
-/** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the AI growth loop's key pages — can AI read and quote them, Bing's crawl, submission */
+/** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the AI growth loop's key pages, can AI read and quote them, Bing's crawl, submission */
 export interface AiPageRow extends DtRow {
   site_id: string; domain: string; url: string; kind: string; checked_at: string; status: number; score: number | null; checks_json: string; issues: string;
   words_raw: number; title: string; updated_on: string; bing_crawled_at: string; bing_status: number; submitted_at: string; submitted_via: string; cited_by: string; questions: string;
@@ -184,7 +184,7 @@ export interface ProspectRow extends DtRow {
    *  outreach gates: it is superseded and must not be offered (see prospectDraft in ./outreach). */
   drafted_at: string;
 }
-/** v4.10: the link ledger — one row per site and referring site, merged from every source and checked on the linking page */
+/** v4.10: the link ledger, one row per site and referring site, merged from every source and checked on the linking page */
 export interface BacklinkRow extends DtRow {
   site_id: string; domain: string; ref_domain: string; kind: string; from_url: string; to_url: string; anchor: string; anchor_kind: string;
   rel: string; placement: string; link_type: string; relevance: number | null; note: string; sources: string; source_count: number;
@@ -285,9 +285,9 @@ export type LadderSettingsColumn = (typeof LADDER_SETTINGS_COLUMNS)[number]['nam
 /** the settings row that holds the website's defaults */
 export const LADDER_SITE_ROW = '_site';
 
-/** G11 + G25 (2026-10-13, FIX_PLAN): the daily key-page watch (`SEO Agent — Page Watch`, every morning) and the weekly URL Inspection
+/** G11 + G25 (2026-10-13, FIX_PLAN): the daily key-page watch (`SEO Agent, Page Watch`, every morning) and the weekly URL Inspection
  * rotation write one row per site and key page. `state`: ok | changed | not_checked; `changes`: the change codes of the last reading;
- * `indexed`: 'yes' | 'no' | '' (empty = Google was not asked, or the answer failed — never "fine"); `mobile`: 'pass' | 'fail' | ''. */
+ * `indexed`: 'yes' | 'no' | '' (empty = Google was not asked, or the answer failed, never "fine"); `mobile`: 'pass' | 'fail' | ''. */
 export interface PageWatchRow extends DtRow {
   site_id: string; domain: string; url: string; kind: string; weight: number; checked_at: string;
   status: number; location: string; noindex: boolean; noindex_source: string; canonical: string; canonical_ok: boolean;
@@ -326,10 +326,10 @@ export const TABLES = {
   linkGraph: 'seo_link_graph',
   audits: 'seo_audits',
   auditFindings: 'seo_audit_findings',
-  /** G11 + G25 (2026-10-13): one row per site and key page — the daily raw watch and what Search Console's URL Inspection said about it */
+  /** G11 + G25 (2026-10-13): one row per site and key page, the daily raw watch and what Search Console's URL Inspection said about it */
   pageWatch: 'seo_page_watch',
   ladderSettings: 'seo_ladder_settings',
-  /** D25b + R6 (2026-10-12/13): every ops alert, with the channel that carried it — what G21's alert delivery rate is measured from */
+  /** D25b + R6 (2026-10-12/13): every ops alert, with the channel that carried it, what G21's alert delivery rate is measured from */
   opsAlerts: 'seo_ops_alerts',
   /** D1 + R9 + G23: one row per run, with its reservation and what it settled (which part measured, which estimated) */
   runLedger: 'seo_run_ledger',

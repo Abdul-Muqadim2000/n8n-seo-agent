@@ -6,7 +6,7 @@ import { api } from './api';
 /**
  * G5 (app/docs/WHITE_LABEL.md): the agency's brand in the running page. It is active on an agency's portal host (for every page,
  * sign-in included) and inside a white-label client workspace for the client's own people; agency staff on the app's own host keep
- * Alaventra. Everything that names the product reads it here — the header lockup, the tab title, the loader, the sign-in panel — and
+ * Alaventra. Everything that names the product reads it here, the header lockup, the tab title, the loader, the sign-in panel, and
  * the accent tokens are replaced by ones computed for WCAG AA in light and dark (`brandTokens`).
  */
 

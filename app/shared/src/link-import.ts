@@ -93,7 +93,7 @@ export function importDate(v: string): string {
 export function parseLinkImport(text: string, domain: string): LinkImportResult {
   const site = domain.toLowerCase().replace(/^www\./, '');
   const grid = parseCsv(text);
-  if (grid.length < 2) throw new Error('The file has no rows. Export the table as CSV (Search Console: Links → Export external links → Latest links → Download CSV).');
+  if (grid.length < 2) throw new Error('The file has no rows. Export the table as CSV (Search Console: Links > Export external links > Latest links > Download CSV).');
   const header = grid[0]!.map((h) => h.trim());
   const body = grid.slice(1);
   const cols = header.map((h, i) => {

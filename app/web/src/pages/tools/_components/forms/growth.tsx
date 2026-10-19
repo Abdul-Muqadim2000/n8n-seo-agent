@@ -98,7 +98,7 @@ export function LadderForm({ initialSiteId, prefill }: ToolFormProps) {
       </FormCard>
 
       <FormCard title="Business context" description={site ? `Leave these empty to use ${site.domain}'s settings.` : 'Used for relevance and for the pages written now.'}>
-        <TextAreaField label="What you sell" optional reg={form.register('business')} error={errMsg(e.business)} rows={2} max={500} value={v.business} hint={site?.business ? `Default: ${site.business.slice(0, 120)}${site.business.length > 120 ? '…' : ''}` : undefined} />
+        <TextAreaField label="What you sell" optional reg={form.register('business')} error={errMsg(e.business)} rows={2} max={500} value={v.business} hint={site?.business ? `Default: ${site.business.slice(0, 120)}${site.business.length > 120 ? '...' : ''}` : undefined} />
         <TextField label="Who buys it" optional reg={form.register('customers')} error={errMsg(e.customers)} hint={site?.customers ? `Default: ${site.customers}` : undefined} />
         <div className="grid gap-5 sm:grid-cols-2">
           <GoalField reg={form.register('goal')} error={errMsg(e.goal)} />
@@ -173,7 +173,7 @@ export function CaseStudyForm({ initialSiteId, prefill }: ToolFormProps) {
           label="Client"
           reg={form.register('clientName')}
           error={errMsg(e.clientName)}
-          placeholder="e.g. Gulf Foods Trading, or “a 40-person food distributor”"
+          placeholder="e.g. Gulf Foods Trading, or &quot;a 40-person food distributor&quot;"
           hint="The company name, or a description when you cannot name them."
         />
         <div className="border-y border-line">
@@ -225,7 +225,7 @@ export function CaseStudyForm({ initialSiteId, prefill }: ToolFormProps) {
           max={2000}
           value={v.results}
           placeholder="e.g. Month-end close from 12 to 4 days · 100% of invoices compliant before the deadline · 18 hours a week of manual entry removed."
-          hint={v.results && !hasNumbers ? 'Add at least one number (before → after, %, time or money saved): numbers are what gets cited.' : 'Only figures the client would confirm.'}
+          hint={v.results && !hasNumbers ? 'Add at least one number (from before to after, %, time or money saved): numbers are what gets cited.' : 'Only figures the client would confirm.'}
         />
         <TextAreaField label="Client quote" optional reg={form.register('quote')} error={errMsg(e.quote)} rows={3} max={600} value={v.quote} placeholder="A sentence or two in the client's words" />
         <TextField label="Quote by" optional reg={form.register('quoteBy')} error={errMsg(e.quoteBy)} placeholder="e.g. Sara Ahmed, Finance Director" hint="Name and role (or role only for anonymous clients)." />
@@ -341,7 +341,7 @@ export function BacklinksForm({ initialSiteId, prefill }: ToolFormProps) {
       <FormCard
         title="Website"
         description="Every link source merged, each important link checked on its page."
-        info="Every link source merged — DataForSEO, Bing, your Search Console export, GA4 visits, the Common Crawl web graph, Wikipedia and the news — each important link checked on its page, lost links with the reason, the gap to your competitors, lists that name them, and outreach drafts."
+        info="Every link source merged (DataForSEO, Bing, your Search Console export, GA4 visits, the Common Crawl web graph, Wikipedia and the news), with each important link checked on its page, lost links with the reason, the gap to your competitors, lists that name them, and outreach drafts."
       >
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
         <CountryField reg={form.register('country')} error={errMsg(e.country)} hint="Used to find competitors when none are given and for the outreach drafts." />

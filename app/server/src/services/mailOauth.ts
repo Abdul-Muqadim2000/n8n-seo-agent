@@ -11,8 +11,8 @@ import { dnsCheck } from './mail';
 
 // L4 (FIX_PLAN, LINK_BUILDER_SPEC.md §2): mailboxes connected with OAuth instead of an app password.
 // Microsoft is retiring basic authentication for SMTP and many IT departments forbid app passwords, so a customer can connect
-//   * **Microsoft 365 through Graph** — sending (`Mail.Send`) and reading replies (`Mail.Read`), so the whole loop works; and
-//   * **Gmail / Google Workspace** — sending only (`gmail.send`). Reading a Gmail inbox needs `gmail.readonly` or `https://mail.google.com/`,
+//   * **Microsoft 365 through Graph**, sending (`Mail.Send`) and reading replies (`Mail.Read`), so the whole loop works; and
+//   * **Gmail / Google Workspace**, sending only (`gmail.send`). Reading a Gmail inbox needs `gmail.readonly` or `https://mail.google.com/`,
 //     which Google classes as **restricted**: it requires a CASA security assessment and app verification before anyone outside the test
 //     users can grant it. Until that is done a Gmail OAuth mailbox sends and the replies are read in Gmail itself (the UI and app/API.md
 //     say exactly this); a customer who wants replies read automatically connects Gmail with an app password or uses Microsoft 365.
@@ -42,7 +42,7 @@ export const MAIL_PROVIDERS: Record<OauthProvider, ProviderDef> = {
     revokeUrl: '',
     scopes: ['openid', 'email', 'offline_access', 'https://graph.microsoft.com/Mail.Send', 'https://graph.microsoft.com/Mail.Read'],
     reads: true,
-    withdraw: 'Remove this app under myaccount.microsoft.com → Privacy → Apps and services you have given access to.',
+    withdraw: 'Remove this app under myaccount.microsoft.com > Privacy > Apps and services you have given access to.',
   },
   gmail_oauth: {
     id: 'gmail_oauth',
@@ -52,7 +52,7 @@ export const MAIL_PROVIDERS: Record<OauthProvider, ProviderDef> = {
     revokeUrl: 'https://oauth2.googleapis.com/revoke',
     scopes: ['openid', 'email', 'https://www.googleapis.com/auth/gmail.send'],
     reads: false,
-    withdraw: 'Remove this app under myaccount.google.com → Security → Third-party apps with account access.',
+    withdraw: 'Remove this app under myaccount.google.com > Security > Third-party apps with account access.',
   },
 };
 
@@ -78,7 +78,7 @@ export const mailProviderInfo = (): MailProviderInfo[] =>
       reads: d.reads,
       note: d.reads
         ? 'Sends pitches and reads the replies, with no password stored.'
-        : 'Sends pitches with no password stored. Replies are not read automatically: Google classes inbox access as a restricted scope, which needs its security review and app verification first — read them in Gmail, or connect this mailbox with an app password instead.',
+        : 'Sends pitches with no password stored. Replies are not read automatically: Google classes inbox access as a restricted scope, which needs its security review and app verification first. Read them in Gmail, or connect this mailbox with an app password instead.',
       disabledWhy: mailOauthEnabled(p)
         ? ''
         : // D-12: customer text, so no setting names or file paths (the operator's README says which settings turn it on)

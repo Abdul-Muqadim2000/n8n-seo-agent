@@ -25,7 +25,7 @@ const src = (o: Partial<LadderSources>): LadderSources => ({ ladders: [], histor
 const NOT_READY = log({ keyword: 'ai consulting', ladder_id: 'lad_ai', status: 'not_ready', qa_reasons: 'covers 60% of the competitors\' subtopics against a target of 90%; 2 figures could not be matched to their source', started_at: ago(1) });
 const READY = log({ keyword: 'erp software uae', status: 'written', started_at: ago(9) });
 
-describe('R111 — a draft that failed its quality check is never offered for publishing', () => {
+describe('R111: a draft that failed its quality check is never offered for publishing', () => {
   it('reads the QA verdict from the newest unpublished content-log row; old rows (only `written`) read as before', () => {
     expect(draftQa([NOT_READY])).toEqual({ needsFix: true, reasons: ['covers 60% of the competitors\' subtopics against a target of 90%', '2 figures could not be matched to their source'] });
     expect(draftQa([READY])).toEqual({ needsFix: false, reasons: [] });
@@ -44,20 +44,20 @@ describe('R111 — a draft that failed its quality check is never offered for pu
     const st = publishStage(waitingPages([NOT_READY, READY], NOW), 0);
     expect(st.headline).toBe('1 page(s) to publish · 1 needs a fix');
     expect(st.state).toBe('attention');
-    expect(st.detail).toContain('“ai consulting” did not pass the quality check: fix it and run it again');
+    expect(st.detail).toContain('"ai consulting" did not pass the quality check: fix it and run it again');
     const onlyFix = publishStage(waitingPages([NOT_READY], NOW), 0);
     expect(onlyFix.headline).toBe('1 needs a fix');
     expect(onlyFix.action).toEqual({ label: 'Run it again', mode: 'keyword' });
     expect(onlyFix.detail).not.toMatch(/Publish them/);
   });
 
-  it('Needs you: a "fix it and run it again" item with the reasons — and no "I published it" for that page', () => {
+  it('Needs you: a "fix it and run it again" item with the reasons, and no "I published it" for that page', () => {
     const b = buildLadders(src({ ladders: [lad({ keyword: 'ai consulting', status: 'writing', page_no: 1 }), lad({ keyword: 'ai consulting dubai', rung: 4, page_no: 2 })], logs: [NOT_READY, READY] }), { dated: [], cadenceRuns: [], rankNextAt: null }, { now: NOW });
     expect(b.waiting.find((w) => w.keyword === 'ai consulting')).toMatchObject({ needsFix: true, ladderId: 'lad_ai' });
     const items = ladderNeedsYou(b);
     const fix = items.find((i) => i.id === 'fix:lad_ai');
     expect(fix).toBeDefined();
-    expect(fix!.title).toBe('Fix 1 page of “ai consulting dubai” before publishing');
+    expect(fix!.title).toBe('Fix 1 page of "ai consulting dubai" before publishing');
     expect(fix!.detail).toContain('covers 60% of the competitors\' subtopics');
     expect(fix!.action).toMatchObject({ label: 'Run it again', mode: 'keyword', prefill: { keyword: 'ai consulting', ladder: { id: 'lad_ai', rung: 1, pageNo: 1 } } });
     // the ladder's publish item no longer names the draft; the other written page keeps its "I published it"
@@ -74,7 +74,7 @@ describe('R111 — a draft that failed its quality check is never offered for pu
     const b = buildLadders(src({ ladders: [lad({ keyword: 'ai consulting', status: 'writing' })], logs: [NOT_READY, READY] }), { dated: [], cadenceRuns: [], rankNextAt: null }, { now: NOW });
     const plan = { pausedReason: 'pileup', waitingPublish: 2, waitingKeywords: ['ai consulting', 'erp software uae'], config: { maxWaiting: 2 } } as unknown as Parameters<typeof cadenceDetail>[1];
     const txt = cadenceDetail([], plan, b);
-    expect(txt).toContain('“ai consulting” (needs a fix)');
+    expect(txt).toContain('"ai consulting" (needs a fix)');
     expect(txt).toContain('fix the others');
     expect(txt).not.toMatch(/Publish them to continue$/);
   });
@@ -98,7 +98,7 @@ describe('R111 — a draft that failed its quality check is never offered for pu
     expect(recs.find((r) => r.id.startsWith('engine:site_tracker:publish'))?.action).toMatchObject({ label: 'Report the published URL', mode: 'published' });
   });
 
-  it('recommendations: a `not_ready` content row is "Fix the draft … and run it again", not "Publish the page"', () => {
+  it('recommendations: a `not_ready` content row is "Fix the draft ... and run it again", not "Publish the page"', () => {
     const b = bundleWith({ items: [{ keyword: 'ai consulting', source: 'app', pageType: 'Service Page', rung: 0, ladderId: '', requestId: '', startedAt: ago(5), status: 'not_ready', publishedUrl: '', publishedAt: '', week: '', existingPageUrl: '', qaReasons: 'covers 60% against 90%' } as never] });
     const recs = recommend(SITE, b);
     expect(recs.some((r) => r.id === 'content:publish:ai consulting')).toBe(false);
@@ -109,7 +109,7 @@ describe('R111 — a draft that failed its quality check is never offered for pu
   });
 });
 
-describe('R66 — an audit is compared only with the previous audit of the same report type', () => {
+describe('R66: an audit is compared only with the previous audit of the same report type', () => {
   const pt = (id: string, at: string, type: string, score: number): AuditPoint =>
     ({ auditId: id, auditedAt: at, reportType: type, healthScore: score, grade: '', pagesCrawled: 47, findings: 0, critical: 0, high: 0, medium: 0, low: 0, scheduled: false }) as AuditPoint;
   // the stored rows of 2026-10-14 / 15 (exec 595 = technical 83, exec 614 = full 70; the full report of 2026-10-14 = 69)
@@ -133,7 +133,7 @@ describe('R66 — an audit is compared only with the previous audit of the same 
   });
 });
 
-describe('R74 — a finding that rested on one outside reading is not "fixed" when it is no longer seen', () => {
+describe('R74: a finding that rested on one outside reading is not "fixed" when it is no longer seen', () => {
   it('follows the engine\'s rule: brand / AI readings and a full report\'s model-written review are one reading; measured findings are not', () => {
     expect(oneReadingFinding({ title: 'Does not rank at the top for its own brand name', category: 'Authority' }, 'full')).toBe(true);
     expect(oneReadingFinding({ title: 'ChatGPT recommends other providers', category: 'AI' }, 'full')).toBe(true);
@@ -143,7 +143,7 @@ describe('R74 — a finding that rested on one outside reading is not "fixed" wh
   });
 });
 
-describe('R116 — a request the engine refuses after its "started" note is closed with the engine\'s own sentence', () => {
+describe('R116: a request the engine refuses after its "started" note is closed with the engine\'s own sentence', () => {
   // the body agent A5's monitor refusal posts (contract of 2026-10-16)
   const refusal = { stage: 'rejected', status: 'rejected', error: 'Another backlinks check for techand.ai is still running (started 19:40). Wait for its report, then ask again.', request_id: '621' };
 
@@ -168,7 +168,7 @@ describe('R116 — a request the engine refuses after its "started" note is clos
   });
 });
 
-describe('R113 — the site report\'s list line follows its own significance test', () => {
+describe('R113: the site report\'s list line follows its own significance test', () => {
   const body = { stage: 'site_tracker', gsc: { totals: { cur: { clicks: 32, impressions: 5308 } }, deltas: { clicks_pct: 52 } }, significance: { clicks: { pct: 52, real: false, significant: false, watch: true } } };
   it('a change the test calls not real is "within normal variation", with no percentage', () => {
     const s = summarize('site_tracker', body);
@@ -181,7 +181,7 @@ describe('R113 — the site report\'s list line follows its own significance tes
   });
 });
 
-describe('R104 — the Pipeline\'s last run is the schedule\'s own fire; on-demand runs and missed fires are named', () => {
+describe('R104: the Pipeline\'s last run is the schedule\'s own fire; on-demand runs and missed fires are named', () => {
   const auto = (o: Partial<AutomationStatus>): AutomationStatus => ({ id: 'rank_tracker', state: 'on', reason: null, nextRunAt: '2026-10-19T12:00:00.000Z', lastRunAt: '2026-10-15T19:48:00.000Z', lastResult: '0 ladder pages in the top 10', lastReportId: 'r', monthlyCredits: 0.1, detail: null, ...o });
 
   it('only an on-demand run since the Monday due time: no last run, "scheduled run missed", and the run named as on demand', () => {
@@ -203,7 +203,7 @@ describe('R104 — the Pipeline\'s last run is the schedule\'s own fire; on-dema
   });
 });
 
-describe('R95 / R104 — the AI Pulse series has one point per date, even with a scheduled and an on-demand reading that day', () => {
+describe('R95 / R104: the AI Pulse series has one point per date, even with a scheduled and an on-demand reading that day', () => {
   const row = (o: Record<string, unknown>) => ({ site_id: 's', domain: 'techand.ai', date: '2026-10-15', checked_at: '', run_id: '', samples: 0, mentioned: 0, cited: 0, mention_rate: 0, citation_rate: 0, share_of_voice: 0, visibility_score: 0, engines_json: '', prompts_json: '', competitors_json: '', sources_json: '', alerts: '', cost_usd: 0, ...o }) as never;
 
   it('pools the two rows of 2026-10-15: samples, mentions and citations summed, rates recomputed; the newest reading is the last run', () => {
@@ -220,7 +220,7 @@ describe('R95 / R104 — the AI Pulse series has one point per date, even with a
   });
 });
 
-describe('R116 — the refusal A5 posts carries extra fields; the handler takes the contract and ignores the rest', () => {
+describe('R116: the refusal A5 posts carries extra fields; the handler takes the contract and ignores the rest', () => {
   it('closes the run with the sentence whatever else the body carries', () => {
     const body = { stage: 'rejected', status: 'rejected', error: 'A backlinks check for techand.ai started 81 ms earlier is still running.', request_id: '621', domain: 'techand.ai', mode: 'backlinks', on_demand: true, reason: 'same_mode', basis: { open: 1 }, execution_id: '624', parent_run_id: '621', cost_usd: 0, refused_at: '2026-10-15T19:41:00Z' };
     expect(stageOf(body)).toBe('rejected');

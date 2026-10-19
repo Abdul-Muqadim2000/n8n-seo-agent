@@ -166,12 +166,12 @@ describe('pipeline notices', () => {
     expect(near.id).toBe('ladder-overlap:e invoicing in the uae');
     expect(near.tone).toBe('warning');
     expect(near.confirm).toBe('Plan this ladder anyway');
-    expect(near.body).toContain('main keyword of your ladder “e invoicing uae”');
+    expect(near.body).toContain('main keyword of your ladder "e invoicing uae"');
     expect(near.link?.ladderId).toBe('lad1');
     // a page keyword of the ladder (exact or near)
     const [pg] = pipelineNotices('ladder', { keyword: 'UAE e-invoicing penalty' }, data());
     expect(pg.id).toBe('ladder-overlap:uae e invoicing penalty');
-    expect(pg.body).toContain('“uae e invoicing penalties” in “E-invoicing”');
+    expect(pg.body).toContain('"uae e invoicing penalties" in "E-invoicing"');
     // ladders from before the keywords field: the planned pages count
     const old = data({ ladders: [{ ...data().ladders[0], keywords: undefined }] });
     expect(pipelineNotices('ladder', { keyword: 'einvoicing software in dubai' }, old)[0].id).toBe('ladder-overlap:einvoicing software in dubai');

@@ -6,7 +6,7 @@ import { autopilotMonthlyUsd, monitorSettingsSchema } from '@seo/shared';
 // Credits as customers live with them (app/docs/CREDITS.md), end to end on a real Postgres (PGlite, every migration): lots used
 // soonest-expiring first, debt paid down by the next lot, expiry, plan months, the quote held and never exceeded, failed runs free,
 // autopilot / on-demand kept apart, credits kept for the schedules, the company's own limits, the guard pausing and resuming the
-// schedules, "Buy credits" requests fulfilled by the admin, the Credits page, its activity and CSV — and no dollar figure anywhere.
+// schedules, "Buy credits" requests fulfilled by the admin, the Credits page, its activity and CSV, and no dollar figure anywhere.
 
 const sa = vi.hoisted(() => ({ calls: [] as Record<string, unknown>[], mails: [] as { to: string; subject: string }[] }));
 vi.hoisted(() => {
@@ -174,13 +174,13 @@ describe('quotes, holds and what a run is charged', () => {
   });
   const c = () => (globalThis as unknown as { qc: InstanceType<typeof Client> }).qc;
 
-  it('a run is quoted in whole credits, held while it runs, and charged what it used — never more than the quote', async () => {
+  it('a run is quoted in whole credits, held while it runs, and charged what it used, never more than the quote', async () => {
     const r = await c().post(`/api/orgs/${ids.org}/runs`, verdict);
     expect(r.status).toBe(200);
     const run = (await db.query.runs.findFirst({ where: eq(schema.runs.orgId, ids.org) }))!;
     expect(run.quotedCredits).toBe(12); // a verdict reserves $0.20 -> 12 credits
     expect((await c().get(`/api/orgs/${ids.org}/billing`)).body).toMatchObject({ held: 12, available: 188 });
-    // the engine settles it at $0.50 — 30 credits — but it was quoted 12: 12 are charged, 18 absorbed
+    // the engine settles it at $0.50, 30 credits, but it was quoted 12: 12 are charged, 18 absorbed
     await db.update(schema.runs).set({ status: 'completed', completedAt: new Date() }).where(eq(schema.runs.id, run.id));
     await callback(ids.org, run.id, run.requestId!, 'q-e1');
     await sync([engineRow({ id: 'q-e1', key: `app:${ids.org}`, mode: 'verdict', usd: 0.5 })]);
@@ -268,7 +268,7 @@ describe('the credits kept for the schedules, and the company\'s own limits', ()
 });
 
 describe('the guard', () => {
-  it('out of credits: pauses the schedules (once), tells the owners, and resumes them after a top-up — never what a person paused', async () => {
+  it('out of credits: pauses the schedules (once), tells the owners, and resumes them after a top-up, never what a person paused', async () => {
     sa.calls.length = 0;
     sa.mails.length = 0;
     const { org } = await company('guard@credits.test', 'Guard Co');
@@ -353,7 +353,7 @@ describe('Buy credits: the request, the admin\'s confirmation', () => {
     expect(b.requests.map((x: { status: string }) => x.status)).toEqual(['cancelled', 'fulfilled']);
     const row = (await boss.get(`/api/admin/companies/${org.id}`)).body;
     expect(row.money.revenueUsd).toBe(100);
-    // the admin's credit book: 2,000 bought for $100, 200 welcome credits given free, 2,200 left — owed at list $110, costing us ~$36.67
+    // the admin's credit book: 2,000 bought for $100, 200 welcome credits given free, 2,200 left, owed at list $110, costing us ~$36.67
     expect(row.credits.book).toMatchObject({
       bought: 2000, boughtUsd: 100, free: 200, freeListUsd: 10, used: 0, remaining: 2200, remainingListUsd: 110, creditValueUsd: 0.05, markup: 3,
     });

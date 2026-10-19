@@ -43,7 +43,7 @@ export function VerdictForm({ initialSiteId, prefill }: ToolFormProps) {
         <TextField label="Keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. erp implementation services" hint="One search phrase, the way a buyer would type it into Google." />
         <CountryField reg={form.register('country')} error={errMsg(e.country)} />
       </FormCard>
-      <FormCard title="Your business" description="Lets the verdict judge relevance, not just competition.">
+      <FormCard title="Your business" description="Lets the verdict judge relevance as well as competition.">
         <TextAreaField
           label="What you sell and to whom"
           reg={form.register('business')}
@@ -147,13 +147,13 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
         <SiteField optional value={v.siteId} onChange={(id) => form.setValue('siteId', id, { shouldDirty: true, shouldValidate: form.formState.isSubmitted })} error={errMsg(e.siteId)} />
         <TextField label="Keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. erp implementation services dubai" hint="The main search phrase the page should rank for. Related phrases are found and covered automatically." />
         {v.ladder && (
-          <Callout tone="info" title={`Part of the keyword ladder “${v.ladder.head || 'your ladder'}”`}>
-            {v.ladder.rung === 4 ? 'The top page of the ladder' : `Rung ${v.ladder.rung}`}: the page links to the ladder’s top page and a sibling, and the ladder marks it as written so the weekly cadence moves on.
+          <Callout tone="info" title={`Part of the keyword ladder "${v.ladder.head || 'your ladder'}"`}>
+            {v.ladder.rung === 4 ? 'The top page of the ladder' : `Rung ${v.ladder.rung}`}: the page links to the ladder's top page and a sibling, and the ladder marks it as written so the weekly cadence moves on.
           </Callout>
         )}
         {v.aiTarget && (
           <Callout tone="info" title="Written to be the page AI cites">
-            For “{v.aiTarget.question}”: the answer comes first, each search the assistants run gets its own section{v.aiTarget.kind === 'refresh' ? ', and your existing page is refreshed with today’s facts and date' : ''}.
+            For "{v.aiTarget.question}": the answer comes first, each search the assistants run gets its own section{v.aiTarget.kind === 'refresh' ? ', and your existing page is refreshed with today\'s facts and date' : ''}.
           </Callout>
         )}
         <CountryField reg={form.register('country')} error={errMsg(e.country)} />
@@ -180,7 +180,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
             reg={form.register('localArea')}
             error={errMsg(e.localArea)}
             placeholder="e.g. Dubai Marina"
-            hint="Where the service is offered. The page carries your verified address from the business profile. Optional when the keyword already names the place (“… in Dubai”)."
+            hint="Where the service is offered. The page carries your verified address from the business profile. Optional when the keyword already names the place (&quot;... in Dubai&quot;)."
           />
         )}
         <TextField
@@ -189,7 +189,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
           reg={form.register('existingPageUrl')}
           error={errMsg(e.existingPageUrl)}
           inputMode="url"
-          placeholder={site ? `https://${site.domain}/services/…` : 'Choose your website first'}
+          placeholder={site ? `https://${site.domain}/services/...` : 'Choose your website first'}
           hint={site ? `Rewrites and strengthens this page instead of writing a new one. Must be on ${site.domain}.` : 'Available when a website is chosen.'}
         />
         {site && !v.existingPageUrl && (
@@ -228,7 +228,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
             reg={form.register('cta')}
             error={errMsg(e.cta)}
             placeholder="e.g. Book a free readiness assessment"
-            hint={site?.cta ? `Leave empty to use “${site.cta}” from the website settings.` : 'What the reader should do at the end of the page.'}
+            hint={site?.cta ? `Leave empty to use "${site.cta}" from the website settings.` : 'What the reader should do at the end of the page.'}
           />
           <TextAreaField
             label="Business facts"
@@ -261,7 +261,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
           </button>
           {videoOpen && (
             <div className="animate-fade-in space-y-5 border-t border-line px-5 py-5 sm:px-6">
-              <TextField label="Video link" optional reg={form.register('videoUrl')} error={errMsg(e.videoUrl)} inputMode="url" placeholder="https://www.youtube.com/watch?v=…" hint="Title, duration and thumbnail are read from YouTube or Vimeo." />
+              <TextField label="Video link" optional reg={form.register('videoUrl')} error={errMsg(e.videoUrl)} inputMode="url" placeholder="https://www.youtube.com/watch?v=..." hint="Title, duration and thumbnail are read from YouTube or Vimeo." />
               {!!v.videoUrl && (
                 <TextAreaField
                   label="Transcript"
@@ -361,7 +361,7 @@ export function DiscoverForm({ initialSiteId, prefill }: ToolFormProps) {
           reg={form.register('customers')}
           error={errMsg(e.customers)}
           placeholder="e.g. CFOs of mid-sized distributors"
-          hint={site?.customers ? `Leave empty to use “${site.customers}”.` : 'Helps the AI review drop keywords your buyers would never search.'}
+          hint={site?.customers ? `Leave empty to use "${site.customers}".` : 'Helps the AI review drop keywords your buyers would never search.'}
         />
         <div className="grid gap-5 sm:grid-cols-2">
           <CountryField reg={form.register('country')} error={errMsg(e.country)} />

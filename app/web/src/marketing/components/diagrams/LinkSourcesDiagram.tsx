@@ -45,8 +45,8 @@ export function LinkSourcesDiagram({ className }: { className?: string }) {
     );
   };
   return (
-    <figure className={className} aria-label={`Nine link sources — ${linkSources.join(', ')} — merge into one ledger that Alaventra checks itself, scoring SEO, referral and brand value.`}>
-      {/* wide: sources → fan-in → ledger → fan-out → values */}
+    <figure className={className} aria-label={`Nine link sources (${linkSources.join(', ')}) merge into one ledger that Alaventra checks itself, scoring SEO, referral and brand value.`}>
+      {/* wide: sources -> fan-in -> ledger -> fan-out -> values */}
       <div className="hidden h-[440px] grid-cols-[minmax(0,220px)_minmax(48px,1fr)_minmax(0,260px)_minmax(40px,0.6fr)_minmax(0,170px)] items-stretch lg:grid" aria-hidden>
         <ul className="grid h-full grid-cols-1" style={{ gridTemplateRows: `repeat(${linkSources.length}, minmax(0, 1fr))` }}>
           {linkSources.map((s) => (

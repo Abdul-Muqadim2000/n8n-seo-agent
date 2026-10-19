@@ -70,7 +70,7 @@ export function AutoManualLanes({ className }: { className?: string }) {
     <div ref={ref} className={cn('rounded-2xl border border-line bg-surface p-5 shadow-raised sm:p-7', on && 'is-on', className)}>
       <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-6">
         <Lane mode="auto" icon={Zap} title="Auto" body="The step runs on schedule. Every page still shows in the pipeline." rows={AUTO} />
-        <Lane mode="manual" icon={UserCheck} title="Manual" body="The step waits in “Needs you” until someone approves it." rows={MANUAL} />
+        <Lane mode="manual" icon={UserCheck} title="Manual" body='The step waits in "Needs you" until someone approves it.' rows={MANUAL} />
       </div>
     </div>
   );

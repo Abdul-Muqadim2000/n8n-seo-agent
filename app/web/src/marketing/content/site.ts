@@ -5,10 +5,10 @@ import { solutions } from './solutions';
 export const site = {
   name: 'Alaventra',
   descriptor: 'Enterprise-grade autonomous SEO.',
-  salesEmail: 'sales@alaventra.example', // PLACEHOLDER — confirm the real sales address
-  supportEmail: 'support@alaventra.example', // PLACEHOLDER — confirm the real support address
-  partnersEmail: 'partners@alaventra.example', // PLACEHOLDER — confirm the real partnerships address
-  securityEmail: 'security@alaventra.example', // PLACEHOLDER — confirm the real security address
+  salesEmail: 'sales@alaventra.example', // PLACEHOLDER, confirm the real sales address
+  supportEmail: 'support@alaventra.example', // PLACEHOLDER, confirm the real support address
+  partnersEmail: 'partners@alaventra.example', // PLACEHOLDER, confirm the real partnerships address
+  securityEmail: 'security@alaventra.example', // PLACEHOLDER, confirm the real security address
   copyright: '© 2026 Alaventra',
 } as const;
 
@@ -64,7 +64,7 @@ export const footerNav: { title: string; links: NavLink[] }[] = [
   },
 ];
 
-/** engines and tools Alaventra works with — shown as text only (no third-party logos) */
+/** engines and tools Alaventra works with, shown as text only (no third-party logos) */
 export const integrations: string[] = [
   'Google Search Console',
   'Google Analytics 4',

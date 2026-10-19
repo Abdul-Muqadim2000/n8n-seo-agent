@@ -5,11 +5,11 @@ import { Drawn } from './parts';
 // The guide panel as the product shows it: one job, your own values, the provider you use (sample data).
 
 const DONE = ['Find where your DNS is managed', 'Open the DNS records for example.com'];
-const LATER = ['Save it, then press “Check now”', 'Leave the record in place'];
+const LATER = ['Save it, then press "Check now"', 'Leave the record in place'];
 const VALUES: { label: string; value: string }[] = [
   { label: 'Type', value: 'TXT' },
   { label: 'Host / name', value: 'example.com' },
-  { label: 'Value', value: 'seo-agent-verification=7f3a…' },
+  { label: 'Value', value: 'seo-agent-verification=7f3a...' },
 ];
 const PROVIDERS = ['Cloudflare', 'GoDaddy', 'Namecheap'];
 

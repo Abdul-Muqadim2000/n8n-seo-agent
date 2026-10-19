@@ -62,7 +62,7 @@ describe('ladder routes', () => {
     expect(n8n.upserts).toEqual([]);
   });
 
-  it('PATCH writes the ladder’s row (filtered by ladder and domain) and answers with its card', async () => {
+  it('PATCH writes the ladder\'s row (filtered by ladder and domain) and answers with its card', async () => {
     const r = await send('PATCH', '/ladders/lad_mine', { mode: 'manual' });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ id: 'lad_mine', mode: 'manual' });
@@ -99,7 +99,7 @@ describe('ladder routes', () => {
     expect(n8n.upserts[0]).toMatchObject({ filters: [{ value: '_site' }, { value: 'techand.ai' }], data: { ladder_id: '_site', max_active: 3, opportunities: 'manual', max_waiting: 3, mode: 'auto' } });
   });
 
-  it('PATCH automation: "Choose keywords for me" is the _site row’s auto_start (only that column when the row exists)', async () => {
+  it('PATCH automation: "Choose keywords for me" is the _site row\'s auto_start (only that column when the row exists)', async () => {
     expect((await send('PATCH', '/automation', { autoStartLadders: 'yes' })).statusCode).toBe(400);
     let r = await send('PATCH', '/automation', { autoStartLadders: true });
     expect(r.json()).toMatchObject({ autoStartLadders: true, defaultMode: 'auto', maxActiveLadders: 2 });

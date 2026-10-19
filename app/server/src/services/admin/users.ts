@@ -71,7 +71,7 @@ export async function createUser(req: FastifyRequest, body: CreateUserInput): Pr
   if (body.orgId) {
     org = (await db.query.organizations.findFirst({ where: eq(schema.organizations.id, body.orgId) })) ?? null;
     if (!org) throw badRequest('Company not found', { orgId: 'Unknown company' });
-    if (org.kind === 'client') throw badRequest('People of a client workspace are added from its agency’s Clients page.', { orgId: 'A client workspace' });
+    if (org.kind === 'client') throw badRequest('People of a client workspace are added from its agency\'s Clients page.', { orgId: 'A client workspace' });
   }
   // the slug is chosen before the transaction (a read on another connection inside it would wait on itself on a one-connection pool)
   const slug = body.newCompanyName ? await uniqueSlug(body.newCompanyName) : '';
@@ -200,7 +200,7 @@ export async function deleteUser(
 export async function setMembership(req: FastifyRequest, target: UserRow, orgId: string, role: string): Promise<{ added: boolean; before: string | null }> {
   const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, orgId) });
   if (!org) throw notFound('Company not found');
-  if (org.kind === 'client') throw badRequest('People of a client workspace are managed from its agency’s Clients page.');
+  if (org.kind === 'client') throw badRequest('People of a client workspace are managed from its agency\'s Clients page.');
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.orgId, orgId), eq(schema.memberships.userId, target.id)) });
   if (m && m.role === role) return { added: false, before: m.role };
   if (m?.role === 'owner' && role !== 'owner') await assertNotLastOwner(org, target.id);

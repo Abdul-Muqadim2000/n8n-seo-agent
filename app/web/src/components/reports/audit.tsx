@@ -83,7 +83,7 @@ export function AuditReport({ report }: { report: ReportDetail }) {
         }
       />
 
-      {/* G18-2 (2026-10-12): the report folds its minor items into one line and says how many — the same number the technical page folds. */}
+      {/* G18-2 (2026-10-12): the report folds its minor items into one line and says how many, the same number the technical page folds. */}
       <Block
         title="Issues found"
         description={`${SEVERITIES.reduce((a, k) => a + c(k), 0)} findings by severity${minorCount ? ` · ${minorCount} minor ${minorCount === 1 ? 'item' : 'items'} folded into one line in the report` : ''}`}
@@ -121,7 +121,7 @@ export function AuditReport({ report }: { report: ReportDetail }) {
       {has(p.entity) && <EntityCheck e={obj(p.entity)} domain={domain} siteId={report.siteId} />}
       {!has(p.search_console) && !has(p.audit_diff) && (
         <Callout tone="info">
-          {/* G5: in a white-label portal the engine's PDF is not offered — never point at a document the reader does not have */}
+          {/* G5: in a white-label portal the engine's PDF is not offered, never point at a document the reader does not have */}
           {report.files.some((f) => f.kind === 'pdf' || f.kind === 'docx')
             ? 'The PDF and Word reports hold every finding with the affected pages and how to fix them.'
             : 'Use Save as PDF at the top of the page to keep a copy of this report.'}
@@ -152,7 +152,7 @@ function AuditDiff({ diff }: { diff: P }) {
       description={
         <>
           {str(diff.summary)}
-          {str(prev.audited_at) && <> · compared with {fmtDate(str(prev.audited_at))} (score {num(prev.health_score) ?? '–'})</>}
+          {str(prev.audited_at) && <> · compared with {fmtDate(str(prev.audited_at))} (score {num(prev.health_score) ?? '-'})</>}
         </>
       }
       actions={
@@ -254,7 +254,7 @@ function FixPack({ fixPack, report }: { fixPack: P; report: ReportDetail }) {
 function InternalLinks({ links }: { links: P[] }) {
   const cols: Column<P>[] = [
     { key: 'from_url', header: 'On this page', sortValue: (r) => str(r.from_url), cell: (r) => <ExternalLink href={str(r.from_url)}>{shortUrl(str(r.from_url))}</ExternalLink> },
-    { key: 'anchor', header: 'Add a link with the text', cell: (r) => <span className="text-ink">“{str(r.anchor)}”</span> },
+    { key: 'anchor', header: 'Add a link with the text', cell: (r) => <span className="text-ink">"{str(r.anchor)}"</span> },
     { key: 'to_url', header: 'Pointing to', sortValue: (r) => str(r.to_url), cell: (r) => <ExternalLink href={str(r.to_url)}>{shortUrl(str(r.to_url))}</ExternalLink> },
     { key: 'reason', header: 'Why', cell: (r) => <span className="text-[13px] text-ink-3">{str(r.reason)}</span>, hideOnMobile: true },
   ];
@@ -290,7 +290,7 @@ function SearchConsole({ sc }: { sc: P }) {
     { key: 'clicks', header: 'Clicks', align: 'right', sortValue: (r) => num(r.clicks), cell: (r) => n(r.clicks) },
     { key: 'impressions', header: 'Impressions', align: 'right', sortValue: (r) => num(r.impressions), cell: (r) => n(r.impressions) },
     { key: 'ctr', header: 'CTR', align: 'right', sortValue: (r) => num(r.ctr), cell: (r) => pctRatio(r.ctr), hideOnMobile: true },
-    { key: 'position', header: 'Position', align: 'right', sortValue: (r) => num(r.position), cell: (r) => <PositionPill value={num(r.position)} text={num(r.position) == null ? '–' : num(r.position)!.toFixed(1)} /> },
+    { key: 'position', header: 'Position', align: 'right', sortValue: (r) => num(r.position), cell: (r) => <PositionPill value={num(r.position)} text={num(r.position) == null ? '-' : num(r.position)!.toFixed(1)} /> },
   ];
   return (
     <Block
@@ -314,7 +314,7 @@ function SearchConsole({ sc }: { sc: P }) {
           { icon: <MousePointerClick />, label: 'Clicks', value: n(totals.clicks) },
           { icon: <Eye />, label: 'Impressions', value: n(totals.impressions) },
           { icon: <Sparkles />, label: 'Click-through rate', value: pctRatio(totals.ctr, 2) },
-          { icon: <BarChart3 />, label: 'Average position', value: num(totals.position)?.toFixed(1) ?? '–' },
+          { icon: <BarChart3 />, label: 'Average position', value: num(totals.position)?.toFixed(1) ?? '-' },
         ]}
       />
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -364,7 +364,7 @@ function SearchConsole({ sc }: { sc: P }) {
           <ul className="space-y-1 text-[13px]">
             {mismatch.slice(0, 10).map((m, i) => (
               <li key={i}>
-                {shortUrl(str(m.url))} → {shortUrl(str(m.google_canonical) || str(m.canonical))}
+                {shortUrl(str(m.url))} to {shortUrl(str(m.google_canonical) || str(m.canonical))}
               </li>
             ))}
           </ul>
@@ -401,12 +401,12 @@ function SiteStructure({ s }: { s: P }) {
         items={[
           { icon: <Layers />, label: 'Pages crawled', value: n(s.crawled_pages) },
           { icon: <CheckCircle2 />, label: 'Indexable pages', value: n(s.indexable_pages) },
-          { icon: <Network />, label: 'Within 3 clicks of home', value: num(s.within_3_clicks_pct) != null ? `${num(s.within_3_clicks_pct)}%` : '–' },
+          { icon: <Network />, label: 'Within 3 clicks of home', value: num(s.within_3_clicks_pct) != null ? `${num(s.within_3_clicks_pct)}%` : '-' },
           { icon: <MapPinned />, label: 'URLs in the sitemap', value: n(sm.urls) },
           { label: 'Indexable, not in sitemap', value: n(s.indexable_not_in_sitemap) },
           { label: 'Only in the sitemap (orphans)', value: n(s.sitemap_only) },
           { label: 'Broken sitemap URLs', value: n(s.sitemap_broken) },
-          { label: 'Sitemap status', value: num(sm.status) != null ? `HTTP ${num(sm.status)}${sm.is_index === true ? ' · index' : ''}` : '–' },
+          { label: 'Sitemap status', value: num(sm.status) != null ? `HTTP ${num(sm.status)}${sm.is_index === true ? ' · index' : ''}` : '-' },
         ]}
       />
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -444,10 +444,10 @@ function EntityCheck({ e, domain, siteId }: { e: P; domain: string; siteId: stri
           <SectionTitle>On your homepage</SectionTitle>
           <KeyValue
             items={[
-              { label: 'Business name', value: str(home.name) || str(e.business_name) || '–' },
+              { label: 'Business name', value: str(home.name) || str(e.business_name) || '-' },
               { label: 'Schema type', value: str(home.type) || 'No Organization schema' },
-              { label: 'Phone', value: str(home.telephone) || '–' },
-              { label: 'Address', value: address || '–' },
+              { label: 'Phone', value: str(home.telephone) || '-' },
+              { label: 'Address', value: address || '-' },
               {
                 label: 'Profiles (sameAs)',
                 value: strs(home.sameAs).length ? (

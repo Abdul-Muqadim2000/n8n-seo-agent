@@ -145,7 +145,7 @@ export function TrackingForm({
         <Field
           label="GA4 property ID"
           optional
-          hint="Leave empty and we use the GA4 property whose web stream matches your domain. Find it in GA4 → Admin → Property details."
+          hint="Leave empty and we use the GA4 property whose web stream matches your domain. Find it in GA4, then Admin, then Property details."
           labelAction={<GuideButton id="ga4-property-id" vars={{ domain: site.domain }} variant="link" label="Where do I find it?" />}
           error={errors.ga4PropertyId?.message}
           className="max-w-sm"
@@ -223,7 +223,7 @@ export function TrackingForm({
         )}
       </fieldset>
 
-      {!showCountry && errors.country && <Callout tone="critical">Set the website’s main country in the business details first.</Callout>}
+      {!showCountry && errors.country && <Callout tone="critical">Set the website's main country in the business details first.</Callout>}
       {error != null && <Callout tone="critical">{errorMessage(error)}</Callout>}
 
       {showSubmit && !readOnly && (

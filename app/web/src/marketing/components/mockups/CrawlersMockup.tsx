@@ -44,11 +44,11 @@ export function CrawlersMockup({ className }: { className?: string }) {
             <ShieldAlert className="size-3.5 text-warning-text" />
             Impostors
           </span>
-          <span className="mt-1 block text-[11.5px] text-ink-2">640 requests used Googlebot’s name from other addresses</span>
+          <span className="mt-1 block text-[11.5px] text-ink-2">640 requests used Googlebot's name from other addresses</span>
         </div>
         <div className="mk-pop rounded-lg border border-line bg-page p-3" style={{ ['--mk-i' as string]: 7 }}>
           <span className="block text-[11.5px] font-semibold">Crawl budget</span>
-          <span className="mt-1 block text-[11.5px] text-ink-2">14% of Googlebot’s requests hit redirects and errors</span>
+          <span className="mt-1 block text-[11.5px] text-ink-2">14% of Googlebot's requests hit redirects and errors</span>
         </div>
       </div>
       <p className="mt-3 text-right font-mono text-[11px] text-ink-3">Sample data</p>

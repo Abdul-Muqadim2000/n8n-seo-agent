@@ -14,7 +14,7 @@ import { fmtAgo } from '@/lib/utils';
 import { SettingsCard } from '../SettingsCard';
 
 /**
- * G4 — Jira Cloud, Linear and Asana: one of each per company. Connecting checks the token and the project / team with the vendor
+ * G4, Jira Cloud, Linear and Asana: one of each per company. Connecting checks the token and the project / team with the vendor
  * before anything is stored; afterwards "Create ticket" appears beside every audit finding and recommendation.
  */
 
@@ -35,14 +35,14 @@ const FORMS: Record<TrackerKind, { guide: string; blurb: string; fields: FieldDe
       { name: 'email', label: 'Atlassian account e-mail', hint: 'The account the API token belongs to; tickets are created as this person.', type: 'email' },
       { name: 'apiToken', label: 'API token', secret: true },
       { name: 'projectKey', label: 'Project key', placeholder: 'SEO', hint: 'The letters before every ticket number, e.g. SEO in SEO-12.' },
-      { name: 'issueType', label: 'Issue type', placeholder: 'Task', hint: 'Task, Bug, Story… — as it is named in the project.' },
+      { name: 'issueType', label: 'Issue type', placeholder: 'Task', hint: 'Task, Bug, Story and so on, as it is named in the project.' },
     ],
   },
   linear: {
     guide: 'linear-api-key',
     blurb: 'Issues in one Linear team, written in Markdown.',
     fields: [
-      { name: 'apiKey', label: 'Personal API key', placeholder: 'lin_api_…', secret: true },
+      { name: 'apiKey', label: 'Personal API key', placeholder: 'lin_api_...', secret: true },
       { name: 'teamKey', label: 'Team key', placeholder: 'WEB', hint: 'The letters before every issue number, e.g. WEB in WEB-7.' },
     ],
   },
@@ -51,7 +51,7 @@ const FORMS: Record<TrackerKind, { guide: string; blurb: string; fields: FieldDe
     blurb: 'Tasks in one Asana project.',
     fields: [
       { name: 'token', label: 'Personal access token', secret: true },
-      { name: 'projectGid', label: 'Project id', placeholder: '1201234567890123', hint: 'The long number in the project’s address: app.asana.com/0/<this>/…' },
+      { name: 'projectGid', label: 'Project id', placeholder: '1201234567890123', hint: 'The long number in the project\'s address: app.asana.com/0/<this>/...' },
     ],
   },
 };
@@ -107,8 +107,8 @@ export function TrackersCard({ data }: { data: IntegrationsOverview }) {
     <SettingsCard
       icon={<ListTodo />}
       title="Issue trackers"
-      description="Send an audit finding or a recommendation to Jira, Linear or Asana as a ticket — one ticket per finding, with its state shown back here."
-      info="The ticket carries the finding’s evidence, example pages and the fix, and links back to Alaventra. Pushing the same finding again opens the ticket already made. Any member can create a ticket; only owners and admins connect a tracker."
+      description="Send an audit finding or a recommendation to Jira, Linear or Asana as a ticket. One ticket per finding, with its state shown back here."
+      info="The ticket carries the finding's evidence, example pages and the fix, and links back to Alaventra. Pushing the same finding again opens the ticket already made. Any member can create a ticket; only owners and admins connect a tracker."
     >
       <CardBody className="space-y-3">
         {TRACKER_KINDS.map((kind) => {

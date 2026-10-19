@@ -65,7 +65,7 @@ export async function api<T>(path: string, opts: { method?: Method; body?: unkno
   const data = text ? safeParse(text) : null;
   if (!res.ok) {
     const e = (data ?? {}) as Partial<ApiError> & Record<string, unknown>;
-    // G1: the company's idle timeout ended the session — back to sign-in (which explains why), then back here
+    // G1: the company's idle timeout ended the session, back to sign-in (which explains why), then back here
     if (res.status === 401 && e.code === 'session_idle' && typeof window !== 'undefined' && !window.location.pathname.startsWith('/login'))
       window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
     if (res.status === 403 && e.code === 'reauth_required' && stepUpHandler && !opts.noStepUp) {
@@ -86,7 +86,7 @@ function safeParse(t: string): unknown {
 }
 
 /** The message of an error answer. Ours carry `error` as text; Vercel's platform errors (e.g. MIDDLEWARE_INVOCATION_FAILED)
- *  answer `{"error":{"code","message"}}` — printing that object showed "[object Object]" on the sign-in page (2026-10-18). */
+ *  answer `{"error":{"code","message"}}`, printing that object showed "[object Object]" on the sign-in page (2026-10-18). */
 export function errorText(error: unknown, status: number): string {
   if (typeof error === 'string' && error.trim()) return error;
   const m = error && typeof error === 'object' ? (error as { message?: unknown }).message : undefined;

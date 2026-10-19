@@ -3,8 +3,8 @@ import type { ModeId } from './constants';
 /**
  * B-R3 / B-B1 (benchmark programme 2026-10-15, area 13 §3.1 and §5(b) B1): **one** cost table, not two.
  *
- * The app used to carry its own per-mode prices in two places — `MODES[mode].costUsd` in `constants.ts` and the arithmetic in
- * `estimate.ts` — both dated *"HANDOVER.md §4, live runs of 2026-10-02"*. The engine recalibrated its own table on 2026-10-13 from
+ * The app used to carry its own per-mode prices in two places, `MODES[mode].costUsd` in `constants.ts` and the arithmetic in
+ * `estimate.ts`, both dated *"HANDOVER.md §4, live runs of 2026-10-02"*. The engine recalibrated its own table on 2026-10-13 from
  * measured runs and made it self-correcting; by 2026-10-14 the app's copy was **1.3x to 2.5x above** what a run really costs
  * (`docs/system-review-2026-10-14/BENCHMARKS_2026-10-14.md`, area 13 §3.1: a one-page ladder shown as $1.80 cost $0.726). Over-stating
  * is the safe direction for a bill and the wrong direction for a guard: two customer-facing runs were refused at *"$5.74 of $6"* on
@@ -18,8 +18,8 @@ import type { ModeId } from './constants';
  *      figure it produces is labelled `source: 'app'` and reads "estimate" in the UI.
  *   2. **It defers to the engine the moment the engine speaks.** `runCostEstimate()` prefers, in order: what the run actually cost
  *      (`run_ledger`, settled), then the engine's own calibrated reservation (`run_cost_estimate_usd`), and only then this table.
- *      The engine's figure is self-correcting — it moves toward what each mode really costs and is never allowed below what the mode
- *      cost in its last runs — so the app must never argue with it.
+ *      The engine's figure is self-correcting, it moves toward what each mode really costs and is never allowed below what the mode
+ *      cost in its last runs, so the app must never argue with it.
  *
  * Nothing here pads, rounds up or holds anything back of its own: a number this file invents that the engine would not reserve is a
  * bug, because the customer would be refused a run the engine would have accepted.
@@ -29,7 +29,7 @@ import type { ModeId } from './constants';
  */
 
 // G6 (2026-10-18): the AI question panel's own cost (per panel size x engines x pulse setting, per weekly run, pulse morning and month) is
-// one formula in ./ai-panel.ts (estimateAiPanelCost) — the mirror of the engine's AIP.cost, both held to the same golden cases
+// one formula in ./ai-panel.ts (estimateAiPanelCost), the mirror of the engine's AIP.cost, both held to the same golden cases
 // (./ai-panel-cost-cases.generated.ts; cost.aipanel.test.ts here, harness S211 there). It is not repeated in this table.
 
 /** The estimate keys the engine prices a request against (`_cost_cal.js` `EST` / `DFS_EST`). */
@@ -54,7 +54,7 @@ export type CostKey =
 
 /**
  * One row per estimate key: `ai` is the Claude money, `dfs` the search-data money, and the engine reserves their sum.
- * `measured` is what that key actually cost in the run named in `basis` — kept beside the reservation so nobody has to open the
+ * `measured` is what that key actually cost in the run named in `basis`, kept beside the reservation so nobody has to open the
  * engine to see how conservative a figure is. Mirrored from `_cost_cal.js` (recalibrated 2026-10-13, unchanged on 2026-10-15).
  */
 export interface CostRow {
@@ -72,7 +72,7 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
   ladder: { ai: 0.18, dfs: 0.21, measured: 0.279, basis: 'a ladder plan, exec 495 ($0.231) plus the 24 results pages B2-4 reads to group the rungs, at $0.002 each (each page it writes reserves its own run)' },
   full: { ai: 0.08, dfs: 0.55, measured: 0.458, basis: 'the full SEO report, exec 523' },
   site_audit: { ai: 0, dfs: 0, measured: 0, basis: 'a technical audit calls no model (execs 497 / 513)' },
-  crawl: { ai: 0, dfs: 0.09, measured: 0.032, basis: 'the crawl of a technical audit; $0.09 is the provider’s quote, $0.032 the pages really crawled (exec 588)' },
+  crawl: { ai: 0, dfs: 0.09, measured: 0.032, basis: 'the crawl of a technical audit; $0.09 is the provider\'s quote, $0.032 the pages really crawled (exec 588)' },
   describe: { ai: 0.03, dfs: 0, measured: 0.012, basis: 'reading a homepage, exec 485' },
   ai_visibility: { ai: 0.14, dfs: 0.95, measured: 0.89, basis: 'an AI visibility check, exec 526' },
   backlinks: { ai: 0.06, dfs: 0.5, measured: 0.373, basis: 'a full backlink check, execs 528 / 529' },
@@ -88,7 +88,7 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
 const round = (n: number): number => Math.round(n * 10000) / 10000;
 
 // ---------------------------------------------------------------------------------------------------------------------------
-// R100: what the engine will actually reserve — its rolling figures (`seo_cache` rows of kind `cost`), ported from `_cost_cal.js`
+// R100: what the engine will actually reserve, its rolling figures (`seo_cache` rows of kind `cost`), ported from `_cost_cal.js`
 // ---------------------------------------------------------------------------------------------------------------------------
 
 /** One stored rolling figure (`seo_cache` key `cost:<ai|dfs>:<estimate key>`), as `_cost_cal.js` `readCal` reads it. */
@@ -111,7 +111,7 @@ const finite = (v: unknown): number => (typeof v === 'number' && Number.isFinite
 
 /**
  * The stored `cost:*` rows of `seo_cache` as one calibration. Rows are `{ key, value }` with `value` a JSON string. Anything that does
- * not parse, or is not a `cost:ai:` / `cost:dfs:` row for an estimate key this table knows, is ignored — the engine also keeps model
+ * not parse, or is not a `cost:ai:` / `cost:dfs:` row for an estimate key this table knows, is ignored, the engine also keeps model
  * factors in the same kind and they are none of the app's business.
  */
 export function parseCalibration(rows: ReadonlyArray<{ key?: unknown; value?: unknown }>): EngineCalibration {
@@ -137,7 +137,7 @@ export function parseCalibration(rows: ReadonlyArray<{ key?: unknown; value?: un
 }
 
 /**
- * What the engine reserves for ONE estimate key and kind — `_cost_cal.js` `estOf`, same formula: the shipped default until the key has
+ * What the engine reserves for ONE estimate key and kind, `_cost_cal.js` `estOf`, same formula: the shipped default until the key has
  * history; then the rolling mean x 1.25 (never above five times the default), and never below the most the key recently cost.
  */
 export function estOf(kind: CostKind, key: CostKey, cal?: EngineCalibration | null): { usd: number; calibrated: boolean } {
@@ -159,7 +159,7 @@ const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.
 const pagesNow = (v: Values): number => Math.min(3, Math.max(1, num(v.pagesNow, 1)));
 
 /**
- * Which estimate keys one request uses — the app's half of the engine's `keysFor`, written against the app's own form values
+ * Which estimate keys one request uses, the app's half of the engine's `keysFor`, written against the app's own form values
  * instead of the engine's payload flags. A key listed here is a run the engine will reserve for, whether it runs inside this
  * execution or is spawned as its own.
  */
@@ -199,7 +199,7 @@ export function costKeys(mode: ModeId, v: Values = {}): CostKey[] {
 
 /**
  * The app's pre-flight figure for one run, summed over the runs this request starts. With `cal` (the engine's own rolling figures, R100)
- * it is what the engine will reserve; without it, the shipped defaults — the fallback, and what `MODES[].costUsd` shows.
+ * it is what the engine will reserve; without it, the shipped defaults, the fallback, and what `MODES[].costUsd` shows.
  */
 export function estimateRunCost(mode: ModeId, v: Values = {}, cal?: EngineCalibration | null): number {
   const keys = costKeys(mode, v);
@@ -209,7 +209,7 @@ export function estimateRunCost(mode: ModeId, v: Values = {}, cal?: EngineCalibr
 /**
  * B-9 (re-rating 2026-10-17): the crawl row is ONE 200-page crawl without JavaScript, whatever the audit asked for. Exec 739 asked for a
  * JavaScript crawl ($0.36 quoted for 200 pages, 4x a plain one) and was shown $0.11. DataForSEO charges per crawled page, so an audit's
- * crawl scales with the pages it may crawl and x4 with JavaScript — the engine's `CC.crawlFactor` (`_cost_cal.js`), constant for constant.
+ * crawl scales with the pages it may crawl and x4 with JavaScript, the engine's `CC.crawlFactor` (`_cost_cal.js`), constant for constant.
  */
 export const CRAWL_BASE_PAGES = 200;
 export const CRAWL_JS_MULT = 4;
@@ -291,7 +291,7 @@ export function runCostEstimate(r: RunCostInput): CostFigure {
       source: 'measured',
       estimated: !!r.actualCostEstimated,
       basis: r.actualCostEstimated
-        ? 'What this run reported spending. Part of it is the engine’s own estimate: the model calls that stream report no token usage, so they are priced from the text instead.'
+        ? 'What this run reported spending. Part of it is the engine\'s own estimate: the model calls that stream report no token usage, so they are priced from the text instead.'
         : 'What this run reported spending, from the search-data tasks it paid for and the model calls it made.',
     };
   const engine = typeof r.engineCostEstimateUsd === 'number' && Number.isFinite(r.engineCostEstimateUsd) && r.engineCostEstimateUsd >= 0 ? r.engineCostEstimateUsd : null;
@@ -301,8 +301,8 @@ export function runCostEstimate(r: RunCostInput): CostFigure {
       source: 'engine',
       estimated: true,
       basis: r.engineCostBasis
-        ? `The engine’s own estimate for this run (${String(r.engineCostBasis).slice(0, 300)}).${r.actualCostPartial ? ' The run reported search-data costs only, which is less than this.' : ''}`
-        : `The engine’s own estimate for this run, from what runs of this kind have recently cost.${r.actualCostPartial ? ' The run reported search-data costs only, which is less than this.' : ''}`,
+        ? `The engine's own estimate for this run (${String(r.engineCostBasis).slice(0, 300)}).${r.actualCostPartial ? ' The run reported search-data costs only, which is less than this.' : ''}`
+        : `The engine's own estimate for this run, from what runs of this kind have recently cost.${r.actualCostPartial ? ' The run reported search-data costs only, which is less than this.' : ''}`,
     };
   const app = typeof r.estimatedCostUsd === 'number' && Number.isFinite(r.estimatedCostUsd) ? r.estimatedCostUsd : estimateRunCost(r.mode, r.input ?? {});
   return { usd: app, source: 'app', estimated: true, basis: APP_ESTIMATE_BASIS };
@@ -310,7 +310,7 @@ export function runCostEstimate(r: RunCostInput): CostFigure {
 
 /**
  * What one run counts for against the budget and in the usage page: what it reported spending, then the engine's calibrated figure,
- * then ours — except that a figure with no model-call part (R102 / R115) never counts for less than the best whole-run estimate,
+ * then ours, except that a figure with no model-call part (R102 / R115) never counts for less than the best whole-run estimate,
  * because the budget would then hold a number the run is known to exceed. `spend.ts` holds the same rule in SQL.
  */
 export function countedRunCost(r: { actual: number | null; partial?: boolean | null; engine: number | null; own: number }): number {
@@ -338,7 +338,7 @@ const fnum = (v: unknown): number | null => (typeof v === 'number' && Number.isF
 const rec = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 
 /**
- * R114: what a report's "Run ledger" card says — search data AND model calls, the total, and whose each figure is. A ledger with no
+ * R114: what a report's "Run ledger" card says, search data AND model calls, the total, and whose each figure is. A ledger with no
  * model-call figure (`ai_usd` absent) says "not reported" rather than showing a total that looks complete; `ai_usd: 0` is a real $0.
  * A crawl's price is a provider quote (`dataforseo_estimated_usd`): the search-data line then reads "partly estimated".
  */
@@ -356,7 +356,7 @@ export function ledgerBreakdown(ledger: unknown, extraCost?: number | null): Led
     dfs == null
       ? { usd: null, state: 'not reported', note: 'This run did not report its search-data cost.' }
       : dfsEst > 0
-        ? { usd: dfs, state: dfsEst >= dfs ? 'estimated' : 'partly estimated', note: `$${dfsEst.toFixed(4)} of it is the provider’s quote for a crawl, not the pages really crawled.` }
+        ? { usd: dfs, state: dfsEst >= dfs ? 'estimated' : 'partly estimated', note: `$${dfsEst.toFixed(4)} of it is the provider's quote for a crawl, not the pages really crawled.` }
         : { usd: dfs, state: 'measured', note: 'What the search-data provider charged for the tasks this run paid for.' };
 
   let model: LedgerPart;
@@ -383,7 +383,7 @@ export interface CostTableInfo {
 }
 
 export const PARTIAL_BASIS =
-  'Search data only — this run did not report its model calls, so what it really cost is higher than this figure.';
+  'Search data only: this run did not report its model calls, so what it really cost is higher than this figure.';
 
 export const APP_ESTIMATE_BASIS =
   'An estimate from what runs of this kind recently cost. The engine replaces it with its own figure as soon as the run starts, and with what the run really spent when it finishes.';

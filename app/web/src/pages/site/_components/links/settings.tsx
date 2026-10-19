@@ -1,5 +1,5 @@
 import { useEngineCal } from '@/lib/engine-cal';
-// Link building — the website's settings (approve each / automatic, the mailbox) and "Find opportunities now".
+// Link building, the website's settings (approve each / automatic, the mailbox) and "Find opportunities now".
 import { PRICES } from '@/lib/prices';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';

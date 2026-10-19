@@ -25,7 +25,7 @@ export default function VerifyEmailPage() {
   return (
     <AuthCard title="Confirm your e-mail">
       {!token && <Callout tone="warning">This link is missing its code. Open the link from the e-mail again.</Callout>}
-      {verify.isPending && <Spinner label="Confirming…" />}
+      {verify.isPending && <Spinner label="Confirming..." />}
       {verify.isSuccess && (
         <div className="flex items-start gap-3 text-sm text-ink-2">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-good-text" />

@@ -63,7 +63,7 @@ describe('cmsPage: the package every connector publishes', () => {
 });
 
 describe('findCmsPlaceholders', () => {
-  it('counts Content QA’s brackets and the labelled ones it leaves for the owner', () => {
+  it('counts Content QA\'s brackets and the labelled ones it leaves for the owner', () => {
     const found = findCmsPlaceholders(['<p>From [Price] a month. [Confirm: AED 50m] threshold. [Owner: confirm — 3 offices]. [Author Name]. [Price]</p>']);
     expect(found).toEqual([
       { token: '[Price]', count: 2, kind: 'placeholder' },
@@ -105,7 +105,7 @@ describe('cmsReadiness: the rule, which has no override', () => {
     expect(r.blockers.map((b) => b.code)).toEqual(['not_publishable']);
   });
 
-  it('a bracket left in the Markdown (the delivery rule’s A-13 hold) is one placeholder blocker with the list, not two blockers', () => {
+  it('a bracket left in the Markdown (the delivery rule\'s A-13 hold) is one placeholder blocker with the list, not two blockers', () => {
     const r = cmsReadiness(cand(page({ markdown: '# E-Invoicing\n\nFees start at [Price band: typical fee in AED].' })));
     expect(r.blockers.map((b) => b.code)).toEqual(['placeholders']);
     expect(r.blockers[0]!.items).toEqual([{ token: '[Price band: typical fee in AED]', count: 1, kind: 'placeholder' }]);

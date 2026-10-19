@@ -11,7 +11,7 @@ import {
   type EventEnvelope,
 } from './integrations';
 
-// G4 (app/docs/INTEGRATIONS.md): the pure half of the integrations — which events a stored callback means, the Slack / Teams
+// G4 (app/docs/INTEGRATIONS.md): the pure half of the integrations, which events a stored callback means, the Slack / Teams
 // formats, the address rules, the backoff.
 
 const facts = (over: Partial<CallbackFacts> & { payload?: Record<string, unknown> } = {}): CallbackFacts => ({
@@ -98,7 +98,7 @@ const env = (type: EventEnvelope['type'], data: Record<string, unknown>): EventE
 });
 
 describe('Slack and Teams formats', () => {
-  it('Slack: a notification text, one section, a button to the report, Slack’s control characters escaped', () => {
+  it('Slack: a notification text, one section, a button to the report, Slack\'s control characters escaped', () => {
     const m = slackMessage(env('alert.raised', { alerts: [{ level: 'high', text: 'Clicks fell <40%> & more' }], report: { url: 'https://app.example.com/o/org/reports/rep-1' } }));
     expect(m.text).toBe('Alert · northwind.example');
     const blocks = m.blocks as { type: string; text?: { text: string }; elements?: { url?: string; text?: unknown }[] }[];
@@ -114,7 +114,7 @@ describe('Slack and Teams formats', () => {
     const card = (m.attachments as { contentType: string; content: { type: string; body: { text: string }[]; actions: { url: string }[] } }[])[0]!;
     expect(card.contentType).toBe('application/vnd.microsoft.card.adaptive');
     expect(card.content.type).toBe('AdaptiveCard');
-    expect(card.content.body.map((b) => b.text)).toContain('Up peppol uae: 12 → 4 (+8)');
+    expect(card.content.body.map((b) => b.text)).toContain('Up peppol uae: 12 to 4 (+8)');
     expect(card.content.actions[0]!.url).toBe('https://app.example.com/r');
   });
 });

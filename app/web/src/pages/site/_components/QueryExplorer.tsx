@@ -24,7 +24,7 @@ const isStriking = (q: QueryPoint) => q.impressions > 0 && q.position >= 4 && q.
 export function GscMove({ prev, cur }: { prev: number; cur: number }) {
   if (cur > 0 && !(prev > 0)) return <Badge tone="accent">New</Badge>;
   if (!(cur > 0) && prev > 0) return <Badge>No impressions</Badge>;
-  if (!(cur > 0)) return <span className="text-xs text-ink-3">–</span>;
+  if (!(cur > 0)) return <span className="text-xs text-ink-3">-</span>;
   return <PositionMove prev={prev} cur={cur} digits={1} />;
 }
 
@@ -34,7 +34,7 @@ export function LivePos({ p }: { p: number }) {
   if (p === 0) return <PositionPill p={0} />;
   return (
     <span className="text-ink-3" title="Not checked live this week">
-      –
+      -
     </span>
   );
 }
@@ -85,7 +85,7 @@ export function QueryExplorer({ queries, periods }: { queries: readonly QueryPoi
     },
     { key: 'impressions', header: 'Impressions', align: 'right', sortValue: (r) => r.impressions, cell: (r) => compactNumber(r.impressions) },
     { key: 'ctr', header: 'CTR', align: 'right', sortValue: (r) => r.ctr, cell: (r) => ratioPct(r.ctr), hideOnMobile: true },
-    { key: 'position', header: 'Avg. position', align: 'right', sortValue: (r) => (r.position > 0 ? r.position : 999), cell: (r) => (r.position > 0 ? <PositionPill p={r.position} avg /> : '–') },
+    { key: 'position', header: 'Avg. position', align: 'right', sortValue: (r) => (r.position > 0 ? r.position : 999), cell: (r) => (r.position > 0 ? <PositionPill p={r.position} avg /> : '-') },
     { key: 'change', header: 'Change', align: 'right', sortValue: (r) => (r.position > 0 && r.prevPosition > 0 ? r.prevPosition - r.position : null), cell: (r) => <GscMove prev={r.prevPosition} cur={r.position} /> },
     { key: 'serp', header: 'Live', align: 'right', sortValue: (r) => (r.serpPosition > 0 ? r.serpPosition : 999), cell: (r) => <LivePos p={r.serpPosition} /> },
     {
@@ -99,7 +99,7 @@ export function QueryExplorer({ queries, periods }: { queries: readonly QueryPoi
             {urlPath(r.page)}
           </span>
         ) : (
-          <span className="text-ink-3">–</span>
+          <span className="text-ink-3">-</span>
         ),
     },
   ];
@@ -138,7 +138,7 @@ export function QueryExplorer({ queries, periods }: { queries: readonly QueryPoi
               onChange={setFilter}
               options={[
                 { value: 'all', label: 'All', count: counts.all },
-                { value: 'striking', label: 'Striking distance 4–20', count: counts.striking },
+                { value: 'striking', label: 'Striking distance 4-20', count: counts.striking },
                 { value: 'top10', label: 'Top 10', count: counts.top10 },
                 { value: 'new', label: 'New', count: counts.new },
                 { value: 'lost', label: 'Lost', count: counts.lost },
@@ -151,7 +151,7 @@ export function QueryExplorer({ queries, periods }: { queries: readonly QueryPoi
       <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-3">
         <Info className="mt-px size-3.5 shrink-0" aria-hidden />
         <span>
-          Select a query to see its trend across weekly reports. “Live” is the position found by this week’s live Google check (tracked keywords). Star = a keyword you track.
+          Select a query to see its trend across weekly reports. "Live" is the position found by this week's live Google check (tracked keywords). Star = a keyword you track.
         </span>
       </p>
       {open && <QueryDialog query={open} history={history} domain={site.domain} onClose={() => setOpen(null)} />}
@@ -193,7 +193,7 @@ function QueryDialog({ query, history, onClose }: { query: string; history: Quer
             { label: 'CTR', value: ratioPct(last.ctr) },
             { label: 'Average position', value: last.position > 0 ? `${last.position.toFixed(1)}${last.prevPosition > 0 ? ` (was ${last.prevPosition.toFixed(1)})` : ''}` : 'no impressions' },
             { label: 'Live Google position', value: last.serpPosition > 0 ? String(last.serpPosition) : last.serpPosition === 0 ? 'not in the top 50' : 'not checked' },
-            { label: 'Ranking page', value: last.page ? <ExternalLink href={last.page}>{urlPath(last.page)}</ExternalLink> : '–' },
+            { label: 'Ranking page', value: last.page ? <ExternalLink href={last.page}>{urlPath(last.page)}</ExternalLink> : '-' },
           ]}
         />
       )}
@@ -201,7 +201,7 @@ function QueryDialog({ query, history, onClose }: { query: string; history: Quer
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <ChartCard
             title="Average position"
-            table={{ columns: [{ key: 'periodEnd', label: '28 days to', format: (v) => fmtDate(String(v)) }, { key: 'position', label: 'Position', align: 'right', format: (v) => (v == null ? '–' : Number(v).toFixed(1)) }], rows: [...rows].reverse() }}
+            table={{ columns: [{ key: 'periodEnd', label: '28 days to', format: (v) => fmtDate(String(v)) }, { key: 'position', label: 'Position', align: 'right', format: (v) => (v == null ? '-' : Number(v).toFixed(1)) }], rows: [...rows].reverse() }}
           >
             <TimeSeriesChart data={rows} xKey="periodEnd" series={[{ key: 'position', label: 'Average position', format: (v) => v.toFixed(1) }]} invertY height={180} />
           </ChartCard>
@@ -236,14 +236,14 @@ export function QueryChangeTable({ rows, empty }: { rows: readonly QueryChange[]
       ),
     },
     { key: 'impressions', header: 'Impressions', align: 'right', sortValue: (r) => r.impressions, cell: (r) => `${compactNumber(r.impressions)}` },
-    { key: 'position', header: 'Avg. position', align: 'right', sortValue: (r) => (r.position > 0 ? r.position : 999), cell: (r) => (r.position > 0 ? <PositionPill p={r.position} avg /> : '–') },
+    { key: 'position', header: 'Avg. position', align: 'right', sortValue: (r) => (r.position > 0 ? r.position : 999), cell: (r) => (r.position > 0 ? <PositionPill p={r.position} avg /> : '-') },
     { key: 'move', header: 'Change', align: 'right', sortValue: (r) => r.positionDelta, cell: (r) => <GscMove prev={r.prevPosition} cur={r.position} /> },
     {
       key: 'page',
       header: 'Page',
       hideOnMobile: true,
       sortValue: (r) => r.page,
-      cell: (r) => (r.page ? <span className="block max-w-[16rem] truncate text-[13px] text-ink-2" title={r.page}>{urlPath(r.page)}</span> : <span className="text-ink-3">–</span>),
+      cell: (r) => (r.page ? <span className="block max-w-[16rem] truncate text-[13px] text-ink-2" title={r.page}>{urlPath(r.page)}</span> : <span className="text-ink-3">-</span>),
     },
   ];
   return <DataTable rows={[...rows]} columns={columns} rowKey={(r, i) => `${r.query}|${i}`} dense pageSize={10} empty={empty} />;

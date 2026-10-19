@@ -80,10 +80,10 @@ export function PublishedReport({ report }: { report: ReportDetail }) {
             <Block title="What Google sees" icon={<Eye />}>
               <KeyValue
                 items={[
-                  { label: 'Title', value: str(page.title) || '–' },
-                  { label: 'H1', value: str(page.h1) || '–' },
-                  { label: 'Description', value: str(page.meta_description) || '–' },
-                  { label: 'Canonical', value: str(page.canonical) ? shortUrl(str(page.canonical)) : '–' },
+                  { label: 'Title', value: str(page.title) || '-' },
+                  { label: 'H1', value: str(page.h1) || '-' },
+                  { label: 'Description', value: str(page.meta_description) || '-' },
+                  { label: 'Canonical', value: str(page.canonical) ? shortUrl(str(page.canonical)) : '-' },
                   { label: 'JSON-LD blocks', value: String(num(page.jsonld_blocks) ?? 0) },
                   { label: 'Words', value: n(page.words) },
                 ]}
@@ -104,7 +104,7 @@ export function PublishedReport({ report }: { report: ReportDetail }) {
                       description={
                         str(o.anchor) || str(o.reason) ? (
                           <>
-                            {str(o.anchor) && <>anchor “{str(o.anchor)}” </>}
+                            {str(o.anchor) && <>anchor "{str(o.anchor)}" </>}
                             {str(o.reason)}
                           </>
                         ) : undefined
@@ -186,8 +186,8 @@ export function ProfileReport({ report }: { report: ReportDetail }) {
         actions={editLink}
         stats={
           <>
-            <HeroStat label="Author and E-E-A-T" value={eeat != null ? `${eeat}%` : '–'} />
-            <HeroStat label="Local business details" value={local != null ? `${local}%` : '–'} />
+            <HeroStat label="Author and E-E-A-T" value={eeat != null ? `${eeat}%` : '-'} />
+            <HeroStat label="Local business details" value={local != null ? `${local}%` : '-'} />
             <HeroStat label="Fields on file" value={<CountUp value={rows.length} />} />
             <HeroStat label="Changed in this update" value={<CountUp value={strs(p.changed).length} />} />
           </>
@@ -233,7 +233,7 @@ function ScoreCard({ title, icon, score, items }: { title: string; icon: ReactNo
           ))}
         </ul>
       ) : (
-        <p className="font-display text-2xl font-semibold text-ink">{score != null ? `${score}%` : '–'}</p>
+        <p className="font-display text-2xl font-semibold text-ink">{score != null ? `${score}%` : '-'}</p>
       )}
     </Block>
   );
@@ -524,10 +524,10 @@ export function DescriptionReport({ report }: { report: ReportDetail }) {
         <Block title="Positioning" icon={<Target />}>
           <KeyValue
             items={[
-              { label: 'Area served', value: str(d.location_served) || '–' },
-              { label: 'Brand tone', value: str(d.tone_of_brand) || '–' },
-              { label: 'Suggested title', value: str(d.suggested_meta_title) || '–' },
-              { label: 'Suggested description', value: str(d.suggested_meta_description) || '–' },
+              { label: 'Area served', value: str(d.location_served) || '-' },
+              { label: 'Brand tone', value: str(d.tone_of_brand) || '-' },
+              { label: 'Suggested title', value: str(d.suggested_meta_title) || '-' },
+              { label: 'Suggested description', value: str(d.suggested_meta_description) || '-' },
             ]}
           />
         </Block>

@@ -3,7 +3,7 @@ import rateLimit from '@fastify/rate-limit';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // G4 (app/docs/INTEGRATIONS.md §4): the write API and the MCP run tools. The run path itself (`createRunWithMeta`: lock, budget,
-// engine front door) is the app's own and is mocked here; what is tested is everything this layer adds or must not lose — the
+// engine front door) is the app's own and is mocked here; what is tested is everything this layer adds or must not lose, the
 // scope, the key acting as its creator (re-checked), the forms' validation, another company's website, the forms' duplicate
 // warnings as a 409 that only an explicit acknowledgement passes, the dry run, the Idempotency-Key, and the MCP tool list.
 
@@ -54,7 +54,7 @@ vi.mock('../src/services/pipeline', () => ({ pipelineData: vi.fn(async () => ({ 
 vi.mock('../src/services/spend', () => ({ monthSpend: vi.fn(async () => 5) }));
 vi.mock('../src/services/billing', () => ({
   creditCheck: vi.fn(async () => ({ enforced: true, needed: 4, available: 1, held: 0, reserved: 0, enough: false, reason: 'balance' })),
-  // the real rounding: $0.12 × 60 credits per dollar = 7.2 → 8 whole credits
+  // the real rounding: $0.12 × 60 credits per dollar = 7.2 -> 8 whole credits
   quoteCredits: vi.fn((usd: number) => (usd > 0 ? Math.max(1, Math.ceil(Math.round(usd * 60 * 100) / 100 - 1e-9)) : 0)),
 }));
 vi.mock('../src/services/admin/settings', () => ({ settingsRow: vi.fn(async () => ({ creditValueUsd: 0.05, markup: 3 })) }));
@@ -98,7 +98,7 @@ const mcp = (token: string, method: string, params?: unknown) =>
   app.inject({ method: 'POST', url: '/api/v1/mcp', headers: { authorization: `Bearer ${token}` }, payload: { jsonrpc: '2.0', id: 1, method, params } });
 
 describe('POST /api/v1/runs', () => {
-  it('starts a run with the forms’ schema, as the key’s creator, and records the key', async () => {
+  it('starts a run with the forms\' schema, as the key\'s creator, and records the key', async () => {
     const r = await post(RUN_KEY, audit);
     expect(r.statusCode).toBe(201);
     expect(r.json().run.id).toBe('run-new');
@@ -135,13 +135,13 @@ describe('POST /api/v1/runs', () => {
     expect(st.created).toEqual([]);
   });
 
-  it('another company’s website is not found — the same answer as one that does not exist', async () => {
+  it('another company\'s website is not found, the same answer as one that does not exist', async () => {
     const r = await post(RUN_KEY, { ...audit, websiteId: SITE_B });
     expect([r.statusCode, r.json().error]).toEqual([404, 'Website not found']);
     expect(st.created).toEqual([]);
   });
 
-  it('the forms’ duplicate warning is a 409 until its id is acknowledged', async () => {
+  it('the forms\' duplicate warning is a 409 until its id is acknowledged', async () => {
     st.activeRuns = [{ id: 'run-going', mode: 'audit', keyword: '', createdAt: '2026-10-17T08:00:00.000Z' }];
     const r = await post(RUN_KEY, audit);
     expect([r.statusCode, r.json().code]).toEqual([409, 'confirm_needed']);

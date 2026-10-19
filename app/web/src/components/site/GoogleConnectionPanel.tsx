@@ -27,7 +27,7 @@ const PERMISSION_LABELS: Record<string, string> = {
 };
 
 export function permissionLabel(p: string | null | undefined): string {
-  return p ? (PERMISSION_LABELS[p] ?? p) : '–';
+  return p ? (PERMISSION_LABELS[p] ?? p) : '-';
 }
 
 export function GoogleConnectionPanel({ orgId, site, canEdit, className }: { orgId: string; site: Site; canEdit: boolean; className?: string }) {
@@ -88,13 +88,13 @@ function ConnectionBody({ orgId, site, conn, canEdit }: { orgId: string; site: S
           <div className="mt-3 space-y-3">
             <KeyValue
               items={[
-                { label: 'Property', value: <span className="break-all">{conn.gsc.property ?? '–'}</span> },
+                { label: 'Property', value: <span className="break-all">{conn.gsc.property ?? '-'}</span> },
                 { label: 'Permission', value: permissionLabel(conn.gsc.permissionLevel) },
               ]}
             />
             {restricted && (
               <Callout tone="warning" action={<GuideButton id="search-console-access" vars={{ domain: site.domain, serviceAccount: conn.serviceAccountEmail }} label="Show me where" />}>
-                The service account has restricted access. Change it to <strong className="font-medium">Full</strong> in Search Console (Settings → Users and permissions) so
+                The service account has restricted access. Change it to <strong className="font-medium">Full</strong> in Search Console (Settings, then Users and permissions) so
                 audits can read sitemaps and page indexing.
               </Callout>
             )}
@@ -133,7 +133,7 @@ function ConnectionBody({ orgId, site, conn, canEdit }: { orgId: string; site: S
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-ink-2">
-                  GA4 adds visits and conversions from search to the weekly report. Give the service account Viewer access, then press “Check again”:
+                  GA4 adds visits and conversions from search to the weekly report. Give the service account Viewer access, then press "Check again":
                 </p>
                 <GuideButton id="ga4-access" vars={{ domain: site.domain, serviceAccount: conn.serviceAccountEmail }} />
               </div>
@@ -212,7 +212,7 @@ function Ga4Picker({ orgId, site, conn, canEdit }: { orgId: string; site: Site; 
   );
 }
 
-/** Enter the GA4 property ID by hand (GA4 → Admin → Property details). */
+/** Enter the GA4 property ID by hand (GA4 -> Admin -> Property details). */
 function ManualGa4({ orgId, site, canEdit, compact }: { orgId: string; site: Site; canEdit: boolean; compact?: boolean }) {
   const update = useUpdateSite(orgId, site.id);
   const refresh = useRefreshConnection(site.id);
@@ -247,7 +247,7 @@ function ManualGa4({ orgId, site, canEdit, compact }: { orgId: string; site: Sit
   return (
     <Field
       label="GA4 property ID"
-      hint="GA4 → Admin → Property details. Digits only."
+      hint="GA4, then Admin, then Property details. Digits only."
       labelAction={<GuideButton id="ga4-property-id" vars={{ domain: site.domain }} variant="link" label="Where do I find it?" />}
       error={err ?? undefined}
       className="max-w-md"

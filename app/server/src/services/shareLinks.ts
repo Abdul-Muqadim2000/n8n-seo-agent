@@ -23,7 +23,7 @@ import { HttpError, notFound } from '../lib/errors';
 /**
  * The expiring share links of one report (G15; the rules live in @seo/shared `share.ts`, this file only reads and writes the database).
  * What a holder of a link can reach: that one report's title, website domain, date, headline values and its own files, plus the
- * company's own name and logo (B-R2) and the run's own caveat when the report is not finished work — read-only.
+ * company's own name and logo (B-R2) and the run's own caveat when the report is not finished work, read-only.
  * What it can never reach: another report (the token resolves to one report id), any list or dashboard, the run's input, the callback
  * payload, the company's other websites, its members or its settings, and no write of any kind. The token itself is never stored.
  */
@@ -40,7 +40,7 @@ const toLink = (r: ReportShareRow, createdByName: string | null, now = new Date(
   revokedAt: r.revokedAt ? r.revokedAt.toISOString() : null,
 });
 
-/** The report, if it belongs to this company (404 otherwise — a report of another company is simply not there). */
+/** The report, if it belongs to this company (404 otherwise, a report of another company is simply not there). */
 async function reportOfOrg(orgId: string, reportId: string) {
   const row = await db.query.reports.findFirst({ where: and(eq(schema.reports.orgId, orgId), eq(schema.reports.id, reportId)) });
   if (!row) throw notFound('Report not found');
@@ -83,8 +83,7 @@ export async function createShare(o: { org: OrgRow; user: UserRow; reportId: str
 }
 
 /**
- * B-R1: the link a delivery carries. Same table, same rules, same expiry and revocation as a link a person creates in the app —
- * there is one sharing mechanism in this product and this is it. The two differences are deliberate: no `createdBy` (nobody
+ * B-R1: the link a delivery carries. Same table, same rules, same expiry and revocation as a link a person creates in the app, * there is one sharing mechanism in this product and this is it. The two differences are deliberate: no `createdBy` (nobody
  * clicked anything), and nothing is created once the report has used up its budget of live links, so a weekly summary cannot
  * quietly spend all ten.
  */
@@ -94,7 +93,7 @@ export async function createShareForDelivery(orgId: string, reportId: string, da
     .select({ n: sql<number>`count(*)::int` })
     .from(schema.reportShares)
     .where(and(eq(schema.reportShares.reportId, reportId), isNull(schema.reportShares.revokedAt), sql`${schema.reportShares.expiresAt} > now()`));
-  // only the hash of a live link was kept, so an existing one cannot be handed out again — a fresh one is made while there is room
+  // only the hash of a live link was kept, so an existing one cannot be handed out again, a fresh one is made while there is room
   if (Number(live[0]?.n ?? 0) >= SHARE.maxPerReport) return null;
   const token = randomToken(SHARE.tokenBytes);
   const [row] = await db
@@ -116,7 +115,7 @@ export async function revokeShare(orgId: string, reportId: string, shareId: stri
   return toLink(updated, null);
 }
 
-/** The stored link behind a token (by its hash), whatever its state — the route decides what to say. */
+/** The stored link behind a token (by its hash), whatever its state, the route decides what to say. */
 export async function shareByToken(token: string): Promise<ReportShareRow | null> {
   const row = await db.query.reportShares.findFirst({ where: eq(schema.reportShares.tokenHash, sha256(token)) });
   return row ?? null;
@@ -137,7 +136,7 @@ export async function markOpened(shareId: string): Promise<void> {
 /**
  * B-R2: the company's own name and logo for the website this report is about.
  *
- * It reads the business profile the company already filled in for the engine and takes **two fields of it** — `business_name` and
+ * It reads the business profile the company already filled in for the engine and takes **two fields of it**, `business_name` and
  * `logo_url`. The rest of that row is the company's postal address, phone, public e-mail, opening hours and the author's biography,
  * and none of it is returned: a share link exposes one report, and a brand mark is the only thing added to that.
  *
@@ -159,7 +158,7 @@ async function brandFor(orgName: string, domain: string | null): Promise<SharedB
 /**
  * B-R2: the headline figures in the order the run wrote them, not the order Postgres happens to return.
  *
- * `summary` is stored as `jsonb`, and jsonb keeps its keys sorted by length — so a shared audit led with "scoreDelta 4" and put the
+ * `summary` is stored as `jsonb`, and jsonb keeps its keys sorted by length, so a shared audit led with "scoreDelta 4" and put the
  * health score last, which is not how anybody reads a report. `summarize()` is the one place that decides what a stage's headline
  * figures are and in which order, so the order is taken from it rather than from a second list that could drift. Anything stored but
  * no longer produced keeps its place at the end instead of disappearing.
@@ -175,7 +174,7 @@ function orderedSummary(stage: string, payload: unknown, stored: Record<string, 
   }
 }
 
-/** The one report a live link may show, with its files and the company's name — and nothing else from that company. */
+/** The one report a live link may show, with its files and the company's name, and nothing else from that company. */
 export async function sharedReport(share: ReportShareRow): Promise<SharedReport | null> {
   const rows = await db
     .select({ r: schema.reports, domain: schema.sites.domain, orgName: schema.organizations.name, org: schema.organizations })
@@ -216,7 +215,7 @@ export async function sharedReport(share: ReportShareRow): Promise<SharedReport 
   };
 }
 
-/** One file of the shared report — the file must belong to that report, or there is nothing to serve. */
+/** One file of the shared report, the file must belong to that report, or there is nothing to serve. */
 export async function sharedFile(share: ReportShareRow, fileId: string) {
   const f = await db.query.files.findFirst({
     where: and(eq(schema.files.id, fileId), eq(schema.files.reportId, share.reportId), eq(schema.files.orgId, share.orgId)),

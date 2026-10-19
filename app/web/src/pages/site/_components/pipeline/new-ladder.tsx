@@ -121,7 +121,7 @@ export function Stepper({ step }: { step: 1 | 2 | 3 }) {
 const DIFF_ORDER: DifficultyForYou[] = ['easy', 'reachable', 'hard', 'very_hard', 'not_realistic'];
 const FILL: Record<string, string> = { good: 'bg-good', accent: 'bg-accent', warning: 'bg-warning', serious: 'bg-serious', critical: 'bg-critical', neutral: 'bg-line-strong' };
 
-/** "Difficulty for your site" as a five-step scale (easy → not realistic), filled up to the keyword's step; the badge says it in words. */
+/** "Difficulty for your site" as a five-step scale (easy -> not realistic), filled up to the keyword's step; the badge says it in words. */
 export function DifficultyScale({ difficulty, className }: { difficulty: DifficultyForYou; className?: string }) {
   const at = DIFF_ORDER.indexOf(difficulty);
   const fill = FILL[DIFFICULTY_TONE[difficulty]] ?? 'bg-accent';
@@ -176,7 +176,7 @@ export function KeywordCard({
             <h3 className="min-w-0 break-words font-display text-[15px] font-semibold leading-snug tracking-[-0.01em] text-ink">{k.keyword}</h3>
             {ourPick && (
               <Badge tone="accent" icon={<Sparkles className="size-3" aria-hidden />}>
-                Research’s first pick
+                Research's first pick
               </Badge>
             )}
           </div>
@@ -220,8 +220,8 @@ export function KeywordCard({
       {k.why && <p className="mt-3 line-clamp-3 text-[13px] leading-snug text-ink-2">{k.why}</p>}
       {k.overlaps.length > 0 && (
         <WarnLine className="mt-3">
-          Your ladder “{k.overlaps[0].head}” already covers this search
-          {k.overlaps[0].keyword !== k.overlaps[0].head ? ` (its page “${k.overlaps[0].keyword}”)` : ''}. One search needs one page.
+          Your ladder "{k.overlaps[0].head}" already covers this search
+          {k.overlaps[0].keyword !== k.overlaps[0].head ? ` (its page "${k.overlaps[0].keyword}")` : ''}. One search needs one page.
         </WarnLine>
       )}
       {footer}

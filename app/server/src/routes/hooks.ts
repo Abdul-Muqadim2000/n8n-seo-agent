@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ingestCallback, orgByHookToken } from '../services/runs';
 
-/** n8n → app: every callback of a company's runs and scheduled reports. The company is identified by the token in the URL. */
+/** n8n -> app: every callback of a company's runs and scheduled reports. The company is identified by the token in the URL. */
 export async function hookRoutes(app: FastifyInstance) {
   app.post('/api/hooks/n8n/:token', { bodyLimit: 40 * 1024 * 1024, config: { rateLimit: { max: 600, timeWindow: '1 minute' } } }, async (req, reply) => {
     const org = await orgByHookToken((req.params as { token: string }).token);

@@ -6,10 +6,10 @@ import { cn } from '@/lib/utils';
  * B-R2: the customer's own mark at the head of a shared report.
  *
  * Three things it must survive, because a client sees this page and nobody from the company is standing next to them:
- *  - **no logo at all** — most companies have not filled one in, so the monogram is the normal case, not the error case;
- *  - **a logo that fails to load** — a URL that 404s, a host that blocks hotlinking, an image blocked by an extension: `onError`
+ *  - **no logo at all**, most companies have not filled one in, so the monogram is the normal case, not the error case;
+ *  - **a logo that fails to load**, a URL that 404s, a host that blocks hotlinking, an image blocked by an extension: `onError`
  *    falls back to the monogram and the page is never left with a broken-image glyph;
- *  - **a logo drawn for white paper** shown on our dark theme — it sits on a white tile in both themes, so a dark wordmark cannot
+ *  - **a logo drawn for white paper** shown on our dark theme, it sits on a white tile in both themes, so a dark wordmark cannot
  *    disappear into a dark page. We never recolour or invert somebody else's logo.
  *
  * `referrerPolicy="no-referrer"`: the page's own URL carries the share token, and that token is never worth handing to the host

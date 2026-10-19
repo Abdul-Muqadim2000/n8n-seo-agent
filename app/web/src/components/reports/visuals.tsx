@@ -18,8 +18,8 @@ import { verdictLabel } from './kit';
 export const ReportFilesContext = createContext<ReportFile[] | null>(null);
 
 /**
- * ReportHero: the report's summary panel (ink) — eyebrow (report type · website · received), the headline sentence, one supporting
- * line, the verdict / score mark on the right, 2–4 HeroStats and the next action; the report's documents follow as download cards.
+ * ReportHero: the report's summary panel (ink), eyebrow (report type · website · received), the headline sentence, one supporting
+ * line, the verdict / score mark on the right, 2-4 HeroStats and the next action; the report's documents follow as download cards.
  */
 export function ReportHero({
   report,
@@ -36,7 +36,7 @@ export function ReportHero({
   aside?: ReactNode;
   stats?: ReactNode;
   actions?: ReactNode;
-  /** extra eyebrow parts after the report type (market, week …) */
+  /** extra eyebrow parts after the report type (market, week ...) */
   eyebrow?: ReactNode;
 }) {
   const files = useContext(ReportFilesContext);
@@ -277,9 +277,9 @@ export function VolumeBar({ value, max, text }: { value: number | null; max: num
   );
 }
 
-/** Keyword difficulty 0–100 as a number with a short meter on the blue ramp (darker = harder; the number says it). */
+/** Keyword difficulty 0-100 as a number with a short meter on the blue ramp (darker = harder; the number says it). */
 export function KdMeter({ value }: { value: number | null }) {
-  if (value == null) return <span className="text-ink-3">–</span>;
+  if (value == null) return <span className="text-ink-3">-</span>;
   const v = Math.max(0, Math.min(100, value));
   const step = v < 15 ? 2 : v < 30 ? 3 : v < 50 ? 4 : v < 70 ? 5 : 6;
   return (

@@ -9,7 +9,7 @@ import { listEndpoints, listWebhookDeliveries } from './webhooks';
 
 /**
  * G4 (2026-10-17): the `integrations` rows (issue trackers and export destinations) as the app shows them, and the one answer of
- * Company settings → Integrations. A view never carries a secret: `secretHint` ("token …a1b2") is all that leaves the server.
+ * Company settings -> Integrations. A view never carries a secret: `secretHint` ("token ...a1b2") is all that leaves the server.
  */
 
 export const toIntegrationView = (r: IntegrationRow): IntegrationView => ({

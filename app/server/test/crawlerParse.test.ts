@@ -5,7 +5,7 @@ import { clientAddress, detectFormat, lineParser, parseAnyTime, parseClfTime, ty
 import { ipInList, isCloudflareIp, isPrivateIp, networkOf, normalizeIp, parseRangeFile, inSource } from '../src/services/crawlers/ranges';
 import { Verifier, type Dns } from '../src/services/crawlers/verify';
 
-// Log formats → records, and records → "is this really that crawler?" — against fixture logs in the vendors' real formats
+// Log formats -> records, and records -> "is this really that crawler?", against fixture logs in the vendors' real formats
 // (test/fixtures/logs) and addresses from the vendors' real published lists (the dated copy in ranges.snapshot.json).
 
 const fx = (f: string) => readFileSync(new URL(`./fixtures/logs/${f}`, import.meta.url), 'utf8');
@@ -186,7 +186,7 @@ function fakeDns(reverse: Record<string, string[] | 'timeout' | 'nxdomain'>, for
 
 describe('Verifier', () => {
   const bot = (k: string) => BOT_BY_KEY.get(k)!;
-  it('on the vendor list → verified, no DNS; off a list-only vendor → spoofed', async () => {
+  it('on the vendor list then verified, no DNS; off a list-only vendor then spoofed', async () => {
     const dns = fakeDns({}, {});
     const v = new Verifier(dns);
     expect(await v.verify(bot('gptbot'), '132.196.86.10')).toBe('verified');

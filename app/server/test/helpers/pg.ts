@@ -6,7 +6,7 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 import * as schema from '../../src/db/schema';
 
 /**
- * G1: a real Postgres for route tests, in-process (PGlite: Postgres compiled to WebAssembly) — no container, no network. Every
+ * G1: a real Postgres for route tests, in-process (PGlite: Postgres compiled to WebAssembly), no container, no network. Every
  * migration in server/drizzle runs on it, so the tests exercise the real schema, constraints and triggers.
  *
  * Use in a test file:

@@ -140,7 +140,7 @@ export async function listCreditEntries(orgId: string, limit = 200): Promise<Cre
 
 /**
  * What the company's in-flight on-demand work holds, in credits: runs not failed and not yet settled into a cost event (the last 24
- * hours — a run that never reported a cost stops holding credits after a day), and keyword checks not yet settled. A run is held at its
+ * hours, a run that never reported a cost stops holding credits after a day), and keyword checks not yet settled. A run is held at its
  * quote (the most it can be charged); a finished run whose cost is known at that cost, never above the quote.
  */
 export async function inFlightCredits(q: Q, orgId: string, s: { creditValueUsd: number; markup: number }): Promise<number> {
@@ -185,7 +185,7 @@ export async function applyNewCompanyCredits(q: Q, org: Pick<OrgRow, 'id' | 'kin
     });
 }
 
-/** credits granted / used in a window, per company. `used` = what runs used (usage debits, re-pricing included; never below 0) — an
+/** credits granted / used in a window, per company. `used` = what runs used (usage debits, re-pricing included; never below 0), an
  *  admin's refund gives credits back to the balance but is not "negative usage". `listValueUsd` = each usage debit at the credit value
  *  in force when it was debited (stored on the entry), so a later price change never restates past usage; entries written before the
  *  value was stored fall back to `currentCreditValueUsd`. The null key holds the entries of deleted companies (their revenue stays in

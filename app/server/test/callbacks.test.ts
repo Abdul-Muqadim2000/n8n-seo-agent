@@ -67,7 +67,7 @@ describe('summaries', () => {
   });
 });
 
-// B-R3 — the money the app shows is the engine's, not a guess of ours
+// B-R3, the money the app shows is the engine's, not a guess of ours
 describe('what a run reported spending', () => {
   it('counts the model calls as well as the search data (it used to count only the search data)', () => {
     const c = ledgerCost({ run_ledger: { dataforseo_usd: 0.0221, ai_usd: 0.587, ai_cost_estimated: true } });
@@ -90,7 +90,7 @@ describe('what a run reported spending', () => {
     expect(ledgerCost({ run_ledger: {} })).toBeNull();
   });
 
-  it('reads the engine’s own calibrated estimate, with its basis', () => {
+  it('reads the engine\'s own calibrated estimate, with its basis', () => {
     const e = engineCostEstimate({ run_cost_estimate_usd: 0.84, run_cost_estimate_basis: 'Claude $0.80 (calibrated, 6 runs); search data $0.04 (default)' });
     expect(e?.usd).toBe(0.84);
     expect(e?.basis).toContain('calibrated');
@@ -102,7 +102,7 @@ describe('what a run reported spending', () => {
     expect(engineCostEstimate({ run_cost_estimate_usd: 'cheap' })).toBeNull();
   });
 
-  it('falls back to the ledger’s own basis sentence when the callback carries no separate one', () => {
+  it('falls back to the ledger\'s own basis sentence when the callback carries no separate one', () => {
     expect(engineCostEstimate({ run_ledger: { run_cost_estimate_usd: 0.2, cost_basis: 'reserved: Claude $0.16 ESTIMATED' } })?.basis).toContain('ESTIMATED');
   });
 });

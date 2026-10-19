@@ -9,7 +9,7 @@ import { useOrgCtx } from '@/lib/context';
 import { issueFor, useCreateIssue, useIssues, useRefreshIssues } from '@/lib/integrations';
 
 /**
- * G4 — "Create ticket" beside an audit finding or a recommendation, once the company connected Jira, Linear or Asana. After the
+ * G4, "Create ticket" beside an audit finding or a recommendation, once the company connected Jira, Linear or Asana. After the
  * ticket exists the button becomes its key and its state in the tracker (to do / in progress / done), linking to it. One finding =
  * one ticket: the server answers the existing ticket when the same finding is pushed again.
  */

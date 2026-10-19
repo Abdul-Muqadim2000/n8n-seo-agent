@@ -7,8 +7,8 @@ import { z } from 'zod';
 //
 // Two kinds of spending, shown and limited separately:
 //   autopilot   the website's schedules (weekly report, AI visibility, the daily AI pulse, AI growth, backlinks, link building, the
-//               monthly audit, the blog posts of the content cadence) — forecast per month from the website's settings
-//   on-demand   analyses someone starts in the app or through the API, and keyword checks — each quoted before it starts, held while it
+//               monthly audit, the blog posts of the content cadence), forecast per month from the website's settings
+//   on-demand   analyses someone starts in the app or through the API, and keyword checks, each quoted before it starts, held while it
 //               runs, charged at what it really used and never more than the quote; a run that fails is not charged
 //
 // Credits arrive in lots, each with its own expiry (a plan's monthly credits roll over one month, packs last 12 months, refunds never
@@ -78,7 +78,7 @@ export function creditRate(s: { creditValueUsd: number; markup: number }): numbe
 
 /** A credit figure for people: whole credits from 10 up, one decimal below, "<0.1" for a sliver, "0" for nothing. */
 export function formatCredits(n: number | null | undefined, opts: { unit?: boolean; signed?: boolean } = {}): string {
-  if (n == null || !Number.isFinite(n)) return '–';
+  if (n == null || !Number.isFinite(n)) return '-';
   const abs = Math.abs(n);
   let s: string;
   if (abs === 0) s = '0';
@@ -140,7 +140,7 @@ export interface BillingSiteRow {
   usedThisMonth: number;
   /** schedules paused (by anybody) */
   paused: boolean;
-  /** paused because credits ran out or the autopilot limit was reached — resumed automatically */
+  /** paused because credits ran out or the autopilot limit was reached, resumed automatically */
   pausedForCredits: boolean;
 }
 

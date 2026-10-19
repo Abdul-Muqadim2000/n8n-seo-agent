@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { estimateRunCost } from '@seo/shared';
 
-// R100: the app reads the engine's own `cost:*` rows, applies the engine's formula, and falls back — labelled — to the shipped table.
+// R100: the app reads the engine's own `cost:*` rows, applies the engine's formula, and falls back, labelled, to the shipped table.
 const rowsMock = vi.fn();
 vi.mock('../src/n8n/client', () => ({ rows: (...a: unknown[]) => rowsMock(...a) }));
 
@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe('engineCostTable', () => {
-  it('reads the engine’s rows and prices a page at the engine’s reservation', async () => {
+  it('reads the engine\'s rows and prices a page at the engine\'s reservation', async () => {
     rowsMock.mockResolvedValue([
       { key: 'cost:ai:content', value: JSON.stringify({ n: 2, mean: 1.0983, max: 1.1862, recent: [1.1862, 0.8933] }) },
       { key: 'cost:dfs:content', value: JSON.stringify({ n: 2, mean: 0.0241, max: 0.0301, recent: [0.0301, 0.0221] }) },

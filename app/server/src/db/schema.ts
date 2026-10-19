@@ -41,7 +41,7 @@ export const users = pgTable(
     mfaTotpEnabledAt: ts('mfa_totp_enabled_at'),
     /** the last accepted RFC 6238 time step: a code is accepted once, never again (replay) */
     mfaTotpLastStep: integer('mfa_totp_last_step'),
-    /** admin panel (0014): a platform administrator suspended the account — no sign-in by any method, every session refused */
+    /** admin panel (0014): a platform administrator suspended the account, no sign-in by any method, every session refused */
     suspendedAt: ts('suspended_at'),
   },
   (t) => [uniqueIndex('users_email_idx').on(t.email), uniqueIndex('users_google_sub_idx').on(t.googleSub)],
@@ -85,7 +85,7 @@ export const webauthnCredentials = pgTable(
 );
 
 /**
- * G1: short-lived server-side state of a multi-step sign-in — the password-checked sign-in still waiting for its second factor, a
+ * G1: short-lived server-side state of a multi-step sign-in, the password-checked sign-in still waiting for its second factor, a
  * passkey challenge, an OIDC state / nonce / PKCE verifier, a SAML request id, a consumed SAML assertion id. `id` is the SHA-256 of
  * a random token the browser holds (cookie or RelayState), or of a protocol id; rows expire within minutes.
  */
@@ -268,7 +268,7 @@ export const sessions = pgTable(
     mfaAt: ts('mfa_at'),
     /** G1: the last proof of presence (sign-in or step-up); security changes need one within MFA.stepUpMinutes */
     reauthAt: ts('reauth_at'),
-    /** G1: what the device list shows and revokes by — never the session key itself */
+    /** G1: what the device list shows and revokes by, never the session key itself */
     publicId: uuid('public_id').defaultRandom().notNull(),
     /** G1: the strictest idle timeout of the person's companies, refreshed when a policy or a membership changes (null = none) */
     idleTimeoutMinutes: integer('idle_timeout_minutes'),
@@ -318,7 +318,7 @@ export const organizations = pgTable(
     onboardedAt: ts('onboarded_at'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: created(),
-    /** G5 (app/docs/WHITE_LABEL.md): standard | agency | client — a client workspace is an ordinary company with its agency as parent */
+    /** G5 (app/docs/WHITE_LABEL.md): standard | agency | client, a client workspace is an ordinary company with its agency as parent */
     kind: text('kind').notNull().default('standard'),
     /** a client workspace's agency; an agency with client workspaces cannot be deleted (restrict) */
     parentOrgId: uuid('parent_org_id').references((): AnyPgColumn => organizations.id, { onDelete: 'restrict' }),
@@ -345,7 +345,7 @@ export const organizations = pgTable(
 
 /**
  * G5: a host an agency serves its client portal on (`seo.agency.com`). Proven by a TXT record carrying `token` (a new random token
- * per claim, bound to this company — WHITE_LABEL.md §2 takeover) plus a CNAME to the app; re-checked, lapsed after repeated failures,
+ * per claim, bound to this company, WHITE_LABEL.md §2 takeover) plus a CNAME to the app; re-checked, lapsed after repeated failures,
  * deleted on release. One verified (or lapsed) owner per host.
  */
 export const portalDomains = pgTable(
@@ -412,7 +412,7 @@ export const memberships = pgTable(
     createdAt: created(),
     /** G1: switched off by the company's identity provider (SCIM `active: false`): no access until reactivated */
     deactivatedAt: ts('deactivated_at'),
-    /** G1: how the person came in — owner / invite / jit (first SSO sign-in) / scim */
+    /** G1: how the person came in, owner / invite / jit (first SSO sign-in) / scim */
     provisionedBy: text('provisioned_by').notNull().default('invite'),
     scimExternalId: text('scim_external_id'),
   },
@@ -498,7 +498,7 @@ export const runs = pgTable(
     error: text('error'),
     /** what the app reserved before the run, from the one table in shared/src/cost.ts */
     estimatedCostUsd: doublePrecision('estimated_cost_usd').notNull().default(0),
-    /** credits (0015): the price the customer was quoted before it started — what it is held at while it runs, and the most it is
+    /** credits (0015): the price the customer was quoted before it started, what it is held at while it runs, and the most it is
      *  ever charged (null for runs from before credits were quoted) */
     quotedCredits: doublePrecision('quoted_credits'),
     actualCostUsd: doublePrecision('actual_cost_usd'),
@@ -578,7 +578,7 @@ export const files = pgTable(
 
 /**
  * G15 (system review 2026-10-11): an expiring, revocable, read-only link to ONE report, for somebody with no account.
- * `id` of the link is a uuid; the secret in the URL is never stored — only its SHA-256 (`tokenHash`), so a database copy hands out no
+ * `id` of the link is a uuid; the secret in the URL is never stored, only its SHA-256 (`tokenHash`), so a database copy hands out no
  * working links. The link reaches that one report and its files, nothing else. We keep who created it, when it expires, when it was
  * revoked and when it was last opened (with a counter), so an owner can see whether anybody used it.
  */
@@ -939,7 +939,7 @@ export const cmsPublishes = pgTable(
 );
 
 // ---------------------------------------------------------------------------------------------------------------------------
-// G4 (2026-10-17): integrations — app/docs/INTEGRATIONS.md. Every secret column holds a value sealed with MAILBOX_KEY (secretBox).
+// G4 (2026-10-17): integrations, app/docs/INTEGRATIONS.md. Every secret column holds a value sealed with MAILBOX_KEY (secretBox).
 // ---------------------------------------------------------------------------------------------------------------------------
 
 /** One connector of a company: an issue tracker (jira / linear / asana, one each) or an export destination (s3 / bigquery). */
@@ -952,11 +952,11 @@ export const integrations = pgTable(
       .references(() => organizations.id, { onDelete: 'cascade' }),
     kind: text('kind').notNull(),
     name: text('name').notNull(),
-    /** the non-secret settings (site URL, project, bucket, dataset, tables, schedule…) */
+    /** the non-secret settings (site URL, project, bucket, dataset, tables, schedule...) */
     config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
     /** sealed JSON of the credentials; never returned */
     secret: text('secret').notNull(),
-    /** e.g. "token …a1b2": shown instead of the secret */
+    /** e.g. "token ...a1b2": shown instead of the secret */
     secretHint: text('secret_hint').notNull().default(''),
     status: text('status').notNull().default('untested'),
     lastError: text('last_error').notNull().default(''),
@@ -1155,7 +1155,7 @@ export const logIngests = pgTable(
 );
 
 /**
- * One row per crawler request (never a person's): kept `log_sources.retention_days`. No client address is stored — only, for a
+ * One row per crawler request (never a person's): kept `log_sources.retention_days`. No client address is stored, only, for a
  * request that was not proved, its network (/24 for IPv4, /48 for IPv6), so a spoofer can be blocked. `line_hash` makes the same
  * line sent twice (an overlapping upload, a retried push) count once.
  */
@@ -1246,7 +1246,7 @@ export const botIpRanges = pgTable('bot_ip_ranges', {
 
 /**
  * A company's credits, one signed entry per movement: `grant` (an admin added credits; `paidUsd` = the revenue recorded with it),
- * `adjust` (an admin corrected the balance, + or -), `usage` (a settled cost, debited once — `refKey` names the cost event it came
+ * `adjust` (an admin corrected the balance, + or -), `usage` (a settled cost, debited once, `refKey` names the cost event it came
  * from, unique, so a sync that runs twice cannot debit twice), `refund` (usage given back). Balance = the sum.
  */
 export const creditLedger = pgTable(
@@ -1298,7 +1298,7 @@ export const costEvents = pgTable(
     mode: text('mode').notNull().default(''),
     /** app | schedule */
     origin: text('origin').notNull().default('schedule'),
-    /** the engine row's key (`app:<org>`, `schedule:<mode>`, `parent:<id>`, `ladder:<id>` …): kept for the record */
+    /** the engine row's key (`app:<org>`, `schedule:<mode>`, `parent:<id>`, `ladder:<id>` ...): kept for the record */
     engineKey: text('engine_key').notNull().default(''),
     claudeUsd: doublePrecision('claude_usd').notNull().default(0),
     claudeEstimatedUsd: doublePrecision('claude_estimated_usd').notNull().default(0),
@@ -1357,8 +1357,7 @@ export const platformSettings = pgTable('platform_settings', {
 });
 
 /**
- * Credits (0015, app/docs/CREDITS.md): a lot of credits a company received — a plan month, a pack, a grant, welcome credits, a refund —
- * with what is left of it and when it expires. The ledger (`credit_ledger`) stays the one record of every movement and the balance is
+ * Credits (0015, app/docs/CREDITS.md): a lot of credits a company received, a plan month, a pack, a grant, welcome credits, a refund, * with what is left of it and when it expires. The ledger (`credit_ledger`) stays the one record of every movement and the balance is
  * its sum; the lots say which credits a debit used (soonest-expiring first) and which expire when. Invariant, per company:
  * balance = Σ remaining − debt, where debt is what was used beyond every lot (paid down first by the next lot).
  */

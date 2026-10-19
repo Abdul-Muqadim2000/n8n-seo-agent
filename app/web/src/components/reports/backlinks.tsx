@@ -19,7 +19,7 @@ const monthLabel = (m: unknown) => {
 };
 
 const SRC: Record<string, string> = { dfs: 'DataForSEO', bing: 'Bing', gsc: 'Search Console', ga4: 'GA4 visits', cc: 'Common Crawl', wiki: 'Wikipedia', hn: 'Hacker News', news: 'News', web: 'Web search', import: 'Upload' };
-const REASON: Record<string, string> = { link_removed: 'link removed', page_gone: 'page gone', domain_gone: 'site gone', not_seen: 'not seen for 4 months', reported_lost: 'reported lost — checking' };
+const REASON: Record<string, string> = { link_removed: 'link removed', page_gone: 'page gone', domain_gone: 'site gone', not_seen: 'not seen for 4 months', reported_lost: 'reported lost, checking' };
 
 export function BacklinksReport({ report }: { report: ReportDetail }) {
   const p = report.payload;
@@ -67,16 +67,16 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
     { key: 'anchor', header: 'Anchor text', cell: (r) => <span className="line-clamp-2 text-[13px] text-ink-2">{str(r.anchor) || <em className="text-ink-3">none</em>}</span>, hideOnMobile: true },
     { key: 'to_url', header: 'To', cell: (r) => <span className="text-[13px] text-ink-2">{shortUrl(str(r.to_url))}</span>, hideOnMobile: true },
     { key: 'domain_rank', header: 'Authority', align: 'right', sortValue: (r) => num(r.domain_rank), cell: (r) => n(r.domain_rank) },
-    { key: 'spam', header: 'Spam', align: 'right', sortValue: (r) => num(r.spam), cell: (r) => (num(r.spam) == null ? '–' : `${num(r.spam)}%`), hideOnMobile: true },
+    { key: 'spam', header: 'Spam', align: 'right', sortValue: (r) => num(r.spam), cell: (r) => (num(r.spam) == null ? '-' : `${num(r.spam)}%`), hideOnMobile: true },
     { key: 'dofollow', header: 'Type', cell: (r) => <Badge>{r.dofollow === false ? 'nofollow' : 'dofollow'}</Badge>, hideOnMobile: true },
-    { key: 'last_seen', header: 'Seen', sortValue: (r) => str(r.last_seen), cell: (r) => <span className="whitespace-nowrap text-xs text-ink-3">{str(r.first_seen)}{str(r.last_seen) && str(r.last_seen) !== str(r.first_seen) ? ` → ${str(r.last_seen)}` : ''}</span> },
+    { key: 'last_seen', header: 'Seen', sortValue: (r) => str(r.last_seen), cell: (r) => <span className="whitespace-nowrap text-xs text-ink-3">{str(r.first_seen)}{str(r.last_seen) && str(r.last_seen) !== str(r.first_seen) ? ` to ${str(r.last_seen)}` : ''}</span> },
     { key: 'reason', header: 'Why', hideOnMobile: true, cell: (r) => (str(r.reason) ? <Badge tone={r.pending === true ? 'neutral' : 'warning'}>{REASON[str(r.reason)] ?? str(r.reason)}</Badge> : null) },
   ];
   const bestCols: Column<P>[] = [
     { key: 'ref_domain', header: 'From', sortValue: (r) => str(r.ref_domain), cell: (r) => <span className="font-medium text-ink">{str(r.ref_domain)}</span> },
     { key: 'seo_value', header: 'Value', align: 'right', sortValue: (r) => num(r.seo_value), cell: (r) => <span className="tabular">{n(r.seo_value)} · {n(r.referral_value)} · {n(r.brand_value)}</span> },
-    { key: 'link_type', header: 'Link', hideOnMobile: true, cell: (r) => <span className="text-[13px] text-ink-2">{[str(r.link_type), str(r.rel) !== 'follow' ? str(r.rel) : '', str(r.placement)].filter(Boolean).join(' · ') || '—'}</span> },
-    { key: 'authority', header: 'Authority', align: 'right', sortValue: (r) => num(r.authority), cell: (r) => <span className="tabular">{[num(r.authority) ? n(r.authority) : '', num(r.dr) ? `DR ${num(r.dr)}` : ''].filter(Boolean).join(' · ') || '—'}</span> },
+    { key: 'link_type', header: 'Link', hideOnMobile: true, cell: (r) => <span className="text-[13px] text-ink-2">{[str(r.link_type), str(r.rel) !== 'follow' ? str(r.rel) : '', str(r.placement)].filter(Boolean).join(' · ') || '-'}</span> },
+    { key: 'authority', header: 'Authority', align: 'right', sortValue: (r) => num(r.authority), cell: (r) => <span className="tabular">{[num(r.authority) ? n(r.authority) : '', num(r.dr) ? `DR ${num(r.dr)}` : ''].filter(Boolean).join(' · ') || '-'}</span> },
     { key: 'verify', header: 'Check', cell: (r) => <Badge tone={str(r.verify) === 'found' ? 'good' : 'neutral'}>{str(r.verify) === 'found' ? 'on the page' : str(r.verify) || 'not checked'}</Badge> },
   ];
   const linkTabs = [
@@ -91,7 +91,7 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
     { key: 'links_to', header: 'Links to', cell: (r) => <span className="text-[13px] text-ink-2">{strs(r.links_to).join(', ')}</span> },
     { key: 'backlinks', header: 'Links', align: 'right', sortValue: (r) => num(r.backlinks), cell: (r) => n(r.backlinks) },
     { key: 'rank', header: 'Authority', align: 'right', sortValue: (r) => num(r.rank), cell: (r) => n(r.rank) },
-    { key: 'spam', header: 'Spam', align: 'right', sortValue: (r) => num(r.spam), cell: (r) => (num(r.spam) == null ? '–' : `${num(r.spam)}%`), hideOnMobile: true },
+    { key: 'spam', header: 'Spam', align: 'right', sortValue: (r) => num(r.spam), cell: (r) => (num(r.spam) == null ? '-' : `${num(r.spam)}%`), hideOnMobile: true },
     { key: 'source', header: 'Found by', hideOnMobile: true, cell: (r) => <Badge>{str(r.source) === 'cc' ? 'Common Crawl' : str(r.source) === 'both' ? 'both' : 'DataForSEO'}</Badge> },
   ];
 
@@ -147,11 +147,11 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
                 hint={dfsRd != null ? `DataForSEO's index alone: ${n(dfsRd)}${farmCount ? `, incl. ${n(farmCount)} link-farm link${farmCount === 1 ? '' : 's'} set aside` : ''}` : undefined}
               />
             ) : (
-              <HeroStat label="Referring domains (DataForSEO)" value={dfsRd != null ? <CountUp value={dfsRd} format={(v) => n(Math.round(v))} /> : '–'} hint={num(s.referring_domains_nofollow) ? `${num(s.referring_domains_nofollow)} nofollow only` : undefined} />
+              <HeroStat label="Referring domains (DataForSEO)" value={dfsRd != null ? <CountUp value={dfsRd} format={(v) => n(Math.round(v))} /> : '-'} hint={num(s.referring_domains_nofollow) ? `${num(s.referring_domains_nofollow)} nofollow only` : undefined} />
             )}
-            <HeroStat label="Backlinks" value={num(s.backlinks) != null ? <CountUp value={num(s.backlinks)!} format={(v) => n(Math.round(v))} /> : '–'} />
+            <HeroStat label="Backlinks" value={num(s.backlinks) != null ? <CountUp value={num(s.backlinks)!} format={(v) => n(Math.round(v))} /> : '-'} />
             <HeroStat label="Links lost" value={<CountUp value={lost.length} />} hint={important.length ? `${important.length} important` : undefined} />
-            <HeroStat label="Spam score (the index's)" value={spam != null ? `${spam}%` : '–'} hint={spamHint} />
+            <HeroStat label="Spam score (the index's)" value={spam != null ? `${spam}%` : '-'} hint={spamHint} />
           </>
         }
       />
@@ -193,7 +193,7 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
           </ul>
           {num(obj(p.coverage).gsc_sample) ? (
             <p className="mt-3 text-[13px] text-ink-2">
-              Of the {n(obj(p.coverage).gsc_sample)} sites in Google’s own sample (your Search Console upload), DataForSEO sees {n(obj(p.coverage).dfs_sees_google)}%; another source confirms {n(obj(p.coverage).all_see_google)}%.
+              Of the {n(obj(p.coverage).gsc_sample)} sites in Google's own sample (your Search Console upload), DataForSEO sees {n(obj(p.coverage).dfs_sees_google)}%; another source confirms {n(obj(p.coverage).all_see_google)}%.
             </p>
           ) : null}
           <p className="mt-2 text-xs text-ink-3">{n(obj(p.coverage).verified)} links checked on their page this month; lost means checked twice and gone.</p>
@@ -201,7 +201,7 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
       )}
 
       {objs(p.best).length > 0 && (
-        <Block title="Best links" description="Value 0–100: SEO / visits / brand" icon={<Award />}>
+        <Block title="Best links" description="Value 0-100: SEO / visits / brand" icon={<Award />}>
           <DataTable rows={objs(p.best)} columns={bestCols} rowKey={(r, i) => `${str(r.ref_domain)}-${i}`} pageSize={10} />
           {p.dr_enabled === true && (
             <p className="mt-2 text-xs text-ink-3">
@@ -289,7 +289,7 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
                 icon={<Recycle />}
                 title={
                   <span className="font-normal">
-                    {shortUrl(str(r.broken_url) || str(r.to_url) || str(r.url))} <span className="text-ink-3">→ 301 to</span> {shortUrl(str(r.redirect_to)) || '/'}
+                    {shortUrl(str(r.broken_url) || str(r.to_url) || str(r.url))} <span className="text-ink-3">redirects with a 301 to</span> {shortUrl(str(r.redirect_to)) || '/'}
                   </span>
                 }
                 description={
@@ -328,7 +328,7 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
                 key={i}
                 icon={<Link2 />}
                 title={<ExternalLink href={str(c.url) || `https://${str(c.domain)}`}>{str(c.domain)}</ExternalLink>}
-                description={`→ ${str(c.competitor)} · ${str(c.first_seen)} · authority ${n(c.domain_rank)}`}
+                description={`links to ${str(c.competitor)} · ${str(c.first_seen)} · authority ${n(c.domain_rank)}`}
               />
             ))}
           </ul>

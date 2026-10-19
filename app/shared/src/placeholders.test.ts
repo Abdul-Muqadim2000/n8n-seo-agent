@@ -7,7 +7,7 @@ import { findOpenBrackets, isReviewNote, PLACEHOLDER_BRACKET_SRC, PLACEHOLDER_NO
 // A-13 (2026-10-17): exec 771's delivered body, cut to the sentence the engine and the view both missed
 const BODY771 = 'For example, a three-entity group on a legacy ERP pays a fixed [Price band: typical Assess & Envision fee in AED]. See [the law](https://u.ae/x) and ![hero](hero.webp).';
 
-describe('A-13 — one detector for every bracket left for a person', () => {
+describe('A-13, one detector for every bracket left for a person', () => {
   it('counts the colon bracket the writer invented as a placeholder (exec 771 counted 0)', () => {
     const b = findOpenBrackets(BODY771);
     expect(b).toEqual([{ token: '[Price band: typical Assess & Envision fee in AED]', count: 1, kind: 'placeholder' }]);
@@ -24,7 +24,7 @@ describe('A-13 — one detector for every bracket left for a person', () => {
   // the engine's kit lives outside app/: present in a repo checkout, absent in the app-only test container and the production image
   // (build_v4.py section 130 asserts the same equality from the engine side, so the check is never lost)
   const KIT = join(__dirname, '../../../n8n/seo-agent/v5/code/_placeholders.js');
-  it.skipIf(!existsSync(KIT))('is the engine’s own pattern, character for character (build_v4.py section 130 asserts the same)', () => {
+  it.skipIf(!existsSync(KIT))('is the engine\'s own pattern, character for character (build_v4.py section 130 asserts the same)', () => {
     const kit = readFileSync(KIT, 'utf8');
     expect(kit).toContain(`const BRACKET_SRC = ${JSON.stringify(PLACEHOLDER_BRACKET_SRC)};`);
     expect(kit).toContain(`const NOTE_SRC = ${JSON.stringify(PLACEHOLDER_NOTE_SRC)};`);

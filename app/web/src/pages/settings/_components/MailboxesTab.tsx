@@ -1,7 +1,7 @@
-// Company settings → Mailboxes (v4.13 Link Builder): the mailboxes link-building pitches go out from (status, today's counts and the warm-up,
+// Company settings -> Mailboxes (v4.13 Link Builder): the mailboxes link-building pitches go out from (status, today's counts and the warm-up,
 // SPF / DMARC / DKIM, replies read, errors; test, change, pause, remove) and the company's opt-out list. Admins change, members read.
 // L4 (2026-10-13): a mailbox can also be connected with Microsoft 365 (sends and reads replies) or Gmail (sends; Google classes inbox
-// access as a restricted scope, so those replies are read in Gmail itself) — no password is stored for either.
+// access as a restricted scope, so those replies are read in Gmail itself), no password is stored for either.
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -72,7 +72,7 @@ export function MailboxesTab() {
   useEffect(() => {
     if (!back) return;
     if (back === 'connected')
-      toast.success(`${params.get('address') ?? 'The mailbox'} is connected`, { description: params.get('reads') === '0' ? 'Pitches will be sent from it. Replies are not read automatically for this provider — read them in your own mailbox.' : 'Pitches will be sent from it and replies read.' });
+      toast.success(`${params.get('address') ?? 'The mailbox'} is connected`, { description: params.get('reads') === '0' ? 'Pitches will be sent from it. Replies are not read automatically for this provider, so read them in your own mailbox.' : 'Pitches will be sent from it and replies read.' });
     else toast.error('The mailbox was not connected', { description: params.get('why') ?? undefined });
     const next = new URLSearchParams(params);
     for (const k of ['mailbox', 'address', 'why', 'reads']) next.delete(k);
@@ -85,7 +85,7 @@ export function MailboxesTab() {
         icon={<Mail />}
         title="Mailboxes"
         description="Link-building pitches go out from your own address, a few a day, and replies are read from its inbox."
-        info="Sent Monday to Friday inside the sending window, 4–9 minutes apart, plain text with no tracking, with a copy in your Sent folder. A mailbox pauses itself at 3 bounces in 50 sends or a policy block from the mail server."
+        info="Sent Monday to Friday inside the sending window, 4-9 minutes apart, plain text with no tracking, with a copy in your Sent folder. A mailbox pauses itself at 3 bounces in 50 sends or a policy block from the mail server."
         actions={
           admin ? (
             <Button size="sm" icon={<Plus className="size-4" />} onClick={() => setEdit('new')}>
@@ -185,8 +185,8 @@ function MailboxCard({ m, admin, onEdit, onRemove }: { m: MailboxView; admin: bo
         <ProgressBar label="All e-mails today" valueLabel={`${m.today.total} of ${m.today.totalCap}`} value={m.today.total} max={Math.max(1, m.today.totalCap)} />
       </div>
       <p className="mt-2 text-xs text-ink-3">
-        {warming ? `Warming up since ${fmtDate(m.startedAt)}: ${m.today.firstCap} first e-mails a day now (5 → 10 → your limit of ${m.dailyFirstMax}). ` : ''}
-        Sends Mon–Fri {hh(m.windowStart)}–{hh(m.windowEnd)} ({m.timezone}) · {m.readsReplies ? `replies checked ${m.lastPollAt ? fmtAgo(m.lastPollAt) : 'not yet'}` : 'replies are not read automatically'} · last sent{' '}
+        {warming ? `Warming up since ${fmtDate(m.startedAt)}: ${m.today.firstCap} first e-mails a day now (5, then 10, then your limit of ${m.dailyFirstMax}). ` : ''}
+        Sends Mon-Fri {hh(m.windowStart)}-{hh(m.windowEnd)} ({m.timezone}) · {m.readsReplies ? `replies checked ${m.lastPollAt ? fmtAgo(m.lastPollAt) : 'not yet'}` : 'replies are not read automatically'} · last sent{' '}
         {m.lastSendAt ? fmtAgo(m.lastSendAt) : 'never'}
       </p>
       {m.lastError && <p className="mt-1.5 text-xs font-medium text-critical-text [overflow-wrap:anywhere]">Last error: {m.lastError}</p>}
@@ -398,7 +398,7 @@ function OptOutCard() {
         ) : q.isError ? (
           <ErrorState error={q.error} onRetry={() => void q.refetch()} title="Could not load the opt-out list" />
         ) : (
-          <DataTable rows={q.data} columns={cols} rowKey={(r) => r.id} dense searchable={q.data.length > 10} searchPlaceholder="Search the list…" initialSort={{ key: 'createdAt', dir: 'desc' }} empty="Nobody has opted out yet." />
+          <DataTable rows={q.data} columns={cols} rowKey={(r) => r.id} dense searchable={q.data.length > 10} searchPlaceholder="Search the list..." initialSort={{ key: 'createdAt', dir: 'desc' }} empty="Nobody has opted out yet." />
         )}
       </CardBody>
     </SettingsCard>

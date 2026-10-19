@@ -44,7 +44,7 @@ describe('D-11: after joining from an invitation, the page leads into the compan
   };
   const base: InvitationPreview = { orgName: 'Rerate 1017 Trading', email: 'rr1017-member@example.org', role: 'member', inviterName: 'Rerate Owner', valid: false, reason: 'This invitation was already accepted.' };
 
-  it('a member who joined from it gets "You joined … — Open it", not only "already accepted"', () => {
+  it('a member who joined from it gets "You joined ... Open it", not only "already accepted"', () => {
     const t = render({ ...base, reason: 'You are a member of Rerate 1017 Trading.', joinedOrgId: 'org-7bf8' });
     expect(t).toContain('You joined Rerate 1017 Trading');
     expect(t).toContain('Open Rerate 1017 Trading');

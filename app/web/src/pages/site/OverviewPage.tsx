@@ -27,7 +27,7 @@ export default function OverviewPage() {
       <PageHeader
         icon={<LayoutDashboard />}
         title="Overview"
-        description={`How ${site.domain} is doing in Google, in AI answers and across the web — and what to do next.`}
+        description={`How ${site.domain} is doing in Google, in AI answers and across the web, and what to do next.`}
         actions={<RunAnalysisMenu />}
       />
       <DataGate q={q} skeleton={<OverviewSkeleton />}>
@@ -102,7 +102,7 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
           <>
             <HeroStat
               label="Clicks from Google"
-              value={L ? <CountUp value={L.clicks} format={compactNumber} /> : '–'}
+              value={L ? <CountUp value={L.clicks} format={compactNumber} /> : '-'}
               delta={L ? <Delta value={pctChange(L.clicks, L.prevClicks)} /> : undefined}
               trend={<Sparkline data={search} dataKey="clicks" />}
               hint={L ? undefined : 'Arrives with weekly tracking'}
@@ -110,7 +110,7 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
             />
             <HeroStat
               label="Impressions"
-              value={L ? <CountUp value={L.impressions} format={compactNumber} /> : '–'}
+              value={L ? <CountUp value={L.impressions} format={compactNumber} /> : '-'}
               delta={L ? <Delta value={pctChange(L.impressions, L.prevImpressions)} /> : undefined}
               trend={<Sparkline data={search} dataKey="impressions" />}
               hint={L ? `${plural(L.queries, 'search query', 'search queries')} · ${L.striking} close to page 1` : 'How often Google showed your pages'}
@@ -119,14 +119,14 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
             <HeroStat
               label="Average position"
               info="Across every query; a rise means you moved up"
-              value={L && L.position > 0 ? <CountUp value={L.position} format={(v) => v.toFixed(1)} /> : '–'}
+              value={L && L.position > 0 ? <CountUp value={L.position} format={(v) => v.toFixed(1)} /> : '-'}
               delta={posDelta != null ? <Delta value={posDelta} suffix="" /> : undefined}
               trend={<Sparkline data={search.map((s) => ({ ...s, position: plotAvgPos(s.position) }))} dataKey="position" invert />}
               onClick={() => navigate(page('search'))}
             />
             <HeroStat
               label="Organic sessions"
-              value={L && L.ga4Connected ? <CountUp value={L.sessions} format={compactNumber} /> : '–'}
+              value={L && L.ga4Connected ? <CountUp value={L.sessions} format={compactNumber} /> : '-'}
               delta={L && L.ga4Connected ? <Delta value={pctChange(L.sessions, L.prevSessions)} /> : undefined}
               trend={L?.ga4Connected ? <Sparkline data={search} dataKey="sessions" /> : undefined}
               hint={L ? (L.ga4Connected ? `${pct(L.organicShare, 0)} of all sessions · ${compactNumber(L.keyEvents)} key events` : 'Google Analytics is not connected') : 'From Google Analytics 4'}
@@ -143,7 +143,7 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
           icon={<Gauge />}
           tone={H && scoreTone(H.healthScore) !== 'accent' ? (scoreTone(H.healthScore) as 'good' | 'warning' | 'critical') : 'blue'}
           visual={H ? <ScoreRing label="Health score" value={H.healthScore} display={<CountUp value={H.healthScore} />} suffix="/100" size={68} /> : undefined}
-          value="–"
+          value="-"
           delta={H ? <Delta value={diff(H.healthScore, prevHealth?.healthScore)} suffix=" pts" digits={0} /> : undefined}
           sparkline={<Sparkline data={health} dataKey="healthScore" />}
           meta={H ? <HealthHint grade={H.grade} score={H.healthScore} critical={H.critical} high={H.high} at={H.auditedAt} /> : 'Run a technical audit to score the site'}
@@ -153,7 +153,7 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
           label="Named in AI answers"
           icon={<Bot />}
           visual={A ? <ScoreRing label="Named in AI answers" value={A.mentionRate} tone="accent" display={<CountUp value={A.mentionRate} format={(v) => pct(v)} />} valueText={pct(A.mentionRate)} size={68} /> : undefined}
-          value="–"
+          value="-"
           delta={A ? <Delta value={diff(A.mentionRate, prevAi?.mentionRate)} suffix=" pts" /> : undefined}
           deltaLabel={A ? 'vs last check' : undefined}
           sparkline={<Sparkline data={ai} dataKey="mentionRate" />}
@@ -163,7 +163,7 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
         <MetricCard
           label={B?.unionDomains != null ? 'Referring sites' : 'Referring domains'}
           icon={<Link2 />}
-          value={B ? <CountUp value={B.unionDomains ?? B.referringDomains} format={compactNumber} /> : '–'}
+          value={B ? <CountUp value={B.unionDomains ?? B.referringDomains} format={compactNumber} /> : '-'}
           delta={B && B.unionDomains == null ? <Delta value={diff(B.referringDomains, prevLinks?.referringDomains)} suffix="" digits={0} /> : undefined}
           deltaLabel={B && B.unionDomains == null ? 'vs last month' : undefined}
           sparkline={<Sparkline data={links} dataKey="referringDomains" />}
@@ -180,7 +180,7 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
           label="Keywords in the top 10"
           icon={<Activity />}
           info={r.keywords ? `${r.top3} in the top 3 · ${r.top10} in the top 10 · ${r.top50} in the top 50 · ${r.keywords} tracked` : undefined}
-          value={r.keywords ? <CountUp value={r.top10} /> : '–'}
+          value={r.keywords ? <CountUp value={r.top10} /> : '-'}
           deltaLabel={r.keywords ? `of ${plural(r.keywords, 'keyword')} tracked` : undefined}
           sparkline={
             r.keywords ? (
@@ -308,8 +308,8 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
 function keywordBuckets(r: OverviewData['rankings']) {
   return [
     { label: 'Top 3', value: r.top3, color: SEQ[5] },
-    { label: '4–10', value: r.top10 - r.top3, color: SEQ[3] },
-    { label: '11–50', value: r.top50 - r.top10, color: SEQ[1] },
+    { label: '4-10', value: r.top10 - r.top3, color: SEQ[3] },
+    { label: '11-50', value: r.top50 - r.top10, color: SEQ[1] },
     { label: 'Not in the top 50', value: Math.max(0, r.keywords - r.top50), color: 'var(--surface-3)' },
   ];
 }
@@ -487,7 +487,7 @@ function SearchTrend({ series, kind, loading, className, annotations, lineage }:
           { key: 'periodEnd', label: '28 days to', format: (v) => fmtDate(String(v)) },
           { key: 'clicks', label: 'Clicks', align: 'right', format: (v) => compactNumber(Number(v)) },
           { key: 'impressions', label: 'Impressions', align: 'right', format: (v) => compactNumber(Number(v)) },
-          { key: 'position', label: 'Avg. position', align: 'right', format: (v) => (v ? Number(v).toFixed(1) : '–') },
+          { key: 'position', label: 'Avg. position', align: 'right', format: (v) => (v ? Number(v).toFixed(1) : '-') },
           { key: 'sessions', label: 'Organic sessions', align: 'right', format: (v) => compactNumber(Number(v)) },
         ],
         rows: [...series].reverse(),
@@ -598,7 +598,7 @@ function MoversCard({ d }: { d: OverviewData }) {
                 {m.keyword}
               </span>
               <span className="shrink-0 text-xs tabular text-ink-3">
-                {posText(m.from)} → <span className="font-medium text-ink">{posText(m.to)}</span>
+                {posText(m.from)} to <span className="font-medium text-ink">{posText(m.to)}</span>
               </span>
               <PositionMove prev={m.from} cur={m.to} className="w-24 shrink-0 justify-end" />
             </li>
@@ -651,7 +651,7 @@ function ContentCard({ d, className }: { d: OverviewData; className?: string }) 
       </div>
       {c.pendingPublish > 0 && (
         <Callout tone="warning" className="mt-4">
-          {plural(c.pendingPublish, 'page is', 'pages are')} written but not live. Nothing can rank before it is published — publish and report the URL.
+          {plural(c.pendingPublish, 'page is', 'pages are')} written but not live. Nothing can rank before it is published. Publish it and report the URL.
         </Callout>
       )}
       {(c.needsFix ?? 0) > 0 && (
@@ -695,7 +695,7 @@ function AlertsCard({ d }: { d: OverviewData }) {
           <IconTile tone="good" size="xs">
             <CheckCircle2 />
           </IconTile>
-          This month’s check-in is recorded
+          This month's check-in is recorded
         </p>
       )}
     </Panel>

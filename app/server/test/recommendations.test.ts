@@ -99,7 +99,7 @@ describe('recommend', () => {
     expect(recs.find((r) => r.id === 'rank:next:lad_1')?.action).toEqual({ label: 'Open the ladder', page: 'pipeline/ladders/lad_1' });
   });
 
-  // REP 3.3 (benchmark pass 2026-10-14): the list is no longer sorted by the hand-set priority — it is the one queue, ordered by
+  // REP 3.3 (benchmark pass 2026-10-14): the list is no longer sorted by the hand-set priority, it is the one queue, ordered by
   // impact x confidence / effort (`@seo/shared/queue`). The guarantee these two tests keep is the new one.
   it('returns the one queue in its own order: blocking setup first, then by value, then whatever nothing measured', () => {
     const recs = recommend(site, bundle({ settings: { ...bundle().settings, readiness: { score: 20, missing: ['Author name'] } }, alerts: { alerts: [], checkins: [], checkinDue: true } }));

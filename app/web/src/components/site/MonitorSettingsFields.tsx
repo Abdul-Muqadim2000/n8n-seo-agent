@@ -114,7 +114,7 @@ export function MonitorSettingsFields({
                   <p className="mt-1.5 text-[13px] text-ink-3">Claude is asked once a month to keep the weekly run cheap.</p>
                 )}
               </fieldset>
-              <Field label="Questions tracked" hint="Up to 500. More questions give a fuller picture of your market; new ones are written per buyer role and market from real AI searches, Google's “People also ask”, your Search Console queries and your competitors' topics." className="max-w-xs">
+              <Field label="Questions tracked" hint="Up to 500. More questions give a fuller picture of your market; new ones are written per buyer role and market from real AI searches, Google's &quot;People also ask&quot;, your Search Console queries and your competitors' topics." className="max-w-xs">
                 {(p) => (
                   <Select {...p} value={value.aiPromptsMax} disabled={disabled} onChange={(e) => set({ aiPromptsMax: Number(e.target.value) })}>
                     {[...new Set([...PROMPT_OPTIONS, value.aiPromptsMax])].sort((x, y) => x - y).filter((n) => n <= AI_PROMPTS_MAX).map((n) => (
@@ -177,7 +177,7 @@ export function MonitorSettingsFields({
                   onChange={(e) => set({ aiGrowth: e.target.checked })}
                 />
                 {value.aiGrowth && (
-                  <Field label="AI answer pages a month" hint={`Written by the Monday content run for the questions AI answers without you — a new answer page or a refresh of your page. About ${PRICES.page()} each, on top of the blog posts.`} className="max-w-xs">
+                  <Field label="AI answer pages a month" hint={`Written by the Monday content run for the questions AI answers without you: a new answer page or a refresh of your page. About ${PRICES.page()} each, on top of the blog posts.`} className="max-w-xs">
                     {(p) => (
                       <Select {...p} value={value.aiPagesPerMonth} disabled={disabled} onChange={(e) => set({ aiPagesPerMonth: Number(e.target.value) })}>
                         {[...new Set([0, 1, 2, 3, 4, 6, 8, value.aiPagesPerMonth])].sort((x, y) => x - y).filter((n) => n <= AI_PAGES_MAX).map((n) => (
@@ -280,7 +280,7 @@ export function MonitorSettingsFields({
 }
 
 /**
- * G6 (2026-10-18): what this panel uses and buys, BEFORE it is saved — the one formula the engine reserves with (estimateAiPanelCost).
+ * G6 (2026-10-18): what this panel uses and buys, BEFORE it is saved, the one formula the engine reserves with (estimateAiPanelCost).
  * credits (app/docs/CREDITS.md): every figure in credits; no per-task provider price or price basis is shown.
  */
 function AiPanelCost({ value }: { value: MonitorSettings }) {
@@ -313,8 +313,8 @@ function MonitorRow({ icon, on, children }: { icon: ReactNode; on: boolean; chil
 }
 
 /**
- * The schedules' monthly estimate with its breakdown, in credits (credits (app/docs/CREDITS.md)): the rows of shared `autopilotRows` —
- * the same rows the Credits page's forecast and the server's reserve for the schedules use — each turned into credits.
+ * The schedules' monthly estimate with its breakdown, in credits (credits (app/docs/CREDITS.md)): the rows of shared `autopilotRows`,
+ * the same rows the Credits page's forecast and the server's reserve for the schedules use, each turned into credits.
  */
 export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors: MonitorSettings; blogsPerWeek: number; className?: string }) {
   useEngineCal();   // re-render with the company's credit rate once it arrives
@@ -357,7 +357,7 @@ export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors
         </table>
       </div>
       <p className="border-t border-line px-4 py-3 text-xs leading-relaxed text-ink-3">
-        Estimates in credits, from live runs; usually less is used because data that has not changed is reused. Settings → Credits shows what was really used. Analyses you start yourself use credits separately.
+        Estimates in credits, from live runs; usually less is used because data that has not changed is reused. Settings, then Credits, shows what was really used. Analyses you start yourself use credits separately.
       </p>
     </div>
   );

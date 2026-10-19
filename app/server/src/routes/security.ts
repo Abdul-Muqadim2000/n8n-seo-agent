@@ -21,7 +21,7 @@ export async function securityRoutes(app: FastifyInstance) {
     const before = policyOf(a.org.securityPolicy);
     // whoever switches the requirement on must already meet it, or they would lock themselves out with their next request
     if (next.requireMfa && !before.requireMfa && !(await userHasMfa(a.user)))
-      throw badRequest('Set up two-step verification on your own account first (Your account → Two-step verification).', { requireMfa: 'You have no second factor yet' });
+      throw badRequest('Set up two-step verification on your own account first (Your account > Two-step verification).', { requireMfa: 'You have no second factor yet' });
     await db.update(schema.organizations).set({ securityPolicy: { ...next } }).where(eq(schema.organizations.id, a.org.id));
     const changed = (Object.keys(next) as (keyof SecurityPolicy)[]).filter((k) => next[k] !== before[k]);
     // every member's open sessions take the new strictest idle timeout at once

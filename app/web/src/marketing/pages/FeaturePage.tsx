@@ -75,7 +75,7 @@ function Benefits({ feature: f }: { feature: Feature }) {
     <Section tone="surface" bordered>
       <div className="flex flex-wrap items-end justify-between gap-6">
         <Reveal className="max-w-3xl">
-          <Eyebrow className="mb-4">What’s included</Eyebrow>
+          <Eyebrow className="mb-4">What's included</Eyebrow>
           <h2 className="font-display text-[1.75rem] font-semibold leading-[1.15] tracking-[-0.01em] text-balance text-ink sm:text-[2.25rem]">{f.tagline}</h2>
         </Reveal>
         <Reveal>

@@ -25,7 +25,7 @@ export default function ForgotPasswordPage() {
         <div className="flex items-start gap-3 text-sm leading-relaxed text-ink-2">
           <MailCheck className="mt-0.5 size-5 shrink-0 text-ink-3" />
           This platform does not send e-mails. Ask your platform administrator for a password reset link: they create it in the admin area and it works for 24 hours.
-          If you signed up with Google, use “Continue with Google” instead.
+          If you signed up with Google, use "Continue with Google" instead.
         </div>
       </AuthCard>
     );

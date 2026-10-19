@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 import { applyServerErrors, asCountry, competitorValidator, errorText, guessCountry } from './helpers';
 
 // The website's business details (createSiteSchema / siteBusinessSchema): the facts every page, report and AI-visibility question
-// starts from. Used by onboarding (steps "website" and "business"), "Add a website" and Website settings → Business details.
+// starts from. Used by onboarding (steps "website" and "business"), "Add a website" and Website settings -> Business details.
 
 const editSchema = siteBusinessSchema.extend({ domain: z.string() });
 export type SiteFormValues = z.input<typeof createSiteSchema>;
@@ -295,7 +295,7 @@ export function DomainClaimedCallout({ domain }: { domain: string }) {
   return (
     <Callout tone="critical" title={`${domain || 'This website'} already belongs to another company`}>
       Another company has verified this domain, and each website can belong to one company only. If it is your website, ask the owner of that company to invite you
-      (Company settings → Team). If you think this is wrong, contact the platform administrator.
+      (Company settings, Team). If you think this is wrong, contact the platform administrator.
     </Callout>
   );
 }

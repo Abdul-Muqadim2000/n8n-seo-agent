@@ -36,7 +36,7 @@ const MONDAY: Run[] = [
   { time: '08:00', when: 'Monday', title: 'Rank tracking', body: 'Every ladder page, head term and keyword you track, checked for its position and the whole results page.', icon: ChartNoAxesColumnIncreasing, to: '/platform/keyword-ladders' },
   { time: '09:00', when: 'Monday', title: 'Site tracking', body: 'Search Console, GA4, Google Trends and live checks, newly published pages, then the Monday report.', icon: ChartLine, to: '/platform/site-tracking' },
   { time: '09:30', when: 'Monday', title: 'AI growth', body: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win queued.', icon: Rocket, to: '/platform/ai-growth' },
-  { time: '10:00', when: 'Monday', title: 'Content cadence', body: 'This week’s posts, picked and written: ladder rung first, then a page losing traffic, striking distance, rising trends — and the AI answer page of the week.', icon: PenLine, to: '/platform/autopilot' },
+  { time: '10:00', when: 'Monday', title: 'Content cadence', body: 'This week\'s posts, picked and written: ladder rung first, then a page losing traffic, striking distance, rising trends, and the AI answer page of the week.', icon: PenLine, to: '/platform/autopilot' },
   { time: '11:00', when: 'Monday', title: 'Link building', body: 'New openings checked, contacts found and pitches drafted for your approval.', icon: Handshake, to: '/platform/link-building' },
 ];
 const AUDIT: Run = {
@@ -52,14 +52,14 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const START = 5 * 60 + 30; // 05:30
 const END = 11 * 60 + 30; // 11:30
 const SPAN = END - START;
-const SWEEP_S = 9; // seconds for the cursor to cross 05:30 → 11:30 (matches platform.css)
+const SWEEP_S = 9; // seconds for the cursor to cross 05:30 to 11:30 (matches platform.css)
 const HOURS = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00'];
 /** runs on a day of the week: Monday has the key-page check and the Monday runs, every other day the key-page check and the pulse */
 const runsOn = (day: number): number => (day === 0 ? 1 + MONDAY.length : 2);
 const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
 const pct = (t: string) => ((mins(t) - START) / SPAN) * 100;
 
-/** "A week with Alaventra": the automatic runs on a Mon–Sun grid of 05:30–11:30, a time cursor sweeping down and lighting each run
+/** "A week with Alaventra": the automatic runs on a Mon-Sun grid of 05:30-11:30, a time cursor sweeping down and lighting each run
  *  as it passes; the monthly audit underneath; every run described in a list (the only view on phones, with a compact week strip). */
 export function WeekSchedule({ className }: { className?: string }) {
   const ink = useSectionTone() === 'ink';
@@ -135,7 +135,7 @@ export function WeekSchedule({ className }: { className?: string }) {
           <ScanSearch className={cn('size-4 shrink-0', ink ? 'text-accent-on-ink' : 'text-accent-text')} />
           <span className={cn('font-mono text-[11px] tabular', muted)}>1st of the month · 06:00</span>
           <span className={cn('text-[13px] font-medium', ink ? 'text-on-ink' : 'text-ink')}>Technical audit</span>
-          <span className={cn('hidden text-[13px] xl:inline', muted)}>— skipped when nothing on the site has changed</span>
+          <span className={cn('hidden text-[13px] xl:inline', muted)}>skipped when nothing on the site has changed</span>
         </div>
       </div>
 
@@ -191,7 +191,7 @@ export function WeekSchedule({ className }: { className?: string }) {
           <div className={cn('flex h-full flex-col rounded-xl border border-dashed p-4 sm:p-5', line)}>
             <Info className={cn('size-4', ink ? 'text-accent-on-ink' : 'text-accent-text')} aria-hidden />
             <p className={cn('mt-4 text-[13.5px] leading-relaxed', ink ? 'text-on-ink-2' : 'text-ink-2')}>
-              The default schedule. Each website’s pipeline page shows every run with its next and last time, and the daily AI Pulse can be switched off per website. A run that was missed — the server was down, say — starts once it is back, and its report says it ran late.
+              The default schedule. Each website's pipeline page shows every run with its next and last time, and the daily AI Pulse can be switched off per website. A run that was missed (the server was down, say) starts once it is back, and its report says it ran late.
             </p>
           </div>
         </li>

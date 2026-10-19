@@ -12,7 +12,7 @@ export function VerifyStep() {
       description={
         verified
           ? 'Ownership is confirmed. Check that Search Console is connected and pick your GA4 property, then continue.'
-          : 'We only show a website’s data to the company that owns it. Pick one way below; it takes about two minutes.'
+          : 'We only show a website\'s data to the company that owns it. Pick one way below; it takes about two minutes.'
       }
       why={
         verified ? undefined : (

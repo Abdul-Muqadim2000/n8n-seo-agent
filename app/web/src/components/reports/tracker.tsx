@@ -17,7 +17,7 @@ import { ActionList, ActionRunButton, BriefCard, sortActions } from './actions';
 import { AlertList, Block, Empty, has, CreditsCard, n, num, obj, objs, pct, pctRatio, SectionTitle, shortUrl, str, strs, type P } from './kit';
 import { ChartTitle, PositionPill, ReportHero } from './visuals';
 
-// The hero's headline (R113): `clicksHeadline` in @seo/shared follows the report's own significance test — a clicks change the test
+// The hero's headline (R113): `clicksHeadline` in @seo/shared follows the report's own significance test, a clicks change the test
 // calls not real reads "within normal variation", and a change that is real leads.
 
 type Metric = 'clicks' | 'impressions' | 'position';
@@ -52,7 +52,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
     <Stagger className="space-y-5">
       <ReportHero
         report={report}
-        eyebrow={str(period.start) ? `${fmtDate(str(period.start))} – ${fmtDate(str(period.end))}` : undefined}
+        eyebrow={str(period.start) ? `${fmtDate(str(period.start))} to ${fmtDate(str(period.end))}` : undefined}
         title={gsc.connected === false ? 'Search Console is not connected' : clicksHeadline(num(cur.clicks), num(deltas.clicks_pct), p.significance)}
         description={[
           actions.length ? `${actions.length} recommended ${actions.length === 1 ? 'action' : 'actions'}` : 'No new actions this week',
@@ -76,16 +76,16 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
             <>
               <HeroStat
                 label="Clicks"
-                value={num(cur.clicks) != null ? <CountUp value={num(cur.clicks)!} format={(v) => n(Math.round(v))} /> : '–'}
+                value={num(cur.clicks) != null ? <CountUp value={num(cur.clicks)!} format={(v) => n(Math.round(v))} /> : '-'}
                 delta={<Delta value={num(deltas.clicks_pct)} digits={0} label="vs previous 28 days" />}
                 trend={<Sparkline data={last28} dataKey="clicks" />}
               />
-              <HeroStat label="Impressions" value={num(cur.impressions) != null ? <CountUp value={num(cur.impressions)!} format={(v) => n(Math.round(v))} /> : '–'} delta={<Delta value={num(deltas.impressions_pct)} digits={0} label="vs previous 28 days" />} trend={<Sparkline data={last28} dataKey="impressions" />} />
+              <HeroStat label="Impressions" value={num(cur.impressions) != null ? <CountUp value={num(cur.impressions)!} format={(v) => n(Math.round(v))} /> : '-'} delta={<Delta value={num(deltas.impressions_pct)} digits={0} label="vs previous 28 days" />} trend={<Sparkline data={last28} dataKey="impressions" />} />
               <HeroStat label="Click-through rate" value={pctRatio(cur.ctr, 2)} delta={<Delta value={num(deltas.ctr_pts)} suffix=" pts" digits={2} label="vs previous" />} />
               <HeroStat
                 label="Average position"
                 info="Across every query; a rise means you moved up"
-                value={num(cur.position)?.toFixed(1) ?? '–'}
+                value={num(cur.position)?.toFixed(1) ?? '-'}
                 delta={<Delta value={positionGain} suffix="" digits={1} label={positionGain != null && positionGain >= 0 ? 'places up' : 'places'} />}
                 trend={<Sparkline data={last28} dataKey="position" invert />}
               />
@@ -98,7 +98,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
 
       {gsc.connected === false && (
         <Callout tone="warning" title="Search Console is not connected">
-          {str(gsc.error) || 'Add the service account as a Full user of the Search Console property (Settings → Users and permissions).'}{' '}
+          {str(gsc.error) || 'Add the service account as a Full user of the Search Console property (Settings, then Users and permissions).'}{' '}
           {report.siteId && (
             <ButtonLink variant="link" to={paths.site(org.id, report.siteId, 'settings/tracking')}>
               Tracking settings
@@ -114,7 +114,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
 
       {ga4.connected !== false && has(oCur) && (
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <MetricCard icon={<Users />} label="Organic sessions (GA4)" value={num(oCur.sessions) != null ? <CountUp value={num(oCur.sessions)!} format={(v) => n(Math.round(v))} /> : '–'} delta={<Delta value={pctChange(num(oCur.sessions), num(oPrev.sessions))} digits={0} />} deltaLabel="vs previous" sparkline={<Sparkline data={gaDaily.slice(-28)} dataKey="sessions" />} />
+          <MetricCard icon={<Users />} label="Organic sessions (GA4)" value={num(oCur.sessions) != null ? <CountUp value={num(oCur.sessions)!} format={(v) => n(Math.round(v))} /> : '-'} delta={<Delta value={pctChange(num(oCur.sessions), num(oPrev.sessions))} digits={0} />} deltaLabel="vs previous" sparkline={<Sparkline data={gaDaily.slice(-28)} dataKey="sessions" />} />
           <MetricCard icon={<Activity />} label="Engaged organic sessions" value={n(oCur.engaged)} delta={<Delta value={pctChange(num(oCur.engaged), num(oPrev.engaged))} digits={0} />} deltaLabel="vs previous" />
           <MetricCard icon={<Flame />} label="Key events from search" value={n(oCur.key_events)} delta={<Delta value={pctChange(num(oCur.key_events), num(oPrev.key_events))} digits={0} />} deltaLabel="vs previous" />
           <MetricCard icon={<BarChart3 />} label="Organic share of sessions" value={pct(ga4.organic_share, 0)} meta={`${n(obj(obj(ga4.total).cur).sessions)} sessions in total`} />
@@ -124,7 +124,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
       {daily.length > 1 && (
         <ChartCard
           title={<ChartTitle icon={<LineChart />}>Google Search, day by day</ChartTitle>}
-          description={str(period.start) ? `${fmtDate(str(period.start))} – ${fmtDate(str(period.end))}, with the 28 days before` : 'Last 8 weeks'}
+          description={str(period.start) ? `${fmtDate(str(period.start))} to ${fmtDate(str(period.end))}, with the 28 days before` : 'Last 8 weeks'}
           actions={
             <Segmented
               size="sm"
@@ -142,7 +142,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
               { key: 'date', label: 'Date', format: (v) => fmtDate(String(v)) },
               { key: 'clicks', label: 'Clicks', align: 'right', format: (v) => n(v) },
               { key: 'impressions', label: 'Impressions', align: 'right', format: (v) => n(v) },
-              { key: 'position', label: 'Position', align: 'right', format: (v) => (num(v) == null ? '–' : num(v)!.toFixed(1)) },
+              { key: 'position', label: 'Position', align: 'right', format: (v) => (num(v) == null ? '-' : num(v)!.toFixed(1)) },
             ],
             rows: daily,
           }}
@@ -180,7 +180,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
                   tone="warning"
                   icon={<Rocket />}
                   title={str(x.keyword)}
-                  description={fix ? `did not pass the quality check${why ? `: ${why}` : ''} — fix it and run it again` : `written ${num(x.days) ?? 0} days ago`}
+                  description={fix ? `did not pass the quality check${why ? `: ${why}` : ''}. Fix it and run it again` : `written ${num(x.days) ?? 0} days ago`}
                   action={
                     can('member') &&
                     (fix ? (
@@ -283,7 +283,7 @@ function FoundLive({ rows, siteId }: { rows: P[]; siteId: string | null }) {
             <div className="min-w-0">
               <p className="flex flex-wrap items-center gap-2 text-sm text-ink">
                 <StatusBadge tone="good">Live</StatusBadge>
-                <span className="min-w-0 break-words">“{str(r.keyword)}”</span>
+                <span className="min-w-0 break-words">"{str(r.keyword)}"</span>
               </p>
               <p className="mt-1 text-xs">
                 <ExternalLink href={str(r.url)}>{shortUrl(str(r.url))}</ExternalLink>
@@ -314,7 +314,7 @@ function FoundLive({ rows, siteId }: { rows: P[]; siteId: string | null }) {
  */
 function ContentGroups({ cg }: { cg: P }) {
   const verdict = (c: P) => {
-    if (!Object.keys(c).length) return <span className="text-xs text-ink-3">–</span>;
+    if (!Object.keys(c).length) return <span className="text-xs text-ink-3">-</span>;
     if (c.measurable === false) return <span className="text-xs text-ink-3">too few clicks to judge</span>;
     if (c.real === true) return <StatusBadge tone={c.direction === 'down' ? 'critical' : 'good'}>{str(c.text)}</StatusBadge>;
     return <span className="text-[13px] text-ink-2">{str(c.text)}{c.watch === true ? ' · within normal variation' : ''}</span>;
@@ -404,7 +404,7 @@ function QueryTabs({ gsc }: { gsc: P }) {
       sortValue: (r) => num(r.position),
       cell: (r) => (
         <span className="inline-flex flex-col items-end gap-0.5">
-          <PositionPill value={num(r.position)} text={num(r.position)?.toFixed(1) ?? '–'} />
+          <PositionPill value={num(r.position)} text={num(r.position)?.toFixed(1) ?? '-'} />
           {num(r.prev_position) ? <span className="text-xs text-ink-3">was {num(r.prev_position)!.toFixed(1)}</span> : null}
         </span>
       ),
@@ -426,7 +426,7 @@ function QueryTabs({ gsc }: { gsc: P }) {
     },
     { key: 'impressions', header: 'Impressions', align: 'right', sortValue: (r) => num(r.impressions), cell: (r) => n(r.impressions) },
     { key: 'ctr', header: 'CTR', align: 'right', sortValue: (r) => num(r.ctr), cell: (r) => pctRatio(r.ctr), hideOnMobile: true },
-    { key: 'position', header: 'Position', align: 'right', sortValue: (r) => num(r.position), cell: (r) => <PositionPill value={num(r.position)} text={num(r.position)?.toFixed(1) ?? '–'} /> },
+    { key: 'position', header: 'Position', align: 'right', sortValue: (r) => num(r.position), cell: (r) => <PositionPill value={num(r.position)} text={num(r.position)?.toFixed(1) ?? '-'} /> },
   ];
   return (
     <Block title="Search queries and pages" description={`${n(gsc.query_count)} queries with impressions this period`} icon={<Search />}>
@@ -486,7 +486,7 @@ function TrackedKeywords({ rows }: { rows: P[] }) {
       header: 'Search Console',
       align: 'right',
       sortValue: (r) => num(r.gsc_position) || 999,
-      cell: (r) => (num(r.gsc_position) ? num(r.gsc_position)!.toFixed(1) : '–'),
+      cell: (r) => (num(r.gsc_position) ? num(r.gsc_position)!.toFixed(1) : '-'),
       hideOnMobile: true,
     },
     { key: 'clicks', header: 'Clicks', align: 'right', sortValue: (r) => num(r.clicks), cell: (r) => n(r.clicks) },
@@ -527,7 +527,7 @@ function LadderPages({ rows }: { rows: P[] }) {
         </div>
       ),
     },
-    { key: 'rung', header: 'Rung', align: 'right', sortValue: (r) => num(r.rung), cell: (r) => num(r.rung) ?? '–' },
+    { key: 'rung', header: 'Rung', align: 'right', sortValue: (r) => num(r.rung), cell: (r) => num(r.rung) ?? '-' },
     { key: 'status', header: 'Status', sortValue: (r) => str(r.status), cell: (r) => <Badge tone={str(r.status) === 'published' ? 'good' : str(r.status) === 'writing' ? 'accent' : 'neutral'}>{str(r.status) || 'planned'}</Badge> },
     {
       key: 'indexed',
@@ -587,7 +587,7 @@ function Trends({ rows }: { rows: P[] }) {
               <>
                 {str(t.error)
                   ? `not available: ${str(t.error)}`
-                  : `latest ${num(t.latest) ?? '–'} · average ${num(t.average) ?? '–'}${str(t.peak_date) ? ` · peak ${fmtDate(str(t.peak_date))}` : ''}`}
+                  : `latest ${num(t.latest) ?? '-'} · average ${num(t.average) ?? '-'}${str(t.peak_date) ? ` · peak ${fmtDate(str(t.peak_date))}` : ''}`}
                 {strs(objs(t.rising).map((x) => str(x.query))).length > 0 && ` · rising: ${objs(t.rising).map((x) => str(x.query)).join(', ')}`}
               </>
             }
@@ -603,7 +603,7 @@ function Trends({ rows }: { rows: P[] }) {
           />
         ))}
       </ul>
-      {rows.some((t) => str(t.direction) === 'sparse') && <p className="px-5 pb-4 text-xs text-ink-3">“sparse” means Google has too little data for a reliable trend; treat the change as a hint.</p>}
+      {rows.some((t) => str(t.direction) === 'sparse') && <p className="px-5 pb-4 text-xs text-ink-3">"sparse" means Google has too little data for a reliable trend; treat the change as a hint.</p>}
     </Block>
   );
 }

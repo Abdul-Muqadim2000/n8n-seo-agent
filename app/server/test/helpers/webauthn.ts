@@ -1,8 +1,8 @@
 import { createHash, generateKeyPairSync, randomBytes, sign, type KeyObject } from 'node:crypto';
 
 /**
- * G1: a software authenticator (one ES256 passkey) that produces the exact WebAuthn JSON a browser sends — registration with "none"
- * attestation, and assertions over authenticatorData ‖ SHA-256(clientDataJSON) — so the server's passkey routes are tested against
+ * G1: a software authenticator (one ES256 passkey) that produces the exact WebAuthn JSON a browser sends, registration with "none"
+ * attestation, and assertions over authenticatorData ‖ SHA-256(clientDataJSON), so the server's passkey routes are tested against
  * real signatures, not mocks.
  */
 

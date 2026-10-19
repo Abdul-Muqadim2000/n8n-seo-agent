@@ -97,14 +97,14 @@ export function ContentReport({ report }: { report: ReportDetail }) {
     str(p.domain) && str(p.domain) !== report.siteDomain && `Website: ${str(p.domain)}`,
     str(p.emailed_to) && `E-mailed to ${str(p.emailed_to)}`,
   ].filter(Boolean);
-  const eyebrowExtra = [pageRole && pageRole !== 'standard' ? `${pageRole.replace(/_/g, ' ')} page` : '', ladderHead ? `${rung != null ? `Rung ${rung} · ` : ''}ladder for “${ladderHead}”` : ''].filter(Boolean).join(' · ');
+  const eyebrowExtra = [pageRole && pageRole !== 'standard' ? `${pageRole.replace(/_/g, ' ')} page` : '', ladderHead ? `${rung != null ? `Rung ${rung} · ` : ''}ladder for "${ladderHead}"` : ''].filter(Boolean).join(' · ');
 
   return (
     <Stagger className="space-y-5">
       <ReportHero
         report={report}
         eyebrow={eyebrowExtra ? <span className="normal-case">{eyebrowExtra}</span> : undefined}
-        title={html ? <>The page for “{keyword || 'this keyword'}” is written</> : verdict ? <>{verdictLabel(verdict)}: “{keyword || 'Keyword'}”</> : keyword || 'Keyword'}
+        title={html ? <>The page for "{keyword || 'this keyword'}" is written</> : verdict ? <>{verdictLabel(verdict)}: "{keyword || 'Keyword'}"</> : keyword || 'Keyword'}
         description={details.length ? details.join(' · ') : undefined}
         aside={
           html ? (
@@ -132,21 +132,21 @@ export function ContentReport({ report }: { report: ReportDetail }) {
           <>
             <HeroStat
               label="Searches / month"
-              value={volume != null ? <CountUp value={volume} format={(v) => n(Math.round(v))} /> : '–'}
+              value={volume != null ? <CountUp value={volume} format={(v) => n(Math.round(v))} /> : '-'}
               delta={num(kd.trend_yearly_pct) != null ? <Delta value={num(kd.trend_yearly_pct)} digits={0} label="year" /> : undefined}
               hint={country ? `Google, ${country}` : 'Google'}
             />
             {html ? (
               <>
-                <HeroStat label="Words" value={words != null ? <CountUp value={words} /> : '–'} hint={str(meta.page_type) ? <span className="line-clamp-2">{str(meta.page_type)}</span> : undefined} />
-                <HeroStat label="Opportunity score" value={score != null ? <CountUp value={score} /> : '–'} hint={verdict ? `Verdict: ${verdictLabel(verdict)}` : undefined} />
+                <HeroStat label="Words" value={words != null ? <CountUp value={words} /> : '-'} hint={str(meta.page_type) ? <span className="line-clamp-2">{str(meta.page_type)}</span> : undefined} />
+                <HeroStat label="Opportunity score" value={score != null ? <CountUp value={score} /> : '-'} hint={verdict ? `Verdict: ${verdictLabel(verdict)}` : undefined} />
                 <HeroStat label="Internal links" value={objs(meta.internal_links).length} hint={`${objs(meta.external_links).length} sources cited`} />
               </>
             ) : (
               <>
-                <HeroStat label="Difficulty" value={kdValue != null ? `${kdValue}/100` : <WordValue>{str(kd.difficulty_label) || '–'}</WordValue>} hint={kdValue != null ? str(kd.difficulty_label) || undefined : 'Keyword difficulty'} />
-                <HeroStat label="Cost per click" value={num(kd.cpc) != null ? usd(kd.cpc) : '–'} hint={str(kd.ads_competition) ? `Ads competition ${str(kd.ads_competition).toLowerCase()}` : undefined} />
-                <HeroStat label="Search intent" value={<WordValue><span className="capitalize">{str(kd.google_intent) || '–'}</span></WordValue>} hint={str(p.recommended_page) ? <span className="line-clamp-2">{str(p.recommended_page)}</span> : undefined} />
+                <HeroStat label="Difficulty" value={kdValue != null ? `${kdValue}/100` : <WordValue>{str(kd.difficulty_label) || '-'}</WordValue>} hint={kdValue != null ? str(kd.difficulty_label) || undefined : 'Keyword difficulty'} />
+                <HeroStat label="Cost per click" value={num(kd.cpc) != null ? usd(kd.cpc) : '-'} hint={str(kd.ads_competition) ? `Ads competition ${str(kd.ads_competition).toLowerCase()}` : undefined} />
+                <HeroStat label="Search intent" value={<WordValue><span className="capitalize">{str(kd.google_intent) || '-'}</span></WordValue>} hint={str(p.recommended_page) ? <span className="line-clamp-2">{str(p.recommended_page)}</span> : undefined} />
               </>
             )}
           </>
@@ -175,10 +175,10 @@ export function ContentReport({ report }: { report: ReportDetail }) {
               cols="sm:grid-cols-3"
               items={[
                 { icon: <Search />, label: 'Searches / month', value: n(kd.search_volume) },
-                { icon: <BarChart3 />, label: 'Difficulty', value: kdValue != null ? `${kdValue}/100` : str(kd.difficulty_label) || '–', hint: kdValue != null ? str(kd.difficulty_label) : undefined },
-                { icon: <MousePointerClick />, label: 'Cost per click', value: num(kd.cpc) != null ? usd(kd.cpc) : '–' },
-                { label: 'Search intent', value: <span className="capitalize">{str(kd.google_intent) || '–'}</span> },
-                { label: 'Ads competition', value: str(kd.ads_competition).toLowerCase() || '–' },
+                { icon: <BarChart3 />, label: 'Difficulty', value: kdValue != null ? `${kdValue}/100` : str(kd.difficulty_label) || '-', hint: kdValue != null ? str(kd.difficulty_label) : undefined },
+                { icon: <MousePointerClick />, label: 'Cost per click', value: num(kd.cpc) != null ? usd(kd.cpc) : '-' },
+                { label: 'Search intent', value: <span className="capitalize">{str(kd.google_intent) || '-'}</span> },
+                { label: 'Ads competition', value: str(kd.ads_competition).toLowerCase() || '-' },
                 {
                   icon: <TrendingUp />,
                   label: 'Trend',
@@ -189,7 +189,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
                         {num(kd.trend_quarterly_pct) != null && <Delta value={num(kd.trend_quarterly_pct)} digits={0} label="quarter" />}
                       </span>
                     ) : (
-                      '–'
+                      '-'
                     ),
                 },
               ]}
@@ -230,9 +230,9 @@ export function ContentReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
 
-      {/* R11: the page is here to finish by hand, not to publish as it is — said before the SEO checks and the page itself */}
+      {/* R11: the page is here to finish by hand, not to publish as it is, said before the SEO checks and the page itself */}
       {html && notReady && (
-        <Callout tone="critical" title={qaLabel || 'This page did not pass the quality check — not ready to publish'}>
+        <Callout tone="critical" title={qaLabel || 'This page did not pass the quality check and is not ready to publish'}>
           The editor had {num(quality.max_rounds) ?? 2} round(s) and the page still fails the checks below, so it is delivered as a draft to finish by hand.
           {qaReasons.length > 0 && (
             <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
@@ -246,7 +246,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
 
       {html && <PageChecks html={html} meta={meta} qa={qa} qaOk={qaOk} notReady={notReady} qaLabel={qaLabel} ledger={obj(p.run_ledger)} />}
 
-      {/* G2: send the page to the website's CMS — drafts by default, live only for owners and admins, never a page the checks refuse */}
+      {/* G2: send the page to the website's CMS, drafts by default, live only for owners and admins, never a page the checks refuse */}
       {/* G5: publishing is the agency's act, never a client person's (their portal has Approvals) */}
       {html && report.siteId && can('viewer') && <CmsPublishPanel report={report} />}
 
@@ -262,7 +262,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
         verdict && (
           <Callout tone="info" title="No page in this report">
             This run checked the keyword without writing a page.
-            {avoid ? ' The verdict advises against a page for this keyword: pick one of the secondary keywords or run keyword discovery.' : ' “Write this page” starts the full run with competitor research, the brief and a QA-checked page.'}
+            {avoid ? ' The verdict advises against a page for this keyword: pick one of the secondary keywords or run keyword discovery.' : ' "Write this page" starts the full run with competitor research, the brief and a QA-checked page.'}
             {avoid && (
               <span className="mt-1 block">
                 <ButtonLink variant="link" to={paths.tool(org.id, 'discover', { siteId: report.siteId })} icon={<ArrowRight className="size-3.5" />}>
@@ -340,8 +340,8 @@ function PageChecks({ html, meta, qa, qaOk, notReady, qaLabel, ledger }: { html:
         ]
       : []),
     { ok: phCount === 0, label: 'Placeholders to fill', detail: phCount ? `${phCount} left (see the preview)` : 'None' },
-    // R11: the gate's own verdict, from the last quality round — "to review" never stands in for "did not pass"
-    ...(qa || notReady ? [{ ok: notReady ? false : qaOk, label: 'Quality check', detail: notReady ? qaLabel || 'Did not pass — not ready to publish' : qa.replace(/^Quality check:\s*/i, '') }] : []),
+    // R11: the gate's own verdict, from the last quality round, "to review" never stands in for "did not pass"
+    ...(qa || notReady ? [{ ok: notReady ? false : qaOk, label: 'Quality check', detail: notReady ? qaLabel || 'Did not pass, not ready to publish' : qa.replace(/^Quality check:\s*/i, '') }] : []),
   ];
   const steps = strs(ledger.ai_nodes);
   return (

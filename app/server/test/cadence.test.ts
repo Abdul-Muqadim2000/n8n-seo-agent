@@ -36,7 +36,7 @@ const input = (o: Partial<CadenceInput>): CadenceInput => ({ domain: D, pagesPer
 const kws = (o: Partial<CadenceInput>) => planCadence(input(o), NOW).picks.map((p) => p.keyword);
 
 describe('cadence mirror: ladder order and focus', () => {
-  it('priority: ladder 1’s pages first, then ladder 2; written pages skipped; the main page waits for support', () => {
+  it('priority: ladder 1\'s pages first, then ladder 2; written pages skipped; the main page waits for support', () => {
     const p = planCadence(input({ ladders: [...A(), ...B({ a: 'writing', b: 'writing' })], settings: [set('lad_A', { priority: 2 }), set('lad_B', { priority: 1 })] }), NOW);
     expect(p.picks.map((x) => x.keyword)).toEqual(['vat software uae software', 'vat software uae providers', 'peppol uae cost']);
     expect(p.picks[0].ladder).toEqual({ id: 'lad_B', rung: 2, head: 'vat software uae', pageNo: 3 });
@@ -82,7 +82,7 @@ describe('cadence mirror: main-page gate and won', () => {
     const p = planCadence(input({ ladders: gated, settings: noGuard }), NOW);
     expect([p.picks, p.waitingForSupport]).toEqual([[], ['lad_A']]);
     expect(cadenceDetail([], { ...p, at: '' }, { cards: [{ id: 'lad_A', head: 'peppol uae' } as never] })).toBe(
-      'Nothing to write automatically: the main page of “peppol uae” waits until half of its supporting pages are live',
+      'Nothing to write automatically: the main page of "peppol uae" waits until half of its supporting pages are live',
     );
   });
   it('half published (ladder row + content log), or the main keyword in the top 30: the main page is written', () => {
@@ -92,7 +92,7 @@ describe('cadence mirror: main-page gate and won', () => {
     expect(kws({ ladders: gated, settings: noGuard, history: ranks('lad_A', 'peppol uae', [-1, 25]) })).toEqual(['peppol uae']);
     expect(kws({ ladders: gated, settings: noGuard, history: ranks('lad_A', 'peppol uae', [45, 25]) })).toEqual([]);
   });
-  it('won: the main keyword in the top 3 in the last 4 checks (or status won) → no more pages, the place is freed', () => {
+  it('won: the main keyword in the top 3 in the last 4 checks (or status won) gives no more pages, the place is freed', () => {
     const p = planCadence(input({ ladders: [...A(), ...B()], history: ranks('lad_A', 'peppol uae', [2, 1, 3, 2]) }), NOW);
     expect([p.picks.every((x) => x.ladder?.id === 'lad_B'), p.picks.length, p.won]).toEqual([true, 3, ['lad_A']]);
     expect(planCadence(input({ ladders: [...A(), ...B()], history: ranks('lad_A', 'peppol uae', [2, 1, 3, 5]) }), NOW).picks[0].ladder?.id).toBe('lad_A');
@@ -105,11 +105,11 @@ describe('cadence mirror: main-page gate and won', () => {
 
 describe('cadence mirror: pile-up guard and opportunity posts', () => {
   const waiting3 = ['x one', 'x two', 'x three'].map((k, i) => logRow(k, { started_at: daysAgo(10 + 10 * i) }));
-  it('3 pages waiting → nothing is written (paused_reason pileup); older than 120 days does not count; the limit from the _site row', () => {
+  it('3 pages waiting gives nothing is written (paused_reason pileup); older than 120 days does not count; the limit from the _site row', () => {
     const p = planCadence(input({ ladders: A(), logs: waiting3 }), NOW);
     expect([p.picks, p.pausedReason, p.waitingPublish, p.candidates.length]).toEqual([[], 'pileup', 3, 4]);
     expect(cadenceDetail([], { ...p, at: '' }, { cards: [] })).toBe(
-      'Writes nothing: 3 written pages waiting for publication (pile-up guard, limit 3): “x three”, “x two”, “x one”. Publish them to continue',
+      'Writes nothing: 3 written pages waiting for publication (pile-up guard, limit 3): "x three", "x two", "x one". Publish them to continue',
     );
     expect(kws({ ladders: A(), logs: [...waiting3.slice(0, 2), logRow('x old', { started_at: daysAgo(130) })] })).toHaveLength(3);
     expect(kws({ ladders: A(), logs: waiting3, settings: [siteSet({ max_waiting: 5 })] })).toHaveLength(3);
@@ -119,12 +119,12 @@ describe('cadence mirror: pile-up guard and opportunity posts', () => {
   });
 
   // ---- v4.14 (FIX_PLAN D5): pages written by a keyword ladder count too (they reached the content log only from v4.14 on) ----
-  it('D5: 2 content-log rows + 2 ladder rows “writing” are 4 pages waiting at a limit of 3 → nothing is written, and they are named', () => {
+  it('D5: 2 content-log rows + 2 ladder rows "writing" are 4 pages waiting at a limit of 3 gives nothing is written, and they are named', () => {
     const p = planCadence(input({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors'), logRow('peppol uae cost', { started_at: daysAgo(20) }), logRow('peppol uae guide', { started_at: daysAgo(19) })] }), NOW);
     expect([p.picks, p.pausedReason, p.waitingPublish]).toEqual([[], 'pileup', 4]);
     expect([...p.waitingKeywords].sort()).toEqual(['erp for distributors', 'erp pricing uae', 'peppol uae cost', 'peppol uae guide']);
     expect(cadenceDetail([], { ...p, at: '' }, { cards: [] })).toBe(
-      'Writes nothing: 4 written pages waiting for publication (pile-up guard, limit 3): “peppol uae cost”, “peppol uae guide”, “erp pricing uae”, “erp for distributors”. Publish them to continue',
+      'Writes nothing: 4 written pages waiting for publication (pile-up guard, limit 3): "peppol uae cost", "peppol uae guide", "erp pricing uae", "erp for distributors". Publish them to continue',
     );
     // the same website is written again once its limit allows it: the guard stopped it, not the ladder
     expect(kws({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors'), logRow('peppol uae cost', { started_at: daysAgo(20) }), logRow('peppol uae guide', { started_at: daysAgo(19) })], settings: [siteSet({ max_waiting: 5 })] })).toEqual([
@@ -133,7 +133,7 @@ describe('cadence mirror: pile-up guard and opportunity posts', () => {
     ]);
   });
 
-  it('D5 / R1: a page in the content log and on its ladder row counts once; published pages never count; only “written” waits', () => {
+  it('D5 / R1: a page in the content log and on its ladder row counts once; published pages never count; only "written" waits', () => {
     const both = planCadence(input({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('peppol uae cost', { status: 'written' }), logRow('peppol uae guide', { status: 'written' })] }), NOW);
     expect([both.waitingPublish, both.pausedReason, [...both.waitingKeywords].sort()]).toEqual([2, '', ['peppol uae cost', 'peppol uae guide']]);
     const published = ['peppol uae cost', 'peppol uae guide', 'peppol uae software'].map((k) => logRow(k, { status: 'published', published_url: slug(k), published_at: daysAgo(3) }));
@@ -144,7 +144,7 @@ describe('cadence mirror: pile-up guard and opportunity posts', () => {
 
   // R1 (2026-10-13, the re-rating run): a budget-refused page run left row 19 saying `writing` with a `started` log row, and this guard
   // counted it among 6 pages waiting and paused the website for a week. `written` in the content log is the only proof of a page.
-  it('R1: a ladder row “writing” whose log row only says “started” is no page waiting — the website keeps writing', () => {
+  it('R1: a ladder row "writing" whose log row only says "started" is no page waiting, the website keeps writing', () => {
     const promised = planCadence(input({ pagesPerWeek: 1, ladders: A({ a: 'writing' }), logs: [logRow('peppol uae cost', { status: 'started' })] }), NOW);
     expect([promised.waitingPublish, promised.pausedReason, promised.waitingKeywords]).toEqual([0, '', []]);
     expect(promised.picks.map((x) => x.keyword)).toEqual(['peppol uae guide']);
@@ -152,7 +152,7 @@ describe('cadence mirror: pile-up guard and opportunity posts', () => {
     expect([written.waitingPublish, written.pausedReason, written.waitingKeywords]).toEqual([1, 'pileup', ['peppol uae cost']]);
   });
 
-  it('D5: nothing older than 120 days waits; a content-log row dates an older ladder’s page', () => {
+  it('D5: nothing older than 120 days waits; a content-log row dates an older ladder\'s page', () => {
     const old = planCadence(input({ ladders: std('lad_O', 'wms dubai', daysAgo(200), { a: 'writing', b: 'writing', c: 'writing' }), logs: [logRow('erp pricing uae', { started_at: daysAgo(130) })] }), NOW);
     expect([old.waitingPublish, old.pausedReason]).toEqual([0, '']);
     const dated = planCadence(input({ ladders: std('lad_O', 'wms dubai', daysAgo(200), { a: 'writing' }), logs: [logRow('wms dubai cost', { started_at: daysAgo(9) })] }), NOW);
@@ -184,7 +184,7 @@ describe('cadence mirror: pile-up guard and opportunity posts', () => {
 
 describe('cadence mirror: the coming Mondays', () => {
   const runs = ['2026-10-05T14:00:00.000Z', '2026-10-12T14:00:00.000Z', '2026-10-19T14:00:00.000Z', '2026-10-26T14:00:00.000Z'];
-  it('each run’s pages count as written for the next run, until the pile-up guard stops the writing', () => {
+  it('each run\'s pages count as written for the next run, until the pile-up guard stops the writing', () => {
     const weeks = simulateCadence(input({ ladders: A(), pagesPerWeek: 1, logs: [logRow('x one')] }), runs, NOW);
     expect(weeks.map((w) => [w.at.slice(0, 10), w.picks.map((p) => p.keyword), w.pausedReason])).toEqual([
       ['2026-10-05', ['peppol uae cost'], ''],
@@ -203,7 +203,7 @@ describe('cadence mirror: the coming Mondays', () => {
   });
 });
 
-// v4.12 (AI_GROWTH_SPEC.md): the AI page of the week — the same rules as Cadence_Plan.js (harness S29 (g))
+// v4.12 (AI_GROWTH_SPEC.md): the AI page of the week, the same rules as Cadence_Plan.js (harness S29 (g))
 describe('cadence mirror: the AI page of the week', () => {
   const target = (o: Partial<AiTargetRow> & { tid: string }) =>
     ({ target_id: 'ait_x_' + o.tid, site_id: 'site_northwind-erp-com', domain: D, prompt_id: '', question: o.question ?? 'Which companies help UAE businesses with e-invoicing?', keyword: o.keyword ?? 'e invoicing in uae', kind: o.kind ?? 'answer', page_url: o.page_url ?? '', page_type: 'Guide',
@@ -239,7 +239,7 @@ describe('cadence mirror: the AI page of the week', () => {
   });
 });
 
-// D11 (2026-10-12, system review FIX_PLAN): one search, one page — the website's page inventory (seo_pages, written weekly by the
+// D11 (2026-10-12, system review FIX_PLAN): one search, one page, the website's page inventory (seo_pages, written weekly by the
 // Site Tracker) keeps the queue from offering a page the site already has. Same rules as SM.matchPage in n8n (harness S40).
 describe('cadence mirror: pages the website already has (D11)', () => {
   const INS = 'https://www.northwind-erp.com/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs';
@@ -265,7 +265,7 @@ describe('cadence mirror: pages the website already has (D11)', () => {
     expect(p.picks.map((x) => x.keyword)).not.toContain('uae e invoicing penalties');
     expect(p.coveredByLivePages).toEqual([{ keyword: 'uae e invoicing penalties', source: 'trend', url: INS }]);
   });
-  it('a ladder page for such a search is still written — as a refresh of that page, never a second URL', () => {
+  it('a ladder page for such a search is still written, as a refresh of that page, never a second URL', () => {
     const L = ladder('lad_P', 'uae e invoicing', [[1, 1, 'uae e invoicing penalties', undefined]], '2026-07-01T00:00:00.000Z');
     const p = planCadence(input({ pagesPerWeek: 1, ladders: L, pages: INVENTORY }), NOW);
     expect(p.picks.map((x) => [x.keyword, x.existingPageUrl])).toEqual([['uae e invoicing penalties', INS]]);
@@ -279,7 +279,7 @@ describe('cadence mirror: pages the website already has (D11)', () => {
   });
 });
 
-// v4.16 (B4-3, benchmark area 4): the same situations as the n8n harness scenario S77 — a page the Site Tracker's test confirmed
+// v4.16 (B4-3, benchmark area 4): the same situations as the n8n harness scenario S77, a page the Site Tracker's test confirmed
 // is losing traffic is refreshed ahead of a striking-distance query, and the states the evidence refused are never written.
 describe('cadence mirror: a page losing traffic is refreshed (B4-3)', () => {
   const P = 'https://www.northwind-erp.com/guides/erp-implementation-checklist/';
@@ -288,7 +288,7 @@ describe('cadence mirror: a page losing traffic is refreshed (B4-3)', () => {
       site_id: 'site_northwind-erp-com', url: P, title: '', h1: '', source: 'gsc', lastmod: '', updated_at: '', measured_at: daysAgo(0),
       queries_json: JSON.stringify([{ query: 'erp implementation checklist', impressions: 9000, clicks: 300 }]),
       clicks: 400, impressions: 13000, position: 9, prev_clicks: 900, yoy_clicks: 1000,
-      decay_state: 'decaying', decay_pct: -56, decay_lost: 500, decay_kind: 'visibility', decay_basis: 'Search Console clicks for this page, the last 28 days against the 28 days before (900 → 400).',
+      decay_state: 'decaying', decay_pct: -56, decay_lost: 500, decay_kind: 'visibility', decay_basis: 'Search Console clicks for this page, the last 28 days against the 28 days before (900 to 400).',
       ...o,
     }) as SitePageRow;
   const striking = (page: string) =>
@@ -302,7 +302,7 @@ describe('cadence mirror: a page losing traffic is refreshed (B4-3)', () => {
     ]);
     expect(p.picks[0].keyword).toBe('erp implementation checklist');
     expect(p.picks[0].decayLost).toBe(500);
-    expect(p.picks[0].why).toContain('500 clicks lost in 28 days (900 → 400)');
+    expect(p.picks[0].why).toContain('500 clicks lost in 28 days (900 to 400)');
   });
 
   it('seasonal, watch and too-small pages are never rewritten', () => {
@@ -326,9 +326,9 @@ describe('cadence mirror: a page losing traffic is refreshed (B4-3)', () => {
   });
 });
 
-describe('cadence mirror: a failed draft and a set-aside main keyword (R111, R87 — 2026-10-16)', () => {
+describe('cadence mirror: a failed draft and a set-aside main keyword (R111, R87: 2026-10-16)', () => {
   // R111: the content log says `not_ready` when the page's LAST quality round failed (Content_Log_Row.js). Cadence_Plan.js counts such a
-  // draft in the pile-up guard — it is written and not live — and names it as needing a fix, never as a page to publish.
+  // draft in the pile-up guard, it is written and not live, and names it as needing a fix, never as a page to publish.
   it('R111: a not_ready draft counts toward the pile-up limit and is named in needsFix; a written one is not', () => {
     const logs = [logRow('erp software uae'), logRow('service industry erp software'), logRow('ai consulting', { status: 'not_ready' })];
     const p = planCadence(input({ ladders: A(), logs }), NOW);
@@ -338,7 +338,7 @@ describe('cadence mirror: a failed draft and a set-aside main keyword (R111, R87
     expect(p.picks).toEqual([]);
   });
 
-  it('R111: a ladder row “writing” whose log row is not_ready waits as a draft to fix (counted once)', () => {
+  it('R111: a ladder row "writing" whose log row is not_ready waits as a draft to fix (counted once)', () => {
     const p = planCadence(input({ ladders: A({ a: 'writing' }), logs: [logRow('peppol uae cost', { status: 'not_ready', ladder_id: 'lad_A' })], settings: noGuard }), NOW);
     expect([p.waitingPublish, p.needsFix]).toEqual([1, ['peppol uae cost']]);
   });

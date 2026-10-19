@@ -29,7 +29,7 @@ export function MovementCell({ pos, prev }: { pos: number | null; prev: number |
   const m = movement(pos, prev);
   if (m.kind === 'new') return <Badge tone="good">new in top 50</Badge>;
   if (m.kind === 'lost') return <Badge tone="critical">dropped out</Badge>;
-  if (m.value == null) return <span className="text-xs text-ink-3">–</span>;
+  if (m.value == null) return <span className="text-xs text-ink-3">-</span>;
   return <Delta value={m.value} suffix="" digits={0} />;
 }
 
@@ -55,7 +55,7 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
   const labels = (r: P) => arr(r.feature_labels).map((x) => str(x)).filter(Boolean);
 
   const cols: Column<P>[] = [
-    { key: 'rung', header: 'Rung', sortValue: (r) => num(r.rung), cell: (r) => <Badge>{num(r.rung) ?? '–'}</Badge>, width: '64px' },
+    { key: 'rung', header: 'Rung', sortValue: (r) => num(r.rung), cell: (r) => <Badge>{num(r.rung) ?? '-'}</Badge>, width: '64px' },
     { key: 'keyword', header: 'Keyword', sortValue: (r) => str(r.keyword), cell: (r) => <span className="font-medium text-ink">{str(r.keyword)}</span> },
     {
       key: 'position',
@@ -69,10 +69,10 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
     },
     { key: 'previous', header: 'Previous', align: 'right', sortValue: (r) => num(r.previous), cell: (r) => <span className="text-ink-3">{formatPosition(num(r.previous))}</span>, hideOnMobile: true },
     { key: 'move', header: 'Change', align: 'right', cell: (r) => <MovementCell pos={num(r.position)} prev={num(r.previous)} /> },
-    { key: 'mobile', header: 'On a phone', align: 'right', sortValue: (r) => num(r.mobile_position), cell: (r) => (r.mobile_position == null ? <span className="text-xs text-ink-3">–</span> : <PositionPill value={num(r.mobile_position)} text={formatPosition(num(r.mobile_position))} />), hideOnMobile: true },
-    { key: 'sov', header: 'Share of voice', align: 'right', sortValue: (r) => num(r.share_of_voice), cell: (r) => (r.share_of_voice == null ? <span className="text-xs text-ink-3">–</span> : <span className="tabular text-[13px] text-ink-2">{num(r.share_of_voice)}%</span>) },
+    { key: 'mobile', header: 'On a phone', align: 'right', sortValue: (r) => num(r.mobile_position), cell: (r) => (r.mobile_position == null ? <span className="text-xs text-ink-3">-</span> : <PositionPill value={num(r.mobile_position)} text={formatPosition(num(r.mobile_position))} />), hideOnMobile: true },
+    { key: 'sov', header: 'Share of voice', align: 'right', sortValue: (r) => num(r.share_of_voice), cell: (r) => (r.share_of_voice == null ? <span className="text-xs text-ink-3">-</span> : <span className="tabular text-[13px] text-ink-2">{num(r.share_of_voice)}%</span>) },
     { key: 'features', header: 'The results page', cell: (r) => (labels(r).length ? <span className="text-[13px] text-ink-2">{labels(r).join(' · ')}</span> : <span className="text-xs text-ink-3">plain results</span>), hideOnMobile: true },
-    { key: 'above', header: 'Above you', cell: (r) => { const a = objs(r.above); return a.length ? <span className="text-[13px] text-ink-2">{a.slice(0, 2).map((x) => `${str(x.domain)} (#${num(x.position)})`).join(', ')}{a.length > 2 ? ` +${a.length - 2}` : ''}</span> : <span className="text-xs text-ink-3">–</span>; }, hideOnMobile: true },
+    { key: 'above', header: 'Above you', cell: (r) => { const a = objs(r.above); return a.length ? <span className="text-[13px] text-ink-2">{a.slice(0, 2).map((x) => `${str(x.domain)} (#${num(x.position)})`).join(', ')}{a.length > 2 ? ` +${a.length - 2}` : ''}</span> : <span className="text-xs text-ink-3">-</span>; }, hideOnMobile: true },
     {
       key: 'notes',
       header: 'Notes',
@@ -80,11 +80,11 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
         const c = obj(r.cannibal);
         const o = obj(r.outranked);
         const t = [c.found === true ? str(c.text) : '', o.available === true && arr(o.domains).length ? str(o.text) : ''].filter(Boolean);
-        return t.length ? <span className="block max-w-[28rem] text-[13px] leading-snug text-ink-2">{t.join(' ')}</span> : <span className="text-xs text-ink-3">–</span>;
+        return t.length ? <span className="block max-w-[28rem] text-[13px] leading-snug text-ink-2">{t.join(' ')}</span> : <span className="text-xs text-ink-3">-</span>;
       },
       hideOnMobile: true,
     },
-    { key: 'url', header: 'Ranking URL', cell: (r) => (str(r.url) ? <ExternalLink href={str(r.url)} className="text-[13px]">{shortUrl(str(r.url))}</ExternalLink> : <span className="text-xs text-ink-3">–</span>), hideOnMobile: true },
+    { key: 'url', header: 'Ranking URL', cell: (r) => (str(r.url) ? <ExternalLink href={str(r.url)} className="text-[13px]">{shortUrl(str(r.url))}</ExternalLink> : <span className="text-xs text-ink-3">-</span>), hideOnMobile: true },
   ];
 
   const top10 = positions.filter((x) => (num(x.position) ?? 0) > 0 && (num(x.position) ?? 99) <= 10).length;
@@ -95,16 +95,16 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
     <Stagger className="space-y-5">
       <ReportHero
         report={report}
-        eyebrow={str(p.head_keyword) ? <span className="normal-case">“{str(p.head_keyword)}”</span> : undefined}
-        title={p.done === true ? 'Ladder complete: tracking has stopped' : `${ranking} of ${positions.length} ${positions.length === 1 ? 'page' : 'pages'} in Google’s top 50`}
-        description={str(p.checked_at) ? `Checked ${fmtDateTime(str(p.checked_at))}. “>50” means not in the top 50 yet; a failed check is retried next week.` : '“>50” means not in the top 50 yet; a failed check is retried next week.'}
+        eyebrow={str(p.head_keyword) ? <span className="normal-case">"{str(p.head_keyword)}"</span> : undefined}
+        title={p.done === true ? 'Ladder complete: tracking has stopped' : `${ranking} of ${positions.length} ${positions.length === 1 ? 'page' : 'pages'} in Google's top 50`}
+        description={str(p.checked_at) ? `Checked ${fmtDateTime(str(p.checked_at))}. ">50" means not in the top 50 yet; a failed check is retried next week.` : '">50" means not in the top 50 yet; a failed check is retried next week.'}
         aside={positions.length ? <ScoreMark score={top10} max={positions.length} label="Pages in the top 10" ringTone="accent" display={`${top10}/${positions.length}`} suffix="" caption={`${ranking} in the top 50`} /> : undefined}
         stats={
           <>
             <HeroStat label="Pages checked" value={<CountUp value={positions.length} />} />
             <HeroStat label="In the top 10" value={<CountUp value={top10} />} />
-            <HeroStat label="Gains" value={<CountUp value={split ? ownGains.length : gains.length} />} hint={split ? 'your pages’ own rises, beyond the page’s churn' : 'moved up since last week'} />
-            <HeroStat label="Drops" value={<CountUp value={split ? ownDrops.length : drops.length} />} hint={split ? 'your pages’ own falls, beyond the page’s churn' : 'moved down since last week'} />
+            <HeroStat label="Gains" value={<CountUp value={split ? ownGains.length : gains.length} />} hint={split ? 'your pages\' own rises, beyond the page\'s churn' : 'moved up since last week'} />
+            <HeroStat label="Drops" value={<CountUp value={split ? ownDrops.length : drops.length} />} hint={split ? 'your pages\' own falls, beyond the page\'s churn' : 'moved down since last week'} />
           </>
         }
       />
@@ -130,7 +130,7 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
             )}
             {run && can('member') && (
               <ButtonLink to={paths.tool(org.id, run.mode, { siteId: report.siteId, prefill: run.prefill })} className="mt-4 h-auto min-h-9 max-w-full whitespace-normal py-2 text-left" icon={<ArrowRight className="size-4" />}>
-                {run.mode === 'keyword' && run.prefill.keyword ? `Write “${String(run.prefill.keyword)}”` : modeTitle(run.mode)}
+                {run.mode === 'keyword' && run.prefill.keyword ? `Write "${String(run.prefill.keyword)}"` : modeTitle(run.mode)}
               </ButtonLink>
             )}
             {p.done === true && (
@@ -176,7 +176,7 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
         icon={<ListOrdered />}
         description={
           <>
-            {ranking} of {positions.length} pages in Google’s top 50
+            {ranking} of {positions.length} pages in Google's top 50
             {str(p.checked_at) && <> · checked {fmtDateTime(str(p.checked_at))}</>}
           </>
         }
@@ -186,7 +186,7 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
         ) : (
           <Empty>No positions in this check.</Empty>
         )}
-        <p className="mt-2 text-xs text-ink-3">“&gt;50” means not in the top 50 yet; a failed check is retried next week.</p>
+        <p className="mt-2 text-xs text-ink-3">"&gt;50" means not in the top 50 yet; a failed check is retried next week.</p>
       </Block>
 
       {Object.keys(serp).length > 0 && (
@@ -199,7 +199,7 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
             <SerpStat label="AI Overview shown" value={num(sf.ai_overview) ?? 0} of={num(serp.checked)} hint={num(sf.ai_overview_cites_us) ? `cites you for ${num(sf.ai_overview_cites_us)}` : num(sf.ai_overview_sources_unknown) ? 'whether it cites you was not loaded' : 'it did not cite you in these checks'} />
             <SerpStat label="Featured snippet" value={num(sf.featured_snippet) ?? 0} of={num(serp.checked)} hint={num(sf.snippet_ours) ? `${num(sf.snippet_ours)} held by you` : 'held by other sites'} />
             <SerpStat label="People Also Ask" value={num(sf.people_also_ask) ?? 0} of={num(serp.checked)} hint="questions worth answering on the page" />
-            <SerpStat label="Your share of voice" value={null} display={serp.share_of_voice == null ? '–' : `${num(serp.share_of_voice)}%`} hint={str(serp.share_of_voice_note) || 'estimated from the clicks page 1 offers'} />
+            <SerpStat label="Your share of voice" value={null} display={serp.share_of_voice == null ? '-' : `${num(serp.share_of_voice)}%`} hint={str(serp.share_of_voice_note) || 'estimated from the clicks page 1 offers'} />
           </div>
           {objs(serp.competitors_above).length > 0 && (
             <div className="mt-4">
@@ -267,7 +267,7 @@ function SerpStat({ label, value, of, hint, display }: { label: string; value: n
   );
 }
 
-/** B6-8: the engine's own lines ("keyword (12 → 18; your page's own move: …)"), each already saying what the move is */
+/** B6-8: the engine's own lines ("keyword (12 -> 18; your page's own move: ...)"), each already saying what the move is */
 function LineList({ title, items, icon, tone, note }: { title: string; items: string[]; icon: ReactNode; tone: 'good' | 'critical' | 'neutral'; note?: string }) {
   return (
     <Block title={title} icon={icon} iconTone={tone} description={note}>
@@ -295,7 +295,7 @@ function MoverList({ title, items, icon, tone }: { title: string; items: P[]; ic
             <li key={i} className="flex items-center justify-between gap-3 py-2 text-sm">
               <span className="text-ink">{str(g.keyword)}</span>
               <span className="flex items-center gap-2 tabular text-ink-2">
-                {formatPosition(num(g.previous))} → <PositionPill value={num(g.position)} text={formatPosition(num(g.position))} />
+                {formatPosition(num(g.previous))} to <PositionPill value={num(g.position)} text={formatPosition(num(g.position))} />
                 <MovementCell pos={num(g.position)} prev={num(g.previous)} />
               </span>
             </li>

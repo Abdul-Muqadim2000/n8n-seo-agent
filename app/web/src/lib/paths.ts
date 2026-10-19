@@ -12,7 +12,7 @@ export const paths = {
   site: (orgId: string, siteId: string, page = 'overview') => `/o/${orgId}/sites/${siteId}/${page}`,
   /** one keyword ladder of a website (inside its Pipeline) */
   ladder: (orgId: string, siteId: string, ladderId: string) => `/o/${orgId}/sites/${siteId}/pipeline/ladders/${encodeURIComponent(ladderId)}`,
-  /** the "New keyword ladder" flow of a website (choose → review → start); `keyword` preselects or pre-fills it */
+  /** the "New keyword ladder" flow of a website (choose -> review -> start); `keyword` preselects or pre-fills it */
   newLadder: (orgId: string, siteId: string, opts: { keyword?: string; country?: string; tab?: 'recommended' | 'check' } = {}) => {
     const q = new URLSearchParams();
     if (opts.keyword) q.set('keyword', opts.keyword);

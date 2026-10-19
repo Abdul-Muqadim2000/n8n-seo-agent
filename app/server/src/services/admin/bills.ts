@@ -65,7 +65,7 @@ export async function anthropicBill(range: PeriodRange, attributedUsd: number, e
       ratio: null,
       asOf: null,
       source: 'unavailable',
-      note: 'Not readable: set ANTHROPIC_ADMIN_API_KEY (an Admin API key, sk-ant-admin…, from the Claude Console → Settings → Admin keys) in app/.env to see what Claude really billed.',
+      note: 'Not readable: set ANTHROPIC_ADMIN_API_KEY (an Admin API key, sk-ant-admin..., from the Claude Console > Settings > Admin keys) in app/.env to see what Claude really billed.',
     };
   // 'all' starts at the first cost the panel knows of (the report needs a start), at most 400 days back
   const from = range.from ?? earliest ?? new Date(range.to.getTime() - 30 * 86_400_000);

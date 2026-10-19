@@ -37,7 +37,7 @@ const CAPABILITIES: { icon: ReactNode; title: string; text: string }[] = [
   {
     icon: <Bot className="size-4" />,
     title: 'AI search visibility',
-    text: 'Your buyers’ questions asked to ChatGPT, Gemini, Perplexity, Claude and Google AI Mode.',
+    text: 'Your buyers\' questions asked to ChatGPT, Gemini, Perplexity, Claude and Google AI Mode.',
   },
   {
     icon: <Wrench className="size-4" />,
@@ -54,7 +54,7 @@ function PortalAuthPanel() {
       {b ? <AgencyLockup name={b.name} logoUrl={b.logoUrl} logoDarkUrl={b.logoDarkUrl} initials={b.initials} /> : <span className="h-7" aria-hidden />}
       <div className="max-w-[460px] py-8">
         <p className="font-display text-[30px] font-semibold leading-[1.2] tracking-[-0.02em] text-ink xl:text-[34px]">{b ? `${b.name} client portal` : 'Client portal'}</p>
-        <p className="mt-4 text-[15px] leading-relaxed text-ink-2">Your websites’ search performance, reports and recommendations in one place, and the pages and outreach waiting for your approval.</p>
+        <p className="mt-4 text-[15px] leading-relaxed text-ink-2">Your websites' search performance, reports and recommendations in one place, and the pages and outreach waiting for your approval.</p>
       </div>
       <p className="border-t border-line pt-5 text-xs leading-relaxed text-ink-3">
         {b?.footerText ?? (b?.supportEmail ? `Questions? ${b.supportEmail}` : '')}

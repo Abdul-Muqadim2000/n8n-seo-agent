@@ -125,7 +125,7 @@ export default function RunDetailPage() {
             <span className="text-ink-3">·</span>
             <span>
               {run.userName ? `${run.userName}, ` : ''}
-              {run.apiKeyName ? `via API key “${run.apiKeyName}”, ` : ''}
+              {run.apiKeyName ? `via API key "${run.apiKeyName}", ` : ''}
               {fmtDateTime(run.createdAt)}
             </span>
           </span>
@@ -156,7 +156,7 @@ export default function RunDetailPage() {
             }
           >
             {run.error || 'The SEO engine rejected the request without a reason.'}
-            <span className="mt-1 block text-xs text-ink-3">“Try again” opens the form with the same values so you can adjust them first.</span>
+            <span className="mt-1 block text-xs text-ink-3">"Try again" opens the form with the same values so you can adjust them first.</span>
           </Callout>
         )}
 
@@ -173,7 +173,7 @@ export default function RunDetailPage() {
             <CardTitle icon={<GitCommitVertical />} title="Timeline" description={reports.length ? `${reports.length} report${reports.length === 1 ? '' : 's'} received; select one to read it below` : 'Reports appear here as the SEO engine sends them'} />
             <div className="px-5 pt-3 pb-5">
               <ol className="relative space-y-1 before:absolute before:top-5 before:bottom-5 before:left-[17px] before:w-0.5 before:rounded-full before:bg-line">
-                <TimelineEvent tone="neutral" icon={<Send />} title="Started" time={run.createdAt} sub={run.userName ? `by ${run.userName}${run.apiKeyName ? ` via API key “${run.apiKeyName}”` : ''}` : run.apiKeyName ? `via API key “${run.apiKeyName}”` : undefined} />
+                <TimelineEvent tone="neutral" icon={<Send />} title="Started" time={run.createdAt} sub={run.userName ? `by ${run.userName}${run.apiKeyName ? ` via API key "${run.apiKeyName}"` : ''}` : run.apiKeyName ? `via API key "${run.apiKeyName}"` : undefined} />
                 {run.acceptedAt && <TimelineEvent tone="blue" icon={<CircleDot />} title="Accepted by the SEO engine" time={run.acceptedAt} />}
                 {reports.map((r) => (
                   <li key={r.id} className="relative">
@@ -231,7 +231,7 @@ export default function RunDetailPage() {
                       'None (research only)'
                     ),
                   },
-                  // credits (app/docs/CREDITS.md): the quote, what was charged, and the rule behind them — never a provider cost
+                  // credits (app/docs/CREDITS.md): the quote, what was charged, and the rule behind them, never a provider cost
                   {
                     label: 'Credits',
                     value: (
@@ -326,7 +326,7 @@ function CardTitle({ icon, title, description }: { icon: ReactNode; title: strin
 }
 
 /**
- * The run's stages as a stepper: sent → accepted by the engine → reports → completed (or failed). Done stages turn green, the live one
+ * The run's stages as a stepper: sent -> accepted by the engine -> reports -> completed (or failed). Done stages turn green, the live one
  * spins; read from the run's own timestamps and status.
  */
 function RunStages({ run, reports, active, duration }: { run: Run; reports: number; active: boolean; duration: number | null }) {

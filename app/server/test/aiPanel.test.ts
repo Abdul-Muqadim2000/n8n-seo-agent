@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AiPromptRow, AiVisibilityRow, MonitorsRow } from '@seo/shared';
 
-// G6 (2026-10-18): the AI question panel manager through the app — the Site Admin body the engine receives (its own field names), the
+// G6 (2026-10-18): the AI question panel manager through the app, the Site Admin body the engine receives (its own field names), the
 // limits, roles and company isolation; the monitors read-back; and the segments the AI visibility page and the read API serve.
 
 const st = vi.hoisted(() => ({ sent: [] as Record<string, unknown>[], role: 'admin' as string, otherOrg: false }));

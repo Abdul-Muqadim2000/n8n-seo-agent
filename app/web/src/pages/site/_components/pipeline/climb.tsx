@@ -38,7 +38,7 @@ function pageLine(p: LadderPage): string {
       return 'Written once half the supporting pages are live';
     case 'set_aside':
       // R16: the keyword rule refused this planned page (a competitor's brand, a government portal, an off-topic search)
-      return 'Set aside: not a search to target — see the weekly content note';
+      return 'Set aside: not a search to target (see the weekly content note)';
     default:
       return p.pageType ? asPageType(p.pageType) : 'Planned';
   }
@@ -140,7 +140,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
     onClose();
     onWrite({
       keyword: p.keyword,
-      why: `Keyword ladder “${ladder.head}”, ${p.rung >= 4 ? 'the main page' : `rung ${p.rung}`}`,
+      why: `Keyword ladder "${ladder.head}", ${p.rung >= 4 ? 'the main page' : `rung ${p.rung}`}`,
       pageType: p.pageType,
       existingPageUrl: '',
       ladder: { id: ladder.id, rung: p.rung, head: ladder.head, pageNo: p.pageNo },
@@ -152,7 +152,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
       wide
       onOpenChange={(o) => !o && onClose()}
       title={p.keyword}
-      description={`${rungLabel(p.rung)} of the keyword ladder “${ladder.head}”`}
+      description={`${rungLabel(p.rung)} of the keyword ladder "${ladder.head}"`}
       footer={
         <>
           {p.runId && (
@@ -203,9 +203,9 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
         )}
         <KeyValue
           items={[
-            { label: 'Page type', value: p.pageType ? asPageType(p.pageType) : '–' },
+            { label: 'Page type', value: p.pageType ? asPageType(p.pageType) : '-' },
             ...(p.volume != null ? [{ label: 'Searches a month', value: compactNumber(p.volume) }] : []),
-            ...(p.kd != null ? [{ label: 'Difficulty (0–100)', value: String(p.kd) }] : []),
+            ...(p.kd != null ? [{ label: 'Difficulty (0-100)', value: String(p.kd) }] : []),
             ...(p.supporting?.length ? [{ label: 'Also covers', value: <Chips items={p.supporting} max={8} /> }] : []),
             ...(p.publishedUrl
               ? [{ label: 'Live at', value: <ExternalLink href={p.publishedUrl}>{urlPath(p.publishedUrl)}</ExternalLink> }]

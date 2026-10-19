@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { SUBJECT_AB_MIN_SENDS, subjectAbStats, subjectVariantFor, type OutreachStep } from './outreach';
 
-// L7 (FIX_PLAN): two subject styles a batch, the reply rate of each — and no verdict before there is enough to read. The same rule runs in
+// L7 (FIX_PLAN): two subject styles a batch, the reply rate of each, and no verdict before there is enough to read. The same rule runs in
 // the engine (n8n/seo-agent/v5/code/_ab.js, harness S61): the two must agree.
-const step = (subject: string): OutreachStep[] => [{ step: 0, waitDays: 0, subject, body: 'Hello …' }];
+const step = (subject: string): OutreachStep[] => [{ step: 0, waitDays: 0, subject, body: 'Hello ...' }];
 const seqs = (variant: string, sent: number, replied: number, subject = `subject ${variant}`) =>
   Array.from({ length: sent }, (_, i) => ({
     subjectVariant: variant,

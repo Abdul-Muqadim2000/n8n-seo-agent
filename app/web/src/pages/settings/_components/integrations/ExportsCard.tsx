@@ -28,7 +28,7 @@ import { fmtAgo, fmtDateTime } from '@/lib/utils';
 import { SettingsCard } from '../SettingsCard';
 
 /**
- * G4 — the warehouse / BI export: six tables, one documented schema, to S3-compatible storage (AWS S3, Google Cloud Storage with
+ * G4, the warehouse / BI export: six tables, one documented schema, to S3-compatible storage (AWS S3, Google Cloud Storage with
  * HMAC keys, Cloudflare R2) as NDJSON or CSV, or straight into BigQuery. Daily or weekly, or "Run now".
  */
 
@@ -65,7 +65,7 @@ function DestinationForm({ onDone }: { onDone: () => void }) {
         : { kind, ...common, projectId: v.projectId ?? '', datasetId: v.datasetId ?? '', location: v.location || 'US', tablePrefix: v.tablePrefix ?? '', serviceAccountJson: v.serviceAccountJson ?? '' };
     try {
       await connect.mutateAsync(body);
-      toast.success('Destination connected — the first export runs on its schedule, or press Run now');
+      toast.success('Destination connected. The first export runs on its schedule, or press Run now');
       onDone();
     } catch (e) {
       if (e instanceof ApiRequestError) setErrors(e.fields);
@@ -91,7 +91,7 @@ function DestinationForm({ onDone }: { onDone: () => void }) {
               </Select>
             )}
           </Field>
-          {provider === 'aws' && text('region', 'Region', { placeholder: 'eu-west-1', hint: 'The bucket’s region.' })}
+          {provider === 'aws' && text('region', 'Region', { placeholder: 'eu-west-1', hint: 'The bucket\'s region.' })}
           {provider === 'r2' && text('accountId', 'Cloudflare account id', { hint: '32 characters, on the R2 overview page.' })}
           {provider === 'other' && text('endpoint', 'Endpoint', { placeholder: 'https://s3.example-storage.com' })}
           {text('bucket', 'Bucket')}
@@ -114,7 +114,7 @@ function DestinationForm({ onDone }: { onDone: () => void }) {
           {text('location', 'Dataset location', { placeholder: 'US or EU' })}
           {text('tablePrefix', 'Table name prefix', { hint: 'Tables are named <prefix><table>, e.g. alaventra_rank_history.' })}
           <Field label="Service-account key (JSON)" className="sm:col-span-2" error={errors.serviceAccountJson} hint="Paste the whole key file. It is stored encrypted and never shown again.">
-            {(p) => <Textarea {...p} rows={5} className="font-mono text-xs" value={v.serviceAccountJson ?? ''} onChange={(e) => set('serviceAccountJson', e.target.value)} placeholder={'{ "type": "service_account", "project_id": "…", … }'} />}
+            {(p) => <Textarea {...p} rows={5} className="font-mono text-xs" value={v.serviceAccountJson ?? ''} onChange={(e) => set('serviceAccountJson', e.target.value)} placeholder={'{ "type": "service_account", "project_id": "...", ... }'} />}
           </Field>
         </div>
       )}
@@ -273,7 +273,7 @@ export function ExportsCard({ data }: { data: IntegrationsOverview }) {
   const dests = data.integrations.filter((i) => i.kind === 's3' || i.kind === 'bigquery');
   const runColumns: Column<ExportRunView>[] = [
     { key: 'startedAt', header: 'When', cell: (r) => fmtAgo(r.startedAt), sortValue: (r) => r.startedAt },
-    { key: 'dest', header: 'Destination', cell: (r) => dests.find((d) => d.id === r.integrationId)?.name ?? '—' },
+    { key: 'dest', header: 'Destination', cell: (r) => dests.find((d) => d.id === r.integrationId)?.name ?? '-' },
     { key: 'trigger', header: 'Started', hideOnMobile: true, cell: (r) => (r.trigger === 'manual' ? 'Run now' : 'Schedule') },
     { key: 'status', header: 'Result', cell: (r) => <StatusBadge tone={RUN_TONE[r.status]}>{RUN_LABEL[r.status]}</StatusBadge> },
     { key: 'rows', header: 'Rows', align: 'right', cell: (r) => r.tables.reduce((n, t) => n + t.rows, 0).toLocaleString() },

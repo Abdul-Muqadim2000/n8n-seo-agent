@@ -10,7 +10,7 @@ import { useCreditActivity } from '@/lib/queries';
 import { cn, fmtDateTime } from '@/lib/utils';
 import { SettingsCard } from '../SettingsCard';
 
-// Every credit in and out, newest first (app/docs/CREDITS.md §3: GET …/billing/activity, the CSV for owners and admins).
+// Every credit in and out, newest first (app/docs/CREDITS.md §3: GET .../billing/activity, the CSV for owners and admins).
 
 type Origin = 'all' | 'autopilot' | 'on_demand' | 'account';
 const ORIGINS: { value: Origin; label: string }[] = [
@@ -21,7 +21,7 @@ const ORIGINS: { value: Origin; label: string }[] = [
 ];
 const EMPTY: Record<Origin, string> = {
   all: 'Credits added and used appear here.',
-  autopilot: 'What your websites’ schedules use appears here.',
+  autopilot: 'What your websites\' schedules use appears here.',
   on_demand: 'Analyses started in the app or through the API appear here.',
   account: 'Credits added, packs, plan credits, corrections and expiries appear here.',
 };
@@ -94,7 +94,7 @@ export function ActivityCard() {
                           {r.domain && <span className="md:hidden"> · {r.domain}</span>}
                         </span>
                       </td>
-                      <td className="hidden px-3 py-2.5 align-top text-ink-2 md:table-cell">{r.domain ?? '–'}</td>
+                      <td className="hidden px-3 py-2.5 align-top text-ink-2 md:table-cell">{r.domain ?? '-'}</td>
                       <td className={cn('px-3 py-2.5 text-right align-top font-mono font-medium whitespace-nowrap tabular', r.credits > 0 ? 'text-ink' : 'text-ink-2')}>
                         {formatCredits(r.credits, { signed: true, unit: false })}
                       </td>

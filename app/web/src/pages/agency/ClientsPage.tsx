@@ -19,7 +19,7 @@ import { agencyOverviewCsvUrl, useAgencyOverview, useAssignStaff, useClients, us
 import { cn, fmtAgo } from '@/lib/utils';
 
 /**
- * G5 (app/docs/WHITE_LABEL.md §1.6): an agency's clients — every client website in one table (health, rankings movement, clicks,
+ * G5 (app/docs/WHITE_LABEL.md §1.6): an agency's clients, every client website in one table (health, rankings movement, clicks,
  * AI visibility, alerts, approvals waiting, credits used and left), the client workspaces with who of the agency can open them, and
  * a new client. A standard company sees what agency mode is and, as its owner, turns it on.
  */
@@ -34,7 +34,7 @@ function AgencyIntro() {
   const enable = useEnableAgency(org.id);
   return (
     <div>
-      <PageHeader icon={<Briefcase />} title="Clients" description="Run your clients’ SEO from one place, under your own brand." />
+      <PageHeader icon={<Briefcase />} title="Clients" description="Run your clients' SEO from one place, under your own brand." />
       <Card>
         <EmptyState
           icon={<Briefcase className="size-5" />}
@@ -42,7 +42,7 @@ function AgencyIntro() {
           description={
             org.kind === 'client'
               ? 'Client workspaces belong to an agency; the agency manages its clients from its own Clients page.'
-              : 'An agency holds a workspace per client — its own websites, credits and people — with your team switching between them, one table of every client website, client logins, your brand and your own portal address.'
+              : 'An agency holds a workspace per client, with its own websites, credits and people. Your team switches between them. You also get one table of every client website, client logins, your brand and your own portal address.'
           }
           action={
             org.kind === 'standard' && can('owner') ? (
@@ -59,7 +59,7 @@ function AgencyIntro() {
   );
 }
 
-const pct = (v: number | null) => (v == null ? '–' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`);
+const pct = (v: number | null) => (v == null ? '-' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`);
 
 function AgencyClients() {
   const { org, can } = useOrgCtx();
@@ -113,7 +113,7 @@ function AgencyClients() {
       sortValue: (r) => r.healthScore ?? -1,
       cell: (r) =>
         r.healthScore == null ? (
-          <span className="text-ink-3">–</span>
+          <span className="text-ink-3">-</span>
         ) : (
           <span className="inline-flex flex-col items-end">
             <StatusBadge tone={scoreTone(r.healthScore) === 'accent' ? 'neutral' : scoreTone(r.healthScore)}>{String(Math.round(r.healthScore))}</StatusBadge>
@@ -129,7 +129,7 @@ function AgencyClients() {
       sortValue: (r) => (r.rankGains ?? 0) - (r.rankDrops ?? 0),
       cell: (r) =>
         r.rankGains == null && r.rankDrops == null ? (
-          <span className="text-ink-3">–</span>
+          <span className="text-ink-3">-</span>
         ) : (
           <span className="tabular text-[13px]">
             <span className="text-good-text">▲ {r.rankGains ?? 0}</span> <span className="text-critical-text">▼ {r.rankDrops ?? 0}</span>
@@ -143,7 +143,7 @@ function AgencyClients() {
       align: 'right',
       hideOnMobile: true,
       sortValue: (r) => r.aiVisibility ?? r.aiMentionRate ?? -1,
-      cell: (r) => <span className="tabular">{r.aiVisibility != null ? Math.round(r.aiVisibility) : r.aiMentionRate != null ? `${Math.round(r.aiMentionRate * 100)}%` : '–'}</span>,
+      cell: (r) => <span className="tabular">{r.aiVisibility != null ? Math.round(r.aiVisibility) : r.aiMentionRate != null ? `${Math.round(r.aiMentionRate * 100)}%` : '-'}</span>,
     },
     {
       key: 'alerts',
@@ -154,7 +154,7 @@ function AgencyClients() {
         <span className="inline-flex flex-wrap justify-end gap-1">
           {r.alerts14d > 0 && <StatusBadge tone="warning">{`${r.alerts14d} alert${r.alerts14d === 1 ? '' : 's'}`}</StatusBadge>}
           {r.approvalsWaiting > 0 && <Badge tone="accent">{`${r.approvalsWaiting} to approve`}</Badge>}
-          {r.alerts14d === 0 && r.approvalsWaiting === 0 && <span className="text-ink-3">–</span>}
+          {r.alerts14d === 0 && r.approvalsWaiting === 0 && <span className="text-ink-3">-</span>}
         </span>
       ),
     },
@@ -178,7 +178,7 @@ function AgencyClients() {
       <PageHeader
         icon={<Briefcase />}
         title="Clients"
-        description="Every client’s websites in one table. Open a client to work in its workspace."
+        description="Every client's websites in one table. Open a client to work in its workspace."
         actions={
           <>
             {admin && (
@@ -209,7 +209,7 @@ function AgencyClients() {
       ) : rows.length ? (
         <Card className="mb-6">
           <CardBody>
-            <DataTable rows={rows} columns={columns} rowKey={(r) => `${r.clientId}:${r.siteId ?? ''}`} initialSort={{ key: 'client', dir: 'asc' }} searchable={rows.length > 8} searchPlaceholder="Search clients and websites…" />
+            <DataTable rows={rows} columns={columns} rowKey={(r) => `${r.clientId}:${r.siteId ?? ''}`} initialSort={{ key: 'client', dir: 'asc' }} searchable={rows.length > 8} searchPlaceholder="Search clients and websites..." />
           </CardBody>
         </Card>
       ) : (
@@ -298,7 +298,7 @@ function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
       open={open}
       onOpenChange={close}
       title="New client"
-      description="A workspace of its own: websites, credits, reports and the client’s logins. Your owners and admins reach it at once."
+      description="A workspace of its own: websites, credits, reports and the client's logins. Your owners and admins reach it at once."
       footer={
         <>
           <Button variant="secondary" onClick={() => close(false)}>

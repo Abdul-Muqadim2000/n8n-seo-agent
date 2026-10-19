@@ -45,7 +45,7 @@ describe('reading incoming mail (v4.13)', () => {
 });
 
 // ---- B11-4 (2026-10-15, benchmark area 11): the authentication gate runs on the read path too -------------------------------
-// SPF / DKIM / DMARC used to be read once, when the mailbox was connected, stored on the row and never looked at again — and no
+// SPF / DKIM / DMARC used to be read once, when the mailbox was connected, stored on the row and never looked at again, and no
 // path refused a send over the answer. These prove the refusal and, just as importantly, what it does NOT refuse.
 describe('B11-4 the sending domain is checked before a new conversation', () => {
   const dns = (o: Partial<DnsCheck>): DnsCheck => ({ spf: 'pass', dmarc: 'pass', dkim: 'found', checkedAt: new Date().toISOString(), notes: [], ...o });
@@ -58,12 +58,12 @@ describe('B11-4 the sending domain is checked before a new conversation', () => 
     expect(g.ok).toBe(false);
     expect(g.why).toContain('techand.ai');
     expect(g.why).toMatch(/SPF/); expect(g.why).toMatch(/DKIM/);
-    expect(g.why).toMatch(/follow-ups/);   // an open conversation is never left hanging
+    expect(g.why).toMatch(/follow-ups/i);   // an open conversation is never left hanging
   });
   it('DKIM alone is enough: a missing SPF is a note, not a refusal', async () => {
     expect((await mailAuthGate('sara@techand.ai', dns({ spf: 'missing', dkim: 'found' }))).ok).toBe(true);
   });
-  it('a weak SPF or a p=none DMARC is never a refusal — only the total absence of authentication is', async () => {
+  it('a weak SPF or a p=none DMARC is never a refusal, only the total absence of authentication is', async () => {
     expect((await mailAuthGate('sara@techand.ai', dns({ spf: 'weak', dmarc: 'none' }))).ok).toBe(true);
   });
   it('a reading older than the window, or one that was never taken, is re-read before it is trusted', () => {

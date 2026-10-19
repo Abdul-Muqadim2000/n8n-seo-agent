@@ -3,7 +3,7 @@ import { STAGE_LABELS } from './constants';
 import { deliveryDecision, webhookUrlOk } from './report-delivery';
 
 /**
- * G4 (2026-10-17) — integrations: event webhooks (signed JSON, Slack, Microsoft Teams), issue trackers (Jira Cloud, Linear, Asana)
+ * G4 (2026-10-17), integrations: event webhooks (signed JSON, Slack, Microsoft Teams), issue trackers (Jira Cloud, Linear, Asana)
  * and the warehouse / BI export (S3-compatible storage, BigQuery). Design note: app/docs/INTEGRATIONS.md.
  *
  * This file is what the server and the web app share: the event types and how they are derived from a stored callback, the message
@@ -27,8 +27,8 @@ export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 export const WEBHOOK_EVENT_LABELS: Record<WebhookEvent, { label: string; description: string }> = {
   'run.completed': { label: 'Analysis finished', description: 'An analysis delivered its final report.' },
   'run.failed': { label: 'Analysis failed', description: 'The engine refused or failed an analysis, or no result arrived in time.' },
-  'report.ready': { label: 'Report ready', description: 'A finished report arrived (a weekly report, an audit, a written page that passed its quality check…).' },
-  'report.held': { label: 'Report held back', description: 'A report the analysis itself marked not ready — a draft that failed its quality check, a refused plan — with the reason.' },
+  'report.ready': { label: 'Report ready', description: 'A finished report arrived (a weekly report, an audit, a written page that passed its quality check...).' },
+  'report.held': { label: 'Report held back', description: 'A report the analysis itself marked not ready (a draft that failed its quality check, a refused plan), with the reason.' },
   'alert.raised': { label: 'Alert', description: 'A Search Console alert, a real change in AI answers, a key page that changed, or an alert line in a weekly report.' },
   'audit.finding.new': { label: 'New audit findings', description: 'An audit found issues the previous audit of the same type did not have.' },
   'rank.changed': { label: 'Ranking moved', description: 'A tracked keyword moved five places or more.' },
@@ -96,7 +96,7 @@ export interface WebhookEndpointView {
   id: string;
   name: string;
   format: WebhookFormat;
-  /** the host and the last four characters of the address — never the address (a Slack URL is a credential) */
+  /** the host and the last four characters of the address, never the address (a Slack URL is a credential) */
   urlHost: string;
   urlHint: string;
   hasSecret: boolean;
@@ -239,12 +239,12 @@ export function eventLines(e: EventEnvelope): { headline: string; lines: string[
       };
     case 'audit.finding.new': {
       const list = arr(d.findings).map(obj);
-      return { headline: `${list.length} new audit finding${list.length === 1 ? '' : 's'}${site}`, lines: list.slice(0, 10).map((x) => `${text(x.severity) || '—'} · ${text(x.title)}`), link };
+      return { headline: `${list.length} new audit finding${list.length === 1 ? '' : 's'}${site}`, lines: list.slice(0, 10).map((x) => `${text(x.severity) || '-'} · ${text(x.title)}`), link };
     }
     case 'rank.changed': {
-      const mv = (m: P) => `${text(m.keyword)}: ${num(m.previous) ?? '—'} → ${num(m.position) || 'not in the top 50'} (${num(m.delta)! > 0 ? '+' : ''}${num(m.delta)})`;
+      const mv = (m: P) => `${text(m.keyword)}: ${num(m.previous) ?? '-'} to ${num(m.position) || 'not in the top 50'} (${num(m.delta)! > 0 ? '+' : ''}${num(m.delta)})`;
       return {
-        headline: `Rankings moved${site}${text(obj(d.ladder).head) ? ` — ${text(obj(d.ladder).head)}` : ''}`,
+        headline: `Rankings moved${site}${text(obj(d.ladder).head) ? `, ${text(obj(d.ladder).head)}` : ''}`,
         lines: [...arr(d.gains).map(obj).map((m) => `Up ${mv(m)}`), ...arr(d.drops).map(obj).map((m) => `Down ${mv(m)}`)].slice(0, 12),
         link,
       };
@@ -264,7 +264,7 @@ export function slackMessage(e: EventEnvelope): P {
   return { text: headline.slice(0, 300), blocks };
 }
 
-/** Teams Workflows webhook body: a message with one Adaptive Card (https://learn.microsoft.com/en-us/connectors/teams/ — "Post card in a chat or channel"). */
+/** Teams Workflows webhook body: a message with one Adaptive Card (https://learn.microsoft.com/en-us/connectors/teams/, "Post card in a chat or channel"). */
 export function teamsMessage(e: EventEnvelope): P {
   const { headline, lines, link } = eventLines(e);
   const body: P[] = [
@@ -324,7 +324,7 @@ export const linearConnectSchema = z.object({
 export const asanaConnectSchema = z.object({
   kind: z.literal('asana'),
   token: secretField('personal access token', 500),
-  projectGid: z.string().trim().regex(/^\d{5,25}$/, 'The project id: the long number in the project’s address'),
+  projectGid: z.string().trim().regex(/^\d{5,25}$/, 'The project id: the long number in the project\'s address'),
 });
 export const trackerConnectSchema = z.discriminatedUnion('kind', [jiraConnectSchema, linearConnectSchema, asanaConnectSchema]);
 export type TrackerConnectInput = z.input<typeof trackerConnectSchema>;
@@ -581,10 +581,10 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
       c('from_url', 'STRING', 'The linking page'),
       c('to_url', 'STRING', 'Your page it links to'),
       c('anchor', 'STRING', 'Link text'),
-      c('anchor_kind', 'STRING', 'brand, url, generic, keyword…'),
+      c('anchor_kind', 'STRING', 'brand, url, generic, keyword...'),
       c('rel', 'STRING', 'follow, nofollow, sponsored, ugc'),
       c('placement', 'STRING', 'Where on the page the link sits'),
-      c('status', 'STRING', 'live, lost, at_risk…'),
+      c('status', 'STRING', 'live, lost, at_risk...'),
       c('first_seen', 'TIMESTAMP', 'First seen by any source'),
       c('last_seen', 'TIMESTAMP', 'Last seen'),
       c('lost_at', 'TIMESTAMP', 'When it was confirmed lost (two misses of our own check)'),
@@ -611,7 +611,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
     dateColumn: 'created_at',
     columns: [
       c('run_id', 'STRING', 'The analysis'),
-      c('mode', 'STRING', 'What it was: audit, keyword, ladder, ai_visibility…'),
+      c('mode', 'STRING', 'What it was: audit, keyword, ladder, ai_visibility...'),
       c('title', 'STRING', 'Its title'),
       c('status', 'STRING', 'submitting, accepted, running, completed or failed'),
       c('started_by', 'STRING', 'person, api_key or auto'),
@@ -640,7 +640,7 @@ export const EXPORTS = {
   staleRunMinutes: 60,
 } as const;
 
-/** A value as the column type wants it: numbers as numbers, timestamps as ISO, dates as YYYY-MM-DD; unreadable → null. */
+/** A value as the column type wants it: numbers as numbers, timestamps as ISO, dates as YYYY-MM-DD; unreadable -> null. */
 export function coerce(v: unknown, type: ColType): string | number | boolean | null {
   if (v == null || v === '') return null;
   switch (type) {
@@ -718,7 +718,7 @@ const scheduleFields = {
   schedule: z.enum(EXPORT_SCHEDULES).default('daily'),
   /** UTC hour */
   hour: z.number().int().min(0).max(23).default(3),
-  /** weekly: 0 = Monday … 6 = Sunday */
+  /** weekly: 0 = Monday ... 6 = Sunday */
   weekday: z.number().int().min(0).max(6).default(0),
 };
 
@@ -754,7 +754,7 @@ export const s3DestinationSchema = z
       ctx.addIssue({
         code: 'custom',
         path: [v.provider === 'aws' ? 'region' : v.provider === 'r2' ? 'accountId' : 'endpoint'],
-        message: v.provider === 'aws' ? 'The bucket’s region, e.g. eu-west-1' : v.provider === 'r2' ? 'The Cloudflare account id (32 characters)' : 'An https:// endpoint on a public host',
+        message: v.provider === 'aws' ? 'The bucket\'s region, e.g. eu-west-1' : v.provider === 'r2' ? 'The Cloudflare account id (32 characters)' : 'An https:// endpoint on a public host',
       });
   });
 
@@ -827,7 +827,7 @@ export interface IntegrationView {
   name: string;
   /** the non-secret settings, as stored */
   config: P;
-  /** e.g. "token …a1b2", "key AKIA…WXYZ" — never the secret */
+  /** e.g. "token ...a1b2", "key AKIA...WXYZ", never the secret */
   secretHint: string;
   status: 'ok' | 'error' | 'untested';
   lastError: string;
@@ -859,4 +859,4 @@ export interface IntegrationsOverview {
 }
 
 /** a secret, shown as its last four characters */
-export const secretHint = (label: string, s: string): string => (s && s.length >= 8 ? `${label} …${s.slice(-4)}` : label);
+export const secretHint = (label: string, s: string): string => (s && s.length >= 8 ? `${label} ...${s.slice(-4)}` : label);

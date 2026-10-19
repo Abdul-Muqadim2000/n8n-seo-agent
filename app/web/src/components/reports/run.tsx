@@ -27,7 +27,7 @@ export function minutesBetween(a: string | null, b: string | number | null): num
 }
 
 export function fmtMinutes(m: number | null): string {
-  if (m == null) return '–';
+  if (m == null) return '-';
   if (m < 1) return '< 1 min';
   if (m < 60) return `${Math.round(m)} min`;
   const h = Math.floor(m / 60);
@@ -239,7 +239,7 @@ export function runCreditsFigure(c: RunCredits): number | null {
 }
 
 /**
- * credits (app/docs/CREDITS.md): one figure in credits and what it is — the quote held while the run goes, what it was charged once it
+ * credits (app/docs/CREDITS.md): one figure in credits and what it is, the quote held while the run goes, what it was charged once it
  * settled (never more than the quote), nothing for a run that failed. A run's provider cost is never shown to a customer.
  */
 export function CostLine({ run }: { run: Run }) {

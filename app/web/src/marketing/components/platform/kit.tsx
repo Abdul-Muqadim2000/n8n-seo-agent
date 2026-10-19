@@ -7,7 +7,7 @@ import { Reveal, useInView } from '../Reveal';
 import { useSectionTone } from '../Section';
 import './platform.css';
 
-/** "Keyword ladders" → "keyword ladders" for use mid-sentence; acronyms stay ("AI visibility", "B2B and SaaS"). */
+/** "Keyword ladders" to "keyword ladders" for use mid-sentence; acronyms stay ("AI visibility", "B2B and SaaS"). */
 export const lowerFirst = (s: string) => (/^[A-Z][A-Z0-9]/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1));
 
 /** A JSON-LD data block (allowed by the CSP: `type="application/ld+json"` is data, not a script). */

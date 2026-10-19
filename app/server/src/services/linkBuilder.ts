@@ -108,8 +108,7 @@ function kpisOf(seqs: OutreachSequence[], prospects: ProspectRow[]): LinkBuildin
   const days = wonSeq.map((q) => (new Date(q.wonAt!).getTime() - new Date(q.startedAt!).getTime()) / 864e5).sort((a, b) => a - b);
   const domains = new Set(started.map((q) => q.prospectDomain));
   const types = [...new Set(started.map((q) => q.type))];
-  // B11-1 (benchmark area 11): a rate below its floor is not printed at all. The bounce rate counts e-mails, not conversations —
-  // it is judged against a ~2% limit, and one bounce in 50 IS 2%, so conversations were the wrong denominator for it as well as
+  // B11-1 (benchmark area 11): a rate below its floor is not printed at all. The bounce rate counts e-mails, not conversations, // it is judged against a ~2% limit, and one bounce in 50 IS 2%, so conversations were the wrong denominator for it as well as
   // too small a one.
   const sentAll = seqs.flatMap((q) => q.messages).filter((m) => m.direction === 'out' && !m.error).length;
   const rates = {
@@ -147,19 +146,19 @@ export async function linkBuildingData(org: OrgRow, site: SiteRow, role: Role): 
     .sort((a, b) => ({ drafted: 0, ready: 1, needs_contact: 2, not_fit: 3 }[a.status] ?? 4) - ({ drafted: 0, ready: 1, needs_contact: 2, not_fit: 3 }[b.status] ?? 4) || b.score * (0.5 + b.fit) - a.score * (0.5 + a.fit));
   const mailboxes = await Promise.all(mbs.map(mailboxView));
   const active = mailboxes.find((m) => m.id === settings.mailboxId && m.status === 'active') ?? mailboxes.find((m) => m.status === 'active');
-  const canSend = !mailboxes.length ? { ok: false, why: 'Connect a mailbox in company settings → Mailboxes: pitches go out from your own address.' }
-    : !active ? { ok: false, why: 'Your mailbox is paused or has an error: check it in company settings → Mailboxes.' }
+  const canSend = !mailboxes.length ? { ok: false, why: 'Connect a mailbox in company settings > Mailboxes: pitches go out from your own address.' }
+    : !active ? { ok: false, why: 'Your mailbox is paused or has an error: check it in company settings > Mailboxes.' }
     : !active.postalAddress ? { ok: false, why: 'Add your postal address to the mailbox: every e-mail must carry it, the follow-ups too (CAN-SPAM).' }
-    // B11-4: the same refusal the sender makes, said here before anyone approves a pitch — neither SPF nor DKIM on the From domain
+    // B11-4: the same refusal the sender makes, said here before anyone approves a pitch, neither SPF nor DKIM on the From domain
     : active.dns && active.dns.spf === 'missing' && active.dns.dkim === 'unknown'
-      ? { ok: false, why: `${active.fromEmail.split('@')[1] ?? 'Your sending domain'} publishes no SPF record and no DKIM key we can find: receiving servers cannot tell your mail from a forgery. Add one of them in company settings → Mailboxes before new pitches go out.` }
+      ? { ok: false, why: `${active.fromEmail.split('@')[1] ?? 'Your sending domain'} publishes no SPF record and no DKIM key we can find: receiving servers cannot tell your mail from a forgery. Add one of them in company settings > Mailboxes before new pitches go out.` }
     : role === 'viewer' ? { ok: false, why: 'Viewers cannot send.' } : { ok: true, why: '' };
   return {
     settings, mailboxes, drafts, sequences: seqs, kpis: kpisOf(seqs, prospects), subjectAb: subjectAbStats(seqs),
     listings: listings.map((l) => ({ id: s(l.listing_id), name: s(l.name), category: s(l.category), status: s(l.status), profileUrl: s(l.profile_url), rel: s(l.rel), competitors: s(l.competitors).split(/,\s*/).filter(Boolean), submitUrl: s(l.submit_url),
       priority: n(l.priority), why: s(l.why), checkedAt: s(l.checked_at), submittedAt: s(l.submitted_at), note: s(l.note) })).sort((a, b) => a.priority - b.priority),
     redirects: outreach.filter((r) => s(r.type) === 'redirect').map((r) => ({ from: s(r.page_url), to: s(r.target_url), reason: s(r.target_reason) })),
-    // G12 (2026-10-13): the table now holds two kinds of reading — won links and page changes. They are never mixed: a page that went
+    // G12 (2026-10-13): the table now holds two kinds of reading, won links and page changes. They are never mixed: a page that went
     // live is not a link. Rows written before the `kind` column exist are link readings (they all had a linking site).
     impact: impact.filter((r) => s(r.kind) !== 'page_change').map((r) => ({ refDomain: s(r.ref_domain), fromUrl: s(r.from_url), targetUrl: s(r.target_url), t0: s(r.t0), weeks: n(r.weeks), basePosition: r.base_position == null ? null : n(r.base_position), position: r.position == null ? null : n(r.position),
       pageChange: r.page_change == null ? null : n(r.page_change), controlChange: r.control_change == null ? null : n(r.control_change), effect: r.effect == null ? null : n(r.effect), verdict: s(r.verdict), note: s(r.note), keyword: s(r.keyword) }))
@@ -178,7 +177,7 @@ export async function approve(org: OrgRow, site: SiteRow, userId: string | null,
   const settings = linkSettingsOf(site);
   const mbs = await db.select().from(schema.mailboxes).where(eq(schema.mailboxes.orgId, org.id));
   const mb = mbs.find((m) => m.id === (a.mailboxId ?? settings.mailboxId) && m.status === 'active') ?? mbs.find((m) => m.status === 'active');
-  if (!mb) throw new HttpError(409, mbs.length ? 'Your mailbox is paused or has an error: check it in company settings → Mailboxes.' : 'Connect a mailbox first (company settings → Mailboxes).', 'no_mailbox');
+  if (!mb) throw new HttpError(409, mbs.length ? 'Your mailbox is paused or has an error: check it in company settings > Mailboxes.' : 'Connect a mailbox first (company settings > Mailboxes).', 'no_mailbox');
   if (!mb.postalAddress.trim()) throw new HttpError(409, 'Add your postal address to the mailbox first: every pitch must carry it.', 'no_address');
   const to = a.toEmail.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(to)) throw badRequest('Choose a valid e-mail address.');

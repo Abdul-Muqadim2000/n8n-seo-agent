@@ -83,7 +83,7 @@ describe('"I fixed this" (G11, criterion 1.10)', () => {
       audited_at: iso(1), finding_key: 'On-Page|missing meta description', category: 'On-Page', severity: 'Medium', title: 'Missing meta description',
       affected_count: 4, ...over }) as AuditFindingRow;
 
-  it('marks the finding for the next daily watch and says when that is — the audit is not waited for', async () => {
+  it('marks the finding for the next daily watch and says when that is, the audit is not waited for', async () => {
     rows.mockResolvedValue([finding()]);
     updateRows.mockResolvedValue(true);
     const r = await requestRecheck('northwind-erp.com', 'aud_1', 'On-Page|missing meta description');

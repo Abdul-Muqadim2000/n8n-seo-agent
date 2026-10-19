@@ -69,7 +69,7 @@ export function CostSplitCell({ cost, align = 'right' }: { cost: CostSplit | nul
 }
 
 const CERTAINTY: Record<CostCertainty, { label: string; tone: 'neutral' | 'accent'; icon: ReactNode; tip: string }> = {
-  measured: { label: 'Measured', tone: 'neutral', icon: <CheckCircle2 className="size-3" aria-hidden />, tip: 'The providers’ own usage figures.' },
+  measured: { label: 'Measured', tone: 'neutral', icon: <CheckCircle2 className="size-3" aria-hidden />, tip: 'The providers\' own usage figures.' },
   'partly estimated': { label: 'Part estimated', tone: 'accent', icon: <Info className="size-3" aria-hidden />, tip: 'Part of the Claude cost is priced by the engine from text, because streaming model calls report no usage.' },
   estimated: { label: 'Estimated', tone: 'accent', icon: <Info className="size-3" aria-hidden />, tip: 'Priced by the engine from text and quotes; no provider figure.' },
   'not reported': { label: 'Not reported', tone: 'neutral', icon: <CircleDashed className="size-3" aria-hidden />, tip: 'The engine reported no cost for this run.' },
@@ -481,12 +481,12 @@ export function CreditDialog({
           )}
           <div className="flex items-center justify-between gap-3">
             <span className="text-ink-3">This change</span>
-            <Num>{has ? signedCredits(kind === 'adjust' ? amount : Math.abs(amount)) : '–'}</Num>
+            <Num>{has ? signedCredits(kind === 'adjust' ? amount : Math.abs(amount)) : '-'}</Num>
           </div>
           {balance != null && (
             <div className="mt-1 flex items-center justify-between gap-3 border-t border-line pt-1.5 font-medium">
               <span className="text-ink">Balance after</span>
-              <Num className={cn('text-ink', after != null && after < 0 && 'text-critical-text')}>{after == null ? '–' : credits(after)}</Num>
+              <Num className={cn('text-ink', after != null && after < 0 && 'text-critical-text')}>{after == null ? '-' : credits(after)}</Num>
             </div>
           )}
           {pages != null && pageCredits != null && (

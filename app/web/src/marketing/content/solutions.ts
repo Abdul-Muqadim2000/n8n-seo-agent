@@ -43,8 +43,8 @@ export const solutions: Solution[] = [
       { feature: 'agency-portal', title: 'A portal for every client, under your name', body: 'A workspace per client, one table of every client website, client logins with approvals, and your brand on your own address.' },
       { feature: 'enterprise', title: 'One workspace per client', body: 'Each client company has its own websites, team, credits and data, with roles for your staff and theirs.' },
       { feature: 'reports', title: 'Reports ready to send', body: 'Full SEO reports as PDF or Word, and a Monday report for every website.' },
-      { feature: 'integrations', title: 'Client data in your own BI', body: 'Every client’s rankings, traffic, audits and AI visibility exported to BigQuery or your storage, or charted in Looker Studio.' },
-      { feature: 'ai-visibility', title: 'AI visibility per client', body: 'Mention rate and share of voice against each client’s own competitors, with ranges.' },
+      { feature: 'integrations', title: 'Client data in your own BI', body: 'Every client\'s rankings, traffic, audits and AI visibility exported to BigQuery or your storage, or charted in Looker Studio.' },
+      { feature: 'ai-visibility', title: 'AI visibility per client', body: 'Mention rate and share of voice against each client\'s own competitors, with ranges.' },
       { feature: 'autopilot', title: 'The same loop for every website', body: 'Weekly cadence per website, Auto where you trust it and Manual where the client signs off.' },
     ],
     outcomes: [
@@ -56,8 +56,8 @@ export const solutions: Solution[] = [
     faqs: [
       { q: 'Can clients see their own data?', a: 'Yes. Invite them to their client workspace as a viewer or an approver; they see their websites, reports and recommendations in a portal under your name, and nothing from other clients or from your credits.' },
       { q: 'Can the portal carry our brand and domain?', a: 'Yes. Switch on white-label for your name, logo and colour, add your own address such as seo.youragency.com with two DNS records, and send client e-mails from your own mailbox once its SPF and DKIM check out.' },
-      { q: 'How do I keep each client’s spending in check?', a: 'Every analysis shows its price in credits first and is never charged more. Each client company has its own credits and its own monthly limits for analyses and for the automatic work.' },
-      { q: 'Do I need access to each client’s Search Console?', a: 'The client adds Alaventra’s service account as a user, and the website owner proves ownership once.' },
+      { q: 'How do I keep each client\'s spending in check?', a: 'Every analysis shows its price in credits first and is never charged more. Each client company has its own credits and its own monthly limits for analyses and for the automatic work.' },
+      { q: 'Do I need access to each client\'s Search Console?', a: 'The client adds Alaventra\'s service account as a user, and the website owner proves ownership once.' },
     ],
     showcase: {
       feature: 'agency-portal',
@@ -80,13 +80,13 @@ export const solutions: Solution[] = [
       { title: 'Blind spots', body: 'Lost links, indexing problems and AI answers change without anyone noticing.' },
     ],
     helps: [
-      { feature: 'autopilot', title: 'A weekly cadence that runs itself', body: 'Blog posts per week, picked in a fixed order and written with QA, with a “Needs you” queue for approvals.' },
+      { feature: 'autopilot', title: 'A weekly cadence that runs itself', body: 'Blog posts per week, picked in a fixed order and written with QA, with a "Needs you" queue for approvals.' },
       { feature: 'keyword-ladders', title: 'Content with a destination', body: 'Keyword ladders climb to the head terms your business needs, one supporting page at a time.' },
       { feature: 'technical-audits', title: 'Audits with a fix pack', body: 'Monthly audits show what changed, and the fix pack goes straight to your developers.' },
       { feature: 'site-tracking', title: 'One weekly view', body: 'Search Console, GA4 and Trends together, with striking-distance keywords called out.' },
-      { feature: 'crawler-analytics', title: 'What the crawlers really did', body: 'Your server logs show which pages Google and the AI crawlers fetched, which they skipped and which “crawlers” were impostors.' },
-      { feature: 'guided-setup', title: 'Nothing waits on a ticket', body: 'Every connection we ask for comes with its steps and your own values — and goes to IT or the agency as an e-mail when the job is theirs.' },
-      { feature: 'report-delivery', title: 'The report reaches the people who decide', body: 'Each week’s report goes to the list you choose and into the channel your team already watches, with an expiring link for anyone outside it.' },
+      { feature: 'crawler-analytics', title: 'What the crawlers really did', body: 'Your server logs show which pages Google and the AI crawlers fetched, which they skipped and which "crawlers" were impostors.' },
+      { feature: 'guided-setup', title: 'Nothing waits on a ticket', body: 'Every connection we ask for comes with its steps and your own values, and goes to IT or the agency as an e-mail when the job is theirs.' },
+      { feature: 'report-delivery', title: 'The report reaches the people who decide', body: 'Each week\'s report goes to the list you choose and into the channel your team already watches, with an expiring link for anyone outside it.' },
       { feature: 'integrations', title: 'Findings in your backlog', body: 'An audit finding becomes one Jira, Linear or Asana ticket with the evidence and the fix, and alerts land in your Slack or Teams channel.' },
     ],
     outcomes: [
@@ -103,14 +103,14 @@ export const solutions: Solution[] = [
     showcase: {
       feature: 'autopilot',
       title: 'One page that says what happens next.',
-      body: 'This week’s posts, the decisions waiting for your team and every schedule with its next run, on one pipeline page per website.',
+      body: 'This week\'s posts, the decisions waiting for your team and every schedule with its next run, on one pipeline page per website.',
     },
   },
   {
     slug: 'b2b-saas',
     name: 'Alaventra for B2B and SaaS',
     shortName: 'B2B and SaaS',
-    tagline: 'Win the long, considered searches your buyers make — in Google and in AI answers.',
+    tagline: 'Win the long, considered searches your buyers make, in Google and in AI answers.',
     summary:
       'B2B buyers research for weeks and increasingly ask AI assistants for a shortlist. Alaventra tracks the questions they ask, builds the pages that answer them and shows the pipeline value AI referrals bring.',
     icon: Layers,
@@ -126,7 +126,7 @@ export const solutions: Solution[] = [
       { feature: 'keyword-ladders', title: 'A route to the head term', body: 'Supporting pages on easier, related keywords climb to the category term.' },
       { feature: 'content', title: 'Pages with real expertise', body: 'Author and reviewer, experience notes, case studies and schema on every page.' },
       { feature: 'backlinks', title: 'Links that count', body: 'Nine link sources, links checked by Alaventra itself and scored prospects.' },
-      { feature: 'link-building', title: 'Listed where buyers compare', body: 'G2, Capterra, TrustRadius and the other directories worth being on, checked against your listing — and pitches to the lists that leave you out.' },
+      { feature: 'link-building', title: 'Listed where buyers compare', body: 'G2, Capterra, TrustRadius and the other directories worth being on, checked against your listing, and pitches to the lists that leave you out.' },
     ],
     outcomes: [
       'A measured view of how AI engines describe and cite you',
@@ -142,7 +142,7 @@ export const solutions: Solution[] = [
     showcase: {
       feature: 'ai-visibility',
       title: 'See the shortlist AI gives your buyers.',
-      body: 'Which brands ChatGPT, Gemini, Perplexity, Claude and Google’s AI name for your buyers’ questions, how often you are cited, and how that moves week by week.',
+      body: 'Which brands ChatGPT, Gemini, Perplexity, Claude and Google\'s AI name for your buyers\' questions, how often you are cited, and how that moves week by week.',
     },
   },
   {
@@ -151,7 +151,7 @@ export const solutions: Solution[] = [
     shortName: 'Local and multi-location',
     tagline: 'Local pages with verified details for every area you serve.',
     summary:
-      'Alaventra writes local pages for the cities and areas you serve, each with your verified name, address and phone, local schema and real proof — and checks that search engines and AI assistants recognise your business.',
+      'Alaventra writes local pages for the cities and areas you serve, each with your verified name, address and phone, local schema and real proof, and checks that search engines and AI assistants recognise your business.',
     icon: MapPin,
     image: 'brightOffice',
     pains: [
@@ -162,11 +162,11 @@ export const solutions: Solution[] = [
     helps: [
       { feature: 'content', title: 'Local pages that hold up', body: 'Local (city or area) pages with a verified name, address and phone block, LocalBusiness schema and the areas you serve.' },
       { feature: 'technical-audits', title: 'Brand and entity check', body: 'Audits confirm your business listing matches your website before it is trusted.' },
-      { feature: 'site-tracking', title: 'Tracking per website', body: 'Search Console, GA4 and live rank checks for each website you run — including whether a local pack was on the page and whether your listing was in it.' },
+      { feature: 'site-tracking', title: 'Tracking per website', body: 'Search Console, GA4 and live rank checks for each website you run, including whether a local pack was on the page and whether your listing was in it.' },
       { feature: 'enterprise', title: 'One account for every brand', body: 'Separate companies for separate brands, with one team and one login.' },
       { feature: 'link-building', title: 'The local listings that matter', body: 'Google Business Profile, Bing Places, Apple Business and the directories in your country, checked for your listing, with a ready description to paste.' },
       { feature: 'guided-setup', title: 'Set up without an agency', body: 'Search Console, Analytics, the records on your domain: each one is a short guide with your own values, written for the provider you actually use.' },
-      { feature: 'report-delivery', title: 'You do not have to remember to look', body: 'The Monday report arrives in your inbox with the numbers in the message — and nothing arrives that the analysis itself flagged as not ready.' },
+      { feature: 'report-delivery', title: 'You do not have to remember to look', body: 'The Monday report arrives in your inbox with the numbers in the message, and nothing arrives that the analysis itself flagged as not ready.' },
     ],
     outcomes: [
       'Consistent business details on every local page',
@@ -204,7 +204,7 @@ export const solutions: Solution[] = [
       { feature: 'integrations', title: 'Findings in the backlog, data in the warehouse', body: 'One Jira, Linear or Asana ticket per finding, six tables to BigQuery or your storage, a Looker Studio connector, alerts in Slack or Teams and an API your assistants can use.' },
       { feature: 'technical-audits', title: 'Releases checked before they ship', body: 'Your build calls the pre-release check against staging and fails on a noindex, a lost canonical or a page robots.txt now blocks.' },
       { feature: 'crawler-analytics', title: 'What crawlers really do', body: 'Logs from Cloudflare, Fastly, Akamai, Vercel or your own servers, with every crawler checked against the addresses its company publishes.' },
-      { feature: 'report-delivery', title: 'Reports to the people who decide', body: 'Weekly reports by e-mail or signed webhook on your schedule — and held back, with the reason, when the analysis marked them not ready.' },
+      { feature: 'report-delivery', title: 'Reports to the people who decide', body: 'Weekly reports by e-mail or signed webhook on your schedule. They are held back, with the reason, when the analysis marked them not ready.' },
     ],
     outcomes: [
       'Single sign-on and provisioning from your identity provider',
@@ -215,7 +215,7 @@ export const solutions: Solution[] = [
     faqs: [
       {
         q: 'Can you go through our security questionnaire?',
-        a: 'Yes. Send it through the contact form with the topic “Security review or questionnaire” and a person on the team will go through it with you. The security page lists how sign-in, access, data isolation and secrets work today.',
+        a: 'Yes. Send it through the contact form with the topic "Security review or questionnaire" and a person on the team will go through it with you. The security page lists how sign-in, access, data isolation and secrets work today.',
       },
       {
         q: 'Can we keep passwords out of it entirely?',
@@ -233,7 +233,7 @@ export const solutions: Solution[] = [
     showcase: {
       feature: 'integrations',
       title: 'Findings where your engineers already work.',
-      body: 'An audit finding becomes one ticket in Jira, Linear or Asana with the evidence and the fix, its state shown back beside the finding — and the same data lands in your warehouse every day or week.',
+      body: 'An audit finding becomes one ticket in Jira, Linear or Asana with the evidence and the fix, its state shown back beside the finding, and the same data lands in your warehouse every day or week.',
     },
   },
 ];

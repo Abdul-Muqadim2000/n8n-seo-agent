@@ -97,7 +97,7 @@ export function FileLinks({ orgId, files, className, size = 'sm' }: { orgId: str
             </button>
           }
         >
-          <p className="mb-2 text-xs font-medium text-ink-3">{fixPack ? 'Fix pack — upload or apply each file' : 'Data files'}</p>
+          <p className="mb-2 text-xs font-medium text-ink-3">{fixPack ? 'Fix pack: upload or apply each file' : 'Data files'}</p>
           <ul className="space-y-1">
             {data.map((f) => (
               <li key={f.id}>
@@ -118,7 +118,7 @@ export function FileLinks({ orgId, files, className, size = 'sm' }: { orgId: str
 const s = (v: unknown) => (typeof v === 'string' && v ? v : null);
 const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
-/** Headline values of a report as small chips (verdict, score, health, mention rate …). */
+/** Headline values of a report as small chips (verdict, score, health, mention rate ...). */
 export function ReportHighlights({ report }: { report: Report }) {
   const m = report.summary ?? {};
   const chips: ReactNode[] = [];
@@ -143,7 +143,7 @@ export function ReportHighlights({ report }: { report: Report }) {
   return chips.length ? <span className="inline-flex flex-wrap gap-1.5">{chips.slice(0, 3)}</span> : null;
 }
 
-/** A list of reports: title → report page, stage, when, highlights, files. */
+/** A list of reports: title -> report page, stage, when, highlights, files. */
 export function ReportList({ orgId, reports, limit, empty }: { orgId: string; reports: readonly Report[]; limit?: number; empty?: ReactNode }) {
   const rows = limit ? reports.slice(0, limit) : reports;
   if (!rows.length) return <>{empty ?? <p className="px-5 py-8 text-center text-sm text-ink-3">No reports yet.</p>}</>;

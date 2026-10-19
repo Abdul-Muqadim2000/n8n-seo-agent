@@ -40,7 +40,7 @@ export function monitorsBody(m: Partial<MonitorSettings>): Body {
   if (m.aiEngines !== undefined) out.ai_engines = m.aiEngines.join(', ');
   if (m.aiPromptsMax !== undefined) out.ai_prompts_max = m.aiPromptsMax;
   if (m.aiPulse !== undefined) out.ai_pulse = m.aiPulse;
-  // G6 (2026-10-18): buyer roles, extra markets and the pulse's sampling — '' clears a list in Site Admin only as ' ', which the server adds
+  // G6 (2026-10-18): buyer roles, extra markets and the pulse's sampling, '' clears a list in Site Admin only as ' ', which the server adds
   if (m.aiPersonas !== undefined) out.ai_personas = m.aiPersonas.join(', ');
   if (m.aiMarkets !== undefined) out.ai_markets = m.aiMarkets.join(', ');
   if (m.aiPulseMode !== undefined) out.ai_pulse_mode = m.aiPulseMode === 'auto' ? 'auto' : m.aiPulseMode;
@@ -88,7 +88,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         ...(input.ladder && dom
           ? { ladder_id: input.ladder.id, ladder_rung: input.ladder.rung, ladder_head: input.ladder.head, ladder_page_no: input.ladder.pageNo, force_content: true }
           : {}),
-        // v4.12: an AI answer target — the brief and the copywriter write the page AI should cite for the question
+        // v4.12: an AI answer target, the brief and the copywriter write the page AI should cite for the question
         ...(input.aiTarget
           ? { ai_target: { question: input.aiTarget.question, kind: input.aiTarget.kind, target_id: input.aiTarget.targetId, fanout: input.aiTarget.fanout, sources: input.aiTarget.sources.map((x) => ({ u: x.url, t: x.title })), competitors: input.aiTarget.competitors } }
           : {}),
@@ -201,7 +201,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         service_areas: input.serviceAreas,
         map_url: input.mapUrl,
         logo_url: input.logoUrl,
-        // G31: the house style — stored on the same profile row (style_*), applied in the writing prompts and checked before delivery
+        // G31: the house style, stored on the same profile row (style_*), applied in the writing prompts and checked before delivery
         style: {
           brand_form: input.style.brandForm,
           brand_wrong: input.style.brandWrong,

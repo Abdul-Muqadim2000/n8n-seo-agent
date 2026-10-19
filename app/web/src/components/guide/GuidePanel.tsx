@@ -17,7 +17,7 @@ import { RichText } from './rich';
 import { firstOpenStep, readDone, writeDone } from './progress';
 
 // The guide panel: one job the person has to do somewhere else, broken into steps they can tick off, with their own values ready to
-// copy, the page to open, what to do when it does not work — and a way to hand the whole thing to the colleague who has to do it.
+// copy, the page to open, what to do when it does not work, and a way to hand the whole thing to the colleague who has to do it.
 // Opened from anywhere through useGuides() (see GuideProvider); the content is data in @seo/shared (guides.ts).
 
 export interface GuideFinish {
@@ -109,7 +109,7 @@ function GuideView({ guide, vars, finish, onBack, onOpen }: { guide: Guide; vars
       toast.error('The browser blocked the clipboard. Select the steps and copy them by hand.');
     }
   };
-  const mailto = `mailto:?subject=${encodeURIComponent(filled.title)}&body=${encodeURIComponent(`${text()}\n\n— sent from Alaventra`)}`;
+  const mailto = `mailto:?subject=${encodeURIComponent(filled.title)}&body=${encodeURIComponent(`${text()}\n\nSent from Alaventra`)}`;
 
   return (
     <>
@@ -359,11 +359,11 @@ const StepRow = function StepRowImpl({
           <div className="flex flex-wrap items-center gap-2 pt-0.5">
             {done ? (
               <Button variant="secondary" size="sm" onClick={onUndo} icon={<Check className="size-3.5 text-good-text" />}>
-                Done — undo
+                Done (undo)
               </Button>
             ) : (
               <Button size="sm" onClick={onDone} icon={<Check className="size-3.5" />}>
-                {last ? 'Mark as done' : 'Done — next step'}
+                {last ? 'Mark as done' : 'Done, next step'}
               </Button>
             )}
           </div>
@@ -415,13 +415,13 @@ function GuideIndex({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
         <div className="relative mt-3">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-3" aria-hidden />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: dns, analytics, app password…" aria-label="Search the guides" className="pl-9" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: dns, analytics, app password..." aria-label="Search the guides" className="pl-9" />
         </div>
       </PanelHead>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {!groups.length && (
           <p className="py-10 text-center text-sm text-ink-3">
-            Nothing matches “{q}”. Try a word from the task — <button type="button" className="font-medium text-accent-text hover:underline" onClick={() => setQ('')}>clear the search</button>.
+            Nothing matches "{q}". Try a word from the task, or <button type="button" className="font-medium text-accent-text hover:underline" onClick={() => setQ('')}>clear the search</button>.
           </p>
         )}
         <div className="space-y-6">

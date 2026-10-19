@@ -63,7 +63,7 @@ export function WriteNowDialog({ item, onClose, note }: { item: WriteNowItem; on
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      title={`Write “${item.keyword}” now`}
+      title={`Write "${item.keyword}" now`}
       description="Researched, written, edited and checked, delivered as a page you publish (HTML, Markdown, Word, PDF). It is then marked as written, so the Monday run moves on to the next page."
       footer={
         <>
@@ -91,7 +91,7 @@ export function WriteNowDialog({ item, onClose, note }: { item: WriteNowItem; on
           <div className="flex gap-2">
             <dt className="w-28 shrink-0 text-ink-3">Keyword ladder</dt>
             <dd className="min-w-0 text-ink">
-              {item.ladder.head} · {item.ladder.rung >= 4 ? 'main page' : `rung ${item.ladder.rung}`} (linked to the ladder’s other pages)
+              {item.ladder.head} · {item.ladder.rung >= 4 ? 'main page' : `rung ${item.ladder.rung}`} (linked to the ladder's other pages)
             </dd>
           </div>
         )}

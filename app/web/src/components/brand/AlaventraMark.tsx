@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 
-// The 33 rays of the supplied Alaventra mark (public/brand/alaventra-mark-*.svg), split out of its single path unchanged — same
+// The 33 rays of the supplied Alaventra mark (public/brand/alaventra-mark-*.svg), split out of its single path unchanged, same
 // coordinates, same viewBox, nothing redrawn. Path order runs from the short ray on the right, round the "rising sun" at the
 // bottom, up to the longest ray at the wing tip, so a wave in this order travels from the sun into the wing.
 const VIEW_BOX = '-623.18 -603.40 911.07 796.53';
@@ -49,7 +49,7 @@ const MOTION: Record<'loader' | 'ambient', CSSProperties> = {
 
 /**
  * The Alaventra mark drawn from the supplied path in `currentColor` (set the colour with a text class: blue or ink on light, white on
- * ink — never per ray). With `wave`, a band of light travels along the rays from the sun to the wing tip; geometry never moves, and
+ * ink, never per ray). With `wave`, a band of light travels along the rays from the sun to the wing tip; geometry never moves, and
  * under prefers-reduced-motion it is the plain mark. Decorative by default; pass `label` to make it an image.
  */
 export function AlaventraMark({ wave, label, className, style }: { wave?: 'loader' | 'ambient'; label?: string; className?: string; style?: CSSProperties }) {

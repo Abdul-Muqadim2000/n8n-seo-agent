@@ -26,14 +26,14 @@ export function DifficultyBadge({ difficulty, compact, className }: { difficulty
   );
 }
 
-/** "Short ladder · 4–8 months" (never shown for "no ladder"). */
+/** "Short ladder · 4-8 months" (never shown for "no ladder"). */
 export function PlanBadge({ plan, months, stretch, className }: { plan: PlanChoice | null | undefined; months?: string; stretch?: boolean; className?: string }) {
   if (!plan || plan === 'none') return null;
   return (
     <Badge icon={<Route className="size-3" aria-hidden />} className={className}>
       {PLAN_CHOICE_LABEL[plan]}
       {stretch ? ' (stretch)' : ''}
-      {months ? ` · ${months.replace('-', '–')} months` : ''}
+      {months ? ` · ${months.replace('-', '-')} months` : ''}
     </Badge>
   );
 }

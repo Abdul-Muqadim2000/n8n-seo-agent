@@ -13,7 +13,7 @@ export const LOOP_STEPS: { label: string; icon: LucideIcon; body: string }[] = [
 
 const R = 38; // ring radius in % of the box
 
-/** The weekly growth loop: Research → Plan → Write → Publish → Track → Learn on a ring, with a pulse travelling round and each step lighting up as it passes. */
+/** The weekly growth loop: Research, Plan, Write, Publish, Track, Learn on a ring, with a pulse travelling round and each step lighting up as it passes. */
 export function GrowthLoopDiagram({ className, centerTitle = 'Every week', centerBody = 'Each loop starts from what the last one learned.' }: { className?: string; centerTitle?: string; centerBody?: string }) {
   const ink = useSectionTone() === 'ink';
   return (

@@ -66,7 +66,7 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
       {d.checkinDue && (
         <Callout
           tone="warning"
-          title="This month’s Search Console check-in is due"
+          title="This month's Search Console check-in is due"
           action={
             <>
               <ToolButton mode="checkin" variant="primary" size="sm">
@@ -76,7 +76,7 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
             </>
           }
         >
-          Open Search Console and look at three things: Security & Manual actions (both should say “No issues detected”) and the Pages report (export it as CSV to record what is not indexed and why). It takes about two minutes.
+          Open Search Console and look at three things: Security & Manual actions (both should say "No issues detected") and the Pages report (export it as CSV to record what is not indexed and why). It takes about two minutes.
         </Callout>
       )}
 
@@ -90,7 +90,7 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
             <HeroNextStep
               icon={<ClipboardCheck />}
               eyebrow="Next step · about two minutes"
-              title="Record this month’s Search Console check-in"
+              title="Record this month's Search Console check-in"
               actions={
                 <ToolButton mode="checkin" variant="secondary" size="sm">
                   Record it now
@@ -106,10 +106,10 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
               value={<CountUp value={open.length} />}
               hint={open.length ? `${urgent} critical or high · ${d.alerts.length} received in total` : d.alerts.length ? `${d.alerts.length} received, all resolved` : 'No Search Console notifications received'}
             />
-            <HeroStat label="Last check-in" value={last ? fmtMonth(last.month) : '–'} hint={last ? `Recorded ${fmtAgo(last.submittedAt)}` : 'Not recorded yet'} />
+            <HeroStat label="Last check-in" value={last ? fmtMonth(last.month) : '-'} hint={last ? `Recorded ${fmtAgo(last.submittedAt)}` : 'Not recorded yet'} />
             <HeroStat
               label="Pages not indexed"
-              value={last ? last.notIndexedTotal.toLocaleString('en-US') : '–'}
+              value={last ? last.notIndexedTotal.toLocaleString('en-US') : '-'}
               delta={last && prev ? <Delta value={diff(last.notIndexedTotal, prev.notIndexedTotal)} suffix="" digits={0} upIsGood={false} label={`vs ${fmtMonth(prev.month)}`} /> : undefined}
               hint={last ? (last.indexedTotal != null ? `${last.indexedTotal.toLocaleString('en-US')} indexed · from the Pages report` : 'From the Pages report') : 'Recorded with the monthly check-in'}
             />
@@ -127,7 +127,7 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
                     </StatusBadge>
                   )
                 ) : (
-                  '–'
+                  '-'
                 )
               }
               hint={last ? `As of the ${fmtMonth(last.month)} check-in` : 'Recorded with the monthly check-in'}
@@ -158,7 +158,7 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
                   columns: [
                     { key: 'month', label: 'Month', format: (v) => fmtMonth(String(v)) },
                     { key: 'notIndexed', label: 'Not indexed', align: 'right' },
-                    { key: 'indexed', label: 'Indexed', align: 'right', format: (v) => (v == null ? '–' : String(v)) },
+                    { key: 'indexed', label: 'Indexed', align: 'right', format: (v) => (v == null ? '-' : String(v)) },
                   ],
                   rows: [...checkins].reverse().map((c) => ({ month: c.month, notIndexed: c.notIndexedTotal, indexed: c.indexedTotal })),
                 }}
@@ -199,7 +199,7 @@ const TONE_ICON: Record<Tone, ReactNode> = {
   accent: <Info />,
   neutral: <Info />,
 };
-/** severity → the ramp of the distribution bar (status colours: severity is a status) */
+/** severity -> the ramp of the distribution bar (status colours: severity is a status) */
 const SEV_COLOR: Record<Tone, string> = { critical: 'var(--critical)', serious: 'var(--serious)', warning: 'var(--warning)', neutral: 'var(--line-strong)', good: 'var(--good)', accent: 'var(--accent)' };
 
 function AlertList({ alerts }: { alerts: ConsoleAlert[] }) {
@@ -282,7 +282,7 @@ function AlertList({ alerts }: { alerts: ConsoleAlert[] }) {
             description={
               alerts.length
                 ? 'Every alert received for this website is resolved.'
-                : 'When Google e-mails a Search Console notice for this website — a manual action, a security issue, indexing or Core Web Vitals problems — it appears here and in the Monday report.'
+                : 'When Google e-mails a Search Console notice for this website (a manual action, a security issue, indexing or Core Web Vitals problems), it appears here and in the Monday report.'
             }
           />
         )}
@@ -297,8 +297,8 @@ function CheckinTable({ rows }: { rows: Checkin[] }) {
     { key: 'manual', header: 'Manual action', sortValue: (c) => (c.manualAction ? 1 : 0), cell: (c) => (c.manualAction ? <StatusBadge tone="critical">Yes</StatusBadge> : <StatusBadge tone="good">None</StatusBadge>) },
     { key: 'security', header: 'Security', sortValue: (c) => (c.securityIssue ? 1 : 0), cell: (c) => (c.securityIssue ? <StatusBadge tone="critical">Issue</StatusBadge> : <StatusBadge tone="good">None</StatusBadge>) },
     { key: 'notIndexed', header: 'Not indexed', align: 'right', sortValue: (c) => c.notIndexedTotal, cell: (c) => c.notIndexedTotal.toLocaleString('en-US') },
-    { key: 'indexed', header: 'Indexed', align: 'right', hideOnMobile: true, sortValue: (c) => c.indexedTotal, cell: (c) => (c.indexedTotal == null ? '–' : c.indexedTotal.toLocaleString('en-US')) },
-    { key: 'notes', header: 'Notes', hideOnMobile: true, cell: (c) => <span className="line-clamp-2 min-w-[12rem] max-w-[24rem] text-[13px] text-ink-2" title={c.notes}>{c.notes || '–'}</span> },
+    { key: 'indexed', header: 'Indexed', align: 'right', hideOnMobile: true, sortValue: (c) => c.indexedTotal, cell: (c) => (c.indexedTotal == null ? '-' : c.indexedTotal.toLocaleString('en-US')) },
+    { key: 'notes', header: 'Notes', hideOnMobile: true, cell: (c) => <span className="line-clamp-2 min-w-[12rem] max-w-[24rem] text-[13px] text-ink-2" title={c.notes}>{c.notes || '-'}</span> },
     { key: 'submitted', header: 'Recorded', hideOnMobile: true, sortValue: (c) => c.submittedAt, cell: (c) => <span className="whitespace-nowrap text-xs text-ink-3">{fmtDate(c.submittedAt)}{c.csvKind ? ` · ${c.csvKind} export` : ''}</span> },
   ];
   return <DataTable rows={rows} columns={columns} rowKey={(c, i) => `${c.month}|${i}`} initialSort={{ key: 'month', dir: 'desc' }} dense pageSize={12} />;
@@ -324,7 +324,7 @@ function LatestCheckin({ c }: { c: Checkin }) {
               <FileSearch className="size-3.5" aria-hidden />
               Indexed pages
             </dt>
-            <dd className="mt-1 font-display text-lg font-semibold text-ink">{c.indexedTotal != null ? c.indexedTotal.toLocaleString('en-US') : '–'}</dd>
+            <dd className="mt-1 font-display text-lg font-semibold text-ink">{c.indexedTotal != null ? c.indexedTotal.toLocaleString('en-US') : '-'}</dd>
           </div>
           <div>
             <dt className="text-xs text-ink-3">Not indexed</dt>

@@ -122,7 +122,7 @@ export const overview: AdminOverview = {
       note: 'Balance movement over the period, read from the DataForSEO account.',
     },
   ],
-  sources: { engineLedger: { ok: true, lastSyncAt: '2026-10-18T18:52:00Z', rows: 1843, note: 'Costs come from the engine’s run ledger, matched to app runs by execution id.' } },
+  sources: { engineLedger: { ok: true, lastSyncAt: '2026-10-18T18:52:00Z', rows: 1843, note: 'Costs come from the engine\'s run ledger, matched to app runs by execution id.' } },
   topCompanies: [...companies].sort((a, b) => b.money.cost.totalUsd - a.money.cost.totalUsd).slice(0, 5),
 };
 

@@ -14,7 +14,7 @@ const stem = (t: string) =>
     .replace(/(ing|ed|es|s)$/, '')
     .replace(/[^a-z0-9]/g, '');
 
-/** The words that make a search: "E-invoicing in the UAE" → ["invoic", "uae"]. */
+/** The words that make a search: "E-invoicing in the UAE" -> ["invoic", "uae"]. */
 export function keywordTokens(s: string): string[] {
   const out: string[] = [];
   for (const t of String(s || '')

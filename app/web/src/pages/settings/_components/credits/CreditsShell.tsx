@@ -21,7 +21,7 @@ const PILL_TONE = {
   critical: 'border-transparent bg-critical-soft text-critical-text',
 } as const;
 
-/** "1,240 credits" in the sidebar, toned by the status, linking to Company settings → Credits. */
+/** "1,240 credits" in the sidebar, toned by the status, linking to Company settings -> Credits. */
 export function CreditPill({ className }: { className?: string }) {
   const { org, role } = useOrgCtx();
   const client = isClientRole(role);

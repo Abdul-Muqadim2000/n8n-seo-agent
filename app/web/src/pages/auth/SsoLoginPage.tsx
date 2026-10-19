@@ -8,7 +8,7 @@ import { Field, Input } from '@/components/ui/field';
 import { api, errorMessage } from '@/lib/api';
 import { AuthCard, GOOGLE_ERRORS, safeNext } from './shared';
 
-/** G1: /login/sso — "Sign in with SSO": the work address decides which company's identity provider to go to. */
+/** G1: /login/sso, "Sign in with SSO": the work address decides which company's identity provider to go to. */
 export default function SsoLoginPage() {
   const [params] = useSearchParams();
   const next = safeNext(params.get('next'));
@@ -36,7 +36,7 @@ export default function SsoLoginPage() {
   return (
     <AuthCard
       title="Sign in with SSO"
-      subtitle="Use your company’s identity provider (Okta, Microsoft Entra ID, Google Workspace…)."
+      subtitle="Use your company's identity provider (Okta, Microsoft Entra ID, Google Workspace...)."
       footer={
         <Link to={next ? `/login?next=${encodeURIComponent(next)}` : '/login'} className="font-medium text-accent-text hover:underline">
           Sign in another way

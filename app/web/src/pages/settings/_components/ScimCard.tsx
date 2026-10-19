@@ -17,7 +17,7 @@ import { fmtAgo, fmtDate } from '@/lib/utils';
 import { SettingsCard } from './SettingsCard';
 
 /**
- * G1: SCIM provisioning (Company settings → Single sign-on): the base URL and a bearer token for the identity provider, and the
+ * G1: SCIM provisioning (Company settings -> Single sign-on): the base URL and a bearer token for the identity provider, and the
  * groups it pushed, each mapped to a role (or to none). The token is shown once.
  */
 export function ScimCard() {
@@ -60,7 +60,7 @@ export function ScimCard() {
         </div>
 
         {fresh && (
-          <Callout tone="good" title="Your provisioning token — copy it now" action={<Button size="sm" variant="secondary" onClick={() => setFresh(null)}>Done</Button>}>
+          <Callout tone="good" title="Your provisioning token: copy it now" action={<Button size="sm" variant="secondary" onClick={() => setFresh(null)}>Done</Button>}>
             <p className="mb-2">Paste it into your identity provider as the API token (Bearer). It is shown only this once.</p>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <code className="min-w-0 max-w-full break-all rounded-md border bg-surface-2 px-2 py-1 font-mono text-xs">{fresh}</code>
@@ -76,7 +76,7 @@ export function ScimCard() {
               {d.tokens.map((t) => (
                 <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
                   <span className="min-w-0">
-                    <span className="font-medium text-ink">{t.name}</span> <code className="font-mono text-xs text-ink-3">{t.prefix}…</code>
+                    <span className="font-medium text-ink">{t.name}</span> <code className="font-mono text-xs text-ink-3">{t.prefix}...</code>
                     <span className="block text-xs text-ink-3">
                       Made {fmtDate(t.createdAt)}
                       {t.createdByName ? ` by ${t.createdByName}` : ''} · {t.lastUsedAt ? `used ${fmtAgo(t.lastUsedAt)}` : 'not used yet'}
@@ -149,7 +149,7 @@ export function ScimCard() {
       </CardBody>
       <CardFooter>
         <p className="text-sm text-ink-2">
-          A person’s role is the highest one mapped from their groups. Switched off in your provider, they lose access here at once; owners are never changed by provisioning.
+          A person's role is the highest one mapped from their groups. Switched off in your provider, they lose access here at once; owners are never changed by provisioning.
         </p>
       </CardFooter>
     </SettingsCard>

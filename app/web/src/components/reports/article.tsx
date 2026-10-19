@@ -44,11 +44,11 @@ function useThemeTokens(): Tokens {
 }
 
 // R45 / A-13 (2026-10-17): one detector with the engine's Content QA (@seo/shared placeholders.ts): a review note is Confirm / Owner /
-// Author insight / Image, every other bracket that starts with a letter — "[Price band: … fee in AED]" included — is a placeholder.
+// Author insight / Image, every other bracket that starts with a letter, "[Price band: ... fee in AED]" included, is a placeholder.
 // The preview highlights both: each is something a person must act on before the page goes live.
 const PLACEHOLDER = placeholderRe();
 
-/** Counts the [placeholders] to fill in anywhere in the HTML (text and attributes) — the engine's own placeholder count. */
+/** Counts the [placeholders] to fill in anywhere in the HTML (text and attributes), the engine's own placeholder count. */
 export function findPlaceholders(html: string): { token: string; count: number }[] {
   return findOpenBrackets(html).filter((b) => b.kind === 'placeholder').map(({ token, count }) => ({ token, count }));
 }
@@ -286,10 +286,10 @@ export function MetaPanel({ meta }: { meta: P }) {
       )}
       <KeyValue
         items={[
-          { label: 'Title tag', value: <>{str(meta.title) || '–'} <span className="block text-xs">{lengthHint(num(meta.title_length) ?? (str(meta.title).length || null), 30, 60)}</span></> },
-          { label: 'Main heading (H1)', value: str(meta.h1) || '–' },
-          { label: 'Meta description', value: <>{str(meta.meta_description) || '–'} <span className="block text-xs">{lengthHint(num(meta.meta_description_length) ?? (str(meta.meta_description).length || null), 120, 160)}</span></> },
-          { label: 'URL slug', value: <code className="text-[13px]">{str(meta.slug) || '–'}</code> },
+          { label: 'Title tag', value: <>{str(meta.title) || '-'} <span className="block text-xs">{lengthHint(num(meta.title_length) ?? (str(meta.title).length || null), 30, 60)}</span></> },
+          { label: 'Main heading (H1)', value: str(meta.h1) || '-' },
+          { label: 'Meta description', value: <>{str(meta.meta_description) || '-'} <span className="block text-xs">{lengthHint(num(meta.meta_description_length) ?? (str(meta.meta_description).length || null), 120, 160)}</span></> },
+          { label: 'URL slug', value: <code className="text-[13px]">{str(meta.slug) || '-'}</code> },
           ...(str(meta.suggested_url)
             ? [
                 {
@@ -299,8 +299,8 @@ export function MetaPanel({ meta }: { meta: P }) {
                 },
               ]
             : []),
-          { label: 'Primary keyword', value: str(meta.primary_keyword) || '–' },
-          { label: 'Page type', value: str(meta.page_type) || '–' },
+          { label: 'Primary keyword', value: str(meta.primary_keyword) || '-' },
+          { label: 'Page type', value: str(meta.page_type) || '-' },
           ...(str(author.name) ? [{ label: 'Author', value: <>{str(author.name)} {author.placeholder === true && <Badge tone="warning" className="ml-1">placeholder</Badge>}</> }] : []),
           ...(str(meta.updated) ? [{ label: 'Updated', value: str(meta.updated) }] : []),
         ]}
@@ -346,7 +346,7 @@ export function MetaPanel({ meta }: { meta: P }) {
           <ul className="space-y-1.5 text-sm">
             {internal.map((l, i) => (
               <li key={i} className="min-w-0">
-                <span className="text-ink">{str(l.text)}</span> <span className="text-ink-3">→</span> <ExternalLink href={str(l.url)} className="text-[13px]" />
+                <span className="text-ink">{str(l.text)}</span> <span className="text-ink-3">to</span> <ExternalLink href={str(l.url)} className="text-[13px]" />
               </li>
             ))}
           </ul>

@@ -65,10 +65,10 @@ describe('out-of-office return dates without the Reply Reader', () => {
   });
 });
 
-// P34-1 (live 2026-10-12): the AI growth page offered a pitch to a government portal, written on 2026-10-02 — before the gates — because
+// P34-1 (live 2026-10-12): the AI growth page offered a pitch to a government portal, written on 2026-10-02, before the gates, because
 // the app marked any prospect row with a stored body `drafted` and printed it.
 describe('stored outreach drafts: only the ones written under the current rules are offered (P34-1)', () => {
-  const row = (o: Partial<StoredDraftRow>): StoredDraftRow => ({ outreach_subject: 'A resource suggestion for your readers', outreach_body: 'I work at techand.ai. Your site appears in AI assistant answers…', ...o });
+  const row = (o: Partial<StoredDraftRow>): StoredDraftRow => ({ outreach_subject: 'A resource suggestion for your readers', outreach_body: 'I work at techand.ai. Your site appears in AI assistant answers...', ...o });
   it('withdraws a draft written before the gates, and one with no date at all', () => {
     expect(draftSuperseded(row({ drafted_at: '2026-10-02T06:00:00Z' }))).toBe(true);
     expect(draftSuperseded(row({ drafted_at: '' }))).toBe(true);
@@ -77,9 +77,9 @@ describe('stored outreach drafts: only the ones written under the current rules 
     expect(prospectDraft(row({ drafted_at: '' }))).toBeNull();
   });
   it('keeps a draft written on or after the gates, with its subject and body', () => {
-    const r = row({ drafted_at: `${DRAFT_GATES_AT}T11:00:00Z`, outreach_subject: 'A note on your e-invoicing page', outreach_body: 'Hello, I read your list this morning…' });
+    const r = row({ drafted_at: `${DRAFT_GATES_AT}T11:00:00Z`, outreach_subject: 'A note on your e-invoicing page', outreach_body: 'Hello, I read your list this morning...' });
     expect(draftSuperseded(r)).toBe(false);
-    expect(prospectDraft(r)).toEqual({ subject: 'A note on your e-invoicing page', body: 'Hello, I read your list this morning…', draftedAt: `${DRAFT_GATES_AT}T11:00:00Z` });
+    expect(prospectDraft(r)).toEqual({ subject: 'A note on your e-invoicing page', body: 'Hello, I read your list this morning...', draftedAt: `${DRAFT_GATES_AT}T11:00:00Z` });
     expect(prospectDraft(row({ drafted_at: '2026-11-04T08:00:00Z' }))?.body).toContain('techand.ai');
   });
   it('never withdraws a draft that was sent: it is the record the follow-ups build on', () => {

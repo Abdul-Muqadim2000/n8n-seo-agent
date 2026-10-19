@@ -5,7 +5,7 @@ import { generate } from 'selfsigned';
 import { SignedXml } from 'xml-crypto';
 
 /**
- * G1: identity providers for the SSO tests — no real IdP is available. An OIDC issuer (discovery, JWKS, a token endpoint that checks
+ * G1: identity providers for the SSO tests, no real IdP is available. An OIDC issuer (discovery, JWKS, a token endpoint that checks
  * the client secret and PKCE and signs ID tokens with its own RS256 key) answering through `ssoDeps.fetch`, and a SAML IdP with a
  * freshly generated key and self-signed certificate that signs assertions the way Okta / Entra ID do (enveloped, exc-c14n,
  * RSA-SHA256).

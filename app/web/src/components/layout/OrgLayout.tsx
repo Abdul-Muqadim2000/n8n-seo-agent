@@ -80,7 +80,7 @@ export function portalPathAllowed(rest: string[]): boolean {
   return false;
 }
 
-/** "Overview · techand.ai — Alaventra" / "Runs · Acme — Alaventra", from the URL the layout already knows. */
+/** "Overview · techand.ai | Alaventra" / "Runs · Acme | Alaventra", from the URL the layout already knows. */
 function shellTitle(pathname: string, org: Org, sites: Site[]): string {
   const rest = pathname.slice(`/o/${org.id}`.length).split('/').filter(Boolean);
   if (rest[0] === 'sites' && rest[1] && rest[1] !== 'new') {
@@ -225,7 +225,7 @@ export function OrgLayout() {
   );
 }
 
-/** /o/:orgId — the last website used, the first one, or "add your first website". */
+/** /o/:orgId: the last website used, the first one, or "add your first website". */
 export function OrgIndex() {
   const { orgId = '' } = useParams();
   const sites = useSites(orgId);
@@ -433,7 +433,7 @@ function Sidebar({ onClose }: { onClose: () => void }) {
 
 /**
  * G5: the sidebar of an agency's client portal (client viewers and approvers): the agency's mark, the client's websites, the portal's
- * pages, reports and approvals — no tools, runs, costs or settings, and nothing that names us unless the agency chose "Powered by".
+ * pages, reports and approvals, no tools, runs, costs or settings, and nothing that names us unless the agency chose "Powered by".
  */
 function PortalSidebar({ onClose }: { onClose: () => void }) {
   const { me, org, sites, role } = useOrgCtx();

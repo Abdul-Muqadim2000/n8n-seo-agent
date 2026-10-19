@@ -8,7 +8,7 @@ import { CopyButton, Meter, scoreTone } from '@/components/ui/misc';
 import { CollapsePanel, IconTile, InfoTip, InsightItem, type IconTileTone } from '@/components/insight';
 
 // Helpers shared by every report renderer. Callback payloads are untyped JSON from n8n, so every read goes through a guard
-// (a malformed field renders as "–" or an empty list instead of crashing the page).
+// (a malformed field renders as "-" or an empty list instead of crashing the page).
 
 export type P = Record<string, unknown>;
 
@@ -20,7 +20,7 @@ export const str = (v: unknown): string => (typeof v === 'string' ? v : v == nul
 export const strs = (v: unknown): string[] => arr(v).map(str).filter(Boolean);
 
 /**
- * D-13: the engine's "started" notes say where the report goes in API terms ("arrives at your callback", "will be sent to … and
+ * D-13: the engine's "started" notes say where the report goes in API terms ("arrives at your callback", "will be sent to ... and
  * your callback"). In the app the callback IS this page, so the customer reads "arrives here".
  */
 export const inAppWording = (s: string): string =>
@@ -29,18 +29,18 @@ export const inAppWording = (s: string): string =>
     .replace(/\bwill be sent to (?:(\S+@\S+?) and )?your callback\b/g, (_m, email?: string) => (email ? `will appear here and be sent to ${email}` : 'will appear here'));
 export const has = (v: unknown): boolean => (Array.isArray(v) ? v.length > 0 : v != null && v !== '' && !(typeof v === 'object' && !Object.keys(v as object).length));
 
-/** "1,600" / "12K" for counts; "–" when missing. */
+/** "1,600" / "12K" for counts; "-" when missing. */
 export const n = (v: unknown) => compactNumber(num(v));
 export const usd = (v: unknown, digits = 2) => formatUsd(num(v), digits);
-/** 0.0069 (ratio) → "0.69%" */
+/** 0.0069 (ratio) -> "0.69%" */
 export const pctRatio = (v: unknown, digits = 1) => {
   const x = num(v);
-  return x == null ? '–' : `${(x * 100).toFixed(digits).replace(/\.0+$/, '')}%`;
+  return x == null ? '-' : `${(x * 100).toFixed(digits).replace(/\.0+$/, '')}%`;
 };
-/** 53 (already percent) → "53%" */
+/** 53 (already percent) -> "53%" */
 export const pct = (v: unknown, digits = 1) => {
   const x = num(v);
-  return x == null ? '–' : `${x.toFixed(digits).replace(/\.0+$/, '')}%`;
+  return x == null ? '-' : `${x.toFixed(digits).replace(/\.0+$/, '')}%`;
 };
 export const shortUrl = (u: string) => u.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '') || u;
 export const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
@@ -294,7 +294,7 @@ const CREDIT_STATE: Record<string, string> = {
 };
 
 /**
- * credits (app/docs/CREDITS.md): what the work behind a report used, in credits — the server puts `credits_used` / `credits_state` on
+ * credits (app/docs/CREDITS.md): what the work behind a report used, in credits, the server puts `credits_used` / `credits_state` on
  * every payload it serves and strips the run ledger and every provider cost, so this card is all a customer sees of it. Nothing
  * when the charge is not known (a client portal, a schedule's report the cost sync has not reached).
  */
@@ -330,7 +330,7 @@ export function CreditsCard({
       <Facts
         cols="sm:grid-cols-3"
         items={[
-          { icon: <Coins />, label: 'Credits', value: state === 'not_charged' ? '0 credits' : used != null ? formatCredits(used) : '–', hint: CREDIT_STATE[state] ?? undefined },
+          { icon: <Coins />, label: 'Credits', value: state === 'not_charged' ? '0 credits' : used != null ? formatCredits(used) : '-', hint: CREDIT_STATE[state] ?? undefined },
         ]}
       />
       {shared && <p className="mt-3 text-[13px] text-ink-2">{sentence}</p>}

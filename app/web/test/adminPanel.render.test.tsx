@@ -19,7 +19,7 @@ import * as F from './adminFixtures';
 import { setAdminUnits } from '@/pages/admin/_components/units';
 
 // The platform admin panel renders every page from answers shaped like the contract (shared/src/admin.ts), and keeps everyone who is
-// not a platform admin out — the server enforces it too.
+// not a platform admin out, the server enforces it too.
 
 function client(platformAdmin = true) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });

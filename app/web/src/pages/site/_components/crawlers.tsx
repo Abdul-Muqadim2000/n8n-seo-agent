@@ -1,4 +1,4 @@
-// Gap #6 (app/docs/LOG_ANALYTICS.md): the Crawlers page's setup side — upload a log, the push key for Cloudflare Logpush and log
+// Gap #6 (app/docs/LOG_ANALYTICS.md): the Crawlers page's setup side, upload a log, the push key for Cloudflare Logpush and log
 // drains, retention, deleting the data, the vendors' IP lists, and the history of every file and push read.
 import { useRef, useState } from 'react';
 import { CloudUpload, Database, FileClock, KeyRound, ListChecks, ShieldCheck, Trash2, Upload } from 'lucide-react';
@@ -18,7 +18,7 @@ import { useCrawlerSettings, useCreatePushKey, useDeleteCrawlerData, useRevokePu
 import { fmtAgo, fmtBytes, fmtDateTime } from '@/lib/utils';
 import { Panel } from './kit';
 
-const FORMAT_LABEL: Record<LogIngestView['format'], string> = { combined: 'Apache / Nginx', w3c: 'IIS / W3C', json: 'JSON lines', unknown: '–' };
+const FORMAT_LABEL: Record<LogIngestView['format'], string> = { combined: 'Apache / Nginx', w3c: 'IIS / W3C', json: 'JSON lines', unknown: '-' };
 const STATUS: Record<LogIngestView['status'], { tone: Tone; label: string }> = {
   queued: { tone: 'neutral', label: 'Waiting' },
   processing: { tone: 'accent', label: 'Reading' },
@@ -89,7 +89,7 @@ function PushKey({ d, orgId, siteId, domain, admin }: { d: CrawlerData; orgId: s
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <StatusBadge tone={push.enabled ? 'good' : 'neutral'}>{push.enabled ? `Key ${push.prefix}… active` : 'No push key'}</StatusBadge>
+        <StatusBadge tone={push.enabled ? 'good' : 'neutral'}>{push.enabled ? `Key ${push.prefix}... active` : 'No push key'}</StatusBadge>
         {push.lastPushAt && <span className="text-[13px] text-ink-3">Last push {fmtAgo(push.lastPushAt)} · {n(push.pushes24h)} in 24 hours</span>}
         <GuideButton id="crawler-logs-cloudflare" label="Cloudflare Logpush" vars={vars} />
         <GuideButton id="crawler-logs-drain" label="Vercel, Fastly, Akamai" vars={vars} />
@@ -204,8 +204,8 @@ export function IngestTable({ items }: { items: LogIngestView[] }) {
     { key: 'source', header: 'From', cell: (r) => <span className="text-ink">{r.source === 'push' ? 'Push' : r.fileName || 'Upload'}</span> },
     { key: 'status', header: 'Status', cell: (r) => <StatusBadge tone={STATUS[r.status].tone}>{STATUS[r.status].label}</StatusBadge> },
     { key: 'format', header: 'Format', hideOnMobile: true, cell: (r) => <span className="text-ink-2">{FORMAT_LABEL[r.format]}</span> },
-    { key: 'lines', header: 'Lines', align: 'right', sortValue: (r) => r.stats?.lines ?? 0, cell: (r) => <span className="tabular">{r.stats ? n(r.stats.lines) : '–'}</span> },
-    { key: 'bots', header: 'Crawler requests', align: 'right', sortValue: (r) => r.stats?.bots ?? 0, cell: (r) => <span className="tabular">{r.stats ? n(r.stats.bots) : '–'}</span> },
+    { key: 'lines', header: 'Lines', align: 'right', sortValue: (r) => r.stats?.lines ?? 0, cell: (r) => <span className="tabular">{r.stats ? n(r.stats.lines) : '-'}</span> },
+    { key: 'bots', header: 'Crawler requests', align: 'right', sortValue: (r) => r.stats?.bots ?? 0, cell: (r) => <span className="tabular">{r.stats ? n(r.stats.bots) : '-'}</span> },
     {
       key: 'note',
       header: 'Notes',
@@ -254,7 +254,7 @@ export function CrawlerSetup({ d, orgId, siteId, domain, admin, member, onUpload
           <div className="space-y-4">
             <Retention d={d} orgId={orgId} siteId={siteId} admin={admin} />
             <p className="text-[13px] leading-relaxed text-ink-2">
-              Stored per crawler request: time, path and parameter names (never their values), status, size, response time, which crawler, and whether it was proved. No address is kept — for a request that was not proved only its network (/24 or /48), so a spoofer can be blocked.
+              Stored per crawler request: time, path and parameter names (never their values), status, size, response time, which crawler, and whether it was proved. No address is kept. For a request that was not proved, only its network (/24 or /48) is kept, so a spoofer can be blocked.
             </p>
             {admin && <DeleteData orgId={orgId} siteId={siteId} domain={domain} />}
           </div>

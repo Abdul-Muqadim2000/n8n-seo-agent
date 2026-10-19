@@ -6,8 +6,8 @@ import { DownFlow, Fan } from './Fan';
 
 const QUESTIONS = ['Best invoicing software for small teams?', 'How do I automate invoice approvals?', 'Which tools integrate with our ERP?'];
 const METRICS = [
-  { label: 'Mention rate', value: '34%', range: '27–41%' },
-  { label: 'Citation rate', value: '19%', range: '13–26%' },
+  { label: 'Mention rate', value: '34%', range: '27-41%' },
+  { label: 'Citation rate', value: '19%', range: '13-26%' },
   { label: 'Share of voice', value: '22%', range: '#2 of 5' },
 ];
 

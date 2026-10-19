@@ -46,7 +46,7 @@ export async function v1Ctx(req: FastifyRequest): Promise<V1Ctx> {
     if (!a) throw new HttpError(401, 'This API key is not valid: it is unknown, revoked or expired', 'api_key_invalid');
     return { org: a.org, auth: 'api_key', key: a.key, scopes: scopesOf(a.key.scopes), req };
   }
-  if (!req.user) throw new HttpError(401, 'Send a company API key (Authorization: Bearer asc_…) or sign in', 'unauthorized');
+  if (!req.user) throw new HttpError(401, 'Send a company API key (Authorization: Bearer asc_...) or sign in', 'unauthorized');
   const orgId = req.headers['x-org-id'] ?? (req.query as { org?: string }).org;
   if (!orgId) throw badRequest('Name the company with the X-Org-Id header', undefined, 'org_missing');
   const a = await orgAccess(req, Array.isArray(orgId) ? orgId[0] : orgId);
@@ -100,11 +100,11 @@ const ENDPOINTS = [
   'POST /api/v1/mcp',
 ];
 
-/** G4 + G1: who the audit log names for a write through the API — the key's creator "via API key <name>", or the signed-in person */
+/** G4 + G1: who the audit log names for a write through the API, the key's creator "via API key <name>", or the signed-in person */
 const apiActor = (ctx: V1Ctx, a: { user: { id: string; email: string } }) => ({
   type: 'user' as const,
   userId: a.user.id,
-  label: ctx.key ? `${a.user.email} via API key ${ctx.key.name} (${ctx.key.prefix}…)` : a.user.email,
+  label: ctx.key ? `${a.user.email} via API key ${ctx.key.name} (${ctx.key.prefix}...)` : a.user.email,
 });
 
 // ---------------- MCP (Streamable HTTP, JSON answers only) over the same handlers ----------------
@@ -141,7 +141,7 @@ const TOOLS: Tool[] = [
   {
     name: 'get_crawler_activity',
     description:
-      "What Googlebot, Bingbot and the AI crawlers (GPTBot, ClaudeBot, PerplexityBot, ChatGPT-User …) actually requested on one verified website, from its own access logs: requests per crawler and day with how many were proved by the vendor's IP list or DNS, spoofed crawlers counted apart, pages Google or AI did not fetch, crawl budget spent on redirects / errors / parameter URLs, pages AI assistants fetched because a person asked, response times. days: 7, 30 or 90.",
+      "What Googlebot, Bingbot and the AI crawlers (GPTBot, ClaudeBot, PerplexityBot, ChatGPT-User ...) actually requested on one verified website, from its own access logs: requests per crawler and day with how many were proved by the vendor's IP list or DNS, spoofed crawlers counted apart, pages Google or AI did not fetch, crawl budget spent on redirects / errors / parameter URLs, pages AI assistants fetched because a person asked, response times. days: 7, 30 or 90.",
     inputSchema: { type: 'object', properties: { websiteId: { type: 'string' }, days: { type: 'integer', enum: [7, 30, 90] } }, required: ['websiteId'] },
     run: (c, a) => getCrawlers(c, a.websiteId, a),
   },
@@ -238,7 +238,7 @@ async function mcp(ctx: V1Ctx, msg: Rpc): Promise<unknown | null> {
       return ok({
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'alaventra', title: `${config.brand} — ${ctx.org.name}`, version: '1.0.0' },
+        serverInfo: { name: 'alaventra', title: `${config.brand}: ${ctx.org.name}`, version: '1.0.0' },
         instructions: ctx.scopes.includes('run')
           ? `Access to ${ctx.org.name}'s SEO data (websites, audits and findings, crawler activity from server logs, analyses, reports, a free publish check) and to starting analyses with the company's credits. Before start_run, call preview_run: it shows the quote in credits and any duplicate warning. Never acknowledge a warning the user has not seen.`
           : `Read-only access to ${ctx.org.name}'s SEO data: websites, technical audits and their findings, crawler activity from server logs, analyses, reports, and a free publish check. This key cannot start a run or change a setting.`,
@@ -383,7 +383,7 @@ export async function apiV1Routes(app: FastifyInstance) {
     // DNS-rebinding guard of the MCP spec: a browser page of another origin may not drive it
     const origin = req.headers.origin;
     if (origin && origin !== new URL(config.appUrl).origin) throw new HttpError(403, 'This origin may not use the MCP endpoint', 'origin_refused');
-    if (!triesBearer(req.headers.authorization)) throw new HttpError(401, 'The MCP endpoint takes a company API key (Authorization: Bearer asc_…)', 'unauthorized');
+    if (!triesBearer(req.headers.authorization)) throw new HttpError(401, 'The MCP endpoint takes a company API key (Authorization: Bearer asc_...)', 'unauthorized');
     const ctx = await v1Ctx(req);
     if (Array.isArray(req.body)) return reply.send(rpcError(null, -32600, 'Batches are not supported'));
     const out = await mcp(ctx, req.body as Rpc);
@@ -391,7 +391,7 @@ export async function apiV1Routes(app: FastifyInstance) {
     return reply.header('content-type', 'application/json').send(out);
   });
 
-  // ---- the company's API keys (session only: Company settings → API access) ----
+  // ---- the company's API keys (session only: Company settings -> API access) ----
   app.get('/api/orgs/:orgId/api-keys', async (req) => {
     const a = await orgAccess(req, (req.params as Args).orgId, 'admin');
     return { items: await listKeys(a.org.id), max: API_KEY.maxLive };
@@ -400,7 +400,7 @@ export async function apiV1Routes(app: FastifyInstance) {
     const a = await orgAccess(req, (req.params as Args).orgId, 'admin');
     const b = parse(apiKeyCreateSchema, req.body ?? {});
     const { key, token } = await createKey({ org: a.org, user: a.user, name: b.name, scopes: b.scopes, expiresInDays: b.expiresInDays });
-    await audit(req, a.org.id, { action: 'apikey.created', target: { type: 'api_key', id: key.id, label: `${key.name} (${key.prefix}…)` }, details: { scopes: key.scopes, expiresAt: key.expiresAt } });
+    await audit(req, a.org.id, { action: 'apikey.created', target: { type: 'api_key', id: key.id, label: `${key.name} (${key.prefix}...)` }, details: { scopes: key.scopes, expiresAt: key.expiresAt } });
     return { ...key, token };
   });
   app.delete('/api/orgs/:orgId/api-keys/:keyId', async (req) => {
@@ -408,11 +408,11 @@ export async function apiV1Routes(app: FastifyInstance) {
     const a = await orgAccess(req, p.orgId, 'admin');
     if (!isUuid(p.keyId)) throw notFound('API key not found');
     const k = await revokeKey(a.org.id, p.keyId);
-    await audit(req, a.org.id, { action: 'apikey.revoked', target: { type: 'api_key', id: k.id, label: `${k.name} (${k.prefix}…)` } });
+    await audit(req, a.org.id, { action: 'apikey.revoked', target: { type: 'api_key', id: k.id, label: `${k.name} (${k.prefix}...)` } });
     return k;
   });
 
-  // ---- B3-7 in the app: Content → "Check a page before you publish" (member, verified website) ----
+  // ---- B3-7 in the app: Content -> "Check a page before you publish" (member, verified website) ----
   app.post('/api/orgs/:orgId/sites/:siteId/publish-check', { config: perCheck, bodyLimit: 2 * 1024 * 1024 }, async (req, reply) => {
     const p = req.params as Args;
     const a = await siteAccess(req, p.orgId, p.siteId, 'member');

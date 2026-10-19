@@ -4,13 +4,13 @@ import { inSource, isCloudflareIp, isPrivateIp } from './ranges';
 
 /**
  * Is a request that calls itself a crawler really that crawler? (app/docs/LOG_ANALYTICS.md §3) Never the user agent alone:
- *  1. the vendor's published IP list — on it: verified;
- *  2. otherwise, for vendors that document it (Google, Bing, Apple, Amazon, Yandex), forward-confirmed reverse DNS — the address's
+ *  1. the vendor's published IP list, on it: verified;
+ *  2. otherwise, for vendors that document it (Google, Bing, Apple, Amazon, Yandex), forward-confirmed reverse DNS, the address's
  *     name ends in the vendor's domain and that name resolves back to the same address: verified; a name elsewhere: spoofed;
  *  3. a vendor with a list and no DNS rule, and the address is not on the list: spoofed;
  *  4. a vendor that publishes no way to check (Bytespider, Meta, SEO tools, unknown bots): claimed;
  *  5. no address, a private or CDN address (the server logged its proxy), DNS that did not answer, or the per-ingest DNS budget
- *     spent: unchecked — never "spoofed" on missing evidence.
+ *     spent: unchecked, never "spoofed" on missing evidence.
  */
 
 export interface Dns {

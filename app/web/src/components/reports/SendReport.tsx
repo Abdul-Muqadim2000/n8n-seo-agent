@@ -6,7 +6,7 @@ import { useOrgCtx } from '@/lib/context';
 import { useDeliverReport } from '@/lib/queries';
 
 /**
- * B-R1: "Send it now" — this one report, to the channels the company already set up, without waiting for the schedule.
+ * B-R1: "Send it now": this one report, to the channels the company already set up, without waiting for the schedule.
  *
  * It offers no override. The server runs the same readiness decision as an automatic delivery, so a page that failed its quality
  * check or a report built on evidence the engine could not read comes back with the reason instead of going out. That is the point:
@@ -21,7 +21,7 @@ export function SendReport({ reportId }: { reportId: string }) {
     try {
       const res = await deliver.mutateAsync(reportId);
       if (res.delivered) toast.success('Sent');
-      else toast.error(res.reason || 'Nothing was sent — check Settings → Report delivery.');
+      else toast.error(res.reason || 'Nothing was sent. Check Settings, then Report delivery.');
     } catch (e) {
       toast.error(errorMessage(e));
     }

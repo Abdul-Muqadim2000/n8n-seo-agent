@@ -3,9 +3,9 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // G4 (app/docs/INTEGRATIONS.md) end to end against a real Postgres: the migrations, the real app with its sessions, CSRF, roles and
-// API keys, the company lock and the budget — with only the network replaced (the SEO engine's front door and Data Tables, and every
+// API keys, the company lock and the budget, with only the network replaced (the SEO engine's front door and Data Tables, and every
 // vendor through lib/netGuard.ts `transport`). Run it against a throwaway database:
-//   G4_DB_TEST=1 DATABASE_URL=postgres://… npx vitest run test/integrations.pg.test.ts
+//   G4_DB_TEST=1 DATABASE_URL=postgres://... npx vitest run test/integrations.pg.test.ts
 // Without G4_DB_TEST it is skipped (the unit tests cover the rules and the vendor request shapes without a database).
 
 const DB = process.env.G4_DB_TEST === '1';
@@ -142,7 +142,7 @@ describe.skipIf(!DB)('G4 integrations (real database)', () => {
       expect(ok.statusCode).toBe(201);
     });
 
-    it('a read key cannot, and another company’s website is not found', async () => {
+    it('a read key cannot, and another company\'s website is not found', async () => {
       expect((await withKey(keys.reader!, 'POST', '/api/v1/runs', audit())).json().code).toBe('scope_missing');
       expect((await withKey(keys.runner!, 'POST', '/api/v1/runs', { ...audit(), websiteId: ids.site2 })).statusCode).toBe(404);
     });
@@ -161,7 +161,7 @@ describe.skipIf(!DB)('G4 integrations (real database)', () => {
       expect([c.statusCode, c.json().code]).toEqual([422, 'idempotency_mismatch']);
     });
 
-    it('the budget is the app’s own: a run over it is 402 and nothing starts', async () => {
+    it('the budget is the app\'s own: a run over it is 402 and nothing starts', async () => {
       await finishRuns();
       await db.update(schema.organizations).set({ monthlyBudgetUsd: 0.01 }).where((await import('drizzle-orm')).eq(schema.organizations.id, ids.org1!));
       const before = st.starts.length;
@@ -300,7 +300,7 @@ describe.skipIf(!DB)('G4 integrations (real database)', () => {
 
   // ------------------------------------------------------------------ G1's audit log
   describe('audit log', () => {
-    it('every G4 write is recorded with who did it — an API run names the key — and only with known actions', async () => {
+    it('every G4 write is recorded with who did it, an API run names the key, and only with known actions', async () => {
       const { AUDIT_ACTIONS } = await import('@seo/shared');
       const rows = await db.query.auditEvents.findMany({ where: (t, o) => o.eq(t.orgId, ids.org1!) });
       const by = (a: string) => rows.filter((r) => r.action === a);
@@ -323,7 +323,7 @@ describe.skipIf(!DB)('G4 integrations (real database)', () => {
       const body = { kind: 's3', name: 'R2', provider: 'r2', accountId: 'f'.repeat(32), bucket: 'nw-seo', prefix: 'alaventra', accessKeyId: 'AKIDTEST1234', secretAccessKey: 'super-secret-access-key', tables: ['rank_history', 'runs'], format: 'ndjson' };
       const c = await as('admin', 'POST', `/api/orgs/${ids.org1}/integrations/exports`, body);
       expect(c.statusCode).toBe(200);
-      expect(c.json().secretHint).toBe('key AKID…1234');
+      expect(c.json().secretHint).toBe('key AKID...1234');
       expect(st.sent[0]!.url).toMatch(/^https:\/\/f{32}\.r2\.cloudflarestorage\.com\/nw-seo\/alaventra\/_alaventra\/dt%3D/);
       st.sent.length = 0;
       const run = await as('admin', 'POST', `/api/orgs/${ids.org1}/integrations/${c.json().id}/run`);

@@ -104,7 +104,7 @@ function CapabilityMatrix() {
 export default function SolutionsPage() {
   useSeo({
     title: 'Solutions',
-    description: 'Alaventra for agencies, in-house marketing teams, B2B and SaaS companies, local and multi-location businesses and enterprise teams — one weekly SEO loop, shaped to how each team works.',
+    description: 'Alaventra for agencies, in-house marketing teams, B2B and SaaS companies, local and multi-location businesses and enterprise teams, with one weekly SEO loop, shaped to how each team works.',
     path: '/solutions',
   });
   return (

@@ -7,8 +7,8 @@ const keyCost = (k: CostKey) => kc(k, engineCal());
 const estimateRunCost = (m: ModeId, v: Record<string, unknown> = {}) => est(m, v, engineCal());
 
 /**
- * D-2 (re-rating 2026-10-17): the price and the time of one run, for every screen that names a mode — the tools cards, the
- * onboarding launch step, the queue — computed exactly as the tool form and the server's credit check compute them. `MODES[].costUsd` is the
+ * D-2 (re-rating 2026-10-17): the price and the time of one run, for every screen that names a mode, the tools cards, the
+ * onboarding launch step, the queue, computed exactly as the tool form and the server's credit check compute them. `MODES[].costUsd` is the
  * shipped table and `MODES[].etaMinutes` the bare base time; neither may be shown as a run's price or duration.
  */
 export const runCost = (mode: ModeId, values: Record<string, unknown> = {}): number => estimateRunCost(mode, values);
@@ -18,7 +18,7 @@ export const runMinutes = (mode: ModeId, values: Record<string, unknown> = {}): 
  * Prices shown inside sentences, all read from the shared cost table (`@seo/shared` cost.ts, which follows the engine's own
  * calibration) so one run shows one figure on every screen, in credits. Never type a price literal into a component (R99, CONVENTIONS.md).
  */
-// credits (app/docs/CREDITS.md): every sentence names the price in credits — an analysis at its quote, a monthly figure as is
+// credits (app/docs/CREDITS.md): every sentence names the price in credits, an analysis at its quote, a monthly figure as is
 const quote = (n: number) => quoteLabel(n);
 const perMonth = (n: number) => creditsLabel(n);
 

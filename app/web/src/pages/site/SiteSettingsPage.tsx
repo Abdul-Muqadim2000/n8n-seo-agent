@@ -148,7 +148,7 @@ function VerificationTab({ admin }: { admin: boolean }) {
         <div>
           <h2 className="text-[15px] font-semibold text-ink">Confirm that you own {site.domain}</h2>
           <p className="mt-1 text-sm leading-relaxed text-ink-2">
-            We only show a website’s data to the company that owns it. Then connect Search Console and GA4 by adding our read-only service account.
+            We only show a website's data to the company that owns it. Then connect Search Console and GA4 by adding our read-only service account.
           </p>
         </div>
       )}
@@ -331,7 +331,7 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
       <CardBody className="flex-1">
         <KeyValue
           items={[
-            { label: 'Started', value: site.trackingStartedAt ? fmtDate(site.trackingStartedAt) : '–' },
+            { label: 'Started', value: site.trackingStartedAt ? fmtDate(site.trackingStartedAt) : '-' },
             { label: 'Last report', value: t.lastRunAt ? `${fmtAgo(t.lastRunAt)}${t.lastStatus ? ` · ${t.lastStatus}` : ''}` : 'None yet' },
             { label: 'Search Console', value: t.gscProperty ?? site.gscProperty ?? <span className="text-warning-text">not connected</span> },
             { label: 'GA4 property', value: t.ga4PropertyId || site.ga4PropertyId || <span className="text-ink-3">detected automatically</span> },
@@ -508,7 +508,7 @@ function MonitorsCard({
 }
 
 /**
- * B7-5 (W3-D's engine half): the website's page groups — blog, services, product — each a pattern over the page address. The weekly
+ * B7-5 (W3-D's engine half): the website's page groups, blog, services, product, each a pattern over the page address. The weekly
  * site report then shows each group's clicks against the 28 days before, judged on the same bar as every alert, with the pages in no
  * group on a line of their own. Stored in the engine (Site Admin `content_groups`); an empty list clears them.
  */
@@ -543,7 +543,7 @@ function ContentGroupsCard({ initial, admin }: { initial: ContentGroup[]; admin:
       <CardHeader
         icon={<HeaderTile icon={<FolderTree />} />}
         title="Content groups"
-        description="Group your pages — blog, services, product — and the weekly report shows how each group does in Google search, judged on the same bar as every alert. A page can sit in more than one group."
+        description="Group your pages (blog, services, product) and the weekly report shows how each group does in Google search, judged on the same bar as every alert. A page can sit in more than one group."
       />
       <CardBody className="space-y-3">
         {rows.length === 0 && <p className="text-sm text-ink-2">No groups yet. The weekly report shows the site as a whole.</p>}
@@ -662,7 +662,7 @@ function DangerTab() {
       </CardBody>
       <CardFooter className="rounded-b-xl border-critical/25 bg-critical-soft/40">
         <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => setOpen(true)}>
-          Delete website…
+          Delete website...
         </Button>
       </CardFooter>
       <Dialog

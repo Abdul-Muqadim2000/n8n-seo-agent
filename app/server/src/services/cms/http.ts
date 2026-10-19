@@ -11,7 +11,7 @@ import { publicLookup } from '../verify';
  * The SSRF guard is two layers deep. The address must pass `cmsUrlOk` (https, a public host name, no credentials in the URL) and the
  * connection's DNS lookup is pinned to public addresses (`publicLookup` from verify.ts: the address that was checked is the address
  * connected to, so a DNS answer that changes between the check and the connect cannot reach the network inside). Redirects are not
- * followed — a CMS that answers 3xx is reported with where it points, so the customer types that address instead. Bodies are capped.
+ * followed, a CMS that answers 3xx is reported with where it points, so the customer types that address instead. Bodies are capped.
  */
 
 export interface CmsHttpRequest {

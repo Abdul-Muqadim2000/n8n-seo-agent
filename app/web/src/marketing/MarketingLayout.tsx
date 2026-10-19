@@ -4,7 +4,7 @@ import { SiteFooter } from './components/SiteFooter';
 import { SiteHeader } from './components/SiteHeader';
 import './marketing.css';
 
-/** New page → top of the page (or the #hash target). */
+/** New page to top of the page (or the #hash target). */
 function useScrollToTop() {
   const { pathname, hash } = useLocation();
   useEffect(() => {

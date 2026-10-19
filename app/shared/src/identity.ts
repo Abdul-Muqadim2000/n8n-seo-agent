@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * G1 (2026-10-17): enterprise identity — two-step verification, step-up, the company security policy, sessions, SSO, SCIM and the
+ * G1 (2026-10-17): enterprise identity, two-step verification, step-up, the company security policy, sessions, SSO, SCIM and the
  * audit log. Design: `app/docs/IDENTITY.md`. This file holds what the server and the web app share: limits, request schemas, answer
  * types and the pure rules, unit-tested once in `identity.test.ts`. Anything that needs node:crypto lives in the server.
  */
@@ -41,13 +41,13 @@ export const cleanTotpCode = (v: unknown): string => (typeof v === 'string' ? v.
 export const isTotpCode = (v: unknown): boolean => CODE_RE.test(cleanTotpCode(v));
 
 const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-/** a recovery code as typed → its canonical form (upper case, no separators, 0/1/8 read as O/I/B), or '' when it cannot be one */
+/** a recovery code as typed -> its canonical form (upper case, no separators, 0/1/8 read as O/I/B), or '' when it cannot be one */
 export function normalizeRecoveryCode(v: unknown): string {
   if (typeof v !== 'string') return '';
   const s = v.toUpperCase().replace(/[\s-]/g, '').replace(/0/g, 'O').replace(/1/g, 'I').replace(/8/g, 'B');
   return s.length === MFA.recoveryLength && [...s].every((c) => B32.includes(c)) ? s : '';
 }
-/** canonical → shown in groups of four ("ABCD-EFGH-IJKL-MNOP") */
+/** canonical -> shown in groups of four ("ABCD-EFGH-IJKL-MNOP") */
 export const formatRecoveryCode = (canonical: string): string => canonical.match(/.{1,4}/g)?.join('-') ?? canonical;
 
 export const mfaVerifySchema = z.discriminatedUnion('method', [
@@ -72,7 +72,7 @@ export interface PasskeyView {
   name: string;
   createdAt: string;
   lastUsedAt: string | null;
-  /** synced across the person's devices (iCloud Keychain, Google Password Manager…) or bound to one device / security key */
+  /** synced across the person's devices (iCloud Keychain, Google Password Manager...) or bound to one device / security key */
   synced: boolean;
 }
 
@@ -93,7 +93,7 @@ export interface MfaStatus {
 export interface TotpEnrolment {
   /** base32, for typing into the app by hand */
   secret: string;
-  /** otpauth://totp/… — what the QR code holds */
+  /** otpauth://totp/..., what the QR code holds */
   uri: string;
   /** the QR code as an SVG document (rendered as an <img> data URI) */
   qrSvg: string;
@@ -107,10 +107,10 @@ export interface MfaChallenge {
   emailHint: string;
 }
 
-/** "a…e@example.com" */
+/** "a...e@example.com" */
 export function maskEmail(email: string): string {
   const [local = '', domain = ''] = email.split('@');
-  const shown = local.length <= 2 ? local.slice(0, 1) : `${local[0]}…${local[local.length - 1]}`;
+  const shown = local.length <= 2 ? local.slice(0, 1) : `${local[0]}...${local[local.length - 1]}`;
   return domain ? `${shown}@${domain}` : shown;
 }
 
@@ -138,7 +138,7 @@ export const AUDIT_RETENTION_CHOICES = [30, 90, 180, 365, 730, 1095, 2555] as co
 export interface SecurityPolicy {
   /** every member must use two-step verification to see anything of the company */
   requireMfa: boolean;
-  /** a Google sign-in counts as two-step (Google's own 2-Step Verification — which we cannot see — is then the company's to enforce) */
+  /** a Google sign-in counts as two-step (Google's own 2-Step Verification, which we cannot see, is then the company's to enforce) */
   mfaTrustGoogle: boolean;
   /** a sign-in through this company's own identity provider counts as two-step (the IdP enforces its own MFA) */
   mfaTrustSso: boolean;
@@ -171,7 +171,7 @@ export const securityPolicySchema = z.object({
     .refine((v) => (AUDIT_RETENTION_CHOICES as readonly number[]).includes(v), 'Choose one of the offered periods'),
 });
 
-/** the stored jsonb → a complete policy (unknown keys dropped, missing or invalid ones at their defaults) */
+/** the stored jsonb -> a complete policy (unknown keys dropped, missing or invalid ones at their defaults) */
 export function policyOf(raw: unknown): SecurityPolicy {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const out = { ...DEFAULT_SECURITY_POLICY };
@@ -274,7 +274,7 @@ export const FREE_MAIL_DOMAINS = [
 ] as const;
 
 const DOMAIN_RE = /^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
-/** "Example.COM." / "@example.com" / "https://example.com/" → "example.com", or '' when it is not a domain */
+/** "Example.COM." / "@example.com" / "https://example.com/" -> "example.com", or '' when it is not a domain */
 export function cleanEmailDomain(v: unknown): string {
   if (typeof v !== 'string') return '';
   const d = v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^@/, '').replace(/[/?#].*$/, '').replace(/\.$/, '');
@@ -315,7 +315,7 @@ export const ssoConnectionSchema = z
       .optional(),
     saml: z
       .object({
-        entityId: z.string().trim().min(1, 'Enter the identity provider’s entity ID (issuer)').max(500),
+        entityId: z.string().trim().min(1, 'Enter the identity provider\'s entity ID (issuer)').max(500),
         ssoUrl: httpsUrl,
         /** empty = keep the stored certificates */
         certificates: z.array(z.string().trim().min(40, 'Paste the whole certificate').max(20_000)).max(SSO.maxCerts).default([]),
@@ -407,8 +407,8 @@ export function scimBearer(header: unknown): string | null {
 }
 
 /**
- * The SCIM filters identity providers send (RFC 7644 §3.4.2.2), `attr eq "value"` only — Okta sends `userName eq "a@b.c"`, Entra ID
- * `userName eq "a@b.c"` / `externalId eq "…"`, groups by `displayName eq "…"`. Anything else is refused (`invalidFilter`) rather than
+ * The SCIM filters identity providers send (RFC 7644 §3.4.2.2), `attr eq "value"` only, Okta sends `userName eq "a@b.c"`, Entra ID
+ * `userName eq "a@b.c"` / `externalId eq "..."`, groups by `displayName eq "..."`. Anything else is refused (`invalidFilter`) rather than
  * answered wrongly.
  */
 export function parseScimFilter(filter: unknown): { attr: string; value: string } | null | 'invalid' {
@@ -422,7 +422,7 @@ export function parseScimFilter(filter: unknown): { attr: string; value: string 
   return a ? { attr: a, value: m[2].replace(/\\(.)/g, '$1') } : 'invalid';
 }
 
-/** "False" / "false" / false → false (Entra ID sends booleans as strings in PATCH) */
+/** "False" / "false" / false -> false (Entra ID sends booleans as strings in PATCH) */
 export const scimBool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : typeof v === 'string' && /^(true|false)$/i.test(v) ? v.toLowerCase() === 'true' : undefined);
 
 export interface ScimTokenView {

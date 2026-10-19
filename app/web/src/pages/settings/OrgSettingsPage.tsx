@@ -47,19 +47,19 @@ import { BrandingTab, ClientMailTab, PortalDomainTab } from './_components/Agenc
 import { CreditsTab } from './_components/credits/CreditsTab';
 
 const TABS = [
-  { id: 'company', label: 'Company', description: 'Your company’s details, websites and setup.' },
-  { id: 'team', label: 'Team', description: 'Who can see and change your company’s SEO work.' },
+  { id: 'company', label: 'Company', description: 'Your company\'s details, websites and setup.' },
+  { id: 'team', label: 'Team', description: 'Who can see and change your company\'s SEO work.' },
   { id: 'credits', label: 'Credits', description: 'Your credit balance, what your websites and analyses use, buying credits and your own limits.' },
   { id: 'delivery', label: 'Report delivery', description: 'Where your finished reports are sent, and on what schedule.' },
   { id: 'mailboxes', label: 'Mailboxes', description: 'The mailboxes link-building pitches go out from, and your opt-out list.' },
-  { id: 'api', label: 'API access', description: 'Keys that let a script, a BI tool or an AI assistant read your data — and, if you allow it, start analyses.' },
+  { id: 'api', label: 'API access', description: 'Keys that let a script, a BI tool or an AI assistant read your data and, if you allow it, start analyses.' },
   { id: 'integrations', label: 'Integrations', description: 'Slack and Teams alerts, Jira / Linear / Asana tickets, exports to your warehouse, Looker Studio and AI assistants.' },
   { id: 'security', label: 'Security', description: 'Two-step verification for everyone, who has it, and how long records are kept.' },
   { id: 'sso', label: 'Single sign-on', description: 'Sign in through your identity provider (Okta, Entra ID, Google Workspace), on your own e-mail domains.' },
   { id: 'audit', label: 'Audit log', description: 'Who did what, when and from where: sign-ins, team, settings, keys and sharing.' },
   // G5: an agency's portal for its clients, and a client workspace's own branding and approval rule
   { id: 'branding', label: 'Branding', description: 'The name, logo and colour your clients see instead of ours.', kinds: ['agency', 'client'] },
-  { id: 'portal', label: 'Portal address', description: 'Your clients’ portal on your own domain, such as seo.youragency.com.', kinds: ['agency'] },
+  { id: 'portal', label: 'Portal address', description: 'Your clients\' portal on your own domain, such as seo.youragency.com.', kinds: ['agency'] },
   { id: 'client-mail', label: 'Client e-mail', description: 'Who e-mails to your clients come from, and where their replies go.', kinds: ['agency'] },
 ] as const satisfies readonly { id: string; label: string; description: string; kinds?: readonly OrgKind[] }[];
 const tabShown = (t: (typeof TABS)[number], kind: OrgKind) => !('kinds' in t) || (t.kinds as readonly OrgKind[]).includes(kind);
@@ -69,11 +69,11 @@ const ROLE_DESCRIPTIONS: Record<Role, string> = {
   admin: 'Websites, website settings and the team. Starts analyses.',
   member: 'Starts analyses and sees every dashboard and report.',
   viewer: 'Sees dashboards and reports. Cannot start analyses.',
-  client_approver: 'The client’s portal: dashboards, reports and recommendations, and approves pages and outreach.',
-  client_viewer: 'The client’s portal: dashboards, reports and recommendations. Read only.',
+  client_approver: 'The client\'s portal: dashboards, reports and recommendations, and approves pages and outreach.',
+  client_viewer: 'The client\'s portal: dashboards, reports and recommendations. Read only.',
 };
 
-const sizeLabel = (s: string) => (s === 'Just me' ? s : `${s.replace('-', '–')} people`);
+const sizeLabel = (s: string) => (s === 'Just me' ? s : `${s.replace('-', '-')} people`);
 
 export default function OrgSettingsPage() {
   const { tab } = useParams();
@@ -285,13 +285,13 @@ function DeleteCompanyCard() {
       <CardBody className="space-y-2 text-sm leading-relaxed text-ink-2">
         <p>
           Deleting <strong className="font-medium text-ink">{org.name}</strong> stops the weekly tracking, monitors and blog posts of its{' '}
-          {sites.length === 1 ? 'website' : `${sites.length} websites`} and deletes every run, report and file in this app, along with the team’s access. The SEO engine’s
+          {sites.length === 1 ? 'website' : `${sites.length} websites`} and deletes every run, report and file in this app, along with the team's access. The SEO engine's
           own history of the websites stays.
         </p>
       </CardBody>
       <CardFooter className="rounded-b-xl border-critical/25 bg-critical-soft/40">
         <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => setOpen(true)}>
-          Delete company…
+          Delete company...
         </Button>
       </CardFooter>
       <Dialog
@@ -475,7 +475,7 @@ function TeamTab() {
         title={`Members (${list.length})`}
         description={
           org.kind === 'client'
-            ? 'The client’s own people see this workspace as their portal. Your agency’s owners and admins reach it already; give other agency members access from the agency’s Clients page.'
+            ? 'The client\'s own people see this workspace as their portal. Your agency\'s owners and admins reach it already; give other agency members access from the agency\'s Clients page.'
             : 'Everyone here sees all websites of the company. What they can change depends on their role.'
         }
         actions={
@@ -487,7 +487,7 @@ function TeamTab() {
         }
       >
         <CardBody>
-          <DataTable rows={list} columns={columns} rowKey={(m) => m.userId} initialSort={{ key: 'role', dir: 'asc' }} searchable={list.length > 8} searchPlaceholder="Search members…" />
+          <DataTable rows={list} columns={columns} rowKey={(m) => m.userId} initialSort={{ key: 'role', dir: 'asc' }} searchable={list.length > 8} searchPlaceholder="Search members..." />
           <h3 className="mt-6 mb-2.5 text-xs font-medium text-ink-3">What each role can do</h3>
           <dl className="grid gap-2.5 sm:grid-cols-2">
             {(org.kind === 'client' ? CLIENT_ROLES : (['owner', 'admin', 'member', 'viewer'] as const)).map((r) => (
@@ -528,7 +528,7 @@ function TeamTab() {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
-                      <span className="text-xs text-ink-3">Invited by {i.invitedBy ?? '–'}</span>
+                      <span className="text-xs text-ink-3">Invited by {i.invitedBy ?? '-'}</span>
                       {admin ? (
                         <Button
                           variant="ghost"

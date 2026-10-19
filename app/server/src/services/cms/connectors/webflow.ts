@@ -56,7 +56,7 @@ export const webflow: CmsConnector = {
     const res = await cmsRequest({ method: 'GET', url: col(c), headers: headers(c) });
     if (res.status === 401) return { ok: false, message: 'Webflow refused the API token. Create a site API token with CMS read and write access and paste it again.' };
     if (res.status === 403) return { ok: false, message: 'The API token may not read this collection: give it CMS read and write access.' };
-    if (res.status === 404) return { ok: false, message: 'Webflow has no collection with this id for this token. Copy the collection id from the collection’s settings in the Designer.' };
+    if (res.status === 404) return { ok: false, message: 'Webflow has no collection with this id for this token. Copy the collection id from the collection\'s settings in the Designer.' };
     if (res.status < 200 || res.status >= 300) return { ok: false, message: `Webflow answered ${res.status} when asked for the collection.` };
     const j = obj(res.json);
     const remoteFields: CmsRemoteField[] = (Array.isArray(j.fields) ? j.fields : [])

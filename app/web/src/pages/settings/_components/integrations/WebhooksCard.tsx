@@ -28,15 +28,15 @@ import { fmtAgo } from '@/lib/utils';
 import { SettingsCard } from '../SettingsCard';
 
 /**
- * G4 — event webhooks: signed JSON for the customer's own systems, or a Slack / Teams channel. Channel routing is one endpoint per
+ * G4, event webhooks: signed JSON for the customer's own systems, or a Slack / Teams channel. Channel routing is one endpoint per
  * channel, each with its own events and websites (e.g. #seo-alerts gets alerts and failed runs, #seo-wins gets ranking moves).
  */
 
 const GUIDE: Record<WebhookFormat, string> = { json: 'webhook-signature', slack: 'slack-webhook', teams: 'teams-workflow-webhook' };
 const PLACEHOLDER: Record<WebhookFormat, string> = {
   json: 'https://hooks.your-company.com/alaventra',
-  slack: 'https://hooks.slack.com/services/T…/B…/…',
-  teams: 'https://….logic.azure.com/workflows/…',
+  slack: 'https://hooks.slack.com/services/T.../B.../...',
+  teams: 'https://....logic.azure.com/workflows/...',
 };
 const DELIVERY_TONE: Record<WebhookDeliveryView['status'], Tone> = { sent: 'good', pending: 'neutral', failed: 'warning', gave_up: 'critical' };
 const DELIVERY_LABEL: Record<WebhookDeliveryView['status'], string> = { sent: 'Delivered', pending: 'Waiting', failed: 'Will retry', gave_up: 'Gave up' };
@@ -73,7 +73,7 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
     try {
       const r = await create.mutateAsync({ name: name.trim(), format, url: url.trim(), events, websiteIds });
       if (r.secret) setFresh({ name: r.endpoint.name, secret: r.secret });
-      toast.success(`${r.endpoint.name} added — send a test to see it arrive`);
+      toast.success(`${r.endpoint.name} added. Send a test to see it arrive`);
       setAdding(false);
       setName('');
       setUrl('');
@@ -117,7 +117,7 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
     { key: 'eventType', header: 'Event', cell: (d) => WEBHOOK_EVENT_LABELS[d.eventType as WebhookEvent]?.label ?? d.eventType },
     { key: 'status', header: 'Result', cell: (d) => <StatusBadge tone={DELIVERY_TONE[d.status]}>{DELIVERY_LABEL[d.status]}</StatusBadge> },
     { key: 'attempts', header: 'Tries', align: 'right', hideOnMobile: true, cell: (d) => d.attempts },
-    { key: 'lastError', header: 'Why', hideOnMobile: true, cell: (d) => <span className="block max-w-xs truncate text-ink-3" title={d.lastError}>{d.status === 'failed' && d.nextAttemptAt ? `Next try ${fmtAgo(d.nextAttemptAt)}. ` : ''}{d.lastError || '—'}</span> },
+    { key: 'lastError', header: 'Why', hideOnMobile: true, cell: (d) => <span className="block max-w-xs truncate text-ink-3" title={d.lastError}>{d.status === 'failed' && d.nextAttemptAt ? `Next try ${fmtAgo(d.nextAttemptAt)}. ` : ''}{d.lastError || '-'}</span> },
     {
       key: 'again',
       header: '',
@@ -134,7 +134,7 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
     <SettingsCard
       icon={<BellRing />}
       title="Alerts and events"
-      description="Push what happens — finished runs, alerts, new audit findings, ranking moves — to Slack, Microsoft Teams or your own system."
+      description="Push what happens (finished runs, alerts, new audit findings, ranking moves) to Slack, Microsoft Teams or your own system."
       info="Each endpoint gets only the events and websites you pick, so routing is one endpoint per channel. Every event is retried after 1, 5, 30, 120 and 720 minutes before it is given up; an endpoint that keeps failing is switched off with the reason."
       actions={
         !adding && (
@@ -146,7 +146,7 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
     >
       <CardBody className="space-y-5">
         {fresh && (
-          <Callout tone="good" title={`Signing secret for ${fresh.name} — copy it now`} action={<Button size="sm" variant="secondary" onClick={() => setFresh(null)}>Done</Button>}>
+          <Callout tone="good" title={`Signing secret for ${fresh.name}: copy it now`} action={<Button size="sm" variant="secondary" onClick={() => setFresh(null)}>Done</Button>}>
             <p className="mb-2">It is shown this once. Your receiver checks the X-Alaventra-Signature header with it.</p>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <code className="min-w-0 max-w-full break-all rounded-md border bg-surface-2 px-2 py-1 font-mono text-xs">{fresh.secret}</code>
@@ -226,10 +226,10 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
                     <Badge tone="accent">{ep.format === 'json' ? 'Signed JSON' : ep.format === 'slack' ? 'Slack' : 'Teams'}</Badge>
                     {ep.enabled ? <StatusBadge tone={ep.consecutiveFailures ? 'warning' : 'good'}>{ep.consecutiveFailures ? `${ep.consecutiveFailures} failed in a row` : 'On'}</StatusBadge> : <StatusBadge tone="critical">Off</StatusBadge>}
                   </div>
-                  <p className="font-mono text-xs text-ink-3">{`${ep.urlHost} …${ep.urlHint}`}</p>
+                  <p className="font-mono text-xs text-ink-3">{`${ep.urlHost} ...${ep.urlHint}`}</p>
                   <p className="text-[13px] text-ink-2">
                     {ep.events.map((e) => WEBHOOK_EVENT_LABELS[e]?.label ?? e).join(' · ')}
-                    {ep.websiteIds.length ? ` — ${ep.websiteIds.map(siteName).join(', ')}` : ' — every website'}
+                    {ep.websiteIds.length ? ` (${ep.websiteIds.map(siteName).join(', ')})` : ' (every website)'}
                   </p>
                   {ep.disabledReason && <p className="text-[13px] text-critical-text">{ep.disabledReason}</p>}
                   <p className="text-xs text-ink-3">{ep.lastSuccessAt ? `Last delivered ${fmtAgo(ep.lastSuccessAt)}` : 'Nothing delivered yet'}</p>
@@ -284,7 +284,7 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
       </CardBody>
       <CardFooter>
         <p className="text-sm text-ink-3">
-          Up to {WEBHOOKS.maxEndpoints} endpoints. Signed JSON carries X-Alaventra-Signature (HMAC-SHA256 of “timestamp.body”), X-Alaventra-Event and X-Alaventra-Delivery; the log keeps {WEBHOOKS.logDays} days.
+          Up to {WEBHOOKS.maxEndpoints} endpoints. Signed JSON carries X-Alaventra-Signature (HMAC-SHA256 of "timestamp.body"), X-Alaventra-Event and X-Alaventra-Delivery; the log keeps {WEBHOOKS.logDays} days.
         </p>
       </CardFooter>
     </SettingsCard>

@@ -41,7 +41,7 @@ const PRINCIPLES: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Hand,
     title: 'You stay in control',
-    body: 'Auto or Manual for every step and every keyword ladder. On Manual, work waits in “Needs you” until a person approves it, and nothing is published without your team.',
+    body: 'Auto or Manual for every step and every keyword ladder. On Manual, work waits in "Needs you" until a person approves it, and nothing is published without your team.',
   },
   {
     icon: Wallet,
@@ -141,7 +141,7 @@ function Inside() {
   return (
     <Section tone="ink" spacing="lg" aria-labelledby="inside-title">
       <div className="flex flex-wrap items-end justify-between gap-6">
-        <SectionHeading id="inside-title" eyebrow="What’s inside" title="One system, from the first keyword to the Monday report." />
+        <SectionHeading id="inside-title" eyebrow="What's inside" title="One system, from the first keyword to the Monday report." />
         <Reveal>
           <ArrowLink to="/platform" onInk>
             Explore the platform
@@ -244,7 +244,7 @@ export default function AboutPage() {
       <PageHero
         eyebrow="About Alaventra"
         title="Enterprise-grade autonomous SEO."
-        lead="We build the system that runs SEO as a weekly loop — research, content, audits, AI answers and backlinks — so teams spend their time on the decisions that need a person."
+        lead="We build the system that runs SEO as a weekly loop (research, content, audits, AI answers and backlinks) so teams spend their time on the decisions that need a person."
         actions={
           <>
             <ButtonLink to="/platform" size="lg">

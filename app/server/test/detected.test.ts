@@ -4,7 +4,7 @@ import { buildLadders, detectedPages, type LadderSchedule, type LadderSources } 
 import { detectedFeed } from '../src/services/pipeline';
 
 // Phase 4 (publish detection): the weekly site report lists written pages it found live on the website (`detected_published`). The
-// app shows them as published ("We found your page live at …") in the ladder and the pipeline, even before n8n's own rows say so;
+// app shows them as published ("We found your page live at ...") in the ladder and the pipeline, even before n8n's own rows say so;
 // missing or odd fields are ignored (the n8n part is not deployed yet).
 
 const NOW = Date.parse('2026-10-05T12:00:00Z');
@@ -60,7 +60,7 @@ describe('detected pages: ladders and the pipeline', () => {
     expect([page.state, page.publishedUrl, page.publishedAt]).toEqual(['published', 'https://www.techand.ai/peppol-uae/', ago(1)]);
     const ev = d.timeline.find((e) => e.kind === 'published')!;
     expect(ev).toMatchObject({ detected: true, keyword: 'peppol uae', at: ago(1) });
-    expect(ev.text).toBe('We found “peppol uae” live at techand.ai/peppol-uae: spotted automatically by the weekly site check');
+    expect(ev.text).toBe('We found "peppol uae" live at techand.ai/peppol-uae: spotted automatically by the weekly site check');
     expect(d.counts.published).toBe(1);
     // neither the ladder page nor the other post waits to be published any more
     expect(b.waiting.map((w) => w.keyword)).toEqual([]);
@@ -77,11 +77,11 @@ describe('detected pages: ladders and the pipeline', () => {
   it('without detections nothing changes (the published entry is the usual one)', () => {
     const marked = [log({ keyword: 'peppol uae', ladder_id: 'l1', status: 'published', published_url: 'https://techand.ai/peppol-uae', published_at: ago(2) })];
     const d = buildLadders(src({ ladders, logs: marked }), sched, { now: NOW }).details.get('l1')!;
-    expect(d.timeline.find((e) => e.kind === 'published')).toMatchObject({ text: '“peppol uae” published at techand.ai/peppol-uae' });
+    expect(d.timeline.find((e) => e.kind === 'published')).toMatchObject({ text: '"peppol uae" published at techand.ai/peppol-uae' });
     expect(d.timeline.find((e) => e.kind === 'published')?.detected).toBeUndefined();
   });
 
-  it('the pipeline feed: newest first, one per address (www and slashes ignored), with the ladder’s main keyword', () => {
+  it('the pipeline feed: newest first, one per address (www and slashes ignored), with the ladder\'s main keyword', () => {
     const older = detectedPages([{ keyword: 'peppol uae', url: 'https://techand.ai/peppol-uae', ladder_id: 'l1' }], ago(8), 'rep-old');
     const feed = detectedFeed([...older, ...detected], [{ id: 'l1', head: 'e invoicing in uae' }]);
     expect(feed.map((f) => [f.keyword, f.head, f.reportId])).toEqual([

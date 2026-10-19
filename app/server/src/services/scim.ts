@@ -88,7 +88,7 @@ export async function createScimToken(req: FastifyRequest, org: OrgRow, user: Us
   if (Number(live[0]?.n ?? 0) >= SCIM.maxLive) throw new HttpError(409, `This company already has ${SCIM.maxLive} live provisioning tokens. Revoke one first.`, 'scim_token_limit');
   const token = SCIM.prefix + randomToken(32);
   const [row] = await db.insert(schema.scimTokens).values({ orgId: org.id, name, prefix: token.slice(0, 13), tokenHash: sha256(token), createdBy: user.id }).returning();
-  await audit(req, org.id, { action: 'scim.token_created', target: { type: 'scim_token', id: row.id, label: `${name} (${row.prefix}…)` } });
+  await audit(req, org.id, { action: 'scim.token_created', target: { type: 'scim_token', id: row.id, label: `${name} (${row.prefix}...)` } });
   return { ...toTokenView(row, user.name), token };
 }
 
@@ -99,7 +99,7 @@ export async function revokeScimToken(req: FastifyRequest, org: OrgRow, id: stri
     .where(and(eq(schema.scimTokens.orgId, org.id), eq(schema.scimTokens.id, id)))
     .returning();
   if (!row) throw notFound('Token not found');
-  await audit(req, org.id, { action: 'scim.token_revoked', target: { type: 'scim_token', id: row.id, label: `${row.name} (${row.prefix}…)` } });
+  await audit(req, org.id, { action: 'scim.token_revoked', target: { type: 'scim_token', id: row.id, label: `${row.name} (${row.prefix}...)` } });
   return toTokenView(row, null);
 }
 
@@ -257,9 +257,9 @@ async function applyUser(req: FastifyRequest, a: ScimAuth, id: string, c: UserCh
   const companyIdentity = (await verifiedDomains(a.org.id)).includes(ssoEmailDomain(x.user.email));
   const userSet: Partial<UserRow> = {};
   if (c.userName && c.userName !== x.user.email) {
-    if (isOwner) throw invalid('The owner’s address cannot be changed by provisioning', 'mutability');
+    if (isOwner) throw invalid('The owner\'s address cannot be changed by provisioning', 'mutability');
     await domainCheck(a.org.id, c.userName);
-    if (!companyIdentity) throw invalid('This account’s address is not on your domain; it cannot be changed by provisioning', 'mutability');
+    if (!companyIdentity) throw invalid('This account\'s address is not on your domain; it cannot be changed by provisioning', 'mutability');
     if (await db.query.users.findFirst({ where: eq(schema.users.email, c.userName) })) throw new ScimError(409, `${c.userName} is taken`, 'uniqueness');
     userSet.email = c.userName;
   }
@@ -332,7 +332,7 @@ export async function patchUser(req: FastifyRequest, a: ScimAuth, id: string, bo
       const [g, ...rest] = (c.name ?? x.user.name).split(' ');
       if (typeof v === 'string') c.name = (p === 'name.givenname' ? [v, ...rest] : [g, v]).filter(Boolean).join(' ').slice(0, 100);
     } else if (p === 'name' && v && typeof v === 'object') Object.assign(c, changesFromBody({ name: v }));
-    // other attributes (title, phone numbers, addresses…) are not kept: accepted and ignored, as RFC 7644 allows for unknown data
+    // other attributes (title, phone numbers, addresses...) are not kept: accepted and ignored, as RFC 7644 allows for unknown data
   }
   await applyUser(req, a, id, c);
   return getUser(a, id);
@@ -350,7 +350,7 @@ export async function deleteUser(req: FastifyRequest, a: ScimAuth, id: string) {
   await audit(req, a.org.id, { action: 'scim.user_deleted', actor: a.actor, target: { type: 'user', id, label: x.user.email }, details: { role: x.m.role } });
 }
 
-// ------------------------------------------------------------------ groups → roles
+// ------------------------------------------------------------------ groups -> roles
 
 async function groupRow(orgId: string, id: string): Promise<ScimGroupRow> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new ScimError(404, 'Group not found');
@@ -551,7 +551,7 @@ export const serviceProviderConfig = () => ({
   changePassword: { supported: false },
   sort: { supported: false },
   etag: { supported: false },
-  authenticationSchemes: [{ type: 'oauthbearertoken', name: 'Bearer token', description: 'A provisioning token from Company settings → Single sign-on', primary: true }],
+  authenticationSchemes: [{ type: 'oauthbearertoken', name: 'Bearer token', description: 'A provisioning token from Company settings > Single sign-on', primary: true }],
   meta: { resourceType: 'ServiceProviderConfig', location: `${base()}/ServiceProviderConfig` },
 });
 

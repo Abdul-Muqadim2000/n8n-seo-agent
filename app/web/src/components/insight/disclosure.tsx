@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { useSurface } from './surface';
 
 /**
- * InfoTip: a small "?" button that shows an explanation — on hover, on keyboard focus and on tap (touch has no hover). Use it for
+ * InfoTip: a small "?" button that shows an explanation: on hover, on keyboard focus and on tap (touch has no hover). Use it for
  * how a number is measured or what a term means; never for the number itself.
  */
 export function InfoTip({ children, label = 'What this means', side = 'top', className }: { children: ReactNode; /** accessible name of the button */ label?: string; side?: 'top' | 'bottom' | 'left' | 'right'; className?: string }) {

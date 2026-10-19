@@ -42,7 +42,7 @@ const CELL: Record<CellState, { label: string; icon: ReactNode; cls: string; hel
   none: { label: 'No answer', icon: <Minus className="size-3.5" aria-hidden />, cls: 'text-ink-3 ring-1 ring-line ring-inset', help: 'The engine gave no answer (e.g. no AI Overview shown)' },
   error: { label: 'Error', icon: <AlertTriangle className="size-3.5" aria-hidden />, cls: 'bg-warning-soft text-warning-text', help: 'The check failed; it is retried next run' },
   monthly: { label: 'Monthly', icon: <CalendarClock className="size-3.5" aria-hidden />, cls: 'text-ink-3 ring-1 ring-line ring-inset', help: 'Asked on the monthly full run; the last result is carried' },
-  unknown: { label: '–', icon: null, cls: 'text-ink-3', help: 'Not asked' },
+  unknown: { label: '-', icon: null, cls: 'text-ink-3', help: 'Not asked' },
 };
 
 export function GridCell({ value, fill }: { value: string | undefined; /** stretch to the cell width (the grid) */ fill?: boolean }) {
@@ -70,7 +70,7 @@ function RateCell({ q }: { q: { winRate: number | null; samples: number; win?: {
     );
   }
   const r = Math.round(w.rate);
-  const range = w.ci ? `${Math.round(w.ci[0])}–${Math.round(w.ci[1])}%` : null;
+  const range = w.ci ? `${Math.round(w.ci[0])}-${Math.round(w.ci[1])}%` : null;
   return (
     <span
       className={cn('inline-flex min-w-[3.25rem] flex-col items-end rounded-md px-2 py-1 tabular', r >= 50 ? 'bg-accent text-accent-ink' : r > 0 ? 'bg-accent-soft text-accent-text' : 'bg-surface-2 text-ink-2')}
@@ -127,7 +127,7 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
               <th scope="col" className="sticky left-0 z-10 min-w-[14rem] border-b border-line bg-surface-2 px-3 py-2 text-left text-xs font-medium text-ink-3">
                 Buyer question
               </th>
-              <th scope="col" className="whitespace-nowrap border-b border-line px-2 py-2 text-right text-xs font-medium text-ink-3" title="Share of this week’s answers to the question that name you (Monday’s run and the daily pulse)">
+              <th scope="col" className="whitespace-nowrap border-b border-line px-2 py-2 text-right text-xs font-medium text-ink-3" title="Share of this week's answers to the question that name you (Monday's run and the daily pulse)">
                 This week
               </th>
               {engines.map((e) => (
@@ -155,7 +155,7 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
                   {q.winRate != null && q.samples ? (
                     <RateCell q={q} />
                   ) : (
-                    <span className="text-xs text-ink-3">–</span>
+                    <span className="text-xs text-ink-3">-</span>
                   )}
                 </td>
                 {engines.map((e) => (
@@ -164,7 +164,7 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
                   </td>
                 ))}
                 <td className="px-3 py-2.5 align-top">
-                  <Chips items={q.competitors} max={3} empty={<span className="text-xs">–</span>} />
+                  <Chips items={q.competitors} max={3} empty={<span className="text-xs">-</span>} />
                 </td>
               </tr>
             ))}
@@ -227,7 +227,7 @@ export function AnswersExplorer({ answers, engineNames }: { answers: readonly An
             <option value="all">All questions</option>
             {prompts.map(([id, p]) => (
               <option key={id} value={id}>
-                {p.length > 70 ? `${p.slice(0, 69)}…` : p}
+                {p.length > 70 ? `${p.slice(0, 69)}...` : p}
               </option>
             ))}
           </Select>
@@ -361,7 +361,7 @@ export function QuestionManager({ prompts }: { prompts: readonly Prompt[] }) {
       .filter(Boolean);
     if (!items.length) return setError('Enter at least one question');
     const short = items.find((s) => s.length < 10);
-    if (short) return setError(`“${short}” is too short: questions need at least 10 characters`);
+    if (short) return setError(`"${short}" is too short: questions need at least 10 characters`);
     const long = items.find((s) => s.length > 300);
     if (long) return setError('Keep each question under 300 characters');
     if (items.length > 15) return setError('Add at most 15 questions at a time');
@@ -371,7 +371,7 @@ export function QuestionManager({ prompts }: { prompts: readonly Prompt[] }) {
       {
         onSuccess: (r) => {
           if (r.ok) {
-            toast.success(`${items.length === 1 ? 'Question' : `${items.length} questions`} added — asked from the next weekly run`);
+            toast.success(`${items.length === 1 ? 'Question' : `${items.length} questions`} added. It is asked from the next weekly run`);
             setDraft('');
           } else toast.error(r.error ?? 'The questions were not saved');
         },
@@ -407,10 +407,10 @@ export function QuestionManager({ prompts }: { prompts: readonly Prompt[] }) {
         </div>
       ),
     },
-    { key: 'kind', header: 'Kind', hideOnMobile: true, sortValue: (p) => p.kind, cell: (p) => (p.kind ? <Kind>{titleCase(p.kind)}</Kind> : '–') },
-    { key: 'stage', header: 'Stage', hideOnMobile: true, sortValue: (p) => p.stage, cell: (p) => <span className="text-[13px] text-ink-2">{p.stage ? titleCase(p.stage) : '–'}</span> },
-    { key: 'volume', header: 'AI searches / mo', align: 'right', hideOnMobile: true, sortValue: (p) => p.volume ?? -1, cell: (p) => <span className="tabular text-[13px]">{p.volume != null ? compactNumber(p.volume) : '–'}</span> },
-    { key: 'source', header: 'Added by', hideOnMobile: true, sortValue: (p) => p.source, cell: (p) => <span className="text-[13px] text-ink-2">{p.origin === 'market' ? 'Real AI question' : p.origin === 'search' ? 'Your Google searches' : p.source === 'custom' || p.origin === 'custom' ? 'You' : /auto|ai|engine|generated|template/i.test(p.source) ? 'Engine' : p.source ? titleCase(p.source) : '–'}</span> },
+    { key: 'kind', header: 'Kind', hideOnMobile: true, sortValue: (p) => p.kind, cell: (p) => (p.kind ? <Kind>{titleCase(p.kind)}</Kind> : '-') },
+    { key: 'stage', header: 'Stage', hideOnMobile: true, sortValue: (p) => p.stage, cell: (p) => <span className="text-[13px] text-ink-2">{p.stage ? titleCase(p.stage) : '-'}</span> },
+    { key: 'volume', header: 'AI searches / mo', align: 'right', hideOnMobile: true, sortValue: (p) => p.volume ?? -1, cell: (p) => <span className="tabular text-[13px]">{p.volume != null ? compactNumber(p.volume) : '-'}</span> },
+    { key: 'source', header: 'Added by', hideOnMobile: true, sortValue: (p) => p.source, cell: (p) => <span className="text-[13px] text-ink-2">{p.origin === 'market' ? 'Real AI question' : p.origin === 'search' ? 'Your Google searches' : p.source === 'custom' || p.origin === 'custom' ? 'You' : /auto|ai|engine|generated|template/i.test(p.source) ? 'Engine' : p.source ? titleCase(p.source) : '-'}</span> },
     { key: 'status', header: 'Status', sortValue: (p) => (isActive(p) ? 0 : 1), cell: (p) => (isActive(p) ? <StatusBadge tone="good">Tracked</StatusBadge> : <Badge icon={<Power className="size-3" aria-hidden />}>{titleCase(p.status)}</Badge>) },
     ...(isAdmin
       ? [
@@ -443,11 +443,11 @@ export function QuestionManager({ prompts }: { prompts: readonly Prompt[] }) {
   return (
     <div className="space-y-4">
       <DataTable rows={[...prompts]} columns={columns} rowKey={(p) => p.promptId} initialSort={{ key: 'status', dir: 'asc' }} dense pageSize={15} empty="No questions yet: the first run writes them from your keywords and business." />
-      <p className="text-xs text-ink-3">{active} active {active === 1 ? 'question is' : 'questions are'} asked on every engine each Monday at 07:00, and on ChatGPT, Gemini and Google AI Mode every other day when the daily pulse is on. New ones come from real AI searches and your Search Console queries on the month’s first run.</p>
+      <p className="text-xs text-ink-3">{active} active {active === 1 ? 'question is' : 'questions are'} asked on every engine each Monday at 07:00, and on ChatGPT, Gemini and Google AI Mode every other day when the daily pulse is on. New ones come from real AI searches and your Search Console queries on the month's first run.</p>
       {isAdmin && (
         <div className="rounded-xl border border-dashed border-line-strong p-4">
-          <Field label="Add buyer questions" hint="One per line, the way a buyer would ask an assistant, e.g. “Which accounting firms in Dubai handle VAT registration for small businesses?”" error={error ?? undefined}>
-            {(p) => <Textarea {...p} rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Which … should I hire for …?" />}
+          <Field label="Add buyer questions" hint="One per line, the way a buyer would ask an assistant, e.g. &quot;Which accounting firms in Dubai handle VAT registration for small businesses?&quot;" error={error ?? undefined}>
+            {(p) => <Textarea {...p} rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Which ... should I hire for ...?" />}
           </Field>
           <div className="mt-3 flex justify-end">
             <Button onClick={add} loading={admin.isPending && !pendingId} icon={<Plus className="size-4" />}>

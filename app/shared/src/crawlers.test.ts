@@ -58,7 +58,7 @@ describe('classifyUserAgent', () => {
     ['ccbot', 'ccbot'],
     ['ahrefs', 'ahrefsbot'],
     ['someBot', 'other-bot'],
-  ] as const)('%s → %s', (k, key) => {
+  ] as const)('%s gives %s', (k, key) => {
     expect(classifyUserAgent(UA[k])?.key).toBe(key);
   });
   it('a person (Chrome, Safari on iPhone, a Cubot phone, no user agent) is no crawler', () => {

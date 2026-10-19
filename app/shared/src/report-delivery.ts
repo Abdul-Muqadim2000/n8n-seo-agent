@@ -3,7 +3,7 @@ import { AUTOMATIONS, MODES, SCHEDULED_STAGES, STAGE_LABELS } from './constants'
 import { findOpenBrackets } from './placeholders';
 
 /**
- * B-R1 — getting the report out of the app (benchmark programme 2026-10-15, area 12 §4 G-1 and §7).
+ * B-R1, getting the report out of the app (benchmark programme 2026-10-15, area 12 §4 G-1 and §7).
  *
  * On 2026-10-14, 23 reports landed in the app's `reports` table and **not one was e-mailed, posted or pushed anywhere**. The
  * customer learned a report existed by logging in. Every one of the six tools benchmarked in that pass pushes the report:
@@ -17,12 +17,12 @@ import { findOpenBrackets } from './placeholders';
  *
  * ## The refusal is the point
  *
- * `deliveryDecision()` decides, and its default answer is no. A report the run marked **not ready** is never delivered — a page
+ * `deliveryDecision()` decides, and its default answer is no. A report the run marked **not ready** is never delivered, a page
  * that failed its quality gate, a plan the engine refused, a verdict it could not check, evidence it could not read, a rejected
  * run. Pushing one of those into an inbox would hand the customer a conclusion the run itself does not stand behind, and the
  * benchmark names refusing as the bar to copy (area 12 §4, "Where the leader is wrong and we are right", item 4: no tool checked
  * labels a figure it could not trust, let alone declines to send it). A held report still sits in the app with its reason on it,
- * so nothing is hidden — it is simply not pushed.
+ * so nothing is hidden, it is simply not pushed.
  */
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ export const DELIVERY = {
 
 export interface DeliverySettings {
   frequency: DeliveryFrequency;
-  /** for `weekly`: 0 = Monday … 6 = Sunday */
+  /** for `weekly`: 0 = Monday ... 6 = Sunday */
   weekday: number;
   /** for `daily` / `weekly` / `monthly`: the hour of the day, UTC, 0-23 */
   hour: number;
@@ -77,7 +77,7 @@ export interface DeliverySettings {
   webhook: {
     enabled: boolean;
     url: string;
-    /** whether a signing secret is stored — the secret itself is never returned by the API */
+    /** whether a signing secret is stored, the secret itself is never returned by the API */
     hasSecret?: boolean;
   };
   /** only these stages are pushed; empty means every finished report */
@@ -185,7 +185,7 @@ const hold = (code: HoldCode, reason: string): DeliveryDecision => ({ deliver: f
 const INTERIM_STAGES = new Set(['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup', 'unknown']);
 
 /**
- * R110 — the stages that are themselves a report. Every weekly / monitor report node in the engine ends with `status: 'progress'`
+ * R110, the stages that are themselves a report. Every weekly / monitor report node in the engine ends with `status: 'progress'`
  * (AI_Report, BL_Report, LB_Report, Growth_Report, Pulse_Metrics, Site_Report, Tracker_Report, Cadence_Status / Cadence_Note):
  * that has been the weekly-report contract since the v4.2 Rank Tracker, 79 stored rows carry it and other API callers may read
  * it, so the app reads `progress` on one of these stages as a finished report rather than the engine changing its word.
@@ -215,7 +215,7 @@ const text = (v: unknown): string => (typeof v === 'string' ? v : '');
 
 export interface DeliveryCandidate {
   stage: string;
-  /** the `status` the callback carried ('completed', 'rejected', …) */
+  /** the `status` the callback carried ('completed', 'rejected', ...) */
   status: string;
   /** the callback body */
   payload: Record<string, unknown>;
@@ -226,15 +226,15 @@ export interface DeliveryCandidate {
  *
  * Every `false` below is deliberate, and each one maps to something a run says about itself:
  *
- *  - **rejected** — the engine refused the request (over budget, a guard, bad input). There is no report.
- *  - **not ready** — R11: a page that used up its quality rounds and still failed carries `qa_not_ready`. It is a draft, and the
+ *  - **rejected**, the engine refused the request (over budget, a guard, bad input). There is no report.
+ *  - **not ready**, R11: a page that used up its quality rounds and still failed carries `qa_not_ready`. It is a draft, and the
  *    report says so; e-mailing it as "your new page" would be a lie told by the delivery, not by the run.
- *  - **refused** — R22 / R23: a ladder the engine declined to plan (`planned: false`) has a reason, not a plan.
- *  - **unavailable** — R18 and the `_serp_obs` rules: a verdict the engine could not check (`NOT_CHECKED`, `feasibility.not_checked`,
+ *  - **refused**, R22 / R23: a ladder the engine declined to plan (`planned: false`) has a reason, not a plan.
+ *  - **unavailable**, R18 and the `_serp_obs` rules: a verdict the engine could not check (`NOT_CHECKED`, `feasibility.not_checked`,
  *    `serp_features.unavailable`, a homepage it could not read). The report exists so the customer can see *why*; pushing it
  *    would present "we could not look" as a finding.
- *  - **interim** — a "started" callback is an acknowledgement, not a result.
- *  - **test run** — C-11: a dry run (`dry_run: true`) changed nothing; it is a test, not a report.
+ *  - **interim**, a "started" callback is an acknowledgement, not a result.
+ *  - **test run**, C-11: a dry run (`dry_run: true`) changed nothing; it is a test, not a report.
  */
 export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
   const p = c.payload ?? {};
@@ -244,7 +244,7 @@ export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
   if (stage === 'rejected' || status === 'rejected')
     return hold('rejected', `The engine refused this run${text(p.error) ? ` (${text(p.error).slice(0, 160)})` : ''}, so there is nothing to send.`);
   // R110: a "started" note is an acknowledgement whatever status it carries (the engine sends them as `accepted`), so it is
-  // checked before the status — otherwise it is coded `rejected` and a share link calls it "did not produce a report".
+  // checked before the status, otherwise it is coded `rejected` and a share link calls it "did not produce a report".
   if (INTERIM_STAGES.has(stage)) return hold('interim', 'This is a note that the work started, not the report itself.');
   if (!finishedStatus(stage, status)) return hold('rejected', `This run finished as "${status}", not as a completed report.`);
   if (text(p.validation_error)) return hold('refused', `The engine refused this run: ${text(p.validation_error).slice(0, 200)}`);
@@ -253,12 +253,12 @@ export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
   if (p.dry_run === true || p.dry_run === 'true')
     return hold('test_run', 'This was a test run (dry run): nothing was submitted or changed, so it stays in the app and is not sent.');
 
-  // R11 — the quality gate. A page that did not pass is a draft, whatever else the report contains.
+  // R11, the quality gate. A page that did not pass is a draft, whatever else the report contains.
   if (p.qa_not_ready === true || p.qa_publishable === false) {
     const why = (Array.isArray(p.qa_reasons) ? p.qa_reasons.map(text).filter(Boolean) : []).slice(0, 2).join('; ');
     return hold('not_ready', `The page did not pass the quality check${why ? ` (${why})` : ''}, so it is waiting in the app rather than going out as finished work.`);
   }
-  // A-13 (2026-10-17) — a written page that still holds a bracket for a person to fill in or confirm is a draft too, whatever the
+  // A-13 (2026-10-17), a written page that still holds a bracket for a person to fill in or confirm is a draft too, whatever the
   // gate said: the same detector the engine counts with (placeholders.ts) reads the page that would be sent.
   const body = text(p.markdown) || text(p.page_markdown);
   if (body) {
@@ -268,7 +268,7 @@ export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
       return hold('not_ready', `The page still has ${n} bracket${n === 1 ? '' : 's'} to fill in or confirm (${open.slice(0, 3).map((b) => b.token.slice(0, 80)).join(', ')}), so it is waiting in the app rather than going out as finished work.`);
     }
   }
-  // R22 / R23 — a ladder the engine would not plan
+  // R22 / R23, a ladder the engine would not plan
   if (p.planned === false) return hold('refused', `No plan was made: ${text(isObj(p.refusal).reason) || 'the engine refused this keyword'}.`);
 
   // Evidence the run could not read. A report built on it is worth reading in the app and worth not pushing.
@@ -366,7 +366,7 @@ export interface DeliveryPayload {
   generatedAt: string;
   /** reports in this message, newest first */
   reports: DeliveryItem[];
-  /** reports that were deliberately **not** sent, with the reason — stated, never hidden */
+  /** reports that were deliberately **not** sent, with the reason, stated, never hidden */
   held: { reportId: string; title: string; reason: string; code: HoldCode | null }[];
 }
 
@@ -415,7 +415,7 @@ const FIGURE_LABELS: Record<string, string> = {
 export const figureLabel = (key: string): string => FIGURE_LABELS[key] ?? key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
 
 const figureValue = (v: string | number | boolean | null): string => {
-  if (v === null) return '—';
+  if (v === null) return '-';
   if (typeof v === 'boolean') return v ? 'yes' : 'no';
   if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100);
   return v;
@@ -434,7 +434,7 @@ export const stageLabel = (stage: string): string => STAGE_LABELS[stage] ?? stag
 export function deliverySubject(p: DeliveryPayload): string {
   if (p.reports.length === 1) {
     const r = p.reports[0]!;
-    return r.siteDomain ? `${r.title} — ${r.siteDomain}` : r.title;
+    return r.siteDomain ? `${r.title}, ${r.siteDomain}` : r.title;
   }
   const domains = [...new Set(p.reports.map((r) => r.siteDomain).filter(Boolean))] as string[];
   const what = p.kind === 'daily' ? 'Today' : p.kind === 'weekly' ? 'This week' : p.kind === 'monthly' ? 'This month' : 'New';
@@ -464,13 +464,13 @@ export function deliveryLines(p: DeliveryPayload): string[] {
         .join('\n'),
     );
   }
-  for (const h of p.held) lines.push(`Not sent — ${h.title}: ${h.reason}`);
+  for (const h of p.held) lines.push(`Not sent, ${h.title}: ${h.reason}`);
   return lines;
 }
 
 /**
  * The webhook body. It carries the structured report so a system can act on it, and a `text` line so the common chat webhooks
- * (Slack, Discord, Microsoft Teams) render something a person can read without any mapping — the same shape the engine's own ops
+ * (Slack, Discord, Microsoft Teams) render something a person can read without any mapping, the same shape the engine's own ops
  * alerts use.
  */
 export function deliveryWebhookBody(p: DeliveryPayload): Record<string, unknown> {
@@ -478,9 +478,9 @@ export function deliveryWebhookBody(p: DeliveryPayload): Record<string, unknown>
     deliverySubject(p),
     ...p.reports.map((r) => {
       const figures = figureLines(r).map((f) => `${f.label}: ${f.value}`).join(' · ');
-      return `• ${r.title}${r.siteDomain ? ` (${r.siteDomain})` : ''}${figures ? ` — ${figures}` : ''}\n  ${r.shareUrl ?? r.url}`;
+      return `• ${r.title}${r.siteDomain ? ` (${r.siteDomain})` : ''}${figures ? `, ${figures}` : ''}\n  ${r.shareUrl ?? r.url}`;
     }),
-    ...p.held.map((h) => `• Not sent — ${h.title}: ${h.reason}`),
+    ...p.held.map((h) => `• Not sent, ${h.title}: ${h.reason}`),
   ].join('\n');
   return {
     text,
@@ -540,7 +540,7 @@ export function clicksHeadline(clicks: number | null, pctCh: number | null, sign
     const steady = `${c} ${unit} from Google, within normal variation`;
     if (!realKey) return steady.charAt(0).toUpperCase() + steady.slice(1);
     const p = asTest(sig![realKey])!.pct as number;
-    return `${label[realKey]} ${p >= 0 ? 'up' : 'down'} ${Math.abs(Math.round(p))}% — a real change · ${steady}`;
+    return `${label[realKey]} ${p >= 0 ? 'up' : 'down'} ${Math.abs(Math.round(p))}%, a real change · ${steady}`;
   }
   if (pctCh == null) return `${c} ${unit} from Google in the last 28 days`;
   if (pctCh >= 0.5) return `Clicks from Google are up ${Math.round(pctCh)}% to ${c}`;
