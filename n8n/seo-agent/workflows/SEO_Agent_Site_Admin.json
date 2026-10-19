@@ -277,6 +277,10 @@
               {
                 "name": "content_groups_json",
                 "type": "string"
+              },
+              {
+                "name": "declared_services",
+                "type": "string"
               }
             ]
           },
@@ -2153,6 +2157,16 @@
                 "type": "string",
                 "canBeUsedToMatch": true,
                 "removed": false
+              },
+              {
+                "id": "declared_services",
+                "displayName": "declared_services",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
               }
             ],
             "attemptToConvertTypes": true,
@@ -3053,6 +3067,16 @@
               {
                 "id": "content_groups_json",
                 "displayName": "content_groups_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "declared_services",
+                "displayName": "declared_services",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,

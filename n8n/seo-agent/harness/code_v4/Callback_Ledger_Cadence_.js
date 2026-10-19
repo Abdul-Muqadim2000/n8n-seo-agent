@@ -51,7 +51,7 @@ const LCB = (() => {
   return { fromSettle };
 })();
 const SETTLE = 'Ledger Settle (Cadence)';
-const PREDS = [["Cadence Note", 0], ["Cadence Status", 0]];          // [[node, output index], …] — the nodes that build the callback items (recorded for the build's proof)
+const PREDS = [["Cadence Note", 0], ["Cadence Preview", 0], ["Cadence Status", 0]];          // [[node, output index], …] — the nodes that build the callback items (recorded for the build's proof)
 const HAS_CALLBACK = 'Has Callback (Cadence)?';
 // the settle's own answer rides input 1; a callback item never carries these two ledger columns
 const isSettle = (j) => !!j && Object.prototype.hasOwnProperty.call(j, 'settled_usd') && Object.prototype.hasOwnProperty.call(j, 'cost_mode');
