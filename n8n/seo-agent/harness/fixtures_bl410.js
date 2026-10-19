@@ -9,7 +9,8 @@ const page = (n) => zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtur
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const SITE = 'site_techand-ai', DOMAIN = 'techand.ai';
 const ok = (items, cost = 0.0242, extra = {}) => ({ tasks: [{ status_code: 20000, status_message: 'Ok.', cost, result: [{ items_count: items.length, items, ...extra }] }] });
-const iso = (daysAgo) => new Date(Date.now() - daysAgo * 864e5).toISOString();
+const NOW0 = Date.now();   // one clock reading: rows uploaded together must carry the same imported_at (a ms tick between rows split one upload in two)
+const iso = (daysAgo) => new Date(NOW0 - daysAgo * 864e5).toISOString();
 const dfsDate = (daysAgo) => iso(daysAgo).replace('T', ' ').slice(0, 19) + ' +00:00';
 // ---- plan inputs ----
 const sites = () => [{ json: { site_id: SITE, domain: DOMAIN, gsc_property: 'sc-domain:techand.ai', ga4_property_id: '543096312', country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: 'http://server:4000/api/hooks/n8n/tok', keywords: 'e invoicing uae, peppol uae', status: 'active', source: 'app' } }];

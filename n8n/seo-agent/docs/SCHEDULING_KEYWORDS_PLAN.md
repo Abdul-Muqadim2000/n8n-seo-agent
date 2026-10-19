@@ -1,7 +1,9 @@
 # Plan: start on the day of setup, a 7-day cycle per website, keyword-first autopilot
 
-Written 2026-10-19 from the handoff `SCHEDULING_KEYWORDS_HANDOFF.md`. **Status: plan only, nothing built. Waiting for the owner's approval
-and the decisions in §11.**
+Written 2026-10-19 from the handoff `SCHEDULING_KEYWORDS_HANDOFF.md`. **Status: approved by the owner on 2026-10-19, with the additions
+discussed that day: three autopilot levels (§5.5), the next keyword after a win (§5.6), "tell first, then go" and the weekly "Coming up"
+plan (§5.7). Implementation started (team and contracts in §14 and §15). The decisions in §11 are taken as recommended, except D8 and
+D10, which are confirmed again at deploy time because they touch production and spend money.**
 
 Research behind it: five read-only passes over the code (engine schedules, app schedules + onboarding, keyword machinery) and the market
 (how SEO tools schedule per project; how content autopilots choose keywords and ask for approval), plus a check of n8n's own docs. Every
@@ -22,7 +24,16 @@ claim about our code below carries a file reference; every market claim carries 
 - A missed or crashed cycle is just a due row the next sweep picks up. That removes the main reason for the Monday deploy ban and most of
   the catch-up's weekly bookkeeping.
 
-**Change 2: no writing without a keyword the client chose.**
+**Change 2: no writing without a keyword the client chose (or, on full autopilot, saw announced and did not stop).**
+- Onboarding asks one question, **"How much should we do on our own?"**, with three levels: 1 only my keywords, 2 my keywords + keep my
+  pages healthy (default), 3 full autopilot. Details are in §5.5.
+- Whatever the level, nothing is written that the client could not see first. Two days before each cycle they get a **"Coming up"** plan
+  (app + e-mail), with Approve or Skip on every item. A new keyword picked by the system is **announced and starts after 2 days** unless
+  changed (§5.7).
+- When a ladder is won, the next queued ladder starts. When the queue is empty, the next keyword is suggested, or announced on full
+  autopilot (§5.6).
+
+The bullets below describe level 1, the strict base. Levels 2 and 3 widen what runs automatically (§5.5).
 - The automatic content pipeline writes **only ladder pages**, and only for ladders the client started: they typed the keyword, or picked
   it from our recommendations.
 - Everything else the cadence picks by itself today becomes a **suggestion with a price and a "Write it" button**: AI answer pages, AI
@@ -397,8 +408,8 @@ Every weekly workflow's plan node gets the same input contract (shared through `
    - A site without a client-chosen ladder gets a cadence status of "Waiting for your first keyword", and the cycle's cadence job is
      skipped with that reason.
    - The weekly report, the Pipeline and Overview show it as the one **Needs you** item: "Choose the keyword you want to be found for".
-3. **R-K3. Everything else is a suggestion, never written automatically.** This covers AI answer pages, AI refreshes, decay refreshes,
-   striking-distance queries and rising trends.
+3. **R-K3. Everything else depends on the autopilot level (§5.5).** At level 1 it is a suggestion, never written automatically. This
+   covers AI answer pages, AI refreshes, decay refreshes, striking-distance queries and rising trends.
    - The setting `opportunities: auto` is removed. The engine reads any stored `auto` as suggest.
    - `ai_pages_month` no longer spends: it becomes how many AI suggestions a month are offered (decision D4).
    - Each suggestion shows why, the page it would change, and the credits.
@@ -413,9 +424,10 @@ Every weekly workflow's plan node gets the same input contract (shared through `
 5. **R-K5. Approved writing is one click with a price.**
    - "Write it" opens the existing Write-now dialog with the credits, and now **carries the suggestion's AI target and source**
      (`WriteNowItem` gains `aiTarget`, `source`), so an approved AI answer page is written as one.
-6. **R-K6. The system never starts a ladder by itself.**
-   - "Choose keywords for me" (`autoStart.ts`) is removed, or becomes "Suggest my next keyword when a ladder is done" (notify, never
-     start; decision D5).
+6. **R-K6. The system never starts a ladder silently.**
+   - At levels 1 and 2 it only suggests the next keyword.
+   - At level 3 it announces the keyword and starts after 2 days unless the client changes or skips it (§5.7).
+   - "Choose keywords for me" (`autoStart.ts`) becomes exactly that announcement flow.
    - Research no longer writes its own top pick when "receive content" is ticked; the app removes that option.
 7. **R-K7. One cycle, one budget.**
    - Pages a ladder start writes at once count against the current cycle's `pages_per_week`. A day-one ladder with 1 page plus 1 post a
@@ -495,6 +507,63 @@ check) or choose later. When research lands, a Needs-you item and the Pipeline b
   - the launch summary.
 
   These are figures at today's 3× markup and $0.05 a credit; they come from `shared/src/cost.ts` at run time, never typed in.
+
+### 5.5 Three autopilot levels (owner decision D13, 2026-10-19)
+
+Onboarding asks **"How much should we do on our own?"**. The answer is stored per website in the `_site` row of `seo_ladder_settings` as
+`autopilot_level`, and it can be changed any time in Website settings.
+
+| Level | Written automatically | Waits for the client's OK |
+|---|---|---|
+| **1. Only my keywords** | ladder pages of ladders the client chose | everything else, in the weekly "Coming up" plan |
+| **2. My keywords + keep my pages healthy** (default) | ladder pages; plus refreshes of the client's **existing** pages that lose traffic (`decay`), strengthening existing pages at positions 4-20 (`striking` with a page), and AI refreshes of existing pages (`ai_refresh`). Each one only when its keyword passes the topic gate against the site's ladders and services ("in topic") | new topics (`trend`, `ai_answer`, `striking` without a page) and new keywords |
+| **3. Full autopilot** | everything of level 2, plus new topics (fit-gated), AI answer pages (`ai_pages_month`), and new ladders on keywords the system picked from research, **announced 2 days before they start** | nothing, but every item can be skipped in "Coming up", and every new keyword can be changed before it starts |
+
+Rules for every level:
+- **The fit gate always runs** (own brand, other brands, government, off topic, too broad). At level 3 it is the only filter, so it runs
+  on every source.
+- **`pages_per_week` bounds everything automatic.** 0 means nothing is written at any level (today a site with 0 still got AI pages). At
+  level 3 the AI pages come on top, by `ai_pages_month`, as they do today.
+- **Auto-pause on rejections.** Every written page gets a "Not what I wanted" button. If 2 of the last 5 automatic pages that were not
+  ladder pages are rejected, the level drops to 1, and the client is told why and how to raise it again.
+- **Upgrade nudge, never an automatic switch.** After 5 approved or published pages at level 1, a Needs-you card offers level 2.
+- **Spending:** the forecast for the chosen level is shown before it is confirmed; the company's existing autopilot limit (credit
+  guard, `autopilot_limit`) still caps the month.
+- **Level 3 and the Techand case.** At level 3 the Techand D365 refresh could still have been written, because D365 is on the client's
+  own site and passes the topic gate. That is acceptable only because the client chose full autopilot. The fault on 2026-10-19 was
+  choosing for them without asking.
+
+### 5.6 The next keyword after a win
+
+- A client can start several ladders. `max_active` (2) run at once and the rest wait as **queued** (this exists in `Cadence_Plan.js`).
+- A ladder that is **won** (top 3 in 4 checks in a row) or has no pages left makes room. The highest-priority queued ladder becomes
+  active at the next cycle (exists).
+- **New: a fresh check on activation.** A queued ladder planned more than 60 days ago gets a Keyword Check (5 s) when it becomes active.
+  If the verdict fell (not realistic now, or a fit of 0), it pauses with a Needs-you item instead of writing on stale results.
+- **New: when the queue is empty**, the app proposes the next keyword from research (research is re-run when older than 90 days):
+  - levels 1 and 2: a suggestion with **Start this ladder** / **Show me others** / **Not now**;
+  - level 3: an announcement that starts after 2 days (§5.7).
+
+### 5.7 "Tell first, then go" and the weekly "Coming up" plan
+
+**New keywords at level 3** (an app table `keyword_proposals`):
+- The card shows the keyword, monthly searches, the plain difficulty, why we chose it, the plan (pages, months) and the credits per
+  page.
+- Buttons: **Approve now** (starts at once, `chosen_by: client_picked`), **Pick a different one** (the other suggestions, or a typed
+  keyword checked in 5 s), **Skip** (never proposed again, and the next one is announced).
+- With no answer, it starts after **2 days** (`start_at`, decision D14) as `chosen_by: system_announced`.
+- **On day one in onboarding** the step says "We'll start with X", with Change. There is no waiting time, because the client is on the
+  screen.
+- An e-mail goes out for each announcement (decision D15).
+
+**"Coming up", two days before every cycle, at every level:**
+- The dispatcher runs the cadence in **preview mode** 48 h before each site's cycle (job `preview`, not in cycle 0). It plans exactly what
+  the cycle would write, writes nothing, and sends a `cycle_preview` callback.
+- The app shows it on the Pipeline and Overview ("Coming up on Wednesday") and e-mails it once a week.
+- Each item says why it was chosen, gives the credits, and is marked automatic (with **Skip**) or needs-OK (with **Approve** /
+  **Skip**).
+- Skips and approvals are written by the app to the Data Table `seo_skips`. The real cycle's cadence honours them: a skipped item is not
+  written; an approved needs-OK item is written as part of the cycle, within `pages_per_week`.
 
 ---
 
@@ -701,6 +770,15 @@ order matters.
 
 ## 11. Decisions for the owner (my recommendation first)
 
+**Taken on 2026-10-19:**
+- D1-D7, D9, D11 and D12 as recommended, adjusted by D13. D4 and D12 now depend on the level: AI answer pages run automatically at level
+  3 only, and decay refreshes of the client's own pages in topic run automatically from level 2. D5 becomes the level-3 announcement
+  flow.
+- **D13:** three autopilot levels, default level 2 (§5.5).
+- **D14:** a 2-day waiting time before an announced keyword starts.
+- **D15:** one weekly "Coming up" e-mail, plus one e-mail per announced keyword.
+- **D8 (reset scope) and D10 (the paid rehearsal) are asked again at deploy time.**
+
 | # | Question | Recommendation | Why |
 |---|---|---|---|
 | D1 | Time of day of each cycle | **06:00 in the website's time zone** (owner's browser zone, captured in onboarding) | Reports land in the client's morning; outside the DST hours. Alternatives: the time of setup, or 07:00 New York for everyone |
@@ -744,3 +822,114 @@ order matters.
 | A forgotten Monday cron or string | Build assertion (no weekly Schedule Trigger) and the app copy lint |
 | Clients without a keyword get nothing written and churn | The Needs-you item everywhere, suggestions ready at onboarding, and the weekly report's first line asks for the keyword |
 | A per-site cycle multiplies small fixed costs (tables loaded per run) | Loads are Data Table reads, free; external calls are per site already. Measured in the rehearsal |
+
+---
+
+## 14. Contracts between the engine and the app (fixed before the agents start)
+
+The code half of this contract is committed in `app/shared/src/cycles.ts` (types, job order, levels, keys) and in `ladder_common.py`
+(`CYCLES_*`, `CYCLE_JOBS_*`, `SKIPS_*`, `seo_ladder_settings.chosen_by` / `autopilot_level`; `seo_sites.declared_services` is added by E3 together with `SM.toRow`, because
+the weekly row must carry exactly the table's columns, harness S35 / S46). The engine
+mirrors the constants in `v5/code/_cycle.js` and `Cadence_Plan.js`.
+
+### 14.1 Data Tables
+
+| Table | Written by | Read by | Notes |
+|---|---|---|---|
+| `seo_cycles` | Site Kickoff, Cycle Dispatcher | dispatcher, AI Pulse, the app (calendar), the deploy guard | one row per site; `next_preview_at` = `next_due_at` − 48 h |
+| `seo_cycle_jobs` | dispatcher (record-then-start, then outcome) | dispatcher, the app (last runs, missed, gave up), the deploy guard | key `<cycle_key>:<job>`; 120 days kept |
+| `seo_skips` | **the app** (n8n public API, like `seo_ladder_settings`) | Content Cadence (real and preview runs) | key `<site_id>:<cycle_key or always>:<item_key>` |
+| `seo_ladder_settings` | the app (as today) and the ladder run | Content Cadence | `chosen_by` on ladder rows, `autopilot_level` on the `_site` row |
+| `seo_sites.declared_services` | Track my site | site model (`SM`), fit gate, research | merged into services, never overwritten by the Site Tracker |
+
+### 14.2 A cycle run (dispatcher → each job's Manual Run)
+
+```
+{ trigger: 'cycle', domain, site_id, cycle_key: 'cyc:<site_id>:<YYYY-MM-DD>', job, monthly: true|false,
+  scheduled_for: '<ISO UTC due time>', request_id: 'cyc_<site_id without site_>_<YYYYMMDD>_<job>',
+  light: !monthly            (backlinks only)
+  preview: true              (content_cadence, the 'preview' job only) }
+```
+- Scheduled semantics for one site: `on_demand` false, switched-off jobs and pauses honoured, monthly extras only when `monthly`.
+- Ledger row key `cycle:<cycle_key>:<job>`, mode as today. The callback of a cycle run carries `trigger: 'cycle'`, `cycle_key` and
+  `cycle_date` (the local date).
+
+### 14.3 Site Kickoff (rewritten)
+
+`POST /webhook/seo-site-kickoff` (X-API-Key)
+`{ domain | site_id, anchor_at?, tz?, skip_jobs?: [job], jobs?: [job], force?, dry_run? }` → `202 { ok, status: 'accepted',
+stage: 'site_kickoff_started', site_id, cycle_key, next_due_at }`.
+- It upserts the `seo_cycles` row (`anchor_at` defaults to now, `tz` to the engine zone; an unknown zone gets 400), with cycle 0 due now.
+- `skip_jobs` holds what the app already ran. The refusals are as today.
+
+### 14.4 Callback stage `cycle_preview` (the preview job, 48 h before a cycle)
+
+`CyclePreview` in `cycles.ts`: `site_id, domain, cycle_key, scheduled_for, level, pages_per_week, waiting_for_keyword, paused_reason,
+items[], suggestions[]`.
+- Each item: `item_key, keyword, source, page_type, existing_page_url, ladder_id, rung, why, auto, est_usd, ai_target`.
+- Status `progress`; nothing is written and nothing is charged beyond the run's own small cost.
+- The `content_cadence` callback of the real cycle gains the same `suggestions[]` (with `ai_target`), plus `level`,
+  `waiting_for_keyword` and `cycle_key`.
+
+### 14.5 Runs from the app
+
+- `mode: 'ladder'` gains `chosen_by`. A ladder started in Manual mode writes nothing at start.
+- `mode: 'track'` gains `timezone` and `services`.
+- `mode: 'discover'` from the app never sets "receive content".
+- Keep the payload key order (Normalize Input's fuzzy matching), then `npm run export:payloads` and harness S23.
+
+### 14.6 App API (A1 builds it, A2 uses it)
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/orgs/:orgId/sites/:siteId/cycle` | `{ timezone, weekday, localTime, anchorAt, nextDueAt, nextPreviewAt, monthlyDay, current: { cycleKey, jobs: CycleJobRow[] }, recent: [...] }` |
+| `PATCH /api/orgs/:orgId/sites/:siteId/cycle` | `{ weekday }` (next cycle at least 3 days after the last one started) |
+| `GET /api/orgs/:orgId/sites/:siteId/coming-up` | the latest `cycle_preview` plus the client's decisions on it |
+| `POST /api/orgs/:orgId/sites/:siteId/coming-up/decisions` | `{ itemKey, decision: 'skip' \| 'approve', scope: 'cycle' \| 'always' }` → `seo_skips` |
+| `PATCH /api/orgs/:orgId/sites/:siteId/automation` | gains `autopilotLevel: 1 \| 2 \| 3` → the `_site` row |
+| `GET /api/orgs/:orgId/sites/:siteId/keyword-proposals` | the pending and recent proposals |
+| `POST …/keyword-proposals/:id/approve`, `/skip`, `/swap { keyword }` | the level-3 announcement, and suggestions at levels 1-2 |
+| `POST /api/orgs/:orgId/sites/:siteId/research/start` | background research during onboarding (free once per website at setup, D3) |
+| `GET …/keywords/recommended` | gains `status: 'none' \| 'running' \| 'ready'` and `startedAt`, for the onboarding poll |
+| `POST /api/orgs/:orgId/reports/:reportId/feedback` | `{ verdict: 'reject', reason? }` ("Not what I wanted"; drives the auto-pause) |
+| `POST /api/orgs/:orgId/runs` | `ladder` gains `chosenBy`; `track` gains `timezone`, `services`; after `track` is accepted the server calls the kickoff |
+
+App Postgres (A1's migration):
+- `sites`: `timezone`, `services`, `cycle_weekday`, `autopilot_level`.
+- New tables:
+  - `keyword_proposals` (`id, site_id, keyword, details jsonb, status pending|approved|swapped|skipped|started|expired, start_at,
+    created_at, decided_at, decided_by`);
+  - `cycle_previews` (`site_id, cycle_key, scheduled_for, body jsonb, received_at`);
+  - `content_feedback` (`site_id, report_id, keyword, verdict, reason, by, created_at`).
+
+---
+
+## 15. The implementation team
+
+Rules for every agent:
+- Work in its own git worktree from the contract commit. Read `CLAUDE.md`, this plan and its own brief.
+- Change only the files its brief owns. Shared files are listed with the part each agent may touch.
+- **Engine agents:**
+  - build with `python3 build_v4.py --no-env` (a worktree has no `n8n/.env`) and check the exit code;
+  - run the harness in a throwaway container (`n8nio/n8n:2.41.4`, the command in the handoff §4); it must end with `0 failed`;
+  - **never start the laptop's n8n**, never deploy, never call a paid API;
+  - commit sources and scenarios only. `workflows/*.json` and `harness/code_v4/` are rebuilt and committed by the orchestrator in the
+    main worktree after each merge (B-F5).
+- **App agents:**
+  - run the typecheck of all three workspaces and the vitest suites single-threaded in `node:22-bookworm-slim`;
+  - follow the copy rules: no em dashes, curly quotes or "…", customer language, Alaventra tokens only.
+- Commit in small, path-scoped commits with the attribution line. **No push:** the orchestrator merges, rebuilds, tests and pushes.
+- End with a report: what was built, file list, test counts, anything left or found elsewhere ("NEEDS-ELSEWHERE").
+
+| Agent | Wave | Owns | Shared, only this part |
+|---|---|---|---|
+| **E1 Cycle core** | 1 | `v5/code/_cycle.js` (new), `build_cycle.py` (new), `v5/code/Cycle_*.js` (new), `Kickoff_Plan.js`, `Kickoff_Validate.js`, the deploy guard in `apply_env.py` + `deploy/gcp/deploy_engine.py`, harness CY scenarios (new file `harness/scenarios_cycle.js`, required from `scenarios_v5.js`) | `build_monitors.py`: the Kickoff block only; `build_v4.py`: calling `build_cycle.py` + a new section for the dispatcher wiring + the deploy-guard self-test |
+| **E2 Cycle semantics** | 1 | `_monitor_sites.js`, `AI_Plan.js`, `BL_Plan.js`, `LB_Plan.js`, `Audit_Sched_Plan.js`, `Audit_Candidates.js`, `Site_Plan.js`, `Site_Row_Track.js`, `Tracker_Plan.js`, `Monitor_Ledger_Row.js`, `_run_guard.js`, `Pulse_Plan.js`, `_ai_panel.js` (`pulseDay`), `build_catchup.py`, the engine wording list of §2.2 item 10, existing scenarios that encode Monday | `Growth_Plan.js`: the monthly / entity / UTC-month parts only; `build_monitors.py`, `build_site_tracker.py`, `build_ladder_extras.py`: the Schedule Trigger nodes, the Pulse cron, Manual Run inputs, sticky notes; `ladder_common.py`: `LEDGER_RESUME_JS` and `_schedule_of`; `build_v4.py`: section 98 + the "no weekly cron" assertion |
+| **E3 Keyword-first engine** | 1 | `Cadence_Plan.js`, `Cadence_Note.js`, `Cadence_Status.js`, `Ladder_Plan.js` (Manual start, `chosen_by`), `Spawn_Page_Runs.js`, `Ladder_Settings_Rows.js`, `Spawn_Followups.js`, `Assess_*` (fit gate), `_site_model.js` (declared services), harness KF scenarios (new file `harness/scenarios_keyword_first.js`), the shared fixture `harness/fixtures/cadence_levels.json` | `Growth_Plan.js`: the fit gate on targets only; `build_site_tracker.py`: the cadence's new loads (Load Skips) and the preview callback path; `build_api.py`: Assess; `build_v4.py`: Track's `declared_services` + Normalize Input fields `timezone` / `services` / `chosen_by` |
+| **A1 App server + shared** | 2 | `app/server/**` (routes, services, migration, tests), `app/shared/src/{constants,autopilot,pipeline-notices,payload,schemas,keywords,ladders}.ts` + their tests, `app/server/src/services/cadence.ts` (mirror; tests read the shared fixture) | `app/shared/src/cycles.ts`: additions only |
+| **A2 App web + marketing** | 2 | `app/web/src/**` (onboarding, Pipeline, settings, WriteNow, content feedback, every "Monday" string), `app/web/src/marketing/**` + changelog, `app/web/test/**`, the copy lint (`app/shared/src/appCopy.test.ts` extension) | none; uses A1's API by the §14.6 contract |
+
+- **Merge order:** E3, E1, E2 (wave 1), then A1, A2 (wave 2). Each merge is rebuilt in the main worktree with `.env`, run through the
+  full harness, the app checks run, then committed and pushed.
+- **Wave 3 (orchestrator):** the integrated build, the full harness and app suites, the browser pass, this plan's status. The paid
+  rehearsal and the production deploy wait for the owner's yes (D8, D10).
