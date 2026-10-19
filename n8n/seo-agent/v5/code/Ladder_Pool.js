@@ -92,8 +92,17 @@ const all = [...pool.values()].map(e => {
 // uses for other companies (seo_cache ai_brands:), the head term / services / business words protected
 let cacheRows = []; try { cacheRows = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRows = []; }
 const sd0 = base.site_description || {};
+// 2026-10-19 (agent E4): the services the client DECLARED ("What do you sell?", seo_sites.declared_services, stored by "Track my site") are
+// protected too, not only the ones this request carried: a ladder started later, without services in its body, must not refuse a keyword
+// about the client's own service as another company's brand. Read from the stored row and from the site model the run carries.
+const declListE4 = (v) => { if (Array.isArray(v)) return v; try { const j = JSON.parse(String(v || '')); return Array.isArray(j) ? j : []; } catch (e) { return String(v || '').split(/[\n,;]+/); } };
+const declared_services = (() => { const out = [];
+  try { for (const r of $('Load Site Row (Model)').all().map(i => i.json || {})) if (r && !r.error) out.push(...declListE4(r.declared_services)); } catch (e) {}
+  try { const m = ($('Site Model').first().json || {}).site_model || {}; out.push(...declListE4(m.declared_services)); } catch (e) {}
+  out.push(...declListE4((base.site_model || {}).declared_services));
+  return [...new Set(out.map(x => String(x == null ? '' : x).replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2))].slice(0, 30); })();
 const fitCtx = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: [...new Set((base.competitors_summary || []).map(c => String(c.domain || '')).filter(Boolean))],
-  brands: fitLearnedBrands(cacheRows), protect: [head, ...(sd0.products_or_services || []), ...(base.services || []), String(base.business || sd0.business_description || '').slice(0, 400)] };
+  brands: fitLearnedBrands(cacheRows), protect: [head, ...(sd0.products_or_services || []), ...(base.services || []), ...declared_services, String(base.business || sd0.business_description || '').slice(0, 400)] };
 const refused = [];
 const candidates = all.filter(e => e.intent !== 'navigational' && !sameAsHead(e.keyword)).filter(e => {
   const g = fitGate(e.keyword, { ...fitCtx, intent: e.intent });
@@ -115,7 +124,7 @@ const sd = base.site_description || {};
 const business = (base.business || sd.business_description || 'unknown') + '. KEYWORD LADDER: this research is for a ladder of pages that climb towards the head keyword "' + head +
   '". A keyword is core (2) only when a page about it would naturally link up to a page about "' + head + '"; neighbouring topics are adjacent (1); jobs, courses, unrelated definitions and other brands are 0.';
 return [{ json: { ...base, business, services: (sd.products_or_services || []).slice(0, 8), other_brands,
-  research: { pool_size: all.length, candidates, by_source: bySource, failures, requests: reqs.length, refused: refused.slice(0, 60) },
+  research: { pool_size: all.length, candidates, by_source: bySource, failures, requests: reqs.length, refused: refused.slice(0, 60), protected_services: declared_services },
   site_rankings: { count: Object.keys(rankings).length, head: headRank, keywords: Object.fromEntries(Object.entries(rankings).slice(0, 400)), available: rankedOk,
     top10: Object.entries(rankings).filter(([k, r]) => r.position >= 1 && r.position <= 10).map(([k, r]) => ({ keyword: k, kd: r.kd, position: r.position })) },
   head_tokens: headTok, head_geo: headGeo } }];
