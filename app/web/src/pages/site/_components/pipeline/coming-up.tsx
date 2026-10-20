@@ -19,6 +19,15 @@ import { cn } from '@/lib/utils';
 import { Panel } from '../kit';
 import { asPageType, fmtDayHead, validDate } from './common';
 import { SOURCE_ICON, SOURCE_LABEL, SOURCE_TONE } from './always-on';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { GuideButton } from '@/components/guide';
+import { autopilotGuideVars } from '@/lib/guide-vars';
+
+/** "How Coming up works", beside the plan (the guide's values: the website's weekday and the credits of a page). */
+function ComingUpGuide({ cycle }: { cycle?: SiteCycleView }) {
+  const { site } = useSiteCtx();
+  return <GuideButton id={AUTOPILOT_SCREEN_GUIDES.comingUp} vars={autopilotGuideVars(site, { cycle })} label="How Coming up works" />;
+}
 
 /** "Wednesday 22 October" for a local date (YYYY-MM-DD) of the website's cycle. */
 export function cycleDayWords(date: string): string {
@@ -95,7 +104,7 @@ function ComingUpPanel({ view, cycle, onWrite }: { view: ComingUpView; cycle?: S
   if (!view.available) {
     const next = cycle?.nextPreviewAt && validDate(cycle.nextPreviewAt) ? fmtDayHead(cycle.nextPreviewAt) : null;
     return (
-      <Panel icon={<CalendarClock />} title="Coming up" description="Before each weekly run you see what it will write, with the credits, and can skip or approve each page.">
+      <Panel icon={<CalendarClock />} title="Coming up" description="Before each weekly run you see what it will write, with the credits, and can skip or approve each page." actions={<ComingUpGuide cycle={cycle} />}>
         <div className="flex items-start gap-3 rounded-lg bg-surface-2/60 px-4 py-3">
           <IconTile size="sm" tone="neutral">
             <Info />
@@ -121,11 +130,14 @@ function ComingUpPanel({ view, cycle, onWrite }: { view: ComingUpView; cycle?: S
           : `What your ${weekday || 'next'} run will write. Automatic pages are written unless you skip them; the others wait for your OK.`
       }
       actions={
-        view.autoCredits > 0 ? (
-          <span className="text-[13px] text-ink-3">
-            about <span className="font-medium text-ink">{formatCredits(view.autoCredits)}</span> on its own
-          </span>
-        ) : undefined
+        <>
+          {view.autoCredits > 0 && (
+            <span className="text-[13px] text-ink-3">
+              about <span className="font-medium text-ink">{formatCredits(view.autoCredits)}</span> on its own
+            </span>
+          )}
+          <ComingUpGuide cycle={cycle} />
+        </>
       }
     >
       <div className="space-y-4">

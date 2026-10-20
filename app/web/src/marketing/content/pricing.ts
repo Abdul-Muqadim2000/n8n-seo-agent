@@ -44,7 +44,7 @@ export const pricingTiers: PricingTier[] = [
       'A weekly report on your website\'s own weekday, alerts and share links',
       'Reports delivered by e-mail or webhook, on your schedule',
       'Alerts in Slack or Teams, and findings as Jira, Linear or Asana tickets',
-      'A step-by-step guide for every setup task',
+      'A step-by-step guide for every setup task, and for choosing your keyword, the autopilot levels and the weekly plan',
     ],
   },
   {
@@ -366,7 +366,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Single sign-on (SAML 2.0 and OIDC)', hint: 'Okta, Microsoft Entra ID, Google Workspace or any standard provider, on your verified e-mail domains; can be required', values: [false, false, true] }, // PLACEHOLDER, confirm the plans
       { label: 'SCIM provisioning', hint: 'People created, updated and switched off from your identity provider; groups mapped to roles', values: [false, false, true] }, // PLACEHOLDER, confirm the plans
       { label: 'Verified website ownership', values: [true, true, true] },
-      { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague', values: [true, true, true] },
+      { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague; plus what happens when, from setup to a keyword won', values: [true, true, true] },
       { label: 'Price in credits before every analysis', hint: 'Held while it runs, charged what it really used and never more; an analysis that fails is free', values: [true, true, true] },
       { label: 'Credit limits per company', hint: 'A monthly limit for analyses people start, one for automatic work, and credits kept for each website\'s automatic work', values: [true, true, true] },
       { label: 'Missed schedules caught up', hint: 'A scheduled run that did not fire starts once the system is back, and its report says it ran late', values: [true, true, true] },

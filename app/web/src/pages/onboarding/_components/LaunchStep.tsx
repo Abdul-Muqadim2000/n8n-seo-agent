@@ -25,6 +25,10 @@ import { cn } from '@/lib/utils';
 import { sizeLabel } from './CompanyStep';
 import { StepFrame } from './WizardShell';
 import { launchRequests } from './launch-plan';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { WhatHappensNext } from '@/components/site/WhatHappensNext';
+import { autopilotGuideVars } from '@/lib/guide-vars';
+import { firstPageReady, nextSteps, type FirstPage } from '@/lib/next-steps';
 import { clearTrackingDraft, readKeywordDraft, readTrackingDraft, useWizardSite, type KeywordPick, type StepId } from './wizard';
 
 const JS_MAX_PAGES = 500;
@@ -76,6 +80,12 @@ export function LaunchStep() {
   const available = b ? Math.max(0, b.onDemandAvailable) : 0;
   const overCredits = metered && nowCredits > available;
   const country = plan.country;
+  // "What happens next": the week this website gets when it starts now (its first week at once, then every 7 days), with where its
+  // first page stands (it waits for the author profile and the business facts)
+  const ready = firstPageReady(settings.data?.profile, site.businessFacts);
+  const firstPage: FirstPage = !picks.length ? (level === 3 ? 'none' : 'no_keyword') : writing ? (ready ? 'writing' : 'waiting') : 'plan';
+  const steps = useMemo(() => nextSteps({ cycle: null, now: Date.now(), firstPage, projectFrom: { tz: site.timezone || browserTimezone() } }), [firstPage, site.timezone]);
+  const guideVars = autopilotGuideVars(site, { level });
 
   const finishOnboarding = async () => {
     try {
@@ -260,6 +270,8 @@ export function LaunchStep() {
             <span className="text-ink-3"> for the weekly checks{writing && plan.blogsPerWeek ? ' and the pages for your keyword' : ''}</span>
           </Row>
         </dl>
+
+        <WhatHappensNext steps={steps} vars={guideVars} action={<GuideButton id={AUTOPILOT_SCREEN_GUIDES.launch} vars={guideVars} label="What happens when" />} />
 
         {/* what happens today, then every week (plan §5.2) */}
         <div className="flex items-start gap-3 rounded-lg border border-line bg-surface px-4 py-3.5 text-[13px] leading-relaxed text-ink-2">

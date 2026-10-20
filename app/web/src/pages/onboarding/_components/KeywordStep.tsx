@@ -20,6 +20,9 @@ import { PRICES } from '@/lib/prices';
 import { useAssessKeyword, useRecommendedKeywords, useSiteData, useStartResearch } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { StepFrame } from './WizardShell';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { GuideButton } from '@/components/guide';
+import { autopilotGuideVars } from '@/lib/guide-vars';
 import { MAX_PICKS, readKeywordDraft, readTrackingDraft, useWizardSite, writeKeywordDraft, type KeywordDraft, type KeywordPick } from './wizard';
 
 /** Up to this many typed ideas are checked. */
@@ -138,6 +141,7 @@ export function KeywordStep() {
   const status = r?.status ?? (r?.reportId ? 'ready' : 'none');
   const suggestions = (r?.keywords ?? []).filter((k) => k.difficultyForYou !== 'not_realistic' && k.planType !== 'none' && !k.overlaps.length).slice(0, MAX_SUGGESTIONS);
 
+  const guideVars = autopilotGuideVars(site, { level });
   const persist = (d: KeywordDraft) => writeKeywordDraft(site.id, d);
   const canContinue = picks.length > 0 || level === 3;
   const next = () => {
@@ -174,9 +178,12 @@ export function KeywordStep() {
 
         {/* 1. their own words */}
         <section aria-labelledby="kw-own" className="space-y-3">
-          <h2 id="kw-own" className="font-display text-[17px] font-semibold tracking-[-0.01em] text-ink">
-            What would a customer type into Google to find a business like yours?
-          </h2>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h2 id="kw-own" className="min-w-0 font-display text-[17px] font-semibold tracking-[-0.01em] text-ink">
+              What would a customer type into Google to find a business like yours?
+            </h2>
+            <GuideButton id={AUTOPILOT_SCREEN_GUIDES.onboardingKeyword} vars={guideVars} label="How to choose" />
+          </div>
           <form onSubmit={submitIdea} className="flex flex-col gap-2 sm:flex-row sm:items-start">
             <Field
               className="min-w-0 flex-1"
@@ -326,9 +333,12 @@ export function KeywordStep() {
         {/* 4. how much we do on our own */}
         <section aria-labelledby="kw-level" className="space-y-3">
           <div>
-            <h2 id="kw-level" className="font-display text-[17px] font-semibold tracking-[-0.01em] text-ink">
-              How much should we do on our own?
-            </h2>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <h2 id="kw-level" className="min-w-0 font-display text-[17px] font-semibold tracking-[-0.01em] text-ink">
+                How much should we do on our own?
+              </h2>
+              <GuideButton id={AUTOPILOT_SCREEN_GUIDES.onboardingLevel} vars={guideVars} label="What each level does" />
+            </div>
             <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
               Whatever you choose, two days before each week we show you what is coming up, and you can skip anything. You can change this any time in Website settings.
             </p>
