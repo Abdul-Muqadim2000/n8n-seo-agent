@@ -734,7 +734,7 @@ const aioObserved = (obs) => {
 };
 
 // ---- run ledger: DataForSEO spend, AI calls, duration (internal; appears on the final item and in the API callback) ----
-const __LEDGER_NODES = ['AI Demand (Retry)', 'AI SERP (Retry)', 'Ask LLMs (Retry)', 'Backlink Gap (Retry)', 'Backlink Summary (Retry)', 'Candidate SERP (Retry)', 'DataForSEO Whois (Retry)', 'Domain Overview (Retry)', 'Fallback SERP (Retry)', 'Fetch GBP (Retry)', 'Find Competitors (Retry)', 'Get Crawled Pages (Retry)', 'Keyword Ideas (Retry)', 'Ranked Keywords (Retry)', 'Run Competitor Keywords (Retry)', 'Run Crawl Extras (Retry)', 'Run Ladder Research (Retry)', 'Run Reach Requests (Retry)', 'Run Research (Retry)', 'Site Authority (Retry)', 'Start Crawl (Retry)', 'SERP Top 10', 'SERP Top 10 (Retry)', 'Facts SERP (Retry)', 'Keyword Data', 'Keyword Data (Retry)', 'Candidate SERP', 'Run Ladder Cluster SERP', 'Run Ladder Cluster SERP (Retry)', 'Discover Ideas', 'Start Crawl', 'Get Crawl Summary', 'Get Crawled Pages', 'Run Crawl Extras', 'Find Competitors', 'Fallback SERP', 'Domain Overview', 'DataForSEO Whois', 'Ranked Keywords', 'Keyword Ideas', 'Backlink Summary', 'Backlink Gap', 'AI SERP', 'Ask LLMs', 'Facts SERP', 'Site Authority', 'Run Research', 'Run Competitor Keywords', 'AI Demand'];
+const __LEDGER_NODES = ['AI Demand (Retry)', 'AI SERP (Retry)', 'Ask LLMs (Retry)', 'Backlink Gap (Retry)', 'Backlink Summary (Retry)', 'Candidate SERP (Retry)', 'DataForSEO Whois (Retry)', 'Domain Overview (Retry)', 'Fallback SERP (Retry)', 'Fetch GBP (Retry)', 'Find Competitors (Retry)', 'Get Crawled Pages (Retry)', 'Keyword Ideas (Retry)', 'Ranked Keywords (Retry)', 'Run Competitor Keywords (Retry)', 'Run Crawl Extras (Retry)', 'Run Ladder Research (Retry)', 'Run Reach Requests (Retry)', 'Run Research (Retry)', 'Site Authority (Retry)', 'Start Crawl (Retry)', 'SERP Top 10', 'SERP Top 10 (Retry)', 'SERP Top 10 (Light Retry)', 'Facts SERP (Retry)', 'Keyword Data', 'Keyword Data (Retry)', 'Candidate SERP', 'Run Ladder Cluster SERP', 'Run Ladder Cluster SERP (Retry)', 'Discover Ideas', 'Start Crawl', 'Get Crawl Summary', 'Get Crawled Pages', 'Run Crawl Extras', 'Find Competitors', 'Fallback SERP', 'Domain Overview', 'DataForSEO Whois', 'Ranked Keywords', 'Keyword Ideas', 'Backlink Summary', 'Backlink Gap', 'AI SERP', 'Ask LLMs', 'Facts SERP', 'Site Authority', 'Run Research', 'Run Competitor Keywords', 'AI Demand'];
 const __AI_NODES = ['Site Describer', 'Keyword Seeds', 'Competitor Analyzer', 'Verdict Agent', 'Strategy Brief', 'Copywriter', 'Editor', 'Content Reviewer', 'Keyword Relevance', 'Critic'];
 
 // R28: a task is counted on its first sighting, by its own id; a repeat is counted as a repeat, and a task with no id is counted (nothing
@@ -975,11 +975,12 @@ if (wantSeo) {
     const aio = sf.ai_overview || {};
     parts.push(h2('What the Results Page Looks Like') + kv([
       ['Featured snippet', sf.featured_snippet ? esc(sf.featured_snippet.domain) + ' — "' + esc(String(sf.featured_snippet.text).slice(0, 160)) + '"' : 'None'],
-      ['AI Overview', esc(aioObserved([{ seen: aio.present == null ? null : !!aio.present, at: aio.seen_at || sf.checked_at }]).text.replace(/^./, c => c.toUpperCase())) + (aio.present ? '. In that check it cited ' + esc((aio.cited_domains || []).join(', ') || 'unknown sources') + '.' : '')],
+      ['AI Overview', (aio.not_read ? esc('Not read on this attempt: the results page was read on a lighter third request that did not ask for it, so whether one appears is unknown') : esc(aioObserved([{ seen: aio.present == null ? null : !!aio.present, at: aio.seen_at || sf.checked_at }]).text.replace(/^./, c => c.toUpperCase()))) + (aio.present ? '. In that check it cited ' + esc((aio.cited_domains || []).join(', ') || 'unknown sources') + '.' : '')],
       ['People Also Ask', (sf.people_also_ask || []).length ? esc(sf.people_also_ask.slice(0, 8).join(' • ')) : 'None'],
       ['Related searches', (sf.related_searches || []).length ? esc(sf.related_searches.slice(0, 8).join(' • ')) : 'None'],
       ['Other features', esc((sf.features_present || []).join(', ') || 'none')],
-      ['Results for this query', num(sf.se_results_count)]
+      ['Results for this query', num(sf.se_results_count)],
+      ...(sf.light_read ? [['Results read', 'The top 10 only, on a lighter third request (the full request failed twice): the results below position 10 and the AI Overview were not read']] : [])   // F-SERP
     ]) + ((ca.serp_feature_strategy) ? '<div class="callout"><b>How to win the features:</b> ' + esc(ca.serp_feature_strategy) + '</div>' : ''));
   }
 
@@ -1126,7 +1127,7 @@ if (wantSeo) {
     sample: LN.sample((kd.competitor_backlink_strength || {}).pages_checked, 'top-ranking pages'), note: 'one crawler\'s index of the web: it finds much of the web, never all of it' }));
   lineage.push((sf && !sf.unavailable)
     ? LN.of('What the results page looks like, and who ranks now', 'serp', { basis: 'one_sample', period: LN.asOf(sf.checked_at || today), sample: 'one results page',
-        note: 'read once, from ' + String(d.country || 'the chosen country') + ' on one device; a feature not seen in that one check is unknown, not absent' })
+        note: 'read once, from ' + String(d.country || 'the chosen country') + ' on one device; a feature not seen in that one check is unknown, not absent' + (sf.light_read ? '; read on a lighter third request: the top 10 only, and the AI Overview was not read' : '') })
     : LN.unknown('What the results page looks like, and who ranks now', String((sf && sf.error) || 'no live results page was read in this run')));
   if ((ca.top_pages || []).length) lineage.push(LN.of('The competitor pages, their word counts and the content gaps', 'web', { basis: 'measured', period: LN.asOf(today),
     sample: LN.sample((ca.top_pages || []).length, 'competitor pages read'), note: 'pages we fetched and read ourselves; the strengths and gaps are an AI reading of those pages' }));

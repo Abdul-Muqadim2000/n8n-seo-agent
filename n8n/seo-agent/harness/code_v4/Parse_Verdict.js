@@ -1244,13 +1244,13 @@ const EV56 = (() => {
   const sf = prev.serp_features || {}; const ev = prev.serp_evidence || null; const kd = prev.keyword_data_evidence || null;
   const out = !!(sf.unavailable || (ev && ev.unavailable));
   const why = String((ev && ev.error) || sf.error || 'no answer from the search data provider').slice(0, 160);
-  const again = (ev && ev.retried) ? ' The search was sent again once and failed again.' : '';
+  const again = (ev && ev.retried) ? (Number(ev.attempts) > 2 ? ' The search was sent ' + ev.attempts + ' times (the last time as a lighter request) and failed every time.' : ' The search was sent again once and failed again.') : '';   // F-SERP: up to three attempts
   return {
     withheld: out,
     evidence: { serp: out ? 'unavailable' : 'read', error: out ? why : '', asked: ev ? ev.asked : 1, checked: ev ? ev.checked : (out ? 0 : 1),
-      retried: ev ? ev.retried : 0, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read' },
+      retried: ev ? ev.retried : 0, attempts: ev ? (Number(ev.attempts) || 1 + (Number(ev.retried) || 0)) : 1, read_light: !!sf.light_read, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read' },
     reason: out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
-      + ' Nobody has seen the pages that rank, the featured snippet or the AI Overview, so any number here would be invented. Run the check again.' : ''
+      + ' Nobody has seen the pages that rank, the featured snippet or the AI Overview, so any number here would be invented.' + (sf.retryable === false ? ' Run the check again.' : ' This is a temporary problem with the search data provider, not with your keyword. Run the check again later.') : ''
   };
 })();
 // ---- B1-1 (2026-10-15, benchmark area 1): the two numbers the keyword report puts in front of a customer ----
@@ -1287,7 +1287,9 @@ const VIS77 = (() => {
   const basis_text = c.traffic_basis === 'calibrated' ? 'calibrated with your own Search Console data'
     : c.traffic_basis === 'modelled' ? 'modelled from the provider\'s monthly volume, after this results page\'s click loss'
     : 'not estimated: no monthly search volume was measured for this keyword';
-  return { visits: c.traffic_potential, basis: c.traffic_basis, basis_text, note: c.traffic_note, model_estimate: model, loss_applied: KWI.lossText(SF77.features_present || []) };
+  return { visits: c.traffic_potential, basis: c.traffic_basis,
+    basis_text: basis_text + ((SF77.ai_overview || {}).not_read ? ' (the AI Overview was not read on this attempt, so any clicks it takes are not counted)' : ''),   // F-SERP
+    note: c.traffic_note, model_estimate: model, loss_applied: KWI.lossText(SF77.features_present || []) };
 })();
 const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;
 let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => PC.fta(noFaqSchema(x))).filter(Boolean) : [];   // R7: never FAQPage schema
@@ -1420,7 +1422,12 @@ if (LM21 && String(LM21.keyword || '').toLowerCase().trim() === String(prev.keyw
   const featsNow = (Array.isArray(sfR.features_present) ? sfR.features_present : []).map(String).filter(f => f !== 'ai_overview');
   const featsThen = (Array.isArray(LM21.features) ? LM21.features : []).map(String).filter(f => f !== 'ai_overview');
   const changed = [];
-  if (thenAio !== nowAio) changed.push(nowAio ? 'an AI Overview was seen this time, and none in the plan\'s reading' : 'no AI Overview was seen this time, while the plan\'s reading had one');
+  // F-SERP (2026-10-20): a reading taken on the lighter last attempt did not ask for the AI Overview, so it saw neither one nor its
+  // absence. An unread side is never compared: "no AI Overview this time" would be a claim nobody measured.
+  const nowAioRead = ((sfR.ai_overview || {}).present) != null, thenAioRead = LM21.ai_overview_read !== false;
+  const aioUnread = !nowAioRead || !thenAioRead
+    ? 'whether an AI Overview appears was not read in ' + (!nowAioRead && !thenAioRead ? 'either reading' : !nowAioRead ? 'this reading' : 'the plan\'s reading') + ', so it is not compared. ' : '';
+  if (nowAioRead && thenAioRead && thenAio !== nowAio) changed.push(nowAio ? 'an AI Overview was seen this time, and none in the plan\'s reading' : 'no AI Overview was seen this time, while the plan\'s reading had one');
   const added = featsNow.filter(f => !featsThen.includes(f)), gone = featsThen.filter(f => !featsNow.includes(f));
   if (added.length) changed.push('new on the page: ' + added.join(', '));
   if (gone.length) changed.push('gone from the page: ' + gone.join(', '));
@@ -1429,9 +1436,10 @@ if (LM21 && String(LM21.keyword || '').toLowerCase().trim() === String(prev.keyw
     + '; this page run read it again at ' + clock(nowAt) + (nowScore != null ? ' and scores it ' + nowScore : '') + '. '
     + (changed.length ? 'What the results page showed differently: ' + changed.join('; ') + '. '
       : (moved ? 'The results-page features read the same both times, so the difference is the judgement of the competing pages, made again on this reading. ' : ''))
+    + (aioUnread ? aioUnread.charAt(0).toUpperCase() + aioUnread.slice(1) : '')
     + 'A results page changes between readings; this page is written against the newer one.';
-  ladder_remeasure = { then: { score: thenScore, checked_at: String(LM21.checked_at || ''), ai_overview: thenAio, features: featsThen },
-    now: { score: nowScore, checked_at: nowAt, ai_overview: nowAio, features: featsNow }, score_moved: moved, changed, text };
+  ladder_remeasure = { then: { score: thenScore, checked_at: String(LM21.checked_at || ''), ai_overview: thenAioRead ? thenAio : null, features: featsThen },
+    now: { score: nowScore, checked_at: nowAt, ai_overview: nowAioRead ? nowAio : null, features: featsNow }, score_moved: moved, changed, text };
   verdict.reasons = [...(Array.isArray(verdict.reasons) ? verdict.reasons : []), text];
 }
 

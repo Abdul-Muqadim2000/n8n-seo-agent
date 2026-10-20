@@ -155,7 +155,10 @@
    "Any Start Crawl Retries?",
    "Wait Before Start Crawl Retry",
    "Start Crawl (Retry)",
-   "Start Crawl Answers"
+   "Start Crawl Answers",
+   "SERP Retry Failed?",
+   "Wait Before SERP Light Retry",
+   "SERP Top 10 (Light Retry)"
   ],
   "SEO Agent \u2014 AI Pulse": [
    "Run AI Requests",
@@ -1055,6 +1058,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Fetch Outbound Links",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "SERP Top 10 (Light Retry)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
