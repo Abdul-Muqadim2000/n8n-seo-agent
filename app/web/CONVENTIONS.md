@@ -45,7 +45,15 @@ state that asks for something, add or reuse a guide in the same change.
 - The panel (`components/guide/GuidePanel.tsx`, lazy-loaded) shows one step at a time with ticks kept in `localStorage`, copy
   buttons on every value, provider tabs, "If it does not work", related guides, **Copy all steps** and **Send to a colleague**
   (mailto with the steps and the values filled in — the person with DNS access is usually someone else).
-- Recommendations get theirs automatically: map the recommendation id in `GUIDE_FOR_RECOMMENDATION`.
+- Recommendations get theirs automatically: map the recommendation id in `GUIDE_FOR_RECOMMENDATION` (or a prefix in
+  `guideForRecommendation`). Needs-you items get theirs from `guideForNeedsYou` and each keyword-first screen from
+  `AUTOPILOT_SCREEN_GUIDES`, both in `@seo/shared/guide-links` (a small module: importing it does not load the catalogue). A new
+  Needs-you kind does not compile until `GUIDE_FOR_NEEDS_YOU_KIND` names its guide.
+- The weekly-autopilot guides (area `autopilot`) take the website's weekday, zone, monthly date, level and credits from
+  `autopilotGuideVars()` (`src/lib/guide-vars.ts`); their numbers come from `shared/src/cycles.ts`, never typed in. The Pipeline and
+  the launch step show "What happens next" (`components/site/WhatHappensNext.tsx`, steps from `src/lib/next-steps.ts`).
+- Copy in guides follows the house rules, checked in `guides.test.ts`: no em or en dashes, curly quotes or ellipsis characters, no stock
+  phrases, and no internal table or field names in the autopilot guides.
 - `GuideIndexButton` (sidebar, onboarding header) opens the searchable catalogue.
 - Tests: `shared/src/guides.test.ts` (ids, placeholders declared and used, https links, closed markup, plain-text export, search).
   Run the browser check in `app/scripts/` style against the dev stack when the panel itself changes.

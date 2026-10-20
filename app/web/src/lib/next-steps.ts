@@ -35,7 +35,8 @@ export interface NextStepsInput {
   projectFrom?: { tz: string } | null;
 }
 
-const fmt = (iso: string, tz: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-GB', { ...o, timeZone: tz }).format(new Date(iso));
+// browsers' ICU writes "Sun, 25 Oct" where Node's writes "Sun 25 Oct": one form everywhere
+const fmt = (iso: string, tz: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-GB', { ...o, timeZone: tz }).format(new Date(iso)).replace(',', '');
 /** "Sun 25 Oct" in the website's zone */
 export const dayLabel = (iso: string, tz: string) => fmt(iso, tz, { weekday: 'short', day: 'numeric', month: 'short' });
 /** "24 Nov" */
