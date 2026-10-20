@@ -172,11 +172,30 @@ function ComingUpPanel({ view, cycle, onWrite }: { view: ComingUpView; cycle?: S
             )}
           </>
         )}
+        {(view.approvedNotWritten ?? []).length > 0 && <NotWritten list={view.approvedNotWritten} />}
         {view.refused.length > 0 && <Refused list={view.refused} />}
       </div>
     </Panel>
   );
 }
+
+/** Approvals the run does not write, each with why (an approval that two different pages share asks for a new one). */
+export function NotWritten({ list }: { list: ComingUpView['approvedNotWritten'] }) {
+  return (
+    <Callout tone={list.some((x) => x.reason === 'ambiguous') ? 'warning' : 'info'} title={list.length === 1 ? 'One approval is not used in this run' : `${list.length} approvals are not used in this run`}>
+      <ul className="mt-1 space-y-1">
+        {list.map((x) => (
+          <li key={`${x.keyword}:${x.reason}`} className="text-[13px] leading-snug">
+            {x.message}
+          </li>
+        ))}
+      </ul>
+    </Callout>
+  );
+}
+
+/** The line a page of a ladder planned long ago carries: its keyword is checked again before anything is written. */
+export const RECHECK_LINE = 'Checking this keyword again before writing: the plan is more than 60 days old, so we make sure it is still a good choice first.';
 
 function Group({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
@@ -230,8 +249,13 @@ function ComingUpRow({ item, closed, onWrite }: { item: ComingUpItem; closed: bo
             <span className={cn('text-sm font-semibold', skipped ? 'text-ink-3 line-through decoration-1' : 'text-ink')}>{item.keyword}</span>
             <Badge tone={SOURCE_TONE[item.source]}>{SOURCE_LABEL[item.source] ?? item.source}</Badge>
             {decisionBadge(item)}
+            {item.recheck && <Badge tone="warning">Checking again</Badge>}
           </div>
-          {item.why && <p className="mt-1 text-[13px] leading-snug text-ink-2">{item.why}</p>}
+          {item.recheck ? (
+            <p className="mt-1 text-[13px] leading-snug text-ink-2">{RECHECK_LINE}</p>
+          ) : (
+            item.why && <p className="mt-1 text-[13px] leading-snug text-ink-2">{item.why}</p>
+          )}
           <p className="mt-0.5 text-xs text-ink-3">
             {asPageType(item.pageType)}
             {item.existingPageUrl ? ` · improves ${item.existingPageUrl.replace(/^https?:\/\/(www\.)?/, '')}` : ''}
@@ -246,7 +270,7 @@ function ComingUpRow({ item, closed, onWrite }: { item: ComingUpItem; closed: bo
               Approve
             </Button>
           )}
-          {!item.auto && !item.canApprove && onWrite && !skipped && (
+          {!item.auto && !item.canApprove && !item.recheck && onWrite && !skipped && (
             <Button size="sm" variant="secondary" icon={<PenSquare className="size-4" />} onClick={() => onWrite(item)}>
               Write it now
             </Button>

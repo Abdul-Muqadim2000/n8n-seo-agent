@@ -7,7 +7,8 @@ import { cadenceDetail, cadenceSchedule } from '../src/services/pipeline';
 // picks are the ones n8n's own code produces there. Keyword-first (2026-10-19): the ladders here have no `chosen_by` (a ladder from before
 // the column, or one started through the API: the client's own), so they are written at every level; what else is written on its own
 // depends on the website's autopilot level (`L3` below = full autopilot). The keyword-first rules themselves are held to the engine by the
-// shared fixture (cadenceLevels.test.ts, 36 cases).
+// shared fixture (cadenceLevels.test.ts, 57 cases). F-KW: a ladder planned more than 60 days ago and never written waits for a fresh keyword
+// check, so the ladders here are planned within the last 60 days (the order between them is what these cases are about).
 
 const NOW = Date.parse('2026-10-05T14:00:00Z');
 const D = 'northwind-erp.com';
@@ -22,9 +23,9 @@ const ladder = (id: string, head: string, pages: [number, number, string, string
   );
 const std = (id: string, h: string, start: string, st: St = {}) =>
   ladder(id, h, [[1, 1, `${h} cost`, st.a], [1, 2, `${h} guide`, st.b], [2, 3, `${h} software`, st.c], [3, 4, `${h} providers`, st.d], [4, 0, h, st.top]], start);
-const A = (st?: St) => std('lad_A', 'peppol uae', '2026-07-01T00:00:00.000Z', st);
-const B = (st?: St) => std('lad_B', 'vat software uae', '2026-08-01T00:00:00.000Z', st);
-const C = (st?: St) => std('lad_C', 'wms dubai', '2026-09-01T00:00:00.000Z', st);
+const A = (st?: St) => std('lad_A', 'peppol uae', '2026-08-20T00:00:00.000Z', st);
+const B = (st?: St) => std('lad_B', 'vat software uae', '2026-09-01T00:00:00.000Z', st);
+const C = (st?: St) => std('lad_C', 'wms dubai', '2026-09-10T00:00:00.000Z', st);
 const W3: St = { a: 'writing', b: 'writing', c: 'writing' };
 const set = (ladder_id: string, o: Partial<LadderSettingsRow> = {}) =>
   ({ ladder_id, site_id: 'site_northwind-erp-com', domain: D, head_keyword: '', mode: 'auto', priority: null, status: 'active', plan_type: '', reach: null, source: 'app', opportunities: '', auto_start: false, max_active: null, max_waiting: null, ...o }) as unknown as LadderSettingsRow;
@@ -174,7 +175,8 @@ describe('cadence mirror: pile-up guard and opportunity posts', () => {
   ] as QueryRow[];
   const trends = [{ domain: D, keyword: 'erp', checked_at: '2026-09-28T09:00:00Z', direction: 'rising', change_pct: 40, rising: 'cloud erp uae (+250%), erp for distributors' }] as TrendRow[];
   it('full autopilot (level 3): striking distance by impressions (no brand queries, latest period), then rising searches', () => {
-    const p = planCadence(input({ queries, trends, settings: L3() }), NOW);
+    // F-KW: every automatic item needs positive topic evidence, at level 3 too: the website sells what these searches are about
+    const p = planCadence(input({ queries, trends, settings: L3(), services: ['ERP software for distributors', 'ERP pricing and licensing', 'Cloud ERP'] }), NOW);
     expect(p.picks.map((x) => [x.keyword, x.source, x.pageType])).toEqual([
       ['erp for distributors', 'striking', 'Service Page'],
       ['erp pricing uae', 'striking', 'Guide'],
@@ -226,8 +228,10 @@ describe('cadence mirror: the AI page of the week (written on its own at level 3
     ({ target_id: 'ait_x_' + o.tid, site_id: 'site_northwind-erp-com', domain: D, prompt_id: '', question: o.question ?? 'Which companies help UAE businesses with e-invoicing?', keyword: o.keyword ?? 'e invoicing in uae', kind: o.kind ?? 'answer', page_url: o.page_url ?? '', page_type: 'Guide',
       fanout: 'a | b', sources_json: '[]', competitors: 'zoho.com, cleartax.com', engines: '', stage: 'decision', value: o.value ?? 1, status: o.status ?? 'queued', reason: '', created_at: '', updated_at: '', request_id: '', written_at: '', won_at: '' }) as AiTargetRow;
   const T = [target({ tid: '1', keyword: 'odoo vs business central uae', value: 2.1 }), target({ tid: '2', kind: 'refresh', page_url: slug('e invoicing uae'), value: 3.4 })];
+  // F-KW: the level-3 AI page needs positive topic evidence: the website sells what its questions are about
+  const AI_SERVICES = ['E-invoicing software', 'Business Central and Odoo implementation'];
   it('the most valuable queued target is written next to the weekly pages (a refresh of the page AI cited)', () => {
-    const p = planCadence(input({ pagesPerWeek: 1, ladders: A(), aiTargets: T, aiPagesPerMonth: 2, settings: L3() }), NOW);
+    const p = planCadence(input({ pagesPerWeek: 1, ladders: A(), aiTargets: T, aiPagesPerMonth: 2, settings: L3(), services: AI_SERVICES }), NOW);
     expect(p.picks.map((x) => x.source)).toEqual(['ladder', 'ai_refresh']);
     expect(p.picks[1].existingPageUrl).toBe(slug('e invoicing uae'));
     expect(p.picks[1].aiTarget).toEqual({ targetId: 'ait_x_2', question: 'Which companies help UAE businesses with e-invoicing?', kind: 'refresh', fanout: ['a', 'b'], sources: [], competitors: ['zoho.com', 'cleartax.com'] });
@@ -251,7 +255,7 @@ describe('cadence mirror: the AI page of the week (written on its own at level 3
     expect(p.picks[0].aiTarget?.targetId).toBe('ait_x_9');
   });
   it('the simulated cycles write the targets one after the other (a refresh is not repeated)', () => {
-    const weeks = simulateCadence(input({ pagesPerWeek: 1, aiTargets: T, aiPagesPerMonth: 4, settings: L3() }), ['2026-10-05T14:00:00.000Z', '2026-10-12T14:00:00.000Z', '2026-10-19T14:00:00.000Z']);
+    const weeks = simulateCadence(input({ pagesPerWeek: 1, aiTargets: T, aiPagesPerMonth: 4, settings: L3(), services: AI_SERVICES }), ['2026-10-05T14:00:00.000Z', '2026-10-12T14:00:00.000Z', '2026-10-19T14:00:00.000Z']);
     expect(weeks.map((w) => w.picks.map((x) => x.source + ':' + x.keyword))).toEqual([['ai_refresh:e invoicing in uae'], ['ai_answer:odoo vs business central uae'], []]);
   });
 });
@@ -283,14 +287,14 @@ describe('cadence mirror: pages the website already has (D11)', () => {
     expect(p.coveredByLivePages).toEqual([{ keyword: 'uae e invoicing penalties', source: 'trend', url: INS }]);
   });
   it('a ladder page for such a search is still written, as a refresh of that page, never a second URL', () => {
-    const L = ladder('lad_P', 'uae e invoicing', [[1, 1, 'uae e invoicing penalties', undefined]], '2026-07-01T00:00:00.000Z');
+    const L = ladder('lad_P', 'uae e invoicing', [[1, 1, 'uae e invoicing penalties', undefined]], daysAgo(30));   // F-KW: a plan older than 60 days waits for a fresh check
     const p = planCadence(input({ pagesPerWeek: 1, ladders: L, pages: INVENTORY }), NOW);
     expect(p.picks.map((x) => [x.keyword, x.existingPageUrl])).toEqual([['uae e invoicing penalties', INS]]);
     expect(p.picks[0].why).toContain('already answers this search, so it is refreshed, not written again');
     expect(p.coveredByLivePages.map((c) => c.source)).toEqual(['ladder']);
   });
   it('without an inventory the queue is exactly what it was before', () => {
-    const p = planCadence(input({ pagesPerWeek: 1, trends: rising('uae e invoicing penalties'), settings: L3() }), NOW);
+    const p = planCadence(input({ pagesPerWeek: 1, trends: rising('uae e invoicing penalties'), settings: L3(), services: ['UAE e-invoicing penalties and compliance'] }), NOW);
     expect(p.picks.map((x) => x.keyword)).toEqual(['uae e invoicing penalties']);
     expect(p.coveredByLivePages).toEqual([]);
   });
@@ -308,11 +312,13 @@ describe('cadence mirror: a page losing traffic is refreshed (B4-3)', () => {
       decay_state: 'decaying', decay_pct: -56, decay_lost: 500, decay_kind: 'visibility', decay_basis: 'Search Console clicks for this page, the last 28 days against the 28 days before (900 to 400).',
       ...o,
     }) as SitePageRow;
+  // F-KW: the website sells what these pages are about (an automatic refresh needs positive topic evidence at every level)
+  const DECAY_SERVICES = ['ERP implementation', 'ERP pricing'];
   const striking = (page: string) =>
     [{ domain: D, period_end: '2026-10-07', query: 'erp pricing uae', position: 8, impressions: 400, clicks: 5, page } as unknown as QueryRow];
 
   it('a confirmed decaying page is queued as a refresh of that URL, ahead of the striking-distance guess', () => {
-    const p = planCadence(input({ pagesPerWeek: 2, pages: [decaying()], queries: striking('https://www.northwind-erp.com/erp-pricing/'), settings: L3() }), NOW);
+    const p = planCadence(input({ pagesPerWeek: 2, pages: [decaying()], queries: striking('https://www.northwind-erp.com/erp-pricing/'), settings: L3(), services: DECAY_SERVICES }), NOW);
     expect(p.picks.map((x) => [x.source, x.existingPageUrl])).toEqual([
       ['decay', P],
       ['striking', 'https://www.northwind-erp.com/erp-pricing/'],
@@ -337,7 +343,7 @@ describe('cadence mirror: a page losing traffic is refreshed (B4-3)', () => {
   });
 
   it('one page is one piece of work: it is not queued as a refresh and as a striking-distance page', () => {
-    const p = planCadence(input({ pagesPerWeek: 3, pages: [decaying()], queries: striking(P), settings: L3() }), NOW);
+    const p = planCadence(input({ pagesPerWeek: 3, pages: [decaying()], queries: striking(P), settings: L3(), services: DECAY_SERVICES }), NOW);
     expect(p.picks.filter((x) => x.existingPageUrl === P)).toHaveLength(1);
     expect(p.picks.map((x) => x.source)).toEqual(['decay']);
   });

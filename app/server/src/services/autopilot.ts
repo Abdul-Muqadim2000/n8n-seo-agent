@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
 import {
   AUTOPILOT_LEVELS,
   NUDGE_AFTER_PAGES,
@@ -23,7 +23,7 @@ import { siteRows } from '../n8n/client';
 import { audit } from './audit';
 import { billingContacts } from './invoices';
 import { assessKeyword } from './keywordChecks';
-import { updateLadderSettings, updateSiteAutomation } from './ladderSettings';
+import { markLadderRechecked, updateLadderSettings, updateSiteAutomation } from './ladderSettings';
 import { baseUrlFor, senderFor } from './portalMail';
 import { wonLadderOf } from './runs';
 import { onPreview, skipsOf } from './comingUp';
@@ -75,6 +75,16 @@ export function automaticPage(log: Pick<ContentLogRow, 'request_id' | 'source' |
   return /^cad_/.test(S(log.request_id)) && S(log.source) !== 'ladder' && !approvedKeys.has(cycleNorm(log.keyword));
 }
 
+/** A written page's content-log row (pure; v5/code/Content_Log_Row.js `prior`): its request id and keyword, else the newest row of its keyword. */
+export function contentLogRowOf(logs: ContentLogRow[], requestId: string, keyword: string): ContentLogRow | null {
+  const k = cycleNorm(keyword);
+  return (
+    (requestId ? logs.find((l) => S(l.request_id) === requestId && cycleNorm(l.keyword) === k) : undefined) ??
+    logs.filter((l) => cycleNorm(l.keyword) === k).sort((a, b) => S(b.started_at).localeCompare(S(a.started_at)))[0] ??
+    null
+  );
+}
+
 /** Whether the rejections drop the level (pure): REJECT_LIMIT of the last REJECT_WINDOW automatic non-ladder pages were rejected. */
 export function autoPauseDue(o: { level: AutopilotLevel; automaticPages: Pick<ContentLogRow, 'keyword' | 'started_at'>[]; rejectedKeys: Set<string> }): boolean {
   if (o.level === 1) return false;
@@ -122,7 +132,9 @@ export async function rejectPage(req: FastifyRequest | null, org: OrgRow, user: 
   let approved = new Set<string>();
   if (site) {
     [logs, approved] = await Promise.all([siteRows<ContentLogRow>('contentLog', site.domain, { sortBy: 'started_at:desc', max: 1000 }).catch(() => [] as ContentLogRow[]), approvedKeysOf(site)]);
-    const row = logs.find((l) => S(l.request_id) === requestId) ?? null;
+    // F-KW: pages 2-3 of one ladder start share a request id, so the page's row is the one with its request id AND its keyword, else the
+    // newest row of its keyword (the engine's Content Log Row rule, word for word)
+    const row = contentLogRowOf(logs, requestId, keyword);
     source = row ? S(row.source) : source;
     automatic = automaticPage(row, approved);
   }
@@ -181,7 +193,19 @@ const wonOf = (p: Record<string, unknown>): string[] => (Array.isArray(p.won_lad
 /** The verdict of a fresh check fell (pure): not realistic now, or off the website's topic. */
 export const recheckFell = (r: { difficultyForYou?: string | null; fit?: number | null }): boolean => r.difficultyForYou === 'not_realistic' || r.fit === 0;
 
-/** After a cadence report or a plan: a ladder that just became active and was planned long ago is checked again (once, ever). */
+/** F-KW: the ladders the cadence itself says wait for a fresh check (`recheck_ladders` in a cycle_preview or content_cadence callback). */
+export const recheckLaddersOf = (p: Record<string, unknown> | null | undefined): string[] =>
+  (Array.isArray(p?.recheck_ladders) ? (p!.recheck_ladders as unknown[]) : []).map((x) => (x && typeof x === 'object' ? S((x as Record<string, unknown>).ladder_id) : S(x))).filter(Boolean);
+
+/**
+ * After a cadence report or a plan, a ladder planned long ago gets one fresh keyword check before its first page (plan §5.6):
+ *   * the ladders the cadence lists in `recheck_ladders` (F-KW: planned more than 60 days ago and never written, whether they were queued
+ *     or active all along; the engine decided at the cycle's due time, so its list is trusted as it is);
+ *   * and a ladder that was queued in the previous plan and is written now, when it was planned more than QUEUED_RECHECK_DAYS ago.
+ * A check that passes writes `rechecked_at` on the ladder's settings row (the cadence writes no page of such a ladder until it is set);
+ * one that fell pauses the ladder and the client is asked. One check per ladder; it may run again only when it failed to run, or when
+ * a pass is older than QUEUED_RECHECK_DAYS (the engine then asks for a fresh one).
+ */
 export async function recheckActivated(org: OrgRow, site: SiteRow, payload: Record<string, unknown>, reportId: string, log: Log = consoleLog, now = Date.now()): Promise<LadderRecheckRow[]> {
   // the plan before this one: the newest cadence report or plan of the website that is not this report
   const recent = await db.query.reports.findMany({
@@ -190,7 +214,8 @@ export async function recheckActivated(org: OrgRow, site: SiteRow, payload: Reco
     limit: 3,
   });
   const before = recent.find((r) => r.id !== reportId) ?? null;
-  const ids = newlyActive(queuedOf(before?.payload as Record<string, unknown>), queuedOf(payload), wonOf(payload));
+  const listed = new Set(recheckLaddersOf(payload));
+  const ids = [...new Set([...listed, ...newlyActive(queuedOf(before?.payload as Record<string, unknown>), queuedOf(payload), wonOf(payload))])];
   if (!ids.length) return [];
   const [ladders, settings] = await Promise.all([siteRows<LadderRow>('ladders', site.domain, { max: 2000, fresh: true }), siteRows<LadderSettingsRow>('ladderSettings', site.domain, { max: 500, fresh: true })]);
   // the system acts for the company's first active owner (a deactivated or suspended one is never acted for)
@@ -202,9 +227,9 @@ export async function recheckActivated(org: OrgRow, site: SiteRow, payload: Reco
     if (!rows.length || ['paused', 'archived', 'won'].includes(S(st?.status))) continue;
     const planned = rows.map((r) => S(r.start_date)).filter(Boolean).sort()[0] || S(st?.created_at);
     const t = Date.parse(planned);
-    if (!Number.isFinite(t) || now - t <= QUEUED_RECHECK_DAYS * 864e5) continue;
+    if (!listed.has(id) && (!Number.isFinite(t) || now - t <= QUEUED_RECHECK_DAYS * 864e5)) continue;
     const head = rows.find((r) => Number(r.rung) === 4)?.keyword || S(rows[0].head_keyword);
-    const [claimed] = await db.insert(schema.ladderRechecks).values({ orgId: org.id, siteId: site.id, ladderId: id, keyword: head }).onConflictDoNothing().returning();
+    const claimed = await claimRecheck(org.id, site.id, id, head, now);
     if (!claimed) continue;
     if (!owner) {
       await db.update(schema.ladderRechecks).set({ status: 'failed', reason: 'the company has no owner to check it for', checkedAt: new Date() }).where(eq(schema.ladderRechecks.id, claimed.id));
@@ -215,7 +240,9 @@ export async function recheckActivated(org: OrgRow, site: SiteRow, payload: Reco
       const check = await assessKeyword({ org, site, user: owner }, { keyword: head }, { automatic: true });
       const fell = recheckFell(check.result);
       const reason = fell ? (check.result.fit === 0 ? 'its keyword now looks outside your business' : 'its keyword is no longer realistic for your website') : '';
+      // the verdict reaches the engine: a fall pauses the ladder, a pass lets the cadence write its first page
       if (fell) await updateLadderSettings(site, id, { status: 'paused' });
+      else await markLadderRechecked(site, id, new Date(now).toISOString());
       const [row] = await db
         .update(schema.ladderRechecks)
         .set({ status: 'done', result: { difficultyForYou: check.result.difficultyForYou, fit: check.result.fit, checkId: check.id }, paused: fell, reason, checkedAt: new Date() })
@@ -229,6 +256,28 @@ export async function recheckActivated(org: OrgRow, site: SiteRow, payload: Reco
     }
   }
   return out;
+}
+
+/**
+ * Claims the one re-check of a ladder (pure database rule, safe across two servers): a new row, or the existing one when its check failed
+ * to run, or when it passed more than QUEUED_RECHECK_DAYS ago. A paused verdict is never re-checked (the client decides). null = not ours.
+ */
+async function claimRecheck(orgId: string, siteId: string, ladderId: string, keyword: string, now: number): Promise<LadderRecheckRow | null> {
+  const [fresh] = await db.insert(schema.ladderRechecks).values({ orgId, siteId, ladderId, keyword }).onConflictDoNothing().returning();
+  if (fresh) return fresh;
+  const [again] = await db
+    .update(schema.ladderRechecks)
+    .set({ status: 'pending', keyword, reason: '', checkedAt: null, createdAt: new Date(now) })
+    .where(
+      and(
+        eq(schema.ladderRechecks.siteId, siteId),
+        eq(schema.ladderRechecks.ladderId, ladderId),
+        eq(schema.ladderRechecks.paused, false),
+        or(eq(schema.ladderRechecks.status, 'failed'), and(eq(schema.ladderRechecks.status, 'done'), lt(schema.ladderRechecks.checkedAt, new Date(now - QUEUED_RECHECK_DAYS * 864e5)))),
+      ),
+    )
+    .returning();
+  return again ?? null;
 }
 
 // ---------------- Needs you (the autopilot's part) ----------------

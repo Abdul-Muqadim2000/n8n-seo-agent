@@ -13,6 +13,8 @@ export interface LadderRow extends DtRow {
   location_code: number; language_code: string; email: string; callback_url: string; request_id: string;
   /** R34 (A4, 2026-10-16): why a row is `live (existing page)` and the page that covers it; the planned address it would have had */
   status_note?: string; covered_by?: string; planned_url?: string;
+  /** F-KW (2026-10-20): who chose this ladder's keyword, written by the ladder run on every row before its settings row ('' = before the column) */
+  chosen_by?: string;
   /** the word count the ladder's verdict set for this page (0 = unknown); passed to a page run as `ladder_words` (P2-7) */
   target_words?: number;
 }
@@ -269,6 +271,9 @@ export interface LadderSettingsRow extends DtRow {
   chosen_by?: string;
   /** the '_site' row only: the website's autopilot level (1 | 2 | 3; empty = 2) */
   autopilot_level?: number | string | null;
+  /** F-KW (2026-10-20, plan §5.6): when the app's fresh keyword check of a ladder planned 60+ days ago PASSED (ISO); the cadence writes no
+   * page of such a ladder until it is set. Written by the app (autopilot.ts recheckActivated). */
+  rechecked_at?: string;
 }
 
 /** seo_ladder_settings exactly as n8n reads it (Cadence_Plan.js): the app creates the table with these columns when it is missing. */
@@ -291,6 +296,7 @@ export const LADDER_SETTINGS_COLUMNS = [
   { name: 'updated_at', type: 'string' },
   { name: 'chosen_by', type: 'string' },
   { name: 'autopilot_level', type: 'number' },
+  { name: 'rechecked_at', type: 'string' },
 ] as const;
 export type LadderSettingsColumn = (typeof LADDER_SETTINGS_COLUMNS)[number]['name'];
 /** the settings row that holds the website's defaults */
@@ -370,4 +376,7 @@ export const SKIPS_COLUMNS = [
   { name: 'scope', type: 'string' },
   { name: 'by', type: 'string' },
   { name: 'created_at', type: 'string' },
+  // F-KW (2026-10-20): the item an approval is for (the plan item's source and ladder), so it never approves another page with the keyword
+  { name: 'source', type: 'string' },
+  { name: 'ladder_id', type: 'string' },
 ] as const;

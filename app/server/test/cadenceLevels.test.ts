@@ -39,10 +39,10 @@ const sortJ = (a: unknown[]) => a.map((x) => JSON.stringify(x)).sort();
 const planOf = (c: FixtureCase) => planCadence(cadenceInputFromTables(c.tables, { estPageUsd: 0.84 }), Date.parse(c.now), triggerOf(c.trigger));
 
 describe('the shared keyword-first fixture (n8n/seo-agent/harness/fixtures/cadence_levels.json)', () => {
-  it('is the file the engine runs: it names this mirror and the contract, and holds the 36 cases', () => {
+  it('is the file the engine runs: it names this mirror and the contract, and holds the 57 cases', () => {
     expect(FX._doc).toMatch(/cadence\.ts/);
     expect(FX.contract).toBe('app/shared/src/cycles.ts');
-    expect(FX.cases.length).toBe(36);
+    expect(FX.cases.length).toBe(57);
   });
 
   for (const c of FX.cases) {

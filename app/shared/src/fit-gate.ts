@@ -62,11 +62,15 @@ const FIT_WIDE = new Set(['business', 'businesses', 'company', 'companies', 'fir
   'consultants', 'consultancy', 'partners', 'partner', 'network', 'info', 'guide', 'guides', 'blog', 'list', 'directory', 'review', 'reviews', 'compare', 'comparison', 'pro', 'plus', 'one', 'first',
   'get', 'go', 'easy', 'home', 'world', 'city', 'market', 'media', 'shop', 'store', 'gulf', 'arab', 'arabia', 'emirates', 'google', 'microsoft', 'amazon', 'apple']);
 
+// F-KW (2026-10-20): letters, marks and digits of EVERY script (an Arabic keyword used to have no tokens at all), NFKC-folded and
+// lower-cased without a locale, exactly as the engine's kit
+const FIT_SPLIT = /[^\p{L}\p{M}\p{N}.]+/u;
+const FIT_SPLIT_WORDS = /[^\p{L}\p{M}\p{N}]+/u;
+const fitLow = (s: unknown) => String(s || '').normalize('NFKC').toLowerCase();
 export const fitTokens = (s: unknown): string[] =>
-  String(s || '')
-    .toLowerCase()
+  fitLow(s)
     .replace(/[’']/g, '')
-    .split(/[^a-z0-9.]+/)
+    .split(FIT_SPLIT)
     .map((t) => t.replace(/^\.+|\.+$/g, ''))
     .filter((t) => t.length > 1 && !FIT_STOP.has(t));
 export const fitHost = (d: unknown): string =>
@@ -89,6 +93,41 @@ export const fitLabels = (domain: unknown, protect: string[] = []): string[] => 
   const parts = [...new Set([first, ...first.split(/[-_]/)])];
   return parts.map((p) => p.replace(/[^a-z0-9]/g, '')).filter((p) => p.length >= FIT_CFG.min_label && !FIT_GENERIC.has(p) && !FIT_GEO.has(p) && !protect.includes(p));
 };
+// F-KW (2026-10-20): a label is the website's own BRAND only when it is distinctive. A label that splits entirely into category, generic
+// or place words, or into the words of the keyword or of what the client protected, describes what the site sells ("erp-software.ae",
+// "crmexperts.ae"); a keyword made of those words is the client's own subject. "techand" does not split, so "techand crm" stays a brand.
+const FIT_CATEGORY = new Set(['expert', 'experts', 'specialist', 'specialists', 'consultant', 'advisor', 'advisors', 'advisory', 'agency', 'agencies', 'design', 'designs', 'designer', 'designers',
+  'interior', 'interiors', 'outsourcing', 'marketing', 'seo', 'legal', 'law', 'lawyer', 'lawyers', 'clinic', 'clinics', 'dental', 'medical', 'health', 'care', 'realty', 'property', 'properties', 'homes',
+  'travel', 'tours', 'logistics', 'cargo', 'shipping', 'trading', 'auto', 'autos', 'cars', 'motors', 'insurance', 'printing', 'events', 'cleaning', 'maintenance', 'security', 'training', 'courses',
+  'implementation', 'integration', 'migration', 'support', 'hosting', 'it', 'hr', 'audit', 'auditing', 'bookkeeping', 'consult', 'advice', 'pros', 'works', 'labs', 'studio', 'studios',
+  'center', 'centre', 'source', 'point', 'zone', 'link', 'links', 'line', 'now', 'hq', 'co', 'inc', 'llc', 'ltd', 'fz', 'fzco', 'fze', 'dmcc']);
+const fitWordBreak = (label: string, vocab: Set<string>) => {
+  const n = label.length;
+  const ok = new Array<boolean>(n + 1).fill(false);
+  ok[0] = true;
+  for (let i = 1; i <= n; i++)
+    for (let j = Math.max(0, i - 30); j < i; j++)
+      if (ok[j] && vocab.has(label.slice(j, i))) {
+        ok[i] = true;
+        break;
+      }
+  return ok[n];
+};
+/** The website's own distinctive brand labels (the engine's fitOwnLabels): a label made only of category, place or keyword words is not a brand. */
+export const fitOwnLabels = (domain: unknown, toks: string[] = [], protect: string[] = []): string[] =>
+  fitLabels(domain, []).filter((l) => {
+    const words = [...FIT_GENERIC, ...FIT_GEO, ...FIT_CATEGORY, ...toks, ...protect]
+      .map((w) => String(w || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''))
+      .filter((w) => w.length >= 2 && w !== l && !FIT_STOP.has(w));
+    const vocab = new Set<string>();
+    for (const w of words) {
+      vocab.add(w);
+      vocab.add(w + 's');
+      if (w.length > 3 && w.endsWith('s')) vocab.add(w.slice(0, -1));
+    }
+    vocab.delete(l);
+    return !fitWordBreak(l, vocab);
+  });
 /** the learned "name -> domain" map from seo_cache rows (key ai_brands:<site_id>) */
 export const fitLearnedBrands = (rows: unknown[]): Record<string, string> => {
   const out: Record<string, string> = {};
@@ -113,15 +152,16 @@ const topicList = (topics: string[] | string | null | undefined): string[] => (A
 const fitTopicWords = (topics: string[] | string | null | undefined) =>
   new Set(
     (Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || ''))
+      .normalize('NFKC')
       .toLowerCase()
-      .split(/[^a-z0-9]+/)
+      .split(FIT_SPLIT_WORDS)
       .filter((t) => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t))
       .map(fitStem),
   );
 const fitTopicPhrases = (topics: string[] | string | null | undefined) =>
   topicList(topics)
     .map((t) => {
-      const w = t.toLowerCase().split(/[^a-z0-9]+/).filter((x) => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
+      const w = fitLow(t).split(FIT_SPLIT_WORDS).filter((x) => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
       return { dist: [...new Set(w.filter((x) => !FIT_GENERIC.has(x)).map(fitStem))], words: [...new Set(w.map(fitStem))] };
     })
     .filter((p) => p.dist.length)
@@ -144,14 +184,15 @@ export function fitTopic(keyword: string, topics: string[] | string | null | und
   if (T.size < (typeof opts.topic_min_words === 'number' ? opts.topic_min_words : 12))
     return { ok: true, reason: '', detail: T.size ? `too few topic words on file (${T.size}) to judge topic distance` : 'no topics on file, so topic distance was not judged', share: null };
   const toks = fitTokens(keyword);
-  const own = toks.filter((t) => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t));
+  // a year or a number ("2026") is neutral, like a place
+  const own = toks.filter((t) => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t) && !/^\d+$/.test(t));
   const known = [...T];
   const stemHit = (s: string, x: string) => x === s || (x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0));
   const matches = (t: string) => {
     const s = fitStem(t);
     return T.has(s) || known.some((x) => stemHit(s, x));
   };
-  const ownStems = toks.filter((t) => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t)).map(fitStem);
+  const ownStems = toks.filter((t) => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t) && !/^\d+$/.test(t)).map(fitStem);
   const allStems = toks.filter((t) => t.length > 2 && !FIT_GEO.has(t)).map(fitStem);
   const viaName = (t: string) => {
     const s = fitStem(t);
@@ -175,10 +216,36 @@ export function fitTopic(keyword: string, topics: string[] | string | null | und
     return {
       ok: false,
       reason: 'off topic',
-      detail: `${Math.round(share * 100)}% of its own words match ${label} (${Math.round(bar * 100)}% is the bar): ${own.filter((t) => hits.indexOf(t) < 0).slice(0, 4).join(', ')}. Add it to your services if you do sell it`,
+      detail: `${Math.round(share * 100)}% of its own words match ${label} (${Math.round(bar * 100)}% is the bar): ${own.filter((t) => hits.indexOf(t) < 0).slice(0, 4).join(', ')}. Add it to your services if you do sell it.`,
       share,
     };
   return { ok: true, reason: '', detail: `${Math.round(share * 100)}% of its own words match ${label}`, share };
+}
+
+export interface TopicEvidence {
+  /** in: the keyword's own words are in the topics given; out: with 12+ topic words on file it misses the bar; unknown: too little on file */
+  verdict: 'in' | 'out' | 'unknown';
+  share: number | null;
+  words: number;
+  detail: string;
+}
+
+/**
+ * POSITIVE topic evidence, for the decisions that write on their own (the engine's fitEvidence). fitTopic refuses nothing with fewer than
+ * 12 topic words on file ("no evidence, no refusal"); here too little on file is `unknown`, which a caller treats as NOT in topic.
+ */
+export function fitEvidence(keyword: string, topics: string[] | string | null | undefined, opts: Pick<FitContext, 'topic_bar' | 'topic_label'> = {}): TopicEvidence {
+  const T = fitTopicWords(topics);
+  if (!T.size) return { verdict: 'unknown', share: null, words: 0, detail: 'nothing is on file about what this website sells or the keywords you chose, so whether it is on topic cannot be judged' };
+  const t = fitTopic(keyword, topics, { ...opts, topic_min_words: 1 });
+  if (t.ok && t.share != null) return { verdict: 'in', share: t.share, words: T.size, detail: t.detail };
+  if (T.size >= 12) return { verdict: 'out', share: t.share, words: T.size, detail: t.detail };
+  return {
+    verdict: 'unknown',
+    share: t.share,
+    words: T.size,
+    detail: `not enough information to judge whether it is on topic: only ${T.size} topic word${T.size === 1 ? '' : 's'} on file, and too few of them are in this keyword`,
+  };
 }
 
 const hasTopics = (t: FitContext['topics']) => !!t && (Array.isArray(t) ? t.length > 0 : String(t).trim() !== '');
@@ -192,7 +259,8 @@ export function fitGate(keyword: string, ctx: FitContext = {}): FitResult {
   const protect = [...new Set((ctx.protect || []).flatMap((p) => fitTokens(p)))];
   const has = (re: RegExp) => re.test(' ' + kw + ' ');
   const contentWord = has(FIT_CONTENT), partnerWord = has(FIT_PARTNER), compareWord = has(FIT_COMPARE), portalWord = has(FIT_PORTAL);
-  for (const l of fitLabels(ctx.own_domain, [])) if (toks.includes(l) || squashed.includes(l)) return { ok: false, reason: 'own brand', detail: `names the website itself (${l})` };
+  // only a DISTINCTIVE label is the website's brand: on an exact-match domain the label is made of the very words the client sells
+  for (const l of fitOwnLabels(ctx.own_domain, toks, protect)) if (toks.includes(l) || squashed.includes(l)) return { ok: false, reason: 'own brand', detail: `names the website itself (${l})` };
   if (String(ctx.intent || '').toLowerCase() === 'navigational') return { ok: false, reason: 'navigational', detail: 'the search data classifies it as navigational (people look for one particular website)' };
   const govWord = (' ' + kw + ' ').match(FIT_GOV_WORDS);
   if (govWord && !contentWord) return { ok: false, reason: 'government', detail: `a public body, not a topic (${String(govWord[1] || govWord[0]).trim()})` };
@@ -269,6 +337,6 @@ export function fitStored(row: Record<string, unknown>, ctx: FitContext = {}): S
   const g = fitGate(kw, ctx);
   if (g.ok) return { ok: true, live, flagged: false, reason: '', detail: '', note: '' };
   const why = `"${kw}" is not a search this website should target: ${g.detail} (${g.reason})`;
-  if (live) return { ok: true, live: true, flagged: true, reason: String(g.reason), detail: String(g.detail), note: `${why}. Its page is already written, so it stays tracked; decide whether to keep it` };
-  return { ok: false, live: false, flagged: true, reason: String(g.reason), detail: String(g.detail), note: `${why}. It was planned before this rule existed, so it is set aside instead of written` };
+  if (live) return { ok: true, live: true, flagged: true, reason: String(g.reason), detail: String(g.detail), note: `${why}. Its page is already written, so it stays tracked; decide whether to keep it.` };
+  return { ok: false, live: false, flagged: true, reason: String(g.reason), detail: String(g.detail), note: `${why}. It is set aside, so no page is written for it.` };
 }

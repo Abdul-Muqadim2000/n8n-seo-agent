@@ -343,7 +343,8 @@ describe('needs you', () => {
 });
 
 describe('cards and Needs you from the cadence mirror', () => {
-  const rows = [...ladder('m', 'payroll uae', 3, 90), ...ladder('a', 'erp dubai', 3, 60)];
+  // F-KW: the Auto ladder is planned within 60 days of the coming runs (an older plan that was never written waits for a fresh check)
+  const rows = [...ladder('m', 'payroll uae', 3, 90), ...ladder('a', 'erp dubai', 3, 40)];
   const build = (o: Partial<LadderSources>, runs = MONDAYS.slice(0, 2), extra: Partial<LadderSchedule> = {}) => {
     const s = src({ ladders: rows, ...o });
     const weeks = simulateCadence({ domain: 'techand.ai', pagesPerWeek: 1, ladders: s.ladders, queries: [], trends: [], logs: s.logs, settings: s.settings, history: s.history }, runs, NOW);

@@ -328,15 +328,18 @@ const preview = (o: Partial<ComingUpView> = {}): ComingUpView => ({
   pausedReason: '',
   reason: '',
   items: [
-    { itemKey: 'payroll software uae', keyword: 'payroll software uae', source: 'ladder', pageType: 'Service Page', existingPageUrl: '', ladderId: 'lad_1', rung: 1, why: 'The next page of your keyword', auto: true, credits: 60, aiTarget: null, decision: null, canSkip: true, canApprove: false },
+    { itemKey: 'payroll software uae', keyword: 'payroll software uae', source: 'ladder', pageType: 'Service Page', existingPageUrl: '', ladderId: 'lad_1', rung: 1, why: 'The next page of your keyword', auto: true, credits: 60, aiTarget: null, decision: null, canSkip: true, canApprove: false, recheck: false },
   ],
   suggestions: [
-    { itemKey: 'payroll for clinics', keyword: 'payroll for clinics', source: 'trend', pageType: 'Blog Post', existingPageUrl: '', ladderId: '', rung: 0, why: 'Searches rose 40% this month', auto: false, credits: 55, aiTarget: null, decision: null, canSkip: true, canApprove: true },
+    { itemKey: 'payroll for clinics', keyword: 'payroll for clinics', source: 'trend', pageType: 'Blog Post', existingPageUrl: '', ladderId: '', rung: 0, why: 'Searches rose 40% this month', auto: false, credits: 55, aiTarget: null, decision: null, canSkip: true, canApprove: true, recheck: false },
   ],
   refused: [{ keyword: 'adp login', source: 'striking', reason: 'other_brand', detail: 'A search for another company' }],
   autoCredits: 60,
   canDecide: true,
   closed: false,
+  approvedNotWritten: [],
+  recheckLadders: [],
+  budget: { pagesPerWeek: 1, spent: 0, room: 1, ladderStartWindow: null },
   ...o,
 });
 
@@ -354,6 +357,32 @@ describe('Coming up', () => {
     expect((t.match(/Skip/g) ?? []).length).toBeGreaterThanOrEqual(2);
     expect(t).toContain('1 topic we left out');
     expect(t).not.toContain('Monday');
+  });
+
+  it('F-KW: a page of an old plan says its keyword is checked again first (no Approve, no Write it now); an approval two pages share explains itself', () => {
+    const old = {
+      itemKey: 'payroll audit uae', keyword: 'payroll audit uae', source: 'ladder' as const, pageType: 'Service Page', existingPageUrl: '', ladderId: 'lad_old', rung: 1,
+      why: 'checking this keyword again before writing: it was planned more than 60 days ago', auto: false, credits: 60, aiTarget: null, decision: null, canSkip: true, canApprove: false, recheck: true,
+    };
+    const qc = client((q) =>
+      q.setQueryData(
+        qk.siteData(tracked.id, 'coming-up'),
+        preview({
+          items: [old],
+          suggestions: [],
+          recheckLadders: [{ ladderId: 'lad_old', head: 'payroll audit uae', plannedAt: '2026-08-01T00:00:00.000Z' }],
+          approvedNotWritten: [{ keyword: 'payroll for clinics', reason: 'ambiguous', message: 'Your OK for "payroll for clinics" was not used: 2 different pages share this search, so we did not know which one you meant. Approve the one you want again.' }],
+        }),
+      ),
+    );
+    const t = text(inSite(<ComingUp />, { qc }));
+    expect(t).toContain('Checking again');
+    expect(t).toContain('Checking this keyword again before writing');
+    expect(t).not.toContain('Write it now');
+    expect(t).not.toMatch(/\bApprove\b(?! the one)/);
+    expect(t).toContain('One approval is not used in this run');
+    expect(t).toContain('2 different pages share this search');
+    expect(t).not.toMatch(/—|…|[“”]/);
   });
 
   it('closed once the run started; waiting for the first keyword says what to do; no plan yet says when it comes', () => {

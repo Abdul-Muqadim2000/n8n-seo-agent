@@ -11,6 +11,7 @@ import {
   type AutopilotLevel,
   type ComingUpDecisionResult,
   type ComingUpItem,
+  type ComingUpNotWritten,
   type ComingUpView,
   type CyclePreview,
   type CyclePreviewItem,
@@ -44,6 +45,9 @@ const asLevel = (v: unknown): AutopilotLevel => (Number(v) === 1 || Number(v) ==
 
 /** The preview body is the engine's: read every field defensively (an older engine may leave some out). */
 export function previewOf(body: Record<string, unknown>): CyclePreview {
+  const recheckIds = new Set(
+    (Array.isArray(body.recheck_ladders) ? body.recheck_ladders : []).map((x) => (x && typeof x === 'object' ? S((x as Record<string, unknown>).ladder_id) : S(x))).filter(Boolean),
+  );
   const list = (v: unknown): CyclePreviewItem[] =>
     (Array.isArray(v) ? v : [])
       .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object' && !!S((x as Record<string, unknown>).keyword))
@@ -59,7 +63,13 @@ export function previewOf(body: Record<string, unknown>): CyclePreview {
         auto: x.auto === true,
         est_usd: Number(x.est_usd) > 0 ? Number(x.est_usd) : 0,
         ai_target: x.ai_target && typeof x.ai_target === 'object' ? (x.ai_target as CyclePreviewItem['ai_target']) : null,
+        // the engine marks the item, or lists its ladder in recheck_ladders (its preview items do not carry the flag)
+        recheck: x.recheck === true || recheckIds.has(S(x.ladder_id)),
       }));
+  const recheck_ladders = (Array.isArray(body.recheck_ladders) ? body.recheck_ladders : [])
+    .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object' && !!S((x as Record<string, unknown>).ladder_id))
+    .map((x) => ({ ladder_id: S(x.ladder_id), head: S(x.head), planned_at: S(x.planned_at), reason: S(x.reason) }));
+  const b = body.budget && typeof body.budget === 'object' ? (body.budget as Record<string, unknown>) : null;
   const pr = S(body.paused_reason);
   return {
     stage: 'cycle_preview',
@@ -78,7 +88,41 @@ export function previewOf(body: Record<string, unknown>): CyclePreview {
     refused: (Array.isArray(body.refused) ? body.refused : [])
       .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
       .map((x) => ({ keyword: S(x.keyword), source: S(x.source), reason: S(x.reason), detail: S(x.detail) })),
+    recheck_ladders,
+    approved_not_written: (Array.isArray(body.approved_not_written) ? body.approved_not_written : [])
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object' && !!S((x as Record<string, unknown>).keyword))
+      .map((x) => ({ keyword: S(x.keyword), source: S(x.source), reason: S(x.reason), detail: S(x.detail) })),
+    ...(b
+      ? {
+          budget: {
+            pages_per_week: Number(b.pages_per_week) || 0,
+            spent: Number(b.spent) || 0,
+            room: Number(b.room) || 0,
+            window_start: S(b.window_start),
+            ladder_start_window: S(b.ladder_start_window),
+          },
+        }
+      : {}),
   };
+}
+
+/** Why an approval is not written this cycle, in the customer's words (the engine's reason codes and details never reach the page). */
+export function notWrittenMessage(x: { keyword: string; reason: string; detail?: string }): ComingUpNotWritten {
+  const q = `"${x.keyword}"`;
+  switch (x.reason) {
+    case 'ambiguous': {
+      const n = Number((S(x.detail).match(/(\d+) different pages/) ?? [])[1]) || 2;
+      return { keyword: x.keyword, reason: 'ambiguous', message: `Your OK for ${q} was not used: ${n} different pages share this search, so we did not know which one you meant. Approve the one you want again.` };
+    }
+    case 'pileup':
+      return { keyword: x.keyword, reason: 'pileup', message: `Your OK for ${q} waits: pages we already wrote are waiting to be published. Publish them and it is written in a later cycle once you approve it again.` };
+    case 'covered_by_live_page':
+      return { keyword: x.keyword, reason: 'covered_by_live_page', message: `${q} is not written: a page of your website already answers this search.` };
+    case 'budget':
+      return { keyword: x.keyword, reason: 'budget', message: `${q} did not fit in this cycle: your pages a week are already used. Approve it again in a later plan.` };
+    default:
+      return { keyword: x.keyword, reason: 'other', message: `${q} is not written in this cycle.` };
+  }
 }
 
 /**
@@ -127,7 +171,7 @@ const decisionOf = (skips: SkipRow[], siteId: string, cycleKey: string, key: str
 export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview: CyclePreviewRow | null; skips: SkipRow[]; role: Role; now: number; credits: (usd: number) => number }): ComingUpView {
   const canDecide = roleAtLeast(o.role, 'member');
   if (!o.preview)
-    return { available: false, cycleKey: '', cycleDate: '', scheduledFor: null, receivedAt: null, level: 2, pagesPerWeek: 0, waitingForKeyword: false, pausedReason: '', reason: '', items: [], suggestions: [], refused: [], autoCredits: 0, canDecide, closed: false };
+    return { available: false, cycleKey: '', cycleDate: '', scheduledFor: null, receivedAt: null, level: 2, pagesPerWeek: 0, waitingForKeyword: false, pausedReason: '', reason: '', items: [], suggestions: [], refused: [], autoCredits: 0, canDecide, closed: false, approvedNotWritten: [], recheckLadders: [], budget: null };
   const p = previewOf(o.preview.body);
   const siteId = n8nSiteId(o.site.domain);
   const due = o.preview.scheduledFor?.getTime() ?? Date.parse(p.scheduled_for);
@@ -157,7 +201,9 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
         : null,
       decision: decisionOf(o.skips, siteId, p.cycle_key, x.item_key),
       canSkip: canDecide && !closed,
-      canApprove: canDecide && !closed && !x.auto,
+      // a page waiting for its fresh keyword check is not approvable: the check decides first
+      canApprove: canDecide && !closed && !x.auto && !x.recheck,
+      recheck: x.recheck === true,
     };
   };
   const items = p.items.map(toItem);
@@ -178,6 +224,9 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
     autoCredits: items.filter((i) => i.auto && i.decision?.decision !== 'skip').reduce((t, i) => t + i.credits, 0),
     canDecide,
     closed,
+    approvedNotWritten: (p.approved_not_written ?? []).map(notWrittenMessage),
+    recheckLadders: (p.recheck_ladders ?? []).map((r) => ({ ladderId: r.ladder_id, head: r.head, plannedAt: r.planned_at })),
+    budget: p.budget ? { pagesPerWeek: p.budget.pages_per_week, spent: p.budget.spent, room: p.budget.room, ladderStartWindow: p.budget.ladder_start_window || null } : null,
   };
 }
 
@@ -220,6 +269,9 @@ export function decisionRow(o: { site: Pick<SiteRow, 'domain'>; preview: CyclePr
     scope: o.input.scope,
     by: o.by.slice(0, 200),
     created_at: new Date(o.now).toISOString(),
+    // F-KW: an approval names its item (source and ladder), so it never approves another page that shares the keyword; a skip is for the keyword
+    source: o.input.decision === 'approve' ? item.source : '',
+    ladder_id: o.input.decision === 'approve' ? item.ladder_id : '',
   };
   return { row, item, preview: p };
 }

@@ -400,6 +400,24 @@ level-3 proposal that gets a new start time after a level change is announced ag
 website's own time zone ("Thursday 22 October at 16:00 (Dubai time)"). Every proposal stores `volume`, `difficultyForYou`, `planType`,
 `months`, `why` in `details` (null or '' when the research did not say).
 
+**Deploy order for the F-KW columns (2026-10-20).** Before this app version goes live, the engine's `sync_tables.py` (run by `apply_env.py`
+or the engine release step) must have added `seo_ladders.chosen_by`, `seo_ladder_settings.rechecked_at`, `seo_skips.source` and
+`seo_skips.ladder_id` (ladder_common.py `LADDER_COLS`, `LADDER_SETTINGS_COLS`, `SKIPS_COLS`). The app writes `rechecked_at` after a passed
+fresh check and `source` / `ladder_id` on every "Coming up" approval; n8n refuses a write to a column it does not have, so on an engine
+without them a decision answers 502 and a re-check is recorded as failed (and tried again on the next plan) until the columns exist.
+
+**The fresh keyword check of an old plan** (`services/autopilot.ts` `recheckActivated`, plan §5.6, F-KW). A ladder planned more than 60
+days ago that never had a page written waits in the Content Cadence for one fresh keyword check. The app runs it for every ladder the
+cadence lists in `recheck_ladders` (in a `cycle_preview` or `content_cadence` callback), and for a ladder that was queued in the previous
+plan and is written now. A pass writes `rechecked_at` (ISO) on the ladder's `seo_ladder_settings` row, so the next cycle writes its first
+page; a fall pauses the ladder and the client is asked (`recheck:<ladderId>` in Needs you). One check per ladder (`ladder_rechecks`); it
+runs again only when it failed to run, or when its pass is more than 60 days old. "Coming up" marks those pages `recheck: true` ("Checking
+again"; not approvable, the check decides first) and lists `recheckLadders`; its view also carries `approvedNotWritten` (each approval the
+cycle does not write, with a customer sentence: `ambiguous` = an older approval that names only a keyword two different pages share) and
+`budget` (`pagesPerWeek`, `spent`, `room`, `ladderStartWindow`: ladder starts count from the previous cadence run). A "Coming up" approval
+writes the item's `source` and `ladder_id` on its `seo_skips` row, so it approves that page only; a skip names the keyword.
+"Not what I wanted" finds the page's content-log row by its request id and keyword (pages of one ladder start share a request id).
+
 **Keyword checks the system starts** (the queued-ladder re-check) act for the company's first active owner (not deactivated, not
 suspended), are stored `keyword_checks.automatic = true` (migration 0019) and are filed as the website's autopilot spend (`origin:
 schedule`), never the owner's on-demand spend.

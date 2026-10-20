@@ -406,3 +406,134 @@ describe('9. the engine without seo_ladder_settings.autopilot_level', () => {
     expect(missingLevelColumn(new Error('unknown column'), { autopilot_level: 1 })).toBe(false);
   });
 });
+
+// ======================================================================================================================================
+// The app half of F-KW (2026-10-20): the engine's keyword-first review fixes, mirrored and acted on by the app
+// ======================================================================================================================================
+
+describe('F-KW 2. the fresh keyword check of an old plan', () => {
+  const ladder = (domain: string, planned: string) => [
+    { ladder_id: 'lad_old', domain, head_keyword: 'crm consulting dubai', keyword: 'crm consulting dubai', rung: 4, page_no: 9, status: 'planned', start_date: planned },
+    { ladder_id: 'lad_old', domain, head_keyword: 'crm consulting dubai', keyword: 'crm consulting cost', rung: 1, page_no: 1, status: 'planned', start_date: planned },
+  ];
+  const cadence = (domain: string, extra: Record<string, unknown>) => ({ stage: 'content_cadence', status: 'progress', domain, trigger: 'cycle', queued_ladders: [], won_ladders: [], ...extra });
+
+  it('a ladder active all along that the cadence lists in recheck_ladders is checked; a pass writes rechecked_at, nothing is paused', async () => {
+    const co = await company('fkw-rc1@ps.test', 'Recheck One');
+    const s = await site(co.org.id, 'rc1-ps.com', { trackingStatus: 'active' });
+    t.tables.ladders = [...(t.tables.ladders ?? []), ...ladder('rc1-ps.com', new Date(Date.now() - 70 * DAY).toISOString())];
+    const org = await orgRow(co.org.id);
+    // never in a queued list: the old trigger (the queued-list diff) never fired for it
+    await ingestCallback(org, cadence('rc1-ps.com', { recheck_ladders: [{ ladder_id: 'lad_old', head: 'crm consulting dubai', planned_at: '', reason: 'checking this keyword again before writing' }] }));
+    await flush(300);
+    const rows = await db.query.ladderRechecks.findMany({ where: eq(schema.ladderRechecks.siteId, s.id) });
+    expect(rows.map((r) => [r.ladderId, r.status, r.paused])).toEqual([['lad_old', 'done', false]]);
+    const st = t.tables.ladderSettings.find((r) => r.ladder_id === 'lad_old' && r.domain === 'rc1-ps.com')!;
+    expect(Date.parse(String(st.rechecked_at))).toBeGreaterThan(Date.now() - 60_000);
+    expect(st.status).not.toBe('paused');
+    const check = (await db.query.keywordChecks.findMany({ where: eq(schema.keywordChecks.siteId, s.id) }))[0];
+    expect(check.automatic).toBe(true);
+  });
+
+  it('a check that fell pauses the ladder and writes no rechecked_at; a check that failed to run is tried again on the next plan', async () => {
+    const co = await company('fkw-rc2@ps.test', 'Recheck Two');
+    const s = await site(co.org.id, 'rc2-ps.com', { trackingStatus: 'active' });
+    t.tables.ladders = [...(t.tables.ladders ?? []), ...ladder('rc2-ps.com', new Date(Date.now() - 70 * DAY).toISOString())];
+    const org = await orgRow(co.org.id);
+    const list = { recheck_ladders: [{ ladder_id: 'lad_old', head: 'crm consulting dubai' }] };
+    // the engine cannot be reached: the check failed to run
+    const { assessCall } = await import('../src/n8n/client');
+    vi.mocked(assessCall).mockResolvedValueOnce({ kind: 'unreachable', status: 0, json: {}, error: 'down' });
+    await ingestCallback(org, cadence('rc2-ps.com', list));
+    await flush(300);
+    expect((await db.query.ladderRechecks.findMany({ where: eq(schema.ladderRechecks.siteId, s.id) })).map((r) => r.status)).toEqual(['failed']);
+    // the next plan: it runs again, and this time the keyword fell
+    t.assess = { difficulty_for_you: 'not_realistic', fit: 2 };
+    await ingestCallback(org, { ...cadence('rc2-ps.com', list), stage: 'cycle_preview', cycle_key: `cyc:${n8nSiteId('rc2-ps.com')}:2026-11-04`, scheduled_for: new Date(Date.now() + 2 * DAY).toISOString(), items: [], suggestions: [] });
+    await flush(300);
+    const rows = await db.query.ladderRechecks.findMany({ where: eq(schema.ladderRechecks.siteId, s.id) });
+    expect(rows.map((r) => [r.status, r.paused])).toEqual([['done', true]]);
+    const st = t.tables.ladderSettings.find((r) => r.ladder_id === 'lad_old' && r.domain === 'rc2-ps.com')!;
+    expect([st.status, st.rechecked_at ?? '']).toEqual(['paused', '']);
+  });
+});
+
+describe('F-KW 3. "Not what I wanted" on page 2 of a ladder start', () => {
+  it('finds the page\'s own content-log row by request id AND keyword (pages of one start share the request id)', async () => {
+    const co = await company('fkw-rid@ps.test', 'Rid Co');
+    const s = await site(co.org.id, 'rid-ps.com', { autopilotLevel: 3 });
+    const rid = 'cad_20261021_rid-ps-com_1';
+    t.tables.contentLog = [
+      ...(t.tables.contentLog ?? []),
+      { domain: 'rid-ps.com', keyword: 'crm consulting cost', source: 'ladder', request_id: rid, started_at: new Date(Date.now() - DAY).toISOString(), status: 'written' },
+      { domain: 'rid-ps.com', keyword: 'crm adoption tips', source: 'decay', request_id: rid, started_at: new Date(Date.now() - DAY).toISOString(), status: 'written' },
+    ];
+    const [rep] = await db.insert(schema.reports).values({ orgId: co.org.id, siteId: s.id, stage: 'content', status: 'completed', title: 'x', requestId: rid, scheduled: true, payload: { keyword: 'crm adoption tips', request_id: rid } }).returning();
+    expect((await co.c.post(`/api/orgs/${co.org.id}/reports/${rep.id}/feedback`, { verdict: 'reject' })).status).toBe(200);
+    const fb = (await db.query.contentFeedback.findFirst({ where: eq(schema.contentFeedback.reportId, rep.id) }))!;
+    // the decay refresh the autopilot chose, not the ladder page that shares its request id
+    expect([fb.source, fb.automatic]).toEqual(['decay', true]);
+  });
+});
+
+describe('F-KW 4 and 5. Coming up: approvals per item, what was not written, pages checked again', () => {
+  it('an approval writes the item\'s source and ladder on its seo_skips row; a skip names only the keyword', async () => {
+    const co = await company('fkw-ap@ps.test', 'Approve Co');
+    const s = await site(co.org.id, 'ap-ps.com', { trackingStatus: 'active' });
+    const sid = n8nSiteId('ap-ps.com');
+    const due = new Date(Date.now() + 2 * DAY).toISOString();
+    const ckey = `cyc:${sid}:${due.slice(0, 10)}`;
+    await db.insert(schema.cyclePreviews).values({
+      orgId: co.org.id,
+      siteId: s.id,
+      cycleKey: ckey,
+      scheduledFor: new Date(due),
+      body: {
+        cycle_key: ckey,
+        scheduled_for: due,
+        level: 1,
+        items: [{ item_key: 'crm data migration', keyword: 'crm data migration', source: 'ladder', ladder_id: 'lad_2', auto: false, est_usd: 0.8 }],
+        suggestions: [{ item_key: 'crm adoption tips', keyword: 'crm adoption tips', source: 'trend', ladder_id: '', auto: false, est_usd: 0.8 }],
+      },
+    });
+    await co.c.post(`${base(co, s.id)}/coming-up/decisions`, { itemKey: 'crm data migration', decision: 'approve', scope: 'cycle' });
+    await co.c.post(`${base(co, s.id)}/coming-up/decisions`, { itemKey: 'crm adoption tips', decision: 'skip', scope: 'cycle' });
+    const rows = (t.tables.skips ?? []).filter((r) => r.site_id === sid);
+    expect(rows.find((r) => r.item_key === 'crm data migration')).toMatchObject({ decision: 'approve', source: 'ladder', ladder_id: 'lad_2' });
+    expect(rows.find((r) => r.item_key === 'crm adoption tips')).toMatchObject({ decision: 'skip', source: '', ladder_id: '' });
+  });
+
+  it('a plan\'s approvals not written (ambiguous explained), its pages waiting for a fresh check, and its budget reach the view', async () => {
+    const co = await company('fkw-view@ps.test', 'View Co');
+    const s = await site(co.org.id, 'view-ps.com', { trackingStatus: 'active' });
+    const sid = n8nSiteId('view-ps.com');
+    const due = new Date(Date.now() + 2 * DAY).toISOString();
+    const ckey = `cyc:${sid}:${due.slice(0, 10)}`;
+    const org = await orgRow(co.org.id);
+    await ingestCallback(org, {
+      stage: 'cycle_preview',
+      status: 'progress',
+      request_id: `cyc_view-ps-com_${due.slice(0, 10).replace(/-/g, '')}_preview`,
+      trigger: 'cycle',
+      site_id: sid,
+      domain: 'view-ps.com',
+      cycle_key: ckey,
+      scheduled_for: due,
+      level: 2,
+      pages_per_week: 1,
+      items: [{ item_key: 'crm consulting cost', keyword: 'crm consulting cost', source: 'ladder', ladder_id: 'lad_old', rung: 1, why: 'checking this keyword again before writing: it was planned more than 60 days ago', auto: false, est_usd: 0.84 }],
+      suggestions: [],
+      recheck_ladders: [{ ladder_id: 'lad_old', head: 'crm consulting dubai', planned_at: '2026-08-01T00:00:00.000Z', reason: 'checking this keyword again before writing' }],
+      approved_not_written: [{ keyword: 'crm implementation partner uae', source: '', reason: 'ambiguous', detail: 'your approval names only the keyword, and 2 different pages share it (decay, striking): approve the one you want again' }],
+      budget: { pages_per_week: 1, spent: 1, room: 0, window_start: due, ladder_start_window: new Date(Date.now() - 5 * DAY).toISOString(), spent_keywords: [] },
+    });
+    await flush();
+    const v = (await co.c.get(`${base(co, s.id)}/coming-up`)).body;
+    expect(v.items[0]).toMatchObject({ keyword: 'crm consulting cost', recheck: true, canApprove: false });
+    expect(v.recheckLadders).toEqual([{ ladderId: 'lad_old', head: 'crm consulting dubai', plannedAt: '2026-08-01T00:00:00.000Z' }]);
+    expect(v.approvedNotWritten).toEqual([{ keyword: 'crm implementation partner uae', reason: 'ambiguous', message: expect.stringMatching(/2 different pages share this search.*Approve the one you want again/) }]);
+    expect(JSON.stringify(v.approvedNotWritten)).not.toMatch(/decay|striking|—|…/);
+    expect(v.budget).toMatchObject({ pagesPerWeek: 1, spent: 1, room: 0 });
+    expect(Date.parse(v.budget.ladderStartWindow)).toBeLessThan(Date.now());
+  });
+});
