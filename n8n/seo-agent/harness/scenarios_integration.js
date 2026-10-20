@@ -64,7 +64,7 @@ module.exports = async (ctx) => {
     const plan = (await run('Track Cycle Plan', [{ json: { id: 12 } }]))[0].json;
     let row = null;
     if (plan.write === true) { row = (await run('Track Cycle Row', [{ json: plan }]))[0].json; mock('Save Cycle (Track)', [{ json: o.cycle_save_error ? { error: { message: o.cycle_save_error } } : { id: 13, ...row } }]); }
-    const tp = (await run('Tracker Payload (Track)', [{ json: {} }]))[0].json;
+    const tp = (await run('Tracker Payload (Track)', [{ json: {} }], { execId: o.execId || 'test-exec' }))[0].json;   // F-REH: Track's own execution id is the Site Tracker's parent
     const resp = (await run('Build Track Response', [{ json: tp }]))[0].json;
     return { ni, site, cad, mon, plan, row, tp, resp };
   });
@@ -255,8 +255,24 @@ module.exports = async (ctx) => {
     begin(SN); const check = mkCheck(SN);
     const W = newWorld(); LIFE.W = W;
     // ---- day one: Track my site (INT1's path), then the ladder the client chose ("Your first keyword", Auto) ----
-    const A = await track(T0, TRACK_BODY());
+    const A = await track(T0, TRACK_BODY(), { execId: '6900' });
     W.sites.push({ id: 11, ...A.site }); W.cadence.push(A.cad); W.monitors.push(A.mon); W.cycles.push({ id: 13, ...A.row });
+    // ---- F-REH (2026-10-20, the real-credit rehearsal): Track's OWN Site Tracker run, as it happened on the rehearsal engine. Track's row (6900,
+    // `track`) is still reserved while it hands over, a `keyword` run (6890) was crashed by a restart and left its row reserved, and a ladder
+    // run (6891) is going: "3 other run(s) in flight" refused the setup run too_many_open. Now the Site Tracker names its parent (Tracker
+    // Payload's parent_run_id -> key parent:6900), so it sees 2 others and runs; and the dispatcher's first sweep releases the dead keyword row.
+    W.ledger.push({ id: ++W.seq, run_id: '6900', key: 'app:' + SID, mode: 'track', status: 'reserved', created_at: ISO(T(T0) + 2000), domain: DOM, heavy: false },
+      { id: ++W.seq, run_id: '6890', key: 'app:' + SID, mode: 'keyword', status: 'reserved', created_at: ISO(T(T0) - 15 * MIN), domain: DOM, heavy: false },
+      { id: ++W.seq, run_id: '6891', key: 'app:' + SID, mode: 'ladder', status: 'reserved', created_at: ISO(T(T0) + 1000), domain: DOM, heavy: false });
+    W.execs.push({ id: '6890', workflowId: 'SEOagentV4Full01', mode: 'webhook', status: 'crashed', startedAt: ISO(T(T0) - 15 * MIN - 2000), stoppedAt: ISO(T(T0) - 5 * MIN) });
+    const W0 = { ...W, runs: [], callbacks: [] };
+    const setupEx = { id: '6901', workflowId: 'SEOagentSiteTrk1', mode: 'integrated', status: 'running', startedAt: ISO(T(T0) + 20000) };
+    const setup = await runJob(W0, { payload: { ...A.tp, job: 'site_tracker' }, exec: setupEx }, T(T0) + 30000);
+    W.seq = W0.seq; W.execs.push(setupEx);
+    W.ledger.find(r => r.run_id === '6900').status = 'done'; W.ledger.find(r => r.run_id === '6891').status = 'done';   // Track and the ladder run finish and settle
+    check('F-REH: Track passes its own execution id to the Site Tracker; the setup run\'s ledger row names it (parent:6900) and its run guard does not count Track - 2 others in flight, so it runs and settles',
+      A.tp.parent_run_id === '6900' && setup.row.key === 'parent:6900' && setup.row.mode === 'site_tracker' && setup.row.domain === DOM && setup.gate.every(g => !g.run_refused) && setup.settled.status === 'done',
+      J({ tp: A.tp.parent_run_id, key: setup.row.key, gate: setup.gate.map(g => [g.run_refused, g.reason, g.basis]), st: setup.settled.status }));
     const L = await at(T(T0) + MIN, async () => {
       reset(); const EMPTY = [{ json: {} }];
       mock('Start Form', F.forms.startLadder);
@@ -294,6 +310,11 @@ module.exports = async (ctx) => {
     const ck0 = 'cyc:' + SID + ':2026-10-21';
     const s1 = await step(W, T(T0) + 3 * MIN);
     const p1 = (s1.started[0] || {}).payload || {};
+    const ghost = W.ledger.find(r => r.run_id === '6890') || {};
+    check('F-REH: the first sweep reads every other reservation by id and releases the keyword run the restart crashed (stale, with why) - not after 2 hours; the honoured skip is reported',
+      s1.rel.some(x => x.run_id === '6890' && x.ghost === true && /crashed by n8n/.test(x.reason) && /^stale \(released by the cycle dispatcher\)/.test(x.cost_basis)) && ghost.status === 'stale'
+      && (s1.P.ghosts || []).length === 1 && s1.P.ghosts[0].mode === 'keyword' && eq((s1.P.sites[0].skip_checks || []).map(x => [x.job, x.honoured, x.run_id]), [['site_tracker', true, '6901']]),
+      J({ rel: s1.rel, ghosts: s1.P.ghosts, ghost, sc: s1.P.sites[0].skip_checks }));
     check('(b) the first sweep opens cycle 0 (monthly) for the website Track wrote, and starts exactly one job: ai_visibility', s1.P.sites.length === 1 && s1.P.sites[0].opened && s1.P.sites[0].opened.key === ck0 && s1.P.sites[0].opened.cycle0 === true
       && s1.P.sites[0].opened.monthly === true && s1.started.length === 1 && p1.job === 'ai_visibility' && !s1.P.adopted.length, J({ site: s1.P.sites[0], started: s1.started.map(x => x.payload) }));
     check('(b) the payload is §14.2 field for field: trigger, domain, site_id, cycle_key, job, monthly, scheduled_for (the anchor), request_id, tz - and nothing else',
@@ -322,7 +343,7 @@ module.exports = async (ctx) => {
       eq(order, ['ai_visibility', 'backlinks', 'rank_tracker', 'ai_growth', 'content_cadence', 'link_builder', 'audit']) && eq(CYC.NAMES, ['ai_visibility', 'backlinks', 'rank_tracker', 'site_tracker', 'ai_growth', 'content_cadence', 'link_builder', 'audit']), J(order));
     check('(d) each job became done from ITS settled ledger row (the reason names the key and the execution), site_tracker skipped with the reason, the marker closed with the counts',
       ['ai_visibility', 'backlinks', 'rank_tracker', 'ai_growth', 'content_cadence', 'link_builder', 'audit'].every(j => jobRow(ck0 + ':' + j).status === 'done' && new RegExp('ledger row cycle:' + ck0.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':' + j + ' settled').test(jobRow(ck0 + ':' + j).reason))
-      && jobRow(ck0 + ':site_tracker').status === 'skipped' && /Track my site" already ran it/.test(jobRow(ck0 + ':site_tracker').reason) && jobRow(ck0 + ':cycle').status === 'done' && /7 done, 1 skipped, 0 gave up/.test(jobRow(ck0 + ':cycle').reason),
+      && jobRow(ck0 + ':site_tracker').status === 'skipped' && /already run when tracking was set up \(execution 6901, finished /.test(jobRow(ck0 + ':site_tracker').reason) && jobRow(ck0 + ':cycle').status === 'done' && /7 done, 1 skipped, 0 gave up/.test(jobRow(ck0 + ':cycle').reason),
       J(W.jobs.filter(r => r.cycle_key === ck0).map(r => [r.job, r.status, r.reason.slice(0, 80)])));
     const R = (j, k) => W.runs.find(r => r.job === j && (!k || r.pl.cycle_key === k));
     const rows0 = W.runs.filter(r => r.pl.cycle_key === ck0);

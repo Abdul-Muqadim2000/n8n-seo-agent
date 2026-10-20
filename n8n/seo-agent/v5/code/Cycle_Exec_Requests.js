@@ -14,5 +14,8 @@ const API = '__N8N_API__';
 const KNOWN = __WORKFLOW_IDS__;
 const CONFIG = __CONFIG__;
 const all = (n) => { try { return $(n).all().map(i => i.json || {}); } catch (e) { return []; } };
-const r = CYC.execReads({ jobs: all('Load Cycle Jobs'), ledger: all('Load Run Ledger (Cycle)'), known: KNOWN, api: API, cfg: CONFIG });
+// F-REH (2026-10-20): plus every OTHER run's reservation younger than the stale window, by id (a run a restart crashed holds a run-guard slot
+// for 2 hours otherwise); `now` is the sweep's own clock, the one Cycle Plan recomputes the same list with
+let now = ''; try { now = String(($('Cycle Entry').first().json || {}).now || ''); } catch (e) { now = ''; }
+const r = CYC.execReads({ jobs: all('Load Cycle Jobs'), ledger: all('Load Run Ledger (Cycle)'), known: KNOWN, api: API, cfg: CONFIG, now: now || new Date().toISOString() });
 return r.reads.length ? r.reads.map(json => ({ json })) : [{ json: { skip: true, unread: r.unread.length } }];

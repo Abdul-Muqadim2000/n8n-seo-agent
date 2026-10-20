@@ -127,7 +127,7 @@ module.exports = async (ctx) => {
     runOut(w, '2026-10-21T07:08:00.000Z');
     const p1 = sweep(w, '2026-10-21T10:01:00.000Z');
     check('CY3: at 06:01 the same day nothing new opens: the website is still in cycle 0', !p1.sites[0].opened && cyc(w).current_key === 'cyc:site_a-com:2026-10-21' && !p1.start.length, JSON.stringify(p1.sites[0]));
-    check('CY3: cycle 0 finished: its marker says so with the counts', /finished at .*: 1 done, 7 skipped, 0 gave up/.test(job(w, 'cyc:site_a-com:2026-10-21:cycle').reason) && job(w, 'cyc:site_a-com:2026-10-21:cycle').status === 'done',
+    check('CY3: cycle 0 finished: its marker says so with the counts (AI visibility and - with no skip_jobs on its row, F-REH - the Site Tracker done)', /finished at .*: 2 done, 6 skipped, 0 gave up/.test(job(w, 'cyc:site_a-com:2026-10-21:cycle').reason) && job(w, 'cyc:site_a-com:2026-10-21:cycle').status === 'done',
       job(w, 'cyc:site_a-com:2026-10-21:cycle').reason);
     const w2 = world({ sites: [SITE('site_a-com', 'a.com')], monitors: [ALL_OFF('site_a-com')], cycles: [kick('site_a-com', 'a.com', 'America/New_York', '2026-10-21T03:30:00.000Z')] });
     sweep(w2, '2026-10-21T03:33:00.000Z');
@@ -276,7 +276,10 @@ module.exports = async (ctx) => {
     const SN = 'CY10 a job starts only when every earlier enabled job of its cycle is done, skipped or gave up; switched-off jobs are skipped with their reason; skip_jobs only in cycle 0'; reset(); begin(SN); const check = mkCheck(SN);
     const w = world({ sites: [SITE('site_a-com', 'a.com')], monitors: [ALL_ON('site_a-com')], cadence: [{ site_id: 'site_a-com', pages_per_week: 2, status: 'active' }],
       ladders: [{ domain: 'a.com', keyword: 'crm implementation services', head_keyword: 'crm implementation' }],
-      cycles: [kick('site_a-com', 'a.com', 'America/New_York', '2026-10-21T14:00:00.000Z', { skip_jobs: ['ai_visibility'] })] });
+      cycles: [kick('site_a-com', 'a.com', 'America/New_York', '2026-10-21T14:00:00.000Z', { skip_jobs: ['ai_visibility', 'site_tracker'] })],
+      // F-REH: a skip is honoured only on the ledger's word - the setup runs of both jobs settled after tracking started
+      ledger: [{ run_id: '41', key: 'parent:40', mode: 'ai_visibility', status: 'done', created_at: '2026-10-21T13:58:00.000Z', settled_at: '2026-10-21T13:59:30.000Z', domain: 'a.com' },
+        { run_id: '42', key: 'parent:40', mode: 'site_tracker', status: 'done', created_at: '2026-10-21T13:58:10.000Z', settled_at: '2026-10-21T13:59:40.000Z', domain: 'a.com' }] });
     const p1 = sweep(w, '2026-10-21T14:01:00.000Z');
     check('CY10: cycle 0 with skip_jobs [ai_visibility]: AI visibility is skipped ("already run when tracking was set up") and backlinks starts first',
       p1.start.length === 1 && p1.start[0].job === 'backlinks' && /already run when tracking was set up/.test(job(w, 'cyc:site_a-com:2026-10-21:ai_visibility').reason), JSON.stringify(p1.start));
@@ -291,7 +294,7 @@ module.exports = async (ctx) => {
       JSON.stringify(p3.start));
     w.starts = []; runOut(w, '2026-10-21T14:12:00.000Z', 60);
     check('CY10: the rest of cycle 0 in order: site tracking skipped (Track my site ran it), then AI growth, the cadence, link building, the audit',
-      JSON.stringify(w.starts.map(s => s.job)) === JSON.stringify(['ai_growth', 'content_cadence', 'link_builder', 'audit']) && /Track my site/.test(job(w, 'cyc:site_a-com:2026-10-21:site_tracker').reason),
+      JSON.stringify(w.starts.map(s => s.job)) === JSON.stringify(['ai_growth', 'content_cadence', 'link_builder', 'audit']) && /already run when tracking was set up \(execution 42, finished 2026-10-21T13:59:40.000Z\)/.test(job(w, 'cyc:site_a-com:2026-10-21:site_tracker').reason),
       JSON.stringify(w.starts.map(s => s.job)));
     w.starts = []; runOut(w, '2026-10-28T10:01:00.000Z', 60);
     check('CY10: cycle 1 runs AI visibility again (skip_jobs is for cycle 0 only) and site tracking, in order, no audit',
@@ -301,10 +304,10 @@ module.exports = async (ctx) => {
       cadence: [{ site_id: 'site_a-com', pages_per_week: 0 }], cycles: [kick('site_a-com', 'a.com', 'America/New_York', '2026-10-21T14:00:00.000Z')] });
     runOut(w2, '2026-10-21T14:01:00.000Z', 60);
     const r = (j) => job(w2, 'cyc:site_a-com:2026-10-21:' + j);
-    check('CY10: what the website switched off is skipped with the plain reason - AI visibility off takes AI growth with it, 0 pages a week skips the cadence, no ladder skips the rank tracker',
+    check('CY10: what the website switched off is skipped with the plain reason - AI visibility off takes AI growth with it, 0 pages a week skips the cadence, no ladder skips the rank tracker (and with no skip_jobs on its row the Site Tracker runs in cycle 0, F-REH)',
       r('ai_visibility').status === 'skipped' && /AI visibility is switched off/.test(r('ai_visibility').reason) && /reads its question panel/.test(r('ai_growth').reason)
       && /no pages a week are set \(0\)/.test(r('content_cadence').reason) && /no keyword ladder/.test(r('rank_tracker').reason) && /link building is switched off/.test(r('link_builder').reason)
-      && JSON.stringify(w2.starts.map(s => s.job)) === JSON.stringify(['backlinks', 'audit']), JSON.stringify(w2.starts.map(s => s.job)));
+      && JSON.stringify(w2.starts.map(s => s.job)) === JSON.stringify(['backlinks', 'site_tracker', 'audit']), JSON.stringify(w2.starts.map(s => s.job)));
     const w3 = world({ sites: [SITE('site_a-com', 'a.com')], monitors: [ALL_ON('site_a-com')], ladders: [{ domain: 'a.com', keyword: 'x' }],
       cycles: [kick('site_a-com', 'a.com', 'America/New_York', '2026-10-21T14:00:00.000Z')] });
     const jobs3 = CYC.jobsFor({ settings: CYC.settingsOf({ monitors: ALL_ON('x'), cadence: { pages_per_week: 1, status: 'off' }, has_ladder: true }), zero: false, monthly: false });
@@ -368,9 +371,9 @@ module.exports = async (ctx) => {
     const w24 = W(); for (let h = 0; h <= 24; h += 4) w24.ledger.push(L({ run_id: String(800 + h), status: 'refused', created_at: ISO(T(START) + h * H1), cost_basis: 'refused before any spending: There are already 3 analyses running' }));
     w24.jobs[2].started_at = ISO(T(START) + 24 * H1 - MIN);
     const p24 = sweep(w24, T(START) + 24 * H1 + 10 * MIN);
-    check('CY11: refused for capacity for 24 h without a break: gave up, named in the alarm list, and the next job is not held by it',
+    check('CY11: refused for capacity for 24 h without a break: gave up, named in the alarm list, and the next job is not held by it (the Site Tracker: this cycle-0 row lists no skip_jobs, so it runs - F-REH)',
       job(w24, 'cyc:site_a-com:2026-10-21:backlinks').status === 'gave_up' && /refused for capacity for 24 h/.test(job(w24, 'cyc:site_a-com:2026-10-21:backlinks').reason)
-      && p24.gave_up.length === 1 && p24.gave_up[0].job === 'backlinks' && p24.start.length === 1 && p24.start[0].job === 'ai_growth', JSON.stringify({ g: p24.gave_up, s: p24.start.map(s => s.job) }));
+      && p24.gave_up.length === 1 && p24.gave_up[0].job === 'backlinks' && p24.start.length === 1 && p24.start[0].job === 'site_tracker', JSON.stringify({ g: p24.gave_up, s: p24.start.map(s => s.job) }));
     const wcu = W(); wcu.ledger.push(L({ status: 'refused', cost_basis: 'refused before any spending (caught_up): The catch-up already ran this scheduled slot' }));
     const pcu = sweep(wcu, NOW);
     check('CY11: caught_up is not retried (only same_mode, heavy_busy and too_many_open are): it gives up with the reason', job(wcu, 'cyc:site_a-com:2026-10-21:backlinks').status === 'gave_up' && pcu.gave_up.length === 1 && /not retried/.test(job(wcu, 'cyc:site_a-com:2026-10-21:backlinks').reason),
@@ -656,7 +659,9 @@ module.exports = async (ctx) => {
   await guard('CY21 a whole cycle through the nodes', async () => {
     const SN = 'CY21 the generated nodes over a whole cycle: each sweep reads the ledger, marks the finished job done, starts the next, and closes the cycle'; reset(); begin(SN); const check = mkCheck(SN);
     const t0 = Date.now() - 2 * H1;
-    const st = { cycles: [{ ...TK(new Date(t0).toISOString()) }], jobs: [], ledger: [] };
+    // F-REH: "Track my site" asked to skip the Site Tracker in cycle 0, and its setup run settled - so the skip is honoured
+    const st = { cycles: [{ ...TK(new Date(t0).toISOString()), skip_jobs: 'site_tracker' }], jobs: [],
+      ledger: [{ run_id: '4999', key: 'parent:4998', mode: 'site_tracker', status: 'done', created_at: ISO(t0 + 30000), settled_at: ISO(t0 + 90000), domain: 'techand.ai' }] };
     const started = [];
     for (let i = 0; i < 14; i++) {
       const now = new Date(t0 + i * 5 * MIN).toISOString();
@@ -722,7 +727,9 @@ module.exports = async (ctx) => {
     mock('Load Sites (Kickoff)', [{ json: SITES[0] }]); mock('Load Cycles (Kickoff)', [{ json: {} }]);
     const KP = (await run('Kickoff Plan', [{ json: {} }]))[0].json;
     const row = (await run('Kickoff Cycle Row', [{ json: {} }]))[0].json;
-    loadAll({ mode: { mode: 'start' }, cycles: [row] }); entry(new Date(Date.now() + MIN).toISOString());
+    // F-REH: the app's own AI visibility run settled after the anchor, so the kickoff's skip_jobs is honoured (CY33 proves the other side)
+    loadAll({ mode: { mode: 'start' }, cycles: [row], ledger: [{ run_id: '3001', key: 'parent:3000', mode: 'ai_visibility', status: 'done', created_at: now, settled_at: now, domain: 'techand.ai' }] });
+    entry(new Date(Date.now() + MIN).toISOString());
     const P = (await CY_RUN('Cycle Plan', [{ json: {} }]))[0].json;
     check('CY24: the kickoff answers with cycle 0\'s key (the Dubai date) and the dispatcher opens exactly that cycle, skipping AI visibility (already run) and starting backlinks',
       KP.cycle_key === 'cyc:site_techand-ai:' + CYC.local('Asia/Dubai', T(now)).date && P.sites[0].opened && P.sites[0].opened.key === KP.cycle_key && P.sites[0].opened.cycle0

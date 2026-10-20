@@ -43,7 +43,7 @@ STALE_PLAN_MINUTES = 10
 # the kit's defaults, repeated here so a reader of the workflow sees the numbers; harness CY13+ runs the generated node with them
 CONFIG = {'local_time': '06:00', 'spacing_days': 3, 'next_gap_hours': 12, 'preview_hours': 48, 'preview_min_lead_hours': 6, 'max_starts': 2, 'max_inflight': 2,
           'max_attempts': 3, 'refusal_hours': 24, 'confirm_minutes': 10, 'retention_days': 120, 'engine_tz': TZ,
-          'exec_page': EXEC_LIMIT, 'max_exec_reads': 60, 'init_quiet_minutes': 2}
+          'exec_page': EXEC_LIMIT, 'max_exec_reads': 60, 'max_ledger_reads': 20, 'init_quiet_minutes': 2}
 CLAIM_HOLD_SECONDS = 2   # F-ENG: the claim is held this long before it is read back, so two sweeps' writes both land before either reads
 CYCLES_TS = os.path.join(HERE, '..', '..', 'app', 'shared', 'src', 'cycles.ts')
 
@@ -194,9 +194,11 @@ node('Update Cycle Rows', DT_TYPE, DT_VERSION, {'resource': 'row', 'operation': 
 code('Cycle Job Rows', 'Cycle_Job_Rows.js', at(23, 1)); iff('Any Job Rows?', '{{ !$json.skip }}', at(24, 1))
 node('Save Cycle Job Rows', DT_TYPE, DT_VERSION, dt_upsert_params(CYCLE_JOBS_TABLE, CYCLE_JOBS_COLS, 'key'), at(25, 0), **SAVE)
 # a reservation whose run n8n reports crashed / canceled is released (`stale`, what Release Stale Runs writes after 2 h), so its retry is not
-# refused as its own twin; only a row still `reserved` is touched
+# refused as its own twin; only a row still `reserved` is touched. F-REH (2026-10-20, real-credit rehearsal): ANY run's reservation younger
+# than the stale window whose execution is dead / finished unsettled / gone (read by id, at most max_ledger_reads a sweep) is released the same
+# way - a deploy's restart no longer blocks a run-guard slot for 2 hours - and its cost_basis says why
 code('Cycle Release Rows', 'Cycle_Release_Rows.js', at(25, 2)); iff('Any Releases?', '{{ !$json.skip }}', at(25, 3))
-node('Release Dead Runs', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $json.run_id }}'), ('status', 'reserved')], {'status': 'stale'}),
+node('Release Dead Runs', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $json.run_id }}'), ('status', 'reserved')], {'status': 'stale', 'cost_basis': '={{ $json.cost_basis }}'}),
      at(26, 3), **SAVE)
 # ---- the starts: RECORD, read the claim back, then start - one at a time ----
 code('Cycle Start Items', 'Cycle_Start_Items.js', at(26, 1)); iff('Any Cycle Starts?', '{{ !$json.skip }}', at(27, 1))

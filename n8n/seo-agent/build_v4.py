@@ -11788,7 +11788,8 @@ def _b140_cycle():
         assert 'Cycle Start Items' not in _reach140(_cc140, _d140, 'Cycle Job Rows'), 'cycle: the starts can begin before the outcome rows are handed to their save'
         assert 'Cycle Start Items' not in _reach140(_cc140, _d140, 'Cycle Release Rows'), 'cycle: a retry can start before the dead run\'s reservation is released (it would be refused as its own twin)'
     _rel140 = _by140['Release Dead Runs']['parameters']
-    assert _rel140['operation'] == 'update' and _rel140['dataTableId']['value'] == 'seo_run_ledger' and _rel140['columns']['value'] == {'status': 'stale'} \
+    # F-REH (2026-10-20): it also writes why (cost_basis) - a ghost reservation of ANY run is released this way, and the row must say so
+    assert _rel140['operation'] == 'update' and _rel140['dataTableId']['value'] == 'seo_run_ledger' and _rel140['columns']['value'] == {'status': 'stale', 'cost_basis': '={{ $json.cost_basis }}'} \
         and [(c['keyName'], c['keyValue']) for c in _rel140['filters']['conditions']] == [('run_id', '={{ $json.run_id }}'), ('status', 'reserved')], \
         'cycle: Release Dead Runs must only mark a still-reserved row of the dead run stale: ' + str(_rel140)
     # F-ENG (2026-10-20): the claim is strong - the row is read again just before it (still what the plan saw?), the claim is a token nobody
