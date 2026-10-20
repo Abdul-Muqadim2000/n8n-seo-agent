@@ -34,6 +34,7 @@ import { badRequest, conflict, HttpError, notFound, parse } from '../lib/errors'
 import { deleteRows, ensureTable, insertRows, invalidateSite, siteAdmin, siteRows } from '../n8n/client';
 import { invalidateForecast } from '../services/billing';
 import { assertGa4ForDomain, findGscProperty, gscOwnerCheck, listGa4Properties } from '../services/google';
+import { assertEngineIdFree, ENGINE_ID_TAKEN } from '../services/engineSite';
 import { routeSiteToApp } from '../services/runs';
 import { fetchPublicText, verify } from '../services/verify';
 
@@ -75,13 +76,29 @@ async function verifiedElsewhere(domain: string, orgId: string): Promise<boolean
 
 type P = { orgId: string; siteId: string };
 
+/** The unique index a Postgres error broke (postgres-js names it `constraint_name`, PGlite `constraint`), or null. */
+function uniqueViolation(err: unknown): string | null {
+  const e = err as { code?: string; constraint_name?: string; constraint?: string; cause?: { code?: string; constraint_name?: string; constraint?: string } };
+  const x = e?.code === '23505' ? e : e?.cause?.code === '23505' ? e.cause : null;
+  return x ? String(x.constraint_name ?? x.constraint ?? '') : null;
+}
+
 /** Marks the site verified and points the domain's stored n8n delivery (site row, ladders) at this company. */
 async function markVerified(site: SiteRow, method: VerificationMethod, gscProperty?: string | null) {
-  const [s] = await db
-    .update(schema.sites)
-    .set({ verifiedAt: new Date(), verificationMethod: method, ...(gscProperty ? { gscProperty } : {}), updatedAt: new Date() })
-    .where(eq(schema.sites.id, site.id))
-    .returning();
+  let s: SiteRow;
+  try {
+    [s] = await db
+      .update(schema.sites)
+      .set({ verifiedAt: new Date(), verificationMethod: method, ...(gscProperty ? { gscProperty } : {}), updatedAt: new Date() })
+      .where(eq(schema.sites.id, site.id))
+      .returning();
+  } catch (err) {
+    // two companies verifying at the same moment: the unique indexes decide, and the loser is told why in plain words
+    const c = uniqueViolation(err);
+    if (c === 'sites_verified_engine_id_idx') throw conflict(ENGINE_ID_TAKEN, 'engine_id_taken');
+    if (c != null) throw conflict(`${site.domain} is already verified by another company on this platform.`, 'domain_claimed');
+    throw err;
+  }
   const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, site.orgId) });
   if (org) await routeSiteToApp(org, s).catch(() => undefined);
 }
@@ -96,9 +113,19 @@ export async function verifyWithGoogle(req: FastifyRequest, orgId: string, siteI
   }
   if (a.site.verifiedAt) return 'already';
   if (await verifiedElsewhere(a.site.domain, a.org.id)) return 'claimed';
+  try {
+    await assertEngineIdFree(a.site.domain, a.site.id);
+  } catch {
+    return 'claimed';
+  }
   const r = await gscOwnerCheck(userAccessToken, a.site.domain);
   if (!r.owner) return 'not_owner';
-  await markVerified(a.site, 'search_console', r.property);
+  try {
+    await markVerified(a.site, 'search_console', r.property);
+  } catch (err) {
+    if (err instanceof HttpError && err.statusCode === 409) return 'claimed';
+    throw err;
+  }
   await audit(req, a.org.id, { action: 'site.verified', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { method: 'search_console' } });
   return 'verified';
 }
@@ -137,6 +164,8 @@ export async function siteRoutes(app: FastifyInstance) {
     if (mine) throw conflict(`${body.domain} is already one of your websites.`, 'site_exists');
     if (await verifiedElsewhere(body.domain, a.org.id))
       throw conflict(`${body.domain} is already verified by another company on this platform. If it is yours, contact the platform administrator.`, 'domain_claimed');
+    // one engine site id, one website: foo.co.uk is refused while foo-co.uk is verified or tracked (and the other way round)
+    await assertEngineIdFree(body.domain);
     const [site] = await db
       .insert(schema.sites)
       .values({
@@ -218,6 +247,7 @@ export async function siteRoutes(app: FastifyInstance) {
     if (method === 'search_console')
       throw badRequest('Search Console ownership is checked with your own Google account: use "Verify with Google" (or a DNS record or meta tag).', undefined, 'use_google');
     if (await verifiedElsewhere(site.domain, site.orgId)) throw conflict(`${site.domain} is already verified by another company on this platform.`, 'domain_claimed');
+    await assertEngineIdFree(site.domain, site.id);
     const r = await verify(method, site.domain, site.verificationToken);
     if (r.verified) await markVerified(site, method);
     await audit(req, site.orgId, { action: r.verified ? 'site.verified' : 'site.verify_failed', outcome: r.verified ? 'success' : 'failure', target: { type: 'site', id: site.id, label: site.domain }, details: { method } });

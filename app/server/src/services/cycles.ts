@@ -29,6 +29,7 @@ import { db, schema } from '../db';
 import type { SiteRow } from '../db/schema';
 import { HttpError } from '../lib/errors';
 import { rows as n8nRows, updateRows } from '../n8n/client';
+import { ownEngineRows } from './engineSite';
 
 // A website's own 7-day cycle as the app shows it (SCHEDULING_KEYWORDS_PLAN.md §4, §14.1, §14.6): read from the engine's seo_cycles row
 // (one per website, written by the Track flow / Site Kickoff and the Cycle Dispatcher) and seo_cycle_jobs (one row per website x cycle x
@@ -162,20 +163,27 @@ export function siteCycleView(site: Pick<SiteRow, 'timezone' | 'trackingStartedA
     recent: keys.filter((k) => k !== currentKey).slice(0, 8).map((k) => cycleSummary(k, jobs, anchorDate)),
     upcoming: status === 'active' ? upcoming : [],
     overdue: !!row && status === 'active' && cycleOverdue(row, now),
-    canChangeWeekday: roleAtLeast(role, 'admin'),
+    // the weekday lives on the engine's row (PATCH writes only seo_cycles.cycle_weekday): before the engine has it, nothing to change yet
+    canChangeWeekday: roleAtLeast(role, 'admin') && !!(row && S(row.anchor_at)),
   };
 }
 
 // ---------------- n8n ----------------
 
-/** The website's seo_cycles row (null before the engine has one) and its job rows, newest cycles first (up to 400 rows). */
+/**
+ * The website's seo_cycles row (null before the engine has one) and its job rows, newest cycles first (up to 400 rows). Only rows that
+ * really are this website's: the cycle row must name its domain (two domains can share one engine site id, engineSite.ts), and the job
+ * rows, which carry no domain, are used only when the site id's cycle row is this website's and no other domain holds it.
+ */
 export async function loadCycleRows(site: Pick<SiteRow, 'domain'>, opts: { fresh?: boolean } = {}): Promise<{ row: CycleRow | null; jobs: CycleJobRow[] }> {
   const sid = n8nSiteId(site.domain);
   const [cyc, jobs] = await Promise.all([
     n8nRows<CycleRow>('cycles', { filters: [{ columnName: 'site_id', condition: 'eq', value: sid }], max: 5, fresh: opts.fresh }),
     n8nRows<CycleJobRow>('cycleJobs', { filters: [{ columnName: 'site_id', condition: 'eq', value: sid }], sortBy: 'updated_at:desc', max: 400, fresh: opts.fresh }),
   ]);
-  return { row: cyc[0] ?? null, jobs };
+  const own = ownEngineRows(cyc, site);
+  const foreign = cyc.length > own.length;
+  return { row: foreign ? null : (own[0] ?? null), jobs: own.length && !foreign ? jobs : [] };
 }
 
 /** GET .../cycle. An engine that cannot be read degrades to the app's own anchor (the view says `known: false`). */
@@ -210,7 +218,15 @@ export async function setCycleWeekday(site: SiteRow, weekday: number, now = Date
   if (!row || !S(row.anchor_at))
     throw new HttpError(409, 'The weekly cycle of this website has not started yet. Start tracking first; the weekday can be changed once its first cycle has started.', 'cycle_not_started');
   const before = row.cycle_weekday === undefined || row.cycle_weekday === null || S(row.cycle_weekday) === '' ? null : Number(row.cycle_weekday);
-  const ok = await updateRows('cycles', [{ columnName: 'site_id', condition: 'eq', value: n8nSiteId(site.domain) }], { cycle_weekday: weekday });
+  // the domain is part of the filter: a row another domain holds under the same site id is never written
+  const ok = await updateRows(
+    'cycles',
+    [
+      { columnName: 'site_id', condition: 'eq', value: n8nSiteId(site.domain) },
+      { columnName: 'domain', condition: 'eq', value: S(row.domain) },
+    ],
+    { cycle_weekday: weekday },
+  );
   if (!ok) throw new HttpError(502, 'The SEO engine did not save the change. Try again in a minute.', 'engine_failed');
   await db.update(schema.sites).set({ cycleWeekday: weekday, updatedAt: new Date() }).where(eq(schema.sites.id, site.id));
   return { result: weekdayChange({ ...row, cycle_weekday: weekday }, site, weekday, now), before };
