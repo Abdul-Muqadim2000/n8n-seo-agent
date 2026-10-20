@@ -9,7 +9,6 @@ const arr = (v) => Array.isArray(v) ? v : [];
 return $input.all().map(i => i.json).filter(s => s && s.report_only && !s.dry_run && s.site_id).map(s => {
   const wfk = !!s.waiting_for_keyword;   // keyword-first (2026-10-19, R-K2): levels 1 and 2 write nothing before the first keyword the client chose
   const rf = arr(s.refused);   // R-K4: refused by the fit gate, with the reason: never written, never suggested
-  const each = '$' + (Number(s.est_page_usd) || 0).toFixed(2);
   const paused = s.paused_reason === 'pileup', ap = arr(s.awaiting_approval), sg = arr(s.suggestions), pend = arr(s.pending_publish), ws = arr(s.waiting_for_support);
   const nf = arr(s.needs_fix), pl = arr(s.paused_ladders);   // R111 / R87: drafts that failed the quality check, ladders whose main keyword was set aside
   const nfHtml = (nf.length && !paused) ? '<p style="color:#b45309"><b>Needs a fix, not a publish:</b> ' + nf.map(x => esc(x.keyword) + (arr(x.reasons).length ? ' (' + arr(x.reasons).map(esc).join('; ') + ')' : '')).join(', ') + '. These drafts did not pass the quality check; fix them and run them again.</p>' : '';
@@ -22,11 +21,11 @@ return $input.all().map(i => i.json).filter(s => s && s.report_only && !s.dry_ru
       : wfk ? '<p><b>Waiting for your first keyword.</b> Nothing is written for <b>' + esc(s.domain) + '</b> until you choose the keyword you want to be found for (start a keyword ladder in the app). Your checks and reports keep running.</p>'
       : '<p>Nothing was written automatically for <b>' + esc(s.domain) + '</b> this week' + (s.reason ? ': ' + esc(s.reason) : '') + '.</p>') +
     nfHtml + plHtml +
-    (aside.length ? '<p style="color:#b45309"><b>Set aside</b> (planned before this rule existed, not written): ' + aside.map(x => esc(x.note || x.keyword)).join(' | ') + '. These rows are now marked <code>set_aside</code>.</p>' : '') +
+    (aside.length ? '<p style="color:#b45309"><b>Set aside</b> (not a search this website should target, so not written): ' + aside.map(x => esc(x.note || x.keyword)).join(' | ') + '. These rows are now marked <code>set_aside</code>.</p>' : '') +
     (pend.length ? '<p style="color:#b45309"><b>Waiting for your publish link:</b> ' + pend.map(p => esc(p.keyword) + ' (written ' + p.days + ' days ago)').join(', ') + '</p>' : '') +
-    (ap.length ? '<p><b>Ready for your approval</b> (Manual ladders, about $1.20 each): ' + ap.map(a => esc(a.keyword) + ' (ladder "' + esc(a.head) + '", ' + (Number(a.rung) === 4 ? 'main page' : 'rung ' + esc(a.rung)) + ')').join(', ') + '. Start one through the <a href="' + esc(FORM_URL) + '">form</a> or the app.</p>' : '') +
+    (ap.length ? '<p><b>Ready for your approval</b> (written only after your OK): ' + ap.map(a => esc(a.keyword) + ' (ladder "' + esc(a.head) + '", ' + (Number(a.rung) === 4 ? 'main page' : 'rung ' + esc(a.rung)) + ')').join(', ') + '. Start one through the <a href="' + esc(FORM_URL) + '">form</a> or the app.</p>' : '') +
     (ws.length ? '<p><b>Main pages waiting for support:</b> ' + ws.map(w => esc(w.head) + ' (' + w.published + ' of ' + w.supporting + ' supporting pages published, ' + w.needed + ' needed, or the main keyword in the top 30)').join(', ') + '</p>' : '') +
-    (sg.length ? '<p><b>Suggested pages</b> (written only after your OK, about ' + each + ' each): ' + sg.map(u => esc(u.keyword) + ' (' + esc(u.source) + '): ' + esc(u.why)).join('; ') + '</p>' : '') +
+    (sg.length ? '<p><b>Suggested pages</b> (written only after your OK; the app shows what each one costs in credits): ' + sg.map(u => esc(u.keyword) + ' (' + esc(u.source) + '): ' + esc(u.why)).join('; ') + '</p>' : '') +
     (rf.length ? '<p style="color:#64748b"><b>Not suggested</b> (not a search this website should target): ' + rf.slice(0, 6).map(x => esc(x.keyword) + ' (' + esc(x.reason) + ': ' + esc(x.detail) + ')').join('; ') + '</p>' : '') +
     (arr(s.upcoming).length ? '<p><b>Next in line:</b> ' + arr(s.upcoming).map(u => esc(u.keyword) + ' (' + esc(u.source) + ')').join(', ') + '</p>' : '') +
     '<p style="color:#64748b;font-size:12px">Change the pages per week, the autopilot level, Auto / Manual and the waiting-page limit in the app, or the pages per week through the Site Admin workflow.</p>';

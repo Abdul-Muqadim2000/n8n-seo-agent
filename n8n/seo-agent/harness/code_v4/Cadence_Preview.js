@@ -111,8 +111,8 @@ const LN = (() => {
     return '<h3 style="margin:18px 0 4px;font-size:13px;color:#0f172a">' + esc1(x.title || 'Where these numbers come from') + '</h3>'
       + '<table style="border-collapse:collapse;margin:4px 0;max-width:100%">'
       + '<tr><th ' + th + '>Figure</th><th ' + th + '>Source</th><th ' + th + '>Period</th><th ' + th + '>Sample</th><th ' + th + '>How it was arrived at</th></tr>'
-      + rows.map(l => '<tr><td ' + td + '>' + esc1(l.figure) + '</td><td ' + td + '>' + esc1(l.source_label) + '</td><td ' + td + '>' + esc1(l.period || '—')
-        + '</td><td ' + td + '>' + esc1(l.sample || '—') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+      + rows.map(l => '<tr><td ' + td + '>' + esc1(l.figure) + '</td><td ' + td + '>' + esc1(l.source_label) + '</td><td ' + td + '>' + esc1(l.period || '-')
+        + '</td><td ' + td + '>' + esc1(l.sample || '-') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(': ')) + '</td></tr>').join('')
       + '</table><p style="color:#64748b;font-size:11px;margin:4px 0">' + esc1(x.footer || 'A figure marked "' + BASIS.modelled + '" is computed, not counted; "' + MISSING + '" means the figure reached this report without its source and should be treated as unverified.') + '</p>';
   };
   return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, hasEvidence, evidenced, unevidenced,
@@ -120,14 +120,14 @@ const LN = (() => {
 })();
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const arr = (v) => Array.isArray(v) ? v : [];
-const usd = (n) => '$' + (Number(n) || 0).toFixed(2);
+// F-KW (2026-10-20, finding 10): no raw dollar figure in a customer's e-mail: the app shows each item's cost in credits (est_usd travels in the callback)
 const LEVEL_LABEL = { 1: 'Only my keywords', 2: 'My keywords and keep my pages healthy', 3: 'Full autopilot' };   // cycles.ts AUTOPILOT_LEVELS
 const SRC = { ladder: 'your keyword ladder', decay: 'a page of yours losing visitors', striking: 'close to page one', trend: 'a rising search', ai_answer: 'a question AI answers without you', ai_refresh: 'a page AI could quote better' };
 return $('Cadence Plan').all().map(i => i.json).filter(p => p && p.preview === true && p.site_id).map(p => {
   const items = arr(p.items), sug = arr(p.suggestions), auto = items.filter(x => x.auto), ok = items.filter(x => !x.auto);
   const level = [1, 2, 3].includes(Number(p.level)) ? Number(p.level) : 2;
   const when = String(p.scheduled_for || '').slice(0, 10) || String(p.cycle_date || '');
-  const li = (x) => '<li><b>' + esc(x.keyword) + '</b> (' + esc(SRC[x.source] || x.source) + ', about ' + usd(x.est_usd) + '): ' + esc(x.why) + (x.existing_page_url ? '; improves ' + esc(x.existing_page_url) : '') + '</li>';
+  const li = (x) => '<li><b>' + esc(x.keyword) + '</b> (' + esc(SRC[x.source] || x.source) + '): ' + esc(x.why) + (x.existing_page_url ? '; improves ' + esc(x.existing_page_url) : '') + '</li>';
   const status = p.waiting_for_keyword ? '<p><b>Waiting for your first keyword.</b> Choose the keyword you want to be found for: nothing is written until you do.</p>'
     : p.paused_reason === 'pileup' ? '<p style="color:#b45309"><b>Paused:</b> ' + esc(p.waiting_publish) + ' written pages are waiting to be published (limit ' + esc(p.max_waiting) + '). Publish them so the next cycle can write.</p>'
     : p.paused_reason === 'site_paused' ? '<p style="color:#b45309"><b>This website is paused.</b> Its next cycle writes nothing until it is resumed.</p>'
@@ -138,9 +138,9 @@ return $('Cadence Plan').all().map(i => i.json).filter(p => p && p.preview === t
     + (sug.length ? '<p><b>Suggestions</b> (written only if you approve them):</p><ol>' + sug.map(li).join('') + '</ol>' : '')
     + (arr(p.refused).length ? '<p style="color:#64748b"><b>Not suggested</b> (not a search this website should target): ' + arr(p.refused).slice(0, 6).map(x => esc(x.keyword) + ' (' + esc(x.reason) + ')').join(', ') + '</p>' : '')
     + (!auto.length && !ok.length && !sug.length && !status ? '<p>Nothing to write in this cycle.</p>' : '')
-    + '<p style="color:#64748b;font-size:12px">Approve or skip each item in the app before the cycle starts. Prices are estimates of one written page.</p>';
+    + '<p style="color:#64748b;font-size:12px">Approve or skip each item in the app before the cycle starts. The app shows what each page costs in credits.</p>';
   // INVARIANTS rule 1: every figure of the plan says where it came from (the price is the run guard's own estimate, the plan is computed)
-  const lineage = [LN.of('the price of each page (about ' + usd(p.est_page_usd) + ')', 'model', { basis: 'estimated', note: String(p.est_basis || '') }),
+  const lineage = [LN.of('the cost of each page (shown in credits in the app)', 'model', { basis: 'estimated', note: 'the run guard\'s own estimate of one written page' }),
     LN.of(items.length + ' planned item(s), ' + sug.length + ' suggestion(s)', 'model', { basis: 'modelled', period: 'the cycle of ' + when, note: 'planned from your keyword ladders, your settings, your skips and the site data on file; nothing is written by this plan' })];
   const htmlL = html + LN.block(lineage);
   const callback_body = { site_id: p.site_id, domain: p.domain, cycle_key: String(p.cycle_key || ''), cycle_date: String(p.cycle_date || ''), scheduled_for: String(p.scheduled_for || ''), trigger: 'cycle',
