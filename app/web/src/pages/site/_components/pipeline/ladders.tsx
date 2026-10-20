@@ -11,6 +11,7 @@ import { Meter } from '@/components/ui/misc';
 import { Sparkline } from '@/components/charts';
 import { IconTile, Stagger, type IconTileTone } from '@/components/insight';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
+import { useCycleDay } from '@/lib/cycle-day';
 import { paths } from '@/lib/paths';
 import { cn, fmtAgo } from '@/lib/utils';
 import { SectionHeading } from '../kit';
@@ -33,6 +34,7 @@ export function LadderCards({ cards, automation, planning = [] }: { cards: Ladde
   const { org, can } = useOrgCtx();
   const admin = can('admin');
   const { site } = useSiteCtx();
+  const day = useCycleDay(site);
   const newLadder = can('member') && (
     <ButtonLink to={paths.newLadder(org.id, site.id)} size="sm" icon={<Plus className="size-4" />}>
       New keyword ladder
@@ -72,7 +74,7 @@ export function LadderCards({ cards, automation, planning = [] }: { cards: Ladde
             <EmptyState
               icon={<TrendingUp className="size-5" />}
               title="No keyword ladders yet"
-              description="Choose a keyword you want to rank for. The system plans the pages from easy to hard, writes them on Mondays and tracks them on Google."
+              description={`Choose a keyword you want to rank for. The system plans the pages from easy to hard, writes them ${day.every} and tracks them on Google.`}
               action={newLadder}
             />
           </Card>

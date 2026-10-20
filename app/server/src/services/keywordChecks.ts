@@ -22,6 +22,7 @@ import { assessCall, siteRows, type AssessCallResult } from '../n8n/client';
 import { dropCheck, findRecentCheck, finishCheck, reserveCheck } from './keywordCheckStore';
 import { latestReport } from './runs';
 import { creditsOfUsd } from './admin/settings';
+import { siteForecasts } from './billing';
 
 // The "New keyword ladder" flow (PIPELINE_FEATURE_SPEC.md §5): the keyword check of one typed keyword (n8n's Keyword Check,
 // SEOagentAssess, paid: DataForSEO ~$0.02-0.05 a check) and the recommended keywords from the website's latest keyword strategy
@@ -107,8 +108,11 @@ async function siteServices(domain: string): Promise<string[]> {
   return rows.map((r) => str(r.service));
 }
 
-/** POST .../keywords/assess: the stored answer of the last 7 days (free), else one paid check. */
-export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>, input: KeywordAssessInput): Promise<KeywordCheck> {
+/**
+ * POST .../keywords/assess: the stored answer of the last 7 days (free), else one paid check. `automatic`: the system asked for it (the
+ * queued-ladder re-check), on the owner's behalf: it is the website's autopilot spend, never the person's on-demand spend (costSync).
+ */
+export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>, input: KeywordAssessInput, opts: { automatic?: boolean } = {}): Promise<KeywordCheck> {
   const { org, site, user } = a;
   requireVerified(site);
   if (org.disabled) throw forbidden('This company is disabled. Contact the platform administrator.');
@@ -120,10 +124,14 @@ export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>
   const cached = await findRecentCheck(site.id, keyword, country, new Date(Date.now() - KEYWORD_CHECK.cacheDays * 864e5));
   if (cached) return toKeywordCheck(cached, true);
 
-  const id = await reserveCheck({ org, site, user, keyword, country });
+  // the schedules' forecast is read outside the company's lock (the credit check inside reads it), as createRun does
+  await siteForecasts(org.id).catch(() => []);
+  const id = await reserveCheck({ org, site, user, keyword, country, automatic: opts.automatic === true });
   let outcome: AssessOutcome;
   try {
-    const [existing, services] = await Promise.all([existingKeywords(site.domain), siteServices(site.domain)]);
+    // what the website sells: the client's own words ("What do you sell?") first, then its case studies
+    const [existing, studied] = await Promise.all([existingKeywords(site.domain), siteServices(site.domain)]);
+    const services = [...(site.services ?? []), ...studied];
     outcome = interpretAssess(await assessCall(assessBody({ site, keyword, country, existing, services }), org.id, KEYWORD_CHECK.timeoutMs));
   } catch (err) {
     await dropCheck(id, false).catch(() => undefined);

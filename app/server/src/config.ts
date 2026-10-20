@@ -73,6 +73,14 @@ const Env = z.object({
    *  named in them and used as their Reply-To (default support@alaventra.com; set it empty to name none) */
   SUPPORT_URL: str(''),
   SUPPORT_EMAIL: str('support@alaventra.com'),
+  /** invoices of paid credit purchases (app/docs/CREDITS.md "Invoices"): the seller as printed on them. The legal name, the
+   *  address (lines separated by "|"), a tax / VAT number when registered (empty = none printed), the billing contact (empty = the
+   *  support address) and the number prefix (ALV-2026-0001). */
+  INVOICE_ISSUER_NAME: str('Alaventra'),
+  INVOICE_ISSUER_ADDRESS: str(''),
+  INVOICE_TAX_ID: str(''),
+  INVOICE_EMAIL: str(''),
+  INVOICE_PREFIX: str('ALV'),
 
   SEO_BRAND: str('Alaventra'),
   SEO_MAIL_FROM: str(''),
@@ -102,9 +110,11 @@ const Env = z.object({
   OWNER_BUDGET_MAX_USD: str('100').transform(Number),
   /** estimated spend of all companies together per day (UTC); runs beyond it wait for tomorrow */
   PLATFORM_DAILY_SPEND_USD: str('40').transform(Number),
-  /** "Choose keywords for me": the server starts the next recommended ladder for websites that switched it on (every 6 hours);
-   * off = the setting is stored but nothing starts on its own */
-  AUTO_START_LADDERS: bool(false),
+  /** keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.6 / §5.7): the platform switch of keyword proposals. On: the server proposes the next
+   * keyword when a website has room (a suggestion at autopilot levels 1-2, an announcement that starts after 2 days at level 3, which the
+   * client chose). Default: ON in production (proposals are how a new client gets its first keyword, and level 3 is the client's own
+   * consent), OFF anywhere else (a development server must never start paid ladders on its own). Off = nothing is proposed or started. */
+  AUTO_START_LADDERS: z.string().optional(),
   /** gap #6 (app/docs/LOG_ANALYTICS.md): the crawler-log worker, retention and IP-list refresh (off on a second server or in tests) */
   CRAWLER_JOBS: bool(true),
   /** where uploaded / pushed logs wait until the worker has read them (deleted right after); local disk of this server */
@@ -193,6 +203,13 @@ export const config = {
     url: (e.SUPPORT_URL || `${e.APP_URL.replace(/\/+$/, '')}/contact?topic=support`).trim(),
     email: /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e.SUPPORT_EMAIL.trim()) ? e.SUPPORT_EMAIL.trim() : '',
   },
+  invoice: {
+    name: e.INVOICE_ISSUER_NAME.trim() || 'Alaventra',
+    lines: e.INVOICE_ISSUER_ADDRESS.split('|').map((l) => l.trim()).filter(Boolean),
+    taxId: e.INVOICE_TAX_ID.trim(),
+    email: /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e.INVOICE_EMAIL.trim()) ? e.INVOICE_EMAIL.trim() : '',
+    prefix: (e.INVOICE_PREFIX.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || 'ALV').slice(0, 8),
+  },
   mail: {
     from: e.SEO_MAIL_FROM || (e.SEO_SMTP_USER ? `${e.SEO_BRAND} <${e.SEO_SMTP_USER}>` : ''),
     host: e.SEO_SMTP_HOST,
@@ -217,7 +234,7 @@ export const config = {
   maxCompaniesPerUser: e.MAX_COMPANIES_PER_USER,
   ownerBudgetMaxUsd: e.OWNER_BUDGET_MAX_USD,
   platformDailySpendUsd: e.PLATFORM_DAILY_SPEND_USD,
-  autoStartLadders: e.AUTO_START_LADDERS,
+  autoStartLadders: e.AUTO_START_LADDERS == null || e.AUTO_START_LADDERS === '' ? e.NODE_ENV === 'production' : /^(1|true|yes|on)$/i.test(e.AUTO_START_LADDERS),
   platformAdmins: e.PLATFORM_ADMIN_EMAILS.split(/[\s,]+/).map((x) => x.trim().toLowerCase()).filter(Boolean),
   defaultBudgetUsd: e.DEFAULT_MONTHLY_BUDGET_USD,
   allowSignup: e.ALLOW_SIGNUP,

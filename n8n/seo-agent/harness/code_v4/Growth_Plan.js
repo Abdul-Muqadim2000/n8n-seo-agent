@@ -1,4 +1,4 @@
-// AI Growth plan (v4.12, AI_GROWTH_SPEC.md; weekly, Monday 09:30 after the AI Visibility Tracker and the Site Tracker, and on demand): the work that
+// AI Growth plan (v4.12, AI_GROWTH_SPEC.md; weekly in each website's own cycle, after the AI Visibility Tracker and the Site Tracker, and on demand): the work that
 // gets a site named and cited in AI answers, not only measured. Per site with AI visibility and the growth loop on:
 //   * key pages to check this week (can an assistant read and quote them: the AI Readiness step) — pages AI cited, the targets' pages, written and
 //     ladder pages, the pages Search Console shows most, the homepage; each page about once a month, never-checked ones first;
@@ -16,6 +16,80 @@
 // Sites = the Data Table seo_sites ("Track my site") + every domain with a keyword ladder; settings per site from seo_monitors (defaults: everything on).
 // On demand (Manual Run with { domain | site_id }) one site runs even when its weekly / monthly monitor is off; an untracked domain is checked ad hoc
 // with the trigger's country, e-mail and callback.
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.5 / §14.2): a THIRD kind of run, `trigger: 'cycle'` — the Cycle Dispatcher starting one job of one
+// website's weekly cycle. It names one site like an on-demand run, but it has the SCHEDULED semantics: `on_demand` is false, a job the site
+// switched off and a paused site are honoured (nothing runs, and the plan says why), an untracked domain is never checked ad hoc, and the
+// monthly extras come only from the `monthly` the dispatcher passes (cycle.monthly), never from the UTC calendar. `cycle` travels with the
+// result so every plan can carry it on.
+// ---- 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4 / §4.5 / §4.8): the website's own calendar ----
+// With one Monday for everyone, a month or a day was the engine's UTC month or day and that rarely mattered. With a 7-day cycle per website
+// (started the day it set up, at 06:00 in ITS time zone), a run after 20:00 New York on the last day of a month is already "next month" in
+// UTC, and a site in Dubai has its Wednesday while New York still has Tuesday. This kit is the one place that answers, for a website:
+//   * which local day / month it is (dayKey / monthKey / weekday), in the website's time zone (`seo_cycles.tz`, else the engine zone);
+//   * what its cycle weekday is (`seo_cycles.cycle_weekday`, 0 = Sunday … 6 = Saturday) and how to say it ("every Wednesday" / "each week");
+//   * what a cycle run is: `trigger: 'cycle'` on a Manual Run (the Cycle Dispatcher's payload, plan §14.2) -> cycleOf(trigger);
+//   * how a weekly report is dated: by its cycle ("Week of Wed 15 Oct"), never by "Monday".
+// Pure: Intl only, no clock unless one is passed, no table access (the caller hands it the seo_cycles rows). ENGINE_TZ is written in at build
+// time from GENERIC_TIMEZONE (America/New_York when unset, the same default n8n/compose.yml and the catch-up use).
+const ST = (() => {
+  const ENGINE_TZ = 'America/New_York';
+  const S = (v) => String(v == null ? '' : v).trim();
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const okTz = (tz) => { const z = S(tz); if (!z || /^__/.test(z)) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: z }).format(0); return true; } catch (e) { return false; } };
+  const engineTz = () => okTz(ENGINE_TZ) ? ENGINE_TZ : 'America/New_York';
+  /** the zone to use: the given one when it is a real IANA zone, else the engine's */
+  const zone = (tz) => okTz(tz) ? S(tz) : engineTz();
+  const msOf = (t) => { if (t instanceof Date) return t.getTime(); if (typeof t === 'number' && Number.isFinite(t)) return t; const v = Date.parse(S(t)); return Number.isFinite(v) ? v : NaN; };
+  const normD = (x) => S(x).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  /** the wall-clock parts of instant `t` in zone `tz`: { date: 'YYYY-MM-DD', month: 'YYYY-MM', weekday: 0-6, hour, minute } */
+  const parts = (t, tz) => {
+    const ms = t === undefined || t === null || t === '' ? Date.now() : msOf(t);
+    if (!Number.isFinite(ms)) return null;
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: zone(tz), year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const p = {}; for (const x of f.formatToParts(new Date(ms))) p[x.type] = x.value;
+    const date = p.year + '-' + p.month + '-' + p.day;
+    return { date, month: date.slice(0, 7), weekday: SHORT.indexOf(p.weekday), hour: Number(p.hour) % 24, minute: Number(p.minute) };
+  };
+  const dayKey = (t, tz) => { const p = parts(t, tz); return p ? p.date : ''; };
+  const monthKey = (t, tz) => { const p = parts(t, tz); return p ? p.month : ''; };
+  const weekday = (t, tz) => { const p = parts(t, tz); return p ? p.weekday : -1; };
+  /** the weekday of a calendar date 'YYYY-MM-DD' (the date itself, no zone involved) */
+  const weekdayOfDate = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(S(date)); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay() : -1; };
+  // ---- the website's cycle row (seo_cycles) ----
+  const cycleRow = (rows, site) => {
+    const s = site || {}, sid = S(s.site_id), dom = normD(s.domain);
+    return (rows || []).find(r => r && typeof r === 'object' && !r.error && ((sid && S(r.site_id) === sid) || (dom && normD(r.domain) === dom))) || null;
+  };
+  const tzOf = (rows, site) => { const r = cycleRow(rows, site); return zone(r && r.tz); };
+  /** the website's cycle weekday (0-6) or null when it has no cycle row (or the row carries none) */
+  const cycleWeekday = (rows, site) => {
+    const r = cycleRow(rows, site); if (!r || r.cycle_weekday === '' || r.cycle_weekday == null) return null;
+    const w = Number(r.cycle_weekday); return Number.isInteger(w) && w >= 0 && w <= 6 ? w : null;
+  };
+  // ---- words ----
+  const dayName = (wd) => (Number.isInteger(wd) && wd >= 0 && wd <= 6) ? DAYS[wd] : '';
+  /** "every Wednesday" when the website's day is known, else "each week" */
+  const everyText = (wd) => dayName(wd) ? 'every ' + dayName(wd) : 'each week';
+  /** "on Wednesday" / "next week" */
+  const onText = (wd) => dayName(wd) ? 'on ' + dayName(wd) : 'next week';
+  /** 'YYYY-MM-DD' -> "Week of Wed 15 Oct" */
+  const weekOf = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(S(date)); if (!m) return ''; return 'Week of ' + SHORT[weekdayOfDate(date)] + ' ' + Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1]; };
+  // ---- a cycle run (plan §14.2): { trigger: 'cycle', domain, site_id, cycle_key: 'cyc:<site_id>:<YYYY-MM-DD>', job, monthly, scheduled_for, request_id, light? } ----
+  const yes = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
+  const keyDate = (key) => { const m = /:(\d{4}-\d{2}-\d{2})$/.exec(S(key)); return m ? m[1] : ''; };
+  const cycleOf = (trigger) => {
+    const t = trigger || {};
+    if (S(t.trigger) !== 'cycle') return null;
+    const key = S(t.cycle_key), date = keyDate(key);
+    return { key, date, job: S(t.job), monthly: yes(t.monthly), light: t.light === undefined || t.light === null || t.light === '' ? null : yes(t.light),
+      scheduled_for: S(t.scheduled_for), request_id: S(t.request_id), tz: okTz(t.tz) ? S(t.tz) : '', preview: yes(t.preview), label: date ? weekOf(date) : '' };
+  };
+  /** the fields a cycle run's callback carries (plan §14.2), or {} for any other run */
+  const callbackFields = (cyc) => cyc && cyc.key ? { trigger: 'cycle', cycle_key: cyc.key, cycle_date: cyc.date, cycle_week: cyc.label, cycle_job: cyc.job } : {};
+  return { ENGINE_TZ, okTz, zone, engineTz, parts, dayKey, monthKey, weekday, weekdayOfDate, cycleRow, tzOf, cycleWeekday, dayName, everyText, onText, weekOf, keyDate, cycleOf, callbackFields, DAYS };
+})();
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
@@ -47,11 +121,20 @@ function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' 
   for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', virtual: true }); }
   for (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }
   const want = normD(trigger.domain) || String(trigger.site_id || '').trim();
+  const cycle = ST.cycleOf(trigger);
   let list = [...byDomain.values()];
+  let cycle_why = '';
   if (want) {
     list = list.filter(s => s.domain === want || s.site_id === want);
-    if (!list.length && normD(trigger.domain)) list = [{ site_id: siteIdFor(normD(trigger.domain)), domain: normD(trigger.domain), country: trigger.country || '', location_code: Number(trigger.location_code) || 0, language_code: trigger.language_code || 'en', email: '', callback_url: '', keywords: [], status: 'active', source: 'adhoc', virtual: true, adhoc: true }];
+    if (!list.length && normD(trigger.domain) && !cycle) list = [{ site_id: siteIdFor(normD(trigger.domain)), domain: normD(trigger.domain), country: trigger.country || '', location_code: Number(trigger.location_code) || 0, language_code: trigger.language_code || 'en', email: '', callback_url: '', keywords: [], status: 'active', source: 'adhoc', virtual: true, adhoc: true }];
+    // a cycle run honours the pause, as the schedule always did (an on-demand run is the owner asking, so it still runs)
+    if (cycle) {
+      if (!list.length) cycle_why = 'no tracked website matches "' + want + '", so this cycle job had nothing to run';
+      else if (list.every(s => String(s.status || 'active') === 'paused')) cycle_why = list[0].domain + ' is paused, so its weekly cycle runs nothing until it is resumed';
+      list = list.filter(s => String(s.status || 'active') !== 'paused');
+    }
   } else list = list.filter(s => String(s.status || 'active') !== 'paused');
+  const on_demand = !!want && !cycle;
   const out = list.map(s => {
     const m = mons.find(x => x.site_id === s.site_id) || {};
     const p = profiles.find(x => x.site_id === s.site_id) || {};
@@ -66,12 +149,16 @@ function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' 
       brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || '', nameOf(s, p)].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };
     const o = { ...s, business_name: nameOf(s, p), settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '',
       region: p.region || '', country_code: p.country_code || '', public_email: p.public_email || '', price_range: p.price_range || '', service_areas: p.service_areas || '', opening_hours: p.opening_hours || '' } };
-    if (want) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }
+    if (on_demand) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }
     o.request_id = String(trigger.request_id || s.request_id || '');
+    o.cycle = cycle;   // null outside a cycle run
     return o;
   });
   const flagOf = { ai: 'ai_visibility', backlinks: 'backlinks', audit: 'audit_monthly', links: 'link_builder' }[kind];
-  return { list: want ? out : out.filter(s => s.settings[flagOf]), on_demand: !!want, want, trigger, total: byDomain.size };
+  // a switched-off job is honoured by every run but an on-demand one (the scheduled rule, and now the cycle's too)
+  const kept = on_demand ? out : out.filter(s => s.settings[flagOf]);
+  if (cycle && !cycle_why && out.length && !kept.length) cycle_why = ({ ai: 'AI visibility', backlinks: 'the backlink monitor', audit: 'the monthly audit', links: 'the Link Builder' }[kind] || kind) + ' is switched off for ' + out[0].domain + ', so this cycle job runs nothing';
+  return { list: kept, on_demand, want, trigger, total: byDomain.size, cycle, cycle_why };
 }
 
 // ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----
@@ -174,7 +261,12 @@ const SM = (() => {
     // P2-2 (2026-10-12): the Site Describer answers with `products_or_services` — reading only `services` left services_json empty on every
     // site, so the brief's facts said `services: []` although the describer had found nine.
     const desc0 = x.description || {};
-    const services = uniq([...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    // keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.2 / §14.1): what the client SAID they sell ("What do you sell?" on Track my site,
+    // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
+    // unchanged and the weekly Site Tracker can never overwrite it
+    const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -192,7 +284,7 @@ const SM = (() => {
 
     return { site_id, domain, canonical_host, host_source, home_url: 'https://' + canonical_host + '/',
       business_name: nameHit.value, name_source: nameHit.source, logo_url: logoHit.value, logo_source: logoHit.source,
-      nap, services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,
+      nap, services, declared_services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,
       model_updated_at: updated_at, sources: { profile: !!prof.site_id || !!prof.business_name, homepage_schema: !!org, gbp: !!(gbp.name || gbp.phone), app: !!(req.business_facts || req.cta || req.business_name), html: !!html } };
   };
 
@@ -296,12 +388,13 @@ const SM = (() => {
   const ageDays = (model) => { const t = Date.parse(S((model || {}).model_updated_at)); return Number.isFinite(t) ? (Date.now() - t) / 864e5 : Infinity; };
   const isFresh = (model, days) => !!(model && S(model.canonical_host) && ageDays(model) < (Number(days) > 0 ? Number(days) : FRESH_DAYS));
   // exactly the seo_sites columns the model owns (plus the two keys), ready to merge into a site row or a cache value
-  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];
+  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at', 'declared_services'];
   const toRow = (model) => { const m = model || {};
     return { site_id: S(m.site_id), domain: S(m.domain), canonical_host: S(m.canonical_host), business_name: S(m.business_name), logo_url: S(m.logo_url),
       nap_json: JSON.stringify(nap(m)), services_json: JSON.stringify(services(m)), nav_pages_json: JSON.stringify((m.nav_pages || []).map(p => ({ url: p.url, title: p.title }))),
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
-      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
+      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at),
+      declared_services: JSON.stringify(Array.isArray(m.declared_services) ? m.declared_services : []) };
   };
   // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
   // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
@@ -399,12 +492,36 @@ const FIT_COMMON = new Set(['management', 'manager', 'document', 'documents', 'p
   'unified', 'professional', 'premium', 'standard', 'basic', 'core', 'general', 'public', 'private', 'social', 'mobile', 'facility', 'facilities', 'experience', 'insights', 'transformation',
   'innovation', 'value', 'impact', 'productivity', 'efficiency', 'assets', 'asset', 'people', 'team', 'teams', 'growth', 'performance']);
 const FIT_COMPARE = /\b(vs|versus|compare|comparison|alternatives?|instead of|better than|difference between|against)\b/;
-const fitTokens = (s) => String(s || '').toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9.]+/).map(t => t.replace(/^\.+|\.+$/g, '')).filter(t => t.length > 1 && !FIT_STOP.has(t));
+// F-KW (2026-10-20, finding 8): letters and digits of EVERY script, not a-z only. An Arabic keyword ("برنامج محاسبة في الإمارات") was
+// no tokens at all, so a ladder the client chose in Arabic was set aside as `empty` and every Arabic item key was ''. NFKC folds
+// full-width and compatibility forms, toLowerCase (never the locale form) folds case; marks (\p{M}) stay inside their word.
+const FIT_SPLIT = /[^\p{L}\p{M}\p{N}.]+/u, FIT_SPLIT_WORDS = /[^\p{L}\p{M}\p{N}]+/u;
+const fitLow = (s) => String(s || '').normalize('NFKC').toLowerCase();
+const fitTokens = (s) => fitLow(s).replace(/[’']/g, '').split(FIT_SPLIT).map(t => t.replace(/^\.+|\.+$/g, '')).filter(t => t.length > 1 && !FIT_STOP.has(t));
 const fitHost = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^(www|m|app|en|ar)\./, '');
 const fitGovHost = (d) => { const h = fitHost(d); return /(^|\.)gov(\.[a-z]{2,3})?$/.test(h) || /(^|\.)(gouv|gob|go|gv)\.[a-z]{2}$/.test(h) || /(^|\.)mil(\.[a-z]{2})?$/.test(h) || /(^|\.)(u\.ae|government\.ae|dubai\.ae|abudhabi\.ae|sharjah\.ae|ajman\.ae|rak\.ae|tax\.gov\.ae|europa\.eu)$/.test(h); };
 // the brand label(s) of a domain: "facts.ae" -> ["facts"], "northwind-erp.com" -> ["northwind"] (generic / short parts dropped), "e-invoicing.ae" -> []
 const fitLabels = (domain, protect) => { const h = fitHost(domain); if (!h) return []; const first = h.split('.')[0]; const parts = [...new Set([first, ...first.split(/[-_]/)])];
   return parts.map(p => p.replace(/[^a-z0-9]/g, '')).filter(p => p.length >= FIT_CFG.min_label && !FIT_GENERIC.has(p) && !FIT_GEO.has(p) && !(protect || []).includes(p)); };
+// F-KW (2026-10-20, finding 5): a label is the website's own BRAND only when it is distinctive. A label that splits entirely into category,
+// generic or place words, or into the words of the keyword or of what the client protected (its ladder heads, its services), describes what
+// the site sells ("erp-software.ae", "crmexperts.ae", "accountingsoftware.ae", "interiordesign-dubai.com"); it is not a name, and a keyword
+// built from those words is the client's own subject. "techand" does not split ("tech" + the stop word "and" is not allowed), so "techand crm"
+// stays the site's own brand. The label itself is never part of its own vocabulary, so "crmexperts reviews" (one word) is still the brand.
+const FIT_CATEGORY = new Set(['expert', 'experts', 'specialist', 'specialists', 'consultant', 'advisor', 'advisors', 'advisory', 'agency', 'agencies', 'design', 'designs', 'designer', 'designers',
+  'interior', 'interiors', 'outsourcing', 'marketing', 'seo', 'legal', 'law', 'lawyer', 'lawyers', 'clinic', 'clinics', 'dental', 'medical', 'health', 'care', 'realty', 'property', 'properties', 'homes',
+  'travel', 'tours', 'logistics', 'cargo', 'shipping', 'trading', 'auto', 'autos', 'cars', 'motors', 'insurance', 'printing', 'events', 'cleaning', 'maintenance', 'security', 'training', 'courses',
+  'implementation', 'integration', 'migration', 'support', 'hosting', 'it', 'hr', 'audit', 'auditing', 'bookkeeping', 'consult', 'advice', 'pros', 'works', 'labs', 'studio', 'studios',
+  'center', 'centre', 'source', 'point', 'zone', 'link', 'links', 'line', 'now', 'hq', 'co', 'inc', 'llc', 'ltd', 'fz', 'fzco', 'fze', 'dmcc']);
+const fitWordBreak = (label, vocab) => { const n = label.length; const ok = new Array(n + 1).fill(false); ok[0] = true;
+  for (let i = 1; i <= n; i++) for (let j = Math.max(0, i - 30); j < i; j++) if (ok[j] && vocab.has(label.slice(j, i))) { ok[i] = true; break; }
+  return ok[n]; };
+const fitOwnLabels = (domain, toks, protect) => fitLabels(domain, []).filter(l => {
+  const words = [...FIT_GENERIC, ...FIT_GEO, ...FIT_CATEGORY, ...(toks || []), ...(protect || [])].map(w => String(w || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter(w => w.length >= 2 && w !== l && !FIT_STOP.has(w));
+  const vocab = new Set(); for (const w of words) { vocab.add(w); vocab.add(w + 's'); if (w.length > 3 && w.endsWith('s')) vocab.add(w.slice(0, -1)); }
+  vocab.delete(l);
+  return !fitWordBreak(l, vocab); });
 // the learned "name -> domain" map from seo_cache rows (key ai_brands:<site_id>), any shape of row list
 const fitLearnedBrands = (rows) => { const out = {}; for (const r of (rows || [])) { const j = r && r.json ? r.json : r; if (!j || typeof j !== 'object' || !/^ai_brands:/.test(String(j.key || ''))) continue; let v = j.value; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } } if (v && typeof v === 'object') for (const [name, d] of Object.entries(v)) if (name && d) out[String(name)] = String(d); } return out; };
 // the organic domains of a DataForSEO SERP answer, in rank order (for ctx.serp)
@@ -425,12 +542,12 @@ const FIT_WIDE = new Set(['business', 'businesses', 'company', 'companies', 'fir
   'consultants', 'consultancy', 'partners', 'partner', 'network', 'info', 'guide', 'guides', 'blog', 'list', 'directory', 'review', 'reviews', 'compare', 'comparison', 'pro', 'plus', 'one', 'first',
   'get', 'go', 'easy', 'home', 'world', 'city', 'market', 'media', 'shop', 'store', 'gulf', 'arab', 'arabia', 'emirates', 'google', 'microsoft', 'amazon', 'apple']);
 const fitStem = (w) => w.length > 5 ? w.replace(/(ingly|ings|ing|ments|ment|ations|ation|ions|ion|ies|ers|er|ed|es|s|e)$/, '') : w;   // the outreach kit's stem: invoice / invoices / invoicing -> invoic
-const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).toLowerCase()
-  .split(/[^a-z0-9]+/).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
+const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).normalize('NFKC').toLowerCase()
+  .split(FIT_SPLIT_WORDS).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
 // B-3: the topics as PHRASES (one service name, one configured keyword, one description), so a common word can be judged against the name
 // it came from. `dist` = the phrase's own distinctive words (stemmed); prose (more than 6 of them) never vouches for a common word.
 const fitTopicPhrases = (topics) => (Array.isArray(topics) ? topics.filter(Boolean).map(String) : [String(topics || '')])
-  .map(t => { const w = t.toLowerCase().split(/[^a-z0-9]+/).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
+  .map(t => { const w = fitLow(t).split(FIT_SPLIT_WORDS).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
     return { dist: [...new Set(w.filter(x => !FIT_GENERIC.has(x)).map(fitStem))], words: [...new Set(w.map(fitStem))] }; })
   .filter(p => p.dist.length).map(p => ({ ...p, prose: p.dist.length > 6 }));
 function fitTopic(keyword, topics, ctx) {
@@ -443,13 +560,13 @@ function fitTopic(keyword, topics, ctx) {
   // whose services and description are a single line gets no topic refusals at all ("no evidence, no refusal").
   if (T.size < (typeof o.topic_min_words === 'number' ? o.topic_min_words : 12)) return { ok: true, reason: '', detail: T.size ? 'too few topic words on file (' + T.size + ') to judge topic distance' : 'no topics on file, so topic distance was not judged', share: null };
   const toks = fitTokens(keyword);
-  const own = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t));
+  const own = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t) && !/^\d+$/.test(t));   // F-KW: a year or a number ("2026") is neutral, like a place
   const known = [...T];
   const stemHit = (s, x) => x === s || (x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0));
   const matches = (t) => { const s = fitStem(t); return T.has(s) || known.some(x => stemHit(s, x)); };
   // B-3: a common word (FIT_COMMON) is on topic only through a service NAME the keyword carries whole, or two words of (prose never vouches)
   // ("business central partner uae" carries two words of "Dynamics 365 Business Central"; "intelligent software solutions" one of "Intelligent Document Processing")
-  const ownStems = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t)).map(fitStem);
+  const ownStems = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t) && !/^\d+$/.test(t)).map(fitStem);
   const allStems = toks.filter(t => t.length > 2 && !FIT_GEO.has(t)).map(fitStem);
   const viaName = (t) => { const s = fitStem(t); return PH.some(ph => !ph.prose && ph.dist.some(x => stemHit(s, x))
     && (ph.dist.every(x => ownStems.some(k => stemHit(k, x))) || ph.words.filter(x => allStems.some(k => stemHit(k, x))).length >= 2)); };
@@ -465,8 +582,51 @@ function fitTopic(keyword, topics, ctx) {
   const hits = own.filter(matchOwn);
   const share = Math.round(100 * hits.length / own.length) / 100;
   if (share < bar) return { ok: false, reason: 'off topic', detail: Math.round(share * 100) + '% of its own words match ' + label + ' (' + Math.round(bar * 100) + '% is the bar): '
-    + own.filter(t => hits.indexOf(t) < 0).slice(0, 4).join(', ') + ' — add it to your services if you do sell it', share };
+    + own.filter(t => hits.indexOf(t) < 0).slice(0, 4).join(', ') + '. Add it to your services if you do sell it.', share };
   return { ok: true, reason: '', detail: Math.round(share * 100) + '% of its own words match ' + label, share };
+}
+// ---- F-KW (2026-10-20, findings 1 and 2): POSITIVE topic evidence, for the decisions that write on their own ----
+// fitTopic answers "may we refuse it?" and, with fewer than 12 topic words on file, refuses nothing ("no evidence, no refusal"). That is the
+// right rule for a refusal and the wrong one for writing a page on our own: a site that lists two services passed every keyword. fitEvidence
+// answers "is there evidence it is the client's subject?": `in` = at least the topic bar of the keyword's own words is in the topics given (any
+// number of topic words); `out` = with 12+ topic words on file the keyword misses the bar (a refusal); `unknown` = too little on file to say,
+// which a caller must treat as NOT in topic (a suggestion at most) and say so in plain words.
+// F-REH (2026-10-20, real-credit rehearsal): a DECLARED service's product-category word is positive evidence. "crm service provider uae" for a
+// client who listed "CRM implementation" came back "not enough information": `crm` is a category word (FIT_GENERIC), which the share rule
+// treats as neutral, so the keyword was judged on "provider" alone. When the client named the category in a service (ctx.services = the
+// services they DECLARED, never the crawl's guesses), that word counts as one of the keyword's own words AND as a hit, at any number of topic
+// words on file. Only product categories qualify: `ai`, `software`, `cloud` and the wide words never do ("character ai" stays off topic for an
+// "AI consulting" site); a FIT_COMMON word ("sales", "central") still needs the whole service name, as in fitTopic.
+const FIT_SERVICE_CATS = new Set(['erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll']);
+const fitServiceAnchors = (keyword, services) => {
+  const svc = new Set((Array.isArray(services) ? services : [services]).filter(Boolean).flatMap(x => fitTokens(String(x))).filter(t => FIT_SERVICE_CATS.has(t)).map(fitStem));
+  if (!svc.size) return [];
+  return [...new Set(fitTokens(keyword).filter(t => FIT_SERVICE_CATS.has(t) && svc.has(fitStem(t))))];
+};
+function fitEvidence(keyword, topics, ctx) {
+  const o = ctx || {};
+  const T = fitTopicWords(topics);
+  const anchors = fitServiceAnchors(keyword, o.services || []);
+  const t = T.size ? fitTopic(keyword, topics, { ...o, topic_min_words: 1 }) : { ok: false, share: null, detail: '' };
+  if (t.ok && t.share != null) return { verdict: 'in', share: t.share, words: T.size, detail: t.detail, basis: 'topics' };
+  if (anchors.length) {
+    // the share again, with the declared category word counted as the keyword's own and as matched
+    const toks = fitTokens(keyword);
+    const own = toks.filter(x => x.length > 2 && !FIT_GEO.has(x) && !FIT_GENERIC.has(x) && !/^\d+$/.test(x));
+    const PH = fitTopicPhrases(topics), known = [...T];
+    const stemHit = (s, x) => x === s || (x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0));
+    const ownStems = own.map(fitStem), allStems = toks.filter(x => x.length > 2 && !FIT_GEO.has(x)).map(fitStem);
+    const viaName = (w) => { const s = fitStem(w); return PH.some(ph => !ph.prose && ph.dist.some(x => stemHit(s, x)) && (ph.dist.every(x => ownStems.some(k => stemHit(k, x))) || ph.words.filter(x => allStems.some(k => stemHit(k, x))).length >= 2)); };
+    const hit = (w) => FIT_COMMON.has(w) ? viaName(w) : (T.has(fitStem(w)) || known.some(x => stemHit(fitStem(w), x)));
+    const hits = own.filter(hit).length + anchors.length, all = own.length + anchors.length;
+    const share = Math.round(100 * hits / all) / 100;
+    const bar = typeof o.topic_bar === 'number' ? o.topic_bar : FIT_TOPIC_BAR;
+    if (share >= bar) return { verdict: 'in', share, words: T.size, basis: 'declared service', anchors,
+      detail: '"' + anchors.join('", "') + '" is one of the services you listed' + (own.length ? ' (' + Math.round(share * 100) + '% of its own words match)' : '') };
+  }
+  if (!T.size) return { verdict: 'unknown', share: null, words: 0, detail: 'nothing is on file yet about what this website sells or which keywords you chose' };
+  if (T.size >= 12) return { verdict: 'out', share: t.share == null ? null : t.share, words: T.size, detail: t.detail };
+  return { verdict: 'unknown', share: t.share == null ? null : t.share, words: T.size, detail: 'too little is on file about what this website sells to tell whether this keyword is part of it' };
 }
 // ctx: { intent, own_domain, competitors: [domains, declared], serp_domains: [domains on the results page / auto-detected rivals], brands: { name: domain } (learned),
 //       serp: [this keyword's own top domains, in rank order] (optional), protect: [words of the head term / seeds / services], relevance: fn (G19 hook) }
@@ -479,7 +639,9 @@ function fitGate(keyword, ctx) {
   const has = (re) => re.test(' ' + kw + ' ');
   const contentWord = has(FIT_CONTENT), partnerWord = has(FIT_PARTNER), compareWord = has(FIT_COMPARE), portalWord = has(FIT_PORTAL);
   // 1. the website itself
-  for (const l of fitLabels(ctx.own_domain, [])) if (toks.includes(l) || squashed.includes(l)) return { ok: false, reason: 'own brand', detail: 'names the website itself (' + l + ')' };
+  // F-KW (2026-10-20, finding 5): only a DISTINCTIVE label is a brand. On an exact-match domain the label is made of the very words the client
+  //    sells ("erp-software.ae" -> "erpsoftware"), and "erp software uae" was refused as the site's own brand (fitOwnLabels above).
+  for (const l of fitOwnLabels(ctx.own_domain, toks, protect)) if (toks.includes(l) || squashed.includes(l)) return { ok: false, reason: 'own brand', detail: 'names the website itself (' + l + ')' };
   // 2. the search data says navigational
   if (String(ctx.intent || '').toLowerCase() === 'navigational') return { ok: false, reason: 'navigational', detail: 'the search data classifies it as navigational (people look for one particular website)' };
   // 3. a public body or an identity document: "ministry of finance", "federal tax authority" (no content / buying word), "fta", "emaratax uae",
@@ -560,10 +722,12 @@ const fitStored = (row, ctx) => {
   const g = fitGate(kw, ctx || {});
   if (g.ok) return { ok: true, live, flagged: false, reason: '', detail: '', note: '' };
   const why = '"' + kw + '" is not a search this website should target: ' + g.detail + ' (' + g.reason + ')';
+  // F-KW (2026-10-20, finding 10): plain sentences, and no claim about WHEN the row was planned: a row written after the gate existed (its
+  // results page changed, a competitor was declared later) is set aside by the same rule, and "planned before this rule existed" was false for it
   if (live) return { ok: true, live: true, flagged: true, reason: g.reason, detail: g.detail,
-    note: why + ' — its page is already written, so it stays tracked; decide whether to keep it' };
+    note: why + '. Its page is already written, so it stays tracked; decide whether to keep it.' };
   return { ok: false, live: false, flagged: true, reason: g.reason, detail: g.detail,
-    note: why + ' — it was planned before this rule existed, so it is set aside instead of written' };
+    note: why + '. It is set aside, so no page is written for it.' };
 };
 // ---- B-G1 / B-G2 / B-G3 (2026-10-15, FIX_PLAN §3.16; INVARIANTS rule 2): the READ path, written once ----
 // R16 put `fitStored` on two read paths — the Rank Tracker and the Content Cadence — and wrote the loop around it twice. Three more
@@ -624,17 +788,21 @@ const FITR = {
     const a = (set_aside || []).filter(x => x && x.dropped);
     if (!a.length) return '';
     return a.length + ' stored keyword' + (a.length === 1 ? ' was' : 's were') + ' set aside, so ' + (a.length === 1 ? 'it is' : 'they are')
-      + ' not ' + String(what || 'used') + ': ' + a.slice(0, 6).map(x => '"' + x.keyword + '" — ' + (x.detail || x.reason)).join('; ')
+      + ' not ' + String(what || 'used') + ': ' + a.slice(0, 6).map(x => '"' + x.keyword + '" (' + (x.detail || x.reason) + ')').join('; ')
       + (a.length > 6 ? ' (and ' + (a.length - 6) + ' more)' : '')
-      + '. They were planned before this rule existed; a page that is already written is kept and only flagged.';
+      + '. A page that is already written is kept and only flagged.';
   }
 };
 const CONFIG = { audit_per_week: 12, recheck_days: 25, max_key_pages: 40, submit_max: 50, resubmit_days: 30, recent_days: 8, earned_fetch: 10, max_targets: 6, refresh_after_days: 90,
   win_min_answers: 2, follow_up_days: 45, follow_up_max: 15, decay_runs: 3, stale_writing_days: 14,   // B9-2 / B9-4 / B9-5 / B9-6 (benchmark area 9): what became of a submission, what a win needs, a page AI has stopped citing, and a page run that never produced a page
   stage_weight: { decision: 1, consideration: 0.8, awareness: 0.6 } };
-const { list, on_demand, want, total } = monitorSites('ai');
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4 / §4.5): a cycle run (`trigger: 'cycle'`) is a scheduled run for one site (AI visibility and AI growth
+// switched off are honoured); the monthly Wikidata check comes only from the `monthly` the Cycle Dispatcher passes. Outside a cycle it is
+// monthly in the WEBSITE's calendar (its time zone, seo_cycles.tz), not the UTC month.
+const { list, on_demand, want, total, cycle, cycle_why } = monitorSites('ai');
 const sites = on_demand ? list : list.filter(s => s.settings.ai_visibility && s.settings.growth);
-if (!sites.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the AI growth loop is off for every site' : 'no sites yet') } }];
+if (!sites.length) return [{ json: { nothing_to_do: true, cycle, reason: cycle ? (cycle_why || (list.length ? 'the AI growth loop is switched off for ' + list[0].domain + ', so this cycle job runs nothing' : 'nothing to run for this cycle')) : on_demand ? 'no site matches "' + want + '"' : (total ? 'the AI growth loop is off for every site' : 'no sites yet') } }];
+const cycleRows = rowsOf('Load Cycles');   // 2026-10-19: each website's time zone
 const vis = rowsOf('Load AI Visibility'), answers = rowsOf('Load AI Answers'), prompts = rowsOf('Load AI Prompts'), logs = rowsOf('Load Content Log'), qh = rowsOf('Load Query History'),
   pagesStored = rowsOf('Load AI Pages'), targetsStored = rowsOf('Load AI Targets'), growthRows = rowsOf('Load AI Growth'), cache = rowsOf('Load Cache (Growth)'), ladders = rowsOf('Load Ladders');
 const now = new Date(); const iso = now.toISOString(); const month = iso.slice(0, 7);
@@ -693,6 +861,23 @@ for (const s of sites) {
   const fitCtx = FITR.ctx({ own_domain: dom, competitors: comps, heads: lrowsAll.map(l => l.head_keyword), services: SM.services(site_model) });
   const fitG = FITR.rungs(lrowsAll, fitCtx, { where: 'AI growth targets' });
   const lrows = fitG.keep; const set_aside = fitG.set_aside;
+  // keyword-first R-K4 (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.1): the target's OWN keyword passes the gate too, not only the rungs it may be
+  // handed to. On 2026-10-19 a CRM-only site (no ladder, no Dynamics 365 among its services) got the AI refresh target "dynamics 365 finance
+  // operations partner uae", and the Content Cadence wrote it. The topics are what the client chose and sells: the ladder heads, the rungs the
+  // gate kept and the site model's services (the client's declared services included); a refused target is stored `set_aside` with its reason.
+  // the services from the stored model AND from the site row itself: a site the weekly Site Tracker has not modelled yet has no stored model,
+  // but its row already carries what the client declared (declared_services) and any services read so far
+  const targetSvc = [...new Set([...SM.services(site_model), ...SM.services(SM.from(s, {}))].map(x => String(x || '').trim()).filter(Boolean))];
+  // F-REH (2026-10-20): the services the client DECLARED, apart: a product category they named (crm, erp, payroll...) is positive topic evidence
+  const targetDeclared = [...new Set([...((site_model || {}).declared_services || []), ...((SM.from(s, {}) || {}).declared_services || [])].map(x => String(x || '').trim()).filter(Boolean))];
+  const targetCtx = FITR.ctx({ own_domain: dom, competitors: comps, heads: lrowsAll.map(l => l.head_keyword), services: targetSvc,
+    topics: [...new Set([...lrowsAll.map(l => String(l.head_keyword || '')), ...lrows.map(l => String(l.keyword || '')), ...targetSvc].map(x => String(x || '').trim()).filter(Boolean))],
+    topic_label: 'what this website sells and the keywords you chose' });
+  const targets_set_aside = [];
+  // F-KW (2026-10-20, finding 2): with fewer than 12 topic words on file the gate refuses nothing ("no evidence, no refusal"), so a site that
+  // lists two services passed every question. Such a target is not called on topic: it says there is not enough information to judge, it is
+  // listed here, and the Content Cadence only ever suggests it (it writes on its own only with positive topic evidence).
+  const targets_unjudged = [];
   const sqAll = qh.filter(q => q.site_id === s.site_id && q.page); const lastPeriod = sqAll.reduce((m, q) => String(q.period_end || '') > m ? String(q.period_end || '') : m, '');
   const sq = sqAll.filter(q => String(q.period_end || '') === lastPeriod);   // the latest Search Console period only
   const stored = new Map(pagesStored.filter(p => p.site_id === s.site_id).map(p => [keyOf(p.url), p]));
@@ -726,7 +911,10 @@ for (const s of sites) {
   for (const g of gaps.filter(g => g && g.prompt && g.kind !== 'brand').slice(0, 10)) {
     const p0 = promptOf.get(g.prompt_id || '') || myPrompts.find(x => String(x.prompt || '').trim() === String(g.prompt).trim()) || {}; const pid = g.prompt_id || p0.prompt_id || qid(g.prompt); const keyword = String(p0.keyword || g.topic || '').toLowerCase().trim() || toks(g.prompt).slice(0, 5).join(' ');
     const target_id = 'ait_' + s.site_id.replace(/^site_/, '') + '_' + pid; const old = existing.get(target_id) || {};
-    const page = pageFor(keyword, g.prompt, pid); if (page) usedPages.add(keyOf(page.url)); const pr = page ? stored.get(keyOf(page.url)) : null;
+    const tg = fitGate(keyword, targetCtx);   // R-K4: judged before it may claim a page, so a refused question never takes another one's refresh
+    const tev = tg.ok ? fitEvidence(keyword, targetCtx.topics || [], { topic_label: 'what this website sells and the keywords you chose', services: targetDeclared }) : null;
+    const unjudged = !!tev && tev.verdict === 'unknown';
+    const page = pageFor(keyword, g.prompt, pid); if (page && (tg.ok || ['writing', 'written'].includes(old.status))) usedPages.add(keyOf(page.url)); const pr = page ? stored.get(keyOf(page.url)) : null;
     // a planned keyword-ladder page for the same search: the Content Cadence writes it with this AI target (one search, one page)
     const hw = new Set(lrows.flatMap(l => String(l.head_keyword || '').toLowerCase().split(/[^a-z0-9]+/)).filter(Boolean)); const kt = (k) => [...new Set(toks(k).filter(w => !hw.has(w)))];
     const same = (a, b) => { const A = kt(a), B = new Set(kt(b)); return A.length > 0 && A.filter(w => B.has(w)).length / A.length >= 0.6; };
@@ -753,20 +941,28 @@ for (const s of sites) {
       const since = old.written_at || old.updated_at || '';
       if (days(since) < CONFIG.stale_writing_days) return null;
       return { since: String(since).slice(0, 10), log: l ? 'the page run is still "' + l.status + '"' : 'no page run on record' }; })();
-    const status = wasWon ? 'queued' : stalled ? 'queued' : ['writing', 'written'].includes(old.status) ? old.status : (kind === 'refresh' && !stale && !weak) ? 'skipped' : (old.status === 'skipped' && old.reason === 'kept by you') ? 'skipped' : 'queued';
+    const status0 = wasWon ? 'queued' : stalled ? 'queued' : ['writing', 'written'].includes(old.status) ? old.status : (kind === 'refresh' && !stale && !weak) ? 'skipped' : (old.status === 'skipped' && old.reason === 'kept by you') ? 'skipped' : 'queued';
+    // R-K4: a target whose keyword this website should not target is never queued for a page. A row already being written (or written) keeps
+    // its state - that page is live work - and is flagged, the same rule fitStored applies to a stored rung.
+    const tLive = ['writing', 'written'].includes(status0);
+    const status = !tg.ok && !tLive ? 'set_aside' : status0;
+    const gateNote = tg.ok ? '' : 'not a search this website should target: ' + tg.detail + ' (' + tg.reason + ')' + (tLive ? '; its page is already being written, so it is kept and flagged' : '; set aside, so no page is written for it') + '. ';
+    const judgeNote = unjudged ? 'Too little is known about what you sell to tell whether this question is part of it, so it is only suggested, never written on its own. ' : '';   // F-REH: one plain sentence (it used to wrap the gate\'s own detail and say the same thing twice)
+    if (unjudged) targets_unjudged.push({ target_id, question: g.prompt, keyword, kind, detail: tev.detail });
+    if (!tg.ok) targets_set_aside.push({ target_id, question: g.prompt, keyword, kind, reason: tg.reason, detail: tg.detail, kept: tLive, note: '"' + keyword + '" ' + gateNote.trim() });
     if (stalled) stalled_targets.push({ target_id, question: g.prompt, since: stalled.since, detail: stalled.log });
     const lostAgain = wasWon ? { target_id, question: g.prompt, won_at: String(old.won_at || '').slice(0, 10), lost_at: String((v && v.checked_at) || iso).slice(0, 10), observed: obsLine(obsOf(pid)) } : null;
     if (lostAgain) won_lost.push(lostAgain);
     targets.push({ target_id, site_id: s.site_id, domain: dom, prompt_id: pid, question: g.prompt, keyword, kind, page_url: page ? page.url : '', page_type: kind === 'refresh' ? '' : (PT[g.kind] || 'Guide'),
       fanout: (g.fanout || []).slice(0, 8).join(' | '), sources_json: JSON.stringify((g.cited_urls || []).slice(0, 6).map(c => ({ u: c.u, t: c.t || '', n: c.n || 1 }))), competitors: (g.competitors || []).slice(0, 8).join(', '),
       engines: engines.join(', '), stage: g.stage || '', value, status,
-      reason: (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (updated ' + String(pr && pr.updated_on || '').slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? '; not updated in 90+ days' : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
+      reason: gateNote + judgeNote + (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (updated ' + String(pr && pr.updated_on || '').slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? '; not updated in 90+ days' : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
       created_at: old.created_at || iso, updated_at: iso, request_id: old.request_id || '', written_at: old.written_at || '', won_at: old.won_at || '' });
     if (page) addPage(page.url, 'target', 'answers "' + g.prompt.slice(0, 80) + '"', { question: g.prompt });
   }
   // targets no longer lost: won (if written) or no longer needed
   const lostIds = new Set(targets.map(t => t.target_id));
-  for (const [id, t] of existing) if (!lostIds.has(id) && !['won', 'skipped'].includes(t.status) && v) {
+  for (const [id, t] of existing) if (!lostIds.has(id) && !['won', 'skipped', 'set_aside'].includes(t.status) && v) {
     // B9-4: absent from the gap list is not the same as named. It can also mean the question was not asked this run (the panel
     // rotates, a request can fail), so the answers of the window decide: at least win_min_answers of them must name the business.
     const o = obsOf(t.prompt_id || ''); const written = ['writing', 'written'].includes(t.status);
@@ -853,7 +1049,9 @@ for (const s of sites) {
   const indexnow_key = (kv && /^[a-f0-9]{32}$/.test(kv.key || '')) ? kv.key : hex(32);
   const prevG = growthRows.filter(g => g.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
   const prevEntity = prevG ? parse(prevG.entity_json, null) : null;
-  const entity_due = on_demand || !prevEntity || String(prevEntity.checked_at || '').slice(0, 7) !== month;
+  const siteTz = ST.tzOf(cycleRows, s);
+  const entity_due = on_demand || (cycle ? cycle.monthly
+    : (!prevEntity || !prevEntity.checked_at || ST.monthKey(prevEntity.checked_at, siteTz) !== ST.monthKey(now, siteTz)));
   const label = dom.split('.')[0];
   const brand_names = [...new Set([dom, ...(s.settings.brand_names || []), ...(label.length >= 5 ? [label] : []), s.profile.business_name].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
   // D12: the name a draft signs with comes from the one site model (profile -> homepage Organization / og:site_name -> what the app sent),
@@ -861,10 +1059,13 @@ for (const s of sites) {
   // writes: with it on, these prospects go to the Link Builder's qualification and writer (one writer).
   const modelName = SM.name(site_model);
   const business_name = String(s.profile.business_name || '').trim() || (modelName && SM.helpers.bare(modelName) !== dom ? modelName : '');
-  out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, business_name, profile: s.profile,
+  out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, cycle, business_name, profile: s.profile,
     link_builder: !!s.settings.link_builder, services: SM.services(site_model), accreditation: SM.facts(site_model).accreditation,
     // B-G2: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
-    set_aside, set_aside_note: FITR.line(set_aside, 'turned into a question to win or a page to write'),
+    set_aside, set_aside_note: [FITR.line(set_aside, 'turned into a question to win or a page to write'),
+      targets_set_aside.filter(x => !x.kept).length ? targets_set_aside.filter(x => !x.kept).length + ' question(s) to win were set aside, so no page is written for them: ' + targets_set_aside.filter(x => !x.kept).slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ': ' + x.detail + ')').join('; ') + '.' : ''].filter(Boolean).join(' '),
+    targets_unjudged,   // F-KW: questions with too little on file to judge their topic (suggested only)
+    targets_set_aside,   // R-K4: the questions to win whose own keyword the gate refused, with the reason (stored `set_aside`, never written)
     brand_names, competitors: comps.slice(0, 12), ai_pages_month: s.settings.ai_pages_month, run_id: 'grow_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso,
     vis_checked_at: v ? v.checked_at : '', win_min_answers: CONFIG.win_min_answers, won_lost, won_now, stalled_targets, follow_up, follow_up_days: CONFIG.follow_up_days,
     topics: [...new Set(lrowsAll.map(l => String(l.head_keyword || '')).filter(Boolean))].slice(0, 20),   // C-2: the categories RV.providerOf judges a cited site against

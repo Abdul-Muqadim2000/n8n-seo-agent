@@ -3,6 +3,7 @@
 // something really changed: today's mention rate below the past week's beyond sampling noise (z-test, 99%), a business suddenly named in many
 // answers, or a question where the business was named first for three days and is now missing. Quiet days send nothing.
 /*__AI_STATS__*/
+/*__SITE_TIME__*/
 const COLS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls'];
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let rows = []; try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {}
@@ -92,7 +93,7 @@ return plans.map(p => {
     ((readable.note || baseline_note) ? '<p style="font-size:12px;color:#b45309;margin:6px 0">' + (readable.note ? '<b>' + esc(readable.note) + '</b>' : '') + (readable.note && baseline_note ? ' ' : '') + esc(baseline_note) + '</p>' : '') +
     // B8-9: how many tests today's alerts were judged across, and at what threshold
     (multiple_tests.tests ? '<p style="font-size:12px;color:#475569;margin:6px 0">' + esc(multiple_tests.note.replace('of this run', 'of today\'s run')) + '</p>' : '') +
-    '<p style="font-size:12px;color:#64748b">The weekly AI visibility report (Monday) adds these daily answers to its figures. Answers vary from one ask to the next; an alert is sent only when a change is beyond that noise, measured against earlier days that asked the same questions of the same engines.</p></div>';
+    '<p style="font-size:12px;color:#64748b">The weekly AI visibility report (' + (p.cycle_weekday_known ? ST.everyText(p.cycle_weekday) : 'each week') + ') adds these daily answers to its figures. Answers vary from one ask to the next; an alert is sent only when a change is beyond that noise, measured against earlier days that asked the same questions of the same engines.</p></div>';
   return { json: { site_id: p.site_id, domain: p.domain, date: p.date, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, alerts, daily_row, answer_rows, subject, html,
     set_aside: p.set_aside || [], set_aside_note: p.set_aside_note || '',   // B-G2 / B-G1: the refusals travel to the app and the callback too
     samples: n, mention_rate: pct(m, n), mention_ci: [lo, hi], citation_rate: pct(c, n), visibility_score: visibility, engines, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered,

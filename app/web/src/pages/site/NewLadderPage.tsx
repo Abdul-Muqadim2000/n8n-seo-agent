@@ -28,6 +28,9 @@ import { Card } from '@/components/ui/card';
 import { Callout, EmptyState, ErrorState, Skeleton, Spinner } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input, Select } from '@/components/ui/field';
 import { KeyValue, PageHeader } from '@/components/ui/misc';
+import { GuideButton } from '@/components/guide';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { autopilotGuideVars } from '@/lib/guide-vars';
 import { Segmented, Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { DifficultyBadge, PlanBadge } from '@/components/site/keyword';
@@ -35,7 +38,8 @@ import { isCountry } from '@/components/reports/meta';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { useAssessKeyword, useBilling, useRecommendedKeywords, useSiteData, useStartRun } from '@/lib/queries';
+import { useAssessKeyword, useBilling, useRecommendedKeywords, useSiteData, useStartResearch, useStartRun } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { fmtDate } from '@/lib/utils';
 import { IconTile } from '@/components/insight';
 import { PipelineNotices, SubmitError, usePipelineNotices, validGoal, validTone } from '@/pages/tools/_components/kit';
@@ -47,7 +51,7 @@ import { fromCheck, fromRecommended, KeywordCard, Stepper, type ChosenKeyword } 
 // one the person has in mind, checked for a few credits), 2 review the plan (plan type, the checks, Auto / Manual, priority, pages to
 // write now, the business details used), 3 start the ladder run. The plan arrives on the Pipeline page in about 5-8 minutes.
 
-const DEFAULT_AUTOMATION: SiteAutomation = { defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 };
+const DEFAULT_AUTOMATION: SiteAutomation = { defaultMode: 'auto', opportunities: 'manual', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 };
 
 export interface LadderChoices {
   /** null = the website's default mode */
@@ -64,7 +68,8 @@ export default function NewLadderPage() {
   const { site } = useSiteCtx();
   const [params] = useSearchParams();
   const pipeline = useSiteData(org.id, site.id, 'pipeline', undefined, { staleTime: 30_000 });
-  const recommended = useRecommendedKeywords(org.id, site.id);
+  // keyword-first: while research runs (started here or at setup) the suggestions are looked up again every 10 s
+  const recommended = useRecommendedKeywords(org.id, site.id, { poll: true });
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [chosen, setChosen] = useState<ChosenKeyword | null>(null);
   const [choices, setChoices] = useState<LadderChoices>({ mode: null, first: false, pagesNow: 1 });
@@ -92,11 +97,14 @@ export default function NewLadderPage() {
         title="New keyword ladder"
         description={`Pick the keyword you want ${site.domain} to rank for. We plan the pages from easy to hard for your website, write them and track them on Google.`}
         actions={
-          can('member') && (
-            <ButtonLink to={paths.tool(org.id, 'ladder', { siteId: site.id })} variant="ghost" size="sm" icon={<SlidersHorizontal className="size-4" />} title="Every field of the ladder tool, for SEO experts">
-              Advanced form
-            </ButtonLink>
-          )
+          <>
+            <GuideButton id={AUTOPILOT_SCREEN_GUIDES.newLadder} vars={autopilotGuideVars(site)} label="How to choose a keyword" />
+            {can('member') && (
+              <ButtonLink to={paths.tool(org.id, 'ladder', { siteId: site.id })} variant="ghost" size="sm" icon={<SlidersHorizontal className="size-4" />} title="Every field of the ladder tool, for SEO experts">
+                Advanced form
+              </ButtonLink>
+            )}
+          </>
         }
       />
       <Stepper step={step} />
@@ -166,14 +174,59 @@ function ChooseStep({
   );
 }
 
-function FindKeywordsLink({ label = 'Find keywords for me', variant = 'secondary' }: { label?: string; variant?: 'primary' | 'secondary' }) {
+/**
+ * "Find keywords for me" (plan §5.3): starts the website's keyword research from here. The free research at setup when it is still
+ * available, else the research run itself (priced in credits on the button); the suggestions appear on this tab when it is done.
+ */
+function StartResearchButton({ label = 'Find keywords for me', variant = 'secondary' }: { label?: string; variant?: 'primary' | 'secondary' }) {
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
+  const free = useStartResearch(org.id, site.id);
+  const start = useStartRun(org.id);
+  const recommended = useRecommendedKeywords(org.id, site.id);
+  const [error, setError] = useState<unknown>(null);
   if (!can('member')) return null;
+  const isFree = recommended.data?.freeResearch === true;
+  const paid = () =>
+    start.mutate(
+      {
+        mode: 'discover',
+        siteId: site.id,
+        country: site.country,
+        business: site.business.slice(0, 500),
+        customers: site.customers.slice(0, 300),
+        businessFacts: site.businessFacts.slice(0, 2000),
+        goal: validGoal(site.goal) ?? 'leads',
+        receiveReport: false,
+        emailCopy: false,
+      },
+      {
+        onSuccess: (run) => {
+          if (run.status === 'failed') return setError(new Error(run.error ?? 'The SEO engine did not accept the research. Try again in a minute.'));
+          toast.success('Keyword research started', { description: 'Your suggestions appear here in about 10 minutes.' });
+          void recommended.refetch();
+        },
+        onError: setError,
+      },
+    );
+  const go = () => {
+    setError(null);
+    if (!isFree) return paid();
+    free.mutate(undefined, {
+      onSuccess: (r) => {
+        if (r.started || r.status === 'running') toast.success('Keyword research started', { description: 'Your suggestions appear here in about 2 minutes.' });
+        void recommended.refetch();
+      },
+      onError: (e) => (e instanceof ApiRequestError && e.code === 'research_not_free' ? paid() : setError(e)),
+    });
+  };
   return (
-    <ButtonLink to={paths.tool(org.id, 'discover', { siteId: site.id, prefill: { receiveReport: false } })} variant={variant} size="sm" icon={<Search className="size-4" />} title={`Keyword research for your website: about ${PRICES.research()} and 10 minutes`}>
-      {label}
-    </ButtonLink>
+    <span className="inline-flex flex-col items-start gap-1">
+      <Button variant={variant} size="sm" icon={<Search className="size-4" />} loading={free.isPending || start.isPending} onClick={go}>
+        {label} {isFree ? '(free)' : `(about ${PRICES.research()})`}
+      </Button>
+      {error != null && (error instanceof ApiRequestError && isCreditRefusal(error) ? <CreditRefusal orgId={org.id} error={error} /> : <span className="text-xs text-critical-text">{errorMessage(error)}</span>)}
+    </span>
   );
 }
 
@@ -198,16 +251,33 @@ function Recommended({ recommended, preset, onChoose, onCheckOwn }: { recommende
       </div>
     );
   if (recommended.isError) return <ErrorState error={recommended.error} onRetry={() => void recommended.refetch()} />;
+  if (r?.status === 'running' && (!r.reportId || r.stale || !list.length))
+    return (
+      <Card className="p-5">
+        <div className="flex items-start gap-3" role="status">
+          <Spinner className="mt-0.5" />
+          <p className="text-[13px] leading-relaxed text-ink-2">
+            <span className="font-medium text-ink">We are finding keywords for {site.domain}.</span> The suggestions appear here on their own when the research is done (2 to 10
+            minutes). Meanwhile you can check a keyword you already have in mind.
+          </p>
+        </div>
+        <div className="mt-3">
+          <Button variant="secondary" size="sm" onClick={onCheckOwn}>
+            I have a keyword in mind
+          </Button>
+        </div>
+      </Card>
+    );
   if (!r?.reportId || !list.length)
     return (
       <Card>
         <EmptyState
           icon={<Search className="size-5" />}
           title={r?.reportId ? 'Your keyword research found nothing to suggest' : `No keyword suggestions for ${site.domain} yet`}
-          description={`Keyword research finds the searches your buyers use and rates each one for your website: easy, reachable or hard. It takes about 10 minutes and uses about ${PRICES.research()}. Or check a keyword you already have in mind.`}
+          description="Keyword research finds the searches your buyers use and rates each one for your website: good chance, takes a few months, or hard for now. Or check a keyword you already have in mind."
           action={
             <>
-              <FindKeywordsLink variant="primary" />
+              <StartResearchButton variant="primary" />
               <Button variant="secondary" size="sm" onClick={onCheckOwn}>
                 I have a keyword in mind
               </Button>
@@ -227,8 +297,8 @@ function Recommended({ recommended, preset, onChoose, onCheckOwn }: { recommende
   return (
     <div className="space-y-4">
       {r.stale && (
-        <Callout tone="warning" title="These suggestions are getting old" action={<FindKeywordsLink label="Find fresh keywords" />}>
-          They come from your keyword research of {fmtDate(r.receivedAt)}. Searches and your website have changed since; fresh research uses about {PRICES.research()}.
+        <Callout tone="warning" title="These suggestions are getting old" action={<StartResearchButton label="Find fresh keywords" />}>
+          They come from your keyword research of {fmtDate(r.receivedAt)}. Searches and your website have changed since, so fresh research gives better suggestions.
         </Callout>
       )}
       <div className="flex flex-col gap-3 rounded-xl border border-accent/30 bg-accent-soft/50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -269,7 +339,7 @@ function Recommended({ recommended, preset, onChoose, onCheckOwn }: { recommende
       </ul>
       {!r.stale && (
         <p className="flex flex-wrap items-center gap-2 text-[13px] text-ink-3">
-          Want other ideas? <FindKeywordsLink label="Find new keywords" />
+          Want other ideas? <StartResearchButton label="Find new keywords" />
         </p>
       )}
     </div>
@@ -461,7 +531,7 @@ function CheckResult({ check, ladders, onChoose, onCheck }: { check: KeywordChec
 
 // ---------------- step 2: review ----------------
 
-/** about how many pages a plan type tracks (one live Google check each every Monday; RANK_CHECK_USD is its cost, shown in credits) */
+/** about how many pages a plan type tracks (one live Google check each week; RANK_CHECK_USD is its cost, shown in credits) */
 const PAGES_OF: Record<string, number> = { direct: 4, short: 6, full: 12 };
 const RANK_CHECK_USD = 0.015;
 
@@ -628,13 +698,13 @@ function ReviewStep({
             </>
           ) : (
             <p className="text-[13px] leading-snug text-ink-2">
-              It follows the website's defaults: {automation.defaultMode === 'manual' ? 'Manual (each page waits for an OK)' : 'Auto (its pages are written on Mondays)'}, after the current ladders. An
+              It follows the website's defaults: {automation.defaultMode === 'manual' ? 'Manual (each page waits for an OK)' : 'Auto (its pages are written in your weekly run)'}, after the current ladders. An
               admin can change both on the Pipeline page.
             </p>
           )}
         </Section>
 
-        <Section icon={<PenSquare />} title="Pages to write now" description={`The plan uses about ${PRICES.plan()}; each page written now adds about ${PRICES.page()} and 10 minutes and arrives as its own report. The rest follow on Mondays.`}>
+        <Section icon={<PenSquare />} title="Pages to write now" description={`The plan uses about ${PRICES.plan()}; each page written now adds about ${PRICES.page()} and 10 minutes and arrives as its own report. The rest follow in your weekly runs.`}>
           <div role="radiogroup" aria-label="Pages to write now" className="grid gap-2 sm:grid-cols-3">
             {([1, 2, 3] as const).map((n) => (
               <ChoiceCard
@@ -727,6 +797,8 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
   // only what differs from what the engine does anyway (the website's default mode, after the current ladders); admins only
   const prefs = admin ? { ...(choices.mode && choices.mode !== automation.defaultMode ? { mode: choices.mode } : {}), ...(choices.first ? { first: true } : {}) } : {};
   const plan = chosen.planType && chosen.planType !== 'none' ? chosen.planType : null;
+  const day = useCycleDay();
+  const Day = day.every.charAt(0).toUpperCase() + day.every.slice(1);
 
   const go = () => {
     setError(null);
@@ -744,6 +816,9 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
         goal: validGoal(site.goal) ?? 'leads',
         tone: validTone(site.tone) ?? TONES[0],
         pagesNow: choices.pagesNow,
+        // keyword-first (R-K1): the person chose this keyword, typed and checked, or picked from our suggestions; a Manual start writes nothing
+        chosenBy: chosen.how === 'checked' ? 'client_typed' : 'client_picked',
+        ...(admin ? { ladderMode: mode } : {}),
         emailCopy: false,
         ...(Object.keys(prefs).length ? { ladderPrefs: prefs } : {}),
       },
@@ -779,7 +854,7 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
             { label: 'Country', value: chosen.country },
             { label: 'Plan', value: plan ? `${PLAN_CHOICE_LABEL[plan]}${chosen.months ? `, about ${chosen.months.replace('-', ' to ')} months` : ''}` : 'Chosen when it is planned' },
             { label: 'Pages written now', value: String(choices.pagesNow) },
-            { label: 'Writing', value: mode === 'manual' ? 'Manual: each next page waits for your OK' : 'Auto: its next pages are written on Mondays' },
+            { label: 'Writing', value: mode === 'manual' ? 'Manual: each page waits for your OK' : `Auto: its next pages are written ${day.every}` },
             ...(admin && (data?.ladderCards.length ?? 0) > 0 ? [{ label: 'Priority', value: choices.first ? 'Number 1 (written first)' : 'After your current ladders' }] : []),
           ]}
         />
@@ -791,12 +866,14 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
               {
                 icon: <PenSquare />,
                 text:
-                  choices.pagesNow === 1
+                  mode === 'manual'
+                    ? 'No page is written yet: each page waits for your OK, so nothing is spent on pages until you say so.'
+                    : choices.pagesNow === 1
                     ? 'The first page is written right away (about 10 minutes) and arrives as a report, ready to publish on your website.'
                     : `The first ${choices.pagesNow} pages are written right away (about 10 minutes each) and arrive as reports, ready to publish on your website.`,
               },
-              { icon: mode === 'manual' ? <Hand /> : <CalendarClock />, text: mode === 'manual' ? 'Each next page waits for your OK under Needs you.' : 'Its next pages are written on Mondays, in priority order with your other ladders.' },
-              { icon: <Activity />, text: 'Every Monday the rank check follows its pages on Google.' },
+              { icon: mode === 'manual' ? <Hand /> : <CalendarClock />, text: mode === 'manual' ? 'Each next page waits for your OK under Needs you.' : `Its next pages are written ${day.every}, in priority order with your other keywords. Coming up shows each one two days before.` },
+              { icon: <Activity />, text: `${Day} the rank check follows its pages on Google.` },
             ].map((x, i) => (
               <li key={i} className="relative flex items-start gap-3">
                 <IconTile size="sm" className="relative z-[1] ring-4 ring-surface">

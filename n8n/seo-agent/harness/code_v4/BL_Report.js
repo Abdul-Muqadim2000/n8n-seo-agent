@@ -129,12 +129,81 @@ const LN = (() => {
     return '<h3 style="margin:18px 0 4px;font-size:13px;color:#0f172a">' + esc1(x.title || 'Where these numbers come from') + '</h3>'
       + '<table style="border-collapse:collapse;margin:4px 0;max-width:100%">'
       + '<tr><th ' + th + '>Figure</th><th ' + th + '>Source</th><th ' + th + '>Period</th><th ' + th + '>Sample</th><th ' + th + '>How it was arrived at</th></tr>'
-      + rows.map(l => '<tr><td ' + td + '>' + esc1(l.figure) + '</td><td ' + td + '>' + esc1(l.source_label) + '</td><td ' + td + '>' + esc1(l.period || '—')
-        + '</td><td ' + td + '>' + esc1(l.sample || '—') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+      + rows.map(l => '<tr><td ' + td + '>' + esc1(l.figure) + '</td><td ' + td + '>' + esc1(l.source_label) + '</td><td ' + td + '>' + esc1(l.period || '-')
+        + '</td><td ' + td + '>' + esc1(l.sample || '-') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(': ')) + '</td></tr>').join('')
       + '</table><p style="color:#64748b;font-size:11px;margin:4px 0">' + esc1(x.footer || 'A figure marked "' + BASIS.modelled + '" is computed, not counted; "' + MISSING + '" means the figure reached this report without its source and should be treated as unverified.') + '</p>';
   };
   return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, hasEvidence, evidenced, unevidenced,
     evidenceNote, SOURCES, BASIS, MISSING };
+})();
+// ---- 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4 / §4.5 / §4.8): the website's own calendar ----
+// With one Monday for everyone, a month or a day was the engine's UTC month or day and that rarely mattered. With a 7-day cycle per website
+// (started the day it set up, at 06:00 in ITS time zone), a run after 20:00 New York on the last day of a month is already "next month" in
+// UTC, and a site in Dubai has its Wednesday while New York still has Tuesday. This kit is the one place that answers, for a website:
+//   * which local day / month it is (dayKey / monthKey / weekday), in the website's time zone (`seo_cycles.tz`, else the engine zone);
+//   * what its cycle weekday is (`seo_cycles.cycle_weekday`, 0 = Sunday … 6 = Saturday) and how to say it ("every Wednesday" / "each week");
+//   * what a cycle run is: `trigger: 'cycle'` on a Manual Run (the Cycle Dispatcher's payload, plan §14.2) -> cycleOf(trigger);
+//   * how a weekly report is dated: by its cycle ("Week of Wed 15 Oct"), never by "Monday".
+// Pure: Intl only, no clock unless one is passed, no table access (the caller hands it the seo_cycles rows). ENGINE_TZ is written in at build
+// time from GENERIC_TIMEZONE (America/New_York when unset, the same default n8n/compose.yml and the catch-up use).
+const ST = (() => {
+  const ENGINE_TZ = 'America/New_York';
+  const S = (v) => String(v == null ? '' : v).trim();
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const okTz = (tz) => { const z = S(tz); if (!z || /^__/.test(z)) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: z }).format(0); return true; } catch (e) { return false; } };
+  const engineTz = () => okTz(ENGINE_TZ) ? ENGINE_TZ : 'America/New_York';
+  /** the zone to use: the given one when it is a real IANA zone, else the engine's */
+  const zone = (tz) => okTz(tz) ? S(tz) : engineTz();
+  const msOf = (t) => { if (t instanceof Date) return t.getTime(); if (typeof t === 'number' && Number.isFinite(t)) return t; const v = Date.parse(S(t)); return Number.isFinite(v) ? v : NaN; };
+  const normD = (x) => S(x).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  /** the wall-clock parts of instant `t` in zone `tz`: { date: 'YYYY-MM-DD', month: 'YYYY-MM', weekday: 0-6, hour, minute } */
+  const parts = (t, tz) => {
+    const ms = t === undefined || t === null || t === '' ? Date.now() : msOf(t);
+    if (!Number.isFinite(ms)) return null;
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: zone(tz), year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const p = {}; for (const x of f.formatToParts(new Date(ms))) p[x.type] = x.value;
+    const date = p.year + '-' + p.month + '-' + p.day;
+    return { date, month: date.slice(0, 7), weekday: SHORT.indexOf(p.weekday), hour: Number(p.hour) % 24, minute: Number(p.minute) };
+  };
+  const dayKey = (t, tz) => { const p = parts(t, tz); return p ? p.date : ''; };
+  const monthKey = (t, tz) => { const p = parts(t, tz); return p ? p.month : ''; };
+  const weekday = (t, tz) => { const p = parts(t, tz); return p ? p.weekday : -1; };
+  /** the weekday of a calendar date 'YYYY-MM-DD' (the date itself, no zone involved) */
+  const weekdayOfDate = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(S(date)); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay() : -1; };
+  // ---- the website's cycle row (seo_cycles) ----
+  const cycleRow = (rows, site) => {
+    const s = site || {}, sid = S(s.site_id), dom = normD(s.domain);
+    return (rows || []).find(r => r && typeof r === 'object' && !r.error && ((sid && S(r.site_id) === sid) || (dom && normD(r.domain) === dom))) || null;
+  };
+  const tzOf = (rows, site) => { const r = cycleRow(rows, site); return zone(r && r.tz); };
+  /** the website's cycle weekday (0-6) or null when it has no cycle row (or the row carries none) */
+  const cycleWeekday = (rows, site) => {
+    const r = cycleRow(rows, site); if (!r || r.cycle_weekday === '' || r.cycle_weekday == null) return null;
+    const w = Number(r.cycle_weekday); return Number.isInteger(w) && w >= 0 && w <= 6 ? w : null;
+  };
+  // ---- words ----
+  const dayName = (wd) => (Number.isInteger(wd) && wd >= 0 && wd <= 6) ? DAYS[wd] : '';
+  /** "every Wednesday" when the website's day is known, else "each week" */
+  const everyText = (wd) => dayName(wd) ? 'every ' + dayName(wd) : 'each week';
+  /** "on Wednesday" / "next week" */
+  const onText = (wd) => dayName(wd) ? 'on ' + dayName(wd) : 'next week';
+  /** 'YYYY-MM-DD' -> "Week of Wed 15 Oct" */
+  const weekOf = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(S(date)); if (!m) return ''; return 'Week of ' + SHORT[weekdayOfDate(date)] + ' ' + Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1]; };
+  // ---- a cycle run (plan §14.2): { trigger: 'cycle', domain, site_id, cycle_key: 'cyc:<site_id>:<YYYY-MM-DD>', job, monthly, scheduled_for, request_id, light? } ----
+  const yes = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
+  const keyDate = (key) => { const m = /:(\d{4}-\d{2}-\d{2})$/.exec(S(key)); return m ? m[1] : ''; };
+  const cycleOf = (trigger) => {
+    const t = trigger || {};
+    if (S(t.trigger) !== 'cycle') return null;
+    const key = S(t.cycle_key), date = keyDate(key);
+    return { key, date, job: S(t.job), monthly: yes(t.monthly), light: t.light === undefined || t.light === null || t.light === '' ? null : yes(t.light),
+      scheduled_for: S(t.scheduled_for), request_id: S(t.request_id), tz: okTz(t.tz) ? S(t.tz) : '', preview: yes(t.preview), label: date ? weekOf(date) : '' };
+  };
+  /** the fields a cycle run's callback carries (plan §14.2), or {} for any other run */
+  const callbackFields = (cyc) => cyc && cyc.key ? { trigger: 'cycle', cycle_key: cyc.key, cycle_date: cyc.date, cycle_week: cyc.label, cycle_job: cyc.job } : {};
+  return { ENGINE_TZ, okTz, zone, engineTz, parts, dayKey, monthKey, weekday, weekdayOfDate, cycleRow, tzOf, cycleWeekday, dayName, everyText, onText, weekOf, keyDate, cycleOf, callbackFields, DAYS };
 })();
 const sites = $('Parse Backlinks').all().map(i => i.json);
 let rows = []; try { rows = $('Prospect Rows').all().map(i => i.json).filter(r => !r.skip); } catch (e) {}
@@ -236,7 +305,7 @@ return sites.filter(s => s.deliver).map(s => {
   if (full || drafts.length) html += h3('Outreach — this month\'s drafts') + (drafts.length ? drafts.map(r => draftBox(r, r.outreach_subject, r.outreach_body, (TYPE[r.type] || r.type) + ' · score ' + (r.score || 0))).join('') : p_('No new drafts this month.', true));
   if (follows.length) html += h3('Follow-ups due') + follows.map(r => draftBox(r, r.followup_subject, r.followup_body, 'follow-up ' + r.followup_step)).join('');
   if (full) html += h3('Prospect pipeline') + p_(esc(counts) + (won.length ? ' · <b>won this month: ' + esc(won.map(w => w.prospect_domain).join(', ')) + '</b>' : '')) + p_('Mark a prospect as contacted / won / rejected in the app (Backlinks → Outreach) or with Site Admin action "prospect". Contacted prospects get follow-up drafts after 7 and 14 days; "won" is set when the link is found on the page. Full list: prospects.csv.', true);
-  html += h3('How this works') + p_('Every Monday the monitor checks for lost and new links and re-checks the valuable ones on their pages (alert e-mail only when something important happened); the first run of each month is the full report. Cost this run: $' + s.cost_usd.toFixed(2) + '.', true) +
+  html += h3('How this works') + p_((s.cycle && s.cycle.date ? 'In this website\'s weekly cycle (' + ST.everyText(ST.weekdayOfDate(s.cycle.date)) + ')' : 'Each week') + ' the monitor checks for lost and new links and re-checks the valuable ones on their pages (alert e-mail only when something important happened); ' + (s.cycle ? 'the website\'s monthly cycle' : 'the first run of each month') + ' is the full report. Cost this run: $' + s.cost_usd.toFixed(2) + '.', true) +
     p_('Data: DataForSEO Backlinks; Bing Webmaster Tools; Google Search Console (your upload); Google Analytics 4; the <a href="https://commoncrawl.org/web-graphs" style="color:#1d4ed8">Common Crawl web graph</a>; Wikipedia; Hacker News (Algolia); news from the <a href="https://www.gdeltproject.org/" style="color:#1d4ed8">GDELT Project</a>' + (drCol ? '; <a href="https://ahrefs.com/" style="color:#1d4ed8">Domain Rating by Ahrefs</a>' : '') + '.', true);
   // G29: the same figures with their source, period and sample
   const srcNames = SRC.filter(([k]) => (C.per_source || {})[k]).map(([, label]) => label);

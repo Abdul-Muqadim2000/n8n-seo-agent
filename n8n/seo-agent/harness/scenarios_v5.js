@@ -1182,7 +1182,7 @@ await guard('ai visibility', async () => {
   mock('Render PDF AI', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
   await run('Prepare PDF AI', rp); const att = await run('Attach PDF AI', store['Render PDF AI']); const cb = await run('Build AI Callback', att);
   check('callback: stage ai_visibility, PDF, no internal rows / samples / learned names', cb[0].json.stage === 'ai_visibility' && cb[0].json.pdf && !cb[0].json.html && !cb[0].json.cache_rows && !cb[0].json.pulse_rows && !cb[0].json.vis_row && cb[0].json.traffic && cb[0].json.access && cb[0].json.index, Object.keys(cb[0].json).join(','));
-  // ---- second week: same panel (with volumes), last week's row, 6 days of AI Pulse samples, the client no longer named this Monday ----
+  // ---- second week: same panel (with volumes), last week's row, 6 days of AI Pulse samples, the client no longer named this week ----
   const before = new Date(Date.now() - 2 * 3600e3).toISOString();
   const vis1 = [{ json: { ...vr[0].json, checked_at: before } }];
   const daily = [1, 2, 3, 4, 5, 6].map(k => A9.dailyRow('2026-10-0' + k, { mentioned: 11, samples: 18 })).map((d, k) => ({ json: { ...d.json, checked_at: new Date(Date.now() - (90 - k * 10) * 60e3).toISOString() } }));
@@ -1266,6 +1266,18 @@ await guard('backlinks', async () => {
   loadAll({ snaps: sr });
   const p2 = await run('BL Plan', store['Load Case Studies']); const rq2 = await run('BL Requests', p2);
   console.log('   light run ->', JSON.stringify({ mode: p2[0].json.mode, since_last: p2[0].json.since.slice(0, 10), requests: rq2.map(r => r.json.kind), competitors_kept: p2[0].json.competitors }));
+  { // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4): the same week as a job of the website's own cycle - the Cycle Dispatcher alone decides full
+    // or light (`monthly`), never the UTC month: the website's monthly cycle is full although this month already had a full run, any other is light
+    const sid = p2[0].json.site_id, dom = p2[0].json.domain;
+    const cyc = (monthly) => ({ trigger: 'cycle', domain: dom, site_id: sid, cycle_key: 'cyc:' + sid + ':2026-10-21', job: 'backlinks', monthly, light: !monthly,
+      scheduled_for: '2026-10-21T10:00:00.000Z', request_id: 'cyc_' + sid.replace(/^site_/, '') + '_20261021_backlinks' });
+    mock('Manual Run', [{ json: cyc(true) }]); const pc1 = (await run('BL Plan', store['Load Case Studies']))[0].json;
+    mock('Manual Run', [{ json: cyc(false) }]); const pc0 = (await run('BL Plan', store['Load Case Studies']))[0].json;
+    delete store['Manual Run'];
+    console.log('   cycle run ->', JSON.stringify({ monthly: [pc1.mode, pc1.on_demand, pc1.request_id], weekly: [pc0.mode, pc0.on_demand] }));
+    if (pc1.mode !== 'full' || pc1.on_demand !== false || pc0.mode !== 'light' || pc0.on_demand !== false || !pc1.cycle || pc1.cycle.key !== 'cyc:' + sid + ':2026-10-21' || pc1.request_id !== cyc(true).request_id)
+      throw new Error('a cycle run must be full exactly on the website\'s monthly cycle and light otherwise, with on_demand false and the cycle\'s request id');
+  }
   const quietLost = JSON.parse(JSON.stringify(M.blLost())); quietLost.tasks[0].result[0].items = []; const quietNew = JSON.parse(JSON.stringify(quietLost));
   mock('Run BL Requests', rq2.map(r => r.json.kind === 'lost' ? quietLost : r.json.kind === 'new' ? quietNew : M.blFor(r.json))); const g2 = await run('Gap Requests', store['Run BL Requests']); delete store['Run Gap Requests'];
   const pb2 = await run('Parse Backlinks', g2); console.log('   light parse ->', JSON.stringify({ deliver: pb2[0].json.deliver, alerts: pb2[0].json.alerts.map(a => a.level), gap: pb2[0].json.gap.length }));
@@ -1482,14 +1494,16 @@ await guard('pipeline', async () => {
   const cad = (n) => [{ json: { site_id: SITE, domain: D, pages_per_week: n, status: 'active', updated_at: 'x', request_id: '' } }];
   const EMPTY = [{ json: {} }];
   const plan = async (o = {}) => {
-    mock('Manual Run', o.trigger || EMPTY); mock('Load Sites', T.sitesRows()); mock('Load Cadence', cad(o.pages || 3)); mock('Load Ladders', o.ladders || EMPTY);
+    mock('Manual Run', o.trigger || EMPTY); mock('Load Sites', o.sites || T.sitesRows()); mock('Load Cadence', cad(o.pages || 3)); mock('Load Ladders', o.ladders || EMPTY);
     mock('Load Query History', o.queries || EMPTY); mock('Load Trends', o.trends || EMPTY); mock('Load Content Log', o.logs || EMPTY);
     mock('Load Ladder Settings', o.settings || EMPTY); mock('Load Main Keyword Ranks', o.ranks || EMPTY);
     const r = await run('Cadence Plan', store['Load Main Keyword Ranks']);
     const picks = r.filter(x => !x.json.nothing_to_do).map(x => x.json);
     return { items: r, picks, kws: picks.map(p => p.keyword), first: r[0].json, status: (r.find(x => x.json.report_only) || {}).json };
   };
-  const A = (st) => std('lad_A', 'peppol uae', '2026-07-01T00:00:00.000Z', st), B = (st) => std('lad_B', 'vat software uae', '2026-08-01T00:00:00.000Z', st), Cl = (st) => std('lad_C', 'wms dubai', '2026-09-01T00:00:00.000Z', st);
+  // F-KW (2026-10-20): plans dated relative to the run (oldest A, then B, then C, as before): a ladder planned 60+ days ago that never wrote a
+  // page now waits for the app's fresh Keyword Check (finding 3b, harness/scenarios_keyword_first.js KF13), which is not what this scenario tests
+  const A = (st) => std('lad_A', 'peppol uae', daysAgo(50), st), B = (st) => std('lad_B', 'vat software uae', daysAgo(40), st), Cl = (st) => std('lad_C', 'wms dubai', daysAgo(30), st);
   const W3 = { a: 'writing', b: 'writing', c: 'writing' };
   // v4.14 (FIX_PLAN D5): ladder rows still 'writing' are pages written and waiting to be published, so a fixture with three or more of
   // them now trips the pile-up guard. The cases below test something else (focus, the main-page gate), so they raise the website's limit;
@@ -1509,7 +1523,9 @@ await guard('pipeline', async () => {
   p = await plan({ ladders: [...A(), ...B({ a: 'writing' })], settings: [set('lad_A', { priority: 2 }), set('lad_B', { priority: 1, mode: 'manual' })] });
   console.log('   manual ->', p.kws.join(' | '), '| awaiting:', JSON.stringify(p.first.awaiting_approval));
   check('manual ladder not written', p.picks.every(x => x.ladder_id === 'lad_A') && p.kws.length === 3, p.kws);
-  check('manual ladder next page awaiting approval', eq(p.first.awaiting_approval, [{ ladder_id: 'lad_B', head: 'vat software uae', keyword: 'vat software uae guide', rung: 1, page_no: 2, page_type: 'Guide', existing_page_url: '' }]), JSON.stringify(p.first.awaiting_approval));
+  // keyword-first (2026-10-19): each entry also carries its item key (the "Coming up" plan's), the price of the page and who chose the ladder
+  check('manual ladder next page awaiting approval', eq(p.first.awaiting_approval.map(({ item_key, est_usd, chosen_by, ...core }) => core), [{ ladder_id: 'lad_B', head: 'vat software uae', keyword: 'vat software uae guide', rung: 1, page_no: 2, page_type: 'Guide', existing_page_url: '' }])
+    && p.first.awaiting_approval[0].item_key === 'vat software uae guide' && p.first.awaiting_approval[0].est_usd > 0 && p.first.awaiting_approval[0].chosen_by === '', JSON.stringify(p.first.awaiting_approval));
   const cnm = await run('Cadence Note', [{ json: {} }]); scanHtml('cadence note (manual ladder)', cnm[0].json.html);
   check('cadence note carries the pipeline facts', cnm[0].json.awaiting_approval.length === 1 && /Ready for your approval/.test(cnm[0].json.html) && cnm[0].json.paused_reason === '' && Array.isArray(cnm[0].json.queued_ladders), JSON.stringify(Object.keys(cnm[0].json)));
   // 4. focus: three Auto ladders, max_active 2 (default) -> the newest waits; a fully written ladder frees its slot; max_active 3 writes all
@@ -1564,30 +1580,47 @@ await guard('pipeline', async () => {
   check('max_waiting 5 from the _site row', p.kws.length === 3, p.kws);
   // 9. opportunities manual: no striking / trend picks, listed as suggestions
   if (!queryRows || !trendRows) throw new Error('S10 did not produce query / trend rows');
-  const pa = await plan({ queries: queryRows, trends: trendRows });
-  const pm = await plan({ queries: queryRows, trends: trendRows, settings: [siteSet({ opportunities: 'manual' })] });
+  // keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.5): `opportunities` decides nothing any more; the autopilot level does. Full
+  // autopilot (3) writes the opportunities on its own, level 1 suggests exactly that list (and, with no ladder chosen, waits for the first keyword)
+  // F-KW (2026-10-20, finding 2): full autopilot writes a non-ladder item only with positive topic evidence (what the site sells, at level 3),
+  // so the level-3 runs below give the site the services its striking and rising searches are about
+  const SVC3 = T.sitesRows({ services_json: JSON.stringify(['ERP implementation for distributors', 'E-invoicing software', 'SAP and Oracle ERP consulting', 'ERP cost and pricing', 'E-invoicing and FTA compliance', 'Replacing an old ERP']) });
+  const pa = await plan({ queries: queryRows, trends: trendRows, settings: [siteSet({ autopilot_level: 3 })], sites: SVC3 });
+  const pm = await plan({ queries: queryRows, trends: trendRows, settings: [siteSet({ opportunities: 'manual', autopilot_level: 1 })] });
   console.log('   opportunities auto ->', pa.kws.join(' | '), '| manual suggestions ->', (pm.status ? pm.status.suggestions : []).map(s => s.keyword + ' [' + s.source + ']').join(' | '));
-  check('opportunities manual: nothing written', !pm.picks.length && pm.status && pm.status.suggestions.length >= 3, JSON.stringify(pm.first).slice(0, 300));
-  check('suggestions = what Auto would write', eq(pm.status.suggestions.slice(0, 3).map(s => s.keyword), pa.kws) && pm.status.suggestions.every(s => ['striking', 'trend'].includes(s.source)), JSON.stringify(pm.status.suggestions.map(s => s.keyword)));
+  check('level 1 (stored opportunities manual): nothing written, the site waits for its first keyword', !pm.picks.length && pm.status && pm.status.suggestions.length >= 3 && pm.status.waiting_for_keyword === true, JSON.stringify(pm.first).slice(0, 300));
+  check('suggestions = what full autopilot would write', eq(pm.status.suggestions.slice(0, 3).map(s => s.keyword), pa.kws) && pm.status.suggestions.every(s => ['striking', 'trend'].includes(s.source) && s.auto === false && s.item_key && s.est_usd > 0), JSON.stringify(pm.status.suggestions.map(s => s.keyword)));
   const pml = await plan({ ladders: A(), queries: queryRows, trends: trendRows, pages: 3, settings: [siteSet({ opportunities: 'manual' })] });
   check('opportunities manual with a ladder: ladder pages only, suggestions on the picks', pml.picks.every(x => x.source === 'ladder') && pml.picks[0].suggestions.length > 0, pml.kws);
   // 10. no settings rows: same picks as the v4.7 plan (frozen copy in harness/legacy/)
   const logRows12 = [{ json: { site_id: SITE, domain: D, keyword: 'wms uae', source: 'trend', page_type: 'Guide', existing_page_url: '', rung: 0, ladder_id: '', request_id: 'cad_old', started_at: '2026-09-15T10:00:00.000Z', status: 'written', published_url: '', published_at: '', week: '2026-09-15' } }];   // R1 (2026-10-13): a page that waits says `written`, which the frozen v4.7 copy counts too
   // R15 (2026-10-13): the ladder page's planned URL (`ladder_target_url`) is new in the spawn body and is checked on its own below, so the
-  const projBody = (b) => { if (!b || typeof b !== 'object') return b; const { ladder_target_url: _planned, ...rest } = b; return rest; };
+  // P1 (2026-10-20): so are the stored business facts and call to action (with the empty `business` / `customers` sent before them), checked in KF3
+  const projBody = (b) => { if (!b || typeof b !== 'object') return b; const { ladder_target_url: _planned, business: _b, customers: _c, business_facts: _f, cta: _cta, ...rest } = b; return rest; };
   const proj = (items) => items.filter(x => !x.json.nothing_to_do).map(x => { const j = x.json; return { keyword: j.keyword, source: j.source, page_type: j.page_type, existing: j.existing_page_url, ladder_id: j.ladder_id, rung: j.rung, page_no: j.page_no, why: j.why, request_id: j.request_id, pages: j.pages_per_week, upcoming: j.upcoming, dry_run: j.dry_run, body: projBody(j.body) }; });   // R1 (2026-10-13): pending_publish is compared on its own below — v4.7 listed every `started` row, R1 only the pages the content log says were `written`
   check('R15: a ladder page the cadence spawns carries the URL its ladder row planned, so the page keeps that slug', pml.picks.every(x => x.body.ladder_target_url === slug(x.keyword)) && pml.picks.length > 0, JSON.stringify(pml.picks.map(x => [x.keyword, x.body.ladder_target_url])));
+  // keyword-first (2026-10-19): v4.7 wrote striking-distance and trend posts on its own, which is full autopilot (level 3) now; the
+  // comparison runs at level 3 (the _site row is the only setting), and a missing settings table is the defaults (level 2), below
+  const L3 = [siteSet({ autopilot_level: 3 })];
   const same12 = async (label, o, extra) => {
-    const n = await plan(o); const old = await run('legacy:Cadence_Plan_v4_7', [{ json: {} }]);
-    console.log('   ' + label + ' -> new:', n.kws.join(' | '), '| v4.7:', old.filter(x => !x.json.nothing_to_do).map(x => x.json.keyword).join(' | '), '| candidates', n.first.candidates, 'vs', old[0].json.candidates);
-    check('no settings = v4.7: ' + label, n.picks.length > 0 && eq(proj(n.items), proj(old)) && (!extra || extra(n, old)), JSON.stringify(proj(n.items)).slice(0, 200) + ' VS ' + JSON.stringify(proj(old)).slice(0, 200));
+    const n = await plan({ settings: L3, sites: SVC3, ...o }); mock('Load Ladder Settings', EMPTY); const old = await run('legacy:Cadence_Plan_v4_7', [{ json: {} }]);
+    console.log('   ' + label + ' -> new:', n.kws.join(' | '), '| v4.7:', old.filter(x => !x.json.nothing_to_do).map(x => x.json.keyword).join(' | '), '| candidates', n.first.candidates, 'vs', old[0].json.candidates, '| old upcoming', JSON.stringify(old[0].json.upcoming), '| suggestions now', JSON.stringify((n.first.suggestions || []).map(s => s.keyword)));
+    check('level 3 = v4.7: ' + label, n.picks.length > 0 && eq(proj(n.items), proj(old)) && (!extra || extra(n, old)), JSON.stringify(proj(n.items)).slice(0, 200) + ' VS ' + JSON.stringify(proj(old)).slice(0, 200));
     return n;
   };
-  await same12('S12 fixture (one ladder, striking, trends)', { trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12 }, (n, old) => n.first.candidates === old[0].json.candidates - 1);   // the gated main page is the only candidate less
-  await same12('scheduled, 3 pages', { pages: 3, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12 });
+  // R-K7 (keyword-first, 2026-10-19): S12's ladder rows were stored moments ago with a page `writing`, which is a ladder START in this cycle and
+  // counts against this week's pages; the v4.7 comparison is about the picking rules, so the ladder is dated as started a month ago here
+  // (the day-one budget itself is harness/scenarios_keyword_first.js)
+  const oldLadderRows = ladderRows.map(r => ({ json: { ...r.json, start_date: '2026-09-01T00:00:00.000Z' } }));
+  await same12('S12 fixture (one ladder, striking, trends)', { trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: oldLadderRows, queries: queryRows, trends: trendRows, logs: logRows12 }, (n, old) => n.first.candidates === old[0].json.candidates - 1);   // the gated main page is the only candidate less
+  await same12('scheduled, 3 pages', { pages: 3, ladders: oldLadderRows, queries: queryRows, trends: trendRows, logs: logRows12 });
+  const fresh12 = await plan({ pages: 3, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12, settings: L3 });
+  check('R-K7: the same ladder started moments ago spends one of this week\'s 3 pages (its first page is being written)', fresh12.picks.length === 2 && fresh12.first.budget.spent === 1 && /ladder start/.test(fresh12.first.budget.spent_keywords[0].how), JSON.stringify({ k: fresh12.kws, b: fresh12.first.budget }));
   await same12('no ladder, dry run', { trigger: { domain: D, pages: 3, dry_run: true }, queries: queryRows, trends: trendRows, logs: logRows12 }, (n, old) => n.first.candidates === old[0].json.candidates && n.first.dry_run === true);
   const missing = [{ json: { error: { message: 'Data table with name "seo_ladder_settings" not found' } } }];
-  await same12('settings / rank tables missing', { trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12, settings: missing, ranks: missing });
+  const nMiss = await plan({ trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12, settings: missing, ranks: missing });
+  const nDef = await plan({ trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12 });
+  check('settings / rank tables missing = the defaults (level 2): the same picks as no settings rows at all', nMiss.picks.length > 0 && eq(proj(nMiss.items), proj(nDef.items)) && nMiss.first.level === 2, JSON.stringify(proj(nMiss.items)).slice(0, 200));
   // R1 (2026-10-13): the publish reminder is the one field that differs from v4.7 on purpose — v4.7 reminded about every log row with
   // status `started`, which is a run that was opened and may never have written a page; R1 reminds only about the pages the log says
   // were `written`. The stored row below says `written`, so the reminder is the same one the customer used to get.
@@ -1597,9 +1630,11 @@ await guard('pipeline', async () => {
     eq((nPending.first.pending_publish || []).map(x => x.keyword), ['wms uae']) && !(oldPending[0].json.pending_publish || []).length,
     JSON.stringify({ now: nPending.first.pending_publish, v47: oldPending[0].json.pending_publish }));
   const n0 = await plan({ trigger: { site_id: SITE, on_demand: true }, pages: 2, ladders: ladderRows, queries: queryRows, trends: trendRows, logs: logRows12 });
-  check('no settings: new fields empty', n0.picks.every(x => x.paused_reason === '' && !x.awaiting_approval.length && !x.suggestions.length && !x.queued_ladders.length && !x.won_ladders.length && x.opportunities === 'auto' && x.max_waiting === 3), JSON.stringify(n0.first).slice(0, 300));
+  // keyword-first: with no settings the level is 2, the ladder (chosen by the client: no chooser on file) is written, and the opportunities
+  // level 2 does not write on its own are suggestions now
+  check('no settings: the pipeline fields are their defaults (level 2, nothing waiting, the opportunities as suggestions)', n0.picks.every(x => x.paused_reason === '' && !x.awaiting_approval.length && x.suggestions.every(sg => ['striking', 'trend'].includes(sg.source) && sg.auto === false) && !x.queued_ladders.length && !x.won_ladders.length && x.opportunities === 'auto' && x.max_waiting === 3 && x.level === 2 && x.waiting_for_keyword === false) && n0.picks.some(x => x.source === 'ladder'), JSON.stringify(n0.first).slice(0, 300));
   const cn0 = await run('Cadence Note', [{ json: {} }]);
-  check('no settings: note has no pipeline sections', !/Ready for your approval|Suggested posts|Queued ladders|waiting for support|Won/.test(cn0[0].json.html), cn0[0].json.html.slice(0, 200));
+  check('no settings: note has no pipeline sections but the suggestions', !/Ready for your approval|Queued ladders|waiting for support|Won/.test(cn0[0].json.html), cn0[0].json.html.slice(0, 200));
   mock('Manual Run', EMPTY); mock('Load Cadence', EMPTY); const noCad = await run('Cadence Plan', [{ json: {} }]);
   check('a site without a cadence still gets nothing', noCad.length === 1 && noCad[0].json.nothing_to_do && !noCad[0].json.report_only, JSON.stringify(noCad[0].json));
   // two ladders, no settings rows: the older ladder first (priority by start date) — a deliberate change from the v4.7 rung interleave
@@ -1664,7 +1699,7 @@ await guard('pipeline phase 3', async () => {
   const EMPTY = [{ json: {} }];
   const keysOf = (o) => JSON.stringify(Object.keys(o || {}).sort());
   const CACHE_COLS = JSON.stringify(['key', 'kind', 'site_id', 'value', 'updated_at'].sort());
-  const SET_COLS = JSON.stringify(['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at'].sort());
+  const SET_COLS = JSON.stringify(['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at', 'chosen_by', 'autopilot_level', 'rechecked_at'].sort());   // + keyword-first (2026-10-19), rechecked_at (F-KW 2026-10-20)
   // the overlap rule of the web app (app/shared/src/ladders.ts), to check the n8n side independently
   const STOPW = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);
   const toks = (s) => [...new Set(String(s).toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 1 && !STOPW.has(t)).map(t => t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '')).filter(Boolean))];
@@ -1932,7 +1967,7 @@ await guard('pipeline phase 3', async () => {
   console.log('   tiers with reach 10 ->', JSON.stringify(Wl.rk.clusters.slice(0, 8).map(c => c.tier + ':' + c.primary_kd + ':' + c.difficulty_for_you)));
   check('discovery for a small site (reach 10): Now only up to difficulty 30 — topics v4.7 put in Now move to Next', nowL.every(c => c.primary_kd == null || c.primary_kd <= 30) && legacyNow.some(t => !nowL.some(c => c.topic === t)), JSON.stringify({ now: nowL.map(c => c.primary_kd), legacyNow }));
   const N0 = await discover(false, null, { base: { live_serp_checks: 8 } });
-  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks', 'topic_radius', 'radius', 'radius_reason', 'grouped_by', 'title_gap', 'tier_note', 'trend_note', 'competitor_basis', 'ladder_near'].includes(k) ? undefined : v));   // 2026-10-16 (R40 / R34 / R58 / R51): grouped_by / title_gap / tier_note / trend_note are new labels; 2026-10-13: topic_radius / radius / radius_reason are G32's block (drawn from the reach, so empty verdicts without a website); 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
+  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks', 'topic_radius', 'radius', 'radius_reason', 'grouped_by', 'title_gap', 'tier_note', 'trend_note', 'competitor_basis', 'ladder_near', 'service_fit', 'service_fit_note'].includes(k) ? undefined : v));   // 2026-10-16 (R40 / R34 / R58 / R51): grouped_by / title_gap / tier_note / trend_note are new labels; 2026-10-13: topic_radius / radius / radius_reason are G32's block (drawn from the reach, so empty verdicts without a website); 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
   check('discovery without a website: no reach call, no labels', N0.rq[0].json.skip && N0.rd.reach === null && N0.rk.reach === null && N0.rk.keywords.every(k => k.difficulty_for_you === undefined), JSON.stringify(N0.rd));
   check('discovery without a website = v4.7 (tiers with difficulty <= 55, priority, pipeline keyword)', eq(strip(N0.rk), strip(N0.legacy)) && eq(N0.ks.choice_options, N0.legacyKs.choice_options) && eq(strip(N0.ks.keyword_strategy), strip(N0.legacyKs.keyword_strategy)), 'differs from the frozen v4.7 Rank Keywords / Build Keyword Strategy');
   check('callback without a website: the new fields are null', N0.ir.reach === null && N0.ir.priority.every(k => k.difficulty_for_you === null && k.label === null && k.plan_type === null) && !/For your site/.test(N0.ks.result_html), JSON.stringify(N0.ir.priority[0]).slice(0, 200));
@@ -2002,10 +2037,13 @@ await guard('pipeline phase 3', async () => {
   check('assess: a realistic on-topic keyword gets no alternatives', eq(b.alternatives, []), JSON.stringify(b.alternatives));
   b = await answer(AR(), [{ json: { output: '```json\n{"fit": 1, "navigational": false, "alternatives": []}\n```' } }]);
   check('assess: a fenced JSON answer from the model is read', b.fit === 1 && b.navigational === false, JSON.stringify(b));
-  b = await answer(AR({ intent: 'navigational', keyword: 'xero login' }), [{ json: { error: { message: 'Overloaded' } } }]);
+  b = await answer(AR({ keyword: 'erp support dubai' }), [{ json: { error: { message: 'Overloaded' } } }]);
   // R3 (2026-10-13): the fit that cannot be read is in the LABEL, not only in `warnings`, and the Claude call is charged even when its
   // answer could not be parsed (live: exec 488 shipped fit null and reported the AI part of the cost as nothing).
-  check('assess: Claude failed -> fit null in the label as well, navigational from the keyword data, a warning, and the model still charged', b.fit === null && b.fit_known === false && /topic check unavailable/.test(b.label) && b.navigational === true && b.difficulty_for_you === 'not_realistic' && b.warnings.some(w => /topic check unavailable: Overloaded/.test(w)) && b.cost_usd === 0.0235, JSON.stringify(b));
+  check('assess: Claude failed on a keyword the fit gate lets through -> fit null in the label as well, a warning, and the model still charged', b.fit === null && b.fit_known === false && /topic check unavailable/.test(b.label) && b.fit_source === 'unknown' && b.warnings.some(w => /topic check unavailable: Overloaded/.test(w)) && b.cost_usd === 0.0235, JSON.stringify(b));
+  b = await answer(AR({ intent: 'navigational', keyword: 'xero login' }), [{ json: { error: { message: 'Overloaded' } } }]);
+  // keyword-first R-K4 (2026-10-19): the deterministic gate decides a refusal whatever the model did - fit 0 and known, navigational from the data
+  check('assess: Claude failed, the fit gate refuses ("xero login") -> fit 0 from the gate, known, navigational, not realistic, the model still charged', b.fit === 0 && b.fit_known === true && b.fit_source === 'gate' && b.fit_gate.ok === false && b.navigational === true && b.difficulty_for_you === 'not_realistic' && /not a fit/.test(b.label) && b.cost_usd === 0.0235, JSON.stringify(b));
   b = await answer(AR({ intent: 'navigational', keyword: 'northwind erp' }), [{ json: { error: { message: 'Overloaded' } } }]);
   check('assess: the site\'s own brand is never "another company"', b.navigational === false && b.difficulty_for_you !== 'not_realistic', JSON.stringify(b));
   mock('Assess Validate', [{ json: v }]); mock('Load Assess Cache', EMPTY);
@@ -2414,7 +2452,7 @@ await guard('backlinks v4.10', async () => {
   mock('Render PDF BL', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
   await run('Prepare PDF BL', rp); const att = await run('Attach PDF BL', store['Render PDF BL']); const cb = await run('Build BL Callback', att); const CB = cb[0].json;
   check('callback: coverage, best links, wins, lists, competitors\' new links, at risk; no ledger dump, no refdomains, no html', !!CB.coverage && CB.best.length > 0 && Array.isArray(CB.wins) && Array.isArray(CB.lists) && Array.isArray(CB.comp_new) && Array.isArray(CB.at_risk) && CB.ledger_rows === undefined && CB.refdomains === undefined && CB.html === undefined && CB.stage === 'backlinks', Object.keys(CB).join(','));
-  // ---------------- next Monday: the light watch ----------------
+  // ---------------- next week: the light watch ----------------
   const ledger2 = R.ledger_rows.map(r => ({ ...r, updated_at: B.iso(7) }));
   loadAll({ ledger: ledger2, prospects: PR, snaps: snr.map(r => ({ json: { ...r.json, checked_at: B.iso(7) } })) });
   const p2 = await run('BL Plan', store['Load Link Graph'], PLAN); const rq2 = await run('BL Requests', p2);
@@ -2474,9 +2512,20 @@ await guard('backlinks v4.10', async () => {
   await run('Contact Requests', ojf); delete store['Fetch Contacts']; await run('Outreach Input', ojf); delete store['Outreach Writer']; const prf = await run('Prospect Rows', store['Outreach Input']);
   const snf = await run('BL Snapshot Rows', prf); const rpf = await run('BL Report', snf);
   check('free only: Ahrefs DR still read (free); authority cells show "DR 77" alone, never "0 · DR" (live finding 2026-10-08)', drf[0].json.skip !== true && Rf.ledger_rows.find(r => r.ref_domain === 'peppol.org').dr === 77 && />DR 77</.test(rpf[0].json.html) && !/>0 · DR/.test(rpf[0].json.html), JSON.stringify({ dr: drf[0].json.skip, cells: (rpf[0].json.html.match(/>[^<]{0,12}DR \d+</g) || []).slice(0, 4) }));
-  check('free only: snapshot mode "free" (the next Monday run is still the month\'s full DataForSEO run), report says $0', snf[0].json.mode === 'free' && /Free sources only/.test(rpf[0].json.html) && /cost \$0/.test(rpf[0].json.html), JSON.stringify({ mode: snf[0].json.mode }));
+  check('free only: snapshot mode "free" (the next scheduled run is still the month\'s full DataForSEO run), report says $0', snf[0].json.mode === 'free' && /Free sources only/.test(rpf[0].json.html) && /cost \$0/.test(rpf[0].json.html), JSON.stringify({ mode: snf[0].json.mode }));
   loadAll({ snaps: snf }); delete store['Manual Run']; const pNext = await run('BL Plan', store['Load Link Graph'], PLAN);
-  check('after a free run, the scheduled Monday run is still the full DataForSEO run', pNext[0].json.mode === 'full' && !pNext[0].json.free_only, JSON.stringify({ mode: pNext[0].json.mode }));
+  check('after a free run, the next scheduled run (no site named) is still the full DataForSEO run', pNext[0].json.mode === 'full' && !pNext[0].json.free_only, JSON.stringify({ mode: pNext[0].json.mode }));
+  { // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4): a job of the website's cycle is never free_only, and its monthly cycle is the full DataForSEO run
+    const sid = pNext[0].json.site_id, dom = pNext[0].json.domain;
+    mock('Manual Run', [{ json: { trigger: 'cycle', domain: dom, site_id: sid, cycle_key: 'cyc:' + sid + ':2026-10-22', job: 'backlinks', monthly: true, light: false, free_only: true, scheduled_for: '2026-10-22T02:00:00.000Z', request_id: 'cyc_x_20261022_backlinks' } }]);
+    const pCyc = (await run('BL Plan', store['Load Link Graph'], PLAN))[0].json;
+    mock('Manual Run', [{ json: { trigger: 'cycle', domain: dom, site_id: sid, cycle_key: 'cyc:' + sid + ':2026-10-29', job: 'backlinks', monthly: false, light: true, scheduled_for: '2026-10-29T02:00:00.000Z', request_id: 'cyc_x_20261029_backlinks' } }]);
+    const pCyc0 = (await run('BL Plan', store['Load Link Graph'], PLAN))[0].json;
+    delete store['Manual Run'];
+    check('cycle (2026-10-19): the website\'s monthly cycle is the full DataForSEO run and never free_only (a free check is the owner asking); the next cycle of the month is light',
+      pCyc.mode === 'full' && pCyc.free_only === false && pCyc.on_demand === false && pCyc0.mode === 'light' && pCyc0.free_only === false && pCyc0.on_demand === false,
+      JSON.stringify({ monthly: [pCyc.mode, pCyc.free_only, pCyc.on_demand], weekly: [pCyc0.mode, pCyc0.free_only] }));
+  }
   { // a paid run 5 days ago, then a free check today (live finding 2026-10-08: "previous" and "changes since" took the free run)
     const paidAt = new Date(Date.now() - 5 * 864e5).toISOString(), paid = { ...snf[0].json, checked_at: paidAt, mode: 'light', rank: 598, referring_domains: 13, spam_score: 8, union_domains: 15 };
     loadAll({ snaps: [snf[0], { json: paid }] }); const pMon = await run('BL Plan', store['Load Link Graph'], PLAN);
@@ -2702,7 +2751,8 @@ await guard('ai growth', async () => {
   // ---- (g) the Content Cadence: one AI page a week within the month's allowance, extra to the blog posts; the target marked writing ----
   const targetRow = (o) => ({ json: { target_id: 'ait_x_' + o.id, site_id: SITE, domain: D, question: o.q, keyword: o.k, kind: o.kind || 'answer', page_url: o.url || '', page_type: o.pt || 'Guide', fanout: 'a search | another search', sources_json: JSON.stringify([{ u: 'https://gulfnews.com/x', t: 'X' }]), competitors: 'zoho.com, cleartax.com', value: o.v, status: 'queued' } });
   const cadLoads = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: o.pages == null ? 1 : o.pages, status: 'active' } }]); mock('Load Ladders', [...M.ladders(), { json: { ladder_id: 'lad_1', domain: D, head_keyword: 'e invoicing in uae', rung: 1, page_no: 1, keyword: 'peppol accredited provider uae', page_type: 'Guide', target_url: 'https://northwind-erp.com/peppol-accredited-provider-uae/', page_exists: false, status: 'planned' } }]); mock('Load Query History', [{ json: {} }]); mock('Load Trends', [{ json: {} }]);
-    mock('Load Content Log', o.logs || [{ json: {} }]); mock('Load Ladder Settings', o.settings || [{ json: {} }]); mock('Load Main Keyword Ranks', [{ json: {} }]);
+    // keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.5): the AI page ON TOP of the pages a week is full autopilot (level 3)
+    mock('Load Content Log', o.logs || [{ json: {} }]); mock('Load Ladder Settings', o.settings || [{ json: { ladder_id: '_site', site_id: SITE, domain: D, autopilot_level: 3 } }]); mock('Load Main Keyword Ranks', [{ json: {} }]);
     mock('Load AI Targets (Cadence)', o.targets || [targetRow({ id: 1, q: 'Odoo or Business Central for UAE e-invoicing?', k: 'odoo vs business central uae', v: 2.1, pt: 'Comparison Page' }), targetRow({ id: 2, q: 'Which companies help UAE businesses with e-invoicing?', k: 'e invoicing in uae', kind: 'refresh', url: WWW + '/e-invoicing-uae/', v: 3.4 })]);
     mock('Load Monitors (Cadence)', o.monitors || [{ json: { site_id: SITE, ai_visibility: true, ai_growth: true, ai_pages_month: '' } }]); };
   cadLoads(); const cpl = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
@@ -2717,9 +2767,10 @@ await guard('ai growth', async () => {
   const cpl3 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
   check('cadence: AI pages off (0 a month) and no blog cadence -> nothing', cpl3.length === 1 && cpl3[0].nothing_to_do === true, JSON.stringify(cpl3));
   cadLoads({ pages: 0 }); const cpl4 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
-  check('cadence: a site without a blog cadence still gets its AI page', cpl4.length === 1 && /^ai_/.test(cpl4[0].source), JSON.stringify(cpl4.map(x => x.source)));
-  cadLoads({ settings: [{ json: { ladder_id: '_site', site_id: SITE, domain: D, opportunities: 'manual' } }] }); const cpl5 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
-  check('cadence: Manual opportunities -> the AI page is a suggestion, not written', !cpl5.some(x => /^ai_/.test(x.source)) && cpl5.some(x => (x.suggestions || []).some(sg => sg.target_id === 'ait_x_2')), JSON.stringify(cpl5.map(x => [x.source, (x.suggestions || []).length])));
+  // keyword-first (2026-10-19): this is the hole the Techand page came through — a site set to 0 pages a week still got its AI page
+  check('cadence: a site set to 0 pages a week gets no AI page either, even at full autopilot (pages_per_week bounds everything)', cpl4.length === 1 && cpl4[0].nothing_to_do === true && !/^ai_/.test(cpl4[0].source || ''), JSON.stringify(cpl4.map(x => x.source || x.reason)));
+  cadLoads({ settings: [{ json: { ladder_id: '_site', site_id: SITE, domain: D, opportunities: 'auto', autopilot_level: 1 } }] }); const cpl5 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
+  check('cadence: level 1 (a stored opportunities auto changes nothing) -> the AI page is a suggestion with its AI target, not written', !cpl5.some(x => /^ai_/.test(x.source)) && cpl5.some(x => (x.suggestions || []).some(sg => sg.target_id === 'ait_x_2' && sg.ai_target && sg.ai_target.question && sg.source === 'ai_refresh' && sg.auto === false)), JSON.stringify(cpl5.map(x => [x.source, (x.suggestions || []).length])));
   cadLoads({ logs: ['a', 'b', 'c'].map(k => ({ json: { site_id: SITE, domain: D, keyword: 'waiting ' + k, source: 'ladder', status: 'written', started_at: ago(5) } })) }); const cpl6 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);   // R1 (2026-10-13): `written` is what makes a page wait for publication
   check('cadence: the pile-up guard (3 unpublished pages) holds the AI page too', !cpl6.some(x => /^ai_/.test(x.source) && !x.nothing_to_do), JSON.stringify(cpl6.map(x => [x.source, x.paused_reason])));
   cadLoads({ targets: [targetRow({ id: 9, q: 'Which accredited Peppol providers work in Dubai?', k: 'accredited peppol provider dubai', v: 5 })] }); const cpl7 = (await run('Cadence Plan', store['Load Monitors (Cadence)'])).map(r => r.json);
@@ -2787,7 +2838,7 @@ await guard('link builder', async () => {
     mock('Load Backlinks', F.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F.snaps().map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]); mock('Load AI Targets', F.targets().map(j => ({ json: j })));
     mock('Load Query History', F.queries().map(j => ({ json: j }))); mock('Load Rank History', F.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', (o.cache || F.cache()).map(j => ({ json: j }))); };
   const sourceFor = (r) => r.kind === 'press' ? F.bsky(r.topic ? [] : [F.onTopicPost()]) : r.kind === 'wayback' ? F.cdx() : r.kind === 'listing_search' ? F.searx(r.listing_id === 'crunchbase' ? ['https://www.crunchbase.com/organization/techand', 'https://www.crunchbase.com/organization/techandvalues'] : []) : r.kind === 'resource_search' ? F.searx(['https://www.einvoicingbasics.co.uk/resources/', 'https://cleartax.com/ae/resources', 'https://www.youtube.com/watch?v=x']) : {};
-  // ---- (a) the plan: scheduled Monday run ----
+  // ---- (a) the plan: a scheduled run over every site (no site named) ----
   loadAll(); delete store['Manual Run'];
   const P = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
   const pg = (u) => P.pages.find(x => x.url === u) || {};
@@ -3593,7 +3644,7 @@ await guard('one site model (FIX_PLAN G19)', async () => {
   check('SM.pageRows writes exactly the seo_pages columns', m1.page_rows.length === 3 && m1.page_rows.every(r => eq(Object.keys(r).sort(), [...TC.PAGES].sort())) && m1.page_rows[0].url === INS, JSON.stringify(Object.keys(m1.page_rows[0])));
 
   // ---- 5. SM.toRow: exactly the seo_sites columns the model owns ----
-  const MODEL_COLS = ['canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];
+  const MODEL_COLS = ['canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at', 'declared_services'];   // + keyword-first (2026-10-19)
   check('SM.toRow writes only seo_sites columns and every model column (sync_tables.py adds them to the live table)',
     Object.keys(p1.row).every(k => TC.SITES.includes(k)) && MODEL_COLS.every(k => k in p1.row) && eq(p1.columns, ['site_id', 'domain', ...MODEL_COLS]) && JSON.parse(p1.row.nap_json).city === 'Dubai', JSON.stringify(Object.keys(p1.row)));
 
@@ -4517,11 +4568,13 @@ await guard('d11-existing-pages', async () => {
 
   // ---- 6. the Content Cadence: a ladder page becomes a refresh, an opportunity post is left out ----
   const cadWith = async (pages) => {
-    reset(); mock('Manual Run', EMPTY); mock('Load Sites', T.sitesRows()); mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: 2, status: 'active', updated_at: 'x', request_id: '' } }]);
+    // F-KW (2026-10-20): a level-3 new topic is written only with positive topic evidence, so the site says what it sells (penalties advice)
+    reset(); mock('Manual Run', EMPTY); mock('Load Sites', T.sitesRows().map(r => ({ json: { ...r.json, services_json: JSON.stringify(['UAE e-invoicing compliance and penalties advice']) } }))); mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: 2, status: 'active', updated_at: 'x', request_id: '' } }]);
     mock('Load Ladders', [lrow(1, 1, 'uae e invoicing fines', 'planned')]);
     mock('Load Query History', EMPTY);
     mock('Load Trends', [{ json: { site_id: SITE, domain: D, keyword: 'e invoicing', direction: 'rising', rising: KW + ' (+120%)', change_pct: 120, checked_at: daysAgo(2) } }]);
-    mock('Load Content Log', EMPTY); mock('Load Ladder Settings', EMPTY); mock('Load Main Keyword Ranks', EMPTY);
+    // keyword-first (2026-10-19): a rising search is a new topic, written on its own at full autopilot (level 3) only
+    mock('Load Content Log', EMPTY); mock('Load Ladder Settings', [{ json: { ladder_id: '_site', site_id: SITE, domain: D, autopilot_level: 3 } }]); mock('Load Main Keyword Ranks', EMPTY);
     mock('Load Pages (Cadence)', pages.length ? pages.map(p => ({ json: { ...p, site_id: SITE, id: 1 } })) : EMPTY);
     const r = await run('Cadence Plan', store['Load Pages (Cadence)']);
     return { picks: r.filter(x => !x.json.nothing_to_do).map(x => x.json), first: r[0].json };
@@ -4642,11 +4695,11 @@ await guard('d20-d21-g9-g24-g28', async () => {
     eq(p0.live.top_domains, ['a.example', 'b.example', 'c.example', 'd.example', 'e.example']), JSON.stringify(p0.live.top_domains));
   const withAio = await strategyFrom(KS2, [{ json: serpWith(true, '2026-10-11 16:03:00 +00:00') }]);
   check('D20: when the live check DID see an AI Overview the card says so with the day it was seen',
-    /an AI Overview was seen on 2026-10-11 \(they vary between searches\) — write a quotable answer block/.test(withAio.keyword_strategy.priority[0].why), withAio.keyword_strategy.priority[0].why);
+    /an AI Overview was seen on 2026-10-11 \(they vary between searches\), so write a quotable answer block/.test(withAio.keyword_strategy.priority[0].why), withAio.keyword_strategy.priority[0].why);
   const failed = await strategyFrom(KS2, [{ json: { tasks: [{ status_code: 50000, status_message: 'Internal Server Error.' }] } }]);
   const pf = failed.keyword_strategy.priority[0];
   check('D20: with no live check the stored results page is quoted as historical and undated, never as a current feature',
-    pf.live === null && /the stored results page showed an AI Overview \(historical, undated — not checked live\)/.test(pf.why) && /historical, undated/.test(failed.result_html), pf.why);
+    pf.live === null && /the stored results page showed an AI Overview \(historical, undated, not checked live\)/.test(pf.why) && /historical, undated/.test(failed.result_html), pf.why);
   const ir = (await run('Build Ideas Response', [{ json: noAio, binary: {} }]))[0].json;
   check('D20: the callback rounds CPCs to 2 decimals (no float32 tail anywhere) and carries the ladder overlap field',
     ir.priority[0].cpc === 13.66 && ir.start_with.cpc === 13.66 && ir.quick_wins.every(k => k.cpc === 13.66) && !/13\.6599/.test(JSON.stringify(ir)) && 'ladder_covered' in ir.priority[0] && eq(ir.ladder_covered, []), JSON.stringify({ cpc: ir.priority[0].cpc, start: ir.start_with.cpc }));
@@ -5826,7 +5879,7 @@ await guard('crux, impact priority, alert channels and test check-ins', async ()
   check('D25c: the API answer says whether the check-in counts for the month, so the app can keep asking too',
     resp.is_test === true && resp.counts_for_month === false && /note marks it/.test(resp.test_reason), JSON.stringify(resp).slice(0, 220));
 
-  // the Site Tracker's monthly check: a test row never satisfies it (the reminder in the Monday report reads checkin_due)
+  // the Site Tracker's monthly check: a test row never satisfies it (the reminder in the weekly report reads checkin_due)
   const month = new Date().toISOString().slice(0, 7);
   const ckRow = (o) => ({ json: { id: 1, site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', month, manual_action: false, security_issue: false, notes: '', coverage_json: '{}', not_indexed_total: 4, csv_kind: 'reasons', submitted_at: month + '-02T09:00:00.000Z', source: 'form', is_test: false, ...o } });
   const EMPTY48 = [{ json: {} }];
@@ -5841,7 +5894,7 @@ await guard('crux, impact priority, alert channels and test check-ins', async ()
   const pNoteOnly = await planWith([ckRow({ notes: 'October check-in (test)' })]);   // the live row: marked only in its note, written before the column existed
   const pOld = await planWith([ckRow({ is_test: true }), ckRow({ id: 2, month: '2026-09', notes: 'September, real' })]);
   console.log('   checkin_due ->', JSON.stringify({ test: pTest.checkin_due, real: pReal.checkin_due, note_only: pNoteOnly.checkin_due, test_plus_old_real: pOld.checkin_due }));
-  check('D25c: a test check-in does not satisfy the month — the Monday report keeps asking (checkin_due stays true) and the test row is never reported as the month\'s answer',
+  check('D25c: a test check-in does not satisfy the month — the weekly report keeps asking (checkin_due stays true) and the test row is never reported as the month\'s answer',
     pTest.checkin_due === true && pTest.last_checkin === null && pNoteOnly.checkin_due === true && pOld.checkin_due === true
     && pOld.last_checkin && pOld.last_checkin.month === '2026-09',
     JSON.stringify({ test: [pTest.checkin_due, pTest.last_checkin], note_only: pNoteOnly.checkin_due, old: [pOld.checkin_due, pOld.last_checkin && pOld.last_checkin.month] }));
@@ -7541,7 +7594,7 @@ await guard('stored rungs, statistical alerts, pre-release check', async () => {
   console.log('   stored rung ->', JSON.stringify(gBrand));
   check('R16: a planned rung that names another company on its own results page is set aside, with the reason in words an owner can read',
     gBrand.ok === false && gBrand.flagged === true && gBrand.reason === 'other brand' && /facts\.ae/.test(gBrand.detail)
-    && /is not a search this website should target/.test(gBrand.note) && /set aside instead of written/.test(gBrand.note), JSON.stringify(gBrand));
+    && /is not a search this website should target/.test(gBrand.note) && /It is set aside, so no page is written for it\./.test(gBrand.note) && !/planned before this rule existed/.test(gBrand.note), JSON.stringify(gBrand));
   const gWritten = await gate62({ keyword: 'facts erp', status: 'writing' }, CTX62);
   check('R16: the same rung whose page is already written is KEPT and only flagged — live work is never dropped silently',
     gWritten.ok === true && gWritten.live === true && gWritten.flagged === true && /already written/.test(gWritten.note), JSON.stringify(gWritten));
@@ -7577,7 +7630,7 @@ await guard('stored rungs, statistical alerts, pre-release check', async () => {
   const aside62 = (C62.first.set_aside || []).find(x => x.keyword === 'facts erp') || {};
   check('R16: the rung is named in `set_aside` with its reason, the evidence and "not written", so nothing disappears quietly',
     aside62.dropped === true && aside62.reason === 'other brand' && aside62.ladder_id === 'lad_R16' && aside62.rung === 2
-    && /facts\.ae/.test(aside62.detail) && /set aside instead of written/.test(aside62.note), JSON.stringify(aside62));
+    && /facts\.ae/.test(aside62.detail) && /It is set aside, so no page is written for it\./.test(aside62.note), JSON.stringify(aside62));
   const marks62 = (await run('Ladder Marks', C62.items)).map(x => x.json);
   console.log('   ladder marks ->', JSON.stringify(marks62));
   check('R16: the ladder row is marked `set_aside` on the same run, so the next cadence, the tracker and the app all stop calling it planned',
@@ -7909,7 +7962,7 @@ await guard('stored rungs, statistical alerts, pre-release check', async () => {
     && rad.rows.length === 6 && rad.rows[0].verdict === 'in_reach', JSON.stringify({ summary: rad.summary, counts: [rad.in_reach.length, rad.stretch.length, rad.far.length] }));
   check('K12: every row carries its basis, and a topic can be looked up by its words (what a plan or a pick asks for)',
     rad.topics.every(t => t.evidence.length >= 2 && ['service', 'page', 'topic', 'none'].includes(t.basis)) && rad.measured === true
-    && rad.picked && rad.picked.topic === 'erp implementation dubai' && /^Within reach — /.test(rad.picked_line), JSON.stringify({ picked: rad.picked && rad.picked.topic, line: rad.picked_line.slice(0, 120) }));
+    && rad.picked && rad.picked.topic === 'erp implementation dubai' && /^Within reach: /.test(rad.picked_line) && !/[—→]/.test(rad.picked_line), JSON.stringify({ picked: rad.picked && rad.picked.topic, line: rad.picked_line.slice(0, 120) }));
   const radNo = await RADof({ reach: null, topics: RADIN.topics.slice(0, 2), services: RADIN.services });
   check('K12: with no measured reach the radius says its verdicts are provisional instead of inventing one',
     radNo.measured === false && radNo.reach === null && /could not be measured this run/.test(radNo.note), JSON.stringify(radNo.note));
@@ -7947,7 +8000,7 @@ await guard('stored rungs, statistical alerts, pre-release check', async () => {
   const L58 = (await run('Ladder Plan', relOf(CANDS58)))[0].json.ladder;
   check('K12: the ladder plan carries the same radius block and a note on the main keyword\'s own topic, with the evidence',
     !!L58.topic_radius && L58.topic_radius.reach === L58.reach && !!L58.head_radius && ['in_reach', 'stretch', 'far'].includes(L58.head_radius.verdict)
-    && L58.notes.some(n => /^Topic radius — /.test(n) && /(Within reach|A stretch|Out of reach for now) — /.test(n) && /difficulty/.test(n)),
+    && L58.notes.some(n => /^Topic radius — /.test(n) && /(Within reach|A stretch|Out of reach for now): /.test(n) && /difficulty/.test(n)),
     JSON.stringify({ head: L58.head_radius && [L58.head_radius.topic, L58.head_radius.verdict], note: L58.notes.find(n => /^Topic radius/.test(n)) }));
   const LREP58 = decode(await run('Build Ladder Report', EMPTY)); save('ladder-plan-topic-radius.doc.html', LREP58); scanHtml('ladder plan (topic radius)', LREP58);
   check('K12: the ladder plan report prints the block too, and the plan itself is unchanged by it (it is shown, never enforced)',
@@ -9350,8 +9403,14 @@ await guard('r23-r22-r26-no-answer-without-data', async () => {
   const noSerp = await ladderRun({ pv: { serp_features: SF_OUT, competitors_summary: [] } });
   console.log('   serp unchecked ->', JSON.stringify({ pool: noSerp.L.stats.pool_size, planned: noSerp.L.planned, reason: (noSerp.L.refusal || {}).reason, score: noSerp.L.feasibility.score }));
   check('R23: a ladder on a results page that failed (40101 inside an HTTP 200) is refused although the research is full, and the reason says what could not be read',
-    noSerp.L.stats.pool_size >= 5 && noSerp.L.planned === false && (noSerp.L.refusal || {}).reason === 'serp_unchecked' && /Internal SE Server Error/.test(noSerp.L.refusal.message)
-    && /none was planned/i.test(noSerp.L.refusal.message) && noSerp.L.data_check.serp_checked === false, JSON.stringify(noSerp.L.refusal));
+    noSerp.L.stats.pool_size >= 5 && noSerp.L.planned === false && (noSerp.L.refusal || {}).reason === 'serp_unchecked' && /Internal SE Server Error/.test(noSerp.L.refusal.detail)
+    && /none was planned/i.test(noSerp.L.refusal.message) && noSerp.L.data_check.serp_checked === false && /Internal SE Server Error/.test(noSerp.L.data_check.serp_error), JSON.stringify(noSerp.L.refusal));
+  // F-SERP (2026-10-20, rehearsal execs 23 / 31): the client reads plain words — Google's results could not be read right now, it is not
+  // about their keyword, try again later — and the provider's own message stays in `detail` / data_check for support
+  check('F-SERP: the refusal the client reads is plain: Google\'s results could not be read right now, not a problem with the keyword, try again later; no provider jargon in it',
+    /^We could not read Google's results for "azure cloud migration dubai" right now/.test(noSerp.L.refusal.message) && /not a problem with your keyword/.test(noSerp.L.refusal.message)
+    && /try again later/i.test(noSerp.L.refusal.message) && !/Internal SE Server Error|40101|SE Server/.test(noSerp.L.refusal.message) && noSerp.L.refusal.transient === true,
+    noSerp.L.refusal.message);
   check('R23: an unchecked results page produces no feasibility score, no expected visits and no page run',
     noSerp.L.feasibility.score === null && noSerp.L.feasibility.status === 'not_checked' && noSerp.L.feasibility.expected_visits_top3 === null && noSerp.L.feasibility.time_to_rank_months === null
     && noSerp.L.write_now.length === 0 && (await run('Spawn Page Runs', [{ json: noSerp.item }])).length === 0, JSON.stringify(noSerp.L.feasibility));
@@ -9360,8 +9419,21 @@ await guard('r23-r22-r26-no-answer-without-data', async () => {
   save('ladder-plan-r23-refused.doc.html', htmlNo); scanHtml('ladder plan refused for missing data (R23)', htmlNo);
   check('R23: the report says it plainly — not scored, no ladder, and why — instead of "Winnable" and a number',
     /Not scored — the data this rests on was missing/.test(htmlNo) && /none — the live Google results could not be checked/.test(htmlNo)
-    && /No ladder planned\.<\/b> The live Google results for &quot;azure cloud migration dubai&quot; could not be read|No ladder planned\.<\/b> The live Google results for "azure cloud migration dubai" could not be read/.test(htmlNo)
+    && /No ladder planned\.<\/b> We could not read Google.{1,6}s results for .{1,6}azure cloud migration dubai.{1,6} right now/.test(htmlNo) && /not a problem with your keyword/.test(htmlNo)
     && !/Winnable/.test(htmlNo) && !/68\/100/.test(htmlNo), (htmlNo.match(/Is it realistic\?[\s\S]{0,260}/) || [''])[0]);
+
+  // F-SERP: after the three attempts of the head keyword's results page (Analyze Competitor Pages: attempts 3, retryable) the message
+  // counts them; a request the provider REFUSED (not retryable: a wrong field, a used-up quota) is not called "temporary"
+  const noSerp3 = await ladderRun({ pv: { serp_features: { ...SF_OUT, attempts: 3, retried: true, retryable: true }, competitors_summary: [] } });
+  check('F-SERP: all three attempts failed -> no ladder, no score, and the plain message says it was tried 3 times, that it is temporary and not about the keyword',
+    noSerp3.L.planned === false && noSerp3.L.refusal.reason === 'serp_unchecked' && noSerp3.L.refusal.attempts === 3 && noSerp3.L.feasibility.score === null
+    && /did not answer after 3 attempts\./.test(noSerp3.L.refusal.message) && /temporary problem on the provider's side/.test(noSerp3.L.refusal.message)
+    && /Please try again later \(in an hour or so\)\./.test(noSerp3.L.refusal.message) && noSerp3.L.write_now.length === 0, noSerp3.L.refusal.message);
+  const noSerpPerm = await ladderRun({ pv: { serp_features: { ...SF_OUT, error: 'Invalid Field: target.', attempts: 1, retried: false, retryable: false }, competitors_summary: [] } });
+  check('F-SERP: a request the provider refused (not sent again) is not called a temporary outage — still not about the keyword, and it says to contact support if it repeats',
+    noSerpPerm.L.planned === false && noSerpPerm.L.refusal.transient === false && !/temporary/.test(noSerpPerm.L.refusal.message)
+    && /not with your keyword/.test(noSerpPerm.L.refusal.message) && /contact support/.test(noSerpPerm.L.refusal.message) && !/after \d+ attempts/.test(noSerpPerm.L.refusal.message),
+    noSerpPerm.L.refusal.message);
 
   // ---- 3. R23: the topic radius on every rung keyword, against the head ----
   const full = await ladderRun();
@@ -9653,17 +9725,18 @@ await guard('r18-r19-r24-failures-inside-http-200', async () => {
   const n66 = await run('Normalize Input', F.forms.pageVerdict); mock('Route Mode', n66);
   await run('Prepare Keyword Run', n66); mock('Fetch Sitemaps', []); await run('Collect Site URLs', []);
   mock('SERP Top 10', SE_ERR); mock('SERP Top 10 (Retry)', SE_ERR);   // execution 549: both attempts, the same 40101
-  await run('Pick Top 6', store['SERP Top 10 (Retry)']);
+  mock('SERP Top 10 (Light Retry)', SE_ERR);   // F-SERP (2026-10-20): and the lighter third attempt too (rehearsal execs 23 / 31)
+  await run('Pick Top 6', store['SERP Top 10 (Light Retry)']);
   mock('Read Competitor Pages', [{ error: { message: 'Invalid URL' } }]); delete store['Retry Blocked Pages']; delete store['Blocked Page Items'];
   await run('Find Blocked Pages', store['Read Competitor Pages']);
   const a66 = (await run('Analyze Competitor Pages', store['Read Competitor Pages']))[0].json;
-  check('R18: after two failed attempts the live results are "unavailable" with the provider\'s own message, the attempts are counted, and the AI Overview stays unknown (null), never "not shown"',
-    a66.serp_features.unavailable === true && a66.serp_features.error === 'Internal SE Server Error.' && a66.serp_features.attempts === 2
-    && a66.serp_features.retried === true && a66.serp_features.ai_overview.present === null
-    && a66.serp_evidence.unavailable === true && a66.serp_evidence.checked === 0 && a66.serp_evidence.retried === 1,
+  check('R18 / F-SERP: after three failed attempts the live results are "unavailable" with the provider\'s own message, the attempts are counted, and the AI Overview stays unknown (null), never "not shown"',
+    a66.serp_features.unavailable === true && a66.serp_features.error === 'Internal SE Server Error.' && a66.serp_features.attempts === 3
+    && a66.serp_features.retried === true && a66.serp_features.ai_overview.present === null && a66.serp_features.retryable === true
+    && a66.serp_evidence.unavailable === true && a66.serp_evidence.checked === 0 && a66.serp_evidence.retried === 2 && a66.serp_evidence.attempts === 3,
     JSON.stringify({ f: a66.serp_features, e: a66.serp_evidence }));
-  check('R18: the digest the analyst reads says the search failed twice and forbids any assumption about the results page',
-    /failed, twice: the search was sent again once and failed again/.test(a66.serp_digest) && /do not state or assume/.test(a66.serp_digest), a66.serp_digest.slice(0, 300));
+  check('R18 / F-SERP: the digest the analyst reads says the search failed three times and forbids any assumption about the results page',
+    /failed, 3 times: the search was sent again twice, the last time as a lighter request, and failed every time/.test(a66.serp_digest) && /do not state or assume/.test(a66.serp_digest), a66.serp_digest.slice(0, 300));
   mock('Facts SERP', SE_ERR); mock('Facts SERP (Retry)', SE_ERR);
   const cf66 = (await run('Collect Facts', store['Facts SERP (Retry)']))[0].json;
   check('R18: "no statistics were found" would be a lie when nothing was searched — the facts search carries its own evidence instead',
@@ -9683,7 +9756,8 @@ await guard('r18-r19-r24-failures-inside-http-200', async () => {
     JSON.stringify({ verdict: pv66.verdict, score: pv66.verdict_score, visits: pv66.expected_visits_top3, months: pv66.time_to_rank_months, ev: pv66.verdict_evidence }));
   check('R18: and the first reason says why, in the owner\'s words, with what to do about it',
     /^No score is given for this keyword: the live Google results could not be read \(Internal SE Server Error\.\)\./.test(pv66.verdict_reasons[0])
-    && /sent again once and failed again/.test(pv66.verdict_reasons[0]) && /Run the check again/.test(pv66.verdict_reasons[0])
+    && /sent 3 times \(the last time as a lighter request\) and failed every time/.test(pv66.verdict_reasons[0]) && /Run the check again/.test(pv66.verdict_reasons[0])
+    && /not with your keyword/.test(pv66.verdict_reasons[0]) && pv66.verdict_evidence.attempts === 3
     && pv66.verdict_reasons.length === F.verdictGo.reasons.length + 1, JSON.stringify(pv66.verdict_reasons));
   const wf66 = await run('Build Word File', [{ json: { ...pv66, include_seo_report: true } }]); const doc66 = decode(wf66);
   const vsec66 = (doc66.match(/Keyword Verdict[\s\S]{0,1400}/) || [''])[0];
@@ -9695,8 +9769,8 @@ await guard('r18-r19-r24-failures-inside-http-200', async () => {
   check('R18: the callback the app stores carries the same refusal — no score, the evidence beside it',
     wr66.score === null && wr66.score_withheld === true && wr66.evidence && wr66.evidence.serp === 'unavailable',
     JSON.stringify({ score: wr66.score, withheld: wr66.score_withheld, ev: wr66.evidence }));
-  // the second attempt answers: its data is used everywhere and the verdict is scored again
-  mock('SERP Top 10 (Retry)', F.serpTop);
+  // the second attempt answers: its data is used everywhere and the verdict is scored again (no third attempt is sent then)
+  mock('SERP Top 10 (Retry)', F.serpTop); delete store['SERP Top 10 (Light Retry)'];
   const t66 = await run('Pick Top 6', store['SERP Top 10 (Retry)']);
   mock('Read Competitor Pages', t66.map((t, i) => ({ page_text: F.compPage(i, 300) })));
   await run('Find Blocked Pages', store['Read Competitor Pages']);
@@ -10658,7 +10732,7 @@ await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrenc
 
   // ---------- 8. the wiring: every scheduled workflow sweeps, and the Page Watch records its own delivery ----------
   const MON74 = Object.keys(WIRE74.monitors).sort();
-  check('B-A7: all ten scheduled workflows end by sweeping the alerts nobody has — that is the retry\'s schedule: Page Watch daily at 05:45, the AI Pulse daily at 06:30, six more on Monday morning, the Audit Scheduler monthly',
+  check('B-A7: all ten scheduled workflows end by sweeping the alerts nobody has — that is the retry\'s schedule: Page Watch daily at 05:45, the AI Pulse daily at 06:30, the weekly jobs and the monthly audit in each website\'s own cycle (2026-10-19; it was six on Monday morning and the audit on the 1st)',
     MON74.length === 11 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch', 'Reply Reader']   // W3-F
       .every(n => MON74.some(m => m.endsWith(n))), JSON.stringify(MON74));
   const badSweep = MON74.filter(w => { const r = WIRE74.monitors[w].retry; return !r.post_full_response && false || !['attempts', 'attempt_log', 'next_attempt_at', 'delivered', 'severity'].every(k => WIRE74.monitors[w].writes.includes(k)); });
@@ -10692,7 +10766,21 @@ await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrenc
   const crowd = await gate([row74({ id: 1, mode: 'backlinks' }), row74({ id: 2, mode: 'rank_tracker' }), row74({ id: 3, mode: 'content_cadence' })]);
   check('B-A9: more analyses in flight than the limit refuses this one and says the next scheduled run goes ahead as usual',
     crowd.allowed === false && crowd.reason === 'too_many_open' && crowd.open_runs === 3 && crowd.max_open === G74.MAX_OPEN
-    && /the next one goes ahead as usual/.test(crowd.refusal), JSON.stringify([crowd.reason, crowd.open_runs]));
+    && /the next one goes ahead as usual/.test(crowd.refusal) && crowd.retry === false, JSON.stringify([crowd.reason, crowd.open_runs]));
+  // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §2.2 item 2 / §4.8): the twin rule is per website for a run that names one, and a cycle job's
+  // capacity refusal is retried by the Cycle Dispatcher - it is never "skipped" (that would cost the website its week)
+  const crowdCyc = await gate([row74({ id: 1, mode: 'backlinks' }), row74({ id: 2, mode: 'rank_tracker' }), row74({ id: 3, mode: 'content_cadence' })], { site: 'techand.ai', cycle: true });
+  check('cycle (2026-10-19): a cycle job refused for too many analyses says the dispatcher retries it in a few minutes, never "skipped", and is marked retry',
+    crowdCyc.allowed === false && crowdCyc.reason === 'too_many_open' && crowdCyc.retry === true && /retried by the dispatcher in a few minutes/.test(crowdCyc.refusal)
+    && !/skipped/.test(crowdCyc.refusal) && /techand\.ai/.test(crowdCyc.refusal), JSON.stringify([crowdCyc.reason, crowdCyc.refusal]));
+  const otherSite = await gate([row74({ id: 7, mode: 'ai_visibility', domain: 'example.org', created_at: ago(40) })], { site: 'techand.ai', cycle: true });
+  const sameSite = await gate([row74({ id: 7, mode: 'ai_visibility', domain: 'techand.ai', created_at: ago(40) })], { site: 'www.techand.ai', cycle: true });
+  const batchTwin = await gate([row74({ id: 7, mode: 'ai_visibility', domain: '', created_at: ago(40) })], { site: 'techand.ai', cycle: true });
+  const batchRun = await gate([row74({ id: 7, mode: 'ai_visibility', domain: 'example.org', created_at: ago(40) })]);
+  check('cycle (2026-10-19): two websites\' AI visibility runs are not twins (both go ahead), the same website twice is (refused, retried), a live run over every site is the twin of any run of its mode, and a run that names no site keeps the mode-only rule',
+    otherSite.allowed === true && sameSite.allowed === false && sameSite.reason === 'same_mode' && sameSite.retry === true && /for techand\.ai/.test(sameSite.refusal) && /starts it again in a few minutes/.test(sameSite.refusal)
+    && batchTwin.allowed === false && batchTwin.reason === 'same_mode' && batchRun.allowed === false && batchRun.reason === 'same_mode' && batchRun.retry === false,
+    JSON.stringify({ other: otherSite.allowed, same: [sameSite.reason, sameSite.retry], batch_twin: batchTwin.reason, batch_run: batchRun.reason }));
   const later = await gate([row74({ id: 101, mode: 'backlinks' }), row74({ id: 102, mode: 'rank_tracker' }), row74({ id: 103, mode: 'audit_schedule' })]);
   check('B-A9: only the rows with a LOWER id than this run\'s own count, so row order decides ties and two runs starting together cannot both refuse each other',
     later.allowed === true && later.open_runs === 0, JSON.stringify(later));
@@ -11342,11 +11430,14 @@ await guard('b4-decay-tested-stored-and-written', async () => {
     clicks: 400, impressions: 13000, position: 9, prev_clicks: 900, yoy_clicks: 1000, decay_state: 'decaying', decay_pct: -56, decay_lost: 500, decay_kind: 'visibility',
     decay_basis: 'Search Console clicks for this page, the last 28 days against the 28 days before (900 → 400).', ...o.over } });
   const cadLoads77 = (o = {}) => {
-    mock('Load Sites', [{ json: { site_id: SITE, domain: D, country: 'United Arab Emirates', status: 'active', email: '', callback_url: '' } }]);
+    // F-KW (2026-10-20, finding 2): every automatic item needs positive topic evidence, at level 3 against what the site sells as well
+    mock('Load Sites', [{ json: { site_id: SITE, domain: D, country: 'United Arab Emirates', status: 'active', email: '', callback_url: '', services_json: JSON.stringify(['ERP implementation', 'ERP pricing and licensing']) } }]);
     mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: o.pages == null ? 1 : o.pages, status: 'active' } }]);
     mock('Load Ladders', o.ladders || [{ json: {} }]); mock('Load Trends', [{ json: {} }]);
     mock('Load Query History', o.queries || [{ json: { site_id: SITE, domain: D, period_end: '2026-10-07', query: 'erp pricing uae', position: 8, impressions: 400, clicks: 5, page: W + '/erp-pricing/' } }]);
-    mock('Load Content Log', o.logs || [{ json: {} }]); mock('Load Ladder Settings', o.settings || [{ json: {} }]); mock('Load Main Keyword Ranks', [{ json: {} }]);
+    // keyword-first (2026-10-19): no ladder here, so the refresh is written on its own at full autopilot (level 3); level 2 with a chosen
+    // ladder and an in-topic page is harness/scenarios_keyword_first.js
+    mock('Load Content Log', o.logs || [{ json: {} }]); mock('Load Ladder Settings', o.settings || [{ json: { ladder_id: '_site', site_id: SITE, domain: D, autopilot_level: 3 } }]); mock('Load Main Keyword Ranks', [{ json: {} }]);
     mock('Load AI Targets (Cadence)', [{ json: {} }]); mock('Load Monitors (Cadence)', [{ json: { site_id: SITE, ai_visibility: false, ai_growth: false } }]);
     mock('Load Pages (Cadence)', o.pageRows || [pageRow(P_DECAY)]);
     mock('Manual Run', [{ json: {} }]);
@@ -11359,7 +11450,7 @@ await guard('b4-decay-tested-stored-and-written', async () => {
     !!dec77 && dec77.existing_page_url === P_DECAY && dec77.keyword === 'erp implementation checklist' && dec77.body.existing_page_url === P_DECAY
     && dec77.body.mode === 'keyword' && dec77.body.force_content === true, JSON.stringify(dec77 && dec77.body));
   check('B4-3: and it is queued BEFORE the striking-distance guess, with the clicks it is losing and the basis in its own reason',
-    cad77[0].source === 'decay' && /500 clicks lost in 28 days \(900 → 400\)/.test(dec77.why) && /Search Console clicks for this page/.test(dec77.why)
+    cad77[0].source === 'decay' && /500 clicks lost in 28 days \(from 900 to 400\)/.test(dec77.why) && !/[\u2014\u2192]/.test(dec77.why) && /Search Console clicks for this page/.test(dec77.why)
     && dec77.decay.decaying === 1 && dec77.decay.queued === 1 && dec77.decay.pages[0].lost === 500,
     JSON.stringify([cad77.map(x => x.source), dec77.why]));
   // the states the evidence refused are never written
@@ -12028,8 +12119,8 @@ await guard('INVARIANTS rule 4 — promises that need their evidence, deliveries
     && no84.ladder_row === null, JSON.stringify([no84.live, no84.log_row, no84.ladder_row]));
   check('rule 4 (paid): and the row the ladder update would have made is skipped, so nothing downstream can mark the rung published either',
     (await run('Published Ladder Row', [{ json: no84 }]))[0].json.skip === true, JSON.stringify(no84.ladder_row));
-  check('rule 4 (paid): the owner is told the truth in the same run — the page could not be fetched, and the Monday check will look again. The row and the message now agree; before this they did not',
-    /could not be fetched/.test(String(no84.summary)) && /Monday/.test(String(no84.summary)) && no84.checks[0].ok === false,
+  check('rule 4 (paid): the owner is told the truth in the same run — the page could not be fetched, and the next weekly check (the website\'s own cycle, never "Monday") will look again. The row and the message now agree; before this they did not',
+    /could not be fetched/.test(String(no84.summary)) && /next weekly report/.test(String(no84.summary)) && !/Monday/.test(String(no84.summary)) && no84.checks[0].ok === false,
     String(no84.summary).slice(0, 180));
 
   mock('Fetch Published Page', { error: 'timeout of 45000ms exceeded', details: {} });
@@ -12342,7 +12433,8 @@ await guard('B-A10 — a failure inside an HTTP 200 is asked again once, counted
   // every gated call must have its OWN second attempt in the same workflow: `X (Retry)` for the spliced ones, `Run AI Retries`
   // for D19's AI gate, whose two nodes are named the other way round. A gate with no second attempt is a label.
   const second = (w, n) => IN200[w].gated.includes(n + ' (Retry)') || (n === 'Run AI Requests' && IN200[w].gated.includes('Run AI Retries'));
-  const unpaired = wfs.flatMap(w => IN200[w].gated.filter(n => !/ \(Retry\)$|Retries$/.test(n) && !second(w, n)).map(n => w + ' / ' + n));
+  // F-SERP (2026-10-20): `SERP Top 10 (Light Retry)` is the THIRD attempt of the head keyword's results page, behind its `(Retry)`
+  const unpaired = wfs.flatMap(w => IN200[w].gated.filter(n => !/ \((?:Light )?Retry\)$|Retries$/.test(n) && !second(w, n)).map(n => w + ' / ' + n));
   check('B-A10: and every gated call has its own second attempt beside it, so the gate is a chain and not a label',
     !unpaired.length, JSON.stringify(unpaired));
   reset();
@@ -14184,7 +14276,7 @@ await guard('S96 B6-7 the customer\'s own keyword list', async () => {
     !Pown.some(c => c.watch_keyword && c.keyword === 'corporate tax uae') && !!cOwn && cOwn.source === 'own'
     && /once a week, not once a run/.test(cOwn.reason), JSON.stringify(cOwn));
   const Pweek = await planOf({ keywords: LIST, history: [hrow96(WID96, 'corporate tax uae', 11, ago96(7), TEN96)] });
-  check('B6-7: and a week later it IS bought — a reading of ours from last Monday is exactly seven days old, so the series stays weekly instead of slipping to a fortnight',
+  check('B6-7: and a week later it IS bought — a reading of ours from the last cycle is exactly seven days old, so the series stays weekly instead of slipping to a fortnight',
     Pweek.some(c => c.watch_keyword && c.keyword === 'corporate tax uae'), JSON.stringify(Pweek.filter(c => c.watch_keyword).map(c => c.keyword)));
 
   // ---------- 3. INVARIANTS rule 2: the gate runs over a stored list ----------
@@ -14544,7 +14636,11 @@ await guard('the pages the crawl never reached, and a queue that starts with wha
     mock('Site Model', [{ json: { site_model: { domain: D97, canonical_host: 'www.' + D97, pages: [] } } }]);
     // as live: the audit item is handed over by *Full Report?* and the node's own input is the last Data Table load
     mock('Full Report?', [{ json: { domain: D97, probe: { findings: [], what_works: [], measurements: {} }, extra_findings: [], extra_works: [] } }]);
-    const out = (await run('GSC Audit Plan', [{ json: { site_id: 's1', domain: D97, page_url: W97 + '/p12/', written_at: ago97(1) } }]))[0].json;
+    // the rotation's "this week" is read on the clock; the scenario's signals are dated against TODAY97, so the run is frozen there (P1, 2026-10-20:
+    // from 2026-10-20 on the wall clock put the IndexNow submission of 2026-10-13 outside the week and this check failed by date alone)
+    const RealDate97 = Date; const T97 = RealDate97.parse(TODAY97);
+    global.Date = class extends RealDate97 { constructor(...a) { if (a.length) super(...a); else super(T97); } static now() { return T97; } };
+    let out; try { out = (await run('GSC Audit Plan', [{ json: { site_id: 's1', domain: D97, page_url: W97 + '/p12/', written_at: ago97(1) } }]))[0].json; } finally { global.Date = RealDate97; }
     if (!withSignals) { if (keep.ai) store['Load AI Pages (Audit)'] = keep.ai; if (keep.log) store['Load Content Log (Audit)'] = keep.log; if (keep.tg) store['Load AI Targets (Audit)'] = keep.tg; }
     return out;
   };
@@ -14575,7 +14671,20 @@ await guard('the pages the crawl never reached, and a queue that starts with wha
 const R94 = (() => {
   const FX = require('./fixtures_r94');
   let WIRE = {}; try { WIRE = require('./catchup_wiring.json'); } catch (e) {}
-  const CU_RUN = (node, input) => run(node, input, { code: 'Catchup__' + node.replace(/[^A-Za-z0-9_.-]+/g, '_') });
+  // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the generated catch-up carries the two daily crons only - the weekly workflows and the Audit
+  // Scheduler run in each website's own cycle. The evidence below is of the weeks of 2026-10-12 and 2026-10-17, when the table held ten
+  // schedules, so the planner (the same pure kit, which still handles weekly and monthly slots) is replayed against THAT table
+  // (fixtures_r94_schedules.json): the GENERATED Catch-up Targets / Catch-up Plan with only their baked table swapped. Everything else is generated.
+  const HIST = require('./fixtures_r94_schedules.json').schedules;
+  const CDIR = process.env.CODE_DIR || require('path').join(__dirname, 'code_v4');
+  const histOf = (file) => { const fs = require('fs'), path = require('path'); const src = fs.readFileSync(path.join(CDIR, file + '.js'), 'utf8');
+    const out = src.replace(/^const SCHEDULES = .*;$/m, () => 'const SCHEDULES = ' + JSON.stringify(HIST) + ';');
+    if (out === src) throw new Error(file + ': no baked schedule table to replay against');
+    fs.writeFileSync(path.join(CDIR, file + '__r94hist.js'), out); return file + '__r94hist'; };
+  let HIST_CODE = {}; try { HIST_CODE = { 'Catch-up Targets': histOf('Catchup__Catch-up_Targets'), 'Catch-up Plan': histOf('Catchup__Catch-up_Plan') }; } catch (e) { console.log('   !! R94: the replay table could not be set up: ' + e.message); }
+  const CU_RUN = (node, input) => run(node, input, { code: HIST_CODE[node] || ('Catchup__' + node.replace(/[^A-Za-z0-9_.-]+/g, '_')) });
+  // the generated nodes, unswapped (the new truth: two daily crons)
+  const CU_GEN = (node, input) => run(node, input, { code: 'Catchup__' + node.replace(/[^A-Za-z0-9_.-]+/g, '_') });
   const ORDER = ['SEOagentAIVisib1', 'SEOagentBacklnk1', 'SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentAIGrow1', 'SEOagentCadence1', 'SEOagentLinkBld1', 'SEOagentAuditSc1', 'SEOagentAIPulse1', 'SEOagentPageWch1'];
   const FIVE = ['SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentAIGrow1', 'SEOagentCadence1', 'SEOagentLinkBld1'];
   const MODE = { SEOagentAIVisib1: 'ai_visibility', SEOagentBacklnk1: 'backlinks', SEOagentTracker1: 'rank_tracker', SEOagentSiteTrk1: 'site_tracker', SEOagentAIGrow1: 'ai_growth',
@@ -14585,8 +14694,9 @@ const R94 = (() => {
   // plan(o): the whole evidence path as n8n runs it - Entry -> the two API reads (mocked from the fixture as of `now`) -> records / ledger -> Plan
   const plan = async (o) => {
     const now = o.now, cut = Date.parse(now);
+    const RUNX = o.gen ? CU_GEN : CU_RUN;   // o.gen: the GENERATED table (the two daily crons) instead of the replayed one of that week
     mock('Catch-up Entry', [{ json: { entry: o.entry || 'sweep', now, clock_moved: false, dry_run: !!o.dry_run, plan_only: !!o.plan_only } }]);
-    const T = await CU_RUN('Catch-up Targets', [{ json: {} }]);
+    const T = await RUNX('Catch-up Targets', [{ json: {} }]);
     mock('Read Workflows (Catch-up)', T.map(t => { const id = t.json.workflow_id, f = FX[id] || {}, w = (o.wf || {})[id] || {};
       if (w.status) return { json: { statusCode: w.status, headers: {}, body: { message: 'unauthorized' } } };
       return { json: { statusCode: 200, headers: {}, body: { id, name: id, active: w.active !== false, createdAt: f.createdAt, updatedAt: w.updatedAt || o.updatedAt || '2026-10-01T00:00:00.000Z', nodes: [] } } }; }));
@@ -14597,12 +14707,12 @@ const R94 = (() => {
       return { json: { statusCode: 200, headers: {}, body: { data: data.map(e => ({ ...e, workflowId: id, finished: true })), nextCursor: null } } }; }));
     mock('Load Catch-up Records', o.records === undefined ? [ARMED] : (o.records.length ? o.records : [{ json: {} }]));
     mock('Load Run Ledger (Catch-up)', (o.ledger || []).length ? o.ledger.map(r => ({ json: r })) : [{ json: {} }]);
-    return (await CU_RUN('Catch-up Plan', store['Read Executions (Catch-up)']))[0].json;
+    return (await RUNX('Catch-up Plan', store['Read Executions (Catch-up)']))[0].json;
   };
   const row = (p, id) => (p.rows || []).find(r => r.workflow_id === id) || {};
   const missedIds = (p) => (p.rows || []).filter(r => ['start', 'missed_waiting', 'missed_plan_only', 'dry_run_skipped'].includes(r.verdict)).map(r => r.workflow_id).sort();
   const started = (p, id, extra) => rec('catchup:' + id + ':' + row(p, id).due, { workflow_id: id, scheduled_for: row(p, id).due, status: 'started', attempts: 1, started_at: p.now, entry: p.entry, ...(extra || {}) });
-  return { FX, WIRE, CU_RUN, ORDER, FIVE, MODE, rec, ARMED, plan, row, missedIds, started };
+  return { FX, WIRE, CU_RUN, CU_GEN, HIST, ORDER, FIVE, MODE, rec, ARMED, plan, row, missedIds, started };
 })();
 
 await guard('S126 R94 the planner on 2026-10-12', async () => {
@@ -14610,9 +14720,17 @@ await guard('S126 R94 the planner on 2026-10-12', async () => {
   reset(); begin(SN);
   const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
   const { plan, row, missedIds, started, FIVE, ORDER, WIRE, rec, ARMED } = R94;
-  check('R94: the catch-up carries exactly the ten generated schedules, each with its manual entry and its ledger mode, in America/New_York',
-    (WIRE.schedules || []).length === 10 && ORDER.every(id => (WIRE.schedules || []).some(s => s.id === id && s.entry_node && s.mode === R94.MODE[id])) && WIRE.tz === 'America/New_York',
+  // 2026-10-19: the GENERATED table is the two daily crons; the replay below uses the ten-slot table of that week (R94.HIST)
+  check('cycle (2026-10-19): the generated catch-up carries exactly the two daily crons - the AI Pulse every day 06:30 and the Page Watch 05:45 - each with its manual entry and its ledger mode, in America/New_York',
+    (WIRE.schedules || []).length === 2 && ['SEOagentAIPulse1', 'SEOagentPageWch1'].every(id => (WIRE.schedules || []).some(s => s.id === id && s.entry_node && s.mode === R94.MODE[id] && s.kind === 'daily'))
+    && (WIRE.schedules || []).find(s => s.id === 'SEOagentAIPulse1').cron === '30 6 * * *' && WIRE.tz === 'America/New_York',
     JSON.stringify((WIRE.schedules || []).map(s => [s.id, s.cron, s.kind, s.entry_node, s.mode])));
+  check('cycle (2026-10-19): the seven weekly workflows and the Audit Scheduler are in no catch-up table - each website\'s cycle runs them (build section 98)',
+    Object.keys(WIRE.cycle_workflows || {}).length === 8 && ORDER.slice(0, 8).every(id => (WIRE.cycle_workflows || {})[id] && !(WIRE.schedules || []).some(s => s.id === id))
+    && JSON.stringify(WIRE.not_replayed) === JSON.stringify(['SEOagentCycleDsp']), JSON.stringify({ cycle: Object.keys(WIRE.cycle_workflows || {}), not_replayed: WIRE.not_replayed }));
+  check('R94: the replayed table of that week is the ten schedules, each with its manual entry and its ledger mode, in America/New_York',
+    R94.HIST.length === 10 && ORDER.every(id => R94.HIST.some(s => s.id === id && s.entry_node && s.mode === R94.MODE[id])) && R94.HIST.every(s => s.tz === 'America/New_York'),
+    JSON.stringify(R94.HIST.map(s => [s.id, s.cron, s.kind, s.entry_node, s.mode])));
   // ---- (a) the dossier's acceptance test: n8n restarts at 16:38-16:40 UTC (the deploy); the catch-up's init door runs at 16:41 ----
   const P1 = await plan({ entry: 'init', now: '2026-10-12T16:41:00.000Z', updatedAt: '2026-10-12T16:38:30.000Z' });
   console.log('   2026-10-12 16:41 init ->', JSON.stringify(P1.rows.map(r => [r.label, r.verdict, (r.due || '').slice(5, 16)])));
@@ -14773,6 +14891,9 @@ await guard('S128 R94 record then start, the scheduled path', async () => {
   check('R94: ten reads of n8n\'s own API, one per scheduled workflow - the workflow and its executions, no key or secret in any URL',
     T.length === 10 && T.every(t => /^http:\/\/localhost:5678\/api\/v1\/workflows\/SEOagent\w+\?excludePinnedData=true$/.test(t.json.wf_url) && /\/executions\?workflowId=SEOagent\w+&limit=250$/.test(t.json.ex_url))
     && !T.some(t => /key|token|secret/i.test(t.json.wf_url + t.json.ex_url)), JSON.stringify(T[0].json));
+  const TG = await R94.CU_GEN('Catch-up Targets', [{ json: {} }]);
+  check('cycle (2026-10-19): the generated catch-up reads two workflows only - the AI Pulse and the Page Watch, the daily crons left',
+    TG.length === 2 && TG.map(t => t.json.workflow_id).sort().join() === 'SEOagentAIPulse1,SEOagentPageWch1', JSON.stringify(TG.map(t => t.json.workflow_id)));
   // ---- record, then start ----
   const P = await plan({ entry: 'init', now: '2026-10-12T16:41:00.000Z', updatedAt: '2026-10-12T16:38:30.000Z', ex: { SEOagentAIPulse1: { extra: [{ id: 'p11', mode: 'trigger', status: 'success', startedAt: '2026-10-11T10:31:00.000Z' }] } } });
   const SI = await CU_RUN('Catch-up Start Items', [{ json: { id: 3 } }]);
@@ -14813,13 +14934,10 @@ await guard('S128 R94 record then start, the scheduled path', async () => {
     REP.key === 'catchup:last' && RS.schedules.length === 10 && RS.started.length === 2 && RS.started.some(s => s.status === 'start_failed') && RS.counts.start === 2 && RS.entry === 'init',
     JSON.stringify({ key: REP.key, counts: RS.counts, started: RS.started }));
   check('R94 (build section 98): on the generated workflow every path to the start passes the saved record, the start does not wait, and the catch-up and every workflow it starts are published by apply_env.py',
-    WIRE.record_then_start === true && (WIRE.published || []).length === 10 && WIRE.workflow && WIRE.workflow.id === 'SEOagentCatchUp1' && WIRE.credential === 'SEOcredN8nApiKey' && WIRE.compose_tz_default === 'America/New_York',
+    WIRE.record_then_start === true && JSON.stringify(WIRE.published || []) === JSON.stringify(['SEOagentAIPulse1', 'SEOagentPageWch1']) && WIRE.workflow && WIRE.workflow.id === 'SEOagentCatchUp1' && WIRE.credential === 'SEOcredN8nApiKey' && WIRE.compose_tz_default === 'America/New_York',
     JSON.stringify({ rts: WIRE.record_then_start, published: WIRE.published, tz: WIRE.compose_tz_default }));
-  const G = WIRE.deploy_guard || {};
-  check('R94: apply_env.py refuses a deploy on Monday 07:00-12:00 New York time (11:00-16:00 UTC in summer, 12:00-17:00 in winter) and lets one through outside it - today, Friday, included',
-    G['mon_2026-10-19_12:00Z_summer'] && G['mon_2026-10-19_12:00Z_summer'].inside === true && G['mon_2026-10-19_12:00Z_summer'].window_utc === 'Mon 11:00-16:00'
-    && G['mon_2026-11-02_16:30Z_winter'].inside === true && G['mon_2026-11-02_16:30Z_winter'].window_utc === 'Mon 12:00-17:00'
-    && G['fri_2026-10-16_12:00Z_today'].inside === false && G['tue_2026-10-20_12:00Z'].inside === false && G['mon_2026-10-19_16:30Z_after'].inside === false, JSON.stringify(G));
+  check('R94 (2026-10-19): the Monday 07:00-12:00 deploy guard is gone with the Monday crons - the cycle\'s guard replaced it (deploy_guard.py, scenarios_cycle.js CY12 / CY23)',
+    !WIRE.deploy_guard, JSON.stringify(WIRE.deploy_guard || null));
   reset();
 });
 
@@ -14861,6 +14979,12 @@ await guard('S129 R94 AI Growth dry run', async () => {
   check('R94: a dry-run catch-up starts only AI Growth (and would start the Cadence), keyed catchup_dry: so production never reads it - the Rank Tracker, Site Tracker and Link Builder, which have no dry-run switch, are reported and not started',
     D.start.map(s => s.workflow_id).join() === 'SEOagentAIGrow1,SEOagentCadence1' && D.start.every(s => s.dry_run === true && s.key.startsWith('catchup_dry:'))
     && ['SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentLinkBld1'].every(id => row(D, id).verdict === 'dry_run_skipped'), JSON.stringify(D.rows.map(r => [r.label, r.verdict])));
+  // 2026-10-19: with the GENERATED table (the two daily crons) a dry-run catch-up starts nothing at all - neither the AI Pulse nor the Page Watch
+  // has a dry-run switch, and the weekly workflows that have one (AI Growth, the cadence) are not in the table any more: a website's cycle runs them
+  const DG = await plan({ gen: true, entry: 'manual', dry_run: true, now: '2026-10-19T16:41:00.000Z', updatedAt: '2026-10-19T09:00:00.000Z', records: [ARMED, rec('catchup:instance', { started_at: '2026-10-19T09:00:00.000Z' })] });
+  check('cycle (2026-10-19): on the generated table a dry-run catch-up starts nothing - the two daily crons have no dry-run switch and are reported, AI Growth and the cadence are no schedule of its any more',
+    DG.start.length === 0 && (DG.rows || []).length === 2 && (DG.rows || []).every(r => ['dry_run_skipped', 'fired', 'caught_up', 'before_arm', 'late_pending', 'not_created'].includes(r.verdict))
+    && !(DG.rows || []).some(r => r.workflow_id === 'SEOagentAIGrow1' || r.workflow_id === 'SEOagentCadence1'), JSON.stringify((DG.rows || []).map(r => [r.label, r.verdict])));
   mock('Catch-up Plan', [{ json: D }]);
   const SI = await CU_RUN('Catch-up Start Items', [{ json: {} }]);
   const RR = (await CU_RUN('Catch-up Record Row', [SI[0]]))[0].json;
@@ -17269,35 +17393,40 @@ await guard('S145 R111 R87 the cadence mails name the drafts that need a fix and
 await guard('S146 R94 a sleep-delayed timer must not run the week twice', async () => {
   const SN = 'S146 R94 - a run started by its own Schedule Trigger refuses (caught_up) when the catch-up already started that slot; nothing else is refused by it';
   reset(); begin(SN); const check = a14Check(SN);
-  const DUE = '2026-10-19T11:30:00.000Z';   // Monday 07:30 America/New_York (EDT)
-  const KEY = 'catchup:SEOagentBacklnk1:' + DUE;
+  // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): only the daily crons have a timer left - the AI Pulse (every day 06:30) is the one replayed
+  // here; a weekly workflow has no Schedule Trigger at all (its gate carries no schedule), so no delayed timer of it can ever run a week twice
+  const DUE = '2026-10-19T10:30:00.000Z';   // 06:30 America/New_York (EDT)
+  const KEY = 'catchup:SEOagentAIPulse1:' + DUE;
   const rec = (key, v) => ({ json: { key, kind: 'catchup', site_id: '', value: JSON.stringify(v), updated_at: '2026-10-19T17:40:00.000Z' } });
   const go = async (o) => {
     reset();
-    mock('BL Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'full' } }]);
-    mock('Load Open Runs (BL)', [{ json: {} }]);
-    mock('Load Catch-up Records (BL)', o.records || [{ json: {} }]);
-    mock('Reserve Run Ledger (BL)', [{ json: { id: 92, run_id: 'test-exec', mode: 'backlinks', status: 'reserved', key: 'schedule:backlinks' } }]);
-    mock('Run Ledger Row (BL)', [{ json: { run_id: 'test-exec', mode: 'backlinks', key: 'schedule:backlinks' } }]);
-    if (o.fire) mock('Weekly Schedule', [{ json: { timestamp: o.fire } }]);
-    return (await run('After Run Ledger (BL)', [{ json: {} }], { code: 'After_Run_Ledger_BL_' }))[0].json;
+    mock('AI Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', pulse_run: true } }]);
+    mock('Load Open Runs (Pulse)', [{ json: {} }]);
+    mock('Load Catch-up Records (Pulse)', o.records || [{ json: {} }]);
+    mock('Reserve Run Ledger (Pulse)', [{ json: { id: 92, run_id: 'test-exec', mode: 'ai_pulse', status: 'reserved', key: 'schedule:ai_pulse' } }]);
+    mock('Run Ledger Row (Pulse)', [{ json: { run_id: 'test-exec', mode: 'ai_pulse', key: 'schedule:ai_pulse' } }]);
+    if (o.fire) mock('Daily Schedule', [{ json: { timestamp: o.fire } }]);
+    return (await run('After Run Ledger (Pulse)', [{ json: {} }], { code: 'Pulse__After_Run_Ledger_Pulse_' }))[0].json;
   };
+  const blSrc = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || (__dirname + '/code_v4'), 'After_Run_Ledger_BL_.js'), 'utf8');
+  check('cycle (2026-10-19): the Backlink Monitor\'s gate carries no schedule any more (const __SCHED = {}) - a weekly job is started by its website\'s cycle, never by a timer that could fire late',
+    /const __SCHED = \{\};/.test(blSrc), (blSrc.match(/const __SCHED = [^;]*;/) || [''])[0]);
   const late = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'started', started_at: '2026-10-19T17:40:00.000Z', entry: 'sweep' })] });
   check('R94: the delayed timer (fires 7 h late) of a slot the catch-up started is refused `caught_up`, nothing started',
-    late.run_refused === true && late.reason === 'caught_up' && /already ran this scheduled slot/.test(late.refusal) && /2026-10-19T11:30:00.000Z/.test(late.refusal), JSON.stringify(late).slice(0, 400));
+    late.run_refused === true && late.reason === 'caught_up' && /already ran this scheduled slot/.test(late.refusal) && late.refusal.indexOf(DUE) >= 0, JSON.stringify(late).slice(0, 400));
   const dur = await go({ fire: '2026-10-19T11:30:02.000Z', records: [{ json: {} }] });
   check('R94: an on-time scheduled run with no catch-up record runs', !dur.run_refused && dur.domain === 'techand.ai', JSON.stringify(dur).slice(0, 300));
   const starting = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'starting', started_at: '2026-10-19T17:40:00.000Z' })] });
   check('R94: a record still `starting` counts (the planner calls it caught up too)', starting.run_refused === true && starting.reason === 'caught_up', JSON.stringify(starting).slice(0, 300));
   const failed = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec(KEY, { status: 'start_failed', error: 'boom' })] });
   check('R94: a catch-up start that FAILED does not refuse the schedule\'s own fire', !failed.run_refused, JSON.stringify(failed).slice(0, 300));
-  const lastWeek = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentBacklnk1:2026-10-12T11:30:00.000Z', { status: 'started', started_at: '2026-10-12T17:00:00.000Z' })] });
-  check('R94: last week\'s record does not refuse this week', !lastWeek.run_refused, JSON.stringify(lastWeek).slice(0, 300));
-  const other = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentAIVisib1:' + DUE, { status: 'started', started_at: '2026-10-19T17:40:00.000Z' })] });
+  const lastWeek = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentAIPulse1:2026-10-18T10:30:00.000Z', { status: 'started', started_at: '2026-10-18T17:00:00.000Z' })] });
+  check('R94: yesterday\'s record does not refuse today', !lastWeek.run_refused, JSON.stringify(lastWeek).slice(0, 300));
+  const other = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup:SEOagentPageWch1:' + DUE, { status: 'started', started_at: '2026-10-19T17:40:00.000Z' })] });
   check('R94: another workflow\'s record does not refuse this one', !other.run_refused, JSON.stringify(other).slice(0, 300));
   const viaCatchup = await go({ records: [rec(KEY, { status: 'started', started_at: '2026-10-19T17:40:00.000Z' })] });
   check('R94: the catch-up\'s OWN start (no Schedule Trigger data) is never refused by its own record', !viaCatchup.run_refused, JSON.stringify(viaCatchup).slice(0, 300));
-  const dry = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup_dry:SEOagentBacklnk1:' + DUE, { status: 'started' })] });
+  const dry = await go({ fire: '2026-10-19T18:30:00.000Z', records: [rec('catchup_dry:SEOagentAIPulse1:' + DUE, { status: 'started' })] });
   check('R94: a dry-run record (`catchup_dry:`) is never read by production', !dry.run_refused, JSON.stringify(dry).slice(0, 300));
   reset();
 });
@@ -18383,6 +18512,8 @@ await guard('S166 B8-8 B8-9 B8-10 the build carries the three engine fixes in bo
 await require('./scenarios_fa3')({ H, run, mock, store, guard, reset, begin });
 // G6 (2026-10-18): the AI question panel at enterprise scale — up to 500 questions, split runs, the pulse's rotating sample (harness/scenarios_g6.js)
 await require('./scenarios_g6')({ H, run, mock, store, guard, reset, begin });
+await require('./scenarios_cycle_semantics')({ H, run, mock, store, guard, reset, begin });   // 2026-10-19: the cycle run (trigger: 'cycle'), SCHEDULING_KEYWORDS_PLAN.md §4.5
+await require('./scenarios_keyword_first')({ H, run, mock, store, guard, reset, begin });   // keyword-first autopilot (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5 / §9 KF)
 
 // ===================================================================================
 // S180-S183 (2026-10-17, defect-fix agent F-B — re-rating 2026-10-17 part 2, executor B: execs 739 / 767, docs/system-review-2026-10-17/
@@ -18987,6 +19118,18 @@ await guard('SFA1-8 A-21 the main page run says it re-measured, and why its numb
   check('A-21: with no ladder measurement handed over there is no re-measure note', !(pv0.verdict_reasons || []).some(r => /^Re-measured:/.test(r)) && pv0.ladder_remeasure === null, JSON.stringify(pv0.ladder_remeasure));
   const rung = bodies.find(b => b.keyword !== 'it consulting dubai');
   check('A-21: a rung page\'s run is handed no measurement (it is another keyword)', !rung || rung.ladder_measure === null, JSON.stringify(rung && rung.ladder_measure));
+  // F-SERP (2026-10-20): a plan reading taken on the lighter third attempt never asked for the AI Overview. The page run must not
+  // print "an AI Overview was seen this time" as a change against a reading that saw nothing either way.
+  check('F-SERP: the ladder says whether its reading asked for the AI Overview at all, and Normalize Input keeps it',
+    lm.ai_overview_read === true && ni.ladder_measure.ai_overview_read === true, JSON.stringify([lm, ni.ladder_measure]));
+  const niL = await niRun({ ...bodies[0], ladder_measure: { ...bodies[0].ladder_measure, ai_overview: false, ai_overview_read: false }, callback_url: 'https://hooks.example.com/x', client_ip: 'ladder:lad_mvcldcnv9q1q' });
+  mock('Merge Keyword Data', [{ json: { ...mk, ladder_measure: niL.ladder_measure } }]);
+  const pvL = (await run('Parse Verdict', JSON.parse(JSON.stringify(FA1.p771_verdict_agent)).map(j => ({ json: j }))))[0].json;
+  const noteL = (pvL.verdict_reasons || []).find(r => /^Re-measured:/.test(r)) || '';
+  check('F-SERP: an AI Overview the plan\'s (lighter) reading never asked for is not compared — no "seen this time" change, the note says it was not read, and the stored reading is null, not false',
+    niL.ladder_measure.ai_overview_read === false && /16:09 UTC/.test(noteL) && !/an AI Overview was seen this time/.test(noteL)
+    && /Whether an AI Overview appears was not read in the plan's reading, so it is not compared\./.test(noteL)
+    && pvL.ladder_remeasure.then.ai_overview === null && pvL.ladder_remeasure.now.ai_overview === true, noteL || JSON.stringify(pvL.ladder_remeasure));
 });
 
 // ===================================================================================
@@ -19163,20 +19306,23 @@ await guard('SFL4 C-12 C-13 Tracker Report on exec 785: a stored set-aside rung 
 await guard('SFL5 C-1 follow-up the Audit Scheduler and the Page Watch say when they ran late', async () => {
   const SN = 'SFL5 C-1 follow-up — F-C put the "ran late" notice on every Callback Ledger; the Audit Scheduler (its audits report through the main workflow) and the Page Watch (its callback is the alert digest) had none';
   reset(); begin(SN); const check = W3E.mkCheck(SN);
-  // the 1st-of-the-month audit (06:00 New York = 10:00 UTC) started by the catch-up six hours later
-  const catchup = { trigger: 'catchup', scheduled_for: '2026-10-01T10:00:00.000Z', why: 'the computer running the engine was asleep at 06:00', started_at: '2026-10-01T16:05:00.000Z' };
+  // 2026-10-19 (owner decision D2): the audit runs in the website's monthly cycle. Its cycle was due 06:00 New York (10:00 UTC) and the Cycle
+  // Dispatcher could only start the audit job six hours later (the engine was down) - the cycle's payload (plan §14.2)
+  const catchup = { trigger: 'cycle', domain: 'northwind-erp.com', site_id: 'site_northwind-erp-com', cycle_key: 'cyc:site_northwind-erp-com:2026-10-01', job: 'audit', monthly: true,
+    scheduled_for: '2026-10-01T10:00:00.000Z', request_id: 'cyc_northwind-erp-com_20261001_audit', why: 'the computer running the engine was asleep at 06:00', started_at: '2026-10-01T16:05:00.000Z' };
   const body0 = { mode: 'audit', domain: 'northwind-erp.com', country: 'United Arab Emirates', report_type: 'Site Audit (technical issues only)', scheduled: true, request_id: 'aud_202610_northwind-erp-com', callback_url: 'https://app.example.com/api/hooks/n8n/x' };
   mock('Audit Schedule Plan', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', run: true, why: '60 days since the last audit (safety net)', body: body0 } }]);
   mock('Manual Run', [{ json: catchup }]);
   const late = (await run('Audits To Start', [{ json: {} }]))[0].json;
-  check('Audit Scheduler: a run the catch-up started 6 h after its slot hands `ran_late` to the audit it starts (the slot, the delay, why)',
-    late.body.ran_late && late.body.ran_late.late === true && late.body.ran_late.due === '2026-10-01T10:00:00.000Z' && late.body.ran_late.late_min === 365
-    && /monthly run that was due Thu 1 Oct 2026, 06:00 \(America\/New_York\)/.test(late.body.ran_late.text) && /schedule catch-up started it/.test(late.body.ran_late.text), JSON.stringify(late.body.ran_late));
+  check('Audit Scheduler: a cycle job started 6 h after its cycle was due hands `ran_late` to the audit it starts (the cycle\'s due time, the delay, why)',
+    late.body.ran_late && late.body.ran_late.late === true && late.body.ran_late.via === 'cycle' && late.body.ran_late.due === '2026-10-01T10:00:00.000Z' && late.body.ran_late.late_min === 365
+    && /run of this website's weekly cycle that was due Thu 1 Oct 2026, 06:00 \(America\/New_York\)/.test(late.body.ran_late.text) && /asleep at 06:00/.test(late.body.ran_late.text), JSON.stringify(late.body.ran_late));
   reset();
   mock('Audit Schedule Plan', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', run: true, why: 'x', body: body0 } }]);
-  mock('Monthly Schedule', [{ json: { timestamp: '2026-10-01T10:00:20.000Z' } }]);
+  // the audit is the cycle's last job: started 1 h 10 min after the cycle was due, after the other jobs - that is the cycle's normal pace, not late
+  mock('Manual Run', [{ json: { ...catchup, started_at: '2026-10-01T11:10:00.000Z', why: '' } }]);
   const onTime = (await run('Audits To Start', [{ json: {} }]))[0].json;
-  check('Audit Scheduler: the schedule firing on time adds nothing to the audit\'s body', !onTime.body.ran_late && onTime.ran_late.late === false, JSON.stringify(onTime.ran_late));
+  check('Audit Scheduler: a cycle job that starts within the cycle\'s normal span (its jobs run one after the other) adds nothing to the audit\'s body', !onTime.body.ran_late && onTime.ran_late.late === false && onTime.ran_late.via === 'cycle' && onTime.ran_late.late_min === 70, JSON.stringify(onTime.ran_late));
   // Normalize Input keeps it for a scheduled request only
   const niRun = async (b) => (await run('Normalize Input', [{ json: { headers: { 'content-type': 'application/json' }, params: {}, query: {}, body: b } }]))[0].json;
   const ni = await niRun({ ...late.body, client_ip: 'audit:site_northwind-erp-com' });
@@ -19187,7 +19333,7 @@ await guard('SFL5 C-1 follow-up the Audit Scheduler and the Page Watch say when 
   mock('Normalize Input', [{ json: ni }]); mock('Rate Limit', [{ json: { run_cost_estimate_usd: 0.09, run_cost_estimate_basis: 'x' } }]);
   const cb = (await run('Run Cost (Callback)', [{ json: { stage: 'site_audit', subject: 'Technical SEO audit — northwind-erp.com', html: '<html><body><h1>Audit</h1></body></html>' } }]))[0].json;
   check('main workflow: the audit report carries `ran_late` (the app titles it "ran late"), the box first in its HTML, the tag on its subject',
-    cb.ran_late && cb.ran_late.late === true && /<body><div class="ran-late"[^>]*><strong>Ran late\.<\/strong> This is the monthly run that was due/.test(cb.html)
+    cb.ran_late && cb.ran_late.late === true && /<body><div class="ran-late"[^>]*><strong>Ran late\.<\/strong> This is the run of this website's weekly cycle that was due/.test(cb.html)
     && /\(ran late — due 2026-10-01\)$/.test(cb.subject), JSON.stringify({ s: cb.subject, h: cb.html.slice(0, 220) }));
   mock('Normalize Input', [{ json: { ...ni, ran_late: null } }]);
   const cb0 = (await run('Run Cost (Callback)', [{ json: { stage: 'site_audit', subject: 'Technical SEO audit — northwind-erp.com', html: '<html><body><h1>Audit</h1></body></html>' } }]))[0].json;
@@ -19250,6 +19396,234 @@ await guard('SFL6 C-8 leftover a vendor\'s own storefront is a competing provide
     real.every(([, , w, s]) => !/its own site menu/.test(w) && !/its own site menu/.test(s)), JSON.stringify(real.map(([d, t, w, s]) => [d, t.slice(0, 40), w, s])));
 });
 
+
+await guard('SK1 Site Kickoff: the first weekly cycle on the day tracking starts', async () => {
+  const SN = 'SK1 Site Kickoff (2026-10-19, rewritten for the per-website cycle) - it writes the website\'s seo_cycles row (anchor, the owner\'s time zone, cycle 0 due now, what the app already ran) instead of starting jobs; untracked, paused and already-started websites are refused (409); a dry run writes nothing';
+  reset(); begin(SN); const check = W3E.mkCheck(SN);
+  const SITE = { site_id: 'site_techand-ai', domain: 'techand.ai', status: 'active' };
+  const COLS = (() => { try { return require('./cycle_wiring.json').cycles_cols; } catch (e) { return null; } })();
+  const validate = async (body) => (await run('Kickoff Validate', { body }))[0].json;
+  const plan = async (body, o = {}) => {
+    const v = await validate(body); mock('Kickoff Validate', [{ json: v }]);
+    mock('Load Sites (Kickoff)', (o.sites || [SITE]).map(json => ({ json })));
+    mock('Load Cycles (Kickoff)', (o.cycles && o.cycles.length ? o.cycles : [{}]).map(json => ({ json })));
+    return (await run('Kickoff Plan', [{ json: {} }]))[0].json;
+  };
+  const bad = await validate({});
+  check('a request without a domain is refused (400)', bad.ok === false && /domain or site_id/.test(bad.error), JSON.stringify(bad));
+  const badTz = await validate({ domain: 'techand.ai', tz: 'Mars/Olympus' });
+  check('an unknown time zone is refused by name (400): the owner\'s zone decides every due time', badTz.ok === false && /unknown time zone "Mars\/Olympus"/.test(badTz.error), JSON.stringify(badTz));
+  const badJobs = await validate({ domain: 'techand.ai', jobs: ['ai_growth', 'weekly_magic'], skip_jobs: 'nonsense' });
+  check('an unknown job, in jobs or in skip_jobs, is refused by name', badJobs.ok === false && /unknown jobs: weekly_magic, nonsense/.test(badJobs.error), JSON.stringify(badJobs));
+  const old = await validate({ domain: 'techand.ai', anchor_at: new Date(Date.now() - 9 * 86400000).toISOString() });
+  const future = await validate({ domain: 'techand.ai', anchor_at: new Date(Date.now() + 3 * 3600000).toISOString() });
+  const junk = await validate({ domain: 'techand.ai', anchor_at: 'next tuesday' });
+  check('an anchor 9 days old, 3 hours ahead, or not a date is refused: cycle 0 starts at the anchor', old.ok === false && /9 days old/.test(old.error) && future.ok === false && /in the future/.test(future.error)
+    && junk.ok === false && /is not a date/.test(junk.error), JSON.stringify([old.error, future.error, junk.error]));
+  const anchor = new Date(Date.now() - 2 * 3600000).toISOString();
+  const okv = await validate({ domain: 'https://www.techand.ai/', anchor_at: anchor, timezone: 'Europe/London', jobs: ['ai_growth', 'content_cadence', 'link_builder'], skip_jobs: ['audit'] });
+  check('a good body: the domain normalised, the anchor kept, `timezone` accepted for tz, and the old `jobs` (only these) mapped onto skip_jobs with the explicit ones',
+    okv.ok && okv.domain === 'techand.ai' && okv.anchor_at === anchor && okv.tz === 'Europe/London'
+    && JSON.stringify(okv.skip_jobs) === JSON.stringify(['audit', 'ai_visibility', 'backlinks', 'rank_tracker', 'site_tracker']), JSON.stringify(okv));
+  const p = await plan({ domain: 'techand.ai', anchor_at: anchor, tz: 'Europe/London', skip_jobs: ['ai_visibility'] });
+  const loc = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }).formatToParts(new Date(anchor)).reduce((m, x) => (m[x.type] = x.value, m), {});
+  const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(loc.weekday), ld = loc.year + '-' + loc.month + '-' + loc.day;
+  check('the row: anchored at the given time, in the owner\'s zone, its local weekday, cycles at 06:00, monthly day = its day (at most 28), cycle 0 due at the anchor, nothing started yet',
+    !p.refused && p.row.anchor_at === anchor && p.row.tz === 'Europe/London' && p.row.cycle_weekday === wd && p.row.local_time === '06:00' && p.row.monthly_day === Math.min(28, +loc.day)
+    && p.row.next_due_at === anchor && p.row.current_key === '' && p.row.last_cycle_at === '' && p.row.status === 'active' && p.row.skip_jobs === 'ai_visibility' && p.row.adopted === false,
+    JSON.stringify(p.row));
+  check('the answer names cycle 0 by the website\'s local date and its due time (202 { site_id, cycle_key, next_due_at })', p.cycle_key === 'cyc:site_techand-ai:' + ld && p.next_due_at === anchor && p.site_id === 'site_techand-ai',
+    JSON.stringify({ k: p.cycle_key, ld }));
+  const now0 = await plan({ domain: 'techand.ai' });
+  check('no anchor and no zone: anchored now in the engine\'s zone (America/New_York)', Math.abs(Date.parse(now0.row.anchor_at) - Date.now()) < 60000 && now0.row.tz === 'America/New_York', JSON.stringify(now0.row));
+  const untracked = await plan({ domain: 'other.example' });
+  check('a website the engine does not track is refused with code not_tracked (409), and told it can send again once tracking exists', untracked.refused && untracked.code === 'not_tracked' && /send again once its tracking row exists|can be sent again/.test(untracked.reason), JSON.stringify(untracked));
+  const paused = await plan({ domain: 'techand.ai' }, { sites: [{ ...SITE, status: 'paused' }] });
+  check('a paused website is refused (code paused)', paused.refused && paused.code === 'paused', JSON.stringify(paused));
+  const EXIST = { site_id: 'site_techand-ai', domain: 'techand.ai', anchor_at: '2026-10-19T17:00:00.000Z', current_key: 'cyc:site_techand-ai:2026-10-19', next_due_at: '2026-10-26T10:00:00.000Z', status: 'active' };
+  const again = await plan({ domain: 'techand.ai' }, { cycles: [EXIST] });
+  check('once per website: a second kickoff is refused with when the cycle was anchored and when it is next due (code already_started)',
+    again.refused && again.code === 'already_started' && /anchored 2026-10-19T17:00:00.000Z, next due 2026-10-26T10:00:00.000Z/.test(again.reason), JSON.stringify(again));
+  const forced = await plan({ domain: 'techand.ai', force: true }, { cycles: [EXIST] });
+  check('force: true writes a new cycle 0 from the new anchor and says what it replaces', !forced.refused && forced.exists && forced.replaces.current_key === 'cyc:site_techand-ai:2026-10-19' && forced.row.current_key === '' && forced.row.last_cycle_at === '',
+    JSON.stringify(forced.replaces));
+  const dry = await plan({ domain: 'techand.ai', dry_run: 'true' }, { cycles: [EXIST] });
+  check('a dry run is not refused for an existing cycle: it answers with the row it would write and says one exists', !dry.refused && dry.dry_run === true && dry.exists === true && dry.row.site_id === 'site_techand-ai', JSON.stringify(dry));
+  mock('Load Cycles (Kickoff)', [{ json: { error: { message: 'Could not find the data table' } } }]);
+  const unread = (await run('Kickoff Plan', [{ json: {} }]))[0].json;
+  check('a cycle table that cannot be read is refused (code unreadable) - nothing is written on a guess', unread.refused && unread.code === 'unreadable', JSON.stringify(unread));
+  mock('Kickoff Plan', [{ json: p }]);
+  const row = (await run('Kickoff Cycle Row', [{ json: {} }]))[0].json;
+  check('the row written is exactly the seo_cycles columns (a Data Table upsert maps every input field)', !!COLS && JSON.stringify(Object.keys(row)) === JSON.stringify(COLS) && row.site_id === 'site_techand-ai', JSON.stringify(Object.keys(row)));
+  const saved = (await run('Kickoff Saved', [{ json: { id: 3, ...row } }]))[0].json;
+  const failed = (await run('Kickoff Saved', [{ json: { error: { message: 'Data table not found' } } }]))[0].json;
+  check('the 202 is given only after the row is saved; a failed save is answered 500 with the reason (nothing will start)',
+    saved.saved === true && !('row' in saved) && saved.cycle_key === p.cycle_key && failed.saved === false && /could not be saved \(Data table not found\)/.test(failed.error), JSON.stringify([saved, failed]));
+  reset();
+});
+// ===================================================================================
+// S-FSERP (F-SERP, 2026-10-20; real-credit rehearsal, isolated engine executions 23 and 31): the head keyword's results page is the one
+// read a ladder (and a keyword verdict) cannot do without. DataForSEO answered `40101 "Internal SE Server Error."` inside an HTTP 200
+// after ~27 s to *SERP Top 10* (depth 30 + the async AI Overview) and to its one retry, on two runs in a row, and the ladder came out
+// NOT_CHECKED for ~$0.27. Now: up to three attempts (20 s, then 45 s), the third a LIGHTER request (depth 10, no AI Overview); only a
+// transient error is re-sent; every attempt's cost counted once by task id; an answer from the lighter attempt labelled where it is used.
+// ===================================================================================
+await guard('fserp-three-attempts', async () => {
+  const SN = 'S-FSERP — the head keyword\'s results page gets three attempts (20 s, 45 s), the last one lighter; only a transient error is sent again; every attempt is paid once by task id; the lighter answer is labelled "not read on this attempt"; all three failing is NOT_CHECKED in plain words';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 700), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 700))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  const W = require('./serp_attempts_wiring.json');
+  // the real failure shape (rehearsal execs 23 / 31): HTTP 200, envelope 20000, the task 40101 after ~27 s, billed
+  const seErr = (id) => ({ version: '0.1.20261020', status_code: 20000, status_message: 'Ok.', time: '27.4 sec.', cost: 0.002, tasks_count: 1, tasks_error: 1,
+    tasks: [{ id, status_code: 40101, status_message: 'Internal SE Server Error.', time: '27.3 sec.', cost: 0.002, result_count: 0, path: ['v3', 'serp', 'google', 'organic', 'live', 'advanced'], data: {}, result: null }] });
+  const taskErr = (id, code, msg) => ({ ...seErr(id), time: '0.2 sec.', tasks: [{ ...seErr(id).tasks[0], status_code: code, status_message: msg, time: '0.1 sec.' }] });
+  // the lighter answer: the first page only (no result below position 10) and no AI Overview block (it was not requested)
+  const lightOk = (id, cost) => { const a = clone(F.serpTop); const t = a.tasks[0]; t.id = id; t.cost = cost; a.cost = cost;
+    t.result[0].items = t.result[0].items.filter(it => it.type !== 'ai_overview' && !(it.type === 'organic' && it.rank_group > 10)); t.data = { depth: 10 }; return a; };
+  const fullOk = (id, cost) => { const a = clone(F.serpTop); a.tasks[0].id = id; a.tasks[0].cost = cost; a.cost = cost; return a; };
+
+  // ---------- 1. the wiring, as the build wrote it ----------
+  check('three attempts in one chain: SERP Top 10 -> gate -> 20 s -> retry -> gate -> 45 s -> the lighter request -> Pick Top 6, and a good answer at any step goes straight on',
+    eq(W.chain, ['SERP Top 10', 'SERP Failed?', 'Wait Before SERP Retry', 'SERP Top 10 (Retry)', 'SERP Retry Failed?', 'Wait Before SERP Light Retry', 'SERP Top 10 (Light Retry)', 'Pick Top 6'])
+    && eq(W.connections['SERP Top 10 (Retry)'].main.map(l => l.map(t => t.node)), [['SERP Retry Failed?']])
+    && eq(W.connections['SERP Retry Failed?'].main.map(l => l.map(t => t.node)), [['Wait Before SERP Light Retry'], ['Pick Top 6']])
+    && eq(W.connections['SERP Failed?'].main.map(l => l.map(t => t.node)), [['Wait Before SERP Retry'], ['Pick Top 6']])
+    && eq(W.connections['SERP Top 10 (Light Retry)'].main.map(l => l.map(t => t.node)), [['Pick Top 6']]), JSON.stringify(W.connections));
+  check('the waits grow: 20 s before the second attempt (was 5 s), 45 s before the third, both in seconds',
+    W.waits['Wait Before SERP Retry'].amount === 20 && W.waits['Wait Before SERP Retry'].unit === 'seconds'
+    && W.waits['Wait Before SERP Light Retry'].amount === 45 && W.waits['Wait Before SERP Light Retry'].unit === 'seconds', JSON.stringify(W.waits));
+  const B = W.bodies;
+  check('the first two attempts are the full request (depth 30 + the async AI Overview); the third is lighter: depth 10, no load_async_ai_overview, same keyword / market / language',
+    /"depth": 30/.test(B['SERP Top 10']) && /"load_async_ai_overview": true/.test(B['SERP Top 10']) && /"depth": 30/.test(B['SERP Top 10 (Retry)']) && /"load_async_ai_overview": true/.test(B['SERP Top 10 (Retry)'])
+    && /"depth": 10\b/.test(B['SERP Top 10 (Light Retry)']) && !/load_async_ai_overview/.test(B['SERP Top 10 (Light Retry)'])
+    && B['SERP Top 10 (Light Retry)'].includes("$('Collect Site URLs').first().json.keyword") && B['SERP Top 10 (Light Retry)'].includes("$('Collect Site URLs').first().json.location_code"), JSON.stringify(B));
+  check('the second gate is the same rule as the first (one expression, RT.TRANSIENT / RT.PERMANENT)', W.gate_conditions['SERP Failed?'] === W.gate_conditions['SERP Retry Failed?'], JSON.stringify(W.gate_conditions));
+  check('every attempt keeps the HTTP-level retry rule and goes on after a failure (the in-200 gate decides)',
+    ['SERP Top 10 (Retry)', 'SERP Top 10 (Light Retry)'].every(n => W.retry_settings[n].retryOnFail === true && W.retry_settings[n].maxTries === 3 && W.retry_settings[n].onError === 'continueRegularOutput'), JSON.stringify(W.retry_settings));
+  check('the lighter attempt is on every report builder\'s cost list beside the other two',
+    Object.keys(W.ledger_lists).length >= 3 && Object.values(W.ledger_lists).every(l => ['SERP Top 10', 'SERP Top 10 (Retry)', 'SERP Top 10 (Light Retry)'].every(n => l.includes(n))), JSON.stringify(Object.keys(W.ledger_lists)));
+
+  // ---------- 2. only a transient error is sent again ----------
+  const CASES = [
+    ['40101 "Internal SE Server Error." after 27 s (the rehearsal)', seErr('g1'), true],
+    ['50000 envelope', { version: '0.1', status_code: 50000, status_message: 'Internal Server Error.', tasks: null }, true],
+    ['a timeout the node passed through', { error: { message: 'The connection timed out' } }, true],
+    ['40501 "Invalid Field" — a wrong request', taskErr('g2', 40501, 'Invalid Field: target.'), false],
+    ['40202 quota — nothing can change', taskErr('g3', 40202, 'Daily quota exceeded.'), false],
+    ['40102 "No Search Results." — a final, valid empty answer', taskErr('g4', 40102, 'No Search Results.'), false],
+    ['a good answer', F.serpTop, false],
+  ];
+  const g1 = await run('SERP Failed?', CASES.map(c => c[1])), g2 = await run('SERP Retry Failed?', CASES.map(c => c[1]));
+  check('the second gate sends the lighter third attempt only for a transient failure — never for a wrong request, an exhausted quota or "No Search Results."',
+    eq(g2.map(i => i.json.retry), CASES.map(c => c[2])) && eq(g1.map(i => i.json.retry), g2.map(i => i.json.retry)), JSON.stringify(CASES.map((c, i) => [c[0], g1[i].json.retry, g2[i].json.retry])));
+  const k1 = (await run('_dfs_retry', [{ answer: CASES[0][1] }]))[0].json;
+  check('the shared kit agrees: 40101 is retryable, its reason is the provider\'s own words', k1.ok === false && k1.retryable === true && k1.why === 'Internal SE Server Error.', JSON.stringify(k1));
+
+  // ---------- 3. the run, attempt by attempt ----------
+  mock('Start Form', F.forms.startVerdict);
+  const n0 = await run('Normalize Input', F.forms.pageVerdict); mock('Route Mode', n0);
+  await run('Prepare Keyword Run', n0); mock('Fetch Sitemaps', []); await run('Collect Site URLs', []);
+  const analyze = async (answers) => {
+    const names = ['SERP Top 10', 'SERP Top 10 (Retry)', 'SERP Top 10 (Light Retry)'];
+    names.forEach((n, k) => { if (answers[k] === undefined) delete store[n]; else mock(n, answers[k]); });
+    const last = names[answers.length - 1];
+    const top = await run('Pick Top 6', store[last]);
+    const ok = top.filter(t => t.json.url);
+    mock('Read Competitor Pages', ok.length ? ok.map((t, i) => ({ page_text: F.compPage(i % F.COMPS.length, 300) })) : [{ error: { message: 'Invalid URL' } }]);
+    delete store['Retry Blocked Pages']; delete store['Blocked Page Items'];
+    await run('Find Blocked Pages', store['Read Competitor Pages']);
+    return { top, a: (await run('Analyze Competitor Pages', store['Read Competitor Pages']))[0].json };
+  };
+  const verdictOf = async (a) => {
+    mock('Facts SERP', V.factsSerp); delete store['Facts SERP (Retry)'];
+    await run('Collect Facts', store['Facts SERP']);
+    mock('Competitor Analyzer', { output: F.competitorAnalysis }); await run('Parse Analysis', store['Competitor Analyzer']);
+    mock('Keyword Data', F.keywordOverview); delete store['Keyword Data (Retry)']; await run('Merge Keyword Data', store['Keyword Data']);
+    mock('Verdict Agent', { output: F.verdictGo });
+    return (await run('Parse Verdict', store['Verdict Agent']))[0].json;
+  };
+
+  // 3a. success on attempt 2: the full answer, no third attempt, a normal plan
+  const r2 = await analyze([seErr('t-a1'), fullOk('t-a2', 0.002)]);
+  check('attempt 2 answers: the run uses it — competitors read, the AI Overview seen, attempts 2, answered on 2, nothing labelled lighter',
+    r2.top.length >= 3 && r2.a.competitors_read >= 3 && !r2.a.serp_features.unavailable && r2.a.serp_features.attempts === 2 && r2.a.serp_features.answered_on === 2
+    && r2.a.serp_features.ai_overview.present === true && !r2.a.serp_features.light_read && r2.a.serp_evidence.light === false && !/RESULTS READ/.test(r2.a.serp_digest),
+    JSON.stringify({ f: { attempts: r2.a.serp_features.attempts, on: r2.a.serp_features.answered_on, aio: r2.a.serp_features.ai_overview.present }, e: r2.a.serp_evidence }));
+  const pv2 = await verdictOf(r2.a);
+  check('attempt 2 answers: the verdict is scored as usual (GO_WITH_CHANGES 66), the evidence says two attempts',
+    pv2.verdict === 'GO_WITH_CHANGES' && pv2.verdict_score === 66 && pv2.score_withheld === false && pv2.verdict_evidence.attempts === 2 && pv2.verdict_evidence.read_light === false,
+    JSON.stringify({ v: pv2.verdict, s: pv2.verdict_score, ev: pv2.verdict_evidence }));
+
+  // 3b. success on attempt 3 (the lighter request): a normal plan, labelled
+  const r3 = await analyze([seErr('t-b1'), seErr('t-b2'), lightOk('t-b3', 0.0006)]);
+  const sf3 = r3.a.serp_features;
+  check('attempt 3 (lighter) answers: the run uses it — competitors from the top 10, attempts 3, answered on 3',
+    r3.top.length >= 3 && r3.a.competitors_read >= 3 && !sf3.unavailable && sf3.attempts === 3 && sf3.answered_on === 3 && r3.a.serp_evidence.checked === 1
+    && r3.a.serp_evidence.retried === 2 && r3.a.serp_evidence.light === true && r3.a.serp_evidence.answered_on === 3,
+    JSON.stringify({ attempts: sf3.attempts, on: sf3.answered_on, read: r3.a.competitors_read, e: r3.a.serp_evidence }));
+  check('the lighter answer is labelled: the AI Overview is "not read on this attempt" (present null, never false), results below position 10 not read; the snippet and People Also Ask on page 1 are read',
+    sf3.ai_overview.present === null && sf3.ai_overview.not_read === true && /not read on this attempt/.test(sf3.ai_overview.why) && sf3.read_depth === 10
+    && sf3.light_read && sf3.light_read.attempt === 3 && sf3.light_read.depth === 10 && sf3.light_read.ai_overview_requested === false
+    && eq(sf3.light_read.not_read, ['the AI Overview', 'the results below position 10']) && sf3.featured_snippet && sf3.featured_snippet.domain === 'erpguide.net' && sf3.people_also_ask.length > 0,
+    JSON.stringify(sf3));
+  check('the analyst\'s digest never says "AI OVERVIEW: none / not seen" for the lighter answer: it says not read, and that only the top 10 were read',
+    /AI OVERVIEW: not read on this attempt \(the lighter third request did not ask for it\)/.test(r3.a.serp_digest) && /RESULTS READ: the top 10 only, on a lighter third request/.test(r3.a.serp_digest)
+    && !/AI OVERVIEW: not seen|AI OVERVIEW: none|AI OVERVIEW: unknown — the results page could not be read/.test(r3.a.serp_digest), r3.a.serp_digest.slice(0, 900));
+  const pv3 = await verdictOf(r3.a);
+  check('attempt 3 answers: a normal verdict and score, the evidence says three attempts and the lighter read; the visit estimate says the AI Overview was not read',
+    pv3.verdict === 'GO_WITH_CHANGES' && pv3.verdict_score === 66 && pv3.score_withheld === false && pv3.verdict_evidence.attempts === 3 && pv3.verdict_evidence.read_light === true
+    && !!pv3.expected_visits && /AI Overview was not read on this attempt/.test(pv3.expected_visits.basis_text || '')
+    && !!pv2.expected_visits && !/not read on this attempt/.test(pv2.expected_visits.basis_text || ''), JSON.stringify({ v: pv3.verdict, ev: pv3.verdict_evidence, vis: pv3.expected_visits }));
+  const wf3 = await run('Build Word File', [{ json: { ...pv3, include_seo_report: true } }]); const doc3 = decode(wf3);
+  const rp3 = (doc3.match(/What the Results Page Looks Like[\s\S]{0,2600}/) || [''])[0];
+  check('the keyword report prints "Not read on this attempt" for the AI Overview (never "None" / "not seen") and a "Results read: the top 10 only" row',
+    /AI Overview<\/td><td[^>]*>Not read on this attempt/.test(rp3) && /Results read<\/td><td[^>]*>The top 10 only, on a lighter third request/.test(rp3) && !/AI Overview<\/td><td[^>]*>(None|Not seen)/.test(rp3), rp3.slice(0, 1400));
+  check('the report\'s data lineage says the results page was read on the lighter request', /read on a lighter third request: the top 10 only, and the AI Overview was not read/.test(doc3), 'lineage');
+  scanHtml('keyword report, results page read on the lighter third attempt', doc3);
+  // the money: each of the three attempts once, by its own task id
+  const L3 = wf3[0].json.run_ledger;
+  check('the cost of every attempt is counted, each task once by its id: $0.002 + $0.002 for the two 40101 answers DataForSEO billed, $0.0006 for the lighter one',
+    L3.by_node['SERP Top 10'] === 0.002 && L3.by_node['SERP Top 10 (Retry)'] === 0.002 && L3.by_node['SERP Top 10 (Light Retry)'] === 0.0006,
+    JSON.stringify({ by_node: L3.by_node, rep: L3.dataforseo_tasks_repeated }));
+  // and a task id seen twice (an answer about a task already paid for) is not paid twice
+  mock('SERP Top 10 (Light Retry)', lightOk('t-b2', 0.002));   // the same task id as the retry
+  const L3b = (await run('Build Word File', [{ json: { ...pv3, include_seo_report: true } }]))[0].json.run_ledger;
+  check('a task id that comes back on a later attempt is not paid again (R28: counted once by task id)',
+    L3b.by_node['SERP Top 10 (Retry)'] === 0.002 && !L3b.by_node['SERP Top 10 (Light Retry)'] && L3b.dataforseo_tasks_repeated === L3.dataforseo_tasks_repeated + 1, JSON.stringify({ by_node: L3b.by_node, rep: L3b.dataforseo_tasks_repeated }));
+
+  // 3c. all three fail: NOT_CHECKED, in plain words
+  const r0 = await analyze([seErr('t-c1'), seErr('t-c2'), seErr('t-c3')]);
+  check('all three fail: "unavailable", three attempts counted, transient, AI Overview unknown (null)',
+    r0.a.serp_features.unavailable === true && r0.a.serp_features.attempts === 3 && r0.a.serp_features.answered_on === 0 && r0.a.serp_features.retryable === true
+    && r0.a.serp_features.ai_overview.present === null && r0.a.serp_evidence.unavailable === true && r0.a.serp_evidence.attempts === 3, JSON.stringify(r0.a.serp_features));
+  const pv0 = await verdictOf(r0.a);
+  check('all three fail: NOT_CHECKED, no score, and the first reason says it was sent 3 times, that it is the provider and not the keyword, and to run it again later',
+    pv0.verdict === 'NOT_CHECKED' && pv0.verdict_score === null && pv0.score_withheld === true && pv0.verdict_evidence.attempts === 3
+    && /sent 3 times \(the last time as a lighter request\) and failed every time/.test(pv0.verdict_reasons[0])
+    && /temporary problem with the search data provider, not with your keyword\. Run the check again later\./.test(pv0.verdict_reasons[0]), pv0.verdict_reasons[0]);
+  const wf0 = await run('Build Word File', [{ json: { ...pv0, include_seo_report: true } }]); const L0 = wf0[0].json.run_ledger;
+  check('all three fail: all three billed attempts are on the ledger once each ($0.006), so the money spent for nothing is visible',
+    L0.by_node['SERP Top 10'] === 0.002 && L0.by_node['SERP Top 10 (Retry)'] === 0.002 && L0.by_node['SERP Top 10 (Light Retry)'] === 0.002, JSON.stringify(L0.by_node));
+
+  // 3d. a non-retryable error is not sent again: one attempt, and the message does not call it temporary
+  const rp = await analyze([taskErr('t-d1', 40501, 'Invalid Field: target.')]);
+  const gp = await run('SERP Failed?', [store['SERP Top 10'][0].json]);
+  check('a wrong request is not sent again: the gate says no, one attempt is counted, retryable false',
+    gp[0].json.retry === false && rp.a.serp_features.unavailable === true && rp.a.serp_features.attempts === 1 && rp.a.serp_features.retryable === false && rp.a.serp_evidence.retried === 0,
+    JSON.stringify({ gate: gp[0].json, f: rp.a.serp_features }));
+  const pvp = await verdictOf(rp.a);
+  check('…and its verdict says to run the check again without calling a refused request a temporary outage', pvp.verdict === 'NOT_CHECKED' && /Run the check again\./.test(pvp.verdict_reasons[0])
+    && !/temporary/.test(pvp.verdict_reasons[0]) && !/sent again|times/.test(pvp.verdict_reasons[0]), pvp.verdict_reasons[0]);
+  const kc = (await run('_dfs_retry', [{ answer: taskErr('t-d1', 40501, 'Invalid Field: target.') }]))[0].json;
+  check('the kit marks it permanent (not retryable)', kc.ok === false && kc.retryable === false && kc.permanent === true, JSON.stringify(kc));
+  reset();
+});
+
+await require('./scenarios_cycle')({ H, run, mock, store, guard, reset, begin });   // CY1-CY24 (2026-10-19): the per-website cycle - kit, Cycle Dispatcher nodes, kickoff row, deploy guard
+await require('./scenarios_integration')({ H, run, mock, store, guard, reset, begin });   // INT1-INT7 (2026-10-19, E4): one client's life through every agent's generated nodes (the cross-agent contract test)
+await require('./scenarios_reh')({ H, run, mock, store, guard, reset, begin });   // REH1-REH6 (F-REH 2026-10-20): the real-credit rehearsal's defects - ghost reservations, Track's parent, cycle 0's skips, service fit, plain notes
 
 H.report();
 })();

@@ -4,6 +4,80 @@
 // Sites = the Data Table seo_sites ("Track my site") + every domain with a keyword ladder; settings per site from seo_monitors (defaults: everything on).
 // On demand (Manual Run with { domain | site_id }) one site runs even when its weekly / monthly monitor is off; an untracked domain is checked ad hoc
 // with the trigger's country, e-mail and callback.
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.5 / §14.2): a THIRD kind of run, `trigger: 'cycle'` — the Cycle Dispatcher starting one job of one
+// website's weekly cycle. It names one site like an on-demand run, but it has the SCHEDULED semantics: `on_demand` is false, a job the site
+// switched off and a paused site are honoured (nothing runs, and the plan says why), an untracked domain is never checked ad hoc, and the
+// monthly extras come only from the `monthly` the dispatcher passes (cycle.monthly), never from the UTC calendar. `cycle` travels with the
+// result so every plan can carry it on.
+// ---- 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4 / §4.5 / §4.8): the website's own calendar ----
+// With one Monday for everyone, a month or a day was the engine's UTC month or day and that rarely mattered. With a 7-day cycle per website
+// (started the day it set up, at 06:00 in ITS time zone), a run after 20:00 New York on the last day of a month is already "next month" in
+// UTC, and a site in Dubai has its Wednesday while New York still has Tuesday. This kit is the one place that answers, for a website:
+//   * which local day / month it is (dayKey / monthKey / weekday), in the website's time zone (`seo_cycles.tz`, else the engine zone);
+//   * what its cycle weekday is (`seo_cycles.cycle_weekday`, 0 = Sunday … 6 = Saturday) and how to say it ("every Wednesday" / "each week");
+//   * what a cycle run is: `trigger: 'cycle'` on a Manual Run (the Cycle Dispatcher's payload, plan §14.2) -> cycleOf(trigger);
+//   * how a weekly report is dated: by its cycle ("Week of Wed 15 Oct"), never by "Monday".
+// Pure: Intl only, no clock unless one is passed, no table access (the caller hands it the seo_cycles rows). ENGINE_TZ is written in at build
+// time from GENERIC_TIMEZONE (America/New_York when unset, the same default n8n/compose.yml and the catch-up use).
+const ST = (() => {
+  const ENGINE_TZ = 'America/New_York';
+  const S = (v) => String(v == null ? '' : v).trim();
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const okTz = (tz) => { const z = S(tz); if (!z || /^__/.test(z)) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: z }).format(0); return true; } catch (e) { return false; } };
+  const engineTz = () => okTz(ENGINE_TZ) ? ENGINE_TZ : 'America/New_York';
+  /** the zone to use: the given one when it is a real IANA zone, else the engine's */
+  const zone = (tz) => okTz(tz) ? S(tz) : engineTz();
+  const msOf = (t) => { if (t instanceof Date) return t.getTime(); if (typeof t === 'number' && Number.isFinite(t)) return t; const v = Date.parse(S(t)); return Number.isFinite(v) ? v : NaN; };
+  const normD = (x) => S(x).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  /** the wall-clock parts of instant `t` in zone `tz`: { date: 'YYYY-MM-DD', month: 'YYYY-MM', weekday: 0-6, hour, minute } */
+  const parts = (t, tz) => {
+    const ms = t === undefined || t === null || t === '' ? Date.now() : msOf(t);
+    if (!Number.isFinite(ms)) return null;
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: zone(tz), year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const p = {}; for (const x of f.formatToParts(new Date(ms))) p[x.type] = x.value;
+    const date = p.year + '-' + p.month + '-' + p.day;
+    return { date, month: date.slice(0, 7), weekday: SHORT.indexOf(p.weekday), hour: Number(p.hour) % 24, minute: Number(p.minute) };
+  };
+  const dayKey = (t, tz) => { const p = parts(t, tz); return p ? p.date : ''; };
+  const monthKey = (t, tz) => { const p = parts(t, tz); return p ? p.month : ''; };
+  const weekday = (t, tz) => { const p = parts(t, tz); return p ? p.weekday : -1; };
+  /** the weekday of a calendar date 'YYYY-MM-DD' (the date itself, no zone involved) */
+  const weekdayOfDate = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(S(date)); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay() : -1; };
+  // ---- the website's cycle row (seo_cycles) ----
+  const cycleRow = (rows, site) => {
+    const s = site || {}, sid = S(s.site_id), dom = normD(s.domain);
+    return (rows || []).find(r => r && typeof r === 'object' && !r.error && ((sid && S(r.site_id) === sid) || (dom && normD(r.domain) === dom))) || null;
+  };
+  const tzOf = (rows, site) => { const r = cycleRow(rows, site); return zone(r && r.tz); };
+  /** the website's cycle weekday (0-6) or null when it has no cycle row (or the row carries none) */
+  const cycleWeekday = (rows, site) => {
+    const r = cycleRow(rows, site); if (!r || r.cycle_weekday === '' || r.cycle_weekday == null) return null;
+    const w = Number(r.cycle_weekday); return Number.isInteger(w) && w >= 0 && w <= 6 ? w : null;
+  };
+  // ---- words ----
+  const dayName = (wd) => (Number.isInteger(wd) && wd >= 0 && wd <= 6) ? DAYS[wd] : '';
+  /** "every Wednesday" when the website's day is known, else "each week" */
+  const everyText = (wd) => dayName(wd) ? 'every ' + dayName(wd) : 'each week';
+  /** "on Wednesday" / "next week" */
+  const onText = (wd) => dayName(wd) ? 'on ' + dayName(wd) : 'next week';
+  /** 'YYYY-MM-DD' -> "Week of Wed 15 Oct" */
+  const weekOf = (date) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(S(date)); if (!m) return ''; return 'Week of ' + SHORT[weekdayOfDate(date)] + ' ' + Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1]; };
+  // ---- a cycle run (plan §14.2): { trigger: 'cycle', domain, site_id, cycle_key: 'cyc:<site_id>:<YYYY-MM-DD>', job, monthly, scheduled_for, request_id, light? } ----
+  const yes = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
+  const keyDate = (key) => { const m = /:(\d{4}-\d{2}-\d{2})$/.exec(S(key)); return m ? m[1] : ''; };
+  const cycleOf = (trigger) => {
+    const t = trigger || {};
+    if (S(t.trigger) !== 'cycle') return null;
+    const key = S(t.cycle_key), date = keyDate(key);
+    return { key, date, job: S(t.job), monthly: yes(t.monthly), light: t.light === undefined || t.light === null || t.light === '' ? null : yes(t.light),
+      scheduled_for: S(t.scheduled_for), request_id: S(t.request_id), tz: okTz(t.tz) ? S(t.tz) : '', preview: yes(t.preview), label: date ? weekOf(date) : '' };
+  };
+  /** the fields a cycle run's callback carries (plan §14.2), or {} for any other run */
+  const callbackFields = (cyc) => cyc && cyc.key ? { trigger: 'cycle', cycle_key: cyc.key, cycle_date: cyc.date, cycle_week: cyc.label, cycle_job: cyc.job } : {};
+  return { ENGINE_TZ, okTz, zone, engineTz, parts, dayKey, monthKey, weekday, weekdayOfDate, cycleRow, tzOf, cycleWeekday, dayName, everyText, onText, weekOf, keyDate, cycleOf, callbackFields, DAYS };
+})();
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
@@ -35,11 +109,20 @@ function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' 
   for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', virtual: true }); }
   for (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }
   const want = normD(trigger.domain) || String(trigger.site_id || '').trim();
+  const cycle = ST.cycleOf(trigger);
   let list = [...byDomain.values()];
+  let cycle_why = '';
   if (want) {
     list = list.filter(s => s.domain === want || s.site_id === want);
-    if (!list.length && normD(trigger.domain)) list = [{ site_id: siteIdFor(normD(trigger.domain)), domain: normD(trigger.domain), country: trigger.country || '', location_code: Number(trigger.location_code) || 0, language_code: trigger.language_code || 'en', email: '', callback_url: '', keywords: [], status: 'active', source: 'adhoc', virtual: true, adhoc: true }];
+    if (!list.length && normD(trigger.domain) && !cycle) list = [{ site_id: siteIdFor(normD(trigger.domain)), domain: normD(trigger.domain), country: trigger.country || '', location_code: Number(trigger.location_code) || 0, language_code: trigger.language_code || 'en', email: '', callback_url: '', keywords: [], status: 'active', source: 'adhoc', virtual: true, adhoc: true }];
+    // a cycle run honours the pause, as the schedule always did (an on-demand run is the owner asking, so it still runs)
+    if (cycle) {
+      if (!list.length) cycle_why = 'no tracked website matches "' + want + '", so this cycle job had nothing to run';
+      else if (list.every(s => String(s.status || 'active') === 'paused')) cycle_why = list[0].domain + ' is paused, so its weekly cycle runs nothing until it is resumed';
+      list = list.filter(s => String(s.status || 'active') !== 'paused');
+    }
   } else list = list.filter(s => String(s.status || 'active') !== 'paused');
+  const on_demand = !!want && !cycle;
   const out = list.map(s => {
     const m = mons.find(x => x.site_id === s.site_id) || {};
     const p = profiles.find(x => x.site_id === s.site_id) || {};
@@ -54,12 +137,16 @@ function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' 
       brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || '', nameOf(s, p)].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };
     const o = { ...s, business_name: nameOf(s, p), settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '',
       region: p.region || '', country_code: p.country_code || '', public_email: p.public_email || '', price_range: p.price_range || '', service_areas: p.service_areas || '', opening_hours: p.opening_hours || '' } };
-    if (want) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }
+    if (on_demand) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }
     o.request_id = String(trigger.request_id || s.request_id || '');
+    o.cycle = cycle;   // null outside a cycle run
     return o;
   });
   const flagOf = { ai: 'ai_visibility', backlinks: 'backlinks', audit: 'audit_monthly', links: 'link_builder' }[kind];
-  return { list: want ? out : out.filter(s => s.settings[flagOf]), on_demand: !!want, want, trigger, total: byDomain.size };
+  // a switched-off job is honoured by every run but an on-demand one (the scheduled rule, and now the cycle's too)
+  const kept = on_demand ? out : out.filter(s => s.settings[flagOf]);
+  if (cycle && !cycle_why && out.length && !kept.length) cycle_why = ({ ai: 'AI visibility', backlinks: 'the backlink monitor', audit: 'the monthly audit', links: 'the Link Builder' }[kind] || kind) + ' is switched off for ' + out[0].domain + ', so this cycle job runs nothing';
+  return { list: kept, on_demand, want, trigger, total: byDomain.size, cycle, cycle_why };
 }
 
 // ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----
@@ -162,7 +249,12 @@ const SM = (() => {
     // P2-2 (2026-10-12): the Site Describer answers with `products_or_services` — reading only `services` left services_json empty on every
     // site, so the brief's facts said `services: []` although the describer had found nine.
     const desc0 = x.description || {};
-    const services = uniq([...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    // keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.2 / §14.1): what the client SAID they sell ("What do you sell?" on Track my site,
+    // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
+    // unchanged and the weekly Site Tracker can never overwrite it
+    const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -180,7 +272,7 @@ const SM = (() => {
 
     return { site_id, domain, canonical_host, host_source, home_url: 'https://' + canonical_host + '/',
       business_name: nameHit.value, name_source: nameHit.source, logo_url: logoHit.value, logo_source: logoHit.source,
-      nap, services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,
+      nap, services, declared_services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,
       model_updated_at: updated_at, sources: { profile: !!prof.site_id || !!prof.business_name, homepage_schema: !!org, gbp: !!(gbp.name || gbp.phone), app: !!(req.business_facts || req.cta || req.business_name), html: !!html } };
   };
 
@@ -284,12 +376,13 @@ const SM = (() => {
   const ageDays = (model) => { const t = Date.parse(S((model || {}).model_updated_at)); return Number.isFinite(t) ? (Date.now() - t) / 864e5 : Infinity; };
   const isFresh = (model, days) => !!(model && S(model.canonical_host) && ageDays(model) < (Number(days) > 0 ? Number(days) : FRESH_DAYS));
   // exactly the seo_sites columns the model owns (plus the two keys), ready to merge into a site row or a cache value
-  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];
+  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at', 'declared_services'];
   const toRow = (model) => { const m = model || {};
     return { site_id: S(m.site_id), domain: S(m.domain), canonical_host: S(m.canonical_host), business_name: S(m.business_name), logo_url: S(m.logo_url),
       nap_json: JSON.stringify(nap(m)), services_json: JSON.stringify(services(m)), nav_pages_json: JSON.stringify((m.nav_pages || []).map(p => ({ url: p.url, title: p.title }))),
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
-      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
+      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at),
+      declared_services: JSON.stringify(Array.isArray(m.declared_services) ? m.declared_services : []) };
   };
   // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
   // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
@@ -321,14 +414,18 @@ const SM = (() => {
     titleShare, titleGap, canonUrl, isListing, pageScore, pageStep,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
-const { list, on_demand, want, total } = monitorSites('audit');
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.3 / §4.4, owner decision D2): the audit runs in each website's MONTHLY cycle - day one, then the first
+// cycle on or after its monthly date. A cycle run (`trigger: 'cycle'`, job audit) with `monthly: false` audits nothing (the dispatcher only
+// starts it on a monthly cycle; this is the guard if it ever does). The sitemap rules of Audit Schedule Plan still decide whether it re-crawls.
+const { list, on_demand, want, total, cycle, cycle_why } = monitorSites('audit');
+if (cycle && list.length && !cycle.monthly) return [{ json: { nothing_to_do: true, cycle, reason: 'the audit runs in ' + list[0].domain + '\'s monthly cycle; this cycle (' + (cycle.label || cycle.key) + ') is not one', skipped: [] } }];
 const audits = rowsOf('Load Audits');
 const out = []; const skipped = [];
 for (const s of list.slice(0, 20)) {
   if (!s.email && !s.callback_url) { skipped.push(s.domain + ' (no e-mail or callback to deliver to)'); continue; }
   const last = audits.filter(a => a.site_id === s.site_id).sort((a, b) => String(b.audited_at).localeCompare(String(a.audited_at)))[0] || null;
   out.push({ json: { site_id: s.site_id, domain: s.domain, country: s.country || 'United States', ga4_property_id: String(s.ga4_property_id || ''), email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', settings: s.settings, on_demand,
-    last_audit: last ? { audited_at: last.audited_at, health_score: Number(last.health_score) || 0, critical: Number(last.critical) || 0, high: Number(last.high) || 0 } : null, sitemap_url: SM.siteUrl(SM.stored(s) || { domain: s.domain }, '/sitemap.xml'), skipped } });
+    last_audit: last ? { audited_at: last.audited_at, health_score: Number(last.health_score) || 0, critical: Number(last.critical) || 0, high: Number(last.high) || 0 } : null, sitemap_url: SM.siteUrl(SM.stored(s) || { domain: s.domain }, '/sitemap.xml'), skipped, cycle } });
 }
-if (!out.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'no site to audit' : 'no sites yet'), skipped } }];
+if (!out.length) return [{ json: { nothing_to_do: true, cycle, reason: cycle ? (cycle_why || (skipped.length ? 'nothing to deliver the audit to: ' + skipped.join('; ') : 'nothing to audit for this cycle')) : on_demand ? 'no site matches "' + want + '"' : (total ? 'no site to audit' : 'no sites yet'), skipped } }];
 return out;

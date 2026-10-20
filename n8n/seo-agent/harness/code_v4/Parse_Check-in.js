@@ -57,6 +57,6 @@ else if (coverage.kind === 'urls') lines.push('URL list uploaded: ' + coverage.u
 else if (coverage.kind === 'chart') lines.push('Pages chart: ' + coverage.indexed_total + ' indexed, ' + coverage.not_indexed_total + ' not indexed on the last date.');
 else if (text) lines.push('The uploaded CSV was not recognised as a Search Console Pages export (expected columns Reason / Pages, URL / Last crawled, or Date / Indexed / Not indexed).');
 else lines.push('No Pages report uploaded (optional).');
-if (row.is_test) lines.push('Recorded as a TEST check-in (' + test_reason + '), so it does not count as the answer for ' + month + ': the Monday report keeps asking for the real check-in. Remove the row with the n8n public API (DELETE /api/v1/data-tables/<seo_console_checkins id>/rows/delete?filter=...) when it is no longer needed.');
-else lines.push('Recorded for ' + month + '; the Monday report includes it and the reminder stops for this month.');
+if (row.is_test) lines.push('Recorded as a TEST check-in (' + test_reason + '), so it does not count as the answer for ' + month + ': the weekly report keeps asking for the real check-in. Remove the row with the n8n public API (DELETE /api/v1/data-tables/<seo_console_checkins id>/rows/delete?filter=...) when it is no longer needed.');
+else lines.push('Recorded for ' + month + '; the weekly report includes it and the reminder stops for this month.');
 return [{ json: { ...d, checkin_row: row, coverage, summary_lines: lines, plain: lines.join('\n'), checkin_month: month, checkin_is_test: row.is_test, checkin_test_reason: test_reason, site_id } }];

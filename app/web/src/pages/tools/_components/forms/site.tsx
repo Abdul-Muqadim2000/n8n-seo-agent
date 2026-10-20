@@ -272,7 +272,7 @@ export function CheckinForm({ initialSiteId, prefill }: ToolFormProps) {
     <ToolShell mode="checkin" site={site} cost={0} eta={estimateEta('checkin', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Record the check-in" blocked={noVerified(sites)}>
       <FormCard
         title="This month in Search Console"
-        description="Two things the Search Console API cannot see. Takes two minutes once a month; the Monday report reminds you."
+        description="Two things the Search Console API cannot see. Takes two minutes once a month; the weekly report reminds you."
         aside={<GuideButton id="search-console-checkin" vars={{ domain: site?.domain }} label="Where do I look?" />}
       >
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />

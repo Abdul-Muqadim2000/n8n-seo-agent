@@ -231,6 +231,7 @@
   "SEO Agent \u2014 Content Cadence": [
    {
     "fed_settle_directly": [
+     "Cadence Preview",
      "Cadence Status"
     ],
     "has_callback": "Has Callback (Cadence)?",
@@ -243,6 +244,10 @@
       0
      ],
      [
+      "Cadence Preview",
+      0
+     ],
+     [
       "Cadence Status",
       0
      ]
@@ -251,6 +256,7 @@
      "bypass": false,
      "input0": [
       "Cadence Note",
+      "Cadence Preview",
       "Cadence Status"
      ],
      "input1": [
@@ -259,6 +265,7 @@
      "merge": true,
      "preds": [
       "Cadence Note",
+      "Cadence Preview",
       "Cadence Status"
      ],
      "reachable": true,

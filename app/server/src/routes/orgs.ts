@@ -21,6 +21,7 @@ import {
   isClientRole,
   ROLE_LABELS,
   orgKindOf,
+  ONBOARDING_STEPS,
 } from '@seo/shared';
 import { isPlatformAdmin, isUuid, orgAccess, requireUser } from '../auth/access';
 import { config } from '../config';
@@ -42,7 +43,6 @@ import { deleteCompany } from '../services/companyDelete';
 // G5: the company answer (with its kind, agency and brand) lives in services/agency.ts
 export { toOrg };
 
-const ONBOARDING_STEPS = ['company', 'website', 'verify', 'business', 'profile', 'tracking', 'launch', 'done'] as const;
 
 export async function orgRoutes(app: FastifyInstance) {
   app.post('/api/orgs', { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async (req) => {

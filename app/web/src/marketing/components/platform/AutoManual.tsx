@@ -4,14 +4,14 @@ import { useOn } from './kit';
 
 type Row = { label: string; note: string; kind?: 'skip' | 'wait' };
 const AUTO: Row[] = [
-  { label: 'Planned', note: 'Picked by the Monday cadence' },
+  { label: 'Planned', note: 'Shown first in "Coming up"' },
   { label: 'No stop', note: 'Runs on schedule', kind: 'skip' },
   { label: 'Written', note: 'Draft, critique and edit' },
   { label: 'Checked', note: 'SEO QA on every page' },
   { label: 'Ready to publish', note: 'Package or a draft in your CMS' },
 ];
 const MANUAL: Row[] = [
-  { label: 'Planned', note: 'Picked by the Monday cadence' },
+  { label: 'Planned', note: 'Shown first in "Coming up"' },
   { label: 'Needs you', note: 'Waits until someone approves', kind: 'wait' },
   { label: 'Written', note: 'Draft, critique and edit' },
   { label: 'Checked', note: 'SEO QA on every page' },

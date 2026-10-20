@@ -1,15 +1,18 @@
 import { AUTOMATIONS, MODES, type AutomationId, type ModeId } from './constants';
 import type { PipelineData, QueueItem } from './data';
 import { keywordsOverlap } from './ladders';
+import { cycleNorm } from './cycles';
 
 // What a manual run means for the website's automatic pipeline, shown on the tool forms before the run starts: nobody pays twice
 // for what the schedule already does, nobody writes a second page that competes with one already written, and everyone sees how
 // the pipeline adapts. Every sentence states what n8n really does:
-// - AI visibility (AI_Plan.js): an on-demand check asks every engine; a weekly run asks Gemini / Claude only when no run this month
-//   (UTC) asked them, so later runs that month reuse the answers.
-// - Backlinks (BL_Plan.js): an on-demand check is always the full report with a fresh link gap; later Mondays that month are light,
-//   and the gap is refreshed again after 85 days.
-// - Audits (Audit_Sched_Plan.js): every audit is stored; the 1st-of-month audit skips a website audited less than 25 days before.
+// - The weekly work runs in the website's own 7-day cycle (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4): the monthly extras run in its
+//   monthly cycle, decided by the Cycle Dispatcher, never moved by a run started by hand.
+// - AI visibility (AI_Plan.js): an on-demand check asks every engine; the cycle's run asks Claude, the brand question and the market-wide
+//   index in the monthly cycle only.
+// - Backlinks (BL_Plan.js): an on-demand check is always the full report with a fresh link gap; the cycle's full report runs in the
+//   monthly cycle, the other weeks are light, and the gap is refreshed again after 85 days.
+// - Audits (Audit_Sched_Plan.js): every audit is stored; the monthly cycle's audit skips a website audited less than 25 days before.
 // - Pages (Cadence_Plan.js + services/runs.ts recordPageInEngine): a page written from the app is logged in seo_content_log, so the
 //   Content Cadence skips that keyword for 90 days; a typed ladder keyword is written as that ladder page.
 // - Ladders (shared/src/ladders.ts): a new main keyword that is the same search as another ladder's main or page keyword (same
@@ -53,12 +56,9 @@ const ISO_FORMAT: NoticeFormat = {
   ago: (iso) => `at ${iso.slice(0, 16).replace('T', ' ')}`,
 };
 
-/** The comparison key of a keyword (same rule as the Content Cadence: case, punctuation and spacing do not matter). */
-export const normKeyword = (s: string) =>
-  String(s || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
+/** The comparison key of a keyword: the Content Cadence's own rule (cycles.ts cycleNorm), so case, punctuation and spacing do not matter
+ *  and a keyword in any script keeps its letters (an Arabic keyword used to become '' and match every other one). */
+export const normKeyword = (s: string) => cycleNorm(s);
 
 const urlKey = (u: string) =>
   String(u || '')
@@ -74,8 +74,6 @@ export const NOTICE_MODES: readonly ModeId[] = ['keyword', 'ladder', 'ai_visibil
 
 const AUTOMATION_OF: Partial<Record<ModeId, AutomationId>> = { ai_visibility: 'ai_visibility', backlinks: 'backlinks', audit: 'audit' };
 
-const monthOf = (d: Date) => new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(d);
-const sameUtcMonth = (a: Date, b: Date) => a.toISOString().slice(0, 7) === b.toISOString().slice(0, 7);
 
 export function pipelineNotices(
   mode: ModeId,
@@ -122,19 +120,23 @@ export function pipelineNotices(
     else if (a?.state === 'on' && a.nextRunAt) {
       const next = new Date(a.nextRunAt);
       const nextIso = a.nextRunAt;
-      const when = `${info.schedule.kind === 'weekly' ? 'every week' : 'every month'}: next on ${f.when(nextIso)}`;
+      const monthlyOnly = info.schedule.kind === 'cycle' ? !!info.schedule.monthlyOnly : info.schedule.kind === 'monthly';
+      const when = `${monthlyOnly ? 'every month, in your monthly cycle' : 'every week, in your website\'s cycle'}: next on ${f.when(nextIso)}`;
       const last = a.lastRunAt ? `, last on ${f.day(a.lastRunAt)}${a.lastResult ? ` (${a.lastResult})` : ''}` : '';
+      // the website's next monthly cycle (the monthly extras run there, whatever is started by hand)
+      const monthly = (data.cycle?.upcoming ?? []).find((c) => c.monthly && Date.parse(c.at) > now.getTime() - 60_000) ?? null;
+      const nextIsMonthly = !!monthly && Math.abs(Date.parse(monthly.at) - next.getTime()) < 36e5;
       let effect = '';
       if (autoId === 'ai_visibility')
-        effect = sameUtcMonth(next, now)
-          ? `This run is a full run (Claude, the brand question, new questions and the market-wide index included), so the automatic runs later in ${monthOf(now)} reuse those instead of paying for them again.`
-          : `The next automatic run is the month's full run as usual.`;
+        effect = `This run asks every engine now (Claude, the brand question, new questions and the market-wide index included). ${
+          nextIsMonthly
+            ? `The automatic check on ${f.day(nextIso)} is your monthly full run as usual.`
+            : monthly
+              ? `The automatic checks keep their own rhythm: the next full run is in your monthly cycle on ${f.day(monthly.at)}.`
+              : 'The automatic checks keep their own rhythm: the full run is in your monthly cycle.'
+        }`;
       else if (autoId === 'backlinks')
-        effect = `${
-          sameUtcMonth(next, now)
-            ? `This run is the full monthly report, so the automatic runs later in ${monthOf(now)} only watch for lost and spammy links.`
-            : `The next automatic run is the month's full report as usual.`
-        } It also refreshes the link gap, which the automatic runs then leave for about 3 months.`;
+        effect = `This run is a full report. The automatic checks keep their own rhythm: the full report runs in your monthly cycle${monthly ? ` (next on ${f.day(monthly.at)})` : ''}, the other weeks only watch for lost and spammy links. It also refreshes the link gap, which the automatic runs then leave for about 3 months.`;
       else if (autoId === 'audit')
         effect =
           next.getTime() - now.getTime() < 25 * 864e5
@@ -157,7 +159,7 @@ export function pipelineNotices(
     const done = data.written.find((w) => normKeyword(w.keyword) === kw);
     const rewrite = !!(done?.publishedUrl && input.existingPageUrl && urlKey(input.existingPageUrl) === urlKey(done.publishedUrl));
     if (done && !rewrite) {
-      const by = done.source === 'cadence' ? ' by your weekly blog posts' : '';
+      const by = done.source === 'cadence' ? ' by your weekly pages' : '';
       out.push({
         id: `written:${kw}`,
         tone: 'warning',
@@ -177,21 +179,21 @@ export function pipelineNotices(
       const cadence = data.automations.find((a) => a.id === 'content_cadence');
       const planned = queued?.ladder ? null : data.ladders.flatMap((l) => l.planned.map((p) => ({ ...p, head: l.head }))).find((p) => normKeyword(p.keyword) === kw);
       if (queued) {
-        const monday = next && cadence?.state === 'on' && cadence.nextRunAt ? cadence.nextRunAt : null;
+        const nextWrite = next && cadence?.state === 'on' && cadence.nextRunAt ? cadence.nextRunAt : null;
         const plan = queuePlan(queued);
         out.push({
           id: `queued:${kw}`,
           tone: 'info',
-          title: monday ? `Your pipeline writes this on ${f.day(monday)}` : 'This keyword is in your blog-post queue',
+          title: nextWrite ? `Your pipeline writes this on ${f.day(nextWrite)}` : 'This keyword is in your queue',
           body:
-            `${monday ? `It is one of the posts the ${f.day(monday)} run writes` : `It waits in the queue${cadence?.state === 'on' ? ' for a coming Monday' : ' (weekly posts are off)'}`}: ${queued.why}. ` +
-            `Writing it now takes it off the queue, so it is not written twice${monday ? ' and that run writes the next topic instead' : ''}.` +
+            `${nextWrite ? `It is one of the pages the ${f.day(nextWrite)} run writes` : `It waits in the queue${cadence?.state === 'on' ? ' for a coming week' : ' (weekly pages are off)'}`}: ${queued.why}. ` +
+            `Writing it now takes it off the queue, so it is not written twice${nextWrite ? ' and that run writes the next topic instead' : ''}.` +
             (queued.ladder
-              ? ` It is written as page ${queued.ladder.pageNo} of your keyword ladder "${queued.ladder.head}": linked to the ladder's other pages and tracked every Monday.`
+              ? ` It is written as page ${queued.ladder.pageNo} of your keyword ladder "${queued.ladder.head}": linked to the ladder's other pages and tracked every week.`
               : queued.existingPageUrl
                 ? ` The pipeline plans it as an update of ${shortUrl(queued.existingPageUrl)}, which already ranks for it.`
                 : ''),
-          short: monday ? `Planned for ${f.day(monday)}` : 'In the blog-post queue',
+          short: nextWrite ? `Planned for ${f.day(nextWrite)}` : 'In the queue',
           usePlan: plan && urlKey(input.existingPageUrl ?? '') !== urlKey(plan.existingPageUrl) ? plan : undefined,
         });
       } else if (planned)
@@ -199,7 +201,7 @@ export function pipelineNotices(
           id: `ladder:${kw}`,
           tone: 'info',
           title: `This is a page of your keyword ladder "${planned.head}"`,
-          body: `It is written as that ladder page (page ${planned.pageNo}): linked to the ladder's other pages, tracked every Monday, and taken off the pipeline's queue so it is not written twice.`,
+          body: `It is written as that ladder page (page ${planned.pageNo}): linked to the ladder's other pages, tracked every week, and taken off the pipeline's queue so it is not written twice.`,
           short: 'Ladder page',
         });
     }
@@ -242,10 +244,10 @@ export function pipelineNotices(
         tone: 'info',
         title: 'Your pipeline takes it from there',
         body:
-          'The rank tracker checks every page of the ladder each Monday. ' +
+          'The rank tracker checks every page of the ladder each week. ' +
           (data.queue.pagesPerWeek > 0
-            ? `After the pages written now, your weekly blog posts continue with the ladder's next pages (${data.queue.pagesPerWeek} a week, ladder pages first).`
-            : 'Weekly blog posts are off, so its other pages wait on the Pipeline page until you click "Write now" or set posts per week.'),
+            ? `After the pages written now, your weekly pages continue with the ladder's next pages (${data.queue.pagesPerWeek} a week, ladder pages first).`
+            : 'Weekly pages are off, so its other pages wait on the Pipeline page until you click "Write now" or set pages a week.'),
         short: 'Joins the pipeline',
       });
   }
@@ -264,7 +266,7 @@ export function pipelineNotices(
       tone: 'warning',
       title: `${waiting.length} page${waiting.length === 1 ? ' is' : 's are'} already waiting to be published`,
       body:
-        `${names} ${waiting.length === 1 ? 'is' : 'are'} written and not live yet, and your limit is ${maxWaiting}: the weekly posts are paused until fewer pages wait. ` +
+        `${names} ${waiting.length === 1 ? 'is' : 'are'} written and not live yet, and your limit is ${maxWaiting}: the weekly pages are paused until fewer pages wait. ` +
         `This run writes ${mode === 'ladder' ? "the ladder's first page" : 'one more page'} on top of them (page ${waiting.length + 1} waiting). Publish the waiting pages first, or start it anyway.`,
       short: `${waiting.length} pages already waiting`,
       confirm: 'Write it anyway',

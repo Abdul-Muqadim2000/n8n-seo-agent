@@ -173,7 +173,7 @@ export function WizardShell({
               </Link>
             )}
           </div>
-          <div className="mt-2.5 grid grid-cols-7 gap-1" role="meter" aria-valuenow={current + 1} aria-valuemin={1} aria-valuemax={STEPS.length} aria-label="Setup progress">
+          <div className="mt-2.5 grid grid-cols-8 gap-1" role="meter" aria-valuenow={current + 1} aria-valuemin={1} aria-valuemax={STEPS.length} aria-label="Setup progress">
             {STEPS.map((s, i) => {
               const st = stateOf(i, s.id);
               return (

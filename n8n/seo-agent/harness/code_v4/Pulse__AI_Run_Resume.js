@@ -3,7 +3,9 @@
 // through a start), the run's state row in seo_cache (`ai_run:<site_id>`) stays `running` and goes silent. Every morning the pulse looks at
 // those rows and starts the tracker again for each run silent for 65 minutes or more (the tracker's own time limit is 60) (and at most 6 days old): the tracker asks only the
 // questions x engines no earlier execution of that run answered, so nothing is asked — or paid for — twice. Any start of the tracker itself
-// (its Monday schedule, a catch-up replay, an on-demand check) does the same for its sites.
+// (a cycle job of its website, a catch-up replay, an on-demand check) does the same for its sites.
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §15): a run started by a website's weekly cycle is resumed AS a run of that cycle (trigger, key, job,
+// monthly, due time from its state), so its last execution still settles `cycle:<cycle_key>:ai_visibility` - the dispatcher's done signal.
 // ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): the AI question panel at enterprise scale — shared by AI Plan, AI Requests, Prompt Jobs,
 // Prompt Rows, Pulse Plan, AI Metrics and the Site Admin (inlined by the build). Pure functions, no node access: the harness runs them.
 // The money is here too (AIP.cost, section 8: ONE formula for the engine; app/shared/src/cost.ts mirrors it against one table of golden
@@ -99,9 +101,14 @@ const AIP = (() => {
 
   // ---- 4. strata and the daily rotating sample ----------------------------------------------------------------------------------
   const stratumOf = (q) => (S(q.cluster || q.topic).toLowerCase() || 'other') + ' | ' + (S(q.persona).toLowerCase() || 'any buyer');
-  /** the pulse-day counter: Tuesday..Sunday of one ISO week are six consecutive numbers (a Monday shares Tuesday's) */
-  const pulseDay = (iso) => {
-    const t = Date.parse(S(iso).slice(0, 10) + 'T00:00:00Z'); const d = Math.floor((t - Date.UTC(1970, 0, 5)) / 864e5);   // 1970-01-05 was a Monday
+  /** the pulse-day counter: the six days after the website's cycle day (its weekly run) are six consecutive numbers, and the cycle day
+   *  itself shares the next day's. `cycleWeekday` is 0 (Sunday) … 6 (Saturday); with none it is Monday (1), the v4.9 rule exactly - every
+   *  website then had its weekly run on Monday and its pulse Tuesday..Sunday. 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): a website's week
+   *  starts on the day it set up, so its six pulse mornings are counted from ITS cycle day; a question is still asked on exactly `per_week`
+   *  of every six consecutive pulse mornings (pulseSample), whatever the weekday. `iso` is the website's LOCAL date (YYYY-MM-DD…). */
+  const pulseDay = (iso, cycleWeekday) => {
+    const cw = Number.isInteger(Number(cycleWeekday)) && cycleWeekday !== null && cycleWeekday !== '' && Number(cycleWeekday) >= 0 && Number(cycleWeekday) <= 6 ? Number(cycleWeekday) : 1;
+    const t = Date.parse(S(iso).slice(0, 10) + 'T00:00:00Z'); const d = Math.floor((t - Date.UTC(1970, 0, 4 + cw)) / 864e5);   // 1970-01-04 was a Sunday: the anchor is the first cycle day of 1970
     const w = Math.floor(d / 7), r = ((d % 7) + 7) % 7;
     return w * 6 + (r === 0 ? 0 : r - 1);
   };
@@ -232,13 +239,17 @@ const AIP = (() => {
     pulsePerWeek, pulseSample, reqKey, slice, stateKey, stateOf, stateVerdict, stateRow, panelIds, panelHash, overlap, hash,
     PRICE, PRICE_BASIS, ENGINES, DEFAULT_ENGINES, MONTHLY_ENGINES, PULSE_ENGINES, FIXED, analystCap, cost };
 })();
+// F-ENG (2026-10-20): a later part of the morning's pulse (the chain that serves every website) does not look again - the first part did
+let __pt = {}; try { __pt = ($('Manual Run').first() || {}).json || {}; } catch (e) { __pt = {}; }
+if (__pt && __pt.pulse_part) return [{ json: { skip: true, reason: 'a later part of this morning\'s pulse: its first part already looked for runs to resume' } }];
 let cache = []; try { cache = $('Load Cache (AI)').all().map(i => i.json).filter(r => r && r.key && String(r.key).indexOf('ai_run:') === 0); } catch (e) {}
 const now = new Date().toISOString();
 const out = [];
 for (const r of cache) {
   const st = AIP.stateOf([r], String(r.key).slice('ai_run:'.length));
   if (!st || AIP.stateVerdict(st, now, '') !== 'resume') continue;
-  out.push({ json: { continue_run: st.run_id, site_id: st.site_id || String(r.key).slice('ai_run:'.length), domain: st.domain || '', email: st.email || '', callback_url: st.callback_url || '', request_id: st.request_id || '',
+  const cyc = st.cycle && st.cycle.key ? { trigger: 'cycle', cycle_key: st.cycle.key, job: st.cycle.job || 'ai_visibility', monthly: !!st.cycle.monthly, scheduled_for: st.cycle.scheduled_for || '' } : {};
+  out.push({ json: { ...cyc, continue_run: st.run_id, site_id: st.site_id || String(r.key).slice('ai_run:'.length), domain: st.domain || '', email: st.email || '', callback_url: st.callback_url || '', request_id: st.request_id || '',
     parent_run_id: String($execution.id), resumed_by: 'ai_pulse', note: 'run ' + st.run_id + ' stopped after part ' + (st.chunk || 1) + ' (' + (st.asked || 0) + ' of ' + (st.total || '?') + ' requests answered, last heard ' + String(st.updated_at || '').slice(0, 16) + ' UTC): started again' } });
 }
 return out.length ? out.slice(0, 5) : [{ json: { skip: true, reason: 'no AI visibility run is waiting to be resumed' } }];

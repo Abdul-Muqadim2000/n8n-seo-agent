@@ -920,6 +920,8 @@ export interface RecommendationAction {
   page?: string;
   /** or an external link (the page in question) */
   href?: string;
+  /** keyword-first: add this keyword to one of the website's ladders (POST .../ladders/:ladderId/keywords), where its topic matches */
+  addToLadder?: { ladderId: string; head: string; keyword: string };
 }
 
 export interface Recommendation {
@@ -931,6 +933,8 @@ export interface Recommendation {
   /** a short evidence line, e.g. "position 11.2 · 340 impressions / week" */
   evidence?: string;
   action?: RecommendationAction;
+  /** a second button (keyword-first: "Add to my ladder" beside "Write the page") */
+  secondary?: RecommendationAction;
   /** REP 3.3 (benchmark pass 2026-10-14): what this is worth and why it sits where it does in the one queue (`queue.ts`).
    * Absent only on rows written before the queue existed; a reader must treat a missing score as "not ranked". */
   score?: RecommendationScore;
@@ -989,10 +993,16 @@ export interface QueueItem {
   pageType: string;
   existingPageUrl: string;
   ladder: { id: string; rung: number; head: string; pageNo: number } | null;
-  /** v4.12: the AI target the page is written for */
-  aiTarget?: { targetId: string; question: string; kind: 'answer' | 'refresh' } | null;
+  /** v4.12: the AI target the page is written for. Keyword-first (R-K5): a suggestion also carries the target's searches, sources and
+   * the companies AI names, so "Write it" writes it as the AI answer page it is */
+  aiTarget?: { targetId: string; question: string; kind: 'answer' | 'refresh'; fanout?: string[]; sources?: { url: string; title: string }[]; competitors?: string[] } | null;
   /** v4.16 (B4-3): the clicks this page lost in 28 days, what put a `decay` refresh where it is in the queue */
   decayLost?: number;
+  /** keyword-first (2026-10-19): the "Coming up" item key (cycles.ts itemKey), whether it is written on its own (`auto`) or waits for
+   * an OK, and its price in credits */
+  itemKey?: string;
+  auto?: boolean;
+  credits?: number;
 }
 
 export interface PipelineStage {
@@ -1059,8 +1069,31 @@ export interface PipelineData {
   automation: SiteAutomation;
   /** pages the weekly site report found live on the website by itself (Phase 4, newest first; missing before it is deployed) */
   detected?: DetectedPage[];
-  /** the server starts recommended ladders for websites with "Choose keywords for me" on (AUTO_START_LADDERS) */
+  /** the platform switch for keyword proposals (AUTO_START_LADDERS): the server proposes the next keyword, and starts it at level 3 */
   autoStartEnabled?: boolean;
+  /** keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4 / §5): the website's own cycle (always set by the server) */
+  cycle?: import('./cycles').SiteCycleView;
+  /** keyword-first: the autopilot level and what it means this cycle (always set by the server) */
+  autopilot?: PipelineAutopilot;
+  /** P1 (2026-10-20): is the website ready for a written page (author profile + business facts, shared/src/readiness.ts) */
+  readiness?: import('./readiness').ContentReadiness | null;
+}
+
+/** What the autopilot does for the website this cycle (keyword-first, plan §5.5). */
+export interface PipelineAutopilot {
+  level: import('./cycles').AutopilotLevel;
+  /** levels 1 and 2: no keyword chosen yet, so nothing is written */
+  waitingForKeyword: boolean;
+  /** why the coming cycle writes nothing ('' when it writes) */
+  reason: string;
+  /** what waits for the client's OK (with its price), as in the "Coming up" plan */
+  suggestions: QueueItem[];
+  /** what the topic check refused, with the reason in plain words */
+  refused: { keyword: string; source: string; reason: string; detail: string }[];
+  /** the auto-pause dropped the level to 1 (rejected pages), and from which level */
+  dropped: { at: string; from: number } | null;
+  /** the ladders whose keyword the client did not choose (their pages wait for an OK) */
+  notChosen: string[];
 }
 
 /** A written page the weekly Site Tracker found live on the website (its `detected_published`, PIPELINE_FEATURE_SPEC.md §6.5). */
@@ -1187,7 +1220,10 @@ export interface LadderDetail extends LadderCard {
 
 export interface NeedsYouItem {
   id: string;
-  kind: 'publish' | 'approve' | 'overlap' | 'duplicate' | 'failed' | 'connection' | 'pileup';
+  /** keyword-first: `keyword` (choose your first / next keyword), `proposal` (a keyword we propose or announced), `recheck` (a queued
+   * ladder whose keyword fell when it became active), `level` (the autopilot level: dropped after rejections, or a nudge to raise it);
+   * P1: `profile` (the author profile and the business facts the first page waits for, or that first page ready to write) */
+  kind: 'publish' | 'approve' | 'overlap' | 'duplicate' | 'failed' | 'connection' | 'pileup' | 'keyword' | 'proposal' | 'recheck' | 'level' | 'profile';
   severity: 'warning' | 'info';
   title: string;
   detail: string;
@@ -1218,11 +1254,14 @@ export interface PipelineSummary {
 }
 
 export interface SiteAutomation {
+  /** keyword-first (§5.5): 1 only my keywords, 2 my keywords and keep my pages healthy (default), 3 full autopilot. The server always
+   * sets it (the `_site` row's autopilot_level, empty = 2). */
+  autopilotLevel?: import('./cycles').AutopilotLevel;
   /** default for new ladders */
   defaultMode: LadderMode;
-  /** opportunity posts (Search Console / Trends) fill free weekly slots automatically, or are suggestions */
+  /** stored for older screens; it decides nothing any more (keyword-first R-K3: what runs on its own is the autopilot level) */
   opportunities: LadderMode;
-  /** start the next recommended keyword automatically (off by default) */
+  /** stored for older screens; it decides nothing any more (keyword proposals follow the autopilot level) */
   autoStartLadders: boolean;
   maxActiveLadders: number;
   /** pile-up guard: no new pages while this many are written but not published */

@@ -4,7 +4,7 @@ import { purgeExpiredSessions } from './auth/session';
 import { purgeAudit } from './services/audit';
 import { config } from './config';
 import { runMigrations, sqlClient } from './db';
-import { AUTO_START, runAutoStart } from './services/autoStart';
+import { startProposalJobs } from './services/autoStart';
 import { checkEngineFailures } from './services/engineFailures';
 import { autoApproveTick, pollTick, senderTick } from './services/outreachJobs';
 import { startCrawlerJobs } from './services/crawlers/jobs';
@@ -47,14 +47,10 @@ async function main() {
         .catch((err) => app.log.warn({ err: String(err) }, 'n8n failure check failed')),
     90 * 1000,
   );
-  // "Choose keywords for me": only with AUTO_START_LADDERS=true (it starts paid ladder runs on the owners' behalf)
-  const autoStart = () =>
-    runAutoStart(app.log)
-      .then((n) => n && app.log.info({ ladders: n }, 'keyword ladders started automatically'))
-      .catch((err) => app.log.warn({ err: String(err) }, 'automatic ladder start failed'));
-  const autoStartFirst = config.autoStartLadders ? setTimeout(autoStart, AUTO_START.firstAfterMs) : null;
-  const autoStartTimer = config.autoStartLadders ? setInterval(autoStart, AUTO_START.everyMs) : null;
-  app.log.info({ autoStartLadders: config.autoStartLadders }, config.autoStartLadders ? 'automatic ladder starts on (every 6 hours)' : 'automatic ladder starts off (AUTO_START_LADDERS)');
+  // keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.6 / §5.7): keyword proposals and the start of announced keywords (level 3), every
+  // 10 minutes; AUTO_START_LADDERS is the platform's switch (default: on in production, off elsewhere; app/server/src/config.ts)
+  const stopProposals = startProposalJobs(app.log);
+  app.log.info({ autoStartLadders: config.autoStartLadders }, config.autoStartLadders ? 'keyword proposals on (every 10 minutes)' : 'keyword proposals off (AUTO_START_LADDERS)');
   // B-R1: the scheduled report delivery. Every five minutes it asks which companies are due a daily / weekly / monthly summary and
   // retries the deliveries that failed; companies on "as each report arrives" are served by the callback itself, not by this timer.
   const delivery = () =>
@@ -89,8 +85,7 @@ async function main() {
     for (const t of crawlerTimers) clearInterval(t);
     stopPortalJobs();
     for (const t of lbTimers) clearInterval(t);
-    if (autoStartFirst) clearTimeout(autoStartFirst);
-    if (autoStartTimer) clearInterval(autoStartTimer);
+    stopProposals();
     clearInterval(deliveryTimer);
     clearInterval(webhookTimer);
     clearInterval(exportTimer);

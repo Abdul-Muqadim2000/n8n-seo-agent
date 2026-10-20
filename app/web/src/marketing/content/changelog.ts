@@ -14,6 +14,65 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-20',
+    title: 'Your first page waits for your author profile and business facts',
+    summary:
+      'No page is written for you until your author profile and your business facts are filled in, so the first page arrives ready to publish instead of as a draft with blanks to fill, and you are never charged for one.',
+    highlights: [
+      'Starting a keyword makes its plan at once; its first page waits until your author (name, job title and a short bio) and your business facts are in Website settings',
+      'Needs you names exactly what is missing, with a guide for each, and once both are in you can write the first page at once or let your next weekly run write it',
+      'Coming up shows the pages that wait for them, and an approved page waits too',
+      '"Write it now" still lets you write a page without them, after a clear warning that it will be a draft with blanks to fill',
+      'The business facts you save in Website settings now reach every page your weekly runs write',
+    ],
+    features: ['autopilot', 'content'],
+  },
+  {
+    date: '2026-10-20',
+    title: 'Guides for the weekly autopilot',
+    summary:
+      'A plain guide now sits beside every choice the weekly autopilot asks of you, and the Pipeline shows what happens next with your own dates.',
+    highlights: [
+      '"What happens when": the whole path from setup to a keyword won, with what you do, what we do and what each step leads to',
+      'Guides for choosing your first keyword, the three autopilot levels, your week and its monthly date, the Coming up plan, keywords we announce on full autopilot, a keyword that was not planned, a page that is not ready to publish, and "Not what I wanted"',
+      'A "What happens next" line on the Pipeline and at the end of setup: today\'s first checks, the Coming up plan, your weekly run and the monthly checks, on your own dates, each opening its guide',
+      'Every item under Needs you now opens the guide that explains it',
+    ],
+    features: ['guided-setup', 'autopilot'],
+  },
+  {
+    date: '2026-10-20',
+    title: 'Your keywords, your week: writing only for keywords you choose',
+    summary:
+      'Alaventra now writes pages automatically only for the keywords you chose, and you decide how much else it does on its own. Each website also gets a week of its own: it starts the day you finish setup, and two days before every week\'s work you see the plan in "Coming up".',
+    highlights: [
+      'Your week starts the day you sign up: the first checks run as soon as setup is finished, then every 7 days on that same weekday, from 06:00 in your website\'s time zone. You can move the weekday in the website\'s settings, and monthly work runs in the first weekly cycle on or after the day of the month the website started',
+      'One question during setup: "What would a customer type into Google to find a business like yours?" Type your own ideas, or pick from suggestions that show your chances ("Good chance", "Takes a few months", "Hard for your website now"), the searches a month, why we suggest it, the plan and about how many credits a page. The research behind them is free once per website, at setup',
+      'Choose now or later: until you choose a keyword, tracking, AI visibility, backlinks and the audit run and nothing is written',
+      'Three levels for "How much should we do on our own?": Only my keywords; My keywords and keep my pages healthy (the default, which also refreshes your existing pages on your topics when they lose visitors or sit close to page one); and Full autopilot, which also takes on new topics and new keywords',
+      'On Full autopilot every new keyword is announced two days before it starts, with Approve now, Pick a different one and Skip',
+      '"Coming up" two days before every weekly cycle: each page that will be written, why and its credits, with Skip on automatic items and Approve or Skip on items waiting for your OK. On the pipeline page and by e-mail once a week',
+      '"Not what I wanted" on every written page: if two of the last five pages the autopilot chose on its own are turned down, it drops back to Only my keywords and tells you',
+      'Answer pages for the questions you lose in AI answers, rising trends and other new topics are now suggestions with their credits and a "Write it" button, unless you choose Full autopilot',
+      'The daily AI Pulse runs every day except your website\'s weekday, when the full AI visibility check runs',
+    ],
+    features: ['autopilot', 'keyword-research', 'keyword-ladders', 'ai-growth'],
+  },
+  {
+    date: '2026-10-20',
+    title: 'Invoices by e-mail',
+    summary:
+      'When your payment for a credit pack is confirmed, the invoice now arrives by e-mail as a PDF, and every invoice stays on your Credits page to download again.',
+    highlights: [
+      'A numbered invoice for every credit purchase, marked paid, with the credits, the price and how long the credits last',
+      'E-mailed to every owner and admin of the company the moment the credits are added, with the PDF attached and the new balance',
+      'An Invoices section on the Credits page lists them all, each with a PDF download',
+      'Credits added for you without a payment, such as credits given back for work that did not go as it should, are announced by e-mail too',
+    ],
+    features: [],
+    labels: ['Billing'],
+  },
+  {
     date: '2026-10-19',
     title: 'Plan prices',
     summary:
@@ -180,10 +239,10 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-16',
     title: 'A missed schedule still runs',
     summary:
-      'Every automatic run (the Monday checks, the writing, the monthly audit) used to be lost if the system was down at the moment it was due. Now a run that did not fire starts once the system is back, and says so.',
+      'Every automatic run (the weekly checks, the writing, the monthly audit) used to be lost if the system was down at the moment it was due. Now a run that did not fire starts once the system is back, and says so.',
     highlights: [
       'Every quarter of an hour Alaventra looks for runs that were due and did not start, and starts each one once',
-      'A Monday run missed on Monday is still that week\'s run later in the week',
+      'A weekly run missed on its day is still that week\'s run later in the week',
       'A run that started late opens its report with "Ran late" and the time it was due, so a late figure is never taken for an on-time one',
     ],
     features: ['autopilot'],
@@ -298,7 +357,7 @@ export const changelog: ChangelogEntry[] = [
     summary:
       'Plans are simpler and cost less: Starter at $39 a month for one website and a page a week, Growth at $129 for the whole engine on up to three websites. And for teams with nobody to do the hands-on work, three done-for-you packages sit alongside them.',
     highlights: [
-      'Starter $39 a month: one website, research, a page a week written and checked, monthly audits, tracking and the Monday report',
+      'Starter $39 a month: one website, research, a page a week written and checked, monthly audits, tracking and the weekly report',
       'Growth $129 a month: up to three websites, the autopilot pipeline, AI search visibility with the daily pulse, backlinks and link building',
       'Setup done for you: we connect Search Console and Analytics, fill in your profile and style guide from one call, and run the first audit and ladder',
       'We publish your pages: WordPress, Shopify, Webflow, Squarespace, Ghost, a headless CMS, or a pull request for a React or Next.js codebase',
@@ -574,7 +633,7 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-11',
     title: 'Link building: pitches from your own mailbox, replies read for you',
     summary:
-      'Alaventra now helps you get links as well as list them. Every Monday it finds the openings, checks each one, finds a contact on the site\'s own domain and drafts a short sequence that points at the right page of yours, and once you approve it, it goes out from your own mailbox.',
+      'Alaventra now helps you get links as well as list them. Every week it finds the openings, checks each one, finds a contact on the site\'s own domain and drafts a short sequence that points at the right page of yours, and once you approve it, it goes out from your own mailbox.',
     highlights: [
       'New openings every week: journalist requests, resource pages, broken links, your competitors\' broken links, your own old addresses that now fail (with the redirect to add) and a checklist of the directories worth being on',
       'Every prospect checked on its own page; competitors, link sellers, government portals and off-topic sites set aside with the reason',
@@ -600,7 +659,7 @@ export const changelog: ChangelogEntry[] = [
     date: '2026-10-10',
     title: 'AI growth: the weekly work that gets you named in AI answers',
     summary:
-      'AI visibility told you where you stand; AI growth acts on it every Monday: getting new pages indexed, making key pages easy for AI assistants to quote, writing the answers you lose and turning the pages AI cites without you into pitches.',
+      'AI visibility told you where you stand; AI growth acts on it every week: getting new pages indexed, making key pages easy for AI assistants to quote, writing the answers you lose and turning the pages AI cites without you into pitches.',
     highlights: [
       'New and updated pages sent to Bing Webmaster Tools every week, and through IndexNow once your key file is up',
       'An AI-readiness score for your key pages: the answer first, a visible update date, question headings, sourced figures and text that is there before any script runs',

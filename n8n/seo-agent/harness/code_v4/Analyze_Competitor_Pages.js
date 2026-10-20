@@ -100,6 +100,21 @@ const RT = (() => {
   };
   /** the same, for a path that makes ONE call and has one retry node (the SERP / facts / keyword-data gates). */
   const one = (first, retry, o) => stats([first], o, retry == null ? [] : [{ retry_of: 0 }], retry == null ? [] : [retry]);
+  /** F-SERP (2026-10-20): ONE call sent up to N times in a row (the head keyword's results page: first, retry, lighter last try).
+   *  `attempts` is [first, second, third ...] in the order they were sent, `null` for an attempt that never ran. The answer is the
+   *  first attempt that answered (later attempts only run when the earlier ones failed); when none did, the FIRST failure's reason is
+   *  kept, as `one` keeps it. `attempts` / `answered_on` say how many were sent and which one answered (1-based, 0 = none). */
+  const chain = (attempts, o) => {
+    const made = (attempts || []).map((a, k) => ({ a, k })).filter(x => x.a != null);
+    if (!made.length) return { asked: 1, answered: 0, failed: 1, failed_first: 1, retried: 0, retry_answered: 0, reasons: ['no answer'], answers: [{}], attempts: 0, answered_on: 0, reasons_by_attempt: [] };
+    const verdicts = made.map(x => ({ k: x.k, a: x.a, v: check(x.a, o) }));
+    const hit = verdicts.find(x => x.v.ok);
+    const firstV = verdicts[0];
+    return { asked: 1, answered: hit ? 1 : 0, failed: hit ? 0 : 1, failed_first: firstV.v.ok ? 0 : 1, retried: made.length - 1,
+      retry_answered: hit && hit !== firstV ? 1 : 0, reasons: hit ? [] : [firstV.v.why || 'no answer'], answers: [hit ? hit.a : firstV.a],
+      attempts: made.length, answered_on: hit ? hit.k + 1 : 0, reasons_by_attempt: verdicts.map(x => x.v.ok ? '' : x.v.why),
+      retryable: hit ? false : verdicts[verdicts.length - 1].v.retryable };
+  };
   /** one sentence about those numbers, in the words the reports already use. */
   const note = (s, what) => {
     const st = s || {}; const thing = S(what) || 'request';
@@ -107,7 +122,8 @@ const RT = (() => {
     if (!st.asked) return '';
     if (!st.failed && !st.retried) return '';
     if (!st.failed) return st.failed_first + ' of ' + st.asked + ' ' + plural(st.asked) + ' failed and ' + (st.retry_answered === 1 ? 'the retry answered' : 'all ' + st.retry_answered + ' answered when they were sent again') + '.';
-    return st.failed + ' of ' + st.asked + ' ' + plural(st.asked) + ' could not be checked' + (st.retried ? ' (sent again once, ' + st.retry_answered + ' answered)' : ' (no answer)')
+    const again = (st.attempts > 2 && st.asked === 1) ? 'sent ' + st.attempts + ' times' : 'sent again once';   // F-SERP: one call sent three times is not "sent again once"
+    return st.failed + ' of ' + st.asked + ' ' + plural(st.asked) + ' could not be checked' + (st.retried ? ' (' + again + ', ' + st.retry_answered + ' answered)' : ' (no answer)')
       + (st.reasons.length ? ': ' + st.reasons.join('; ') : '') + '. Only the ' + st.answered + ' that answered are counted below.';
   };
   /** the evidence block a score may be refused on: `unavailable` means nobody saw it, twice. */
@@ -148,7 +164,7 @@ const RT = (() => {
       why: 'the earlier figure came from ' + name(b) + ' and this one from ' + name(a) + ', which do not measure the same thing, so ' + what + ' are not compared' };
     return { comparable: true, why: '', kind: a, kind_before: b };
   };
-  return { dfs, google, check, failures, plan, merge, stats, one, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT, NO_RESULTS };
+  return { dfs, google, check, failures, plan, merge, stats, one, chain, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT, NO_RESULTS };
 })();
 // ---- results-page observations (2026-10-11, FIX_PLAN D26): an AI Overview (and every other SERP feature) is what ONE Google query showed at
 // ONE moment — live, the ladder plan said "no AI Overview" and the page run minutes later "cites 11 domains". Inlined by the build
@@ -290,12 +306,15 @@ let serpStats = { asked: 1, answered: 0, failed: 1, failed_first: 1, retried: 0,
 try {
   const first0 = (() => { try { return $('SERP Top 10').first().json; } catch (e) { return null; } })();
   const retry0 = (() => { try { return $('SERP Top 10 (Retry)').first().json; } catch (e) { return null; } })();
-  serpStats = RT.one(first0, retry0);
+  // F-SERP (2026-10-20): the third attempt is a lighter request (top 10, no AI Overview), sent only when the first two failed
+  const light0 = (() => { try { return $('SERP Top 10 (Light Retry)').first().json; } catch (e) { return null; } })();
+  serpStats = RT.chain([first0, retry0, light0]);
   const sj = serpStats.answers[0] || {}; const t0 = (Array.isArray(sj.tasks) ? sj.tasks[0] : null) || {};
   if (serpStats.failed) serpError = String(serpStats.reasons[0] || 'no answer').slice(0, 160);
   const res = (t0.result || [])[0] || {}; serpItems = res.items || []; seCount = res.se_results_count ?? null; seenAt = serpSeenAt(sj);
 } catch (e) { serpItems = []; serpError = 'no answer'; }
-const serp_evidence = RT.evidence('the live Google results for this keyword', serpStats, { unit: 'search' });
+const serp_evidence = RT.evidence('the live Google results for this keyword', serpStats, { unit: 'search', attempts: serpStats.attempts || 1,
+  answered_on: serpStats.answered_on || 0, light: serpStats.answered_on === 3 });   // F-SERP: which of the three attempts answered
 const norm = (d) => String(d || '').toLowerCase().replace(/^www\./, '');
 const paa = [], related = [], forum = []; let featured = null, aio = null; const featureTypes = new Set();
 for (const it of serpItems) {
@@ -315,17 +334,30 @@ const serp_features = { se_results_count: seCount, checked_at: seenAt, people_al
   featured_snippet: featured, ai_overview: aio || { present: false, text: '', cited_domains: [], seen_at: seenAt }, features_present: [...featureTypes].filter(t => t !== 'organic'),
   video_results: featureTypes.has('video'), shopping_results: featureTypes.has('shopping') || featureTypes.has('popular_products'), local_pack: featureTypes.has('local_pack') || featureTypes.has('map') };
 if (serpError) Object.assign(serp_features, { unavailable: true, error: serpError, ai_overview: { present: null, text: '', cited_domains: [], seen_at: null } });
-Object.assign(serp_features, { attempts: 1 + (serpStats.retried || 0), retried: !!serpStats.retried });
-const aioText = aioObserved([{ seen: serp_features.ai_overview.present, at: seenAt, source: 'live Google results' }]).text;
+Object.assign(serp_features, { attempts: serpStats.attempts || 1 + (serpStats.retried || 0), retried: !!serpStats.retried, answered_on: serpStats.answered_on || 0 });
+if (serpError) serp_features.retryable = serpStats.retryable !== false;   // F-SERP: a provider outage, not a wrong request
+// F-SERP (2026-10-20): an answer from the lighter third attempt read the first page only and did not ask for the AI Overview.
+// What it did not ask for is "not read on this attempt" (present: null), never "none"; what is on the first page was read.
+const SERP_LIGHT = !serpError && serpStats.answered_on === 3;
+if (SERP_LIGHT) {
+  const lightWhy = 'not read on this attempt: Google\'s results were read on a third, lighter request (the top 10 only, without the AI Overview) because the full request failed twice';
+  serp_features.read_depth = 10;
+  serp_features.light_read = { attempt: 3, depth: 10, ai_overview_requested: false, why: lightWhy,
+    not_read: aio ? ['the results below position 10'] : ['the AI Overview', 'the results below position 10'] };
+  if (!aio) serp_features.ai_overview = { present: null, not_read: true, why: lightWhy, text: '', cited_domains: [], seen_at: null };
+}
+let aioText = aioObserved([{ seen: serp_features.ai_overview.present, at: seenAt, source: 'live Google results' }]).text;
+if (serp_features.ai_overview.not_read) aioText = 'not read on this attempt (the lighter third request did not ask for it), so whether one appears is unknown';
 
 const digest = competitors.map(c => `\n=== COMPETITOR #${c.rank}: ${c.domain} ===\nURL: ${c.url}\nTitle: ${c.title}\nMeta Description: ${c.snippet}\nUseful Word Count: ${c.word_count} · Named author: ${c.has_author ? 'yes' : 'no'} · Dated: ${c.has_date ? 'yes' : 'no'} · Lists: ${c.lists} · Tables: ${c.tables}\nHeadings:\n${c.headings.join('\n')}\n\nContent Excerpt:\n${c.content}\n`).join('\n');
-const serpDigest = serpError ? 'LIVE GOOGLE RESULTS: unavailable for this run (the search data provider failed' + (serpStats.retried ? ', twice: the search was sent again once and failed again' : '') + ': ' + serpError + '). There is no information about the pages in the top 10, a featured snippet, People Also Ask or an AI Overview for this query: do not state or assume whether any of them appear, and say that the results page could not be checked.' : [
+const serpDigest = serpError ? 'LIVE GOOGLE RESULTS: unavailable for this run (the search data provider failed' + (serpStats.retried ? (serpStats.attempts > 2 ? ', ' + serpStats.attempts + ' times: the search was sent again twice, the last time as a lighter request, and failed every time' : ', twice: the search was sent again once and failed again') : '') + ': ' + serpError + '). There is no information about the pages in the top 10, a featured snippet, People Also Ask or an AI Overview for this query: do not state or assume whether any of them appear, and say that the results page could not be checked.' : [
   featured ? `FEATURED SNIPPET (held by ${featured.domain}): "${featured.text}"` : 'FEATURED SNIPPET: none',
   'AI OVERVIEW: ' + aioText + (serp_features.ai_overview.present ? `. In that check it cited ${serp_features.ai_overview.cited_domains.join(', ') || 'unknown sources'}. Summary: ${serp_features.ai_overview.text.slice(0, 500)}` : '') + ' Do not write "there is no AI Overview" or "an AI Overview takes the clicks" as a fact: say what was seen and when.',
   paa.length ? 'PEOPLE ALSO ASK:\n- ' + paa.slice(0, 12).join('\n- ') : 'PEOPLE ALSO ASK: none',
   related.length ? 'RELATED SEARCHES: ' + related.slice(0, 10).join(' | ') : '',
   forum.length ? 'FORUM THREADS ON PAGE 1: ' + forum.map(f => f.title + ' (' + f.source + ')').join(' | ') : '',
-  'OTHER SERP FEATURES: ' + (serp_features.features_present.join(', ') || 'none')
+  'OTHER SERP FEATURES: ' + (serp_features.features_present.join(', ') || 'none'),
+  SERP_LIGHT ? 'RESULTS READ: the top 10 only, on a lighter third request (the full request failed twice). The AI Overview was not requested: do not state or assume whether one appears, and do not describe results below position 10.' : ''
 ].filter(Boolean).join('\n');
 const termDigest = term_model.slice(0, 30).map(t => `${t.term} (${t.docs}/${competitors.length} pages, ~${t.avg_count}x)`).join('; ');
 

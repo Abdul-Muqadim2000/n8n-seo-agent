@@ -277,7 +277,7 @@ const RAD = (() => {
         + (far.length ? '; ' + far.length + ' are out of reach for now (' + name(far, 2) + (far.length > 2 ? ' …' : '') + ')' : '') + '.';
     const note = reach == null
       ? 'Your reach could not be measured this run, so these verdicts use the smallest default (' + r + '): treat them as provisional.'
-      : 'Your reach is the difficulty your site already wins — the 75th percentile of the difficulty of the keywords it ranks in the top 10 for'
+      : 'Your reach is the difficulty your site already wins: the 75th percentile of the difficulty of the keywords it ranks in the top 10 for'
         + (x.reach_method === 'size' ? ' (measured from the size of your ranking profile this time)' : x.reach_method === 'default' ? ' (no ranking data: the default for a new site)' : '')
         + '. A stretch topic is not a no: it is the one to come back to once the topics within reach are won and links have been earned.';
     return { reach, reach_method: S(x.reach_method), measured: reach != null, topics, in_reach: inR, stretch: st, far, summary, note, checked_at: S(x.checked_at) };
@@ -288,7 +288,7 @@ const RAD = (() => {
       .filter(o => o.common.length).sort((a, b) => b.common.length - a.common.length);
     return all.length ? all[0].x : null; };
   /** one topic's verdict as a sentence (a plan's notes, a tooltip): "A stretch — … (difficulty 55 against your reach 28; …)" */
-  const line = (t) => !t ? '' : LABEL[t.verdict] + ' — ' + t.reason + ' (' + (t.evidence || []).join('; ') + ')';
+  const line = (t) => !t ? '' : LABEL[t.verdict] + ': ' + t.reason + ' (' + (t.evidence || []).join('; ') + ')';
   /** the rows a report prints, in reading order: within reach, then the stretches, then what is out of reach for now */
   const rows = (radius) => { const rad = radius || {}; return [...(rad.in_reach || []), ...(rad.stretch || []), ...(rad.far || [])]; };
   /**
@@ -309,7 +309,7 @@ const RAD = (() => {
     const onSubject = !subject.length || common.some(t => subject.includes(t));
     if (common.length >= need && onSubject) return { ok: true, shared: common, need, head_words: h, subject, reason: '' };
     if (common.length >= need) return { ok: false, shared: common, need, head_words: h, subject,
-      reason: 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" — the kind of service or the place, not the subject (' + q(subject) + ')' };
+      reason: 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '", which is the kind of service or the place, not the subject (' + q(subject) + ')' };
     return { ok: false, shared: common, need, head_words: h, subject,
       reason: common.length
         ? 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" (' + common.length + ' of the ' + h.length + ' words that matter, ' + need + ' needed: ' + q(h) + ')'
@@ -383,12 +383,36 @@ const FIT_COMMON = new Set(['management', 'manager', 'document', 'documents', 'p
   'unified', 'professional', 'premium', 'standard', 'basic', 'core', 'general', 'public', 'private', 'social', 'mobile', 'facility', 'facilities', 'experience', 'insights', 'transformation',
   'innovation', 'value', 'impact', 'productivity', 'efficiency', 'assets', 'asset', 'people', 'team', 'teams', 'growth', 'performance']);
 const FIT_COMPARE = /\b(vs|versus|compare|comparison|alternatives?|instead of|better than|difference between|against)\b/;
-const fitTokens = (s) => String(s || '').toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9.]+/).map(t => t.replace(/^\.+|\.+$/g, '')).filter(t => t.length > 1 && !FIT_STOP.has(t));
+// F-KW (2026-10-20, finding 8): letters and digits of EVERY script, not a-z only. An Arabic keyword ("برنامج محاسبة في الإمارات") was
+// no tokens at all, so a ladder the client chose in Arabic was set aside as `empty` and every Arabic item key was ''. NFKC folds
+// full-width and compatibility forms, toLowerCase (never the locale form) folds case; marks (\p{M}) stay inside their word.
+const FIT_SPLIT = /[^\p{L}\p{M}\p{N}.]+/u, FIT_SPLIT_WORDS = /[^\p{L}\p{M}\p{N}]+/u;
+const fitLow = (s) => String(s || '').normalize('NFKC').toLowerCase();
+const fitTokens = (s) => fitLow(s).replace(/[’']/g, '').split(FIT_SPLIT).map(t => t.replace(/^\.+|\.+$/g, '')).filter(t => t.length > 1 && !FIT_STOP.has(t));
 const fitHost = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^(www|m|app|en|ar)\./, '');
 const fitGovHost = (d) => { const h = fitHost(d); return /(^|\.)gov(\.[a-z]{2,3})?$/.test(h) || /(^|\.)(gouv|gob|go|gv)\.[a-z]{2}$/.test(h) || /(^|\.)mil(\.[a-z]{2})?$/.test(h) || /(^|\.)(u\.ae|government\.ae|dubai\.ae|abudhabi\.ae|sharjah\.ae|ajman\.ae|rak\.ae|tax\.gov\.ae|europa\.eu)$/.test(h); };
 // the brand label(s) of a domain: "facts.ae" -> ["facts"], "northwind-erp.com" -> ["northwind"] (generic / short parts dropped), "e-invoicing.ae" -> []
 const fitLabels = (domain, protect) => { const h = fitHost(domain); if (!h) return []; const first = h.split('.')[0]; const parts = [...new Set([first, ...first.split(/[-_]/)])];
   return parts.map(p => p.replace(/[^a-z0-9]/g, '')).filter(p => p.length >= FIT_CFG.min_label && !FIT_GENERIC.has(p) && !FIT_GEO.has(p) && !(protect || []).includes(p)); };
+// F-KW (2026-10-20, finding 5): a label is the website's own BRAND only when it is distinctive. A label that splits entirely into category,
+// generic or place words, or into the words of the keyword or of what the client protected (its ladder heads, its services), describes what
+// the site sells ("erp-software.ae", "crmexperts.ae", "accountingsoftware.ae", "interiordesign-dubai.com"); it is not a name, and a keyword
+// built from those words is the client's own subject. "techand" does not split ("tech" + the stop word "and" is not allowed), so "techand crm"
+// stays the site's own brand. The label itself is never part of its own vocabulary, so "crmexperts reviews" (one word) is still the brand.
+const FIT_CATEGORY = new Set(['expert', 'experts', 'specialist', 'specialists', 'consultant', 'advisor', 'advisors', 'advisory', 'agency', 'agencies', 'design', 'designs', 'designer', 'designers',
+  'interior', 'interiors', 'outsourcing', 'marketing', 'seo', 'legal', 'law', 'lawyer', 'lawyers', 'clinic', 'clinics', 'dental', 'medical', 'health', 'care', 'realty', 'property', 'properties', 'homes',
+  'travel', 'tours', 'logistics', 'cargo', 'shipping', 'trading', 'auto', 'autos', 'cars', 'motors', 'insurance', 'printing', 'events', 'cleaning', 'maintenance', 'security', 'training', 'courses',
+  'implementation', 'integration', 'migration', 'support', 'hosting', 'it', 'hr', 'audit', 'auditing', 'bookkeeping', 'consult', 'advice', 'pros', 'works', 'labs', 'studio', 'studios',
+  'center', 'centre', 'source', 'point', 'zone', 'link', 'links', 'line', 'now', 'hq', 'co', 'inc', 'llc', 'ltd', 'fz', 'fzco', 'fze', 'dmcc']);
+const fitWordBreak = (label, vocab) => { const n = label.length; const ok = new Array(n + 1).fill(false); ok[0] = true;
+  for (let i = 1; i <= n; i++) for (let j = Math.max(0, i - 30); j < i; j++) if (ok[j] && vocab.has(label.slice(j, i))) { ok[i] = true; break; }
+  return ok[n]; };
+const fitOwnLabels = (domain, toks, protect) => fitLabels(domain, []).filter(l => {
+  const words = [...FIT_GENERIC, ...FIT_GEO, ...FIT_CATEGORY, ...(toks || []), ...(protect || [])].map(w => String(w || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter(w => w.length >= 2 && w !== l && !FIT_STOP.has(w));
+  const vocab = new Set(); for (const w of words) { vocab.add(w); vocab.add(w + 's'); if (w.length > 3 && w.endsWith('s')) vocab.add(w.slice(0, -1)); }
+  vocab.delete(l);
+  return !fitWordBreak(l, vocab); });
 // the learned "name -> domain" map from seo_cache rows (key ai_brands:<site_id>), any shape of row list
 const fitLearnedBrands = (rows) => { const out = {}; for (const r of (rows || [])) { const j = r && r.json ? r.json : r; if (!j || typeof j !== 'object' || !/^ai_brands:/.test(String(j.key || ''))) continue; let v = j.value; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } } if (v && typeof v === 'object') for (const [name, d] of Object.entries(v)) if (name && d) out[String(name)] = String(d); } return out; };
 // the organic domains of a DataForSEO SERP answer, in rank order (for ctx.serp)
@@ -409,12 +433,12 @@ const FIT_WIDE = new Set(['business', 'businesses', 'company', 'companies', 'fir
   'consultants', 'consultancy', 'partners', 'partner', 'network', 'info', 'guide', 'guides', 'blog', 'list', 'directory', 'review', 'reviews', 'compare', 'comparison', 'pro', 'plus', 'one', 'first',
   'get', 'go', 'easy', 'home', 'world', 'city', 'market', 'media', 'shop', 'store', 'gulf', 'arab', 'arabia', 'emirates', 'google', 'microsoft', 'amazon', 'apple']);
 const fitStem = (w) => w.length > 5 ? w.replace(/(ingly|ings|ing|ments|ment|ations|ation|ions|ion|ies|ers|er|ed|es|s|e)$/, '') : w;   // the outreach kit's stem: invoice / invoices / invoicing -> invoic
-const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).toLowerCase()
-  .split(/[^a-z0-9]+/).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
+const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).normalize('NFKC').toLowerCase()
+  .split(FIT_SPLIT_WORDS).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
 // B-3: the topics as PHRASES (one service name, one configured keyword, one description), so a common word can be judged against the name
 // it came from. `dist` = the phrase's own distinctive words (stemmed); prose (more than 6 of them) never vouches for a common word.
 const fitTopicPhrases = (topics) => (Array.isArray(topics) ? topics.filter(Boolean).map(String) : [String(topics || '')])
-  .map(t => { const w = t.toLowerCase().split(/[^a-z0-9]+/).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
+  .map(t => { const w = fitLow(t).split(FIT_SPLIT_WORDS).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
     return { dist: [...new Set(w.filter(x => !FIT_GENERIC.has(x)).map(fitStem))], words: [...new Set(w.map(fitStem))] }; })
   .filter(p => p.dist.length).map(p => ({ ...p, prose: p.dist.length > 6 }));
 function fitTopic(keyword, topics, ctx) {
@@ -427,13 +451,13 @@ function fitTopic(keyword, topics, ctx) {
   // whose services and description are a single line gets no topic refusals at all ("no evidence, no refusal").
   if (T.size < (typeof o.topic_min_words === 'number' ? o.topic_min_words : 12)) return { ok: true, reason: '', detail: T.size ? 'too few topic words on file (' + T.size + ') to judge topic distance' : 'no topics on file, so topic distance was not judged', share: null };
   const toks = fitTokens(keyword);
-  const own = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t));
+  const own = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t) && !/^\d+$/.test(t));   // F-KW: a year or a number ("2026") is neutral, like a place
   const known = [...T];
   const stemHit = (s, x) => x === s || (x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0));
   const matches = (t) => { const s = fitStem(t); return T.has(s) || known.some(x => stemHit(s, x)); };
   // B-3: a common word (FIT_COMMON) is on topic only through a service NAME the keyword carries whole, or two words of (prose never vouches)
   // ("business central partner uae" carries two words of "Dynamics 365 Business Central"; "intelligent software solutions" one of "Intelligent Document Processing")
-  const ownStems = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t)).map(fitStem);
+  const ownStems = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t) && !/^\d+$/.test(t)).map(fitStem);
   const allStems = toks.filter(t => t.length > 2 && !FIT_GEO.has(t)).map(fitStem);
   const viaName = (t) => { const s = fitStem(t); return PH.some(ph => !ph.prose && ph.dist.some(x => stemHit(s, x))
     && (ph.dist.every(x => ownStems.some(k => stemHit(k, x))) || ph.words.filter(x => allStems.some(k => stemHit(k, x))).length >= 2)); };
@@ -449,8 +473,51 @@ function fitTopic(keyword, topics, ctx) {
   const hits = own.filter(matchOwn);
   const share = Math.round(100 * hits.length / own.length) / 100;
   if (share < bar) return { ok: false, reason: 'off topic', detail: Math.round(share * 100) + '% of its own words match ' + label + ' (' + Math.round(bar * 100) + '% is the bar): '
-    + own.filter(t => hits.indexOf(t) < 0).slice(0, 4).join(', ') + ' — add it to your services if you do sell it', share };
+    + own.filter(t => hits.indexOf(t) < 0).slice(0, 4).join(', ') + '. Add it to your services if you do sell it.', share };
   return { ok: true, reason: '', detail: Math.round(share * 100) + '% of its own words match ' + label, share };
+}
+// ---- F-KW (2026-10-20, findings 1 and 2): POSITIVE topic evidence, for the decisions that write on their own ----
+// fitTopic answers "may we refuse it?" and, with fewer than 12 topic words on file, refuses nothing ("no evidence, no refusal"). That is the
+// right rule for a refusal and the wrong one for writing a page on our own: a site that lists two services passed every keyword. fitEvidence
+// answers "is there evidence it is the client's subject?": `in` = at least the topic bar of the keyword's own words is in the topics given (any
+// number of topic words); `out` = with 12+ topic words on file the keyword misses the bar (a refusal); `unknown` = too little on file to say,
+// which a caller must treat as NOT in topic (a suggestion at most) and say so in plain words.
+// F-REH (2026-10-20, real-credit rehearsal): a DECLARED service's product-category word is positive evidence. "crm service provider uae" for a
+// client who listed "CRM implementation" came back "not enough information": `crm` is a category word (FIT_GENERIC), which the share rule
+// treats as neutral, so the keyword was judged on "provider" alone. When the client named the category in a service (ctx.services = the
+// services they DECLARED, never the crawl's guesses), that word counts as one of the keyword's own words AND as a hit, at any number of topic
+// words on file. Only product categories qualify: `ai`, `software`, `cloud` and the wide words never do ("character ai" stays off topic for an
+// "AI consulting" site); a FIT_COMMON word ("sales", "central") still needs the whole service name, as in fitTopic.
+const FIT_SERVICE_CATS = new Set(['erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll']);
+const fitServiceAnchors = (keyword, services) => {
+  const svc = new Set((Array.isArray(services) ? services : [services]).filter(Boolean).flatMap(x => fitTokens(String(x))).filter(t => FIT_SERVICE_CATS.has(t)).map(fitStem));
+  if (!svc.size) return [];
+  return [...new Set(fitTokens(keyword).filter(t => FIT_SERVICE_CATS.has(t) && svc.has(fitStem(t))))];
+};
+function fitEvidence(keyword, topics, ctx) {
+  const o = ctx || {};
+  const T = fitTopicWords(topics);
+  const anchors = fitServiceAnchors(keyword, o.services || []);
+  const t = T.size ? fitTopic(keyword, topics, { ...o, topic_min_words: 1 }) : { ok: false, share: null, detail: '' };
+  if (t.ok && t.share != null) return { verdict: 'in', share: t.share, words: T.size, detail: t.detail, basis: 'topics' };
+  if (anchors.length) {
+    // the share again, with the declared category word counted as the keyword's own and as matched
+    const toks = fitTokens(keyword);
+    const own = toks.filter(x => x.length > 2 && !FIT_GEO.has(x) && !FIT_GENERIC.has(x) && !/^\d+$/.test(x));
+    const PH = fitTopicPhrases(topics), known = [...T];
+    const stemHit = (s, x) => x === s || (x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0));
+    const ownStems = own.map(fitStem), allStems = toks.filter(x => x.length > 2 && !FIT_GEO.has(x)).map(fitStem);
+    const viaName = (w) => { const s = fitStem(w); return PH.some(ph => !ph.prose && ph.dist.some(x => stemHit(s, x)) && (ph.dist.every(x => ownStems.some(k => stemHit(k, x))) || ph.words.filter(x => allStems.some(k => stemHit(k, x))).length >= 2)); };
+    const hit = (w) => FIT_COMMON.has(w) ? viaName(w) : (T.has(fitStem(w)) || known.some(x => stemHit(fitStem(w), x)));
+    const hits = own.filter(hit).length + anchors.length, all = own.length + anchors.length;
+    const share = Math.round(100 * hits / all) / 100;
+    const bar = typeof o.topic_bar === 'number' ? o.topic_bar : FIT_TOPIC_BAR;
+    if (share >= bar) return { verdict: 'in', share, words: T.size, basis: 'declared service', anchors,
+      detail: '"' + anchors.join('", "') + '" is one of the services you listed' + (own.length ? ' (' + Math.round(share * 100) + '% of its own words match)' : '') };
+  }
+  if (!T.size) return { verdict: 'unknown', share: null, words: 0, detail: 'nothing is on file yet about what this website sells or which keywords you chose' };
+  if (T.size >= 12) return { verdict: 'out', share: t.share == null ? null : t.share, words: T.size, detail: t.detail };
+  return { verdict: 'unknown', share: t.share == null ? null : t.share, words: T.size, detail: 'too little is on file about what this website sells to tell whether this keyword is part of it' };
 }
 // ctx: { intent, own_domain, competitors: [domains, declared], serp_domains: [domains on the results page / auto-detected rivals], brands: { name: domain } (learned),
 //       serp: [this keyword's own top domains, in rank order] (optional), protect: [words of the head term / seeds / services], relevance: fn (G19 hook) }
@@ -463,7 +530,9 @@ function fitGate(keyword, ctx) {
   const has = (re) => re.test(' ' + kw + ' ');
   const contentWord = has(FIT_CONTENT), partnerWord = has(FIT_PARTNER), compareWord = has(FIT_COMPARE), portalWord = has(FIT_PORTAL);
   // 1. the website itself
-  for (const l of fitLabels(ctx.own_domain, [])) if (toks.includes(l) || squashed.includes(l)) return { ok: false, reason: 'own brand', detail: 'names the website itself (' + l + ')' };
+  // F-KW (2026-10-20, finding 5): only a DISTINCTIVE label is a brand. On an exact-match domain the label is made of the very words the client
+  //    sells ("erp-software.ae" -> "erpsoftware"), and "erp software uae" was refused as the site's own brand (fitOwnLabels above).
+  for (const l of fitOwnLabels(ctx.own_domain, toks, protect)) if (toks.includes(l) || squashed.includes(l)) return { ok: false, reason: 'own brand', detail: 'names the website itself (' + l + ')' };
   // 2. the search data says navigational
   if (String(ctx.intent || '').toLowerCase() === 'navigational') return { ok: false, reason: 'navigational', detail: 'the search data classifies it as navigational (people look for one particular website)' };
   // 3. a public body or an identity document: "ministry of finance", "federal tax authority" (no content / buying word), "fta", "emaratax uae",
@@ -544,10 +613,12 @@ const fitStored = (row, ctx) => {
   const g = fitGate(kw, ctx || {});
   if (g.ok) return { ok: true, live, flagged: false, reason: '', detail: '', note: '' };
   const why = '"' + kw + '" is not a search this website should target: ' + g.detail + ' (' + g.reason + ')';
+  // F-KW (2026-10-20, finding 10): plain sentences, and no claim about WHEN the row was planned: a row written after the gate existed (its
+  // results page changed, a competitor was declared later) is set aside by the same rule, and "planned before this rule existed" was false for it
   if (live) return { ok: true, live: true, flagged: true, reason: g.reason, detail: g.detail,
-    note: why + ' — its page is already written, so it stays tracked; decide whether to keep it' };
+    note: why + '. Its page is already written, so it stays tracked; decide whether to keep it.' };
   return { ok: false, live: false, flagged: true, reason: g.reason, detail: g.detail,
-    note: why + ' — it was planned before this rule existed, so it is set aside instead of written' };
+    note: why + '. It is set aside, so no page is written for it.' };
 };
 // ---- B-G1 / B-G2 / B-G3 (2026-10-15, FIX_PLAN §3.16; INVARIANTS rule 2): the READ path, written once ----
 // R16 put `fitStored` on two read paths — the Rank Tracker and the Content Cadence — and wrote the loop around it twice. Three more
@@ -608,9 +679,9 @@ const FITR = {
     const a = (set_aside || []).filter(x => x && x.dropped);
     if (!a.length) return '';
     return a.length + ' stored keyword' + (a.length === 1 ? ' was' : 's were') + ' set aside, so ' + (a.length === 1 ? 'it is' : 'they are')
-      + ' not ' + String(what || 'used') + ': ' + a.slice(0, 6).map(x => '"' + x.keyword + '" — ' + (x.detail || x.reason)).join('; ')
+      + ' not ' + String(what || 'used') + ': ' + a.slice(0, 6).map(x => '"' + x.keyword + '" (' + (x.detail || x.reason) + ')').join('; ')
       + (a.length > 6 ? ' (and ' + (a.length - 6) + ' more)' : '')
-      + '. They were planned before this rule existed; a page that is already written is kept and only flagged.';
+      + '. A page that is already written is kept and only flagged.';
   }
 };
 // ---- the page type, as one of the options the form offers (D10, 2026-10-12; the builders inline this file where a node asks for the PAGE_TYPE kit) ----
@@ -748,7 +819,12 @@ const SM = (() => {
     // P2-2 (2026-10-12): the Site Describer answers with `products_or_services` — reading only `services` left services_json empty on every
     // site, so the brief's facts said `services: []` although the describer had found nine.
     const desc0 = x.description || {};
-    const services = uniq([...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    // keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.2 / §14.1): what the client SAID they sell ("What do you sell?" on Track my site,
+    // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
+    // unchanged and the weekly Site Tracker can never overwrite it
+    const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -766,7 +842,7 @@ const SM = (() => {
 
     return { site_id, domain, canonical_host, host_source, home_url: 'https://' + canonical_host + '/',
       business_name: nameHit.value, name_source: nameHit.source, logo_url: logoHit.value, logo_source: logoHit.source,
-      nap, services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,
+      nap, services, declared_services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,
       model_updated_at: updated_at, sources: { profile: !!prof.site_id || !!prof.business_name, homepage_schema: !!org, gbp: !!(gbp.name || gbp.phone), app: !!(req.business_facts || req.cta || req.business_name), html: !!html } };
   };
 
@@ -870,12 +946,13 @@ const SM = (() => {
   const ageDays = (model) => { const t = Date.parse(S((model || {}).model_updated_at)); return Number.isFinite(t) ? (Date.now() - t) / 864e5 : Infinity; };
   const isFresh = (model, days) => !!(model && S(model.canonical_host) && ageDays(model) < (Number(days) > 0 ? Number(days) : FRESH_DAYS));
   // exactly the seo_sites columns the model owns (plus the two keys), ready to merge into a site row or a cache value
-  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];
+  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at', 'declared_services'];
   const toRow = (model) => { const m = model || {};
     return { site_id: S(m.site_id), domain: S(m.domain), canonical_host: S(m.canonical_host), business_name: S(m.business_name), logo_url: S(m.logo_url),
       nap_json: JSON.stringify(nap(m)), services_json: JSON.stringify(services(m)), nav_pages_json: JSON.stringify((m.nav_pages || []).map(p => ({ url: p.url, title: p.title }))),
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
-      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
+      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at),
+      declared_services: JSON.stringify(Array.isArray(m.declared_services) ? m.declared_services : []) };
   };
   // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
   // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
@@ -1049,7 +1126,7 @@ const KWI = (() => {
       const posTxt = position > 0 ? '#' + (Math.round(position * 10) / 10) : 'unreported';
       const pathTxt = answered_by ? (S(answered_by.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
       // A-22: the second page is named beside Google's own, never instead of it; a page matched by words alone says so
-      const alsoTxt = answered_by && answered_by.also ? ' — ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' matches the words of this search more closely: keep one page for it and link the other to it' : '';
+      const alsoTxt = answered_by && answered_by.also ? '; ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' matches the words of this search more closely: keep one page for it and link the other to it' : '';
       // a listing page (the blog index) is what Google shows; the position is ITS position, and the page about the search is named beside it
       const listPath = answered_by && answered_by.listing ? (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
       const rankTxt = listPath ? 'Google shows ' + listPath + ' (a listing page) at ' + posTxt + ' for it; the page about it is ' + pathTxt + ' (link it from ' + listPath + ')'
@@ -1057,12 +1134,12 @@ const KWI = (() => {
       const basisTxt = answered_by && answered_by.matched_by !== 'search console' && answered_by.matched_by !== 'search console page' && !answered_by.listing ? ' (matched by its words: Search Console names no page of yours for this search)' : '';
       const why = kinds.indexOf('no_page') >= 0 ? 'no page of yours answers this search'
         : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions is about something else: ' + (evidence.h1 ? 'its title and H1 share' : 'its title shares') + ' only '
-          + evidence.have + ' of the ' + evidence.of + ' words of this search (missing: ' + evidence.missing.join(', ') + ') — you rank ' + posTxt + ' with ' + pathTxt
-          + (striking ? ' (striking distance)' : '') + (answered_by.also ? '; ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' is the page about it by its words — make that page the clear answer and link it from ' + pathTxt : '; aim that page at it or give the search its own')
-        : striking ? rankTxt + ' — striking distance: improve that page' + alsoTxt + basisTxt
-        : lowPos ? (listPath ? 'low position: ' + rankTxt : 'low position on ' + pathTxt + ' (you rank ' + posTxt + ' with it)') + ' — improve that page' + alsoTxt + basisTxt
+          + evidence.have + ' of the ' + evidence.of + ' words of this search (missing: ' + evidence.missing.join(', ') + '); you rank ' + posTxt + ' with ' + pathTxt
+          + (striking ? ' (striking distance)' : '') + (answered_by.also ? '; ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' is the page about it by its words, so make that page the clear answer and link it from ' + pathTxt : '; aim that page at it or give the search its own')
+        : striking ? rankTxt + ', striking distance: improve that page' + alsoTxt + basisTxt
+        : lowPos ? (listPath ? 'low position: ' + rankTxt : 'low position on ' + pathTxt + ' (you rank ' + posTxt + ' with it)') + ': improve that page' + alsoTxt + basisTxt
         : 'a page of yours already answers this search (' + pathTxt + (position > 0 ? ', you rank ' + posTxt : '') + ')'
-          + (answered_by && answered_by.listing ? ' — Google currently shows ' + (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' for it' : '') + alsoTxt + basisTxt;
+          + (answered_by && answered_by.listing ? '; Google currently shows ' + (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' for it' : '') + alsoTxt + basisTxt;
       considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
         ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowOnSite ? pageUrl : rowUrl, gsc_page: rowUrl, on_site: rowOnSite, answered_by, kinds, why,
         period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
@@ -1338,7 +1415,7 @@ const KWI = (() => {
 //   keyword not set aside) that still have a planned page to write are active; the rest wait as Queued. `won` is not judged here (no
 //   rank history is read by the ladder mode) - a won ladder with a planned page left is counted, and the result says so in `basis`.
 const WAITING = (() => {
-  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const norm = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim();   // F-KW (2026-10-20): every script, as cycleNorm
   const lc = (v) => String(v == null ? '' : v).toLowerCase().trim();
   const WAITS = new Set(['written', 'not_ready']);
   const LADDER_WRITTEN = new Set(['writing', 'written', 'not_ready']);   // A-20: a ladder row whose page run has started or finished
@@ -1531,6 +1608,42 @@ const OWN = (() => {
     return lines.join('\n');
   };
   return { tokens, relate, ladders, drafts, ladderOf, draftOf, claim, sayOf, distinct, text, HOW, PLACES, ukey };
+})();
+// ---- is the website ready for its first written page? ONE rule for the ladder start, the Content Cadence and the app (P1, 2026-10-20) ----
+// Rehearsal 2026-10-20 (docs/REHEARSAL_2026-10-20.md §4 item 1): a new client launched a ladder with no author profile and no business facts;
+// the first page was written at once (Claude about $1.02, about 62 credits) and Content QA rightly refused it: "11 bracketed field(s) in the
+// byline, the author box and the Person schema still need your details" and claims "nothing on file supports". The owner's decision: the
+// first page waits until the author profile and the business facts are filled in. Inlined by the build (its marker is READINESS in a block comment) into
+// *Ladder Plan* (main workflow) and *Cadence Plan* (Content Cadence); mirrored word for word in app/shared/src/readiness.ts.
+//   * author profile ready = what Content QA needs to put NO bracket in the byline, the author box or the Person schema (Content_QA.js
+//     PROFILE_PH, Blog_Package.js): the author's name (without it 11 fields are brackets) and a bio (without it the author box keeps one),
+//     plus the author's job title, the role the byline and the Person schema name (the owner's minimum: a name and a role).
+//   * business facts ready = facts on file of a reasonable length (FACTS_MIN characters, whitespace collapsed): what the page may claim
+//     about the business, so its own terms, scope and credentials are not marked [Confirm: ...].
+//   of({ profile, facts }) -> { ready, profile_ready, facts_ready, missing: [{ key, label }], missing_text, reason, basis }
+const READY = (() => {
+  const S = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  const FACTS_MIN = 30;
+  const PROFILE_FIELDS = [
+    { key: 'author_name', label: "your author's name" },
+    { key: 'author_job_title', label: "your author's job title" },
+    { key: 'author_bio', label: 'a short author bio' },
+  ];
+  const FACTS = { key: 'business_facts', label: 'your business facts' };
+  const REASON = 'waiting for your author profile and business facts';
+  const listText = (a) => a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+  const of = (o) => {
+    const x = o || {}; const p = (x.profile && typeof x.profile === 'object') ? x.profile : {};
+    const missingProfile = PROFILE_FIELDS.filter(f => !S(p[f.key]));
+    const facts = S(x.facts);
+    const facts_ready = facts.length >= FACTS_MIN;
+    const missing = [...missingProfile.map(f => ({ key: f.key, label: f.label })), ...(facts_ready ? [] : [{ key: FACTS.key, label: FACTS.label }])];
+    const missing_text = listText(missing.map(m => m.label));
+    return { ready: !missing.length, profile_ready: !missingProfile.length, facts_ready, facts_chars: facts.length, facts_min: FACTS_MIN, missing, missing_text,
+      reason: missing.length ? REASON + ' (add ' + missing_text + ')' : '',
+      basis: 'the author profile needs a name, a job title and a bio (the fields the byline, the author box and the Person schema print); the business facts need at least ' + FACTS_MIN + ' characters' };
+  };
+  return { of, FACTS_MIN, PROFILE_FIELDS, REASON };
 })();
 // Ladder mode: applies the AI relevance screen, assigns keywords to rungs by difficulty, builds one page per topic
 // cluster, maps internal links, matches existing pages, estimates the timeline and picks the pages to write now.
@@ -1865,7 +1978,7 @@ const poolRefused = ((pool.research || {}).refused || []).slice();
 let cacheRowsP = []; try { cacheRowsP = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsP = []; }
 const sdP = base.site_description || {};
 const fitCtxP = { own_domain: domain, competitors: (base.competitors || []).map(String), serp_domains: [...new Set((base.competitors_summary || []).map(c => String(c.domain || '')).filter(Boolean))],
-  brands: fitLearnedBrands(cacheRowsP), protect: [head, ...(sdP.products_or_services || []), ...(base.services || []), String(base.business || sdP.business_description || '').slice(0, 400)] };
+  brands: fitLearnedBrands(cacheRowsP), protect: [head, ...(sdP.products_or_services || []), ...(base.services || []), ...(SITE_MODEL ? SM.services(SITE_MODEL) : []), String(base.business || sdP.business_description || '').slice(0, 400)] };   // keyword-first (2026-10-19): the site model's services, the client's declared ones included
 const kws = ((pool.research || {}).candidates || []).filter(k => { const g = fitGate(k.keyword, { ...fitCtxP, intent: (rel.get(k.keyword) || {}).intent || k.intent }); if (!g.ok) poolRefused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return g.ok; }).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
@@ -2082,8 +2195,23 @@ let refusal = null;
 if (dupHead) refusal = { reason: 'duplicate', ladder_id: dupHead.ladder_id, head: dupHead.head,
   message: 'This website already has a keyword ladder for "' + dupHead.head + '" (' + dupHead.ladder_id + '). One search needs one page, so no second ladder was planned: continue that ladder instead.' };
 else if (plan.plan_type === 'none') refusal = { reason: 'not_realistic', message: '"' + head + '" is not a realistic main keyword for ' + domain + ' (' + (other_brand ? 'it is another company\'s brand: ' + headGate.detail : navigational ? 'people searching it look for one particular website or brand' + (!headGate.ok ? ': ' + headGate.detail : '') : 'the verdict is AVOID') + '). No ladder pages were planned; pick one of the alternatives as the main keyword instead.' };
-else if (serpOut) refusal = { reason: 'serp_unchecked', short: 'the live Google results could not be checked', detail: serpOut,
-  message: 'The live Google results for "' + head + '" could not be read on this run (' + serpOut + '), so nothing is known about who ranks for it, how strong those pages are or which results-page features take the clicks. A ladder plan is a bet on that competition, so none was planned, nothing was scored and no page was written. Run it again once the search data provider answers.' };
+else if (serpOut) {
+  // F-SERP (2026-10-20, real-credit rehearsal execs 23 / 31): the client's own keyword came back NOT_CHECKED twice in a row because
+  // DataForSEO's scraper answered 40101 "Internal SE Server Error." to the heavy request. The message the client reads says what
+  // happened in plain words: Google's results could not be read right now, it is not about their keyword, and when to try again.
+  // The provider's own message stays in `detail` (and in data_check.serp_error) for support, never as the client's explanation.
+  const sfR = base.serp_features || {};
+  const tries = Number(sfR.attempts) || 1;
+  const transient = sfR.retryable !== false;
+  refusal = { reason: 'serp_unchecked', short: 'the live Google results could not be checked', detail: serpOut, attempts: tries, transient,
+    message: 'We could not read Google\'s results for "' + head + '" right now: our search data provider did not answer'
+      + (tries > 1 ? ' after ' + tries + ' attempts' : '') + '. '
+      + (transient
+        ? 'This is a temporary problem on the provider\'s side. It is not a problem with your keyword, and it says nothing about whether "' + head + '" is a good choice. '
+        : 'The provider refused the request, which is a problem on our side, not with your keyword. ')
+      + 'A ladder plan is a bet on who ranks for the keyword, so none was planned, nothing was scored and no page was written. '
+      + (transient ? 'Please try again later (in an hour or so).' : 'Please try again later; if it keeps happening, contact support.') };
+}
 else if (thinPool) refusal = { reason: 'thin_data', short: 'the keyword research returned too little data', pool_size: poolSize, minimum: LADDER_MIN_POOL, head_measured: headMeasured,
   message: 'The keyword research returned only ' + poolSize + ' keyword' + (poolSize === 1 ? '' : 's') + ' around "' + head + '" in ' + (base.country || 'this market')
     + (headMeasured ? ' (a ladder needs at least ' + LADDER_MIN_POOL + ' to pick rungs from)' : ', and the search data provider has no search volume and no difficulty for "' + head + '" itself')
@@ -2397,24 +2525,47 @@ const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung:
 const focusL = WAITING.focus({ ladders: rowsOf('Load Domain Ladders').filter(r => reachDomain(r.domain) === reachDomain(domain)), settings: settingsRows,
   log: rowsOf('Load Content Log (Ladder)').filter(r => reachDomain(r.domain) === reachDomain(domain)), exclude: ladderId, now: Date.now() });
 const ownSet = settingsRows.find(r => String(r.ladder_id) === ladderId) || null;
-const ownMode = ownSet && ['auto', 'manual'].includes(String(ownSet.mode || '').toLowerCase()) ? String(ownSet.mode).toLowerCase() : focusL.site_mode;
+// keyword-first R-K7 (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.1 / §14.5): the mode the ladder is STARTED in, when the request names it
+// (`ladder_mode`, the app's "Ask me before each page"), else its own settings row, else the website's default
+const reqMode = ['auto', 'manual'].includes(String(base.ladder_mode || '').toLowerCase()) ? String(base.ladder_mode).toLowerCase() : '';
+const ownMode = reqMode || (ownSet && ['auto', 'manual'].includes(String(ownSet.mode || '').toLowerCase()) ? String(ownSet.mode).toLowerCase() : focusL.site_mode);
 const ownPrio = ownSet && Number(ownSet.priority) >= 1 ? Number(ownSet.priority) : Infinity;
 const ahead = focusL.order.filter(l => l.priority < ownPrio || ownPrio === Infinity);
 const queuedL = planned && ownMode === 'auto' && ahead.length >= focusL.max_active;
 const forced = base.force_content === true;
 const holdWhy = [];
+// R-K7: a Manual ladder writes NOTHING at start - its text always said its pages wait for an OK, and until now the first pages_now were written
+// anyway (pagesNow can never be 0). This is the client's own choice, not a limit, so `force_content` does not override it.
+const manualHold = planned && write_now.length && ownMode === 'manual' ? { limit: 'manual', text: 'this ladder is Manual, so its pages wait for your OK: nothing was written at the start, and each page is written when you approve it (Write it on the Pipeline page)' } : null;
 if (planned && write_now.length && pile_up.at_limit) holdWhy.push({ limit: 'pileup', text: pile_up.waiting + ' page(s) are written and waiting to be published, and the website\'s limit is ' + pile_up.limit
   + (pile_up.needs_fix ? ' (' + pile_up.needs_fix + ' of them did not pass the quality check and need a fix first)' : '') });
 if (planned && write_now.length && queuedL) holdWhy.push({ limit: 'max_active', text: 'the website writes at most ' + focusL.max_active + ' Auto ladder(s) at a time, and ' + ahead.length + ' with pages still to write come before this one ('
   + ahead.slice(0, 4).map(l => '"' + l.head + '"').join(', ') + (ahead.length > 4 ? ' …' : '') + '), so it waits as Queued' });
-const held = holdWhy.length && !forced ? { pages: write_now.splice(0, write_now.length), why: holdWhy } : null;
-const limits = { max_active: focusL.max_active, active_ahead: ahead.length, active_ladders: focusL.active.map(l => l.head), queued: queuedL, own_mode: ownMode,
+// P1 (2026-10-20, rehearsal §4 item 1, owner decision): no page is written before the website's author profile and business facts are on file.
+// The rehearsal's first page was written at once with neither and Content QA refused it ("11 bracketed field(s) in the byline, the author box
+// and the Person schema", claims nothing on file supports), while the client paid about 62 credits for a draft. The plan is still made and
+// stored; the page is HELD like a Manual ladder's (its rows stay `planned`, Spawn Page Runs starts nothing, nothing is charged for it) and the
+// Content Cadence writes it in the first cycle after both are filled in. The facts are the request's (the app sends the website's own) or the
+// site model's; the profile is the seo_profiles row the run already loaded (*Load Profile (Model)*). `force_content` does not override it: it
+// is the owner's rule, not a limit. One rule with the cadence and the app: v5/code/_readiness.js.
+const readyRow = rowsOf('Load Profile (Model)').find(r => r.site_id === reachSiteId(domain) || (r.domain && reachDomain(r.domain) === reachDomain(domain))) || {};
+const readiness = READY.of({ profile: readyRow, facts: String(base.business_facts || '').trim() || String((siteModel || {}).business_facts || '') });
+const profileHold = planned && write_now.length && !readiness.ready ? { limit: 'profile', missing: readiness.missing.map(m => m.key),
+  text: READY.REASON + ': the first page waits until you add ' + readiness.missing_text + ' (Website settings), so it is not written as a draft with blanks to fill; nothing was charged for it' } : null;
+const held = manualHold ? { pages: write_now.splice(0, write_now.length), why: [manualHold, ...(profileHold ? [profileHold] : []), ...holdWhy] }
+  : profileHold ? { pages: write_now.splice(0, write_now.length), why: [profileHold, ...holdWhy] }
+  : holdWhy.length && !forced ? { pages: write_now.splice(0, write_now.length), why: holdWhy } : null;
+const limits = { max_active: focusL.max_active, active_ahead: ahead.length, active_ladders: focusL.active.map(l => l.head), queued: queuedL, own_mode: ownMode, manual_hold: !!manualHold,
+  profile_hold: !!profileHold, readiness,   // P1: the first page waits for the author profile and the business facts
+  chosen_by: ['client_typed', 'client_picked', 'system_announced'].includes(String(base.chosen_by || '')) ? String(base.chosen_by) : 'client_typed',   // R-K1: who chose this keyword (stored by Ladder Settings Rows)
   max_waiting: pile_up.limit, waiting: pile_up.waiting, waiting_needs_fix: pile_up.needs_fix, at_waiting_limit: pile_up.at_limit, forced: !!(forced && holdWhy.length),
   basis: focusL.basis + '; ' + pile_up.basis,
   text: 'Limits of this website: at most ' + focusL.max_active + ' Auto ladder(s) written at a time (' + ahead.length + ' ahead of this one' + (queuedL ? ', so it waits as Queued' : ownMode === 'manual' ? '; this ladder is Manual, so its pages wait for your OK' : ', so it is written now') + '); at most '
     + pile_up.limit + ' written pages waiting to be published (' + pile_up.waiting + ' now' + (pile_up.needs_fix ? ', ' + pile_up.needs_fix + ' needing a fix' : '') + ').'
     + (held ? ' So the page' + (held.pages.length === 1 ? '' : 's') + ' asked for now (' + held.pages.map(w => '"' + w.keyword + '"').join(', ') + ') ' + (held.pages.length === 1 ? 'was' : 'were') + ' NOT written: ' + held.why.map(w => w.text).join('; and ')
-      + '. The plan is stored and the Content Cadence writes ' + (held.pages.length === 1 ? 'it' : 'them') + ' when ' + (held.why.some(w => w.limit === 'pileup') ? 'the waiting pages are published or discarded' : '') + (held.why.length > 1 ? ' and ' : '') + (held.why.some(w => w.limit === 'max_active') ? 'a ladder ahead of it is finished or paused (or you move this one up on the Pipeline page)' : '') + '.'
+      + (manualHold ? '. The plan is stored; nothing is written until you approve a page.'
+        : profileHold && !holdWhy.length ? '. The plan is stored and the page is written in your next weekly cycle once both are on file (or at once with Write it now on the Pipeline page).'
+        : '. The plan is stored and the Content Cadence writes ' + (held.pages.length === 1 ? 'it' : 'them') + ' when ' + (held.why.some(w => w.limit === 'pileup') ? 'the waiting pages are published or discarded' : '') + (held.why.length > 1 ? ' and ' : '') + (held.why.some(w => w.limit === 'max_active') ? 'a ladder ahead of it is finished or paused (or you move this one up on the Pipeline page)' : '') + '.')
       : (forced && holdWhy.length ? ' The request said to write anyway (force), so the limits were overridden for this run: ' + holdWhy.map(w => w.text).join('; and ') + '.' : '')) };
 const pages_total = planned ? rungPages.length + 1 : 0;
 const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: rel.size, relevant: kws.length, pages_total, rung_pages: planned ? rungPages.length : 0,

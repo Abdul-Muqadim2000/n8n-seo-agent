@@ -27,12 +27,48 @@ const fromText = (v) => {
 let o = out.output != null ? out.output : out.text;
 if (o && typeof o !== 'object') o = fromText(o);
 const aiOk = !!(o && typeof o === 'object' && o.fit != null && Number.isFinite(Number(o.fit)));
-const fit = aiOk ? Math.max(0, Math.min(2, Math.round(Number(o.fit)))) : null;
+const fitAi = aiOk ? Math.max(0, Math.min(2, Math.round(Number(o.fit)))) : null;
 // the second attempt (*Keyword Fit (Text)*) runs only when the first came back empty; referencing a node that did not run throws
 let plainRan = false; try { plainRan = !!($('Keyword Fit (Text)').first() || {}).json; } catch (e) { plainRan = false; }
-const brand = String(a.domain || '').split('.')[0].replace(/[^a-z0-9]/g, '');
-const ownBrand = brand.length >= 4 && String(a.keyword).replace(/[^a-z0-9]/g, '').includes(brand);
-const navigational = aiOk ? (o.navigational === true || String(o.navigational).toLowerCase() === 'true') : (String(a.intent || '') === 'navigational' && !ownBrand);
+// F-KW (2026-10-20, finding 5): the site's own brand is its DISTINCTIVE label only (fitOwnLabels): on an exact-match domain
+// ("erp-software.ae") "erp software uae" is the client's subject, not a search for the site itself
+const kwToksA = fitTokens(a.keyword);
+const ownBrand = fitOwnLabels(a.domain, kwToksA, [...new Set((a.services || []).flatMap(x => fitTokens(x)))]).some(l => kwToksA.includes(l) || kwToksA.join('').includes(l));
+const navAi = aiOk ? (o.navigational === true || String(o.navigational).toLowerCase() === 'true') : (String(a.intent || '') === 'navigational' && !ownBrand);
+const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
+// ---- keyword-first R-K4 (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.1): the deterministic fit gate, called at last ----
+// The Keyword Check inlined fitGate and never called it, so whether a competitor's brand, a government portal or the site's own name was "a
+// fit" was left to one Haiku call (and to nothing when that call failed). The gate runs first, on what the engine knows about the site: its own
+// domain, the competitors it declared (seo_monitors / the site row), the brand names AI uses for other companies (seo_cache ai_brands:<site>),
+// DataForSEO's intent, and as topics what it sells (the request's services, the site model's services, the client's declared services) and the
+// keywords it already chose. A refusal makes `fit` 0 with its reason, whatever the model said; the model's alternatives are still offered.
+const siteRowA = rowsOf('Load Site (Assess)')[0] || {}, monRowA = rowsOf('Load Monitors (Assess)')[0] || {};
+const modelA = (() => { try { return SM.from({ ...siteRowA, site_id: siteRowA.site_id || a.site_id || '', domain: siteRowA.domain || a.domain || '' }, { monitors: monRowA }); } catch (e) { return null; } })();
+let cacheA = []; try { cacheA = $('Load Assess Cache').all().map(i => i.json).filter(r => r && r.key); } catch (e) { cacheA = []; }
+const headsA = [...new Set(rowsOf('Load Ladders (Assess)').map(r => String(r.head_keyword || '')).filter(Boolean))];
+const servicesA = [...new Set([...(a.services || []), ...(modelA ? modelA.services : [])].map(x => String(x || '').trim()).filter(Boolean))];
+const gateCtxA = FITR.ctx({ own_domain: a.domain, intent: a.intent || '', competitors: modelA ? modelA.competitors : [], brands: fitLearnedBrands(cacheA), heads: headsA, services: servicesA,
+  topics: [...servicesA, ...headsA, ...(a.existing_keywords || [])], topic_label: 'what this website sells and the keywords you chose' });
+const gate = fitGate(a.keyword, gateCtxA);
+const GATE_WORDS = { 'own brand': 'it is your own brand name', 'other brand': 'it names another company', government: 'it is a government service', navigational: 'people search it to reach one particular website',
+  portal: 'it is a login, portal or status check', 'off topic': 'it is not about what you sell', 'too broad': 'it is too broad to win', 'job search': 'people search it to find work', empty: 'there is no keyword' };
+const fit = gate.ok ? fitAi : 0;
+// F-KW (2026-10-20, finding 2): the gate judges topic distance only with 12+ topic words on file. Below that it passed everything and the
+// answer read as if the topic had been checked. Now the check says when there is not enough information to judge (and how to fix it), and a
+// keyword with positive evidence says so; the model's own fit still stands, it is never overruled on too little evidence.
+// F-REH (2026-10-20, real-credit rehearsal): the services the client DECLARED (the request's, and the stored seo_sites.declared_services) are
+// passed to fitEvidence as well, so a keyword that carries one of their product categories ("crm service provider uae" for "CRM
+// implementation") counts as on topic even with few words on file. And the note is the customer's own sentence, built here for the state the
+// site is in: it asks for services only when none are listed (the rehearsal's client had listed four and was told to "add what you sell"),
+// with no internal terms and nothing said twice.
+const declaredA = [...new Set([...(a.services || []), ...((modelA && modelA.declared_services) || [])].map(x => String(x || '').trim()).filter(Boolean))];
+const evA = gate.ok ? fitEvidence(a.keyword, gateCtxA.topics || [], { topic_label: 'what you sell and the keywords you chose', services: declaredA }) : null;
+const topic_judged = !evA || evA.verdict !== 'unknown';
+const topicNoteA = topic_judged ? '' : !declaredA.length
+  ? 'we could not tell whether this keyword matches what you sell, because no services are listed for this website yet. Add your main services in your website settings and the check will tell you'
+  : 'we could not tell whether this keyword matches what you sell: it does not clearly match the services you listed (' + declaredA.slice(0, 4).join(', ') + (declaredA.length > 4 ? ' and ' + (declaredA.length - 4) + ' more' : '') + '). If you offer it, add it to your services and check it again';
+const navigational = gate.ok ? navAi : (gate.reason === 'navigational' || navAi);
+const fit_gate = gate.ok ? { ok: true, reason: '', detail: '', topic_judged, topic_note: topicNoteA, ...(evA && evA.basis === 'declared service' ? { topic_basis: evA.detail } : {}) } : { ok: false, reason: gate.reason, detail: gate.detail, words: GATE_WORDS[gate.reason] || gate.reason, topic_judged: true, topic_note: '' };
 // ---- B1-1 / B1-2 (2026-10-15, benchmark area 1): "difficulty for your site" is measured on THIS keyword's topic where the site has a
 // record on it. The leaders personalise per topic (MarketMuse Personalized Difficulty = Keyword Difficulty - a topic-level Topic
 // Authority, and "If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty"; Semrush lowers Personal KD
@@ -51,7 +87,6 @@ const plan = reachPlan(difficulty_for_you, reachStrong(a.reach_info, a.position)
 // "erp software uae" — the head of an active ladder with a written page — answered "Easy · Direct plan" with no word about it. The same
 // search (one search, one page: equal words or 75%+ in common) is named; when the Keyword Check also loaded the domain's seo_ladders /
 // seo_content_log rows (optional nodes), the ladder id, its status and the page are given too.
-const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
 const existing = (() => {
   const kw = String(a.keyword || '').toLowerCase().trim();
   const same = (x) => { const k = String(x || '').toLowerCase().trim(); return !!k && (k === kw || keywordsOverlap(k, kw)); };
@@ -90,7 +125,9 @@ const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/
 const need = difficulty_for_you === 'not_realistic' || fit === 0;
 const alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
 const warnings = [];
-if (!aiOk) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160) + (plainRan ? ' (the plain-text retry answered nothing either)' : ''));
+if (!gate.ok) warnings.push('not a fit for this website: ' + fit_gate.words + ' (' + gate.detail + ')');
+if (!topic_judged) warnings.push(topicNoteA);
+if (!aiOk && gate.ok) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160) + (plainRan ? ' (the plain-text retry answered nothing either)' : ''));
 if ((a.reach_errors || []).length) warnings.push('reach measured from partial data: ' + a.reach_errors.join('; ').slice(0, 200));
 // B1-1: an encouraging answer that rests on a reach measured on OTHER topics says so where the warnings are read. Only then: a site
 // with no record anywhere is not borrowing anything, and a measurement on this topic needs no caveat.
@@ -103,8 +140,9 @@ if (!a.known) warnings.push('DataForSEO has no data for this keyword in ' + a.co
 if (fit !== null && fit < 2 && /homepage only/.test(String(a.services_source || ''))) warnings.push('the topic check used a stored description written from the homepage only, so a service named elsewhere on the site may be missing: run "Describe my website" to refresh it');
 const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volume, kd: a.kd, intent: a.intent, cpc: a.cpc, position: a.position, reach,
   difficulty_for_you, plan_type: plan.plan_type, months: plan.months, fit, navigational, alternatives,
+  fit_gate, fit_source: !gate.ok ? 'gate' : aiOk ? 'model' : 'unknown',   // R-K4: a refusal by the gate decides the fit, independent of the model
   cost_usd: +(Number(a.dfs_cost || 0) + CONFIG.ai_cost_usd * (plainRan ? 2 : 1)).toFixed(4),   // R3: the model is charged even when its answer could not be parsed
-  label: (reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you]) + (topic.used ? ' \u00b7 measured on this topic' : '') + (fit === null ? ' \u00b7 ' + FIT_UNKNOWN : ''), fit_known: fit !== null, stretch: plan.stretch, position_url: a.position_url,
+  label: (reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you]) + (topic.used ? ' \u00b7 measured on this topic' : '') + (fit === null ? ' \u00b7 ' + FIT_UNKNOWN : '') + (gate.ok ? '' : ' \u00b7 not a fit: ' + fit_gate.words), fit_known: fit !== null, stretch: plan.stretch, position_url: a.position_url,
   chance: plan.plan_type === 'none' ? null : plan.chance, chance_text: plan.plan_type === 'none' ? '' : reachChanceText(plan), base_rate: REACH_BASE_RATE,   // G3 (2026-10-11): the estimated chance band (uncalibrated) and the 2025 base rate
   reach_info: { method: a.reach_info.method, p75: a.reach_info.p75 ?? null, size_reach: a.reach_info.size_reach ?? null, sample: a.reach_info.sample ?? null, top10: a.reach_info.top10 ?? null, cached: !!a.reach_info.cached, cached_at: a.reach_info.cached_at || null,
     site_reach: topic.site_reach },

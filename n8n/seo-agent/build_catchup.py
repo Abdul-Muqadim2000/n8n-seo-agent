@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Builds SEO Agent — Schedule Catch-up (SEOagentCatchUp1): R94 of the 2026-10-15 re-rating (docs/system-review-2026-10-15/defects/C_monitors.md).
 
-Five of the ten schedules had never fired on their own and the rest fired late. n8n keeps a cron fire in memory only: a restart, a deploy
+Five of the ten schedules had never fired on their own and the rest fired late. (Since 2026-10-19 only the two daily crons - the AI Pulse and
+the Page Watch - are left: the weekly workflows and the Audit Scheduler run in each website's own cycle, started by the Cycle Dispatcher.) n8n keeps a cron fire in memory only: a restart, a deploy
 or a re-activation re-arms every schedule for its NEXT future time, so a fire that was due and not yet delivered is thrown away (the
 2026-10-12 16:38 deploy restart dropped five Monday runs), and while the Mac sleeps the VM's timers stop, so fires arrive late.
 
@@ -39,8 +40,13 @@ TZ = (ENV.get('GENERIC_TIMEZONE') or '').strip() or DEFAULT_TZ
 N8N_API = ((ENV.get('SEO_N8N_API_URL') or '').strip() or 'http://localhost:5678/api/v1').rstrip('/')   # n8n's own API, from inside its container
 EXEC_LIMIT = 250   # the public API's page maximum: one page covers far more than the 36 h a catch-up looks back
 CRED = {'httpHeaderAuth': {'id': 'SEOcredN8nApiKey', 'name': 'n8n API (SEO Agent catch-up)'}}   # sync_credentials.py, from N8N_API_KEY
-EXPECTED = ('SEOagentAIVisib1', 'SEOagentBacklnk1', 'SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentAIGrow1', 'SEOagentCadence1',
-            'SEOagentLinkBld1', 'SEOagentAuditSc1', 'SEOagentAIPulse1', 'SEOagentPageWch1')
+# 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8, owner decision D2): the seven weekly workflows and the Audit Scheduler have no cron any more -
+# each website runs them in its own 7-day cycle, and a missed or crashed cycle job is the Cycle Dispatcher's own due row (record-then-start,
+# the most recent missed cycle once). The catch-up keeps the two daily crons. The dispatcher's own 5-minute sweep is durable by itself (its
+# state is in seo_cycles / seo_cycle_jobs, and n8n's Instance Started sweeps it too), so it is never a schedule this planner replays.
+EXPECTED = ('SEOagentAIPulse1', 'SEOagentPageWch1')
+NOT_REPLAYED = ('SEOagentCycleDsp',)   # the Cycle Dispatcher (build_cycle.py): its sweep is not a slot to replay
+DISPATCHER_ID = 'SEOagentCycleDsp'     # F-ENG (2026-10-20): ... but it is WATCHED: inactive, or no sweep for 20 minutes, raises an ops alert
 # A dry run (a test through *Catch-up Run*) starts only the workflows that honour `dry_run`: AI Growth (no Bing / IndexNow submission,
 # R94) and the Content Cadence (plans, writes nothing). Every other workflow spends for real, so a dry run never starts it.
 DRY_RUN_OK = {'SEOagentAIGrow1': [('Bing Submit Requests', 'DRY_RUN'), ('IndexNow Requests', 'DRY_RUN')],
@@ -53,7 +59,8 @@ CONFIG = {'next_gap_hours': {'daily': 2, 'weekly': 12, 'monthly': 48},
           'confirm_minutes': 10, 'stale_plan_minutes': 10, 'count_on_demand': False}
 SWEEP = 'Sweep (every 15 min)'
 SWEEP_CRON = '7,22,37,52 * * * *'
-NOT_GENERATED = ('SEO_Agent_v3_original_export.json', 'SEO_Agent_Test_Callback_Receiver.json')
+NOT_GENERATED = ('SEO_Agent_v3_original_export.json', 'SEO_Agent_Test_Callback_Receiver.json',
+                 'SEO_Agent_Cycle_Dispatcher.json')   # 2026-10-19: its 5-minute sweep is durable by itself (Instance Started + its own table), never caught up
 
 
 def cron_of(iv, where):
@@ -96,7 +103,7 @@ def schedules():
             continue
         for wf in json.load(open(os.path.join(OUT, fn), encoding='utf-8')):
             trig = [n for n in wf['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
-            if not trig:
+            if not trig or wf['id'] in NOT_REPLAYED:
                 continue
             assert len(trig) == 1, fn + ': more than one Schedule Trigger'
             ivs = trig[0]['parameters']['rule']['interval']
@@ -114,8 +121,8 @@ def schedules():
                         'cron': cron, 'kind': kind_of(cron), 'tz': (wf.get('settings') or {}).get('timezone') or TZ, 'entry_node': entries[0],
                         'trigger_node': trig[0]['name'], 'dry_run_ok': wf['id'] in DRY_RUN_OK})
     ids = sorted(s['id'] for s in out)
-    assert ids == sorted(EXPECTED), 'R94: the scheduled workflows are ' + str(ids) + ', expected the ten of the dossier ' + str(sorted(EXPECTED)) + \
-        ' - a new schedule must be added to EXPECTED here (and to apply_env.PUBLISH)'
+    assert ids == sorted(EXPECTED), 'R94: the scheduled workflows are ' + str(ids) + ', expected the two daily crons ' + str(sorted(EXPECTED)) + \
+        ' - a weekly workflow runs in each website\'s cycle and has no cron (2026-10-19); a new daily schedule must be added to EXPECTED here (and to apply_env.PUBLISH)'
     return out
 
 
@@ -151,8 +158,8 @@ def src(file):
     slim = [{k: v for k, v in x.items() if k not in ('name', 'trigger_node')} for x in SCHED]
     s = s.replace('__SCHEDULES__', json.dumps(slim, ensure_ascii=False)).replace('__CONFIG__', json.dumps(CONFIG))
     s = s.replace('__TZ__', TZ).replace('__N8N_API__', N8N_API).replace('__EXEC_LIMIT__', str(EXEC_LIMIT))
-    s = s.replace('__WATCH__', json.dumps({k: WATCH[k] for k in ('id', 'name', 'trigger_node')}, ensure_ascii=False))
-    left = re.findall(r'/\*__[A-Z_]+__\*/|__(?:SCHEDULES|CONFIG|TZ|N8N_API|EXEC_LIMIT|WATCH)__', s)
+    s = s.replace('__WATCH__', json.dumps({k: WATCH[k] for k in ('id', 'name', 'trigger_node')}, ensure_ascii=False)).replace('__DISPATCHER_ID__', DISPATCHER_ID)
+    left = re.findall(r'/\*__[A-Z_]+__\*/|__(?:SCHEDULES|CONFIG|TZ|N8N_API|EXEC_LIMIT|WATCH|DISPATCHER_ID)__', s)
     assert not left, file + ': placeholder left ' + str(left)
     return s
 
@@ -225,6 +232,12 @@ node('Save Start Result', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CAC
 node('Space Starts', 'n8n-nodes-base.wait', 1.1, {'amount': 30, 'unit': 'seconds'}, at(24, 1), webhookId=node_id(NAME, 'Space Starts:hook'))
 code('Catch-up Report', 'Catchup_Report.js', at(17, 0))
 node('Save Catch-up Report', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(18, 0), **SAVE)
+# ---- F-ENG (2026-10-20): the Cycle Dispatcher's watchdog - is every website's week still being started? (the mailbox watchdog's pattern) ----
+api_get('Read Dispatcher Workflow (Watchdog)', '=' + N8N_API + '/workflows/' + DISPATCHER_ID + '?excludePinnedData=true', at(19, -3))
+node('Load Cycle Last (Watchdog)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', 'cycle:last'), at(20, -3), **LOAD)
+code('Dispatcher Watchdog', 'Dispatcher_Watchdog.js', at(21, -3)); iff('Save Dispatcher Watch?', '{{ $json.save }}', at(22, -3))
+code('Dispatcher Watch Row', 'Dispatcher_Watch_Row.js', at(23, -3))
+node('Save Dispatcher Watch', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(24, -3), **SAVE)
 # ---- C-16 (re-rating 2026-10-17): the mail watcher's watchdog, last in the sweep (every catch-up start has happened by then) ----
 from ladder_common import OPS_ALERTS_TABLE
 api_get('Read Mailbox Workflow (Watchdog)', '=' + N8N_API + '/workflows/' + WATCH['id'] + '?excludePinnedData=true', at(19, -1))
@@ -260,10 +273,13 @@ link('Any State?', 'Save Catch-up State', 0); link('Any State?', 'Catch-up Start
 link('Any Starts?', 'Loop Catch-ups', 0); link('Any Starts?', 'Catch-up Report', 1)
 link('Loop Catch-ups', 'Catch-up Report', 0); link('Loop Catch-ups', 'Catch-up Record Row', 1)   # splitInBatches v3: 0 = done, 1 = loop
 link('Recorded?', 'Start Missed Run', 0); link('Recorded?', 'Loop Catch-ups', 1)
-for a, b in [('Save Catch-up Report', 'Read Mailbox Workflow (Watchdog)'), ('Read Mailbox Workflow (Watchdog)', 'Load Mailbox Alerts (Watchdog)'),
+for a, b in [('Save Catch-up Report', 'Read Dispatcher Workflow (Watchdog)'), ('Read Dispatcher Workflow (Watchdog)', 'Load Cycle Last (Watchdog)'),
+             ('Load Cycle Last (Watchdog)', 'Dispatcher Watchdog'), ('Dispatcher Watchdog', 'Save Dispatcher Watch?'), ('Dispatcher Watch Row', 'Save Dispatcher Watch'),
+             ('Save Dispatcher Watch', 'Read Mailbox Workflow (Watchdog)'), ('Read Mailbox Workflow (Watchdog)', 'Load Mailbox Alerts (Watchdog)'),
              ('Load Mailbox Alerts (Watchdog)', 'Watchdog Plan'), ('Watchdog Plan', 'Mailbox Down?'), ('Deactivate Mailbox', 'Activate Mailbox'),
              ('Activate Mailbox', 'Watchdog Result'), ('Watchdog Result', 'Save Watchdog State'), ('Save Watchdog State', 'Watchdog Alarm')]:
     link(a, b)
+link('Save Dispatcher Watch?', 'Dispatcher Watch Row', 0); link('Save Dispatcher Watch?', 'Read Mailbox Workflow (Watchdog)', 1)
 link('Mailbox Down?', 'Deactivate First?', 0); link('Mailbox Down?', 'Watchdog Result', 1)
 link('Deactivate First?', 'Deactivate Mailbox', 0); link('Deactivate First?', 'Activate Mailbox', 1)
 
@@ -300,6 +316,6 @@ for n in N:
         open(os.path.join(CODE, CODE_PREFIX + re.sub(r'[^A-Za-z0-9_.-]+', '_', n['name']) + '.js'), 'w').write(n['parameters']['jsCode'])
 # what the harness reads (S126-S129) and build section 98 extends: the schedule table as baked, and the settings it was baked with
 json.dump({'workflow': {'id': WID, 'name': NAME, 'file': FILE}, 'tz': TZ, 'default_tz': DEFAULT_TZ, 'n8n_api': N8N_API, 'credential': CRED['httpHeaderAuth']['id'],
-           'config': CONFIG, 'exec_limit': EXEC_LIMIT, 'schedules': SCHED, 'watchdog': WATCH},
+           'config': CONFIG, 'exec_limit': EXEC_LIMIT, 'schedules': SCHED, 'watchdog': WATCH, 'dispatcher_watchdog': {'id': DISPATCHER_ID, 'state_key': 'catchup:watchdog:' + DISPATCHER_ID}},
           open(os.path.join(HERE, 'harness', 'catchup_wiring.json'), 'w'), indent=1, sort_keys=True)
 print('wrote', FILE + ':', len(N), 'nodes;', len(SCHED), 'schedules caught up (' + TZ + ')')

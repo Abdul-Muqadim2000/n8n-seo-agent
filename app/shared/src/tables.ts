@@ -13,6 +13,8 @@ export interface LadderRow extends DtRow {
   location_code: number; language_code: string; email: string; callback_url: string; request_id: string;
   /** R34 (A4, 2026-10-16): why a row is `live (existing page)` and the page that covers it; the planned address it would have had */
   status_note?: string; covered_by?: string; planned_url?: string;
+  /** F-KW (2026-10-20): who chose this ladder's keyword, written by the ladder run on every row before its settings row ('' = before the column) */
+  chosen_by?: string;
   /** the word count the ladder's verdict set for this page (0 = unknown); passed to a page run as `ladder_words` (P2-7) */
   target_words?: number;
 }
@@ -38,6 +40,10 @@ export interface SiteRow extends DtRow {
   last_run_at: string; last_status: string; request_id: string;
   /** B7-5 (W3-D): [{ name, pattern }] as JSON text, set through Site Admin `content_groups` */
   content_groups_json?: string;
+  /** G19 site model (2026-10-12): the services the weekly crawl read (JSON list), the competitors (comma list) */
+  services_json?: string; competitors?: string; brand_names?: string; canonical_host?: string;
+  /** keyword-first (2026-10-19): what the client said they sell ("What do you sell?"), JSON list; never overwritten by a crawl */
+  declared_services?: string;
 }
 export interface SiteMetricsRow extends DtRow {
   site_id: string; domain: string; period_start: string; period_end: string; checked_at: string; gsc_connected: boolean;
@@ -260,6 +266,14 @@ export interface LadderSettingsRow extends DtRow {
   ladder_id: string; site_id: string; domain: string; head_keyword: string; mode: string; priority: number; status: string;
   plan_type: string; reach: number; source: string; opportunities: string; auto_start: boolean; max_active: number;
   max_waiting: number; created_at: string; updated_at: string;
+  /** keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.1): who chose a ladder's keyword (client_typed | client_picked |
+   * system_announced; '' = a ladder from before the column, or one started through the API = the client) */
+  chosen_by?: string;
+  /** the '_site' row only: the website's autopilot level (1 | 2 | 3; empty = 2) */
+  autopilot_level?: number | string | null;
+  /** F-KW (2026-10-20, plan §5.6): when the app's fresh keyword check of a ladder planned 60+ days ago PASSED (ISO); the cadence writes no
+   * page of such a ladder until it is set. Written by the app (autopilot.ts recheckActivated). */
+  rechecked_at?: string;
 }
 
 /** seo_ladder_settings exactly as n8n reads it (Cadence_Plan.js): the app creates the table with these columns when it is missing. */
@@ -280,6 +294,9 @@ export const LADDER_SETTINGS_COLUMNS = [
   { name: 'max_waiting', type: 'number' },
   { name: 'created_at', type: 'string' },
   { name: 'updated_at', type: 'string' },
+  { name: 'chosen_by', type: 'string' },
+  { name: 'autopilot_level', type: 'number' },
+  { name: 'rechecked_at', type: 'string' },
 ] as const;
 export type LadderSettingsColumn = (typeof LADDER_SETTINGS_COLUMNS)[number]['name'];
 /** the settings row that holds the website's defaults */
@@ -337,7 +354,29 @@ export const TABLES = {
   linkOutreach: 'seo_link_outreach',
   listings: 'seo_listings',
   linkImpact: 'seo_link_impact',
-  /** the engine's key/value store; the app reads only its `cost:*` rows (the rolling per-mode figures the engine reserves, R100) */
+  /** the engine's key/value store; the app reads its `cost:*` rows (the rolling per-mode figures the engine reserves, R100) and the
+   * `ai_brands:<site_id>` rows (the names AI uses for other companies, for the cadence mirror's fit gate) */
   cache: 'seo_cache',
+  /** keyword-first / the per-website cycle (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §14.1): one row per website, written by the engine */
+  cycles: 'seo_cycles',
+  /** one row per website x cycle x job, written by the Cycle Dispatcher (record-then-start, then the outcome) */
+  cycleJobs: 'seo_cycle_jobs',
+  /** the client's decisions on the "Coming up" plan: written by the app, read by the Content Cadence */
+  skips: 'seo_skips',
 } as const;
 export type TableKey = keyof typeof TABLES;
+
+/** seo_skips exactly as the engine creates it (ladder_common.py SKIPS_COLS): the app creates the table with these columns when it is missing. */
+export const SKIPS_COLUMNS = [
+  { name: 'key', type: 'string' },
+  { name: 'site_id', type: 'string' },
+  { name: 'cycle_key', type: 'string' },
+  { name: 'item_key', type: 'string' },
+  { name: 'decision', type: 'string' },
+  { name: 'scope', type: 'string' },
+  { name: 'by', type: 'string' },
+  { name: 'created_at', type: 'string' },
+  // F-KW (2026-10-20): the item an approval is for (the plan item's source and ladder), so it never approves another page with the keyword
+  { name: 'source', type: 'string' },
+  { name: 'ladder_id', type: 'string' },
+] as const;

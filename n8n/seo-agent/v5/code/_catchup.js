@@ -209,18 +209,28 @@ const CU = (() => {
   const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const wall = (tz, t) => { const p = parts(tz, t), pad = (n) => String(n).padStart(2, '0');
     return WD[new Date(Date.UTC(p.y, p.mo - 1, p.d)).getUTCDay()] + ' ' + p.d + ' ' + MO[p.mo - 1] + ' ' + p.y + ', ' + pad(p.h) + ':' + pad(p.mi) + ' (' + tz + ')'; };
+  // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.5): a job of a website's weekly cycle (`trigger: 'cycle'`, the Cycle Dispatcher) is late against
+  // its cycle's due time (`scheduled_for`). Its jobs run one after the other (about 40-60 minutes for a whole cycle), so a cycle job is called
+  // late only past CYCLE_LATE_MIN, not the 30 minutes a fixed slot allows; its words name the cycle, not a schedule.
+  const CYCLE_LATE_MIN = 180;
   const lateRun = (o) => {
-    const c = o || {}, tz = S(c.tz) || 'America/New_York', thr = Number(c.threshold_min) > 0 ? Number(c.threshold_min) : 30;
-    const via = S(c.trigger) === 'catchup' ? 'catchup' : S(c.fired_at) ? 'schedule' : '';
+    const c = o || {}, tz = S(c.tz) || 'America/New_York';
+    const via = S(c.trigger) === 'catchup' ? 'catchup' : S(c.trigger) === 'cycle' ? 'cycle' : S(c.fired_at) ? 'schedule' : '';
     if (!via) return { late: false, via: 'on_demand' };
+    const thr = Number(c.threshold_min) > 0 ? Number(c.threshold_min) : (via === 'cycle' ? CYCLE_LATE_MIN : 30);
     let due = 0;
-    try { due = via === 'catchup' ? ms(c.scheduled_for) : (c.cron ? lastDue(c.cron, tz, ms(c.fired_at)) : 0); } catch (e) { due = 0; }
+    try { due = (via === 'catchup' || via === 'cycle') ? ms(c.scheduled_for) : (c.cron ? lastDue(c.cron, tz, ms(c.fired_at)) : 0); } catch (e) { due = 0; }
     const started = ms(c.started_at) || ms(c.fired_at) || ms(c.now);
     if (!due || !started) return { late: false, via, reason: 'the due time could not be worked out' };
     const late_min = Math.max(0, Math.round((started - due) / MIN));
     const out = { late: late_min > thr, via, due: iso(due), started_at: iso(started), late_min, kind: S(c.kind) };
     if (!out.late) return out;
     const what = { daily: 'daily', weekly: 'weekly', monthly: 'monthly' }[S(c.kind)] || 'scheduled';
+    if (via === 'cycle') {
+      out.why = S(c.why) || 'the cycle started after its due time (the engine was stopped, restarting or busy with other websites)';
+      out.text = 'This is the run of this website\'s weekly cycle that was due ' + wall(tz, due) + '. It ran ' + dur(late_min) + ' late: ' + out.why + '. Its figures are as of when it ran, not as of the due time.';
+      return out;
+    }
     out.why = via === 'catchup' ? (S(c.why) || 'its scheduled time was missed') + '; the schedule catch-up started it'
       : 'the schedule fired late (the computer running the engine was asleep or restarting at the due time)';
     out.text = 'This is the ' + what + ' run that was due ' + wall(tz, due) + '. It ran ' + dur(late_min) + ' late: ' + out.why + '. Its figures are as of when it ran, not as of the due time.';
@@ -264,5 +274,31 @@ const CU = (() => {
       last_result: 'not listening: the re-activation failed (' + err + ') - attempt ' + failures,
       alarm: failures >= cfg.alarm_after && (failures - cfg.alarm_after) % cfg.alarm_every === 0 };
   };
-  return { plan, lastDue, nextDue, parse, zonedToUtc, offset, stalePlan, lateRun, wall, dur, watchdog, watchdogResult, DEFAULTS, DEAD, WD_DEFAULTS };
+  // ---- F-ENG (2026-10-20): the Cycle Dispatcher's watchdog. Every website's week is started by one workflow sweeping every 5 minutes; when it is
+  // not published (a deploy imported it and left it inactive) or has stopped sweeping, no website's cycle runs and nothing else says so.
+  // Its own record is the evidence: seo_cache `cycle:last` is written at the end of every real sweep (plan_only included). Alarm when the
+  // workflow is inactive, or that record is older than `stale_minutes` (no record: older than that since the workflow was last updated),
+  // rate-limited to one alarm every `alarm_every_hours` while it lasts; nothing on the door n8n has just started through (its own sweep
+  // comes 45 s later) or in a test. o: { wf: {ok, active, updatedAt, error}, last: {updated_at} | null, state, now, entry, test }
+  const CW_DEFAULTS = { stale_minutes: 20, alarm_every_hours: 6 };
+  const cycleWatchdog = (o) => {
+    const c = o || {}, cfg = { ...CW_DEFAULTS, ...(c.config || {}) }, now = ms(c.now) || Date.now(), st = parseValue(c.state || {}), wf = c.wf || {};
+    const lastAt = ms(c.last && c.last.updated_at), age = lastAt ? (now - lastAt) / MIN : null;
+    const since = wf.ok ? ms(wf.updatedAt) : 0;
+    const problems = [];
+    if (wf.ok && wf.active === false) problems.push('the Cycle Dispatcher (SEOagentCycleDsp) is not active: no website\'s cycle is started (publish it - a deploy imports it inactive; deploy_manifest.json publishes it)');
+    if (lastAt && age > cfg.stale_minutes) problems.push('its last sweep (seo_cache cycle:last) was ' + dur(age) + ' ago, at ' + iso(lastAt) + ' (it sweeps every 5 minutes)');
+    else if (!lastAt && (!wf.ok || wf.active !== false) && since && (now - since) / MIN > cfg.stale_minutes) problems.push('it has written no sweep record (seo_cache cycle:last) in the ' + dur((now - since) / MIN) + ' since it was last updated');
+    const base = { checked_at: iso(now), last_sweep_at: lastAt ? iso(lastAt) : '', active: wf.ok ? wf.active !== false : null, read: wf.ok ? '' : (S(wf.error) || 'no answer') };
+    if (c.test) return { ...base, verdict: 'test', alarm: false, reason: 'a test run of the catch-up does not judge the dispatcher', state: st };
+    if (!problems.length) return { ...base, verdict: wf.ok ? 'sweeping' : 'blind', alarm: false, problems: [], reason: wf.ok ? 'active, last sweep ' + (lastAt ? dur(age) + ' ago' : 'none yet (updated ' + (since ? iso(since) : '?') + ')')
+      : 'the dispatcher workflow could not be read (' + base.read + '); its last sweep was ' + (lastAt ? dur(age) + ' ago' : 'never recorded'), state: { ...st, down_since: '', last_alarm_at: '' } };
+    const down = ms(st.down_since) || now;
+    if (c.entry === 'init') return { ...base, verdict: 'starting', alarm: false, problems, reason: 'n8n has just started: the dispatcher\'s own Instance Started sweep comes next, so this is judged at the next catch-up sweep', state: st };
+    const lastAlarm = ms(st.last_alarm_at), due = !lastAlarm || now - lastAlarm >= cfg.alarm_every_hours * H;
+    return { ...base, verdict: 'down', alarm: due, problems, down_since: iso(down),
+      reason: problems.join('; ') + (due ? '' : ' (alerted at ' + iso(lastAlarm) + '; again after ' + cfg.alarm_every_hours + ' h)'),
+      state: { ...st, down_since: iso(down), last_alarm_at: due ? iso(now) : S(st.last_alarm_at) } };
+  };
+  return { plan, lastDue, nextDue, parse, zonedToUtc, offset, stalePlan, lateRun, wall, dur, watchdog, watchdogResult, cycleWatchdog, DEFAULTS, DEAD, WD_DEFAULTS, CW_DEFAULTS, CYCLE_LATE_MIN };
 })();

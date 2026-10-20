@@ -29,6 +29,7 @@ import {
   type AdminPurchaseRequest,
   type CreditLot,
   type CreditSource,
+  type InvoiceView,
 } from '@seo/shared';
 import { conflict, HttpError } from '../lib/errors';
 import { adminAudit } from '../services/admin/audit';
@@ -38,6 +39,7 @@ import { periodRange } from '../services/admin/period';
 import { activity, companiesCsv, companyAbsorbed, companyDetail, companyRows, overview, runsPage, userRows } from '../services/admin/reports';
 import { getSettings, saveSettings, settingsRow } from '../services/admin/settings';
 import { alignExistingCompanies, creditGuardTick, grantPlanCredits, requestView } from '../services/billing';
+import { billingContacts, emailInvoice, invoicePdf, invoiceView, issueInvoice, listInvoices, notifyCredits, notifySkipped } from '../services/invoices';
 import { createUser, deleteUser, removeMembership, SET_PASSWORD_HOURS, setMembership, updateUser, userOrThrow } from '../services/admin/users';
 import { deleteCompany } from '../services/companyDelete';
 import { deleteUserSessions } from '../auth/session';
@@ -210,17 +212,25 @@ export async function adminRoutes(app: FastifyInstance) {
           ? new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + s.packExpiryMonths, new Date().getUTCDate()))
           : new Date(Date.now() + body.expires * 86_400_000);
     const source = request || body.paidUsd > 0 ? 'pack' : 'grant';
-    // an adjustment down may take the balance below zero only on purpose: it is written as asked, and the panel shows the result
-    const row = await addCreditEntry(db, {
-      orgId: org.id,
-      kind: body.kind,
-      credits: body.credits,
-      ref: body.kind === 'grant' ? { source, ...(request ? { requestId: request.id } : {}) } : null,
-      lot: body.kind === 'grant' ? { source, expiresAt } : undefined,
-      refKey: request ? `request:${request.id}` : null,
-      paidUsd: body.kind === 'grant' ? body.paidUsd : 0,
-      note: body.note || (body.kind === 'grant' ? (body.paidUsd > 0 ? 'Credits bought' : 'Credits granted') : body.kind === 'refund' ? 'Credits refunded' : 'Balance corrected'),
-      actor: { userId: admin.id, email: admin.email },
+    // an adjustment down may take the balance below zero only on purpose: it is written as asked, and the panel shows the result.
+    // A paid grant issues its invoice in the same transaction, so one never exists without the other (app/docs/CREDITS.md "Invoices").
+    const billedTo = body.kind === 'grant' && body.paidUsd > 0 ? await billingContacts(org.id) : [];
+    const { row, invoice } = await db.transaction(async (tx) => {
+      const row = await addCreditEntry(tx, {
+        orgId: org.id,
+        kind: body.kind,
+        credits: body.credits,
+        ref: body.kind === 'grant' ? { source, ...(request ? { requestId: request.id } : {}) } : null,
+        lot: body.kind === 'grant' ? { source, expiresAt } : undefined,
+        refKey: request ? `request:${request.id}` : null,
+        paidUsd: body.kind === 'grant' ? body.paidUsd : 0,
+        note: body.note || (body.kind === 'grant' ? (body.paidUsd > 0 ? 'Credits bought' : 'Credits granted') : body.kind === 'refund' ? 'Credits refunded' : 'Balance corrected'),
+        actor: { userId: admin.id, email: admin.email },
+      });
+      if (!row || row.kind !== 'grant' || row.paidUsd <= 0) return { row, invoice: null };
+      const invoice = await issueInvoice(tx, { org, ledgerId: row.id, requestId: request?.id ?? null, credits: row.credits, amountUsd: row.paidUsd, expiresAt, issuedBy: admin.email, billedTo });
+      await tx.execute(sql`update ${schema.creditLedger} set ref = coalesce(ref, '{}'::jsonb) || ${JSON.stringify({ invoice: { id: invoice.id, number: invoice.number } })}::jsonb where id = ${row.id}::uuid`);
+      return { row, invoice };
     });
     if (!row) throw new HttpError(500, 'The credits could not be written.');
     if (request)
@@ -231,14 +241,49 @@ export async function adminRoutes(app: FastifyInstance) {
     // credits added: a company whose schedules the guard paused gets them back now, not at its next pass
     if (row.credits > 0) void creditGuardTick(req.log).catch((err) => req.log.warn({ err: String(err) }, 'credit guard after a grant failed'));
     const balance = await creditBalance(db, org.id);
+    // the company hears about it: a paid grant with its invoice attached, any other credits added with a short note
+    const notified = body.notify
+      ? await notifyCredits(org, row, { invoice, expiresAt, balanceAfter: balance }, req.log).catch((err) => (req.log.warn({ err: String(err) }, 'credit e-mail failed'), { skipped: 'the e-mail failed' }))
+      : await notifySkipped(row.id, 'the platform admin chose not to e-mail');
     await adminAudit(req, `credits.${body.kind === 'grant' ? 'granted' : body.kind === 'refund' ? 'refunded' : 'adjusted'}`, { type: 'company', id: org.id, label: org.name }, {
       credits: row.credits,
       paidUsd: row.paidUsd,
       note: row.note,
       balanceAfter: balance,
+      ...(invoice ? { invoice: invoice.number } : {}),
+      notified,
     });
     const entries = await listCreditEntries(org.id, 50);
     return entries.find((e) => e.id === row.id) ?? { ...entries[0], id: row.id };
+  });
+
+  // invoices of paid grants (app/docs/CREDITS.md "Invoices"): the list, the PDF, and sending it again to today's owners and admins
+  app.get('/api/admin/companies/:id/invoices', async (req): Promise<InvoiceView[]> => {
+    guard(req);
+    const org = await orgOrThrow((req.params as { id: string }).id);
+    return listInvoices(org.id, 200);
+  });
+
+  const invoiceOrThrow = async (id: string) => {
+    const inv = isUuid(id) ? await db.query.invoices.findFirst({ where: eq(schema.invoices.id, id) }) : null;
+    if (!inv) throw notFound('Invoice not found');
+    return inv;
+  };
+
+  app.get('/api/admin/invoices/:id/pdf', async (req, reply) => {
+    guard(req);
+    const inv = await invoiceOrThrow((req.params as { id: string }).id);
+    return reply.header('content-type', 'application/pdf').header('content-disposition', `attachment; filename="${inv.number}.pdf"`).send(await invoicePdf(inv));
+  });
+
+  app.post('/api/admin/invoices/:id/send', async (req): Promise<InvoiceView> => {
+    guard(req);
+    const inv = await invoiceOrThrow((req.params as { id: string }).id);
+    if (!inv.orgId) throw conflict('The company of this invoice was deleted: there is nobody to send it to.', 'company_deleted');
+    const to = await emailInvoice(inv, req.log, { resend: true });
+    if (!to.length) throw conflict('The invoice could not be e-mailed: e-mail is off on this server, or the company has no owner or admin.', 'not_sent');
+    await adminAudit(req, 'invoice.sent', { type: 'company', id: inv.orgId, label: inv.orgName }, { invoice: inv.number, to });
+    return invoiceView((await invoiceOrThrow(inv.id)));
   });
 
   // the company's credit lots as the credits page shows them: the ones still holding credits first (soonest to expire first, the order

@@ -251,12 +251,36 @@ const FIT_COMMON = new Set(['management', 'manager', 'document', 'documents', 'p
   'unified', 'professional', 'premium', 'standard', 'basic', 'core', 'general', 'public', 'private', 'social', 'mobile', 'facility', 'facilities', 'experience', 'insights', 'transformation',
   'innovation', 'value', 'impact', 'productivity', 'efficiency', 'assets', 'asset', 'people', 'team', 'teams', 'growth', 'performance']);
 const FIT_COMPARE = /\b(vs|versus|compare|comparison|alternatives?|instead of|better than|difference between|against)\b/;
-const fitTokens = (s) => String(s || '').toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9.]+/).map(t => t.replace(/^\.+|\.+$/g, '')).filter(t => t.length > 1 && !FIT_STOP.has(t));
+// F-KW (2026-10-20, finding 8): letters and digits of EVERY script, not a-z only. An Arabic keyword ("برنامج محاسبة في الإمارات") was
+// no tokens at all, so a ladder the client chose in Arabic was set aside as `empty` and every Arabic item key was ''. NFKC folds
+// full-width and compatibility forms, toLowerCase (never the locale form) folds case; marks (\p{M}) stay inside their word.
+const FIT_SPLIT = /[^\p{L}\p{M}\p{N}.]+/u, FIT_SPLIT_WORDS = /[^\p{L}\p{M}\p{N}]+/u;
+const fitLow = (s) => String(s || '').normalize('NFKC').toLowerCase();
+const fitTokens = (s) => fitLow(s).replace(/[’']/g, '').split(FIT_SPLIT).map(t => t.replace(/^\.+|\.+$/g, '')).filter(t => t.length > 1 && !FIT_STOP.has(t));
 const fitHost = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^(www|m|app|en|ar)\./, '');
 const fitGovHost = (d) => { const h = fitHost(d); return /(^|\.)gov(\.[a-z]{2,3})?$/.test(h) || /(^|\.)(gouv|gob|go|gv)\.[a-z]{2}$/.test(h) || /(^|\.)mil(\.[a-z]{2})?$/.test(h) || /(^|\.)(u\.ae|government\.ae|dubai\.ae|abudhabi\.ae|sharjah\.ae|ajman\.ae|rak\.ae|tax\.gov\.ae|europa\.eu)$/.test(h); };
 // the brand label(s) of a domain: "facts.ae" -> ["facts"], "northwind-erp.com" -> ["northwind"] (generic / short parts dropped), "e-invoicing.ae" -> []
 const fitLabels = (domain, protect) => { const h = fitHost(domain); if (!h) return []; const first = h.split('.')[0]; const parts = [...new Set([first, ...first.split(/[-_]/)])];
   return parts.map(p => p.replace(/[^a-z0-9]/g, '')).filter(p => p.length >= FIT_CFG.min_label && !FIT_GENERIC.has(p) && !FIT_GEO.has(p) && !(protect || []).includes(p)); };
+// F-KW (2026-10-20, finding 5): a label is the website's own BRAND only when it is distinctive. A label that splits entirely into category,
+// generic or place words, or into the words of the keyword or of what the client protected (its ladder heads, its services), describes what
+// the site sells ("erp-software.ae", "crmexperts.ae", "accountingsoftware.ae", "interiordesign-dubai.com"); it is not a name, and a keyword
+// built from those words is the client's own subject. "techand" does not split ("tech" + the stop word "and" is not allowed), so "techand crm"
+// stays the site's own brand. The label itself is never part of its own vocabulary, so "crmexperts reviews" (one word) is still the brand.
+const FIT_CATEGORY = new Set(['expert', 'experts', 'specialist', 'specialists', 'consultant', 'advisor', 'advisors', 'advisory', 'agency', 'agencies', 'design', 'designs', 'designer', 'designers',
+  'interior', 'interiors', 'outsourcing', 'marketing', 'seo', 'legal', 'law', 'lawyer', 'lawyers', 'clinic', 'clinics', 'dental', 'medical', 'health', 'care', 'realty', 'property', 'properties', 'homes',
+  'travel', 'tours', 'logistics', 'cargo', 'shipping', 'trading', 'auto', 'autos', 'cars', 'motors', 'insurance', 'printing', 'events', 'cleaning', 'maintenance', 'security', 'training', 'courses',
+  'implementation', 'integration', 'migration', 'support', 'hosting', 'it', 'hr', 'audit', 'auditing', 'bookkeeping', 'consult', 'advice', 'pros', 'works', 'labs', 'studio', 'studios',
+  'center', 'centre', 'source', 'point', 'zone', 'link', 'links', 'line', 'now', 'hq', 'co', 'inc', 'llc', 'ltd', 'fz', 'fzco', 'fze', 'dmcc']);
+const fitWordBreak = (label, vocab) => { const n = label.length; const ok = new Array(n + 1).fill(false); ok[0] = true;
+  for (let i = 1; i <= n; i++) for (let j = Math.max(0, i - 30); j < i; j++) if (ok[j] && vocab.has(label.slice(j, i))) { ok[i] = true; break; }
+  return ok[n]; };
+const fitOwnLabels = (domain, toks, protect) => fitLabels(domain, []).filter(l => {
+  const words = [...FIT_GENERIC, ...FIT_GEO, ...FIT_CATEGORY, ...(toks || []), ...(protect || [])].map(w => String(w || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter(w => w.length >= 2 && w !== l && !FIT_STOP.has(w));
+  const vocab = new Set(); for (const w of words) { vocab.add(w); vocab.add(w + 's'); if (w.length > 3 && w.endsWith('s')) vocab.add(w.slice(0, -1)); }
+  vocab.delete(l);
+  return !fitWordBreak(l, vocab); });
 // the learned "name -> domain" map from seo_cache rows (key ai_brands:<site_id>), any shape of row list
 const fitLearnedBrands = (rows) => { const out = {}; for (const r of (rows || [])) { const j = r && r.json ? r.json : r; if (!j || typeof j !== 'object' || !/^ai_brands:/.test(String(j.key || ''))) continue; let v = j.value; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } } if (v && typeof v === 'object') for (const [name, d] of Object.entries(v)) if (name && d) out[String(name)] = String(d); } return out; };
 // the organic domains of a DataForSEO SERP answer, in rank order (for ctx.serp)
@@ -277,12 +301,12 @@ const FIT_WIDE = new Set(['business', 'businesses', 'company', 'companies', 'fir
   'consultants', 'consultancy', 'partners', 'partner', 'network', 'info', 'guide', 'guides', 'blog', 'list', 'directory', 'review', 'reviews', 'compare', 'comparison', 'pro', 'plus', 'one', 'first',
   'get', 'go', 'easy', 'home', 'world', 'city', 'market', 'media', 'shop', 'store', 'gulf', 'arab', 'arabia', 'emirates', 'google', 'microsoft', 'amazon', 'apple']);
 const fitStem = (w) => w.length > 5 ? w.replace(/(ingly|ings|ing|ments|ment|ations|ation|ions|ion|ies|ers|er|ed|es|s|e)$/, '') : w;   // the outreach kit's stem: invoice / invoices / invoicing -> invoic
-const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).toLowerCase()
-  .split(/[^a-z0-9]+/).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
+const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).normalize('NFKC').toLowerCase()
+  .split(FIT_SPLIT_WORDS).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
 // B-3: the topics as PHRASES (one service name, one configured keyword, one description), so a common word can be judged against the name
 // it came from. `dist` = the phrase's own distinctive words (stemmed); prose (more than 6 of them) never vouches for a common word.
 const fitTopicPhrases = (topics) => (Array.isArray(topics) ? topics.filter(Boolean).map(String) : [String(topics || '')])
-  .map(t => { const w = t.toLowerCase().split(/[^a-z0-9]+/).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
+  .map(t => { const w = fitLow(t).split(FIT_SPLIT_WORDS).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
     return { dist: [...new Set(w.filter(x => !FIT_GENERIC.has(x)).map(fitStem))], words: [...new Set(w.map(fitStem))] }; })
   .filter(p => p.dist.length).map(p => ({ ...p, prose: p.dist.length > 6 }));
 function fitTopic(keyword, topics, ctx) {
@@ -295,13 +319,13 @@ function fitTopic(keyword, topics, ctx) {
   // whose services and description are a single line gets no topic refusals at all ("no evidence, no refusal").
   if (T.size < (typeof o.topic_min_words === 'number' ? o.topic_min_words : 12)) return { ok: true, reason: '', detail: T.size ? 'too few topic words on file (' + T.size + ') to judge topic distance' : 'no topics on file, so topic distance was not judged', share: null };
   const toks = fitTokens(keyword);
-  const own = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t));
+  const own = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t) && !/^\d+$/.test(t));   // F-KW: a year or a number ("2026") is neutral, like a place
   const known = [...T];
   const stemHit = (s, x) => x === s || (x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0));
   const matches = (t) => { const s = fitStem(t); return T.has(s) || known.some(x => stemHit(s, x)); };
   // B-3: a common word (FIT_COMMON) is on topic only through a service NAME the keyword carries whole, or two words of (prose never vouches)
   // ("business central partner uae" carries two words of "Dynamics 365 Business Central"; "intelligent software solutions" one of "Intelligent Document Processing")
-  const ownStems = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t)).map(fitStem);
+  const ownStems = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t) && !/^\d+$/.test(t)).map(fitStem);
   const allStems = toks.filter(t => t.length > 2 && !FIT_GEO.has(t)).map(fitStem);
   const viaName = (t) => { const s = fitStem(t); return PH.some(ph => !ph.prose && ph.dist.some(x => stemHit(s, x))
     && (ph.dist.every(x => ownStems.some(k => stemHit(k, x))) || ph.words.filter(x => allStems.some(k => stemHit(k, x))).length >= 2)); };
@@ -317,8 +341,51 @@ function fitTopic(keyword, topics, ctx) {
   const hits = own.filter(matchOwn);
   const share = Math.round(100 * hits.length / own.length) / 100;
   if (share < bar) return { ok: false, reason: 'off topic', detail: Math.round(share * 100) + '% of its own words match ' + label + ' (' + Math.round(bar * 100) + '% is the bar): '
-    + own.filter(t => hits.indexOf(t) < 0).slice(0, 4).join(', ') + ' — add it to your services if you do sell it', share };
+    + own.filter(t => hits.indexOf(t) < 0).slice(0, 4).join(', ') + '. Add it to your services if you do sell it.', share };
   return { ok: true, reason: '', detail: Math.round(share * 100) + '% of its own words match ' + label, share };
+}
+// ---- F-KW (2026-10-20, findings 1 and 2): POSITIVE topic evidence, for the decisions that write on their own ----
+// fitTopic answers "may we refuse it?" and, with fewer than 12 topic words on file, refuses nothing ("no evidence, no refusal"). That is the
+// right rule for a refusal and the wrong one for writing a page on our own: a site that lists two services passed every keyword. fitEvidence
+// answers "is there evidence it is the client's subject?": `in` = at least the topic bar of the keyword's own words is in the topics given (any
+// number of topic words); `out` = with 12+ topic words on file the keyword misses the bar (a refusal); `unknown` = too little on file to say,
+// which a caller must treat as NOT in topic (a suggestion at most) and say so in plain words.
+// F-REH (2026-10-20, real-credit rehearsal): a DECLARED service's product-category word is positive evidence. "crm service provider uae" for a
+// client who listed "CRM implementation" came back "not enough information": `crm` is a category word (FIT_GENERIC), which the share rule
+// treats as neutral, so the keyword was judged on "provider" alone. When the client named the category in a service (ctx.services = the
+// services they DECLARED, never the crawl's guesses), that word counts as one of the keyword's own words AND as a hit, at any number of topic
+// words on file. Only product categories qualify: `ai`, `software`, `cloud` and the wide words never do ("character ai" stays off topic for an
+// "AI consulting" site); a FIT_COMMON word ("sales", "central") still needs the whole service name, as in fitTopic.
+const FIT_SERVICE_CATS = new Set(['erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll']);
+const fitServiceAnchors = (keyword, services) => {
+  const svc = new Set((Array.isArray(services) ? services : [services]).filter(Boolean).flatMap(x => fitTokens(String(x))).filter(t => FIT_SERVICE_CATS.has(t)).map(fitStem));
+  if (!svc.size) return [];
+  return [...new Set(fitTokens(keyword).filter(t => FIT_SERVICE_CATS.has(t) && svc.has(fitStem(t))))];
+};
+function fitEvidence(keyword, topics, ctx) {
+  const o = ctx || {};
+  const T = fitTopicWords(topics);
+  const anchors = fitServiceAnchors(keyword, o.services || []);
+  const t = T.size ? fitTopic(keyword, topics, { ...o, topic_min_words: 1 }) : { ok: false, share: null, detail: '' };
+  if (t.ok && t.share != null) return { verdict: 'in', share: t.share, words: T.size, detail: t.detail, basis: 'topics' };
+  if (anchors.length) {
+    // the share again, with the declared category word counted as the keyword's own and as matched
+    const toks = fitTokens(keyword);
+    const own = toks.filter(x => x.length > 2 && !FIT_GEO.has(x) && !FIT_GENERIC.has(x) && !/^\d+$/.test(x));
+    const PH = fitTopicPhrases(topics), known = [...T];
+    const stemHit = (s, x) => x === s || (x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0));
+    const ownStems = own.map(fitStem), allStems = toks.filter(x => x.length > 2 && !FIT_GEO.has(x)).map(fitStem);
+    const viaName = (w) => { const s = fitStem(w); return PH.some(ph => !ph.prose && ph.dist.some(x => stemHit(s, x)) && (ph.dist.every(x => ownStems.some(k => stemHit(k, x))) || ph.words.filter(x => allStems.some(k => stemHit(k, x))).length >= 2)); };
+    const hit = (w) => FIT_COMMON.has(w) ? viaName(w) : (T.has(fitStem(w)) || known.some(x => stemHit(fitStem(w), x)));
+    const hits = own.filter(hit).length + anchors.length, all = own.length + anchors.length;
+    const share = Math.round(100 * hits / all) / 100;
+    const bar = typeof o.topic_bar === 'number' ? o.topic_bar : FIT_TOPIC_BAR;
+    if (share >= bar) return { verdict: 'in', share, words: T.size, basis: 'declared service', anchors,
+      detail: '"' + anchors.join('", "') + '" is one of the services you listed' + (own.length ? ' (' + Math.round(share * 100) + '% of its own words match)' : '') };
+  }
+  if (!T.size) return { verdict: 'unknown', share: null, words: 0, detail: 'nothing is on file yet about what this website sells or which keywords you chose' };
+  if (T.size >= 12) return { verdict: 'out', share: t.share == null ? null : t.share, words: T.size, detail: t.detail };
+  return { verdict: 'unknown', share: t.share == null ? null : t.share, words: T.size, detail: 'too little is on file about what this website sells to tell whether this keyword is part of it' };
 }
 // ctx: { intent, own_domain, competitors: [domains, declared], serp_domains: [domains on the results page / auto-detected rivals], brands: { name: domain } (learned),
 //       serp: [this keyword's own top domains, in rank order] (optional), protect: [words of the head term / seeds / services], relevance: fn (G19 hook) }
@@ -331,7 +398,9 @@ function fitGate(keyword, ctx) {
   const has = (re) => re.test(' ' + kw + ' ');
   const contentWord = has(FIT_CONTENT), partnerWord = has(FIT_PARTNER), compareWord = has(FIT_COMPARE), portalWord = has(FIT_PORTAL);
   // 1. the website itself
-  for (const l of fitLabels(ctx.own_domain, [])) if (toks.includes(l) || squashed.includes(l)) return { ok: false, reason: 'own brand', detail: 'names the website itself (' + l + ')' };
+  // F-KW (2026-10-20, finding 5): only a DISTINCTIVE label is a brand. On an exact-match domain the label is made of the very words the client
+  //    sells ("erp-software.ae" -> "erpsoftware"), and "erp software uae" was refused as the site's own brand (fitOwnLabels above).
+  for (const l of fitOwnLabels(ctx.own_domain, toks, protect)) if (toks.includes(l) || squashed.includes(l)) return { ok: false, reason: 'own brand', detail: 'names the website itself (' + l + ')' };
   // 2. the search data says navigational
   if (String(ctx.intent || '').toLowerCase() === 'navigational') return { ok: false, reason: 'navigational', detail: 'the search data classifies it as navigational (people look for one particular website)' };
   // 3. a public body or an identity document: "ministry of finance", "federal tax authority" (no content / buying word), "fta", "emaratax uae",
@@ -412,10 +481,12 @@ const fitStored = (row, ctx) => {
   const g = fitGate(kw, ctx || {});
   if (g.ok) return { ok: true, live, flagged: false, reason: '', detail: '', note: '' };
   const why = '"' + kw + '" is not a search this website should target: ' + g.detail + ' (' + g.reason + ')';
+  // F-KW (2026-10-20, finding 10): plain sentences, and no claim about WHEN the row was planned: a row written after the gate existed (its
+  // results page changed, a competitor was declared later) is set aside by the same rule, and "planned before this rule existed" was false for it
   if (live) return { ok: true, live: true, flagged: true, reason: g.reason, detail: g.detail,
-    note: why + ' — its page is already written, so it stays tracked; decide whether to keep it' };
+    note: why + '. Its page is already written, so it stays tracked; decide whether to keep it.' };
   return { ok: false, live: false, flagged: true, reason: g.reason, detail: g.detail,
-    note: why + ' — it was planned before this rule existed, so it is set aside instead of written' };
+    note: why + '. It is set aside, so no page is written for it.' };
 };
 // ---- B-G1 / B-G2 / B-G3 (2026-10-15, FIX_PLAN §3.16; INVARIANTS rule 2): the READ path, written once ----
 // R16 put `fitStored` on two read paths — the Rank Tracker and the Content Cadence — and wrote the loop around it twice. Three more
@@ -476,9 +547,9 @@ const FITR = {
     const a = (set_aside || []).filter(x => x && x.dropped);
     if (!a.length) return '';
     return a.length + ' stored keyword' + (a.length === 1 ? ' was' : 's were') + ' set aside, so ' + (a.length === 1 ? 'it is' : 'they are')
-      + ' not ' + String(what || 'used') + ': ' + a.slice(0, 6).map(x => '"' + x.keyword + '" — ' + (x.detail || x.reason)).join('; ')
+      + ' not ' + String(what || 'used') + ': ' + a.slice(0, 6).map(x => '"' + x.keyword + '" (' + (x.detail || x.reason) + ')').join('; ')
       + (a.length > 6 ? ' (and ' + (a.length - 6) + ' more)' : '')
-      + '. They were planned before this rule existed; a page that is already written is kept and only flagged.';
+      + '. A page that is already written is kept and only flagged.';
   }
 };
 // ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----
@@ -581,7 +652,12 @@ const SM = (() => {
     // P2-2 (2026-10-12): the Site Describer answers with `products_or_services` — reading only `services` left services_json empty on every
     // site, so the brief's facts said `services: []` although the describer had found nine.
     const desc0 = x.description || {};
-    const services = uniq([...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    // keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.2 / §14.1): what the client SAID they sell ("What do you sell?" on Track my site,
+    // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
+    // unchanged and the weekly Site Tracker can never overwrite it
+    const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -599,7 +675,7 @@ const SM = (() => {
 
     return { site_id, domain, canonical_host, host_source, home_url: 'https://' + canonical_host + '/',
       business_name: nameHit.value, name_source: nameHit.source, logo_url: logoHit.value, logo_source: logoHit.source,
-      nap, services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,
+      nap, services, declared_services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,
       model_updated_at: updated_at, sources: { profile: !!prof.site_id || !!prof.business_name, homepage_schema: !!org, gbp: !!(gbp.name || gbp.phone), app: !!(req.business_facts || req.cta || req.business_name), html: !!html } };
   };
 
@@ -703,12 +779,13 @@ const SM = (() => {
   const ageDays = (model) => { const t = Date.parse(S((model || {}).model_updated_at)); return Number.isFinite(t) ? (Date.now() - t) / 864e5 : Infinity; };
   const isFresh = (model, days) => !!(model && S(model.canonical_host) && ageDays(model) < (Number(days) > 0 ? Number(days) : FRESH_DAYS));
   // exactly the seo_sites columns the model owns (plus the two keys), ready to merge into a site row or a cache value
-  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];
+  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at', 'declared_services'];
   const toRow = (model) => { const m = model || {};
     return { site_id: S(m.site_id), domain: S(m.domain), canonical_host: S(m.canonical_host), business_name: S(m.business_name), logo_url: S(m.logo_url),
       nap_json: JSON.stringify(nap(m)), services_json: JSON.stringify(services(m)), nav_pages_json: JSON.stringify((m.nav_pages || []).map(p => ({ url: p.url, title: p.title }))),
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
-      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
+      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at),
+      declared_services: JSON.stringify(Array.isArray(m.declared_services) ? m.declared_services : []) };
   };
   // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
   // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
@@ -766,12 +843,48 @@ const fromText = (v) => {
 let o = out.output != null ? out.output : out.text;
 if (o && typeof o !== 'object') o = fromText(o);
 const aiOk = !!(o && typeof o === 'object' && o.fit != null && Number.isFinite(Number(o.fit)));
-const fit = aiOk ? Math.max(0, Math.min(2, Math.round(Number(o.fit)))) : null;
+const fitAi = aiOk ? Math.max(0, Math.min(2, Math.round(Number(o.fit)))) : null;
 // the second attempt (*Keyword Fit (Text)*) runs only when the first came back empty; referencing a node that did not run throws
 let plainRan = false; try { plainRan = !!($('Keyword Fit (Text)').first() || {}).json; } catch (e) { plainRan = false; }
-const brand = String(a.domain || '').split('.')[0].replace(/[^a-z0-9]/g, '');
-const ownBrand = brand.length >= 4 && String(a.keyword).replace(/[^a-z0-9]/g, '').includes(brand);
-const navigational = aiOk ? (o.navigational === true || String(o.navigational).toLowerCase() === 'true') : (String(a.intent || '') === 'navigational' && !ownBrand);
+// F-KW (2026-10-20, finding 5): the site's own brand is its DISTINCTIVE label only (fitOwnLabels): on an exact-match domain
+// ("erp-software.ae") "erp software uae" is the client's subject, not a search for the site itself
+const kwToksA = fitTokens(a.keyword);
+const ownBrand = fitOwnLabels(a.domain, kwToksA, [...new Set((a.services || []).flatMap(x => fitTokens(x)))]).some(l => kwToksA.includes(l) || kwToksA.join('').includes(l));
+const navAi = aiOk ? (o.navigational === true || String(o.navigational).toLowerCase() === 'true') : (String(a.intent || '') === 'navigational' && !ownBrand);
+const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
+// ---- keyword-first R-K4 (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.1): the deterministic fit gate, called at last ----
+// The Keyword Check inlined fitGate and never called it, so whether a competitor's brand, a government portal or the site's own name was "a
+// fit" was left to one Haiku call (and to nothing when that call failed). The gate runs first, on what the engine knows about the site: its own
+// domain, the competitors it declared (seo_monitors / the site row), the brand names AI uses for other companies (seo_cache ai_brands:<site>),
+// DataForSEO's intent, and as topics what it sells (the request's services, the site model's services, the client's declared services) and the
+// keywords it already chose. A refusal makes `fit` 0 with its reason, whatever the model said; the model's alternatives are still offered.
+const siteRowA = rowsOf('Load Site (Assess)')[0] || {}, monRowA = rowsOf('Load Monitors (Assess)')[0] || {};
+const modelA = (() => { try { return SM.from({ ...siteRowA, site_id: siteRowA.site_id || a.site_id || '', domain: siteRowA.domain || a.domain || '' }, { monitors: monRowA }); } catch (e) { return null; } })();
+let cacheA = []; try { cacheA = $('Load Assess Cache').all().map(i => i.json).filter(r => r && r.key); } catch (e) { cacheA = []; }
+const headsA = [...new Set(rowsOf('Load Ladders (Assess)').map(r => String(r.head_keyword || '')).filter(Boolean))];
+const servicesA = [...new Set([...(a.services || []), ...(modelA ? modelA.services : [])].map(x => String(x || '').trim()).filter(Boolean))];
+const gateCtxA = FITR.ctx({ own_domain: a.domain, intent: a.intent || '', competitors: modelA ? modelA.competitors : [], brands: fitLearnedBrands(cacheA), heads: headsA, services: servicesA,
+  topics: [...servicesA, ...headsA, ...(a.existing_keywords || [])], topic_label: 'what this website sells and the keywords you chose' });
+const gate = fitGate(a.keyword, gateCtxA);
+const GATE_WORDS = { 'own brand': 'it is your own brand name', 'other brand': 'it names another company', government: 'it is a government service', navigational: 'people search it to reach one particular website',
+  portal: 'it is a login, portal or status check', 'off topic': 'it is not about what you sell', 'too broad': 'it is too broad to win', 'job search': 'people search it to find work', empty: 'there is no keyword' };
+const fit = gate.ok ? fitAi : 0;
+// F-KW (2026-10-20, finding 2): the gate judges topic distance only with 12+ topic words on file. Below that it passed everything and the
+// answer read as if the topic had been checked. Now the check says when there is not enough information to judge (and how to fix it), and a
+// keyword with positive evidence says so; the model's own fit still stands, it is never overruled on too little evidence.
+// F-REH (2026-10-20, real-credit rehearsal): the services the client DECLARED (the request's, and the stored seo_sites.declared_services) are
+// passed to fitEvidence as well, so a keyword that carries one of their product categories ("crm service provider uae" for "CRM
+// implementation") counts as on topic even with few words on file. And the note is the customer's own sentence, built here for the state the
+// site is in: it asks for services only when none are listed (the rehearsal's client had listed four and was told to "add what you sell"),
+// with no internal terms and nothing said twice.
+const declaredA = [...new Set([...(a.services || []), ...((modelA && modelA.declared_services) || [])].map(x => String(x || '').trim()).filter(Boolean))];
+const evA = gate.ok ? fitEvidence(a.keyword, gateCtxA.topics || [], { topic_label: 'what you sell and the keywords you chose', services: declaredA }) : null;
+const topic_judged = !evA || evA.verdict !== 'unknown';
+const topicNoteA = topic_judged ? '' : !declaredA.length
+  ? 'we could not tell whether this keyword matches what you sell, because no services are listed for this website yet. Add your main services in your website settings and the check will tell you'
+  : 'we could not tell whether this keyword matches what you sell: it does not clearly match the services you listed (' + declaredA.slice(0, 4).join(', ') + (declaredA.length > 4 ? ' and ' + (declaredA.length - 4) + ' more' : '') + '). If you offer it, add it to your services and check it again';
+const navigational = gate.ok ? navAi : (gate.reason === 'navigational' || navAi);
+const fit_gate = gate.ok ? { ok: true, reason: '', detail: '', topic_judged, topic_note: topicNoteA, ...(evA && evA.basis === 'declared service' ? { topic_basis: evA.detail } : {}) } : { ok: false, reason: gate.reason, detail: gate.detail, words: GATE_WORDS[gate.reason] || gate.reason, topic_judged: true, topic_note: '' };
 // ---- B1-1 / B1-2 (2026-10-15, benchmark area 1): "difficulty for your site" is measured on THIS keyword's topic where the site has a
 // record on it. The leaders personalise per topic (MarketMuse Personalized Difficulty = Keyword Difficulty - a topic-level Topic
 // Authority, and "If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty"; Semrush lowers Personal KD
@@ -790,7 +903,6 @@ const plan = reachPlan(difficulty_for_you, reachStrong(a.reach_info, a.position)
 // "erp software uae" — the head of an active ladder with a written page — answered "Easy · Direct plan" with no word about it. The same
 // search (one search, one page: equal words or 75%+ in common) is named; when the Keyword Check also loaded the domain's seo_ladders /
 // seo_content_log rows (optional nodes), the ladder id, its status and the page are given too.
-const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
 const existing = (() => {
   const kw = String(a.keyword || '').toLowerCase().trim();
   const same = (x) => { const k = String(x || '').toLowerCase().trim(); return !!k && (k === kw || keywordsOverlap(k, kw)); };
@@ -829,7 +941,9 @@ const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/
 const need = difficulty_for_you === 'not_realistic' || fit === 0;
 const alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
 const warnings = [];
-if (!aiOk) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160) + (plainRan ? ' (the plain-text retry answered nothing either)' : ''));
+if (!gate.ok) warnings.push('not a fit for this website: ' + fit_gate.words + ' (' + gate.detail + ')');
+if (!topic_judged) warnings.push(topicNoteA);
+if (!aiOk && gate.ok) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160) + (plainRan ? ' (the plain-text retry answered nothing either)' : ''));
 if ((a.reach_errors || []).length) warnings.push('reach measured from partial data: ' + a.reach_errors.join('; ').slice(0, 200));
 // B1-1: an encouraging answer that rests on a reach measured on OTHER topics says so where the warnings are read. Only then: a site
 // with no record anywhere is not borrowing anything, and a measurement on this topic needs no caveat.
@@ -842,8 +956,9 @@ if (!a.known) warnings.push('DataForSEO has no data for this keyword in ' + a.co
 if (fit !== null && fit < 2 && /homepage only/.test(String(a.services_source || ''))) warnings.push('the topic check used a stored description written from the homepage only, so a service named elsewhere on the site may be missing: run "Describe my website" to refresh it');
 const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volume, kd: a.kd, intent: a.intent, cpc: a.cpc, position: a.position, reach,
   difficulty_for_you, plan_type: plan.plan_type, months: plan.months, fit, navigational, alternatives,
+  fit_gate, fit_source: !gate.ok ? 'gate' : aiOk ? 'model' : 'unknown',   // R-K4: a refusal by the gate decides the fit, independent of the model
   cost_usd: +(Number(a.dfs_cost || 0) + CONFIG.ai_cost_usd * (plainRan ? 2 : 1)).toFixed(4),   // R3: the model is charged even when its answer could not be parsed
-  label: (reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you]) + (topic.used ? ' \u00b7 measured on this topic' : '') + (fit === null ? ' \u00b7 ' + FIT_UNKNOWN : ''), fit_known: fit !== null, stretch: plan.stretch, position_url: a.position_url,
+  label: (reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you]) + (topic.used ? ' \u00b7 measured on this topic' : '') + (fit === null ? ' \u00b7 ' + FIT_UNKNOWN : '') + (gate.ok ? '' : ' \u00b7 not a fit: ' + fit_gate.words), fit_known: fit !== null, stretch: plan.stretch, position_url: a.position_url,
   chance: plan.plan_type === 'none' ? null : plan.chance, chance_text: plan.plan_type === 'none' ? '' : reachChanceText(plan), base_rate: REACH_BASE_RATE,   // G3 (2026-10-11): the estimated chance band (uncalibrated) and the 2025 base rate
   reach_info: { method: a.reach_info.method, p75: a.reach_info.p75 ?? null, size_reach: a.reach_info.size_reach ?? null, sample: a.reach_info.sample ?? null, top10: a.reach_info.top10 ?? null, cached: !!a.reach_info.cached, cached_at: a.reach_info.cached_at || null,
     site_reach: topic.site_reach },

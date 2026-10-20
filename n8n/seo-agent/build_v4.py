@@ -765,7 +765,7 @@ GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 /
 KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
 RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n'))   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n'))   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -1262,8 +1262,8 @@ add_node('Page Track', 'n8n-nodes-base.form', 2.5, {'formFields': {'values': [
     copy.deepcopy(COUNTRY_FIELD),
     {'fieldLabel': 'Search terms to track (optional)', 'fieldType': 'textarea', 'placeholder': 'One per line, up to 20: the searches you care about. Keyword-ladder terms are tracked automatically.'},
     {'fieldLabel': 'GA4 property ID (optional)', 'placeholder': 'e.g. 123456789 (Analytics → Admin → Property details). Leave empty: it is detected from the site URL once access is granted.'},
-    {'fieldLabel': 'Email me the weekly report', 'fieldType': 'email', 'placeholder': 'Required: the first report arrives within minutes, then every Monday', 'requiredField': True}
-]}, 'options': {'formTitle': 'Track my site', 'formDescription': 'Every Monday: clicks, impressions, positions and traffic from your own Search Console and Google Analytics, the keywords within reach of page 1, pages losing traffic, whether your new pages are indexed, search trends, and what to do next. The first report explains which Google account to add so real data flows in.'}}, [448, 760])
+    {'fieldLabel': 'Email me the weekly report', 'fieldType': 'email', 'placeholder': 'Required: the first report arrives within minutes, then once a week on the weekday you set this up', 'requiredField': True}
+]}, 'options': {'formTitle': 'Track my site', 'formDescription': 'Once a week, on the weekday you set this up: clicks, impressions, positions and traffic from your own Search Console and Google Analytics, the keywords within reach of page 1, pages losing traffic, whether your new pages are indexed, search trends, and what to do next. The first report explains which Google account to add so real data flows in.'}}, [448, 760])
 connect('Page Track', 'Normalize Input')
 nodes['Unmatched Choice']['parameters']['jsCode'] = "throw new Error('Please choose one of the 7 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword / Track my site).');"
 patch('Normalize Input', "else if (choice.includes('rank my site') || choice.includes('ladder')) mode = 'ladder';", "else if (choice.includes('rank my site') || choice.includes('ladder')) mode = 'ladder';\nelse if (choice.includes('track')) mode = 'track';")
@@ -1285,19 +1285,19 @@ add_node('Tracker Payload (Track)', 'n8n-nodes-base.code', 2, {'jsCode': rd('cod
 add_node('Start Site Tracker', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentSiteTrk1'}, 'mode': 'once', 'options': {'waitForSubWorkflow': False}}, [TX + 880, TY], {'onError': 'continueRegularOutput'})
 if_node('Via Webhook (Track)?', "{{ !!$('Normalize Input').first().json.via_webhook }}", [TX + 1100, TY])
 add_node('Build Track Response', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Build_Track_Response.js')}, [TX + 1320, TY - 120])
-add_node('Tracking Started', 'n8n-nodes-base.form', 2.5, {'operation': 'completion', 'completionTitle': "=Tracking is set up for {{ $('Normalize Input').first().json.domain }}", 'completionMessage': "=Your first performance report is being prepared now and will be e-mailed to {{ $('Normalize Input').first().json.email }} within a few minutes, then every Monday. It tells you which Google account to add to Search Console and Google Analytics so your real search data flows in. You can close this page.", 'options': {}}, [TX + 1320, TY + 120])
+add_node('Tracking Started', 'n8n-nodes-base.form', 2.5, {'operation': 'completion', 'completionTitle': "=Tracking is set up for {{ $('Normalize Input').first().json.domain }}", 'completionMessage': "=Your first performance report is being prepared now and will be e-mailed to {{ $('Normalize Input').first().json.email }} within a few minutes, then once a week on today's weekday. It tells you which Google account to add to Search Console and Google Analytics so your real search data flows in. You can close this page.", 'options': {}}, [TX + 1320, TY + 120])
 for a, b in [('Ensure Sites Table (Track)', 'Site Row (Track)'), ('Site Row (Track)', 'Save Site (Track)'), ('Save Site (Track)', 'Tracker Payload (Track)'), ('Tracker Payload (Track)', 'Start Site Tracker'), ('Start Site Tracker', 'Via Webhook (Track)?'), ('Build Track Response', 'Has Callback?')]:
     connect(a, b)
 connect('Via Webhook (Track)?', 'Build Track Response', 0); connect('Via Webhook (Track)?', 'Tracking Started', 1)
 nodes['Note 1']['parameters']['content'] = nodes['Note 1']['parameters']['content'].replace("· **Rank my site for a keyword** (ladder).", "· **Rank my site for a keyword** (ladder) · **Track my site** (weekly Search Console / GA4 / Trends report through the Site Tracker workflow).")
 sticky("""### Track my site (form option / API mode `track`, v4.3)
-Registers the site in the Data Table `seo_sites` (upsert by site id: domain, country, search terms to track, GA4 property id, e-mail / callback) and starts **SEO Agent — Site Tracker** at once for this site; the tracker then runs every Monday. The form ends on "Tracking is set up"; API callers get `stage: site_tracker_setup` and later one `stage: site_tracker` callback per weekly report. Domains with a keyword ladder are tracked automatically.""", TX - 60, TY - 420, 900, 240, 5)
+Registers the site in the Data Table `seo_sites` (upsert by site id: domain, country, search terms to track, GA4 property id, e-mail / callback) and starts **SEO Agent — Site Tracker** at once for this site; the tracker then runs once a week in the website's own cycle (from the day tracking starts, 2026-10-19). The form ends on "Tracking is set up"; API callers get `stage: site_tracker_setup` and later one `stage: site_tracker` callback per weekly report. Domains with a keyword ladder are tracked automatically.""", TX - 60, TY - 420, 900, 240, 5)
 log('Site tracking (v4.3): start option "Track my site (rankings & traffic)" + form page (domain, country, search terms, GA4 property id, e-mail); API mode "track" (keywords, ga4_property_id); rows upserted into seo_sites and the Site Tracker workflow started at once; completion page / callback stage site_tracker_setup')
 
 
 # =============================================================================
 # 13. CONTENT CADENCE + "I PUBLISHED A PAGE" (v4.3): blog package on every content run (article HTML + Markdown + meta.json, CMS-agnostic),
-#     configurable blog posts per week per site (seo_cadence; written every Monday by SEO Agent — Content Cadence), published-URL feedback
+#     configurable blog posts per week per site (seo_cadence; written each week in the website's cycle by SEO Agent — Content Cadence), published-URL feedback
 #     (live publish check, content log, ladder row, link suggestions), internal spawns exempt from the per-address rate limit.
 # =============================================================================
 from ladder_common import LOG_TABLE, LOG_COLS, CADENCE_TABLE, CADENCE_COLS, QUERY_TABLE, dt_get_all_params, dt_upsert_params_keys, dt_update_params
@@ -1329,7 +1329,7 @@ add_node('Page Published', 'n8n-nodes-base.form', 2.5, {'formFields': {'values':
     {'fieldLabel': 'Website Domain', 'placeholder': 'example.com', 'requiredField': True},
     {'fieldLabel': 'Keyword of the page', 'placeholder': 'the keyword the page was written for (as in the e-mail subject)', 'requiredField': True},
     {'fieldLabel': 'Published page URL', 'placeholder': 'https://example.com/blog/your-new-page/', 'requiredField': True}
-]}, 'options': {'formTitle': 'I published a page', 'formDescription': 'Tell us where the page went live. We check the live page (title, meta description, H1, canonical, schema, indexability), record it, suggest pages to link from, and the trackers follow its indexing and positions from the next Monday.', 'buttonLabel': 'Record it'}}, [448, 960])
+]}, 'options': {'formTitle': 'I published a page', 'formDescription': 'Tell us where the page went live. We check the live page (title, meta description, H1, canonical, schema, indexability), record it, suggest pages to link from, and the trackers follow its indexing and positions from the next weekly report.', 'buttonLabel': 'Record it'}}, [448, 960])
 connect('Page Published', 'Normalize Input')
 nodes['Unmatched Choice']['parameters']['jsCode'] = "throw new Error('Please choose one of the 8 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword / Track my site / I published a page).');"
 patch('Normalize Input', "else if (choice.includes('track')) mode = 'track';", "else if (choice.includes('track')) mode = 'track';\nelse if (choice.includes('published')) mode = 'published';")
@@ -1374,12 +1374,12 @@ add_node('Cadence Row (Track)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ca
 add_node('Save Cadence (Track)', DT_TYPE, DT_VERSION, dt_upsert_params(CADENCE_TABLE, CADENCE_COLS, 'site_id'), [TX + 770, TY - 160], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
 disconnect('Ensure Sites Table (Track)', 'Site Row (Track)'); connect('Ensure Sites Table (Track)', 'Ensure Cadence Table (Track)'); connect('Ensure Cadence Table (Track)', 'Site Row (Track)')
 disconnect('Save Site (Track)', 'Tracker Payload (Track)'); connect('Save Site (Track)', 'Cadence Row (Track)'); connect('Cadence Row (Track)', 'Save Cadence (Track)'); connect('Save Cadence (Track)', 'Tracker Payload (Track)')
-nodes['Tracking Started']['parameters']['completionMessage'] = "=Your first performance report is being prepared now and will be e-mailed to {{ $('Normalize Input').first().json.email }} within a few minutes, then every Monday. {{ $('Normalize Input').first().json.blogs_per_week ? 'Every Monday the Content Cadence also writes ' + $('Normalize Input').first().json.blogs_per_week + ' blog page(s) for you (HTML + Markdown + meta.json); publish them and report the links with \"I published a page\". ' : '' }}The report tells you which Google account to add to Search Console and Google Analytics so your real search data flows in. You can close this page."
+nodes['Tracking Started']['parameters']['completionMessage'] = "=Your first performance report is being prepared now and will be e-mailed to {{ $('Normalize Input').first().json.email }} within a few minutes, then once a week on today's weekday. {{ $('Normalize Input').first().json.blogs_per_week ? 'Each week the Content Cadence also writes up to ' + $('Normalize Input').first().json.blogs_per_week + ' blog page(s) for you (HTML + Markdown + meta.json); publish them and report the links with \"I published a page\". ' : '' }}The report tells you which Google account to add to Search Console and Google Analytics so your real search data flows in. You can close this page."
 # ---------- E. notes ----------
 nodes['Note 1']['parameters']['content'] = nodes['Note 1']['parameters']['content'].replace("· **Track my site** (weekly Search Console / GA4 / Trends report through the Site Tracker workflow).", "· **Track my site** (weekly Search Console / GA4 / Trends report through the Site Tracker workflow; blog posts per week through the Content Cadence workflow) · **I published a page** (publish check + tracking of the live URL).")
 sticky("""### Blog package, content cadence and "I published a page" (v4.3)
 Every content run now also delivers the article as **HTML + Markdown + meta.json** (`Blog Package`: title, slug, meta description, keywords, headings, internal links, schema, word count, content score, publish checklist) by e-mail and in the callback (`markdown`, `html`, `meta`). The owner publishes in **any CMS**.
-"Track my site" takes **blog posts per week** (0-3 → `seo_cadence`); the workflow **SEO Agent — Content Cadence** writes them every Monday (ladder rung → striking-distance query → rising trend) and logs them in `seo_content_log`.
+"Track my site" takes **blog posts per week** (0-3 → `seo_cadence`); the workflow **SEO Agent — Content Cadence** writes them each week in the website's own cycle (ladder rung → striking-distance query → rising trend) and logs them in `seo_content_log`.
 "I published a page" (form / API `mode: published`): fetches the live page, checks title / meta description / H1 / canonical / noindex / JSON-LD / length, upserts the content-log row with the URL, marks the ladder row published with the real URL, suggests pages to link from; the Site Tracker inspects the page and tracks the keyword from the next Monday. Internal spawns (`ladder:` / `cadence:` keys) do not consume the owner's 6 public runs per day.""", TX - 60, TY + 160, 1100, 300, 5)
 log('Content cadence + published pages (v4.3): blog package (article HTML, Markdown, meta.json) on every content run; "Blog posts per week" on Track my site (seo_cadence, written weekly by SEO Agent — Content Cadence); "I published a page" form option / API mode published (live publish check, content log, ladder row, link suggestions); internal spawns exempt from the per-address rate limit; reporting a published page is free')
 
@@ -1837,6 +1837,67 @@ add_node('Save Monitors (Track)', DT_TYPE, DT_VERSION, dt_upsert_params(MONITORS
 disconnect('Save Cadence (Track)', 'Tracker Payload (Track)')
 for a, b in [('Save Cadence (Track)', 'Ensure Monitors Table (Track)'), ('Ensure Monitors Table (Track)', 'Load Monitors (Track)'), ('Load Monitors (Track)', 'Monitor Row (Track)'), ('Monitor Row (Track)', 'Save Monitors (Track)'), ('Save Monitors (Track)', 'Tracker Payload (Track)')]:
     connect(a, b)
+# ---------- keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §2.2 item 5 / §5.2 / §14.1 / §14.5): Track my site and the request fields ----------
+# * Track my site reads the stored seo_sites row first, so a re-save keeps a site its owner or the credit guard paused `paused` (it used to
+#   write `status: active` on every save: un-pausing by accident). Resuming is Site Admin's `resume`. *Site Row (Track)* reads this node by name.
+# * Normalize Input takes four new fields, each read by its EXACT key (pick() matches keys fuzzily, so a new word must not be a substring
+#   another pick() looks for: none of "chosen", "ladder_mode", "services", "timezone" contains one):
+#     chosen_by   - who chose a ladder's keyword (client_typed | client_picked | system_announced; anything else = '', read as client_typed);
+#     ladder_mode - the mode a ladder is started in (auto | manual; a Manual ladder writes nothing at start);
+#     services    - what the client sells ("What do you sell?"), stored by Track my site as declared_services, plus `services_given`
+#                   (false when the request had no services at all, so a re-save without them leaves the stored list alone);
+#     timezone    - the website's IANA time zone; Track my site ignores it (the Site Kickoff takes it), an invalid zone becomes ''.
+_ecK = pos('Ensure Cadence Table (Track)')
+disconnect('Ensure Cadence Table (Track)', 'Site Row (Track)')
+add_node('Load Site (Track)', DT_TYPE, DT_VERSION, dt_get_where_params(SITES_TABLE, 'site_id', 'eq', SITE18), [_ecK[0] + 220, _ecK[1] - 160], LOAD18)
+connect('Ensure Cadence Table (Track)', 'Load Site (Track)'); connect('Load Site (Track)', 'Site Row (Track)')
+patch('Normalize Input', "const ladder_links = Array.isArray(p2.ladder_links)",
+      "// keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §14.5): exact keys only (see build_v4.py)\n"
+      "const KF_CHOSEN = ['client_typed', 'client_picked', 'system_announced'].includes(String(p2.chosen_by || '').trim().toLowerCase()) ? String(p2.chosen_by).trim().toLowerCase() : '';\n"
+      "const KF_LADDER_MODE = ['auto', 'manual'].includes(String(p2.ladder_mode || '').trim().toLowerCase()) ? String(p2.ladder_mode).trim().toLowerCase() : '';\n"
+      "const KF_SERVICES_GIVEN = Array.isArray(p2.services) || typeof p2.services === 'string';\n"
+      "const KF_SERVICES = (Array.isArray(p2.services) ? p2.services : String(p2.services || '').split(/[\\n,;]+/)).map(x => String(x == null ? '' : x).replace(/\\s+/g, ' ').trim().slice(0, 80)).filter(x => x.length >= 2).filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i).slice(0, 30);\n"
+      "const KF_TZ = (() => { const t = String(p2.timezone || '').trim(); if (!t || t.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\\-]*(\\/[A-Za-z0-9_+\\-]+)*$/.test(t)) return ''; try { new Intl.DateTimeFormat('en-US', { timeZone: t }); return t; } catch (e) { return ''; } })();\n"
+      "const ladder_links = Array.isArray(p2.ladder_links)")
+patch('Normalize Input', "    pipeline_source: String(p2.pipeline_source || ''),",
+      "    pipeline_source: String(p2.pipeline_source || ''),\n    chosen_by: KF_CHOSEN,\n    ladder_mode: KF_LADDER_MODE,\n    services: KF_SERVICES,\n    services_given: KF_SERVICES_GIVEN,\n    timezone: KF_TZ,")
+assert "'Load Site (Track)'" in rd('code/Site_Row_Track.js') and 'declared_services' in rd('code/Site_Row_Track.js'), 'keyword-first: Track my site does not keep a pause or store the declared services'
+assert "('declared_services', 'string')" in open(os.path.join(HERE0, 'ladder_common.py'), encoding='utf-8').read(), 'keyword-first: seo_sites has no declared_services column'
+assert 'declared_services:' in rd('code/_site_model.js') and "'declared_services'];" in rd('code/_site_model.js'), 'keyword-first: the site model does not write declared_services back (SM.toRow)'
+log('Keyword-first, Track my site and the request (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.2 / §14): Normalize Input takes chosen_by, ladder_mode, services (+ services_given) and timezone by their exact keys; Track my site reads the stored row first (Load Site (Track)) so a re-save keeps a paused site paused, and stores the declared services (seo_sites.declared_services), which the site model merges into its services and writes back unchanged')
+# ---------- E4 (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4.7 / §14.1 / §14.5): "Track my site" creates the website's cycle ----------
+# The Site Kickoff answered 409 not_tracked until this path had written seo_sites, so an app calling it right after `track` raced it. The
+# cycle row is now ensured here, after the seo_sites row (and the cadence / monitor rows) are saved and before the Site Tracker starts, by
+# the cycle kit's one row builder (CYC.cycleRow, which the kickoff uses too): a new row anchored at `tracking_started_at` (the kickoff's
+# window, CYC.anchorOf; else now), in the request's `timezone` (else the engine's), cycle 0 due at once with skip_jobs = site_tracker; an
+# existing row keeps its anchor, weekday, due times and status. Normalize Input takes `tracking_started_at` by its exact key (no pick()
+# word is a substring of it, so the fuzzy matcher cannot take it for another field).
+from ladder_common import CYCLES_TABLE as CYT_E4, CYCLES_COLS as CYC_COLS_E4, CATCHUP_SRC as CATCHUP_E4
+from env_settings import ENV as _ENV_E4
+TZ_E4 = (_ENV_E4.get('GENERIC_TIMEZONE') or '').strip() or 'America/New_York'   # the engine's zone, read the way build_cycle.py reads it
+patch('Normalize Input', "const KF_TZ = (() => {",
+      "const KF_TRACK_START = (() => { const v = String(p2.tracking_started_at == null ? '' : p2.tracking_started_at).trim(); if (!v || v.length > 40) return ''; const t = Date.parse(v); return Number.isFinite(t) ? new Date(t).toISOString() : ''; })();   // E4: the app's trackingStartedAt (the cycle's anchor; its window is checked by the cycle kit)\n"
+      "const KF_TZ = (() => {")
+patch('Normalize Input', "    timezone: KF_TZ,", "    timezone: KF_TZ,\n    tracking_started_at: KF_TRACK_START,")
+_TRACK_WORDS_E4 = set(re.findall(r"pick\(p2, '([^']+)'\)", code('Normalize Input')))
+assert _TRACK_WORDS_E4 and not any(w in 'tracking started at' for w in _TRACK_WORDS_E4), 'E4: a pick() word is a substring of tracking_started_at: ' + str(sorted(w for w in _TRACK_WORDS_E4 if w in 'tracking started at'))
+_tcp_src = rd('code/Track_Cycle_Plan.js').replace('/*__CATCHUP__*/', CATCHUP_E4).replace('/*__CYCLE__*/', _rd0('code/_cycle.js').rstrip('\n')).replace('__TZ__', TZ_E4)
+assert '/*__' not in _tcp_src and "'__TZ__'" not in _tcp_src and 'const CYC = (() => {' in _tcp_src and 'const CU = (() => {' in _tcp_src, 'E4: Track Cycle Plan kits not inlined'
+_smt = pos('Save Monitors (Track)')
+disconnect('Save Monitors (Track)', 'Tracker Payload (Track)')
+add_node('Ensure Cycles Table (Track)', DT_TYPE, DT_VERSION, dt_create_params(CYT_E4, CYC_COLS_E4), [_smt[0] + 220, _smt[1] - 180], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Cycle (Track)', DT_TYPE, DT_VERSION, dt_get_where_params(CYT_E4, 'site_id', 'eq', SITE18), [_smt[0] + 440, _smt[1] - 180], LOAD18)
+add_node('Track Cycle Plan', 'n8n-nodes-base.code', 2, {'jsCode': _tcp_src}, [_smt[0] + 660, _smt[1] - 180])
+if_node('Cycle To Save (Track)?', "{{ $json.write === true }}", [_smt[0] + 880, _smt[1] - 180])
+add_node('Track Cycle Row', 'n8n-nodes-base.code', 2, {'jsCode': "// the website's seo_cycles row as Track Cycle Plan built it, exact columns (upserted by site_id; a Data Table save maps every input field)\nconst COLS = "
+         + json.dumps([c for c, _t in CYC_COLS_E4]) + ";\nconst r = $('Track Cycle Plan').first().json.row || {};\nreturn [{ json: Object.fromEntries(COLS.map(c => [c, r[c]])) }];"}, [_smt[0] + 1100, _smt[1] - 300])
+add_node('Save Cycle (Track)', DT_TYPE, DT_VERSION, dt_upsert_params(CYT_E4, CYC_COLS_E4, 'site_id'), [_smt[0] + 1320, _smt[1] - 300], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+for a, b in [('Save Monitors (Track)', 'Ensure Cycles Table (Track)'), ('Ensure Cycles Table (Track)', 'Load Cycle (Track)'), ('Load Cycle (Track)', 'Track Cycle Plan'),
+             ('Track Cycle Plan', 'Cycle To Save (Track)?'), ('Track Cycle Row', 'Save Cycle (Track)'), ('Save Cycle (Track)', 'Tracker Payload (Track)')]:
+    connect(a, b)
+connect('Cycle To Save (Track)?', 'Track Cycle Row', 0); connect('Cycle To Save (Track)?', 'Tracker Payload (Track)', 1)
+assert "$('Site Row (Track)')" in code('Tracker Payload (Track)'), 'E4: Tracker Payload (Track) must read Site Row (Track) by name (a Data Table save sits before it now)'
+log('"Track my site" creates the website\'s cycle (2026-10-19, agent E4): after the seo_sites, cadence and monitor rows are saved, Track Cycle Plan ensures the seo_cycles row with the cycle kit\'s one row builder (CYC.cycleRow, shared with the Site Kickoff): a new row anchored at tracking_started_at (within the last 6 days and at most 1 h ahead, else now) in the request\'s timezone (else ' + TZ_E4 + '), cycle 0 due at once, skip_jobs site_tracker; an existing row keeps its anchor, weekday, due times and status (a paused site stays paused), only an empty zone (or an adopted row\'s engine zone) is filled; Normalize Input takes tracking_started_at by its exact key; the site_tracker_setup answer carries the cycle')
 # ---------- D. audit: brand & entity check (between the Search Console step and the scoring) ----------
 patch('Analyze Probes', "        sitemap_urls: locs.length,\n", "        sitemap_urls: locs.length,\n        robots_txt: robotsText.slice(0, 20000),\n        ai_crawlers_blocked: aiBlocked,\n        llms_txt_present: llms.status === 200 && llms.body.length > 100 && !/<html/i.test(llms.body),\n")
 SITE_AUDIT19 = "={{ 'site_' + String($('Check Crawl').first().json.domain || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-') }}"
@@ -9423,6 +9484,10 @@ log('The Editor is priced for the calls it made (2026-10-16, re-rating 2026-10-1
 #  * R95: an on-demand AI pulse is stored beside the day's scheduled reading (build_monitors.py: upsert by site + date + run_id).
 # =============================================================================
 assert "parent_run_id: String($execution.id)" in code('Monitor Start'), 'R77: Monitor Start does not tell the monitor which run started it'
+# F-REH (2026-10-20, real-credit rehearsal): "Track my site" starts the Site Tracker the same way, so it names its parent too - without it the
+# Track run's own reservation counted as "another analysis in flight" and the client's first Site Tracker run was refused too_many_open
+assert "parent_run_id: String($execution.id)" in code('Tracker Payload (Track)') and conns['Tracker Payload (Track)']['main'][0][0]['node'] == 'Start Site Tracker', \
+    'F-REH: Tracker Payload (Track) does not tell the Site Tracker which run started it (or no longer feeds Start Site Tracker)'
 assert '__handoff' in code('Run Ledger Settle') and "dfs_source: 'handoff'" in code('Run Ledger Settle'), \
     'R81: the front door settles a monitor hand-off as if it had spent the reservation'
 assert 'dfs_source' in nodes['Settle Run Ledger']['parameters']['columns']['value'], 'R81: the settle does not write where the money is'
@@ -9877,11 +9942,23 @@ log('One picture of the results page and of our own pages (2026-10-16, re-rating
 #       published by apply_env.py; the time zone it was built with is the one n8n/compose.yml gives n8n; the credential exists in
 #       sync_credentials.py; and apply_env.py's Monday guard refuses inside the window and lets a deploy through outside it (self-test,
 #       summer and winter time).
+#     * **2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8, owner decision D2): the weekly crons are gone.** A website's week starts the day it
+#       set up and repeats every 7 days at 06:00 in its own time zone; the Cycle Dispatcher starts each job of a cycle through the
+#       workflow's own *Manual Run* (`trigger: 'cycle'`). The catch-up keeps the two daily crons (AI Pulse, Page Watch); the dispatcher's own
+#       sweep is never replayed (NOT_REPLAYED). And a forgotten Monday cron fails the build: none of the seven weekly workflows nor the
+#       Audit Scheduler may carry a Schedule Trigger, each keeps a *Manual Run* that feeds the path a cycle needs, and each plan node
+#       (the cadence's is E3's Cadence_Plan.js) reads the cycle run through ST.cycleOf.
 # 99. A TEST RUN THAT SUBMITS TO BING (R94's companion). AI Growth submits to Bing Webmaster and IndexNow, so the re-rating could not run it
 #     at all. `dry_run: true` on its manual entry (only a catch-up test passes it) keeps SubmitUrlBatch and IndexNow unsent - the request
 #     nodes hand on what WOULD have been sent, the IF in front of each submit refuses a dry item, and the report says "DRY RUN - nothing
 #     was submitted" first. Proved here on the generated AI Growth workflow; harness S129 runs the nodes.
 # =============================================================================
+_CYCLE_JOBS98 = {'SEOagentAIVisib1': 'AI Plan', 'SEOagentBacklnk1': 'BL Plan', 'SEOagentTracker1': 'Tracker Plan', 'SEOagentSiteTrk1': 'Site Plan',
+                 'SEOagentAIGrow1': 'Growth Plan', 'SEOagentCadence1': 'Cadence Plan', 'SEOagentLinkBld1': 'LB Plan', 'SEOagentAuditSc1': 'Audit Candidates'}
+_CYCLE_DAILY98 = ('SEOagentAIPulse1', 'SEOagentPageWch1')
+_CYCLE_NOT_REPLAYED98 = ('SEOagentCycleDsp',)
+
+
 def _b98_catchup():
     """Runs right after the four sub-builds (the catch-up reads their generated workflows), before every lint that walks workflows/."""
     import ast as _ast98, datetime as _dt98
@@ -9893,15 +9970,44 @@ def _b98_catchup():
     _by98 = {n['name']: n for n in _cu98['nodes']}
     _out98 = lambda c, nd: [t['node'] for lst in ((c.get(nd) or {}).get('main') or []) for t in (lst or [])]
     # ---------- A. the schedule table is every generated schedule, each with a manual entry on the schedule's own path ----------
-    _sched98 = {}
+    _sched98, _allwf98 = {}, {}
     for _f98 in sorted(os.listdir(_wd98)):
-        if not _f98.endswith('.json') or _f98 in _NOT_GENERATED69 or _f98 == _wire98['workflow']['file']:
+        if not _f98.endswith('.json') or _f98 in _NOT_GENERATED69 or _f98 == _wire98['workflow']['file'] or _f98 == _CYCLE_FILE140:   # section 140: the dispatcher's sweep is never caught up
             continue
         for _w98 in json.load(open(os.path.join(_wd98, _f98), encoding='utf-8')):
             _t98 = [n for n in _w98['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
-            if _t98:
+            if _t98 and _w98['id'] not in _CYCLE_NOT_REPLAYED98:
                 _sched98[_w98['id']] = (_w98, _t98[0]['name'])
+            _allwf98[_w98['id']] = _w98
     _baked98 = {s['id']: s for s in _wire98['schedules']}
+    # ---------- 2026-10-19: the seven weekly workflows and the Audit Scheduler run in each website's cycle - no cron, a Manual Run, a cycle-aware plan ----------
+    assert sorted(_baked98) == sorted(_CYCLE_DAILY98), 'cycle (2026-10-19): the catch-up must carry the two daily crons only, it carries %s' % sorted(_baked98)
+    _cycwf98 = {}
+    for _cid98, _plan98 in _CYCLE_JOBS98.items():
+        assert _cid98 in _allwf98, 'cycle (2026-10-19): the weekly workflow %s was not generated' % _cid98
+        _cw98 = _allwf98[_cid98]
+        _tr98 = [n['name'] for n in _cw98['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
+        assert not _tr98, 'cycle (2026-10-19): %s (%s) has a Schedule Trigger again (%s) - a weekly job runs in each website\'s own cycle, never on a shared cron' % (_cw98['name'], _cid98, _tr98)
+        _mr98 = [n for n in _cw98['nodes'] if n['name'] == 'Manual Run' and n['type'] == 'n8n-nodes-base.executeWorkflowTrigger']
+        assert len(_mr98) == 1 and _out98(_cw98['connections'], 'Manual Run'), 'cycle (2026-10-19): %s has no Manual Run the dispatcher can start' % _cid98
+        _seen98, _todo98 = set(), ['Manual Run']
+        while _todo98:
+            _nd98 = _todo98.pop()
+            if _nd98 in _seen98: continue
+            _seen98.add(_nd98); _todo98.extend(_out98(_cw98['connections'], _nd98))
+        _pn98 = next((n for n in _cw98['nodes'] if n['name'] == _plan98), None)
+        assert _pn98 is not None and _plan98 in _seen98, 'cycle (2026-10-19): %s - the Manual Run does not reach its plan node %s' % (_cid98, _plan98)
+        if _cid98 != 'SEOagentCadence1':   # the cadence's plan node reads the cycle in E3's Cadence_Plan.js
+            assert 'ST.cycleOf(' in _pn98['parameters']['jsCode'] and 'const ST = (() => {' in _pn98['parameters']['jsCode'], \
+                'cycle (2026-10-19): %s - its plan node %s does not read the cycle run (ST.cycleOf)' % (_cid98, _plan98)
+        # the callback of a cycle run carries trigger / cycle_key / cycle_date (Callback Ledger puts them on the item): a POST that sends the
+        # whole item carries them as they are, a POST with an explicit body must spread them in
+        _posts98 = [n for n in _cw98['nodes'] if n['type'] == 'n8n-nodes-base.httpRequest' and n['name'].startswith('POST ') and '$json.callback_url' in str(n['parameters'].get('url'))]
+        for _pn in _posts98:
+            _jb98 = str(_pn['parameters'].get('jsonBody') or '')
+            assert _jb98 == '={{ JSON.stringify($json) }}' or ("$json.trigger === 'cycle' ? { trigger: 'cycle', cycle_key: $json.cycle_key" in _jb98 and 'cycle_date: $json.cycle_date' in _jb98), \
+                'cycle (2026-10-19): %s / %s posts an explicit callback body without the cycle fields (trigger, cycle_key, cycle_date)' % (_cid98, _pn['name'])
+        _cycwf98[_cid98] = {'name': _cw98['name'], 'plan': _plan98, 'manual_run': 'Manual Run', 'callback_posts': sorted(_pn['name'] for _pn in _posts98)}
     assert sorted(_sched98) == sorted(_baked98), 'R94: the catch-up carries %s but the generated schedules are %s' % (sorted(_baked98), sorted(_sched98))
     for _id98, (_w98, _tn98) in _sched98.items():
         _c98 = _w98['connections']
@@ -9944,7 +10050,6 @@ def _b98_catchup():
     # the lists live in deploy_manifest.json since 2026-10-18, read by both deploy paths: apply_env.py (local) and the engine image's
     # release step (n8n/deploy/release.mjs) - so the check reads the manifest and proves both still read it
     _ae98 = open(os.path.join(HERE0, 'apply_env.py'), encoding='utf-8').read()
-    _tree98 = _ast98.parse(_ae98)   # still read below: deploy_window's Monday rule
     _rel98 = open(os.path.join(HERE0, '..', 'deploy', 'release.mjs'), encoding='utf-8').read()
     assert "json.load(open(os.path.join(HERE, 'deploy_manifest.json')" in _ae98 and "MANIFEST['workflows'], MANIFEST['publish']" in _ae98, \
         'R94: apply_env.py no longer takes its import / publish lists from deploy_manifest.json'
@@ -9964,21 +10069,9 @@ def _b98_catchup():
     _ex98 = open(os.path.join(HERE0, '..', '.env.seo.example'), encoding='utf-8').read()
     assert re.search(r'(?m)^N8N_API_KEY=$', _ex98) and re.search(r'(?m)^GENERIC_TIMEZONE=' + re.escape(_wire98['default_tz']) + '$', _ex98), \
         'R94: n8n/.env.seo.example does not name N8N_API_KEY / GENERIC_TIMEZONE'
-    # ---------- D. the Monday deploy guard: the function apply_env.py runs, self-tested in isolation ----------
-    _fn98 = next(n for n in _tree98.body if isinstance(n, _ast98.FunctionDef) and n.name == 'deploy_window')
-    _ns98 = {'DEFAULT_TZ': 'America/New_York'}
-    exec(compile(_ast98.Module(body=[_fn98], type_ignores=[]), 'apply_env.py:deploy_window', 'exec'), _ns98)
-    _U98 = lambda *a: _dt98.datetime(*a, tzinfo=_dt98.timezone.utc)
-    _cases98 = {'mon_2026-10-19_12:00Z_summer': (_U98(2026, 10, 19, 12, 0), True), 'mon_2026-10-19_10:59Z_before': (_U98(2026, 10, 19, 10, 59), False),
-                'mon_2026-10-19_16:30Z_after': (_U98(2026, 10, 19, 16, 30), False), 'tue_2026-10-20_12:00Z': (_U98(2026, 10, 20, 12, 0), False),
-                'fri_2026-10-16_12:00Z_today': (_U98(2026, 10, 16, 12, 0), False), 'mon_2026-11-02_16:30Z_winter': (_U98(2026, 11, 2, 16, 30), True),
-                'mon_2026-11-02_11:30Z_winter_before': (_U98(2026, 11, 2, 11, 30), False)}
-    _guard98 = {}
-    for _k98, (_t98, _want98) in _cases98.items():
-        _in98, _a98, _b98 = _ns98['deploy_window'](_t98, 'America/New_York')
-        assert _in98 is _want98, 'R94: apply_env.deploy_window(%s) answered %s, expected %s' % (_k98, _in98, _want98)
-        _guard98[_k98] = {'inside': _in98, 'window_utc': _a98.strftime('%a %H:%M') + '-' + _b98.strftime('%H:%M')}
-    assert "'--force-monday' not in args" in _ae98 and 'sys.exit(' in _ae98.split('deploy_window(tz_name=')[1][:400], 'R94: apply_env.py does not refuse inside the window'
+    # ---------- D. the deploy guard: since 2026-10-19 it is the per-website cycle's (deploy_guard.py, shared by apply_env.py and
+    # deploy/gcp/deploy_engine.py), self-tested in section 140 on harness/deploy_window_cases.json. The Monday 07:00-12:00 rule is gone
+    # with the Monday crons; its flag --force-monday still overrides the new guard. ----------
     # ---------- 99. AI Growth: a dry item never reaches a submission ----------
     _g98 = json.load(open(os.path.join(_wd98, 'SEO_Agent_AI_Growth.json'), encoding='utf-8'))[0]
     _gn98 = {n['name']: n for n in _g98['nodes']}
@@ -9991,11 +10084,15 @@ def _b98_catchup():
         assert 'DRY_RUN' in _gn98[_req98]['parameters']['jsCode'] and 'would_submit' in _gn98[_req98]['parameters']['jsCode'], 'R94: ' + _req98 + ' has no dry-run switch'
         _growth98[_sub98] = {'gate': _if98, 'expr': _lv98}
     assert 'dry_run_note' in _gn98['Growth Report']['parameters']['jsCode'], 'R94: the AI Growth report does not say it was a dry run'
-    _wire98.update({'deploy_guard': _guard98, 'growth_dry_run': _growth98, 'record_then_start': True,
-                    'published': sorted(_baked98), 'compose_tz_default': _tzm98.group(1)})
+    _wire98.pop('deploy_guard', None)   # section 140 holds the deploy guard's self-test now (harness/cycle_wiring.json)
+    _wire98.update({'growth_dry_run': _growth98, 'record_then_start': True,
+                    'published': sorted(_baked98), 'compose_tz_default': _tzm98.group(1),
+                    # 2026-10-19: the weekly workflows that run in each website's cycle (no cron; Manual Run -> plan), for the harness
+                    'cycle_workflows': _cycwf98, 'daily_crons': list(_CYCLE_DAILY98), 'not_replayed': list(_CYCLE_NOT_REPLAYED98)})
     json.dump(_wire98, open(os.path.join(HERE0, 'harness', 'catchup_wiring.json'), 'w'), indent=1, sort_keys=True)
     print('R94: the Schedule Catch-up carries the %d generated schedules (%s), records before it starts, and every target is published; '
-          'apply_env.py refuses a Monday deploy (%d guard cases); AI Growth submits nothing on a dry run' % (len(_baked98), _wire98['tz'], len(_guard98)))
+          'AI Growth submits nothing on a dry run' % (len(_baked98), _wire98['tz']))
+    print('cycle (2026-10-19): %d weekly workflows carry no cron and are started by the website\'s cycle through Manual Run; the catch-up keeps %s' % (len(_cycwf98), ', '.join(_CYCLE_DAILY98)))
 
 
 log('A schedule that never fired, and a restart that threw its fire away (2026-10-16, re-rating 2026-10-15 R94, High). In the 21 days to 2026-10-15 the Rank Tracker, the Site Tracker, AI Growth, the Content Cadence and the Link Builder had 8 due fires and none fired; the cause, read in n8n\'s own code, is that a cron fire lives only in memory and every restart, deploy or re-publish re-arms the schedule for its next future time, so the 2026-10-12 16:38 deploy restart threw away the five Monday runs the Mac\'s sleep had pushed past it. New workflow SEO Agent - Schedule Catch-up (build_catchup.py, SEOagentCatchUp1; kit v5/code/_catchup.js): n8n\'s Instance Started event plus an hourly sweep read each of the ten schedules\' latest due time in GENERIC_TIMEZONE, the workflow\'s executions with mode trigger through n8n\'s public API (an on-demand run does not count - an owner decision) and the catch-up\'s own seo_cache records, and start a missed fire ONCE through the workflow\'s own manual entry with no site, recording catchup:<workflow>:<due ISO> before the start; only fires due in the last 36 h (weekly / monthly) or 20 h (daily), never before the catch-up first ran, at most three a sweep 60 s apart and never more than the run guard has room for; a fire the schedule still holds is left to it until 6 h late so a week never runs twice. apply_env.py refuses a deploy on Monday 07:00-12:00 in the schedules\' time zone (--force-monday overrides), n8n/compose.yml sets GENERIC_TIMEZONE explicitly (America/New_York, what it was while unset), sync_credentials.py writes the n8n API credential from N8N_API_KEY, and AI Growth gained dry_run: true, which sends nothing to Bing or IndexNow and says so in the report (section 99)')
@@ -11584,6 +11681,170 @@ log('C-1 follow-up (F-L, 2026-10-18): a scheduled audit the Audit Scheduler star
 log('B-16 (F-L, 2026-10-18): the homepage address variants are followed through the host probes and a chain of two hops or more is a Low finding; "HTTP correctly redirects to HTTPS" is not said over one')
 
 # =============================================================================
+# 141. THE HEAD KEYWORD'S RESULTS PAGE GETS THREE ATTEMPTS, THE LAST ONE LIGHTER (2026-10-20, fixer F-SERP; real-credit rehearsal,
+#      isolated engine executions 23 and 31). The ladder's head keyword "crm service provider uae" came back NOT_CHECKED on two runs in
+#      a row: *SERP Top 10* (organic/live/advanced, UAE, depth 30, load_async_ai_overview) answered `40101 "Internal SE Server Error."`
+#      inside an HTTP 200 after ~27 s, *SERP Top 10 (Retry)* failed the same way 5 s later, and the run spent ~$0.27 to plan nothing.
+#      Other reads of the same runs failed and succeeded at random (a Facts SERP retry answered, a Cluster SERP retry did not), so it is
+#      DataForSEO's scraper being flaky on HEAVY requests, not a bad keyword.
+#      * This is the one read a ladder (and a keyword verdict) cannot do without, so it now gets up to THREE attempts with a growing
+#        wait: 20 s before the second (was 5 s), 45 s before the third. The third is a LIGHTER request (`depth` 10, no
+#        `load_async_ai_overview`): the heavy request is the one that times out on DataForSEO's side.
+#      * Only what a further attempt can fix is re-sent: *SERP Retry Failed?* carries the same rule as *SERP Failed?* (section 56,
+#        DFS_FAILED56 = RT.TRANSIENT / RT.PERMANENT), so a wrong request, an exhausted quota or 40102 "No Search Results." is not.
+#      * Money: the new node is on every report builder's __LEDGER_NODES, where __dfsOnce counts each task once by its own id (R28).
+#      * Lineage (INVARIANTS rule 1): an answer taken from the lighter attempt says so wherever it is used. The AI Overview was not
+#        requested, so it is "not read on this attempt" (present: null, not_read: true), never "none"; the results below position 10
+#        were not read; the featured snippet, People Also Ask and the top 10 are on the first page and were read. The re-measure note
+#        (A-21) does not compare an AI Overview that one of its two readings never asked for.
+#      * When all three fail, the ladder's refusal tells the client in plain words that Google's results could not be read right now,
+#        that it is not about their keyword, and to try again later (v5/code/Ladder_Plan.js); the verdict's first reason says the same.
+# =============================================================================
+_W141 = (20, 45)   # seconds before the second and before the third attempt
+_srt141 = 'SERP Top 10 (Retry)'
+assert [t['node'] for l in conns[_srt141]['main'] for t in l] == ['Pick Top 6'], 'F-SERP: SERP Top 10 (Retry) no longer feeds Pick Top 6 alone'
+assert [t['node'] for t in conns['SERP Failed?']['main'][0]] == ['Wait Before SERP Retry'], 'F-SERP: the first gate no longer waits before the retry'
+_ws141 = nodes['Wait Before SERP Retry']['parameters']
+assert _ws141.get('unit') == 'seconds' and nodes['Wait Before SERP Retry']['typeVersion'] == 1.1, 'F-SERP: the first wait is not in seconds'
+_ws141['amount'] = _W141[0]
+_body141 = nodes[_srt141]['parameters']['jsonBody']
+_HEAVY141 = '"depth": 30,\n       "load_async_ai_overview": true\n     }]'
+assert _body141.count(_HEAVY141) == 1 and "$('Collect Site URLs').first().json.keyword" in _body141, 'F-SERP: the retry request body moved'
+_p141 = pos(_srt141)
+if_node('SERP Retry Failed?', DFS_FAILED56, [_p141[0] + 180, _p141[1] + 200])
+add_node('Wait Before SERP Light Retry', 'n8n-nodes-base.wait', 1.1, {'amount': _W141[1], 'unit': 'seconds'}, [_p141[0] + 360, _p141[1] + 200],
+         {'webhookId': nid('Wait Before SERP Light Retry:hook')})
+_lr141 = copy.deepcopy(nodes[_srt141]); _lr141['name'] = 'SERP Top 10 (Light Retry)'; _lr141['id'] = nid('SERP Top 10 (Light Retry)')
+_lr141['position'] = [_p141[0] + 540, _p141[1] + 200]
+_lr141['parameters']['jsonBody'] = _body141.replace(_HEAVY141, '"depth": 10\n     }]')
+_lr141['onError'] = 'continueRegularOutput'; _lr141.update(retry_lint.RETRY)
+assert _lr141.get('credentials'), 'F-SERP: the lighter retry has no credential slot'
+assert 'load_async_ai_overview' not in _lr141['parameters']['jsonBody'] and '"depth": 10' in _lr141['parameters']['jsonBody']
+nodes['SERP Top 10 (Light Retry)'] = _lr141
+disconnect(_srt141, 'Pick Top 6')
+connect(_srt141, 'SERP Retry Failed?')
+connect('SERP Retry Failed?', 'Wait Before SERP Light Retry', 0); connect('SERP Retry Failed?', 'Pick Top 6', 1)
+connect('Wait Before SERP Light Retry', 'SERP Top 10 (Light Retry)'); connect('SERP Top 10 (Light Retry)', 'Pick Top 6')
+# the harness shim: the gate's exact condition (the same expression as SERP Failed?, S66 / S141 compare them)
+open(os.path.join(OUT_CODE, 'SERP_Retry_Failed_.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 141): the IF node's condition, true = take the lighter third attempt\n"
+    "return $input.all().map(i => { const $json = i.json; return { json: { retry: " + DFS_FAILED56[2:-2].strip() + " } }; });\n")
+retry_lint.record_gate('SEO Agent v4', [_srt141, 'SERP Retry Failed?', 'Wait Before SERP Light Retry', 'SERP Top 10 (Light Retry)', 'Pick Top 6'])
+
+# ---------- the money: the lighter attempt is counted, each task once by its id ----------
+_LRE141 = re.compile(r"const __LEDGER_NODES = \[([^\]]*)\];")
+_ln141 = sorted(nm for nm in nodes if _LRE141.search(nodes[nm]['parameters'].get('jsCode', '') or '') and "'SERP Top 10 (Retry)'" in _LRE141.search(nodes[nm]['parameters'].get('jsCode', '')).group(1))
+assert {'Build Word File', 'Build Ladder Report', 'Build Keyword File'} <= set(_ln141), _ln141
+for _nm141 in _ln141:
+    patch(_nm141, "'SERP Top 10 (Retry)'", "'SERP Top 10 (Retry)', 'SERP Top 10 (Light Retry)'")
+    assert "__dfsOnce(t)" in code(_nm141), 'F-SERP: ' + _nm141 + ' would count an attempt twice'
+
+# ---------- what was read, and on which attempt (INVARIANTS rule 1) ----------
+patch('Analyze Competitor Pages', "  serpStats = RT.one(first0, retry0);",
+      "  // F-SERP (2026-10-20): the third attempt is a lighter request (top 10, no AI Overview), sent only when the first two failed\n"
+      "  const light0 = (() => { try { return $('SERP Top 10 (Light Retry)').first().json; } catch (e) { return null; } })();\n"
+      "  serpStats = RT.chain([first0, retry0, light0]);")
+patch('Analyze Competitor Pages', "const serp_evidence = RT.evidence('the live Google results for this keyword', serpStats, { unit: 'search' });",
+      "const serp_evidence = RT.evidence('the live Google results for this keyword', serpStats, { unit: 'search', attempts: serpStats.attempts || 1,\n"
+      "  answered_on: serpStats.answered_on || 0, light: serpStats.answered_on === 3 });   // F-SERP: which of the three attempts answered")
+patch('Analyze Competitor Pages', "Object.assign(serp_features, { attempts: 1 + (serpStats.retried || 0), retried: !!serpStats.retried });\n"
+      "const aioText = aioObserved([{ seen: serp_features.ai_overview.present, at: seenAt, source: 'live Google results' }]).text;",
+      """Object.assign(serp_features, { attempts: serpStats.attempts || 1 + (serpStats.retried || 0), retried: !!serpStats.retried, answered_on: serpStats.answered_on || 0 });
+if (serpError) serp_features.retryable = serpStats.retryable !== false;   // F-SERP: a provider outage, not a wrong request
+// F-SERP (2026-10-20): an answer from the lighter third attempt read the first page only and did not ask for the AI Overview.
+// What it did not ask for is "not read on this attempt" (present: null), never "none"; what is on the first page was read.
+const SERP_LIGHT = !serpError && serpStats.answered_on === 3;
+if (SERP_LIGHT) {
+  const lightWhy = 'not read on this attempt: Google\\'s results were read on a third, lighter request (the top 10 only, without the AI Overview) because the full request failed twice';
+  serp_features.read_depth = 10;
+  serp_features.light_read = { attempt: 3, depth: 10, ai_overview_requested: false, why: lightWhy,
+    not_read: aio ? ['the results below position 10'] : ['the AI Overview', 'the results below position 10'] };
+  if (!aio) serp_features.ai_overview = { present: null, not_read: true, why: lightWhy, text: '', cited_domains: [], seen_at: null };
+}
+let aioText = aioObserved([{ seen: serp_features.ai_overview.present, at: seenAt, source: 'live Google results' }]).text;
+if (serp_features.ai_overview.not_read) aioText = 'not read on this attempt (the lighter third request did not ask for it), so whether one appears is unknown';""")
+patch('Analyze Competitor Pages', "(serpStats.retried ? ', twice: the search was sent again once and failed again' : '')",
+      "(serpStats.retried ? (serpStats.attempts > 2 ? ', ' + serpStats.attempts + ' times: the search was sent again twice, the last time as a lighter request, and failed every time'"
+      " : ', twice: the search was sent again once and failed again') : '')")
+patch('Analyze Competitor Pages', "  'OTHER SERP FEATURES: ' + (serp_features.features_present.join(', ') || 'none')\n].filter(Boolean).join('\\n');",
+      "  'OTHER SERP FEATURES: ' + (serp_features.features_present.join(', ') || 'none'),\n"
+      "  SERP_LIGHT ? 'RESULTS READ: the top 10 only, on a lighter third request (the full request failed twice). The AI Overview was not requested: do not state or assume whether one appears, and do not describe results below position 10.' : ''\n"
+      "].filter(Boolean).join('\\n');")
+# the verdict: how many times it was sent, and in plain words that an outage is not about the keyword
+patch('Parse Verdict', "const again = (ev && ev.retried) ? ' The search was sent again once and failed again.' : '';",
+      "const again = (ev && ev.retried) ? (Number(ev.attempts) > 2 ? ' The search was sent ' + ev.attempts + ' times (the last time as a lighter request) and failed every time.'"
+      " : ' The search was sent again once and failed again.') : '';   // F-SERP: up to three attempts")
+patch('Parse Verdict', "so any number here would be invented. Run the check again.' : ''",
+      "so any number here would be invented.' + (sf.retryable === false ? ' Run the check again.'"
+      " : ' This is a temporary problem with the search data provider, not with your keyword. Run the check again later.') : ''")
+patch('Parse Verdict', "retried: ev ? ev.retried : 0, keyword_data:",
+      "retried: ev ? ev.retried : 0, attempts: ev ? (Number(ev.attempts) || 1 + (Number(ev.retried) || 0)) : 1, read_light: !!sf.light_read, keyword_data:")
+patch('Parse Verdict', "  return { visits: c.traffic_potential, basis: c.traffic_basis, basis_text, note: c.traffic_note,",
+      "  return { visits: c.traffic_potential, basis: c.traffic_basis,\n"
+      "    basis_text: basis_text + ((SF77.ai_overview || {}).not_read ? ' (the AI Overview was not read on this attempt, so any clicks it takes are not counted)' : ''),   // F-SERP\n"
+      "    note: c.traffic_note,")
+# the keyword report and the ladder report: "not read on this attempt", never "None"
+patch('Build Word File', "['AI Overview', esc(aioObserved([{ seen: aio.present == null ? null : !!aio.present, at: aio.seen_at || sf.checked_at }]).text.replace(/^./, c => c.toUpperCase()))",
+      "['AI Overview', (aio.not_read ? esc('Not read on this attempt: the results page was read on a lighter third request that did not ask for it, so whether one appears is unknown')"
+      " : esc(aioObserved([{ seen: aio.present == null ? null : !!aio.present, at: aio.seen_at || sf.checked_at }]).text.replace(/^./, c => c.toUpperCase())))")
+patch('Build Word File', "      ['Results for this query', num(sf.se_results_count)]\n",
+      "      ['Results for this query', num(sf.se_results_count)],\n"
+      "      ...(sf.light_read ? [['Results read', 'The top 10 only, on a lighter third request (the full request failed twice): the results below position 10 and the AI Overview were not read']] : [])   // F-SERP\n")
+patch('Build Word File', "note: 'read once, from ' + String(d.country || 'the chosen country') + ' on one device; a feature not seen in that one check is unknown, not absent' })",
+      "note: 'read once, from ' + String(d.country || 'the chosen country') + ' on one device; a feature not seen in that one check is unknown, not absent'"
+      " + (sf.light_read ? '; read on a lighter third request: the top 10 only, and the AI Overview was not read' : '') })")
+patch('Build Ladder Report', "': AI Overview ' + esc(aioObserved([{ seen: (sf.ai_overview || {}).present, at: sf.checked_at || (sf.ai_overview || {}).seen_at }]).text)",
+      "': AI Overview ' + esc((sf.ai_overview || {}).not_read ? 'not read on this attempt (the results page was read on a lighter third request, the top 10 only, that did not ask for it)'"
+      " : aioObserved([{ seen: (sf.ai_overview || {}).present, at: sf.checked_at || (sf.ai_overview || {}).seen_at }]).text)")
+# A-21: the reading the ladder hands its main page says whether it asked for the AI Overview at all
+patch('Normalize Input', "ai_overview: p2.ladder_measure.ai_overview === true,\n",
+      "ai_overview: p2.ladder_measure.ai_overview === true, ai_overview_read: p2.ladder_measure.ai_overview_read !== false,\n")
+assert 'ai_overview_read:' in code('Spawn Page Runs') and 'nowAioRead && thenAioRead' in code('Parse Verdict'), 'F-SERP: the re-measure note would compare an AI Overview nobody read'
+assert "attempts: tries, transient" in code('Ladder Plan') and 'not a problem with your keyword' in code('Ladder Plan'), 'F-SERP: the ladder refusal is not the plain one'
+assert 'chain' in DFS_RETRY_SRC and 'const chain = (attempts, o) =>' in code('Analyze Competitor Pages'), 'F-SERP: the retry kit has no RT.chain'
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+_gg141, _uu141 = retry_lint.check_in200({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+assert 'SERP Top 10 (Light Retry)' in _gg141, 'F-SERP: the lighter attempt is outside a recorded gate'
+json.dump({'chain': ['SERP Top 10', 'SERP Failed?', 'Wait Before SERP Retry', _srt141, 'SERP Retry Failed?', 'Wait Before SERP Light Retry', 'SERP Top 10 (Light Retry)', 'Pick Top 6'],
+           'waits': {'Wait Before SERP Retry': nodes['Wait Before SERP Retry']['parameters'], 'Wait Before SERP Light Retry': nodes['Wait Before SERP Light Retry']['parameters']},
+           'bodies': {n: nodes[n]['parameters']['jsonBody'] for n in ('SERP Top 10', _srt141, 'SERP Top 10 (Light Retry)')},
+           'connections': {k: conns[k] for k in ('SERP Top 10', 'SERP Failed?', 'Wait Before SERP Retry', _srt141, 'SERP Retry Failed?', 'Wait Before SERP Light Retry', 'SERP Top 10 (Light Retry)')},
+           'gate_conditions': {g: nodes[g]['parameters']['conditions']['conditions'][0]['leftValue'] for g in ('SERP Failed?', 'SERP Retry Failed?')},
+           'ledger_lists': {nm: re.findall(r"'([^']+)'", _LRE141.search(code(nm)).group(1)) for nm in _ln141},
+           'retry_settings': {n: {k: nodes[n].get(k) for k in ('retryOnFail', 'maxTries', 'waitBetweenTries', 'onError')} for n in (_srt141, 'SERP Top 10 (Light Retry)')}},
+          open(os.path.join(HERE0, 'harness', 'serp_attempts_wiring.json'), 'w'), indent=1, sort_keys=True)
+sticky("""### The head keyword's results page: three attempts, the last one lighter (F-SERP, 2026-10-20)
+DataForSEO's scraper answers **40101 "Internal SE Server Error."** inside an HTTP 200 for heavy requests at random (rehearsal execs 23 / 31: the client's own keyword came back NOT_CHECKED twice in a row). This read is the one a ladder cannot do without, so it is sent **up to three times**: wait 20 s, again; wait 45 s, then a **lighter** request (top 10, no AI Overview). Only what a further attempt can fix is re-sent; every attempt's cost is counted once by task id.
+An answer from the lighter attempt says so: the AI Overview is **"not read on this attempt"**, never "none", and results below position 10 were not read. When all three fail the client reads, in plain words, that Google's results could not be read right now, that it is not about their keyword, and to try again later.""",
+    pos('SERP Retry Failed?')[0] - 40, pos('SERP Retry Failed?')[1] + 140, 1000, 260, 3)
+log('The head keyword\'s results page gets three attempts, the last one lighter (2026-10-20, F-SERP; real-credit rehearsal execs 23 / 31: SERP Top 10 and its retry both answered 40101 "Internal SE Server Error." inside an HTTP 200 after ~27 s, twice in a row, and the ladder came out NOT_CHECKED for ~$0.27): SERP Top 10 -> 20 s -> retry -> SERP Retry Failed? (the same transient-only rule) -> 45 s -> SERP Top 10 (Light Retry) with depth 10 and no load_async_ai_overview; RT.chain judges the three attempts; the lighter answer is labelled where it is used (AI Overview "not read on this attempt", top 10 only), the cost of every attempt is counted once by task id, and an all-fail ladder tells the client in plain words that Google\'s results could not be read right now, not about their keyword, try again later')
+
+# =============================================================================
+# 142. NO PAGE BEFORE THE AUTHOR PROFILE AND THE BUSINESS FACTS (2026-10-20, agent P1; real-credit rehearsal docs/REHEARSAL_2026-10-20.md §4
+#      item 1, the owner's decision). A new client launched a ladder with no author profile and no business facts; its first page was written
+#      at once (about 62 credits) and Content QA refused it ("11 bracketed field(s) in the byline, the author box and the Person schema", claims
+#      nothing on file supports). Now:
+#      * v5/code/_readiness.js (READY.of, its marker READINESS in a block comment): author profile ready = name + job title + bio on seo_profiles (what Content
+#        QA needs to print no bracket in the byline / author box / Person schema, plus the role); business facts ready = at least
+#        READY.FACTS_MIN characters. Mirrored in app/shared/src/readiness.ts (the harness compares the two).
+#      * *Ladder Plan* keeps the plan and HOLDS the pages it was asked to write now (limit `profile`, not overridden by force_content), so
+#        Spawn Page Runs starts nothing and nothing is charged for a page; the Content Cadence writes it in the first cycle after both exist.
+#      * the data path: Track my site stores the business facts the app sends (`business_facts`, only when the key is present), Site Admin
+#        takes a new action `facts` (the app sends it whenever the client saves them), and Spawn Page Runs falls back to the site model's facts.
+# =============================================================================
+assert 'const READY = (() => {' in code('Ladder Plan') and '/*__READINESS__*/' not in code('Ladder Plan'), 'P1: the readiness kit is not inlined into Ladder Plan'
+assert "const profileHold = planned && write_now.length && !readiness.ready" in code('Ladder Plan') and "rowsOf('Load Profile (Model)')" in code('Ladder Plan'), \
+    'P1: the ladder start writes its first page before the author profile and the business facts are on file'
+assert "(L.held && Array.isArray(L.held.pages) && L.held.pages.length)" in code('Spawn Page Runs'), 'P1: Spawn Page Runs would start a held page'
+assert 'business_facts: factsOf' in code('Spawn Page Runs') and "($('Site Model').first().json || {}).site_model" in code('Spawn Page Runs'), 'P1: a ladder page run drops the stored business facts'
+assert 'Load Profile (Model)' in nodes, 'P1: Load Profile (Model) is gone'
+patch('Normalize Input', "    services_given: KF_SERVICES_GIVEN,", "    services_given: KF_SERVICES_GIVEN,\n    facts_given: Object.prototype.hasOwnProperty.call(p2 || {}, 'business_facts'),   // P1 (2026-10-20): Track my site stores the facts only when the key is sent")
+assert "d.facts_given ? { business_facts:" in rd('code/Site_Row_Track.js'), 'P1: Track my site does not store the business facts'
+assert "('business_facts', 'string')" in open(os.path.join(HERE0, 'ladder_common.py'), encoding='utf-8').read(), 'P1: seo_sites has no business_facts column'
+log('No page before the author profile and the business facts (2026-10-20, agent P1; rehearsal §4 item 1): v5/code/_readiness.js (name + job title + bio, facts of at least 30 characters; mirrored in app/shared/src/readiness.ts); Ladder Plan keeps the plan and holds its pages (limit profile, nothing spawned or charged); the Content Cadence holds every page it would write and lists it (held_for_profile, preview items held: profile, approvals wait too); Track my site stores business_facts, Site Admin takes action facts, every page run carries the stored facts')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;
@@ -11618,7 +11879,242 @@ import subprocess
 for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py'):
     _r = subprocess.run([sys.executable, os.path.join(HERE0, _s)], cwd=HERE0)
     assert _r.returncode == 0, _s + ' failed'
+# =============================================================================
+# 140. THE WEEK BELONGS TO THE WEBSITE (2026-10-19, docs/SCHEDULING_KEYWORDS_PLAN.md §4, agent E1 "Cycle core"). Seven Monday crons ran every
+#     customer at once: a client who set up on Tuesday waited six days for the first weekly cycle, Monday morning in New York carried the whole
+#     load, and every restart in that window threw a due fire away (R94). Now each website has its own 7-day cycle from the moment its
+#     tracking starts: cycle 0 at setup, then 06:00 in the website's own time zone on its own weekday, monthly work on its own monthly date.
+#     * **The kit** (v5/code/_cycle.js, CYC): pure - no clock, no network, no table - so the harness replays any date (scenarios_cycle.js
+#       CY1-CY24). Due times from stored intent through the catch-up's own Intl rule (CU.zonedToUtc), the most recent missed cycle once,
+#       the 12-hour gap, the job order and the dependency rule, outcomes read off the run ledger (`cycle:<cycle_key>:<job>` settled = done;
+#       capacity refusals retried without an attempt for 24 h; three attempts for a failure; account too low = gave up), capped starts that
+#       never go into a refusal the run guard would give, adoption of a tracked website with no row, the plan-only switch, retention.
+#     * **The dispatcher** (build_cycle.py, SEOagentCycleDsp): Instance Started + a sweep every 5 minutes + a test door; RECORD the job row,
+#       read the claim back, THEN start the job's own Manual Run with the §14.2 payload. Built inactive (an import deactivates anyway) and
+#       PUBLISHED by every deploy (F-ENG 2026-10-20: deploy_manifest.json had left it out, so a deploy silently switched it off); the
+#       seo_cache row cycle:mode (missing = plan_only) is the safety switch, and the catch-up's watchdog alerts when it stops sweeping.
+#     * **Site Kickoff** writes the seo_cycles row instead of starting jobs (build_monitors.py 5c).
+#     * **The deploy guard** (deploy_guard.py, both deploy paths): no Monday window any more; refuse while a dispatcher job is in flight or a
+#       cycle / preview is due in the next 15 minutes, read from the tables; refuse when they cannot be read; --force (alias --force-monday).
+#     What this section proves on the GENERATED files: the three doors; every path from a door to the start passes the saved record AND the
+#     claim read back; the outcomes and skips are written before any start; the start does not wait and takes the workflow id from the
+#     saved record; no execution time-out; published with every target; the job order equals the
+#     app's contract (app/shared/src/cycles.ts); the kickoff no longer starts anything and answers only after its row is saved; and the deploy
+#     guard's answers on every case of harness/deploy_window_cases.json, plus its refusal / override / unreadable behaviour.
+# =============================================================================
+_CYCLE_FILE140 = 'SEO_Agent_Cycle_Dispatcher.json'
+
+
+def _b140_cycle():
+    """Runs right after the catch-up (build_cycle.py reads the generated target workflows), before every lint that walks workflows/."""
+    _r140 = subprocess.run([sys.executable, os.path.join(HERE0, 'build_cycle.py')] + (['--no-env'] if '--no-env' in sys.argv[1:] else []), cwd=HERE0)
+    assert _r140.returncode == 0, 'build_cycle.py failed'
+    _wd140 = os.path.join(HERE0, 'workflows')
+    _wire140 = json.load(open(os.path.join(HERE0, 'harness', 'cycle_wiring.json'), encoding='utf-8'))
+    _w140 = json.load(open(os.path.join(_wd140, _CYCLE_FILE140), encoding='utf-8'))[0]
+    _by140 = {n['name']: n for n in _w140['nodes']}
+    _cc140 = _w140['connections']
+    _out140 = lambda c, nd: [t['node'] for lst in ((c.get(nd) or {}).get('main') or []) for t in (lst or [])]
+
+    def _reach140(c, start, blocked):
+        seen, todo = set(), [start]
+        while todo:
+            nd = todo.pop()
+            if nd in seen or nd == blocked:
+                continue
+            seen.add(nd); todo.extend(_out140(c, nd))
+        return seen
+    # ---------- A. the doors, the settings, inactive ----------
+    assert _w140['id'] == 'SEOagentCycleDsp' and _w140['active'] is False, 'cycle: the dispatcher is built inactive (the import deactivates it anyway; the deploy publishes it)'
+    _st140 = _w140['settings']
+    assert _st140.get('executionTimeout') == -1 and _st140.get('errorWorkflow') == 'SEOagentErrHandl' and _st140.get('saveDataSuccessExecution') == 'none', \
+        'cycle: the dispatcher needs no time-out (C-1: wall-clock), the Error Handler (the gave-up alarm) and no saved successes (every 5 minutes): ' + str(_st140)
+    assert _by140['Instance Started']['type'] == 'n8n-nodes-base.n8nTrigger' and _by140['Instance Started']['parameters']['events'] == ['init'], 'cycle: no Instance Started door'
+    _sw140 = [n for n in _w140['nodes'] if n['type'] == 'n8n-nodes-base.scheduleTrigger']
+    assert len(_sw140) == 1, 'cycle: the dispatcher must have exactly one sweep schedule'
+    _iv140 = _sw140[0]['parameters']['rule']['interval']
+    assert len(_iv140) == 1 and _iv140[0].get('field') == 'cronExpression' and _iv140[0].get('expression') == _wire140['sweep_cron'] == '3-58/5 * * * *', \
+        'cycle: the sweep must be the explicit cron 3-58/5 * * * * (offset from the catch-up): ' + str(_iv140)
+    assert _by140['Cycle Run']['type'] == 'n8n-nodes-base.executeWorkflowTrigger' and _by140['Cycle Run']['parameters'].get('inputSource') == 'passthrough', 'cycle: no test door'
+    _plan140 = _by140['Cycle Plan']['parameters']['jsCode']
+    for _k140 in ('const CU = (() =>', 'const RG = (() =>', 'const CYC = (() =>', "let mode = 'plan_only'", 'CYC.plan('):
+        assert _k140 in _plan140, 'cycle: Cycle Plan lacks ' + _k140
+    assert "dry_run && Number.isFinite(Date.parse" in _by140['Cycle Entry']['parameters']['jsCode'], 'cycle: the clock may move only on a dry run'
+    # ---------- B. RECORD, read the claim back, THEN start - by graph walk ----------
+    _doors140 = ('Instance Started', _sw140[0]['name'], 'Cycle Run')
+    for _d140 in _doors140:
+        assert 'Start Cycle Job' in _reach140(_cc140, _d140, None), 'cycle: ' + _d140 + ' never reaches the start'
+        for _gate140 in ('Read Claim (Cycle)', 'Cycle Record Row', 'Claim Free?', 'Save Cycle Record', 'Hold Claim (Cycle)', 'Confirm Cycle Claim', 'Cycle Payload', 'Cycle Recorded?', 'Cycle Plan'):
+            assert 'Start Cycle Job' not in _reach140(_cc140, _d140, _gate140), \
+                'cycle: ' + _d140 + ' can reach Start Cycle Job without passing ' + _gate140 + ' - the start must come after its saved record and the claim read back'
+        for _w8 in ('Save Cycle Rows', 'Save Cycle Job Rows'):   # what the plan learnt is written before anything starts
+            assert _w8 in _reach140(_cc140, _d140, None)
+        assert 'Cycle Start Items' not in _reach140(_cc140, _d140, 'Cycle Job Rows'), 'cycle: the starts can begin before the outcome rows are handed to their save'
+        assert 'Cycle Start Items' not in _reach140(_cc140, _d140, 'Cycle Release Rows'), 'cycle: a retry can start before the dead run\'s reservation is released (it would be refused as its own twin)'
+    _rel140 = _by140['Release Dead Runs']['parameters']
+    # F-REH (2026-10-20): it also writes why (cost_basis) - a ghost reservation of ANY run is released this way, and the row must say so
+    assert _rel140['operation'] == 'update' and _rel140['dataTableId']['value'] == 'seo_run_ledger' and _rel140['columns']['value'] == {'status': 'stale', 'cost_basis': '={{ $json.cost_basis }}'} \
+        and [(c['keyName'], c['keyValue']) for c in _rel140['filters']['conditions']] == [('run_id', '={{ $json.run_id }}'), ('status', 'reserved')], \
+        'cycle: Release Dead Runs must only mark a still-reserved row of the dead run stale: ' + str(_rel140)
+    # F-ENG (2026-10-20): the claim is strong - the row is read again just before it (still what the plan saw?), the claim is a token nobody
+    # else can write, it is held a moment, then read back; a claim another sweep holds sends this one back to the loop, never to the start
+    assert _out140(_cc140, 'Loop Cycle Starts') == ['Cycle Retention', 'Read Claim (Cycle)'] and _out140(_cc140, 'Read Claim (Cycle)') == ['Cycle Record Row'] \
+        and _out140(_cc140, 'Cycle Record Row') == ['Claim Free?'] and _out140(_cc140, 'Claim Free?') == ['Save Cycle Record', 'Loop Cycle Starts'] \
+        and _out140(_cc140, 'Save Cycle Record') == ['Hold Claim (Cycle)'] and _out140(_cc140, 'Hold Claim (Cycle)') == ['Confirm Cycle Claim'] \
+        and _out140(_cc140, 'Confirm Cycle Claim') == ['Cycle Payload'] and _out140(_cc140, 'Cycle Payload') == ['Cycle Recorded?'], 'cycle: the record-then-start chain is broken'
+    _rc140 = _by140['Read Claim (Cycle)']['parameters']
+    assert _rc140['operation'] == 'get' and _rc140['dataTableId']['value'] == 'seo_cycle_jobs' and _rc140['filters']['conditions'][0]['keyName'] == 'key', 'cycle: the claim is not read back from seo_cycle_jobs by key before it is written'
+    assert _by140['Hold Claim (Cycle)']['type'] == 'n8n-nodes-base.wait' and 1 <= _by140['Hold Claim (Cycle)']['parameters']['amount'] <= 10, 'cycle: the claim is not held before it is read back'
+    assert _out140(_cc140, 'Cycle Recorded?')[0] == 'Start Cycle Job', 'cycle: the recorded branch does not lead to the start'
+    _start140 = _by140['Start Cycle Job']['parameters']
+    assert _start140['options'].get('waitForSubWorkflow') is False and _start140['workflowId']['value'] == "={{ $('Cycle Record Row').first().json.workflow_id }}", \
+        'cycle: the start waits for the job, or does not take the workflow from the saved record: ' + str(_start140)
+    _cpay140 = _by140['Cycle Payload']['parameters']['jsCode']
+    assert 'CU.stalePlan(' in _cpay140 and "String(back.run_id || '') !== String(rec.run_id || '')" in _cpay140 and 'return [{ json: { ...s.payload } }]' in _cpay140, \
+        'cycle: the payload node lost a refusal (stale plan, claim) or no longer sends the plan\'s payload exactly'
+    _rr140 = _by140['Cycle Record Row']['parameters']['jsCode']
+    assert 'run_id: CYC.claimToken($execution.id' in _rr140 and 'CYC.claimFree(s.expect' in _rr140, 'cycle: the record row carries no claim token, or writes it without checking the row is still the plan\'s'
+    # F-ENG (2026-10-20): every table the plan reads refuses the sweep when it could not be read (the websites' own settings too)
+    _cp140 = _by140['Cycle Plan']['parameters']['jsCode']
+    _loads140 = sorted(n['name'] for n in _w140['nodes'] if n['type'] == DT_TYPE and n['name'].startswith('Load '))
+    _miss140 = [n for n in _loads140 if "['" + n + "'," not in _cp140]
+    assert len(_loads140) >= 10 and not _miss140, 'cycle: Cycle Plan does not refuse the sweep when %s could not be read (an error item would be read as an empty table)' % _miss140
+    assert 'CYC.execReads(' in _by140['Cycle Exec Requests']['parameters']['jsCode'] and 'CYC.runsFrom(' in _cp140 and 'CYC.execReads(' in _cp140, \
+        'cycle: n8n\'s executions are not read the kit\'s way (running runs, runs by id, windows of finished runs; what was not read is known)'
+    assert "e.entry === 'init'" in _cp140 and "'Load Cycle Last'" in _cp140, 'cycle: the Instance Started door does not stand down after a sweep that just finished'
+    _alarm140 = _by140['Cycle Alarm']['parameters']['jsCode']
+    assert 'p.unsettled' in _alarm140 and 'p.gave_up' in _alarm140, 'cycle: a run that finished with its ledger row unsettled raises no alert'
+    assert _out140(_cc140, 'Save Cycle Report') == ['Cycle Alarm'] and not _out140(_cc140, 'Cycle Alarm'), 'cycle: the gave-up alarm must be the last node, after the report is saved'
+    _cfg140 = _by140['Save Cycle Record']['parameters']
+    assert _cfg140['operation'] == 'upsert' and _cfg140['dataTableId']['value'] == 'seo_cycle_jobs' and _cfg140['filters']['conditions'][0]['keyName'] == 'key', 'cycle: the record is not an upsert by key'
+    assert _by140['Save Cycle Rows']['parameters']['filters']['conditions'][0]['keyName'] == 'site_id', 'cycle: seo_cycles is not upserted by site_id'
+    # F-ENG (2026-10-20): a row that exists is UPDATED with only the changed fields (an app PATCH of the weekday made mid-sweep survives)
+    _up140 = _by140['Update Cycle Rows']['parameters']
+    assert _up140['operation'] == 'update' and _up140['dataTableId']['value'] == 'seo_cycles' and _up140['columns']['mappingMode'] == 'autoMapInputData' \
+        and [(c['keyName'], c['keyValue']) for c in _up140['filters']['conditions']] == [('site_id', '={{ $json.site_id }}')], 'cycle: existing seo_cycles rows are not updated by site_id with the changed fields only: ' + str(_up140)
+    assert 'r.created === true' in _by140['Cycle State Rows']['parameters']['jsCode'] and 'r.changed' in _by140['Cycle State Updates']['parameters']['jsCode'], \
+        'cycle: Save Cycle Rows writes existing rows whole again (only new rows may be written whole)'
+    assert 'Update Cycle Rows' in _reach140(_cc140, 'Cycle Plan', None) and 'Cycle Start Items' not in _reach140(_cc140, 'Cycle Plan', 'Cycle State Updates'), 'cycle: the changed fields are not written before the starts'
+    # ---------- C. jobs, targets, deployment, credential ----------
+    _kit140 = [(j['job'], j['workflow_id']) for j in _wire140['jobs']]
+    assert [j for j, _w in _kit140] == ['ai_visibility', 'backlinks', 'rank_tracker', 'site_tracker', 'ai_growth', 'content_cadence', 'link_builder', 'audit'], \
+        'cycle: the job order is not today\'s Monday order (plan §4.3): ' + str(_kit140)
+    if _wire140.get('cycles_ts_jobs') is not None:
+        assert [(j['job'], j['workflow_id']) for j in _wire140['cycles_ts_jobs']] == _kit140, 'cycle: app/shared/src/cycles.ts CYCLE_JOBS and the kit disagree'
+    _man140 = json.load(open(os.path.join(HERE0, 'deploy_manifest.json'), encoding='utf-8'))
+    assert _CYCLE_FILE140 in _man140['workflows'], 'cycle: deploy_manifest.json does not import the dispatcher'
+    # F-ENG (2026-10-20): the rule is the other way round now. Every deploy imports the workflows, and an import DEACTIVATES them, so a
+    # dispatcher left out of the publish list was switched off by every deploy and no website's week ran. It is published like every other
+    # workflow; the safety switch is the seo_cache row cycle:mode (missing = plan_only), so a first deploy only plans until the owner flips it.
+    assert 'SEOagentCycleDsp' in _man140['publish'], 'cycle: the dispatcher is not in deploy_manifest.json publish - every deploy would leave it inactive and no website\'s week would run'
+    assert "let mode = 'plan_only'" in _cp140 and "v.mode === 'start'" in _cp140, 'cycle: publishing the dispatcher is safe only because it plans until seo_cache cycle:mode says start'
+    _unpub140 = sorted({w for _j, w in _kit140} - set(_man140['publish']))
+    assert not _unpub140, 'cycle: the dispatcher would start %s, which the deploy does not publish ("Workflow is not active")' % _unpub140
+    _sc140 = open(os.path.join(HERE0, 'sync_credentials.py'), encoding='utf-8').read()
+    assert "('%s', " % _wire140['credential'] in _sc140, 'cycle: sync_credentials.py does not write the n8n API credential'
+    for _id140, _t140 in _wire140['targets'].items():
+        assert _t140['entry_node'], 'cycle: ' + _id140 + ' has no Manual Run'
+    # ---------- D. Site Kickoff writes the cycle row and starts nothing ----------
+    _ko140 = json.load(open(os.path.join(_wd140, 'SEO_Agent_Site_Kickoff.json'), encoding='utf-8'))[0]
+    _kb140 = {n['name']: n for n in _ko140['nodes']}; _kc140 = _ko140['connections']
+    assert not [n['name'] for n in _ko140['nodes'] if n['type'] == 'n8n-nodes-base.executeWorkflow'], 'cycle: Site Kickoff still starts jobs itself'
+    _ksv140 = _kb140['Save Kickoff Cycle']['parameters']
+    assert _ksv140['operation'] == 'upsert' and _ksv140['dataTableId']['value'] == 'seo_cycles' and _ksv140['filters']['conditions'][0]['keyName'] == 'site_id', 'cycle: the kickoff does not upsert seo_cycles by site_id'
+    assert 'Respond Kickoff Accepted' in _reach140(_kc140, 'Site Kickoff API', None) and 'Respond Kickoff Accepted' not in _reach140(_kc140, 'Site Kickoff API', 'Save Kickoff Cycle'), \
+        'cycle: the kickoff can answer 202 without saving the row'
+    _codes140 = {n['name']: n['parameters']['options']['responseCode'] for n in _ko140['nodes'] if n['type'] == 'n8n-nodes-base.respondToWebhook'}
+    assert _codes140 == {'Respond Kickoff Bad Request': 400, 'Respond Kickoff Refused': 409, 'Respond Kickoff Dry Run': 200, 'Respond Kickoff Accepted': 202, 'Respond Kickoff Failed': 500}, \
+        'cycle: the kickoff\'s answers changed: ' + str(_codes140)
+    assert 'CYC.cycleRow(' in _kb140['Kickoff Plan']['parameters']['jsCode'] and 'CYC.validTz(' in _kb140['Kickoff Validate']['parameters']['jsCode'] and 'CYC.anchorOf(' in _kb140['Kickoff Validate']['parameters']['jsCode'], \
+        'cycle: the kickoff does not build its row with the kit (CYC.cycleRow, which "Track my site" uses too; the dispatcher\'s adoption uses its newCycleRow)'
+    # E4 (2026-10-19): "Track my site" writes the same row with the same builder, after seo_sites is saved and before the Site Tracker starts
+    _tcp140 = nodes['Track Cycle Plan']['parameters']['jsCode']
+    assert 'CYC.cycleRow(' in _tcp140 and 'CYC.anchorOf(' in _tcp140 and "skip_jobs: ['site_tracker']" in _tcp140, 'cycle: Track my site does not ensure its cycle row with the kit\'s builder'
+    _tsv140 = nodes['Save Cycle (Track)']['parameters']
+    assert _tsv140['operation'] == 'upsert' and _tsv140['dataTableId']['value'] == 'seo_cycles' and _tsv140['filters']['conditions'][0]['keyName'] == 'site_id', 'cycle: Track my site does not upsert seo_cycles by site_id'
+    _tr140 = _reach140(conns, 'Save Site (Track)', None)
+    assert 'Track Cycle Plan' in _tr140 and 'Start Site Tracker' in _reach140(conns, 'Track Cycle Plan', None) and 'Track Cycle Plan' not in _reach140(conns, 'Start Site Tracker', None), \
+        'cycle: Track my site must ensure the cycle row after seo_sites is saved and before the Site Tracker starts'
+    assert 'Respond Kickoff Dry Run' in _out140(_kc140, 'Kickoff Dry Run?') and 'Kickoff Cycle Row' in _out140(_kc140, 'Kickoff Dry Run?') \
+        and 'Save Kickoff Cycle' not in _reach140(_kc140, 'Kickoff Dry Run?', 'Kickoff Cycle Row'), 'cycle: a dry run can write the row'
+    # ---------- E. the deploy guard: one rule, both deploy paths, self-tested on the shared cases ----------
+    import deploy_guard as _dg140
+    _cases140 = json.load(open(os.path.join(HERE0, 'harness', 'deploy_window_cases.json'), encoding='utf-8'))
+    _guard140 = {}
+    for _c140 in _cases140['cases']:
+        _r140 = _dg140.deploy_window(_c140['jobs'], _c140['cycles'], _cases140['now'], _c140.get('minutes') or 15)
+        _wt140 = _c140['want']
+        assert _r140['busy'] is _wt140['busy'] and [j['key'] for j in _r140['starting']] == _wt140['starting'] and [j['key'] for j in _r140['running']] == _wt140['running'] \
+            and len(_r140['due']) == _wt140['due'] and len(_r140['ignored_stale']) == _wt140.get('ignored', 0), 'cycle: deploy_guard.deploy_window("%s") answered %s, expected %s' % (_c140['name'], _r140, _wt140)
+        assert bool(_r140['running']) == bool(_r140['note']) and (not _r140['running'] or 'the dispatcher sees the dead run' in _r140['note']), 'cycle: a running job must be reported (and why it is safe): ' + str(_r140)
+        _guard140[_c140['name']] = _r140
+    _ae140 = open(os.path.join(HERE0, 'apply_env.py'), encoding='utf-8').read()
+    _de140 = open(os.path.join(HERE0, '..', '..', 'deploy', 'gcp', 'deploy_engine.py'), encoding='utf-8').read()
+    assert 'deploy_guard.check(n8n_api, args)' in _ae140 and 'sys.exit(_refusal)' in _ae140 and 'def deploy_window' not in _ae140, 'cycle: apply_env.py does not run the shared deploy guard'
+    assert 'deploy_guard.check(api, args' in _de140 and 'sys.exit(refusal)' in _de140 and 'def deploy_window' not in _de140, 'cycle: deploy_engine.py does not run the shared deploy guard'
+    assert _ae140.index('deploy_guard.check(') < _ae140.index("if '--no-build' not in args:"), 'cycle: apply_env.py builds or imports before it asks the guard'
+    assert _de140.index('deploy_guard.check(') < _de140.index('# 2. build'), 'cycle: deploy_engine.py builds before it asks the guard'
+    assert set(_dg140.FORCE_FLAGS) == {'--force', '--force-monday'}, 'cycle: --force and the old --force-monday must both override the guard'
+    _idle140 = {'seo_cycle_jobs': [], 'seo_cycles': []}
+    _busy140 = {'seo_cycle_jobs': [{'key': 'cyc:site_a:2026-10-21:backlinks', 'job': 'backlinks', 'status': 'starting', 'updated_at': '2026-10-21T13:58:00.000Z'}], 'seo_cycles': []}
+    _run140 = {'seo_cycle_jobs': [{'key': 'cyc:site_b:2026-10-21:audit', 'job': 'audit', 'status': 'running', 'updated_at': '2026-10-21T13:30:00.000Z'}], 'seo_cycles': []}
+
+    def _api140(tables, fail=None, missing=False):
+        def call(method, path):
+            if fail == 'raise':
+                raise OSError('connection refused')
+            if fail:
+                return fail, None
+            if path.startswith('/data-tables?'):
+                return 200, {'data': [] if missing else [{'id': 't1', 'name': 'seo_cycle_jobs'}, {'id': 't2', 'name': 'seo_cycles'}], 'nextCursor': None}
+            tid = path.split('/')[2]
+            return 200, {'data': tables['seo_cycle_jobs' if tid == 't1' else 'seo_cycles'], 'nextCursor': None}
+        return call
+    _now140 = _dg140._ms('2026-10-21T14:00:00.000Z')
+    _said140 = []
+    _chk140 = {
+        'idle': _dg140.check(_api140(_idle140), [], now=_now140, say=_said140.append),
+        'busy': _dg140.check(_api140(_busy140), [], now=_now140, say=_said140.append),
+        'running_only': _dg140.check(_api140(_run140), [], now=_now140, say=_said140.append),
+        'busy_force': _dg140.check(_api140(_busy140), ['--force'], now=_now140, say=_said140.append),
+        'busy_force_monday': _dg140.check(_api140(_busy140), ['--force-monday'], now=_now140, say=_said140.append),
+        'unreadable_401': _dg140.check(_api140(_idle140, fail=401), [], now=_now140, say=_said140.append),
+        'unreachable': _dg140.check(_api140(_idle140, fail='raise'), [], now=_now140, say=_said140.append),
+        'unreadable_force': _dg140.check(_api140(_idle140, fail=401), ['--force'], now=_now140, say=_said140.append),
+        'fresh_instance_no_tables': _dg140.check(_api140(_idle140, missing=True), [], now=_now140, say=_said140.append)}
+    assert _chk140['idle'] is None and _chk140['fresh_instance_no_tables'] is None, 'cycle: the guard refused an idle instance: ' + str(_chk140)
+    assert _chk140['busy'] and 'refusing now' in _chk140['busy'] and 'cyc:site_a:2026-10-21:backlinks' in _chk140['busy'], 'cycle: the guard let a deploy through over a job that is starting'
+    assert _chk140['running_only'] is None and any('cyc:site_b:2026-10-21:audit' in x and 'the dispatcher sees the dead run' in x for x in _said140), \
+        'cycle: a running job must be reported, never refused (a restart kills it and the dispatcher retries it)'
+    assert _chk140['busy_force'] is None and _chk140['busy_force_monday'] is None and sum('DEPLOY GUARD OVERRIDDEN' in s for s in _said140) == 3, \
+        'cycle: --force / --force-monday must override, loudly'
+    assert _chk140['unreadable_401'] and 'could not be read' in _chk140['unreadable_401'] and _chk140['unreachable'] and 'could not be reached' in _chk140['unreachable'] \
+        and _chk140['unreadable_force'] is None, 'cycle: a guard that cannot read the tables must refuse (unless --force) and say why: ' + str(_chk140)
+    # ---------- F. the image's release step (n8n/deploy/release.mjs) asks the same rule: CYC.deployWindow out of the generated dispatcher ----------
+    _rel140 = open(os.path.join(HERE0, '..', 'deploy', 'release.mjs'), encoding='utf-8').read()
+    _rg140 = open(os.path.join(HERE0, '..', 'deploy', 'deploy_guard.mjs'), encoding='utf-8').read()
+    assert 'inMondayWindow' not in _rel140 and "from './deploy_guard.mjs'" in _rel140 and 'SEO_DEPLOY_FORCE_MONDAY' in _rel140 and 'SEO_DEPLOY_FORCE' in _rel140, \
+        'cycle: release.mjs still has the Monday window, or does not ask the per-cycle guard (SEO_DEPLOY_FORCE, alias SEO_DEPLOY_FORCE_MONDAY)'
+    assert _rel140.index('deployGuard(') < _rel140.index("n8n('import:workflow'"), 'cycle: release.mjs imports before it asks the guard'
+    assert 'CYC.deployWindow(' in _rg140 and "'Cycle Plan'" in _rg140 and 'deployWindow = ' not in _rg140, 'cycle: deploy_guard.mjs does not read the rule out of the generated dispatcher (or writes a rule of its own)'
+    # ---------- G. production's deploy path: the columns first, a failed sync fails, a missing workflow fails unless --create-missing ----------
+    assert _de140.index("'sync_tables.py'") < _de140.index("api('PUT', '/workflows/'"), 'cycle: deploy_engine.py PUTs the workflows before the new Data Table columns exist'
+    assert 'sync failed' in _de140 and "'--create-missing' not in args" in _de140 and 'SEOagentCycleDsp' in _de140, \
+        'cycle: deploy_engine.py ignores a failed sync_tables.py, or lets a workflow missing remotely pass without --create-missing'
+    import shutil as _sh140
+    _sh140.copyfile(os.path.join(HERE0, '..', 'deploy', 'deploy_guard.mjs'), os.path.join(HERE0, 'harness', 'deploy_guard.mjs'))   # harness CY12 runs it (generated copy)
+    _wire140.update({'record_then_start': True, 'deploy_guard': {k: {'busy': v['busy'], 'starting': [j['key'] for j in v['starting']], 'running': [j['key'] for j in v['running']],
+                     'due': len(v['due']), 'ignored': len(v['ignored_stale']), 'reason': v['reason'], 'note': v['note']} for k, v in _guard140.items()},
+                     'guard_check': {k: (v is None) for k, v in _chk140.items()}, 'dispatcher_published': 'SEOagentCycleDsp' in _man140['publish'], 'kickoff_codes': _codes140, 'published_targets': sorted({w for _j, w in _kit140})})
+    json.dump(_wire140, open(os.path.join(HERE0, 'harness', 'cycle_wiring.json'), 'w'), indent=1, sort_keys=True)
+    print('cycle (section 140): the Cycle Dispatcher reads the claim, records a token, holds and reads it back, then starts (%d jobs, published, plan_only until '
+          'cycle:mode); Site Kickoff writes seo_cycles and starts nothing; the deploy guard answers %d shared cases (refuses a start or a due cycle, reports a running job) '
+          'and refuses when it cannot read; release.mjs asks the same rule' % (len(_kit140), len(_guard140)))
+
+
+
 _b98_catchup()   # R94 (sections 98-99): build the Schedule Catch-up (build_catchup.py) from the workflows just written, and prove it
+_b140_cycle()    # section 140: the Cycle Dispatcher (build_cycle.py), the Site Kickoff's cycle row and the deploy guard, proved on the files
 
 # section 55 (R17 / R29): both checks need every workflow on disk, so they run here, after the sub-builds
 _r17_r29_checks()

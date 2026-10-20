@@ -226,7 +226,27 @@ module.exports = async (ctx) => {
     check('… and, with strata large enough, exactly N times (no question is favoured)', counts.filter(c => c === pw.per_week).length === 499, Math.max(...counts));
     check('every topic x buyer group (48) is in every morning\'s sample', minStrata === 48, minStrata);
     check('no morning passes the 900-request limit', maxReq <= 900, maxReq);
-    check('Tuesday to Sunday are six consecutive pulse days; a Monday shares Tuesday\'s slot', AIP.pulseDay('2026-10-25') - AIP.pulseDay('2026-10-20') === 5 && AIP.pulseDay('2026-10-19') === AIP.pulseDay('2026-10-20') && AIP.pulseDay('2026-10-27') - AIP.pulseDay('2026-10-20') === 6, '');
+    check('a website with no cycle weekday: Tuesday to Sunday are six consecutive pulse days; a Monday shares Tuesday\'s slot (the v4.9 rule, unchanged)', AIP.pulseDay('2026-10-25') - AIP.pulseDay('2026-10-20') === 5 && AIP.pulseDay('2026-10-19') === AIP.pulseDay('2026-10-20') && AIP.pulseDay('2026-10-27') - AIP.pulseDay('2026-10-20') === 6
+      && AIP.pulseDay('2026-10-21', 1) === AIP.pulseDay('2026-10-21') && AIP.pulseDay('2026-10-21', null) === AIP.pulseDay('2026-10-21') && AIP.pulseDay('2026-10-21', '') === AIP.pulseDay('2026-10-21'), '');
+    // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): a website's week starts on ITS cycle day. For every weekday: the six days after the cycle
+    // day are six consecutive pulse days, the cycle day itself shares the next day's slot (the pulse is skipped on it anyway), and over those six
+    // mornings every question is still asked exactly N times - the rotation covers each question exactly as before
+    const DAYNAME = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayOfWeek = (iso) => new Date(iso + 'T00:00:00Z').getUTCDay();
+    const isoPlus = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+    const perCw = [];
+    for (let cw = 0; cw <= 6; cw++) {
+      let cd = '2026-10-18'; while (dayOfWeek(cd) !== cw) cd = isoPlus(cd, 1);   // the first cycle day on or after Sunday 2026-10-18
+      const six = [1, 2, 3, 4, 5, 6].map(k => AIP.pulseDay(isoPlus(cd, k), cw));
+      const consecutive = six.every((v, i) => i === 0 || v - six[i - 1] === 1);
+      const sharesNext = AIP.pulseDay(cd, cw) === six[0];
+      const nextWeek = AIP.pulseDay(isoPlus(cd, 8), cw) - six[0] === 6;   // the day after the next cycle day continues the count
+      const cnt = new Map(); for (const d of six) for (const q of AIP.pulseSample(panel, { per_week: pw.per_week, day: d }).asked) cnt.set(q.prompt_id, (cnt.get(q.prompt_id) || 0) + 1);
+      const exact = cnt.size === 499 && [...cnt.values()].every(c => c === pw.per_week);
+      perCw.push({ cw: DAYNAME[cw], consecutive, sharesNext, nextWeek, exact });
+    }
+    check('for a website whose cycle day is any of the seven weekdays, its six pulse mornings are consecutive pulse days, its cycle day shares the next morning\'s slot, the count runs on week after week, and every question is asked exactly N times over the six',
+      perCw.every(x => x.consecutive && x.sharesNext && x.nextWeek && x.exact), JSON.stringify(perCw));
     // a small stratum (fewer questions than mornings) is still in every morning — topped up in turn
     const small = [...panel.slice(0, 60), { ...panel[0], prompt_id: 'tiny_1', cluster: 'tiny cluster', persona: 'COO' }];
     let tinyDays = 0; for (let d = 0; d < 6; d++) if (AIP.pulseSample(small, { per_week: 1, day: base + d }).asked.some(q => q.prompt_id === 'tiny_1')) tinyDays++;

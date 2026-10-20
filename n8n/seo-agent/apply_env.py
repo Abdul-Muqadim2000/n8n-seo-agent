@@ -5,44 +5,34 @@
 3. imports the generated workflows, publishes the standard set (Console Alerts only when SEO_IMAP_PASSWORD is set),
 4. adds the columns a newer build expects to the Data Tables that already exist (sync_tables.py, v4.9),
 5. restarts n8n and waits for it.
-R94 (2026-10-16): it refuses to run inside the Monday window of the weekly schedules (07:00-12:00 in GENERIC_TIMEZONE, i.e. 11:00-16:00 UTC
-in summer): an import re-publishes every workflow and a restart re-arms every schedule for its NEXT time, so a weekly run that is due or
-running late is thrown away. --force-monday overrides it (the Schedule Catch-up then starts what the restart threw away).
-Usage: python3 apply_env.py [--no-build] [--no-restart] [--force-monday]"""
-import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
+The deploy guard (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4.8; deploy_guard.py, shared with deploy/gcp/deploy_engine.py): it refuses while a
+Cycle Dispatcher job is STARTING, or a website's cycle or "Coming up" preview is due in the next 15 minutes - read from
+seo_cycle_jobs / seo_cycles through n8n's public API (N8N_API_KEY); a RUNNING job is reported, not refused (the restart kills it and
+the dispatcher retries it, at the cost of one of its three attempts). The publish set includes the Cycle Dispatcher (F-ENG 2026-10-20):
+it only plans until seo_cache cycle:mode says start. If the tables cannot be read it refuses too, and says
+why. --force overrides it, loudly (--force-monday, the flag of the old Monday 07:00-12:00 rule, is the same flag).
+Usage: python3 apply_env.py [--no-build] [--no-restart] [--force]"""
+import json, os, shutil, subprocess, sys, tempfile, time, urllib.error, urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__)); N8N_DIR = os.path.join(HERE, '..'); CONTAINER, PROJECT = 'n8n-n8n-1', 'wo1WpMiHjdduGvfl'
 sys.path.insert(0, HERE); from env_settings import load_env
 from ladder_common import ALERT_WEBHOOK_PLACEHOLDER
+import deploy_guard
 MANIFEST = json.load(open(os.path.join(HERE, 'deploy_manifest.json'), encoding='utf-8'))   # shared with n8n/deploy/release.mjs
 WORKFLOWS, PUBLISH = MANIFEST['workflows'], MANIFEST['publish']
 def sh(cmd, **kw): return subprocess.run(cmd, check=True, text=True, capture_output=True, **kw)
 args = sys.argv[1:]
-# R94 (2026-10-16, defects/C_monitors.md): every n8n restart discards a due fire - the crons re-arm for their next future time, and the
-# import below re-publishes every workflow, which does the same. The weekly runs fall on Monday 07:00-11:00 in the instance's time zone
-# and arrive late while the Mac sleeps (the 2026-10-12 16:38 deploy dropped five of them), so a deploy inside that window is refused.
-DEFAULT_TZ = 'America/New_York'   # what n8n uses with GENERIC_TIMEZONE unset; n8n/compose.yml sets the same default explicitly
-def deploy_window(now_utc=None, tz_name=None):
-    """-> (inside, start_utc, end_utc): Monday 07:00-12:00 in the schedules' time zone (the weekly crons are 07:00-11:00, plus an hour
-    for a run in progress); 11:00-16:00 UTC when the time zone database is not available. Build section 98 self-tests it."""
-    import datetime as _dt
-    now = now_utc or _dt.datetime.now(_dt.timezone.utc)
+N8N_API_BASE = os.environ.get('N8N_PUBLIC_URL', 'http://localhost:5678').rstrip('/') + '/api/v1'   # the local n8n (sync_tables.py's setting)
+def n8n_api(method, path):
+    """n8n's public API on this machine, for the deploy guard: (status, json). The key is read here and sent only to n8n; it is never printed."""
+    key = (os.environ.get('N8N_API_KEY') or load_env().get('N8N_API_KEY') or '').strip()
+    if not key: raise RuntimeError('no N8N_API_KEY in n8n/.env')
+    req = urllib.request.Request(N8N_API_BASE + path, method=method, headers={'X-N8N-API-KEY': key, 'Accept': 'application/json'})
     try:
-        from zoneinfo import ZoneInfo
-        tz = ZoneInfo(tz_name or DEFAULT_TZ)
-        loc = now.astimezone(tz)
-        start = loc.replace(hour=7, minute=0, second=0, microsecond=0) - _dt.timedelta(days=loc.weekday())
-        end = start.replace(hour=12)
-        a, b = start.astimezone(_dt.timezone.utc), end.astimezone(_dt.timezone.utc)
-    except Exception:
-        monday = (now - _dt.timedelta(days=now.weekday())).replace(minute=0, second=0, microsecond=0)
-        a, b = monday.replace(hour=11), monday.replace(hour=16)
-    return (a <= now < b), a, b
-if __name__ == '__main__' and '--force-monday' not in args:
-    _in94, _a94, _b94 = deploy_window(tz_name=(load_env().get('GENERIC_TIMEZONE') or '').strip() or DEFAULT_TZ)
-    if _in94:
-        sys.exit('R94: refusing to deploy now: Monday ' + _a94.strftime('%H:%M') + '-' + _b94.strftime('%H:%M') + ' UTC is when the weekly '
-                 'schedules fire, and an import or a restart throws away a run that is due or late. Deploy after ' + _b94.strftime('%H:%M')
-                 + ' UTC, or pass --force-monday (the Schedule Catch-up then starts what the restart threw away).')
+        with urllib.request.urlopen(req, timeout=20) as r: return r.status, json.loads(r.read() or b'null')
+    except urllib.error.HTTPError as e: return e.code, None
+if __name__ == '__main__':
+    _refusal = deploy_guard.check(n8n_api, args)
+    if _refusal: sys.exit(_refusal)
 if '--no-build' not in args:
     r = subprocess.run([sys.executable, os.path.join(HERE, 'build_v4.py')], cwd=HERE, capture_output=True, text=True)
     if r.returncode != 0: print(r.stdout[-2000:], r.stderr[-2000:]); sys.exit('build failed')

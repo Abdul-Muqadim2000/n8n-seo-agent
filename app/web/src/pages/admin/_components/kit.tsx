@@ -24,7 +24,7 @@ import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Callout } from '@/components/ui/feedback';
-import { Field, Input, Select, Textarea } from '@/components/ui/field';
+import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
 import { PageHeader } from '@/components/ui/misc';
 import { pageTitle } from '@/components/layout/Brand';
@@ -384,8 +384,8 @@ export function CreditDialog({
   const form = useForm<CreditValues, unknown, z.output<typeof adminCreditSchema>>({
     resolver: zodResolver(adminCreditSchema),
     defaultValues: request
-      ? { kind: 'grant', credits: request.credits, paidUsd: request.priceUsd, note: `${request.packId} pack${request.note ? ` · ${request.note}` : ''}`.slice(0, 500), expires: 'pack', requestId: request.id }
-      : { kind, paidUsd: 0, note: '', expires: 'pack' },
+      ? { kind: 'grant', credits: request.credits, paidUsd: request.priceUsd, note: `${request.packId} pack${request.note ? ` · ${request.note}` : ''}`.slice(0, 500), expires: 'pack', requestId: request.id, notify: true }
+      : { kind, paidUsd: 0, note: '', expires: 'pack', notify: kind !== 'adjust' },
   });
   const [expiry, setExpiry] = useState<ExpiryChoice>('pack');
   const [days, setDays] = useState(90);
@@ -405,7 +405,10 @@ export function CreditDialog({
       { id: company.id, ...v },
       {
         onSuccess: (entry) => {
-          toast.success(`${company.name}: ${signedCredits(entry?.credits ?? v.credits)} credits · balance ${credits(entry?.balanceAfter ?? after)}${request ? ' · request fulfilled' : ''}`);
+          const inv = entry?.ref?.invoice;
+          const told = entry?.ref?.notified;
+          const mail = told && 'to' in told ? ` · e-mailed to ${told.to.join(', ')}` : v.notify && told && 'skipped' in told ? ` · not e-mailed: ${told.skipped}` : '';
+          toast.success(`${company.name}: ${signedCredits(entry?.credits ?? v.credits)} credits · balance ${credits(entry?.balanceAfter ?? after)}${request ? ' · request fulfilled' : ''}${inv ? ` · invoice ${inv.number}` : ''}${mail}`);
           onClose();
         },
         onError: (e) => {
@@ -469,6 +472,17 @@ export function CreditDialog({
             )}
           </div>
         )}
+        <Checkbox
+          {...form.register('notify')}
+          label={kind === 'grant' && paid > 0 ? 'E-mail the invoice to the company' : 'Tell the company by e-mail'}
+          description={
+            kind === 'grant' && paid > 0
+              ? 'An invoice is issued for every payment. With this on, its PDF goes to the owners and admins now; you can send it again later.'
+              : kind === 'adjust' && !(amount > 0)
+                ? 'Only credits added are announced: a correction down sends nothing.'
+                : 'A short note to the owners and admins with the credits added and the new balance.'
+          }
+        />
         <Field label="Note" optional error={err.note?.message}>
           {(p) => <Textarea {...p} rows={2} placeholder={kind === 'grant' ? 'Invoice 2026-114, bank transfer' : 'Why'} {...form.register('note')} />}
         </Field>

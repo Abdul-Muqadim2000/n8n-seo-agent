@@ -23,7 +23,7 @@ export function Calendar({ data }: { data: PipelineData }) {
     return [...m.values()];
   }, [data.calendar]);
   return (
-    <Panel icon={<Clock />} title="Next four weeks" description="Every automatic run that is switched on, in your time zone.">
+    <Panel icon={<Clock />} title="Next four weeks" description="Your weekly runs and every check that is switched on, in your time zone.">
       {!days.length ? (
         <p className="text-sm text-ink-3">Nothing is scheduled: start tracking or switch the automations on.</p>
       ) : (
@@ -123,7 +123,7 @@ export function RecentActivity({ data }: { data: PipelineData }) {
   return (
     <Panel icon={<Activity />} title="Recent automatic runs" description="Reports the pipeline delivered on its own (weekly and monthly runs), and pages it found live.">
       {!entries.length ? (
-        <p className="text-sm text-ink-3">Nothing yet: the first automatic reports arrive on the next Monday after tracking starts.</p>
+        <p className="text-sm text-ink-3">Nothing yet: the first automatic reports arrive in your first weekly run, which starts the day tracking starts.</p>
       ) : (
         <>
           <ul className="divide-y divide-line">{entries.slice(0, SHOWN).map(row)}</ul>

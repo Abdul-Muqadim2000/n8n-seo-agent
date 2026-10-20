@@ -58,7 +58,7 @@ export function ResetLinkCard({ className }: { className?: string }) {
 }
 
 // G21 (2026-10-13, FIX_PLAN G21): runs delivered / runs started per week, for the runs the app starts and for the nine schedules,
-// with the schedule fires that left no execution behind (D25a: a Mac-hosted stack misses a Monday whenever the machine sleeps) and the
+// with the schedule fires that left no execution behind (D25a: a Mac-hosted stack misses a scheduled fire whenever the machine sleeps) and the
 // channel that carried each ops alert (R6). Internal only: this page is for operators, so it is not on the business site.
 const ratePct = (v: number | null) => (v == null ? 'unmeasured' : `${v.toFixed(1)}%`);   // R106: null is "not measured", never 0% or a dash
 type RateTone = 'good' | 'warning' | 'critical' | 'neutral';

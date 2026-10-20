@@ -8,6 +8,12 @@ const now = new Date().toISOString();
 // day's budget guard refuses sets its row back to `planned` with the reason (*Refused Ladder Row*), so no feature reports a page nobody wrote.
 const startedNow = Math.min(3, Math.max(1, Number(d.pages_now) || 1));
 const writing = new Set((L.write_now || []).slice(0, startedNow).map(w => w.keyword));
+// F-KW (2026-10-20, finding 9): who chose this ladder's keyword, on every row (the settings row is written after these rows and may fail);
+// the same rule as Ladder Settings Rows: the request's chooser, else the plan's, else client_typed (a ladder started through the API)
+const CHOSEN = ['client_typed', 'client_picked', 'system_announced'];
+const lcC = (v) => String(v == null ? '' : v).toLowerCase().trim();
+let reqC = {}; try { reqC = $('Normalize Input').first().json || {}; } catch (e) { reqC = {}; }
+const chosen_by = CHOSEN.includes(lcC(reqC.chosen_by)) ? lcC(reqC.chosen_by) : CHOSEN.includes(lcC(d.chosen_by)) ? lcC(d.chosen_by) : 'client_typed';
 return pages.map(p => ({ json: {
   ladder_id: String(L.ladder_id || ''), domain: String(L.domain || d.domain || ''), head_keyword: String((L.head || {}).keyword || d.keyword || ''),
   rung: Number(p.rung) || 4, page_no: Number(p.page_no) || 0, keyword: String(p.keyword || ''), supporting: (p.supporting || []).join(', '),
@@ -15,5 +21,6 @@ return pages.map(p => ({ json: {
   target_words: Number(p.target_words) || 0,   // P2-7: the length the verdict asked for (main page); R8: a rung page gets its own measured target
   status_note: '',   // R1: filled only when something moved the row (a refused page run sets it back to planned with the reason)
   months: Array.isArray(p.months) ? p.months.join('-') : '', start_date: now, country: String(d.country || ''), location_code: Number(d.location_code) || 0,
-  language_code: String(d.language_code || 'en'), email: String(d.email || ''), callback_url: String(d.callback_url || ''), request_id: String(d.request_id || '')
+  language_code: String(d.language_code || 'en'), email: String(d.email || ''), callback_url: String(d.callback_url || ''), request_id: String(d.request_id || ''),
+  chosen_by
 } }));

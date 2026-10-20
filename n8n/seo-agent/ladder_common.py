@@ -18,7 +18,11 @@ LADDER_COLS = [('ladder_id', 'string'), ('domain', 'string'), ('head_keyword', '
                # R1 (2026-10-13, re-rating): why the row is in its current status when something moved it back -- a page run the daily budget
                # guard refused sets `writing` back to `planned` and says so here, so the ladder plan, the Rank Tracker and the Content
                # Cadence never report a page that was never written. Empty on a row nothing moved.
-               ('status_note', 'string')]
+               ('status_note', 'string'),
+               # F-KW (2026-10-20): who chose this ladder's keyword (client_typed | client_picked | system_announced), written by the ladder run on
+               # every row BEFORE its seo_ladder_settings row, so the Content Cadence still knows when that second write fails; '' = a row from
+               # before the column. Run sync_tables.py after deploying.
+               ('chosen_by', 'string')]
 HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number')]
 HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number'),
                 # v4.16 (G6, 2026-10-12 system review): the whole results page of the same SERP call, so a reading can be read back and
@@ -57,7 +61,11 @@ SITES_COLS = [('site_id', 'string'), ('domain', 'string'), ('gsc_property', 'str
               ('accreditation', 'string'), ('model_updated_at', 'string'),
               # B7-5 (W3-D, 2026-10-17): content groups -- a JSON list [{name, pattern}] of regexes over page paths, set through Site Admin
               # (action content_groups); the Site Tracker reports each group's Search Console clicks with the same statistical bar
-              ('content_groups_json', 'string')]
+              ('content_groups_json', 'string'),
+              # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §5.2 / §14.1): the services the client declared ("What do you sell?" on Track my site), a JSON
+              # list. Written by Track my site only; the site model (SM.from) merges it into its services and SM.toRow writes it back unchanged, so
+              # the weekly Site Tracker never overwrites it. Read by the fit gate (protected words, topics) and the keyword research (seeds).
+              ('declared_services', 'string')]
 # v4.15 (G19): the site's page inventory -- one row per site and URL (sitemap, Search Console, AI Growth key pages, publish detection), filled
 # by D11; `queries_json` holds the Search Console queries the page gets impressions for. SM.matchPage() reads it.
 PAGES_TABLE = 'seo_pages'
@@ -311,7 +319,35 @@ CACHE_COLS = [('key', 'string'), ('kind', 'string'), ('site_id', 'string'), ('va
 LADDER_SETTINGS_TABLE = 'seo_ladder_settings'
 LADDER_SETTINGS_COLS = [('ladder_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('head_keyword', 'string'), ('mode', 'string'), ('priority', 'number'), ('status', 'string'),
                         ('plan_type', 'string'), ('reach', 'number'), ('source', 'string'), ('opportunities', 'string'), ('auto_start', 'boolean'), ('max_active', 'number'), ('max_waiting', 'number'),
-                        ('created_at', 'string'), ('updated_at', 'string')]
+                        ('created_at', 'string'), ('updated_at', 'string'),
+                        # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §5.5 / §14): who chose a ladder's keyword (client_typed | client_picked |
+                        # system_announced; '' = client_typed) and, on the '_site' row, the website's autopilot level (1 | 2 | 3; empty = 2)
+                        ('chosen_by', 'string'), ('autopilot_level', 'number'),
+                        # F-KW (2026-10-20, plan §5.6): when the app's fresh Keyword Check of a ladder planned 60+ days ago PASSED (ISO). The Content
+                        # Cadence writes no page of such a ladder until it is set (a check that fell pauses the ladder instead). Written by the app.
+                        ('rechecked_at', 'string')]
+
+# ---- the per-website 7-day cycle (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4 / §7 / §14; app mirror app/shared/src/cycles.ts) ----
+# seo_cycles: one row per website (upsert by site_id), written by the Site Kickoff and the Cycle Dispatcher. Times are ISO UTC; tz is IANA;
+# cycle_weekday 0-6 (Sunday 0) in tz; local_time 'HH:MM'; monthly_day 1-28; current_key 'cyc:<site_id>:<YYYY-MM-DD>' (the local due date).
+CYCLES_TABLE = 'seo_cycles'
+CYCLES_COLS = [('site_id', 'string'), ('domain', 'string'), ('anchor_at', 'string'), ('tz', 'string'), ('cycle_weekday', 'number'), ('local_time', 'string'),
+               ('monthly_day', 'number'), ('next_due_at', 'string'), ('next_preview_at', 'string'), ('current_key', 'string'), ('status', 'string'),
+               ('skip_jobs', 'string'), ('last_cycle_at', 'string'), ('last_monthly_key', 'string'), ('adopted', 'boolean'), ('updated_at', 'string')]
+# seo_cycle_jobs: one row per website x cycle x job (upsert by key = '<cycle_key>:<job>'), written by the dispatcher BEFORE it starts the job
+# (record-then-start). status: starting | running | done | skipped | refused | failed | gave_up; ledger_key 'cycle:<cycle_key>:<job>'.
+CYCLE_JOBS_TABLE = 'seo_cycle_jobs'
+CYCLE_JOBS_COLS = [('key', 'string'), ('site_id', 'string'), ('cycle_key', 'string'), ('job', 'string'), ('workflow_id', 'string'), ('status', 'string'),
+                   ('attempts', 'number'), ('run_id', 'string'), ('ledger_key', 'string'), ('monthly', 'boolean'), ('reason', 'string'), ('due_at', 'string'),
+                   ('started_at', 'string'), ('finished_at', 'string'), ('updated_at', 'string')]
+# seo_skips: the client's decisions on the "Coming up" plan, written by the app; read by the Content Cadence. key '<site_id>:<cycle_key|always>:<item_key>',
+# item_key = the normalised keyword (lower case, non-alphanumerics -> one space); decision skip | approve; scope cycle | always.
+SKIPS_TABLE = 'seo_skips'
+SKIPS_COLS = [('key', 'string'), ('site_id', 'string'), ('cycle_key', 'string'), ('item_key', 'string'), ('decision', 'string'), ('scope', 'string'),
+              ('by', 'string'), ('created_at', 'string'),
+              # F-KW (2026-10-20): the item an approval is for (the CyclePreviewItem's source and ladder_id), so it never approves another page
+              # that shares the keyword; empty = an older keyword-only row (approved only when one item alone has that keyword)
+              ('source', 'string'), ('ladder_id', 'string')]
 
 def dt_get_recent_params(table, key, condition, value, limit, order_col='createdAt', direction='DESC'):
     """Get at most `limit` rows matching one condition, newest first (bounded load for tables that only grow, e.g. the rank history)."""
@@ -475,12 +511,20 @@ if (__SCHED.trigger && __SCHED.cron) {
     } catch (e) { __caught = null; }   // fail OPEN: a scheduled run is never refused for a lookup that did not work
   }
 }
-const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id), caught_up: __caught, parent_run_id });
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the twin rule is per website for a run that names one - a cycle job or an on-demand start
+// (trigger `domain`, or `site_id` with the domain on this run's row). A run that names none (the daily batch pulse / page watch) keeps the
+// mode-only rule. A cycle job's capacity refusal is retried by the Cycle Dispatcher, so its wording says so instead of "skipped".
+const __site = __S(__trig.domain) || (__S(__trig.site_id) ? __S((mine && mine.domain) || (__row && __row.domain)) : '');   // RG.gate normalises the host
+const __cycle = __S(__trig.trigger) === 'cycle';
+const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id), site: __site, cycle: __cycle, caught_up: __caught, parent_run_id });
 if (g.allowed || __NO_GATE__) return plan;   // W3-F: a synchronous caller is waiting (the Reply Reader): it keeps its row but is never refused by what else is running
 let __dom = __S(__trig.domain);
 if (!__dom) { try { __dom = __S((plan[0] && plan[0].json || {}).domain); } catch (e) { __dom = ''; } }
 return [{ json: { run_refused: true, run_id: String($execution.id), refused_at: new Date().toISOString(),
-  cost_basis: ('refused before any spending: ' + g.refusal + ' [' + g.basis + ']').slice(0, 400),
+  // 2026-10-19: the reason code first, so the Cycle Dispatcher (which reads only the ledger row) tells a capacity refusal it retries
+  // (`same_mode`, `heavy_busy`, `too_many_open`) from one it does not (`account_low`, `caught_up`)
+  cost_basis: ('refused before any spending (' + g.reason + '): ' + g.refusal + ' [' + g.basis + ']').slice(0, 400),
+  retry: !!g.retry, cycle_key: __cycle ? __S(__trig.cycle_key) : '', site: g.site || '',
   reason: g.reason, refusal: g.refusal, basis: g.basis, open_runs: g.open_runs, open: g.open, max_open: g.max_open,
   stale_ignored: g.stale_ignored, mode: g.mode, where: g.where, parent_run_id,
   // R116: who to tell. Only a run started by hand (a Manual Run with a callback) has someone waiting; a scheduled refusal has nobody.
@@ -514,6 +558,20 @@ def _schedule_of(wfobj):
     from env_settings import ENV
     tz = (wfobj.get('settings') or {}).get('timezone') or (ENV.get('GENERIC_TIMEZONE') or '').strip() or 'America/New_York'
     return {'trigger': trig[0]['name'], 'cron': cron, 'tz': tz, 'wf': str(wfobj.get('id'))}
+
+
+def engine_tz():
+    """The engine's own time zone (n8n's GENERIC_TIMEZONE; America/New_York when unset, as n8n/compose.yml and the catch-up default it)."""
+    from env_settings import ENV
+    return (ENV.get('GENERIC_TIMEZONE') or '').strip() or 'America/New_York'
+
+
+def site_time_src():
+    """2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the website-calendar kit (ST, v5/code/_site_time.js) with the engine zone written in.
+    Every builder inlines it through the `/*__SITE_TIME__*/` marker (inside _monitor_sites.js for the monitors, directly elsewhere)."""
+    s = read_v5('code/_site_time.js').rstrip('\n').replace('__ENGINE_TZ__', engine_tz())
+    assert '__ENGINE_TZ__' not in s
+    return s
 
 
 def inline_kits(src):

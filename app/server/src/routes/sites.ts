@@ -34,6 +34,7 @@ import { badRequest, conflict, HttpError, notFound, parse } from '../lib/errors'
 import { deleteRows, ensureTable, insertRows, invalidateSite, siteAdmin, siteRows } from '../n8n/client';
 import { invalidateForecast } from '../services/billing';
 import { assertGa4ForDomain, findGscProperty, gscOwnerCheck, listGa4Properties } from '../services/google';
+import { assertEngineIdFree, ENGINE_ID_TAKEN } from '../services/engineSite';
 import { routeSiteToApp } from '../services/runs';
 import { fetchPublicText, verify } from '../services/verify';
 
@@ -61,6 +62,10 @@ export function toSite(s: SiteRow): Site {
     trackingStatus: s.trackingStatus as Site['trackingStatus'],
     trackingStartedAt: s.trackingStartedAt?.toISOString() ?? null,
     createdAt: s.createdAt.toISOString(),
+    timezone: s.timezone,
+    services: s.services,
+    cycleWeekday: s.cycleWeekday ?? null,
+    autopilotLevel: (s.autopilotLevel === 1 || s.autopilotLevel === 3 ? s.autopilotLevel : 2) as Site['autopilotLevel'],
   };
 }
 
@@ -71,13 +76,29 @@ async function verifiedElsewhere(domain: string, orgId: string): Promise<boolean
 
 type P = { orgId: string; siteId: string };
 
+/** The unique index a Postgres error broke (postgres-js names it `constraint_name`, PGlite `constraint`), or null. */
+function uniqueViolation(err: unknown): string | null {
+  const e = err as { code?: string; constraint_name?: string; constraint?: string; cause?: { code?: string; constraint_name?: string; constraint?: string } };
+  const x = e?.code === '23505' ? e : e?.cause?.code === '23505' ? e.cause : null;
+  return x ? String(x.constraint_name ?? x.constraint ?? '') : null;
+}
+
 /** Marks the site verified and points the domain's stored n8n delivery (site row, ladders) at this company. */
 async function markVerified(site: SiteRow, method: VerificationMethod, gscProperty?: string | null) {
-  const [s] = await db
-    .update(schema.sites)
-    .set({ verifiedAt: new Date(), verificationMethod: method, ...(gscProperty ? { gscProperty } : {}), updatedAt: new Date() })
-    .where(eq(schema.sites.id, site.id))
-    .returning();
+  let s: SiteRow;
+  try {
+    [s] = await db
+      .update(schema.sites)
+      .set({ verifiedAt: new Date(), verificationMethod: method, ...(gscProperty ? { gscProperty } : {}), updatedAt: new Date() })
+      .where(eq(schema.sites.id, site.id))
+      .returning();
+  } catch (err) {
+    // two companies verifying at the same moment: the unique indexes decide, and the loser is told why in plain words
+    const c = uniqueViolation(err);
+    if (c === 'sites_verified_engine_id_idx') throw conflict(ENGINE_ID_TAKEN, 'engine_id_taken');
+    if (c != null) throw conflict(`${site.domain} is already verified by another company on this platform.`, 'domain_claimed');
+    throw err;
+  }
   const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, site.orgId) });
   if (org) await routeSiteToApp(org, s).catch(() => undefined);
 }
@@ -92,9 +113,19 @@ export async function verifyWithGoogle(req: FastifyRequest, orgId: string, siteI
   }
   if (a.site.verifiedAt) return 'already';
   if (await verifiedElsewhere(a.site.domain, a.org.id)) return 'claimed';
+  try {
+    await assertEngineIdFree(a.site.domain, a.site.id);
+  } catch {
+    return 'claimed';
+  }
   const r = await gscOwnerCheck(userAccessToken, a.site.domain);
   if (!r.owner) return 'not_owner';
-  await markVerified(a.site, 'search_console', r.property);
+  try {
+    await markVerified(a.site, 'search_console', r.property);
+  } catch (err) {
+    if (err instanceof HttpError && err.statusCode === 409) return 'claimed';
+    throw err;
+  }
   await audit(req, a.org.id, { action: 'site.verified', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { method: 'search_console' } });
   return 'verified';
 }
@@ -133,6 +164,8 @@ export async function siteRoutes(app: FastifyInstance) {
     if (mine) throw conflict(`${body.domain} is already one of your websites.`, 'site_exists');
     if (await verifiedElsewhere(body.domain, a.org.id))
       throw conflict(`${body.domain} is already verified by another company on this platform. If it is yours, contact the platform administrator.`, 'domain_claimed');
+    // one engine site id, one website: foo.co.uk is refused while foo-co.uk is verified or tracked (and the other way round)
+    await assertEngineIdFree(body.domain);
     const [site] = await db
       .insert(schema.sites)
       .values({
@@ -147,6 +180,8 @@ export async function siteRoutes(app: FastifyInstance) {
         businessFacts: body.businessFacts,
         competitors: body.competitors,
         brandNames: body.brandNames,
+        ...(body.services ? { services: body.services } : {}),
+        ...(body.timezone ? { timezone: body.timezone } : {}),
         verificationToken: randomToken(18),
       })
       .returning();
@@ -174,6 +209,13 @@ export async function siteRoutes(app: FastifyInstance) {
       .set({ ...patch, updatedAt: new Date() })
       .where(eq(schema.sites.id, site.id))
       .returning();
+    // P1 (2026-10-20, rehearsal §4 item 1): the engine writes no page before the business facts are on ITS site row (the Content Cadence
+    // reads them there, and the weekly pages carry them). Changed facts of a tracked website go to the engine at once (Site Admin `facts`);
+    // a website the engine does not track yet gets them with "Track my site". A failure is logged, the save stands: the next track re-sends.
+    if (body.businessFacts !== undefined && s.businessFacts !== site.businessFacts && s.verifiedAt && ['active', 'paused'].includes(s.trackingStatus))
+      await siteAdmin({ action: 'facts', domain: s.domain, site_id: n8nSiteId(s.domain), business_facts: s.businessFacts.slice(0, 2000), request_id: `app-facts-${s.id}-${Date.now().toString(36)}` }).catch((err) =>
+        req.log.warn({ site: s.domain, err: String((err as Error)?.message ?? err) }, 'business facts not sent to the engine'),
+      );
     return toSite(s);
   });
 
@@ -212,6 +254,7 @@ export async function siteRoutes(app: FastifyInstance) {
     if (method === 'search_console')
       throw badRequest('Search Console ownership is checked with your own Google account: use "Verify with Google" (or a DNS record or meta tag).', undefined, 'use_google');
     if (await verifiedElsewhere(site.domain, site.orgId)) throw conflict(`${site.domain} is already verified by another company on this platform.`, 'domain_claimed');
+    await assertEngineIdFree(site.domain, site.id);
     const r = await verify(method, site.domain, site.verificationToken);
     if (r.verified) await markVerified(site, method);
     await audit(req, site.orgId, { action: r.verified ? 'site.verified' : 'site.verify_failed', outcome: r.verified ? 'success' : 'failure', target: { type: 'site', id: site.id, label: site.domain }, details: { method } });
@@ -227,7 +270,7 @@ export async function siteRoutes(app: FastifyInstance) {
     const g = (await siteRows<AiGrowthRow>('aiGrowth', site.domain, { sortBy: 'checked_at:desc', max: 1 }))[0];
     const keyUrl = String(safeJson<Record<string, Record<string, unknown>>>(g?.submitted_json ?? '', {}).indexnow?.key_url ?? '');
     const m = keyUrl.match(/^https:\/\/([^/]+)\/([a-f0-9]{32})\.txt$/);
-    if (!m) throw notFound('No IndexNow key yet: the first AI growth run (Mondays 09:30) makes it.');
+    if (!m) throw notFound('No IndexNow key yet: the first weekly AI growth run of this website makes it.');
     const host = m[1].toLowerCase();
     if (host !== site.domain && host !== `www.${site.domain}`) throw badRequest('The key file must be on your own website.');
     const r = await fetchPublicText(keyUrl, 4096).catch(() => null);

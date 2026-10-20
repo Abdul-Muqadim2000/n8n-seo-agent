@@ -1,7 +1,8 @@
-// Pipeline home: the always-on part (opportunity posts and monitoring) and the weekly capacity the ladders share.
+// Pipeline home: the always-on part (suggestions, what the autopilot writes on its own, monitoring) and the weekly pages the ladders share.
 import type { ReactNode } from 'react';
 import { AlertTriangle, Bot, CalendarClock, ChevronRight, Circle, FileText, Flame, History, Lightbulb, PenSquare, Play, RefreshCw, Settings, Target, TrendingDown, TrendingUp } from 'lucide-react';
 import { AUTOMATIONS, type AutomationStatus, type LadderCard, type PipelineData, type QueueItem } from '@seo/shared';
+import { useCycleDay } from '@/lib/cycle-day';
 import { PRICES } from '@/lib/prices';
 import { formatCredits } from '@/lib/credits';
 import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
@@ -12,13 +13,16 @@ import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { cn, fmtAgo } from '@/lib/utils';
 import { Panel, SectionHeading } from '../kit';
-import { asPageType, AUTO_ICON, fmtWhen, inDays, ModeChip, validDate } from './common';
+import { asPageType, AUTO_ICON, fmtWhen, inDays, validDate } from './common';
 import type { WriteNowItem } from './WriteNowDialog';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { GuideButton } from '@/components/guide';
+import { autopilotGuideVars } from '@/lib/guide-vars';
 
 // v4.16 (B4-3): `decay` = a page that is measurably losing traffic, refreshed rather than written again
-const SOURCE_LABEL: Record<QueueItem['source'], string> = { ladder: 'Keyword ladder', decay: 'Losing traffic', striking: 'Close to page one', trend: 'Rising search', ai_answer: 'AI answer page', ai_refresh: 'AI refresh' };
-const SOURCE_TONE: Record<QueueItem['source'], Tone> = { ladder: 'accent', decay: 'warning', striking: 'neutral', trend: 'neutral', ai_answer: 'accent', ai_refresh: 'accent' };
-const SOURCE_ICON: Record<QueueItem['source'], ReactNode> = { ladder: <TrendingUp />, decay: <TrendingDown />, striking: <Target />, trend: <Flame />, ai_answer: <Bot />, ai_refresh: <Bot /> };
+export const SOURCE_LABEL: Record<QueueItem['source'], string> = { ladder: 'Your keyword', decay: 'Losing visitors', striking: 'Close to page one', trend: 'Rising search', ai_answer: 'AI answer page', ai_refresh: 'AI refresh' };
+export const SOURCE_TONE: Record<QueueItem['source'], Tone> = { ladder: 'accent', decay: 'warning', striking: 'neutral', trend: 'neutral', ai_answer: 'accent', ai_refresh: 'accent' };
+export const SOURCE_ICON: Record<QueueItem['source'], ReactNode> = { ladder: <TrendingUp />, decay: <TrendingDown />, striking: <Target />, trend: <Flame />, ai_answer: <Bot />, ai_refresh: <Bot /> };
 
 function automationState(a: AutomationStatus): ReactNode {
   if (a.state === 'on') return <StatusBadge tone="good">On</StatusBadge>;
@@ -38,10 +42,10 @@ export function AlwaysOn({ data, cards, onWrite }: { data: PipelineData; cards: 
         id="always-on-heading"
         icon={<RefreshCw />}
         title="Always on"
-        description="Runs next to your ladders: posts for new chances in Search Console and Google Trends, and the weekly checks of your site."
+        description="Runs next to your keywords: chances we found in Search Console, Google Trends and AI answers, and the weekly checks of your site."
       />
       <Capacity data={data} cards={cards} />
-      <OpportunityPosts data={data} onWrite={onWrite} />
+      <Suggestions data={data} onWrite={onWrite} />
       <Monitoring data={data} />
     </section>
   );
@@ -52,10 +56,11 @@ function Capacity({ data, cards }: { data: PipelineData; cards: LadderCard[] }) 
   const { site } = useSiteCtx();
   const perWeek = data.queue?.pagesPerWeek ?? 0;
   const ladders = writingLadders(cards);
-  const opportunities = (data.automation?.opportunities ?? 'auto') === 'auto';
+  const level = data.autopilot?.level ?? data.automation?.autopilotLevel ?? 2;
   const maxActive = data.automation?.maxActiveLadders ?? 2;
   const cadence = data.automations.find((a) => a.id === 'content_cadence');
-  const users = [...ladders.map((l) => `"${l.head}"`), ...(opportunities ? ['opportunity posts'] : [])];
+  const users = [...ladders.map((l) => `"${l.head}"`), ...(level >= 2 ? [level === 3 ? 'new topics and refreshes' : 'refreshes of your pages'] : [])];
+  const day = useCycleDay();
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-start gap-3.5 text-[13px]">
@@ -66,7 +71,7 @@ function Capacity({ data, cards }: { data: PipelineData; cards: LadderCard[] }) 
           {perWeek > 0 ? (
             <>
               <p className="flex flex-wrap items-baseline gap-x-2">
-                <span className="font-display text-xl leading-tight font-semibold tracking-[-0.01em] text-ink">{perWeek === 1 ? '1 post a week' : `${perWeek} posts a week`}</span>
+                <span className="font-display text-xl leading-tight font-semibold tracking-[-0.01em] text-ink">{perWeek === 1 ? '1 page a week' : `${perWeek} pages a week`}</span>
                 {users.length > 0 && <span className="text-ink-3">used by:</span>}
               </p>
               {users.length > 0 && (
@@ -82,24 +87,24 @@ function Capacity({ data, cards }: { data: PipelineData; cards: LadderCard[] }) 
             </>
           ) : (
             <p className="text-ink">
-              <span className="font-display text-base font-semibold">Weekly posts are off.</span> <span className="text-ink-2">Nothing is written on its own; use Write now on a ladder page or an opportunity.</span>
+              <span className="font-display text-base font-semibold">Weekly pages are off.</span> <span className="text-ink-2">Nothing is written on its own; use Write it on a ladder page or a suggestion.</span>
             </p>
           )}
           <p className="mt-1.5 text-xs leading-snug text-ink-3">
-            Shared by the ladders in their order, at most {maxActive === 1 ? '1 ladder' : `${maxActive} ladders`} at a time: the first gets the posts until it has nothing to write, then the next one.
+            Shared by your keywords in their order, at most {maxActive === 1 ? '1 keyword' : `${maxActive} keywords`} at a time: the first gets the pages until it has nothing to write, then the next one.
             {perWeek > 0 && cadence && validDate(cadence.nextRunAt) ? ` Next writing: ${fmtWhen(cadence.nextRunAt)}.` : ''}
           </p>
           {perWeek > 0 && data.queue?.paused && (
             <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-warning-text">
               <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
-              Next Monday writes nothing: {data.queue.paused.waiting} written pages waiting for publication (pile-up guard, limit {data.queue.paused.max}).
+              The next weekly run ({day.on}) writes nothing: {data.queue.paused.waiting} written pages wait to be published (limit {data.queue.paused.max}).
             </p>
           )}
         </div>
       </div>
       {can('admin') && (
         <ButtonLink to={paths.site(org.id, site.id, 'settings/tracking')} variant="secondary" size="sm" className="self-start sm:self-center">
-          {perWeek > 0 ? 'Change' : 'Turn on weekly posts'}
+          {perWeek > 0 ? 'Change' : 'Turn on weekly pages'}
         </ButtonLink>
       )}
     </div>
@@ -127,11 +132,12 @@ function QueueRow({ item, onWrite, highlight }: { item: QueueItem; onWrite?: (i:
           </div>
           <p className="mt-1 text-[13px] leading-snug text-ink-3">{item.why}</p>
           {item.existingPageUrl && <p className="mt-0.5 truncate text-xs text-ink-3">Improves {item.existingPageUrl.replace(/^https?:\/\/(www\.)?/, '')}</p>}
+          {item.credits != null && item.credits > 0 && <p className="mt-0.5 text-xs text-ink-3">About {formatCredits(item.credits)}</p>}
         </div>
       </div>
       {onWrite && can('member') && (
         <Button size="sm" variant={highlight ? 'primary' : 'secondary'} icon={<PenSquare className="size-4" />} onClick={() => onWrite(item)}>
-          Write now
+          Write it
         </Button>
       )}
     </li>
@@ -149,59 +155,77 @@ function GroupTitle({ icon, children }: { icon: ReactNode; children: ReactNode }
   );
 }
 
-function OpportunityPosts({ data, onWrite }: { data: PipelineData; onWrite: (i: WriteNowItem) => void }) {
-  const mode = data.automation?.opportunities ?? 'auto';
-  const manual = mode === 'manual';
-  // Manual: the posts Auto would write are suggestions; nothing is written on its own
-  const next = manual ? [] : (data.queue?.next ?? []).filter((i) => i.source !== 'ladder');
-  const later = manual ? (data.queue?.suggestions ?? []) : (data.queue?.later ?? []).filter((i) => i.source !== 'ladder');
+/**
+ * Suggestions (keyword-first R-K3): what the autopilot found but does not write on its own at the website's level, each with why, the
+ * page it would change and the credits, and "Write it" (one approved run). At levels 2 and 3 the items the level writes on its own are
+ * listed first.
+ */
+function Suggestions({ data, onWrite }: { data: PipelineData; onWrite: (i: WriteNowItem) => void }) {
+  const { org, can } = useOrgCtx();
+  const { site } = useSiteCtx();
+  const day = useCycleDay();
+  const level = data.autopilot?.level ?? data.automation?.autopilotLevel ?? 2;
+  // what the level writes on its own this week (never the ladders: they have their own cards)
+  const next = (data.queue?.next ?? []).filter((i) => i.source !== 'ladder');
+  const suggestions = data.autopilot?.suggestions ?? data.queue?.suggestions ?? [];
   const perWeek = data.queue?.pagesPerWeek ?? 0;
+  const write = (i: QueueItem) => onWrite({ keyword: i.keyword, why: i.why, pageType: i.pageType, existingPageUrl: i.existingPageUrl, ladder: i.ladder, aiTarget: i.aiTarget ?? null, source: i.source, credits: i.credits });
   return (
     <Panel
       icon={<Lightbulb />}
-      title={
-        <span className="inline-flex flex-wrap items-center gap-2">
-          Opportunity posts
-          <ModeChip mode={mode} />
-        </span>
-      }
+      title="Suggestions"
       description={
-        mode === 'auto'
-          ? 'Searches you already appear for close to page one, and rising searches. They fill the weekly posts the ladders leave free.'
-          : 'Searches close to page one and rising searches, shown as suggestions: nothing is written until you click Write now.'
+        level === 1
+          ? 'Chances we found: pages close to page one, pages losing visitors, rising searches and AI questions. Nothing here is written until you click Write it.'
+          : level === 2
+            ? 'We refresh your own pages on your topics on our own. New topics wait here until you click Write it.'
+            : 'On full autopilot we write what fits your business on our own, and show it in Coming up first. The rest waits here.'
+      }
+      actions={
+        <>
+          <GuideButton id={AUTOPILOT_SCREEN_GUIDES.suggestions} vars={autopilotGuideVars(site, { level })} label="What waits for my OK" />
+          {can('admin') && (
+            <ButtonLink to={paths.site(org.id, site.id, 'settings/autopilot')} variant="ghost" size="sm" icon={<Settings className="size-4" />}>
+              Level {level}
+            </ButtonLink>
+          )}
+        </>
       }
     >
       <div className="space-y-4">
-        {!next.length && !later.length ? (
+        {!next.length && !suggestions.length ? (
           <div className="flex items-start gap-3 rounded-lg bg-surface-2/60 px-4 py-3">
             <IconTile size="sm" tone="neutral">
               <Target />
             </IconTile>
-            <p className="text-sm text-ink-3">No opportunities right now. They come from the weekly site report: searches where you show up on page two, and searches that are rising on Google.</p>
+            <p className="text-sm text-ink-3">
+              No suggestions right now. They come from your weekly site report and AI checks: searches where you show up on page two, pages losing visitors, rising searches and
+              questions AI answers without you.
+            </p>
           </div>
         ) : (
           <>
-            {!perWeek && !manual && (
-              <Callout tone="info" title="Weekly posts are off">
-                These would be written next. Turn weekly posts on, or write one now (about {PRICES.page()} each).
+            {!perWeek && next.length > 0 && (
+              <Callout tone="info" title="Weekly pages are off">
+                These would be written next. Turn weekly pages on, or write one now (about {PRICES.page()} each).
               </Callout>
             )}
             {next.length > 0 && (
               <div>
-                <GroupTitle icon={<CalendarClock />}>Next Monday</GroupTitle>
+                <GroupTitle icon={<CalendarClock />}>Written on its own {day.on}</GroupTitle>
                 <ul className="space-y-2">
                   {next.map((i) => (
-                    <QueueRow key={i.keyword} item={i} onWrite={onWrite} highlight />
+                    <QueueRow key={i.keyword} item={i} onWrite={write} highlight />
                   ))}
                 </ul>
               </div>
             )}
-            {later.length > 0 && (
+            {suggestions.length > 0 && (
               <div>
-                <GroupTitle icon={<Lightbulb />}>{manual ? 'Suggested posts: write the ones you want' : next.length ? 'Then, when a weekly post is free' : 'In line, when a weekly post is free'}</GroupTitle>
+                <GroupTitle icon={<Lightbulb />}>Waiting for your OK: write the ones you want</GroupTitle>
                 <ul className="space-y-2">
-                  {later.map((i) => (
-                    <QueueRow key={i.keyword} item={i} onWrite={onWrite} />
+                  {suggestions.map((i) => (
+                    <QueueRow key={i.keyword} item={i} onWrite={write} />
                   ))}
                 </ul>
               </div>
@@ -221,7 +245,7 @@ function Monitoring({ data }: { data: PipelineData }) {
     <Panel
       icon={<CalendarClock />}
       title="Monitoring"
-      description={`Checks that run on their own. Times are in your time zone (the engine runs on ${data.timezone}).`}
+      description="Checks that run on their own, one after the other in your weekly run. Times are in your own time zone."
       actions={
         can('admin') && (
           <ButtonLink to={paths.site(org.id, site.id, 'settings/tracking')} variant="secondary" size="sm" icon={<Settings className="size-4" />}>

@@ -1,4 +1,4 @@
-// Backlink monitor plan (weekly Monday 07:30; the first run of each month is the FULL run, the others are LIGHT): per site the window since the
+// Backlink monitor plan (weekly, in each website's own cycle; the website's monthly cycle is the FULL run, the others are LIGHT): per site the window since the
 // last check, the competitors (configured, else found once through DataForSEO Labs and kept), the brand names for mention search, the pages
 // worth pitching (ladder top / published pages, case studies) and the existing prospects. Light runs only watch for lost and spammy links
 // and stay quiet unless something important happened.
@@ -6,13 +6,15 @@
 // (referral visits = links that send people), the uploaded Search Console link exports, Bing Webmaster Tools (when its key is set), the brand
 // query for news / web mentions, the topics for "best X" list pages and the Link Analyst — and the ledger of links already known.
 // On demand with free_only (API): the free sources and the link check only — no DataForSEO, no Claude, $0.
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4 / §14.2): a cycle run (`trigger: 'cycle'`) is FULL only when the Cycle Dispatcher passes
+// `monthly: true` (and not `light: true`); otherwise LIGHT. The UTC month rule stays for a run outside a cycle. Never free_only.
 /*__MONITOR_SITES__*/
 /*__COUNTRIES__*/
 /*__SITE_MODEL__*/
 /*__RIVALS__*/
 const CONFIG = { max_sites_per_run: 15, first_lookback_days: 30, gap_every_days: 85, bing: __BING_ENABLED__ };   // v4.6: the link gap changes slowly: refreshed quarterly; bing: set at build time when SEO_BING_WEBMASTER_API_KEY is in n8n/.env
-const { list, on_demand, want, total } = monitorSites('backlinks');   // `trigger` comes from the shared snippet
-if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the backlink monitor is switched off for every site' : 'no sites yet (register one through "Track my site" or plan a keyword ladder)') } }];
+const { list, on_demand, want, total, cycle, cycle_why } = monitorSites('backlinks');   // `trigger` comes from the shared snippet
+if (!list.length) return [{ json: { nothing_to_do: true, cycle, reason: cycle ? (cycle_why || 'nothing to run for this cycle') : on_demand ? 'no site matches "' + want + '"' : (total ? 'the backlink monitor is switched off for every site' : 'no sites yet (register one through "Track my site" or plan a keyword ladder)') } }];
 const snaps = rowsOf('Load Backlink Snapshots'), prospects = rowsOf('Load Link Prospects'), ladders = rowsOf('Load Ladders'), logs = rowsOf('Load Content Log'), cases = rowsOf('Load Case Studies');
 const ledger = rowsOf('Load Backlinks'), imports = rowsOf('Load Link Imports');
 const now = new Date(); const iso = now.toISOString(); const month = iso.slice(0, 7);
@@ -26,7 +28,9 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // a free check reads no DataForSEO: it must not move "changes since" (the next paid run would skip DataForSEO's new / lost links in between),
   // and counts compare like with like — DataForSEO figures with the last DataForSEO run, all-source counts with the last run of the same kind
   const last = mine.find(x => x.mode !== 'free') || null, lastFull = mine.find(x => x.mode === 'full') || null, lastSame = mine.find(x => (x.mode === 'free') === free_only) || null;
-  const mode = on_demand ? (trigger.light ? 'light' : 'full') : ((!lastFull || String(lastFull.checked_at).slice(0, 7) !== month) ? 'full' : 'light');
+  const mode = on_demand ? (trigger.light ? 'light' : 'full')
+    : cycle ? ((cycle.monthly && cycle.light !== true) ? 'full' : 'light')   // the website's monthly cycle, decided by the dispatcher
+    : ((!lastFull || String(lastFull.checked_at).slice(0, 7) !== month) ? 'full' : 'light');
   const since = last ? dfs(last.checked_at) : dfs(now.getTime() - CONFIG.first_lookback_days * 864e5);
   const since_full = lastFull ? dfs(lastFull.checked_at) : dfs(now.getTime() - CONFIG.first_lookback_days * 864e5);
   const kept = lastFull ? (parse(lastFull.competitors_json, []) || []).map(c => c.domain).filter(Boolean) : [];
@@ -69,5 +73,5 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
       // half with the half it belongs to instead of assuming one row describes both.
       union_mode: lastSame ? String(lastSame.mode || '') : '',
       union_domains: lastSame ? Number(lastSame.union_domains) || 0 : 0, best_links: lastSame ? Number(lastSame.best_links) || 0 : 0, referral_visits: lastSame ? Number(lastSame.referral_visits) || 0 : 0 } : (lastSame ? { checked_at: lastSame.checked_at, mode: lastSame.mode, union_mode: String(lastSame.mode || ''), rank: 0, backlinks: 0, referring_domains: 0, spam_score: 0, broken_backlinks: 0, union_domains: Number(lastSame.union_domains) || 0, best_links: Number(lastSame.best_links) || 0, referral_visits: Number(lastSame.referral_visits) || 0 } : null),
-    existing_prospects: prospects.filter(p => p.site_id === s.site_id).length, checked_at: iso } };
+    existing_prospects: prospects.filter(p => p.site_id === s.site_id).length, checked_at: iso, cycle } };
 });

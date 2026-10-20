@@ -1,17 +1,20 @@
-// Link Builder plan (v4.13, LINK_BUILDER_SPEC.md; Monday 11:00 after the Backlink Monitor and AI Growth, or on demand): per site with the Link
+// Link Builder plan (v4.13, LINK_BUILDER_SPEC.md; weekly in each website's own cycle, after the Backlink Monitor and AI Growth, or on demand): per site with the Link
 // Builder on, what to look for this week — journalist requests (weekly), resource pages, the listings checklist, our old URLs in the Wayback
 // Machine, podcast shows that take guests on the site's topics (L5) and competitors' broken backlinks and most-linked pages (L6)
 // (monthly: every ~25 days, kept in seo_cache linkbld:<site>), the prospects to qualify — and what
 // the pitches need: topics, competitors, the business profile (signature), our pages with their position and links (which page to point to).
 // On demand with free_only: no DataForSEO, no Claude ($0).
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4 / §4.8): a cycle run (`trigger: 'cycle'`) is a scheduled run for one site; the monthly sources keep
+// their rolling 25 days (per site already), and "pitches per page this month" counts the website's own month (its time zone, seo_cycles.tz).
 /*__MONITOR_SITES__*/
 /*__COUNTRIES__*/
 /*__LINK_KIT__*/
 /*__SITE_MODEL__*/
 /*__RIVALS__*/
 const CONFIG = { max_sites_per_run: 15, sequences_per_week: 10, monthly_days: 25, qualify_per_week: 25 };
-const { list, on_demand, want, total } = monitorSites('links');   // `trigger` comes from the shared snippet
-if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the Link Builder is switched off for every site' : 'no sites yet') } }];
+const { list, on_demand, want, total, cycle, cycle_why } = monitorSites('links');   // `trigger` comes from the shared snippet
+if (!list.length) return [{ json: { nothing_to_do: true, cycle, reason: cycle ? (cycle_why || 'nothing to run for this cycle') : on_demand ? 'no site matches "' + want + '"' : (total ? 'the Link Builder is switched off for every site' : 'no sites yet') } }];
+const cycleRows = rowsOf('Load Cycles');   // 2026-10-19: each website's time zone
 const prospects = rowsOf('Load Link Prospects'), outreach = rowsOf('Load Link Outreach'), ladders = rowsOf('Load Ladders'), logs = rowsOf('Load Content Log'), snaps = rowsOf('Load Backlink Snapshots');
 const profiles = rowsOf('Load Profiles'), cache = rowsOf('Load Cache (Links)'), targets = rowsOf('Load AI Targets'), ledger = rowsOf('Load Backlinks'), queries = rowsOf('Load Query History'), ranks = rowsOf('Load Rank History');
 // R93 (2026-10-16, re-rating 2026-10-15): the site's page inventory (seo_pages: each page's real <title> / H1). A target page used to be named
@@ -92,8 +95,10 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const myLedger = myLedger0.filter(l => l.link_type !== 'spam' && !farms.has(l.ref_domain));
   const rdsTo = (u) => { const k = pathKey(u); const set = new Set(); for (const l of myLedger) if (pathKey(l.to_url) === k) set.add(l.ref_domain + (l.rel === 'follow' ? '' : '~')); let n = 0; for (const x of set) n += x.endsWith('~') ? 0.5 : 1; return n; };
   const kwShare = (u) => { const k = pathKey(u); const mine = myLedger.filter(l => pathKey(l.to_url) === k && l.anchor_kind); return mine.length ? mine.filter(l => l.anchor_kind === 'money').length / mine.length : 0; };
-  const month = iso.slice(0, 7);
-  const pitched = (u) => outreach.filter(o => o.site_id === s.site_id && pathKey(o.target_url) === pathKey(u) && String(o.drafted_at || '').slice(0, 7) === month).length;
+  // 2026-10-19: "this month" is the website's own month (its time zone), not the UTC one - a pitch drafted on the 31st at 21:00 in New York
+  // belongs to that month, not the next
+  const tz = ST.tzOf(cycleRows, s); const month = ST.monthKey(now, tz);
+  const pitched = (u) => outreach.filter(o => o.site_id === s.site_id && pathKey(o.target_url) === pathKey(u) && o.drafted_at && ST.monthKey(o.drafted_at, tz) === month).length;
   const pages = [];
   // R93: a page's title is its own title — the inventory's <title> / H1, else the menu text the site model read — never a search query.
   // A page whose title is not on record gets none (the writer then offers the brand as link text); the query stays its `keyword`.
@@ -122,5 +127,5 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     pages, home, canonical_host: site_model.canonical_host || s.domain, budget: CONFIG.sequences_per_week, qualify_max: CONFIG.qualify_per_week,
     due: { listings: due('listings_at'), resources: due('resources_at'), wayback: due('wayback_at'), broken: due('broken_at') && !free_only, press: true,
       podcasts: due('podcasts_at'), assets: due('assets_at') && !free_only },   // L5: podcast shows (free, monthly). L6: the asset ideas read from the competitors' most-linked pages (DataForSEO domain_pages, monthly, ~$0.02 a competitor)
-    state: st, prospects_open: mineP.filter(p => (p.status || 'new') === 'new').length, outreach_rows: mineO.length, checked_at: iso } };
+    state: st, prospects_open: mineP.filter(p => (p.status || 'new') === 'new').length, outreach_rows: mineO.length, checked_at: iso, cycle, tz, month } };
 });

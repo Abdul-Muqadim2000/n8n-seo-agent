@@ -26,7 +26,7 @@ export function DeliveryMockup({ className }: { className?: string }) {
           </span>
           <span className="min-w-0">
             <span className="block font-display text-[14px] leading-snug font-semibold">Weekly tracking report: example.com</span>
-            <span className="mt-1 block text-[10.5px] text-ink-3">To you and two colleagues · every Monday at 08:00</span>
+            <span className="mt-1 block text-[10.5px] text-ink-3">To you and two colleagues · every Wednesday after the checks</span>
           </span>
         </div>
       </div>

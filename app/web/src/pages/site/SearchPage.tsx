@@ -4,6 +4,7 @@ import { ArrowUpDown, BarChart3, CalendarRange, CheckCircle2, FileText, FlaskCon
 import { CHANGE_TEST_METHOD, CHANGE_VERDICT_TONES, compactNumber, titleCase, type Lineage, type MetricsPoint, type SearchData, type TrendPoint } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { useSiteData } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { paths } from '@/lib/paths';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import { AnnotationLegend, ChartCard, LineageNote, ShareBars, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
@@ -49,6 +50,7 @@ interface Ga {
 
 function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
   const { org, site, can, page } = useSitePage();
+  const day = useCycleDay(site);
   const S = d.snapshot;
   const metrics = useMemo(() => sortByDate(d.metrics, (m) => m.periodEnd), [d.metrics]);
   const M: MetricsPoint | null = metrics.length ? metrics[metrics.length - 1] : null;
@@ -58,7 +60,7 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
       <EmptyState
         icon={<Search className="size-5" />}
         title="No search data yet"
-        description="Weekly tracking reads Search Console, Google Analytics, Google Trends and live rankings every Monday. The first report arrives a few minutes after you start it."
+        description={`Weekly tracking reads Search Console, Google Analytics, Google Trends and live rankings ${day.every}. The first report arrives a few minutes after you start it.`}
         action={
           can('admin') ? (
             <ButtonLink to={page('settings/tracking')}>Start weekly tracking</ButtonLink>

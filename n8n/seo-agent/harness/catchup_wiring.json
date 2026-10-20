@@ -17,36 +17,78 @@
   "stale_plan_minutes": 10
  },
  "credential": "SEOcredN8nApiKey",
- "default_tz": "America/New_York",
- "deploy_guard": {
-  "fri_2026-10-16_12:00Z_today": {
-   "inside": false,
-   "window_utc": "Mon 11:00-16:00"
+ "cycle_workflows": {
+  "SEOagentAIGrow1": {
+   "callback_posts": [
+    "POST Growth Report"
+   ],
+   "manual_run": "Manual Run",
+   "name": "SEO Agent \u2014 AI Growth",
+   "plan": "Growth Plan"
   },
-  "mon_2026-10-19_10:59Z_before": {
-   "inside": false,
-   "window_utc": "Mon 11:00-16:00"
+  "SEOagentAIVisib1": {
+   "callback_posts": [
+    "POST AI Report"
+   ],
+   "manual_run": "Manual Run",
+   "name": "SEO Agent \u2014 AI Visibility Tracker",
+   "plan": "AI Plan"
   },
-  "mon_2026-10-19_12:00Z_summer": {
-   "inside": true,
-   "window_utc": "Mon 11:00-16:00"
+  "SEOagentAuditSc1": {
+   "callback_posts": [],
+   "manual_run": "Manual Run",
+   "name": "SEO Agent \u2014 Audit Scheduler",
+   "plan": "Audit Candidates"
   },
-  "mon_2026-10-19_16:30Z_after": {
-   "inside": false,
-   "window_utc": "Mon 11:00-16:00"
+  "SEOagentBacklnk1": {
+   "callback_posts": [
+    "POST BL Report"
+   ],
+   "manual_run": "Manual Run",
+   "name": "SEO Agent \u2014 Backlink Monitor",
+   "plan": "BL Plan"
   },
-  "mon_2026-11-02_11:30Z_winter_before": {
-   "inside": false,
-   "window_utc": "Mon 12:00-17:00"
+  "SEOagentCadence1": {
+   "callback_posts": [
+    "POST Cadence Note"
+   ],
+   "manual_run": "Manual Run",
+   "name": "SEO Agent \u2014 Content Cadence",
+   "plan": "Cadence Plan"
   },
-  "mon_2026-11-02_16:30Z_winter": {
-   "inside": true,
-   "window_utc": "Mon 12:00-17:00"
+  "SEOagentLinkBld1": {
+   "callback_posts": [
+    "POST LB Report"
+   ],
+   "manual_run": "Manual Run",
+   "name": "SEO Agent \u2014 Link Builder",
+   "plan": "LB Plan"
   },
-  "tue_2026-10-20_12:00Z": {
-   "inside": false,
-   "window_utc": "Mon 11:00-16:00"
+  "SEOagentSiteTrk1": {
+   "callback_posts": [
+    "POST Site Report"
+   ],
+   "manual_run": "Manual Run",
+   "name": "SEO Agent \u2014 Site Tracker",
+   "plan": "Site Plan"
+  },
+  "SEOagentTracker1": {
+   "callback_posts": [
+    "POST Progress"
+   ],
+   "manual_run": "Manual Run",
+   "name": "SEO Agent \u2014 Rank Tracker",
+   "plan": "Tracker Plan"
   }
+ },
+ "daily_crons": [
+  "SEOagentAIPulse1",
+  "SEOagentPageWch1"
+ ],
+ "default_tz": "America/New_York",
+ "dispatcher_watchdog": {
+  "id": "SEOagentCycleDsp",
+  "state_key": "catchup:watchdog:SEOagentCycleDsp"
  },
  "exec_limit": 250,
  "growth_dry_run": {
@@ -60,34 +102,17 @@
   }
  },
  "n8n_api": "http://localhost:5678/api/v1",
+ "not_replayed": [
+  "SEOagentCycleDsp"
+ ],
  "published": [
-  "SEOagentAIGrow1",
   "SEOagentAIPulse1",
-  "SEOagentAIVisib1",
-  "SEOagentAuditSc1",
-  "SEOagentBacklnk1",
-  "SEOagentCadence1",
-  "SEOagentLinkBld1",
-  "SEOagentPageWch1",
-  "SEOagentSiteTrk1",
-  "SEOagentTracker1"
+  "SEOagentPageWch1"
  ],
  "record_then_start": true,
  "schedules": [
   {
-   "cron": "30 9 * * 1",
-   "dry_run_ok": true,
-   "entry_node": "Manual Run",
-   "id": "SEOagentAIGrow1",
-   "kind": "weekly",
-   "label": "AI Growth",
-   "mode": "ai_growth",
-   "name": "SEO Agent \u2014 AI Growth",
-   "trigger_node": "Weekly Schedule",
-   "tz": "America/New_York"
-  },
-  {
-   "cron": "30 6 * * 0,2-6",
+   "cron": "30 6 * * *",
    "dry_run_ok": false,
    "entry_node": "Manual Run",
    "id": "SEOagentAIPulse1",
@@ -96,66 +121,6 @@
    "mode": "ai_pulse",
    "name": "SEO Agent \u2014 AI Pulse",
    "trigger_node": "Daily Schedule",
-   "tz": "America/New_York"
-  },
-  {
-   "cron": "0 7 * * 1",
-   "dry_run_ok": false,
-   "entry_node": "Manual Run",
-   "id": "SEOagentAIVisib1",
-   "kind": "weekly",
-   "label": "AI Visibility Tracker",
-   "mode": "ai_visibility",
-   "name": "SEO Agent \u2014 AI Visibility Tracker",
-   "trigger_node": "Weekly Schedule",
-   "tz": "America/New_York"
-  },
-  {
-   "cron": "0 6 1 * *",
-   "dry_run_ok": false,
-   "entry_node": "Manual Run",
-   "id": "SEOagentAuditSc1",
-   "kind": "monthly",
-   "label": "Audit Scheduler",
-   "mode": "audit_schedule",
-   "name": "SEO Agent \u2014 Audit Scheduler",
-   "trigger_node": "Monthly Schedule",
-   "tz": "America/New_York"
-  },
-  {
-   "cron": "30 7 * * 1",
-   "dry_run_ok": false,
-   "entry_node": "Manual Run",
-   "id": "SEOagentBacklnk1",
-   "kind": "weekly",
-   "label": "Backlink Monitor",
-   "mode": "backlinks",
-   "name": "SEO Agent \u2014 Backlink Monitor",
-   "trigger_node": "Weekly Schedule",
-   "tz": "America/New_York"
-  },
-  {
-   "cron": "0 10 * * 1",
-   "dry_run_ok": true,
-   "entry_node": "Manual Run",
-   "id": "SEOagentCadence1",
-   "kind": "weekly",
-   "label": "Content Cadence",
-   "mode": "content_cadence",
-   "name": "SEO Agent \u2014 Content Cadence",
-   "trigger_node": "Weekly Schedule",
-   "tz": "America/New_York"
-  },
-  {
-   "cron": "0 11 * * 1",
-   "dry_run_ok": false,
-   "entry_node": "Manual Run",
-   "id": "SEOagentLinkBld1",
-   "kind": "weekly",
-   "label": "Link Builder",
-   "mode": "link_builder",
-   "name": "SEO Agent \u2014 Link Builder",
-   "trigger_node": "Weekly Schedule",
    "tz": "America/New_York"
   },
   {
@@ -168,30 +133,6 @@
    "mode": "page_watch",
    "name": "SEO Agent \u2014 Page Watch",
    "trigger_node": "Daily Schedule",
-   "tz": "America/New_York"
-  },
-  {
-   "cron": "0 8 * * 1",
-   "dry_run_ok": false,
-   "entry_node": "Manual Run",
-   "id": "SEOagentTracker1",
-   "kind": "weekly",
-   "label": "Rank Tracker",
-   "mode": "rank_tracker",
-   "name": "SEO Agent \u2014 Rank Tracker",
-   "trigger_node": "Weekly Schedule",
-   "tz": "America/New_York"
-  },
-  {
-   "cron": "0 9 * * 1",
-   "dry_run_ok": false,
-   "entry_node": "Manual Run",
-   "id": "SEOagentSiteTrk1",
-   "kind": "weekly",
-   "label": "Site Tracker",
-   "mode": "site_tracker",
-   "name": "SEO Agent \u2014 Site Tracker",
-   "trigger_node": "Weekly Schedule",
    "tz": "America/New_York"
   }
  ],

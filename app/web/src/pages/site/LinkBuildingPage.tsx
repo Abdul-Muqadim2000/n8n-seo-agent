@@ -7,6 +7,7 @@ import { formatPercent, type LinkBuildingData } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { paths } from '@/lib/paths';
 import { useLinkBuilding } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtDate } from '@/lib/utils';
 import { Collapsible, CountUp, HeroLink, HeroNextStep, HeroStat, MetricCard, Stagger, SummaryHero, useSurface } from '@/components/insight';
 import { StatusBadge } from '@/components/ui/badge';
@@ -90,6 +91,7 @@ function HeroJump({ to, children }: { to: string; children: string }) {
 
 function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void }) {
   const { org, role, can } = useSitePage();
+  const day = useCycleDay();
   const k = d.kpis;
   const counts = draftCounts(d);
   const { running, replies } = sequenceGroups(d);
@@ -108,7 +110,7 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
           ? `${plural(running.length, 'conversation')} in progress`
           : d.lastRun
             ? 'No pitches waiting this week'
-            : 'Your first link opportunities arrive on Monday';
+            : `Your first link opportunities arrive ${day.on}`;
 
   const next =
     !d.canSend.ok && can('admin')
@@ -157,7 +159,7 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
 
       <SummaryHero
         tone="blue"
-        eyebrow={<HeroEyebrow tag="Link building">{d.lastRun ? `Last search ${fmtDate(d.lastRun)} · every Monday 11:00` : 'Every Monday 11:00'}</HeroEyebrow>}
+        eyebrow={<HeroEyebrow tag="Link building">{d.lastRun ? `Last search ${fmtDate(d.lastRun)} · ${day.every}` : day.name ? `Every ${day.name}` : 'Each week'}</HeroEyebrow>}
         title={title}
         description={approvalLine(d)}
         aside={next ? <HeroNextStep icon={<Handshake />} title={next.title} actions={next.action} /> : undefined}

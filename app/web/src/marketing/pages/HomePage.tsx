@@ -41,7 +41,7 @@ const COMPARE: { job: string; byHand: string; withUs: string }[] = [
   {
     job: 'Writing the pages',
     byHand: 'A blog post now and then, when someone finds the time.',
-    withUs: 'Pages written every week, checked for facts and quality, ready for you to publish.',
+    withUs: 'Pages written every week for the keywords you choose, checked for facts and quality, ready for you to publish.',
   },
   {
     job: 'Keeping the site healthy',
@@ -51,18 +51,18 @@ const COMPARE: { job: string; byHand: string; withUs: string }[] = [
   {
     job: 'Showing up in AI answers',
     byHand: 'No idea whether ChatGPT recommends you or a competitor.',
-    withUs: 'The questions your buyers ask AI, checked every day, and pages written to win them.',
+    withUs: 'The questions your buyers ask AI, checked every day, and the pages to win them suggested, written when you say so.',
   },
   {
     job: 'Knowing it works',
     byHand: 'Reports nobody reads, numbers nobody trusts.',
-    withUs: 'One Monday report: what moved, why, and what to do next.',
+    withUs: 'One weekly report: what moved, why, and what to do next.',
   },
 ];
 
 // "Every place people look for you": what Alaventra does on each surface (AI engines and links are on the Growth plan)
 const SURFACES: { icon: LucideIcon; name: string; what: string }[] = [
-  { icon: Search, name: 'Google search', what: 'Pages written for what your buyers search, with positions checked every week' },
+  { icon: Search, name: 'Google search', what: 'Pages written for the searches you choose, with positions checked every week' },
   { icon: Sparkles, name: 'Google AI Overviews and AI Mode', what: 'Checked for your name and your links' },
   { icon: MessageSquare, name: 'ChatGPT', what: 'Asked your buyers\' questions every day' },
   { icon: Bot, name: 'Gemini, Perplexity and Claude', what: 'Asked the same questions, next to your competitors' },
@@ -82,17 +82,17 @@ const TIMELINE = [
   {
     when: 'Day 1',
     title: 'Set up and first check',
-    body: 'Connect your website in minutes. Get a full check of the site, the searches worth winning and your first page written.',
+    body: 'Connect your website in minutes and choose the keywords you want to be found for, from suggestions that show your chances. Your first checks start the same day, and the first page for your keyword follows as soon as your author profile and business facts are filled in.',
   },
   {
     when: 'Week 1',
-    title: 'SEO on a schedule',
-    body: 'New pages every week, your Google positions checked and your AI answers watched, all without anyone chasing it.',
+    title: 'Your own weekly cycle',
+    body: 'Every 7 days from the day you signed up: new pages for your keywords, your Google positions checked and your AI answers watched. Two days before, "Coming up" shows what will be written.',
   },
   {
     when: 'Month 1',
     title: 'Proof it is working',
-    body: 'Every Monday a report shows what moved, what got clicks and what to do next, in plain words.',
+    body: 'Every week a report shows what moved, what got clicks and what to do next, in plain words.',
   },
   {
     when: 'Month 3 and on',
@@ -117,11 +117,15 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'How fast will I see results?',
-    a: 'You can connect a website, check it and have your first page written on day one, and the weekly schedule starts that same week. Moving up on Google takes longer, usually weeks to a few months, depending on how hard the search is. Nobody can honestly promise a position on Google, and we don\'t. What we do promise is that the work starts on day one and every Monday you see what moved.',
+    a: 'You can connect a website, choose your keyword and start your weekly cycle on day one. Your first page is written as soon as your author profile and business facts are in, so it carries a real byline and facts about your business instead of blanks to fill. Moving up on Google takes longer, usually weeks to a few months, depending on how hard the search is. Nobody can honestly promise a position on Google, and we don\'t. What we do promise is that the work starts on day one and every week you see what moved.',
   },
   {
     q: 'Do we need an SEO specialist to use Alaventra?',
     a: 'No. Every verdict, audit finding and recommendation explains itself in plain language, and the pipeline tells you what to do next. Specialists get the detail they need to go further.',
+  },
+  {
+    q: 'Will Alaventra write about things I did not choose?',
+    a: 'Not unless you ask it to. Pages are written automatically only for keywords you chose, and you pick how much it does on its own: Only my keywords; My keywords and keep my pages healthy, which also refreshes your existing pages on your topics; or Full autopilot, which adds new topics and new keywords, each new keyword announced two days before it starts. Whatever the level, "Coming up" shows every page two days before it is written, and you can skip it.',
   },
   {
     q: 'What is the difference between Auto and Manual?',
@@ -209,7 +213,7 @@ function Hero() {
           </div>
           <div className="animate-fade-up" style={{ animationDelay: '140ms' }}>
             <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl">
-              Alaventra is SEO that runs itself. It finds what your buyers search on Google and ask ChatGPT, writes the pages that answer them, fixes what holds your site back, and shows you every week that more people are finding you.
+              Alaventra is SEO that runs itself. It finds what your buyers search on Google and ask ChatGPT, writes pages for the keywords you choose, fixes what holds your site back, and shows you every week that more people are finding you.
             </p>
           </div>
           <div className="mt-9 flex flex-wrap justify-center gap-3 animate-fade-up" style={{ animationDelay: '210ms' }}>
@@ -459,7 +463,7 @@ function CapabilityGrid() {
   return (
     <Section tone="page" id="platform" bordered>
       <div className="flex flex-wrap items-end justify-between gap-6">
-        <SectionHeading eyebrow={`Platform · ${CapabilityCount} capabilities`} title="Everything SEO takes. One place." lead="Each part works on its own. Together they run your SEO every week, from finding what people search for to the Monday report." />
+        <SectionHeading eyebrow={`Platform · ${CapabilityCount} capabilities`} title="Everything SEO takes. One place." lead="Each part works on its own. Together they run your SEO every week, from finding what people search for to the weekly report." />
         <Reveal>
           <ArrowLink to="/platform">Explore the platform</ArrowLink>
         </Reveal>
@@ -546,6 +550,7 @@ function LadderSpotlight() {
           <div className="mt-9">
             <CheckList
               items={[
+                'Ladders only on keywords you choose, each page shown in "Coming up" two days before it is written',
                 'Difficulty for your site, with a Direct, Short or Full plan',
                 'Weekly rank checks for every rung and the head term, on desktop and on a phone',
                 'Every check records the results page too: AI Overview, snippet, who ranks above you and your share of voice',
@@ -731,7 +736,7 @@ function FaqSection() {
 export default function HomePage() {
   useSeo({
     title: 'Get found on Google and ChatGPT: SEO that runs itself',
-    description: 'You built the product; Alaventra brings the traffic. It finds what your buyers search for, writes the pages, fixes your site and tracks Google and AI answers every week.',
+    description: 'You built the product; Alaventra brings the traffic. It finds what your buyers search for, writes pages for the keywords you choose, fixes your site and tracks Google and AI answers every week.',
     path: '/',
   });
   return (

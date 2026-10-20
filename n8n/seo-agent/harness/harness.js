@@ -26,7 +26,41 @@ function loadCode(node) {
   return fs.readFileSync(file, 'utf8');
 }
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+// P1 (2026-10-20): no page is written before the website's author profile and business facts are on file (v5/code/_readiness.js), read
+// by *Cadence Plan* (Load Profiles (Cadence) + the site row's business_facts) and *Ladder Plan* (Load Profile (Model) + the request's or the
+// site model's facts). The scenarios written before that rule describe websites ready for written pages and test other rules, so a run of
+// either node whose scenario never mocked the profile load gets a READY website for that one run (a complete author, and facts on a site
+// row that has no business_facts key), and the store is restored afterwards. A scenario about readiness mocks the profile load itself (an
+// empty load included): the shared fixture (KF2) always does, and KF21-KF23 / S-P1 test the hold. Counted in READY_DEFAULTS.
+const READY_FACTS = 'Founded in 2012; 40 consultants; certified partner; fixed-price implementation packages from 12 weeks; offices in the region.';
+const READY_AUTHOR = { author_name: 'Harness Author', author_job_title: 'Head of delivery', author_bio: 'Leads the delivery team and writes about the services this website sells.' };
+const READY_DEFAULTS = { count: 0 };
+function readyDefaults(node) {
+  const restore = [];
+  const keep = (k) => { const had = Object.prototype.hasOwnProperty.call(store, k); restore.push([k, had, store[k]]); };
+  if (node === 'Cadence Plan' && !store['Load Profiles (Cadence)']) {
+    const sites = (store['Load Sites'] || []).map(i => i.json || {}).filter(s => s && s.site_id);
+    keep('Load Profiles (Cadence)'); store['Load Profiles (Cadence)'] = toItems(sites.length ? sites.map(s => ({ site_id: s.site_id, domain: s.domain, ...READY_AUTHOR })) : [{}]);
+    if (store['Load Sites']) { keep('Load Sites'); store['Load Sites'] = store['Load Sites'].map(i => ({ ...i, json: i.json && i.json.site_id && !('business_facts' in i.json) ? { ...i.json, business_facts: READY_FACTS } : i.json })); }
+    READY_DEFAULTS.count++;
+  }
+  if (node === 'Ladder Plan' && !store['Load Profile (Model)']) {
+    const base = ((store['Parse Verdict'] || [])[0] || {}).json || {};
+    const dom = String(base.domain || '').toLowerCase().replace(/^www\./, '');
+    keep('Load Profile (Model)'); store['Load Profile (Model)'] = toItems([{ site_id: 'site_' + dom.replace(/[^a-z0-9]+/g, '-'), domain: dom, ...READY_AUTHOR }]);
+    const sm = ((store['Site Model'] || [])[0] || {}).json;
+    if (!String(base.business_facts || '').trim() && !(sm && sm.site_model && String(sm.site_model.business_facts || '').trim())) {
+      keep('Site Model'); store['Site Model'] = toItems([{ ...(sm || {}), site_model: { ...((sm && sm.site_model) || {}), business_facts: READY_FACTS } }]);
+    }
+    READY_DEFAULTS.count++;
+  }
+  return () => { for (const [k, had, v] of restore.reverse()) { if (had) store[k] = v; else delete store[k]; } };
+}
 async function run(node, input, opts = {}) {
+  const undoReady = readyDefaults(opts.code || node);
+  try { return await runNode(node, input, opts); } finally { undoReady(); }
+}
+async function runNode(node, input, opts = {}) {
   const inputItems = toItems(input === undefined ? results.filter(r => r.ok && r.scenario === scenario).slice(-1)[0].items : input);
   const t0 = Date.now();
   try {
@@ -34,7 +68,8 @@ async function run(node, input, opts = {}) {
     // 'URL' is shadowed on purpose: the n8n Code sandbox has no URL constructor (live finding 2026-10-02), so any use must fail here too
     const fn = new AsyncFunction('$input', '$', '$runIndex', '$getWorkflowStaticData', '$now', '$execution', '$workflow', '$json', 'URL', src);
     const thisArg = { helpers: { getBinaryDataBuffer: async (i, prop) => { const b = inputItems[i] && inputItems[i].binary && inputItems[i].binary[prop]; if (!b || !b.data) throw new Error('no binary ' + prop); return Buffer.from(b.data, 'base64'); } } };
-    const out = await fn.call(thisArg, wrap(inputItems), $, opts.runIndex || 0, () => staticData, new Date(), { id: 'test-exec' }, { id: 'wf', name: 'test' }, inputItems[0] && inputItems[0].json, undefined);
+    // opts.execId: the execution id n8n would give this run (scenarios_integration.js: every workflow run of a client's life has its own)
+    const out = await fn.call(thisArg, wrap(inputItems), $, opts.runIndex || 0, () => staticData, new Date(), { id: String(opts.execId || 'test-exec') }, { id: 'wf', name: 'test' }, inputItems[0] && inputItems[0].json, undefined);
     const items = toItems(out);
     store[node] = items;
     results.push({ scenario, node, ok: true, ms: Date.now() - t0, items });

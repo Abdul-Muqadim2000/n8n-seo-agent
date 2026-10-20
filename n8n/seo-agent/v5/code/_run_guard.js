@@ -69,6 +69,13 @@ const RG = (() => {
   };
 
   const at = (r) => S(r && r.created_at).slice(11, 16);
+  const host = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §2.2 item 2 / §4.8): the twin rule is PER WEBSITE for a run that names one. With one Monday for
+  // everyone, a run of a monitor was a run over every site, so "the same monitor is still running" was the whole rule. With a 7-day cycle per
+  // website, two websites' AI Visibility runs are not twins and must not refuse each other; the same website twice still is. A run that names
+  // no website (the daily batch AI Pulse and Page Watch, a manual start over every site) keeps the mode-only rule, and a live run that names
+  // none (a batch run, which covers every site) is still the twin of any run of its mode.
+  const sameSite = (r, site) => !site || !host(r && r.domain) || host(r && r.domain) === site;
 
   // the gate a scheduled run passes. `mine` is the row this run just reserved (its id breaks ties).
   const gate = (o) => {
@@ -76,6 +83,8 @@ const RG = (() => {
     const nowMs = ms(c.now) || Date.now();
     const mode = S(c.mode) || S(mine.mode);
     const where = S(c.where) || mode;
+    const site = host(c.site);              // '' = a run over every site (the mode-only rule)
+    const cycle = c.cycle === true;         // a job of a website's weekly cycle: the Cycle Dispatcher retries a capacity refusal
     const parent_run_id = S(c.parent_run_id) || parentOf(mine);
     const ctx = { now: new Date(nowMs).toISOString(), my_id: n0(mine.id), run_id: S(c.run_id) || S(mine.run_id), stale_hours: c.stale_hours, parent_run_id };
     const live = liveRuns(rows, ctx);
@@ -86,7 +95,10 @@ const RG = (() => {
       + (stale ? ', ' + stale + ' stale reservation(s) ignored' : '')
       + (parentOpen ? ', the run that started this one (execution ' + parent_run_id + ') not counted' : '') + '; the limit is ' + max_open;
     const refuse = (reason, detail) => ({ allowed: false, reason, refusal: detail, open_runs: live.length, open: live.map(r => ({ mode: S(r.mode), run_id: S(r.run_id), at: at(r) })),
-      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id });
+      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id, site,
+      // a capacity refusal of a cycle job is not a lost week: the dispatcher starts it again at its next sweep, without spending an attempt
+      retry: cycle && ['same_mode', 'heavy_busy', 'too_many_open'].includes(reason) });
+    const RETRY = ' The website\'s weekly cycle starts it again in a few minutes, once the other run has finished; nothing of its week is lost.';
 
     // 0. R94 follow-up: this is the delayed timer of a slot the catch-up already ran - the week would run twice.
     if (c.caught_up) return refuse('caught_up', 'The catch-up already ran this scheduled slot (due ' + S(c.caught_up.due) + ', started ' + (S(c.caught_up.started_at) || 'earlier')
@@ -94,18 +106,21 @@ const RG = (() => {
 
     // 1. the same monitor is still running. A weekly check that overlaps its own previous run reads the same tables twice, writes the same
     //    rows twice and bills the same APIs twice; the one still going is the one with the data.
-    const twin = live.find(r => S(r.mode) === mode && mode);
-    if (twin) return refuse('same_mode', 'The previous ' + mode.replace(/_/g, ' ') + ' run (execution ' + S(twin.run_id) + ', started '
-      + (at(twin) || 'earlier') + ' UTC) is still going. Nothing was charged and nothing was started: this run would have read the same data and written the same rows twice.');
+    //    2026-10-19: of the same WEBSITE when this run names one (sameSite).
+    const twin = live.find(r => S(r.mode) === mode && mode && sameSite(r, site));
+    if (twin) return refuse('same_mode', 'The previous ' + mode.replace(/_/g, ' ') + ' run' + (site ? ' for ' + site : '') + ' (execution ' + S(twin.run_id) + ', started '
+      + (at(twin) || 'earlier') + ' UTC) is still going. Nothing was charged and nothing was started: this run would have read the same data and written the same rows twice.' + (cycle ? RETRY : ''));
 
     // 2. P34-5, shared with Rate Limit: one heavy crawl of a site at a time.
     const busy = heavyBusy(rows, { ...ctx, domain: S(c.domain) || S(mine.domain), heavy: c.heavy != null ? c.heavy : mine.heavy });
     if (busy) return refuse('heavy_busy', 'A large audit of ' + (S(c.domain) || S(mine.domain)).toLowerCase() + ' is already running (execution '
-      + S(busy.run_id) + ', started ' + (at(busy) || 'earlier') + ' UTC). Two big crawls of the same website at once overload the crawler and both time out, so this one was not started.');
+      + S(busy.run_id) + ', started ' + (at(busy) || 'earlier') + ' UTC). Two big crawls of the same website at once overload the crawler and both time out, so this one was not started.' + (cycle ? RETRY : ''));
 
     // 3. too much in flight at once.
+    //    2026-10-19: a cycle job is not skipped - the Cycle Dispatcher retries it (only a run with no dispatcher behind it waits for its next turn)
     if (live.length >= max_open) return refuse('too_many_open', 'There are already ' + live.length + ' analyses running (the limit is '
-      + max_open + '). Nothing was charged and nothing was started: this scheduled run is skipped and the next one goes ahead as usual.');
+      + max_open + '). Nothing was charged and nothing was started: ' + (cycle ? 'this job of ' + (site || 'the website') + '\'s weekly cycle is retried by the dispatcher in a few minutes, so its week is not lost.'
+        : 'this scheduled run is skipped and the next one goes ahead as usual.'));
 
     // 4. the account is the one cap nobody can argue with. Fail OPEN: a probe that did not answer is 0 and refuses nothing.
     const bal = n0(c.balance_usd != null ? c.balance_usd : mine.dfs_balance);
@@ -116,8 +131,8 @@ const RG = (() => {
       + '). Nothing was charged and nothing was started: a run that runs out of data credit half way through delivers half a report.');
 
     return { allowed: true, reason: 'ok', refusal: '', open_runs: live.length, open: live.map(r => ({ mode: S(r.mode), run_id: S(r.run_id), at: at(r) })),
-      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id };
+      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id, site, retry: false };
   };
 
-  return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, STALE_HOURS, MAX_OPEN };
+  return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, sameSite, STALE_HOURS, MAX_OPEN };
 })();

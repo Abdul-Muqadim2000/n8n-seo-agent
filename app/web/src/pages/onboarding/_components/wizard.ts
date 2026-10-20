@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { Me, Org, Site } from '@seo/shared';
+import { DEFAULT_AUTOPILOT_LEVEL, type AutopilotLevel, type DifficultyForYou, type Me, type Org, type PlanChoice, type Site } from '@seo/shared';
 import { trackFormSchema, type TrackFormOutput } from '@/components/site/TrackingForm';
 
 // Onboarding steps (the server stores the last one reached in organizations.onboarding_step, same ids).
@@ -10,7 +10,8 @@ export const STEPS = [
   { id: 'verify', label: 'Verify ownership', hint: 'Prove you own the site' },
   { id: 'business', label: 'Business details', hint: 'Facts every page uses' },
   { id: 'profile', label: 'Author & profile', hint: 'E-E-A-T trust signals' },
-  { id: 'tracking', label: 'Tracking', hint: 'Keywords and monitors' },
+  { id: 'keyword', label: 'Your first keyword', hint: 'What you want to be found for' },
+  { id: 'tracking', label: 'Tracking', hint: 'What we check each week' },
   { id: 'launch', label: 'Launch', hint: 'Review and start' },
 ] as const;
 
@@ -26,7 +27,7 @@ export function stepIndex(s: string | null | undefined): number {
 }
 
 /** Steps that work on one website (they need ?site= or the company's website). */
-export const SITE_STEPS: readonly StepId[] = ['verify', 'business', 'profile', 'tracking', 'launch'];
+export const SITE_STEPS: readonly StepId[] = ['verify', 'business', 'profile', 'keyword', 'tracking', 'launch'];
 
 export interface WizardValue {
   me: Me;
@@ -81,7 +82,60 @@ export function writeTrackingDraft(siteId: string, values: unknown) {
 export function clearTrackingDraft(siteId: string) {
   try {
     localStorage.removeItem(draftKey(siteId));
+    localStorage.removeItem(keywordKey(siteId));
   } catch {
     /* ignore */
+  }
+}
+
+// ---------- the "Your first keyword" choices, kept until launch (per browser, per website) ----------
+
+/** One keyword the owner chose in onboarding: started as a keyword ladder at launch. */
+export interface KeywordPick {
+  keyword: string;
+  /** typed and checked by the owner, or picked from our suggestions */
+  chosenBy: 'client_typed' | 'client_picked';
+  /** "Write a page each week" (auto) or "Ask me before each page" (manual) */
+  mode: 'auto' | 'manual';
+  volume: number | null;
+  difficultyForYou: DifficultyForYou | null;
+  planType: PlanChoice | null;
+  months: string;
+  why: string;
+}
+
+export interface KeywordDraft {
+  picks: KeywordPick[];
+  /** "I'll choose later": nothing is written until a keyword is chosen (level 3: we choose and tell you first) */
+  later: boolean;
+  level: AutopilotLevel;
+}
+
+/** At most this many keywords are chosen in onboarding (the ladders written at the same time, `max_active`). */
+export const MAX_PICKS = 2;
+
+const keywordKey = (siteId: string) => `onboarding:keyword:${siteId}`;
+const LEVELS: readonly number[] = [1, 2, 3];
+
+export function readKeywordDraft(siteId: string): KeywordDraft | null {
+  try {
+    const raw = localStorage.getItem(keywordKey(siteId));
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Partial<KeywordDraft>;
+    const picks = (Array.isArray(v.picks) ? v.picks : [])
+      .filter((p): p is KeywordPick => !!p && typeof p.keyword === 'string' && p.keyword.trim().length >= 2)
+      .map((p) => ({ ...p, chosenBy: p.chosenBy === 'client_picked' ? ('client_picked' as const) : ('client_typed' as const), mode: p.mode === 'manual' ? ('manual' as const) : ('auto' as const) }))
+      .slice(0, MAX_PICKS);
+    return { picks, later: v.later === true && !picks.length, level: LEVELS.includes(Number(v.level)) ? (Number(v.level) as AutopilotLevel) : DEFAULT_AUTOPILOT_LEVEL };
+  } catch {
+    return null;
+  }
+}
+
+export function writeKeywordDraft(siteId: string, draft: KeywordDraft) {
+  try {
+    localStorage.setItem(keywordKey(siteId), JSON.stringify(draft));
+  } catch {
+    /* storage blocked: the launch step then starts no ladder, and the Pipeline asks for the keyword */
   }
 }

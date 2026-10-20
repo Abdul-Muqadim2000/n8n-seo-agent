@@ -104,9 +104,14 @@ const AIP = (() => {
 
   // ---- 4. strata and the daily rotating sample ----------------------------------------------------------------------------------
   const stratumOf = (q) => (S(q.cluster || q.topic).toLowerCase() || 'other') + ' | ' + (S(q.persona).toLowerCase() || 'any buyer');
-  /** the pulse-day counter: Tuesday..Sunday of one ISO week are six consecutive numbers (a Monday shares Tuesday's) */
-  const pulseDay = (iso) => {
-    const t = Date.parse(S(iso).slice(0, 10) + 'T00:00:00Z'); const d = Math.floor((t - Date.UTC(1970, 0, 5)) / 864e5);   // 1970-01-05 was a Monday
+  /** the pulse-day counter: the six days after the website's cycle day (its weekly run) are six consecutive numbers, and the cycle day
+   *  itself shares the next day's. `cycleWeekday` is 0 (Sunday) … 6 (Saturday); with none it is Monday (1), the v4.9 rule exactly - every
+   *  website then had its weekly run on Monday and its pulse Tuesday..Sunday. 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): a website's week
+   *  starts on the day it set up, so its six pulse mornings are counted from ITS cycle day; a question is still asked on exactly `per_week`
+   *  of every six consecutive pulse mornings (pulseSample), whatever the weekday. `iso` is the website's LOCAL date (YYYY-MM-DD…). */
+  const pulseDay = (iso, cycleWeekday) => {
+    const cw = Number.isInteger(Number(cycleWeekday)) && cycleWeekday !== null && cycleWeekday !== '' && Number(cycleWeekday) >= 0 && Number(cycleWeekday) <= 6 ? Number(cycleWeekday) : 1;
+    const t = Date.parse(S(iso).slice(0, 10) + 'T00:00:00Z'); const d = Math.floor((t - Date.UTC(1970, 0, 4 + cw)) / 864e5);   // 1970-01-04 was a Sunday: the anchor is the first cycle day of 1970
     const w = Math.floor(d / 7), r = ((d % 7) + 7) % 7;
     return w * 6 + (r === 0 ? 0 : r - 1);
   };
@@ -259,7 +264,12 @@ for (const p of plans) {
   const aiEst = +((analyst * 0.02 + writer * 0.04) / Math.max(1, plans.length)).toFixed(4);   // modelled, only to size what is left to reserve
   const final = !!p.chunk.final_expected;
   const sb = p.spent_before || { dfs: 0, ai: 0 };
-  const st = { run_id: p.run_id, run_kind: p.run_kind, on_demand: !!p.on_demand, full_due: !!p.full_due, request_id: p.request_id || '', email: p.email || '', callback_url: p.callback_url || '',
+  // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §15, split jobs): a run of a website's weekly cycle keeps its cycle in its state and in the start
+  // of its next execution, so that execution is a cycle run of the SAME cycle (trigger, key, job, monthly, due time) and only the run's last
+  // execution settles `cycle:<cycle_key>:ai_visibility`; every earlier part is `…:part<n>` (Monitor_Ledger_Row).
+  const cyc = p.cycle && p.cycle.key ? { key: p.cycle.key, date: p.cycle.date || '', job: p.cycle.job || 'ai_visibility', monthly: !!p.cycle.monthly, scheduled_for: p.cycle.scheduled_for || '', request_id: p.cycle.request_id || p.request_id || '', label: p.cycle.label || '' } : null;
+  const cycStart = cyc ? { trigger: 'cycle', cycle_key: cyc.key, job: cyc.job, monthly: cyc.monthly, scheduled_for: cyc.scheduled_for } : {};
+  const st = { run_id: p.run_id, run_kind: p.run_kind, on_demand: !!p.on_demand, full_due: !!p.full_due, request_id: p.request_id || '', email: p.email || '', callback_url: p.callback_url || '', cycle: cyc,
     site_id: p.site_id, domain: p.domain, started_at: p.checked_at, updated_at: now, chunk: p.chunk.no, status: 'running', finishing: final,
     asked: Number(ci.done_before || 0) + Number(ci.asked_now || 0), total: Number(ci.total) || p.chunk.total_est, left: final ? 0 : Number(ci.left_after) || 0,
     unavailable: Number(((p.state_before || {}).unavailable) || 0) + failed,
@@ -267,7 +277,7 @@ for (const p of plans) {
     executions: [...(p.chunk.executions || []), String($execution.id)].slice(-60), resumed: !!p.chunk.resumed };
   out.push({ json: { site_id: p.site_id, domain: p.domain, final, state_row: { ...AIP.stateRow(p.site_id, st, now) },
     // the next execution's trigger: Manual Run reads domain / site_id like any on-demand start, plus the run it continues
-    next: final ? null : { continue_run: p.run_id, site_id: p.site_id, domain: p.domain, email: p.email || '', callback_url: p.callback_url || '', request_id: p.request_id || '', parent_run_id: String($execution.id) },
+    next: final ? null : { continue_run: p.run_id, site_id: p.site_id, domain: p.domain, email: p.email || '', callback_url: p.callback_url || '', request_id: p.request_id || '', parent_run_id: String($execution.id), ...cycStart },
     note: (final ? 'the last part of run ' + p.run_id + ' (' + st.asked + ' of ' + st.total + ' requests asked over ' + st.executions.length + ' execution(s))'
       : 'part ' + p.chunk.no + ' of run ' + p.run_id + ': ' + st.asked + ' of ' + st.total + ' requests asked; the next execution asks the rest')
       + (st.unavailable ? '; ' + st.unavailable + ' could not be read, even when sent again' : ''),

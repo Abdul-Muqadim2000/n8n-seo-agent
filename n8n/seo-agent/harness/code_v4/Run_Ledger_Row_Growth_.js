@@ -27,8 +27,16 @@ const own = (r, k) => r[k] !== undefined && r[k] !== null && r[k] !== '' && Numb
 const priced = paid.filter(r => own(r, 'est_dfs_usd') || own(r, 'est_ai_usd')).length;
 const ai = +paid.reduce((s, r) => s + (own(r, 'est_ai_usd') ? n0(r.est_ai_usd) : n0(EST.ai)), 0).toFixed(4);
 const dfs = +paid.reduce((s, r) => s + (own(r, 'est_dfs_usd') ? n0(r.est_dfs_usd) : (full(r) ? n0(EST.dfs_full) : n0(EST.dfs))), 0).toFixed(4);
-// one site in the run: name it, as the main workflow's reservation does (P34-5 reads `domain` to refuse a second heavy crawl of the same site)
-const domain = rows.length === 1 ? String(rows[0].domain || '').toLowerCase() : '';
+// one site in the run: name it, as the main workflow's reservation does (P34-5 reads `domain` to refuse a second heavy crawl of the same site).
+// 2026-10-19: one site even when the plan emits one item per CHECK (the Rank Tracker of one website: every item carries the same domain), and
+// a cycle / on-demand run names its site from the trigger when its plan had nothing to do - the run guard's twin rule is per site now
+// (RG.gate `site`) and the Cycle Dispatcher reads the row of a job that ran nothing like any other.
+const __doms = [...new Set(rows.map(r => String(r.domain || '').toLowerCase().trim()).filter(Boolean))];
+let __trig0 = {};
+for (const __n of ['Manual Run', 'Watch Run']) { try { const __t = $(__n).first(); if (__t && __t.json) { __trig0 = __t.json; break; } } catch (e) {} }
+if (__trig0.body && typeof __trig0.body === 'object') __trig0 = { ...__trig0, ...__trig0.body };
+const __trigDom = String(__trig0.domain || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+const domain = __doms.length === 1 ? __doms[0] : (!__doms.length ? __trigDom : '');
 // R32: the account balance at the moment this row is reserved, from the free appendix/user_data probe on the ledger chain.
 let dfs_balance = 0;
 try { const __b = $('DFS Balance (Growth)').first().json || {}; const __t = (__b.tasks || [])[0] || {}; const __r = (__t.result || [])[0] || {};
@@ -41,7 +49,18 @@ let __trig = {};
 for (const __n of ['Manual Run', 'Watch Run']) { try { const __t = $(__n).first(); if (__t && __t.json) { __trig = __t.json; break; } } catch (e) {} }
 if (__trig.body && typeof __trig.body === 'object') __trig = { ...__trig, ...__trig.body };
 const parent_run_id = String(__trig.parent_run_id == null ? '' : __trig.parent_run_id).trim();
-return [{ json: { run_id: String($execution.id), key: parent_run_id ? 'parent:' + parent_run_id : 'schedule:' + MODE, mode: MODE, est_usd: ai, created_at: new Date().toISOString(),
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.5 / §14.2 / §15): a run of a website's weekly cycle is keyed `cycle:<cycle_key>:<job>` - the
+// Cycle Dispatcher reads exactly that row to know the job is done (settled), refused for capacity (retried without spending an attempt) or
+// failed. It is autopilot spend, like `schedule:`. A job that runs in several executions (the AI Visibility Tracker's split run) settles that
+// key only in its FINAL execution; every earlier part is `cycle:<cycle_key>:<job>:part<n>`, so a part that finished is never read as the job
+// finished. The parent of a continuation is still known to the run guard by the trigger's `parent_run_id`.
+const JOB_OF = { ai_visibility: 'ai_visibility', backlinks: 'backlinks', rank_tracker: 'rank_tracker', site_tracker: 'site_tracker', ai_growth: 'ai_growth',
+  content_cadence: 'content_cadence', link_builder: 'link_builder', audit_schedule: 'audit', ai_pulse: 'ai_pulse', page_watch: 'page_watch' };
+const __cycKey = String(__trig.trigger || '') === 'cycle' ? String(__trig.cycle_key || '').trim() : '';
+const __job = String(__trig.job || '').trim() || JOB_OF[MODE] || MODE;
+const __part = (() => { const c = (rows[0] || {}).chunk; return c && typeof c === 'object' && c.final_expected === false ? Math.max(1, Number(c.no) || 1) : 0; })();
+const __key = __cycKey ? 'cycle:' + __cycKey + ':' + __job + (__part ? ':part' + __part : '') : (parent_run_id ? 'parent:' + parent_run_id : 'schedule:' + MODE);
+return [{ json: { run_id: String($execution.id), key: __key, mode: MODE, est_usd: ai, created_at: new Date().toISOString(),
   status: 'reserved', settled_usd: 0, domain, heavy: false, dfs_est_usd: dfs, dfs_usd: 0,
   // R28 (2026-10-14): the DataForSEO balance at reservation time, read for free from appendix/user_data so the day's reported spend can be
   // held against the account. R32 (2026-10-14, FIX_PLAN §3.13): a scheduled run takes the reading too — until now only main-workflow runs

@@ -9,7 +9,12 @@ import {
   CalendarClock,
   CheckCircle2,
   Copy,
+  Gauge,
+  UserRound,
   Hand,
+  KeyRound,
+  Megaphone,
+  RotateCcw,
   Inbox,
   Info,
   Layers,
@@ -30,11 +35,15 @@ import { CollapsePanel, CountUp, DisclosureButton, HeroNextStep, HeroStat, IconT
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useBilling } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtAgo } from '@/lib/utils';
 import { Panel } from '../kit';
 import { plural } from '../format';
 import { AUTO_ICON, fmtDayHead, fmtTime, fmtWhen, validDate } from './common';
 import type { WriteNowItem } from './WriteNowDialog';
+import { guideForNeedsYou } from '@seo/shared/guide-links';
+import { GuideButton } from '@/components/guide';
+import { autopilotGuideVars } from '@/lib/guide-vars';
 
 // ---------- this week ----------
 /** Older servers: the coming week from the automations' next run times. */
@@ -161,11 +170,18 @@ const KIND_ICON: Record<NeedsYouItem['kind'], ReactNode> = {
   failed: <XCircle className="size-4" />,
   connection: <PlugZap className="size-4" />,
   pileup: <Layers className="size-4" />,
+  // keyword-first kinds (A1 added them to the shared type; A2 gives them their own icons)
+  keyword: <KeyRound className="size-4" />,
+  proposal: <Megaphone className="size-4" />,
+  recheck: <RotateCcw className="size-4" />,
+  level: <Gauge className="size-4" />,
+  profile: <UserRound className="size-4" />,
 };
 
 /** Older servers: the pages waiting to be published. */
 export function needsYouOf(data: PipelineData): NeedsYouItem[] {
-  if (data.needsYou) return data.needsYou;
+  // keyword-first: "Choose the keyword you want to be found for" leads while the website has none
+  if (data.needsYou) return [...data.needsYou].sort((a, b) => Number(b.id === 'keyword:first') - Number(a.id === 'keyword:first'));
   // R111: a draft that failed the quality check is not offered as "publish it" (the server's own Needs-you list words it as a fix)
   return [...(data.queue?.waiting ?? [])]
     .filter((w) => !(w as { needsFix?: boolean }).needsFix)
@@ -184,7 +200,9 @@ export function needsYouOf(data: PipelineData): NeedsYouItem[] {
 function useNeedsYouHref() {
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
-  return (a: NonNullable<NeedsYouItem['action']>): string | null => {
+  return (a: NonNullable<NeedsYouItem['action']>, kind?: NeedsYouItem['kind']): string | null => {
+    // a keyword proposal is decided on this page, in its own card
+    if (kind === 'proposal') return '#keyword-proposals';
     if (a.ladderId) return paths.ladder(org.id, site.id, a.ladderId);
     if (a.runId) return paths.run(org.id, a.runId);
     // G2: the page's report, where it is sent to the CMS
@@ -199,7 +217,7 @@ function useNeedsYouHref() {
 function NeedsYouAction({ it, primary, onWrite, variant }: { it: NeedsYouItem; primary: boolean; onWrite?: (i: WriteNowItem) => void; variant?: 'primary' | 'secondary' }) {
   const { can } = useOrgCtx();
   const to = useNeedsYouHref();
-  const href = it.action ? to(it.action) : null;
+  const href = it.action ? to(it.action, it.kind) : null;
   // a Manual ladder's next page: "Write it" opens the Write now dialog with the ladder fields
   const write = it.writeNow && onWrite && can('member') ? it.writeNow : null;
   const v = variant ?? (primary ? 'primary' : 'secondary');
@@ -207,6 +225,21 @@ function NeedsYouAction({ it, primary, onWrite, variant }: { it: NeedsYouItem; p
     return (
       <Button size="sm" variant={v} className="self-start" icon={<PenSquare className="size-4" />} onClick={() => onWrite!(write)}>
         {it.action?.label ?? 'Write it'}
+      </Button>
+    );
+  if (href && it.action && href.startsWith('#'))
+    return (
+      <Button
+        size="sm"
+        variant={v}
+        className="self-start"
+        onClick={() => {
+          const el = document.getElementById(href.slice(1));
+          el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          el?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+        }}
+      >
+        {it.action.label}
       </Button>
     );
   if (href && it.action)
@@ -219,6 +252,8 @@ function NeedsYouAction({ it, primary, onWrite, variant }: { it: NeedsYouItem; p
 }
 
 export function NeedsYou({ items, onWrite }: { items: NeedsYouItem[]; onWrite?: (i: WriteNowItem) => void }) {
+  const { site } = useSiteCtx();
+  const vars = useMemo(() => autopilotGuideVars(site), [site]);
   if (!items.length) return null;
   const important = items.some((x) => x.severity === 'warning');
   return (
@@ -248,7 +283,13 @@ export function NeedsYou({ items, onWrite }: { items: NeedsYouItem[]; onWrite?: 
                 meta={it.severity === 'warning' ? <StatusBadge tone="warning">Important</StatusBadge> : <Badge icon={<Info className="size-3" aria-hidden />}>To do</Badge>}
                 title={it.title}
                 description={it.detail ? <span className="text-[13px] leading-snug text-ink-2">{it.detail}</span> : undefined}
-                action={<NeedsYouAction it={it} primary={primary} onWrite={onWrite} />}
+                action={
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <NeedsYouAction it={it} primary={primary} onWrite={onWrite} />
+                    {/* every ask carries the guide that explains it (CONVENTIONS.md, Setup guides) */}
+                    <GuideButton id={guideForNeedsYou(it)} vars={vars} variant="icon" label={`How this works: ${it.title}`} />
+                  </span>
+                }
                 actionPosition="side"
               />
             );
@@ -329,7 +370,7 @@ export function PipelineHero({ data, needs, cards, onWrite }: { data: PipelineDa
       stats={
         s ? (
           <>
-            <HeroStat label="Pages published this month" value={<CountUp value={s.publishedThisMonth} />} hint="Ladder pages and blog posts that went live" />
+            <HeroStat label="Pages published this month" value={<CountUp value={s.publishedThisMonth} />} hint="Pages for your keywords and other pages that went live" />
             <HeroStat label="Keywords in the top 10" value={<CountUp value={s.top10} />} hint="Ladder pages and main keywords on page one of Google" />
             <HeroStat label="Clicks from ladder pages" value={<CountUp value={s.clicks28d} format={compactNumber} />} hint="Last 28 days, from Search Console" />
             {b && (
@@ -357,6 +398,7 @@ const STEP_ICON = [<ListOrdered key="plan" />, <PenSquare key="write" />, <Inbox
 
 export function HowItWorks({ data, cards }: { data: PipelineData; cards: LadderCard[] }) {
   const { site } = useSiteCtx();
+  const day = useCycleDay();
   const [open, setOpen] = useState(false);
   const id = useId();
   const stage = (id: PipelineStage['id']) => data.stages?.find((s) => s.id === id);
@@ -364,12 +406,12 @@ export function HowItWorks({ data, cards }: { data: PipelineData; cards: LadderC
   const steps: { title: string; text: string; yours?: string }[] = [
     {
       title: 'Plan',
-      text: 'Pick one main keyword. The plan lists pages from easy to hard, each with its own, easier keyword.',
+      text: 'You choose the main keyword. The plan lists pages from easy to hard, each with its own, easier keyword.',
       yours: cards.length ? `${plural(cards.length, 'keyword ladder')} · ${stage('plan')?.headline ?? ''}` : stage('plan')?.headline,
     },
     {
-      title: 'Pages written on Mondays',
-      text: 'Every Monday the next page is researched, written, edited and checked: easy pages first.',
+      title: day.name ? `Pages written on ${day.name}s` : 'Pages written each week',
+      text: `${day.every.charAt(0).toUpperCase() + day.every.slice(1)} the next page is researched, written, edited and checked: easy pages first. Coming up shows it two days before.`,
       yours: stage('write')?.headline,
     },
     {
@@ -379,7 +421,7 @@ export function HowItWorks({ data, cards }: { data: PipelineData; cards: LadderC
     },
     {
       title: 'Rank check',
-      text: 'Every Monday each page and the main keyword are looked up on Google.',
+      text: `${day.every.charAt(0).toUpperCase() + day.every.slice(1)} each page and the main keyword are looked up on Google.`,
       yours: stage('track')?.detail,
     },
     {

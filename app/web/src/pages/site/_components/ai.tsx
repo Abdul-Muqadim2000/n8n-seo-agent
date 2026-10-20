@@ -5,6 +5,7 @@ import { AlertTriangle, CalendarClock, CheckCircle2, CircleX, Link2, Minus, Plus
 import { AI_ENGINES, compactNumber, questionWin, titleCase, type AiData } from '@seo/shared';
 import { errorMessage } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -127,7 +128,7 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
               <th scope="col" className="sticky left-0 z-10 min-w-[14rem] border-b border-line bg-surface-2 px-3 py-2 text-left text-xs font-medium text-ink-3">
                 Buyer question
               </th>
-              <th scope="col" className="whitespace-nowrap border-b border-line px-2 py-2 text-right text-xs font-medium text-ink-3" title="Share of this week's answers to the question that name you (Monday's run and the daily pulse)">
+              <th scope="col" className="whitespace-nowrap border-b border-line px-2 py-2 text-right text-xs font-medium text-ink-3" title="Share of this week's answers to the question that name you (the weekly run and the daily pulse)">
                 This week
               </th>
               {engines.map((e) => (
@@ -346,6 +347,7 @@ const isActive = (p: Prompt) => !p.status || p.status === 'active';
 /** The buyer questions asked every week; admins add and switch them off. */
 export function QuestionManager({ prompts }: { prompts: readonly Prompt[] }) {
   const { org, site, can } = useSitePage();
+  const day = useCycleDay(site);
   const admin = useSiteAdmin(org.id, site.id);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -443,7 +445,7 @@ export function QuestionManager({ prompts }: { prompts: readonly Prompt[] }) {
   return (
     <div className="space-y-4">
       <DataTable rows={[...prompts]} columns={columns} rowKey={(p) => p.promptId} initialSort={{ key: 'status', dir: 'asc' }} dense pageSize={15} empty="No questions yet: the first run writes them from your keywords and business." />
-      <p className="text-xs text-ink-3">{active} active {active === 1 ? 'question is' : 'questions are'} asked on every engine each Monday at 07:00, and on ChatGPT, Gemini and Google AI Mode every other day when the daily pulse is on. New ones come from real AI searches and your Search Console queries on the month's first run.</p>
+      <p className="text-xs text-ink-3">{active} active {active === 1 ? 'question is' : 'questions are'} asked on every engine {day.every}, and on ChatGPT, Gemini and Google AI Mode every other day when the daily pulse is on. New ones come from real AI searches and your Search Console queries in the monthly cycle.</p>
       {isAdmin && (
         <div className="rounded-xl border border-dashed border-line-strong p-4">
           <Field label="Add buyer questions" hint="One per line, the way a buyer would ask an assistant, e.g. &quot;Which accounting firms in Dubai handle VAT registration for small businesses?&quot;" error={error ?? undefined}>

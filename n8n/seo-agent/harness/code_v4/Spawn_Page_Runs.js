@@ -3,6 +3,9 @@
 const d = $input.first().json; const L = d.ladder || {};
 const GOAL = { leads: 'Get leads and enquiries', sales: 'Sell online', traffic: 'Rank and educate (traffic)', brand: 'Build the brand' };
 const n = Math.min(3, Math.max(1, Number(d.pages_now) || 1));
+// keyword-first R-K7 (2026-10-19): a ladder started in Manual mode writes nothing at start (Ladder Plan holds its pages and empties write_now);
+// a plan that says it held its pages starts no page run, whatever pages_now asked for
+if ((L.limits || {}).manual_hold === true || (L.held && Array.isArray(L.held.pages) && L.held.pages.length)) return [];
 // F-A1 / A-21 (2026-10-17): the main page's run reads the head keyword's results page again; it is told what THIS run measured, so it can
 // say that it re-measured and why its number moved (Parse Verdict, v5/code/_remeasure.js) instead of printing a second score silently
 const headKw = String((L.head || {}).keyword || d.keyword || '').toLowerCase().trim();
@@ -10,10 +13,16 @@ const headKw = String((L.head || {}).keyword || d.keyword || '').toLowerCase().t
 const sfL = (() => { try { return ($('Ladder Plan').first().json || {}).serp_features || d.serp_features || {}; } catch (e) { return d.serp_features || {}; } })();
 const measureOf = (p) => String(p.keyword || '').toLowerCase().trim() !== headKw || (L.feasibility || {}).scored === false ? null : {
   keyword: headKw, score: (L.feasibility || {}).score ?? d.verdict_score ?? null, checked_at: String(sfL.checked_at || ((sfL.ai_overview || {}).seen_at) || ''),
-  ai_overview: ((sfL.ai_overview || {}).present) === true, features: Array.isArray(sfL.features_present) ? sfL.features_present.slice(0, 12) : [] };
+  ai_overview: ((sfL.ai_overview || {}).present) === true, ai_overview_read: ((sfL.ai_overview || {}).present) != null,   // F-SERP: a lighter reading did not ask for the AI Overview
+  features: Array.isArray(sfL.features_present) ? sfL.features_present.slice(0, 12) : [] };
+// P1 (2026-10-20): every page run carries the website's business facts and call to action, the request's (the app sends the website's own)
+// or else the site model's (seo_sites / the cached model), so a ladder started without them in the request still writes with the stored ones
+const SMF = (() => { try { return ($('Site Model').first().json || {}).site_model || {}; } catch (e) { return {}; } })();
+const factsOf = String(d.business_facts || '').trim() || String(SMF.business_facts || '').trim();
+const ctaOf = String(d.cta || '').trim() || String(SMF.cta || '').trim();
 return (L.write_now || []).slice(0, n).map(p => ({ json: { body: {
   mode: 'keyword', keyword: p.keyword, page_type: p.page_type || 'Service Page', country: d.country, domain: d.domain,
-  business: d.business || '', customers: d.audience || '', business_facts: d.business_facts || '', cta: d.cta || '', tone: d.tone || '', goal: GOAL[d.goal] || d.goal || '',
+  business: d.business || '', customers: d.audience || '', business_facts: factsOf, cta: ctaOf, tone: d.tone || '', goal: GOAL[d.goal] || d.goal || '',
   receive: ['Keyword Report', 'Page Content'], existing_page_url: p.exists ? p.target_url : '',
   email: d.email || '', callback_url: d.callback_url || '', request_id: d.request_id || '', client_ip: 'ladder:' + (L.ladder_id || ''),
   force_content: true, ladder_id: L.ladder_id || '', ladder_rung: p.rung, ladder_head: (L.head || {}).keyword || d.keyword, ladder_page_no: p.page_no,

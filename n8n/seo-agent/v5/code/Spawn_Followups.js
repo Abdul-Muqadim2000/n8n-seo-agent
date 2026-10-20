@@ -6,12 +6,18 @@ const GOAL = { leads: 'Get leads and enquiries', sales: 'Sell online', traffic: 
 const common = { country: d.country, domain: d.domain || '', business: d.business || '', customers: d.audience || '', business_facts: d.business_facts || '', cta: d.cta || '', tone: d.tone || '',
   goal: GOAL[d.goal] || d.goal || '', email: d.email || '', callback_url: d.callback_url || '', request_id: d.request_id || $execution.id, client_ip: 'discover:' + $execution.id };
 const out = [];
-if (d.include_content || d.include_seo_report) {
+// keyword-first R-K6 (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.1 / §14.5): research started from the web app (client_ip `app:<company>`)
+// never writes a page on the system's own pick, even with "receive content" ticked - the client chooses the keyword (a suggestion, a ladder).
+// The keyword report on that pick is still delivered when it was asked for; it writes nothing.
+let ni = {}; try { ni = $('Normalize Input').first().json || {}; } catch (e) { ni = {}; }
+const fromApp = /^app:/i.test(String(ni.client_ip || d.client_ip || ''));
+const pageOk = !!d.include_content && !fromApp;
+if (pageOk || d.include_seo_report) {
   const ks = d.keyword_suggestions || {};
   const pick = (ks.recommended || [])[0] || (ks.easy_wins || [])[0] || null;
   if (pick && pick.keyword) {
     const intent = pick.intent || 'commercial';
-    const receive = []; if (d.include_seo_report) receive.push('Keyword Report'); if (d.include_content) receive.push('Page Content');
+    const receive = []; if (d.include_seo_report) receive.push('Keyword Report'); if (pageOk) receive.push('Page Content');
     out.push({ json: { body: { mode: 'keyword', keyword: pick.keyword, page_type: pick.page_type || (intent === 'informational' ? 'Blog Post' : 'Service Page'), ...common, receive,
       chosen_keyword_reason: pick.why || pick.reason || ('Highest-scoring ' + intent + ' keyword from the research'), chosen_by: d.chosen_by || 'system', pipeline_source: 'discover' } } });
   }

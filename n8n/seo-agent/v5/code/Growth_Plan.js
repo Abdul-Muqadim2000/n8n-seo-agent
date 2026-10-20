@@ -1,4 +1,4 @@
-// AI Growth plan (v4.12, AI_GROWTH_SPEC.md; weekly, Monday 09:30 after the AI Visibility Tracker and the Site Tracker, and on demand): the work that
+// AI Growth plan (v4.12, AI_GROWTH_SPEC.md; weekly in each website's own cycle, after the AI Visibility Tracker and the Site Tracker, and on demand): the work that
 // gets a site named and cited in AI answers, not only measured. Per site with AI visibility and the growth loop on:
 //   * key pages to check this week (can an assistant read and quote them: the AI Readiness step) — pages AI cited, the targets' pages, written and
 //     ladder pages, the pages Search Console shows most, the homepage; each page about once a month, never-checked ones first;
@@ -18,9 +18,13 @@
 const CONFIG = { audit_per_week: 12, recheck_days: 25, max_key_pages: 40, submit_max: 50, resubmit_days: 30, recent_days: 8, earned_fetch: 10, max_targets: 6, refresh_after_days: 90,
   win_min_answers: 2, follow_up_days: 45, follow_up_max: 15, decay_runs: 3, stale_writing_days: 14,   // B9-2 / B9-4 / B9-5 / B9-6 (benchmark area 9): what became of a submission, what a win needs, a page AI has stopped citing, and a page run that never produced a page
   stage_weight: { decision: 1, consideration: 0.8, awareness: 0.6 } };
-const { list, on_demand, want, total } = monitorSites('ai');
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.4 / §4.5): a cycle run (`trigger: 'cycle'`) is a scheduled run for one site (AI visibility and AI growth
+// switched off are honoured); the monthly Wikidata check comes only from the `monthly` the Cycle Dispatcher passes. Outside a cycle it is
+// monthly in the WEBSITE's calendar (its time zone, seo_cycles.tz), not the UTC month.
+const { list, on_demand, want, total, cycle, cycle_why } = monitorSites('ai');
 const sites = on_demand ? list : list.filter(s => s.settings.ai_visibility && s.settings.growth);
-if (!sites.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the AI growth loop is off for every site' : 'no sites yet') } }];
+if (!sites.length) return [{ json: { nothing_to_do: true, cycle, reason: cycle ? (cycle_why || (list.length ? 'the AI growth loop is switched off for ' + list[0].domain + ', so this cycle job runs nothing' : 'nothing to run for this cycle')) : on_demand ? 'no site matches "' + want + '"' : (total ? 'the AI growth loop is off for every site' : 'no sites yet') } }];
+const cycleRows = rowsOf('Load Cycles');   // 2026-10-19: each website's time zone
 const vis = rowsOf('Load AI Visibility'), answers = rowsOf('Load AI Answers'), prompts = rowsOf('Load AI Prompts'), logs = rowsOf('Load Content Log'), qh = rowsOf('Load Query History'),
   pagesStored = rowsOf('Load AI Pages'), targetsStored = rowsOf('Load AI Targets'), growthRows = rowsOf('Load AI Growth'), cache = rowsOf('Load Cache (Growth)'), ladders = rowsOf('Load Ladders');
 const now = new Date(); const iso = now.toISOString(); const month = iso.slice(0, 7);
@@ -79,6 +83,23 @@ for (const s of sites) {
   const fitCtx = FITR.ctx({ own_domain: dom, competitors: comps, heads: lrowsAll.map(l => l.head_keyword), services: SM.services(site_model) });
   const fitG = FITR.rungs(lrowsAll, fitCtx, { where: 'AI growth targets' });
   const lrows = fitG.keep; const set_aside = fitG.set_aside;
+  // keyword-first R-K4 (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.1): the target's OWN keyword passes the gate too, not only the rungs it may be
+  // handed to. On 2026-10-19 a CRM-only site (no ladder, no Dynamics 365 among its services) got the AI refresh target "dynamics 365 finance
+  // operations partner uae", and the Content Cadence wrote it. The topics are what the client chose and sells: the ladder heads, the rungs the
+  // gate kept and the site model's services (the client's declared services included); a refused target is stored `set_aside` with its reason.
+  // the services from the stored model AND from the site row itself: a site the weekly Site Tracker has not modelled yet has no stored model,
+  // but its row already carries what the client declared (declared_services) and any services read so far
+  const targetSvc = [...new Set([...SM.services(site_model), ...SM.services(SM.from(s, {}))].map(x => String(x || '').trim()).filter(Boolean))];
+  // F-REH (2026-10-20): the services the client DECLARED, apart: a product category they named (crm, erp, payroll...) is positive topic evidence
+  const targetDeclared = [...new Set([...((site_model || {}).declared_services || []), ...((SM.from(s, {}) || {}).declared_services || [])].map(x => String(x || '').trim()).filter(Boolean))];
+  const targetCtx = FITR.ctx({ own_domain: dom, competitors: comps, heads: lrowsAll.map(l => l.head_keyword), services: targetSvc,
+    topics: [...new Set([...lrowsAll.map(l => String(l.head_keyword || '')), ...lrows.map(l => String(l.keyword || '')), ...targetSvc].map(x => String(x || '').trim()).filter(Boolean))],
+    topic_label: 'what this website sells and the keywords you chose' });
+  const targets_set_aside = [];
+  // F-KW (2026-10-20, finding 2): with fewer than 12 topic words on file the gate refuses nothing ("no evidence, no refusal"), so a site that
+  // lists two services passed every question. Such a target is not called on topic: it says there is not enough information to judge, it is
+  // listed here, and the Content Cadence only ever suggests it (it writes on its own only with positive topic evidence).
+  const targets_unjudged = [];
   const sqAll = qh.filter(q => q.site_id === s.site_id && q.page); const lastPeriod = sqAll.reduce((m, q) => String(q.period_end || '') > m ? String(q.period_end || '') : m, '');
   const sq = sqAll.filter(q => String(q.period_end || '') === lastPeriod);   // the latest Search Console period only
   const stored = new Map(pagesStored.filter(p => p.site_id === s.site_id).map(p => [keyOf(p.url), p]));
@@ -112,7 +133,10 @@ for (const s of sites) {
   for (const g of gaps.filter(g => g && g.prompt && g.kind !== 'brand').slice(0, 10)) {
     const p0 = promptOf.get(g.prompt_id || '') || myPrompts.find(x => String(x.prompt || '').trim() === String(g.prompt).trim()) || {}; const pid = g.prompt_id || p0.prompt_id || qid(g.prompt); const keyword = String(p0.keyword || g.topic || '').toLowerCase().trim() || toks(g.prompt).slice(0, 5).join(' ');
     const target_id = 'ait_' + s.site_id.replace(/^site_/, '') + '_' + pid; const old = existing.get(target_id) || {};
-    const page = pageFor(keyword, g.prompt, pid); if (page) usedPages.add(keyOf(page.url)); const pr = page ? stored.get(keyOf(page.url)) : null;
+    const tg = fitGate(keyword, targetCtx);   // R-K4: judged before it may claim a page, so a refused question never takes another one's refresh
+    const tev = tg.ok ? fitEvidence(keyword, targetCtx.topics || [], { topic_label: 'what this website sells and the keywords you chose', services: targetDeclared }) : null;
+    const unjudged = !!tev && tev.verdict === 'unknown';
+    const page = pageFor(keyword, g.prompt, pid); if (page && (tg.ok || ['writing', 'written'].includes(old.status))) usedPages.add(keyOf(page.url)); const pr = page ? stored.get(keyOf(page.url)) : null;
     // a planned keyword-ladder page for the same search: the Content Cadence writes it with this AI target (one search, one page)
     const hw = new Set(lrows.flatMap(l => String(l.head_keyword || '').toLowerCase().split(/[^a-z0-9]+/)).filter(Boolean)); const kt = (k) => [...new Set(toks(k).filter(w => !hw.has(w)))];
     const same = (a, b) => { const A = kt(a), B = new Set(kt(b)); return A.length > 0 && A.filter(w => B.has(w)).length / A.length >= 0.6; };
@@ -139,20 +163,28 @@ for (const s of sites) {
       const since = old.written_at || old.updated_at || '';
       if (days(since) < CONFIG.stale_writing_days) return null;
       return { since: String(since).slice(0, 10), log: l ? 'the page run is still "' + l.status + '"' : 'no page run on record' }; })();
-    const status = wasWon ? 'queued' : stalled ? 'queued' : ['writing', 'written'].includes(old.status) ? old.status : (kind === 'refresh' && !stale && !weak) ? 'skipped' : (old.status === 'skipped' && old.reason === 'kept by you') ? 'skipped' : 'queued';
+    const status0 = wasWon ? 'queued' : stalled ? 'queued' : ['writing', 'written'].includes(old.status) ? old.status : (kind === 'refresh' && !stale && !weak) ? 'skipped' : (old.status === 'skipped' && old.reason === 'kept by you') ? 'skipped' : 'queued';
+    // R-K4: a target whose keyword this website should not target is never queued for a page. A row already being written (or written) keeps
+    // its state - that page is live work - and is flagged, the same rule fitStored applies to a stored rung.
+    const tLive = ['writing', 'written'].includes(status0);
+    const status = !tg.ok && !tLive ? 'set_aside' : status0;
+    const gateNote = tg.ok ? '' : 'not a search this website should target: ' + tg.detail + ' (' + tg.reason + ')' + (tLive ? '; its page is already being written, so it is kept and flagged' : '; set aside, so no page is written for it') + '. ';
+    const judgeNote = unjudged ? 'Too little is known about what you sell to tell whether this question is part of it, so it is only suggested, never written on its own. ' : '';   // F-REH: one plain sentence (it used to wrap the gate\'s own detail and say the same thing twice)
+    if (unjudged) targets_unjudged.push({ target_id, question: g.prompt, keyword, kind, detail: tev.detail });
+    if (!tg.ok) targets_set_aside.push({ target_id, question: g.prompt, keyword, kind, reason: tg.reason, detail: tg.detail, kept: tLive, note: '"' + keyword + '" ' + gateNote.trim() });
     if (stalled) stalled_targets.push({ target_id, question: g.prompt, since: stalled.since, detail: stalled.log });
     const lostAgain = wasWon ? { target_id, question: g.prompt, won_at: String(old.won_at || '').slice(0, 10), lost_at: String((v && v.checked_at) || iso).slice(0, 10), observed: obsLine(obsOf(pid)) } : null;
     if (lostAgain) won_lost.push(lostAgain);
     targets.push({ target_id, site_id: s.site_id, domain: dom, prompt_id: pid, question: g.prompt, keyword, kind, page_url: page ? page.url : '', page_type: kind === 'refresh' ? '' : (PT[g.kind] || 'Guide'),
       fanout: (g.fanout || []).slice(0, 8).join(' | '), sources_json: JSON.stringify((g.cited_urls || []).slice(0, 6).map(c => ({ u: c.u, t: c.t || '', n: c.n || 1 }))), competitors: (g.competitors || []).slice(0, 8).join(', '),
       engines: engines.join(', '), stage: g.stage || '', value, status,
-      reason: (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (updated ' + String(pr && pr.updated_on || '').slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? '; not updated in 90+ days' : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
+      reason: gateNote + judgeNote + (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (updated ' + String(pr && pr.updated_on || '').slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? '; not updated in 90+ days' : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
       created_at: old.created_at || iso, updated_at: iso, request_id: old.request_id || '', written_at: old.written_at || '', won_at: old.won_at || '' });
     if (page) addPage(page.url, 'target', 'answers "' + g.prompt.slice(0, 80) + '"', { question: g.prompt });
   }
   // targets no longer lost: won (if written) or no longer needed
   const lostIds = new Set(targets.map(t => t.target_id));
-  for (const [id, t] of existing) if (!lostIds.has(id) && !['won', 'skipped'].includes(t.status) && v) {
+  for (const [id, t] of existing) if (!lostIds.has(id) && !['won', 'skipped', 'set_aside'].includes(t.status) && v) {
     // B9-4: absent from the gap list is not the same as named. It can also mean the question was not asked this run (the panel
     // rotates, a request can fail), so the answers of the window decide: at least win_min_answers of them must name the business.
     const o = obsOf(t.prompt_id || ''); const written = ['writing', 'written'].includes(t.status);
@@ -239,7 +271,9 @@ for (const s of sites) {
   const indexnow_key = (kv && /^[a-f0-9]{32}$/.test(kv.key || '')) ? kv.key : hex(32);
   const prevG = growthRows.filter(g => g.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
   const prevEntity = prevG ? parse(prevG.entity_json, null) : null;
-  const entity_due = on_demand || !prevEntity || String(prevEntity.checked_at || '').slice(0, 7) !== month;
+  const siteTz = ST.tzOf(cycleRows, s);
+  const entity_due = on_demand || (cycle ? cycle.monthly
+    : (!prevEntity || !prevEntity.checked_at || ST.monthKey(prevEntity.checked_at, siteTz) !== ST.monthKey(now, siteTz)));
   const label = dom.split('.')[0];
   const brand_names = [...new Set([dom, ...(s.settings.brand_names || []), ...(label.length >= 5 ? [label] : []), s.profile.business_name].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
   // D12: the name a draft signs with comes from the one site model (profile -> homepage Organization / og:site_name -> what the app sent),
@@ -247,10 +281,13 @@ for (const s of sites) {
   // writes: with it on, these prospects go to the Link Builder's qualification and writer (one writer).
   const modelName = SM.name(site_model);
   const business_name = String(s.profile.business_name || '').trim() || (modelName && SM.helpers.bare(modelName) !== dom ? modelName : '');
-  out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, business_name, profile: s.profile,
+  out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, cycle, business_name, profile: s.profile,
     link_builder: !!s.settings.link_builder, services: SM.services(site_model), accreditation: SM.facts(site_model).accreditation,
     // B-G2: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
-    set_aside, set_aside_note: FITR.line(set_aside, 'turned into a question to win or a page to write'),
+    set_aside, set_aside_note: [FITR.line(set_aside, 'turned into a question to win or a page to write'),
+      targets_set_aside.filter(x => !x.kept).length ? targets_set_aside.filter(x => !x.kept).length + ' question(s) to win were set aside, so no page is written for them: ' + targets_set_aside.filter(x => !x.kept).slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ': ' + x.detail + ')').join('; ') + '.' : ''].filter(Boolean).join(' '),
+    targets_unjudged,   // F-KW: questions with too little on file to judge their topic (suggested only)
+    targets_set_aside,   // R-K4: the questions to win whose own keyword the gate refused, with the reason (stored `set_aside`, never written)
     brand_names, competitors: comps.slice(0, 12), ai_pages_month: s.settings.ai_pages_month, run_id: 'grow_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso,
     vis_checked_at: v ? v.checked_at : '', win_min_answers: CONFIG.win_min_answers, won_lost, won_now, stalled_targets, follow_up, follow_up_days: CONFIG.follow_up_days,
     topics: [...new Set(lrowsAll.map(l => String(l.head_keyword || '')).filter(Boolean))].slice(0, 20),   // C-2: the categories RV.providerOf judges a cited site against

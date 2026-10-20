@@ -8,6 +8,7 @@ import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { useApproveOutreach, useDismissOutreach } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { fmtDate } from '@/lib/utils';
 import { Collapsible, IconTile, InfoTip } from '@/components/insight';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -27,6 +28,7 @@ const SETTLED = new Set(['won', 'rejected', 'ignored']);
 
 export function ReadyToSend({ d, onRun }: { d: LinkBuildingData; onRun?: () => void }) {
   const [open, setOpen] = useState<OutreachDraft | null>(null);
+  const day = useCycleDay();
   const live = d.drafts.filter((x) => x.status !== 'not_fit' && !SETTLED.has(x.prospectStatus));
   const notFit = d.drafts.filter((x) => x.status === 'not_fit');
   const drafted = live.filter((x) => x.status === 'drafted' && x.steps.length).length;
@@ -62,7 +64,7 @@ export function ReadyToSend({ d, onRun }: { d: LinkBuildingData; onRun?: () => v
             className="py-9"
             icon={<Send className="size-5" />}
             title="No pitches waiting"
-            description={`The Link Builder looks for new opportunities every Monday at 11:00${d.lastRun ? ` (last search ${fmtDate(d.lastRun)})` : ''}: journalist requests, dead links to replace, resource pages, lists that leave you out. New pitches appear here for your approval.`}
+            description={`The Link Builder looks for new opportunities ${day.every}${d.lastRun ? ` (last search ${fmtDate(d.lastRun)})` : ''}: journalist requests, dead links to replace, resource pages, lists that leave you out. New pitches appear here for your approval.`}
             action={
               onRun ? (
                 <Button variant="secondary" onClick={onRun}>

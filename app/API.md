@@ -142,7 +142,7 @@ cost or a dollar budget in them (`customerAuditDetails`: keys ending in `Usd` or
 | GET | /api/orgs/:orgId | | `Org` |
 | PATCH | /api/orgs/:orgId | `updateOrgSchema` (admin) | `Org` |
 | DELETE | /api/orgs/:orgId | `{ confirm: <company name> }` (owner) | `{ ok }` (stops tracking of its sites in n8n, deletes the company's data in the app) |
-| PATCH | /api/orgs/:orgId/onboarding | `{ step, done? }` (admin) | `Org` |
+| PATCH | /api/orgs/:orgId/onboarding | `{ step, done? }` (admin); `step` is one of `ONBOARDING_STEPS` (shared/src/constants.ts: the wizard's steps in order, `keyword` included, then `done`) | `Org` |
 | PATCH | /api/orgs/:orgId/budget | `{ monthlyBudgetUsd }` (**platform admin only**; anyone else 403 "Limits are in Settings → Credits.") | `Org` |
 | GET | /api/orgs/:orgId/delivery | | `{ settings: DeliverySettings, nextAt, mailReady, signingReady, recent: DeliveryRecord[] }` |
 | PUT | /api/orgs/:orgId/delivery | `DeliverySettings` (+ `webhook.secret`; owner) | the same shape |
@@ -160,12 +160,17 @@ cost or a dollar budget in them (`customerAuditDetails`: keys ending in `Usd` or
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET | /api/orgs/:orgId/sites | | `Site[]` |
-| POST | /api/orgs/:orgId/sites | `createSiteSchema` (admin) | `Site` (409 when another company verified the domain) |
+| POST | /api/orgs/:orgId/sites | `createSiteSchema` (admin) | `Site` (409 `domain_claimed` when another company verified the domain; 409 `engine_id_taken` when another verified or tracked website's domain differs only in dots and dashes, see "One engine site id" below) |
 | GET | /api/orgs/:orgId/sites/:siteId | | `Site` |
 | PATCH | /api/orgs/:orgId/sites/:siteId | `updateSiteSchema` (admin) | `Site` |
+
+Keyword-first (2026-10-19): `Site` also carries `timezone` (IANA, `''` = the engine's America/New_York), `services` ("What do you sell?",
+up to 30 × 2-80 characters), `cycleWeekday` (0 Sunday - 6, `null` = the weekday tracking started on) and `autopilotLevel` (1 | 2 | 3).
+`createSiteSchema` / `updateSiteSchema` accept `timezone` (an unknown zone is a 400) and `services`; both reach the engine with the next
+"Track my site" (`mode: 'track'`), which sends them with `tracking_started_at`.
 | DELETE | /api/orgs/:orgId/sites/:siteId | (admin) | `{ ok }` (also stops tracking in n8n) |
 | GET | /api/orgs/:orgId/sites/:siteId/verification | | `SiteVerificationInfo` |
-| POST | /api/orgs/:orgId/sites/:siteId/verify | `verifySiteSchema` (admin) | `VerifyResult` |
+| POST | /api/orgs/:orgId/sites/:siteId/verify | `verifySiteSchema` (admin) | `VerifyResult`; 409 `engine_id_taken` (as above; a unique index on verified websites settles two verifications at the same moment) |
 | GET | /api/orgs/:orgId/sites/:siteId/google | | `GoogleConnection` |
 | POST | /api/orgs/:orgId/sites/:siteId/admin | `adminActionSchema` (admin, verified site) | `AdminResult` |
 
@@ -209,7 +214,7 @@ Verified sites only (403 `forbidden` otherwise); another company's website is a 
 | GET | …/data/backlinks | `BacklinksData` (v4.10: `refs` = the link ledger with sources, check status and SEO / referral / brand values; `latest.coverage` per source + Google-sample share; `latest.anchors`, `pages`, `wins`, `relChanged`, `compNew`, `lists`; `imports`; `linkGraph`; prospects with score, contact and follow-up drafts; `report.mentions`, `atRisk`, `reclaim`, `drEnabled`) |
 | GET | …/data/alerts | `AlertsData` |
 | GET | …/data/settings | `SiteSettingsData` |
-| GET | …/data/pipeline | `PipelineData` (automations with next/last run, the blog-topic queue, growth loop, 4-week calendar, recent automatic runs; for the tool-form notices: `running` schedule executions, this site's `activeRuns`, `written` pages, `ladders` with their planned pages) |
+| GET | …/data/pipeline | `PipelineData` (automations with next/last run, the page queue, growth loop, 4-week calendar, recent automatic runs; for the tool-form notices: `running` schedule executions and cycle jobs, this site's `activeRuns`, `written` pages, `ladders` with their planned pages; keyword-first: `cycle`, `autopilot`) |
 | GET | …/data/ladders/:ladderId | `LadderDetail` (one keyword ladder: its card plus every page with its state, position history, run / report, volume / difficulty; the timeline with the coming Mondays; clicks and impressions of its published pages by Search Console period; its plan, rank and page reports; cost so far; 404 when the ladder is not one of this domain's) |
 | GET | …/recommendations | `Recommendation[]` |
 
@@ -222,12 +227,14 @@ Verified sites only (403 `forbidden` otherwise); another company's website is a 
 | `thisWeek` | `ThisWeekItem[]`: the schedule runs of the next 7 days in time order (and any running now) with what each touches, e.g. the blog posts with their ladder |
 | `summary` | pages published this month, ladder keywords in the top 10, clicks of ladder pages (latest 28-day period), `creditsUsedThisMonth` (credits, autopilot + on-demand); `spendThisMonthUsd` / `budgetUsd` are deprecated (provider cost; `budgetUsd` is 0) and go once no page reads them |
 | `automation` | `SiteAutomation`: the website's defaults (`_site` row of `seo_ladder_settings`; without it Auto, opportunities Auto, no auto-start, 2 active ladders, pile-up at 3); changed with `PATCH …/automation` |
-| `autoStartEnabled` | the server runs "Choose keywords for me" (`AUTO_START_LADDERS=true`); false = the setting is stored, nothing starts on its own |
+| `autoStartEnabled` | keyword proposals are on for the platform (`AUTO_START_LADDERS`, on by default in production, off elsewhere) |
+| `cycle` | `SiteCycleView` (below): the website's own weekly cycle, weekday, next due time, the cycle being worked on and the coming cycles |
+| `autopilot` | `PipelineAutopilot`: `level` (1-3), `waitingForKeyword` (levels 1-2 with no chosen keyword: nothing is written), `reason` (why the coming cycle writes nothing), `suggestions` (what waits for an OK, each with `itemKey` and `credits`), `refused` (the topic check's refusals with the reason), `dropped` (`{ at, from }` when the auto-pause lowered the level), `notChosen` (ids of Auto ladders whose keyword the client did not choose) |
 | `detected` | `DetectedPage[]` (Phase 4, newest first, one per address): written pages the weekly site report found live by itself (`site_tracker` callback `detected_published`) — shown as "We found your page live at …" in the recent activity; such a page counts as published in its ladder (timeline event `published` with `detected: true`) even before n8n's rows say so. Empty until the n8n part is deployed |
 | `activeRuns` (ladder) | a ladder run whose plan has not arrived: the Pipeline shows a "Planning your ladder …" card and polls every 30 s until the plan (and the ladder's card) is there |
 | `ladders[].keywords` | every page keyword of a ladder (the overlap warning on the ladder form) |
-| `queue.next` / `queue.later` | what the coming Monday run writes, then the rest of its queue — computed by the app's mirror of the Content Cadence (`server/src/services/cadence.ts`, same rules as `Cadence_Plan.js`): ladder pages of the active Auto ladders in priority order (at most `maxActiveLadders`, main page after its support, Direct plans main page first, won / paused / Manual ladders skipped), then opportunity posts when they are Auto; empty while the pile-up guard holds |
-| `queue.suggestions` | opportunity posts while they are Manual (what Auto would write; nothing is written on its own) |
+| `queue.next` / `queue.later` | what the website's next cycle writes, then the rest of its queue — computed by the app's mirror of the Content Cadence (`server/src/services/cadence.ts`, same rules as `Cadence_Plan.js`, held to the shared fixture `n8n/seo-agent/harness/fixtures/cadence_levels.json`): ladder pages of the active Auto ladders the client chose, in priority order (at most `maxActiveLadders`, main page after its support, Direct plans main page first, won / paused / Manual ladders skipped), then what the autopilot level writes on its own; nothing before the first chosen keyword at levels 1-2; empty while the pile-up guard holds. Each item has `itemKey`, `auto` and `credits` |
+| `queue.suggestions` | what waits for the client's OK, with its price in credits (`aiTarget` carries the question, searches, sources and the companies AI names, for "Write it") |
 | `queue.paused` | `{ reason: 'pileup', waiting, max }` when the coming run writes nothing because `max` or more pages wait to be published, else `null` |
 | `needsYou[].writeNow` | on `approve` items (a Manual ladder's next page): the page with its ladder fields, for the Write now dialog |
 
@@ -242,7 +249,8 @@ missing); the Content Cadence reads them every Monday. A ladder that is not one 
 | PATCH | /api/orgs/:orgId/sites/:siteId/ladders/:ladderId | `ladderSettingsSchema`: `{ mode?: 'auto' \| 'manual', status?: 'active' \| 'paused' }` | `LadderCard` (as it is now) |
 | PUT | /api/orgs/:orgId/sites/:siteId/ladders/order | `ladderOrderSchema`: `{ ladderIds }`, every ladder of the website once (400 otherwise) | `LadderCard[]` in the new order (priorities 1..n) |
 | DELETE | /api/orgs/:orgId/sites/:siteId/ladders/:ladderId | | 204 (its `seo_ladders`, `seo_ladder_settings` and `seo_rank_history` rows; written pages stay in the content log and the reports) |
-| PATCH | /api/orgs/:orgId/sites/:siteId/automation | `siteAutomationSchema`: `{ defaultMode?, opportunities?, autoStartLadders?: boolean, maxActiveLadders? (1-5), maxWaiting? (1-10) }` | `SiteAutomation` |
+| PATCH | /api/orgs/:orgId/sites/:siteId/automation | `siteAutomationSchema`: `{ autopilotLevel?: 1 \| 2 \| 3, defaultMode?, opportunities?, autoStartLadders?: boolean, maxActiveLadders? (1-5), maxWaiting? (1-10) }` | `SiteAutomation` (with `autopilotLevel`); **503 `engine_not_ready`** when the engine's `seo_ladder_settings` has no `autopilot_level` column yet (nothing is changed, the app's mirror included; the server logs `engine refused autopilot_level: column missing` with the engine's status and message). Deploy order: the engine's `sync_tables.py` (run by `apply_env.py` / the engine release step) must have added the column before this app version serves |
+| POST | /api/orgs/:orgId/sites/:siteId/ladders/:ladderId/keywords | `{ keyword }` (2-120 characters) — "Add to my ladder": one more planned supporting page of the ladder (rung 1, after its last page), written by the ladder in turn with its links | `LadderCard`; 404 not one of the website's ladders; 409 `duplicate_keyword` when a page of any ladder of the website is already that search; audited `site.ladder_keyword_added` |
 
 - A ladder row the app creates keeps `mode: ''` unless the person chose one (the website's default mode applies) and `status: 'active'`.
 - Priorities: a ladder without a priority that gets a row takes the next number after the existing ones, and so does every ladder
@@ -250,15 +258,11 @@ missing); the Content Cadence reads them every Monday. A ladder that is not one 
 - `status` is only `active` / `paused` here: `won` comes from the rank tracker (below), `queued` is computed, and `stuck` is never
   written (n8n would stop writing the ladder; it is display-only).
 
-- `autoStartLadders` ("Choose keywords for me", the `_site` row's `auto_start`, off by default): with `AUTO_START_LADDERS=true` the
-  server (every 6 hours, `services/autoStart.ts`) starts the next recommended keyword for such a website when fewer active Auto ladders
-  with pages left than `maxActiveLadders` are being written (the cadence mirror's cards: not paused / won / queued). The keyword: the
-  first of `GET …/keywords/recommended` (latest `keyword_strategy` report, at most 90 days old) that is easy or reachable, not
-  `plan_type: none`, overlaps no ladder (main or page keyword), was not off-topic in a keyword check (`fit: 0`) and was never started
-  automatically for the website (nor the same search). Not when: tracking is paused, a ladder run is going, the pile-up guard holds,
-  one was started automatically less than 7 days ago. The run: `createRun` as the company's owner (the same locked budget check: 402 →
-  skipped), mode `ladder` with the website's business fields, 1 page now, no e-mail, title "Started automatically: …", `input.autoStart:
-  true`; its reports count as automatic (`scheduled`).
+- `autopilotLevel` (keyword-first, plan §5.5): 1 only my keywords, 2 my keywords and keep my pages healthy (default), 3 full autopilot.
+  Written to the `_site` row's `autopilot_level` (the engine decides with it) and mirrored on the website; a change is audited
+  (`site.autopilot_level_changed`), updates the forecast and moves an open keyword proposal (announced at level 3, a suggestion below).
+- `opportunities` and `autoStartLadders` are stored for older screens and decide nothing any more: what runs on its own is the level, and
+  keyword proposals (below) replace "Choose keywords for me".
 
 ## Link building (v4.13, `n8n/seo-agent/LINK_BUILDER_SPEC.md`)
 Pitches go out from the company's own mailbox, after a person approves them (or automatically, within a daily limit the owner sets). A mailbox is connected either with an **app password** (SMTP + IMAP; the password is encrypted with `MAILBOX_KEY` and never returned) or, since L4, with **OAuth**: **Microsoft 365** through Graph (sends *and* reads replies) or **Gmail / Google Workspace** (sends only — reading a Gmail inbox needs Google's `gmail.readonly`, a *restricted* scope that requires a CASA security assessment and app verification, so those replies are read in Gmail itself; the Mailboxes tab says so). The refresh token is encrypted like a password, the access token is renewed before it expires, and both are revoked when the mailbox is disconnected. The OAuth apps belong to this installation (`MS_OAUTH_*`, `GMAIL_OAUTH_*` in `app/.env`); with a pair unset that provider is not offered. The server's jobs (`LINK_BUILDER_JOBS`) send inside each mailbox's window (Monday-Friday, its hours and time zone; warm-up 5 / 10 / then its limit; 4-9 minutes apart), read the inbox every 3 minutes (replies, out-of-office, bounces, opt-outs) and stop a sequence at the first reply. The same inbox pass reads **journalist digests** (HARO / Source of Sources) and writes every open request as a `digest` prospect for each verified website (L5); the SEO engine then qualifies and drafts it like any other prospect. A mailbox connected with OAuth sends through its provider's API, and only Microsoft 365 is read. Errors: `{ error, code }`; 409 codes `no_mailbox`, `no_address`, `suppressed`, `consent_needed`; 503 `no_key`.
@@ -306,10 +310,145 @@ studies' services), existing_keywords (its ladders' main and page keywords) }`).
 Keyword checks count everywhere runs do: the credit check and the company's credits (`services/billing.ts`, settled into the credit
 ledger by the cost sync), the platform's dollar guard (`services/spend.ts`), the platform admin list and the platform's daily ceiling.
 
+
+## The website's cycle, Coming up, keyword proposals, research, feedback (keyword-first, 2026-10-19)
+
+`n8n/seo-agent/docs/SCHEDULING_KEYWORDS_PLAN.md` §4, §5, §14.6; types in `shared/src/cycles.ts` (+ the clock in `shared/src/cycle-clock.ts`);
+server `services/cycles.ts`, `comingUp.ts`, `autoStart.ts`, `research.ts`, `autopilot.ts`, routes `routes/autopilot.ts`. Prices are in
+credits only (whole credits, rounded up, as runs are quoted); reasons are customer words. Reading: everyone in the company (`viewer` +);
+deciding: `member` +; the weekday: `admin` +. Verified websites for every write.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | /api/orgs/:orgId/sites/:siteId/cycle | | `SiteCycleView` |
+| PATCH | /api/orgs/:orgId/sites/:siteId/cycle | `cycleWeekdaySchema` `{ weekday: 0-6 }` (admin) | `CycleWeekdayResult` `{ weekday, weekdayName, nextDueAt, timezone }`; 409 `cycle_not_started` before the engine has the website's cycle |
+| GET | /api/orgs/:orgId/sites/:siteId/coming-up | | `ComingUpView` |
+| POST | /api/orgs/:orgId/sites/:siteId/coming-up/decisions | `comingUpDecisionSchema` `{ itemKey, decision: 'skip' \| 'approve', scope?: 'cycle' \| 'always' }` (member) | `ComingUpDecisionResult` `{ item: ComingUpItem, key }`; 409 `engine_site_conflict` when the engine holds the website's site id for another domain |
+| GET | /api/orgs/:orgId/sites/:siteId/keyword-proposals | | `KeywordProposalList` `{ pending, recent, level, enabled }` |
+| POST | /api/orgs/:orgId/sites/:siteId/keyword-proposals/:id/approve | (member) | `{ proposal: KeywordProposalView, runId }` |
+| POST | /api/orgs/:orgId/sites/:siteId/keyword-proposals/:id/skip | (member) | `{ proposal, next: KeywordProposalView \| null }` |
+| POST | /api/orgs/:orgId/sites/:siteId/keyword-proposals/:id/swap | `{ keyword }` (member) | `{ proposal, runId }`; 409 `keyword_not_suitable` with `check` (the `KeywordCheck`, its alternatives) when the typed keyword is not realistic or off topic |
+| POST | /api/orgs/:orgId/sites/:siteId/research/start | (member) | `ResearchStartResult` `{ status, runId, startedAt, free, started }`; 409 `research_not_free` with `credits` |
+| GET | /api/orgs/:orgId/sites/:siteId/keywords/recommended | | `RecommendedKeywords` plus `status: 'none' \| 'running' \| 'ready'`, `startedAt`, `runId` (the running research) and `freeResearch` (the free research is still available) |
+| POST | /api/orgs/:orgId/reports/:reportId/feedback | `contentFeedbackSchema` `{ verdict: 'reject', reason? }` (member) | `ContentFeedbackResult` `{ id, verdict, levelDropped, level }`; 400 when the report is not a written page |
+
+**The cycle** (`GET …/cycle`). Read from the engine's `seo_cycles` row (one per website) and `seo_cycle_jobs` (one per website × cycle ×
+job). `known: false` until the engine has the row: the app's own anchor (`sites.trackingStartedAt`) and zone then say when the cycles run
+(cycle 0 opened at setup). `status` active | paused | off | not_started; `weekday` / `weekdayName` / `localTime` (06:00) / `monthlyDay`
+in the website's `timezone`; `nextDueAt`, `nextPreviewAt` (48 h before; none before cycle 1); `current` and `recent` (`CycleSummary`:
+`cycleKey`, local `date`, `monthly`, `cycle0`, `status` running | done | skipped, `jobs`: `CycleJobView[]` in the cycle's order with
+`label`, `status` (starting | running | done | skipped | refused | failed | gave_up), `attempts`, `reason` in customer words, `dueAt`,
+`startedAt`, `finishedAt`); `upcoming` (`CycleOccurrence[]`: `date`, `at`, `cycle0`, `monthly`, `previewAt`; the first may be due now,
+never more than one overdue); `overdue` (more than 24 h late); `canChangeWeekday` (admin +, and only once the engine has the row: `known: true`; before it PATCH answers 409 `cycle_not_started`). A rank-tracking-only website (ladders, no
+tracked site) shows its other jobs as skipped with the engine's reason.
+
+**The weekday** (`PATCH …/cycle`) writes ONLY `seo_cycles.cycle_weekday` (the engine recomputes `next_due_at` within 5 minutes with the
+same rule) and mirrors it on the website: the next cycle is the chosen weekday at least 3 days after the last one started, at 06:00
+local, so two cycles never run days apart. Audited `site.cycle_weekday_changed` (before / after).
+
+**Coming up** (`GET …/coming-up`). The engine's `cycle_preview` callback (48 h before each cycle, nothing written) is kept per cycle
+(`cycle_previews`, a re-made plan replaces it). `ComingUpView`: `available` (false before the first plan), `cycleKey`, `cycleDate`,
+`scheduledFor`, `receivedAt`, `level`, `pagesPerWeek`, `waitingForKeyword`, `pausedReason` ('' | pileup | site_paused), `reason`,
+`items` (written on their own, `auto: true`, and the pages of Manual / not-chosen ladders that wait, `auto: false`), `suggestions`,
+`refused`, `autoCredits`, `canDecide`, `closed` (the cycle started: decisions are refused with 409). `ComingUpItem`: `itemKey`,
+`keyword`, `source`, `pageType`, `existingPageUrl`, `ladderId`, `rung`, `why`, `auto`, `credits`, `aiTarget` (question, kind, target id,
+searches, sources, competitors), `decision` (the newest: a skip beats an approval, as in the engine), `canSkip`, `canApprove`.
+
+**Decisions** write the engine's `seo_skips` (`SkipRow`, key `skipKey(site_id, scope, cycle_key, itemKey)`; the table is created with
+its columns if missing): `skip` for this cycle or `always`; `approve` for this cycle only (a needs-OK item is then written in the cycle,
+within the pages a week, even before the first keyword; an automatic item cannot be approved: 400). An approval clears an "always skip"
+of the same item. The item must be in the plan (400), the plan must exist (404). Audited `site.coming_up_decided`.
+
+**Keyword proposals** (`services/autoStart.ts`; timer every 10 minutes, `AUTO_START_LADDERS`). When a website has room (fewer active Auto
+ladders with pages to write than `maxActiveLadders` and none queued: a ladder was won, has no pages left, or there is none yet), the best
+recommended keyword (easy or reachable, a plan, no overlap with the ladders, not off topic in a keyword check, never proposed before)
+becomes a proposal: at levels 1-2 a suggestion (`startAt: null`) that waits; at level 3 an announcement that starts `PROPOSAL_WAIT_HOURS`
+(48) later as `chosen_by: system_announced`, on the owner's behalf, as autopilot spend (an e-mail goes to owners and admins). Research
+older than 90 days: level 3 starts a research refresh first (autopilot spend, at most once a week); levels 1-2 get the "Start keyword
+research" recommendation. Approve starts it now as `client_picked`; swap checks the typed keyword first (a keyword check, 5 s) and starts
+it as `client_typed`; skip means never again for this website and proposes the next one. Never for a paused or credit-paused website,
+above `max_active`, or while a ladder run is going (the start waits and says why in `note`). Idempotent by database rules: one open
+proposal per website, one proposal per keyword per website, a claim (pending → starting) before any start; a claim with no run after
+15 minutes is released (or linked to the run it made). `KeywordProposalView`: `id`, `keyword`, `status` (pending | approved | swapped |
+skipped | started | expired | failed), `startAt`, `level`, `why`, `occasion` (room | won | done), `searches`, `difficulty`, `chance`
+("Good chance" / "Takes a few months" / "Hard for your website now"), `planType`, `months`, `creditsPerPage`, `runId`, `swappedFor`,
+`note`, `createdAt`, `decidedAt`, `decidedBy`. Audited `site.keyword_proposal_decided`.
+
+**Research at setup** (D3). `POST …/research/start` starts the website's keyword research (`mode: discover`, never a page) and it is
+free once per website, at setup only: the grant is keyed by the domain (`free_research_grants`), so deleting the website and adding it
+again, or adding it in another company, earns no second one; at setup = tracking not started, or started less than 24 h ago. The free
+run is quoted at 0 credits (the cost sync never charges a run beyond its quote) and skips the company's own credit and budget checks;
+the platform's daily ceiling still applies. The grant is keyed by the **registrable domain** (`registrableDomain`, the engine's rule:
+`blog.example.com` and `example.com` share one; a subdomain of a hosting platform such as `a.wixsite.com` is its own; grants stored by
+the full domain before 2026-10-20 still count). Only an explicit refusal by the engine (it answered 4xx) gives the grant back; a start
+with no answer (the 30 s timeout) or a 5xx keeps it used, because the engine may be running it. Research running → its run
+(`started: false`); fresh research on file → `ready`; otherwise 409 `research_not_free` with its price (start it from the keyword
+research form, `POST …/runs`). Audited `site.research_started`.
+
+**One engine site id** (`services/engineSite.ts`). The engine stores a website under `site_` + its domain with every non-alphanumeric run
+as `-`, so `foo.co.uk` and `foo-co.uk` share `site_foo-co-uk`. The app refuses the second one at create and at verify while the first is
+verified or tracked (409 `engine_id_taken`, the other domain never named), and reads or writes an engine row keyed by site id only when it
+names this website's domain: `seo_cycles` (a row of another domain is ignored, its weekday never written: the PATCH filter carries the
+domain), and the tables with no domain column (`seo_cycle_jobs`, `seo_skips`) only when no `seo_sites` / `seo_cycles` row under the id
+names another domain. A `cycle_preview` is kept only with a valid `scheduled_for`, a cycle key of this website and (when it names one) its
+domain; the latest plan sorts `scheduled_for DESC NULLS LAST`.
+
+**Proposals that did not start.** An approve, a swap, a due level-3 start or a claim found after a crash whose ladder run the engine did not
+take is `failed` with a `note` ("The ladder did not start: the SEO engine did not accept it. It can be proposed again."), never `approved` / `started`; the keyword can
+be proposed again until it failed `MAX_FAILED_STARTS` (2) times (the per-keyword unique index skips failed rows, migration 0019). A
+level-3 proposal that gets a new start time after a level change is announced again with a new e-mail; the start time is written in the
+website's own time zone ("Thursday 22 October at 16:00 (Dubai time)"). Every proposal stores `volume`, `difficultyForYou`, `planType`,
+`months`, `why` in `details` (null or '' when the research did not say).
+
+**Deploy order for the F-KW columns (2026-10-20).** Before this app version goes live, the engine's `sync_tables.py` (run by `apply_env.py`
+or the engine release step) must have added `seo_ladders.chosen_by`, `seo_ladder_settings.rechecked_at`, `seo_skips.source` and
+`seo_skips.ladder_id` (ladder_common.py `LADDER_COLS`, `LADDER_SETTINGS_COLS`, `SKIPS_COLS`). The app writes `rechecked_at` after a passed
+fresh check and `source` / `ladder_id` on every "Coming up" approval; n8n refuses a write to a column it does not have, so on an engine
+without them a decision answers 502 and a re-check is recorded as failed (and tried again on the next plan) until the columns exist.
+
+**The fresh keyword check of an old plan** (`services/autopilot.ts` `recheckActivated`, plan §5.6, F-KW). A ladder planned more than 60
+days ago that never had a page written waits in the Content Cadence for one fresh keyword check. The app runs it for every ladder the
+cadence lists in `recheck_ladders` (in a `cycle_preview` or `content_cadence` callback), and for a ladder that was queued in the previous
+plan and is written now. A pass writes `rechecked_at` (ISO) on the ladder's `seo_ladder_settings` row, so the next cycle writes its first
+page; a fall pauses the ladder and the client is asked (`recheck:<ladderId>` in Needs you). One check per ladder (`ladder_rechecks`); it
+runs again only when it failed to run, or when its pass is more than 60 days old. "Coming up" marks those pages `recheck: true` ("Checking
+again"; not approvable, the check decides first) and lists `recheckLadders`; its view also carries `approvedNotWritten` (each approval the
+cycle does not write, with a customer sentence: `ambiguous` = an older approval that names only a keyword two different pages share) and
+`budget` (`pagesPerWeek`, `spent`, `room`, `ladderStartWindow`: ladder starts count from the previous cadence run). A "Coming up" approval
+writes the item's `source` and `ladder_id` on its `seo_skips` row, so it approves that page only; a skip names the keyword.
+"Not what I wanted" finds the page's content-log row by its request id and keyword (pages of one ladder start share a request id).
+
+**Keyword checks the system starts** (the queued-ladder re-check) act for the company's first active owner (not deactivated, not
+suspended), are stored `keyword_checks.automatic = true` (migration 0019) and are filed as the website's autopilot spend (`origin:
+schedule`), never the owner's on-demand spend.
+
+**"Not what I wanted"** (`POST /reports/:reportId/feedback`). One rejection per written page (`content_feedback`, unique per report; a
+second is answered with the first). A page the autopilot chose on its own (a cadence page, `cad_` run, not a ladder page and not
+approved) counts toward the auto-pause: `REJECT_LIMIT` (2) rejections among the last `REJECT_WINDOW` (5) such pages drop the level to 1,
+the website records when and from which level (`autopilot.dropped`, a Needs-you item until it is raised again) and owners and admins get
+an e-mail. The drop is decided before the rejection is stored and the level is written to the engine first: when the engine refuses the
+write the answer is 502 `engine_failed` (or 503 `engine_not_ready`) and nothing is kept, so a retry decides again. Audited
+`site.content_rejected` and `site.autopilot_paused`. The nudge: at level 1, 5 published or approved pages offer
+level 2 (a Needs-you item, never switched automatically).
+
+**Needs you** (in `PipelineData.needsYou`, kinds added): `keyword` (`keyword:first` "Choose the keyword you want to be found for" while
+waiting; `keyword:next` when every ladder is won or has no pages left), `proposal` (`proposal:<id>`), `recheck` (`recheck:<ladderId>`:
+a queued ladder planned more than `QUEUED_RECHECK_DAYS` (60) ago got one fresh keyword check when it became active and was paused
+because its verdict fell: not realistic now, or off topic), `level` (`level:dropped`, `level:nudge`).
+
+**E-mails** (the account mailer, branded, plain text and HTML, a white-label agency's sender for its clients): the weekly "Coming up"
+(once per cycle, to owners and admins: what is written on its own and what waits, in credits), each level-3 announcement, the auto-pause.
+
 ## Runs, reports, files
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | POST | /api/orgs/:orgId/runs | `RunInput` (member; one schema per `mode`, see `RUN_SCHEMAS`) | `Run` (status `accepted`, or `failed` with `error`) |
+
+Keyword-first fields (§14.5): `track` takes `timezone` (IANA; 400 when unknown) and `services` (replace the stored list); the server adds
+`tracking_started_at` (the website's first tracking, kept on every re-save: the anchor of its weekly cycle, which the engine creates
+itself; the app never calls the Site Kickoff). `ladder` takes `chosenBy` (`client_typed` default, `client_picked`; `system_announced` only
+from the server's announcement) and `ladderMode` (`auto` | `manual`; a Manual ladder writes nothing at start; admins only, defaults to
+the flow's `ladderPrefs.mode`). `discover` never asks for a page (`receiveContent` is accepted and stored false).
 | GET | /api/orgs/:orgId/runs?siteId=&mode=&status=&cursor=&limit= | | `Page<Run>` |
 | GET | /api/orgs/:orgId/runs/:runId | | `{ run: Run, reports: Report[] }` |
 | GET | /api/orgs/:orgId/reports?siteId=&stage=&limit=&before= | | `Report[]` |
@@ -365,6 +504,7 @@ keyword data and stays.
 | PUT | /api/orgs/:orgId/billing/limits | owner | `CreditLimits` `{ onDemandMonthly, autopilotMonthly, reserveForAutopilot }` |
 | POST | /api/orgs/:orgId/billing/requests | admin + | `{ packId, note }` → a pack request (at most 3 waiting) |
 | DELETE | /api/orgs/:orgId/billing/requests/:id | admin + | cancels a waiting request |
+| GET | /api/orgs/:orgId/billing/invoices/:invoiceId/pdf | viewer + | the invoice as a PDF (the company's own only; the list is `BillingOverview.invoices`) |
 | GET | /api/orgs/:orgId/costs | viewer + | the cost table plus `creditRate` (credits per unit of its figures) — what the forms turn into quotes |
 
 **A run** (`Run.credits`, `RunV1.credits`, `RunCredits` in `shared/src/api.ts`): `{ quoted, charged, state, capped }` —
@@ -784,6 +924,13 @@ checking it and the cadence writes no more pages for it. A `ladder_plan` callbac
 Runs); a `site_tracker` callback with `detected_published: [{ keyword, url, ladder_id, matched_by, source }]` (Phase 4) is stored as
 usual and read by the Pipeline (`detected`), the ladder detail and the site-report view ("We found your page live at …").
 
+Keyword-first: every callback of a job of the website's cycle carries `trigger: 'cycle'`, `cycle_key`, `cycle_date` and a request id
+`cyc_<site>_<YYYYMMDD>_<job>`; it never matches an app run (even one with the same id) and is stored as a scheduled report of the
+website; its ledger row `cycle:<cycle_key>:<job>` is autopilot spend (as `schedule:` rows are). A `cycle_preview` callback (status
+`progress`) is kept as the "Coming up" plan and e-mailed once; a `content_cadence` or `cycle_preview` callback whose queued ladder is now
+written triggers the re-check above; a won ladder and a `keyword_strategy` callback look for the next keyword; `site_tracker_setup`'s
+`cycle.cycle_weekday` is kept on the website.
+
 ## Platform admin (e-mails in `PLATFORM_ADMIN_EMAILS`)
 | Method | Path | Body | Returns |
 |---|---|---|---|
@@ -806,7 +953,10 @@ charged the platform, **revenue** = payments recorded with credit grants, **marg
 | GET | /api/admin/companies/:id | `?period` | `AdminCompanyDetail` (members, websites with their cost, cost by mode, daily, the 20 newest runs, the 100 newest credit entries) |
 | PATCH | /api/admin/companies/:id | `adminCompanyUpdateSchema` (`monthlyBudgetUsd`, `disabled`, `creditsEnforced`, `name`) | `AdminCompanyDetail`; also written to the company's own audit log (`company.admin_changed`) |
 | GET | /api/admin/companies/:id/credits | | `CreditEntry[]` newest first, each with `balanceAfter` |
-| POST | /api/admin/companies/:id/credits | `adminCreditSchema` (`kind` grant / adjust / refund, `credits`, `paidUsd` grants only, `note`) | `CreditEntry` |
+| POST | /api/admin/companies/:id/credits | `adminCreditSchema` (`kind` grant / adjust / refund, `credits`, `paidUsd` grants only, `note`, `notify` default true) | `CreditEntry`; a grant with `paidUsd > 0` issues an invoice (`ref.invoice`); `ref.notified` = who was e-mailed, or why nobody was |
+| GET | /api/admin/companies/:id/invoices | | `InvoiceView[]` newest first |
+| GET | /api/admin/invoices/:id/pdf | | the invoice as a PDF |
+| POST | /api/admin/invoices/:id/send | | e-mails it again (PDF attached) to the company's owners and admins of today → `InvoiceView`; 409 when nobody could be reached |
 | DELETE | /api/admin/companies/:id | `{ confirm: <slug> }` (`adminDeleteCompanySchema`) | `{ ok }` — the same deletion as the owner's (verified websites stop in the engine first; an unreachable engine is logged, the deletion goes on); 409 `agency_has_clients`; its cost history stays as unattributed |
 | GET | /api/admin/export/companies.csv | `?period` | `text/csv`: every company with the money and credit columns; text cells that start with `= + - @`, tab or CR are prefixed with `'` |
 | GET | /api/admin/users | `?period&q` | `AdminUserRow[]` (cost = runs the person started; schedules belong to the company) |

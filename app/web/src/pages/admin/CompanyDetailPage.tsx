@@ -4,11 +4,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { ArrowLeft, Ban, CalendarClock, ChevronDown, Coins, Inbox, Pencil, Play, Plus, RotateCcw, SlidersHorizontal, Trash2, TrendingUp, Wallet } from 'lucide-react';
-import { ADMIN_ROLES, CREDIT_SOURCE_LABEL, ROLE_LABELS, type AdminCompanyDetail, type AdminMember, type AdminModeCost, type AdminPurchaseRequest, type AdminSiteRow, type CreditEntry, type CreditLot } from '@seo/shared';
+import { ArrowLeft, Ban, CalendarClock, ChevronDown, Coins, Download, Inbox, Pencil, Play, Plus, RotateCcw, Send, SlidersHorizontal, Trash2, TrendingUp, Wallet } from 'lucide-react';
+import { ADMIN_ROLES, CREDIT_SOURCE_LABEL, ROLE_LABELS, type AdminCompanyDetail, type AdminMember, type AdminModeCost, type AdminPurchaseRequest, type AdminSiteRow, type CreditEntry, type CreditLot, type InvoiceView } from '@seo/shared';
 import { CountUp, MetricCard, Stagger } from '@/components/insight';
 import { Badge, StatusBadge } from '@/components/ui/badge';
-import { Button, ButtonLink } from '@/components/ui/button';
+import { Button, ButtonLink, buttonClass } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { Field, Input, Select } from '@/components/ui/field';
@@ -22,7 +22,7 @@ import { pageTitle } from '@/components/layout/Brand';
 import { useDocumentTitle } from '@/components/layout/useDocumentTitle';
 import { useAdminPeriod } from './AdminLayout';
 import { AdminCard, CompanyStatus, FlushTable, ConfirmDialog, CostSplitCell, CreditDialog, DailyCostChart, Money, Num, RowTile, SplitLine, type CreditKind, type CreditRequestPreset } from './_components/kit';
-import { useAdminCompanyAbsorbed, useAdminCompanyLots } from './_components/creditQueries';
+import { useAdminCompanyAbsorbed, useAdminCompanyInvoices, useAdminCompanyLots, useAdminSendInvoice } from './_components/creditQueries';
 import { RunsTable } from './_components/runs';
 import { adminPaths, credits, marginPct, modeLabel, money, nextFirstOfMonth, PERIOD_LABELS, signedCredits, signedMoney, withPeriod } from './lib';
 import { CreditBookCard, useAdminUnits } from './_components/units';
@@ -262,6 +262,8 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
         </AdminCard>
 
         <LotsCard c={c} />
+
+        <InvoicesCard c={c} />
 
         <AdminCard title="Websites" description={`${c.sites_.length} website${c.sites_.length === 1 ? '' : 's'}`} bodyClassName="px-0 pb-0 pt-3">
           <FlushTable rows={c.sites_} columns={siteCols} rowKey={(s) => s.id} initialSort={{ key: 'cost', dir: 'desc' }} empty="No website yet." />
@@ -506,6 +508,72 @@ function LotsCard({ c }: { c: AdminCompanyDetail }) {
         </div>
       ) : (
         <FlushTable rows={q.data ?? []} columns={cols} rowKey={(l) => l.id} pageSize={10} empty="No credits have arrived yet." />
+      )}
+    </AdminCard>
+  );
+}
+
+/** the company's invoices: one per paid grant, e-mailed with it; download the PDF or send it again to today's owners and admins */
+function InvoicesCard({ c }: { c: AdminCompanyDetail }) {
+  const q = useAdminCompanyInvoices(c.id);
+  const send = useAdminSendInvoice(c.id);
+  const cols: Column<InvoiceView>[] = [
+    { key: 'number', header: 'Invoice', sortValue: (i) => i.number, cell: (i) => <Num className="whitespace-nowrap text-ink">{i.number}</Num> },
+    { key: 'at', header: 'Issued', sortValue: (i) => i.issuedAt, cell: (i) => <Num className="whitespace-nowrap text-ink-2">{fmtDate(i.issuedAt)}</Num> },
+    { key: 'credits', header: 'Credits', align: 'right', sortValue: (i) => i.credits, cell: (i) => <Num>{credits(i.credits)}</Num> },
+    { key: 'amount', header: 'Paid', align: 'right', sortValue: (i) => i.amountUsd, cell: (i) => <Money value={i.amountUsd} /> },
+    {
+      key: 'emailed',
+      header: 'E-mailed',
+      hideOnMobile: true,
+      cell: (i) =>
+        i.emailedAt ? (
+          <span className="block min-w-[160px] text-[13px] text-ink-2">
+            {fmtDate(i.emailedAt)}
+            <span className="block truncate text-xs text-ink-3">{i.emailedTo.join(', ')}</span>
+          </span>
+        ) : (
+          <Badge tone="warning">Not sent</Badge>
+        ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      cell: (i) => (
+        <span className="flex justify-end gap-1.5">
+          <a href={`/api/admin/invoices/${i.id}/pdf`} className={buttonClass('secondary', 'sm')} download={`${i.number}.pdf`} aria-label={`Download invoice ${i.number}`}>
+            <Download className="size-4" aria-hidden />
+            PDF
+          </a>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Send className="size-4" />}
+            loading={send.isPending && send.variables === i.id}
+            onClick={() =>
+              send.mutate(i.id, {
+                onSuccess: (r) => toast.success(`Invoice ${r.number} sent to ${r.emailedTo.join(', ')}`),
+                onError: (e) => toast.error(errorMessage(e)),
+              })
+            }
+            aria-label={`Send invoice ${i.number} again`}
+          >
+            Send again
+          </Button>
+        </span>
+      ),
+    },
+  ];
+  return (
+    <AdminCard title="Invoices" description="One for every grant that recorded a payment, numbered per year. E-mailed with its PDF to the owners and admins when issued." bodyClassName="px-0 pb-0 pt-3">
+      {q.isError && <Callout tone="warning" className="mx-5 mb-3">Could not read the invoices: {errorMessage(q.error)}</Callout>}
+      {q.isPending ? (
+        <div className="px-5 pb-5">
+          <Skeleton className="h-16" />
+        </div>
+      ) : (
+        <FlushTable rows={q.data ?? []} columns={cols} rowKey={(i) => i.id} initialSort={{ key: 'at', dir: 'desc' }} pageSize={10} empty="No invoice yet. Add credits with a payment to issue one." />
       )}
     </AdminCard>
   );

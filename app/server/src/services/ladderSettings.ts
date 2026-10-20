@@ -1,4 +1,6 @@
 import {
+  DEFAULT_AUTOPILOT_LEVEL,
+  cycleNorm,
   LADDER_SETTINGS_COLUMNS,
   LADDER_SITE_ROW,
   n8nSiteId,
@@ -10,8 +12,8 @@ import {
   type SiteAutomationInput,
 } from '@seo/shared';
 import type { SiteRow } from '../db/schema';
-import { badRequest, notFound } from '../lib/errors';
-import { deleteRows, ensureTable, siteRows, upsertRow } from '../n8n/client';
+import { badRequest, conflict, HttpError, notFound } from '../lib/errors';
+import { deleteRows, EngineWriteError, ensureTable, insertRows, siteRows, upsertRow } from '../n8n/client';
 import { siteAutomation } from './ladders';
 
 // The person's controls over the keyword ladders of a website, written to n8n's seo_ladder_settings (one row per ladder, plus the
@@ -72,6 +74,7 @@ function newLadderRow(site: { domain: string }, ladderId: string, ladders: Ladde
     source: 'app',
     opportunities: '',
     auto_start: false,
+    chosen_by: '',
     created_at: now,
     updated_at: now,
     ...extra,
@@ -167,8 +170,9 @@ export function automationWrite(o: { site: { domain: string }; settings: LadderS
     ...(o.change.maxActiveLadders != null ? { maxActiveLadders: o.change.maxActiveLadders } : {}),
     ...(o.change.maxWaiting != null ? { maxWaiting: o.change.maxWaiting } : {}),
     ...(o.change.autoStartLadders != null ? { autoStartLadders: o.change.autoStartLadders } : {}),
+    ...(o.change.autopilotLevel != null ? { autopilotLevel: o.change.autopilotLevel } : {}),
   };
-  const cols = { mode: o.change.defaultMode, opportunities: o.change.opportunities, max_active: o.change.maxActiveLadders, max_waiting: o.change.maxWaiting, auto_start: o.change.autoStartLadders };
+  const cols = { mode: o.change.defaultMode, opportunities: o.change.opportunities, max_active: o.change.maxActiveLadders, max_waiting: o.change.maxWaiting, auto_start: o.change.autoStartLadders, autopilot_level: o.change.autopilotLevel };
   const exists = o.settings.some((r) => r.ladder_id === LADDER_SITE_ROW);
   if (exists) return { insert: false, automation: next, data: settingsData({ ...cols, updated_at: o.now }) };
   return {
@@ -187,6 +191,8 @@ export function automationWrite(o: { site: { domain: string }; settings: LadderS
       auto_start: next.autoStartLadders,
       max_active: next.maxActiveLadders,
       max_waiting: next.maxWaiting,
+      autopilot_level: next.autopilotLevel ?? DEFAULT_AUTOPILOT_LEVEL,
+      chosen_by: '',
       created_at: o.now,
       updated_at: o.now,
     }),
@@ -226,6 +232,20 @@ export async function updateLadderSettings(site: SiteRow, ladderId: string, chan
   await apply(site, ladderSettingsWrites({ site, ...cur, ladderId, change, now: new Date().toISOString() }));
 }
 
+/**
+ * F-KW (plan §5.6): the app's fresh keyword check of a ladder planned 60+ days ago PASSED: `rechecked_at` on its settings row, so the
+ * Content Cadence writes its first page. Only this column changes (a new row follows the website's default mode and keeps no priority).
+ */
+export function recheckedWrite(o: { site: { domain: string }; ladders: LadderRow[]; settings: LadderSettingsRow[]; ladderId: string; at: string; now: string }): SettingsWrite {
+  return write(o.site, o.ladders, settingsByLadder(o.settings).get(o.ladderId), o.ladderId, { rechecked_at: o.at }, o.now);
+}
+
+export async function markLadderRechecked(site: SiteRow, ladderId: string, at: string): Promise<void> {
+  const cur = await current(site);
+  assertLadderOfSite(cur.ladders, ladderId);
+  await apply(site, [recheckedWrite({ site, ...cur, ladderId, at, now: new Date().toISOString() })]);
+}
+
 export async function reorderLadders(site: SiteRow, ladderIds: string[]): Promise<void> {
   const cur = await current(site);
   await apply(site, ladderOrderWrites({ site, ...cur, ladderIds, now: new Date().toISOString() }));
@@ -241,11 +261,37 @@ export async function deleteLadder(site: SiteRow, ladderId: string): Promise<voi
   await deleteRows('rankHistory', f);
 }
 
-export async function updateSiteAutomation(site: SiteRow, change: SiteAutomationInput): Promise<SiteAutomation> {
+type ErrLog = { error: (o: object, m: string) => void };
+const consoleErr: ErrLog = { error: (o, m) => console.error(JSON.stringify({ level: 'error', msg: m, ...o })) };
+
+/**
+ * Whether the engine refused a `_site` write because its seo_ladder_settings has no `autopilot_level` column yet (pure). The column is
+ * added by the engine's sync_tables.py; until it has run, n8n answers 4xx naming the column (or an unknown column).
+ */
+export function missingLevelColumn(err: unknown, data: Record<string, unknown>): boolean {
+  if (!(err instanceof EngineWriteError) || !('autopilot_level' in data)) return false;
+  return err.engineStatus >= 400 && err.engineStatus < 500 && /autopilot_level|column/i.test(err.engineMessage);
+}
+
+export const LEVEL_COLUMN_MISSING =
+  'Autopilot levels are not switched on in the SEO engine yet, so nothing was changed. Our team has been told. Try again later.';
+
+export async function updateSiteAutomation(site: SiteRow, change: SiteAutomationInput, log: ErrLog = consoleErr): Promise<SiteAutomation> {
   const settings = await siteRows<LadderSettingsRow>('ladderSettings', site.domain, { max: 500, fresh: true });
   const w = automationWrite({ site, settings, change, now: new Date().toISOString() });
   await ensureTable('ladderSettings', LADDER_SETTINGS_COLUMNS);
-  await upsertRow('ladderSettings', [byLadder(LADDER_SITE_ROW), byDomain(site.domain)], w.data);
+  try {
+    await upsertRow('ladderSettings', [byLadder(LADDER_SITE_ROW), byDomain(site.domain)], w.data);
+  } catch (err) {
+    // the deploy order: the engine's sync_tables.py adds seo_ladder_settings.autopilot_level; an engine without it refuses the write
+    if (missingLevelColumn(err, w.data)) {
+      const e = err as EngineWriteError;
+      log.error({ site: site.domain, table: e.table, engineStatus: e.engineStatus, engineMessage: e.engineMessage, fix: 'run the engine sync_tables.py (seo_ladder_settings.autopilot_level)' }, 'engine refused autopilot_level: column missing');
+      throw new HttpError(503, LEVEL_COLUMN_MISSING, 'engine_not_ready');
+    }
+    log.error({ site: site.domain, err: String((err as Error)?.message ?? err) }, 'website automation not saved in the engine');
+    throw err;
+  }
   return w.automation;
 }
 
@@ -265,4 +311,44 @@ export async function markLadderWon(site: SiteRow, ladderId: string): Promise<bo
   if (!w) return false;
   await apply(site, [w]);
   return true;
+}
+
+/**
+ * Keyword-first "Add to my ladder" (SCHEDULING_KEYWORDS_PLAN.md §5.3): a search on a ladder's topic becomes one more planned supporting
+ * page of that ladder (rung 1, after its last page), so the client's own ladder writes it in turn, with the ladder's links, instead of a
+ * page of its own. Pure: the row to insert, or the reason it is refused (the ladder is not the website's; a page of any ladder of the
+ * website is already this search: one search, one page).
+ */
+export function ladderKeywordRow(o: { site: Pick<SiteRow, 'domain' | 'country'>; ladders: LadderRow[]; ladderId: string; keyword: string; now: string }): Record<string, unknown> {
+  const mine = o.ladders.filter((r) => r.ladder_id === o.ladderId);
+  if (!mine.length) throw notFound('Keyword ladder not found');
+  const k = cycleNorm(o.keyword);
+  const dup = o.ladders.find((r) => cycleNorm(r.keyword) === k || cycleNorm(r.head_keyword) === k);
+  if (dup) throw conflict(`"${dup.keyword || o.keyword}" is already a page of your ladder "${dup.head_keyword}": one search needs one page.`, 'duplicate_keyword');
+  const head = mine.find((r) => Number(r.rung) === 4)?.keyword || mine[0].head_keyword || '';
+  return {
+    ladder_id: o.ladderId,
+    domain: o.site.domain,
+    head_keyword: head,
+    rung: 1,
+    page_no: Math.max(0, ...mine.map((r) => Number(r.page_no) || 0)) + 1,
+    keyword: o.keyword.trim().slice(0, 100),
+    supporting: '',
+    page_type: 'Guide',
+    target_url: '',
+    page_exists: false,
+    status: 'planned',
+    months: '',
+    start_date: mine.map((r) => String(r.start_date || '')).filter(Boolean).sort()[0] || o.now,
+    country: mine[0].country || o.site.country,
+  };
+}
+
+/** POST .../ladders/:ladderId/keywords {keyword}: adds the planned page to the ladder in the engine. */
+export async function addKeywordToLadder(site: SiteRow, ladderId: string, keyword: string): Promise<Record<string, unknown>> {
+  const cur = await current(site);
+  const row = ladderKeywordRow({ site, ladders: cur.ladders, ladderId, keyword, now: new Date().toISOString() });
+  const ok = await insertRows('ladders', [row]);
+  if (!ok) throw new HttpError(502, 'The SEO engine did not save the page. Try again in a minute.', 'engine_failed');
+  return row;
 }

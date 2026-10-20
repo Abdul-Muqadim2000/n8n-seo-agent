@@ -1,4 +1,5 @@
 import { useEngineCal } from '@/lib/engine-cal';
+import { useCycleDay } from '@/lib/cycle-day';
 import { PRICES } from '@/lib/prices';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -35,7 +36,7 @@ export default function ContentPage() {
       <PageHeader
         icon={<PenSquare />}
         title="Content"
-        description="Pages the engine has written for this website, what is live, the weekly blog cadence and the proof that makes pages trustworthy."
+        description="Pages the engine has written for this website, what is live, the weekly pages for your keyword and the proof that makes pages trustworthy."
         actions={
           <>
             <ToolButton mode="published" icon={<CheckCircle2 className="size-4" />}>
@@ -102,6 +103,7 @@ function reportsByKeyword(reports: readonly Report[]) {
 
 function Content({ d }: { d: ContentData }) {
   const { org, site, page, can, tool } = useSitePage();
+  const day = useCycleDay();
   const [view, setView] = useState<'board' | 'table'>('board');
   const [source, setSource] = useState('all');
   const [unpublish, setUnpublish] = useState<ContentItem | null>(null);
@@ -132,7 +134,7 @@ function Content({ d }: { d: ContentData }) {
             ? `${plural(waiting.length, 'page is', 'pages are')} written but not live${stale.length ? `, ${stale.length} for more than a week` : ''}. Nothing ranks before it is published.`
             : d.items.length
               ? 'Every written page is live and tracked.'
-              : 'Pages appear here when you write one for a keyword, when a keyword ladder starts its pages, or when the weekly blog cadence writes its posts.'
+              : 'Pages appear here when you write one for a keyword, when a keyword ladder starts its pages, or when the weekly run writes the next page for your keyword.'
         }
         aside={
           oldest && can('member') ? (
@@ -225,7 +227,7 @@ function Content({ d }: { d: ContentData }) {
             <EmptyState
               icon={<PenSquare className="size-5" />}
               title="No pages written yet"
-              description="Pages appear here when you write one for a keyword, when a keyword ladder starts its pages, or when the weekly blog cadence writes its posts every Monday."
+              description={`Pages appear here when you write one for a keyword, when a keyword ladder starts its pages, or when the weekly run writes the next page for your keyword ${day.every}.`}
               action={
                 <>
                   <ToolButton mode="keyword" variant="primary">
@@ -233,7 +235,7 @@ function Content({ d }: { d: ContentData }) {
                   </ToolButton>
                   {can('admin') && (
                     <ButtonLink to={page('settings/tracking')} variant="secondary">
-                      Turn on weekly blog posts
+                      Turn on weekly pages
                     </ButtonLink>
                   )}
                 </>
@@ -505,11 +507,12 @@ function UnpublishDialog({ item, onClose }: { item: ContentItem; onClose: () => 
 
 function CadenceCard({ cadence, on }: { cadence: ContentData['cadence']; on: boolean }) {
   const { can, page } = useSitePage();
+  const day = useCycleDay();
   return (
     <Panel
-      title="Weekly blog posts"
+      title="Pages a week for your keyword"
       icon={<CalendarClock className="size-4" />}
-      description="Content cadence: written every Monday at 10:00"
+      description={day.name ? `Written every ${day.name} in your weekly run` : 'Written in your weekly run'}
       actions={
         can('admin') ? (
           <ButtonLink to={page('settings/tracking')} size="sm" variant="secondary">
@@ -526,14 +529,14 @@ function CadenceCard({ cadence, on }: { cadence: ContentData['cadence']; on: boo
           <span className="font-display text-3xl leading-none font-semibold tracking-[-0.01em] text-ink">
             <CountUp value={on ? cadence!.pagesPerWeek : 0} />
           </span>
-          <span className="text-sm text-ink-2">{on ? (cadence!.pagesPerWeek === 1 ? 'post per week' : 'posts per week') : 'posts per week (off)'}</span>
+          <span className="text-sm text-ink-2">{on ? (cadence!.pagesPerWeek === 1 ? 'page a week' : 'pages a week') : 'pages a week (off)'}</span>
           {cadence?.status === 'paused' && <StatusBadge tone="warning">Paused</StatusBadge>}
         </div>
       </div>
       <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
         {on
-          ? 'Each Monday the engine picks the next pages in this order: the next rung of your keyword ladder, queries in striking distance (positions 4-20), then rising Google Trends searches. Each post arrives as HTML, Markdown and meta.json, ready to publish.'
-          : `Turn on 1-3 posts a week and the engine writes them every Monday from your ladder, striking-distance queries and rising searches, at about ${PRICES.page()} per post.`}
+          ? `${day.name ? `Each ${day.name}` : 'Each week'} the engine writes the next pages of the keyword ladders you chose. Other ideas, such as queries in striking distance (positions 4-20) and rising Google Trends searches, come as suggestions that wait for your OK unless your autopilot level covers them. Each page arrives as HTML, Markdown and meta.json, ready to publish.`
+          : `Turn on 1-3 pages a week and the engine writes them ${day.every} for the keywords you chose, at about ${PRICES.page()} per page.`}
       </p>
     </Panel>
   );

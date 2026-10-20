@@ -273,15 +273,16 @@ def callback_after_settle(wfobj, wiring, has_cb, post, v5_dir, declared_ends):
     hx, hy = nodes[has_cb]['position']
     wfobj['nodes'].append(_node(join, 'n8n-nodes-base.merge', 3.2, {'mode': 'append'}, [hx - 440, hy + 120]))
     # C-1 (re-rating 2026-10-17): the schedule of this workflow, so its callback can say the run was late (CU.lateRun)
-    from ladder_common import _schedule_of
+    from ladder_common import _schedule_of, site_time_src
     sched = dict(_schedule_of(wfobj) or {})
     if sched.get('cron'):
         _mn, _hr, _dom, _mon, _dow = sched['cron'].split()
         sched['kind'] = 'monthly' if _dom != '*' else ('weekly' if _dow != '*' else 'daily')
     code = (_read(v5_dir, 'Callback_Ledger.js').replace('/*__LEDGER_CB__*/', ledger_cb_src(v5_dir))
             .replace('/*__CATCHUP__*/', _read(v5_dir, '_catchup.js').rstrip('\n')).replace('__SCHED_JSON__', json.dumps(sched))
+            .replace('/*__SITE_TIME__*/', site_time_src())   # 2026-10-19: a cycle run's callback carries its cycle and is dated by it (ST)
             .replace('__SETTLE__', settle_code).replace('__HAS_CALLBACK__', has_cb).replace('__PREDS__', json.dumps(preds)))
-    for ph in ('/*__LEDGER_CB__*/', '/*__CATCHUP__*/', '__SCHED_JSON__', '__SETTLE__', '__HAS_CALLBACK__', '__PREDS__'):
+    for ph in ('/*__LEDGER_CB__*/', '/*__CATCHUP__*/', '/*__SITE_TIME__*/', '__SCHED_JSON__', '__SETTLE__', '__HAS_CALLBACK__', '__PREDS__'):
         assert ph not in code, ph + ' left in ' + cbl
     wfobj['nodes'].append(_node(cbl, 'n8n-nodes-base.code', 2, {'jsCode': code}, [hx - 220, hy + 120]))
     for p, i in preds:
@@ -311,7 +312,9 @@ def bake_ran_late(wfobj, v5_dir):
     """F-L (2026-10-18, C-1 follow-up): fill RAN_LATE_MARK in every Code node of `wfobj` with the catch-up kit, the workflow's own SCHED
     and the RL kit (v5/code/_ran_late.js). Returns the names of the nodes it baked (asserted by the caller)."""
     sched = schedule_with_kind(wfobj)
-    assert sched.get('cron'), 'F-L: ' + str(wfobj.get('name')) + ' carries the ran-late mark but has no schedule to be late against'
+    # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the Audit Scheduler has no cron any more - it runs in each website's monthly cycle - so its
+    # notice is late against the cycle's due time (`trigger: 'cycle'`, `scheduled_for`; CU.lateRun) or the catch-up's payload, and SCHED is
+    # empty. A workflow WITH a cron still bakes it, exactly as before.
     src = _read(v5_dir, '_catchup.js').rstrip('\n') + '\nconst SCHED = ' + json.dumps(sched) + ';\n' + _read(v5_dir, '_ran_late.js').rstrip('\n')
     baked = []
     for n in wfobj['nodes']:

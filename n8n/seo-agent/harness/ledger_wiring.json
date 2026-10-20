@@ -205,7 +205,7 @@
      "settle": "Ledger Settle (Growth)"
     }
    ],
-   "catchup_records": "Load Catch-up Records (Growth)",
+   "catchup_records": "",
    "cost_cal": "Load Cost Factors (Growth)",
    "est": {
     "ai": 0.55,
@@ -452,7 +452,7 @@
      "settle": "Ledger Settle (AI)"
     }
    ],
-   "catchup_records": "Load Catch-up Records (AI)",
+   "catchup_records": "",
    "cost_cal": "Load Cost Factors (AI)",
    "est": {
     "ai": 0.27,
@@ -508,7 +508,7 @@
    },
    "balance": "DFS Balance (Audit)",
    "balance_end": "DFS Balance End (Audit)",
-   "catchup_records": "Load Catch-up Records (Audit)",
+   "catchup_records": "",
    "cost_cal": "Load Cost Factors (Audit)",
    "est": {
     "ai": 0.0,
@@ -636,7 +636,7 @@
      "settle": "Ledger Settle (BL)"
     }
    ],
-   "catchup_records": "Load Catch-up Records (BL)",
+   "catchup_records": "",
    "cost_cal": "Load Cost Factors (BL)",
    "est": {
     "ai": 0.05,
@@ -694,6 +694,7 @@
    "callbacks": [
     {
      "fed_settle_directly": [
+      "Cadence Preview",
       "Cadence Status"
      ],
      "has_callback": "Has Callback (Cadence)?",
@@ -706,6 +707,10 @@
        0
       ],
       [
+       "Cadence Preview",
+       0
+      ],
+      [
        "Cadence Status",
        0
       ]
@@ -713,7 +718,7 @@
      "settle": "Ledger Settle (Cadence)"
     }
    ],
-   "catchup_records": "Load Catch-up Records (Cadence)",
+   "catchup_records": "",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
@@ -822,7 +827,7 @@
      "settle": "Ledger Settle (LB)"
     }
    ],
-   "catchup_records": "Load Catch-up Records (LB)",
+   "catchup_records": "",
    "cost_cal": "Load Cost Factors (LB)",
    "est": {
     "ai": 0.3,
@@ -944,7 +949,7 @@
      "settle": "Ledger Settle (Tracker)"
     }
    ],
-   "catchup_records": "Load Catch-up Records (Tracker)",
+   "catchup_records": "",
    "est": {
     "ai": 0.0,
     "dfs": 0.015
@@ -1133,7 +1138,7 @@
      "settle": "Ledger Settle (Site)"
     }
    ],
-   "catchup_records": "Load Catch-up Records (Site)",
+   "catchup_records": "",
    "est": {
     "ai": 0.03,
     "dfs": 0.01

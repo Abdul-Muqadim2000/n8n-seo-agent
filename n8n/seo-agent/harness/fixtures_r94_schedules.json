@@ -1,0 +1,105 @@
+{
+ "_note": "The schedule table the catch-up carried from 2026-10-16 to 2026-10-19 (seven Monday crons, the 1st-of-the-month audit, the AI Pulse Tuesday to Sunday and the daily Page Watch), exactly as build_catchup.py baked it then. Since 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md section 4.8) the weekly workflows run in each website's own cycle and the generated table holds the two daily crons only; S126-S129 and SC1 replay the real 2026-10-12 / 2026-10-17 evidence against THIS table, because that evidence is of that week and the planner (v5/code/_catchup.js) still handles weekly and monthly slots.",
+ "schedules": [
+  {
+   "cron": "30 9 * * 1",
+   "dry_run_ok": true,
+   "entry_node": "Manual Run",
+   "id": "SEOagentAIGrow1",
+   "kind": "weekly",
+   "label": "AI Growth",
+   "mode": "ai_growth",
+   "tz": "America/New_York"
+  },
+  {
+   "cron": "30 6 * * 0,2-6",
+   "dry_run_ok": false,
+   "entry_node": "Manual Run",
+   "id": "SEOagentAIPulse1",
+   "kind": "daily",
+   "label": "AI Pulse",
+   "mode": "ai_pulse",
+   "tz": "America/New_York"
+  },
+  {
+   "cron": "0 7 * * 1",
+   "dry_run_ok": false,
+   "entry_node": "Manual Run",
+   "id": "SEOagentAIVisib1",
+   "kind": "weekly",
+   "label": "AI Visibility Tracker",
+   "mode": "ai_visibility",
+   "tz": "America/New_York"
+  },
+  {
+   "cron": "0 6 1 * *",
+   "dry_run_ok": false,
+   "entry_node": "Manual Run",
+   "id": "SEOagentAuditSc1",
+   "kind": "monthly",
+   "label": "Audit Scheduler",
+   "mode": "audit_schedule",
+   "tz": "America/New_York"
+  },
+  {
+   "cron": "30 7 * * 1",
+   "dry_run_ok": false,
+   "entry_node": "Manual Run",
+   "id": "SEOagentBacklnk1",
+   "kind": "weekly",
+   "label": "Backlink Monitor",
+   "mode": "backlinks",
+   "tz": "America/New_York"
+  },
+  {
+   "cron": "0 10 * * 1",
+   "dry_run_ok": true,
+   "entry_node": "Manual Run",
+   "id": "SEOagentCadence1",
+   "kind": "weekly",
+   "label": "Content Cadence",
+   "mode": "content_cadence",
+   "tz": "America/New_York"
+  },
+  {
+   "cron": "0 11 * * 1",
+   "dry_run_ok": false,
+   "entry_node": "Manual Run",
+   "id": "SEOagentLinkBld1",
+   "kind": "weekly",
+   "label": "Link Builder",
+   "mode": "link_builder",
+   "tz": "America/New_York"
+  },
+  {
+   "cron": "45 5 * * *",
+   "dry_run_ok": false,
+   "entry_node": "Watch Run",
+   "id": "SEOagentPageWch1",
+   "kind": "daily",
+   "label": "Page Watch",
+   "mode": "page_watch",
+   "tz": "America/New_York"
+  },
+  {
+   "cron": "0 8 * * 1",
+   "dry_run_ok": false,
+   "entry_node": "Manual Run",
+   "id": "SEOagentTracker1",
+   "kind": "weekly",
+   "label": "Rank Tracker",
+   "mode": "rank_tracker",
+   "tz": "America/New_York"
+  },
+  {
+   "cron": "0 9 * * 1",
+   "dry_run_ok": false,
+   "entry_node": "Manual Run",
+   "id": "SEOagentSiteTrk1",
+   "kind": "weekly",
+   "label": "Site Tracker",
+   "mode": "site_tracker",
+   "tz": "America/New_York"
+  }
+ ]
+}

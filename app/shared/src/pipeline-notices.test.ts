@@ -69,19 +69,28 @@ describe('pipeline notices', () => {
     expect(n.tone).toBe('info');
     expect(n.confirm).toBeUndefined();
     expect(n.body).toContain('does not move or cancel the schedule');
-    expect(n.body).toContain('later in October reuse');
+    expect(n.body).toContain("every week, in your website's cycle");
+    // without the website's cycle on file: the full run is in the monthly cycle, no date promised
+    expect(n.body).toContain('the full run is in your monthly cycle');
+    // 2026-10-19: the monthly extras run in the website's own monthly cycle, whatever is started by hand
+    const monthly = (at: string) => data({ cycle: { upcoming: [{ date: at.slice(0, 10), at, cycle0: false, monthly: true, previewAt: '' }] } as unknown as PipelineData['cycle'] });
+    const [same] = pipelineNotices('ai_visibility', {}, monthly('2026-10-05T11:00:00Z'), { now: NOW });
+    expect(same.body).toContain('is your monthly full run as usual');
+    const [later] = pipelineNotices('ai_visibility', {}, monthly('2026-10-26T11:00:00Z'), { now: NOW });
+    expect(later.body).toContain('the next full run is in your monthly cycle on 2026-10-26');
+    expect(n.body).not.toMatch(/Monday/);
     expect(n.body).toContain('53 credits');
     expect(n.body).not.toMatch(/\$/);
     expect(n.link?.reportId).toBe('rep-1');
   });
 
-  it('backlinks: a manual run is the month\'s full report', () => {
+  it('backlinks: a manual run is a full report; the cycle keeps its own rhythm (the full report in the monthly cycle)', () => {
     const [n] = pipelineNotices('backlinks', {}, data(), { now: NOW });
     expect(n.body).toContain('only watch for lost and spammy links');
-    // run on the last day of the month: the next run is in a new month
-    const late = data({ automations: [auto('backlinks', 'on', '2026-11-02T12:30:00Z')] });
-    const [m] = pipelineNotices('backlinks', {}, late, { now: new Date('2026-10-31T12:00:00Z') });
-    expect(m.body).toContain('full report as usual');
+    expect(n.body).toContain('the full report runs in your monthly cycle');
+    const cyc = data({ cycle: { upcoming: [{ date: '2026-10-19', at: '2026-10-19T11:30:00Z', cycle0: false, monthly: true, previewAt: '' }] } as unknown as PipelineData['cycle'] });
+    const [m] = pipelineNotices('backlinks', {}, cyc, { now: NOW });
+    expect(m.body).toContain('(next on 2026-10-19)');
   });
 
   it('audit: the automatic audit skips a site audited less than 25 days before', () => {
@@ -117,7 +126,7 @@ describe('pipeline notices', () => {
     expect(pub[0].id).toBe('written:fta e invoicing rules');
     expect(pub[0].confirm).toBeTruthy();
     expect(pub[0].body).toContain('techand.ai/fta-rules');
-    expect(pub[0].body).toContain('by your weekly blog posts');
+    expect(pub[0].body).toContain('by your weekly pages');
     const rewrite = pipelineNotices('keyword', { keyword: 'FTA e-invoicing rules', existingPageUrl: 'https://www.techand.ai/fta-rules', receiveContent: true }, data());
     expect(rewrite).toEqual([]);
     const waiting = pipelineNotices('keyword', { keyword: 'peppol uae', receiveContent: true }, data());
@@ -157,7 +166,7 @@ describe('pipeline notices', () => {
     expect(fresh.id).toBe('ladder-next');
     expect(fresh.body).toContain('1 a week');
     const [off] = pipelineNotices('ladder', { keyword: 'payroll software uae' }, data({ queue: { ...data().queue, pagesPerWeek: 0 } }));
-    expect(off.body).toContain('Weekly blog posts are off');
+    expect(off.body).toContain('Weekly pages are off');
   });
 
   it('ladder: a main keyword that is almost the same search as another ladder\'s main or page keyword needs a tick', () => {

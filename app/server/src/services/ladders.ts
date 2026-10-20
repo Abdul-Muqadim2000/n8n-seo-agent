@@ -1,6 +1,7 @@
 import {
   daysSince,
   estimateRunCost,
+  DEFAULT_AUTOPILOT_LEVEL,
   DEFAULT_PLATFORM_SETTINGS,
   formatCredits,
   isWon,
@@ -65,7 +66,9 @@ export const MAIN_PAGE_GATE = true;
 /** about one DataForSEO live SERP check per keyword per week */
 export const LADDER_COSTS = { rankCheckEach: 0.015 };
 export const SITE_ROW = LADDER_SITE_ROW;
-export const SITE_DEFAULTS: SiteAutomation = { defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 };
+/** keyword-first (2026-10-19): the autopilot level decides what is written on its own (default 2); `opportunities` and `autoStartLadders`
+ *  are kept for older screens and decide nothing (a stored `auto` reads as "suggest", R-K3). */
+export const SITE_DEFAULTS: SiteAutomation = { autopilotLevel: DEFAULT_AUTOPILOT_LEVEL, defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 };
 const WRITING_WINDOW_MS = 3 * 3600_000;
 const ACTIVE_RUN = ['submitting', 'accepted', 'running'];
 
@@ -239,7 +242,10 @@ const positive = (v: unknown, d: number, max: number) => {
 export function siteAutomation(settings: LadderSettingsRow[]): SiteAutomation {
   const r = settings.find((x) => x.ladder_id === SITE_ROW);
   if (!r) return { ...SITE_DEFAULTS };
+  const lvl = Number(r.autopilot_level);
   return {
+    // the engine reads 1, 2 or 3, anything else (empty) as 2 (Cadence_Plan.js levelOf)
+    autopilotLevel: lvl === 1 || lvl === 2 || lvl === 3 ? lvl : DEFAULT_AUTOPILOT_LEVEL,
     // the cadence reads 'manual' or else Auto
     defaultMode: asMode(r.mode, SITE_DEFAULTS.defaultMode),
     opportunities: asMode(r.opportunities, SITE_DEFAULTS.opportunities),
@@ -702,7 +708,7 @@ function nextStep(
 /** the same words: "e invoicing in uae" and "UAE e-invoicing" */
 const sameSearch = (a: string, b: string) => keywordTokens(a).sort().join(' ') === keywordTokens(b).sort().join(' ');
 
-const KIND_RANK: Record<NeedsYouItem['kind'], number> = { connection: 0, pileup: 1, publish: 2, failed: 3, duplicate: 4, overlap: 5, approve: 6 };
+const KIND_RANK: Record<NeedsYouItem['kind'], number> = { connection: 0, keyword: 1, profile: 1.5, proposal: 2, level: 3, recheck: 4, pileup: 5, publish: 6, failed: 7, duplicate: 8, overlap: 9, approve: 10 };
 
 /** Most urgent first: warnings, then by kind. */
 export function sortNeedsYou(items: NeedsYouItem[]): NeedsYouItem[] {
@@ -720,10 +726,10 @@ export function ladderNeedsYou(b: LadderBuild, cs: { creditValueUsd: number; mar
       kind: 'pileup',
       severity: 'warning',
       title: pile.now
-        ? `Weekly posts stopped: ${plural(pile.waiting, 'written page')} waiting for publication`
-        : `Last Monday's posts were skipped: ${plural(pile.waiting, 'written page')} waited for publication`,
+        ? `Weekly pages stopped: ${plural(pile.waiting, 'written page')} waiting for publication`
+        : `Last week's pages were skipped: ${plural(pile.waiting, 'written page')} waited for publication`,
       detail:
-        (pile.lastRunAt ? 'Last Monday\'s run wrote nothing for this reason. ' : '') +
+        (pile.lastRunAt ? 'Last week\'s run wrote nothing for this reason. ' : '') +
         // D5: ladder pages count too, so say which pages they are
         (b.waiting.length ? `Waiting: ${b.waiting.slice(0, 4).map((w) => (w.needsFix ? `${q(w.keyword)} (needs a fix)` : q(w.keyword))).join(', ')}${b.waiting.length > 4 ? ' and more' : ''}. ` : '') +
         `No new page is written while ${pile.max === 1 ? 'a page waits' : `${pile.max} or more pages wait`} to be published (the pile-up guard, your limit). ` +

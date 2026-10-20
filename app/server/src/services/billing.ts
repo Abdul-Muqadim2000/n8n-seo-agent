@@ -24,6 +24,9 @@ import {
   type CreditStatus,
   type MonitorSettings,
   type MonitorsRow,
+  type AutopilotLevel,
+  type LadderRow,
+  type LadderSettingsRow,
 } from '@seo/shared';
 import { config } from '../config';
 import { db, schema } from '../db';
@@ -33,8 +36,10 @@ import { sendMail } from '../lib/mailer';
 import { siteAdmin, siteRows } from '../n8n/client';
 import { addCreditEntry, creditBalance, inFlightCredits } from './admin/credits';
 import { settingsRow } from './admin/settings';
+import { billingContacts, listInvoices } from './invoices';
 import { execRows, tsv } from './admin/sqlRows';
 import { monitorsFromRow } from './data';
+import { chosenLadderWriting } from './cadence';
 
 // Credits as the customer lives with them (app/docs/CREDITS.md): the balance and what can be spent now, the schedules' forecast and
 // the credits kept for them, the company's own limits, the check every analysis passes before it starts, the Credits page, and the
@@ -92,8 +97,14 @@ export async function siteForecasts(orgId: string, opts: { fresh?: boolean } = {
       const pausedByPerson = s.trackingStatus === 'paused' && !s.creditsPausedAt;
       let usd = 0;
       if (!pausedByPerson) {
-        const row = (await siteRows<MonitorsRow>('monitors', s.domain, { max: 5 }).catch(() => []))[0];
-        usd = autopilotMonthlyUsd(completeMonitors(monitorsFromRow(row)), s.blogsPerWeek);
+        // keyword-first (plan §5.4): pages are forecast only while a keyword the client chose has pages to write (level 3: always)
+        const level = (s.autopilotLevel === 1 || s.autopilotLevel === 3 ? s.autopilotLevel : 2) as AutopilotLevel;
+        const [mon, ladders, settings] = await Promise.all([
+          siteRows<MonitorsRow>('monitors', s.domain, { max: 5 }).catch(() => [] as MonitorsRow[]),
+          siteRows<LadderRow>('ladders', s.domain, { max: 2000 }).catch(() => [] as LadderRow[]),
+          siteRows<LadderSettingsRow>('ladderSettings', s.domain, { max: 500 }).catch(() => [] as LadderSettingsRow[]),
+        ]);
+        usd = autopilotMonthlyUsd(completeMonitors(monitorsFromRow(mon[0])), s.blogsPerWeek, { level, writing: chosenLadderWriting(ladders, settings, level) });
       }
       return { siteId: s.id, domain: s.domain, usd, paused: s.trackingStatus === 'paused', pausedForCredits: !!s.creditsPausedAt, pausedReason: s.creditsPausedReason ?? null };
     }),
@@ -312,6 +323,7 @@ export async function billingOverview(org: OrgRow, now = new Date()): Promise<Bi
     : null;
 
   const requests = await db.query.creditPurchaseRequests.findMany({ where: eq(schema.creditPurchaseRequests.orgId, org.id), orderBy: desc(schema.creditPurchaseRequests.createdAt), limit: 10 });
+  const invoices = await listInvoices(org.id);
   const runway = org.creditsEnforced ? runwayDays(st.available, st.dailyBurn) : null;
   return {
     enforced: org.creditsEnforced,
@@ -347,6 +359,7 @@ export async function billingOverview(org: OrgRow, now = new Date()): Promise<Bi
     expiringSoon,
     packs: packsOf(s).map((p) => pricePack(p, s.creditValueUsd)),
     requests: requests.map(requestView),
+    invoices,
     creditValueUsd: s.creditValueUsd,
     packExpiryMonths: s.packExpiryMonths,
     planRolloverMonths: s.planRollover ? 1 : 0,
@@ -494,14 +507,6 @@ async function setPaused(site: SiteRow, reason: 'balance' | 'autopilot_limit' | 
   return true;
 }
 
-async function owners(orgId: string): Promise<string[]> {
-  const rows = await db
-    .select({ email: schema.users.email })
-    .from(schema.memberships)
-    .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
-    .where(and(eq(schema.memberships.orgId, orgId), inArray(schema.memberships.role, ['owner', 'admin'])));
-  return rows.map((r) => r.email);
-}
 
 const NOTICE: Record<Exclude<CreditStatus, 'ok'>, { subject: string; line: (st: CreditState) => string }> = {
   low: { subject: 'Your credits will run out within a week', line: (st) => `You have ${formatCredits(st.available)} available and use about ${formatCredits(st.dailyBurn)} a day, so they last about ${Math.floor(st.available / st.dailyBurn)} more days.` },
@@ -635,7 +640,7 @@ async function guardPass(log: Log, now: Date): Promise<GuardResult> {
           const n = level !== 'ok' && worse ? NOTICE[level as Exclude<CreditStatus, 'ok'>] : null;
           const subject = n ? n.subject : 'Automatic work has resumed';
           const line = n ? n.line(st) : 'Credits were added, so your websites\' automatic work runs again from its next scheduled time.';
-          for (const to of await owners(org.id)) {
+          for (const to of await billingContacts(org.id)) {
             await sendMail({ to, subject: `${subject} · ${org.name}`, lines: [line], action: { label: 'Open Credits', url: `${config.appUrl}/o/${org.id}/settings/credits` } }, log).catch(() => false);
             out.notices++;
           }

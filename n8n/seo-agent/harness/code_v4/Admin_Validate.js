@@ -3,7 +3,8 @@ const raw = $input.first().json || {};
 const b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};
 const action = String(b.action || '').toLowerCase();
 const errors = [];
-if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups'].includes(action)) errors.push('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts or content_groups');
+if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups', 'facts'].includes(action)) errors.push('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts, content_groups or facts');
+if (action === 'facts' && (b.business_facts == null || typeof b.business_facts !== 'string')) errors.push('business_facts (text; an empty text clears them) is required for action facts');   // P1 (2026-10-20)
 if (action === 'content_groups' && !Array.isArray(b.content_groups)) errors.push('content_groups (a list of {name, pattern}; [] clears them) is required for action content_groups');
 if (!b.site_id && !b.domain) errors.push('site_id or domain is required');
 if (action === 'cadence' && b.pages_per_week == null && b.blogs_per_week == null) errors.push('pages_per_week (0-3) is required for action cadence');

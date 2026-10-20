@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { baseRateText, chanceLabel, chanceText, chooseForMe, FIT_UNKNOWN_NOTE, forYouLabel, ladderOverlapsOf, PLAN_CHANCE, planChance, REACH_BASE_RATE, reachMeasured, recommendedFromStrategy, toAssessment, toChance, UNMEASURED_CHANCE, type LadderKeywords } from './keywords';
+import { baseRateText, chanceLabel, chanceText, chooseForMe, FIT_UNKNOWN_NOTE, forYouLabel, ladderOverlapsOf, PLAN_CHANCE, planChance, REACH_BASE_RATE, reachMeasured, recommendedFromStrategy, SERVICE_OUT_NOTE, toAssessment, toChance, UNMEASURED_CHANCE, type LadderKeywords } from './keywords';
 
 // FIX_PLAN G3 (2026-10-11): the 2025 base rate and the chance band per plan, the same words as n8n's _reach.js (reachChance / reachBaseRateText /
 // reachChanceText); the band is marked uncalibrated everywhere until the system has measured its own ladders.
@@ -112,6 +112,62 @@ describe('recommended keywords from the keyword strategy', () => {
       ['dental crm', null, ''],
     ]);
     expect(chooseForMe(list)).toBeNull();
+  });
+
+  // F-REH (2026-10-20): the real-credit rehearsal. techand.ai listed "CRM implementation, Dynamics 365 Business Central, Dynamics 365 Sales,
+  // E-invoicing compliance"; the research's top cards were IT-company searches, all "easy". The engine now says whether each keyword is one of
+  // the services the client listed (service_fit), and the list a non-technical owner picks from starts with those.
+  it('what the client sells first: in, then not judged, then out (with a plain note); a search a ladder holds still goes last', () => {
+    const rehearsal = {
+      start_with: kw('crm system', { ...reachable, service_fit: 'in' }),
+      priority: [
+        kw('software development company in dubai', { ...easy, service_fit: 'out' }),
+        kw('it company in dubai', { ...easy, service_fit: 'out' }),
+        kw('dubai it solutions', { ...easy, service_fit: 'out' }),
+        kw('crm service provider uae', { ...reachable, service_fit: 'in' }),
+        kw('dynamics 365 sales', { ...hard, service_fit: 'in' }),
+        kw('odoo partner uae', { ...easy, service_fit: 'unknown' }),
+        kw('peppol uae', { ...easy, service_fit: 'in' }),
+      ],
+      content_plan: [{ tier: 'Now', topic: 'IT', primary_keyword: 'it companies in abu dhabi', keyword_count: 3, total_volume: 480, ...easy, service_fit: 'out' }],
+    };
+    const list = recommendedFromStrategy(rehearsal, ladders);
+    expect(list.map((k) => [k.keyword, k.serviceFit, k.difficultyForYou])).toEqual([
+      ['crm system', 'in', 'reachable'],
+      ['crm service provider uae', 'in', 'reachable'],
+      ['dynamics 365 sales', 'in', 'hard'],
+      ['odoo partner uae', 'unknown', 'easy'],
+      ['software development company in dubai', 'out', 'easy'],
+      ['it company in dubai', 'out', 'easy'],
+      ['dubai it solutions', 'out', 'easy'],
+      ['it companies in abu dhabi', 'out', 'easy'],
+      ['peppol uae', 'in', 'easy'],
+    ]);
+    expect(list.filter((k) => k.serviceFit === 'out').every((k) => k.note === SERVICE_OUT_NOTE)).toBe(true);
+    expect(list.filter((k) => k.serviceFit !== 'out').every((k) => k.note === '')).toBe(true);
+    expect(SERVICE_OUT_NOTE).toBe('Not one of the services you listed');
+    // the customer's words: no em dash, no arrow, no internal term
+    expect(/[—–→]|service_fit/.test(SERVICE_OUT_NOTE)).toBe(false);
+    // "Choose for me" then lands on one of the client's services, never on the easier IT search above it in the old order
+    expect(chooseForMe(list)?.keyword).toBe('crm system');
+  });
+  it('chooseForMe never picks a keyword outside the services the client listed', () => {
+    const base = { volume: 100, overlaps: [] as never[], planType: 'direct', months: '2-4', why: '' };
+    const list = [
+      { ...base, keyword: 'it company in dubai', difficultyForYou: 'easy', serviceFit: 'out' },
+      { ...base, keyword: 'crm system', difficultyForYou: 'reachable', serviceFit: 'in' },
+    ] as never[];
+    expect((chooseForMe(list) as { keyword: string } | null)?.keyword).toBe('crm system');
+    expect(chooseForMe([list[0]])).toBeNull();
+  });
+
+
+  it('a report from before service fit (no service_fit): every card is not judged and the order is exactly as before', () => {
+    const list = recommendedFromStrategy(payload, ladders);
+    expect(list.every((k) => k.serviceFit === 'unknown' && k.note === '')).toBe(true);
+    expect(list.map((k) => k.keyword)).toEqual(['odoo partner uae', 'odoo pricing uae', 'erp implementation cost uae', 'odoo implementation uae', 'erp software dubai', 'peppol uae', 'uae e-invoicing']);
+    // anything that is not 'in' or 'out' is read as not judged
+    expect(recommendedFromStrategy({ priority: [kw('a b', { service_fit: 'maybe' }), kw('c d', { service_fit: null })] }, []).map((k) => k.serviceFit)).toEqual(['unknown', 'unknown']);
   });
 
   it('caps the list and ignores junk', () => {

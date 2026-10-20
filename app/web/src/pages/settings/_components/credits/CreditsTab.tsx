@@ -16,6 +16,7 @@ import { fmtDate, fmtDay } from '@/lib/utils';
 import { SettingsCard } from '../SettingsCard';
 import { ActivityCard } from './ActivityCard';
 import { BuyCreditsCard } from './BuyCredits';
+import { InvoicesCard } from './InvoicesCard';
 import { LimitsCard } from './LimitsCard';
 import { daysText, featureTotals, lotTerms, pausedByLimit, statusLabel, statusTone } from './status';
 
@@ -69,6 +70,7 @@ export function CreditsTab() {
         <HowCreditsWork b={b} />
       </div>
       <BuyCreditsCard b={b} id={BUY_ID} />
+      <InvoicesCard b={b} />
       <LimitsCard b={b} />
       <ActivityCard />
     </Stagger>

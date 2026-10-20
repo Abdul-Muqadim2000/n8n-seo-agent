@@ -8,6 +8,7 @@ import { paths } from '@/lib/paths';
 import { useMe, useOnboardingStep, useOrg, useSites } from '@/lib/queries';
 import { BusinessStep } from './_components/BusinessStep';
 import { CompanyStep } from './_components/CompanyStep';
+import { KeywordStep } from './_components/KeywordStep';
 import { LaunchStep } from './_components/LaunchStep';
 import { ProfileStep } from './_components/ProfileStep';
 import { TrackingStep } from './_components/TrackingStep';
@@ -25,6 +26,7 @@ const STEP_COMPONENTS: Record<StepId, () => ReactNode> = {
   verify: VerifyStep,
   business: BusinessStep,
   profile: ProfileStep,
+  keyword: KeywordStep,
   tracking: TrackingStep,
   launch: LaunchStep,
 };
@@ -68,6 +70,7 @@ function CompanyWizard({ me, orgId }: { me: Me; orgId: string }) {
   const canAdmin = !!o && roleAtLeast(o.role, 'admin');
   useEffect(() => {
     if (!current || !canAdmin || !o || o.onboardedAt || onboarding.isPending) return;
+    // the server stores every step of the wizard (orgs.ts ONBOARDING_STEPS), "keyword" too, so the wizard resumes where it was left
     if (stepIndex(current) > stepIndex(stored)) onboarding.mutate({ step: current });
   }, [current, stored, canAdmin]);
 

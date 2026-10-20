@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { Drawn, MockBadge } from './parts';
 
 // The AI growth section of the AI visibility page with sample data: what was done this week, the readiness of three key pages,
-// the questions queued to win and one page AI cites without naming the business.
+// the questions to win, the next answer page suggested and one page AI cites without naming the business.
 
 const DONE: { value: string; label: string }[] = [
   { value: '6', label: 'pages sent to Bing' },
@@ -20,11 +20,11 @@ const PAGES: { path: string; score: number; tone: 'good' | 'warning' | 'critical
 export function AiGrowthMockup({ className }: { className?: string }) {
   return (
     <Drawn
-      label="The AI growth section with sample data: this week 6 pages sent to Bing, 4 questions to win and 2 pages AI cites without naming you; AI readiness of three key pages scored 86, 58 and 34 with the reason for each; the next answer page queued; and a list page AI cites that names three competitors, with a pitch drafted."
+      label="The AI growth section with sample data: this week 6 pages sent to Bing, 4 questions to win and 2 pages AI cites without naming you; AI readiness of three key pages scored 86, 58 and 34 with the reason for each; the next answer page suggested with its credits; and a list page AI cites that names three competitors, with a pitch drafted."
       className={cn('@container rounded-xl border border-line bg-surface p-4 text-ink shadow-overlay sm:p-6', className)}
     >
       <span className="block text-[11px] text-ink-3">AI growth · this week</span>
-      <span className="mt-0.5 block font-display text-[15px] font-semibold">Done for you on Monday</span>
+      <span className="mt-0.5 block font-display text-[15px] font-semibold">Done for you on your weekday</span>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
         {DONE.map((d, i) => (
@@ -55,9 +55,9 @@ export function AiGrowthMockup({ className }: { className?: string }) {
         <div className="mk-pop rounded-lg border border-line bg-page p-3" style={{ ['--mk-i' as string]: 7 }}>
           <span className="flex items-center gap-1.5 text-[11.5px] font-semibold">
             <FileText className="size-3.5 text-accent-text" />
-            Next answer page
+            Suggested answer page
           </span>
-          <span className="mt-1 block text-[11.5px] text-ink-2">"How long does VAT registration take?" Lost on 3 of 5 engines</span>
+          <span className="mt-1 block text-[11.5px] text-ink-2">"How long does VAT registration take?" Lost on 3 of 5 engines · about 51 credits</span>
         </div>
         <div className="mk-pop rounded-lg border border-line bg-page p-3" style={{ ['--mk-i' as string]: 8 }}>
           <span className="flex items-center gap-1.5 text-[11.5px] font-semibold">

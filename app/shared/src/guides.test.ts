@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { fillGuide, fillText, GUIDE_AREAS, GUIDE_FOR_RECOMMENDATION, GUIDES, guideAvailable, guideById, guideText, guidesByArea, plainText, searchGuides, type Guide } from './guides';
+import { AUTOPILOT_SCREEN_GUIDES, fillGuide, fillText, GUIDE_AREAS, GUIDE_FOR_NEEDS_YOU_KIND, GUIDE_FOR_RECOMMENDATION, GUIDES, guideAvailable, guideById, guideForNeedsYou, guideForRecommendation, guideText, guidesByArea, plainText, searchGuides, type Guide } from './guides';
+import { CYCLE_SPACING_DAYS } from './cycle-clock';
+import { AUTOPILOT_LEVELS, CHANCE_WORDS, CYCLE_LOCAL_TIME, NUDGE_AFTER_PAGES, PREVIEW_HOURS_BEFORE, PROPOSAL_WAIT_HOURS, QUEUED_RECHECK_DAYS, REJECT_LIMIT, REJECT_WINDOW } from './cycles';
+import type { NeedsYouItem } from './data';
 
 const all = GUIDES as unknown as Guide[];
 const texts = (g: Guide): string[] => [
@@ -166,5 +169,117 @@ describe('D-9: only the ways this installation offers', () => {
 
   it('every guide that walks through "Verify with Google" says it needs Google sign-in', () => {
     for (const g of all) if (texts(g).some((t) => /Verify with Google/.test(t))) expect(g.requires, g.id).toBe('google_signin');
+  });
+});
+
+describe('copy rules (no AI tells in customer text)', () => {
+  // the owner's rule of 2026-10-19: no em or en dashes, no curly quotes, no ellipsis character, no stock phrases, no internal names
+  const STOCK = /\b(delve|seamless(ly)?|leverage|unlock the power|game[- ]changer|in today's|elevate|supercharge|cutting[- ]edge|robust solution|it's important to note|whether you're)\b/i;
+  const INTERNAL = /\b(seo_[a-z_]+|cycle_preview|n8n|dataforseo|chosen_by|autopilot_level|pages_per_week|Cadence_Plan|Data Table)\b/i;
+  it('holds for every guide', () => {
+    for (const g of all) {
+      for (const t of [...texts(g), g.where ?? '', g.who ?? '']) {
+        expect(t, g.id).not.toMatch(/[–—‘’“”…]/);
+        expect(t, g.id).not.toMatch(STOCK);
+      }
+    }
+  });
+  it('the weekly autopilot guides never name an internal table, field or service', () => {
+    for (const g of guidesByArea('autopilot')) for (const t of [...texts(g), g.where ?? '', g.who ?? '']) expect(t, g.id).not.toMatch(INTERNAL);
+  });
+});
+
+describe('the weekly autopilot guides', () => {
+  const ids = ['your-journey', 'choose-first-keyword', 'autopilot-levels', 'your-weekly-cycle', 'coming-up-plan', 'keyword-announcements', 'keyword-not-planned', 'page-not-ready', 'not-what-i-wanted'];
+  it('exist, each with steps, how to tell it worked, what to do when it does not, related guides and search words', () => {
+    for (const id of ids) {
+      const g = guideById(id);
+      expect(g, id).toBeDefined();
+      expect(g!.area, id).toBe('autopilot');
+      expect(g!.done, id).toBeTruthy();
+      expect(g!.trouble?.length, id).toBeGreaterThan(0);
+      expect(g!.related?.length, id).toBeGreaterThan(0);
+      expect(g!.keywords?.length, id).toBeGreaterThan(0);
+    }
+  });
+
+  it('take their numbers from the cycle contract, not from typed-in figures', () => {
+    const t = (id: string) => guideText(guideById(id)!);
+    expect(t('coming-up-plan')).toContain(`${PREVIEW_HOURS_BEFORE} hours before every weekly run`);
+    expect(t('keyword-announcements')).toContain(`${PROPOSAL_WAIT_HOURS} hours after the announcement`);
+    expect(t('autopilot-levels')).toContain(`${REJECT_LIMIT} of the last ${REJECT_WINDOW} pages`);
+    expect(t('autopilot-levels')).toContain(`after ${NUDGE_AFTER_PAGES} pages published or approved`);
+    expect(t('keyword-not-planned')).toContain(`more than ${QUEUED_RECHECK_DAYS} days`);
+    expect(t('your-weekly-cycle')).toContain(`at least ${CYCLE_SPACING_DAYS} days after the last one started`);
+    expect(t('your-weekly-cycle')).toContain(CYCLE_LOCAL_TIME);
+    for (const l of AUTOPILOT_LEVELS) expect(t('autopilot-levels')).toContain(l.label);
+    for (const w of new Set(Object.values(CHANCE_WORDS))) expect(t('choose-first-keyword')).toContain(w);
+  });
+
+  it("read as whole sentences with no values (the catalogue) and with the website's own values", () => {
+    const vars = { domain: 'kf.example.com', weekday: 'Tuesday', timezone: 'Asia/Dubai', monthlyDate: 'day 20 of the month', level: 'level 2 (My keywords and keep my pages healthy)', pageCredits: 'about 51 credits', planCredits: 'about 16 credits', checkCredits: 'about 2 credits' };
+    for (const id of ids) {
+      expect(guideText(guideById(id)!), id).not.toMatch(/\{\{|\}\}/);
+      expect(guideText(guideById(id)!, vars), id).not.toMatch(/\{\{|\}\}/);
+    }
+    expect(guideText(guideById('your-weekly-cycle')!, vars)).toContain('Tuesday, from 06:00 in Asia/Dubai');
+    expect(guideText(guideById('your-journey')!, vars)).toContain('on or after day 20 of the month');
+  });
+
+  it('ask for the author profile and business facts before the first page (owner decision 2026-10-20)', () => {
+    for (const id of ['your-journey', 'choose-first-keyword', 'page-not-ready']) {
+      const t = guideText(guideById(id)!);
+      expect(t, id).toMatch(/author profile/);
+      expect(t, id).toMatch(/business facts/);
+    }
+    expect(guideText(guideById('your-journey')!)).toContain('a draft with blanks');
+  });
+
+  it('are found by the words a client would type', () => {
+    expect(searchGuides('coming up')[0].id).toBe('coming-up-plan');
+    expect(searchGuides('what happens when').map((g) => g.id)).toContain('your-journey');
+    expect(searchGuides('autopilot level').map((g) => g.id)).toContain('autopilot-levels');
+    expect(searchGuides('not ready').map((g) => g.id)).toContain('page-not-ready');
+    expect(searchGuides('weekday').map((g) => g.id)).toContain('your-weekly-cycle');
+  });
+});
+
+describe('every keyword-first ask has a guide', () => {
+  // every kind the server builds (services/pipeline.ts, ladders.ts, autopilot.ts)
+  const KINDS: NeedsYouItem['kind'][] = ['publish', 'approve', 'overlap', 'duplicate', 'failed', 'connection', 'pileup', 'keyword', 'proposal', 'recheck', 'level', 'profile'];
+  it('each Needs-you kind maps to a guide that exists', () => {
+    expect(Object.keys(GUIDE_FOR_NEEDS_YOU_KIND).sort()).toEqual([...KINDS].sort());
+    for (const k of KINDS) expect(guideById(GUIDE_FOR_NEEDS_YOU_KIND[k]), k).toBeDefined();
+  });
+  it('refines the item by its id: a refused plan, a draft to fix, an announcement, Search Console', () => {
+    const at = (id: string, kind: NeedsYouItem['kind'], severity: 'warning' | 'info' = 'info') => guideForNeedsYou({ id, kind, severity });
+    expect(at('keyword:first', 'keyword', 'warning')).toBe('choose-first-keyword');
+    // P1: the profile the first page waits for, only the facts, and the first page once both are on file
+    expect([at('profile:author', 'profile', 'warning'), at('profile:facts', 'profile', 'warning'), at('profile:write-first', 'profile')]).toEqual(['business-profile', 'business-facts', 'coming-up-plan']);
+    expect(at('keyword:next', 'keyword')).toBe('choose-first-keyword');
+    expect(at('proposal:p1', 'proposal', 'warning')).toBe('keyword-announcements');
+    expect(at('proposal:p2', 'proposal', 'info')).toBe('choose-first-keyword');
+    expect(at('recheck:lad_1', 'recheck', 'warning')).toBe('keyword-not-planned');
+    expect(at('level:dropped', 'level', 'warning')).toBe('autopilot-levels');
+    expect(at('level:nudge', 'level')).toBe('autopilot-levels');
+    expect(at('refused:rep1', 'failed')).toBe('keyword-not-planned');
+    expect(at('fix:lad_1', 'failed', 'warning')).toBe('page-not-ready');
+    expect(at('failed:run1', 'failed', 'warning')).toBe('your-journey');
+    expect(at('publish:lad_1', 'publish')).toBe('publish-page');
+    expect(at('connection:gsc', 'connection', 'warning')).toBe('search-console-access');
+  });
+  it('each new screen names a guide that exists in the weekly autopilot area', () => {
+    for (const [screen, id] of Object.entries(AUTOPILOT_SCREEN_GUIDES)) {
+      expect(guideById(id), screen).toBeDefined();
+      expect(guideById(id)!.area, screen).toBe('autopilot');
+    }
+  });
+  it('recommendations find their guide by id or by prefix', () => {
+    expect(guideForRecommendation('keyword:first')).toBe('choose-first-keyword');
+    expect(guideForRecommendation('keyword:research')).toBe('choose-first-keyword');
+    expect(guideForRecommendation('content:fix:payroll software uae')).toBe('page-not-ready');
+    expect(guideForRecommendation('content:publish:payroll software uae')).toBe('publish-page');
+    expect(guideForRecommendation('setup:gsc')).toBe('search-console-access');
+    expect(guideForRecommendation('tech:score-drop')).toBeUndefined();
   });
 });

@@ -1,0 +1,421 @@
+{
+ "claim_hold_seconds": 2,
+ "config": {
+  "confirm_minutes": 10,
+  "engine_tz": "America/New_York",
+  "exec_page": 250,
+  "init_quiet_minutes": 2,
+  "local_time": "06:00",
+  "max_attempts": 3,
+  "max_exec_reads": 60,
+  "max_inflight": 2,
+  "max_ledger_reads": 20,
+  "max_starts": 2,
+  "next_gap_hours": 12,
+  "preview_hours": 48,
+  "preview_min_lead_hours": 6,
+  "refusal_hours": 24,
+  "retention_days": 120,
+  "spacing_days": 3
+ },
+ "credential": "SEOcredN8nApiKey",
+ "cycle_jobs_cols": [
+  "key",
+  "site_id",
+  "cycle_key",
+  "job",
+  "workflow_id",
+  "status",
+  "attempts",
+  "run_id",
+  "ledger_key",
+  "monthly",
+  "reason",
+  "due_at",
+  "started_at",
+  "finished_at",
+  "updated_at"
+ ],
+ "cycles_cols": [
+  "site_id",
+  "domain",
+  "anchor_at",
+  "tz",
+  "cycle_weekday",
+  "local_time",
+  "monthly_day",
+  "next_due_at",
+  "next_preview_at",
+  "current_key",
+  "status",
+  "skip_jobs",
+  "last_cycle_at",
+  "last_monthly_key",
+  "adopted",
+  "updated_at"
+ ],
+ "cycles_ts_consts": {
+  "cycle_key": true,
+  "local_time": "06:00",
+  "preview_hours": 48
+ },
+ "cycles_ts_jobs": [
+  {
+   "job": "ai_visibility",
+   "workflow_id": "SEOagentAIVisib1"
+  },
+  {
+   "job": "backlinks",
+   "workflow_id": "SEOagentBacklnk1"
+  },
+  {
+   "job": "rank_tracker",
+   "workflow_id": "SEOagentTracker1"
+  },
+  {
+   "job": "site_tracker",
+   "workflow_id": "SEOagentSiteTrk1"
+  },
+  {
+   "job": "ai_growth",
+   "workflow_id": "SEOagentAIGrow1"
+  },
+  {
+   "job": "content_cadence",
+   "workflow_id": "SEOagentCadence1"
+  },
+  {
+   "job": "link_builder",
+   "workflow_id": "SEOagentLinkBld1"
+  },
+  {
+   "job": "audit",
+   "workflow_id": "SEOagentAuditSc1"
+  }
+ ],
+ "default_tz": "America/New_York",
+ "deploy_guard": {
+  "a cycle due in 10 minutes": {
+   "busy": true,
+   "due": 1,
+   "ignored": 0,
+   "note": "",
+   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (a.com cycle 2026-10-21T14:10:00.000Z)",
+   "running": [],
+   "starting": []
+  },
+  "a cycle due in 20 minutes is outside the window": {
+   "busy": false,
+   "due": 0,
+   "ignored": 0,
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
+  },
+  "a cycle marker is not a job": {
+   "busy": false,
+   "due": 0,
+   "ignored": 0,
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
+  },
+  "a cycle overdue for 30 minutes (a plan-only dispatcher) does not block deploys for ever": {
+   "busy": false,
+   "due": 0,
+   "ignored": 0,
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
+  },
+  "a cycle that became due 5 minutes ago is about to start": {
+   "busy": true,
+   "due": 1,
+   "ignored": 0,
+   "note": "",
+   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (a.com cycle 2026-10-21T13:55:00.000Z)",
+   "running": [],
+   "starting": []
+  },
+  "a job running, last written 30 min ago": {
+   "busy": false,
+   "due": 0,
+   "ignored": 0,
+   "note": "1 job(s) running (cyc:site_a:2026-10-21:backlinks): not a reason to wait - a restart kills a running job, the dispatcher sees the dead run at its next sweep and starts it again (one of its three attempts)",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [
+    "cyc:site_a:2026-10-21:backlinks"
+   ],
+   "starting": []
+  },
+  "a job starting 12 minutes ago is still between its claim and its ledger row: refuse": {
+   "busy": true,
+   "due": 0,
+   "ignored": 0,
+   "note": "",
+   "reason": "1 dispatcher job(s) starting, between the claim and the run's ledger row (cyc:site_a:2026-10-21:backlinks)",
+   "running": [],
+   "starting": [
+    "cyc:site_a:2026-10-21:backlinks"
+   ]
+  },
+  "a job starting 20 minutes ago never started (the dispatcher fails it): ignored, go": {
+   "busy": false,
+   "due": 0,
+   "ignored": 1,
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
+  },
+  "a job starting a minute ago": {
+   "busy": true,
+   "due": 0,
+   "ignored": 0,
+   "note": "",
+   "reason": "1 dispatcher job(s) starting, between the claim and the run's ledger row (cyc:site_a:2026-10-21:ai_visibility)",
+   "running": [],
+   "starting": [
+    "cyc:site_a:2026-10-21:ai_visibility"
+   ]
+  },
+  "a paused or switched-off website's due cycle holds nothing": {
+   "busy": false,
+   "due": 0,
+   "ignored": 0,
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
+  },
+  "a preview due in 14 minutes": {
+   "busy": true,
+   "due": 1,
+   "ignored": 0,
+   "note": "",
+   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (b.org preview 2026-10-21T14:14:00.000Z)",
+   "running": [],
+   "starting": []
+  },
+  "a row with no times at all is not counted as fresh": {
+   "busy": false,
+   "due": 0,
+   "ignored": 1,
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
+  },
+  "a running job and two starts due: all named": {
+   "busy": true,
+   "due": 2,
+   "ignored": 0,
+   "note": "1 job(s) running (cyc:site_b:2026-10-20:link_builder): not a reason to wait - a restart kills a running job, the dispatcher sees the dead run at its next sweep and starts it again (one of its three attempts)",
+   "reason": "2 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (d.io preview 2026-10-21T14:01:00.000Z, a.com cycle 2026-10-21T14:12:00.000Z)",
+   "running": [
+    "cyc:site_b:2026-10-20:link_builder"
+   ],
+   "starting": []
+  },
+  "a running row three hours old is a crashed run, ignored": {
+   "busy": false,
+   "due": 0,
+   "ignored": 1,
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
+  },
+  "a wider window (30 minutes) sees a cycle due in 20": {
+   "busy": true,
+   "due": 1,
+   "ignored": 0,
+   "note": "",
+   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:30:00.000Z (a.com cycle 2026-10-21T14:20:00.000Z)",
+   "running": [],
+   "starting": []
+  },
+  "done, skipped and gave-up jobs hold nothing": {
+   "busy": false,
+   "due": 0,
+   "ignored": 0,
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
+  },
+  "nothing at all": {
+   "busy": false,
+   "due": 0,
+   "ignored": 0,
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
+  },
+  "one running and one starting: the starting one refuses": {
+   "busy": true,
+   "due": 0,
+   "ignored": 0,
+   "note": "1 job(s) running (cyc:site_a:2026-10-21:audit): not a reason to wait - a restart kills a running job, the dispatcher sees the dead run at its next sweep and starts it again (one of its three attempts)",
+   "reason": "1 dispatcher job(s) starting, between the claim and the run's ledger row (cyc:site_b:2026-10-21:rank_tracker)",
+   "running": [
+    "cyc:site_a:2026-10-21:audit"
+   ],
+   "starting": [
+    "cyc:site_b:2026-10-21:rank_tracker"
+   ]
+  },
+  "twenty websites running their cycles at once: reported, not refused": {
+   "busy": false,
+   "due": 0,
+   "ignored": 0,
+   "note": "20 job(s) running (cyc:site_00:2026-10-21:ai_visibility, cyc:site_01:2026-10-21:ai_visibility, cyc:site_02:2026-10-21:ai_visibility, cyc:site_03:2026-10-21:ai_visibility, cyc:site_04:2026-10-21:ai_visibility): not a reason to wait - a restart kills a running job, the dispatcher sees the dead run at its next sweep and starts it again (one of its three attempts)",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [
+    "cyc:site_00:2026-10-21:ai_visibility",
+    "cyc:site_01:2026-10-21:ai_visibility",
+    "cyc:site_02:2026-10-21:ai_visibility",
+    "cyc:site_03:2026-10-21:ai_visibility",
+    "cyc:site_04:2026-10-21:ai_visibility",
+    "cyc:site_05:2026-10-21:ai_visibility",
+    "cyc:site_06:2026-10-21:ai_visibility",
+    "cyc:site_07:2026-10-21:ai_visibility",
+    "cyc:site_08:2026-10-21:ai_visibility",
+    "cyc:site_09:2026-10-21:ai_visibility",
+    "cyc:site_10:2026-10-21:ai_visibility",
+    "cyc:site_11:2026-10-21:ai_visibility",
+    "cyc:site_12:2026-10-21:ai_visibility",
+    "cyc:site_13:2026-10-21:ai_visibility",
+    "cyc:site_14:2026-10-21:ai_visibility",
+    "cyc:site_15:2026-10-21:ai_visibility",
+    "cyc:site_16:2026-10-21:ai_visibility",
+    "cyc:site_17:2026-10-21:ai_visibility",
+    "cyc:site_18:2026-10-21:ai_visibility",
+    "cyc:site_19:2026-10-21:ai_visibility"
+   ],
+   "starting": []
+  }
+ },
+ "dispatcher_published": true,
+ "exec_limit": 250,
+ "guard_check": {
+  "busy": false,
+  "busy_force": true,
+  "busy_force_monday": true,
+  "fresh_instance_no_tables": true,
+  "idle": true,
+  "running_only": true,
+  "unreachable": false,
+  "unreadable_401": false,
+  "unreadable_force": true
+ },
+ "jobs": [
+  {
+   "job": "ai_visibility",
+   "workflow_id": "SEOagentAIVisib1"
+  },
+  {
+   "job": "backlinks",
+   "workflow_id": "SEOagentBacklnk1"
+  },
+  {
+   "job": "rank_tracker",
+   "workflow_id": "SEOagentTracker1"
+  },
+  {
+   "job": "site_tracker",
+   "workflow_id": "SEOagentSiteTrk1"
+  },
+  {
+   "job": "ai_growth",
+   "workflow_id": "SEOagentAIGrow1"
+  },
+  {
+   "job": "content_cadence",
+   "workflow_id": "SEOagentCadence1"
+  },
+  {
+   "job": "link_builder",
+   "workflow_id": "SEOagentLinkBld1"
+  },
+  {
+   "job": "audit",
+   "workflow_id": "SEOagentAuditSc1"
+  }
+ ],
+ "jobs_days": 40,
+ "kickoff_codes": {
+  "Respond Kickoff Accepted": 202,
+  "Respond Kickoff Bad Request": 400,
+  "Respond Kickoff Dry Run": 200,
+  "Respond Kickoff Failed": 500,
+  "Respond Kickoff Refused": 409
+ },
+ "ledger_days": 2,
+ "n8n_api": "http://localhost:5678/api/v1",
+ "published_targets": [
+  "SEOagentAIGrow1",
+  "SEOagentAIVisib1",
+  "SEOagentAuditSc1",
+  "SEOagentBacklnk1",
+  "SEOagentCadence1",
+  "SEOagentLinkBld1",
+  "SEOagentSiteTrk1",
+  "SEOagentTracker1"
+ ],
+ "record_then_start": true,
+ "stale_plan_minutes": 10,
+ "sweep_cron": "3-58/5 * * * *",
+ "targets": {
+  "SEOagentAIGrow1": {
+   "entry_node": "Manual Run",
+   "file": "SEO_Agent_AI_Growth.json",
+   "name": "SEO Agent \u2014 AI Growth"
+  },
+  "SEOagentAIVisib1": {
+   "entry_node": "Manual Run",
+   "file": "SEO_Agent_AI_Visibility.json",
+   "name": "SEO Agent \u2014 AI Visibility Tracker"
+  },
+  "SEOagentAuditSc1": {
+   "entry_node": "Manual Run",
+   "file": "SEO_Agent_Audit_Scheduler.json",
+   "name": "SEO Agent \u2014 Audit Scheduler"
+  },
+  "SEOagentBacklnk1": {
+   "entry_node": "Manual Run",
+   "file": "SEO_Agent_Backlink_Monitor.json",
+   "name": "SEO Agent \u2014 Backlink Monitor"
+  },
+  "SEOagentCadence1": {
+   "entry_node": "Manual Run",
+   "file": "SEO_Agent_Content_Cadence.json",
+   "name": "SEO Agent \u2014 Content Cadence"
+  },
+  "SEOagentLinkBld1": {
+   "entry_node": "Manual Run",
+   "file": "SEO_Agent_Link_Builder.json",
+   "name": "SEO Agent \u2014 Link Builder"
+  },
+  "SEOagentSiteTrk1": {
+   "entry_node": "Manual Run",
+   "file": "SEO_Agent_Site_Tracker.json",
+   "name": "SEO Agent \u2014 Site Tracker"
+  },
+  "SEOagentTracker1": {
+   "entry_node": "Manual Run",
+   "file": "SEO_Agent_Rank_Tracker.json",
+   "name": "SEO Agent \u2014 Rank Tracker"
+  }
+ },
+ "tz": "America/New_York",
+ "workflow": {
+  "file": "SEO_Agent_Cycle_Dispatcher.json",
+  "id": "SEOagentCycleDsp",
+  "name": "SEO Agent \u2014 Cycle Dispatcher"
+ }
+}

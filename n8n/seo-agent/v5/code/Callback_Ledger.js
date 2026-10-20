@@ -24,6 +24,7 @@ const run_ledger = settled ? LCB.fromSettle(settled)
 // payload's `trigger: 'catchup'`, `scheduled_for`, `why`) or fired by its own schedule hours after the slot (the Mac asleep). The slot,
 // how late and why go on the callback as `ran_late`, first in the report's HTML and in its subject. An on-demand run is never "late".
 /*__CATCHUP__*/
+/*__SITE_TIME__*/
 const SCHED = __SCHED_JSON__;
 let __trig = {}, __fired = '';
 for (const __n of ['Manual Run', 'Watch Run']) { try { const __t = $(__n).first(); if (__t && __t.json) { __trig = __t.json; break; } } catch (e) {} }
@@ -31,8 +32,20 @@ if (__trig.body && typeof __trig.body === 'object') __trig = { ...__trig, ...__t
 if (SCHED.trigger) { try { const __t = $(SCHED.trigger).first(); if (__t && __t.json) __fired = String(__t.json.timestamp || ''); } catch (e) {} }
 let ran_late = { late: false };
 try { ran_late = CU.lateRun({ trigger: __trig.trigger, scheduled_for: __trig.scheduled_for, why: __trig.why, started_at: __trig.started_at, fired_at: __fired,
-  cron: SCHED.cron, tz: SCHED.tz, kind: SCHED.kind }); } catch (e) { ran_late = { late: false }; }
+  cron: SCHED.cron, tz: ST.okTz(__trig.tz) ? __trig.tz : (SCHED.tz || ST.engineTz()), kind: SCHED.kind }); } catch (e) { ran_late = { late: false }; }
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.5 / §14.2): a callback of a cycle run says so - `trigger: 'cycle'`, `cycle_key`, `cycle_date` (the
+// cycle's local due date) and `cycle_week` - and its report is dated by the cycle ("Week of Wed 15 Oct"), never by a Monday it did not run on.
+const __cyc = ST.cycleOf(__trig);
+const __cycFields = ST.callbackFields(__cyc);
 const __esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+const cycleMark = (j) => {
+  if (!__cyc || !__cyc.key) return j;
+  const o = { ...j, ...__cycFields };
+  if (__cyc.label && typeof o.subject === 'string' && o.subject && o.subject.indexOf(__cyc.label) < 0) o.subject = o.subject + ' · ' + __cyc.label;
+  const line = '<p class="cycle-week" style="margin:0 0 10px;color:#64748b;font:13px/1.5 sans-serif">' + __esc(__cyc.label) + ': this website\'s weekly cycle.</p>';
+  if (__cyc.label && typeof o.html === 'string' && o.html && o.html.indexOf('class="cycle-week"') < 0) o.html = /<body[^>]*>/i.test(o.html) ? o.html.replace(/<body[^>]*>/i, (b) => b + line) : line + o.html;
+  return o;
+};
 const lateMark = (j) => {
   if (!ran_late.late) return j;
   const box = '<div class="ran-late" style="border:1px solid #b45309;background:#fffbeb;color:#78350f;padding:10px 14px;margin:0 0 14px;font:14px/1.5 sans-serif"><strong>Ran late.</strong> ' + __esc(ran_late.text) + '</div>';
@@ -42,7 +55,7 @@ const lateMark = (j) => {
   return o;
 };
 return items.map((it) => {
-  const out = { json: lateMark({ ...((it && it.json) || {}), run_ledger }) };
+  const out = { json: lateMark(cycleMark({ ...((it && it.json) || {}), run_ledger })) };
   if (it && it.binary) out.binary = it.binary;
   return out;
 });

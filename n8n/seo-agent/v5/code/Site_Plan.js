@@ -6,6 +6,11 @@
 // aside for being a competitor's brand still bought a live rank check every week and still appeared in the weekly report. The same shared
 // read-path gate the Rank Tracker and the Content Cadence use (FITR, _fit_gate.js) runs here, and what it sets aside is named with its reason.
 /*__FIT_GATE__*/
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.5 / §4.8): three kinds of run. No site named = the batch over every active site (the old Monday run).
+// A site named with `on_demand` semantics = the owner or "Track my site" asking (a paused site still runs). A site named by a run of its weekly
+// cycle (`trigger: 'cycle'`, the Cycle Dispatcher) = a SCHEDULED run for that one site: `on_demand` false and a paused site honoured. The monthly
+// check-in reminder counts the website's own month (its time zone, seo_cycles.tz, else the engine zone).
+/*__SITE_TIME__*/
 const CONFIG = {
   service_account_email: '__SA_EMAIL__',   // filled from n8n/.env (SEO_GOOGLE_SA_EMAIL) at build time; shown in the connect instructions
   max_sites_per_run: 25, max_tracked_keywords: 40, max_gsc_keyword_requests: 30, max_trend_keywords: 4, max_serp_checks: 20,
@@ -46,17 +51,27 @@ const logRows = rowsOf('Load Content Log').filter(r => r.keyword && r.domain);  
 const alertRows = rowsOf('Load Console Alerts').filter(r => r.domain && r.kind);     // Search Console notification mails + check-in flags
 const checkinRows = rowsOf('Load Check-ins').filter(r => r.site_id && r.month);     // monthly owner check-ins (manual action / security / Pages export)
 const monRows = rowsOf('Load Monitors (Site)');   // B-G3: the declared competitors the fit gate needs on the read path
+const cycleRows = rowsOf('Load Cycles');          // 2026-10-19: each website's time zone and cycle weekday
 const byDomain = new Map();
 for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d, keywords: kwList(s.keywords), virtual: false }); }
 for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, gsc_property: '', ga4_property_id: '', country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', created_at: '', last_run_at: '', request_id: l.request_id || '', virtual: true }); }
 // a registered site without an address inherits the ladder's e-mail / callback for the same domain (API registrations with callback only)
 for (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }
 const want = normD(trigger.domain) || String(trigger.site_id || '').trim();
-const on_demand = !!want;
+const cycle = ST.cycleOf(trigger);
+const on_demand = !!want && !cycle;
 let list = [...byDomain.values()];
-if (on_demand) list = list.filter(s => s.domain === want || s.site_id === want);
+let cycle_why = '';
+if (want) {
+  list = list.filter(s => s.domain === want || s.site_id === want);
+  if (cycle) {
+    if (!list.length) cycle_why = 'no tracked website matches "' + want + '", so this cycle job had nothing to run';
+    else if (list.every(s => String(s.status || 'active') === 'paused')) cycle_why = list[0].domain + ' is paused, so its weekly cycle runs nothing until it is resumed';
+    list = list.filter(s => String(s.status || 'active') !== 'paused');
+  }
+}
 else list = list.filter(s => String(s.status || 'active') !== 'paused');
-if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no tracked site matches "' + want + '"' : 'no sites to track yet (register one through "Track my site" or plan a keyword ladder)', sites: byDomain.size } }];
+if (!list.length) return [{ json: { nothing_to_do: true, cycle, reason: cycle ? (cycle_why || 'nothing to run for this cycle') : on_demand ? 'no tracked site matches "' + want + '"' : 'no sites to track yet (register one through "Track my site" or plan a keyword ladder)', sites: byDomain.size } }];
 const end = new Date(Date.now() - 3 * 864e5); end.setUTCHours(0, 0, 0, 0);
 const iso = (d) => d.toISOString().slice(0, 10); const addDays = (d, n) => new Date(d.getTime() + n * 864e5);
 const ranges = { current: { start: iso(addDays(end, -27)), end: iso(end) }, previous: { start: iso(addDays(end, -55)), end: iso(addDays(end, -28)) }, yoy: { start: iso(addDays(end, -27 - 364)), end: iso(addDays(end, -364)) },
@@ -122,13 +137,24 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const cutoff = new Date(Date.now() - 35 * 864e5).toISOString();
   const console_alerts = alertRows.filter(a => normD(a.domain) === s.domain && String(a.received_at) >= cutoff).sort((a, b) => String(b.received_at).localeCompare(String(a.received_at))).slice(0, 10).map(a => ({ kind: a.kind, severity: a.severity, subject: a.subject, summary: a.summary, received_at: a.received_at, source: a.source || 'mail' }));
   const cks = checkinRows.filter(c => c.site_id === s.site_id).sort((a, b) => String(b.month).localeCompare(String(a.month)));
+  // 2026-10-19: the website's own calendar - its time zone and its cycle day (the report says "every Wednesday", or "each week" without one)
+  const tz = ST.tzOf(cycleRows, s); const cycle_weekday = ST.cycleWeekday(cycleRows, s);
+  const localMonth = ST.monthKey(now, tz);
+  // a check-in answers the month it was SUBMITTED in, in the website's time zone. The check-in mode stores `month` as the UTC month of the
+  // submission; when the two agree that is the same answer, shifted only at a month's edge (21:00 New York on the 31st is the 1st in UTC).
+  // A row whose stored month is NOT its submission's UTC month was given its month explicitly, and that month is kept; a row with no
+  // submission time keeps its stored month.
+  const checkinMonth = (c) => { const sm = String(c.month || ''), at = String(c.submitted_at || '');
+    if (!at || !Number.isFinite(Date.parse(at))) return sm;
+    if (sm && sm !== new Date(Date.parse(at)).toISOString().slice(0, 7)) return sm;
+    return ST.monthKey(at, tz) || sm; };
   const last_checkin = cks[0] ? { month: cks[0].month, manual_action: !!cks[0].manual_action, security_issue: !!cks[0].security_issue, not_indexed_total: Number(cks[0].not_indexed_total), csv_kind: cks[0].csv_kind || 'none', coverage: (() => { try { return JSON.parse(cks[0].coverage_json || '{}'); } catch (e) { return {}; } })(), notes: cks[0].notes || '', submitted_at: cks[0].submitted_at || '' } : null;
   // B7-7 (W3-D): the owner's own dated notes (monthly check-ins) become chart marks; test check-ins never do
   const owner_notes = checkinRows.filter(c => c.site_id === s.site_id && !c.is_test && String(c.notes || '').trim() && String(c.submitted_at || '').slice(0, 10))
     .map(c => ({ date: String(c.submitted_at).slice(0, 10), text: String(c.notes).trim().slice(0, 300), source: 'seo_console_checkins' })).slice(0, 24);
   // B7-5 (W3-D): content groups -- [{name, pattern}] from the site row (Site Admin action content_groups); none when unset, and it says so
   const content_groups = (() => { try { const v = JSON.parse(s.content_groups_json || '[]'); return (Array.isArray(v) ? v : []).map(g => ({ name: String(g && g.name || '').trim().slice(0, 60), pattern: String(g && g.pattern || '').trim().slice(0, 200) })).filter(g => g.name && g.pattern).slice(0, 12); } catch (e) { return []; } })();
-  const checkin_due = !cks.some(c => c.month === now.slice(0, 7));
+  const checkin_due = !cks.some(c => checkinMonth(c) === localMonth);
   const serp = {};
   for (const h of history) { if (normD(h.domain) !== s.domain) continue; const k = String(h.keyword).toLowerCase(); if (!serp[k] || String(h.checked_at) > String(serp[k].checked_at)) serp[k] = { position: Number(h.position), url: h.url || '', checked_at: h.checked_at }; }
   return { json: { site_id: s.site_id, domain: s.domain, gsc_property_hint: s.gsc_property || '', ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, ''), country: s.country || '', location_code: Number(s.location_code) || 0, language_code: s.language_code || 'en',
@@ -139,5 +165,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     // B7-1: the dated changes, readable ones first; GSC Requests buys the two windows of the first `max_change_tests`, the rest
     // travel with the reason they could not be read so the report says so instead of showing a shorter list
     changes: changes.slice(0, Math.max(CONFIG.max_change_tests, 12)),
-    owner_notes, content_groups, content_groups_json: s.content_groups_json || '', serp_positions: serp, pending_publish, needs_fix, console_alerts, last_checkin, checkin_due, ranges, on_demand, checked_at: now, config: CONFIG } };
+    owner_notes, content_groups, content_groups_json: s.content_groups_json || '', serp_positions: serp, pending_publish, needs_fix, console_alerts, last_checkin, checkin_due, ranges, on_demand, checked_at: now, config: CONFIG,
+    // 2026-10-19: the cycle this run belongs to (null outside one), the website's zone, its cycle day and the words for it
+    cycle, tz, local_month: localMonth, cycle_weekday, every_week: ST.everyText(cycle_weekday) } };
 });

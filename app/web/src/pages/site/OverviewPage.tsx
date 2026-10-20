@@ -4,6 +4,7 @@ import { Activity, BellRing, Bot, CalendarDays, CheckCircle2, Clock, FileText, G
 import { compactNumber, type OverviewData } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { useSiteData } from '@/lib/queries';
+import { useCycleDay } from '@/lib/cycle-day';
 import { paths } from '@/lib/paths';
 import { cn, fmtDate, fmtDateTime } from '@/lib/utils';
 import { AnnotationLegend, ChartCard, LineageNote, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
@@ -18,6 +19,8 @@ import { diff, fmtMonthShort, fmtRange, lastTwo, pct, pctChange, plural, sortByD
 import { plotAvgPos, PositionMove, posText } from './_components/positions';
 import { CATEGORY_META, RecommendationButton, sortRecommendations } from './_components/recommendations';
 import { ReportList } from './_components/reports';
+
+import { ComingUpSummary } from './_components/pipeline/coming-up';
 
 export default function OverviewPage() {
   const { org, site } = useSitePage();
@@ -135,6 +138,9 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
           </>
         }
       />
+
+      {/* keyword-first: the plan of the next weekly run, two days before it (it links to the Pipeline) */}
+      <ComingUpSummary />
 
       {/* site health, AI answers, links and rankings: one card each */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -396,13 +402,14 @@ function PausedNotice({ d }: { d: OverviewData }) {
 /** What is still missing for a complete picture, as a short checklist. */
 function SetupChecklist({ d }: { d: OverviewData }) {
   const { can, page } = useSitePage();
+  const day = useCycleDay();
   const tracking = d.site.trackingStatus;
   const steps: Step[] = [
     {
       done: tracking === 'active' || !!d.search.latest,
       title: 'Weekly tracking',
       icon: <TrendingUp />,
-      detail: 'Search Console, Analytics, Google Trends and live rank checks every Monday.',
+      detail: `Search Console, Analytics, Google Trends and live rank checks ${day.every}.`,
       action: (
         <div className="flex flex-wrap items-center gap-2">
           {can('admin') ? (
@@ -465,6 +472,7 @@ function ChartTitle({ icon, children, info }: { icon: ReactNode; children: React
 function SearchTrend({ series, kind, loading, className, annotations, lineage }: { series: OverviewData['search']['series']; kind: OverviewData['search']['seriesKind']; loading: boolean; className?: string; annotations?: OverviewData['search']['annotations']; lineage?: OverviewData['search']['lineage'] }) {
   const [metric, setMetric] = useState<Metric>('clicks');
   const { page } = useSitePage();
+  const day = useCycleDay();
   const m = METRICS.find((x) => x.value === metric)!;
   const rows = series.map((r) => ({ ...r, position: plotAvgPos(r.position) }));
   const first = series[0];
@@ -508,7 +516,7 @@ function SearchTrend({ series, kind, loading, className, annotations, lineage }:
         <EmptyState
           icon={<TrendingUp className="size-5" />}
           title="No search data yet"
-          description="Weekly tracking reads Search Console and Google Analytics every Monday; the first report arrives a few minutes after you start it."
+          description={`Weekly tracking reads Search Console and Google Analytics ${day.every}; the first report arrives a few minutes after you start it.`}
         />
       )}
     </ChartCard>
@@ -647,7 +655,7 @@ function ContentCard({ d, className }: { d: OverviewData; className?: string }) 
         <ContentStat icon={<CheckCircle2 />} tone={c.published > 0 ? 'good' : 'neutral'} label="Published" value={c.published} info="live and checked" />
         <ContentStat icon={<Clock />} tone={c.pendingPublish > 0 ? 'warning' : 'neutral'} label="Waiting to publish" value={c.pendingPublish} info={c.pendingPublish ? 'written, not live yet' : 'nothing waiting'} />
         <ContentStat icon={<Clock />} tone={(c.needsFix ?? 0) > 0 ? 'warning' : 'neutral'} label="Needs a fix" value={c.needsFix ?? 0} info={(c.needsFix ?? 0) ? 'failed the quality check' : 'nothing to fix'} />
-        <ContentStat icon={<CalendarDays />} tone="blue" label="Blog posts per week" value={c.pagesPerWeek || 'Off'} hint={`${plural(c.caseStudies, 'case study', 'case studies')} on file`} />
+        <ContentStat icon={<CalendarDays />} tone="blue" label="Pages a week for your keyword" value={c.pagesPerWeek || 'Off'} hint={`${plural(c.caseStudies, 'case study', 'case studies')} on file`} />
       </div>
       {c.pendingPublish > 0 && (
         <Callout tone="warning" className="mt-4">

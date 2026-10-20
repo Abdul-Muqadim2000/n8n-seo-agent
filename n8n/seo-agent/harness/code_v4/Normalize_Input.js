@@ -287,6 +287,13 @@ const crawl_js_req = p2.crawl_js !== undefined ? (!!p2.crawl_js && !/^(false|0|n
 if (crawl_js_req && crawl_pages > 500) throw new Error('JavaScript rendering is limited to 500 pages per audit (it is about 10x slower); choose 500 or fewer pages.');
 const pagesRaw = parseInt(String(pick(p2, 'pages to write') || p2.pages_now || CONFIG.ladder_pages_default), 10);
 const pages_now = Math.min(3, Math.max(1, isNaN(pagesRaw) ? CONFIG.ladder_pages_default : pagesRaw));
+// keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §14.5): exact keys only (see build_v4.py)
+const KF_CHOSEN = ['client_typed', 'client_picked', 'system_announced'].includes(String(p2.chosen_by || '').trim().toLowerCase()) ? String(p2.chosen_by).trim().toLowerCase() : '';
+const KF_LADDER_MODE = ['auto', 'manual'].includes(String(p2.ladder_mode || '').trim().toLowerCase()) ? String(p2.ladder_mode).trim().toLowerCase() : '';
+const KF_SERVICES_GIVEN = Array.isArray(p2.services) || typeof p2.services === 'string';
+const KF_SERVICES = (Array.isArray(p2.services) ? p2.services : String(p2.services || '').split(/[\n,;]+/)).map(x => String(x == null ? '' : x).replace(/\s+/g, ' ').trim().slice(0, 80)).filter(x => x.length >= 2).filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i).slice(0, 30);
+const KF_TRACK_START = (() => { const v = String(p2.tracking_started_at == null ? '' : p2.tracking_started_at).trim(); if (!v || v.length > 40) return ''; const t = Date.parse(v); return Number.isFinite(t) ? new Date(t).toISOString() : ''; })();   // E4: the app's trackingStartedAt (the cycle's anchor; its window is checked by the cycle kit)
+const KF_TZ = (() => { const t = String(p2.timezone || '').trim(); if (!t || t.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-]+)*$/.test(t)) return ''; try { new Intl.DateTimeFormat('en-US', { timeZone: t }); return t; } catch (e) { return ''; } })();
 const ladder_links = Array.isArray(p2.ladder_links) ? p2.ladder_links.filter(l => l && l.url).slice(0, 20) : [];
 const wordpress_url = String(p2.wordpress_url || '').trim();
 const AT = (p2.ai_target && typeof p2.ai_target === 'object' && !Array.isArray(p2.ai_target)) ? p2.ai_target : null;
@@ -410,6 +417,13 @@ return [{
     local_area,
     video,
     pipeline_source: String(p2.pipeline_source || ''),
+    chosen_by: KF_CHOSEN,
+    ladder_mode: KF_LADDER_MODE,
+    services: KF_SERVICES,
+    services_given: KF_SERVICES_GIVEN,
+    facts_given: Object.prototype.hasOwnProperty.call(p2 || {}, 'business_facts'),   // P1 (2026-10-20): Track my site stores the facts only when the key is sent
+    timezone: KF_TZ,
+    tracking_started_at: KF_TRACK_START,
     chosen_keyword_reason: String(p2.chosen_keyword_reason || '').slice(0, 300),
     ladder_id: String(p2.ladder_id || (mode === 'ladder' ? 'lad_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : '')),
     ladder_rung: (p2.ladder_rung != null && p2.ladder_rung !== '') ? Number(p2.ladder_rung) : null,
@@ -419,7 +433,7 @@ return [{
     ladder_target_url: /^https?:\/\/\S+$/i.test(String(p2.ladder_target_url || '').trim()) ? String(p2.ladder_target_url).trim().slice(0, 300) : '',   // R15: the URL the ladder planned for this page
     ladder_measure: (p2.ladder_measure && typeof p2.ladder_measure === 'object' && !Array.isArray(p2.ladder_measure)) ? { keyword: String(p2.ladder_measure.keyword || '').toLowerCase().trim().slice(0, 200),
       score: (p2.ladder_measure.score === null || p2.ladder_measure.score === '' || !Number.isFinite(Number(p2.ladder_measure.score))) ? null : Number(p2.ladder_measure.score),
-      checked_at: String(p2.ladder_measure.checked_at || '').slice(0, 40), ai_overview: p2.ladder_measure.ai_overview === true,
+      checked_at: String(p2.ladder_measure.checked_at || '').slice(0, 40), ai_overview: p2.ladder_measure.ai_overview === true, ai_overview_read: p2.ladder_measure.ai_overview_read !== false,
       features: Array.isArray(p2.ladder_measure.features) ? p2.ladder_measure.features.slice(0, 12).map(x => String(x).slice(0, 40)) : [] } : null,   // A-21: what the ladder run measured for this keyword
     ai_target,
     force_content: !!p2.force_content,

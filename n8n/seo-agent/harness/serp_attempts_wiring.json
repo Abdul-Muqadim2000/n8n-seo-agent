@@ -1,0 +1,404 @@
+{
+ "bodies": {
+  "SERP Top 10": "=[{\n       \"keyword\": \"{{ $json.keyword }}\",\n       \"location_code\": {{ $json.location_code }},\n       \"language_code\": \"{{ $json.language_code || 'en' }}\",\n       \"depth\": 30,\n       \"load_async_ai_overview\": true\n     }]",
+  "SERP Top 10 (Light Retry)": "=[{\n       \"keyword\": \"{{ $('Collect Site URLs').first().json.keyword }}\",\n       \"location_code\": {{ $('Collect Site URLs').first().json.location_code }},\n       \"language_code\": \"{{ $('Collect Site URLs').first().json.language_code || 'en' }}\",\n       \"depth\": 10\n     }]",
+  "SERP Top 10 (Retry)": "=[{\n       \"keyword\": \"{{ $('Collect Site URLs').first().json.keyword }}\",\n       \"location_code\": {{ $('Collect Site URLs').first().json.location_code }},\n       \"language_code\": \"{{ $('Collect Site URLs').first().json.language_code || 'en' }}\",\n       \"depth\": 30,\n       \"load_async_ai_overview\": true\n     }]"
+ },
+ "chain": [
+  "SERP Top 10",
+  "SERP Failed?",
+  "Wait Before SERP Retry",
+  "SERP Top 10 (Retry)",
+  "SERP Retry Failed?",
+  "Wait Before SERP Light Retry",
+  "SERP Top 10 (Light Retry)",
+  "Pick Top 6"
+ ],
+ "connections": {
+  "SERP Failed?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Wait Before SERP Retry",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Pick Top 6",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "SERP Retry Failed?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Wait Before SERP Light Retry",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Pick Top 6",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "SERP Top 10": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "SERP Failed?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "SERP Top 10 (Light Retry)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Pick Top 6",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "SERP Top 10 (Retry)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "SERP Retry Failed?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Wait Before SERP Light Retry": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "SERP Top 10 (Light Retry)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Wait Before SERP Retry": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "SERP Top 10 (Retry)",
+      "type": "main"
+     }
+    ]
+   ]
+  }
+ },
+ "gate_conditions": {
+  "SERP Failed?": "={{ !!($json.error || Number($json.status_code) >= 40000 || !Array.isArray($json.tasks) || !Number((($json.tasks || [])[0] || {}).status_code) || Number((($json.tasks || [])[0] || {}).status_code) >= 40000 || (Number((($json.tasks || [])[0] || {}).status_code) === 20000 && !(((($json.tasks || [])[0] || {}).result) || [])[0])) && (!/permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no search results|no access|invalid field|unknown field|unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i.test(String((((($json.tasks || [])[0] || {}).status_message) || $json.status_message || ($json.error && ($json.error.message || $json.error)) || ''))) || /internal (?:se )?server error|internal error|server error|timeout|timed out|temporar|try again|unavailable|backend|deadline exceeded|connection|socket|econn|eai_again|rate limit|too many requests|\\b(?:429|500|502|503|504)\\b/i.test(String((((($json.tasks || [])[0] || {}).status_message) || $json.status_message || ($json.error && ($json.error.message || $json.error)) || '')))) }}",
+  "SERP Retry Failed?": "={{ !!($json.error || Number($json.status_code) >= 40000 || !Array.isArray($json.tasks) || !Number((($json.tasks || [])[0] || {}).status_code) || Number((($json.tasks || [])[0] || {}).status_code) >= 40000 || (Number((($json.tasks || [])[0] || {}).status_code) === 20000 && !(((($json.tasks || [])[0] || {}).result) || [])[0])) && (!/permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no search results|no access|invalid field|unknown field|unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i.test(String((((($json.tasks || [])[0] || {}).status_message) || $json.status_message || ($json.error && ($json.error.message || $json.error)) || ''))) || /internal (?:se )?server error|internal error|server error|timeout|timed out|temporar|try again|unavailable|backend|deadline exceeded|connection|socket|econn|eai_again|rate limit|too many requests|\\b(?:429|500|502|503|504)\\b/i.test(String((((($json.tasks || [])[0] || {}).status_message) || $json.status_message || ($json.error && ($json.error.message || $json.error)) || '')))) }}"
+ },
+ "ledger_lists": {
+  "Build Audit Report": [
+   "AI Demand (Retry)",
+   "AI SERP (Retry)",
+   "Ask LLMs (Retry)",
+   "Backlink Gap (Retry)",
+   "Backlink Summary (Retry)",
+   "Candidate SERP (Retry)",
+   "DataForSEO Whois (Retry)",
+   "Domain Overview (Retry)",
+   "Fallback SERP (Retry)",
+   "Fetch GBP (Retry)",
+   "Find Competitors (Retry)",
+   "Get Crawled Pages (Retry)",
+   "Keyword Ideas (Retry)",
+   "Ranked Keywords (Retry)",
+   "Run Competitor Keywords (Retry)",
+   "Run Crawl Extras (Retry)",
+   "Run Ladder Research (Retry)",
+   "Run Reach Requests (Retry)",
+   "Run Research (Retry)",
+   "Site Authority (Retry)",
+   "Start Crawl (Retry)",
+   "SERP Top 10",
+   "SERP Top 10 (Retry)",
+   "SERP Top 10 (Light Retry)",
+   "Facts SERP (Retry)",
+   "Keyword Data",
+   "Keyword Data (Retry)",
+   "Candidate SERP",
+   "Run Ladder Cluster SERP",
+   "Run Ladder Cluster SERP (Retry)",
+   "Discover Ideas",
+   "Start Crawl",
+   "Get Crawl Summary",
+   "Get Crawled Pages",
+   "Run Crawl Extras",
+   "Find Competitors",
+   "Fallback SERP",
+   "Domain Overview",
+   "DataForSEO Whois",
+   "Ranked Keywords",
+   "Keyword Ideas",
+   "Backlink Summary",
+   "Backlink Gap",
+   "AI SERP",
+   "Ask LLMs",
+   "Facts SERP",
+   "Site Authority",
+   "Run Research",
+   "Run Competitor Keywords",
+   "AI Demand",
+   "Fetch GBP"
+  ],
+  "Build Full Report": [
+   "AI Demand (Retry)",
+   "AI SERP (Retry)",
+   "Ask LLMs (Retry)",
+   "Backlink Gap (Retry)",
+   "Backlink Summary (Retry)",
+   "Candidate SERP (Retry)",
+   "DataForSEO Whois (Retry)",
+   "Domain Overview (Retry)",
+   "Fallback SERP (Retry)",
+   "Fetch GBP (Retry)",
+   "Find Competitors (Retry)",
+   "Get Crawled Pages (Retry)",
+   "Keyword Ideas (Retry)",
+   "Ranked Keywords (Retry)",
+   "Run Competitor Keywords (Retry)",
+   "Run Crawl Extras (Retry)",
+   "Run Ladder Research (Retry)",
+   "Run Reach Requests (Retry)",
+   "Run Research (Retry)",
+   "Site Authority (Retry)",
+   "Start Crawl (Retry)",
+   "SERP Top 10",
+   "SERP Top 10 (Retry)",
+   "SERP Top 10 (Light Retry)",
+   "Facts SERP (Retry)",
+   "Keyword Data",
+   "Keyword Data (Retry)",
+   "Candidate SERP",
+   "Run Ladder Cluster SERP",
+   "Run Ladder Cluster SERP (Retry)",
+   "Discover Ideas",
+   "Start Crawl",
+   "Get Crawl Summary",
+   "Get Crawled Pages",
+   "Run Crawl Extras",
+   "Find Competitors",
+   "Fallback SERP",
+   "Domain Overview",
+   "DataForSEO Whois",
+   "Ranked Keywords",
+   "Keyword Ideas",
+   "Backlink Summary",
+   "Backlink Gap",
+   "AI SERP",
+   "Ask LLMs",
+   "Facts SERP",
+   "Site Authority",
+   "Run Research",
+   "Run Competitor Keywords",
+   "AI Demand",
+   "Fetch GBP"
+  ],
+  "Build Keyword File": [
+   "AI Demand (Retry)",
+   "AI SERP (Retry)",
+   "Ask LLMs (Retry)",
+   "Backlink Gap (Retry)",
+   "Backlink Summary (Retry)",
+   "Candidate SERP (Retry)",
+   "DataForSEO Whois (Retry)",
+   "Domain Overview (Retry)",
+   "Fallback SERP (Retry)",
+   "Fetch GBP (Retry)",
+   "Find Competitors (Retry)",
+   "Get Crawled Pages (Retry)",
+   "Keyword Ideas (Retry)",
+   "Ranked Keywords (Retry)",
+   "Run Competitor Keywords (Retry)",
+   "Run Crawl Extras (Retry)",
+   "Run Ladder Research (Retry)",
+   "Run Reach Requests (Retry)",
+   "Run Research (Retry)",
+   "Site Authority (Retry)",
+   "Start Crawl (Retry)",
+   "SERP Top 10",
+   "SERP Top 10 (Retry)",
+   "SERP Top 10 (Light Retry)",
+   "Facts SERP (Retry)",
+   "Keyword Data",
+   "Keyword Data (Retry)",
+   "Candidate SERP",
+   "Run Ladder Cluster SERP",
+   "Run Ladder Cluster SERP (Retry)",
+   "Discover Ideas",
+   "Start Crawl",
+   "Get Crawl Summary",
+   "Get Crawled Pages",
+   "Run Crawl Extras",
+   "Find Competitors",
+   "Fallback SERP",
+   "Domain Overview",
+   "DataForSEO Whois",
+   "Ranked Keywords",
+   "Keyword Ideas",
+   "Backlink Summary",
+   "Backlink Gap",
+   "AI SERP",
+   "Ask LLMs",
+   "Facts SERP",
+   "Site Authority",
+   "Run Research",
+   "Run Competitor Keywords",
+   "AI Demand",
+   "Run Reach Requests"
+  ],
+  "Build Ladder Report": [
+   "AI Demand (Retry)",
+   "AI SERP (Retry)",
+   "Ask LLMs (Retry)",
+   "Backlink Gap (Retry)",
+   "Backlink Summary (Retry)",
+   "Candidate SERP (Retry)",
+   "DataForSEO Whois (Retry)",
+   "Domain Overview (Retry)",
+   "Fallback SERP (Retry)",
+   "Fetch GBP (Retry)",
+   "Find Competitors (Retry)",
+   "Get Crawled Pages (Retry)",
+   "Keyword Ideas (Retry)",
+   "Ranked Keywords (Retry)",
+   "Run Competitor Keywords (Retry)",
+   "Run Crawl Extras (Retry)",
+   "Run Ladder Research (Retry)",
+   "Run Reach Requests (Retry)",
+   "Run Research (Retry)",
+   "Site Authority (Retry)",
+   "Start Crawl (Retry)",
+   "SERP Top 10",
+   "SERP Top 10 (Retry)",
+   "SERP Top 10 (Light Retry)",
+   "Facts SERP (Retry)",
+   "Keyword Data",
+   "Keyword Data (Retry)",
+   "Candidate SERP",
+   "Run Ladder Cluster SERP",
+   "Run Ladder Cluster SERP (Retry)",
+   "Discover Ideas",
+   "Start Crawl",
+   "Get Crawl Summary",
+   "Get Crawled Pages",
+   "Run Crawl Extras",
+   "Find Competitors",
+   "Fallback SERP",
+   "Domain Overview",
+   "DataForSEO Whois",
+   "Ranked Keywords",
+   "Keyword Ideas",
+   "Backlink Summary",
+   "Backlink Gap",
+   "AI SERP",
+   "Ask LLMs",
+   "Facts SERP",
+   "Site Authority",
+   "Run Research",
+   "Run Competitor Keywords",
+   "AI Demand",
+   "Run Ladder Research"
+  ],
+  "Build Word File": [
+   "AI Demand (Retry)",
+   "AI SERP (Retry)",
+   "Ask LLMs (Retry)",
+   "Backlink Gap (Retry)",
+   "Backlink Summary (Retry)",
+   "Candidate SERP (Retry)",
+   "DataForSEO Whois (Retry)",
+   "Domain Overview (Retry)",
+   "Fallback SERP (Retry)",
+   "Fetch GBP (Retry)",
+   "Find Competitors (Retry)",
+   "Get Crawled Pages (Retry)",
+   "Keyword Ideas (Retry)",
+   "Ranked Keywords (Retry)",
+   "Run Competitor Keywords (Retry)",
+   "Run Crawl Extras (Retry)",
+   "Run Ladder Research (Retry)",
+   "Run Reach Requests (Retry)",
+   "Run Research (Retry)",
+   "Site Authority (Retry)",
+   "Start Crawl (Retry)",
+   "SERP Top 10",
+   "SERP Top 10 (Retry)",
+   "SERP Top 10 (Light Retry)",
+   "Facts SERP (Retry)",
+   "Keyword Data",
+   "Keyword Data (Retry)",
+   "Candidate SERP",
+   "Run Ladder Cluster SERP",
+   "Run Ladder Cluster SERP (Retry)",
+   "Discover Ideas",
+   "Start Crawl",
+   "Get Crawl Summary",
+   "Get Crawled Pages",
+   "Run Crawl Extras",
+   "Find Competitors",
+   "Fallback SERP",
+   "Domain Overview",
+   "DataForSEO Whois",
+   "Ranked Keywords",
+   "Keyword Ideas",
+   "Backlink Summary",
+   "Backlink Gap",
+   "AI SERP",
+   "Ask LLMs",
+   "Facts SERP",
+   "Site Authority",
+   "Run Research",
+   "Run Competitor Keywords",
+   "AI Demand"
+  ]
+ },
+ "retry_settings": {
+  "SERP Top 10 (Light Retry)": {
+   "maxTries": 3,
+   "onError": "continueRegularOutput",
+   "retryOnFail": true,
+   "waitBetweenTries": 5000
+  },
+  "SERP Top 10 (Retry)": {
+   "maxTries": 3,
+   "onError": "continueRegularOutput",
+   "retryOnFail": true,
+   "waitBetweenTries": 5000
+  }
+ },
+ "waits": {
+  "Wait Before SERP Light Retry": {
+   "amount": 45,
+   "unit": "seconds"
+  },
+  "Wait Before SERP Retry": {
+   "amount": 20,
+   "unit": "seconds"
+  }
+ }
+}

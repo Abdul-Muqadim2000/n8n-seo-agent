@@ -217,18 +217,28 @@ const CU = (() => {
   const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const wall = (tz, t) => { const p = parts(tz, t), pad = (n) => String(n).padStart(2, '0');
     return WD[new Date(Date.UTC(p.y, p.mo - 1, p.d)).getUTCDay()] + ' ' + p.d + ' ' + MO[p.mo - 1] + ' ' + p.y + ', ' + pad(p.h) + ':' + pad(p.mi) + ' (' + tz + ')'; };
+  // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.5): a job of a website's weekly cycle (`trigger: 'cycle'`, the Cycle Dispatcher) is late against
+  // its cycle's due time (`scheduled_for`). Its jobs run one after the other (about 40-60 minutes for a whole cycle), so a cycle job is called
+  // late only past CYCLE_LATE_MIN, not the 30 minutes a fixed slot allows; its words name the cycle, not a schedule.
+  const CYCLE_LATE_MIN = 180;
   const lateRun = (o) => {
-    const c = o || {}, tz = S(c.tz) || 'America/New_York', thr = Number(c.threshold_min) > 0 ? Number(c.threshold_min) : 30;
-    const via = S(c.trigger) === 'catchup' ? 'catchup' : S(c.fired_at) ? 'schedule' : '';
+    const c = o || {}, tz = S(c.tz) || 'America/New_York';
+    const via = S(c.trigger) === 'catchup' ? 'catchup' : S(c.trigger) === 'cycle' ? 'cycle' : S(c.fired_at) ? 'schedule' : '';
     if (!via) return { late: false, via: 'on_demand' };
+    const thr = Number(c.threshold_min) > 0 ? Number(c.threshold_min) : (via === 'cycle' ? CYCLE_LATE_MIN : 30);
     let due = 0;
-    try { due = via === 'catchup' ? ms(c.scheduled_for) : (c.cron ? lastDue(c.cron, tz, ms(c.fired_at)) : 0); } catch (e) { due = 0; }
+    try { due = (via === 'catchup' || via === 'cycle') ? ms(c.scheduled_for) : (c.cron ? lastDue(c.cron, tz, ms(c.fired_at)) : 0); } catch (e) { due = 0; }
     const started = ms(c.started_at) || ms(c.fired_at) || ms(c.now);
     if (!due || !started) return { late: false, via, reason: 'the due time could not be worked out' };
     const late_min = Math.max(0, Math.round((started - due) / MIN));
     const out = { late: late_min > thr, via, due: iso(due), started_at: iso(started), late_min, kind: S(c.kind) };
     if (!out.late) return out;
     const what = { daily: 'daily', weekly: 'weekly', monthly: 'monthly' }[S(c.kind)] || 'scheduled';
+    if (via === 'cycle') {
+      out.why = S(c.why) || 'the cycle started after its due time (the engine was stopped, restarting or busy with other websites)';
+      out.text = 'This is the run of this website\'s weekly cycle that was due ' + wall(tz, due) + '. It ran ' + dur(late_min) + ' late: ' + out.why + '. Its figures are as of when it ran, not as of the due time.';
+      return out;
+    }
     out.why = via === 'catchup' ? (S(c.why) || 'its scheduled time was missed') + '; the schedule catch-up started it'
       : 'the schedule fired late (the computer running the engine was asleep or restarting at the due time)';
     out.text = 'This is the ' + what + ' run that was due ' + wall(tz, due) + '. It ran ' + dur(late_min) + ' late: ' + out.why + '. Its figures are as of when it ran, not as of the due time.';
@@ -272,7 +282,33 @@ const CU = (() => {
       last_result: 'not listening: the re-activation failed (' + err + ') - attempt ' + failures,
       alarm: failures >= cfg.alarm_after && (failures - cfg.alarm_after) % cfg.alarm_every === 0 };
   };
-  return { plan, lastDue, nextDue, parse, zonedToUtc, offset, stalePlan, lateRun, wall, dur, watchdog, watchdogResult, DEFAULTS, DEAD, WD_DEFAULTS };
+  // ---- F-ENG (2026-10-20): the Cycle Dispatcher's watchdog. Every website's week is started by one workflow sweeping every 5 minutes; when it is
+  // not published (a deploy imported it and left it inactive) or has stopped sweeping, no website's cycle runs and nothing else says so.
+  // Its own record is the evidence: seo_cache `cycle:last` is written at the end of every real sweep (plan_only included). Alarm when the
+  // workflow is inactive, or that record is older than `stale_minutes` (no record: older than that since the workflow was last updated),
+  // rate-limited to one alarm every `alarm_every_hours` while it lasts; nothing on the door n8n has just started through (its own sweep
+  // comes 45 s later) or in a test. o: { wf: {ok, active, updatedAt, error}, last: {updated_at} | null, state, now, entry, test }
+  const CW_DEFAULTS = { stale_minutes: 20, alarm_every_hours: 6 };
+  const cycleWatchdog = (o) => {
+    const c = o || {}, cfg = { ...CW_DEFAULTS, ...(c.config || {}) }, now = ms(c.now) || Date.now(), st = parseValue(c.state || {}), wf = c.wf || {};
+    const lastAt = ms(c.last && c.last.updated_at), age = lastAt ? (now - lastAt) / MIN : null;
+    const since = wf.ok ? ms(wf.updatedAt) : 0;
+    const problems = [];
+    if (wf.ok && wf.active === false) problems.push('the Cycle Dispatcher (SEOagentCycleDsp) is not active: no website\'s cycle is started (publish it - a deploy imports it inactive; deploy_manifest.json publishes it)');
+    if (lastAt && age > cfg.stale_minutes) problems.push('its last sweep (seo_cache cycle:last) was ' + dur(age) + ' ago, at ' + iso(lastAt) + ' (it sweeps every 5 minutes)');
+    else if (!lastAt && (!wf.ok || wf.active !== false) && since && (now - since) / MIN > cfg.stale_minutes) problems.push('it has written no sweep record (seo_cache cycle:last) in the ' + dur((now - since) / MIN) + ' since it was last updated');
+    const base = { checked_at: iso(now), last_sweep_at: lastAt ? iso(lastAt) : '', active: wf.ok ? wf.active !== false : null, read: wf.ok ? '' : (S(wf.error) || 'no answer') };
+    if (c.test) return { ...base, verdict: 'test', alarm: false, reason: 'a test run of the catch-up does not judge the dispatcher', state: st };
+    if (!problems.length) return { ...base, verdict: wf.ok ? 'sweeping' : 'blind', alarm: false, problems: [], reason: wf.ok ? 'active, last sweep ' + (lastAt ? dur(age) + ' ago' : 'none yet (updated ' + (since ? iso(since) : '?') + ')')
+      : 'the dispatcher workflow could not be read (' + base.read + '); its last sweep was ' + (lastAt ? dur(age) + ' ago' : 'never recorded'), state: { ...st, down_since: '', last_alarm_at: '' } };
+    const down = ms(st.down_since) || now;
+    if (c.entry === 'init') return { ...base, verdict: 'starting', alarm: false, problems, reason: 'n8n has just started: the dispatcher\'s own Instance Started sweep comes next, so this is judged at the next catch-up sweep', state: st };
+    const lastAlarm = ms(st.last_alarm_at), due = !lastAlarm || now - lastAlarm >= cfg.alarm_every_hours * H;
+    return { ...base, verdict: 'down', alarm: due, problems, down_since: iso(down),
+      reason: problems.join('; ') + (due ? '' : ' (alerted at ' + iso(lastAlarm) + '; again after ' + cfg.alarm_every_hours + ' h)'),
+      state: { ...st, down_since: iso(down), last_alarm_at: due ? iso(now) : S(st.last_alarm_at) } };
+  };
+  return { plan, lastDue, nextDue, parse, zonedToUtc, offset, stalePlan, lateRun, wall, dur, watchdog, watchdogResult, cycleWatchdog, DEFAULTS, DEAD, WD_DEFAULTS, CW_DEFAULTS, CYCLE_LATE_MIN };
 })();
 // ---- B-A9 (2026-10-15, build section 64): the ten schedules go through the same gate the API runs use ----
 // Every run started through the API passes *Rate Limit*: it reserves a seo_run_ledger row, counts the rows with a lower id, drops the stale
@@ -345,6 +381,13 @@ const RG = (() => {
   };
 
   const at = (r) => S(r && r.created_at).slice(11, 16);
+  const host = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §2.2 item 2 / §4.8): the twin rule is PER WEBSITE for a run that names one. With one Monday for
+  // everyone, a run of a monitor was a run over every site, so "the same monitor is still running" was the whole rule. With a 7-day cycle per
+  // website, two websites' AI Visibility runs are not twins and must not refuse each other; the same website twice still is. A run that names
+  // no website (the daily batch AI Pulse and Page Watch, a manual start over every site) keeps the mode-only rule, and a live run that names
+  // none (a batch run, which covers every site) is still the twin of any run of its mode.
+  const sameSite = (r, site) => !site || !host(r && r.domain) || host(r && r.domain) === site;
 
   // the gate a scheduled run passes. `mine` is the row this run just reserved (its id breaks ties).
   const gate = (o) => {
@@ -352,6 +395,8 @@ const RG = (() => {
     const nowMs = ms(c.now) || Date.now();
     const mode = S(c.mode) || S(mine.mode);
     const where = S(c.where) || mode;
+    const site = host(c.site);              // '' = a run over every site (the mode-only rule)
+    const cycle = c.cycle === true;         // a job of a website's weekly cycle: the Cycle Dispatcher retries a capacity refusal
     const parent_run_id = S(c.parent_run_id) || parentOf(mine);
     const ctx = { now: new Date(nowMs).toISOString(), my_id: n0(mine.id), run_id: S(c.run_id) || S(mine.run_id), stale_hours: c.stale_hours, parent_run_id };
     const live = liveRuns(rows, ctx);
@@ -362,7 +407,10 @@ const RG = (() => {
       + (stale ? ', ' + stale + ' stale reservation(s) ignored' : '')
       + (parentOpen ? ', the run that started this one (execution ' + parent_run_id + ') not counted' : '') + '; the limit is ' + max_open;
     const refuse = (reason, detail) => ({ allowed: false, reason, refusal: detail, open_runs: live.length, open: live.map(r => ({ mode: S(r.mode), run_id: S(r.run_id), at: at(r) })),
-      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id });
+      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id, site,
+      // a capacity refusal of a cycle job is not a lost week: the dispatcher starts it again at its next sweep, without spending an attempt
+      retry: cycle && ['same_mode', 'heavy_busy', 'too_many_open'].includes(reason) });
+    const RETRY = ' The website\'s weekly cycle starts it again in a few minutes, once the other run has finished; nothing of its week is lost.';
 
     // 0. R94 follow-up: this is the delayed timer of a slot the catch-up already ran - the week would run twice.
     if (c.caught_up) return refuse('caught_up', 'The catch-up already ran this scheduled slot (due ' + S(c.caught_up.due) + ', started ' + (S(c.caught_up.started_at) || 'earlier')
@@ -370,18 +418,21 @@ const RG = (() => {
 
     // 1. the same monitor is still running. A weekly check that overlaps its own previous run reads the same tables twice, writes the same
     //    rows twice and bills the same APIs twice; the one still going is the one with the data.
-    const twin = live.find(r => S(r.mode) === mode && mode);
-    if (twin) return refuse('same_mode', 'The previous ' + mode.replace(/_/g, ' ') + ' run (execution ' + S(twin.run_id) + ', started '
-      + (at(twin) || 'earlier') + ' UTC) is still going. Nothing was charged and nothing was started: this run would have read the same data and written the same rows twice.');
+    //    2026-10-19: of the same WEBSITE when this run names one (sameSite).
+    const twin = live.find(r => S(r.mode) === mode && mode && sameSite(r, site));
+    if (twin) return refuse('same_mode', 'The previous ' + mode.replace(/_/g, ' ') + ' run' + (site ? ' for ' + site : '') + ' (execution ' + S(twin.run_id) + ', started '
+      + (at(twin) || 'earlier') + ' UTC) is still going. Nothing was charged and nothing was started: this run would have read the same data and written the same rows twice.' + (cycle ? RETRY : ''));
 
     // 2. P34-5, shared with Rate Limit: one heavy crawl of a site at a time.
     const busy = heavyBusy(rows, { ...ctx, domain: S(c.domain) || S(mine.domain), heavy: c.heavy != null ? c.heavy : mine.heavy });
     if (busy) return refuse('heavy_busy', 'A large audit of ' + (S(c.domain) || S(mine.domain)).toLowerCase() + ' is already running (execution '
-      + S(busy.run_id) + ', started ' + (at(busy) || 'earlier') + ' UTC). Two big crawls of the same website at once overload the crawler and both time out, so this one was not started.');
+      + S(busy.run_id) + ', started ' + (at(busy) || 'earlier') + ' UTC). Two big crawls of the same website at once overload the crawler and both time out, so this one was not started.' + (cycle ? RETRY : ''));
 
     // 3. too much in flight at once.
+    //    2026-10-19: a cycle job is not skipped - the Cycle Dispatcher retries it (only a run with no dispatcher behind it waits for its next turn)
     if (live.length >= max_open) return refuse('too_many_open', 'There are already ' + live.length + ' analyses running (the limit is '
-      + max_open + '). Nothing was charged and nothing was started: this scheduled run is skipped and the next one goes ahead as usual.');
+      + max_open + '). Nothing was charged and nothing was started: ' + (cycle ? 'this job of ' + (site || 'the website') + '\'s weekly cycle is retried by the dispatcher in a few minutes, so its week is not lost.'
+        : 'this scheduled run is skipped and the next one goes ahead as usual.'));
 
     // 4. the account is the one cap nobody can argue with. Fail OPEN: a probe that did not answer is 0 and refuses nothing.
     const bal = n0(c.balance_usd != null ? c.balance_usd : mine.dfs_balance);
@@ -392,10 +443,10 @@ const RG = (() => {
       + '). Nothing was charged and nothing was started: a run that runs out of data credit half way through delivers half a report.');
 
     return { allowed: true, reason: 'ok', refusal: '', open_runs: live.length, open: live.map(r => ({ mode: S(r.mode), run_id: S(r.run_id), at: at(r) })),
-      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id };
+      stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id, site, retry: false };
   };
 
-  return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, STALE_HOURS, MAX_OPEN };
+  return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, sameSite, STALE_HOURS, MAX_OPEN };
 })();
 const plan = $('Watch Plan').all();
 let rows = []; try { rows = $('Load Open Runs (Watch)').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) { rows = []; }
@@ -428,12 +479,20 @@ if (__SCHED.trigger && __SCHED.cron) {
     } catch (e) { __caught = null; }   // fail OPEN: a scheduled run is never refused for a lookup that did not work
   }
 }
-const g = RG.gate({ rows, mine, mode: 'page_watch', where: 'SEO Agent — Page Watch', run_id: String($execution.id), caught_up: __caught, parent_run_id });
+// 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the twin rule is per website for a run that names one - a cycle job or an on-demand start
+// (trigger `domain`, or `site_id` with the domain on this run's row). A run that names none (the daily batch pulse / page watch) keeps the
+// mode-only rule. A cycle job's capacity refusal is retried by the Cycle Dispatcher, so its wording says so instead of "skipped".
+const __site = __S(__trig.domain) || (__S(__trig.site_id) ? __S((mine && mine.domain) || (__row && __row.domain)) : '');   // RG.gate normalises the host
+const __cycle = __S(__trig.trigger) === 'cycle';
+const g = RG.gate({ rows, mine, mode: 'page_watch', where: 'SEO Agent — Page Watch', run_id: String($execution.id), site: __site, cycle: __cycle, caught_up: __caught, parent_run_id });
 if (g.allowed || false) return plan;   // W3-F: a synchronous caller is waiting (the Reply Reader): it keeps its row but is never refused by what else is running
 let __dom = __S(__trig.domain);
 if (!__dom) { try { __dom = __S((plan[0] && plan[0].json || {}).domain); } catch (e) { __dom = ''; } }
 return [{ json: { run_refused: true, run_id: String($execution.id), refused_at: new Date().toISOString(),
-  cost_basis: ('refused before any spending: ' + g.refusal + ' [' + g.basis + ']').slice(0, 400),
+  // 2026-10-19: the reason code first, so the Cycle Dispatcher (which reads only the ledger row) tells a capacity refusal it retries
+  // (`same_mode`, `heavy_busy`, `too_many_open`) from one it does not (`account_low`, `caught_up`)
+  cost_basis: ('refused before any spending (' + g.reason + '): ' + g.refusal + ' [' + g.basis + ']').slice(0, 400),
+  retry: !!g.retry, cycle_key: __cycle ? __S(__trig.cycle_key) : '', site: g.site || '',
   reason: g.reason, refusal: g.refusal, basis: g.basis, open_runs: g.open_runs, open: g.open, max_open: g.max_open,
   stale_ignored: g.stale_ignored, mode: g.mode, where: g.where, parent_run_id,
   // R116: who to tell. Only a run started by hand (a Manual Run with a callback) has someone waiting; a scheduled refusal has nobody.

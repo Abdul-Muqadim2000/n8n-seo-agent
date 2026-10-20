@@ -1,11 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { creditActivityQuerySchema, creditLimitsSchema, creditPurchaseSchema, type BillingOverview, type CreditActivityPage, type CreditLimits, type CreditPurchaseRequest } from '@seo/shared';
-import { orgAccess } from '../auth/access';
+import { isUuid, orgAccess } from '../auth/access';
 import { db, schema } from '../db';
 import { notFound, parse } from '../lib/errors';
 import { audit } from '../services/audit';
 import { activityCsv, billingOverview, creditActivity, invalidateForecast, requestPack, requestView } from '../services/billing';
+import { invoicePdf } from '../services/invoices';
 
 // Credits, as the customer reads and controls them (app/docs/CREDITS.md). Reading needs membership (a viewer sees the balance its
 // analyses use); the company's own limits and asking for credits are an owner's / admin's decision. Client people of an agency never
@@ -37,6 +38,15 @@ export async function billingRoutes(app: FastifyInstance) {
       .header('content-type', 'text/csv; charset=utf-8')
       .header('content-disposition', `attachment; filename="credits-${a.org.slug}-${new Date().toISOString().slice(0, 10)}.csv"`)
       .send(activityCsv(rows));
+  });
+
+  // an invoice of the company's own (app/docs/CREDITS.md "Invoices"): any member may read it, as they read the requests and prices
+  app.get('/api/orgs/:orgId/billing/invoices/:invoiceId/pdf', async (req, reply) => {
+    const p = req.params as { orgId: string; invoiceId: string };
+    const a = await orgAccess(req, p.orgId);
+    const inv = isUuid(p.invoiceId) ? await db.query.invoices.findFirst({ where: and(eq(schema.invoices.id, p.invoiceId), eq(schema.invoices.orgId, a.org.id)) }) : null;
+    if (!inv) throw notFound('Invoice not found');
+    return reply.header('content-type', 'application/pdf').header('content-disposition', `attachment; filename="${inv.number}.pdf"`).send(await invoicePdf(inv));
   });
 
   app.put('/api/orgs/:orgId/billing/limits', async (req): Promise<CreditLimits> => {

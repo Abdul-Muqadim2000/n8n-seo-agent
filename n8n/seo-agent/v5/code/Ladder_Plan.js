@@ -6,6 +6,7 @@
 /*__KW_INPUTS__*/
 /*__WAITING__*/
 /*__OWN_COVER__*/
+/*__READINESS__*/
 // Ladder mode: applies the AI relevance screen, assigns keywords to rungs by difficulty, builds one page per topic
 // cluster, maps internal links, matches existing pages, estimates the timeline and picks the pages to write now.
 // v4.8 (PIPELINE_FEATURE_SPEC §5.3-5.5): everything is measured against the site's REACH (stored 30 days in seo_cache, else measured from this
@@ -100,7 +101,7 @@ const poolRefused = ((pool.research || {}).refused || []).slice();
 let cacheRowsP = []; try { cacheRowsP = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsP = []; }
 const sdP = base.site_description || {};
 const fitCtxP = { own_domain: domain, competitors: (base.competitors || []).map(String), serp_domains: [...new Set((base.competitors_summary || []).map(c => String(c.domain || '')).filter(Boolean))],
-  brands: fitLearnedBrands(cacheRowsP), protect: [head, ...(sdP.products_or_services || []), ...(base.services || []), String(base.business || sdP.business_description || '').slice(0, 400)] };
+  brands: fitLearnedBrands(cacheRowsP), protect: [head, ...(sdP.products_or_services || []), ...(base.services || []), ...(SITE_MODEL ? SM.services(SITE_MODEL) : []), String(base.business || sdP.business_description || '').slice(0, 400)] };   // keyword-first (2026-10-19): the site model's services, the client's declared ones included
 const kws = ((pool.research || {}).candidates || []).filter(k => { const g = fitGate(k.keyword, { ...fitCtxP, intent: (rel.get(k.keyword) || {}).intent || k.intent }); if (!g.ok) poolRefused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return g.ok; }).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
@@ -317,8 +318,23 @@ let refusal = null;
 if (dupHead) refusal = { reason: 'duplicate', ladder_id: dupHead.ladder_id, head: dupHead.head,
   message: 'This website already has a keyword ladder for "' + dupHead.head + '" (' + dupHead.ladder_id + '). One search needs one page, so no second ladder was planned: continue that ladder instead.' };
 else if (plan.plan_type === 'none') refusal = { reason: 'not_realistic', message: '"' + head + '" is not a realistic main keyword for ' + domain + ' (' + (other_brand ? 'it is another company\'s brand: ' + headGate.detail : navigational ? 'people searching it look for one particular website or brand' + (!headGate.ok ? ': ' + headGate.detail : '') : 'the verdict is AVOID') + '). No ladder pages were planned; pick one of the alternatives as the main keyword instead.' };
-else if (serpOut) refusal = { reason: 'serp_unchecked', short: 'the live Google results could not be checked', detail: serpOut,
-  message: 'The live Google results for "' + head + '" could not be read on this run (' + serpOut + '), so nothing is known about who ranks for it, how strong those pages are or which results-page features take the clicks. A ladder plan is a bet on that competition, so none was planned, nothing was scored and no page was written. Run it again once the search data provider answers.' };
+else if (serpOut) {
+  // F-SERP (2026-10-20, real-credit rehearsal execs 23 / 31): the client's own keyword came back NOT_CHECKED twice in a row because
+  // DataForSEO's scraper answered 40101 "Internal SE Server Error." to the heavy request. The message the client reads says what
+  // happened in plain words: Google's results could not be read right now, it is not about their keyword, and when to try again.
+  // The provider's own message stays in `detail` (and in data_check.serp_error) for support, never as the client's explanation.
+  const sfR = base.serp_features || {};
+  const tries = Number(sfR.attempts) || 1;
+  const transient = sfR.retryable !== false;
+  refusal = { reason: 'serp_unchecked', short: 'the live Google results could not be checked', detail: serpOut, attempts: tries, transient,
+    message: 'We could not read Google\'s results for "' + head + '" right now: our search data provider did not answer'
+      + (tries > 1 ? ' after ' + tries + ' attempts' : '') + '. '
+      + (transient
+        ? 'This is a temporary problem on the provider\'s side. It is not a problem with your keyword, and it says nothing about whether "' + head + '" is a good choice. '
+        : 'The provider refused the request, which is a problem on our side, not with your keyword. ')
+      + 'A ladder plan is a bet on who ranks for the keyword, so none was planned, nothing was scored and no page was written. '
+      + (transient ? 'Please try again later (in an hour or so).' : 'Please try again later; if it keeps happening, contact support.') };
+}
 else if (thinPool) refusal = { reason: 'thin_data', short: 'the keyword research returned too little data', pool_size: poolSize, minimum: LADDER_MIN_POOL, head_measured: headMeasured,
   message: 'The keyword research returned only ' + poolSize + ' keyword' + (poolSize === 1 ? '' : 's') + ' around "' + head + '" in ' + (base.country || 'this market')
     + (headMeasured ? ' (a ladder needs at least ' + LADDER_MIN_POOL + ' to pick rungs from)' : ', and the search data provider has no search volume and no difficulty for "' + head + '" itself')
@@ -632,24 +648,47 @@ const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung:
 const focusL = WAITING.focus({ ladders: rowsOf('Load Domain Ladders').filter(r => reachDomain(r.domain) === reachDomain(domain)), settings: settingsRows,
   log: rowsOf('Load Content Log (Ladder)').filter(r => reachDomain(r.domain) === reachDomain(domain)), exclude: ladderId, now: Date.now() });
 const ownSet = settingsRows.find(r => String(r.ladder_id) === ladderId) || null;
-const ownMode = ownSet && ['auto', 'manual'].includes(String(ownSet.mode || '').toLowerCase()) ? String(ownSet.mode).toLowerCase() : focusL.site_mode;
+// keyword-first R-K7 (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.1 / §14.5): the mode the ladder is STARTED in, when the request names it
+// (`ladder_mode`, the app's "Ask me before each page"), else its own settings row, else the website's default
+const reqMode = ['auto', 'manual'].includes(String(base.ladder_mode || '').toLowerCase()) ? String(base.ladder_mode).toLowerCase() : '';
+const ownMode = reqMode || (ownSet && ['auto', 'manual'].includes(String(ownSet.mode || '').toLowerCase()) ? String(ownSet.mode).toLowerCase() : focusL.site_mode);
 const ownPrio = ownSet && Number(ownSet.priority) >= 1 ? Number(ownSet.priority) : Infinity;
 const ahead = focusL.order.filter(l => l.priority < ownPrio || ownPrio === Infinity);
 const queuedL = planned && ownMode === 'auto' && ahead.length >= focusL.max_active;
 const forced = base.force_content === true;
 const holdWhy = [];
+// R-K7: a Manual ladder writes NOTHING at start - its text always said its pages wait for an OK, and until now the first pages_now were written
+// anyway (pagesNow can never be 0). This is the client's own choice, not a limit, so `force_content` does not override it.
+const manualHold = planned && write_now.length && ownMode === 'manual' ? { limit: 'manual', text: 'this ladder is Manual, so its pages wait for your OK: nothing was written at the start, and each page is written when you approve it (Write it on the Pipeline page)' } : null;
 if (planned && write_now.length && pile_up.at_limit) holdWhy.push({ limit: 'pileup', text: pile_up.waiting + ' page(s) are written and waiting to be published, and the website\'s limit is ' + pile_up.limit
   + (pile_up.needs_fix ? ' (' + pile_up.needs_fix + ' of them did not pass the quality check and need a fix first)' : '') });
 if (planned && write_now.length && queuedL) holdWhy.push({ limit: 'max_active', text: 'the website writes at most ' + focusL.max_active + ' Auto ladder(s) at a time, and ' + ahead.length + ' with pages still to write come before this one ('
   + ahead.slice(0, 4).map(l => '"' + l.head + '"').join(', ') + (ahead.length > 4 ? ' …' : '') + '), so it waits as Queued' });
-const held = holdWhy.length && !forced ? { pages: write_now.splice(0, write_now.length), why: holdWhy } : null;
-const limits = { max_active: focusL.max_active, active_ahead: ahead.length, active_ladders: focusL.active.map(l => l.head), queued: queuedL, own_mode: ownMode,
+// P1 (2026-10-20, rehearsal §4 item 1, owner decision): no page is written before the website's author profile and business facts are on file.
+// The rehearsal's first page was written at once with neither and Content QA refused it ("11 bracketed field(s) in the byline, the author box
+// and the Person schema", claims nothing on file supports), while the client paid about 62 credits for a draft. The plan is still made and
+// stored; the page is HELD like a Manual ladder's (its rows stay `planned`, Spawn Page Runs starts nothing, nothing is charged for it) and the
+// Content Cadence writes it in the first cycle after both are filled in. The facts are the request's (the app sends the website's own) or the
+// site model's; the profile is the seo_profiles row the run already loaded (*Load Profile (Model)*). `force_content` does not override it: it
+// is the owner's rule, not a limit. One rule with the cadence and the app: v5/code/_readiness.js.
+const readyRow = rowsOf('Load Profile (Model)').find(r => r.site_id === reachSiteId(domain) || (r.domain && reachDomain(r.domain) === reachDomain(domain))) || {};
+const readiness = READY.of({ profile: readyRow, facts: String(base.business_facts || '').trim() || String((siteModel || {}).business_facts || '') });
+const profileHold = planned && write_now.length && !readiness.ready ? { limit: 'profile', missing: readiness.missing.map(m => m.key),
+  text: READY.REASON + ': the first page waits until you add ' + readiness.missing_text + ' (Website settings), so it is not written as a draft with blanks to fill; nothing was charged for it' } : null;
+const held = manualHold ? { pages: write_now.splice(0, write_now.length), why: [manualHold, ...(profileHold ? [profileHold] : []), ...holdWhy] }
+  : profileHold ? { pages: write_now.splice(0, write_now.length), why: [profileHold, ...holdWhy] }
+  : holdWhy.length && !forced ? { pages: write_now.splice(0, write_now.length), why: holdWhy } : null;
+const limits = { max_active: focusL.max_active, active_ahead: ahead.length, active_ladders: focusL.active.map(l => l.head), queued: queuedL, own_mode: ownMode, manual_hold: !!manualHold,
+  profile_hold: !!profileHold, readiness,   // P1: the first page waits for the author profile and the business facts
+  chosen_by: ['client_typed', 'client_picked', 'system_announced'].includes(String(base.chosen_by || '')) ? String(base.chosen_by) : 'client_typed',   // R-K1: who chose this keyword (stored by Ladder Settings Rows)
   max_waiting: pile_up.limit, waiting: pile_up.waiting, waiting_needs_fix: pile_up.needs_fix, at_waiting_limit: pile_up.at_limit, forced: !!(forced && holdWhy.length),
   basis: focusL.basis + '; ' + pile_up.basis,
   text: 'Limits of this website: at most ' + focusL.max_active + ' Auto ladder(s) written at a time (' + ahead.length + ' ahead of this one' + (queuedL ? ', so it waits as Queued' : ownMode === 'manual' ? '; this ladder is Manual, so its pages wait for your OK' : ', so it is written now') + '); at most '
     + pile_up.limit + ' written pages waiting to be published (' + pile_up.waiting + ' now' + (pile_up.needs_fix ? ', ' + pile_up.needs_fix + ' needing a fix' : '') + ').'
     + (held ? ' So the page' + (held.pages.length === 1 ? '' : 's') + ' asked for now (' + held.pages.map(w => '"' + w.keyword + '"').join(', ') + ') ' + (held.pages.length === 1 ? 'was' : 'were') + ' NOT written: ' + held.why.map(w => w.text).join('; and ')
-      + '. The plan is stored and the Content Cadence writes ' + (held.pages.length === 1 ? 'it' : 'them') + ' when ' + (held.why.some(w => w.limit === 'pileup') ? 'the waiting pages are published or discarded' : '') + (held.why.length > 1 ? ' and ' : '') + (held.why.some(w => w.limit === 'max_active') ? 'a ladder ahead of it is finished or paused (or you move this one up on the Pipeline page)' : '') + '.'
+      + (manualHold ? '. The plan is stored; nothing is written until you approve a page.'
+        : profileHold && !holdWhy.length ? '. The plan is stored and the page is written in your next weekly cycle once both are on file (or at once with Write it now on the Pipeline page).'
+        : '. The plan is stored and the Content Cadence writes ' + (held.pages.length === 1 ? 'it' : 'them') + ' when ' + (held.why.some(w => w.limit === 'pileup') ? 'the waiting pages are published or discarded' : '') + (held.why.length > 1 ? ' and ' : '') + (held.why.some(w => w.limit === 'max_active') ? 'a ladder ahead of it is finished or paused (or you move this one up on the Pipeline page)' : '') + '.')
       : (forced && holdWhy.length ? ' The request said to write anyway (force), so the limits were overridden for this run: ' + holdWhy.map(w => w.text).join('; and ') + '.' : '')) };
 const pages_total = planned ? rungPages.length + 1 : 0;
 const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: rel.size, relevant: kws.length, pages_total, rung_pages: planned ? rungPages.length : 0,

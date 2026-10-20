@@ -444,7 +444,7 @@
       },
       {
         "parameters": {
-          "fromEmail": "Alaventra <devaicondeveloper3@gmail.com>",
+          "fromEmail": "Alaventra <noreply@alaventra.com>",
           "toEmail": "={{ $json.email }}",
           "subject": "={{ $json.subject_line }}",
           "emailFormat": "html",
@@ -541,7 +541,7 @@
       },
       {
         "parameters": {
-          "content": "## SEO Agent — Console Alerts (v4.3)\nGoogle exposes **no API** for manual actions, security issues, the site-wide Pages (index coverage) report, Core Web Vitals and rich-result issue reports — but it **e-mails every user of the property** when they appear. This workflow reads the agent's mailbox over IMAP (credential **Gmail IMAP (SEO Agent)**: imap.gmail.com, 993, SSL, the agent's Gmail address + App Password) and turns Search Console notifications into typed alerts in `seo_console_alerts` (upsert by message id; other mails are ignored and never marked read).\n**Set-up per site:** add the agent's Gmail address as a user (Restricted is enough) of the property in Search Console → Settings → Users and permissions, so Google sends it the notices.\nManual actions and security issues are e-mailed / posted to the owner immediately with the fix steps; all notices appear in the Monday report and the brief for 35 days. The monthly **Search Console check-in** (form / API `mode: checkin`) is the manual safety net for the same items and for the Pages report export.",
+          "content": "## SEO Agent — Console Alerts (v4.3)\nGoogle exposes **no API** for manual actions, security issues, the site-wide Pages (index coverage) report, Core Web Vitals and rich-result issue reports — but it **e-mails every user of the property** when they appear. This workflow reads the agent's mailbox over IMAP (credential **Gmail IMAP (SEO Agent)**: imap.gmail.com, 993, SSL, the agent's Gmail address + App Password) and turns Search Console notifications into typed alerts in `seo_console_alerts` (upsert by message id; other mails are ignored and never marked read).\n**Set-up per site:** add the agent's Gmail address as a user (Restricted is enough) of the property in Search Console → Settings → Users and permissions, so Google sends it the notices.\nManual actions and security issues are e-mailed / posted to the owner immediately with the fix steps; all notices appear in the weekly report and the brief for 35 days. The monthly **Search Console check-in** (form / API `mode: checkin`) is the manual safety net for the same items and for the Pages report export.",
           "height": 340,
           "width": 1100,
           "color": 5
