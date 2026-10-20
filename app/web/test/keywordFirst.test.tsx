@@ -277,11 +277,22 @@ describe('onboarding: the new step "Your first keyword"', () => {
   it('launch: the summary names today and the weekday, with the first page; no separate audit or AI run is offered', () => {
     writeKeywordDraft(site.id, { picks: [{ keyword: 'payroll software uae', chosenBy: 'client_picked', mode: 'auto', volume: 320, difficultyForYou: 'easy', planType: 'direct', months: '2-4', why: '' }], later: false, level: 2 });
     writeTrackingDraft(site.id, { ...trackDefaults(site), blogsPerWeek: 1 });
+    // P1 (2026-10-20, rehearsal §4 item 1): this website has no author profile and no business facts, so today is the plan, and the first
+    // page waits for them (the engine holds it and nothing is charged for it)
     const t = text(onboarding('launch'));
     expect(t).toContain('Today: your first checks');
-    expect(t).toContain('the first page for "payroll software uae"');
+    expect(t).toContain('the plan for "payroll software uae"');
+    expect(t).not.toContain('the first page for "payroll software uae"');
+    expect(t).toContain("Your first page waits for your author's name, your author's job title, a short author bio and your business facts");
+    expect(t).not.toContain("The first page counts as this week's page");
     expect(t).toMatch(/Then every (Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\s*:\s*the weekly checks\s*, and a page for your keyword\s*, about [\d,.]+ credits a month/);
-    expect(t).toContain("The first page counts as this week's page");
+    // with both on file, the first page is written today and counts as this week's page
+    const facts = 'Founded in 2014; 300 payroll clients; WPS certified; fixed monthly fees.';
+    const author = { name: 'Amira Saleh', jobTitle: 'Head of payroll', bio: 'Amira runs payroll for 300 companies in the UAE.', credentials: '', url: '', sameAs: [], imageUrl: '', knowsAbout: [] };
+    const ready = client((qc) => qc.setQueryData(qk.siteData(site.id, 'settings', ''), { profile: { author }, readiness: { score: 30, missing: [] } }), [{ ...site, businessFacts: facts }]);
+    const r = text(onboarding('launch', ready));
+    expect(r).toContain('the first page for "payroll software uae"');
+    expect(r).toContain("The first page counts as this week's page");
     expect(t).toMatch(/Level 2\s*: My keywords and keep my pages healthy/);
     expect(t).not.toContain('Run a technical audit now');
     expect(t).not.toContain('AI visibility baseline now');

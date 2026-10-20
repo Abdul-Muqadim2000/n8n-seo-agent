@@ -48,6 +48,7 @@ import {
   type SitePageRow,
   type ThisWeekItem,
   type TrendRow,
+  contentReadiness,
 } from '@seo/shared';
 import { config } from '../config';
 import { db } from '../db';
@@ -66,6 +67,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { scheduleState } from './delivery';
 import { annotatePublishNeeds } from './cms/service';
 import { CADENCE, simulateCadence, type CadenceWeek } from './cadence';
+import { profileNeedsYou } from './readiness';
 import { buildLadders, draftQa, ladderAppSources, ladderNeedsYou, ladderReports, sortNeedsYou, type LadderBuild, type LadderSchedule, type SiteRun, type WaitingPage } from './ladders';
 import { loadBundle, recommend, type SiteBundle } from './recommendations';
 import { latestReport, monthSpend, reportsList } from './runs';
@@ -589,6 +591,9 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   // keyword-first (plan §5.4): pages are written on their own only while a keyword the client chose has pages left (level 3: always)
   const level = levelOf(settingsRows.find((r) => String(r.ladder_id) === '_site'));
   const writingNow = level === 3 || chosenLadderWriting(ladders, settingsRows, level);
+  // P1 (2026-10-20, rehearsal §4 item 1): no page is written before the author profile and the business facts are on file (the engine's
+  // rule, shared/src/readiness.ts): the profile the engine holds, the facts the client keeps here (sent to the engine on every change)
+  const readiness = contentReadiness({ profile: x.content.profile, businessFacts: site.businessFacts });
 
   const reportOf = (stages: string[]) => recentReports.find((r) => stages.includes(r.stage)) ?? null;
   const lastIso = (...v: (string | null | undefined)[]) => v.filter((s): s is string => !!s).sort().pop() ?? null;
@@ -755,6 +760,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       aiBrands,
       skips,
       estPageUsd: estimateRunCost('keyword', { receiveContent: true, receiveReport: true }, costTable?.calibration ?? null),
+      readiness,
     },
     cadenceCycles.map((c) => c.at),
     now,
@@ -872,7 +878,9 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     nudge: nudgeDue({ level: week0.level, published: published.length, approved: approvedCount, dropped: !!dropped }),
     researching: ownRuns.some((r) => r.mode === 'discover'),
   });
-  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...autopilotItems, ...failedRuns(app.runs), ...refusedPlans(recentReports), ...ladderNeedsYou(build, await settingsRow())]);
+  // P1: the profile and the facts the first page waits for, or (once both are on file) a first page that can be written at once
+  const profileItems = profileNeedsYou({ readiness, plan: week0, anyWritten: logs.length > 0, priced: (q) => priced(q) });
+  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...profileItems, ...autopilotItems, ...failedRuns(app.runs), ...refusedPlans(recentReports), ...ladderNeedsYou(build, await settingsRow())]);
   const thisWeek = thisWeekItems({ automations, calendar, running: runningHere, queue, plan: week0, x, build, tz, cycles });
   const autopilot: PipelineAutopilot = {
     level: week0.level,
@@ -923,6 +931,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     autoStartEnabled: config.autoStartLadders,
     cycle: siteCycleView(site, cyc.row, cyc.jobs, now, 'viewer'),
     autopilot,
+    // P1: is the website ready for a written page (the author profile and the business facts), and what is missing
+    readiness,
   };
   // G12 / G29: the rows the ladder detail marks its charts and states its lineage from (already read for the pipeline)
   return { data, ladders: build, rows: { logs, queries, audits: x.technical.audits } };

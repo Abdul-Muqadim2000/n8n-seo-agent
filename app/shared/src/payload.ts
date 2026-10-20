@@ -151,6 +151,9 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         // `tracking_started_at` (the website's first tracking, kept on every re-save). Exact keys, after the fuzzy-matched head.
         ...(input.timezone || s?.timezone ? { timezone: input.timezone || s?.timezone || '' } : {}),
         ...(input.services !== undefined ? { services: input.services } : s?.services?.length ? { services: s.services } : {}),
+        // P1 (2026-10-20): the website's business facts, stored by Track my site on the engine's site row, which the Content Cadence's pages and
+        // the readiness rule read (the app is their source; Website settings sends Site Admin `facts` when they change). Exact key, after the head.
+        ...(s ? { business_facts: (s.businessFacts || '').slice(0, 2000) } : {}),
       };
 
     case 'published':

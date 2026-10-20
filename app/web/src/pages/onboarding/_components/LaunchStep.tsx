@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CalendarClock, Receipt, ShieldAlert } from 'lucide-react';
-import { AI_ENGINES, AUTOPILOT_LEVELS, autopilotMonthlyUsd, autopilotRows, formatCredits, GOALS, MONITOR_COSTS, type Run } from '@seo/shared';
+import { AI_ENGINES, AUTOPILOT_LEVELS, autopilotMonthlyUsd, autopilotRows, contentReadiness, formatCredits, GOALS, MONITOR_COSTS, type Run } from '@seo/shared';
 import { useEngineCal } from '@/lib/engine-cal';
 import { runCost } from '@/lib/prices';
 import { creditsLabel, quoteCredits, quoteLabel } from '@/lib/credits';
@@ -28,7 +28,7 @@ import { launchRequests } from './launch-plan';
 import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
 import { WhatHappensNext } from '@/components/site/WhatHappensNext';
 import { autopilotGuideVars } from '@/lib/guide-vars';
-import { firstPageReady, nextSteps, type FirstPage } from '@/lib/next-steps';
+import { nextSteps, type FirstPage } from '@/lib/next-steps';
 import { clearTrackingDraft, readKeywordDraft, readTrackingDraft, useWizardSite, type KeywordPick, type StepId } from './wizard';
 
 const JS_MAX_PAGES = 500;
@@ -71,8 +71,11 @@ export function LaunchStep() {
     .filter((r) => r.on && r.id !== 'blog_posts' && r.id !== 'research' && r.id !== 'site_report')
     .reduce((t, r) => t + (r.id === 'audit' ? r.usd : r.usd / MONITOR_COSTS.weeksPerMonth), 0);
   // a ladder start: its plan and, for "Write a page each week", the first page today; "Ask me before each page" writes nothing at start
+  // P1 (2026-10-20, rehearsal §4 item 1): the first page waits for the author profile and the business facts (the engine holds it and the
+  // run is quoted for the plan alone), so without them today's start is the plan only
+  const readiness = contentReadiness({ profile: settings.data?.profile, businessFacts: site.businessFacts });
   const ladderUsd = (p: KeywordPick) =>
-    p.mode === 'auto' ? runCost('ladder', { pagesNow: 1 }) : Math.max(0.01, runCost('ladder', { pagesNow: 1 }) - runCost('keyword', { receiveContent: true, receiveReport: true }));
+    p.mode === 'auto' && readiness.ready ? runCost('ladder', { pagesNow: 1 }) : Math.max(0.01, runCost('ladder', { pagesNow: 1 }) - runCost('keyword', { receiveContent: true, receiveReport: true }));
   // credits (app/docs/CREDITS.md): each run is quoted (and held) on its own, so starting now uses the sum of their quotes
   const nowCredits = quoteCredits(runCost('track')) + picks.reduce((t, p) => t + quoteCredits(ladderUsd(p)), 0);
   const b = billing.data;
@@ -82,7 +85,7 @@ export function LaunchStep() {
   const country = plan.country;
   // "What happens next": the week this website gets when it starts now (its first week at once, then every 7 days), with where its
   // first page stands (it waits for the author profile and the business facts)
-  const ready = firstPageReady(settings.data?.profile, site.businessFacts);
+  const ready = readiness.ready;
   const firstPage: FirstPage = !picks.length ? (level === 3 ? 'none' : 'no_keyword') : writing ? (ready ? 'writing' : 'waiting') : 'plan';
   const steps = useMemo(() => nextSteps({ cycle: null, now: Date.now(), firstPage, projectFrom: { tz: site.timezone || browserTimezone() } }), [firstPage, site.timezone]);
   const guideVars = autopilotGuideVars(site, { level });
@@ -206,7 +209,7 @@ export function LaunchStep() {
               {goal} · {site.tone}
             </span>
             <span className="block text-ink-3">
-              {site.businessFacts ? `${site.businessFacts.length} characters of business facts` : 'No business facts yet; pages will be more general'}
+              {site.businessFacts ? `${site.businessFacts.length} characters of business facts` : 'No business facts yet: your first page waits for them'}
               {plan.competitors.length ? ` · competitors: ${plan.competitors.join(', ')}` : ''}
             </span>
           </Row>
@@ -218,7 +221,7 @@ export function LaunchStep() {
             ) : settings.data?.profile ? (
               <>Saved · {settings.data.readiness.score}% complete</>
             ) : (
-              <span className="text-ink-3">Not set up (or still being saved); pages carry no author byline until it is</span>
+              <span className="text-ink-3">Not set up (or still being saved); your first page waits for it</span>
             )}
           </Row>
           <Row label="Your keyword" step="keyword" go={go}>
@@ -284,7 +287,7 @@ export function LaunchStep() {
               {picks.map((p, i) => (
                 <span key={p.keyword}>
                   {i === 0 ? ' and ' : ' and '}
-                  {p.mode === 'auto' ? `the first page for "${p.keyword}"` : `the plan for "${p.keyword}"`} (about {quoteLabel(ladderUsd(p))})
+                  {p.mode === 'auto' && readiness.ready ? `the first page for "${p.keyword}"` : `the plan for "${p.keyword}"`} (about {quoteLabel(ladderUsd(p))})
                 </span>
               ))}
               .
@@ -293,7 +296,12 @@ export function LaunchStep() {
               <span className="font-semibold text-ink">Then every {weekday}:</span> the weekly checks
               {writing && plan.blogsPerWeek ? `, and ${plan.blogsPerWeek === 1 ? 'a page' : `${plan.blogsPerWeek} pages`} for your keyword` : ''}, about {creditsLabel(monthly)} a month.
             </p>
-            {writing && plan.blogsPerWeek > 0 && <p className="text-ink-3">The first page counts as this week's page, so the next one is written next {weekday}.</p>}
+            {writing && plan.blogsPerWeek > 0 && readiness.ready && <p className="text-ink-3">The first page counts as this week's page, so the next one is written next {weekday}.</p>}
+            {writing && !readiness.ready && (
+              <p className="text-warning-text">
+                Your first page waits for {readiness.missingText}: add {readiness.missing.length === 1 ? 'it' : 'them'} in Website settings and it is written in your next weekly run, or at once from the Pipeline. Nothing is charged for it until then.
+              </p>
+            )}
             {picks.some((p) => p.mode === 'manual') && <p className="text-ink-3">For a keyword where we ask first, the plan is made today and each page waits for your OK.</p>}
             {!picks.length && level !== 3 && <p className="text-ink-3">No pages are written until you choose a keyword. The checks run anyway.</p>}
           </div>

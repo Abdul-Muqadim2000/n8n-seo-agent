@@ -171,8 +171,10 @@ export function costKeys(mode: ModeId, v: Values = {}): CostKey[] {
       // "Write a page" writes one; without it the run stops at the keyword report
       return v.receiveContent === false ? ['report'] : ['content'];
     case 'ladder': {
-      // the plan, then one content run per page the owner asked for now (the engine reserves each spawn separately)
+      // the plan, then one content run per page the owner asked for now (the engine reserves each spawn separately); P1: a page the engine
+      // holds for the author profile and the business facts (`pagesHeld`, set by the server) is not written now, so it is not quoted
       const keys: CostKey[] = ['ladder'];
+      if (v.pagesHeld === 'profile') return keys;
       for (let i = 0; i < pagesNow(v); i++) keys.push('content');
       return keys;
     }

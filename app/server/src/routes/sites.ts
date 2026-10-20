@@ -209,6 +209,13 @@ export async function siteRoutes(app: FastifyInstance) {
       .set({ ...patch, updatedAt: new Date() })
       .where(eq(schema.sites.id, site.id))
       .returning();
+    // P1 (2026-10-20, rehearsal §4 item 1): the engine writes no page before the business facts are on ITS site row (the Content Cadence
+    // reads them there, and the weekly pages carry them). Changed facts of a tracked website go to the engine at once (Site Admin `facts`);
+    // a website the engine does not track yet gets them with "Track my site". A failure is logged, the save stands: the next track re-sends.
+    if (body.businessFacts !== undefined && s.businessFacts !== site.businessFacts && s.verifiedAt && ['active', 'paused'].includes(s.trackingStatus))
+      await siteAdmin({ action: 'facts', domain: s.domain, site_id: n8nSiteId(s.domain), business_facts: s.businessFacts.slice(0, 2000), request_id: `app-facts-${s.id}-${Date.now().toString(36)}` }).catch((err) =>
+        req.log.warn({ site: s.domain, err: String((err as Error)?.message ?? err) }, 'business facts not sent to the engine'),
+      );
     return toSite(s);
   });
 

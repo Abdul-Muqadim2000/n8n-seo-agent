@@ -1,15 +1,16 @@
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { PenSquare } from 'lucide-react';
-import { urlOnHost, type QueueItem, type Site } from '@seo/shared';
+import { contentReadiness, readinessPage, urlOnHost, type QueueItem, type Site } from '@seo/shared';
 import { PRICES } from '@/lib/prices';
 import { formatCredits } from '@/lib/credits';
-import { Button } from '@/components/ui/button';
+import { Button, ButtonLink } from '@/components/ui/button';
+import { Callout } from '@/components/ui/feedback';
 import { Dialog } from '@/components/ui/overlay';
 import { errorMessage } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { useStartRun } from '@/lib/queries';
+import { useSiteData, useStartRun } from '@/lib/queries';
 import { asPageType } from './common';
 
 /** A page to write now: a blog-queue topic or a planned page of a keyword ladder. */
@@ -79,9 +80,14 @@ export function writeNowRequest(item: WriteNowItem, site: Pick<Site, 'id' | 'dom
  * the next one instead of writing it twice.
  */
 export function WriteNowDialog({ item, onClose, note }: { item: WriteNowItem; onClose: () => void; note?: string }) {
-  const { org } = useOrgCtx();
+  const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
   const start = useStartRun(org.id);
+  // P1 (2026-10-20, rehearsal §4 item 1): without the author profile and the business facts the page arrives as a draft with blanks to fill
+  // (the byline, the author box and claims the facts would support). The client may still choose to write it: warned, never blocked.
+  const settings = useSiteData(org.id, site.id, 'settings', undefined, { enabled: !!site.verifiedAt });
+  const readiness = settings.data ? contentReadiness({ profile: settings.data.profile, businessFacts: site.businessFacts }) : null;
+  const notReady = !!readiness && !readiness.ready;
   const navigate = useNavigate();
   const body = writeNowRequest(item, site);
   const aiTarget = body.aiTarget ?? null;
@@ -112,12 +118,23 @@ export function WriteNowDialog({ item, onClose, note }: { item: WriteNowItem; on
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
+          {notReady && can('admin') && (
+            <ButtonLink to={paths.site(org.id, site.id, readinessPage(readiness!))} variant="secondary" onClick={onClose}>
+              Add them first
+            </ButtonLink>
+          )}
           <Button loading={start.isPending} icon={<PenSquare className="size-4" />} onClick={write}>
-            Write it (about {item.credits ? formatCredits(item.credits) : PRICES.page()})
+            {notReady ? 'Write anyway' : 'Write it'} (about {item.credits ? formatCredits(item.credits) : PRICES.page()})
           </Button>
         </>
       }
     >
+      {notReady && (
+        <Callout tone="warning" title="The page will be a draft with blanks to fill" className="mb-4">
+          Your website has no {readiness!.missingText} on file yet, so the byline, the author box and some claims come back as bracketed fields to complete
+          before you can publish. Add them first, or write it anyway.
+        </Callout>
+      )}
       <dl className="space-y-2 text-sm">
         {item.why && (
           <div className="flex gap-2">

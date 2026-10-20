@@ -1,4 +1,5 @@
 // Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)
+// | facts (business_facts, the client's own facts about the business, stored on seo_sites; P1 2026-10-20)
 // | prospect (prospect_domain + status contacted / replied / won / rejected / ignored / new, note, contact_email; replied: v4.13) | ai_prompts (add custom questions, switch some off) — by site_id or domain.
 // The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).
 let t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }
@@ -7,7 +8,10 @@ const action = String(t.action || '').toLowerCase();
 const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
 const domain = normD(t.domain) || String(t.site_id || '').replace(/^site_/, '').replace(/-/g, '.');
 const site_id = String(t.site_id || '').trim() || (normD(t.domain) ? 'site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-') : '');
-if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts or content_groups');
+if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups', 'facts'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts, content_groups or facts');
+// P1 (2026-10-20): the business facts the client saved in the app, so the Content Cadence and the readiness rule (v5/code/_readiness.js) read them
+if (action === 'facts' && t.business_facts == null) throw new Error('business_facts (text; an empty text clears them) is required for action facts');
+const business_facts = String(t.business_facts == null ? '' : t.business_facts).trim().slice(0, 2000);
 if (!site_id) throw new Error('site_id or domain is required');
 const pages = Math.min(3, Math.max(0, Number(t.pages_per_week == null ? t.blogs_per_week : t.pages_per_week) || 0));
 if (action === 'cadence' && t.pages_per_week == null && t.blogs_per_week == null) throw new Error('pages_per_week (0-3) is required for action cadence');
@@ -36,4 +40,4 @@ const content_groups = (rawGroups || []).map(g => ({ name: String(g && g.name ||
 if (action === 'content_groups') for (const g of content_groups) { if (/(\+|\*|\})\)?[+*{]/.test(g.pattern)) throw new Error('content group "' + g.name + '": nested repetition in the pattern is refused'); try { new RegExp(g.pattern, 'i'); } catch (e) { throw new Error('content group "' + g.name + '": not a valid regular expression'); } }
 const content_groups_json = JSON.stringify(content_groups);
 const monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (action === 'monitors' ? t : {});
-return [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, monitors, content_groups_json, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];
+return [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, monitors, content_groups_json, business_facts, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];

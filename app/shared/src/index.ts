@@ -41,3 +41,4 @@ export * from './autopilot'; // one breakdown of a website's schedules, for the 
 export * from './cycle-clock'; // the per-website cycle's clock (v5/code/_cycle.js mirrored): due times, monthly cycles, previews
 export * from './fit-gate';  // the engine's fit gate (v5/code/_fit_gate.js), ported rule for rule for the cadence mirror
 export * from './cycles';    // the per-website 7-day cycle and keyword-first autopilot contract (SCHEDULING_KEYWORDS_PLAN.md §14)
+export * from './readiness';   // P1 (2026-10-20): author profile + business facts before a written page (the engine's v5/code/_readiness.js)

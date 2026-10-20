@@ -65,6 +65,8 @@ export function previewOf(body: Record<string, unknown>): CyclePreview {
         ai_target: x.ai_target && typeof x.ai_target === 'object' ? (x.ai_target as CyclePreviewItem['ai_target']) : null,
         // the engine marks the item, or lists its ladder in recheck_ladders (its preview items do not carry the flag)
         recheck: x.recheck === true || recheckIds.has(S(x.ladder_id)),
+        // P1: held until the author profile and the business facts are on file
+        ...(x.held === 'profile' ? { held: 'profile' as const } : {}),
       }));
   const recheck_ladders = (Array.isArray(body.recheck_ladders) ? body.recheck_ladders : [])
     .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object' && !!S((x as Record<string, unknown>).ladder_id))
@@ -89,6 +91,10 @@ export function previewOf(body: Record<string, unknown>): CyclePreview {
       .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
       .map((x) => ({ keyword: S(x.keyword), source: S(x.source), reason: S(x.reason), detail: S(x.detail) })),
     recheck_ladders,
+    waiting_for_profile: body.waiting_for_profile === true,
+    readiness: body.readiness && typeof body.readiness === 'object'
+      ? { ready: (body.readiness as Record<string, unknown>).ready === true, missing: (Array.isArray((body.readiness as Record<string, unknown>).missing) ? ((body.readiness as Record<string, unknown>).missing as unknown[]) : []).map(String), missing_text: S((body.readiness as Record<string, unknown>).missing_text) }
+      : null,
     approved_not_written: (Array.isArray(body.approved_not_written) ? body.approved_not_written : [])
       .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object' && !!S((x as Record<string, unknown>).keyword))
       .map((x) => ({ keyword: S(x.keyword), source: S(x.source), reason: S(x.reason), detail: S(x.detail) })),
@@ -120,6 +126,8 @@ export function notWrittenMessage(x: { keyword: string; reason: string; detail?:
       return { keyword: x.keyword, reason: 'covered_by_live_page', message: `${q} is not written: a page of your website already answers this search.` };
     case 'budget':
       return { keyword: x.keyword, reason: 'budget', message: `${q} did not fit in this cycle: your pages a week are already used. Approve it again in a later plan.` };
+    case 'profile':
+      return { keyword: x.keyword, reason: 'profile', message: `Your OK for ${q} waits: no page is written until your author profile and business facts are on file (Website settings).` };
     default:
       return { keyword: x.keyword, reason: 'other', message: `${q} is not written in this cycle.` };
   }
@@ -171,7 +179,7 @@ const decisionOf = (skips: SkipRow[], siteId: string, cycleKey: string, key: str
 export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview: CyclePreviewRow | null; skips: SkipRow[]; role: Role; now: number; credits: (usd: number) => number }): ComingUpView {
   const canDecide = roleAtLeast(o.role, 'member');
   if (!o.preview)
-    return { available: false, cycleKey: '', cycleDate: '', scheduledFor: null, receivedAt: null, level: 2, pagesPerWeek: 0, waitingForKeyword: false, pausedReason: '', reason: '', items: [], suggestions: [], refused: [], autoCredits: 0, canDecide, closed: false, approvedNotWritten: [], recheckLadders: [], budget: null };
+    return { available: false, cycleKey: '', cycleDate: '', scheduledFor: null, receivedAt: null, level: 2, pagesPerWeek: 0, waitingForKeyword: false, pausedReason: '', reason: '', items: [], suggestions: [], refused: [], autoCredits: 0, canDecide, closed: false, approvedNotWritten: [], recheckLadders: [], budget: null, waitingForProfile: false, missingText: '' };
   const p = previewOf(o.preview.body);
   const siteId = n8nSiteId(o.site.domain);
   const due = o.preview.scheduledFor?.getTime() ?? Date.parse(p.scheduled_for);
@@ -204,6 +212,7 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
       // a page waiting for its fresh keyword check is not approvable: the check decides first
       canApprove: canDecide && !closed && !x.auto && !x.recheck,
       recheck: x.recheck === true,
+      held: x.held === 'profile',
     };
   };
   const items = p.items.map(toItem);
@@ -221,12 +230,15 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
     items,
     suggestions: p.suggestions.map(toItem),
     refused: (p.refused ?? []).map((r) => ({ keyword: r.keyword, source: r.source, reason: r.reason, detail: r.detail })),
-    autoCredits: items.filter((i) => i.auto && i.decision?.decision !== 'skip').reduce((t, i) => t + i.credits, 0),
+    // P1: a page held for the author profile and the business facts uses no credits in this cycle
+    autoCredits: items.filter((i) => i.auto && !i.held && i.decision?.decision !== 'skip').reduce((t, i) => t + i.credits, 0),
     canDecide,
     closed,
     approvedNotWritten: (p.approved_not_written ?? []).map(notWrittenMessage),
     recheckLadders: (p.recheck_ladders ?? []).map((r) => ({ ladderId: r.ladder_id, head: r.head, plannedAt: r.planned_at })),
     budget: p.budget ? { pagesPerWeek: p.budget.pages_per_week, spent: p.budget.spent, room: p.budget.room, ladderStartWindow: p.budget.ladder_start_window || null } : null,
+    waitingForProfile: p.waiting_for_profile === true,
+    missingText: S(p.readiness?.missing_text),
   };
 }
 

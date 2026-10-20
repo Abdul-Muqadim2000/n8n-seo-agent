@@ -765,7 +765,7 @@ GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 /
 KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
 RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n'))   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n'))   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -11819,6 +11819,30 @@ DataForSEO's scraper answers **40101 "Internal SE Server Error."** inside an HTT
 An answer from the lighter attempt says so: the AI Overview is **"not read on this attempt"**, never "none", and results below position 10 were not read. When all three fail the client reads, in plain words, that Google's results could not be read right now, that it is not about their keyword, and to try again later.""",
     pos('SERP Retry Failed?')[0] - 40, pos('SERP Retry Failed?')[1] + 140, 1000, 260, 3)
 log('The head keyword\'s results page gets three attempts, the last one lighter (2026-10-20, F-SERP; real-credit rehearsal execs 23 / 31: SERP Top 10 and its retry both answered 40101 "Internal SE Server Error." inside an HTTP 200 after ~27 s, twice in a row, and the ladder came out NOT_CHECKED for ~$0.27): SERP Top 10 -> 20 s -> retry -> SERP Retry Failed? (the same transient-only rule) -> 45 s -> SERP Top 10 (Light Retry) with depth 10 and no load_async_ai_overview; RT.chain judges the three attempts; the lighter answer is labelled where it is used (AI Overview "not read on this attempt", top 10 only), the cost of every attempt is counted once by task id, and an all-fail ladder tells the client in plain words that Google\'s results could not be read right now, not about their keyword, try again later')
+
+# =============================================================================
+# 142. NO PAGE BEFORE THE AUTHOR PROFILE AND THE BUSINESS FACTS (2026-10-20, agent P1; real-credit rehearsal docs/REHEARSAL_2026-10-20.md §4
+#      item 1, the owner's decision). A new client launched a ladder with no author profile and no business facts; its first page was written
+#      at once (about 62 credits) and Content QA refused it ("11 bracketed field(s) in the byline, the author box and the Person schema", claims
+#      nothing on file supports). Now:
+#      * v5/code/_readiness.js (READY.of, its marker READINESS in a block comment): author profile ready = name + job title + bio on seo_profiles (what Content
+#        QA needs to print no bracket in the byline / author box / Person schema, plus the role); business facts ready = at least
+#        READY.FACTS_MIN characters. Mirrored in app/shared/src/readiness.ts (the harness compares the two).
+#      * *Ladder Plan* keeps the plan and HOLDS the pages it was asked to write now (limit `profile`, not overridden by force_content), so
+#        Spawn Page Runs starts nothing and nothing is charged for a page; the Content Cadence writes it in the first cycle after both exist.
+#      * the data path: Track my site stores the business facts the app sends (`business_facts`, only when the key is present), Site Admin
+#        takes a new action `facts` (the app sends it whenever the client saves them), and Spawn Page Runs falls back to the site model's facts.
+# =============================================================================
+assert 'const READY = (() => {' in code('Ladder Plan') and '/*__READINESS__*/' not in code('Ladder Plan'), 'P1: the readiness kit is not inlined into Ladder Plan'
+assert "const profileHold = planned && write_now.length && !readiness.ready" in code('Ladder Plan') and "rowsOf('Load Profile (Model)')" in code('Ladder Plan'), \
+    'P1: the ladder start writes its first page before the author profile and the business facts are on file'
+assert "(L.held && Array.isArray(L.held.pages) && L.held.pages.length)" in code('Spawn Page Runs'), 'P1: Spawn Page Runs would start a held page'
+assert 'business_facts: factsOf' in code('Spawn Page Runs') and "($('Site Model').first().json || {}).site_model" in code('Spawn Page Runs'), 'P1: a ladder page run drops the stored business facts'
+assert 'Load Profile (Model)' in nodes, 'P1: Load Profile (Model) is gone'
+patch('Normalize Input', "    services_given: KF_SERVICES_GIVEN,", "    services_given: KF_SERVICES_GIVEN,\n    facts_given: Object.prototype.hasOwnProperty.call(p2 || {}, 'business_facts'),   // P1 (2026-10-20): Track my site stores the facts only when the key is sent")
+assert "d.facts_given ? { business_facts:" in rd('code/Site_Row_Track.js'), 'P1: Track my site does not store the business facts'
+assert "('business_facts', 'string')" in open(os.path.join(HERE0, 'ladder_common.py'), encoding='utf-8').read(), 'P1: seo_sites has no business_facts column'
+log('No page before the author profile and the business facts (2026-10-20, agent P1; rehearsal §4 item 1): v5/code/_readiness.js (name + job title + bio, facts of at least 30 characters; mirrored in app/shared/src/readiness.ts); Ladder Plan keeps the plan and holds its pages (limit profile, nothing spawned or charged); the Content Cadence holds every page it would write and lists it (held_for_profile, preview items held: profile, approvals wait too); Track my site stores business_facts, Site Admin takes action facts, every page run carries the stored facts')
 
 # =============================================================================
 # 9. WRITE

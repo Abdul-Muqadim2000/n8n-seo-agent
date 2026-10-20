@@ -29,6 +29,10 @@ interface FixtureCase {
     skipped?: string[];
     budget_spent?: number;
     approved_not_written?: { keyword: string; reason: string }[];
+    /** P1: what the run would have written, held for the author profile and the business facts */
+    held?: { keyword: string; source: string }[];
+    waiting_for_profile?: boolean;
+    missing?: string[];
   };
 }
 
@@ -39,10 +43,10 @@ const sortJ = (a: unknown[]) => a.map((x) => JSON.stringify(x)).sort();
 const planOf = (c: FixtureCase) => planCadence(cadenceInputFromTables(c.tables, { estPageUsd: 0.84 }), Date.parse(c.now), triggerOf(c.trigger));
 
 describe('the shared keyword-first fixture (n8n/seo-agent/harness/fixtures/cadence_levels.json)', () => {
-  it('is the file the engine runs: it names this mirror and the contract, and holds the 57 cases', () => {
+  it('is the file the engine runs: it names this mirror and the contract, and holds the 66 cases', () => {
     expect(FX._doc).toMatch(/cadence\.ts/);
     expect(FX.contract).toBe('app/shared/src/cycles.ts');
-    expect(FX.cases.length).toBe(57);
+    expect(FX.cases.length).toBe(66);
   });
 
   for (const c of FX.cases) {
@@ -59,6 +63,15 @@ describe('the shared keyword-first fixture (n8n/seo-agent/harness/fixtures/caden
       if (c.expect.budget_spent != null) it(`R-K7: pages already spent in the cycle = ${c.expect.budget_spent}`, () => expect(p.budget.spent).toBe(c.expect.budget_spent));
       if (c.expect.approved_not_written)
         it('approvals not written this cycle, with the reason', () => expect(p.approvedNotWritten.map((x) => ({ keyword: x.keyword, reason: x.reason }))).toEqual(c.expect.approved_not_written));
+      // P1 (2026-10-20): the author profile and the business facts before a written page
+      if (c.expect.held) it('held for the author profile and the business facts, with the reason', () => {
+        expect(ks(p.heldForProfile)).toEqual(c.expect.held);
+        expect(p.heldForProfile.every((h) => h.held === 'profile' && /waiting for your author profile and business facts/.test(h.why))).toBe(true);
+        if (c.expect.held?.length && (c.trigger as { preview?: boolean }).preview) expect(c.expect.held.every((h) => p.items.some((x) => x.keyword === h.keyword && x.held === 'profile'))).toBe(true);
+        if (c.expect.held?.length) expect(p.reason).toMatch(/waiting for your author profile and business facts/);
+      });
+      if (c.expect.waiting_for_profile != null) it(`waiting for the profile: ${c.expect.waiting_for_profile}`, () => expect(p.waitingForProfile).toBe(c.expect.waiting_for_profile));
+      if (c.expect.missing) it('the missing parts, in order', () => expect(p.readiness?.missing).toEqual(c.expect.missing));
       // the invariants every run holds (the harness's KF3)
       it('no refused keyword is written or suggested (R-K4)', () => {
         const refused = new Set(p.refused.map((x) => cycleNorm(x.keyword)));

@@ -19,6 +19,7 @@ export const GUIDE_FOR_NEEDS_YOU_KIND: Record<NeedsYouItem['kind'], GuideId> = {
   overlap: 'keyword-not-planned',
   duplicate: 'keyword-not-planned',
   connection: 'your-weekly-cycle',
+  profile: 'business-profile',   // P1: the author profile and the business facts the first page waits for
 };
 
 /** The guide that answers one Needs-you item: its kind's, refined by what the id says (a refused plan, a draft to fix, an announcement). */
@@ -26,6 +27,8 @@ export function guideForNeedsYou(item: Pick<NeedsYouItem, 'id' | 'kind' | 'sever
   const id = item.id;
   if (id.startsWith('refused:')) return 'keyword-not-planned';
   if (id.startsWith('fix:')) return 'page-not-ready';
+  if (id === 'profile:facts') return 'business-facts';   // P1: only the business facts are missing
+  if (id === 'profile:write-first') return 'coming-up-plan';
   if (id === 'connection:gsc') return 'search-console-access';
   if (id === 'connection:tracking') return 'your-journey';
   // a level-3 announcement is a warning (it starts on its own); a suggestion at levels 1-2 waits and is info

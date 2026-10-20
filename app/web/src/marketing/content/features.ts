@@ -115,6 +115,7 @@ export const features: Feature[] = [
       'Three levels for "How much should we do on our own?": Only my keywords; My keywords and keep my pages healthy (the default, which also refreshes your existing pages on your topics that lose visitors or sit close to page one); Full autopilot (also new topics and new keywords)',
       '"Coming up" two days before every weekly cycle: each page that will be written, why and about how many credits. Skip anything automatic, approve or skip anything waiting for your OK. In the app and by e-mail',
       'On full autopilot, a new keyword is announced two days before it starts, and you can change it or skip it',
+      'No page is written until your author profile and business facts are in, so every page arrives with a real byline and facts about your business, never as a draft with blanks to fill',
       '"Not what I wanted" on every written page: if two of the last five pages the autopilot chose on its own are turned down, it drops back to Only my keywords and tells you',
       'Your week starts the day you sign up: the first checks run when setup is finished, then every 7 days on that weekday in your time zone. You can move the weekday',
       'Pages a week for your keywords, from 0 to 3, with the credits a month shown before you save, and Auto or Manual per ladder and per website',

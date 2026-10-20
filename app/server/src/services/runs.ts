@@ -44,6 +44,7 @@ import { assertCredits, siteForecasts } from './billing';
 import { customerError } from '../lib/customerError';
 import { suspendedError } from '../auth/session';
 import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
+import { siteReadiness } from './readiness';
 
 /**
  * R100: what the engine will reserve for this request, its own rolling figures (`engineCostTable`), the shipped table only when
@@ -192,6 +193,13 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     if (page) input = { ...input, keyword: page.keyword, ladder: page.ladder };
   }
 
+  // P1 (2026-10-20, rehearsal §4 item 1): an Auto ladder start on a website without its author profile or business facts keeps its plan, and
+  // the engine holds the first page (Ladder Plan, v5/code/_readiness.js) until both are on file: the run is quoted for the plan alone, and
+  // the run says so. A Manual start writes nothing anyway. A caller's own `pagesHeld` is never trusted. Unreadable profile = not decided here.
+  if (input.mode === 'ladder') {
+    const held = site && input.ladderMode !== 'manual' ? await siteReadiness(site) : null;
+    input = { ...input, pagesHeld: held && !held.ready ? 'profile' : undefined };
+  }
   const estimated = await estimateCost(input);
   // the website's first tracking, kept on every re-save: the anchor of its weekly cycle (the engine accepts it within the last 6 days)
   const trackingStartedAt = site && input.mode === 'track' ? (site.trackingStartedAt ?? new Date()) : null;

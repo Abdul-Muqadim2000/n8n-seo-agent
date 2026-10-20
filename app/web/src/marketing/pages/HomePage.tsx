@@ -82,7 +82,7 @@ const TIMELINE = [
   {
     when: 'Day 1',
     title: 'Set up and first check',
-    body: 'Connect your website in minutes and choose the keywords you want to be found for, from suggestions that show your chances. Your first checks start the same day, and so does the first page for your keyword.',
+    body: 'Connect your website in minutes and choose the keywords you want to be found for, from suggestions that show your chances. Your first checks start the same day, and the first page for your keyword follows as soon as your author profile and business facts are filled in.',
   },
   {
     when: 'Week 1',
@@ -117,7 +117,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'How fast will I see results?',
-    a: 'You can connect a website, choose your keyword and have your first page written on day one, and your weekly cycle starts that same day. Moving up on Google takes longer, usually weeks to a few months, depending on how hard the search is. Nobody can honestly promise a position on Google, and we don\'t. What we do promise is that the work starts on day one and every week you see what moved.',
+    a: 'You can connect a website, choose your keyword and start your weekly cycle on day one. Your first page is written as soon as your author profile and business facts are in, so it carries a real byline and facts about your business instead of blanks to fill. Moving up on Google takes longer, usually weeks to a few months, depending on how hard the search is. Nobody can honestly promise a position on Google, and we don\'t. What we do promise is that the work starts on day one and every week you see what moved.',
   },
   {
     q: 'Do we need an SEO specialist to use Alaventra?',
