@@ -371,7 +371,7 @@ for (const s of list) {
   for (const x of decayCands) opps.push({ keyword: x.q.query, page_type: 'Guide', existing_page_url: x.row.url, source: 'decay', decay_lost: x.lost,
     why: 'this page is losing traffic: ' + x.lost + ' clicks lost in 28 days (from ' + (Number(x.row.prev_clicks) || 0) + ' to ' + (Number(x.row.clicks) || 0) + ')'
       + (String(x.row.decay_kind || '') === 'clickthrough' ? ', and it is still shown as often, so the title and description come first' : '')
-      + '. It is refreshed, not written again. ' + String(x.row.decay_basis || '').replace(/\s*->\s*/g, ' to ') });
+      + '. It is refreshed, not written again. ' + String(x.row.decay_basis || '').replace(/\s*(->|\u2192)\s*/g, ' to ') });
   const sq = qh.filter(q => normD(q.domain) === s.domain && q.query); const latest = sq.reduce((m, q) => String(q.period_end) > m ? String(q.period_end) : m, '');
   // F-KW (finding 5): a brand query names the site's DISTINCTIVE label (fitOwnLabels): on an exact-match domain ("erp-software.ae") the client's
   // own subject ("erp software uae") is not a brand query
