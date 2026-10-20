@@ -77,7 +77,6 @@ const { ingestCallback } = await import('../src/services/runs');
 const { proposeForSite, startDueProposals } = await import('../src/services/autoStart');
 const { latestPreview } = await import('../src/services/comingUp');
 const { assessKeyword } = await import('../src/services/keywordChecks');
-const { EngineWriteError } = await import('../src/n8n/client');
 vi.setConfig({ testTimeout: 30_000 });
 
 let app: FastifyInstance;
@@ -192,5 +191,218 @@ describe('8c. the engine\'s real seo_cycles row', () => {
     const p = await co.c.patch(`${base(co, s.id)}/cycle`, { weekday: 5 });
     expect([p.status, p.body.weekdayName]).toEqual([200, 'Friday']);
     expect(t.tables.cycles[0].cycle_weekday).toBe(5);
+  });
+});
+
+describe('2. keyword checks the system starts', () => {
+  it('the queued-ladder re-check acts for the first ACTIVE owner and is filed as autopilot spend; a person\'s check stays on demand', async () => {
+    const { syncCosts } = await import('../src/services/admin/costSync');
+    const co = await company('ps-kc@ps.test', 'Check Co');
+    // a second owner; the first one leaves (deactivated): the system never acts for them
+    const second = await signUp(app, 'ps-kc-2@ps.test');
+    await db.update(schema.users).set({ emailVerifiedAt: new Date() }).where(eq(schema.users.email, 'ps-kc-2@ps.test'));
+    const u2 = (await db.query.users.findFirst({ where: eq(schema.users.email, 'ps-kc-2@ps.test') }))!;
+    await db.insert(schema.memberships).values({ orgId: co.org.id, userId: u2.id, role: 'owner' });
+    await db.update(schema.memberships).set({ deactivatedAt: new Date() }).where(and(eq(schema.memberships.orgId, co.org.id), eq(schema.memberships.userId, co.userId)));
+    void second;
+    const s = await site(co.org.id, 'kc-ps.com', { trackingStatus: 'active' });
+    const planned = new Date(Date.now() - 70 * DAY).toISOString();
+    t.tables.ladders = [
+      ...(t.tables.ladders ?? []),
+      { ladder_id: 'lad_kc', domain: 'kc-ps.com', head_keyword: 'crm consulting dubai', keyword: 'crm consulting dubai', rung: 4, page_no: 9, status: 'planned', start_date: planned },
+    ];
+    const org = await orgRow(co.org.id);
+    const cadence = (queued: string[]) => ({ stage: 'content_cadence', status: 'progress', domain: 'kc-ps.com', trigger: 'cycle', queued_ladders: queued.map((ladder_id) => ({ ladder_id })), won_ladders: [] });
+    await ingestCallback(org, cadence(['lad_kc']));
+    await flush();
+    await ingestCallback(org, cadence([]));
+    await flush(300);
+    const checks = await db.query.keywordChecks.findMany({ where: eq(schema.keywordChecks.siteId, s.id) });
+    expect(checks.map((c) => [c.keyword, c.automatic, c.userId])).toEqual([['crm consulting dubai', true, u2.id]]);
+    // the person's own check of the same website
+    await assessKeyword({ org, site: s, user: u2 }, { keyword: 'crm training dubai' });
+    await syncCosts({ readLedger: async () => [], full: true });
+    const events = await db.query.costEvents.findMany({ where: and(eq(schema.costEvents.orgId, co.org.id), eq(schema.costEvents.source, 'keyword_check')) });
+    const originOf = (id: string) => events.find((e) => e.eventKey === `kc:${id}`)?.origin;
+    const mine = (await db.query.keywordChecks.findMany({ where: eq(schema.keywordChecks.siteId, s.id) })).find((c) => !c.automatic)!;
+    expect([originOf(checks[0].id), originOf(mine.id)]).toEqual(['schedule', 'app']);
+  });
+});
+
+describe('3. a proposal whose ladder run failed', () => {
+  it('approve with a run the engine refused: failed with a note, and the keyword can be proposed again (twice at most)', async () => {
+    const co = await company('ps-fail@ps.test', 'Fail Co');
+    const s = await site(co.org.id, 'fail-ps.com', { trackingStatus: 'active', autopilotLevel: 2 });
+    await strategy(co.org.id, s.id, [{ keyword: 'crm consulting', difficulty_for_you: 'easy', plan_type: 'direct' }]);
+    const org = await orgRow(co.org.id);
+    await proposeForSite(org, s, undefined, Date.now(), log);
+    const id = (await co.c.get(`${base(co, s.id)}/keyword-proposals`)).body.pending[0].id;
+    t.startOk = false;
+    t.startStatus = 400;
+    const ap = await co.c.post(`${base(co, s.id)}/keyword-proposals/${id}/approve`);
+    expect(ap.status).toBe(200);
+    expect(ap.body.proposal).toMatchObject({ keyword: 'crm consulting', status: 'failed' });
+    expect(ap.body.proposal.note).toMatch(/did not start.*can be proposed again/);
+    t.startOk = true;
+    const again = await proposeForSite(org, s, undefined, Date.now(), log);
+    expect(again).toMatchObject({ keyword: 'crm consulting' });
+    expect(again.proposalId).not.toBeNull();
+  });
+
+  it('a claim found after a crash whose run failed is recorded as failed, not as started', async () => {
+    const co = await company('ps-stale@ps.test', 'Stale Co');
+    const s = await site(co.org.id, 'stale-ps.com', { trackingStatus: 'active', autopilotLevel: 3 });
+    const [p] = await db.insert(schema.keywordProposals).values({ orgId: co.org.id, siteId: s.id, keyword: 'crm audit', keywordNorm: 'crm audit', status: 'starting', level: 3, claimedAt: new Date(Date.now() - 60 * 60_000) }).returning();
+    await db.insert(schema.runs).values({ orgId: co.org.id, siteId: s.id, mode: 'ladder', title: 'x', status: 'failed', error: 'refused', input: { proposalId: p.id, chosenBy: 'system_announced', keyword: 'crm audit' } });
+    await startDueProposals(log);
+    const after = (await db.query.keywordProposals.findFirst({ where: eq(schema.keywordProposals.id, p.id) }))!;
+    expect(after.status).toBe('failed');
+    expect(after.note).toMatch(/did not start/);
+  });
+});
+
+describe('4. the free research at setup', () => {
+  it('a start with no answer or a 5xx keeps the grant used; only a 4xx gives it back', async () => {
+    const co = await company('ps-res@ps.test', 'Res Co');
+    const s = await site(co.org.id, 'res5xx-ps.com');
+    t.startOk = false;
+    t.startStatus = 503;
+    expect((await co.c.post(`${base(co, s.id)}/research/start`)).body).toMatchObject({ started: false });
+    expect(await db.query.freeResearchGrants.findFirst({ where: eq(schema.freeResearchGrants.domain, 'res5xx-ps.com') })).toBeTruthy();
+    t.startOk = true;
+    expect((await co.c.post(`${base(co, s.id)}/research/start`)).body.code).toBe('research_not_free');
+    const s0 = await site(co.org.id, 'res0-ps.com');
+    t.startOk = false;
+    t.startStatus = 0; // the 30 s timeout: the engine may be working on it
+    await co.c.post(`${base(co, s0.id)}/research/start`);
+    expect(await db.query.freeResearchGrants.findFirst({ where: eq(schema.freeResearchGrants.domain, 'res0-ps.com') })).toBeTruthy();
+  });
+
+  it('one free research per registrable domain: a subdomain (any company) gets none; a grant stored by the full domain still counts', async () => {
+    const a = await company('ps-reg-a@ps.test', 'Reg A');
+    const b = await company('ps-reg-b@ps.test', 'Reg B');
+    const s = await site(a.org.id, 'reg-ps.com');
+    expect((await a.c.post(`${base(a, s.id)}/research/start`)).body).toMatchObject({ free: true, started: true });
+    expect((await db.query.freeResearchGrants.findFirst({ where: eq(schema.freeResearchGrants.domain, 'reg-ps.com') }))?.siteId).toBe(s.id);
+    const sub = await site(b.org.id, 'blog.reg-ps.com');
+    expect((await b.c.post(`${base(b, sub.id)}/research/start`)).body.code).toBe('research_not_free');
+    await db.insert(schema.freeResearchGrants).values({ domain: 'shop.legacy-ps.com', orgId: a.org.id });
+    const legacy = await site(a.org.id, 'shop.legacy-ps.com');
+    expect((await a.c.post(`${base(a, legacy.id)}/research/start`)).body.code).toBe('research_not_free');
+  });
+});
+
+describe('5. a "Coming up" plan without a due time', () => {
+  it('is refused (never stored), and an old one without a due time never pins Coming up ahead of the real next plan', async () => {
+    const co = await company('ps-prev@ps.test', 'Prev Co');
+    const s = await site(co.org.id, 'prev-ps.com', { trackingStatus: 'active' });
+    const sid = n8nSiteId('prev-ps.com');
+    const org = await orgRow(co.org.id);
+    const plan = (cycleKey: string, scheduledFor: string) => ({ stage: 'cycle_preview', status: 'progress', request_id: `cyc_prev_${cycleKey.slice(-10)}_preview`, trigger: 'cycle', site_id: sid, domain: 'prev-ps.com', cycle_key: cycleKey, scheduled_for: scheduledFor, level: 2, items: [], suggestions: [] });
+    await ingestCallback(org, plan(`cyc:${sid}:2026-11-04`, ''));
+    await flush();
+    expect(await db.query.cyclePreviews.findMany({ where: eq(schema.cyclePreviews.siteId, s.id) })).toEqual([]);
+    // a plan for another domain under the same id is refused too
+    await ingestCallback(org, { ...plan(`cyc:${sid}:2026-11-04`, new Date(Date.now() + DAY).toISOString()), domain: 'prev-ps-other.com' });
+    await flush();
+    expect(await db.query.cyclePreviews.findMany({ where: eq(schema.cyclePreviews.siteId, s.id) })).toEqual([]);
+    // a row kept before the rule (no due time) and the real next plan: the real one is the latest
+    await db.insert(schema.cyclePreviews).values({ orgId: co.org.id, siteId: s.id, cycleKey: `cyc:${sid}:2026-10-01`, scheduledFor: null, body: {}, receivedAt: new Date() });
+    const due = new Date(Date.now() + 2 * DAY).toISOString();
+    await ingestCallback(org, plan(`cyc:${sid}:${due.slice(0, 10)}`, due));
+    await flush();
+    expect((await latestPreview(s.id))?.cycleKey).toBe(`cyc:${sid}:${due.slice(0, 10)}`);
+  });
+});
+
+describe('6. level-3 announcements', () => {
+  it('a new start time after a level change is announced again, and the time is in the website\'s own zone', async () => {
+    const co = await company('ps-ann@ps.test', 'Ann Co');
+    const s = await site(co.org.id, 'ann-ps.com', { trackingStatus: 'active', autopilotLevel: 2, timezone: 'Asia/Dubai' });
+    await strategy(co.org.id, s.id, [{ keyword: 'crm consulting', difficulty_for_you: 'easy', plan_type: 'direct' }]);
+    await proposeForSite(await orgRow(co.org.id), s, undefined, Date.now(), log);
+    await co.c.patch(`${base(co, s.id)}/automation`, { autopilotLevel: 3 });
+    await flush(100);
+    expect(t.mails.map((m) => m.subject)).toEqual(['We will start "crm consulting" for ann-ps.com']);
+    expect(t.mails[0].lines.join(' ')).toMatch(/at \d\d:\d\d \(Dubai time\)/);
+    expect(t.mails[0].lines.join(' ')).not.toMatch(/UTC/);
+    await co.c.patch(`${base(co, s.id)}/automation`, { autopilotLevel: 1 });
+    await flush(100);
+    await co.c.patch(`${base(co, s.id)}/automation`, { autopilotLevel: 3 });
+    await flush(100);
+    expect(t.mails.map((m) => m.subject)).toEqual(['We will start "crm consulting" for ann-ps.com', 'We will start "crm consulting" for ann-ps.com']);
+  });
+});
+
+describe('7. the auto-pause when the engine write fails', () => {
+  it('the rejection is not stored, so the retry drops the level (it is never lost behind a stored rejection)', async () => {
+    const co = await company('ps-pause@ps.test', 'Pause Co');
+    const s = await site(co.org.id, 'pause-ps.com', { autopilotLevel: 3 });
+    t.tables.contentLog = [
+      ...(t.tables.contentLog ?? []),
+      ...['a', 'b'].map((k, i) => ({ domain: 'pause-ps.com', keyword: `auto page ${k}`, source: 'decay', request_id: `cad_20261014_p_${i + 1}`, started_at: new Date(Date.now() - (i + 1) * DAY).toISOString(), status: 'written' })),
+    ];
+    const page = async (keyword: string, requestId: string) =>
+      (await db.insert(schema.reports).values({ orgId: co.org.id, siteId: s.id, stage: 'content', status: 'completed', title: keyword, requestId, scheduled: true, payload: { keyword, request_id: requestId } }).returning())[0];
+    const p1 = await page('auto page a', 'cad_20261014_p_1');
+    const p2 = await page('auto page b', 'cad_20261014_p_2');
+    const send = (id: string) => co.c.post(`/api/orgs/${co.org.id}/reports/${id}/feedback`, { verdict: 'reject' });
+    expect((await send(p1.id)).body).toMatchObject({ levelDropped: false });
+    t.upsertFail = (table) => (table === 'ladderSettings' ? new Error('n8n is down') : null);
+    const failed = await send(p2.id);
+    expect([failed.status, failed.body.code]).toEqual([502, 'engine_failed']);
+    expect(await db.query.contentFeedback.findFirst({ where: eq(schema.contentFeedback.reportId, p2.id) })).toBeUndefined();
+    expect((await db.query.sites.findFirst({ where: eq(schema.sites.id, s.id) }))!.autopilotLevel).toBe(3);
+    t.upsertFail = null;
+    expect((await send(p2.id)).body).toMatchObject({ levelDropped: true, level: 1 });
+    expect((await db.query.sites.findFirst({ where: eq(schema.sites.id, s.id) }))!.autopilotLevel).toBe(1);
+    expect(t.tables.ladderSettings.find((x) => x.domain === 'pause-ps.com' && x.ladder_id === '_site')).toMatchObject({ autopilot_level: 1 });
+  });
+});
+
+describe('8. onboarding, source, proposal details', () => {
+  it('a: the server stores the "keyword" onboarding step', async () => {
+    const co = await company('ps-onb@ps.test', 'Onb Co');
+    const r = await co.c.patch(`/api/orgs/${co.org.id}/onboarding`, { step: 'keyword' });
+    expect(r.status).toBe(200);
+    expect((await orgRow(co.org.id)).onboardingStep).toBe('keyword');
+  });
+
+  it('b: a keyword run keeps where the suggestion came from on the content log; the engine is not sent a field it does not read', async () => {
+    const co = await company('ps-src@ps.test', 'Src Co');
+    const s = await site(co.org.id, 'src-ps.com');
+    const r = await co.c.post(`/api/orgs/${co.org.id}/runs`, { mode: 'keyword', siteId: s.id, keyword: 'best crm consultants dubai', country: 'United States', source: 'ai_answer' });
+    expect(r.status).toBe(200);
+    expect(t.tables.contentLog.find((x) => x.domain === 'src-ps.com')).toMatchObject({ keyword: 'best crm consultants dubai', source: 'ai_answer' });
+    expect('source' in t.starts.at(-1)!).toBe(false);
+    expect((await co.c.post(`/api/orgs/${co.org.id}/runs`, { mode: 'keyword', siteId: s.id, keyword: 'crm audit', country: 'United States', source: 'made_up' })).status).toBe(400);
+  });
+
+  it('d: every proposal stores volume, difficultyForYou and planType (null when the research did not say)', async () => {
+    const co = await company('ps-det@ps.test', 'Det Co');
+    const s = await site(co.org.id, 'det-ps.com', { trackingStatus: 'active' });
+    await strategy(co.org.id, s.id, [{ keyword: 'crm consulting', difficulty_for_you: 'easy', plan_type: 'direct' }]);
+    await proposeForSite(await orgRow(co.org.id), s, undefined, Date.now(), log);
+    const p = (await db.query.keywordProposals.findFirst({ where: eq(schema.keywordProposals.siteId, s.id) }))!;
+    for (const k of ['volume', 'difficultyForYou', 'planType', 'months', 'why']) expect(Object.keys(p.details)).toContain(k);
+    expect(p.details).toMatchObject({ difficultyForYou: 'easy', planType: 'direct' });
+  });
+});
+
+describe('9. the engine without seo_ladder_settings.autopilot_level', () => {
+  it('PATCH automation answers a clear 503 and changes nothing; another refusal is not mistaken for it', async () => {
+    const { missingLevelColumn } = await import('../src/services/ladderSettings');
+    const { EngineWriteError } = await import('../src/n8n/client');
+    const co = await company('ps-col@ps.test', 'Col Co');
+    const s = await site(co.org.id, 'col-ps.com', { autopilotLevel: 2 });
+    t.upsertFail = (table, data) => (table === 'ladderSettings' && 'autopilot_level' in data ? new EngineWriteError('rows/upsert answered 400', 400, "unknown column name 'autopilot_level'", 'seo_ladder_settings') : null);
+    const r = await co.c.patch(`${base(co, s.id)}/automation`, { autopilotLevel: 3 });
+    expect([r.status, r.body.code]).toEqual([503, 'engine_not_ready']);
+    expect(JSON.stringify(r.body)).not.toMatch(/autopilot_level|column|seo_/);
+    expect((await db.query.sites.findFirst({ where: eq(schema.sites.id, s.id) }))!.autopilotLevel).toBe(2);
+    expect(missingLevelColumn(new EngineWriteError('x', 400, 'unknown column', 't'), { autopilot_level: 1 })).toBe(true);
+    expect(missingLevelColumn(new EngineWriteError('x', 500, 'unknown column', 't'), { autopilot_level: 1 })).toBe(false);
+    expect(missingLevelColumn(new EngineWriteError('x', 400, 'unknown column', 't'), { mode: 'auto' })).toBe(false);
+    expect(missingLevelColumn(new Error('unknown column'), { autopilot_level: 1 })).toBe(false);
   });
 });
