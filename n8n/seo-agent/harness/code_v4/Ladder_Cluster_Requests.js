@@ -140,7 +140,7 @@ const KWI = (() => {
       const posTxt = position > 0 ? '#' + (Math.round(position * 10) / 10) : 'unreported';
       const pathTxt = answered_by ? (S(answered_by.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
       // A-22: the second page is named beside Google's own, never instead of it; a page matched by words alone says so
-      const alsoTxt = answered_by && answered_by.also ? ' — ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' matches the words of this search more closely: keep one page for it and link the other to it' : '';
+      const alsoTxt = answered_by && answered_by.also ? '; ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' matches the words of this search more closely: keep one page for it and link the other to it' : '';
       // a listing page (the blog index) is what Google shows; the position is ITS position, and the page about the search is named beside it
       const listPath = answered_by && answered_by.listing ? (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
       const rankTxt = listPath ? 'Google shows ' + listPath + ' (a listing page) at ' + posTxt + ' for it; the page about it is ' + pathTxt + ' (link it from ' + listPath + ')'
@@ -148,12 +148,12 @@ const KWI = (() => {
       const basisTxt = answered_by && answered_by.matched_by !== 'search console' && answered_by.matched_by !== 'search console page' && !answered_by.listing ? ' (matched by its words: Search Console names no page of yours for this search)' : '';
       const why = kinds.indexOf('no_page') >= 0 ? 'no page of yours answers this search'
         : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions is about something else: ' + (evidence.h1 ? 'its title and H1 share' : 'its title shares') + ' only '
-          + evidence.have + ' of the ' + evidence.of + ' words of this search (missing: ' + evidence.missing.join(', ') + ') — you rank ' + posTxt + ' with ' + pathTxt
-          + (striking ? ' (striking distance)' : '') + (answered_by.also ? '; ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' is the page about it by its words — make that page the clear answer and link it from ' + pathTxt : '; aim that page at it or give the search its own')
-        : striking ? rankTxt + ' — striking distance: improve that page' + alsoTxt + basisTxt
-        : lowPos ? (listPath ? 'low position: ' + rankTxt : 'low position on ' + pathTxt + ' (you rank ' + posTxt + ' with it)') + ' — improve that page' + alsoTxt + basisTxt
+          + evidence.have + ' of the ' + evidence.of + ' words of this search (missing: ' + evidence.missing.join(', ') + '); you rank ' + posTxt + ' with ' + pathTxt
+          + (striking ? ' (striking distance)' : '') + (answered_by.also ? '; ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' is the page about it by its words, so make that page the clear answer and link it from ' + pathTxt : '; aim that page at it or give the search its own')
+        : striking ? rankTxt + ', striking distance: improve that page' + alsoTxt + basisTxt
+        : lowPos ? (listPath ? 'low position: ' + rankTxt : 'low position on ' + pathTxt + ' (you rank ' + posTxt + ' with it)') + ': improve that page' + alsoTxt + basisTxt
         : 'a page of yours already answers this search (' + pathTxt + (position > 0 ? ', you rank ' + posTxt : '') + ')'
-          + (answered_by && answered_by.listing ? ' — Google currently shows ' + (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' for it' : '') + alsoTxt + basisTxt;
+          + (answered_by && answered_by.listing ? '; Google currently shows ' + (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' for it' : '') + alsoTxt + basisTxt;
       considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
         ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowOnSite ? pageUrl : rowUrl, gsc_page: rowUrl, on_site: rowOnSite, answered_by, kinds, why,
         period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
@@ -507,7 +507,7 @@ const RAD = (() => {
         + (far.length ? '; ' + far.length + ' are out of reach for now (' + name(far, 2) + (far.length > 2 ? ' …' : '') + ')' : '') + '.';
     const note = reach == null
       ? 'Your reach could not be measured this run, so these verdicts use the smallest default (' + r + '): treat them as provisional.'
-      : 'Your reach is the difficulty your site already wins — the 75th percentile of the difficulty of the keywords it ranks in the top 10 for'
+      : 'Your reach is the difficulty your site already wins: the 75th percentile of the difficulty of the keywords it ranks in the top 10 for'
         + (x.reach_method === 'size' ? ' (measured from the size of your ranking profile this time)' : x.reach_method === 'default' ? ' (no ranking data: the default for a new site)' : '')
         + '. A stretch topic is not a no: it is the one to come back to once the topics within reach are won and links have been earned.';
     return { reach, reach_method: S(x.reach_method), measured: reach != null, topics, in_reach: inR, stretch: st, far, summary, note, checked_at: S(x.checked_at) };
@@ -518,7 +518,7 @@ const RAD = (() => {
       .filter(o => o.common.length).sort((a, b) => b.common.length - a.common.length);
     return all.length ? all[0].x : null; };
   /** one topic's verdict as a sentence (a plan's notes, a tooltip): "A stretch — … (difficulty 55 against your reach 28; …)" */
-  const line = (t) => !t ? '' : LABEL[t.verdict] + ' — ' + t.reason + ' (' + (t.evidence || []).join('; ') + ')';
+  const line = (t) => !t ? '' : LABEL[t.verdict] + ': ' + t.reason + ' (' + (t.evidence || []).join('; ') + ')';
   /** the rows a report prints, in reading order: within reach, then the stretches, then what is out of reach for now */
   const rows = (radius) => { const rad = radius || {}; return [...(rad.in_reach || []), ...(rad.stretch || []), ...(rad.far || [])]; };
   /**
@@ -539,7 +539,7 @@ const RAD = (() => {
     const onSubject = !subject.length || common.some(t => subject.includes(t));
     if (common.length >= need && onSubject) return { ok: true, shared: common, need, head_words: h, subject, reason: '' };
     if (common.length >= need) return { ok: false, shared: common, need, head_words: h, subject,
-      reason: 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" — the kind of service or the place, not the subject (' + q(subject) + ')' };
+      reason: 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '", which is the kind of service or the place, not the subject (' + q(subject) + ')' };
     return { ok: false, shared: common, need, head_words: h, subject,
       reason: common.length
         ? 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" (' + common.length + ' of the ' + h.length + ' words that matter, ' + need + ' needed: ' + q(h) + ')'

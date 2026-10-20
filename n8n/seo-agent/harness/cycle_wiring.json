@@ -9,6 +9,7 @@
   "max_attempts": 3,
   "max_exec_reads": 60,
   "max_inflight": 2,
+  "max_ledger_reads": 20,
   "max_starts": 2,
   "next_gap_hours": 12,
   "preview_hours": 48,

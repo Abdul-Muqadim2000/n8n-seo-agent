@@ -10,6 +10,8 @@ const summary = { entry: p.entry, now: p.now, mode: p.mode, configured_mode: p.c
   note: p.note || '', engine_tz: p.engine_tz, counts: p.counts, basis: p.basis, open_jobs: p.open_jobs, live_runs: p.live_runs, room: p.room, adopted: p.adopted,
   started: [...started, ...skipped], would_start: p.would ? (p.would.start || []).map(s => ({ key: s.key, why: s.why })) : [], gave_up: p.gave_up || [],
   unsettled: p.unsettled || [], skipped_init: p.skipped_init || '', exec_reads: p.exec_reads || null,
+  // F-REH: other runs' reservations released because n8n says their run is dead (in plan_only: found, not released)
+  ghosts: (p.ghosts && p.ghosts.length ? p.ghosts : (p.would && p.would.ghosts) || []).map(g => ({ run_id: g.run_id, mode: g.mode, domain: g.domain, status: g.status, released: !(p.would && p.would.ghosts && p.would.ghosts.length) })),
   sites: (p.sites || []).map(s => ({ site_id: s.site_id, domain: s.domain, verdict: s.verdict, reason: s.reason, cycle_key: s.cycle_key, next_due_at: s.next_due_at,
     next_preview_at: s.next_preview_at, monthly: s.monthly, cycle0: s.cycle0, opened: s.opened || null, skipped_cycle: s.skipped_cycle || null,
     jobs: (s.jobs || []).map(j => ({ job: j.job, verdict: j.verdict, reason: String(j.reason || '').slice(0, 160) })) })) };

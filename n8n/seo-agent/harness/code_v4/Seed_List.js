@@ -27,4 +27,6 @@ for (const g of order) (groups[g] || []).forEach(push);
 if (!ordered.length && base.business) push(String(base.business).split(/[.,]/)[0].slice(0, 60));
 const seed_groups = {};
 for (const g of Object.keys(groups)) seed_groups[g] = (groups[g] || []).map(norm).filter(Boolean).slice(0, 8);
-return [{ json: { ...base, seeds: ordered.slice(0, 30), primary_seed: ordered[0] || '', seed_groups, services: [...new Set([...declared, ...(ai.services || [])])] } }];
+// F-REH (2026-10-20): the declared services also travel ALONE (`declared_services`): the research ranks its suggestions by whether they are
+// one of these (service_fit, Rank Keywords), and `services` mixes in what the model read off the homepage
+return [{ json: { ...base, seeds: ordered.slice(0, 30), primary_seed: ordered[0] || '', seed_groups, services: [...new Set([...declared, ...(ai.services || [])])], declared_services: declared } }];

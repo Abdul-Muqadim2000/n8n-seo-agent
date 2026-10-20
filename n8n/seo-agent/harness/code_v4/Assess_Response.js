@@ -350,13 +350,42 @@ function fitTopic(keyword, topics, ctx) {
 // answers "is there evidence it is the client's subject?": `in` = at least the topic bar of the keyword's own words is in the topics given (any
 // number of topic words); `out` = with 12+ topic words on file the keyword misses the bar (a refusal); `unknown` = too little on file to say,
 // which a caller must treat as NOT in topic (a suggestion at most) and say so in plain words.
+// F-REH (2026-10-20, real-credit rehearsal): a DECLARED service's product-category word is positive evidence. "crm service provider uae" for a
+// client who listed "CRM implementation" came back "not enough information": `crm` is a category word (FIT_GENERIC), which the share rule
+// treats as neutral, so the keyword was judged on "provider" alone. When the client named the category in a service (ctx.services = the
+// services they DECLARED, never the crawl's guesses), that word counts as one of the keyword's own words AND as a hit, at any number of topic
+// words on file. Only product categories qualify: `ai`, `software`, `cloud` and the wide words never do ("character ai" stays off topic for an
+// "AI consulting" site); a FIT_COMMON word ("sales", "central") still needs the whole service name, as in fitTopic.
+const FIT_SERVICE_CATS = new Set(['erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll']);
+const fitServiceAnchors = (keyword, services) => {
+  const svc = new Set((Array.isArray(services) ? services : [services]).filter(Boolean).flatMap(x => fitTokens(String(x))).filter(t => FIT_SERVICE_CATS.has(t)).map(fitStem));
+  if (!svc.size) return [];
+  return [...new Set(fitTokens(keyword).filter(t => FIT_SERVICE_CATS.has(t) && svc.has(fitStem(t))))];
+};
 function fitEvidence(keyword, topics, ctx) {
+  const o = ctx || {};
   const T = fitTopicWords(topics);
-  if (!T.size) return { verdict: 'unknown', share: null, words: 0, detail: 'nothing is on file about what this website sells or the keywords you chose, so whether it is on topic cannot be judged' };
-  const t = fitTopic(keyword, topics, { ...(ctx || {}), topic_min_words: 1 });
-  if (t.ok && t.share != null) return { verdict: 'in', share: t.share, words: T.size, detail: t.detail };
+  const anchors = fitServiceAnchors(keyword, o.services || []);
+  const t = T.size ? fitTopic(keyword, topics, { ...o, topic_min_words: 1 }) : { ok: false, share: null, detail: '' };
+  if (t.ok && t.share != null) return { verdict: 'in', share: t.share, words: T.size, detail: t.detail, basis: 'topics' };
+  if (anchors.length) {
+    // the share again, with the declared category word counted as the keyword's own and as matched
+    const toks = fitTokens(keyword);
+    const own = toks.filter(x => x.length > 2 && !FIT_GEO.has(x) && !FIT_GENERIC.has(x) && !/^\d+$/.test(x));
+    const PH = fitTopicPhrases(topics), known = [...T];
+    const stemHit = (s, x) => x === s || (x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0));
+    const ownStems = own.map(fitStem), allStems = toks.filter(x => x.length > 2 && !FIT_GEO.has(x)).map(fitStem);
+    const viaName = (w) => { const s = fitStem(w); return PH.some(ph => !ph.prose && ph.dist.some(x => stemHit(s, x)) && (ph.dist.every(x => ownStems.some(k => stemHit(k, x))) || ph.words.filter(x => allStems.some(k => stemHit(k, x))).length >= 2)); };
+    const hit = (w) => FIT_COMMON.has(w) ? viaName(w) : (T.has(fitStem(w)) || known.some(x => stemHit(fitStem(w), x)));
+    const hits = own.filter(hit).length + anchors.length, all = own.length + anchors.length;
+    const share = Math.round(100 * hits / all) / 100;
+    const bar = typeof o.topic_bar === 'number' ? o.topic_bar : FIT_TOPIC_BAR;
+    if (share >= bar) return { verdict: 'in', share, words: T.size, basis: 'declared service', anchors,
+      detail: '"' + anchors.join('", "') + '" is one of the services you listed' + (own.length ? ' (' + Math.round(share * 100) + '% of its own words match)' : '') };
+  }
+  if (!T.size) return { verdict: 'unknown', share: null, words: 0, detail: 'nothing is on file yet about what this website sells or which keywords you chose' };
   if (T.size >= 12) return { verdict: 'out', share: t.share == null ? null : t.share, words: T.size, detail: t.detail };
-  return { verdict: 'unknown', share: t.share == null ? null : t.share, words: T.size, detail: 'not enough information to judge whether it is on topic: only ' + T.size + ' topic word' + (T.size === 1 ? '' : 's') + ' on file, and too few of them are in this keyword' };
+  return { verdict: 'unknown', share: t.share == null ? null : t.share, words: T.size, detail: 'too little is on file about what this website sells to tell whether this keyword is part of it' };
 }
 // ctx: { intent, own_domain, competitors: [domains, declared], serp_domains: [domains on the results page / auto-detected rivals], brands: { name: domain } (learned),
 //       serp: [this keyword's own top domains, in rank order] (optional), protect: [words of the head term / seeds / services], relevance: fn (G19 hook) }
@@ -843,10 +872,19 @@ const fit = gate.ok ? fitAi : 0;
 // F-KW (2026-10-20, finding 2): the gate judges topic distance only with 12+ topic words on file. Below that it passed everything and the
 // answer read as if the topic had been checked. Now the check says when there is not enough information to judge (and how to fix it), and a
 // keyword with positive evidence says so; the model's own fit still stands, it is never overruled on too little evidence.
-const evA = gate.ok ? fitEvidence(a.keyword, gateCtxA.topics || [], { topic_label: 'what you sell and the keywords you chose' }) : null;
+// F-REH (2026-10-20, real-credit rehearsal): the services the client DECLARED (the request's, and the stored seo_sites.declared_services) are
+// passed to fitEvidence as well, so a keyword that carries one of their product categories ("crm service provider uae" for "CRM
+// implementation") counts as on topic even with few words on file. And the note is the customer's own sentence, built here for the state the
+// site is in: it asks for services only when none are listed (the rehearsal's client had listed four and was told to "add what you sell"),
+// with no internal terms and nothing said twice.
+const declaredA = [...new Set([...(a.services || []), ...((modelA && modelA.declared_services) || [])].map(x => String(x || '').trim()).filter(Boolean))];
+const evA = gate.ok ? fitEvidence(a.keyword, gateCtxA.topics || [], { topic_label: 'what you sell and the keywords you chose', services: declaredA }) : null;
 const topic_judged = !evA || evA.verdict !== 'unknown';
+const topicNoteA = topic_judged ? '' : !declaredA.length
+  ? 'we could not tell whether this keyword matches what you sell, because no services are listed for this website yet. Add your main services in your website settings and the check will tell you'
+  : 'we could not tell whether this keyword matches what you sell: it does not clearly match the services you listed (' + declaredA.slice(0, 4).join(', ') + (declaredA.length > 4 ? ' and ' + (declaredA.length - 4) + ' more' : '') + '). If you offer it, add it to your services and check it again';
 const navigational = gate.ok ? navAi : (gate.reason === 'navigational' || navAi);
-const fit_gate = gate.ok ? { ok: true, reason: '', detail: '', topic_judged, topic_note: topic_judged ? '' : evA.detail } : { ok: false, reason: gate.reason, detail: gate.detail, words: GATE_WORDS[gate.reason] || gate.reason, topic_judged: true, topic_note: '' };
+const fit_gate = gate.ok ? { ok: true, reason: '', detail: '', topic_judged, topic_note: topicNoteA, ...(evA && evA.basis === 'declared service' ? { topic_basis: evA.detail } : {}) } : { ok: false, reason: gate.reason, detail: gate.detail, words: GATE_WORDS[gate.reason] || gate.reason, topic_judged: true, topic_note: '' };
 // ---- B1-1 / B1-2 (2026-10-15, benchmark area 1): "difficulty for your site" is measured on THIS keyword's topic where the site has a
 // record on it. The leaders personalise per topic (MarketMuse Personalized Difficulty = Keyword Difficulty - a topic-level Topic
 // Authority, and "If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty"; Semrush lowers Personal KD
@@ -904,7 +942,7 @@ const need = difficulty_for_you === 'not_realistic' || fit === 0;
 const alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
 const warnings = [];
 if (!gate.ok) warnings.push('not a fit for this website: ' + fit_gate.words + ' (' + gate.detail + ')');
-if (!topic_judged) warnings.push('not enough information to judge whether this is on topic for you: ' + evA.detail + '. Add what you sell to your website settings so the check can tell');
+if (!topic_judged) warnings.push(topicNoteA);
 if (!aiOk && gate.ok) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160) + (plainRan ? ' (the plain-text retry answered nothing either)' : ''));
 if ((a.reach_errors || []).length) warnings.push('reach measured from partial data: ' + a.reach_errors.join('; ').slice(0, 200));
 // B1-1: an encouraging answer that rests on a reach measured on OTHER topics says so where the warnings are read. Only then: a site
