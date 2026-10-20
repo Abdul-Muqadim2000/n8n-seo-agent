@@ -69,10 +69,20 @@
 //     so a failed settings save can no longer make an announced keyword read as the client's; '' on both = a ladder from before the column.
 //   * an approval matches the item's source and ladder when the app recorded them; a keyword-only approval that fits two items writes none.
 //   * every keyword and item key is normalised in every script (Unicode letters, marks and digits), identically in app/shared/src/cycles.ts.
+// ---- P1 (2026-10-20, rehearsal §4 item 1, owner decision): no page before the author profile and the business facts ----
+// A new client's first page was written with neither on file and Content QA refused it (11 bracketed author fields, claims nothing on file
+// supports), after the client paid about 62 credits. Now every page this run would write (ladder pages, approved items, the level's own
+// items, the AI page) is HELD while the website's author profile (seo_profiles: name, job title, bio) or business facts (seo_sites
+// .business_facts, at least READY.FACTS_MIN characters) are missing: `held_for_profile` lists them with the reason, a preview shows them
+// as items with `held: 'profile'`, an approval waits too (approved_not_written reason `profile`), nothing is started or charged, and the
+// next cycle after both are filled in writes them, within its budget. The site is not "waiting for a keyword" for this: it is
+// `waiting_for_profile`. One rule with the ladder start and the app: v5/code/_readiness.js (app/shared/src/readiness.ts).
+// Every page run also carries the website's stored business facts and call to action (`business_facts`, `cta`), so the brief uses them.
 // Sites without a pick but with something to say (paused, waiting for a keyword, awaiting approval, suggestions, a main page waiting for
 // support, refusals) get one report_only item (nothing_to_do: true) for the Cadence Status note; dry_run only plans.
 /*__SITE_MODEL__*/
 /*__WAITING__*/
+/*__READINESS__*/
 // R16 (2026-10-13, FIX_PLAN §3.11): the fit gate also reads the rows that were STORED before it existed, so a competitor's brand or a
 // government portal planned as a rung is set aside here instead of being written (`set_aside`, with the reason; the Ladder Marks node
 // writes `status: set_aside` back on the row, so the app and the next run see the same thing).
@@ -103,6 +113,8 @@ const norm = cycleNorm;
 const lc = (v) => String(v == null ? '' : v).toLowerCase().trim();
 const sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), cad = rowsOf('Load Cadence').filter(r => r.site_id), ladders = rowsOf('Load Ladders').filter(r => r.ladder_id && r.keyword), qh = rowsOf('Load Query History'), trends = rowsOf('Load Trends'), logs = rowsOf('Load Content Log').filter(r => r.keyword);
 const settings = rowsOf('Load Ladder Settings').filter(r => r.ladder_id);
+// P1: the websites' business profiles (seo_profiles, written by "Set up my business profile"): the author fields the readiness rule reads
+const profileRows = rowsOf('Load Profiles (Cadence)').filter(r => r.site_id || r.domain);
 // R16 (2026-10-13): the node loads the ranks of EVERY rung now (it was rung 4 only). The won / gate rules still read the main keyword's
 // own rows (headRanks); every rung's rows carry the results page the Rank Tracker stored for that keyword, which the fit gate reads.
 const allRanks = rowsOf('Load Main Keyword Ranks').filter(r => r.ladder_id && r.keyword);
@@ -185,6 +197,8 @@ for (const s of list) {
   // website defaults ('_site' row)
   const siteRow = settings.find(r => String(r.ladder_id) === '_site' && (r.site_id === s.site_id || normD(r.domain) === s.domain)) || {};
   const level = levelOf(siteRow);
+  // P1: is the website ready for a written page (author profile + business facts)? Decided once per site, applied to everything written below
+  const readiness = READY.of({ profile: profileRows.find(r => r.site_id === s.site_id) || profileRows.find(r => normD(r.domain) === s.domain) || {}, facts: s.business_facts });
   // `opportunities` is read only to report what was stored: it decides nothing any more (a stored `auto` means "suggest", plan §5.1 R-K3)
   const cfg = { mode: lc(siteRow.mode) === 'manual' ? 'manual' : 'auto', opportunities: lc(siteRow.opportunities) === 'manual' ? 'manual' : 'auto', max_active: posInt(siteRow.max_active, CONFIG.max_active, 20), max_waiting: posInt(siteRow.max_waiting, CONFIG.max_waiting, 100) };
   const slog = logs.filter(l => normD(l.domain) === s.domain);
@@ -521,7 +535,13 @@ for (const s of list) {
       if (coverOf(o)) { if (!covered.some(c => norm(c.keyword) === k)) { const c = coverOf(o); covered.push({ keyword: o.keyword, source: o.source, url: c.url, matched_by: c.matched_by }); } return false; }   // D11: never suggest a second page for a search a live page answers
       return true; })
     .slice(0, CONFIG.suggestions).map(o => itemOf(o, false));
-  const pickedU = new Set(picks.map(p => norm(p.keyword)));   // the AI page (v4.12) is not one of uniq
+  // P1: nothing is written before the author profile and the business facts are on file: what this run would write is HELD (listed, priced,
+  // never started, never charged) and the first cycle after both exist writes it. Suggestions are computed above from the same picks, so a
+  // held page is never offered a second time as a suggestion.
+  const heldForProfile = !readiness.ready ? picks.splice(0, picks.length) : [];
+  const heldK = new Set(heldForProfile.map(p => norm(p.keyword)));
+  const HELD_WHY = '; ' + READY.REASON + ': it is written once you add ' + readiness.missing_text;
+  const pickedU = new Set([...picks, ...heldForProfile].map(p => norm(p.keyword)));   // the AI page (v4.12) is not one of uniq; a held page is not "later" either
   const upcoming = uniq.filter(x => !pickedU.has(norm(x.keyword))).slice(0, CONFIG.upcoming).map(x => ({ keyword: x.keyword, source: x.source, why: x.why }));
   const pending = waiting.filter(w => !w.needs_fix).map(w => ({ keyword: w.keyword, started_at: w.written_at, days: Math.round((at - new Date(w.written_at || atIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);   // D5: ladder pages are in `waiting` too; R111: a failed draft is never a publish reminder
   const needs_fix = waiting.filter(w => w.needs_fix).map(w => ({ keyword: w.keyword, written_at: w.written_at, reasons: w.reasons || [] }));   // R111
@@ -536,7 +556,7 @@ for (const s of list) {
   const recheck_ladders = recheckL.map(x => ({ ladder_id: x.id, head: x.head, planned_at: x.start, reason: RECHECK_WHY }));
   // an approval that is not written this cycle, with the reason: the pile-up guard, the budget, or a live page already answering its search
   const approved_not_written = approved.filter(o => !pickedU.has(norm(o.keyword))).map(o => ({ keyword: o.keyword, source: o.source,
-    reason: paused_reason || (covered.some(c => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget') }))
+    reason: paused_reason || (heldK.has(norm(o.keyword)) ? 'profile' : covered.some(c => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget') }))
     .concat(approval_ambiguous.map(a => ({ keyword: a.keyword, source: '', reason: 'ambiguous', detail: 'your approval names only the keyword, and ' + a.sources.length + ' different pages share it (' + a.sources.join(', ') + '): approve the one you want again' })));
   const facts = { set_aside, refused, covered_by_live_pages: covered.slice(0, 10), paused_reason, waiting_publish: waitingKw.size,
     needs_fix, needs_fix_keywords: needs_fix.map(w => w.keyword),   // R111: of the waiting pages, the drafts that failed their quality check
@@ -546,6 +566,8 @@ for (const s of list) {
     decay: { decaying: decayRows.length, queued: decayCands.length, skipped: decay_skipped,
       pages: decayCands.map(x => ({ url: x.row.url, keyword: x.q.query, lost: x.lost, kind: String(x.row.decay_kind || ''), basis: String(x.row.decay_basis || '') })) }, waiting_keywords: waiting.map(w => w.keyword).slice(0, 20), max_waiting: cfg.max_waiting, pileup_forced: pileup && force, opportunities: cfg.opportunities, awaiting_approval, suggestions,
     // keyword-first (2026-10-19): the level, whether the site still waits for its first keyword, the cycle, the budget, the client's decisions
+    // P1: the readiness for a written page, and what was held for it (keyword, source, why, price; the preview carries them as items)
+    readiness, waiting_for_profile: !readiness.ready, held_for_profile: heldForProfile.map(p => ({ ...itemOf(p, true), held: 'profile', why: p.why + HELD_WHY })),
     cycle_request_id, level, auto_sources: AUTO_SOURCES[level], waiting_for_keyword, client_ladders: clientLadders.length, cycle_key, cycle_date, scheduled_for, trigger: trigger_kind, budget,
     skipped, approved_items: approved.map(o => ({ keyword: o.keyword, source: o.source, item_key: cycleNorm(o.keyword) })), approved_not_written, est_page_usd: EST_PAGE_USD, est_basis,
     not_chosen_ladders: unchosenL.map(x => ({ ladder_id: x.id, head: x.head, chosen_by: x.chosen_by })), recheck_ladders,
@@ -556,9 +578,12 @@ for (const s of list) {
   const ridOf = (i) => 'cad_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '') + '_' + i;
   // ---- preview: ONE item per site, what the cycle would write — nothing is started, logged or marked ----
   if (preview) {
-    const items = [...picks.map(p => itemOf(p, true)), ...awaiting_approval.map(a => itemOf({ ...a, source: 'ladder', why: a.why || 'the next page of your ladder "' + a.head + '": it waits for your OK' }, false))];
-    const reasonP = waiting_for_keyword ? 'waiting for your first keyword: choose the keyword you want to be found for' + (picks.length ? '; until then only what you approved is written' : ', nothing is written until then')
+    const items = [...picks.map(p => itemOf(p, true)), ...facts.held_for_profile.map(h => ({ ...h, auto: true })),
+      ...awaiting_approval.map(a => ({ ...itemOf({ ...a, source: 'ladder', why: (a.why || 'the next page of your ladder "' + a.head + '": it waits for your OK') + (readiness.ready ? '' : HELD_WHY) }, false), ...(readiness.ready ? {} : { held: 'profile' }) }))];
+    const profileP = heldForProfile.length ? READY.REASON + ': ' + heldForProfile.length + ' page' + (heldForProfile.length === 1 ? '' : 's') + ' ' + (heldForProfile.length === 1 ? 'is' : 'are') + ' written once you add ' + readiness.missing_text : '';
+    const reasonP = waiting_for_keyword ? 'waiting for your first keyword: choose the keyword you want to be found for' + (picks.length ? '; until then only what you approved is written' : profileP ? '; and ' + profileP : ', nothing is written until then')
       : paused_reason ? waitingKw.size + ' written pages are waiting to be published (limit ' + cfg.max_waiting + '): nothing new is written until they are'
+      : profileP ? profileP
       : !pages ? 'no pages a week are set for this website' : !picks.length ? 'nothing to write automatically in this cycle' : '';
     out.push({ json: { preview: true, dry_run: true, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '',
       request_id: cycle_request_id || 'prev_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), pages_per_week: pages, items, reason: reasonP, upcoming, pending_publish: pending, candidates: uniq.length, week,
@@ -567,17 +592,20 @@ for (const s of list) {
   }
   picks.forEach((p, i) => { const request_id = ridOf(spent + i + 1);
     out.push({ json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', source: p.source, keyword: p.keyword, page_type: p.page_type, existing_page_url: p.existing_page_url || '', ladder_id: p.ladder_id || '', rung: p.rung || 0, page_no: p.page_no || 0, target_id: p.target_id || '', why: p.why, request_id, pages_per_week: pages, upcoming, pending_publish: pending, candidates: uniq.length, dry_run, week, item_key: cycleNorm(p.keyword), auto: !p.approved, approved: !!p.approved, est_usd: EST_PAGE_USD, ...facts,
-      body: { mode: 'keyword', keyword: p.keyword, page_type: p.page_type, country: s.country || '', domain: s.domain, receive: ['Keyword Report', 'Page Content'], existing_page_url: p.existing_page_url || '', email: s.email || '', callback_url: s.callback_url || '', request_id, client_ip: 'cadence:' + s.site_id, force_content: true,
+      body: { mode: 'keyword', keyword: p.keyword, page_type: p.page_type, country: s.country || '', domain: s.domain, receive: ['Keyword Report', 'Page Content'], existing_page_url: p.existing_page_url || '', email: s.email || '', callback_url: s.callback_url || '', business: '', customers: '', request_id, client_ip: 'cadence:' + s.site_id, force_content: true,
+        business_facts: String(s.business_facts || '').trim().slice(0, 2000), cta: String(s.cta || '').trim().slice(0, 200),   // P1: the stored facts reach every page run (Normalize Input matches `business` first, so it is sent, empty, before them)
         ...(p.ai_target ? { ai_target: p.ai_target } : {}),
         ...(p.source === 'ladder' ? { ladder_id: p.ladder_id, ladder_rung: p.rung, ladder_head: p.head, ladder_page_no: p.page_no, ladder_target_url: p.target_url || '', ladder_links: (p.links || []).map(l => ({ url: l.url, path: String(l.url).replace(/^https?:\/\/[^\/]+/i, '') || '/', role: l.role, keyword: l.keyword, planned: true })) } : {}) } } }); });
   const dropped = set_aside.filter(x => x.dropped);   // R16: a rung nobody should write is a reason to report, not to go quiet
-  if (!picks.length && (isCycle || paused_reason || waiting_for_keyword || awaiting_approval.length || suggestions.length || facts.waiting_for_support.length || dropped.length || facts.paused_ladders.length)) {
+  if (!picks.length && (isCycle || paused_reason || waiting_for_keyword || heldForProfile.length || awaiting_approval.length || suggestions.length || facts.waiting_for_support.length || dropped.length || facts.paused_ladders.length)) {
     const fixK = new Set(needs_fix.map(w => norm(w.keyword)));
+    const profileR = heldForProfile.length ? READY.REASON + ': ' + heldForProfile.length + ' page' + (heldForProfile.length === 1 ? '' : 's') + ' ' + (heldForProfile.length === 1 ? 'is' : 'are') + ' ready to write once you add ' + readiness.missing_text + ' (Website settings); nothing is written or charged until then' : '';
     const reason = waiting_for_keyword ? 'waiting for your first keyword: choose the keyword you want to be found for, nothing is written until you do'
-        + (suggestions.length ? ' (' + suggestions.length + ' suggestion' + (suggestions.length === 1 ? '' : 's') + ' wait for your OK)' : '')
+        + (suggestions.length ? ' (' + suggestions.length + ' suggestion' + (suggestions.length === 1 ? '' : 's') + ' wait for your OK)' : '') + (profileR ? '; and ' + profileR : '')
       : paused_reason ? waitingKw.size + ' written pages waiting for publication (pile-up guard, limit ' + cfg.max_waiting + '): ' + facts.waiting_keywords.slice(0, 6).map(k => '"' + k + '"' + (fixK.has(norm(k)) ? (() => { const cv = coverOf({ keyword: k }); return cv ? ' (not needed: ' + SM.pageStep({ keyword: k, covered_url: cv.url, not_ready: true }).text + ')' : ' (needs a fix: it did not pass the quality check)'; })() : '')).join(', ')
         + (needs_fix.length ? '. Publish the ones that passed, and fix the ' + needs_fix.length + ' that need a fix and run them again, to continue' : '. Publish them to continue')
       : !pages ? 'no pages a week are set for this website, so nothing is written at any autopilot level'
+      : profileR ? profileR
       : (pages && !room && spent) ? 'this cycle\'s ' + pages + ' page' + (pages === 1 ? '' : 's') + ' a week ' + (spent === 1 ? 'is' : 'are') + ' already used: ' + budget.spent_keywords.map(x => '"' + x.keyword + '" (' + x.how + ')').join(', ')
       : dropped.length ? 'nothing to write automatically this week; ' + dropped.length + ' planned page(s) set aside: ' + dropped.slice(0, 3).map(x => x.note).join(' | ')
       : 'nothing to write automatically this week';
