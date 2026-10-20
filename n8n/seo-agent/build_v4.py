@@ -9484,6 +9484,10 @@ log('The Editor is priced for the calls it made (2026-10-16, re-rating 2026-10-1
 #  * R95: an on-demand AI pulse is stored beside the day's scheduled reading (build_monitors.py: upsert by site + date + run_id).
 # =============================================================================
 assert "parent_run_id: String($execution.id)" in code('Monitor Start'), 'R77: Monitor Start does not tell the monitor which run started it'
+# F-REH (2026-10-20, real-credit rehearsal): "Track my site" starts the Site Tracker the same way, so it names its parent too - without it the
+# Track run's own reservation counted as "another analysis in flight" and the client's first Site Tracker run was refused too_many_open
+assert "parent_run_id: String($execution.id)" in code('Tracker Payload (Track)') and conns['Tracker Payload (Track)']['main'][0][0]['node'] == 'Start Site Tracker', \
+    'F-REH: Tracker Payload (Track) does not tell the Site Tracker which run started it (or no longer feeds Start Site Tracker)'
 assert '__handoff' in code('Run Ledger Settle') and "dfs_source: 'handoff'" in code('Run Ledger Settle'), \
     'R81: the front door settles a monitor hand-off as if it had spent the reservation'
 assert 'dfs_source' in nodes['Settle Run Ledger']['parameters']['columns']['value'], 'R81: the settle does not write where the money is'
