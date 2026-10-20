@@ -1,4 +1,4 @@
-import { CYCLE_LOCAL_TIME, ENGINE_TIMEZONE, isValidTimezone, PREVIEW_HOURS_BEFORE, upcomingCycles, type CycleOccurrence, type SiteCycleView } from '@seo/shared';
+import { contentReadiness, CYCLE_LOCAL_TIME, ENGINE_TIMEZONE, isValidTimezone, PREVIEW_HOURS_BEFORE, upcomingCycles, type CycleOccurrence, type ReadinessProfile, type SiteCycleView } from '@seo/shared';
 import type { GuideId } from '@seo/shared/guides';
 
 // "What happens next" (the Pipeline and the end of onboarding): the website's next real dates as a short line of steps, each with the
@@ -110,8 +110,7 @@ export function nextSteps({ cycle, now, firstPage, projectFrom }: NextStepsInput
 
 /**
  * Where the website's first page stands, from what the app already reads (owner decision 2026-10-20: the first page of a keyword waits
- * for the author profile and the business facts). `ready` is the author's name on the profile and business facts written down; when the
- * server exposes its own readiness of the first page, pass that instead.
+ * for the author profile and the business facts). `ready` is the engine's readiness rule (shared/src/readiness.ts).
  */
 export function firstPageOf(o: {
   needsKeyword: boolean;
@@ -125,9 +124,8 @@ export function firstPageOf(o: {
   return o.ladders.some((l) => l.mode === 'auto') ? 'writing' : 'plan';
 }
 
-/** The author's name and the business facts, the two things the first page waits for. */
-export const firstPageReady = (profile: { author?: { name?: string | null } | null } | null | undefined, businessFacts: string | null | undefined): boolean =>
-  !!profile?.author?.name?.trim() && !!businessFacts?.trim();
+/** The author profile (name, job title, bio) and the business facts the first page waits for: the engine's own rule (shared/src/readiness.ts). */
+export const firstPageReady = (profile: ReadinessProfile, businessFacts: string | null | undefined): boolean => contentReadiness({ profile, businessFacts }).ready;
 
 /** The step line as plain text ("Today: first checks and your first page · Sun 25 Oct: Coming up ..."), for screen readers and tests. */
 export const nextStepsText = (steps: NextStep[]) => steps.map((s) => `${s.when}: ${s.text}`).join(' · ');

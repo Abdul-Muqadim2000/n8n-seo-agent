@@ -156,13 +156,32 @@ function ComingUpPanel({ view, cycle, onWrite }: { view: ComingUpView; cycle?: S
             The checks still run. You can approve a suggestion below to have it written this week.
           </Callout>
         )}
+        {/* P1 (2026-10-20): no page is written before the author profile and the business facts are on file */}
+        {view.waitingForProfile && (
+          <Callout
+            tone="warning"
+            title="Your pages wait for your author profile and business facts"
+            action={
+              can('admin') ? (
+                <ButtonLink to={paths.site(org.id, site.id, /author/.test(view.missingText) ? 'settings/profile' : 'settings/business')} size="sm">
+                  Add them
+                </ButtonLink>
+              ) : undefined
+            }
+          >
+            {view.missingText ? `Add ${view.missingText} in Website settings. ` : ''}Until then nothing is written or charged, approved pages included. The pages below are written in the first run after that.
+            <span className="mt-2 flex flex-wrap gap-2">
+              <GuideButton id={/author/.test(view.missingText) ? 'business-profile' : 'business-facts'} />
+            </span>
+          </Callout>
+        )}
         {view.pausedReason === 'pileup' && (
           <Callout tone="warning" title="Writing is paused: pages wait to be published">
             Publish the pages you have, then the weekly pages continue.
           </Callout>
         )}
         {view.pausedReason === 'site_paused' && <Callout tone="warning" title="Tracking is paused for this website: nothing runs until you resume it" />}
-        {view.reason && !view.waitingForKeyword && !view.pausedReason && <p className="text-[13px] text-ink-3">{view.reason}</p>}
+        {view.reason && !view.waitingForKeyword && !view.pausedReason && !view.waitingForProfile && <p className="text-[13px] text-ink-3">{view.reason}</p>}
 
         {!auto.length && !waiting.length ? (
           <p className="text-sm text-ink-3">Nothing to write in this run. Your checks and reports run as usual.</p>
@@ -262,6 +281,7 @@ function ComingUpRow({ item, closed, onWrite }: { item: ComingUpItem; closed: bo
             <Badge tone={SOURCE_TONE[item.source]}>{SOURCE_LABEL[item.source] ?? item.source}</Badge>
             {decisionBadge(item)}
             {item.recheck && <Badge tone="warning">Checking again</Badge>}
+            {item.held && <Badge tone="warning">Waits for your profile</Badge>}
           </div>
           {item.recheck ? (
             <p className="mt-1 text-[13px] leading-snug text-ink-2">{RECHECK_LINE}</p>

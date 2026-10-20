@@ -1075,6 +1075,8 @@ export interface PipelineData {
   cycle?: import('./cycles').SiteCycleView;
   /** keyword-first: the autopilot level and what it means this cycle (always set by the server) */
   autopilot?: PipelineAutopilot;
+  /** P1 (2026-10-20): is the website ready for a written page (author profile + business facts, shared/src/readiness.ts) */
+  readiness?: import('./readiness').ContentReadiness | null;
 }
 
 /** What the autopilot does for the website this cycle (keyword-first, plan §5.5). */
@@ -1219,8 +1221,9 @@ export interface LadderDetail extends LadderCard {
 export interface NeedsYouItem {
   id: string;
   /** keyword-first: `keyword` (choose your first / next keyword), `proposal` (a keyword we propose or announced), `recheck` (a queued
-   * ladder whose keyword fell when it became active), `level` (the autopilot level: dropped after rejections, or a nudge to raise it) */
-  kind: 'publish' | 'approve' | 'overlap' | 'duplicate' | 'failed' | 'connection' | 'pileup' | 'keyword' | 'proposal' | 'recheck' | 'level';
+   * ladder whose keyword fell when it became active), `level` (the autopilot level: dropped after rejections, or a nudge to raise it);
+   * P1: `profile` (the author profile and the business facts the first page waits for, or that first page ready to write) */
+  kind: 'publish' | 'approve' | 'overlap' | 'duplicate' | 'failed' | 'connection' | 'pileup' | 'keyword' | 'proposal' | 'recheck' | 'level' | 'profile';
   severity: 'warning' | 'info';
   title: string;
   detail: string;

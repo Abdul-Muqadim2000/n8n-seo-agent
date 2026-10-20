@@ -124,6 +124,8 @@ export interface CyclePreviewItem {
   chosen_by?: ChosenBy | '';
   /** F-KW: the next page of a ladder planned more than 60 days ago, waiting for its fresh keyword check */
   recheck?: boolean;
+  /** P1 (2026-10-20): held until the website's author profile and business facts are on file (the reason is in `why`) */
+  held?: 'profile';
 }
 
 /** The `cycle_preview` callback body (beside the usual callback fields). */
@@ -157,6 +159,9 @@ export interface CyclePreview {
   /** the engine's price of one page (USD) and where it comes from: internal, never shown to a customer */
   est_page_usd?: number;
   est_basis?: string;
+  /** P1: nothing is written until the author profile and the business facts are on file; what is missing (readiness keys) */
+  waiting_for_profile?: boolean;
+  readiness?: { ready: boolean; missing: string[]; missing_text: string } | null;
 }
 
 /** One row of the engine's `seo_skips`, written by the app. */
@@ -265,12 +270,14 @@ export interface ComingUpItem {
   canApprove: boolean;
   /** F-KW: a page of a ladder planned long ago: the keyword is checked again before anything is written */
   recheck: boolean;
+  /** P1: written once the author profile and the business facts are on file (approving it does not write it sooner) */
+  held: boolean;
 }
 
 /** An approval the cycle did not write, in the customer's words. */
 export interface ComingUpNotWritten {
   keyword: string;
-  reason: 'pileup' | 'budget' | 'covered_by_live_page' | 'ambiguous' | 'other';
+  reason: 'pileup' | 'budget' | 'covered_by_live_page' | 'ambiguous' | 'profile' | 'other';
   message: string;
 }
 
@@ -305,6 +312,9 @@ export interface ComingUpView {
   recheckLadders: { ladderId: string; head: string; plannedAt: string }[];
   /** R-K7: the cycle's pages a week, how many are already used, and from when ladder starts count */
   budget: { pagesPerWeek: number; spent: number; room: number; ladderStartWindow: string | null } | null;
+  /** P1: the cycle writes nothing until the author profile and the business facts are on file, and what is missing in customer words */
+  waitingForProfile: boolean;
+  missingText: string;
 }
 
 /** POST /api/orgs/:orgId/sites/:siteId/coming-up/decisions */

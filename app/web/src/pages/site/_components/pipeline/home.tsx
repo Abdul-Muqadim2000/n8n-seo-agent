@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Copy,
   Gauge,
+  UserRound,
   Hand,
   KeyRound,
   Megaphone,
@@ -174,6 +175,7 @@ const KIND_ICON: Record<NeedsYouItem['kind'], ReactNode> = {
   proposal: <Megaphone className="size-4" />,
   recheck: <RotateCcw className="size-4" />,
   level: <Gauge className="size-4" />,
+  profile: <UserRound className="size-4" />,
 };
 
 /** Older servers: the pages waiting to be published. */

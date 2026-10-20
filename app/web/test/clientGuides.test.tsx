@@ -178,10 +178,15 @@ describe('"What happens next": built from the website\'s cycle', () => {
     expect(firstPageOf({ needsKeyword: false, ladders: [lad('auto')], ready: true })).toBe('writing');
     expect(firstPageOf({ needsKeyword: false, ladders: [lad('manual')], ready: true })).toBe('plan');
     expect(firstPageOf({ needsKeyword: false, ladders: [lad('auto', 1)], ready: false })).toBe('none');
-    expect(firstPageReady({ author: { name: 'Amira' } }, 'Founded 2012')).toBe(true);
-    expect(firstPageReady({ author: { name: ' ' } }, 'Founded 2012')).toBe(false);
-    expect(firstPageReady(null, 'Founded 2012')).toBe(false);
-    expect(firstPageReady({ author: { name: 'Amira' } }, '')).toBe(false);
+    // the engine's rule (shared/src/readiness.ts): the author's name, job title and bio, and business facts of at least 30 characters
+    const author = { name: 'Amira', jobTitle: 'Head of delivery', bio: 'Leads the delivery team.' };
+    const facts = 'Founded 2012; 40 consultants; certified partner.';
+    expect(firstPageReady({ author }, facts)).toBe(true);
+    expect(firstPageReady({ author: { ...author, name: ' ' } }, facts)).toBe(false);
+    expect(firstPageReady({ author: { ...author, bio: '' } }, facts)).toBe(false);
+    expect(firstPageReady(null, facts)).toBe(false);
+    expect(firstPageReady({ author }, '')).toBe(false);
+    expect(firstPageReady({ author }, 'Founded 2012')).toBe(false);
   });
 
   it('renders as a list of buttons, each opening its guide, with the line for screen readers', () => {
