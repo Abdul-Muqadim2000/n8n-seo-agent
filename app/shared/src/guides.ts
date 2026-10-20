@@ -7,7 +7,10 @@
 // [label](https://url) for links, and {{placeholders}} for the real values of the site (its domain, the record to add, the key
 // file). Rendering is in web/src/components/guide/rich.tsx; the plain-text form is `guideText` below.
 
-export type GuideArea = 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company' | 'security' | 'integrations' | 'agency';
+import { CYCLE_SPACING_DAYS } from './cycle-clock';
+import { AUTOPILOT_LEVELS, CHANCE_WORDS, CYCLE_LOCAL_TIME, NUDGE_AFTER_PAGES, PREVIEW_HOURS_BEFORE, PROPOSAL_WAIT_HOURS, QUEUED_RECHECK_DAYS, REJECT_LIMIT, REJECT_WINDOW } from './cycles';
+
+export type GuideArea = 'autopilot' | 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company' | 'security' | 'integrations' | 'agency';
 
 export interface GuideVar {
   key: string;
@@ -87,6 +90,7 @@ export const guideAvailable = (g: Pick<Guide, 'requires'> | undefined, a: GuideA
   !!g && (g.requires !== 'google_signin' || a.googleSignIn);
 
 export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[] = [
+  { id: 'autopilot', label: 'Your weekly autopilot', description: 'What happens when, and the choices that steer it: your keyword, the level, the weekly plan' },
   { id: 'google', label: 'Google data', description: 'Search Console and Analytics: the data behind every report' },
   { id: 'ownership', label: 'Proving the website is yours', description: 'One of the ways this app offers, before any data is shown' },
   { id: 'website', label: 'Changes on your website', description: 'Files, pages and tools that live on your side' },
@@ -98,6 +102,10 @@ export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[
   { id: 'agency', label: 'Your agency portal', description: 'Your brand, your domain and your clients\' access' },
 ];
 
+/** Whole days, for the sentences that say "2 days before" (the constants are in hours). */
+const PREVIEW_DAYS = PREVIEW_HOURS_BEFORE / 24;
+const PROPOSAL_WAIT_DAYS = PROPOSAL_WAIT_HOURS / 24;
+
 const V = {
   domain: { key: 'domain', label: 'Your website', example: 'your-domain.com' },
   serviceAccount: { key: 'serviceAccount', label: 'The address that reads your Google data', example: 'reader@alaventra-seo.iam.gserviceaccount.com' },
@@ -107,6 +115,14 @@ const V = {
   indexNowKey: { key: 'indexNowKey', label: 'Your IndexNow key', example: 'e474f67e21841570c3de6d7624391652' },
   indexNowFile: { key: 'indexNowFile', label: 'The file name', example: 'e474f67e21841570c3de6d7624391652.txt' },
   indexNowUrl: { key: 'indexNowUrl', label: 'Where the file goes', example: 'https://your-domain.com/e474f67e21841570c3de6d7624391652.txt' },
+  // the weekly autopilot: each example reads as a sentence on its own, because the searchable catalogue opens a guide with no values
+  weekday: { key: 'weekday', label: 'Your weekday', example: 'the weekday you finished setup' },
+  timezone: { key: 'timezone', label: 'Your time zone', example: "your website's time zone" },
+  monthlyDate: { key: 'monthlyDate', label: 'Your monthly date', example: 'the day of the month you finished setup' },
+  level: { key: 'level', label: 'Your autopilot level', example: 'the level you chose' },
+  pageCredits: { key: 'pageCredits', label: 'A written page', example: 'the credits shown before it starts' },
+  planCredits: { key: 'planCredits', label: 'A keyword plan', example: 'the credits shown before you start it' },
+  checkCredits: { key: 'checkCredits', label: 'A keyword check', example: 'the few credits shown beside the box' },
 } as const;
 
 export const GUIDES = [
@@ -2034,6 +2050,414 @@ export const GUIDES = [
     related: ['portal-branding', 'portal-domain'],
     keywords: ['client login', 'client access', 'approver', 'viewer', 'agency'],
   },
+  // ---------------------------------------------------------------- Your weekly autopilot (SCHEDULING_KEYWORDS_PLAN.md §4-§5)
+  // The numbers in these texts come from cycles.ts / cycle-clock.ts (the engine mirrors them), never typed in; the website's own values
+  // (its weekday, zone, monthly date, level, the credits of a page) arrive through {{vars}} from web/src/lib/guide-vars.ts.
+  {
+    id: 'your-journey',
+    area: 'autopilot',
+    title: 'What happens when',
+    why: 'The whole path from setup to a keyword won, stage by stage: what you do, what we do, and what each step leads to. Read it once and every message from Alaventra will make sense.',
+    where: 'Alaventra: the Pipeline page of your website',
+    minutes: 6,
+    vars: [V.domain, V.weekday, V.timezone, V.monthlyDate, V.level],
+    steps: [
+      {
+        title: 'Setup: your answers, your keyword, your level',
+        body: '**You:** say what you sell, choose the keyword you want to be found for (or let us suggest one), pick how much we do on our own, and fill in your **author profile** and your **business facts**. **We:** start a free keyword research while you answer, and check every keyword you type. **It leads to:** a plan for {{domain}} that only writes for keywords you chose, at {{level}}.',
+        note: 'The author profile and the business facts are what let your first page be published as it is, instead of arriving as a draft with blanks to fill. Until both exist, the plan for your keyword is still made, but its pages wait and use no credits.',
+      },
+      {
+        title: 'Day 1: the first week starts at once',
+        body: '**We:** start your first week within minutes of finishing setup: the checks run one after another (it is also your first monthly week, so it includes the full AI check, the full backlink report and the audit), and the plan for your keyword is made. When your author profile and business facts are in, the first page of your keyword is written the same day. **You:** nothing, unless something shows under **Needs you**. **It leads to:** your first reports within the hour, and a first page to publish.',
+        note: 'The first page counts as that week\'s page, so the next one is written in your next weekly run.',
+      },
+      {
+        title: 'Every week on your day: the weekly run',
+        body: '**We:** on {{weekday}} at ' + CYCLE_LOCAL_TIME + ' in {{timezone}}, check how AI assistants answer your buyers, your backlinks, where your keyword\'s pages rank, your Search Console and Analytics figures, your pages\' readiness for AI answers, then write the week\'s pages and look for sites that might link to you. Each step starts when the one before it is done. **You:** read the reports when they arrive. **It leads to:** a page or more a week for your keyword, and reports that show what moved.',
+      },
+      {
+        title: PREVIEW_DAYS + ' days before: Coming up',
+        body: '**We:** make the plan of the next weekly run: each page it will write, why, and its credits, on the Pipeline and by e-mail to the owners and admins. **You:** **Skip** what you do not want, **Approve** what waits for your OK, or do nothing. **It leads to:** a weekly run that writes exactly that plan. Doing nothing is fine: automatic pages are written, the others are not.',
+      },
+      {
+        title: 'Once a month on your monthly date: the bigger checks',
+        body: '**We:** in the first weekly run on or after {{monthlyDate}}, add the full AI visibility check, the full backlink report, a check of your entry in Wikidata and the technical audit of your whole site (when audits are on). **You:** look at the audit\'s fixes when you have time. **It leads to:** a monthly picture of your site\'s health, compared with the month before.',
+      },
+      {
+        title: 'Pages arrive as drafts for you to publish',
+        body: '**We:** research, write, edit and check every page, then deliver it as a report with the page ready to copy (HTML and Markdown). **You:** check it, fill in anything in [brackets], put it on your website, then press **I published it** with its address. **It leads to:** we check the page live and start tracking its position.',
+        warn: 'A page marked **Not ready to publish** did not pass the quality check. Finish it first: the guide for that page explains each reason.',
+      },
+      {
+        title: 'Your keyword climbs',
+        body: '**We:** write the easier supporting pages first, each linking to your main page, then the main page itself, and check every page on Google each week. **You:** keep publishing what we write. **It leads to:** easier pages reaching page one first, then the main keyword. The keyword is **won** when it stays in the top 3 for 4 weekly checks in a row. Expect months, not weeks.',
+      },
+      {
+        title: 'After a win: your next keyword',
+        body: '**We:** start the next keyword in your queue. With none queued, at levels 1 and 2 we suggest one with **Start this ladder**, **Show me others** and **Not now**; at level 3 we announce one that starts ' + PROPOSAL_WAIT_DAYS + ' days later unless you change it. **You:** start it, swap it or skip it. **It leads to:** a new keyword with its own plan.',
+      },
+      {
+        title: 'When something stops',
+        body: 'Each of these shows under **Needs you** on the Pipeline with the one thing to do: no keyword chosen yet (nothing is written); author profile or business facts missing (the first page waits); a keyword that was **not planned** (the reason is on it); pages **waiting to be published** (writing pauses until you publish); credits run out (the weekly work pauses and resumes by itself when credits are added); a keyword **checked again** before its first page; and the level lowered to 1 after pages were marked **Not what I wanted**.',
+      },
+    ],
+    done: 'The **What happens next** line on the Pipeline shows your next dates, and **Needs you** is empty or holds only things you have decided to leave for later.',
+    trouble: [
+      { q: 'Nothing has been written yet', a: 'Look at **Needs you**: either no keyword is chosen, your author profile or business facts are missing, or pages wait to be published. Levels 1 and 2 never write before you choose a keyword.' },
+      { q: 'A weekly run did not happen', a: 'A paused website or empty credits stop the week. When it resumes, the missed week runs once and your weekday carries on. Missed weeks never pile up.' },
+    ],
+    related: ['choose-first-keyword', 'autopilot-levels', 'your-weekly-cycle', 'coming-up-plan', 'page-not-ready'],
+    keywords: ['journey', 'timeline', 'what next', 'start', 'onboarding', 'stages', 'how it works', 'autopilot', 'week'],
+  },
+  {
+    id: 'choose-first-keyword',
+    area: 'autopilot',
+    title: 'Choose the keyword you want to be found for',
+    why: 'Pages are written automatically only for keywords you chose. One good keyword, close to what you sell and within reach, is the start of everything else.',
+    where: 'Setup step "Your first keyword", or Pipeline > New keyword ladder',
+    minutes: 5,
+    vars: [V.weekday, V.checkCredits, V.planCredits, V.pageCredits],
+    steps: [
+      {
+        title: 'Type your own idea, or take a suggestion',
+        body: 'Under **What would a customer type into Google**, type what a buyer would search to find a business like yours, and press **Check it**. Each check takes 5 to 20 seconds and uses {{checkCredits}} (free if the same keyword was checked in the last 7 days). Or pick from **Suggest keywords for me**: our research of your website and market, judged against what you sell.',
+        note: 'Suggestions that do not match the services you listed come last, with a note. If a good one is missing, add the service under **What do you sell?** in the business details.',
+      },
+      {
+        title: 'Read your chances in plain words',
+        body: 'Each card says how many people search it a month and your chances: **' + CHANCE_WORDS.easy + '** (your website already wins searches this hard), **' + CHANCE_WORDS.reachable + '** (within reach with a short plan) or **' + CHANCE_WORDS.hard + '** (a long climb of easier pages first). It also says why we suggest it and how many pages the plan has.',
+        warn: 'A keyword that is someone else\'s brand, that people use to find one particular website, or that sits outside what you sell is not started. The card offers closer keywords instead.',
+      },
+      {
+        title: 'Pick one to start',
+        body: 'One keyword is enough, and two is the most we start at once. A plan is several pages over months; two keywords at the same time already share your weekly pages. You can add more later from the Pipeline, and they wait in a queue.',
+      },
+      {
+        title: 'Say how pages are written for it',
+        body: '**Write a page each week** (recommended): choosing the keyword is your OK, and the next page is written on {{weekday}}, easy pages first. **Ask me before each page**: the plan is made, and each page waits for your OK under **Needs you** and in **Coming up**.',
+      },
+      {
+        title: 'Know what happens right after',
+        body: 'When you start, we make the plan (about 5 to 10 minutes) and, with **Write a page each week**, write its first page the same day. The first page waits until your **author profile** and **business facts** are filled in, so it can be published as it is rather than as a draft with blanks: the plan still runs, the pages wait and use no credits, and **Needs you** says what is missing. Once both are in, the next weekly run writes it, or press **Write it now**.',
+      },
+      {
+        title: 'Know what it costs',
+        body: 'The plan uses {{planCredits}}. Each page uses {{pageCredits}}, shown again before anything starts. The weekly pages count in the monthly estimate beside your autopilot level.',
+      },
+    ],
+    done: 'Your keyword shows as a card on the Pipeline with its plan, and **Coming up** lists its next page.',
+    trouble: [
+      { q: 'No suggestions appear', a: 'The research takes about 2 minutes after the business step and fills in on its own. Meanwhile type your own idea, or press **I\'ll choose later**: the checks run and nothing is written until you choose.' },
+      { q: 'My keyword says it does not fit', a: 'It looks outside what you sell, or people use it to find one particular company. If it is truly what you sell, add that service under **What do you sell?** and check it again, or take one of the closer keywords offered.' },
+      { q: 'I chose a keyword and nothing was written', a: 'Look at **Needs you**: the first page waits for your author profile and business facts, and **Ask me before each page** waits for your OK.' },
+    ],
+    related: ['your-journey', 'autopilot-levels', 'keyword-not-planned', 'business-profile', 'business-facts'],
+    keywords: ['keyword', 'first keyword', 'ladder', 'suggestions', 'research', 'chance', 'difficulty', 'manual', 'auto'],
+  },
+  {
+    id: 'autopilot-levels',
+    area: 'autopilot',
+    title: 'Choose how much we do on our own',
+    why: 'Three levels decide what is written without asking. Whatever the level, nothing is written that you could not see first in Coming up, and nothing outside your business is ever written.',
+    where: 'Website settings > Autopilot',
+    who: 'An owner or admin changes the level',
+    minutes: 4,
+    vars: [V.level],
+    steps: [
+      {
+        title: 'Level 1: ' + AUTOPILOT_LEVELS[0].label,
+        body: 'Written on its own: only the pages of keywords you chose. Everything else waits for your OK in **Coming up**. Example: you chose "payroll software uae"; we write its pages each week and suggest, but never write, a refresh of your pricing page that is losing visitors.',
+      },
+      {
+        title: 'Level 2: ' + AUTOPILOT_LEVELS[1].label + ' (the default)',
+        body: 'Also written on its own: refreshes of your **existing** pages on your topics when they lose visitors or sit at positions 4 to 20, and refreshes that help them appear in AI answers. Example: your page on payroll for small companies drops from position 6 to 14; we refresh it in your next weekly run. New topics still wait for your OK, and your home page and main menu pages are only ever suggested.',
+        note: '"On your topics" means the keywords you chose and the services you listed, nothing we guessed from your website.',
+      },
+      {
+        title: 'Level 3: ' + AUTOPILOT_LEVELS[2].label,
+        body: 'Also written on its own: new topics that fit your business (rising searches, answer pages for questions you lose in AI answers), and new keywords from your research, each announced ' + PROPOSAL_WAIT_DAYS + ' days before it starts. Example: searches for "wps payroll deadline" rise; a page on it appears in **Coming up** as automatic, and you can still skip it.',
+      },
+      {
+        title: 'Know what does not change',
+        body: 'At levels 1 and 2 nothing is written until you have chosen a keyword, except a page you approve yourself. **Pages a week** caps what is written on its own at every level: at 0 nothing is written on its own. The topic check always runs: other companies\' brands, government sites and topics outside what you sell are never written.',
+      },
+      {
+        title: 'Change the level',
+        body: 'Open **Website settings > Autopilot**, pick a level and press **Save level**. Your website is at {{level}}. The next weekly run uses the new level, and **Coming up** shows what it means before anything is written.',
+      },
+      {
+        title: 'Know when it lowers itself',
+        body: 'If you mark ' + REJECT_LIMIT + ' of the last ' + REJECT_WINDOW + ' pages we chose on our own as **Not what I wanted**, the level drops to 1, the owners and admins get an e-mail, and **Needs you** says why. Raise it again whenever you like.',
+      },
+      {
+        title: 'The suggestion to go up, never a switch',
+        body: 'At level 1, after ' + NUDGE_AFTER_PAGES + ' pages published or approved, **Needs you** offers level 2. We never raise it for you.',
+      },
+      {
+        title: 'Credits',
+        body: 'Each level shows about how many credits a month it uses with your settings. The company\'s monthly autopilot limit (Company settings > Credits > Limits) still caps the month, whatever the level.',
+      },
+    ],
+    done: 'Website settings > Autopilot shows the level you chose, and the next **Coming up** plan marks as automatic only what that level writes on its own.',
+    trouble: [
+      { q: 'The level went down on its own', a: 'Pages chosen by us were marked **Not what I wanted** too often. Press **Back to level 2** (or 3) in Website settings > Autopilot when you are ready.' },
+      { q: 'A page I did not want is in Coming up', a: 'Press **Skip**, then **Never suggest it again**. Skips always beat the level.' },
+    ],
+    related: ['coming-up-plan', 'not-what-i-wanted', 'keyword-announcements', 'budget'],
+    keywords: ['autopilot', 'level', 'automatic', 'only my keywords', 'healthy', 'full autopilot', 'settings'],
+  },
+  {
+    id: 'your-weekly-cycle',
+    area: 'autopilot',
+    title: 'Your week: when the work runs',
+    why: 'Each website has its own week. Knowing its day, its order and its monthly date tells you when to expect each report and when to decide on the plan.',
+    where: 'Pipeline > Your week',
+    who: 'Anyone can look; an owner or admin moves the weekday',
+    minutes: 4,
+    vars: [V.weekday, V.timezone, V.monthlyDate],
+    steps: [
+      {
+        title: 'Your day and time',
+        body: 'Your week started the day you finished setup and repeats every 7 days on that weekday: {{weekday}}, from ' + CYCLE_LOCAL_TIME + ' in {{timezone}}.',
+      },
+      {
+        title: 'The order of the week',
+        body: 'Each step starts when the one before it is done or skipped: 1 how AI assistants answer your buyers; 2 your backlinks; 3 the rank check of your keyword\'s pages; 4 your site report from Search Console and Analytics; 5 your pages\' readiness for AI answers and sending new pages to Bing; 6 writing the week\'s pages; 7 finding sites that might link to you; 8 the technical audit, in the monthly week only. A step that is switched off is skipped with the reason.',
+        note: 'A step that fails 3 times does not hold up the rest. **Your week** and the report say which one did not run and why, and the next week tries again.',
+      },
+      {
+        title: 'What you receive, and when',
+        body: '**' + PREVIEW_DAYS + ' days before:** the **Coming up** plan, on the Pipeline and by e-mail to owners and admins. **On the day:** each report lands under **Reports** as its step finishes, the written pages included. If your company set up report delivery, they also arrive by e-mail or webhook.',
+      },
+      {
+        title: 'Your monthly date',
+        body: 'Once a month, in the first weekly run on or after {{monthlyDate}}, the week also runs the full AI visibility check, the full backlink report, a check of your entry in Wikidata and the technical audit (when audits are on). Your first week was a monthly week too.',
+      },
+      {
+        title: 'Move your week to another day',
+        body: 'Under **Your week**, choose a day in **Move your week to** and press **Change weekday**. The next run moves to that weekday, at least ' + CYCLE_SPACING_DAYS + ' days after the last one started, so two runs never come days apart. You can move it once the first weekly run has started.',
+      },
+      {
+        title: 'Paused, or out of credits',
+        body: 'While the website is paused (the **Pause** button on the Pipeline) or the credits are used up, nothing runs. When it resumes, the missed week runs once and your weekday carries on. Missed weeks never pile up. Credits resume the work by themselves when they are added or a new month starts.',
+      },
+    ],
+    done: '**Your week** shows your weekday, the next weekly run and the date of the next **Coming up** plan.',
+    trouble: [
+      { q: 'The run is marked Late', a: 'It runs as soon as the system is back, once, and the next week is on your usual day.' },
+      { q: 'I cannot change the weekday', a: 'Only owners and admins can, and only after the first weekly run has started.' },
+    ],
+    related: ['coming-up-plan', 'your-journey', 'budget'],
+    keywords: ['week', 'weekday', 'cycle', 'schedule', 'monthly', 'time zone', 'calendar', 'when'],
+  },
+  {
+    id: 'coming-up-plan',
+    area: 'autopilot',
+    title: 'Decide on the Coming up plan',
+    why: 'Before each weekly run you see exactly what it will write, with the credits. A minute here is how you steer the autopilot without changing any setting.',
+    where: 'Pipeline > Coming up, or the weekly e-mail',
+    who: 'Owners, admins and members can decide',
+    minutes: 3,
+    vars: [V.weekday, V.pageCredits],
+    steps: [
+      {
+        title: 'When it arrives',
+        body: PREVIEW_HOURS_BEFORE + ' hours before every weekly run. Your run is on {{weekday}}, so the plan comes ' + PREVIEW_DAYS + ' days earlier. Owners and admins also get it by e-mail. There is none before your very first week: that one starts at setup.',
+      },
+      {
+        title: 'Read the two groups',
+        body: '**Written on its own:** pages your level writes automatically; they are written unless you skip them. **Waits for your OK:** suggestions and the pages of a keyword set to **Ask me before each page**; they are written only if you approve them. Each item says why it was chosen and its credits (a page uses {{pageCredits}}).',
+      },
+      {
+        title: 'Skip what you do not want',
+        body: 'Press **Skip**, then **This week only** (it can come back in a later plan) or **Never suggest it again** (it never comes back).',
+      },
+      {
+        title: 'Approve what you do want',
+        body: '**Approve** puts a waiting page into this week\'s run. Some suggestions offer **Write it now** instead, which writes the page at once as an analysis you start.',
+        note: 'Approved pages still respect your pages a week and the pause for pages waiting to be published. One that does not fit is listed under **not used in this run** with the reason.',
+      },
+      {
+        title: 'Or do nothing',
+        body: 'That is a valid answer: the automatic pages are written, the waiting ones are not, and nothing else happens.',
+      },
+      {
+        title: 'Know when it closes',
+        body: 'When the weekly run starts, its plan closes and can no longer change. Decide on the next plan when it arrives.',
+      },
+    ],
+    done: 'Each item you decided on shows **Approved**, **Skipped this week** or **Never suggested again**.',
+    trouble: [
+      { q: 'An item says "Checking this keyword again"', a: 'Its plan is more than ' + QUEUED_RECHECK_DAYS + ' days old, so the keyword is checked again before its first page. If it still fits, it is written; if not, the keyword pauses and **Needs you** asks you.' },
+      { q: 'An approval was "not used in this run"', a: 'The reason is beside it: your pages a week were already used, pages wait to be published, a page already on your website covers it, or two different pages share the keyword (approve the exact item again).' },
+      { q: 'It says nothing is written until I choose a keyword', a: 'At levels 1 and 2 nothing is written on its own before you choose a keyword. You can still approve a suggestion to have it written this week.' },
+      { q: 'My decision was refused', a: 'The weekly run had already started. Decide on the next plan.' },
+    ],
+    related: ['your-weekly-cycle', 'autopilot-levels', 'choose-first-keyword'],
+    keywords: ['coming up', 'plan', 'preview', 'approve', 'skip', 'suggestions', 'week'],
+  },
+  {
+    id: 'keyword-announcements',
+    area: 'autopilot',
+    title: 'A new keyword we announced',
+    why: 'At level 3 (full autopilot) we choose your next keyword ourselves, but never silently: it is announced ' + PROPOSAL_WAIT_DAYS + ' days before it starts, and you can stop or change it.',
+    where: 'Pipeline > Your next keyword starts soon, and the e-mail',
+    who: 'Owners, admins and members can decide',
+    minutes: 2,
+    vars: [V.pageCredits],
+    steps: [
+      {
+        title: 'Why it was announced',
+        body: 'Your website had room for another keyword (a keyword was won, its plan ran out of pages, or none was chosen yet), and you are at level 3. We picked the best keyword from your research that fits what you sell and that no other keyword of yours covers.',
+      },
+      {
+        title: 'Read the card',
+        body: 'It shows the keyword, its searches a month, your chances in plain words, why we chose it, the plan, when it starts, and the credits of each page ({{pageCredits}}). Owners and admins also get it by e-mail.',
+      },
+      {
+        title: 'Approve now',
+        body: 'It starts at once instead of waiting: the plan arrives in about 5 to 10 minutes, then its first page (once your author profile and business facts are filled in).',
+      },
+      {
+        title: 'Or pick a different one',
+        body: 'Choose another suggestion, or type your own keyword. A typed keyword is checked first (5 to 20 seconds) and starts only if it fits your website.',
+      },
+      {
+        title: 'Or skip it',
+        body: 'It is never proposed again for this website, and the next one is announced.',
+      },
+      {
+        title: 'Or do nothing',
+        body: PROPOSAL_WAIT_HOURS + ' hours after the announcement it starts on its own, from your autopilot credits.',
+      },
+    ],
+    done: 'The card is gone from the Pipeline and the keyword shows as a ladder card (or the next announcement replaced it).',
+    trouble: [
+      { q: 'I do not want keywords chosen for me', a: 'Lower the level to 1 or 2 in Website settings > Autopilot. A waiting announcement then becomes a suggestion that starts only when you press **Start this ladder**.' },
+      { q: 'It did not start', a: 'The card says why, for example not enough credits. Nothing was charged for a start that did not happen.' },
+    ],
+    related: ['autopilot-levels', 'choose-first-keyword', 'your-journey'],
+    keywords: ['announcement', 'proposal', 'next keyword', 'full autopilot', 'level 3', 'approve', 'skip'],
+  },
+  {
+    id: 'keyword-not-planned',
+    area: 'autopilot',
+    title: 'A keyword that was not planned',
+    why: 'Sometimes a keyword comes back with no plan and no pages. It is always for a stated reason, and each reason has a clear next step.',
+    where: 'Pipeline > Needs you, and the plan report',
+    minutes: 3,
+    steps: [
+      {
+        title: 'Google\'s results could not be read',
+        body: 'Our search data provider did not answer, even after several tries. It says nothing about your keyword, nothing was written and **nothing is charged**. Start it again in an hour or so.',
+      },
+      {
+        title: 'Too little data',
+        body: 'The research found fewer than 3 related searches, or no search volume at all for the keyword itself. Check the spelling, try a broader wording, or try a keyword closer to what people really search.',
+      },
+      {
+        title: 'Someone else\'s brand, or one particular website',
+        body: 'People searching it want one particular company or website, so a page of yours would not be what they look for. The plan report lists easier keywords: start one of those instead.',
+      },
+      {
+        title: 'Outside what you sell',
+        body: 'The check found the keyword far from your business. Google rewards websites that stay on their topic. If it is truly yours, add it under **What do you sell?** in the business details and check it again.',
+      },
+      {
+        title: 'You already have a keyword for this search',
+        body: 'One search needs one page, so no second plan was made. Continue the existing one from the Pipeline.',
+      },
+      {
+        title: 'Checked again and paused',
+        body: 'A keyword that waited in the queue for more than ' + QUEUED_RECHECK_DAYS + ' days is checked again before its first page. If it no longer fits, it is paused and **Needs you** asks you: choose another keyword, or resume it if you still want it.',
+      },
+    ],
+    done: 'The keyword shows as a planned ladder card, or you chose another one in its place.',
+    trouble: [
+      { q: 'Two of my keywords overlap', a: 'They share searches, and two pages for one search compete in Google. Open the one lower in your list and pause or delete it, or keep each search in one keyword only.' },
+    ],
+    related: ['choose-first-keyword', 'your-journey'],
+    keywords: ['not planned', 'refused', 'no plan', 'failed', 'brand', 'off topic', 'recheck', 'duplicate', 'overlap'],
+  },
+  {
+    id: 'page-not-ready',
+    area: 'autopilot',
+    title: 'Finish a page that is not ready to publish',
+    why: 'A page that did not pass the quality check arrives as a draft to finish, never as a page to publish as it is. Each reason on it tells you exactly what to fill in or fix.',
+    where: 'The page\'s report, and Pipeline > Needs you',
+    minutes: 15,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Read the reasons on the report',
+        body: 'The red box at the top of the page\'s report lists what the check found, from its last round of editing.',
+      },
+      {
+        title: 'Brackets and masked figures',
+        body: 'Text such as **[Price]**, **[Statistic]** or **[name, role]** is a blank for you: a figure we could not source, or a detail only you know. Fill each one in, or rewrite the sentence so it does not need it. **[Confirm: ...]** marks a claim to check before it goes live.',
+      },
+      {
+        title: 'Author details',
+        body: 'Bracketed fields in the byline and the author box mean your author profile is not filled in. Fill it in once and every later page carries a real byline.',
+      },
+      {
+        title: 'Sources, subtopics and length',
+        body: 'A reason may ask for a source behind a figure, name subtopics the best page for this search covers and this one does not, or give the length against its target. Add the missing parts, or trim.',
+      },
+      {
+        title: 'Prevent it next time',
+        body: 'Most of these come from what we do not know about you. A filled **author profile** and **business facts** let pages be published as they are, which is why the first page of a keyword waits for both.',
+      },
+      {
+        title: 'Finish it, then publish it',
+        body: 'Edit the copy yourself and put it on {{domain}}, or press **Run it again** under **Needs you** once your profile and facts are in (a new page run uses credits). Then press **I published it** with the address, so we check it live and start tracking.',
+        warn: 'Sending a page that is not ready to your website from Alaventra is refused: finish it first.',
+      },
+    ],
+    done: 'The page is live on {{domain}} with no brackets left, and its report shows it as published.',
+    trouble: [
+      { q: 'I filled everything in and it is still not ready', a: 'The check judges the copy it delivered, not your later edits. Fix the copy by hand, or press **Run it again** for a fresh page written with your new details.' },
+      { q: 'The topic itself is wrong', a: 'Press **Not what I wanted** on the report instead, and skip the keyword in the next **Coming up** plan.' },
+    ],
+    related: ['business-profile', 'business-facts', 'publish-page', 'not-what-i-wanted'],
+    keywords: ['not ready', 'quality check', 'draft', 'placeholders', 'brackets', 'confirm', 'author', 'facts'],
+  },
+  {
+    id: 'not-what-i-wanted',
+    area: 'autopilot',
+    title: 'Mark a page as not what you wanted',
+    why: 'It tells us a page missed, so we choose better, and it is the brake on the autopilot: if pages we chose ourselves keep missing, we stop choosing on our own.',
+    where: 'The page\'s report: Not what I wanted',
+    who: 'Owners, admins and members',
+    minutes: 1,
+    vars: [V.level],
+    steps: [
+      {
+        title: 'Press Not what I wanted',
+        body: 'On the report of a written page, press **Not what I wanted**, add a reason if you like (the topic is not ours, the facts are off, the tone is wrong), and press **Mark it**. You can mark a page once.',
+      },
+      {
+        title: 'Know what it counts towards',
+        body: 'Only pages we chose on our own count: refreshes and new topics your level wrote without asking. Pages of keywords you chose, and pages you approved, never lower the level.',
+      },
+      {
+        title: 'Know when it lowers the level',
+        body: 'When ' + REJECT_LIMIT + ' of the last ' + REJECT_WINDOW + ' pages we chose on our own are marked, the website goes from {{level}} to level 1, ' + AUTOPILOT_LEVELS[0].label + '. Owners and admins get an e-mail and **Needs you** says why.',
+      },
+      {
+        title: 'Raise it again when you are ready',
+        body: 'Open **Website settings > Autopilot** and press **Back to level 2** (or pick another level). Nothing else changes.',
+      },
+    ],
+    done: 'The button reads **Marked as not what you wanted**.',
+    trouble: [
+      { q: 'I marked a page by mistake', a: 'A mark stays. The level drops only at ' + REJECT_LIMIT + ' marks among the last ' + REJECT_WINDOW + ' pages we chose on our own; if it did, raise it again in Website settings > Autopilot.' },
+      { q: 'The button is not there', a: 'It shows on written pages only, for owners, admins and members.' },
+    ],
+    related: ['autopilot-levels', 'coming-up-plan'],
+    keywords: ['reject', 'not what i wanted', 'feedback', 'thumbs down', 'auto pause', 'level'],
+  },
 ] as const satisfies readonly Guide[];
 
 export type GuideId = (typeof GUIDES)[number]['id'];
@@ -2183,4 +2607,21 @@ export const GUIDE_FOR_RECOMMENDATION: Record<string, GuideId> = {
   'ai:indexnow': 'indexnow-key-file',
   'links:mailbox': 'mailbox-connect',
   'bl:gsc-import': 'search-console-links-export',
+  // keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.3)
+  'keyword:research': 'choose-first-keyword',
+  'keyword:first': 'choose-first-keyword',
+  'content:cadence': 'your-weekly-cycle',
 };
+
+/** Recommendations whose id carries the keyword after a fixed prefix (`content:fix:<keyword>`). */
+const GUIDE_FOR_RECOMMENDATION_PREFIX: [prefix: string, id: GuideId][] = [
+  ['content:fix:', 'page-not-ready'],
+  ['content:publish:', 'publish-page'],
+];
+
+/** The guide of a recommendation, by its exact id or its prefix; undefined when it asks for nothing outside the app. */
+export function guideForRecommendation(id: string): GuideId | undefined {
+  return GUIDE_FOR_RECOMMENDATION[id] ?? GUIDE_FOR_RECOMMENDATION_PREFIX.find(([p]) => id.startsWith(p))?.[1];
+}
+
+export * from './guide-links';

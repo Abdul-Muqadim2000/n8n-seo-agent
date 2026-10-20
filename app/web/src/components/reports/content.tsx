@@ -14,6 +14,8 @@ import { CmsPublishPanel } from './CmsPublish';
 import { Block, Bullets, Chips, Facts, has, CreditsCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
 import { keywordPrefill } from './meta';
 import { ChartTitle, ReportHero, ScoreMark, TickGrid, WordValue } from './visuals';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { GuideButton } from '@/components/guide';
 
 const monthLabel = (m: unknown) => {
   const d = parseISO(`${String(m)}-01`);
@@ -232,7 +234,11 @@ export function ContentReport({ report }: { report: ReportDetail }) {
 
       {/* R11: the page is here to finish by hand, not to publish as it is, said before the SEO checks and the page itself */}
       {html && notReady && (
-        <Callout tone="critical" title={qaLabel || 'This page did not pass the quality check and is not ready to publish'}>
+        <Callout
+          tone="critical"
+          title={qaLabel || 'This page did not pass the quality check and is not ready to publish'}
+          action={<GuideButton id={AUTOPILOT_SCREEN_GUIDES.pageNotReady} vars={{ domain: str(p.domain) || report.siteDomain || '' }} label="How to finish it" />}
+        >
           The editor had {num(quality.max_rounds) ?? 2} round(s) and the page still fails the checks below, so it is delivered as a draft to finish by hand.
           {qaReasons.length > 0 && (
             <ul className="mt-1.5 list-disc space-y-0.5 pl-5">

@@ -15,6 +15,9 @@ import { cn, fmtAgo } from '@/lib/utils';
 import { Panel, SectionHeading } from '../kit';
 import { asPageType, AUTO_ICON, fmtWhen, inDays, validDate } from './common';
 import type { WriteNowItem } from './WriteNowDialog';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { GuideButton } from '@/components/guide';
+import { autopilotGuideVars } from '@/lib/guide-vars';
 
 // v4.16 (B4-3): `decay` = a page that is measurably losing traffic, refreshed rather than written again
 export const SOURCE_LABEL: Record<QueueItem['source'], string> = { ladder: 'Your keyword', decay: 'Losing visitors', striking: 'Close to page one', trend: 'Rising search', ai_answer: 'AI answer page', ai_refresh: 'AI refresh' };
@@ -179,11 +182,14 @@ function Suggestions({ data, onWrite }: { data: PipelineData; onWrite: (i: Write
             : 'On full autopilot we write what fits your business on our own, and show it in Coming up first. The rest waits here.'
       }
       actions={
-        can('admin') ? (
-          <ButtonLink to={paths.site(org.id, site.id, 'settings/autopilot')} variant="ghost" size="sm" icon={<Settings className="size-4" />}>
-            Level {level}
-          </ButtonLink>
-        ) : undefined
+        <>
+          <GuideButton id={AUTOPILOT_SCREEN_GUIDES.suggestions} vars={autopilotGuideVars(site, { level })} label="What waits for my OK" />
+          {can('admin') && (
+            <ButtonLink to={paths.site(org.id, site.id, 'settings/autopilot')} variant="ghost" size="sm" icon={<Settings className="size-4" />}>
+              Level {level}
+            </ButtonLink>
+          )}
+        </>
       }
     >
       <div className="space-y-4">

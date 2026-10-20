@@ -40,6 +40,9 @@ import { Panel } from '../kit';
 import { plural } from '../format';
 import { AUTO_ICON, fmtDayHead, fmtTime, fmtWhen, validDate } from './common';
 import type { WriteNowItem } from './WriteNowDialog';
+import { guideForNeedsYou } from '@seo/shared/guide-links';
+import { GuideButton } from '@/components/guide';
+import { autopilotGuideVars } from '@/lib/guide-vars';
 
 // ---------- this week ----------
 /** Older servers: the coming week from the automations' next run times. */
@@ -247,6 +250,8 @@ function NeedsYouAction({ it, primary, onWrite, variant }: { it: NeedsYouItem; p
 }
 
 export function NeedsYou({ items, onWrite }: { items: NeedsYouItem[]; onWrite?: (i: WriteNowItem) => void }) {
+  const { site } = useSiteCtx();
+  const vars = useMemo(() => autopilotGuideVars(site), [site]);
   if (!items.length) return null;
   const important = items.some((x) => x.severity === 'warning');
   return (
@@ -276,7 +281,13 @@ export function NeedsYou({ items, onWrite }: { items: NeedsYouItem[]; onWrite?: 
                 meta={it.severity === 'warning' ? <StatusBadge tone="warning">Important</StatusBadge> : <Badge icon={<Info className="size-3" aria-hidden />}>To do</Badge>}
                 title={it.title}
                 description={it.detail ? <span className="text-[13px] leading-snug text-ink-2">{it.detail}</span> : undefined}
-                action={<NeedsYouAction it={it} primary={primary} onWrite={onWrite} />}
+                action={
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <NeedsYouAction it={it} primary={primary} onWrite={onWrite} />
+                    {/* every ask carries the guide that explains it (CONVENTIONS.md, Setup guides) */}
+                    <GuideButton id={guideForNeedsYou(it)} vars={vars} variant="icon" label={`How this works: ${it.title}`} />
+                  </span>
+                }
                 actionPosition="side"
               />
             );

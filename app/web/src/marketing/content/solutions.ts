@@ -167,7 +167,7 @@ export const solutions: Solution[] = [
       { feature: 'site-tracking', title: 'Tracking per website', body: 'Search Console, GA4 and live rank checks for each website you run, including whether a local pack was on the page and whether your listing was in it.' },
       { feature: 'enterprise', title: 'One account for every brand', body: 'Separate companies for separate brands, with one team and one login.' },
       { feature: 'link-building', title: 'The local listings that matter', body: 'Google Business Profile, Bing Places, Apple Business and the directories in your country, checked for your listing, with a ready description to paste.' },
-      { feature: 'guided-setup', title: 'Set up without an agency', body: 'Search Console, Analytics, the records on your domain: each one is a short guide with your own values, written for the provider you actually use.' },
+      { feature: 'guided-setup', title: 'Set up without an agency', body: 'Search Console, Analytics, the records on your domain: each one is a short guide with your own values, written for the provider you actually use. And one plain guide to what happens when: your keyword, your weekly plan and what each step leads to.' },
       { feature: 'report-delivery', title: 'You do not have to remember to look', body: 'The weekly report arrives in your inbox with the numbers in the message, and nothing arrives that the analysis itself flagged as not ready.' },
     ],
     outcomes: [

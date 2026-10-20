@@ -28,6 +28,9 @@ import { Card } from '@/components/ui/card';
 import { Callout, EmptyState, ErrorState, Skeleton, Spinner } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input, Select } from '@/components/ui/field';
 import { KeyValue, PageHeader } from '@/components/ui/misc';
+import { GuideButton } from '@/components/guide';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { autopilotGuideVars } from '@/lib/guide-vars';
 import { Segmented, Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { DifficultyBadge, PlanBadge } from '@/components/site/keyword';
@@ -94,11 +97,14 @@ export default function NewLadderPage() {
         title="New keyword ladder"
         description={`Pick the keyword you want ${site.domain} to rank for. We plan the pages from easy to hard for your website, write them and track them on Google.`}
         actions={
-          can('member') && (
-            <ButtonLink to={paths.tool(org.id, 'ladder', { siteId: site.id })} variant="ghost" size="sm" icon={<SlidersHorizontal className="size-4" />} title="Every field of the ladder tool, for SEO experts">
-              Advanced form
-            </ButtonLink>
-          )
+          <>
+            <GuideButton id={AUTOPILOT_SCREEN_GUIDES.newLadder} vars={autopilotGuideVars(site)} label="How to choose a keyword" />
+            {can('member') && (
+              <ButtonLink to={paths.tool(org.id, 'ladder', { siteId: site.id })} variant="ghost" size="sm" icon={<SlidersHorizontal className="size-4" />} title="Every field of the ladder tool, for SEO experts">
+                Advanced form
+              </ButtonLink>
+            )}
+          </>
         }
       />
       <Stepper step={step} />

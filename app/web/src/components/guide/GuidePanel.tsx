@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import * as D from '@radix-ui/react-dialog';
 import { toast } from 'sonner';
-import { ArrowLeft, ArrowRight, Briefcase, Building2, Check, ChevronRight, Clock, Copy, ExternalLink as ExternalIcon, Globe, LifeBuoy, Lock, Mail, MapPin, Search, Send, Plug, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Briefcase, Building2, Check, ChevronRight, Clock, Copy, ExternalLink as ExternalIcon, Globe, Route, LifeBuoy, Lock, Mail, MapPin, Search, Send, Plug, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react';
 import { fillGuide, GUIDE_AREAS, guideAvailable, guideById, guideText, GUIDES, searchGuides, type FilledCopy, type FilledStep, type Guide, type GuideArea, type GuideVars } from '@seo/shared/guides';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,7 @@ export interface GuideFinish {
 }
 export type GuideState = { mode: 'index'; query?: string } | { mode: 'guide'; id: string; vars?: GuideVars; finish?: GuideFinish; fromIndex?: boolean } | null;
 
-const AREA_ICON: Record<GuideArea, LucideIcon> = { google: Search, ownership: ShieldCheck, website: Globe, mailbox: Mail, business: Building2, company: UserRound, security: Lock, integrations: Plug, agency: Briefcase };
+const AREA_ICON: Record<GuideArea, LucideIcon> = { autopilot: Route, google: Search, ownership: ShieldCheck, website: Globe, mailbox: Mail, business: Building2, company: UserRound, security: Lock, integrations: Plug, agency: Briefcase };
 const areaLabel = (a: GuideArea) => GUIDE_AREAS.find((x) => x.id === a)?.label ?? 'Guide';
 
 /** D-9: what this installation offers (Google sign-in may be off); until the server says, a Google-only guide is not offered */
