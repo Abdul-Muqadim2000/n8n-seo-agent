@@ -529,6 +529,7 @@
         "E-invoicing onboarding",
         "Odoo implementation"
       ],
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
       "tracking_started_at": "2026-10-19T08:30:00.000Z"
     },
     "expect": {
@@ -584,7 +585,8 @@
         "audit_pages": 500,
         "audit_js": false,
         "brand_names": "Northwind, Northwind ERP"
-      }
+      },
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner"
     },
     "expect": {
       "mode": "track",
