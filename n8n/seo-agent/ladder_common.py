@@ -18,7 +18,11 @@ LADDER_COLS = [('ladder_id', 'string'), ('domain', 'string'), ('head_keyword', '
                # R1 (2026-10-13, re-rating): why the row is in its current status when something moved it back -- a page run the daily budget
                # guard refused sets `writing` back to `planned` and says so here, so the ladder plan, the Rank Tracker and the Content
                # Cadence never report a page that was never written. Empty on a row nothing moved.
-               ('status_note', 'string')]
+               ('status_note', 'string'),
+               # F-KW (2026-10-20): who chose this ladder's keyword (client_typed | client_picked | system_announced), written by the ladder run on
+               # every row BEFORE its seo_ladder_settings row, so the Content Cadence still knows when that second write fails; '' = a row from
+               # before the column. Run sync_tables.py after deploying.
+               ('chosen_by', 'string')]
 HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number')]
 HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number'),
                 # v4.16 (G6, 2026-10-12 system review): the whole results page of the same SERP call, so a reading can be read back and
@@ -318,7 +322,10 @@ LADDER_SETTINGS_COLS = [('ladder_id', 'string'), ('site_id', 'string'), ('domain
                         ('created_at', 'string'), ('updated_at', 'string'),
                         # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §5.5 / §14): who chose a ladder's keyword (client_typed | client_picked |
                         # system_announced; '' = client_typed) and, on the '_site' row, the website's autopilot level (1 | 2 | 3; empty = 2)
-                        ('chosen_by', 'string'), ('autopilot_level', 'number')]
+                        ('chosen_by', 'string'), ('autopilot_level', 'number'),
+                        # F-KW (2026-10-20, plan §5.6): when the app's fresh Keyword Check of a ladder planned 60+ days ago PASSED (ISO). The Content
+                        # Cadence writes no page of such a ladder until it is set (a check that fell pauses the ladder instead). Written by the app.
+                        ('rechecked_at', 'string')]
 
 # ---- the per-website 7-day cycle (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4 / §7 / §14; app mirror app/shared/src/cycles.ts) ----
 # seo_cycles: one row per website (upsert by site_id), written by the Site Kickoff and the Cycle Dispatcher. Times are ISO UTC; tz is IANA;
@@ -337,7 +344,10 @@ CYCLE_JOBS_COLS = [('key', 'string'), ('site_id', 'string'), ('cycle_key', 'stri
 # item_key = the normalised keyword (lower case, non-alphanumerics -> one space); decision skip | approve; scope cycle | always.
 SKIPS_TABLE = 'seo_skips'
 SKIPS_COLS = [('key', 'string'), ('site_id', 'string'), ('cycle_key', 'string'), ('item_key', 'string'), ('decision', 'string'), ('scope', 'string'),
-              ('by', 'string'), ('created_at', 'string')]
+              ('by', 'string'), ('created_at', 'string'),
+              # F-KW (2026-10-20): the item an approval is for (the CyclePreviewItem's source and ladder_id), so it never approves another page
+              # that shares the keyword; empty = an older keyword-only row (approved only when one item alone has that keyword)
+              ('source', 'string'), ('ladder_id', 'string')]
 
 def dt_get_recent_params(table, key, condition, value, limit, order_col='createdAt', direction='DESC'):
     """Get at most `limit` rows matching one condition, newest first (bounded load for tables that only grow, e.g. the rank history)."""

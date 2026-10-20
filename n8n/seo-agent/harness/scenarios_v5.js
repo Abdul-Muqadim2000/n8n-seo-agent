@@ -1494,14 +1494,16 @@ await guard('pipeline', async () => {
   const cad = (n) => [{ json: { site_id: SITE, domain: D, pages_per_week: n, status: 'active', updated_at: 'x', request_id: '' } }];
   const EMPTY = [{ json: {} }];
   const plan = async (o = {}) => {
-    mock('Manual Run', o.trigger || EMPTY); mock('Load Sites', T.sitesRows()); mock('Load Cadence', cad(o.pages || 3)); mock('Load Ladders', o.ladders || EMPTY);
+    mock('Manual Run', o.trigger || EMPTY); mock('Load Sites', o.sites || T.sitesRows()); mock('Load Cadence', cad(o.pages || 3)); mock('Load Ladders', o.ladders || EMPTY);
     mock('Load Query History', o.queries || EMPTY); mock('Load Trends', o.trends || EMPTY); mock('Load Content Log', o.logs || EMPTY);
     mock('Load Ladder Settings', o.settings || EMPTY); mock('Load Main Keyword Ranks', o.ranks || EMPTY);
     const r = await run('Cadence Plan', store['Load Main Keyword Ranks']);
     const picks = r.filter(x => !x.json.nothing_to_do).map(x => x.json);
     return { items: r, picks, kws: picks.map(p => p.keyword), first: r[0].json, status: (r.find(x => x.json.report_only) || {}).json };
   };
-  const A = (st) => std('lad_A', 'peppol uae', '2026-07-01T00:00:00.000Z', st), B = (st) => std('lad_B', 'vat software uae', '2026-08-01T00:00:00.000Z', st), Cl = (st) => std('lad_C', 'wms dubai', '2026-09-01T00:00:00.000Z', st);
+  // F-KW (2026-10-20): plans dated relative to the run (oldest A, then B, then C, as before): a ladder planned 60+ days ago that never wrote a
+  // page now waits for the app's fresh Keyword Check (finding 3b, harness/scenarios_keyword_first.js KF13), which is not what this scenario tests
+  const A = (st) => std('lad_A', 'peppol uae', daysAgo(50), st), B = (st) => std('lad_B', 'vat software uae', daysAgo(40), st), Cl = (st) => std('lad_C', 'wms dubai', daysAgo(30), st);
   const W3 = { a: 'writing', b: 'writing', c: 'writing' };
   // v4.14 (FIX_PLAN D5): ladder rows still 'writing' are pages written and waiting to be published, so a fixture with three or more of
   // them now trips the pile-up guard. The cases below test something else (focus, the main-page gate), so they raise the website's limit;
@@ -1580,7 +1582,10 @@ await guard('pipeline', async () => {
   if (!queryRows || !trendRows) throw new Error('S10 did not produce query / trend rows');
   // keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.5): `opportunities` decides nothing any more; the autopilot level does. Full
   // autopilot (3) writes the opportunities on its own, level 1 suggests exactly that list (and, with no ladder chosen, waits for the first keyword)
-  const pa = await plan({ queries: queryRows, trends: trendRows, settings: [siteSet({ autopilot_level: 3 })] });
+  // F-KW (2026-10-20, finding 2): full autopilot writes a non-ladder item only with positive topic evidence (what the site sells, at level 3),
+  // so the level-3 runs below give the site the services its striking and rising searches are about
+  const SVC3 = T.sitesRows({ services_json: JSON.stringify(['ERP implementation for distributors', 'E-invoicing software', 'SAP and Oracle ERP consulting', 'ERP cost and pricing', 'E-invoicing and FTA compliance', 'Replacing an old ERP']) });
+  const pa = await plan({ queries: queryRows, trends: trendRows, settings: [siteSet({ autopilot_level: 3 })], sites: SVC3 });
   const pm = await plan({ queries: queryRows, trends: trendRows, settings: [siteSet({ opportunities: 'manual', autopilot_level: 1 })] });
   console.log('   opportunities auto ->', pa.kws.join(' | '), '| manual suggestions ->', (pm.status ? pm.status.suggestions : []).map(s => s.keyword + ' [' + s.source + ']').join(' | '));
   check('level 1 (stored opportunities manual): nothing written, the site waits for its first keyword', !pm.picks.length && pm.status && pm.status.suggestions.length >= 3 && pm.status.waiting_for_keyword === true, JSON.stringify(pm.first).slice(0, 300));
@@ -1597,8 +1602,8 @@ await guard('pipeline', async () => {
   // comparison runs at level 3 (the _site row is the only setting), and a missing settings table is the defaults (level 2), below
   const L3 = [siteSet({ autopilot_level: 3 })];
   const same12 = async (label, o, extra) => {
-    const n = await plan({ settings: L3, ...o }); mock('Load Ladder Settings', EMPTY); const old = await run('legacy:Cadence_Plan_v4_7', [{ json: {} }]);
-    console.log('   ' + label + ' -> new:', n.kws.join(' | '), '| v4.7:', old.filter(x => !x.json.nothing_to_do).map(x => x.json.keyword).join(' | '), '| candidates', n.first.candidates, 'vs', old[0].json.candidates);
+    const n = await plan({ settings: L3, sites: SVC3, ...o }); mock('Load Ladder Settings', EMPTY); const old = await run('legacy:Cadence_Plan_v4_7', [{ json: {} }]);
+    console.log('   ' + label + ' -> new:', n.kws.join(' | '), '| v4.7:', old.filter(x => !x.json.nothing_to_do).map(x => x.json.keyword).join(' | '), '| candidates', n.first.candidates, 'vs', old[0].json.candidates, '| old upcoming', JSON.stringify(old[0].json.upcoming), '| suggestions now', JSON.stringify((n.first.suggestions || []).map(s => s.keyword)));
     check('level 3 = v4.7: ' + label, n.picks.length > 0 && eq(proj(n.items), proj(old)) && (!extra || extra(n, old)), JSON.stringify(proj(n.items)).slice(0, 200) + ' VS ' + JSON.stringify(proj(old)).slice(0, 200));
     return n;
   };
@@ -1693,7 +1698,7 @@ await guard('pipeline phase 3', async () => {
   const EMPTY = [{ json: {} }];
   const keysOf = (o) => JSON.stringify(Object.keys(o || {}).sort());
   const CACHE_COLS = JSON.stringify(['key', 'kind', 'site_id', 'value', 'updated_at'].sort());
-  const SET_COLS = JSON.stringify(['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at', 'chosen_by', 'autopilot_level'].sort());   // + keyword-first (2026-10-19)
+  const SET_COLS = JSON.stringify(['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at', 'chosen_by', 'autopilot_level', 'rechecked_at'].sort());   // + keyword-first (2026-10-19), rechecked_at (F-KW 2026-10-20)
   // the overlap rule of the web app (app/shared/src/ladders.ts), to check the n8n side independently
   const STOPW = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);
   const toks = (s) => [...new Set(String(s).toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 1 && !STOPW.has(t)).map(t => t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '')).filter(Boolean))];
@@ -4562,7 +4567,8 @@ await guard('d11-existing-pages', async () => {
 
   // ---- 6. the Content Cadence: a ladder page becomes a refresh, an opportunity post is left out ----
   const cadWith = async (pages) => {
-    reset(); mock('Manual Run', EMPTY); mock('Load Sites', T.sitesRows()); mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: 2, status: 'active', updated_at: 'x', request_id: '' } }]);
+    // F-KW (2026-10-20): a level-3 new topic is written only with positive topic evidence, so the site says what it sells (penalties advice)
+    reset(); mock('Manual Run', EMPTY); mock('Load Sites', T.sitesRows().map(r => ({ json: { ...r.json, services_json: JSON.stringify(['UAE e-invoicing compliance and penalties advice']) } }))); mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: 2, status: 'active', updated_at: 'x', request_id: '' } }]);
     mock('Load Ladders', [lrow(1, 1, 'uae e invoicing fines', 'planned')]);
     mock('Load Query History', EMPTY);
     mock('Load Trends', [{ json: { site_id: SITE, domain: D, keyword: 'e invoicing', direction: 'rising', rising: KW + ' (+120%)', change_pct: 120, checked_at: daysAgo(2) } }]);
@@ -7587,7 +7593,7 @@ await guard('stored rungs, statistical alerts, pre-release check', async () => {
   console.log('   stored rung ->', JSON.stringify(gBrand));
   check('R16: a planned rung that names another company on its own results page is set aside, with the reason in words an owner can read',
     gBrand.ok === false && gBrand.flagged === true && gBrand.reason === 'other brand' && /facts\.ae/.test(gBrand.detail)
-    && /is not a search this website should target/.test(gBrand.note) && /set aside instead of written/.test(gBrand.note), JSON.stringify(gBrand));
+    && /is not a search this website should target/.test(gBrand.note) && /It is set aside, so no page is written for it\./.test(gBrand.note) && !/planned before this rule existed/.test(gBrand.note), JSON.stringify(gBrand));
   const gWritten = await gate62({ keyword: 'facts erp', status: 'writing' }, CTX62);
   check('R16: the same rung whose page is already written is KEPT and only flagged — live work is never dropped silently',
     gWritten.ok === true && gWritten.live === true && gWritten.flagged === true && /already written/.test(gWritten.note), JSON.stringify(gWritten));
@@ -7623,7 +7629,7 @@ await guard('stored rungs, statistical alerts, pre-release check', async () => {
   const aside62 = (C62.first.set_aside || []).find(x => x.keyword === 'facts erp') || {};
   check('R16: the rung is named in `set_aside` with its reason, the evidence and "not written", so nothing disappears quietly',
     aside62.dropped === true && aside62.reason === 'other brand' && aside62.ladder_id === 'lad_R16' && aside62.rung === 2
-    && /facts\.ae/.test(aside62.detail) && /set aside instead of written/.test(aside62.note), JSON.stringify(aside62));
+    && /facts\.ae/.test(aside62.detail) && /It is set aside, so no page is written for it\./.test(aside62.note), JSON.stringify(aside62));
   const marks62 = (await run('Ladder Marks', C62.items)).map(x => x.json);
   console.log('   ladder marks ->', JSON.stringify(marks62));
   check('R16: the ladder row is marked `set_aside` on the same run, so the next cadence, the tracker and the app all stop calling it planned',
@@ -11402,7 +11408,8 @@ await guard('b4-decay-tested-stored-and-written', async () => {
     clicks: 400, impressions: 13000, position: 9, prev_clicks: 900, yoy_clicks: 1000, decay_state: 'decaying', decay_pct: -56, decay_lost: 500, decay_kind: 'visibility',
     decay_basis: 'Search Console clicks for this page, the last 28 days against the 28 days before (900 → 400).', ...o.over } });
   const cadLoads77 = (o = {}) => {
-    mock('Load Sites', [{ json: { site_id: SITE, domain: D, country: 'United Arab Emirates', status: 'active', email: '', callback_url: '' } }]);
+    // F-KW (2026-10-20, finding 2): every automatic item needs positive topic evidence, at level 3 against what the site sells as well
+    mock('Load Sites', [{ json: { site_id: SITE, domain: D, country: 'United Arab Emirates', status: 'active', email: '', callback_url: '', services_json: JSON.stringify(['ERP implementation', 'ERP pricing and licensing']) } }]);
     mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: o.pages == null ? 1 : o.pages, status: 'active' } }]);
     mock('Load Ladders', o.ladders || [{ json: {} }]); mock('Load Trends', [{ json: {} }]);
     mock('Load Query History', o.queries || [{ json: { site_id: SITE, domain: D, period_end: '2026-10-07', query: 'erp pricing uae', position: 8, impressions: 400, clicks: 5, page: W + '/erp-pricing/' } }]);
@@ -11421,7 +11428,7 @@ await guard('b4-decay-tested-stored-and-written', async () => {
     !!dec77 && dec77.existing_page_url === P_DECAY && dec77.keyword === 'erp implementation checklist' && dec77.body.existing_page_url === P_DECAY
     && dec77.body.mode === 'keyword' && dec77.body.force_content === true, JSON.stringify(dec77 && dec77.body));
   check('B4-3: and it is queued BEFORE the striking-distance guess, with the clicks it is losing and the basis in its own reason',
-    cad77[0].source === 'decay' && /500 clicks lost in 28 days \(900 → 400\)/.test(dec77.why) && /Search Console clicks for this page/.test(dec77.why)
+    cad77[0].source === 'decay' && /500 clicks lost in 28 days \(from 900 to 400\)/.test(dec77.why) && !/[\u2014\u2192]/.test(dec77.why) && /Search Console clicks for this page/.test(dec77.why)
     && dec77.decay.decaying === 1 && dec77.decay.queued === 1 && dec77.decay.pages[0].lost === 500,
     JSON.stringify([cad77.map(x => x.source), dec77.why]));
   // the states the evidence refused are never written

@@ -12,7 +12,7 @@
 //   keyword not set aside) that still have a planned page to write are active; the rest wait as Queued. `won` is not judged here (no
 //   rank history is read by the ladder mode) - a won ladder with a planned page left is counted, and the result says so in `basis`.
 const WAITING = (() => {
-  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const norm = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim();   // F-KW (2026-10-20): every script, as cycleNorm
   const lc = (v) => String(v == null ? '' : v).toLowerCase().trim();
   const WAITS = new Set(['written', 'not_ready']);
   const LADDER_WRITTEN = new Set(['writing', 'written', 'not_ready']);   // A-20: a ladder row whose page run has started or finished

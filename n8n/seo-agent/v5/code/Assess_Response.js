@@ -30,8 +30,10 @@ const aiOk = !!(o && typeof o === 'object' && o.fit != null && Number.isFinite(N
 const fitAi = aiOk ? Math.max(0, Math.min(2, Math.round(Number(o.fit)))) : null;
 // the second attempt (*Keyword Fit (Text)*) runs only when the first came back empty; referencing a node that did not run throws
 let plainRan = false; try { plainRan = !!($('Keyword Fit (Text)').first() || {}).json; } catch (e) { plainRan = false; }
-const brand = String(a.domain || '').split('.')[0].replace(/[^a-z0-9]/g, '');
-const ownBrand = brand.length >= 4 && String(a.keyword).replace(/[^a-z0-9]/g, '').includes(brand);
+// F-KW (2026-10-20, finding 5): the site's own brand is its DISTINCTIVE label only (fitOwnLabels): on an exact-match domain
+// ("erp-software.ae") "erp software uae" is the client's subject, not a search for the site itself
+const kwToksA = fitTokens(a.keyword);
+const ownBrand = fitOwnLabels(a.domain, kwToksA, [...new Set((a.services || []).flatMap(x => fitTokens(x)))]).some(l => kwToksA.includes(l) || kwToksA.join('').includes(l));
 const navAi = aiOk ? (o.navigational === true || String(o.navigational).toLowerCase() === 'true') : (String(a.intent || '') === 'navigational' && !ownBrand);
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
 // ---- keyword-first R-K4 (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.1): the deterministic fit gate, called at last ----
@@ -51,8 +53,13 @@ const gate = fitGate(a.keyword, gateCtxA);
 const GATE_WORDS = { 'own brand': 'it is your own brand name', 'other brand': 'it names another company', government: 'it is a government service', navigational: 'people search it to reach one particular website',
   portal: 'it is a login, portal or status check', 'off topic': 'it is not about what you sell', 'too broad': 'it is too broad to win', 'job search': 'people search it to find work', empty: 'there is no keyword' };
 const fit = gate.ok ? fitAi : 0;
+// F-KW (2026-10-20, finding 2): the gate judges topic distance only with 12+ topic words on file. Below that it passed everything and the
+// answer read as if the topic had been checked. Now the check says when there is not enough information to judge (and how to fix it), and a
+// keyword with positive evidence says so; the model's own fit still stands, it is never overruled on too little evidence.
+const evA = gate.ok ? fitEvidence(a.keyword, gateCtxA.topics || [], { topic_label: 'what you sell and the keywords you chose' }) : null;
+const topic_judged = !evA || evA.verdict !== 'unknown';
 const navigational = gate.ok ? navAi : (gate.reason === 'navigational' || navAi);
-const fit_gate = gate.ok ? { ok: true, reason: '', detail: '' } : { ok: false, reason: gate.reason, detail: gate.detail, words: GATE_WORDS[gate.reason] || gate.reason };
+const fit_gate = gate.ok ? { ok: true, reason: '', detail: '', topic_judged, topic_note: topic_judged ? '' : evA.detail } : { ok: false, reason: gate.reason, detail: gate.detail, words: GATE_WORDS[gate.reason] || gate.reason, topic_judged: true, topic_note: '' };
 // ---- B1-1 / B1-2 (2026-10-15, benchmark area 1): "difficulty for your site" is measured on THIS keyword's topic where the site has a
 // record on it. The leaders personalise per topic (MarketMuse Personalized Difficulty = Keyword Difficulty - a topic-level Topic
 // Authority, and "If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty"; Semrush lowers Personal KD
@@ -110,6 +117,7 @@ const need = difficulty_for_you === 'not_realistic' || fit === 0;
 const alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
 const warnings = [];
 if (!gate.ok) warnings.push('not a fit for this website: ' + fit_gate.words + ' (' + gate.detail + ')');
+if (!topic_judged) warnings.push('not enough information to judge whether this is on topic for you: ' + evA.detail + '. Add what you sell to your website settings so the check can tell');
 if (!aiOk && gate.ok) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160) + (plainRan ? ' (the plain-text retry answered nothing either)' : ''));
 if ((a.reach_errors || []).length) warnings.push('reach measured from partial data: ' + a.reach_errors.join('; ').slice(0, 200));
 // B1-1: an encouraging answer that rests on a reach measured on OTHER topics says so where the warnings are read. Only then: a site

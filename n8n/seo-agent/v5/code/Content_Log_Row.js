@@ -10,7 +10,7 @@
 const d = $('Normalize Input').first().json;
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };
 const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
-const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const norm = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim();   // F-KW (2026-10-20, finding 8): every script, as cycleNorm
 // Report-only runs (a keyword report, a verdict) take the same delivery path, so the article itself has to say that a page exists:
 // the Blog Package passes a run without content through untouched.
 let page = {}; try { page = (($('Blog Package').first() || {}).json) || {}; } catch (e) { page = {}; }
@@ -20,8 +20,11 @@ if (!domain || !keyword) return [{ json: { skip: true, reason: 'no website or no
 const now = new Date().toISOString();
 const logs = rowsOf('Load Content Log (Run)').filter(r => r.keyword && normD(r.domain) === domain);
 const rid = String(d.request_id || '');
-// the row this run already has (the cadence and the app write one when they start the run), else the newest row for the same keyword
-const prior = (rid ? logs.find(r => String(r.request_id) === rid) : null) ||
+// the row this run already has (the cadence and the app write one when they start the run), else the newest row for the same keyword.
+// F-KW (2026-10-20, finding 7): by request id AND keyword. A ladder start with pages_now 2-3 gives every page run the ladder run's one
+// request id (the app matches its callbacks by that id), so a lookup by id alone handed page 2 the row of page 1: page 2 took page 1's
+// keyword, and the upsert by site + keyword overwrote page 1's row. A row of the same run for ANOTHER keyword is never this page's row.
+const prior = (rid ? logs.find(r => String(r.request_id) === rid && norm(r.keyword) === norm(keyword)) : null) ||
   logs.filter(r => norm(r.keyword) === norm(keyword)).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;
 const ip = String(d.client_ip || '');
 const source = (prior && prior.source) || (/^cadence:/i.test(ip) ? 'cadence' : /^app:/i.test(ip) ? 'app' : (/^ladder:/i.test(ip) || d.ladder_id) ? 'ladder' : 'manual');

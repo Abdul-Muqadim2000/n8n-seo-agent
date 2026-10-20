@@ -53,8 +53,9 @@ export const AUTO_SOURCES: Record<AutopilotLevel, ReadonlyArray<TopicSource>> = 
   3: ['ladder', 'decay', 'striking', 'ai_refresh', 'trend', 'ai_answer'],
 };
 
-/** The one normalisation of a keyword both sides use for item keys and skips. */
-export const cycleNorm = (s: string): string => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/** The one normalisation of a keyword both sides use for item keys and skips. Letters, marks and digits of every script (an Arabic
+ *  keyword used to normalise to ''), NFKC-folded and lower-cased without a locale; the engine's Cadence Plan carries the same text. */
+export const cycleNorm = (s: string): string => String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim();
 /** An item of the "Coming up" plan is identified by its keyword alone, so a skip covers every source of the same search. */
 export const itemKey = (keyword: string): string => cycleNorm(keyword);
 /** A cycle's key: the website and the local date the cycle is due. */

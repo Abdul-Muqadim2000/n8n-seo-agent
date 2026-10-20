@@ -525,7 +525,7 @@ Onboarding asks **"How much should we do on our own?"**. The answer is stored pe
 | Level | Written automatically | Waits for the client's OK |
 |---|---|---|
 | **1. Only my keywords** | ladder pages of ladders the client chose | everything else, in the weekly "Coming up" plan |
-| **2. My keywords + keep my pages healthy** (default) | ladder pages; plus refreshes of the client's **existing** pages that lose traffic (`decay`), strengthening existing pages at positions 4-20 (`striking` with a page), and AI refreshes of existing pages (`ai_refresh`). Each one only when its keyword passes the topic gate against the site's ladders and services ("in topic") | new topics (`trend`, `ai_answer`, `striking` without a page) and new keywords |
+| **2. My keywords + keep my pages healthy** (default) | ladder pages; plus refreshes of the client's **existing** pages that lose traffic (`decay`), strengthening existing pages at positions 4-20 (`striking` with a page), and AI refreshes of existing pages (`ai_refresh`). Each one only when its keyword is **in topic: positive evidence that it is what the client chose** (the heads and kept rungs of the client's own ladders that are not paused or archived, and the services the client declared). The services a site crawl inferred never make a keyword in topic at this level (they only keep the gate from refusing the site's own services). Never the homepage or a main menu page | new topics (`trend`, `ai_answer`, `striking` without a page) and new keywords |
 | **3. Full autopilot** | everything of level 2, plus new topics (fit-gated), AI answer pages (`ai_pages_month`), and new ladders on keywords the system picked from research, **announced 2 days before they start** | nothing, but every item can be skipped in "Coming up", and every new keyword can be changed before it starts |
 
 Rules for every level:
@@ -543,6 +543,15 @@ Rules for every level:
 - **Upgrade nudge, never an automatic switch.** After 5 approved or published pages at level 1, a Needs-you card offers level 2.
 - **Spending:** the forecast for the chosen level is shown before it is confirmed; the company's existing autopilot limit (credit
   guard, `autopilot_limit`) still caps the month.
+- **"In topic" means against what the client chose** (F-KW, 2026-10-20, after a production-safety review proved level 2 still wrote the
+  Techand D365 refresh once any keyword was chosen, because "in topic" read the services the crawl inferred: Techand is a Dynamics partner).
+  Levels 1 and 2 judge a keyword against the client's own ladders and declared services only. Level 3 adds the crawled services. At every
+  level an automatic item needs **positive evidence**: with too little on file to judge (a site listing two services) it is a suggestion,
+  and AI Growth and the Keyword Check say "not enough information to judge" instead of passing it.
+- **Never on its own, at any level:** the website's root and its main menu pages (`nav_pages_json`) are suggested, never rewritten.
+- **"Coming up" is judged at the cycle's due time** (`scheduled_for`): the AI allowance's month, the weekly AI page, the recent, decay,
+  refresh and pile-up windows, so the preview lists what the cycle will write. A ladder planned more than 60 days ago that never wrote a page
+  waits for the app's fresh Keyword Check (`seo_ladder_settings.rechecked_at`) before its first page.
 - **Level 3 and the Techand case.** At level 3 the Techand D365 refresh could still have been written, because D365 is on the client's
   own site and passes the topic gate. That is acceptable only because the client chose full autopilot. The fault on 2026-10-19 was
   choosing for them without asking.

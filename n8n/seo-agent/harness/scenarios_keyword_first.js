@@ -12,6 +12,9 @@
 //   KF8  the ladder start: chosen_by and the start mode stored on the settings row; a Manual ladder writes nothing at start, and says so;
 //   KF9  research from the app never writes a page on the system's own pick;
 //   KF10 declared services: Normalize Input, Track my site (and a re-save keeps a paused site paused), the site model and its row.
+//   KF11-KF16 (F-KW, 2026-10-20) the production-safety review of keyword-first: in topic is what the client chose (the Techand D365 refresh),
+//        evidence before writing and sparse topics, exact-match domains, the preview at the due time, old plans re-checked, homepages, one budget
+//        across the cycle, one content-log row per page, the chooser on the ladder rows, approvals per item, every script, plain words.
 // Called from scenarios_v5.js just before the report (one appended line).
 const fs = require('fs'); const path = require('path');
 module.exports = async (ctx) => {
@@ -41,6 +44,7 @@ module.exports = async (ctx) => {
     mock('Load Trends', items(t.trends)); mock('Load Content Log', items(t.content_log)); mock('Load Ladder Settings', items(t.ladder_settings)); mock('Load Main Keyword Ranks', items(t.ranks));
     mock('Load AI Targets (Cadence)', items(t.ai_targets)); mock('Load AI Targets Writing (Cadence)', items([])); mock('Load Monitors (Cadence)', items(t.monitors));
     mock('Load Pages (Cadence)', items(t.pages)); mock('Load AI Brands (Cadence)', items(t.ai_brands)); mock('Load Skips (Cadence)', items(t.skips)); mock('Load Cost (Cadence)', items(t.cost));
+    mock('Load Cycle Jobs (Cadence)', items(t.cycle_jobs));   // F-KW: the content-cadence jobs of earlier cycles (R-K7)
   };
   const planCase = async (c) => { reset(); loadCadence(c);
     const out = await frozen(c.now, async () => (await run('Cadence Plan', [{ json: {} }])).map(i => i.json));
@@ -167,7 +171,7 @@ module.exports = async (ctx) => {
     check('its pages carry their item key and say whether they were automatic or approved', note.pages.length === 3 && note.pages.every(p => p.item_key === cycleNormOf(p.keyword) && p.auto === true && p.approved === false && p.est_usd > 0), JSON.stringify(note.pages));
     check('its suggestions are CyclePreviewItems (source, AI target, price), so "Write it" can carry them', note.suggestions.length === 3 && note.suggestions.every(s => s.item_key && s.source && 'ai_target' in s && s.auto === false) && note.suggestions[0].ai_target && note.suggestions[0].ai_target.kind === 'answer', JSON.stringify(note.suggestions));
     check('the refusals travel too, with their reasons', (note.refused || []).length === 2 && note.refused.every(x => x.reason === 'off topic' && x.detail), JSON.stringify(note.refused));
-    check('the note says the suggestions wait for an OK, with the price, and names what was not suggested', /Suggested pages<\/b> \(written only after your OK, about \$/.test(note.html) && /Not suggested/.test(note.html) && !/opportunity posts are set to Manual/.test(note.html), note.html.slice(0, 500));
+    check('the note says the suggestions wait for an OK, with the price, and names what was not suggested', /Suggested pages<\/b> \(written only after your OK; the app shows what each one costs in credits\)/.test(note.html) && !/\$\d/.test(note.html) && /Not suggested/.test(note.html) && !/opportunity posts are set to Manual/.test(note.html), note.html.slice(0, 500));
     H.scanHtml('cadence note (keyword-first)', note.html);
     // the waiting status note
     const w = await planCase(FX.cases.find(x => x.name === 'techand_replay_defaults'));
@@ -299,7 +303,7 @@ module.exports = async (ctx) => {
     const sr = (await run('Ladder Settings Rows', store['Save Ladder Rows'])).map(r => r.json);
     const mine = sr.find(r => r.ladder_id === L.ladder_id) || {};
     check('the settings row stores chosen_by and the start mode from the request', mine.chosen_by === 'client_typed' && mine.mode === 'manual' && mine.autopilot_level === null, JSON.stringify(mine));
-    const SET_COLS = ['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at', 'chosen_by', 'autopilot_level'];   // ladder_common.py LADDER_SETTINGS_COLS
+    const SET_COLS = ['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at', 'chosen_by', 'autopilot_level', 'rechecked_at'];   // ladder_common.py LADDER_SETTINGS_COLS
     check('the settings row has exactly the seo_ladder_settings columns', sr.every(r => eq(Object.keys(r).sort(), [...SET_COLS].sort())), JSON.stringify(Object.keys(mine)));
     mock('Normalize Input', [{ json: { ...nL[0].json, chosen_by: '', ladder_mode: '' } }]);
     const sr2 = (await run('Ladder Settings Rows', store['Save Ladder Rows'])).map(r => r.json);
@@ -358,5 +362,176 @@ module.exports = async (ctx) => {
     check('a round trip through the stored row keeps them (the weekly Site Tracker never overwrites them)', eq(back.model.declared_services, ['CRM implementation', 'CRM data migration']) && back.row.declared_services === m.row.declared_services, JSON.stringify(back.model.declared_services));
     const legacy = (await run('_site_model', [{ json: { site_row: { site_id: 'site_x', domain: 'x.example.org', declared_services: 'CRM implementation, CRM training' } } }]))[0].json;
     check('a comma-separated value is read too (and written back as JSON)', eq(legacy.model.declared_services, ['CRM implementation', 'CRM training']) && legacy.row.declared_services === JSON.stringify(['CRM implementation', 'CRM training']), JSON.stringify(legacy.row.declared_services));
+  });
+
+  // ===================================================================================
+  // F-KW (2026-10-20): the production-safety review of keyword-first. Its replays (s1-s10) are fixture cases now (KF2 runs them all:
+  // techand_real_services_*, paused_ladder_is_not_a_topic, level3_sparse_topics_new_topics_suggested, homepage_and_menu_pages_never_rewritten,
+  // preview_judged_at_due_time*, preview_month_rollover, preview_without_cycle_trigger, rk7_mid_cycle_ladder_start, rk7_ladder_start_counted_once,
+  // stale_ladder_*, arabic_*, approval_*, announced_ladder_settings_row_lost, level2_ai_refresh_crawl_only_is_suggestion). Every check below
+  // fails on the code before the review's fixes.
+  // ===================================================================================
+  const caseOf = (n) => JSON.parse(JSON.stringify(FX.cases.find(c => c.name === n)));
+  await guard('KF11 keyword-first safety: in topic is what the client chose', async () => {
+    reset(); const SN = 'KF11 keyword-first safety (finding 1) — the Techand D365 refresh is never written at levels 1-2 once the client chose a CRM keyword, whatever the crawl says the site sells; level 3 may'; begin(SN); const check = mkCheck(SN);
+    const D365 = 'dynamics 365 finance operations partner uae';
+    for (const n of ['techand_real_services_level2', 'techand_real_services_level2_cycle', 'techand_real_services_level1', 'paused_ladder_is_not_a_topic']) {
+      const r = await planCase(caseOf(n));
+      check(n + ': the D365 refresh is not written, it is offered as a suggestion (the gate passes it: the site sells D365)', !r.picks.some(p => p.keyword === D365) && (r.facts.suggestions || []).some(s => s.keyword === D365 && s.auto === false) && !(r.facts.refused || []).length, JSON.stringify({ p: ks(r.picks), s: ks(r.facts.suggestions) }));
+    }
+    const pv = await planCase({ ...caseOf('techand_real_services_level2'), trigger: { trigger: 'cycle', domain: 'techand.ai', site_id: 'site_techand-ai', cycle_key: 'cyc:site_techand-ai:2026-10-23', scheduled_for: '2026-10-23T06:00:00.000Z', job: 'preview', preview: true } });
+    check('its "Coming up" preview lists nothing automatic for it (only the suggestion)', !(pv.facts.items || []).some(x => x.keyword === D365) && (pv.facts.suggestions || []).some(s => s.keyword === D365), JSON.stringify(pv.facts.items));
+    const l3 = await planCase(caseOf('techand_real_services_level3'));
+    check('level 3 (full autopilot, the client\'s choice): in topic through the site\'s own services, written as the AI page (plan §5.5)', l3.picks.length === 1 && l3.picks[0].keyword === D365 && l3.picks[0].source === 'ai_refresh', JSON.stringify(ks(l3.picks)));
+    const mig = await planCase(caseOf('level2_ai_refresh_crawl_only_is_suggestion')), mig2 = await planCase(caseOf('level2_ai_refresh_in_topic'));
+    check('a service only the crawl lists never makes a level-2 page in topic; the same service DECLARED by the client does', !mig.picks.some(p => p.source === 'ai_refresh') && mig2.picks.some(p => p.source === 'ai_refresh'), JSON.stringify({ crawl: ks(mig.picks), declared: ks(mig2.picks) }));
+    const src = fs.readFileSync(path.join(CODE, 'Cadence_Plan.js'), 'utf8');
+    check('the source: level 1-2 evidence reads chosenTopics (ladders + declared), never `services`', /const chosenTopics = cleanT\(\[\.\.\.ladderTopics\(clientIds\), \.\.\.declared\]\);/.test(src) && /const evidenceTopics = level === 3 \? fullTopics : chosenTopics;/.test(src), 'Cadence_Plan.js');
+  });
+
+  await guard('KF12 keyword-first safety: evidence before writing, sparse topics, exact-match domains', async () => {
+    reset(); const SN = 'KF12 keyword-first safety (findings 2 and 5) — a level-3 new topic needs positive evidence; sparse topics say "not enough information" (cadence, AI Growth, Keyword Check); an exact-match domain\'s own subject is not its brand'; begin(SN); const check = mkCheck(SN);
+    const r = await planCase(caseOf('level3_sparse_topics_new_topics_suggested'));
+    check('level 3 with two declared services: "chatgpt for sales emails" and "office coffee machines" are NOT written (suggestions)', !r.picks.length && ['chatgpt for sales emails', 'office coffee machines'].every(k => (r.facts.suggestions || []).some(s => s.keyword === k)), JSON.stringify({ p: ks(r.picks), s: ks(r.facts.suggestions) }));
+    // the gate kit itself
+    const G = new Function(fs.readFileSync(path.join(CODE, '_fit_gate.js'), 'utf8').replace(/return \$input\.all\(\)[\s\S]*$/, 'return { fitGate, fitStored, fitEvidence, fitTokens };'))();
+    const ev = G.fitEvidence('office coffee machines', ['CRM implementation', 'CRM consulting']);
+    check('fitEvidence: two services on file, a keyword with none of their words = unknown with a plain sentence (never "in")', ev.verdict === 'unknown' && /not enough information to judge/.test(ev.detail), JSON.stringify(ev));
+    check('fitEvidence: the same list and "crm implementation dubai" = in; nothing on file = unknown', G.fitEvidence('crm implementation dubai', ['CRM implementation', 'CRM consulting']).verdict === 'in' && G.fitEvidence('crm implementation dubai', []).verdict === 'unknown', 'fitEvidence');
+    const own = [['erp software uae', 'erp-software.ae', ['erp software uae']], ['erp software price uae', 'erp-software.ae', ['erp software uae']], ['crm experts dubai', 'crmexperts.ae', ['crm experts dubai']], ['accounting software uae', 'accountingsoftware.ae', []],
+      ['vat consultants dubai', 'vatconsultants.ae', []], ['payroll outsourcing uae', 'payrolloutsourcing.ae', []], ['interior design dubai', 'interiordesign-dubai.com', []]];
+    const res = own.map(([k, d, p]) => [k, d, G.fitGate(k, { own_domain: d, protect: p })]);
+    check('an exact-match domain\'s own subject is not refused as its own brand (s3: erp-software.ae, crmexperts.ae, accountingsoftware.ae, vatconsultants.ae, payrolloutsourcing.ae, interiordesign-dubai.com)', res.every(([, , g]) => g.ok), JSON.stringify(res.filter(([, , g]) => !g.ok)));
+    check('the stored rung of the same is kept (fitStored, the cadence read path)', G.fitStored({ keyword: 'erp software price uae', status: 'planned' }, { own_domain: 'erp-software.ae', protect: ['erp software uae'] }).ok === true, 'fitStored');
+    const t1 = G.fitGate('techand crm', { own_domain: 'techand.ai', protect: ['CRM implementation'] }), t2 = G.fitGate('northwind reviews', { own_domain: 'northwind-erp.com', protect: ['erp software uae'] }),
+      t3 = G.fitGate('facts erp pricing', { own_domain: 'facts.ae', protect: ['erp software uae'] });
+    check('a distinctive label is still the site\'s own brand ("techand crm", "northwind reviews" on northwind-erp.com, "facts erp pricing" on facts.ae)', [t1, t2, t3].every(t => t.reason === 'own brand'), JSON.stringify({ t1, t2, t3 }));
+    // AI Growth: a target with too little on file to judge is listed as such, with the sentence, and never called on topic
+    const D = 'techand.ai', SITE = 'site_techand-ai';
+    const gaps = [{ prompt_id: 'p_d', prompt: 'Which Dynamics 365 Finance and Operations partner should a UAE company choose?', kind: 'recommend', topic: 'dynamics 365 finance operations partner uae', competitors: ['example-partner.ae'], volume: 300, stage: 'decision', fanout: [], cited_urls: [], engines: { chatgpt: 'absent' } },
+      { prompt_id: 'p_c', prompt: 'Who are the best CRM consultants in the UAE?', kind: 'recommend', topic: 'best crm implementation consultants uae', competitors: ['example-crm.ae'], volume: 200, stage: 'decision', fanout: [], cited_urls: [], engines: { chatgpt: 'absent' } }];
+    reset();
+    mock('Load Sites', [{ json: { site_id: SITE, domain: D, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: 'https://hooks.example.com/cb', status: 'active', services_json: '[]', declared_services: JSON.stringify(['CRM implementation', 'CRM consulting']) } }]);
+    mock('Load Ladders', [{ json: {} }]); mock('Load Monitors', [{ json: { site_id: SITE, domain: D, ai_visibility: true, ai_growth: true } }]); mock('Load Profiles', [{ json: {} }]);
+    mock('Load AI Visibility', [{ json: { site_id: SITE, domain: D, run_id: 'ai_1', checked_at: new Date(Date.now() - 864e5).toISOString(), gaps_json: JSON.stringify(gaps), pages_json: '[]', competitors_json: '[]' } }]);
+    mock('Load AI Prompts', gaps.map(g => ({ json: { prompt_id: g.prompt_id, site_id: SITE, prompt: g.prompt, kind: g.kind, keyword: g.topic, status: 'active' } })));
+    for (const n of ['Load Content Log', 'Load Query History', 'Load AI Pages', 'Load AI Targets', 'Load AI Growth', 'Load Link Prospects (Growth)', 'Load AI Answers', 'Load Cache (Growth)']) mock(n, [{ json: {} }]);
+    const GP = (await run('Growth Plan', [{ json: {} }]))[0].json;
+    const tD = GP.targets.find(t => t.prompt_id === 'p_d'), tC = GP.targets.find(t => t.prompt_id === 'p_c');
+    check('AI Growth with two declared services: the D365 question says there is not enough information to judge it (listed in targets_unjudged), the CRM one does not', (GP.targets_unjudged || []).some(x => x.target_id === tD.target_id) && /Not enough information to judge whether this is on topic/.test(tD.reason) && !(GP.targets_unjudged || []).some(x => x.target_id === tC.target_id), JSON.stringify({ u: GP.targets_unjudged, d: tD && tD.reason }));
+    // the Keyword Check
+    const AR = (o) => ({ ok: true, keyword: 'crm implementation dubai', domain: D, site_id: SITE, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', volume: 320, kd: 30, cpc: 6.5, intent: 'commercial', known: true, position: null, position_url: null,
+      reach_info: { reach: 35, method: 'size', p75: null, size_reach: 35, sample: 2, top10: 60, organic_keywords: 400, cached: true, cached_at: '2026-10-18T00:00:00.000Z' }, reach_errors: [], cache_row: null, dfs_cost: 0.0202, business: 'CRM partner', services: [], existing_keywords: [], business_source: 'request', ...o });
+    const ask = async (ar, site) => { reset(); mock('Assess Result', [{ json: ar }]);
+      mock('Load Site (Assess)', [{ json: { site_id: SITE, domain: ar.domain, services_json: '[]', declared_services: JSON.stringify(['CRM implementation']), ...(site || {}) } }]); mock('Load Monitors (Assess)', [{ json: {} }]);
+      for (const n of ['Load Assess Cache', 'Load Ladders (Assess)', 'Load Content Log (Assess)', 'Load Pages (Assess)', 'Load Ladder Settings (Assess)']) mock(n, [{ json: {} }]);
+      return (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: '' } } }]))[0].json.body; };
+    let b = await ask(AR({ keyword: 'office coffee machines dubai' }));
+    check('Keyword Check, one declared service: an unrelated keyword is not called judged: topic_judged false, a warning that says so', b.fit_gate.ok === true && b.fit_gate.topic_judged === false && b.warnings.some(w => /not enough information to judge whether this is on topic/.test(w)), JSON.stringify({ g: b.fit_gate, w: b.warnings }));
+    b = await ask(AR({ keyword: 'crm implementation dubai' }));
+    check('... and a keyword with evidence is judged (no such warning)', b.fit_gate.topic_judged === true && !b.warnings.some(w => /not enough information/.test(w)), JSON.stringify(b.fit_gate));
+    b = await ask(AR({ keyword: 'erp software uae', domain: 'erp-software.ae', site_id: 'site_erp-software-ae' }), { site_id: 'site_erp-software-ae', domain: 'erp-software.ae', declared_services: JSON.stringify(['ERP software implementation']) });
+    check('Keyword Check on an exact-match domain: "erp software uae" is not the site\'s own brand', b.fit_gate.ok === true && b.fit === 2, JSON.stringify(b.fit_gate));
+  });
+
+  await guard('KF13 keyword-first safety: Coming up shows the cycle; old plans; homepages', async () => {
+    reset(); const SN = 'KF13 keyword-first safety (findings 3, 4) — the preview is judged at the cycle\'s due time; a ladder planned 60+ days ago waits for the app\'s fresh check; the homepage and the menu pages are never rewritten on their own'; begin(SN); const check = mkCheck(SN);
+    const keys = (r) => [...r.picks.map(p => p.keyword)].sort();
+    for (const [p, q] of [['preview_judged_at_due_time', 'preview_judged_at_due_time_real']]) {
+      const a = await planCase(caseOf(p)), b = await planCase(caseOf(q));
+      check(p + ': the preview lists exactly what the real cycle writes (the AI page included)', eq([...(a.facts.items || []).filter(x => x.auto).map(x => x.keyword)].sort(), keys(b)) && keys(b).includes('best crm consultants uae'), JSON.stringify({ preview: (a.facts.items || []).map(x => x.keyword), real: keys(b) }));
+    }
+    const m = await planCase(caseOf('preview_month_rollover'));
+    check('a preview on Oct 30 for the cycle of Nov 1 counts November\'s AI allowance (the October page does not block it)', (m.facts.items || []).some(x => x.source === 'ai_answer') && m.facts.ai_pages && m.facts.ai_pages.used_this_month === 0, JSON.stringify(m.facts.ai_pages));
+    const pw = await planCase(caseOf('preview_without_cycle_trigger'));
+    check('preview: true without trigger cycle is a preview (one dry-run item, nothing started)', pw.out.length === 1 && pw.out[0].preview === true && pw.out[0].dry_run === true && !pw.picks.length, JSON.stringify(pw.out.map(j => [j.preview, j.dry_run, j.keyword])));
+    const st = await planCase(caseOf('stale_ladder_waits_for_fresh_check'));
+    const aw = (st.facts.awaiting_approval || [])[0] || {};
+    check('a ladder planned 142 days ago becomes active and is NOT written: listed with "checking this keyword again before writing", recheck true, and in recheck_ladders', !st.picks.length && aw.recheck === true && /checking this keyword again before writing/.test(aw.why) && (st.facts.recheck_ladders || []).some(x => x.ladder_id === 'lad_b'), JSON.stringify({ aw, rl: st.facts.recheck_ladders }));
+    const ok = await planCase(caseOf('stale_ladder_after_fresh_check'));
+    check('after the app\'s check passed (rechecked_at) its first page is written', ok.picks.length === 1 && ok.picks[0].ladder_id === 'lad_b' && !(ok.facts.recheck_ladders || []).length, JSON.stringify(ks(ok.picks)));
+    const old = caseOf('stale_ladder_after_fresh_check'); old.tables.ladder_settings[2].rechecked_at = '2026-05-01T00:00:00.000Z';
+    const o2 = await planCase(old);
+    check('a re-check older than the plan it checks does not count', !o2.picks.length && (o2.facts.recheck_ladders || []).length === 1, JSON.stringify(ks(o2.picks)));
+    const h = await planCase(caseOf('homepage_and_menu_pages_never_rewritten'));
+    check('the homepage and a main menu page are suggestions, never automatic, and say why', !h.picks.some(p => p.source !== 'ladder') && ['crm consultants in uae', 'crm implementation services uae'].every(k => (h.facts.suggestions || []).some(s => s.keyword === k && /homepage or a main menu page/.test(s.why))), JSON.stringify(h.facts.suggestions));
+    const l3 = caseOf('homepage_and_menu_pages_never_rewritten'); l3.tables.ladder_settings = [{ ladder_id: '_site', site_id: 'site_techand-ai', domain: 'techand.ai', autopilot_level: 3 }];
+    const h3 = await planCase(l3);
+    check('... at level 3 as well', !h3.picks.some(p => p.existing_page_url && /^https:\/\/techand\.ai\/(services\/)?$/.test(p.existing_page_url)), JSON.stringify(ks(h3.picks)));
+  });
+
+  await guard('KF14 keyword-first safety: one budget, one row per page, who chose it, which item was approved', async () => {
+    reset(); const SN = 'KF14 keyword-first safety (findings 6, 7, 9) — a mid-cycle ladder start counts once against the next cycle; two pages of one ladder start keep two content-log rows; the chooser survives a lost settings row; an approval is for one item'; begin(SN); const check = mkCheck(SN);
+    const a = await planCase(caseOf('rk7_mid_cycle_ladder_start'));
+    check('a Saturday ladder start counts against the next cycle (spent 1 of 1, named "ladder start")', a.facts.budget.spent === 1 && !a.picks.length && a.facts.budget.spent_keywords.some(x => x.how === 'ladder start'), JSON.stringify(a.facts.budget));
+    const b = await planCase(caseOf('rk7_ladder_start_counted_once'));
+    check('a start the previous cadence run already counted is not counted again', b.facts.budget.spent === 0 && b.picks.length === 1, JSON.stringify(b.facts.budget));
+    const nj = caseOf('rk7_mid_cycle_ladder_start'); delete nj.tables.cycle_jobs;
+    const c = await planCase(nj);
+    check('with no job row the previous due time (7 days before) bounds the window: still counted', c.facts.budget.spent === 1, JSON.stringify(c.facts.budget));
+    // finding 7: Content Log Row
+    reset();
+    mock('Normalize Input', [{ json: { domain: 'techand.ai', keyword: 'crm data migration checklist', request_id: 'app-ladder-1', client_ip: 'ladder:lad_crm', ladder_id: 'lad_crm', ladder_rung: 1, page_type: 'Guide' } }]);
+    mock('Blog Package', [{ json: { article_html: '<p>x</p>', qa_not_ready: false } }]);
+    mock('Load Content Log (Run)', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', keyword: 'crm implementation cost uae', source: 'ladder', request_id: 'app-ladder-1', status: 'written', started_at: '2026-10-21T09:40:00.000Z', rung: 1, ladder_id: 'lad_crm' } }]);
+    const row = (await run('Content Log Row', [{ json: {} }]))[0].json;
+    check('page 2 of a ladder start (same request id as page 1) keeps its own keyword, so the upsert by keyword writes its own row', row.keyword === 'crm data migration checklist' && row.request_id === 'app-ladder-1', JSON.stringify(row));
+    // finding 9: the chooser
+    const ls = await planCase(caseOf('announced_ladder_settings_row_lost'));
+    check('an announced ladder whose settings row was lost is not the client\'s choice at level 2 (its rows say system_announced): nothing written, waiting', !ls.picks.length && ls.facts.waiting_for_keyword === true, JSON.stringify(ks(ls.picks)));
+    reset();
+    mock('Attach PDF Ladder', [{ json: { domain: 'techand.ai', pages_now: 1, ladder: { ladder_id: 'lad_new', domain: 'techand.ai', head: { keyword: 'crm service provider uae' }, rungs: [{ months: [1, 2], pages: [{ rung: 1, page_no: 1, keyword: 'crm implementation cost uae' }] }], top: { rung: 4, keyword: 'crm service provider uae' }, write_now: [] } } }]);
+    mock('Normalize Input', [{ json: { chosen_by: 'system_announced' } }]);
+    const lr = (await run('Ladder Rows', [{ json: {} }])).map(x => x.json);
+    check('the ladder run writes chosen_by on every seo_ladders row, exactly the table\'s columns', lr.length === 2 && lr.every(x => x.chosen_by === 'system_announced') && lr.every(x => eq(Object.keys(x).sort(), [...TC.LADDER].sort())), JSON.stringify(lr[0]));
+    mock('Normalize Input', [{ json: {} }]);
+    check('... client_typed when the request names no chooser (an API caller is the client)', (await run('Ladder Rows', [{ json: {} }])).every(x => x.json.chosen_by === 'client_typed'), 'chosen_by');
+    mock('Save Ladder Rows', lr.map(r => ({ json: { id: 1, ...r } })));
+    mock('Load Domain Ladder Settings', [{ json: { ladder_id: 'lad_new', site_id: 'site_techand-ai', domain: 'techand.ai', priority: 3, status: 'active', mode: 'auto', chosen_by: 'client_typed', rechecked_at: '2026-10-20T00:00:00.000Z' } }]);
+    mock('Load Domain Ladders', [{ json: { ladder_id: 'lad_ann', domain: 'techand.ai', keyword: 'x y', head_keyword: 'x y', rung: 4, start_date: '2026-10-01T00:00:00.000Z', chosen_by: 'system_announced' } },
+      { json: { ladder_id: 'lad_leg', domain: 'techand.ai', keyword: 'p q', head_keyword: 'p q', rung: 4, start_date: '2026-09-01T00:00:00.000Z' } }]);
+    const sr = (await run('Ladder Settings Rows', [{ json: {} }])).map(x => x.json);
+    const by = (id) => sr.find(x => x.ladder_id === id) || {};
+    check('a back-filled settings row takes the chooser its ladder\'s own rows carry (system_announced), a legacy ladder stays \'\'', by('lad_ann').chosen_by === 'system_announced' && by('lad_leg').chosen_by === '', JSON.stringify(sr.map(x => [x.ladder_id, x.chosen_by])));
+    check('the ladder\'s own settings row keeps the app\'s rechecked_at', by('lad_new').rechecked_at === '2026-10-20T00:00:00.000Z' && sr.every(x => 'rechecked_at' in x), JSON.stringify(by('lad_new')));
+    // approvals
+    const am = await planCase(caseOf('approval_keyword_only_two_items')), as = await planCase(caseOf('approval_by_source'));
+    check('a keyword-only approval that fits two different pages writes neither and says so (ambiguous)', !am.picks.some(p => p.approved) && (am.facts.approved_not_written || []).some(x => x.reason === 'ambiguous'), JSON.stringify(am.facts.approved_not_written));
+    check('an approval naming its source writes exactly that item', as.picks.filter(p => p.approved).length === 1 && as.picks.find(p => p.approved).source === 'decay', JSON.stringify(ks(as.picks)));
+  });
+
+  await guard('KF15 keyword-first safety: every script', async () => {
+    reset(); const SN = 'KF15 keyword-first safety (finding 8) — Arabic keywords: tokens, item keys and skips in every script, identically in the engine and cycles.ts'; begin(SN); const check = mkCheck(SN);
+    const ar = 'أفضل برنامج محاسبة للشركات الصغيرة';
+    check('cycleNorm (the contract\'s own text) keeps Arabic words, folds case and punctuation as before', cycleNormOf(ar + '!') === ar && cycleNormOf('CRM — Service, Provider!') === 'crm service provider' && cycleNormOf('ＣＲＭ Ｄｕｂａｉ') === 'crm dubai', JSON.stringify([cycleNormOf(ar), cycleNormOf('ＣＲＭ Ｄｕｂａｉ')]));
+    const r = await planCase(caseOf('arabic_ladder_written'));
+    check('an Arabic ladder is written, not set aside as empty, and each page carries its Arabic item key', r.picks.length === 2 && r.picks.every(p => p.item_key && p.item_key === cycleNormOf(p.keyword)) && !(r.facts.set_aside || []).length, JSON.stringify(r.picks.map(p => [p.keyword, p.item_key])));
+    const m = await planCase(caseOf('arabic_manual_ladder_one_approval'));
+    check('one approved Arabic page of a Manual ladder is written, the other waits', m.picks.length === 1 && m.picks[0].keyword === ar && (m.facts.awaiting_approval || []).length === 1, JSON.stringify(ks(m.picks)));
+    const G = new Function(fs.readFileSync(path.join(CODE, '_fit_gate.js'), 'utf8').replace(/return \$input\.all\(\)[\s\S]*$/, 'return { fitTokens };'))();
+    check('the gate tokenises Arabic and accented words', G.fitTokens('برنامج محاسبة').length === 2 && G.fitTokens('logiciel de comptabilité').includes('comptabilité'), JSON.stringify(G.fitTokens('برنامج محاسبة')));
+  });
+
+  await guard('KF16 keyword-first safety: customer-facing words', async () => {
+    reset(); const SN = 'KF16 keyword-first safety (finding 10) — no em dash, arrow, ellipsis or curly quote in what the cadence, the gate and its e-mails say; no dollar figure in the e-mails; no false "planned before this rule existed"'; begin(SN); const check = mkCheck(SN);
+    const BAD = /[—–→…“”‘’]/;
+    const KEYS = new Set(['why', 'reason', 'detail', 'note', 'html', 'subject', 'label', 'text']);
+    const hits = []; const scan = (where, v, k) => { if (typeof v === 'string') { if (KEYS.has(k) && BAD.test(v)) hits.push(where + '.' + k + ': ' + v.slice(Math.max(0, v.search(BAD) - 40), v.search(BAD) + 20)); return; }
+      if (Array.isArray(v)) v.forEach(x => scan(where, x, k)); else if (v && typeof v === 'object') for (const [kk, vv] of Object.entries(v)) scan(where, vv, kk); };
+    const dollars = [];
+    for (const c of FX.cases) {
+      const r = await planCase(c); scan(c.name + ' Cadence Plan', r.out, '');
+      mock('Cadence Plan', r.out.map(json => ({ json })));
+      const mails = [...(await run('Cadence Note', [{ json: {} }])), ...(await run('Cadence Status', r.out.map(json => ({ json })))), ...(await run('Cadence Preview', [{ json: {} }]))].map(i => i.json);
+      for (const m of mails) { scan(c.name + ' e-mail', { html: m.html, subject: m.subject }, ''); if (/\$\s?\d/.test(String(m.html || '') + String(m.subject || ''))) dollars.push(c.name + ': ' + String(m.html).match(/.{0,40}\$\s?\d.{0,10}/)[0]); }
+      if (/planned before this rule existed/.test(JSON.stringify(r.out) + JSON.stringify(mails))) hits.push(c.name + ': "planned before this rule existed"');
+    }
+    check('no em dash, en dash, arrow, ellipsis or curly quote in any why / reason / detail / note / subject / e-mail of the 57 fixture cases', !hits.length, hits.slice(0, 8).join(' | '));
+    check('no dollar figure in a cadence e-mail (the app shows credits)', !dollars.length, dollars.slice(0, 4).join(' | '));
+    const G = new Function(fs.readFileSync(path.join(CODE, '_fit_gate.js'), 'utf8').replace(/return \$input\.all\(\)[\s\S]*$/, 'return { fitGate, fitStored, FITR };'))();
+    const words = [G.fitGate('zoho crm pricing uae', { own_domain: 'acme.ae', topics: ['CRM implementation services', 'CRM consulting for sales teams', 'CRM data migration', 'Customer support desk setup', 'Sales pipeline automation', 'CRM training and adoption'] }).detail,
+      G.fitStored({ keyword: 'emirates id status check', status: 'planned' }, { own_domain: 'acme.ae' }).note, G.fitStored({ keyword: 'emirates id status check', status: 'written' }, { own_domain: 'acme.ae' }).note,
+      G.FITR.line([{ keyword: 'fta portal', detail: 'a public body', dropped: true }], 'tracked')];
+    check('the gate\'s own sentences are plain (off topic, set aside, kept and flagged, the read-path line)', words.every(w => w && !BAD.test(w) && !/planned before this rule existed/.test(w)), JSON.stringify(words));
   });
 };
