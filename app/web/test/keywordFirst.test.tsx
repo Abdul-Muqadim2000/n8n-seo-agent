@@ -567,6 +567,8 @@ describe('plain words for a keyword', () => {
 // ======================================================================================================================================
 describe('"Write it" on a suggestion (R-K5)', () => {
   it('sends where the suggestion came from and its AI target, in a body the server accepts', () => {
+    // a saved website always has a tone (the database default is the first one)
+    const saved = { ...site, tone: 'Professional and direct' };
     const body = writeNowRequest(
       {
         keyword: 'who are the best payroll providers in dubai',
@@ -576,13 +578,13 @@ describe('"Write it" on a suggestion (R-K5)', () => {
         source: 'ai_answer',
         aiTarget: { question: 'Who are the best payroll providers in Dubai?', kind: 'answer', targetId: 'ait_1', fanout: ['payroll dubai'], sources: [{ url: 'https://x.test/a', title: 'A' }], competitors: ['rival.test'] },
       },
-      site,
+      saved,
     );
     expect(body).toMatchObject({ mode: 'keyword', source: 'ai_answer', aiTarget: { question: 'Who are the best payroll providers in Dubai?', kind: 'answer' } });
     const parsed = keywordInput.safeParse(body);
     expect(parsed.success).toBe(true);
     expect(parsed.success && parsed.data.source).toBe('ai_answer');
     // a page with no source sends none (the server records the app's own page)
-    expect('source' in writeNowRequest({ keyword: 'payroll uae', why: '', pageType: 'Service Page', ladder: null }, site)).toBe(false);
+    expect('source' in writeNowRequest({ keyword: 'payroll uae', why: '', pageType: 'Service Page', ladder: null }, saved)).toBe(false);
   });
 });
