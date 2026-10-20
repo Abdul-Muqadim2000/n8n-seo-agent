@@ -21,6 +21,10 @@ import { WriteNowDialog, type WriteNowItem } from './_components/pipeline/WriteN
 import { ComingUp } from './_components/pipeline/coming-up';
 import { KeywordProposals } from './_components/pipeline/proposals';
 import { YourWeek } from './_components/pipeline/your-week';
+import { PipelineNextSteps } from './_components/pipeline/next-steps';
+import { GuideButton } from '@/components/guide';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { autopilotGuideVars } from '@/lib/guide-vars';
 
 // The website's Pipeline (PIPELINE_FEATURE_SPEC.md §4.1): this week's runs, what needs the person, one card per keyword ladder,
 // the always-on part (opportunity posts, monitoring, the weekly capacity), how a ladder works, the next four weeks and what ran.
@@ -80,6 +84,7 @@ export default function PipelinePage() {
         description={`Everything that runs on its own for ${site.domain}: the pages for the keywords you chose, the checks, and what happens when. You publish the pages; the rest runs every week.`}
         actions={
           <>
+            <GuideButton id={AUTOPILOT_SCREEN_GUIDES.pipeline} vars={autopilotGuideVars(site, { cycle: d.cycle, level: d.autopilot?.level })} label="What happens when" />
             {status === 'active' ? <StatusBadge tone="good">Autopilot on</StatusBadge> : status === 'paused' ? <StatusBadge tone="warning">Paused</StatusBadge> : <Badge>Not started</Badge>}
             <span className="text-[13px] text-ink-3">about {formatCredits(d.monthlyCredits)} a month</span>
             {can('admin') && d.tracking.verified && <PipelineSettingsButton automation={d.automation} autoStartEnabled={d.autoStartEnabled !== false} />}
@@ -136,6 +141,8 @@ export default function PipelinePage() {
         )}
 
         <PipelineHero data={d} needs={needs} cards={cards} onWrite={setWriting} />
+
+        <PipelineNextSteps data={d} needs={needs} />
 
         <div className={needs.length ? 'grid gap-4 xl:grid-cols-2 xl:items-start' : ''}>
           <NeedsYou items={needs} onWrite={setWriting} />
