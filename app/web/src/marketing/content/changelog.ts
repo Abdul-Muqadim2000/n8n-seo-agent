@@ -15,6 +15,20 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-20',
+    title: 'Your first page waits for your author profile and business facts',
+    summary:
+      'No page is written for you until your author profile and your business facts are filled in, so the first page arrives ready to publish instead of as a draft with blanks to fill, and you are never charged for one.',
+    highlights: [
+      'Starting a keyword makes its plan at once; its first page waits until your author (name, job title and a short bio) and your business facts are in Website settings',
+      'Needs you names exactly what is missing, with a guide for each, and once both are in you can write the first page at once or let your next weekly run write it',
+      'Coming up shows the pages that wait for them, and an approved page waits too',
+      '"Write it now" still lets you write a page without them, after a clear warning that it will be a draft with blanks to fill',
+      'The business facts you save in Website settings now reach every page your weekly runs write',
+    ],
+    features: ['autopilot', 'content'],
+  },
+  {
+    date: '2026-10-20',
     title: 'Guides for the weekly autopilot',
     summary:
       'A plain guide now sits beside every choice the weekly autopilot asks of you, and the Pipeline shows what happens next with your own dates.',
