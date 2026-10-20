@@ -952,10 +952,12 @@ export const features: Feature[] = [
     shortName: 'Guided setup',
     tagline: 'Every step we ask of you, with your own values and the page to open.',
     summary:
-      'SEO work stalls at the same place every time: the part that happens in someone else\'s account. Wherever Alaventra needs something from you (a Google permission, a DNS record, a file on your site, a mailbox), the ask carries a guide through that one job, with your own values ready to copy and a way to hand it to whoever can do it.',
+      'SEO work stalls at the same place every time: the part that happens in someone else\'s account. Wherever Alaventra needs something from you (a Google permission, a DNS record, a file on your site, a mailbox), the ask carries a guide through that one job, with your own values ready to copy and a way to hand it to whoever can do it. And because the autopilot runs every week, the choices it asks of you have guides too: which keyword to start with, how much it may do on its own, and what to do with the weekly plan.',
     icon: LifeBuoy,
     benefits: [
       'A guide beside every ask: Search Console and Analytics access, proving the domain is yours, the IndexNow file, your links export, letting the AI crawlers in, mailboxes and their SPF, DKIM and DMARC records, publishing a page, applying a fix pack, your business profile and style guide',
+      'Guides for the weekly autopilot: what happens when, from setup to a keyword won; choosing your first keyword; the three autopilot levels; your week and its monthly date; the Coming up plan; and what to do when a page is not ready to publish',
+      'A "What happens next" line on your Pipeline with your own next dates: the plan two days before your week, the weekly run, the monthly checks, each opening its guide',
       'Your own values, never a placeholder: the record for your domain, your key file, the exact address to add, each in a box you copy from',
       'Written for the provider you actually use: Cloudflare, GoDaddy, Namecheap or cPanel for DNS; WordPress, Shopify, Wix, Squarespace or Webflow for the website',
       'Tick the steps off as you go. Close it, come back tomorrow, and it opens where you stopped',
@@ -969,7 +971,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 27, label: 'guides, one for each thing we ask of you' },
+      { value: 65, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],
@@ -988,7 +990,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Is this only for the first week?',
-        a: 'No. The same guides sit on the asks that come up later: the IndexNow file, a new mailbox, the fix pack from an audit, publishing a page that was written for you, the monthly Search Console check-in. There is also a searchable list of all of them in the app.',
+        a: 'No. The same guides sit on the asks that come up later: the IndexNow file, a new mailbox, the fix pack from an audit, publishing a page that was written for you, the monthly Search Console check-in, and every week\'s Coming up plan. There is also a searchable list of all of them in the app.',
       },
     ],
     related: ['site-tracking', 'enterprise', 'technical-audits'],

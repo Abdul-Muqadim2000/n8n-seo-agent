@@ -15,6 +15,19 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-20',
+    title: 'Guides for the weekly autopilot',
+    summary:
+      'A plain guide now sits beside every choice the weekly autopilot asks of you, and the Pipeline shows what happens next with your own dates.',
+    highlights: [
+      '"What happens when": the whole path from setup to a keyword won, with what you do, what we do and what each step leads to',
+      'Guides for choosing your first keyword, the three autopilot levels, your week and its monthly date, the Coming up plan, keywords we announce on full autopilot, a keyword that was not planned, a page that is not ready to publish, and "Not what I wanted"',
+      'A "What happens next" line on the Pipeline and at the end of setup: today\'s first checks, the Coming up plan, your weekly run and the monthly checks, on your own dates, each opening its guide',
+      'Every item under Needs you now opens the guide that explains it',
+    ],
+    features: ['guided-setup', 'autopilot'],
+  },
+  {
+    date: '2026-10-20',
     title: 'Your keywords, your week: writing only for keywords you choose',
     summary:
       'Alaventra now writes pages automatically only for the keywords you chose, and you decide how much else it does on its own. Each website also gets a week of its own: it starts the day you finish setup, and two days before every week\'s work you see the plan in "Coming up".',
