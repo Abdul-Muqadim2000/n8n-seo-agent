@@ -18,6 +18,9 @@ import { paths } from '@/lib/paths';
 import { PRICES } from '@/lib/prices';
 import { useKeywordProposals, useProposalAction, useRecommendedKeywords } from '@/lib/queries';
 import { Panel } from '../kit';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { GuideButton } from '@/components/guide';
+import { autopilotGuideVars } from '@/lib/guide-vars';
 
 /** "Thursday 23 October, 06:00" in the viewer's zone. */
 const fmtStart = (iso: string) => new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
@@ -49,6 +52,13 @@ export function KeywordProposals() {
           announced
             ? 'You chose full autopilot, so we picked the next keyword from your research. It starts on its own unless you change it.'
             : 'You have room for another keyword. Start it, pick a different one, or skip it: nothing starts without your OK.'
+        }
+        actions={
+          <GuideButton
+            id={announced ? AUTOPILOT_SCREEN_GUIDES.proposals : AUTOPILOT_SCREEN_GUIDES.newLadder}
+            vars={autopilotGuideVars(site, { level: q.data?.level })}
+            label={announced ? 'What happens if I do nothing' : 'How to choose'}
+          />
         }
       >
         <ul className="space-y-4">

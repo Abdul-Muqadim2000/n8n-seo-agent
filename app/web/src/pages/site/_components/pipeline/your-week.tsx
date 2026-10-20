@@ -14,6 +14,9 @@ import { cn, fmtAgo } from '@/lib/utils';
 import { Panel } from '../kit';
 import { fmtDayHead, fmtWhen, inDays, validDate } from './common';
 import { cycleDayWords } from './coming-up';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { GuideButton } from '@/components/guide';
+import { autopilotGuideVars } from '@/lib/guide-vars';
 
 const JOB_STATE: Record<CycleJobView['status'], { label: string; icon: ReactNode; tone: string }> = {
   waiting: { label: 'Waiting', icon: <Circle className="size-3.5" aria-hidden />, tone: 'text-ink-3' },
@@ -44,7 +47,12 @@ export function YourWeek({ cycle: fromPage, compact }: { cycle: SiteCycleView | 
           ? `Your weekly run starts the day tracking starts for ${site.domain}, then repeats every 7 days on that weekday.`
           : `Every ${name ?? 'week'} at ${cycle.localTime || '06:00'} (${cycle.timezone}) the weekly run checks your website and writes the pages for your keyword, one step after the other.`
       }
-      actions={cycle.status === 'paused' ? <StatusBadge tone="warning">Paused</StatusBadge> : cycle.overdue ? <StatusBadge tone="warning">Late</StatusBadge> : undefined}
+      actions={
+        <>
+          {cycle.status === 'paused' ? <StatusBadge tone="warning">Paused</StatusBadge> : cycle.overdue ? <StatusBadge tone="warning">Late</StatusBadge> : null}
+          <GuideButton id={AUTOPILOT_SCREEN_GUIDES.yourWeek} vars={autopilotGuideVars(site, { cycle })} label="How your week works" />
+        </>
+      }
     >
       <div className="space-y-4">
         <dl className="grid gap-2 rounded-lg bg-surface-2/60 px-3 py-2.5 text-[13px] sm:grid-cols-2">

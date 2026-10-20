@@ -28,6 +28,8 @@ import { Dialog } from '@/components/ui/overlay';
 import { LinkTabs, Segmented } from '@/components/ui/tabs';
 import { TagInput } from '@/components/ui/tag-input';
 import { GuideButton } from '@/components/guide';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { autopilotGuideVars } from '@/lib/guide-vars';
 import { errorMessage } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -619,6 +621,7 @@ function AutopilotTab({ admin }: { admin: boolean }) {
           icon={<HeaderTile icon={<Bot />} />}
           title="How much should we do on our own?"
           description="Whatever the level, two days before each weekly run you see what is coming up and can skip anything. The topic check always runs: nothing outside your business is written."
+          actions={<GuideButton id={AUTOPILOT_SCREEN_GUIDES.autopilotSettings} vars={autopilotGuideVars(site, { cycle: d.cycle, level })} label="What each level does" />}
         />
         <CardBody>
           <AutopilotLevelPicker

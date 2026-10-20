@@ -11,6 +11,8 @@ import { Dialog } from '@/components/ui/overlay';
 import { errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useContentFeedback } from '@/lib/queries';
+import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
+import { GuideButton } from '@/components/guide';
 
 /** A written page: the button shows only on these (the server refuses any other report). */
 export const isWrittenPage = (r: Pick<ReportDetail, 'stage' | 'payload'>): boolean => r.stage === 'content' && typeof r.payload?.keyword === 'string' && !!String(r.payload.keyword).trim();
@@ -64,6 +66,7 @@ export function NotWhatIWanted({ report }: { report: Pick<ReportDetail, 'id' | '
           <Field label="What was wrong?" optional hint="For example: the topic is not ours, the facts are off, the tone is wrong.">
             {(p) => <Textarea {...p} rows={3} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />}
           </Field>
+          <GuideButton id={AUTOPILOT_SCREEN_GUIDES.notWhatIWanted} variant="link" label="When does this lower the autopilot level?" />
           {send.isError && <Callout tone="critical">{errorMessage(send.error)}</Callout>}
         </div>
       </Dialog>
