@@ -232,6 +232,20 @@ export async function updateLadderSettings(site: SiteRow, ladderId: string, chan
   await apply(site, ladderSettingsWrites({ site, ...cur, ladderId, change, now: new Date().toISOString() }));
 }
 
+/**
+ * F-KW (plan §5.6): the app's fresh keyword check of a ladder planned 60+ days ago PASSED: `rechecked_at` on its settings row, so the
+ * Content Cadence writes its first page. Only this column changes (a new row follows the website's default mode and keeps no priority).
+ */
+export function recheckedWrite(o: { site: { domain: string }; ladders: LadderRow[]; settings: LadderSettingsRow[]; ladderId: string; at: string; now: string }): SettingsWrite {
+  return write(o.site, o.ladders, settingsByLadder(o.settings).get(o.ladderId), o.ladderId, { rechecked_at: o.at }, o.now);
+}
+
+export async function markLadderRechecked(site: SiteRow, ladderId: string, at: string): Promise<void> {
+  const cur = await current(site);
+  assertLadderOfSite(cur.ladders, ladderId);
+  await apply(site, [recheckedWrite({ site, ...cur, ladderId, at, now: new Date().toISOString() })]);
+}
+
 export async function reorderLadders(site: SiteRow, ladderIds: string[]): Promise<void> {
   const cur = await current(site);
   await apply(site, ladderOrderWrites({ site, ...cur, ladderIds, now: new Date().toISOString() }));
