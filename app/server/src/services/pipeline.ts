@@ -56,7 +56,8 @@ import { creditsOfUsd, settingsRow, wholeCreditsOfUsd } from './admin/settings';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { notFound } from '../lib/errors';
 import { executions, rows as n8nRows, siteRows, type ExecutionSummary } from '../n8n/client';
-import { aiQuotaOf, chosenLadderWriting, competitorsOf, levelOf, servicesOf, type CadenceSiteRow } from './cadence';
+import { aiQuotaOf, chosenLadderWriting, competitorsOf, declaredServicesOf, levelOf, navPagesOf, servicesOf, type CadenceSiteRow } from './cadence';
+import { skipsOf } from './comingUp';
 import { cycleIntentOf, loadCycleRows, siteCycleView } from './cycles';
 import { engineCostTable } from './engineCost';
 import { autopilotNeedsYou, nudgeDue } from './autopilot';
@@ -562,7 +563,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     // keyword-first (2026-10-19): the website's cycle, its seo_sites row (services), the client's decisions, the AI brand names, the price of a page
     loadCycleRows(site).catch(() => ({ row: null as CycleRow | null, jobs: [] as CycleJobRow[] })),
     siteRows<CadenceSiteRow>('sites', d, { max: 3 }).then((r) => r[0] ?? null).catch(() => null),
-    n8nRows<SkipRow>('skips', { filters: [{ columnName: 'site_id', condition: 'eq', value: sid }], max: 2000 }).catch(() => [] as SkipRow[]),
+    // seo_skips has no domain column: read only when the engine's site id is this website's (engineSite.ts)
+    skipsOf(site).catch(() => [] as SkipRow[]),
     n8nRows<Record<string, unknown>>('cache', { filters: [{ columnName: 'key', condition: 'eq', value: `ai_brands:${sid}` }], max: 3 }).catch(() => [] as Record<string, unknown>[]),
     engineCostTable().catch(() => null),
     siteRows<Record<string, unknown>>('monitors', d, { max: 3 }).catch(() => [] as Record<string, unknown>[]),
@@ -740,6 +742,11 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       aiPagesPerMonth: aiQuotaOf((monRows[0] ?? null) as Parameters<typeof aiQuotaOf>[0]),
       pages: sitePages,
       services: servicesOf(engineSite, site.services),
+      // F-KW: what the client said they sell (the app's "What do you sell?" and the engine row's declared_services), the menu pages, the
+      // earlier cadence runs (R-K7 counts ladder starts from the previous one)
+      declaredServices: declaredServicesOf(engineSite, site.services),
+      navPages: navPagesOf(engineSite),
+      cycleJobs: cyc.jobs,
       competitors: competitorsOf(engineSite, (monRows[0] ?? null) as Parameters<typeof competitorsOf>[1], site.competitors),
       aiBrands,
       skips,

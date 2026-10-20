@@ -1240,7 +1240,8 @@ export function chosenLadderWriting(ladders: LadderRow[], settings: LadderSettin
     const st = settingOf.get(String(id));
     const mode = st && (lc(st.mode) === 'auto' || lc(st.mode) === 'manual') ? lc(st.mode) : cfg.mode;
     const status = st && (STATUSES as readonly string[]).includes(lc(st.status)) ? lc(st.status) : 'active';
-    const chosen = lc(st?.chosen_by);
+    // F-KW: the settings row names the chooser, else the ladder's own rows (the ladder run writes chosen_by on them first)
+    const chosen = lc(st?.chosen_by) || (ladders.filter((l) => l && l.ladder_id === id).map((l) => lc(l.chosen_by)).find(Boolean) ?? '');
     if (mode === 'auto' && (status === 'active' || status === 'queued') && (CLIENT_CHOSEN.has(chosen) || (chosen === 'system_announced' && level === 3))) return true;
   }
   return false;
