@@ -53,6 +53,7 @@ const CYC = (() => {
     stale_hours: 2,             // the run guard's rule (RG.STALE_HOURS): a reservation older than this never settles - it crashed
     exec_page: 250,             // n8n's public API page maximum (MAX_ITEMS_PER_PAGE, 2.41.4): one read of a 10-minute window of a workflow's runs
     max_exec_reads: 60,         // reads of n8n's executions one sweep may make (a window per job start, the running runs, a run by id)
+    max_ledger_reads: 20,       // F-REH: reads of OTHER runs' reservations a sweep may make (any reserved ledger row younger than stale_hours, by id)
     init_quiet_minutes: 2,      // the Instance Started door stands down when a sweep finished this recently (two sweeps never plan from one snapshot)
     retention_days: 120,        // seo_cycle_jobs rows older than this are deleted
     max_open: 3,                // the run guard's limit (RG.MAX_OPEN): the dispatcher never starts into a refusal it can see
@@ -64,6 +65,8 @@ const CYC = (() => {
   // ledger row, so a reservation it left would hold a start slot (and refuse the retry as its own twin) for the 2 hours of the stale rule
   const DEAD = new Set(['crashed', 'canceled', 'cancelled', 'error']);
   const CAPACITY = new Set(['same_mode', 'too_many_open', 'heavy_busy']);
+  // F-REH: the key under which runsFrom() hands the plan what n8n said about each reservation's execution by id (no workflow has this id)
+  const LEDGER_RUNS = '*ledger';
   // ---- time: local dates in a website's zone, with the catch-up kit's Intl rule ----
   const validTz = (tz) => { if (!S(tz)) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: S(tz) }).format(0); return true; } catch (e) { return false; } };
   const local = (tz, t) => { const d = new Date(t + CU.offset(tz, t));
@@ -188,17 +191,48 @@ const CYC = (() => {
       ai_visibility: st.ai_visibility ? '' : 'AI visibility is switched off for this website',
       backlinks: st.backlinks ? '' : 'the backlink monitor is switched off for this website',
       rank_tracker: st.has_ladder ? '' : 'there is no keyword ladder to check yet',
-      site_tracker: zero ? '"Track my site" already ran it when tracking was set up (cycle 0)' : '',
+      // F-REH (2026-10-20): no longer off in every cycle 0. "Track my site" asks for it to be skipped (skip_jobs), and the plan honours that
+      // only when the ledger shows the setup run DONE (skipEvidence) - a refused or failed setup run used to mean no site report for 7 days
+      site_tracker: '',
       ai_growth: !st.ai_visibility ? 'AI visibility is switched off, and AI growth reads its question panel' : st.ai_growth ? '' : 'AI growth is switched off for this website',
       content_cadence: st.cadence ? '' : st.cadence_off ? 'the content cadence is switched off' : 'no pages a week are set (0), so nothing is written',
       link_builder: st.link_builder ? '' : 'link building is switched off for this website',
       audit: !monthly ? 'the audit runs on the website\'s monthly cycle only' : st.audit_monthly ? '' : 'the monthly audit is switched off for this website',
     };
+    const ev = c.skip_evidence || {};
     return JOBS.map(j => {
       let reason = why[j.job] || '';
-      if (!reason && skip.has(j.job)) reason = 'already run when tracking was set up (skip_jobs), so cycle 0 does not run it twice';
+      if (!reason && skip.has(j.job)) { const e = ev[j.job];
+        reason = 'already run when tracking was set up' + (e && S(e.run_id) ? ' (execution ' + S(e.run_id) + ', finished ' + (S(e.at) || 'earlier') + ')' : ' (skip_jobs)') + ', so cycle 0 does not run it twice'; }
       return { ...j, on: !reason, why: reason, extra: j.job === 'backlinks' ? { light: !monthly } : {} };
     });
+  };
+  // ---- F-REH (2026-10-20, real-credit rehearsal): a cycle-0 skip is a CLAIM ("the setup already ran it"), checked against the ledger ----
+  // "Track my site" writes skip_jobs = site_tracker when it creates the cycle row, before it knows whether its own Site Tracker run worked; in
+  // the rehearsal that run was refused (too_many_open) and the client had no site report for 7 days. A skip_jobs entry is honoured only when a
+  // ledger row of that job's mode for this website is DONE (settled) since the anchor (less a 10-minute grace for the app's and the engine's
+  // clocks). Anything else - refused, crashed, still running, no row at all - and the job runs in cycle 0 in its normal order (a setup run
+  // still in flight is its twin, so the dispatcher waits for it and judges again). Only cycle 0 has skip_jobs.
+  // The modes a job's run reserves under: its own workflow's, and for the audit also the main workflow's audit run (what the app's setup
+  // starts) - the Audit Scheduler spawns its audits there and reserves nothing itself.
+  const DONE_MODES = { audit: ['audit_schedule', 'audit'] };
+  const SKIP_GRACE_MS = 10 * MIN;
+  // o: { skip_jobs: [job], domain, anchor (ms), ledger } -> { honoured: [job], evidence: { job: { run_id, at } }, not: [{ job, why }] }
+  const skipEvidence = (o) => {
+    const c = o || {}, dom = normD(c.domain), from = (ms(c.anchor) || 0) - SKIP_GRACE_MS, out = { honoured: [], evidence: {}, not: [] };
+    for (const job of (c.skip_jobs || [])) {
+      const J = BY_JOB[job]; if (!J) continue;
+      const modes = DONE_MODES[job] || [J.mode];
+      const rows = (c.ledger || []).filter(r => r && modes.includes(S(r.mode)) && dom && normD(r.domain) === dom && ms(r.created_at) >= from)
+        .sort((x, y) => ms(x.created_at) - ms(y.created_at));
+      const done = rows.filter(r => S(r.status) === 'done');
+      if (done.length) { const d = done[done.length - 1]; out.honoured.push(job); out.evidence[job] = { run_id: S(d.run_id), at: S(d.settled_at) || S(d.created_at) }; continue; }
+      const last = rows[rows.length - 1];
+      out.not.push({ job, why: !last ? 'the setup asked to skip ' + J.label + ' in cycle 0, but the ledger has no run of it for ' + (dom || 'this website') + ' since tracking started, so it runs in cycle 0'
+        : 'the setup asked to skip ' + J.label + ' in cycle 0, but its run (execution ' + S(last.run_id) + ') ended "' + (S(last.status) || 'unknown') + '", not done, so it runs in cycle 0'
+          + (S(last.status) === 'refused' ? ' (' + refusalOf(last) + ')' : '') });
+    }
+    return out;
   };
   // the §14.2 payload of a cycle run, exactly (+ tz, agreed with E2): the job's Manual Run reads `trigger: 'cycle'` and runs scheduled
   // semantics for one site
@@ -334,7 +368,18 @@ const CYC = (() => {
         url: api + '/executions?workflowId=' + q(wf) + '&startedAfter=' + q(iso(a)) + '&startedBefore=' + q(iso(b)) + '&limit=' + page });
     }
     const cap = Math.max(1, Number(cfg.max_exec_reads) || 60);
-    return { reads: all.slice(0, cap), unread: all.slice(cap) };
+    // F-REH (2026-10-20, real-credit rehearsal): EVERY run still `reserved` in the ledger - not only the dispatcher's own jobs - is read by id.
+    // A restart (every production deploy) crashes the runs in flight; their rows stayed `reserved` for the 2-hour stale rule and counted toward
+    // the run guard's MAX_OPEN (3) for every other run (the rehearsal: a crashed `keyword` run refused the client's first Site Tracker run). A
+    // row older than the stale window is already ignored by the guard (and marked by *Release Stale Runs*), so only younger rows are read,
+    // oldest first, at most max_ledger_reads a sweep; a read the cap leaves out is reported in `unread` and judged at a later sweep.
+    const now = ms(c.now) || 0, sh = Number(cfg.stale_hours) > 0 ? Number(cfg.stale_hours) : DEFAULTS.stale_hours;
+    const ghosts = ledger.filter(l => S(l.status) === 'reserved' && /^\d+$/.test(S(l.run_id)) && (!now || !isStale(l, now, sh)))
+      .sort((x, y) => ms(x.created_at) - ms(y.created_at) || Number(x.run_id) - Number(y.run_id));
+    const greads = [];
+    for (const l of ghosts) { const url = api + '/executions/' + q(S(l.run_id)); if (seen.has(url)) continue; seen.add(url); greads.push({ workflow_id: '', kind: 'ledger', run_id: S(l.run_id), key: S(l.key), url }); }
+    const gcap = Math.max(0, Number.isFinite(Number(cfg.max_ledger_reads)) ? Number(cfg.max_ledger_reads) : DEFAULTS.max_ledger_reads);
+    return { reads: [...all.slice(0, cap), ...greads.slice(0, gcap)], unread: [...all.slice(cap), ...greads.slice(gcap)] };
   };
   // what the reads answered, per workflow, in the shape outcome() reads. `responses[i]` is the HTTP node's full response to reads[i]
   // ({ statusCode, body }); a list answer is { data: [...], nextCursor }, a by-id answer the execution itself.
@@ -345,9 +390,19 @@ const CYC = (() => {
     const ex = (d) => ({ id: S(d.id), mode: S(d.mode), status: S(d.status), startedAt: S(d.startedAt), stoppedAt: S(d.stoppedAt) });
     const runs = {};
     const of = (wf) => runs[wf] || (runs[wf] = { ok: true, data: [], byId: {}, incomplete: [], errors: [] });
+    // F-REH: every by-id answer, whatever workflow it belongs to, under LEDGER_RUNS - what n8n says about each reservation's execution
+    // (`byId`), the ones n8n no longer has (`gone`: a 404) and the reads that failed (no evidence either way)
+    const G = { byId: {}, gone: {}, errors: [] };
     (reads || []).forEach((t, i) => {
-      if (!t || !S(t.workflow_id)) return;
-      const R = of(S(t.workflow_id)), x = (responses || [])[i] || {}, b = bodyOf(x);
+      if (!t) return;
+      const x = (responses || [])[i] || {}, b = bodyOf(x);
+      if (t.kind === 'id' || t.kind === 'ledger') {
+        if (code(x) === 200 && S(b.id)) G.byId[S(b.id)] = ex(b);
+        else if (code(x) === 404 && S(t.run_id)) G.gone[S(t.run_id)] = true;
+        else if (t.kind === 'ledger') G.errors.push('execution ' + S(t.run_id) + ': ' + failed(x));
+      }
+      if (!S(t.workflow_id)) return;
+      const R = of(S(t.workflow_id));
       if (t.kind === 'id') {
         if (code(x) === 200 && S(b.id)) R.byId[S(b.id)] = ex(b);
         else if (code(x) !== 404) R.errors.push('execution ' + S(t.run_id) + ': ' + failed(x));   // 404 = pruned: no evidence, not an error
@@ -363,6 +418,7 @@ const CYC = (() => {
       const R = of(S(t.workflow_id));
       if (t.kind !== 'id') R.incomplete.push({ kind: S(t.kind), from: t.kind === 'running' ? '' : S(t.from), to: t.kind === 'running' ? '' : S(t.to), oldest: '', unread: true });
     }
+    if (Object.keys(G.byId).length || Object.keys(G.gone).length || G.errors.length) runs[LEDGER_RUNS] = G;
     return runs;
   };
   // the trailing run of capacity refusals of one ledger key: how long the job has been refused without a break
@@ -454,6 +510,33 @@ const CYC = (() => {
       const since = refusedSince(ledger, r.ledger_key || ledgerKey(r.cycle_key, r.job));
       if (since && now - since >= cfg.refusal_hours * H) { put({ ...r, status: 'gave_up', finished_at: nowIso, reason: 'gave up: refused for capacity for ' + Math.round((now - since) / H) + ' h without a break' }); gaveUp.push(r.key); }
     }
+    // ---- 1b. F-REH (2026-10-20, real-credit rehearsal): ghost reservations of ANY run. An n8n restart crashed a `keyword` run of the main
+    // workflow; its row stayed `reserved` until the 2-hour stale rule and held one of the run guard's MAX_OPEN slots for every other run, so
+    // the client's first Site Tracker run was refused. Every reservation younger than the stale window is judged by what n8n says about its
+    // execution (CYC.execReads read it by id): crashed / canceled / error = it can never settle; success = it finished without settling (its
+    // settle failed); a 404 while no read lists it running = n8n no longer has it. Each is released (`stale`, the state *Release Stale Runs*
+    // writes, with the reason in its cost_basis). No answer, or a run still running / waiting / new, is left alone (no evidence, no release).
+    const ghosts = [];
+    const LR = runs[LEDGER_RUNS] || null;
+    if (LR) {
+      const alive = new Set(); for (const [w, r] of Object.entries(runs)) if (w !== LEDGER_RUNS && r && Array.isArray(r.data)) for (const e of r.data) if (!DEAD.has(S(e.status)) && S(e.status) !== 'success') alive.add(S(e.id));
+      for (const l of ledger) {
+        const id = S(l.run_id);
+        if (S(l.status) !== 'reserved' || !/^\d+$/.test(id) || release.has(id) || isStale(l, now, cfg.stale_hours)) continue;
+        const x = LR.byId[id] || null, xs = x ? S(x.status) : '';
+        const what = (S(l.mode) || 'a') + ' run' + (normD(l.domain) ? ' of ' + normD(l.domain) : '') + ' (execution ' + id + ', ledger row ' + (S(l.key) || '?') + ', reserved ' + (S(l.created_at) || '?') + ')';
+        let why = '';
+        if (x && DEAD.has(xs)) why = 'the ' + what + (xs === 'error' ? ' ended with an error' : ' was ' + xs + ' by n8n (a restart, a deploy or a time-out)') + ' before it settled its reservation';
+        else if (x && xs === 'success') why = 'the ' + what + ' finished ("success") without settling its reservation';
+        else if (!x && LR.gone[id] && !alive.has(id)) why = 'n8n no longer has the ' + what + ' and no read lists it running';
+        if (!why) continue;
+        why += ', so it no longer holds a run-guard slot (released by the cycle dispatcher, not after the ' + cfg.stale_hours + '-hour stale rule)';
+        release.set(id, { run_id: id, key: S(l.key), reason: why, ghost: true });
+        ghosts.push({ run_id: id, key: S(l.key), mode: S(l.mode), domain: normD(l.domain), status: xs || 'gone', reserved_at: S(l.created_at), reason: why });
+      }
+    }
+    // the release carries the row's own cost_basis, so *Release Dead Runs* keeps what the reservation said beside why it was released
+    for (const [id, v] of release) { const l = ledger.find(r => S(r.run_id) === id && S(r.status) === 'reserved'); if (l && !v.was) v.was = S(l.cost_basis).slice(0, 200); }
 
     // ---- 2. adoption: a tracked, active website with no cycle row gets one now (the kickoff's safety net, plan §4.7) ----
     const cyc = new Map(cycles.map(r => [S(r.site_id), r]));
@@ -539,6 +622,9 @@ const CYC = (() => {
       next.next_preview_at = previewOn ? iso(pAt) : '';
       delete next.__next_date;
       out.cycle_key = ck; out.next_due_at = next.next_due_at; out.next_preview_at = next.next_preview_at; out.monthly = monthlyNow; out.cycle0 = zeroNow;
+      // F-REH: cycle 0's skip_jobs, each checked against the ledger (a setup run that did not finish is not a reason to skip a job)
+      const sk = zeroNow && rd.skip_jobs.length ? skipEvidence({ skip_jobs: rd.skip_jobs, domain, anchor: rd.anchor, ledger }) : { honoured: [], evidence: {}, not: [] };
+      if (zeroNow && rd.skip_jobs.length) out.skip_checks = [...sk.honoured.map(j => ({ job: j, honoured: true, run_id: sk.evidence[j].run_id })), ...sk.not.map(x => ({ job: x.job, honoured: false, why: x.why }))];
       if (opened) out.opened = { key: opened.key, due_at: iso(opened.due.at), monthly: opened.monthly, cycle0: opened.zero, not_run_before: opened.passed };
       if (skippedCycle) out.skipped_cycle = { key: skippedCycle.key, due_at: iso(skippedCycle.due.at), next_due_at: iso(skippedCycle.next.at) };
       // open jobs of a cycle that is no longer current: finished where they finished (above), set aside where they never ran. A job still
@@ -555,11 +641,11 @@ const CYC = (() => {
         if (S(r.site_id) === siteId && S(r.job) === 'cycle' && S(r.status) === 'running' && S(r.cycle_key) !== ck) put({ ...r, status: 'done', finished_at: nowIso, reason: S(r.reason) + '; closed when ' + ck + ' started' });
       }
       if (paused) { say('paused', (out.domain || siteId) + ': ' + paused + ', so nothing starts' + (mr.due ? ' (a cycle has been due since ' + iso(mr.due.at) + '; it runs once on resume)' : ''));
-        out.jobs = ck ? jobsFor({ settings, zero: zeroNow, monthly: monthlyNow, skip_jobs: rd.skip_jobs, rank_only: rankOnly }).map(j => { const r = byKey.get(ck + ':' + j.job); return { job: j.job, verdict: r ? S(r.status) : 'paused', reason: r ? S(r.reason) : paused }; }) : [];
+        out.jobs = ck ? jobsFor({ settings, zero: zeroNow, monthly: monthlyNow, skip_jobs: sk.honoured, skip_evidence: sk.evidence, rank_only: rankOnly }).map(j => { const r = byKey.get(ck + ':' + j.job); return { job: j.job, verdict: r ? S(r.status) : 'paused', reason: r ? S(r.reason) : paused }; }) : [];
         finish(); continue; }
       if (!ck) { say('not_due', 'cycle 0 is due ' + next.next_due_at); finish(); continue; }
       // ---- the jobs of the current cycle, in order: a job starts only when every earlier one is done, skipped or gave up ----
-      const list = jobsFor({ settings, zero: zeroNow, monthly: monthlyNow, skip_jobs: rd.skip_jobs, rank_only: rankOnly });
+      const list = jobsFor({ settings, zero: zeroNow, monthly: monthlyNow, skip_jobs: sk.honoured, skip_evidence: sk.evidence, rank_only: rankOnly });
       let blocker = '';
       for (const j of list) {
         const key = ck + ':' + j.job, r = byKey.get(key), lk = ledgerKey(ck, j.job);
@@ -648,10 +734,10 @@ const CYC = (() => {
     return { now: nowIso, entry: S(c.entry) || 'sweep', mode: planOnly ? 'plan_only' : 'start', configured_mode: S(c.mode) === 'start' ? 'start' : 'plan_only', dry_run: dry, engine_tz: engineTz,
       sites: sitesOut, adopted, open_jobs: open.length, live_runs: live.length, room: take, max_inflight: cfg.max_inflight, max_open: cfg.max_open,
       cycle_rows: planOnly ? [] : cycleRows, job_rows: planOnly ? [] : jobRows, start: planOnly ? [] : realStarts.map(s => { const { would, ...x } = s; return x; }),
-      would: planOnly ? { cycle_rows: cycleRows, job_rows: jobRows, release: [...release.values()], unsettled, start: wouldStarts.map(s => { const { would, ...x } = s; return x; }) } : null,
-      release: planOnly ? [] : [...release.values()], gave_up: planOnly ? [] : gave, unsettled: planOnly ? [] : unsettled, retention: { before: iso(now - cfg.retention_days * DAY), days: cfg.retention_days, run: !planOnly },
+      would: planOnly ? { cycle_rows: cycleRows, job_rows: jobRows, release: [...release.values()], ghosts, unsettled, start: wouldStarts.map(s => { const { would, ...x } = s; return x; }) } : null,
+      release: planOnly ? [] : [...release.values()], ghosts: planOnly ? [] : ghosts, gave_up: planOnly ? [] : gave, unsettled: planOnly ? [] : unsettled, retention: { before: iso(now - cfg.retention_days * DAY), days: cfg.retention_days, run: !planOnly },
       counts, basis: sitesOut.length + ' website(s) read (' + adopted.length + ' adopted); ' + (planOnly ? wouldStarts.length + ' start(s) planned, none made (' + (dry ? 'dry run' : 'plan_only') + ')' : realStarts.length + ' start(s)')
-        + ', ' + open.length + ' job(s) in flight, ' + live.length + ' run(s) holding the run guard' };
+        + ', ' + open.length + ' job(s) in flight, ' + live.length + ' run(s) holding the run guard' + (ghosts.length ? ', ' + ghosts.length + ' dead reservation(s) of other runs ' + (planOnly ? 'found (not released: ' + (dry ? 'dry run' : 'plan_only') + ')' : 'released') : '') };
   };
 
   // ---- the claim (F-ENG 2026-10-20): is the job's row still what this sweep planned from? `current` = the rows a read of that key returned
@@ -707,6 +793,6 @@ const CYC = (() => {
     const reason = busy ? why : 'nothing starting and nothing due in the next ' + Math.round(win / MIN) + ' min';
     return { busy, starting, running, due, ignored_stale: ignored, minutes: Math.round(win / MIN), reason, note };
   };
-  return { plan, deployWindow, DEPLOY, outcome, execReads, runsFrom, claimFree, claimToken, refusalOf, refusedSince, settingsOf, jobsFor, payload, newCycleRow, cycleRow, anchorOf, ANCHOR, siteIdOf, read, nextAfter, mostRecent, local, validTz, dueAt,
+  return { plan, deployWindow, DEPLOY, outcome, execReads, runsFrom, claimFree, claimToken, refusalOf, refusedSince, settingsOf, jobsFor, skipEvidence, LEDGER_RUNS, payload, newCycleRow, cycleRow, anchorOf, ANCHOR, siteIdOf, read, nextAfter, mostRecent, local, validTz, dueAt,
     dateAdd, weekdayOf, cycleKey, dateOfKey, requestId, ledgerKey, periodKey, monthlyDayOf, jobRow, cycleRowOf, JOBS, PREVIEW, BY_JOB, NAMES, DEFAULTS, TERMINAL, LIVE, DEAD, CAPACITY };
 })();

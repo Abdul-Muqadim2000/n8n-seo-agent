@@ -4,7 +4,9 @@
 // the cycle kit's one row builder (CYC.cycleRow - the kickoff uses the same one, so the two cannot drift):
 //   * no row yet: anchor = the request's `tracking_started_at` (accepted within the last 6 days and at most 1 h ahead - CYC.anchorOf, the
 //     kickoff's own window - else now), zone = the request's `timezone` when valid (Normalize Input checked it), else the engine's; cycle 0
-//     due at the anchor; skip_jobs = site_tracker (this path starts the Site Tracker itself, right after this node);
+//     due at the anchor; skip_jobs = site_tracker (this path starts the Site Tracker itself, right after this node). F-REH (2026-10-20): that
+//     is a claim, not a verdict - the dispatcher honours it only when the ledger shows that Site Tracker run DONE since the anchor
+//     (CYC.skipEvidence); a refused or failed setup run means cycle 0 runs the Site Tracker in its normal order;
 //   * a row already: its anchor, weekday and due times are kept (a re-save never moves the website's week), its status is kept (a paused
 //     website stays paused), and only an empty zone - or the engine zone of a row the dispatcher adopted - takes the request's zone;
 //   * the seo_sites save failed: no cycle row (the dispatcher adopts a tracked website with no row, so a failure here only delays cycle 0).

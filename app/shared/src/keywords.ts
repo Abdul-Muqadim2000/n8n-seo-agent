@@ -249,7 +249,13 @@ export interface RecommendedKeyword {
   source: RecommendedSource;
   /** the website's keyword ladders that already cover this search (main or page keyword; one search, one page) */
   overlaps: { ladderId: string; head: string; keyword: string }[];
+  /** is it one of the services the client listed: 'in', 'out', or 'unknown' (too little on file, or a report from before 2026-10-20) */
+  serviceFit?: ServiceFit;
+  /** a short line for the card in the customer's words ('' when there is nothing to say) */
+  note?: string;
 }
+
+export type ServiceFit = 'in' | 'unknown' | 'out';
 
 export interface RecommendedKeywords {
   /** the keyword strategy report the list comes from; null when the website has none */
@@ -294,6 +300,10 @@ export function ladderOverlapsOf(keyword: string, ladders: LadderKeywords[]): Re
 
 const DIFF_RANK: Record<string, number> = { easy: 0, reachable: 1, unknown: 2, hard: 3, very_hard: 4, not_realistic: 5 };
 const SOURCE_RANK: Record<RecommendedSource, number> = { start_with: 0, priority: 1, quick_win: 2, content_plan: 3 };
+const FIT_RANK: Record<ServiceFit, number> = { in: 0, unknown: 1, out: 2 };
+/** the card's line for a keyword that is not one of the client's services (F-REH, 2026-10-20) */
+export const SERVICE_OUT_NOTE = 'Not one of the services you listed';
+const asServiceFit = (v: unknown): ServiceFit => (v === 'in' || v === 'out' ? v : 'unknown');
 
 /**
  * The keywords of a keyword_strategy callback as ladder candidates: the discovery's pick (start_with), its priority keywords, quick
@@ -311,6 +321,7 @@ export function recommendedFromStrategy(payload: Record<string, unknown>, ladder
     const difficultyForYou = asDifficulty(k.difficulty_for_you);
     const planType = asPlanChoice(k.plan_type);
     const months = planType === 'none' ? '' : str(k.months);
+    const serviceFit = asServiceFit(k.service_fit);
     items.push({
       keyword: kw,
       volume: num(k.volume ?? k.total_volume),
@@ -324,6 +335,8 @@ export function recommendedFromStrategy(payload: Record<string, unknown>, ladder
       label: str(k.label) || forYouLabel(difficultyForYou, planType, months),
       source,
       overlaps: ladderOverlapsOf(kw, ladders),
+      serviceFit,
+      note: serviceFit === 'out' ? SERVICE_OUT_NOTE : '',
       i: items.length,
     });
   };
@@ -338,10 +351,15 @@ export function recommendedFromStrategy(payload: Record<string, unknown>, ladder
     const n = num(t.keyword_count);
     add(t, 'content_plan', str(t.primary_keyword), [str(t.topic) && `Topic "${str(t.topic)}"`, n ? `${n} related searches on one page` : ''].filter(Boolean).join(': '));
   }
+  // F-REH (2026-10-20, real-credit rehearsal): what the client sells comes first. The engine judges every keyword against the services the
+  // client listed (service_fit); a non-technical owner picks from the top, and the rehearsal's top five were IT-company searches for a CRM
+  // and Dynamics 365 partner. A search a ladder already holds still goes last (picking it would start a second ladder for one search); among
+  // the rest: one of the client's services, then not judged (no services listed, or a report from before service fit), then not one of them.
   return items
     .sort(
       (a, b) =>
         Number(a.overlaps.length > 0) - Number(b.overlaps.length > 0) ||
+        FIT_RANK[a.serviceFit ?? 'unknown'] - FIT_RANK[b.serviceFit ?? 'unknown'] ||
         DIFF_RANK[a.difficultyForYou ?? 'unknown'] - DIFF_RANK[b.difficultyForYou ?? 'unknown'] ||
         SOURCE_RANK[a.source] - SOURCE_RANK[b.source] ||
         a.i - b.i,

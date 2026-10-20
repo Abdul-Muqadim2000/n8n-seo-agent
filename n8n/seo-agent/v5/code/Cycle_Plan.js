@@ -47,8 +47,9 @@ if (e.entry === 'init' && Number.isFinite(lastAt) && tNow >= lastAt && tNow - la
 }
 // n8n's executions of the workflows that have a job in flight: the reads *Cycle Exec Requests* made (in its order) and, recomputed from the
 // same tables, the ones it did not make (beyond max_exec_reads) - a start one of those covered is "not confirmable", never "no run"
-const targets = all('Cycle Exec Requests').filter(t => t && t.workflow_id && !t.skip), res = all('Read Executions (Cycle)');
-const reads = CYC.execReads({ jobs: all('Load Cycle Jobs'), ledger: all('Load Run Ledger (Cycle)'), known: KNOWN, api: API, cfg: CONFIG });
+// F-REH (2026-10-20): every read it made, by its URL - a reservation's read by id (kind `ledger`) names no workflow
+const targets = all('Cycle Exec Requests').filter(t => t && t.url && !t.skip), res = all('Read Executions (Cycle)');
+const reads = CYC.execReads({ jobs: all('Load Cycle Jobs'), ledger: all('Load Run Ledger (Cycle)'), known: KNOWN, api: API, cfg: CONFIG, now: e.now });
 const runs = CYC.runsFrom(targets, res, reads.unread);
 // the Rank Tracker job runs for a website that has a ladder rung the fit gate keeps (INVARIANTS rule 2: stored rungs are read back through
 // the same gate that writes them, FITR - a website whose only rungs are a competitor's brand or a government portal buys no rank check)

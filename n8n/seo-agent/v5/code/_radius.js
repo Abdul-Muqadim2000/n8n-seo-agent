@@ -90,7 +90,7 @@ const RAD = (() => {
         + (far.length ? '; ' + far.length + ' are out of reach for now (' + name(far, 2) + (far.length > 2 ? ' …' : '') + ')' : '') + '.';
     const note = reach == null
       ? 'Your reach could not be measured this run, so these verdicts use the smallest default (' + r + '): treat them as provisional.'
-      : 'Your reach is the difficulty your site already wins — the 75th percentile of the difficulty of the keywords it ranks in the top 10 for'
+      : 'Your reach is the difficulty your site already wins: the 75th percentile of the difficulty of the keywords it ranks in the top 10 for'
         + (x.reach_method === 'size' ? ' (measured from the size of your ranking profile this time)' : x.reach_method === 'default' ? ' (no ranking data: the default for a new site)' : '')
         + '. A stretch topic is not a no: it is the one to come back to once the topics within reach are won and links have been earned.';
     return { reach, reach_method: S(x.reach_method), measured: reach != null, topics, in_reach: inR, stretch: st, far, summary, note, checked_at: S(x.checked_at) };
@@ -101,7 +101,7 @@ const RAD = (() => {
       .filter(o => o.common.length).sort((a, b) => b.common.length - a.common.length);
     return all.length ? all[0].x : null; };
   /** one topic's verdict as a sentence (a plan's notes, a tooltip): "A stretch — … (difficulty 55 against your reach 28; …)" */
-  const line = (t) => !t ? '' : LABEL[t.verdict] + ' — ' + t.reason + ' (' + (t.evidence || []).join('; ') + ')';
+  const line = (t) => !t ? '' : LABEL[t.verdict] + ': ' + t.reason + ' (' + (t.evidence || []).join('; ') + ')';
   /** the rows a report prints, in reading order: within reach, then the stretches, then what is out of reach for now */
   const rows = (radius) => { const rad = radius || {}; return [...(rad.in_reach || []), ...(rad.stretch || []), ...(rad.far || [])]; };
   /**
@@ -122,7 +122,7 @@ const RAD = (() => {
     const onSubject = !subject.length || common.some(t => subject.includes(t));
     if (common.length >= need && onSubject) return { ok: true, shared: common, need, head_words: h, subject, reason: '' };
     if (common.length >= need) return { ok: false, shared: common, need, head_words: h, subject,
-      reason: 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" — the kind of service or the place, not the subject (' + q(subject) + ')' };
+      reason: 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '", which is the kind of service or the place, not the subject (' + q(subject) + ')' };
     return { ok: false, shared: common, need, head_words: h, subject,
       reason: common.length
         ? 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" (' + common.length + ' of the ' + h.length + ' words that matter, ' + need + ' needed: ' + q(h) + ')'
