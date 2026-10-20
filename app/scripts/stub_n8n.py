@@ -30,6 +30,9 @@ TABLES = [
     'seo_backlink_snapshots', 'seo_link_prospects', 'seo_backlinks', 'seo_link_imports', 'seo_link_graph', 'seo_audits',
     'seo_audit_findings', 'seo_page_watch', 'seo_ladder_settings', 'seo_ops_alerts', 'seo_run_ledger', 'seo_link_outreach',
     'seo_listings', 'seo_link_impact',
+    # keyword-first (2026-10-19): the website's cycle, its jobs and the client's "Coming up" decisions. Without them a row seeded here
+    # was never read (the app found no table), so the cycle view fell back to the app's own anchor and the weekday PATCH answered 409.
+    'seo_cache', 'seo_cycles', 'seo_cycle_jobs', 'seo_skips',
 ]
 IDS = {name: str(1000 + i) for i, name in enumerate(TABLES)}
 BY_ID = {v: k for k, v in IDS.items()}
