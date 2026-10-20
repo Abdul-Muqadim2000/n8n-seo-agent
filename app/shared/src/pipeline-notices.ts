@@ -1,6 +1,7 @@
 import { AUTOMATIONS, MODES, type AutomationId, type ModeId } from './constants';
 import type { PipelineData, QueueItem } from './data';
 import { keywordsOverlap } from './ladders';
+import { cycleNorm } from './cycles';
 
 // What a manual run means for the website's automatic pipeline, shown on the tool forms before the run starts: nobody pays twice
 // for what the schedule already does, nobody writes a second page that competes with one already written, and everyone sees how
@@ -55,12 +56,9 @@ const ISO_FORMAT: NoticeFormat = {
   ago: (iso) => `at ${iso.slice(0, 16).replace('T', ' ')}`,
 };
 
-/** The comparison key of a keyword (same rule as the Content Cadence: case, punctuation and spacing do not matter). */
-export const normKeyword = (s: string) =>
-  String(s || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
+/** The comparison key of a keyword: the Content Cadence's own rule (cycles.ts cycleNorm), so case, punctuation and spacing do not matter
+ *  and a keyword in any script keeps its letters (an Arabic keyword used to become '' and match every other one). */
+export const normKeyword = (s: string) => cycleNorm(s);
 
 const urlKey = (u: string) =>
   String(u || '')

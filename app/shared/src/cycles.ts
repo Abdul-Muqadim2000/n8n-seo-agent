@@ -163,6 +163,9 @@ export interface SkipRow {
   scope: 'cycle' | 'always';
   by: string;
   created_at: string;
+  /** F-KW (2026-10-20): the item an approval is for (source and ladder of the plan item); '' or missing = an older keyword-only row */
+  source?: string;
+  ladder_id?: string;
 }
 export const skipKey = (siteId: string, scope: 'cycle' | 'always', cycle: string, item: string): string =>
   `${siteId}:${scope === 'always' ? 'always' : cycle}:${item}`;
