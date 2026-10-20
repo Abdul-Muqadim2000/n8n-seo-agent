@@ -368,7 +368,8 @@ export function recommendedFromStrategy(payload: Record<string, unknown>, ladder
     .map(({ i: _i, ...k }) => k);
 }
 
-/** "Choose for me": the first card that is easy or reachable for the website and that no ladder covers yet; null when none is. */
-export function chooseForMe<T extends Pick<RecommendedKeyword, 'difficultyForYou' | 'overlaps'>>(list: readonly T[]): T | null {
-  return list.find((k) => isWithinReach(k.difficultyForYou) && !k.overlaps.length) ?? null;
+/** "Choose for me": the first card that is easy or reachable for the website, that no ladder covers yet and that is not outside the
+ *  services the client listed (rehearsal 2026-10-20: keyword-first never chooses a topic the client does not sell); null when none is. */
+export function chooseForMe<T extends Pick<RecommendedKeyword, 'difficultyForYou' | 'overlaps'> & { serviceFit?: RecommendedKeyword['serviceFit'] }>(list: readonly T[]): T | null {
+  return list.find((k) => isWithinReach(k.difficultyForYou) && !k.overlaps.length && k.serviceFit !== 'out') ?? null;
 }

@@ -151,6 +151,16 @@ describe('recommended keywords from the keyword strategy', () => {
     // "Choose for me" then lands on one of the client's services, never on the easier IT search above it in the old order
     expect(chooseForMe(list)?.keyword).toBe('crm system');
   });
+  it('chooseForMe never picks a keyword outside the services the client listed', () => {
+    const base = { volume: 100, overlaps: [] as never[], planType: 'direct', months: '2-4', why: '' };
+    const list = [
+      { ...base, keyword: 'it company in dubai', difficultyForYou: 'easy', serviceFit: 'out' },
+      { ...base, keyword: 'crm system', difficultyForYou: 'reachable', serviceFit: 'in' },
+    ] as never[];
+    expect((chooseForMe(list) as { keyword: string } | null)?.keyword).toBe('crm system');
+    expect(chooseForMe([list[0]])).toBeNull();
+  });
+
 
   it('a report from before service fit (no service_fit): every card is not judged and the order is exactly as before', () => {
     const list = recommendedFromStrategy(payload, ladders);

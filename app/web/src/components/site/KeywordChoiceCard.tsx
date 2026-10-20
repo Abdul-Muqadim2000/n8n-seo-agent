@@ -41,6 +41,8 @@ export interface KeywordChoice {
   planType: PlanChoice | null;
   months: string;
   why: string;
+  /** rehearsal 2026-10-20: "Not one of the services you listed" for a research card outside what the client sells */
+  note?: string;
 }
 
 export function KeywordChoiceCard({
@@ -109,6 +111,7 @@ export function KeywordChoiceCard({
         </span>
       </span>
       {k.why && <span className="mt-2.5 block text-[13px] leading-snug text-ink-3">Why we suggest it: {k.why}</span>}
+      {k.note && <span className="mt-1 block text-[13px] leading-snug text-ink-3">{k.note}</span>}
     </>
   );
   const frame = cn(

@@ -53,7 +53,7 @@ const choiceOfCheck = (c: KeywordCheck): KeywordChoice => ({
   months: c.result.months,
   why: c.result.position != null ? `Your website already shows up at position ${c.result.position} for it.` : '',
 });
-const choiceOfRec = (k: RecommendedKeyword): KeywordChoice => ({ keyword: k.keyword, volume: k.volume, difficultyForYou: k.difficultyForYou, planType: k.planType, months: k.months, why: k.why });
+const choiceOfRec = (k: RecommendedKeyword): KeywordChoice => ({ keyword: k.keyword, volume: k.volume, difficultyForYou: k.difficultyForYou, planType: k.planType, months: k.months, why: k.why, note: k.note });
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 export function KeywordStep() {
