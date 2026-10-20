@@ -10,7 +10,7 @@
 /*__CYCLE__*/
 const s = $('Loop Cycle Starts').first().json || {};
 const now = new Date().toISOString();
-const free = CYC.claimFree(s.expect || null, $input.all().map(i => i.json || {}));
+const free = CYC.claimFree(s.expect || null, $('Read Claim (Cycle)').all().map(i => i.json || {}));   // the row as it is now, read just before
 if (!free.ok) return [{ json: { skip: true, key: s.key || '', reason: free.reason } }];
 return [{ json: { key: s.key, site_id: s.site_id, cycle_key: s.cycle_key, job: s.job, workflow_id: s.workflow_id, status: 'starting', attempts: Number(s.attempts) || 1,
   run_id: CYC.claimToken($execution.id, now, Math.random().toString(36).slice(2, 10)), ledger_key: s.ledger_key, monthly: !!s.monthly, reason: ('starting: ' + String(s.why || '')).slice(0, 600),

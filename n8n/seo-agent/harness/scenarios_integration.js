@@ -19,7 +19,7 @@
 //   INT6 Growth Metrics counts set_aside questions beside queued / written;
 //   INT7 an approval is the client's choice: written while the site waits for its first keyword, never past a skip, the budget or the pile-up.
 // Called from scenarios_v5.js just before the report (one line).
-const fs = require('fs'); const path = require('path');
+const fs = require('fs'); const path = require('path'); const { fakeN8nApi } = require('./fake_n8n_api');
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
   const CD = process.env.CODE_DIR || path.join(__dirname, 'code_v4');
@@ -147,22 +147,27 @@ module.exports = async (ctx) => {
   // one dispatcher sweep through its generated nodes (the doors, the evidence, the plan, the writes, record-then-start, the alarm)
   const sweep = async (W, now, o = {}) => at(now, async () => {
     reset(); const dspExec = nextExec();
-    mock('Load Cycle Mode', items([{ key: 'cycle:mode', kind: 'cycle', value: J({ mode: 'start' }), updated_at: ISO(T(T0) - D1) }]));
+    mock('Load Cycle Mode', items([{ key: 'cycle:mode', kind: 'cycle', value: J({ mode: 'start' }), updated_at: ISO(T(T0) - D1) }])); mock('Load Cycle Last', items([]));
     mock('Load Cycles', items(W.cycles)); mock('Load Cycle Jobs', items(W.jobs)); mock('Load Sites (Cycle)', items(W.sites)); mock('Load Monitors (Cycle)', items(W.monitors));
     mock('Load Cadence (Cycle)', items(W.cadence)); mock('Load Ladder Settings (Cycle)', items(W.ladder_settings)); mock('Load Ladders (Cycle)', items(W.ladders));
     mock('Load Run Ledger (Cycle)', items(W.ledger.filter(r => T(r.created_at) >= T(now) - 2 * D1)));
     const E = (await CY('Cycle Entry', [{ json: {} }]))[0].json;
     const req = (await CY('Cycle Exec Requests', [{ json: {} }])).map(i => i.json);
-    if (!req[0].skip) mock('Read Executions (Cycle)', req.map(r => ({ json: { statusCode: 200, body: { data: W.execs.filter(x => x.workflowId === r.workflow_id).slice().reverse()
-      .map(x => ({ id: x.id, mode: x.mode, status: x.status, startedAt: x.startedAt, stoppedAt: x.stoppedAt || '' })) } } })));
+    // F-ENG (2026-10-20): n8n's executions answered as n8n 2.41.4 answers them (harness/fake_n8n_api.js: no running run in the default list,
+    // status=running for those, a run by id, windows on startedAt) - the old fake listed running runs in every read, which n8n never does
+    const API = fakeN8nApi(W.execs.map(x => ({ id: x.id, workflowId: x.workflowId, mode: x.mode, status: x.status, startedAt: x.startedAt, stoppedAt: x.stoppedAt || null })));
+    if (!req[0].skip) mock('Read Executions (Cycle)', req.map(r => ({ json: API(r.url) })));
     const P = (await CY('Cycle Plan', [{ json: {} }]))[0].json;
     for (const r of (await CY('Cycle State Rows', [{ json: {} }])).map(x => x.json).filter(x => !x.skip)) upsert(W.cycles, 'site_id', r);
+    for (const r of (await CY('Cycle State Updates', [{ json: {} }])).map(x => x.json).filter(x => !x.skip)) upsert(W.cycles, 'site_id', r);   // F-ENG: the changed fields only
     for (const r of (await CY('Cycle Job Rows', [{ json: { id: 1 } }])).map(x => x.json).filter(x => !x.skip)) upsert(W.jobs, 'key', r);
     const rel = (await CY('Cycle Release Rows', [{ json: {} }])).map(x => x.json).filter(x => !x.skip);
     for (const x of rel) for (const l of W.ledger) if (String(l.run_id) === x.run_id && l.status === 'reserved') l.status = 'stale';   // Release Dead Runs
     const started = [];
     for (const s of (await CY('Cycle Start Items', [{ json: {} }])).map(x => x.json).filter(x => !x.skip)) {
-      const rr = (await CY('Cycle Record Row', [{ json: s }], { execId: dspExec }))[0].json;
+      mock('Loop Cycle Starts', [{ json: s }]); mock('Read Claim (Cycle)', items(W.jobs.filter(j => j.key === s.key)));   // F-ENG: the row read just before the claim
+      const rr = (await CY('Cycle Record Row', [{ json: {} }], { execId: dspExec }))[0].json;
+      if (rr.skip) { started.push({ skip: true, reason: rr.reason, key: rr.key }); continue; }
       upsert(W.jobs, 'key', rr);
       mock('Save Cycle Record', [{ json: { id: ++W.seq, ...W.jobs.find(j => j.key === rr.key) } }]);
       const back = W.jobs.find(j => j.key === rr.key);   // Confirm Cycle Claim: the row read back from the table
@@ -175,7 +180,7 @@ module.exports = async (ctx) => {
     }
     await CY('Cycle Report', [{ json: {} }]);
     let alarm = null;
-    if ((P.gave_up || []).length) { try { await CY('Cycle Alarm', [{ json: {} }], { expectError: true }); } catch (e) {} const r = H.results[H.results.length - 1]; alarm = r.error; r.ok = !!o.expect_alarm; if (!o.expect_alarm) r.error = 'unexpected alarm: ' + r.error; }
+    if ((P.gave_up || []).length || (P.unsettled || []).length) { try { await CY('Cycle Alarm', [{ json: {} }], { expectError: true }); } catch (e) {} const r = H.results[H.results.length - 1]; alarm = r.error; r.ok = !!o.expect_alarm; if (!o.expect_alarm) r.error = 'unexpected alarm: ' + r.error; }
     else await CY('Cycle Alarm', [{ json: {} }]);
     W.starts.push(...started.filter(s => !s.skip).map(s => ({ at: now, job: s.payload.job, cycle_key: s.payload.cycle_key, attempt: s.record.attempts })));
     return { E, P, started, alarm, rel };
@@ -294,7 +299,7 @@ module.exports = async (ctx) => {
     check('(b) the payload is §14.2 field for field: trigger, domain, site_id, cycle_key, job, monthly, scheduled_for (the anchor), request_id, tz - and nothing else',
       eq(Object.keys(p1).sort(), ['cycle_key', 'domain', 'job', 'monthly', 'request_id', 'scheduled_for', 'site_id', 'trigger', 'tz']) && p1.trigger === 'cycle' && p1.domain === DOM && p1.site_id === SID && p1.cycle_key === ck0
       && p1.monthly === true && p1.scheduled_for === A.row.anchor_at && p1.request_id === 'cyc_northwind-erp-com_20261021_ai_visibility' && p1.tz === TZ, J(p1));
-    check('(b) recorded before it started: the job row was "starting" with this sweep\'s claim, the ledger key cycle:<cycle_key>:<job>, attempt 1', s1.started[0].record.status === 'starting' && /^dsp:\d+$/.test(s1.started[0].record.run_id)
+    check('(b) recorded before it started: the job row was "starting" with this sweep\'s claim, the ledger key cycle:<cycle_key>:<job>, attempt 1', s1.started[0].record.status === 'starting' && /^dsp:\d+:[0-9a-z]+:[0-9a-z]+$/.test(s1.started[0].record.run_id)
       && s1.started[0].record.ledger_key === 'cycle:' + ck0 + ':ai_visibility' && s1.started[0].record.attempts === 1, J(s1.started[0].record));
     const site0 = W.cycles[0];
     check('(b) the cycle row now says cycle 0 is current and cycle 1 is due Wed 28 Oct 06:00 Dubai (02:00Z), its preview 48 h before', site0.current_key === ck0 && site0.next_due_at === '2026-10-28T02:00:00.000Z'

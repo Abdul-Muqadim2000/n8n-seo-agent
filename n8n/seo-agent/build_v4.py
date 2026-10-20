@@ -11936,7 +11936,7 @@ def _b140_cycle():
     _sh140.copyfile(os.path.join(HERE0, '..', 'deploy', 'deploy_guard.mjs'), os.path.join(HERE0, 'harness', 'deploy_guard.mjs'))   # harness CY12 runs it (generated copy)
     _wire140.update({'record_then_start': True, 'deploy_guard': {k: {'busy': v['busy'], 'starting': [j['key'] for j in v['starting']], 'running': [j['key'] for j in v['running']],
                      'due': len(v['due']), 'ignored': len(v['ignored_stale']), 'reason': v['reason'], 'note': v['note']} for k, v in _guard140.items()},
-                     'guard_check': {k: (v is None) for k, v in _chk140.items()}, 'kickoff_codes': _codes140, 'published_targets': sorted({w for _j, w in _kit140})})
+                     'guard_check': {k: (v is None) for k, v in _chk140.items()}, 'dispatcher_published': 'SEOagentCycleDsp' in _man140['publish'], 'kickoff_codes': _codes140, 'published_targets': sorted({w for _j, w in _kit140})})
     json.dump(_wire140, open(os.path.join(HERE0, 'harness', 'cycle_wiring.json'), 'w'), indent=1, sort_keys=True)
     print('cycle (section 140): the Cycle Dispatcher reads the claim, records a token, holds and reads it back, then starts (%d jobs, published, plan_only until '
           'cycle:mode); Site Kickoff writes seo_cycles and starts nothing; the deploy guard answers %d shared cases (refuses a start or a due cycle, reports a running job) '

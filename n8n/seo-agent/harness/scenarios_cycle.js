@@ -1,4 +1,4 @@
-// CY1-CY24 (2026-10-19, n8n/seo-agent/docs/SCHEDULING_KEYWORDS_PLAN.md §4 / §9 / §14, agent E1 "Cycle core"): the week belongs to the
+// CY1-CY32 (2026-10-19; CY25-CY32 F-ENG 2026-10-20, the production-safety review: error / unsettled outcomes, bounded blind, running runs read, every load refuses, the Instance Started door and the claim, changed-field updates, the published + watched dispatcher, the release step's guard; n8n/seo-agent/docs/SCHEDULING_KEYWORDS_PLAN.md §4 / §9 / §14, agent E1 "Cycle core"): the week belongs to the
 // website. The pure cycle kit (v5/code/_cycle.js, CYC) is taken out of the GENERATED Cycle Plan node exactly as the build inlined it, together
 // with the catch-up's time rule (CU) and the run guard (RG), and replayed on any date: due times in three zones across both DST changes, the
 // most recent missed cycle once, the 12-hour gap, pause and resume, weekday changes, the monthly date and exactly 12 monthly cycles a year,
@@ -7,6 +7,7 @@
 // back, the §14.2 payload exactly, outcomes from ledger rows, the seo_cycles updates, retention, the report and the gave-up alarm.
 // Called from scenarios_v5.js just before the report.
 const fs = require('fs'); const path = require('path');
+const { fakeN8nApi } = require('./fake_n8n_api');   // F-ENG (2026-10-20): n8n 2.41.4's executions API, faithfully (no running run in the default list)
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
   const CD = process.env.CODE_DIR || path.join(__dirname, 'code_v4');
@@ -36,8 +37,12 @@ module.exports = async (ctx) => {
   const world = (o) => { const c = o || {}; return { sites: c.sites || [], cycles: (c.cycles || []).map(r => ({ ...r })), jobs: (c.jobs || []).map(r => ({ ...r })), ledger: c.ledger || [],
     monitors: c.monitors || [], cadence: c.cadence || [], ladders: c.ladders || [], ladder_settings: c.ladder_settings || [], runs: c.runs || {}, mode: c.mode || 'start', seq: 1000, starts: [] }; };
   const upsert = (arr, key, row) => { const i = arr.findIndex(r => r[key] === row[key]); if (i >= 0) arr[i] = { ...arr[i], ...row }; else arr.push({ ...row }); };
+  const API_BASE = 'http://localhost:5678/api/v1', WF_IDS = [...new Set(CYC.JOBS.map(j => j.workflow_id))];
+  // what the dispatcher learns from n8n: its reads (CYC.execReads) answered by the faithful fake API, assembled by CYC.runsFrom
+  const runsVia = (execs, jobs, ledger, cfg, apiOpts) => { const R = CYC.execReads({ jobs, ledger, known: WF_IDS, api: API_BASE, cfg }); const api = fakeN8nApi(execs, apiOpts);
+    return CYC.runsFrom(R.reads, R.reads.map(r => api(r.url)), R.unread); };
   const planW = (w, now, x) => CYC.plan({ now: ISO(now), mode: w.mode, engine_tz: 'America/New_York', sites: w.sites, cycles: w.cycles, jobs: w.jobs, monitors: w.monitors, cadence: w.cadence,
-    ladders: w.ladders, ladder_settings: w.ladder_settings, ledger: w.ledger, runs: w.runs, ...(x || {}) });
+    ladders: w.ladders, ladder_settings: w.ladder_settings, ledger: w.ledger, runs: w.execs ? runsVia(w.execs, w.jobs, w.ledger) : w.runs, ...(x || {}) });
   const applyW = (w, p, now) => { for (const r of p.cycle_rows) upsert(w.cycles, 'site_id', r); for (const r of p.job_rows) upsert(w.jobs, 'key', r);
     for (const x of (p.release || [])) for (const l of w.ledger) if (String(l.run_id) === x.run_id && l.status === 'reserved') l.status = 'stale';   // Release Dead Runs
     for (const s of p.start) { upsert(w.jobs, 'key', CYC.jobRow({ ...s, status: 'starting', run_id: 'dsp:sim', reason: 'starting: ' + s.why, started_at: ISO(now), finished_at: '', updated_at: ISO(now) })); w.starts.push(s); }
@@ -340,11 +345,13 @@ module.exports = async (ctx) => {
       && o([L({ key: LK + ':part1', status: 'done' }), L({ run_id: '503', status: 'done', created_at: '2026-10-21T14:12:00.000Z' })]).state === 'done'
       && o([L({ key: LK + ':part1', status: 'done', settled_at: '2026-10-21T14:10:00.000Z' })], null, null, T(START) + 3 * H1).state === 'failed', '');
     check('CY11: a double start (two racing sweeps): the twin refused same_mode does not hide the run that is going', o([L({ run_id: '600', status: 'refused', cost_basis: 'The previous backlinks run (execution 501) is still going' }), L()]).state === 'running', '');
-    check('CY11: no ledger row yet: an execution of the workflow after the start is running; none after 10 min is failed; within 10 min it is starting',
-      o([], { SEOagentBacklnk1: { ok: true, data: [{ id: '700', status: 'running', mode: 'integrated', startedAt: '2026-10-21T14:00:20.000Z' }] } }).state === 'running'
-      && o([], OK_RUNS).state === 'failed' && o([], OK_RUNS, null, T(START) + 4 * MIN).state === 'starting', '');
+    // F-ENG (2026-10-20): the execution is in n8n as n8n keeps it - RUNNING - and reaches the plan only through the reads the dispatcher makes
+    const RUN700 = [{ id: '700', workflowId: 'SEOagentBacklnk1', status: 'running', mode: 'integrated', startedAt: '2026-10-21T14:00:20.000Z' }];
+    const viaApi = runsVia(RUN700, [row()], []);
+    check('CY11: no ledger row yet: an execution of the workflow after the start is running (read through status=running, as n8n 2.41.4 lists it); none after 10 min is failed; within 10 min it is starting',
+      o([], viaApi).state === 'running' && o([], OK_RUNS).state === 'failed' && o([], OK_RUNS, null, T(START) + 4 * MIN).state === 'starting', JSON.stringify(viaApi));
     check('CY11: an execution that belongs to another job\'s ledger row is never taken for ours',
-      CYC.outcome({ row: row(), ledger: [], runs: { SEOagentBacklnk1: { ok: true, data: [{ id: '700', status: 'running', mode: 'integrated', startedAt: '2026-10-21T14:00:20.000Z' }] } }, claimed: new Set(['700']), now: NOW, cfg: CYC.DEFAULTS }).state === 'failed', '');
+      CYC.outcome({ row: row(), ledger: [], runs: viaApi, claimed: new Set(['700']), now: NOW, cfg: CYC.DEFAULTS }).state === 'failed', '');
     check('CY11: n8n\'s executions unreadable and no ledger row: blind (looked at again), but after 2 h it is failed',
       o([], { SEOagentBacklnk1: { ok: false, error: 'HTTP 401' } }).state === 'blind' && o([], { SEOagentBacklnk1: { ok: false, error: 'HTTP 401' } }, null, T(START) + 2 * H1 + MIN).state === 'failed', '');
     check('CY11: a run that finished "success" with no ledger row under its key is done, and says its plan node does not key cycle runs',
@@ -409,14 +416,15 @@ module.exports = async (ctx) => {
     for (const c of CASES.cases) {
       const r = CYC.deployWindow({ jobs: c.jobs, cycles: c.cycles, now: CASES.now, minutes: c.minutes || 15 });
       const want = c.want, p = py[c.name];
-      const same = r.busy === want.busy && JSON.stringify(r.inflight.map(j => j.key)) === JSON.stringify(want.inflight) && r.due.length === want.due && r.ignored_stale.length === (want.ignored || 0);
+      const K = (a) => JSON.stringify(a.map(j => j.key));
+      const same = r.busy === want.busy && K(r.starting) === JSON.stringify(want.starting) && K(r.running) === JSON.stringify(want.running) && r.due.length === want.due && r.ignored_stale.length === (want.ignored || 0);
       check('CY12: deploy window - ' + c.name + ' -> ' + (want.busy ? 'refuse' : 'go') + ', and deploy_guard.py (build section 140) answered the same',
-        same && !!p && p.busy === r.busy && JSON.stringify(p.inflight) === JSON.stringify(r.inflight.map(j => j.key)) && p.due === r.due.length && p.ignored === r.ignored_stale.length && p.reason === r.reason,
-        JSON.stringify({ js: r, py: p, want }));
+        same && !!p && p.busy === r.busy && JSON.stringify(p.starting) === K(r.starting) && JSON.stringify(p.running) === K(r.running) && p.due === r.due.length && p.ignored === r.ignored_stale.length
+        && p.reason === r.reason && p.note === r.note, JSON.stringify({ js: r, py: p, want }));
     }
     const g = WIRE.guard_check || {};
     check('CY12: the deploy scripts\' guard (build section 140 self-test): idle and a fresh instance go; a running job refuses; --force and --force-monday override; tables that cannot be read refuse unless --force',
-      g.idle === true && g.fresh_instance_no_tables === true && g.busy === false && g.busy_force === true && g.busy_force_monday === true && g.unreadable_401 === false && g.unreachable === false && g.unreadable_force === true, JSON.stringify(g));
+      g.idle === true && g.fresh_instance_no_tables === true && g.busy === false && g.running_only === true && g.busy_force === true && g.busy_force_monday === true && g.unreadable_401 === false && g.unreachable === false && g.unreadable_force === true, JSON.stringify(g));
   });
 
   // ===== CY13: capacity =====
@@ -539,6 +547,7 @@ module.exports = async (ctx) => {
   const SITES = [SITE('site_techand-ai', 'techand.ai')];
   const loadAll = (o) => { const c = o || {};
     mock('Load Cycle Mode', items(c.mode === undefined ? [] : [{ key: 'cycle:mode', kind: 'cycle', value: typeof c.mode === 'string' ? c.mode : JSON.stringify(c.mode), updated_at: '2026-10-19T12:00:00.000Z' }]));
+    mock('Load Cycle Last', items(c.last ? [{ key: 'cycle:last', kind: 'cycle', value: '{}', updated_at: c.last }] : []));
     mock('Load Cycles', items(c.cycles || [])); mock('Load Cycle Jobs', items(c.jobs || [])); mock('Load Sites (Cycle)', items(c.sites || SITES));
     mock('Load Monitors (Cycle)', items(c.monitors || [ALL_ON('site_techand-ai')])); mock('Load Cadence (Cycle)', items(c.cadence || [{ site_id: 'site_techand-ai', pages_per_week: 1, status: 'active' }]));
     mock('Load Ladder Settings (Cycle)', items(c.ladder_settings || [])); mock('Load Ladders (Cycle)', items(c.ladders || [])); mock('Load Run Ledger (Cycle)', items(c.ledger || []));
@@ -569,8 +578,8 @@ module.exports = async (ctx) => {
     mock('Load Cycle Jobs', items([{ key: 'k1', job: 'backlinks', status: 'running', workflow_id: 'SEOagentBacklnk1' }, { key: 'k2', job: 'audit', status: 'done', workflow_id: 'SEOagentAuditSc1' },
       { key: 'k3', job: 'cycle', status: 'running', workflow_id: '' }, { key: 'k4', job: 'preview', status: 'starting', workflow_id: 'SEOagentCadence1' }, { key: 'k5', job: 'x', status: 'running', workflow_id: 'Evil/../../x' }]));
     const R = (await CY_RUN('Cycle Exec Requests', [{ json: {} }])).map(i => i.json);
-    check('CY19: one read per workflow with a starting / running job (the cadence and the backlink monitor), only known workflow ids, no key in any URL',
-      R.length === 2 && R.map(r => r.workflow_id).join() === 'SEOagentBacklnk1,SEOagentCadence1' && R.every(r => /^http:\/\/localhost:5678\/api\/v1\/executions\?workflowId=SEOagent\w+&limit=100$/.test(r.url)) && !R.some(r => /key|token/i.test(r.url)), JSON.stringify(R));
+    check('CY19: reads only for workflows with a starting / running job (the cadence and the backlink monitor): their RUNNING runs (status=running, 250 a page), only known workflow ids, no key in any URL',
+      R.length === 2 && R.map(r => r.workflow_id).join() === 'SEOagentBacklnk1,SEOagentCadence1' && R.every(r => r.kind === 'running' && /^http:\/\/localhost:5678\/api\/v1\/executions\?workflowId=SEOagent\w+&status=running&limit=250$/.test(r.url)) && !R.some(r => /key|token/i.test(r.url)), JSON.stringify(R));
     mock('Load Cycle Jobs', items([{ key: 'k2', job: 'audit', status: 'done', workflow_id: 'SEOagentAuditSc1' }]));
     check('CY19: nothing in flight: no read at all (a skip item for the IF)', (await CY_RUN('Cycle Exec Requests', [{ json: {} }]))[0].json.skip === true, '');
     const now = new Date().toISOString();
@@ -610,17 +619,20 @@ module.exports = async (ctx) => {
     const now = new Date().toISOString();
     loadAll({ mode: { mode: 'start' }, cycles: [TK(now)] }); entry(now);
     const P = (await CY_RUN('Cycle Plan', [{ json: {} }]))[0].json;
-    const SR = (await CY_RUN('Cycle State Rows', [{ json: {} }])).map(i => i.json);
-    check('CY20: the seo_cycles row carries exactly the table\'s columns, with the cycle opened (current_key, last_cycle_at, last_monthly_key, next due 7 days on at 06:00 Dubai)',
-      SR.length === 1 && JSON.stringify(Object.keys(SR[0])) === JSON.stringify(WIRE.cycles_cols) && SR[0].current_key === 'cyc:site_techand-ai:' + CYC.local('Asia/Dubai', T(now)).date && SR[0].last_cycle_at
-      && CYC.local('Asia/Dubai', T(SR[0].next_due_at)).h === 6 && SR[0].last_monthly_key, JSON.stringify(SR[0]));
+    const SR0 = (await CY_RUN('Cycle State Rows', [{ json: {} }])).map(i => i.json);
+    const SRU = (await CY_RUN('Cycle State Updates', [{ json: {} }])).map(i => i.json), SR = SRU;
+    check('CY20: the existing seo_cycles row is not written whole (no new row this sweep); its UPDATE carries only the fields the sweep changed - the cycle opened (current_key, last_cycle_at, last_monthly_key, next due 7 days on at 06:00 Dubai) - and never cycle_weekday, tz or anchor_at',
+      SR0.length === 1 && SR0[0].skip === true && SR.length === 1 && SR[0].site_id === 'site_techand-ai' && SR[0].current_key === 'cyc:site_techand-ai:' + CYC.local('Asia/Dubai', T(now)).date && SR[0].last_cycle_at
+      && CYC.local('Asia/Dubai', T(SR[0].next_due_at)).h === 6 && SR[0].last_monthly_key && SR[0].updated_at && !('cycle_weekday' in SR[0]) && !('tz' in SR[0]) && !('anchor_at' in SR[0])
+      && Object.keys(SR[0]).every(k => WIRE.cycles_cols.includes(k)), JSON.stringify([SR0, SR]));
     const JR = (await CY_RUN('Cycle Job Rows', [{ json: { id: 1 } }])).map(i => i.json);
     check('CY20: the job rows carry exactly the seo_cycle_jobs columns: the cycle marker (running, monthly) - the start is not among them',
       JR.length === 1 && JSON.stringify(Object.keys(JR[0])) === JSON.stringify(WIRE.cycle_jobs_cols) && JR[0].job === 'cycle' && JR[0].status === 'running' && JR[0].monthly === true, JSON.stringify(JR));
     const SI = (await CY_RUN('Cycle Start Items', [{ json: { id: 2 } }])).map(i => i.json);
-    const RR = (await CY_RUN('Cycle Record Row', [{ json: SI[0] }]))[0].json;
-    check('CY20: the record row is exactly the seo_cycle_jobs columns, status starting, attempt 1, this execution\'s claim, ledger key cycle:<cycle_key>:<job>',
-      JSON.stringify(Object.keys(RR)) === JSON.stringify(WIRE.cycle_jobs_cols) && RR.status === 'starting' && RR.attempts === 1 && RR.run_id === 'dsp:test-exec' && RR.ledger_key === 'cycle:' + RR.cycle_key + ':ai_visibility'
+    mock('Loop Cycle Starts', [{ json: SI[0] }]); mock('Read Claim (Cycle)', [{ json: {} }]);   // the row read just before the claim: none yet
+    const RR = (await CY_RUN('Cycle Record Row', [{ json: {} }]))[0].json;
+    check('CY20: the record row is exactly the seo_cycle_jobs columns, status starting, attempt 1, this execution\'s claim token (dsp:<execution>:<time>:<random>), ledger key cycle:<cycle_key>:<job>',
+      JSON.stringify(Object.keys(RR)) === JSON.stringify(WIRE.cycle_jobs_cols) && RR.status === 'starting' && RR.attempts === 1 && /^dsp:test-exec:[0-9a-z]+:[0-9a-z]+$/.test(RR.run_id) && RR.ledger_key === 'cycle:' + RR.cycle_key + ':ai_visibility'
       && RR.workflow_id === 'SEOagentAIVisib1' && RR.started_at && !RR.finished_at, JSON.stringify(RR));
     mock('Save Cycle Record', [{ json: { id: 41, createdAt: 'x', updatedAt: 'x', ...RR } }]);
     const PL = (await CY_RUN('Cycle Payload', [{ json: { id: 41, ...RR } }]))[0].json;
@@ -652,9 +664,11 @@ module.exports = async (ctx) => {
         ladders: [{ domain: 'techand.ai', keyword: 'e invoicing uae', head_keyword: 'e invoicing uae' }] }); entry(now);
       const P = (await CY_RUN('Cycle Plan', [{ json: {} }]))[0].json;
       for (const r of (await CY_RUN('Cycle State Rows', [{ json: {} }])).map(x => x.json).filter(x => !x.skip)) upsert(st.cycles, 'site_id', r);
+      for (const r of (await CY_RUN('Cycle State Updates', [{ json: {} }])).map(x => x.json).filter(x => !x.skip)) upsert(st.cycles, 'site_id', r);
       for (const r of (await CY_RUN('Cycle Job Rows', [{ json: {} }])).map(x => x.json).filter(x => !x.skip)) upsert(st.jobs, 'key', r);
       for (const s of (await CY_RUN('Cycle Start Items', [{ json: {} }])).map(x => x.json).filter(x => !x.skip)) {
-        const rr = (await CY_RUN('Cycle Record Row', [{ json: s }]))[0].json; const rec = { ...rr, started_at: now, updated_at: now }; upsert(st.jobs, 'key', rec);
+        mock('Loop Cycle Starts', [{ json: s }]); mock('Read Claim (Cycle)', items(st.jobs.filter(j => j.key === s.key)));
+        const rr = (await CY_RUN('Cycle Record Row', [{ json: {} }]))[0].json; const rec = { ...rr, started_at: now, updated_at: now }; upsert(st.jobs, 'key', rec);
         mock('Cycle Record Row', [{ json: rec }]); mock('Save Cycle Record', [{ json: { id: 1, ...rec } }]); mock('Cycle Plan', [{ json: { ...P, now: new Date().toISOString() } }]);
         const pl = (await CY_RUN('Cycle Payload', [{ json: { id: 1, ...rec } }]))[0].json; started.push(pl);
         st.ledger.push({ run_id: String(5000 + started.length), key: 'cycle:' + pl.cycle_key + ':' + pl.job, mode: CYC.BY_JOB[pl.job].mode, status: 'done', created_at: new Date(T(now) + MIN).toISOString(), settled_at: new Date(T(now) + 2 * MIN).toISOString(), domain: 'techand.ai' });
@@ -713,5 +727,239 @@ module.exports = async (ctx) => {
     check('CY24: the kickoff answers with cycle 0\'s key (the Dubai date) and the dispatcher opens exactly that cycle, skipping AI visibility (already run) and starting backlinks',
       KP.cycle_key === 'cyc:site_techand-ai:' + CYC.local('Asia/Dubai', T(now)).date && P.sites[0].opened && P.sites[0].opened.key === KP.cycle_key && P.sites[0].opened.cycle0
       && P.start.length === 1 && P.start[0].job === 'backlinks' && /already run when tracking was set up/.test((P.job_rows.find(r => r.job === 'ai_visibility') || {}).reason || ''), JSON.stringify({ kp: KP.cycle_key, s: P.sites[0] }));
+  });
+
+  // =====================================================================================================================================
+  // CY25-CY32 (F-ENG 2026-10-20): the production-safety review of the cycle. Each check fails on the code before the fix (the replays of
+  // the review: err.js, blind.js, loadfail.js) and n8n's answers come from harness/fake_n8n_api.js, which answers as n8n 2.41.4 does.
+  // =====================================================================================================================================
+  const T25 = '2026-10-21T14:00:00.000Z', CK25 = 'cyc:site_a-com:2026-10-21', LK25 = (j) => 'cycle:' + CK25 + ':' + j;
+  const row25 = (job, wf, x) => CYC.jobRow({ key: CK25 + ':' + job, site_id: 'site_a-com', cycle_key: CK25, job, workflow_id: wf, status: 'starting', attempts: 1, run_id: 'dsp:9',
+    ledger_key: LK25(job), monthly: true, started_at: T25, updated_at: T25, ...(x || {}) });
+  const W25 = (rows, ledger, execs) => { const w = world({ sites: [SITE('site_a-com', 'a.com'), SITE('site_b-com', 'b.com')], monitors: [ALL_ON('site_a-com'), ALL_ON('site_b-com')],
+    cycles: [{ ...kick('site_a-com', 'a.com', 'America/New_York', '2026-10-21T13:00:00.000Z'), current_key: CK25, last_cycle_at: '2026-10-21T13:01:00.000Z', next_due_at: '2026-10-28T10:00:00.000Z', last_monthly_key: '2026-10' },
+      { ...kick('site_b-com', 'b.com', 'America/New_York', '2026-10-21T13:59:00.000Z') }],
+    jobs: [CYC.jobRow({ key: CK25 + ':cycle', site_id: 'site_a-com', cycle_key: CK25, job: 'cycle', status: 'running', monthly: true, due_at: '2026-10-21T13:00:00.000Z', updated_at: T25 }),
+      CYC.jobRow({ key: CK25 + ':ai_visibility', site_id: 'site_a-com', cycle_key: CK25, job: 'ai_visibility', status: 'done', monthly: true, updated_at: T25 }), ...rows], ledger });
+    w.execs = execs; return w; };
+
+  await guard('CY25 error and unsettled', async () => {
+    const SN = 'CY25 an execution that ended in "error" is failed at once and its reservation released; one that ended "success" with its row still reserved is done, never run again, and alerted once as unsettled money'; reset(); begin(SN); const check = mkCheck(SN);
+    const row = row25('backlinks', 'SEOagentBacklnk1');
+    const L = [{ key: LK25('backlinks'), run_id: '700', status: 'reserved', created_at: ISO(T(T25) + 20000), mode: 'backlinks', domain: 'a.com' }];
+    const ex = (st) => [{ id: '700', workflowId: 'SEOagentBacklnk1', status: st, mode: 'integrated', startedAt: ISO(T(T25) + 10000), stoppedAt: st === 'running' ? null : ISO(T(T25) + 60000) }];
+    const at = (st, mins) => CYC.outcome({ row, ledger: L, runs: runsVia(ex(st), [row], L), claimed: new Set(), now: T(T25) + mins * MIN, cfg: CYC.DEFAULTS });
+    const e5 = at('error', 5), e60 = at('error', 60), e119 = at('error', 119), s5 = at('success', 5), s121 = at('success', 121), r5 = at('running', 5), c5 = at('crashed', 5);
+    check('CY25: "error" with the row reserved is failed at once - at 5, 60 and 119 min, not after the 2-hour stale rule (err.js: it was "running" until 121 min) - with the reservation released',
+      [e5, e60, e119].every(o => o.state === 'failed' && o.release === '700') && /ended with an error/.test(e5.reason) && c5.state === 'failed' && c5.release === '700', JSON.stringify([e5, e60, e119]));
+    check('CY25: "success" with the row still reserved is done (err.js: it was "running", then "failed" at 121 min and run AGAIN), its reservation released, its money named as unsettled',
+      s5.state === 'done' && s121.state === 'done' && s5.release === '700' && s5.unsettled && s5.unsettled.run_id === '700' && s5.unsettled.ledger_key === LK25('backlinks') && /not settled/.test(s5.reason), JSON.stringify([s5, s121]));
+    check('CY25: a reserved row whose run n8n still runs is running - GET /executions/<id> shows a running execution, the default list never does',
+      r5.state === 'running' && fakeN8nApi(ex('running'))(API_BASE + '/executions?workflowId=SEOagentBacklnk1&limit=100').body.data.length === 0 && fakeN8nApi(ex('running'))(API_BASE + '/executions/700').body.status === 'running', JSON.stringify(r5));
+    // through the plan
+    const we = W25([row], L.map(r => ({ ...r })), ex('error')), pe = sweep(we, T(T25) + 5 * MIN);
+    check('CY25: through the plan, the errored run is released (Release Dead Runs) and attempt 2 starts the same sweep - it does not hold a start slot for 2 h',
+      pe.release.some(r => r.run_id === '700') && pe.start.some(s => s.job === 'backlinks' && s.attempts === 2), JSON.stringify({ rel: pe.release, s: pe.start.map(s => [s.job, s.attempts]) }));
+    const ws = W25([row], L.map(r => ({ ...r })), ex('success')), ps = sweep(ws, T(T25) + 5 * MIN), ps2 = sweep(ws, T(T25) + 10 * MIN);
+    check('CY25: through the plan, the finished run is done and never started again, its reservation released, and named in `unsettled` once (the sweep it turned done, not the next)',
+      job(ws, CK25 + ':backlinks').status === 'done' && !ps.start.some(s => s.job === 'backlinks') && !ps2.start.some(s => s.job === 'backlinks') && ps.release.some(r => r.run_id === '700')
+      && ps.unsettled.length === 1 && ps.unsettled[0].domain === 'a.com' && ps.unsettled[0].job === 'backlinks' && ps2.unsettled.length === 0, JSON.stringify({ u: ps.unsettled, u2: ps2.unsettled, st: job(ws, CK25 + ':backlinks') }));
+    mock('Cycle Plan', [{ json: { ...ps, mode: 'start', dry_run: false } }]);
+    const al = await CY_ERR('Cycle Alarm', [{ json: {} }], /1 cycle run\(s\) finished but left their run-ledger row unsettled.*a\.com backlinks \(execution 700/);
+    mock('Cycle Plan', [{ json: { ...ps2, mode: 'start', dry_run: false } }]);
+    const quiet = (await CY_RUN('Cycle Alarm', [{ json: {} }]))[0].json;
+    check('CY25: the generated Cycle Alarm fails the run (the Error Handler\'s ops alert) for the unsettled money, once; the next sweep is quiet', al.ok && quiet.unsettled === 0, al.error);
+  });
+
+  await guard('CY26 blind is bounded', async () => {
+    const SN = 'CY26 a start the reads cannot confirm is blind for at most stale_hours, then failed; the reads are windows on startedAt, a full page is "not confirmable", never "no run"'; reset(); begin(SN); const check = mkCheck(SN);
+    const row = row25('content_cadence', 'SEOagentCadence1');
+    // blind.js: the dispatcher was off; 100 newer finished runs (other websites') fill the old one-page read. The old evidence shape:
+    const old = { SEOagentCadence1: { ok: true, full: true, oldest: ISO(T(T25) + H1), data: Array.from({ length: 100 }, (_, i) => ({ id: String(5000 + i), status: 'success', mode: 'integrated', startedAt: ISO(T(T25) + H1 + i * MIN) })) } };
+    const ob = (now) => CYC.outcome({ row, ledger: [], runs: old, claimed: new Set(), now, cfg: CYC.DEFAULTS });
+    check('CY26: blind.js - a full page newer than the start: blind for at most 2 h, then failed (was blind after 1, 3 and 30 days, holding a start slot for ever)',
+      ob(T(T25) + 30 * MIN).state === 'blind' && ob(T(T25) + D1).state === 'failed' && ob(T(T25) + 30 * D1).state === 'failed' && /treated as failed/.test(ob(T(T25) + D1).reason), JSON.stringify(ob(T(T25) + D1)));
+    // the reads the kit makes now: a window on startedAt per start, the running runs, each reservation by id - 250 a page
+    const R = CYC.execReads({ jobs: [row], ledger: [{ key: LK25('content_cadence'), run_id: '901', status: 'reserved', created_at: ISO(T(T25) + 30000) }], known: WF_IDS, api: API_BASE, cfg: CYC.DEFAULTS });
+    const kinds = R.reads.map(r => r.kind).join();
+    const win = R.reads.find(r => r.kind === 'window') || {};
+    check('CY26: the reads: the running runs (status=running), the reservation by id, and a window startedAfter = start - 5 s, startedBefore = start + confirm + 1 min, limit 250',
+      kinds === 'running,id,window' && /status=running/.test(R.reads[0].url) && /\/executions\/901$/.test(R.reads[1].url) && win.from === ISO(T(T25) - 5000) && win.to === ISO(T(T25) + 11 * MIN)
+      && /startedAfter=2026-10-21T13%3A59%3A55\.000Z&startedBefore=2026-10-21T14%3A11%3A00\.000Z&limit=250$/.test(win.url) && !R.unread.length, JSON.stringify(R));
+    // the same world as blind.js through the faithful API: the 100 later runs are outside the window, so the job is not "blind" - after 10 min with no run it is failed and retried
+    const later = Array.from({ length: 100 }, (_, i) => ({ id: String(5000 + i), workflowId: 'SEOagentCadence1', status: 'success', mode: 'integrated', startedAt: ISO(T(T25) + H1 + i * MIN), stoppedAt: ISO(T(T25) + H1 + i * MIN + 30000) }));
+    const nb = CYC.outcome({ row, ledger: [], runs: runsVia(later, [row], []), claimed: new Set(), now: T(T25) + 3 * D1, cfg: CYC.DEFAULTS });
+    check('CY26: blind.js through the reads: the later runs are outside the start\'s window, so the start is failed (no run appeared in 10 min) and retried - not blind', nb.state === 'failed' && /no run of its workflow appeared/.test(nb.reason), JSON.stringify(nb));
+    // a window that is really full (300 runs of other websites inside the 10 minutes): nextCursor -> not confirmable -> blind, then failed
+    const crowd = Array.from({ length: 300 }, (_, i) => ({ id: String(7000 + i), workflowId: 'SEOagentCadence1', status: 'success', mode: 'trigger', startedAt: ISO(T(T25) + 1000 + i * 1000), stoppedAt: ISO(T(T25) + 2000 + i * 1000) }));
+    const full = runsVia(crowd, [row], []);
+    const fb = (now) => CYC.outcome({ row, ledger: [], runs: full, claimed: new Set(), now, cfg: CYC.DEFAULTS });
+    check('CY26: a full window (n8n answers nextCursor) is incomplete: blind at 30 min, failed after 2 h',
+      (full.SEOagentCadence1.incomplete || []).length === 1 && fb(T(T25) + 30 * MIN).state === 'blind' && fb(T(T25) + 2 * H1 + MIN).state === 'failed', JSON.stringify({ inc: full.SEOagentCadence1.incomplete, s: fb(T(T25) + 30 * MIN) }));
+    const capped = CYC.execReads({ jobs: [row], ledger: [], known: WF_IDS, api: API_BASE, cfg: { ...CYC.DEFAULTS, max_exec_reads: 1 } });
+    const cr = CYC.runsFrom(capped.reads, capped.reads.map(r => fakeN8nApi([])(r.url)), capped.unread);
+    check('CY26: reads beyond max_exec_reads are not made, and the start they covered is blind (bounded), never "no run"', capped.reads.length === 1 && capped.unread.length === 1
+      && CYC.outcome({ row, ledger: [], runs: cr, claimed: new Set(), now: T(T25) + 30 * MIN, cfg: CYC.DEFAULTS }).state === 'blind', JSON.stringify(capped));
+    // and the plan of blind.js: the stuck row no longer holds one of the two in-flight slots for ever
+    const wb = W25([row, row25('link_builder', 'SEOagentLinkBld1')], [], later);
+    const pb = sweep(wb, T(T25) + 3 * D1);
+    check('CY26: blind.js through the plan: the two stuck rows are failed and retried, and b.com\'s cycle 0 gets room', pb.start.length === 2 && job(wb, CK25 + ':content_cadence').attempts >= 1
+      && ['failed', 'starting'].includes(job(wb, CK25 + ':content_cadence').status), JSON.stringify({ s: pb.start.map(s => [s.site_id, s.job, s.attempts]), open: pb.open_jobs }));
+  });
+
+  await guard('CY27 running runs are read', async () => {
+    const SN = 'CY27 n8n\'s public API never lists a running execution unless asked status=running: the dispatcher asks, so a run slow to reserve its ledger row is running, never started twice'; reset(); begin(SN); const check = mkCheck(SN);
+    const T0 = new Date(Date.now() - 12 * MIN).toISOString(), d0 = CYC.local('Asia/Dubai', T(T0)).date, ck = 'cyc:site_techand-ai:' + d0;
+    const jobs = [CYC.jobRow({ key: ck + ':cycle', site_id: 'site_techand-ai', cycle_key: ck, job: 'cycle', status: 'running', monthly: true, due_at: T0, updated_at: T0 }),
+      CYC.jobRow({ key: ck + ':ai_visibility', site_id: 'site_techand-ai', cycle_key: ck, job: 'ai_visibility', workflow_id: 'SEOagentAIVisib1', status: 'starting', attempts: 1, run_id: 'dsp:1', ledger_key: 'cycle:' + ck + ':ai_visibility', monthly: true, started_at: T0, updated_at: T0 })];
+    const cy = { ...TK(T0), current_key: ck, last_cycle_at: T0, next_due_at: new Date(Date.now() + 6 * D1).toISOString(), last_monthly_key: CYC.periodKey(d0, TK(T0).monthly_day) };
+    const execs = [{ id: '991', workflowId: 'SEOagentAIVisib1', status: 'running', mode: 'integrated', startedAt: new Date(T(T0) + 20000).toISOString(), stoppedAt: null }];
+    const api = fakeN8nApi(execs);
+    check('CY27: the faithful API: the default list of the workflow does not show the running run; status=running does', api(API_BASE + '/executions?workflowId=SEOagentAIVisib1&limit=250').body.data.length === 0
+      && api(API_BASE + '/executions?workflowId=SEOagentAIVisib1&status=running&limit=250').body.data.length === 1, '');
+    loadAll({ mode: { mode: 'start' }, cycles: [cy], jobs }); entry(new Date().toISOString());
+    const req = (await CY_RUN('Cycle Exec Requests', [{ json: {} }])).map(i => i.json);
+    mock('Cycle Exec Requests', req.map(json => ({ json }))); mock('Read Executions (Cycle)', req.map(r => ({ json: api(r.url) })));
+    const P = (await CY_RUN('Cycle Plan', [{ json: {} }]))[0].json;
+    const v = (P.sites[0].jobs || []).find(j => j.job === 'ai_visibility') || {};
+    check('CY27: 12 min after the start, with no ledger row yet, the generated nodes see the running run: the job is running, nothing is started again (was: "failed" after 10 min, then a second start)',
+      req.some(r => r.kind === 'running') && v.verdict === 'running' && /execution 991/.test(v.reason) && !P.start.some(s => s.job === 'ai_visibility') && (P.job_rows.find(r => r.job === 'ai_visibility') || {}).status === 'running',
+      JSON.stringify({ req: req.map(r => r.kind), v, start: P.start }));
+    // the old evidence (the default list only) - what the dispatcher read before: no run -> failed -> started twice
+    const oldRuns = { SEOagentAIVisib1: { ok: true, data: api(API_BASE + '/executions?workflowId=SEOagentAIVisib1&limit=100').body.data } };
+    check('CY27: with the default list only (the old read) the same job is "failed" and would start again - the double start this fixes',
+      CYC.outcome({ row: jobs[1], ledger: [], runs: oldRuns, claimed: new Set(), now: Date.now(), cfg: CYC.DEFAULTS }).state === 'failed', '');
+  });
+
+  await guard('CY28 every load refuses', async () => {
+    const SN = 'CY28 a table that could not be read - any of them, the websites\' own settings too - refuses the whole sweep; nothing is skipped with a false reason'; reset(); begin(SN); const check = mkCheck(SN);
+    const site = SITE('site_a-com', 'a.com');
+    const c = { ...kick('site_a-com', 'a.com', 'America/New_York', '2026-10-14T14:00:00.000Z'), current_key: CK25, last_cycle_at: T25, last_monthly_key: '2026-10' };
+    const done = (j) => CYC.jobRow({ key: CK25 + ':' + j, site_id: 'site_a-com', cycle_key: CK25, job: j, status: 'done', updated_at: T25 });
+    const jobs = [CYC.jobRow({ key: CK25 + ':cycle', site_id: 'site_a-com', cycle_key: CK25, job: 'cycle', status: 'running', monthly: false, due_at: T25 }), ...['ai_visibility', 'backlinks', 'rank_tracker', 'site_tracker', 'ai_growth'].map(done)];
+    const err = [{ error: { message: 'SQLITE_BUSY: database is locked' } }];
+    const ok = CYC.plan({ now: T(T25) + H1, mode: 'start', sites: [site], cycles: [c], jobs, monitors: [ALL_ON('site_a-com')], cadence: [{ site_id: 'site_a-com', pages_per_week: 1, status: 'active' }], ladders: [{ domain: 'a.com' }], ladder_settings: [], ledger: [], runs: {} });
+    check('CY28: control - the tables read: the cadence starts (the next job in the cycle)', ok.start.some(s => s.job === 'content_cadence'), JSON.stringify(ok.start));
+    const thrown = (o) => { try { CYC.plan({ now: T(T25) + H1, mode: 'start', sites: [site], cycles: [c], jobs, monitors: [ALL_ON('site_a-com')], cadence: [], ladders: [], ladder_settings: [], ledger: [], runs: {}, ...o }); return ''; } catch (e) { return String(e.message); } };
+    const t1 = thrown({ monitors: err }), t2 = thrown({ cadence: err, ladders: err }), t3 = thrown({ ladder_settings: err }), t4 = thrown({ sites: err });
+    check('CY28: loadfail.js - an error item from Load Monitors / Load Cadence / Load Ladders / Load Ladder Settings / Load Sites makes the kit refuse the sweep (was: content_cadence "skipped: no pages a week are set (0)" and written)',
+      /seo_monitors could not be read \(SQLITE_BUSY/.test(t1) && /seo_cadence could not be read/.test(t2) && /seo_ladder_settings could not be read/.test(t3) && /seo_sites could not be read/.test(t4), JSON.stringify([t1, t2, t3, t4]));
+    for (const n of ['Load Monitors (Cycle)', 'Load Cadence (Cycle)', 'Load Ladders (Cycle)', 'Load Ladder Settings (Cycle)', 'Load Cycle Mode', 'Load Cycle Last']) {
+      loadAll({ mode: { mode: 'start' }, cycles: [TK(new Date().toISOString())] }); mock(n, [{ json: { error: { message: 'Data table not found' } } }]); entry(new Date().toISOString());
+      const r = await CY_ERR('Cycle Plan', [{ json: {} }], /cannot read .*Data table not found.*nothing was started or skipped/);
+      check('CY28: the generated Cycle Plan fails the run (the Error Handler alerts) when ' + n + ' could not be read', r.ok, r.error);
+    }
+  });
+
+  await guard('CY29 the Instance Started door and the claim', async () => {
+    const SN = 'CY29 the Instance Started door stands down after a sweep that just finished, and two sweeps planned from one snapshot start a job once (the row is read before the claim, the claim is a token, read back)'; reset(); begin(SN); const check = mkCheck(SN);
+    const now = new Date().toISOString();
+    loadAll({ mode: { mode: 'start' }, cycles: [TK(now)], last: new Date(Date.now() - 60000).toISOString() }); entry(now, { entry: 'init' });
+    const P1 = (await CY_RUN('Cycle Plan', [{ json: {} }]))[0].json;
+    mock('Cycle Plan', [{ json: P1 }]); const RP = (await CY_RUN('Cycle Report', [{ json: {} }]))[0].json;
+    check('CY29: n8n started 45 s ago and a sweep finished 60 s ago: the Instance Started door plans nothing, writes nothing, starts nothing, and keeps its own record (cycle:last stays the last real sweep)',
+      /stands down/.test(P1.skipped_init || '') && !P1.start.length && !P1.cycle_rows.length && !P1.job_rows.length && RP.key === 'cycle:last_init_skip', JSON.stringify({ s: P1.skipped_init, k: RP.key }));
+    loadAll({ mode: { mode: 'start' }, cycles: [TK(now)], last: new Date(Date.now() - 3 * MIN).toISOString() }); entry(now, { entry: 'init' });
+    const P2 = (await CY_RUN('Cycle Plan', [{ json: {} }]))[0].json;
+    loadAll({ mode: { mode: 'start' }, cycles: [TK(now)], last: new Date(Date.now() - 60000).toISOString() }); entry(now, { entry: 'sweep' });
+    const P3 = (await CY_RUN('Cycle Plan', [{ json: {} }]))[0].json;
+    check('CY29: the door plans as usual when the last sweep is 3 min old, and the 5-minute sweep is never held back by it', !P2.skipped_init && P2.start.length === 1 && !P3.skipped_init && P3.start.length === 1, JSON.stringify([P2.skipped_init, P3.skipped_init]));
+    // two sweeps from one snapshot: A records first; B reads the row before its claim and backs off
+    const s = P3.start[0];
+    mock('Loop Cycle Starts', [{ json: s }]); mock('Read Claim (Cycle)', [{ json: {} }]);
+    const A = (await CY_RUN('Cycle Record Row', [{ json: {} }]))[0].json;
+    mock('Read Claim (Cycle)', [{ json: { id: 3, ...A } }]);
+    const B = (await CY_RUN('Cycle Record Row', [{ json: {} }]))[0].json;
+    check('CY29: sweep A writes its claim; sweep B, planned from the same snapshot (no row), reads A\'s row before its own claim and backs off with the reason - so B can never overwrite A\'s claim after A read it back',
+      A.status === 'starting' && /^dsp:/.test(A.run_id) && B.skip === true && /another dispatcher sweep recorded this job after this sweep planned/.test(B.reason), JSON.stringify([A, B]));
+    const ex = { status: 'failed', run_id: 'dsp:1:a:b', updated_at: '2026-10-21T14:00:00.000Z' };
+    check('CY29: CYC.claimFree - the row the plan wrote is free; one another sweep changed (claim, status or write time) is not; an unreadable row is not',
+      CYC.claimFree(ex, [{ key: 'k', ...ex }]).ok && !CYC.claimFree(ex, [{ key: 'k', ...ex, run_id: 'dsp:2:c:d', status: 'starting' }]).ok && !CYC.claimFree(ex, [{ key: 'k', ...ex, updated_at: '2026-10-21T14:00:01.000Z' }]).ok
+      && !CYC.claimFree(ex, [{}]).ok && !CYC.claimFree(null, [{ key: 'k', status: 'starting' }]).ok && CYC.claimFree(null, [{}]).ok && !CYC.claimFree(null, [{ error: { message: 'x' } }]).ok, '');
+    const t1 = CYC.claimToken('77', '2026-10-21T14:00:00.000Z', 'r1'), t2 = CYC.claimToken('77', '2026-10-21T14:00:00.000Z', 'r2');
+    check('CY29: two claims of one execution at one moment differ (the random part), and the payload starts only on its own exact token', t1 !== t2 && /^dsp:77:/.test(t1), JSON.stringify([t1, t2]));
+    // the whole race through the nodes: both sweeps' payloads - only one starts
+    mock('Cycle Record Row', [{ json: A }]); mock('Save Cycle Record', [{ json: { id: 3, ...A } }]); mock('Cycle Plan', [{ json: { ...P3, now: new Date().toISOString() } }]);
+    const mine = (await CY_RUN('Cycle Payload', [{ json: { id: 3, ...A } }]))[0].json;
+    check('CY29: A reads its own token back and starts the job; B never reached its save', mine.trigger === 'cycle' && !mine.skip, JSON.stringify(mine));
+  });
+
+  await guard('CY30 the app\'s weekday survives a sweep', async () => {
+    const SN = 'CY30 an existing seo_cycles row is updated with the fields the sweep changed only: an app PATCH of the weekday made mid-sweep is never put back'; reset(); begin(SN); const check = mkCheck(SN);
+    const w = world({ sites: [SITE('site_a-com', 'a.com')], monitors: [ALL_OFF('site_a-com')], cycles: [kick('site_a-com', 'a.com', 'America/New_York', '2026-10-21T14:00:00.000Z')] });
+    const p = planW(w, '2026-10-21T14:01:00.000Z');
+    const full = p.cycle_rows[0];
+    check('CY30: the plan names what it changed (current_key, last_cycle_at, last_monthly_key, the due times) and not the weekday', full && full.created === false && full.changed.includes('current_key') && !full.changed.includes('cycle_weekday') && full.cycle_weekday === 3, JSON.stringify(full));
+    // the owner moves the week to Friday while the sweep runs (PATCH .../cycle {weekday: 5})
+    w.cycles[0].cycle_weekday = 5;
+    mock('Cycle Plan', [{ json: p }]);
+    const U = (await CY_RUN('Cycle State Updates', [{ json: {} }])).map(i => i.json), N = (await CY_RUN('Cycle State Rows', [{ json: {} }])).map(i => i.json);
+    for (const r of U) upsert(w.cycles, 'site_id', r);   // Update Cycle Rows: the item's fields, by site_id
+    check('CY30: the generated nodes write no whole row and an update without cycle_weekday: the owner\'s Friday is kept (the old Save Cycle Rows wrote the snapshot\'s Wednesday back)',
+      N[0].skip === true && U.length === 1 && !('cycle_weekday' in U[0]) && w.cycles[0].cycle_weekday === 5 && w.cycles[0].current_key === 'cyc:site_a-com:2026-10-21', JSON.stringify({ U, row: w.cycles[0] }));
+    const p2 = planW(w, '2026-10-21T14:06:00.000Z');
+    check('CY30: the next sweep reads the Friday and moves the next due time to it (at least 3 days after the last cycle)', CYC.weekdayOf(CYC.local('America/New_York', T(p2.sites[0].next_due_at)).date) === 5, JSON.stringify(p2.sites[0].next_due_at));
+    const wa = world({ sites: [SITE('site_z-com', 'z.com')], monitors: [ALL_OFF('site_z-com')], cycles: [] });
+    const pa = planW(wa, '2026-10-21T14:01:00.000Z');
+    mock('Cycle Plan', [{ json: pa }]);
+    const NA = (await CY_RUN('Cycle State Rows', [{ json: {} }])).map(i => i.json), UA = (await CY_RUN('Cycle State Updates', [{ json: {} }])).map(i => i.json);
+    check('CY30: a website adopted this sweep (no row yet) is written whole, with exactly the table\'s columns', NA.length === 1 && JSON.stringify(Object.keys(NA[0])) === JSON.stringify(WIRE.cycles_cols) && UA[0].skip === true, JSON.stringify(NA));
+  });
+
+  await guard('CY31 the dispatcher is published and watched', async () => {
+    const SN = 'CY31 every deploy publishes the dispatcher (plan_only until cycle:mode), and the catch-up\'s watchdog alerts when it is inactive or stopped sweeping, at most every 6 h'; reset(); begin(SN); const check = mkCheck(SN);
+    check('CY31 (build section 140): the dispatcher is in deploy_manifest.json publish, and it plans only until seo_cache cycle:mode says start', WIRE.dispatcher_published === true, JSON.stringify(WIRE.dispatcher_published));
+    let CU2 = null; try { CU2 = kits('Catchup__Dispatcher_Watchdog.js', ['CU']).CU; } catch (e) { CU2 = null; }
+    check('CY31: the catch-up carries the dispatcher watchdog (generated Dispatcher Watchdog node, CU.cycleWatchdog)', !!(CU2 && CU2.cycleWatchdog), '');
+    if (!CU2 || !CU2.cycleWatchdog) return;
+    const now = '2026-10-21T14:00:00.000Z', on = { ok: true, active: true, updatedAt: '2026-10-20T10:00:00.000Z' };
+    const wd = (o) => CU2.cycleWatchdog({ now, entry: 'sweep', wf: on, last: { updated_at: '2026-10-21T13:57:00.000Z' }, state: {}, ...o });
+    const ok = wd({}), off = wd({ wf: { ...on, active: false } }), stale = wd({ last: { updated_at: '2026-10-21T13:30:00.000Z' } });
+    const again = wd({ last: { updated_at: '2026-10-21T13:30:00.000Z' }, state: stale.state, now: '2026-10-21T15:00:00.000Z' }), later = wd({ last: { updated_at: '2026-10-21T13:30:00.000Z' }, state: stale.state, now: '2026-10-21T20:01:00.000Z' });
+    const init = wd({ entry: 'init', wf: { ...on, active: false } }), test = wd({ test: true, wf: { ...on, active: false } }), never = wd({ last: null, wf: { ...on, updatedAt: '2026-10-21T13:00:00.000Z' } }), fresh = wd({ last: null, wf: { ...on, updatedAt: '2026-10-21T13:50:00.000Z' } });
+    check('CY31: active and swept 3 min ago: fine; inactive: alarm; last sweep 30 min ago: alarm; no sweep record 60 min after its last update: alarm; just published 10 min ago: wait',
+      !ok.alarm && ok.verdict === 'sweeping' && off.alarm && /not active/.test(off.reason) && stale.alarm && /30 min ago/.test(stale.reason) && never.alarm && !fresh.alarm, JSON.stringify([ok, off, stale, never, fresh].map(x => [x.verdict, x.alarm])));
+    check('CY31: rate-limited - one alarm, quiet an hour later, again after 6 h; never on the door n8n just started through, never in a test', !again.alarm && later.alarm && !init.alarm && !test.alarm, JSON.stringify([again.reason, later.alarm, init.verdict, test.verdict]));
+    // the generated nodes: the watchdog reads the workflow and cycle:last; Watchdog Alarm fails the run with the reason
+    mock('Catch-up Entry', [{ json: { entry: 'sweep', now: new Date().toISOString(), plan_only: false, dry_run: false } }]);
+    mock('Read Dispatcher Workflow (Watchdog)', [{ json: { statusCode: 200, body: { id: 'SEOagentCycleDsp', active: false, updatedAt: '2026-10-19T10:00:00.000Z' } } }]);
+    mock('Load Cycle Last (Watchdog)', [{ json: { key: 'cycle:last', updated_at: new Date(Date.now() - 2 * H1).toISOString() } }]); mock('Load Catch-up Records', [{ json: {} }]);
+    const D = (await run('Dispatcher Watchdog', [{ json: {} }], { code: 'Catchup__Dispatcher_Watchdog' }))[0].json;
+    mock('Dispatcher Watchdog', [{ json: D }]); mock('Watchdog Result', [{ json: { value: '{}' } }]);
+    let al = null; try { await run('Watchdog Alarm', [{ json: {} }], { code: 'Catchup__Watchdog_Alarm', expectError: true }); } catch (e) {}
+    al = H.results[H.results.length - 1]; const threw = !al.ok && /Cycle Dispatcher .* is not starting any website's cycle/.test(al.error); al.ok = threw; al.error = threw ? 'threw as expected: ' + al.error.slice(0, 90) : 'did not throw the dispatcher alarm: ' + al.error;
+    check('CY31: the generated Dispatcher Watchdog sees an inactive dispatcher with a 2-hour-old sweep, saves its state, and Watchdog Alarm fails the run (the ops alert)', D.alarm === true && D.save === true && D.state_row && D.state_row.key === 'catchup:watchdog:SEOagentCycleDsp' && threw, JSON.stringify(D).slice(0, 300));
+  });
+
+  await guard('CY32 the release step asks the cycle rule', async () => {
+    const SN = 'CY32 the image\'s release step (n8n/deploy/release.mjs) asks CYC.deployWindow read out of the generated dispatcher: a start refuses, a running job is reported, unreadable tables refuse, SEO_DEPLOY_FORCE overrides'; reset(); begin(SN); const check = mkCheck(SN);
+    let G = null; try { G = await import(require('url').pathToFileURL(path.join(__dirname, 'deploy_guard.mjs')).href); } catch (e) { G = null; }
+    check('CY32: deploy_guard.mjs (copied into the harness by build section 140) loads', !!G, 'run build_v4.py first');
+    if (!G) return;
+    const kit = G.kitFromSource(fs.readFileSync(path.join(CD, 'Cycle__Cycle_Plan.js'), 'utf8')).CYC;
+    const tables = (jobs, cycles, o = {}) => async (method, p) => {
+      if (o.status) return { status: o.status, body: { message: 'unauthorized' } };
+      if (p.startsWith('/data-tables?')) return { status: 200, body: { data: o.none ? [] : [{ id: 't1', name: 'seo_cycle_jobs' }, { id: 't2', name: 'seo_cycles' }], nextCursor: null } };
+      const id = p.split('/')[2]; return { status: 200, body: { data: id === 't1' ? jobs : cycles, nextCursor: null } };
+    };
+    const now = Date.parse('2026-10-21T14:00:00.000Z'), said = [];
+    const say = (m) => said.push(m);
+    const starting = [{ key: 'cyc:site_a:2026-10-21:backlinks', job: 'backlinks', status: 'starting', updated_at: '2026-10-21T13:59:00.000Z' }];
+    const running = [{ key: 'cyc:site_b:2026-10-21:audit', job: 'audit', status: 'running', updated_at: '2026-10-21T13:30:00.000Z' }];
+    const r = {
+      idle: await G.deployGuard({ api: tables([], []), CYC: kit, now, say }), fresh: await G.deployGuard({ api: tables([], [], { none: true }), CYC: kit, now, say }),
+      start: await G.deployGuard({ api: tables(starting, []), CYC: kit, now, say }), run: await G.deployGuard({ api: tables(running, []), CYC: kit, now, say }),
+      due: await G.deployGuard({ api: tables([], [{ site_id: 'site_a', domain: 'a.com', status: 'active', next_due_at: '2026-10-21T14:10:00.000Z' }]), CYC: kit, now, say }),
+      unread: await G.deployGuard({ api: tables([], [], { status: 401 }), CYC: kit, now, say }), noUrl: await G.deployGuard({ api: null, CYC: kit, now, say }),
+      forced: await G.deployGuard({ api: tables(starting, []), CYC: kit, now, say, force: 'SEO_DEPLOY_FORCE_MONDAY' }) };
+    check('CY32: idle and a fresh instance release; a job starting or a cycle due in 10 min refuses; a running job releases and is reported with why it is safe',
+      r.idle === null && r.fresh === null && /refusing now - 1 dispatcher job\(s\) starting/.test(r.start || '') && r.run === null && said.some(m => /cyc:site_b:2026-10-21:audit.*the dispatcher sees the dead run/.test(m)) && /due by/.test(r.due || ''), JSON.stringify(r));
+    check('CY32: tables that cannot be read refuse, naming SEO_DEPLOY_GUARD_URL and the first-release SEO_DEPLOY_FORCE; the old SEO_DEPLOY_FORCE_MONDAY overrides loudly',
+      /could not be read \(n8n answered 401/.test(r.unread || '') && /SEO_DEPLOY_GUARD_URL/.test(r.noUrl || '') && /SEO_DEPLOY_FORCE=true/.test(r.unread || '') && r.forced === null && said.some(m => /DEPLOY GUARD OVERRIDDEN \(SEO_DEPLOY_FORCE_MONDAY\)/.test(m)), JSON.stringify(r));
+    for (const c of CASES.cases) {
+      const a = kit.deployWindow({ jobs: c.jobs, cycles: c.cycles, now: CASES.now, minutes: c.minutes || 15 }), b = CYC.deployWindow({ jobs: c.jobs, cycles: c.cycles, now: CASES.now, minutes: c.minutes || 15 });
+      if (JSON.stringify(a) !== JSON.stringify(b)) { check('CY32: the release step\'s rule is the dispatcher\'s on "' + c.name + '"', false, JSON.stringify([a, b])); return; }
+    }
+    check('CY32: the release step\'s rule (read out of the generated workflow) answers every shared case exactly as the kit does', true, '');
   });
 };
