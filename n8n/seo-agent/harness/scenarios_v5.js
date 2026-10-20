@@ -19424,6 +19424,7 @@ await guard('SK1 Site Kickoff: the first weekly cycle on the day tracking starts
 });
 await require('./scenarios_cycle')({ H, run, mock, store, guard, reset, begin });   // CY1-CY24 (2026-10-19): the per-website cycle - kit, Cycle Dispatcher nodes, kickoff row, deploy guard
 await require('./scenarios_integration')({ H, run, mock, store, guard, reset, begin });   // INT1-INT7 (2026-10-19, E4): one client's life through every agent's generated nodes (the cross-agent contract test)
+await require('./scenarios_reh')({ H, run, mock, store, guard, reset, begin });   // REH1-REH6 (F-REH 2026-10-20): the real-credit rehearsal's defects - ghost reservations, Track's parent, cycle 0's skips, service fit, plain notes
 
 H.report();
 })();
