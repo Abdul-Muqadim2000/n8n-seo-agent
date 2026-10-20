@@ -506,6 +506,19 @@ export const callbackCostCountsForRun = (stage: string, body: Record<string, unk
  * (`{stage:'rejected', status:'rejected', error, request_id}`), so the customer reads why instead of waiting for a report that never
  * comes. A final stage completes it; anything else marks an accepted run as running. A completed run is never reopened.
  */
+/**
+ * Rehearsal 2026-10-20 (real engine): a ladder plan that came back with nothing because Google's live results could not be read
+ * (`planned: false`, `refusal.reason: 'serp_unchecked'`, after the engine's three attempts) delivered nothing the client can use. The
+ * client is not charged for the provider's outage. Returns the customer sentence, or null when the run delivered something.
+ */
+export function noResultOf(stage: string, body: Record<string, unknown>): string | null {
+  if (stage !== 'ladder_plan') return null;
+  const planned = !(body.planned === false || body.planned === 'false');
+  const refusal = body.refusal && typeof body.refusal === 'object' ? (body.refusal as { reason?: unknown }) : null;
+  if (planned || !refusal || refusal.reason !== 'serp_unchecked') return null;
+  return "Google's results could not be read right now (our search data provider did not answer), so nothing was planned and no credits were used. Please try again later.";
+}
+
 export function runOutcome(
   runStatus: string,
   finalStages: readonly string[],
@@ -517,7 +530,13 @@ export function runOutcome(
     const why = typeof body.error === 'string' && body.error.trim() ? body.error.trim() : typeof body.validation_error === 'string' && body.validation_error.trim() ? body.validation_error.trim() : 'Rejected by the SEO engine';
     return { status: 'failed', error: why, completedAt: new Date() };
   }
-  if (finalStages.includes(stage)) return runStatus === 'completed' ? {} : { status: 'completed', completedAt: new Date(), error: null };
+  if (finalStages.includes(stage)) {
+    // rehearsal 2026-10-20: a final answer that delivered nothing because the external data could not be read ends the run as failed,
+    // so the cost sync charges it nothing (and returns what it already took, step 6); the engine's own spend stays recorded
+    const noResult = noResultOf(stage, body);
+    if (noResult) return runStatus === 'failed' ? {} : { status: 'failed', error: noResult, completedAt: new Date() };
+    return runStatus === 'completed' ? {} : { status: 'completed', completedAt: new Date(), error: null };
+  }
   if (runStatus === 'accepted' || runStatus === 'submitting') return { status: 'running' };
   return {};
 }
