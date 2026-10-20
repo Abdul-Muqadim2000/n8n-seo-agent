@@ -493,6 +493,11 @@ export const sites = pgTable(
     uniqueIndex('sites_org_domain_idx').on(t.orgId, t.domain),
     // a domain's data (n8n Data Tables are keyed by domain) belongs to the one company that verified it
     uniqueIndex('sites_verified_domain_idx').on(t.domain).where(sql`${t.verifiedAt} is not null`),
+    // one engine site id, one verified website: `foo.co.uk` and `foo-co.uk` both become `site_foo-co-uk` in the engine (shared n8nSiteId),
+    // so a second verified website with the same id would read and write the first one's rows (services/engineSite.ts)
+    uniqueIndex('sites_verified_engine_id_idx')
+      .on(sql`('site_' || regexp_replace(${t.domain}, '[^a-z0-9]+', '-', 'g'))`)
+      .where(sql`${t.verifiedAt} is not null`),
   ],
 );
 
@@ -640,6 +645,8 @@ export const keywordChecks = pgTable(
     /** the engine's answer (snake_case, as n8n sent it) */
     result: jsonb('result').$type<Record<string, unknown>>().notNull().default({}),
     costUsd: doublePrecision('cost_usd').notNull().default(0),
+    /** started by the system (the queued-ladder re-check), not by a person: autopilot spend, never the person's on-demand spend */
+    automatic: boolean('automatic').notNull().default(false),
     createdAt: created(),
   },
   (t) => [index('keyword_checks_org_created_idx').on(t.orgId, t.createdAt), index('keyword_checks_site_keyword_idx').on(t.siteId, t.keyword, t.country)],
@@ -1514,7 +1521,8 @@ export const keywordProposals = pgTable(
     decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
   },
   (t) => [
-    uniqueIndex('keyword_proposals_site_keyword_idx').on(t.siteId, t.keywordNorm),
+    // a keyword is proposed once per website; a proposal whose start failed does not count, so the keyword can be proposed again
+    uniqueIndex('keyword_proposals_site_keyword_idx').on(t.siteId, t.keywordNorm).where(sql`${t.status} <> 'failed'`),
     uniqueIndex('keyword_proposals_site_open_idx').on(t.siteId).where(sql`${t.status} in ('pending', 'starting')`),
     index('keyword_proposals_due_idx').on(t.status, t.startAt),
   ],

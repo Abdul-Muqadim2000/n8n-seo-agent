@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LadderCard, RecommendedKeyword, RecommendedKeywords } from '@seo/shared';
-import { activeAutoLadders, announcementMail, proposalDecision, type ProposalState } from '../src/services/autoStart';
+import { activeAutoLadders, announcementMail, localMoment, MAX_FAILED_STARTS, proposalDecision, proposalDetails, proposedBeforeOf, type ProposalState } from '../src/services/autoStart';
 
 // The next keyword, proposed by the system (SCHEDULING_KEYWORDS_PLAN.md §5.6 / §5.7): which keyword is proposed, when nothing is, and when
 // the research is refreshed first. The decision is pure (every input is passed in); the store, the timer and the client's decisions run
@@ -87,14 +87,16 @@ describe('keyword proposals: the decision', () => {
     }
   });
 
-  it('the announcement e-mail: plain words, the date it starts, the credits a page; no dollar figure', () => {
+  it('the announcement e-mail: plain words, the date it starts in the website\'s own time zone, the credits a page; no dollar figure', () => {
     const m = announcementMail({
-      site: { domain: 'techand.ai' },
+      site: { domain: 'techand.ai', timezone: 'Asia/Dubai' },
       p: { id: 'p', siteId: 's', keyword: 'crm consulting', status: 'pending', startAt: '2026-10-22T12:00:00.000Z', level: 3, why: 'You offer CRM implementation.', occasion: 'room', searches: 320, difficulty: 'easy', chance: 'Good chance', planType: 'direct', months: '2-4', creditsPerPage: 51, runId: null, swappedFor: null, note: '', createdAt: '', decidedAt: null, decidedBy: null },
       url: 'https://app.test/x',
     });
     expect(m.subject).toBe('We will start "crm consulting" for techand.ai');
-    expect(m.lines.join(' ')).toMatch(/starts on Thu, 22 Oct 2026 12:00 UTC unless you change it/);
+    // 12:00 UTC is 16:00 in Dubai: the owner reads the time of their own website, never UTC
+    expect(m.lines.join(' ')).toMatch(/starts on Thursday 22 October at 16:00 \(Dubai time\) unless you change it/);
+    expect(m.lines.join(' ')).not.toMatch(/UTC/);
     expect(m.lines.join(' ')).toMatch(/about 51 credits/);
     expect(m.details).toEqual([
       { label: 'Keyword', value: 'crm consulting' },
@@ -103,5 +105,31 @@ describe('keyword proposals: the decision', () => {
       { label: 'Time to rank', value: '2-4 months' },
     ]);
     expect(JSON.stringify(m)).not.toMatch(/\$|USD|—|…/);
+  });
+});
+
+describe('keyword proposals: the production-safety fixes (2026-10-20)', () => {
+  it('the start time in the website\'s zone, across time zones and daylight saving; an unknown zone falls back to the engine\'s', () => {
+    expect(localMoment('2026-10-22T12:00:00.000Z', 'America/New_York')).toBe('Thursday 22 October at 08:00 (New York time)');
+    expect(localMoment('2026-11-05T12:00:00.000Z', 'America/New_York')).toBe('Thursday 5 November at 07:00 (New York time)');
+    expect(localMoment('2026-10-22T12:00:00.000Z', 'UTC')).toBe('Thursday 22 October at 12:00 (UTC)');
+    expect(localMoment('2026-10-22T12:00:00.000Z', 'Mars/Olympus')).toBe('Thursday 22 October at 08:00 (New York time)');
+  });
+
+  it('a keyword whose start failed can be proposed again, until it failed MAX_FAILED_STARTS times; any other outcome is final', () => {
+    expect(proposedBeforeOf([{ k: 'CRM consulting', status: 'failed' }])).toEqual([]);
+    expect(proposedBeforeOf(Array.from({ length: MAX_FAILED_STARTS }, () => ({ k: 'crm consulting', status: 'failed' })))).toEqual(['crm consulting']);
+    expect(proposedBeforeOf([{ k: 'a', status: 'skipped' }, { k: 'b', status: 'started' }, { k: 'c', status: 'approved' }, { k: 'd', status: 'pending' }]).sort()).toEqual(['a', 'b', 'c', 'd']);
+    // the decision then proposes it again
+    const d = proposalDecision(state({ proposedBefore: proposedBeforeOf([{ k: 'odoo partner uae', status: 'failed' }]) }));
+    expect(d).toMatchObject({ action: 'propose', pick: { keyword: 'odoo partner uae' } });
+  });
+
+  it('every proposal carries the keys the app reads back (volume, difficultyForYou, planType, months, why), null when unknown', () => {
+    const full = proposalDetails(rec('odoo partner uae'), 'Buyers compare partners.', 'rep-1');
+    expect(full).toMatchObject({ volume: 200, difficultyForYou: 'easy', planType: 'direct', months: '2-4', why: 'Buyers compare partners.', reportId: 'rep-1' });
+    const bare = proposalDetails({ keyword: 'x' } as Partial<RecommendedKeyword>, '', null);
+    for (const k of ['volume', 'difficultyForYou', 'planType', 'months', 'why']) expect(Object.keys(JSON.parse(JSON.stringify(bare)))).toContain(k);
+    expect([bare.volume, bare.difficultyForYou, bare.planType]).toEqual([null, null, null]);
   });
 });

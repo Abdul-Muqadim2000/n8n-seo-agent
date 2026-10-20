@@ -72,7 +72,7 @@ export async function ladderRoutes(app: FastifyInstance) {
   app.patch('/api/orgs/:orgId/sites/:siteId/automation', limit, async (req): Promise<SiteAutomation> => {
     const a = await guard(req);
     const body = parse(siteAutomationSchema, req.body);
-    const out = await updateSiteAutomation(a.site, body);
+    const out = await updateSiteAutomation(a.site, body, req.log);
     if (body.autopilotLevel != null && body.autopilotLevel !== a.site.autopilotLevel) {
       await mirrorAutopilotLevel(a.site, body.autopilotLevel);
       invalidateForecast(a.org.id);

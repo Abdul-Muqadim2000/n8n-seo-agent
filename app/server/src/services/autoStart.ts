@@ -2,6 +2,8 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, lte, sql } from 'dr
 import {
   CHANCE_WORDS,
   DEFAULT_AUTOPILOT_LEVEL,
+  ENGINE_TIMEZONE,
+  isValidTimezone,
   PROPOSAL_WAIT_HOURS,
   RECOMMENDATIONS_MAX_AGE_DAYS,
   cycleNorm,
@@ -37,6 +39,7 @@ import { assessKeyword, recommendedKeywords } from './keywordChecks';
 import { pipelineData } from './pipeline';
 import { baseUrlFor, senderFor } from './portalMail';
 import { createRun } from './runs';
+import { ownerOf } from './companyOwner';
 
 // The next keyword, proposed by the system (SCHEDULING_KEYWORDS_PLAN.md §5.6 / §5.7, owner decisions D5 / D13 / D14 / D15). "Choose
 // keywords for me" became exactly this: when a website has room (fewer active ladders than its limit and none queued: a ladder was won,
@@ -63,6 +66,27 @@ export const PROPOSALS = {
 } as const;
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+/** a keyword whose start failed this many times is not proposed again (a refusal that repeats is not worth another announcement) */
+export const MAX_FAILED_STARTS = 2;
+
+/**
+ * The keywords not to propose again (pure): every keyword proposed before, except one whose starts only failed (the engine did not take
+ * it, so the client never got it), until it failed MAX_FAILED_STARTS times.
+ */
+export function proposedBeforeOf(rows: { k: string; status: string }[]): string[] {
+  const failed = new Map<string, number>();
+  const kept = new Set<string>();
+  for (const r of rows) {
+    const k = cycleNorm(r.k);
+    if (r.status === 'failed') failed.set(k, (failed.get(k) ?? 0) + 1);
+    else kept.add(k);
+  }
+  for (const [k, n] of failed) if (n >= MAX_FAILED_STARTS) kept.add(k);
+  return [...kept];
+}
+
+/** The note of a proposal whose ladder run the engine did not take (the keyword can be proposed again). */
+const failedNote = (run: Pick<RunRow, 'error'>) => `The ladder did not start: ${customerError(run.error) ?? 'the SEO engine did not accept it'}. It can be proposed again.`;
 const OPEN: KeywordProposalStatus[] = ['pending'];
 
 /** Auto ladders that still have pages to write and are not paused, won or queued (the ones the weekly pages go to). */
@@ -185,6 +209,27 @@ export async function listProposals(site: SiteRow): Promise<KeywordProposalList>
   };
 }
 
+/**
+ * The details every proposal carries (pure): the keys the app reads back (toProposal: `volume`, `difficultyForYou`, `planType`, `months`,
+ * `why`) are always present, null or '' when the research did not say, so no writer can leave one out.
+ */
+export function proposalDetails(pick: Partial<RecommendedKeyword>, why: string, reportId: string | null): Record<string, unknown> {
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const str = (v: unknown) => (typeof v === 'string' ? v : '');
+  return {
+    volume: num(pick.volume),
+    kd: num(pick.kd),
+    difficultyForYou: typeof pick.difficultyForYou === 'string' ? pick.difficultyForYou : null,
+    planType: typeof pick.planType === 'string' ? pick.planType : null,
+    months: str(pick.months),
+    label: str(pick.label),
+    why,
+    source: str(pick.source),
+    pageType: str(pick.pageType),
+    reportId,
+  };
+}
+
 /** Records a proposal; null when the website already has an open one or this keyword was proposed before (the unique indexes). */
 export async function insertProposal(o: { org: OrgRow; site: SiteRow; pick: RecommendedKeyword; occasion: 'room' | 'won' | 'done'; why: string; level: AutopilotLevel; now: number; reportId: string | null }): Promise<KeywordProposalRow | null> {
   const startAt = o.level === 3 ? new Date(o.now + PROPOSAL_WAIT_HOURS * 3_600_000) : null;
@@ -195,7 +240,7 @@ export async function insertProposal(o: { org: OrgRow; site: SiteRow; pick: Reco
       siteId: o.site.id,
       keyword: o.pick.keyword,
       keywordNorm: cycleNorm(o.pick.keyword),
-      details: { volume: o.pick.volume, kd: o.pick.kd, difficultyForYou: o.pick.difficultyForYou, planType: o.pick.planType, months: o.pick.months, label: o.pick.label, why: o.why, source: o.pick.source, pageType: o.pick.pageType, reportId: o.reportId },
+      details: proposalDetails(o.pick, o.why, o.reportId),
       status: 'pending',
       level: o.level,
       occasion: o.occasion,
@@ -219,16 +264,7 @@ export interface ProposalDeps {
   announce: (org: OrgRow, site: SiteRow, p: KeywordProposalRow, log: Log) => Promise<void>;
 }
 
-async function ownerOf(orgId: string): Promise<UserRow | null> {
-  const r = await db
-    .select({ u: schema.users })
-    .from(schema.memberships)
-    .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
-    .where(and(eq(schema.memberships.orgId, orgId), eq(schema.memberships.role, 'owner'), isNull(schema.memberships.deactivatedAt)))
-    .orderBy(asc(schema.memberships.createdAt))
-    .limit(1);
-  return r[0]?.u ?? null;
-}
+export { ownerOf };
 
 async function fitsOf(siteId: string): Promise<Map<string, number | null>> {
   const m = new Map<string, number | null>();
@@ -241,8 +277,18 @@ async function fitsOf(siteId: string): Promise<Map<string, number | null>> {
 }
 
 /** The e-mail of a level-3 announcement (pure). */
-export function announcementMail(o: { site: Pick<SiteRow, 'domain'>; p: KeywordProposalView; url: string }): { subject: string; title: string; lines: string[]; details: { label: string; value: string }[] } {
-  const when = o.p.startAt ? new Date(o.p.startAt).toUTCString().replace(/:\d\d GMT$/, ' UTC') : 'in two days';
+/** A moment in the website's own time zone, in plain words: "Thursday 22 October at 14:00 (Dubai time)". */
+export function localMoment(at: string | Date, timezone: string): string {
+  const t = new Date(at);
+  const tz = isValidTimezone(timezone) ? timezone : ENGINE_TIMEZONE;
+  const part = (type: string) => new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(t).find((p) => p.type === type)?.value ?? '';
+  const place = /^(UTC|Etc\/UTC|Etc\/GMT)$/.test(tz) ? 'UTC' : `${tz.split('/').pop()!.replace(/_/g, ' ')} time`;
+  return `${part('weekday')} ${part('day')} ${part('month')} at ${part('hour')}:${part('minute')} (${place})`;
+}
+
+export function announcementMail(o: { site: Pick<SiteRow, 'domain' | 'timezone'>; p: KeywordProposalView; url: string }): { subject: string; title: string; lines: string[]; details: { label: string; value: string }[] } {
+  // the website's own zone (the one its weekly cycle runs in), never UTC
+  const when = o.p.startAt ? localMoment(o.p.startAt, o.site.timezone) : 'in two days';
   return {
     subject: `We will start "${o.p.keyword}" for ${o.site.domain}`,
     title: `Your next keyword: "${o.p.keyword}"`,
@@ -318,7 +364,7 @@ export async function proposeForSite(org: OrgRow, site: SiteRow, deps: ProposalD
     cards: data.ladderCards,
     ladders: data.ladders.map((l) => ({ id: l.id, head: l.head, keywords: l.keywords ?? l.planned.map((p) => p.keyword) })),
     recommended,
-    proposedBefore: proposed.map((p) => p.k),
+    proposedBefore: proposedBeforeOf(proposed),
     open: proposed.some((p) => p.status === 'pending' || p.status === 'starting'),
     ladderRunActive: data.activeRuns.some((r) => r.mode === 'ladder'),
     researchRunning: data.activeRuns.some((r) => r.mode === 'discover'),
@@ -378,7 +424,8 @@ export async function startDueProposals(log: Log, deps: ProposalDeps = defaultDe
   for (const p of stale) {
     const run = await db.query.runs.findFirst({ where: and(eq(schema.runs.siteId, p.siteId), sql`${schema.runs.input}->>'proposalId' = ${p.id}`) });
     const by = String((run?.input as Record<string, unknown> | undefined)?.chosenBy ?? '');
-    if (run) await finish(p.id, { status: by === 'client_picked' ? 'approved' : by === 'client_typed' ? 'swapped' : 'started', runId: run.id, ...(by === 'client_typed' ? { swappedFor: String((run.input as Record<string, unknown>).keyword ?? '') } : {}) });
+    if (run && run.status === 'failed') await finish(p.id, { status: 'failed', runId: run.id, note: failedNote(run) });
+    else if (run) await finish(p.id, { status: by === 'client_picked' ? 'approved' : by === 'client_typed' ? 'swapped' : 'started', runId: run.id, ...(by === 'client_typed' ? { swappedFor: String((run.input as Record<string, unknown>).keyword ?? '') } : {}) });
     else if (!p.decidedAt) await release(p.id);
   }
   if (!config.autoStartLadders) return 0;
@@ -414,7 +461,7 @@ export async function startDueProposals(log: Log, deps: ProposalDeps = defaultDe
       }
       try {
         const run = await deps.start({ user: owner, org, role: 'owner' }, parsed.data, { startedBy: 'auto', proposalId: p.id });
-        await finish(p.id, run.status === 'failed' ? { status: 'failed', runId: run.id, note: customerError(run.error) ?? 'The SEO engine did not accept it' } : { status: 'started', runId: run.id, note: '' });
+        await finish(p.id, run.status === 'failed' ? { status: 'failed', runId: run.id, note: failedNote(run) } : { status: 'started', runId: run.id, note: '' });
         if (run.status !== 'failed') started++;
         log.info({ site: site.domain, keyword: p.keyword, run: run.id }, 'announced keyword started');
       } catch (err) {
@@ -487,7 +534,12 @@ export async function approveProposal(a: OrgAccess & { site: SiteRow }, id: stri
   if (!c) throw conflict('This proposal was decided a moment ago.', 'proposal_decided');
   try {
     const run = await deps.start(a, parsed.data, { proposalId: p.id });
-    const [row] = await db.update(schema.keywordProposals).set({ status: 'approved', runId: run.id, decidedAt: new Date(), decidedBy: a.user.id, note: '' }).where(eq(schema.keywordProposals.id, p.id)).returning();
+    // a run the engine did not take is a failure, not a decision: the proposal says why, and the keyword can be proposed again
+    const [row] = await db
+      .update(schema.keywordProposals)
+      .set(run.status === 'failed' ? { status: 'failed', runId: run.id, decidedAt: new Date(), decidedBy: a.user.id, note: failedNote(run) } : { status: 'approved', runId: run.id, decidedAt: new Date(), decidedBy: a.user.id, note: '' })
+      .where(eq(schema.keywordProposals.id, p.id))
+      .returning();
     return { proposal: toProposal(row, a.user.email), run };
   } catch (err) {
     await release(p.id);
@@ -530,7 +582,11 @@ export async function swapProposal(a: OrgAccess & { site: SiteRow }, id: string,
   if (!c) throw conflict('This proposal was decided a moment ago.', 'proposal_decided');
   try {
     const run = await deps.start(a, parsed.data, { proposalId: p.id });
-    const [row] = await db.update(schema.keywordProposals).set({ status: 'swapped', swappedFor: k, runId: run.id, decidedAt: new Date(), decidedBy: a.user.id, note: '' }).where(eq(schema.keywordProposals.id, p.id)).returning();
+    const [row] = await db
+      .update(schema.keywordProposals)
+      .set(run.status === 'failed' ? { status: 'failed', swappedFor: k, runId: run.id, decidedAt: new Date(), decidedBy: a.user.id, note: failedNote(run) } : { status: 'swapped', swappedFor: k, runId: run.id, decidedAt: new Date(), decidedBy: a.user.id, note: '' })
+      .where(eq(schema.keywordProposals.id, p.id))
+      .returning();
     return { proposal: toProposal(row, a.user.email), run };
   } catch (err) {
     await release(p.id);
@@ -550,7 +606,8 @@ export async function relevelProposals(org: OrgRow, site: SiteRow, level: Autopi
     else if (!p.startAt) {
       const [row] = await db
         .update(schema.keywordProposals)
-        .set({ level, startAt: new Date(now + PROPOSAL_WAIT_HOURS * 3_600_000) })
+        // a new start time is a new announcement: its e-mail goes out again (announce claims emailed_at), with the new time
+        .set({ level, startAt: new Date(now + PROPOSAL_WAIT_HOURS * 3_600_000), emailedAt: null })
         .where(and(eq(schema.keywordProposals.id, p.id), eq(schema.keywordProposals.status, 'pending')))
         .returning();
       if (row) await deps.announce(org, site, row, log).catch((err) => log.warn({ err: String(err) }, 'announcement e-mail failed'));

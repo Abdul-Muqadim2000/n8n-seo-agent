@@ -559,9 +559,9 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
     }
 
     // ---- 4. keyword checks ----
-    const checks = await execRows<{ id: string; org_id: string; site_id: string | null; user_id: string | null; cost_usd: number; created_at: string; reported: boolean; domain: string | null }>(
+    const checks = await execRows<{ id: string; org_id: string; site_id: string | null; user_id: string | null; cost_usd: number; created_at: string; reported: boolean; domain: string | null; automatic: boolean }>(
       tx,
-      sql`select k.id, k.org_id, k.site_id, k.user_id, k.cost_usd, k.created_at, (k.result ? 'cost_usd') as reported, s.domain
+      sql`select k.id, k.org_id, k.site_id, k.user_id, k.cost_usd, k.created_at, (k.result ? 'cost_usd') as reported, s.domain, k.automatic
           from ${schema.keywordChecks} k left join ${schema.sites} s on s.id = k.site_id
           where k.status = 'done' and not exists (select 1 from ${schema.costEvents} e where e.event_key = 'kc:' || k.id::text)
           limit 5000`,
@@ -578,7 +578,8 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
           userId: k.user_id,
           domain: k.domain ?? '',
           mode: 'keyword_check',
-          origin: 'app',
+          // a check the system started (the queued-ladder re-check) is the website's autopilot spend, not the person's on-demand spend
+          origin: k.automatic === true ? 'schedule' : 'app',
           ...c,
           startedAt: date(k.created_at),
           occurredAt: date(k.created_at) ?? new Date(),
