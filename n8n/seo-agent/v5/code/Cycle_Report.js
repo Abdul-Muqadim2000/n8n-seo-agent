@@ -9,8 +9,11 @@ const skipped = items.filter(r => r && r.skip && r.reason).map(r => ({ key: r.ke
 const summary = { entry: p.entry, now: p.now, mode: p.mode, configured_mode: p.configured_mode, mode_reason: p.mode_reason, dry_run: p.dry_run, clock_moved: !!p.clock_moved,
   note: p.note || '', engine_tz: p.engine_tz, counts: p.counts, basis: p.basis, open_jobs: p.open_jobs, live_runs: p.live_runs, room: p.room, adopted: p.adopted,
   started: [...started, ...skipped], would_start: p.would ? (p.would.start || []).map(s => ({ key: s.key, why: s.why })) : [], gave_up: p.gave_up || [],
+  unsettled: p.unsettled || [], skipped_init: p.skipped_init || '', exec_reads: p.exec_reads || null,
   sites: (p.sites || []).map(s => ({ site_id: s.site_id, domain: s.domain, verdict: s.verdict, reason: s.reason, cycle_key: s.cycle_key, next_due_at: s.next_due_at,
     next_preview_at: s.next_preview_at, monthly: s.monthly, cycle0: s.cycle0, opened: s.opened || null, skipped_cycle: s.skipped_cycle || null,
     jobs: (s.jobs || []).map(j => ({ job: j.job, verdict: j.verdict, reason: String(j.reason || '').slice(0, 160) })) })) };
 const test = p.dry_run || p.plan_only_input || p.clock_moved;
-return [{ json: { key: test ? 'cycle:last_test' : 'cycle:last', kind: 'cycle', site_id: '', value: JSON.stringify(summary).slice(0, 30000), updated_at: new Date().toISOString() } }];
+// F-ENG (2026-10-20): an Instance Started door that stood down (a sweep had just finished) keeps its own record, so cycle:last stays the
+// last real sweep - the catch-up's watchdog reads its age to know the dispatcher is alive
+return [{ json: { key: test ? 'cycle:last_test' : p.skipped_init ? 'cycle:last_init_skip' : 'cycle:last', kind: 'cycle', site_id: '', value: JSON.stringify(summary).slice(0, 30000), updated_at: new Date().toISOString() } }];

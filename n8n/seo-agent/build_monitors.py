@@ -450,6 +450,12 @@ Q.node('Save AI Daily', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_DAILY_TABL
 Q.node('Prune Pulse Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWERS_TABLE, [('run_kind', 'eq', 'pulse'), ('checked_at', 'lt', SINCE(21))]), at(22, 0), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
 Q.code('Pulse Alerts', "// Sites with something to report (an alert, or an on-demand run): the e-mail and the callback (stage ai_pulse). Quiet days send nothing.\nconst out = $('Pulse Metrics').all().map(i => i.json).filter(m => (m.alerts || []).length || m.on_demand).map(m => { const { daily_row, answer_rows, ...rest } = m; return { json: rest }; });\nreturn out.length ? out : [{ json: { skip: true } }];", at(23, 0))
 Q.iff('Any Pulse Alerts?', '{{ !$json.skip }}', at(24, 0)); Q.deliver('Pulse', at(25, -1), None)
+# F-ENG (2026-10-20): every website gets its pulse - the websites one execution cannot hold (15, or one morning's request limit) are handed to the
+# next part of the chain, started after this part's answers and daily rows are saved (one part at a time: the run guard keeps the pulse's
+# mode-only twin rule, and `parent_run_id` keeps it from taking this execution's own reservation for a twin)
+Q.code('Next Pulse Part', "// F-ENG (2026-10-20): the next part of this morning's pulse (Pulse Plan's `pulse_next`: the websites after the last one this part took),\n// started through the workflow's own Manual Run. None when every website was served.\nconst n = ($('AI Plan').first().json || {}).pulse_next;\nreturn n && n.pulse_part ? [{ json: n }] : [{ json: { skip: true } }];", at(23, 2))
+Q.iff('Any Next Pulse Part?', '{{ !$json.skip }}', at(24, 2))
+Q.node('Start Next Pulse Part', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentAIPulse1'}, 'mode': 'once', 'options': {'waitForSubWorkflow': False}}, at(25, 2), onError='continueRegularOutput')
 Q.chain('Daily Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Load AI Daily', 'Load Cache (AI)', 'Load Cycles', 'AI Plan', 'AI Run Resume', 'Any Run To Resume?'); Q.link('Manual Run', ens[0][0])
 Q.link('Any Run To Resume?', 'Resume AI Run', 0); Q.link('Any Run To Resume?', 'Any Sites (Pulse)?', 1); Q.link('Resume AI Run', 'Any Sites (Pulse)?')
 Q.link('Any Sites (Pulse)?', 'AI Requests', 0); Q.link('Any Sites (Pulse)?', 'Nothing To Do (Pulse)', 1)
@@ -457,7 +463,8 @@ Q.chain('AI Requests', 'Any AI Requests?'); Q.link('Any AI Requests?', 'Run AI R
 Q.ai_retry_gate(at(13, 1), 'Parse AI Answers')   # D19: the pulse re-sends a failed task once too (its figures are the week's samples)
 Q.chain('Parse AI Answers', 'Pulse Metrics', 'Pulse Answer Rows', 'Any Pulse Answers?'); Q.link('Any Pulse Answers?', 'Save AI Answers', 0); Q.link('Any Pulse Answers?', 'AI Daily Rows', 1); Q.link('Save AI Answers', 'AI Daily Rows')
 Q.chain('AI Daily Rows', 'Any Daily Rows?'); Q.link('Any Daily Rows?', 'Save AI Daily', 0); Q.link('Any Daily Rows?', 'Prune Pulse Answers', 1); Q.link('Save AI Daily', 'Prune Pulse Answers')
-Q.chain('Prune Pulse Answers', 'Pulse Alerts', 'Any Pulse Alerts?'); Q.link('Any Pulse Alerts?', 'Has Email (Pulse)?', 0); Q.link('Any Pulse Alerts?', 'Has Callback (Pulse)?', 0)
+Q.chain('Prune Pulse Answers', 'Next Pulse Part', 'Any Next Pulse Part?'); Q.link('Any Next Pulse Part?', 'Start Next Pulse Part', 0); Q.link('Any Next Pulse Part?', 'Pulse Alerts', 1); Q.link('Start Next Pulse Part', 'Pulse Alerts')
+Q.chain('Pulse Alerts', 'Any Pulse Alerts?'); Q.link('Any Pulse Alerts?', 'Has Email (Pulse)?', 0); Q.link('Any Pulse Alerts?', 'Has Callback (Pulse)?', 0)
 Q.run_ledger('ai_pulse', 'Pulse', 'AI Plan', ['Pulse Alerts'], at(10, 4), measured='Pulse Metrics')
 LEDGER_WIRING[Q.name]['daily_upsert_keys'] = list(AI_DAILY_KEYS)   # R95: the harness (S117) replays the upsert with the keys the node uses
 Q.sticky(f"""## SEO Agent — AI Pulse (v4.9)
