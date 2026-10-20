@@ -63,8 +63,11 @@ export async function recommendedWithStatus(org: OrgRow, site: SiteRow, now = Da
   return { ...rec, status, startedAt: run && status === 'running' ? run.createdAt.toISOString() : null, runId: run && status === 'running' ? run.id : null, freeResearch: freeResearchAllowed(site, !!grant, now) };
 }
 
-const inputOf = (site: SiteRow) =>
-  discoverInput.parse({ mode: 'discover', siteId: site.id, country: site.country, business: site.business.slice(0, 500), customers: site.customers.slice(0, 300), businessFacts: site.businessFacts.slice(0, 2000), goal: site.goal, emailCopy: false });
+// Rehearsal 2026-10-20 (real engine): the automatic research asks for the keyword strategy only. With the schema's default
+// receiveReport: true the engine also ran a full keyword report on its own top pick (a second paid run under a run quoted free),
+// which nobody reads at setup. The same holds for the level-3 research refresh (autoStart.ts).
+export const inputOf = (site: SiteRow) =>
+  discoverInput.parse({ mode: 'discover', siteId: site.id, country: site.country, business: site.business.slice(0, 500), customers: site.customers.slice(0, 300), businessFacts: site.businessFacts.slice(0, 2000), goal: site.goal, receiveReport: false, emailCopy: false });
 
 /** POST .../research/start: the free research at setup, or the research already going / fresh. 409 `research_not_free` otherwise. */
 export async function startResearch(a: OrgAccess & { site: SiteRow }, now = Date.now(), start: StartFn = createRunWithMeta): Promise<ResearchStartResult> {

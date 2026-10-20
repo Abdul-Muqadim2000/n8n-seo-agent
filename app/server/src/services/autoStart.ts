@@ -378,7 +378,7 @@ export async function proposeForSite(org: OrgRow, site: SiteRow, deps: ProposalD
     if (last && now - last.createdAt.getTime() < 7 * 864e5) return { proposalId: null, keyword: null, reason: `${decision.why}; a research run started less than 7 days ago` };
     const owner = await deps.owner(org.id);
     if (!owner) return { proposalId: null, keyword: null, reason: 'the company has no owner' };
-    const input = discoverInput.parse({ mode: 'discover', siteId: site.id, country: site.country, business: site.business.slice(0, 500), customers: site.customers.slice(0, 300), businessFacts: site.businessFacts.slice(0, 2000), goal: site.goal, emailCopy: false });
+    const input = discoverInput.parse({ mode: 'discover', siteId: site.id, country: site.country, business: site.business.slice(0, 500), customers: site.customers.slice(0, 300), businessFacts: site.businessFacts.slice(0, 2000), goal: site.goal, receiveReport: false, emailCopy: false });
     try {
       const run = await deps.start({ user: owner, org, role: 'owner' }, input, { startedBy: 'auto' });
       return { proposalId: null, keyword: null, reason: `${decision.why}: research started`, researchRunId: run.id };
