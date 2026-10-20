@@ -15,7 +15,7 @@ import { TrackingStep } from './_components/TrackingStep';
 import { VerifyStep } from './_components/VerifyStep';
 import { WebsiteStep } from './_components/WebsiteStep';
 import { StepMessage, WizardShell } from './_components/WizardShell';
-import { isStep, serverStep, SITE_STEPS, stepIndex, WizardContext, type StepId, type WizardValue } from './_components/wizard';
+import { isStep, SITE_STEPS, stepIndex, WizardContext, type StepId, type WizardValue } from './_components/wizard';
 
 // /onboarding                    -> a new company (first sign-in, or "New company" from the menu)
 // /onboarding/:orgId/:step?      -> the steps of an existing company; without a step it resumes at the stored one
@@ -70,9 +70,8 @@ function CompanyWizard({ me, orgId }: { me: Me; orgId: string }) {
   const canAdmin = !!o && roleAtLeast(o.role, 'admin');
   useEffect(() => {
     if (!current || !canAdmin || !o || o.onboardedAt || onboarding.isPending) return;
-    // a step the server does not store yet is recorded as the one before it (wizard.ts serverStep)
-    const save = serverStep(current);
-    if (stepIndex(save) > stepIndex(stored)) onboarding.mutate({ step: save });
+    // the server stores every step of the wizard (orgs.ts ONBOARDING_STEPS), "keyword" too, so the wizard resumes where it was left
+    if (stepIndex(current) > stepIndex(stored)) onboarding.mutate({ step: current });
   }, [current, stored, canAdmin]);
 
   useEffect(() => {

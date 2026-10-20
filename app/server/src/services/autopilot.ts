@@ -6,7 +6,6 @@ import {
   REJECT_LIMIT,
   REJECT_WINDOW,
   cycleNorm,
-  n8nSiteId,
   type AutopilotLevel,
   type ContentFeedbackResult,
   type ContentLogRow,
@@ -18,16 +17,17 @@ import {
 import type { FastifyRequest } from 'fastify';
 import { db, schema } from '../db';
 import type { KeywordProposalRow, LadderRecheckRow, OrgRow, SiteRow, UserRow } from '../db/schema';
-import { badRequest, notFound } from '../lib/errors';
+import { badRequest, HttpError, notFound } from '../lib/errors';
 import { sendMail } from '../lib/mailer';
-import { rows as n8nRows, siteRows } from '../n8n/client';
+import { siteRows } from '../n8n/client';
 import { audit } from './audit';
 import { billingContacts } from './invoices';
 import { assessKeyword } from './keywordChecks';
 import { updateLadderSettings, updateSiteAutomation } from './ladderSettings';
 import { baseUrlFor, senderFor } from './portalMail';
 import { wonLadderOf } from './runs';
-import { onPreview } from './comingUp';
+import { onPreview, skipsOf } from './comingUp';
+import { ownerOf } from './companyOwner';
 
 // The autopilot level of a website and what follows from it (SCHEDULING_KEYWORDS_PLAN.md §5.5 / §5.6, contract app/shared/src/cycles.ts):
 //   * the level itself (PATCH .../automation `autopilotLevel`): written to the engine's `_site` row (which decides) and mirrored on the site;
@@ -82,8 +82,9 @@ export function autoPauseDue(o: { level: AutopilotLevel; automaticPages: Pick<Co
   return last.filter((p) => o.rejectedKeys.has(cycleNorm(p.keyword))).length >= REJECT_LIMIT;
 }
 
+/** The keywords the client approved in "Coming up" (seo_skips, read only when the engine's site id is this website's: skipsOf). */
 async function approvedKeysOf(site: Pick<SiteRow, 'domain'>): Promise<Set<string>> {
-  const skips = await n8nRows<SkipRow>('skips', { filters: [{ columnName: 'site_id', condition: 'eq', value: n8nSiteId(site.domain) }], max: 2000 }).catch(() => [] as SkipRow[]);
+  const skips: SkipRow[] = await skipsOf(site);
   return new Set(skips.filter((r) => S(r.decision) === 'approve').map((r) => cycleNorm(S(r.item_key))));
 }
 
@@ -125,6 +126,23 @@ export async function rejectPage(req: FastifyRequest | null, org: OrgRow, user: 
     source = row ? S(row.source) : source;
     automatic = automaticPage(row, approved);
   }
+  // the auto-pause is decided BEFORE the rejection is stored, and the level is written first: when the engine refuses the write, nothing is
+  // kept, so the client's retry (or the next "Not what I wanted") decides again and the drop is never lost behind a stored rejection
+  let drop = false;
+  if (site && automatic) {
+    const rejected = await db.select({ keyword: schema.contentFeedback.keyword }).from(schema.contentFeedback).where(and(eq(schema.contentFeedback.siteId, site.id), eq(schema.contentFeedback.automatic, true)));
+    const rejectedKeys = new Set([...rejected.map((r) => cycleNorm(r.keyword)), cycleNorm(keyword)]);
+    drop = autoPauseDue({ level, automaticPages: logs.filter((l) => automaticPage(l, approved)), rejectedKeys });
+  }
+  if (drop && site) {
+    try {
+      await setAutopilotLevel(site, 1, 'auto_pause');
+    } catch (err) {
+      consoleLog.error({ site: site.domain, reportId: report.id, err: String((err as Error)?.message ?? err) }, 'auto-pause: the level could not be lowered, the rejection is not stored so a retry decides again');
+      if (err instanceof HttpError && err.code === 'engine_not_ready') throw err;
+      throw new HttpError(502, 'We could not save this right now, so nothing was changed. Try again in a minute.', 'engine_failed');
+    }
+  }
   const [fb] = await db
     .insert(schema.contentFeedback)
     .values({ orgId: org.id, siteId: site?.id ?? null, reportId: report.id, keyword, source, automatic, verdict: 'reject', reason: reason.slice(0, 1000), by: user.id })
@@ -132,11 +150,8 @@ export async function rejectPage(req: FastifyRequest | null, org: OrgRow, user: 
     .returning();
   const id = fb?.id ?? (await db.query.contentFeedback.findFirst({ where: eq(schema.contentFeedback.reportId, report.id) }))!.id;
   await audit(req, org.id, { action: 'site.content_rejected', target: { type: 'report', id: report.id, label: keyword }, details: { siteId: site?.id ?? null, automatic, source } });
-  if (!site || !automatic || !fb) return { id, verdict: 'reject', levelDropped: false, level };
-  const rejected = await db.select({ keyword: schema.contentFeedback.keyword }).from(schema.contentFeedback).where(and(eq(schema.contentFeedback.siteId, site.id), eq(schema.contentFeedback.automatic, true)));
-  const automaticPages = logs.filter((l) => automaticPage(l, approved));
-  if (!autoPauseDue({ level, automaticPages, rejectedKeys: new Set(rejected.map((r) => cycleNorm(r.keyword))) })) return { id, verdict: 'reject', levelDropped: false, level };
-  await setAutopilotLevel(site, 1, 'auto_pause');
+  // a second request for the same page at the same moment: the first one told the client
+  if (!site || !drop || !fb) return { id, verdict: 'reject', levelDropped: false, level: drop ? 1 : level };
   await audit(req, org.id, { action: 'site.autopilot_paused', actor: { type: 'system', label: 'system' }, target: { type: 'site', id: site.id, label: site.domain }, details: { from: level, to: 1, rejected: REJECT_LIMIT, window: REJECT_WINDOW } });
   const url = `${await baseUrlFor(org)}/o/${org.id}/sites/${site.id}/settings/automation`;
   const m = autoPauseMail(site, level, url);
@@ -178,12 +193,8 @@ export async function recheckActivated(org: OrgRow, site: SiteRow, payload: Reco
   const ids = newlyActive(queuedOf(before?.payload as Record<string, unknown>), queuedOf(payload), wonOf(payload));
   if (!ids.length) return [];
   const [ladders, settings] = await Promise.all([siteRows<LadderRow>('ladders', site.domain, { max: 2000, fresh: true }), siteRows<LadderSettingsRow>('ladderSettings', site.domain, { max: 500, fresh: true })]);
-  const owner = await db
-    .select({ u: schema.users })
-    .from(schema.memberships)
-    .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
-    .where(and(eq(schema.memberships.orgId, org.id), eq(schema.memberships.role, 'owner')))
-    .limit(1);
+  // the system acts for the company's first active owner (a deactivated or suspended one is never acted for)
+  const owner = await ownerOf(org.id);
   const out: LadderRecheckRow[] = [];
   for (const id of ids) {
     const rows = ladders.filter((l) => l.ladder_id === id);
@@ -195,12 +206,13 @@ export async function recheckActivated(org: OrgRow, site: SiteRow, payload: Reco
     const head = rows.find((r) => Number(r.rung) === 4)?.keyword || S(rows[0].head_keyword);
     const [claimed] = await db.insert(schema.ladderRechecks).values({ orgId: org.id, siteId: site.id, ladderId: id, keyword: head }).onConflictDoNothing().returning();
     if (!claimed) continue;
-    if (!owner[0]) {
+    if (!owner) {
       await db.update(schema.ladderRechecks).set({ status: 'failed', reason: 'the company has no owner to check it for', checkedAt: new Date() }).where(eq(schema.ladderRechecks.id, claimed.id));
       continue;
     }
     try {
-      const check = await assessKeyword({ org, site, user: owner[0].u }, { keyword: head });
+      // started by the system: the website's autopilot spend, never the owner's on-demand spend
+      const check = await assessKeyword({ org, site, user: owner }, { keyword: head }, { automatic: true });
       const fell = recheckFell(check.result);
       const reason = fell ? (check.result.fit === 0 ? 'its keyword now looks outside your business' : 'its keyword is no longer realistic for your website') : '';
       if (fell) await updateLadderSettings(site, id, { status: 'paused' });

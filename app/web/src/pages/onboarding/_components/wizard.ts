@@ -26,13 +26,6 @@ export function stepIndex(s: string | null | undefined): number {
   return i < 0 ? 0 : i;
 }
 
-/**
- * The step the server stores for a step of the wizard. The server keeps the steps it knows (organizations.onboarding_step); until it
- * knows "keyword" too, that step is recorded as the step before it, so the wizard resumes at the profile step and walks into it.
- */
-const SERVER_STEPS = new Set(['company', 'website', 'verify', 'business', 'profile', 'tracking', 'launch', 'done']);
-export const serverStep = (s: StepId): StepId => (SERVER_STEPS.has(s) ? s : (STEPS[Math.max(0, stepIndex(s) - 1)].id as StepId));
-
 /** Steps that work on one website (they need ?site= or the company's website). */
 export const SITE_STEPS: readonly StepId[] = ['verify', 'business', 'profile', 'keyword', 'tracking', 'launch'];
 

@@ -155,8 +155,11 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
   return (await createRunWithMeta(a, input, opts)).run;
 }
 
-/** `createRun`, and whether the run is a replay of an earlier request with the same Idempotency-Key (nothing new was started). */
-export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: CreateRunOptions = {}): Promise<{ run: RunRow; replayed: boolean }> {
+/**
+ * `createRun`, and whether the run is a replay of an earlier request with the same Idempotency-Key (nothing new was started), and the
+ * engine's HTTP answer to the start (`engineStatus`: 202 accepted, a 4xx refusal, a 5xx, or 0 when no answer arrived; null on a replay).
+ */
+export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: CreateRunOptions = {}): Promise<{ run: RunRow; replayed: boolean; engineStatus?: number | null }> {
   const { org, user } = a;
   const auto = opts.startedBy === 'auto';
   if (org.disabled) throw forbidden('This company is disabled. Contact the platform administrator.');
@@ -250,7 +253,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
       .returning();
     return { row, replayed: false };
   });
-  if (created.replayed) return { run: created.row, replayed: true };
+  if (created.replayed) return { run: created.row, replayed: true, engineStatus: null };
   const run = created.row;
 
   const res = await startRun(body, org.id);
@@ -261,7 +264,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
       .where(eq(schema.runs.id, run.id))
       .returning();
     void emitRunsFailed([failed.id]).catch(() => undefined);
-    return { run: failed, replayed: false };
+    return { run: failed, replayed: false, engineStatus: res.status };
   }
   // B-A6 (2026-10-15): the engine recognised a repeat of a request already running, did not start a second run and did not spend
   // again, and answered with the FIRST run's id. Two of our rows would then carry one request id, and a callback matches the newest
@@ -276,7 +279,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     });
     if (original) {
       await db.delete(schema.runs).where(eq(schema.runs.id, run.id));
-      return { run: original, replayed: true };
+      return { run: original, replayed: true, engineStatus: res.status };
     }
     // the first run is not ours (started outside this app, or already cleaned up): keep this row, it is the only one that can
     // receive the callback, but never claim it started work the engine did not do.
@@ -311,7 +314,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
       })
       .where(eq(schema.sites.id, site.id));
   }
-  return { run: accepted, replayed: false };
+  return { run: accepted, replayed: false, engineStatus: res.status };
 }
 
 /** B-A6: should this start resolve to a run that is already going, instead of keeping a row of its own?
@@ -328,7 +331,8 @@ async function recordPageInEngine(site: SiteRow, input: Extract<RunInput, { mode
       site_id: n8nSiteId(site.domain),
       domain: site.domain,
       keyword: input.keyword,
-      source: input.ladder ? 'ladder' : 'app',
+      // R-K5: an approved suggestion keeps its kind (an AI answer page, a refresh...); a ladder page is a ladder page; else the app's own
+      source: input.ladder ? 'ladder' : input.source && input.source !== 'ladder' ? input.source : 'app',
       page_type: input.pageType,
       existing_page_url: input.existingPageUrl,
       rung: input.ladder?.rung ?? 0,

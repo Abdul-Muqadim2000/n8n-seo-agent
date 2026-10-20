@@ -12,6 +12,7 @@ const t = vi.hoisted(() => ({
   tables: {} as Record<string, Record<string, unknown>[]>,
   starts: [] as Record<string, unknown>[],
   startOk: true,
+  startStatus: 503,
   mails: [] as { to: string; subject: string; lines: string[] }[],
   assess: { difficulty_for_you: 'easy', fit: 2 } as Record<string, unknown>,
 }));
@@ -38,7 +39,7 @@ vi.mock('../src/n8n/client', async (orig) => {
   let n = 0;
   return {
     ...real,
-    startRun: vi.fn(async (body: Record<string, unknown>) => (t.starts.push(body), t.startOk ? { ok: true, status: 202, requestId: `exec-${++n}`, etaMinutes: 5, error: null, duplicate: false, firstSeenAt: null } : { ok: false, status: 503, requestId: null, etaMinutes: null, error: 'down', duplicate: false, firstSeenAt: null })),
+    startRun: vi.fn(async (body: Record<string, unknown>) => (t.starts.push(body), t.startOk ? { ok: true, status: 202, requestId: `exec-${++n}`, etaMinutes: 5, error: null, duplicate: false, firstSeenAt: null } : { ok: false, status: t.startStatus, requestId: null, etaMinutes: null, error: 'down', duplicate: false, firstSeenAt: null })),
     rows: vi.fn(async (table: string, q: { filters?: F[] } = {}) => tbl(table).filter((r) => match(r, q.filters))),
     siteRows: vi.fn(async (table: string, domain: string, q: { extra?: F[] } = {}) => tbl(table).filter((r) => r.domain === domain && match(r, q.extra))),
     insertRows: vi.fn(async (table: string, rows: Record<string, unknown>[]) => (tbl(table).push(...rows), true)),
@@ -110,6 +111,7 @@ afterAll(async () => {
 beforeEach(() => {
   t.starts = [];
   t.startOk = true;
+  t.startStatus = 503;
   t.mails = [];
 });
 
@@ -184,10 +186,11 @@ describe('the free keyword research at setup (D3)', () => {
     expect((await co.c.post(`${base(co, s2.id)}/research/start`)).body.code).toBe('research_not_free');
   });
 
-  it('a request the engine refused gives the grant back; only at setup; viewers cannot start it', async () => {
+  it('a request the engine refused (4xx) gives the grant back; only at setup; viewers cannot start it', async () => {
     const co = await company('research2@kf.test', 'Research Two');
     const s = await site(co.org.id, 'research2-kf.com');
     t.startOk = false;
+    t.startStatus = 400;
     const r = await co.c.post(`${base(co, s.id)}/research/start`);
     expect(r.body).toMatchObject({ status: 'none', free: true, started: false });
     expect(await db.query.freeResearchGrants.findFirst({ where: eq(schema.freeResearchGrants.domain, 'research2-kf.com') })).toBeUndefined();
@@ -205,7 +208,8 @@ describe('the cycle of a website', () => {
     const co = await company('cycle@kf.test', 'Cycle Co');
     const s = await site(co.org.id, 'cycle-kf.com', { trackingStatus: 'active', trackingStartedAt: new Date('2026-10-14T08:00:00Z'), timezone: 'Asia/Dubai' });
     const v = (await co.c.get(`${base(co, s.id)}/cycle`)).body;
-    expect(v).toMatchObject({ known: false, status: 'active', timezone: 'Asia/Dubai', weekday: 3, weekdayName: 'Wednesday', localTime: '06:00', canChangeWeekday: true });
+    // the weekday is on the engine's row: before it exists the change is not offered (and PATCH answers 409)
+    expect(v).toMatchObject({ known: false, status: 'active', timezone: 'Asia/Dubai', weekday: 3, weekdayName: 'Wednesday', localTime: '06:00', canChangeWeekday: false });
     expect(v.upcoming.length).toBe(5);
     expect(v.upcoming.every((c: { at: string }) => new Date(c.at).getUTCHours() === 2)).toBe(true); // 06:00 in Dubai
     expect((await co.c.patch(`${base(co, s.id)}/cycle`, { weekday: 5 })).status).toBe(409);

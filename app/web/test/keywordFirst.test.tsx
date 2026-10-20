@@ -4,6 +4,8 @@ import { renderToString } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import {
+  ONBOARDING_STEPS,
+  keywordInput,
   ladderInput,
   trackInput,
   type ComingUpView,
@@ -18,11 +20,12 @@ import {
 } from '@seo/shared';
 import OnboardingPage from '@/pages/onboarding/OnboardingPage';
 import { launchRequests } from '@/pages/onboarding/_components/launch-plan';
-import { readKeywordDraft, serverStep, STEPS, writeKeywordDraft, writeTrackingDraft } from '@/pages/onboarding/_components/wizard';
+import { readKeywordDraft, STEPS, writeKeywordDraft, writeTrackingDraft } from '@/pages/onboarding/_components/wizard';
 import { trackDefaults } from '@/components/site/TrackingForm';
 import { ComingUp, ComingUpSummary } from '@/pages/site/_components/pipeline/coming-up';
 import { KeywordProposals, countdown } from '@/pages/site/_components/pipeline/proposals';
 import { YourWeek } from '@/pages/site/_components/pipeline/your-week';
+import { writeNowRequest } from '@/pages/site/_components/pipeline/WriteNowDialog';
 import { AutopilotLevelPicker } from '@/components/site/AutopilotLevel';
 import { isWrittenPage, NotWhatIWanted } from '@/components/reports/ContentFeedback';
 import { chanceWords, planWords, searchesWords } from '@/components/site/KeywordChoiceCard';
@@ -189,12 +192,11 @@ function stubFetch(status: number, body: unknown) {
 
 // ======================================================================================================================================
 describe('onboarding: the new step "Your first keyword"', () => {
-  it('sits between the profile and tracking, and is stored on the server as the step before it', () => {
+  it('sits between the profile and tracking, and the server stores every step of the wizard (so it resumes at "keyword")', () => {
     const ids = STEPS.map((s) => s.id);
     expect(ids.indexOf('keyword')).toBe(ids.indexOf('profile') + 1);
     expect(ids.indexOf('tracking')).toBe(ids.indexOf('keyword') + 1);
-    expect(serverStep('keyword')).toBe('profile');
-    expect(serverStep('tracking')).toBe('tracking');
+    expect([...ids, 'done']).toEqual([...ONBOARDING_STEPS]);
   });
 
   it('the business step asks what the website sells', () => {
@@ -559,5 +561,30 @@ describe('plain words for a keyword', () => {
     expect(searchesWords(null)).toBe('Searches a month not known yet');
     expect(planWords('full', '6-12')).toBe('About 9-13 pages over 6-12 months');
     expect(planWords('none', '')).toBe('');
+  });
+});
+
+// ======================================================================================================================================
+describe('"Write it" on a suggestion (R-K5)', () => {
+  it('sends where the suggestion came from and its AI target, in a body the server accepts', () => {
+    // a saved website always has a tone (the database default is the first one)
+    const saved = { ...site, tone: 'Professional and direct' };
+    const body = writeNowRequest(
+      {
+        keyword: 'who are the best payroll providers in dubai',
+        why: 'AI answers name three rivals',
+        pageType: 'Blog Post',
+        ladder: null,
+        source: 'ai_answer',
+        aiTarget: { question: 'Who are the best payroll providers in Dubai?', kind: 'answer', targetId: 'ait_1', fanout: ['payroll dubai'], sources: [{ url: 'https://x.test/a', title: 'A' }], competitors: ['rival.test'] },
+      },
+      saved,
+    );
+    expect(body).toMatchObject({ mode: 'keyword', source: 'ai_answer', aiTarget: { question: 'Who are the best payroll providers in Dubai?', kind: 'answer' } });
+    const parsed = keywordInput.safeParse(body);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.source).toBe('ai_answer');
+    // a page with no source sends none (the server records the app's own page)
+    expect('source' in writeNowRequest({ keyword: 'payroll uae', why: '', pageType: 'Service Page', ladder: null }, saved)).toBe(false);
   });
 });

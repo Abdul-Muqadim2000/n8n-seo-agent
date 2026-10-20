@@ -13,7 +13,7 @@ import {
 } from '@seo/shared';
 import type { SiteRow } from '../db/schema';
 import { badRequest, conflict, HttpError, notFound } from '../lib/errors';
-import { deleteRows, ensureTable, insertRows, siteRows, upsertRow } from '../n8n/client';
+import { deleteRows, EngineWriteError, ensureTable, insertRows, siteRows, upsertRow } from '../n8n/client';
 import { siteAutomation } from './ladders';
 
 // The person's controls over the keyword ladders of a website, written to n8n's seo_ladder_settings (one row per ladder, plus the
@@ -247,11 +247,37 @@ export async function deleteLadder(site: SiteRow, ladderId: string): Promise<voi
   await deleteRows('rankHistory', f);
 }
 
-export async function updateSiteAutomation(site: SiteRow, change: SiteAutomationInput): Promise<SiteAutomation> {
+type ErrLog = { error: (o: object, m: string) => void };
+const consoleErr: ErrLog = { error: (o, m) => console.error(JSON.stringify({ level: 'error', msg: m, ...o })) };
+
+/**
+ * Whether the engine refused a `_site` write because its seo_ladder_settings has no `autopilot_level` column yet (pure). The column is
+ * added by the engine's sync_tables.py; until it has run, n8n answers 4xx naming the column (or an unknown column).
+ */
+export function missingLevelColumn(err: unknown, data: Record<string, unknown>): boolean {
+  if (!(err instanceof EngineWriteError) || !('autopilot_level' in data)) return false;
+  return err.engineStatus >= 400 && err.engineStatus < 500 && /autopilot_level|column/i.test(err.engineMessage);
+}
+
+export const LEVEL_COLUMN_MISSING =
+  'Autopilot levels are not switched on in the SEO engine yet, so nothing was changed. Our team has been told. Try again later.';
+
+export async function updateSiteAutomation(site: SiteRow, change: SiteAutomationInput, log: ErrLog = consoleErr): Promise<SiteAutomation> {
   const settings = await siteRows<LadderSettingsRow>('ladderSettings', site.domain, { max: 500, fresh: true });
   const w = automationWrite({ site, settings, change, now: new Date().toISOString() });
   await ensureTable('ladderSettings', LADDER_SETTINGS_COLUMNS);
-  await upsertRow('ladderSettings', [byLadder(LADDER_SITE_ROW), byDomain(site.domain)], w.data);
+  try {
+    await upsertRow('ladderSettings', [byLadder(LADDER_SITE_ROW), byDomain(site.domain)], w.data);
+  } catch (err) {
+    // the deploy order: the engine's sync_tables.py adds seo_ladder_settings.autopilot_level; an engine without it refuses the write
+    if (missingLevelColumn(err, w.data)) {
+      const e = err as EngineWriteError;
+      log.error({ site: site.domain, table: e.table, engineStatus: e.engineStatus, engineMessage: e.engineMessage, fix: 'run the engine sync_tables.py (seo_ladder_settings.autopilot_level)' }, 'engine refused autopilot_level: column missing');
+      throw new HttpError(503, LEVEL_COLUMN_MISSING, 'engine_not_ready');
+    }
+    log.error({ site: site.domain, err: String((err as Error)?.message ?? err) }, 'website automation not saved in the engine');
+    throw err;
+  }
   return w.automation;
 }
 

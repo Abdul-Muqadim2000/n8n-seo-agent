@@ -43,6 +43,8 @@ export type ChosenBy = 'client_typed' | 'client_picked' | 'system_announced';
 
 /** Content sources the Content Cadence can pick. `ladder` is the client's plan; the rest depend on the level. */
 export type TopicSource = 'ladder' | 'decay' | 'striking' | 'trend' | 'ai_answer' | 'ai_refresh';
+/** The same sources as values (the run form's `source`, schemas.ts). */
+export const TOPIC_SOURCES = ['ladder', 'decay', 'striking', 'trend', 'ai_answer', 'ai_refresh'] as const satisfies readonly TopicSource[];
 
 /** Which sources run automatically at each level (the fit gate always runs; level 2 also needs the item to be "in topic" and to change an existing page). */
 export const AUTO_SOURCES: Record<AutopilotLevel, ReadonlyArray<TopicSource>> = {

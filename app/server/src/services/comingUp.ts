@@ -1,8 +1,9 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import {
   AUTOPILOT_LEVELS,
   SKIPS_COLUMNS,
   cycleDateOf,
+  engineRowIsDomain,
   itemKey as itemKeyOf,
   n8nSiteId,
   roleAtLeast,
@@ -26,6 +27,7 @@ import { wholeCreditsOfUsd as creditsOfUsd } from './admin/settings';
 import { billingContacts } from './invoices';
 import { baseUrlFor, senderFor } from './portalMail';
 import { localDayName, siteTimezone } from './cycles';
+import { assertEngineSiteIsOurs, foreignEngineDomain } from './engineSite';
 
 // The weekly "Coming up" plan (SCHEDULING_KEYWORDS_PLAN.md §5.7, §14.4, §14.6): 48 hours before each cycle the engine plans exactly what
 // that cycle would write and posts it (callback stage `cycle_preview`, nothing written). The app keeps the latest plan of each cycle
@@ -79,12 +81,25 @@ export function previewOf(body: Record<string, unknown>): CyclePreview {
   };
 }
 
-/** Keeps the latest plan of each cycle of the website (a re-made preview replaces the earlier one). */
-export async function storePreview(org: OrgRow, site: SiteRow, body: Record<string, unknown>, reportId: string | null): Promise<CyclePreviewRow | null> {
+/**
+ * Whether a plan may be kept (pure): a cycle key of this website, a valid due time (a plan without one would sort first for ever and
+ * could never close), and, when the plan names a domain, this website's domain (two domains can share one engine site id).
+ */
+export function previewRefusal(site: Pick<SiteRow, 'domain'>, body: Record<string, unknown>): string | null {
   const cycleKey = S(body.cycle_key);
-  if (!/^cyc:.+:\d{4}-\d{2}-\d{2}$/.test(cycleKey)) return null;
+  if (!/^cyc:.+:\d{4}-\d{2}-\d{2}$/.test(cycleKey)) return 'no cycle key';
+  if (!cycleKey.startsWith(`cyc:${n8nSiteId(site.domain)}:`)) return 'the cycle key is not this website\'s';
+  if (S(body.domain) && !engineRowIsDomain(body.domain, site.domain)) return 'the plan names another domain';
   const t = Date.parse(S(body.scheduled_for));
-  const values = { orgId: org.id, siteId: site.id, cycleKey, scheduledFor: Number.isFinite(t) ? new Date(t) : null, body, reportId, receivedAt: new Date() };
+  if (!Number.isFinite(t) || t <= 0) return 'no valid scheduled_for';
+  return null;
+}
+
+/** Keeps the latest plan of each cycle of the website (a re-made preview replaces the earlier one). null when it is refused (previewRefusal). */
+export async function storePreview(org: OrgRow, site: SiteRow, body: Record<string, unknown>, reportId: string | null): Promise<CyclePreviewRow | null> {
+  if (previewRefusal(site, body)) return null;
+  const cycleKey = S(body.cycle_key);
+  const values = { orgId: org.id, siteId: site.id, cycleKey, scheduledFor: new Date(Date.parse(S(body.scheduled_for))), body, reportId, receivedAt: new Date() };
   const [row] = await db
     .insert(schema.cyclePreviews)
     .values(values)
@@ -95,7 +110,8 @@ export async function storePreview(org: OrgRow, site: SiteRow, body: Record<stri
 
 /** The website's latest plan (the cycle due next, or the newest one received). */
 export async function latestPreview(siteId: string): Promise<CyclePreviewRow | null> {
-  return (await db.query.cyclePreviews.findFirst({ where: eq(schema.cyclePreviews.siteId, siteId), orderBy: [desc(schema.cyclePreviews.scheduledFor), desc(schema.cyclePreviews.receivedAt)] })) ?? null;
+  // NULLS LAST: a plan stored before due times were required has none, and must never pin "Coming up" ahead of the real next cycle
+  return (await db.query.cyclePreviews.findFirst({ where: eq(schema.cyclePreviews.siteId, siteId), orderBy: [sql`${schema.cyclePreviews.scheduledFor} desc nulls last`, desc(schema.cyclePreviews.receivedAt)] })) ?? null;
 }
 
 const decisionOf = (skips: SkipRow[], siteId: string, cycleKey: string, key: string): ComingUpItem['decision'] => {
@@ -165,7 +181,9 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
   };
 }
 
-async function skipsOf(site: Pick<SiteRow, 'domain'>, fresh = false): Promise<SkipRow[]> {
+/** The client's decisions in seo_skips (keyed by site id, no domain column): none when the engine holds the site id for another domain. */
+export async function skipsOf(site: Pick<SiteRow, 'domain'>, fresh = false): Promise<SkipRow[]> {
+  if (await foreignEngineDomain(site, { fresh }).catch(() => null)) return [];
   return n8nRows<SkipRow>('skips', { filters: [{ columnName: 'site_id', condition: 'eq', value: n8nSiteId(site.domain) }], max: 2000, fresh }).catch(() => []);
 }
 
@@ -210,6 +228,8 @@ export function decisionRow(o: { site: Pick<SiteRow, 'domain'>; preview: CyclePr
 export async function decideComingUp(site: SiteRow, user: Pick<UserRow, 'email'>, role: Role, input: ComingUpDecisionInput, now = Date.now()): Promise<ComingUpDecisionResult> {
   const preview = await latestPreview(site.id);
   const { row, preview: p } = decisionRow({ site, preview, input, by: user.email, now });
+  // seo_skips carries no domain: written only when the engine's site id is this website's
+  await assertEngineSiteIsOurs(site);
   await ensureTable('skips', SKIPS_COLUMNS);
   await upsertRow('skips', [{ columnName: 'key', condition: 'eq', value: row.key }], row as unknown as Record<string, unknown>);
   // the client's newest word wins: an approval for this cycle clears an "always skip" of the same item (the engine lets a skip win)
@@ -274,6 +294,11 @@ export async function emailComingUp(org: OrgRow, site: SiteRow, preview: CyclePr
 
 /** A plan just arrived: keep it and e-mail it (the first plan of a cycle only). */
 export async function onPreview(org: OrgRow, site: SiteRow, body: Record<string, unknown>, reportId: string, log: Log): Promise<void> {
+  const refused = previewRefusal(site, body);
+  if (refused) {
+    log.error({ site: site.domain, cycleKey: S(body.cycle_key), reportId, why: refused }, '"Coming up" plan not kept');
+    return;
+  }
   const row = await storePreview(org, site, body, reportId);
   if (row && !row.emailedAt) await emailComingUp(org, site, row, log);
 }

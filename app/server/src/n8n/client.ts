@@ -301,6 +301,18 @@ export async function deleteRows(table: TableKey, filters: Filter[]): Promise<bo
   return true;
 }
 
+/** A Data Table write n8n answered with an error: its HTTP status and its own message are kept for the caller to explain (never the request). */
+export class EngineWriteError extends HttpError {
+  constructor(
+    message: string,
+    public engineStatus: number,
+    public engineMessage: string,
+    public table: string,
+  ) {
+    super(502, message);
+  }
+}
+
 /** n8n's error text for a failed write (its JSON `message`), short; never the request. */
 async function n8nError(res: Response): Promise<string> {
   const j = (await res.json().catch(() => null)) as { message?: unknown } | null;
@@ -331,7 +343,7 @@ export async function upsertRow(table: TableKey, filters: Filter[], data: Record
   forgetTable(name);
   if (!res.ok) {
     const why = await n8nError(res);
-    throw new HttpError(502, `The SEO engine did not save the change (rows/upsert on ${name} answered ${res.status}${why ? `: ${why}` : ''})`);
+    throw new EngineWriteError(`The SEO engine did not save the change (rows/upsert on ${name} answered ${res.status}${why ? `: ${why}` : ''})`, res.status, why, name);
   }
 }
 

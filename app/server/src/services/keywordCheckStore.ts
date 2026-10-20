@@ -60,7 +60,7 @@ export function checkRefusal(o: { keyword: string; running: boolean; today: numb
  * Reserves a check under the company's lock (checkRefusal on the current counts and spend), then a 'pending' row holding the
  * estimate in the budget until the answer arrives. Returns its id.
  */
-export async function reserveCheck(o: { org: OrgRow; site: SiteRow; user: UserRow; keyword: string; country: string }): Promise<string> {
+export async function reserveCheck(o: { org: OrgRow; site: SiteRow; user: UserRow; keyword: string; country: string; automatic?: boolean }): Promise<string> {
   return db.transaction(async (tx) => {
     await lockCompany(tx, o.org.id);
     const [{ n }] = await tx
@@ -81,7 +81,7 @@ export async function reserveCheck(o: { org: OrgRow; site: SiteRow; user: UserRo
     await assertCredits(tx, o.org, KEYWORD_CHECK.estimateUsd, 'This keyword check');
     const [row] = await tx
       .insert(schema.keywordChecks)
-      .values({ orgId: o.org.id, siteId: o.site.id, userId: o.user.id, keyword: o.keyword, country: o.country, status: 'pending', costUsd: KEYWORD_CHECK.estimateUsd })
+      .values({ orgId: o.org.id, siteId: o.site.id, userId: o.user.id, keyword: o.keyword, country: o.country, status: 'pending', costUsd: KEYWORD_CHECK.estimateUsd, automatic: o.automatic === true })
       .returning({ id: schema.keywordChecks.id });
     return row.id;
   });

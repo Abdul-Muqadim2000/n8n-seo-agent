@@ -15,6 +15,7 @@ import {
 } from './constants';
 import { cleanDomain, domainOk } from './domain';
 import { isValidTimezone } from './cycle-clock';
+import { TOPIC_SOURCES } from './cycles';
 
 // ---------- building blocks ----------
 const opt = (max: number) => z.string().trim().max(max, `At most ${max} characters`).default('');
@@ -178,6 +179,10 @@ export const keywordInput = z
         competitors: z.array(z.string().trim().min(1).max(80)).max(8).default([]),
       })
       .optional(),
+    /** keyword-first (R-K5): where an approved suggestion came from ("Write it" on a "Coming up" item or a suggestion), kept on the
+     *  website's content log so the page is shown and counted as that kind of page. The app keeps it; the engine is not sent it (Normalize
+     *  Input reads no `source` field, and the content log row the app writes at the start carries it, which the engine keeps). */
+    source: z.enum(TOPIC_SOURCES).optional(),
     emailCopy,
   })
   .superRefine((v, ctx) => {

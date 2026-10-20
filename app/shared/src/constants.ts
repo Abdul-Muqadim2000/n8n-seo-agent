@@ -3,6 +3,13 @@ import { AI_PANEL_LIMITS, AI_PANEL_PRICE, AI_PANEL_PULSE_ENGINES, estimateAiPane
 import { ENGINE_TIMEZONE, isValidTimezone, localDateOf, readCycleIntent, upcomingCycles, type CycleIntent } from './cycle-clock';
 import type { CycleJob } from './cycles';
 
+/**
+ * The onboarding steps the server keeps on the company (organizations.onboarding_step: the furthest one reached), in the wizard's order
+ * (web/src/pages/onboarding/_components/wizard.ts STEPS, plus `done`), so the wizard resumes at the step where it was left.
+ */
+export const ONBOARDING_STEPS = ['company', 'website', 'verify', 'business', 'profile', 'keyword', 'tracking', 'launch', 'done'] as const;
+export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+
 // Option lists mirror the n8n form pages and Normalize Input (n8n/seo-agent/v5 + build_v4.py), so every value the app sends
 // is one the workflow already understands. Change them together.
 

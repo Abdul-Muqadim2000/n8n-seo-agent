@@ -108,8 +108,11 @@ async function siteServices(domain: string): Promise<string[]> {
   return rows.map((r) => str(r.service));
 }
 
-/** POST .../keywords/assess: the stored answer of the last 7 days (free), else one paid check. */
-export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>, input: KeywordAssessInput): Promise<KeywordCheck> {
+/**
+ * POST .../keywords/assess: the stored answer of the last 7 days (free), else one paid check. `automatic`: the system asked for it (the
+ * queued-ladder re-check), on the owner's behalf: it is the website's autopilot spend, never the person's on-demand spend (costSync).
+ */
+export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>, input: KeywordAssessInput, opts: { automatic?: boolean } = {}): Promise<KeywordCheck> {
   const { org, site, user } = a;
   requireVerified(site);
   if (org.disabled) throw forbidden('This company is disabled. Contact the platform administrator.');
@@ -123,7 +126,7 @@ export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>
 
   // the schedules' forecast is read outside the company's lock (the credit check inside reads it), as createRun does
   await siteForecasts(org.id).catch(() => []);
-  const id = await reserveCheck({ org, site, user, keyword, country });
+  const id = await reserveCheck({ org, site, user, keyword, country, automatic: opts.automatic === true });
   let outcome: AssessOutcome;
   try {
     // what the website sells: the client's own words ("What do you sell?") first, then its case studies

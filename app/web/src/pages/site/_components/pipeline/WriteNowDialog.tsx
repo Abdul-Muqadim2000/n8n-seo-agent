@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { PenSquare } from 'lucide-react';
-import { urlOnHost, type QueueItem } from '@seo/shared';
+import { urlOnHost, type QueueItem, type Site } from '@seo/shared';
 import { PRICES } from '@/lib/prices';
 import { formatCredits } from '@/lib/credits';
 import { Button } from '@/components/ui/button';
@@ -38,14 +38,10 @@ const SOURCE_WHAT: Record<QueueItem['source'], string> = {
 };
 
 /**
- * Starts one content run for this website. The run marks the topic (or the ladder page) as written, so the weekly run moves on to
- * the next one instead of writing it twice.
+ * The run a "Write it" / "Write now" starts (pure): one page of the website, with the ladder page, the suggestion's AI target and where
+ * the suggestion came from (`source`, kept on the website's content log, R-K5). The server checks every field again.
  */
-export function WriteNowDialog({ item, onClose, note }: { item: WriteNowItem; onClose: () => void; note?: string }) {
-  const { org } = useOrgCtx();
-  const { site } = useSiteCtx();
-  const start = useStartRun(org.id);
-  const navigate = useNavigate();
+export function writeNowRequest(item: WriteNowItem, site: Pick<Site, 'id' | 'domain' | 'country' | 'tone' | 'goal'>) {
   const existing = item.existingPageUrl && urlOnHost(item.existingPageUrl, site.domain) ? item.existingPageUrl : '';
   const t = item.aiTarget;
   // the run's AI target takes the schema's shape (the server checks the lengths again)
@@ -60,23 +56,39 @@ export function WriteNowDialog({ item, onClose, note }: { item: WriteNowItem; on
           competitors: (t.competitors ?? []).filter(Boolean).slice(0, 8),
         }
       : null;
+  return {
+    mode: 'keyword' as const,
+    siteId: site.id,
+    keyword: item.keyword,
+    country: site.country,
+    pageType: asPageType(item.pageType),
+    existingPageUrl: existing,
+    tone: site.tone,
+    goal: site.goal,
+    receiveReport: true,
+    receiveContent: true,
+    ...(item.ladder ? { ladder: item.ladder } : {}),
+    ...(aiTarget ? { aiTarget } : {}),
+    ...(item.source ? { source: item.source } : {}),
+    emailCopy: false,
+  };
+}
+
+/**
+ * Starts one content run for this website. The run marks the topic (or the ladder page) as written, so the weekly run moves on to
+ * the next one instead of writing it twice.
+ */
+export function WriteNowDialog({ item, onClose, note }: { item: WriteNowItem; onClose: () => void; note?: string }) {
+  const { org } = useOrgCtx();
+  const { site } = useSiteCtx();
+  const start = useStartRun(org.id);
+  const navigate = useNavigate();
+  const body = writeNowRequest(item, site);
+  const aiTarget = body.aiTarget ?? null;
+  const existing = body.existingPageUrl;
   const write = () =>
     start.mutate(
-      {
-        mode: 'keyword',
-        siteId: site.id,
-        keyword: item.keyword,
-        country: site.country,
-        pageType: asPageType(item.pageType),
-        existingPageUrl: existing,
-        tone: site.tone,
-        goal: site.goal,
-        receiveReport: true,
-        receiveContent: true,
-        ...(item.ladder ? { ladder: item.ladder } : {}),
-        ...(aiTarget ? { aiTarget } : {}),
-        emailCopy: false,
-      },
+      body,
       {
         onSuccess: (run) => {
           if (run.status === 'failed') {
