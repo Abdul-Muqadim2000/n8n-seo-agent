@@ -49,6 +49,26 @@
 //     override, no `force`), request ids dated by the cycle. `preview: true` (the dispatcher's `preview` job, 48 h before a cycle) plans exactly
 //     what that cycle would write and WRITES NOTHING: one item per site (`preview: true`, `dry_run: true`) that the Cadence Preview node turns
 //     into the `cycle_preview` callback (shape CyclePreview in cycles.ts).
+// ---- F-KW (2026-10-20, production-safety review of keyword-first; replays in harness/scenarios_keyword_first.js KF11-KF20) ----
+// The review proved the default level still wrote the Techand page once ANY keyword was chosen: "in topic" read the services the site crawl
+// inferred (Techand IS a Dynamics 365 partner), so the D365 refresh was "in topic" for a client who chose CRM. The owner's rule: levels 1-2
+// never write a topic the client did not choose. Now:
+//   * IN TOPIC = what the CLIENT chose: the heads and kept rungs of the client's own ladders and the services they declared (`chosenTopics`).
+//     The crawl's services still PROTECT words in the gate (no refusal of the site's own services), but never make a page "in topic" at
+//     levels 1-2. Level 3 (full autopilot, the client's choice) adds the crawl's services, and needs that evidence for EVERY automatic item,
+//     new topics included; no evidence = a suggestion (fitEvidence, v5/code/_fit_gate.js: a site listing two services no longer passes all).
+//   * the website's root and its main menu pages (`nav_pages_json`) are never rewritten on their own, at any level: a suggestion at most.
+//   * a preview (any `preview: true`) plans the cycle AS OF its due time (`scheduled_for`): the month of the AI allowance, "an AI page this
+//     week", the 90-day recent rule, the decay and refresh windows, the pile-up window and in-flight runs are all read at that time.
+//   * a ladder planned more than 60 days ago (cycles.ts QUEUED_RECHECK_DAYS) that has never had a page written waits for the app's fresh
+//     Keyword Check (`rechecked_at` on its seo_ladder_settings row, written by the app) before its first page: listed for the client
+//     ("checking this keyword again before writing", `recheck: true`) and in `recheck_ladders`, never written on a plan that old.
+//   * R-K7 for ladder starts at ANY point of the cycle: a page a ladder start wrote counts against the first cadence run after it, so a
+//     Saturday start counts against the next Wednesday (the previous cadence run's time comes from seo_cycle_jobs, else the previous due time).
+//   * who chose a ladder: its seo_ladder_settings row, else its own seo_ladders rows (the ladder run writes `chosen_by` on both, rows first),
+//     so a failed settings save can no longer make an announced keyword read as the client's; '' on both = a ladder from before the column.
+//   * an approval matches the item's source and ladder when the app recorded them; a keyword-only approval that fits two items writes none.
+//   * every keyword and item key is normalised in every script (Unicode letters, marks and digits), identically in app/shared/src/cycles.ts.
 // Sites without a pick but with something to say (paused, waiting for a keyword, awaiting approval, suggestions, a main page waiting for
 // support, refusals) get one report_only item (nothing_to_do: true) for the Cadence Status note; dry_run only plans.
 /*__SITE_MODEL__*/
@@ -67,12 +87,14 @@ const CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_d
   // months before judging a refresh: https://www.semrush.com/blog/content-audit/)
   decay_per_week: 2, decay_refresh_days: 60,
   // R-K7: a run outside a cycle (on demand, the old weekly schedule) counts the pages started in the last 6 days as this week's
-  cycle_window_days: 6, in_flight_hours: 2 };
+  cycle_window_days: 6, in_flight_hours: 2,
+  // F-KW: a ladder planned longer ago than this is checked again before its first page (cycles.ts QUEUED_RECHECK_DAYS); a cycle is 7 days
+  recheck_days: 60, cycle_days: 7 };
 // ---- the contract (app/shared/src/cycles.ts): levels, the sources each level writes on its own, the item key ----
 const LEVELS = [1, 2, 3], DEFAULT_LEVEL = 2;
 const AUTO_SOURCES = { 1: ['ladder'], 2: ['ladder', 'decay', 'striking', 'ai_refresh'], 3: ['ladder', 'decay', 'striking', 'ai_refresh', 'trend', 'ai_answer'] };
-const CLIENT_CHOSEN = new Set(['', 'client_typed', 'client_picked']);   // '' = a ladder started before chosen_by existed, or through the API (the caller is the client)
-const cycleNorm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();   // cycles.ts cycleNorm / itemKey, character for character
+const CLIENT_CHOSEN = new Set(['', 'client_typed', 'client_picked']);   // '' = neither the settings row nor the ladder's own rows name a chooser: a ladder from before chosen_by existed (chooserOf)
+const cycleNorm = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim();   // cycles.ts cycleNorm / itemKey, character for character
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };
@@ -93,7 +115,9 @@ const aiTargets = rowsOf('Load AI Targets (Cadence)').filter(r => r.target_id &&
 // R90 (2026-10-16): the names AI uses for other companies (seo_cache ai_brands:<site>), for the fit gate of the stored rungs
 const aiBrandRows = rowsOf('Load AI Brands (Cadence)').filter(r => r.key);
 // keyword-first: the client's decisions on the "Coming up" plan (seo_skips, written by the app) and the engine's own cost calibration
-const skipRows = rowsOf('Load Skips (Cadence)').filter(r => r.site_id && r.item_key && r.decision);
+const skipRows = rowsOf('Load Skips (Cadence)').filter(r => r.site_id && r.item_key != null && String(r.item_key) !== '' && r.decision);
+// F-KW (R-K7): the content-cadence jobs of earlier cycles (seo_cycle_jobs, written by the dispatcher): when the previous cadence really ran
+const cycleJobRows = rowsOf('Load Cycle Jobs (Cadence)').filter(r => r.site_id && String(r.job || '') === 'content_cadence');
 const cal = CC.readCal(rowsOf('Load Cost (Cadence)').filter(r => r.key));
 const CONTENT_REQ = { mode: 'keyword', include_content: true };   // what every pick is: a content run (Rate Limit prices it the same way)
 const estAi = CC.pick('ai', CONTENT_REQ, cal), estDfs = CC.pick('dfs', CONTENT_REQ, cal);
@@ -103,10 +127,11 @@ const aiQuotaOf = (siteId) => { const m = monitors.find(x => x.site_id === siteI
 const cadOf = new Map(cad.map(c => [c.site_id, c]));
 // ---- who is asking: the Cycle Dispatcher (trigger 'cycle', one site, scheduled semantics), an on-demand caller (one site), or the batch ----
 const isCycle = lc(trigger.trigger) === 'cycle';
-const preview = isCycle && (trigger.preview === true || lc(trigger.preview) === 'true' || lc(trigger.job) === 'preview');
+// F-KW (finding 9): ANY `preview: true` is a preview and writes nothing, with or without `trigger: 'cycle'` (it used to run for real without it)
+const preview = trigger.preview === true || lc(trigger.preview) === 'true' || (isCycle && lc(trigger.job) === 'preview');
 const want = normD(trigger.domain) || String(trigger.site_id || '').trim(); const scoped = !!want; const on_demand = scoped && !isCycle;
 const dry_run = !!trigger.dry_run || preview;   // a preview writes nothing: every writer downstream drops a dry-run item as well
-const force = on_demand && (trigger.force === true || lc(trigger.force) === 'true');
+const force = on_demand && !preview && (trigger.force === true || lc(trigger.force) === 'true');
 const cycle_key = isCycle ? String(trigger.cycle_key || '').trim() : '';
 const cycle_date = (cycle_key.match(/(\d{4}-\d{2}-\d{2})$/) || [])[1] || '';
 const scheduled_for = isCycle ? String(trigger.scheduled_for || '') : '';
@@ -116,6 +141,10 @@ const scheduled_for = isCycle ? String(trigger.scheduled_for || '') : '';
 const cycle_request_id = isCycle ? String(trigger.request_id || '').trim().slice(0, 120) : '';
 const now = new Date(); const nowIso = now.toISOString(); const week = cycle_date || nowIso.slice(0, 10);
 const schedT = Date.parse(scheduled_for);
+// F-KW (finding 3a): the clock the plan is judged at. A preview runs 48 h before the cycle and must show what the cycle will write THEN: every
+// time window below (the month of the AI allowance, an AI page this week, recent keywords, the decay / refresh windows, the pile-up window,
+// in-flight runs) is read at the cycle's due time. A real run reads the wall clock.
+const at = preview && Number.isFinite(schedT) ? new Date(schedT) : now; const atIso = at.toISOString();
 // R-K7: where this cycle's budget starts — the cycle run's own due time, or (outside a cycle) the last six days
 const windowStart = isCycle && Number.isFinite(schedT) ? schedT : Number(now) - CONFIG.cycle_window_days * 864e5;
 const trigger_kind = isCycle ? 'cycle' : on_demand ? 'on_demand' : 'schedule';
@@ -159,7 +188,7 @@ for (const s of list) {
   // `opportunities` is read only to report what was stored: it decides nothing any more (a stored `auto` means "suggest", plan §5.1 R-K3)
   const cfg = { mode: lc(siteRow.mode) === 'manual' ? 'manual' : 'auto', opportunities: lc(siteRow.opportunities) === 'manual' ? 'manual' : 'auto', max_active: posInt(siteRow.max_active, CONFIG.max_active, 20), max_waiting: posInt(siteRow.max_waiting, CONFIG.max_waiting, 100) };
   const slog = logs.filter(l => normD(l.domain) === s.domain);
-  const recent = new Set(slog.filter(l => l.status === 'published' || (now - new Date(l.started_at || 0)) < CONFIG.skip_recent_days * 864e5).map(l => norm(l.keyword)));
+  const recent = new Set(slog.filter(l => l.status === 'published' || (at - new Date(l.started_at || 0)) < CONFIG.skip_recent_days * 864e5).map(l => norm(l.keyword)));
   const publishedKw = new Set(slog.filter(l => l.published_url).map(l => norm(l.keyword)));
   const lrows = ladders.filter(l => normD(l.domain) === s.domain).sort(byRung);
   const ladderKw = new Set(lrows.map(l => norm(l.keyword)));
@@ -170,6 +199,8 @@ for (const s of list) {
   const monRow = monitors.find(m => m.site_id === s.site_id || normD(m.domain) === s.domain) || {};
   const fitModel = (() => { try { return SM.from(s, { monitors: monRow }); } catch (e) { return null; } })();
   const services = fitModel ? fitModel.services : [];   // the site model's services: what the Site Tracker read AND what the client declared (declared_services)
+  // F-KW (finding 1): what the CLIENT said they sell, kept apart from what a crawl inferred: only these make a keyword "in topic" at levels 1-2
+  const declared = fitModel && Array.isArray(fitModel.declared_services) ? fitModel.declared_services : [];
   const fitCtx = { own_domain: s.domain, brands: fitLearnedBrands(aiBrandRows.filter(r => String(r.key || '') === 'ai_brands:' + s.site_id)),
     competitors: fitModel ? fitModel.competitors : String(monRow.competitors || '').split(',').map(x => normD(x)).filter(Boolean),
     protect: [...new Set([...lrows.map(l => String(l.head_keyword || '')), ...services].filter(Boolean))] };
@@ -178,8 +209,8 @@ for (const s of list) {
   // R87 / R90 (2026-10-16, re-rating 2026-10-15): ONE stored reading — the newest desktop reading of the keyword for this site within 60
   // days, whichever workflow bought it — read one entry per position (RS.serpHosts, the same rule as the Rank Tracker). The old reader merged
   // every reading the keyword ever had into one list of best positions: an October page and a September page judged as one.
-  const serpFor = (kw) => { const h = RS.prevReading(allRanks, { keyword: kw, domain: s.domain, before: nowIso, withSnapshot: true });
-    return (h && (now - new Date(h.checked_at)) <= 60 * 864e5) ? RS.serpHosts(h, 10) : []; };
+  const serpFor = (kw) => { const h = RS.prevReading(allRanks, { keyword: kw, domain: s.domain, before: atIso, withSnapshot: true });
+    return (h && (at - new Date(h.checked_at)) <= 60 * 864e5) ? RS.serpHosts(h, 10) : []; };
   // R90: every stored rung of a ladder is also judged against the domains of its LADDER's stored results pages (the head's above all):
   // "facts erp" has no reading of its own, but facts.ae stands on its head's page ("erp software uae", #6 on 2026-10-14)
   const ladderDoms = new Map();
@@ -193,6 +224,25 @@ for (const s of list) {
       reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok });
   }
   const fitOk = (l) => (fitOf.get(l) || { ok: true }).ok;
+  // ---- F-KW (finding 9): who chose each ladder. The seo_ladder_settings row says it (the app and the ladder run write it); when it is empty
+  // (a settings save that failed, or a row the ladder run back-filled), the ladder's OWN rows say it: the ladder run writes `chosen_by` on
+  // every seo_ladders row before the settings row, so an announced keyword can no longer read as the client's when the second write fails.
+  // Empty on both = a ladder started before the column existed (all of them were started by the client or its API), read as client_typed. ----
+  const chooserOf = (id) => { const st0 = settingOf.get(String(id)); const sv = lc(st0 && st0.chosen_by); if (sv) return sv;
+    return lrows.filter(l => String(l.ladder_id) === String(id)).map(l => lc(l.chosen_by)).find(Boolean) || ''; };
+  const statusOfL = (id) => { const st0 = settingOf.get(String(id)); return st0 && STATUSES.includes(lc(st0.status)) ? lc(st0.status) : 'active'; };
+  const ladderIds = [...new Set(lrows.map(l => String(l.ladder_id)))];
+  const clientIds = new Set(ladderIds.filter(id => CLIENT_CHOSEN.has(chooserOf(id)) && statusOfL(id) !== 'archived'));
+  const okIds = new Set(ladderIds.filter(id => { const c = chooserOf(id); return CLIENT_CHOSEN.has(c) || (c === 'system_announced' && level === 3); }));
+  // the ladders whose subject may make a page "in topic": chosen, and not paused or archived (a paused ladder is the client saying "not now";
+  // R-K2 still counts it as a choice, so the site does not fall back to "waiting for your first keyword")
+  const liveTopic = (id) => !['paused', 'archived'].includes(statusOfL(id));
+  const ladderTopics = (ids) => lrows.filter(l => ids.has(String(l.ladder_id)) && liveTopic(String(l.ladder_id))).flatMap(l => [String(l.head_keyword || ''), ...(isTop(l) || fitOk(l) ? [String(l.keyword || '')] : [])]);
+  const cleanT = (a) => [...new Set(a.map(x => String(x || '').trim()).filter(Boolean))];
+  // finding 1: levels 1-2 judge "in topic" against what the client chose; level 3 (full autopilot) also against what the site sells
+  const chosenTopics = cleanT([...ladderTopics(clientIds), ...declared]);
+  const fullTopics = cleanT([...chosenTopics, ...ladderTopics(okIds), ...services]);
+  const evidenceTopics = level === 3 ? fullTopics : chosenTopics;
   // ---- R-K4: the gate every candidate that is NOT a ladder page passes, at every level. Topics = what the client's ladders are about (heads
   // and the rungs the gate kept) and what the site sells (the model's services, declared ones included), so "off topic" / "too broad" are
   // judged against the client's own subject. The serp is the keyword's own stored results page when the Rank Tracker read one. ----
@@ -204,15 +254,27 @@ for (const s of list) {
   const refuse = (o, g) => { const note = '"' + o.keyword + '" (' + o.source + ') is not a search this website should target: ' + g.detail + ' (' + g.reason + '), so it is not written and not suggested';
     const x = { ladder_id: '', keyword: o.keyword, source: o.source, reason: g.reason, detail: g.detail, note, written: false, dropped: true, ...(o.target_id ? { target_id: o.target_id } : {}) };
     set_aside.push(x); refused.push({ keyword: o.keyword, source: o.source, reason: g.reason, detail: g.detail, note, ...(o.target_id ? { target_id: o.target_id } : {}) }); };
-  // level 2's "in topic": POSITIVE evidence that the keyword is about the client's own subject — at least the topic bar of its own words is
-  // found in the ladders' heads and rungs and the services. With too few topic words on file the gate above judges nothing (its "no evidence,
-  // no refusal" rule); here no evidence means no automatic page: it stays a suggestion.
-  const inTopic = (kw) => { if (!topics.length) return false; const t = fitTopic(kw, topics, { topic_min_words: 1 }); return !!t.ok && t.share != null; };
+  // "in topic": POSITIVE evidence that the keyword is about the client's own subject. F-KW (findings 1 and 2): levels 1-2 read only what the
+  // client chose (their ladders and their declared services, never the crawl's services); level 3 also the crawl's services. With too few
+  // topic words on file the gate above judges nothing (its "no evidence, no refusal" rule); here no evidence means no automatic page: it stays
+  // a suggestion, at every level.
+  const evidenceOf = (kw) => fitEvidence(kw, evidenceTopics, { topic_label: level === 3 ? 'what this website sells and the keywords you chose' : 'the keywords and services you chose' });
+  const inTopic = (kw) => evidenceOf(kw).verdict === 'in';
+  // finding 4: the website's root and its main menu pages are never rewritten on their own, at any level (a suggestion at most)
+  const navKeys = new Set(((fitModel && fitModel.nav_pages) || []).map(p => String(p.url || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '')).filter(Boolean));
+  const mainPage = (u) => { const k = String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, ''); if (!k) return false;
+    return !/\//.test(k) || navKeys.has(k); };
+  const MAIN_WHY = '; it is your homepage or a main menu page, so it is only suggested and never rewritten on its own';
   // ---- skips and approvals (seo_skips): the client's word on the "Coming up" plan ----
   const mySkips = skipRows.filter(r => r.site_id === s.site_id);
   const skipAlways = new Set(mySkips.filter(r => lc(r.decision) === 'skip' && lc(r.scope) === 'always').map(r => cycleNorm(r.item_key)));
   const skipCycle = new Set(cycle_key ? mySkips.filter(r => lc(r.decision) === 'skip' && lc(r.scope) !== 'always' && String(r.cycle_key || '') === cycle_key).map(r => cycleNorm(r.item_key)) : []);
-  const approvedKeys = new Set(cycle_key ? mySkips.filter(r => lc(r.decision) === 'approve' && String(r.cycle_key || '') === cycle_key).map(r => cycleNorm(r.item_key)) : []);
+  const approveRows = cycle_key ? mySkips.filter(r => lc(r.decision) === 'approve' && String(r.cycle_key || '') === cycle_key) : [];
+  const approvedKeys = new Set(approveRows.map(r => cycleNorm(r.item_key)));
+  // F-KW (finding 9): an approval is for ONE item. When the app recorded the item's source (and ladder), only that item matches; an older
+  // keyword-only row matches only when one item alone has that keyword (approvalFor below), never two different pages that share it.
+  const rowFits = (r, o) => cycleNorm(r.item_key) === cycleNorm(o.keyword) && (!String(r.source || '').trim() || lc(r.source) === lc(o.source))
+    && (!String(r.ladder_id || '').trim() || String(r.ladder_id) === String(o.ladder_id || ''));
   const skipped = [];
   const isSkipped = (kw) => skipAlways.has(cycleNorm(kw)) || skipCycle.has(cycleNorm(kw));
   const noteSkip = (o) => { const k = cycleNorm(o.keyword); if (skipped.some(x => x.item_key === k)) return; skipped.push({ item_key: k, keyword: o.keyword, source: o.source, scope: skipAlways.has(k) ? 'always' : 'cycle' }); };
@@ -228,8 +290,8 @@ for (const s of list) {
     const plan_type = st && ['direct', 'short', 'full'].includes(lc(st.plan_type)) ? lc(st.plan_type) : '';
     const priority = st && Number(st.priority) >= 1 ? Number(st.priority) : Infinity;
     const start = rows.map(r => String(r.start_date || '')).filter(Boolean).sort()[0] || String((st && st.created_at) || '');
-    const chosen_by = lc(st && st.chosen_by);   // R-K1: '' = client_typed (a ladder started before the column, or through the API)
-    const chosen_ok = CLIENT_CHOSEN.has(chosen_by) || (chosen_by === 'system_announced' && level === 3);
+    const chosen_by = chooserOf(id);   // R-K1 / F-KW: the settings row, else the ladder's own rows; '' = a ladder from before the column
+    const chosen_ok = okIds.has(String(id));
     const hist = headRanks.filter(h => String(h.ladder_id) === String(id) && norm(h.keyword) === norm(head) && String(h.position) !== '' && h.position != null && Number.isFinite(Number(h.position)) && Number(h.position) >= 0)
       .sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));   // failed checks (-1) are "check again", not a position
     const head_position = hist.length ? Number(hist[0].position) : null;
@@ -241,6 +303,15 @@ for (const s of list) {
     const ordered = plan_type === 'direct' ? [...rows.filter(isTop), ...rows.filter(r => !isTop(r))] : rows;
     const remaining = ordered.filter(open);
     const eligible = remaining.filter(r => !isTop(r) || gate_open);
+    // F-KW (finding 3b, plan §5.6): a ladder planned more than 60 days ago that has never had a page written is not written on that old plan:
+    // it waits until the app's fresh Keyword Check passed (`rechecked_at` on its settings row, no older than the plan it checks and itself
+    // within 60 days). A check that fell pauses the ladder (the app writes `status: paused`), so it is never written at all.
+    const planned_at = Date.parse(start);
+    const everWritten = rows.some(r => WAITING.LADDER_WRITTEN.has(String(r.status || '')) || (String(r.status || '') === 'published' && !(r.page_exists === true || r.page_exists === 'true')))
+      || slog.some(l => String(l.ladder_id || '') === String(id) || rows.some(r => norm(r.keyword) === norm(l.keyword)));
+    const recheckedT = Date.parse(String((st && st.rechecked_at) || ''));
+    const recheck_due = Number.isFinite(planned_at) && (at - planned_at) > CONFIG.recheck_days * 864e5 && !everWritten
+      && !(Number.isFinite(recheckedT) && recheckedT >= planned_at && (at - recheckedT) <= CONFIG.recheck_days * 864e5);
     const main_waiting = !gate_open && remaining.some(isTop) && !eligible.length;   // blocked on publishing: the gated main page is all that is left
     // R87 (2026-10-16): a ladder whose MAIN keyword is set aside — its row says `set_aside` (the Rank Tracker and *Ladder Marks* write it
     // back with the reason), or the gate refuses it now on its stored results page — is paused. Its rungs exist to climb towards that
@@ -248,11 +319,11 @@ for (const s of list) {
     const hf = top ? fitOf.get(top) : null;
     const head_aside = top && (String(top.status || '') === 'set_aside' || (hf && hf.flagged && !hf.ok))
       ? { keyword: top.keyword, reason: String(top.status || '') === 'set_aside' ? String(top.status_note || 'its main keyword was set aside') : (hf.detail + ' (' + hf.reason + ')') } : null;
-    if (head_aside) return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting: false, remaining: [], eligible: [], head_aside };
-    return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting, remaining, eligible };
+    if (head_aside) return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting: false, remaining: [], eligible: [], head_aside, recheck_due: false };
+    return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting, remaining, eligible, recheck_due };
   }).sort((a, b) => a.priority - b.priority || String(a.start).localeCompare(String(b.start)) || String(a.id).localeCompare(String(b.id)));
   // R-K2: the ladders the client chose (any status except archived: a won ladder still tells us their topics)
-  const clientLadders = info.filter(x => CLIENT_CHOSEN.has(x.chosen_by) && x.status !== 'archived');
+  const clientLadders = info.filter(x => clientIds.has(String(x.id)));
   const waiting_for_keyword = level < 3 && !clientLadders.length;
   const writable = info.filter(x => ['active', 'queued'].includes(x.status) && !x.won);
   const autoL = writable.filter(x => x.mode === 'auto' && x.remaining.length && x.chosen_ok);
@@ -270,7 +341,9 @@ for (const s of list) {
     return { keyword: l.keyword, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '', target_url: l.target_url || '', source: 'ladder', ladder_id: l.ladder_id, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '', links, chosen_by: x.chosen_by, why: 'keyword ladder, rung ' + (isTop(l) ? 'top' : l.rung) + ' towards "' + (l.head_keyword || '') + '"' };
   };
   const cands = [];
-  for (const x of active) for (const l of x.eligible) { if (isSkipped(l.keyword)) { noteSkip({ keyword: l.keyword, source: 'ladder' }); continue; } cands.push(ladderCand(x, l)); }
+  // F-KW (finding 3b): an active ladder waiting for its fresh check keeps its place (the next ladder does not jump the queue) and writes nothing
+  const recheckL = active.filter(x => x.recheck_due);
+  for (const x of active) { if (x.recheck_due) continue; for (const l of x.eligible) { if (isSkipped(l.keyword)) { noteSkip({ keyword: l.keyword, source: 'ladder' }); continue; } cands.push(ladderCand(x, l)); } }
   const opps = [];
   // ---- B4-3 (2026-10-15, benchmark area 4): A PAGE THAT IS LOSING TRAFFIC IS WORK, NOT A LINE IN AN E-MAIL ----
   // Until today the decay verdict lived for the length of one Site Tracker run and died in a weekly e-mail as a priority-3
@@ -285,7 +358,7 @@ for (const s of list) {
   // Keyword-first (2026-10-19): written on its own from level 2 when in topic, else a suggestion.
   const decayRows = pageRows.filter(r => r.site_id === s.site_id && String(r.decay_state || '') === 'decaying' && r.url);
   const ukeyD = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
-  const touchedRecently = new Set(slog.filter(l => l.existing_page_url && (now - new Date(l.started_at || 0)) < CONFIG.decay_refresh_days * 864e5).map(l => ukeyD(l.existing_page_url)));
+  const touchedRecently = new Set(slog.filter(l => l.existing_page_url && (at - new Date(l.started_at || 0)) < CONFIG.decay_refresh_days * 864e5).map(l => ukeyD(l.existing_page_url)));
   const topQueryRow = (r) => { let best = null; try { const qs = JSON.parse(r.queries_json || '[]');
       for (const q of (Array.isArray(qs) ? qs : [])) { const k = String(q.query || '').trim(); if (!k) continue;
         if (!best || (Number(q.impressions) || 0) > (Number(best.impressions) || 0)) best = q; } } catch (e) {}
@@ -296,12 +369,15 @@ for (const s of list) {
     .sort((a, b) => b.lost - a.lost).slice(0, CONFIG.decay_per_week);
   const decay_skipped = decayRows.length - decayCands.length;
   for (const x of decayCands) opps.push({ keyword: x.q.query, page_type: 'Guide', existing_page_url: x.row.url, source: 'decay', decay_lost: x.lost,
-    why: 'this page is losing traffic: ' + x.lost + ' clicks lost in 28 days (' + (Number(x.row.prev_clicks) || 0) + ' → ' + (Number(x.row.clicks) || 0) + ')'
+    why: 'this page is losing traffic: ' + x.lost + ' clicks lost in 28 days (from ' + (Number(x.row.prev_clicks) || 0) + ' to ' + (Number(x.row.clicks) || 0) + ')'
       + (String(x.row.decay_kind || '') === 'clickthrough' ? ', and it is still shown as often, so the title and description come first' : '')
-      + ' — refreshed, not written again. ' + String(x.row.decay_basis || '') });
+      + '. It is refreshed, not written again. ' + String(x.row.decay_basis || '').replace(/\s*->\s*/g, ' to ') });
   const sq = qh.filter(q => normD(q.domain) === s.domain && q.query); const latest = sq.reduce((m, q) => String(q.period_end) > m ? String(q.period_end) : m, '');
-  const brand = s.domain.split('.')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-  const strikes = sq.filter(q => String(q.period_end) === latest && Number(q.position) >= CONFIG.striking_min_position && Number(q.position) <= CONFIG.striking_max_position && Number(q.impressions) >= CONFIG.striking_min_impressions && !(brand.length >= 4 && norm(q.query).replace(/\s/g, '').includes(brand)) && !recent.has(norm(q.query)) && !ladderKw.has(norm(q.query))).sort((a, b) => Number(b.impressions) - Number(a.impressions));
+  // F-KW (finding 5): a brand query names the site's DISTINCTIVE label (fitOwnLabels): on an exact-match domain ("erp-software.ae") the client's
+  // own subject ("erp software uae") is not a brand query
+  const protectT = [...new Set((fitCtx.protect || []).flatMap(x => fitTokens(x)))];
+  const brandQuery = (q) => { const t = fitTokens(q); const sq0 = t.join(''); return fitOwnLabels(s.domain, t, protectT).some(l => t.includes(l) || sq0.includes(l)); };
+  const strikes = sq.filter(q => String(q.period_end) === latest && Number(q.position) >= CONFIG.striking_min_position && Number(q.position) <= CONFIG.striking_max_position && Number(q.impressions) >= CONFIG.striking_min_impressions && !brandQuery(q.query) && !recent.has(norm(q.query)) && !ladderKw.has(norm(q.query))).sort((a, b) => Number(b.impressions) - Number(a.impressions));
   // B4-3: a page already queued as a refresh is not queued a second time for one of its other queries — one page, one piece of work
   const decayUrls = new Set(decayCands.map(x => ukeyD(x.row.url)));
   for (const q of strikes) { if (q.page && decayUrls.has(ukeyD(q.page))) continue;
@@ -312,15 +388,19 @@ for (const s of list) {
     opps.push({ keyword: rq, page_type: 'Guide', existing_page_url: '', source: 'trend', why: 'rising related search for "' + t.keyword + '" (Google Trends, ' + (t.change_pct > 0 ? '+' : '') + t.change_pct + '% vs the 12-month average)' }); }
   // R-K3: which of these runs on its own at this level. Level 2 needs an existing page AND positive topic evidence; level 3 takes every source
   // the gate let through; level 1 none.
-  const autoFor = (o) => AUTO_SOURCES[level].includes(o.source) && (level === 3 || (!!o.existing_page_url && o.in_topic === true));
+  // F-KW (findings 1, 2, 4): every automatic item needs positive topic evidence (against what the client chose; at level 3 also what the site
+  // sells), level 2 also an existing page, and never the homepage or a main menu page
+  const autoFor = (o) => AUTO_SOURCES[level].includes(o.source) && o.in_topic === true && !o.main_page && (level === 3 || !!o.existing_page_url);
+  const markTopic = (o) => { const ev = evidenceOf(o.keyword); o.in_topic = ev.verdict === 'in'; o.topic_evidence = ev.verdict;
+    o.main_page = !!o.existing_page_url && mainPage(o.existing_page_url); if (o.main_page) o.why += MAIN_WHY; return o; };
   const okOpps = [];
-  for (const o of opps) { const g = gateOf(o); if (!g.ok) { refuse(o, g); continue; } if (isSkipped(o.keyword)) { noteSkip(o); continue; } o.in_topic = inTopic(o.keyword); okOpps.push(o); }
+  for (const o of opps) { const g = gateOf(o); if (!g.ok) { refuse(o, g); continue; } if (isSkipped(o.keyword)) { noteSkip(o); continue; } okOpps.push(markTopic(o)); }
   // ---- the AI page (v4.12): the most valuable queued AI target the gate lets through, within the month's allowance, one a week ----
   const isAi = (l) => l.source === 'ai_answer' || l.source === 'ai_refresh';
-  const aiUsed = slog.filter(l => isAi(l) && String(l.started_at || '').slice(0, 7) === nowIso.slice(0, 7)).length;
-  const aiThisWeek = slog.some(l => isAi(l) && (now - new Date(l.started_at || 0)) < 6 * 864e5);
+  const aiUsed = slog.filter(l => isAi(l) && String(l.started_at || '').slice(0, 7) === atIso.slice(0, 7)).length;
+  const aiThisWeek = slog.some(l => isAi(l) && (at - new Date(l.started_at || 0)) < 6 * 864e5);
   const keyOfU = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
-  const refreshedRecently = new Set(slog.filter(l => l.existing_page_url && (now - new Date(l.started_at || 0)) < 60 * 864e5).map(l => keyOfU(l.existing_page_url)));
+  const refreshedRecently = new Set(slog.filter(l => l.existing_page_url && (at - new Date(l.started_at || 0)) < 60 * 864e5).map(l => keyOfU(l.existing_page_url)));
   // one search, one page: an AI question that a keyword-ladder page already targets is written AS that ladder page (with the AI target), never twice.
   // Words of the site's ladder heads ("e invoicing in uae") appear everywhere and do not count.
   const STOPW = new Set(['the', 'and', 'for', 'with', 'what', 'how', 'which', 'are', 'can', 'does', 'your', 'you', 'that', 'this', 'from', 'into', 'best', 'top', 'list', 'guide']);
@@ -338,21 +418,31 @@ for (const s of list) {
     const o = aiCandOf(t); const g = gateOf(o);   // R-K4: the AI target's keyword passes the same gate (the Techand D365 refresh did not)
     if (!g.ok) { refuse(o, g); continue; }
     if (isSkipped(o.keyword)) { noteSkip(o); continue; }
-    o.in_topic = inTopic(o.keyword); aiQueue.push(o);
+    aiQueue.push(markTopic(o));
   }
+  // F-KW: the client's own subject first (stable: by value inside each group), so the AI page of the week, or the one AI suggestion, is on it
+  aiQueue.sort((a, b) => (b.in_topic === true ? 1 : 0) - (a.in_topic === true ? 1 : 0));
   const aiDue = aiQuota > aiUsed && !aiThisWeek;
   // ---- what is written: the ladder pages, then what the client approved for this cycle, then the level's own automatic items ----
   const aiCand0 = aiQueue[0] || null;
   // level 2: an AI refresh of an existing page in topic is one of the level's refreshes (a slot of pages_per_week); level 3: the AI page on top
-  const aiAuto2 = level === 2 && aiCand0 && aiDue && aiCand0.source === 'ai_refresh' && !!aiCand0.existing_page_url && aiCand0.in_topic === true ? aiCand0 : null;
+  const aiAuto2 = level === 2 && aiCand0 && aiDue && aiCand0.source === 'ai_refresh' && !!aiCand0.existing_page_url && aiCand0.in_topic === true && !aiCand0.main_page ? aiCand0 : null;
   const autoOpps = [...okOpps.filter(autoFor), ...(aiAuto2 ? [aiAuto2] : [])];
   // the needs-OK candidates the client may approve: the other opportunities, the AI targets, and the next pages of Manual / not-chosen ladders
-  const needOk = [...okOpps.filter(o => !autoFor(o)), ...aiQueue.filter(o => o !== aiAuto2 && !(level === 3 && o === aiCand0))];
+  const aiTop3 = level === 3 && aiCand0 && aiCand0.in_topic === true && !aiCand0.main_page ? aiCand0 : null;   // F-KW: the level-3 AI page needs evidence too
+  const needOk = [...okOpps.filter(o => !autoFor(o)), ...aiQueue.filter(o => o !== aiAuto2 && o !== aiTop3)];
   // while the site waits for its first keyword the level's automatic items are shown as suggestions (sugPool below), so the client may
   // approve them too: they are approvable then (E4, 2026-10-19)
   const approvable = [...needOk, ...(waiting_for_keyword ? autoOpps : []), ...[...manualL, ...unchosenL].flatMap(x => x.eligible.filter(l => !isSkipped(l.keyword)).map(l => ladderCand(x, l)))];
-  const approvedSeen = new Set();
-  const approved = approvable.filter(o => { const k = cycleNorm(o.keyword); if (!approvedKeys.has(k) || approvedSeen.has(k)) return false; approvedSeen.add(k); return true; })
+  const approvedSeen = new Set(); const approval_ambiguous = [];
+  // F-KW (finding 9): the approval row that names this item (source / ladder), or a keyword-only row when no other item shares the keyword
+  const approvalFor = (o) => { const k = cycleNorm(o.keyword); const rows0 = approveRows.filter(r => cycleNorm(r.item_key) === k); if (!rows0.length) return false;
+    if (rows0.some(r => String(r.source || '').trim() && rowFits(r, o))) return true;
+    if (!rows0.some(r => !String(r.source || '').trim() && rowFits(r, o))) return false;
+    const same = approvable.filter(x => cycleNorm(x.keyword) === k); const kinds = new Set(same.map(x => lc(x.source) + '|' + String(x.ladder_id || '') + '|' + String(x.existing_page_url || '')));
+    if (kinds.size > 1) { if (!approval_ambiguous.some(a => a.item_key === k)) approval_ambiguous.push({ item_key: k, keyword: o.keyword, sources: same.map(x => x.source) }); return false; }
+    return true; };
+  const approved = approvable.filter(o => { const k = cycleNorm(o.keyword); if (approvedSeen.has(k) || !approvalFor(o)) return false; approvedSeen.add(k); return true; })
     .map(o => ({ ...o, approved: true, why: o.why + '; approved by you for this cycle' }));
   cands.push(...approved, ...autoOpps.filter(o => !approvedSeen.has(cycleNorm(o.keyword))));
   // D11: one search, one page — a candidate a live page of the site already answers is written as a refresh of that page (ladder) or left out
@@ -365,13 +455,13 @@ for (const s of list) {
     const c = coverOf(x); if (!c) return true;
     covered.push({ keyword: x.keyword, source: x.source, url: c.url, matched_by: c.matched_by });
     if (x.source !== 'ladder') return false;   // an opportunity post would be a second page for the same search
-    x.existing_page_url = c.url; x.covered_by = c.url; x.why += ' — ' + c.url + ' already answers this search, so it is refreshed, not written again';
+    x.existing_page_url = c.url; x.covered_by = c.url; x.why += '; ' + c.url + ' already answers this search, so it is refreshed, not written again';
     return true; });
   // pile-up guard (v4.14, FIX_PLAN D5): every page written and not published counts, each keyword once — the content log rows that say
   // `written` (in the last 120 days) AND the ladder rows still 'writing' whose keyword has such a row and no published page.
   // R1 / R111 / A-20: the rule itself lives in v5/code/_waiting.js (WAITING.waiting), so the ladder mode counts the same pages
   const WAITS = WAITING.WAITS;   // R111: const WAITS = new Set(['written', 'not_ready']); - a failed draft still waits, labelled "needs a fix"
-  const W = WAITING.waiting({ log: slog, ladders: lrows, now: Number(now), days: CONFIG.waiting_days });
+  const W = WAITING.waiting({ log: slog, ladders: lrows, now: Number(at), days: CONFIG.waiting_days });
   const waiting = W.list;
   const waitingKw = W.keys;
   const pileup = waitingKw.size >= cfg.max_waiting;
@@ -382,19 +472,31 @@ for (const s of list) {
   // that says `started`, or a ladder row the start marked `writing` with no log row yet, younger than `in_flight_hours` (a page run takes
   // 10-15 minutes). An older `started` row is a run that never finished: it wrote nothing, so it spends nothing.
   const inWin = (t) => { const v = Date.parse(String(t || '')); return Number.isFinite(v) && v >= windowStart; };
-  const inFlight = (t) => { const v = Date.parse(String(t || '')); return Number.isFinite(v) && (Number(now) - v) < CONFIG.in_flight_hours * 36e5; };
+  const inFlight = (t) => { const v = Date.parse(String(t || '')); return Number.isFinite(v) && (Number(at) - v) < CONFIG.in_flight_hours * 36e5; };
+  // F-KW (finding 6): a page a LADDER START wrote counts against the first cadence run after it, wherever in the cycle it happened. Inside a
+  // cycle that is every start since the previous cycle's cadence ran (seo_cycle_jobs started_at of the newest earlier content_cadence job,
+  // else that cycle's due time, else this cycle's due time minus 7 days): a start before that run was counted by it, one after it (a mid-cycle
+  // start by the client, or a level-3 announcement) is this cycle's. Outside a cycle: the last six days, as before.
+  const prevJob = isCycle && Number.isFinite(schedT) ? cycleJobRows.filter(r => r.site_id === s.site_id && String(r.cycle_key || '') !== cycle_key
+    && Number.isFinite(Date.parse(String(r.due_at || r.started_at || ''))) && Date.parse(String(r.due_at || r.started_at || '')) < schedT)
+    .sort((a, b) => String(b.due_at || b.started_at || '').localeCompare(String(a.due_at || a.started_at || '')))[0] || null : null;
+  const prevRan = prevJob ? (Date.parse(String(prevJob.started_at || '')) || Date.parse(String(prevJob.due_at || ''))) : NaN;
+  const startWindow = isCycle && Number.isFinite(schedT) ? Math.min(schedT, Number.isFinite(prevRan) ? prevRan : schedT - CONFIG.cycle_days * 864e5) : windowStart;
+  const inStartWin = (t) => { const v = Date.parse(String(t || '')); return Number.isFinite(v) && v >= startWindow && v <= Number(at); };
   const EXISTS = new Set(['written', 'not_ready', 'published']);
   const spentKeys = new Map();
   const spend = (kw, how) => { const k = norm(kw); if (k && !spentKeys.has(k)) spentKeys.set(k, how); };
-  for (const l of slog) { if (!inWin(l.started_at)) continue; const rid = String(l.request_id || ''); const own = /^cad_/.test(rid);
+  for (const l of slog) { const rid = String(l.request_id || ''); const own = /^cad_/.test(rid);
+    if (own ? !inWin(l.started_at) : !inStartWin(l.started_at)) continue;   // F-KW: this cycle's cadence runs from its due time; ladder starts since the last cadence run
     if (!own && String(l.source || '') !== 'ladder') continue;   // the app's "Write it" is a page the client asked for on top: not the autopilot's budget
     const st = String(l.status || '');
     if (EXISTS.has(st) || String(l.published_url || '').trim() || (st === 'started' && inFlight(l.started_at))) spend(l.keyword, own ? 'this cycle\'s cadence' : 'ladder start'); }
-  for (const l of lrows) if (WAITING.LADDER_WRITTEN.has(l.status) && inWin(l.start_date) && inFlight(l.start_date) && !/^cad_/.test(String(l.request_id || ''))
-    && !slog.some(g => norm(g.keyword) === norm(l.keyword) && inWin(g.started_at))) spend(l.keyword, 'ladder start (being written)');
+  for (const l of lrows) if (WAITING.LADDER_WRITTEN.has(l.status) && inStartWin(l.start_date) && inFlight(l.start_date) && !/^cad_/.test(String(l.request_id || ''))
+    && !slog.some(g => norm(g.keyword) === norm(l.keyword) && inStartWin(g.started_at))) spend(l.keyword, 'ladder start (being written)');
   const spent = spentKeys.size;
   const room = Math.max(0, pages - spent);
-  const budget = { pages_per_week: pages, spent, room, window_start: new Date(windowStart).toISOString(), window: isCycle && Number.isFinite(schedT) ? 'this cycle (from its due time)' : 'the last ' + CONFIG.cycle_window_days + ' days',
+  const budget = { pages_per_week: pages, spent, room, window_start: new Date(windowStart).toISOString(), ladder_start_window: new Date(startWindow).toISOString(),
+    window: isCycle && Number.isFinite(schedT) ? 'this cycle (from its due time; ladder starts since the previous cadence run)' : 'the last ' + CONFIG.cycle_window_days + ' days',
     spent_keywords: [...spentKeys.entries()].slice(0, 10).map(([k, how]) => ({ keyword: k, how })) };
   const blocked = !!paused_reason || waiting_for_keyword;   // R-K2: at levels 1 and 2 nothing the SYSTEM chooses is written before the first chosen keyword
   // ... but an item the client approved for this cycle is the client's own choice: it is written while the site waits for its first keyword,
@@ -403,9 +505,9 @@ for (const s of list) {
   const picks = pickable.slice(0, room);
   // v4.12: the AI page of the week ON TOP of the pages a week — level 3 only, within the month's allowance, one a week, never while the
   // pile-up guard holds, and never for a site set to 0 pages a week
-  for (const p of picks) if (p.source === 'ladder' && !p.ai_target) { const t = aiTargets.find(x => x.site_id === s.site_id && x.status === 'queued' && x.kind !== 'refresh' && (sameSearch(x.keyword, p.keyword) || sameSearch(p.keyword, x.keyword))); if (t) { p.ai_target = aiTargetOf(t); p.target_id = t.target_id; p.why += ' — written to answer "' + t.question + '" in AI answers'; } }
+  for (const p of picks) if (p.source === 'ladder' && !p.ai_target) { const t = aiTargets.find(x => x.site_id === s.site_id && x.status === 'queued' && x.kind !== 'refresh' && (sameSearch(x.keyword, p.keyword) || sameSearch(p.keyword, x.keyword))); if (t) { p.ai_target = aiTargetOf(t); p.target_id = t.target_id; p.why += '; written to answer "' + t.question + '" in AI answers'; } }
   const aiCand = aiCand0 && !picks.some(x => norm(x.keyword) === norm(aiCand0.keyword)) ? aiCand0 : null;
-  const aiPick = level === 3 && pages > 0 && aiCand && aiDue && !blocked ? aiCand : null;
+  const aiPick = level === 3 && pages > 0 && aiCand && aiCand === aiTop3 && aiDue && !blocked ? aiCand : null;
   if (aiPick) picks.push(aiPick);
   // ---- suggestions: every needs-OK candidate the gate let through, not skipped, not written this run — with its price (max 5, AI first) ----
   const pickedK = new Set(picks.map(p => norm(p.keyword)));
@@ -417,16 +519,21 @@ for (const s of list) {
     .slice(0, CONFIG.suggestions).map(o => itemOf(o, false));
   const pickedU = new Set(picks.map(p => norm(p.keyword)));   // the AI page (v4.12) is not one of uniq
   const upcoming = uniq.filter(x => !pickedU.has(norm(x.keyword))).slice(0, CONFIG.upcoming).map(x => ({ keyword: x.keyword, source: x.source, why: x.why }));
-  const pending = waiting.filter(w => !w.needs_fix).map(w => ({ keyword: w.keyword, started_at: w.written_at, days: Math.round((now - new Date(w.written_at || nowIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);   // D5: ladder pages are in `waiting` too; R111: a failed draft is never a publish reminder
+  const pending = waiting.filter(w => !w.needs_fix).map(w => ({ keyword: w.keyword, started_at: w.written_at, days: Math.round((at - new Date(w.written_at || atIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);   // D5: ladder pages are in `waiting` too; R111: a failed draft is never a publish reminder
   const needs_fix = waiting.filter(w => w.needs_fix).map(w => ({ keyword: w.keyword, written_at: w.written_at, reasons: w.reasons || [] }));   // R111
   const awaitOf = (x, why) => { const l = x.eligible.find(r => !isSkipped(r.keyword) && !approvedSeen.has(cycleNorm(r.keyword))); if (!l) return null;
     return { ladder_id: x.id, head: x.head, keyword: l.keyword, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '',
       item_key: cycleNorm(l.keyword), est_usd: EST_PAGE_USD, chosen_by: x.chosen_by, ...(why ? { why } : {}) }; };
+  const RECHECK_WHY = 'checking this keyword again before writing: it was planned more than ' + CONFIG.recheck_days + ' days ago';
   const awaiting_approval = [...manualL.map(x => awaitOf(x, '')), ...unchosenL.map(x => awaitOf(x, x.chosen_by === 'system_announced'
-      ? 'a keyword we announced: its pages are written on their own only at full autopilot (level 3)' : 'a ladder whose keyword you did not choose (' + (x.chosen_by || 'unknown') + '): its pages wait for your OK'))].filter(Boolean);
+      ? 'a keyword we announced: its pages are written on their own only at full autopilot (level 3)' : 'a ladder whose keyword you did not choose (' + (x.chosen_by || 'unknown') + '): its pages wait for your OK')),
+    ...recheckL.map(x => { const a = awaitOf(x, RECHECK_WHY); return a ? { ...a, recheck: true } : null; })].filter(Boolean);
+  // F-KW (finding 3b): the ladders that wait for the app's fresh Keyword Check (the app checks the head keyword and writes rechecked_at, or pauses it)
+  const recheck_ladders = recheckL.map(x => ({ ladder_id: x.id, head: x.head, planned_at: x.start, reason: RECHECK_WHY }));
   // an approval that is not written this cycle, with the reason: the pile-up guard, the budget, or a live page already answering its search
   const approved_not_written = approved.filter(o => !pickedU.has(norm(o.keyword))).map(o => ({ keyword: o.keyword, source: o.source,
-    reason: paused_reason || (covered.some(c => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget') }));
+    reason: paused_reason || (covered.some(c => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget') }))
+    .concat(approval_ambiguous.map(a => ({ keyword: a.keyword, source: '', reason: 'ambiguous', detail: 'your approval names only the keyword, and ' + a.sources.length + ' different pages share it (' + a.sources.join(', ') + '): approve the one you want again' })));
   const facts = { set_aside, refused, covered_by_live_pages: covered.slice(0, 10), paused_reason, waiting_publish: waitingKw.size,
     needs_fix, needs_fix_keywords: needs_fix.map(w => w.keyword),   // R111: of the waiting pages, the drafts that failed their quality check
     paused_ladders: info.filter(x => x.head_aside).map(x => ({ ladder_id: x.id, head: x.head, reason: x.head_aside.reason })),   // R87
@@ -437,7 +544,7 @@ for (const s of list) {
     // keyword-first (2026-10-19): the level, whether the site still waits for its first keyword, the cycle, the budget, the client's decisions
     cycle_request_id, level, auto_sources: AUTO_SOURCES[level], waiting_for_keyword, client_ladders: clientLadders.length, cycle_key, cycle_date, scheduled_for, trigger: trigger_kind, budget,
     skipped, approved_items: approved.map(o => ({ keyword: o.keyword, source: o.source, item_key: cycleNorm(o.keyword) })), approved_not_written, est_page_usd: EST_PAGE_USD, est_basis,
-    not_chosen_ladders: unchosenL.map(x => ({ ladder_id: x.id, head: x.head, chosen_by: x.chosen_by })),
+    not_chosen_ladders: unchosenL.map(x => ({ ladder_id: x.id, head: x.head, chosen_by: x.chosen_by })), recheck_ladders,
     ai_pages: { per_month: aiQuota, used_this_month: aiUsed, this_week: !!aiPick, next: aiCand ? { keyword: aiCand.keyword, source: aiCand.source, target_id: aiCand.target_id, why: aiCand.why } : null, queued: aiQueue.length, on_top: level === 3 },
     queued_ladders: queued.map(x => ({ ladder_id: x.id, head: x.head, priority: Number.isFinite(x.priority) ? x.priority : null, reason: 'max_active' })),
     won_ladders: info.filter(x => x.won || x.status === 'won').map(x => ({ ladder_id: x.id, head: x.head, position: x.head_position, checks: x.won_checks })),
@@ -465,7 +572,7 @@ for (const s of list) {
     const reason = waiting_for_keyword ? 'waiting for your first keyword: choose the keyword you want to be found for, nothing is written until you do'
         + (suggestions.length ? ' (' + suggestions.length + ' suggestion' + (suggestions.length === 1 ? '' : 's') + ' wait for your OK)' : '')
       : paused_reason ? waitingKw.size + ' written pages waiting for publication (pile-up guard, limit ' + cfg.max_waiting + '): ' + facts.waiting_keywords.slice(0, 6).map(k => '"' + k + '"' + (fixK.has(norm(k)) ? (() => { const cv = coverOf({ keyword: k }); return cv ? ' (not needed: ' + SM.pageStep({ keyword: k, covered_url: cv.url, not_ready: true }).text + ')' : ' (needs a fix: it did not pass the quality check)'; })() : '')).join(', ')
-        + (needs_fix.length ? ' — publish the ones that passed, and fix the ' + needs_fix.length + ' that need a fix and run them again, to continue' : ' — publish them to continue')
+        + (needs_fix.length ? '. Publish the ones that passed, and fix the ' + needs_fix.length + ' that need a fix and run them again, to continue' : '. Publish them to continue')
       : !pages ? 'no pages a week are set for this website, so nothing is written at any autopilot level'
       : (pages && !room && spent) ? 'this cycle\'s ' + pages + ' page' + (pages === 1 ? '' : 's') + ' a week ' + (spent === 1 ? 'is' : 'are') + ' already used: ' + budget.spent_keywords.map(x => '"' + x.keyword + '" (' + x.how + ')').join(', ')
       : dropped.length ? 'nothing to write automatically this week; ' + dropped.length + ' planned page(s) set aside: ' + dropped.slice(0, 3).map(x => x.note).join(' | ')

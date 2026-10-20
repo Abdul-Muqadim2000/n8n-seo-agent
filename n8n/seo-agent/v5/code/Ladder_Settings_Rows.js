@@ -24,12 +24,15 @@ const CHOSEN = ['client_typed', 'client_picked', 'system_announced'];
 const row = (o) => ({ ladder_id: o.ladder_id, site_id, domain, head_keyword: o.head_keyword || '', mode: o.mode || '', priority: o.priority == null ? null : Number(o.priority), status: o.status || '',
   plan_type: o.plan_type || '', reach: o.reach == null || o.reach === '' ? null : Number(o.reach), source: o.source || '', opportunities: o.opportunities || '', auto_start: o.auto_start === true || lc(o.auto_start) === 'true',
   max_active: o.max_active == null || o.max_active === '' ? null : Number(o.max_active), max_waiting: o.max_waiting == null || o.max_waiting === '' ? null : Number(o.max_waiting), created_at: o.created_at || now, updated_at: now,
-  chosen_by: CHOSEN.includes(lc(o.chosen_by)) ? lc(o.chosen_by) : '', autopilot_level: null });
+  chosen_by: CHOSEN.includes(lc(o.chosen_by)) ? lc(o.chosen_by) : '', autopilot_level: null, rechecked_at: String(o.rechecked_at || '') });
 let req = {}; try { req = $('Normalize Input').first().json || {}; } catch (e) { req = {}; }
 const reqChosen = CHOSEN.includes(lc(req.chosen_by)) ? lc(req.chosen_by) : (CHOSEN.includes(lc(d.chosen_by)) ? lc(d.chosen_by) : '');
 const reqMode = ['auto', 'manual'].includes(lc(req.ladder_mode)) ? lc(req.ladder_mode) : (['auto', 'manual'].includes(lc(d.ladder_mode)) ? lc(d.ladder_mode) : '');
 // the site's other ladders (from seo_ladders), oldest first
 const starts = new Map();
+// F-KW (2026-10-20, finding 9): a back-filled row takes the chooser its ladder's OWN rows carry (the ladder run writes chosen_by there first);
+// only a ladder whose rows say nothing (from before the column) is written '' = legacy, read as client_typed by the Content Cadence
+const rowChooser = new Map(); for (const r of rowsOf('Load Domain Ladders')) { const c = lc(r.chosen_by); if (CHOSEN.includes(c) && !rowChooser.has(String(r.ladder_id || ''))) rowChooser.set(String(r.ladder_id || ''), c); }
 for (const r of rowsOf('Load Domain Ladders')) { const lid = String(r.ladder_id || ''); if (!lid || lid === id || reachDomain(r.domain) !== domain) continue;
   const s = String(r.start_date || ''); if (!starts.has(lid) || (s && s < starts.get(lid).start)) starts.set(lid, { start: s, head: String(r.head_keyword || (Number(r.rung) === 4 ? r.keyword : '') || starts.get(lid)?.head || '') }); }
 const existing = [...starts.entries()].map(([lid, x]) => ({ ladder_id: lid, start: x.start, head: x.head, st: settingOf.get(lid) || null }));
@@ -37,12 +40,13 @@ let top = Math.max(0, ...[...settingOf.values()].map(r => prio(r) || 0));   // e
 const out = [];
 for (const e of existing.filter(e => !prio(e.st)).sort((a, b) => a.start.localeCompare(b.start) || a.ladder_id.localeCompare(b.ladder_id))) {
   top += 1;
-  out.push(row(e.st ? { ...e.st, priority: top } : { ladder_id: e.ladder_id, head_keyword: e.head, mode: '', priority: top, status: '', plan_type: '', reach: null, source: 'system', chosen_by: '' }));   // chosen_by '' = legacy, read as client_typed
+  out.push(row(e.st ? { ...e.st, priority: top, chosen_by: lc(e.st.chosen_by) || rowChooser.get(e.ladder_id) || '' } : { ladder_id: e.ladder_id, head_keyword: e.head, mode: '', priority: top, status: '', plan_type: '', reach: null, source: 'system', chosen_by: rowChooser.get(e.ladder_id) || '' }));   // '' only for a legacy ladder
 }
 const own = settingOf.get(id) || null;
 const siteMode = siteRow && ['auto', 'manual'].includes(lc(siteRow.mode)) ? lc(siteRow.mode) : 'auto';
 out.push(row({ ladder_id: id, head_keyword: (L.head || {}).keyword || d.keyword || '', mode: reqMode || (own && ['auto', 'manual'].includes(lc(own.mode)) ? lc(own.mode) : siteMode),
   chosen_by: reqChosen || (own && CHOSEN.includes(lc(own.chosen_by)) ? lc(own.chosen_by) : 'client_typed'),
   priority: prio(own) || top + 1, status: own && lc(own.status) ? lc(own.status) : 'active', plan_type: L.plan_type || '', reach: L.reach, source: own && own.source ? own.source : 'ladder',
-  opportunities: own ? own.opportunities : '', auto_start: own ? own.auto_start : false, max_active: own ? own.max_active : null, max_waiting: own ? own.max_waiting : null, created_at: own && own.created_at ? own.created_at : now }));
+  opportunities: own ? own.opportunities : '', auto_start: own ? own.auto_start : false, max_active: own ? own.max_active : null, max_waiting: own ? own.max_waiting : null, created_at: own && own.created_at ? own.created_at : now,
+  rechecked_at: own ? own.rechecked_at : '' }));
 return out.map(r => ({ json: r }));

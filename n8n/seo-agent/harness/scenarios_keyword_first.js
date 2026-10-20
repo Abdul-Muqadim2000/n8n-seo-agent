@@ -299,7 +299,7 @@ module.exports = async (ctx) => {
     const sr = (await run('Ladder Settings Rows', store['Save Ladder Rows'])).map(r => r.json);
     const mine = sr.find(r => r.ladder_id === L.ladder_id) || {};
     check('the settings row stores chosen_by and the start mode from the request', mine.chosen_by === 'client_typed' && mine.mode === 'manual' && mine.autopilot_level === null, JSON.stringify(mine));
-    const SET_COLS = ['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at', 'chosen_by', 'autopilot_level'];   // ladder_common.py LADDER_SETTINGS_COLS
+    const SET_COLS = ['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at', 'chosen_by', 'autopilot_level', 'rechecked_at'];   // ladder_common.py LADDER_SETTINGS_COLS
     check('the settings row has exactly the seo_ladder_settings columns', sr.every(r => eq(Object.keys(r).sort(), [...SET_COLS].sort())), JSON.stringify(Object.keys(mine)));
     mock('Normalize Input', [{ json: { ...nL[0].json, chosen_by: '', ladder_mode: '' } }]);
     const sr2 = (await run('Ladder Settings Rows', store['Save Ladder Rows'])).map(r => r.json);

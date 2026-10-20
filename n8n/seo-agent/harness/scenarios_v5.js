@@ -1693,7 +1693,7 @@ await guard('pipeline phase 3', async () => {
   const EMPTY = [{ json: {} }];
   const keysOf = (o) => JSON.stringify(Object.keys(o || {}).sort());
   const CACHE_COLS = JSON.stringify(['key', 'kind', 'site_id', 'value', 'updated_at'].sort());
-  const SET_COLS = JSON.stringify(['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at', 'chosen_by', 'autopilot_level'].sort());   // + keyword-first (2026-10-19)
+  const SET_COLS = JSON.stringify(['ladder_id', 'site_id', 'domain', 'head_keyword', 'mode', 'priority', 'status', 'plan_type', 'reach', 'source', 'opportunities', 'auto_start', 'max_active', 'max_waiting', 'created_at', 'updated_at', 'chosen_by', 'autopilot_level', 'rechecked_at'].sort());   // + keyword-first (2026-10-19), rechecked_at (F-KW 2026-10-20)
   // the overlap rule of the web app (app/shared/src/ladders.ts), to check the n8n side independently
   const STOPW = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);
   const toks = (s) => [...new Set(String(s).toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 1 && !STOPW.has(t)).map(t => t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '')).filter(Boolean))];
