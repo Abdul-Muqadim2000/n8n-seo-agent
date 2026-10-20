@@ -1,21 +1,571 @@
 {
- "_comment": "The deploy guard's cases (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4.8). Build section 140 runs deploy_guard.deploy_window (Python, what apply_env.py and deploy_engine.py ask) on every case; harness CY12 runs CYC.deployWindow (the cycle kit) on the same cases and compares both with `want` and with each other. now = 2026-10-21T14:00:00Z in every case; a job row is fresh for 2 h 10 min; a cycle or preview counts from 10 min before now to `minutes` (15) after.",
+ "_comment": "The deploy guard's cases (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4.8; the rule made precise by F-ENG 2026-10-20). Build section 140 runs deploy_guard.deploy_window (Python, what apply_env.py and deploy_engine.py ask) on every case; harness CY12 runs CYC.deployWindow (the cycle kit, also what n8n/deploy/release.mjs asks) on the same cases and compares both with `want` and with each other. now = 2026-10-21T14:00:00Z in every case. REFUSE (busy) while a job is starting (a starting row is fresh for 15 min) or a cycle / preview is due from 10 min before now to `minutes` (15) after; a running job (fresh for 2 h 10 min) is REPORTED, never refused: a restart kills it and the dispatcher retries it.",
  "now": "2026-10-21T14:00:00.000Z",
  "cases": [
-  {"name": "nothing at all", "jobs": [], "cycles": [], "want": {"busy": false, "inflight": [], "due": 0}},
-  {"name": "a job running, last written 30 min ago", "jobs": [{"key": "cyc:site_a:2026-10-21:backlinks", "job": "backlinks", "status": "running", "updated_at": "2026-10-21T13:30:00.000Z", "started_at": "2026-10-21T13:25:00.000Z"}], "cycles": [], "want": {"busy": true, "inflight": ["cyc:site_a:2026-10-21:backlinks"], "due": 0}},
-  {"name": "a job starting a minute ago", "jobs": [{"key": "cyc:site_a:2026-10-21:ai_visibility", "job": "ai_visibility", "status": "starting", "updated_at": "2026-10-21T13:59:00.000Z", "started_at": "2026-10-21T13:59:00.000Z"}], "cycles": [], "want": {"busy": true, "inflight": ["cyc:site_a:2026-10-21:ai_visibility"], "due": 0}},
-  {"name": "a running row three hours old is a crashed run, ignored", "jobs": [{"key": "cyc:site_a:2026-10-21:audit", "job": "audit", "status": "running", "updated_at": "2026-10-21T11:00:00.000Z", "started_at": "2026-10-21T10:55:00.000Z"}], "cycles": [], "want": {"busy": false, "inflight": [], "due": 0, "ignored": 1}},
-  {"name": "a cycle marker is not a job", "jobs": [{"key": "cyc:site_a:2026-10-21:cycle", "job": "cycle", "status": "running", "updated_at": "2026-10-21T13:50:00.000Z"}], "cycles": [], "want": {"busy": false, "inflight": [], "due": 0}},
-  {"name": "done, skipped and gave-up jobs hold nothing", "jobs": [{"key": "cyc:site_a:2026-10-21:backlinks", "job": "backlinks", "status": "done", "updated_at": "2026-10-21T13:55:00.000Z"}, {"key": "cyc:site_a:2026-10-21:audit", "job": "audit", "status": "skipped", "updated_at": "2026-10-21T13:55:00.000Z"}, {"key": "cyc:site_a:2026-10-21:link_builder", "job": "link_builder", "status": "gave_up", "updated_at": "2026-10-21T13:55:00.000Z"}], "cycles": [], "want": {"busy": false, "inflight": [], "due": 0}},
-  {"name": "a cycle due in 10 minutes", "jobs": [], "cycles": [{"site_id": "site_a", "domain": "a.com", "status": "active", "next_due_at": "2026-10-21T14:10:00.000Z", "next_preview_at": ""}], "want": {"busy": true, "inflight": [], "due": 1}},
-  {"name": "a cycle due in 20 minutes is outside the window", "jobs": [], "cycles": [{"site_id": "site_a", "domain": "a.com", "status": "active", "next_due_at": "2026-10-21T14:20:00.000Z", "next_preview_at": ""}], "want": {"busy": false, "inflight": [], "due": 0}},
-  {"name": "a cycle that became due 5 minutes ago is about to start", "jobs": [], "cycles": [{"site_id": "site_a", "domain": "www.a.com", "status": "active", "next_due_at": "2026-10-21T13:55:00.000Z", "next_preview_at": ""}], "want": {"busy": true, "inflight": [], "due": 1}},
-  {"name": "a cycle overdue for 30 minutes (a plan-only dispatcher) does not block deploys for ever", "jobs": [], "cycles": [{"site_id": "site_a", "domain": "a.com", "status": "active", "next_due_at": "2026-10-21T13:30:00.000Z", "next_preview_at": ""}], "want": {"busy": false, "inflight": [], "due": 0}},
-  {"name": "a preview due in 14 minutes", "jobs": [], "cycles": [{"site_id": "site_b", "domain": "b.org", "status": "active", "next_due_at": "2026-10-23T10:00:00.000Z", "next_preview_at": "2026-10-21T14:14:00.000Z"}], "want": {"busy": true, "inflight": [], "due": 1}},
-  {"name": "a paused or switched-off website's due cycle holds nothing", "jobs": [], "cycles": [{"site_id": "site_a", "domain": "a.com", "status": "paused", "next_due_at": "2026-10-21T14:05:00.000Z", "next_preview_at": ""}, {"site_id": "site_c", "domain": "c.net", "status": "off", "next_due_at": "2026-10-21T14:05:00.000Z", "next_preview_at": ""}], "want": {"busy": false, "inflight": [], "due": 0}},
-  {"name": "a wider window (30 minutes) sees a cycle due in 20", "minutes": 30, "jobs": [], "cycles": [{"site_id": "site_a", "domain": "a.com", "status": "active", "next_due_at": "2026-10-21T14:20:00.000Z", "next_preview_at": ""}], "want": {"busy": true, "inflight": [], "due": 1}},
-  {"name": "a running job and two starts due: all named", "jobs": [{"key": "cyc:site_b:2026-10-20:link_builder", "job": "link_builder", "status": "running", "updated_at": "2026-10-21T13:40:00.000Z"}], "cycles": [{"site_id": "site_a", "domain": "a.com", "status": "active", "next_due_at": "2026-10-21T14:12:00.000Z", "next_preview_at": "2026-10-19T14:12:00.000Z"}, {"site_id": "site_d", "domain": "d.io", "status": "", "next_due_at": "2026-10-28T10:00:00.000Z", "next_preview_at": "2026-10-21T14:01:00.000Z"}], "want": {"busy": true, "inflight": ["cyc:site_b:2026-10-20:link_builder"], "due": 2}},
-  {"name": "a row with no times at all is not counted as fresh", "jobs": [{"key": "cyc:site_a:2026-10-21:rank_tracker", "job": "rank_tracker", "status": "running"}], "cycles": [{"site_id": "site_a", "domain": "a.com", "status": "active", "next_due_at": "", "next_preview_at": ""}], "want": {"busy": false, "inflight": [], "due": 0, "ignored": 1}}
+  {
+   "name": "nothing at all",
+   "jobs": [],
+   "cycles": [],
+   "want": {
+    "busy": false,
+    "due": 0,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "a job running, last written 30 min ago",
+   "jobs": [
+    {
+     "key": "cyc:site_a:2026-10-21:backlinks",
+     "job": "backlinks",
+     "status": "running",
+     "updated_at": "2026-10-21T13:30:00.000Z",
+     "started_at": "2026-10-21T13:25:00.000Z"
+    }
+   ],
+   "cycles": [],
+   "want": {
+    "busy": false,
+    "due": 0,
+    "starting": [],
+    "running": [
+     "cyc:site_a:2026-10-21:backlinks"
+    ]
+   }
+  },
+  {
+   "name": "a job starting a minute ago",
+   "jobs": [
+    {
+     "key": "cyc:site_a:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "starting",
+     "updated_at": "2026-10-21T13:59:00.000Z",
+     "started_at": "2026-10-21T13:59:00.000Z"
+    }
+   ],
+   "cycles": [],
+   "want": {
+    "busy": true,
+    "due": 0,
+    "starting": [
+     "cyc:site_a:2026-10-21:ai_visibility"
+    ],
+    "running": []
+   }
+  },
+  {
+   "name": "a running row three hours old is a crashed run, ignored",
+   "jobs": [
+    {
+     "key": "cyc:site_a:2026-10-21:audit",
+     "job": "audit",
+     "status": "running",
+     "updated_at": "2026-10-21T11:00:00.000Z",
+     "started_at": "2026-10-21T10:55:00.000Z"
+    }
+   ],
+   "cycles": [],
+   "want": {
+    "busy": false,
+    "due": 0,
+    "ignored": 1,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "a cycle marker is not a job",
+   "jobs": [
+    {
+     "key": "cyc:site_a:2026-10-21:cycle",
+     "job": "cycle",
+     "status": "running",
+     "updated_at": "2026-10-21T13:50:00.000Z"
+    }
+   ],
+   "cycles": [],
+   "want": {
+    "busy": false,
+    "due": 0,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "done, skipped and gave-up jobs hold nothing",
+   "jobs": [
+    {
+     "key": "cyc:site_a:2026-10-21:backlinks",
+     "job": "backlinks",
+     "status": "done",
+     "updated_at": "2026-10-21T13:55:00.000Z"
+    },
+    {
+     "key": "cyc:site_a:2026-10-21:audit",
+     "job": "audit",
+     "status": "skipped",
+     "updated_at": "2026-10-21T13:55:00.000Z"
+    },
+    {
+     "key": "cyc:site_a:2026-10-21:link_builder",
+     "job": "link_builder",
+     "status": "gave_up",
+     "updated_at": "2026-10-21T13:55:00.000Z"
+    }
+   ],
+   "cycles": [],
+   "want": {
+    "busy": false,
+    "due": 0,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "a cycle due in 10 minutes",
+   "jobs": [],
+   "cycles": [
+    {
+     "site_id": "site_a",
+     "domain": "a.com",
+     "status": "active",
+     "next_due_at": "2026-10-21T14:10:00.000Z",
+     "next_preview_at": ""
+    }
+   ],
+   "want": {
+    "busy": true,
+    "due": 1,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "a cycle due in 20 minutes is outside the window",
+   "jobs": [],
+   "cycles": [
+    {
+     "site_id": "site_a",
+     "domain": "a.com",
+     "status": "active",
+     "next_due_at": "2026-10-21T14:20:00.000Z",
+     "next_preview_at": ""
+    }
+   ],
+   "want": {
+    "busy": false,
+    "due": 0,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "a cycle that became due 5 minutes ago is about to start",
+   "jobs": [],
+   "cycles": [
+    {
+     "site_id": "site_a",
+     "domain": "www.a.com",
+     "status": "active",
+     "next_due_at": "2026-10-21T13:55:00.000Z",
+     "next_preview_at": ""
+    }
+   ],
+   "want": {
+    "busy": true,
+    "due": 1,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "a cycle overdue for 30 minutes (a plan-only dispatcher) does not block deploys for ever",
+   "jobs": [],
+   "cycles": [
+    {
+     "site_id": "site_a",
+     "domain": "a.com",
+     "status": "active",
+     "next_due_at": "2026-10-21T13:30:00.000Z",
+     "next_preview_at": ""
+    }
+   ],
+   "want": {
+    "busy": false,
+    "due": 0,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "a preview due in 14 minutes",
+   "jobs": [],
+   "cycles": [
+    {
+     "site_id": "site_b",
+     "domain": "b.org",
+     "status": "active",
+     "next_due_at": "2026-10-23T10:00:00.000Z",
+     "next_preview_at": "2026-10-21T14:14:00.000Z"
+    }
+   ],
+   "want": {
+    "busy": true,
+    "due": 1,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "a paused or switched-off website's due cycle holds nothing",
+   "jobs": [],
+   "cycles": [
+    {
+     "site_id": "site_a",
+     "domain": "a.com",
+     "status": "paused",
+     "next_due_at": "2026-10-21T14:05:00.000Z",
+     "next_preview_at": ""
+    },
+    {
+     "site_id": "site_c",
+     "domain": "c.net",
+     "status": "off",
+     "next_due_at": "2026-10-21T14:05:00.000Z",
+     "next_preview_at": ""
+    }
+   ],
+   "want": {
+    "busy": false,
+    "due": 0,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "a wider window (30 minutes) sees a cycle due in 20",
+   "minutes": 30,
+   "jobs": [],
+   "cycles": [
+    {
+     "site_id": "site_a",
+     "domain": "a.com",
+     "status": "active",
+     "next_due_at": "2026-10-21T14:20:00.000Z",
+     "next_preview_at": ""
+    }
+   ],
+   "want": {
+    "busy": true,
+    "due": 1,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "a running job and two starts due: all named",
+   "jobs": [
+    {
+     "key": "cyc:site_b:2026-10-20:link_builder",
+     "job": "link_builder",
+     "status": "running",
+     "updated_at": "2026-10-21T13:40:00.000Z"
+    }
+   ],
+   "cycles": [
+    {
+     "site_id": "site_a",
+     "domain": "a.com",
+     "status": "active",
+     "next_due_at": "2026-10-21T14:12:00.000Z",
+     "next_preview_at": "2026-10-19T14:12:00.000Z"
+    },
+    {
+     "site_id": "site_d",
+     "domain": "d.io",
+     "status": "",
+     "next_due_at": "2026-10-28T10:00:00.000Z",
+     "next_preview_at": "2026-10-21T14:01:00.000Z"
+    }
+   ],
+   "want": {
+    "busy": true,
+    "due": 2,
+    "starting": [],
+    "running": [
+     "cyc:site_b:2026-10-20:link_builder"
+    ]
+   }
+  },
+  {
+   "name": "a row with no times at all is not counted as fresh",
+   "jobs": [
+    {
+     "key": "cyc:site_a:2026-10-21:rank_tracker",
+     "job": "rank_tracker",
+     "status": "running"
+    }
+   ],
+   "cycles": [
+    {
+     "site_id": "site_a",
+     "domain": "a.com",
+     "status": "active",
+     "next_due_at": "",
+     "next_preview_at": ""
+    }
+   ],
+   "want": {
+    "busy": false,
+    "due": 0,
+    "ignored": 1,
+    "starting": [],
+    "running": []
+   }
+  },
+  {
+   "name": "a job starting 12 minutes ago is still between its claim and its ledger row: refuse",
+   "jobs": [
+    {
+     "key": "cyc:site_a:2026-10-21:backlinks",
+     "job": "backlinks",
+     "status": "starting",
+     "updated_at": "2026-10-21T13:48:00.000Z",
+     "started_at": "2026-10-21T13:48:00.000Z"
+    }
+   ],
+   "cycles": [],
+   "want": {
+    "busy": true,
+    "starting": [
+     "cyc:site_a:2026-10-21:backlinks"
+    ],
+    "running": [],
+    "due": 0
+   }
+  },
+  {
+   "name": "a job starting 20 minutes ago never started (the dispatcher fails it): ignored, go",
+   "jobs": [
+    {
+     "key": "cyc:site_a:2026-10-21:backlinks",
+     "job": "backlinks",
+     "status": "starting",
+     "updated_at": "2026-10-21T13:40:00.000Z",
+     "started_at": "2026-10-21T13:40:00.000Z"
+    }
+   ],
+   "cycles": [],
+   "want": {
+    "busy": false,
+    "starting": [],
+    "running": [],
+    "due": 0,
+    "ignored": 1
+   }
+  },
+  {
+   "name": "twenty websites running their cycles at once: reported, not refused",
+   "jobs": [
+    {
+     "key": "cyc:site_00:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:10:00.000Z",
+     "started_at": "2026-10-21T13:10:00.000Z"
+    },
+    {
+     "key": "cyc:site_01:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:11:00.000Z",
+     "started_at": "2026-10-21T13:11:00.000Z"
+    },
+    {
+     "key": "cyc:site_02:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:12:00.000Z",
+     "started_at": "2026-10-21T13:12:00.000Z"
+    },
+    {
+     "key": "cyc:site_03:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:13:00.000Z",
+     "started_at": "2026-10-21T13:13:00.000Z"
+    },
+    {
+     "key": "cyc:site_04:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:14:00.000Z",
+     "started_at": "2026-10-21T13:14:00.000Z"
+    },
+    {
+     "key": "cyc:site_05:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:15:00.000Z",
+     "started_at": "2026-10-21T13:15:00.000Z"
+    },
+    {
+     "key": "cyc:site_06:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:16:00.000Z",
+     "started_at": "2026-10-21T13:16:00.000Z"
+    },
+    {
+     "key": "cyc:site_07:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:17:00.000Z",
+     "started_at": "2026-10-21T13:17:00.000Z"
+    },
+    {
+     "key": "cyc:site_08:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:18:00.000Z",
+     "started_at": "2026-10-21T13:18:00.000Z"
+    },
+    {
+     "key": "cyc:site_09:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:19:00.000Z",
+     "started_at": "2026-10-21T13:19:00.000Z"
+    },
+    {
+     "key": "cyc:site_10:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:20:00.000Z",
+     "started_at": "2026-10-21T13:20:00.000Z"
+    },
+    {
+     "key": "cyc:site_11:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:21:00.000Z",
+     "started_at": "2026-10-21T13:21:00.000Z"
+    },
+    {
+     "key": "cyc:site_12:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:22:00.000Z",
+     "started_at": "2026-10-21T13:22:00.000Z"
+    },
+    {
+     "key": "cyc:site_13:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:23:00.000Z",
+     "started_at": "2026-10-21T13:23:00.000Z"
+    },
+    {
+     "key": "cyc:site_14:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:24:00.000Z",
+     "started_at": "2026-10-21T13:24:00.000Z"
+    },
+    {
+     "key": "cyc:site_15:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:25:00.000Z",
+     "started_at": "2026-10-21T13:25:00.000Z"
+    },
+    {
+     "key": "cyc:site_16:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:26:00.000Z",
+     "started_at": "2026-10-21T13:26:00.000Z"
+    },
+    {
+     "key": "cyc:site_17:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:27:00.000Z",
+     "started_at": "2026-10-21T13:27:00.000Z"
+    },
+    {
+     "key": "cyc:site_18:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:28:00.000Z",
+     "started_at": "2026-10-21T13:28:00.000Z"
+    },
+    {
+     "key": "cyc:site_19:2026-10-21:ai_visibility",
+     "job": "ai_visibility",
+     "status": "running",
+     "updated_at": "2026-10-21T13:29:00.000Z",
+     "started_at": "2026-10-21T13:29:00.000Z"
+    }
+   ],
+   "cycles": [],
+   "want": {
+    "busy": false,
+    "starting": [],
+    "running": [
+     "cyc:site_00:2026-10-21:ai_visibility",
+     "cyc:site_01:2026-10-21:ai_visibility",
+     "cyc:site_02:2026-10-21:ai_visibility",
+     "cyc:site_03:2026-10-21:ai_visibility",
+     "cyc:site_04:2026-10-21:ai_visibility",
+     "cyc:site_05:2026-10-21:ai_visibility",
+     "cyc:site_06:2026-10-21:ai_visibility",
+     "cyc:site_07:2026-10-21:ai_visibility",
+     "cyc:site_08:2026-10-21:ai_visibility",
+     "cyc:site_09:2026-10-21:ai_visibility",
+     "cyc:site_10:2026-10-21:ai_visibility",
+     "cyc:site_11:2026-10-21:ai_visibility",
+     "cyc:site_12:2026-10-21:ai_visibility",
+     "cyc:site_13:2026-10-21:ai_visibility",
+     "cyc:site_14:2026-10-21:ai_visibility",
+     "cyc:site_15:2026-10-21:ai_visibility",
+     "cyc:site_16:2026-10-21:ai_visibility",
+     "cyc:site_17:2026-10-21:ai_visibility",
+     "cyc:site_18:2026-10-21:ai_visibility",
+     "cyc:site_19:2026-10-21:ai_visibility"
+    ],
+    "due": 0
+   }
+  },
+  {
+   "name": "one running and one starting: the starting one refuses",
+   "jobs": [
+    {
+     "key": "cyc:site_a:2026-10-21:audit",
+     "job": "audit",
+     "status": "running",
+     "updated_at": "2026-10-21T13:20:00.000Z"
+    },
+    {
+     "key": "cyc:site_b:2026-10-21:rank_tracker",
+     "job": "rank_tracker",
+     "status": "starting",
+     "updated_at": "2026-10-21T13:58:30.000Z"
+    }
+   ],
+   "cycles": [],
+   "want": {
+    "busy": true,
+    "starting": [
+     "cyc:site_b:2026-10-21:rank_tracker"
+    ],
+    "running": [
+     "cyc:site_a:2026-10-21:audit"
+    ],
+    "due": 0
+   }
+  }
  ]
 }

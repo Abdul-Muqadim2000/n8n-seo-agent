@@ -12,8 +12,10 @@ wall-clock time and a sleeping VM cancelled sweep 728 - and a plan older than 10
 Three doors: n8n's own *Instance Started* (a restart only delays a cycle to the next sweep; a job it killed is read off its ledger row
 and retried), the 5-minute *Cycle Sweep*, and *Cycle Run* (a test: { dry_run?, plan_only?, now? }; `now` only with dry_run).
 The switch: seo_cache `cycle:mode` = {"mode":"start"} starts jobs; with no row (the default) it only plans and reports, so a deploy can
-never start customer work by itself. The workflow is built INACTIVE and is not in the publish list (deploy_manifest.json): the owner
-activates it, reads one plan-only sweep's report, then flips the mode (plan §10 steps 5 and 8).
+never start customer work by itself. F-ENG (2026-10-20): the workflow IS in the publish list (deploy_manifest.json) - a deploy that imports
+it and leaves it inactive (an import deactivates) silently stopped every website's week. The mode row is the safety switch, not the
+activation: on a first deploy it sweeps in plan_only, the owner reads one sweep's report (seo_cache cycle:last), then flips the mode (plan
+§10). The Schedule Catch-up's watchdog alerts when the dispatcher is inactive or its last sweep is older than 20 minutes.
 The decision is the pure kit v5/code/_cycle.js (harness scenarios_cycle.js); build_v4.py section 140 proves the wiring.
 """
 import json, os, re
@@ -21,7 +23,7 @@ import env_settings as _env   # B-F5: a build with no n8n/.env refuses, unless t
 _env.require_settings('build_cycle.py')
 import url_lint, retry_lint
 from env_settings import ENV
-from ladder_common import (DT_TYPE, DT_VERSION, CACHE_TABLE, CACHE_COLS, RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, RUN_GUARD_SRC, CATCHUP_SRC, SITES_TABLE, MONITORS_TABLE,
+from ladder_common import (DT_TYPE, DT_VERSION, dt_schema, CACHE_TABLE, CACHE_COLS, RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, RUN_GUARD_SRC, CATCHUP_SRC, SITES_TABLE, MONITORS_TABLE,
                            CADENCE_TABLE, LADDER_TABLE, LADDER_SETTINGS_TABLE, CYCLES_TABLE, CYCLES_COLS, CYCLE_JOBS_TABLE, CYCLE_JOBS_COLS, SKIPS_TABLE, SKIPS_COLS,
                            dt_create_params, dt_upsert_params, dt_get_all_params, dt_get_where_params, dt_get_all_where_params, dt_delete_where_params,
                            node_id, freeze_ids, read_v5)
@@ -33,14 +35,16 @@ CODE_PREFIX = 'Cycle__'
 DEFAULT_TZ = 'America/New_York'
 TZ = (ENV.get('GENERIC_TIMEZONE') or '').strip() or DEFAULT_TZ
 N8N_API = ((ENV.get('SEO_N8N_API_URL') or '').strip() or 'http://localhost:5678/api/v1').rstrip('/')   # n8n's own API, from inside its container
-EXEC_LIMIT = 100   # one page of a workflow's newest executions: far more than start in the 10 minutes a start is looked for
+EXEC_LIMIT = 250   # n8n 2.41.4's public API page maximum (MAX_ITEMS_PER_PAGE): one read of a 10-minute window of a workflow's runs
 CRED = {'httpHeaderAuth': {'id': 'SEOcredN8nApiKey', 'name': 'n8n API (SEO Agent catch-up)'}}   # the catch-up's credential (sync_credentials.py, N8N_API_KEY)
 SWEEP, SWEEP_CRON = 'Cycle Sweep (every 5 min)', '3-58/5 * * * *'   # offset from the catch-up's 7,22,37,52 so the two never sweep in the same minute
 LEDGER_DAYS, JOBS_DAYS = 2, 40   # the ledger rows an outcome is read from; the job rows a plan reads (older ones are finished or set aside)
 STALE_PLAN_MINUTES = 10
 # the kit's defaults, repeated here so a reader of the workflow sees the numbers; harness CY13+ runs the generated node with them
 CONFIG = {'local_time': '06:00', 'spacing_days': 3, 'next_gap_hours': 12, 'preview_hours': 48, 'preview_min_lead_hours': 6, 'max_starts': 2, 'max_inflight': 2,
-          'max_attempts': 3, 'refusal_hours': 24, 'confirm_minutes': 10, 'retention_days': 120, 'engine_tz': TZ}
+          'max_attempts': 3, 'refusal_hours': 24, 'confirm_minutes': 10, 'retention_days': 120, 'engine_tz': TZ,
+          'exec_page': EXEC_LIMIT, 'max_exec_reads': 60, 'init_quiet_minutes': 2}
+CLAIM_HOLD_SECONDS = 2   # F-ENG: the claim is held this long before it is read back, so two sweeps' writes both land before either reads
 CYCLES_TS = os.path.join(HERE, '..', '..', 'app', 'shared', 'src', 'cycles.ts')
 
 
@@ -151,6 +155,8 @@ node('Ensure Cycle Jobs Table', DT_TYPE, DT_VERSION, dt_create_params(CYCLE_JOBS
 node('Ensure Skips Table', DT_TYPE, DT_VERSION, dt_create_params(SKIPS_TABLE, SKIPS_COLS), at(5, 1), **LOAD)
 node('Ensure Cache Table (Cycle)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), at(6, 1), **LOAD)
 node('Load Cycle Mode', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', 'cycle:mode'), at(7, 1), **LOAD)
+# F-ENG (2026-10-20): the last sweep's record - the Instance Started door stands down when a sweep finished in the last 2 minutes
+node('Load Cycle Last', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', 'cycle:last'), at(7, 2), **LOAD)
 node('Load Cycles', DT_TYPE, DT_VERSION, dt_get_all_params(CYCLES_TABLE), at(8, 1), **LOAD)
 node('Load Cycle Jobs', DT_TYPE, DT_VERSION, dt_get_all_where_params(CYCLE_JOBS_TABLE, [('updated_at', 'gte', ago(JOBS_DAYS))]), at(9, 1), **LOAD)
 node('Load Sites (Cycle)', DT_TYPE, DT_VERSION, dt_get_all_params(SITES_TABLE), at(10, 1), **LOAD)
@@ -168,7 +174,14 @@ node('Read Executions (Cycle)', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'G
 code('Cycle Plan', 'Cycle_Plan.js', at(19, 1))
 # ---- what changed, written before anything starts: the websites' cycle rows, then the job rows (outcomes, skips, markers) ----
 code('Cycle State Rows', 'Cycle_State_Rows.js', at(20, 1)); iff('Any Cycle Rows?', '{{ !$json.skip }}', at(21, 1))
-node('Save Cycle Rows', DT_TYPE, DT_VERSION, dt_upsert_params(CYCLES_TABLE, CYCLES_COLS, 'site_id'), at(22, 0), **SAVE)
+node('Save Cycle Rows', DT_TYPE, DT_VERSION, dt_upsert_params(CYCLES_TABLE, CYCLES_COLS, 'site_id'), at(22, 0), **SAVE)   # new (adopted) rows only, whole
+# F-ENG (2026-10-20): a row that exists is UPDATED by site_id with only the fields the sweep changed (the input item carries exactly those), so an
+# app PATCH of the weekday made mid-sweep is never put back from this sweep's snapshot
+code('Cycle State Updates', 'Cycle_State_Updates.js', at(22, 2)); iff('Any Cycle Updates?', '{{ !$json.skip }}', at(22, 3))
+node('Update Cycle Rows', DT_TYPE, DT_VERSION, {'resource': 'row', 'operation': 'update', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': CYCLES_TABLE},
+     'matchType': 'allConditions', 'filters': {'conditions': [{'keyName': 'site_id', 'condition': 'eq', 'keyValue': '={{ $json.site_id }}'}]},
+     'columns': {'mappingMode': 'autoMapInputData', 'value': None, 'matchingColumns': [], 'schema': dt_schema(CYCLES_COLS), 'attemptToConvertTypes': True, 'convertFieldsToString': False},
+     'options': {}}, at(23, 3), **SAVE)
 code('Cycle Job Rows', 'Cycle_Job_Rows.js', at(23, 1)); iff('Any Job Rows?', '{{ !$json.skip }}', at(24, 1))
 node('Save Cycle Job Rows', DT_TYPE, DT_VERSION, dt_upsert_params(CYCLE_JOBS_TABLE, CYCLE_JOBS_COLS, 'key'), at(25, 0), **SAVE)
 # a reservation whose run n8n reports crashed / canceled is released (`stale`, what Release Stale Runs writes after 2 h), so its retry is not
@@ -179,8 +192,11 @@ node('Release Dead Runs', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE
 # ---- the starts: RECORD, read the claim back, then start - one at a time ----
 code('Cycle Start Items', 'Cycle_Start_Items.js', at(26, 1)); iff('Any Cycle Starts?', '{{ !$json.skip }}', at(27, 1))
 node('Loop Cycle Starts', 'n8n-nodes-base.splitInBatches', 3, {'batchSize': 1, 'options': {}}, at(28, 1))
-code('Cycle Record Row', 'Cycle_Record_Row.js', at(29, 2))
+# F-ENG (2026-10-20): the row is read again just before the claim; the claim is written only when it is still what the plan saw
+node('Read Claim (Cycle)', DT_TYPE, DT_VERSION, dt_get_where_params(CYCLE_JOBS_TABLE, 'key', 'eq', "={{ $('Loop Cycle Starts').first().json.key }}"), at(29, 3), **LOAD)
+code('Cycle Record Row', 'Cycle_Record_Row.js', at(29, 2)); iff('Claim Free?', '{{ !$json.skip }}', at(30, 3))
 node('Save Cycle Record', DT_TYPE, DT_VERSION, dt_upsert_params(CYCLE_JOBS_TABLE, CYCLE_JOBS_COLS, 'key'), at(30, 2), **SAVE)
+node('Hold Claim (Cycle)', 'n8n-nodes-base.wait', 1.1, {'amount': CLAIM_HOLD_SECONDS, 'unit': 'seconds'}, at(31, 3), webhookId=node_id(NAME, 'Hold Claim (Cycle):hook'))
 node('Confirm Cycle Claim', DT_TYPE, DT_VERSION, dt_get_where_params(CYCLE_JOBS_TABLE, 'key', 'eq', "={{ $('Cycle Record Row').first().json.key }}"), at(31, 2), **LOAD)
 code('Cycle Payload', 'Cycle_Payload.js', at(32, 2)); iff('Cycle Recorded?', '{{ !$json.skip }}', at(33, 2))
 # answer first, then run (CLAUDE.md): the start does not wait for the run - the started workflow is its own execution with its own ledger
@@ -199,24 +215,28 @@ code('Cycle Alarm', 'Cycle_Alarm.js', at(34, 0))
 
 link('Instance Started', 'Let n8n Start (Cycle)'); link('Let n8n Start (Cycle)', 'Cycle Entry'); link(SWEEP, 'Cycle Entry'); link('Cycle Run', 'Cycle Entry')
 for a, b in [('Cycle Entry', 'Ensure Cycles Table'), ('Ensure Cycles Table', 'Ensure Cycle Jobs Table'), ('Ensure Cycle Jobs Table', 'Ensure Skips Table'),
-             ('Ensure Skips Table', 'Ensure Cache Table (Cycle)'), ('Ensure Cache Table (Cycle)', 'Load Cycle Mode'), ('Load Cycle Mode', 'Load Cycles'),
+             ('Ensure Skips Table', 'Ensure Cache Table (Cycle)'), ('Ensure Cache Table (Cycle)', 'Load Cycle Mode'), ('Load Cycle Mode', 'Load Cycle Last'), ('Load Cycle Last', 'Load Cycles'),
              ('Load Cycles', 'Load Cycle Jobs'), ('Load Cycle Jobs', 'Load Sites (Cycle)'), ('Load Sites (Cycle)', 'Load Monitors (Cycle)'),
              ('Load Monitors (Cycle)', 'Load Cadence (Cycle)'), ('Load Cadence (Cycle)', 'Load Ladder Settings (Cycle)'), ('Load Ladder Settings (Cycle)', 'Load Ladders (Cycle)'),
              ('Load Ladders (Cycle)', 'Load Run Ledger (Cycle)'), ('Load Run Ledger (Cycle)', 'Cycle Exec Requests'), ('Cycle Exec Requests', 'Any Exec Reads?'),
              ('Read Executions (Cycle)', 'Cycle Plan'), ('Cycle Plan', 'Cycle State Rows'), ('Cycle State Rows', 'Any Cycle Rows?'),
-             ('Save Cycle Rows', 'Cycle Job Rows'), ('Cycle Job Rows', 'Any Job Rows?'), ('Save Cycle Job Rows', 'Cycle Release Rows'),
+             ('Save Cycle Rows', 'Cycle State Updates'), ('Cycle State Updates', 'Any Cycle Updates?'), ('Update Cycle Rows', 'Cycle Job Rows'),
+             ('Cycle Job Rows', 'Any Job Rows?'), ('Save Cycle Job Rows', 'Cycle Release Rows'),
              ('Cycle Release Rows', 'Any Releases?'), ('Release Dead Runs', 'Cycle Start Items'),
-             ('Cycle Start Items', 'Any Cycle Starts?'), ('Cycle Record Row', 'Save Cycle Record'), ('Save Cycle Record', 'Confirm Cycle Claim'),
+             ('Cycle Start Items', 'Any Cycle Starts?'), ('Read Claim (Cycle)', 'Cycle Record Row'), ('Cycle Record Row', 'Claim Free?'),
+             ('Save Cycle Record', 'Hold Claim (Cycle)'), ('Hold Claim (Cycle)', 'Confirm Cycle Claim'),
              ('Confirm Cycle Claim', 'Cycle Payload'), ('Cycle Payload', 'Cycle Recorded?'), ('Start Cycle Job', 'Cycle Start Result'),
              ('Cycle Start Result', 'Save Cycle Start Result'), ('Save Cycle Start Result', 'Space Cycle Starts'), ('Space Cycle Starts', 'Loop Cycle Starts'),
              ('Cycle Retention', 'Retain?'), ('Delete Old Cycle Jobs', 'Cycle Report'), ('Cycle Report', 'Save Cycle Report'), ('Save Cycle Report', 'Cycle Alarm')]:
     link(a, b)
 link('Any Exec Reads?', 'Read Executions (Cycle)', 0); link('Any Exec Reads?', 'Cycle Plan', 1)
-link('Any Cycle Rows?', 'Save Cycle Rows', 0); link('Any Cycle Rows?', 'Cycle Job Rows', 1)
+link('Any Cycle Rows?', 'Save Cycle Rows', 0); link('Any Cycle Rows?', 'Cycle State Updates', 1)
+link('Any Cycle Updates?', 'Update Cycle Rows', 0); link('Any Cycle Updates?', 'Cycle Job Rows', 1)
 link('Any Job Rows?', 'Save Cycle Job Rows', 0); link('Any Job Rows?', 'Cycle Release Rows', 1)
 link('Any Releases?', 'Release Dead Runs', 0); link('Any Releases?', 'Cycle Start Items', 1)
 link('Any Cycle Starts?', 'Loop Cycle Starts', 0); link('Any Cycle Starts?', 'Cycle Retention', 1)
-link('Loop Cycle Starts', 'Cycle Retention', 0); link('Loop Cycle Starts', 'Cycle Record Row', 1)   # splitInBatches v3: 0 = done, 1 = loop
+link('Loop Cycle Starts', 'Cycle Retention', 0); link('Loop Cycle Starts', 'Read Claim (Cycle)', 1)   # splitInBatches v3: 0 = done, 1 = loop
+link('Claim Free?', 'Save Cycle Record', 0); link('Claim Free?', 'Loop Cycle Starts', 1)   # a claim another sweep holds: back off, the report says why
 link('Cycle Recorded?', 'Start Cycle Job', 0); link('Cycle Recorded?', 'Loop Cycle Starts', 1)
 link('Retain?', 'Delete Old Cycle Jobs', 0); link('Retain?', 'Cycle Report', 1)
 
@@ -224,10 +244,10 @@ table = '\n'.join('| %d | %s | `%s` | %s |' % (i + 1, j['job'], j['workflow_id']
 node('Note', 'n8n-nodes-base.stickyNote', 1, {'width': 1500, 'height': 600, 'color': 6, 'content': """## SEO Agent — Cycle Dispatcher (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4)
 **The week belongs to the website.** Cycle 0 starts within five minutes of setup (Site Kickoff writes the website's `seo_cycles` row; a tracked website with no row is adopted here, anchored now, in """ + TZ + """). Every later cycle is due at **06:00 in the website's own time zone** on the first local date at least 3 days after the last cycle started that is its weekday (+7 days when the weekday is unchanged). The UTC time is derived each time from the stored intent (zone, weekday, local time), so DST never moves it. Cycle key `cyc:<site_id>:<local due date>`.
 **Doors:** *Instance Started* (waits 45 s for n8n to settle), *""" + SWEEP + """* (`""" + SWEEP_CRON + """`, offset from the catch-up), *Cycle Run* — a test `{ dry_run?, plan_only?, now? }` (`now` only with `dry_run`; a dry run writes nothing and starts nothing). No execution time-out (C-1); a plan older than """ + str(STALE_PLAN_MINUTES) + """ min is never acted on.
-**Mode:** `seo_cache` `cycle:mode` = `{"mode":"start"}` starts jobs. No row, `plan_only` or anything unreadable: it plans and reports only (the safe default, flipped by the owner at go-live).
+**Mode:** `seo_cache` `cycle:mode` = `{"mode":"start"}` starts jobs. No row, `plan_only` or anything unreadable: it plans and reports only (the safe default, flipped by the owner at go-live). The workflow itself is PUBLISHED by every deploy (deploy_manifest.json); the Schedule Catch-up's watchdog alerts when it is inactive or its last sweep (`cycle:last`) is older than 20 min. A table that cannot be read - any of them - fails the sweep (the Error Handler alerts); nothing is started or skipped from a partial picture.
 **Each sweep:** the most recent due cycle only (a website more than a cycle overdue runs once; a cycle due less than 12 h before the next is skipped and recorded); the jobs in order, each starting only when every earlier one is done, skipped or gave up; monthly extras on the first cycle on or after the website's monthly date (its start day, at most the 28th) — 12 a year; the "Coming up" preview (the cadence with `preview: true`) 48 h before every cycle except cycle 0. Paused websites are skipped; on resume the most recent due cycle runs once.
-**Starts:** RECORD the job row `starting` with this execution's claim, read it back (*Confirm Cycle Claim*), THEN start the workflow's own Manual Run with `{ trigger: 'cycle', domain, site_id, cycle_key, job, monthly, scheduled_for, request_id, light?, preview? }`; at most """ + str(CONFIG['max_starts']) + """ a sweep, """ + str(CONFIG['max_inflight']) + """ in flight, never into a refusal the run guard would give (its live runs, a twin of the same work for the same website), most overdue first.
-**Outcomes from the ledger** (`cycle:<cycle_key>:<job>`): settled = done (handed off counts; `:part<n>` rows of a split run are progress, never done); refused for capacity = tried again without spending an attempt, for at most 24 h; account too low = gave up; a reservation past 2 h, a run n8n crashed or cancelled (its reservation is released at once, `stale`, so the retry is not refused as its twin), or a record with no run after 10 min = failed, three attempts, then gave up — and the run fails at *Cycle Alarm* so the Error Handler raises the ops alert. `seo_cycle_jobs` keeps 120 days.
+**Starts:** read the job row again (*Read Claim*: it must still be what the plan saw, else another sweep claimed it), RECORD it `starting` with a claim token nobody else can write, hold it a moment, read it back (*Confirm Cycle Claim*), THEN start the workflow's own Manual Run with `{ trigger: 'cycle', domain, site_id, cycle_key, job, monthly, scheduled_for, request_id, light?, preview? }`; at most """ + str(CONFIG['max_starts']) + """ a sweep, """ + str(CONFIG['max_inflight']) + """ in flight, never into a refusal the run guard would give (its live runs, a twin of the same work for the same website), most overdue first.
+**Outcomes from the ledger** (`cycle:<cycle_key>:<job>`) and n8n's executions (its running runs, each reservation's run by id, a window of finished runs after each start): settled = done (handed off counts; `:part<n>` rows of a split run are progress, never done); refused for capacity = tried again without spending an attempt, for at most 24 h; account too low = gave up; a reservation whose run n8n reports error / crashed / cancelled (released at once, `stale`, so the retry is not refused as its twin), a reservation past 2 h, or a record with no run after 10 min = failed, three attempts, then gave up; a run that ended `success` with its row still reserved = done, never run again, its reservation released and its unsettled money alerted; a start the reads cannot confirm = blind for at most 2 h, then failed. A job that gave up or a run left unsettled fails the run at *Cycle Alarm*, so the Error Handler raises the ops alert. `seo_cycle_jobs` keeps 120 days.
 **Record:** `seo_cache` `cycle:last` (tests: `cycle:last_test`). Successful executions are not kept (every 5 minutes).
 
 | # | job | workflow | Manual Run |
@@ -256,6 +276,6 @@ for n in N:
 json.dump({'workflow': {'id': WID, 'name': NAME, 'file': FILE}, 'tz': TZ, 'default_tz': DEFAULT_TZ, 'n8n_api': N8N_API, 'credential': CRED['httpHeaderAuth']['id'],
            'config': CONFIG, 'exec_limit': EXEC_LIMIT, 'sweep_cron': SWEEP_CRON, 'jobs': JOBS, 'cycles_ts_jobs': TS, 'cycles_ts_consts': TS_CONSTS, 'targets': TARGETS,
            'cycles_cols': [c for c, _t in CYCLES_COLS], 'cycle_jobs_cols': [c for c, _t in CYCLE_JOBS_COLS], 'ledger_days': LEDGER_DAYS, 'jobs_days': JOBS_DAYS,
-           'stale_plan_minutes': STALE_PLAN_MINUTES},
+           'stale_plan_minutes': STALE_PLAN_MINUTES, 'claim_hold_seconds': CLAIM_HOLD_SECONDS},
           open(os.path.join(HERE, 'harness', 'cycle_wiring.json'), 'w'), indent=1, sort_keys=True)
-print('wrote', FILE + ':', len(N), 'nodes; the cycle of', len(JOBS), 'jobs (' + TZ + '), inactive')
+print('wrote', FILE + ':', len(N), 'nodes; the cycle of', len(JOBS), 'jobs (' + TZ + '), published by the deploy, plan_only until seo_cache cycle:mode says start')

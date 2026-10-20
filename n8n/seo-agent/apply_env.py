@@ -6,9 +6,10 @@
 4. adds the columns a newer build expects to the Data Tables that already exist (sync_tables.py, v4.9),
 5. restarts n8n and waits for it.
 The deploy guard (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4.8; deploy_guard.py, shared with deploy/gcp/deploy_engine.py): it refuses while a
-Cycle Dispatcher job is starting or running, or a website's cycle or "Coming up" preview is due in the next 15 minutes - read from
-seo_cycle_jobs / seo_cycles through n8n's public API (N8N_API_KEY). An import re-publishes every workflow and a restart kills what is
-running; the dispatcher retries a killed job, but that costs one of its three attempts. If the tables cannot be read it refuses too, and says
+Cycle Dispatcher job is STARTING, or a website's cycle or "Coming up" preview is due in the next 15 minutes - read from
+seo_cycle_jobs / seo_cycles through n8n's public API (N8N_API_KEY); a RUNNING job is reported, not refused (the restart kills it and
+the dispatcher retries it, at the cost of one of its three attempts). The publish set includes the Cycle Dispatcher (F-ENG 2026-10-20):
+it only plans until seo_cache cycle:mode says start. If the tables cannot be read it refuses too, and says
 why. --force overrides it, loudly (--force-monday, the flag of the old Monday 07:00-12:00 rule, is the same flag).
 Usage: python3 apply_env.py [--no-build] [--no-restart] [--force]"""
 import json, os, shutil, subprocess, sys, tempfile, time, urllib.error, urllib.request

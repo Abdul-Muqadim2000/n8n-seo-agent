@@ -388,9 +388,13 @@ Every weekly workflow's plan node gets the same input contract (shared through `
 - **Catch-up:** keeps the AI Pulse, Page Watch and (if D2 keeps it on the 1st) the Audit Scheduler. The seven weekly workflows lose their
   Schedule Trigger and leave its list. `RG.caughtUp` stays for those three. Build section 98's assertions change accordingly, and a new
   assertion says **no weekly workflow keeps a Schedule Trigger**, so a forgotten Monday cron fails the build.
-- **Deploy guard:** "refuse Mon 07:00-12:00" becomes "refuse while a dispatcher job is in flight or due in the next 15 minutes, unless
-  `--force`". The guard reads `seo_cycle_jobs` through the n8n API from inside the VM; both copies change (`apply_env.py`,
-  `deploy/gcp/deploy_engine.py`). A deploy that does kill a job only costs a retry (§4.6).
+- **Deploy guard:** "refuse Mon 07:00-12:00" becomes "refuse while a dispatcher job is STARTING (between its claim and its run's
+  ledger row) or a cycle / preview is due in the next 15 minutes, unless `--force`". A RUNNING job is reported, never refused: a
+  restart kills it and the dispatcher retries it at its next sweep (precise rule, F-ENG 2026-10-20 - refusing for running jobs
+  would refuse almost always at scale). One rule: `deploy_guard.py` (`apply_env.py`, `deploy/gcp/deploy_engine.py`) and
+  `CYC.deployWindow`, which the image's release step (`n8n/deploy/release.mjs`, `deploy_guard.mjs`) reads out of the generated
+  dispatcher; `SEO_DEPLOY_FORCE` (alias `SEO_DEPLOY_FORCE_MONDAY`) overrides there. A deploy that does kill a job only costs a
+  retry (§4.6).
 - **Month keys:** monthly decisions inside the jobs come from the dispatcher. The remaining UTC-month uses (check-in reminder, pitches per
   page per month, cost calibration) become the site's time-zone month through one helper in the kit.
 - **Wording:** "every Monday" becomes "every Wednesday" (the site's day), or "every week" where no site is known. Weekly reports are dated
@@ -758,16 +762,23 @@ order matters.
    - app database;
    - the engine's `seo_*` Data Tables and n8n executions (decision D8: which ones exactly).
 4. **Engine:**
-   - `deploy/gcp/deploy_engine.py --apply` at the approved commit (all workflows, including the new dispatcher, which is imported
-     **inactive**);
-   - `sync_tables.py` creates `seo_cycles` / `seo_cycle_jobs` and `chosen_by`;
-   - check: no weekly workflow has a schedule; the catch-up lists three; the Site Kickoff answers 400 on a bad body.
-5. **Dispatcher on, in `plan_only`:** activate it and read one sweep's report (nothing to start, since there are no sites).
+   - `deploy/gcp/deploy_engine.py --apply --create-missing` at the approved commit (corrected 2026-10-20, F-ENG): the VM has no
+     Cycle Dispatcher yet, and a workflow missing remotely fails the deploy without `--create-missing`. The deploy runs
+     `sync_tables.py` FIRST and stops if it fails; then it updates and **publishes** every workflow, the dispatcher included;
+   - `sync_tables.py` adds the new **columns** to tables that exist (`chosen_by`, `autopilot_level`, `declared_services`); it never
+     creates a table. `seo_cycles`, `seo_cycle_jobs` and `seo_skips` are created by the dispatcher's own Ensure nodes on its first
+     sweep;
+   - check: no weekly workflow has a schedule; the catch-up lists two (AI Pulse, Page Watch) and watches the dispatcher; the Site
+     Kickoff answers 400 on a bad body.
+5. **Dispatcher on, in `plan_only`:** the deploy published it; with no `seo_cache` row `cycle:mode` it only plans. Read one sweep's
+   record (`seo_cache` `cycle:last`: nothing to start, since there are no sites). The catch-up's watchdog alerts when the
+   dispatcher is inactive or has not swept for 20 minutes (`catchup:watchdog:SEOagentCycleDsp`).
 6. **App API:** on the VM, check out the exact commit and run `up -d --build app` (migration runs at start). Check `/api` health and one
    sign-up. **Then web:** move `main` to that commit so Vercel deploys it.
 7. **Live checks:** the owner's test site through onboarding (§9 production steps); watch `seo_cycle_jobs` fill in order; credits debited
    as autopilot.
-8. **Open the door:** switch the dispatcher from `plan_only` to start, and invite clients.
+8. **Open the door:** switch the dispatcher from `plan_only` to start (the `seo_cache` row `cycle:mode` = `{"mode":"start"}`, kind
+   `cycle`), and invite clients.
 
 **Rollback:**
 - **Engine:** `deploy_engine.py --apply` at the previous commit. It restores the Monday crons, and the new tables are ignored by the old

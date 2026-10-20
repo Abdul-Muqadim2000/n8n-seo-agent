@@ -7,6 +7,9 @@
 // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §15): a run started by a website's weekly cycle is resumed AS a run of that cycle (trigger, key, job,
 // monthly, due time from its state), so its last execution still settles `cycle:<cycle_key>:ai_visibility` - the dispatcher's done signal.
 /*__AI_PANEL__*/
+// F-ENG (2026-10-20): a later part of the morning's pulse (the chain that serves every website) does not look again - the first part did
+let __pt = {}; try { __pt = ($('Manual Run').first() || {}).json || {}; } catch (e) { __pt = {}; }
+if (__pt && __pt.pulse_part) return [{ json: { skip: true, reason: 'a later part of this morning\'s pulse: its first part already looked for runs to resume' } }];
 let cache = []; try { cache = $('Load Cache (AI)').all().map(i => i.json).filter(r => r && r.key && String(r.key).indexOf('ai_run:') === 0); } catch (e) {}
 const now = new Date().toISOString();
 const out = [];

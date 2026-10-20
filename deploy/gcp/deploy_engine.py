@@ -9,23 +9,30 @@ tunnel. It is apply_env.py for a remote instance: no `docker exec`, no restart.
   --no-build            use the generated workflows/*.json as they are (default: run build_v4.py first, which needs n8n/.env)
   --credentials         also rewrite the credential records from n8n/.env (PATCH by their fixed ids; values never printed)
   --create-missing      a workflow or credential the remote does not have yet is imported through IAP SSH with n8n's CLI
-                        (the public API cannot create a record with a fixed id; the workflows reference each other by id)
+                        (the public API cannot create a record with a fixed id; the workflows reference each other by id).
+                        Without it a workflow missing remotely FAILS the deploy (F-ENG 2026-10-20) - on the first deploy of the
+                        per-website cycle that is the Cycle Dispatcher (SEOagentCycleDsp) and the Site Kickoff
   --n8n-url URL         default http://localhost:15678
   --force               deploy while a website's cycle job is in flight or due anyway (the deploy guard, below); --force-monday,
                         the flag of the old Monday rule, is the same flag
 
-What it does, in order (each step says what it found):
+What it does, in order (each step says what it found; any failure exits 1):
  1. the deploy guard (n8n/seo-agent/deploy_guard.py, shared with apply_env.py; SCHEDULING_KEYWORDS_PLAN.md §4.8): refuses while a Cycle
     Dispatcher job is starting or running, or a website's cycle or "Coming up" preview is due in the next 15 minutes - read from
     seo_cycle_jobs / seo_cycles through the remote n8n's public API. An update re-publishes workflows and can kill a running job (the
     dispatcher retries it, at the cost of one attempt). Tables that cannot be read refuse too, with the reason. --force overrides, loudly
  2. builds with the owner's settings (build_v4.py, exit code checked) unless --no-build
- 3. for each workflow of deploy_manifest.json: substitutes the alert webhook (R29: the real URL only ever exists in memory and on
+ 3. sync_tables.py against the remote, with the same key, BEFORE any workflow changes (F-ENG 2026-10-20): it adds the new columns to the
+    Data Tables that exist, so a new workflow never runs against a table without them; its exit code is checked (a failed sync stops
+    the deploy before anything is updated). sync_tables.py adds COLUMNS only: a new TABLE is created by the workflow's own Ensure node
+    the first time it runs (seo_cycles, seo_cycle_jobs, seo_skips by the Cycle Dispatcher's)
+ 4. for each workflow of deploy_manifest.json: substitutes the alert webhook (R29: the real URL only ever exists in memory and on
     the instance), then PUT /api/v1/workflows/<id> when the content differs. n8n 2.41.4 makes a PUT on a published workflow live at
-    once (verified 2026-10-18 on a scratch instance: activeVersionId follows the new versionId)
- 4. POST /api/v1/workflows/<id>/activate for the manifest's publish set (+ publish_when_imap when SEO_IMAP_PASSWORD is set) - idempotent
- 5. --credentials: PATCH /api/v1/credentials/<id> for every credential sync_credentials.py defines whose values are set
- 6. sync_tables.py against the remote (new Data Table columns), with the same key
+    once (verified 2026-10-18 on a scratch instance: activeVersionId follows the new versionId). A workflow missing remotely is
+    imported with --create-missing, else it is a failure
+ 5. POST /api/v1/workflows/<id>/activate for the manifest's publish set (+ publish_when_imap when SEO_IMAP_PASSWORD is set) - idempotent.
+    The set includes the Cycle Dispatcher: publishing it starts nothing by itself (seo_cache cycle:mode, missing = plan_only)
+ 6. --credentials: PATCH /api/v1/credentials/<id> for every credential sync_credentials.py defines whose values are set
 The API key is N8N_API_KEY from n8n/.env (it stays valid on the server when the instance key was carried over by the migration), or
 N8N_REMOTE_API_KEY from the environment. Nothing prints a key, a credential value or the alert webhook.
 """
@@ -134,6 +141,13 @@ def main():
             print(r.stdout[-1500:], r.stderr[-1500:]); sys.exit('build failed (exit %d)' % r.returncode)
         say('built: ' + ([l for l in r.stdout.splitlines() if l.startswith('wrote')] or ['ok'])[-1])
 
+    # 3. Data Table columns FIRST (F-ENG 2026-10-20): a workflow updated below may read a column this release adds; and a failed sync stops here
+    r = subprocess.run([sys.executable, os.path.join(ENGINE, 'sync_tables.py')] + ([] if APPLY else ['--dry-run']), capture_output=True, text=True,
+                       env=dict(os.environ, N8N_PUBLIC_URL=URL, N8N_API_KEY=KEY))
+    say('tables: ' + ((r.stdout or r.stderr).strip()[-600:] or 'no output'))
+    if r.returncode != 0:
+        sys.exit('sync failed: sync_tables.py exited %d - no workflow was updated (fix the Data Table columns, then deploy again)' % r.returncode)
+
     # the one deploy list (deploy_manifest.json, also read by apply_env.py and n8n/deploy/release.mjs)
     manifest = json.load(open(os.path.join(ENGINE, 'deploy_manifest.json'), encoding='utf-8'))
     consts = {'WORKFLOWS': manifest['workflows'], 'PUBLISH': manifest['publish']}
@@ -172,10 +186,15 @@ def main():
             try: rc, last = ssh_import('workflow', tmp)
             finally: os.unlink(tmp)
             (say if rc == 0 else failed.append)('  imported %s: %s' % (wid, last) if rc == 0 else wid + ' import failed: ' + last)
-    elif missing:
-        say('  (missing workflows are created by the migration - migrate_data.md - or by --create-missing)')
+    elif missing and '--create-missing' not in args:
+        # F-ENG (2026-10-20): a workflow the remote does not have is a failure, never a note - on the first deploy of the per-website cycle
+        # the missing ones are the Cycle Dispatcher and the Site Kickoff, and without the dispatcher no website's week runs
+        first = [w for _f, w, _t in missing if w in ('SEOagentCycleDsp', 'SEOagentKickoff1')]
+        failed.append('%d workflow(s) missing remotely: %s - run again with --create-missing to import them%s' % (
+            len(missing), ', '.join(w for _f, w, _t in missing),
+            ' (first deploy of the per-website cycle: the Cycle Dispatcher SEOagentCycleDsp is new; it is published in plan_only, RUNBOOK.md)' if first else ''))
 
-    # 4. publish
+    # 5. publish
     publish = list(consts['PUBLISH']) + (list(manifest.get('publish_when_imap') or []) if ENV.get('SEO_IMAP_PASSWORD') else [])
     hold = {x.split('=', 1)[1] for x in args if x.startswith('--except=')}
     # The public API refuses to publish a workflow whose Execute Workflow nodes call an unpublished sub-workflow ("Please publish all
@@ -204,7 +223,7 @@ def main():
         (' (incl. referenced sub-workflows: ' + ', '.join(extra) + ')') if extra else '', ('; FAILED: ' + '; '.join(pub_fail)) if pub_fail else ''))
     failed += pub_fail
 
-    # 5. credentials
+    # 6. credentials
     if '--credentials' in args:
         sys.path.insert(0, ENGINE)
         import sync_credentials as SC
@@ -229,15 +248,6 @@ def main():
             say('  credentials missing remotely: ' + ', '.join(c for c, *_ in cmiss) + ' (--create-missing imports them)')
         say('credentials: %d %s, %d skipped (empty in n8n/.env)' % (len(done), 'written' if APPLY else 'to write', len(skipped)))
 
-    # 6. Data Table columns
-    if APPLY:
-        r = subprocess.run([sys.executable, os.path.join(ENGINE, 'sync_tables.py')], capture_output=True, text=True,
-                           env=dict(os.environ, N8N_PUBLIC_URL=URL, N8N_API_KEY=KEY))
-        say((r.stdout or r.stderr).strip()[-600:])
-    else:
-        r = subprocess.run([sys.executable, os.path.join(ENGINE, 'sync_tables.py'), '--dry-run'], capture_output=True, text=True,
-                           env=dict(os.environ, N8N_PUBLIC_URL=URL, N8N_API_KEY=KEY))
-        say((r.stdout or r.stderr).strip()[-600:])
     if failed:
         say('FAILED:\n  ' + '\n  '.join(failed)); sys.exit(1)
     say('done.' if APPLY else 'dry run done. Run again with --apply.')

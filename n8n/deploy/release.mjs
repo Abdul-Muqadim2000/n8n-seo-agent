@@ -7,11 +7,18 @@
 //   SEO_ALERT_WEBHOOK_URL      optional: substituted for the placeholder at import time, never stored in the image or the repo (R29)
 //   SEO_PUBLISH_CONSOLE_ALERTS true to publish Console Alerts too (it needs the IMAP credential)
 //   SEO_HOLD_WORKFLOWS         optional: comma-separated workflow ids imported but left unpublished
-//   SEO_DEPLOY_FORCE_MONDAY    true to release inside the Monday window anyway (R94: a restart then throws away the weekly runs that
-//                              are due; the Schedule Catch-up workflow starts them again)
+//   SEO_DEPLOY_GUARD_URL       the RUNNING engine's public API (e.g. https://hooks.alaventra.com/api/v1): the deploy guard reads the cycle
+//                              tables there (F-ENG 2026-10-20, deploy_guard.mjs). Unset or unreachable: the release is refused unless forced
+//   SEO_DEPLOY_GUARD_API_KEY   its API key (default: N8N_API_KEY); never printed
+//   SEO_DEPLOY_FORCE           true to release while a website's cycle job is starting or due anyway (and on a FIRST release, when no
+//                              engine runs yet to ask). SEO_DEPLOY_FORCE_MONDAY, the flag of the old Monday 07:00-12:00 rule, is an alias.
+// The deploy guard is the per-cycle rule (CYC.deployWindow, read out of the generated dispatcher): refuse while a dispatcher job is
+// STARTING or a website's cycle / "Coming up" preview is due in the next 15 minutes; a RUNNING job is reported, never refused - a restart
+// kills it and the dispatcher sees the dead run at its next sweep and starts it again. The Monday window is gone with the Monday crons.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { deployGuard, kitFromWorkflow } from './deploy_guard.mjs';
 
 const ROOT = '/opt/seo';
 const PLACEHOLDER = '__SEO_ALERT_WEBHOOK_URL__';
@@ -19,13 +26,16 @@ const env = process.env;
 const truthy = (v) => /^(1|true|yes|on)$/i.test(String(v ?? '').trim());
 const log = (...a) => console.log('[seo-release]', ...a);
 
-// R94: Monday 07:00-12:00 in the schedules' time zone (the weekly crons run 07:00-11:00, plus an hour for a run in progress)
-function inMondayWindow(now = new Date(), tz = env.GENERIC_TIMEZONE || 'America/New_York') {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', hourCycle: 'h23' }).formatToParts(now).map((p) => [p.type, p.value]),
-  );
-  const hour = Number(parts.hour);
-  return parts.weekday === 'Mon' && hour >= 7 && hour < 12;
+// the running engine's public API, for the deploy guard: (method, path) -> { status, body }. The key goes only to that host.
+function guardApi() {
+  const base = String(env.SEO_DEPLOY_GUARD_URL ?? '').trim().replace(/\/+$/, '');
+  const key = String(env.SEO_DEPLOY_GUARD_API_KEY ?? env.N8N_API_KEY ?? '').trim();
+  if (!base || !key) return null;
+  return async (method, path) => {
+    const r = await fetch(base + path, { method, headers: { 'X-N8N-API-KEY': key, Accept: 'application/json' }, signal: AbortSignal.timeout(20000) });
+    let body = null; try { body = await r.json(); } catch { body = null; }
+    return { status: r.status, body };
+  };
 }
 
 function n8n(...args) {
@@ -33,12 +43,13 @@ function n8n(...args) {
 }
 const lastLine = (s) => s.split('\n').filter(Boolean).pop() ?? '';
 
-if (inMondayWindow() && !truthy(env.SEO_DEPLOY_FORCE_MONDAY)) {
-  console.error(
-    '[seo-release] R94: refusing to release now: Monday 07:00-12:00 (' + (env.GENERIC_TIMEZONE || 'America/New_York') + ') is when the weekly ' +
-      'schedules fire, and a release restarts n8n, which throws away a run that is due. Release after 12:00, or set SEO_DEPLOY_FORCE_MONDAY=true.',
-  );
-  process.exit(1);
+const force = truthy(env.SEO_DEPLOY_FORCE) ? 'SEO_DEPLOY_FORCE' : truthy(env.SEO_DEPLOY_FORCE_MONDAY) ? 'SEO_DEPLOY_FORCE_MONDAY' : '';
+{
+  let CYC = null;
+  try { ({ CYC } = kitFromWorkflow(join(ROOT, 'workflows', 'SEO_Agent_Cycle_Dispatcher.json'))); }
+  catch (e) { console.error('[seo-release] the deploy guard could not read its rule out of the dispatcher workflow:', String(e.message || e)); process.exit(1); }
+  const refusal = await deployGuard({ api: guardApi(), CYC, force, say: (m) => log(m) });
+  if (refusal) { console.error('[seo-release] ' + refusal); process.exit(1); }
 }
 
 const manifest = JSON.parse(readFileSync(join(ROOT, 'deploy_manifest.json'), 'utf8'));

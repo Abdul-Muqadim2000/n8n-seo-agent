@@ -453,6 +453,59 @@ module.exports = async (ctx) => {
   });
 
   // ===================================================================================================================================
+  await guard('CS9b the AI Pulse serves every website', async () => {
+    reset(); const SN = 'CS9b the AI Pulse serves EVERY website each morning (F-ENG 2026-10-20): 40 websites in parts of at most 15 and one morning\'s request limit, each part handing the rest to the next, every website once';
+    begin(SN); const check = mkCheck(SN);
+    const P = FX.pulse;
+    const pad = (i) => String(i).padStart(2, '0');
+    const SITES = [], MONS = [], PROMPTS = [];
+    for (let i = 0; i < 40; i++) {
+      const sid = 'site_s' + pad(i) + '-com', dom = 's' + pad(i) + '.com', heavy = i < 10;   // ten websites with a 50-question panel: 150 requests a morning each
+      SITES.push({ ...P['Load Sites'][0], site_id: sid, domain: dom, keywords: '' });
+      MONS.push({ ...P['Load Monitors'][0], site_id: sid, domain: dom, competitors: '', brand_names: '', ai_prompts_max: heavy ? 50 : 8, ai_pulse: true });
+      const n = heavy ? 50 : 8;
+      for (let q = 0; q < n; q++) PROMPTS.push({ ...P['Load AI Prompts'][q % P['Load AI Prompts'].length], prompt_id: 'p_' + pad(i) + '_' + pad(q), site_id: sid, domain: dom,
+        prompt: 'Which firms in the UAE offer service ' + q + ' of line ' + i + ' for mid-size companies?', topic: 'service line ' + q, keyword: 'service ' + q + ' uae', status: 'active', source: 'auto' });
+    }
+    const plan = async (now, trigger, fired) => atNow(now, async () => {
+      reset();
+      mock('Load Sites', items(SITES)); mock('Load Ladders', items([])); mock('Load Profiles', items(P['Load Profiles'])); mock('Load AI Visibility', items([])); mock('Load AI Daily', items([]));
+      mock('Load Cache (AI)', items([])); mock('Load Monitors', items(MONS)); mock('Load AI Prompts', items(PROMPTS)); mock('Load Cycles', items([]));
+      if (fired) mock('Daily Schedule', [{ json: { timestamp: now } }]); else delete store['Daily Schedule'];
+      if (trigger) mock('Manual Run', [{ json: trigger }]); else delete store['Manual Run'];
+      return (await run('AI Plan', [{ json: {} }], { code: 'Pulse__AI_Plan' })).map(i => i.json);
+    });
+    // Tuesday 27 Oct 2026, 06:30 New York (a website with no cycle row keeps the Monday skip, so Tuesday is an ordinary pulse morning)
+    const served = [], parts = [];
+    let trig = null, guardN = 0;
+    for (;;) {
+      const out = await plan('2026-10-27T10:30:00.000Z', trig, !trig);
+      const real = out.filter(o => !o.nothing_to_do);
+      const req = real.reduce((t, o) => t + o.prompts.length * o.pulse_engines.length, 0);
+      parts.push({ n: real.length, req, part: (out[0].pulse_part || {}).part, next: !!out[0].pulse_next, dates: [...new Set(real.map(o => o.date))] });
+      served.push(...real.map(o => o.site_id));
+      trig = out[0].pulse_next;
+      if (!trig || ++guardN > 10) break;
+    }
+    const uniq = new Set(served);
+    check('CS9b: every one of the 40 websites is served exactly once this morning (the pulse used to ask the first 15 and drop 25 in silence)',
+      served.length === 40 && uniq.size === 40 && SITES.every(s => uniq.has(s.site_id)), JSON.stringify({ served: served.length, parts }));
+    check('CS9b: no part holds more than 15 websites or more than one morning\'s request limit (' + AIP.LIMITS.pulse_max_requests + ' requests), and the heavy panels make the first parts smaller',
+      parts.every(p => p.n <= 15 && p.req <= AIP.LIMITS.pulse_max_requests) && parts.length >= 4 && parts[0].n < 15, JSON.stringify(parts));
+    check('CS9b: every part is the same morning (one date), numbered 1, 2, 3 ...; the last hands nothing on', parts.every((p, i) => p.part === i + 1 && p.dates.join() === '2026-10-27') && !parts[parts.length - 1].next && parts.slice(0, -1).every(p => p.next), JSON.stringify(parts));
+    const first = await plan('2026-10-27T10:30:00.000Z', null, true);
+    const nx = first[0].pulse_next || {};
+    check('CS9b: the hand-off is the next execution\'s Manual Run: trigger pulse_part, this execution as parent_run_id (the run guard does not take its own reservation for a twin), the morning\'s date, the cursor, scheduled: true',
+      nx.trigger === 'pulse_part' && nx.parent_run_id && nx.pulse_part && nx.pulse_part.date === '2026-10-27' && nx.pulse_part.part === 2 && nx.pulse_part.scheduled === true && /^site_s\d\d-com$/.test(nx.pulse_part.after), JSON.stringify(nx));
+    // a later part still skips a website on its cycle day: `scheduled` travels with the chain
+    const mondayNext = await plan('2026-10-26T10:30:00.000Z', { trigger: 'pulse_part', parent_run_id: '1', pulse_part: { date: '2026-10-26', after: 'site_s30-com', part: 3, scheduled: true } }, false);
+    check('CS9b: a later part of a scheduled Monday still skips the websites whose weekly day it is (Monday for a website with no cycle row) - and only the websites after the cursor are looked at',
+      mondayNext[0].nothing_to_do === true && (mondayNext[0].cycle_day_skipped || []).length === 9 && mondayNext[0].cycle_day_skipped.every(x => x.domain > 's30.com'), JSON.stringify(mondayNext[0]).slice(0, 300));
+    const nextSrc = (() => { try { return src('Pulse__Next_Pulse_Part.js'); } catch (e) { return ''; } })();
+    check('CS9b: the generated pulse starts its next part (Next Pulse Part reads AI Plan\'s pulse_next; its later parts do not resume AI visibility runs again)',
+      /pulse_next/.test(nextSrc) && /pulse_part/.test(src('Pulse__AI_Run_Resume.js')), nextSrc.slice(0, 200));
+  });
+  // ===================================================================================================================================
   await guard('CS10 a cycle run\'s callback is dated by its cycle', async () => {
     reset(); const SN = 'CS10 cycle semantics — every callback of a cycle run carries trigger: cycle, cycle_key, cycle_date and is dated "Week of …" in its subject and HTML; every other run\'s callback is unchanged; a cycle job hours late says so';
     begin(SN); const check = mkCheck(SN);

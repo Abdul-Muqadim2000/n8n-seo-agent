@@ -11722,13 +11722,15 @@ for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'b
 #       capacity refusals retried without an attempt for 24 h; three attempts for a failure; account too low = gave up), capped starts that
 #       never go into a refusal the run guard would give, adoption of a tracked website with no row, the plan-only switch, retention.
 #     * **The dispatcher** (build_cycle.py, SEOagentCycleDsp): Instance Started + a sweep every 5 minutes + a test door; RECORD the job row,
-#       read the claim back, THEN start the job's own Manual Run with the §14.2 payload. Built inactive, imported, not published.
+#       read the claim back, THEN start the job's own Manual Run with the §14.2 payload. Built inactive (an import deactivates anyway) and
+#       PUBLISHED by every deploy (F-ENG 2026-10-20: deploy_manifest.json had left it out, so a deploy silently switched it off); the
+#       seo_cache row cycle:mode (missing = plan_only) is the safety switch, and the catch-up's watchdog alerts when it stops sweeping.
 #     * **Site Kickoff** writes the seo_cycles row instead of starting jobs (build_monitors.py 5c).
 #     * **The deploy guard** (deploy_guard.py, both deploy paths): no Monday window any more; refuse while a dispatcher job is in flight or a
 #       cycle / preview is due in the next 15 minutes, read from the tables; refuse when they cannot be read; --force (alias --force-monday).
 #     What this section proves on the GENERATED files: the three doors; every path from a door to the start passes the saved record AND the
 #     claim read back; the outcomes and skips are written before any start; the start does not wait and takes the workflow id from the
-#     saved record; no execution time-out; built inactive, imported and not published, every target published; the job order equals the
+#     saved record; no execution time-out; published with every target; the job order equals the
 #     app's contract (app/shared/src/cycles.ts); the kickoff no longer starts anything and answers only after its row is saved; and the deploy
 #     guard's answers on every case of harness/deploy_window_cases.json, plus its refusal / override / unreadable behaviour.
 # =============================================================================
@@ -11755,7 +11757,7 @@ def _b140_cycle():
             seen.add(nd); todo.extend(_out140(c, nd))
         return seen
     # ---------- A. the doors, the settings, inactive ----------
-    assert _w140['id'] == 'SEOagentCycleDsp' and _w140['active'] is False, 'cycle: the dispatcher must be built inactive (the owner activates it, plan §10 step 5)'
+    assert _w140['id'] == 'SEOagentCycleDsp' and _w140['active'] is False, 'cycle: the dispatcher is built inactive (the import deactivates it anyway; the deploy publishes it)'
     _st140 = _w140['settings']
     assert _st140.get('executionTimeout') == -1 and _st140.get('errorWorkflow') == 'SEOagentErrHandl' and _st140.get('saveDataSuccessExecution') == 'none', \
         'cycle: the dispatcher needs no time-out (C-1: wall-clock), the Error Handler (the gave-up alarm) and no saved successes (every 5 minutes): ' + str(_st140)
@@ -11774,7 +11776,7 @@ def _b140_cycle():
     _doors140 = ('Instance Started', _sw140[0]['name'], 'Cycle Run')
     for _d140 in _doors140:
         assert 'Start Cycle Job' in _reach140(_cc140, _d140, None), 'cycle: ' + _d140 + ' never reaches the start'
-        for _gate140 in ('Save Cycle Record', 'Confirm Cycle Claim', 'Cycle Payload', 'Cycle Recorded?', 'Cycle Plan'):
+        for _gate140 in ('Read Claim (Cycle)', 'Cycle Record Row', 'Claim Free?', 'Save Cycle Record', 'Hold Claim (Cycle)', 'Confirm Cycle Claim', 'Cycle Payload', 'Cycle Recorded?', 'Cycle Plan'):
             assert 'Start Cycle Job' not in _reach140(_cc140, _d140, _gate140), \
                 'cycle: ' + _d140 + ' can reach Start Cycle Job without passing ' + _gate140 + ' - the start must come after its saved record and the claim read back'
         for _w8 in ('Save Cycle Rows', 'Save Cycle Job Rows'):   # what the plan learnt is written before anything starts
@@ -11785,8 +11787,15 @@ def _b140_cycle():
     assert _rel140['operation'] == 'update' and _rel140['dataTableId']['value'] == 'seo_run_ledger' and _rel140['columns']['value'] == {'status': 'stale'} \
         and [(c['keyName'], c['keyValue']) for c in _rel140['filters']['conditions']] == [('run_id', '={{ $json.run_id }}'), ('status', 'reserved')], \
         'cycle: Release Dead Runs must only mark a still-reserved row of the dead run stale: ' + str(_rel140)
-    assert _out140(_cc140, 'Cycle Record Row') == ['Save Cycle Record'] and _out140(_cc140, 'Save Cycle Record') == ['Confirm Cycle Claim'] \
+    # F-ENG (2026-10-20): the claim is strong - the row is read again just before it (still what the plan saw?), the claim is a token nobody
+    # else can write, it is held a moment, then read back; a claim another sweep holds sends this one back to the loop, never to the start
+    assert _out140(_cc140, 'Loop Cycle Starts') == ['Cycle Retention', 'Read Claim (Cycle)'] and _out140(_cc140, 'Read Claim (Cycle)') == ['Cycle Record Row'] \
+        and _out140(_cc140, 'Cycle Record Row') == ['Claim Free?'] and _out140(_cc140, 'Claim Free?') == ['Save Cycle Record', 'Loop Cycle Starts'] \
+        and _out140(_cc140, 'Save Cycle Record') == ['Hold Claim (Cycle)'] and _out140(_cc140, 'Hold Claim (Cycle)') == ['Confirm Cycle Claim'] \
         and _out140(_cc140, 'Confirm Cycle Claim') == ['Cycle Payload'] and _out140(_cc140, 'Cycle Payload') == ['Cycle Recorded?'], 'cycle: the record-then-start chain is broken'
+    _rc140 = _by140['Read Claim (Cycle)']['parameters']
+    assert _rc140['operation'] == 'get' and _rc140['dataTableId']['value'] == 'seo_cycle_jobs' and _rc140['filters']['conditions'][0]['keyName'] == 'key', 'cycle: the claim is not read back from seo_cycle_jobs by key before it is written'
+    assert _by140['Hold Claim (Cycle)']['type'] == 'n8n-nodes-base.wait' and 1 <= _by140['Hold Claim (Cycle)']['parameters']['amount'] <= 10, 'cycle: the claim is not held before it is read back'
     assert _out140(_cc140, 'Cycle Recorded?')[0] == 'Start Cycle Job', 'cycle: the recorded branch does not lead to the start'
     _start140 = _by140['Start Cycle Job']['parameters']
     assert _start140['options'].get('waitForSubWorkflow') is False and _start140['workflowId']['value'] == "={{ $('Cycle Record Row').first().json.workflow_id }}", \
@@ -11794,11 +11803,29 @@ def _b140_cycle():
     _cpay140 = _by140['Cycle Payload']['parameters']['jsCode']
     assert 'CU.stalePlan(' in _cpay140 and "String(back.run_id || '') !== String(rec.run_id || '')" in _cpay140 and 'return [{ json: { ...s.payload } }]' in _cpay140, \
         'cycle: the payload node lost a refusal (stale plan, claim) or no longer sends the plan\'s payload exactly'
-    assert "run_id: 'dsp:' + String($execution.id)" in _by140['Cycle Record Row']['parameters']['jsCode'], 'cycle: the record row carries no claim'
+    _rr140 = _by140['Cycle Record Row']['parameters']['jsCode']
+    assert 'run_id: CYC.claimToken($execution.id' in _rr140 and 'CYC.claimFree(s.expect' in _rr140, 'cycle: the record row carries no claim token, or writes it without checking the row is still the plan\'s'
+    # F-ENG (2026-10-20): every table the plan reads refuses the sweep when it could not be read (the websites' own settings too)
+    _cp140 = _by140['Cycle Plan']['parameters']['jsCode']
+    _loads140 = sorted(n['name'] for n in _w140['nodes'] if n['type'] == DT_TYPE and n['name'].startswith('Load '))
+    _miss140 = [n for n in _loads140 if "['" + n + "'," not in _cp140]
+    assert len(_loads140) >= 10 and not _miss140, 'cycle: Cycle Plan does not refuse the sweep when %s could not be read (an error item would be read as an empty table)' % _miss140
+    assert 'CYC.execReads(' in _by140['Cycle Exec Requests']['parameters']['jsCode'] and 'CYC.runsFrom(' in _cp140 and 'CYC.execReads(' in _cp140, \
+        'cycle: n8n\'s executions are not read the kit\'s way (running runs, runs by id, windows of finished runs; what was not read is known)'
+    assert "e.entry === 'init'" in _cp140 and "'Load Cycle Last'" in _cp140, 'cycle: the Instance Started door does not stand down after a sweep that just finished'
+    _alarm140 = _by140['Cycle Alarm']['parameters']['jsCode']
+    assert 'p.unsettled' in _alarm140 and 'p.gave_up' in _alarm140, 'cycle: a run that finished with its ledger row unsettled raises no alert'
     assert _out140(_cc140, 'Save Cycle Report') == ['Cycle Alarm'] and not _out140(_cc140, 'Cycle Alarm'), 'cycle: the gave-up alarm must be the last node, after the report is saved'
     _cfg140 = _by140['Save Cycle Record']['parameters']
     assert _cfg140['operation'] == 'upsert' and _cfg140['dataTableId']['value'] == 'seo_cycle_jobs' and _cfg140['filters']['conditions'][0]['keyName'] == 'key', 'cycle: the record is not an upsert by key'
     assert _by140['Save Cycle Rows']['parameters']['filters']['conditions'][0]['keyName'] == 'site_id', 'cycle: seo_cycles is not upserted by site_id'
+    # F-ENG (2026-10-20): a row that exists is UPDATED with only the changed fields (an app PATCH of the weekday made mid-sweep survives)
+    _up140 = _by140['Update Cycle Rows']['parameters']
+    assert _up140['operation'] == 'update' and _up140['dataTableId']['value'] == 'seo_cycles' and _up140['columns']['mappingMode'] == 'autoMapInputData' \
+        and [(c['keyName'], c['keyValue']) for c in _up140['filters']['conditions']] == [('site_id', '={{ $json.site_id }}')], 'cycle: existing seo_cycles rows are not updated by site_id with the changed fields only: ' + str(_up140)
+    assert 'r.created === true' in _by140['Cycle State Rows']['parameters']['jsCode'] and 'r.changed' in _by140['Cycle State Updates']['parameters']['jsCode'], \
+        'cycle: Save Cycle Rows writes existing rows whole again (only new rows may be written whole)'
+    assert 'Update Cycle Rows' in _reach140(_cc140, 'Cycle Plan', None) and 'Cycle Start Items' not in _reach140(_cc140, 'Cycle Plan', 'Cycle State Updates'), 'cycle: the changed fields are not written before the starts'
     # ---------- C. jobs, targets, deployment, credential ----------
     _kit140 = [(j['job'], j['workflow_id']) for j in _wire140['jobs']]
     assert [j for j, _w in _kit140] == ['ai_visibility', 'backlinks', 'rank_tracker', 'site_tracker', 'ai_growth', 'content_cadence', 'link_builder', 'audit'], \
@@ -11807,8 +11834,11 @@ def _b140_cycle():
         assert [(j['job'], j['workflow_id']) for j in _wire140['cycles_ts_jobs']] == _kit140, 'cycle: app/shared/src/cycles.ts CYCLE_JOBS and the kit disagree'
     _man140 = json.load(open(os.path.join(HERE0, 'deploy_manifest.json'), encoding='utf-8'))
     assert _CYCLE_FILE140 in _man140['workflows'], 'cycle: deploy_manifest.json does not import the dispatcher'
-    assert 'SEOagentCycleDsp' not in _man140['publish'] and 'SEOagentCycleDsp' not in (_man140.get('publish_when_imap') or []), \
-        'cycle: the dispatcher is in the publish list - it must stay inactive until the owner activates it (plan §10)'
+    # F-ENG (2026-10-20): the rule is the other way round now. Every deploy imports the workflows, and an import DEACTIVATES them, so a
+    # dispatcher left out of the publish list was switched off by every deploy and no website's week ran. It is published like every other
+    # workflow; the safety switch is the seo_cache row cycle:mode (missing = plan_only), so a first deploy only plans until the owner flips it.
+    assert 'SEOagentCycleDsp' in _man140['publish'], 'cycle: the dispatcher is not in deploy_manifest.json publish - every deploy would leave it inactive and no website\'s week would run'
+    assert "let mode = 'plan_only'" in _cp140 and "v.mode === 'start'" in _cp140, 'cycle: publishing the dispatcher is safe only because it plans until seo_cache cycle:mode says start'
     _unpub140 = sorted({w for _j, w in _kit140} - set(_man140['publish']))
     assert not _unpub140, 'cycle: the dispatcher would start %s, which the deploy does not publish ("Workflow is not active")' % _unpub140
     _sc140 = open(os.path.join(HERE0, 'sync_credentials.py'), encoding='utf-8').read()
@@ -11845,8 +11875,9 @@ def _b140_cycle():
     for _c140 in _cases140['cases']:
         _r140 = _dg140.deploy_window(_c140['jobs'], _c140['cycles'], _cases140['now'], _c140.get('minutes') or 15)
         _wt140 = _c140['want']
-        assert _r140['busy'] is _wt140['busy'] and [j['key'] for j in _r140['inflight']] == _wt140['inflight'] and len(_r140['due']) == _wt140['due'] \
-            and len(_r140['ignored_stale']) == _wt140.get('ignored', 0), 'cycle: deploy_guard.deploy_window("%s") answered %s, expected %s' % (_c140['name'], _r140, _wt140)
+        assert _r140['busy'] is _wt140['busy'] and [j['key'] for j in _r140['starting']] == _wt140['starting'] and [j['key'] for j in _r140['running']] == _wt140['running'] \
+            and len(_r140['due']) == _wt140['due'] and len(_r140['ignored_stale']) == _wt140.get('ignored', 0), 'cycle: deploy_guard.deploy_window("%s") answered %s, expected %s' % (_c140['name'], _r140, _wt140)
+        assert bool(_r140['running']) == bool(_r140['note']) and (not _r140['running'] or 'the dispatcher sees the dead run' in _r140['note']), 'cycle: a running job must be reported (and why it is safe): ' + str(_r140)
         _guard140[_c140['name']] = _r140
     _ae140 = open(os.path.join(HERE0, 'apply_env.py'), encoding='utf-8').read()
     _de140 = open(os.path.join(HERE0, '..', '..', 'deploy', 'gcp', 'deploy_engine.py'), encoding='utf-8').read()
@@ -11856,7 +11887,8 @@ def _b140_cycle():
     assert _de140.index('deploy_guard.check(') < _de140.index('# 2. build'), 'cycle: deploy_engine.py builds before it asks the guard'
     assert set(_dg140.FORCE_FLAGS) == {'--force', '--force-monday'}, 'cycle: --force and the old --force-monday must both override the guard'
     _idle140 = {'seo_cycle_jobs': [], 'seo_cycles': []}
-    _busy140 = {'seo_cycle_jobs': [{'key': 'cyc:site_a:2026-10-21:backlinks', 'job': 'backlinks', 'status': 'running', 'updated_at': '2026-10-21T13:58:00.000Z'}], 'seo_cycles': []}
+    _busy140 = {'seo_cycle_jobs': [{'key': 'cyc:site_a:2026-10-21:backlinks', 'job': 'backlinks', 'status': 'starting', 'updated_at': '2026-10-21T13:58:00.000Z'}], 'seo_cycles': []}
+    _run140 = {'seo_cycle_jobs': [{'key': 'cyc:site_b:2026-10-21:audit', 'job': 'audit', 'status': 'running', 'updated_at': '2026-10-21T13:30:00.000Z'}], 'seo_cycles': []}
 
     def _api140(tables, fail=None, missing=False):
         def call(method, path):
@@ -11874,6 +11906,7 @@ def _b140_cycle():
     _chk140 = {
         'idle': _dg140.check(_api140(_idle140), [], now=_now140, say=_said140.append),
         'busy': _dg140.check(_api140(_busy140), [], now=_now140, say=_said140.append),
+        'running_only': _dg140.check(_api140(_run140), [], now=_now140, say=_said140.append),
         'busy_force': _dg140.check(_api140(_busy140), ['--force'], now=_now140, say=_said140.append),
         'busy_force_monday': _dg140.check(_api140(_busy140), ['--force-monday'], now=_now140, say=_said140.append),
         'unreadable_401': _dg140.check(_api140(_idle140, fail=401), [], now=_now140, say=_said140.append),
@@ -11881,17 +11914,33 @@ def _b140_cycle():
         'unreadable_force': _dg140.check(_api140(_idle140, fail=401), ['--force'], now=_now140, say=_said140.append),
         'fresh_instance_no_tables': _dg140.check(_api140(_idle140, missing=True), [], now=_now140, say=_said140.append)}
     assert _chk140['idle'] is None and _chk140['fresh_instance_no_tables'] is None, 'cycle: the guard refused an idle instance: ' + str(_chk140)
-    assert _chk140['busy'] and 'refusing now' in _chk140['busy'] and 'cyc:site_a:2026-10-21:backlinks' in _chk140['busy'], 'cycle: the guard let a deploy through over a running job'
+    assert _chk140['busy'] and 'refusing now' in _chk140['busy'] and 'cyc:site_a:2026-10-21:backlinks' in _chk140['busy'], 'cycle: the guard let a deploy through over a job that is starting'
+    assert _chk140['running_only'] is None and any('cyc:site_b:2026-10-21:audit' in x and 'the dispatcher sees the dead run' in x for x in _said140), \
+        'cycle: a running job must be reported, never refused (a restart kills it and the dispatcher retries it)'
     assert _chk140['busy_force'] is None and _chk140['busy_force_monday'] is None and sum('DEPLOY GUARD OVERRIDDEN' in s for s in _said140) == 3, \
         'cycle: --force / --force-monday must override, loudly'
     assert _chk140['unreadable_401'] and 'could not be read' in _chk140['unreadable_401'] and _chk140['unreachable'] and 'could not be reached' in _chk140['unreachable'] \
         and _chk140['unreadable_force'] is None, 'cycle: a guard that cannot read the tables must refuse (unless --force) and say why: ' + str(_chk140)
-    _wire140.update({'record_then_start': True, 'deploy_guard': {k: {'busy': v['busy'], 'inflight': [j['key'] for j in v['inflight']], 'due': len(v['due']),
-                     'ignored': len(v['ignored_stale']), 'reason': v['reason']} for k, v in _guard140.items()},
-                     'guard_check': {k: (v is None) for k, v in _chk140.items()}, 'kickoff_codes': _codes140, 'published_targets': sorted({w for _j, w in _kit140})})
+    # ---------- F. the image's release step (n8n/deploy/release.mjs) asks the same rule: CYC.deployWindow out of the generated dispatcher ----------
+    _rel140 = open(os.path.join(HERE0, '..', 'deploy', 'release.mjs'), encoding='utf-8').read()
+    _rg140 = open(os.path.join(HERE0, '..', 'deploy', 'deploy_guard.mjs'), encoding='utf-8').read()
+    assert 'inMondayWindow' not in _rel140 and "from './deploy_guard.mjs'" in _rel140 and 'SEO_DEPLOY_FORCE_MONDAY' in _rel140 and 'SEO_DEPLOY_FORCE' in _rel140, \
+        'cycle: release.mjs still has the Monday window, or does not ask the per-cycle guard (SEO_DEPLOY_FORCE, alias SEO_DEPLOY_FORCE_MONDAY)'
+    assert _rel140.index('deployGuard(') < _rel140.index("n8n('import:workflow'"), 'cycle: release.mjs imports before it asks the guard'
+    assert 'CYC.deployWindow(' in _rg140 and "'Cycle Plan'" in _rg140 and 'deployWindow = ' not in _rg140, 'cycle: deploy_guard.mjs does not read the rule out of the generated dispatcher (or writes a rule of its own)'
+    # ---------- G. production's deploy path: the columns first, a failed sync fails, a missing workflow fails unless --create-missing ----------
+    assert _de140.index("'sync_tables.py'") < _de140.index("api('PUT', '/workflows/'"), 'cycle: deploy_engine.py PUTs the workflows before the new Data Table columns exist'
+    assert 'sync failed' in _de140 and "'--create-missing' not in args" in _de140 and 'SEOagentCycleDsp' in _de140, \
+        'cycle: deploy_engine.py ignores a failed sync_tables.py, or lets a workflow missing remotely pass without --create-missing'
+    import shutil as _sh140
+    _sh140.copyfile(os.path.join(HERE0, '..', 'deploy', 'deploy_guard.mjs'), os.path.join(HERE0, 'harness', 'deploy_guard.mjs'))   # harness CY12 runs it (generated copy)
+    _wire140.update({'record_then_start': True, 'deploy_guard': {k: {'busy': v['busy'], 'starting': [j['key'] for j in v['starting']], 'running': [j['key'] for j in v['running']],
+                     'due': len(v['due']), 'ignored': len(v['ignored_stale']), 'reason': v['reason'], 'note': v['note']} for k, v in _guard140.items()},
+                     'guard_check': {k: (v is None) for k, v in _chk140.items()}, 'dispatcher_published': 'SEOagentCycleDsp' in _man140['publish'], 'kickoff_codes': _codes140, 'published_targets': sorted({w for _j, w in _kit140})})
     json.dump(_wire140, open(os.path.join(HERE0, 'harness', 'cycle_wiring.json'), 'w'), indent=1, sort_keys=True)
-    print('cycle (section 140): the Cycle Dispatcher records, reads its claim back, then starts (%d jobs, inactive, not published); Site Kickoff '
-          'writes seo_cycles and starts nothing; the deploy guard answers %d shared cases and refuses when it cannot read' % (len(_kit140), len(_guard140)))
+    print('cycle (section 140): the Cycle Dispatcher reads the claim, records a token, holds and reads it back, then starts (%d jobs, published, plan_only until '
+          'cycle:mode); Site Kickoff writes seo_cycles and starts nothing; the deploy guard answers %d shared cases (refuses a start or a due cycle, reports a running job) '
+          'and refuses when it cannot read; release.mjs asks the same rule' % (len(_kit140), len(_guard140)))
 
 
 
