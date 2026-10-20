@@ -649,8 +649,12 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastRunAt: lastIso(x.ai.growth?.checkedAt, reportOf(['ai_growth'])?.receivedAt),
       lastResult: x.ai.growth ? `${x.ai.growth.submitted.bing.submitted + x.ai.growth.submitted.indexnow.submitted} page(s) sent to Bing / IndexNow · ${x.ai.growth.pagesChecked} checked${x.ai.growth.avgScore != null ? ` (avg ${x.ai.growth.avgScore}/100)` : ''} · ${x.ai.growth.earned.length} pages AI cites without you` : null,
       lastReportId: reportOf(['ai_growth'])?.id ?? null,
-      monthlyUsd: m?.aiVisibility === false || m?.aiGrowth === false ? 0 : estimateAiGrowthCost({ pages: m?.aiPagesPerMonth }).total,
-      detail: `${m?.aiPagesPerMonth ?? 2} AI answer page(s) a month · Bing / IndexNow · earned-media drafts`,
+      // rehearsal 2026-10-20: AI answer pages are written on their own at level 3 only (plan §5.4, as the credits forecast in
+      // shared/src/autopilot.ts); at levels 1-2 they are suggestions and cost nothing unless approved, so they are not in this figure
+      monthlyUsd: m?.aiVisibility === false || m?.aiGrowth === false ? 0 : estimateAiGrowthCost({ pages: level === 3 ? m?.aiPagesPerMonth : 0 }).total,
+      detail: level === 3
+        ? `${m?.aiPagesPerMonth ?? 2} AI answer page(s) a month · Bing / IndexNow · earned-media drafts`
+        : 'AI answer pages are suggested for your OK · Bing / IndexNow · earned-media drafts',
     }),
     base('link_builder', m?.linkBuilder ?? true, 'The Link Builder is switched off in the monitor settings', {
       lastRunAt: reportOf(['link_builder'])?.receivedAt ?? null,

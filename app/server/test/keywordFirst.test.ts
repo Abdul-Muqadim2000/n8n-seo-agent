@@ -592,6 +592,10 @@ describe('the Pipeline reads the website\'s cycle and the autopilot', () => {
     expect(weekly.every((a: { nextRunAt: string | null }) => !!a.nextRunAt && new Date(a.nextRunAt).getUTCHours() === 2)).toBe(true);
     // the pages a week are not forecast before a keyword is chosen
     expect(d.automations.find((a: { id: string }) => a.id === 'content_cadence')).toMatchObject({ monthlyCredits: 0, detail: '1 page(s) a week, once you have chosen a keyword' });
+    // rehearsal 2026-10-20: at level 2 the AI answer pages are suggestions, so the AI growth figure has no page in it
+    const growth = d.automations.find((a: { id: string }) => a.id === 'ai_growth');
+    expect(growth.detail).toMatch(/suggested for your OK/);
+    expect(growth.monthlyCredits).toBeLessThan(50);
     expect(JSON.stringify(d)).not.toMatch(/every Monday|Monday's|Mondays/);
   });
 });
