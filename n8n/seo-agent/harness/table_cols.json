@@ -372,7 +372,8 @@
   "callback_url",
   "request_id",
   "target_words",
-  "status_note"
+  "status_note",
+  "chosen_by"
  ],
  "HISTORY": [
   "ladder_id",
