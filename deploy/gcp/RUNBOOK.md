@@ -100,14 +100,37 @@ sudo DATA_DIR=/mnt/data SECRETS_DIR=/mnt/data/secrets $C logs --tail 100 n8n
 - **The editor** is never public. Run `deploy/gcp/tunnel.sh` and open http://localhost:15678. Sign in with the migrated owner account,
   the same one as on the Mac.
 - **Deploying workflows** uses `python3 deploy/gcp/deploy_engine.py`. Run it from the main checkout: it builds with `n8n/.env`.
-  1. It builds, then updates every workflow of `n8n/seo-agent/deploy_manifest.json` through the public API.
-  2. It publishes the manifest's set. Referenced sub-workflows go first: the API refuses a workflow that calls an unpublished one.
-  3. It adds new Data Table columns (`sync_tables.py`).
-  4. It refuses the Monday 07:00–12:00 New York window (R94) unless you pass `--force-monday`.
+  1. **The deploy guard** (`n8n/seo-agent/deploy_guard.py`) reads `seo_cycle_jobs` / `seo_cycles` on the VM. It **refuses** while a
+     Cycle Dispatcher job is *starting* (between its claim and its run's ledger row) or a website's cycle or "Coming up" preview is due
+     in the next 15 minutes. A *running* job is **reported, not refused**: a restart kills it, the dispatcher sees the dead run at its
+     next sweep and starts it again (one of its three attempts). The Monday 07:00–12:00 window is gone with the Monday crons.
+     `--force` overrides (`--force-monday` is the same flag). Tables it cannot read refuse too.
+  2. It builds.
+  3. It adds new Data Table columns (`sync_tables.py`) **before** any workflow changes, and stops if that fails. `sync_tables.py`
+     adds columns only; a new table (`seo_cycles`, `seo_cycle_jobs`, `seo_skips`) is created by its workflow's Ensure node the first
+     time that workflow runs.
+  4. It updates every workflow of `n8n/seo-agent/deploy_manifest.json` through the public API. A workflow the VM does not have
+     **fails the deploy** unless you pass `--create-missing`.
+  5. It publishes the manifest's set, the Cycle Dispatcher included. Referenced sub-workflows go first: the API refuses a workflow
+     that calls an unpublished one.
 - **Options:**
   - `--credentials` rewrites the credentials from `n8n/.env`.
   - `--create-missing` imports a workflow the VM does not have yet, using n8n's CLI over IAP SSH. The public API cannot create a
     record with a fixed id.
+- **First deploy of the per-website cycle** (SCHEDULING_KEYWORDS_PLAN.md §10). The VM has neither the Cycle Dispatcher
+  (`SEOagentCycleDsp`) nor the rewritten Site Kickoff yet, so:
+  1. `python3 deploy/gcp/deploy_engine.py` (dry run): it lists both as missing remotely and fails, naming `--create-missing`.
+  2. `python3 deploy/gcp/deploy_engine.py --apply --create-missing`: imports them, then publishes every workflow, the dispatcher
+     too. **Publishing it starts nothing:** with no `seo_cache` row `cycle:mode` it sweeps in `plan_only` - it plans every
+     website's cycle every 5 minutes and starts no job.
+  3. Read one sweep's record: the `seo_cache` row `cycle:last` (Data Tables in the editor, or the public API). It lists every
+     website, its cycle and what it *would* start (`would_start`), with the reasons.
+  4. **The mode flip (the owner's step):** add the `seo_cache` row `key = cycle:mode`, `kind = cycle`, `value = {"mode":"start"}`.
+     The next sweep starts jobs. To stop it again, set the value to `{"mode":"plan_only"}` (or delete the row).
+  5. **The watchdog:** the Schedule Catch-up (`SEOagentCatchUp1`, every 15 minutes) raises an ops alert when the dispatcher is
+     inactive, or its last sweep (`cycle:last`) is older than 20 minutes, at most once every 6 hours while it lasts. Its record is
+     the `seo_cache` row `catchup:watchdog:SEOagentCycleDsp`. A dispatcher a deploy left inactive is therefore seen within 20
+     minutes; re-publish it with `POST /api/v1/workflows/SEOagentCycleDsp/activate`.
 - **The n8n API key** is the local `N8N_API_KEY`. It stays valid because the instance key was carried over.
 
 **Concurrency** is limited in two places, which work together:
@@ -220,10 +243,10 @@ two ways, and the second needs no Vercel work per agency:
   - Moving to standard (non-Spot) provisioning costs about $13 a month more.
 - **What it costs in work:**
   - A run in progress dies. Its ledger row goes stale after 2 hours and holds nothing; the customer sees the run fail.
-  - A schedule due while the VM was down did not fire. **The Schedule Catch-up** (`SEOagentCatchUp1`, "Instance Started" + hourly)
-    starts every missed weekly or daily slot once after n8n comes back. This is the R94 path, built because a sleeping Mac lost
-    Monday runs.
-  - Schedules re-arm for their next time on every start. Avoid deploying in the Monday window for the same reason.
+  - A cycle due while the VM was down starts at the dispatcher's next sweep (its own "Instance Started" door, or the 5-minute
+    sweep): it is a row in `seo_cycles`, not an in-memory fire. A job the VM killed is seen dead in the run ledger and n8n's
+    executions and started again (three attempts). The two daily crons left (AI Pulse, Page Watch) are replayed by the
+    **Schedule Catch-up** (`SEOagentCatchUp1`), which also watches the dispatcher (alert after 20 minutes without a sweep).
 - **Test it:** `gcloud compute instances stop alaventra-vm-1 --zone me-central1-a`. The group repairs it; watch
   `gcloud compute instance-groups managed list-instances alaventra-mig --zone me-central1-a`.
 

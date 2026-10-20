@@ -94,9 +94,13 @@ Code nodes in n8n's own task runner, one container. It maps the usual host conve
 on 5678, which the workflows call), `DATABASE_URL` → n8n's Postgres settings with TLS.
 
 **Release step** — run `seo-release` (the image's command) as the host's release / pre-deploy command, against the same database:
-it imports the credentials and the workflows and publishes them; the new web process picks them up when it starts. It refuses
-Monday 07:00–12:00 New York (the weekly runs; `SEO_DEPLOY_FORCE_MONDAY=true` overrides, the Schedule Catch-up then restarts what was
-missed) and fails the release if any workflow does not publish, so the previous release keeps running.
+it imports the credentials and the workflows and publishes them (the Cycle Dispatcher too: it only plans until the `seo_cache` row
+`cycle:mode` says start); the new web process picks them up when it starts. Its deploy guard is the per-cycle rule, read out of the
+generated dispatcher (`deploy_guard.mjs`): it refuses while a website's cycle job is starting or a cycle / preview is due in the next
+15 minutes, and reports (never refuses) a running job, which the dispatcher retries after the restart. It reads the cycle tables from
+the RUNNING engine: set `SEO_DEPLOY_GUARD_URL` (its `/api/v1`) and `SEO_DEPLOY_GUARD_API_KEY` (default `N8N_API_KEY`); unreadable
+tables refuse. `SEO_DEPLOY_FORCE=true` overrides (needed on a first release, when no engine runs yet; `SEO_DEPLOY_FORCE_MONDAY` is an
+alias). It fails the release if any workflow does not publish, so the previous release keeps running.
 
 | Setting | Value |
 |---|---|
