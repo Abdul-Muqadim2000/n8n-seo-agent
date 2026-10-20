@@ -24,7 +24,7 @@ _env.require_settings('build_cycle.py')
 import url_lint, retry_lint
 from env_settings import ENV
 from ladder_common import (DT_TYPE, DT_VERSION, dt_schema, CACHE_TABLE, CACHE_COLS, RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, RUN_GUARD_SRC, CATCHUP_SRC, SITES_TABLE, MONITORS_TABLE,
-                           CADENCE_TABLE, LADDER_TABLE, LADDER_SETTINGS_TABLE, CYCLES_TABLE, CYCLES_COLS, CYCLE_JOBS_TABLE, CYCLE_JOBS_COLS, SKIPS_TABLE, SKIPS_COLS,
+                           CADENCE_TABLE, LADDER_TABLE, LADDER_SETTINGS_TABLE, SITES_COLS, MONITORS_COLS, CADENCE_COLS, LADDER_COLS, LADDER_SETTINGS_COLS, CYCLES_TABLE, CYCLES_COLS, CYCLE_JOBS_TABLE, CYCLE_JOBS_COLS, SKIPS_TABLE, SKIPS_COLS,
                            dt_create_params, dt_upsert_params, dt_get_all_params, dt_get_where_params, dt_get_all_where_params, dt_delete_where_params,
                            node_id, freeze_ids, read_v5)
 
@@ -154,6 +154,15 @@ node('Ensure Cycles Table', DT_TYPE, DT_VERSION, dt_create_params(CYCLES_TABLE, 
 node('Ensure Cycle Jobs Table', DT_TYPE, DT_VERSION, dt_create_params(CYCLE_JOBS_TABLE, CYCLE_JOBS_COLS), at(4, 1), **LOAD)
 node('Ensure Skips Table', DT_TYPE, DT_VERSION, dt_create_params(SKIPS_TABLE, SKIPS_COLS), at(5, 1), **LOAD)
 node('Ensure Cache Table (Cycle)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), at(6, 1), **LOAD)
+# Rehearsal 2026-10-20 (real engine, fresh database = production after the reset): every table the plan READS is ensured first. A
+# table no workflow has created yet (a fresh instance: seo_sites, seo_monitors... appear only when "Track my site" first runs) answers
+# "not found", and since F-ENG the plan refuses the whole sweep on any failed read - so a fresh engine failed every 5 minutes and
+# alerted each time. Created empty with the same columns the owning workflows use, a missing table reads as no rows, which is the truth.
+_ENSURE_READ = [('Ensure Sites Table (Cycle)', SITES_TABLE, SITES_COLS), ('Ensure Monitors Table (Cycle)', MONITORS_TABLE, MONITORS_COLS),
+                ('Ensure Cadence Table (Cycle)', CADENCE_TABLE, CADENCE_COLS), ('Ensure Ladder Settings Table (Cycle)', LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS),
+                ('Ensure Ladders Table (Cycle)', LADDER_TABLE, LADDER_COLS), ('Ensure Run Ledger Table (Cycle)', RUN_LEDGER_TABLE, RUN_LEDGER_COLS)]
+for _i, (_n, _t, _c) in enumerate(_ENSURE_READ):
+    node(_n, DT_TYPE, DT_VERSION, dt_create_params(_t, _c), at(6, 3 + _i), **LOAD)
 node('Load Cycle Mode', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', 'cycle:mode'), at(7, 1), **LOAD)
 # F-ENG (2026-10-20): the last sweep's record - the Instance Started door stands down when a sweep finished in the last 2 minutes
 node('Load Cycle Last', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', 'cycle:last'), at(7, 2), **LOAD)
@@ -215,7 +224,7 @@ code('Cycle Alarm', 'Cycle_Alarm.js', at(34, 0))
 
 link('Instance Started', 'Let n8n Start (Cycle)'); link('Let n8n Start (Cycle)', 'Cycle Entry'); link(SWEEP, 'Cycle Entry'); link('Cycle Run', 'Cycle Entry')
 for a, b in [('Cycle Entry', 'Ensure Cycles Table'), ('Ensure Cycles Table', 'Ensure Cycle Jobs Table'), ('Ensure Cycle Jobs Table', 'Ensure Skips Table'),
-             ('Ensure Skips Table', 'Ensure Cache Table (Cycle)'), ('Ensure Cache Table (Cycle)', 'Load Cycle Mode'), ('Load Cycle Mode', 'Load Cycle Last'), ('Load Cycle Last', 'Load Cycles'),
+             ('Ensure Skips Table', 'Ensure Cache Table (Cycle)'), ('Ensure Cache Table (Cycle)', 'Ensure Sites Table (Cycle)'), ('Ensure Sites Table (Cycle)', 'Ensure Monitors Table (Cycle)'), ('Ensure Monitors Table (Cycle)', 'Ensure Cadence Table (Cycle)'), ('Ensure Cadence Table (Cycle)', 'Ensure Ladder Settings Table (Cycle)'), ('Ensure Ladder Settings Table (Cycle)', 'Ensure Ladders Table (Cycle)'), ('Ensure Ladders Table (Cycle)', 'Ensure Run Ledger Table (Cycle)'), ('Ensure Run Ledger Table (Cycle)', 'Load Cycle Mode'), ('Load Cycle Mode', 'Load Cycle Last'), ('Load Cycle Last', 'Load Cycles'),
              ('Load Cycles', 'Load Cycle Jobs'), ('Load Cycle Jobs', 'Load Sites (Cycle)'), ('Load Sites (Cycle)', 'Load Monitors (Cycle)'),
              ('Load Monitors (Cycle)', 'Load Cadence (Cycle)'), ('Load Cadence (Cycle)', 'Load Ladder Settings (Cycle)'), ('Load Ladder Settings (Cycle)', 'Load Ladders (Cycle)'),
              ('Load Ladders (Cycle)', 'Load Run Ledger (Cycle)'), ('Load Run Ledger (Cycle)', 'Cycle Exec Requests'), ('Cycle Exec Requests', 'Any Exec Reads?'),
@@ -264,6 +273,23 @@ for s_, outs in C.items():
             for t in lst: assert t['node'] in names, t['node']
 for n in N:
     if n['type'] == 'n8n-nodes-base.httpRequest': assert n.get('credentials'), n['name']
+# Rehearsal 2026-10-20: every Data Table the dispatcher READS is created (createIfNotExists) on the main path before the first read of it,
+# so a fresh engine (production right after its reset) reads "no rows", never "table not found" -> a refused sweep and an alert every 5 min.
+def _tbl(n): return ((n.get('parameters') or {}).get('dataTableId') or {}).get('value')
+_byname = {n['name']: n for n in N}
+_order, _seen, _cur = [], set(), 'Cycle Entry'
+while _cur and _cur not in _seen:
+    _seen.add(_cur); _order.append(_cur)
+    _nx = [t['node'] for lst in (w['connections'].get(_cur, {}).get('main') or []) for t in (lst or [])]
+    _cur = _nx[0] if _nx else None
+_ensured = set()
+for _nm in _order:
+    _n = _byname[_nm]
+    if _n['type'] == DT_TYPE and (_n['parameters'].get('operation') == 'create' or _n['parameters'].get('resource') == 'table'):
+        _ensured.add(_n['parameters'].get('tableName'))
+    elif _n['type'] == DT_TYPE and _nm.startswith('Load '):
+        assert _tbl(_n) in _ensured, 'Cycle Dispatcher: ' + _nm + ' reads ' + str(_tbl(_n)) + ' before any Ensure node creates it (a fresh engine would refuse every sweep)'
+assert sum(1 for _nm in _order if _nm.startswith('Load ')) >= 10, 'Cycle Dispatcher: the main path walk found too few Load nodes: ' + str(_order)
 url_lint.check(w, NAME)
 retry_lint.check(w, NAME)
 freeze_ids(w)

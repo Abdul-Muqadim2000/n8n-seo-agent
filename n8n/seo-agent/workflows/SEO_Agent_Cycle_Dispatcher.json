@@ -374,6 +374,632 @@
       },
       {
         "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_sites",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "gsc_property",
+                "type": "string"
+              },
+              {
+                "name": "ga4_property_id",
+                "type": "string"
+              },
+              {
+                "name": "country",
+                "type": "string"
+              },
+              {
+                "name": "location_code",
+                "type": "number"
+              },
+              {
+                "name": "language_code",
+                "type": "string"
+              },
+              {
+                "name": "email",
+                "type": "string"
+              },
+              {
+                "name": "callback_url",
+                "type": "string"
+              },
+              {
+                "name": "keywords",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "last_run_at",
+                "type": "string"
+              },
+              {
+                "name": "last_status",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              },
+              {
+                "name": "canonical_host",
+                "type": "string"
+              },
+              {
+                "name": "business_name",
+                "type": "string"
+              },
+              {
+                "name": "logo_url",
+                "type": "string"
+              },
+              {
+                "name": "nap_json",
+                "type": "string"
+              },
+              {
+                "name": "services_json",
+                "type": "string"
+              },
+              {
+                "name": "nav_pages_json",
+                "type": "string"
+              },
+              {
+                "name": "business_facts",
+                "type": "string"
+              },
+              {
+                "name": "cta",
+                "type": "string"
+              },
+              {
+                "name": "brand_names",
+                "type": "string"
+              },
+              {
+                "name": "competitors",
+                "type": "string"
+              },
+              {
+                "name": "accreditation",
+                "type": "string"
+              },
+              {
+                "name": "model_updated_at",
+                "type": "string"
+              },
+              {
+                "name": "content_groups_json",
+                "type": "string"
+              },
+              {
+                "name": "declared_services",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "5a006887-2f1c-556a-91d7-c74437bc102d",
+        "name": "Ensure Sites Table (Cycle)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          660
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_monitors",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "ai_visibility",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_engines",
+                "type": "string"
+              },
+              {
+                "name": "ai_prompts_max",
+                "type": "number"
+              },
+              {
+                "name": "backlinks",
+                "type": "boolean"
+              },
+              {
+                "name": "audit_monthly",
+                "type": "boolean"
+              },
+              {
+                "name": "audit_pages",
+                "type": "number"
+              },
+              {
+                "name": "audit_js",
+                "type": "boolean"
+              },
+              {
+                "name": "competitors",
+                "type": "string"
+              },
+              {
+                "name": "brand_names",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              },
+              {
+                "name": "ai_pulse",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_growth",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_pages_month",
+                "type": "number"
+              },
+              {
+                "name": "link_builder",
+                "type": "boolean"
+              },
+              {
+                "name": "stuck_weeks",
+                "type": "number"
+              },
+              {
+                "name": "ai_personas",
+                "type": "string"
+              },
+              {
+                "name": "ai_markets",
+                "type": "string"
+              },
+              {
+                "name": "ai_pulse_mode",
+                "type": "string"
+              },
+              {
+                "name": "ai_pulse_per_week",
+                "type": "number"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "6cda9d12-b88c-5489-8501-2c19424fd171",
+        "name": "Ensure Monitors Table (Cycle)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          880
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_cadence",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "pages_per_week",
+                "type": "number"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "badef141-0f9c-5f55-afa4-13aea96bd57b",
+        "name": "Ensure Cadence Table (Cycle)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          1100
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_ladder_settings",
+          "columns": {
+            "column": [
+              {
+                "name": "ladder_id",
+                "type": "string"
+              },
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "head_keyword",
+                "type": "string"
+              },
+              {
+                "name": "mode",
+                "type": "string"
+              },
+              {
+                "name": "priority",
+                "type": "number"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "plan_type",
+                "type": "string"
+              },
+              {
+                "name": "reach",
+                "type": "number"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "opportunities",
+                "type": "string"
+              },
+              {
+                "name": "auto_start",
+                "type": "boolean"
+              },
+              {
+                "name": "max_active",
+                "type": "number"
+              },
+              {
+                "name": "max_waiting",
+                "type": "number"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "chosen_by",
+                "type": "string"
+              },
+              {
+                "name": "autopilot_level",
+                "type": "number"
+              },
+              {
+                "name": "rechecked_at",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "23dc38a9-15d8-5444-a912-0c7c2c77e970",
+        "name": "Ensure Ladder Settings Table (Cycle)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          1320
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_ladders",
+          "columns": {
+            "column": [
+              {
+                "name": "ladder_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "head_keyword",
+                "type": "string"
+              },
+              {
+                "name": "rung",
+                "type": "number"
+              },
+              {
+                "name": "page_no",
+                "type": "number"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "supporting",
+                "type": "string"
+              },
+              {
+                "name": "page_type",
+                "type": "string"
+              },
+              {
+                "name": "target_url",
+                "type": "string"
+              },
+              {
+                "name": "page_exists",
+                "type": "boolean"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "months",
+                "type": "string"
+              },
+              {
+                "name": "start_date",
+                "type": "string"
+              },
+              {
+                "name": "country",
+                "type": "string"
+              },
+              {
+                "name": "location_code",
+                "type": "number"
+              },
+              {
+                "name": "language_code",
+                "type": "string"
+              },
+              {
+                "name": "email",
+                "type": "string"
+              },
+              {
+                "name": "callback_url",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              },
+              {
+                "name": "target_words",
+                "type": "number"
+              },
+              {
+                "name": "status_note",
+                "type": "string"
+              },
+              {
+                "name": "chosen_by",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "ff0c2230-e93a-58a7-b850-78a9c4e1f546",
+        "name": "Ensure Ladders Table (Cycle)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          1540
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_run_ledger",
+          "columns": {
+            "column": [
+              {
+                "name": "run_id",
+                "type": "string"
+              },
+              {
+                "name": "key",
+                "type": "string"
+              },
+              {
+                "name": "mode",
+                "type": "string"
+              },
+              {
+                "name": "est_usd",
+                "type": "number"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "settled_usd",
+                "type": "number"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "heavy",
+                "type": "boolean"
+              },
+              {
+                "name": "dfs_est_usd",
+                "type": "number"
+              },
+              {
+                "name": "dfs_usd",
+                "type": "number"
+              },
+              {
+                "name": "dfs_balance",
+                "type": "number"
+              },
+              {
+                "name": "cost_mode",
+                "type": "string"
+              },
+              {
+                "name": "ai_usd",
+                "type": "number"
+              },
+              {
+                "name": "measured_usd",
+                "type": "number"
+              },
+              {
+                "name": "estimated_usd",
+                "type": "number"
+              },
+              {
+                "name": "cost_basis",
+                "type": "string"
+              },
+              {
+                "name": "settled_at",
+                "type": "string"
+              },
+              {
+                "name": "dfs_balance_end",
+                "type": "number"
+              },
+              {
+                "name": "dfs_source",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "d6252f9e-f6ac-5945-ba72-f2b7644e7a59",
+        "name": "Ensure Run Ledger Table (Cycle)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          1760
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
           "resource": "row",
           "operation": "get",
           "dataTableId": {
@@ -2767,6 +3393,72 @@
         ]
       },
       "Ensure Cache Table (Cycle)": {
+        "main": [
+          [
+            {
+              "node": "Ensure Sites Table (Cycle)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Sites Table (Cycle)": {
+        "main": [
+          [
+            {
+              "node": "Ensure Monitors Table (Cycle)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Monitors Table (Cycle)": {
+        "main": [
+          [
+            {
+              "node": "Ensure Cadence Table (Cycle)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Cadence Table (Cycle)": {
+        "main": [
+          [
+            {
+              "node": "Ensure Ladder Settings Table (Cycle)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Ladder Settings Table (Cycle)": {
+        "main": [
+          [
+            {
+              "node": "Ensure Ladders Table (Cycle)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Ladders Table (Cycle)": {
+        "main": [
+          [
+            {
+              "node": "Ensure Run Ledger Table (Cycle)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Run Ledger Table (Cycle)": {
         "main": [
           [
             {
