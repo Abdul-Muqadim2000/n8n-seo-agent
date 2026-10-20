@@ -2,7 +2,7 @@
 
 Written 2026-10-19 from the handoff `SCHEDULING_KEYWORDS_HANDOFF.md`. **Status: approved by the owner on 2026-10-19, with the additions
 discussed that day: three autopilot levels (§5.5), the next keyword after a win (§5.6), "tell first, then go" and the weekly "Coming up"
-plan (§5.7). Implementation started (team and contracts in §14 and §15). The decisions in §11 are taken as recommended, except D8 and
+plan (§5.7). Implementation started (team and contracts in §14 and §15). **2026-10-20: built, reviewed adversarially (3 reviewers, every finding fixed), and run once end to end with real credits on a fresh production-like engine: `REHEARSAL_2026-10-20.md` (9 real defects found and fixed; engine harness 9635/0, app 553/1211/125). Not deployed: the owner decides the reset and the deploy window.** The decisions in §11 are taken as recommended, except D8 and
 D10, which are confirmed again at deploy time because they touch production and spend money.**
 
 Research behind it: five read-only passes over the code (engine schedules, app schedules + onboarding, keyword machinery) and the market
