@@ -421,6 +421,7 @@ return [{
     ladder_mode: KF_LADDER_MODE,
     services: KF_SERVICES,
     services_given: KF_SERVICES_GIVEN,
+    facts_given: Object.prototype.hasOwnProperty.call(p2 || {}, 'business_facts'),   // P1 (2026-10-20): Track my site stores the facts only when the key is sent
     timezone: KF_TZ,
     tracking_started_at: KF_TRACK_START,
     chosen_keyword_reason: String(p2.chosen_keyword_reason || '').slice(0, 300),

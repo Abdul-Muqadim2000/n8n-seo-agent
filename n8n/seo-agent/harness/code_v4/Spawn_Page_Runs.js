@@ -15,9 +15,14 @@ const measureOf = (p) => String(p.keyword || '').toLowerCase().trim() !== headKw
   keyword: headKw, score: (L.feasibility || {}).score ?? d.verdict_score ?? null, checked_at: String(sfL.checked_at || ((sfL.ai_overview || {}).seen_at) || ''),
   ai_overview: ((sfL.ai_overview || {}).present) === true, ai_overview_read: ((sfL.ai_overview || {}).present) != null,   // F-SERP: a lighter reading did not ask for the AI Overview
   features: Array.isArray(sfL.features_present) ? sfL.features_present.slice(0, 12) : [] };
+// P1 (2026-10-20): every page run carries the website's business facts and call to action, the request's (the app sends the website's own)
+// or else the site model's (seo_sites / the cached model), so a ladder started without them in the request still writes with the stored ones
+const SMF = (() => { try { return ($('Site Model').first().json || {}).site_model || {}; } catch (e) { return {}; } })();
+const factsOf = String(d.business_facts || '').trim() || String(SMF.business_facts || '').trim();
+const ctaOf = String(d.cta || '').trim() || String(SMF.cta || '').trim();
 return (L.write_now || []).slice(0, n).map(p => ({ json: { body: {
   mode: 'keyword', keyword: p.keyword, page_type: p.page_type || 'Service Page', country: d.country, domain: d.domain,
-  business: d.business || '', customers: d.audience || '', business_facts: d.business_facts || '', cta: d.cta || '', tone: d.tone || '', goal: GOAL[d.goal] || d.goal || '',
+  business: d.business || '', customers: d.audience || '', business_facts: factsOf, cta: ctaOf, tone: d.tone || '', goal: GOAL[d.goal] || d.goal || '',
   receive: ['Keyword Report', 'Page Content'], existing_page_url: p.exists ? p.target_url : '',
   email: d.email || '', callback_url: d.callback_url || '', request_id: d.request_id || '', client_ip: 'ladder:' + (L.ladder_id || ''),
   force_content: true, ladder_id: L.ladder_id || '', ladder_rung: p.rung, ladder_head: (L.head || {}).keyword || d.keyword, ladder_page_no: p.page_no,

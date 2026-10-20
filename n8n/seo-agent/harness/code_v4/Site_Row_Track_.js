@@ -9,7 +9,10 @@ const d = $('Normalize Input').first().json; const now = new Date().toISOString(
 const site_id = 'site_' + String(d.domain || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
 let prior = null; try { prior = $('Load Site (Track)').all().map(i => i.json).find(r => r && !r.error && r.site_id === site_id) || null; } catch (e) { prior = null; }
 const status = prior && String(prior.status || '') === 'paused' ? 'paused' : 'active';
+// P1 (2026-10-20): the business facts the app sends with "Track my site" (the website's own), stored on the row the Content Cadence and the
+// readiness rule read (v5/code/_readiness.js); a request without the key leaves the stored facts alone (Site Admin `facts` changes them later)
+const facts = d.facts_given ? { business_facts: String(d.business_facts || '').trim().slice(0, 2000) } : {};
 const declared = d.services_given ? { declared_services: JSON.stringify((Array.isArray(d.services) ? d.services : []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 30)) } : {};
 return [{ json: { site_id, domain: d.domain, gsc_property: '', ga4_property_id: String(d.ga4_property_id || ''), country: d.country || '', location_code: Number(d.location_code) || 0, language_code: d.language_code || 'en',
   email: d.email || '', callback_url: d.callback_url || '', keywords: (d.track_keywords || []).join(', '), status, source: d.via_webhook ? 'api' : 'form', created_at: now, last_run_at: '', last_status: 'registered', request_id: d.request_id || '',
-  ...declared } }];
+  ...declared, ...facts } }];

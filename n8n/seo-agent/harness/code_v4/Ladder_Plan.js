@@ -1609,6 +1609,42 @@ const OWN = (() => {
   };
   return { tokens, relate, ladders, drafts, ladderOf, draftOf, claim, sayOf, distinct, text, HOW, PLACES, ukey };
 })();
+// ---- is the website ready for its first written page? ONE rule for the ladder start, the Content Cadence and the app (P1, 2026-10-20) ----
+// Rehearsal 2026-10-20 (docs/REHEARSAL_2026-10-20.md §4 item 1): a new client launched a ladder with no author profile and no business facts;
+// the first page was written at once (Claude about $1.02, about 62 credits) and Content QA rightly refused it: "11 bracketed field(s) in the
+// byline, the author box and the Person schema still need your details" and claims "nothing on file supports". The owner's decision: the
+// first page waits until the author profile and the business facts are filled in. Inlined by the build (its marker is READINESS in a block comment) into
+// *Ladder Plan* (main workflow) and *Cadence Plan* (Content Cadence); mirrored word for word in app/shared/src/readiness.ts.
+//   * author profile ready = what Content QA needs to put NO bracket in the byline, the author box or the Person schema (Content_QA.js
+//     PROFILE_PH, Blog_Package.js): the author's name (without it 11 fields are brackets) and a bio (without it the author box keeps one),
+//     plus the author's job title, the role the byline and the Person schema name (the owner's minimum: a name and a role).
+//   * business facts ready = facts on file of a reasonable length (FACTS_MIN characters, whitespace collapsed): what the page may claim
+//     about the business, so its own terms, scope and credentials are not marked [Confirm: ...].
+//   of({ profile, facts }) -> { ready, profile_ready, facts_ready, missing: [{ key, label }], missing_text, reason, basis }
+const READY = (() => {
+  const S = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  const FACTS_MIN = 30;
+  const PROFILE_FIELDS = [
+    { key: 'author_name', label: "your author's name" },
+    { key: 'author_job_title', label: "your author's job title" },
+    { key: 'author_bio', label: 'a short author bio' },
+  ];
+  const FACTS = { key: 'business_facts', label: 'your business facts' };
+  const REASON = 'waiting for your author profile and business facts';
+  const listText = (a) => a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+  const of = (o) => {
+    const x = o || {}; const p = (x.profile && typeof x.profile === 'object') ? x.profile : {};
+    const missingProfile = PROFILE_FIELDS.filter(f => !S(p[f.key]));
+    const facts = S(x.facts);
+    const facts_ready = facts.length >= FACTS_MIN;
+    const missing = [...missingProfile.map(f => ({ key: f.key, label: f.label })), ...(facts_ready ? [] : [{ key: FACTS.key, label: FACTS.label }])];
+    const missing_text = listText(missing.map(m => m.label));
+    return { ready: !missing.length, profile_ready: !missingProfile.length, facts_ready, facts_chars: facts.length, facts_min: FACTS_MIN, missing, missing_text,
+      reason: missing.length ? REASON + ' (add ' + missing_text + ')' : '',
+      basis: 'the author profile needs a name, a job title and a bio (the fields the byline, the author box and the Person schema print); the business facts need at least ' + FACTS_MIN + ' characters' };
+  };
+  return { of, FACTS_MIN, PROFILE_FIELDS, REASON };
+})();
 // Ladder mode: applies the AI relevance screen, assigns keywords to rungs by difficulty, builds one page per topic
 // cluster, maps internal links, matches existing pages, estimates the timeline and picks the pages to write now.
 // v4.8 (PIPELINE_FEATURE_SPEC §5.3-5.5): everything is measured against the site's REACH (stored 30 days in seo_cache, else measured from this
@@ -2505,9 +2541,22 @@ if (planned && write_now.length && pile_up.at_limit) holdWhy.push({ limit: 'pile
   + (pile_up.needs_fix ? ' (' + pile_up.needs_fix + ' of them did not pass the quality check and need a fix first)' : '') });
 if (planned && write_now.length && queuedL) holdWhy.push({ limit: 'max_active', text: 'the website writes at most ' + focusL.max_active + ' Auto ladder(s) at a time, and ' + ahead.length + ' with pages still to write come before this one ('
   + ahead.slice(0, 4).map(l => '"' + l.head + '"').join(', ') + (ahead.length > 4 ? ' …' : '') + '), so it waits as Queued' });
-const held = manualHold ? { pages: write_now.splice(0, write_now.length), why: [manualHold, ...holdWhy] }
+// P1 (2026-10-20, rehearsal §4 item 1, owner decision): no page is written before the website's author profile and business facts are on file.
+// The rehearsal's first page was written at once with neither and Content QA refused it ("11 bracketed field(s) in the byline, the author box
+// and the Person schema", claims nothing on file supports), while the client paid about 62 credits for a draft. The plan is still made and
+// stored; the page is HELD like a Manual ladder's (its rows stay `planned`, Spawn Page Runs starts nothing, nothing is charged for it) and the
+// Content Cadence writes it in the first cycle after both are filled in. The facts are the request's (the app sends the website's own) or the
+// site model's; the profile is the seo_profiles row the run already loaded (*Load Profile (Model)*). `force_content` does not override it: it
+// is the owner's rule, not a limit. One rule with the cadence and the app: v5/code/_readiness.js.
+const readyRow = rowsOf('Load Profile (Model)').find(r => r.site_id === reachSiteId(domain) || (r.domain && reachDomain(r.domain) === reachDomain(domain))) || {};
+const readiness = READY.of({ profile: readyRow, facts: String(base.business_facts || '').trim() || String((siteModel || {}).business_facts || '') });
+const profileHold = planned && write_now.length && !readiness.ready ? { limit: 'profile', missing: readiness.missing.map(m => m.key),
+  text: READY.REASON + ': the first page waits until you add ' + readiness.missing_text + ' (Website settings), so it is not written as a draft with blanks to fill; nothing was charged for it' } : null;
+const held = manualHold ? { pages: write_now.splice(0, write_now.length), why: [manualHold, ...(profileHold ? [profileHold] : []), ...holdWhy] }
+  : profileHold ? { pages: write_now.splice(0, write_now.length), why: [profileHold, ...holdWhy] }
   : holdWhy.length && !forced ? { pages: write_now.splice(0, write_now.length), why: holdWhy } : null;
 const limits = { max_active: focusL.max_active, active_ahead: ahead.length, active_ladders: focusL.active.map(l => l.head), queued: queuedL, own_mode: ownMode, manual_hold: !!manualHold,
+  profile_hold: !!profileHold, readiness,   // P1: the first page waits for the author profile and the business facts
   chosen_by: ['client_typed', 'client_picked', 'system_announced'].includes(String(base.chosen_by || '')) ? String(base.chosen_by) : 'client_typed',   // R-K1: who chose this keyword (stored by Ladder Settings Rows)
   max_waiting: pile_up.limit, waiting: pile_up.waiting, waiting_needs_fix: pile_up.needs_fix, at_waiting_limit: pile_up.at_limit, forced: !!(forced && holdWhy.length),
   basis: focusL.basis + '; ' + pile_up.basis,
@@ -2515,6 +2564,7 @@ const limits = { max_active: focusL.max_active, active_ahead: ahead.length, acti
     + pile_up.limit + ' written pages waiting to be published (' + pile_up.waiting + ' now' + (pile_up.needs_fix ? ', ' + pile_up.needs_fix + ' needing a fix' : '') + ').'
     + (held ? ' So the page' + (held.pages.length === 1 ? '' : 's') + ' asked for now (' + held.pages.map(w => '"' + w.keyword + '"').join(', ') + ') ' + (held.pages.length === 1 ? 'was' : 'were') + ' NOT written: ' + held.why.map(w => w.text).join('; and ')
       + (manualHold ? '. The plan is stored; nothing is written until you approve a page.'
+        : profileHold && !holdWhy.length ? '. The plan is stored and the page is written in your next weekly cycle once both are on file (or at once with Write it now on the Pipeline page).'
         : '. The plan is stored and the Content Cadence writes ' + (held.pages.length === 1 ? 'it' : 'them') + ' when ' + (held.why.some(w => w.limit === 'pileup') ? 'the waiting pages are published or discarded' : '') + (held.why.length > 1 ? ' and ' : '') + (held.why.some(w => w.limit === 'max_active') ? 'a ladder ahead of it is finished or paused (or you move this one up on the Pipeline page)' : '') + '.')
       : (forced && holdWhy.length ? ' The request said to write anyway (force), so the limits were overridden for this run: ' + holdWhy.map(w => w.text).join('; and ') + '.' : '')) };
 const pages_total = planned ? rungPages.length + 1 : 0;
