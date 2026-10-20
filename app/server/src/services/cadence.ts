@@ -1,6 +1,8 @@
 import {
   AUTO_SOURCES,
+  contentReadiness,
   cycleNorm,
+  READINESS_REASON,
   DEFAULT_AUTOPILOT_LEVEL,
   fitEvidence,
   fitGate,
@@ -12,6 +14,7 @@ import {
   type AiTargetRow,
   type AutopilotLevel,
   type ChosenBy,
+  type ContentReadiness,
   type ContentLogRow,
   type FitContext,
   type LadderMode,
@@ -55,6 +58,9 @@ import {
 //   even while the website waits for its first keyword (E4, 2026-10-19); skips still win, the budget and the pile-up guard still apply.
 // - pile-up guard: max_waiting or more pages written and not published -> nothing is written (`pausedReason: 'pileup'`).
 // - D11, one search one page: a candidate a live page already answers is a refresh (ladder) or left out (anything else).
+// - P1 (2026-10-20, rehearsal §4 item 1): no page before the author profile and the business facts (shared/src/readiness.ts, the engine's
+//   v5/code/_readiness.js): while either is missing, everything the run would write is held (`heldForProfile`, with the reason), an
+//   approval waits too (approvedNotWritten reason `profile`), and the first run after both are on file writes it within its budget.
 
 export const CADENCE = {
   maxPerWeek: 3,
@@ -309,6 +315,9 @@ export interface CadenceInput {
   skips?: SkipRow[];
   /** the engine's price of one page (a content run), USD */
   estPageUsd?: number;
+  /** P1: the website's readiness for a written page (author profile + business facts, shared/src/readiness.ts). Undefined = not judged
+   * (callers that plan what the rules would do once both are on file); the Pipeline and the fixture always pass it. */
+  readiness?: ContentReadiness;
 }
 
 /** The website's defaults as the engine reads them from the '_site' row. `opportunities` is reported only: it decides nothing. */
@@ -373,6 +382,8 @@ export interface CadenceItem extends QueueItem {
   recheck?: boolean;
   /** F-KW: an existing page that is the homepage or a main menu page (never rewritten on its own) */
   mainPage?: boolean;
+  /** P1: written once the author profile and the business facts are on file */
+  held?: 'profile';
 }
 
 export interface CadenceRefusal { keyword: string; source: TopicSource; reason: string; detail: string; note: string; targetId?: string }
@@ -404,7 +415,13 @@ export interface CadencePlan {
   /** what the client approved for this cycle */
   approvedItems: { keyword: string; source: TopicSource; itemKey: string }[];
   /** approvals not written this cycle, with the reason */
-  approvedNotWritten: { keyword: string; source: TopicSource | ''; reason: 'pileup' | 'budget' | 'covered_by_live_page' | 'ambiguous'; detail?: string }[];
+  approvedNotWritten: { keyword: string; source: TopicSource | ''; reason: 'pileup' | 'budget' | 'covered_by_live_page' | 'ambiguous' | 'profile'; detail?: string }[];
+  /** P1: the website's readiness for a written page (null = not judged) */
+  readiness: ContentReadiness | null;
+  /** P1: the author profile or the business facts are missing, so nothing is written */
+  waitingForProfile: boolean;
+  /** P1: what this run would have written, held until both are on file (each with the reason in its `why`) */
+  heldForProfile: CadenceItem[];
   /** R-K7: this cycle's budget (ladder starts count from `ladderStartWindow`) */
   budget: { pagesPerWeek: number; spent: number; room: number; windowStart: string; ladderStartWindow: string; spentKeywords: { keyword: string; how: string }[] };
   /** F-KW: ladders planned more than 60 days ago, never written, that wait for the app's fresh keyword check (rechecked_at) */
@@ -462,6 +479,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   const nowIso = atIso;
   const base = (over: Partial<CadencePlan>): CadencePlan => ({
     config: cfg, level, trigger: trigger.kind, waitingForKeyword: false, picks: [], candidates: [], suggestions: [], awaitingApproval: [], items: [], refused: [], setAside: [], skipped: [], approvedItems: [], approvedNotWritten: [], recheckLadders: [],
+    readiness: input.readiness ?? null, waitingForProfile: !!input.readiness && !input.readiness.ready, heldForProfile: [],
     budget: EMPTY_BUDGET(pages, windowStart), ladders: [], queued: [], won: [], waitingForSupport: [], pausedReason: '', waitingPublish: 0, waitingKeywords: [], needsFix: [], coveredByLivePages: [],
     aiPages: { perMonth: Math.max(0, Math.floor(Number(input.aiPagesPerMonth ?? 0))), usedThisMonth: 0, thisWeek: false, onTop: level === 3 }, reason: '', estPageUsd, ...over,
   });
@@ -941,6 +959,12 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     })
     .slice(0, CADENCE.suggestions)
     .map((o) => ({ ...o, auto: false }));
+  // P1: nothing is written before the author profile and the business facts are on file (the engine's heldForProfile, right after its
+  // suggestions): what this run would write is held, listed with the reason, and never offered again as a suggestion
+  const readiness = input.readiness ?? null;
+  const heldWhy = readiness && !readiness.ready ? `; ${READINESS_REASON}: it is written once you add ${readiness.missingText}` : '';
+  const held: Cand[] = readiness && !readiness.ready ? picks.splice(0, picks.length).map((p) => ({ ...p, held: 'profile' as const, why: p.why + heldWhy })) : [];
+  const heldK = new Set(held.map((p) => norm(p.keyword)));
   const awaitOf = (x: Info, why: string): Cand | null => {
     const l = x.eligible.find((r) => !isSkipped(r.keyword) && !approvedSeen.has(cycleNorm(r.keyword)));
     if (!l) return null;
@@ -963,7 +987,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   const approvedNotWritten: CadencePlan['approvedNotWritten'] = [
     ...approved
       .filter((o) => !pickedNow.has(norm(o.keyword)))
-      .map((o) => ({ keyword: o.keyword, source: o.source as TopicSource | '', reason: (pausedReason || (covered.some((c) => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget')) as 'pileup' | 'budget' | 'covered_by_live_page' })),
+      .map((o) => ({ keyword: o.keyword, source: o.source as TopicSource | '', reason: (pausedReason || (heldK.has(norm(o.keyword)) ? 'profile' : covered.some((c) => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget')) as 'pileup' | 'budget' | 'covered_by_live_page' | 'profile' })),
     ...approvalAmbiguous.map((a) => ({
       keyword: a.keyword,
       source: '' as const,
@@ -971,12 +995,17 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
       detail: `your approval names only the keyword, and ${a.sources.length} different pages share it (${a.sources.join(', ')}): approve the one you want again`,
     })),
   ];
+  const profileR = held.length && readiness
+    ? `${READINESS_REASON}: ${held.length} page${held.length === 1 ? '' : 's'} ${held.length === 1 ? 'is' : 'are'} ready to write once you add ${readiness.missingText} (Website settings); nothing is written or charged until then`
+    : '';
   const reason = waitingForKeyword
-    ? `waiting for your first keyword: choose the keyword you want to be found for${picks.length ? '; until then only what you approved is written' : ', nothing is written until you do'}${suggestions.length ? ` (${suggestions.length} suggestion${suggestions.length === 1 ? '' : 's'} wait for your OK)` : ''}`
+    ? `waiting for your first keyword: choose the keyword you want to be found for${picks.length ? '; until then only what you approved is written' : ', nothing is written until you do'}${suggestions.length ? ` (${suggestions.length} suggestion${suggestions.length === 1 ? '' : 's'} wait for your OK)` : ''}${profileR ? `; and ${profileR}` : ''}`
     : pausedReason
       ? `${W.keys.size} written pages are waiting to be published (limit ${cfg.maxWaiting}): nothing new is written until they are`
       : !pages
         ? 'no pages a week are set for this website, so nothing is written at any autopilot level'
+        : profileR
+          ? profileR
         : !picks.length && !room && spent
           ? `this cycle's ${pages} page${pages === 1 ? '' : 's'} a week ${spent === 1 ? 'is' : 'are'} already used`
           : !picks.length
@@ -1026,7 +1055,13 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     const { targetId: _t, head: _h, ...rest } = c;
     return rest;
   };
-  const items = preview ? [...picks.map((p) => ({ ...clean(p), auto: true })), ...awaitingApproval.map((a) => ({ ...clean(a), auto: false }))] : [];
+  const items = preview
+    ? [
+        ...picks.map((p) => ({ ...clean(p), auto: true })),
+        ...held.map((p) => ({ ...clean(p), auto: true })),
+        ...awaitingApproval.map((a) => ({ ...clean(a), auto: false, ...(heldWhy ? { held: 'profile' as const, why: a.why + heldWhy } : {}) })),
+      ]
+    : [];
   return {
     config: cfg,
     level,
@@ -1043,6 +1078,9 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     skipped,
     approvedItems: approved.map((o) => ({ keyword: o.keyword, source: o.source, itemKey: cycleNorm(o.keyword) })),
     approvedNotWritten,
+    readiness,
+    waitingForProfile: !!readiness && !readiness.ready,
+    heldForProfile: held.map(clean),
     budget,
     recheckLadders,
     ladders,
@@ -1112,6 +1150,8 @@ export interface CadenceSiteRow {
   competitors?: string;
   /** F-KW: the website's main menu pages ([{url, title}]) */
   nav_pages_json?: string;
+  /** P1: the business facts the engine holds for the website (Track my site / Site Admin facts) */
+  business_facts?: string;
 }
 
 /** What the client said they sell: the app's own list first, then the engine row's declared_services (SM.from's declListOf). */
@@ -1180,6 +1220,8 @@ export interface CadenceTables {
   ai_brands?: unknown[];
   /** F-KW: seo_cycle_jobs (the content_cadence jobs of earlier cycles) */
   cycle_jobs?: { site_id?: string; job?: string; cycle_key?: string; due_at?: string; started_at?: string }[];
+  /** P1: seo_profiles (the author fields the readiness rule reads) */
+  profiles?: { site_id?: string; domain?: string; author_name?: string; author_job_title?: string; author_bio?: string }[];
 }
 
 /** One website's input from the engine's own rows: pages a week from seo_cadence (`off` = 0), the AI quota from seo_monitors. */
@@ -1213,6 +1255,8 @@ export function cadenceInputFromTables(t: CadenceTables, o: { siteId?: string; d
     skips: t.skips ?? [],
     cycleJobs: (t.cycle_jobs ?? []).filter((r) => r && (!r.site_id || r.site_id === siteId)),
     estPageUsd: o.estPageUsd,
+    // P1: the engine's own readiness reading (its seo_profiles row and the facts on its seo_sites row)
+    readiness: contentReadiness({ profile: mine(t.profiles)[0] ?? null, businessFacts: site.business_facts }),
   };
 }
 
