@@ -170,7 +170,8 @@ describe('the free keyword research at setup (D3)', () => {
     const run = (await db.query.runs.findFirst({ where: eq(schema.runs.id, r.body.runId) }))!;
     // quoted 0: the cost sync never charges a run beyond its quote
     expect([run.mode, run.quotedCredits, (run.input as Record<string, unknown>).freeResearch]).toEqual(['discover', 0, true]);
-    expect(t.starts.at(-1)).toMatchObject({ mode: 'discover', receive: ['Keyword Report'] });
+    // the keyword strategy only: no keyword report on the engine's own pick (rehearsal 2026-10-20: a second paid run under a free quote)
+    expect(t.starts.at(-1)).toMatchObject({ mode: 'discover', receive: [] });
     // asked again while it runs: the same run, nothing new
     const again = await co.c.post(`${base(co, s.id)}/research/start`);
     expect(again.body).toMatchObject({ status: 'running', runId: r.body.runId, started: false });
