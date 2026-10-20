@@ -258,6 +258,10 @@ for (const s of list) {
   // client chose (their ladders and their declared services, never the crawl's services); level 3 also the crawl's services. With too few
   // topic words on file the gate above judges nothing (its "no evidence, no refusal" rule); here no evidence means no automatic page: it stays
   // a suggestion, at every level.
+  // F-REH (2026-10-20): deliberately WITHOUT `services`. fitEvidence's declared-category rule ("crm" in a keyword, "CRM implementation" declared)
+  // is evidence enough to rank a research suggestion or to answer the Keyword Check, where a person decides; it is not enough to WRITE a page
+  // on our own ("hubspot crm free" for a CRM implementation partner, fixture level3_sparse_topics_new_topics_suggested). Automatic writing keeps
+  // the topic-share evidence, exactly as the app's mirror (server/src/services/cadence.ts inTopic) judges it.
   const evidenceOf = (kw) => fitEvidence(kw, evidenceTopics, { topic_label: level === 3 ? 'what this website sells and the keywords you chose' : 'the keywords and services you chose' });
   const inTopic = (kw) => evidenceOf(kw).verdict === 'in';
   // finding 4: the website's root and its main menu pages are never rewritten on their own, at any level (a suggestion at most)

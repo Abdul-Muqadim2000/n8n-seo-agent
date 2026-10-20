@@ -396,7 +396,7 @@ module.exports = async (ctx) => {
     // the gate kit itself
     const G = new Function(fs.readFileSync(path.join(CODE, '_fit_gate.js'), 'utf8').replace(/return \$input\.all\(\)[\s\S]*$/, 'return { fitGate, fitStored, fitEvidence, fitTokens };'))();
     const ev = G.fitEvidence('office coffee machines', ['CRM implementation', 'CRM consulting']);
-    check('fitEvidence: two services on file, a keyword with none of their words = unknown with a plain sentence (never "in")', ev.verdict === 'unknown' && /not enough information to judge/.test(ev.detail), JSON.stringify(ev));
+    check('fitEvidence: two services on file, a keyword with none of their words = unknown with a plain sentence (never "in")', ev.verdict === 'unknown' && /too little is on file about what this website sells/.test(ev.detail) && !/topic word/.test(ev.detail), JSON.stringify(ev));
     check('fitEvidence: the same list and "crm implementation dubai" = in; nothing on file = unknown', G.fitEvidence('crm implementation dubai', ['CRM implementation', 'CRM consulting']).verdict === 'in' && G.fitEvidence('crm implementation dubai', []).verdict === 'unknown', 'fitEvidence');
     const own = [['erp software uae', 'erp-software.ae', ['erp software uae']], ['erp software price uae', 'erp-software.ae', ['erp software uae']], ['crm experts dubai', 'crmexperts.ae', ['crm experts dubai']], ['accounting software uae', 'accountingsoftware.ae', []],
       ['vat consultants dubai', 'vatconsultants.ae', []], ['payroll outsourcing uae', 'payrolloutsourcing.ae', []], ['interior design dubai', 'interiordesign-dubai.com', []]];
@@ -418,7 +418,7 @@ module.exports = async (ctx) => {
     for (const n of ['Load Content Log', 'Load Query History', 'Load AI Pages', 'Load AI Targets', 'Load AI Growth', 'Load Link Prospects (Growth)', 'Load AI Answers', 'Load Cache (Growth)']) mock(n, [{ json: {} }]);
     const GP = (await run('Growth Plan', [{ json: {} }]))[0].json;
     const tD = GP.targets.find(t => t.prompt_id === 'p_d'), tC = GP.targets.find(t => t.prompt_id === 'p_c');
-    check('AI Growth with two declared services: the D365 question says there is not enough information to judge it (listed in targets_unjudged), the CRM one does not', (GP.targets_unjudged || []).some(x => x.target_id === tD.target_id) && /Not enough information to judge whether this is on topic/.test(tD.reason) && !(GP.targets_unjudged || []).some(x => x.target_id === tC.target_id), JSON.stringify({ u: GP.targets_unjudged, d: tD && tD.reason }));
+    check('AI Growth with two declared services: the D365 question says there is not enough information to judge it (listed in targets_unjudged), the CRM one does not', (GP.targets_unjudged || []).some(x => x.target_id === tD.target_id) && /Too little is known about what you sell to tell whether this question is part of it/.test(tD.reason) && !(GP.targets_unjudged || []).some(x => x.target_id === tC.target_id), JSON.stringify({ u: GP.targets_unjudged, d: tD && tD.reason }));
     // the Keyword Check
     const AR = (o) => ({ ok: true, keyword: 'crm implementation dubai', domain: D, site_id: SITE, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', volume: 320, kd: 30, cpc: 6.5, intent: 'commercial', known: true, position: null, position_url: null,
       reach_info: { reach: 35, method: 'size', p75: null, size_reach: 35, sample: 2, top10: 60, organic_keywords: 400, cached: true, cached_at: '2026-10-18T00:00:00.000Z' }, reach_errors: [], cache_row: null, dfs_cost: 0.0202, business: 'CRM partner', services: [], existing_keywords: [], business_source: 'request', ...o });
@@ -427,9 +427,9 @@ module.exports = async (ctx) => {
       for (const n of ['Load Assess Cache', 'Load Ladders (Assess)', 'Load Content Log (Assess)', 'Load Pages (Assess)', 'Load Ladder Settings (Assess)']) mock(n, [{ json: {} }]);
       return (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: '' } } }]))[0].json.body; };
     let b = await ask(AR({ keyword: 'office coffee machines dubai' }));
-    check('Keyword Check, one declared service: an unrelated keyword is not called judged: topic_judged false, a warning that says so', b.fit_gate.ok === true && b.fit_gate.topic_judged === false && b.warnings.some(w => /not enough information to judge whether this is on topic/.test(w)), JSON.stringify({ g: b.fit_gate, w: b.warnings }));
+    check('Keyword Check, one declared service: an unrelated keyword is not called judged: topic_judged false, a warning that says so', b.fit_gate.ok === true && b.fit_gate.topic_judged === false && b.warnings.some(w => /^we could not tell whether this keyword matches what you sell: it does not clearly match the services you listed \(CRM implementation\)/.test(w)), JSON.stringify({ g: b.fit_gate, w: b.warnings }));
     b = await ask(AR({ keyword: 'crm implementation dubai' }));
-    check('... and a keyword with evidence is judged (no such warning)', b.fit_gate.topic_judged === true && !b.warnings.some(w => /not enough information/.test(w)), JSON.stringify(b.fit_gate));
+    check('... and a keyword with evidence is judged (no such warning)', b.fit_gate.topic_judged === true && !b.warnings.some(w => /could not tell whether this keyword/.test(w)), JSON.stringify(b.fit_gate));
     b = await ask(AR({ keyword: 'erp software uae', domain: 'erp-software.ae', site_id: 'site_erp-software-ae' }), { site_id: 'site_erp-software-ae', domain: 'erp-software.ae', declared_services: JSON.stringify(['ERP software implementation']) });
     check('Keyword Check on an exact-match domain: "erp software uae" is not the site\'s own brand', b.fit_gate.ok === true && b.fit === 2, JSON.stringify(b.fit_gate));
   });
