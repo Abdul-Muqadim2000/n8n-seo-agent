@@ -9402,8 +9402,14 @@ await guard('r23-r22-r26-no-answer-without-data', async () => {
   const noSerp = await ladderRun({ pv: { serp_features: SF_OUT, competitors_summary: [] } });
   console.log('   serp unchecked ->', JSON.stringify({ pool: noSerp.L.stats.pool_size, planned: noSerp.L.planned, reason: (noSerp.L.refusal || {}).reason, score: noSerp.L.feasibility.score }));
   check('R23: a ladder on a results page that failed (40101 inside an HTTP 200) is refused although the research is full, and the reason says what could not be read',
-    noSerp.L.stats.pool_size >= 5 && noSerp.L.planned === false && (noSerp.L.refusal || {}).reason === 'serp_unchecked' && /Internal SE Server Error/.test(noSerp.L.refusal.message)
-    && /none was planned/i.test(noSerp.L.refusal.message) && noSerp.L.data_check.serp_checked === false, JSON.stringify(noSerp.L.refusal));
+    noSerp.L.stats.pool_size >= 5 && noSerp.L.planned === false && (noSerp.L.refusal || {}).reason === 'serp_unchecked' && /Internal SE Server Error/.test(noSerp.L.refusal.detail)
+    && /none was planned/i.test(noSerp.L.refusal.message) && noSerp.L.data_check.serp_checked === false && /Internal SE Server Error/.test(noSerp.L.data_check.serp_error), JSON.stringify(noSerp.L.refusal));
+  // F-SERP (2026-10-20, rehearsal execs 23 / 31): the client reads plain words — Google's results could not be read right now, it is not
+  // about their keyword, try again later — and the provider's own message stays in `detail` / data_check for support
+  check('F-SERP: the refusal the client reads is plain: Google\'s results could not be read right now, not a problem with the keyword, try again later; no provider jargon in it',
+    /^We could not read Google's results for "azure cloud migration dubai" right now/.test(noSerp.L.refusal.message) && /not a problem with your keyword/.test(noSerp.L.refusal.message)
+    && /try again later/i.test(noSerp.L.refusal.message) && !/Internal SE Server Error|40101|SE Server/.test(noSerp.L.refusal.message) && noSerp.L.refusal.transient === true,
+    noSerp.L.refusal.message);
   check('R23: an unchecked results page produces no feasibility score, no expected visits and no page run',
     noSerp.L.feasibility.score === null && noSerp.L.feasibility.status === 'not_checked' && noSerp.L.feasibility.expected_visits_top3 === null && noSerp.L.feasibility.time_to_rank_months === null
     && noSerp.L.write_now.length === 0 && (await run('Spawn Page Runs', [{ json: noSerp.item }])).length === 0, JSON.stringify(noSerp.L.feasibility));
@@ -9412,8 +9418,21 @@ await guard('r23-r22-r26-no-answer-without-data', async () => {
   save('ladder-plan-r23-refused.doc.html', htmlNo); scanHtml('ladder plan refused for missing data (R23)', htmlNo);
   check('R23: the report says it plainly — not scored, no ladder, and why — instead of "Winnable" and a number',
     /Not scored — the data this rests on was missing/.test(htmlNo) && /none — the live Google results could not be checked/.test(htmlNo)
-    && /No ladder planned\.<\/b> The live Google results for &quot;azure cloud migration dubai&quot; could not be read|No ladder planned\.<\/b> The live Google results for "azure cloud migration dubai" could not be read/.test(htmlNo)
+    && /No ladder planned\.<\/b> We could not read Google.{1,6}s results for .{1,6}azure cloud migration dubai.{1,6} right now/.test(htmlNo) && /not a problem with your keyword/.test(htmlNo)
     && !/Winnable/.test(htmlNo) && !/68\/100/.test(htmlNo), (htmlNo.match(/Is it realistic\?[\s\S]{0,260}/) || [''])[0]);
+
+  // F-SERP: after the three attempts of the head keyword's results page (Analyze Competitor Pages: attempts 3, retryable) the message
+  // counts them; a request the provider REFUSED (not retryable: a wrong field, a used-up quota) is not called "temporary"
+  const noSerp3 = await ladderRun({ pv: { serp_features: { ...SF_OUT, attempts: 3, retried: true, retryable: true }, competitors_summary: [] } });
+  check('F-SERP: all three attempts failed -> no ladder, no score, and the plain message says it was tried 3 times, that it is temporary and not about the keyword',
+    noSerp3.L.planned === false && noSerp3.L.refusal.reason === 'serp_unchecked' && noSerp3.L.refusal.attempts === 3 && noSerp3.L.feasibility.score === null
+    && /did not answer after 3 attempts\./.test(noSerp3.L.refusal.message) && /temporary problem on the provider's side/.test(noSerp3.L.refusal.message)
+    && /Please try again later \(in an hour or so\)\./.test(noSerp3.L.refusal.message) && noSerp3.L.write_now.length === 0, noSerp3.L.refusal.message);
+  const noSerpPerm = await ladderRun({ pv: { serp_features: { ...SF_OUT, error: 'Invalid Field: target.', attempts: 1, retried: false, retryable: false }, competitors_summary: [] } });
+  check('F-SERP: a request the provider refused (not sent again) is not called a temporary outage — still not about the keyword, and it says to contact support if it repeats',
+    noSerpPerm.L.planned === false && noSerpPerm.L.refusal.transient === false && !/temporary/.test(noSerpPerm.L.refusal.message)
+    && /not with your keyword/.test(noSerpPerm.L.refusal.message) && /contact support/.test(noSerpPerm.L.refusal.message) && !/after \d+ attempts/.test(noSerpPerm.L.refusal.message),
+    noSerpPerm.L.refusal.message);
 
   // ---- 3. R23: the topic radius on every rung keyword, against the head ----
   const full = await ladderRun();
@@ -9705,17 +9724,18 @@ await guard('r18-r19-r24-failures-inside-http-200', async () => {
   const n66 = await run('Normalize Input', F.forms.pageVerdict); mock('Route Mode', n66);
   await run('Prepare Keyword Run', n66); mock('Fetch Sitemaps', []); await run('Collect Site URLs', []);
   mock('SERP Top 10', SE_ERR); mock('SERP Top 10 (Retry)', SE_ERR);   // execution 549: both attempts, the same 40101
-  await run('Pick Top 6', store['SERP Top 10 (Retry)']);
+  mock('SERP Top 10 (Light Retry)', SE_ERR);   // F-SERP (2026-10-20): and the lighter third attempt too (rehearsal execs 23 / 31)
+  await run('Pick Top 6', store['SERP Top 10 (Light Retry)']);
   mock('Read Competitor Pages', [{ error: { message: 'Invalid URL' } }]); delete store['Retry Blocked Pages']; delete store['Blocked Page Items'];
   await run('Find Blocked Pages', store['Read Competitor Pages']);
   const a66 = (await run('Analyze Competitor Pages', store['Read Competitor Pages']))[0].json;
-  check('R18: after two failed attempts the live results are "unavailable" with the provider\'s own message, the attempts are counted, and the AI Overview stays unknown (null), never "not shown"',
-    a66.serp_features.unavailable === true && a66.serp_features.error === 'Internal SE Server Error.' && a66.serp_features.attempts === 2
-    && a66.serp_features.retried === true && a66.serp_features.ai_overview.present === null
-    && a66.serp_evidence.unavailable === true && a66.serp_evidence.checked === 0 && a66.serp_evidence.retried === 1,
+  check('R18 / F-SERP: after three failed attempts the live results are "unavailable" with the provider\'s own message, the attempts are counted, and the AI Overview stays unknown (null), never "not shown"',
+    a66.serp_features.unavailable === true && a66.serp_features.error === 'Internal SE Server Error.' && a66.serp_features.attempts === 3
+    && a66.serp_features.retried === true && a66.serp_features.ai_overview.present === null && a66.serp_features.retryable === true
+    && a66.serp_evidence.unavailable === true && a66.serp_evidence.checked === 0 && a66.serp_evidence.retried === 2 && a66.serp_evidence.attempts === 3,
     JSON.stringify({ f: a66.serp_features, e: a66.serp_evidence }));
-  check('R18: the digest the analyst reads says the search failed twice and forbids any assumption about the results page',
-    /failed, twice: the search was sent again once and failed again/.test(a66.serp_digest) && /do not state or assume/.test(a66.serp_digest), a66.serp_digest.slice(0, 300));
+  check('R18 / F-SERP: the digest the analyst reads says the search failed three times and forbids any assumption about the results page',
+    /failed, 3 times: the search was sent again twice, the last time as a lighter request, and failed every time/.test(a66.serp_digest) && /do not state or assume/.test(a66.serp_digest), a66.serp_digest.slice(0, 300));
   mock('Facts SERP', SE_ERR); mock('Facts SERP (Retry)', SE_ERR);
   const cf66 = (await run('Collect Facts', store['Facts SERP (Retry)']))[0].json;
   check('R18: "no statistics were found" would be a lie when nothing was searched — the facts search carries its own evidence instead',
@@ -9735,7 +9755,8 @@ await guard('r18-r19-r24-failures-inside-http-200', async () => {
     JSON.stringify({ verdict: pv66.verdict, score: pv66.verdict_score, visits: pv66.expected_visits_top3, months: pv66.time_to_rank_months, ev: pv66.verdict_evidence }));
   check('R18: and the first reason says why, in the owner\'s words, with what to do about it',
     /^No score is given for this keyword: the live Google results could not be read \(Internal SE Server Error\.\)\./.test(pv66.verdict_reasons[0])
-    && /sent again once and failed again/.test(pv66.verdict_reasons[0]) && /Run the check again/.test(pv66.verdict_reasons[0])
+    && /sent 3 times \(the last time as a lighter request\) and failed every time/.test(pv66.verdict_reasons[0]) && /Run the check again/.test(pv66.verdict_reasons[0])
+    && /not with your keyword/.test(pv66.verdict_reasons[0]) && pv66.verdict_evidence.attempts === 3
     && pv66.verdict_reasons.length === F.verdictGo.reasons.length + 1, JSON.stringify(pv66.verdict_reasons));
   const wf66 = await run('Build Word File', [{ json: { ...pv66, include_seo_report: true } }]); const doc66 = decode(wf66);
   const vsec66 = (doc66.match(/Keyword Verdict[\s\S]{0,1400}/) || [''])[0];
@@ -9747,8 +9768,8 @@ await guard('r18-r19-r24-failures-inside-http-200', async () => {
   check('R18: the callback the app stores carries the same refusal — no score, the evidence beside it',
     wr66.score === null && wr66.score_withheld === true && wr66.evidence && wr66.evidence.serp === 'unavailable',
     JSON.stringify({ score: wr66.score, withheld: wr66.score_withheld, ev: wr66.evidence }));
-  // the second attempt answers: its data is used everywhere and the verdict is scored again
-  mock('SERP Top 10 (Retry)', F.serpTop);
+  // the second attempt answers: its data is used everywhere and the verdict is scored again (no third attempt is sent then)
+  mock('SERP Top 10 (Retry)', F.serpTop); delete store['SERP Top 10 (Light Retry)'];
   const t66 = await run('Pick Top 6', store['SERP Top 10 (Retry)']);
   mock('Read Competitor Pages', t66.map((t, i) => ({ page_text: F.compPage(i, 300) })));
   await run('Find Blocked Pages', store['Read Competitor Pages']);
@@ -12411,7 +12432,8 @@ await guard('B-A10 — a failure inside an HTTP 200 is asked again once, counted
   // every gated call must have its OWN second attempt in the same workflow: `X (Retry)` for the spliced ones, `Run AI Retries`
   // for D19's AI gate, whose two nodes are named the other way round. A gate with no second attempt is a label.
   const second = (w, n) => IN200[w].gated.includes(n + ' (Retry)') || (n === 'Run AI Requests' && IN200[w].gated.includes('Run AI Retries'));
-  const unpaired = wfs.flatMap(w => IN200[w].gated.filter(n => !/ \(Retry\)$|Retries$/.test(n) && !second(w, n)).map(n => w + ' / ' + n));
+  // F-SERP (2026-10-20): `SERP Top 10 (Light Retry)` is the THIRD attempt of the head keyword's results page, behind its `(Retry)`
+  const unpaired = wfs.flatMap(w => IN200[w].gated.filter(n => !/ \((?:Light )?Retry\)$|Retries$/.test(n) && !second(w, n)).map(n => w + ' / ' + n));
   check('B-A10: and every gated call has its own second attempt beside it, so the gate is a chain and not a label',
     !unpaired.length, JSON.stringify(unpaired));
   reset();
@@ -19091,6 +19113,18 @@ await guard('SFA1-8 A-21 the main page run says it re-measured, and why its numb
   check('A-21: with no ladder measurement handed over there is no re-measure note', !(pv0.verdict_reasons || []).some(r => /^Re-measured:/.test(r)) && pv0.ladder_remeasure === null, JSON.stringify(pv0.ladder_remeasure));
   const rung = bodies.find(b => b.keyword !== 'it consulting dubai');
   check('A-21: a rung page\'s run is handed no measurement (it is another keyword)', !rung || rung.ladder_measure === null, JSON.stringify(rung && rung.ladder_measure));
+  // F-SERP (2026-10-20): a plan reading taken on the lighter third attempt never asked for the AI Overview. The page run must not
+  // print "an AI Overview was seen this time" as a change against a reading that saw nothing either way.
+  check('F-SERP: the ladder says whether its reading asked for the AI Overview at all, and Normalize Input keeps it',
+    lm.ai_overview_read === true && ni.ladder_measure.ai_overview_read === true, JSON.stringify([lm, ni.ladder_measure]));
+  const niL = await niRun({ ...bodies[0], ladder_measure: { ...bodies[0].ladder_measure, ai_overview: false, ai_overview_read: false }, callback_url: 'https://hooks.example.com/x', client_ip: 'ladder:lad_mvcldcnv9q1q' });
+  mock('Merge Keyword Data', [{ json: { ...mk, ladder_measure: niL.ladder_measure } }]);
+  const pvL = (await run('Parse Verdict', JSON.parse(JSON.stringify(FA1.p771_verdict_agent)).map(j => ({ json: j }))))[0].json;
+  const noteL = (pvL.verdict_reasons || []).find(r => /^Re-measured:/.test(r)) || '';
+  check('F-SERP: an AI Overview the plan\'s (lighter) reading never asked for is not compared — no "seen this time" change, the note says it was not read, and the stored reading is null, not false',
+    niL.ladder_measure.ai_overview_read === false && /16:09 UTC/.test(noteL) && !/an AI Overview was seen this time/.test(noteL)
+    && /Whether an AI Overview appears was not read in the plan's reading, so it is not compared\./.test(noteL)
+    && pvL.ladder_remeasure.then.ai_overview === null && pvL.ladder_remeasure.now.ai_overview === true, noteL || JSON.stringify(pvL.ladder_remeasure));
 });
 
 // ===================================================================================
@@ -19422,6 +19456,166 @@ await guard('SK1 Site Kickoff: the first weekly cycle on the day tracking starts
     saved.saved === true && !('row' in saved) && saved.cycle_key === p.cycle_key && failed.saved === false && /could not be saved \(Data table not found\)/.test(failed.error), JSON.stringify([saved, failed]));
   reset();
 });
+// ===================================================================================
+// S-FSERP (F-SERP, 2026-10-20; real-credit rehearsal, isolated engine executions 23 and 31): the head keyword's results page is the one
+// read a ladder (and a keyword verdict) cannot do without. DataForSEO answered `40101 "Internal SE Server Error."` inside an HTTP 200
+// after ~27 s to *SERP Top 10* (depth 30 + the async AI Overview) and to its one retry, on two runs in a row, and the ladder came out
+// NOT_CHECKED for ~$0.27. Now: up to three attempts (20 s, then 45 s), the third a LIGHTER request (depth 10, no AI Overview); only a
+// transient error is re-sent; every attempt's cost counted once by task id; an answer from the lighter attempt labelled where it is used.
+// ===================================================================================
+await guard('fserp-three-attempts', async () => {
+  const SN = 'S-FSERP — the head keyword\'s results page gets three attempts (20 s, 45 s), the last one lighter; only a transient error is sent again; every attempt is paid once by task id; the lighter answer is labelled "not read on this attempt"; all three failing is NOT_CHECKED in plain words';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 700), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 700))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  const W = require('./serp_attempts_wiring.json');
+  // the real failure shape (rehearsal execs 23 / 31): HTTP 200, envelope 20000, the task 40101 after ~27 s, billed
+  const seErr = (id) => ({ version: '0.1.20261020', status_code: 20000, status_message: 'Ok.', time: '27.4 sec.', cost: 0.002, tasks_count: 1, tasks_error: 1,
+    tasks: [{ id, status_code: 40101, status_message: 'Internal SE Server Error.', time: '27.3 sec.', cost: 0.002, result_count: 0, path: ['v3', 'serp', 'google', 'organic', 'live', 'advanced'], data: {}, result: null }] });
+  const taskErr = (id, code, msg) => ({ ...seErr(id), time: '0.2 sec.', tasks: [{ ...seErr(id).tasks[0], status_code: code, status_message: msg, time: '0.1 sec.' }] });
+  // the lighter answer: the first page only (no result below position 10) and no AI Overview block (it was not requested)
+  const lightOk = (id, cost) => { const a = clone(F.serpTop); const t = a.tasks[0]; t.id = id; t.cost = cost; a.cost = cost;
+    t.result[0].items = t.result[0].items.filter(it => it.type !== 'ai_overview' && !(it.type === 'organic' && it.rank_group > 10)); t.data = { depth: 10 }; return a; };
+  const fullOk = (id, cost) => { const a = clone(F.serpTop); a.tasks[0].id = id; a.tasks[0].cost = cost; a.cost = cost; return a; };
+
+  // ---------- 1. the wiring, as the build wrote it ----------
+  check('three attempts in one chain: SERP Top 10 -> gate -> 20 s -> retry -> gate -> 45 s -> the lighter request -> Pick Top 6, and a good answer at any step goes straight on',
+    eq(W.chain, ['SERP Top 10', 'SERP Failed?', 'Wait Before SERP Retry', 'SERP Top 10 (Retry)', 'SERP Retry Failed?', 'Wait Before SERP Light Retry', 'SERP Top 10 (Light Retry)', 'Pick Top 6'])
+    && eq(W.connections['SERP Top 10 (Retry)'].main.map(l => l.map(t => t.node)), [['SERP Retry Failed?']])
+    && eq(W.connections['SERP Retry Failed?'].main.map(l => l.map(t => t.node)), [['Wait Before SERP Light Retry'], ['Pick Top 6']])
+    && eq(W.connections['SERP Failed?'].main.map(l => l.map(t => t.node)), [['Wait Before SERP Retry'], ['Pick Top 6']])
+    && eq(W.connections['SERP Top 10 (Light Retry)'].main.map(l => l.map(t => t.node)), [['Pick Top 6']]), JSON.stringify(W.connections));
+  check('the waits grow: 20 s before the second attempt (was 5 s), 45 s before the third, both in seconds',
+    W.waits['Wait Before SERP Retry'].amount === 20 && W.waits['Wait Before SERP Retry'].unit === 'seconds'
+    && W.waits['Wait Before SERP Light Retry'].amount === 45 && W.waits['Wait Before SERP Light Retry'].unit === 'seconds', JSON.stringify(W.waits));
+  const B = W.bodies;
+  check('the first two attempts are the full request (depth 30 + the async AI Overview); the third is lighter: depth 10, no load_async_ai_overview, same keyword / market / language',
+    /"depth": 30/.test(B['SERP Top 10']) && /"load_async_ai_overview": true/.test(B['SERP Top 10']) && /"depth": 30/.test(B['SERP Top 10 (Retry)']) && /"load_async_ai_overview": true/.test(B['SERP Top 10 (Retry)'])
+    && /"depth": 10\b/.test(B['SERP Top 10 (Light Retry)']) && !/load_async_ai_overview/.test(B['SERP Top 10 (Light Retry)'])
+    && B['SERP Top 10 (Light Retry)'].includes("$('Collect Site URLs').first().json.keyword") && B['SERP Top 10 (Light Retry)'].includes("$('Collect Site URLs').first().json.location_code"), JSON.stringify(B));
+  check('the second gate is the same rule as the first (one expression, RT.TRANSIENT / RT.PERMANENT)', W.gate_conditions['SERP Failed?'] === W.gate_conditions['SERP Retry Failed?'], JSON.stringify(W.gate_conditions));
+  check('every attempt keeps the HTTP-level retry rule and goes on after a failure (the in-200 gate decides)',
+    ['SERP Top 10 (Retry)', 'SERP Top 10 (Light Retry)'].every(n => W.retry_settings[n].retryOnFail === true && W.retry_settings[n].maxTries === 3 && W.retry_settings[n].onError === 'continueRegularOutput'), JSON.stringify(W.retry_settings));
+  check('the lighter attempt is on every report builder\'s cost list beside the other two',
+    Object.keys(W.ledger_lists).length >= 3 && Object.values(W.ledger_lists).every(l => ['SERP Top 10', 'SERP Top 10 (Retry)', 'SERP Top 10 (Light Retry)'].every(n => l.includes(n))), JSON.stringify(Object.keys(W.ledger_lists)));
+
+  // ---------- 2. only a transient error is sent again ----------
+  const CASES = [
+    ['40101 "Internal SE Server Error." after 27 s (the rehearsal)', seErr('g1'), true],
+    ['50000 envelope', { version: '0.1', status_code: 50000, status_message: 'Internal Server Error.', tasks: null }, true],
+    ['a timeout the node passed through', { error: { message: 'The connection timed out' } }, true],
+    ['40501 "Invalid Field" — a wrong request', taskErr('g2', 40501, 'Invalid Field: target.'), false],
+    ['40202 quota — nothing can change', taskErr('g3', 40202, 'Daily quota exceeded.'), false],
+    ['40102 "No Search Results." — a final, valid empty answer', taskErr('g4', 40102, 'No Search Results.'), false],
+    ['a good answer', F.serpTop, false],
+  ];
+  const g1 = await run('SERP Failed?', CASES.map(c => c[1])), g2 = await run('SERP Retry Failed?', CASES.map(c => c[1]));
+  check('the second gate sends the lighter third attempt only for a transient failure — never for a wrong request, an exhausted quota or "No Search Results."',
+    eq(g2.map(i => i.json.retry), CASES.map(c => c[2])) && eq(g1.map(i => i.json.retry), g2.map(i => i.json.retry)), JSON.stringify(CASES.map((c, i) => [c[0], g1[i].json.retry, g2[i].json.retry])));
+  const k1 = (await run('_dfs_retry', [{ answer: CASES[0][1] }]))[0].json;
+  check('the shared kit agrees: 40101 is retryable, its reason is the provider\'s own words', k1.ok === false && k1.retryable === true && k1.why === 'Internal SE Server Error.', JSON.stringify(k1));
+
+  // ---------- 3. the run, attempt by attempt ----------
+  mock('Start Form', F.forms.startVerdict);
+  const n0 = await run('Normalize Input', F.forms.pageVerdict); mock('Route Mode', n0);
+  await run('Prepare Keyword Run', n0); mock('Fetch Sitemaps', []); await run('Collect Site URLs', []);
+  const analyze = async (answers) => {
+    const names = ['SERP Top 10', 'SERP Top 10 (Retry)', 'SERP Top 10 (Light Retry)'];
+    names.forEach((n, k) => { if (answers[k] === undefined) delete store[n]; else mock(n, answers[k]); });
+    const last = names[answers.length - 1];
+    const top = await run('Pick Top 6', store[last]);
+    const ok = top.filter(t => t.json.url);
+    mock('Read Competitor Pages', ok.length ? ok.map((t, i) => ({ page_text: F.compPage(i % F.COMPS.length, 300) })) : [{ error: { message: 'Invalid URL' } }]);
+    delete store['Retry Blocked Pages']; delete store['Blocked Page Items'];
+    await run('Find Blocked Pages', store['Read Competitor Pages']);
+    return { top, a: (await run('Analyze Competitor Pages', store['Read Competitor Pages']))[0].json };
+  };
+  const verdictOf = async (a) => {
+    mock('Facts SERP', V.factsSerp); delete store['Facts SERP (Retry)'];
+    await run('Collect Facts', store['Facts SERP']);
+    mock('Competitor Analyzer', { output: F.competitorAnalysis }); await run('Parse Analysis', store['Competitor Analyzer']);
+    mock('Keyword Data', F.keywordOverview); delete store['Keyword Data (Retry)']; await run('Merge Keyword Data', store['Keyword Data']);
+    mock('Verdict Agent', { output: F.verdictGo });
+    return (await run('Parse Verdict', store['Verdict Agent']))[0].json;
+  };
+
+  // 3a. success on attempt 2: the full answer, no third attempt, a normal plan
+  const r2 = await analyze([seErr('t-a1'), fullOk('t-a2', 0.002)]);
+  check('attempt 2 answers: the run uses it — competitors read, the AI Overview seen, attempts 2, answered on 2, nothing labelled lighter',
+    r2.top.length >= 3 && r2.a.competitors_read >= 3 && !r2.a.serp_features.unavailable && r2.a.serp_features.attempts === 2 && r2.a.serp_features.answered_on === 2
+    && r2.a.serp_features.ai_overview.present === true && !r2.a.serp_features.light_read && r2.a.serp_evidence.light === false && !/RESULTS READ/.test(r2.a.serp_digest),
+    JSON.stringify({ f: { attempts: r2.a.serp_features.attempts, on: r2.a.serp_features.answered_on, aio: r2.a.serp_features.ai_overview.present }, e: r2.a.serp_evidence }));
+  const pv2 = await verdictOf(r2.a);
+  check('attempt 2 answers: the verdict is scored as usual (GO_WITH_CHANGES 66), the evidence says two attempts',
+    pv2.verdict === 'GO_WITH_CHANGES' && pv2.verdict_score === 66 && pv2.score_withheld === false && pv2.verdict_evidence.attempts === 2 && pv2.verdict_evidence.read_light === false,
+    JSON.stringify({ v: pv2.verdict, s: pv2.verdict_score, ev: pv2.verdict_evidence }));
+
+  // 3b. success on attempt 3 (the lighter request): a normal plan, labelled
+  const r3 = await analyze([seErr('t-b1'), seErr('t-b2'), lightOk('t-b3', 0.0006)]);
+  const sf3 = r3.a.serp_features;
+  check('attempt 3 (lighter) answers: the run uses it — competitors from the top 10, attempts 3, answered on 3',
+    r3.top.length >= 3 && r3.a.competitors_read >= 3 && !sf3.unavailable && sf3.attempts === 3 && sf3.answered_on === 3 && r3.a.serp_evidence.checked === 1
+    && r3.a.serp_evidence.retried === 2 && r3.a.serp_evidence.light === true && r3.a.serp_evidence.answered_on === 3,
+    JSON.stringify({ attempts: sf3.attempts, on: sf3.answered_on, read: r3.a.competitors_read, e: r3.a.serp_evidence }));
+  check('the lighter answer is labelled: the AI Overview is "not read on this attempt" (present null, never false), results below position 10 not read; the snippet and People Also Ask on page 1 are read',
+    sf3.ai_overview.present === null && sf3.ai_overview.not_read === true && /not read on this attempt/.test(sf3.ai_overview.why) && sf3.read_depth === 10
+    && sf3.light_read && sf3.light_read.attempt === 3 && sf3.light_read.depth === 10 && sf3.light_read.ai_overview_requested === false
+    && eq(sf3.light_read.not_read, ['the AI Overview', 'the results below position 10']) && sf3.featured_snippet && sf3.featured_snippet.domain === 'erpguide.net' && sf3.people_also_ask.length > 0,
+    JSON.stringify(sf3));
+  check('the analyst\'s digest never says "AI OVERVIEW: none / not seen" for the lighter answer: it says not read, and that only the top 10 were read',
+    /AI OVERVIEW: not read on this attempt \(the lighter third request did not ask for it\)/.test(r3.a.serp_digest) && /RESULTS READ: the top 10 only, on a lighter third request/.test(r3.a.serp_digest)
+    && !/AI OVERVIEW: not seen|AI OVERVIEW: none|AI OVERVIEW: unknown — the results page could not be read/.test(r3.a.serp_digest), r3.a.serp_digest.slice(0, 900));
+  const pv3 = await verdictOf(r3.a);
+  check('attempt 3 answers: a normal verdict and score, the evidence says three attempts and the lighter read; the visit estimate says the AI Overview was not read',
+    pv3.verdict === 'GO_WITH_CHANGES' && pv3.verdict_score === 66 && pv3.score_withheld === false && pv3.verdict_evidence.attempts === 3 && pv3.verdict_evidence.read_light === true
+    && !!pv3.expected_visits && /AI Overview was not read on this attempt/.test(pv3.expected_visits.basis_text || '')
+    && !!pv2.expected_visits && !/not read on this attempt/.test(pv2.expected_visits.basis_text || ''), JSON.stringify({ v: pv3.verdict, ev: pv3.verdict_evidence, vis: pv3.expected_visits }));
+  const wf3 = await run('Build Word File', [{ json: { ...pv3, include_seo_report: true } }]); const doc3 = decode(wf3);
+  const rp3 = (doc3.match(/What the Results Page Looks Like[\s\S]{0,2600}/) || [''])[0];
+  check('the keyword report prints "Not read on this attempt" for the AI Overview (never "None" / "not seen") and a "Results read: the top 10 only" row',
+    /AI Overview<\/td><td[^>]*>Not read on this attempt/.test(rp3) && /Results read<\/td><td[^>]*>The top 10 only, on a lighter third request/.test(rp3) && !/AI Overview<\/td><td[^>]*>(None|Not seen)/.test(rp3), rp3.slice(0, 1400));
+  check('the report\'s data lineage says the results page was read on the lighter request', /read on a lighter third request: the top 10 only, and the AI Overview was not read/.test(doc3), 'lineage');
+  scanHtml('keyword report, results page read on the lighter third attempt', doc3);
+  // the money: each of the three attempts once, by its own task id
+  const L3 = wf3[0].json.run_ledger;
+  check('the cost of every attempt is counted, each task once by its id: $0.002 + $0.002 for the two 40101 answers DataForSEO billed, $0.0006 for the lighter one',
+    L3.by_node['SERP Top 10'] === 0.002 && L3.by_node['SERP Top 10 (Retry)'] === 0.002 && L3.by_node['SERP Top 10 (Light Retry)'] === 0.0006,
+    JSON.stringify({ by_node: L3.by_node, rep: L3.dataforseo_tasks_repeated }));
+  // and a task id seen twice (an answer about a task already paid for) is not paid twice
+  mock('SERP Top 10 (Light Retry)', lightOk('t-b2', 0.002));   // the same task id as the retry
+  const L3b = (await run('Build Word File', [{ json: { ...pv3, include_seo_report: true } }]))[0].json.run_ledger;
+  check('a task id that comes back on a later attempt is not paid again (R28: counted once by task id)',
+    L3b.by_node['SERP Top 10 (Retry)'] === 0.002 && !L3b.by_node['SERP Top 10 (Light Retry)'] && L3b.dataforseo_tasks_repeated === L3.dataforseo_tasks_repeated + 1, JSON.stringify({ by_node: L3b.by_node, rep: L3b.dataforseo_tasks_repeated }));
+
+  // 3c. all three fail: NOT_CHECKED, in plain words
+  const r0 = await analyze([seErr('t-c1'), seErr('t-c2'), seErr('t-c3')]);
+  check('all three fail: "unavailable", three attempts counted, transient, AI Overview unknown (null)',
+    r0.a.serp_features.unavailable === true && r0.a.serp_features.attempts === 3 && r0.a.serp_features.answered_on === 0 && r0.a.serp_features.retryable === true
+    && r0.a.serp_features.ai_overview.present === null && r0.a.serp_evidence.unavailable === true && r0.a.serp_evidence.attempts === 3, JSON.stringify(r0.a.serp_features));
+  const pv0 = await verdictOf(r0.a);
+  check('all three fail: NOT_CHECKED, no score, and the first reason says it was sent 3 times, that it is the provider and not the keyword, and to run it again later',
+    pv0.verdict === 'NOT_CHECKED' && pv0.verdict_score === null && pv0.score_withheld === true && pv0.verdict_evidence.attempts === 3
+    && /sent 3 times \(the last time as a lighter request\) and failed every time/.test(pv0.verdict_reasons[0])
+    && /temporary problem with the search data provider, not with your keyword\. Run the check again later\./.test(pv0.verdict_reasons[0]), pv0.verdict_reasons[0]);
+  const wf0 = await run('Build Word File', [{ json: { ...pv0, include_seo_report: true } }]); const L0 = wf0[0].json.run_ledger;
+  check('all three fail: all three billed attempts are on the ledger once each ($0.006), so the money spent for nothing is visible',
+    L0.by_node['SERP Top 10'] === 0.002 && L0.by_node['SERP Top 10 (Retry)'] === 0.002 && L0.by_node['SERP Top 10 (Light Retry)'] === 0.002, JSON.stringify(L0.by_node));
+
+  // 3d. a non-retryable error is not sent again: one attempt, and the message does not call it temporary
+  const rp = await analyze([taskErr('t-d1', 40501, 'Invalid Field: target.')]);
+  const gp = await run('SERP Failed?', [store['SERP Top 10'][0].json]);
+  check('a wrong request is not sent again: the gate says no, one attempt is counted, retryable false',
+    gp[0].json.retry === false && rp.a.serp_features.unavailable === true && rp.a.serp_features.attempts === 1 && rp.a.serp_features.retryable === false && rp.a.serp_evidence.retried === 0,
+    JSON.stringify({ gate: gp[0].json, f: rp.a.serp_features }));
+  const pvp = await verdictOf(rp.a);
+  check('…and its verdict says to run the check again without calling a refused request a temporary outage', pvp.verdict === 'NOT_CHECKED' && /Run the check again\./.test(pvp.verdict_reasons[0])
+    && !/temporary/.test(pvp.verdict_reasons[0]) && !/sent again|times/.test(pvp.verdict_reasons[0]), pvp.verdict_reasons[0]);
+  const kc = (await run('_dfs_retry', [{ answer: taskErr('t-d1', 40501, 'Invalid Field: target.') }]))[0].json;
+  check('the kit marks it permanent (not retryable)', kc.ok === false && kc.retryable === false && kc.permanent === true, JSON.stringify(kc));
+  reset();
+});
+
 await require('./scenarios_cycle')({ H, run, mock, store, guard, reset, begin });   // CY1-CY24 (2026-10-19): the per-website cycle - kit, Cycle Dispatcher nodes, kickoff row, deploy guard
 await require('./scenarios_integration')({ H, run, mock, store, guard, reset, begin });   // INT1-INT7 (2026-10-19, E4): one client's life through every agent's generated nodes (the cross-agent contract test)
 await require('./scenarios_reh')({ H, run, mock, store, guard, reset, begin });   // REH1-REH6 (F-REH 2026-10-20): the real-credit rehearsal's defects - ghost reservations, Track's parent, cycle 0's skips, service fit, plain notes

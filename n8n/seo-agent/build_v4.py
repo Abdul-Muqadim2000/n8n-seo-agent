@@ -11681,6 +11681,146 @@ log('C-1 follow-up (F-L, 2026-10-18): a scheduled audit the Audit Scheduler star
 log('B-16 (F-L, 2026-10-18): the homepage address variants are followed through the host probes and a chain of two hops or more is a Low finding; "HTTP correctly redirects to HTTPS" is not said over one')
 
 # =============================================================================
+# 141. THE HEAD KEYWORD'S RESULTS PAGE GETS THREE ATTEMPTS, THE LAST ONE LIGHTER (2026-10-20, fixer F-SERP; real-credit rehearsal,
+#      isolated engine executions 23 and 31). The ladder's head keyword "crm service provider uae" came back NOT_CHECKED on two runs in
+#      a row: *SERP Top 10* (organic/live/advanced, UAE, depth 30, load_async_ai_overview) answered `40101 "Internal SE Server Error."`
+#      inside an HTTP 200 after ~27 s, *SERP Top 10 (Retry)* failed the same way 5 s later, and the run spent ~$0.27 to plan nothing.
+#      Other reads of the same runs failed and succeeded at random (a Facts SERP retry answered, a Cluster SERP retry did not), so it is
+#      DataForSEO's scraper being flaky on HEAVY requests, not a bad keyword.
+#      * This is the one read a ladder (and a keyword verdict) cannot do without, so it now gets up to THREE attempts with a growing
+#        wait: 20 s before the second (was 5 s), 45 s before the third. The third is a LIGHTER request (`depth` 10, no
+#        `load_async_ai_overview`): the heavy request is the one that times out on DataForSEO's side.
+#      * Only what a further attempt can fix is re-sent: *SERP Retry Failed?* carries the same rule as *SERP Failed?* (section 56,
+#        DFS_FAILED56 = RT.TRANSIENT / RT.PERMANENT), so a wrong request, an exhausted quota or 40102 "No Search Results." is not.
+#      * Money: the new node is on every report builder's __LEDGER_NODES, where __dfsOnce counts each task once by its own id (R28).
+#      * Lineage (INVARIANTS rule 1): an answer taken from the lighter attempt says so wherever it is used. The AI Overview was not
+#        requested, so it is "not read on this attempt" (present: null, not_read: true), never "none"; the results below position 10
+#        were not read; the featured snippet, People Also Ask and the top 10 are on the first page and were read. The re-measure note
+#        (A-21) does not compare an AI Overview that one of its two readings never asked for.
+#      * When all three fail, the ladder's refusal tells the client in plain words that Google's results could not be read right now,
+#        that it is not about their keyword, and to try again later (v5/code/Ladder_Plan.js); the verdict's first reason says the same.
+# =============================================================================
+_W141 = (20, 45)   # seconds before the second and before the third attempt
+_srt141 = 'SERP Top 10 (Retry)'
+assert [t['node'] for l in conns[_srt141]['main'] for t in l] == ['Pick Top 6'], 'F-SERP: SERP Top 10 (Retry) no longer feeds Pick Top 6 alone'
+assert [t['node'] for t in conns['SERP Failed?']['main'][0]] == ['Wait Before SERP Retry'], 'F-SERP: the first gate no longer waits before the retry'
+_ws141 = nodes['Wait Before SERP Retry']['parameters']
+assert _ws141.get('unit') == 'seconds' and nodes['Wait Before SERP Retry']['typeVersion'] == 1.1, 'F-SERP: the first wait is not in seconds'
+_ws141['amount'] = _W141[0]
+_body141 = nodes[_srt141]['parameters']['jsonBody']
+_HEAVY141 = '"depth": 30,\n       "load_async_ai_overview": true\n     }]'
+assert _body141.count(_HEAVY141) == 1 and "$('Collect Site URLs').first().json.keyword" in _body141, 'F-SERP: the retry request body moved'
+_p141 = pos(_srt141)
+if_node('SERP Retry Failed?', DFS_FAILED56, [_p141[0] + 180, _p141[1] + 200])
+add_node('Wait Before SERP Light Retry', 'n8n-nodes-base.wait', 1.1, {'amount': _W141[1], 'unit': 'seconds'}, [_p141[0] + 360, _p141[1] + 200],
+         {'webhookId': nid('Wait Before SERP Light Retry:hook')})
+_lr141 = copy.deepcopy(nodes[_srt141]); _lr141['name'] = 'SERP Top 10 (Light Retry)'; _lr141['id'] = nid('SERP Top 10 (Light Retry)')
+_lr141['position'] = [_p141[0] + 540, _p141[1] + 200]
+_lr141['parameters']['jsonBody'] = _body141.replace(_HEAVY141, '"depth": 10\n     }]')
+_lr141['onError'] = 'continueRegularOutput'; _lr141.update(retry_lint.RETRY)
+assert _lr141.get('credentials'), 'F-SERP: the lighter retry has no credential slot'
+assert 'load_async_ai_overview' not in _lr141['parameters']['jsonBody'] and '"depth": 10' in _lr141['parameters']['jsonBody']
+nodes['SERP Top 10 (Light Retry)'] = _lr141
+disconnect(_srt141, 'Pick Top 6')
+connect(_srt141, 'SERP Retry Failed?')
+connect('SERP Retry Failed?', 'Wait Before SERP Light Retry', 0); connect('SERP Retry Failed?', 'Pick Top 6', 1)
+connect('Wait Before SERP Light Retry', 'SERP Top 10 (Light Retry)'); connect('SERP Top 10 (Light Retry)', 'Pick Top 6')
+# the harness shim: the gate's exact condition (the same expression as SERP Failed?, S66 / S141 compare them)
+open(os.path.join(OUT_CODE, 'SERP_Retry_Failed_.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 141): the IF node's condition, true = take the lighter third attempt\n"
+    "return $input.all().map(i => { const $json = i.json; return { json: { retry: " + DFS_FAILED56[2:-2].strip() + " } }; });\n")
+retry_lint.record_gate('SEO Agent v4', [_srt141, 'SERP Retry Failed?', 'Wait Before SERP Light Retry', 'SERP Top 10 (Light Retry)', 'Pick Top 6'])
+
+# ---------- the money: the lighter attempt is counted, each task once by its id ----------
+_LRE141 = re.compile(r"const __LEDGER_NODES = \[([^\]]*)\];")
+_ln141 = sorted(nm for nm in nodes if _LRE141.search(nodes[nm]['parameters'].get('jsCode', '') or '') and "'SERP Top 10 (Retry)'" in _LRE141.search(nodes[nm]['parameters'].get('jsCode', '')).group(1))
+assert {'Build Word File', 'Build Ladder Report', 'Build Keyword File'} <= set(_ln141), _ln141
+for _nm141 in _ln141:
+    patch(_nm141, "'SERP Top 10 (Retry)'", "'SERP Top 10 (Retry)', 'SERP Top 10 (Light Retry)'")
+    assert "__dfsOnce(t)" in code(_nm141), 'F-SERP: ' + _nm141 + ' would count an attempt twice'
+
+# ---------- what was read, and on which attempt (INVARIANTS rule 1) ----------
+patch('Analyze Competitor Pages', "  serpStats = RT.one(first0, retry0);",
+      "  // F-SERP (2026-10-20): the third attempt is a lighter request (top 10, no AI Overview), sent only when the first two failed\n"
+      "  const light0 = (() => { try { return $('SERP Top 10 (Light Retry)').first().json; } catch (e) { return null; } })();\n"
+      "  serpStats = RT.chain([first0, retry0, light0]);")
+patch('Analyze Competitor Pages', "const serp_evidence = RT.evidence('the live Google results for this keyword', serpStats, { unit: 'search' });",
+      "const serp_evidence = RT.evidence('the live Google results for this keyword', serpStats, { unit: 'search', attempts: serpStats.attempts || 1,\n"
+      "  answered_on: serpStats.answered_on || 0, light: serpStats.answered_on === 3 });   // F-SERP: which of the three attempts answered")
+patch('Analyze Competitor Pages', "Object.assign(serp_features, { attempts: 1 + (serpStats.retried || 0), retried: !!serpStats.retried });\n"
+      "const aioText = aioObserved([{ seen: serp_features.ai_overview.present, at: seenAt, source: 'live Google results' }]).text;",
+      """Object.assign(serp_features, { attempts: serpStats.attempts || 1 + (serpStats.retried || 0), retried: !!serpStats.retried, answered_on: serpStats.answered_on || 0 });
+if (serpError) serp_features.retryable = serpStats.retryable !== false;   // F-SERP: a provider outage, not a wrong request
+// F-SERP (2026-10-20): an answer from the lighter third attempt read the first page only and did not ask for the AI Overview.
+// What it did not ask for is "not read on this attempt" (present: null), never "none"; what is on the first page was read.
+const SERP_LIGHT = !serpError && serpStats.answered_on === 3;
+if (SERP_LIGHT) {
+  const lightWhy = 'not read on this attempt: Google\\'s results were read on a third, lighter request (the top 10 only, without the AI Overview) because the full request failed twice';
+  serp_features.read_depth = 10;
+  serp_features.light_read = { attempt: 3, depth: 10, ai_overview_requested: false, why: lightWhy,
+    not_read: aio ? ['the results below position 10'] : ['the AI Overview', 'the results below position 10'] };
+  if (!aio) serp_features.ai_overview = { present: null, not_read: true, why: lightWhy, text: '', cited_domains: [], seen_at: null };
+}
+let aioText = aioObserved([{ seen: serp_features.ai_overview.present, at: seenAt, source: 'live Google results' }]).text;
+if (serp_features.ai_overview.not_read) aioText = 'not read on this attempt (the lighter third request did not ask for it), so whether one appears is unknown';""")
+patch('Analyze Competitor Pages', "(serpStats.retried ? ', twice: the search was sent again once and failed again' : '')",
+      "(serpStats.retried ? (serpStats.attempts > 2 ? ', ' + serpStats.attempts + ' times: the search was sent again twice, the last time as a lighter request, and failed every time'"
+      " : ', twice: the search was sent again once and failed again') : '')")
+patch('Analyze Competitor Pages', "  'OTHER SERP FEATURES: ' + (serp_features.features_present.join(', ') || 'none')\n].filter(Boolean).join('\\n');",
+      "  'OTHER SERP FEATURES: ' + (serp_features.features_present.join(', ') || 'none'),\n"
+      "  SERP_LIGHT ? 'RESULTS READ: the top 10 only, on a lighter third request (the full request failed twice). The AI Overview was not requested: do not state or assume whether one appears, and do not describe results below position 10.' : ''\n"
+      "].filter(Boolean).join('\\n');")
+# the verdict: how many times it was sent, and in plain words that an outage is not about the keyword
+patch('Parse Verdict', "const again = (ev && ev.retried) ? ' The search was sent again once and failed again.' : '';",
+      "const again = (ev && ev.retried) ? (Number(ev.attempts) > 2 ? ' The search was sent ' + ev.attempts + ' times (the last time as a lighter request) and failed every time.'"
+      " : ' The search was sent again once and failed again.') : '';   // F-SERP: up to three attempts")
+patch('Parse Verdict', "so any number here would be invented. Run the check again.' : ''",
+      "so any number here would be invented.' + (sf.retryable === false ? ' Run the check again.'"
+      " : ' This is a temporary problem with the search data provider, not with your keyword. Run the check again later.') : ''")
+patch('Parse Verdict', "retried: ev ? ev.retried : 0, keyword_data:",
+      "retried: ev ? ev.retried : 0, attempts: ev ? (Number(ev.attempts) || 1 + (Number(ev.retried) || 0)) : 1, read_light: !!sf.light_read, keyword_data:")
+patch('Parse Verdict', "  return { visits: c.traffic_potential, basis: c.traffic_basis, basis_text, note: c.traffic_note,",
+      "  return { visits: c.traffic_potential, basis: c.traffic_basis,\n"
+      "    basis_text: basis_text + ((SF77.ai_overview || {}).not_read ? ' (the AI Overview was not read on this attempt, so any clicks it takes are not counted)' : ''),   // F-SERP\n"
+      "    note: c.traffic_note,")
+# the keyword report and the ladder report: "not read on this attempt", never "None"
+patch('Build Word File', "['AI Overview', esc(aioObserved([{ seen: aio.present == null ? null : !!aio.present, at: aio.seen_at || sf.checked_at }]).text.replace(/^./, c => c.toUpperCase()))",
+      "['AI Overview', (aio.not_read ? esc('Not read on this attempt: the results page was read on a lighter third request that did not ask for it, so whether one appears is unknown')"
+      " : esc(aioObserved([{ seen: aio.present == null ? null : !!aio.present, at: aio.seen_at || sf.checked_at }]).text.replace(/^./, c => c.toUpperCase())))")
+patch('Build Word File', "      ['Results for this query', num(sf.se_results_count)]\n",
+      "      ['Results for this query', num(sf.se_results_count)],\n"
+      "      ...(sf.light_read ? [['Results read', 'The top 10 only, on a lighter third request (the full request failed twice): the results below position 10 and the AI Overview were not read']] : [])   // F-SERP\n")
+patch('Build Word File', "note: 'read once, from ' + String(d.country || 'the chosen country') + ' on one device; a feature not seen in that one check is unknown, not absent' })",
+      "note: 'read once, from ' + String(d.country || 'the chosen country') + ' on one device; a feature not seen in that one check is unknown, not absent'"
+      " + (sf.light_read ? '; read on a lighter third request: the top 10 only, and the AI Overview was not read' : '') })")
+patch('Build Ladder Report', "': AI Overview ' + esc(aioObserved([{ seen: (sf.ai_overview || {}).present, at: sf.checked_at || (sf.ai_overview || {}).seen_at }]).text)",
+      "': AI Overview ' + esc((sf.ai_overview || {}).not_read ? 'not read on this attempt (the results page was read on a lighter third request, the top 10 only, that did not ask for it)'"
+      " : aioObserved([{ seen: (sf.ai_overview || {}).present, at: sf.checked_at || (sf.ai_overview || {}).seen_at }]).text)")
+# A-21: the reading the ladder hands its main page says whether it asked for the AI Overview at all
+patch('Normalize Input', "ai_overview: p2.ladder_measure.ai_overview === true,\n",
+      "ai_overview: p2.ladder_measure.ai_overview === true, ai_overview_read: p2.ladder_measure.ai_overview_read !== false,\n")
+assert 'ai_overview_read:' in code('Spawn Page Runs') and 'nowAioRead && thenAioRead' in code('Parse Verdict'), 'F-SERP: the re-measure note would compare an AI Overview nobody read'
+assert "attempts: tries, transient" in code('Ladder Plan') and 'not a problem with your keyword' in code('Ladder Plan'), 'F-SERP: the ladder refusal is not the plain one'
+assert 'chain' in DFS_RETRY_SRC and 'const chain = (attempts, o) =>' in code('Analyze Competitor Pages'), 'F-SERP: the retry kit has no RT.chain'
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+_gg141, _uu141 = retry_lint.check_in200({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+assert 'SERP Top 10 (Light Retry)' in _gg141, 'F-SERP: the lighter attempt is outside a recorded gate'
+json.dump({'chain': ['SERP Top 10', 'SERP Failed?', 'Wait Before SERP Retry', _srt141, 'SERP Retry Failed?', 'Wait Before SERP Light Retry', 'SERP Top 10 (Light Retry)', 'Pick Top 6'],
+           'waits': {'Wait Before SERP Retry': nodes['Wait Before SERP Retry']['parameters'], 'Wait Before SERP Light Retry': nodes['Wait Before SERP Light Retry']['parameters']},
+           'bodies': {n: nodes[n]['parameters']['jsonBody'] for n in ('SERP Top 10', _srt141, 'SERP Top 10 (Light Retry)')},
+           'connections': {k: conns[k] for k in ('SERP Top 10', 'SERP Failed?', 'Wait Before SERP Retry', _srt141, 'SERP Retry Failed?', 'Wait Before SERP Light Retry', 'SERP Top 10 (Light Retry)')},
+           'gate_conditions': {g: nodes[g]['parameters']['conditions']['conditions'][0]['leftValue'] for g in ('SERP Failed?', 'SERP Retry Failed?')},
+           'ledger_lists': {nm: re.findall(r"'([^']+)'", _LRE141.search(code(nm)).group(1)) for nm in _ln141},
+           'retry_settings': {n: {k: nodes[n].get(k) for k in ('retryOnFail', 'maxTries', 'waitBetweenTries', 'onError')} for n in (_srt141, 'SERP Top 10 (Light Retry)')}},
+          open(os.path.join(HERE0, 'harness', 'serp_attempts_wiring.json'), 'w'), indent=1, sort_keys=True)
+sticky("""### The head keyword's results page: three attempts, the last one lighter (F-SERP, 2026-10-20)
+DataForSEO's scraper answers **40101 "Internal SE Server Error."** inside an HTTP 200 for heavy requests at random (rehearsal execs 23 / 31: the client's own keyword came back NOT_CHECKED twice in a row). This read is the one a ladder cannot do without, so it is sent **up to three times**: wait 20 s, again; wait 45 s, then a **lighter** request (top 10, no AI Overview). Only what a further attempt can fix is re-sent; every attempt's cost is counted once by task id.
+An answer from the lighter attempt says so: the AI Overview is **"not read on this attempt"**, never "none", and results below position 10 were not read. When all three fail the client reads, in plain words, that Google's results could not be read right now, that it is not about their keyword, and to try again later.""",
+    pos('SERP Retry Failed?')[0] - 40, pos('SERP Retry Failed?')[1] + 140, 1000, 260, 3)
+log('The head keyword\'s results page gets three attempts, the last one lighter (2026-10-20, F-SERP; real-credit rehearsal execs 23 / 31: SERP Top 10 and its retry both answered 40101 "Internal SE Server Error." inside an HTTP 200 after ~27 s, twice in a row, and the ladder came out NOT_CHECKED for ~$0.27): SERP Top 10 -> 20 s -> retry -> SERP Retry Failed? (the same transient-only rule) -> 45 s -> SERP Top 10 (Light Retry) with depth 10 and no load_async_ai_overview; RT.chain judges the three attempts; the lighter answer is labelled where it is used (AI Overview "not read on this attempt", top 10 only), the cost of every attempt is counted once by task id, and an all-fail ladder tells the client in plain words that Google\'s results could not be read right now, not about their keyword, try again later')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

@@ -317,8 +317,23 @@ let refusal = null;
 if (dupHead) refusal = { reason: 'duplicate', ladder_id: dupHead.ladder_id, head: dupHead.head,
   message: 'This website already has a keyword ladder for "' + dupHead.head + '" (' + dupHead.ladder_id + '). One search needs one page, so no second ladder was planned: continue that ladder instead.' };
 else if (plan.plan_type === 'none') refusal = { reason: 'not_realistic', message: '"' + head + '" is not a realistic main keyword for ' + domain + ' (' + (other_brand ? 'it is another company\'s brand: ' + headGate.detail : navigational ? 'people searching it look for one particular website or brand' + (!headGate.ok ? ': ' + headGate.detail : '') : 'the verdict is AVOID') + '). No ladder pages were planned; pick one of the alternatives as the main keyword instead.' };
-else if (serpOut) refusal = { reason: 'serp_unchecked', short: 'the live Google results could not be checked', detail: serpOut,
-  message: 'The live Google results for "' + head + '" could not be read on this run (' + serpOut + '), so nothing is known about who ranks for it, how strong those pages are or which results-page features take the clicks. A ladder plan is a bet on that competition, so none was planned, nothing was scored and no page was written. Run it again once the search data provider answers.' };
+else if (serpOut) {
+  // F-SERP (2026-10-20, real-credit rehearsal execs 23 / 31): the client's own keyword came back NOT_CHECKED twice in a row because
+  // DataForSEO's scraper answered 40101 "Internal SE Server Error." to the heavy request. The message the client reads says what
+  // happened in plain words: Google's results could not be read right now, it is not about their keyword, and when to try again.
+  // The provider's own message stays in `detail` (and in data_check.serp_error) for support, never as the client's explanation.
+  const sfR = base.serp_features || {};
+  const tries = Number(sfR.attempts) || 1;
+  const transient = sfR.retryable !== false;
+  refusal = { reason: 'serp_unchecked', short: 'the live Google results could not be checked', detail: serpOut, attempts: tries, transient,
+    message: 'We could not read Google\'s results for "' + head + '" right now: our search data provider did not answer'
+      + (tries > 1 ? ' after ' + tries + ' attempts' : '') + '. '
+      + (transient
+        ? 'This is a temporary problem on the provider\'s side. It is not a problem with your keyword, and it says nothing about whether "' + head + '" is a good choice. '
+        : 'The provider refused the request, which is a problem on our side, not with your keyword. ')
+      + 'A ladder plan is a bet on who ranks for the keyword, so none was planned, nothing was scored and no page was written. '
+      + (transient ? 'Please try again later (in an hour or so).' : 'Please try again later; if it keeps happening, contact support.') };
+}
 else if (thinPool) refusal = { reason: 'thin_data', short: 'the keyword research returned too little data', pool_size: poolSize, minimum: LADDER_MIN_POOL, head_measured: headMeasured,
   message: 'The keyword research returned only ' + poolSize + ' keyword' + (poolSize === 1 ? '' : 's') + ' around "' + head + '" in ' + (base.country || 'this market')
     + (headMeasured ? ' (a ladder needs at least ' + LADDER_MIN_POOL + ' to pick rungs from)' : ', and the search data provider has no search volume and no difficulty for "' + head + '" itself')

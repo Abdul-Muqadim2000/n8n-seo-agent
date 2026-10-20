@@ -13,7 +13,8 @@ const headKw = String((L.head || {}).keyword || d.keyword || '').toLowerCase().t
 const sfL = (() => { try { return ($('Ladder Plan').first().json || {}).serp_features || d.serp_features || {}; } catch (e) { return d.serp_features || {}; } })();
 const measureOf = (p) => String(p.keyword || '').toLowerCase().trim() !== headKw || (L.feasibility || {}).scored === false ? null : {
   keyword: headKw, score: (L.feasibility || {}).score ?? d.verdict_score ?? null, checked_at: String(sfL.checked_at || ((sfL.ai_overview || {}).seen_at) || ''),
-  ai_overview: ((sfL.ai_overview || {}).present) === true, features: Array.isArray(sfL.features_present) ? sfL.features_present.slice(0, 12) : [] };
+  ai_overview: ((sfL.ai_overview || {}).present) === true, ai_overview_read: ((sfL.ai_overview || {}).present) != null,   // F-SERP: a lighter reading did not ask for the AI Overview
+  features: Array.isArray(sfL.features_present) ? sfL.features_present.slice(0, 12) : [] };
 return (L.write_now || []).slice(0, n).map(p => ({ json: { body: {
   mode: 'keyword', keyword: p.keyword, page_type: p.page_type || 'Service Page', country: d.country, domain: d.domain,
   business: d.business || '', customers: d.audience || '', business_facts: d.business_facts || '', cta: d.cta || '', tone: d.tone || '', goal: GOAL[d.goal] || d.goal || '',
