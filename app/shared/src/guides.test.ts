@@ -246,7 +246,7 @@ describe('the weekly autopilot guides', () => {
 
 describe('every keyword-first ask has a guide', () => {
   // every kind the server builds (services/pipeline.ts, ladders.ts, autopilot.ts)
-  const KINDS: NeedsYouItem['kind'][] = ['publish', 'approve', 'overlap', 'duplicate', 'failed', 'connection', 'pileup', 'keyword', 'proposal', 'recheck', 'level'];
+  const KINDS: NeedsYouItem['kind'][] = ['publish', 'approve', 'overlap', 'duplicate', 'failed', 'connection', 'pileup', 'keyword', 'proposal', 'recheck', 'level', 'profile'];
   it('each Needs-you kind maps to a guide that exists', () => {
     expect(Object.keys(GUIDE_FOR_NEEDS_YOU_KIND).sort()).toEqual([...KINDS].sort());
     for (const k of KINDS) expect(guideById(GUIDE_FOR_NEEDS_YOU_KIND[k]), k).toBeDefined();
@@ -254,6 +254,8 @@ describe('every keyword-first ask has a guide', () => {
   it('refines the item by its id: a refused plan, a draft to fix, an announcement, Search Console', () => {
     const at = (id: string, kind: NeedsYouItem['kind'], severity: 'warning' | 'info' = 'info') => guideForNeedsYou({ id, kind, severity });
     expect(at('keyword:first', 'keyword', 'warning')).toBe('choose-first-keyword');
+    // P1: the profile the first page waits for, only the facts, and the first page once both are on file
+    expect([at('profile:author', 'profile', 'warning'), at('profile:facts', 'profile', 'warning'), at('profile:write-first', 'profile')]).toEqual(['business-profile', 'business-facts', 'coming-up-plan']);
     expect(at('keyword:next', 'keyword')).toBe('choose-first-keyword');
     expect(at('proposal:p1', 'proposal', 'warning')).toBe('keyword-announcements');
     expect(at('proposal:p2', 'proposal', 'info')).toBe('choose-first-keyword');
