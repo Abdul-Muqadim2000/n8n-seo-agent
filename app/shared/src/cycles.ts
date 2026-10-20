@@ -122,6 +122,8 @@ export interface CyclePreviewItem {
   approved?: boolean;
   /** ladder items: who chose the ladder's keyword */
   chosen_by?: ChosenBy | '';
+  /** F-KW: the next page of a ladder planned more than 60 days ago, waiting for its fresh keyword check */
+  recheck?: boolean;
 }
 
 /** The `cycle_preview` callback body (beside the usual callback fields). */
@@ -146,8 +148,12 @@ export interface CyclePreview {
   refused?: { keyword: string; source: string; reason: string; detail: string; note?: string; target_id?: string }[];
   /** what the client skipped */
   skipped?: { item_key: string; keyword: string; source: string; scope: 'always' | 'cycle' }[];
-  /** R-K7: the cycle's budget */
-  budget?: { pages_per_week: number; spent: number; room: number; window_start?: string; spent_keywords?: { keyword: string; how: string }[] };
+  /** R-K7: the cycle's budget (`ladder_start_window`: ladder starts count from there, F-KW) */
+  budget?: { pages_per_week: number; spent: number; room: number; window_start?: string; ladder_start_window?: string; spent_keywords?: { keyword: string; how: string }[] };
+  /** F-KW: ladders planned more than 60 days ago that wait for the app's fresh keyword check */
+  recheck_ladders?: { ladder_id: string; head: string; planned_at: string; reason: string }[];
+  /** approvals not written in this cycle, with the reason (`ambiguous`: a keyword-only approval that two different pages share) */
+  approved_not_written?: { keyword: string; source: string; reason: string; detail?: string }[];
   /** the engine's price of one page (USD) and where it comes from: internal, never shown to a customer */
   est_page_usd?: number;
   est_basis?: string;
@@ -257,6 +263,15 @@ export interface ComingUpItem {
   /** Skip: every item; Approve: the items that wait for an OK */
   canSkip: boolean;
   canApprove: boolean;
+  /** F-KW: a page of a ladder planned long ago: the keyword is checked again before anything is written */
+  recheck: boolean;
+}
+
+/** An approval the cycle did not write, in the customer's words. */
+export interface ComingUpNotWritten {
+  keyword: string;
+  reason: 'pileup' | 'budget' | 'covered_by_live_page' | 'ambiguous' | 'other';
+  message: string;
 }
 
 /** GET /api/orgs/:orgId/sites/:siteId/coming-up */
@@ -284,6 +299,12 @@ export interface ComingUpView {
   canDecide: boolean;
   /** the plan is for a cycle that already started: decisions are closed */
   closed: boolean;
+  /** F-KW: approvals the cycle does not write, each with why (an approval that names only a keyword two pages share is `ambiguous`) */
+  approvedNotWritten: ComingUpNotWritten[];
+  /** F-KW: ladders planned long ago whose keyword is checked again before their first page */
+  recheckLadders: { ladderId: string; head: string; plannedAt: string }[];
+  /** R-K7: the cycle's pages a week, how many are already used, and from when ladder starts count */
+  budget: { pagesPerWeek: number; spent: number; room: number; ladderStartWindow: string | null } | null;
 }
 
 /** POST /api/orgs/:orgId/sites/:siteId/coming-up/decisions */
