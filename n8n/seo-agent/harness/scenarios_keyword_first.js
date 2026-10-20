@@ -45,6 +45,7 @@ module.exports = async (ctx) => {
     mock('Load AI Targets (Cadence)', items(t.ai_targets)); mock('Load AI Targets Writing (Cadence)', items([])); mock('Load Monitors (Cadence)', items(t.monitors));
     mock('Load Pages (Cadence)', items(t.pages)); mock('Load AI Brands (Cadence)', items(t.ai_brands)); mock('Load Skips (Cadence)', items(t.skips)); mock('Load Cost (Cadence)', items(t.cost));
     mock('Load Cycle Jobs (Cadence)', items(t.cycle_jobs));   // F-KW: the content-cadence jobs of earlier cycles (R-K7)
+    mock('Load Profiles (Cadence)', items(t.profiles));   // P1: the author profiles (an empty load = no profile on file)
   };
   const planCase = async (c) => { reset(); loadCadence(c);
     const out = await frozen(c.now, async () => (await run('Cadence Plan', [{ json: {} }])).map(i => i.json));
@@ -97,10 +98,17 @@ module.exports = async (ctx) => {
       if (e.skipped) check(c.name + ': skipped by the client', eq((f.skipped || []).map(x => x.item_key).sort(), [...e.skipped].sort()), JSON.stringify(f.skipped));
       if (e.approved_not_written) check(c.name + ': approvals not written, with their reasons', eq((f.approved_not_written || []).map(x => ({ keyword: x.keyword, reason: x.reason })), e.approved_not_written), JSON.stringify(f.approved_not_written));
       if (e.budget_spent != null) check(c.name + ': R-K7 pages already spent in the cycle = ' + e.budget_spent, (f.budget || {}).spent === e.budget_spent, JSON.stringify(f.budget));
+      // P1: what was held for the author profile and the business facts, and which parts are missing
+      if (e.held) check(c.name + ': held for the author profile and business facts', eq(ks(f.held_for_profile), e.held) && (f.held_for_profile || []).every(h => h.held === 'profile' && /waiting for your author profile and business facts/.test(h.why)), JSON.stringify(f.held_for_profile));
+      if (e.waiting_for_profile != null) check(c.name + ': waiting_for_profile ' + e.waiting_for_profile, !!f.waiting_for_profile === e.waiting_for_profile, JSON.stringify(f.readiness));
+      if (e.missing) check(c.name + ': the missing parts, in order', eq(((f.readiness || {}).missing || []).map(m => m.key), e.missing), JSON.stringify(f.readiness));
+      if (e.held && e.held.length && c.trigger && c.trigger.preview) check(c.name + ': the preview lists the held pages as items marked held, with the reason', e.held.every(h => (f.items || []).some(x => x.keyword === h.keyword && x.held === 'profile')) && /waiting for your author profile and business facts/.test(f.reason), JSON.stringify({ items: f.items, reason: f.reason }));
+      if (e.held && e.held.length && !(c.trigger && c.trigger.preview)) check(c.name + ': nothing is started, and the status says what to add', !r.picks.length && r.out.some(j => j.report_only && /waiting for your author profile and business facts/.test(j.reason)), JSON.stringify(r.out.map(j => j.reason)));
       // ---- KF3: the invariants every run must hold, whatever the case ----
       const refusedK = new Set((f.refused || []).map(x => cycleNormOf(x.keyword)));
       const pages = Number((((c.tables.cadence || [])[0]) || {}).pages_per_week) || 0;
       check(c.name + ': no refused keyword is written or suggested (R-K4)', ![...r.picks, ...(f.suggestions || [])].some(p => refusedK.has(cycleNormOf(p.keyword))), JSON.stringify([...refusedK]));
+      check(c.name + ': P1, every pick carries the website\'s business facts, sent after an empty `business`', r.picks.every(p => p.body.business === '' && Object.keys(p.body).indexOf('business') < Object.keys(p.body).indexOf('business_facts') && p.body.business_facts === String(((c.tables.sites || [])[0] || {}).business_facts || '')), JSON.stringify(r.picks.map(p => [p.body.business, (p.body.business_facts || '').slice(0, 20)])));
       check(c.name + ': every pick is a content run with the planned keyword, a unique request id and an item key', r.picks.every(p => p.body && p.body.mode === 'keyword' && p.body.force_content === true && p.body.keyword === p.keyword && p.item_key === cycleNormOf(p.keyword))
         && new Set(r.picks.map(p => p.request_id)).size === r.picks.length, JSON.stringify(r.picks.map(p => p.request_id)));
       check(c.name + ': pages_per_week bounds everything automatic (the AI page on top only at level 3, never with 0 a week)', r.picks.filter(p => !/^ai_/.test(p.source) || c.level !== 3).length <= pages && (pages > 0 || !r.picks.length), JSON.stringify({ pages, picks: ks(r.picks) }));
@@ -526,12 +534,109 @@ module.exports = async (ctx) => {
       for (const m of mails) { scan(c.name + ' e-mail', { html: m.html, subject: m.subject }, ''); if (/\$\s?\d/.test(String(m.html || '') + String(m.subject || ''))) dollars.push(c.name + ': ' + String(m.html).match(/.{0,40}\$\s?\d.{0,10}/)[0]); }
       if (/planned before this rule existed/.test(JSON.stringify(r.out) + JSON.stringify(mails))) hits.push(c.name + ': "planned before this rule existed"');
     }
-    check('no em dash, en dash, arrow, ellipsis or curly quote in any why / reason / detail / note / subject / e-mail of the 57 fixture cases', !hits.length, hits.slice(0, 8).join(' | '));
+    check('no em dash, en dash, arrow, ellipsis or curly quote in any why / reason / detail / note / subject / e-mail of the fixture cases', !hits.length, hits.slice(0, 8).join(' | '));
     check('no dollar figure in a cadence e-mail (the app shows credits)', !dollars.length, dollars.slice(0, 4).join(' | '));
     const G = new Function(fs.readFileSync(path.join(CODE, '_fit_gate.js'), 'utf8').replace(/return \$input\.all\(\)[\s\S]*$/, 'return { fitGate, fitStored, FITR };'))();
     const words = [G.fitGate('zoho crm pricing uae', { own_domain: 'acme.ae', topics: ['CRM implementation services', 'CRM consulting for sales teams', 'CRM data migration', 'Customer support desk setup', 'Sales pipeline automation', 'CRM training and adoption'] }).detail,
       G.fitStored({ keyword: 'emirates id status check', status: 'planned' }, { own_domain: 'acme.ae' }).note, G.fitStored({ keyword: 'emirates id status check', status: 'written' }, { own_domain: 'acme.ae' }).note,
       G.FITR.line([{ keyword: 'fta portal', detail: 'a public body', dropped: true }], 'tracked')];
     check('the gate\'s own sentences are plain (off topic, set aside, kept and flagged, the read-path line)', words.every(w => w && !BAD.test(w) && !/planned before this rule existed/.test(w)), JSON.stringify(words));
+  });
+  // ===================================================================================
+  // KF21-KF23 — P1 (2026-10-20, rehearsal §4 item 1): no page before the author profile and the business facts
+  // ===================================================================================
+  await guard('KF21 profile before the first page: the ladder start', async () => {
+    reset(); const SN = 'KF21 profile before the first page — a ladder start without the author profile or the business facts keeps its plan and holds its page (nothing spawned, nothing charged, force_content does not override it); with both it writes, and the page run carries the facts'; begin(SN); const check = mkCheck(SN);
+    const F = require('./fixtures'); const V = require('./fixtures_v5'); const EMPTY = [{ json: {} }];
+    mock('Start Form', F.forms.startLadder);
+    const nL = await run('Normalize Input', F.forms.pageLadder);
+    mock('Route Mode', nL); await run('Prepare Keyword Run', nL);
+    mock('Fetch Sitemaps', [{ statusCode: 200, headers: {}, sitemap_xml: F.urlset(F.siteUrls) }]);
+    const cuL = await run('Collect Site URLs', store['Fetch Sitemaps']);
+    mock('Parse Analysis', { ...cuL[0].json, competitor_analysis: F.competitorAnalysis, competitors: [] });
+    mock('Keyword Data', F.keywordOverview); mock('Site Authority', F.rankOverview(F.OUR));
+    await run('Merge Keyword Data', store['Site Authority']);
+    mock('Verdict Agent', { output: { ...F.verdictGo, expected_monthly_visits_top3: 90, time_to_rank_months: 9 } });
+    const pvL = await run('Parse Verdict', store['Verdict Agent']);
+    mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+    const lrq = await run('Ladder Requests', EMPTY);
+    mock('Run Ladder Research', V.ladderResearch(lrq.map(r => r.json)));
+    const lpool = await run('Ladder Pool', store['Run Ladder Research']);
+    const lch = await run('Ladder Relevance Chunks', lpool);
+    mock('Ladder Keyword Relevance', lch.map(c => V.ladderRelevance(c.json)));
+    const PV0 = pvL[0].json; const dom = String(PV0.domain || '').toLowerCase().replace(/^www\./, ''); const sid = 'site_' + dom.replace(/[^a-z0-9]+/g, '-');
+    const FACTS = 'Founded in 2011; 30 consultants; certified partner; fixed-price implementation packages from 12 weeks; offices in two cities.';
+    const AUTHOR = { site_id: sid, domain: dom, author_name: 'Omar Said', author_job_title: 'Practice lead', author_bio: 'Omar leads the practice and has delivered more than 50 projects for mid-sized companies.' };
+    const planWith = async (pv, o) => { mock('Parse Verdict', { ...PV0, chosen_by: 'client_typed', ladder_mode: 'auto', ...pv }); mock('Load Site Cache', EMPTY); mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+      mock('Load Profile (Model)', o.profile ? [{ json: o.profile }] : EMPTY);
+      mock('Site Model', [{ json: { site_model: { domain: dom, business_facts: o.modelFacts || '', cta: '' } } }]);
+      return (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json; };
+    // the rehearsal client: no profile, no facts
+    const none = await planWith({ business_facts: '', force_content: true }, {}); const L = none.ladder;
+    console.log('   no profile, no facts ->', JSON.stringify({ planned: L.planned, write_now: L.write_now.length, held: L.held && L.held.why.map(w => w.limit), missing: L.limits.readiness.missing.map(m => m.key) }));
+    check('the plan is made and stored, its page HELD for the profile (force_content does not override it)', L.planned && L.write_now.length === 0 && L.held && L.held.pages.length === 1 && L.held.why[0].limit === 'profile' && L.limits.profile_hold === true, JSON.stringify({ w: L.write_now, h: L.held }));
+    check('every missing part is named, in customer words', eq(L.limits.readiness.missing.map(m => m.key), ['author_name', 'author_job_title', 'author_bio', 'business_facts']) && /waiting for your author profile and business facts/.test(L.limits.text) && /your author's name/.test(L.limits.text) && /nothing was charged for it/.test(L.limits.text), L.limits.text);
+    check('the reason is plain words (no em dash, ellipsis or curly quote)', !/[—–…“”‘’]/.test(L.limits.text + JSON.stringify(L.held)), L.limits.text);
+    mock('Attach PDF Ladder', [{ json: none }]);
+    const rows = (await run('Ladder Rows', [{ json: none }])).map(r => r.json);
+    check('every ladder row stays planned (the cadence writes it later; R-K7: it spends nothing now)', rows.length > 1 && rows.every(r => r.status === 'planned'), JSON.stringify(rows.map(r => r.status)));
+    check('no page run is spawned, so nothing is charged for a page', (await run('Spawn Page Runs', [{ json: none }])).length === 0, 'spawned');
+    // only the facts are missing
+    const noFacts = (await planWith({ business_facts: 'We do CRM.' }, { profile: AUTHOR })).ladder;
+    check('facts of a few words are not enough: held, missing business_facts only', noFacts.write_now.length === 0 && noFacts.held && noFacts.held.why[0].limit === 'profile' && eq(noFacts.limits.readiness.missing.map(m => m.key), ['business_facts']), JSON.stringify(noFacts.limits.readiness));
+    // a Manual ladder without the profile: both reasons, Manual first
+    const man = (await planWith({ business_facts: '', ladder_mode: 'manual' }, {})).ladder;
+    check('a Manual ladder without the profile names both reasons (Manual first)', man.held && eq(man.held.why.map(w => w.limit).slice(0, 2), ['manual', 'profile']), JSON.stringify(man.held && man.held.why.map(w => w.limit)));
+    // both on file: the page is written at once and its run carries the facts
+    const ready = await planWith({ business_facts: FACTS }, { profile: AUTHOR });
+    check('with the author profile and the facts, the first page is written at once', ready.ladder.write_now.length === 1 && !ready.ladder.held && ready.ladder.limits.readiness.ready === true, JSON.stringify({ w: ready.ladder.write_now.length, h: ready.ladder.held }));
+    const sp = (await run('Spawn Page Runs', [{ json: ready }])).map(i => i.json.body);
+    check('the page run carries the request\'s business facts', sp.length === 1 && sp[0].business_facts === FACTS, JSON.stringify(sp.map(b => b.business_facts)));
+    // the request has no facts but the site model does (stored by Track my site or Site Admin facts): ready, and the run carries the stored facts
+    const viaModel = await planWith({ business_facts: '' }, { profile: AUTHOR, modelFacts: FACTS });
+    const sp2 = (await run('Spawn Page Runs', [{ json: viaModel }])).map(i => i.json.body);
+    check('facts stored on the website count, and reach the page run when the request had none', viaModel.ladder.write_now.length === 1 && sp2.length === 1 && sp2[0].business_facts === FACTS, JSON.stringify({ w: viaModel.ladder.write_now.length, f: sp2.map(b => b.business_facts) }));
+  });
+
+  await guard('KF22 profile before the first page: the data path', async () => {
+    reset(); const SN = 'KF22 profile before the first page — Track my site stores the business facts the app sends (only when the key is there), Site Admin takes action facts, and the readiness kit is the rule the app mirrors'; begin(SN); const check = mkCheck(SN);
+    const FACTS = 'Founded in 2015; 25 CRM consultants; certified partner since 2017; fixed-price packages from 10 weeks.';
+    const body = { mode: 'track', domain: 'techand.ai', country: 'United Arab Emirates', email: '', callback_url: 'https://hooks.example.com/x', business: '', customers: '', keywords: ['crm service provider'], business_facts: FACTS };
+    const ni = (await run('Normalize Input', { body }))[0].json;
+    check('Normalize Input: the facts and facts_given (the key was sent); `business` stays empty', ni.facts_given === true && ni.business_facts === FACTS && !ni.business, JSON.stringify({ g: ni.facts_given, f: ni.business_facts, b: ni.business }));
+    mock('Normalize Input', [{ json: ni }]); mock('Load Site (Track)', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', status: 'active' } }]);
+    const row = (await run('Site Row (Track)', [{ json: {} }]))[0].json;
+    check('Track my site stores them on seo_sites (a real column)', row.business_facts === FACTS && TC.SITES.includes('business_facts'), JSON.stringify(row));
+    const b2 = { ...body }; delete b2.business_facts;
+    const ni2 = (await run('Normalize Input', { body: b2 }))[0].json;
+    mock('Normalize Input', [{ json: ni2 }]);
+    check('a re-save without the key leaves the stored facts alone', ni2.facts_given === false && !('business_facts' in (await run('Site Row (Track)', [{ json: {} }]))[0].json), JSON.stringify(ni2.facts_given));
+    mock('Admin Run', [{ json: { body: { action: 'facts', site_id: 'site_techand-ai', business_facts: '  ' + FACTS + '  ' } } }]);
+    const a = (await run('Admin Action', [{ json: {} }]))[0].json;
+    check('Site Admin facts: the facts, trimmed, for the site row', a.action === 'facts' && a.business_facts === FACTS && a.site_id === 'site_techand-ai', JSON.stringify(a));
+    mock('Admin Run', [{ json: { body: { action: 'facts', site_id: 'site_techand-ai' } } }]);
+    const er = await H.expectError('Admin Action', [{ json: {} }], /business_facts/);
+    check('Site Admin facts without a text is refused', er.ok, er.error);
+    const av = (await run('Admin Validate', [{ json: { body: { action: 'facts', domain: 'techand.ai', business_facts: FACTS } } }]))[0].json;
+    const av2 = (await run('Admin Validate', [{ json: { body: { action: 'facts', domain: 'techand.ai' } } }]))[0].json;
+    check('the Admin API accepts facts with a text and answers 400 without one', av.ok === true && av2.ok === false && /business_facts/.test(av2.error), JSON.stringify({ av, av2 }));
+    // the kit: the rule the app mirrors (app/shared/src/readiness.ts holds the same numbers; its vitest suite reads the kit)
+    const kitSrc = fs.readFileSync(path.join(CODE, 'Cadence_Plan.js'), 'utf8').match(/const READY = \(\(\) => \{[\s\S]*?\n\}\)\(\);/);
+    check('the readiness kit is inlined into Cadence Plan', !!kitSrc, 'READY');
+    const K = new Function((kitSrc ? kitSrc[0] : 'const READY = null;') + '\nreturn READY;')();
+    const full = K.of({ profile: { author_name: 'A', author_job_title: 'B', author_bio: 'C' }, facts: 'x'.repeat(30) });
+    const empty = K.of({});
+    check('READY: 30 characters of facts and name + job title + bio are ready; nothing on file names all four parts', K.FACTS_MIN === 30 && full.ready && !empty.ready && eq(empty.missing.map(m => m.key), ['author_name', 'author_job_title', 'author_bio', 'business_facts'])
+      && empty.missing_text === "your author's name, your author's job title, a short author bio and your business facts" && !K.of({ profile: {}, facts: '   ' + 'y'.repeat(29) + '   ' }).facts_ready, JSON.stringify(empty));
+  });
+
+  await guard('KF23 profile before the first page: the preview e-mail and callback', async () => {
+    reset(); const SN = 'KF23 profile before the first page — the "Coming up" callback carries waiting_for_profile, what is missing and the held items; its e-mail lists them apart and says what to add'; begin(SN); const check = mkCheck(SN);
+    const c = FX.cases.find(x => x.name === 'preview_holds_for_profile'); const r = await planCase(c);
+    mock('Cadence Plan', r.out.map(json => ({ json })));
+    const pv = (await run('Cadence Preview', [{ json: {} }])).map(i => i.json); const b = (pv[0] || {}).callback_body || {};
+    check('the callback says the site waits for its profile, names what is missing, and the held items are marked', b.waiting_for_profile === true && eq((b.readiness || {}).missing, ['author_name', 'author_job_title', 'author_bio']) && (b.items || []).filter(x => x.held === 'profile').length === 3, JSON.stringify({ w: b.waiting_for_profile, r: b.readiness, held: (b.items || []).map(x => x.held) }));
+    check('the e-mail lists them under their own heading, never as "written on their own", and says what to add', /Ready to write once your author profile and business facts are on file/.test(pv[0].html) && !/Written on their own/.test(pv[0].html) && /Add your author(&#39;|')s name/.test(pv[0].html) && /add your author profile/.test(pv[0].subject), pv[0].subject);
+    H.scanHtml('cycle preview e-mail (held for the profile)', pv[0].html);
   });
 };

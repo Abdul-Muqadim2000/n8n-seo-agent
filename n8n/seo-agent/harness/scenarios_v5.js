@@ -1595,7 +1595,8 @@ await guard('pipeline', async () => {
   // 10. no settings rows: same picks as the v4.7 plan (frozen copy in harness/legacy/)
   const logRows12 = [{ json: { site_id: SITE, domain: D, keyword: 'wms uae', source: 'trend', page_type: 'Guide', existing_page_url: '', rung: 0, ladder_id: '', request_id: 'cad_old', started_at: '2026-09-15T10:00:00.000Z', status: 'written', published_url: '', published_at: '', week: '2026-09-15' } }];   // R1 (2026-10-13): a page that waits says `written`, which the frozen v4.7 copy counts too
   // R15 (2026-10-13): the ladder page's planned URL (`ladder_target_url`) is new in the spawn body and is checked on its own below, so the
-  const projBody = (b) => { if (!b || typeof b !== 'object') return b; const { ladder_target_url: _planned, ...rest } = b; return rest; };
+  // P1 (2026-10-20): so are the stored business facts and call to action (with the empty `business` / `customers` sent before them), checked in KF3
+  const projBody = (b) => { if (!b || typeof b !== 'object') return b; const { ladder_target_url: _planned, business: _b, customers: _c, business_facts: _f, cta: _cta, ...rest } = b; return rest; };
   const proj = (items) => items.filter(x => !x.json.nothing_to_do).map(x => { const j = x.json; return { keyword: j.keyword, source: j.source, page_type: j.page_type, existing: j.existing_page_url, ladder_id: j.ladder_id, rung: j.rung, page_no: j.page_no, why: j.why, request_id: j.request_id, pages: j.pages_per_week, upcoming: j.upcoming, dry_run: j.dry_run, body: projBody(j.body) }; });   // R1 (2026-10-13): pending_publish is compared on its own below — v4.7 listed every `started` row, R1 only the pages the content log says were `written`
   check('R15: a ladder page the cadence spawns carries the URL its ladder row planned, so the page keeps that slug', pml.picks.every(x => x.body.ladder_target_url === slug(x.keyword)) && pml.picks.length > 0, JSON.stringify(pml.picks.map(x => [x.keyword, x.body.ladder_target_url])));
   // keyword-first (2026-10-19): v4.7 wrote striking-distance and trend posts on its own, which is full autopilot (level 3) now; the
@@ -14635,7 +14636,11 @@ await guard('the pages the crawl never reached, and a queue that starts with wha
     mock('Site Model', [{ json: { site_model: { domain: D97, canonical_host: 'www.' + D97, pages: [] } } }]);
     // as live: the audit item is handed over by *Full Report?* and the node's own input is the last Data Table load
     mock('Full Report?', [{ json: { domain: D97, probe: { findings: [], what_works: [], measurements: {} }, extra_findings: [], extra_works: [] } }]);
-    const out = (await run('GSC Audit Plan', [{ json: { site_id: 's1', domain: D97, page_url: W97 + '/p12/', written_at: ago97(1) } }]))[0].json;
+    // the rotation's "this week" is read on the clock; the scenario's signals are dated against TODAY97, so the run is frozen there (P1, 2026-10-20:
+    // from 2026-10-20 on the wall clock put the IndexNow submission of 2026-10-13 outside the week and this check failed by date alone)
+    const RealDate97 = Date; const T97 = RealDate97.parse(TODAY97);
+    global.Date = class extends RealDate97 { constructor(...a) { if (a.length) super(...a); else super(T97); } static now() { return T97; } };
+    let out; try { out = (await run('GSC Audit Plan', [{ json: { site_id: 's1', domain: D97, page_url: W97 + '/p12/', written_at: ago97(1) } }]))[0].json; } finally { global.Date = RealDate97; }
     if (!withSignals) { if (keep.ai) store['Load AI Pages (Audit)'] = keep.ai; if (keep.log) store['Load Content Log (Audit)'] = keep.log; if (keep.tg) store['Load AI Targets (Audit)'] = keep.tg; }
     return out;
   };

@@ -555,7 +555,7 @@ for (const s of list) {
   // F-KW (finding 3b): the ladders that wait for the app's fresh Keyword Check (the app checks the head keyword and writes rechecked_at, or pauses it)
   const recheck_ladders = recheckL.map(x => ({ ladder_id: x.id, head: x.head, planned_at: x.start, reason: RECHECK_WHY }));
   // an approval that is not written this cycle, with the reason: the pile-up guard, the budget, or a live page already answering its search
-  const approved_not_written = approved.filter(o => !pickedU.has(norm(o.keyword))).map(o => ({ keyword: o.keyword, source: o.source,
+  const approved_not_written = approved.filter(o => !picks.some(p => norm(p.keyword) === norm(o.keyword))).map(o => ({ keyword: o.keyword, source: o.source,
     reason: paused_reason || (heldK.has(norm(o.keyword)) ? 'profile' : covered.some(c => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget') }))
     .concat(approval_ambiguous.map(a => ({ keyword: a.keyword, source: '', reason: 'ambiguous', detail: 'your approval names only the keyword, and ' + a.sources.length + ' different pages share it (' + a.sources.join(', ') + '): approve the one you want again' })));
   const facts = { set_aside, refused, covered_by_live_pages: covered.slice(0, 10), paused_reason, waiting_publish: waitingKw.size,

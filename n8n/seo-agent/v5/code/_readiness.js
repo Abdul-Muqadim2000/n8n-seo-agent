@@ -12,7 +12,7 @@
 //   of({ profile, facts }) -> { ready, profile_ready, facts_ready, missing: [{ key, label }], missing_text, reason, basis }
 const READY = (() => {
   const S = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
-  const FACTS_MIN = 60;
+  const FACTS_MIN = 30;
   const PROFILE_FIELDS = [
     { key: 'author_name', label: "your author's name" },
     { key: 'author_job_title', label: "your author's job title" },

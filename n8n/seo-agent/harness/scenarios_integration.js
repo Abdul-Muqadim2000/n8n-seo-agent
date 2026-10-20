@@ -579,6 +579,7 @@ module.exports = async (ctx) => {
       mock('Load Sites', items(t.sites)); mock('Load Cadence', items(t.cadence)); mock('Load Ladders', items(t.ladders)); mock('Load Query History', items(t.query_history)); mock('Load Trends', items(t.trends)); mock('Load Content Log', items(t.content_log));
       mock('Load Ladder Settings', items(t.ladder_settings)); mock('Load Main Keyword Ranks', items(t.ranks)); mock('Load AI Targets (Cadence)', items(t.ai_targets)); mock('Load AI Targets Writing (Cadence)', items([])); mock('Load Monitors (Cadence)', items(t.monitors));
       mock('Load Pages (Cadence)', items(t.pages)); mock('Load AI Brands (Cadence)', items(t.ai_brands)); mock('Load Skips (Cadence)', items(t.skips)); mock('Load Cost (Cadence)', items(t.cost));
+      mock('Load Profiles (Cadence)', items(t.profiles));   // P1: the fixture's author profiles
       return (await run('Cadence Plan', [{ json: {} }])).map(i => i.json); });
     const o = await planOf(c), w = o.filter(x => x.body), f = o.find(x => x.site_id) || {};
     check('waiting for the first keyword, one page a week, two approvals and one of them also skipped: the approved, not-skipped item is written - only that one',
