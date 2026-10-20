@@ -16,6 +16,12 @@
 // zone, seo_cycles.tz) falls on seo_cycles.cycle_weekday - because its weekly AI Visibility run asks the same engines that day; a website with
 // no cycle row keeps the old Monday skip. The rotating sample counts the six other mornings from that day (AIP.pulseDay), so each question is
 // still asked on `per_week` of its six pulse mornings. Only a morning the schedule started skips (the cron or the catch-up); a start by hand never does.
+// F-ENG (2026-10-20): EVERY website gets its pulse, every morning. It used to ask the first 15 sites (`sites.slice(0, 15)`) and drop the rest
+// in silence. Now one execution takes the websites in site_id order until it holds 15 or its requests reach one morning's limit
+// (AIP.LIMITS.pulse_max_requests, the per-execution budget AI Requests enforces), and hands the rest to the NEXT execution of this
+// workflow (`pulse_part`: the morning's date, the last site_id taken, the part number, whether the schedule started the morning), started
+// by *Start Next Pulse Part* the way the AI Visibility Tracker chains a split run (`parent_run_id`, so the run guard does not take this
+// execution's open ledger row for a twin). The chain ends when no website is left; it is bounded by max_parts.
 // ---- shared by the monitors (AI Visibility Tracker, Backlink Monitor, Audit Scheduler; inlined by the build): which sites, with which settings ----
 // Sites = the Data Table seo_sites ("Track my site") + every domain with a keyword ladder; settings per site from seo_monitors (defaults: everything on).
 // On demand (Manual Run with { domain | site_id }) one site runs even when its weekly / monthly monitor is off; an untracked domain is checked ad hoc
@@ -717,9 +723,13 @@ const AIP = (() => {
     PRICE, PRICE_BASIS, ENGINES, DEFAULT_ENGINES, MONTHLY_ENGINES, PULSE_ENGINES, FIXED, analystCap, cost };
 })();
 const CONFIG = { pulse_engines: ['chatgpt', 'gemini', 'ai_mode', 'copilot'],   // v4.12: + Copilot ($0.002) when the site chose it
-  max_sites_per_run: 15, baseline_days: 7 };
+  max_sites_per_run: 15, baseline_days: 7, max_parts: 200 };
 const { list, on_demand, want, total } = monitorSites('ai');
-const sites = on_demand ? list : list.filter(s => s.settings.pulse);
+const sites = (on_demand ? list : list.filter(s => s.settings.pulse)).slice().sort((a, b) => String(a.site_id).localeCompare(String(b.site_id)));
+// F-ENG: a continuation of this morning's pulse (a later part of the chain) - the websites after the last one the earlier part took
+const part = !on_demand && trigger && trigger.pulse_part && typeof trigger.pulse_part === 'object' ? trigger.pulse_part : null;
+const partNo = part ? Math.max(2, Number(part.part) || 2) : 1;
+const after = part ? String(part.after || '') : '';
 if (!sites.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the daily AI pulse is off for every site (or AI visibility is off)' : 'no sites yet') } }];
 const promptRows = rowsOf('Load AI Prompts'), visRows = rowsOf('Load AI Visibility'), daily = rowsOf('Load AI Daily'), cache = rowsOf('Load Cache (AI)');
 const cycleRows = rowsOf('Load Cycles');   // 2026-10-19: each website's cycle weekday and time zone
@@ -727,13 +737,20 @@ const cycleDay = [];                       // the websites skipped this morning 
 // the skip is the SCHEDULE's rule: a morning the daily cron (or the catch-up replaying it) started. A start by hand - on demand for one site,
 // or a test over every site - asks what it was asked to, whatever the day.
 let __fired = false; try { const __d = $('Daily Schedule').first(); __fired = !!(__d && __d.json && Object.keys(__d.json).length); } catch (e) { __fired = false; }
-const scheduledMorning = !on_demand && (__fired || String(trigger.trigger || '') === 'catchup');
-const now = new Date(); const iso = now.toISOString(); const today = iso.slice(0, 10);
+const scheduledMorning = !on_demand && (__fired || String(trigger.trigger || '') === 'catchup' || !!(part && part.scheduled));
+const now = new Date(); const iso = now.toISOString();
+const today = part && /^\d{4}-\d{2}-\d{2}$/.test(String(part.date || '')) ? String(part.date) : iso.slice(0, 10);   // a later part is the same morning
 const parse = (t, d) => { try { const v = JSON.parse(t || ''); return v == null ? d : v; } catch (e) { return d; } };
 const isoOf = (code) => { const c = Object.values(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(x => Number(x.code) === Number(code)); return c ? String(c.iso || '').toUpperCase() : ''; };
 const codeOfIso = (iso) => { const c = Object.values(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(x => String(x.iso || '').toUpperCase() === String(iso || '').toUpperCase()); return c ? Number(c.code) : AIP.locationOf(iso); };   // G6: a market outside COUNTRIES keeps its own country
 const out = [];
-for (const s of sites.slice(0, CONFIG.max_sites_per_run)) {
+let asked = 0, lastTaken = after, next = null, considered = 0;
+const todo = sites.filter(s => !after || String(s.site_id).localeCompare(after) > 0);
+for (const s of todo) {
+  // this execution is full: the rest of the websites go to the next part (none is ever dropped)
+  if (out.length >= CONFIG.max_sites_per_run) { next = lastTaken; break; }
+  considered++;
+  const __prevTaken = lastTaken; lastTaken = String(s.site_id);   // decided here (served or skipped with its reason)
   // 2026-10-19: the website's own day. Monday (1) for a website with no cycle row, as when the cron skipped Monday for everyone.
   const tz = ST.tzOf(cycleRows, s); const cw0 = ST.cycleWeekday(cycleRows, s); const cw = cw0 == null ? 1 : cw0;
   const localToday = ST.dayKey(now, tz);
@@ -772,6 +789,10 @@ for (const s of sites.slice(0, CONFIG.max_sites_per_run)) {
     note: pw.per_week >= 6 ? 'all ' + panel.length + ' questions, as every morning' : prompts.length + ' of the ' + panel.length + ' questions this morning (a rotating sample: every question ' + pw.per_week + ' morning' + (pw.per_week === 1 ? '' : 's') + ' a week, all ' + sm.strata + ' topic x buyer groups every morning)' };
   const costModel = AIP.cost({ panel: panel.length + 1, engines: s.settings.engines, pulse: true, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week, cluster_size: medianCluster });
   const pulse_est = +(prompts.length * engines.reduce((t, e) => t + (AIP.PRICE[e] || 0), 0)).toFixed(4);
+  // F-ENG: the per-execution request budget - a website that would take this execution past one morning's limit starts the next part
+  const req = prompts.length * engines.length;
+  if (out.length && asked + req > AIP.LIMITS.pulse_max_requests) { lastTaken = __prevTaken; next = lastTaken; considered--; break; }
+  asked += req;
   const label = s.domain.split('.')[0];
   const brand_names = [...new Set([s.domain, ...(s.settings.brand_names || []), ...(label.length >= 5 ? [label] : [])].map(x => String(x).trim()).filter(x => x.length >= 3))];
   const prev = visRows.filter(v => v.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
@@ -798,9 +819,14 @@ for (const s of sites.slice(0, CONFIG.max_sites_per_run)) {
     est_dfs_usd: pulse_est, est_ai_usd: 0,
     // B-G1: what the gate refused, with its reason, so the pulse mail names it instead of printing a shorter panel (INVARIANTS rule 1)
     set_aside, set_aside_note: FITR.line(set_aside, 'asked of the AI engines or scored against'),
-    run_id: 'pulse_' + today.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso } });
+    run_id: 'pulse_' + today.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso, pulse_part_no: partNo } });
 }
+// the next part of this morning: only when a website is left, and never past max_parts (a chain that long is a defect: it alerts by failing)
+const pulse_next = next != null && !on_demand ? { trigger: 'pulse_part', parent_run_id: String($execution.id), pulse_part: { date: today, after: next, part: partNo + 1, scheduled: scheduledMorning } } : null;
+if (pulse_next && partNo >= CONFIG.max_parts) throw new Error('AI Pulse: ' + partNo + ' parts this morning and websites are still left after ' + next + ' - the chain is stopped; check the pulse plan');
+const partInfo = { part: partNo, after_site: after, websites: sites.length, considered, served: out.length, requests: asked, next_after: pulse_next ? next : '' };
+if (out.length) { out[0].json.pulse_next = pulse_next; out[0].json.pulse_part = partInfo; }
 if (out.length && cycleDay.length) out[0].json.cycle_day_skipped = cycleDay;
-return out.length ? out : [{ json: { nothing_to_do: true, cycle_day_skipped: cycleDay, reason: cycleDay.length && cycleDay.length === sites.slice(0, CONFIG.max_sites_per_run).length
+return out.length ? out : [{ json: { nothing_to_do: true, pulse_next: null, pulse_part: partInfo, cycle_day_skipped: cycleDay, reason: part && !todo.length ? 'no website is left after ' + after + ' this morning (part ' + partNo + ')' : cycleDay.length && cycleDay.length === considered
   ? 'every website with the pulse on has its weekly cycle today (' + cycleDay.map(x => x.domain).join(', ') + '): their weekly runs ask the same engines'
   : 'no site has a question panel yet (the weekly AI visibility run writes it)' + (cycleDay.length ? '; skipped for their cycle day: ' + cycleDay.map(x => x.domain).join(', ') : '') } }];

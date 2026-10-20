@@ -285,7 +285,33 @@ const CU = (() => {
       last_result: 'not listening: the re-activation failed (' + err + ') - attempt ' + failures,
       alarm: failures >= cfg.alarm_after && (failures - cfg.alarm_after) % cfg.alarm_every === 0 };
   };
-  return { plan, lastDue, nextDue, parse, zonedToUtc, offset, stalePlan, lateRun, wall, dur, watchdog, watchdogResult, DEFAULTS, DEAD, WD_DEFAULTS, CYCLE_LATE_MIN };
+  // ---- F-ENG (2026-10-20): the Cycle Dispatcher's watchdog. Every website's week is started by one workflow sweeping every 5 minutes; when it is
+  // not published (a deploy imported it and left it inactive) or has stopped sweeping, no website's cycle runs and nothing else says so.
+  // Its own record is the evidence: seo_cache `cycle:last` is written at the end of every real sweep (plan_only included). Alarm when the
+  // workflow is inactive, or that record is older than `stale_minutes` (no record: older than that since the workflow was last updated),
+  // rate-limited to one alarm every `alarm_every_hours` while it lasts; nothing on the door n8n has just started through (its own sweep
+  // comes 45 s later) or in a test. o: { wf: {ok, active, updatedAt, error}, last: {updated_at} | null, state, now, entry, test }
+  const CW_DEFAULTS = { stale_minutes: 20, alarm_every_hours: 6 };
+  const cycleWatchdog = (o) => {
+    const c = o || {}, cfg = { ...CW_DEFAULTS, ...(c.config || {}) }, now = ms(c.now) || Date.now(), st = parseValue(c.state || {}), wf = c.wf || {};
+    const lastAt = ms(c.last && c.last.updated_at), age = lastAt ? (now - lastAt) / MIN : null;
+    const since = wf.ok ? ms(wf.updatedAt) : 0;
+    const problems = [];
+    if (wf.ok && wf.active === false) problems.push('the Cycle Dispatcher (SEOagentCycleDsp) is not active: no website\'s cycle is started (publish it - a deploy imports it inactive; deploy_manifest.json publishes it)');
+    if (lastAt && age > cfg.stale_minutes) problems.push('its last sweep (seo_cache cycle:last) was ' + dur(age) + ' ago, at ' + iso(lastAt) + ' (it sweeps every 5 minutes)');
+    else if (!lastAt && (!wf.ok || wf.active !== false) && since && (now - since) / MIN > cfg.stale_minutes) problems.push('it has written no sweep record (seo_cache cycle:last) in the ' + dur((now - since) / MIN) + ' since it was last updated');
+    const base = { checked_at: iso(now), last_sweep_at: lastAt ? iso(lastAt) : '', active: wf.ok ? wf.active !== false : null, read: wf.ok ? '' : (S(wf.error) || 'no answer') };
+    if (c.test) return { ...base, verdict: 'test', alarm: false, reason: 'a test run of the catch-up does not judge the dispatcher', state: st };
+    if (!problems.length) return { ...base, verdict: wf.ok ? 'sweeping' : 'blind', alarm: false, problems: [], reason: wf.ok ? 'active, last sweep ' + (lastAt ? dur(age) + ' ago' : 'none yet (updated ' + (since ? iso(since) : '?') + ')')
+      : 'the dispatcher workflow could not be read (' + base.read + '); its last sweep was ' + (lastAt ? dur(age) + ' ago' : 'never recorded'), state: { ...st, down_since: '', last_alarm_at: '' } };
+    const down = ms(st.down_since) || now;
+    if (c.entry === 'init') return { ...base, verdict: 'starting', alarm: false, problems, reason: 'n8n has just started: the dispatcher\'s own Instance Started sweep comes next, so this is judged at the next catch-up sweep', state: st };
+    const lastAlarm = ms(st.last_alarm_at), due = !lastAlarm || now - lastAlarm >= cfg.alarm_every_hours * H;
+    return { ...base, verdict: 'down', alarm: due, problems, down_since: iso(down),
+      reason: problems.join('; ') + (due ? '' : ' (alerted at ' + iso(lastAlarm) + '; again after ' + cfg.alarm_every_hours + ' h)'),
+      state: { ...st, down_since: iso(down), last_alarm_at: due ? iso(now) : S(st.last_alarm_at) } };
+  };
+  return { plan, lastDue, nextDue, parse, zonedToUtc, offset, stalePlan, lateRun, wall, dur, watchdog, watchdogResult, cycleWatchdog, DEFAULTS, DEAD, WD_DEFAULTS, CW_DEFAULTS, CYCLE_LATE_MIN };
 })();
 // ---- the per-website 7-day cycle (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4 / §7 / §14; build_cycle.py, build section 140) ----
 // Every website gets its own week: cycle 0 starts the moment its tracking does, and every later cycle at 06:00 in the website's own time
@@ -340,13 +366,18 @@ const CYC = (() => {
     refusal_hours: 24,          // a job refused for capacity is retried without spending an attempt, for at most this long
     confirm_minutes: 10,        // a job recorded `starting` with no run of its workflow this long after was never started
     stale_hours: 2,             // the run guard's rule (RG.STALE_HOURS): a reservation older than this never settles - it crashed
+    exec_page: 250,             // n8n's public API page maximum (MAX_ITEMS_PER_PAGE, 2.41.4): one read of a 10-minute window of a workflow's runs
+    max_exec_reads: 60,         // reads of n8n's executions one sweep may make (a window per job start, the running runs, a run by id)
+    init_quiet_minutes: 2,      // the Instance Started door stands down when a sweep finished this recently (two sweeps never plan from one snapshot)
     retention_days: 120,        // seo_cycle_jobs rows older than this are deleted
     max_open: 3,                // the run guard's limit (RG.MAX_OPEN): the dispatcher never starts into a refusal it can see
     engine_tz: 'America/New_York',
   };
   const TERMINAL = new Set(['done', 'skipped', 'gave_up']);
   const LIVE = new Set(['starting', 'running']);
-  const DEAD = new Set(['crashed', 'canceled', 'cancelled']);
+  // the executions n8n has stopped for good. `error` is one of them (F-ENG 2026-10-20): an execution that ended in an error never settles its
+  // ledger row, so a reservation it left would hold a start slot (and refuse the retry as its own twin) for the 2 hours of the stale rule
+  const DEAD = new Set(['crashed', 'canceled', 'cancelled', 'error']);
   const CAPACITY = new Set(['same_mode', 'too_many_open', 'heavy_busy']);
   // ---- time: local dates in a website's zone, with the catch-up kit's Intl rule ----
   const validTz = (tz) => { if (!S(tz)) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: S(tz) }).format(0); return true; } catch (e) { return false; } };
@@ -512,8 +543,13 @@ const CYC = (() => {
   const isStale = (r, now, h) => { const st = S(r && r.status); if (st === 'stale') return true; const t = ms(r && r.created_at); return st === 'reserved' && t > 0 && t < now - h * H; };
   const shortBasis = (r) => S(r && r.cost_basis).replace(/\s+/g, ' ').slice(0, 160);
   // ---- the outcome of a job the dispatcher started, from the ledger first and n8n's executions second ----
-  // a: { row, ledger, runs: {workflow_id: {ok, full, oldest, data: [{id, mode, status, startedAt}]}}, claimed: Set of run ids other keys own, now, cfg }
-  // -> { state: done | running | starting | refused | failed | blind, reason, run_id, finished_at, code }
+  // a: { row, ledger, runs: {workflow_id: {ok, data: [{id, mode, status, startedAt, stoppedAt}], byId: {id: execution}, incomplete: [{from, to, oldest}],
+  //      (legacy: full, oldest)}}, claimed: Set of run ids other keys own, now, cfg }
+  // -> { state: done | running | starting | refused | failed | blind, reason, run_id, finished_at, code, release?, unsettled? }
+  // F-ENG (2026-10-20, production-safety review): what n8n says about the execution behind a RESERVED row decides first. An execution that
+  // ended in `error` (or was crashed / canceled) is failed at once and its reservation released, so it never holds a start slot for the 2 h
+  // of the stale rule; one that ended in `success` with its row still reserved finished - its settle failed - so it is done (never paid for
+  // twice) and named as unsettled money for the ops alert. A run that cannot be confirmed is `blind` for at most `stale_hours`, then failed.
   const outcome = (a) => {
     const c = a || {}, row = c.row || {}, cfg = c.cfg || DEFAULTS, now = c.now;
     const lk = S(row.ledger_key) || ledgerKey(row.cycle_key, row.job), T = ms(row.started_at) || ms(row.updated_at);
@@ -521,7 +557,8 @@ const CYC = (() => {
     const rows = (c.ledger || []).filter(r => r && S(r.key) === lk && after(r)).sort((x, y) => ms(x.created_at) - ms(y.created_at));
     const parts = (c.ledger || []).filter(r => r && S(r.key).startsWith(lk + ':part') && after(r)).sort((x, y) => ms(x.created_at) - ms(y.created_at));
     const run = (c.runs || {})[S(row.workflow_id)] || {};
-    const execOf = (id) => run.ok ? (run.data || []).find(x => S(x.id) === S(id)) : null;
+    // an execution by id: the direct read (GET /executions/<id> lists a running one too), else the windowed list
+    const execOf = (id) => { if (!S(id)) return null; const b = run.byId && run.byId[S(id)]; if (b) return b; return run.ok ? (run.data || []).find(x => S(x.id) === S(id)) || null : null; };
     const done = rows.filter(r => S(r.status) === 'done');
     // AI Visibility may settle the final key at $0 when it hands over to a chain that resumes, and that chain settles it again later: a
     // `:part<n>` row NEWER than the last settled final row means the job is still going (a key settling twice is fine: done stays done)
@@ -530,10 +567,16 @@ const CYC = (() => {
     if (resumed.length) { parts.splice(0, parts.length, ...resumed); rows.splice(0, rows.length); }
     else if (done.length) { const d = lastDone;
       return { state: 'done', run_id: S(d.run_id), finished_at: S(d.settled_at) || iso(now), reason: 'finished: its ledger row ' + lk + ' settled' + (S(d.settled_at) ? ' at ' + S(d.settled_at) : '') + ' (execution ' + S(d.run_id) + ')' + (S(d.dfs_source) === 'handoff' ? ', handed off' : '') }; }
-    const live = rows.filter(r => S(r.status) === 'reserved' && !isStale(r, now, cfg.stale_hours));
-    if (live.length) { const l = live[live.length - 1], x = execOf(l.run_id);
-      if (x && DEAD.has(S(x.status))) return { state: 'failed', run_id: S(l.run_id), release: S(l.run_id), reason: 'its run (execution ' + S(l.run_id) + ') was ' + S(x.status) + ' by n8n before it finished (a restart, a deploy or a time-out)' };
-      return { state: 'running', run_id: S(l.run_id), reason: 'running (execution ' + S(l.run_id) + ', ledger row reserved at ' + S(l.created_at) + ')' }; }
+    const reserved = rows.filter(r => S(r.status) === 'reserved');
+    if (reserved.length) { const l = reserved[reserved.length - 1], id = S(l.run_id), x = execOf(id), xs = x ? S(x.status) : '';
+      if (x && DEAD.has(xs)) return { state: 'failed', run_id: id, release: id, reason: xs === 'error'
+        ? 'its run (execution ' + id + ') ended with an error before it settled its ledger row ' + lk + ' (n8n status "error")'
+        : 'its run (execution ' + id + ') was ' + xs + ' by n8n before it finished (a restart, a deploy or a time-out)' };
+      if (x && xs === 'success') return { state: 'done', run_id: id, release: id, finished_at: S(x.stoppedAt) || iso(now),
+        unsettled: { run_id: id, ledger_key: lk, reserved_at: S(l.created_at), stopped_at: S(x.stoppedAt), mode: S(l.mode), domain: S(l.domain) },
+        reason: 'the run finished (execution ' + id + ' ended "success") but its ledger row ' + lk + ' was not settled: its money is not on record (ops alert raised); the job is not run again' };
+      if (!isStale(l, now, cfg.stale_hours)) return { state: 'running', run_id: id, reason: 'running (execution ' + id + ', ledger row reserved at ' + S(l.created_at) + (xs ? ', n8n says "' + xs + '"' : '') + ')' };
+    }
     if (rows.length) {
       const last = rows[rows.length - 1], st = S(last.status);
       if (st === 'refused') { const code = refusalOf(last);
@@ -545,28 +588,97 @@ const CYC = (() => {
     if (parts.length) { const p = parts[parts.length - 1], pt = S(p.status);
       if (pt === 'refused') { const code = refusalOf(p); return { state: 'refused', code, run_id: S(p.run_id), refused_at: S(p.created_at), reason: 'a later part (' + S(p.key).slice(lk.length + 1) + ') was refused by its run guard (' + code + ')' }; }
       const x = execOf(p.run_id);
-      if (pt === 'reserved' && x && DEAD.has(S(x.status))) return { state: 'failed', run_id: S(p.run_id), release: S(p.run_id), reason: 'part ' + S(p.key).slice(lk.length + 1) + ' (execution ' + S(p.run_id) + ') was ' + S(x.status) + ' by n8n' };
+      if (pt === 'reserved' && x && DEAD.has(S(x.status))) return { state: 'failed', run_id: S(p.run_id), release: S(p.run_id), reason: 'part ' + S(p.key).slice(lk.length + 1) + ' (execution ' + S(p.run_id) + ') was ' + (S(x.status) === 'error' ? 'stopped by an error' : S(x.status) + ' by n8n') };
       if (isStale(p, now, cfg.stale_hours) || (pt === 'done' && now - (ms(p.settled_at) || ms(p.created_at)) > cfg.stale_hours * H))
         return { state: 'failed', run_id: S(p.run_id), reason: 'the split run stopped after ' + S(p.key).slice(lk.length + 1) + ' (no later part and no final ledger row for ' + cfg.stale_hours + ' h)' };
       return { state: 'running', run_id: S(p.run_id), reason: 'running in parts: ' + S(p.key).slice(lk.length + 1) + ' is ' + (pt === 'done' ? 'settled, the next part is on its way' : 'in flight') + ' (execution ' + S(p.run_id) + ')' };
     }
     // no ledger row yet: what n8n says about the workflow's runs after our start
-    const age = now - T;
+    const age = now - T, overdue = age > cfg.stale_hours * H;
     if (!run.ok) {
-      if (age > cfg.stale_hours * H) return { state: 'failed', reason: 'no ledger row under ' + lk + ' ' + Math.round(age / MIN) + ' min after the start, and n8n\'s executions could not be read (' + (S(run.error) || 'no answer') + ')' };
-      return { state: 'blind', reason: 'no ledger row yet and n8n\'s executions could not be read (' + (S(run.error) || 'no answer') + '); looked at again next sweep' };
+      if (overdue) return { state: 'failed', reason: 'no ledger row under ' + lk + ' ' + Math.round(age / MIN) + ' min after the start, and n8n\'s executions could not be read (' + (S(run.error) || 'no answer') + ')' };
+      return { state: 'blind', reason: 'no ledger row yet and n8n\'s executions could not be read (' + (S(run.error) || 'no answer') + '); looked at again next sweep (at most ' + cfg.stale_hours + ' h)' };
     }
     const mine = (run.data || []).filter(x => S(x.mode) !== 'trigger' && ms(x.startedAt) >= T - 5000 && ms(x.startedAt) <= T + cfg.confirm_minutes * MIN && !(c.claimed && c.claimed.has(S(x.id))))
       .sort((x, y) => ms(x.startedAt) - ms(y.startedAt));
-    const alive = mine.filter(x => !DEAD.has(S(x.status)) && !['success', 'error'].includes(S(x.status)));
-    if (alive.length) return { state: age > cfg.stale_hours * H ? 'failed' : 'running', run_id: S(alive[0].id), reason: age > cfg.stale_hours * H
-      ? 'its run (execution ' + S(alive[0].id) + ') has reserved no ledger row in ' + Math.round(age / MIN) + ' min' : 'started (execution ' + S(alive[0].id) + '), no ledger row yet' };
+    const alive = mine.filter(x => !DEAD.has(S(x.status)) && S(x.status) !== 'success');
+    if (alive.length) return { state: overdue ? 'failed' : 'running', run_id: S(alive[0].id), reason: overdue
+      ? 'its run (execution ' + S(alive[0].id) + ') has reserved no ledger row in ' + Math.round(age / MIN) + ' min' : 'started (execution ' + S(alive[0].id) + ', n8n says "' + S(alive[0].status) + '"), no ledger row yet' };
     if (mine.length) { const x = mine[0];
       if (S(x.status) === 'success') return { state: 'done', run_id: S(x.id), finished_at: S(x.stoppedAt) || iso(now), reason: 'finished (execution ' + S(x.id) + ' success) but left no ledger row under ' + lk + ' - its plan node does not key cycle runs yet' };
       return { state: 'failed', run_id: S(x.id), reason: 'its run (execution ' + S(x.id) + ') ended "' + S(x.status) + '" before it reserved its ledger row' }; }
-    if (run.full && ms(run.oldest) > T) return { state: 'blind', reason: 'more runs of the workflow since the start than one page of n8n\'s executions holds; looked at again next sweep' };
+    // the reads could not cover the start: a full page (more runs than one read holds), or a read this sweep did not make. Not knowing is
+    // `blind` - never "nothing started" - and blind is bounded: after stale_hours the job is failed (and retried, or given up)
+    const cut = (run.full && ms(run.oldest) > T) || (run.incomplete || []).some(w => (!S(w.from) || T >= ms(w.from) - 5000) && (!S(w.to) || T <= ms(w.to) + 5000) && (!ms(w.oldest) || ms(w.oldest) > T));
+    if (cut) return overdue
+      ? { state: 'failed', reason: 'no ledger row under ' + lk + ' in ' + Math.round(age / MIN) + ' min, and n8n\'s executions around the start could not be read in full (more runs than one page holds) - not confirmed in ' + cfg.stale_hours + ' h, so it is treated as failed' }
+      : { state: 'blind', reason: 'more runs of the workflow around the start than one read of n8n\'s executions holds; looked at again next sweep (at most ' + cfg.stale_hours + ' h)' };
     if (age > cfg.confirm_minutes * MIN) return { state: 'failed', reason: 'no run of its workflow appeared in the ' + cfg.confirm_minutes + ' min after it was recorded (the sweep stopped between the record and the start, or n8n refused the start)' };
     return { state: 'starting', reason: 'recorded at ' + iso(T) + ', waiting for its run to appear' };
+  };
+  // ---- n8n's executions the plan needs, as reads of the public API (n8n 2.41.4, dist/public-api/v1/controllers/executions.public.controller.js):
+  //  * GET /executions lists FINISHED executions only unless `status=running` (`excludeRunning: query.status !== 'running'`), newest id first,
+  //    at most 250 a page (`limit`), with a `nextCursor` when more match; `startedAfter` / `startedBefore` filter startedAt, both inclusive.
+  //  * GET /executions/<id> returns one execution whatever its status (a running one too), 404 when it is gone (pruned).
+  // So per workflow with a job starting or running: its RUNNING executions (the slow-to-reserve run the default list never shows), each
+  // reservation's own execution by id, and a 10-minute window of finished runs after each start. Bounded: at most max_exec_reads a sweep;
+  // a read not made is reported as `unread`, and the plan treats the start it covered as not confirmable (blind, bounded) - never as "none".
+  // o: { jobs, ledger, known: [workflow ids], api, cfg } -> { reads: [{workflow_id, kind, url, from?, to?, run_id?}], unread: [...] }
+  const execReads = (o) => {
+    const c = o || {}, cfg = { ...DEFAULTS, ...(c.cfg || {}) }, known = new Set((c.known || []).map(S)), api = S(c.api).replace(/\/+$/, '');
+    const page = Math.min(250, Math.max(1, Number(cfg.exec_page) || 250));
+    const open = (c.jobs || []).filter(r => r && typeof r === 'object' && !r.error && S(r.key) && S(r.job) !== 'cycle' && LIVE.has(S(r.status)) && known.has(S(r.workflow_id)));
+    const ledger = (c.ledger || []).filter(r => r && typeof r === 'object' && !r.error);
+    const all = [], seen = new Set();
+    const add = (x) => { if (seen.has(x.url)) return; seen.add(x.url); all.push(x); };
+    const q = (v) => encodeURIComponent(v);
+    for (const wf of [...new Set(open.map(r => S(r.workflow_id)))].sort()) {
+      const mine = open.filter(r => S(r.workflow_id) === wf);
+      const Ts = mine.map(r => ms(r.started_at) || ms(r.updated_at)).filter(Boolean).sort((x, y) => x - y);
+      const from0 = Ts.length ? iso(Ts[0] - 5000) : '';
+      add({ workflow_id: wf, kind: 'running', from: from0, to: '', url: api + '/executions?workflowId=' + q(wf) + '&status=running' + (from0 ? '&startedAfter=' + q(from0) : '') + '&limit=' + page });
+      for (const r of mine) {
+        const lk = S(r.ledger_key) || ledgerKey(r.cycle_key, r.job), T = ms(r.started_at) || ms(r.updated_at);
+        for (const l of ledger) if ((S(l.key) === lk || S(l.key).startsWith(lk + ':part')) && S(l.status) === 'reserved' && /^\d+$/.test(S(l.run_id)) && ms(l.created_at) >= T - 5000)
+          add({ workflow_id: wf, kind: 'id', run_id: S(l.run_id), url: api + '/executions/' + q(S(l.run_id)) });
+      }
+      // the windows of finished runs, overlapping ones merged
+      const wins = Ts.map(t => [t - 5000, t + cfg.confirm_minutes * MIN + MIN]);
+      const merged = []; for (const w of wins) { const m = merged[merged.length - 1]; if (m && w[0] <= m[1]) m[1] = Math.max(m[1], w[1]); else merged.push([...w]); }
+      for (const [a, b] of merged) add({ workflow_id: wf, kind: 'window', from: iso(a), to: iso(b),
+        url: api + '/executions?workflowId=' + q(wf) + '&startedAfter=' + q(iso(a)) + '&startedBefore=' + q(iso(b)) + '&limit=' + page });
+    }
+    const cap = Math.max(1, Number(cfg.max_exec_reads) || 60);
+    return { reads: all.slice(0, cap), unread: all.slice(cap) };
+  };
+  // what the reads answered, per workflow, in the shape outcome() reads. `responses[i]` is the HTTP node's full response to reads[i]
+  // ({ statusCode, body }); a list answer is { data: [...], nextCursor }, a by-id answer the execution itself.
+  const runsFrom = (reads, responses, unread) => {
+    const code = (r) => Number(r && r.statusCode) || 0;
+    const bodyOf = (r) => { const b = r && (r.body ?? r.data); if (b && typeof b === 'object') return b; try { return JSON.parse(S(b) || '{}'); } catch (e) { return {}; } };
+    const failed = (r) => code(r) ? 'HTTP ' + code(r) : S((r && r.error && (r.error.message || r.error)) || 'no answer').slice(0, 160);
+    const ex = (d) => ({ id: S(d.id), mode: S(d.mode), status: S(d.status), startedAt: S(d.startedAt), stoppedAt: S(d.stoppedAt) });
+    const runs = {};
+    const of = (wf) => runs[wf] || (runs[wf] = { ok: true, data: [], byId: {}, incomplete: [], errors: [] });
+    (reads || []).forEach((t, i) => {
+      if (!t || !S(t.workflow_id)) return;
+      const R = of(S(t.workflow_id)), x = (responses || [])[i] || {}, b = bodyOf(x);
+      if (t.kind === 'id') {
+        if (code(x) === 200 && S(b.id)) R.byId[S(b.id)] = ex(b);
+        else if (code(x) !== 404) R.errors.push('execution ' + S(t.run_id) + ': ' + failed(x));   // 404 = pruned: no evidence, not an error
+        return;
+      }
+      if (code(x) === 200 && Array.isArray(b.data)) {
+        const rows = b.data.map(ex);
+        for (const r of rows) if (!R.data.some(y => y.id === r.id)) R.data.push(r);
+        if (b.nextCursor) R.incomplete.push({ kind: S(t.kind), from: S(t.from), to: S(t.to), oldest: rows.map(r => r.startedAt).filter(Boolean).sort()[0] || '' });
+      } else { R.ok = false; R.error = failed(x); R.errors.push(failed(x) + (S(t.kind) ? ' (' + S(t.kind) + ' read)' : '')); }
+    });
+    for (const t of (unread || [])) if (t && S(t.workflow_id)) {
+      const R = of(S(t.workflow_id));
+      if (t.kind !== 'id') R.incomplete.push({ kind: S(t.kind), from: t.kind === 'running' ? '' : S(t.from), to: t.kind === 'running' ? '' : S(t.to), oldest: '', unread: true });
+    }
+    return runs;
   };
   // the trailing run of capacity refusals of one ledger key: how long the job has been refused without a break
   const refusedSince = (ledger, lk) => {
@@ -592,6 +704,13 @@ const CYC = (() => {
     const c = o || {}, cfg = { ...DEFAULTS, ...(c.config || {}) }, now = ms(c.now) || Date.now(), nowIso = iso(now);
     const engineTz = validTz(c.engine_tz) ? S(c.engine_tz) : DEFAULTS.engine_tz;
     const dry = c.dry_run === true, planOnly = dry || S(c.mode) !== 'start';
+    // F-ENG (2026-10-20): a table that could not be read is never read as an empty one. An error item from ANY load - the schedule, the job
+    // rows, the ledger, the websites, or a website's own settings (monitors, cadence, ladders, ladder settings) - refuses the whole sweep:
+    // read as empty, a missing monitors or cadence row would switch jobs off and skip paid work with a false reason ("switched off").
+    const BAD = [['cycles', 'seo_cycles'], ['jobs', 'seo_cycle_jobs'], ['ledger', 'seo_run_ledger'], ['sites', 'seo_sites'], ['monitors', 'seo_monitors'],
+      ['cadence', 'seo_cadence'], ['ladders', 'the keyword ladders (seo_ladders)'], ['ladder_settings', 'seo_ladder_settings']];
+    for (const [k, what] of BAD) { const bad = (Array.isArray(c[k]) ? c[k] : []).find(r => r && typeof r === 'object' && r.error);
+      if (bad) throw new Error('CYC.plan: ' + what + ' could not be read (' + S(bad.error && (bad.error.message || bad.error)).slice(0, 200) + '): nothing is planned from a partial picture, so no job is started or skipped this sweep'); }
     const clean = (a) => (a || []).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length);
     const sites = clean(c.sites).filter(r => S(r.site_id) && S(r.domain)), cycles = clean(c.cycles).filter(r => S(r.site_id));
     const ledger = clean(c.ledger).filter(r => S(r.run_id) || S(r.key)), runs = c.runs || {};
@@ -606,7 +725,7 @@ const CYC = (() => {
     for (const s of clean(c.ladder_settings)) if (S(s.ladder_id) && S(s.ladder_id) !== '_site' && !/^(deleted|archived)$/i.test(S(s.status))) ladderDomains.add(normD(s.domain));
     // run ids another job's ledger row owns: an execution that belongs to someone else is never taken for ours
     const claimedBy = new Map(); for (const r of ledger) if (S(r.run_id) && S(r.key)) claimedBy.set(S(r.run_id), S(r.key));
-    const rows = [], sitesOut = [], cycleRows = [], cands = [], gaveUp = [], adopted = [];
+    const rows = [], sitesOut = [], cycleRows = [], cands = [], gaveUp = [], adopted = [], unsettled = [];
     const touch = new Set();   // job keys whose row this plan changed
     const evOf = new Map();    // job key -> what the evidence said this sweep
     // a reservation whose execution n8n reports crashed / canceled never settles: it would hold the run guard (and refuse the retry as its
@@ -641,6 +760,8 @@ const CYC = (() => {
       // starting / blind: unchanged, looked at again next sweep
       evOf.set(r.key, ev);
       if (ev.release) release.set(S(ev.release), { run_id: S(ev.release), key: r.key, reason: ev.reason });
+      // a run that finished with its ledger row unsettled: its money is not on record - named once, the sweep its job turns done (the ops alert)
+      if (ev.unsettled) unsettled.push({ key: r.key, site_id: S(r.site_id), job: S(r.job), domain: normD((siteOf.get(S(r.site_id)) || {}).domain) || normD(ev.unsettled.domain), ...ev.unsettled });
     }
     // a refused job waiting for room keeps its bound: 24 h of refusals in a row, then it gives up
     for (const r of [...byKey.values()]) {
@@ -679,8 +800,11 @@ const CYC = (() => {
       if (!rd.ok) { say('blind', 'the cycle row of ' + (out.domain || siteId) + ' cannot be read: ' + rd.reason + ', so nothing was started'); continue; }
       const domain = normD((site && site.domain) || raw.domain); out.domain = domain;
       const next = { ...cycleRowOf(raw), domain, tz: rd.tz, cycle_weekday: rd.weekday, local_time: rd.local_time, monthly_day: rd.monthly_day };
+      // F-ENG (2026-10-20): a row that exists is UPDATED with only the fields this sweep changed (`changed`), so an app PATCH made mid-sweep
+      // (Settings -> weekday) is never overwritten from this sweep's snapshot; only a new (adopted) row is written whole (`created`)
       const finish = () => { const before = raw.__new ? null : cycleRowOf(raw);
-        if (!before || CYCLE_FIELDS.some(f => S(before[f]) !== S(next[f])) || normD(before.domain) !== domain) cycleRows.push(cycleRowOf({ ...next, updated_at: nowIso })); };
+        const changed = before ? [...CYCLE_FIELDS.filter(f => S(before[f]) !== S(next[f])), ...(normD(before.domain) !== domain ? ['domain'] : [])] : [];
+        if (!before || changed.length) cycleRows.push({ ...cycleRowOf({ ...next, updated_at: nowIso }), created: !before, changed: before ? changed : ['*'] }); };
       // no seo_sites row, but keyword ladders: a rank-tracking-only cycle (the monitors are off by definition: nobody set them up)
       const rankOnly = !site && ladderRowDomains.has(domain);
       out.rank_only = rankOnly;
@@ -822,33 +946,67 @@ const CYC = (() => {
       k.v.verdict = 'start'; busy.add(k.job.mode + '|' + k.domain);
       start.push({ k });
     }
-    const starts = start.map(({ k, __would }) => ({ would: !!__would, key: k.key, site_id: k.siteId, cycle_key: k.cycle_key, job: k.job.job, workflow_id: k.job.workflow_id,
+    // ---- 5. what to write: only rows that changed (a sweep every 5 minutes writes nothing on a quiet day) ----
+    const jobRows = [...touch].map(k => byKey.get(k)).filter(r => !orig.has(r.key) || !sameJob(r, orig.get(r.key))).map(r => jobRow(r));
+    // F-ENG (2026-10-20, the claim): what each job's row must still hold when its start is recorded - the row this sweep wrote, else the row
+    // it read (null: no row). *Cycle Record Row* reads the row again first and backs off when it changed (another sweep claimed it after
+    // this plan was made); the claim it then writes carries a token no other sweep can produce, read back after the save.
+    const written = new Map(jobRows.map(r => [r.key, r]));
+    const expectOf = (key) => { const r = written.get(key) || orig.get(key); return r ? { status: S(r.status), run_id: S(r.run_id), updated_at: S(r.updated_at) } : null; };
+    const starts = start.map(({ k, __would }) => ({ would: !!__would, key: k.key, expect: expectOf(k.key), site_id: k.siteId, cycle_key: k.cycle_key, job: k.job.job, workflow_id: k.job.workflow_id,
       attempts: k.attempt, ledger_key: k.ledger_key, monthly: !!k.monthly, due_at: iso(k.due), retry_of: k.prior ? S(k.prior.reason).slice(0, 300) : '',
       why: (k.prior ? (S(k.prior.status) === 'failed' ? 'attempt ' + k.attempt + ' (the last one failed)' : 'again after a capacity refusal (attempt ' + k.attempt + ')') : 'next in the cycle') + ' - ' + k.job.label + ' for ' + k.domain,
       payload: payload({ domain: k.domain, site_id: k.siteId, cycle_key: k.cycle_key, job: k.job.job, monthly: k.monthly, scheduled_for: k.scheduled_for, tz: k.tz }), plan_now: nowIso }));
     const realStarts = starts.filter(s => !s.would), wouldStarts = starts.filter(s => s.would);
-    // ---- 5. what to write: only rows that changed (a sweep every 5 minutes writes nothing on a quiet day) ----
-    const jobRows = [...touch].map(k => byKey.get(k)).filter(r => !orig.has(r.key) || !sameJob(r, orig.get(r.key))).map(r => jobRow(r));
     const counts = {}; for (const s of sitesOut) for (const j of s.jobs) counts[j.verdict] = (counts[j.verdict] || 0) + 1;
     const gave = [...new Set(gaveUp)].map(k => byKey.get(k)).filter(Boolean).map(r => ({ key: r.key, site_id: r.site_id, job: r.job, domain: (sitesOut.find(s => s.site_id === r.site_id) || {}).domain || '', reason: S(r.reason) }));
     return { now: nowIso, entry: S(c.entry) || 'sweep', mode: planOnly ? 'plan_only' : 'start', configured_mode: S(c.mode) === 'start' ? 'start' : 'plan_only', dry_run: dry, engine_tz: engineTz,
       sites: sitesOut, adopted, open_jobs: open.length, live_runs: live.length, room: take, max_inflight: cfg.max_inflight, max_open: cfg.max_open,
       cycle_rows: planOnly ? [] : cycleRows, job_rows: planOnly ? [] : jobRows, start: planOnly ? [] : realStarts.map(s => { const { would, ...x } = s; return x; }),
-      would: planOnly ? { cycle_rows: cycleRows, job_rows: jobRows, release: [...release.values()], start: wouldStarts.map(s => { const { would, ...x } = s; return x; }) } : null,
-      release: planOnly ? [] : [...release.values()], gave_up: planOnly ? [] : gave, retention: { before: iso(now - cfg.retention_days * DAY), days: cfg.retention_days, run: !planOnly },
+      would: planOnly ? { cycle_rows: cycleRows, job_rows: jobRows, release: [...release.values()], unsettled, start: wouldStarts.map(s => { const { would, ...x } = s; return x; }) } : null,
+      release: planOnly ? [] : [...release.values()], gave_up: planOnly ? [] : gave, unsettled: planOnly ? [] : unsettled, retention: { before: iso(now - cfg.retention_days * DAY), days: cfg.retention_days, run: !planOnly },
       counts, basis: sitesOut.length + ' website(s) read (' + adopted.length + ' adopted); ' + (planOnly ? wouldStarts.length + ' start(s) planned, none made (' + (dry ? 'dry run' : 'plan_only') + ')' : realStarts.length + ' start(s)')
         + ', ' + open.length + ' job(s) in flight, ' + live.length + ' run(s) holding the run guard' };
   };
 
-  // ===== the deploy guard's question (apply_env.py / deploy_engine.py ask the same one in Python: deploy_guard.py; build section 140
-  // and harness CY12 hold the two to the same cases). Busy = a dispatcher job is starting or running (and not stale), or a cycle or a
-  // preview of an active website is due in the next `minutes` (or became due in the last 10, so the sweep is about to start it).
+  // ---- the claim (F-ENG 2026-10-20): is the job's row still what this sweep planned from? `current` = the rows a read of that key returned
+  // just before the claim is written; `expect` = the plan's view ({status, run_id, updated_at}, or null for "no row yet"). Anything else
+  // means another sweep (an Instance Started door landing on a cron sweep, say) recorded the job after this plan was made: back off.
+  const claimFree = (expect, current) => {
+    const all = Array.isArray(current) ? current : [current];
+    const err = all.find(r => r && typeof r === 'object' && r.error);
+    if (err) return { ok: false, reason: 'the job row could not be read before the claim (' + S(err.error && (err.error.message || err.error)).slice(0, 160) + '), so nothing is started; the next sweep decides again' };
+    const cur = all.find(r => r && typeof r === 'object' && S(r.key)) || null;
+    const show = (r) => '"' + S(r.status) + '", claim ' + (S(r.run_id) || 'none') + ', written ' + (S(r.updated_at) || '?');
+    if (!expect) return cur ? { ok: false, reason: 'another dispatcher sweep recorded this job after this sweep planned (the row is now ' + show(cur) + '), so this one backs off' } : { ok: true, reason: '' };
+    if (!cur) return { ok: false, reason: 'the job row this sweep planned from is gone, so nothing is started; the next sweep decides again' };
+    if (S(cur.status) !== S(expect.status) || S(cur.run_id) !== S(expect.run_id) || S(cur.updated_at) !== S(expect.updated_at))
+      return { ok: false, reason: 'the job row changed after this sweep planned (now ' + show(cur) + ', planned from ' + show(expect) + '): another sweep claimed it, so this one backs off' };
+    return { ok: true, reason: '' };
+  };
+  // a claim nobody else can write: this execution, the moment and a random part (the read-back compares it exactly)
+  const claimToken = (execId, at, rnd) => 'dsp:' + S(execId) + ':' + Number(ms(at) || Date.now()).toString(36) + ':' + S(rnd || Math.random().toString(36).slice(2, 10));
+
+  // ===== the deploy guard's question (apply_env.py / deploy_engine.py ask it in Python: deploy_guard.py; n8n/deploy/release.mjs asks THIS
+  // function, read out of the generated dispatcher; build section 140 and harness CY12 hold the two to the same cases).
+  // F-ENG (2026-10-20, the rule made precise): a deploy restarts n8n or re-publishes the workflows, and that kills whatever is running.
+  //  * REFUSE while a job is STARTING - between the dispatcher's claim and the run's ledger row - or a cycle or "Coming up" preview of an
+  //    active website is due in the next `minutes` (15), or became due in the last 10 (the next sweep is about to start it). Those are the
+  //    moments a restart can leave a start nobody can confirm, or push a due start into a refusal.
+  //  * REPORT, never refuse, a job that is RUNNING: it is safe. A restart kills it, the dispatcher sees the dead run at its next sweep and
+  //    starts it again (one of its three attempts). Refusing for it would refuse almost always once many websites run.
+  // A `starting` row older than confirm_minutes + one sweep (15 min) is a start that never happened (the dispatcher fails it), and a
+  // `running` row older than the stale rule + confirm (2 h 10 min) a crashed run: both are ignored, and counted.
+  const DEPLOY = { window_minutes: 15, lookback_minutes: 10, starting_minutes: 15 };
   const deployWindow = (o) => {
-    const c = o || {}, now = ms(c.now) || Date.now(), win = (Number(c.minutes) > 0 ? Number(c.minutes) : 15) * MIN;
-    const staleMs = DEFAULTS.stale_hours * H + DEFAULTS.confirm_minutes * MIN, lookback = 10 * MIN;
+    const c = o || {}, now = ms(c.now) || Date.now(), win = (Number(c.minutes) > 0 ? Number(c.minutes) : DEPLOY.window_minutes) * MIN;
+    const staleRun = DEFAULTS.stale_hours * H + DEFAULTS.confirm_minutes * MIN, staleStart = DEPLOY.starting_minutes * MIN, lookback = DEPLOY.lookback_minutes * MIN;
     const open = (c.jobs || []).filter(r => r && S(r.job) !== 'cycle' && LIVE.has(S(r.status)));
-    const fresh = (r) => now - (ms(r.updated_at) || ms(r.started_at)) <= staleMs;
-    const inflight = open.filter(fresh).map(r => ({ key: S(r.key), job: S(r.job), status: S(r.status), since: S(r.updated_at) || S(r.started_at) }));
+    const age = (r) => { const t = ms(r.updated_at) || ms(r.started_at); return t ? now - t : Infinity; };
+    const fresh = (r) => age(r) <= (S(r.status) === 'starting' ? staleStart : staleRun);
+    const view = (r) => ({ key: S(r.key), job: S(r.job), status: S(r.status), since: S(r.updated_at) || S(r.started_at) });
+    const starting = open.filter(r => S(r.status) === 'starting' && fresh(r)).map(view).sort((a, b) => a.key.localeCompare(b.key));
+    const running = open.filter(r => S(r.status) === 'running' && fresh(r)).map(view).sort((a, b) => a.key.localeCompare(b.key));
     const ignored = open.filter(r => !fresh(r)).map(r => S(r.key));
     const due = [];
     for (const r of (c.cycles || [])) {
@@ -856,15 +1014,15 @@ const CYC = (() => {
       for (const [what, at] of [['cycle', ms(r.next_due_at)], ['preview', ms(r.next_preview_at)]])
         if (at && at >= now - lookback && at <= now + win) due.push({ site_id: S(r.site_id), domain: normD(r.domain), what, at: iso(at) });
     }
-    inflight.sort((a, b) => a.key.localeCompare(b.key)); due.sort((a, b) => a.at.localeCompare(b.at) || a.site_id.localeCompare(b.site_id));
-    const busy = inflight.length > 0 || due.length > 0;
-    const reason = busy ? [inflight.length ? inflight.length + ' dispatcher job(s) in flight (' + inflight.slice(0, 5).map(j => j.key + ' ' + j.status).join(', ') + ')' : '',
-      due.length ? due.length + ' cycle / preview start(s) due by ' + iso(now + win) + ' (' + due.slice(0, 5).map(d => d.domain + ' ' + d.what + ' ' + d.at).join(', ') + ')' : ''].filter(Boolean).join('; ')
-      : 'no dispatcher job in flight and nothing due in the next ' + Math.round(win / MIN) + ' min';
-    return { busy, inflight, due, ignored_stale: ignored, minutes: Math.round(win / MIN), reason };
+    due.sort((a, b) => a.at.localeCompare(b.at) || a.site_id.localeCompare(b.site_id));
+    const busy = starting.length > 0 || due.length > 0;
+    const why = [starting.length ? starting.length + ' dispatcher job(s) starting, between the claim and the run\'s ledger row (' + starting.slice(0, 5).map(j => j.key).join(', ') + ')' : '',
+      due.length ? due.length + ' cycle / preview start(s) due by ' + iso(now + win) + ' (' + due.slice(0, 5).map(d => d.domain + ' ' + d.what + ' ' + d.at).join(', ') + ')' : ''].filter(Boolean).join('; ');
+    const note = running.length ? running.length + ' job(s) running (' + running.slice(0, 5).map(j => j.key).join(', ') + '): not a reason to wait - a restart kills a running job, the dispatcher sees the dead run at its next sweep and starts it again (one of its three attempts)' : '';
+    const reason = busy ? why : 'nothing starting and nothing due in the next ' + Math.round(win / MIN) + ' min';
+    return { busy, starting, running, due, ignored_stale: ignored, minutes: Math.round(win / MIN), reason, note };
   };
-
-  return { plan, deployWindow, outcome, refusalOf, refusedSince, settingsOf, jobsFor, payload, newCycleRow, cycleRow, anchorOf, ANCHOR, siteIdOf, read, nextAfter, mostRecent, local, validTz, dueAt,
+  return { plan, deployWindow, DEPLOY, outcome, execReads, runsFrom, claimFree, claimToken, refusalOf, refusedSince, settingsOf, jobsFor, payload, newCycleRow, cycleRow, anchorOf, ANCHOR, siteIdOf, read, nextAfter, mostRecent, local, validTz, dueAt,
     dateAdd, weekdayOf, cycleKey, dateOfKey, requestId, ledgerKey, periodKey, monthlyDayOf, jobRow, cycleRowOf, JOBS, PREVIEW, BY_JOB, NAMES, DEFAULTS, TERMINAL, LIVE, DEAD, CAPACITY };
 })();
 const TZ = 'America/New_York';

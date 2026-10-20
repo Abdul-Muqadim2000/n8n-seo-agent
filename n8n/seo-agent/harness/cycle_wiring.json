@@ -1,9 +1,13 @@
 {
+ "claim_hold_seconds": 2,
  "config": {
   "confirm_minutes": 10,
   "engine_tz": "America/New_York",
+  "exec_page": 250,
+  "init_quiet_minutes": 2,
   "local_time": "06:00",
   "max_attempts": 3,
+  "max_exec_reads": 60,
   "max_inflight": 2,
   "max_starts": 2,
   "next_gap_hours": 12,
@@ -94,121 +98,216 @@
    "busy": true,
    "due": 1,
    "ignored": 0,
-   "inflight": [],
-   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (a.com cycle 2026-10-21T14:10:00.000Z)"
+   "note": "",
+   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (a.com cycle 2026-10-21T14:10:00.000Z)",
+   "running": [],
+   "starting": []
   },
   "a cycle due in 20 minutes is outside the window": {
    "busy": false,
    "due": 0,
    "ignored": 0,
-   "inflight": [],
-   "reason": "no dispatcher job in flight and nothing due in the next 15 min"
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
   },
   "a cycle marker is not a job": {
    "busy": false,
    "due": 0,
    "ignored": 0,
-   "inflight": [],
-   "reason": "no dispatcher job in flight and nothing due in the next 15 min"
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
   },
   "a cycle overdue for 30 minutes (a plan-only dispatcher) does not block deploys for ever": {
    "busy": false,
    "due": 0,
    "ignored": 0,
-   "inflight": [],
-   "reason": "no dispatcher job in flight and nothing due in the next 15 min"
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
   },
   "a cycle that became due 5 minutes ago is about to start": {
    "busy": true,
    "due": 1,
    "ignored": 0,
-   "inflight": [],
-   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (a.com cycle 2026-10-21T13:55:00.000Z)"
+   "note": "",
+   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (a.com cycle 2026-10-21T13:55:00.000Z)",
+   "running": [],
+   "starting": []
   },
   "a job running, last written 30 min ago": {
+   "busy": false,
+   "due": 0,
+   "ignored": 0,
+   "note": "1 job(s) running (cyc:site_a:2026-10-21:backlinks): not a reason to wait - a restart kills a running job, the dispatcher sees the dead run at its next sweep and starts it again (one of its three attempts)",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [
+    "cyc:site_a:2026-10-21:backlinks"
+   ],
+   "starting": []
+  },
+  "a job starting 12 minutes ago is still between its claim and its ledger row: refuse": {
    "busy": true,
    "due": 0,
    "ignored": 0,
-   "inflight": [
+   "note": "",
+   "reason": "1 dispatcher job(s) starting, between the claim and the run's ledger row (cyc:site_a:2026-10-21:backlinks)",
+   "running": [],
+   "starting": [
     "cyc:site_a:2026-10-21:backlinks"
-   ],
-   "reason": "1 dispatcher job(s) in flight (cyc:site_a:2026-10-21:backlinks running)"
+   ]
+  },
+  "a job starting 20 minutes ago never started (the dispatcher fails it): ignored, go": {
+   "busy": false,
+   "due": 0,
+   "ignored": 1,
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
   },
   "a job starting a minute ago": {
    "busy": true,
    "due": 0,
    "ignored": 0,
-   "inflight": [
+   "note": "",
+   "reason": "1 dispatcher job(s) starting, between the claim and the run's ledger row (cyc:site_a:2026-10-21:ai_visibility)",
+   "running": [],
+   "starting": [
     "cyc:site_a:2026-10-21:ai_visibility"
-   ],
-   "reason": "1 dispatcher job(s) in flight (cyc:site_a:2026-10-21:ai_visibility starting)"
+   ]
   },
   "a paused or switched-off website's due cycle holds nothing": {
    "busy": false,
    "due": 0,
    "ignored": 0,
-   "inflight": [],
-   "reason": "no dispatcher job in flight and nothing due in the next 15 min"
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
   },
   "a preview due in 14 minutes": {
    "busy": true,
    "due": 1,
    "ignored": 0,
-   "inflight": [],
-   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (b.org preview 2026-10-21T14:14:00.000Z)"
+   "note": "",
+   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (b.org preview 2026-10-21T14:14:00.000Z)",
+   "running": [],
+   "starting": []
   },
   "a row with no times at all is not counted as fresh": {
    "busy": false,
    "due": 0,
    "ignored": 1,
-   "inflight": [],
-   "reason": "no dispatcher job in flight and nothing due in the next 15 min"
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
   },
   "a running job and two starts due: all named": {
    "busy": true,
    "due": 2,
    "ignored": 0,
-   "inflight": [
+   "note": "1 job(s) running (cyc:site_b:2026-10-20:link_builder): not a reason to wait - a restart kills a running job, the dispatcher sees the dead run at its next sweep and starts it again (one of its three attempts)",
+   "reason": "2 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (d.io preview 2026-10-21T14:01:00.000Z, a.com cycle 2026-10-21T14:12:00.000Z)",
+   "running": [
     "cyc:site_b:2026-10-20:link_builder"
    ],
-   "reason": "1 dispatcher job(s) in flight (cyc:site_b:2026-10-20:link_builder running); 2 cycle / preview start(s) due by 2026-10-21T14:15:00.000Z (d.io preview 2026-10-21T14:01:00.000Z, a.com cycle 2026-10-21T14:12:00.000Z)"
+   "starting": []
   },
   "a running row three hours old is a crashed run, ignored": {
    "busy": false,
    "due": 0,
    "ignored": 1,
-   "inflight": [],
-   "reason": "no dispatcher job in flight and nothing due in the next 15 min"
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
   },
   "a wider window (30 minutes) sees a cycle due in 20": {
    "busy": true,
    "due": 1,
    "ignored": 0,
-   "inflight": [],
-   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:30:00.000Z (a.com cycle 2026-10-21T14:20:00.000Z)"
+   "note": "",
+   "reason": "1 cycle / preview start(s) due by 2026-10-21T14:30:00.000Z (a.com cycle 2026-10-21T14:20:00.000Z)",
+   "running": [],
+   "starting": []
   },
   "done, skipped and gave-up jobs hold nothing": {
    "busy": false,
    "due": 0,
    "ignored": 0,
-   "inflight": [],
-   "reason": "no dispatcher job in flight and nothing due in the next 15 min"
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
   },
   "nothing at all": {
    "busy": false,
    "due": 0,
    "ignored": 0,
-   "inflight": [],
-   "reason": "no dispatcher job in flight and nothing due in the next 15 min"
+   "note": "",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [],
+   "starting": []
+  },
+  "one running and one starting: the starting one refuses": {
+   "busy": true,
+   "due": 0,
+   "ignored": 0,
+   "note": "1 job(s) running (cyc:site_a:2026-10-21:audit): not a reason to wait - a restart kills a running job, the dispatcher sees the dead run at its next sweep and starts it again (one of its three attempts)",
+   "reason": "1 dispatcher job(s) starting, between the claim and the run's ledger row (cyc:site_b:2026-10-21:rank_tracker)",
+   "running": [
+    "cyc:site_a:2026-10-21:audit"
+   ],
+   "starting": [
+    "cyc:site_b:2026-10-21:rank_tracker"
+   ]
+  },
+  "twenty websites running their cycles at once: reported, not refused": {
+   "busy": false,
+   "due": 0,
+   "ignored": 0,
+   "note": "20 job(s) running (cyc:site_00:2026-10-21:ai_visibility, cyc:site_01:2026-10-21:ai_visibility, cyc:site_02:2026-10-21:ai_visibility, cyc:site_03:2026-10-21:ai_visibility, cyc:site_04:2026-10-21:ai_visibility): not a reason to wait - a restart kills a running job, the dispatcher sees the dead run at its next sweep and starts it again (one of its three attempts)",
+   "reason": "nothing starting and nothing due in the next 15 min",
+   "running": [
+    "cyc:site_00:2026-10-21:ai_visibility",
+    "cyc:site_01:2026-10-21:ai_visibility",
+    "cyc:site_02:2026-10-21:ai_visibility",
+    "cyc:site_03:2026-10-21:ai_visibility",
+    "cyc:site_04:2026-10-21:ai_visibility",
+    "cyc:site_05:2026-10-21:ai_visibility",
+    "cyc:site_06:2026-10-21:ai_visibility",
+    "cyc:site_07:2026-10-21:ai_visibility",
+    "cyc:site_08:2026-10-21:ai_visibility",
+    "cyc:site_09:2026-10-21:ai_visibility",
+    "cyc:site_10:2026-10-21:ai_visibility",
+    "cyc:site_11:2026-10-21:ai_visibility",
+    "cyc:site_12:2026-10-21:ai_visibility",
+    "cyc:site_13:2026-10-21:ai_visibility",
+    "cyc:site_14:2026-10-21:ai_visibility",
+    "cyc:site_15:2026-10-21:ai_visibility",
+    "cyc:site_16:2026-10-21:ai_visibility",
+    "cyc:site_17:2026-10-21:ai_visibility",
+    "cyc:site_18:2026-10-21:ai_visibility",
+    "cyc:site_19:2026-10-21:ai_visibility"
+   ],
+   "starting": []
   }
  },
- "exec_limit": 100,
+ "dispatcher_published": true,
+ "exec_limit": 250,
  "guard_check": {
   "busy": false,
   "busy_force": true,
   "busy_force_monday": true,
   "fresh_instance_no_tables": true,
   "idle": true,
+  "running_only": true,
   "unreachable": false,
   "unreadable_401": false,
   "unreadable_force": true

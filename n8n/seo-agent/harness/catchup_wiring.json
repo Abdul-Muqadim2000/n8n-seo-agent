@@ -86,6 +86,10 @@
   "SEOagentPageWch1"
  ],
  "default_tz": "America/New_York",
+ "dispatcher_watchdog": {
+  "id": "SEOagentCycleDsp",
+  "state_key": "catchup:watchdog:SEOagentCycleDsp"
+ },
  "exec_limit": 250,
  "growth_dry_run": {
   "Submit IndexNow": {

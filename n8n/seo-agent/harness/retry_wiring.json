@@ -1946,6 +1946,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Read Dispatcher Workflow (Watchdog)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "Read Mailbox Workflow (Watchdog)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
