@@ -78,7 +78,7 @@ describe('the cycle view', () => {
   it('before the engine has a row: cycle 0 opened at setup, the next is the first to come; after a weekday change, the next on that day', () => {
     expect(cycleIntentOf(site, null)).toMatchObject({ anchorAt: '2026-10-14T08:00:00.000Z', lastCycleAt: '2026-10-14T08:00:00.000Z', tz: 'UTC' });
     const v = siteCycleView(site, null, [], NOW, 'admin');
-    expect(v).toMatchObject({ known: false, status: 'active', weekday: 3, weekdayName: 'Wednesday', nextDueAt: '2026-10-21T06:00:00.000Z', canChangeWeekday: true, overdue: false });
+    expect(v).toMatchObject({ known: false, status: 'active', weekday: 3, weekdayName: 'Wednesday', nextDueAt: '2026-10-21T06:00:00.000Z', canChangeWeekday: false, overdue: false }); // the weekday is the engine row's: not offered before it exists (PATCH would 409)
     expect(siteCycleView({ ...site, trackingStatus: 'paused' } as SiteRow, null, [], NOW, 'viewer')).toMatchObject({ status: 'paused', nextDueAt: null, upcoming: [], canChangeWeekday: false });
     expect(siteCycleView({ ...site, trackingStartedAt: null, trackingStatus: 'not_started' } as unknown as SiteRow, null, [], NOW, 'admin')).toMatchObject({ status: 'not_started', weekday: null, upcoming: [] });
     const row = { anchor_at: '2026-10-14T08:00:00.000Z', tz: 'UTC', cycle_weekday: 3, last_cycle_at: '2026-10-14T08:01:00.000Z', status: 'active' as const };
