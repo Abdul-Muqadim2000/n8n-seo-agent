@@ -126,7 +126,7 @@ describe('the "Coming up" plan', () => {
   });
   it('a decision row: the contract\'s key and fields; refused for unknown items, an automatic approval, an "always" approval, a started cycle', () => {
     const r = decisionRow({ site: { domain: 'x.com' }, preview, input: { itemKey: 'Crm Migration', decision: 'approve', scope: 'cycle' }, by: 'a@x', now: NOW });
-    expect(r.row).toEqual({ key: 'site_x-com:cyc:site_x-com:2026-10-23:crm migration', site_id: 'site_x-com', cycle_key: body.cycle_key, item_key: 'crm migration', decision: 'approve', scope: 'cycle', by: 'a@x', created_at: new Date(NOW).toISOString() });
+    expect(r.row).toEqual({ key: 'site_x-com:cyc:site_x-com:2026-10-23:crm migration', site_id: 'site_x-com', cycle_key: body.cycle_key, item_key: 'crm migration', decision: 'approve', scope: 'cycle', by: 'a@x', created_at: new Date(NOW).toISOString(), source: 'ladder', ladder_id: '' });
     expect(decisionRow({ site: { domain: 'x.com' }, preview, input: { itemKey: 'best crm', decision: 'skip', scope: 'always' }, by: 'a@x', now: NOW }).row).toMatchObject({ key: 'site_x-com:always:best crm', cycle_key: '' });
     for (const input of [
       { itemKey: 'nothing', decision: 'skip' as const, scope: 'cycle' as const },
