@@ -765,7 +765,7 @@ GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 /
 KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
 RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n'))   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n'))   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -11827,6 +11827,69 @@ DataForSEO's scraper answers **40101 "Internal SE Server Error."** inside an HTT
 An answer from the lighter attempt says so: the AI Overview is **"not read on this attempt"**, never "none", and results below position 10 were not read. When all three fail the client reads, in plain words, that Google's results could not be read right now, that it is not about their keyword, and to try again later.""",
     pos('SERP Retry Failed?')[0] - 40, pos('SERP Retry Failed?')[1] + 140, 1000, 260, 3)
 log('The head keyword\'s results page gets three attempts, the last one lighter (2026-10-20, F-SERP; real-credit rehearsal execs 23 / 31: SERP Top 10 and its retry both answered 40101 "Internal SE Server Error." inside an HTTP 200 after ~27 s, twice in a row, and the ladder came out NOT_CHECKED for ~$0.27): SERP Top 10 -> 20 s -> retry -> SERP Retry Failed? (the same transient-only rule) -> 45 s -> SERP Top 10 (Light Retry) with depth 10 and no load_async_ai_overview; RT.chain judges the three attempts; the lighter answer is labelled where it is used (AI Overview "not read on this attempt", top 10 only), the cost of every attempt is counted once by task id, and an all-fail ladder tells the client in plain words that Google\'s results could not be read right now, not about their keyword, try again later')
+
+# >>> 143 (E-DEAD)
+# =============================================================================
+# 143. PAGES THAT ARE GONE, AND COMPARISONS WITH NOTHING ON THE OTHER SIDE (2026-10-21, pre-launch run on techand.ai, fixer E-DEAD:
+#      RV-1 / RV-2 / RV-3 / RV-5 / RV-6). techand.ai was rebuilt and Search Console still showed ~34 old addresses that now 404 (the bare host
+#      308s to www, which 404s). The audit read the first answer only and filed them as Low "redirect somewhere else" ("/x -> /x (308)"),
+#      told the owner to add them to the sitemap and rewrite their titles, called a complete crawl a crawl limit, and ranked "far fewer top-10
+#      rankings than competitors" (0 against a competitor median of 0, with help.ardoq.com among the competitors) as High.
+#      * *Not Crawled Hops -> Fetch Not Crawled (Final)*: every address that answered a redirect is asked again with the redirects followed;
+#        one that ends in 404 / 410 is gone, and every gone address is ONE finding with the page each should redirect to (v5/code/_gone.js,
+#        the same words the weekly site report, the AI reports and the fix pack use). The fix pack writes redirects.csv from it.
+#      * the comparison findings need something on the other side: no "far fewer top-10 rankings" or "organic traffic under 10%" when the
+#        competitors' median is tiny, or when Search Console's measurement contradicts the estimate; a help-centre / docs subdomain of a tool
+#        is never picked as a competitor.
+# =============================================================================
+_fn143 = pos('Fetch Not Crawled')
+add_node('Not Crawled Hops', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Not_Crawled_Hops.js')}, [_fn143[0] + 110, _fn143[1] - 160])
+if_node('Any Redirects To Follow?', '{{ !$json.no_hops }}', [_fn143[0] + 220, _fn143[1] - 160])
+_fnc_p143 = json.loads(json.dumps(nodes['Fetch Not Crawled']['parameters']))   # the same request (headers, timeout, batching), redirects followed to their end
+_fnc_p143['options']['redirect'] = {'redirect': {'followRedirects': True, 'maxRedirects': 6}}
+add_node('Fetch Not Crawled (Final)', 'n8n-nodes-base.httpRequest', 4.5, _fnc_p143, [_fn143[0] + 330, _fn143[1] - 320],
+         dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl55.RETRY))
+disconnect('Fetch Not Crawled', 'Not Crawled Check')
+connect('Fetch Not Crawled', 'Not Crawled Hops'); connect('Not Crawled Hops', 'Any Redirects To Follow?')
+connect('Any Redirects To Follow?', 'Fetch Not Crawled (Final)', 0); connect('Any Redirects To Follow?', 'Not Crawled Check', 1)
+connect('Fetch Not Crawled (Final)', 'Not Crawled Check')
+assert nodes['Fetch Not Crawled (Final)']['parameters']['options']['response']['response']['fullResponse'] is True and not _rl55.weak(nodes['Fetch Not Crawled (Final)'])
+assert 'google.com/bot.html' not in json.dumps(nodes['Fetch Not Crawled (Final)']), 'R119: the follow-up fetch names Google\'s bot page'
+for _n143 in ('Not Crawled Check', 'Fix Pack'):
+    assert 'const GONE = (() => {' in code(_n143) and '/*__GONE__*/' not in code(_n143), _n143 + ': the gone-pages kit is not inlined (RV-1)'
+assert "finalOf.get(ukey(t.url))" in code('Not Crawled Check') and "GONE.finding(redirectPlan" in code('Not Crawled Check'), 'RV-2: a redirect that ends in 404 is still filed as a redirect'
+assert "fNc.urls_all" in code('GSC Audit Findings') and "fSm.urls_all" in code('GSC Audit Findings'), 'RV-3: the Search Console lists cannot be cleaned of the gone addresses'
+assert "(((a.not_crawled_check || {}).redirects) || [])" in code('Fix Pack'), 'RV-1: the fix pack has no redirects for the gone addresses'
+# RV-5: the host split names its own unit (pages Google shows under the other host), not "N of M crawled pages"
+patch('GSC Audit Findings', "f90.affected_urls = urls90.slice(0, 200); f90.host_split = true; }",
+      "f90.affected_urls = urls90.slice(0, 200); f90.host_split = true; f90.affected_unit = 'pages Google shows under the other address'; }")
+# ---- RV-6: a comparison needs a side to compare with ----
+_MIN143 = "const MIN_TOP10_143 = 10, MIN_ETV_143 = 50;   // RV-6 (2026-10-21): under these the competitors' side says nothing (techand.ai: a median of 0 top-10 rankings and 4 visits)\n"
+patch('Competitor Analysis', "const findings = [];\nconst works = [];", _MIN143 + "const findings = [];\nconst works = [];")
+patch('Competitor Analysis', "} else if ((you.top10 || 0) === 0) {", "} else if ((you.top10 || 0) === 0 && (!comps.length || med.top10 == null || med.top10 >= MIN_TOP10_143)) {")
+patch('Competitor Analysis', "} else if (med.top10 && you.top10 < med.top10 * 0.25) {", "} else if (med.top10 && med.top10 >= MIN_TOP10_143 && you.top10 < med.top10 * 0.25) {")
+patch('Competitor Analysis', "if (metricsRead76 && comps.length && med.est_monthly_traffic && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {",
+      "if (metricsRead76 && comps.length && med.est_monthly_traffic && med.est_monthly_traffic >= MIN_ETV_143 && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {")
+# the reconcile with Search Console (section 90): "competitors hold hundreds" was printed whatever the median; a site Google shows in its top 10
+# is not "far behind" a median that is not there; measured clicks that beat the estimate retire the traffic comparison
+patch('GSC Audit Findings', "const __ex90 = (base.extra_findings || []).map(f => {\n  if (!__rk90 || !f || f.category !== 'Authority') return f;\n  const t = String(f.title || '');",
+      "const __med143 = ((base.competitor_benchmark || {}).medians) || null;\n"
+      "const __ex90 = (base.extra_findings || []).map(f => {\n  if (!__rk90 || !f || f.category !== 'Authority') return f;\n  const t = String(f.title || '');\n"
+      "  // RV-6 (2026-10-21): Google's own data shows top-10 rankings and the competitors' median is tiny or unknown: there is nothing to be far behind\n"
+      "  if (/does not rank in Google.s top 10 for any keyword/i.test(t) && __rk90.top10 > 0 && __med143 && !(Number(__med143.top10) >= 10)) return null;\n"
+      "  // RV-6: the site's measured clicks over 28 days already beat a tenth of the competitors' estimated monthly visits: the estimate is contradicted\n"
+      "  if (/^Organic traffic is under 10% of competitors$/.test(t) && search_console.totals && __med143 && Number(__med143.est_monthly_traffic) > 0\n"
+      "    && Number(search_console.totals.clicks) >= Number(__med143.est_monthly_traffic) * 0.1) return null;")
+patch('GSC Audit Findings', "while the competitors hold hundreds in the same database: a buyer who searches for what you sell finds them first.',",
+      "while the competitors hold a median of ' + __n90((__med143 || {}).top10) + ' in the same database: a buyer who searches for what you sell finds them first.',")
+patch('GSC Audit Findings', "const __works90 = (__rk90 && __rk90.top10)", "const __exk143 = __ex90.filter(Boolean); __ex90.length = 0; __ex90.push(...__exk143);\nconst __works90 = (__rk90 && __rk90.top10)")
+# a help centre, a documentation site or a community forum of some tool ranks for the words of a service page and is never a competitor
+patch('Pick Competitors', "const isBig = (d) => BIG.some(b => d === b || d.endsWith('.' + b)) || /\\.(gov|edu)(\\.|$)/.test(d);",
+      "const isBig = (d) => BIG.some(b => d === b || d.endsWith('.' + b)) || /\\.(gov|edu)(\\.|$)/.test(d)\n"
+      "  || /^(help|support|docs|doc|kb|knowledge|knowledgebase|community|academy|status|developer|developers|forum|forums|answers|faq|careers|jobs|learn)\\./.test(d);   // RV-6 (2026-10-21): help.ardoq.com was a \"competitor\" of an AI consultancy")
+assert 'MIN_TOP10_143' in code('Competitor Analysis') and 'help|support|docs' in code('Pick Competitors') and '__med143' in code('GSC Audit Findings'), 'RV-6: the comparison guards are missing'
+log('Pages that are gone, one message everywhere (2026-10-21, pre-launch run on techand.ai, fixer E-DEAD, RV-1 / RV-2 / RV-3 / RV-5 / RV-6): every known address that answered a redirect is asked again with the redirects followed (Not Crawled Hops -> Fetch Not Crawled (Final)), one that ends in 404 / 410 is gone and every gone address is ONE finding, "Pages Google still shows no longer answer: redirect them", with the page each should redirect to (v5/code/_gone.js), ranked with the index blockers and written to the fix pack\'s redirects.csv; the Search Console lists stop asking to add gone pages to the sitemap or rewrite their titles, a complete crawl is not called a crawl limit, a finding outside the crawl counts in its own unit; no "far fewer top-10 rankings" or "traffic under 10% of competitors" against a tiny competitor median or against Search Console\'s measured clicks, and a help-centre or docs subdomain is never a competitor')
+# <<< 143 (E-DEAD)
 
 # =============================================================================
 # 142. NO PAGE BEFORE THE AUTHOR PROFILE AND THE BUSINESS FACTS (2026-10-20, agent P1; real-credit rehearsal docs/REHEARSAL_2026-10-20.md §4

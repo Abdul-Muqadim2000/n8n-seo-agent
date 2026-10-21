@@ -366,6 +366,7 @@ return plans.map(p => {
   const deliver = p.mode === 'full' || p.on_demand || alerts.some(a => a.level === 'high' || a.level === 'medium');
   // disavow candidates (review only: Google ignores most spam; disavow only for a manual action or a paid-link pattern you did not create)
   const disavow = [...new Set([...spammy.filter(x => x.spam >= 60 || SPAM_WORDS.test(x.anchor + ' ' + x.title)).map(x => LK.refKey(x.from_domain)), ...ledger.filter(r => r.link_type === 'spam').map(r => r.ref_domain)])];   // the whole cluster, live or gone (D3)
+  disavow.splice(0, disavow.length, ...disavow.filter(d => d && /\./.test(d) && !LK.isSuffix(d)));   // RV-8 (2026-10-21): never `domain:us.com` (a stored ref_domain from before the suffix fix, or any other suffix on its own)
   const disavow_text = disavow.length ? '# Disavow candidates for ' + p.domain + ' (' + today + ')\n# Review before uploading at https://search.google.com/search-console/disavow-links — Google ignores most spam links on its own;\n# disavow only for a manual action or a clear paid-link pattern you did not create.\n' + disavow.map(d => 'domain:' + d).join('\n') + '\n' : '';
   // ---------------- prospects: value x likelihood ----------------
   const target0 = home;   // C-10: no prospect is pointed at the first asset by default any more (targetFor, above)

@@ -1,10 +1,22 @@
 // Compact facts for the AI brief (one item per site): totals, movers, opportunities, tracked keywords, pages, traffic, trends, alerts, actions.
 /*__SITE_MODEL__*/
 /*__SITE_STATS__*/
+/*__GONE__*/
 const r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;
-return $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A = m.ga4;
+return $('Site Metrics').all().map(i => { const m0 = i.json;
+  // RV-1 (2026-10-21): the pages that no longer answer never reach the brief as pages to work on (the brief made "make this 404 page the
+  // single page for the search" its priority 1); they reach it once, as the redirects to make
+  const goneSet = new Set((m0.gone_pages || []).map(r => GONE.keyOf(r.from_url)));
+  const live = (list, pick) => GONE.drop(list, goneSet, pick).kept;
+  const m = goneSet.size ? { ...m0, gsc: { ...m0.gsc, top_pages: live(m0.gsc.top_pages || [], x => x.page), striking: live(m0.gsc.striking || [], x => x.page), ctr_gaps: live(m0.gsc.ctr_gaps || [], x => x.page),
+      decaying_pages: live(m0.gsc.decaying_pages || [], x => x.page), not_decay: live(m0.gsc.not_decay || [], x => x.page), rising_pages: live(m0.gsc.rising_pages || [], x => x.page) } } : m0;
+  const G = m.gsc, A = m.ga4;
   const W = m.site || {};
   const facts = { website: { canonical_host: W.canonical_host || m.domain, home_url: W.home_url || SM.siteUrl({ canonical_host: W.canonical_host, domain: m.domain }, '/'), business_name: W.business_name || m.domain, services: W.services || [], city: (W.nap || {}).city || '', pages_known: W.pages_known || 0, note: 'Call the business by this name and write every URL on the canonical host. pages_known is how many pages of this site the agent knows: never tell the owner to publish a new page for a search a page in the list already answers \u2014 say to refresh that page.' },
+    // RV-1 / RV-15: the redirects to make come first, and the brief never asks for a redirect the server already makes
+    ...(goneSet.size ? { pages_that_no_longer_answer: (m.gone_pages || []).slice(0, 15).map(r => r.from_url + ' (HTTP ' + (r.status || 404) + ', ' + r.impressions + ' impressions in 28 days) -> redirect to ' + r.to_url + ' (' + r.match + ')'),
+      pages_that_no_longer_answer_note: 'These addresses answer 404 and Google still shows them. The only action for them is the permanent (301) redirect listed: never tell the owner to improve, link to, consolidate on, watch or refresh any of them.' } : {}),
+    host_note: 'The site uses ' + (W.canonical_host || m.domain) + ' as its address. Search Console rows under both host forms do not mean a redirect is missing: never tell the owner to add a redirect between the two host forms unless computed_actions holds a host_split action.',
     domain: m.domain, period: m.period.current, previous_period: m.period.previous, weeks_tracked: m.weeks_tracked,
     search_console: G.connected ? { totals: G.totals, deltas: G.deltas, queries_with_impressions: G.query_count, pages_with_impressions: G.page_count ?? null,
       // G9 (2026-10-12): every query row was read, not a sample; the queries Google withholds, and brand vs non-brand

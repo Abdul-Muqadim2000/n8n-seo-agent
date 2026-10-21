@@ -73,7 +73,7 @@ FIT_GATE_SRC = _rdt('code/_fit_gate.js').rstrip('\n')        # R16 (build_v4.py 
 rd = lambda p: (seo_events.inline(_rdt(p)).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
                 .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC)
                 .replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__WAITING__*/', WAITING_SRC).replace('/*__READINESS__*/', READINESS_SRC)
-                .replace('/*__SITE_TIME__*/', site_time_src()))   # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the website's calendar and the cycle run (ST)
+                .replace('/*__SITE_TIME__*/', site_time_src()).replace('/*__GONE__*/', _rdt('code/_gone.js').rstrip('\n')))   # RV-1 (2026-10-21): the pages that no longer answer, one message   # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the website's calendar and the cycle run (ST)
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'sitetracker:' + name))
 MAIN_WF = json.load(open(os.path.join(OUT, 'SEO_Agent_v4.json')))[0]
@@ -280,6 +280,11 @@ N.append(code('Parse Site SERP', rd('code/Parse_Site_SERP.js'), at(15, 4)))
 N.append(node('Save Site Rank History', DT_TYPE, DT_VERSION, dt_insert_params(HISTORY_TABLE, HISTORY_COLS), at(16, 4), onError='continueRegularOutput'))
 # D11: the week's page inventory (sitemap + Search Console pages and their queries + AI Growth's key pages + the pages found live) ->
 # the site model (SM.withPages) and seo_pages (only the rows that changed)
+# RV-1 (2026-10-21): the pages Google shows that the sitemap does not list are read (redirects followed) before the inventory is built, so a
+# page that answers 404 is stored as gone (seo_pages.http_status) and no report advises on it
+N.append(code('Status Targets (Site)', rd('code/Status_Targets_Site.js'), at(15, 6), **SAFE))
+N.append(iff('Any Status Checks?', '{{ !$json.skip }}', at(16, 6)))
+N.append(node('Fetch Page Status (Site)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', HTML, 15000, 5), at(17, 7), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Page Inventory (Site)', rd('code/Page_Inventory_Site.js'), at(16, 4), **SAFE))
 N.append(code('Page Rows (Site)', rd('code/Page_Rows_Site.js'), at(16, 5), **SAFE))
 N.append(iff('Any Page Rows?', '{{ !$json.skip }}', at(16, 6)))
@@ -335,7 +340,7 @@ for a, b in [('Manual Run', 'Ensure Sites Table'), ('Ensure Sites Table', 'Ensur
              ('GSC Sites', 'Resolve Properties'), ('Resolve Properties', 'GSC Requests'), ('GSC Requests', 'Any GSC?'), ('GSC Query', 'GSC More Requests'), ('GSC More Requests', 'Any More GSC?'), ('GSC Query (More)', 'Parse GSC'), ('Parse GSC', 'Need GA4 Detect?'),
              ('GA4 Accounts', 'Stream Requests'), ('Stream Requests', 'Any Streams?'), ('GA4 Streams', 'GA4 Requests'), ('GA4 Requests', 'Any GA4?'), ('GA4 Report', 'Parse GA4'), ('Parse GA4', 'Inspect Requests'),
              ('Inspect Requests', 'Any Inspections?'), ('Inspect URL', 'Parse Inspection'), ('Parse Inspection', 'Inspect Rows (Site)'), ('Inspect Rows (Site)', 'Any Inspect Rows?'), ('Save Page Watch (Site)', 'Trends Requests'), ('Trends Requests', 'Any Trends?'), ('Google Trends', 'Parse Trends'), ('Parse Trends', 'Site SERP Requests'),
-             ('Site SERP Requests', 'Any SERP?'), ('SERP Check (Site)', 'Parse Site SERP'), ('Parse Site SERP', 'Save Site Rank History'), ('Save Site Rank History', 'Page Inventory (Site)'),
+             ('Site SERP Requests', 'Any SERP?'), ('SERP Check (Site)', 'Parse Site SERP'), ('Parse Site SERP', 'Save Site Rank History'), ('Save Site Rank History', 'Status Targets (Site)'), ('Status Targets (Site)', 'Any Status Checks?'), ('Fetch Page Status (Site)', 'Page Inventory (Site)'),
              ('Page Inventory (Site)', 'Page Rows (Site)'), ('Page Rows (Site)', 'Any Page Rows?'), ('Save Pages (Site)', 'Site Metrics'),
              ('Site Metrics', 'Metrics Rows'), ('Metrics Rows', 'Save Site Metrics'), ('Save Site Metrics', 'Query Rows'), ('Query Rows', 'Any Query Rows?'), ('Save Query Rows', 'Trend Rows'), ('Trend Rows', 'Any Trend Rows?'), ('Save Trends', 'Site Rows'), ('Site Rows', 'Save Sites'), ('Save Sites', 'Brief Input'), ('Brief Input', 'Site Brief'), ('Site Brief', 'Site Report'),
              ('Site Report', 'Prepare PDF Site'), ('Prepare PDF Site', 'Render PDF Site'), ('Render PDF Site', 'Attach PDF Site'), ('Attach PDF Site', 'Has Email (Site)?'), ('Attach PDF Site', 'Build Site Callback'), ('Build Site Callback', 'Has Callback (Site)?')]:
@@ -361,7 +366,8 @@ link(C, 'Any GA4?', 'GA4 Report', 0); link(C, 'Any GA4?', 'Inspect Requests', 1)
 link(C, 'Any Inspections?', 'Inspect URL', 0); link(C, 'Any Inspections?', 'Trends Requests', 1)
 link(C, 'Any Inspect Rows?', 'Save Page Watch (Site)', 0); link(C, 'Any Inspect Rows?', 'Trends Requests', 1)
 link(C, 'Any Trends?', 'Google Trends', 0); link(C, 'Any Trends?', 'Parse Trends', 1)   # all trends stored -> Parse Trends returns them from seo_trends
-link(C, 'Any SERP?', 'SERP Check (Site)', 0); link(C, 'Any SERP?', 'Page Inventory (Site)', 1)
+link(C, 'Any SERP?', 'SERP Check (Site)', 0); link(C, 'Any SERP?', 'Status Targets (Site)', 1)
+link(C, 'Any Status Checks?', 'Fetch Page Status (Site)', 0); link(C, 'Any Status Checks?', 'Page Inventory (Site)', 1)   # RV-1
 link(C, 'Any Page Rows?', 'Save Pages (Site)', 0); link(C, 'Any Page Rows?', 'Site Metrics', 1)
 link(C, 'Any Query Rows?', 'Save Query Rows', 0); link(C, 'Any Query Rows?', 'Trend Rows', 1)
 link(C, 'Any Trend Rows?', 'Save Trends', 0); link(C, 'Any Trend Rows?', 'Site Rows', 1)
@@ -376,6 +382,8 @@ for _n in ('Match Slugs (Detect)', 'Detect Published'): assert 'const overlapTok
 # and the inventory names the pages still judged by their address only. *Fetch Pages (Detect)* is the one HTTP node for both reads.
 assert "grab('Load Pages (Site)')" in _code['Match Slugs (Detect)'] and 'title_fill_per_site' in _code['Match Slugs (Detect)'] and 'title_fill' in _code['Match Slugs (Detect)'], 'R34: Match Slugs (Detect) does not read the missing titles'
 assert 'SM.titleGap(merged)' in _code['Page Inventory (Site)'] and 'title_unknown' in _code['Page Inventory (Site)'], 'R34: the page inventory does not name the pages without a title'
+assert "grabAll('Fetch Page Status (Site)')" in _code['Page Inventory (Site)'] and 'http_status' in _code['Page Inventory (Site)'], 'RV-1: the inventory does not store what the pages Google shows answer'
+assert 'const GONE = (() => {' in _code['Site Metrics'] and 'GONE.action(' in _code['Site Metrics'] and 'gone_pages' in _code['Brief Input'], 'RV-1: the weekly report does not name the pages that no longer answer'
 assert any(n['name'] == 'Fetch Pages (Detect)' and n.get('retryOnFail') for n in N), 'R34: the title read must keep the retry rule (retry_lint)'
 assert 'function publishedRows(' in _code['Detect Published'], 'Detect Published: published-page rows not inlined'
 assert not any(('/*__OVERLAP__*/' in c_) or ('/*__PUBLISH_ROWS__*/' in c_) for c_ in _code.values()), 'placeholder left in the Site Tracker'

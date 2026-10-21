@@ -7,6 +7,12 @@
 // check. So a timeout, a DNS failure and a bot wall are all `not_fetched`, counted apart and named, and every count below says how
 // many of how many it was measured on (`checked` / `checked_of`).
 // Nothing here can fail the audit, and nothing here costs anything.
+// RV-1 / RV-2 (2026-10-21, pre-launch run on techand.ai): a redirect is followed to its end (*Not Crawled Hops -> Fetch Not Crawled (Final)*).
+// The bare host 308s to www and www answers 404 for 34 old addresses Google still shows; they were filed as Low "redirect somewhere else"
+// with the evidence "/x -> /x (308)". An address that ends in 404 / 410 is GONE, wherever the redirects led, and every gone address is one
+// finding with the redirect each needs (v5/code/_gone.js, the same words in every report). The earlier Search Console findings stop
+// advising on them ("add them to the sitemap", "rewrite the titles"), and a complete crawl is not called a crawl limit.
+/*__GONE__*/
 let prev = {};
 try { prev = $('Render Diff').first().json || {}; } catch (e) {}
 if (!prev.probe) { try { const i = $input.first().json || {}; if (i.probe || i.skip) prev = i; } catch (e2) {} }
@@ -15,6 +21,10 @@ let reqs = [];
 try { reqs = $('Not Crawled Targets').all().map(i => i.json || {}); } catch (e) {}
 let res = [];
 try { res = $('Fetch Not Crawled').all().map(i => i.json || {}); } catch (e) {}
+// the end of each redirect: the same address asked again with the redirects followed (paired by position with the hop list)
+let hopReq = [], hopRes = [];
+try { hopReq = $('Not Crawled Hops').all().map(i => i.json || {}).filter(h => h && h.url && !h.no_hops); } catch (e) {}
+try { hopRes = $('Fetch Not Crawled (Final)').all().map(i => i.json || {}); } catch (e) {}
 
 const S = (v) => String(v == null ? '' : v).trim();
 const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -24,6 +34,7 @@ const headerOf = (r, name) => { const h = (r && r.headers) || {}; const k = Obje
 // host-agnostic: a crawl reports www. while a canonical may use the bare host, and that is not a mismatch (D15 / G14)
 const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
 const sameUrl = (a, b) => !!ukey(a) && ukey(a) === ukey(b);
+const finalOf = new Map(); hopReq.forEach((h, i) => { const r = hopRes[i] || {}; const st = n0(r.statusCode != null ? r.statusCode : r.status); if (st) finalOf.set(ukey(h.url), st); });
 const attr = (tag, name) => { const m = S(tag).match(new RegExp(name + '\\s*=\\s*("([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i')); return m ? S(m[2] || m[3] || m[4]) : ''; };
 
 const targets = reqs.filter(r => r && r.url && !r.skip);
@@ -52,7 +63,14 @@ const pages = targets.map((t, i) => {
     return out;
   }
   out.checked = true;
-  if (status >= 300 && status < 400) { out.redirect_to = headerOf(r, 'location'); out.state = 'redirect'; return out; }
+  if (status >= 300 && status < 400) { out.redirect_to = headerOf(r, 'location'); out.state = 'redirect';
+    // RV-2: where the redirect ends decides what the address is. Ending in 404 / 410 it is gone; in another error it is an error; in a
+    // page it is a working redirect. Not followed (no answer) it stays "redirect", as it was before.
+    const fin = finalOf.get(ukey(t.url)) || 0; out.final_status = fin; out.first_status = status;
+    out.host_only = !!out.redirect_to && ukey(out.redirect_to) === ukey(t.url);
+    if (GONE.isGone(fin)) { out.state = 'gone'; out.status = fin; out.via_redirect = true; }
+    else if (fin >= 400 && fin !== 401 && fin !== 403 && fin !== 429) { out.state = 'error'; out.status = fin; out.via_redirect = true; }
+    return out; }
   if (status === 404 || status === 410) { out.state = 'gone'; return out; }
   if (status >= 400) { out.state = 'error'; return out; }
   const html = bodyOf(r);
@@ -84,20 +102,36 @@ const sampleNote = checked.length
   : 'none of the known URLs the crawl never reached could be read';
 
 const available = checked.length > 0;
+// RV-1: the live pages the crawl read (redirect targets for the gone addresses) and whether the crawl finished under its limit
+const crawlComplete = !!(((prev.site_structure || {}).crawl_coverage || {}).crawl_complete === true);
+let livePages = [];
+try { livePages = (($('Get Crawled Pages').first().json || {}).tasks?.[0]?.result?.[0]?.items || [])
+  .filter(p => p && p.resource_type === 'html' && Number(p.status_code) === 200).map(p => ({ url: p.url, title: (((p.meta || {}).htags || {}).h1 || [])[0] || (p.meta || {}).title || '' })); } catch (e) {}
+livePages = [...livePages, ...by('live').map(p => ({ url: p.url, title: p.title }))];
+const homeUrl = (livePages.find(p => pathOf(p.url) === '/') || {}).url || '';
+let redirectPlan = [];
 const not_available = available ? '' : (!planned && skipped) ? S(skipped.reason)
   : notChecked.length ? 'none of the ' + notChecked.length + ' URL(s) tried could be read: ' + [...new Set(notChecked.map(p => p.not_checked))].slice(0, 2).join('; ')
     : 'no known URL outside the crawl was read in this run';
 
 if (available) {
-  const dead = [...by('gone'), ...by('error')];
-  if (dead.length) {
-    const hurt = seen(dead);
-    F(hurt.length ? 'High' : 'Medium', 'Known URLs outside the crawl no longer answer',
-      dead.slice(0, 5).map(p => p.path + ': HTTP ' + p.status).join(' · ') + ' — ' + sampleNote
+  const gone = by('gone'), errs = by('error');
+  const dead = [...gone, ...errs];
+  if (gone.length) {
+    // RV-1: ONE finding for every gone address, with the page each one should redirect to (the crawl's live pages are the candidates)
+    redirectPlan = GONE.plan(gone.map(p => ({ url: p.url, status: p.status, impressions: p.impressions, clicks: p.clicks })), livePages, homeUrl);
+    const viaR = gone.filter(p => p.via_redirect).length;
+    findings.push({ ...GONE.finding(redirectPlan, { note: sampleNote, via_redirect: viaR, source: 'not_crawled' }),
+      affected_pct: Math.max(1, Math.min(100, Math.round(share(gone.length)))), affected_of: checked.length, affected_unit: 'known URLs read outside the crawl' });
+  }
+  if (errs.length) {
+    const hurt = seen(errs);
+    F(hurt.length ? 'High' : 'Medium', 'Known URLs outside the crawl answer with a server error',
+      errs.slice(0, 5).map(p => p.path + ': HTTP ' + p.status).join('; ') + '. ' + sampleNote
         + (hurt.length ? '; ' + hurt.length + ' of them still earn impressions in Search Console' : ''),
       'These addresses are in your sitemap or Google still shows them, but they return an error. Visitors and crawlers that follow them hit a dead end, and the link value pointing at them is lost.',
-      'Restore each page or 301-redirect it to the closest live page, then remove the dead address from the sitemap.',
-      dead.map(p => p.url), share(dead.length));
+      'Fix the error, or restore each page or 301-redirect it to the closest live page, then remove the address from the sitemap.',
+      errs.map(p => p.url), share(errs.length));
   }
   const live = by('live');
   if (live.length) {
@@ -105,7 +139,8 @@ if (available) {
       live.length + ' of the ' + checked.length + ' URL(s) read answer 200 and are indexable, and this audit judged nothing about them: '
         + live.slice(0, 4).map(p => p.path).join(', ') + (live.length > 4 ? ' …' : '') + '. ' + sampleNote + '.',
       'Every share and count in this report is a share of the pages that were crawled. These pages exist and can rank, but no finding here covers them — the crawl stopped before it reached them, or nothing on the site links to them.',
-      'Raise the crawl limit for this site so the next audit covers them, and link to them from the pages that already rank (the crawler follows links, and so do visitors).',
+      crawlComplete ? 'Link to them from the pages that already rank: the crawl finished under its limit, so no internal link leads to them (the crawler follows links, and so do visitors).'
+        : 'Raise the crawl limit for this site so the next audit covers them, and link to them from the pages that already rank (the crawler follows links, and so do visitors).',
       live.map(p => p.url), share(live.length));
   }
   const noidx = by('noindex');
@@ -121,7 +156,7 @@ if (available) {
   const redir = by('redirect');
   if (redir.length) {
     F('Low', 'Known URLs outside the crawl redirect somewhere else',
-      redir.slice(0, 5).map(p => p.path + ' → ' + (pathOf(p.redirect_to) || p.redirect_to || 'an unnamed address') + ' (' + p.status + ')').join(' · ') + ' — ' + sampleNote,
+      redir.slice(0, 5).map(p => p.path + ' to ' + (p.host_only ? 'the same address on the main host' : (pathOf(p.redirect_to) || p.redirect_to || 'an unnamed address')) + ' (' + p.status + (p.final_status ? ', ends in ' + p.final_status : '') + ')').join('; ') + '. ' + sampleNote,
       'A redirected address in the sitemap wastes crawl budget and makes the sitemap less trustworthy; Google is told to fetch a URL that is not the real one.',
       'List only the final 200-status addresses in the sitemap.',
       redir.map(p => p.url), share(redir.length));
@@ -163,9 +198,41 @@ const not_crawled_check = {
     : 'not available: ' + not_available,
   pages: pages.slice(0, 25).map(p => ({ url: p.url, path: p.path, source: p.source, status: p.status, state: p.state, checked: p.checked,
     not_checked: p.not_checked, redirect_to: p.redirect_to, canonical: p.canonical, title: p.title, noindex: p.noindex,
-    impressions: p.impressions, changed_at: p.changed_at, changed_label: p.changed_label })),
+    impressions: p.impressions, changed_at: p.changed_at, changed_label: p.changed_label, final_status: p.final_status || 0, via_redirect: !!p.via_redirect })),
+  // RV-1: the gone addresses and the page each should redirect to (the fix pack writes redirects.csv from it)
+  gone: by('gone').length, redirects: redirectPlan.slice(0, 200),
 };
 
+// ---- RV-3 / RV-5: the Search Console findings made before the addresses were read stop advising on the gone ones ----
+// "Add them to the sitemap" and "rewrite the titles" for pages that answer 404 are work on pages that no longer exist; the gone ones move
+// to the redirect finding. The coverage line called a complete crawl a crawl limit when every address it missed is gone or redirects.
+const goneKeys = new Set(by('gone').map(p => ukey(p.url)));
+const RECONCILE = { 'Pages Google shows in search are missing from the sitemap': { min: 3, unit: 'page(s) with impressions are not in sitemap.xml' },
+  'Pages shown in Google but never clicked': { min: 1, unit: 'page(s) with 50+ impressions and 0 clicks in 28 days' } };
+const earlier = [];
+for (const f of (prev.extra_findings || [])) {
+  const rule = f && RECONCILE[f.title];
+  if (rule && goneKeys.size && Array.isArray(f.urls_all) && f.urls_all.length) {
+    const keep = f.urls_all.filter(u => !goneKeys.has(ukey(u))); const moved = f.urls_all.length - keep.length;
+    if (!moved) { earlier.push(f); continue; }
+    if (keep.length < rule.min) continue;   // what is left is not worth the finding: the gone pages are in the redirect finding
+    earlier.push({ ...f, urls_all: keep, sample_urls: keep.slice(0, 5), affected_count: keep.length,
+      evidence: keep.length + ' ' + rule.unit + ' (' + moved + ' more no longer answer and are in the redirect finding, not here)' });
+    continue;
+  }
+  if (f && f.title === 'The crawl covered only part of the site' && crawlComplete && available && checked.length) {
+    const explained = checked.filter(p => p.state === 'gone' || p.state === 'redirect').length;
+    if (explained === checked.length && checked.length >= Math.ceil(0.8 * (totalNotCrawled || checked.length))) {
+      earlier.push({ ...f, severity: 'Info', scoring: false, title: 'The crawl reached every page that still answers',
+        evidence: S(f.evidence).split(';')[0] + '; the crawl finished under its limit, and every one of the ' + checked.length + ' known URL(s) it did not reach that could be read no longer answers or redirects elsewhere (' + sampleNote + ')',
+        why: 'The addresses the crawl missed are old ones, not pages it failed to reach: there is no crawl limit to raise.',
+        fix: 'Nothing to raise. Redirect the addresses that no longer answer (see that finding).' });
+      continue;
+    }
+  }
+  earlier.push(f);
+}
+
 return [{ json: { ...prev, skip: undefined, not_crawled_check,
-  extra_findings: [...(prev.extra_findings || []), ...findings],
+  extra_findings: [...earlier, ...findings],
   extra_works: [...(prev.extra_works || []), ...works] } }];

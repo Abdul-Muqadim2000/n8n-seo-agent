@@ -17,6 +17,11 @@ const grabAll = (name) => { try { return $(name).all().map(i => i.json || {}); }
 const gscAll = grab('Parse GSC');
 const aiPages = grab('Load AI Pages (Site)').filter(r => r.site_id && r.url);
 const stored = grab('Load Pages (Site)').filter(r => r.site_id && r.url);
+// RV-1 (2026-10-21): what the pages Google shows outside the sitemap answered this run (Status Targets (Site) -> Fetch Page Status (Site),
+// redirects followed, paired by position). A bot wall, a rate limit or no answer is NOT a status: the row keeps what it had.
+const stReq = grabAll('Status Targets (Site)').filter(x => x && x.url && !x.skip), stRes = grabAll('Fetch Page Status (Site)');
+const statusBy = new Map(); stReq.forEach((q, i) => { const r = stRes[i] || {}; const st = Number(r.statusCode != null ? r.statusCode : r.status) || 0;
+  if (!st || st === 401 || st === 403 || st === 429) return; statusBy.set(q.site_id + '|' + String(q.url || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, ''), { url: q.url, status: st }); });
 const now = new Date().toISOString();
 const S = (v) => String(v == null ? '' : v).trim();
 const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
@@ -24,7 +29,7 @@ const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www
 // must reach the Content Cadence this week, not next time its title changes.
 const PERF = ['clicks', 'impressions', 'position', 'prev_clicks', 'yoy_clicks', 'decay_state', 'decay_pct', 'decay_lost', 'decay_kind', 'decay_basis'];
 const sameRow = (a, b) => !!b && S(a.title) === S(b.title) && S(a.h1) === S(b.h1) && S(a.source) === S(b.source) && S(a.lastmod) === S(b.lastmod) && S(a.queries_json) === S(b.queries_json)
-  && PERF.every(k => S(a[k]) === S(b[k]));
+  && PERF.every(k => S(a[k]) === S(b[k])) && (Number(a.http_status) || 0) === (Number(b.http_status) || 0);   // RV-1: a page that went from live to gone (or back) is written
 // the empty measurement: a page Search Console said nothing about this week keeps the columns it already had, and a page that was
 // never measured carries zeros with `decay_state: ''` — never a "steady" that nothing stood behind.
 const EMPTY_PERF = { clicks: 0, impressions: 0, position: 0, prev_clicks: 0, yoy_clicks: 0, decay_state: '', decay_pct: 0, decay_lost: 0, decay_kind: '', decay_basis: '', measured_at: '' };
@@ -48,7 +53,9 @@ return sites.map((s, idx) => {
   // 4. AI Growth's key pages (they already carry the page title)
   for (const r of aiPages.filter(r => r.site_id === s.site_id)) add.push({ url: r.url, title: r.title, source: 'ai_pages' });
   // 5. what is already stored (a page that left the sitemap is still live until our own check says otherwise)
-  for (const r of stored.filter(r => r.site_id === s.site_id)) add.push({ url: r.url, title: r.title, h1: r.h1, source: r.source || 'sitemap', lastmod: r.lastmod, queries_json: r.queries_json });
+  for (const r of stored.filter(r => r.site_id === s.site_id)) add.push({ url: r.url, title: r.title, h1: r.h1, source: r.source || 'sitemap', lastmod: r.lastmod, queries_json: r.queries_json, http_status: r.http_status, status_at: r.status_at });
+  // 6. RV-1: this run's answers win over what was stored (SM.withPages keeps the newest reading)
+  for (const [k, v] of statusBy) if (k.indexOf(s.site_id + '|') === 0) add.push({ url: v.url, source: 'gsc', http_status: v.status, status_at: now });
   const merged = SM.withPages(model, add.slice(0, CONFIG.max_pages * 4));
   merged.pages = merged.pages.slice(0, CONFIG.max_pages);
   merged.model_updated_at = merged.model_updated_at || now;
@@ -80,7 +87,12 @@ return sites.map((s, idx) => {
     note: gap.untitled ? 'title unknown for ' + gap.untitled + ' of ' + gap.pages + ' page(s): their <title> could not be read this week'
       + (fillState && fillState.left ? ' (' + fillState.left + ' left for the next weekly read, ' + fillState.cap + ' a week)' : ' (the page did not answer, or the weekly read reaches it next time)')
       + ' — until then a search is matched to them on their address alone' : '' };
-  return { json: { site_id: s.site_id, domain: s.domain, pages: merged.pages, rows, total: merged.pages.length, changed: rows.length, stored: was.size, by_source: bySource, title_unknown,
+  // RV-1: the pages that no longer answer, as the inventory knows them now (read this run or before), and what was read this run
+  const gone = SM.gonePages(merged).map(p => ({ url: p.url, http_status: p.http_status, status_at: p.status_at }));
+  const stPlan = ((grabAll('Status Targets (Site)')[0] || {}).status_plan || []).find(x => x && x.site_id === s.site_id) || null;
+  const status_check = { read: [...statusBy.keys()].filter(k => k.indexOf(s.site_id + '|') === 0).length, planned: stPlan ? stPlan.planned : 0, left: stPlan ? stPlan.left : 0, gone: gone.length,
+    note: stPlan ? 'the pages Google shows that the sitemap does not list are read each week (redirects followed), the most impressions first' + (stPlan.left ? '; ' + stPlan.left + ' are left for next week' : '') : 'not read in this run' };
+  return { json: { site_id: s.site_id, domain: s.domain, pages: merged.pages, rows, total: merged.pages.length, changed: rows.length, stored: was.size, by_source: bySource, title_unknown, gone, status_check,
     measured: perfBy.size, decaying: [...perfBy.values()].filter(p => p.state === 'decaying').length,
     decay_summary: (gsc && gsc.decay_summary) || null,
     sitemap_read: !!(det && (det.sitemap || {}).ok), with_queries: merged.pages.filter(p => (p.queries || []).length).length } };

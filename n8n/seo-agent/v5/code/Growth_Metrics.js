@@ -3,6 +3,9 @@
 // actions ranked by value, alerts; plus the rows for seo_ai_pages, seo_ai_targets, seo_link_prospects, seo_ai_growth and seo_cache.
 /*__SITE_MODEL__*/
 /*__DRAFTS__*/
+// RV-1 / RV-16 (2026-10-21): key pages that answer 404 (old addresses AI still cites) are ONE redirect action with the page each should go to,
+// not "fix X (answers 404)" one by one, and they have no readiness score (the average was 25 with them at 0, 52-70 without)
+/*__GONE__*/
 const plans = $('Growth Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const all = (n) => { try { return $(n).all().map(i => i.json); } catch (e) { return []; } };
 const ready = all('AI Readiness').filter(x => !x.skip), earnedAll = all('Earned Media').filter(x => !x.skip);
@@ -101,7 +104,12 @@ for (const p of plans) {
       errors: er.filter(x => !x.r || (!x.r.search && !x.r.query)).length }; }
   // ---- actions (most valuable first) and alerts ----
   const actions = []; const alerts = [];
-  for (const r of pages.filter(r => !r.status || r.status >= 400 || r.checks.some(c => c.key === 'indexable' && c.ok === false && r.status >= 200 && r.status < 300))) {
+  const goneP = pages.filter(r => r.gone || GONE.isGone(r.status));
+  const gone_pages = GONE.plan(goneP.map(r => ({ url: r.url, status: r.status })), [...pages.filter(r => r.status >= 200 && r.status < 300), ...(p.key_pages || [])].filter(k => !goneP.some(g => keyOf(g.url) === keyOf(k.url))),
+    SM.siteUrl({ canonical_host: p.site_host, domain: p.domain }, '/'));
+  { const ga = GONE.action(gone_pages); if (ga) { actions.push({ ...ga, why: gone_pages.length + ' key page(s) AI cites or that we track answer ' + [...new Set(gone_pages.map(r => r.status || 404))].join(' / ') + ': every assistant and every searcher who follows them lands on an error page. Do not improve or submit these pages: they no longer exist.' });
+    alerts.push({ level: 'high', text: gone_pages.length + ' key page(s) no longer answer (' + gone_pages.slice(0, 3).map(r => r.from).join(', ') + (gone_pages.length > 3 ? ' and more' : '') + '): redirect them to the closest live page.' }); } }
+  for (const r of pages.filter(r => !(r.gone || GONE.isGone(r.status)) && (!r.status || r.status >= 400 || r.checks.some(c => c.key === 'indexable' && c.ok === false && r.status >= 200 && r.status < 300)))) {
     actions.push({ priority: 1, type: 'access', action: 'Fix ' + r.url + (r.status >= 400 || !r.status ? ' (answers ' + (r.status || 'nothing') + ')' : ' (not indexable)'), why: r.issues[0] || 'Assistants cannot use a page they cannot fetch or index.' });
     if (['cited', 'target', 'ladder', 'content', 'home'].includes(r.kind)) alerts.push({ level: 'high', text: 'Key page ' + r.url + ' cannot be used by AI: ' + (r.issues[0] || 'error ' + r.status) });
   }
@@ -130,7 +138,7 @@ for (const p of plans) {
   for (const e of earned.filter(e => e.draft || e.action_type === 'reply').slice(0, 3)) actions.push({ priority: 1, type: 'earned', action: e.action, why: 'AI cited "' + (e.title || e.url) + '" ' + e.citations + 'x (' + e.engines.join(', ') + ') for "' + (e.questions[0] || '') + '"' + (e.competitors_named.length ? '; it names ' + e.competitors_named.join(', ') + ' and not you' : '') + (e.draft ? '. A draft is ready.' : ''), url: e.url, draft: e.draft });
   if (!verified) actions.push({ priority: 2, type: 'indexnow', action: 'Put one file on the website: ' + indexnow.key_url, why: 'The file contains just ' + p.indexnow_key + '. Then every new or updated page is notified the same day to the IndexNow engines — Bing (which Microsoft Copilot answers from), Yandex, Naver, Seznam, Yep and Amazon; Google does not take part, and a notification is not an indexing.', key: p.indexnow_key, key_url: indexnow.key_url });
   if (BING && !inAccount) actions.push({ priority: 2, type: 'bing', action: 'Add ' + p.site_host + ' to Bing Webmaster Tools', why: 'Import it from Google Search Console (one click) in the account the agent reads: new pages are then submitted to Bing every week and Bing\'s crawl of each key page is checked.' });
-  for (const t of queued.slice(0, 2)) actions.push({ priority: 2, type: t.kind === 'refresh' ? 'refresh' : 'content', action: (t.kind === 'refresh' ? 'Refresh ' + t.page_url + ' to answer "' : 'Write an answer page for "') + t.question + '"', why: t.reason + (p.ai_pages_month > 0 ? '. Queued: the Monday content run writes it (' + p.ai_pages_month + ' AI pages a month).' : '. AI pages are off for this site: write it from the AI visibility page.'), target_id: t.target_id,
+  for (const t of queued.filter(t => !(t.kind === 'refresh' && gone_pages.some(g => keyOf(g.from_url) === keyOf(t.page_url)))).slice(0, 2)) actions.push({ priority: 2, type: t.kind === 'refresh' ? 'refresh' : 'content', action: (t.kind === 'refresh' ? 'Refresh ' + t.page_url + ' to answer "' : 'Write an answer page for "') + t.question + '"', why: t.reason + (p.ai_pages_month > 0 ? '. Queued: the Monday content run writes it (' + p.ai_pages_month + ' AI pages a month).' : '. AI pages are off for this site: write it from the AI visibility page.'), target_id: t.target_id,
     api_body: { mode: 'keyword', keyword: t.keyword, country: p.country, domain: p.domain, page_type: t.page_type || 'Guide', existing_page_url: t.kind === 'refresh' ? t.page_url : '', receive: ['Keyword Report', 'Page Content'], ai_target: { question: t.question, kind: t.kind, fanout: t.fanout.split(' | ').filter(Boolean), sources: JSON.parse(t.sources_json || '[]'), competitors: t.competitors.split(', ').filter(Boolean), target_id: t.target_id } } });
   for (const r of pages.filter(r => ['cited', 'target', 'ladder', 'content'].includes(r.kind) && r.score != null && r.checks.some(c => (c.key === 'fresh' || c.key === 'answer_first') && c.ok !== true)).slice(0, 3)) actions.push({ priority: 3, type: 'page', action: 'Improve ' + r.url + ' (AI-readiness ' + r.score + '/100)', why: r.issues.slice(0, 2).join(' ') });
   if (entity && !entity.found) actions.push({ priority: 3, type: 'entity', action: 'Become a recognised entity', why: 'No Wikidata item has ' + p.domain + ' as its official website. Wikidata accepts organisations with independent sources (press, registries): once covered, create the item with the website (P856), the founding date and the location — knowledge graphs feed AI answers.' });
@@ -158,6 +166,7 @@ for (const p of plans) {
     targets: targets.map(t => ({ target_id: t.target_id, question: t.question, kind: t.kind, page_url: t.page_url, status: t.status, value: t.value, reason: t.reason, engines: t.engines, competitors: t.competitors })),
     // B-G2 (2026-10-15): the rungs the read-path fit gate set aside, with the reason, so the report says why the list is shorter
     set_aside: p.set_aside || [], set_aside_note: p.set_aside_note || '',
-    earned, earned_basis: p.earned_basis || null, corrections, entity, actions: actions.slice(0, 12), alerts, drafts_written, handed_over, page_rows, target_rows: targets, prospect_rows, growth_row, cache_rows } });
+    earned, earned_basis: p.earned_basis || null, corrections, entity, actions: actions.slice(0, 12), alerts, drafts_written, handed_over, page_rows, target_rows: targets, prospect_rows, growth_row, cache_rows,
+    gone_pages } });   // RV-1: the key pages that no longer answer, with the redirect each needs
 }
 return out.length ? out : [{ json: { skip: true } }];
