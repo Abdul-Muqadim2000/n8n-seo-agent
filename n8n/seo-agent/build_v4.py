@@ -12040,15 +12040,29 @@ add_node('Ladder Title Requests', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/
 if_node('Title Read Wanted?', '{{ $json.title_check === true }}', [_lp144[0] - 440, _lp144[1] + 420])
 add_node('Read Ladder Titles', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True,
     'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.15)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
-    'options': {'timeout': 15000, 'batching': {'batch': {'batchSize': 2, 'batchInterval': 300}}, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}},
+    'options': {'timeout': 15000, 'batching': {'batch': {'batchSize': 2, 'batchInterval': 300}}, 'redirect': {'redirect': {'followRedirects': False}},
                 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
     [_lp144[0] - 220, _lp144[1] + 340], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
+# KW-LADDER (review 2026-10-21 item 15): no redirect is followed blindly (it went up to 5 hops to any host and gave the final page's title to
+# the client's URL). Ladder Title Hops follows a redirect once, only to the same page on the client's own host (www / bare, a trailing slash);
+# Ladder Titles reports every other redirect as redirected, never titled.
+add_node('Ladder Title Hops', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Title_Hops.js')}, [_lp144[0] - 110, _lp144[1] + 560])
+if_node('Title Hop Wanted?', '{{ $json.hop === true }}', [_lp144[0] + 0, _lp144[1] + 640])
+add_node('Read Ladder Titles (Redirect)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.15)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'timeout': 15000, 'batching': {'batch': {'batchSize': 2, 'batchInterval': 300}}, 'redirect': {'redirect': {'followRedirects': False}},
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [_lp144[0] + 110, _lp144[1] + 560], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
 add_node('Ladder Titles', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Titles.js')}, [_lp144[0], _lp144[1] + 420])
 connect('After Count (Ladder Keyword Relevance)', 'Ladder Title Requests')
 connect('Ladder Title Requests', 'Title Read Wanted?')
 connect('Title Read Wanted?', 'Read Ladder Titles', 0); connect('Title Read Wanted?', 'Ladder Titles', 1)
-connect('Read Ladder Titles', 'Ladder Titles')
+connect('Read Ladder Titles', 'Ladder Title Hops'); connect('Ladder Title Hops', 'Title Hop Wanted?')
+connect('Title Hop Wanted?', 'Read Ladder Titles (Redirect)', 0); connect('Title Hop Wanted?', 'Ladder Titles', 1)
+connect('Read Ladder Titles (Redirect)', 'Ladder Titles')
 connect('Ladder Titles', 'Ladder Plan')
+for _n144 in ('Read Ladder Titles', 'Read Ladder Titles (Redirect)'):
+    assert nodes[_n144]['parameters']['options']['redirect']['redirect'] == {'followRedirects': False}, 'KW-LADDER: ' + _n144 + ' follows redirects to any host'
 assert [t['node'] for l in conns['Ladder Titles']['main'] for t in l] == ['Ladder Plan'], 'D7: the title read does not reach Ladder Plan'
 assert 'Ladder Plan' not in [t['node'] for l in conns['After Count (Ladder Keyword Relevance)']['main'] for t in l], 'D7: Ladder Plan still runs before the title read'
 assert "$('Ladder Keyword Relevance').all()" in code('Ladder Plan'), 'D7: Ladder Plan must read the relevance screen by name (its input is the title read now)'
