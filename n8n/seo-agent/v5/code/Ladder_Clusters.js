@@ -1,3 +1,4 @@
+/*__COMPETITORS__*/
 /*__KW_INPUTS__*/
 /*__DFS_RETRY__*/
 // B2-4 (2026-10-15, benchmark area 2, criterion K7): the rung candidates' results pages, read once, turned into clusters of searches
@@ -21,7 +22,16 @@ const out = { available: false, asked: asked.filter(r => !r.supporting_check).le
   left_uncompared: plan0.left_uncompared || 0, price_usd: KWI.CFG.serp_check_usd, cost_usd: 0, cost_basis: '', top_n: 7, min_overlap_pct: 40,
   min_shared_urls: 3, clusters: [], of_keyword: {}, not_compared: [], skip_reason: String(plan0.skip_reason || ''), note: '' };
 
+// KW-COMP (2026-10-21, RV-6): who this ladder competes with, from the results pages the run already bought (the main keyword's own page
+// and every rung keyword's page read below): a business that ranks on several of them, weighted by position, the declared ones first;
+// job boards, directories, authorities, help subdomains and the rest are passed over with their kind (CMP). Nothing new is bought.
+const cmpSerps = [];
+const headSerp = (pool.competitors_summary || []).filter(c => c && (c.domain || c.url)).map(c => ({ type: 'organic', domain: c.domain, url: c.url, title: c.title, description: c.snippet, rank_group: Number(c.rank) || null }));
+if (headSerp.length) cmpSerps.push({ keyword: String(pool.keyword || ''), items: headSerp });
+const ladderCompetitors = () => { const r = CMP.select({ serps: cmpSerps, declared: pool.competitors || ((pool.site_model || {}).competitors) || [], own_domain: pool.domain, n: 5 });
+  return { picked: r.picked, excluded: r.excluded.slice(0, 12), too_few: r.too_few.slice(0, 5), serps_read: r.serps_read, min_serps: r.min_serps, note: r.note }; };
 if (!asked.length) {
+  out.competitors = ladderCompetitors();
   out.cost_basis = 'no results page was bought on this run, so nothing was spent on comparing the rungs';
   out.note = out.skip_reason ? 'The rung keywords were not compared on their results pages: ' + out.skip_reason + '.' : '';
   return [{ json: { ...pool, serp_clusters: out } }];
@@ -72,8 +82,10 @@ asked.forEach((q, i) => {
   out.types_of[String(q.keyword).toLowerCase()] = (({ read, dominant, dominant_count, dominant_share, counts }) => ({ read, dominant, dominant_count, dominant_share, counts }))(KWI.serpPageTypes(its.slice(0, out.top_n).map(x => ({ url: x.url || x.domain, title: x.title || '' })), {}));
   out.titles_of[String(q.keyword).toLowerCase()] = its.slice(0, 4).map(x => String(x.title || '').replace(/\s+/g, ' ').trim().slice(0, 90)).filter(Boolean);
   (q.supporting_check ? supportingEntries : entries).push({ keyword: q.keyword, urls, weight: Number(q.weight) || 0, volume: q.volume });
+  if (String(q.keyword || '').toLowerCase() !== String(pool.keyword || '').toLowerCase()) cmpSerps.push({ keyword: q.keyword, items: its });
 });
 out.compared = entries.length;
+out.competitors = ladderCompetitors();
 out.supporting_compared = supportingEntries.length;
 
 const overlap = KWI.serpClusters(entries, { top_n: out.top_n, min_overlap: out.min_overlap_pct / 100 });

@@ -19645,6 +19645,7 @@ await require('./scenarios_ladder_picture')({ H, run, mock, store, guard, reset,
 
 await require('./scenarios_kw_accuracy')({ H, run, mock, store, guard, reset, begin });   // KWACC (KW-ACC 2026-10-21): the labelled keyword business-fit set (accuracy/keywords.json), kit + full report, ratcheted on accuracy/KEYWORDS_BASELINE.md
 await require('./scenarios_kwmatch')({ H, run, mock, store, guard, reset, begin });   // KM1-KM8 (KW-MATCH 2026-10-21): K8 the page ABOUT a search (core words, IDF, services, confidence, evidence, may overlap) and K1 the topic reach from the site's own Search Console readings with the sample printed
+await require('./scenarios_kwcomp')({ H, run, mock, store, guard, reset, begin });   // KC1-KC5 (KW-COMP 2026-10-21, K6 / A-24 / RV-6): one competitor rule (v5/code/_competitors.js) - kinds, overlap scoring, declared first; research, full report, ladder
 
 H.report();
 })();

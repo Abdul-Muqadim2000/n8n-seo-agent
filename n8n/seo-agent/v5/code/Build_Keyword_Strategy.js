@@ -311,7 +311,7 @@ const html = `
   ${table(ks.questions || [], KW.slice(0, 5))}
 
   <h2>Keywords competitors rank for and you should too</h2>
-  <p class="muted">Competitors checked: ${esc((ks.competitor_domains || []).join(', ') || 'none found')}${ks.competitor_basis && ks.competitor_basis.note ? ' — chosen from ' + esc(ks.competitor_basis.note) : ''}.</p>
+  <p class="muted">Competitors checked: ${esc((((ks.competitor_basis || {}).picked) || []).length ? ks.competitor_basis.picked.map(p => p.domain + (p.how ? ' (' + p.how + ')' : '')).join('; ') : ((ks.competitor_domains || []).join(', ') || 'none found'))}.${ks.competitor_basis && ks.competitor_basis.note ? ' How they were chosen: ' + esc(ks.competitor_basis.note) : ''}</p>
   ${table(ks.competitor_gaps || [], [...KW.slice(0, 5), ['Competitors in top 20', k => esc((k.competitors || []).map(c => c.domain + ' #' + c.position).slice(0, 3).join(', '))]])}
 
   <h2>Long-tail phrases (4+ words)</h2>

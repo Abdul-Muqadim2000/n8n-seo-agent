@@ -63,7 +63,7 @@ module.exports = async (ctx) => {
       doms[0] === 'cleartax.com' && doms[1] === 'azentio.com' && doms[2] === 'hlbhamt.com', JSON.stringify(doms));
     check('A-24: every competitor says how it was chosen, and the passed-over results say why (job board, directory, list)',
       basis.picked.length === 3 && basis.picked.every(p => p.how) && basis.skipped.some(s => s.domain === 'naukrigulf.com' && s.why === 'job board')
-      && basis.skipped.some(s => s.domain === 'themanifest.com' && /directory/.test(s.why)) && /passed over on that page: naukrigulf\.com — job board/.test(basis.note), JSON.stringify(basis).slice(0, 600));
+      && basis.skipped.some(s => s.domain === 'themanifest.com' && /directory/.test(s.why)) && /Passed over: .*naukrigulf\.com \(job board\)/.test(basis.note), JSON.stringify(basis).slice(0, 600));
     // with no declared competitors the results page alone decides, and still never a job board
     const seedNo = { ...FX.seed764, competitors: [], site_model: { competitors: [] } };
     mock('Seed List', [{ json: seedNo }]);
