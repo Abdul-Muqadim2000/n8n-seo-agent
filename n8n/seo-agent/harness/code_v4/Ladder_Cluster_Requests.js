@@ -465,7 +465,12 @@ const RAD = (() => {
     const kd = num(t.kd), pos = num(t.your_position);
     const diff = difficultyForYou(kd, reach, { position: pos });
     const toks = tokens([t.topic, t.primary_keyword, (t.keywords || []).map(k => S(k.keyword || k)).join(' ')].join(' '));
-    const hits = anchorList.map(a => ({ a, common: shared(toks, a.tokens) })).filter(x => x.common.length >= CFG.min_service_tokens)
+    // E-GATE (2026-10-21, pre-launch run RV-20): a site topic that IS one of this topic's own keywords cannot vouch for it. The ladder passes
+    // its head and the verdict's secondary keywords as site topics, so the head's topic read "it is one of your topics: "AI strategy
+    // consulting Dubai"", the plan quoting its own keyword back as evidence. Such an anchor is skipped; a service or a page still counts.
+    const ownKw = new Set([t.topic, t.primary_keyword, ...(t.keywords || []).map(k => S(k.keyword || k))].map(x => tokens(x).slice().sort().join(' ')).filter(Boolean));
+    const hits = anchorList.filter(a => !(a.kind === 'topic' && ownKw.has(a.tokens.slice().sort().join(' '))))
+      .map(a => ({ a, common: shared(toks, a.tokens) })).filter(x => x.common.length >= CFG.min_service_tokens)
       .sort((x, y) => y.common.length - x.common.length);
     const near = hits[0] || null;
     const evidence = [];

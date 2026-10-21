@@ -346,7 +346,7 @@
      "node": "AI Brief",
      "ref": "$('AI Brief Input').item.json",
      "streaming": false,
-     "template_chars": 1636
+     "template_chars": 1857
     },
     {
      "after": [
@@ -1104,7 +1104,7 @@
      "node": "Site Brief",
      "ref": "$('Brief Input').item.json",
      "streaming": false,
-     "template_chars": 3143
+     "template_chars": 3590
     }
    ],
    "ai_nodes": [

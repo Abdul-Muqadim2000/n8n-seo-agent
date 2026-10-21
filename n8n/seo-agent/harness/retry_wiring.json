@@ -2079,6 +2079,13 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Fetch Page Status (Site)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "Render PDF Site",
     "retryOnFail": true,
     "waitBetweenTries": 5000

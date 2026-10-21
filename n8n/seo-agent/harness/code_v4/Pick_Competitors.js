@@ -25,7 +25,8 @@ const BIG = ['microsoft.com', 'google.com', 'youtube.com', 'linkedin.com', 'face
   'pinterest.com', 'tiktok.com', 'github.com', 'indeed.com', 'glassdoor.com', 'forbes.com', 'clutch.co', 'g2.com',
   'goodfirms.co', 'capterra.com', 'trustpilot.com', 'crunchbase.com', 'yelp.com', 'upwork.com', 'fiverr.com',
   'sortlist.com', 'designrush.com', 'gartner.com', 'techradar.com', 'bayut.com', 'dubizzle.com', 'yellowpages.ae'];
-const isBig = (d) => BIG.some(b => d === b || d.endsWith('.' + b)) || /\.(gov|edu)(\.|$)/.test(d);
+const isBig = (d) => BIG.some(b => d === b || d.endsWith('.' + b)) || /\.(gov|edu)(\.|$)/.test(d)
+  || /^(help|support|docs|doc|kb|knowledge|knowledgebase|community|academy|status|developer|developers|forum|forums|answers|faq|careers|jobs|learn)\./.test(d);   // RV-6 (2026-10-21): help.ardoq.com was a "competitor" of an AI consultancy
 const clean = (d) => String(d || '').toLowerCase().replace(/^www\./, '');
 const isOurs = (d) => d === ours || d.endsWith('.' + ours);
 

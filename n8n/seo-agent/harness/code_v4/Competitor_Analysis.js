@@ -46,6 +46,7 @@ const med = {
   domain_age_years: r1(median(comps.map(c => c.domain_age_years)))
 };
 
+const MIN_TOP10_143 = 10, MIN_ETV_143 = 50;   // RV-6 (2026-10-21): under these the competitors' side says nothing (techand.ai: a median of 0 top-10 rankings and 4 visits)
 const findings = [];
 const works = [];
 const F = (severity, title, evidence, why, fix) => findings.push({
@@ -61,19 +62,19 @@ if (!metricsRead76) {
     why: 'Rankings, traffic and authority comparisons are left out of this report: nothing was measured. This is not "no rankings".',
     fix: 'No action needed — the check is made again on the next run.',
     sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false });
-} else if ((you.top10 || 0) === 0) {
+} else if ((you.top10 || 0) === 0 && (!comps.length || med.top10 == null || med.top10 >= MIN_TOP10_143)) {
   F('High', 'The site does not rank in Google’s top 10 for any keyword',
     'Top-10 rankings in ' + (base.country || 'the target country') + ': ' + base.domain + ' 0' + (comps.length ? ' vs competitor median ' + (med.top10 ?? 'N/A') + ' (' + names + ')' : ''),
     'Without top-10 rankings the site gets almost no organic traffic, however good the pages are.',
     'Build authority first (partner listings, directories, reviews, mentions) and target long-tail keywords where competitors are weak.');
-} else if (med.top10 && you.top10 < med.top10 * 0.25) {
+} else if (med.top10 && med.top10 >= MIN_TOP10_143 && you.top10 < med.top10 * 0.25) {
   F('High', 'Far fewer top-10 rankings than competitors', base.domain + ' ' + you.top10 + ' vs competitor median ' + med.top10,
     'Competitors are visible for many more searches.', 'Use the keyword gap to target terms competitors rank for, starting with low-difficulty ones.');
 } else if (comps.length) {
   works.push('Top-10 rankings comparable with competitors (' + you.top10 + ' vs median ' + med.top10 + ')');
 }
 
-if (metricsRead76 && comps.length && med.est_monthly_traffic && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {
+if (metricsRead76 && comps.length && med.est_monthly_traffic && med.est_monthly_traffic >= MIN_ETV_143 && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {
   F('High', 'Organic traffic is under 10% of competitors',
     'Estimated monthly organic visits: ' + base.domain + ' ' + (you.est_monthly_traffic || 0) + ' vs competitor median ' + Math.round(med.est_monthly_traffic).toLocaleString('en-GB'),
     'Most searchers in this market are going to competitors.', 'Close the keyword and backlink gaps shown in this report.');

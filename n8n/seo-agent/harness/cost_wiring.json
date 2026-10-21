@@ -101,10 +101,12 @@
     "keyword",
     "language_name",
     "page_type",
+    "pricing_facts",
     "proof_context",
     "role_writer",
     "site_description",
     "spelling",
+    "timeline_facts",
     "tone",
     "verdict_exclusions",
     "video_context"
@@ -116,7 +118,7 @@
    "model": "claude-opus-5-5",
    "node": "Copywriter",
    "streaming": true,
-   "template_chars": 10487
+   "template_chars": 11251
   },
   {
    "count_answer": "Count Answer (Critic)",
@@ -217,7 +219,9 @@
     "keyword",
     "language_name",
     "output",
-    "spelling"
+    "pricing_facts",
+    "spelling",
+    "timeline_facts"
    ],
    "from": [],
    "input": "Needs Revision?",
@@ -226,7 +230,7 @@
    "model": "claude-opus-5-5",
    "node": "Editor",
    "streaming": true,
-   "template_chars": 6933
+   "template_chars": 7508
   },
   {
    "count_answer": "Count Answer (Keyword Relevance)",

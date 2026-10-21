@@ -118,7 +118,7 @@ const SM = (() => {
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
 
     const pages = (Array.isArray(x.pages) ? x.pages : []).map(p => ({ url: S(p.url), title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod),
-      queries: Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []) })).filter(p => p.url);
+      queries: Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []), http_status: Number(p.http_status) || 0, status_at: S(p.status_at) })).filter(p => p.url);
 
     const business_facts = S(req.business_facts || x.business_facts || row.business_facts).slice(0, 2000);
     const cta = S(req.cta || x.cta || row.cta).slice(0, 200);
@@ -175,12 +175,17 @@ const SM = (() => {
   const LISTING = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:insights|blog|blogs|news|articles|resources|posts|updates|knowledge|learn|library|stories|press|media|case-studies)\/?$|\/(?:category|categories|tag|tags|page|author|topics?)\/[^/]+\/?$/i;
   const isListing = (u) => { const p = pathOf(u).replace(/[?#].*$/, ''); return LISTING.test(p); };
   const untitled = (model) => pages(model).filter(p => !S(p.title) && !S(p.h1));
+  // RV-1 (2026-10-21): a page whose address answered 404 / 410 when it was last read (redirects followed: the bare host 308s to www, which
+  // 404s) is GONE. It is still in the inventory (Google keeps showing it), but no advice may point at it: matchPage never returns it as
+  // "the page that answers this search", and the readers list it as a redirect to make (v5/code/_gone.js). Unknown (0) is not gone.
+  const isGone = (p) => { const n = Number((p || {}).http_status) || 0; return n === 404 || n === 410; };
+  const gonePages = (model) => pages(model).filter(isGone);
   const matchPage = (model, keyword, prefer) => {   // `prefer`: a URL that wins a tie (the page Search Console itself credits for the search)
     const prefKey = prefer ? bare(hostOf(prefer)) + pathOf(prefer).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase() : "";
     const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
     const want = matchTerms(keyword); if (!want.length) return null;
     const key = tokensOf(keyword).join(' ');
-    const inv = pages(model);
+    const inv = pages(model).filter(p => !isGone(p));   // RV-1: a gone page answers nothing
     const byQuery = [];
     for (const p of inv) {
       const q = (p.queries || []).find(x => tokensOf(x.query || x.keyword || x).join(' ') === key && (Number((x || {}).impressions) || 0) > 0);
@@ -225,8 +230,10 @@ const SM = (() => {
   const queriesOf = (p) => Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []);
   const withPages = (model, more) => ({ ...model, pages: (() => { const seen = new Set(); const out = [];
     for (const p of [...pages(model), ...(Array.isArray(more) ? more : [])]) { const u = S(p.url); if (!u) continue; const k = pathOf(u).replace(/\/$/, '').toLowerCase();
-      if (seen.has(k)) { const old = out.find(o => pathOf(o.url).replace(/\/$/, '').toLowerCase() === k); if (old) { old.title = old.title || S(p.title); old.h1 = old.h1 || S(p.h1); old.lastmod = old.lastmod || S(p.lastmod); const q = queriesOf(p); if (q.length) old.queries = q; } continue; }
-      seen.add(k); out.push({ url: u, title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries: queriesOf(p) }); }
+      if (seen.has(k)) { const old = out.find(o => pathOf(o.url).replace(/\/$/, '').toLowerCase() === k); if (old) { old.title = old.title || S(p.title); old.h1 = old.h1 || S(p.h1); old.lastmod = old.lastmod || S(p.lastmod); const q = queriesOf(p); if (q.length) old.queries = q;
+        // RV-1: the newest reading of the address wins (a page that came back after a redirect was added is live again)
+        if ((Number(p.http_status) || 0) && S(p.status_at) >= S(old.status_at)) { old.http_status = Number(p.http_status) || 0; old.status_at = S(p.status_at); } } continue; }
+      seen.add(k); out.push({ url: u, title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries: queriesOf(p), http_status: Number(p.http_status) || 0, status_at: S(p.status_at) }); }
     return out; })() });
   // the model exactly as it was stored (seo_sites row or a seo_cache value), with its own timestamp -- never "now", so isFresh() is honest
   const stored = (row) => { const r = (row && typeof row === 'object') ? row : {}; return (S(r.canonical_host) || S(r.model_updated_at)) ? from(r, {}) : null; };
@@ -251,7 +258,8 @@ const SM = (() => {
     source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString(),
     clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
     decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
-    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
+    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at),
+    http_status: num0(p.http_status), status_at: S(p.status_at) }));   // RV-1: what the address answered when it was last read (0 = not read)
   // ---- C-7 (re-rating 2026-10-17): ONE page state per keyword, read by the Rank Tracker AND the Site Tracker (and so by the cadence) ----
   // In one morning the Rank Tracker said of "ai consulting" "…/ai-copilot-advisory-uae already answers this search - refresh that page"
   // while the Site Tracker said "fix the four drafts that failed the quality check and run them again", and of "it consulting dubai"
@@ -269,7 +277,7 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
 })();
 const CONFIG = { max_pages: 2000, queries_per_page: 10, min_impressions: 1 };
@@ -281,6 +289,11 @@ const grabAll = (name) => { try { return $(name).all().map(i => i.json || {}); }
 const gscAll = grab('Parse GSC');
 const aiPages = grab('Load AI Pages (Site)').filter(r => r.site_id && r.url);
 const stored = grab('Load Pages (Site)').filter(r => r.site_id && r.url);
+// RV-1 (2026-10-21): what the pages Google shows outside the sitemap answered this run (Status Targets (Site) -> Fetch Page Status (Site),
+// redirects followed, paired by position). A bot wall, a rate limit or no answer is NOT a status: the row keeps what it had.
+const stReq = grabAll('Status Targets (Site)').filter(x => x && x.url && !x.skip), stRes = grabAll('Fetch Page Status (Site)');
+const statusBy = new Map(); stReq.forEach((q, i) => { const r = stRes[i] || {}; const st = Number(r.statusCode != null ? r.statusCode : r.status) || 0;
+  if (!st || st === 401 || st === 403 || st === 429) return; statusBy.set(q.site_id + '|' + String(q.url || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, ''), { url: q.url, status: st }); });
 const now = new Date().toISOString();
 const S = (v) => String(v == null ? '' : v).trim();
 const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
@@ -288,7 +301,7 @@ const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www
 // must reach the Content Cadence this week, not next time its title changes.
 const PERF = ['clicks', 'impressions', 'position', 'prev_clicks', 'yoy_clicks', 'decay_state', 'decay_pct', 'decay_lost', 'decay_kind', 'decay_basis'];
 const sameRow = (a, b) => !!b && S(a.title) === S(b.title) && S(a.h1) === S(b.h1) && S(a.source) === S(b.source) && S(a.lastmod) === S(b.lastmod) && S(a.queries_json) === S(b.queries_json)
-  && PERF.every(k => S(a[k]) === S(b[k]));
+  && PERF.every(k => S(a[k]) === S(b[k])) && (Number(a.http_status) || 0) === (Number(b.http_status) || 0);   // RV-1: a page that went from live to gone (or back) is written
 // the empty measurement: a page Search Console said nothing about this week keeps the columns it already had, and a page that was
 // never measured carries zeros with `decay_state: ''` — never a "steady" that nothing stood behind.
 const EMPTY_PERF = { clicks: 0, impressions: 0, position: 0, prev_clicks: 0, yoy_clicks: 0, decay_state: '', decay_pct: 0, decay_lost: 0, decay_kind: '', decay_basis: '', measured_at: '' };
@@ -312,7 +325,9 @@ return sites.map((s, idx) => {
   // 4. AI Growth's key pages (they already carry the page title)
   for (const r of aiPages.filter(r => r.site_id === s.site_id)) add.push({ url: r.url, title: r.title, source: 'ai_pages' });
   // 5. what is already stored (a page that left the sitemap is still live until our own check says otherwise)
-  for (const r of stored.filter(r => r.site_id === s.site_id)) add.push({ url: r.url, title: r.title, h1: r.h1, source: r.source || 'sitemap', lastmod: r.lastmod, queries_json: r.queries_json });
+  for (const r of stored.filter(r => r.site_id === s.site_id)) add.push({ url: r.url, title: r.title, h1: r.h1, source: r.source || 'sitemap', lastmod: r.lastmod, queries_json: r.queries_json, http_status: r.http_status, status_at: r.status_at });
+  // 6. RV-1: this run's answers win over what was stored (SM.withPages keeps the newest reading)
+  for (const [k, v] of statusBy) if (k.indexOf(s.site_id + '|') === 0) add.push({ url: v.url, source: 'gsc', http_status: v.status, status_at: now });
   const merged = SM.withPages(model, add.slice(0, CONFIG.max_pages * 4));
   merged.pages = merged.pages.slice(0, CONFIG.max_pages);
   merged.model_updated_at = merged.model_updated_at || now;
@@ -344,7 +359,12 @@ return sites.map((s, idx) => {
     note: gap.untitled ? 'title unknown for ' + gap.untitled + ' of ' + gap.pages + ' page(s): their <title> could not be read this week'
       + (fillState && fillState.left ? ' (' + fillState.left + ' left for the next weekly read, ' + fillState.cap + ' a week)' : ' (the page did not answer, or the weekly read reaches it next time)')
       + ' — until then a search is matched to them on their address alone' : '' };
-  return { json: { site_id: s.site_id, domain: s.domain, pages: merged.pages, rows, total: merged.pages.length, changed: rows.length, stored: was.size, by_source: bySource, title_unknown,
+  // RV-1: the pages that no longer answer, as the inventory knows them now (read this run or before), and what was read this run
+  const gone = SM.gonePages(merged).map(p => ({ url: p.url, http_status: p.http_status, status_at: p.status_at }));
+  const stPlan = ((grabAll('Status Targets (Site)')[0] || {}).status_plan || []).find(x => x && x.site_id === s.site_id) || null;
+  const status_check = { read: [...statusBy.keys()].filter(k => k.indexOf(s.site_id + '|') === 0).length, planned: stPlan ? stPlan.planned : 0, left: stPlan ? stPlan.left : 0, gone: gone.length,
+    note: stPlan ? 'the pages Google shows that the sitemap does not list are read each week (redirects followed), the most impressions first' + (stPlan.left ? '; ' + stPlan.left + ' are left for next week' : '') : 'not read in this run' };
+  return { json: { site_id: s.site_id, domain: s.domain, pages: merged.pages, rows, total: merged.pages.length, changed: rows.length, stored: was.size, by_source: bySource, title_unknown, gone, status_check,
     measured: perfBy.size, decaying: [...perfBy.values()].filter(p => p.state === 'decaying').length,
     decay_summary: (gsc && gsc.decay_summary) || null,
     sitemap_read: !!(det && (det.sitemap || {}).ok), with_queries: merged.pages.filter(p => (p.queries || []).length).length } };

@@ -38,12 +38,16 @@ reqs.forEach((q, i) => {
   const checks = []; const add = (key, ok, weight, label, fix, detail) => checks.push({ key, ok: ok === true ? true : ok === 'partial' ? 'partial' : false, weight, label, fix, detail: detail || '' });
   const issuesFirst = [];   // B9-3: what no assistant may read comes before anything on the page itself
   const reachable = status >= 200 && status < 300 && html.length > 200;
+  // RV-16 (2026-10-21): a key page that answers 404 / 410 is GONE (AI still cites old addresses of a rebuilt site): the fix is a redirect, never
+  // "remove the noindex" (a 404 page often carries one), and it has no readiness score, so it is not a 0 in the average
+  const gone = status === 404 || status === 410;
+  const GONE_FIX = 'The page no longer exists (HTTP ' + status + '): add a permanent (301) redirect from this address to the closest live page, so the AI answers and searches that still cite it reach a real page.';
   const noindex = /<meta[^>]+name=["'](?:robots|googlebot|bingbot)["'][^>]*content=["'][^"']*noindex/i.test(html) || /noindex/i.test(hdr('x-robots-tag'));
   const canon = (html.match(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']+)["']/i) || html.match(/<link[^>]+href=["']([^"']+)["'][^>]*rel=["']canonical["']/i) || [])[1] || '';
   const canonElsewhere = !!canon && /^https?:/i.test(canon) && keyOf(canon) !== keyOf(q.url);
   const tooBig = html.length > 4000000;
-  add('reachable', reachable && !tooBig, 20, 'Answers with the page (HTTP ' + (status || 'no answer') + ')', status >= 300 || !status ? 'The page did not answer with 200 — fix the error or the redirect so assistants can read it.' : 'The page is over 4 MB of HTML — ChatGPT skips pages that large; trim inline code and data.', tooBig ? Math.round(html.length / 1e6) + ' MB' : '');
-  add('indexable', reachable && !noindex && !canonElsewhere, 10, 'Indexable (no noindex, canonical to itself)', noindex ? 'Remove the noindex: search engines and the AI answers built on them drop the page.' : 'The canonical points to ' + canon + ' — AI and search engines treat that page as the original.', canonElsewhere ? canon : '');
+  add('reachable', reachable && !tooBig, 20, 'Answers with the page (HTTP ' + (status || 'no answer') + ')', gone ? GONE_FIX : status >= 300 || !status ? 'The page did not answer with 200: fix the error or the redirect so assistants can read it.' : 'The page is over 4 MB of HTML: ChatGPT skips pages that large; trim inline code and data.', tooBig ? Math.round(html.length / 1e6) + ' MB' : '');
+  add('indexable', reachable && !noindex && !canonElsewhere, 10, 'Indexable (no noindex, canonical to itself)', !reachable ? '' : noindex ? 'Remove the noindex: search engines and the AI answers built on them drop the page.' : 'The canonical points to ' + canon + ': AI and search engines treat that page as the original.', canonElsewhere ? canon : '');   // RV-16: a page that does not answer has one fix, the one above
   let score = 0, words_raw = 0, title = '', h1 = '', updated_on = '', updated_visible = false;
   if (reachable) {
     const clean = html.replace(/<!--[\s\S]*?-->/g, ' ').replace(/<(script|style|noscript|svg|template|iframe)\b[\s\S]*?<\/\1>/gi, ' ');
@@ -128,8 +132,9 @@ reqs.forEach((q, i) => {
   }
   const bi = bq.findIndex(x => x && x.kind === 'info' && x.site_id === q.site_id && keyOf(x.page) === keyOf(q.url)); const bd = bi >= 0 ? (jsonOf(br[bi]).d || null) : null;
   const pr = (p.stored_pages || []).find(x => x.key === keyOf(q.url)) || {};
-  const issues = [...issuesFirst, ...checks.filter(c => c.ok !== true && c.weight > 0).sort((a, b) => b.weight - a.weight).map(c => c.fix)];
-  out.push({ json: { site_id: q.site_id, domain: p.domain, url: q.url, kind: q.kind, checked_at: iso, status, score, checks, issues, words_raw, title, h1, updated_on, updated_visible,
+  if (gone) { score = null; score_withheld = (score_withheld ? score_withheld + '; ' : '') + 'the page no longer answers (HTTP ' + status + '), so it is not scored: redirect it'; }   // RV-16
+  const issues = [...issuesFirst, ...checks.filter(c => c.ok !== true && c.weight > 0).sort((a, b) => b.weight - a.weight).map(c => c.fix)].filter(Boolean);
+  out.push({ json: { site_id: q.site_id, domain: p.domain, url: q.url, kind: q.kind, checked_at: iso, status, score, checks, issues, words_raw, title, h1, updated_on, updated_visible, gone,
     fetchers_checked, fetchers: fetchTests, fetchers_note, findings,   // B9-8
     robots_checked, robots_blocked, robots_rule, robots_note, score_withheld,   // B9-3: a score is withheld, never guessed, when no AI fetcher may read the page
     bing_known: !!bd, bing_crawled_at: bd ? dateOfMs(bd.LastCrawledDate) : (pr.bing_crawled_at || ''), bing_status: bd ? (Number(bd.HttpStatus) || 0) : (Number(pr.bing_status) || 0), bing_discovered_at: bd ? dateOfMs(bd.DiscoveryDate) : '' } });

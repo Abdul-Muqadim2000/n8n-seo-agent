@@ -12,7 +12,9 @@ return $('AI Metrics').all().map(i => { const m = i.json; const M = m.metrics; c
     by_buyer_stage: (m.clusters.stages || []).map(s => s.key + ': named ' + s.mention_rate + '% (' + s.questions + ' questions' + (s.leader ? ', leader ' + s.leader : '') + ')'),
     by_topic: (m.clusters.clusters || []).slice(0, 6).map(s => s.key + ': named ' + s.mention_rate + '%' + (s.volume ? ', ' + s.volume + ' AI searches/mo' : '') + (s.leader ? ', leader ' + s.leader : '')),
     competitors: m.competitors.map(c => c.domain + ' ' + c.share + '% share (' + c.mentions + ' mentions)'),
-    sources_ai_trusts: m.sources.slice(0, 10).map(s => s.domain + ' (' + s.kind + ', ' + s.citations + ' citations)'), your_cited_pages: m.our_pages.map(x => x.url + ' ' + x.citations + 'x'),
+    sources_ai_trusts: m.sources.slice(0, 10).map(s => s.domain + ' (' + s.kind + ', ' + s.citations + ' citations)'), your_cited_pages: m.our_pages.filter(x => !x.gone).map(x => x.url + ' ' + x.citations + 'x'),
+    // RV-1 (2026-10-21): cited addresses that answer 404 are not pages to build on: the brief is told so, with the redirect each needs
+    ...((m.gone_cited || []).length ? { cited_pages_that_no_longer_answer: m.gone_cited.map(r => r.from_url + ' (HTTP ' + (r.status || 404) + ', cited ' + (r.citations || 0) + 'x) -> redirect to ' + r.to_url), cited_pages_note: 'These addresses no longer exist. Never advise building on, refreshing or linking to them: the only action is the redirect listed.' } : {}),
     questions_lost: m.gaps.map(g => g.prompt + (g.volume ? ' [' + g.volume + ' AI searches/mo]' : '') + ' → ' + g.competitors.slice(0, 3).join(', ')),
     what_ai_searched: (m.fanout || []).slice(0, 6).map(f => f.query),
     perception: { score: m.perception.score, positive: m.perception.positive, negative: m.perception.negative, words_ai_uses: m.perception.descriptors,
