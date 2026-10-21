@@ -64,7 +64,12 @@ const fitCtx = { own_domain: base.domain || '', competitors: (base.competitors |
 // this run's sitemap, SM.matchPage) instead of being recommended as a new page — writing a second page for the same search splits the
 // signals. The keyword stays in the list, so the owner can see it and refresh the page that exists.
 const siteModelD = (() => { try { const m = $('Site Model').first().json.site_model; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } })();
-const pageModelD = SM.withPages(siteModelD || SM.from({ domain: base.domain || '' }, {}), (base.site_urls || []).map(u => ({ url: u, source: 'sitemap' })));
+// KWL-RES follow-up: what the pages the research could offer answered when it opened them this run (Research Status Requests -> Read Research
+// Pages -> Research Page Status; null when that read did not run). A gone page joins the inventory as gone (newest reading wins in withPages).
+const pageStatusD = (() => { try { const x = $('Research Page Status').first().json.page_status; return (x && typeof x === 'object' && x.ran) ? x : null; } catch (e) { return null; } })();
+const statusReadD = new Map(((pageStatusD || {}).pages || []).map(p => [GONE.keyOf(p.url), p]));
+const pageModelD = SM.withPages(siteModelD || SM.from({ domain: base.domain || '' }, {}), [...(base.site_urls || []).map(u => ({ url: u, source: 'sitemap' })),
+  ...((pageStatusD || {}).pages || []).filter(p => p.state === 'gone' || p.state === 'live').map(p => ({ url: p.url, source: 'status check', http_status: p.http_status, status_at: pageStatusD.read_at }))]);
 // R36 (2026-10-16, re-rating 2026-10-15): the keyword's OWN Search Console row was never consulted, so six searches the site already ranks
 // for with /dynamics-365-finance-and-operations-uae (one at #6.2) were offered as new "Landing / Location Page" cards. A Search Console row
 // whose page is on this site is the strongest evidence there is: the keyword is covered by that page (with its position), and only a
@@ -86,6 +91,14 @@ const coveredBy = (kw, gsc) => {
   if (g && !(m && SM.isListing(g.page) && !SM.isListing(m.url))) return { url: SM.canonUrl(pageModelD, g.page), title: '', matched_by: 'search console', position: g.position ?? null,
     impressions: g.impressions ?? null, ...(m && SM.canonUrl(pageModelD, m.url) !== SM.canonUrl(pageModelD, g.page) ? { inventory_match: SM.canonUrl(pageModelD, m.url) } : {}) };
   return m ? { url: SM.canonUrl(pageModelD, m.url), title: m.title || '', matched_by: m.matched_by, ...(g ? { position: g.position ?? null } : {}), ...(m.listing ? { listing: m.listing } : {}) } : null; };
+// KWL-RES follow-up: "refresh the page you have" only for a page known to answer (opened this run, or a 2xx status on file). When the research
+// opened pages this run and this one could not be checked (no answer, a bot wall, it forwards elsewhere, or past the cap), the keyword keeps
+// the page as a possible answer, marked `checked: false` with the reason, and the advice is to check it, never to refresh it.
+const pageCheck = (u) => { if (!pageStatusD) return { checked: true };
+  const r = statusReadD.get(GONE.keyOf(u)); if (r && r.state === 'live') return { checked: true };
+  const p = SM.pages(pageModelD).find(x => GONE.keyOf(x.url) === GONE.keyOf(u)); const n = Number((p || {}).http_status) || 0; if (n >= 200 && n < 300) return { checked: true };
+  return { checked: false, check_reason: r ? (r.state === 'redirected' ? 'it ' + r.reason + (r.to ? ' (' + r.to + ')' : '') : 'it could not be opened (' + r.reason + ')') : 'it was not opened in this run (only the first ' + (pageStatusD.cap || 10) + ' pages are checked)' }; };
+const withCheck = (c) => c ? { ...c, ...pageCheck(c.url) } : null;
 // 2026-10-12 (FIX_PLAN D20): discovery now loads the site's own keyword ladders too (Load Domain Ladders (Discovery), the archived ones skipped
 // through seo_ladder_settings). A keyword a ladder head or one of its rungs already covers is marked `ladder_covered` instead of being
 // recommended as a new page: the live run offered "e invoicing" as the top pick while the ladder head "e invoicing in uae" was already running.
@@ -119,7 +132,7 @@ const kws = (base.research.candidates || []).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
   const page_type = PAGES.includes(r.page_type) ? r.page_type : defaultPage(intent);
-  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword, k.gsc), gone_ranking: goneRanking(k.gsc), ladder_covered: ladderCovers(k.keyword), ladder_near: ladderNear(k.keyword), ...forYou(k.kd, topicReachOf(r.topic, k.keyword)) };
+  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: withCheck(coveredBy(k.keyword, k.gsc)), gone_ranking: goneRanking(k.gsc), ladder_covered: ladderCovers(k.keyword), ladder_near: ladderNear(k.keyword), ...forYou(k.kd, topicReachOf(r.topic, k.keyword)) };
 }).filter(k => k.relevance > 0 && k.intent !== 'navigational').filter(k => {
   const g = fitGate(k.keyword, { ...fitCtx, intent: k.intent });
   if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail });
@@ -190,6 +203,7 @@ ordered.forEach(c => {
   // own header said "let that ladder finish" while the plan's first Now row was the same search. It is listed, with what to do instead.
   if (c.ladder_covered || c.covered_by) { c.tier = 'Covered';
     c.tier_note = c.ladder_covered ? 'in your ladder "' + c.ladder_covered.head_keyword + '" (' + c.ladder_covered.how + ') - let that ladder write it'
+      : c.covered_by.checked === false ? 'may already be answered by ' + c.covered_by.url + ', but ' + c.covered_by.check_reason + ': open it before writing a new page'
       : 'improve the page you have: ' + c.covered_by.url + (c.covered_by.position ? ' (you rank #' + c.covered_by.position + ')' : ''); return; }
   if (c.ladder_near) c.tier_note = nearNote(c.ladder_near);   // A-25: kept in the plan, the ladder named beside it
   else if (c.gone_ranking) c.tier_note = goneNote(c.gone_ranking);   // KWL-RES D1: the page that ranked is gone
@@ -254,7 +268,8 @@ return [{ json: { ...base, keyword_strategy: {
   service_fit: { declared_services: declaredR, judged_on: ownTopicsR.length ? (declaredR.length ? 'the services you listed' + (base.business ? ' and your business description' : '') : 'your business description') : 'nothing (no services listed)',
     in: kws.filter(k => k.service_fit === 'in').length, unknown: kws.filter(k => k.service_fit === 'unknown').length, out: kws.filter(k => k.service_fit === 'out').length },
   competitor_domains: base.research.competitor_domains, competitor_basis: base.research.competitor_basis || null, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
-  covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by, position: k.covered_by.position ?? null })), pages_known: SM.pages(pageModelD).length,
+  covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by, position: k.covered_by.position ?? null, ...(k.covered_by.checked === false ? { checked: false, check_reason: k.covered_by.check_reason } : {}) })),
+  page_status: pageStatusD ? { asked: pageStatusD.asked, not_asked: pageStatusD.not_asked, read_at: pageStatusD.read_at, gone: pageStatusD.pages.filter(p => p.state === 'gone').length, live: pageStatusD.pages.filter(p => p.state === 'live').length, unknown: pageStatusD.pages.filter(p => p.state === 'unknown' || p.state === 'redirected').length } : null, pages_known: SM.pages(pageModelD).length,
   // KWL-RES D1: the keywords whose Search Console page is gone, and every address the site model knows is gone (Build Keyword Strategy reads
   // the live check's own result against it, so a gone page's position never makes a keyword "Easy")
   gone_ranked: kws.filter(k => k.gone_ranking).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.gone_ranking.url, path: k.gone_ranking.path, position: k.gone_ranking.position })),

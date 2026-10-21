@@ -11,7 +11,11 @@ const pick = (k) => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, cpc: cpc2
   traffic_basis: k.traffic_basis || null, traffic_note: k.traffic_note || null, trend_note: k.trend_note || null, modelled_traffic_potential: k.modelled_traffic_potential ?? null,
   gsc: k.gsc || null, serp_cluster: k.serp_cluster || null,
   // F-REH (2026-10-20): is it one of the services the client listed (in / unknown / out); the app ranks and notes by it
-  service_fit: k.service_fit || 'unknown', service_fit_note: k.service_fit_note || null });   // D11 / D20: a live page or one of the site's ladders already covers this search   // v4.8: for this site (null without a website); G3: the chance band
+  service_fit: k.service_fit || 'unknown', service_fit_note: k.service_fit_note || null,
+  // KWL-RES (2026-10-21 live keyword test D3): a job or training search says so in fields of its own, so the app never guesses it from `why`;
+  // and a keyword whose ranking page is gone says which page (a head start after a redirect)
+  career: !!k.career, career_note: k.career ? (k.career_note || (k.career.detail ? k.career.detail + ', so a page for it would bring few buyers' : 'people search it for work or training')) : null,
+  gone_ranking: k.gone_ranking || null });   // D11 / D20: a live page or one of the site's ladders already covers this search   // v4.8: for this site (null without a website); G3: the chance band
 const pdfData = bin.pdf ? await b64('pdf', bin.pdf) : null;
 const docData = bin.data ? await b64('data', bin.data) : null;
 return [{ json: {
