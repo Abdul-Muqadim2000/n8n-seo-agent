@@ -1322,9 +1322,7 @@
           }
         },
         "onError": "continueRegularOutput",
-        "retryOnFail": true,
-        "maxTries": 3,
-        "waitBetweenTries": 5000
+        "retryOnFail": false
       },
       {
         "parameters": {
@@ -4090,9 +4088,7 @@
           }
         },
         "onError": "continueRegularOutput",
-        "retryOnFail": true,
-        "maxTries": 3,
-        "waitBetweenTries": 5000
+        "retryOnFail": false
       },
       {
         "parameters": {

@@ -232,6 +232,43 @@ const overlapTokens = (s) => { const out = []; for (const t of String(s || '').t
   const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '').replace(/[^a-z0-9]/g, ''); if (w && !out.includes(w)) out.push(w); } return out; };
 const overlapScore = (a, b) => { if (!a.length || !b.length) return 0; const sb = new Set(b); const common = a.filter(t => sb.has(t)).length; return common / (a.length + b.length - common); };
 const keywordsOverlap = (a, b) => overlapScore(overlapTokens(a), overlapTokens(b)) >= 0.75;
+// ---- N2 (KW recheck 2026-10-21, exec 152): one search, one ladder - the WORDS half of the rule, read before anything is paid for ----
+// The ladder "ai consulting company dubai" was refused as the same search as the ladder "ai consulting dubai", correctly, but only after
+// the competitor pages, the Competitor Analyzer, the Verdict, the ladder research, the cluster results pages and the relevance screen had
+// run: $0.142 search data + $0.138 Claude (about 17 credits) for an answer a words comparison against the stored ladders gives for free.
+// This kit is that comparison, used twice so the two cannot drift: by *Ladder Duplicate (Words)* right after *Rate Limit* (the run is
+// refused there, nothing charged, before any paid call), and by Ladder_Plan.js (sameSearchLP), which still adds the results-page rule
+// (3 of the top 7 pages in common) once today's results pages are read. Needs overlapTokens / overlapScore / reachDomain (_reach.js).
+const LDUP = (() => {
+  const S = (x) => String(x == null ? '' : x).toLowerCase().trim();
+  // consultant / consulting / consultancy are one word, company / companies, service / services ... (KWL-LAD D14)
+  const FAMILY = [[/^consult/, 'consult'], [/^compan/, 'company'], [/^agenc/, 'agency'], [/^servic/, 'service'], [/^provid/, 'provider'], [/^firm/, 'firm'],
+    [/^solution/, 'solution'], [/^develop/, 'develop'], [/^automat/, 'automat'], [/^implement/, 'implement'], [/^integrat/, 'integrat'], [/^special/, 'special']];
+  const fam = (s) => [...new Set(overlapTokens(s).map(t => { for (const [re, f] of FAMILY) if (re.test(t)) return f; return t; }))];
+  /** the same search in other words: the same keyword, or 75% of the folded words shared */
+  const sameWords = (a, b) => { const ka = S(a), kb = S(b); if (!ka || !kb) return false; return ka === kb || overlapScore(fam(ka), fam(kb)) >= 0.75; };
+  const headOf = (r) => S(r.head_keyword || (Number(r.rung) === 4 ? r.keyword : ''));
+  /** -> null | { kind: 'head' | 'page', ladder_id, head, keyword } : another ladder of this site whose main keyword (first) or one of
+   *  whose planned pages is the same search as `head`, by words. `rows` = seo_ladders rows; opt: { ladder_id (this ladder, left out),
+   *  domain, archived: [ladder ids] } */
+  const byWords = (head, rows, o) => {
+    const opt = o || {}, h = S(head), own = String(opt.ladder_id || ''), arch = new Set((opt.archived || []).map(String));
+    if (!h) return null;
+    const dom = opt.domain ? reachDomain(opt.domain) : '';
+    const others = (rows || []).filter(r => r && r.ladder_id && String(r.ladder_id) !== own && !arch.has(String(r.ladder_id)) && (!dom || reachDomain(r.domain) === dom));
+    const heads = new Map(); for (const r of others) { const x = headOf(r); if (x && !heads.has(String(r.ladder_id))) heads.set(String(r.ladder_id), x); }
+    for (const [id, x] of heads) if (sameWords(x, h)) return { kind: 'head', ladder_id: id, head: x, keyword: x };
+    for (const r of others) for (const k of [r.keyword, r.head_keyword]) if (S(k) && sameWords(k, h)) return { kind: 'page', ladder_id: String(r.ladder_id), head: heads.get(String(r.ladder_id)) || S(k), keyword: S(k) };
+    return null;
+  };
+  const sameWhy = (a, b) => S(a) === S(b) ? 'it is the same keyword' : '"' + a + '" and "' + b + '" are the same search in other words';
+  /** the sentence the client reads (the same words as Ladder_Plan.js's duplicate refusal), plus what it cost: nothing */
+  const message = (m, head) => !m ? '' : (m.kind === 'head'
+    ? 'This website already has a keyword ladder for "' + m.head + '" (' + m.ladder_id + ')' + (S(m.head) !== S(head) ? ': ' + sameWhy(head, m.head) : '') + '. One search needs one page, so no second ladder was planned: continue that ladder instead.'
+    : 'Your ladder "' + m.head + '" (' + m.ladder_id + ') already plans a page for "' + m.keyword + '": ' + sameWhy(head, m.keyword) + '. One search needs one page, so no second ladder was planned: continue that ladder, or pause it and start this one.')
+    + ' This was found before any research was paid for, so nothing was charged.';
+  return { FAMILY, fam, sameWords, byWords, message };
+})();
 // ---- topic radius (G32, 2026-10-13, system review FIX_PLAN.md G32; criterion K12 in CRITERIA_keywords_content.md) ----
 // "Which topics is this website close enough to win, and which are a stretch?" — until now the system answered that per keyword
 // (difficulty for your site, `_reach.js`) but never per TOPIC, so a plan could quietly wander off what the site actually sells: the
@@ -455,7 +492,9 @@ const fitLow = (s) => String(s || '').normalize('NFKC').toLowerCase();
 const FIT_SYNONYMS = [[/\bartificial[\s-]+intelligence\b/g, 'ai'], [/\bcustomer[\s-]+relationship[\s-]+management\b/g, 'crm'], [/\benterprise[\s-]+resource[\s-]+planning\b/g, 'erp'],
   [/\bml\b/g, 'machine learning'], [/\bbi\b/g, 'business intelligence'],
   [/\b(?:advisory|advisors?|advisers?)\b/g, 'consultant'],   // consultancy, consulting and consultant already agree (one stem, "consult"); a consultant word stays a word of its own ("hire ai consultant dubai")
-  [/\b(?:e[\s-]?|electronic[\s-]+)(invoic\w*)/g, 'e $1']];
+  [/\b(?:e[\s-]?|electronic[\s-]+)(invoic\w*)/g, 'e $1'],
+  // N1 (KW recheck 2026-10-21, exec 149): "d365 cloud migration uae" was out for a Dynamics 365 partner: d365 is how buyers write Dynamics 365
+  [/\b(?:d365|dynamics365|ms ?d365)\b/g, 'dynamics 365']];
 const fitSyn = (s) => FIT_SYNONYMS.reduce((t, [re, to]) => t.replace(re, to), String(s || '').normalize('NFKC').toLowerCase());
 const fitTokens = (s) => fitLow(s).replace(/[’']/g, '').split(FIT_SPLIT).map(t => t.replace(/^\.+|\.+$/g, '')).filter(t => t.length > 1 && !FIT_STOP.has(t));
 const fitHost = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^(www|m|app|en|ar)\./, '');
@@ -546,9 +585,13 @@ const fitArabic = (s) => {
 // categories that count as matched words of the keyword; `words` join the topic words; `wide` are two-letter categories ("ai", "it") that
 // count only with a word naming a seller ("best ai companies uae", "ai firm dubai"), so "ai online", "ai uae" and "best ai apps" stay too broad.
 const FIT_FAMILIES = [
-  { re: /\b(erp|erps|enterprise resource planning|business central|dynamics 365 (finance|f ?& ?o|supply chain)|finance and operations|netsuite|sap|odoo|acumatica|epicor|sage (x3|intacct|200)|oracle (fusion|cloud erp|epm|erp))\b/, anchors: ['erp', 'erps'], words: ['erp'] },
-  { re: /\b(e ?-?invoic\w*|einvoic\w*|electronic invoic\w*|peppol|fatoora)\b/, anchors: ['invoicing', 'invoice', 'invoices', 'einvoicing'], words: ['peppol', 'pint', 'fatoora', 'invoicing', 'einvoicing'], svc: ['vat'] },
-  { re: /\b(crm|dynamics 365 (sales|customer service|marketing)|customer engagement|salesforce|hubspot)\b/, anchors: ['crm'], words: ['crm'] },
+  // N1: `cat` = a product family; a service the client declared in it (Business Central, Dynamics 365 Finance, F&O; Dynamics 365 Sales; any
+  // e-invoicing service) makes the family's category word one of the client's own (fitServiceAnchors), so "erp consultants" and "finance erp
+  // system" are the work of a Business Central partner. `subj` = the names of the standard itself (not a vendor): a keyword about PINT-AE is
+  // an e-invoicing firm's subject whatever else it asks ("pint-ae xml format mandatory fields").
+  { re: /\b(erp|erps|enterprise resource planning|business central|dynamics 365 (finance|f ?& ?o|supply chain)|finance and operations|netsuite|sap|odoo|acumatica|epicor|sage (x3|intacct|200)|oracle (fusion|cloud erp|epm|erp))\b/, anchors: ['erp', 'erps'], words: ['erp'], cat: true },
+  { re: /\b(e ?-?invoic\w*|einvoic\w*|electronic invoic\w*|peppol|fatoora)\b/, anchors: ['invoicing', 'invoice', 'invoices', 'einvoicing'], words: ['peppol', 'pint', 'fatoora', 'invoicing', 'einvoicing'], svc: ['vat'], cat: true, subj: ['peppol', 'pint', 'fatoora'] },
+  { re: /\b(crm|dynamics 365 (sales|customer service|marketing)|customer engagement|salesforce|hubspot)\b/, anchors: ['crm'], words: ['crm'], cat: true },
   { re: /\b(vat|value added tax|tax (registration|consultan\w*|advis\w*|filing|compliance))\b/, anchors: ['vat'], words: [] },
   { re: /\b(ai|artificial intelligence|machine learning|copilot|genai|generative ai)\b/, anchors: [], words: [], wide: ['ai'] },   // no extra topic words: "generative ai" and "ai agent" stay as wide as "ai" (R13)
   { re: /\b(it (services|support|solutions|consulting|company|outsourcing|infrastructure)|managed it|information technology)\b/, anchors: [], words: [], wide: ['it'] }];
@@ -707,8 +750,12 @@ function fitTopic(keyword, topics, ctx) {
 // words on file. Only product categories qualify: `ai`, `software`, `cloud` and the wide words never do ("character ai" stays off topic for an
 // "AI consulting" site); a FIT_COMMON word ("sales", "central") still needs the whole service name, as in fitTopic.
 const FIT_SERVICE_CATS = new Set(['erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll']);
+// the declared product families (FIT_FAMILIES `cat`) of these services, read on the services alone (never the crawl)
+const fitServiceFamilies = (services) => { const txt = (Array.isArray(services) ? services : [services]).filter(Boolean).map(x => fitSyn(x)).join(' | ');
+  return txt ? FIT_FAMILIES.filter(f => f.cat && f.re.test(txt)) : []; };
 const fitServiceAnchors = (keyword, services) => {
   const svc = new Set((Array.isArray(services) ? services : [services]).filter(Boolean).flatMap(x => fitTokens(fitSyn(x))).filter(t => FIT_SERVICE_CATS.has(t)).map(fitStem));
+  for (const f of fitServiceFamilies(services)) f.anchors.forEach(a => svc.add(fitStem(a)));   // N1: Business Central / D365 Finance -> erp, D365 Sales -> crm
   if (!svc.size) return [];
   return [...new Set(fitTokens(fitSyn(keyword)).filter(t => FIT_SERVICE_CATS.has(t) && svc.has(fitStem(t))))];
 };
@@ -719,6 +766,11 @@ function fitEvidence(keyword, topics, ctx) {
   // KW-GATE: judged on the topics alone here (no declared-category anchors), so a keyword that passes only through a declared category says so (basis below)
   const t = T.size ? fitTopic(keyword, topics, { ...o, topic_min_words: 1, _decl: { ...fitDeclared(o), anchors: new Set(), svc: new Set() } }) : { ok: false, share: null, detail: '' };
   if (t.ok && t.share != null) return { verdict: 'in', share: t.share, words: T.size, detail: t.detail, basis: 'topics' };
+  // N1: the name of a standard the client works in (PINT-AE, Peppol, FATOORA for an e-invoicing service) makes the search the client's subject
+  const subjToks = fitTokens(fitSyn(keyword));
+  for (const f of fitServiceFamilies(o.services || [])) { const w = (f.subj || []).find(x => subjToks.includes(x));
+    if (w) return { verdict: 'in', share: t.share == null ? null : t.share, words: T.size, basis: 'declared service', anchors: [w],
+      detail: '"' + w + '" is part of a service you listed (' + (o.services || []).find(s => f.re.test(fitSyn(s))) + ')' }; }
   if (anchors.length) {
     // the share again, with the declared category word counted as the keyword's own and as matched
     const toks = fitTokens(fitSyn(keyword));
@@ -731,8 +783,11 @@ function fitEvidence(keyword, topics, ctx) {
     const hits = own.filter(hit).length + anchors.length, all = own.length + anchors.length;
     const share = Math.round(100 * hits / all) / 100;
     const bar = typeof o.topic_bar === 'number' ? o.topic_bar : FIT_TOPIC_BAR;
+    // N1: a category reached through a product the client listed is named with that product ("erp" for Dynamics 365 Business Central)
+    const said = new Set((o.services || []).flatMap(x => fitTokens(fitSyn(x))).map(fitStem));
+    const via = anchors.every(a => said.has(fitStem(a))) ? '' : ((o.services || []).find(s => fitServiceFamilies([s]).some(f => f.anchors.some(a => anchors.includes(a)))) || '');
     if (share >= bar) return { verdict: 'in', share, words: T.size, basis: 'declared service', anchors,
-      detail: '"' + anchors.join('", "') + '" is one of the services you listed' + (own.length ? ' (' + Math.round(share * 100) + '% of its own words match)' : '') };
+      detail: '"' + anchors.join('", "') + '" ' + (via ? 'is the category of ' + via + ', one of the services you listed' : 'is one of the services you listed') + (own.length ? ' (' + Math.round(share * 100) + '% of its own words match)' : '') };
   }
   if (!T.size) return { verdict: 'unknown', share: null, words: 0, detail: 'nothing is on file yet about what this website sells or which keywords you chose' };
   if (T.size >= 12) return { verdict: 'out', share: t.share == null ? null : t.share, words: T.size, detail: t.detail };
@@ -2425,15 +2480,13 @@ const pile_up = (() => {
 // Now the head and every rung keyword are compared with every keyword of the site's other ladders by two rules: the same words once a word
 // family is folded (consultant / consulting / consultancy are one word, company / companies, service / services ...), and, where both
 // searches have a results page read today (the shared reading this run compared, Ladder Clusters), 3 or more of their top 7 pages in common.
-const FAMILY_LP = [[/^consult/, 'consult'], [/^compan/, 'company'], [/^agenc/, 'agency'], [/^servic/, 'service'], [/^provid/, 'provider'], [/^firm/, 'firm'],
-  [/^solution/, 'solution'], [/^develop/, 'develop'], [/^automat/, 'automat'], [/^implement/, 'implement'], [/^integrat/, 'integrat'], [/^special/, 'special']];
-const famTokensLP = (s) => [...new Set(overlapTokens(s).map(t => { for (const [re, f] of FAMILY_LP) if (re.test(t)) return f; return t; }))];
+// the word families and the words rule live in v5/code/_ladder_dup.js (LDUP), shared with Ladder Duplicate (Words) (N2)
 const urlsTodayLP = (() => { try { const c = $('Ladder Clusters').first().json.serp_clusters || {}; return { of: c.urls_of || {}, top: Number(c.top_n) || 7 }; } catch (e) { return { of: {}, top: 7 }; } })();
 // -> null | { by: 'words' | 'results', shared?, of? }
 const sameSearchLP = (a, b) => {
   const ka = String(a || '').toLowerCase().trim(), kb = String(b || '').toLowerCase().trim();
   if (!ka || !kb) return null;
-  if (ka === kb || overlapScore(famTokensLP(ka), famTokensLP(kb)) >= 0.75) return { by: 'words' };
+  if (LDUP.sameWords(ka, kb)) return { by: 'words' };   // N2: one words rule, the one Ladder Duplicate (Words) refuses on before any paid call
   const ua = urlsTodayLP.of[ka], ub = urlsTodayLP.of[kb];
   if (Array.isArray(ua) && Array.isArray(ub) && ua.length && ub.length) {
     const top = Math.min(7, urlsTodayLP.top || 7); const sb = new Set(ub.slice(0, top)); const shared = ua.slice(0, top).filter(u => sb.has(u)).length;
@@ -3225,7 +3278,7 @@ if (SERP_CL && SERP_CL.note) notes.push(SERP_CL.note
 // B2-5: the destination's results page, and the stated effect on the score
 if (serp_diversity.checked) notes.push(serp_diversity.text);
 if (head_radius) notes.push('Topic radius for "' + head_radius.topic + '": ' + RAD.line(head_radius) + '.');
-if (poolRefused.length) notes.push(poolRefused.length + ' keyword(s) were left out of the ladder because they are other companies\' brands, government or portal searches, or navigational: ' + poolRefused.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ')').join(', ') + (poolRefused.length > 6 ? ' and ' + (poolRefused.length - 6) + ' more' : '') + '.');
+if (poolRefused.length) notes.push(poolRefused.length + ' keyword(s) were left out of the ladder, each with its reason (another company\'s brand, a government or portal search, a navigational search or a job search): ' + poolRefused.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ')').join(', ') + (poolRefused.length > 6 ? ' and ' + (poolRefused.length - 6) + ' more' : '') + '.');
 if (planned && plan_type === 'full' && rungPages.length && pages_total < 8) notes.push('Only ' + pages_total + ' pages could be planned from the data: the topic is narrow in ' + base.country + '. The ladder is shorter but still valid.');
 if (planned && plan_type === 'full' && rungPages.length) for (const r of rungs) if (!r.pages.length) notes.push('No keywords fell into rung ' + r.rung + '; the ladder skips it.');
 if (planned && plan_type === 'direct' && rungPages.length < 2) notes.push('Only ' + rungPages.length + ' supporting page(s) could be planned around the main keyword; add more as the site grows.');
@@ -3248,7 +3301,9 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   domain, country: base.country, goal: base.goal || 'leads', feasibility, rungs, top, folded, link_map, timeline, write_now, pages_now: pagesNow,
   later: later.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, ...(k.held_back ? { held_back: true } : {}) })), requirements, stats, notes,
   plan_type, difficulty_for_you, reach, months: planned ? plan.months : '', months_range: planned ? plan.months_range : null, stretch: planned && plan.stretch, planned, refusal, order: order_text,
-  label: planned ? reachLabel(difficulty_for_you, plan) : (dataRefused || (refusal && refusal.reason === 'career')) ? ('No ladder planned · ' + refusal.short) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
+  // N6: a duplicate read "Reachable for your site · no ladder" beside a winnable verdict; it says why no ladder was planned
+  label: planned ? reachLabel(difficulty_for_you, plan) : (dataRefused || (refusal && refusal.reason === 'career')) ? ('No ladder planned · ' + refusal.short)
+    : (refusal && refusal.reason === 'duplicate') ? ('No ladder planned · the same search as your ladder "' + (refusal.head || refusal.their_keyword || '') + '"') : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
   chance: planned ? plan.chance : null, chance_text: planned ? reachChanceText(plan) : '', base_rate: REACH_BASE_RATE, refused_keywords: poolRefused.slice(0, 40),
   reach_info: { reach: reachInfo.reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },   // B2-1: the SITE-wide measurement; `reach` above is what this topic was measured against
   pile_up,   // R42

@@ -935,7 +935,7 @@ out.tasks = seen.size + noId;
 const hits = asked.map(q => hitOf(q)).filter(h => h && h.hit);
 out.read_today = hits.length;
 out.read_today_note = hits.length ? hits.length + ' results page(s) were ' + hits[0].text + ' and used again at no cost' : '';
-out.cost_basis = 'measured: ' + out.tasks + ' results-page call(s) at what each task reported, counted once by task id'
+out.cost_basis = 'measured: ' + out.tasks + ' Google results page(s) read, at the price the search data provider reported for each, each counted once'   // N6 / D13: no internal terms in the client's document
   + (noId ? ' (' + noId + ' with no task id of their own)' : '') + '; the cap for this run was ' + out.cap + ' keyword(s)'
   + (out.cap_basis ? ' - ' + out.cap_basis : '') + (out.read_today ? '; ' + out.read_today_note : '') + '.';
 
