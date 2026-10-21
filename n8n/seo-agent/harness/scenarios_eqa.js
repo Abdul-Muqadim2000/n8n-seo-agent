@@ -87,8 +87,9 @@ module.exports = async (ctx) => {
     check('no reason, warning or note asks for a course heading (Program Fee, Alumni Speak, self-study kit, Program Eligibility)', !COURSE.test(said) && !(Q.missing_subtopics || []).length, said.slice(0, 900));
     check('the stored plan\'s course headings are dropped with their reason (the page to beat is a course page)',
       (Q.subtopics_dropped || []).some(x => /Program Fee/.test(x.subtopic) && /course, job or directory page/.test(x.reason)), J(Q.subtopics_dropped));
-    check('the page is not ready only because of its two brackets, both named, with "fill in or delete"',
-      Q.not_ready === true && Q.passed === false && Q.placeholder_count === 2 && (Q.not_ready_reasons || []).length === 1
+    // E-CLAIM (2026-10-21): the page's promises in Tech&'s name are the second reason (scenarios_claims.js asserts them one by one)
+    check('the page is not ready for its two brackets, both named, with "fill in or delete", and for its unsupported promises',
+      Q.not_ready === true && Q.passed === false && Q.placeholder_count === 2 && (Q.not_ready_reasons || []).length === 2 && /Confirm each one is true or delete it/.test(Q.not_ready_reasons[1])
       && Q.not_ready_reasons[0].includes(BANK) && Q.not_ready_reasons[0].includes(FEE) && /Fill in or delete each one/.test(Q.not_ready_reasons[0]), J(Q.not_ready_reasons));
     const fee = (QL.owner_edits || []).find(e => e.token === FEE), bank = (QL.owner_edits || []).find(e => e.token === BANK);
     check('each bracket has its edit: the fee band is to be deleted (no price facts on file), the banking reference filled in or deleted',
@@ -118,7 +119,12 @@ module.exports = async (ctx) => {
     check('round 1, the copy passed and two brackets are left: not publishable, final at once ("not ready to publish", no editor round)',
       r1.passed_copy === true && r1.passed === false && r1.publishable === false && r1.editor_needed === false && r1.not_ready === true && /not ready to publish/.test(r1.quality_label)
       && /No editing round could change it/.test(r1.quality.note), J({ pc: r1.passed_copy, p: r1.passed, nr: r1.not_ready, note: r1.quality.note }));
-    const filled = FX.draft_round2.split(BANK).join('a regional bank').split(FEE).join('a fixed scope');
+    // E-CLAIM (2026-10-21): the page's promises in Tech&'s name nothing on file supports keep it not ready too; they are taken out here
+    const PROMISES = ['You receive a prioritised use-case backlog', 'We test a proof of concept', 'You receive a working solution', 'This phase covers adoption tracking', 'You receive a runbook',
+      'Admins learn security', 'Makers learn to extend', 'You keep a self-study pack', 'If out-of-the-box Copilot covers', 'We design permissions', 'Sometimes a rule-based Power Platform workflow'];
+    const FILL = 'A short review closes each step before the next one starts.';
+    const unpromise = (d) => PROMISES.reduce((x, p) => x.replace(new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^\\n]*?[.!?](?=\\s|$)'), FILL), d);
+    const filled = unpromise(FX.draft_round2.split(BANK).join('a regional bank').split(FEE).join('a fixed scope'));
     const r2 = (await qa42(noSubs, filled, 1)).content_qa;
     console.log('   no brackets ->', J({ passed: r2.passed, brackets: r2.body_brackets, warnings: r2.warnings }));
     check('the same page with its two brackets filled in passes and is publishable', r2.body_brackets === 0 && r2.passed === true && r2.publishable === true && r2.not_ready === false, J({ p: r2.passed, b: r2.body_brackets, w: r2.warnings }));

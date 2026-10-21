@@ -19638,6 +19638,7 @@ await require('./scenarios_egate')({ H, run, mock, store, guard, reset, begin })
 await require('./scenarios_reh')({ H, run, mock, store, guard, reset, begin });   // REH1-REH7 (F-REH 2026-10-20 + D2 2026-10-21): the real-credit rehearsal's defects - ghost reservations, Track's parent, cycle 0's skips, service fit, plain notes; the app's setup research body with its services
 await require('./scenarios_eqa')({ H, run, mock, store, guard, reset, begin });   // EQA1-EQA7 (E-QA 2026-10-21): the pre-launch page run's quality check (exec 42) - course page as benchmark, owner edits, bracket gate, author line, cards, URL form
 await require('./scenarios_dead')({ H, run, mock, store, guard, reset, begin });   // DEAD1-DEAD9 (E-DEAD 2026-10-21): the pre-launch run's dead pages - one redirect message in every report, redirects followed, Bing, fix pack, comparisons, disavow
+await require('./scenarios_claims')({ H, run, mock, store, guard, reset, begin });   // CLM1-CLM4 (E-CLAIM 2026-10-21): promises in the client's name (deliverables, process, billing) need a fact on file, else an owner edit and not ready
 
 H.report();
 })();

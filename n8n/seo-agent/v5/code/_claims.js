@@ -94,5 +94,91 @@ const CL = (() => {
     }
     return out;
   }
-  return { CLAIM_RE, keyOf, check, business };
+  // ---- E-CLAIM (2026-10-21, pre-launch run exec 42): what a page PROMISES in the business's name must be on file ----
+  // Live (exec 42, techand.ai "ai consultant") the page promised "You receive a prioritised use-case backlog, data readiness findings and
+  // an ROI case", "We test a proof of concept ... documented test results", "You receive a runbook and monitoring dashboards", a training
+  // plan and "a self-study pack", "document each decision for your audit team" and "we stop there". The client states none of it, and
+  // CL.business (terms / scope / credentials only) let every one through. CL.commitments(text, corpus, opts) reads the sentences that
+  // commit the business to something:
+  //   * "we / <name> / our team" + a doing verb (test, build, design, deliver, document, train, stop, tell, charge ...);
+  //   * an offer to the reader in a section about the business ("you receive / get / keep ...", "business users get ...");
+  //   * a phase or training line in such a section ("This phase covers ...", "Admins learn ...");
+  //   * a billing line right after a billing sentence ("Licences sit on a separate line of the quote").
+  // A section is about the business when its H2 group names the business, speaks as "we", or is headed by a phase or service the corpus
+  // names. A statement is supported when its key terms are on file: one sentence of the corpus carries at least half of them (the words
+  // scattered over a whole website do not count: every page says "data", "integration" and "test"), and every number it states is on file. Generic statements (no business subject) and advice to
+  // the reader are never read. opts.names: the business names; opts.skip: sentences already flagged elsewhere.
+  const COMMIT_VERB = '(?:test|tests|build|builds|design|designs|deliver|delivers|provide|provides|offer|offers|document|documents|train|trains|run|runs|give|gives|hand|hands|include|includes|cover|covers|stop|stops|tell|tells|guarantee|guarantees|commit|commits|charge|charges|bill|bills|invoice|invoices|quote|quotes|price|prices|set up|sets up|assign|assigns|monitor|monitors|support|supports|manage|manages|handle|handles|migrate|migrates|implement|implements|deploy|deploys|integrate|integrates|review|reviews|audit|audits|write|writes|create|creates|produce|produces|prepare|prepares|map|maps|assess|assesses|track|tracks|measure|measures|refund|refunds|promise|promises|ensure|ensures|keep|keeps|work with|works with|work in|works in|serve|serves|treat|treats|start|starts|begin|begins|finish|finishes|complete|completes|respond|responds|reply|replies|host|hosts|maintain|maintains|operate|operates|resell|resells|sell|sells|license|licenses|are available|is available|are certified|is certified|are accredited|is accredited)';
+  const OFFER_RE = /\b(?:[Yy]ou|[Yy]our (?:team|teams|staff|people|users|admins|organisation|organization|business|company))\s+(?:will\s+|also\s+|then\s+)?(?:receive|get|keep|walk away with|leave with|are given|are handed)\b|\b(?:[Bb]usiness users|[Uu]sers|[Aa]dmins|[Mm]akers)\s+(?:will\s+)?(?:get|receive)\b/;
+  const TRAIN_RE = /^(?:[Aa]dmins|[Mm]akers|(?:[Bb]usiness )?[Uu]sers|[Ss]taff|[Ee]mployees|[Yy]our (?:team|staff|admins|users|people))\s+(?:learn|are trained|get trained|receive training)\b/;
+  const PHASE_RE = /^(?:[Tt]his|[Ee]ach|[Ee]very|[Tt]he)\s+(?:phase|stage|step|engagement|service|workstream|programme|program|package|plan)\s+(?:covers|includes|ends|delivers|starts|runs|takes|comes with)\b/;
+  const CTA_RE = /^(?:[Bb]ook|[Cc]all|[Cc]ontact|[Tt]alk to|[Ee]mail|[Ss]chedule|[Gg]et in touch|[Aa]rrange|[Rr]equest a)\b/;
+  const BILL_RE = /\b(?:quote|quotes|quoted|invoice\w*|billed|billing|line item|separate line|fees?|payment|deposit|retainer|hourly|day rate|licen[cs]es? (?:sit|are|is)|charged?)\b/i;
+  // words that say nothing on their own about what is promised: they never count for or against support
+  const GENERIC = new Set('you your receive get keep give gives offer provide include includes cover covers phase stage step engagement service then also each every well real live new own way part make makes work business client clients team teams solution solutions reason scope sometimes'.split(' ').map(stem));
+  function commitments(text, corpus, opts = {}) {
+    const t = String(text || ''); const out = { flags: [], checked: 0 };
+    if (!t.trim()) return out;
+    const names = (opts.names || []).map(n => String(n || '').trim()).filter(n => n.length >= 3);
+    const nameWords = [...new Set(names.flatMap(n => norm(n).split(' ')).filter(Boolean))];
+    const skip = new Set((opts.skip || []).map(s => norm(s)));
+    const NAMES = names.map(n => (/^\w/.test(n) ? '\\b' : '') + escR(n)).join('|');
+    const SUBJ = '(?:\\b[Ww]e|\\b[Oo]ur (?:team|teams|consultants|engineers|people|firm|company|scope|service|services|engagements?|approach|experts)' + (NAMES ? '|' + NAMES : '') + ')';
+    const WE_RE = new RegExp(SUBJ + '(?:\\s+(?:will|also|then|always|typically|usually|can|then also|first|now))?(?:\\s+(?:will|also|then))?\\s+' + COMMIT_VERB + '\\b');
+    const NAME_RE = NAMES ? new RegExp('(?:' + NAMES + ')') : null;
+    const ABOUT_RE = new RegExp('\\b[Ww]e\\b|\\b[Oo]ur\\b' + (NAMES ? '|' + NAMES : ''));
+    const cnorm = norm(corpus);
+    const cs = String(corpus || '').split(/(?<=[.!?])\s+|\n+/).map(s => new Set(words(s, nameWords))).filter(x => x.size);
+    // sections: one H2 group = the H2 and the H3s under it
+    const groups = []; let g = null, para = [];
+    const flushPara = () => { if (para.length && g) g.paras.push(para.join(' ')); para = []; };
+    for (const line of t.split('\n')) {
+      const L = line.trim();
+      const h = L.match(/^(#{1,6})\s+(.*)$/);
+      if (h) { flushPara(); if (h[1].length <= 2 || !g) { g = { heads: [], paras: [] }; groups.push(g); } g.heads.push(h[2]); continue; }
+      if (!g) { g = { heads: [], paras: [] }; groups.push(g); }
+      if (!L || /^\|/.test(L) || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):/i.test(L)) { flushPara(); continue; }
+      if (/^[-*]\s+/.test(L)) { flushPara(); para.push(L); flushPara(); continue; }
+      para.push(L);
+    }
+    flushPara();
+    const headOnFile = (hd) => { const pre = norm(String(hd).split(':')[0]); return pre.length >= 6 && cnorm.includes(pre); };
+    for (const G of groups) {
+      const sentsOf = (p) => p.replace(/\*\*/g, '').replace(/^[-*]\s+/, '').split(/(?<=[.!?])\s+(?=[A-Z"(\[])/).map(s => s.trim());
+      const clean = (s) => s.replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '');
+      const aboutBiz = G.heads.some(hd => headOnFile(hd) || (NAME_RE && NAME_RE.test(hd))) || G.paras.some(p => ABOUT_RE.test(clean(p)));
+      for (const p of G.paras) {
+        const sents = sentsOf(p); let lastBill = false;
+        for (const s of sents) {
+          const plain = clean(s);
+          if (plain.length < 12 || /\?\s*$/.test(plain) || /[\[\]]/.test(s.replace(/\[[^\[\]]*\]\([^)]*\)/g, '')) || skip.has(norm(s))) { lastBill = skip.has(norm(s)) && BILL_RE.test(plain); continue; }   // a billing sentence flagged by CL.business still carries the next line
+          let why = null;
+          if (CTA_RE.test(plain)) { lastBill = false; continue; }   // the page's call to action ("Book a scoping call and we will ...") invites a conversation, it is not a deliverable
+          if (WE_RE.test(plain)) why = 'we';
+          else if (aboutBiz && OFFER_RE.test(plain)) why = 'offer';
+          else if (aboutBiz && (TRAIN_RE.test(plain) || PHASE_RE.test(plain))) why = 'phase';
+          else if (lastBill && BILL_RE.test(plain) && !ABOUT_RE.test(plain)) why = 'billing';
+          lastBill = !!why && BILL_RE.test(plain);
+          if (!why) continue;
+          out.checked++;
+          const W = [...new Set(words(plain, nameWords))].filter(w => !GENERIC.has(w));
+          const nums = (plain.match(/\d[\d,.:/+]*/g) || []).map(x => x.replace(/[,.]+$/, '')).filter(x => !/^\d$/.test(x));
+          const numsOk = nums.every(n => cnorm.includes(norm(n)) || String(corpus || '').includes(n));
+          const best = W.length ? Math.max(0, ...cs.map(c => W.filter(w => c.has(w)).length)) / W.length : 0;
+          const supported = numsOk && W.length > 0 && best >= 0.5;
+          if (opts.trace) out.trace = (out.trace || []).concat([{ s: plain.slice(0, 90), why, W, best: Math.round(100 * best), numsOk }]);
+          if (supported) continue;
+          const kind = /\b(?:charg|bill|fee|price|pricing|quote|invoice|payment|licen[cs]es? (?:sit|are)|separate line|cost)/i.test(plain) ? 'pricing'
+            : /\b(?:guarantee|warrant|refund|promise)/i.test(plain) ? 'guarantee'
+              : /\b(?:within|\d+\s*(?:days?|weeks?|months?|hours?))\b/i.test(plain) ? 'timeline'
+                : /\b(?:certified|accredit|partner)/i.test(plain) ? 'credential'
+                  : /\b(?:stop|only|not|scope|covers|includes)\b/i.test(plain) ? 'scope'
+                    : (why === 'offer' || why === 'phase' || /\b(?:deliver|provide|runbook|pack|report|dashboard|document)/i.test(plain)) ? 'deliverable' : 'process';
+          out.flags.push({ kind, sentence: s.replace(/^[-*]\s+/, '').slice(0, 300), support: Math.round(100 * best) });
+        }
+      }
+    }
+    return out;
+  }
+  return { CLAIM_RE, keyOf, check, business, commitments };
 })();
