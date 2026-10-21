@@ -765,7 +765,8 @@ GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 /
 KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
 RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n'))   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+SERP_CACHE_SRC = _rd0('code/_serp_cache.js').rstrip('\n')   # KW-SERP (RV-12, 2026-10-21): one results-page reading per search and day, shared by every path (section 145)
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n'))   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -12009,6 +12010,128 @@ assert "$('Ladder Titles').first().json.page_titles" in code('Ladder Plan') and 
 assert "for (const n of ['SERP Top 10 (Light Retry)', 'SERP Top 10 (Retry)', 'SERP Top 10'])" in code('Ladder Plan') and 'const pairShare = ' in code('Ladder Plan'), \
     'one search, one page: the rungs are not compared with the main keyword\'s own results page'
 log('The ladder reads the pages it could duplicate and compares every rung with the main keyword\'s results page (2026-10-21, paid run r04, D7): Ladder Title Requests -> Title Read Wanted? -> Read Ladder Titles (at most 8 free GETs of the client\'s own untitled pages that could overlap the plan, retry rule) -> Ladder Titles -> Ladder Plan; the plan judges overlap on the titles read and says what it read; every rung page and member is compared with the main keyword\'s own results page (SERP Top 10 / retries, top 7) and with every keyword an earlier page claims, >= 3 of 7 = a supporting keyword of that page, with the count')
+
+# =============================================================================
+# 145. ONE READING OF A RESULTS PAGE PER SEARCH AND DAY, SHARED BY EVERY PATH (KW-SERP, 2026-10-21, pre-launch run RV-12 / A-21 of
+#      2026-10-17). The research, the ladder and the rank tracker read three different results pages for "ai consultant" on one day, and
+#      two runs three minutes apart said "no AI Overview" and "an AI Overview was seen". v5/code/_serp_cache.js keys a reading by keyword
+#      + location + language + device and keeps the UTC day on the value (one seo_cache row per search, overwritten by the next day's read).
+#      * the verdict / ladder head (SERP Top 10, depth 30 + AI Overview): SERP Cache Key -> Load SERP Cache -> Use SERP Cache ->
+#        SERP Read Today? -> (yes) Cached SERP -> Pick Top 6 | (no) SERP Top 10 as before; after Pick Top 6 the fresh reading is stored
+#        (SERP Cache Row -> New SERP Reading? -> Save SERP Cache -> Restore Top 6), on the main path.
+#      * the ladder's rung reads (depth 10): Ladder Cluster Requests -> Load SERP Cache (Ladder) (one lookup per keyword) -> Ladder SERP
+#        Cache Split (only the keywords not read today are sent; all read = one item down the "nothing to buy" branch) -> Cluster SERP
+#        Wanted? ...; Ladder Clusters puts the readings back in order; Ladder SERP Cache Rows -> New SERP Readings? -> Save SERP Cache
+#        (Ladder) -> Restore Clusters -> Ladder Relevance Chunks.
+#      * the Keyword Check (build_api.py): Load Assess Cache reads the row by key; Assess Requests does not buy a page read today.
+#      A failed read is never stored; a cache hit costs nothing (cost 0, task id `cache:<id>`), so the ledger counts every paid task once.
+# =============================================================================
+_SC145 = 'const SC = (() => {'
+_sk145 = pos('SERP Top 10')
+_par145 = [(s, i) for s, o in conns.items() for i, l in enumerate(o.get('main', [])) for t in (l or []) if t['node'] == 'SERP Top 10']
+assert sorted(s for s, _ in _par145) == ['Collect Client Pages', 'Read Client Pages?'], _par145
+for _s145, _i145 in _par145:
+    conns[_s145]['main'][_i145] = [t for t in conns[_s145]['main'][_i145] if t['node'] != 'SERP Top 10']
+add_node('SERP Cache Key (Top 10)', 'n8n-nodes-base.code', 2, {'jsCode': SERP_CACHE_SRC + """
+// KW-SERP: the keyword run's item passes through with the key of its results page (the request SERP Top 10 sends: depth 30, AI Overview)
+return $input.all().map(i => { const j = i.json || {};
+  const body = { keyword: j.keyword, location_code: j.location_code, language_code: j.language_code || 'en', depth: 30, load_async_ai_overview: true };
+  return { json: { ...j, serp_cache_key: SC.key(body), serp_cache_body: body } }; });"""}, [_sk145[0] - 660, _sk145[1] - 220])
+for _s145, _i145 in _par145:
+    connect(_s145, 'SERP Cache Key (Top 10)', _i145)
+add_node('Load SERP Cache (Top 10)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', "={{ $('SERP Cache Key (Top 10)').first().json.serp_cache_key }}"),
+         [_sk145[0] - 440, _sk145[1] - 220], LOAD18)
+add_node('Use SERP Cache (Top 10)', 'n8n-nodes-base.code', 2, {'jsCode': SERP_CACHE_SRC + """
+// KW-SERP: today's reading of this results page, when one is deep enough and loaded the AI Overview; otherwise SERP Top 10 buys it as before
+const j = $('SERP Cache Key (Top 10)').first().json;
+const rows = $input.all().map(i => i.json).filter(r => r && r.key);
+const L = SC.lookup(rows, j.serp_cache_body);
+return [{ json: { ...j, serp_cache_hit: L.hit === true, serp_cache_why: L.hit ? L.text : L.why, serp_cached: L.hit ? L.response : null } }];"""}, [_sk145[0] - 220, _sk145[1] - 220])
+if_node('SERP Read Today?', '{{ $json.serp_cache_hit === true }}', [_sk145[0], _sk145[1] - 220])
+add_node('Cached SERP (Top 10)', 'n8n-nodes-base.code', 2, {'jsCode': "// KW-SERP: the reading made earlier today, in DataForSEO's own shape (cost 0, task id cache:<id>), so Pick Top 6 and the analysis read it unchanged\nreturn [{ json: $input.first().json.serp_cached }];"},
+         [_sk145[0] + 220, _sk145[1] - 300])
+for a, b in [('SERP Cache Key (Top 10)', 'Load SERP Cache (Top 10)'), ('Load SERP Cache (Top 10)', 'Use SERP Cache (Top 10)'), ('Use SERP Cache (Top 10)', 'SERP Read Today?'),
+             ('Cached SERP (Top 10)', 'Pick Top 6')]:
+    connect(a, b)
+connect('SERP Read Today?', 'Cached SERP (Top 10)', 0); connect('SERP Read Today?', 'SERP Top 10', 1)
+# the readers of the head's answer take today's reading first (RT.chain judges it like any answer; it carries cost 0)
+patch('Analyze Competitor Pages', "  const first0 = (() => { try { return $('SERP Top 10').first().json; } catch (e) { return null; } })();",
+      "  const first0 = (() => { try { return $('Cached SERP (Top 10)').first().json; } catch (e) { try { return $('SERP Top 10').first().json; } catch (e2) { return null; } } })();   // KW-SERP: today's reading first")
+patch('Ladder Plan', "for (const n of ['SERP Top 10 (Light Retry)', 'SERP Top 10 (Retry)', 'SERP Top 10'])",
+      "for (const n of ['SERP Top 10 (Light Retry)', 'SERP Top 10 (Retry)', 'SERP Top 10', 'Cached SERP (Top 10)'])")
+# the fresh reading is stored after Pick Top 6, on the main path (a chain beside it would run last: R17)
+_pt145 = pos('Pick Top 6')
+assert [t['node'] for l in conns['Pick Top 6']['main'] for t in l] == ['Read Competitor Pages'], 'KW-SERP: Pick Top 6 no longer feeds Read Competitor Pages'
+disconnect('Pick Top 6', 'Read Competitor Pages')
+add_node('SERP Cache Row (Top 10)', 'n8n-nodes-base.code', 2, {'jsCode': SERP_CACHE_SRC + """
+// KW-SERP: the attempt that answered (the lighter third one says so: 10 deep, no AI Overview) becomes today's reading; a failed one is never stored
+let k = {}; try { k = $('SERP Cache Key (Top 10)').first().json; } catch (e) { k = {}; }
+const body = k.serp_cache_body || null;
+if (body) for (const [n, b] of [['SERP Top 10 (Light Retry)', { ...body, depth: 10, load_async_ai_overview: false }], ['SERP Top 10 (Retry)', body], ['SERP Top 10', body]]) {
+  let a = null; try { a = $(n).first().json; } catch (e) { a = null; }
+  const r = a ? SC.rowFor(a, b, '') : null;
+  if (r) return [{ json: r }];
+}
+return [{ json: { skip: true } }];"""}, [_pt145[0], _pt145[1] + 200])
+if_node('New SERP Reading?', '{{ !$json.skip }}', [_pt145[0] + 220, _pt145[1] + 200])
+add_node('Save SERP Cache (Top 10)', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [_pt145[0] + 440, _pt145[1] + 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Restore Top 6', 'n8n-nodes-base.code', 2, {'jsCode': "// The run continues with the competitors Pick Top 6 chose (a Data Table upsert outputs the stored row, not the run's items).\nreturn $('Pick Top 6').all().map(i => ({ json: i.json }));"},
+         [_pt145[0] + 660, _pt145[1] + 200])
+connect('Pick Top 6', 'SERP Cache Row (Top 10)'); connect('SERP Cache Row (Top 10)', 'New SERP Reading?')
+connect('New SERP Reading?', 'Save SERP Cache (Top 10)', 0); connect('New SERP Reading?', 'Restore Top 6', 1)
+connect('Save SERP Cache (Top 10)', 'Restore Top 6'); connect('Restore Top 6', 'Read Competitor Pages')
+
+# ---------- the ladder's rung reads ----------
+_lc145 = pos('Ladder Cluster Requests')
+assert [t['node'] for l in conns['Ladder Cluster Requests']['main'] for t in l] == ['Cluster SERP Wanted?'], 'KW-SERP: the cluster requests moved'
+disconnect('Ladder Cluster Requests', 'Cluster SERP Wanted?')
+_ldc145 = dict(LOAD18); _ldc145.pop('executeOnce')   # one lookup per requested keyword
+add_node('Load SERP Cache (Ladder)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', "={{ $json.serp_cache_key || 'serp:none' }}"), [_lc145[0] + 60, _lc145[1] + 200], _ldc145)
+add_node('Ladder SERP Cache Split', 'n8n-nodes-base.code', 2, {'jsCode': SERP_CACHE_SRC + """
+// KW-SERP: only the keywords whose results page was NOT read today go to DataForSEO. When every one was read today, one item takes the
+// "nothing to buy" branch and Ladder Clusters uses the stored readings (cost 0). A skip item (free run, cap 0, too few) passes unchanged.
+const reqs = $('Ladder Cluster Requests').all().map(i => i.json);
+if (!reqs.some(r => r && r.cluster_check)) return reqs.map(j => ({ json: j }));
+const rows = $input.all().map(i => i.json).filter(r => r && r.key);
+const misses = reqs.filter(r => r && r.cluster_check && !SC.lookup(rows, { keyword: r.keyword, location_code: r.location_code, language_code: r.language_code || 'en', depth: 10 }).hit);
+if (!misses.length) return [{ json: { cluster_check: false, all_read_today: true, asked: reqs[0].asked, cap: reqs[0].cap } }];
+return misses.map(j => ({ json: j }));"""}, [_lc145[0] + 140, _lc145[1] + 200])
+connect('Ladder Cluster Requests', 'Load SERP Cache (Ladder)'); connect('Load SERP Cache (Ladder)', 'Ladder SERP Cache Split'); connect('Ladder SERP Cache Split', 'Cluster SERP Wanted?')
+_lcl145 = pos('Ladder Clusters')
+assert [t['node'] for l in conns['Ladder Clusters']['main'] for t in l] == ['Ladder Relevance Chunks'], 'KW-SERP: Ladder Clusters no longer feeds the relevance screen'
+disconnect('Ladder Clusters', 'Ladder Relevance Chunks')
+add_node('Ladder SERP Cache Rows', 'n8n-nodes-base.code', 2, {'jsCode': DFS_RETRY_SRC + '\n' + SERP_CACHE_SRC + """
+// KW-SERP: every results page this run bought and read (after the in-200 retry) becomes today's reading for the other paths; failed ones are not stored
+let sent = []; try { sent = $('Ladder SERP Cache Split').all().map(i => i.json).filter(r => r && r.cluster_check); } catch (e) { sent = []; }
+const first = (() => { try { return $('Run Ladder Cluster SERP').all().map(i => i.json); } catch (e) { return []; } })();
+const retryItems = (() => { try { return $('Ladder Cluster Retry').all().map(i => i.json).filter(x => x && x.is_retry); } catch (e) { return []; } })();
+const retryAnswers = (() => { try { return $('Run Ladder Cluster SERP (Retry)').all().map(i => i.json); } catch (e) { return []; } })();
+if (!sent.length || !first.length) return [{ json: { skip: true } }];
+const answers = RT.stats(first, {}, retryItems, retryAnswers).answers || [];
+const byKey = new Map();
+sent.forEach((q, i) => { const r = SC.rowFor(answers[i], { keyword: q.keyword, location_code: q.location_code, language_code: q.language_code || 'en', depth: 10 }, ''); if (r) byKey.set(r.key, r); });
+return byKey.size ? [...byKey.values()].map(r => ({ json: r })) : [{ json: { skip: true } }];"""}, [_lcl145[0], _lcl145[1] + 200])
+if_node('New SERP Readings?', '{{ !$json.skip }}', [_lcl145[0] + 220, _lcl145[1] + 200])
+add_node('Save SERP Cache (Ladder)', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [_lcl145[0] + 440, _lcl145[1] + 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Restore Clusters', 'n8n-nodes-base.code', 2, {'jsCode': "// The run continues with the pool item Ladder Clusters made (a Data Table upsert outputs the stored rows, not the run's item).\nreturn [{ json: $('Ladder Clusters').first().json }];"},
+         [_lcl145[0] + 660, _lcl145[1] + 200])
+connect('Ladder Clusters', 'Ladder SERP Cache Rows'); connect('Ladder SERP Cache Rows', 'New SERP Readings?')
+connect('New SERP Readings?', 'Save SERP Cache (Ladder)', 0); connect('New SERP Readings?', 'Restore Clusters', 1)
+connect('Save SERP Cache (Ladder)', 'Restore Clusters'); connect('Restore Clusters', 'Ladder Relevance Chunks')
+# the proof on the graph and in the code
+for _n145 in ('SERP Cache Key (Top 10)', 'Use SERP Cache (Top 10)', 'SERP Cache Row (Top 10)', 'Ladder SERP Cache Split', 'Ladder SERP Cache Rows', 'Ladder Cluster Requests', 'Ladder Clusters'):
+    assert _SC145 in code(_n145) and '/*__' not in code(_n145), 'KW-SERP: ' + _n145 + ' is missing the cache kit'
+assert 'SC.lookup(rows, j.serp_cache_body)' in code('Use SERP Cache (Top 10)') and "$('Ladder SERP Cache Split')" in code('Ladder Cluster Retry'), 'KW-SERP: a path does not look up today\'s reading'
+assert "$('Cached SERP (Top 10)')" in code('Analyze Competitor Pages'), 'KW-SERP: the analysis does not read today\'s reading'
+for _a145, _b145 in (('SERP Read Today?', ['Cached SERP (Top 10)', 'SERP Top 10']), ('Restore Top 6', ['Read Competitor Pages']), ('Restore Clusters', ['Ladder Relevance Chunks'])):
+    assert [t['node'] for l in conns[_a145]['main'] for t in l] == _b145, 'KW-SERP: ' + _a145 + ' wiring'
+# the harness shim: the kit as a node ({ fn, args } -> { r })
+open(os.path.join(OUT_CODE, '_serp_cache.js'), 'w').write("// harness shim (written by build_v4.py section 145): the results-page cache kit, { fn, args } -> { r }\n" + SERP_CACHE_SRC
+    + "\nreturn $input.all().map(i => ({ json: { r: SC[i.json.fn].apply(null, i.json.args || []) } }));\n")
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('One reading of a results page per search and day, shared by every path (KW-SERP, 2026-10-21, RV-12 / A-21): v5/code/_serp_cache.js keys a reading by keyword + location + language + device and keeps the UTC day on the value (seo_cache `serp:<keyword>|<location>|<language>|<device>`, one row per search); the verdict / ladder head (SERP Top 10), the ladder rung reads (Run Ladder Cluster SERP) and the Keyword Check use a reading made earlier today when it is deep enough (and loaded the AI Overview when the path needs it), at no cost, and store every fresh reading; a failed read is never stored; two runs missing at the same moment both pay once (accepted)')
+
 
 # =============================================================================
 # 9. WRITE

@@ -1,5 +1,6 @@
 /*__KW_INPUTS__*/
 /*__RADIUS__*/
+/*__SERP_CACHE__*/
 // B2-4 (2026-10-15, benchmark area 2, docs/system-review-2026-10-14/BENCH_AREA2_ladders.md gap 5, criterion K7): one results page per
 // rung candidate, so the rungs can be grouped by what Google ACTUALLY answers each search with instead of by the AI's topic label.
 //   Until today `Ladder_Pool` initialised `competitors: []` and never filled it (the ladder's four Labs pulls return `serp_info.
@@ -43,7 +44,10 @@ const skip = freeOnly ? 'this run was asked for free sources only, so no results
     : wanted.length < 2 ? 'only ' + wanted.length + ' rung candidate(s) are on this ladder\'s topic, and a comparison needs at least two, so nothing was bought'
       : '';
 if (skip) return [{ json: { cluster_check: false, skip_reason: skip, ...plan, asked: 0, supporting_asked: 0, cost_usd: 0 } }];
-return [...wanted.map((k, i) => ({ json: { cluster_check: true, keyword: k.keyword, location_code: d.location_code, language_code: d.language_code || 'en',
+// KW-SERP (RV-12, 2026-10-21): each request carries the key of its results page in seo_cache, so a page read earlier today by any path
+// (research, Keyword Check, an earlier ladder, the rank tracker) is used as it is and not bought again (Ladder SERP Cache Split)
+const ck = (kw) => SC.key({ keyword: kw, location_code: d.location_code, language_code: d.language_code || 'en' });
+return [...wanted.map((k, i) => ({ json: { cluster_check: true, keyword: k.keyword, serp_cache_key: ck(k.keyword), location_code: d.location_code, language_code: d.language_code || 'en',
   n: i + 1, of: wanted.length, weight: k.pre_score ?? k.opportunity ?? 0, volume: k.volume ?? null, ...plan } })),
-  ...supporting.map((k, i) => ({ json: { cluster_check: true, supporting_check: true, keyword: k.keyword, location_code: d.location_code, language_code: d.language_code || 'en',
+  ...supporting.map((k, i) => ({ json: { cluster_check: true, supporting_check: true, keyword: k.keyword, serp_cache_key: ck(k.keyword), location_code: d.location_code, language_code: d.language_code || 'en',
     n: wanted.length + i + 1, of: wanted.length + supporting.length, weight: 0, volume: null, ...plan } }))];

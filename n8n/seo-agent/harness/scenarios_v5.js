@@ -2028,7 +2028,7 @@ await guard('pipeline phase 3', async () => {
   resp1 = await run('Assess Response', FIT({ fit: 2 })); B = resp1[0].json.body;
   check('assess: already #14 -> easy, direct 2-3 months (top 20 shortens); cost $0.0253 (A-28: the Haiku call at $0.0033; E-SERP: + the results page $0.002)', B.difficulty_for_you === 'easy' && B.plan_type === 'direct' && B.months === '2-3' && B.position === 14 && B.cost_usd === 0.0253, JSON.stringify(B));
   const rra2 = await run('Reach Row (Assess)', resp1);
-  check('assess: a stored reach is not saved again', rra2[0].json.skip === true, JSON.stringify(rra2[0].json));
+  check('assess: a stored reach is not saved again (KW-SERP: only the fresh results-page reading is)', rra2.every(i => i.json.kind !== 'reach') && rra2.length === 1 && rra2[0].json.kind === 'serp', JSON.stringify(rra2.map(i => i.json.key || i.json)));
   b = await answer(AR({ keyword: 'cleartax e invoicing', existing_keywords: ['e invoicing in uae', 'peppol uae'] }), FIT({ fit: 1, navigational: true, alternatives: ['e invoicing software uae', 'Peppol UAE', 'cleartax e invoicing', 'e invoicing in the UAE', '"FTA e invoicing requirements"', 'einvoicing for sme uae'] }));
   check('assess: another company\'s brand -> not realistic, no plan, up to 3 alternatives (not the keyword itself, not one the site has)', b.difficulty_for_you === 'not_realistic' && b.plan_type === 'none' && b.months === '' && b.navigational === true && eq(b.alternatives, ['e invoicing software uae', 'fta e invoicing requirements', 'einvoicing for sme uae']) && b.label === 'Not realistic for your site', JSON.stringify(b));
   b = await answer(AR({ keyword: 'payroll outsourcing dubai', kd: 20 }), FIT({ fit: 0, alternatives: ['erp implementation dubai'] }));
@@ -19643,5 +19643,6 @@ await require('./scenarios_full_gate')({ H, run, mock, store, guard, reset, begi
 await require('./scenarios_claims')({ H, run, mock, store, guard, reset, begin });   // CLM1-CLM4 (E-CLAIM 2026-10-21): promises in the client's name (deliverables, process, billing) need a fact on file, else an owner edit and not ready
 await require('./scenarios_ladder_picture')({ H, run, mock, store, guard, reset, begin });   // LP1-LP3 (2026-10-21, D7): the ladder reads the pages it could duplicate; one page per search against the main keyword and between rungs
 
+await require('./scenarios_serp_cache')({ H, run, mock, store, guard, reset, begin });   // SC1-SC5 (KW-SERP 2026-10-21, RV-12): one results-page reading per search and day, shared by the Keyword Check, the ladder head and the ladder's rung reads; deep enough or bought again; failed reads never stored
 H.report();
 })();

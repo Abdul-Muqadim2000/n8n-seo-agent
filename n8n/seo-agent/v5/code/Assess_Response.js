@@ -180,7 +180,8 @@ const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volum
   existing,   // R50
   // E-SERP: the results page this answer read (or why it could not), and what kind of page Google ranks there
   serp: { read: !!serpA.read, asked: !!serpA.asked, why: serpA.read ? '' : String(serpA.why || ''), pages_read: serpPagesA.length, top: serpPagesA.slice(0, 5).map(p => p.domain),
-    paa: (serpA.paa || []).slice(0, 4), page_types: kindsA ? { read: kindsA.read, dominant: kindsA.dominant, counts: kindsA.counts, text: kindsA.text } : null },
+    paa: (serpA.paa || []).slice(0, 4), page_types: kindsA ? { read: kindsA.read, dominant: kindsA.dominant, counts: kindsA.counts, text: kindsA.text } : null,
+    checked_at: serpA.checked_at || null, ai_overview_seen: serpA.read ? !!serpA.ai_overview_seen : null, read_today: !!serpA.read_today, read_note: String(serpA.read_note || '') },   // KW-SERP: the one reading of today, shared with every path
   fit_judged_without_serp: !serpA.read,
   business_source: a.business_source, warnings };
 if (existing) body.label = body.label + (existing.how === 'a page of yours' ? ' · you already have a page for it' : ' · already one of your keywords');
