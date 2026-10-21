@@ -8,7 +8,7 @@ const num = (n) => (n == null || n === '' || isNaN(n)) ? 'N/A' : Number(n).toLoc
 const SHORT = { easy: 'easy for you', reachable: 'reachable', hard: 'hard', very_hard: 'very hard' };   // v4.8: difficulty relative to the site's reach
 const kdLabel = (v) => v == null ? 'N/A' : v + (L.reach != null ? ' · ' + SHORT[difficultyForYou(v, L.reach, {})] : (v < 30 ? ' · easy' : v < 50 ? ' · medium' : v < 70 ? ' · hard' : ' · very hard'));
 const posText = (p) => p ? '#' + p : 'not in top 60';
-const months = (m) => Array.isArray(m) ? (m[0] === m[1] ? 'month ' + m[0] : 'months ' + m[0] + '-' + m[1]) : '—';
+const months = (m) => Array.isArray(m) ? (m[0] === m[1] ? 'month ' + m[0] : 'months ' + m[0] + '-' + m[1]) : '-';
 // R42 (2026-10-16): a ladder run that writes a page while the site already has its limit of written-but-unpublished pages says so, in the
 // owner's words, where the notes are read (the Content Cadence stops at that limit; a ladder run does not, so the pile grows by one).
 // F-A1 / A-12: a plan built with the website's limits (`L.limits`) states them itself, held pages included; this note is for older plans
@@ -55,11 +55,11 @@ const orderText = { direct: 'Write the main page first (it is within reach now),
 const mainOnly = L.planned && L.plan_type !== 'direct' && !((L.stats || {}).rung_pages);   // no supporting keywords in the data: the main page is written first
 const orderLine = mainOnly ? 'No supporting keywords were found in the search data for this topic, so the main page is the whole ladder for now and is written first; supporting pages can be added as the site grows.' : orderText;
 const chanceLine = planned && L.chance && L.chance.band === 'unmeasured' ? '<p><b>Estimated chance:</b> ' + esc(L.chance_text || L.chance.label) + '</p>'   // R49: no band printed when the reach rests on no measured ranking
-  : planned && L.chance && L.chance.label ? '<p><b>Estimated chance</b> of reaching the top 10 within ' + esc(L.months) + ' months: <b>' + esc(L.chance.band) + '</b> (' + L.chance.range[0] + '-' + L.chance.range[1] + '%) — ' + esc(REACH_CHANCE_NOTE) + '. ' + esc(reachBaseRateText()) + '</p>' : '';
-const refusedLine = (L.refused_keywords || []).length ? '<p class="small">Left out as other companies\' brands, government or portal searches, or navigational: ' + L.refused_keywords.slice(0, 12).map(x => '"' + esc(x.keyword) + '" (' + esc(x.reason) + ')').join(', ') + (L.refused_keywords.length > 12 ? ' …' : '') + '.</p>' : '';
+  : planned && L.chance && L.chance.label ? '<p><b>Estimated chance</b> of reaching the top 10 within ' + esc(L.months) + ' months: <b>' + esc(L.chance.band) + '</b> (' + L.chance.range[0] + '-' + L.chance.range[1] + '%): ' + esc(REACH_CHANCE_NOTE) + '. ' + esc(reachBaseRateText()) + '</p>' : '';
+const refusedLine = (L.refused_keywords || []).length ? '<p class="small">Left out, each with its reason (another company\'s brand, a government or portal search, a navigational search or a job search): ' + L.refused_keywords.slice(0, 12).map(x => '"' + esc(x.keyword) + '" (' + esc(x.reason) + ')').join(', ') + (L.refused_keywords.length > 12 ? ' and ' + (L.refused_keywords.length - 12) + ' more' : '') + '.</p>' : '';
 const whyPlan = () => h2('Why this plan') + '<p>' + reachText + '</p><p>"' + esc(head.keyword) + '" is <b>' + esc(DIFF[L.difficulty_for_you] || L.difficulty_for_you) + '</b>: ' + diffWhy + '.</p>' +
-  (planned ? '<p><b>' + esc(planName) + ' — about ' + esc(L.months) + ' months.</b> ' + esc(orderLine) + '</p>' + chanceLine : '<div class="note"><b>No ladder planned.</b> ' + esc((L.refusal || {}).message || '') + '</div>') +
-  ((L.excluded_keywords || []).length ? '<p class="small">Left out because another ladder of this site already covers them (one search, one page): ' + L.excluded_keywords.slice(0, 12).map(x => '"' + esc(x.keyword) + '"').join(', ') + (L.excluded_keywords.length > 12 ? ' …' : '') + '.</p>' : '') + refusedLine +
+  (planned ? '<p><b>' + esc(planName) + ': about ' + esc(L.months) + ' months.</b> ' + esc(orderLine) + '</p>' + chanceLine : '<div class="note"><b>No ladder planned.</b> ' + esc((L.refusal || {}).message || '') + '</div>') +
+  ((L.excluded_keywords || []).length ? '<p class="small">Left out because another ladder of this site already covers them (one search, one page): ' + L.excluded_keywords.slice(0, 12).map(x => '"' + esc(x.keyword) + '"').join(', ') + (L.excluded_keywords.length > 12 ? ' and ' + (L.excluded_keywords.length - 12) + ' more' : '') + '.</p>' : '') + refusedLine +
   '<p class="small">Difficulty for your site: easy up to reach + 5 (or you already rank in the top 20), reachable up to reach + 20, hard up to reach + 40, very hard above. Easy → direct plan (2-4 months, estimated chance good), reachable → short ladder (4-8, fair), hard → full ladder (9-15, low), very hard → full ladder as a stretch (slim); a little faster for strong sites. The month ranges follow the 2025 Ahrefs study (' + REACH_BASE_RATE.top10_within_year_pct + '% of new pages reach the top 10 within a year; ' + REACH_BASE_RATE.of_those_within_month_pct + '% of those within a month); the chance bands are uncalibrated estimates until this system has measured its own ladders.</p>';
 // D26: the results page at the time of the check — an observation, not a fact about the query
 const sf = d.serp_features || null;
@@ -78,20 +78,20 @@ parts.push(`
 
 // 1. Summary
 parts.push(h2('The plan in one page') + kv([
-  ['Destination keyword', '<b>' + esc(head.keyword) + '</b> — ' + num(head.volume) + ' searches/mo, difficulty ' + kdLabel(head.kd) + (head.cpc != null ? ', CPC ' + String(Math.round(Number(head.cpc) * 100) / 100) : '')],
+  ['Destination keyword', '<b>' + esc(head.keyword) + '</b>: ' + num(head.volume) + ' searches/mo, difficulty ' + kdLabel(head.kd) + (head.cpc != null ? ', CPC ' + String(Math.round(Number(head.cpc) * 100) / 100) : '')],
   ['Is it realistic?', '<span class="' + statusClass + '">' + statusLabel + '</span>' + (f.score != null ? ' (verdict ' + esc(f.verdict) + ', ' + f.score + '/100)' : '') + scoreAdjNote],
-  ...(L.stretch && (f.alternatives || []).length ? [['Consider first', f.alternatives.map(a => '"' + esc(a) + '"').join(' · ') + ' — realistic alternatives; the full ladder below is a stretch']] : []),
-  ['For your site', '<b>' + esc(DIFF[L.difficulty_for_you] || '—') + '</b> · reach ' + esc(L.reach) + ' · ' + (planned ? esc(planName) + ' · about ' + esc(L.months) + ' months' : 'no ladder planned')],
+  ...(L.stretch && (f.alternatives || []).length ? [['Consider first', f.alternatives.map(a => '"' + esc(a) + '"').join(' · ') + ': realistic alternatives; the full ladder below is a stretch']] : []),
+  ['For your site', '<b>' + esc(DIFF[L.difficulty_for_you] || '-') + '</b> · reach ' + esc(L.reach) + ' · ' + (planned ? esc(planName) + ' · about ' + esc(L.months) + ' months' : 'no ladder planned')],
   ['Where you rank today', (head.your_position ? '#' + head.your_position + ' for the destination keyword' : 'not in the top 60 for the destination keyword') + (st.site_rankings_found ? '; the site ranks for ' + num(st.site_rankings_found) + ' keywords in the top 60' : '')],
   ['The ladder', planned ? num(st.pages_total) + ' pages: ' + rungs.map(r => r.pages.length + ' on rung ' + r.rung).join(', ') + (rungs.length ? ' and' : '') + ' the main page — ' + esc(L.order || '') : 'none — ' + esc((L.refusal || {}).reason === 'duplicate' ? 'this website already has a ladder for this keyword' : 'not realistic for this site')],
-  ['Timeline', (L.timeline || []).map(t => esc(t.label) + ': ' + months(t.months)).join(' · ') || '—'],
-  ['Traffic potential', planned ? '~' + num(st.traffic_potential_total) + ' visits/month across the ladder once the pages rank in the top 3' : '—'],
+  ['Timeline', (L.timeline || []).map(t => esc(t.label) + ': ' + months(t.months)).join(' · ') || '-'],
+  ['Traffic potential', planned ? '~' + num(st.traffic_potential_total) + ' visits/month across the ladder once the pages rank in the top 3' : '-'],
   // R1 (2026-10-13): the plan used to call these pages written and promise them as page content before the page run had even started — and a
   // run the day's AI budget refused then left nothing behind but a ladder row saying "writing" (live: execution 500).
   // keyword-first R-K7 (2026-10-19): a Manual ladder writes nothing at start, and its pages wait for the client's OK (never "when the limit clears")
   ['Started now', (L.limits || {}).manual_hold === true ? 'none: this ladder is Manual, so each page waits for your OK (approve it on the Pipeline page or in the weekly "Coming up" plan)'
-    : L.held && (L.held.pages || []).length ? 'none — held by the website\'s limits: ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '. The Content Cadence writes '
-    + (L.held.pages.length === 1 ? 'it' : 'them') + ' when the limit clears.' : (L.write_now || []).length ? (L.write_now || []).map(w => '"' + esc(w.keyword) + '" (rung ' + w.rung + ')').join(', ') + ' — started as its own page run; each arrives as its own report. A run the day\'s AI budget refuses writes nothing and puts the page back to "planned" for the next weekly run.' : 'none'],
+    : L.held && (L.held.pages || []).length ? 'none: held by the website\'s limits: ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '. The Content Cadence writes '
+    + (L.held.pages.length === 1 ? 'it' : 'them') + ' when the limit clears.' : (L.write_now || []).length ? (L.write_now || []).map(w => '"' + esc(w.keyword) + '" (rung ' + w.rung + ')').join(', ') + ': started as its own page run; each arrives as its own report. A run the day\'s AI budget refuses writes nothing and puts the page back to "planned" for the next weekly run.' : 'none'],
   ['Tracking', planned ? 'Positions checked ' + esc((L.tracker || {}).cadence || 'weekly') + '; progress e-mail with the next rung; once the top page holds the top 3 for 4 checks it is checked monthly' : 'nothing to track']
 ]) + ((L.notes || []).filter(n => !(L.refusal && n === L.refusal.message)).length ? '<div class="note">' + L.notes.filter(n => !(L.refusal && n === L.refusal.message)).map(esc).join('<br>') + '</div>' : ''));
 
@@ -107,7 +107,7 @@ parts.push(h2('Is the destination realistic?') +
   kv([['Expected visits/month at #1-3', f.expected_visits_top3 != null ? num(f.expected_visits_top3) : 'N/A'], ['Time to rank (verdict estimate)', f.time_to_rank_months != null ? f.time_to_rank_months + ' months' : 'N/A'],
     // B2-5 (2026-10-15): domain diversity is Semrush's fifth ranking factor and it now moves this score - the count is measured, the
     // adjustment is a stated rule, and both are printed here so nobody has to take the number on trust.
-    ...(dv ? [['Who owns the results page', (dv.checked ? '<b>' + num(dv.domains) + ' different site(s)</b> in the top ' + num(dv.results) + ' — ' + esc(dv.band) : 'not known: the results page could not be read')
+    ...(dv ? [['Who owns the results page', (dv.checked ? '<b>' + num(dv.domains) + ' different site(s)</b> in the top ' + num(dv.results) + ': ' + esc(dv.band) : 'not known: the results page could not be read')
       + '<br><span class="small">' + esc(dv.text) + '</span><br><span class="small">' + esc(dv.basis) + '</span>']] : [])]));
 
 // B2-2 (2026-10-15, benchmark area 2): what the site already has on this topic, before the plan's new pages — the inventory the leaders
@@ -116,7 +116,7 @@ const cov = ta && ta.coverage ? ta.coverage : null;
 if (cov) {
   const covPages = (cov.pages || []).length
     ? '<table class="ct"><tr><th>Page you already have on this topic</th><th>Title</th></tr>'
-      + cov.pages.map(p => '<tr><td>' + esc(p.url) + '</td><td>' + esc(p.title || '—') + '</td></tr>').join('') + '</table>'
+      + cov.pages.map(p => '<tr><td>' + esc(p.url) + '</td><td>' + esc(p.title || '-') + '</td></tr>').join('') + '</table>'
     : '';
   parts.push(h2('What you already have on this topic') + '<p>' + esc(cov.summary) + '</p>' +
     kv([['Pages on this topic', num(cov.pages_on_site)],
@@ -129,32 +129,39 @@ if (cov) {
 // compared. The convention is Keyword Insights' own: the top 7 results at a 40% shared-URL threshold (B2-6).
 if (scl && scl.asked) {
   const clRows = (scl.clusters || []).slice(0, 12).map(c => '<tr><td><b>' + esc(c.head_keyword) + '</b></td><td>' + c.keyword_count + '</td><td>'
-    + esc((c.keywords || []).slice(1).map(k => '"' + k.keyword + '" (' + k.shared_urls + ' shared)').join(', ') || '—') + '</td></tr>').join('');
-  const ncRows = (scl.not_compared || []).slice(0, 10).map(x => '<li>"' + esc(x.keyword) + '" — ' + esc(x.reason) + (x.retried ? ' (asked twice)' : '') + '</li>').join('');
+    + esc((c.keywords || []).slice(1).map(k => '"' + k.keyword + '" (' + k.shared_urls + ' shared)').join(', ') || '-') + '</td></tr>').join('');
+  const ncRows = (scl.not_compared || []).slice(0, 10).map(x => '<li>"' + esc(x.keyword) + '": ' + esc(x.reason) + (x.retried ? ' (asked twice)' : '') + '</li>').join('');
   parts.push(h2('Searches that share a results page') +
     '<p class="small">' + esc(scl.note) + '</p>' +
     (clRows ? '<table class="ct"><tr><th>One page for</th><th>Searches</th><th>Also covers</th></tr>' + clRows + '</table>' : '') +
     kv([['Results pages read', num(scl.compared) + ' of ' + num(scl.asked) + ' asked' + (scl.retried ? ' (' + num(scl.retried) + ' sent again, ' + num(scl.retry_answered) + ' answered)' : '')],
       ['How they were compared', 'the top ' + num(scl.top_n) + ' results, ' + num(scl.min_shared_urls) + ' shared URLs (' + num(scl.min_overlap_pct) + '%)'],
       ['What it cost', '$' + Number(scl.cost_usd || 0).toFixed(4) + '<br><span class="small">' + esc(scl.cost_basis) + '</span>']]) +
-    (ncRows ? '<p class="small"><b>Could not be compared</b> — these keep their own group and nothing was merged on their behalf:</p><ul class="small">' + ncRows + '</ul>' : '') +
+    (ncRows ? '<p class="small"><b>Could not be compared</b>: these keep their own group and nothing was merged on their behalf:</p><ul class="small">' + ncRows + '</ul>' : '') +
     (scl.left_uncompared ? '<p class="small">' + num(scl.left_uncompared) + ' further keyword(s) on this topic were below the cap of ' + num(scl.cap) + ' and were not compared.</p>' : ''));
 } else if (scl && scl.skip_reason) {
   parts.push(h2('Searches that share a results page') + '<p>' + esc(scl.note || scl.skip_reason) + '</p>');
+}
+// KW-COMP (2026-10-21, RV-6): who this ladder competes with, read from the same results pages, with the sites that rank but compete with nobody
+const cmpL = scl && scl.competitors;
+if (cmpL && ((cmpL.picked || []).length || (cmpL.excluded || []).length)) {
+  parts.push(h2('Who you compete with on this ladder') +
+    ((cmpL.picked || []).length ? '<ul>' + cmpL.picked.map(c => '<li><b>' + esc(c.domain) + '</b>: ' + esc(c.evidence) + '</li>').join('') + '</ul>' : '<p>No business ranked often enough on these results pages to count as a competitor.</p>') +
+    '<p class="small">' + esc(cmpL.note) + '</p>');
 }
 
 // 4. The ladder (only when pages were planned)
 if (planned) {
 let ladderHtml = h2('The ladder', true) + '<p class="small">One page per topic. Lower rungs are specific and winnable; each rung links up to the top page. Pages marked "improve" already exist on your site. "Why here" is the data that put the page in this position (B2-3).</p>';
 for (const r of rungs) {
-  ladderHtml += '<h3>' + esc(r.label) + ' — ' + months(r.months) + '</h3>' +
+  ladderHtml += '<h3>' + esc(r.label) + ': ' + months(r.months) + '</h3>' +
     '<table class="ct"><tr><th>#</th><th>Page (primary keyword)</th><th>Supporting keywords</th><th>Grouped by</th><th>Page type</th><th>Searches/mo</th><th>Difficulty</th><th>You today</th><th>Page on site</th></tr>' +
-    r.pages.map(p => '<tr><td>' + p.page_no + '</td><td><b>' + esc(p.keyword) + '</b>' + (p.why ? '<br><span class="small">' + esc(p.why) + '</span>' : '') + '</td><td>' + esc((p.supporting || []).join(', ') || '—') + '</td><td>' + esc(p.grouped_by || 'topic label') + '</td><td>' + esc(p.page_type) + '</td><td>' + num(p.total_volume) + '</td><td>' + kdLabel(p.kd) + '</td><td>' + esc(posText(p.your_position)) + '</td><td>' + (p.exists ? '<span class="ok">improve</span><br><span class="small">' + esc(p.target_url) + '</span>' : 'new<br><span class="small">' + esc(p.target_url) + '</span>') + '</td></tr>').join('') + '</table>';
+    r.pages.map(p => '<tr><td>' + p.page_no + '</td><td><b>' + esc(p.keyword) + '</b>' + (p.why ? '<br><span class="small">' + esc(p.why) + '</span>' : '') + '</td><td>' + esc((p.supporting || []).join(', ') || '-') + '</td><td>' + esc(p.grouped_by || 'topic label') + '</td><td>' + esc(p.page_type) + '</td><td>' + num(p.total_volume) + '</td><td>' + kdLabel(p.kd) + '</td><td>' + esc(posText(p.your_position)) + '</td><td>' + (p.exists ? '<span class="ok">improve</span><br><span class="small">' + esc(p.target_url) + '</span>' : 'new<br><span class="small">' + esc(p.target_url) + '</span>') + '</td></tr>').join('') + '</table>';
 }
-ladderHtml += '<h3>Top — ' + esc(top.keyword) + ' — ' + months(top.months) + '</h3>' + kv([
+ladderHtml += '<h3>Top: ' + esc(top.keyword) + ': ' + months(top.months) + '</h3>' + kv([
   ['Page', (top.exists ? '<span class="ok">improve</span> ' : 'new ') + esc(top.target_url)],
-  ['Page type', esc(top.page_type)], ['Supporting keywords', esc((top.supporting || []).join(', ') || '—') + (top.grouped_by ? '<br><span class="small">Grouped by ' + esc(top.grouped_by) + '</span>' : '')],   // A-10
-  ['Searches/mo · difficulty', num(top.volume) + ' · ' + kdLabel(top.kd)], ['You today', esc(posText(top.your_position))], ['When', L.plan_type === 'direct' || mainOnly ? 'written first — ' + months(top.months) : months(top.months)],
+  ['Page type', esc(top.page_type)], ['Supporting keywords', esc((top.supporting || []).join(', ') || '-') + (top.grouped_by ? '<br><span class="small">Grouped by ' + esc(top.grouped_by) + '</span>' : '')],   // A-10
+  ['Searches/mo · difficulty', num(top.volume) + ' · ' + kdLabel(top.kd)], ['You today', esc(posText(top.your_position))], ['When', L.plan_type === 'direct' || mainOnly ? 'written first: ' + months(top.months) : months(top.months)],
   ...(top.why ? [['Why here', esc(top.why)]] : [])   // B2-3
 ]);
 parts.push(ladderHtml);
@@ -176,7 +183,7 @@ parts.push(h2('Internal link map') + '<p class="small">Every rung page links up 
 // 6. Write now
 parts.push(h2('Pages written now') + ((L.write_now || []).length ? '<table class="ct"><tr><th>#</th><th>Keyword</th><th>Page type</th><th>URL</th><th>Links to</th></tr>' +
   L.write_now.map(w => '<tr><td>' + w.page_no + '</td><td><b>' + esc(w.keyword) + '</b></td><td>' + esc(w.page_type) + '</td><td>' + esc(w.target_url) + (w.exists ? ' (improve)' : ' (new)') + '</td><td>' + esc((w.links_to || []).map(x => x.keyword).join(', ')) + '</td></tr>').join('') + '</table>' +
-  '<p>Each page runs through the full content pipeline (competitor analysis, verified facts, brief, copywriter, critic, QA, editor) and arrives as its own PDF and Word file' + (d.email ? ' at ' + esc(d.email) : '') + '. Publish it at the URL above, then the weekly tracker measures the climb.</p>' : (L.held && (L.held.pages || []).length ? '<p><b>Held, not written:</b> ' + L.held.pages.map(w => '"' + esc(w.keyword) + '"').join(', ') + ' — ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '.</p><p class="small">' + esc((L.limits || {}).text || '') + '</p>' : '<p>No pages requested now.</p>')));
+  '<p>Each page runs through the full content pipeline (competitor analysis, verified facts, brief, copywriter, critic, QA, editor) and arrives as its own PDF and Word file' + (d.email ? ' at ' + esc(d.email) : '') + '. Publish it at the URL above, then the weekly tracker measures the climb.</p>' : (L.held && (L.held.pages || []).length ? '<p><b>Held, not written:</b> ' + L.held.pages.map(w => '"' + esc(w.keyword) + '"').join(', ') + ': ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '.</p><p class="small">' + esc((L.limits || {}).text || '') + '</p>' : '<p>No pages requested now.</p>')));
 
 // 7. Requirements
 parts.push(h2('What else is needed') + '<table class="ct"><tr><th>Item</th><th>Detail</th></tr>' + (L.requirements || []).map(r => '<tr><td><b>' + esc(r.item) + '</b></td><td>' + esc(r.detail) + '</td></tr>').join('') + '</table>');
@@ -190,21 +197,21 @@ parts.push(h2('Tracking and next rungs') + '<p>The ladder is registered for ' + 
 if ((L.later || []).length) parts.push(h2(planned ? 'Keywords for later (difficulty above ' + (Number(L.reach) + 30) + ', or beyond this plan\'s pages)' : 'Keywords found around the main keyword') + '<table class="ct"><tr><th>Keyword</th><th>Searches/mo</th><th>Difficulty</th></tr>' + L.later.map(k => '<tr><td>' + esc(k.keyword) + '</td><td>' + num(k.volume) + '</td><td>' + kdLabel(k.kd) + '</td></tr>').join('') + '</table>');
 
 // 10. Method
-parts.push(h2('How this was built') + '<p class="small">' + num(st.pool_size) + ' keywords were pulled around the head term (long-tail suggestions, related searches, keyword ideas for the head term and your services, and the keywords your site already ranks for). ' + num(st.ai_reviewed) + ' were screened by AI for topical relevance to the head term; ' + num(st.relevant) + ' survived. Rungs follow difficulty relative to your reach (' + esc(L.reach) + '): rung 1 up to the reach (long-tail, 20+ searches), rung 2 up to reach + 15, rung 3 up to reach + 30, the head term on top; keywords other ladders of this site already cover are left out. One page per topic cluster, 2-4 pages per rung; a direct plan keeps 2-3 supporting pages, a short ladder 3-5. Traffic potential = searches after SERP-feature click loss × a top-3 click share. Positions and metrics from DataForSEO for ' + esc(L.country) + '.' + ((st.research_failures || []).length ? ' Some data pulls failed: ' + esc(st.research_failures.join('; ')) + '.' : '') + '</p>');
+parts.push(h2('How this was built') + '<p class="small">' + num(st.pool_size) + ' keywords were pulled around the head term (long-tail suggestions, related searches, keyword ideas for the head term and your services, and the keywords your site already ranks for). ' + num(st.ai_reviewed) + ' were screened by AI for topical relevance to the head term; ' + num(st.relevant) + ' survived. Rungs follow difficulty relative to your reach (' + esc(L.reach) + '): rung 1 up to the reach (long-tail, 20+ searches), rung 2 up to reach + 15, rung 3 up to reach + 30, the head term on top; keywords other ladders of this site already cover are left out. One page per topic cluster, 2-4 pages per rung; a direct plan keeps 2-3 supporting pages, a short ladder 3-5. Traffic potential = searches after the click loss to Google\'s own answers × a top-3 click share. Positions and metrics from our search data for ' + esc(L.country) + '.' + ((st.research_failures || []).length ? ' Some data pulls failed: ' + esc(st.research_failures.join('; ')) + '.' : '') + '</p>');
 
 // G29 (2026-10-13, FIX_PLAN): the same plan with every figure's source, period and sample, as a table and as structured fields
 const lineage = [
   LN.of('Searches per month and difficulty', 'kwdata', { basis: 'estimated', period: 'the provider\'s latest 12-month average', sample: LN.sample(st.pool_size, 'keywords pulled'),
     note: 'a provider estimate for ' + String(L.country || '') + ', not a measurement of your site; a single keyword\'s volume can be well off' }),
   LN.of('Traffic potential per page', 'model', { basis: 'modelled', period: 'per month, once the page ranks', sample: LN.sample((L.rungs || []).length, 'rungs planned'),
-    note: 'searches after results-page click loss × a top-3 click share — modelled, never measured clicks' }),
+    note: 'searches after results-page click loss × a top-3 click share: modelled, never measured clicks' }),
   LN.of('Difficulty for your site and the plan type', 'model', { basis: 'modelled', period: LN.asOf(today), sample: 'your site\'s reach ' + String(L.reach == null ? 'unknown' : L.reach),
     note: 'your reach against each keyword\'s difficulty; the month ranges and chances are modelled from published base rates, not from your own history yet' }),
   LN.of('Who ranks now and which results-page features show', 'serp', { basis: 'one_sample', period: LN.asOf(today), sample: LN.sample((d.live_checks && d.live_checks.done) || (L.rungs || []).length, 'keywords checked live on Google'),
     note: 'one results page per keyword at one moment, from ' + String(L.country || 'the chosen country') }),
 ];
 parts.push(h2('Where these numbers come from') + '<table class="ct"><tr><th>Figure</th><th>Source</th><th>Period</th><th>Sample</th><th>How it was arrived at</th></tr>'
-  + lineage.map(l => '<tr><td>' + esc(l.figure) + '</td><td>' + esc(l.source_label) + '</td><td>' + esc(l.period || '—') + '</td><td>' + esc(l.sample || '—') + '</td><td>' + esc([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+  + lineage.map(l => '<tr><td>' + esc(l.figure) + '</td><td>' + esc(l.source_label) + '</td><td>' + esc(l.period || '-') + '</td><td>' + esc(l.sample || '-') + '</td><td>' + esc([l.basis_label, l.note].filter(Boolean).join(': ')) + '</td></tr>').join('')
   + '</table><p class="small">A figure marked "modelled, not measured" is computed, not counted.</p>');
 
 const css = `
@@ -230,7 +237,7 @@ p { margin: 0 0 9px; }
 .small { font-size: 9pt; color: #64748B; }
 .pb { page-break-before: always; }`;
 const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8"><title>${esc(head.keyword)} — Keyword Ladder Plan</title>
+<head><meta charset="utf-8"><title>${esc(head.keyword)}: Keyword Ladder Plan</title>
 <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
 <style>${css}</style></head>
 <body>${parts.join('\n')}</body></html>`;

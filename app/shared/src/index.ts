@@ -39,6 +39,7 @@ export * from './admin';
 export * from './billing';   // credits: what customers see and pay (app/docs/CREDITS.md)
 export * from './autopilot'; // one breakdown of a website's schedules, for the settings card, the forecast and the reserve
 export * from './cycle-clock'; // the per-website cycle's clock (v5/code/_cycle.js mirrored): due times, monthly cycles, previews
-export * from './fit-gate';  // the engine's fit gate (v5/code/_fit_gate.js), ported rule for rule for the cadence mirror
+export * from './fit-gate';  // the engine's fit gate (v5/code/_fit_gate.js), generated from the kit by build_v4.py (KW-PARITY), the same code
 export * from './cycles';    // the per-website 7-day cycle and keyword-first autopilot contract (SCHEDULING_KEYWORDS_PLAN.md §14)
 export * from './readiness';   // P1 (2026-10-20): author profile + business facts before a written page (the engine's v5/code/_readiness.js)
+export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run

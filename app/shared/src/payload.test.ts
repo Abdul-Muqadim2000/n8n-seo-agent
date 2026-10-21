@@ -92,6 +92,33 @@ describe('buildN8nPayload', () => {
     expect(keywordInput.safeParse({ ...fromSite, business: 'x'.repeat(501) }).success).toBe(false);
   });
 
+  // D2 (paid pre-launch run 2026-10-21): the setup research ran before Track my site stored the services on the engine's site row, and
+  // its body carried none, so the research could not tell which keywords were what the client sells
+  it('discover: what the website sells travels as `services` (at most 30), after the fuzzy-matched keys; none listed, no key', () => {
+    const d = RUN_SCHEMAS.discover.parse({ mode: 'discover', siteId: SITE_ID, country: 'United Arab Emirates' });
+    const body = buildN8nPayload(d, { ...site, services: ['CRM implementation'] }, delivery);
+    expect(body.services).toEqual(['CRM implementation']);
+    const keys = Object.keys(body);
+    expect(keys.indexOf('services')).toBeGreaterThan(keys.indexOf('business_facts'));
+    const many = Array.from({ length: 35 }, (_, i) => `Service ${i + 1}`);
+    expect(buildN8nPayload(d, { ...site, services: many }, delivery).services).toEqual(many.slice(0, 30));
+    expect('services' in buildN8nPayload(d, site, delivery)).toBe(false);
+    expect('services' in buildN8nPayload(d, { ...site, services: [] }, delivery)).toBe(false);
+    expect('services' in buildN8nPayload(RUN_SCHEMAS.discover.parse({ mode: 'discover', siteId: null, country: 'United Arab Emirates', business: 'ERP' }), null, delivery)).toBe(false);
+  });
+
+  // RV-13 (2026-10-21): the full report's keyword suggestions had another company's brand and off-topic terms: it knew nothing the site sells
+  it('audit / full report: what the website sells travels as `services` (at most 30); none listed, no key', () => {
+    const a = auditInput.parse({ mode: 'audit', siteId: SITE_ID, country: 'United Arab Emirates', reportType: 'full' });
+    const body = buildN8nPayload(a, { ...site, services: ['ERP implementation', 'Odoo support'] }, delivery);
+    expect(body.services).toEqual(['ERP implementation', 'Odoo support']);
+    const keys = Object.keys(body);
+    expect(keys.indexOf('services')).toBeGreaterThan(keys.indexOf('customers'));
+    const many = Array.from({ length: 31 }, (_, i) => `Service ${i + 1}`);
+    expect(buildN8nPayload(a, { ...site, services: many }, delivery).services).toHaveLength(30);
+    expect('services' in buildN8nPayload(a, site, delivery)).toBe(false);
+  });
+
   it('audit: site competitors when none are given; full report label', () => {
     const p = auditInput.parse({ mode: 'audit', siteId: SITE_ID, country: 'United Arab Emirates', reportType: 'full' });
     const b = buildN8nPayload(p, site, delivery);

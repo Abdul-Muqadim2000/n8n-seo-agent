@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import {
-  autopilotMonthlyUsd,
+  autopilotRows,
+  type AutopilotRow,
   creditLimitsOf,
   creditRate,
   creditStatus,
@@ -87,6 +88,26 @@ export const invalidateForecast = (orgId: string) => void forecastCache.delete(o
 
 const completeMonitors = (m: Partial<MonitorSettings> | null | undefined): MonitorSettings => monitorSettingsSchema.parse({ ...(m ?? {}), brandNames: [], aiPersonas: [], aiMarkets: [] });
 
+/**
+ * One website's schedules a month, row by row (provider cost, USD), from the rows the engine holds for it. The one computation behind the
+ * Credits page's forecast, the schedules' reserve and the Pipeline's "about N credits a month" with its per-automation figures (pre-launch
+ * run 2026-10-21, B4: the Pipeline summed its own figures and read 573 credits where the Credits page read 567).
+ */
+export function siteAutopilotRows(
+  s: Pick<SiteRow, 'autopilotLevel' | 'blogsPerWeek'>,
+  mon: MonitorsRow | null | undefined,
+  ladders: LadderRow[],
+  settings: LadderSettingsRow[],
+): AutopilotRow[] {
+  // keyword-first (plan §5.4): pages are forecast only while a keyword the client chose has pages to write (level 3: always)
+  const level = (s.autopilotLevel === 1 || s.autopilotLevel === 3 ? s.autopilotLevel : 2) as AutopilotLevel;
+  return autopilotRows(completeMonitors(monitorsFromRow(mon ?? undefined)), s.blogsPerWeek ?? 0, {
+    level,
+    writing: chosenLadderWriting(ladders, settings, level),
+    ranking: ladders.some((l) => String(l.ladder_id || '').trim() !== ''),
+  });
+}
+
 /** The tracked, verified websites of a company and what their schedules use a month. */
 export async function siteForecasts(orgId: string, opts: { fresh?: boolean } = {}): Promise<SiteForecast[]> {
   const hit = forecastCache.get(orgId);
@@ -97,14 +118,12 @@ export async function siteForecasts(orgId: string, opts: { fresh?: boolean } = {
       const pausedByPerson = s.trackingStatus === 'paused' && !s.creditsPausedAt;
       let usd = 0;
       if (!pausedByPerson) {
-        // keyword-first (plan §5.4): pages are forecast only while a keyword the client chose has pages to write (level 3: always)
-        const level = (s.autopilotLevel === 1 || s.autopilotLevel === 3 ? s.autopilotLevel : 2) as AutopilotLevel;
         const [mon, ladders, settings] = await Promise.all([
           siteRows<MonitorsRow>('monitors', s.domain, { max: 5 }).catch(() => [] as MonitorsRow[]),
           siteRows<LadderRow>('ladders', s.domain, { max: 2000 }).catch(() => [] as LadderRow[]),
           siteRows<LadderSettingsRow>('ladderSettings', s.domain, { max: 500 }).catch(() => [] as LadderSettingsRow[]),
         ]);
-        usd = autopilotMonthlyUsd(completeMonitors(monitorsFromRow(mon[0])), s.blogsPerWeek, { level, writing: chosenLadderWriting(ladders, settings, level) });
+        usd = Math.round(siteAutopilotRows(s, mon[0], ladders, settings).reduce((t, r) => t + r.usd, 0) * 10000) / 10000;
       }
       return { siteId: s.id, domain: s.domain, usd, paused: s.trackingStatus === 'paused', pausedForCredits: !!s.creditsPausedAt, pausedReason: s.creditsPausedReason ?? null };
     }),
@@ -367,17 +386,39 @@ export async function billingOverview(org: OrgRow, now = new Date()): Promise<Bi
   };
 }
 
-/** The company's movements, newest first (`cursor` = the seq to continue below), as the customer reads them. */
+/**
+ * The cursor of the activity list: the row's time (milliseconds) and its seq, `<ms>_<seq>`. A bare seq (an older client's cursor) is read
+ * as "below this seq" as before.
+ */
+export function activityCursor(c: string | undefined): { ms: number; seq: string } | { seq: string } | null {
+  if (!c) return null;
+  const m = /^(\d+)_(\d+)$/.exec(c);
+  return m ? { ms: Number(m[1]), seq: m[2] } : /^\d+$/.test(c) ? { seq: c } : null;
+}
+
+/**
+ * The company's movements, newest first (`cursor` from the previous page), as the customer reads them.
+ *
+ * B12 (pre-launch run 2026-10-21): the list said "newest first" and was sorted by the order the rows were booked, while each row shows when
+ * its work happened: a schedule's charge is booked when its cost settles, minutes after a later on-demand run, so 14:54 sat above 15:01.
+ * It is now sorted by the time it shows (then by booking order), and "balance after" runs in the same order.
+ */
 export async function creditActivity(orgId: string, o: { origin: 'all' | 'autopilot' | 'on_demand' | 'account'; cursor?: string; limit: number }): Promise<{ rows: CreditActivityRow[]; nextCursor: string | null }> {
   const filter =
     o.origin === 'account' ? sql`and kind <> 'usage'` : o.origin === 'all' ? sql`` : sql`and kind = 'usage' and ${ORIGIN} = ${o.origin}`;
-  const rows = await execRows<{ id: string; seq: string; created_at: string; kind: string; credits: number; note: string; ref: Record<string, unknown> | null; origin: string; balance_after: number }>(db, sql`
+  const cur = activityCursor(o.cursor);
+  const after = !cur
+    ? sql``
+    : 'ms' in cur
+      ? sql`and (at_ms < ${cur.ms} or (at_ms = ${cur.ms} and seq::bigint < ${cur.seq}::bigint))`
+      : sql`and seq::bigint < ${cur.seq}::bigint`;
+  const rows = await execRows<{ id: string; seq: string; at_ms: string; created_at: string; kind: string; credits: number; note: string; ref: Record<string, unknown> | null; origin: string; balance_after: number }>(db, sql`
     select * from (
-      select id, seq::text as seq, created_at, kind, credits, note, ref, ${ORIGIN} as origin,
-        sum(credits) over (order by seq rows between unbounded preceding and current row)::float as balance_after
+      select id, seq::text as seq, floor(extract(epoch from created_at) * 1000)::bigint as at_ms, created_at, kind, credits, note, ref, ${ORIGIN} as origin,
+        sum(credits) over (order by floor(extract(epoch from created_at) * 1000), seq rows between unbounded preceding and current row)::float as balance_after
       from ${schema.creditLedger} where org_id = ${orgId}::uuid
-    ) x where credits <> 0 ${filter} ${o.cursor ? sql`and seq::bigint < ${o.cursor}::bigint` : sql``}
-    order by seq::bigint desc limit ${o.limit + 1}`);
+    ) x where credits <> 0 ${filter} ${after}
+    order by at_ms desc, seq::bigint desc limit ${o.limit + 1}`);
   const page = rows.slice(0, o.limit).map((r): CreditActivityRow => {
     const ref = r.ref ?? {};
     const domain = typeof ref.domain === 'string' && ref.domain ? ref.domain : null;
@@ -398,7 +439,8 @@ export async function creditActivity(orgId: string, o: { origin: 'all' | 'autopi
       balanceAfter: r2(Number(r.balance_after)),
     };
   });
-  return { rows: page, nextCursor: rows.length > o.limit ? rows[o.limit - 1].seq : null };
+  const last = rows[o.limit - 1];
+  return { rows: page, nextCursor: rows.length > o.limit && last ? `${last.at_ms}_${last.seq}` : null };
 }
 
 export function activityCsv(rows: CreditActivityRow[]): string {

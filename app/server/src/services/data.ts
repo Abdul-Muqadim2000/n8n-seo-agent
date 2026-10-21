@@ -9,6 +9,8 @@ import {
   COUNTRIES,
   notFixedKeys,
   profileReadiness,
+  contentReadiness,
+  readinessPage,
   safeJson,
   splitList,
   type AiAccess,
@@ -235,7 +237,7 @@ export function engineActions(list: unknown, source: EngineAction['source'], rec
       type: s(a.type) || 'action',
       action:
         s(a.action || a.text) ||
-        `Fix the draft for "${s(a.keyword)}" and run it again: it did not pass the quality check, so it is not ready to publish`,
+        `Finish the draft for "${s(a.keyword)}" by hand: it did not pass the quality check, so it is not ready to publish. Fill in or delete each bracket its report lists, then publish it`,
       why: s(a.why) || (s(a.type) === 'fix_draft' && reasonList(a.reasons).length ? `The quality check found: ${reasonList(a.reasons).slice(0, 3).join('; ')}.` : ''),
       keyword: s(a.keyword) || null,
       url: s(a.url) || null,
@@ -516,9 +518,11 @@ export function rankSeries(rows: RankHistoryRow[]): { history: RankPoint[]; late
 
 export async function rankingsData(site: SiteRow): Promise<RankingsData> {
   const d = site.domain;
-  const [ladderRows, history] = await Promise.all([
+  const [ladderRows, history, profiles] = await Promise.all([
     siteRows<LadderRow>('ladders', d, { max: 1000 }),
     siteRows<RankHistoryRow>('rankHistory', d, { sortBy: 'checked_at:asc', max: 5000 }),
+    // B6 (pre-launch run 2026-10-21): the rungs the profile hold keeps from being written say so, as the Pipeline does
+    siteRows<ProfileRow>('profiles', d, { max: 5 }).catch(() => [] as ProfileRow[]),
   ]);
   const histBy = new Map<string, RankHistoryRow[]>();
   for (const h of history) {
@@ -620,7 +624,8 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
       ? lineage('Mobile position', 'serp', { period: lineageAsOf(s(history.filter(isMobile).pop()?.checked_at)), sample: lineageSample(history.filter(isMobile).length, 'mobile checks'), basis: 'one_sample' })
       : lineageUnknown('Mobile position', 'no mobile check was bought for this website yet'),
   ];
-  return { ladders: out, keywords, lineage: lineageList };
+  const r = contentReadiness({ profile: profiles[0] ?? null, businessFacts: site.businessFacts });
+  return { ladders: out, keywords, lineage: lineageList, readiness: { ready: r.ready, missingText: r.missingText, page: readinessPage(r) } };
 }
 
 // ---------------- content & profile ----------------

@@ -11,7 +11,7 @@ import { Meter } from '@/components/ui/misc';
 import { Sparkline } from '@/components/charts';
 import { IconTile, Stagger, type IconTileTone } from '@/components/insight';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
-import { useCycleDay } from '@/lib/cycle-day';
+import { siteTimezone, useCycleDay } from '@/lib/cycle-day';
 import { paths } from '@/lib/paths';
 import { cn, fmtAgo } from '@/lib/utils';
 import { SectionHeading } from '../kit';
@@ -146,6 +146,7 @@ function Fact({ label, children, className }: { label: string; children: ReactNo
 function LadderCardView({ card: c, rank, controls }: { card: LadderCard; rank: number; controls?: ReactNode }) {
   const { org } = useOrgCtx();
   const { site } = useSiteCtx();
+  const tz = siteTimezone(site);
   const series = sparkRows(c.headSeries);
   const meta = [c.country, c.planType ? PLAN_LABEL[c.planType] : '', monthsText(c.months) ? `about ${monthsText(c.months)}` : ''].filter(Boolean).join(' · ');
   const nextKind = c.next?.kind ?? 'none';
@@ -213,7 +214,7 @@ function LadderCardView({ card: c, rank, controls }: { card: LadderCard; rank: n
                 {NEXT_ICON[nextKind] ?? NEXT_ICON.none}
               </IconTile>
               <span className="min-w-0 break-words pt-0.5 leading-snug">
-                {validDate(c.next?.at) && <span className="font-medium">{fmtShortDay(c.next.at)}: </span>}
+                {validDate(c.next?.at) && <span className="font-medium">{fmtShortDay(c.next.at, tz)}: </span>}
                 {c.next?.text || 'Nothing planned'}
               </span>
             </span>
@@ -231,7 +232,7 @@ function LadderCardView({ card: c, rank, controls }: { card: LadderCard; rank: n
           {c.overlaps.map((o) => (
             <WarnLine key={o.ladderId}>
               Overlap: shares {o.keywords.length === 1 ? 'a keyword' : `${o.keywords.length} keywords`} with the ladder "{o.head}" ({o.keywords.slice(0, 3).join(', ')}
-              {o.keywords.length > 3 ? ', ...' : ''}). Two pages for one search compete with each other.
+              {o.keywords.length > 3 ? ' and more' : ''}). Two pages for one search compete with each other.
             </WarnLine>
           ))}
         </div>

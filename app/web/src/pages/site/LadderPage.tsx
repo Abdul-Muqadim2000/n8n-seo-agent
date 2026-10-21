@@ -40,7 +40,7 @@ import { plural, sortByDate } from './_components/format';
 import { PositionHistoryCard, type HistoryLine } from './_components/history';
 import { ranked } from './_components/positions';
 import { Climb } from './_components/pipeline/climb';
-import { LadderStatusBadge, ModeChip, monthsText, PLAN_HINT, PLAN_LABEL, PositionChange, positionWords, fmtShortDay, sparkRows, validDate } from './_components/pipeline/common';
+import { LadderStatusBadge, ModeChip, monthsText, PLAN_HINT, PLAN_LABEL, PositionChange, positionWords, fmtShortDay, sparkRows, useSiteZone, validDate } from './_components/pipeline/common';
 import { DeleteLadderButton, LadderModeSwitch, LadderPauseButton, MODE_HELP } from './_components/pipeline/controls';
 import { HeroMeter, WarnLine } from './_components/pipeline/home';
 import { Panel } from './_components/kit';
@@ -95,6 +95,7 @@ export default function LadderPage() {
 
 function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) {
   const { can } = useOrgCtx();
+  const tz = useSiteZone();
   const admin = can('admin');
   const [writing, setWriting] = useState<WriteNowItem | null>(null);
   const series = sparkRows(l.headSeries);
@@ -143,7 +144,7 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
             {(l.overlaps ?? []).map((o) => (
               <WarnLine key={o.ladderId}>
                 Overlap: shares {o.keywords.length === 1 ? 'a keyword' : `${o.keywords.length} keywords`} with the ladder "{o.head}" ({o.keywords.slice(0, 4).join(', ')}
-                {o.keywords.length > 4 ? ', ...' : ''}). Two pages for one search compete with each other.
+                {o.keywords.length > 4 ? ' and more' : ''}). Two pages for one search compete with each other.
               </WarnLine>
             ))}
           </div>
@@ -171,7 +172,7 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
           aside={
             <HeroNextStep
               icon={NEXT_ICON[l.next?.kind ?? 'none'] ?? <CalendarClock />}
-              eyebrow={validDate(l.next?.at) ? `Next step · ${fmtShortDay(l.next.at)} · ${fmtAgo(l.next.at)}` : 'Next step'}
+              eyebrow={validDate(l.next?.at) ? `Next step · ${fmtShortDay(l.next.at, tz)} · ${fmtAgo(l.next.at)}` : 'Next step'}
               title={l.next?.text || 'Nothing planned'}
             />
           }

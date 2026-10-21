@@ -7,7 +7,7 @@ return [{ json: { run_id: String($execution.id), key: String(v.caller || 'anon')
   // R9 (2026-10-13): the DataForSEO estimate beside the AI one -- a keyword check pays for the overview, the site's position and (without a
   // stored reach) the reach measurement. G23 recalibrated it from the money: the three checks of 2026-10-13 cost $0.0761 together, so
   // $0.0254 each, and the estimate may never sit below what the mode has recently cost (it was $0.024, under the measured figure).
-  dfs_est_usd: 0.034, dfs_usd: 0,
+  dfs_est_usd: 0.04, dfs_usd: 0,
   // R28 (2026-10-14): the main workflow records the DataForSEO balance here so the day can be reconciled against the account; the Keyword
   // Check does not read it (the request is synchronous and must answer in seconds), so its rows carry 0 = not read.
   dfs_balance: 0,

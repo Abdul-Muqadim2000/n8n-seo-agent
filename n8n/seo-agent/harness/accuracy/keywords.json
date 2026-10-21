@@ -1,0 +1,1556 @@
+{
+ "version": 1,
+ "category": "keyword_fit",
+ "doc": "Labelled accuracy set for the keyword business-fit decision (KW-ACC, 2026-10-21): should this website target this search at all? One case per (site, keyword). `label` is in (a page of this site may target it) or out (no page should), `expect` is the reason class a careful human gives, `reason` one line in plain words, `source` the evidence (a file of the 2026-10-21 paid run, a live page, a site fixture, or human judgement on the declared services). `serp` (optional) is the keyword's real results page from that run (top domains in rank order, people-also-ask), passed to the gate on the path that reads a results page. Labels are independent of what the code decides today: score_keywords.js runs the real generated gate and the full report's Analyze Keywords node, and scenario KWACC ratchets on KEYWORDS_BASELINE.md. How the set is labelled and scored: KEYWORDS_BASELINE.md (its first sections).",
+ "classes": {
+  "other_brand": "names another company or its product",
+  "navigational": "a sign-in or own-site task: people want one particular website",
+  "government": "a public body, its portal or its service to a person",
+  "career": "people looking for work, pay or training",
+  "off_topic": "nothing this website sells",
+  "too_broad": "only category words: says nothing about this website",
+  "place_only": "a place and nothing else",
+  "in_topic": "a search a page of this website may target"
+ },
+ "sites": [
+  {
+   "site": "techand.ai",
+   "own_domain": "techand.ai",
+   "services": [
+    "AI consulting",
+    "AI and automation",
+    "Microsoft Copilot implementation",
+    "Dynamics 365 Finance",
+    "Dynamics 365 Business Central",
+    "Dynamics 365 Sales",
+    "E-invoicing compliance"
+   ],
+   "business": "Microsoft partner in Dubai for enterprises in the UAE and GCC: AI consulting and automation, Microsoft Copilot, Dynamics 365 business applications, data and cloud",
+   "brand_names": [
+    "Tech&",
+    "Techand"
+   ],
+   "competitors": [],
+   "serp_domains": [
+    "hamtinfotech.com",
+    "ingoude.ae",
+    "blog.evolvxai.com"
+   ],
+   "brands": {
+    "Microsoft UAE": "microsoft.com"
+   },
+   "source": "services: run/drive.py SERVICES (the 7 services saved on 2026-10-21); business: facts_body.json / site_full_body.json; competitors none declared (drive.py); serp_domains = research summary competitors of r01_discover_report.json; brands = the learned name of RV-7 (seo_cache ai_brands:)"
+  },
+  {
+   "site": "peppol.org",
+   "own_domain": "peppol.org",
+   "services": [
+    "Peppol network",
+    "Peppol membership",
+    "Peppol specifications",
+    "Peppol e-invoicing standards",
+    "Peppol access point certification",
+    "Peppol authorities"
+   ],
+   "business": "OpenPeppol, the not-for-profit association that operates and governs the Peppol network for e-invoicing and e-procurement: membership, specifications, certified service providers",
+   "brand_names": [
+    "OpenPeppol",
+    "Peppol"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "harness/accuracy/sites/peppol-org.json (pages /, /members/, /join/, /about/: OpenPeppol, not-for-profit behind the Peppol network); services written from those pages for this set"
+  },
+  {
+   "site": "azdan.com",
+   "own_domain": "azdan.com",
+   "services": [
+    "Oracle NetSuite implementation",
+    "NetSuite support and managed services",
+    "NetSuite customization and integration",
+    "Oracle EPM",
+    "NetSuite ERP for real estate, manufacturing and logistics"
+   ],
+   "business": "Oracle NetSuite solution provider and Oracle EPM partner in the UAE, Saudi Arabia and Egypt: 200+ NetSuite ERP implementations, support and managed services",
+   "brand_names": [
+    "Azdan"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "harness/accuracy/sites/azdan-com.json (Oracle NetSuite solution provider, UAE / KSA / Egypt: implementation, support, managed services, Oracle EPM, industries); services written from those pages for this set"
+  },
+  {
+   "site": "taxwise-advisory.ae",
+   "own_domain": "taxwise-advisory.ae",
+   "services": [
+    "VAT registration",
+    "Corporate tax registration",
+    "VAT return filing",
+    "Tax advisory"
+   ],
+   "business": "Tax consultancy in Dubai: VAT and corporate tax registration, filing and advice for UAE companies",
+   "brand_names": [
+    "Taxwise"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 2: a VAT consultancy)"
+  },
+  {
+   "site": "skillbridge.ae",
+   "own_domain": "skillbridge.ae",
+   "services": [
+    "Power BI workshops",
+    "Corporate learning programs",
+    "Excel bootcamps"
+   ],
+   "business": "Corporate training in Dubai: Power BI, Excel and data skills workshops for teams",
+   "brand_names": [
+    "Skillbridge"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 8: a training company)"
+  },
+  {
+   "site": "staffpoint.ae",
+   "own_domain": "staffpoint.ae",
+   "services": [
+    "Manpower supply",
+    "Executive search",
+    "Employment agency",
+    "Staff augmentation"
+   ],
+   "business": "Recruitment agency in Dubai: manpower supply, executive search and permanent placements for UAE employers",
+   "brand_names": [
+    "Staffpoint"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 8: a recruitment agency)"
+  },
+  {
+   "site": "netcore-it.ae",
+   "own_domain": "netcore-it.ae",
+   "services": [
+    "Managed IT services",
+    "IT support",
+    "Network infrastructure",
+    "Cybersecurity"
+   ],
+   "business": "IT company in Dubai: managed IT services, IT support, network infrastructure and cybersecurity for SMEs",
+   "brand_names": [
+    "Netcore"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 13: an IT firm)"
+  },
+  {
+   "site": "certiq.ae",
+   "own_domain": "certiq.ae",
+   "services": [
+    "ISO 27001 consulting",
+    "ISO 9001 consulting",
+    "ISO certification support"
+   ],
+   "business": "ISO consultancy in the UAE: gap analysis, documentation and audit support for ISO 27001 and ISO 9001 certification",
+   "brand_names": [
+    "CertIQ"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 6: an ISO consultancy)"
+  },
+  {
+   "site": "cloudnine-crm.ae",
+   "own_domain": "cloudnine-crm.ae",
+   "services": [
+    "Salesforce implementation",
+    "Salesforce consulting",
+    "CRM integration"
+   ],
+   "business": "Salesforce partner in Dubai: Salesforce implementation, consulting and CRM integration for UAE companies",
+   "brand_names": [
+    "Cloudnine"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 5: a Salesforce partner)"
+  }
+ ],
+ "cases": [
+  {
+   "id": "KW-T01",
+   "site": "techand.ai",
+   "keyword": "ai consulting dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "its first service plus its city: the exact search the client wants to win",
+   "source": "REPORTS_REVIEW.md §1 (run evidence 2026-10-21) (verdict lists it as secondary while the gate refuses it)",
+   "serp": {
+    "top_domains": [
+     "leewayhertz.com",
+     "tecbrix.com",
+     "masterofcode.com",
+     "linkedin.com",
+     "msbcgroup.com"
+    ],
+    "paa": [
+     "What are some AI consulting firms?",
+     "How much do consultants earn in Dubai?",
+     "Which consultancy is best in Dubai?",
+     "What is the going rate for an AI consultant?"
+    ],
+    "from": "r01_discover_report.json (research, run evidence 2026-10-21)"
+   }
+  },
+  {
+   "id": "KW-T02",
+   "site": "techand.ai",
+   "keyword": "ai consulting services uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "its first service, the buyer word and its country",
+   "source": "check_ai_consulting.json (fit 0 \"too broad\", D4)"
+  },
+  {
+   "id": "KW-T03",
+   "site": "techand.ai",
+   "keyword": "dynamics 365 business central uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a declared service and its country",
+   "source": "check_d365_bc.json (fit 2)"
+  },
+  {
+   "id": "KW-T04",
+   "site": "techand.ai",
+   "keyword": "dynamics 365 business central partner uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for a partner for a declared service",
+   "source": "harness scenarios_full_gate.js FG1 (leaks of 2026-10-17 / 2026-10-21)"
+  },
+  {
+   "id": "KW-T05",
+   "site": "techand.ai",
+   "keyword": "microsoft copilot consultant",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for help with a declared service (Copilot implementation)",
+   "source": "r07_verdict.json (verdict keyword chosen by the client)"
+  },
+  {
+   "id": "KW-T06",
+   "site": "techand.ai",
+   "keyword": "microsoft copilot implementation uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a declared service, word for word, plus the country",
+   "source": "live site techand.ai (scratchpad/rv/live, facts_body.json): Microsoft partner, AI consulting, Copilot, Dynamics 365, e-invoicing"
+  },
+  {
+   "id": "KW-T07",
+   "site": "techand.ai",
+   "keyword": "ai consulting cost uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer pricing the first service: a core buyer question",
+   "source": "r_cycle0_ai_growth.json set_aside_note (run evidence 2026-10-21) (set aside as off topic \"cost\"; REPORTS_REVIEW calls it a core buyer question)"
+  },
+  {
+   "id": "KW-T08",
+   "site": "techand.ai",
+   "keyword": "best ai consulting firms dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer comparing providers of the first service",
+   "source": "r_cycle0_ai_growth.json set_aside_note (run evidence 2026-10-21) (set aside as too broad)"
+  },
+  {
+   "id": "KW-T09",
+   "site": "techand.ai",
+   "keyword": "top ai consultants dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer shortlisting AI consultants in the client's city",
+   "source": "r_cycle0_ai_growth.json set_aside_note (run evidence 2026-10-21) (set aside as too broad)"
+  },
+  {
+   "id": "KW-T10",
+   "site": "techand.ai",
+   "keyword": "ai for finance operations uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "AI applied to finance operations: Dynamics 365 Finance plus AI consulting",
+   "source": "r08_ai_pulse.json set_aside_note (run evidence 2026-10-21) (refused as \"a brand of Microsoft UAE\", RV-7) and r_cycle0_ai_growth.json set_aside_note (run evidence 2026-10-21) (off topic \"operations\")"
+  },
+  {
+   "id": "KW-T11",
+   "site": "techand.ai",
+   "keyword": "erp software uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "Dynamics 365 Finance and Business Central are ERP software the client implements",
+   "source": "RV-7 example in _fit_gate.js E-GATE comment; live site techand.ai (scratchpad/rv/live, facts_body.json): Microsoft partner, AI consulting, Copilot, Dynamics 365, e-invoicing"
+  },
+  {
+   "id": "KW-T12",
+   "site": "techand.ai",
+   "keyword": "best erp software uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer comparing ERP products; an ERP partner answers it with its own product",
+   "source": "human judgement on the site's declared services; live site techand.ai (scratchpad/rv/live, facts_body.json): Microsoft partner, AI consulting, Copilot, Dynamics 365, e-invoicing"
+  },
+  {
+   "id": "KW-T13",
+   "site": "techand.ai",
+   "keyword": "erp systems in uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer comparing ERP systems; the client implements two of them",
+   "source": "r01_discover_report.json (research, run evidence 2026-10-21) (top_domains xedos.ae, odooerp.ae, ecerp.in: ERP vendors and partners)"
+  },
+  {
+   "id": "KW-T14",
+   "site": "techand.ai",
+   "keyword": "vat registration uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "tax compliance next to the declared e-invoicing compliance service: e-invoicing in the UAE is built on VAT registration (TRN)",
+   "source": "human judgement on the site's declared services (tax-adjacent search for the e-invoicing service)"
+  },
+  {
+   "id": "KW-T15",
+   "site": "techand.ai",
+   "keyword": "e invoicing uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "the declared e-invoicing compliance service and its country",
+   "source": "live site techand.ai (scratchpad/rv/live, facts_body.json): Microsoft partner, AI consulting, Copilot, Dynamics 365, e-invoicing"
+  },
+  {
+   "id": "KW-T16",
+   "site": "techand.ai",
+   "keyword": "what is e invoicing in uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "an informational search on the e-invoicing service: a guide page",
+   "source": "r01_discover_report.json (research, run evidence 2026-10-21)"
+  },
+  {
+   "id": "KW-T17",
+   "site": "techand.ai",
+   "keyword": "uae e invoicing mandate 2026",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "the regulation the e-invoicing compliance service answers",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T18",
+   "site": "techand.ai",
+   "keyword": "fta e invoicing",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a public body plus a business topic word is a topic, not the body's portal",
+   "source": "_fit_gate.js bounds (\"zatca e invoicing\", \"fta vat registration\" are kept)"
+  },
+  {
+   "id": "KW-T19",
+   "site": "techand.ai",
+   "keyword": "peppol uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "the UAE e-invoicing model runs on Peppol: part of the e-invoicing compliance service",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T20",
+   "site": "techand.ai",
+   "keyword": "dynamics 365 sales implementation dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a declared service with an implementation word and the city",
+   "source": "live site techand.ai (scratchpad/rv/live, facts_body.json): Microsoft partner, AI consulting, Copilot, Dynamics 365, e-invoicing"
+  },
+  {
+   "id": "KW-T21",
+   "site": "techand.ai",
+   "keyword": "dynamics 365 finance partner uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for a partner for a declared service",
+   "source": "live site techand.ai (scratchpad/rv/live, facts_body.json): Microsoft partner, AI consulting, Copilot, Dynamics 365, e-invoicing"
+  },
+  {
+   "id": "KW-T22",
+   "site": "techand.ai",
+   "keyword": "copilot studio consulting",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "Copilot Studio is listed on the site; consulting is the service",
+   "source": "facts_body.json (Copilot Studio listed)"
+  },
+  {
+   "id": "KW-T23",
+   "site": "techand.ai",
+   "keyword": "ai automation uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "the declared \"AI and automation\" service and its country",
+   "source": "_fit_gate.js R13 comment (\"ai automation uae\" still matches); live site techand.ai (scratchpad/rv/live, facts_body.json): Microsoft partner, AI consulting, Copilot, Dynamics 365, e-invoicing"
+  },
+  {
+   "id": "KW-T24",
+   "site": "techand.ai",
+   "keyword": "dynamics 365 vs sap business one",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a comparison of the client's product with a rival: a buyer page the partner can write",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T25",
+   "site": "techand.ai",
+   "keyword": "business central pricing uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer pricing a product the client sells and implements",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T26",
+   "site": "techand.ai",
+   "keyword": "microsoft dynamics 365 partner uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for a Microsoft Dynamics partner: what the client is",
+   "source": "_fit_gate.js bounds (\"microsoft dynamics 365 partner uae\" is kept)"
+  },
+  {
+   "id": "KW-T27",
+   "site": "techand.ai",
+   "keyword": "ibt: no 1 bpo company in middle east",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "the page title of another company (IBT, a BPO firm): searched by people who want that company",
+   "source": "audit_findings_rows.json + r07_full.json (full report, run evidence 2026-10-21) (offered as a low-difficulty keyword)"
+  },
+  {
+   "id": "KW-T28",
+   "site": "techand.ai",
+   "keyword": "ibt no 1 bpo company in middle east",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "the same company name without the colon",
+   "source": "audit_findings_rows.json + r07_full.json (full report, run evidence 2026-10-21) (spelling variant)"
+  },
+  {
+   "id": "KW-T29",
+   "site": "techand.ai",
+   "keyword": "ingoude: erp solutions dubai",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "another company's page title (ingoude.ae, a rival on the results page)",
+   "source": "r01_discover_report.json (research, run evidence 2026-10-21) (ingoude.ae in the research competitors); title form as in the IBT leak"
+  },
+  {
+   "id": "KW-T30",
+   "site": "techand.ai",
+   "keyword": "ingoude erp solutions dubai",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "the same rival name without the colon",
+   "source": "r01_discover_report.json (research, run evidence 2026-10-21) (ingoude.ae in the research competitors)"
+  },
+  {
+   "id": "KW-T31",
+   "site": "techand.ai",
+   "keyword": "cleartax e invoicing uae",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "ClearTax is an e-invoicing vendor; people searching it want ClearTax",
+   "source": "harness/accuracy/links.json (cleartax.com, a competitor of techand.ai in the set)"
+  },
+  {
+   "id": "KW-T32",
+   "site": "techand.ai",
+   "keyword": "cleartax vs zoho",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "a comparison of two other vendors' products; the client sells neither",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T33",
+   "site": "techand.ai",
+   "keyword": "odoo login",
+   "label": "out",
+   "expect": "navigational",
+   "reason": "a sign-in to another vendor's product",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T34",
+   "site": "techand.ai",
+   "keyword": "odoo pricing uae",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "the price of a rival ERP the client does not sell",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T35",
+   "site": "techand.ai",
+   "keyword": "netsuite pricing",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "the price of a rival ERP (Oracle NetSuite) the client does not sell; contrast with azdan.com",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T36",
+   "site": "techand.ai",
+   "keyword": "dynamics 365 login",
+   "label": "out",
+   "expect": "navigational",
+   "reason": "a sign-in to Microsoft's product: people want Microsoft's login page, not a partner",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T37",
+   "site": "techand.ai",
+   "keyword": "techand login",
+   "label": "out",
+   "expect": "navigational",
+   "reason": "the client's own name plus login: already the client's own page, not a new target",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T38",
+   "site": "techand.ai",
+   "keyword": "sap implementation dubai",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "SAP is a rival product the client (a Microsoft partner) does not implement",
+   "source": "human judgement on the site's declared services; live site techand.ai (scratchpad/rv/live, facts_body.json): Microsoft partner, AI consulting, Copilot, Dynamics 365, e-invoicing"
+  },
+  {
+   "id": "KW-T39",
+   "site": "techand.ai",
+   "keyword": "fta login",
+   "label": "out",
+   "expect": "government",
+   "reason": "the tax authority's own sign-in",
+   "source": "_fit_gate.js government bounds"
+  },
+  {
+   "id": "KW-T40",
+   "site": "techand.ai",
+   "keyword": "emaratax portal",
+   "label": "out",
+   "expect": "government",
+   "reason": "the tax authority's portal",
+   "source": "_fit_gate.js government bounds"
+  },
+  {
+   "id": "KW-T41",
+   "site": "techand.ai",
+   "keyword": "emirates id status",
+   "label": "out",
+   "expect": "government",
+   "reason": "an identity document status check",
+   "source": "_fit_gate.js government bounds"
+  },
+  {
+   "id": "KW-T42",
+   "site": "techand.ai",
+   "keyword": "mofa attestation dubai",
+   "label": "out",
+   "expect": "government",
+   "reason": "a public body's document service to a person",
+   "source": "harness scenarios_full_gate.js FG1 (leaks of 2026-10-17 / 2026-10-21) (R60)"
+  },
+  {
+   "id": "KW-T43",
+   "site": "techand.ai",
+   "keyword": "uae document attestation",
+   "label": "out",
+   "expect": "government",
+   "reason": "a document service public bodies provide to a person",
+   "source": "harness scenarios_full_gate.js FG1 (leaks of 2026-10-17 / 2026-10-21) (B-3)"
+  },
+  {
+   "id": "KW-T44",
+   "site": "techand.ai",
+   "keyword": "ministry of finance uae",
+   "label": "out",
+   "expect": "government",
+   "reason": "a public body by name",
+   "source": "_fit_gate.js government bounds"
+  },
+  {
+   "id": "KW-T45",
+   "site": "techand.ai",
+   "keyword": "finance jobs in uae",
+   "label": "out",
+   "expect": "career",
+   "reason": "people looking for work",
+   "source": "harness scenarios_full_gate.js FG1 (leaks of 2026-10-17 / 2026-10-21) (B-3)"
+  },
+  {
+   "id": "KW-T46",
+   "site": "techand.ai",
+   "keyword": "ai consultant jobs",
+   "label": "out",
+   "expect": "career",
+   "reason": "people looking for work as an AI consultant",
+   "source": "r04_ladder_plan.json pool (run evidence 2026-10-21)"
+  },
+  {
+   "id": "KW-T47",
+   "site": "techand.ai",
+   "keyword": "ai consultant salary",
+   "label": "out",
+   "expect": "career",
+   "reason": "people asking what the job pays",
+   "source": "r04_ladder_plan.json pool (run evidence 2026-10-21)"
+  },
+  {
+   "id": "KW-T48",
+   "site": "techand.ai",
+   "keyword": "dynamics 365 consultant jobs dubai",
+   "label": "out",
+   "expect": "career",
+   "reason": "people looking for work on the client's product",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T49",
+   "site": "techand.ai",
+   "keyword": "ai annotation jobs work from home",
+   "label": "out",
+   "expect": "career",
+   "reason": "people looking for remote work",
+   "source": "r04_ladder_plan.json pool (run evidence 2026-10-21)"
+  },
+  {
+   "id": "KW-T50",
+   "site": "techand.ai",
+   "keyword": "ai course dubai",
+   "label": "out",
+   "expect": "career",
+   "reason": "people looking for training; the client does not sell courses",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T51",
+   "site": "techand.ai",
+   "keyword": "ai consultant",
+   "label": "out",
+   "expect": "career",
+   "reason": "its results page is freelancers, a certification course and job boards and its questions are about pay: searchers want to become one, not hire one",
+   "source": "REPORTS_REVIEW.md §1 (run evidence 2026-10-21) (RV-11) and recommended.json (run evidence 2026-10-21)",
+   "serp": {
+    "top_domains": [
+     "upwork.com",
+     "usaii.org",
+     "ae.indeed.com",
+     "consultancy-me.com",
+     "ibm.com"
+    ],
+    "paa": [
+     "What exactly does an AI consultant do?",
+     "What is AI consulting's salary?",
+     "How do I become an AI consultant?",
+     "What is a $900000 AI job?"
+    ],
+    "from": "r01_discover_report.json (research, run evidence 2026-10-21)"
+   }
+  },
+  {
+   "id": "KW-T52",
+   "site": "techand.ai",
+   "keyword": "software companies in dubai",
+   "label": "out",
+   "expect": "off_topic",
+   "reason": "searchers want lists of software houses (job boards, listicles); the client is a Microsoft consultancy, not a software vendor (its llms.txt says so)",
+   "source": "REPORTS_REVIEW.md §1 (run evidence 2026-10-21) (recommended #1) and recommended.json (run evidence 2026-10-21)",
+   "serp": {
+    "top_domains": [
+     "naukrigulf.com",
+     "brainstation-23.com",
+     "reddit.com",
+     "gligx.com",
+     "linkedin.com"
+    ],
+    "paa": [
+     "Which is the best IT company in Dubai?",
+     "Who are the top 10 software companies?",
+     "What are the top 50 IT companies in Dubai?",
+     "What are the top 10 companies in Dubai?"
+    ],
+    "from": "r01_discover_report.json (research, run evidence 2026-10-21)"
+   }
+  },
+  {
+   "id": "KW-T53",
+   "site": "techand.ai",
+   "keyword": "best software companies in dubai",
+   "label": "out",
+   "expect": "off_topic",
+   "reason": "a list of software houses; the client is not one",
+   "source": "recommended.json (run evidence 2026-10-21)"
+  },
+  {
+   "id": "KW-T54",
+   "site": "techand.ai",
+   "keyword": "top software companies in dubai",
+   "label": "out",
+   "expect": "off_topic",
+   "reason": "a list of software houses; the client is not one",
+   "source": "recommended.json (run evidence 2026-10-21)"
+  },
+  {
+   "id": "KW-T55",
+   "site": "techand.ai",
+   "keyword": "it services",
+   "label": "out",
+   "expect": "too_broad",
+   "reason": "two generic words, no place, no service of the client",
+   "source": "recommended.json (run evidence 2026-10-21)"
+  },
+  {
+   "id": "KW-T56",
+   "site": "techand.ai",
+   "keyword": "cloud solutions",
+   "label": "out",
+   "expect": "too_broad",
+   "reason": "two generic words; its results are cloud vendors and courses",
+   "source": "recommended.json (run evidence 2026-10-21) (the engine's start_with)",
+   "serp": {
+    "top_domains": [
+     "clouds.ae",
+     "cloudsolutions.com.sa",
+     "linkedin.com",
+     "coursera.org",
+     "cloud.google.com"
+    ],
+    "paa": [
+     "What is meant by cloud solutions?",
+     "What are the top 3 cloud services?",
+     "What are examples of cloud solutions?",
+     "Who are the top 5 cloud providers?"
+    ],
+    "from": "r01_discover_report.json (research, run evidence 2026-10-21)"
+   }
+  },
+  {
+   "id": "KW-T57",
+   "site": "techand.ai",
+   "keyword": "technology consulting",
+   "label": "out",
+   "expect": "too_broad",
+   "reason": "a generic category owned by the Big Four; nothing of the client's services in it",
+   "source": "recommended.json (run evidence 2026-10-21)",
+   "serp": {
+    "top_domains": [
+     "pwc.com",
+     "coursera.org",
+     "consultancy-me.com",
+     "ey.com",
+     "baone.ae"
+    ],
+    "paa": [
+     "What are the Big 4 technology consulting firms?",
+     "What is a Big 4 tech consultant?",
+     "What are the top 5 technology consulting firms?",
+     "Is tech consulting a high paying job?"
+    ],
+    "from": "r01_discover_report.json (research, run evidence 2026-10-21)"
+   }
+  },
+  {
+   "id": "KW-T58",
+   "site": "techand.ai",
+   "keyword": "intelligent software solutions",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "another company's name, not a topic",
+   "source": "recommended.json (run evidence 2026-10-21) and _fit_gate.js B-3 comment"
+  },
+  {
+   "id": "KW-T59",
+   "site": "techand.ai",
+   "keyword": "top facilities management companies uae",
+   "label": "out",
+   "expect": "off_topic",
+   "reason": "another industry's companies",
+   "source": "harness scenarios_full_gate.js FG1 (leaks of 2026-10-17 / 2026-10-21)"
+  },
+  {
+   "id": "KW-T60",
+   "site": "techand.ai",
+   "keyword": "character ai",
+   "label": "out",
+   "expect": "off_topic",
+   "reason": "a consumer chatbot product",
+   "source": "_fit_gate.js R13 comment"
+  },
+  {
+   "id": "KW-T61",
+   "site": "techand.ai",
+   "keyword": "meta ai",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "Meta's own assistant: a brand search",
+   "source": "r04_ladder_plan.json pool (run evidence 2026-10-21)"
+  },
+  {
+   "id": "KW-T62",
+   "site": "techand.ai",
+   "keyword": "ai",
+   "label": "out",
+   "expect": "too_broad",
+   "reason": "one category word",
+   "source": "_fit_gate.js R13 comment"
+  },
+  {
+   "id": "KW-T63",
+   "site": "techand.ai",
+   "keyword": "uae",
+   "label": "out",
+   "expect": "place_only",
+   "reason": "a place and nothing else",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T64",
+   "site": "techand.ai",
+   "keyword": "dubai companies",
+   "label": "out",
+   "expect": "place_only",
+   "reason": "a place plus \"companies\": nothing the client sells",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-T65",
+   "site": "techand.ai",
+   "keyword": "will marketing jobs be taken over by ai",
+   "label": "out",
+   "expect": "off_topic",
+   "reason": "a question about AI and jobs, not about buying AI services",
+   "source": "r04_ladder_plan.json pool (run evidence 2026-10-21)"
+  },
+  {
+   "id": "KW-T66",
+   "site": "techand.ai",
+   "keyword": "it consultant capgemini",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "another consulting firm by name",
+   "source": "r04_ladder_plan.json pool (run evidence 2026-10-21)"
+  },
+  {
+   "id": "KW-T67",
+   "site": "techand.ai",
+   "keyword": "tech consultant deloitte",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "another consulting firm by name",
+   "source": "r04_ladder_plan.json pool (run evidence 2026-10-21)"
+  },
+  {
+   "id": "KW-T68",
+   "site": "techand.ai",
+   "keyword": "استشارات الذكاء الاصطناعي في دبي",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "Arabic for \"AI consulting in Dubai\": the first service and its city",
+   "source": "human judgement on the site's declared services (Arabic search of the first service)",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T69",
+   "site": "techand.ai",
+   "keyword": "شركة استشارات ذكاء اصطناعي",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "Arabic for \"AI consulting company\"",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T70",
+   "site": "techand.ai",
+   "keyword": "مايكروسوفت دايناميكس 365 الإمارات",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "Arabic for \"Microsoft Dynamics 365 UAE\"",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T71",
+   "site": "techand.ai",
+   "keyword": "الفاتورة الإلكترونية في الإمارات",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "Arabic for \"e-invoicing in the UAE\"",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T72",
+   "site": "techand.ai",
+   "keyword": "نظام الفوترة الإلكترونية الإمارات",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "Arabic for \"e-invoicing system UAE\"",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T73",
+   "site": "techand.ai",
+   "keyword": "برنامج محاسبة في الإمارات",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "Arabic for \"accounting software in the UAE\": Business Central / Finance",
+   "source": "_fit_gate.js F-KW comment (a ladder the client chose in Arabic)",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T74",
+   "site": "techand.ai",
+   "keyword": "كوبايلوت مايكروسوفت للشركات",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "Arabic for \"Microsoft Copilot for companies\"",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T75",
+   "site": "techand.ai",
+   "keyword": "وظائف الذكاء الاصطناعي في دبي",
+   "label": "out",
+   "expect": "career",
+   "reason": "Arabic for \"AI jobs in Dubai\"",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T76",
+   "site": "techand.ai",
+   "keyword": "راتب مستشار ذكاء اصطناعي",
+   "label": "out",
+   "expect": "career",
+   "reason": "Arabic for \"AI consultant salary\"",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T77",
+   "site": "techand.ai",
+   "keyword": "وظائف محاسب في دبي",
+   "label": "out",
+   "expect": "career",
+   "reason": "Arabic for \"accountant jobs in Dubai\"",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T78",
+   "site": "techand.ai",
+   "keyword": "الهيئة الاتحادية للضرائب تسجيل الدخول",
+   "label": "out",
+   "expect": "government",
+   "reason": "Arabic for \"Federal Tax Authority login\"",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T79",
+   "site": "techand.ai",
+   "keyword": "تجديد الهوية الإماراتية",
+   "label": "out",
+   "expect": "government",
+   "reason": "Arabic for \"Emirates ID renewal\"",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T80",
+   "site": "techand.ai",
+   "keyword": "تصديق الشهادات وزارة الخارجية",
+   "label": "out",
+   "expect": "government",
+   "reason": "Arabic for \"certificate attestation, Ministry of Foreign Affairs\"",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-T81",
+   "site": "techand.ai",
+   "keyword": "دبي",
+   "label": "out",
+   "expect": "place_only",
+   "reason": "Arabic for \"Dubai\": a place and nothing else",
+   "source": "human judgement on the site's declared services",
+   "lang": "ar"
+  },
+  {
+   "id": "KW-P01",
+   "site": "peppol.org",
+   "keyword": "what is peppol",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "the network the site runs: its core explainer search",
+   "source": "harness/accuracy/sites/peppol-org.json (pages /, /members/, /join/, /about/: OpenPeppol, not-for-profit behind the Peppol network) (homepage: \"operates behind the Peppol network\")"
+  },
+  {
+   "id": "KW-P02",
+   "site": "peppol.org",
+   "keyword": "peppol e invoicing",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "what the network is for",
+   "source": "harness/accuracy/sites/peppol-org.json (pages /, /members/, /join/, /about/: OpenPeppol, not-for-profit behind the Peppol network)"
+  },
+  {
+   "id": "KW-P03",
+   "site": "peppol.org",
+   "keyword": "peppol access point",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "OpenPeppol certifies the access points of the network",
+   "source": "harness/accuracy/sites/peppol-org.json (pages /, /members/, /join/, /about/: OpenPeppol, not-for-profit behind the Peppol network)"
+  },
+  {
+   "id": "KW-P04",
+   "site": "peppol.org",
+   "keyword": "peppol bis billing 3.0",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a Peppol specification the association publishes",
+   "source": "harness/accuracy/sites/peppol-org.json (pages /, /members/, /join/, /about/: OpenPeppol, not-for-profit behind the Peppol network)"
+  },
+  {
+   "id": "KW-P05",
+   "site": "peppol.org",
+   "keyword": "peppol network",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "the network the site operates",
+   "source": "harness/accuracy/sites/peppol-org.json (pages /, /members/, /join/, /about/: OpenPeppol, not-for-profit behind the Peppol network)"
+  },
+  {
+   "id": "KW-P06",
+   "site": "peppol.org",
+   "keyword": "peppol members",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "the site's own members list page",
+   "source": "harness/accuracy/sites/peppol-org.json (pages /, /members/, /join/, /about/: OpenPeppol, not-for-profit behind the Peppol network) (/members/)"
+  },
+  {
+   "id": "KW-P07",
+   "site": "peppol.org",
+   "keyword": "openpeppol membership",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "joining the association: the site's /join/ page",
+   "source": "harness/accuracy/sites/peppol-org.json (pages /, /members/, /join/, /about/: OpenPeppol, not-for-profit behind the Peppol network) (/join/)"
+  },
+  {
+   "id": "KW-P08",
+   "site": "peppol.org",
+   "keyword": "peppol uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a country adopting the network",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-P09",
+   "site": "peppol.org",
+   "keyword": "peppol authority",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "the national bodies of the Peppol governance model",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-P10",
+   "site": "peppol.org",
+   "keyword": "e invoicing europe",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "the main market of the network the site runs",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-P11",
+   "site": "peppol.org",
+   "keyword": "openpeppol login",
+   "label": "out",
+   "expect": "navigational",
+   "reason": "members signing in: the site's own login, not a page to write",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-P12",
+   "site": "peppol.org",
+   "keyword": "storecove pricing",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "the prices of one commercial access-point vendor",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-P13",
+   "site": "peppol.org",
+   "keyword": "pagero login",
+   "label": "out",
+   "expect": "navigational",
+   "reason": "a sign-in to another company's product",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-P14",
+   "site": "peppol.org",
+   "keyword": "peppol jobs",
+   "label": "out",
+   "expect": "career",
+   "reason": "people looking for work",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-P15",
+   "site": "peppol.org",
+   "keyword": "hmrc vat login",
+   "label": "out",
+   "expect": "government",
+   "reason": "the UK tax authority's sign-in",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-P16",
+   "site": "peppol.org",
+   "keyword": "belgium",
+   "label": "out",
+   "expect": "place_only",
+   "reason": "a place and nothing else",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-P17",
+   "site": "peppol.org",
+   "keyword": "accounting software",
+   "label": "out",
+   "expect": "off_topic",
+   "reason": "a product category the association does not sell",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-P18",
+   "site": "peppol.org",
+   "keyword": "invoice template",
+   "label": "out",
+   "expect": "off_topic",
+   "reason": "a document template; nothing the association offers",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-P19",
+   "site": "peppol.org",
+   "keyword": "bpo company",
+   "label": "out",
+   "expect": "off_topic",
+   "reason": "another industry",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A01",
+   "site": "azdan.com",
+   "keyword": "netsuite partner uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "what the site is: a NetSuite partner in the UAE",
+   "source": "harness/accuracy/sites/azdan-com.json (Oracle NetSuite solution provider, UAE / KSA / Egypt: implementation, support, managed services, Oracle EPM, industries)"
+  },
+  {
+   "id": "KW-A02",
+   "site": "azdan.com",
+   "keyword": "netsuite implementation partner dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "its first service and a city it serves",
+   "source": "harness/accuracy/sites/azdan-com.json (Oracle NetSuite solution provider, UAE / KSA / Egypt: implementation, support, managed services, Oracle EPM, industries)"
+  },
+  {
+   "id": "KW-A03",
+   "site": "azdan.com",
+   "keyword": "netsuite pricing uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer pricing the product the site sells and implements (contrast: out for techand.ai)",
+   "source": "human judgement on the site's declared services; harness/accuracy/sites/azdan-com.json (Oracle NetSuite solution provider, UAE / KSA / Egypt: implementation, support, managed services, Oracle EPM, industries)"
+  },
+  {
+   "id": "KW-A04",
+   "site": "azdan.com",
+   "keyword": "best erp software uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer comparing ERP products; an ERP partner answers it with its own product",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A05",
+   "site": "azdan.com",
+   "keyword": "erp software saudi arabia",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "ERP in a market the site serves",
+   "source": "harness/accuracy/sites/azdan-com.json (Oracle NetSuite solution provider, UAE / KSA / Egypt: implementation, support, managed services, Oracle EPM, industries)"
+  },
+  {
+   "id": "KW-A06",
+   "site": "azdan.com",
+   "keyword": "netsuite vs sap business one",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a comparison of the site's product with a rival",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A07",
+   "site": "azdan.com",
+   "keyword": "odoo vs netsuite",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a comparison of a rival with the site's product",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A08",
+   "site": "azdan.com",
+   "keyword": "oracle epm consultant",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for help with a declared service (Oracle EPM)",
+   "source": "harness/accuracy/sites/azdan-com.json (Oracle NetSuite solution provider, UAE / KSA / Egypt: implementation, support, managed services, Oracle EPM, industries)"
+  },
+  {
+   "id": "KW-A09",
+   "site": "azdan.com",
+   "keyword": "zatca e invoicing netsuite",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "Saudi e-invoicing on the site's product, in a market it serves",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A10",
+   "site": "azdan.com",
+   "keyword": "netsuite support services",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a declared service",
+   "source": "harness/accuracy/sites/azdan-com.json (Oracle NetSuite solution provider, UAE / KSA / Egypt: implementation, support, managed services, Oracle EPM, industries)"
+  },
+  {
+   "id": "KW-A11",
+   "site": "azdan.com",
+   "keyword": "real estate erp software uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "an industry the site lists, plus ERP and its country",
+   "source": "harness/accuracy/sites/azdan-com.json (Oracle NetSuite solution provider, UAE / KSA / Egypt: implementation, support, managed services, Oracle EPM, industries) (/industries)"
+  },
+  {
+   "id": "KW-A12",
+   "site": "azdan.com",
+   "keyword": "netsuite login",
+   "label": "out",
+   "expect": "navigational",
+   "reason": "a sign-in to Oracle's product: people want Oracle's login page",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A13",
+   "site": "azdan.com",
+   "keyword": "netsuite consultant jobs dubai",
+   "label": "out",
+   "expect": "career",
+   "reason": "people looking for work",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A14",
+   "site": "azdan.com",
+   "keyword": "netsuite certification course",
+   "label": "out",
+   "expect": "career",
+   "reason": "people looking for training; the site does not sell courses",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A15",
+   "site": "azdan.com",
+   "keyword": "sap business one partner uae",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "a partner for a rival product the site does not sell",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A16",
+   "site": "azdan.com",
+   "keyword": "odoo pricing",
+   "label": "out",
+   "expect": "other_brand",
+   "reason": "the price of a rival product",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A17",
+   "site": "azdan.com",
+   "keyword": "zatca portal login",
+   "label": "out",
+   "expect": "government",
+   "reason": "the Saudi tax authority's sign-in",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A18",
+   "site": "azdan.com",
+   "keyword": "egypt",
+   "label": "out",
+   "expect": "place_only",
+   "reason": "a place and nothing else",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A19",
+   "site": "azdan.com",
+   "keyword": "dubai companies",
+   "label": "out",
+   "expect": "place_only",
+   "reason": "a place plus \"companies\"",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A20",
+   "site": "azdan.com",
+   "keyword": "erp",
+   "label": "out",
+   "expect": "too_broad",
+   "reason": "one category word",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A21",
+   "site": "azdan.com",
+   "keyword": "azdan careers",
+   "label": "out",
+   "expect": "career",
+   "reason": "the site's own careers search: job seekers",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A22",
+   "site": "azdan.com",
+   "keyword": "oracle careers dubai",
+   "label": "out",
+   "expect": "career",
+   "reason": "job seekers at Oracle",
+   "source": "human judgement on the site's declared services"
+  },
+  {
+   "id": "KW-A23",
+   "site": "azdan.com",
+   "keyword": "top facilities management companies uae",
+   "label": "out",
+   "expect": "off_topic",
+   "reason": "another industry's companies",
+   "source": "harness scenarios_full_gate.js FG1 (leaks of 2026-10-17 / 2026-10-21) (same leak on another site)"
+  },
+  {
+   "id": "KW-R01",
+   "site": "taxwise-advisory.ae",
+   "keyword": "vat registration uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "its own first service; the government pages on the results page do not make it a government search",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 2)",
+   "holdout": true,
+   "serp": {
+    "top_domains": [
+     "tax.gov.ae",
+     "u.ae",
+     "mof.gov.ae",
+     "ey.com",
+     "pwc.com"
+    ],
+    "paa": []
+   }
+  },
+  {
+   "id": "KW-R02",
+   "site": "skillbridge.ae",
+   "keyword": "power bi course dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a course search is what a training company sells",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 8)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R03",
+   "site": "staffpoint.ae",
+   "keyword": "accountant jobs in dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "job searches are what a recruitment agency fills",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 8)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R04",
+   "site": "netcore-it.ae",
+   "keyword": "it company dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for an IT firm in its city",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 13)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R05",
+   "site": "netcore-it.ae",
+   "keyword": "it services company uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for its declared service",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 13)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R06",
+   "site": "netcore-it.ae",
+   "keyword": "best it company uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer comparing IT firms in its market",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 13)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R07",
+   "site": "certiq.ae",
+   "keyword": "iso 27001 certification dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "buyers of ISO 27001 consulting search for the certification they need",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 6)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R08",
+   "site": "cloudnine-crm.ae",
+   "keyword": "salesforce consultant dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a results page of partners, no job page: buyers looking for a Salesforce consultant",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 5)",
+   "holdout": true,
+   "serp": {
+    "top_domains": [
+     "cloudanalogy.com",
+     "techcronus.com",
+     "rolustech.com",
+     "nexgensis.com",
+     "emiratesgraphic.com"
+    ],
+    "paa": [
+     "How much does a Salesforce consultant earn in Dubai?",
+     "How do I become a Salesforce consultant?"
+    ]
+   }
+  },
+  {
+   "id": "KW-R09",
+   "site": "techand.ai",
+   "keyword": "best erp companies in dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a list of the industry the client is in (Business Central is an ERP)",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 3)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R10",
+   "site": "techand.ai",
+   "keyword": "no 1 erp company in uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for the best ERP firm, no other company named",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 3)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R11",
+   "site": "techand.ai",
+   "keyword": "number 1 ai consulting company dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "its first service, no other company named",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 3)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R12",
+   "site": "techand.ai",
+   "keyword": "best ai companies uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "buyers comparing AI firms in the client's market",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 13)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R13",
+   "site": "techand.ai",
+   "keyword": "ai firm dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for an AI firm in the client's city",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 13)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R14",
+   "site": "techand.ai",
+   "keyword": "dynamics 365: business central pricing",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "its own product with a colon, not a company name",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 14)",
+   "holdout": true
+  }
+ ]
+}

@@ -449,9 +449,12 @@ function PageRow({ page, country, siteId, writingNow }: { page: P; country: stri
         </p>
         {target && (
           <p className="mt-1 text-xs">
+            {status === 'improve' && <span className="text-ink-3">Improves your existing page </span>}
             <ExternalLink href={target}>{shortUrl(target)}</ExternalLink>
           </p>
         )}
+        {/* KW-APP (2026-10-21): which existing page the plan matched, and the engine's evidence for it when it sends one */}
+        {status === 'improve' && str(page.existing_evidence) && <p className="mt-1 text-xs text-ink-3">Why this page: {str(page.existing_evidence)}</p>}
         {strs(page.supporting).length > 0 && <p className="mt-1 text-xs text-ink-3">Also covers: {strs(page.supporting).join(', ')}</p>}
       </div>
       {!writingNow && can('member') && (
@@ -522,7 +525,7 @@ function LinkMap({ links }: { links: P[] }) {
   return (
     <Block title="Link map" description="Internal links to add as each page goes live: up to the top page, sideways to a sibling" icon={<Network />}>
       <SectionTitle className="sr-only">Links</SectionTitle>
-      <DataTable rows={links} columns={cols} rowKey={(r, i) => `${str(r.from)}-${str(r.to)}-${i}`} pageSize={12} dense searchable searchPlaceholder="Filter by page..." searchText={(r) => `${str(r.from)} ${str(r.to)}`} />
+      <DataTable rows={links} columns={cols} rowKey={(r, i) => `${str(r.from)}-${str(r.to)}-${i}`} pageSize={12} dense searchable searchPlaceholder="Filter by page" searchText={(r) => `${str(r.from)} ${str(r.to)}`} />
     </Block>
   );
 }

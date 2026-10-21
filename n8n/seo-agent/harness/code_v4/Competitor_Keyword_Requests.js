@@ -1,419 +1,184 @@
-// ---- what the keyword research is allowed to use, and what its numbers mean (2026-10-13, FIX_PLAN G8; criteria K2 / K4 / K6 / K7) ----
-// Three inputs the research was missing, all built from data the run already holds (no extra paid call):
-//   * KWI.gscSeeds()     - the site's OWN Search Console queries as discovery seeds: a query that gets impressions while no live page
-//                          answers it (the D11 page inventory decides through SM.matchPage) and a striking-distance query (position
-//                          8-20). Search Console is the only first-party record of what people really type, so it now seeds the paid
-//                          pulls instead of only being read afterwards (K6).
-//   * KWI.calibrate()    - the traffic estimate checked against the site's own measured clicks and impressions where it already
-//                          ranks, labelled `calibrated` or `modelled`. A modelled number is never presented as measured (K2).
-//   * KWI.serpClusters() - keywords grouped when their results pages share enough URLs, each cluster named by its head keyword and
-//                          carrying the shared URLs, so one page can target the whole group (K7). Discovery compares the top 10 at 3
-//                          shared URLs from results pages the run already fetched (the live checks and the competitors' own ranking
-//                          URLs); the keyword ladder (B2-4, 2026-10-15) buys one results page per rung candidate and compares the
-//                          TOP 7 at a 40% threshold, the convention's own current numbers (B2-6, `top_n` / `min_overlap`).
-// Every function is pure and takes its thresholds as options, so the harness (S52) can drive it directly.
-const KWI = (() => {
-  const S = (v) => String(v == null ? '' : v).trim();
-  const num = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
-  const low = (v) => S(v).toLowerCase().replace(/\s+/g, ' ');
-  const yes = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
-  const CFG = {
-    min_impressions: 10,        // a query needs this many impressions in the Search Console period before it seeds anything
-    striking_min: 8,            // "striking distance": bottom of page 1 to the end of page 2, where one strong page moves the needle
-    striking_max: 20,
-    target_share: 0.75,         // A-22: a page's own slug / title targets a search at this share of its words (SM.MATCH_MIN)
-    off_topic_share: 0.5,       // R35: a ranking page is "about something else" only when its own title / H1 hold less than half of the search's words
-    max_seeds: 10,              // how many Search Console queries may be handed to the research as seeds
-    period_days: 28,            // the Search Console window the Site Tracker stores (Site_Plan.js ranges.current)
-    month_days: 30,
-    top_share: 0.3,             // the share of a search a page in the top three takes (the modelled estimate uses the same share)
-    min_shared_urls: 3,         // K7: a shared results page means at least this many of the same top-10 URLs
-    min_urls: 3,                // a keyword needs this many known top-10 URLs before it can be compared at all
-    max_cluster_keywords: 12,
-    live_serp_checks: 16,       // K4: how many keywords get a live intent / page-type check (cost-aware cap, see LIVE_MAX)
-    live_serp_max: 25,
-    // B2-6 (2026-10-15, benchmark area 2, approved by the owner): Keyword Insights, whose convention the shared-URL rule is, now
-    // compares the TOP 7 and not the top 10 - "the overlap setting was originally 1-10, it now runs from 1-7 because Google no longer
-    // reliably shows 10 traditional links" - at a default threshold of 40% of them (https://docs.keywordinsights.ai/learning-center/
-    // the-features/keyword-clustering/). `top_n` cuts every keyword's list to that depth BEFORE anything is compared, and
-    // `min_overlap` turns the threshold into a share of it: ceil(7 x 0.4) = 3 of 7. Both default to 0 = off, so the discovery path
-    // keeps the top-10 / 3-URL shape it was measured on until the orchestrator re-baselines K7; the ladder (B2-4) passes 7 / 0.4.
-    top_n: 0,
-    min_overlap: 0,
-    // B2-4: how many of a ladder's rung candidates may be sent for a results page of their own, and what one costs. A full ladder
-    // plans at most 11 pages (rung limits 4 / 4 / 3) and a page takes at most 7 keywords, so 24 covers more than twice the pages a
-    // plan can hold; the rest of the pool would be bought for keywords no page will ever target.
-    ladder_serp_checks: 24,
-    ladder_serp_max: 30,
-    serp_check_usd: 0.002       // one DataForSEO live-advanced SERP at depth 10, the same call the discovery live checks buy
-  };
-  const bare = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '');
-  const cap = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
-  // K4: how many live results-page checks this run may buy. One check is a DataForSEO live-advanced SERP at depth 10 (~$0.002), so the
-  // default 16 costs about $0.032 a run against $0.016 at the old fixed 8; the owner may set it per run and it is hard-capped at 25.
-  const liveChecks = (requested) => { const n = num(requested); return n == null || n <= 0 ? CFG.live_serp_checks : Math.round(cap(n, 1, CFG.live_serp_max)); };
-  // B2-4: the same shape for the ladder's own cap. 0 or a negative number means "make no call at all" (a free run), which is why this
-  // one does NOT fall back to the default when it is given a zero: a bound of nothing has to be expressible.
-  const ladderChecks = (requested) => { const n = num(requested); if (n == null) return CFG.ladder_serp_checks; if (n <= 0) return 0; return Math.round(cap(n, 1, CFG.ladder_serp_max)); };
-  const checkCost = (n) => +((Math.max(0, Number(n) || 0)) * CFG.serp_check_usd).toFixed(4);
-
-  // ---- K6: the site's own Search Console queries as seeds ----
-  // rows = seo_query_history rows (the Site Tracker writes one per site, query and 28-day period). Only the newest period counts:
-  // the table only grows, so older rows would seed last month's picture.
-  const gscSeeds = (rows, o) => {
-    const c = { ...CFG, ...(o || {}) };
-    const dom = bare(c.domain);
-    const all = (Array.isArray(rows) ? rows : []).filter(r => r && S(r.query) && !r.error && (!dom || bare(r.domain) === dom));
-    const period = all.reduce((m, r) => S(r.period_end) > m ? S(r.period_end) : m, '');
-    const isScraper = typeof c.isScraper === 'function' ? c.isScraper : () => false;
-    const isBrand = typeof c.isBrand === 'function' ? c.isBrand : () => false;
-    const matchPage = typeof c.matchPage === 'function' ? c.matchPage : () => null;
-    const dropped = { scraper: 0, brand: 0, low_impressions: 0, duplicate: 0 };
-    const seen = new Set(); const considered = [];
-    for (const r of all.filter(r => S(r.period_end) === period).sort((a, b) => (num(b.impressions) || 0) - (num(a.impressions) || 0))) {
-      const q = low(r.query); if (!q) continue;
-      if (seen.has(q)) { dropped.duplicate++; continue; }
-      seen.add(q);
-      if (isScraper(q)) { dropped.scraper++; continue; }
-      if (isBrand(q)) { dropped.brand++; continue; }
-      const impressions = num(r.impressions) || 0, clicks = num(r.clicks) || 0, position = num(r.position) || 0;
-      if (impressions < c.min_impressions) { dropped.low_impressions++; continue; }
-      // which page, if any, already answers this search: the page inventory first (D11), the page Search Console reports only when
-      // the inventory is empty (then it is the best evidence we have, and it is labelled as such)
-      const inv = matchPage(q, S(r.page));   // R35: the page Search Console credits wins a tie
-      // R12 (2026-10-13, re-rating §3.11): 11 of 25 rows read "no page of yours answers this search" while the same row named a live
-      // 200-OK page of the site — one of them ranking #6.2 — because only the slug / title match counted and the URL Search Console
-      // itself reports was ignored whenever the inventory was non-empty. A URL on this site is evidence: it is the answering page, with
-      // its own label ("the page that gets the impressions does not target this search"), so the report never asks the owner for a second
-      // page for a search they already rank for (D11's cannibalisation rule, in the discovery path).
-      // R55 (2026-10-16): Search Console reports the bare host for an sc-domain property while the inventory holds the canonical one,
-      // so one table linked both. Every site URL printed goes through the site's canonical host (`c.canon`, SM.canonUrl); Google's own
-      // URL stays as `gsc_page`.
-      const canon = typeof c.canon === 'function' ? c.canon : (u) => u;
-      const rowUrl = S(r.page);
-      const rowBare = bare(rowUrl);
-      const rowOnSite = !!rowUrl && !!rowBare && (!dom || rowBare === dom || rowBare.endsWith('.' + dom));
-      const pageUrl = rowOnSite ? S(canon(rowUrl)) : rowUrl;
-      // R35 (2026-10-16, re-rating 2026-10-15): a row whose page is on the site is a page that RANKS for the query. It used to be labelled
-      // "the page that gets the impressions does not target this search" whenever the literal word matcher failed — 20 rows, 18 of them
-      // the D365 F&O page for D365 F&O searches. A page is now called off-target only on evidence about the page itself: its own title /
-      // H1 (`c.pageTitleShare`, SM.titleShare) holding less than half of the search's words, and the sentence says what was compared.
-      const evidence = rowOnSite && typeof c.pageTitleShare === 'function' ? c.pageTitleShare(rowUrl, q) : null;
-      const row_page = (rowUrl && (c.use_row_page || rowOnSite))
-        ? { url: pageUrl, title: S(evidence && evidence.title), matched_by: c.use_row_page ? 'search console page' : 'search console' } : null;
-      // A-22 (2026-10-17, re-rating 2026-10-17, exec 764): 17 of 79 rows named a different page than the one Search Console reports for the
-      // query — "dynamics 365 finance and operations pricing dubai" ranks #9.6 with /dynamics-365-finance-and-operations-uae and the owner was
-      // told to improve the VAT article, because the inventory's word match decided first and Google's own page only broke a tie. The page
-      // Google ranks for a search (Search Console's query x page row) IS the answer. The word match is the fallback for a row with no page
-      // of ours, and is labelled as such; where another page targets the search more closely by its words, both are named (`also`), never
-      // swapped. The one exception stays R56: a listing page (the blog index) gets impressions for every article it lists, so the dedicated
-      // page behind it answers, and the listing is named beside it.
-      const listingOf = typeof c.isListing === 'function' ? c.isListing : () => false;
-      const pageScore = typeof c.pageScore === 'function' ? c.pageScore : () => null;
-      const ukey = (u) => bare(u) + S(u).toLowerCase().replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
-      const invUrl = inv ? S(canon(S(inv.url))) : '';
-      const invIsRow = !!inv && !!rowUrl && ukey(invUrl) === ukey(pageUrl);
-      const listingRow = rowOnSite && listingOf(rowUrl) && !!inv && !invIsRow && !listingOf(inv.url);
-      let answered_by = null;
-      if (rowOnSite && !listingRow) {
-        answered_by = { ...row_page, basis: 'the page Search Console reports for this search' };
-        if (inv && !invIsRow && S(inv.matched_by) !== 'query') {
-          const own = pageScore(rowUrl, q);
-          if (own == null || (Number(inv.score) || 0) > own + 1e-9) answered_by.also = { url: invUrl, title: S(inv.title), matched_by: S(inv.matched_by), score: inv.score ?? null };
-        }
-      } else if (inv) {
-        answered_by = { url: invUrl, title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory',
-          basis: listingRow ? 'the page about this search behind the listing page Google shows for it' : 'matched by its words: Search Console names no page of yours for this search',
-          ...(inv.listing ? { listing: inv.listing } : listingRow ? { listing: { url: pageUrl, impressions: impressions,
-            note: 'Google currently shows ' + (pageUrl.replace(/^https?:\/\/[^/]+/i, '') || '/') + ' (a listing page) for this search; the page that is about it is ' + (invUrl.replace(/^https?:\/\/[^/]+/i, '') || '/') } } : {}) };
-      } else answered_by = row_page;
-      const kinds = [];
-      const ownScore = rowOnSite ? pageScore(rowUrl, q) : null;   // the ranking page's own words (slug or title / H1): a slug that targets the search is not "about something else"
-      const offTopic = !!answered_by && answered_by.matched_by === 'search console' && !invIsRow && !!evidence && evidence.share != null && evidence.share < c.off_topic_share
-        && !(ownScore != null && ownScore + 1e-9 >= c.target_share);
-      const striking = position >= c.striking_min && position <= c.striking_max;
-      const lowPos = position > c.striking_max;
-      if (!answered_by) kinds.push('no_page');
-      else if (offTopic) kinds.push('page_mismatch');
-      else if (!inv && lowPos) kinds.push('low_position');
-      if (striking) kinds.push('striking');
-      const posTxt = position > 0 ? '#' + (Math.round(position * 10) / 10) : 'unreported';
-      const pathTxt = answered_by ? (S(answered_by.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
-      // A-22: the second page is named beside Google's own, never instead of it; a page matched by words alone says so
-      const alsoTxt = answered_by && answered_by.also ? '; ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' matches the words of this search more closely: keep one page for it and link the other to it' : '';
-      // a listing page (the blog index) is what Google shows; the position is ITS position, and the page about the search is named beside it
-      const listPath = answered_by && answered_by.listing ? (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') : '';
-      const rankTxt = listPath ? 'Google shows ' + listPath + ' (a listing page) at ' + posTxt + ' for it; the page about it is ' + pathTxt + ' (link it from ' + listPath + ')'
-        : 'you rank ' + posTxt + ' with ' + pathTxt;
-      const basisTxt = answered_by && answered_by.matched_by !== 'search console' && answered_by.matched_by !== 'search console page' && !answered_by.listing ? ' (matched by its words: Search Console names no page of yours for this search)' : '';
-      const why = kinds.indexOf('no_page') >= 0 ? 'no page of yours answers this search'
-        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions is about something else: ' + (evidence.h1 ? 'its title and H1 share' : 'its title shares') + ' only '
-          + evidence.have + ' of the ' + evidence.of + ' words of this search (missing: ' + evidence.missing.join(', ') + '); you rank ' + posTxt + ' with ' + pathTxt
-          + (striking ? ' (striking distance)' : '') + (answered_by.also ? '; ' + (S(answered_by.also.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' is the page about it by its words, so make that page the clear answer and link it from ' + pathTxt : '; aim that page at it or give the search its own')
-        : striking ? rankTxt + ', striking distance: improve that page' + alsoTxt + basisTxt
-        : lowPos ? (listPath ? 'low position: ' + rankTxt : 'low position on ' + pathTxt + ' (you rank ' + posTxt + ' with it)') + ': improve that page' + alsoTxt + basisTxt
-        : 'a page of yours already answers this search (' + pathTxt + (position > 0 ? ', you rank ' + posTxt : '') + ')'
-          + (answered_by && answered_by.listing ? '; Google currently shows ' + (S(answered_by.listing.url).replace(/^https?:\/\/[^/]+/i, '') || '/') + ' for it' : '') + alsoTxt + basisTxt;
-      considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
-        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowOnSite ? pageUrl : rowUrl, gsc_page: rowUrl, on_site: rowOnSite, answered_by, kinds, why,
-        period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
-    }
-    const wanted = considered.filter(q => q.kinds.length);
-    const rank = (x) => x.kinds.indexOf('no_page') >= 0 ? 2 : x.kinds.indexOf('page_mismatch') >= 0 ? 1 : 0;   // R12: a search with no page at all first, then one whose ranking page targets something else
-    const order = [...wanted].sort((a, b) => rank(b) - rank(a) || b.impressions - a.impressions);
-    return { available: all.length > 0, period_end: period, period_days: c.period_days, rows: all.length, considered: considered.length,
-      page_check: (num(c.pages_known) || 0) > 0 ? 'page inventory' : (c.use_row_page ? 'search console page' : 'unavailable'),
-      pages_known: num(c.pages_known) || 0,
-      queries: wanted, no_page: wanted.filter(q => q.kinds.indexOf('no_page') >= 0), striking: wanted.filter(q => q.kinds.indexOf('striking') >= 0),
-      mismatch: wanted.filter(q => q.kinds.indexOf('page_mismatch') >= 0),
-      low_position: wanted.filter(q => q.kinds.indexOf('low_position') >= 0),
-      // R36 (2026-10-16): EVERY measured search with its page (not only the seeds), so discovery can say "you already rank for this with
-      // <page>" for a keyword the providers also returned, instead of recommending a second page for it
-      measured: considered.filter(q => q.on_site).slice(0, 500).map(q => ({ keyword: q.keyword, impressions: q.impressions, clicks: q.clicks, position: q.position,
-        page: q.page, gsc_page: q.gsc_page, answered_url: q.answered_by ? q.answered_by.url : '' })),
-      answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 60),
-      seeds: order.slice(0, c.max_seeds).map(q => q.keyword), dropped,
-      min_impressions: c.min_impressions, striking_min: c.striking_min, striking_max: c.striking_max };
-  };
-
-  // ---- K3: the click loss a results page causes, and where each figure comes from (B1-3, 2026-10-15, benchmark area 1) ----
-  // Until today every factor here was an undated constant, and the AI Overview one (0.65 = a 35% loss) was the APRIL 2025 measurement
-  // -- "AI Overviews reduced clicks to top-ranking content by 34.5%" -- while the current study, published 2026-02-04 on December 2025
-  // data over 300,000 keywords, measures **-58.0% at position 1**, -50.8% at 2 and -46.4% at 3
-  // (https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/). The estimate these factors feed is explicitly "what a page in the top
-  // three would get" (`top_share`), so the top-three average of that table is the figure that belongs here: it was 1.5x too generous.
-  // The other features have no comparable published measurement (the 2025 featured-snippet numbers disagree with each other and with
-  // Perficient's "click-neutral" finding), so they stay where they were and are labelled a STATED RULE, not a measurement. Every one of
-  // them is named in `CLICK_LOSS` with its basis so a report can print what it applied and why, instead of a bare multiplier.
-  const AIO_CTR_2025 = { 1: 0.420, 2: 0.492, 3: 0.536 };   // 1 - the measured loss at each of the top three positions
-  const CLICK_LOSS = {
-    ai_overview: { factor: +(((AIO_CTR_2025[1] + AIO_CTR_2025[2] + AIO_CTR_2025[3]) / 3).toFixed(3)), basis: 'measured',
-      what: 'an AI Overview', source: 'Ahrefs, 300,000 keywords, December 2025 data (published 2026-02-04)',
-      url: 'https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/',
-      note: 'clicks to position 1 fall 58.0% when an AI Overview is shown (50.8% at 2, 46.4% at 3); this estimate is for a page in the top three, so their average is applied' },
-    featured_snippet: { factor: 0.85, basis: 'stated rule', what: 'a featured snippet', source: 'no measurement we could verify; published 2025 studies disagree', url: '' },
-    video: { factor: 0.92, basis: 'stated rule', what: 'video results', source: 'no measurement we could verify', url: '' },
-    local_pack: { factor: 0.85, basis: 'stated rule', what: 'a local pack', source: 'no measurement we could verify', url: '' },
-    shopping: { factor: 0.9, basis: 'stated rule', what: 'shopping results', source: 'no measurement we could verify', url: '' },
-  };
-  const FEATURE_KEY = { ai_overview: 'ai_overview', featured_snippet: 'featured_snippet', video: 'video', short_videos: 'video',
-    local_pack: 'local_pack', map: 'local_pack', shopping: 'shopping', popular_products: 'shopping' };
-  // which of the five were seen on this results page, each once, in the order they are listed above
-  const lossApplied = (types) => { const seen = new Set((Array.isArray(types) ? types : []).map(x => FEATURE_KEY[S(x).toLowerCase()]).filter(Boolean));
-    return Object.keys(CLICK_LOSS).filter(k => seen.has(k)).map(k => ({ key: k, ...CLICK_LOSS[k] })); };
-  const featureLoss = (types) => lossApplied(types).reduce((ctr, f) => ctr * f.factor, 1);
-  // "an AI Overview (-52% of the clicks, measured: Ahrefs ...)" - one clause per feature, for the note under a traffic figure
-  const lossText = (types) => lossApplied(types).map(f => f.what + ' (-' + Math.round((1 - f.factor) * 100) + '% of the clicks, ' + f.basis + (f.source ? ': ' + f.source : '') + ')').join(', ');
-
-  // ---- K2: the traffic number, and where it comes from ----
-  // `calibrated`: the site's own measured impressions for this exact search (the Search Console period, scaled to a month) through the
-  //               results page's click loss and the share a top-three page takes, never below the clicks the site already gets.
-  // `modelled`:   the provider's monthly volume through the same two factors - an estimate of an estimate, named as one.
-  // `unknown`:    neither a volume nor a measurement, so no number at all (better than a confident zero).
-  const calibrate = (e, o) => {
-    const c = { ...CFG, ...(o || {}) };
-    const k = e || {};
-    const ctr = featureLoss(k.serp_types);
-    // B1-3: the figure says which features took clicks off it, how much each one took and whether that number is measured or a rule
-    const lossTxt = lossText(k.serp_types);
-    const lossNote = lossTxt ? ' Click loss applied: ' + lossTxt + '.' : '';
-    // B1-3 (2026-10-15): `num(null)` is 0, not null — Number(null) is 0 and 0 is finite — so a keyword the provider has NO volume for
-    // came back as "0 visits a month (modelled)" instead of "no estimate", a confident number where nothing was measured (the R26
-    // class). An absent volume is absent; a provider that really reports 0 still reports 0.
-    const vol = (k.volume === null || k.volume === undefined || k.volume === '') ? null : num(k.volume);
-    const modelled = vol == null ? null : Math.round(vol * ctr * c.top_share);
-    const g = (k.gsc && typeof k.gsc === 'object') ? k.gsc : null;
-    const impressions = g ? num(g.impressions) : null;
-    if (impressions != null && impressions > 0) {
-      const clicks = num(g.clicks) || 0;
-      const days = num(g.period_days) > 0 ? num(g.period_days) : c.period_days;
-      const toMonth = c.month_days / days;
-      const traffic_potential = Math.max(Math.round(impressions * toMonth * ctr * c.top_share), Math.round(clicks * toMonth));
-      const pos = num(g.position);
-      return { traffic_potential, traffic_basis: 'calibrated', modelled_traffic_potential: modelled,
-        traffic_note: 'Calibrated with your own Search Console data: ' + Math.round(impressions) + ' impressions and ' + Math.round(clicks)
-          + ' click(s) measured for this exact search on your site in ' + Math.round(days) + ' days'
-          + (pos ? ' at average position ' + (Math.round(pos * 10) / 10) : '') + '. A page in the top three would take about '
-          + traffic_potential + ' visits a month' + (modelled != null ? ' (the modelled estimate from the provider\'s volume is ' + modelled + ').' : '.') + lossNote };
-    }
-    if (modelled == null) {
-      return { traffic_potential: null, traffic_basis: 'unknown', modelled_traffic_potential: null,
-        traffic_note: 'No monthly volume from the provider and no Search Console measurement for this search, so no traffic estimate is given.' };
-    }
-    return { traffic_potential: modelled, traffic_basis: 'modelled', modelled_traffic_potential: modelled,
-      traffic_note: 'Modelled, not measured: ' + vol + ' searches a month (a provider estimate) through the click loss of this results page and the share a top-three page takes.' + lossNote };
-  };
-  // ---- K4: what KIND of page Google actually ranks for this search (B1-5, 2026-10-15, benchmark area 1) ----
-  // The intent and the page type came from the AI screen's label (and DataForSEO's `main_intent` behind it). The live results page
-  // was already bought for the priority keywords and only its domains, its features and its People Also Ask were kept, so the one
-  // piece of evidence that settles the question - the ten pages Google chose - was thrown away. K4's own anchor for a 10 is "the
-  // dominant top-10 page type decides, a mismatch is flagged"; Ahrefs tells you to study the top 10 by hand for exactly this.
-  // `serpPageTypes` reads the URL and the title of each organic result, with the title first where it is decisive ("best ... ",
-  // "how to ...") and the path after it. Nothing is inferred from a domain we have not read, and a result it cannot place is
-  // `Other`, counted and never guessed at.
-  // F-A1 / A-11 (2026-10-17, re-rating): a title that says it IS a list ("Top 10 ...", "List of ...", "Top IT Consulting Companies in
-  // Dubai") is a list wherever it is published - the LinkedIn Pulse listicle of exec 770 was counted as a forum post, so the results page
-  // of "dubai it consulting companies" (4 lists of 7) settled nothing and the rung was planned as a service page with no word about it.
-  const LIST_TITLE = /\b(?:top\s*\d+\+?|list of)\b|\btop\s+(?:[\w&.-]+\s+){0,4}(?:companies|firms|agencies|providers|consultants|consultancies|vendors|partners|tools|platforms)\b/i;
-  const SHAPES = [
-    { type: 'Government or official', test: (u, t, d) => /(^|\.)(gov|gov\.[a-z]{2}|gob|govt)(\.|$)/.test(d) || /\.gov($|\.)/.test(d) },
-    { type: 'Comparison or list', test: (u, t) => LIST_TITLE.test(t) },
-    { type: 'Forum or community', test: (u, t, d) => /(^|\.)(reddit|quora|stackexchange|stackoverflow|linkedin|facebook|x|twitter|medium)\./.test(d) || /\/(forum|community|questions|discussion)\//.test(u) },
-    { type: 'Directory or marketplace', test: (u, t, d) => /(^|\.)(g2|capterra|getapp|softwareadvice|trustradius|saashub|clutch|crunchbase|yelp|yellowpages|indiamart)\./.test(d) },
-    { type: 'Comparison or list', test: (u, t) => /\b(best|top\s*\d+|vs\.?|versus|alternatives?|comparison|compared)\b/i.test(t) || /\/(best|top|vs|alternatives|compare)[-\/]/.test(u) },
-    { type: 'Pricing page', test: (u, t) => /\bpricing\b|\bprice list\b|\bcost(s)?\b.*\b(plans?|pricing)\b/i.test(t) || /\/(pricing|plans|price)(\/|$)/.test(u) },
-    { type: 'Guide or article', test: (u, t) => /\b(how to|what is|why|guide|tutorial|checklist|explained|step[- ]by[- ]step|everything you need)\b/i.test(t) || /\/(blog|insights|articles?|news|resources?|learn|guides?|knowledge|academy)(\/|$)/.test(u) },
-    { type: 'Service or product page', test: (u, t) => /\/(services?|solutions?|products?|software|platform|industries)(\/|$)/.test(u) || /\b(software|solution|services?|platform)\b/i.test(t) },
-    { type: 'Homepage', test: (u) => /^[a-z0-9.-]+\/?$/.test(u) },
+// ---- KW-COMP (2026-10-21, K6 / A-24 / RV-6): who is a COMPETITOR, one answer for research, the ladder and the full report ----
+// Research took its competitors from ONE results page and its #2 was a job board (naukrigulf.com): 545 of 1,168 pool keywords came from
+// job and directory sites. On 2026-10-21 the set held help.ardoq.com and job boards again. The leaders (Semrush, Ahrefs) pick organic
+// competitors by keyword OVERLAP. A competitor here is a business that ranks for several of the client's in-topic keywords and sells
+// something comparable; never a job board, directory, marketplace, review site, news or media site, government or free-zone authority,
+// search engine, social network, Q&A site, the help / docs / community pages of another product, a course provider, an encyclopedia, a
+// global platform, a "top 10 companies" list, or the client itself.
+//  * CMP.kindOf(domain, url, title, snippet) -> { kind, label, by: 'host' | 'result' }: 'business' when nothing rules it out.
+//    A HOST kind (naukrigulf.com, help.ardoq.com, difc.ae) rules the whole domain out; a RESULT kind (a jobs page, a list article, a
+//    course page on an ordinary business domain) only means that one result is no evidence of competing.
+//  * CMP.select({ serps: [{ keyword, items }], declared, own_domain, n, boost }) -> { picked, excluded, too_few, serps_read, note }
+//    Scores each business by how many of the results pages the run already bought it appears in, weighted by position. With three or more
+//    pages read a business must appear on at least two ("several of your keywords"). The competitors the owner declared stay first.
+//    Nothing here buys anything.
+const CMP = (() => {
+  const S = (v) => String(v == null ? '' : v);
+  const host = (h) => S(h).toLowerCase().trim().replace(/^[a-z]+:\/\//, '').replace(/^www\d?\./, '').replace(/[\/?#:].*$/, '').replace(/\.$/, '');
+  const reg = (h) => { const x = host(h); const p = x.split('.').filter(Boolean); if (p.length <= 2) return x;
+    const sl = p.slice(-2).join('.'); return /^(co|com|org|net|gov|ac|edu|ltd|plc|sch|nic|mil|gob|gouv)\.[a-z]{2}$/.test(sl) ? p.slice(-3).join('.') : sl; };
+  const LABEL = { you: 'your own site', job: 'job board', directory: 'business directory', marketplace: 'marketplace or freelance platform',
+    review: 'review or comparison site', media: 'news or media site', gov: 'government or free-zone authority', search: 'search engine',
+    social: 'social network', qa: 'Q&A site or forum', help: 'help, docs or community pages of another product', education: 'course or education provider',
+    reference: 'encyclopedia or reference site', platform: 'global software platform', list: 'list of companies, not a seller', business: 'business', unknown: 'unreadable address' };
+  // the name, then only a public suffix (indeed.com, uk.indeed.com, indeed.ae, x.co.uk): a business's own subdomain "connect.acme.com" is not "connect"
+  const SUF = '(?:com|net|org|co|io|ai|info|biz|me|tv|ly|app|fyi|news|[a-z]{2})(?:\\.[a-z]{2})?';
+  const alt = (a) => new RegExp('(^|\\.)(' + a.join('|').replace(/\./g, '\\.') + ')\\.' + SUF + '$');
+  // host lists: the name before the public suffix, any country ending (indeed.com, indeed.ae)
+  const HOSTS = [
+    ['search', alt(['google', 'bing', 'yahoo', 'duckduckgo', 'baidu', 'yandex', 'ask', 'ecosia', 'naver', 'brave'])],
+    ['social', alt(['linkedin', 'facebook', 'instagram', 'twitter', 'x', 'tiktok', 'youtube', 'youtu', 'pinterest', 'threads', 'snapchat', 'vimeo', 'telegram', 't', 'whatsapp', 'slideshare', 'scribd'])],
+    ['qa', alt(['reddit', 'quora', 'stackoverflow', 'stackexchange', 'superuser', 'serverfault', 'answers', 'discord', 'spiceworks'])],
+    ['job', alt(['naukrigulf', 'naukri', 'indeed', 'glassdoor', 'bayt', 'monster', 'monstergulf', 'foundit', 'gulftalent', 'ziprecruiter', 'jooble', 'careerjet',
+      'simplyhired', 'wellfound', 'laimoon', 'drjobpro', 'jobsdb', 'jobstreet', 'seek', 'reed', 'totaljobs', 'careerbuilder', 'rozee', 'dubaicareers', 'gulfjobs', 'naukrigulf', 'akhtaboot', 'tanqeeb', 'wuzzuf', 'payscale', 'salary', 'levels'])],
+    ['review', alt(['g2', 'capterra', 'getapp', 'softwareadvice', 'trustradius', 'trustpilot', 'peerspot', 'softwaresuggest', 'gartner', 'sitejabber', 'saashub',
+      'alternativeto', 'producthunt', 'selecthub', 'financesonline', 'comparably', 'reviews', 'softwareworld', 'crozdesk', 'technologyadvice'])],
+    ['directory', alt(['clutch', 'themanifest', 'goodfirms', 'sortlist', 'designrush', 'techbehemoths', '2gis', 'yellowpages', 'yelp', 'crunchbase', 'dnb', 'zoominfo',
+      'kompass', 'hidubai', 'uaeyp', 'serchen', 'topdevelopers', 'itfirms', 'appfutura', 'f6s', 'owler', 'cbinsights', 'tracxn', 'pitchbook', 'dubaidirectory',
+      'uaecompanies', 'yello', 'cybo', 'tradeindia', 'europages', 'expertmarket', 'agencyspotter', 'upcity', 'bark', 'thumbtack', 'emiratesyellowpages'])],
+    ['marketplace', alt(['upwork', 'fiverr', 'freelancer', 'toptal', 'peopleperhour', 'guru', 'amazon', 'noon', 'daraz', 'ebay', 'alibaba', 'aliexpress', 'dubizzle',
+      'bayut', 'propertyfinder', 'appsource.microsoft', 'apps.shopify', 'marketplace.microsoft', 'aws.amazon', 'apps.odoo', 'play.google', 'apps.apple'])],
+    ['media', alt(['khaleejtimes', 'gulfnews', 'thenationalnews', 'thenational', 'arabianbusiness', 'zawya', 'gulfbusiness', 'emirates247', 'wam', 'bloomberg', 'reuters',
+      'forbes', 'forbesmiddleeast', 'cnbc', 'bbc', 'cnn', 'nytimes', 'theguardian', 'businessinsider', 'techcrunch', 'wired', 'zdnet', 'computerweekly', 'itp', 'economymiddleeast',
+      'wamda', 'medium', 'substack', 'entrepreneur', 'inc', 'fastcompany', 'venturebeat', 'techradar', 'theverge', 'engadget', 'mashable', 'hbr', 'techtarget', 'cio',
+      'computerworld', 'infoworld', 'analyticsinsight', 'towardsdatascience', 'kdnuggets', 'marktechpost', 'abcmoney', 'ft', 'wsj', 'economist', 'aljazeera', 'alarabiya',
+      'skynewsarabia', 'albayan', 'alkhaleej', 'emaratalyoum', 'gitex', 'menabytes', 'magnitt', 'smeadvisor', 'cxotoday', 'datacenterdynamics', 'itnewsafrica', 'tahawultech'])],
+    ['reference', alt(['wikipedia', 'wikihow', 'wikidata', 'britannica', 'investopedia', 'merriam-webster', 'dictionary', 'thefreedictionary', 'wiktionary', 'statista'])],
+    ['education', alt(['coursera', 'udemy', 'edx', 'simplilearn', 'greatlearning', 'mygreatlearning', 'upgrad', 'udacity', 'datacamp', 'skillshare', 'pluralsight',
+      'euro-training', 'usaii', 'iabac', 'knowledgehut', 'edureka', 'intellipaat', 'futurelearn', 'khanacademy', 'britishcouncil', 'emeritus', 'classcentral', 'w3schools'])],
+    // free zones and authorities of the UAE (a business sets up THROUGH them; they compete with no one), plus the region's tax portals
+    ['gov', alt(['difc', 'dmcc', 'dafz', 'jafza', 'rakez', 'ifza', 'meydanfz', 'shams', 'adgm', 'dso', 'dwtc', 'kezad', 'saif-zone', 'srtip', 'hfz', 'dic', 'dubaiinternetcity',
+      'dubaicommercity', 'fujairahfreezone', 'ajmanfreezone', 'uaqftz', 'adafz', 'twofour54', 'dubaichamber', 'abudhabichamber', 'sharjahchamber', 'ded', 'dubaided', 'tamm',
+      'u', 'zatca', 'mof', 'mohre', 'dubai', 'abudhabi', 'investindubai', 'gdrfad', 'moec', 'tdra',
+      // KWL-RES D10: government foundations and initiatives (dubaifuture.ae was a ladder's #1 "competitor"); the title rule below finds the rest
+      'dubaifuture', 'digitaldubai', 'smartdubai', 'dub', 'dubaiai', 'museumofthefuture', 'mbrf', 'mbrsg', 'adio', 'dubaiaicampus', 'aiseer'])],
+    ['platform', alt(['microsoft', 'dynamics', 'office', 'apple', 'oracle', 'sap', 'salesforce', 'hubspot', 'ibm', 'aws', 'azure', 'github', 'gitlab', 'atlassian', 'zoho',
+      'shopify', 'wix', 'wordpress', 'squarespace', 'adobe', 'openai', 'nvidia', 'meta', 'notion', 'odoo', 'intuit', 'quickbooks', 'xero', 'netsuite', 'workday', 'servicenow', 'cloudflare'])],
   ];
-  // what WE would write for it, in the same words, so a mismatch is a real disagreement and not a vocabulary difference
-  const OURS = { 'Blog Post': 'Guide or article', Guide: 'Guide or article', 'Pillar Page': 'Guide or article', 'FAQ Page': 'Guide or article',
-    'Comparison Page': 'Comparison or list', 'Service Page': 'Service or product page', 'Product Page': 'Service or product page',
-    'Landing Page': 'Service or product page', 'Category Page': 'Service or product page', 'Location Page': 'Service or product page',
-    'Local Page': 'Service or product page', 'Case Study': 'Guide or article' };
-  const shapeOf = (url, title) => {
-    const u = urlKey(url), d = bare(url), t = S(title);
-    for (const sh of SHAPES) { try { if (sh.test(u, t, d)) return sh.type; } catch (e) {} }
-    return 'Other';
+  const HELP_SUB = /^(help|support|docs|doc|documentation|kb|knowledge|knowledgebase|community|communities|techcommunity|academy|developer|developers|dev|learn|forum|forums|answers|faq|status|wiki|careers|jobs|training|university|partners?)\./;
+  const kindOfHost = (domainOrUrl, own) => {
+    const h = host(domainOrUrl); if (!h || !/\./.test(h)) return 'unknown';
+    const o = host(own); if (o && (h === o || h.endsWith('.' + o) || reg(h) === reg(o))) return 'you';
+    if (/(^|\.)(gov|mil|int|gob|gouv|govt|government)(\.[a-z]{2})?$/.test(h) || /\.(gov|mil)\.[a-z]{2}$/.test(h)) return 'gov';
+    if (/(^|\.)(edu|ac)\.[a-z]{2}$/.test(h) || /\.edu$/.test(h)) return 'education';
+    for (const [k, re] of HOSTS) if (re.test(h)) return k;
+    if (HELP_SUB.test(h) && h.split('.').length >= 3) return 'help';
+    const lab = reg(h).split('.')[0];
+    if (/(jobs|careers|recruit|vacanc|hiring)/.test(lab)) return 'job';
+    if (/(freezone|free-zone|freezon)/.test(lab) || /^[a-z]{2,10}fz$/.test(lab)) return 'gov';
+    if (/(news|times|magazine|herald|tribune|gazette|journal|chronicle|insider|digest|money)$/.test(lab) || /^(the)?news/.test(lab)) return 'media';
+    if (/(directory|yellowpages|listings?)$/.test(lab) || /^(top|best)(firms|companies|agencies|developers|vendors)/.test(lab)) return 'directory';
+    if (/(university|college|institute|academy|school)$/.test(lab) || /^(university|college)/.test(lab)) return 'education';
+    return 'business';
   };
-  /** results: [{ url, title }] from the live top 10 · o.page_type = the page we plan to write
-   *  -> { read, counts, dominant, dominant_count, dominant_share, ours, mismatch, text } */
-  const serpPageTypes = (results, o) => {
-    const c = { ...CFG, ...(o || {}) };
-    const list = (Array.isArray(results) ? results : []).filter(r => r && S(r.url)).slice(0, 10);
-    const counts = {};
-    for (const r of list) { const k = shapeOf(r.url, r.title); counts[k] = (counts[k] || 0) + 1; }
-    const read = list.length;
-    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    const top = ranked[0] || null;
-    const ours = OURS[S(c.page_type)] || '';
-    // a dominant kind is one at least half the page agrees on, out of at least four results read: below that nobody can call it
-    const dominant = top && read >= 4 && top[1] / read >= 0.5 && top[0] !== 'Other' ? top[0] : '';
-    const mismatch = !!(dominant && ours && dominant !== ours);
-    const text = !read ? 'The results page was not read, so what Google ranks for this search is unknown.'
-      : !dominant ? 'Google ranks a mix for this search (' + ranked.map(x => x[1] + ' ' + x[0].toLowerCase()).join(', ') + '), so no page type is settled by the results.'
-        : dominant.toLowerCase().replace(/^./, m => m.toUpperCase()) + 's are what Google ranks here: ' + top[1] + ' of the ' + read + ' results read'
-          + (ours ? (mismatch ? ', while this plan writes a ' + ours.toLowerCase() + ' - expect to work harder, or write what the results page shows'
-            : ', which is what this plan writes') : '') + '.';
-    return { read, counts, dominant, dominant_count: top ? top[1] : 0, dominant_share: read ? Math.round((top ? top[1] : 0) / read * 100) : 0,
-      ours, mismatch, text };
+  // what ONE result is, on an ordinary business domain: a jobs page, a list of companies, a course page (the domain may still compete elsewhere)
+  const JOB_T = /\b(jobs?|vacanc(?:y|ies)|careers?|hiring|recruit\w*|salar(?:y|ies)|job openings?)\b/i;
+  const JOB_AR = /(وظائف|وظيفة|رواتب|توظيف)/;
+  const LIST_T = /\b(?:top|best|leading)\s+(?:\d+\s+)?[\w\s&.,-]{0,50}?\b(?:companies|firms|agencies|providers|consultants|consultancies|partners|vendors|developers|integrators|implementers|tools)\b|\b\d+\s+(?:best|top|leading)\b|\blist of\b|\btop\s*\d+\b/i;
+  // the address of a list article: /rankings/..., /top-10-ai-consulting-companies, /blog/ai-companies-in-dubai (r04: consultancy-me.com, leewayhertz.com)
+  const LIST_P = /\/(?:rankings?\/|[^\/?#]*\b(?:top|best)-(?:\d+-)?[^\/?#]*(?:companies|firms|agencies|providers|consultants|consultancies|vendors|partners|developers|tools)\b|[^\/?#]*\b(?:companies|firms|agencies)-in-)/;   // not "consultants-in-dubai": that is a vendor's own service page (hlbhamt.com)
+  const LIST_AR = /(أفضل\s*\d*\s*شركات|قائمة)/;
+  const COURSE_T = /\b(course|courses|certification (?:course|program(?:me)?|exam|training)|certificate program(?:me)?|bootcamp|diploma|program fee|enrol(?:l|ment)?|syllabus|curriculum|online training)\b/i;
+  const COURSE_AR = /(دورة|دورات|شهادة معتمدة)/;
+  const kindOfResult = (url, title, snippet) => {
+    const t = S(title); const u = S(url).toLowerCase(); const p = u.replace(/^[a-z]+:\/\/[^\/]+/, '');
+    if (JOB_T.test(t) || JOB_AR.test(t) || /\/(jobs?|careers?|vacanc\w*)(\/|$|-|\?)/.test(p)) return 'job';
+    if (LIST_T.test(t) || LIST_AR.test(t) || LIST_P.test(p)) return 'list';
+    if (COURSE_T.test(t) || COURSE_AR.test(t) || /\/(courses?|certifications?|training-courses?)(\/|$|-)/.test(p)) return 'education';
+    return 'business';
   };
-  const BASIS_TEXT = { calibrated: 'calibrated with your Search Console data', modelled: 'modelled from provider volume', unknown: 'no estimate' };
-
-  // ---- A-24 (2026-10-17, re-rating exec 764): who may stand as a COMPETITOR whose rankings feed keyword discovery ----
-  // Discovery took the top three domains of one results page ("erp consultants dubai"), and #2 was naukrigulf.com "ERP Consultant Jobs
-  // in UAE - 67 Vacancies": its 300 ranked keywords ("flydubai careers", "dubai iranian hospital", "jobs abu dhabi") were 545 of the
-  // 1,168 researched and 224 of the 240 reviewed were rated off-topic. A competitor is a business that sells what the site sells; a job
-  // board, a directory / review marketplace, a list of companies, a government portal, a news site or a forum ranks for the search but
-  // competes for nothing. Each class is read from the result itself (host, title, URL shape — KWI.shapeOf's rules), never guessed.
-  const JOB_HOSTS = /(^|\.)(naukrigulf|naukri|indeed|glassdoor|bayt|monster|monstergulf|foundit|gulftalent|ziprecruiter|jooble|careerjet|simplyhired|wellfound|dubizzle|laimoon|drjobpro|jobsdb|jobstreet|seek|reed|totaljobs|careerbuilder)\./;
-  const NEWS_HOSTS = /(^|\.)(khaleejtimes|gulfnews|thenationalnews|thenational|arabianbusiness|zawya|gulfbusiness|emirates247|wam|bloomberg|reuters|forbes|forbesmiddleeast|cnbc|bbc|cnn|nytimes|theguardian|businessinsider|techcrunch|wired|zdnet|computerweekly|itp|economymiddleeast|wamda)\./;
-  const DIRECTORY_HOSTS = /(^|\.)(clutch|themanifest|goodfirms|sortlist|designrush|techbehemoths|2gis|yellowpages|yelp|g2|capterra|getapp|softwareadvice|trustradius|saashub|crunchbase|trustpilot|upwork|fiverr|softwaresuggest|gartner|peerspot|serchen|dnb|zoominfo|kompass|hidubai|uaeyp)\./;
-  const JOB_TEXT = /\b(jobs?|vacanc(?:y|ies)|careers?|hiring|recruit\w*|salar(?:y|ies))\b/i;
-  /** -> '' (a business: may be a competitor) or the class that rules it out */
-  const competitorClass = (domain, url, title) => {
-    const d = bare(domain || url); if (!d) return 'unknown';
-    if (JOB_HOSTS.test(d) || JOB_TEXT.test(S(title)) || /\/(jobs?|careers?|vacanc\w*)(\/|$|-)/i.test(urlKey(url))) return 'job board';
-    if (NEWS_HOSTS.test(d)) return 'news or media';
-    const shape = shapeOf(S(url) || d, title);
-    if (shape === 'Government or official') return 'government';
-    if (shape === 'Forum or community') return 'forum or social';
-    if (DIRECTORY_HOSTS.test(d) || shape === 'Directory or marketplace') return 'directory or marketplace';
-    if (shape === 'Comparison or list') return 'list of companies';
-    return '';
+  // KWL-RES D10 (2026-10-21 live keyword test, exec 125): dubaifuture.ae (Dubai Future Foundation) was the ladder's top competitor: no host list
+  // can name every authority, foundation, council or chamber, but their own results say what they are. A NAMED body ("Dubai Future Foundation",
+  // "Roads and Transport Authority", "UAE Cyber Security Council", "Dubai Chamber") in the title, or a snippet that calls the site a government
+  // entity / initiative, rules the whole domain out (a business result that merely mentions government work is not one: the name must end in
+  // the word, or the snippet must say the site is the government's).
+  // the name must be a whole segment of the title (the site name before or after "|", " - ", ":"), so a case study titled "How we helped
+  // the Roads and Transport Authority" on a business's site is not read as the authority's own page
+  const GOV_NAME_SEG = /^(?:the\s+)?(?:[A-Z][\w'&.-]*\s+(?:(?:of|and|for|the|de)\s+)?){1,6}(?:Foundation|Authority|Council|Chamber(?: of Commerce(?: and Industry)?)?|Municipality)(?:\s*\([A-Z]{2,6}\))?$|^(?:the\s+)?(?:Ministry|Government) of\s+[A-Z][\w\s&'-]{1,60}$/;
+  const GOV_NAME_T = { test: (t) => S(t).split(/\s+[|\u2013\u2014:-]\s+|\s*\|\s*/).map(x => x.trim()).filter(Boolean).some(x => GOV_NAME_SEG.test(x)) };
+  const GOV_SNIP = /\b(?:(?:a|an|the)\s+(?:federal|government|governmental|public)\s+(?:entity|initiative|agency|body|authority|department|foundation|organi[sz]ation|program(?:me)?|platform)|government[- ](?:owned|backed|led|initiative|entity)|established by (?:the )?(?:government|(?:an? |royal |emiri )?decree|law)|chamber of commerce|ministry of)\b/i;
+  const govSignal = (title, snippet) => GOV_NAME_T.test(S(title)) || GOV_SNIP.test(S(title) + ' ' + S(snippet));
+  const kindOf = (domain, url, title, snippet, own) => {
+    const hk = kindOfHost(domain || url, own);
+    if (hk !== 'business') return { kind: hk, label: LABEL[hk] || hk, by: 'host' };
+    if (govSignal(title, snippet)) return { kind: 'gov', label: LABEL.gov, by: 'host' };
+    const rk = kindOfResult(url, title, snippet);
+    return { kind: rk, label: LABEL[rk] || rk, by: rk === 'business' ? '' : 'result' };
   };
-
-  // ---- K7: clusters by shared results pages ----
-  // entries: [{ keyword, urls: [top-10 urls], weight, volume }]. A head keyword takes every keyword that shares at least
-  // min_shared_urls of its own top-10 URLs; the head is the strongest keyword not already in a cluster, so the cluster can be named
-  // after it. Queries and trailing slashes are ignored when URLs are compared (the same page, written two ways).
-  const urlKey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
-  const serpClusters = (entries, o) => {
-    const c = { ...CFG, ...(o || {}) };
-    // B2-6: the depth every list is cut to before it is compared, and the number of shared URLs that depth demands. With `top_n` and
-    // `min_overlap` set (the ladder: 7 and 0.4) the threshold is a SHARE of the depth - ceil(7 x 0.4) = 3 of 7 - instead of the flat
-    // count discovery still uses, and both numbers travel on every cluster so a report can state what was compared and how deeply.
-    const depth = (num(c.top_n) || 0) > 0 ? Math.round(c.top_n) : 0;
-    const need = (num(c.min_overlap) || 0) > 0 && depth ? Math.max(1, Math.ceil(depth * c.min_overlap)) : c.min_shared_urls;
-    const list = (Array.isArray(entries) ? entries : []).map(e => ({ keyword: low((e || {}).keyword),
-      urls: (() => { const u = [...new Set(((e || {}).urls || []).map(urlKey).filter(Boolean))]; return depth ? u.slice(0, depth) : u; })(),
-      weight: num((e || {}).weight) || 0, volume: num((e || {}).volume) }))
-      .filter(e => e.keyword && e.urls.length >= c.min_urls);
-    const byKw = new Map(); for (const e of list) if (!byKw.has(e.keyword)) byKw.set(e.keyword, e);
-    const ranked = [...byKw.values()].sort((a, b) => b.weight - a.weight || (b.volume || 0) - (a.volume || 0) || a.keyword.localeCompare(b.keyword));
-    const used = new Set(); const clusters = [];
-    const built = [];
-    for (const head of ranked) {
-      if (used.has(head.keyword)) continue;
-      const hs = new Set(head.urls); const members = [];
-      for (const other of ranked) {
-        if (other.keyword === head.keyword || used.has(other.keyword)) continue;
-        const shared = other.urls.filter(u => hs.has(u));
-        if (shared.length >= need) members.push({ keyword: other.keyword, volume: other.volume, shared_urls: shared.length, shared: shared.slice(0, 3), shared_with_head: shared.length });
-      }
-      if (!members.length) continue;
-      used.add(head.keyword); members.forEach(m => used.add(m.keyword));
-      built.push({ head, members });
-    }
-    // F-A1 / A-9 (2026-10-17, re-rating exec 770): a keyword that meets the rule with a MEMBER of a group but not with its head was left
-    // alone and labelled "own results page (no other search Google answers with the same pages)" - "it consulting company dubai" shares
-    // 3 of its top 7 with "it consulting company in dubai" (the plan's own threshold) and only 2 with the group's head. The rule is a
-    // pair rule, so the label could only be true if every pair was compared. A keyword still alone after the heads have taken their
-    // members joins the group of the member it shares the most with (one hop: a keyword that joined this way is never a bridge for the
-    // next one), and says through whom it joined and how much it shares with the head.
-    if (c.attach !== false) {
-      for (const k of ranked) {
-        if (used.has(k.keyword)) continue;
-        const ks = new Set(k.urls); let best = null;
-        for (const g of built) for (const m of [{ keyword: g.head.keyword, urls: g.head.urls }, ...g.members.filter(x => !x.via).map(x => byKw.get(x.keyword))]) {
-          if (!m || !Array.isArray(m.urls)) continue;
-          const shared = m.urls.filter(u => ks.has(u));
-          if (shared.length >= need && (!best || shared.length > best.shared.length)) best = { g, via: m.keyword, shared };
+  const weight = (p) => { const n = Number(p) || 99; return n <= 10 ? +(1 - (n - 1) * 0.07).toFixed(2) : n <= 20 ? 0.25 : n <= 30 ? 0.1 : 0; };
+  const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[,;\n]+/)).map(host).filter(Boolean);
+  const select = (o) => {
+    o = o || {}; const own = host(o.own_domain); const n = Math.max(1, Number(o.n) || 3);
+    const serps = (Array.isArray(o.serps) ? o.serps : []).filter(s => s && Array.isArray(s.items) && s.items.some(x => x && (!x.type || x.type === 'organic')));
+    const read = serps.length;
+    const cand = new Map(); const excl = new Map();
+    // KWL-RES D10: a domain one of whose results names it a government body is a government body on every results page
+    const govRegs = new Set(); for (const s of serps) for (const it of s.items) { if (!it || (it.type && it.type !== 'organic')) continue; const h = host(it.domain || it.url);
+      if (h && kindOfHost(h, own) === 'business' && govSignal(it.title, it.description || it.snippet)) govRegs.add(reg(h)); }
+    serps.forEach((s, si) => {
+      const kw = S(s.keyword).trim();
+      const seenHere = new Set();
+      for (const it of s.items) {
+        if (!it || (it.type && it.type !== 'organic')) continue;
+        const h = host(it.domain || it.url); if (!h) continue;
+        const pos = Number(it.rank_group || it.rank_absolute || it.rank || it.position) || 99;
+        const k0 = kindOf(h, it.url, it.title, it.description || it.snippet, own);
+        const k = (k0.kind === 'business' || k0.by === 'result') && govRegs.has(reg(h)) ? { kind: 'gov', label: LABEL.gov, by: 'host' } : k0;
+        const d = k.by === 'host' ? (k.kind === 'gov' && govRegs.has(reg(h)) ? reg(h) : h) : reg(h);
+        if (k.kind === 'you') continue;
+        if (k.kind !== 'business') {
+          const e = excl.get(d) || { domain: d, kind: k.kind, label: k.label, by: k.by, seen_in: 0, best_position: 99, example: '', kinds: {} };
+          e.best_position = Math.min(e.best_position, pos);
+          e.kinds[k.kind] = (e.kinds[k.kind] || 0) + 1;
+          if (!seenHere.has('x:' + d)) { e.seen_in++; seenHere.add('x:' + d); }
+          if (!e.example) e.example = S(it.title).replace(/\s+/g, ' ').trim().slice(0, 90) + (kw ? ' (for "' + kw + '")' : '');
+          excl.set(d, e); continue;
         }
-        if (!best) continue;
-        const hs = new Set(best.g.head.urls);
-        best.g.members.push({ keyword: k.keyword, volume: k.volume, shared_urls: best.shared.length, shared: best.shared.slice(0, 3),
-          via: best.via === best.g.head.keyword ? '' : best.via, shared_with_head: k.urls.filter(u => hs.has(u)).length });
-        used.add(k.keyword);
+        if (seenHere.has(d)) continue; seenHere.add(d);
+        const c = cand.get(d) || { domain: d, serps: 0, score: 0, best_position: 99, keywords: [] };
+        const b = typeof o.boost === 'function' ? (Number(o.boost(it, d)) || 1) : 1;
+        c.serps++; c.score = +(c.score + weight(pos) * b).toFixed(3); c.best_position = Math.min(c.best_position, pos);
+        if (kw && c.keywords.length < 6) c.keywords.push(kw + ' #' + pos);
+        cand.set(d, c);
       }
+    });
+    // a domain with result-level exclusions AND a counting appearance is a business: its list / jobs page is not held against it
+    for (const d of cand.keys()) { const e = excl.get(d); if (e && e.by === 'result') excl.delete(d); }
+    for (const e of excl.values()) if (e.by === 'result') { const top = Object.entries(e.kinds).sort((a, b) => b[1] - a[1])[0]; e.kind = top[0]; e.label = LABEL[e.kind] || e.kind; }
+    const minSerps = read >= 3 ? 2 : 1;
+    const ev = (c) => read <= 1 ? 'ranks #' + c.best_position + (c.keywords[0] ? ' for "' + c.keywords[0].replace(/ #\d+$/, '') + '"' : '') + ' (the only results page read)'
+      : 'ranks for ' + c.serps + ' of your ' + read + ' keywords (best #' + c.best_position + ')';
+    const ranked = [...cand.values()].sort((a, b) => b.score - a.score || b.serps - a.serps || a.best_position - b.best_position || a.domain.localeCompare(b.domain));
+    const too_few = ranked.filter(c => c.serps < minSerps).map(c => ({ domain: c.domain, serps: c.serps, why: 'seen on only ' + c.serps + ' of your ' + read + ' results pages' }));
+    const fromSerps = ranked.filter(c => c.serps >= minSerps);
+    // the owner's own list first: kept unless the address itself is a job board, a directory, an authority… (said, not silently dropped)
+    const declared = []; const declaredRefused = [];
+    for (const d0 of [...new Set(listOf(o.declared))]) {
+      const hk = kindOfHost(d0, own); if (hk === 'you') continue;
+      const d = hk === 'business' || hk === 'unknown' ? reg(d0) : d0;
+      if (hk !== 'business' && hk !== 'unknown') { declaredRefused.push({ domain: d, kind: hk, label: LABEL[hk], by: 'host', seen_in: 0, example: 'you named it as a competitor, but it is a ' + LABEL[hk] }); continue; }
+      if (declared.some(x => x.domain === d)) continue;
+      const c = cand.get(d);
+      declared.push({ domain: d, source: 'declared', serps: c ? c.serps : 0, of: read, score: c ? c.score : 0, best_position: c ? c.best_position : null,
+        keywords: c ? c.keywords : [], evidence: 'declared by you as a competitor' + (c ? '; ' + ev(c) : read ? '; not seen on the ' + read + ' results page(s) read' : '') });
     }
-    for (const { head, members } of built) {
-      members.sort((a, b) => b.shared_urls - a.shared_urls || (b.volume || 0) - (a.volume || 0));
-      clusters.push({ head_keyword: head.keyword, keyword_count: members.length + 1, urls_compared: head.urls.length,
-        min_shared_urls: need, top_n: depth, min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
-        total_volume: [head, ...members].reduce((s, m) => s + (num(m.volume) || 0), 0),
-        keywords: [{ keyword: head.keyword, volume: head.volume, shared_urls: head.urls.length, shared: [] }, ...members].slice(0, c.max_cluster_keywords) });
-    }
-    clusters.sort((a, b) => b.keyword_count - a.keyword_count || b.total_volume - a.total_volume);
-    // every compared keyword's own list, at the depth it was compared at, so a later step can test any pair by the same rule (A-10)
-    const urls_of = {}; for (const e of ranked) urls_of[e.keyword] = e.urls.slice();
-    return { clusters, urls_of, keywords_compared: ranked.length, compared_keywords: ranked.map(e => e.keyword), min_shared_urls: need, min_urls: c.min_urls, top_n: depth,
-      min_overlap_pct: depth && (num(c.min_overlap) || 0) > 0 ? Math.round(c.min_overlap * 100) : null,
-      clustered: clusters.reduce((n, x) => n + x.keyword_count, 0) };
+    const picked = [...declared, ...fromSerps.filter(c => !declared.some(x => x.domain === c.domain))
+      .map(c => ({ domain: c.domain, source: 'results', serps: c.serps, of: read, score: c.score, best_position: c.best_position, keywords: c.keywords, evidence: ev(c) }))].slice(0, Math.max(n, declared.length));
+    const excluded = [...declaredRefused, ...[...excl.values()].sort((a, b) => b.seen_in - a.seen_in || a.best_position - b.best_position || a.domain.localeCompare(b.domain))]
+      .map(({ kinds, ...e }) => e);
+    const exText = excluded.slice(0, 6).map(e => e.domain + ' (' + e.label + ')').join(', ');
+    const note = !read
+      ? (declared.length ? 'No results page was read on this run, so only the competitor(s) you declared are used: ' + declared.map(d => d.domain).join(', ') + '.'
+        : 'No results page was read on this run and you declared no competitor, so no competitor was used.')
+      : (declared.length ? declared.length + ' competitor(s) you declared, then ' : '')
+        + (read === 1 ? (picked.length > declared.length ? 'the businesses on Google\'s results page for "' + S(serps[0].keyword) + '"' : 'no other business on Google\'s results page for "' + S(serps[0].keyword) + '"')
+          + ' (one results page only, so this is a thin read)'
+          : picked.length > declared.length ? 'the businesses that rank for the most of your ' + read + ' keywords on the results pages this run read' : 'no other business ranked often enough on the ' + read + ' results pages read')
+        + (minSerps > 1 ? '; a business must rank for at least ' + minSerps + ' of them' : '')
+        + (exText ? '. Passed over: ' + exText : '') + '.';
+    return { picked, excluded: excluded.slice(0, 20), too_few: too_few.slice(0, 10), serps_read: read, min_serps: minSerps, note };
   };
-  // R40 (2026-10-16, re-rating 2026-10-15): ONE rule for which keywords may share a page, used by the ladder (Ladder Plan) and by
-  // discovery's content plan (Rank Keywords). Exec 610 compared the results pages of all 10 rung keywords, found no two sharing even 2 of
-  // their top 7, and still merged "openai consulting" into "ai consulting firm" because the AI's topic label said so. Now:
-  //   * Google answers it with the same pages as other keywords (a SERP cluster)  -> one page for the cluster ('shared results page');
-  //   * its results page was read and compared and shares with no one             -> its own page ('own results page');
-  //   * its results page could not be read or compared                           -> the AI's topic label + page type ('topic label').
-  // -> { key, by } ; `o` = { keyword, topic, page_type, serp_head (the cluster head, '' when it is not in a cluster), compared }
-  const pageGroup = (o) => { const x = o || {}; const kw = low(x.keyword);
-    if (S(x.serp_head)) return { key: 'serp|' + low(x.serp_head), by: 'shared results page' };
-    if (x.compared) return { key: 'kw|' + kw, by: 'own results page' };
-    return { key: 'topic|' + (low(x.topic) || kw) + '|' + S(x.page_type), by: 'topic label' }; };
-  // "one page can serve all three: 'erp software uae' also covers 'erp system uae' (4 of the same top-10 pages), ..."
-  const clusterText = (cl) => {
-    const c = cl || {}; const others = (c.keywords || []).slice(1);
-    if (!others.length) return '';
-    const depthTxt = c.top_n ? 'top ' + c.top_n : 'top-10';
-    return 'One page can target all ' + c.keyword_count + ': "' + c.head_keyword + '" shares '
-      + others.map(k => k.via ? k.shared_urls + ' of the ' + depthTxt + ' pages of "' + k.via + '" with "' + k.keyword + '" (' + (k.shared_with_head ?? 0) + ' with "' + c.head_keyword + '" itself)'
-        : k.shared_urls + ' of its ' + depthTxt + ' pages with "' + k.keyword + '"').join(', ')
-      + ' - Google answers these searches with the same pages, so a second page would only split the signals.';
-  };
-  const pageKindOf = (page_type) => OURS[S(page_type)] || '';   // F-A1 / A-11: the kind of page a plan's page type is, in serpPageTypes' words
-  return { CFG, CLICK_LOSS, gscSeeds, calibrate, serpClusters, pageGroup, pageKindOf, clusterText, featureLoss, lossApplied, lossText, serpPageTypes, shapeOf, competitorClass, liveChecks, ladderChecks, checkCost, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
+  return { kindOf, kindOfHost, kindOfResult, govSignal, select, weight, host, reg, LABEL };
 })();
 // From the primary-seed SERP, pick the 3 closest competitors and fetch the keywords they rank for (top 20 positions).
 // Always emits at least one request so the chain never stalls.
@@ -426,44 +191,28 @@ const KWI = (() => {
 const base = $('Seed List').first().json;
 const reqs = $('Research Requests').all().map(i => i.json);
 const res = $input.all().map(i => i.json);
-const BIG = ['microsoft.com', 'google.com', 'youtube.com', 'linkedin.com', 'facebook.com', 'wikipedia.org', 'amazon.com', 'apple.com', 'reddit.com', 'quora.com',
-  'medium.com', 'instagram.com', 'twitter.com', 'x.com', 'pinterest.com', 'tiktok.com', 'github.com', 'indeed.com', 'glassdoor.com', 'forbes.com', 'clutch.co', 'g2.com',
-  'goodfirms.co', 'capterra.com', 'trustpilot.com', 'crunchbase.com', 'yelp.com', 'upwork.com', 'fiverr.com', 'sortlist.com', 'designrush.com', 'gartner.com', 'techtarget.com',
-  'investopedia.com', 'hubspot.com', 'salesforce.com', 'oracle.com', 'sap.com', 'shopify.com', 'coursera.org', 'udemy.com'];
 const ours = String(base.domain || '').toLowerCase().replace(/^www\./, '');
 const clean = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
-const isBig = (x) => BIG.some(b => x === b || x.endsWith('.' + b)) || /\.(gov|edu)(\.|$)/.test(x);
-const isOurs = (dm) => !dm || dm === ours || (ours && dm.endsWith('.' + ours));
-const serpIdx = reqs.findIndex(r => r.kind === 'serp');
-const serpKw = serpIdx >= 0 ? String((((reqs[serpIdx] || {}).body || [])[0] || {}).keyword || base.primary_seed || '') : '';
-const items = serpIdx >= 0 ? (res[serpIdx]?.tasks?.[0]?.result?.[0]?.items || []) : [];
-// prefer domains that clearly serve the client's country (ccTLD or country/city words in the result), then fill with the rest
+// KW-COMP (2026-10-21, RV-6): every results page this run bought (kind 'serp'; one today) goes through the shared competitor kit (CMP):
+// a domain is a competitor only if it is a business (no job board, directory, marketplace, review or media site, authority, search engine,
+// social network, Q&A site, help / docs subdomain, course provider or list of companies) and it ranks on those pages, weighted by position;
+// with three or more pages it must rank on at least two. The owner's declared competitors stay first. Nothing new is bought.
+const serpReqs = reqs.map((r, i) => ({ r, i })).filter(x => x.r.kind === 'serp');
+const serpKw = serpReqs.length ? String((((serpReqs[0].r || {}).body || [])[0] || {}).keyword || base.primary_seed || '') : '';
+const serps = serpReqs.map(x => ({ keyword: String((((x.r || {}).body || [])[0] || {}).keyword || ''), items: (res[x.i]?.tasks?.[0]?.result?.[0]?.items || []) }));
+// a domain that clearly serves the client's country (ccTLD or country / city words in the result) counts a quarter more
 const iso = String(base.country_iso || '').toLowerCase();
 const COUNTRY_WORDS = { ae: ['uae', 'dubai', 'abu dhabi', 'sharjah', 'emirates'], sa: ['saudi', 'riyadh', 'jeddah', 'ksa'], pk: ['pakistan', 'karachi', 'lahore', 'islamabad'], in: ['india', 'mumbai', 'delhi', 'bangalore', 'bengaluru'], gb: ['uk', 'united kingdom', 'london', 'british'], au: ['australia', 'sydney', 'melbourne'], ca: ['canada', 'toronto', 'vancouver'], sg: ['singapore'], za: ['south africa', 'johannesburg', 'cape town'], de: ['deutschland', 'germany', 'berlin', 'münchen'], fr: ['france', 'paris'], es: ['españa', 'spain', 'madrid'], it: ['italia', 'italy', 'milano'], nl: ['nederland', 'netherlands', 'amsterdam'], br: ['brasil', 'brazil', 'são paulo'], mx: ['méxico', 'mexico'], nz: ['new zealand', 'auckland'], ie: ['ireland', 'dublin'], us: [] };
 const words = COUNTRY_WORDS[iso] || [];
 const isLocal = (it, dm) => (iso && iso !== 'us' && dm.endsWith('.' + iso)) || words.some(w => ((it.title || '') + ' ' + (it.description || '') + ' ' + (it.url || '')).toLowerCase().includes(w));
-// 1. the competitors the owner declared (Track my site / Site Admin `monitors`, carried by the site model)
+// 1. the competitors the owner declared (Track my site / Site Admin `monitors`, carried by the site model), up to two, then the businesses
 const declaredRaw = [...(Array.isArray(base.competitors) ? base.competitors : String(base.competitors || '').split(/[,;\n]+/)),
   ...(((base.site_model || {}).competitors) || [])].map(clean).filter(Boolean);
-const declared = [...new Set(declaredRaw)].filter(dm => !isOurs(dm) && !isBig(dm) && !KWI.competitorClass(dm, 'https://' + dm + '/', '')).slice(0, 2);
-// 2. the businesses of the results page, the rest passed over with their class
-const seen = new Set(declared); const local = [], other = []; const skipped = [];
-for (const it of items) {
-  if (it.type !== 'organic') continue;
-  const dm = clean(it.domain);
-  if (isOurs(dm) || seen.has(dm)) continue;
-  seen.add(dm);
-  const cls = KWI.competitorClass(dm, it.url, it.title) || (isBig(dm) ? 'a household name / platform' : '');
-  if (cls) { skipped.push({ domain: dm, position: it.rank_group || it.rank_absolute || null, title: String(it.title || '').slice(0, 90), why: cls }); continue; }
-  (isLocal(it, dm) ? local : other).push({ domain: dm, position: it.rank_group || it.rank_absolute || null });
-}
-const fromSerp = [...local, ...other].slice(0, Math.max(0, 3 - declared.length));
-const picked = [...declared.map(dm => ({ domain: dm, how: 'declared by you as a competitor' })),
-  ...fromSerp.map(x => ({ domain: x.domain, how: 'ranks' + (x.position ? ' #' + x.position : '') + ' for "' + serpKw + '" and sells, not lists, jobs or news' }))];
+const sel = CMP.select({ serps, declared: [...new Set(declaredRaw)].slice(0, 2), own_domain: ours, n: 3, boost: (it, dm) => isLocal(it, dm) ? 1.25 : 1 });
+const picked = sel.picked.slice(0, 3).map(p => ({ domain: p.domain, how: p.evidence, source: p.source, serps: p.serps, of: p.of, keywords: p.keywords }));
+const skipped = sel.excluded.map(e => ({ domain: e.domain, title: e.example, why: e.label, kind: e.kind, seen_in: e.seen_in }));
 const domains = picked.map(p => p.domain);
-const competitor_basis = { picked, skipped: skipped.slice(0, 12), serp_keyword: serpKw,
-  note: (declared.length ? declared.length + ' competitor(s) you declared' + (fromSerp.length ? ', then ' : '') : '') + (fromSerp.length ? 'the first business' + (fromSerp.length > 1 ? 'es' : '') + ' on Google\'s results for "' + serpKw + '"' : '')
-    + (skipped.length ? ' (passed over on that page: ' + skipped.slice(0, 5).map(s => s.domain + ' — ' + s.why).join(', ') + ')' : '') };
+const competitor_basis = { picked, skipped: skipped.slice(0, 12), too_few: sel.too_few, serp_keyword: serpKw, serps_read: sel.serps_read, note: sel.note };
 const L = 'https://api.dataforseo.com/v3/dataforseo_labs/google/';
 const loc = base.location_code, lang = base.language_code || 'en';
 const out = domains.map(dm => ({ kind: 'competitor', label: 'keywords ' + dm + ' ranks for', domain: dm, endpoint: L + 'ranked_keywords/live',

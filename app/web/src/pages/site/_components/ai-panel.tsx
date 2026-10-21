@@ -270,7 +270,7 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
         <PickFilter label="Result on" value={engine} onChange={setEngine} options={engines} format={engineLabel} allLabel="Any engine" />
       </div>
       {editing && <EditQuestion p={editing} onClose={() => setEditing(null)} onSave={(body, msg) => { send(body, msg); setEditing(null); }} />}
-      <DataTable rows={rows} columns={columns} rowKey={(p) => p.promptId} dense pageSize={25} searchable searchPlaceholder="Search the questions..." searchText={(p) => [p.prompt, p.cluster, p.persona, p.market].join(' ')}
+      <DataTable rows={rows} columns={columns} rowKey={(p) => p.promptId} dense pageSize={25} searchable searchPlaceholder="Search the questions" searchText={(p) => [p.prompt, p.cluster, p.persona, p.market].join(' ')}
         empty={status === 'refused' ? 'No question was refused: every question the engine wrote passed the keyword rule.' : 'No questions match these filters.'} />
       {status === 'refused' && refused.length > 0 && (
         <Callout tone="info" title="Why questions are refused">

@@ -9,7 +9,7 @@ type P = { orgId: string; siteId: string };
 
 /**
  * Choosing the main keyword of a new keyword ladder (PIPELINE_FEATURE_SPEC.md §5): the keyword check (members; paid, counted in the
- * budget, 30 a day per company, the same keyword of the last 7 days free) and the recommended keywords (everyone; free). Verified
+ * budget, 30 a day per company, the same keyword of the last few hours, same rules and context, free) and the recommended keywords (everyone; free). Verified
  * websites only.
  */
 export async function keywordRoutes(app: FastifyInstance) {

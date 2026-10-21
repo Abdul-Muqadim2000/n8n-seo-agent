@@ -38,6 +38,40 @@
   "refused_values": {
    "status": "refused"
   },
+  "release_stale": {
+   "after": [
+    "Settle Run Ledger (Assess)"
+   ],
+   "conditions": [
+    [
+     "mode",
+     "eq",
+     "assess"
+    ],
+    [
+     "status",
+     "eq",
+     "reserved"
+    ],
+    [
+     "created_at",
+     "lt",
+     "={{ new Date(Date.now() - 120000).toISOString() }}"
+    ]
+   ],
+   "node": "Release Stale Rows (Assess)",
+   "values": {
+    "ai_usd": "={{ 0 }}",
+    "cost_basis": "released: the keyword check stopped before it answered (over its time limit), so no cost was reported; DataForSEO $0.0400 ESTIMATED (the reservation), Claude not called",
+    "dfs_source": "estimate",
+    "dfs_usd": "={{ 0.04 }}",
+    "estimated_usd": "={{ 0.04 }}",
+    "measured_usd": "={{ 0 }}",
+    "settled_at": "={{ new Date().toISOString() }}",
+    "settled_usd": "={{ 0 }}",
+    "status": "stale"
+   }
+  },
   "settle_conditions": [
    [
     "run_id",
@@ -65,7 +99,14 @@
    "settled_usd": "={{ $json.settled_usd }}",
    "status": "done"
   },
-  "settle_via": "Ledger Settle (Assess)"
+  "settle_via": "Ledger Settle (Assess)",
+  "time_budget": {
+   "first_timeout_ms": 12000,
+   "read_budget_ms": 24000,
+   "retry_timeout_ms": 8000,
+   "retry_wait_s": 1,
+   "workflow_timeout_s": 45
+  }
  },
  "heavy_audit_pages": 100,
  "ladder_release": {
@@ -346,7 +387,7 @@
      "node": "AI Brief",
      "ref": "$('AI Brief Input').item.json",
      "streaming": false,
-     "template_chars": 1636
+     "template_chars": 1857
     },
     {
      "after": [
@@ -1104,7 +1145,7 @@
      "node": "Site Brief",
      "ref": "$('Brief Input').item.json",
      "streaming": false,
-     "template_chars": 3143
+     "template_chars": 3590
     }
    ],
    "ai_nodes": [

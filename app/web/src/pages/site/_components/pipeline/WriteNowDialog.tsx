@@ -76,6 +76,19 @@ export function writeNowRequest(item: WriteNowItem, site: Pick<Site, 'id' | 'dom
 }
 
 /**
+ * D6 (pre-launch run 2026-10-21): "Write it now" on a page of a keyword does not add a page to the week, it moves one. The engine counts a
+ * ladder page written since the last weekly run against the next run's pages a week (Cadence_Plan.js R-K7, unchanged), so that run writes
+ * one page fewer: in the run, the keyword's next page waited a week and nothing said so.
+ */
+export function weeklyTradeOff(pagesPerWeek: number | null | undefined): string {
+  const n = Number(pagesPerWeek) || 0;
+  if (n <= 0) return 'Your weekly pages are off, so this is one page on top: nothing else moves.';
+  return n === 1
+    ? 'This uses your next weekly run\'s page (1 page a week): that run writes no other page, so the next page of your keyword moves a week later.'
+    : `This uses one of your next weekly run's ${n} pages a week: that run writes ${n - 1} instead of ${n}.`;
+}
+
+/**
  * Starts one content run for this website. The run marks the topic (or the ladder page) as written, so the weekly run moves on to
  * the next one instead of writing it twice.
  */
@@ -173,6 +186,8 @@ export function WriteNowDialog({ item, onClose, note }: { item: WriteNowItem; on
           </div>
         )}
       </dl>
+      {/* D6 (pre-launch run 2026-10-21): the trade-off, said before the click (the engine's budget rule is unchanged) */}
+      {item.ladder && <p className="mt-3 text-[13px] leading-snug text-ink-3">{weeklyTradeOff(site.blogsPerWeek)}</p>}
       {note && <p className="mt-3 text-[13px] leading-snug text-ink-3">{note}</p>}
     </Dialog>
   );

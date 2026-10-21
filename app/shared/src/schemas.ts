@@ -44,6 +44,23 @@ const optionalSiteId = siteId.nullable().default(null);
 const emailCopy = z.boolean().default(true);
 const stringList = (max: number, itemMax = 120) => z.array(z.string().trim().min(1).max(itemMax)).max(max).default([]);
 
+/**
+ * A PATCH body built from a create schema: every field optional and NO default applied when it is left out. Zod 4 applies an inner
+ * `.default()` even to an absent key after `.partial()` (and for `.default(x).optional()`), so a partial PATCH reset every field it
+ * did not send to its default (D1, paid pre-launch run 2026-10-21: the onboarding Tracking step wiped the business facts the client had
+ * just typed). Each field keeps its own validation (trim, max lengths, refinements); only the outer default / optional wrappers go.
+ */
+export function patchOf<T extends z.ZodRawShape>(o: z.ZodObject<T>) {
+  const shape = Object.fromEntries(
+    Object.entries(o.shape).map(([k, s]) => {
+      let t = s as z.ZodType;
+      while (t instanceof z.ZodDefault || t instanceof z.ZodOptional) t = (t as z.ZodDefault<z.ZodType>).unwrap() as z.ZodType;
+      return [k, t.optional()];
+    }),
+  );
+  return z.object(shape) as unknown as z.ZodObject<{ [K in keyof T]: z.ZodOptional<T[K]> }>;
+}
+
 // ---------- auth ----------
 export const emailField = z.string().trim().toLowerCase().email('Enter a valid e-mail address').max(200);
 export const passwordField = z
@@ -71,7 +88,7 @@ export const createOrgSchema = z.object({
   size: z.union([z.literal(''), z.enum(COMPANY_SIZES)]).default(''),
   website: opt(200),
 });
-export const updateOrgSchema = createOrgSchema.partial();
+export const updateOrgSchema = patchOf(createOrgSchema);
 // G5: client roles are accepted here and checked against the company's kind by the server (inviteRoleProblem)
 export const inviteSchema = z.object({ email: emailField, role: z.enum(['admin', 'member', 'viewer', 'client_approver', 'client_viewer']).default('member') });
 export const updateMemberSchema = z.object({ role: z.enum(['admin', 'member', 'viewer', 'client_approver', 'client_viewer']) });
@@ -127,9 +144,10 @@ export const siteBusinessSchema = z.object({
     .optional(),
 });
 export const createSiteSchema = siteBusinessSchema.extend({ domain: domainField });
-export const updateSiteSchema = siteBusinessSchema.partial().extend({
+// D1: patchOf, not .partial(): a field left out of the body is left out of the update (the GA4 picker sends its ID alone)
+export const updateSiteSchema = patchOf(siteBusinessSchema).extend({
   ga4PropertyId: z.string().trim().regex(/^\d{0,16}$/, 'Digits only').optional(),
-  keywords: stringList(20, 100).optional(),
+  keywords: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
 });
 export const verifySiteSchema = z.object({ method: z.enum(['search_console', 'dns', 'meta']) });
 
@@ -261,8 +279,9 @@ export const ladderInput = z.object({
   /** the mode the ladder starts in: a Manual ladder writes nothing at start (its pages wait for an OK); none = the website's default */
   ladderMode: z.enum(['auto', 'manual'], { message: 'Choose Auto or Manual' }).optional(),
   /** P1 (2026-10-20): set by the SERVER only (any value a caller sends is replaced): the engine will hold this ladder's first page because
-   * the website's author profile or business facts are missing, so the run is quoted for the plan alone */
-  pagesHeld: z.enum(['profile']).optional(),
+   * the website's author profile or business facts are missing, so the run is quoted for the plan alone. KW-APP D8 (2026-10-21): 'manual'
+   * when the ladder starts Manual (asked for, or the website's default): the engine writes nothing at start, so nothing is quoted for pages */
+  pagesHeld: z.enum(['profile', 'manual']).optional(),
   emailCopy,
 });
 
@@ -506,8 +525,9 @@ export const adminActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('unpublish'), keyword: keywordField }),
   z.object({
     action: z.literal('monitors'),
-    monitors: monitorSettingsSchema.partial(),
-    competitors: domainList(3).optional(),
+    // D1: patchOf: a setting left out stays as it is (with .partial() zod 4 sent every default, and no competitors cleared the engine's)
+    monitors: patchOf(monitorSettingsSchema),
+    competitors: z.array(domainField).max(3, 'Up to 3 domains').optional(),
   }),
   z.object({
     action: z.literal('prospect'),
@@ -654,7 +674,8 @@ export const mailboxSchema = z.object({
   dailyFirstMax: z.number().int().min(1).max(30).default(20), dailyMax: z.number().int().min(1).max(50).default(50),
 });
 export type MailboxInput = z.output<typeof mailboxSchema>;
-export const mailboxPatchSchema = mailboxSchema.partial().extend({ password: z.string().min(4).max(400).optional() });
+// D1: patchOf: the settings form sends only what changed; a field left out keeps its stored value (no port / window / limit default)
+export const mailboxPatchSchema = patchOf(mailboxSchema).extend({ password: z.string().min(4).max(400).optional() });
 /** L4: start the OAuth flow for one provider (the settings a password mailbox asks for are filled in afterwards) */
 export const mailboxOauthStartSchema = z.object({ provider: z.enum(['gmail_oauth', 'ms_graph']), label: z.string().trim().max(60).default('') });
 export const linkSettingsSchema = z.object({ mode: z.enum(['approve', 'auto']).optional(), mailboxId: z.string().uuid().nullable().optional(), autoDailyMax: z.number().int().min(1).max(30).optional() });

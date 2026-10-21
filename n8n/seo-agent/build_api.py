@@ -9,7 +9,7 @@ from ladder_common import freeze_ids   # B-F5 (2026-10-15): one id rule, so an u
 import env_settings as _env   # B-F5: a build with no n8n/.env must refuse, not bake its fallbacks
 _env.require_settings('build_api.py')
 from ladder_common import (CACHE_TABLE, CACHE_COLS, DT_TYPE, DT_VERSION,
-                           dt_create_params, dt_insert_params, dt_get_all_where_params, dt_delete_where_params)
+                           dt_create_params, dt_insert_params, dt_get_all_where_params, dt_delete_where_params, dt_update_where_params)
 from ladder_common import LADDER_TABLE as _LADDER_TABLE, LOG_TABLE as _LOG_TABLE   # R50 (A14): the Keyword Check names the ladder / page that already holds the search
 from ladder_common import PAGES_TABLE as _PAGES_TABLE, LADDER_SETTINGS_TABLE as _LSET_TABLE   # A-1 / A-2 (2026-10-17): the page inventory and the ladder's own status
 from ladder_common import SITES_TABLE as _SITES_TABLE, MONITORS_TABLE as _MON_TABLE   # keyword-first R-K4 (2026-10-19): the site's competitors and declared services for the fit gate
@@ -324,6 +324,8 @@ def _assess_code(f):
     s = _rd5('code/' + f).replace('/*__REACH__*/', _rd5('code/_reach.js').rstrip('\n'))
     s = s.replace('/*__FIT_GATE__*/', _rd5('code/_fit_gate.js').rstrip('\n'))   # R50 (A14): the stored ladder rows it names pass the same gate every other read path uses
     s = s.replace('/*__SITE_MODEL__*/', _rd5('code/_site_model.js').rstrip('\n')).replace('/*__OWN_COVER__*/', _rd5('code/_own_cover.js').rstrip('\n'))   # A-1 (2026-10-17): the page inventory match, the same as the main workflow's
+    s = s.replace('/*__SERP_CACHE__*/', _rd5('code/_serp_cache.js').rstrip('\n'))   # KW-SERP (RV-12, 2026-10-21): one results-page reading per search and day, shared by every path
+    s = s.replace('/*__KW_INPUTS__*/', _rd5('code/_kw_inputs.js').rstrip('\n'))   # E-SERP (2026-10-21): what kind of page Google ranks (KWI.serpPageTypes), the research's and the ladder's rule
     s = s.replace('/*__COUNTRIES__*/', '// ---- countries: copied from the main workflow\'s Normalize Input by build_api.py (DataForSEO location code = 2000 + ISO numeric) ----' + _m_c.group(0))
     s = s.replace('/*__DOMAIN_RULES__*/', '// ---- domain rules: copied from Normalize Input (public hostnames only) ----' + _m_d.group(0) + _m_o.group(0))
     assert '/*__' not in s, f + ': placeholder left'
@@ -373,10 +375,19 @@ _AN = [
        # R81 part 2 (2026-10-16, re-rating C-5): Assess_Ledger_Settle.js stamped `settled_at` and `dfs_source` and this update dropped them,
        # so every Keyword Check row stayed `done` with no `settled_at` and every other run's settle counted it as in flight for ever
        'settled_at': '={{ $json.settled_at }}', 'dfs_source': '={{ $json.dfs_source }}'}), [2740, -400], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
+  # KWL-LAD D5 (live run 2026-10-21, exec 119): a Keyword Check stopped by its 45 s limit never reaches its settle, so its row stayed `reserved`
+  # with dfs 0 although DataForSEO had answered (~$0.04). After every settle, the check releases any EARLIER assess row still reserved two
+  # minutes after it was made: status `stale` (release_stale_runs.py's word), the reservation's DataForSEO estimate recorded as estimated.
+  _an('Release Stale Rows (Assess)', DT_TYPE, DT_VERSION, dt_update_where_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS,
+      [('mode', 'eq', 'assess'), ('status', 'eq', 'reserved'), ('created_at', 'lt', '={{ new Date(Date.now() - 120000).toISOString() }}')],
+      {'status': 'stale', 'settled_usd': '={{ 0 }}', 'ai_usd': '={{ 0 }}', 'dfs_usd': '={{ 0.04 }}', 'measured_usd': '={{ 0 }}', 'estimated_usd': '={{ 0.04 }}',
+       'settled_at': '={{ new Date().toISOString() }}', 'dfs_source': 'estimate',
+       'cost_basis': 'released: the keyword check stopped before it answered (over its time limit), so no cost was reported; DataForSEO $0.0400 ESTIMATED (the reservation), Claude not called'}),
+      [2960, -400], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
   _arespond('Respond Assess Bad Request', "={{ JSON.stringify({ ok: false, error: $json.error, errors: $json.errors }) }}", 400, [660, 320]),
   _an('Ensure Cache Table (Assess)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), [660, -100], onError='continueRegularOutput', executeOnce=True),
   # keyword-first R-K4 (2026-10-19): + the brand names AI uses for other companies (ai_brands:<site_id>), for the deterministic fit gate
-  _an('Load Assess Cache', DT_TYPE, DT_VERSION, dt_get_any_params(CACHE_TABLE, [('key', "={{ 'reach:' + $('Assess Validate').first().json.site_id }}"), ('key', "={{ 'desc:' + $('Assess Validate').first().json.domain }}"), ('key', "={{ 'ai_brands:' + $('Assess Validate').first().json.site_id }}")]), [880, -100], **_LOAD),
+  _an('Load Assess Cache', DT_TYPE, DT_VERSION, dt_get_any_params(CACHE_TABLE, [('key', "={{ 'reach:' + $('Assess Validate').first().json.site_id }}"), ('key', "={{ 'desc:' + $('Assess Validate').first().json.domain }}"), ('key', "={{ 'ai_brands:' + $('Assess Validate').first().json.site_id }}"), ('key', "={{ $('Assess Validate').first().json.serp_cache_key || 'serp:none' }}")]), [880, -100], **_LOAD),
   # R50 (2026-10-16, A14): the answer names the ladder / page that already holds the search. Assess_Response.js reads these two nodes by name.
   _an('Load Ladders (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LADDER_TABLE, [('domain', 'eq', "={{ $('Assess Validate').first().json.domain }}")]), [990, -100], **_LOAD),
   _an('Load Content Log (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LOG_TABLE, [('domain', 'eq', "={{ $('Assess Validate').first().json.domain }}")]), [1045, -100], **_LOAD),
@@ -401,10 +412,10 @@ _AN = [
   _an('Keyword Fit (Text)', '@n8n/n8n-nodes-langchain.agent', 3.1, {'promptType': 'define', 'text': '=' + _rd5('prompts/keyword_fit.txt').replace(_FIT_RETURN, _FIT_PLAIN), 'options': {}}, [2140, -380], retryOnFail=True, maxTries=2, waitBetweenTries=1000, onError='continueRegularOutput'),
   _acode('Assess Response', 'Assess_Response.js', [2300, -200]),
   _arespond('Respond Assess', "={{ JSON.stringify($json.body) }}", 200, [2520, -200]),
-  _acode('Reach Row (Assess)', "// After the answer: a newly measured reach goes to seo_cache ('reach:<site_id>', 30 days) for the ladder and discovery (exact columns).\nconst r = $('Assess Result').first().json.cache_row;\nreturn [{ json: r || { skip: true } }];", [2740, -200]),
+  _acode('Reach Row (Assess)', "// After the answer: a newly measured reach goes to seo_cache ('reach:<site_id>', 30 days) for the ladder and discovery (exact columns),\n// and (KW-SERP, 2026-10-21) a fresh results-page reading ('serp:<keyword>|<location>|<language>|<device>', today) for every other path.\nconst a = $('Assess Result').first().json;\nconst rows = [a.cache_row, a.serp_cache_row].filter(Boolean);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", [2740, -200]),
   _aif('New Reach (Assess)?', '{{ !$json.skip }}', [2960, -200]),
   _an('Save Reach (Assess)', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [3180, -200], onError='continueRegularOutput'),
-  _an('Note', 'n8n-nodes-base.stickyNote', 1, {'content': "## SEO Agent — Keyword Check (v4.8)\n`POST /webhook/seo-keyword-assess` (header auth: credential **SEO API Key**, header `X-API-Key`), synchronous (~5-15 s). The web app's keyword flow (PIPELINE_FEATURE_SPEC §5.2) checks one keyword before a ladder starts.\n\nBody: `{ keyword (2-100 chars), country (name or ISO-2), domain, business?, services? (array), existing_keywords? (array) }`.\n\nDataForSEO Labs in parallel: keyword overview (volume, difficulty, intent, CPC), the site's position for the keyword, and the site's **reach** (stored 30 days in `seo_cache` as `reach:<site_id>`, shared with the ladder and discovery; else measured: top-10 keywords + size). The deterministic **fit gate** first (own brand, a declared competitor or a brand AI names, government, navigational, off topic against the site's services, declared ones included): a refusal makes the fit 0 with its reason (`fit_gate`, `fit_source: gate`), whatever the model says (keyword-first, 2026-10-19). One **Claude Haiku** call: topic fit 0/1/2, navigational / other brand, up to 3 alternatives. Business context: the request, else the stored homepage description.\n\n**200** `{ keyword, country, volume, kd, intent, cpc, position, reach, difficulty_for_you, plan_type, months, fit, navigational, alternatives, cost_usd, label, stretch, position_url, reach_info, business_source, warnings }` · **400** `{ ok:false, error, errors: {field: message} }` · **429** daily limit (40 per caller — the app's `X-Forwarded-For: app:<company>` — and 400 in total) · **502** DataForSEO failed.\nCost: ~$0.02 with a stored reach, ~$0.05 without.\n\n**v4.14 (D1):** the daily limits are counted from `seo_run_ledger` (one row reserved per request before the count; rows with a lower id count; refused rows marked, settled at the end), so parallel requests cannot slip past them.", 'height': 460, 'width': 760, 'color': 4}, [-40, -580]),
+  _an('Note', 'n8n-nodes-base.stickyNote', 1, {'content': "## SEO Agent — Keyword Check (v4.8)\n`POST /webhook/seo-keyword-assess` (header auth: credential **SEO API Key**, header `X-API-Key`), synchronous (~5-15 s). The web app's keyword flow (PIPELINE_FEATURE_SPEC §5.2) checks one keyword before a ladder starts.\n\nBody: `{ keyword (2-100 chars), country (name or ISO-2), domain, business?, services? (array), existing_keywords? (array) }`.\n\nDataForSEO Labs in parallel: keyword overview (volume, difficulty, intent, CPC), the site's position for the keyword, and the site's **reach** (stored 30 days in `seo_cache` as `reach:<site_id>`, shared with the ladder and discovery; else measured: top-10 keywords + size). The deterministic **fit gate** first (own brand, a declared competitor or a brand AI names, government, navigational, off topic against the site's services, declared ones included): a refusal makes the fit 0 with its reason (`fit_gate`, `fit_source: gate`), whatever the model says (keyword-first, 2026-10-19). One **Claude Haiku** call: topic fit 0/1/2, navigational / other brand, up to 3 alternatives. Business context: the request, else the stored homepage description.\n\n**200** `{ keyword, country, volume, kd, intent, cpc, position, reach, difficulty_for_you, plan_type, months, fit, navigational, alternatives, cost_usd, label, stretch, position_url, reach_info, business_source, warnings }` · **400** `{ ok:false, error, errors: {field: message} }` · **429** daily limit (40 per caller — the app's `X-Forwarded-For: app:<company>` — and 400 in total) · **502** DataForSEO failed.\n**E-SERP (2026-10-21):** one Google results page for the keyword (organic live/advanced, depth 10, the site's location and language, ~$0.002, through the in-200 retry gate): the career rule (job boards, courses, salary questions) and what kind of page Google ranks, the same evidence the ladder head reads; an unread page is said, never read as no demand.\nCost: ~$0.022 with a stored reach, ~$0.052 without.\n\n**v4.14 (D1):** the daily limits are counted from `seo_run_ledger` (one row reserved per request before the count; rows with a lower id count; refused rows marked, settled at the end), so parallel requests cannot slip past them.", 'height': 460, 'width': 760, 'color': 4}, [-40, -580]),
 ]
 _AC = {}
 def _alink(a, b, out=0):
@@ -415,7 +426,7 @@ for _a, _b in [('Assess Webhook', 'Assess Validate'), ('Assess Validate', 'Asses
                ('Run Assess Requests', 'Assess Result'), ('Assess Result', 'DataForSEO OK?'), ('Keyword Fit', 'Fit Parsed?'), ('Keyword Fit (Text)', 'Assess Response'), ('Assess Response', 'Respond Assess'), ('Respond Assess', 'Reach Row (Assess)'), ('Reach Row (Assess)', 'New Reach (Assess)?'),
                ('Ensure Run Ledger (Assess)', 'Run Ledger Row (Assess)'), ('Run Ledger Row (Assess)', 'Reserve Run Ledger (Assess)'), ('Reserve Run Ledger (Assess)', 'Load Run Ledger (Assess)'), ('Load Run Ledger (Assess)', 'Assess Limit'),
                ('Assess Limit', 'Assess Limited?'), ('Respond Assess Limited', 'Mark Run Refused (Assess)'),
-               ('Respond Assess', 'Ledger Settle (Assess)'), ('Ledger Settle (Assess)', 'Settle Run Ledger (Assess)')]:
+               ('Respond Assess', 'Ledger Settle (Assess)'), ('Ledger Settle (Assess)', 'Settle Run Ledger (Assess)'), ('Settle Run Ledger (Assess)', 'Release Stale Rows (Assess)')]:
     _alink(_a, _b)
 _alink('Assess Valid?', 'Ensure Run Ledger (Assess)', 0); _alink('Assess Valid?', 'Respond Assess Bad Request', 1)
 _alink('Assess Limited?', 'Respond Assess Limited', 0); _alink('Assess Limited?', 'Ensure Cache Table (Assess)', 1)
@@ -442,6 +453,25 @@ _gk10 = dfs_gate.splice(kwf, 'Run Assess Requests', os.path.join(_here, 'v5'),
 retry_lint.record_gate('SEO Agent — Keyword Check', _gk10['chain'])
 # R28: the price the caller is told is both attempts, each task counted once by its own id — the merged list alone would miss a
 # first attempt that was billed and then replaced (a task answering 20000 with an empty result did the work).
+# KWL-LAD D5 (live run 2026-10-21, execs 119 / 120): the SERP read with the AI Overview timed out at 15 s, the gate waited 5 s and re-sent it
+# with another 15 s, and with Claude after it the check passed the app's 45 s and was cancelled. The synchronous check now has a time budget:
+# the first attempt may take 12 s, the gate waits 1 s, the second attempt may take 8 s, and it is sent only when it can still end within
+# ASSESS_READ_BUDGET_MS of the first request (Assess Requests stamps `sent_at`); otherwise the page is "not read in time" and judged without.
+ASSESS_FIRST_TIMEOUT_MS, ASSESS_RETRY_TIMEOUT_MS, ASSESS_RETRY_WAIT_S, ASSESS_READ_BUDGET_MS = 12000, 8000, 1, 24000
+_bn10 = {n['name']: n for n in _AN}
+_bn10['Run Assess Requests']['parameters']['options']['timeout'] = ASSESS_FIRST_TIMEOUT_MS
+_bn10['Run Assess Requests (Retry)']['parameters']['options']['timeout'] = ASSESS_RETRY_TIMEOUT_MS
+_bn10['Wait Before Run Assess Requests Retry']['parameters']['amount'] = ASSESS_RETRY_WAIT_S
+_pl10 = _bn10['Run Assess Requests Retry Plan']['parameters']
+_old_pl10 = "const p = RT.plan(live, answers, { max: 24 });"
+assert _pl10['jsCode'].count(_old_pl10) == 1, 'D5: the Keyword Check retry plan changed shape'
+_pl10['jsCode'] = _pl10['jsCode'].replace(_old_pl10,
+    "// KWL-LAD D5: a second attempt only when it can still end inside the check's time budget (the caller waits at most 45 s)\n"
+    "const __t0 = Number((live[0] || {}).sent_at) || 0;\n"
+    "const __left = __t0 ? " + str(ASSESS_READ_BUDGET_MS) + " - (Date.now() - __t0) : " + str(ASSESS_READ_BUDGET_MS) + ";\n"
+    "const __fits = __left >= " + str(ASSESS_RETRY_WAIT_S * 1000 + ASSESS_RETRY_TIMEOUT_MS) + ";\n"
+    "if (!__fits) { const __f = RT.failures(answers, {}); if (__f.length) return [{ json: { skip: true, is_retry: false, failed: __f.length, reasons: __f.map(x => x.why).slice(0, 5), out_of_time: true, reason: 'not read in time: no time left for a second attempt' } }]; }\n"
+    "const p = RT.plan(live, answers, { max: 24 });")
 _ar10 = next(n for n in _AN if n['name'] == 'Assess Result')
 _old10 = "const dfs_cost = +res.reduce((s, x) => s + (x && Array.isArray(x.tasks) ? x.tasks.reduce((a, t) => a + (Number(t && t.cost) || 0), 0) : 0), 0).toFixed(4);"
 assert _ar10['parameters']['jsCode'].count(_old10) == 1, 'B-A10: Assess Result no longer prices the run where it did'
@@ -454,6 +484,11 @@ assert '__dfs' in _ar10['parameters']['jsCode'], 'B-A10: the keyword check does 
 retry_lint.check_in200(kwf)
 url_lint.check(kwf)   # D15: no node builds a site URL by hand (url_lint.py)
 retry_lint.check(kwf)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
+# N3 (2026-10-22, exec 145): n8n re-ran the whole retry node 3 x 8 s + 2 x 5 s = 34 s when its first item timed out, so the check
+# passed its 45 s limit. Both reads now carry the per-item pattern (no node-level retry), so the worst case is the budget above.
+_n3 = [_bn10['Run Assess Requests'], _bn10['Run Assess Requests (Retry)']]
+assert all(retry_lint.paid_multi(n) and not n.get('retryOnFail') for n in _n3), 'N3: the Keyword Check reads must not retry as whole nodes'
+assert ASSESS_FIRST_TIMEOUT_MS + ASSESS_RETRY_WAIT_S * 1000 + ASSESS_RETRY_TIMEOUT_MS <= ASSESS_READ_BUDGET_MS, 'N3: the reads no longer fit their budget'
 json.dump([freeze_ids(kwf)], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Keyword_Check.json'), 'w'), indent=2, ensure_ascii=False)
 if os.path.isdir(_code):
     for _n in _AN:
@@ -478,6 +513,14 @@ if os.path.isfile(_lw_path):
                             'schema': json.loads(_by_name['Parser - Keyword Fit'.replace(' - ', ' \u2014 ')]['parameters']['inputSchema']),
                             'fallback_has_parser': bool(_by_name['Keyword Fit (Text)']['parameters'].get('hasOutputParser')),
                             'to_response': sorted(s_ for s_, o_ in _AC.items() for l_ in (o_.get('main') or []) for t_ in (l_ or []) if t_['node'] == 'Assess Response')}
+    # KWL-LAD D5 (harness KLL5): the Keyword Check's time budget and the release of a check stopped by its time limit, as built
+    _rel = _by_name['Release Stale Rows (Assess)']['parameters']
+    _lw['assess']['time_budget'] = {'first_timeout_ms': _by_name['Run Assess Requests']['parameters']['options']['timeout'],
+                                    'retry_timeout_ms': _by_name['Run Assess Requests (Retry)']['parameters']['options']['timeout'],
+                                    'retry_wait_s': _by_name['Wait Before Run Assess Requests Retry']['parameters']['amount'], 'read_budget_ms': ASSESS_READ_BUDGET_MS,
+                                    'workflow_timeout_s': kwf['settings']['executionTimeout']}
+    _lw['assess']['release_stale'] = {'node': 'Release Stale Rows (Assess)', 'after': sorted(s_ for s_, o in _AC.items() for _l in (o.get('main') or []) for _t in (_l or []) if _t['node'] == 'Release Stale Rows (Assess)'),
+                                      'conditions': [[c['keyName'], c['condition'], c['keyValue']] for c in _rel['filters']['conditions']], 'values': _rel['columns']['value']}
     json.dump(_lw, open(_lw_path, 'w'), indent=1)
 print('Keyword Check workflow written:', len(_AN), 'nodes')
 

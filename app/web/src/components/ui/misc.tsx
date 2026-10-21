@@ -148,11 +148,13 @@ export function Avatar({ name, src, size = 28, className }: { name: string; src?
 /** "label: value" rows for detail panels. */
 export function KeyValue({ items, className }: { items: { label: ReactNode; value: ReactNode }[]; className?: string }) {
   return (
-    <dl className={cn('grid grid-cols-[minmax(0,max-content)_1fr] gap-x-6 gap-y-2 text-sm', className)}>
+    // B7 (pre-launch run 2026-10-21): a value with no space in it (a JSON object, a long address) set the column's minimum width and pushed
+    // the run page 61 px past a 375 px screen; the value column may shrink and such a value breaks anywhere
+    <dl className={cn('grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm', className)}>
       {items.map((it, i) => (
         <div key={i} className="contents">
-          <dt className="text-ink-3">{it.label}</dt>
-          <dd className="min-w-0 break-words text-ink">{it.value}</dd>
+          <dt className="min-w-0 text-ink-3 [overflow-wrap:anywhere]">{it.label}</dt>
+          <dd className="min-w-0 text-ink [overflow-wrap:anywhere]">{it.value}</dd>
         </div>
       ))}
     </dl>

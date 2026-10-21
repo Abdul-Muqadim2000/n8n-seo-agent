@@ -611,7 +611,9 @@ const GQ = (() => {
             // a join across a filler word ("tech and" -> "techand") is the name SPOKEN, so it counts only as the whole query
             if (acc === k && (!filler || (i === 0 && onlyDomain(t.slice(j))))) return true; } } }
       for (const sp of spoken) { const rest = t.slice(0, sp.length).join(' ') === sp.join(' ') ? t.slice(sp.length) : null;
-        if (rest && rest.every(x => tld.includes(x) || x === 'com' || x === 'www')) return true; }
+        // RV-15 (2026-10-21): the name followed only by its own words ("tech and tech", typed for "Tech&") is still the name, not a search for
+        // something else; it was reported as two of the site's pages competing for one search
+        if (rest && rest.every(x => tld.includes(x) || x === 'com' || x === 'www' || sp.includes(x))) return true; }
       // A-26 (2026-10-17, exec 764): "techandf cc" — the brand typed with one slip — was taken as a customer search, used as a discovery
       // seed and reported as a page mismatch ("aim that page at it"). A token (or two adjacent tokens with no filler word between them)
       // within one edit of a brand key of 6+ letters (two edits from 10 letters), starting with the same two letters, is the brand misspelt.
@@ -800,9 +802,13 @@ if (!connected) {
     works.push('Search Console (last 28 days): ' + t.clicks + ' clicks from ' + t.impressions + ' impressions, average position ' + t.position);
     if (t.impressions >= 500 && t.position <= 10 && t.ctr < 0.01) F('Medium', 'Very low click-through rate for a site ranking on page 1', 'Titles and descriptions are not winning the click even where you rank well.', 'Rewrite the titles and meta descriptions of the pages with the most impressions (lead with the outcome, add a number, match the query wording).', (t.ctr * 100).toFixed(2) + '% CTR at average position ' + t.position + ' over ' + t.impressions + ' impressions', [], null, 100);
     const noClick = pagesRows.filter(p => p.impressions >= 50 && p.clicks === 0);
-    if (noClick.length) F('Low', 'Pages shown in Google but never clicked', 'These pages earn impressions without clicks: the snippet does not match what searchers want, or they rank too low to be seen.', 'Check each page\'s main query, rewrite its title and description, and strengthen the page for that query.', noClick.length + ' page(s) with 50+ impressions and 0 clicks in 28 days', noClick.map(p => p.page), noClick.length, pagesRows.length ? Math.round(noClick.length / pagesRows.length * 100) : 100);
+    if (noClick.length) { F('Low', 'Pages shown in Google but never clicked', 'These pages earn impressions without clicks: the snippet does not match what searchers want, or they rank too low to be seen.', 'Check each page\'s main query, rewrite its title and description, and strengthen the page for that query.', noClick.length + ' page(s) with 50+ impressions and 0 clicks in 28 days', noClick.map(p => p.page), noClick.length, pagesRows.length ? Math.round(noClick.length / pagesRows.length * 100) : 100);
+      // RV-3 (2026-10-21): the whole list travels, so the not-crawled check can take out the addresses that no longer answer (a dead page has no title to rewrite)
+      const fNc = findings[findings.length - 1]; if (fNc && fNc.title === 'Pages shown in Google but never clicked') fNc.urls_all = noClick.map(p => p.page).slice(0, 300); }
     if (sitemapKnown) { const shownNotInSitemap = pagesRows.filter(p => !sitemapUrls.includes(key(p.page)) && p.impressions >= 20); search_console.not_in_sitemap_but_shown = shownNotInSitemap.map(p => p.page).slice(0, 10);
-      if (shownNotInSitemap.length >= 3) F('Low', 'Pages Google shows in search are missing from the sitemap', 'Google found these pages on its own; listing them in the sitemap keeps their updates flowing and confirms they are meant to rank.', 'Add them to the sitemap (or set the right canonical / noindex if they should not rank).', shownNotInSitemap.length + ' page(s) with impressions are not in sitemap.xml', shownNotInSitemap.map(p => p.page), shownNotInSitemap.length, 100); }
+      if (shownNotInSitemap.length >= 3) { F('Low', 'Pages Google shows in search are missing from the sitemap', 'Google found these pages on its own; listing them in the sitemap keeps their updates flowing and confirms they are meant to rank.', 'Add them to the sitemap (or set the right canonical / noindex if they should not rank).', shownNotInSitemap.length + ' page(s) with impressions are not in sitemap.xml', shownNotInSitemap.map(p => p.page), shownNotInSitemap.length, 100);
+        // RV-3: a page that answers 404 does not belong in a sitemap; the not-crawled check takes those out of this list (urls_all)
+        const fSm = findings[findings.length - 1]; if (fSm && fSm.title === 'Pages Google shows in search are missing from the sitemap') fSm.urls_all = shownNotInSitemap.map(p => p.page).slice(0, 300); } }
   }
   // G25 (2026-10-13): one reading per inspected page — index state, the canonical Google chose, the last crawl, mobile usability and the
   // rich results — through the shared kit, which also classifies a permission error or an exhausted quota as "not checked" (never "not indexed").
@@ -896,7 +902,7 @@ if (!connected) {
         'Your site names https://' + ch + ' as its address, but Google shows and ranks pages under https://' + alt + '. The pages under https://' + ch + ' then read as "not indexed" while their twins collect the impressions, and links and ranking signals are split between two addresses until one of them wins.',
         'Make every signal name https://' + ch + ': submit https://' + ch + '/sitemap.xml in Search Console' + (altMaps.length ? ' and remove ' + altMaps.map(s => s.path).join(', ') : '') + ', list only https://' + ch + ' URLs in it, change internal links that still point at https://' + alt + ', keep the redirects, then watch the page rows move to https://' + ch + ' in Search Console over the next weeks. Requesting indexing page by page does not help: Google already knows these pages under the other address. If https://' + alt + ' is the address you want, change the redirect and the canonical tags instead.',
         ev, urls90, urls90.length || A.pages, (ok.length && urls90.length) ? Math.round(urls90.length / ok.length * 100) : Math.round(altShare * 100));
-      const f90 = findings[findings.length - 1]; if (f90 && /are split in Google/.test(String(f90.title || ''))) { f90.affected_urls = urls90.slice(0, 200); f90.host_split = true; }
+      const f90 = findings[findings.length - 1]; if (f90 && /are split in Google/.test(String(f90.title || ''))) { f90.affected_urls = urls90.slice(0, 200); f90.host_split = true; f90.affected_unit = 'pages Google shows under the other address'; }
       const nc90 = findings.find(f => f && f.title === 'Pages shown in Google but never clicked');
       if (nc90) { const n = pagesRows.filter(p => p.impressions >= 50 && p.clicks === 0 && __hostOf90(p.page) === alt).length; if (n) nc90.evidence = String(nc90.evidence || '') + '; ' + n + ' of them are listed under https://' + alt + ', the other address (see the www and non-www finding)'; }
     }
@@ -934,7 +940,12 @@ const crawl_coverage = { known_urls: knownUrls.length, crawled_known: knownCrawl
   not_crawled_list: notCrawled.map(u => knownMeta.get(u) || { url: 'https://' + u, source: 'sitemap', impressions: 0, clicks: 0 })
     .filter(m => /^https?:\/\//i.test(String(m.url || ''))).sort((a, b) => (b.impressions - a.impressions) || (b.clicks - a.clicks)).slice(0, 60),
   text: knownUrls.length ? 'Crawled ' + knownCrawled.length + ' of ' + knownUrls.length + ' known URLs (' + coveragePct + '%; sitemap ' + sitemapUrls.length + (gscPageKeys.length ? ' + ' + gscPageKeys.length + ' pages with Search Console impressions' : '') + ')' : 'No sitemap and no Search Console pages: the crawl is the only list of URLs, so coverage cannot be measured' };
-if (knownUrls.length >= 10 && coveragePct != null && coveragePct < 90) F('Medium', 'The crawl covered only part of the site', 'Every share and count below is a share of the pages that were crawled, not of the whole site; pages nobody crawled can hide the worst problems.', 'Raise the crawl limit for this site (or fix what blocks the crawler: robots.txt rules, bot protection, pages reachable only through scripts), then audit again.', crawl_coverage.text + '; ' + notCrawled.length + ' known URLs were not reached' + (plan.crawl_limit ? ' (crawl limit ' + plan.crawl_limit + ' pages' + (crawlComplete ? '' : ', the crawl did not finish') + ')' : ''), crawl_coverage.sample_not_crawled, notCrawled.length, 100 - coveragePct);
+// RV-5 (2026-10-21): a crawl that FINISHED under its limit did not stop early: the known URLs it missed are not linked from the site (on
+// techand.ai all 26 were old addresses that answer 404). It is not called a crawl limit, and the fix is not "raise the limit".
+if (knownUrls.length >= 10 && coveragePct != null && coveragePct < 90) F('Medium', 'The crawl covered only part of the site', 'Every share and count below is a share of the pages that were crawled, not of the whole site; pages nobody crawled can hide the worst problems.',
+  crawlComplete ? 'Nothing to raise: the crawl finished. Link to the missed pages that should rank and redirect the ones that no longer answer (each one is read in this audit, see the findings about the URLs outside the crawl).'
+    : 'Raise the crawl limit for this site (or fix what blocks the crawler: robots.txt rules, bot protection, pages reachable only through scripts), then audit again.',
+  crawl_coverage.text + '; ' + notCrawled.length + ' known URLs were not reached' + (plan.crawl_limit ? (crawlComplete ? ', although the crawl finished under its limit of ' + plan.crawl_limit + ' pages: no internal link leads to them' : ' (crawl limit ' + plan.crawl_limit + ' pages, the crawl did not finish)') : ''), crawl_coverage.sample_not_crawled, notCrawled.length, 100 - coveragePct);
 else if (knownUrls.length >= 10 && coveragePct != null) works.push(crawl_coverage.text);
 const site_structure = { crawl_coverage, crawled_pages: pages.length, indexable_pages: indexablePages.length, depth_buckets: depthBuckets, within_3_clicks_pct: withDepth ? Math.round(within3 / withDepth * 100) : null, sections: topSections, sitemap: { url: plan.sitemap_url, status: smStatus, urls: sitemapUrls.length, is_index: isIndex, children: childCount }, indexable_not_in_sitemap: notInSitemap.length, sitemap_only: sitemapOnly.length, sitemap_broken: sitemapBroken.length, crawl_complete: crawlComplete };
 // ---- R61 (2026-10-16): the ranking statements built before Search Console was read (Competitor Analysis, Analyze Keywords) said
@@ -945,12 +956,18 @@ const __n90 = (v) => (Number(v) || 0).toLocaleString('en-GB');
 const __per90 = (__rk90 && __rk90.period && __rk90.period.start) ? __rk90.period.start + ' to ' + __rk90.period.end : 'the last 28 days';
 const __gsc90 = __rk90 ? 'Search Console (measured, ' + __per90 + '): ' + __rk90.top10 + ' quer' + (__rk90.top10 === 1 ? 'y' : 'ies') + ' at an average position in Google\'s top 10 (' + __n90(__rk90.top10_impressions) + ' impressions, ' + __n90(__rk90.top10_clicks) + ' clicks'
   + (__rk90.top10_brand ? '; ' + __rk90.top10_brand + ' of them for your own name' : '') + ')' + ((__rk90.examples || []).length ? ', e.g. ' + __rk90.examples.slice(0, 3).map(q => '"' + q.query + '" #' + q.position).join(', ') : '') : '';
+const __med143 = ((base.competitor_benchmark || {}).medians) || null;
 const __ex90 = (base.extra_findings || []).map(f => {
   if (!__rk90 || !f || f.category !== 'Authority') return f;
   const t = String(f.title || '');
+  // RV-6 (2026-10-21): Google's own data shows top-10 rankings and the competitors' median is tiny or unknown: there is nothing to be far behind
+  if (/does not rank in Google.s top 10 for any keyword/i.test(t) && __rk90.top10 > 0 && __med143 && !(Number(__med143.top10) >= 10)) return null;
+  // RV-6: the site's measured clicks over 28 days already beat a tenth of the competitors' estimated monthly visits: the estimate is contradicted
+  if (/^Organic traffic is under 10% of competitors$/.test(t) && search_console.totals && __med143 && Number(__med143.est_monthly_traffic) > 0
+    && Number(search_console.totals.clicks) >= Number(__med143.est_monthly_traffic) * 0.1) return null;
   if (/does not rank in Google.s top 10 for any keyword/i.test(t) && __rk90.top10 > 0) return { ...f, title: 'Far fewer top-10 rankings than competitors',
     evidence: String(f.evidence || '').replace(/^Top-10 rankings in /, 'DataForSEO\'s ranking database, top-10 rankings in ') + '; ' + __gsc90,
-    why: 'Google shows the site in its top 10 for very few searches' + (__rk90.top10_brand * 2 >= __rk90.top10 ? ', most of them for its own name,' : '') + ' while the competitors hold hundreds in the same database: a buyer who searches for what you sell finds them first.',
+    why: 'Google shows the site in its top 10 for very few searches' + (__rk90.top10_brand * 2 >= __rk90.top10 ? ', most of them for its own name,' : '') + ' while the competitors hold a median of ' + __n90((__med143 || {}).top10) + ' in the same database: a buyer who searches for what you sell finds them first.',
     reconciled: 'search_console' };
   const mi = t.match(/^No rankings for (informational|commercial|transactional) searches$/);
   if (mi && ((__rk90.by_intent_top30 || {})[mi[1]] || 0) > 0) { const n = __rk90.by_intent_top30[mi[1]];
@@ -962,6 +979,7 @@ const __ex90 = (base.extra_findings || []).map(f => {
     reconciled: 'search_console' };
   return f;
 });
+const __exk143 = __ex90.filter(Boolean); __ex90.length = 0; __ex90.push(...__exk143);
 const __works90 = (__rk90 && __rk90.top10) ? ['Google\'s own data (Search Console, ' + __per90 + '): ' + __rk90.top10 + ' quer' + (__rk90.top10 === 1 ? 'y' : 'ies') + ' in the top 10' + (__rk90.top10_brand ? ' (' + __rk90.top10_brand + ' for your own name)' : '')] : [];
 // R59: "One canonical host … the canonical tags agree" is what the server says; with Google showing the other host it is not what works
 const __probe90 = (base.probe && host_split90 && host_split90.found) ? { ...base.probe, what_works: (base.probe.what_works || []).filter(w => !/^One canonical host|^www redirects to the main domain/.test(String(w))),

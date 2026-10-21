@@ -4,13 +4,17 @@
 /*__COVERAGE__*/
 /*__PLACEHOLDERS__*/
 /*__CLAIMS__*/
+/*__PROMISE_JUDGE__*/
 /*__EXCLUSIONS__*/
 /*__FIT_GATE__*/
 // Deterministic quality gate for the generated page. v5 adds: banned-phrase (AI cliché) detection, readability (Flesch),
 // term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,
 // and a 0-100 CONTENT SCORE. Schema is generated here (page-type aware), never by the model.
 const prev = $('Parse Brief').first().json;
-const inItem = $input.first().json;
+// CT-FIX2 (2026-10-22): the draft comes through *Promise Candidates* (stage 1 of the promise check), and this node's own input is then the
+// second reader's answer (*Promise Judge*) or, when nothing was sent, the candidates item itself. A run without those nodes reads its input.
+const PCJ = (() => { try { const j = $('Promise Candidates').first().json; return j && j.promise_judge && j.output !== undefined ? j : null; } catch (e) { return null; } })();
+const inItem = PCJ || $input.first().json;
 const rawOut = inItem.output;
 let md = (typeof rawOut === 'string' ? rawOut : JSON.stringify(rawOut || '')).trim();
 const round = ($runIndex || 0) + 1;
@@ -53,13 +57,8 @@ const ownFacts = String(prev.business || '') + ' ' + String(prev.business_facts 
 // years" as an unverified statistic although the homepage says "20+ Years" and `client_pages` carried it: the check read only
 // `business_facts` + `case_facts_text`, both empty. The same corpus decides whether a statement about the business's own terms is
 // on file (§9d) and which figures need no external source (§9, §9b).
-const OWN_TEXT = (() => {
-  const SMx = SITE_MODEL || (prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null) || {};
-  const vals = (o) => (o && typeof o === 'object') ? Object.values(o).map(v => (v && typeof v === 'object') ? vals(v) : String(v == null ? '' : v)).join(' ') : String(o || '');
-  return [prev.business, prev.business_facts, prev.case_facts_text, SMx.business_facts, SMx.accreditation, vals(SMx.services), vals(SMx.nap),
-    vals(prev.site_profile), vals(prev.author), vals(prev.reviewer), ...(prev.client_pages || []).map(p => p && p.text), prev.existing_page_text,
-    prev.existing_page_facts_text, vals(prev.client_signals)].filter(Boolean).map(String).join('\n');
-})();
+const OWN_TEXT = PJ.ownText(prev, SITE_MODEL);   // CT-FIX2: one definition for this node and Promise Candidates (_promise_judge.js); E-CLAIM: the case studies on file vouch too
+// CT-FIX (review item 1): the call to action the client gave (prev.cta, the site model's cta) is its own text too
 const ownLower = OWN_TEXT.toLowerCase().replace(/\s+/g, ' ');
 const addSrc = (u, t) => { const k = SRC.key(u); if (!k || !String(t || '').trim()) return; srcText.set(k, ((srcText.get(k) || '') + ' ' + String(t)).slice(0, 12000)); };
 (prev.facts || []).forEach(f => addSrc(f && f.url, [f && f.text, f && f.claim, f && f.title].filter(Boolean).join(' ')));
@@ -145,7 +144,7 @@ if (!userGavePrices) {
     masked++; masked_amounts.push({ amount: amt.trim(), context }); return '[Price]';
   });
   if (masked) fixes.push(`Replaced ${masked} invented price(s) with [Price]`);
-  if (flagged) fixes.push(`Marked ${flagged} unsourced amount(s) (thresholds, fines, market figures) as [Confirm: …] for review`);
+  if (flagged) fixes.push(`Marked ${flagged} unsourced amount(s) (thresholds, fines, market figures) as [Confirm: ...] for review`);
   if (kept) fixes.push(`Kept ${kept} amount(s) stated in the verified facts`);
   if (sourced) fixes.push(`Kept ${sourced} amount(s) that the source cited in the same sentence states (${[...new Set(sourced_amounts.map(a => a.source))].slice(0, 4).join(', ')})`);
   if (illustrative) fixes.push(`Kept ${illustrative} amount(s) inside a passage the draft labels illustrative or hypothetical (a worked example has to keep its arithmetic)`);
@@ -161,7 +160,11 @@ const ladderPlannedUrl = (prev.ladder_id && String(prev.ladder_target_url || '')
 const ladderSlug = ladderPlannedUrl ? (ladderPlannedUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '').split('/').filter(Boolean).pop() || '') : '';
 const slugWritten = metaOf('Slug');
 const slug = ladderSlug || slugWritten;
-if (ladderSlug && slugWritten && slugWritten.replace(/^\/|\/$/g, '') !== ladderSlug) fixes.push('Kept the URL the keyword ladder planned (/' + ladderSlug + '/) instead of the slug the draft suggested (' + slugWritten + '): the ladder\'s link map, the other pages\' links and the rank tracking all use the planned URL');
+// CT-FIX2 (live page 2026-10-22, D6): the Word report printed the draft's slug and "/ai-automation/" beside meta / schema / checklist
+// "/whatwedo/ai-automation": the draft's Slug line now carries the planned slug, and the fix names the planned address in its one form
+const ladderPath = ladderPlannedUrl ? ('/' + ladderPlannedUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '')) : '';
+if (ladderSlug && slugWritten && slugWritten.replace(/^\/|\/$/g, '') !== ladderSlug) { md = md.replace(/^Slug:[ \t]*.*$/im, 'Slug: ' + ladderSlug);
+  fixes.push('Kept the URL the keyword ladder planned (' + ladderPath + ') instead of the slug the draft suggested (' + slugWritten + '): the ladder\'s link map, the other pages\' links and the rank tracking all use the planned URL'); }
 {
   const h1At = md.search(/^# .+$/m);
   if (h1At > 0) {
@@ -203,8 +206,17 @@ if (round > 1) {
     const deadPrev = new Set((((PRV.content_qa || {}).link_check || {}).dead || []).map(x => SRC.key(x && x.url)).filter(Boolean));
     const OFFICIAL = /(^|\.)(gov|edu|int|mil)(\.|$)|\.gov\.[a-z]{2}$|(^|\.)(u\.ae|europa\.eu|who\.int|oecd\.org|worldbank\.org|imf\.org)$/i;
     const relinked = [];
+    // CT-FIX2 (live page 2026-10-22, D5): the editor dropped a misattributed PwC / Forrester citation and this fix put it back on the first
+    // "source" of an unrelated bullet. A generic anchor ("source", "here", "this report") says nothing about where the claim is: it is
+    // re-attached only inside the same sentence it stood in (its words kept), and an anchor the editor's review named is never restored.
+    const GENERIC_ANCHOR = /^(?:source|sources|here|this|link|report|study|survey|data|research|this report|this study|the report|the study|read more|learn more|more|official source)$/i;
+    const sentOf = (txt, at) => { const a0 = Math.max(txt.lastIndexOf('. ', at), txt.lastIndexOf('\n', at)) + 1; let b0 = txt.slice(at).search(/[.!?](?:\s|$)|\n/); b0 = b0 < 0 ? txt.length : at + b0; return txt.slice(a0, b0); };
+    const plainSent = (t) => String(t || '').replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/^\s*[-*\d.)]+\s+/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const reviewText = JSON.stringify(lastCritique || critique || '').toLowerCase();
     for (const m of prevMd.matchAll(/\[([^\[\]]{3,120})\]\((https?:\/\/[^)\s]+)\)/g)) {
       const anchor = m[1], url = m[2]; const k = SRC.key(url); const host = SRC.host(url);
+      const generic = GENERIC_ANCHOR.test(anchor.trim()); const prevSent = generic ? plainSent(sentOf(prevMd, m.index)) : '';
+      if (reviewText && host && reviewText.includes(host.replace(/^www\./, '')) && /misattribut|vendor|not a (?:primary|reliable)|remove|drop/.test(reviewText)) continue;
       if (!k || deadPrev.has(k) || (domain && (host === domain || host.endsWith('.' + domain)))) continue;
       if (!(evid.has(k) || OFFICIAL.test(host))) continue;
       if (md.includes('](' + url + ')')) continue;
@@ -212,7 +224,9 @@ if (round > 1) {
       const re = new RegExp('(^|[^\\[\\w])(' + escRe(anchor) + ')(?![\\w\\]])', 'g'); let hit = null, mm;
       while ((mm = re.exec(md))) { const at = mm.index + mm[1].length; const lineStart = md.lastIndexOf('\n', at) + 1;
         if (/^(#|Title:|Meta Description:|Slug:)/.test(md.slice(lineStart, lineStart + 18))) continue;
-        const before = md.slice(Math.max(0, at - 200), at); if (/\[[^\]]*$/.test(before)) continue; hit = at; break; }
+        const before = md.slice(Math.max(0, at - 200), at); if (/\[[^\]]*$/.test(before)) continue;
+        if (generic && plainSent(sentOf(md, at)) !== prevSent) continue;   // CT-FIX2 (D5): a generic anchor only in its own sentence
+        hit = at; break; }
       if (hit == null) continue;
       md = md.slice(0, hit) + '[' + anchor + '](' + url + ')' + md.slice(hit + anchor.length); relinked.push(url);
     }
@@ -248,7 +262,7 @@ md = md.replace(/\[([^\[\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
   externalLinks++; externalUrls.push({ anchor: text, url: u, host, tier }); return '[' + text + '](' + u + ')';
 });
 if (removedLinks.length) fixes.push(`Removed ${removedLinks.length} link(s) to pages that do not exist on ${domain || 'the site'}: ` + removedLinks.slice(0, 4).join(', '));
-if (plannedLinks.length) fixes.push(`Removed ${plannedLinks.length} link(s) to pages that are planned but not published yet: ` + [...new Set(plannedLinks)].slice(0, 4).join(', ') + ' — they are listed in the package as links to add once they are live');
+if (plannedLinks.length) fixes.push(`Removed ${plannedLinks.length} link(s) to pages that are planned but not published yet: ` + [...new Set(plannedLinks)].slice(0, 4).join(', ') + '. They are listed in the package as links to add once they are live');
 if (cleanedLinks) fixes.push(`Stripped tracking parameters (utm_*, srsltid, gclid, fbclid) from ${cleanedLinks} link(s)`);
 if (weakRepeats.length) fixes.push(`Unlinked ${weakRepeats.length} repeat citation(s) of a source with no independent authority (one per domain): ` + [...new Set(weakRepeats)].join(', '));
 // citations must point at sources the brief allowed (evidence plan) or at least be real-looking hosts
@@ -258,7 +272,7 @@ const unknownSources = externalUrls.filter(e => !TRUSTED.test(e.host) && allowed
 // A-14 (2026-10-17): named by URL, not by host, and said for what it is — whether each one ANSWERS is measured by *Outbound Link Check*
 // right after this node (in a content run), which names every dead one; this warning is about what the run never read
 if (unknownSources.length > 2) warnings.push('External links to sources not in the evidence plan: ' + unknownSources.slice(0, 3).map(e => e.url).join(', ') + (unknownSources.length > 3 ? ' and ' + (unknownSources.length - 3) + ' more' : '')
-  + ' — this run never read those pages, so what each sentence cites them for is unchecked: cite the evidence plan\'s source instead, or keep only a page that states the claim');
+  + '. This run never read those pages, so what each sentence cites them for is unchecked: cite the evidence plan\'s source instead, or keep only a page that states the claim');
 const trusted_sources = externalUrls.filter(e => TRUSTED.test(e.host)).map(e => e.host);
 
 // 6. FAQs
@@ -368,7 +382,7 @@ const citedFigureCheck = (text, limit) => {
   r9b.found.forEach(x => unverified_figures.push({ figure: x.figure, sources: x.sources, reason: x.reason, ...(x.refreshed ? { refreshed_source: true } : {}) }));
   marks.sort((x, y) => y.start - x.start);
   for (const t of marks) md = md.slice(0, t.start) + '[Confirm: ' + t.raw + ']' + md.slice(t.end);
-  if (marks.length) fixes.push(`Marked ${marks.length} figure(s) that the cited source does not carry, or that the excerpt of it the run read does not show, as [Confirm: …] for review`);
+  if (marks.length) fixes.push(`Marked ${marks.length} figure(s) that the cited source does not carry, or that the excerpt of it the run read does not show, as [Confirm: ...] for review`);
 }
 // 9c. B3-8: on a refresh, the LIVE page is checked against its own cited sources as they read today — by the same rule (§9b), report
 //     only: the live copy is not ours to mark, the draft above is. What the owner is told: which figures the page has been showing that
@@ -400,6 +414,31 @@ if (RS && RS.refresh) {
 const bizNames = [...new Set([(prev.site_profile || {}).business_name, SITE_MODEL ? SM.name(SITE_MODEL) : '', ...((SITE_MODEL && Array.isArray(SITE_MODEL.brand_names)) ? SITE_MODEL.brand_names : []),
   (prev.site_description || {}).business_name, domain ? String(domain).split('.')[0] : ''].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
 const business_claims = [];
+const carried_promises = [];   // CT-FIX2: round N's reworded marks of round N-1's promises
+// CT-FIX (review item 7): the editor keeps QA's own [Confirm: <sentence>] marks from the round before. Read as brackets, they were
+// skipped by the claims check and came back as "the writer also left 1 note", with the "add it to your business facts" advice lost. A
+// mark that holds a whole sentence the claims check flags again (same facts, same rule) is unwrapped here and marked again below, so
+// it stays a business promise in every round; a mark the check does not flag (the writer's own note) is left as it is.
+{
+  const SENT_MARK = /\[Confirm: ([^\[\]]{20,}?[.!])\]/g;
+  const open = md.replace(SENT_MARK, '$1');
+  if (open !== md) {
+    const k = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const C1 = CL.business(open, OWN_TEXT, { names: bizNames }); const C2 = CL.commitments(open, OWN_TEXT, { names: bizNames, skip: C1.flags.map(f => f.sentence) });
+    const again = new Set(C1.flags.concat(C2.flags).map(f => k(f.sentence)));
+    // CT-FIX2 (live page 2026-10-22, item 7 on the real path): exec 159's editor did not keep round 1's mark word for word, it REWORDED the
+    // promise inside it ("Each phase ends in a go/no-go decision ..." -> "[Confirm: We recommend a go/no-go review at the end of each phase
+    // ...]"), which the rules read as advice: it came back as "the writer also left 1 note" with the generic action. A mark whose sentence
+    // shares at least half of its words with a promise of the round before is that promise, carried: it stays a business promise.
+    const toks = (x) => new Set(String(x || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(w => w.length > 3));
+    const PRVQ = (() => { try { return (($('Needs Revision?').first().json || {}).content_qa) || {}; } catch (e) { return {}; } })();
+    const before = (PRVQ.business_promises || []).concat(PRVQ.carried_promises || []).filter(b => b && b.sentence);
+    const similar = (x) => { const A = toks(x); return before.find(b => { const B = toks(b.sentence); const n = [...A].filter(w => B.has(w)).length; return Math.min(A.size, B.size) >= 4 && n / Math.min(A.size, B.size) >= 0.5; }); };
+    md = md.replace(SENT_MARK, (all, inner) => { if (again.has(k(inner))) return inner; const was = round > 1 ? similar(inner) : null;
+      if (was) { carried_promises.push({ sentence: inner, kind: was.kind || 'process', was: was.sentence }); return inner; } return all; });
+  }
+}
+const mdBeforeClaims = md;   // E-CLAIM reads the copy before §9d's marks (a mark would hide the billing line after it)
 {
   const BC = CL.business(md, OWN_TEXT, { names: bizNames });
   for (const f of BC.flags.slice(0, 8)) {
@@ -407,7 +446,52 @@ const business_claims = [];
     if (marked) md = md.slice(0, at) + '[Confirm: ' + f.sentence + ']' + md.slice(at + f.sentence.length);
     business_claims.push({ kind: f.kind, trigger: f.trigger, sentence: f.sentence, marked });
   }
-  if (business_claims.some(x => x.marked)) fixes.push('Marked ' + business_claims.filter(x => x.marked).length + ' statement(s) about the business that nothing on file supports as [Confirm: …] for the owner');
+  if (business_claims.some(x => x.marked)) fixes.push('Marked ' + business_claims.filter(x => x.marked).length + ' statement(s) about the business that nothing on file supports as [Confirm: ...] for the owner');
+}
+// 9e. E-CLAIM (2026-10-21, pre-launch run exec 42): what the page PROMISES in the business's name. The page told techand.ai's buyers
+//     "You receive a prioritised use-case backlog, data readiness findings and an ROI case", "We test a proof of concept ... documented
+//     test results", "You receive a runbook and monitoring dashboards", a training plan with "a self-study pack", "document each decision
+//     for your audit team" and "we stop there"; on 2026-10-17 a page invented the billing terms ("We charge for advice and delivery.
+//     Licences sit on a separate line of the quote"). None of it is on file and §9d (terms, scope, credentials) let the promises through.
+//     CL.commitments reads every deliverable, process step, billing term, guarantee, timeline and scope line said in the business's name
+//     and holds it against OWN_TEXT (business facts, profile, case studies, its own pages). One nothing supports is marked [Confirm: ...]
+//     in the copy and becomes an owner edit ("confirm it is true or delete it"): the page is not ready to publish until it is done, exactly
+//     like a bracket. It is not an editor warning: only the owner knows whether the business really does it.
+const business_promises = [];
+// CT-FIX2 (2026-10-22, live page exec 159): two stages. The rules (CL.commitments, collect) list the CANDIDATES; the second reader
+// (*Promise Judge*, Claude Haiku, one call per round, built by *Promise Candidates*) judged each one against its closest facts. A
+// candidate it answered for is flagged when it is a commitment of the business and no fact carries it; one it did not answer for, or
+// every one when the call failed, is decided by the rules, and the report says so. The model never adds a sentence.
+let promise_check = { method: 'rules', model: null, candidates: 0, judged: 0, overturned: [], added: [], note: '' };
+{
+  const BP = CL.commitments(mdBeforeClaims, OWN_TEXT, { names: bizNames, skip: business_claims.map(b => b.sentence), collect: true, captions: PJ.captionsOf(brief) });
+  const pjc = PCJ && PCJ.promise_judge ? PCJ.promise_judge : null;
+  let J = null, why = '';
+  if (!pjc) why = 'the second reader was not part of this run';
+  else if (pjc.skip) why = pjc.skip_reason || 'nothing to judge';
+  else { let resp = null; try { resp = $('Promise Judge').first().json; } catch (e) { resp = null; }
+    J = PJ.read(resp, pjc.candidates || []); if (!J.ok) why = J.why; }
+  const cands = BP.candidates || [];
+  const final = [];
+  const ck = new Set(cands.map(c => PJ.k(c.sentence)));
+  for (const c of cands) { const d = PJ.decide(c, J, CL.backs);
+    if (d.by === 'model' && d.flagged !== !!c.rule_flag) (d.flagged ? promise_check.added : promise_check.overturned).push({ sentence: c.sentence.slice(0, 200), reason: d.reason || '', supported_by: d.supported_by || null });
+    if (d.flagged) final.push({ kind: c.kind, sentence: c.sentence, support: c.support, where: c.where, reason: d.by === 'model' ? d.reason : '', by: d.by }); }
+  for (const f of BP.flags) if (!ck.has(PJ.k(f.sentence))) final.push({ ...f, by: 'rules' });   // a rule flag the candidate list merged away
+  // the promises the editor reworded inside round N-1's marks: flagged unless the second reader found the fact that carries them
+  for (const c of carried_promises) { if (final.some(f => PJ.k(f.sentence) === PJ.k(c.sentence))) continue;
+    const rc = cands.find(x => PJ.k(x.sentence) === PJ.k(c.sentence)); if (rc && !rc.rule_flag && rc.why !== 'wide' && rc.why !== 'advice') continue;   // the rules judged it a commitment and found the facts that carry it
+    const v = J && J.ok ? J.by.get(PJ.k(c.sentence)) : null; if (v && v.supported_by && v.fact && CL.backs(c.sentence, v.fact)) continue;
+    final.push({ kind: c.kind, sentence: c.sentence, support: 0, where: 'para', reason: 'the promise marked in the round before, reworded by the editor', by: 'carried' }); }
+  promise_check = { method: J && J.ok ? 'rules+model' : 'rules', model: J && J.ok ? PJ.MODEL : null, candidates: cands.length, judged: J && J.ok ? J.by.size : 0,
+    overturned: promise_check.overturned.slice(0, 10), added: promise_check.added.slice(0, 10), usage: J && J.usage ? J.usage : null,
+    note: J && J.ok ? '' : (pjc && pjc.off) ? '' : 'checked by rules only: ' + (why || 'the second reader gave no answer') };   // switched off by default: nothing to report
+  for (const f of final.slice(0, 15)) {
+    const at = f.where === 'caption' ? -1 : md.indexOf(f.sentence); const marked = at >= 0 && !/[\[\]]/.test(f.sentence);   // a sentence holding a link is listed, never wrapped (no nested bracket); a caption is not in the copy
+    if (marked) md = md.slice(0, at) + '[Confirm: ' + f.sentence + ']' + md.slice(at + f.sentence.length);
+    business_promises.push({ kind: f.kind, sentence: f.sentence, marked, support_pct: f.support, where: f.where === 'caption' ? 'image caption' : undefined, reason: f.reason || undefined, checked_by: f.by });
+  }
+  if (business_promises.length) fixes.push('Marked ' + business_promises.filter(x => x.marked).length + ' promise(s) made in the business\'s name that nothing on file supports (deliverables, process steps, terms) as [Confirm: ...] for the owner');
 }
 
 // 10. Banned phrases (AI clichés and filler)
@@ -441,8 +525,8 @@ const read_basis = RBAND.ok
   ? 'scored against the pages that rank for this search, measured the same way as the draft: ' + read_band_line + ', from ' + CVG.BAND_HARDER + ' points harder to ' + CVG.BAND_EASIER + ' points easier than their median'
   : 'no band from the pages that rank (' + RBAND.reason + '), so the fixed band is used: Flesch 40+ with sentences of 22 words or fewer scores full marks';
 const read_note = flesch == null || !RBAND.ok ? ''
-  : read_position === 'harder' ? 'Readability: Flesch ' + flesch + ' is harder to read than the pages that rank (' + read_band_line + ') — shorter sentences and plainer words would bring it into the band. Advice, not a blocker.'
-    : read_position === 'easier' ? 'Readability: Flesch ' + flesch + ' is plainer than the pages that rank (' + read_band_line + ') — easy reading is good for readers; check the page still carries the technical precision its search expects. Advice, not a blocker.'
+  : read_position === 'harder' ? 'Readability: Flesch ' + flesch + ' is harder to read than the pages that rank (' + read_band_line + '): shorter sentences and plainer words would bring it into the band. Advice, not a blocker.'
+    : read_position === 'easier' ? 'Readability: Flesch ' + flesch + ' is plainer than the pages that rank (' + read_band_line + '). Easy reading is good for readers; check the page still carries the technical precision its search expects. Advice, not a blocker.'
       : '';
 
 // 12. Term coverage (brief terms first, else the competitor term model)
@@ -491,7 +575,25 @@ if (!subPool.length) subPool = prev.competitors || [];
 const subBest = covPlan && covPlan.best ? (subPool.find(c => c && (c.url === covPlan.best.url || (covPlan.best.domain && c.domain === covPlan.best.domain))) || { domain: covPlan.best.domain, url: covPlan.best.url }) : null;
 const subOpts = { labels: fitLabels, brands: subPool.map(c => c && (c.domain || c.url)).filter(Boolean).concat((SITE_MODEL && Array.isArray(SITE_MODEL.competitors)) ? SITE_MODEL.competitors : []) };
 const subtopics_dropped = [];
-const subtopicsKept = (covPlan && Array.isArray(covPlan.subtopics) ? covPlan.subtopics : []).filter(s => { const why = CVG.namesBrand(s, subBest, subOpts); if (why) subtopics_dropped.push({ subtopic: s, reason: why }); return !why; });
+// D5 / RV-9 (2026-10-21, pre-launch run exec 42): the only failing check of round 2 was "Subtopics the best competitor page covers":
+// "Program Fee: US $894 (All Inclusive)", "Alumni Speak", "Program Eligibility", the headings of usaii.org's certification course, while
+// the verdict of the same run had said to skip "AI consultant certification" and "AI consultant course". A subtopic is asked of the draft
+// only when (1) the page to beat is of the kind being written, re-read here by the kit's own rule (a plan stored before the fix, or built
+// by another caller, may still carry a course page), (2) neither that page nor the subtopic is about a topic the verdict left out, and
+// (3) it is not a sales heading (a fee, a price, alumni, eligibility: CVG.subtopics' own filter, applied again to a stored plan).
+const verdict_exclusions = Array.isArray(prev.verdict_exclusions) ? prev.verdict_exclusions : EXC.fromVerdict(prev.verdict_changes, []);
+const qaPageKind = CVG.kindFor(prev.page_type);
+const benchKind = subBest && (subBest.title || subBest.headings) ? CVG.kindOf(subBest, prev.keyword || '') : (covPlan && covPlan.best ? covPlan.best.kind : null);
+const benchTitleText = subBest ? String(subBest.title || '') + ' ' + String(subBest.url || '').replace(/^https?:\/\/[^\/]+/i, '').replace(/[\/_-]+/g, ' ') : '';
+const benchExcluded = benchTitleText.trim() ? verdict_exclusions.find(e => EXC.match(benchTitleText, e, prev.keyword || '')) : null;
+const benchOffKind = !!(covPlan && (covPlan.type_match === false || (benchKind && benchKind !== qaPageKind && !(qaPageKind === 'guide' && benchKind === 'list'))));
+const subtopicsKept = (covPlan && Array.isArray(covPlan.subtopics) ? covPlan.subtopics : []).filter(s => {
+  let why = benchOffKind ? 'the page to beat is a ' + ({ other: 'course, job or directory page', list: 'list of companies', guide: 'guide', service: 'service page', unknown: 'page of another kind' }[benchKind] || 'page of another kind') + ', not a page like this one'
+    : benchExcluded ? 'the page to beat is about "' + String(benchExcluded.topic != null ? benchExcluded.topic : benchExcluded) + '", a topic the verdict said to leave out' : '';
+  if (!why) { const ex = verdict_exclusions.find(e => EXC.match(s, e, prev.keyword || '')); if (ex) why = 'about "' + String(ex.topic != null ? ex.topic : ex) + '", a topic the verdict said to leave out'; }
+  if (!why && CVG.isPromo(s, benchKind)) why = 'a sales heading (a fee or a price, or a course\'s alumni and eligibility), not a topic';
+  if (!why) why = CVG.namesBrand(s, subBest, subOpts) || '';
+  if (why) subtopics_dropped.push({ subtopic: s, reason: why }); return !why; });
 const missingSubtopics = subtopicsKept.length
   ? CVG.subtopicGap(subtopicsKept, { headings: h2s.concat(md.match(/^###\s+.+$/gm) || []), text: bodyPlain }).filter(x => x.state === 'missing').map(x => x.subtopic)
   : [];
@@ -510,13 +612,13 @@ const coverage_report = {
   basis: coverage_target_pct
     ? 'uses ' + termsFound + ' of the ' + termCoverage.length + ' terms the top pages share (' + coverage_pct + '%; a term counts once it appears), against a target of ' + coverage_target_pct + '% taken from '
       + ((covPlan.best.domain || 'the best page') + (covPlan.best.rank ? ' (position ' + covPlan.best.rank + ')' : '')) + ', which covers ' + bestPct + '%'
-      + (benchCov ? ' — on the same list and the same measure it uses ' + benchCov.found + ' of the ' + benchCov.total : ' on the shared-term list of the brief')
+      + (benchCov ? '; on the same list and the same measure it uses ' + benchCov.found + ' of the ' + benchCov.total : ' on the shared-term list of the brief')
       + (covPlan.average_pct != null ? ' (average of the ' + (covPlan.pages_compared || 0) + ' pages read: ' + covPlan.average_pct + '%)' : '')
     : 'uses ' + termsFound + ' of the ' + termCoverage.length + ' terms the top pages share (' + coverage_pct + '%; a term counts once it appears); no competitor page could be read, so there is no target to compare with'
 };
 // the comparison in one sentence, on one measure, for the reason the owner reads
 const coverage_compare = coverage_target_pct
-  ? 'it uses ' + termsFound + ' of the ' + termCoverage.length + ' terms the top pages share (' + coverage_pct + '%), against a target of ' + coverage_target_pct + '% — '
+  ? 'it uses ' + termsFound + ' of the ' + termCoverage.length + ' terms the top pages share (' + coverage_pct + '%), against a target of ' + coverage_target_pct + '%: '
     + ((covPlan.best.domain || 'the best page') + (benchCov ? ' uses ' + benchCov.found + ' of the ' + benchCov.total + ' (' + bestPct + '%) on the same list' : ' covers ' + bestPct + '%'))
     + '; a term counts once it appears'
   : '';
@@ -530,8 +632,19 @@ const unansweredSnippets = snippetTargets.filter(t => t.question && !new RegExp(
 
 // 14. Warnings
 const target = brief.target_word_count || 800;
-if (mainWords < target * 0.8) warnings.push(`Main content is short: ${mainWords} words vs target ${target}`);
-if (mainWords > target * 1.25) warnings.push(`Main content is too long: ${mainWords} words vs target ${target} — cut repetition and secondary detail, do not add anything`);
+// CT-FIX (2026-10-22, with CT-DEPTH's C8): when the ranking pages of the same kind gave a length band (Parse Analysis `length_band`, ok)
+// and the brief's target sits inside it, the length is judged against that band and the reason names it and its sample; otherwise
+// (too few pages, or the verdict set a number outside it) the old rule stays: short under 0.8x, too long over 1.25x of the target.
+const LBQ = (prev.competitor_analysis || {}).length_band || prev.length_band || null;
+// CT-FIX2 (live page 2026-10-22, D8): with too few same-kind pages Parse Analysis gives the PAGE-TYPE band (ok: false, source page_type,
+// "1,800-3,500 words", said so); QA ignored it and told the editor to cut 323 words of a page inside that band. Either band is the band.
+const lenBand = !!(LBQ && (LBQ.ok || LBQ.source === 'page_type') && Number(LBQ.low) > 0 && Number(LBQ.high) >= Number(LBQ.low) && target >= Number(LBQ.low) && target <= Number(LBQ.high));
+const lenLow = lenBand ? Number(LBQ.low) : target * 0.8, lenHigh = lenBand ? Number(LBQ.high) : target * 1.25;
+const lenBasis = lenBand ? (LBQ.ok ? ' (the band of ' + (LBQ.basis || 'the pages ranking for this search') + ')' : ' (' + (LBQ.basis || 'the usual length for this kind of page') + ')') : '';
+const length_band = lenBand ? { low: lenLow, high: lenHigh, source: LBQ.ok ? 'ranking_pages' : 'page_type', sample: Number(LBQ.sample) || 0, basis: String(LBQ.basis || '') } : null;
+const lenOk = lenBand ? (mainWords >= lenLow && mainWords <= lenHigh) : Math.abs(mainWords - target) <= target * 0.25;
+if (mainWords < lenLow) warnings.push(`Main content is short: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis);
+if (mainWords > lenHigh) warnings.push(`Main content is too long: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis + '. Cut repetition and secondary detail, and do not add anything');
 if (thinSections.length) warnings.push('Sections far below their target length: ' + thinSections.slice(0, 4).join('; '));
 if (!metaTitle) warnings.push('Meta title line missing');
 else { if (metaTitle.length > 60) warnings.push(`Meta title is ${metaTitle.length} characters (max 60)`); if (metaTitle.length < 30) warnings.push(`Meta title is only ${metaTitle.length} characters (aim for 50-60)`); if (kw && !flexRe(kw, 'i').test(metaTitle)) warnings.push('Primary keyword missing from the meta title'); }
@@ -541,11 +654,11 @@ if (slug && !/^\/?[a-z0-9]+(-[a-z0-9]+)*\/?$/.test(slug)) warnings.push('Slug sh
 if (!h1) warnings.push('H1 missing'); else if (kw && !flexRe(kw, 'i').test(h1)) warnings.push('Primary keyword missing from H1');
 if (kw && !flexRe(kw, 'i').test(first100)) warnings.push('Primary keyword not in the first 100 words');
 if (kwCount < 3) warnings.push(`Primary keyword used only ${kwCount} time(s)`);
-if (density > 2) warnings.push(`Keyword density is high (${density}%) — risk of keyword stuffing`);
+if (density > 2) warnings.push(`Keyword density is high (${density}%), a risk of keyword stuffing`);
 if (h2s.length < 4) warnings.push(`Only ${h2s.length} H2 sections (brief expects ${outline.length || 'more'})`);
 if (!qaMatch) warnings.push('Quick answer block missing (a 40-70 word direct answer right after the introduction)');
 else if (answerWords < 35 || answerWords > 90) warnings.push(`Quick answer is ${answerWords} words (aim for 40-70)`);
-if (answeredQuestions < 3) warnings.push(`Only ${answeredQuestions} question(s) answered as a heading (aim for 3+ question-style headings with a direct 40-60 word answer under each — that is what AI answers quote)`);
+if (answeredQuestions < 3) warnings.push(`Only ${answeredQuestions} question(s) answered as a heading (aim for 3+ question-style headings with a direct 40-60 word answer under each: that is what AI answers quote)`);
 if (faqHeadings > 1) warnings.push('Duplicate FAQ sections found');
 if (/faq|frequently asked/i.test(lastH2)) warnings.push('The call to action should be the last section');
 if (!/\|.*\|/.test(md)) warnings.push('Comparison table missing');
@@ -566,7 +679,7 @@ const intent = { words_before_answer: before, answer_limit_words: ANSWER_FIRST_M
   question_headings: qHeads, quick_answer_words: answerWords, ai_target: !!AT,
   basis: qaMatch ? 'the words between the H1 and the Quick answer, and the H2 / H3 headings phrased as questions, counted in the draft itself'
     : 'no Quick answer line in the draft, so where the answer sits could not be measured (the missing block is its own warning)' };
-if (!AT && before != null && before > ANSWER_FIRST_MAX) warnings.push('Answer first: the Quick answer comes after ' + before + ' words of introduction — move it up so the page answers its own question within the first ' + ANSWER_FIRST_MAX + ' words under the H1');
+if (!AT && before != null && before > ANSWER_FIRST_MAX) warnings.push('Answer first: the Quick answer comes after ' + before + ' words of introduction. Move it up so the page answers its own question within the first ' + ANSWER_FIRST_MAX + ' words under the H1');
 if (!AT && qHeads < 2 && answeredQuestions >= 3) warnings.push('Phrase at least 2 H2 / H3 headings as the questions readers ask (' + qHeads + ' now; the FAQ answers count elsewhere, but a question heading with its answer right under it is what search and AI answers quote)');
 if (AT) {
   const STOPW = new Set(['the', 'and', 'for', 'with', 'what', 'how', 'which', 'are', 'can', 'does', 'your', 'you', 'that', 'this', 'from', 'into', 'best', '2024', '2025', '2026', '2027', 'list', 'official']);
@@ -581,32 +694,36 @@ if (AT) {
 // B-11 (F-B, 2026-10-17, exec 745): "should not be treated as an automatic guarantee" and "does not by itself guarantee compliance" DENY a
 // guarantee; only a sentence that makes one is a claim to verify
 const __guar = String(md || '').split(/(?<=[.!?])\s+|\n+/).filter(x => /guarantee/i.test(x) && !/\b(no|not|never|nor|neither|without|cannot|can't|won't|isn't|doesn't|don't)\b[^.!?]{0,60}guarantee/i.test(x));
-if (__guar.length && !prev.business) warnings.push('Contains a guarantee claim — please verify: "' + __guar[0].trim().replace(/^\[Confirm:\s*/, '').replace(/\]$/, '').slice(0, 120) + '"');   // A-15: quoted without the [Confirm: …] §9d may have put round it
-if (business_claims.length) warnings.push('Statements about ' + (bizNames[0] || 'the business') + '\'s own terms, scope or credentials that nothing on file supports (business facts, profile, its own pages; now marked [Confirm: …]): '
-  + business_claims.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + ' — remove each one, or the owner confirms it in the business facts');
+if (__guar.length && !prev.business) warnings.push('Contains a guarantee claim to verify: "' + __guar[0].trim().replace(/^\[Confirm:\s*/, '').replace(/\]$/, '').slice(0, 120) + '"');   // A-15: quoted without the [Confirm: …] §9d may have put round it
+if (business_claims.length) warnings.push('Statements about ' + (bizNames[0] || 'the business') + '\'s own terms, scope or credentials that nothing on file supports (business facts, profile, its own pages; now marked [Confirm: ...]): '
+  + business_claims.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + '. Remove each one, or confirm it in the business facts');
 // A-18 (2026-10-17): a section about a topic the verdict said to leave out. Live (exec 771) the verdict said "Skip the consultancy-licence
 // and start-an-IT-company questions, which don't match buyer intent" and the page carried "How Much Is a Consultancy Licence in Dubai?".
-const verdict_exclusions = Array.isArray(prev.verdict_exclusions) ? prev.verdict_exclusions : EXC.fromVerdict(prev.verdict_changes, []);
 const excluded_sections = EXC.check(md.match(/^#{2,3} .+$/gm) || [], verdict_exclusions, prev.keyword || '');
 if (excluded_sections.length) warnings.push('Sections about a topic the verdict said to leave out: ' + excluded_sections.slice(0, 4).map(x => '"' + x.heading + '" (the verdict: skip ' + x.topic + ')').join('; ')
-  + ' — remove each section; the page stays on what its buyers search for');
+  + '. Remove each section, so the page stays on what its buyers search for');
 if (stats.length) warnings.push('Unverified statistics that need a linked source or a [Statistic] marker: ' + stats.join('; '));
 const figAbsent = unverified_figures.filter(f => f.reason !== 'not_in_excerpt'), figExcerpt = unverified_figures.filter(f => f.reason === 'not_in_excerpt');
-if (figAbsent.length) warnings.push('Figures the cited source does not carry (now marked [Confirm: …]): ' + figAbsent.slice(0, 5).map(f => '"' + f.figure + '" (' + f.sources.join(', ') + ')').join('; ') + ' — quote the source\'s own number or cite the page that states it');
-if (figExcerpt.length) warnings.push('Figures not in the excerpt of the cited source the run read (the excerpt was cut short, so the page itself may state them; now marked [Confirm: …]): ' + figExcerpt.slice(0, 5).map(f => '"' + f.figure + '" (' + f.sources.join(', ') + ')').join('; ') + ' — check the figure on the source page, or cite the page that states it');
-if (weakRepeats.length) warnings.push('A source with no independent authority was cited more than once (' + [...new Set(weakRepeats)].join(', ') + '): the repeats were unlinked — cite an official, standards, research or major-press source instead');
+if (figAbsent.length) warnings.push('Figures the cited source does not carry (now marked [Confirm: ...]): ' + figAbsent.slice(0, 5).map(f => '"' + f.figure + '" (' + f.sources.join(', ') + ')').join('; ') + '. Quote the source\'s own number or cite the page that states it');
+if (figExcerpt.length) warnings.push('Figures not in the excerpt of the cited source the run read (the excerpt was cut short, so the page itself may state them; now marked [Confirm: ...]): ' + figExcerpt.slice(0, 5).map(f => '"' + f.figure + '" (' + f.sources.join(', ') + ')').join('; ') + '. Check the figure on the source page, or cite the page that states it');
+if (weakRepeats.length) warnings.push('A source with no independent authority was cited more than once (' + [...new Set(weakRepeats)].join(', ') + '): the repeats were unlinked. Cite an official, standards, research or major-press source instead');
 if ((prev.internal_link_candidates || []).length > 1 && internalLinks === 0) warnings.push('No internal links to existing pages on the site');
 if (bannedCount) warnings.push('Filler / AI-cliché phrases to rewrite (' + bannedCount + '): ' + banned_found.slice(0, 8).map(b => '"' + b.phrase + '"' + (b.count > 1 ? ' x' + b.count : '')).join(', '));
-if (flesch != null && flesch < 30 && !RBAND.ok) warnings.push(`Hard to read (Flesch ${flesch}, average sentence ${avgSentence} words) — shorten sentences and use plainer words`);
-if (longSentences > Math.max(3, sentences.length * 0.12)) warnings.push(`${longSentences} sentences longer than 28 words — split them`);
-if (passive_pct > 25) warnings.push(`Passive voice in about ${passive_pct}% of sentences — rewrite in active voice`);
+if (flesch != null && flesch < 30 && !RBAND.ok) warnings.push(`Hard to read (Flesch ${flesch}, average sentence ${avgSentence} words): shorten sentences and use plainer words`);
+if (longSentences > Math.max(3, sentences.length * 0.12)) warnings.push(`${longSentences} sentences longer than 28 words: split them`);
+if (passive_pct > 25) warnings.push(`Passive voice in about ${passive_pct}% of sentences: rewrite in active voice`);
 if (termCoverage.length >= 8 && coverage_target_pct && coverage_pct < coverage_target_pct)
-  warnings.push('Topic coverage ' + coverage_pct + '% against a target of ' + coverage_target_pct + '% (' + (coverage_report.best_competitor ? (coverage_report.best_competitor.domain || 'the best page') + ' covers ' + coverage_report.best_competitor_pct + '%' : 'the best page in the results') + ') — both counted the same way, a term counts once it appears; these terms do not appear at all, work them in where they belong: ' + missingTerms.join(', '));
-else if (termCoverage.length >= 8 && !coverage_target_pct && coverage < 0.6) warnings.push('Topic coverage is thin — competitors cover these terms and this page does not: ' + missingTerms.join(', '));
-if (missingSubtopics.length) warnings.push('Subtopics the best competitor page covers and this draft does not: ' + missingSubtopics.slice(0, 4).map(x => '"' + x + '"').join(', ') + ' — add each one where it belongs (our own heading and words, never theirs), or the page is thinner than the one it has to beat');
-if (wordsArr.length > 400 && specificity < 0.6) warnings.push(`Too generic (${specificity} specifics per 100 words) — add concrete examples, numbers with sources, steps or decision rules`);
+  warnings.push('Topic coverage ' + coverage_pct + '% against a target of ' + coverage_target_pct + '% (' + (coverage_report.best_competitor ? (coverage_report.best_competitor.domain || 'the best page') + ' covers ' + coverage_report.best_competitor_pct + '%' : 'the best page in the results') + '). Both are counted the same way (a term counts once it appears). These terms do not appear at all; work them in where they belong: ' + missingTerms.join(', '));
+else if (termCoverage.length >= 8 && !coverage_target_pct && coverage < 0.6) warnings.push('Topic coverage is thin: competitors cover these terms and this page does not: ' + missingTerms.join(', '));
+// D5 (2026-10-21): when the draft already reaches the term target, a subtopic gap is advice (in `coverage_advice`), never a refusal on its
+// own: exec 42's draft used 18 of the 18 shared terms at a length close to the page to beat, and was still told it was "thinner".
+const coverage_advice = [];
+const subtopicLine = missingSubtopics.length ? 'Subtopics the best competitor page covers and this draft does not: ' + missingSubtopics.slice(0, 4).map(x => '"' + x + '"').join(', ') + '. Add each one where it belongs, under our own heading and in our own words' : '';
+if (subtopicLine && coverage_target_pct && coverage_pct >= coverage_target_pct) coverage_advice.push(subtopicLine + ' (advice: the page already reaches the topic coverage target)');
+else if (subtopicLine) warnings.push(subtopicLine);
+if (wordsArr.length > 400 && specificity < 0.6) warnings.push(`Too generic (${specificity} specifics per 100 words): add concrete examples, numbers with sources, steps or decision rules`);
 if (unansweredSnippets.length) warnings.push('Snippet questions from the brief that have no matching heading: ' + unansweredSnippets.join(' | '));
-if (critique && Array.isArray(critique.problems)) critique.problems.filter(p => /high|medium/i.test(p.severity || '')).slice(0, 8).forEach(p => warnings.push('Editor review: ' + [p.location ? '"' + String(p.location).slice(0, 80) + '"' : '', p.issue, p.fix ? 'Fix: ' + p.fix : ''].filter(Boolean).join(' — ')));
+if (critique && Array.isArray(critique.problems)) critique.problems.filter(p => /high|medium/i.test(p.severity || '')).slice(0, 8).forEach(p => warnings.push('Editor review: ' + (p.location ? '"' + String(p.location).slice(0, 80) + '": ' : '') + String(p.issue || '').trim().replace(/[.;:]+$/, '') + (p.fix ? '. Fix: ' + String(p.fix).trim() : '')));
 
 // 14b. Placeholders (FIX_PLAN D10, 2026-10-12): the live page of execution 365 held 30 × [Price], 20 × [Timeline], [Office address] and
 //      [Phone number] and still passed at 91 — nobody could publish it. A page may carry a few bracketed gaps for the owner to fill; more
@@ -629,13 +746,14 @@ const finalBody = md.replace(/^(Title|Meta Description|Slug|Primary Keyword|Seco
 const phScan = PH.scan(finalBody);
 const placeholders = phScan.placeholders;
 const placeholder_count = phScan.placeholder_count;
-const review_notes = phScan.notes.filter(n => !/^\[Image\b/i.test(n.token)).reduce((k, n) => k + n.count, 0) + (finalBody.match(/\[Statistic\b[^\]]*\]/gi) || []).length;   // as before: Confirm / Owner / Author insight notes and [Statistic] (a placeholder too); the image plan is not a note
+const promiseMarks = new Set(business_promises.filter(b => b.marked).map(b => '[Confirm: ' + b.sentence + ']'));   // E-CLAIM: counted as claims, not as review notes
+const review_notes = phScan.notes.filter(n => !/^\[Image\b/i.test(n.token) && !promiseMarks.has(n.token)).reduce((k, n) => k + n.count, 0) + (finalBody.match(/\[Statistic\b[^\]]*\]/gi) || []).length;   // as before: Confirm / Owner / Author insight notes and [Statistic] (a placeholder too); the image plan is not a note
 const qaOwnMarks = new Set(unverified_figures.map(f => '[Confirm: ' + f.figure + ']').concat(flagged_amounts.map(a => '[Confirm: ' + a.amount + ']'))
-  .concat(business_claims.filter(b => b.marked).map(b => '[Confirm: ' + b.sentence + ']')));
+  .concat(business_claims.filter(b => b.marked).map(b => '[Confirm: ' + b.sentence + ']')).concat(business_promises.filter(b => b.marked).map(b => '[Confirm: ' + b.sentence + ']')));
 const writer_notes = phScan.notes.filter(n => /^\[(?:Confirm|Owner)\b/i.test(n.token) && !qaOwnMarks.has(n.token));
 const open_brackets = placeholders.map(p => ({ ...p, kind: 'placeholder' })).concat(writer_notes.map(n => ({ ...n, kind: 'review_note' })));
 if (placeholder_count > PH_MAX) warnings.push(`Too many placeholders to publish (${placeholder_count}, at most ${PH_MAX} allowed): ` + placeholders.slice(0, 6).map(p => p.token + (p.count > 1 ? ' x' + p.count : '')).join(', ')
-  + ' — rewrite those passages so they do not need the missing figure (what drives the cost, what the stages are, what to ask the vendor), and keep a placeholder only where the owner must fill one value in');
+  + '. Rewrite those passages so they do not need the missing figure (what drives the cost, what the stages are, what to ask the vendor), and keep a placeholder only where the owner must fill one value in');
 
 // 15. Content score (0-100)
 // FIX_PLAN G2: an FAQ block is no longer one of the checks (no FAQ rich results since 2026-05-07); question headings answered directly are.
@@ -672,7 +790,16 @@ const PA = P.address || {}; const AU = prev.author || null; const RV = prev.revi
 const nap_source = MNAP ? (P0.street_address || PA0.street || P0.phone ? 'profile' : (MNAP.source || '')) : (PA0.street || P0.phone ? 'profile' : '');
 const bizName = String(P.business_name || ((prev.site_description && prev.site_description.business_name) ? prev.site_description.business_name : '')).trim();
 const biz = bizName || '[Your Business Name]';
-const pageUrl = (prev.existing_page && prev.existing_page.url) || (domain ? siteUrlOf(domain, String(slug || '').replace(/^\/|\/$/g, '')) : '[Page URL]');
+// RV-17 / L3 (2026-10-21, pre-launch run exec 42): the schema said https://www.techand.ai/ai-consultant while the package and the
+// checklist said .../ai-consultant/ (the ladder's planned URL), and the site itself 308-redirects the slash away. One URL now, in the
+// site's own form: the trailing slash its sitemap uses for most pages (no slash when it does not, as before when it cannot tell), the
+// ladder's planned page when there is one, the page being improved as it is.
+const slashForm = (() => { const ps = (prev.site_urls || []).map(u => String(u || '').replace(/^https?:\/\/[^\/?#]+/i, '').replace(/[?#].*$/, '')).filter(x => x && x !== '/' && !/\.[a-z0-9]{2,5}$/i.test(x));   // CT-FIX (review item 18): a file URL has no slash form and does not vote
+  if (ps.length < 3) return null; const withSlash = ps.filter(x => /\/$/.test(x)).length; return withSlash * 2 > ps.length; })();
+const inSiteForm = (u) => { const raw = String(u || ''); if (!/^https?:\/\/[^\/?#]+\/./.test(raw) || /[?#]/.test(raw) || /\.[a-z0-9]{2,5}$/i.test(raw)) return raw;
+  return slashForm === true ? raw.replace(/\/*$/, '/') : slashForm === false ? raw.replace(/\/+$/, '') : raw; };
+const ladderPageUrl = (prev.ladder_id && String(prev.ladder_target_url || '').trim() && domain) ? siteUrlOf(domain, String(prev.ladder_target_url).trim().replace(/^https?:\/\/[^\/?#]*/i, '').replace(/^\/+/, '')) : '';   // the stored slash is kept when the site's form is unknown
+const pageUrl = (prev.existing_page && prev.existing_page.url) || inSiteForm(ladderPageUrl || (domain ? siteUrlOf(domain, String(slug || '').replace(/^\/|\/$/g, '')) : '[Page URL]'));
 const h1Text = plain(h1.replace(/^#\s*/, '')) || metaTitle;
 const home = domain ? siteUrlOf(domain, '/') : '[Website URL]';
 const slugId = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -695,14 +822,15 @@ if (pkgArticleLike) {
   else if (!String(AU.bio || '').trim()) PROFILE_PH.push({ token: '[Two-sentence bio: what the author does and for whom]', count: 1, where: 'author box' });
 }
 const profile_placeholders = PROFILE_PH.reduce((n, x) => n + x.count, 0);
-const authorRef = AU ? { '@type': 'Person', ...(domain ? { '@id': home + '#author-' + slugId(AU.name) } : {}), name: AU.name, ...(AU.url ? { url: AU.url } : {}) } : { '@type': 'Person', name: '[Author Name]', url: '[Author Page URL]' };
+const authorRef = AU ? { '@type': 'Person', ...(domain ? { '@id': home + '#author-' + slugId(AU.name) } : {}), name: AU.name, ...(AU.url ? { url: AU.url } : {}),
+    ...(!domain && AU.job_title ? { jobTitle: AU.job_title } : {}), ...(!domain && AU.bio ? { description: String(AU.bio).slice(0, 300) } : {}), ...(!domain && AU.image_url ? { image: AU.image_url } : {}) } : { '@type': 'Person', name: '[Author Name]', url: '[Author Page URL]' };   // CT-FIX (review item 20): with no domain there is no @id to point at the full Person block, so the reference carries its details
 if (articleLike) {
-  blocks.push({ type: 'Article', json: { '@context': 'https://schema.org', '@type': 'Article', headline: h1Text, description: plain(metaDesc), author: authorRef, publisher: org, datePublished: today, dateModified: today, mainEntityOfPage: { '@type': 'WebPage', '@id': pageUrl }, keywords: [prev.keyword, ...(brief.secondary_keywords || []).slice(0, 5)].filter(Boolean).join(', '), ...(role === 'case_study' ? { articleSection: 'Case study' } : {}) } });
+  blocks.push({ type: 'Article', json: { '@context': 'https://schema.org', '@type': 'Article', headline: h1Text, description: plain(metaDesc), author: authorRef, publisher: org, datePublished: today, dateModified: today, mainEntityOfPage: { '@type': 'WebPage', ...(domain ? { '@id': pageUrl } : { url: pageUrl }) }, keywords: [prev.keyword, ...(brief.secondary_keywords || []).slice(0, 5)].filter(Boolean).join(', '), ...(role === 'case_study' ? { articleSection: 'Case study' } : {}) } });
   const person = AU ? { '@context': 'https://schema.org', ...authorRef, ...(AU.job_title ? { jobTitle: AU.job_title } : {}), ...((AU.bio || AU.credentials) ? { description: [AU.bio, AU.credentials && !String(AU.bio || '').includes(AU.credentials) ? AU.credentials : ''].filter(Boolean).join(' ').slice(0, 600) } : {}),
       ...(AU.image_url ? { image: AU.image_url } : {}), ...((AU.same_as || []).length ? { sameAs: AU.same_as } : {}), ...((AU.knows_about || []).length ? { knowsAbout: AU.knows_about } : {}), worksFor: domain ? { '@id': home + '#organization', name: biz } : { '@type': 'Organization', name: biz } }
     : { '@context': 'https://schema.org', '@type': 'Person', name: '[Author Name]', jobTitle: '[Job title]', description: '[Two-sentence bio with credentials]', url: '[Author Page URL]', sameAs: ['[LinkedIn profile URL]'], worksFor: { '@type': 'Organization', name: biz } };
   blocks.push({ type: 'Person', note: AU ? 'The author (business profile). Link the byline to the author page.' : 'No business profile on file: fill in the author, or set up the profile once (form "Set up my business profile" / API mode profile) so every page carries it.', json: person });
-  if (RV) blocks.push({ type: 'WebPage', note: 'Expert review (reviewedBy / lastReviewed).', json: { '@context': 'https://schema.org', '@type': 'WebPage', '@id': pageUrl, url: pageUrl, name: h1Text, reviewedBy: { '@type': 'Person', name: RV.name, ...(RV.job_title ? { jobTitle: RV.job_title } : {}), ...(RV.url ? { url: RV.url } : {}) }, lastReviewed: today } });
+  if (RV) blocks.push({ type: 'WebPage', note: 'Expert review (reviewedBy / lastReviewed).', json: { '@context': 'https://schema.org', '@type': 'WebPage', ...(domain ? { '@id': pageUrl } : {}), url: pageUrl, name: h1Text, reviewedBy: { '@type': 'Person', name: RV.name, ...(RV.job_title ? { jobTitle: RV.job_title } : {}), ...(RV.url ? { url: RV.url } : {}) }, lastReviewed: today } });
 } else if (pt.includes('product')) {
   blocks.push({ type: 'Product', json: { '@context': 'https://schema.org', '@type': 'Product', name: h1Text, description: plain(metaDesc), brand: { '@type': 'Brand', name: biz }, url: pageUrl, offers: { '@type': 'Offer', priceCurrency: prev.currency || 'USD', price: '[Price as a number]', availability: 'https://schema.org/InStock', url: pageUrl } } });
 } else if (role === 'local') {
@@ -717,7 +845,20 @@ if (articleLike) {
     ...(P.price_range ? { priceRange: P.price_range } : {}), ...(P.logo_url ? { logo: P.logo_url, image: P.logo_url } : {}), ...(P.map_url ? { hasMap: P.map_url } : {}) } });
   blocks.push({ type: 'Service', json: { '@context': 'https://schema.org', '@type': 'Service', name: h1Text, serviceType: prev.keyword, description: plain(metaDesc), provider: lbId ? { '@id': lbId, name: biz } : org, areaServed: { '@type': 'Place', name: area }, url: pageUrl } });
 } else {
-  blocks.push({ type: 'Service', json: { '@context': 'https://schema.org', '@type': 'Service', name: h1Text, serviceType: prev.keyword, description: plain(metaDesc), provider: org, areaServed: prev.country || '[Country]', url: pageUrl } });
+  // L3 (2026-10-21): serviceType is the service's name ("AI Consultant", acronyms kept), not the raw lowercase keyword; areaServed lists the
+  // areas the business profile names when it names any, the target country otherwise
+  const areasL3 = (Array.isArray(P.service_areas) ? P.service_areas : []).map(x => String(x || '').trim()).filter(Boolean);
+  blocks.push({ type: 'Service', json: { '@context': 'https://schema.org', '@type': 'Service', name: h1Text, serviceType: titleCaseKeyword(String(prev.keyword || '')), description: plain(metaDesc), provider: org,
+    areaServed: areasL3.length ? areasL3.slice(0, 12).map(a => ({ '@type': 'Place', name: a })) : (prev.country || '[Country]'), url: pageUrl } });
+}
+// RV-10 (2026-10-21): a page that is not article-like carries a compact expert line when an author is on file (Blog Package), so the author
+// is in the schema too: the Person, and the WebPage with its author, reviewer and the visible "Updated" date. Nothing without a profile.
+if (!articleLike && !pkgArticleLike && AU) {
+  blocks.push({ type: 'Person', note: 'The author named in the expert line under the H1 (business profile).', json: { '@context': 'https://schema.org', ...authorRef, ...(AU.job_title ? { jobTitle: AU.job_title } : {}),
+    ...((AU.same_as || []).length ? { sameAs: AU.same_as } : {}), ...((AU.knows_about || []).length ? { knowsAbout: AU.knows_about } : {}), worksFor: domain ? { '@id': home + '#organization', name: biz } : { '@type': 'Organization', name: biz } } });
+  blocks.push({ type: 'WebPage', note: 'The page, its author and the date shown in the expert line.', json: { '@context': 'https://schema.org', '@type': 'WebPage', ...(domain ? { '@id': pageUrl } : {}), url: pageUrl, name: h1Text,
+    author: { '@type': 'Person', ...(authorRef['@id'] ? { '@id': authorRef['@id'] } : {}), name: AU.name }, dateModified: today,
+    ...(RV ? { reviewedBy: { '@type': 'Person', name: RV.name, ...(RV.job_title ? { jobTitle: RV.job_title } : {}), ...(RV.url ? { url: RV.url } : {}) }, lastReviewed: today } : {}) } });
 }
 const V = prev.video || null;
 if (V && V.url) {
@@ -760,17 +901,17 @@ if (insightPrompts) eeat_notes.push(insightPrompts + ' [Author insight: ...] lin
 // B3-8: what the refresh found on the live page (a note for the report, never an editor round: the draft is what the gate judges)
 if (refresh_check && refresh_check.live_figures_unverified.length) { const lf = refresh_check.live_figures_unverified;
   eeat_notes.push('Refresh: the live page shows ' + lf.length + ' figure(s) its own cited source no longer states as it reads today: ' + lf.slice(0, 4).map(x => '"' + x.figure + '" (' + x.sources.join(', ') + ')').join('; ')
-    + (lf.some(x => x.still_in_draft) ? ' — the refreshed draft still carries ' + lf.filter(x => x.still_in_draft).length + ' of them, marked [Confirm: …]: quote the source\'s current figure or drop the claim' : ' — the refreshed draft no longer repeats them') + '.'); }
+    + (lf.some(x => x.still_in_draft) ? '. The refreshed draft still carries ' + lf.filter(x => x.still_in_draft).length + ' of them, marked [Confirm: ...]: quote the source\'s current figure or drop the claim' : '. The refreshed draft no longer repeats them') + '.'); }
 if (refresh_check && refresh_check.sources_failed.length) eeat_notes.push('Refresh: ' + refresh_check.sources_failed.length + ' source(s) the live page cites could not be re-read today, so the figures citing them were not re-checked: ' + refresh_check.sources_failed.slice(0, 3).map(x => x.url).join(', ') + '.');
 if (role === 'local' && !(P.phone && PA.street)) eeat_notes.push('Local page without a full address and phone on file: fill in the business profile so the NAP block and LocalBusiness schema are complete.');
-if (V && (V.missing || []).length) eeat_notes.push('Video: missing ' + V.missing.join(', ') + (V.missing.includes('transcript') ? ' (paste the transcript from YouTube Studio → Subtitles)' : '') + '.');
-if (role === 'hub' && HPplanned.length) eeat_notes.push(HPplanned.length + ' cluster page(s) are planned and not live yet: this page links to none of them. They are listed in the package as "links to add when published" — add the link once each one is live.');
+if (V && (V.missing || []).length) eeat_notes.push('Video: missing ' + V.missing.join(', ') + (V.missing.includes('transcript') ? ' (paste the transcript from YouTube Studio, under Subtitles)' : '') + '.');
+if (role === 'hub' && HPplanned.length) eeat_notes.push(HPplanned.length + ' cluster page(s) are planned and not live yet: this page links to none of them. They are listed in the package as "links to add when published": add the link once each one is live.');
 fixes.push('Generated ' + blocks.map(b => b.type).join(' + ') + ' schema');
 
 // FIX_PLAN D10: a page nobody can publish never passes — more than PH_MAX placeholders, or more than 25% over the brief's target (which is
 // itself clamped to the competitor analysis' recommendation, or to the verdict's own target, in Parse Brief).
 const too_many_placeholders = placeholder_count > PH_MAX;
-const too_long = mainWords > target * 1.25;
+const too_long = mainWords > lenHigh;
 // R22's editor half (2026-10-14, the second re-rating): being over length was only ever one warning among up to twenty, and the page
 // that was delivered still ran 2,648 words against its own 1,800 target (+47%) after TWO editor rounds. The cut is now an instruction of
 // its own — how many words to take out and which sections carry them (the ones furthest over their own outline target, else the longest) —
@@ -781,10 +922,12 @@ const fat_sections = sections.map(sec => { const o = outline.find(x => x.h2 && p
     const t = o ? Number(o.target_words) || 0 : 0; return { h2: sec.h2, words: sec.words, target: t, over: t ? sec.words - t : 0 }; })
   .sort((a, b) => (b.over - a.over) || (b.words - a.words)).slice(0, 3).filter(x => x.over > 0 || !x.target);
 const atRiskTerms = termCoverage.filter(t => t.found > 0 && t.found <= 2).map(t => t.term).slice(0, 15);
-const length_instruction = (target && mainWords > target * 1.1)
-  ? 'CUT ' + over_words + ' words: the main content is ' + mainWords + ' words against a target of ' + target + ' (+' + over_pct + '%). '
+const cutTo = lenBand ? lenHigh : Math.round(target * 1.1);   // CT-FIX2 (D8): inside the band nothing is cut; above it, down to its top
+const cut_words = lenBand ? Math.max(0, mainWords - lenHigh) : over_words;
+const length_instruction = (target && (lenBand ? mainWords > lenHigh : mainWords > target * 1.1))
+  ? 'CUT ' + cut_words + ' words: the main content is ' + mainWords + ' words against ' + (lenBand ? 'the band of ' + lenLow + '-' + lenHigh + lenBasis : 'a target of ' + target + ' (+' + over_pct + '%)') + '. '
     + (fat_sections.length ? 'The longest sections are ' + fat_sections.map(x => '"' + x.h2 + '" (' + x.words + ' words' + (x.target ? ' against ' + x.target : '') + ')').join(', ') + '. ' : '')
-    + 'Cut repetition, restatements and secondary detail; keep every section, every verified fact, every source and every link. Do not add a single word, and do not stop above ' + Math.round(target * 1.1) + ' words.'
+    + 'Cut repetition, restatements and secondary detail; keep every section, every verified fact, every source and every link. Do not add a single word, and do not stop above ' + cutTo + ' words.'
     // A-17: the cut once took the Quick answer itself (exec 771) — the protected blocks are named in the instruction, not left to inference
     + ' PROTECTED, never cut: the **Quick answer:** line right after the introduction (' + (answerWords || '40-70') + ' words), every source link and the call to action.'
     // R43: a correct cut must not fail the coverage check by taking a term off the page — the ones used only once or twice are named
@@ -800,21 +943,51 @@ const placeholder_list = placeholders.slice(0, 6).map(p => p.token + (p.count > 
 const removed_note = !masked_amounts.length ? ''
   : ' The amount(s) removed: ' + masked_amounts.slice(0, 4).map(a => '"' + a.amount + '" in "' + a.context + '"').join('; ')
     + (masked_amounts.length > 4 ? ' and ' + (masked_amounts.length - 4) + ' more' : '')
-    + ' — nothing on file and no source cited in that sentence states them, so give us the figure or let the sentence drop it.';
+    + '. Nothing on file and no source cited in that sentence states them, so give us the figure or let the sentence drop it.';
 // R45: a bracket that is not a masked figure ("[name, role]", "[date]") is called what it is, and the writer's notes to confirm are named
 const FIGURE_MASK = /^\[(?:Price|Statistic|Number|Amount|Figure|Percentage|Timeline)\]$/i;
 const allMasks = placeholders.every(p => FIGURE_MASK.test(p.token));
 const writer_note = writer_notes.length ? ' The writer also left ' + writer_notes.reduce((n, x) => n + x.count, 0) + ' note(s) for you to confirm: '
   + writer_notes.slice(0, 4).map(x => x.token + (x.count > 1 ? ' x' + x.count : '')).join(', ') + '.' : '';
 const ph_base = (!placeholder_count ? (removed_note ? removed_note.trim() : '')
-  : (too_many_placeholders ? placeholder_count + ' placeholder(s) left in the copy (at most ' + PH_MAX + ' can be published): ' + placeholder_list
-    : allMasks ? placeholder_count + ' masked figure(s) still in the text: ' + placeholder_list + ' — fill each one in, or rewrite the sentence so it does not need the figure, before you publish'
-      : placeholder_count + ' bracket(s) left in the text for you to fill in: ' + placeholder_list + ' — fill each one in before you publish') + removed_note).trim();
+  : (too_many_placeholders ? placeholder_count + ' placeholder(s) left in the copy (at most ' + PH_MAX + ' can be published): ' + placeholder_list + '. Fill in or delete each one'
+    : allMasks ? placeholder_count + ' masked figure(s) still in the text: ' + placeholder_list + '. Fill in each one, or rewrite the sentence so it does not need the figure, before you publish'
+      : placeholder_count + ' bracket(s) left in the text: ' + placeholder_list + '. Fill in or delete each one before you publish') + removed_note).trim();
 const placeholder_note = !writer_note ? ph_base : !ph_base ? writer_note.trim() : ph_base + (/[.!?]$/.test(ph_base) ? '' : '.') + writer_note;
+// Placeholder gate (2026-10-21, pre-launch run exec 42): body brackets refused a page only above PH_MAX (5), so a page with
+// "[Tech& assessment duration and fee band, to confirm]" in its text would have been labelled "passed the quality check" and
+// `publishable: true` in the package and the e-mail, while the app's own CMS rule (app/shared/src/cms.ts cmsReadiness) refuses any open
+// bracket. One rule now: any bracket left for the owner in the body (a placeholder, or a [Confirm: ...] / [Owner: ...] / [Author insight:
+// ...] note; the image plan is not one) keeps the page "not ready to publish", and each one is named with what to do: fill it in or delete it.
+const body_notes = phScan.notes.filter(n => !/^\[Image\b/i.test(n.token));
+// E-CLAIM: every statement about the business that nothing on file supports (§9d and §9e) is one owner edit with the sentence itself
+const claimMarks = new Set(business_claims.filter(b => b.marked).concat(business_promises.filter(b => b.marked)).map(b => '[Confirm: ' + b.sentence + ']'));
+const bizLabel = bizNames[0] || 'your business';
+const claim_edits = business_claims.map(b => ({ ...b, src: 'terms' })).concat(business_promises.map(b => ({ ...b, src: 'promise' })))
+  .map(b => ({ token: b.marked ? '[Confirm: ' + b.sentence + ']' : b.sentence, count: 1, kind: 'claim', claim_kind: b.kind, sentence: b.sentence, action: 'confirm_or_delete',
+    text: (b.where === 'image caption' ? 'Confirm it is true or change the image caption: "' : 'Confirm it is true or delete it: "') + b.sentence + '" (nothing in the business facts, the author profile, the case studies or ' + bizLabel + '\'s own pages says this; if it is true, add it to your business facts so later pages can say it too)' }));
+const claims_open = business_promises.length + business_claims.filter(b => !b.marked).length;   // marked ones are counted as brackets below
+const body_brackets = placeholder_count + body_notes.reduce((k, n) => k + n.count, 0);
+// what the owner edits by hand, bracket by bracket. A price, fee or duration bracket on a page whose business gave no such facts is one
+// to DELETE (the brief's own angle rule said "no numbers and no placeholders" for cost; the writer added one anyway)
+const PRICE_WORDS = /\b(?:price|prices|pricing|fee|fees|cost|costs|rate|rates|budget|band|aed|usd|eur|gbp|sar)\b/i, TIME_WORDS = /\b(?:duration|timeline|how long|weeks?|months?|days?|turnaround)\b/i;
+const owner_edits = [...placeholders.map(p => ({ token: p.token, count: p.count, kind: 'placeholder' })), ...body_notes.filter(n => !claimMarks.has(n.token)).map(n => ({ token: n.token, count: n.count, kind: 'note' }))]
+  .map(x => { const inner = String(x.token).replace(/^\[|\]$/g, '');
+    const noFacts = !qaOwnMarks.has(x.token) && ((PRICE_WORDS.test(inner) && prev.pricing_facts === false) || (TIME_WORDS.test(inner) && prev.timeline_facts === false));   // CT-FIX (review item 8): QA's own [Confirm: <figure>] / [Confirm: <amount>] mark is a figure to check (a true government fine is one), never a business price to delete
+    const what = noFacts ? 'delete'
+      : x.kind === 'note' ? (/^Author insight/i.test(inner) ? 'write' : 'confirm') : FIGURE_MASK.test(x.token) ? 'fill_or_rewrite' : 'fill_or_delete';
+    const text = what === 'delete' ? 'Delete ' + x.token + ' and the words that need it: no ' + (PRICE_WORDS.test(inner) ? 'price' : 'timeline') + ' facts are on file, so the page should not promise one (or replace it with a real figure you are happy to publish)'
+      : what === 'write' ? 'Replace ' + x.token + ' with a real example from your own work, or delete it'
+      : what === 'confirm' ? 'Check the statement marked ' + x.token + ': keep it and remove the bracket if it is true, or delete the sentence'
+      : what === 'fill_or_rewrite' ? 'Fill in ' + x.token + ' with the real figure, or rewrite the sentence without it'
+      : 'Fill in ' + x.token + ' with the real detail, or delete the bracket and the words that need it';
+    return { token: x.token, count: x.count, action: what, text: text + (x.count > 1 ? ' (' + x.count + ' times)' : '') }; });
+// the claims come right after the placeholders: they are what a buyer would hold the business to
+owner_edits.splice(placeholders.length, 0, ...claim_edits);
 // P2-6: `passed_copy` judges the text and decides the editor round; `passed` judges the page the owner receives, so the author box's
-// bracketed fields keep it false — the honest answer to "can I publish this as it is?".
-const passed_copy = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25 && !too_many_placeholders && !too_long;
-const passed = passed_copy && profile_placeholders === 0;
+// bracketed fields, and every bracket left in the body, keep it false: the honest answer to "can I publish this as it is?".
+const passed_copy = warnings.length === 0 && content_score >= 80 && lenOk && !too_many_placeholders && !too_long;
+const passed = passed_copy && profile_placeholders === 0 && body_brackets === 0 && claims_open === 0;   // E-CLAIM: an unsupported promise is an open bracket
 // v4.6: the editor pass (a full rewrite) runs only when it can still improve the page. It is skipped when the draft already scores 90+, the editorial
 // review rates it 85+ with no high-severity problem, the length is on target and the only open notes are style notes (passive voice, long
 // sentences, medium review remarks). Every SEO check (meta, H1 / keyword, quick answer, question headings, table, CTA, links, sources, figures, coverage,
@@ -822,7 +995,7 @@ const passed = passed_copy && profile_placeholders === 0;
 const STYLE_ONLY = /^(Passive voice in about|\d+ sentences longer than 28 words|Editor review: )/;
 const crit = critique || lastCritique || {};
 const highProblem = (crit.problems || []).some(p => /high|critical/i.test(p.severity || ''));
-const editor_needed = !passed_copy && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && !too_many_placeholders && !too_long && Math.abs(mainWords - target) <= target * 0.25 && warnings.every(w => STYLE_ONLY.test(w)));
+const editor_needed = !passed_copy && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && !too_many_placeholders && !too_long && lenOk && warnings.every(w => STYLE_ONLY.test(w)));
 if (!passed_copy && !editor_needed && round === 1) fixes.push('Editor pass skipped: the draft met every SEO check (score ' + content_score + ', review ' + crit.score + '); the style notes below are left for a final read');
 // R11 (2026-10-13, re-rating §3.11): when the rounds run out with the gate still failing, the page is DELIVERED AS A DRAFT and labelled as
 // one. Live (exec 521) round 1 failed on 6 placeholders, the editor ran, round 2 came back with 12 (11 × [Price], 1 × [Number]) and 40%
@@ -830,37 +1003,64 @@ if (!passed_copy && !editor_needed && round === 1) fixes.push('Editor pass skipp
 // meta.json saying the quality check had failed. The counts below are this round's, so the delivery can only ever carry the LAST round's.
 const max_rounds = Math.max(1, Math.round(Number(prev.qa_max_rounds) || 2));
 const rounds_left = Math.max(0, max_rounds - round);
-const not_ready = !passed && !rounds_left;   // no round left to fix it: a draft, not a publishable page
+// no round left to fix it, or no editor round will run (the copy passed and only the owner's brackets are left): a draft, not a page to publish
+const not_ready = !passed && (!rounds_left || !editor_needed);
 // R46 (2026-10-16): QA round N follows N - 1 editor calls (round 1 reads the copywriter's draft). Live (exec 616) the note said "The editor
 // had 2 round(s)" after ONE editor call and the cost ledger priced a second; both now read `editor_rounds`.
 const editor_rounds = Math.max(0, round - 1);
+const promises_note = !business_promises.length ? '' : business_promises.length + ' statement(s) about ' + bizLabel + '\'s services, process or terms that nothing on file supports (business facts, author profile, case studies, its own pages): '
+  + business_promises.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + (business_promises.length > 4 ? '; and ' + (business_promises.length - 4) + ' more' : '') + '. Confirm each one is true or delete it before you publish' + (promise_check.note ? ' (' + promise_check.note + ')' : '');
+const body_notes_other = body_notes.filter(n => !claimMarks.has(n.token));
 const not_ready_reasons = !not_ready ? [] : [
   placeholder_note,   // R25: named whenever any body placeholder is left, not only above PH_MAX
+  promises_note,   // E-CLAIM: the promises in the business's name, sentence by sentence
+  // the [Confirm: ...] marks QA put on figures and claims, and [Author insight: ...] lines, when no warning below names them already
+  (!placeholder_count && !writer_note && body_notes_other.length && !warnings.some(w => /now marked \[Confirm/.test(w))) ? body_notes_other.reduce((k, n) => k + n.count, 0) + ' note(s) in square brackets left in the text: ' + body_notes_other.slice(0, 4).map(n => n.token).join(', ') + '. Complete or delete each one before you publish' : '',
   profile_placeholders ? profile_placeholders + ' bracketed field(s) in the byline, the author box and the Person schema still need your details' : '',
-  too_long ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
-  (!too_long && Math.abs(mainWords - target) > target * 0.25) ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
+  too_long ? 'the main content is ' + mainWords + ' words against a target of ' + (lenBand ? lenLow + '-' + lenHigh + lenBasis : target) : '',
+  (!too_long && !lenOk) ? 'the main content is ' + mainWords + ' words against a target of ' + (lenBand ? lenLow + '-' + lenHigh + lenBasis : target) : '',
   (coverage_target_pct && coverage_pct < coverage_target_pct) ? coverage_compare : '',   // R43: one measure, both figures, the basis named
   content_score < 80 ? 'the content score is ' + content_score + ' of 100 (80 is the bar)' : '',
   ...warnings.filter(w => !/^Too many placeholders|^Main content is too long/.test(w)).slice(0, 4)
 ].filter(Boolean);
 const quality_label = passed ? 'passed the quality check'
-  : not_ready ? 'did not pass the quality check — not ready to publish'
+  : not_ready ? 'did not pass the quality check, so it is not ready to publish'
     : 'needs another editing round before it can be published';
+// QA advice actionable (2026-10-21, pre-launch run exec 42): the owner was told "fix it and run it again". A new run writes (and charges
+// for) a whole new page, throws away every bracket the owner filled in, and reads the same results page again. What is left on a draft
+// is finished BY HAND, in the draft: `owner_edits` names each bracket and what to do with it, and `next_step` never offers a paid re-run.
+const edits_only = not_ready && passed_copy;   // the copy passed: only the owner's brackets and the author fields are left
+const next_step = !not_ready ? ''
+  : (edits_only ? 'Finish this draft by hand: ' : 'Finish this draft by hand: work through the points above in the text, then ')
+    + (owner_edits.length ? (edits_only ? '' : 'for each bracket, ') + owner_edits.slice(0, 6).map(e => e.text.replace(/^./, c => c.toLowerCase())).join('; ') + (owner_edits.length > 6 ? '; and the ' + (owner_edits.length - 6) + ' other bracket(s) listed' : '') + '. '
+      : profile_placeholders ? 'fill in the author fields or set up the business profile once. ' : (edits_only ? 'review it once more. ' : ''))
+    + 'Then publish it. You do not need a new run for these edits: a new run writes a whole new page and is charged again.';
 const quality = { passed, publishable: passed, not_ready, round, max_rounds, rounds_left, label: quality_label, reasons: not_ready_reasons,
   placeholder_note, placeholders_in_body: placeholders.map(p => p.token),   // R25: the owner is told about a masked figure even on a page that is otherwise ready
   placeholder_count, placeholders_total: placeholder_count + profile_placeholders, placeholder_max: PH_MAX, coverage_pct, coverage_target_pct, content_score,
-  editor_rounds, open_brackets,   // R46 / R45
-  note: not_ready ? (editor_rounds ? 'The editor had ' + editor_rounds + ' round' + (editor_rounds === 1 ? '' : 's') : 'No editing round was left (the quality check allows ' + max_rounds + ' round' + (max_rounds === 1 ? '' : 's') + ')')
+  editor_rounds, open_brackets, body_brackets, owner_edits, next_step, fix_by: not_ready ? 'edit' : '', claims_open, unsupported_promises: business_promises.length,   // R46 / R45; owner edits by hand, never a re-run
+  note: not_ready ? (editor_rounds ? 'The editor had ' + editor_rounds + ' round' + (editor_rounds === 1 ? '' : 's') : (rounds_left ? 'No editing round could change it (what is left is for you to fill in)' : 'No editing round was left (the quality check allows ' + max_rounds + ' round' + (max_rounds === 1 ? '' : 's') + ')'))
     + ' and the page still fails the checks above: it is delivered as a draft to finish by hand, not as a page to publish as it is.' : '' };
+// M1 / M2 (2026-10-21, pre-launch run exec 42): the top page's "Secondary Keywords" were the keywords of the three rung pages planned
+// under it ("ai consulting", "ai consultant dubai", "ai consulting firm"), and the PDF / Word printed that list while meta.json printed the
+// verdict's. One list now: the draft's own line (what the report prints and the package reads), without another page of the same ladder.
+const siblingKw = new Set([...(prev.ladder_links || []).map(l => l && (l.keyword || l.about)), ...(prev.planned_link_targets || []).map(l => l && (l.keyword || l.about)), ...(prev.hub_pages || []).map(h => h && h.keyword)]
+  .map(x => String(x || '').toLowerCase().replace(/\s+/g, ' ').trim()).filter(x => x && x !== kw));
+const secondary_dropped = [];
+if (siblingKw.size) md = md.replace(/^(Secondary Keywords:[ \t]*)(.*)$/m, (m0, head, list) => { const items = list.split(/\s*,\s*/).filter(Boolean);
+  const kept = items.filter(x => { const k = x.toLowerCase().replace(/\s+/g, ' ').trim(); if (siblingKw.has(k)) { secondary_dropped.push(x); return false; } return true; });
+  return head + kept.join(', '); });
+if (secondary_dropped.length) fixes.push('Took ' + secondary_dropped.length + ' keyword(s) of other pages of this ladder off the secondary keywords (each has its own page): ' + secondary_dropped.join(', '));
 const site_profile_out = (P && Object.keys(P).some(k => k === 'address' ? Object.values(P.address || {}).some(Boolean) : String(P[k] || '').trim())) ? P : (prev.site_profile || null);
 return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null, site_profile: site_profile_out,
   content_qa: { ai_ready, round, editor_rounds, passed, editor_needed, content_score, quality, publishable: passed, not_ready, quality_label, not_ready_reasons, max_rounds, rounds_left, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, writer_notes, open_brackets, business_name: bizName, nap_source,
-    placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections,   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
+    placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections, length_band,   // CT-FIX2 (D8): the band judged against and its sample   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
     masked_amounts, flagged_amounts, sourced_amounts,   // B3-1 / B3-2: what the money mask removed, what it left for review, and what a cited source vouched for
     outbound_links: externalUrls.map(e => ({ url: e.url, anchor: e.anchor, host: e.host, tier: e.tier })),   // A-14: every outbound link, for Outbound Link Check
-    business_claims, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19
+    business_claims, business_promises, promise_check, carried_promises, claims_open, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19 / E-CLAIM
     verdict_exclusions, excluded_sections, protected_restored,   // A-18 / A-17
+    coverage_advice, subtopics_dropped, owner_edits, next_step, body_brackets, page_url: pageUrl,   // D5 / owner edits / placeholder gate (2026-10-21)
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: plannedLinksQA.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role, anchor: anchorText(p) })),

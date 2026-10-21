@@ -90,7 +90,9 @@ const fitCtxFor = (domain, pages) => {
 const byLadder = new Map();
 for (const r of rows) { if (!byLadder.has(r.ladder_id)) byLadder.set(r.ladder_id, []); byLadder.get(r.ladder_id).push(r); }
 const checks = []; const skipped = []; const setAside = []; const pausedLadders = [];
-const serpBody = (p, device) => [{ keyword: p.keyword, location_code: Number(p.location_code), language_code: p.language_code || 'en', depth: 50,
+// KW-SERP (2026-10-21): the AI Overview is loaded too (the one request shape every path uses; it costs no more: depth 30 measured $0.006
+// with and without it), so the tracker's 50-deep desktop reading can serve every shallower path the same day (v5/code/_serp_cache.js)
+const serpBody = (p, device) => [{ keyword: p.keyword, location_code: Number(p.location_code), language_code: p.language_code || 'en', depth: 50, load_async_ai_overview: true,
   device, os: device === 'mobile' ? 'android' : 'windows' }];   // the device was never set before G6 (DataForSEO's default is desktop/windows)
 for (const [id, pages] of byLadder) {
   const top = pages.find(p => Number(p.rung) === 4) || pages[0];

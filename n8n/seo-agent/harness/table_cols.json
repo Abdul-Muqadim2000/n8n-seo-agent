@@ -332,7 +332,9 @@
   "decay_lost",
   "decay_kind",
   "decay_basis",
-  "measured_at"
+  "measured_at",
+  "http_status",
+  "status_at"
  ],
  "LOG": [
   "site_id",

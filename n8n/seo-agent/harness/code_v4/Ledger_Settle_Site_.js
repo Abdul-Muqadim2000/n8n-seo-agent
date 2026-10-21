@@ -247,11 +247,11 @@ const CC = (() => {
     content: 0.04,            // 0.0221 (exec 521) — was 0.08
     verdict: 0.04,            // 0.0221 (exec 486) — was 0.06
     report: 0.04,             // 0.0221 (exec 519)
-    discover: 0.34,           // 0.2552 (exec 518) — was 0.15, below the money
-    ladder: 0.21,             // 0.1162 (exec 495) + 24 results-page calls at $0.002 = 0.1642 — was 0.16 before B2-4 (2026-10-15)
+    discover: 0.40,           // 0.2552 (exec 518) + 16 live checks now 30 deep with the AI Overview (+$0.004 each, KW-SERP 2026-10-21) = 0.3192 — was 0.34
+    ladder: 0.31,             // 0.1162 (exec 495) + 24 results-page calls at $0.006 (30 deep + AI Overview, KW-SERP 2026-10-21) = 0.2602 — was 0.21
     ai_visibility: 0.95,      // 0.7946 (exec 526) — was 0.60, below the money
     backlinks: 0.5,           // 0.3727 (execs 528 / 529)
-    assess: 0.034,            // 0.0254 per check (execs 487-489, $0.0761 for three) — was 0.024, below the money
+    assess: 0.04,             // 0.0254 per check (execs 487-489) + its results page 30 deep with the AI Overview ($0.006, KW-SERP 2026-10-21) = 0.0314 — was 0.034
   };
   const ALPHA = 0.3;          // how fast the rolling figure follows the last settle
   const HEADROOM = 1.25;      // the guard reserves a quarter more than the rolling figure
@@ -663,7 +663,7 @@ const ranAi = AI_NODES.filter(n => { try { return ($(n).all() || []).length > 0;
 //     measurement, and the counter can never fail the run (neverError + continueRegularOutput + the retry rule).
 // With no table at all (a workflow whose builder has not been taught this) AI_CALLS is `[]`, nothing is priced and the settle keeps the
 // reservation exactly as R31 left it.
-const AI_CALLS = [{"after": ["Site Report"], "branch": 0, "count_answer": "Count Answer (Site Brief)", "count_per_item": true, "count_prompt": "Count Prompt (Site Brief)", "count_resume": "After Count (Site Brief)", "count_rounds": 0, "count_set": "Prompt For Count (Site Brief)", "effort": "low", "fields": ["facts"], "from": [], "input": "Brief Input", "max_tokens": 8192, "model": "claude-sonnet-5-5", "model_node": "Claude \u2014 Site Brief", "node": "Site Brief", "ref": "$('Brief Input').item.json", "streaming": false, "template_chars": 3143}];
+const AI_CALLS = [{"after": ["Site Report"], "branch": 0, "count_answer": "Count Answer (Site Brief)", "count_per_item": true, "count_prompt": "Count Prompt (Site Brief)", "count_resume": "After Count (Site Brief)", "count_rounds": 0, "count_set": "Prompt For Count (Site Brief)", "effort": "low", "fields": ["facts"], "from": [], "input": "Brief Input", "max_tokens": 8192, "model": "claude-sonnet-5-5", "model_node": "Claude \u2014 Site Brief", "node": "Site Brief", "ref": "$('Brief Input').item.json", "streaming": false, "template_chars": 3590}];
 const CAL = "";   // the stored per-model correction factors the monthly reconciliation writes ('' when this workflow reads none)
 const __jsonOf = (n, idx) => { try { return ((idx == null ? $(n).all() : $(n).all(idx)) || []).map(i => (i && i.json) || {}); } catch (e) { return null; } };
 const __chars = (v) => v == null ? 0 : (typeof v === 'string' ? v.length : JSON.stringify(v).length);

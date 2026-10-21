@@ -11,6 +11,11 @@
 /*__DRAFTS__*/
 /*__DFS_RETRY__*/
 /*__RIVALS__*/
+// RV-1 (2026-10-21, pre-launch run on techand.ai): the brief said "build on your existing D365 F&O pages" and the report listed them as "your
+// cited pages" while they answer 404. The page inventory says what each address answered (seo_pages.http_status, the Site Tracker): a cited
+// page that no longer answers is flagged, kept out of the brief's pages to build on, and turned into the one redirect action (_gone.js).
+/*__GONE__*/
+const pageInv = (() => { try { return $('Load Pages (AI)').all().map(i => i.json).filter(r => r && r.site_id && r.url && !r.error); } catch (e) { return []; } })();
 // G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): a weekly run split across executions is measured ONCE, in its last execution, over every answer
 // of the run — this execution's and the ones earlier executions stored (seo_ai_answers, same run_id). A site whose run continues in another
 // execution is not measured here (AI Chunk Handoff states its money); with no site finishing here the node says so and the report path ends.
@@ -36,8 +41,10 @@ const GENERIC_SOCIAL = /(^|\.)(youtube\.com|linkedin\.com|facebook\.com|instagra
 const MEDIA = /(^|\.)(gulfnews|khaleejtimes|thenationalnews|zawya|arabianbusiness|gulfbusiness|reuters|bloomberg|forbes|cnbc|bbc|ft|wsj|techcrunch|entrepreneur|economist|businessinsider|thenational|arabnews|timesofindia|dawn)\.[a-z.]+$/i;
 const DIRECTORY = /(^|\.)(g2|capterra|clutch|trustpilot|goodfirms|getapp|softwareadvice|crunchbase|yelp|sortlist|designrush|themanifest|[a-z-]*yellowpages[a-z-]*|[a-z-]*directory[a-z-]*)\.[a-z.]+$/i;
 const AUTHORITY = /(^|\.)(deloitte|pwc|kpmg|ey|gartner|forrester|mckinsey|accenture|statista|bcg|bain|idc)\.[a-z.]+$/i;
-const GOV = /\.gov(\.[a-z]{2})?$|(^|\.)u\.ae$|\.int$|\.edu(\.[a-z]{2})?$/i;
-const kindOf = (d) => GOV.test(d) ? 'official' : GENERIC_SOCIAL.test(d) ? 'platform' : MEDIA.test(d) ? 'media' : DIRECTORY.test(d) ? 'directory' : AUTHORITY.test(d) ? 'authority' : 'site';
+const GOV = /\.gov(\.[a-z]{2})?$|(^|\.)u\.ae$|\.int$|\.edu(\.[a-z]{2})?$|(^|\.)(difc|adgm|dmcc|dafz|jafza|rakez|dso|dubaichamber|abudhabichamber)\.(com|ae|org)$/i;   // RV-14: the UAE free-zone authorities are official bodies, not rivals
+// RV-14 (2026-10-21): a search engine is where AI looked, never a place to "get featured on" (the report said "Get featured on google.com")
+const ENGINE = /(^|\.)(google|bing|yahoo|duckduckgo|yandex|baidu|ecosia|ask)\.[a-z.]+$/i;
+const kindOf = (d) => ENGINE.test(d) ? 'engine' : GOV.test(d) ? 'official' : GENERIC_SOCIAL.test(d) ? 'platform' : MEDIA.test(d) ? 'media' : DIRECTORY.test(d) ? 'directory' : AUTHORITY.test(d) ? 'authority' : 'site';
 const pct = (a, b) => b ? Math.round(1000 * a / b) / 10 : 0;
 const ENG = { chatgpt: 'ChatGPT', perplexity: 'Perplexity', gemini: 'Gemini', claude: 'Claude', ai_overview: 'Google AI Overview', ai_mode: 'Google AI Mode', copilot: 'Copilot', chatgpt_api: 'ChatGPT API', gemini_api: 'Gemini API' };   // G6: + the model APIs (opt-in)
 const FORM_URL = '__FORM_URL__', API_URL = '__API_URL__';
@@ -103,9 +110,17 @@ return plans.map(p => {
   const ranks = ans.filter(r => r.rank > 0).map(r => Number(r.rank));
   const meta = new Map([...p.prompts, ...freshP.filter(r => r.site_id === p.site_id)].map(q => [q.prompt_id, q]));
   const volOf = new Map([...meta.values()].map(q => [q.prompt_id, Number(q.volume) || 0]));
+  // RV-14 (2026-10-21): a site whose cited pages are ranking lists ("Best AI Consultants for Small Businesses in Dubai (2026)", abcmoney.co.uk)
+  // publishes lists of providers, it is not one: it is never counted as a business AI recommends instead of you
+  const LIST_TITLE = /^\s*(the\s+)?(\d+\s+)?(best|top)\b|\btop\s+\d+\b|\b\d+\s+best\b|\branking/i;
+  const listSites = (() => { const by = new Map(); const hostU = (u) => { const m = String(u || '').match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
+    for (const r of ansAll) { let cu = []; try { cu = JSON.parse(r.cited_urls || '[]'); } catch (e) {} for (const c of (Array.isArray(cu) ? cu : [])) { const h = hostU(c && c.u); if (!h || !c.t) continue;
+      const x = by.get(h) || { list: 0, other: 0 }; if (LIST_TITLE.test(String(c.t))) x.list++; else x.other++; by.set(h, x); } }
+    return new Set([...by.entries()].filter(([, x]) => x.list > 0 && x.other === 0).map(([h]) => h)); })();
+  const notList = (d) => !listSites.has(String(d || '').toLowerCase().replace(/^www\./, '')) || (p.configured_competitors || []).includes(d);
   // competitors: configured ones always; plus businesses AI names in at least 2 answers (domains, or brand names without a known website)
   const counts = new Map(); const bump = (d, n) => counts.set(d, (counts.get(d) || 0) + n);
-  for (const r of ans) for (const d of list(r.competitors)) bump(d, 1);
+  for (const r of ans) for (const d of list(r.competitors).filter(notList)) bump(d, 1);
   for (const d of PR) for (const [k, n] of Object.entries(d.competitors || {})) bump(k, Number(n) || 0);
   { const merged = mergeBrands([...counts.entries()], p.aliases); counts.clear(); for (const [k, v] of merged) counts.set(k, v.reduce((x, y) => x + y, 0)); }   // "ClearTax" and cleartax.com are one business
   const comp = [...new Set([...p.configured_competitors, ...[...counts.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([d]) => d)])].slice(0, 8)
@@ -167,11 +182,20 @@ return plans.map(p => {
     ...[...rivalSet].filter(d => !rival_sources.some(r => r.domain === d) && !vendorWhy.has(d)).map(domain => ({ domain, citations: 0, kind: 'named' }))].slice(0, 120);
   const sources = [...src.values()].sort((a, b) => b.citations - a.citations).slice(0, 15).map(s => ({ domain: s.domain, citations: s.citations, engines: [...s.engines].filter(x => x !== 'daily'), topics: [...s.topics].slice(0, 3), kind: kindOf(s.domain), urls: [...s.urls.values()].sort((a, b) => b.n - a.n).slice(0, 3) }));
   const pages = new Map(); for (const r of ansAll) for (const u of String(r.our_urls || '').split(/\s+/).filter(Boolean)) { const x = pages.get(u) || { url: u, citations: 0, engines: new Set() }; x.citations++; x.engines.add(r.engine); pages.set(u, x); }
-  const our_pages = [...pages.values()].sort((a, b) => b.citations - a.citations).slice(0, 10).map(x => ({ url: x.url, citations: x.citations, engines: [...x.engines] }));
+  const invMine = pageInv.filter(r => r.site_id === p.site_id);
+  const goneKeys = new Set(invMine.filter(r => GONE.isGone(r.http_status)).map(r => GONE.keyOf(r.url)));
+  const statusOf = new Map(invMine.filter(r => Number(r.http_status) > 0).map(r => [GONE.keyOf(r.url), Number(r.http_status)]));
+  const our_pages = [...pages.values()].sort((a, b) => b.citations - a.citations).slice(0, 10).map(x => ({ url: x.url, citations: x.citations, engines: [...x.engines],
+    ...(goneKeys.has(GONE.keyOf(x.url)) ? { gone: true, http_status: statusOf.get(GONE.keyOf(x.url)) || 404 } : {}) }));
+  // RV-1: the cited addresses that no longer answer, and the page each should redirect to (the live pages of the inventory are the candidates)
+  const goneCited = [...pages.values()].filter(x => goneKeys.has(GONE.keyOf(x.url)));
+  const gone_cited = GONE.plan(goneCited.map(x => ({ url: x.url, status: statusOf.get(GONE.keyOf(x.url)) || 404, impressions: Number((invMine.find(r => GONE.keyOf(r.url) === GONE.keyOf(x.url)) || {}).impressions) || 0 })),
+    invMine.filter(r => !GONE.isGone(r.http_status) && (r.source === 'sitemap' || (Number(r.http_status) >= 200 && Number(r.http_status) < 300))), (invMine.find(r => GONE.pathOf(r.url) === '/') || {}).url || '')
+    .map(r => ({ ...r, citations: (goneCited.find(x => GONE.keyOf(x.url) === GONE.keyOf(r.from_url)) || {}).citations || 0 }));
   // per question: who wins this run, and how often the business was named over the week's samples (win rate)
   const byQ = new Map();
   for (const r of Rall) { const q = byQ.get(r.prompt_id) || { prompt: r.prompt, kind: r.kind, topic: r.topic, engines: {}, competitors: new Set(), sources: new Set(), fanout: new Set(), urls: new Map(), n: 0, m: 0 }; q.engines[r.engine] = !r.answered ? (r.error ? 'error' : 'none') : r.cited ? 'cited' : r.mentioned ? 'mentioned' : 'absent';
-    if (r.answered) { q.n++; if (r.mentioned) q.m++; list(r.competitors).forEach(d => q.competitors.add(d)); list(r.sources).forEach(d => q.sources.add(d)); String(r.fanout || '').split(' | ').filter(Boolean).forEach(f => q.fanout.add(f));
+    if (r.answered) { q.n++; if (r.mentioned) q.m++; list(r.competitors).filter(notList).forEach(d => q.competitors.add(d)); list(r.sources).forEach(d => q.sources.add(d)); String(r.fanout || '').split(' | ').filter(Boolean).forEach(f => q.fanout.add(f));
       for (const c of citedOf(r)) { const x = q.urls.get(c.u) || { u: c.u, t: c.t || '', n: 0, engines: new Set() }; x.n++; x.engines.add(r.engine); if (!x.t && c.t) x.t = c.t; q.urls.set(c.u, x); } } byQ.set(r.prompt_id, q); }
   for (const d of PR) for (const [id, st] of Object.entries(d.prompts || {})) { const q = byQ.get(id); if (!q) continue; for (const v of Object.values(st || {})) { if (v === 'n' || v === 'e') continue; q.n++; if (/^[mcMC]$/.test(v)) q.m++; } }   // G6: upper case = named FIRST — it was not counted as named at all
   for (const e of p.engines) if (MONTHLY.includes(e) && !Rall.some(r => r.engine === e)) for (const q0 of byQ.values()) if (!(e in q0.engines)) q0.engines[e] = 'monthly';   // asked on the month's full run
@@ -478,6 +502,7 @@ return plans.map(p => {
   // actions, most valuable first (value = the demand behind a question, or how much a fix unblocks)
   const actions = [];
   if (acc) for (const it of acc.issues.filter(x => x.level === 'critical' || x.level === 'high').slice(0, 2)) actions.push({ priority: 1, type: 'access', action: it.fix, why: it.text });
+  { const ga = GONE.action(gone_cited); if (ga) actions.push({ ...ga, why: 'AI answers cite ' + gone_cited.length + ' of your old addresses that now answer ' + [...new Set(gone_cited.map(r => r.status || 404))].join(' / ') + ' (' + gone_cited.reduce((t, r) => t + (r.citations || 0), 0) + ' citations), so every reader who follows them lands on an error page. Do not build on these pages: they no longer exist.' }); }
   for (const it of issues.slice(0, 2)) actions.push({ priority: 1, type: 'accuracy', action: 'Correct what AI says: ' + it.text.split(' → ')[0].slice(0, 120), why: (it.engines.join(', ') + ' state this; the fact on file is "' + (it.text.split(' → ')[1] || 'different') + '". State the right fact plainly on the About and service pages, in the Organization schema and on the profiles AI reads (Google Business Profile, LinkedIn, directories).').slice(0, 400) });
   for (const g of gaps.slice(0, 3)) actions.push({ priority: 1, type: 'content', action: 'Win the answer to "' + g.prompt + '"', why: 'AI recommends ' + g.competitors.slice(0, 3).join(', ') + ' here and not you' + (g.volume ? ' (' + g.volume.toLocaleString('en-GB') + ' AI searches a month)' : '') + (g.sources.length ? '; it relies on ' + g.sources.slice(0, 3).join(', ') : '') + (g.fanout.length ? '; to answer it searched "' + g.fanout[0] + '"' : '') + '.', keyword: g.topic || g.prompt,
     api_body: { mode: 'keyword', keyword: (g.topic || g.prompt).toLowerCase().slice(0, 80), country: p.country, domain: p.domain, page_type: g.kind === 'compare' ? 'Comparison Page' : 'Guide', receive: ['Keyword Report', 'Page Content'],
@@ -512,7 +537,7 @@ return plans.map(p => {
       family: segments.family, moves: segments.moves, min_answers: segments.min_answers }),
     panel_json: J(panel_info), chunks: run_split ? run_split.executions : 1 };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
   const now = p.checked_at;
-  const prospect_rows = sources.filter(s => !['platform', 'authority'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};
+  const prospect_rows = sources.filter(s => !['platform', 'authority', 'engine'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};
     const top = (s.urls || [])[0] || null;   // v4.12: the exact page AI cites on that site (the one to be named on)
     const kept = DRAFTS.carry(old);   // P34-1: a draft written before the D12 / D13 gates is withdrawn, not carried into the refreshed row
     return { site_id: p.site_id, domain: p.domain, prospect_domain: s.domain, type: 'ai_source', rank: Number(old.rank) || 0, spam_score: Number(old.spam_score) || 0,
@@ -544,5 +569,5 @@ return plans.map(p => {
     // B8-8 / B8-9: each engine's own change test (or why it was not tested), and the one correction the tested alerts were judged by
     engine_changes, min_engine_samples: MIN_ENGINE_SAMPLES, multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },
-    engines, competitors: comp, sources, rival_sources, our_pages, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, segments, panel: { ...panel_info, ids: undefined }, form_url: FORM_URL, api_url: API_URL } };
+    engines, competitors: comp, sources, rival_sources, our_pages, gone_cited, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, segments, panel: { ...panel_info, ids: undefined }, form_url: FORM_URL, api_url: API_URL } };
 });

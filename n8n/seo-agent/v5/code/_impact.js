@@ -9,7 +9,9 @@ const IMP = (() => {
   const SEV_W = { Critical: 10, High: 6, Medium: 3, Low: 1.2, Info: 0.4 };
   const SEV_ORD = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
   // what stops Google indexing a page or sends it somewhere else: these come first whatever else is in the list
-  const BLOCKER = /noindex|not indexable|non-indexable|blocked by robots|robots\.txt (blocks|disallow)|disallowed|broken pages|returning 4xx|server errors|canonical (points|to broken|to a redirect|chain)|recursive canonical|soft 404|redirect (loop|chain)|not indexed|index coverage|crawler access|meta refresh|www and non-www|duplicate host|HTTP does not redirect|sitemap is (missing|not)|no sitemap/i;
+  // RV-5 (2026-10-21): addresses Google still shows that no longer answer are a blocker too: on techand.ai they held 2-3k of 5.7k impressions
+  // and ranked under the CDN-caching and authority findings
+  const BLOCKER = /no longer answer|noindex|not indexable|non-indexable|blocked by robots|robots\.txt (blocks|disallow)|disallowed|broken pages|returning 4xx|server errors|canonical (points|to broken|to a redirect|chain)|recursive canonical|soft 404|redirect (loop|chain)|not indexed|index coverage|crawler access|meta refresh|www and non-www|duplicate host|HTTP does not redirect|sitemap is (missing|not)|no sitemap/i;
   // B-6 (2026-10-17, re-rating 2026-10-17, execs 739 / 767): the reason a blocker is first was one sentence for every class — "Google cannot
   // index or follow these pages" — printed under the www / non-www split finding whose own text says Google shows and ranks those pages under
   // the other address and that requesting indexing does not help. The reason now names what THIS class of blocker does.
@@ -21,6 +23,7 @@ const IMP = (() => {
     if (/canonical/i.test(t)) return 'these pages send Google to another address as the one to index';
     if (/sitemap/i.test(t)) return 'Google is not given a working list of the pages to crawl';
     if (/crawler access|blocked by robots|robots\.txt|disallow/i.test(t)) return 'crawlers are told not to read these pages';
+    if (/no longer answer/i.test(t)) return 'Google still shows these addresses and they answer with an error, so every visit and every link to them is lost until they redirect';
     if (/broken pages|returning 4xx|server errors|soft 404/i.test(t)) return 'these addresses do not answer with a page';
     if (/not indexed|index coverage/i.test(t)) return 'Google has not indexed these pages';
     return 'Google cannot index or follow these pages';
@@ -194,7 +197,9 @@ const IMP = (() => {
       f.minor = isMinor(f);   // G18-2: folded in the reports and in the app, never removed
       f.impact_basis = [
         blocker ? blockerWhy(f) : '',
-        siteWide ? 'the whole website' : affected + ' of ' + total + ' crawled pages',
+        // RV-5: a finding about addresses outside the crawl (the not-crawled check, the pages Google shows under the other host) counts in its own
+        // unit; "9 of 23 crawled pages" named a share of a crawl those pages were never part of
+        siteWide ? 'the whole website' : f.affected_unit ? (n0(f.affected_count) || affected) + (f.affected_of ? ' of ' + n0(f.affected_of) : '') + ' ' + S(f.affected_unit) : affected + ' of ' + total + ' crawled pages',
         sc ? (measured || siteWide ? 'about ' : 'an estimated ') + fmt(clicks) + ' clicks and ' + fmt(impressions) + ' impressions in the last 28 days'
           + (capped ? ' (capped at everything the whole website measured in that period: the pages affected cannot put more at risk)' : '') : 'no Search Console data, so the pages affected and their place in the site decide the order',
         ga ? (keMeasured || siteWide ? 'about ' : 'an estimated ') + fmt(keyEvents) + ' GA4 key events in the last 28 days' + (keCapped ? ' (capped at the whole website\'s total)' : '') : '',

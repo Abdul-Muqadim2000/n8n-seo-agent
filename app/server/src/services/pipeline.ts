@@ -2,11 +2,8 @@ import {
   AUTOMATIONS,
   formatPercent,
   normKeyword,
-  MONITOR_COSTS,
   AI_PROMPTS_DEFAULT,
-  estimateAiGrowthCost,
   aiPulseQuestions,
-  estimateAiVisibilityCost,
   nextScheduledRun,
   // G12 / G29 (2026-10-13, FIX_PLAN): the ladder's chart marks, its page-change readings and the lineage of its numbers
   buildAnnotations,
@@ -29,6 +26,8 @@ import {
   type Lineage,
   type PagePeriodPoint,
   type AutomationId,
+  type AutopilotRowId,
+  type MonitorsRow,
   type AutomationStatus,
   type AiTargetRow,
   type ContentLogRow,
@@ -49,17 +48,18 @@ import {
   type ThisWeekItem,
   type TrendRow,
   contentReadiness,
+  READINESS_REASON,
 } from '@seo/shared';
 import { config } from '../config';
 import { db } from '../db';
-import { monthStartUtc, usageSince } from './billing';
+import { monthStartUtc, siteAutopilotRows, usageSince } from './billing';
 import { creditsOfUsd, settingsRow, wholeCreditsOfUsd } from './admin/settings';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { notFound } from '../lib/errors';
 import { executions, rows as n8nRows, siteRows, type ExecutionSummary } from '../n8n/client';
 import { aiQuotaOf, chosenLadderWriting, competitorsOf, declaredServicesOf, levelOf, navPagesOf, servicesOf, type CadenceSiteRow } from './cadence';
 import { skipsOf } from './comingUp';
-import { cycleIntentOf, loadCycleRows, siteCycleView } from './cycles';
+import { contentCycleNote, cycleIntentOf, loadCycleRows, siteCycleView } from './cycles';
 import { engineCostTable } from './engineCost';
 import { autopilotNeedsYou, nudgeDue } from './autopilot';
 import { schema } from '../db';
@@ -118,14 +118,14 @@ export function publishStage(waiting: WaitingEntry[], publishedCount: number): P
       ? 'Every written page is live'
       : [
           ready.length ? 'Publish them on your site, then report each URL so tracking starts' : '',
-          fix.length ? `${fix.map((w) => `"${w.keyword}"`).slice(0, 3).join(', ')} did not pass the quality check: fix ${fix.length === 1 ? 'it' : 'them'} and run ${fix.length === 1 ? 'it' : 'them'} again` : '',
+          fix.length ? `${fix.map((w) => `"${w.keyword}"`).slice(0, 3).join(', ')} did not pass the quality check: finish ${fix.length === 1 ? 'it' : 'them'} by hand (each bracket ${fix.length === 1 ? 'its' : 'their'} report lists), then publish ${fix.length === 1 ? 'it' : 'them'}` : '',
         ]
           .filter(Boolean)
           .join('. '),
     action: ready.length
       ? { label: 'Report a published URL', mode: 'published' }
       : fix.length
-        ? { label: 'Run it again', mode: 'keyword' }
+        ? { label: 'See what to edit', page: 'content' }
         : { label: 'Content', page: 'content' },
   };
 }
@@ -188,11 +188,13 @@ async function scheduledHistory(): Promise<Record<string, ExecutionSummary[]>> {
  * is named as one, and a due time with no fire is "missed on <date>", instead of the newest row of any origin under a "next run
  * Monday" as if the schedule worked. Without the engine's history the automation is left as the app's own rows describe it.
  */
-export function withScheduleTruth(list: AutomationStatus[], history: Record<string, ExecutionSummary[]>, tz: string, now = new Date()): AutomationStatus[] {
+export function withScheduleTruth(list: AutomationStatus[], history: Record<string, ExecutionSummary[]>, tz: string, now = new Date(), siteSince?: string | null): AutomationStatus[] {
   return list.map((a) => {
     const info = AUTOMATIONS.find((x) => x.id === a.id);
     if (!info) return a;
-    const st = scheduleState(info, history[info.workflow], tz, now, a.lastRunAt);
+    // Pre-launch run 2026-10-21 (Low): a website added at 14:08 read "scheduled run missed on 2026-10-21" for a 10:30 pulse it did not
+    // exist for. A due time before the website was tracked is not one it missed.
+    const st = scheduleState(info, history[info.workflow], tz, now, a.lastRunAt, siteSince ? { [info.workflow]: siteSince } : undefined);
     if (!st.known) return a;
     const on = a.state === 'on';
     const note = on ? st.note : st.onDemandAt ? `last run on demand ${st.onDemandAt.slice(0, 16).replace('T', ' ')} UTC` : '';
@@ -387,7 +389,7 @@ export function cadenceDetail(next: QueueItem[], plan: CadenceWeek, build: Pick<
     return (
       `Writes nothing: ${plural(plan.waitingPublish, 'written page')} waiting for publication (pile-up guard, limit ${plan.config.maxWaiting})` +
       (plan.waitingKeywords.length ? `: ${plan.waitingKeywords.slice(0, 4).map(label).join(', ')}${plan.waitingKeywords.length > 4 ? ' ...' : ''}` : '') +
-      (anyFix ? '. Publish the ready ones and fix the others, then run them again, to continue' : '. Publish them to continue')
+      (anyFix ? '. Publish the ready ones, and finish the others by hand and publish them, to continue' : '. Publish them to continue')
     );
   }
   if (next.length)
@@ -626,6 +628,10 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     };
   };
 
+  // B4 (pre-launch run 2026-10-21): every month figure on this page comes from the Credits page's own rows (billing.siteAutopilotRows),
+  // per automation and in total, so "about N credits a month" here is the company forecast's figure for this website
+  const forecastRows = siteAutopilotRows(site, (monRows[0] ?? null) as unknown as MonitorsRow | null, ladders, settingsRows);
+  const rowUsd = (id: AutopilotRowId) => forecastRows.find((r) => r.id === id)?.usd ?? 0;
   const aiReport = reportOf(['ai_visibility']);
   // the pulse asks the stored panel without the brand question (asked monthly); before the first run: the setting minus that question
   const panelMax = m?.aiPromptsMax ?? AI_PROMPTS_DEFAULT;
@@ -640,15 +646,16 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastRunAt: lastIso(lastAi?.checkedAt, aiReport?.receivedAt),
       lastResult: lastAi ? `Named in ${formatPercent(lastAi.mentionRate, 0)} of ${lastAi.answers} answers · share of voice ${formatPercent(lastAi.shareOfVoice, 0)}` : null,
       lastReportId: aiReport?.id ?? null,
-      monthlyUsd: m?.aiVisibility === false ? 0 : (() => { const c = estimateAiVisibilityCost({ prompts: m?.aiPromptsMax, engines: m?.aiEngines, pulse: m?.aiPulse }); return c.weekly + c.fullRun; })(),
+      monthlyUsd: rowUsd('ai_visibility'),
       detail: m ? `${m.aiPromptsMax} questions · ${m.aiEngines.length} engines` : `${AI_PROMPTS_DEFAULT} questions · 6 engines (defaults)`,
     }),
     base('ai_pulse', (m?.aiVisibility ?? true) && (m?.aiPulse ?? true), m?.aiVisibility === false ? 'AI visibility is switched off' : 'The daily pulse is switched off in the monitor settings', {
       lastRunAt: pulseLastRun(x.ai.daily as { date: string; checkedAt?: string }[]),
       lastResult: x.ai.daily.length ? (() => { const dd = x.ai.daily[x.ai.daily.length - 1]; return `Named in ${formatPercent(dd.mentionRate, 0)} of ${dd.samples} answers${dd.alerts.length ? ` · ${dd.alerts.length} alert(s)` : ''}`; })() : null,
       lastReportId: reportOf(['ai_pulse'])?.id ?? null,
-      monthlyUsd: m?.aiVisibility === false || m?.aiPulse === false ? 0 : estimateAiVisibilityCost({ prompts: m?.aiPromptsMax, engines: m?.aiEngines, pulse: true }).pulse,
-      detail: `ChatGPT, Gemini and Google AI Mode · ${pulseQuestions} questions a day`,
+      monthlyUsd: rowUsd('ai_pulse'),
+      // the panel's brand question is asked once a month ("8 questions" on AI visibility, 7 a day here): said, not left to look like a mismatch
+      detail: `ChatGPT, Gemini and Google AI Mode · ${pulseQuestions} questions a day${x.ai.prompts.some((p) => p.kind === 'brand' && p.status !== 'off') ? ' (your panel without the brand question, which is asked once a month)' : ''}`,
     }),
     base('ai_growth', (m?.aiVisibility ?? true) && (m?.aiGrowth ?? true), m?.aiVisibility === false ? 'AI visibility is switched off' : 'The AI growth loop is switched off in the monitor settings', {
       lastRunAt: lastIso(x.ai.growth?.checkedAt, reportOf(['ai_growth'])?.receivedAt),
@@ -656,7 +663,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastReportId: reportOf(['ai_growth'])?.id ?? null,
       // rehearsal 2026-10-20: AI answer pages are written on their own at level 3 only (plan §5.4, as the credits forecast in
       // shared/src/autopilot.ts); at levels 1-2 they are suggestions and cost nothing unless approved, so they are not in this figure
-      monthlyUsd: m?.aiVisibility === false || m?.aiGrowth === false ? 0 : estimateAiGrowthCost({ pages: level === 3 ? m?.aiPagesPerMonth : 0 }).total,
+      monthlyUsd: rowUsd('ai_growth'),
       detail: level === 3
         ? `${m?.aiPagesPerMonth ?? 2} AI answer page(s) a month · Bing / IndexNow · earned-media drafts`
         : 'AI answer pages are suggested for your OK · Bing / IndexNow · earned-media drafts',
@@ -665,7 +672,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastRunAt: reportOf(['link_builder'])?.receivedAt ?? null,
       lastResult: (() => { const r = reportOf(['link_builder']); const sm = (r?.summary ?? {}) as Record<string, unknown>; return r ? `${Number(sm.drafted) || 0} pitch(es) drafted · ${Number(sm.press) || 0} journalist request(s) · ${Number(sm.listingsMissing) || 0} listing(s) missing` : null; })(),
       lastReportId: reportOf(['link_builder'])?.id ?? null,
-      monthlyUsd: m?.linkBuilder === false ? 0 : MONITOR_COSTS.linkBuilderMonthly,
+      monthlyUsd: rowUsd('link_builder'),
       detail: 'Up to 10 drafted sequences a week · sent from your mailbox after approval',
     }),
     base('backlinks', m?.backlinks ?? true, 'Switched off in the monitor settings', {
@@ -673,7 +680,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       // R112: the merged count (every source) where the snapshot has one, never DataForSEO's index count shown as "the" count
       lastResult: lastBl ? `${lastBl.unionDomains ?? lastBl.referringDomains} ${lastBl.unionDomains != null ? 'linking sites (all sources)' : 'referring domains (DataForSEO)'} · ${lastBl.lostLinks} lost · ${lastBl.newLinks} new` : null,
       lastReportId: blReport?.id ?? null,
-      monthlyUsd: m?.backlinks === false ? 0 : MONITOR_COSTS.backlinksMonthly,
+      monthlyUsd: rowUsd('backlinks'),
       detail: x.backlinks.prospects.length ? `${x.backlinks.prospects.filter((p) => p.status === 'new').length} new link prospects` : null,
     }),
     base('rank_tracker', x.rankings.ladders.length > 0, 'No keyword ladder yet: plan one with "Rank my site for a keyword"', {
@@ -682,14 +689,14 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
         ? `${x.rankings.ladders.reduce((t, l) => t + l.rungs.filter((r) => r.latestPosition != null && r.latestPosition > 0 && r.latestPosition <= 10).length, 0)} ladder pages in the top 10`
         : null,
       lastReportId: rtReport?.id ?? null,
-      monthlyUsd: x.rankings.ladders.length ? 0.1 : 0,
+      monthlyUsd: rowUsd('rank_tracker'),
       detail: x.rankings.ladders.length ? `${x.rankings.ladders.length} ladder(s) · ${x.rankings.ladders.reduce((t, l) => t + l.pages, 0)} pages` : null,
     }),
     base('site_tracker', true, null, {
       lastRunAt: lastIso(x.settings.tracking.lastRunAt, stReport?.receivedAt),
       lastResult: snap?.gsc.current ? `${snap.gsc.current.clicks} clicks · ${snap.gsc.current.impressions} impressions (28 days)` : x.settings.tracking.lastStatus,
       lastReportId: stReport?.id ?? null,
-      monthlyUsd: MONITOR_COSTS.siteTrackerMonthly,
+      monthlyUsd: rowUsd('site_report'),
       detail: `${x.settings.tracking.keywords.length} tracked keywords${x.settings.tracking.gscProperty ? ' · Search Console' : ''}${x.settings.tracking.ga4PropertyId ? ' · GA4' : ''}`,
     }),
     base('content_cadence', pagesPerWeek > 0, 'Pages a week is 0', {
@@ -697,19 +704,20 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastResult: cadenceLogs.length ? `${cadenceLogs.length} page(s) written in your cycles · ${cadenceLogs.filter((l) => l.status === 'published').length} published` : null,
       lastReportId: cadenceReport?.report.id ?? null,
       // keyword-first (plan §5.4): pages are counted only while a keyword the client chose has pages to write (level 3: always)
-      monthlyUsd: writingNow ? pagesPerWeek * MONITOR_COSTS.weeksPerMonth * MONITOR_COSTS.blogPostEach : 0,
+      monthlyUsd: rowUsd('blog_posts'),
       detail: pagesPerWeek ? `${pagesPerWeek} page(s) a week${writingNow ? '' : ', once you have chosen a keyword'}` : null,
     }),
     base('audit', m?.auditMonthly ?? true, 'Switched off in the monitor settings', {
       lastRunAt: lastIso(lastAudit?.auditedAt, auReport?.receivedAt),
       lastResult: lastAudit ? `Health ${lastAudit.healthScore}/100 (${lastAudit.grade}) · ${lastAudit.findings} findings` : null,
       lastReportId: auReport?.id ?? null,
-      monthlyUsd: m?.auditMonthly === false ? 0 : MONITOR_COSTS.auditMonthly,
+      monthlyUsd: rowUsd('audit'),
       detail: m ? `up to ${m.auditPages} pages${m.auditJs ? ' · JavaScript' : ''}` : 'up to 200 pages',
     }),
   ];
   // R104: "last run" is the schedule's own last fire; on-demand results and missed due times are named as such
-  const automations = withCycleTruth(withScheduleTruth(automationsRaw, await scheduledHistory().catch(() => ({}) as Record<string, ExecutionSummary[]>), tz, new Date(now)), cyc.jobs);
+  const siteSince = (site.trackingStartedAt ?? site.createdAt)?.toISOString() ?? null;
+  const automations = withCycleTruth(withScheduleTruth(automationsRaw, await scheduledHistory().catch(() => ({}) as Record<string, ExecutionSummary[]>), tz, new Date(now), siteSince), cyc.jobs);
 
   // ---------- calendar: the next 4 weeks ----------
   const calendar: PipelineData['calendar'] = [];
@@ -859,7 +867,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       : null;
   const build = buildLadders(
     { ladders, history, logs, queries, settings: settingsRows, ...app },
-    { ...cadenceSchedule(weeks, cadenceOn), cadenceRuns: cadenceCycles.map((c) => c.at), rankNextAt: on('rank_tracker')?.nextRunAt ?? null, lastRunPileup },
+    { ...cadenceSchedule(weeks, cadenceOn), cadenceRuns: cadenceCycles.map((c) => c.at), rankNextAt: on('rank_tracker')?.nextRunAt ?? null, lastRunPileup, held: readiness.ready ? null : READINESS_REASON },
   );
   // keyword-first: the autopilot's own Needs-you items (the keyword to choose, a proposal, a paused ladder, the level)
   // every ladder is won or has no page left to write: the client chooses the next keyword (a paused ladder is the client's own pause)
@@ -911,7 +919,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     },
     calendar,
     activity: recentReports.filter((r) => r.scheduled).slice(0, 15),
-    monthlyCredits: Math.round(automations.filter((a) => a.state === 'on').reduce((t, a) => t + a.monthlyCredits, 0) * 100) / 100,
+    // B4: the website's line of the Credits page's forecast (its rows, research refresh included), 0 while a person has paused it
+    monthlyCredits: automations.some((a) => a.state === 'on') ? creditsOfUsd(forecastRows.reduce((t, r) => t + r.usd, 0)) : 0,
     // a schedule run covers this website only while its automation is on for it
     running: runningHere,
     activeRuns: ownRuns,
@@ -929,7 +938,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     automation: build.automation,
     detected: detectedFeed(app.detected ?? [], build.cards),
     autoStartEnabled: config.autoStartLadders,
-    cycle: siteCycleView(site, cyc.row, cyc.jobs, now, 'viewer'),
+    // D9: the content job says what it wrote, or why it wrote nothing, from its cycle's content report
+    cycle: siteCycleView(site, cyc.row, cyc.jobs, now, 'viewer', contentCycleNote(cadenceReport?.payload as Record<string, unknown> | undefined)),
     autopilot,
     // P1: is the website ready for a written page (the author profile and the business facts), and what is missing
     readiness,

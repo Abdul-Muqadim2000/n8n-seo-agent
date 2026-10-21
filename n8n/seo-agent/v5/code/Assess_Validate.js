@@ -1,4 +1,5 @@
 /*__REACH__*/
+/*__SERP_CACHE__*/
 /*__COUNTRIES__*/
 /*__DOMAIN_RULES__*/
 // Keyword Check (v4.8, PIPELINE_FEATURE_SPEC §5.2): validates POST /webhook/seo-keyword-assess { keyword, country, domain, business?, services?,
@@ -25,7 +26,11 @@ const bad = Object.keys(errors).length > 0;
 const client = String(hdr['x-forwarded-for'] || hdr['x-real-ip'] || '').split(',')[0].trim().toLowerCase();
 const key = /^app:[a-z0-9-]{6,64}$/.test(client) ? client : (client || 'anon');
 const c = COUNTRIES[countryName] || {};
+// KWL-LAD D7 (live run 2026-10-21, exec 120): an Arabic keyword's results page was asked for in English. The results page of a keyword written in
+// Arabic script is read in Arabic (language_code ar, the site's own location); the keyword data keeps the market's language as before.
+const arabicScript = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(keyword);
+const serpLang = arabicScript ? 'ar' : (c.lang || 'en');
 return [{ json: { ok: !bad, status: bad ? 400 : 200, errors, error: bad ? Object.values(errors).join('; ') : '',
   keyword, domain, site_id: domain ? reachSiteId(domain) : '', country: countryName, country_iso: c.iso || '', location_code: c.code || null, language_code: c.lang || 'en',
   business: typeof b.business === 'string' ? b.business.trim().slice(0, 1500) : '', services: listOf(b.services).slice(0, 20).map(s => s.slice(0, 120)),
-  existing_keywords: listOf(b.existing_keywords).slice(0, 300).map(s => s.toLowerCase().slice(0, 120)), caller: key, request_id: String(b.request_id || ('assess-' + $execution.id)) } }];
+  existing_keywords: listOf(b.existing_keywords).slice(0, 300).map(s => s.toLowerCase().slice(0, 120)), caller: key, serp_language_code: serpLang, arabic_script: arabicScript, serp_cache_key: SC.key({ keyword, location_code: c.code || 0, language_code: serpLang }), request_id: String(b.request_id || ('assess-' + $execution.id)) } }];

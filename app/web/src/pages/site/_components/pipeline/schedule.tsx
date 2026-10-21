@@ -10,20 +10,21 @@ import { paths } from '@/lib/paths';
 import { fmtAgo } from '@/lib/utils';
 import { Panel } from '../kit';
 import { plural } from '../format';
-import { AUTO_ICON, fmtDayHead, fmtTime } from './common';
+import { AUTO_ICON, dayKey, fmtDayHead, fmtTime, useSiteZone } from './common';
 import { DayTile } from './home';
 
 export function Calendar({ data }: { data: PipelineData }) {
+  const tz = useSiteZone();
   const days = useMemo(() => {
     const m = new Map<string, { at: string; automation: AutomationId }[]>();
     for (const e of data.calendar ?? []) {
-      const key = new Date(e.at).toDateString();
+      const key = dayKey(e.at, tz);
       m.set(key, [...(m.get(key) ?? []), e]);
     }
     return [...m.values()];
-  }, [data.calendar]);
+  }, [data.calendar, tz]);
   return (
-    <Panel icon={<Clock />} title="Next four weeks" description="Your weekly runs and every check that is switched on, in your time zone.">
+    <Panel icon={<Clock />} title="Next four weeks" description={`Your weekly runs and every check that is switched on, in your website's time zone (${tz}).`}>
       {!days.length ? (
         <p className="text-sm text-ink-3">Nothing is scheduled: start tracking or switch the automations on.</p>
       ) : (
@@ -31,16 +32,16 @@ export function Calendar({ data }: { data: PipelineData }) {
           {days.map((events) => (
             <li key={events[0].at} className="min-w-0 rounded-xl border border-line bg-surface p-3 transition-[border-color,box-shadow] duration-200 ease-brand hover:border-line-strong hover:shadow-card">
               <div className="flex items-center gap-2.5">
-                <DayTile iso={events[0].at} className="size-10" />
+                <DayTile iso={events[0].at} tz={tz} className="size-10" />
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] font-semibold text-ink">{fmtDayHead(events[0].at)}</p>
+                  <p className="truncate text-[13px] font-semibold text-ink">{fmtDayHead(events[0].at, tz)}</p>
                   <p className="text-xs text-ink-3">{plural(events.length, 'run')}</p>
                 </div>
               </div>
               <ul className="mt-2.5 space-y-1">
                 {events.map((e) => (
                   <li key={e.at + e.automation} className="flex items-center gap-2 text-[13px] text-ink-2">
-                    <span className="w-[4.25rem] shrink-0 whitespace-nowrap text-xs tabular text-ink-3">{fmtTime(e.at)}</span>
+                    <span className="w-[4.25rem] shrink-0 whitespace-nowrap text-xs tabular text-ink-3">{fmtTime(e.at, tz)}</span>
                     <IconTile size="xs">{AUTO_ICON[e.automation]}</IconTile>
                     <span className="min-w-0 truncate">{AUTOMATIONS.find((a) => a.id === e.automation)?.title}</span>
                   </li>

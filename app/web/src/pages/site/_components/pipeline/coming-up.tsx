@@ -12,6 +12,7 @@ import { Menu, MenuItem, MenuLabel } from '@/components/ui/overlay';
 import { ActionCard, IconTile } from '@/components/insight';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
+import { siteTimezone } from '@/lib/cycle-day';
 import { formatCredits } from '@/lib/credits';
 import { paths } from '@/lib/paths';
 import { useComingUp, useComingUpDecision } from '@/lib/queries';
@@ -100,9 +101,10 @@ export function ComingUpSummary() {
 function ComingUpPanel({ view, cycle, onWrite }: { view: ComingUpView; cycle?: SiteCycleView; onWrite?: (it: ComingUpItem) => void }) {
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
+  const tz = siteTimezone(site);
   const day = view.cycleDate ? cycleDayWords(view.cycleDate) : '';
   if (!view.available) {
-    const next = cycle?.nextPreviewAt && validDate(cycle.nextPreviewAt) ? fmtDayHead(cycle.nextPreviewAt) : null;
+    const next = cycle?.nextPreviewAt && validDate(cycle.nextPreviewAt) ? fmtDayHead(cycle.nextPreviewAt, tz) : null;
     return (
       <Panel icon={<CalendarClock />} title="Coming up" description="Before each weekly run you see what it will write, with the credits, and can skip or approve each page." actions={<ComingUpGuide cycle={cycle} />}>
         <div className="flex items-start gap-3 rounded-lg bg-surface-2/60 px-4 py-3">

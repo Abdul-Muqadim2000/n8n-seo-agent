@@ -13,6 +13,11 @@
 /*__ANNOTATIONS__*/
 /*__LINEAGE__*/
 /*__CHANGE_TEST__*/
+// RV-1 (2026-10-21, pre-launch run on techand.ai): the pages that no longer answer. The report told the owner to make a 404 page "the single
+// page" for a search, to link to it from another 404 page and to watch a third; the first thing to say was "redirect the old addresses".
+// The inventory now carries what each address answered (Status Targets / Fetch Page Status, SM.isGone): the gone ones are ONE priority-1
+// action with the page each should redirect to (_gone.js), and no other action, list or brief fact may point at them.
+/*__GONE__*/
 // G28 (2026-10-12, FIX_PLAN): a traffic alert fires on a STATISTICAL change, not on a fixed 30%. ST.change (two-sample Poisson z, 95% range)
 // decides; a large move that is still inside sampling noise is reported as "watch". Google's own update dates are added as context.
 const FORM_URL = '__FORM_URL__', API_URL = '__API_URL__';
@@ -183,6 +188,15 @@ return sites.map((s, idx) => {
   if (det && det.candidates && !(det.sitemap || {}).ok) alerts.push({ level: 'info', text: 'Publish detection could not read the sitemap (' + ((det.sitemap || {}).error || 'no sitemap') + '); report published pages with "I published a page"' });
   // ---- actions (deterministic; the AI brief words them for the owner) ----
   const actions = []; const apiBase = { country: s.country || '', domain: s.domain, email: s.email || '' };
+  // ---- RV-1: the gone pages, with their Search Console traffic, and the one action that names them ----
+  const cannibalLive = (() => { const keysG = new Set(SM.gonePages(model).map(p => GONE.keyOf(p.url)));
+    return ((gsc && gsc.cannibal) || []).map(c => ({ ...c, pages: (c.pages || []).filter(p => !keysG.has(GONE.keyOf(p.page))) })).filter(c => c.pages.length >= 2); })();
+  const goneRows = SM.gonePages(model); const goneKeys = new Set(goneRows.map(p => GONE.keyOf(p.url)));
+  const isGoneUrl = (u) => !!u && goneKeys.has(GONE.keyOf(u));
+  const trafficBy = new Map(); for (const p0 of ((gsc && gsc.pages) || [])) { const k = GONE.keyOf(p0.page); const t = trafficBy.get(k) || { impressions: 0, clicks: 0 }; t.impressions += Number(p0.impressions) || 0; t.clicks += Number(p0.clicks) || 0; trafficBy.set(k, t); }
+  const liveForRedirect = SM.pages(model).filter(p => !SM.isGone(p) && (p.source === 'sitemap' || (Number(p.http_status) >= 200 && Number(p.http_status) < 300)));
+  const gone_pages = GONE.plan(goneRows.map(p => ({ url: p.url, status: p.http_status, ...(trafficBy.get(GONE.keyOf(p.url)) || {}) })), liveForRedirect, SM.siteUrl(model, '/'));
+  { const ga = GONE.action(gone_pages); if (ga) actions.push(ga); }
   const pageBody = (keyword, url, page_type) => ({ mode: 'keyword', keyword, page_type: page_type || 'Service Page', ...apiBase, existing_page_url: url || '', receive: ['Keyword Report', 'Page Content'] });
   // B4-3: the search a page is really refreshed FOR — the query that brings it the most impressions, from this run's own
   // Search Console rows. A refresh with no search behind it is a rewrite nobody asked for.
@@ -221,12 +235,12 @@ return sites.map((s, idx) => {
   if (hostSplit) actions.push({ priority: 2, type: 'host_split', keyword: '', url: SM.siteUrl(model, '/'),
     action: 'Make Google use ' + hostSplit.site_home + ': submit the sitemap on ' + hostSplit.site_home + ' in Search Console (in place of one on ' + hostSplit.google_home + '), change the internal links that still point at ' + hostSplit.google_home + ', keep the redirects, and watch these pages move over.',
     why: hostSplit.pages.length + ' inspected page(s) are shown by Google under ' + hostSplit.google_home + ' (its chosen canonical), e.g. ' + hostSplit.pages[0].google_canonical + '.' });
-  for (const q of ((gsc && gsc.striking) || []).slice(0, 3)) actions.push({ priority: 2, type: 'striking', action: 'Push "' + q.query + '" from #' + r1(q.position) + ' into the top 3: expand ' + (q.page || 'the ranking page') + ' with the missing sub-topics, add an FAQ and 2-3 internal links to it.', why: q.impressions + ' impressions in 28 days at position ' + r1(q.position) + ' (' + q.clicks + ' clicks); a top-3 spot typically triples the clicks.', keyword: q.query, url: q.page || '', api_body: pageBody(q.query, q.page, 'Service Page') });
-  for (const q of ((gsc && gsc.ctr_gaps) || []).slice(0, 2)) actions.push({ priority: 2, type: 'ctr', action: 'Rewrite the title and meta description of ' + (q.page || 'the ranking page') + ' for "' + q.query + '" (lead with the outcome and a number).', why: 'Position ' + r1(q.position) + ' with ' + q.impressions + ' impressions but CTR ' + (q.ctr * 100).toFixed(1) + '% vs about ' + Math.round(q.expected_ctr * 100) + '% expected.', keyword: q.query, url: q.page || '' });
+  for (const q of ((gsc && gsc.striking) || []).filter(q => !isGoneUrl(q.page)).slice(0, 3)) actions.push({ priority: 2, type: 'striking', action: 'Push "' + q.query + '" from #' + r1(q.position) + ' into the top 3: expand ' + (q.page || 'the ranking page') + ' with the missing sub-topics, add an FAQ and 2-3 internal links to it.', why: q.impressions + ' impressions in 28 days at position ' + r1(q.position) + ' (' + q.clicks + ' clicks); a top-3 spot typically triples the clicks.', keyword: q.query, url: q.page || '', api_body: pageBody(q.query, q.page, 'Service Page') });
+  for (const q of ((gsc && gsc.ctr_gaps) || []).filter(q => !isGoneUrl(q.page)).slice(0, 2)) actions.push({ priority: 2, type: 'ctr', action: 'Rewrite the title and meta description of ' + (q.page || 'the ranking page') + ' for "' + q.query + '" (lead with the outcome and a number).', why: 'Position ' + r1(q.position) + ' with ' + q.impressions + ' impressions but CTR ' + (q.ctr * 100).toFixed(1) + '% vs about ' + Math.round(q.expected_ctr * 100) + '% expected.', keyword: q.query, url: q.page || '' });
   // B4-1 / B4-3 (2026-10-15, benchmark area 4): a decaying page is a TESTED, SEASONALLY CHECKED judgement, it is ranked by the
   // clicks actually lost, it says which KIND of fall it is (the work differs), and — unlike before — it ships the body that
   // writes the refresh, so the owner can act on it the way they can act on a striking-distance query.
-  for (const p of ((gsc && gsc.decaying_pages) || []).slice(0, 2)) { const q = topQueryOf(p.page);
+  for (const p of ((gsc && gsc.decaying_pages) || []).filter(p => !isGoneUrl(p.page)).slice(0, 2)) { const q = topQueryOf(p.page);
     actions.push({ priority: 2, type: 'decay',
       action: p.kind === 'clickthrough'
         ? 'Rewrite the title and description of ' + p.page + ' first: it is still shown as often, and fewer people click it. Refresh the page itself only if that does not bring the clicks back.'
@@ -234,7 +248,7 @@ return sites.map((s, idx) => {
       why: p.lost + ' clicks lost in 28 days (' + p.prev_clicks + ' → ' + p.clicks + ', ' + p.pct + '%). ' + p.basis,
       keyword: q ? q.query : '', url: p.page, ...(q ? { api_body: pageBody(q.query, p.page, 'Guide') } : {}) }); }
   // what the old 25% rule would have called decay, and the evidence says is not: reported, never acted on
-  for (const p of ((gsc && gsc.not_decay) || []).slice(0, 2)) actions.push({ priority: 4, type: 'decay_watch',
+  for (const p of ((gsc && gsc.not_decay) || []).filter(p => !isGoneUrl(p.page)).slice(0, 2)) actions.push({ priority: 4, type: 'decay_watch',
     action: p.state === 'seasonal' ? 'Leave ' + p.page + ' alone for now: it is down on the last 28 days but not on the same weeks a year ago.' : 'Watch ' + p.page + ': the fall is large but could still be chance at this traffic.',
     why: p.basis, keyword: '', url: p.page });
   for (const t of trends.filter(t => t.direction === 'rising' && (t.rising || []).length).slice(0, 1)) actions.push({ priority: 3, type: 'trend', action: 'Interest in "' + t.keyword + '" is rising (' + (t.change_pct > 0 ? '+' : '') + t.change_pct + '% vs the 12-month average); cover the rising searches: ' + t.rising.slice(0, 3).map(r => r.query).join(', ') + '.', why: 'Google Trends, past 12 months.', keyword: t.rising[0].query, url: '', api_body: { mode: 'verdict', keyword: t.rising[0].query, ...apiBase } });
@@ -242,11 +256,13 @@ return sites.map((s, idx) => {
   if (!ga4) actions.push({ priority: 4, type: 'connect_ga4', action: 'Add the same service account as a Viewer of the GA4 property (Admin → Property access management), or register the site with its GA4 property ID.', why: 'Connects search visibility to visits and key events (conversions).', keyword: '', url: '' });
   // B7-3 (2026-10-15, benchmark area 7): two of the site's own pages shown for one search, measured by Google. Never "publish
   // another page" — the opposite of D11, and the same rule: one search, one page.
-  for (const c of ((gsc && gsc.cannibal) || []).slice(0, 2)) actions.push({ priority: 2, type: 'cannibalisation',
-    action: 'Two of your pages compete for "' + c.query + '": ' + c.pages.map(p => p.page).slice(0, 3).join(' and ')
-      + '. Decide which one answers this search, point the other one at it with a link (or merge and redirect), and give the second page its own search.',
-    why: c.basis + (c.split ? ' Google shows ' + c.preferred + ' most often, but ' + c.best.page + ' ranks better when it is shown — the two are splitting the signals for this search.' : ''),
-    keyword: c.query, url: c.preferred });
+  // RV-1 / RV-15 (2026-10-21): a gone page competes for nothing (it is in the redirect action), and the count says how many pages it is
+  for (const c of cannibalLive.slice(0, 2)) { const n = c.pages.length;
+    actions.push({ priority: 2, type: 'cannibalisation',
+      action: (n === 2 ? 'Two of your pages compete for "' : n + ' of your pages compete for "') + c.query + '": ' + c.pages.map(p => p.page).slice(0, 4).join(', ')
+        + '. Decide which one answers this search, point ' + (n === 2 ? 'the other one' : 'the others') + ' at it with a link (or merge them into it and redirect), and give ' + (n === 2 ? 'the second page' : 'each of the others') + ' its own search.',
+      why: c.basis + (c.split && !isGoneUrl(c.preferred) && !isGoneUrl((c.best || {}).page) ? ' Google shows ' + c.preferred + ' most often, but ' + c.best.page + ' ranks better when it is shown, so the two are splitting the signals for this search.' : ''),
+      keyword: c.query, url: isGoneUrl(c.preferred) ? c.pages[0].page : c.preferred }); }
   actions.sort((a, b) => a.priority - b.priority); const acts = actions.slice(0, 12);   // the brief picks the top 5-6; the full list stays in the callback
   // ---- rows for the Data Tables ----
   const T = gsc ? gsc.totals : null; const G = ga4;
@@ -420,7 +436,8 @@ return sites.map((s, idx) => {
     annotations, annotation_note: AN.OWN_NOTES_LINE, brand_series, data_breaks, lineage,   // G12 / G29: the events of the period for every chart, and where each figure came from
     // B7-1 (2026-10-15, benchmark area 7): the method sentence used to travel alone — the Site Tracker shipped it and ran no test.
     change_method: change_tests.method, change_tests,
-    cannibal: (gsc && gsc.cannibal) || [], cannibal_summary: (gsc && gsc.cannibal_summary) || null,   // B7-3
+    cannibal: cannibalLive, cannibal_summary: (gsc && gsc.cannibal_summary) || null,   // B7-3; RV-1: without the pages that no longer answer
+    gone_pages, page_status: inv ? (inv.status_check || null) : null,   // RV-1: the old addresses that answer 404 / 410 and the page each should redirect to
     devices: (gsc && gsc.devices) || { read: false, rows: [], reason: 'Search Console is not connected for this site' },   // B7-2
     countries: (gsc && gsc.countries) || { read: false, rows: [], reason: 'Search Console is not connected for this site' },
     // B-G3 (2026-10-15): the rungs the read-path fit gate set aside, with the reason, so the report can say why the list is shorter

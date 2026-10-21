@@ -14,6 +14,31 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-21',
+    title: 'Fixes from our pre-launch run',
+    summary: 'Fixes found by running a full setup end to end before our first clients join.',
+    highlights: [
+      'Saving one setting no longer resets the others: choosing your Analytics property, saving your keywords at setup or changing one mailbox setting keeps your business description, business facts, tone and mailbox settings as they were',
+      'The keyword research at setup and the full SEO report now know the services you listed, so the keywords they suggest first are the ones you sell',
+      'The site report that starts when you set up tracking now counts as your first weekly report, under autopilot, and the launch screen includes it in today\'s estimate; starting tracking itself uses no credits',
+      'Pages Google still shows that no longer open are now one clear finding at the top of your reports, with a suggested new address for each and ready-made redirect files in the fix pack; no report advises on a page that is gone, and gone pages are no longer sent to Bing',
+      'Keywords for what you sell are judged correctly: a short service name such as "AI consulting" counts, and a search where people look for jobs or courses is no longer offered as a keyword for buyers',
+      'A page that is not ready to publish tells you exactly what to fill in or delete in the draft, and never asks you to pay for a new page; it is compared only with pages of the same kind, never with a course or a job listing',
+      'Service pages carry a short author line with the update date once your author profile is in',
+      'A page never promises something about your business that your facts do not say: any such sentence is marked for you to confirm or delete before the page counts as ready',
+      'A keyword plan reads the pages you already have before it plans new ones, and puts searches that Google answers with the same pages on one page instead of two',
+      'The quick keyword check now reads the search results too, so it gives the same answer as your research and your keyword plans',
+      'The keyword lists in the full SEO report leave out other companies\' names and other industries, and say why',
+      'Every part of the product now gives the same answer for the same keyword on the same day: research, the quick check, keyword plans and the full report read one search result and one set of rules, Arabic included',
+      'Competitors are businesses that rank for several of your keywords, never job boards, directories, marketplaces, news sites or government bodies, and each one comes with the reason it was chosen',
+      'A keyword plan improves the page you already have about a topic instead of planning a new one, and never plans a second page for a search another plan already covers',
+      'A page\'s length target comes from the pages that rank for the search, and each new page comes with links to add from your existing pages, checked before they are suggested',
+      'We fixed a case where a retried search request could be charged twice; a retry now repeats only the request that failed',
+    ],
+    features: ['autopilot', 'site-tracking', 'link-building', 'keyword-research', 'content', 'technical-audits'],
+    labels: ['Billing'],
+  },
+  {
     date: '2026-10-20',
     title: 'Your first page waits for your author profile and business facts',
     summary:

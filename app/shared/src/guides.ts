@@ -2121,7 +2121,7 @@ export const GUIDES = [
     steps: [
       {
         title: 'Type your own idea, or take a suggestion',
-        body: 'Under **What would a customer type into Google**, type what a buyer would search to find a business like yours, and press **Check it**. Each check takes 5 to 20 seconds and uses {{checkCredits}} (free if the same keyword was checked in the last 7 days). Or pick from **Suggest keywords for me**: our research of your website and market, judged against what you sell.',
+        body: 'Under **What would a customer type into Google**, type what a buyer would search to find a business like yours, and press **Check it**. Each check takes 5 to 20 seconds and uses {{checkCredits}} (free if the same keyword was checked in the last few hours). Or pick from **Suggest keywords for me**: our research of your website and market, judged against what you sell.',
         note: 'Suggestions that do not match the services you listed come last, with a note. If a good one is missing, add the service under **What do you sell?** in the business details.',
       },
       {
@@ -2391,7 +2391,7 @@ export const GUIDES = [
     steps: [
       {
         title: 'Read the reasons on the report',
-        body: 'The red box at the top of the page\'s report lists what the check found, from its last round of editing.',
+        body: 'The red box at the top of the page\'s report lists what the check found, from its last round of editing, then each bracket to edit by hand and your next step.',
       },
       {
         title: 'Brackets and masked figures',
@@ -2411,13 +2411,13 @@ export const GUIDES = [
       },
       {
         title: 'Finish it, then publish it',
-        body: 'Edit the copy yourself and put it on {{domain}}, or press **Run it again** under **Needs you** once your profile and facts are in (a new page run uses credits). Then press **I published it** with the address, so we check it live and start tracking.',
+        body: 'Edit the copy yourself, in the report\'s preview text or the Word file: fill in or delete each bracket, as the report says for each one. Then put it on {{domain}} and press **I published it** with the address, so we check it live and start tracking. You do not need a new run for these edits: a new run writes a whole new page and is charged again.',
         warn: 'Sending a page that is not ready to your website from Alaventra is refused: finish it first.',
       },
     ],
     done: 'The page is live on {{domain}} with no brackets left, and its report shows it as published.',
     trouble: [
-      { q: 'I filled everything in and it is still not ready', a: 'The check judges the copy it delivered, not your later edits. Fix the copy by hand, or press **Run it again** for a fresh page written with your new details.' },
+      { q: 'I filled everything in and it is still not ready', a: 'The check judges the copy it delivered, not your later edits: once you have edited every bracket, the page is ready to publish. A new run is only worth it when the topic itself was wrong, and it is charged as a new page.' },
       { q: 'The topic itself is wrong', a: 'Press **Not what I wanted** on the report instead, and skip the keyword in the next **Coming up** plan.' },
     ],
     related: ['business-profile', 'business-facts', 'publish-page', 'not-what-i-wanted'],

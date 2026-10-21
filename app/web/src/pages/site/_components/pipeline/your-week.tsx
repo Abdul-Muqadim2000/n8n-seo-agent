@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Field, Select } from '@/components/ui/field';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
+import { siteTimezone } from '@/lib/cycle-day';
 import { useSetCycleWeekday, useSiteCycle } from '@/lib/queries';
 import { cn, fmtAgo } from '@/lib/utils';
 import { Panel } from '../kit';
@@ -32,6 +33,7 @@ const JOB_STATE: Record<CycleJobView['status'], { label: string; icon: ReactNode
 export function YourWeek({ cycle: fromPage, compact }: { cycle: SiteCycleView | undefined; compact?: boolean }) {
   const { org } = useOrgCtx();
   const { site } = useSiteCtx();
+  const tz = siteTimezone(site);
   // the cycle's own read knows the person's role (whether they may move the weekday); the page's copy is shown until it arrives
   const q = useSiteCycle(org.id, site.id, !!site.verifiedAt);
   const cycle = q.data ?? fromPage;
@@ -58,11 +60,11 @@ export function YourWeek({ cycle: fromPage, compact }: { cycle: SiteCycleView | 
         <dl className="grid gap-2 rounded-lg bg-surface-2/60 px-3 py-2.5 text-[13px] sm:grid-cols-2">
           <div className="min-w-0">
             <dt className="text-xs text-ink-3">Next weekly run</dt>
-            <dd className="mt-0.5 text-ink">{validDate(cycle.nextDueAt) ? `${fmtWhen(cycle.nextDueAt)} · ${inDays(cycle.nextDueAt)}` : cycle.status === 'paused' ? 'Paused' : 'Not scheduled yet'}</dd>
+            <dd className="mt-0.5 text-ink">{validDate(cycle.nextDueAt) ? `${fmtWhen(cycle.nextDueAt, tz)} · ${inDays(cycle.nextDueAt)}` : cycle.status === 'paused' ? 'Paused' : 'Not scheduled yet'}</dd>
           </div>
           <div className="min-w-0">
             <dt className="text-xs text-ink-3">Coming up plan</dt>
-            <dd className="mt-0.5 text-ink">{validDate(cycle.nextPreviewAt) ? fmtDayHead(cycle.nextPreviewAt) : 'Two days before each run'}</dd>
+            <dd className="mt-0.5 text-ink">{validDate(cycle.nextPreviewAt) ? fmtDayHead(cycle.nextPreviewAt, tz) : 'Two days before each run'}</dd>
           </div>
           {cycle.monthlyDay != null && (
             <div className="min-w-0 sm:col-span-2">
@@ -124,6 +126,7 @@ function JobRow({ j, n }: { j: CycleJobView; n: number }) {
 function WeekdayControl({ cycle }: { cycle: SiteCycleView }) {
   const { org } = useOrgCtx();
   const { site } = useSiteCtx();
+  const tz = siteTimezone(site);
   const set = useSetCycleWeekday(org.id, site.id);
   const [value, setValue] = useState(String(cycle.weekday ?? 1));
   const changed = Number(value) !== cycle.weekday;
@@ -131,7 +134,7 @@ function WeekdayControl({ cycle }: { cycle: SiteCycleView }) {
     set.mutate(Number(value), {
       onSuccess: (r) =>
         toast.success(`Your week now starts on ${r.weekdayName}`, {
-          description: r.nextDueAt && validDate(r.nextDueAt) ? `The next weekly run is ${fmtWhen(r.nextDueAt)}. Two runs are always at least 3 days apart.` : 'Two runs are always at least 3 days apart.',
+          description: r.nextDueAt && validDate(r.nextDueAt) ? `The next weekly run is ${fmtWhen(r.nextDueAt, tz)}. Two runs are always at least 3 days apart.` : 'Two runs are always at least 3 days apart.',
         }),
       onError: (e) =>
         toast.error(

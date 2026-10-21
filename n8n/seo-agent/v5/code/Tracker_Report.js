@@ -359,7 +359,7 @@ for (const [id, items] of byLadder) {
     + (notCompared.length ? '<p style="color:#64748b"><b>Position changes that could not be compared with the results page around them</b> (no verdict): ' + esc(notCompared.join('; ')) + '</p>' : '')
     + (moves.length ? '<p style="color:#64748b;font-size:12px">How a move of ' + RS.MOVE.min_places + ' places or more is read: ' + esc(RS.MOVE.rule) + '.</p>' : '')
     + (outrankedFound.length ? '<p style="color:#b45309"><b>Who took the place:</b> ' + esc(outrankedFound.map(o => o.text).join(' ')) + '</p>' : '')
-    + (cannibalFound.length ? '<p style="color:#b45309"><b>Two of your pages compete for one search:</b> ' + esc(cannibalFound.map(c => c.text).join(' ')) + '</p>' : '');
+    + (cannibalFound.length ? '<p style="color:#b45309"><b>Your own pages compete for one search:</b> ' + esc(cannibalFound.map(c => c.text).join(' ')) + '</p>' : '');
   const sovHtml = voiceW.value != null ? '<p style="font-size:12px;color:#334155">Your share of voice across the ' + voiceW.keywords + ' keyword' + (voiceW.keywords === 1 ? '' : 's') + ' read: '
     + voiceW.value + '% (' + esc(voiceW.note) + ').</p>' : '';
   for (const l of lineage) if (l && /^Share of voice$/.test(String(l.figure || '')) && l.basis !== 'unknown') l.note = String(l.note || '') + ' Across the keywords: ' + voiceW.note + '.';
@@ -491,7 +491,7 @@ if (watchMeta && (watchMeta.sites || []).length) {
       + (notComparedW.length ? '<p style="color:#64748b"><b>Position changes that could not be compared with the results page around them</b> (no verdict): ' + esc(notComparedW.join('; ')) + '</p>' : '')
       + (bigW.length ? '<p style="color:#64748b;font-size:12px">How a move of ' + RS.MOVE.min_places + ' places or more is read: ' + esc(RS.MOVE.rule) + '.</p>' : '')
       + (outrankedW.length ? '<p style="color:#b45309"><b>Who took the place:</b> ' + esc(outrankedW.map(r => '"' + r.keyword + '": ' + r.outranked.text).join(' ')) + '</p>' : '')
-      + (cannibalW.length ? '<p style="color:#b45309"><b>Two of your pages compete for one search:</b> ' + esc(cannibalW.map(r => r.cannibal.text).join(' ')) + '</p>' : '')
+      + (cannibalW.length ? '<p style="color:#b45309"><b>Your own pages compete for one search:</b> ' + esc(cannibalW.map(r => r.cannibal.text).join(' ')) + '</p>' : '')
       + (voiceWW.value != null ? '<p style="font-size:12px;color:#334155">Your share of voice across the ' + voiceWW.keywords + ' keyword' + (voiceWW.keywords === 1 ? '' : 's') + ' read: ' + voiceWW.value + '% (' + esc(voiceWW.note) + ').</p>' : '');
     const readRows = rowsW.filter(r => r.read);
     const top10 = readRows.filter(r => r.current > 0 && r.current <= 10).length;

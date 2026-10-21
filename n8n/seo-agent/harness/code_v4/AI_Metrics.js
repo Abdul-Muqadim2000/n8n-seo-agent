@@ -792,6 +792,97 @@ const RV = (() => {
   const marketMedia = (d, iso) => { const re = MARKET_MEDIA[S(iso).toUpperCase()]; return !!re && re.test(norm(d)); };
   return { set, providerOf, storefront, menuOf, families, reg, aiRivals, marketMedia, ROUNDUP, FAMILIES, NOT_RIVAL };
 })();
+// RV-1 (2026-10-21, pre-launch run on techand.ai): the brief said "build on your existing D365 F&O pages" and the report listed them as "your
+// cited pages" while they answer 404. The page inventory says what each address answered (seo_pages.http_status, the Site Tracker): a cited
+// page that no longer answers is flagged, kept out of the brief's pages to build on, and turned into the one redirect action (_gone.js).
+// ---- RV-1 (2026-10-21, pre-launch run on techand.ai): PAGES THAT ARE GONE, ONE MESSAGE EVERYWHERE (inlined where a node asks for the GONE kit marker) ----
+// The site was rebuilt: Search Console still showed ~34 old addresses (2-3k of 5.7k impressions) that answer 404 (the bare host 308s to
+// www, which 404s) and nothing redirects them. The audit filed some as "redirect somewhere else" (Low), the weekly site report told the
+// owner to make one of them "the single page" for a search, the AI visibility brief said "build on your existing D365 pages" and AI
+// Growth sent them to Bing. The first thing the owner has to hear is one sentence: these addresses are gone, redirect each to this page.
+// This kit holds that sentence, the suggested target of each redirect and the redirect files, so every report says the same thing:
+//   GONE.isGone(status)            404 / 410 after following redirects (a bot wall, a timeout or a 5xx is NOT gone: not known)
+//   GONE.plan(dead, live, home)    [{ from_url, from, to, to_url, status, impressions, clicks, match }] most impressions first
+//   GONE.finding(plan, o)          the audit finding (one title, one fix) with the full list in `redirects`
+//   GONE.action(plan)              the weekly / AI report action (priority 1)
+//   GONE.files(plan, today)        { csv, nginx, htaccess } for the fix pack
+//   GONE.keyOf(u) / GONE.drop(list, set, pick)   host-agnostic address key, and "leave the gone addresses out of this list"
+// Customer text: plain words, no dashes used as punctuation, no ellipsis.
+const GONE = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const isGone = (st) => { const n = n0(st); return n === 404 || n === 410; };
+  const keyOf = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const pathOf = (u) => S(u).replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/(.)\/+$/, '$1') || '/';
+  const fmt = (v) => n0(v).toLocaleString('en-GB');
+  // words that say nothing about which page an old address was about (places, filler, the generic page words of every site)
+  const STOP = new Set(['the', 'and', 'for', 'with', 'from', 'your', 'our', 'what', 'how', 'why', 'who', 'are', 'you', 'its', 'into', 'about', 'uae', 'dubai', 'abu', 'dhabi',
+    'sharjah', 'emirates', 'united', 'arab', 'html', 'htm', 'php', 'aspx', 'page', 'pages', 'index', 'www', 'com', 'new', 'best', 'top', 'guide', 'complete', 'every', 'must']);
+  const stem = (t) => t.length >= 5 ? t.replace(/(ations?|ings?|ants?|ers?)$/, '').replace(/s$/, '').replace(/e$/, '') : t;   // services = service, operations = operation
+  const words = (s) => [...new Set(S(s).toLowerCase().replace(/&/g, ' and ').split(/[^a-z0-9]+/).filter(t => t.length > 2 && !STOP.has(t)).map(stem))];
+  // the closest live page: the one sharing the most specific words with the old address (a word most live pages carry counts for little);
+  // without one, the section page the old address sat under when that page is live, else the home page, and the match says which it was
+  const plan = (dead, live, home) => {
+    const deadKeys = new Set((Array.isArray(dead) ? dead : []).map(d => keyOf(d.url || d.from_url)));
+    const L = (Array.isArray(live) ? live : []).map(p => ({ url: S(p.url), path: pathOf(p.url), title: S(p.title || p.h1), status: p.status != null ? p.status : p.http_status }))
+      .filter(p => p.url && !isGone(p.status) && !deadKeys.has(keyOf(p.url)));
+    const homeUrl = S(home) || (L.find(p => p.path === '/') || {}).url || '/';
+    const docs = L.filter(p => p.path !== '/').map(p => ({ p, w: new Set([...words(p.path.replace(/[\/_-]+/g, ' ')), ...words(p.title)]) }));
+    const df = new Map(); for (const d of docs) for (const w of d.w) df.set(w, (df.get(w) || 0) + 1);
+    const idf = (w) => Math.log(1 + (docs.length + 1) / (1 + (df.get(w) || 0)));
+    const seen = new Set(); const out = [];
+    for (const d0 of (Array.isArray(dead) ? dead : [])) {
+      const url = S(d0.url || d0.from_url); const k = keyOf(url); if (!url || seen.has(k)) continue; seen.add(k);
+      const path = pathOf(url); const want = words(path.replace(/[\/_-]+/g, ' '));
+      let best = null;
+      for (const d of docs) { const shared = want.filter(w => d.w.has(w)); if (!shared.length) continue;
+        const score = shared.reduce((s, w) => s + idf(w), 0);
+        if (!best || score > best.score + 1e-9 || (Math.abs(score - best.score) < 1e-9 && d.p.path.length < best.p.path.length)) best = { p: d.p, score, shared }; }
+      const strong = best && (best.shared.length >= 2 || best.score >= 1.2);
+      const parent = path.split('/').filter(Boolean).slice(0, -1).join('/');
+      const section = parent ? L.find(p => p.path === '/' + parent) : null;
+      const to = strong ? best.p : section || null;
+      out.push({ from_url: url, from: path, to_url: to ? to.url : homeUrl, to: to ? to.path : '/', status: n0(d0.status || d0.http_status), impressions: n0(d0.impressions), clicks: n0(d0.clicks),
+        match: strong ? 'same topic (shares "' + best.shared.slice(0, 3).join('", "') + '")' : section ? 'its section page' : 'home page (no live page matches it by name: use a better page if you have one)' });
+    }
+    return out.sort((a, b) => b.impressions - a.impressions || b.clicks - a.clicks || a.from.localeCompare(b.from));
+  };
+  const totals = (pl) => (pl || []).reduce((t, r) => ({ impressions: t.impressions + n0(r.impressions), clicks: t.clicks + n0(r.clicks) }), { impressions: 0, clicks: 0 });
+  const line = (r) => r.from + (r.impressions ? ' (' + fmt(r.impressions) + ' impressions)' : '') + ' to ' + r.to;
+  const TITLE = 'Pages Google still shows no longer answer: redirect them';
+  const TITLE_UNSEEN = 'Known URLs outside the crawl no longer answer';
+  const FIX = 'Add a permanent (301) redirect from each old address to the page suggested for it (redirects.csv in the fix pack lists every one, with nginx and Apache versions; use a better page where you have one), then take the old addresses out of the sitemap and the internal links.';
+  // the audit finding: one title and one fix wherever a gone page is found; `o.note` is the sample the reading came from
+  const finding = (pl, o) => {
+    const x = o || {}; const t = totals(pl); const seen = (pl || []).filter(r => r.impressions > 0 || r.clicks > 0);
+    const codes = [...new Set((pl || []).map(r => r.status).filter(Boolean))].map(c => 'HTTP ' + c).join(' / ') || 'HTTP 404';
+    return { category: 'Crawlability & Indexing', severity: seen.length ? 'High' : 'Medium', title: seen.length ? TITLE : TITLE_UNSEEN,
+      evidence: (pl || []).length + ' address(es) answer ' + codes + (x.via_redirect ? ' (' + x.via_redirect + ' of them only after a redirect to the main host)' : '') + ': '
+        + (pl || []).slice(0, 5).map(r => r.from + ': HTTP ' + (r.status || 404) + (r.impressions ? ', ' + fmt(r.impressions) + ' impressions' : '')).join('; ')
+        + ((pl || []).length > 5 ? '; and ' + ((pl || []).length - 5) + ' more' : '') + (x.note ? '. ' + x.note : '')
+        + (seen.length ? '; ' + seen.length + ' of them still earn impressions in Search Console (' + fmt(t.impressions) + ' impressions and ' + fmt(t.clicks) + ' clicks in the last 28 days)' : ''),
+      why: seen.length ? 'Google still shows these addresses in search, and every visitor who clicks them, and every link that points at them, lands on an error page. Until they redirect, the visibility they earned is lost, and Google drops them one by one.'
+        : 'These addresses are in your sitemap or were known before, but they return an error. Visitors and crawlers that follow them hit a dead end, and the link value pointing at them is lost.',
+      fix: FIX, sample_urls: (pl || []).slice(0, 5).map(r => r.from_url), affected_urls: (pl || []).slice(0, 200).map(r => r.from_url), affected_count: (pl || []).length || null,
+      scope: 'page', scoring: true, source: x.source || 'gone', figure: '', redirects: (pl || []).slice(0, 200) };
+  };
+  const action = (pl) => { const t = totals(pl); if (!(pl || []).length) return null;
+    return { priority: 1, type: 'redirect_gone', keyword: '', url: (pl[0] || {}).from_url || '',
+      action: 'Redirect the ' + pl.length + ' old address(es) that now answer 404 (301 to the closest live page): ' + pl.slice(0, 4).map(line).join('; ') + (pl.length > 4 ? '; and ' + (pl.length - 4) + ' more' : '') + '.',
+      why: 'Google still shows them (' + fmt(t.impressions) + ' impressions and ' + fmt(t.clicks) + ' clicks in the last 28 days), and every visit and every link to them ends on an error page. Do not work on these pages: they no longer exist.',
+      redirects: pl.slice(0, 60) }; };
+  const q = (v) => '"' + S(v).replace(/"/g, '""') + '"';
+  const files = (pl, today) => { const L = (pl || []).filter(r => r.from && r.to && r.from !== r.to); if (!L.length) return null; const d = S(today) || new Date().toISOString().slice(0, 10);
+    return { count: L.length,
+      csv: 'from,to,http_status_now,impressions_28d,match\n' + L.map(r => [r.from, r.to, r.status || 404, r.impressions, r.match].map(q).join(',')).join('\n') + '\n',
+      nginx: '# 301 redirects for addresses that no longer answer, found by the SEO audit on ' + d + '\n' + L.map(r => 'location = ' + r.from + ' { return 301 ' + r.to + '; }').join('\n') + '\n',
+      htaccess: '# 301 redirects for addresses that no longer answer, found by the SEO audit on ' + d + '\n' + L.map(r => 'Redirect 301 ' + r.from + ' ' + r.to).join('\n') + '\n' }; };
+  // leave the gone addresses out of a list (pick reads the address from an entry); returns { kept, dropped }
+  const drop = (list, set, pick) => { const kept = [], dropped = []; const get = pick || ((x) => (x && typeof x === 'object') ? (x.url || x.page || x.u) : x);
+    for (const x of (Array.isArray(list) ? list : [])) (set && set.has(keyOf(get(x))) ? dropped : kept).push(x); return { kept, dropped }; };
+  return { isGone, keyOf, pathOf, plan, finding, action, files, drop, totals, TITLE, TITLE_UNSEEN, FIX };
+})();
+const pageInv = (() => { try { return $('Load Pages (AI)').all().map(i => i.json).filter(r => r && r.site_id && r.url && !r.error); } catch (e) { return []; } })();
 // G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): a weekly run split across executions is measured ONCE, in its last execution, over every answer
 // of the run — this execution's and the ones earlier executions stored (seo_ai_answers, same run_id). A site whose run continues in another
 // execution is not measured here (AI Chunk Handoff states its money); with no site finishing here the node says so and the report path ends.
@@ -817,8 +908,10 @@ const GENERIC_SOCIAL = /(^|\.)(youtube\.com|linkedin\.com|facebook\.com|instagra
 const MEDIA = /(^|\.)(gulfnews|khaleejtimes|thenationalnews|zawya|arabianbusiness|gulfbusiness|reuters|bloomberg|forbes|cnbc|bbc|ft|wsj|techcrunch|entrepreneur|economist|businessinsider|thenational|arabnews|timesofindia|dawn)\.[a-z.]+$/i;
 const DIRECTORY = /(^|\.)(g2|capterra|clutch|trustpilot|goodfirms|getapp|softwareadvice|crunchbase|yelp|sortlist|designrush|themanifest|[a-z-]*yellowpages[a-z-]*|[a-z-]*directory[a-z-]*)\.[a-z.]+$/i;
 const AUTHORITY = /(^|\.)(deloitte|pwc|kpmg|ey|gartner|forrester|mckinsey|accenture|statista|bcg|bain|idc)\.[a-z.]+$/i;
-const GOV = /\.gov(\.[a-z]{2})?$|(^|\.)u\.ae$|\.int$|\.edu(\.[a-z]{2})?$/i;
-const kindOf = (d) => GOV.test(d) ? 'official' : GENERIC_SOCIAL.test(d) ? 'platform' : MEDIA.test(d) ? 'media' : DIRECTORY.test(d) ? 'directory' : AUTHORITY.test(d) ? 'authority' : 'site';
+const GOV = /\.gov(\.[a-z]{2})?$|(^|\.)u\.ae$|\.int$|\.edu(\.[a-z]{2})?$|(^|\.)(difc|adgm|dmcc|dafz|jafza|rakez|dso|dubaichamber|abudhabichamber)\.(com|ae|org)$/i;   // RV-14: the UAE free-zone authorities are official bodies, not rivals
+// RV-14 (2026-10-21): a search engine is where AI looked, never a place to "get featured on" (the report said "Get featured on google.com")
+const ENGINE = /(^|\.)(google|bing|yahoo|duckduckgo|yandex|baidu|ecosia|ask)\.[a-z.]+$/i;
+const kindOf = (d) => ENGINE.test(d) ? 'engine' : GOV.test(d) ? 'official' : GENERIC_SOCIAL.test(d) ? 'platform' : MEDIA.test(d) ? 'media' : DIRECTORY.test(d) ? 'directory' : AUTHORITY.test(d) ? 'authority' : 'site';
 const pct = (a, b) => b ? Math.round(1000 * a / b) / 10 : 0;
 const ENG = { chatgpt: 'ChatGPT', perplexity: 'Perplexity', gemini: 'Gemini', claude: 'Claude', ai_overview: 'Google AI Overview', ai_mode: 'Google AI Mode', copilot: 'Copilot', chatgpt_api: 'ChatGPT API', gemini_api: 'Gemini API' };   // G6: + the model APIs (opt-in)
 const FORM_URL = 'http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d', API_URL = 'http://localhost:5678/webhook/seo-keyword-check';
@@ -884,9 +977,17 @@ return plans.map(p => {
   const ranks = ans.filter(r => r.rank > 0).map(r => Number(r.rank));
   const meta = new Map([...p.prompts, ...freshP.filter(r => r.site_id === p.site_id)].map(q => [q.prompt_id, q]));
   const volOf = new Map([...meta.values()].map(q => [q.prompt_id, Number(q.volume) || 0]));
+  // RV-14 (2026-10-21): a site whose cited pages are ranking lists ("Best AI Consultants for Small Businesses in Dubai (2026)", abcmoney.co.uk)
+  // publishes lists of providers, it is not one: it is never counted as a business AI recommends instead of you
+  const LIST_TITLE = /^\s*(the\s+)?(\d+\s+)?(best|top)\b|\btop\s+\d+\b|\b\d+\s+best\b|\branking/i;
+  const listSites = (() => { const by = new Map(); const hostU = (u) => { const m = String(u || '').match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
+    for (const r of ansAll) { let cu = []; try { cu = JSON.parse(r.cited_urls || '[]'); } catch (e) {} for (const c of (Array.isArray(cu) ? cu : [])) { const h = hostU(c && c.u); if (!h || !c.t) continue;
+      const x = by.get(h) || { list: 0, other: 0 }; if (LIST_TITLE.test(String(c.t))) x.list++; else x.other++; by.set(h, x); } }
+    return new Set([...by.entries()].filter(([, x]) => x.list > 0 && x.other === 0).map(([h]) => h)); })();
+  const notList = (d) => !listSites.has(String(d || '').toLowerCase().replace(/^www\./, '')) || (p.configured_competitors || []).includes(d);
   // competitors: configured ones always; plus businesses AI names in at least 2 answers (domains, or brand names without a known website)
   const counts = new Map(); const bump = (d, n) => counts.set(d, (counts.get(d) || 0) + n);
-  for (const r of ans) for (const d of list(r.competitors)) bump(d, 1);
+  for (const r of ans) for (const d of list(r.competitors).filter(notList)) bump(d, 1);
   for (const d of PR) for (const [k, n] of Object.entries(d.competitors || {})) bump(k, Number(n) || 0);
   { const merged = mergeBrands([...counts.entries()], p.aliases); counts.clear(); for (const [k, v] of merged) counts.set(k, v.reduce((x, y) => x + y, 0)); }   // "ClearTax" and cleartax.com are one business
   const comp = [...new Set([...p.configured_competitors, ...[...counts.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([d]) => d)])].slice(0, 8)
@@ -948,11 +1049,20 @@ return plans.map(p => {
     ...[...rivalSet].filter(d => !rival_sources.some(r => r.domain === d) && !vendorWhy.has(d)).map(domain => ({ domain, citations: 0, kind: 'named' }))].slice(0, 120);
   const sources = [...src.values()].sort((a, b) => b.citations - a.citations).slice(0, 15).map(s => ({ domain: s.domain, citations: s.citations, engines: [...s.engines].filter(x => x !== 'daily'), topics: [...s.topics].slice(0, 3), kind: kindOf(s.domain), urls: [...s.urls.values()].sort((a, b) => b.n - a.n).slice(0, 3) }));
   const pages = new Map(); for (const r of ansAll) for (const u of String(r.our_urls || '').split(/\s+/).filter(Boolean)) { const x = pages.get(u) || { url: u, citations: 0, engines: new Set() }; x.citations++; x.engines.add(r.engine); pages.set(u, x); }
-  const our_pages = [...pages.values()].sort((a, b) => b.citations - a.citations).slice(0, 10).map(x => ({ url: x.url, citations: x.citations, engines: [...x.engines] }));
+  const invMine = pageInv.filter(r => r.site_id === p.site_id);
+  const goneKeys = new Set(invMine.filter(r => GONE.isGone(r.http_status)).map(r => GONE.keyOf(r.url)));
+  const statusOf = new Map(invMine.filter(r => Number(r.http_status) > 0).map(r => [GONE.keyOf(r.url), Number(r.http_status)]));
+  const our_pages = [...pages.values()].sort((a, b) => b.citations - a.citations).slice(0, 10).map(x => ({ url: x.url, citations: x.citations, engines: [...x.engines],
+    ...(goneKeys.has(GONE.keyOf(x.url)) ? { gone: true, http_status: statusOf.get(GONE.keyOf(x.url)) || 404 } : {}) }));
+  // RV-1: the cited addresses that no longer answer, and the page each should redirect to (the live pages of the inventory are the candidates)
+  const goneCited = [...pages.values()].filter(x => goneKeys.has(GONE.keyOf(x.url)));
+  const gone_cited = GONE.plan(goneCited.map(x => ({ url: x.url, status: statusOf.get(GONE.keyOf(x.url)) || 404, impressions: Number((invMine.find(r => GONE.keyOf(r.url) === GONE.keyOf(x.url)) || {}).impressions) || 0 })),
+    invMine.filter(r => !GONE.isGone(r.http_status) && (r.source === 'sitemap' || (Number(r.http_status) >= 200 && Number(r.http_status) < 300))), (invMine.find(r => GONE.pathOf(r.url) === '/') || {}).url || '')
+    .map(r => ({ ...r, citations: (goneCited.find(x => GONE.keyOf(x.url) === GONE.keyOf(r.from_url)) || {}).citations || 0 }));
   // per question: who wins this run, and how often the business was named over the week's samples (win rate)
   const byQ = new Map();
   for (const r of Rall) { const q = byQ.get(r.prompt_id) || { prompt: r.prompt, kind: r.kind, topic: r.topic, engines: {}, competitors: new Set(), sources: new Set(), fanout: new Set(), urls: new Map(), n: 0, m: 0 }; q.engines[r.engine] = !r.answered ? (r.error ? 'error' : 'none') : r.cited ? 'cited' : r.mentioned ? 'mentioned' : 'absent';
-    if (r.answered) { q.n++; if (r.mentioned) q.m++; list(r.competitors).forEach(d => q.competitors.add(d)); list(r.sources).forEach(d => q.sources.add(d)); String(r.fanout || '').split(' | ').filter(Boolean).forEach(f => q.fanout.add(f));
+    if (r.answered) { q.n++; if (r.mentioned) q.m++; list(r.competitors).filter(notList).forEach(d => q.competitors.add(d)); list(r.sources).forEach(d => q.sources.add(d)); String(r.fanout || '').split(' | ').filter(Boolean).forEach(f => q.fanout.add(f));
       for (const c of citedOf(r)) { const x = q.urls.get(c.u) || { u: c.u, t: c.t || '', n: 0, engines: new Set() }; x.n++; x.engines.add(r.engine); if (!x.t && c.t) x.t = c.t; q.urls.set(c.u, x); } } byQ.set(r.prompt_id, q); }
   for (const d of PR) for (const [id, st] of Object.entries(d.prompts || {})) { const q = byQ.get(id); if (!q) continue; for (const v of Object.values(st || {})) { if (v === 'n' || v === 'e') continue; q.n++; if (/^[mcMC]$/.test(v)) q.m++; } }   // G6: upper case = named FIRST — it was not counted as named at all
   for (const e of p.engines) if (MONTHLY.includes(e) && !Rall.some(r => r.engine === e)) for (const q0 of byQ.values()) if (!(e in q0.engines)) q0.engines[e] = 'monthly';   // asked on the month's full run
@@ -1259,6 +1369,7 @@ return plans.map(p => {
   // actions, most valuable first (value = the demand behind a question, or how much a fix unblocks)
   const actions = [];
   if (acc) for (const it of acc.issues.filter(x => x.level === 'critical' || x.level === 'high').slice(0, 2)) actions.push({ priority: 1, type: 'access', action: it.fix, why: it.text });
+  { const ga = GONE.action(gone_cited); if (ga) actions.push({ ...ga, why: 'AI answers cite ' + gone_cited.length + ' of your old addresses that now answer ' + [...new Set(gone_cited.map(r => r.status || 404))].join(' / ') + ' (' + gone_cited.reduce((t, r) => t + (r.citations || 0), 0) + ' citations), so every reader who follows them lands on an error page. Do not build on these pages: they no longer exist.' }); }
   for (const it of issues.slice(0, 2)) actions.push({ priority: 1, type: 'accuracy', action: 'Correct what AI says: ' + it.text.split(' → ')[0].slice(0, 120), why: (it.engines.join(', ') + ' state this; the fact on file is "' + (it.text.split(' → ')[1] || 'different') + '". State the right fact plainly on the About and service pages, in the Organization schema and on the profiles AI reads (Google Business Profile, LinkedIn, directories).').slice(0, 400) });
   for (const g of gaps.slice(0, 3)) actions.push({ priority: 1, type: 'content', action: 'Win the answer to "' + g.prompt + '"', why: 'AI recommends ' + g.competitors.slice(0, 3).join(', ') + ' here and not you' + (g.volume ? ' (' + g.volume.toLocaleString('en-GB') + ' AI searches a month)' : '') + (g.sources.length ? '; it relies on ' + g.sources.slice(0, 3).join(', ') : '') + (g.fanout.length ? '; to answer it searched "' + g.fanout[0] + '"' : '') + '.', keyword: g.topic || g.prompt,
     api_body: { mode: 'keyword', keyword: (g.topic || g.prompt).toLowerCase().slice(0, 80), country: p.country, domain: p.domain, page_type: g.kind === 'compare' ? 'Comparison Page' : 'Guide', receive: ['Keyword Report', 'Page Content'],
@@ -1293,7 +1404,7 @@ return plans.map(p => {
       family: segments.family, moves: segments.moves, min_answers: segments.min_answers }),
     panel_json: J(panel_info), chunks: run_split ? run_split.executions : 1 };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
   const now = p.checked_at;
-  const prospect_rows = sources.filter(s => !['platform', 'authority'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};
+  const prospect_rows = sources.filter(s => !['platform', 'authority', 'engine'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};
     const top = (s.urls || [])[0] || null;   // v4.12: the exact page AI cites on that site (the one to be named on)
     const kept = DRAFTS.carry(old);   // P34-1: a draft written before the D12 / D13 gates is withdrawn, not carried into the refreshed row
     return { site_id: p.site_id, domain: p.domain, prospect_domain: s.domain, type: 'ai_source', rank: Number(old.rank) || 0, spam_score: Number(old.spam_score) || 0,
@@ -1325,5 +1436,5 @@ return plans.map(p => {
     // B8-8 / B8-9: each engine's own change test (or why it was not tested), and the one correction the tested alerts were judged by
     engine_changes, min_engine_samples: MIN_ENGINE_SAMPLES, multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },
-    engines, competitors: comp, sources, rival_sources, our_pages, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, segments, panel: { ...panel_info, ids: undefined }, form_url: FORM_URL, api_url: API_URL } };
+    engines, competitors: comp, sources, rival_sources, our_pages, gone_cited, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, segments, panel: { ...panel_info, ids: undefined }, form_url: FORM_URL, api_url: API_URL } };
 });

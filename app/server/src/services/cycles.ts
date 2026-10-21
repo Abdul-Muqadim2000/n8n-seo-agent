@@ -69,16 +69,42 @@ export function cycleIntentOf(site: Pick<SiteRow, 'timezone' | 'trackingStartedA
 }
 
 /**
- * A job's reason in the customer's words: the engine's skip reasons are already plain sentences ("skipped: AI visibility is switched off
- * for this website"); anything about executions, ledgers or capacity becomes what it means for the customer.
+ * D9 (pre-launch run 2026-10-21): what a finished job did, said for each job. The engine's own reason for a finished job is about its
+ * ledger row ("finished: its ledger row ... settled (execution 30)"), so the cycle view showed nothing at all, even for a content job that
+ * wrote nothing because the page waited for the author profile. A note from the job's own report (`note`) says more when there is one.
  */
-export function jobReason(status: string, reason: string, attempts: number): string {
+export const JOB_DONE_TEXT: Record<Exclude<CycleJob, 'cycle'>, string> = {
+  ai_visibility: 'Done: the AI visibility report is under Reports',
+  backlinks: 'Done: the backlink report is under Reports',
+  rank_tracker: 'Done: the new positions are on Rankings',
+  site_tracker: 'Done: the weekly site report is under Reports',
+  ai_growth: 'Done: the AI growth report is under Reports',
+  content_cadence: 'Done: what it wrote, or why it wrote nothing, is on Content and under Reports',
+  link_builder: 'Done: new pitches, if any, are on Link building',
+  audit: 'Started the audit: its report arrives under Reports when the crawl is finished',
+  preview: 'Done: the plan is under Coming up',
+};
+
+/** Words about our own machinery that never reach a customer (an execution, a ledger row, a table, the engine). */
+const INTERNAL = /execution|ledger|seo_|n8n|workflow|run guard|skip_jobs/i;
+
+/**
+ * A job's reason in the customer's words: the engine's skip reasons are already plain sentences ("skipped: AI visibility is switched off
+ * for this website"); anything about executions, ledgers or capacity becomes what it means for the customer. Every finished, skipped or
+ * stopped job says something (D9): a done job its JOB_DONE_TEXT, or the note its own report gave.
+ */
+export function jobReason(status: string, reason: string, attempts: number, job?: string, note?: string): string {
   const r = S(reason);
   switch (status) {
+    case 'done':
+      return S(note) || (job ? (JOB_DONE_TEXT[job as Exclude<CycleJob, 'cycle'>] ?? '') : '');
     case 'skipped': {
       if (/^set aside/i.test(r)) return 'Not run: the next cycle started before it could run';
-      const why = r.replace(/^skipped:\s*/i, '');
-      return /execution|ledger|seo_|n8n|workflow|run guard/i.test(why) ? 'Not needed this week' : why.charAt(0).toUpperCase() + why.slice(1);
+      // D9: "already run when tracking was set up (execution 16, finished ...), so cycle 0 does not run it twice"
+      if (/already run when tracking was set up/i.test(r)) return 'Already ran when tracking was set up today, so this first run does not repeat it';
+      if (/next cycle is due/i.test(r)) return 'Not run: the next weekly run came soon enough to cover it';
+      const why = r.replace(/^skipped:\s*/i, '').replace(/\s*\([^)]*\)/g, '').trim();
+      return !why || INTERNAL.test(why) ? 'Not needed this week' : why.charAt(0).toUpperCase() + why.slice(1);
     }
     case 'refused':
       return 'Waiting for a free slot: it starts again automatically';
@@ -93,8 +119,11 @@ export function jobReason(status: string, reason: string, attempts: number): str
 
 const JOB_ORDER = new Map<string, number>([...CYCLE_JOBS.map((j, i) => [j.job as string, i + 1] as const), ['preview', 0]]);
 
+/** What a job's own report said about one cycle (D9): `notes[cycleKey][job]`, e.g. the content job that wrote nothing and why. */
+export type CycleNotes = Record<string, Partial<Record<Exclude<CycleJob, 'cycle'>, string>>>;
+
 /** One cycle of the website and its jobs (in the cycle's order), from the job rows. */
-export function cycleSummary(cycleKey: string, jobs: CycleJobRow[], anchorDate: string): CycleSummary {
+export function cycleSummary(cycleKey: string, jobs: CycleJobRow[], anchorDate: string, notes: CycleNotes = {}): CycleSummary {
   const mine = jobs.filter((j) => S(j.cycle_key) === cycleKey);
   const marker = mine.find((j) => S(j.job) === 'cycle');
   const list: CycleJobView[] = mine
@@ -109,7 +138,7 @@ export function cycleSummary(cycleKey: string, jobs: CycleJobRow[], anchorDate: 
         status,
         attempts: Number(j.attempts) || 0,
         monthly: yes(j.monthly),
-        reason: jobReason(status, S(j.reason), Number(j.attempts) || 0),
+        reason: jobReason(status, S(j.reason), Number(j.attempts) || 0, job, notes[cycleKey]?.[job]),
         dueAt: iso(j.due_at),
         startedAt: iso(j.started_at),
         finishedAt: iso(j.finished_at),
@@ -128,7 +157,7 @@ export function cycleSummary(cycleKey: string, jobs: CycleJobRow[], anchorDate: 
 }
 
 /** The whole view (pure): the engine's row and job rows, or the app's own anchor before the engine has a row. */
-export function siteCycleView(site: Pick<SiteRow, 'timezone' | 'trackingStartedAt' | 'cycleWeekday' | 'trackingStatus'>, row: Partial<CycleRow> | null, jobs: CycleJobRow[], now: number, role: Role): SiteCycleView {
+export function siteCycleView(site: Pick<SiteRow, 'timezone' | 'trackingStartedAt' | 'cycleWeekday' | 'trackingStatus'>, row: Partial<CycleRow> | null, jobs: CycleJobRow[], now: number, role: Role, notes: CycleNotes = {}): SiteCycleView {
   const intent = cycleIntentOf(site, row);
   const r = intent ? readCycleIntent(intent) : null;
   const upcoming = intent ? upcomingCycles(intent, now, 5) : [];
@@ -159,8 +188,8 @@ export function siteCycleView(site: Pick<SiteRow, 'timezone' | 'trackingStartedA
     nextDueAt: status === 'active' ? nextDue : null,
     nextPreviewAt: status === 'active' ? iso(row?.next_preview_at) ?? (upcoming[0]?.previewAt || null) : null,
     lastCycleAt: iso(row?.last_cycle_at),
-    current: currentKey ? cycleSummary(currentKey, jobs, anchorDate) : null,
-    recent: keys.filter((k) => k !== currentKey).slice(0, 8).map((k) => cycleSummary(k, jobs, anchorDate)),
+    current: currentKey ? cycleSummary(currentKey, jobs, anchorDate, notes) : null,
+    recent: keys.filter((k) => k !== currentKey).slice(0, 8).map((k) => cycleSummary(k, jobs, anchorDate, notes)),
     upcoming: status === 'active' ? upcoming : [],
     overdue: !!row && status === 'active' && cycleOverdue(row, now),
     // the weekday lives on the engine's row (PATCH writes only seo_cycles.cycle_weekday): before the engine has it, nothing to change yet
@@ -230,6 +259,24 @@ export async function setCycleWeekday(site: SiteRow, weekday: number, now = Date
   if (!ok) throw new HttpError(502, 'The SEO engine did not save the change. Try again in a minute.', 'engine_failed');
   await db.update(schema.sites).set({ cycleWeekday: weekday, updatedAt: new Date() }).where(eq(schema.sites.id, site.id));
   return { result: weekdayChange({ ...row, cycle_weekday: weekday }, site, weekday, now), before };
+}
+
+/**
+ * D9: the content job's note for its cycle, from the content report of that cycle (Cadence_Note / Cadence_Status carry `cycle_key`): the
+ * pages it started, or why it wrote nothing (the engine's reason, e.g. "waiting for your author profile and business facts: ...").
+ */
+export function contentCycleNote(payload: Record<string, unknown> | null | undefined): CycleNotes {
+  const p = payload ?? {};
+  const key = S(p.cycle_key);
+  if (!key) return {};
+  const pages = Array.isArray(p.pages) ? (p.pages as Record<string, unknown>[]).map((x) => S(x?.keyword)).filter(Boolean) : [];
+  const why = S(p.reason).replace(/\s*\([^)]*execution[^)]*\)/gi, '');
+  const text = pages.length
+    ? `Started ${pages.length === 1 ? '1 page' : `${pages.length} pages`}: ${pages.slice(0, 3).map((k) => `"${k}"`).join(', ')}${pages.length > 3 ? ' and more' : ''}`
+    : why && !INTERNAL.test(why)
+      ? `Wrote nothing: ${why.length > 240 ? `${why.slice(0, 239).replace(/\s+\S*$/, '')} (more on Content)` : why}`
+      : '';
+  return text ? { [key]: { content_cadence: text } } : {};
 }
 
 /** The local date in the website's zone (for "Coming up on Wednesday"). */

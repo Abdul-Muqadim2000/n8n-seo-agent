@@ -2,10 +2,15 @@
 // crawlers allowed, blocking "Disallow: /" removed for search engines), llms.txt (site summary + key pages by section), a redirect map for broken
 // pages (CSV + nginx + Apache), Organization / LocalBusiness / WebSite schema from the business profile, Google Business Profile and homepage,
 // internal links to add (CSV) and a README. Files are binaries (zipped by the next node for the e-mail) and plain text in fix_pack for the API.
+// RV-1 (2026-10-21): the redirect map also carries every known address that no longer answers (the not-crawled check's gone list, with the
+// page suggested for each), and the crawl's broken pages are read from every item (DataForSEO files a 404 under resource_type "broken",
+// so the html-only list never held one and the README promised redirects that were not in the pack).
+/*__GONE__*/
 const d = $('Audit Diff').first().json; const a = d.site_audit || {};
 const base = $('Check Crawl').first().json; const domain = base.domain;
 const m = a.measurements || {}; const host = m.canonical_host || domain; const home = 'https://' + host + '/';
-const pages = ($('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.resource_type === 'html');
+const crawlItems = ($('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.url);
+const pages = crawlItems.filter(p => p.resource_type === 'html');
 const E = a.entity || {}; const P = (() => { try { return $('Load Profile (Audit)').all().map(i => i.json).find(x => x && x.site_id === d.site_id) || {}; } catch (e) { return {}; } })();
 const pathOf = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/i, '') || '/';
 const files = [];
@@ -65,8 +70,11 @@ add('llms.txt', 'fix_llms', 'text/markdown', m.llms_txt_present ? 'A refreshed /
 // ---- redirect map for broken pages ----
 const live = good.filter(p => pathOf(p.url) !== '/');
 const toks = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter(t => t.length > 2);
-const broken = pages.filter(p => (p.checks || {}).is_broken || Number(p.status_code) >= 400).slice(0, 100);
+const broken = crawlItems.filter(p => (p.resource_type === 'html' || p.resource_type === 'broken') && ((p.checks || {}).is_broken || Number(p.status_code) >= 400)).slice(0, 100);
 const map = broken.map(b => { const bt = new Set(toks(pathOf(b.url))); let best = home, score = 0; for (const l of live) { const s = toks(pathOf(l.url)).filter(t => bt.has(t)).length; if (s > score) { score = s; best = l.url; } } return { from: pathOf(b.url), to: pathOf(best), status: b.status_code, match: score ? 'same topic' : 'homepage (no close match: pick a better page if you have one)' }; });
+// RV-1: the known addresses that no longer answer (Search Console still shows most of them), each with the page suggested for it
+for (const r of (((a.not_crawled_check || {}).redirects) || [])) { const from = GONE.pathOf(r.from_url || r.from); if (!from || from === '/' || map.some(m => GONE.pathOf(m.from) === from)) continue;
+  map.push({ from, to: GONE.pathOf(r.to_url || r.to || '/'), status: r.status || 404, match: r.match || '' }); }
 if (map.length) {
   add('redirects.csv', 'fix_redirects_csv', 'text/csv', map.length + ' broken URL(s) → closest live page (301)', 'from,to,http_status_now,match\n' + map.map(r => [r.from, r.to, r.status, r.match].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n') + '\n');
   add('redirects-nginx.conf', 'fix_redirects_nginx', 'text/plain', 'The same map for nginx (server block)', '# 301 redirects for broken URLs found by the audit on ' + today + '\n' + map.map(r => 'location = ' + r.from.replace(/\?.*$/, '') + ' { return 301 ' + r.to + '; }').join('\n') + '\n');
@@ -101,7 +109,7 @@ add('website.jsonld', 'fix_schema_website', 'application/ld+json', 'WebSite sche
 // ---- internal links ----
 const il = a.internal_links || [];
 if (il.length) add('internal-links.csv', 'fix_internal_links', 'text/csv', il.length + ' internal links to add (from page → to page, with an anchor)', 'from_page,to_page,anchor_text,why\n' + il.map(l => [l.from_url, l.to_url, l.anchor, l.reason].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n') + '\n');
-const readme = 'FIX PACK for ' + domain + ' — SEO audit of ' + today + '\n\n' + files.map(f => '* ' + f.name + ': ' + f.purpose).join('\n') + '\n\nHow to use: robots.txt and llms.txt go to the site root; add the redirects in your server or CDN (test a few URLs afterwards); paste the .jsonld blocks into the page <head> (organization + website on the homepage, localbusiness on the contact page), replace any [placeholder]; add the internal links in the page copy, with the anchor text or a natural variant. The next audit checks the result and lists what was fixed.\n';
+const readme = 'FIX PACK for ' + domain + ' (SEO audit of ' + today + ')\n\n' + files.map(f => '* ' + f.name + ': ' + f.purpose).join('\n') + '\n\nHow to use: robots.txt and llms.txt go to the site root; ' + (map.length ? 'add the redirects in your server or CDN (test a few URLs afterwards); ' : '') + 'paste the .jsonld blocks into the page <head> (organization + website on the homepage, localbusiness on the contact page), replace any [placeholder]; add the internal links in the page copy, with the anchor text or a natural variant. The next audit checks the result and lists what was fixed.\n';
 add('README.txt', 'fix_readme', 'text/plain', 'What each file is and how to deploy it', readme);
 const binary = {}; for (const f of files) binary[f.prop] = { data: Buffer.from(f.content, 'utf8').toString('base64'), mimeType: f.mime, fileName: f.name, fileExtension: f.name.split('.').pop() };
 return [{ json: { ...d, site_audit: { ...a, fix_pack: { files: files.map(f => ({ name: f.name, purpose: f.purpose, bytes: Buffer.byteLength(f.content, 'utf8') })), robots_changes: changes } }, fix_pack: { generated_at: today, files: files.map(f => ({ name: f.name, purpose: f.purpose, content: f.content })) }, fix_props: files.map(f => f.prop) }, binary }];

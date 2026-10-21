@@ -304,7 +304,7 @@ let serpItems = []; let seCount = null; let serpError = ''; let seenAt = new Dat
 // an HTTP 200 is a failure, whatever its number — the 50000-only test of section 25 let 40101 through twice in execution 549.
 let serpStats = { asked: 1, answered: 0, failed: 1, failed_first: 1, retried: 0, retry_answered: 0, reasons: ['no answer'], answers: [{}] };
 try {
-  const first0 = (() => { try { return $('SERP Top 10').first().json; } catch (e) { return null; } })();
+  const first0 = (() => { try { return $('Cached SERP (Top 10)').first().json; } catch (e) { try { return $('SERP Top 10').first().json; } catch (e2) { return null; } } })();   // KW-SERP: today's reading first
   const retry0 = (() => { try { return $('SERP Top 10 (Retry)').first().json; } catch (e) { return null; } })();
   // F-SERP (2026-10-20): the third attempt is a lighter request (top 10, no AI Overview), sent only when the first two failed
   const light0 = (() => { try { return $('SERP Top 10 (Light Retry)').first().json; } catch (e) { return null; } })();

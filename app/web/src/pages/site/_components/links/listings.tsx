@@ -52,8 +52,8 @@ export function Listings({ d }: { d: LinkBuildingData }) {
           <>
             {todo.length > 0 ? (
               <ul className="divide-y divide-line border-t border-line">
-                {todo.map((l) => (
-                  <ListingRow key={l.id} l={l} />
+                {todo.map((l, i) => (
+                  <ListingRow key={`${l.id || l.name}|${i}`} l={l} />
                 ))}
               </ul>
             ) : (
@@ -63,8 +63,8 @@ export function Listings({ d }: { d: LinkBuildingData }) {
               <div className="border-t border-line px-5 py-3">
                 <Collapsible label={`${done.length} linked${ignored.length ? ` · ${ignored.length} not relevant` : ''}`} openLabel="Hide" contentClassName="pt-2">
                   <ul className="-mx-5 divide-y divide-line">
-                    {[...done, ...ignored].map((l) => (
-                      <ListingRow key={l.id} l={l} />
+                    {[...done, ...ignored].map((l, i) => (
+                      <ListingRow key={`${l.id || l.name}|${i}`} l={l} />
                     ))}
                   </ul>
                 </Collapsible>
@@ -162,8 +162,8 @@ export function Redirects({ d }: { d: LinkBuildingData }) {
       >
         {d.redirects.length ? (
           <ul className="divide-y divide-line border-t border-line">
-            {d.redirects.map((r) => (
-              <li key={r.from} className="px-5 py-3 text-[13px]">
+            {d.redirects.map((r, i) => (
+              <li key={`${r.from}|${r.to}|${i}`} className="px-5 py-3 text-[13px]">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                   <code className="min-w-0 font-mono text-xs text-ink-2 [overflow-wrap:anywhere]">{r.from}</code>
                   <ArrowRight className="hidden size-3.5 shrink-0 text-ink-3 sm:block" aria-hidden />
@@ -198,12 +198,12 @@ export function Impact({ d }: { d: LinkBuildingData }) {
       >
         {d.impact.length ? (
           <ul className="divide-y divide-line border-t border-line">
-            {d.impact.map((r) => {
+            {d.impact.map((r, i) => {
               const v = verdictOf(r.verdict);
               const tile: IconTileTone = v.tone === 'good' ? 'good' : v.tone === 'accent' ? 'blue' : 'neutral';
               return (
                 <InsightItem
-                  key={`${r.refDomain}|${r.targetUrl}|${r.t0}`}
+                  key={`${r.refDomain}|${r.targetUrl}|${r.t0}|${i}`}
                   tone={tile}
                   icon={<BarChart3 />}
                   actionPosition="side"

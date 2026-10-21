@@ -95,11 +95,16 @@ const askedWords = Number(brief.target_word_count) || 0;
 // ladder verdict had set at 2,100. The ladder row stores that number (seo_ladders.target_words) and the run carries it as `ladder_words`.
 const ladderWords = (() => { const n = Number(prev.ladder_words) || 0; return (n >= 300 && n <= 6000) ? n : 0; })();
 const baseWords = verdictWords || recWords || ladderWords || 0;
+// C8 (2026-10-22): when the ranking pages of the same kind gave a band (Parse Analysis `length_band`), the brief may plan anywhere inside
+// it; outside, it is brought back to the band's median. The verdict's own number still wins, and a band from too few pages (ok: false)
+// keeps the old rule (within 10% of the recommended figure).
+const LB = (prev.competitor_analysis || {}).length_band || prev.length_band || null;
+const useBand = !verdictWords && !!(LB && LB.ok && Number(LB.low) > 0 && Number(LB.high) >= Number(LB.low));
 if (baseWords) {
-  const lo = Math.round(baseWords * 0.9), hi = Math.round(baseWords * 1.1);
-  const clamped = Math.min(hi, Math.max(lo, askedWords || baseWords));
+  const lo = useBand ? Number(LB.low) : Math.round(baseWords * 0.9), hi = useBand ? Number(LB.high) : Math.round(baseWords * 1.1);
+  const clamped = useBand ? ((askedWords >= lo && askedWords <= hi) ? askedWords : Number(LB.target_word_count) || baseWords) : Math.min(hi, Math.max(lo, askedWords || baseWords));
   if (clamped !== askedWords) {
-    adjustments.push('Target length ' + (askedWords || 'unset') + ' -> ' + clamped + ' words (' + (verdictWords ? 'the verdict asked for about ' + verdictWords : recWords ? 'the competitor analysis recommends ' + recWords : 'the keyword ladder\'s own target is ' + ladderWords) + ', within 10%)');
+    adjustments.push('Target length ' + (askedWords || 'unset') + ' -> ' + clamped + ' words (' + (verdictWords ? 'the verdict asked for about ' + verdictWords + ', within 10%' : useBand ? 'the ' + String(LB.basis || 'ranking pages of the same kind') : recWords ? 'the competitor analysis recommends ' + recWords + ', within 10%' : 'the keyword ladder\'s own target is ' + ladderWords + ', within 10%') + ')');
     brief.target_word_count = clamped;
     // the writer follows the outline, so the sections move with the target
     const sum = (brief.outline || []).reduce((s, sec) => s + (Number(sec.target_words) || 0), 0);
@@ -181,6 +186,14 @@ if (prev.ladder_id && ladderUrlPB) {
   const asked = String(brief.slug || '').replace(/^\/|\/$/g, '');
   if (slugPB && slugPB !== asked) { adjustments.push('Slug "' + (asked || 'unset') + '" -> "' + slugPB + '": the keyword ladder planned this page at ' + ladderUrlPB + ', and its link map, the other rung pages and the rank tracking all use that URL'); brief.slug = slugPB; }
 }
+
+// 5. M1 (2026-10-21, pre-launch run exec 42): a ladder's top page took the keywords of the rung pages planned under it as its own
+//    secondary keywords ("ai consulting", "ai consultant dubai", "ai consulting firm"): four pages for one search. A keyword another
+//    page of the same ladder (or a hub's cluster page) is written for is taken off the list here, before the copywriter reads it.
+const siblingKwPB = new Set([...(prev.ladder_links || []).map(l => l && (l.keyword || l.about)), ...(prev.planned_link_targets || []).map(l => l && (l.keyword || l.about)), ...(prev.hub_pages || []).map(h => h && h.keyword)]
+  .map(x => String(x || '').toLowerCase().replace(/\s+/g, ' ').trim()).filter(x => x && x !== String(prev.keyword || '').toLowerCase().trim()));
+if (siblingKwPB.size && Array.isArray(brief.secondary_keywords)) { const offPB = brief.secondary_keywords.filter(k => siblingKwPB.has(String(k || '').toLowerCase().replace(/\s+/g, ' ').trim()));
+  if (offPB.length) { brief.secondary_keywords = brief.secondary_keywords.filter(k => !offPB.includes(k)); adjustments.push('Took ' + offPB.length + ' keyword(s) off the secondary keywords because another page of this ladder is written for each: ' + offPB.join(', ')); } }
 
 // Word count check
 const totalWords = (brief.outline || []).reduce((s, sec) => s + (Number(sec.target_words) || 0), 0);

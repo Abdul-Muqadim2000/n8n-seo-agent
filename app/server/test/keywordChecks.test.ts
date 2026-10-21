@@ -6,7 +6,8 @@ import type { LadderRow } from '@seo/shared';
 // last 7 days is free (no n8n call), the daily limit and the budget refuse before n8n is called, n8n's answers are mapped for people,
 // and the reservation is removed when the engine never worked on the check (kept as failed when it may have).
 
-type Row = { id: string; orgId: string; siteId: string; keyword: string; country: string; status: string; result: Record<string, unknown>; costUsd: number; createdAt: Date };
+type Row = { id: string; orgId: string; siteId: string; keyword: string; country: string; status: string; result: Record<string, unknown>; costUsd: number; createdAt: Date; rulesVersion?: string; contextHash?: string };
+type Stamp = { rulesVersion: string; contextHash: string };
 
 const st = vi.hoisted(() => ({
   role: 'member' as string,
@@ -39,11 +40,15 @@ vi.mock('../src/services/keywordCheckStore', async () => {
   let n = 0;
   return {
     checkRefusal: real.checkRefusal,
-    findRecentCheck: vi.fn(async (siteId: string, keyword: string, country: string, since: Date) =>
-      st.checks.filter((c) => c.siteId === siteId && c.keyword === keyword && c.country === country && c.status === 'done' && c.createdAt >= since).sort((a, b) => +b.createdAt - +a.createdAt)[0] ?? null,
+    // as the SQL version: same website, keyword, country, answered, recent, made by the same rules for the same context
+    findRecentCheck: vi.fn(async (siteId: string, keyword: string, country: string, since: Date, stamp: Stamp) =>
+      st.checks
+        .filter((c) => c.siteId === siteId && c.keyword === keyword && c.country === country && c.status === 'done' && c.createdAt >= since)
+        .filter((c) => !!stamp.rulesVersion && !!stamp.contextHash && c.rulesVersion === stamp.rulesVersion && c.contextHash === stamp.contextHash)
+        .sort((a, b) => +b.createdAt - +a.createdAt)[0] ?? null,
     ),
     // the real decision on the in-memory rows (as the SQL version counts them)
-    reserveCheck: vi.fn(async (o: { org: typeof st.org; site: typeof st.site; keyword: string; country: string }) => {
+    reserveCheck: vi.fn(async (o: { org: typeof st.org; site: typeof st.site; keyword: string; country: string; stamp?: Stamp }) => {
       const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
       const month = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
       const refusal = real.checkRefusal({
@@ -57,7 +62,7 @@ vi.mock('../src/services/keywordCheckStore', async () => {
       });
       if (refusal) throw refusal;
       const id = `chk-${++n}`;
-      st.checks.push({ id, orgId: o.org.id, siteId: o.site.id, keyword: o.keyword, country: o.country, status: 'pending', result: {}, costUsd: 0.05, createdAt: new Date() });
+      st.checks.push({ id, orgId: o.org.id, siteId: o.site.id, keyword: o.keyword, country: o.country, status: 'pending', result: {}, costUsd: 0.05, createdAt: new Date(), rulesVersion: o.stamp?.rulesVersion ?? '', contextHash: o.stamp?.contextHash ?? '' });
       return id;
     }),
     finishCheck: vi.fn(async (id: string, result: Record<string, unknown>, costUsd: number) => {
@@ -81,6 +86,12 @@ vi.mock('../src/services/runs', () => ({ latestReport: vi.fn(async () => st.stra
 vi.mock('../src/db', async () => ({ db: { query: { runs: { findFirst: vi.fn(async () => null) }, freeResearchGrants: { findFirst: vi.fn(async () => null) } } }, schema: await vi.importActual('../src/db/schema') }));
 
 const { keywordRoutes } = await import('../src/routes/keywords');
+const { checkContextHash, engineRulesVersion, ladderKeywordsOf } = await import('../src/services/keywordChecks');
+/** the stamp a check made now would carry (the website's context exactly as assessKeyword reads it) */
+const stampNow = (): Stamp => ({
+  rulesVersion: engineRulesVersion(),
+  contextHash: checkContextHash({ site: st.site as never, services: ['Peppol onboarding', 'Peppol onboarding', 'ERP rollout'], existing: ladderKeywordsOf(st.ladders).flatMap((l) => [l.head, ...l.keywords]) }),
+});
 const { HttpError } = await import('../src/lib/errors');
 
 let app: FastifyInstance;
@@ -154,22 +165,64 @@ describe('keyword check', () => {
     expect(st.checks.map((x) => [x.status, x.costUsd])).toEqual([['done', 0.042]]);
   });
 
-  it('the same keyword and country within 7 days: the stored answer, free, no n8n call', async () => {
-    st.checks.push({ id: 'old', orgId: 'org-1', siteId: 'site-1', keyword: 'e invoicing software uae', country: 'United Arab Emirates', status: 'done', result: ANSWER, costUsd: 0.042, createdAt: new Date(Date.now() - 6 * 864e5) });
+  it('the same keyword and country within 6 hours, same rules and context: the stored answer, free, no n8n call', async () => {
+    st.checks.push({ id: 'old', orgId: 'org-1', siteId: 'site-1', keyword: 'e invoicing software uae', country: 'United Arab Emirates', status: 'done', result: ANSWER, costUsd: 0.042, createdAt: new Date(Date.now() - 5 * 3600_000), ...stampNow() });
     const r = await assess({ keyword: 'e invoicing software uae' });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ id: 'old', cached: true });
     expect(st.calls).toHaveLength(0);
-    // another country, or older than 7 days: a new check
-    st.checks[0].createdAt = new Date(Date.now() - 8 * 864e5);
+    // another country, or older than 6 hours: a new check
+    st.checks[0].createdAt = new Date(Date.now() - 7 * 3600_000);
     expect((await assess({ keyword: 'e invoicing software uae' })).json().cached).toBe(false);
     expect((await assess({ keyword: 'e invoicing software uae', country: 'Saudi Arabia' })).json().cached).toBe(false);
     expect(st.calls).toHaveLength(2);
+    // the new check carries the stamp it was made with, so the next ask reuses it
+    expect(st.checks.at(-1)).toMatchObject(stampNow());
+    expect((await assess({ keyword: 'e invoicing software uae' })).json().cached).toBe(true);
+    expect(st.calls).toHaveLength(2);
+  });
+
+  // KW-APP D6 (2026-10-21, live run): after the engine upgrade, "ai consultant" still showed the morning's "fit 2, Easy" from the 7-day cache
+  // while the new engine says it is a job search (fit 0).
+  it('a stored answer made by other engine rules, for another website context, or before stamps existed is never shown again', async () => {
+    const morning = { ...ANSWER, keyword: 'ai consultant', fit: 2, difficulty_for_you: 'easy', label: 'Easy for your site' };
+    const stamp = stampNow();
+    expect(stamp.rulesVersion).toMatch(/^fg-[0-9a-f]{16}$/);
+    expect(engineRulesVersion()).toBe(stamp.rulesVersion);
+    st.checks.push({ id: 'morning', orgId: 'org-1', siteId: 'site-1', keyword: 'ai consultant', country: 'United Arab Emirates', status: 'done', result: morning, costUsd: 0.03, createdAt: new Date(Date.now() - 3600_000), ...stamp, rulesVersion: 'fg-0000000000000000' });
+    st.answer = { kind: 'answered', status: 200, json: { ...ANSWER, keyword: 'ai consultant', fit: 0, label: 'Not a fit: people search it to find work or training' }, error: null };
+    const r = await assess({ keyword: 'ai consultant' });
+    expect(r.json()).toMatchObject({ cached: false, result: { fit: 0 } });
+    expect(st.calls).toHaveLength(1);
+    // the same rules: reused
+    expect((await assess({ keyword: 'ai consultant' })).json()).toMatchObject({ cached: true, result: { fit: 0 } });
+    expect(st.calls).toHaveLength(1);
+    // the website context moves: a new ladder keyword, brand names, competitors, services
+    st.ladders = [...st.ladders, { ladder_id: 'lad_ai', domain: 'techand.ai', head_keyword: 'ai consulting dubai', keyword: 'ai consulting dubai', rung: 4 } as LadderRow];
+    expect((await assess({ keyword: 'ai consultant' })).json().cached).toBe(false);
+    (st.site as Record<string, unknown>).brandNames = ['Tech&'];
+    expect((await assess({ keyword: 'ai consultant' })).json().cached).toBe(false);
+    (st.site as Record<string, unknown>).competitors = ['cleartax.com'];
+    expect((await assess({ keyword: 'ai consultant' })).json().cached).toBe(false);
+    (st.site as Record<string, unknown>).services = ['AI consulting'];
+    expect((await assess({ keyword: 'ai consultant' })).json().cached).toBe(false);
+    expect(st.calls).toHaveLength(5);
+    expect((await assess({ keyword: 'ai consultant' })).json().cached).toBe(true);
+    // order and case of the lists do not matter
+    expect(checkContextHash({ site: { domain: 'a.com', business: 'x', brandNames: ['B', 'a'] } as never, services: ['S1', 's2'], existing: ['k2', 'k1'] })).toBe(
+      checkContextHash({ site: { domain: 'A.com', business: 'x', brandNames: ['a', 'b'] } as never, services: ['s2', 's1'], existing: ['k1', 'k2'] }),
+    );
+    // a row from before the stamps (empty) is never reused
+    st.checks = [{ id: 'pre', orgId: 'org-1', siteId: 'site-1', keyword: 'vat uae', country: 'United Arab Emirates', status: 'done', result: ANSWER, costUsd: 0.03, createdAt: new Date() }];
+    expect((await assess({ keyword: 'vat uae' })).json().cached).toBe(false);
+    delete (st.site as Record<string, unknown>).brandNames;
+    delete (st.site as Record<string, unknown>).competitors;
+    delete (st.site as Record<string, unknown>).services;
   });
 
   it('30 checks a day per company: the 31st is refused (429) before n8n is called; a cached one still answers', async () => {
     for (let i = 0; i < 30; i++)
-      st.checks.push({ id: `c${i}`, orgId: 'org-1', siteId: 'site-1', keyword: `keyword ${i}`, country: 'United Arab Emirates', status: i % 5 ? 'done' : 'failed', result: ANSWER, costUsd: 0.02, createdAt: new Date() });
+      st.checks.push({ id: `c${i}`, orgId: 'org-1', siteId: 'site-1', keyword: `keyword ${i}`, country: 'United Arab Emirates', status: i % 5 ? 'done' : 'failed', result: ANSWER, costUsd: 0.02, createdAt: new Date(), ...stampNow() });
     const r = await assess({ keyword: 'e invoicing software uae' });
     expect(r.statusCode).toBe(429);
     expect(r.json().code).toBe('check_limit');

@@ -174,7 +174,28 @@ const INPUT_LABELS: Record<string, string> = {
   ga4PropertyId: 'GA4 property',
   blogsPerWeek: 'Blog posts per week',
   emailCopy: 'E-mail copy',
+  // B7 (pre-launch run 2026-10-21): a "Write it now" of a ladder page showed `ladder {"id":"lad_...","head":...}` and `source ladder`
+  ladder: 'Keyword ladder',
+  source: 'Started from',
+  aiTarget: 'AI question',
 };
+
+const SOURCE_WORDS: Record<string, string> = {
+  ladder: 'a page of your keyword',
+  decay: 'a page losing visitors',
+  striking: 'a search where you are close to page one',
+  trend: 'a rising search',
+  ai_answer: 'a question AI assistants answer',
+  ai_refresh: 'a page AI assistants could cite',
+};
+
+/** A run's ladder field in words: "ai consultant, main page" */
+function ladderWords(v: Record<string, unknown>): string {
+  const head = typeof v.head === 'string' ? v.head : '';
+  const rung = Number(v.rung);
+  const where = Number.isFinite(rung) && rung > 0 ? (rung >= 4 ? 'main page' : `rung ${rung}`) : '';
+  return [head ? `"${head}"` : '', where].filter(Boolean).join(', ') || 'a page of your keyword';
+}
 
 function LongText({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
@@ -201,6 +222,9 @@ export function inputRows(input: Record<string, unknown>): { label: string; valu
     else if (k === 'goal') value = GOALS.find((g) => g.value === v)?.label ?? String(v);
     else if (k === 'pageType') value = PAGE_TYPES.find((p) => p.value === v)?.label ?? String(v);
     else if (k === 'reportType') value = v === 'full' ? 'Full SEO report' : 'Technical audit';
+    else if (k === 'ladder' && v && typeof v === 'object' && !Array.isArray(v)) value = ladderWords(v as Record<string, unknown>);
+    else if (k === 'source' && typeof v === 'string') value = SOURCE_WORDS[v] ?? v.replace(/_/g, ' ');
+    else if (k === 'aiTarget' && v && typeof v === 'object' && !Array.isArray(v)) value = String((v as Record<string, unknown>).question ?? '') || 'yes';
     else if (typeof v === 'boolean') value = v ? 'Yes' : 'No';
     else if (Array.isArray(v)) value = v.map(String).join(', ');
     else if (typeof v === 'object') value = JSON.stringify(v);

@@ -1,4 +1,5 @@
 /*__REACH__*/
+/*__SERP_CACHE__*/
 // Keyword Check: reads the DataForSEO answers. The keyword overview is required (no answer -> 502); the position and the reach degrade gracefully
 // (position unknown -> null; reach calls failed -> the stored or default reach, not stored). Business context for the topic check: the request,
 // else the stored homepage description (seo_cache 'desc:<domain>', 30 days).
@@ -14,6 +15,30 @@ const info = (it && it.keyword_info) || {}, props = (it && it.keyword_properties
 const pr = answer('position');
 let position = null, position_url = null;
 if (reachTaskOk(pr)) { const best = ((((pr.tasks[0].result || [])[0]) || {}).items || []).map(x => ((x || {}).ranked_serp_element || {}).serp_item || {}).filter(x => x.rank_group).sort((a, b) => a.rank_group - b.rank_group)[0]; if (best) { position = best.rank_group; position_url = best.url || null; } }
+// E-SERP (2026-10-21): the keyword's own results page. Optional like the position: a read that failed (twice: the in-200 gate re-sent it) is
+// "results page not read" with the provider's own reason, never "no demand", and the fit is then judged without it (Assess Response says so).
+// 40102 "No Search Results." is DataForSEO's final answer: read, and empty.
+// KW-SERP: the reading made earlier today (Assess Requests carried it, cost 0) when no results page was bought on this check
+const svFresh = answer('serp');
+const sv = svFresh !== undefined ? svFresh : ((reqs[0] || {}).serp_cached || undefined);
+const serpCached = !!(sv && sv.serp_cache && sv.serp_cache.hit);
+const serp = (() => {
+  if (sv === undefined) return { asked: false, read: false, why: 'not asked', pages: [], paa: [], related: [] };
+  const t0 = (sv && Array.isArray(sv.tasks) ? sv.tasks[0] : null) || {};
+  if (!sv.error && (Number(t0.status_code) === 40102 || Number(sv.status_code) === 40102)) return { asked: true, read: true, empty: true, why: '', pages: [], paa: [], related: [] };
+  // KWL-LAD D5: a read that ran out of time says so in plain words (the check has a time budget; it is judged without the page)
+  if (!reachTaskOk(sv)) { const why = String(reachError(sv) || ''); const late = /time ?out|timed out|aborted|ECONNABORTED|ETIMEDOUT|not read in time/i.test(why);
+    return { asked: true, read: false, late, why: late ? 'not read in time' : why, pages: [], paa: [], related: [] }; }
+  const r0 = ((t0.result || [])[0]) || {}; const items = Array.isArray(r0.items) ? r0.items : [];
+  const pages = items.filter(x => x && x.type === 'organic' && !(Number(x.rank_group) > 10)).map(x => ({ rank: Number(x.rank_group) || null, domain: String(x.domain || ''), url: String(x.url || ''), title: String(x.title || '') })).slice(0, 10);
+  const paa = items.filter(x => x && x.type === 'people_also_ask').flatMap(x => (x.items || []).map(q => q && (q.title || q.question))).filter(Boolean).map(String).slice(0, 8);
+  const related = items.filter(x => x && x.type === 'related_searches').flatMap(x => (x.items || []).map(q => typeof q === 'string' ? q : (q && (q.title || q.keyword)))).filter(Boolean).map(String).slice(0, 12);
+  return { asked: true, read: true, why: '', pages, paa, related, checked_at: String(r0.datetime || '') || null, ai_overview_seen: items.some(x => x && x.type === 'ai_overview'),
+    read_today: serpCached, read_note: serpCached ? sv.serp_cache.text : '' };
+})();
+// a fresh reading (not a failed one) is stored for every other path today (Reach Row (Assess) saves it after the answer)
+const serpReq = reqs.find(r => r.kind === 'serp');
+const serp_cache_row = svFresh !== undefined && serpReq ? SC.rowFor(svFresh, serpReq.body[0], '') : null;
 let rows = []; try { rows = $('Load Assess Cache').all().map(i => i.json).filter(r => r && !r.error); } catch (e) { rows = []; }
 // B1-2 (2026-10-15, benchmark area 1): the keywords the reach was measured on travel with it, from this run's pull or from the stored
 // row, so the answer can measure the difficulty on the TOPIC of the keyword that was asked about instead of only across the whole site.
@@ -35,5 +60,6 @@ const services = v.services.length ? v.services : ((desc && desc.products_or_ser
 const services_source = v.services.length ? 'request' : (desc ? (descPages > 1 ? 'stored description (' + descPages + ' pages read)' : 'stored description (homepage only)') : 'none');
 return [{ json: { ok: true, keyword: v.keyword, domain: v.domain, country: v.country, location_code: v.location_code, language_code: v.language_code,
   volume: info.search_volume ?? null, kd: props.keyword_difficulty ?? null, cpc: info.cpc ?? null, intent: (it && (it.search_intent_info || {}).main_intent) || null, known: !!it,
-  position, position_url, reach_info, reach_errors, cache_row, dfs_cost, business, services, services_source, existing_keywords: v.existing_keywords,
+  serp_language_code: v.serp_language_code || v.language_code, arabic_script: !!v.arabic_script,
+  position, position_url, serp, reach_info, reach_errors, cache_row, serp_cache_row, dfs_cost, business, services, services_source, existing_keywords: v.existing_keywords,
   business_source: v.business ? 'request' : (desc ? 'stored description' : 'none') } }];

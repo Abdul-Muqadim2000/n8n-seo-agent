@@ -63,7 +63,9 @@ const GQ = (() => {
             // a join across a filler word ("tech and" -> "techand") is the name SPOKEN, so it counts only as the whole query
             if (acc === k && (!filler || (i === 0 && onlyDomain(t.slice(j))))) return true; } } }
       for (const sp of spoken) { const rest = t.slice(0, sp.length).join(' ') === sp.join(' ') ? t.slice(sp.length) : null;
-        if (rest && rest.every(x => tld.includes(x) || x === 'com' || x === 'www')) return true; }
+        // RV-15 (2026-10-21): the name followed only by its own words ("tech and tech", typed for "Tech&") is still the name, not a search for
+        // something else; it was reported as two of the site's pages competing for one search
+        if (rest && rest.every(x => tld.includes(x) || x === 'com' || x === 'www' || sp.includes(x))) return true; }
       // A-26 (2026-10-17, exec 764): "techandf cc" — the brand typed with one slip — was taken as a customer search, used as a discovery
       // seed and reported as a page mismatch ("aim that page at it"). A token (or two adjacent tokens with no filler word between them)
       // within one edit of a brand key of 6+ letters (two edits from 10 letters), starting with the same two letters, is the brand misspelt.

@@ -68,8 +68,8 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
   content: { ai: 0.8, dfs: 0.04, measured: 0.609, basis: 'a written page, exec 521 ($0.438 of it the three streaming Opus nodes)' },
   report: { ai: 0.16, dfs: 0.04, measured: 0.127, basis: 'a keyword report, exec 519' },
   verdict: { ai: 0.16, dfs: 0.04, measured: 0.13, basis: 'a keyword verdict, exec 486' },
-  discover: { ai: 0.24, dfs: 0.34, measured: 0.42, basis: 'keyword discovery, exec 518' },
-  ladder: { ai: 0.18, dfs: 0.21, measured: 0.279, basis: 'a ladder plan, exec 495 ($0.231) plus the 24 results pages B2-4 reads to group the rungs, at $0.002 each (each page it writes reserves its own run)' },
+  discover: { ai: 0.24, dfs: 0.4, measured: 0.42, basis: 'keyword discovery, exec 518, with its 16 live results pages read 30 deep with the AI Overview ($0.006 each)' },
+  ladder: { ai: 0.18, dfs: 0.31, measured: 0.279, basis: 'a ladder plan, exec 495 ($0.231) plus the 24 results pages B2-4 reads to group the rungs, at $0.006 each, 30 deep with the AI Overview (each page it writes reserves its own run)' },
   full: { ai: 0.08, dfs: 0.55, measured: 0.458, basis: 'the full SEO report, exec 523' },
   site_audit: { ai: 0, dfs: 0, measured: 0, basis: 'a technical audit calls no model (execs 497 / 513)' },
   crawl: { ai: 0, dfs: 0.09, measured: 0.032, basis: 'the crawl of a technical audit; $0.09 is the provider\'s quote, $0.032 the pages really crawled (exec 588)' },
@@ -77,12 +77,12 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
   ai_visibility: { ai: 0.14, dfs: 0.95, measured: 0.89, basis: 'an AI visibility check, exec 526' },
   backlinks: { ai: 0.06, dfs: 0.5, measured: 0.373, basis: 'a full backlink check, execs 528 / 529' },
   // these start the work that costs; what they spawn reserves its own run, so the run itself reserves nothing
-  track: { ai: 0, dfs: 0, measured: 0, basis: 'setting tracking up; the weekly reports are their own runs' },
+  track: { ai: 0, dfs: 0, measured: 0, basis: 'setting tracking up; the site report it starts is the first weekly report, autopilot spend like the others' },
   published: { ai: 0, dfs: 0, measured: 0, basis: 'a publish check reads your own page' },
   checkin: { ai: 0, dfs: 0, measured: 0, basis: 'a check-in records what you type' },
   profile: { ai: 0, dfs: 0, measured: 0, basis: 'saving the business profile' },
   case_study: { ai: 0, dfs: 0, measured: 0, basis: 'the intake itself; the page it writes reserves a content run' },
-  assess: { ai: 0, dfs: 0.034, measured: 0.0254, basis: 'one keyword check, execs 487-489' },
+  assess: { ai: 0, dfs: 0.04, measured: 0.0254, basis: 'one keyword check, execs 487-489, plus its results page read 30 deep with the AI Overview ($0.006)' },
 };
 
 const round = (n: number): number => Math.round(n * 10000) / 10000;
@@ -172,9 +172,11 @@ export function costKeys(mode: ModeId, v: Values = {}): CostKey[] {
       return v.receiveContent === false ? ['report'] : ['content'];
     case 'ladder': {
       // the plan, then one content run per page the owner asked for now (the engine reserves each spawn separately); P1: a page the engine
-      // holds for the author profile and the business facts (`pagesHeld`, set by the server) is not written now, so it is not quoted
+      // holds for the author profile and the business facts (`pagesHeld`, set by the server) is not written now, so it is not quoted.
+      // KW-APP D8 (2026-10-21, live run): a Manual ladder writes nothing at start either (Ladder_Plan.js manualHold), and was quoted 99
+      // credits for a run charged 23.73: the plan alone, whether the form asked for Manual or the server read it from the website's default
       const keys: CostKey[] = ['ladder'];
-      if (v.pagesHeld === 'profile') return keys;
+      if (v.pagesHeld === 'profile' || v.pagesHeld === 'manual' || v.ladderMode === 'manual') return keys;
       for (let i = 0; i < pagesNow(v); i++) keys.push('content');
       return keys;
     }

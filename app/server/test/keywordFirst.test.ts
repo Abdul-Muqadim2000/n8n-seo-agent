@@ -187,6 +187,18 @@ describe('the free keyword research at setup (D3)', () => {
     expect((await co.c.post(`${base(co, s2.id)}/research/start`)).body.code).toBe('research_not_free');
   });
 
+  // D2 (paid pre-launch run 2026-10-21): the setup research runs before Track my site stores what the website sells on the engine's site row,
+  // and its body carried no services, so the research judged no keyword against them
+  it('the setup research carries what the website sells, also for a website with services and no business description', async () => {
+    const co = await company('research-svc@kf.test', 'Research Services');
+    const s = await site(co.org.id, 'research-svc-kf.com', { services: ['CRM implementation', 'CRM training'] });
+    expect((await co.c.post(`${base(co, s.id)}/research/start`)).status).toBe(200);
+    expect(t.starts.at(-1)).toMatchObject({ mode: 'discover', services: ['CRM implementation', 'CRM training'], business: 'CRM implementation for sales teams' });
+    const only = await site(co.org.id, 'research-svc2-kf.com', { business: '', services: ['Odoo implementation'] });
+    expect((await co.c.post(`${base(co, only.id)}/research/start`)).status).toBe(200);
+    expect(t.starts.at(-1)).toMatchObject({ mode: 'discover', services: ['Odoo implementation'] });
+  });
+
   it('a request the engine refused (4xx) gives the grant back; only at setup; viewers cannot start it', async () => {
     const co = await company('research2@kf.test', 'Research Two');
     const s = await site(co.org.id, 'research2-kf.com');
@@ -453,8 +465,8 @@ describe('keyword proposals', () => {
     const s = await site(co.org.id, 'suggest-kf.com', { trackingStatus: 'active', autopilotLevel: 2 });
     await strategy(co.org.id, s.id, [
       { keyword: 'crm consulting', difficulty_for_you: 'easy', plan_type: 'direct' },
-      { keyword: 'crm training', difficulty_for_you: 'reachable', plan_type: 'short' },
       { keyword: 'crm migration', difficulty_for_you: 'easy', plan_type: 'direct' },
+      { keyword: 'crm training', difficulty_for_you: 'reachable', plan_type: 'short' },
     ]);
     const org = (await db.query.organizations.findFirst({ where: eq(schema.organizations.id, co.org.id) }))!;
     await proposeForSite(org, s, undefined, Date.now(), log);
@@ -465,7 +477,7 @@ describe('keyword proposals', () => {
     expect(await startDueProposals(log)).toBe(0); // levels 1-2 never start on their own
     // skip: never again, the next one is proposed
     const sk = await co.c.post(`${base(co, s.id)}/keyword-proposals/${list.pending[0].id}/skip`);
-    // the next best one: easy before reachable (the research's own order inside each)
+    // the next one in the research's own order (KW-APP D3: the app no longer re-ranks it by difficulty)
     expect(sk.body).toMatchObject({ proposal: { status: 'skipped' }, next: { keyword: 'crm migration' } });
     expect((await co.c.post(`${base(co, s.id)}/keyword-proposals/${list.pending[0].id}/skip`)).status).toBe(409);
     // swap for a typed keyword that is not realistic: refused with the check, nothing started
@@ -571,6 +583,36 @@ describe('autopilot spend: a cycle job\'s ledger row and a run the system starte
     const usage = await db.query.creditLedger.findMany({ where: and(eq(schema.creditLedger.orgId, co.org.id), eq(schema.creditLedger.kind, 'usage')) });
     const origins = usage.map((u) => (u.ref as Record<string, unknown>).origin).sort();
     expect(origins).toEqual(['autopilot', 'autopilot', 'on_demand']);
+  });
+
+  // D3 (paid pre-launch run 2026-10-21): Track was quoted 0 credits, stored as "no quote", and its Site Tracker child was charged 2.92 credits
+  // on demand under it with no cap
+  it('Track my site is quoted 0 and stored as 0; its Site Tracker child is the first weekly site report (autopilot); a 0-quoted run is never charged', async () => {
+    const { syncCosts } = await import('../src/services/admin/costSync');
+    const co = await company('track-spend@kf.test', 'Track Spend');
+    const s = await site(co.org.id, 'track-spend-kf.com', { verifiedAt: new Date(Date.now() - 10 * DAY) });
+    await db.update(schema.organizations).set({ createdAt: new Date(Date.now() - 10 * DAY) }).where(eq(schema.organizations.id, co.org.id));
+    await db.update(schema.platformSettings).set({ creditsSince: new Date(0) });
+    const r = await co.c.post(`/api/orgs/${co.org.id}/runs`, { mode: 'track', siteId: s.id, country: 'United States' });
+    expect(r.status).toBe(200);
+    const track = (await db.query.runs.findFirst({ where: and(eq(schema.runs.siteId, s.id), eq(schema.runs.mode, 'track')) }))!;
+    expect(track.quotedCredits).toBe(0);
+    // a run that was quoted 0 (a check-in) and somehow spent: capped at its quote, so nothing is charged and the rest is absorbed
+    const [zero] = await db.insert(schema.runs).values({ orgId: co.org.id, siteId: s.id, mode: 'checkin', title: 'z', status: 'completed', requestId: 'exec-zero-1', input: {}, quotedCredits: 0 }).returning();
+    const row = (id: string, key: string, mode: string, usd: number) => ({ run_id: id, key, mode, status: 'done', domain: 'track-spend-kf.com', ai_usd: 0, dfs_usd: usd, measured_usd: usd, estimated_usd: 0, settled_at: new Date(Date.now() - 5 * 60_000).toISOString(), created_at: new Date(Date.now() - 7 * 60_000).toISOString() });
+    await syncCosts({
+      readLedger: async () => [row(track.requestId!, `app:${co.org.id}`, 'track', 0), row('exec-st-16', `parent:${track.requestId}`, 'site_tracker', 0.0486), row('exec-zero-1', `app:${co.org.id}`, 'checkin', 0.0486)],
+      full: true,
+    });
+    const events = await db.query.costEvents.findMany({ where: eq(schema.costEvents.orgId, co.org.id) });
+    expect(events.find((e) => e.engineRunId === 'exec-st-16')).toMatchObject({ origin: 'schedule', runId: null, siteId: s.id });
+    const usage = await db.query.creditLedger.findMany({ where: and(eq(schema.creditLedger.orgId, co.org.id), eq(schema.creditLedger.kind, 'usage')) });
+    const of = (exec: string) => usage.find((u) => u.refKey === `cost:engine:${exec}`);
+    expect([of('exec-st-16')!.credits, (of('exec-st-16')!.ref as Record<string, unknown>).origin, (of('exec-st-16')!.ref as Record<string, unknown>).runId]).toEqual([-2.92, 'autopilot', null]);
+    // the Track run itself is charged nothing
+    expect(usage.filter((u) => (u.ref as Record<string, unknown>).runId === track.id).reduce((t, u) => t + u.credits, 0)).toBe(0);
+    const z = of('exec-zero-1')!;
+    expect([Math.abs(z.credits), (z.ref as Record<string, unknown>).runId, (z.ref as Record<string, unknown>).absorbed]).toEqual([0, zero.id, 2.92]);
   });
 });
 

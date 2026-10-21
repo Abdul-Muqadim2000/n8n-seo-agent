@@ -1,6 +1,7 @@
 /*__REACH__*/
 /*__FIT_GATE__*/
 /*__SITE_MODEL__*/
+/*__KW_INPUTS__*/
 
 // Keyword Check: the answer. Difficulty for this site and plan from the shared reach rules; topic fit, navigational / other brand and the
 // alternatives from the small Claude call (if it failed: fit null, navigational from DataForSEO's intent unless the keyword names the site itself).
@@ -49,9 +50,24 @@ const headsA = [...new Set(rowsOf('Load Ladders (Assess)').map(r => String(r.hea
 const servicesA = [...new Set([...(a.services || []), ...(modelA ? modelA.services : [])].map(x => String(x || '').trim()).filter(Boolean))];
 const gateCtxA = FITR.ctx({ own_domain: a.domain, intent: a.intent || '', competitors: modelA ? modelA.competitors : [], brands: fitLearnedBrands(cacheA), heads: headsA, services: servicesA,
   topics: [...servicesA, ...headsA, ...(a.existing_keywords || [])], topic_label: 'what this website sells and the keywords you chose' });
+// ---- E-SERP (2026-10-21, pre-launch run RV-11): the keyword's own results page, read the way the ladder head and the research read it ----
+// "ai consultant" came back a fit and Easy here (no results page was read) while the ladder refused it as a career search: upwork, a USAII
+// certification, indeed, bayt, glassdoor, and the questions people also ask were about salary. The gate now gets the same evidence the ladder
+// head gets: the top 10 (ctx.serp, the brand-query rule) and ctx.career (fitCareer: the pages, the questions, the related searches). A page
+// that could not be read is said to be unread, and the fit is judged without it; it is never read as "no demand".
+const serpA = (a.serp && typeof a.serp === 'object') ? a.serp : { asked: false, read: false, why: 'not asked', pages: [], paa: [], related: [] };
+const serpPagesA = Array.isArray(serpA.pages) ? serpA.pages : [];
+if (serpA.read) {
+  gateCtxA.serp = serpPagesA.map(p => String(p.domain || '')).filter(Boolean);
+  gateCtxA.career = { pages: serpPagesA.map(p => ({ domain: p.domain, url: p.url, title: p.title })), paa: serpA.paa || [], related: serpA.related || [],
+    topics: [...servicesA, ...headsA, ...(a.existing_keywords || [])] };
+}
 const gate = fitGate(a.keyword, gateCtxA);
+const careerA = !gate.ok && gate.reason === 'job search' && !!gate.career;
 const GATE_WORDS = { 'own brand': 'it is your own brand name', 'other brand': 'it names another company', government: 'it is a government service', navigational: 'people search it to reach one particular website',
-  portal: 'it is a login, portal or status check', 'off topic': 'it is not about what you sell', 'too broad': 'it is too broad to win', 'job search': 'people search it to find work', empty: 'there is no keyword' };
+  portal: 'it is a login, portal or status check', 'off topic': 'it is not about what you sell', 'too broad': 'it is too broad to win', 'job search': careerA ? 'people search it to find work or training' : 'people search it to find work', empty: 'there is no keyword' };
+// what KIND of page Google ranks here (KWI.serpPageTypes, the research's and the ladder's rule): lists, jobs, courses or service pages
+const kindsA = serpA.read && serpPagesA.length ? KWI.serpPageTypes(serpPagesA.map(p => ({ url: p.url || p.domain, title: p.title || '' })), {}) : null;
 const fit = gate.ok ? fitAi : 0;
 // F-KW (2026-10-20, finding 2): the gate judges topic distance only with 12+ topic words on file. Below that it passed everything and the
 // answer read as if the topic had been checked. Now the check says when there is not enough information to judge (and how to fix it), and a
@@ -114,19 +130,74 @@ const existing = (() => {
   if (!hit && !lad && !log) return { keyword: kw, how: 'a page of yours', ladder_id: null, ladder_status: null, rung: null, page_url: pg.url, page_title: pg.title || null, page_status: 'live',
     matched_by: pg.matched_by, pages_checked: pages.length,
     note: 'you already have a page for this search: ' + pg.url + (pg.title ? ' ("' + pg.title + '")' : '') + ' - improve that page rather than starting a ladder for a second one' };
-  const page_url = String((log && (log.published_url || log.existing_page_url)) || (lad && lad.target_url) || (pg && pg.url) || '').trim();
+  // N4 (KW recheck 2026-10-21): "ai consultant" named https://www.techand.ai/ai-consultant/ as the existing page: the old ladder's PLANNED
+  // address of a draft never published, answering 404. A page is named only when it exists: a published content-log page or the ladder's
+  // address that the page inventory holds as a live page (a 404 / 410 inventory page is gone, SM.isGone), else the live match (SM.matchPage).
+  // An address that is only planned travels as `planned_url`, a draft's state as `draft_status`; neither is "an existing page".
+  const normU = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const inv = (u) => { const k = normU(u); return k ? (pages.find(p => normU(p.url) === k) || null) : null; };
+  const liveAt = (u) => { const p = inv(u); return p ? !SM.isGone(p) : null; };   // true live, false gone, null not in the inventory
+  const logPub = log && /publish/i.test(String(log.status || '')) ? String(log.published_url || log.existing_page_url || '').trim() : '';
+  const logUrl = logPub && liveAt(logPub) !== false ? logPub : '';
+  const ladUrl = lad && lad.target_url && liveAt(lad.target_url) === true ? String(lad.target_url) : '';
+  const page_url = String(logUrl || ladUrl || (pg && pg.url) || '').trim();
+  const planned_url = !page_url && lad && lad.target_url ? String(lad.target_url) : null;
   return { keyword: String(hit || (lad && lad.keyword) || ''), how: String(hit).toLowerCase().trim() === kw ? 'the same keyword' : 'the same search',
     ladder_id: lad ? String(lad.ladder_id || '') : null, ladder_status: ladStatus, row_status: lad ? String(lad.status || '') : null, rung: lad ? Number(lad.rung) || null : null,
-    page_url: page_url || null, page_status: log ? String(log.status || '') : null, live_page: pg ? pg.url : null, pages_checked: pages.length,
+    page_url: page_url || null, page_status: logUrl ? String(log.status || '') : page_url ? 'live' : null, live_page: pg ? pg.url : null, pages_checked: pages.length,
+    planned_url, draft_status: log && !logUrl ? String(log.status || '') || null : null,
     note: 'already one of your keywords' + (lad ? ' (ladder ' + lad.ladder_id + (ladStatus ? ', ' + ladStatus : '') + ')' : ' (one of your keyword ladders)')
-      + (page_url ? ' - its page: ' + page_url : '') + ': continue that ladder / improve that page rather than starting a second one for the same search' };
+      + (page_url ? ' - its page: ' + page_url : planned_url ? ' - its page is planned (' + planned_url + ') and not published yet' : '') + ': continue that ladder / improve that page rather than starting a second one for the same search' };
 })();
 const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\n,;]+/) : [])).map(x => String(x == null ? '' : x).toLowerCase().replace(/["“”]/g, '').replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2 && x.length <= 100);
 const need = difficulty_for_you === 'not_realistic' || fit === 0;
-const alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
+// KW-GATE (review 16): every alternative goes through the same gate, WITHOUT the asked keyword's own results page and career evidence: those
+// pages describe the asked search, not the alternative (a government results page for "vat registration uae" must not refuse "vat consultant uae")
+const ctxAlt = { ...gateCtxA, career: null, serp: [] };
+let alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => fitGate(x, ctxAlt).ok && !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
+// E-SERP: a career search is offered BUYER searches only - the model's and the results page's own related searches, each through the same gate
+// (no job, pay or course words), with a buyer word for the related ones; none at hand = none offered, never the job searches back
+if (careerA) {
+  const ctxNoCareer = ctxAlt;
+  const buyerOk = (k) => { const t = ' ' + String(k).toLowerCase() + ' '; return fitGate(k, ctxNoCareer).ok && !FIT_JOB_KW.test(t) && !FIT_COURSE_KW.test(t) && !keywordsOverlap(k, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, k)); };
+  const relBuyer = listOf(serpA.related || []).filter(k => FIT_BUYER_KW.test(' ' + k + ' '));
+  alternatives = [...new Set([...alternatives, ...relBuyer])].filter(buyerOk).slice(0, 3);
+}
+// ---- KWL-LAD D4 (live run 2026-10-21, exec 114): "ai consultant" was refused as a job search with `alternatives: []` and no word why: every
+// buyer search for the subject ("ai consulting", "ai consultant dubai", "ai consulting firm") already belonged to the client's ladder "ai
+// consultant", so the model offered none and the filter hid them. When the buyer searches are held by a ladder of the site, the answer says
+// which ladder holds them; the other in-topic buyer searches stay offered.
+const subjOf = (k) => fitTokens(k).filter(t => t.length > 3 && !FIT_GEO.has(t));
+const sameSubj = (x, y) => x === y || (x.length >= 6 && y.length >= 6 && x.slice(0, 6) === y.slice(0, 6));
+const kwSubj = subjOf(a.keyword);
+const ladRowsA = rowsOf('Load Ladders (Assess)');
+const ladderOf = (k) => { const r = ladRowsA.find(x => String(x.keyword || '').toLowerCase().trim() === k || keywordsOverlap(String(x.keyword || ''), k)); return r ? String(r.head_keyword || r.keyword || '').toLowerCase().trim() : ''; };
+const heldAlt = !need ? [] : [...new Set((a.existing_keywords || []).map(e => String(e || '').toLowerCase().trim()).filter(Boolean))]
+  .filter(e => !keywordsOverlap(e, a.keyword) && e !== String(a.keyword || '').toLowerCase().trim())
+  .filter(e => subjOf(e).some(t => kwSubj.some(u => sameSubj(t, u))))
+  .filter(e => { const t = ' ' + e + ' '; return fitGate(e, ctxAlt).ok && !(careerA && (FIT_JOB_KW.test(t) || FIT_COURSE_KW.test(t))); })
+  .slice(0, 6);
+const heldBy = new Map(); for (const e of heldAlt) { const h = ladderOf(e) || ''; if (!heldBy.has(h)) heldBy.set(h, []); heldBy.get(h).push(e); }
+const alternatives_held = heldAlt.map(k => ({ keyword: k, ladder: ladderOf(k) || null }));
+const alternatives_note = !heldAlt.length ? '' : [...heldBy.entries()].map(([h, ks]) => (h ? 'your ladder "' + h + '" already covers ' : 'your keywords already cover ')
+    + ks.map(k => '"' + k + '"').join(', ')).join('; ')
+  + ', so ' + (heldAlt.length === 1 ? 'it is' : 'they are') + ' not offered again' + (alternatives.length ? '. Other searches for buyers: ' + alternatives.map(k => '"' + k + '"').join(', ') : '. No other search for buyers on this subject was found');
+// ---- KWL-LAD D7 (exec 120): an Arabic keyword says how it was read (the gate's own reading, fitArabic) and in which language its results page was read
+const AR_A = fitArabic(String(a.keyword || ''));
+const reading = AR_A.read ? { script: 'arabic', read_as: AR_A.text, unread: AR_A.unread.slice(0, 6), serp_language: String(a.serp_language_code || ''),
+  note: 'This Arabic keyword was read as "' + AR_A.text + '" (word by word with a built-in list of common search words, no machine translation)'
+    + (AR_A.unread.length ? '; ' + AR_A.unread.length + ' word(s) could not be read (' + AR_A.unread.slice(0, 3).join(', ') + ') and counted neither for nor against the fit' : '')
+    + '. ' + (serpA.read ? 'Its Google results page was read in ' + (a.serp_language_code === 'ar' ? 'Arabic' : 'the market language') + ' for ' + a.country + '.' : 'Its Google results page was not read, so the fit rests on that reading and what you sell.') } : null;
+if (reading) fit_gate.reading_note = reading.note;
 const warnings = [];
+if (reading) warnings.push(reading.note);
+if (alternatives_note) warnings.push(alternatives_note);
 if (!gate.ok) warnings.push('not a fit for this website: ' + fit_gate.words + ' (' + gate.detail + ')');
 if (!topic_judged) warnings.push(topicNoteA);
+// E-SERP: an unread results page is said once, with the provider's reason; it is not "no demand" and nothing was concluded from it
+if (serpA.asked && !serpA.read) warnings.push(serpA.late ? 'results page not read in time: the check has a time limit, so the fit was judged without it and whether people search it for work or training was not checked'
+  : 'results page not read (' + String(serpA.why || 'no answer').slice(0, 140) + '): the fit was judged without it, so whether people search it for work or training was not checked');
+if (gate.ok && kindsA && kindsA.dominant && !['Service or product page', 'Homepage'].includes(kindsA.dominant)) warnings.push('what Google ranks: ' + kindsA.text);
 if (!aiOk && gate.ok) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160) + (plainRan ? ' (the plain-text retry answered nothing either)' : ''));
 if ((a.reach_errors || []).length) warnings.push('reach measured from partial data: ' + a.reach_errors.join('; ').slice(0, 200));
 // B1-1: an encouraging answer that rests on a reach measured on OTHER topics says so where the warnings are read. Only then: a site
@@ -139,7 +210,7 @@ if (!a.known) warnings.push('DataForSEO has no data for this keyword in ' + a.co
 // "business central partner uae" came back as fit 1. Say so whenever that list is what decided a less-than-core fit.
 if (fit !== null && fit < 2 && /homepage only/.test(String(a.services_source || ''))) warnings.push('the topic check used a stored description written from the homepage only, so a service named elsewhere on the site may be missing: run "Describe my website" to refresh it');
 const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volume, kd: a.kd, intent: a.intent, cpc: a.cpc, position: a.position, reach,
-  difficulty_for_you, plan_type: plan.plan_type, months: plan.months, fit, navigational, alternatives,
+  difficulty_for_you, plan_type: plan.plan_type, months: plan.months, fit, navigational, alternatives, alternatives_held, alternatives_note, reading,
   fit_gate, fit_source: !gate.ok ? 'gate' : aiOk ? 'model' : 'unknown',   // R-K4: a refusal by the gate decides the fit, independent of the model
   cost_usd: +(Number(a.dfs_cost || 0) + CONFIG.ai_cost_usd * (plainRan ? 2 : 1)).toFixed(4),   // R3: the model is charged even when its answer could not be parsed
   label: (reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you]) + (topic.used ? ' \u00b7 measured on this topic' : '') + (fit === null ? ' \u00b7 ' + FIT_UNKNOWN : '') + (gate.ok ? '' : ' \u00b7 not a fit: ' + fit_gate.words), fit_known: fit !== null, stretch: plan.stretch, position_url: a.position_url,
@@ -151,6 +222,11 @@ const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volum
   topic_evidence: { on_topic: topic.on_topic, top10: topic.top10, sample: topic.sample, best: topic.best, examples: topic.examples, other_topics: topic.other_topics, reason: topic.reason },
   reach_note: topic.note,
   existing,   // R50
+  // E-SERP: the results page this answer read (or why it could not), and what kind of page Google ranks there
+  serp: { read: !!serpA.read, asked: !!serpA.asked, why: serpA.read ? '' : String(serpA.why || ''), pages_read: serpPagesA.length, top: serpPagesA.slice(0, 5).map(p => p.domain),
+    paa: (serpA.paa || []).slice(0, 4), page_types: kindsA ? { read: kindsA.read, dominant: kindsA.dominant, counts: kindsA.counts, text: kindsA.text } : null,
+    late: !!serpA.late, language: String(a.serp_language_code || a.language_code || ''), checked_at: serpA.checked_at || null, ai_overview_seen: serpA.read ? !!serpA.ai_overview_seen : null, read_today: !!serpA.read_today, read_note: String(serpA.read_note || '') },   // KW-SERP: the one reading of today, shared with every path
+  fit_judged_without_serp: !serpA.read,
   business_source: a.business_source, warnings };
 if (existing) body.label = body.label + (existing.how === 'a page of yours' ? ' · you already have a page for it' : ' · already one of your keywords');
 // ---- R26 (2026-10-14, FIX_PLAN.md §3.12): an answer with no search data may not sound sure ----

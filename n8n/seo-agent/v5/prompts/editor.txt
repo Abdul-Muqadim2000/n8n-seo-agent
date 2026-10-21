@@ -14,6 +14,7 @@ LENGTH RULE: the corrected main content must land within 10% of the target. If t
 Terms that must appear (currently missing): {{ ($json.content_qa.missing_terms || []).join(', ') || 'none' }}
 Verified facts you may cite (with their URL): {{ (($json.content_brief || {}).evidence_plan || []).map(e => e.fact + ' — ' + e.source_url).join(' | ') || 'none' }}
 Allowed internal links: {{ JSON.stringify((($json.content_brief || {}).internal_link_suggestions || []).map(l => l.url)) }}
+{{ ($json.pricing_facts === false || $json.timeline_facts === false) ? 'No ' + ($json.pricing_facts === false && $json.timeline_facts === false ? 'price or timeline' : $json.pricing_facts === false ? 'price' : 'timeline') + ' facts are on file: add no ' + [$json.pricing_facts === false ? 'price, fee, fee band or rate' : '', $json.timeline_facts === false ? 'duration or timeline' : ''].filter(Boolean).join(', and no ') + ' and no bracket asking for one, and never add a promise (a deliverable, a pack, a guarantee) that the facts do not state. A subtopic of a competitor page that is a course, a fee or a product of another kind is not ours to cover.' : '' }}
 
 HOW TO FIX
 - "Meta title too long/short": rewrite the Title line to 50-60 characters with the keyword near the start.

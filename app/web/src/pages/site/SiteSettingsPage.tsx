@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { AutopilotLevelPicker } from '@/components/site/AutopilotLevel';
+import { forecastPlanOf } from '@/lib/forecast-plan';
 import { useCycleDay } from '@/lib/cycle-day';
 import { YourWeek } from './_components/pipeline/your-week';
 import { Navigate, useNavigate, useParams } from 'react-router';
@@ -443,6 +444,7 @@ function MonitorsCard({
   const [competitors, setCompetitors] = useState(initialCompetitors);
   const [enginesError, setEnginesError] = useState<string | undefined>();
   const ai = useSiteData(org.id, site.id, 'ai');   // B8-7: the precision table reads the latest run's measured sample
+  const pipelineQ = useSiteData(org.id, site.id, 'pipeline');   // B4: the forecast's plan (level, keyword pages, rank checks)
   const dirty = JSON.stringify(monitors) !== JSON.stringify(initial) || JSON.stringify(competitors) !== JSON.stringify(initialCompetitors);
 
   const save = () => {
@@ -492,7 +494,7 @@ function MonitorsCard({
             </Field>
           </div>
           <div className="lg:sticky lg:top-6 lg:self-start">
-            <MonitoringCost monitors={monitors} blogsPerWeek={blogsPerWeek} />
+            <MonitoringCost monitors={monitors} blogsPerWeek={blogsPerWeek} plan={pipelineQ.data ? forecastPlanOf(pipelineQ.data, site) : undefined} />
           </div>
         </div>
       </CardBody>
@@ -612,8 +614,8 @@ function AutopilotTab({ admin }: { admin: boolean }) {
     );
   const d = pipeline.data;
   const level = d.autopilot?.level ?? d.automation?.autopilotLevel ?? site.autopilotLevel ?? 2;
-  // a keyword the client chose (Auto, not won or paused) still has pages to write: the forecast counts the weekly pages
-  const writing = (d.ladderCards ?? []).some((c) => c.mode !== 'manual' && c.status !== 'won' && c.status !== 'paused' && c.counts.planned > 0 && !(d.autopilot?.notChosen ?? []).includes(c.id));
+  // a keyword the client chose (Auto, not won or paused) still has pages to write, a ladder to rank-check: the server's forecast plan
+  const { writing, ranking } = forecastPlanOf(d, site);
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-start">
       <Card>
@@ -633,6 +635,7 @@ function AutopilotTab({ admin }: { admin: boolean }) {
             monitors={settings.data.monitors}
             pagesPerWeek={settings.data.cadence?.pagesPerWeek ?? site.blogsPerWeek}
             writing={writing}
+            ranking={ranking}
             admin={admin}
           />
         </CardBody>

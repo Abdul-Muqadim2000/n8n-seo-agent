@@ -173,7 +173,8 @@ const RT = (() => {
 // used-up balance), which asking again cannot mend. A keyword whose second attempt fails as well is NOT clustered - `Ladder Clusters`
 // names it as "could not be compared" and the plan prints the count.
 const RETRY_MAX = 12;
-const reqs = $('Ladder Cluster Requests').all().map(i => i.json).filter(r => r && r.cluster_check);
+// KW-SERP: only the keywords actually sent (the ones not read earlier today) are paired with the answers
+const reqs = (() => { try { return $('Ladder SERP Cache Split').all(); } catch (e) { return $('Ladder Cluster Requests').all(); } })().map(i => i.json).filter(r => r && r.cluster_check);
 const answers = $input.all().map(i => i.json);
 const plan = RT.plan(reqs, answers, { max: RETRY_MAX });
 if (!plan.items.length) return [{ json: { no_retry: true, failed: plan.failed, retryable: plan.retryable, skipped: plan.skipped,

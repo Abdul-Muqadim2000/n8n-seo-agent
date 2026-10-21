@@ -763,9 +763,11 @@ SOURCES_SRC = _rd0('code/_sources.js').rstrip('\n'); ANCHOR_SRC = _rd0('code/_an
 PAGE_TYPE_SRC = _rd0('code/_page_type.js').rstrip('\n')   # 2026-10-12 (D10): the page type as one of the form's fixed options, with the verdict's free text kept as page_notes
 GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 / D24): the Search Console query rules (scraper queries, brand split, anonymised share)
 KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
+COMPETITORS_SRC = _rd0('code/_competitors.js').rstrip('\n')   # 2026-10-21 (KW-COMP, RV-6): who is a competitor (a business ranking on several of the run's results pages), one answer for research, the ladder and the full report
 RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n'))   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+SERP_CACHE_SRC = _rd0('code/_serp_cache.js').rstrip('\n')   # KW-SERP (RV-12, 2026-10-21): one results-page reading per search and day, shared by every path (section 145)
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__LADDER_DUP__*/', _rd0('code/_ladder_dup.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n'))   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -882,6 +884,7 @@ disconnect('Copywriter', 'Content QA')
 connect('Copywriter', 'Critic'); connect('Critic', 'Parse Critique'); connect('Parse Critique', 'Content QA')
 setcode('Content QA', rd('code/Content_QA.js'))
 set_prompt('Editor', 'editor.txt')
+assert "'duration or timeline'" in rd('prompts/editor.txt') and ".filter(Boolean).join(', and no ')" in rd('prompts/editor.txt'), 'CT-FIX (review item 17): the editor prompt drops durations when neither price nor timeline facts are on file'
 # report additions
 patch('Build Word File', "    ['Recommended Page Type', esc(d.recommended_page || d.page_type || 'N/A')]\n  ]) +", "    ['Recommended Page Type', esc(d.recommended_page || d.page_type || 'N/A')],\n    ['Expected visits/month at #1-3', d.expected_visits_top3 != null ? num(d.expected_visits_top3) : 'N/A'],\n    ['Time to rank', d.time_to_rank_months != null ? d.time_to_rank_months + ' months' : 'N/A']\n  ]) +")
 patch('Build Word File', "  '<h3>Why</h3>' + ul(d.verdict_reasons) +", "  '<h3>Why</h3>' + ul(d.verdict_reasons) +\n  ((d.verdict_changes && d.verdict_changes.length) ? '<h3>What must change first</h3>' + ul(d.verdict_changes) : '') +")
@@ -1734,8 +1737,8 @@ sb18['properties']['experience_notes'] = ARR; sb18['properties']['video_placemen
 sb18['properties']['outline']['items']['properties']['link_to'] = {'type': 'string'}
 set_schema('Parser — Strategy Brief', sb18)
 # length bands for the new page types (hub pages are longer, case studies and local pages shorter)
-patch('Parse Analysis', "const isGuide = /blog|guide|article/.test(pt);\nconst lo = isGuide ? 1200 : 900, hi = isGuide ? 3000 : 2400;",
-      "const isGuide = /blog|guide|article/.test(pt);\nconst isHub = /pillar|hub/.test(pt) || Number(prev.ladder_rung) === 4, isShort = /case stud|local/.test(pt);   // v4.4 page types\nconst lo = isHub ? 1800 : isShort ? 800 : isGuide ? 1200 : 900, hi = isHub ? 3500 : isShort ? 1800 : isGuide ? 3000 : 2400;")
+# C8 (2026-10-22): the hub / case-study / local length bands live in v5/code/Parse_Analysis.js now (this patch was dropped by the G33 re-read)
+assert 'isHub ? 1800 : isShort ? 800' in code('Parse Analysis'), 'Parse Analysis: the v4.4 page-type length bands are missing'
 # ---------- E. report + package fields ----------
 patch('Build Word File', "content_images: Array.isArray(brief.image_suggestions) ? brief.image_suggestions : []",
       "content_images: Array.isArray(brief.image_suggestions) ? brief.image_suggestions : [],\n    page_role: d.page_role || 'standard', article_like: d.article_like == null ? null : !!d.article_like, author: d.author || null, reviewer: d.reviewer || null, site_profile: d.site_profile || null, hub_pages: d.hub_pages || [], video: d.video || null, case_study: d.case_study || null, case_id: d.case_id || '', local_area: d.local_area || '', content_brief_video_placement: brief.video_placement || '', eeat_notes: qa.eeat_notes || [], page_type: d.page_type || ''")
@@ -2134,6 +2137,7 @@ connect('Measure Reach?', 'Run Reach Requests', 0); connect('Measure Reach?', 'R
 connect('Reach (Discovery)', 'New Reach (Discovery)?'); connect('New Reach (Discovery)?', 'Reach Row (Discovery)', 0); connect('New Reach (Discovery)?', 'Research Requests', 1)
 connect('Reach Row (Discovery)', 'Save Reach (Discovery)'); connect('Save Reach (Discovery)', 'Research Requests')
 patch('Build Keyword File', "'Run Competitor Keywords', 'AI Demand'];", "'Run Competitor Keywords', 'AI Demand', 'Run Reach Requests'];")
+patch('Build Keyword File', "<title>Keyword Ideas — ${", "<title>Keyword ideas for ${")   # KWL-RES (2026-10-21 live keyword test D13): no dash as punctuation in the client's document title
 assert nodes['Run Reach Requests'].get('credentials'), 'reach request without credential'
 # every node that inlines the reach rules really got them (and no placeholder is left anywhere)
 for _n in ('Ladder Plan', 'Build Ladder Report', 'Ladder Settings Rows', 'Reach Requests (Discovery)', 'Reach (Discovery)', 'Rank Keywords', 'Build Keyword Strategy'):
@@ -2450,6 +2454,10 @@ open(os.path.join(OUT_CODE, '_fit_gate.js'), 'w').write("// harness shim (writte
     "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { keyword: j.keyword, ...fitGate(j.keyword, { ...(j.ctx || {}), intent: j.intent }), brands_text: fitBrandList(j.ctx || {}, (j.ctx || {}).protect) } }; });\n")
 open(os.path.join(OUT_CODE, '_serp_obs.js'), 'w').write("// harness shim (written by build_v4.py section 26): the results-page observation rules — { serp, at, obs } -> { seen_at, clock, count, seen, text }\n" + SERP_OBS_SRC +
     "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { seen_at: j.serp ? serpSeenAt(j.serp) : null, clock: j.at ? obsClock(j.at) : null, ...aioObserved(j.obs || []) } }; });\n")
+# KW-PARITY (2026-10-21): the app's fit gate is the kit itself, generated here (app/shared/src/fit-gate.generated.js + .d.ts, committed);
+# it was a hand-written port that fell behind the kit. app/shared/src/fit-gate.parity.test.ts fails while the generated file is stale.
+import fit_gate_app
+fit_gate_app.write_app_files(FIT_GATE_SRC)
 log('System review fixes (2026-10-11, FIX_PLAN D4 / D8 / D16 / D26 / G3): one shared keyword fit gate (navigational, government / portal, other brands — competitor and results-page domain labels, learned AI brand names, SERP dominance; v5/code/_fit_gate.js) in Analyze Keywords, Rank Keywords, Ladder Pool, Ladder Plan and Brief Context with a reason per refusal (site_keywords.refused, keyword_strategy.refused, ladder refused_keywords); the relevance prompt is told the brands; the Rank Tracker\'s next step follows the ladder state (write / publish / rungs / improve); an AI Overview is a timed observation ("seen in the check at …", "seen in N of M checks"; v5/code/_serp_obs.js) in the digest, the verdict rules, the keyword report, the keyword strategy and the ladder report; the 2025 Ahrefs base rate (1.74% / 40.8%) with an uncalibrated chance band per plan (_reach.js, app mirror)')
 
 # =============================================================================
@@ -3152,10 +3160,13 @@ log('A test check-in can never pass as the month\'s Search Console check-in (202
 # =============================================================================
 import retry_lint
 _g1_changed = retry_lint.apply_rule(nodes.values())
-for _g1 in ('Read Website', 'SERP Top 10', 'Keyword Data', 'PageSpeed', 'RDAP Lookup', 'Fetch GBP', 'Read Nav Pages', 'Render PDF Report', 'Fetch Published Page', 'Run Reach Requests'):
+for _g1 in ('Read Website', 'SERP Top 10', 'Keyword Data', 'PageSpeed', 'RDAP Lookup', 'Read Nav Pages', 'Render PDF Report', 'Fetch Published Page'):
     assert _g1 in nodes, _g1 + ': node missing (G1 retry rule)'
     assert nodes[_g1].get('maxTries') == 3 and nodes[_g1].get('waitBetweenTries') == 5000, _g1 + ': the retry rule did not reach it'
-assert len(_g1_changed) >= 45, 'G1: only %d HTTP nodes were normalised - the retry rule should reach every external call' % len(_g1_changed)
+for _g1 in ('Fetch GBP', 'Run Reach Requests'):   # N3 (2026-10-22): paid calls that carry several items are retried per item by their gate
+    assert retry_lint.paid_multi(nodes[_g1]) and not nodes[_g1].get('retryOnFail'), _g1 + ': a paid multi-item call must not retry as a whole node'
+_g1_paid = [n for n in nodes.values() if n.get('type') == 'n8n-nodes-base.httpRequest' and retry_lint.paid_multi(n)]   # N3: these take the per-item pattern instead
+assert len(set(_g1_changed) | {n['name'] for n in _g1_paid}) >= 45, 'G1: only %d HTTP nodes were normalised - the retry rule should reach every external call' % len(_g1_changed)
 for _g1 in ('POST Callback', 'POST Rejection'):   # the two report callbacks stay without a retry, on purpose
     assert _g1 in retry_lint.ALLOW and not nodes[_g1].get('retryOnFail'), _g1 + ': a report callback must not be retried'
 # the lint has to bite: a new HTTP node without a retry is a finding, an allow-listed one is not
@@ -4178,31 +4189,35 @@ assert "const capped = false" not in code('Build Site Issues') and 'capped at ev
 
 # ---------- B. R11: a page that fails the quality check is delivered as a draft, and says so everywhere ----------
 patch('Build Word File', "    ['Status', qa.passed ? '<span class=\"ok\">Passed</span>' : '<span class=\"bad\">Needs review</span>'],",
-      "    ['Status', qa.passed ? '<span class=\"ok\">Passed</span>' : qa.not_ready ? '<span class=\"bad\">Did not pass \\u2014 not ready to publish</span>' : '<span class=\"bad\">Needs review</span>'],\n"
-      "    ...(qa.not_ready ? [['Why it is not ready', '<span class=\"bad\">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first")
+      "    ['Status', qa.passed ? '<span class=\"ok\">Passed</span>' : qa.not_ready ? '<span class=\"bad\">Did not pass, not ready to publish</span>' : '<span class=\"bad\">Needs review</span>'],\n"
+      "    ...(qa.not_ready ? [['Why it is not ready', '<span class=\"bad\">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first\n"
+      "    ...(qa.not_ready && (qa.quality || {}).next_step ? [['What to do', esc(qa.quality.next_step)]] : []),   // 2026-10-21: edit the draft by hand, never a paid re-run")
 patch('Build Word File', "    qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed' : 'Quality check: ' + ((qa.warnings || []).length + (qa.profile_placeholders ? 1 : 0)) + ' item(s) to review'),",
       "    // R11 (2026-10-13, re-rating §3.11): the summary is this (the LAST) round's, and when the rounds ran out with the gate still failing it says the page is not ready\n"
       "    qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed'\n"
-      "      : qa.not_ready ? 'Did not pass the quality check \\u2014 not ready to publish (round ' + qa.round + ' of ' + qa.max_rounds + '): ' + ((qa.not_ready_reasons || []).slice(0, 3).join('; ') || ((qa.warnings || []).length + ' item(s) to review'))\n"
+      "      : qa.not_ready ? 'Did not pass the quality check, so it is not ready to publish (round ' + qa.round + ' of ' + qa.max_rounds + '): ' + ((qa.not_ready_reasons || []).slice(0, 3).join('; ') || ((qa.warnings || []).length + ' item(s) to review'))\n"
       "        : 'Quality check: ' + ((qa.warnings || []).length + (qa.profile_placeholders ? 1 : 0)) + ' item(s) to review'),\n"
       "    qa_publishable: qa.passed == null ? null : !!qa.passed,\n"
       "    qa_not_ready: !!qa.not_ready, qa_label: qa.quality_label || '', qa_reasons: qa.not_ready_reasons || [], qa_quality: qa.quality || null,\n"
       "    qa_round: qa.round == null ? null : qa.round, qa_max_rounds: qa.max_rounds == null ? null : qa.max_rounds,\n"
       "    qa_placeholders: qa.placeholders_total == null ? null : qa.placeholders_total,\n"
       "    content_links_to_add: qa.links_to_add_when_published || [],   // R15: every planned ladder / cluster link, for the package\n"
-      "    ladder_target_url: d.ladder_target_url || '',")
+      "    ladder_target_url: d.ladder_target_url || '',\n"
+      "    // 2026-10-21 (E-QA): what to do with a draft (by hand, never a re-run), the one URL the page is published at, and the ladder's links\n"
+      "    qa_next_step: (qa.quality || {}).next_step || '', qa_owner_edits: (qa.quality || {}).owner_edits || [], qa_page_url: qa.page_url || '', ladder_links: d.ladder_links || [],")
 # the file name says it too, so a draft cannot be mistaken for a finished page on disk
 patch('Build Word File', "const fileName = prefix + '-' + safe + '-' + today + '.doc';",
       "const fileName = prefix + '-' + safe + '-' + today + (qa.not_ready ? '-DRAFT' : '') + '.doc';   // R11 (2026-10-13)")
 _BP_META_OLD = "const meta = { title, h1: h1 || title, slug, suggested_url: dom ? siteUrlOf(dom, '/' + slug + '/') : '/' + slug + '/',"
 _BP_META_NEW = """// R15 (2026-10-13, re-rating §3.11): a ladder page is published at the URL its ladder row planned — the row's link map, the siblings'
 // up-links and the Rank Tracker all use it, so a different suggested URL leaves every stored link pointing nowhere.
-const plannedPageUrl = (d.ladder_id && String(d.ladder_target_url || '').trim()) ? ownUrl(String(d.ladder_target_url).trim()) : '';
+// RV-17 (2026-10-21): the URL in its site's own form (Content QA's page_url follows the sitemap: techand.ai drops the trailing slash)
+const plannedPageUrl = (d.ladder_id && String(d.ladder_target_url || '').trim()) ? ownUrl(String(d.qa_page_url || d.ladder_target_url).trim()) : '';
 // R15: the links to add once a planned page is live — the ladder's planned pages as well as a hub's cluster pages (Content QA built the list)
 const plannedLinks = (Array.isArray(d.content_links_to_add) && d.content_links_to_add.length)
   ? d.content_links_to_add.filter(p => p && p.url).map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(ownUrl(p.url)), anchor: p.anchor || anchorText(p), role: p.role || '', note: 'Not published yet: add this link from this page once the page is live.' }))
   : HPplanned.map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(p.url), anchor: anchorText(p), role: p.role || p.ladder || '', note: 'Not published yet: add this link from this page once the page is live.' }));
-const meta = { title, h1: h1 || title, slug, suggested_url: plannedPageUrl || (dom ? siteUrlOf(dom, '/' + slug + '/') : '/' + slug + '/'),"""
+const meta = { title, h1: h1 || title, slug, suggested_url: plannedPageUrl || (d.qa_page_url ? ownUrl(d.qa_page_url) : '') || (dom ? siteUrlOf(dom, '/' + slug + '/') : '/' + slug + '/'),"""
 patch('Blog Package', _BP_META_OLD, _BP_META_NEW)
 patch('Blog Package', "  links_to_add_when_published: HPplanned.map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(p.url), anchor: anchorText(p), note: 'Not published yet: add this link from this page once the page is live.' })),",
       "  links_to_add_when_published: plannedLinks,")
@@ -4212,12 +4227,16 @@ patch('Blog Package', "word_count: words, content_score, content_score_withheld,
       "  publishable: d.qa_publishable == null ? null : !!d.qa_publishable, quality: d.qa_quality || null,")
 patch('Blog Package', "if (HPplanned.length) extra.push('\"links_to_add_when_published\" lists ' + HPplanned.length + ' page(s) this hub does NOT link to yet because they are not published: add the link with the anchor given once each one is live (the weekly ladder e-mail reminds you)');",
       "if (plannedLinks.length) extra.push('\"links_to_add_when_published\" lists ' + plannedLinks.length + ' page(s) this page does NOT link to yet because they are not published: add the link with the anchor given once each one is live (the weekly ladder e-mail reminds you)');")
-patch('Blog Package', "const extra = [];", "const extra = [];\nif (d.qa_not_ready) extra.push('This page DID NOT PASS the quality check (' + (d.qa_label || 'not ready to publish') + '): ' + ((d.qa_reasons || []).slice(0, 3).join('; ') || 'see the report') + ' \\u2014 finish those points before you publish it');\nif (plannedPageUrl) extra.push('Publish it at ' + plannedPageUrl + ': that is the URL this keyword ladder planned, and the other pages of the ladder already link to it');")
+patch('Blog Package', "const extra = [];", "const extra = [];\nif (d.qa_not_ready) extra.push('This page did not pass the quality check, so it is not ready to publish: ' + ((d.qa_reasons || []).slice(0, 3).join('; ') || 'see the report') + '. ' + (d.qa_next_step || 'Finish those points in the draft before you publish it.'));\n"
+      "// L2 (2026-10-21): \"the other pages of the ladder already link to it\" was said with no other page written; it is said only of pages that are live\n"
+      "const liveLadderLinks = (d.ladder_links || []).filter(l => l && l.url && l.planned === false && String(ownUrl(l.url)).replace(/\\/+$/, '') !== String(plannedPageUrl).replace(/\\/+$/, '')).length + HP.length;\n"
+      "if (plannedPageUrl) extra.push('Publish it at ' + plannedPageUrl + ': that is the URL this keyword ladder planned' + (liveLadderLinks ? ', and ' + liveLadderLinks + ' published page(s) of the ladder already link to it' : '. The other pages of the ladder are not published yet; each one links to this URL when it is written'));")
 patch('Build Webhook Response', "    qa_summary: d.qa_summary || null,",
       "    qa_summary: d.qa_summary || null,\n"
       "    // R11 (2026-10-13): the app shows the last quality round's verdict, not a count of warnings\n"
       "    qa_publishable: d.qa_publishable == null ? null : !!d.qa_publishable,\n"
-      "    qa_not_ready: !!d.qa_not_ready, qa_label: d.qa_label || null, qa_reasons: d.qa_reasons || [], qa_quality: d.qa_quality || null,")
+      "    qa_not_ready: !!d.qa_not_ready, qa_label: d.qa_label || null, qa_reasons: d.qa_reasons || [], qa_quality: d.qa_quality || null,\n"
+      "    qa_next_step: d.qa_next_step || null, qa_owner_edits: d.qa_owner_edits || [],   // 2026-10-21: what to edit by hand (the app's Needs-you can say it instead of \"run it again\")")
 assert 'qa_not_ready' in code('Build Word File') and 'qa_not_ready' in code('Build Webhook Response') and 'publishable: d.qa_publishable' in code('Blog Package'), 'R11: the delivery does not carry the gate'
 assert 'quality_label' in code('Content QA') and 'illustrativeZones' in code('Content QA'), 'R11: Content QA has no gate or no illustrative zones'
 
@@ -4233,6 +4252,21 @@ patch('Analyze Keywords', "const fitsAK = (k) => { const g = fitGate(k.keyword, 
       "const fitsAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, intent: k.intent || '', reason: g.reason, detail: g.detail }); return g.ok; };")
 patch('Analyze Keywords', "if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return false; };",
       "if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, intent: k.intent || '', reason: g.reason, detail: g.detail }); return false; };")
+# FG1 (2026-10-21) put two rules in a wrapper around fitGate in this node only (a company's own name before a colon or a "number 1" claim,
+# and a list of another industry's companies). KW-GATE (2026-10-21, review items 3, 4, 14) moved both into the shared kit (v5/code/_fit_gate.js
+# rules 5c / 5d), corrected (category words are neutral: "best erp companies in dubai" and "no 1 erp company in uae" are the client's own
+# industry; the colon rule needs a name that is no topic word; "#1" now matches), so research, the ladder, the Keyword Check and the full
+# report decide the same keyword the same way. This node only calls the kit.
+# KW-GATE: the v3 intent guess called every keyword that contains the domain label "navigational". On peppol.org the label is the subject
+# itself ("what is peppol", "peppol access point"): a label that is a word of the client's own services or business line is a topic word.
+patch('Analyze Keywords', "  if (k.includes(brand)) return 'navigational';",
+      "  if (k.includes(brand) && !brandIsTopicAK()) return 'navigational';   // KW-GATE (2026-10-21): a domain label that is also a word of what the client sells is its subject (peppol.org)")
+patch('Analyze Keywords', "// Intent: DataForSEO ka ho to wahi, warna alfaaz se andaza\n",
+      "// Intent: DataForSEO ka ho to wahi, warna alfaaz se andaza\n"
+      "let brandIsTopicMemoAK = null;\n"
+      "const brandIsTopicAK = () => { if (brandIsTopicMemoAK !== null) return brandIsTopicMemoAK; const said = [...(base.services || []), String(base.business || '')];\n"
+      "  try { const m = $('Restore Site Model').first().json.site_model || null; if (m) said.push(...(Array.isArray(m.services) ? m.services : [])); } catch (e) {}\n"
+      "  brandIsTopicMemoAK = (' ' + said.join(' ').toLowerCase().replace(/[^a-z0-9]+/g, ' ') + ' ').includes(' ' + brand + ' '); return brandIsTopicMemoAK; };\n")
 patch('Build Full Report', "  html += `<h2>4a. Keyword Opportunities by Search Intent</h2>`;",
       "  // R13 (2026-10-13): a bucket the gate emptied says so with the reasons, instead of reading like a market with no demand\n"
       "  const refusedAK = (sk.refused || []);\n"
@@ -4249,6 +4283,7 @@ patch('Build Full Report', "  if ((sk.easy_wins || []).length) {",
 patch('Build Full Report', "html += '<p class=\"small\">Left out of the gap on purpose: ' + sk.refused.length + ' searches for government portals, logins or other companies\\' brands (e.g. '",
       "html += '<p class=\"small\">Left out of the gap on purpose: ' + sk.refused.length + ' searches no page of this website should target (e.g. '")
 assert "topic_label: 'what this website sells'" in code('Analyze Keywords') and 'function fitTopic(' in code('Analyze Keywords'), 'R13: the topic bar is not wired into Analyze Keywords'
+assert 'fitGateKit' not in code('Analyze Keywords') and 'list of companies in another industry' in FIT_GATE_SRC, 'KW-GATE: the full report wraps the shared gate with rules of its own again'
 # R12: the report prints the kit's own reason per row, so it can never word a row itself
 assert "q.why ||" in code('Build Keyword Strategy') and 'mismatch' in code('Build Keyword Strategy'), 'R12: the keyword strategy still words the reason itself'
 assert "kinds.push('page_mismatch')" in code('Search Console Seeds (Discovery)'), 'R12: the discovery seeds have no page-mismatch class'
@@ -4488,7 +4523,7 @@ assert ('cost_mode', 'string') in RUN_LEDGER_COLS and ('ai_usd', 'number') in RU
     and ('estimated_usd', 'number') in RUN_LEDGER_COLS and ('cost_basis', 'string') in RUN_LEDGER_COLS, \
     'G23: seo_run_ledger cannot say which part of a cost was measured (add the columns in ladder_common.py, then sync_tables.py on the next deploy)'
 assert 'ai_visibility: 0.14' in COST_SRC and 'ai_visibility: 0.95' in COST_SRC, 'G23: ai_visibility still reserves the $0.06 that cost $0.79'
-assert 'dfs_est_usd: 0.034' in rd('code/Assess_Ledger_Row.js'), "G23: the Keyword Check still reserves less than a check has measured"
+assert 'dfs_est_usd: 0.04' in rd('code/Assess_Ledger_Row.js'), "G23: the Keyword Check still reserves less than a check has measured"
 assert 'cost_mode' in rd('code/Monitor_Ledger_Row.js') and 'cost_basis' in rd('code/Monitor_Ledger_Settle.js'), 'G23: a scheduled run settles without saying what was measured'
 assert os.path.exists(os.path.join(HERE0, 'reconcile_claude_cost.py')), 'G23: the monthly reconciliation script is missing'
 _rc51 = open(os.path.join(HERE0, 'reconcile_claude_cost.py'), encoding='utf-8').read()
@@ -4947,7 +4982,7 @@ assert 'PC.MIN_FIT' in _K58['LB_Assemble'] and 'PC.cleanQuote(' in _K58['LB_Asse
 # R25 + R22: the masked figures by name, and the cut as an instruction
 assert 'placeholder_note' in code('Content QA') and 'masked figure(s) still in the text' in code('Content QA'), 'R25: the body placeholders are not named in the reasons'
 assert 'placeholder_count > PH_MAX' in code('Content QA') and 'const too_many_placeholders' in code('Content QA'), 'R25: the R11 delivery gate was loosened'
-assert 'length_instruction' in code('Content QA') and "'CUT ' + over_words" in code('Content QA'), 'R22: Content QA does not state the cut'
+assert 'length_instruction' in code('Content QA') and "'CUT ' + cut_words" in code('Content QA'), 'R22: Content QA does not state the cut'
 _ED58 = nodes['Editor']['parameters']['text']
 assert 'content_qa.length_instruction' in _ED58 and 'THE FIRST THING TO DO' in _ED58 and '"Main content is too long"' in _ED58, 'R22: the editor is not told to cut, only warned'
 # R25: a page that is otherwise deliverable still says which figures are masked
@@ -6902,7 +6937,7 @@ assert len(_ln70) >= 5, _ln70
 for nm in _ln70:
     patch(nm, "'Candidate SERP', ", "'Candidate SERP', 'Run Ladder Cluster SERP', 'Run Ladder Cluster SERP (Retry)', ")
     assert "__dfsOnce(t)" in code(nm), nm + ': R28 dedupe missing where the new calls are counted'
-assert 'ladder: 0.21,' in COST_SRC, 'B2-4: the per-mode DataForSEO estimate was not raised for the results-page calls'
+assert 'ladder: 0.31,' in COST_SRC, 'B2-4: the per-mode DataForSEO estimate was not raised for the results-page calls'
 # INVARIANTS rule 3: the new DataForSEO nodes are inside a recorded in-200 gate chain, and the ratchet is re-checked with them in
 retry_lint.record_gate('SEO Agent v4', list(retry_lint.GATES.get('SEO Agent v4') or [])
                        + ['Ladder Cluster Requests', 'Cluster SERP Wanted?', 'Run Ladder Cluster SERP', 'Ladder Cluster Retry',
@@ -7480,7 +7515,7 @@ for _nm75, g in _g75.items():
         g['answers'] + ': the merged answers do not reach what read the call before'
     assert "RT.plan(" in code(g['plan']) and "live.length !== answers.length" in code(g['plan']), g['plan']
     assert "RT.stats(" in code(g['answers']) and "__dfs: ev" in code(g['answers']) and 'counted once by task id' in code(g['answers']), g['answers']
-    assert nodes[g['retry']].get('credentials') and nodes[g['retry']].get('maxTries') == 3, g['retry'] + ': credential or retry slot'
+    assert nodes[g['retry']].get('credentials') and (nodes[g['retry']].get('maxTries') == 3 or (retry_lint.paid_multi(nodes[g['retry']]) and not nodes[g['retry']].get('retryOnFail'))), g['retry'] + ': credential or retry slot (N3: a paid multi-item retry is the per-item pattern)'
 # nothing still reads the first attempt where the merged answer is what it wanted (the retry would be paid for and ignored)
 for _nm75, g in _g75.items():
     for _o75 in nodes.values():
@@ -8038,7 +8073,7 @@ let CACHE77 = []; try { CACHE77 = $('Load Site Cache').all().map(i => i.json); }
 // read. Never a fresh paid pull: a keyword report does not buy the ranked-keywords list.
 const RI77 = reachCached(CACHE77, prev.domain, prev.location_code) || { ...reachFrom(null, prev.site_authority || null), ranked: null, cached: false };
 const TA77 = reachTopic(RI77.ranked === undefined ? null : RI77.ranked, prev.keyword, RI77.reach, { domain: prev.domain || 'your site',
-  reason_missing: RI77.cached ? 'the reach stored on ' + String(RI77.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this report has no topic evidence to read'
+  reason_missing: RI77.cached ? 'the reach of your site was measured on ' + String(RI77.cached_at || '').slice(0, 10) + ' across all your keywords, not this topic, so this report cannot say how strong you are on this topic in particular'
     : 'a keyword report does not buy the list of keywords your site ranks for (the keyword research and the ladder do)' });
 const DIFF77 = prev.domain ? difficultyForYou(KD77, TA77.reach, {}) : null;
 const PLAN77 = DIFF77 ? reachPlan(DIFF77, reachStrong(RI77, null), reachMeasured(TA77 && TA77.used ? { used: true } : RI77, null)) : null;   // R49: no chance band on a reach no measured ranking supports
@@ -9430,7 +9465,7 @@ assert 'Keep at least one use of each of these terms' in code('Content QA'), 'R4
 assert "CVG.best(prev.competitors || [], covTerms, { kind: pageKind, keyword: prev.keyword })" in code('Parse Analysis'), \
     'R44: Parse Analysis picks the page to beat without the kind of page being written'
 for _n100 in ('Parse Analysis', 'Content QA'):
-    assert 'const kindOf = (p) =>' in code(_n100) and 'const PROMO = ' in code(_n100), 'R44: ' + _n100 + ' carries an older coverage kit'
+    assert 'const kindOf = (p, keyword) =>' in code(_n100) and 'const PROMO = ' in code(_n100), 'R44: ' + _n100 + ' carries an older coverage kit'   # D5 (2026-10-21): the kind is read without the keyword's own words
 assert 'names another company is not a subtopic' in nodes['Strategy Brief']['parameters']['text'], 'R44: the brief prompt lost the subtopic rule'
 assert 'a term counts once it appears' in nodes['Strategy Brief']['parameters']['text'], 'R43: the brief prompt does not say how coverage is measured'
 # R45's rule now lives in the placeholder kit (A-13, section 130): any bracket that starts with a letter, whatever its case, is counted
@@ -11424,7 +11459,7 @@ _NOT_GENERATED69 = ('SEO_Agent_v3_original_export.json', 'SEO_Agent_Test_Callbac
 PLACEHOLDERS_SRC = _rd0('code/_placeholders.js').rstrip('\n'); CLAIMS_SRC = _rd0('code/_claims.js').rstrip('\n')
 EXCLUSIONS_SRC = _rd0('code/_exclusions.js').rstrip('\n'); OUTBOUND_SRC = _rd0('code/_outbound.js').rstrip('\n')
 _kit130 = lambda s: s.replace('/*__PLACEHOLDERS__*/', PLACEHOLDERS_SRC).replace('/*__CLAIMS__*/', CLAIMS_SRC).replace('/*__EXCLUSIONS__*/', EXCLUSIONS_SRC).replace('/*__OUTBOUND__*/', OUTBOUND_SRC)
-for _n130 in ('Content QA', 'Parse Brief', 'Parse Analysis'):
+for _n130 in ('Content QA', 'Parse Brief', 'Parse Analysis', 'Brief Context'):   # Brief Context: D5 (2026-10-21) drops the verdict's skipped topics from the subtopics
     setcode(_n130, _kit130(code(_n130)))
     assert not any(('/*__%s__*/' % _m) in code(_n130) for _m in ('PLACEHOLDERS', 'CLAIMS', 'EXCLUSIONS', 'OUTBOUND', 'FIT_GATE')), _n130 + ': a kit placeholder is left (section 130)'
 assert 'const PH = (() =>' in code('Content QA') and 'const CL = (() =>' in code('Content QA') and 'const EXC = (() =>' in code('Content QA') and 'const fitLabels' in code('Content QA'), 'A-13 / A-15 / A-16 / A-18: a kit is missing from Content QA'
@@ -11433,7 +11468,7 @@ assert 'PH.scan(finalBody)' in code('Content QA') and 'PH_RE' not in code('Conte
 _ph_ts130 = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'app', 'shared', 'src', 'placeholders.ts')
 if os.path.exists(_ph_ts130):
     _pt130 = open(_ph_ts130, encoding='utf-8').read()
-    for _pat130 in ('BRACKET_SRC', 'NOTE_SRC'):
+    for _pat130 in ('BRACKET_SRC', 'NOTE_SRC', 'CODE_SRC', 'NOT_GAP_SRC'):   # CT-FIX: the code and not-a-gap rules too
         _m130 = re.search(r'const ' + _pat130 + r' = ("(?:[^"\\]|\\.)*");', PLACEHOLDERS_SRC)
         assert _m130 and ('PLACEHOLDER_' + _pat130 + ' = ' + _m130.group(1) + ';') in _pt130, 'A-13: app/shared/src/placeholders.ts and v5/code/_placeholders.js disagree on ' + _pat130
 assert 'CL.business(md, OWN_TEXT' in code('Content QA') and 'ownStat(s)' in code('Content QA'), 'A-15 / A-19: the business claims or the own-figures check are not wired'
@@ -11820,6 +11855,114 @@ An answer from the lighter attempt says so: the AI Overview is **"not read on th
     pos('SERP Retry Failed?')[0] - 40, pos('SERP Retry Failed?')[1] + 140, 1000, 260, 3)
 log('The head keyword\'s results page gets three attempts, the last one lighter (2026-10-20, F-SERP; real-credit rehearsal execs 23 / 31: SERP Top 10 and its retry both answered 40101 "Internal SE Server Error." inside an HTTP 200 after ~27 s, twice in a row, and the ladder came out NOT_CHECKED for ~$0.27): SERP Top 10 -> 20 s -> retry -> SERP Retry Failed? (the same transient-only rule) -> 45 s -> SERP Top 10 (Light Retry) with depth 10 and no load_async_ai_overview; RT.chain judges the three attempts; the lighter answer is labelled where it is used (AI Overview "not read on this attempt", top 10 only), the cost of every attempt is counted once by task id, and an all-fail ladder tells the client in plain words that Google\'s results could not be read right now, not about their keyword, try again later')
 
+# >>> 143 (E-DEAD)
+# =============================================================================
+# 143. PAGES THAT ARE GONE, AND COMPARISONS WITH NOTHING ON THE OTHER SIDE (2026-10-21, pre-launch run on techand.ai, fixer E-DEAD:
+#      RV-1 / RV-2 / RV-3 / RV-5 / RV-6). techand.ai was rebuilt and Search Console still showed ~34 old addresses that now 404 (the bare host
+#      308s to www, which 404s). The audit read the first answer only and filed them as Low "redirect somewhere else" ("/x -> /x (308)"),
+#      told the owner to add them to the sitemap and rewrite their titles, called a complete crawl a crawl limit, and ranked "far fewer top-10
+#      rankings than competitors" (0 against a competitor median of 0, with help.ardoq.com among the competitors) as High.
+#      * *Not Crawled Hops -> Fetch Not Crawled (Final)*: every address that answered a redirect is asked again with the redirects followed;
+#        one that ends in 404 / 410 is gone, and every gone address is ONE finding with the page each should redirect to (v5/code/_gone.js,
+#        the same words the weekly site report, the AI reports and the fix pack use). The fix pack writes redirects.csv from it.
+#      * the comparison findings need something on the other side: no "far fewer top-10 rankings" or "organic traffic under 10%" when the
+#        competitors' median is tiny, or when Search Console's measurement contradicts the estimate; a help-centre / docs subdomain of a tool
+#        is never picked as a competitor.
+# =============================================================================
+_fn143 = pos('Fetch Not Crawled')
+add_node('Not Crawled Hops', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Not_Crawled_Hops.js')}, [_fn143[0] + 110, _fn143[1] - 160])
+if_node('Any Redirects To Follow?', '{{ !$json.no_hops }}', [_fn143[0] + 220, _fn143[1] - 160])
+_fnc_p143 = json.loads(json.dumps(nodes['Fetch Not Crawled']['parameters']))   # the same request (headers, timeout, batching), redirects followed to their end
+_fnc_p143['options']['redirect'] = {'redirect': {'followRedirects': True, 'maxRedirects': 6}}
+add_node('Fetch Not Crawled (Final)', 'n8n-nodes-base.httpRequest', 4.5, _fnc_p143, [_fn143[0] + 330, _fn143[1] - 320],
+         dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl55.RETRY))
+disconnect('Fetch Not Crawled', 'Not Crawled Check')
+connect('Fetch Not Crawled', 'Not Crawled Hops'); connect('Not Crawled Hops', 'Any Redirects To Follow?')
+connect('Any Redirects To Follow?', 'Fetch Not Crawled (Final)', 0); connect('Any Redirects To Follow?', 'Not Crawled Check', 1)
+connect('Fetch Not Crawled (Final)', 'Not Crawled Check')
+assert nodes['Fetch Not Crawled (Final)']['parameters']['options']['response']['response']['fullResponse'] is True and not _rl55.weak(nodes['Fetch Not Crawled (Final)'])
+assert 'google.com/bot.html' not in json.dumps(nodes['Fetch Not Crawled (Final)']), 'R119: the follow-up fetch names Google\'s bot page'
+for _n143 in ('Not Crawled Check', 'Fix Pack'):
+    assert 'const GONE = (() => {' in code(_n143) and '/*__GONE__*/' not in code(_n143), _n143 + ': the gone-pages kit is not inlined (RV-1)'
+assert "finalOf.get(ukey(t.url))" in code('Not Crawled Check') and "GONE.finding(redirectPlan" in code('Not Crawled Check'), 'RV-2: a redirect that ends in 404 is still filed as a redirect'
+assert "fNc.urls_all" in code('GSC Audit Findings') and "fSm.urls_all" in code('GSC Audit Findings'), 'RV-3: the Search Console lists cannot be cleaned of the gone addresses'
+assert "(((a.not_crawled_check || {}).redirects) || [])" in code('Fix Pack'), 'RV-1: the fix pack has no redirects for the gone addresses'
+# RV-5: the host split names its own unit (pages Google shows under the other host), not "N of M crawled pages"
+patch('GSC Audit Findings', "f90.affected_urls = urls90.slice(0, 200); f90.host_split = true; }",
+      "f90.affected_urls = urls90.slice(0, 200); f90.host_split = true; f90.affected_unit = 'pages Google shows under the other address'; }")
+# ---- RV-6: a comparison needs a side to compare with ----
+_MIN143 = "const MIN_TOP10_143 = 10, MIN_ETV_143 = 50;   // RV-6 (2026-10-21): under these the competitors' side says nothing (techand.ai: a median of 0 top-10 rankings and 4 visits)\n"
+patch('Competitor Analysis', "const findings = [];\nconst works = [];", _MIN143 + "const findings = [];\nconst works = [];")
+patch('Competitor Analysis', "} else if ((you.top10 || 0) === 0) {", "} else if ((you.top10 || 0) === 0 && (!comps.length || med.top10 == null || med.top10 >= MIN_TOP10_143)) {")
+patch('Competitor Analysis', "} else if (med.top10 && you.top10 < med.top10 * 0.25) {", "} else if (med.top10 && med.top10 >= MIN_TOP10_143 && you.top10 < med.top10 * 0.25) {")
+patch('Competitor Analysis', "if (metricsRead76 && comps.length && med.est_monthly_traffic && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {",
+      "if (metricsRead76 && comps.length && med.est_monthly_traffic && med.est_monthly_traffic >= MIN_ETV_143 && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {")
+# the reconcile with Search Console (section 90): "competitors hold hundreds" was printed whatever the median; a site Google shows in its top 10
+# is not "far behind" a median that is not there; measured clicks that beat the estimate retire the traffic comparison
+patch('GSC Audit Findings', "const __ex90 = (base.extra_findings || []).map(f => {\n  if (!__rk90 || !f || f.category !== 'Authority') return f;\n  const t = String(f.title || '');",
+      "const __med143 = ((base.competitor_benchmark || {}).medians) || null;\n"
+      "const __ex90 = (base.extra_findings || []).map(f => {\n  if (!__rk90 || !f || f.category !== 'Authority') return f;\n  const t = String(f.title || '');\n"
+      "  // RV-6 (2026-10-21): Google's own data shows top-10 rankings and the competitors' median is tiny or unknown: there is nothing to be far behind\n"
+      "  if (/does not rank in Google.s top 10 for any keyword/i.test(t) && __rk90.top10 > 0 && __med143 && !(Number(__med143.top10) >= 10)) return null;\n"
+      "  // RV-6: the site's measured clicks over 28 days already beat a tenth of the competitors' estimated monthly visits: the estimate is contradicted\n"
+      "  if (/^Organic traffic is under 10% of competitors$/.test(t) && search_console.totals && __med143 && Number(__med143.est_monthly_traffic) > 0\n"
+      "    && Number(search_console.totals.clicks) >= Number(__med143.est_monthly_traffic) * 0.1) return null;")
+patch('GSC Audit Findings', "while the competitors hold hundreds in the same database: a buyer who searches for what you sell finds them first.',",
+      "while the competitors hold a median of ' + __n90((__med143 || {}).top10) + ' in the same database: a buyer who searches for what you sell finds them first.',")
+patch('GSC Audit Findings', "const __works90 = (__rk90 && __rk90.top10)", "const __exk143 = __ex90.filter(Boolean); __ex90.length = 0; __ex90.push(...__exk143);\nconst __works90 = (__rk90 && __rk90.top10)")
+# a help centre, a documentation site or a community forum of some tool ranks for the words of a service page and is never a competitor
+patch('Pick Competitors', "const isBig = (d) => BIG.some(b => d === b || d.endsWith('.' + b)) || /\\.(gov|edu)(\\.|$)/.test(d);",
+      "const isBig = (d) => BIG.some(b => d === b || d.endsWith('.' + b)) || /\\.(gov|edu)(\\.|$)/.test(d)\n"
+      "  || /^(help|support|docs|doc|kb|knowledge|knowledgebase|community|academy|status|developer|developers|forum|forums|answers|faq|careers|jobs|learn)\\./.test(d);   // RV-6 (2026-10-21): help.ardoq.com was a \"competitor\" of an AI consultancy")
+assert 'MIN_TOP10_143' in code('Competitor Analysis') and 'help|support|docs' in code('Pick Competitors') and '__med143' in code('GSC Audit Findings'), 'RV-6: the comparison guards are missing'
+log('Pages that are gone, one message everywhere (2026-10-21, pre-launch run on techand.ai, fixer E-DEAD, RV-1 / RV-2 / RV-3 / RV-5 / RV-6): every known address that answered a redirect is asked again with the redirects followed (Not Crawled Hops -> Fetch Not Crawled (Final)), one that ends in 404 / 410 is gone and every gone address is ONE finding, "Pages Google still shows no longer answer: redirect them", with the page each should redirect to (v5/code/_gone.js), ranked with the index blockers and written to the fix pack\'s redirects.csv; the Search Console lists stop asking to add gone pages to the sitemap or rewrite their titles, a complete crawl is not called a crawl limit, a finding outside the crawl counts in its own unit; no "far fewer top-10 rankings" or "traffic under 10% of competitors" against a tiny competitor median or against Search Console\'s measured clicks, and a help-centre or docs subdomain is never a competitor')
+# <<< 143 (E-DEAD)
+# >>> 144 (KW-COMP)
+# =============================================================================
+# 144b. ONE ANSWER TO "WHO IS A COMPETITOR" (2026-10-21, agent KW-COMP; K6 / A-24 of 10-17, RV-6 / RV-14 of the pre-launch run). Research took
+#      its competitors from one results page (a job board at #2: 545 of 1,168 pool keywords from job and directory sites); the full report
+#      named help.ardoq.com. v5/code/_competitors.js (CMP) classifies a domain from its host and the result (job board, directory,
+#      marketplace, review, media, government / free zone, search engine, social, Q&A, help / docs subdomain, education, reference,
+#      platform, list of companies) and scores the businesses by how many of the results pages the run ALREADY bought they rank on, weighted
+#      by position; the declared competitors stay first; every pick carries its evidence and every exclusion its kind. Used by discovery
+#      (Competitor Keyword Requests: the pool grows only from business competitors), the ladder (Ladder Clusters -> serp_clusters.competitors,
+#      printed in the ladder report) and the full report (Pick Competitors, here). The AI visibility rival logic is unchanged.
+# =============================================================================
+patch('Pick Competitors', "const clean = (d) => String(d || '').toLowerCase().replace(/^www\\./, '');\nconst isOurs = (d) => d === ours || d.endsWith('.' + ours);",
+      "const clean = (d) => String(d || '').toLowerCase().replace(/^www\\./, '');\nconst isOurs = (d) => d === ours || d.endsWith('.' + ours);\n" + COMPETITORS_SRC + "\n"
+      "// KW-COMP (2026-10-21, RV-6): the same competitor rule as research and the ladder (CMP): a domain whose ADDRESS is a job board, directory,\n"
+      "// review or media site, authority, search engine, social network, Q&A site, help / docs subdomain, course provider or platform is never a\n"
+      "// competitor, whatever it shares; the results pages score the businesses by how many of them each ranks on, weighted by position.\n"
+      "const cmpExcluded = [];\n"
+      "const notBusiness = (d) => { const k = CMP.kindOfHost(d, ours); if (k === 'business') return false; if (k !== 'you' && !cmpExcluded.some(e => e.domain === d)) cmpExcluded.push({ domain: d, kind: k, label: CMP.LABEL[k] || k }); return true; };")
+patch('Pick Competitors', "    if (!d || isOurs(d) || isBig(d)) return;\n    score[d] = (score[d] || 0) + (it.intersections || 0) * 10;",
+      "    if (!d || isOurs(d) || isBig(d) || notBusiness(d)) return;\n    score[d] = (score[d] || 0) + (it.intersections || 0) * 10;")
+patch('Pick Competitors', "  serps.forEach(s => {\n    const items = s.tasks?.[0]?.result?.[0]?.items || [];\n    items.filter(x => x.type === 'organic' && x.rank_group <= 10).forEach(x => {\n      const d = clean(x.domain);\n      if (!d || isOurs(d) || isBig(d)) return;\n      score[d] = (score[d] || 0) + (11 - x.rank_group);\n    });\n  });\n"
+      "  comps = Object.entries(score).sort((a, b) => b[1] - a[1]).slice(0, 3)\n    .map(([d]) => ({ domain: d, shared: shared[d] ?? null, source: 'auto' }));",
+      "  const sel = CMP.select({ serps: serps.map((s, i) => ({ keyword: queries[i] || '', items: (s.tasks?.[0]?.result?.[0]?.items || []).filter(x => x && x.type === 'organic' && Number(x.rank_group) <= 10) })), own_domain: ours, n: 10 });\n"
+      "  const evOf = {};\n"
+      "  for (const c of sel.picked) { const d = c.domain; if (isBig(d)) continue; score[d] = (score[d] || 0) + Math.round(c.score * 10); evOf[d] = c.evidence; }\n"
+      "  for (const e of sel.excluded) if (!cmpExcluded.some(x => x.domain === e.domain)) cmpExcluded.push({ domain: e.domain, kind: e.kind, label: e.label, example: e.example });\n"
+      "  comps = Object.entries(score).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 3)\n"
+      "    .map(([d]) => ({ domain: d, shared: shared[d] ?? null, source: 'auto',\n"
+      "      evidence: [shared[d] ? 'shares ' + shared[d] + ' ranking keywords with you' : '', evOf[d] || ''].filter(Boolean).join('; ') || 'ranks for your keywords' }));")
+patch('Pick Competitors', "  method = labsItems.length ? 'auto-detected from shared rankings and Google results for: ' + queries.join(', ')\n    : 'auto-detected from Google results for: ' + queries.join(', ');",
+      "  method = (labsItems.length ? 'auto-detected from shared rankings and Google results for: ' + queries.join(', ')\n    : 'auto-detected from Google results for: ' + queries.join(', '))\n"
+      "    + (cmpExcluded.length ? '. Passed over: ' + cmpExcluded.slice(0, 6).map(e => e.domain + ' (' + e.label + ')').join(', ') : '');")
+patch('Pick Competitors', "  { json: { domain: ours, is_you: true, shared: null, source: 'you', method, competitors_evidence } },",
+      "  { json: { domain: ours, is_you: true, shared: null, source: 'you', method, competitors_evidence, competitors_excluded: cmpExcluded.slice(0, 20) } },")
+assert 'const CMP = (() => {' in code('Pick Competitors') and 'notBusiness(d)' in code('Pick Competitors') and 'CMP.select(' in code('Pick Competitors'), 'KW-COMP: the full report still picks competitors without the shared rule'
+for _n144 in ('Competitor Keyword Requests', 'Ladder Clusters'):
+    assert 'const CMP = (() => {' in code(_n144) and '/*__COMPETITORS__*/' not in code(_n144) and 'CMP.select(' in code(_n144), _n144 + ': the competitor kit is not inlined (KW-COMP)'
+assert 'Who you compete with on this ladder' in code('Build Ladder Report'), 'KW-COMP: the ladder report does not say who the ladder competes with'
+assert not any('/*__COMPETITORS__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'KW-COMP: competitor kit placeholder left'
+# the kit as a runnable shim for the harness (scenarios_kwcomp.js): { fn, args } in, CMP[fn](...args) out
+open(os.path.join(OUT_CODE, '_competitors_kit.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 144, KW-COMP): the competitor kit - { fn, args } -> CMP[fn](...args)\n"
+    + COMPETITORS_SRC + "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { out: CMP[j.fn](...(j.args || [])) } }; });\n")
+log('One answer to "who is a competitor" (2026-10-21, agent KW-COMP; K6 / A-24 / RV-6): v5/code/_competitors.js classifies a domain (job board, directory, marketplace, review, media, government or free zone, search engine, social, Q&A, help or docs subdomain, course, reference, platform, list of companies) and scores businesses by how many of the run\'s own results pages they rank on, weighted by position, declared competitors first, each pick with its evidence and each exclusion with its kind; used by discovery (the pool grows only from business competitors), the ladder (serp_clusters.competitors + the ladder report) and the full report (Pick Competitors); no new paid call')
+# <<< 144 (KW-COMP)
+
 # =============================================================================
 # 142. NO PAGE BEFORE THE AUTHOR PROFILE AND THE BUSINESS FACTS (2026-10-20, agent P1; real-credit rehearsal docs/REHEARSAL_2026-10-20.md §4
 #      item 1, the owner's decision). A new client launched a ladder with no author profile and no business facts; its first page was written
@@ -11843,6 +11986,425 @@ patch('Normalize Input', "    services_given: KF_SERVICES_GIVEN,", "    services
 assert "d.facts_given ? { business_facts:" in rd('code/Site_Row_Track.js'), 'P1: Track my site does not store the business facts'
 assert "('business_facts', 'string')" in open(os.path.join(HERE0, 'ladder_common.py'), encoding='utf-8').read(), 'P1: seo_sites has no business_facts column'
 log('No page before the author profile and the business facts (2026-10-20, agent P1; rehearsal §4 item 1): v5/code/_readiness.js (name + job title + bio, facts of at least 30 characters; mirrored in app/shared/src/readiness.ts); Ladder Plan keeps the plan and holds its pages (limit profile, nothing spawned or charged); the Content Cadence holds every page it would write and lists it (held_for_profile, preview items held: profile, approvals wait too); Track my site stores business_facts, Site Admin takes action facts, every page run carries the stored facts')
+
+# =============================================================================
+# 143b. THE PAGE CHECK GIVES THE CLIENT THE RIGHT ADVICE (2026-10-21, engine fixer E-QA; paid pre-launch run, techand.ai ladder page
+#      "ai consultant", exec 42; review CONTENT_REVIEW.md C1 / C2 / M1 / M2 / M4 / M5 / M6 / L1-L3, REPORTS_REVIEW.md RV-9 / RV-10 / RV-17,
+#      DRIVER_REPORT.md D5):
+#      * D5 / RV-9: the "page to beat" was usaii.org's certification course, so the client was told to add "Program Fee: US $894" and
+#        "Alumni Speak". CVG.kindOf reads a course / certification / job / marketplace / directory page as 'other' (never a competitor of a
+#        service page, never a stand-in), never takes the keyword's own words as evidence that a page sells the service, and calls a page
+#        nothing classifies 'unknown' instead of 'service'; subtopics come only from a page of the kind being written (Parse Analysis),
+#        without a sales heading (fee, price, alumni, eligibility), without the verdict's skipped topics (Brief Context, before the brief
+#        reads them, and Content QA); with no such page the comparison is said to be impossible, with the results that could not be read.
+#        A subtopic gap is advice when the draft already reaches the term target.
+#      * The advice is an edit by hand: `quality.owner_edits` (each bracket and what to do: fill in or delete; delete a price / duration
+#        bracket when no such facts are on file) and `quality.next_step`, which never offers a paid re-run.
+#      * Placeholder gate: ANY bracket left for the owner in the body keeps the page "not ready to publish" (the app's CMS rule refuses
+#        them all), and a page whose copy passed with only brackets left is final at once (no editor round can fill them in).
+#      * RV-10: a page that is not article-like carries a compact expert line (author, job title, "Updated" date, reviewer) with the Person
+#        and WebPage schema whenever an author profile exists; the readiness rule is unchanged.
+#      * Low: the checklist says the ladder's pages "already link" only when some are live; one secondary-keyword list (the draft's own,
+#        without the ladder's other pages' keywords, also in the brief); image cards with no "..." cut, H3 sections as their points, alt
+#        text from what the card shows (article HTML / Markdown rewritten to match); one page URL in the site's own slash form (schema,
+#        package, ladder plan); serviceType named, areaServed from the profile; og:image height from the hero; no price / duration bracket
+#        asked of a business with no such facts (copywriter + editor prompts); em dashes, "..." and arrows out of the customer text.
+# =============================================================================
+patch('Parse Brief', "// Word count check\nconst totalWords = (brief.outline || []).reduce",
+      "// 5. M1 (2026-10-21, pre-launch run exec 42): a ladder's top page took the keywords of the rung pages planned under it as its own\n"
+      "//    secondary keywords (\"ai consulting\", \"ai consultant dubai\", \"ai consulting firm\"): four pages for one search. A keyword another\n"
+      "//    page of the same ladder (or a hub's cluster page) is written for is taken off the list here, before the copywriter reads it.\n"
+      "const siblingKwPB = new Set([...(prev.ladder_links || []).map(l => l && (l.keyword || l.about)), ...(prev.planned_link_targets || []).map(l => l && (l.keyword || l.about)), ...(prev.hub_pages || []).map(h => h && h.keyword)]\n"
+      "  .map(x => String(x || '').toLowerCase().replace(/\\s+/g, ' ').trim()).filter(x => x && x !== String(prev.keyword || '').toLowerCase().trim()));\n"
+      "if (siblingKwPB.size && Array.isArray(brief.secondary_keywords)) { const offPB = brief.secondary_keywords.filter(k => siblingKwPB.has(String(k || '').toLowerCase().replace(/\\s+/g, ' ').trim()));\n"
+      "  if (offPB.length) { brief.secondary_keywords = brief.secondary_keywords.filter(k => !offPB.includes(k)); adjustments.push('Took ' + offPB.length + ' keyword(s) off the secondary keywords because another page of this ladder is written for each: ' + offPB.join(', ')); } }\n\n"
+      "// Word count check\nconst totalWords = (brief.outline || []).reduce")
+assert 'siblingKwPB' in code('Parse Brief'), 'M1: Parse Brief does not drop the ladder siblings from the secondary keywords'
+assert "const EXC = (() =>" in code('Brief Context') and 'subtopics_excluded' in code('Brief Context') and "author_line" in code('Brief Context'), 'D5 / RV-10: Brief Context does not filter the subtopics or set the author line'
+assert "CVG.isPromo(s, benchKind)" in code('Content QA') and 'benchOffKind' in code('Content QA') and 'body_brackets === 0' in code('Content QA') and 'owner_edits' in code('Content QA'), 'D5 / placeholder gate: Content QA is not wired'
+assert "otherWhy(p, kw)" in code('Parse Analysis') and 'sameKind ? CVG.subtopics(' in code('Parse Analysis'), 'D5: Parse Analysis takes subtopics from another kind of page'
+assert 'compactAuthor' in code('Blog Package') and 'liveLadderLinks' in code('Blog Package') and "'og:image:height': (heroImg" in code('Blog Package'), 'RV-10 / L2 / L3: the package is not wired'
+assert 'card_alt' in code('Image Cards') and 'altSwaps' in code('Attach Images'), 'M6: the card alt text is not wired'
+assert 'qa_next_step' in code('Build Word File') and 'qa_next_step' in code('Build Webhook Response'), 'the next step does not reach the report or the callback'
+assert "pricing_facts === false" in nodes['Copywriter']['parameters']['text'] and "pricing_facts === false" in nodes['Editor']['parameters']['text'], 'M5: the writers are not told there are no price facts'
+for _n143 in ('Content QA', 'Blog Package', 'Originality Check', 'Outbound Link Check', 'Attach Images', 'Image Cards'):
+    _c143 = code(_n143)
+    for _bad143 in ("quality check — not ready", "quality check \\u2014 not ready", "Did not pass \\u2014", "and the other pages of the ladder already link to it", "+ '…'"):
+        assert _bad143 not in _c143, '%s still carries "%s" (owner copy rule, 2026-10-21)' % (_n143, _bad143)
+log('The page check gives the client the right advice (2026-10-21, E-QA; pre-launch exec 42): a course / certification / job / directory page is never the page to beat and its sales headings never subtopics; the verdict\'s skipped topics leave the subtopics before the brief; with no page of the same kind the comparison is said to be impossible; any bracket in the body keeps the page not ready, with each bracket named and what to do (fill in or delete) and a next step that is an edit by hand, never a paid re-run; service pages carry a compact expert line with Person schema when a profile exists; one URL form, one secondary-keyword list, honest image alt text, no em dashes in the QA text')
+
+# =============================================================================
+# 144. THE LADDER READS THE PAGES IT COULD DUPLICATE, AND COMPARES EVERY RUNG WITH THE MAIN KEYWORD'S RESULTS PAGE (2026-10-21, paid run
+#      r04 / DRIVER_REPORT D7). At onboarding the app starts Track my site and the ladder together: the ladder read seo_pages before the
+#      Site Tracker stored a title ("19 of the 19 pages have no title on file yet ... judged by their address only"). And the plan put four
+#      pages on one intent ("ai consultant" + "ai consulting", "ai consultant dubai", "ai consulting firm") because the main keyword's "top 7"
+#      was competitors_summary - the pages the competitor analysis could READ after skipping Reddit / LinkedIn / marketplaces.
+#      * Ladder Title Requests -> Title Read Wanted? -> Read Ladder Titles (free GETs of the client's own pages, at most 8, retry rule) ->
+#        Ladder Titles -> Ladder Plan, on the main path after the relevance screen's count: the untitled pages whose address shares a word
+#        with the main keyword (then the pool, then a services section) are read, their <title> / <h1> join the inventory, and the plan says
+#        what was read and what could not be.
+#      * Ladder Plan compares every rung page AND every member of it with the main keyword's own results page (SERP Top 10 or its retries,
+#        top 7, the rungs' URL rule; competitors_summary only as the fallback) and with every keyword an earlier page claims: >= 3 of 7
+#        shared = a supporting keyword of that page, printed with the count.
+# =============================================================================
+_lp144 = pos('Ladder Plan')
+disconnect('After Count (Ladder Keyword Relevance)', 'Ladder Plan')
+add_node('Ladder Title Requests', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Title_Requests.js')}, [_lp144[0] - 660, _lp144[1] + 420])
+if_node('Title Read Wanted?', '{{ $json.title_check === true }}', [_lp144[0] - 440, _lp144[1] + 420])
+add_node('Read Ladder Titles', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.15)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'timeout': 15000, 'batching': {'batch': {'batchSize': 2, 'batchInterval': 300}}, 'redirect': {'redirect': {'followRedirects': False}},
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [_lp144[0] - 220, _lp144[1] + 340], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
+# KW-LADDER (review 2026-10-21 item 15): no redirect is followed blindly (it went up to 5 hops to any host and gave the final page's title to
+# the client's URL). Ladder Title Hops follows a redirect once, only to the same page on the client's own host (www / bare, a trailing slash);
+# Ladder Titles reports every other redirect as redirected, never titled.
+add_node('Ladder Title Hops', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Title_Hops.js')}, [_lp144[0] - 110, _lp144[1] + 560])
+if_node('Title Hop Wanted?', '{{ $json.hop === true }}', [_lp144[0] + 0, _lp144[1] + 640])
+add_node('Read Ladder Titles (Redirect)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.15)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'timeout': 15000, 'batching': {'batch': {'batchSize': 2, 'batchInterval': 300}}, 'redirect': {'redirect': {'followRedirects': False}},
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [_lp144[0] + 110, _lp144[1] + 560], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
+add_node('Ladder Titles', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Titles.js')}, [_lp144[0], _lp144[1] + 420])
+connect('After Count (Ladder Keyword Relevance)', 'Ladder Title Requests')
+connect('Ladder Title Requests', 'Title Read Wanted?')
+connect('Title Read Wanted?', 'Read Ladder Titles', 0); connect('Title Read Wanted?', 'Ladder Titles', 1)
+connect('Read Ladder Titles', 'Ladder Title Hops'); connect('Ladder Title Hops', 'Title Hop Wanted?')
+connect('Title Hop Wanted?', 'Read Ladder Titles (Redirect)', 0); connect('Title Hop Wanted?', 'Ladder Titles', 1)
+connect('Read Ladder Titles (Redirect)', 'Ladder Titles')
+connect('Ladder Titles', 'Ladder Plan')
+for _n144 in ('Read Ladder Titles', 'Read Ladder Titles (Redirect)'):
+    assert nodes[_n144]['parameters']['options']['redirect']['redirect'] == {'followRedirects': False}, 'KW-LADDER: ' + _n144 + ' follows redirects to any host'
+assert [t['node'] for l in conns['Ladder Titles']['main'] for t in l] == ['Ladder Plan'], 'D7: the title read does not reach Ladder Plan'
+assert 'Ladder Plan' not in [t['node'] for l in conns['After Count (Ladder Keyword Relevance)']['main'] for t in l], 'D7: Ladder Plan still runs before the title read'
+assert "$('Ladder Keyword Relevance').all()" in code('Ladder Plan'), 'D7: Ladder Plan must read the relevance screen by name (its input is the title read now)'
+assert "$('Ladder Titles').first().json.page_titles" in code('Ladder Plan') and 'const SM = (() => {' in code('Ladder Title Requests'), 'D7: the titles read do not reach the plan'
+assert "for (const n of ['SERP Top 10 (Light Retry)', 'SERP Top 10 (Retry)', 'SERP Top 10'])" in code('Ladder Plan') and 'const pairShare = ' in code('Ladder Plan'), \
+    'one search, one page: the rungs are not compared with the main keyword\'s own results page'
+log('The ladder reads the pages it could duplicate and compares every rung with the main keyword\'s results page (2026-10-21, paid run r04, D7): Ladder Title Requests -> Title Read Wanted? -> Read Ladder Titles (at most 8 free GETs of the client\'s own untitled pages that could overlap the plan, retry rule) -> Ladder Titles -> Ladder Plan; the plan judges overlap on the titles read and says what it read; every rung page and member is compared with the main keyword\'s own results page (SERP Top 10 / retries, top 7) and with every keyword an earlier page claims, >= 3 of 7 = a supporting keyword of that page, with the count')
+
+# =============================================================================
+# 145. ONE READING OF A RESULTS PAGE PER SEARCH AND DAY, SHARED BY EVERY PATH (KW-SERP, 2026-10-21, pre-launch run RV-12 / A-21 of
+#      2026-10-17). The research, the ladder and the rank tracker read three different results pages for "ai consultant" on one day, and
+#      two runs three minutes apart said "no AI Overview" and "an AI Overview was seen". v5/code/_serp_cache.js keys a reading by keyword
+#      + location + language + device and keeps the UTC day on the value (one seo_cache row per search, overwritten by the next day's read).
+#      * the verdict / ladder head (SERP Top 10, depth 30 + AI Overview): SERP Cache Key -> Load SERP Cache -> Use SERP Cache ->
+#        SERP Read Today? -> (yes) Cached SERP -> Pick Top 6 | (no) SERP Top 10 as before; after Pick Top 6 the fresh reading is stored
+#        (SERP Cache Row -> New SERP Reading? -> Save SERP Cache -> Restore Top 6), on the main path.
+#      * the ladder's rung reads (depth 10): Ladder Cluster Requests -> Load SERP Cache (Ladder) (one lookup per keyword) -> Ladder SERP
+#        Cache Split (only the keywords not read today are sent; all read = one item down the "nothing to buy" branch) -> Cluster SERP
+#        Wanted? ...; Ladder Clusters puts the readings back in order; Ladder SERP Cache Rows -> New SERP Readings? -> Save SERP Cache
+#        (Ladder) -> Restore Clusters -> Ladder Relevance Chunks.
+#      * the Keyword Check (build_api.py): Load Assess Cache reads the row by key; Assess Requests does not buy a page read today.
+#      A failed read is never stored; a cache hit costs nothing (cost 0, task id `cache:<id>`), so the ledger counts every paid task once.
+# =============================================================================
+_SC145 = 'const SC = (() => {'
+_sk145 = pos('SERP Top 10')
+_par145 = [(s, i) for s, o in conns.items() for i, l in enumerate(o.get('main', [])) for t in (l or []) if t['node'] == 'SERP Top 10']
+assert sorted(s for s, _ in _par145) == ['Collect Client Pages', 'Read Client Pages?'], _par145
+for _s145, _i145 in _par145:
+    conns[_s145]['main'][_i145] = [t for t in conns[_s145]['main'][_i145] if t['node'] != 'SERP Top 10']
+add_node('SERP Cache Key (Top 10)', 'n8n-nodes-base.code', 2, {'jsCode': SERP_CACHE_SRC + """
+// KW-SERP: the keyword run's item passes through with the key of its results page (the request SERP Top 10 sends: depth 30, AI Overview)
+return $input.all().map(i => { const j = i.json || {};
+  const body = { keyword: j.keyword, location_code: j.location_code, language_code: j.language_code || 'en', depth: 30, load_async_ai_overview: true };
+  return { json: { ...j, serp_cache_key: SC.key(body), serp_cache_body: body } }; });"""}, [_sk145[0] - 660, _sk145[1] - 220])
+for _s145, _i145 in _par145:
+    connect(_s145, 'SERP Cache Key (Top 10)', _i145)
+add_node('Load SERP Cache (Top 10)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', "={{ $('SERP Cache Key (Top 10)').first().json.serp_cache_key }}"),
+         [_sk145[0] - 440, _sk145[1] - 220], LOAD18)
+add_node('Use SERP Cache (Top 10)', 'n8n-nodes-base.code', 2, {'jsCode': SERP_CACHE_SRC + """
+// KW-SERP: today's reading of this results page, when one is deep enough and loaded the AI Overview; otherwise SERP Top 10 buys it as before
+const j = $('SERP Cache Key (Top 10)').first().json;
+const rows = $input.all().map(i => i.json).filter(r => r && r.key);
+const L = SC.lookup(rows, j.serp_cache_body);
+return [{ json: { ...j, serp_cache_hit: L.hit === true, serp_cache_why: L.hit ? L.text : L.why, serp_cached: L.hit ? L.response : null } }];"""}, [_sk145[0] - 220, _sk145[1] - 220])
+if_node('SERP Read Today?', '{{ $json.serp_cache_hit === true }}', [_sk145[0], _sk145[1] - 220])
+add_node('Cached SERP (Top 10)', 'n8n-nodes-base.code', 2, {'jsCode': "// KW-SERP: the reading made earlier today, in DataForSEO's own shape (cost 0, task id cache:<id>), so Pick Top 6 and the analysis read it unchanged\nreturn [{ json: $input.first().json.serp_cached }];"},
+         [_sk145[0] + 220, _sk145[1] - 300])
+for a, b in [('SERP Cache Key (Top 10)', 'Load SERP Cache (Top 10)'), ('Load SERP Cache (Top 10)', 'Use SERP Cache (Top 10)'), ('Use SERP Cache (Top 10)', 'SERP Read Today?'),
+             ('Cached SERP (Top 10)', 'Pick Top 6')]:
+    connect(a, b)
+connect('SERP Read Today?', 'Cached SERP (Top 10)', 0); connect('SERP Read Today?', 'SERP Top 10', 1)
+# the readers of the head's answer take today's reading first (RT.chain judges it like any answer; it carries cost 0)
+patch('Analyze Competitor Pages', "  const first0 = (() => { try { return $('SERP Top 10').first().json; } catch (e) { return null; } })();",
+      "  const first0 = (() => { try { return $('Cached SERP (Top 10)').first().json; } catch (e) { try { return $('SERP Top 10').first().json; } catch (e2) { return null; } } })();   // KW-SERP: today's reading first")
+patch('Ladder Plan', "for (const n of ['SERP Top 10 (Light Retry)', 'SERP Top 10 (Retry)', 'SERP Top 10'])",
+      "for (const n of ['SERP Top 10 (Light Retry)', 'SERP Top 10 (Retry)', 'SERP Top 10', 'Cached SERP (Top 10)'])")
+# the fresh reading is stored after Pick Top 6, on the main path (a chain beside it would run last: R17)
+_pt145 = pos('Pick Top 6')
+assert [t['node'] for l in conns['Pick Top 6']['main'] for t in l] == ['Read Competitor Pages'], 'KW-SERP: Pick Top 6 no longer feeds Read Competitor Pages'
+disconnect('Pick Top 6', 'Read Competitor Pages')
+add_node('SERP Cache Row (Top 10)', 'n8n-nodes-base.code', 2, {'jsCode': SERP_CACHE_SRC + """
+// KW-SERP: the attempt that answered (the lighter third one says so: 10 deep, no AI Overview) becomes today's reading; a failed one is never stored
+let k = {}; try { k = $('SERP Cache Key (Top 10)').first().json; } catch (e) { k = {}; }
+const body = k.serp_cache_body || null;
+if (body) for (const [n, b] of [['SERP Top 10 (Light Retry)', { ...body, depth: 10, load_async_ai_overview: false }], ['SERP Top 10 (Retry)', body], ['SERP Top 10', body]]) {
+  let a = null; try { a = $(n).first().json; } catch (e) { a = null; }
+  const r = a ? SC.rowFor(a, b, '') : null;
+  if (r) return [{ json: r }];
+}
+return [{ json: { skip: true } }];"""}, [_pt145[0], _pt145[1] + 200])
+if_node('New SERP Reading?', '{{ !$json.skip }}', [_pt145[0] + 220, _pt145[1] + 200])
+add_node('Save SERP Cache (Top 10)', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [_pt145[0] + 440, _pt145[1] + 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Restore Top 6', 'n8n-nodes-base.code', 2, {'jsCode': "// The run continues with the competitors Pick Top 6 chose (a Data Table upsert outputs the stored row, not the run's items).\nreturn $('Pick Top 6').all().map(i => ({ json: i.json }));"},
+         [_pt145[0] + 660, _pt145[1] + 200])
+connect('Pick Top 6', 'SERP Cache Row (Top 10)'); connect('SERP Cache Row (Top 10)', 'New SERP Reading?')
+connect('New SERP Reading?', 'Save SERP Cache (Top 10)', 0); connect('New SERP Reading?', 'Restore Top 6', 1)
+connect('Save SERP Cache (Top 10)', 'Restore Top 6'); connect('Restore Top 6', 'Read Competitor Pages')
+
+# ---------- the ladder's rung reads ----------
+_lc145 = pos('Ladder Cluster Requests')
+assert [t['node'] for l in conns['Ladder Cluster Requests']['main'] for t in l] == ['Cluster SERP Wanted?'], 'KW-SERP: the cluster requests moved'
+disconnect('Ladder Cluster Requests', 'Cluster SERP Wanted?')
+_ldc145 = dict(LOAD18); _ldc145.pop('executeOnce')   # one lookup per requested keyword
+add_node('Load SERP Cache (Ladder)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', "={{ $json.serp_cache_key || 'serp:none' }}"), [_lc145[0] + 60, _lc145[1] + 200], _ldc145)
+add_node('Ladder SERP Cache Split', 'n8n-nodes-base.code', 2, {'jsCode': SERP_CACHE_SRC + """
+// KW-SERP: only the keywords whose results page was NOT read today go to DataForSEO. When every one was read today, one item takes the
+// "nothing to buy" branch and Ladder Clusters uses the stored readings (cost 0). A skip item (free run, cap 0, too few) passes unchanged.
+const reqs = $('Ladder Cluster Requests').all().map(i => i.json);
+if (!reqs.some(r => r && r.cluster_check)) return reqs.map(j => ({ json: j }));
+const rows = $input.all().map(i => i.json).filter(r => r && r.key);
+const misses = reqs.filter(r => r && r.cluster_check && !SC.lookup(rows, { keyword: r.keyword, location_code: r.location_code, language_code: r.language_code || 'en', depth: 30, load_async_ai_overview: true }).hit);
+if (!misses.length) return [{ json: { cluster_check: false, all_read_today: true, asked: reqs[0].asked, cap: reqs[0].cap } }];
+return misses.map(j => ({ json: j }));"""}, [_lc145[0] + 140, _lc145[1] + 200])
+connect('Ladder Cluster Requests', 'Load SERP Cache (Ladder)'); connect('Load SERP Cache (Ladder)', 'Ladder SERP Cache Split'); connect('Ladder SERP Cache Split', 'Cluster SERP Wanted?')
+_lcl145 = pos('Ladder Clusters')
+assert [t['node'] for l in conns['Ladder Clusters']['main'] for t in l] == ['Ladder Relevance Chunks'], 'KW-SERP: Ladder Clusters no longer feeds the relevance screen'
+disconnect('Ladder Clusters', 'Ladder Relevance Chunks')
+add_node('Ladder SERP Cache Rows', 'n8n-nodes-base.code', 2, {'jsCode': DFS_RETRY_SRC + '\n' + SERP_CACHE_SRC + """
+// KW-SERP: every results page this run bought and read (after the in-200 retry) becomes today's reading for the other paths; failed ones are not stored
+let sent = []; try { sent = $('Ladder SERP Cache Split').all().map(i => i.json).filter(r => r && r.cluster_check); } catch (e) { sent = []; }
+const first = (() => { try { return $('Run Ladder Cluster SERP').all().map(i => i.json); } catch (e) { return []; } })();
+const retryItems = (() => { try { return $('Ladder Cluster Retry').all().map(i => i.json).filter(x => x && x.is_retry); } catch (e) { return []; } })();
+const retryAnswers = (() => { try { return $('Run Ladder Cluster SERP (Retry)').all().map(i => i.json); } catch (e) { return []; } })();
+if (!sent.length || !first.length) return [{ json: { skip: true } }];
+const answers = RT.stats(first, {}, retryItems, retryAnswers).answers || [];
+const byKey = new Map();
+sent.forEach((q, i) => { const r = SC.rowFor(answers[i], { keyword: q.keyword, location_code: q.location_code, language_code: q.language_code || 'en', depth: 30, load_async_ai_overview: true }, ''); if (r) byKey.set(r.key, r); });
+return byKey.size ? [...byKey.values()].map(r => ({ json: r })) : [{ json: { skip: true } }];"""}, [_lcl145[0], _lcl145[1] + 200])
+if_node('New SERP Readings?', '{{ !$json.skip }}', [_lcl145[0] + 220, _lcl145[1] + 200])
+add_node('Save SERP Cache (Ladder)', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [_lcl145[0] + 440, _lcl145[1] + 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Restore Clusters', 'n8n-nodes-base.code', 2, {'jsCode': "// The run continues with the pool item Ladder Clusters made (a Data Table upsert outputs the stored rows, not the run's item).\nreturn [{ json: $('Ladder Clusters').first().json }];"},
+         [_lcl145[0] + 660, _lcl145[1] + 200])
+connect('Ladder Clusters', 'Ladder SERP Cache Rows'); connect('Ladder SERP Cache Rows', 'New SERP Readings?')
+connect('New SERP Readings?', 'Save SERP Cache (Ladder)', 0); connect('New SERP Readings?', 'Restore Clusters', 1)
+connect('Save SERP Cache (Ladder)', 'Restore Clusters'); connect('Restore Clusters', 'Ladder Relevance Chunks')
+# ---------- one request shape (owner decision 2026-10-21): every path asks 30 deep with the AI Overview, so the answer does not depend on
+# which path read the search first. Measured $0.006 for this shape (depth 30, with or without the AI Overview: fixtures_live/fa3_live)
+# against $0.002 for depth 10: +$0.004 a Keyword Check, +$0.096 a ladder at its 24-keyword cap, +$0.064 a discovery at 16 live checks.
+_OLD10 = "depth: 10 }]) }}"
+_NEW30 = "depth: 30, load_async_ai_overview: true }]) }}"
+for _n145b in ('Run Ladder Cluster SERP', 'Run Ladder Cluster SERP (Retry)', 'Candidate SERP', 'Candidate SERP (Retry)'):
+    _jb145 = nodes[_n145b]['parameters']['jsonBody']
+    assert _jb145.count(_OLD10) == 1, 'KW-SERP: ' + _n145b + ' no longer asks 10 deep: ' + _jb145
+    nodes[_n145b]['parameters']['jsonBody'] = _jb145.replace(_OLD10, _NEW30)
+assert nodes['Candidate SERP']['parameters']['jsonBody'] == nodes['Candidate SERP (Retry)']['parameters']['jsonBody'], 'KW-SERP: the research retry must be a byte copy'
+# ---------- the research live checks (Candidate SERP, inside its in-200 gate) ----------
+_view145 = {'name': 'SEO Agent v4 — Audit, Keywords, Verdict & Content', 'nodes': list(nodes.values()), 'connections': conns}
+import ladder_common as _lc145
+_w145 = _lc145.serp_cache_wrap(_view145, 'Candidate SERP', 'Research',
+    "(j) => ({ keyword: j.keyword, location_code: $('Seed List').first().json.location_code, language_code: $('Seed List').first().json.language_code || 'en', depth: 30, load_async_ai_overview: true })",
+    SERP_CACHE_SRC, DFS_RETRY_SRC, 'the live Google results for a candidate keyword', 'search')
+for _nd145 in _view145['nodes']:
+    nodes[_nd145['name']] = _nd145
+assert _w145['dsts'] == ['Build Keyword Strategy'], _w145
+assert "try { return $('SERP Cache Split (Research)').all(); }" in code('Candidate SERP Retry Plan'), 'KW-SERP: the research gate does not pair what was sent'
+# the proof on the graph and in the code
+for _n145 in ('SERP Cache Key (Top 10)', 'Use SERP Cache (Top 10)', 'SERP Cache Row (Top 10)', 'Ladder SERP Cache Split', 'Ladder SERP Cache Rows', 'Ladder Cluster Requests', 'Ladder Clusters'):
+    assert _SC145 in code(_n145) and '/*__' not in code(_n145), 'KW-SERP: ' + _n145 + ' is missing the cache kit'
+assert 'SC.lookup(rows, j.serp_cache_body)' in code('Use SERP Cache (Top 10)') and "$('Ladder SERP Cache Split')" in code('Ladder Cluster Retry'), 'KW-SERP: a path does not look up today\'s reading'
+assert "$('Cached SERP (Top 10)')" in code('Analyze Competitor Pages'), 'KW-SERP: the analysis does not read today\'s reading'
+for _a145, _b145 in (('SERP Read Today?', ['Cached SERP (Top 10)', 'SERP Top 10']), ('Restore Top 6', ['Read Competitor Pages']), ('Restore Clusters', ['Ladder Relevance Chunks'])):
+    assert [t['node'] for l in conns[_a145]['main'] for t in l] == _b145, 'KW-SERP: ' + _a145 + ' wiring'
+# the harness shim: the kit as a node ({ fn, args } -> { r })
+open(os.path.join(OUT_CODE, '_serp_cache.js'), 'w').write("// harness shim (written by build_v4.py section 145): the results-page cache kit, { fn, args } -> { r }\n" + SERP_CACHE_SRC
+    + "\nreturn $input.all().map(i => ({ json: { r: SC[i.json.fn].apply(null, i.json.args || []) } }));\n")
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('One reading of a results page per search and day, shared by every path (KW-SERP, 2026-10-21, RV-12 / A-21): v5/code/_serp_cache.js keys a reading by keyword + location + language + device and keeps the UTC day on the value (seo_cache `serp:<keyword>|<location>|<language>|<device>`, one row per search); the verdict / ladder head (SERP Top 10), the ladder rung reads (Run Ladder Cluster SERP) and the Keyword Check use a reading made earlier today when it is deep enough (and loaded the AI Overview when the path needs it), at no cost, and store every fresh reading; a failed read is never stored; two runs missing at the same moment both pay once (accepted)')
+
+# =============================================================================
+# 146. THE RESEARCH OPENS THE PAGES IT WOULD OFFER TO REFRESH (KWL-RES follow-up, 2026-10-21 live keyword test exec 111). At onboarding
+#      the research runs before the Site Tracker has read any page's status (seo_pages http_status 0), so "already answered by a page you
+#      have: refresh it" pointed at 8 pages that answer 404. Research Status Requests -> Status Read Wanted? -> Read Research Pages (free
+#      GETs of the client's own pages, at most 10, no redirect followed, retry rule) -> Research Status Hops -> Status Hop Wanted? -> Read
+#      Research Pages (Redirect) (once, only to the same page on the client's own host) -> Research Page Status -> Rank Keywords. A gone page
+#      (404 / 410 / soft 404) is gone (its ranking is a head start after a redirect); a page that could not be checked is never "refresh it".
+#      The statuses are not written back to seo_pages here (the weekly Site Tracker owns that table's status columns).
+# =============================================================================
+_rk146 = pos('Rank Keywords')
+disconnect('After Count (Keyword Relevance)', 'Rank Keywords')
+add_node('Research Status Requests', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Research_Status_Requests.js')}, [_rk146[0] - 660, _rk146[1] + 420])
+if_node('Status Read Wanted?', '{{ $json.status_check === true }}', [_rk146[0] - 440, _rk146[1] + 420])
+_hdr146 = {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.15)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]}
+_opt146 = {'timeout': 15000, 'batching': {'batch': {'batchSize': 2, 'batchInterval': 300}}, 'redirect': {'redirect': {'followRedirects': False}},
+           'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}
+add_node('Read Research Pages', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': _hdr146, 'options': json.loads(json.dumps(_opt146))},
+    [_rk146[0] - 220, _rk146[1] + 340], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
+add_node('Research Status Hops', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Research_Status_Hops.js')}, [_rk146[0] - 110, _rk146[1] + 560])
+if_node('Status Hop Wanted?', '{{ $json.hop === true }}', [_rk146[0] + 0, _rk146[1] + 640])
+add_node('Read Research Pages (Redirect)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': _hdr146, 'options': json.loads(json.dumps(_opt146))},
+    [_rk146[0] + 110, _rk146[1] + 560], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
+add_node('Research Page Status', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Research_Page_Status.js')}, [_rk146[0] - 220, _rk146[1] + 220])
+connect('After Count (Keyword Relevance)', 'Research Status Requests')
+connect('Research Status Requests', 'Status Read Wanted?')
+connect('Status Read Wanted?', 'Read Research Pages', 0); connect('Status Read Wanted?', 'Research Page Status', 1)
+connect('Read Research Pages', 'Research Status Hops'); connect('Research Status Hops', 'Status Hop Wanted?')
+connect('Status Hop Wanted?', 'Read Research Pages (Redirect)', 0); connect('Status Hop Wanted?', 'Research Page Status', 1)
+connect('Read Research Pages (Redirect)', 'Research Page Status')
+connect('Research Page Status', 'Rank Keywords')
+for _n146 in ('Read Research Pages', 'Read Research Pages (Redirect)'):
+    assert nodes[_n146]['parameters']['options']['redirect']['redirect'] == {'followRedirects': False}, 'KWL-RES: ' + _n146 + ' follows redirects to any host'
+assert [t['node'] for l in conns['Research Page Status']['main'] for t in l] == ['Rank Keywords'], 'KWL-RES: the status read does not reach Rank Keywords'
+assert 'Rank Keywords' not in [t['node'] for l in conns['After Count (Keyword Relevance)']['main'] for t in l], 'KWL-RES: Rank Keywords still runs before the status read'
+assert "$('Research Page Status').first().json.page_status" in code('Rank Keywords') and 'const SM = (() => {' in code('Research Status Requests') and 'const GONE = (() => {' in code('Research Status Requests'), 'KWL-RES: the statuses read do not reach Rank Keywords'
+assert "$('After Count (Keyword Relevance)').all()" in code('Research Page Status'), 'KWL-RES: the relevance items must pass through to Rank Keywords unchanged'
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('The research opens the pages it would offer to refresh (KWL-RES follow-up, 2026-10-21 live keyword test exec 111): Research Status Requests -> Status Read Wanted? -> Read Research Pages (at most 10 free GETs of the client\'s own pages Search Console or the inventory would offer for a researched keyword, no redirect followed, retry rule) -> Research Status Hops -> Read Research Pages (Redirect) (once, same page on the client\'s host) -> Research Page Status -> Rank Keywords; 404 / 410 / soft 404 = gone (a head start after a redirect), a page that could not be checked is named with the reason and never "refresh it"; not written back to seo_pages')
+
+
+# =============================================================================
+# 146. LINKS TO THE NEW PAGE FROM THE SITE'S OWN LIVE PAGES, AND A LENGTH BAND FROM THE RANKING PAGES OF THE SAME KIND (CT-DEPTH,
+#      2026-10-22; scorecard 2026-10-17 §3.3 C12 / C8).
+#      * C12: Attach PDF Report -> Inbound Candidates (the site model's pages ranked by the new page's topic words, v5/code/_inbound.js)
+#        -> Check Inbound Pages? -> (yes) Fetch Inbound Pages (one plain GET per candidate, the site's own pages, free) -> Inbound Links
+#        (3-5 pages that answered 200, are not noindex and do not link to the new page yet: section, anchor, sentence) -> Blog Package
+#        (meta.json `inbound_links`, the publish checklist line; the callback carries meta). A run without a page passes straight through.
+#      * C8: Parse Analysis sets `length_band` (median + interquartile range of the same-kind ranking pages' word counts inside the page-type
+#        band; fewer than 3 such pages: the page-type band, said so); Parse Brief's guard keeps the brief inside it; the strategy brief names it.
+# =============================================================================
+INBOUND_SRC = _rd0('code/_inbound.js').rstrip('\n')
+rd146 = lambda p: rd(p).replace('/*__INBOUND__*/', INBOUND_SRC)
+_ap146 = pos('Attach PDF Report')
+_t146 = [t['node'] for t in conns['Attach PDF Report']['main'][0]]
+assert _t146 == ['Blog Package'], 'C12: Attach PDF Report wiring changed: %r' % _t146
+add_node('Inbound Candidates', 'n8n-nodes-base.code', 2, {'jsCode': rd146('code/Inbound_Candidates.js')}, [_ap146[0] + 60, _ap146[1] + 320])
+if_node('Check Inbound Pages?', "{{ !$json.skip }}", [_ap146[0] + 240, _ap146[1] + 320])
+add_node('Fetch Inbound Pages', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.15)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'timeout': 20000, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [_ap146[0] + 420, _ap146[1] + 260], {'alwaysOutputData': True, 'onError': 'continueRegularOutput', **retry_lint.RETRY})
+add_node('Inbound Links', 'n8n-nodes-base.code', 2, {'jsCode': rd146('code/Inbound_Links.js')}, [_ap146[0] + 600, _ap146[1] + 320])
+disconnect('Attach PDF Report', 'Blog Package')
+connect('Attach PDF Report', 'Inbound Candidates'); connect('Inbound Candidates', 'Check Inbound Pages?')
+connect('Check Inbound Pages?', 'Fetch Inbound Pages', 0); connect('Check Inbound Pages?', 'Inbound Links', 1)
+connect('Fetch Inbound Pages', 'Inbound Links'); connect('Inbound Links', 'Blog Package')
+for _n146 in ('Inbound Candidates', 'Inbound Links'):
+    assert 'const INB = (() => {' in code(_n146) and '/*__INBOUND__*/' not in code(_n146), _n146 + ': the inbound-link kit is not inlined'
+assert 'const SM = (() => {' in code('Inbound Candidates'), 'Inbound Candidates: the site model kit is not inlined'
+assert 'meta.inbound_links = ' in code('Blog Package'), 'C12: the blog package does not carry the inbound links'
+assert 'const length_band = ' in code('Parse Analysis') and 'analysis.length_band = length_band' in code('Parse Analysis'), 'C8: Parse Analysis sets no length band'
+assert 'const useBand = ' in code('Parse Brief'), 'C8: the brief guard does not read the length band'
+open(os.path.join(OUT_CODE, '_inbound.js'), 'w').write("// harness shim (written by build_v4.py section 146): the inbound-link kit, { fn, args } -> { r }\n" + INBOUND_SRC
+    + "\nreturn $input.all().map(i => ({ json: { r: INB[i.json.fn].apply(null, i.json.args || []) } }));\n")
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('Links to the new page from the site\'s own live pages, and a length band from the ranking pages of the same kind (CT-DEPTH, 2026-10-22; scorecard C12 / C8): Inbound Candidates ranks the site model\'s pages by the new page\'s topic words (v5/code/_inbound.js), Fetch Inbound Pages reads each candidate once (free), Inbound Links keeps 3-5 that answered 200, are not noindex and do not link to the new page yet, each with the section, a varied anchor and a sentence, and the Blog Package puts them in meta.json, the publish checklist and the callback; Parse Analysis sets length_band (median and interquartile range of the same-kind ranking pages, inside the page-type band; under 3 pages the page-type band, said so), Parse Brief keeps the brief inside it and the strategy brief names it; the hub / case-study / local bands live in the file again')
+
+
+# =============================================================================
+# 147. A DUPLICATE LADDER IS REFUSED BEFORE ANYTHING IS PAID FOR (KW-FINAL N2, 2026-10-22; KW recheck exec 152)
+#      The ladder "ai consulting company dubai" was refused as the same search as the ladder "ai consulting dubai" after $0.142 of search
+#      data and $0.138 of Claude. The words half of that rule (v5/code/_ladder_dup.js, LDUP, now also what Ladder Plan's sameSearchLP uses)
+#      runs right after Rate Limit on the site's stored ladders and, for a NEW ladder that matches, sets the input refusal: Input OK? takes
+#      the refused path (ledger row refused, nothing charged, the reason in the callback). The results-page half stays in Ladder Plan.
+# =============================================================================
+assert [t['node'] for lst in conns['Rate Limit']['main'] for t in lst] == ['Input OK?'], 'N2: Rate Limit no longer feeds Input OK? alone'
+_rl147 = pos('Rate Limit')
+_RL_DOM147 = "String($('Rate Limit').first().json.domain || '').toLowerCase().replace(/^www\\./, '')"
+add_node('Load Ladders (Dup Check)', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_TABLE, [('domain', '={{ ' + _RL_DOM147 + ' }}'), ('domain', "={{ 'www.' + " + _RL_DOM147 + " }}")]),
+         [_rl147[0] + 110, _rl147[1] + 260], LOAD18)
+add_node('Load Ladder Settings (Dup Check)', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_SETTINGS_TABLE, [('domain', '={{ ' + _RL_DOM147 + ' }}')]),
+         [_rl147[0] + 330, _rl147[1] + 260], LOAD18)
+add_node('Ladder Duplicate (Words)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Duplicate_Words.js')}, [_rl147[0] + 550, _rl147[1] + 260])
+disconnect('Rate Limit', 'Input OK?')
+connect('Rate Limit', 'Load Ladders (Dup Check)'); connect('Load Ladders (Dup Check)', 'Load Ladder Settings (Dup Check)')
+connect('Load Ladder Settings (Dup Check)', 'Ladder Duplicate (Words)'); connect('Ladder Duplicate (Words)', 'Input OK?')
+# the refused request now comes from the duplicate check (it carries the refusal); Rate Limit's item is the fallback (same fields)
+_ri147 = code('Refused Input')
+assert _ri147.count("return [{ json: $('Rate Limit').first().json }];") == 1, 'N2: Refused Input changed shape'
+nodes['Refused Input']['parameters']['jsCode'] = _ri147.replace("return [{ json: $('Rate Limit').first().json }];",
+    "// N2 (2026-10-22): the item Input OK? judged - the duplicate-ladder check's, which may carry the refusal - else Rate Limit's\n"
+    "let __rq = null; try { __rq = $('Ladder Duplicate (Words)').first().json; } catch (e) {}\n"
+    "return [{ json: __rq || $('Rate Limit').first().json }];")
+for _n147 in ('Ladder Duplicate (Words)', 'Ladder Plan'):
+    assert 'const LDUP = (() => {' in code(_n147) and '/*__LADDER_DUP__*/' not in code(_n147), _n147 + ': the ladder-duplicate kit is not inlined'
+assert 'LDUP.sameWords(ka, kb)' in code('Ladder Plan'), 'N2: Ladder Plan does not use the shared words rule'
+open(os.path.join(OUT_CODE, '_ladder_dup.js'), 'w').write("// harness shim (written by build_v4.py section 147): the ladder-duplicate kit, { fn, args } -> { r }\n"
+    + _rd0('code/_reach.js') + '\n' + _rd0('code/_ladder_dup.js') + "\nreturn $input.all().map(i => ({ json: { r: LDUP[i.json.fn].apply(null, i.json.args || []) } }));\n")
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('A duplicate ladder is refused before anything is paid for (KW-FINAL N2, 2026-10-22): Ladder Duplicate (Words) reads the site\'s stored ladders right after Rate Limit and refuses a NEW ladder whose main keyword is, word for word, another ladder\'s main keyword or planned page (v5/code/_ladder_dup.js, the same rule Ladder Plan applies); the run takes the input-refusal path, nothing is charged, and the results-page half of the rule stays in Ladder Plan')
+
+
+
+# =============================================================================
+# 148. THE PROMISE CHECK IN TWO STAGES, AND THE LIVE PAGE'S OTHER DEFECTS (CT-FIX2, 2026-10-22; paid page run exec 159, PAGE_RUN_REPORT D1-D8)
+#      The rule-based promise check scored 100% / 88% recall offline, then on a fresh live page flagged three true or harmless sentences
+#      and missed three promises: more patterns had stopped helping. Stage 1 (the claims kit, `collect`) lists CANDIDATES with a wide net;
+#      stage 2 is one Claude Haiku call per QA round (*Promise Judge*, HTTP to the Messages API with the Anthropic credential, a forced
+#      tool for the JSON) that judges each candidate against its closest facts. Content QA applies the verdicts; when the call fails the
+#      rules decide and the report says "checked by rules only". The answer carries Anthropic's own token usage, so its cost is MEASURED
+#      and joins the run's Claude figure in the ledger (one call per round, every round summed).
+#        * Promise Candidates (Code) -> Judge Promises? -> (yes) Promise Judge -> Content QA, (no) -> Content QA; the draft passes through
+#          Promise Candidates, which Content QA now reads.
+# =============================================================================
+PJ_SRC148 = _rd0('code/_promise_judge.js').rstrip('\n')
+_kit148 = lambda c: c.replace('/*__PROMISE_JUDGE__*/', PJ_SRC148).replace('/*__CLAIMS__*/', CLAIMS_SRC)
+setcode('Content QA', _kit148(code('Content QA')))
+assert 'const PJ = (() => {' in code('Content QA') and '/*__PROMISE_JUDGE__*/' not in code('Content QA'), 'CT-FIX2: the promise judge kit is not in Content QA'
+_pre148 = sorted({s0 for s0, o in conns.items() for l in (o.get('main') or []) for t in (l or []) if t['node'] == 'Content QA'})
+assert set(_pre148) == {'After Count (Editor)', 'Refresh Sources'}, 'CT-FIX2: Content QA is fed by %r' % _pre148
+_cq148 = pos('Content QA')
+add_node('Promise Candidates', 'n8n-nodes-base.code', 2, {'jsCode': _kit148(rd('code/Promise_Candidates.js'))}, [_cq148[0] - 420, _cq148[1] + 520])
+if_node('Judge Promises?', "{{ !$json.promise_judge.skip }}", [_cq148[0] - 240, _cq148[1] + 520])
+add_node('Promise Judge', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'POST', 'url': 'https://api.anthropic.com/v1/messages',
+    'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'anthropicApi',
+    'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'anthropic-version', 'value': '2023-06-01'}]},
+    'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ $json.promise_judge.body }}',
+    'options': {'timeout': 60000}}, [_cq148[0] - 60, _cq148[1] + 460],
+    dict(credentials=dict(_ANTHROPIC_CRED62), onError='continueRegularOutput', alwaysOutputData=True, **_rl55.RETRY))
+for _p148 in _pre148:
+    disconnect(_p148, 'Content QA'); connect(_p148, 'Promise Candidates')
+connect('Promise Candidates', 'Judge Promises?'); connect('Judge Promises?', 'Promise Judge', 0); connect('Judge Promises?', 'Content QA', 1)
+connect('Promise Judge', 'Content QA')
+assert 'const CL = (() =>' in code('Promise Candidates') and 'const PJ = (() =>' in code('Promise Candidates') and 'const SM = (() =>' in code('Promise Candidates'), 'Promise Candidates: a kit is missing'
+assert "$('Promise Candidates').first().json" in code('Content QA') and "$('Promise Judge').first().json" in code('Content QA') and 'PJ.decide(c, J, CL.backs)' in code('Content QA'), 'CT-FIX2: Content QA does not apply the verdicts'
+assert 'OWN_TEXT = PJ.ownText(prev, SITE_MODEL)' in code('Content QA') and 'PJ.ownText(prev, SITE_MODEL)' in code('Promise Candidates'), 'CT-FIX2: the two nodes read different facts'
+# the judge's measured cost joins the run's Claude figure wherever the content run settles it
+_PJ_COST148 = """// CT-FIX2 (2026-10-22, section 148): the promise judge (Claude Haiku over HTTP, once per QA round). Anthropic reports the tokens of each answer,
+// so this call is MEASURED, every round summed (a run index the node never reached ends the walk).
+{ let inT = 0, outT = 0, n = 0; for (let r = 0; r < 12; r++) { let a = null; try { a = $('Promise Judge').all(0, r); } catch (e) { break; } if (!a || !a.length) break;
+    for (const i of a) { const u = (i && i.json && i.json.usage) || null; if (u && (Number(u.input_tokens) || Number(u.output_tokens))) { inT += Number(u.input_tokens) || 0; outT += Number(u.output_tokens) || 0; n++; } } }
+  if (n) __costCalls.push({ node: 'Promise Judge', model: 'claude-haiku-4-5-20251001', max_tokens: 4000, effort: '', streaming: false, prompt_chars: 0, output_chars: 0, usage: { promptTokens: inT, completionTokens: outT }, calls: n }); }
+"""
+_cost148 = [nm for nm in nodes if 'run_ledger.ai_cost = CC.runCost(__costCalls' in nodes[nm]['parameters'].get('jsCode', '')]
+assert {'Build Word File', 'Run Ledger Settle'} <= set(_cost148), _cost148
+for _n148 in _cost148:
+    nodes[_n148]['parameters']['jsCode'] = code(_n148).replace('run_ledger.ai_cost = CC.runCost(__costCalls', _PJ_COST148 + 'run_ledger.ai_cost = CC.runCost(__costCalls', 1)
+    assert "$('Promise Judge').all(0, r)" in code(_n148), _n148
+# Word report (D7): no em dash, arrow, "..." or curly quote in the text the client reads (tags and attributes untouched)
+_WB148 = "      data: Buffer.from('\\ufeff' + html, 'utf8').toString('base64'),"
+assert code('Build Word File').count(_WB148) == 1, 'CT-FIX2: the Word file body changed shape'
+assert code('Build Word File').count('\nconst html = `<html') == 1, 'CT-FIX2: the Word file html changed shape'
+nodes['Build Word File']['parameters']['jsCode'] = code('Build Word File').replace(_WB148,
+    "      data: Buffer.from('\\ufeff' + __plainWord(html), 'utf8').toString('base64'),").replace('\nconst html = `<html', r"""
+// CT-FIX2 (live page 2026-10-22, D7): the Word report carried 18 em dashes, an arrow and "..." while the page, meta and app were clean. The
+// text between tags is written the way the rest of the product writes: a dash becomes a colon (a comma after the first), an arrow "to",
+// a cut title loses its "...", QA's "[Confirm: ...]" names what goes inside, curly quotes are straight.
+const __plainWord = (h) => String(h).replace(/>([^<]+)</g, (m, t) => { let n = 0;
+  const x = t.replace(/\[Confirm: (?:\.\.\.|…)\]/g, '[Confirm: the sentence]').replace(/\s+—\s+/g, () => (n++ ? ', ' : ': ')).replace(/—/g, '-').replace(/\s*→\s*/g, ' to ')
+    .replace(/\s*(?:\.\.\.|…)(?=\s*$|\s*[)\]])/g, '').replace(/(?:\.\.\.|…)/g, '').replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+  return '>' + x + '<'; });
+const html = `<html""", 1)
+assert '__plainWord(html)' in code('Build Word File') and 'const __plainWord = ' in code('Build Word File'), 'CT-FIX2: the Word text clean-up is not wired'
+open(os.path.join(OUT_CODE, '_promise_judge.js'), 'w').write("// harness shim (written by build_v4.py section 148): the promise judge kit, { fn, args } -> { r }\n" + PJ_SRC148
+    + "\nreturn $input.all().map(i => ({ json: { r: PJ[i.json.fn].apply(null, i.json.args || []) } }));\n")
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('The promise check in two stages (CT-FIX2, 2026-10-22): Promise Candidates lists the sentences in the business\'s name with a wide net (captions, phases on file, list items), Promise Judge (Claude Haiku, one call a QA round, measured usage in the ledger) judges each against its closest facts, Content QA applies the verdicts and falls back to the rules with "checked by rules only"; round N-1\'s reworded promise marks stay promises; the length band of the page type is used; generic citation anchors are re-attached only in their own sentence; inbound anchors avoid the ladder\'s other searches; the Word report has one slug and no dashes, arrows or "..."')
 
 # =============================================================================
 # 9. WRITE

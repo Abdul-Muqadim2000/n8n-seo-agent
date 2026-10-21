@@ -108,6 +108,9 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         business_facts: input.businessFacts || s?.businessFacts || '',
         features,
         receive,
+        // D2 (2026-10-21): what the website sells, so the research judges each keyword's service fit (the setup research runs before Track
+        // my site stores them on the engine's site row). Exact key, after the fuzzy-matched head; absent = the engine keeps its stored list.
+        ...(s?.services?.length ? { services: s.services.slice(0, 30) } : {}),
       };
     }
 
@@ -123,6 +126,8 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         competitors: input.competitors.length ? input.competitors : (s?.competitors ?? []),
         // B5-12 (W3-A): the fix list can weigh problems by GA4 key events when the website's property is known
         ga4_property_id: s?.ga4PropertyId || '',
+        // D2 / RV-13 (2026-10-21): what the website sells, so the full report's keyword suggestions keep to it (exact key, after the head)
+        ...(s?.services?.length ? { services: s.services.slice(0, 30) } : {}),
       };
 
     case 'ladder':

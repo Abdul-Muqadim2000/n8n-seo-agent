@@ -63,7 +63,7 @@ module.exports = async (ctx) => {
       doms[0] === 'cleartax.com' && doms[1] === 'azentio.com' && doms[2] === 'hlbhamt.com', JSON.stringify(doms));
     check('A-24: every competitor says how it was chosen, and the passed-over results say why (job board, directory, list)',
       basis.picked.length === 3 && basis.picked.every(p => p.how) && basis.skipped.some(s => s.domain === 'naukrigulf.com' && s.why === 'job board')
-      && basis.skipped.some(s => s.domain === 'themanifest.com' && /directory/.test(s.why)) && /passed over on that page: naukrigulf\.com — job board/.test(basis.note), JSON.stringify(basis).slice(0, 600));
+      && basis.skipped.some(s => s.domain === 'themanifest.com' && /directory/.test(s.why)) && /Passed over: .*naukrigulf\.com \(job board\)/.test(basis.note), JSON.stringify(basis).slice(0, 600));
     // with no declared competitors the results page alone decides, and still never a job board
     const seedNo = { ...FX.seed764, competitors: [], site_model: { competitors: [] } };
     mock('Seed List', [{ json: seedNo }]);
@@ -221,8 +221,12 @@ module.exports = async (ctx) => {
     check('A-25: "erp systems in uae" (priority #5, no ladder note live) carries one now',
       !!kw('erp systems in uae').ladder_covered, JSON.stringify(kw('erp systems in uae').ladder_covered));
     const p = ks.pipeline_keyword || {};
-    check('A-25: "Where to start" is a search no ladder holds, or it says which ladder it is close to',
-      p.keyword && !p.ladder_covered && (!p.ladder_near || /close to your ladder/.test(p.ladder_note || '')), JSON.stringify({ k: p.keyword, c: p.ladder_covered, n: p.ladder_near, note: p.ladder_note }));
+    // KW-MATCH (K8, 2026-10-21): "cloud solutions" (the pick before) is answered by the live /capabilities/cloud-services ("Cloud Services"), so
+    // it is no longer a page to build first; with no free keyword left the pick may be a held one, and then it must say so (never quietly)
+    check('A-25: "Where to start" is a search no ladder holds, or it says which ladder it is close to, or that it is held and why it was still picked',
+      p.keyword && p.keyword !== 'cloud solutions' && (!p.ladder_covered || /already in your ladder ".+" \(.+\) - picked only because no free keyword qualified/.test(p.ladder_note || ''))
+      && (!p.ladder_near || p.ladder_covered || /close to your ladder/.test(p.ladder_note || '')), JSON.stringify({ k: p.keyword, c: p.ladder_covered, n: p.ladder_near, note: p.ladder_note }));
+    check('K8: "cloud solutions" is answered by the live Cloud Services page, not a page to build', /capabilities\/cloud-services/.test(JSON.stringify(kw('cloud solutions'))), JSON.stringify(kw('cloud solutions')).slice(0, 400));
     const lead = ks.clusters.filter(c => c.tier === 'Now');
     check('A-25: no "Now" topic is a search a ladder holds; a Now topic near a ladder names it',
       lead.every(c => !c.ladder_covered && (!c.ladder_near || /close to your ladder/.test(c.tier_note || ''))) && ks.clusters.some(c => c.primary_keyword === 'erp system dubai' && c.tier === 'Covered'),

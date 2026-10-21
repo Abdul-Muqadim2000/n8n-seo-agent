@@ -225,11 +225,11 @@ const CC = (() => {
     content: 0.04,            // 0.0221 (exec 521) — was 0.08
     verdict: 0.04,            // 0.0221 (exec 486) — was 0.06
     report: 0.04,             // 0.0221 (exec 519)
-    discover: 0.34,           // 0.2552 (exec 518) — was 0.15, below the money
-    ladder: 0.21,             // 0.1162 (exec 495) + 24 results-page calls at $0.002 = 0.1642 — was 0.16 before B2-4 (2026-10-15)
+    discover: 0.40,           // 0.2552 (exec 518) + 16 live checks now 30 deep with the AI Overview (+$0.004 each, KW-SERP 2026-10-21) = 0.3192 — was 0.34
+    ladder: 0.31,             // 0.1162 (exec 495) + 24 results-page calls at $0.006 (30 deep + AI Overview, KW-SERP 2026-10-21) = 0.2602 — was 0.21
     ai_visibility: 0.95,      // 0.7946 (exec 526) — was 0.60, below the money
     backlinks: 0.5,           // 0.3727 (execs 528 / 529)
-    assess: 0.034,            // 0.0254 per check (execs 487-489, $0.0761 for three) — was 0.024, below the money
+    assess: 0.04,             // 0.0254 per check (execs 487-489) + its results page 30 deep with the AI Overview ($0.006, KW-SERP 2026-10-21) = 0.0314 — was 0.034
   };
   const ALPHA = 0.3;          // how fast the rolling figure follows the last settle
   const HEADROOM = 1.25;      // the guard reserves a quarter more than the rolling figure
@@ -656,7 +656,7 @@ if (__crawlQuote > 0) {
 // and the thinking budget of the node's effort level. Every figure here is an ESTIMATE and says so (ai_cost.estimated / .basis), and the
 // per-model correction factors the monthly reconciliation writes into seo_cache are applied before the prices are.
 const __calRows = () => { try { return $('Load Cost Calibration').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) { return []; } };
-const __AI_CALLS = [{"node": "Keyword Seeds", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 1913, "input": "Route Mode", "fields": ["audience", "business", "country", "domain", "goal", "language_name", "site_description"], "from": [], "loop": false, "count_prompt": "Count Prompt (Keyword Seeds)", "count_answer": "Count Answer (Keyword Seeds)", "count_per_item": false, "count_rounds": 1, "model_node": "Anthropic Chat Model"}, {"node": "Competitor Analyzer", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 4953, "input": "Collect Facts", "fields": ["avg_competitor_words", "competitor_digest", "competitor_questions", "competitors_read", "country", "existing_page", "existing_page_facts_text", "existing_page_tables", "existing_page_text", "facts", "goal", "keyword", "language_name", "page_type", "serp_digest", "stats_seen", "term_digest"], "from": [], "loop": false, "count_prompt": "Count Prompt (Competitor Analyzer)", "count_answer": "Count Answer (Competitor Analyzer)", "count_per_item": false, "count_rounds": 1, "model_node": "Claude \u2014 Competitor Analyzer"}, {"node": "Content Reviewer", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 2388, "input": "Build Content Prompt", "fields": ["content_prompt_comp", "content_prompt_our", "country", "domain", "language_name"], "from": [], "loop": false, "count_prompt": "Count Prompt (Content Reviewer)", "count_answer": "Count Answer (Content Reviewer)", "count_per_item": false, "count_rounds": 1, "model_node": "Claude \u2014 Content Reviewer"}, {"node": "Copywriter", "model": "claude-opus-5-5", "max_tokens": 32768, "effort": "medium", "streaming": true, "template_chars": 10487, "input": "Parse Brief", "fields": ["ai_target", "audience", "business", "business_facts", "content_brief", "country", "eeat_context", "existing_page", "existing_page_facts_text", "existing_page_tables", "existing_page_text", "goal", "keyword", "language_name", "page_type", "proof_context", "role_writer", "site_description", "spelling", "tone", "verdict_exclusions", "video_context"], "from": [], "loop": false, "count_prompt": "Count Prompt (Copywriter)", "count_answer": "Count Answer (Copywriter)", "count_rounds": 1, "model_node": "Claude \u2014 Copywriter"}, {"node": "Critic", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 6212, "input": "Copywriter", "fields": ["output"], "from": [["Parse Brief", "audience"], ["Parse Brief", "business_facts"], ["Parse Brief", "case_facts_text"], ["Parse Brief", "content_brief.client_facts"], ["Parse Brief", "content_brief.evidence_plan"], ["Parse Brief", "content_brief.information_gain"], ["Parse Brief", "content_brief.objections"], ["Parse Brief", "content_brief.snippet_targets"], ["Parse Brief", "content_brief.target_audience"], ["Parse Brief", "content_brief.target_word_count"], ["Parse Brief", "content_brief.terms_to_use"], ["Parse Brief", "content_brief.unique_angle"], ["Parse Brief", "goal"], ["Parse Brief", "keyword"], ["Parse Brief", "page_type"], ["Parse Brief", "site_description"]], "loop": false, "count_prompt": "Count Prompt (Critic)", "count_answer": "Count Answer (Critic)", "count_per_item": false, "count_rounds": 1, "model_node": "Claude \u2014 Critic"}, {"node": "Editor", "model": "claude-opus-5-5", "max_tokens": 32768, "effort": "medium", "streaming": true, "template_chars": 6933, "input": "Needs Revision?", "fields": ["content_brief", "content_qa.length_instruction", "content_qa.main_content_words", "content_qa.missing_terms", "content_qa.target_word_count", "content_qa.warnings", "critique", "keyword", "language_name", "output", "spelling"], "from": [], "loop": true, "count_prompt": "Count Prompt (Editor)", "count_answer": "Count Answer (Editor)", "count_rounds": 1, "model_node": "Claude \u2014 Editor"}, {"node": "Keyword Relevance", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "low", "streaming": false, "template_chars": 3052, "input": "Relevance Chunks", "fields": ["audience", "business", "chunk_index", "chunk_size", "chunk_total", "country", "goal", "keywords_text", "other_brands", "services"], "from": [], "loop": false, "count_prompt": "Count Prompt (Keyword Relevance)", "count_answer": "Count Answer (Keyword Relevance)", "count_per_item": true, "count_rounds": 0, "model_node": "Claude \u2014 Keyword Relevance"}, {"node": "Ladder Keyword Relevance", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "low", "streaming": false, "template_chars": 3052, "input": "Ladder Relevance Chunks", "fields": ["audience", "business", "chunk_index", "chunk_size", "chunk_total", "country", "goal", "keywords_text", "other_brands", "services"], "from": [], "loop": false, "count_prompt": "Count Prompt (Ladder Keyword Relevance)", "count_answer": "Count Answer (Ladder Keyword Relevance)", "count_per_item": true, "count_rounds": 0, "model_node": "Claude \u2014 Ladder Relevance"}, {"node": "Site Describer", "model": "claude-haiku-4-5-20251001", "max_tokens": 4096, "effort": "", "streaming": false, "template_chars": 1881, "input": "Site Pages", "fields": ["domain", "page_title", "pages_text", "site_pages", "site_text"], "from": [], "loop": false, "count_prompt": "Count Prompt (Site Describer)", "count_answer": "Count Answer (Site Describer)", "count_per_item": false, "count_rounds": 1, "model_node": "Claude \u2014 Site Describer"}, {"node": "Strategy Brief", "model": "claude-opus-5-5", "max_tokens": 24576, "effort": "medium", "streaming": true, "template_chars": 13292, "input": "Brief Context", "fields": ["ai_target", "angle_rules", "audience", "business", "business_facts", "client_pages", "client_signals", "competitor_analysis", "competitors_summary", "country", "coverage_digest", "cta", "currency", "domain", "eeat_context", "existing_page", "facts", "facts_list", "goal", "internal_link_candidates", "keyword", "keyword_data", "ladder_head", "ladder_links", "ladder_rung", "language_name", "page_notes", "page_type", "planned_link_targets", "proof_context", "recommended_page", "role_brief", "serp_features", "site_description", "spelling", "term_digest", "tone", "verdict", "verdict_exclusions", "verdict_reasons", "verdict_score", "video_context"], "from": [], "loop": false, "count_prompt": "Count Prompt (Strategy Brief)", "count_answer": "Count Answer (Strategy Brief)", "count_rounds": 1, "model_node": "Claude \u2014 Strategy Brief"}, {"node": "Verdict Agent", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 6229, "input": "Merge Keyword Data", "fields": ["audience", "business", "competitor_analysis", "competitors_summary", "country", "domain", "existing_page", "existing_page_facts_text", "goal", "keyword", "keyword_data", "language_name", "own_coverage_text", "page_type", "serp_digest", "site_authority"], "from": [], "loop": false, "count_prompt": "Count Prompt (Verdict Agent)", "count_answer": "Count Answer (Verdict Agent)", "count_per_item": false, "count_rounds": 1, "model_node": "Verdict Chat Model"}];
+const __AI_CALLS = [{"node": "Keyword Seeds", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 1913, "input": "Route Mode", "fields": ["audience", "business", "country", "domain", "goal", "language_name", "site_description"], "from": [], "loop": false, "count_prompt": "Count Prompt (Keyword Seeds)", "count_answer": "Count Answer (Keyword Seeds)", "count_per_item": false, "count_rounds": 1, "model_node": "Anthropic Chat Model"}, {"node": "Competitor Analyzer", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 4953, "input": "Collect Facts", "fields": ["avg_competitor_words", "competitor_digest", "competitor_questions", "competitors_read", "country", "existing_page", "existing_page_facts_text", "existing_page_tables", "existing_page_text", "facts", "goal", "keyword", "language_name", "page_type", "serp_digest", "stats_seen", "term_digest"], "from": [], "loop": false, "count_prompt": "Count Prompt (Competitor Analyzer)", "count_answer": "Count Answer (Competitor Analyzer)", "count_per_item": false, "count_rounds": 1, "model_node": "Claude \u2014 Competitor Analyzer"}, {"node": "Content Reviewer", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 2388, "input": "Build Content Prompt", "fields": ["content_prompt_comp", "content_prompt_our", "country", "domain", "language_name"], "from": [], "loop": false, "count_prompt": "Count Prompt (Content Reviewer)", "count_answer": "Count Answer (Content Reviewer)", "count_per_item": false, "count_rounds": 1, "model_node": "Claude \u2014 Content Reviewer"}, {"node": "Copywriter", "model": "claude-opus-5-5", "max_tokens": 32768, "effort": "medium", "streaming": true, "template_chars": 11251, "input": "Parse Brief", "fields": ["ai_target", "audience", "business", "business_facts", "content_brief", "country", "eeat_context", "existing_page", "existing_page_facts_text", "existing_page_tables", "existing_page_text", "goal", "keyword", "language_name", "page_type", "pricing_facts", "proof_context", "role_writer", "site_description", "spelling", "timeline_facts", "tone", "verdict_exclusions", "video_context"], "from": [], "loop": false, "count_prompt": "Count Prompt (Copywriter)", "count_answer": "Count Answer (Copywriter)", "count_rounds": 1, "model_node": "Claude \u2014 Copywriter"}, {"node": "Critic", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 6212, "input": "Copywriter", "fields": ["output"], "from": [["Parse Brief", "audience"], ["Parse Brief", "business_facts"], ["Parse Brief", "case_facts_text"], ["Parse Brief", "content_brief.client_facts"], ["Parse Brief", "content_brief.evidence_plan"], ["Parse Brief", "content_brief.information_gain"], ["Parse Brief", "content_brief.objections"], ["Parse Brief", "content_brief.snippet_targets"], ["Parse Brief", "content_brief.target_audience"], ["Parse Brief", "content_brief.target_word_count"], ["Parse Brief", "content_brief.terms_to_use"], ["Parse Brief", "content_brief.unique_angle"], ["Parse Brief", "goal"], ["Parse Brief", "keyword"], ["Parse Brief", "page_type"], ["Parse Brief", "site_description"]], "loop": false, "count_prompt": "Count Prompt (Critic)", "count_answer": "Count Answer (Critic)", "count_per_item": false, "count_rounds": 1, "model_node": "Claude \u2014 Critic"}, {"node": "Editor", "model": "claude-opus-5-5", "max_tokens": 32768, "effort": "medium", "streaming": true, "template_chars": 7596, "input": "Needs Revision?", "fields": ["content_brief", "content_qa.length_instruction", "content_qa.main_content_words", "content_qa.missing_terms", "content_qa.target_word_count", "content_qa.warnings", "critique", "keyword", "language_name", "output", "pricing_facts", "spelling", "timeline_facts"], "from": [], "loop": true, "count_prompt": "Count Prompt (Editor)", "count_answer": "Count Answer (Editor)", "count_rounds": 1, "model_node": "Claude \u2014 Editor"}, {"node": "Keyword Relevance", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "low", "streaming": false, "template_chars": 3052, "input": "Relevance Chunks", "fields": ["audience", "business", "chunk_index", "chunk_size", "chunk_total", "country", "goal", "keywords_text", "other_brands", "services"], "from": [], "loop": false, "count_prompt": "Count Prompt (Keyword Relevance)", "count_answer": "Count Answer (Keyword Relevance)", "count_per_item": true, "count_rounds": 0, "model_node": "Claude \u2014 Keyword Relevance"}, {"node": "Ladder Keyword Relevance", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "low", "streaming": false, "template_chars": 3052, "input": "Ladder Relevance Chunks", "fields": ["audience", "business", "chunk_index", "chunk_size", "chunk_total", "country", "goal", "keywords_text", "other_brands", "services"], "from": [], "loop": false, "count_prompt": "Count Prompt (Ladder Keyword Relevance)", "count_answer": "Count Answer (Ladder Keyword Relevance)", "count_per_item": true, "count_rounds": 0, "model_node": "Claude \u2014 Ladder Relevance"}, {"node": "Site Describer", "model": "claude-haiku-4-5-20251001", "max_tokens": 4096, "effort": "", "streaming": false, "template_chars": 1881, "input": "Site Pages", "fields": ["domain", "page_title", "pages_text", "site_pages", "site_text"], "from": [], "loop": false, "count_prompt": "Count Prompt (Site Describer)", "count_answer": "Count Answer (Site Describer)", "count_per_item": false, "count_rounds": 1, "model_node": "Claude \u2014 Site Describer"}, {"node": "Strategy Brief", "model": "claude-opus-5-5", "max_tokens": 24576, "effort": "medium", "streaming": true, "template_chars": 13684, "input": "Brief Context", "fields": ["ai_target", "angle_rules", "audience", "business", "business_facts", "client_pages", "client_signals", "competitor_analysis", "competitors_summary", "country", "coverage_digest", "cta", "currency", "domain", "eeat_context", "existing_page", "facts", "facts_list", "goal", "internal_link_candidates", "keyword", "keyword_data", "ladder_head", "ladder_links", "ladder_rung", "language_name", "page_notes", "page_type", "planned_link_targets", "proof_context", "recommended_page", "role_brief", "serp_features", "site_description", "spelling", "term_digest", "tone", "verdict", "verdict_exclusions", "verdict_reasons", "verdict_score", "video_context"], "from": [], "loop": false, "count_prompt": "Count Prompt (Strategy Brief)", "count_answer": "Count Answer (Strategy Brief)", "count_rounds": 1, "model_node": "Claude \u2014 Strategy Brief"}, {"node": "Verdict Agent", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 6229, "input": "Merge Keyword Data", "fields": ["audience", "business", "competitor_analysis", "competitors_summary", "country", "domain", "existing_page", "existing_page_facts_text", "goal", "keyword", "keyword_data", "language_name", "own_coverage_text", "page_type", "serp_digest", "site_authority"], "from": [], "loop": false, "count_prompt": "Count Prompt (Verdict Agent)", "count_answer": "Count Answer (Verdict Agent)", "count_per_item": false, "count_rounds": 1, "model_node": "Verdict Chat Model"}];
 const __chars = (v) => v == null ? 0 : (typeof v === 'string' ? v.length : JSON.stringify(v).length);
 const __at = (o, p) => String(p).split('.').reduce((v, k) => (v == null ? v : v[k]), o);
 const __jsonOf = (n) => { try { return ($(n).all() || []).map(i => (i && i.json) || {}); } catch (e) { return null; } };
@@ -696,6 +696,11 @@ for (const c of __AI_CALLS) {
   __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
     prompt_chars, output_chars, counted, calls: Math.max(__base104, __runs104), retries: Math.max(0, __runs104 - __base104) });
 }
+// CT-FIX2 (2026-10-22, section 148): the promise judge (Claude Haiku over HTTP, once per QA round). Anthropic reports the tokens of each answer,
+// so this call is MEASURED, every round summed (a run index the node never reached ends the walk).
+{ let inT = 0, outT = 0, n = 0; for (let r = 0; r < 12; r++) { let a = null; try { a = $('Promise Judge').all(0, r); } catch (e) { break; } if (!a || !a.length) break;
+    for (const i of a) { const u = (i && i.json && i.json.usage) || null; if (u && (Number(u.input_tokens) || Number(u.output_tokens))) { inT += Number(u.input_tokens) || 0; outT += Number(u.output_tokens) || 0; n++; } } }
+  if (n) __costCalls.push({ node: 'Promise Judge', model: 'claude-haiku-4-5-20251001', max_tokens: 4000, effort: '', streaming: false, prompt_chars: 0, output_chars: 0, usage: { promptTokens: inT, completionTokens: outT }, calls: n }); }
 run_ledger.ai_cost = CC.runCost(__costCalls, CC.readCal(__calRows()).factors);
 run_ledger.ai_usd = run_ledger.ai_cost.usd;
 run_ledger.ai_cost_estimated = run_ledger.ai_cost.estimated;
@@ -806,13 +811,53 @@ function difficultyForYou(kd, reach, o) {
 // only when that evidence is as strong as the site-wide measurement demands (REACH_CFG.min_top10 keywords in the top 10 with a difficulty).
 // Below that bar the site-wide reach stays and the caller is told WHY, so no plan quietly rests on a number measured on other topics. There
 // is no third direction: absence of on-topic wins is not evidence of inability, so it never invents a penalty of its own.
-const REACH_TOPIC_CFG = { max_examples: 6, max_other: 4 };
+const REACH_TOPIC_CFG = { max_examples: 6, max_other: 4, min_sample: REACH_CFG.min_top10, max_position: 20 };
 // the default on-topic test: half of the head's meaningful words (the shape `_radius.js` RAD.headFit uses; the ladder passes that kit in)
 const reachTopicMatch = (head) => { const h = overlapTokens(head); const need = Math.max(1, Math.ceil(h.length / 2));
   return (kw) => { if (!h.length) return false; const t = overlapTokens(kw); return t.filter(x => h.includes(x)).length >= need; }; };
+// ---- K1 (2026-10-21, KW-MATCH): the topic sample also comes from the site's OWN readings ----
+// On 2026-10-17 and again on 2026-10-21 (r04, "ai consultant") every plan was measured against one site-wide reach of 10 ("method size,
+// sample 0"): the ranked-keyword pull holds nothing for a small site, so reachTopic never had evidence. The site's own Search Console
+// queries (seo_pages, position <= 20) and the rank tracker's readings are that evidence, free. A caller passes them as `gsc` / `tracked`
+// with `kdOf(keyword)` (the difficulty the run already holds for that keyword); a row counts for this topic when it carries the topic's
+// distinctive words (generic and place words left out), and only rows with a known difficulty enter the sample. Below
+// REACH_TOPIC_CFG.min_sample the site-wide reach stays and the note says so, with the sample size.
+const REACH_TOPIC_GENERIC = new Set(['consulting', 'consultant', 'consultancy', 'service', 'services', 'company', 'companies', 'agency', 'firm', 'provider', 'providers', 'solution', 'solutions',
+  'expert', 'experts', 'specialist', 'partner', 'partners', 'best', 'top', 'near', 'me', 'cost', 'price', 'pricing', 'uae', 'dubai', 'abu', 'dhabi', 'sharjah', 'ajman', 'gcc', 'emirates',
+  'saudi', 'arabia', 'ksa', 'riyadh', 'qatar', 'doha', 'oman', 'bahrain', 'kuwait', 'middle', 'east']);
+const reachTopicCore = (head) => overlapTokens(String(head || '').toLowerCase().split(/[^a-z0-9]+/).filter(t => !REACH_TOPIC_GENERIC.has(t)).join(' '));
+const reachTopicDistinct = (head) => { const h = reachTopicCore(head); const need = h.length <= 2 ? h.length : Math.ceil(h.length * 0.6);
+  return (kw) => { if (!h.length) return false; const t = overlapTokens(kw); return t.filter(x => h.includes(x)).length >= need; }; };
+function reachTopicOwn(head, o, site, who) {
+  const opts = o || {}; const min = Number(opts.min_sample) > 0 ? Number(opts.min_sample) : REACH_TOPIC_CFG.min_sample;
+  const on = reachTopicDistinct(head); const kdOf = typeof opts.kdOf === 'function' ? opts.kdOf : () => null;
+  const rows = new Map();
+  const add = (kw, position, kd, source) => { const k = String(kw || '').toLowerCase().trim(); const p = reachNum(position); if (!k || p == null || p < 1 || p > REACH_TOPIC_CFG.max_position || (source !== 'ranked' && !on(k))) return;
+    const d = reachNum(kd) != null ? reachNum(kd) : reachNum(kdOf(k)); const old = rows.get(k);
+    if (!old || p < old.position) rows.set(k, { keyword: k, position: Math.round(p * 10) / 10, kd: d != null ? d : (old ? old.kd : null), source }); else if (old.kd == null && d != null) old.kd = d; };
+  for (const r of (opts.ranked_on || [])) add(r.keyword, r.position, r.kd, 'ranked');
+  for (const r of (Array.isArray(opts.gsc) ? opts.gsc : [])) add(r && (r.query || r.keyword), r && r.position, r && r.kd, 'search_console');
+  for (const r of (Array.isArray(opts.tracked) ? opts.tracked : [])) add(r && r.keyword, r && r.position, r && r.kd, 'rank_tracker');
+  const all = [...rows.values()]; const known = all.filter(r => r.kd != null);
+  const kds = known.map(r => r.kd).sort((a, b) => a - b);
+  let p75 = null;
+  if (kds.length >= min) { const i = REACH_CFG.percentile * (kds.length - 1), lo = Math.floor(i), hi = Math.ceil(i); p75 = Math.round(kds[lo] + (kds[hi] - kds[lo]) * (i - lo)); }
+  const by = (s) => known.filter(r => r.source === s).length;
+  const sources = { search_console: by('search_console'), rank_tracker: by('rank_tracker'), ranked: by('ranked') };
+  const parts = [[sources.search_console, 'from Search Console'], [sources.rank_tracker, 'from the rank tracker'], [sources.ranked, 'from the ranking data']].filter(x => x[0]).map(x => x[0] + ' ' + x[1]);
+  const q = '"' + String(head || '') + '"';
+  const sample_text = known.length + ' of your searches about ' + q + ' rank in the top ' + REACH_TOPIC_CFG.max_position + ' with a known difficulty' + (parts.length ? ' (' + parts.join(', ') + ')' : '')
+    + (all.length > known.length ? '; ' + (all.length - known.length) + ' more rank there with no difficulty on file' : '');
+  const used = p75 != null;
+  const note = used
+    ? 'Measured on this topic: ' + sample_text + ', and 75% of them have a difficulty of ' + p75 + ' or lower, so this plan is measured against ' + p75 + ' and not against the site-wide reach of ' + site + '.'
+    : 'This plan is measured against your site-wide reach (' + site + '), because only ' + sample_text + ', and at least ' + min + ' are needed to measure a reach on one topic. Treat the months and the chance below as the optimistic case.';
+  return { used, p75, sample: known.length, min_sample: min, sources, rows: all.sort((a, b) => a.position - b.position).slice(0, REACH_TOPIC_CFG.max_examples), sample_text, note };
+}
 /**
  * ranked: [{ keyword, kd, position }] — every keyword the site ranks for that this run saw (null = the pull failed)
- * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain, reason_missing }
+ * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain, reason_missing,
+ *   gsc: [{ query, position }] / tracked: [{ keyword, position }] (K1: the site's own readings, top 20), kdOf(keyword) -> kd | null, min_sample }
  * -> { used, reach, topic_reach, site_reach, on_topic, top10, sample, best, examples, other_topics, reason, note }
  */
 function reachTopic(ranked, head, domainReach, o) {
@@ -846,8 +891,15 @@ function reachTopic(ranked, head, domainReach, o) {
       + ' or lower, so this plan is measured against ' + p75 + ' and not against the site-wide reach of ' + site + '.'
     : 'This plan is measured against your site-wide reach (' + site + '), because ' + reason + '. A reach measured on other topics'
       + (other_topics.length ? ' (' + other_topics.map(k => '"' + k + '"').join(', ') + ')' : '') + ' is weaker evidence for this one: treat the months and the chance below as the optimistic case.';
-  return { used, reach: used ? p75 : site, topic_reach: p75, site_reach: site, on_topic: on.length, top10: top10.length, sample: kds.length,
-    best: best ? { keyword: String(best.keyword), position: pos(best) } : null, examples, other_topics, reason, note, head: String(head || '') };
+  const out = { used, reach: used ? p75 : site, topic_reach: p75, site_reach: site, on_topic: on.length, top10: top10.length, sample: kds.length,
+    best: best ? { keyword: String(best.keyword), position: pos(best) } : null, examples, other_topics, reason, note, head: String(head || ''),
+    method: used ? 'topic' : 'site', min_sample: REACH_TOPIC_CFG.min_sample, sample_text: kds.length + ' of your top-10 keywords about ' + q + ' with a known difficulty' };
+  // K1: with the site's own readings (Search Console / rank tracker) the sample is read from them too, and printed
+  if (!Array.isArray(opts.gsc) && !Array.isArray(opts.tracked)) return out;
+  const own = reachTopicOwn(head, { ...opts, ranked_on: top10 }, site, who);
+  return { ...out, used: own.used, reach: own.used ? own.p75 : site, topic_reach: own.p75, sample: own.sample, min_sample: own.min_sample, sources: own.sources,
+    own_rows: own.rows, sample_text: own.sample_text, method: own.used ? 'topic' : 'site', note: own.note,
+    reason: own.used ? out.reason : 'only ' + own.sample_text + ' (at least ' + own.min_sample + ' are needed)' };
 }
 const reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };
 // `measured` (R49): reachMeasured(reach info, position); false = no chance band. Left out, the band stays (a caller with no reach info).
@@ -1034,7 +1086,7 @@ const num = (n) => (n == null || n === '' || isNaN(n)) ? 'N/A' : Number(n).toLoc
 const SHORT = { easy: 'easy for you', reachable: 'reachable', hard: 'hard', very_hard: 'very hard' };   // v4.8: difficulty relative to the site's reach
 const kdLabel = (v) => v == null ? 'N/A' : v + (L.reach != null ? ' · ' + SHORT[difficultyForYou(v, L.reach, {})] : (v < 30 ? ' · easy' : v < 50 ? ' · medium' : v < 70 ? ' · hard' : ' · very hard'));
 const posText = (p) => p ? '#' + p : 'not in top 60';
-const months = (m) => Array.isArray(m) ? (m[0] === m[1] ? 'month ' + m[0] : 'months ' + m[0] + '-' + m[1]) : '—';
+const months = (m) => Array.isArray(m) ? (m[0] === m[1] ? 'month ' + m[0] : 'months ' + m[0] + '-' + m[1]) : '-';
 // R42 (2026-10-16): a ladder run that writes a page while the site already has its limit of written-but-unpublished pages says so, in the
 // owner's words, where the notes are read (the Content Cadence stops at that limit; a ladder run does not, so the pile grows by one).
 // F-A1 / A-12: a plan built with the website's limits (`L.limits`) states them itself, held pages included; this note is for older plans
@@ -1082,11 +1134,11 @@ const orderText = { direct: 'Write the main page first (it is within reach now),
 const mainOnly = L.planned && L.plan_type !== 'direct' && !((L.stats || {}).rung_pages);   // no supporting keywords in the data: the main page is written first
 const orderLine = mainOnly ? 'No supporting keywords were found in the search data for this topic, so the main page is the whole ladder for now and is written first; supporting pages can be added as the site grows.' : orderText;
 const chanceLine = planned && L.chance && L.chance.band === 'unmeasured' ? '<p><b>Estimated chance:</b> ' + esc(L.chance_text || L.chance.label) + '</p>'   // R49: no band printed when the reach rests on no measured ranking
-  : planned && L.chance && L.chance.label ? '<p><b>Estimated chance</b> of reaching the top 10 within ' + esc(L.months) + ' months: <b>' + esc(L.chance.band) + '</b> (' + L.chance.range[0] + '-' + L.chance.range[1] + '%) — ' + esc(REACH_CHANCE_NOTE) + '. ' + esc(reachBaseRateText()) + '</p>' : '';
-const refusedLine = (L.refused_keywords || []).length ? '<p class="small">Left out as other companies\' brands, government or portal searches, or navigational: ' + L.refused_keywords.slice(0, 12).map(x => '"' + esc(x.keyword) + '" (' + esc(x.reason) + ')').join(', ') + (L.refused_keywords.length > 12 ? ' …' : '') + '.</p>' : '';
+  : planned && L.chance && L.chance.label ? '<p><b>Estimated chance</b> of reaching the top 10 within ' + esc(L.months) + ' months: <b>' + esc(L.chance.band) + '</b> (' + L.chance.range[0] + '-' + L.chance.range[1] + '%): ' + esc(REACH_CHANCE_NOTE) + '. ' + esc(reachBaseRateText()) + '</p>' : '';
+const refusedLine = (L.refused_keywords || []).length ? '<p class="small">Left out, each with its reason (another company\'s brand, a government or portal search, a navigational search or a job search): ' + L.refused_keywords.slice(0, 12).map(x => '"' + esc(x.keyword) + '" (' + esc(x.reason) + ')').join(', ') + (L.refused_keywords.length > 12 ? ' and ' + (L.refused_keywords.length - 12) + ' more' : '') + '.</p>' : '';
 const whyPlan = () => h2('Why this plan') + '<p>' + reachText + '</p><p>"' + esc(head.keyword) + '" is <b>' + esc(DIFF[L.difficulty_for_you] || L.difficulty_for_you) + '</b>: ' + diffWhy + '.</p>' +
-  (planned ? '<p><b>' + esc(planName) + ' — about ' + esc(L.months) + ' months.</b> ' + esc(orderLine) + '</p>' + chanceLine : '<div class="note"><b>No ladder planned.</b> ' + esc((L.refusal || {}).message || '') + '</div>') +
-  ((L.excluded_keywords || []).length ? '<p class="small">Left out because another ladder of this site already covers them (one search, one page): ' + L.excluded_keywords.slice(0, 12).map(x => '"' + esc(x.keyword) + '"').join(', ') + (L.excluded_keywords.length > 12 ? ' …' : '') + '.</p>' : '') + refusedLine +
+  (planned ? '<p><b>' + esc(planName) + ': about ' + esc(L.months) + ' months.</b> ' + esc(orderLine) + '</p>' + chanceLine : '<div class="note"><b>No ladder planned.</b> ' + esc((L.refusal || {}).message || '') + '</div>') +
+  ((L.excluded_keywords || []).length ? '<p class="small">Left out because another ladder of this site already covers them (one search, one page): ' + L.excluded_keywords.slice(0, 12).map(x => '"' + esc(x.keyword) + '"').join(', ') + (L.excluded_keywords.length > 12 ? ' and ' + (L.excluded_keywords.length - 12) + ' more' : '') + '.</p>' : '') + refusedLine +
   '<p class="small">Difficulty for your site: easy up to reach + 5 (or you already rank in the top 20), reachable up to reach + 20, hard up to reach + 40, very hard above. Easy → direct plan (2-4 months, estimated chance good), reachable → short ladder (4-8, fair), hard → full ladder (9-15, low), very hard → full ladder as a stretch (slim); a little faster for strong sites. The month ranges follow the 2025 Ahrefs study (' + REACH_BASE_RATE.top10_within_year_pct + '% of new pages reach the top 10 within a year; ' + REACH_BASE_RATE.of_those_within_month_pct + '% of those within a month); the chance bands are uncalibrated estimates until this system has measured its own ladders.</p>';
 // D26: the results page at the time of the check — an observation, not a fact about the query
 const sf = d.serp_features || null;
@@ -1105,20 +1157,20 @@ parts.push(`
 
 // 1. Summary
 parts.push(h2('The plan in one page') + kv([
-  ['Destination keyword', '<b>' + esc(head.keyword) + '</b> — ' + num(head.volume) + ' searches/mo, difficulty ' + kdLabel(head.kd) + (head.cpc != null ? ', CPC ' + String(Math.round(Number(head.cpc) * 100) / 100) : '')],
+  ['Destination keyword', '<b>' + esc(head.keyword) + '</b>: ' + num(head.volume) + ' searches/mo, difficulty ' + kdLabel(head.kd) + (head.cpc != null ? ', CPC ' + String(Math.round(Number(head.cpc) * 100) / 100) : '')],
   ['Is it realistic?', '<span class="' + statusClass + '">' + statusLabel + '</span>' + (f.score != null ? ' (verdict ' + esc(f.verdict) + ', ' + f.score + '/100)' : (f.verdict === 'NOT_CHECKED' ? ' — not scored: the live Google results could not be read in this run, so the competition was never seen' : '')) + scoreAdjNote],
-  ...(L.stretch && (f.alternatives || []).length ? [['Consider first', f.alternatives.map(a => '"' + esc(a) + '"').join(' · ') + ' — realistic alternatives; the full ladder below is a stretch']] : []),
-  ['For your site', '<b>' + esc(DIFF[L.difficulty_for_you] || '—') + '</b> · reach ' + esc(L.reach) + ' · ' + (planned ? esc(planName) + ' · about ' + esc(L.months) + ' months' : 'no ladder planned')],
+  ...(L.stretch && (f.alternatives || []).length ? [['Consider first', f.alternatives.map(a => '"' + esc(a) + '"').join(' · ') + ': realistic alternatives; the full ladder below is a stretch']] : []),
+  ['For your site', '<b>' + esc(DIFF[L.difficulty_for_you] || '-') + '</b> · reach ' + esc(L.reach) + ' · ' + (planned ? esc(planName) + ' · about ' + esc(L.months) + ' months' : 'no ladder planned')],
   ['Where you rank today', (head.your_position ? '#' + head.your_position + ' for the destination keyword' : 'not in the top 60 for the destination keyword') + (st.site_rankings_found ? '; the site ranks for ' + num(st.site_rankings_found) + ' keywords in the top 60' : '')],
   ['The ladder', planned ? num(st.pages_total) + ' pages: ' + rungs.map(r => r.pages.length + ' on rung ' + r.rung).join(', ') + (rungs.length ? ' and' : '') + ' the main page — ' + esc(L.order || '') : 'none — ' + esc((L.refusal || {}).short || ((L.refusal || {}).reason === 'duplicate' ? 'this website already has a ladder for this keyword' : 'not realistic for this site'))],
-  ['Timeline', (L.timeline || []).map(t => esc(t.label) + ': ' + months(t.months)).join(' · ') || '—'],
-  ['Traffic potential', planned ? '~' + num(st.traffic_potential_total) + ' visits/month across the ladder once the pages rank in the top 3' : '—'],
+  ['Timeline', (L.timeline || []).map(t => esc(t.label) + ': ' + months(t.months)).join(' · ') || '-'],
+  ['Traffic potential', planned ? '~' + num(st.traffic_potential_total) + ' visits/month across the ladder once the pages rank in the top 3' : '-'],
   // R1 (2026-10-13): the plan used to call these pages written and promise them as page content before the page run had even started — and a
   // run the day's AI budget refused then left nothing behind but a ladder row saying "writing" (live: execution 500).
   // keyword-first R-K7 (2026-10-19): a Manual ladder writes nothing at start, and its pages wait for the client's OK (never "when the limit clears")
   ['Started now', (L.limits || {}).manual_hold === true ? 'none: this ladder is Manual, so each page waits for your OK (approve it on the Pipeline page or in the weekly "Coming up" plan)'
-    : L.held && (L.held.pages || []).length ? 'none — held by the website\'s limits: ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '. The Content Cadence writes '
-    + (L.held.pages.length === 1 ? 'it' : 'them') + ' when the limit clears.' : (L.write_now || []).length ? (L.write_now || []).map(w => '"' + esc(w.keyword) + '" (rung ' + w.rung + ')').join(', ') + ' — started as its own page run; each arrives as its own report. A run the day\'s AI budget refuses writes nothing and puts the page back to "planned" for the next weekly run.' : 'none'],
+    : L.held && (L.held.pages || []).length ? 'none: held by the website\'s limits: ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '. The Content Cadence writes '
+    + (L.held.pages.length === 1 ? 'it' : 'them') + ' when the limit clears.' : (L.write_now || []).length ? (L.write_now || []).map(w => '"' + esc(w.keyword) + '" (rung ' + w.rung + ')').join(', ') + ': started as its own page run; each arrives as its own report. A run the day\'s AI budget refuses writes nothing and puts the page back to "planned" for the next weekly run.' : 'none'],
   ['Tracking', planned ? 'Positions checked ' + esc((L.tracker || {}).cadence || 'weekly') + '; progress e-mail with the next rung; once the top page holds the top 3 for 4 checks it is checked monthly' : 'nothing to track']
 ]) + ((L.notes || []).filter(n => !(L.refusal && n === L.refusal.message)).length ? '<div class="note">' + L.notes.filter(n => !(L.refusal && n === L.refusal.message)).map(esc).join('<br>') + '</div>' : ''));
 
@@ -1134,7 +1186,7 @@ parts.push(h2('Is the destination realistic?') +
   kv([['Expected visits/month at #1-3', f.expected_visits_top3 != null ? num(f.expected_visits_top3) : 'N/A'], ['Time to rank', f.time_to_rank_months != null ? f.time_to_rank_months + ' months \u2014 the writing model\'s own estimate, not measured; the modelled range and its chance band are in the plan above' : 'not estimated'],
     // B2-5 (2026-10-15): domain diversity is Semrush's fifth ranking factor and it now moves this score - the count is measured, the
     // adjustment is a stated rule, and both are printed here so nobody has to take the number on trust.
-    ...(dv ? [['Who owns the results page', (dv.checked ? '<b>' + num(dv.domains) + ' different site(s)</b> in the top ' + num(dv.results) + ' — ' + esc(dv.band) : 'not known: the results page could not be read')
+    ...(dv ? [['Who owns the results page', (dv.checked ? '<b>' + num(dv.domains) + ' different site(s)</b> in the top ' + num(dv.results) + ': ' + esc(dv.band) : 'not known: the results page could not be read')
       + '<br><span class="small">' + esc(dv.text) + '</span><br><span class="small">' + esc(dv.basis) + '</span>']] : [])]));
 
 // B2-2 (2026-10-15, benchmark area 2): what the site already has on this topic, before the plan's new pages — the inventory the leaders
@@ -1143,7 +1195,7 @@ const cov = ta && ta.coverage ? ta.coverage : null;
 if (cov) {
   const covPages = (cov.pages || []).length
     ? '<table class="ct"><tr><th>Page you already have on this topic</th><th>Title</th></tr>'
-      + cov.pages.map(p => '<tr><td>' + esc(p.url) + '</td><td>' + esc(p.title || '—') + '</td></tr>').join('') + '</table>'
+      + cov.pages.map(p => '<tr><td>' + esc(p.url) + '</td><td>' + esc(p.title || '-') + '</td></tr>').join('') + '</table>'
     : '';
   parts.push(h2('What you already have on this topic') + '<p>' + esc(cov.summary) + '</p>' +
     kv([['Pages on this topic', num(cov.pages_on_site)],
@@ -1156,32 +1208,39 @@ if (cov) {
 // compared. The convention is Keyword Insights' own: the top 7 results at a 40% shared-URL threshold (B2-6).
 if (scl && scl.asked) {
   const clRows = (scl.clusters || []).slice(0, 12).map(c => '<tr><td><b>' + esc(c.head_keyword) + '</b></td><td>' + c.keyword_count + '</td><td>'
-    + esc((c.keywords || []).slice(1).map(k => '"' + k.keyword + '" (' + k.shared_urls + ' shared)').join(', ') || '—') + '</td></tr>').join('');
-  const ncRows = (scl.not_compared || []).slice(0, 10).map(x => '<li>"' + esc(x.keyword) + '" — ' + esc(x.reason) + (x.retried ? ' (asked twice)' : '') + '</li>').join('');
+    + esc((c.keywords || []).slice(1).map(k => '"' + k.keyword + '" (' + k.shared_urls + ' shared)').join(', ') || '-') + '</td></tr>').join('');
+  const ncRows = (scl.not_compared || []).slice(0, 10).map(x => '<li>"' + esc(x.keyword) + '": ' + esc(x.reason) + (x.retried ? ' (asked twice)' : '') + '</li>').join('');
   parts.push(h2('Searches that share a results page') +
     '<p class="small">' + esc(scl.note) + '</p>' +
     (clRows ? '<table class="ct"><tr><th>One page for</th><th>Searches</th><th>Also covers</th></tr>' + clRows + '</table>' : '') +
     kv([['Results pages read', num(scl.compared) + ' of ' + num(scl.asked) + ' asked' + (scl.retried ? ' (' + num(scl.retried) + ' sent again, ' + num(scl.retry_answered) + ' answered)' : '')],
       ['How they were compared', 'the top ' + num(scl.top_n) + ' results, ' + num(scl.min_shared_urls) + ' shared URLs (' + num(scl.min_overlap_pct) + '%)'],
       ['What it cost', '$' + Number(scl.cost_usd || 0).toFixed(4) + '<br><span class="small">' + esc(scl.cost_basis) + '</span>']]) +
-    (ncRows ? '<p class="small"><b>Could not be compared</b> — these keep their own group and nothing was merged on their behalf:</p><ul class="small">' + ncRows + '</ul>' : '') +
+    (ncRows ? '<p class="small"><b>Could not be compared</b>: these keep their own group and nothing was merged on their behalf:</p><ul class="small">' + ncRows + '</ul>' : '') +
     (scl.left_uncompared ? '<p class="small">' + num(scl.left_uncompared) + ' further keyword(s) on this topic were below the cap of ' + num(scl.cap) + ' and were not compared.</p>' : ''));
 } else if (scl && scl.skip_reason) {
   parts.push(h2('Searches that share a results page') + '<p>' + esc(scl.note || scl.skip_reason) + '</p>');
+}
+// KW-COMP (2026-10-21, RV-6): who this ladder competes with, read from the same results pages, with the sites that rank but compete with nobody
+const cmpL = scl && scl.competitors;
+if (cmpL && ((cmpL.picked || []).length || (cmpL.excluded || []).length)) {
+  parts.push(h2('Who you compete with on this ladder') +
+    ((cmpL.picked || []).length ? '<ul>' + cmpL.picked.map(c => '<li><b>' + esc(c.domain) + '</b>: ' + esc(c.evidence) + '</li>').join('') + '</ul>' : '<p>No business ranked often enough on these results pages to count as a competitor.</p>') +
+    '<p class="small">' + esc(cmpL.note) + '</p>');
 }
 
 // 4. The ladder (only when pages were planned)
 if (planned) {
 let ladderHtml = h2('The ladder', true) + '<p class="small">One page per topic. Lower rungs are specific and winnable; each rung links up to the top page. Pages marked "improve" already exist on your site. "Why here" is the data that put the page in this position (B2-3).</p>';
 for (const r of rungs) {
-  ladderHtml += '<h3>' + esc(r.label) + ' — ' + months(r.months) + '</h3>' +
+  ladderHtml += '<h3>' + esc(r.label) + ': ' + months(r.months) + '</h3>' +
     '<table class="ct"><tr><th>#</th><th>Page (primary keyword)</th><th>Supporting keywords</th><th>Grouped by</th><th>Page type</th><th>Searches/mo</th><th>Difficulty</th><th>You today</th><th>Page on site</th></tr>' +
-    r.pages.map(p => '<tr><td>' + p.page_no + '</td><td><b>' + esc(p.keyword) + '</b>' + (p.why ? '<br><span class="small">' + esc(p.why) + '</span>' : '') + '</td><td>' + esc((p.supporting || []).join(', ') || '—') + '</td><td>' + esc(p.grouped_by || 'topic label') + '</td><td>' + esc(p.page_type) + '</td><td>' + num(p.total_volume) + '</td><td>' + kdLabel(p.kd) + '</td><td>' + esc(posText(p.your_position)) + '</td><td>' + (p.exists ? '<span class="ok">improve</span><br><span class="small">' + esc(p.target_url) + '</span>' : 'new<br><span class="small">' + esc(p.target_url) + '</span>') + '</td></tr>').join('') + '</table>';
+    r.pages.map(p => '<tr><td>' + p.page_no + '</td><td><b>' + esc(p.keyword) + '</b>' + (p.why ? '<br><span class="small">' + esc(p.why) + '</span>' : '') + '</td><td>' + esc((p.supporting || []).join(', ') || '-') + '</td><td>' + esc(p.grouped_by || 'topic label') + '</td><td>' + esc(p.page_type) + '</td><td>' + num(p.total_volume) + '</td><td>' + kdLabel(p.kd) + '</td><td>' + esc(posText(p.your_position)) + '</td><td>' + (p.exists ? '<span class="ok">improve</span><br><span class="small">' + esc(p.target_url) + '</span>' : 'new<br><span class="small">' + esc(p.target_url) + '</span>') + '</td></tr>').join('') + '</table>';
 }
-ladderHtml += '<h3>Top — ' + esc(top.keyword) + ' — ' + months(top.months) + '</h3>' + kv([
+ladderHtml += '<h3>Top: ' + esc(top.keyword) + ': ' + months(top.months) + '</h3>' + kv([
   ['Page', (top.exists ? '<span class="ok">improve</span> ' : 'new ') + esc(top.target_url)],
-  ['Page type', esc(top.page_type)], ['Supporting keywords', esc((top.supporting || []).join(', ') || '—') + (top.grouped_by ? '<br><span class="small">Grouped by ' + esc(top.grouped_by) + '</span>' : '')],   // A-10
-  ['Searches/mo · difficulty', num(top.volume) + ' · ' + kdLabel(top.kd)], ['You today', esc(posText(top.your_position))], ['When', L.plan_type === 'direct' || mainOnly ? 'written first — ' + months(top.months) : months(top.months)],
+  ['Page type', esc(top.page_type)], ['Supporting keywords', esc((top.supporting || []).join(', ') || '-') + (top.grouped_by ? '<br><span class="small">Grouped by ' + esc(top.grouped_by) + '</span>' : '')],   // A-10
+  ['Searches/mo · difficulty', num(top.volume) + ' · ' + kdLabel(top.kd)], ['You today', esc(posText(top.your_position))], ['When', L.plan_type === 'direct' || mainOnly ? 'written first: ' + months(top.months) : months(top.months)],
   ...(top.why ? [['Why here', esc(top.why)]] : [])   // B2-3
 ]);
 parts.push(ladderHtml);
@@ -1203,7 +1262,7 @@ parts.push(h2('Internal link map') + '<p class="small">Every rung page links up 
 // 6. Write now
 parts.push(h2('Pages written now') + ((L.write_now || []).length ? '<table class="ct"><tr><th>#</th><th>Keyword</th><th>Page type</th><th>URL</th><th>Links to</th></tr>' +
   L.write_now.map(w => '<tr><td>' + w.page_no + '</td><td><b>' + esc(w.keyword) + '</b></td><td>' + esc(w.page_type) + '</td><td>' + esc(w.target_url) + (w.exists ? ' (improve)' : ' (new)') + '</td><td>' + esc((w.links_to || []).map(x => x.keyword).join(', ')) + '</td></tr>').join('') + '</table>' +
-  '<p>Each page runs through the full content pipeline (competitor analysis, verified facts, brief, copywriter, critic, QA, editor) and arrives as its own PDF and Word file' + (d.email ? ' at ' + esc(d.email) : '') + '. Publish it at the URL above, then the weekly tracker measures the climb.</p>' : (L.held && (L.held.pages || []).length ? '<p><b>Held, not written:</b> ' + L.held.pages.map(w => '"' + esc(w.keyword) + '"').join(', ') + ' — ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '.</p><p class="small">' + esc((L.limits || {}).text || '') + '</p>' : '<p>No pages requested now.</p>')));
+  '<p>Each page runs through the full content pipeline (competitor analysis, verified facts, brief, copywriter, critic, QA, editor) and arrives as its own PDF and Word file' + (d.email ? ' at ' + esc(d.email) : '') + '. Publish it at the URL above, then the weekly tracker measures the climb.</p>' : (L.held && (L.held.pages || []).length ? '<p><b>Held, not written:</b> ' + L.held.pages.map(w => '"' + esc(w.keyword) + '"').join(', ') + ': ' + esc((L.held.why || []).map(w => w.text).join('; and ')) + '.</p><p class="small">' + esc((L.limits || {}).text || '') + '</p>' : '<p>No pages requested now.</p>')));
 
 // 7. Requirements
 parts.push(h2('What else is needed') + '<table class="ct"><tr><th>Item</th><th>Detail</th></tr>' + (L.requirements || []).map(r => '<tr><td><b>' + esc(r.item) + '</b></td><td>' + esc(r.detail) + '</td></tr>').join('') + '</table>');
@@ -1217,21 +1276,21 @@ parts.push(h2('Tracking and next rungs') + '<p>The ladder is registered for ' + 
 if ((L.later || []).length) parts.push(h2(planned ? 'Keywords for later (difficulty above ' + (Number(L.reach) + 30) + ', or beyond this plan\'s pages)' : 'Keywords found around the main keyword') + '<table class="ct"><tr><th>Keyword</th><th>Searches/mo</th><th>Difficulty</th></tr>' + L.later.map(k => '<tr><td>' + esc(k.keyword) + '</td><td>' + num(k.volume) + '</td><td>' + kdLabel(k.kd) + '</td></tr>').join('') + '</table>');
 
 // 10. Method
-parts.push(h2('How this was built') + '<p class="small">' + num(st.pool_size) + ' keywords were pulled around the head term (long-tail suggestions, related searches, keyword ideas for the head term and your services, and the keywords your site already ranks for). ' + num(st.ai_reviewed) + ' were screened by AI for topical relevance to the head term; ' + num(st.relevant) + ' survived. Rungs follow difficulty relative to your reach (' + esc(L.reach) + '): rung 1 up to the reach (long-tail, 20+ searches), rung 2 up to reach + 15, rung 3 up to reach + 30, the head term on top; keywords other ladders of this site already cover are left out. One page per topic cluster, 2-4 pages per rung; a direct plan keeps 2-3 supporting pages, a short ladder 3-5. Traffic potential = searches after SERP-feature click loss × a top-3 click share. Positions and metrics from DataForSEO for ' + esc(L.country) + '.' + ((st.research_failures || []).length ? ' Some data pulls failed: ' + esc(st.research_failures.join('; ')) + '.' : '') + '</p>');
+parts.push(h2('How this was built') + '<p class="small">' + num(st.pool_size) + ' keywords were pulled around the head term (long-tail suggestions, related searches, keyword ideas for the head term and your services, and the keywords your site already ranks for). ' + num(st.ai_reviewed) + ' were screened by AI for topical relevance to the head term; ' + num(st.relevant) + ' survived. Rungs follow difficulty relative to your reach (' + esc(L.reach) + '): rung 1 up to the reach (long-tail, 20+ searches), rung 2 up to reach + 15, rung 3 up to reach + 30, the head term on top; keywords other ladders of this site already cover are left out. One page per topic cluster, 2-4 pages per rung; a direct plan keeps 2-3 supporting pages, a short ladder 3-5. Traffic potential = searches after the click loss to Google\'s own answers × a top-3 click share. Positions and metrics from our search data for ' + esc(L.country) + '.' + ((st.research_failures || []).length ? ' Some data pulls failed: ' + esc(st.research_failures.join('; ')) + '.' : '') + '</p>');
 
 // G29 (2026-10-13, FIX_PLAN): the same plan with every figure's source, period and sample, as a table and as structured fields
 const lineage = [
   LN.of('Searches per month and difficulty', 'kwdata', { basis: 'estimated', period: 'the provider\'s latest 12-month average', sample: LN.sample(st.pool_size, 'keywords pulled'),
     note: 'a provider estimate for ' + String(L.country || '') + ', not a measurement of your site; a single keyword\'s volume can be well off' }),
   LN.of('Traffic potential per page', 'model', { basis: 'modelled', period: 'per month, once the page ranks', sample: LN.sample((L.rungs || []).length, 'rungs planned'),
-    note: 'searches after results-page click loss × a top-3 click share — modelled, never measured clicks' }),
+    note: 'searches after results-page click loss × a top-3 click share: modelled, never measured clicks' }),
   LN.of('Difficulty for your site and the plan type', 'model', { basis: 'modelled', period: LN.asOf(today), sample: 'your site\'s reach ' + String(L.reach == null ? 'unknown' : L.reach),
     note: 'your reach against each keyword\'s difficulty; the month ranges and chances are modelled from published base rates, not from your own history yet' }),
   LN.of('Who ranks now and which results-page features show', 'serp', { basis: 'one_sample', period: LN.asOf(today), sample: LN.sample((d.live_checks && d.live_checks.done) || (L.rungs || []).length, 'keywords checked live on Google'),
     note: 'one results page per keyword at one moment, from ' + String(L.country || 'the chosen country') }),
 ];
 parts.push(h2('Where these numbers come from') + '<table class="ct"><tr><th>Figure</th><th>Source</th><th>Period</th><th>Sample</th><th>How it was arrived at</th></tr>'
-  + lineage.map(l => '<tr><td>' + esc(l.figure) + '</td><td>' + esc(l.source_label) + '</td><td>' + esc(l.period || '—') + '</td><td>' + esc(l.sample || '—') + '</td><td>' + esc([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+  + lineage.map(l => '<tr><td>' + esc(l.figure) + '</td><td>' + esc(l.source_label) + '</td><td>' + esc(l.period || '-') + '</td><td>' + esc(l.sample || '-') + '</td><td>' + esc([l.basis_label, l.note].filter(Boolean).join(': ')) + '</td></tr>').join('')
   + '</table><p class="small">A figure marked "modelled, not measured" is computed, not counted.</p>');
 
 const css = `
@@ -1257,7 +1316,7 @@ p { margin: 0 0 9px; }
 .small { font-size: 9pt; color: #64748B; }
 .pb { page-break-before: always; }`;
 const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8"><title>${esc(head.keyword)} — Keyword Ladder Plan</title>
+<head><meta charset="utf-8"><title>${esc(head.keyword)}: Keyword Ladder Plan</title>
 <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
 <style>${css}</style></head>
 <body>${parts.join('\n')}</body></html>`;

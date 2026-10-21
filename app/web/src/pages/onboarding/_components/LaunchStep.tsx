@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CalendarClock, Receipt, ShieldAlert } from 'lucide-react';
-import { AI_ENGINES, AUTOPILOT_LEVELS, autopilotMonthlyUsd, autopilotRows, contentReadiness, formatCredits, GOALS, MONITOR_COSTS, type Run } from '@seo/shared';
+import { AI_ENGINES, AUTOPILOT_LEVELS, autopilotMonthlyUsd, autopilotRows, contentReadiness, firstCycleChecksUsd, formatCredits, GOALS, type Run } from '@seo/shared';
 import { useEngineCal } from '@/lib/engine-cal';
 import { runCost } from '@/lib/prices';
 import { creditsLabel, quoteCredits, quoteLabel } from '@/lib/credits';
@@ -64,12 +64,11 @@ export function LaunchStep() {
   const weekday = siteWeekdayName(site) ?? todayWeekdayName();
   // credits (app/docs/CREDITS.md): the schedules' month from the same rows as the settings card and the Credits page (autopilotRows)
   const monthly = autopilotMonthlyUsd(m, plan.blogsPerWeek, { level, writing });
-  // today: "Track my site" (the first report) and the first cycle's checks, which start at once (cycle 0 is also the website's monthly
-  // cycle, so the monthly audit runs in it); the cycle's checks are autopilot spend, shown as an estimate
+  // today: the first cycle's checks, which start at once (cycle 0 is also the website's monthly cycle, so the monthly audit runs in it),
+  // with the first weekly site report that "Track my site" starts (D3, 2026-10-21: autopilot spend, it was left out of this figure);
+  // the cycle's checks are autopilot spend, shown as an estimate
   const rows = autopilotRows(m, plan.blogsPerWeek, { level, writing });
-  const firstChecksUsd = rows
-    .filter((r) => r.on && r.id !== 'blog_posts' && r.id !== 'research' && r.id !== 'site_report')
-    .reduce((t, r) => t + (r.id === 'audit' ? r.usd : r.usd / MONITOR_COSTS.weeksPerMonth), 0);
+  const firstChecksUsd = firstCycleChecksUsd(rows);
   // a ladder start: its plan and, for "Write a page each week", the first page today; "Ask me before each page" writes nothing at start
   // P1 (2026-10-20, rehearsal §4 item 1): the first page waits for the author profile and the business facts (the engine holds it and the
   // run is quoted for the plan alone), so without them today's start is the plan only

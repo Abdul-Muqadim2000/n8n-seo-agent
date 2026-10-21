@@ -357,6 +357,8 @@ export const MONITOR_COSTS = {
   /** v4.13 (LINK_BUILDER_SPEC.md §8): the sequence writer (≤ 10 a week) ≈ $0.25, competitors' broken backlinks ≈ $0.07, replies ≈ $0.001 each; the rest is free */
   linkBuilderMonthly: 0.35,
   siteTrackerMonthly: 4 * 0.03,
+  /** the weekly rank check of a website's keyword ladders (the Pipeline's figure since v4.8; one forecast row, shared/src/autopilot.ts) */
+  rankTrackerMonthly: 0.1,
   /** the monthly technical audit and each written page are ordinary runs: priced from the one table, never a second copy */
   auditMonthly: modeCostUsd('audit'),
   blogPostEach: modeCostUsd('keyword'),

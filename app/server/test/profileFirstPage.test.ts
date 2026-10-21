@@ -141,6 +141,9 @@ describe('the first page waits for the author profile and the business facts (re
     // ---- 3. the client saves the business facts: they reach the engine's site row at once (Site Admin `facts`) ----
     const patched = await u.c.patch(base, { businessFacts: FACTS });
     expect(patched.status).toBe(200);
+    // D1 (2026-10-21): a PATCH with the facts alone keeps everything else the website stores
+    expect(patched.body).toMatchObject({ business: 'CRM implementation for sales teams', businessFacts: FACTS, timezone: 'Asia/Dubai' });
+    expect((await db.query.sites.findFirst({ where: eq(schema.sites.id, site.id) }))!.business).toBe('CRM implementation for sales teams');
     expect(t.admin.at(-1)).toMatchObject({ action: 'facts', site_id: SID, domain: DOMAIN, business_facts: FACTS });
     expect(t.tables.sites[0].business_facts).toBe(FACTS);
     // only the profile is missing now
@@ -175,7 +178,7 @@ describe('the first page waits for the author profile and the business facts (re
     expect(t.starts.at(-1)).toMatchObject({ mode: 'track', business_facts: FACTS });
   });
 
-  it('a Manual ladder start is not changed (it writes nothing at start anyway), and unchanged facts send nothing to the engine', async () => {
+  it('a Manual ladder start is quoted for the plan alone (it writes nothing at start), and unchanged facts send nothing to the engine', async () => {
     const u = await signUp(app, 'owner2@p1.test');
     await db.update(schema.users).set({ emailVerifiedAt: new Date() }).where(eq(schema.users.email, 'owner2@p1.test'));
     const org = (await u.c.post('/api/orgs', { name: 'P1 Two' })).body as { id: string };
@@ -184,8 +187,19 @@ describe('the first page waits for the author profile and the business facts (re
       .insert(schema.sites)
       .values({ orgId: org.id, domain: 'manual-p1.com', country: 'United States', businessFacts: FACTS, verificationToken: 't', verifiedAt: new Date(Date.now() - 5 * DAY), trackingStatus: 'active' })
       .returning();
-    const r = await u.c.post(`/api/orgs/${org.id}/runs`, { mode: 'ladder', siteId: site.id, keyword: 'crm consulting', country: 'United States', ladderMode: 'manual' });
-    expect(((await db.query.runs.findFirst({ where: eq(schema.runs.id, r.body.id) }))!.input as Record<string, unknown>).pagesHeld).toBeUndefined();
+    // KW-APP D8 (2026-10-21, live run): a Manual ladder that writes nothing was quoted 99 credits (plan + the page) and charged 23.73
+    const planOnly = estimateRunCost('ladder', { pagesNow: 1, pagesHeld: 'manual' }, null);
+    expect(planOnly).toBeLessThan(estimateRunCost('ladder', { pagesNow: 1 }, null));
+    expect(planOnly).toBeCloseTo(estimateRunCost('ladder', { pagesNow: 3, ladderMode: 'manual' }, null), 6);
+    const r = await u.c.post(`/api/orgs/${org.id}/runs`, { mode: 'ladder', siteId: site.id, keyword: 'crm consulting', country: 'United States', pagesNow: 1, ladderMode: 'manual' });
+    const run = (await db.query.runs.findFirst({ where: eq(schema.runs.id, r.body.id) }))!;
+    expect([(run.input as Record<string, unknown>).pagesHeld, run.estimatedCostUsd]).toEqual(['manual', planOnly]);
+    // no mode asked for: the website's default decides, as the engine's does (Ladder_Plan.js ownMode)
+    t.tables.ladderSettings = [{ ladder_id: '_site', site_id: n8nSiteId('manual-p1.com'), domain: 'manual-p1.com', mode: 'manual' }];
+    const r2 = await u.c.post(`/api/orgs/${org.id}/runs`, { mode: 'ladder', siteId: site.id, keyword: 'crm advisory', country: 'United States', pagesNow: 1 });
+    const run2 = (await db.query.runs.findFirst({ where: eq(schema.runs.id, r2.body.id) }))!;
+    expect([(run2.input as Record<string, unknown>).pagesHeld, run2.estimatedCostUsd]).toEqual(['manual', planOnly]);
+    t.tables.ladderSettings = [];
     await u.c.patch(`/api/orgs/${org.id}/sites/${site.id}`, { businessFacts: FACTS });
     expect(t.admin).toEqual([]);
   });

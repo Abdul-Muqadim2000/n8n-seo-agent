@@ -110,20 +110,24 @@ if (failing) {
   const who = failing.kind === 'competitor' ? 'the competitor page ' + failing.source : 'this site\'s own page ' + failing.source;
   warnings.push('Originality: ' + failing.overlap_pct + '% of this draft is word for word the same as ' + who
     + ' (limit ' + THRESHOLD + '%; longest identical run ' + failing.longest_passage_words + ' words'
-    + (p ? ': "' + p.text + '"' : '') + ') — rewrite those passages in our own words and from our own angle'
+    + (p ? ': "' + p.text + '"' : '') + '). Rewrite those passages in our own words and from our own angle'
     + (failing.kind === 'competitor' ? '; never reuse a competitor\'s sentences, lists or table rows.'
-      : '; two pages of the same site with the same text compete with each other — either make this page clearly different or improve that page instead.'));
+      : '; two pages of the same site with the same text compete with each other: either make this page clearly different or improve that page instead.'));
 }
 for (const m of measured.filter(x => x.kind !== 'improved' && x !== failing && x.overlap_pct > THRESHOLD * 0.67).slice(0, 2)) {
   warnings.push('Originality: ' + m.overlap_pct + '% of this draft also appears on ' + m.source + ' (under the ' + THRESHOLD + '% limit, worth a read before publishing)');
 }
 if (duplicate_targets.length) {
   warnings.push('This site already has a page aimed at the same search: ' + duplicate_targets.map(x => x.url).join(', ')
-    + ' — improve that page instead of publishing a second one, or make clear in the brief how this page is different (its text could not be compared: it was not read in this run)');
+    + '. Improve that page instead of publishing a second one, or make clear in the brief how this page is different (its text could not be compared: it was not read in this run)');
 }
 
 qa.originality = originality;
 qa.warnings = warnings;
+// CT-FIX (review item 14): the next step said "Then publish it." beside the warning that the site already has a page for this search.
+if (duplicate_targets.length && qa.quality && typeof qa.quality === 'object' && /Then publish it\./.test(String(qa.quality.next_step || ''))) {
+  qa.quality = { ...qa.quality, next_step: String(qa.quality.next_step).replace('Then publish it.', 'Then, rather than publishing a second page for the same search, use it to improve ' + duplicate_targets[0].url + ' (or say in the brief how this page differs).') };
+}
 if (failing) {
   qa.passed = false;
   qa.passed_copy = false;
@@ -140,12 +144,15 @@ if (failing) {
   qa.publishable = false;
   qa.not_ready = !roundsLeft;
   qa.quality_label = roundsLeft ? 'needs another editing round before it can be published'
-    : 'did not pass the quality check — not ready to publish';
+    : 'did not pass the quality check, so it is not ready to publish';
   qa.not_ready_reasons = !roundsLeft
     ? [reason, ...(Array.isArray(qa.not_ready_reasons) ? qa.not_ready_reasons : [])].filter((x, i, a) => x && a.indexOf(x) === i).slice(0, 6)
     : (Array.isArray(qa.not_ready_reasons) ? qa.not_ready_reasons : []);
   qa.quality = { ...(qa.quality && typeof qa.quality === 'object' ? qa.quality : {}),
     passed: false, publishable: false, not_ready: qa.not_ready, label: qa.quality_label, reasons: qa.not_ready_reasons,
+    // 2026-10-21: what to do is an edit by hand, never a paid re-run (Content QA's next_step, with the repeated passages first)
+    next_step: roundsLeft ? '' : 'Finish this draft by hand: rewrite the passages it repeats from ' + failing.source + ' in your own words' + ((qa.quality || {}).next_step ? ', and ' + String(qa.quality.next_step).replace(/^Finish this draft by hand:\s*/, '') : '. Then publish it. You do not need a new run for these edits: a new run writes a whole new page and is charged again.'),
+    fix_by: roundsLeft ? '' : 'edit',
     note: roundsLeft ? '' : 'The editor had ' + (Number(qa.max_rounds) || 1) + ' round(s) and the page still repeats another page word for word: it is delivered as a draft to finish by hand, not as a page to publish as it is.' };
 }
 return [{ json: { ...d, content_qa: qa } }];

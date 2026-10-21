@@ -12,6 +12,9 @@
 //   REH5 a declared product category ("crm" in "CRM implementation") is topic evidence; the Keyword Check's topic note is one plain sentence
 //        that asks for services only when none are listed.
 //   REH6 no em dash or arrow in any why / reason / note the research hands the app (a scan of the generated output).
+//   REH7 (D2, paid pre-launch run 2026-10-21) the setup research the APP starts carries what the website sells: the exported discover body
+//        (app/shared payload.ts, `npm run export:payloads`) through Quick Validate, Normalize Input, Seed List and Rank Keywords. REH4 mocked
+//        Collect Research with the services already in it, which is how the app's missing `services` key passed offline.
 // Called from scenarios_v5.js just before the report (one line).
 const fs = require('fs'); const path = require('path'); const { fakeN8nApi } = require('./fake_n8n_api');
 module.exports = async (ctx) => {
@@ -181,8 +184,9 @@ module.exports = async (ctx) => {
   const BUSINESS = 'Microsoft Dynamics 365 and CRM implementation partner for UAE companies; e-invoicing compliance and Peppol onboarding';
   const research = async (o) => {
     reset();
-    const base = { domain: DOM, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', goal: 'leads', seeds: ['crm implementation'], services: o.declared || [], declared_services: o.declared || [],
-      business: o.business || BUSINESS, competitors: [], site_urls: [], research: { candidates: CANDS, pool_size: CANDS.length, competitor_domains: [], by_source: {}, failures: [] } };
+    // REH7: `o.base` is a real Seed List output (what Collect Research passes on with its research), instead of injected services
+    const base = { ...(o.base || { domain: DOM, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', goal: 'leads', seeds: ['crm implementation'], services: o.declared || [], declared_services: o.declared || [],
+      business: o.business || BUSINESS, competitors: [], site_urls: [] }), research: { candidates: CANDS, pool_size: CANDS.length, competitor_domains: [], by_source: {}, failures: [] } };
     mock('Collect Research', [{ json: base }]);
     mock('Relevance Chunks', [{ json: { keywords_chunk: CANDS.map(c => ({ keyword: c.keyword })) } }]);
     mock('Load Site Cache', [{ json: {} }]); delete store['Site Model']; delete store['Reach (Discovery)'];
@@ -265,5 +269,37 @@ module.exports = async (ctx) => {
     const b3 = await ask(AR({ keyword: 'office coffee machines dubai' }), []);
     const w3 = b3.warnings.find(w => /could not tell/.test(w)) || '';
     check('Keyword Check, no services listed at all: then, and only then, it asks for them', /^we could not tell whether this keyword matches what you sell, because no services are listed for this website yet\. Add your main services in your website settings and the check will tell you$/.test(w3), J(b3.warnings));
+  });
+
+  // ===================================================================================================================================
+  await guard('REH7 the app setup research carries the services', async () => {
+    const SN = 'REH7 the setup research the app starts carries what the website sells (paid pre-launch run 2026-10-21: the discover body had no services key, the engine has no site row before Track my site, so every keyword was "unknown") - the exported body through Quick Validate, Normalize Input, Seed List and Rank Keywords'; reset(); begin(SN); const check = mkCheck(SN);
+    const P = require('./fixtures_platform.json');
+    const f = P.find(x => x.body && x.body.mode === 'discover' && Array.isArray(x.body.services));
+    const SITE_SERVICES = ['Odoo implementation', 'E-invoicing onboarding'];
+    check('the app exports a setup research body that carries the website\'s services (app/shared payload.ts discover case)', f && eq(f.body.services, SITE_SERVICES), J(P.filter(x => x.body && x.body.mode === 'discover').map(x => x.body)));
+    if (!f) return;
+    // the app's body as the engine receives it; Seed List reads Route Mode (Normalize Input's item; no site model: the setup research runs
+    // before Track my site writes the engine's site row), and its output is what Collect Research hands Rank Keywords with the research
+    const through = async (body) => {
+      reset();
+      const qv = await run('Quick Validate', { headers: f.headers, body }); delete store['Start Form'];
+      const n = (await run('Normalize Input', qv[0].json.forward))[0].json;
+      mock('Route Mode', [{ json: n }]); delete store['Site Model'];
+      const sl = (await run('Seed List', [{ json: { output: { primary_seed: 'odoo partner uae', seed_groups: { services: ['odoo partner uae', 'erp for distributors'] }, services: ['ERP consulting'] } } }]))[0].json;
+      return { n, sl, R: await research({ base: sl }) };
+    };
+    const withS = await through(f.body);
+    const { services: _drop, ...bare } = f.body;
+    const without = await through(bare);
+    check('Normalize Input takes the services by their exact key (services_given), Seed List passes them on alone as declared_services',
+      eq(withS.n.services, SITE_SERVICES) && withS.n.services_given === true && eq(withS.sl.declared_services, SITE_SERVICES), J({ n: withS.n.services, given: withS.n.services_given, d: withS.sl.declared_services }));
+    const fit = withS.R.KS.service_fit;
+    console.log('   service fit (app body) ->', J(withS.R.KS.keywords.map(k => [k.keyword, k.service_fit])), '| start with ->', withS.R.KS.pipeline_keyword && withS.R.KS.pipeline_keyword.keyword);
+    check('Rank Keywords judges service fit against the services the app sent: at least one keyword is in ("e invoicing uae"), declared_services are the website\'s',
+      fit.in > 0 && eq(fit.declared_services, SITE_SERVICES) && (withS.R.KS.keywords.find(k => k.keyword === 'e invoicing uae') || {}).service_fit === 'in' && /the services you listed/.test(fit.judged_on), J(fit));
+    check('the start-with pick is one of the website\'s services, never an out keyword', withS.R.KS.pipeline_keyword && withS.R.KS.pipeline_keyword.service_fit === 'in', J(withS.R.KS.pipeline_keyword));
+    check('control: the same body without the services key (the code before the fix) is blind - every keyword unknown, nothing listed',
+      without.n.services_given === false && without.R.KS.keywords.every(k => k.service_fit === 'unknown') && without.R.KS.service_fit.judged_on === 'nothing (no services listed)', J(without.R.KS.service_fit));
   });
 };

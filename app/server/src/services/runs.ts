@@ -18,6 +18,7 @@ import {
   type ModeId,
   type LadderPrefs,
   type LadderRow,
+  type LadderSettingsRow,
   type Report,
   type ReportFile,
   type Role,
@@ -45,6 +46,7 @@ import { customerError } from '../lib/customerError';
 import { suspendedError } from '../auth/session';
 import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
 import { siteReadiness } from './readiness';
+import { siteAutomation } from './ladders';
 
 /**
  * R100: what the engine will reserve for this request, its own rolling figures (`engineCostTable`), the shipped table only when
@@ -115,6 +117,12 @@ export function inputForRole(input: RunInput, role: Role): RunInput {
  * never sends `system_announced` (only the server's level-3 announcement starts such a ladder); none = the person typed it. The start
  * mode is the admin's "Auto / Manual" choice of the flow (`ladderPrefs.mode`) when no `ladderMode` is given.
  */
+/** The website's default ladder mode (its `_site` settings row); null when n8n cannot be read (then nothing is decided from it). */
+async function siteDefaultMode(domain: string): Promise<'auto' | 'manual' | null> {
+  const rows = await siteRows<LadderSettingsRow>('ladderSettings', domain, { max: 500 }).catch(() => null);
+  return rows ? siteAutomation(rows).defaultMode : null;
+}
+
 export function ladderChoice(input: RunInput, auto: boolean): RunInput {
   if (input.mode !== 'ladder') return input;
   const chosenBy = input.chosenBy === 'system_announced' && !auto ? 'client_typed' : (input.chosenBy ?? (auto ? 'system_announced' : 'client_typed'));
@@ -196,9 +204,12 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   // P1 (2026-10-20, rehearsal §4 item 1): an Auto ladder start on a website without its author profile or business facts keeps its plan, and
   // the engine holds the first page (Ladder Plan, v5/code/_readiness.js) until both are on file: the run is quoted for the plan alone, and
   // the run says so. A Manual start writes nothing anyway. A caller's own `pagesHeld` is never trusted. Unreadable profile = not decided here.
+  // KW-APP D8 (2026-10-21, live run): a Manual ladder, asked for or the website's default (the engine's own fallback, Ladder_Plan.js ownMode),
+  // writes nothing at start, so it is quoted for the plan alone ('manual'); it was quoted 99 credits and charged 23.73.
   if (input.mode === 'ladder') {
-    const held = site && input.ladderMode !== 'manual' ? await siteReadiness(site) : null;
-    input = { ...input, pagesHeld: held && !held.ready ? 'profile' : undefined };
+    const manual = input.ladderMode === 'manual' || (!input.ladderMode && site ? (await siteDefaultMode(site.domain)) === 'manual' : false);
+    const held = site && !manual ? await siteReadiness(site) : null;
+    input = { ...input, pagesHeld: manual ? 'manual' : held && !held.ready ? 'profile' : undefined };
   }
   const estimated = await estimateCost(input);
   // the website's first tracking, kept on every re-save: the anchor of its weekly cycle (the engine accepts it within the last 6 days)
@@ -251,8 +262,9 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
         status: 'submitting',
         input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}), ...(opts.proposalId ? { proposalId: opts.proposalId } : {}), ...(opts.free ? { freeResearch: true } : {}) } as unknown as Record<string, unknown>,
         estimatedCostUsd: estimated,
-        // a free run is quoted 0 (the cost sync caps every charge of a run at its quote), so it is never charged
-        quotedCredits: opts.free ? 0 : quoted > 0 ? quoted : null,
+        // a free run is quoted 0 (the cost sync caps every charge of a run at its quote), so it is never charged. D3 (2026-10-21): a quote of
+        // 0 is stored as 0, not as "no quote" (null is left for runs from before credits), so any work a 0-quoted run starts is capped too
+        quotedCredits: opts.free ? 0 : quoted,
         etaMinutes: etaFor(input),
         apiKeyId: opts.apiKeyId ?? null,
         idempotencyKey: opts.idempotency?.key ?? null,
