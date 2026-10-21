@@ -1,4 +1,5 @@
-// Helpers shared by /changelog and the About page's "How we build" list.
+// Helpers shared by /changelog and the About page's "How we build" list. The changelog shows versions only, never dates
+// (fmtLongDate stays for the legal pages).
 import type { ChangelogEntry } from '../../content/changelog';
 import { featureBySlug } from '../../content/features';
 
@@ -16,21 +17,21 @@ export function fmtLongDate(iso: string, short = false): string {
   return `${d} ${(short ? SHORT : MONTHS)[m]} ${y}`;
 }
 
-/** "October 2026" */
-export const monthLabel = (iso: string) => {
-  const { y, m } = parts(iso);
-  return `${MONTHS[m]} ${y}`;
-};
-
-/** stable anchor id: date + title slug, e.g. "2026-10-08-backlinks-from-every-source" */
+/** stable anchor id from the version, e.g. "v4-2" (the title slug for an entry without one); never a date, since no date is shown */
 export function entryAnchor(e: ChangelogEntry): string {
-  const slug = e.title
+  if (e.version) return `v${e.version.replace(/[^0-9a-z]+/gi, '-')}`;
+  return e.title
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
-  return `${e.date}-${slug}`;
 }
+
+/** "Alaventra 4.2", or the title for an entry without a version */
+export const releaseName = (e: ChangelogEntry) => (e.version ? `Alaventra ${e.version}` : e.title);
+
+/** the major line a release belongs to ("4" for 4.2), or "" without a version */
+export const majorOf = (e: ChangelogEntry) => (e.version ? e.version.split('.')[0] : '');
 
 export interface ChangelogTag {
   /** filter key: a feature slug, or "label:<name>" */

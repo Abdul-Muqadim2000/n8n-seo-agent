@@ -7,7 +7,7 @@ import { changelog } from '../content/changelog';
 import { features, type Fact } from '../content/features';
 import { aiEngines, integrations, linkSources } from '../content/site';
 import { useSeo } from '../useSeo';
-import { entryAnchor, fmtLongDate } from '../components/company/changelog-utils';
+import { entryAnchor } from '../components/company/changelog-utils';
 
 const REAL: { icon: LucideIcon; title: string; body: string }[] = [
   {
@@ -206,14 +206,20 @@ function Shipping() {
           <SectionHeading id="shipping-title" eyebrow="How we build" title="Shipped in small steps, written down in plain words." lead="Every release lands in the changelog in product language: what changed, and why it matters to your team." />
           <ol className="mt-10 space-y-3">
             {recent.map((e, i) => (
-              <Reveal as="li" key={e.title} index={i}>
+              <Reveal as="li" key={entryAnchor(e)} index={i}>
                 <Link
                   to={`/changelog#${entryAnchor(e)}`}
                   className="group flex items-start gap-4 rounded-xl border border-line bg-page p-4 transition-[border-color,background-color,box-shadow] duration-200 ease-brand hover:border-line-strong hover:bg-surface hover:shadow-card sm:p-5"
                 >
-                  <time dateTime={e.date} className="w-[5.5rem] shrink-0 pt-0.5 font-mono text-[12px] text-ink-3 tabular">
-                    {fmtLongDate(e.date, true)}
-                  </time>
+                  <span className="w-12 shrink-0 pt-0.5 font-mono text-[12px] font-medium text-ink-3 tabular">
+                    {e.version ? (
+                      <>
+                        <span className="sr-only">Version </span>
+                        <span aria-hidden>v</span>
+                        {e.version}
+                      </>
+                    ) : null}
+                  </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[15px] font-medium text-ink group-hover:text-accent-text">{e.title}</span>
                     <span className="mt-1 block text-[13.5px] leading-snug text-ink-2">{e.summary}</span>

@@ -153,7 +153,8 @@ Full guide: `brand/BRAND.md`; the app's tokens are in `src/index.css` (light + d
      `components/platform/CapabilityScreen.tsx` (`APP_PATH`).
   3. The capability count in the copy ("Ten capabilities. One system.", "All ten capabilities", the Platform description) comes from
      `capabilityCount` / `CapabilityCount` in `features.ts` — never type the number into page copy.
-  4. Add a `changelog.ts` entry (newest first, `features: [slug]`).
+  4. Add it to the newest release in `changelog.ts` or start a new version (newest first, `features: [slug]`; the real date stays in
+     the data and is never shown; `major` only for a true milestone).
   5. If it matters to a team or a plan: link it from the relevant `solutions.ts` entries (`helps`) and add rows to the comparison
      table / plan lists in `pricing.ts`.
   6. Check `/`, `/platform`, `/platform/<slug>` at 375 and 1440 in light and dark, with reduced motion on and off.
