@@ -373,11 +373,16 @@ const asServiceFit = (v: unknown): ServiceFit => (v === 'in' || v === 'out' ? v 
 export const CAREER_NOTE = 'Mostly people looking for work or training, not buyers';
 /** the engine's words when it demotes a job or training search (v5/code: "mostly looking for work or training") */
 const CAREER_WHY = /looking for work or training/i;
-/** KW-APP D3: the engine's career flag (an object with its detail, or true), or its words in `why` when the flag did not travel */
+/** KW-APP D3: the engine's career flag (since KWL-RES 2026-10-22 a boolean with `career_note`; earlier an object with its detail),
+ * or its words in `why` only for older callbacks where the flag did not travel. An explicit `career: false` is the engine's answer. */
 function careerOf(k: Record<string, unknown>, why: string): { career: boolean; note: string } {
   const c = k.career;
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const detail = c && typeof c === 'object' ? str((c as Record<string, unknown>).detail).trim() : '';
-  if (detail) return { career: true, note: detail.charAt(0).toUpperCase() + detail.slice(1) };
+  if (detail) return { career: true, note: cap(detail) };
+  if (c === false) return { career: false, note: '' };
+  const engineNote = str(k.career_note).trim();
+  if (c === true && engineNote) return { career: true, note: cap(engineNote) };
   if (c === true || CAREER_WHY.test(why)) {
     const m = /(?:^|; )([^;]*looking for work or training[^;]*)/i.exec(why);
     const line = m ? m[1].trim() : '';

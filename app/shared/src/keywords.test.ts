@@ -205,6 +205,10 @@ describe('recommended keywords from the keyword strategy', () => {
       ['sap jobs dubai', true, 'Mostly job seekers (bayt.com)'],
     ]);
     expect(recommendedFromStrategy({ priority: [kw('sap jobs dubai', { ...easy, career: true })] }, [])[0].note).toBe(CAREER_NOTE);
+    // KWL-RES (2026-10-22): the engine sends career as a boolean with career_note; an explicit false is final, even when `why` reads like a job search
+    expect(recommendedFromStrategy({ priority: [kw('sap jobs dubai', { ...easy, career: true, career_note: 'job and course pages rank for it (bayt.com)' })] }, [])[0].note)
+      .toBe('Job and course pages rank for it (bayt.com)');
+    expect(recommendedFromStrategy({ priority: [kw('microsoft dynamics ax dubai', { ...easy, service_fit: 'in', why: career, career: false, career_note: null })] }, [])[0].career).toBe(false);
     // "Choose for me" takes the engine's pick and never a job search, however easy
     expect(chooseForMe(list)?.keyword).toBe('financial reporting automation');
     expect(chooseForMe(list.filter((k) => k.career))).toBeNull();
