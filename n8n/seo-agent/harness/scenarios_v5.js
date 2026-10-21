@@ -19640,6 +19640,7 @@ await require('./scenarios_eqa')({ H, run, mock, store, guard, reset, begin }); 
 await require('./scenarios_dead')({ H, run, mock, store, guard, reset, begin });   // DEAD1-DEAD9 (E-DEAD 2026-10-21): the pre-launch run's dead pages - one redirect message in every report, redirects followed, Bing, fix pack, comparisons, disavow
 await require('./scenarios_assess_serp')({ H, run, mock, store, guard, reset, begin });   // AS1-AS4 (E-SERP 2026-10-21): the Keyword Check reads one results page - career search fit 0, service page fit 2, a 40101 re-sent then judged without it, the cost once by task id
 await require('./scenarios_full_gate')({ H, run, mock, store, guard, reset, begin });   // FG1 (2026-10-21): one business-fit gate on every list of the full report's keyword section
+await require('./scenarios_claims')({ H, run, mock, store, guard, reset, begin });   // CLM1-CLM4 (E-CLAIM 2026-10-21): promises in the client's name (deliverables, process, billing) need a fact on file, else an owner edit and not ready
 
 H.report();
 })();
