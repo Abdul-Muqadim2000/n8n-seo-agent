@@ -53,8 +53,8 @@ module.exports = async (ctx) => {
     reset(); const SN = 'AS1 E-SERP - the Keyword Check reads the results page of "ai consultant" (job boards, a certification, salary questions) and gives the ladder\'s verdict: fit 0, a career search'; begin(SN); const check = mkCheck(SN);
     const reqs = await start('ai consultant');
     const sq = reqs.find(r => r.kind === 'serp');
-    check('one organic results page is asked for: live/advanced, depth 10, the site\'s location and language (the ladder head\'s request fields)',
-      !!sq && /serp\/google\/organic\/live\/advanced$/.test(sq.endpoint) && J(Object.keys(sq.body[0]).sort()) === J(['depth', 'keyword', 'language_code', 'location_code']) && sq.body[0].depth === 10 && sq.body[0].location_code === LOC && sq.body[0].keyword === 'ai consultant'
+    check('one organic results page is asked for: live/advanced, 30 deep with the AI Overview (KW-SERP: the one shape every path sends), the site\'s location and language (the ladder head\'s request fields)',
+      !!sq && /serp\/google\/organic\/live\/advanced$/.test(sq.endpoint) && J(Object.keys(sq.body[0]).sort()) === J(['depth', 'keyword', 'language_code', 'load_async_ai_overview', 'location_code']) && sq.body[0].depth === 30 && sq.body[0].load_async_ai_overview === true && sq.body[0].location_code === LOC && sq.body[0].keyword === 'ai consultant'
         && reqs.filter(r => r.kind === 'serp').length === 1, J(reqs.map(r => [r.kind, r.body])));
     const { body } = await respond(answersFor(reqs, CAREER, 'ai consultant').map(j => ({ json: j })), 2, 'ai consultant salary, ai consulting services uae, ai consultant course');
     console.log('   keyword check ->', J({ fit: body.fit, gate: body.fit_gate, alts: body.alternatives, serp: body.serp, label: body.label }));

@@ -22,7 +22,7 @@ const lowQ = (q) => String((q || {}).keyword || '').toLowerCase().trim();
 const sent = (() => { try { return $('Ladder SERP Cache Split').all().map(i => i.json).filter(r => r && r.cluster_check); } catch (e) { return asked; } })();
 const sentAt = new Map(sent.map((q, i) => [lowQ(q), i]));
 const cacheRows = (() => { try { return $('Load SERP Cache (Ladder)').all().map(i => i.json).filter(r => r && r.key); } catch (e) { return []; } })();
-const hitOf = (q) => (sentAt.has(lowQ(q)) ? null : SC.lookup(cacheRows, { keyword: q.keyword, location_code: q.location_code, language_code: q.language_code || 'en', depth: 10 }));
+const hitOf = (q) => (sentAt.has(lowQ(q)) ? null : SC.lookup(cacheRows, { keyword: q.keyword, location_code: q.location_code, language_code: q.language_code || 'en', depth: 30, load_async_ai_overview: true }));
 
 const out = { available: false, asked: asked.filter(r => !r.supporting_check).length, supporting_asked: asked.filter(r => r.supporting_check).length, compared: 0, failed: 0, retried: retryItems.length, retry_answered: 0,
   cap: plan0.cap ?? KWI.CFG.ladder_serp_checks, cap_basis: plan0.cap_basis || '', candidates: plan0.candidates || 0, on_topic: plan0.on_topic || 0,

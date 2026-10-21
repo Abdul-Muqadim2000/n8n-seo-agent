@@ -8,6 +8,8 @@
 //   SC3 the ladder head and the Keyword Check share one reading: the same top pages, the same AI Overview answer, the same career verdict
 //   SC4 the ladder's rung reads: only keywords not read today are bought; all read today = nothing bought; fresh readings stored, failed ones not
 //   SC5 depth: a reading too shallow for a path (the head needs 30 + the AI Overview; the rank tracker 50) is bought again and replaces the row
+//   SC6 the research live checks and the Keyword Check share the page, whichever comes first; the research's gate pairs only what it sent
+//   SC7 the Rank Tracker (50 deep + AI Overview) refreshes the row, and its reading serves a later Keyword Check; costs counted once
 // Called from scenarios_v5.js just before the report (one line).
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
@@ -32,7 +34,7 @@ module.exports = async (ctx) => {
   const PAA = { type: 'people_also_ask', rank_group: 1, rank_absolute: 7, items: [{ type: 'people_also_ask_element', title: 'What exactly does an AI consultant do?' }, { type: 'people_also_ask_element', title: "What is AI consulting's salary?" }] };
   const REL = { type: 'related_searches', rank_group: 1, rank_absolute: 12, items: ['ai consultant salary', 'ai consultant jobs', 'ai consulting services dubai'] };
   // an answer in DataForSEO's shape; `data` echoes the request like the live API does
-  const serp = (id, kw, body, items, o = {}) => ({ version: '0.1.2026', status_code: 20000, status_message: 'Ok.', cost: 0.002, tasks: [{ id, status_code: 20000, status_message: 'Ok.', cost: 0.002,
+  const serp = (id, kw, body, items, o = {}) => ({ version: '0.1.2026', status_code: 20000, status_message: 'Ok.', cost: o.cost || 0.002, tasks: [{ id, status_code: 20000, status_message: 'Ok.', cost: o.cost || 0.002,
     data: { api: 'serp', function: 'live', se: 'google', se_type: 'organic', keyword: kw, location_code: LOC, language_code: 'en', ...body },
     result: [{ keyword: kw, location_code: LOC, language_code: 'en', datetime: o.at || today, se_results_count: 1200000, item_types: [...new Set(items.map(x => x.type))], items }] }] });
   const fail = (id, code, msg) => ({ version: '0.1.2026', status_code: 20000, status_message: 'Ok.', cost: 0, tasks: [{ id, status_code: code, status_message: msg, cost: 0, result: null }] });
@@ -164,7 +166,7 @@ module.exports = async (ctx) => {
     const kws = Object.keys(pagesOf);
     const plan = { cap: 24, cap_basis: 'the standing cap', candidates: 3, on_topic: 3, asked: 3, left_uncompared: 0, supporting_asked: 0 };
     const reqs = kws.map((k, i) => ({ cluster_check: true, keyword: k, serp_cache_key: 'serp:' + k + '|2784|en|desktop', location_code: LOC, language_code: 'en', n: i + 1, of: 3, weight: 3 - i, volume: 100, ...plan }));
-    const rowOf = async (kw, id) => kit('rowFor', ans(kw, id), B10(kw), '');
+    const rowOf = async (kw, id) => kit('rowFor', ans(kw, id), HEAD_BODY(kw), '');
     const r0 = await rowOf(kws[0], 't-kc-a'), r1 = await rowOf(kws[1], 't-res-b');
     mock('Ladder Pool', [{ json: { keyword: 'ai consulting', location_code: LOC, language_code: 'en' } }]);
     mock('Ladder Cluster Requests', reqs);
@@ -214,10 +216,10 @@ module.exports = async (ctx) => {
   await guard('SC5 KW-SERP depth', async () => {
     reset(); const SN = 'SC5 KW-SERP - a reading too shallow for a path is bought again and replaces the row: the head needs 30 + the AI Overview, the rank tracker 50'; begin(SN); const check = mkCheck(SN);
     const KW = 'ai consulting dubai';
-    const kc = await kit('rowFor', serp('t-kc-1', KW, { depth: 10 }, CAREER_PAGES), B10(KW), '');
+    const kc = await kit('rowFor', serp('t-kc-1', KW, { depth: 10 }, CAREER_PAGES), B10(KW), '');   // a 10-deep reading (the head's lighter third attempt)
     mock('SERP Cache Key (Top 10)', [{ json: { keyword: KW, location_code: LOC, language_code: 'en', serp_cache_key: kc.key, serp_cache_body: HEAD_BODY(KW) } }]);
     const use = (await run('Use SERP Cache (Top 10)', [{ json: kc }]))[0].json;
-    check('the head does not use the Keyword Check\'s 10-deep reading: it buys its own', use.serp_cache_hit === false && /only 10 results deep, this needs 30/.test(use.serp_cache_why), J(use.serp_cache_why));
+    check('the head does not use a 10-deep reading: it buys its own', use.serp_cache_hit === false && /only 10 results deep, this needs 30/.test(use.serp_cache_why), J(use.serp_cache_why));
     // the head's first attempt fails, the retry answers: the retry's reading is stored and replaces the shallow row (same key)
     mock('SERP Top 10', [fail('t-h1', 40101, 'Internal SE Server Error.')]);
     mock('SERP Top 10 (Retry)', [serp('t-h2', KW, { depth: 30, load_async_ai_overview: true }, [AIO, ...CAREER_PAGES])]);
@@ -236,5 +238,116 @@ module.exports = async (ctx) => {
     check('the rank tracker (50 deep) does not use a 30-deep reading; its own 50-deep reading fits in the row and serves a 10-deep path, not the head (no AI Overview), not mobile',
       need50.hit === false && v.depth === 50 && v.items.length === 50 && deep.value.length <= 20000 && serve10.hit === true && serveHead.hit === false && mobile.hit === false,
       J({ need50: need50.why, depth: v.depth, len: deep.value.length, s10: serve10.hit, head: serveHead.why, mobile: mobile.why }));
+  });
+  // ===================================================================================
+  // SC6 / SC7 (owner decision 2026-10-21): one request shape (30 deep + the AI Overview; the tracker 50 deep + the AI Overview) and the
+  // research live checks and the Rank Tracker on the same cache, through the split around their in-200 gates.
+  const SEED = { location_code: LOC, language_code: 'en' };
+  const DUBAI_PAGES = [org(1, 'www.alpha-ai.ae', 'https://www.alpha-ai.ae/services/ai-consulting/', 'AI Consulting Services in Dubai'),
+    org(2, 'www.beta.ae', 'https://www.beta.ae/solutions/artificial-intelligence/', 'AI Consulting Solutions Dubai'), org(3, 'gamma.com', 'https://gamma.com/services/ai-strategy-dubai/', 'AI Strategy Dubai')];
+  const costOnce = (answers) => { const ids = new Set(); let c = 0; for (const a of answers) for (const t of ((a || {}).tasks || [])) { const v = Number(t.cost || 0); if (!v || ids.has(t.id)) continue; ids.add(t.id); c += v; } return +c.toFixed(4); };
+  const research = async (kws, rows, answersFor) => {
+    for (const k of ['Candidate SERP', 'Candidate SERP Answers', 'Candidate SERP (Retry)', 'Candidate SERP Retry Plan', 'SERP Cache Split (Research)']) delete store[k];
+    mock('Seed List', [{ json: SEED }]);
+    await run('SERP Cache Keys (Research)', kws.map(k => ({ json: { keyword: k, volume: 300 } })));
+    mock('Load SERP Cache (Research)', rows.length ? rows.map(r => ({ json: r })) : EMPTY);
+    const split = (await run('SERP Cache Split (Research)', store['Load SERP Cache (Research)'])).map(i => i.json);
+    let bought = [];
+    if (!split[0].serp_cache_all_read) {
+      bought = split.map(j => answersFor(j.keyword));
+      mock('Candidate SERP', bought);
+      const plan = (await run('Candidate SERP Retry Plan', store['Candidate SERP'])).map(i => i.json);
+      if (plan.some(p => p.is_retry)) throw new Error('unexpected retry ' + J(plan));
+      await run('Candidate SERP Answers', EMPTY);
+    }
+    const out = (await run('SERP With Cache (Research)', EMPTY)).map(i => i.json);
+    const rowsOut = (await run('SERP Cache Rows (Research)', EMPTY)).map(i => i.json);
+    const restored = (await run('Restore SERP (Research)', EMPTY)).map(i => i.json);
+    return { split, out, rowsOut, restored, bought };
+  };
+
+  await guard('SC6 KW-SERP research live checks share the reading with the Keyword Check', async () => {
+    reset(); const SN = 'SC6 KW-SERP - the research live checks and the Keyword Check read one results page per search a day, whichever comes first, and agree on it; the money is counted once'; begin(SN); const check = mkCheck(SN);
+    const HB = { depth: 30, load_async_ai_overview: true };
+    const answersFor = (kw) => kw === 'ai consultant' ? serp('t-res-1', kw, HB, [AIO, ...CAREER_PAGES, PAA, REL], { cost: 0.006 }) : serp('t-res-2', kw, HB, DUBAI_PAGES, { cost: 0.006 });
+    // 1. research first: both bought, both stored, in their own order
+    const r1 = await research(['ai consultant', 'ai consulting dubai'], [], answersFor);
+    check('research first: both pages bought (30 deep with the AI Overview), the answers handed on in order, both stored',
+      r1.split.length === 2 && r1.out.length === 2 && r1.out[0].tasks[0].id === 't-res-1' && r1.out[1].tasks[0].id === 't-res-2' && r1.rowsOut.length === 2 && r1.restored.length === 2
+        && r1.out[0].__dfs.cost_usd === 0.012 && r1.out[0].__dfs.read_today === 0, J({ split: r1.split.map(s => s.keyword), rows: r1.rowsOut.map(r => r.key), ev: r1.out[0].__dfs.cost_usd }));
+    const resRow = r1.rowsOut.find(r => r.key === 'serp:ai consultant|2784|en|desktop');
+    // 2. the Keyword Check after it: no request, the same page
+    const reqs = await kcStart('ai consultant', [resRow]);
+    const kc = await kcRespond(kcAnswers(reqs, null));
+    const resTop = r1.out[0].tasks[0].result[0].items.filter(x => x.type === 'organic').slice(0, 5).map(x => x.domain);
+    check('the Keyword Check after the research sends no results-page request and reads the research\'s page: the same top sites, the same AI Overview (seen), a career search (fit 0)',
+      !reqs.some(r => r.kind === 'serp') && J(kc.body.serp.top) === J(resTop) && kc.body.serp.ai_overview_seen === true && r1.out[0].tasks[0].result[0].items.some(x => x.type === 'ai_overview')
+        && kc.body.fit === 0 && kc.body.fit_gate.reason === 'job search' && kc.ar.dfs_cost === 0.02, J({ top: kc.body.serp.top, resTop, aio: kc.body.serp.ai_overview_seen, dfs: kc.ar.dfs_cost }));
+    // 3. Keyword Check first, research after: the research buys only the other keyword
+    reset();
+    const k0 = await kcStart('ai consultant', []);
+    const kcFirst = await kcRespond(kcAnswers(k0, serp('t-kc-9', 'ai consultant', HB, [AIO, ...CAREER_PAGES, PAA, REL])));
+    const kcRow = kcFirst.rows.find(r => r.kind === 'serp');
+    const r2 = await research(['ai consultant', 'ai consulting dubai'], [kcRow], answersFor);
+    console.log('   research after the check ->', J({ sent: r2.split.map(s => s.keyword), ids: r2.out.map(a => a.tasks[0].id), ev: r2.out[0].__dfs }));
+    check('the research after a Keyword Check buys only the keyword not read today, and its retry gate pairs the one answer with the one request',
+      r2.split.length === 1 && r2.split[0].keyword === 'ai consulting dubai' && r2.bought.length === 1, J(r2.split));
+    check('…and reads the check\'s own page for "ai consultant": the same task (cache:t-kc-9, cost 0), the same top sites and the same AI Overview as the check',
+      r2.out[0].tasks[0].id === 'cache:t-kc-9' && r2.out[0].tasks[0].cost === 0 && J(r2.out[0].tasks[0].result[0].items.filter(x => x.type === 'organic').slice(0, 5).map(x => x.domain)) === J(kcFirst.body.serp.top)
+        && r2.out[0].tasks[0].result[0].items.some(x => x.type === 'ai_overview') === kcFirst.body.serp.ai_overview_seen, J(r2.out[0].tasks[0].id));
+    check('costs counted once: the research pays $0.006 (one page), the evidence says one was read earlier today, and the cached answer adds nothing by task id',
+      r2.out[0].__dfs.cost_usd === 0.006 && r2.out[0].__dfs.read_today === 1 && /read earlier today at \d\d:\d\d UTC/.test(r2.out[0].__dfs.read_today_note)
+        && costOnce(r2.out) === 0.006 && r2.out[0].__dfs_cost_usd === 0 && r2.rowsOut.length === 1 && r2.rowsOut[0].key === 'serp:ai consulting dubai|2784|en|desktop', J(r2.out[0].__dfs));
+    // 4. everything read today: nothing bought, the readers still get every answer in order
+    const r3 = await research(['ai consultant', 'ai consulting dubai'], [kcRow, r2.rowsOut[0]], answersFor);
+    check('all read today: one item down the other branch, nothing bought, both answers handed on in order at $0, nothing stored again',
+      r3.split.length === 1 && r3.split[0].serp_cache_all_read === true && r3.bought.length === 0 && r3.out.length === 2 && r3.out.every(a => a.tasks[0].cost === 0 && /^cache:/.test(a.tasks[0].id))
+        && r3.out[0].__dfs.cost_usd === 0 && /nothing bought/.test(r3.out[0].__dfs.cost_basis) && r3.rowsOut[0].skip === true, J({ split: r3.split, ev: r3.out[0].__dfs }));
+  });
+
+  await guard('SC7 KW-SERP the Rank Tracker refreshes the reading and serves the later paths', async () => {
+    reset(); const SN = 'SC7 KW-SERP - the Rank Tracker (50 deep + AI Overview) buys what is not deep enough, refreshes the row, and its reading serves a later Keyword Check the same day; costs counted once'; begin(SN); const check = mkCheck(SN);
+    const KW = 'ai consultant';
+    const body = (device) => [{ keyword: KW, location_code: LOC, language_code: 'en', depth: 50, load_async_ai_overview: true, device, os: device === 'mobile' ? 'android' : 'windows' }];
+    const items = ['desktop', 'mobile'].map(d => ({ ladder_id: 'lad_1', keyword: KW, device: d, endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: body(d) }));
+    const many = (pfx) => [AIO, ...CAREER_PAGES, ...Array.from({ length: 44 }, (_, i) => org(i + 7, pfx + i + '.example', 'https://' + pfx + i + '.example/ai', 'AI ' + i)), PAA, REL];
+    const tracker = async (rows, answersFor) => {
+      for (const k of ['SERP Check', 'SERP Check Answers', 'SERP Check (Retry)', 'SERP Check Retry Plan', 'SERP Cache Split (Tracker)']) delete store[k];
+      await run('SERP Cache Keys (Tracker)', items.map(j => ({ json: j })));
+      mock('Load SERP Cache (Tracker)', rows.length ? rows.map(r => ({ json: r })) : EMPTY);
+      const split = (await run('SERP Cache Split (Tracker)', store['Load SERP Cache (Tracker)'])).map(i => i.json);
+      if (!split[0].serp_cache_all_read) {
+        mock('SERP Check', split.map(j => answersFor(j.device)));
+        await run('SERP Check Retry Plan', store['SERP Check']);
+        await run('SERP Check Answers', EMPTY);
+      }
+      const out = (await run('SERP With Cache (Tracker)', EMPTY)).map(i => i.json);
+      const rowsOut = (await run('SERP Cache Rows (Tracker)', EMPTY)).map(i => i.json);
+      return { split, out, rowsOut };
+    };
+    const ansFor = (d) => serp('t-rt-' + d, KW, { depth: 50, load_async_ai_overview: true, device: d }, many(d === 'mobile' ? 'm' : 'd'), { cost: 0.01 });
+    // a Keyword Check read the search earlier today (30 deep): not deep enough for the tracker
+    const k0 = await kcStart(KW, []);
+    const kcFirst = await kcRespond(kcAnswers(k0, serp('t-kc-1', KW, { depth: 30, load_async_ai_overview: true }, [AIO, ...CAREER_PAGES, PAA, REL])));
+    const kcRow = kcFirst.rows.find(r => r.kind === 'serp');
+    const t1 = await tracker([kcRow], ansFor);
+    check('the tracker does not use a 30-deep reading for its 50-deep check: both devices are bought', t1.split.length === 2 && t1.out.map(a => a.tasks[0].id).join() === 't-rt-desktop,t-rt-mobile', J(t1.split.map(s => s.device)));
+    const desk = t1.rowsOut.find(r => r.key === 'serp:ai consultant|2784|en|desktop'), mob = t1.rowsOut.find(r => r.key === 'serp:ai consultant|2784|en|mobile');
+    check('its readings refresh the rows: the desktop row is now 50 deep with the AI Overview (replacing the check\'s 30-deep one, same key), the mobile one has its own key',
+      !!desk && !!mob && JSON.parse(desk.value).depth === 50 && JSON.parse(desk.value).aio_loaded === true && JSON.parse(desk.value).items.filter(x => x.type === 'organic').length === 50 && desk.value.length <= 20000,
+      J(t1.rowsOut.map(r => r.key)));
+    // a later Keyword Check uses the tracker's deeper reading
+    const k2 = await kcStart(KW, [desk]);
+    const kc2 = await kcRespond(kcAnswers(k2, null));
+    check('a later Keyword Check uses the tracker\'s 50-deep reading: no request, the same top sites, the same AI Overview answer, the same career verdict, $0 for the page',
+      !k2.some(r => r.kind === 'serp') && J(kc2.body.serp.top) === J(CAREER_PAGES.slice(0, 5).map(p => p.domain)) && kc2.body.serp.ai_overview_seen === true && kc2.body.fit === 0
+        && kc2.ar.dfs_cost === 0.02 && kc2.body.serp.read_today === true, J({ top: kc2.body.serp.top, fit: kc2.body.fit, dfs: kc2.ar.dfs_cost }));
+    // the tracker again the same day: nothing bought, the cost evidence says so
+    const t2 = await tracker([desk, mob], ansFor);
+    check('the tracker again the same day buys nothing: both checks are today\'s readings at $0, in order, and nothing is stored again',
+      t2.split[0].serp_cache_all_read === true && t2.out.length === 2 && t2.out.every(a => a.tasks[0].cost === 0) && t2.out[1].tasks[0].data.device === 'mobile'
+        && t2.out[0].__dfs.cost_usd === 0 && costOnce(t2.out) === 0 && t2.rowsOut[0].skip === true, J(t2.out[0].__dfs));
+    check('costs counted once over the day: the tracker paid 2 x $0.01 once; nothing for the cached answers',
+      costOnce([...t1.out, ...t2.out]) === 0.02 && t1.out[0].__dfs.cost_usd === 0.02, J({ t1: t1.out[0].__dfs.cost_usd }));
   });
 };

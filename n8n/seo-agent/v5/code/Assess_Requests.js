@@ -16,9 +16,11 @@ if (!reachCached(rows, v.domain, v.location_code)) reqs.push(...reachRequests(v.
 // this check exactly as they decide the ladder head and the research. "ai consultant" (upwork, usaii, indeed, bayt, glassdoor) was a fit and
 // Easy here while the ladder refused it. Sent last, through the same call, so the in-200 retry gate and the cost by task id cover it.
 // KW-SERP (RV-12, 2026-10-21): ONE reading of a results page per search and day, shared with the research, the ladder and the rank tracker
-// (v5/code/_serp_cache.js, seo_cache `serp:<keyword>|<location>|<language>|<device>`). A reading made earlier today, at least 10 results
-// deep, is used as it is (cost 0) and travels on the first request item for Assess Result; otherwise the page is bought as before.
-const serpBody = { keyword: v.keyword, location_code: v.location_code, language_code: v.language_code || 'en', depth: 10 };
+// (v5/code/_serp_cache.js, seo_cache `serp:<keyword>|<location>|<language>|<device>`). A reading made earlier today, at least 30 results
+// deep with the AI Overview, is used as it is (cost 0) and travels on the first request item for Assess Result; otherwise the page is bought as before.
+// KW-SERP (owner decision 2026-10-21): every path asks Google the SAME way - 30 deep with the AI Overview loaded, the head's request -
+// so whichever path reads a search first, every other path gets the same answer that day ($0.006 measured for this shape, fa3_live).
+const serpBody = { keyword: v.keyword, location_code: v.location_code, language_code: v.language_code || 'en', depth: 30, load_async_ai_overview: true };
 const serpHit = SC.lookup(rows, serpBody);
 if (serpHit.hit) reqs[0].serp_cached = serpHit.response;
 else reqs.push({ kind: 'serp', label: 'results page for "' + v.keyword + '"', endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: [serpBody] });

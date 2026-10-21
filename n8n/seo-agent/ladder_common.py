@@ -1011,3 +1011,96 @@ def ids_are_frozen(workflow):
     """-> the nodes whose id is not the one the rule gives. Build section 69 asserts this over every generated workflow."""
     name = workflow.get('name') or workflow.get('id') or ''
     return sorted(n.get('name') for n in (workflow.get('nodes') or []) if n.get('id') != node_id(name, n.get('name')))
+
+
+# ---- KW-SERP (2026-10-21, RV-12): one results-page reading per search and day, shared by every path ----
+# serp_cache_wrap puts the seo_cache lookup around a DataForSEO SERP call that is ALREADY inside its in-200 gate (dfs_gate.splice):
+#   <parent> -> SERP Cache Keys (L) -> Load SERP Cache (L) -> SERP Cache Split (L) -> Any SERP To Buy? (L) --yes--> <X> -> ... -> <X> Answers
+#                                                                                                      --no (all read today)--+
+#   <X> Answers -> SERP With Cache (L) [every request again, in order: today's reading or the answer] -> SERP Cache Rows (L) ->
+#   New SERP Readings? (L) -> Save SERP Cache (L) -> Restore SERP (L) -> <what read <X> Answers before>
+# The gate's Retry Plan pairs what was SENT (the split's output) with the answers; the readers downstream see the full list unchanged.
+# `body_js` is a JS function (item json -> the request body object), so the key, the lookup and the stored row all use the request
+# the call really sends. A hit costs nothing and is not stored again; a failed read is never stored (v5/code/_serp_cache.js).
+def serp_cache_wrap(wf, http, label, body_js, sc_src, rt_src, what, unit='search', dx=200, dy=-240):
+    name = wf.get('name') or ''
+    nodes = wf['nodes']; conns = wf.setdefault('connections', {})
+    by = {n['name']: n for n in nodes}
+    ans_node, plan_node = http + ' Answers', http + ' Retry Plan'
+    assert http in by and ans_node in by and plan_node in by, 'KW-SERP: %r is not inside its in-200 gate in %r' % (http, name)
+    parents = [(s, bi) for s, o in conns.items() for bi, l in enumerate((o or {}).get('main') or []) for t in (l or []) if t.get('node') == http]
+    assert len(parents) == 1, 'KW-SERP: %r must have exactly one parent, found %s' % (http, parents)
+    parent, branch = parents[0]
+    dsts = [dict(t) for l in ((conns.get(ans_node) or {}).get('main') or []) for t in (l or [])]
+    assert dsts, 'KW-SERP: %r feeds nothing' % ans_node
+    x, y = by[http]['position']
+    K, LD, SP, IF_, WC, RW, NR, SV, RS = ('SERP Cache Keys (%s)' % label, 'Load SERP Cache (%s)' % label, 'SERP Cache Split (%s)' % label,
+        'Any SERP To Buy? (%s)' % label, 'SERP With Cache (%s)' % label, 'SERP Cache Rows (%s)' % label, 'New SERP Readings? (%s)' % label,
+        'Save SERP Cache (%s)' % label, 'Restore SERP (%s)' % label)
+    for nm in (K, LD, SP, IF_, WC, RW, NR, SV, RS):
+        assert nm not in by, 'KW-SERP: %r exists already' % nm
+    head = sc_src + '\nconst BODY = ' + body_js + ';\n'
+
+    def _n(nm, ntype, ver, params, pos, **extra):
+        n = {'parameters': params, 'id': node_id(name, nm), 'name': nm, 'type': ntype, 'typeVersion': ver, 'position': pos}
+        n.update(extra); nodes.append(n); return n
+
+    def _code(nm, src, pos, **extra): return _n(nm, 'n8n-nodes-base.code', 2, {'jsCode': src}, pos, **extra)
+
+    def _if(nm, expr, pos):
+        return _n(nm, 'n8n-nodes-base.if', 2.3, {'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3},
+            'conditions': [{'id': node_id(name, nm + ':c'), 'leftValue': '=' + expr, 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}],
+            'combinator': 'and'}, 'looseTypeValidation': True, 'options': {}}, pos)
+
+    def _link(a, b, out=0):
+        outs = conns.setdefault(a, {}).setdefault('main', [])
+        while len(outs) <= out: outs.append([])
+        if not any(t['node'] == b for t in outs[out]): outs[out].append({'node': b, 'type': 'main', 'index': 0})
+
+    _code(K, head + "// KW-SERP: every request carries the seo_cache key of the results page it asks for (keyword, location, language, device)\n"
+          "return $input.all().map(i => { const j = i.json || {}; return { json: { ...j, serp_cache_key: SC.key(BODY(j)) } }; });", [x - 3 * dx, y + dy])
+    _n(LD, DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', "={{ $json.serp_cache_key || 'serp:none' }}"), [x - 2 * dx, y + dy],
+       alwaysOutputData=True, onError='continueRegularOutput')
+    _code(SP, head + "// KW-SERP: only the requests whose results page was NOT read today (deep enough, AI Overview when asked) go to DataForSEO;\n"
+          "// when every one was, one item takes the other branch and nothing is bought.\n"
+          "const all = $('" + K + "').all().map(i => i.json);\n"
+          "const rows = $input.all().map(i => i.json).filter(r => r && r.key);\n"
+          "const misses = all.filter(j => !SC.lookup(rows, BODY(j)).hit);\n"
+          "if (!misses.length) return [{ json: { serp_cache_all_read: true, read_today: all.length } }];\n"
+          "return misses.map(j => ({ json: j }));", [x - dx, y + dy])
+    _if(IF_, '{{ $json.serp_cache_all_read !== true }}', [x, y + dy])
+    _code(WC, rt_src + '\n' + head + "// KW-SERP: every request again, in its own order - today's reading (cost 0, task id cache:<paid id>) or the answer the gate\n"
+          "// merged - so what reads this call downstream is unchanged. The evidence block counts only what was bought.\n"
+          "const all = $('" + K + "').all().map(i => i.json);\n"
+          "const rows = (() => { try { return $('" + LD + "').all().map(i => i.json).filter(r => r && r.key); } catch (e) { return []; } })();\n"
+          "const ans = (() => { try { return $('" + ans_node + "').all().map(i => i.json); } catch (e) { return []; } })();\n"
+          "let k = 0, hits = 0, at = '';\n"
+          "const out = all.map(j => { const L = SC.lookup(rows, BODY(j)); if (L.hit) { hits++; at = at || L.text; return { ...L.response, __dfs_cost_usd: 0, serp_read_today: L.text }; } return ans[k++] || {}; });\n"
+          "let ev = (ans[0] && ans[0].__dfs) || null;\n"
+          "if (!ev) { ev = RT.evidence(" + _json.dumps(what) + ", RT.stats([], {}, [], []), { unit: " + _json.dumps(unit) + " }); ev.cost_usd = 0; ev.tasks = 0;\n"
+          "  ev.cost_basis = 'nothing bought: every results page was ' + (at || 'read earlier today') + ' and used again at no cost.'; }\n"
+          "ev = { ...ev, read_today: hits, read_today_note: hits ? hits + ' results page(s) were ' + at + ' and used again at no cost' : '' };\n"
+          "return out.map(a => ({ json: { ...a, __dfs: ev } }));", [x + 6 * dx, y + dy])
+    _code(RW, head + "// KW-SERP: every results page bought and read this run becomes today's reading for the other paths; a failed one is never stored\n"
+          "const all = $('" + K + "').all().map(i => i.json);\n"
+          "const got = $('" + WC + "').all().map(i => i.json);\n"
+          "const byKey = new Map();\n"
+          "all.forEach((j, i) => { const r = SC.rowFor(got[i], BODY(j), ''); if (r) byKey.set(r.key, r); });\n"
+          "return byKey.size ? [...byKey.values()].map(r => ({ json: r })) : [{ json: { skip: true } }];", [x + 7 * dx, y + dy])
+    _if(NR, '{{ !$json.skip }}', [x + 8 * dx, y + dy])
+    _n(SV, DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [x + 9 * dx, y + dy - 80], onError='continueRegularOutput', alwaysOutputData=True)
+    _code(RS, "// The run continues with every answer in order (a Data Table upsert outputs the stored rows, not the run's items).\nreturn $('" + WC + "').all().map(i => ({ json: i.json }));", [x + 10 * dx, y + dy])
+    # rewire: parent -> keys ... -> IF -> http ; answers -> with cache -> rows -> ... -> restore -> dsts
+    pl = conns[parent]['main'][branch]
+    pl[:] = [t for t in pl if t['node'] != http] + [{'node': K, 'type': 'main', 'index': 0}]
+    for a, b in ((K, LD), (LD, SP), (SP, IF_), (WC, RW), (RW, NR), (SV, RS)):
+        _link(a, b)
+    _link(IF_, http, 0); _link(IF_, WC, 1); _link(NR, SV, 0); _link(NR, RS, 1)
+    conns[ans_node]['main'] = [[{'node': WC, 'type': 'main', 'index': 0}]]
+    conns[RS] = {'main': [[dict(t) for t in dsts]]}
+    # the gate pairs what was SENT with what came back
+    plan = by[plan_node]['parameters']
+    old = "$('" + parent + "')" + ('.all()' if not branch else '.all(%d)' % branch)
+    assert plan['jsCode'].count(old) == 1, 'KW-SERP: %s does not read its requests from %s' % (plan_node, parent)
+    plan['jsCode'] = plan['jsCode'].replace(old, "(() => { try { return $('" + SP + "').all(); } catch (e) { return " + old + "; } })()")   # a run with no split (an older caller) pairs as before
+    return {'keys': K, 'load': LD, 'split': SP, 'if': IF_, 'with_cache': WC, 'rows': RW, 'new': NR, 'save': SV, 'restore': RS, 'dsts': [t['node'] for t in dsts]}

@@ -4509,7 +4509,7 @@ assert ('cost_mode', 'string') in RUN_LEDGER_COLS and ('ai_usd', 'number') in RU
     and ('estimated_usd', 'number') in RUN_LEDGER_COLS and ('cost_basis', 'string') in RUN_LEDGER_COLS, \
     'G23: seo_run_ledger cannot say which part of a cost was measured (add the columns in ladder_common.py, then sync_tables.py on the next deploy)'
 assert 'ai_visibility: 0.14' in COST_SRC and 'ai_visibility: 0.95' in COST_SRC, 'G23: ai_visibility still reserves the $0.06 that cost $0.79'
-assert 'dfs_est_usd: 0.034' in rd('code/Assess_Ledger_Row.js'), "G23: the Keyword Check still reserves less than a check has measured"
+assert 'dfs_est_usd: 0.04' in rd('code/Assess_Ledger_Row.js'), "G23: the Keyword Check still reserves less than a check has measured"
 assert 'cost_mode' in rd('code/Monitor_Ledger_Row.js') and 'cost_basis' in rd('code/Monitor_Ledger_Settle.js'), 'G23: a scheduled run settles without saying what was measured'
 assert os.path.exists(os.path.join(HERE0, 'reconcile_claude_cost.py')), 'G23: the monthly reconciliation script is missing'
 _rc51 = open(os.path.join(HERE0, 'reconcile_claude_cost.py'), encoding='utf-8').read()
@@ -6923,7 +6923,7 @@ assert len(_ln70) >= 5, _ln70
 for nm in _ln70:
     patch(nm, "'Candidate SERP', ", "'Candidate SERP', 'Run Ladder Cluster SERP', 'Run Ladder Cluster SERP (Retry)', ")
     assert "__dfsOnce(t)" in code(nm), nm + ': R28 dedupe missing where the new calls are counted'
-assert 'ladder: 0.21,' in COST_SRC, 'B2-4: the per-mode DataForSEO estimate was not raised for the results-page calls'
+assert 'ladder: 0.31,' in COST_SRC, 'B2-4: the per-mode DataForSEO estimate was not raised for the results-page calls'
 # INVARIANTS rule 3: the new DataForSEO nodes are inside a recorded in-200 gate chain, and the ratchet is re-checked with them in
 retry_lint.record_gate('SEO Agent v4', list(retry_lint.GATES.get('SEO Agent v4') or [])
                        + ['Ladder Cluster Requests', 'Cluster SERP Wanted?', 'Run Ladder Cluster SERP', 'Ladder Cluster Retry',
@@ -12093,7 +12093,7 @@ add_node('Ladder SERP Cache Split', 'n8n-nodes-base.code', 2, {'jsCode': SERP_CA
 const reqs = $('Ladder Cluster Requests').all().map(i => i.json);
 if (!reqs.some(r => r && r.cluster_check)) return reqs.map(j => ({ json: j }));
 const rows = $input.all().map(i => i.json).filter(r => r && r.key);
-const misses = reqs.filter(r => r && r.cluster_check && !SC.lookup(rows, { keyword: r.keyword, location_code: r.location_code, language_code: r.language_code || 'en', depth: 10 }).hit);
+const misses = reqs.filter(r => r && r.cluster_check && !SC.lookup(rows, { keyword: r.keyword, location_code: r.location_code, language_code: r.language_code || 'en', depth: 30, load_async_ai_overview: true }).hit);
 if (!misses.length) return [{ json: { cluster_check: false, all_read_today: true, asked: reqs[0].asked, cap: reqs[0].cap } }];
 return misses.map(j => ({ json: j }));"""}, [_lc145[0] + 140, _lc145[1] + 200])
 connect('Ladder Cluster Requests', 'Load SERP Cache (Ladder)'); connect('Load SERP Cache (Ladder)', 'Ladder SERP Cache Split'); connect('Ladder SERP Cache Split', 'Cluster SERP Wanted?')
@@ -12109,7 +12109,7 @@ const retryAnswers = (() => { try { return $('Run Ladder Cluster SERP (Retry)').
 if (!sent.length || !first.length) return [{ json: { skip: true } }];
 const answers = RT.stats(first, {}, retryItems, retryAnswers).answers || [];
 const byKey = new Map();
-sent.forEach((q, i) => { const r = SC.rowFor(answers[i], { keyword: q.keyword, location_code: q.location_code, language_code: q.language_code || 'en', depth: 10 }, ''); if (r) byKey.set(r.key, r); });
+sent.forEach((q, i) => { const r = SC.rowFor(answers[i], { keyword: q.keyword, location_code: q.location_code, language_code: q.language_code || 'en', depth: 30, load_async_ai_overview: true }, ''); if (r) byKey.set(r.key, r); });
 return byKey.size ? [...byKey.values()].map(r => ({ json: r })) : [{ json: { skip: true } }];"""}, [_lcl145[0], _lcl145[1] + 200])
 if_node('New SERP Readings?', '{{ !$json.skip }}', [_lcl145[0] + 220, _lcl145[1] + 200])
 add_node('Save SERP Cache (Ladder)', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [_lcl145[0] + 440, _lcl145[1] + 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
@@ -12118,6 +12118,26 @@ add_node('Restore Clusters', 'n8n-nodes-base.code', 2, {'jsCode': "// The run co
 connect('Ladder Clusters', 'Ladder SERP Cache Rows'); connect('Ladder SERP Cache Rows', 'New SERP Readings?')
 connect('New SERP Readings?', 'Save SERP Cache (Ladder)', 0); connect('New SERP Readings?', 'Restore Clusters', 1)
 connect('Save SERP Cache (Ladder)', 'Restore Clusters'); connect('Restore Clusters', 'Ladder Relevance Chunks')
+# ---------- one request shape (owner decision 2026-10-21): every path asks 30 deep with the AI Overview, so the answer does not depend on
+# which path read the search first. Measured $0.006 for this shape (depth 30, with or without the AI Overview: fixtures_live/fa3_live)
+# against $0.002 for depth 10: +$0.004 a Keyword Check, +$0.096 a ladder at its 24-keyword cap, +$0.064 a discovery at 16 live checks.
+_OLD10 = "depth: 10 }]) }}"
+_NEW30 = "depth: 30, load_async_ai_overview: true }]) }}"
+for _n145b in ('Run Ladder Cluster SERP', 'Run Ladder Cluster SERP (Retry)', 'Candidate SERP', 'Candidate SERP (Retry)'):
+    _jb145 = nodes[_n145b]['parameters']['jsonBody']
+    assert _jb145.count(_OLD10) == 1, 'KW-SERP: ' + _n145b + ' no longer asks 10 deep: ' + _jb145
+    nodes[_n145b]['parameters']['jsonBody'] = _jb145.replace(_OLD10, _NEW30)
+assert nodes['Candidate SERP']['parameters']['jsonBody'] == nodes['Candidate SERP (Retry)']['parameters']['jsonBody'], 'KW-SERP: the research retry must be a byte copy'
+# ---------- the research live checks (Candidate SERP, inside its in-200 gate) ----------
+_view145 = {'name': 'SEO Agent v4 — Audit, Keywords, Verdict & Content', 'nodes': list(nodes.values()), 'connections': conns}
+import ladder_common as _lc145
+_w145 = _lc145.serp_cache_wrap(_view145, 'Candidate SERP', 'Research',
+    "(j) => ({ keyword: j.keyword, location_code: $('Seed List').first().json.location_code, language_code: $('Seed List').first().json.language_code || 'en', depth: 30, load_async_ai_overview: true })",
+    SERP_CACHE_SRC, DFS_RETRY_SRC, 'the live Google results for a candidate keyword', 'search')
+for _nd145 in _view145['nodes']:
+    nodes[_nd145['name']] = _nd145
+assert _w145['dsts'] == ['Build Keyword Strategy'], _w145
+assert "try { return $('SERP Cache Split (Research)').all(); }" in code('Candidate SERP Retry Plan'), 'KW-SERP: the research gate does not pair what was sent'
 # the proof on the graph and in the code
 for _n145 in ('SERP Cache Key (Top 10)', 'Use SERP Cache (Top 10)', 'SERP Cache Row (Top 10)', 'Ladder SERP Cache Split', 'Ladder SERP Cache Rows', 'Ladder Cluster Requests', 'Ladder Clusters'):
     assert _SC145 in code(_n145) and '/*__' not in code(_n145), 'KW-SERP: ' + _n145 + ' is missing the cache kit'
