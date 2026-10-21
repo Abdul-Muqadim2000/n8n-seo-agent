@@ -11962,6 +11962,43 @@ for _n143 in ('Content QA', 'Blog Package', 'Originality Check', 'Outbound Link 
 log('The page check gives the client the right advice (2026-10-21, E-QA; pre-launch exec 42): a course / certification / job / directory page is never the page to beat and its sales headings never subtopics; the verdict\'s skipped topics leave the subtopics before the brief; with no page of the same kind the comparison is said to be impossible; any bracket in the body keeps the page not ready, with each bracket named and what to do (fill in or delete) and a next step that is an edit by hand, never a paid re-run; service pages carry a compact expert line with Person schema when a profile exists; one URL form, one secondary-keyword list, honest image alt text, no em dashes in the QA text')
 
 # =============================================================================
+# 144. THE LADDER READS THE PAGES IT COULD DUPLICATE, AND COMPARES EVERY RUNG WITH THE MAIN KEYWORD'S RESULTS PAGE (2026-10-21, paid run
+#      r04 / DRIVER_REPORT D7). At onboarding the app starts Track my site and the ladder together: the ladder read seo_pages before the
+#      Site Tracker stored a title ("19 of the 19 pages have no title on file yet ... judged by their address only"). And the plan put four
+#      pages on one intent ("ai consultant" + "ai consulting", "ai consultant dubai", "ai consulting firm") because the main keyword's "top 7"
+#      was competitors_summary - the pages the competitor analysis could READ after skipping Reddit / LinkedIn / marketplaces.
+#      * Ladder Title Requests -> Title Read Wanted? -> Read Ladder Titles (free GETs of the client's own pages, at most 8, retry rule) ->
+#        Ladder Titles -> Ladder Plan, on the main path after the relevance screen's count: the untitled pages whose address shares a word
+#        with the main keyword (then the pool, then a services section) are read, their <title> / <h1> join the inventory, and the plan says
+#        what was read and what could not be.
+#      * Ladder Plan compares every rung page AND every member of it with the main keyword's own results page (SERP Top 10 or its retries,
+#        top 7, the rungs' URL rule; competitors_summary only as the fallback) and with every keyword an earlier page claims: >= 3 of 7
+#        shared = a supporting keyword of that page, printed with the count.
+# =============================================================================
+_lp144 = pos('Ladder Plan')
+disconnect('After Count (Ladder Keyword Relevance)', 'Ladder Plan')
+add_node('Ladder Title Requests', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Title_Requests.js')}, [_lp144[0] - 660, _lp144[1] + 420])
+if_node('Title Read Wanted?', '{{ $json.title_check === true }}', [_lp144[0] - 440, _lp144[1] + 420])
+add_node('Read Ladder Titles', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.15)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'timeout': 15000, 'batching': {'batch': {'batchSize': 2, 'batchInterval': 300}}, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}},
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [_lp144[0] - 220, _lp144[1] + 340], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
+add_node('Ladder Titles', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Titles.js')}, [_lp144[0], _lp144[1] + 420])
+connect('After Count (Ladder Keyword Relevance)', 'Ladder Title Requests')
+connect('Ladder Title Requests', 'Title Read Wanted?')
+connect('Title Read Wanted?', 'Read Ladder Titles', 0); connect('Title Read Wanted?', 'Ladder Titles', 1)
+connect('Read Ladder Titles', 'Ladder Titles')
+connect('Ladder Titles', 'Ladder Plan')
+assert [t['node'] for l in conns['Ladder Titles']['main'] for t in l] == ['Ladder Plan'], 'D7: the title read does not reach Ladder Plan'
+assert 'Ladder Plan' not in [t['node'] for l in conns['After Count (Ladder Keyword Relevance)']['main'] for t in l], 'D7: Ladder Plan still runs before the title read'
+assert "$('Ladder Keyword Relevance').all()" in code('Ladder Plan'), 'D7: Ladder Plan must read the relevance screen by name (its input is the title read now)'
+assert "$('Ladder Titles').first().json.page_titles" in code('Ladder Plan') and 'const SM = (() => {' in code('Ladder Title Requests'), 'D7: the titles read do not reach the plan'
+assert "for (const n of ['SERP Top 10 (Light Retry)', 'SERP Top 10 (Retry)', 'SERP Top 10'])" in code('Ladder Plan') and 'const pairShare = ' in code('Ladder Plan'), \
+    'one search, one page: the rungs are not compared with the main keyword\'s own results page'
+log('The ladder reads the pages it could duplicate and compares every rung with the main keyword\'s results page (2026-10-21, paid run r04, D7): Ladder Title Requests -> Title Read Wanted? -> Read Ladder Titles (at most 8 free GETs of the client\'s own untitled pages that could overlap the plan, retry rule) -> Ladder Titles -> Ladder Plan; the plan judges overlap on the titles read and says what it read; every rung page and member is compared with the main keyword\'s own results page (SERP Top 10 / retries, top 7) and with every keyword an earlier page claims, >= 3 of 7 = a supporting keyword of that page, with the count')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

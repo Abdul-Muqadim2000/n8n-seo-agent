@@ -18,7 +18,7 @@
 const base = $('Parse Verdict').first().json;
 const pool = $('Ladder Pool').first().json;
 const chunks = $('Ladder Relevance Chunks').all().map(i => i.json);
-const outs = $input.all().map(i => i.json);
+const outs = (() => { try { return $('Ladder Keyword Relevance').all().map(i => i.json); } catch (e) { return $input.all().map(i => i.json); } })();   // D7: the title read sits between the screen and this node
 const head = String(base.keyword || '').toLowerCase().trim();
 const domain = String(base.domain || '').toLowerCase();
 // D15 (system review 2026-10-11): every URL we emit uses the site model's canonical host (SITE_MODEL_SPEC.md §6) -- the bare domain
@@ -182,8 +182,14 @@ for (const k of onTopic) { const r = rungMap.get(k.keyword); if (r) byRung[r].pu
 // a page answers the keyword when >= 75% of its meaningful words are in the slug or the title, or when it already gets impressions for
 // the exact query (seo_pages, filled weekly by the Site Tracker). A hit means status 'improve' with the real URL, never a second page.
 const siteModel = (() => { try { const m = $('Site Model').first().json.site_model; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } })();
+// D7 (paid run 2026-10-21, exec 15): the app starts Track my site and the ladder together, so seo_pages had no title yet. The pages that could
+// overlap this plan were read just now (Ladder Title Requests -> Read Ladder Titles -> Ladder Titles, at most 8 free GETs of the client's
+// own pages); their titles join the inventory here, so the overlap is judged on what the page says and not on its address alone.
+const PAGE_TITLES = (() => { try { const t = $('Ladder Titles').first().json.page_titles; return (t && typeof t === 'object') ? t : null; } catch (e) { return null; } })();
+const titlesRead = ((PAGE_TITLES || {}).read || []).filter(r => r && r.url && (r.title || r.h1));
 const invPages = [...(base.site_urls || []).map(u => ({ url: u, source: 'sitemap' })),
-  ...((base.internal_link_candidates || []).filter(c => c && c.url && c.title).map(c => ({ url: c.url, title: c.title, source: 'sitemap' })))];
+  ...((base.internal_link_candidates || []).filter(c => c && c.url && c.title).map(c => ({ url: c.url, title: c.title, source: 'sitemap' }))),
+  ...titlesRead.map(r => ({ url: r.url, title: r.title || '', h1: r.h1 || '', source: 'sitemap' }))];
 const pageModel = SM.withPages(siteModel || SM.from({ domain }, {}), invPages);
 const findExisting = (keyword, yourUrl) => {
   if (yourUrl) return { url: yourUrl, source: 'ranking' };
@@ -393,10 +399,26 @@ const one_page = { moved: [], left_out: [], kept: [] };
   const lowK = (x) => String(x || '').toLowerCase().trim();
   const urlsOfK = (kw) => { const u = (((SERP_CL || {}).urls_of) || {})[lowK(kw)]; return Array.isArray(u) && u.length ? u : null; };
   const needK = (SERP_CL || {}).min_shared_urls || 3, depthK = (SERP_CL || {}).top_n || 7;
-  const headUrls = (base.competitors_summary || []).filter(c => c && Number(c.rank) >= 1 && Number(c.rank) <= depthK)
+  // 2026-10-21 (paid run r04): the main keyword's top 7 came from competitors_summary - the pages the competitor analysis could READ, after
+  // it skipped Reddit / LinkedIn / Wikipedia / marketplaces - so a gap-toothed list stood for "the main keyword's results page" and no rung
+  // could be measured against it ("ai consulting", "ai consultant dubai" and "ai consulting firm" stayed pages of their own beside "ai
+  // consultant"). The results page this run already bought for the main keyword (SERP Top 10 or its retries) is read here in full, at the
+  // same depth and by the same URL rule as the rungs; competitors_summary stays the fallback when that answer is not in this run.
+  const serpHeadUrls = (() => { for (const n of ['SERP Top 10 (Light Retry)', 'SERP Top 10 (Retry)', 'SERP Top 10']) {
+    let a = null; try { a = $(n).first().json; } catch (e) { a = null; }
+    const t = (((a || {}).tasks) || [])[0] || {}; if (Number(t.status_code) !== 20000) continue;
+    const items = ((((t.result || [])[0]) || {}).items || []).filter(x => x && x.type === 'organic' && (x.url || x.domain))
+      .sort((x, y) => (Number(x.rank_group) || 99) - (Number(y.rank_group) || 99));
+    const u = [...new Set(items.map(x => KWI.urlKey(x.url || x.domain)).filter(Boolean))].slice(0, depthK);
+    if (u.length >= KWI.CFG.min_urls) return u; } return null; })();
+  const headUrls = serpHeadUrls || (base.competitors_summary || []).filter(c => c && Number(c.rank) >= 1 && Number(c.rank) <= depthK)
     .sort((a, b) => Number(a.rank) - Number(b.rank)).map(c => KWI.urlKey(c.url || c.domain)).filter(Boolean);
   const headRead = headUrls.length >= KWI.CFG.min_urls;
+  one_page.head_results = serpHeadUrls ? 'the main keyword\'s own results page (top ' + headUrls.length + ')' : headRead ? 'the competitor pages read for the main keyword (' + headUrls.length + ')' : 'not available';
   const sharedN = (a, b) => { const sb = new Set(b); return a.filter(u => sb.has(u)).length; };
+  // measured overlap only: null / -1 when a results page was not read (then the words decide, as before)
+  const headShare = (kw) => { const u = urlsOfK(kw); return u && headRead ? sharedN(u, headUrls) : null; };
+  const pairShare = (a, b) => { const ua = urlsOfK(a), ub = urlsOfK(b); return ua && ub && lowK(a) !== lowK(b) ? sharedN(ua, ub) : -1; };
   // the same words: every word kept (numbers and one-letter words too - "phase 1" is not "phase 2"; "best" and "top" change the search),
   // only joining words dropped and a plural folded ("companies" = "company"); the R1 cross-ladder rule (overlapTokens, 75%) is looser
   // on purpose and is not used here
@@ -421,11 +443,31 @@ const one_page = { moved: [], left_out: [], kept: [] };
   const owners = [];
   for (const r of rungs) r.pages = r.pages.filter(pg => {
     if (sameKw(pg.keyword, head)) {
-      top.supporting = [...new Set([...(top.supporting || []), pg.keyword])];
-      one_page.moved.push({ keyword: pg.keyword, from: 'rung ' + r.rung + ' page', to: 'the main page', why: 'it is the main keyword\'s own search' }); return false; }
+      // 2026-10-21: the page's other keywords go with it (they were dropped before), and a measured share is printed as measured
+      const hs = headShare(pg.keyword);
+      top.supporting = [...new Set([...(top.supporting || []), pg.keyword, ...(pg.supporting || [])])];
+      one_page.moved.push({ keyword: pg.keyword, from: 'rung ' + r.rung + ' page', to: 'the main page', ...(hs != null ? { shared_urls: hs, of: headUrls.length } : {}),
+        why: hs != null ? 'Google answers it with the main keyword\'s own pages (' + hs + ' of the top ' + headUrls.length + ' shared, ' + needK + ' needed), so it is a supporting keyword of the main page, not a page of its own' : 'it is the main keyword\'s own search' });
+      for (const m of (pg.supporting || [])) one_page.moved.push({ keyword: m, from: 'rung ' + r.rung + ' page "' + pg.keyword + '"', to: 'the main page', why: 'it went with "' + pg.keyword + '", whose results page is the main keyword\'s' });
+      return false; }
     const owner = owners.find(o => claimsOf(o).some(k => sameKw(k, pg.keyword)));
     if (owner) { owner.supporting = [...new Set([...(owner.supporting || []), pg.keyword, ...(pg.supporting || [])])];
       one_page.moved.push({ keyword: pg.keyword, from: 'rung ' + r.rung + ' page', to: '"' + owner.keyword + '"', why: 'the same search as a keyword that page already targets' }); return false; }
+    // 2026-10-21: every OTHER keyword of the page too, pair by pair - a member Google answers with the main keyword's pages joins the main
+    // page; a member sharing its results page with a keyword an earlier page already claims joins that page (A-9: two searches sharing 3 of
+    // 7 that the grouping had put in two different groups stayed on two pages)
+    const before = new Set(pg.supporting || []);
+    pg.supporting = (pg.supporting || []).filter(m => {
+      const mh = headShare(m);
+      if (mh != null && mh >= needK) { top.supporting = [...new Set([...(top.supporting || []), m])];
+        one_page.moved.push({ keyword: m, from: 'rung ' + r.rung + ' page "' + pg.keyword + '"', to: 'the main page', shared_urls: mh, of: headUrls.length,
+          why: 'Google answers it with the main keyword\'s own pages (' + mh + ' of the top ' + headUrls.length + ' shared, ' + needK + ' needed)' }); return false; }
+      for (const o of owners) { const k = claimsOf(o).find(c => pairShare(c, m) >= needK); if (!k) continue;
+        const n = pairShare(k, m); o.supporting = [...new Set([...(o.supporting || []), m])];
+        one_page.moved.push({ keyword: m, from: 'rung ' + r.rung + ' page "' + pg.keyword + '"', to: '"' + o.keyword + '"', shared_urls: n, of: depthK,
+          why: 'it shares ' + n + ' of its top ' + depthK + ' with "' + k + '", which that page already targets (' + needK + ' needed)' }); return false; }
+      return true; });
+    if (Array.isArray(pg.keywords)) pg.keywords = pg.keywords.filter(k => !before.has(k.keyword) || pg.supporting.includes(k.keyword));
     owners.push(pg); return true; });
   // a rung page's supporting keyword that a live page of the site already answers belongs to that page, not to a new one
   for (const pg of owners) pg.supporting = (pg.supporting || []).filter(kw => { const c = OWN.claim(kw, pageOnly(pg.exists ? [pg.target_url] : []));
@@ -439,7 +481,8 @@ const one_page = { moved: [], left_out: [], kept: [] };
     if (kw === head) continue;   // the same search as the head (same words, or the same results page) belongs on this page: it is kept below
     // R34 / step 2 above: a keyword folded into the main page because the same live page (or the main search itself) answers it stays
     const fold = folded.find(f => lowK(f.keyword) === kw && f.into === 'main page') || one_page.moved.find(m => lowK(m.keyword) === kw && m.to === 'the main page');
-    if (fold) { keep.push({ keyword: kw, by: fold.why || 'the same live page answers it', shared_urls: null, of: null }); continue; }
+    if (fold) { keep.push(fold.shared_urls != null && fold.shared_urls >= needK ? { keyword: kw, by: 'shared results page', shared_urls: fold.shared_urls, of: fold.of || headUrls.length }
+      : { keyword: kw, by: fold.why || 'the same live page answers it', shared_urls: null, of: null }); continue; }
     const owner = owners.find(o => claimsOf(o).some(k => sameKw(k, kw)));
     if (owner) { out('the rung page "' + owner.keyword + '" targets it'); continue; }
     const tk = takenBy(kw); if (tk) { out('it belongs to your ladder "' + tk.head + '"'); continue; }   // R1, the cross-ladder rule the rungs use
@@ -615,6 +658,7 @@ const allPlanned = planned ? [...rungPages, top] : [];
 const nImprove = allPlanned.filter(p => p.exists).length, nNew = allPlanned.length - nImprove;
 const bestPos = topic_authority.best;
 topic_authority.coverage = { pages_on_site: pagesOnTopic.length, pages: pagesOnTopic.slice(0, 8), ranked_keywords: topic_authority.on_topic, title_gap: titleGapL, folded,
+  titles_read: PAGE_TITLES ? { asked: PAGE_TITLES.asked, read: titlesRead.slice(0, 8), failed: (PAGE_TITLES.failed || []).slice(0, 8), skip_reason: PAGE_TITLES.skip_reason || '' } : null,
   top10_keywords: topic_authority.top10, best_position: bestPos ? bestPos.position : null, best_keyword: bestPos ? bestPos.keyword : '',
   planned_total: allPlanned.length, planned_improve: nImprove, planned_new: nNew,
   summary: !planned ? 'No pages were planned, so there is nothing to compare with what the site already has.'
@@ -735,6 +779,12 @@ if (refusal) notes.push(refusal.message);
 notes.push(topic_authority.note);
 if (planned) notes.push(topic_authority.coverage.summary);
 if (planned) for (const f of folded) notes.push(f.note + '.');   // R34
+// D7: what was read live for this plan, and what could not be
+if (planned && PAGE_TITLES && PAGE_TITLES.asked) notes.push('Pages read for this plan: ' + PAGE_TITLES.untitled + ' page(s) of the site had no title on file yet, so the '
+  + PAGE_TITLES.asked + ' whose address could overlap these keywords were read now: '
+  + titlesRead.slice(0, 8).map(r => r.url + ' ("' + String(r.title || r.h1).slice(0, 80) + '")').join(', ')
+  + ((PAGE_TITLES.failed || []).length ? (titlesRead.length ? '; ' : '') + PAGE_TITLES.failed.length + ' could not be read (' + PAGE_TITLES.failed.slice(0, 3).map(f => f.url + ': ' + f.reason).join(', ') + ') and were judged by their address only' : '')
+  + '. A page that answers a search in this plan is improved, never given a second page.');
 // B2-4: what Google itself said about which of these searches want the same page, what it cost, and what could not be compared
 if (SERP_CL && SERP_CL.note) notes.push(SERP_CL.note
   + (planned && clusterRungs.length ? ' In this plan ' + clusterRungs.length + ' group(s) became one page each instead of several: '
