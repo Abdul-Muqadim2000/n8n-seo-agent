@@ -11464,7 +11464,7 @@ assert 'PH.scan(finalBody)' in code('Content QA') and 'PH_RE' not in code('Conte
 _ph_ts130 = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'app', 'shared', 'src', 'placeholders.ts')
 if os.path.exists(_ph_ts130):
     _pt130 = open(_ph_ts130, encoding='utf-8').read()
-    for _pat130 in ('BRACKET_SRC', 'NOTE_SRC'):
+    for _pat130 in ('BRACKET_SRC', 'NOTE_SRC', 'CODE_SRC', 'NOT_GAP_SRC'):   # CT-FIX: the code and not-a-gap rules too
         _m130 = re.search(r'const ' + _pat130 + r' = ("(?:[^"\\]|\\.)*");', PLACEHOLDERS_SRC)
         assert _m130 and ('PLACEHOLDER_' + _pat130 + ' = ' + _m130.group(1) + ';') in _pt130, 'A-13: app/shared/src/placeholders.ts and v5/code/_placeholders.js disagree on ' + _pat130
 assert 'CL.business(md, OWN_TEXT' in code('Content QA') and 'ownStat(s)' in code('Content QA'), 'A-15 / A-19: the business claims or the own-figures check are not wired'

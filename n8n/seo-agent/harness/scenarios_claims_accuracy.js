@@ -38,8 +38,10 @@ module.exports = async (ctx) => {
     check('CLACC set: the 11 promises of the 2026-10-21 page are in it, labelled unsupported, read inside their real section', promises.length === 11 && promises.every(c => c.label === 'unsupported_claim' && c.section && c.section.includes(c.sentence)), promises.length);
     const ids = SET.cases.map(c => c.id);
     check('CLACC set: case ids are unique', new Set(ids).size === ids.length);
-    const wrongHold = SET.cases.filter(c => !!c.holdout !== (crypto.createHash('sha1').update(c.sentence + c.site, 'utf8').digest()[0] % 10 < 3));
-    check('CLACC set: the hold-out mark is sha1(sentence + site)[0] % 10 < 3 on every case', !wrongHold.length, wrongHold.map(c => c.id).join(', '));
+    // CT-FIX (2026-10-22): the independent review's synthetic cases (source "independent review ...") are hold-out as a group: they were
+    // written by the reviewer before the fix and are never tuned on
+    const wrongHold = SET.cases.filter(c => !!c.holdout !== (/^independent review/.test(c.source) || crypto.createHash('sha1').update(c.sentence + c.site, 'utf8').digest()[0] % 10 < 3));
+    check('CLACC set: the hold-out mark is sha1(sentence + site)[0] % 10 < 3 on every case, and every independent-review case is hold-out', !wrongHold.length, wrongHold.map(c => c.id).join(', '));
 
     const r = await scoreClaims(H, console.log);
 

@@ -8,8 +8,12 @@
 //   - a review note is one of the closed list Confirm / Owner / Author insight / Image;
 //   - every other bracket that starts with a letter is a placeholder, whatever its case or punctuation.
 
-export const PLACEHOLDER_BRACKET_SRC = "(?<![!\\\\])\\[([A-Za-z][^\\[\\]\\n]{0,399})\\](?![(:])";
+export const PLACEHOLDER_BRACKET_SRC = "(?<![!\\\\])\\[(\\p{L}[^\\[\\]\\n]{0,399})\\](?![(:])";
 export const PLACEHOLDER_NOTE_SRC = "^(?:confirm|owner|author insight|image)\\s*:";
+// 2026-10-22 (CT-FIX, review item 11): code is read as code, a bracket starts with a letter of any script (Arabic included), and an
+// edit / date label or "[sic]" is not a gap. Same strings as the engine (the build compares all four).
+export const PLACEHOLDER_CODE_SRC = "```[\\s\\S]*?```|~~~[\\s\\S]*?~~~|`[^`\\n]+`";
+export const PLACEHOLDER_NOT_GAP_SRC = "^(?:sic!?|emphasis (?:added|mine|ours)|(?:last )?(?:updated|revised|edited|reviewed|published)\\b[^\\]]*\\d{4}|(?:19|20)\\d\\d)$";
 
 export type OpenBracketKind = 'placeholder' | 'review_note';
 export interface OpenBracket {
@@ -19,16 +23,19 @@ export interface OpenBracket {
 }
 
 /** A fresh global matcher for every bracket that may be left for a person (stateful `lastIndex`, so never shared). */
-export const placeholderRe = (): RegExp => new RegExp(PLACEHOLDER_BRACKET_SRC, 'g');
+export const placeholderRe = (): RegExp => new RegExp(PLACEHOLDER_BRACKET_SRC, 'gu');
 const NOTE_RE = new RegExp(PLACEHOLDER_NOTE_SRC, 'i');
+const NOT_GAP_RE = new RegExp(PLACEHOLDER_NOT_GAP_SRC, 'i');
+/** The text with inline and fenced code blanked out: an index such as `labels[sensitivity]` is not a gap. */
+export const withoutCode = (text: string): string => String(text ?? '').replace(new RegExp(PLACEHOLDER_CODE_SRC, 'g'), ' ');
 
 /** Every bracket left in `text` for a person, counted per token, placeholders first, each kind by count. */
 export function findOpenBrackets(text: string): OpenBracket[] {
   const ph = new Map<string, number>();
   const nt = new Map<string, number>();
-  for (const m of String(text ?? '').matchAll(placeholderRe())) {
+  for (const m of withoutCode(text).matchAll(placeholderRe())) {
     const inner = (m[1] ?? '').trim();
-    if (!inner || /^x$/i.test(inner)) continue;
+    if (!inner || /^x$/i.test(inner) || NOT_GAP_RE.test(inner)) continue;
     const tok = `[${m[1]}]`;
     const into = NOTE_RE.test(inner) ? nt : ph;
     into.set(tok, (into.get(tok) ?? 0) + 1);
@@ -37,6 +44,9 @@ export function findOpenBrackets(text: string): OpenBracket[] {
     [...mp.entries()].map(([token, count]) => ({ token, count, kind })).sort((a, b) => b.count - a.count);
   return [...list(ph, 'placeholder'), ...list(nt, 'review_note')];
 }
+
+/** Whether the inside of one matched bracket is left for a person (not a ticked checkbox, "[sic]" or an "[Updated 2026]" label). */
+export const isOpenBracket = (inner: string): boolean => { const x = String(inner ?? '').trim(); return !!x && !/^x$/i.test(x) && !NOT_GAP_RE.test(x); };
 
 /** Whether one matched token is a review note (Confirm / Owner / Author insight / Image) rather than a gap to fill. */
 export const isReviewNote = (token: string): boolean => NOTE_RE.test(token.replace(/^\[|\]$/g, '').trim());

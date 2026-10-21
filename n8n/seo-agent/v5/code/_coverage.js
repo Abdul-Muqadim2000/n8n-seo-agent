@@ -48,6 +48,12 @@ const CVG = (() => {
   // The kind 'other' is a course, a certification, a training programme, a job, career or salary page, a freelance marketplace or a
   // member directory, read from the title, the URL path and the page's own headings.
   const OTHER_TITLE = /\b(?:certified|certifications?|certificates?|courses?|bootcamps?|diplomas?|degrees?|masterclass|syllabus|curriculum|tuition|salary|salaries|jobs?|vacanc\w*|careers?|freelancers?|freelance|associations?|directory|membership|marketplace)\b|\bprogram(?:me)?s?\b(?!\s+management)|\bhow (?:to|do i|can i) become\b|\bfor hire\b/i;
+  // CT-FIX (review item 4, 2026-10-22): one word in a title is not enough. "Microsoft Certified Dynamics 365 Partner", "Active Directory &
+  // Azure Migration Services", "Shopify Development & Marketplace Integration", "ERP Implementation | Programme Delivery", "Salesforce
+  // Consulting Partner | Careers at scale" and a Golden Visa page with two "Eligibility" headings are real competitors. A page is
+  // 'other' on TWO signals (title, URL path, headings); a title word that only ever names a course, a job or a salary (STRONG) is two.
+  const OTHER_STRONG = /\b(?:courses?|bootcamps?|diplomas?|degrees?|masterclass|syllabus|tuition|salary|salaries|jobs?|vacanc\w*|freelancers?|freelance)\b|\bhow (?:to|do i|can i) become\b|\bfor hire\b/i;
+  const OTHER_KW = /\b(?:training|trainings|course|courses|certif\w*|bootcamps?|diplomas?|degrees?|jobs?|careers?|salar\w*|academy|workshops?)\b/i;   // a client that sells the course itself
   const OTHER_PATH = /\/(?:[a-z-]*certif[a-z-]*|[a-z-]*courses?|bootcamps?|training(?:-[a-z-]+)?|programs?|programmes?|jobs?|careers?|vacancies|salar[a-z-]*|hire|freelancers?|directory|members?)(?:\/|$)/i;
   const OTHER_HEADINGS = /\b(?:program(?:me)? fees?|course fees?|tuition|eligibility|eligible|curriculum|syllabus|enrol\w*|enroll\w*|admissions?|alumni|study[- ]?(?:books?|kits?|materials?)|get certified|salary|job (?:description|openings)|apply now|member directory|get listed|post a job)\b/i;
   // The words of the keyword itself are never the evidence: "Consultant" in "Certified AI Consultant" says what the page is about, not
@@ -63,13 +69,12 @@ const CVG = (() => {
   // why a page is 'other' ('title' | 'headings' | 'path'), or '' when it is not. A search for the course itself ("ai consultant
   // certification") is not refused for being one: when the keyword carries such a word, nothing is 'other'.
   const otherWhy = (p, keyword) => {
-    if (OTHER_TITLE.test(S(keyword))) return '';
+    if (OTHER_TITLE.test(S(keyword)) || OTHER_KW.test(S(keyword))) return '';
     const title = kwStrip(S(p && p.title), keyword), path = pathOf(p && p.url).toLowerCase();
-    if (OTHER_TITLE.test(title)) return 'title';
+    if (OTHER_STRONG.test(title)) return 'title';
     const hs = ((p && p.headings) || []).map(h => S(h).replace(/^H\d:\s*/i, '')).filter(h => OTHER_HEADINGS.test(h));
-    if (hs.length >= 2) return 'headings';
-    if (OTHER_PATH.test(path) && !GUIDE_PATH.test(path)) return 'path';
-    return '';
+    const sig = [OTHER_TITLE.test(title) ? 'title' : '', hs.length >= 2 ? 'headings' : '', (OTHER_PATH.test(path) && !GUIDE_PATH.test(path)) ? 'path' : ''].filter(Boolean);
+    return sig.length >= 2 ? sig.join(' + ') : '';
   };
   // R44 kinds plus D5: 'list' | 'other' | 'service' | 'guide' | 'unknown'. A page nothing says sells the service is 'unknown' now, not
   // 'service' (iaaic.org's directory homepage was a "service page" by that default): it can stand in for the term target, never be the
@@ -84,6 +89,13 @@ const CVG = (() => {
     const sep = title.split(/\s+[|–—-]\s+/);   // "AI Consulting Services | ATI Lab", "AI Consulting Services in Dubai - Kinetic Consulting"
     if (sep.length >= 2 && sep[sep.length - 1].split(/\s+/).length <= 4 && SERVICE_WORDS.test(kwStrip(sep.slice(0, -1).join(' '), kw))) return 'service';
     if (p && p.has_author && p.has_date) return 'guide';
+    // CT-FIX (review item 3): "AI Consultant in Dubai | Kinetic", "Hire an AI Consultant in Dubai" and "AI Consulting Services Dubai" were
+    // 'unknown', so a service page had no page of its kind to beat. A page that is no list, no guide and no course whose title offers the
+    // thing (an offer word) or names the search itself (every keyword word, any ending) is a service page.
+    if (SERVICE_WORDS.test(kwStrip(title, kw))) return 'service';
+    const kws = S(kw).toLowerCase().split(/[^a-z0-9&]+/).filter(w => w.length >= 2 && !STOP.has(w));
+    const tl = title.toLowerCase();
+    if (kws.length && kws.every(w => new RegExp('\\b' + w.slice(0, Math.max(2, Math.min(w.length, 7))).replace(/[^a-z0-9&]/g, '')).test(tl))) return 'service';
     return 'unknown';
   };
   // the kind of page being written, from the page type (PT.of options): a service / product / landing / local page sells; the rest explain
@@ -140,7 +152,12 @@ const CVG = (() => {
   // eligibility, a curriculum, enrolment, study kits, "Ready for your Next Step?" (exec 42's usaii.org headings).
   const PROMO_OFFER = /(?:\bUS\s?\$|\$\s?\d|\b(?:aed|usd|eur|gbp|sar|inr)\s?\d|\d\s?(?:aed|usd|eur|gbp|sar)\b)|\b(?:program(?:me)?s? fees?|course fees?|tuition|fees?\s*:|prices?\s*:|discounts?|speedster|worth up to|alumni|eligib\w*|curriculum|syllabus|enrol\w*|enroll\w*|admissions?|scholarships?|study[- ]?(?:books?|kits?|materials?)|ready for (?:your|the) next|resource cent(?:er|re)|e-?learning)\b/i;
   const FREE_CAPS = /\bFREE\b/;
-  const isPromo = (h) => { const t = clean(h); return PROMO.test(t) || PROMO_OFFER.test(t) || FREE_CAPS.test(t); };
+  // CT-FIX (review item 5): "Eligibility for small business relief", "Volume discounts for multi-year licences", "Projects under $50k: what
+  // to expect", "Curriculum design for internal AI training", "FREE trial versus paid pilot" are topics on a page of our kind. A course's
+  // sales words count only when the page to beat is a course / job / directory page (kind 'other'); a heading that IS a fee or an amount
+  // ("Fee: US $894", "Program Fee: US $894 (All Inclusive)", "AED 4,500") is never a topic.
+  const FEE_LABEL = /^(?:(?:program(?:me)?|course|registration|application|exam|joining)\s+)?(?:fees?|prices?|pricing|costs?|tuition)\s*:|^\W*(?:US\s?)?(?:\$|aed|usd|eur|gbp|sar|inr)\s?\d[\d,.]*\s*[a-z]{0,3}\W*(?:\([^)]*\))?\s*$/i;
+  const isPromo = (h, kind) => { const t = clean(h); return PROMO.test(t) || FEE_LABEL.test(t) || (kind === 'other' && (PROMO_OFFER.test(t) || FREE_CAPS.test(t))); };
   const ENTRY_DETAIL = /^(?:key (?:highlights|features|services)|services|contact information|location|founded|headquarters|pricing|rating|website|pros|cons|why we picked it)\b/i;
   const levelOf = (h) => { const m = S(h).match(/^H(\d)\s*:/i); return m ? Number(m[1]) : 2; };
   const bodyUnder = (content, text) => {   // the words between this heading's line and the next heading line, or null when the line is not found
@@ -202,7 +219,7 @@ const CVG = (() => {
       const text = clean(h); const key = text.toLowerCase();
       if (!text || text.length < 8 || text.length > 90 || JUNK.test(text) || seen.has(key)) continue;
       if (toks(text).length < 2) continue;
-      if (isPromo(text)) continue;
+      if (isPromo(text, list ? 'list' : kindOf(page, opts && opts.keyword))) continue;
       if (namesBrand(text, page, opts, marks)) continue;   // A-16: the competitor's own name is never our subtopic
       if (list && (/^\d+[.)]\s/.test(text) || ENTRY_DETAIL.test(text))) continue;
       const parent = i + 1 < hs.length && levelOf(hs[i + 1]) > levelOf(h);
