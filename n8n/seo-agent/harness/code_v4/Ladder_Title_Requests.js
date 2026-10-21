@@ -412,4 +412,12 @@ const scored = untitled.map(p => {
 }).filter(x => x.score > 0).sort((a, b) => b.score - a.score || a.path.length - b.path.length);
 if (!scored.length) return skip('none of the ' + untitled.length + ' untitled page(s) could overlap this plan by its address or section');
 const pick = scored.slice(0, CAP);
-return pick.map((x, i) => ({ json: { title_check: true, url: x.url, why: x.why, n: i + 1, of: pick.length, untitled: untitled.length, candidates: scored.length, cap: CAP } }));
+// KW-LADDER (review item 9): a client-rendered site answers every address with the same app-shell title ("Tech& | Enterprise Automation &
+// Digital Transformation Solutions", no H1), which is the homepage's title and not the page's. Ladder Titles discards a title equal to the
+// homepage's, so the homepage title is needed: the one on file, else the homepage is read once more as a reference (free, not in the cap,
+// never a page of the plan).
+const homeOnFile = SM.pages(pm).find(p => p && p.url && SM.helpers.bare(SM.helpers.hostOf(p.url) || '') === own && SM.helpers.pathOf(p.url).replace(/[?#].*$/, '').replace(/\/+$/, '') === '' && String(p.title || '').trim());
+const home_title = homeOnFile ? String(homeOnFile.title).trim() : '';
+const items = pick.map((x, i) => ({ json: { title_check: true, url: x.url, why: x.why, n: i + 1, of: pick.length, untitled: untitled.length, candidates: scored.length, cap: CAP, home_title } }));
+if (!home_title) items.push({ json: { title_check: true, home_ref: true, url: SM.siteUrl(model || SM.from({ domain }, {}), '/'), why: 'the homepage, to recognise a site-wide title', n: pick.length + 1, of: pick.length, untitled: untitled.length, candidates: scored.length, cap: CAP, home_title: '' } });
+return items;
