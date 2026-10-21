@@ -142,6 +142,13 @@ if (scl && scl.asked) {
 } else if (scl && scl.skip_reason) {
   parts.push(h2('Searches that share a results page') + '<p>' + esc(scl.note || scl.skip_reason) + '</p>');
 }
+// KW-COMP (2026-10-21, RV-6): who this ladder competes with, read from the same results pages, with the sites that rank but compete with nobody
+const cmpL = scl && scl.competitors;
+if (cmpL && ((cmpL.picked || []).length || (cmpL.excluded || []).length)) {
+  parts.push(h2('Who you compete with on this ladder') +
+    ((cmpL.picked || []).length ? '<ul>' + cmpL.picked.map(c => '<li><b>' + esc(c.domain) + '</b>: ' + esc(c.evidence) + '</li>').join('') + '</ul>' : '<p>No business ranked often enough on these results pages to count as a competitor.</p>') +
+    '<p class="small">' + esc(cmpL.note) + '</p>');
+}
 
 // 4. The ladder (only when pages were planned)
 if (planned) {

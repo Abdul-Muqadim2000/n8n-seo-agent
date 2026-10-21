@@ -763,9 +763,10 @@ SOURCES_SRC = _rd0('code/_sources.js').rstrip('\n'); ANCHOR_SRC = _rd0('code/_an
 PAGE_TYPE_SRC = _rd0('code/_page_type.js').rstrip('\n')   # 2026-10-12 (D10): the page type as one of the form's fixed options, with the verdict's free text kept as page_notes
 GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 / D24): the Search Console query rules (scraper queries, brand split, anonymised share)
 KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
+COMPETITORS_SRC = _rd0('code/_competitors.js').rstrip('\n')   # 2026-10-21 (KW-COMP, RV-6): who is a competitor (a business ranking on several of the run's results pages), one answer for research, the ladder and the full report
 RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n'))   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n'))   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -11902,6 +11903,51 @@ patch('Pick Competitors', "const isBig = (d) => BIG.some(b => d === b || d.endsW
 assert 'MIN_TOP10_143' in code('Competitor Analysis') and 'help|support|docs' in code('Pick Competitors') and '__med143' in code('GSC Audit Findings'), 'RV-6: the comparison guards are missing'
 log('Pages that are gone, one message everywhere (2026-10-21, pre-launch run on techand.ai, fixer E-DEAD, RV-1 / RV-2 / RV-3 / RV-5 / RV-6): every known address that answered a redirect is asked again with the redirects followed (Not Crawled Hops -> Fetch Not Crawled (Final)), one that ends in 404 / 410 is gone and every gone address is ONE finding, "Pages Google still shows no longer answer: redirect them", with the page each should redirect to (v5/code/_gone.js), ranked with the index blockers and written to the fix pack\'s redirects.csv; the Search Console lists stop asking to add gone pages to the sitemap or rewrite their titles, a complete crawl is not called a crawl limit, a finding outside the crawl counts in its own unit; no "far fewer top-10 rankings" or "traffic under 10% of competitors" against a tiny competitor median or against Search Console\'s measured clicks, and a help-centre or docs subdomain is never a competitor')
 # <<< 143 (E-DEAD)
+# >>> 144 (KW-COMP)
+# =============================================================================
+# 144. ONE ANSWER TO "WHO IS A COMPETITOR" (2026-10-21, agent KW-COMP; K6 / A-24 of 10-17, RV-6 / RV-14 of the pre-launch run). Research took
+#      its competitors from one results page (a job board at #2: 545 of 1,168 pool keywords from job and directory sites); the full report
+#      named help.ardoq.com. v5/code/_competitors.js (CMP) classifies a domain from its host and the result (job board, directory,
+#      marketplace, review, media, government / free zone, search engine, social, Q&A, help / docs subdomain, education, reference,
+#      platform, list of companies) and scores the businesses by how many of the results pages the run ALREADY bought they rank on, weighted
+#      by position; the declared competitors stay first; every pick carries its evidence and every exclusion its kind. Used by discovery
+#      (Competitor Keyword Requests: the pool grows only from business competitors), the ladder (Ladder Clusters -> serp_clusters.competitors,
+#      printed in the ladder report) and the full report (Pick Competitors, here). The AI visibility rival logic is unchanged.
+# =============================================================================
+patch('Pick Competitors', "const clean = (d) => String(d || '').toLowerCase().replace(/^www\\./, '');\nconst isOurs = (d) => d === ours || d.endsWith('.' + ours);",
+      "const clean = (d) => String(d || '').toLowerCase().replace(/^www\\./, '');\nconst isOurs = (d) => d === ours || d.endsWith('.' + ours);\n" + COMPETITORS_SRC + "\n"
+      "// KW-COMP (2026-10-21, RV-6): the same competitor rule as research and the ladder (CMP): a domain whose ADDRESS is a job board, directory,\n"
+      "// review or media site, authority, search engine, social network, Q&A site, help / docs subdomain, course provider or platform is never a\n"
+      "// competitor, whatever it shares; the results pages score the businesses by how many of them each ranks on, weighted by position.\n"
+      "const cmpExcluded = [];\n"
+      "const notBusiness = (d) => { const k = CMP.kindOfHost(d, ours); if (k === 'business') return false; if (k !== 'you' && !cmpExcluded.some(e => e.domain === d)) cmpExcluded.push({ domain: d, kind: k, label: CMP.LABEL[k] || k }); return true; };")
+patch('Pick Competitors', "    if (!d || isOurs(d) || isBig(d)) return;\n    score[d] = (score[d] || 0) + (it.intersections || 0) * 10;",
+      "    if (!d || isOurs(d) || isBig(d) || notBusiness(d)) return;\n    score[d] = (score[d] || 0) + (it.intersections || 0) * 10;")
+patch('Pick Competitors', "  serps.forEach(s => {\n    const items = s.tasks?.[0]?.result?.[0]?.items || [];\n    items.filter(x => x.type === 'organic' && x.rank_group <= 10).forEach(x => {\n      const d = clean(x.domain);\n      if (!d || isOurs(d) || isBig(d)) return;\n      score[d] = (score[d] || 0) + (11 - x.rank_group);\n    });\n  });\n"
+      "  comps = Object.entries(score).sort((a, b) => b[1] - a[1]).slice(0, 3)\n    .map(([d]) => ({ domain: d, shared: shared[d] ?? null, source: 'auto' }));",
+      "  const sel = CMP.select({ serps: serps.map((s, i) => ({ keyword: queries[i] || '', items: (s.tasks?.[0]?.result?.[0]?.items || []).filter(x => x && x.type === 'organic' && Number(x.rank_group) <= 10) })), own_domain: ours, n: 10 });\n"
+      "  const evOf = {};\n"
+      "  for (const c of sel.picked) { const d = c.domain; if (isBig(d)) continue; score[d] = (score[d] || 0) + Math.round(c.score * 10); evOf[d] = c.evidence; }\n"
+      "  for (const e of sel.excluded) if (!cmpExcluded.some(x => x.domain === e.domain)) cmpExcluded.push({ domain: e.domain, kind: e.kind, label: e.label, example: e.example });\n"
+      "  comps = Object.entries(score).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 3)\n"
+      "    .map(([d]) => ({ domain: d, shared: shared[d] ?? null, source: 'auto',\n"
+      "      evidence: [shared[d] ? 'shares ' + shared[d] + ' ranking keywords with you' : '', evOf[d] || ''].filter(Boolean).join('; ') || 'ranks for your keywords' }));")
+patch('Pick Competitors', "  method = labsItems.length ? 'auto-detected from shared rankings and Google results for: ' + queries.join(', ')\n    : 'auto-detected from Google results for: ' + queries.join(', ');",
+      "  method = (labsItems.length ? 'auto-detected from shared rankings and Google results for: ' + queries.join(', ')\n    : 'auto-detected from Google results for: ' + queries.join(', '))\n"
+      "    + (cmpExcluded.length ? '. Passed over: ' + cmpExcluded.slice(0, 6).map(e => e.domain + ' (' + e.label + ')').join(', ') : '');")
+patch('Pick Competitors', "  { json: { domain: ours, is_you: true, shared: null, source: 'you', method, competitors_evidence } },",
+      "  { json: { domain: ours, is_you: true, shared: null, source: 'you', method, competitors_evidence, competitors_excluded: cmpExcluded.slice(0, 20) } },")
+assert 'const CMP = (() => {' in code('Pick Competitors') and 'notBusiness(d)' in code('Pick Competitors') and 'CMP.select(' in code('Pick Competitors'), 'KW-COMP: the full report still picks competitors without the shared rule'
+for _n144 in ('Competitor Keyword Requests', 'Ladder Clusters'):
+    assert 'const CMP = (() => {' in code(_n144) and '/*__COMPETITORS__*/' not in code(_n144) and 'CMP.select(' in code(_n144), _n144 + ': the competitor kit is not inlined (KW-COMP)'
+assert 'Who you compete with on this ladder' in code('Build Ladder Report'), 'KW-COMP: the ladder report does not say who the ladder competes with'
+assert not any('/*__COMPETITORS__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'KW-COMP: competitor kit placeholder left'
+# the kit as a runnable shim for the harness (scenarios_kwcomp.js): { fn, args } in, CMP[fn](...args) out
+open(os.path.join(OUT_CODE, '_competitors_kit.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 144, KW-COMP): the competitor kit - { fn, args } -> CMP[fn](...args)\n"
+    + COMPETITORS_SRC + "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { out: CMP[j.fn](...(j.args || [])) } }; });\n")
+log('One answer to "who is a competitor" (2026-10-21, agent KW-COMP; K6 / A-24 / RV-6): v5/code/_competitors.js classifies a domain (job board, directory, marketplace, review, media, government or free zone, search engine, social, Q&A, help or docs subdomain, course, reference, platform, list of companies) and scores businesses by how many of the run\'s own results pages they rank on, weighted by position, declared competitors first, each pick with its evidence and each exclusion with its kind; used by discovery (the pool grows only from business competitors), the ladder (serp_clusters.competitors + the ladder report) and the full report (Pick Competitors); no new paid call')
+# <<< 144 (KW-COMP)
 
 # =============================================================================
 # 142. NO PAGE BEFORE THE AUTHOR PROFILE AND THE BUSINESS FACTS (2026-10-20, agent P1; real-credit rehearsal docs/REHEARSAL_2026-10-20.md §4
