@@ -767,7 +767,7 @@ COMPETITORS_SRC = _rd0('code/_competitors.js').rstrip('\n')   # 2026-10-21 (KW-C
 RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
 SERP_CACHE_SRC = _rd0('code/_serp_cache.js').rstrip('\n')   # KW-SERP (RV-12, 2026-10-21): one results-page reading per search and day, shared by every path (section 145)
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n'))   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__LADDER_DUP__*/', _rd0('code/_ladder_dup.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n'))   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -3160,10 +3160,13 @@ log('A test check-in can never pass as the month\'s Search Console check-in (202
 # =============================================================================
 import retry_lint
 _g1_changed = retry_lint.apply_rule(nodes.values())
-for _g1 in ('Read Website', 'SERP Top 10', 'Keyword Data', 'PageSpeed', 'RDAP Lookup', 'Fetch GBP', 'Read Nav Pages', 'Render PDF Report', 'Fetch Published Page', 'Run Reach Requests'):
+for _g1 in ('Read Website', 'SERP Top 10', 'Keyword Data', 'PageSpeed', 'RDAP Lookup', 'Read Nav Pages', 'Render PDF Report', 'Fetch Published Page'):
     assert _g1 in nodes, _g1 + ': node missing (G1 retry rule)'
     assert nodes[_g1].get('maxTries') == 3 and nodes[_g1].get('waitBetweenTries') == 5000, _g1 + ': the retry rule did not reach it'
-assert len(_g1_changed) >= 45, 'G1: only %d HTTP nodes were normalised - the retry rule should reach every external call' % len(_g1_changed)
+for _g1 in ('Fetch GBP', 'Run Reach Requests'):   # N3 (2026-10-22): paid calls that carry several items are retried per item by their gate
+    assert retry_lint.paid_multi(nodes[_g1]) and not nodes[_g1].get('retryOnFail'), _g1 + ': a paid multi-item call must not retry as a whole node'
+_g1_paid = [n for n in nodes.values() if n.get('type') == 'n8n-nodes-base.httpRequest' and retry_lint.paid_multi(n)]   # N3: these take the per-item pattern instead
+assert len(set(_g1_changed) | {n['name'] for n in _g1_paid}) >= 45, 'G1: only %d HTTP nodes were normalised - the retry rule should reach every external call' % len(_g1_changed)
 for _g1 in ('POST Callback', 'POST Rejection'):   # the two report callbacks stay without a retry, on purpose
     assert _g1 in retry_lint.ALLOW and not nodes[_g1].get('retryOnFail'), _g1 + ': a report callback must not be retried'
 # the lint has to bite: a new HTTP node without a retry is a finding, an allow-listed one is not
@@ -7512,7 +7515,7 @@ for _nm75, g in _g75.items():
         g['answers'] + ': the merged answers do not reach what read the call before'
     assert "RT.plan(" in code(g['plan']) and "live.length !== answers.length" in code(g['plan']), g['plan']
     assert "RT.stats(" in code(g['answers']) and "__dfs: ev" in code(g['answers']) and 'counted once by task id' in code(g['answers']), g['answers']
-    assert nodes[g['retry']].get('credentials') and nodes[g['retry']].get('maxTries') == 3, g['retry'] + ': credential or retry slot'
+    assert nodes[g['retry']].get('credentials') and (nodes[g['retry']].get('maxTries') == 3 or (retry_lint.paid_multi(nodes[g['retry']]) and not nodes[g['retry']].get('retryOnFail'))), g['retry'] + ': credential or retry slot (N3: a paid multi-item retry is the per-item pattern)'
 # nothing still reads the first attempt where the merged answer is what it wanted (the retry would be paid for and ignored)
 for _nm75, g in _g75.items():
     for _o75 in nodes.values():
@@ -12300,6 +12303,40 @@ open(os.path.join(OUT_CODE, '_inbound.js'), 'w').write("// harness shim (written
 url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 log('Links to the new page from the site\'s own live pages, and a length band from the ranking pages of the same kind (CT-DEPTH, 2026-10-22; scorecard C12 / C8): Inbound Candidates ranks the site model\'s pages by the new page\'s topic words (v5/code/_inbound.js), Fetch Inbound Pages reads each candidate once (free), Inbound Links keeps 3-5 that answered 200, are not noindex and do not link to the new page yet, each with the section, a varied anchor and a sentence, and the Blog Package puts them in meta.json, the publish checklist and the callback; Parse Analysis sets length_band (median and interquartile range of the same-kind ranking pages, inside the page-type band; under 3 pages the page-type band, said so), Parse Brief keeps the brief inside it and the strategy brief names it; the hub / case-study / local bands live in the file again')
+
+
+# =============================================================================
+# 147. A DUPLICATE LADDER IS REFUSED BEFORE ANYTHING IS PAID FOR (KW-FINAL N2, 2026-10-22; KW recheck exec 152)
+#      The ladder "ai consulting company dubai" was refused as the same search as the ladder "ai consulting dubai" after $0.142 of search
+#      data and $0.138 of Claude. The words half of that rule (v5/code/_ladder_dup.js, LDUP, now also what Ladder Plan's sameSearchLP uses)
+#      runs right after Rate Limit on the site's stored ladders and, for a NEW ladder that matches, sets the input refusal: Input OK? takes
+#      the refused path (ledger row refused, nothing charged, the reason in the callback). The results-page half stays in Ladder Plan.
+# =============================================================================
+assert [t['node'] for lst in conns['Rate Limit']['main'] for t in lst] == ['Input OK?'], 'N2: Rate Limit no longer feeds Input OK? alone'
+_rl147 = pos('Rate Limit')
+_RL_DOM147 = "String($('Rate Limit').first().json.domain || '').toLowerCase().replace(/^www\\./, '')"
+add_node('Load Ladders (Dup Check)', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_TABLE, [('domain', '={{ ' + _RL_DOM147 + ' }}'), ('domain', "={{ 'www.' + " + _RL_DOM147 + " }}")]),
+         [_rl147[0] + 110, _rl147[1] + 260], LOAD18)
+add_node('Load Ladder Settings (Dup Check)', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_SETTINGS_TABLE, [('domain', '={{ ' + _RL_DOM147 + ' }}')]),
+         [_rl147[0] + 330, _rl147[1] + 260], LOAD18)
+add_node('Ladder Duplicate (Words)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Duplicate_Words.js')}, [_rl147[0] + 550, _rl147[1] + 260])
+disconnect('Rate Limit', 'Input OK?')
+connect('Rate Limit', 'Load Ladders (Dup Check)'); connect('Load Ladders (Dup Check)', 'Load Ladder Settings (Dup Check)')
+connect('Load Ladder Settings (Dup Check)', 'Ladder Duplicate (Words)'); connect('Ladder Duplicate (Words)', 'Input OK?')
+# the refused request now comes from the duplicate check (it carries the refusal); Rate Limit's item is the fallback (same fields)
+_ri147 = code('Refused Input')
+assert _ri147.count("return [{ json: $('Rate Limit').first().json }];") == 1, 'N2: Refused Input changed shape'
+nodes['Refused Input']['parameters']['jsCode'] = _ri147.replace("return [{ json: $('Rate Limit').first().json }];",
+    "// N2 (2026-10-22): the item Input OK? judged - the duplicate-ladder check's, which may carry the refusal - else Rate Limit's\n"
+    "let __rq = null; try { __rq = $('Ladder Duplicate (Words)').first().json; } catch (e) {}\n"
+    "return [{ json: __rq || $('Rate Limit').first().json }];")
+for _n147 in ('Ladder Duplicate (Words)', 'Ladder Plan'):
+    assert 'const LDUP = (() => {' in code(_n147) and '/*__LADDER_DUP__*/' not in code(_n147), _n147 + ': the ladder-duplicate kit is not inlined'
+assert 'LDUP.sameWords(ka, kb)' in code('Ladder Plan'), 'N2: Ladder Plan does not use the shared words rule'
+open(os.path.join(OUT_CODE, '_ladder_dup.js'), 'w').write("// harness shim (written by build_v4.py section 147): the ladder-duplicate kit, { fn, args } -> { r }\n"
+    + _rd0('code/_reach.js') + '\n' + _rd0('code/_ladder_dup.js') + "\nreturn $input.all().map(i => ({ json: { r: LDUP[i.json.fn].apply(null, i.json.args || []) } }));\n")
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('A duplicate ladder is refused before anything is paid for (KW-FINAL N2, 2026-10-22): Ladder Duplicate (Words) reads the site\'s stored ladders right after Rate Limit and refuses a NEW ladder whose main keyword is, word for word, another ladder\'s main keyword or planned page (v5/code/_ladder_dup.js, the same rule Ladder Plan applies); the run takes the input-refusal path, nothing is charged, and the results-page half of the rule stays in Ladder Plan')
 
 
 # =============================================================================

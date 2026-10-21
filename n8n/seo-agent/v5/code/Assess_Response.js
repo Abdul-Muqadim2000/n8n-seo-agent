@@ -130,12 +130,24 @@ const existing = (() => {
   if (!hit && !lad && !log) return { keyword: kw, how: 'a page of yours', ladder_id: null, ladder_status: null, rung: null, page_url: pg.url, page_title: pg.title || null, page_status: 'live',
     matched_by: pg.matched_by, pages_checked: pages.length,
     note: 'you already have a page for this search: ' + pg.url + (pg.title ? ' ("' + pg.title + '")' : '') + ' - improve that page rather than starting a ladder for a second one' };
-  const page_url = String((log && (log.published_url || log.existing_page_url)) || (lad && lad.target_url) || (pg && pg.url) || '').trim();
+  // N4 (KW recheck 2026-10-21): "ai consultant" named https://www.techand.ai/ai-consultant/ as the existing page: the old ladder's PLANNED
+  // address of a draft never published, answering 404. A page is named only when it exists: a published content-log page or the ladder's
+  // address that the page inventory holds as a live page (a 404 / 410 inventory page is gone, SM.isGone), else the live match (SM.matchPage).
+  // An address that is only planned travels as `planned_url`, a draft's state as `draft_status`; neither is "an existing page".
+  const normU = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const inv = (u) => { const k = normU(u); return k ? (pages.find(p => normU(p.url) === k) || null) : null; };
+  const liveAt = (u) => { const p = inv(u); return p ? !SM.isGone(p) : null; };   // true live, false gone, null not in the inventory
+  const logPub = log && /publish/i.test(String(log.status || '')) ? String(log.published_url || log.existing_page_url || '').trim() : '';
+  const logUrl = logPub && liveAt(logPub) !== false ? logPub : '';
+  const ladUrl = lad && lad.target_url && liveAt(lad.target_url) === true ? String(lad.target_url) : '';
+  const page_url = String(logUrl || ladUrl || (pg && pg.url) || '').trim();
+  const planned_url = !page_url && lad && lad.target_url ? String(lad.target_url) : null;
   return { keyword: String(hit || (lad && lad.keyword) || ''), how: String(hit).toLowerCase().trim() === kw ? 'the same keyword' : 'the same search',
     ladder_id: lad ? String(lad.ladder_id || '') : null, ladder_status: ladStatus, row_status: lad ? String(lad.status || '') : null, rung: lad ? Number(lad.rung) || null : null,
-    page_url: page_url || null, page_status: log ? String(log.status || '') : null, live_page: pg ? pg.url : null, pages_checked: pages.length,
+    page_url: page_url || null, page_status: logUrl ? String(log.status || '') : page_url ? 'live' : null, live_page: pg ? pg.url : null, pages_checked: pages.length,
+    planned_url, draft_status: log && !logUrl ? String(log.status || '') || null : null,
     note: 'already one of your keywords' + (lad ? ' (ladder ' + lad.ladder_id + (ladStatus ? ', ' + ladStatus : '') + ')' : ' (one of your keyword ladders)')
-      + (page_url ? ' - its page: ' + page_url : '') + ': continue that ladder / improve that page rather than starting a second one for the same search' };
+      + (page_url ? ' - its page: ' + page_url : planned_url ? ' - its page is planned (' + planned_url + ') and not published yet' : '') + ': continue that ladder / improve that page rather than starting a second one for the same search' };
 })();
 const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\n,;]+/) : [])).map(x => String(x == null ? '' : x).toLowerCase().replace(/["“”]/g, '').replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2 && x.length <= 100);
 const need = difficulty_for_you === 'not_realistic' || fit === 0;

@@ -6,7 +6,9 @@
 // itself. Which pages: for the relevant keywords first, then by opportunity, the page Search Console credits for the keyword and the page
 // the inventory matches (SM.matchPage), at most CAP distinct addresses. A page the site model already knows (gone, or answering 200 read
 // within FRESH_DAYS) is not opened again. Free GETs of the client's own pages; one item per page, or one { status_check: false } item.
-const CAP = 10, FRESH_DAYS = 7;
+// N5 (KW recheck 2026-10-21, exec 149): a 404 insights page was left "not checked" by a cap of 10; opening one of the client's own pages costs
+// nothing, so the cap is 25 (each read is a free GET, two at a time, 15 s at most)
+const CAP = 25, FRESH_DAYS = 7;
 const base = $('Collect Research').first().json;
 const domain = String(base.domain || '').toLowerCase();
 let model = null; try { const m = $('Site Model').first().json.site_model; if (m && typeof m === 'object') model = m; } catch (e) { model = null; }

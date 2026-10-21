@@ -484,6 +484,11 @@ assert '__dfs' in _ar10['parameters']['jsCode'], 'B-A10: the keyword check does 
 retry_lint.check_in200(kwf)
 url_lint.check(kwf)   # D15: no node builds a site URL by hand (url_lint.py)
 retry_lint.check(kwf)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
+# N3 (2026-10-22, exec 145): n8n re-ran the whole retry node 3 x 8 s + 2 x 5 s = 34 s when its first item timed out, so the check
+# passed its 45 s limit. Both reads now carry the per-item pattern (no node-level retry), so the worst case is the budget above.
+_n3 = [_bn10['Run Assess Requests'], _bn10['Run Assess Requests (Retry)']]
+assert all(retry_lint.paid_multi(n) and not n.get('retryOnFail') for n in _n3), 'N3: the Keyword Check reads must not retry as whole nodes'
+assert ASSESS_FIRST_TIMEOUT_MS + ASSESS_RETRY_WAIT_S * 1000 + ASSESS_RETRY_TIMEOUT_MS <= ASSESS_READ_BUDGET_MS, 'N3: the reads no longer fit their budget'
 json.dump([freeze_ids(kwf)], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Keyword_Check.json'), 'w'), indent=2, ensure_ascii=False)
 if os.path.isdir(_code):
     for _n in _AN:
