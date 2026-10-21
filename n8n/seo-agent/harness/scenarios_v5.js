@@ -19643,5 +19643,6 @@ await require('./scenarios_full_gate')({ H, run, mock, store, guard, reset, begi
 await require('./scenarios_claims')({ H, run, mock, store, guard, reset, begin });   // CLM1-CLM4 (E-CLAIM 2026-10-21): promises in the client's name (deliverables, process, billing) need a fact on file, else an owner edit and not ready
 await require('./scenarios_ladder_picture')({ H, run, mock, store, guard, reset, begin });   // LP1-LP3 (2026-10-21, D7): the ladder reads the pages it could duplicate; one page per search against the main keyword and between rungs
 
+await require('./scenarios_kw_accuracy')({ H, run, mock, store, guard, reset, begin });   // KWACC (KW-ACC 2026-10-21): the labelled keyword business-fit set (accuracy/keywords.json), kit + full report, ratcheted on accuracy/KEYWORDS_BASELINE.md
 H.report();
 })();
