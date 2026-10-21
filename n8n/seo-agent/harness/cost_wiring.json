@@ -230,7 +230,7 @@
    "model": "claude-opus-5-5",
    "node": "Editor",
    "streaming": true,
-   "template_chars": 7508
+   "template_chars": 7596
   },
   {
    "count_answer": "Count Answer (Keyword Relevance)",

@@ -559,6 +559,10 @@ if (duplicate_targets.length) {
 
 qa.originality = originality;
 qa.warnings = warnings;
+// CT-FIX (review item 14): the next step said "Then publish it." beside the warning that the site already has a page for this search.
+if (duplicate_targets.length && qa.quality && typeof qa.quality === 'object' && /Then publish it\./.test(String(qa.quality.next_step || ''))) {
+  qa.quality = { ...qa.quality, next_step: String(qa.quality.next_step).replace('Then publish it.', 'Then, rather than publishing a second page for the same search, use it to improve ' + duplicate_targets[0].url + ' (or say in the brief how this page differs).') };
+}
 if (failing) {
   qa.passed = false;
   qa.passed_copy = false;

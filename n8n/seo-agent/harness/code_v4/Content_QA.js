@@ -728,6 +728,13 @@ const CVG = (() => {
   // The kind 'other' is a course, a certification, a training programme, a job, career or salary page, a freelance marketplace or a
   // member directory, read from the title, the URL path and the page's own headings.
   const OTHER_TITLE = /\b(?:certified|certifications?|certificates?|courses?|bootcamps?|diplomas?|degrees?|masterclass|syllabus|curriculum|tuition|salary|salaries|jobs?|vacanc\w*|careers?|freelancers?|freelance|associations?|directory|membership|marketplace)\b|\bprogram(?:me)?s?\b(?!\s+management)|\bhow (?:to|do i|can i) become\b|\bfor hire\b/i;
+  // CT-FIX (review item 4, 2026-10-22): one word in a title is not enough. "Microsoft Certified Dynamics 365 Partner", "Active Directory &
+  // Azure Migration Services", "Shopify Development & Marketplace Integration", "ERP Implementation | Programme Delivery", "Salesforce
+  // Consulting Partner | Careers at scale" and a Golden Visa page with two "Eligibility" headings are real competitors. A page is
+  // 'other' on TWO signals (title, URL path, headings); a title word that only ever names a course, a job or a salary (STRONG) is two.
+  const OTHER_STRONG = /\b(?:courses?|bootcamps?|diplomas?|degrees?|masterclass|syllabus|tuition|salary|salaries|jobs?|vacanc\w*|freelancers?|freelance)\b|\bhow (?:to|do i|can i) become\b|\bfor hire\b/i;
+  const OTHER_HEAD_STRONG = /\b(?:member directory|post a job|program(?:me)? fees?|course fees?|tuition|admissions?|get certified|apply now)\b/i;   // one such heading names the page's own offer
+  const OTHER_KW = /\b(?:training|trainings|course|courses|certif\w*|bootcamps?|diplomas?|degrees?|jobs?|careers?|salar\w*|academy|workshops?)\b/i;   // a client that sells the course itself
   const OTHER_PATH = /\/(?:[a-z-]*certif[a-z-]*|[a-z-]*courses?|bootcamps?|training(?:-[a-z-]+)?|programs?|programmes?|jobs?|careers?|vacancies|salar[a-z-]*|hire|freelancers?|directory|members?)(?:\/|$)/i;
   const OTHER_HEADINGS = /\b(?:program(?:me)? fees?|course fees?|tuition|eligibility|eligible|curriculum|syllabus|enrol\w*|enroll\w*|admissions?|alumni|study[- ]?(?:books?|kits?|materials?)|get certified|salary|job (?:description|openings)|apply now|member directory|get listed|post a job)\b/i;
   // The words of the keyword itself are never the evidence: "Consultant" in "Certified AI Consultant" says what the page is about, not
@@ -743,13 +750,12 @@ const CVG = (() => {
   // why a page is 'other' ('title' | 'headings' | 'path'), or '' when it is not. A search for the course itself ("ai consultant
   // certification") is not refused for being one: when the keyword carries such a word, nothing is 'other'.
   const otherWhy = (p, keyword) => {
-    if (OTHER_TITLE.test(S(keyword))) return '';
+    if (OTHER_TITLE.test(S(keyword)) || OTHER_KW.test(S(keyword))) return '';
     const title = kwStrip(S(p && p.title), keyword), path = pathOf(p && p.url).toLowerCase();
-    if (OTHER_TITLE.test(title)) return 'title';
+    if (OTHER_STRONG.test(title)) return 'title';
     const hs = ((p && p.headings) || []).map(h => S(h).replace(/^H\d:\s*/i, '')).filter(h => OTHER_HEADINGS.test(h));
-    if (hs.length >= 2) return 'headings';
-    if (OTHER_PATH.test(path) && !GUIDE_PATH.test(path)) return 'path';
-    return '';
+    const sig = [OTHER_TITLE.test(title) ? 'title' : '', (hs.length >= 2 || hs.some(h => OTHER_HEAD_STRONG.test(h))) ? 'headings' : '', (OTHER_PATH.test(path) && !GUIDE_PATH.test(path)) ? 'path' : ''].filter(Boolean);
+    return sig.length >= 2 ? sig.join(' + ') : '';
   };
   // R44 kinds plus D5: 'list' | 'other' | 'service' | 'guide' | 'unknown'. A page nothing says sells the service is 'unknown' now, not
   // 'service' (iaaic.org's directory homepage was a "service page" by that default): it can stand in for the term target, never be the
@@ -764,6 +770,13 @@ const CVG = (() => {
     const sep = title.split(/\s+[|–—-]\s+/);   // "AI Consulting Services | ATI Lab", "AI Consulting Services in Dubai - Kinetic Consulting"
     if (sep.length >= 2 && sep[sep.length - 1].split(/\s+/).length <= 4 && SERVICE_WORDS.test(kwStrip(sep.slice(0, -1).join(' '), kw))) return 'service';
     if (p && p.has_author && p.has_date) return 'guide';
+    // CT-FIX (review item 3): "AI Consultant in Dubai | Kinetic", "Hire an AI Consultant in Dubai" and "AI Consulting Services Dubai" were
+    // 'unknown', so a service page had no page of its kind to beat. A page that is no list, no guide and no course whose title offers the
+    // thing (an offer word) or names the search itself (every keyword word, any ending) is a service page.
+    if (SERVICE_WORDS.test(kwStrip(title, kw))) return 'service';
+    const kws = S(kw).toLowerCase().split(/[^a-z0-9&]+/).filter(w => w.length >= 2 && !STOP.has(w));
+    const tl = title.toLowerCase();
+    if (kws.length && kws.every(w => new RegExp('\\b' + w.slice(0, Math.max(2, Math.min(w.length, 7))).replace(/[^a-z0-9&]/g, '')).test(tl))) return 'service';
     return 'unknown';
   };
   // the kind of page being written, from the page type (PT.of options): a service / product / landing / local page sells; the rest explain
@@ -820,7 +833,12 @@ const CVG = (() => {
   // eligibility, a curriculum, enrolment, study kits, "Ready for your Next Step?" (exec 42's usaii.org headings).
   const PROMO_OFFER = /(?:\bUS\s?\$|\$\s?\d|\b(?:aed|usd|eur|gbp|sar|inr)\s?\d|\d\s?(?:aed|usd|eur|gbp|sar)\b)|\b(?:program(?:me)?s? fees?|course fees?|tuition|fees?\s*:|prices?\s*:|discounts?|speedster|worth up to|alumni|eligib\w*|curriculum|syllabus|enrol\w*|enroll\w*|admissions?|scholarships?|study[- ]?(?:books?|kits?|materials?)|ready for (?:your|the) next|resource cent(?:er|re)|e-?learning)\b/i;
   const FREE_CAPS = /\bFREE\b/;
-  const isPromo = (h) => { const t = clean(h); return PROMO.test(t) || PROMO_OFFER.test(t) || FREE_CAPS.test(t); };
+  // CT-FIX (review item 5): "Eligibility for small business relief", "Volume discounts for multi-year licences", "Projects under $50k: what
+  // to expect", "Curriculum design for internal AI training", "FREE trial versus paid pilot" are topics on a page of our kind. A course's
+  // sales words count only when the page to beat is a course / job / directory page (kind 'other'); a heading that IS a fee or an amount
+  // ("Fee: US $894", "Program Fee: US $894 (All Inclusive)", "AED 4,500") is never a topic.
+  const FEE_LABEL = /^(?:(?:program(?:me)?|course|registration|application|exam|joining)\s+)?(?:fees?|prices?|pricing|costs?|tuition)\s*:|^\W*(?:US\s?)?(?:\$|aed|usd|eur|gbp|sar|inr)\s?\d[\d,.]*\s*[a-z]{0,3}\W*(?:\([^)]*\))?\s*$/i;
+  const isPromo = (h, kind) => { const t = clean(h); if (/\b(?:versus|vs\.?|compared (?:to|with))\s/i.test(t) && !FEE_LABEL.test(t)) return false; return PROMO.test(t) || FEE_LABEL.test(t) || (kind === 'other' && (PROMO_OFFER.test(t) || FREE_CAPS.test(t))); };
   const ENTRY_DETAIL = /^(?:key (?:highlights|features|services)|services|contact information|location|founded|headquarters|pricing|rating|website|pros|cons|why we picked it)\b/i;
   const levelOf = (h) => { const m = S(h).match(/^H(\d)\s*:/i); return m ? Number(m[1]) : 2; };
   const bodyUnder = (content, text) => {   // the words between this heading's line and the next heading line, or null when the line is not found
@@ -882,7 +900,7 @@ const CVG = (() => {
       const text = clean(h); const key = text.toLowerCase();
       if (!text || text.length < 8 || text.length > 90 || JUNK.test(text) || seen.has(key)) continue;
       if (toks(text).length < 2) continue;
-      if (isPromo(text)) continue;
+      if (isPromo(text, list ? 'list' : kindOf(page, opts && opts.keyword))) continue;
       if (namesBrand(text, page, opts, marks)) continue;   // A-16: the competitor's own name is never our subtopic
       if (list && (/^\d+[.)]\s/.test(text) || ENTRY_DETAIL.test(text))) continue;
       const parent = i + 1 < hs.length && levelOf(hs[i + 1]) > levelOf(h);
@@ -965,17 +983,23 @@ const CVG = (() => {
 //     `[date]`, `[Price band: typical … fee in AED]`, `[Insert client logo]`.
 // Regex only (the n8n Code sandbox has no URL constructor).
 const PH = (() => {
-  const BRACKET_SRC = "(?<![!\\\\])\\[([A-Za-z][^\\[\\]\\n]{0,399})\\](?![(:])";
+  const BRACKET_SRC = "(?<![!\\\\])\\[(\\p{L}[^\\[\\]\\n]{0,399})\\](?![(:])";
   const NOTE_SRC = "^(?:confirm|owner|author insight|image)\\s*:";
-  const bracketRe = () => new RegExp(BRACKET_SRC, 'g');
+  // CT-FIX (review item 11, 2026-10-22): code is read as code ("`labels[sensitivity]`" is an index, not a gap); a bracket starts with a
+  // letter of any script ("[السعر]" is a placeholder, it passed before); an edit or date label and an editor's "[sic]" are not gaps.
+  const CODE_SRC = "```[\\s\\S]*?```|~~~[\\s\\S]*?~~~|`[^`\\n]+`";
+  const NOT_GAP_SRC = "^(?:sic!?|emphasis (?:added|mine|ours)|(?:last )?(?:updated|revised|edited|reviewed|published)\\b[^\\]]*\\d{4}|(?:19|20)\\d\\d)$";
+  const bracketRe = () => new RegExp(BRACKET_SRC, 'gu');
   const NOTE_RE = new RegExp(NOTE_SRC, 'i');
+  const NOT_GAP_RE = new RegExp(NOT_GAP_SRC, 'i');
+  const noCode = (t) => t.replace(new RegExp(CODE_SRC, 'g'), ' ');
   // one pass over the text: { placeholders: [{token, count}], notes: [{token, count}], placeholder_count, note_count, items: [...] }
   const scan = (text) => {
-    const t = String(text == null ? '' : text);
+    const t = noCode(String(text == null ? '' : text));
     const ph = new Map(), nt = new Map();
     for (const m of t.matchAll(bracketRe())) {
       const inner = m[1].trim(); if (!inner) continue;
-      if (/^x$/i.test(inner)) continue;   // a ticked checkbox
+      if (/^x$/i.test(inner) || NOT_GAP_RE.test(inner)) continue;   // a ticked checkbox, [sic], [Updated 2026]
       const tok = '[' + m[1] + ']';
       const into = NOTE_RE.test(inner) ? nt : ph;
       into.set(tok, (into.get(tok) || 0) + 1);
@@ -985,7 +1009,7 @@ const PH = (() => {
     return { placeholders, notes, placeholder_count: placeholders.reduce((s, x) => s + x.count, 0), note_count: notes.reduce((s, x) => s + x.count, 0),
       items: placeholders.map(p => ({ ...p, kind: 'placeholder' })).concat(notes.map(n => ({ ...n, kind: 'review_note' }))) };
   };
-  return { BRACKET_SRC, NOTE_SRC, bracketRe, NOTE_RE, scan };
+  return { BRACKET_SRC, NOTE_SRC, CODE_SRC, NOT_GAP_SRC, bracketRe, NOTE_RE, scan };
 })();
 // ---- claims kit (D14, 2026-10-11; inlined by build_monitors.py): statements about the business that only the owner can vouch for. With no
 // facts on file the Reply Reader's suggested answer invented "we're not directly accredited by the Ministry, but we work with accredited
@@ -1065,7 +1089,7 @@ const CL = (() => {
         let kind = null, trig = null, m;
         if ((m = plain.match(SCOPE)) && !BIZ_ADVICE.test(plain) && !/\b(?:what|whether|if)\s+$/i.test(plain.slice(0, m.index))) { kind = 'scope'; trig = m[0]; }
         else if (SUBJ_RE.test(plain) && (m = plain.match(BIZ_TERMS))) { kind = 'terms'; trig = m[0]; }
-        else if (SUBJ_RE.test(plain) && (m = plain.match(BIZ_CRED))) { kind = 'credential'; trig = m[0]; }
+        else if (SUBJ_RE.test(plain) && (m = plain.match(BIZ_CRED)) && !(/^member/i.test(m[0]) && names.some(n => plain.slice(m.index + m[0].length).trim().toLowerCase().startsWith(n.toLowerCase())))) { kind = 'credential'; trig = m[0]; }   // CT-FIX: "membership of <the business>" is joining it, not a credential it holds
         if (!kind) continue;
         out.checked++;
         // an elliptical sentence ("Some can, but Tech& does not.") is read with the sentence or heading before it
@@ -1077,7 +1101,7 @@ const CL = (() => {
           if (kind === 'credential' && /\d/.test(key)) return true;   // the same number on the site's own pages: "20+ Years"
           const hit = W.filter(w => c.w.has(w)).length; return W.length ? hit / W.length >= 0.5 : false;
         });
-        if (!supported) out.flags.push({ kind, trigger: trig, sentence: s.slice(0, 300) });
+        if (!supported) out.flags.push({ kind, trigger: trig, sentence: s });   // CT-FIX: the whole sentence (Content QA finds and wraps it); a display cut is the reader's
       }
       prevLine = L;
     }
@@ -1086,90 +1110,222 @@ const CL = (() => {
   // ---- E-CLAIM (2026-10-21, pre-launch run exec 42): what a page PROMISES in the business's name must be on file ----
   // Live (exec 42, techand.ai "ai consultant") the page promised "You receive a prioritised use-case backlog, data readiness findings and
   // an ROI case", "We test a proof of concept ... documented test results", "You receive a runbook and monitoring dashboards", a training
-  // plan and "a self-study pack", "document each decision for your audit team" and "we stop there". The client states none of it, and
-  // CL.business (terms / scope / credentials only) let every one through. CL.commitments(text, corpus, opts) reads the sentences that
-  // commit the business to something:
-  //   * "we / <name> / our team" + a doing verb (test, build, design, deliver, document, train, stop, tell, charge ...);
-  //   * an offer to the reader in a section about the business ("you receive / get / keep ...", "business users get ...");
-  //   * a phase or training line in such a section ("This phase covers ...", "Admins learn ...");
-  //   * a billing line right after a billing sentence ("Licences sit on a separate line of the quote").
-  // A section is about the business when its H2 group names the business, speaks as "we", or is headed by a phase or service the corpus
-  // names. A statement is supported when its key terms are on file: one sentence of the corpus carries at least half of them (the words
-  // scattered over a whole website do not count: every page says "data", "integration" and "test"), and every number it states is on file. Generic statements (no business subject) and advice to
-  // the reader are never read. opts.names: the business names; opts.skip: sentences already flagged elsewhere.
-  const COMMIT_VERB = '(?:test|tests|build|builds|design|designs|deliver|delivers|provide|provides|offer|offers|document|documents|train|trains|run|runs|give|gives|hand|hands|include|includes|cover|covers|stop|stops|tell|tells|guarantee|guarantees|commit|commits|charge|charges|bill|bills|invoice|invoices|quote|quotes|price|prices|set up|sets up|assign|assigns|monitor|monitors|support|supports|manage|manages|handle|handles|migrate|migrates|implement|implements|deploy|deploys|integrate|integrates|review|reviews|audit|audits|write|writes|create|creates|produce|produces|prepare|prepares|map|maps|assess|assesses|track|tracks|measure|measures|refund|refunds|promise|promises|ensure|ensures|keep|keeps|work with|works with|work in|works in|serve|serves|treat|treats|start|starts|begin|begins|finish|finishes|complete|completes|respond|responds|reply|replies|host|hosts|maintain|maintains|operate|operates|resell|resells|sell|sells|license|licenses|are available|is available|are certified|is certified|are accredited|is accredited)';
-  const OFFER_RE = /\b(?:[Yy]ou|[Yy]our (?:team|teams|staff|people|users|admins|organisation|organization|business|company))\s+(?:will\s+|also\s+|then\s+)?(?:receive|get|keep|walk away with|leave with|are given|are handed)\b|\b(?:[Bb]usiness users|[Uu]sers|[Aa]dmins|[Mm]akers)\s+(?:will\s+)?(?:get|receive)\b/;
-  const TRAIN_RE = /^(?:[Aa]dmins|[Mm]akers|(?:[Bb]usiness )?[Uu]sers|[Ss]taff|[Ee]mployees|[Yy]our (?:team|staff|admins|users|people))\s+(?:learn|are trained|get trained|receive training)\b/;
-  const PHASE_RE = /^(?:[Tt]his|[Ee]ach|[Ee]very|[Tt]he)\s+(?:phase|stage|step|engagement|service|workstream|programme|program|package|plan)\s+(?:covers|includes|ends|delivers|starts|runs|takes|comes with)\b/;
-  const CTA_RE = /^(?:[Bb]ook|[Cc]all|[Cc]ontact|[Tt]alk to|[Ee]mail|[Ss]chedule|[Gg]et in touch|[Aa]rrange|[Rr]equest a)\b/;
+  // plan and "a self-study pack", "document each decision for your audit team" and "we stop there". The client states none of it.
+  // CT-FIX (2026-10-22, labelled set harness/accuracy/claims.json): the first version listed commitment VERBS, so it missed every promise
+  // phrased another way ("we have delivered 150 projects", "our fixed fee starts at USD 15,000", "training is included at no extra cost",
+  // a verb-less deliverable under "What you get", every Arabic sentence) and flagged a page's own call to action and a guide's narration.
+  // It now decides by SUBJECT, not by verb. A sentence is a commitment of the business when:
+  //   * the business is its grammatical subject: "we / we'll / we're / we have", a sentence that opens with "our <anything>", the
+  //     business's name in the first words ("Every Azdan implementation takes ...", "As a Microsoft partner, Tech& implements ..."), the
+  //     name followed by a verb anywhere, or "with us / from us / by <name>";
+  //   * in a section about the business (its H2 group names it, speaks as we / our in a subject, or is headed by a phase on file): an offer
+  //     to the reader ("you will receive / your team gets ..."), a passive line ("is delivered / are included / are part of the service"),
+  //     a cost or duration line ("Membership costs EUR 2,500"), a phase or training line;
+  //   * a list item under a business lead-in ("Our engagement includes:", or a heading such as "What you get from Tech&"): each item
+  //     inherits the lead-in, verb or not. Table rows, headings and the meta description are read the same way (subject rules only).
+  // Never a commitment: a question; the page's call to action (an imperative in the closing / CTA section, "<imperative> and we will
+  // ...", "our team will reply ..."), unless it names a price, quote, fee or guarantee; guide narration ("in this guide we cover ...",
+  // "below we map ..."); words inside quotation marks; a worked example ("say we start with ..."); a sentence whose agent is a named third
+  // party ("you receive a TRN from the FTA"); "we" inside a relative clause ("most distributors we work with ...").
+  // Support: one corpus sentence (or two adjacent ones: a fact is often split over a line break) carries at least half of its content
+  // words, every number it states is on file as a whole number (number words are digits, "two decades" = 20 years, "round-the-clock" =
+  // 24/7), and every strong qualifier it uses (only, exclusive, platinum, gold, largest, leading, first ...) is on that same fact.
+  // Arabic: normalised like the keyword gate (alef forms, ta marbuta, alef maqsura, diacritics, tatweel, Arabic-Indic digits); a sentence
+  // in the first person plural ("نحن / نقدم / نضمن / لدينا / فريقنا ...") or an offer ("ستحصل") is a commitment; its business terms are
+  // read through a small bilingual lexicon and held against the same facts with the same rule (fewer than two terms read = cannot be
+  // checked = flagged for the owner).
+  const NUMW = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, ninety: 90, hundred: 100 };
+  // the same meaning in the words a writer or a site uses: applied to the claim and to the facts before anything is compared
+  const canon = (s) => String(s || '')
+    .replace(/\b(?:a|one) decade\b/gi, '10 years').replace(/\b(two|three|four|five) decades\b/gi, (m, n) => (NUMW[n.toLowerCase()] * 10) + ' years')
+    .replace(/\b(?:a|one) dozen\b/gi, '12').replace(/\b(?:around|round)[- ]the[- ]clock\b|\b24\s*x\s*7\b|\b24 hours a day,? 7 days a week\b|\b24 hours a day\b/gi, '24/7')
+    .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|ninety|hundred)\b/gi, (m) => String(NUMW[m.toLowerCase()]))
+    .replace(/(\d)\s*-\s*(day|week|month|year|hour|minute)s?\b/gi, '$1 $2s');
+  // whole numbers only: "within 10 days" is not supported by "2010", "100" or "10x"; a single digit counts only with its unit ("8 weeks")
+  const UNIT = '(?:days?|weeks?|months?|years?|hours?|minutes?|business days|working days)';
+  const numsOf = (s) => {
+    const t = canon(s); const out = [];
+    for (const m of t.matchAll(/(?<![\w.,])(\d[\d,]*(?:\.\d+)?)(?![\w])/g)) { const n = m[1].replace(/,/g, '').replace(/\.0+$/, '');
+      if (/^\d$/.test(n)) { const u = t.slice(m.index + m[0].length).match(new RegExp('^\\+?\\s+(?:to \\d+\\s+)?(' + UNIT + ')', 'i')); if (u) out.push(n + ' ' + stem(u[1].split(' ').pop())); }
+      else out.push(n); }
+    return out;
+  };
+  const STRONG = /\b(?:only|sole|exclusive\w*|platinum|gold|silver|diamond|elite|premier|largest|biggest|leading|first|#1|number one|best|official|award[- ]winning)\b/gi;
+  const ARABIC = /[؀-ۿ]/;
+  const arNorm = (s) => String(s || '').replace(/[ً-ْٰـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x660)).replace(/٬/g, ',');
+  // business terms in Arabic (normalised, without the article) -> the English word the facts use; phrases first
+  const AR_LEX = [['على مدار الساعه', '24/7'], ['طوال ايام الاسبوع', '24/7'], ['المنطقه الحره', 'freezone'], ['دليل تشغيل', 'runbook'], ['لوحات متابعه', 'monitoring dashboards'],
+    ['نموذج تجريبي', 'pilot'], ['النموذج التجريبي', 'pilot'], ['نت سويت', 'netsuite'], ['ذكاء اصطناعي', 'ai'], ['عامين', '2 years'], ['سنتين', '2 years'],
+    ['دعم', 'support'], ['خبره', 'experience'], ['عام', 'years'], ['عاما', 'years'], ['اعوام', 'years'], ['سنه', 'years'], ['سنوات', 'years'], ['قطاع', 'industry'],
+    ['مكتب', 'office'], ['مقر', 'based'], ['مطار', 'airport'], ['دبي', 'dubai'], ['امارات', 'uae'], ['خليج', 'gcc'], ['سعوديه', 'ksa'], ['مصر', 'egypt'], ['شريك', 'partner'],
+    ['مايكروسوفت', 'microsoft'], ['اوراكل', 'oracle'], ['تنفيذ', 'implementation'], ['ضمان', 'guarantee'], ['نضمن', 'guarantee'], ['استرداد', 'refund'], ['اموال', 'money'],
+    ['شهاده', 'certification'], ['معتمد', 'certified'], ['رسوم', 'fee'], ['تكلفه', 'cost'], ['سعر', 'price'], ['درهم', 'aed'], ['تقييم', 'assessment'], ['جاهزيه', 'readiness'],
+    ['اطلاق', 'go-live'], ['تدريب', 'training'], ['اسبوع', 'weeks'], ['اسابيع', 'weeks'], ['شهر', 'months'], ['اشهر', 'months'], ['يوم', 'days'], ['ايام', 'days'], ['مجاني', 'free'],
+    ['مجانا', 'free'], ['خصم', 'discount'], ['مستشار', 'consultant'], ['مستشارون', 'consultants'], ['عملاء', 'clients'], ['مشروع', 'project'], ['مشاريع', 'projects'], ['ترخيص', 'licence'],
+    ['بيانات', 'data'], ['واحد', '1'], ['اثنان', '2'], ['ثلاثه', '3'], ['اربعه', '4'], ['خمسه', '5'], ['سته', '6'], ['سبعه', '7'], ['ثمانيه', '8'], ['تسعه', '9'], ['عشره', '10'], ['عشرين', '20']]
+    .map(([a, e]) => [arNorm(a).split(' ').map(w => w.replace(/^ال(?=\S{3,})/, '')).join(' '), e]);
+  const AR_WE = new Set(['نحن', 'لدينا', 'عندنا', 'نقدم', 'نوفر', 'نضمن', 'نلتزم', 'نتعهد', 'نعمل', 'نساعد', 'نبني', 'نصمم', 'ننفذ', 'نسلم', 'نتقاضى', 'نفرض', 'ندير', 'نخدم', 'نختبر', 'ندرب', 'نراجع', 'نرد', 'سنقوم', 'سنقدم', 'سنوفر', 'سنرسل', 'سنسلم'].map(arNorm));
+  const AR_OFFER = new Set(['ستحصل', 'تحصل', 'ستتلقى', 'تتلقى', 'ستستلم'].map(arNorm));
+  const AR_CTA = /^(?:احجز|تواصل|اتصل|اطلب|ابدا|سجل|راسلنا|ارسل|انضم|جرب|تحدث)/;
+  const AR_NOT_OURS = new Set(['هنا', 'احيانا', 'لنا'].map(arNorm));
+  const arTokens = (s) => arNorm(s).replace(/[^؀-ۿ0-9a-z%\s]/gi, ' ').split(/\s+/).filter(Boolean);
+  const arStrip = (w) => w.replace(/^(?:وال|بال|لل|فال|كال|ال|و|ب|ل|ف)(?=\S{3,})/, '');
+  const arOurs = (s) => { const T = arTokens(s); if (AR_CTA.test(T[0] || '')) return null;
+    if (T.some(w => AR_WE.has(w) || AR_WE.has(arStrip(w)) || (w.length >= 5 && /نا$/.test(w) && !AR_NOT_OURS.has(w)))) return 'we';
+    if (T.some(w => AR_OFFER.has(w))) return 'offer'; return null; };
+  const arToEnglish = (s) => { let t = ' ' + arTokens(s).map(arStrip).join(' ') + ' '; const hits = [];
+    for (const [a, e] of AR_LEX) { const re = new RegExp('(?:^|\\s)(?:ال)?' + a.replace(/\s+/g, '\\s+(?:ال)?') + '(?:نا|ها|كم|ك)?(?=\\s)', 'g'); if (re.test(t)) { hits.push(e); t = t.replace(re, ' '); } }
+    const digits = (s.match(/\d[\d,]*/g) || []).concat((arNorm(s).match(/\d[\d,]*/g) || []));
+    const lat = (String(s).match(/[A-Za-z][A-Za-z0-9&-]+/g) || []);
+    return { text: [...new Set(digits)].join(' ') + ' ' + lat.join(' ') + ' ' + hits.join(' '), terms: hits.length + lat.length };
+  };
+  const SAY_RE = /\b(?:says?|said|states?|stated|notes?|noted|told|according to|writes?|wrote|explains?|explained)\b/i;
+  const NARR_OPEN = /^(?:in this (?:guide|article|post|page|section|piece|checklist)|in the (?:next|following) sections?|in the sections? below|below|above|here|next|throughout this (?:guide|article|page)|as we (?:saw|said|noted|explained|mentioned)|later in this (?:guide|article))\b/i;
+  const NARR_VERB = /^(?:we|we['’]ll)\s+(?:will\s+)?(?:cover|explain|walk (?:you )?through|look at|outline|list|compare|answer|explore|discuss|break down|summari[sz]e|unpack|examine|describe|go through|show you)\s+(?:the|these|this|what|how|why|when|which|each|every|\d+|both|all)\b/i;
+  const EXAMPLE_RE = /^(?:say|suppose|imagine|assume|picture|let['’]?s say|for (?:example|instance), (?:say|suppose|imagine|if))\b/i;
+  const ADVICE_WE = /^(?:we|we['’]d)\s+(?:would\s+|always\s+|strongly\s+)?(?:recommend|suggest|advise|encourage|urge)\b/i;
+  const CTA_START = /^(?:book|call|contact|talk|email|e-mail|schedule|get in touch|arrange|request|get a|get your|get started|share|send|ask|tell us|reach|start|join|sign up|try|download|visit|speak|let['’]s|fill in|message|claim|see how|find out|learn more|ready to)\b/i;
+  const CTA_HEAD = /\b(?:next steps?|get started|getting started with us|contact|talk to|book|ready to|let['’]s talk|work with us|request|speak to|get in touch|start (?:your|a|with))\b/i;
+  const CTA_FOLLOW = /\b(?:reply|replies|respond|responds|get back to you|call you back|be in touch|contact you|review (?:it|them|your|the details)|send (?:you )?(?:a |the )?(?:written )?(?:plan|proposal|summary|recommendation|outline|next steps)|prepare a (?:fixed-scope |short )?(?:proposal|plan)|set up a call|arrange a call)\b/i;
+  const CTA_TERMS = /\b(?:quotes?|quoted|price[sd]?|pricing|fees?|cost|guarantee\w*|refund\w*|money[- ]back|warrant\w*|discount\w*)\b|(?:aed|usd|eur|gbp|sar|\$|€|£)\s?\d/i;
+  const COMMIT_VERB = /\b(?:test|tests|build|builds|design|designs|deliver|delivers|provide|provides|offer|offers|document|documents|train|trains|run|runs|give|gives|hand|hands|include|includes|cover|covers|stop|stops|tell|tells|guarantee|guarantees|commit|commits|charge|charges|bill|bills|invoice|invoices|quote|quotes|set up|sets up|assign|assigns|monitor|monitors|support|supports|manage|manages|handle|handles|migrate|migrates|implement|implements|deploy|deploys|integrate|integrates|review|reviews|audit|audits|write|writes|create|creates|produce|produces|prepare|prepares|assess|assesses|track|tracks|measure|measures|refund|refunds|promise|promises|ensure|ensures|keep|keeps|work|works|serve|serves|start|starts|begin|begins|complete|completes|respond|responds|reply|replies|host|hosts|maintain|maintains|operate|operates|resell|resells|sell|sells|license|licenses|certif(?:y|ies)|has|have|had|is|are|was|were|holds?|employs?|costs?|takes?|lasts?|comes?|wins?|won)\b/;
+  const OFFER_RE = /\b(?:you|your (?:team|teams|staff|people|users|admins|organisation|organization|business|company))\s+(?:will\s+|['’]ll\s+|also\s+|then\s+|always\s+)?(?:receive|receives|get|gets|keep|keeps|walk away with|leave with|are given|are handed|can expect|will have)\b|\b(?:business users|users|admins|makers)\s+(?:will\s+)?(?:get|gets|receive)\b/i;
+  const TRAIN_RE = /^(?:admins|makers|(?:business )?users|staff|employees|your (?:team|staff|admins|users|people))\s+(?:learn|are trained|get trained|receive training)\b/i;
+  const PHASE_RE = /^(?:this|each|every|the)\s+(?:phase|stage|step|engagement|service|workstream|programme|program|package|plan)\s+(?:covers|includes|ends|delivers|starts|runs|takes|comes with)\b/i;
+  const PASSIVE_RE = /\b(?:is|are|will be|comes?|come)\s+(?:also\s+|always\s+)?(?:delivered|included|provided|offered|covered|handled|priced|billed|charged|backed|guaranteed|free of charge|at no (?:extra )?cost|part of (?:the|every|each|our|all)|available (?:to|for|with|at)|bundled|built in|supplied)\b/i;
+  const COSTTIME_RE = /\b(?:costs?|starts? at|is priced at|takes|lasts|runs for)\s+(?:about\s+|around\s+|from\s+|just\s+|only\s+)?(?:(?:aed|usd|eur|gbp|sar|\$|€|£)\s?)?\d/i;
   const BILL_RE = /\b(?:quote|quotes|quoted|invoice\w*|billed|billing|line item|separate line|fees?|payment|deposit|retainer|hourly|day rate|licen[cs]es? (?:sit|are|is)|charged?)\b/i;
+  const LEAD_HEAD = /\b(?:what you get|you get|you receive|deliverables?|includes?|included|what (?:we|\S+) (?:deliver|delivers|does|do|handles?|offers?|covers?|provides?)|our (?:services|engagement|approach|offer|packages?|scope))\b/i;
   // words that say nothing on their own about what is promised: they never count for or against support
-  const GENERIC = new Set('you your receive get keep give gives offer provide include includes cover covers phase stage step engagement service then also each every well real live new own way part make makes work business client clients team teams solution solutions reason scope sometimes'.split(' ').map(stem));
+  const GENERIC = new Set('you your receive get gets keep give gives offer provide include includes cover covers phase stage step engagement service then also each every well real live new own way part make makes work business client clients team teams solution solutions reason scope sometimes have has more than over typical typically'.split(' ').map(stem));
+  // a name that is only part of a fuller name of the business names something else ("peppol" is the network, "OpenPeppol" the
+  // organisation): only the full names are a subject
+  const fullNames = (list) => { const ns = (list || []).map(n => String(n || '').trim()).filter(n => n.length >= 3); const k = (n) => norm(String(n).replace(/&/g, 'and')).replace(/ /g, '');
+    return ns.filter(n => !ns.some(o => k(o) !== k(n) && k(o).includes(k(n)))); };
   function commitments(text, corpus, opts = {}) {
     const t = String(text || ''); const out = { flags: [], checked: 0 };
     if (!t.trim()) return out;
-    const names = (opts.names || []).map(n => String(n || '').trim()).filter(n => n.length >= 3);
+    const names = fullNames(opts.names);
     const nameWords = [...new Set(names.flatMap(n => norm(n).split(' ')).filter(Boolean))];
     const skip = new Set((opts.skip || []).map(s => norm(s)));
-    const NAMES = names.map(n => (/^\w/.test(n) ? '\\b' : '') + escR(n)).join('|');
-    const SUBJ = '(?:\\b[Ww]e|\\b[Oo]ur (?:team|teams|consultants|engineers|people|firm|company|scope|service|services|engagements?|approach|experts)' + (NAMES ? '|' + NAMES : '') + ')';
-    const WE_RE = new RegExp(SUBJ + '(?:\\s+(?:will|also|then|always|typically|usually|can|then also|first|now))?(?:\\s+(?:will|also|then))?\\s+' + COMMIT_VERB + '\\b');
-    const NAME_RE = NAMES ? new RegExp('(?:' + NAMES + ')') : null;
-    const ABOUT_RE = new RegExp('\\b[Ww]e\\b|\\b[Oo]ur\\b' + (NAMES ? '|' + NAMES : ''));
-    const cnorm = norm(corpus);
-    const cs = String(corpus || '').split(/(?<=[.!?])\s+|\n+/).map(s => new Set(words(s, nameWords))).filter(x => x.size);
-    // sections: one H2 group = the H2 and the H3s under it
-    const groups = []; let g = null, para = [];
-    const flushPara = () => { if (para.length && g) g.paras.push(para.join(' ')); para = []; };
+    const NAMES = names.map(n => (/^\w/.test(n) ? '\\b' : '') + escR(n) + (/\w$/.test(n) ? '\\b' : '')).join('|');
+    const NAME_RE = NAMES ? new RegExp('(?:' + NAMES + ')', 'i') : null;
+    const NAME_VERB = NAMES ? new RegExp('(?:' + NAMES + ')(?:[\'’]s)?(?:\\s+(?:also|then|now|always|typically|usually|will|can|has|have))*\\s+' + COMMIT_VERB.source.slice(2), 'i') : null;
+    const NAME_BY = NAMES ? new RegExp('\\b(?:with|from|by|at)\\s+(?:' + NAMES + ')', 'i') : null;
+    const WE_SUBJ = /(?:^|[,;:]\s*|\b(?:and|but|so|then|that|because|where|when|if|once|after|before|until|while|which|or)\s+)(?:we|we['’](?:ll|re|ve|d))\s+(?!recommend|suggest|advise|encourage|urge)\S/i;
+    const OUR_SUBJ = /(?:^|\b(?:and|but|so|then|because|while)\s+|[;:]\s*)our\s+\S+(?:\s+\S+){0,5}?\s+(?:is|are|was|were|has|have|will|can|also|costs?|starts?|takes?|includes?|covers?|runs?|lets?|helps?|handles?|monitors?|provides?|delivers?|offers?|works?|holds?|builds?|designs?|comes?|begins?|ends?|means?|gives?|charges?|bills?|supports?|serves?|keeps?|treats?|does|did|consists?)\b/i;
+    const WITH_US = /\b(?:with|from|by)\s+us\b/i;
+    const lead = (s) => s.replace(/^(?:yes|no|in short|in practice|today|also|first|next|finally|then|so|and|but|instead|however|in addition|for that reason|as a result|on top of that|after go-live|unlike [^,]{3,60}|as an? [^,]{3,60}|for [^,]{3,40}|after [^,]{3,40}|once [^,]{3,40}|during [^,]{3,40}|in [^,]{3,40}|at [^,]{3,40}|with [^,]{3,40}|if [^,]{3,80}|when [^,]{3,60}|where [^,]{3,60}),\s+/i, '');
+    const nameFirst = (s) => { if (!NAME_RE) return false; const w = s.split(/\s+/).slice(0, 4).join(' '); const m = w.match(NAME_RE); if (!m) return false;
+      const before = w.slice(0, m.index).trim().toLowerCase(); return !/\b(?:of|for|to|with|from|about|by|at|than|like|on|in)$/.test(before); };
+    const bizSubject = (p) => { const s = lead(p);
+      if (WE_SUBJ.test(s) && !ADVICE_WE.test(s)) return 'we';
+      if (OUR_SUBJ.test(s)) return 'our';
+      if (nameFirst(s) || (NAME_VERB && NAME_VERB.test(s))) return 'name';
+      if (WITH_US.test(s) || (NAME_BY && NAME_BY.test(s))) return 'with';
+      return null; };
+    const quoteless = (s) => s.replace(/["“][^"“”]{3,300}["”]/g, ' ').replace(/\s+/g, ' ').trim();
+    // the third party who acts: "from the FTA", "issued by the Ministry", "<Org> says"
+    const thirdParty = (s) => { const m = s.match(/\b(?:from|by|issued by|with)\s+(?:the\s+)?([A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*)*)/); return !!(m && !(NAME_RE && NAME_RE.test(m[1])) && !/^(?:Us|Our|We)$/.test(m[1])); };
+    const cnorm = norm(canon(corpus));
+    const cnums = new Set(numsOf(corpus));
+    const csents = String(corpus || '').split(/(?<=[.!?])\s+|\n+/).map(s => canon(s)).filter(s => s.trim());
+    const cs = []; for (let i = 0; i < csents.length; i++) { const one = csents[i]; const two = i + 1 < csents.length ? one + ' ' + csents[i + 1] : one;
+      for (const x of (two === one ? [one] : [one, two])) { const w = new Set(words(x, nameWords)); if (w.size) cs.push({ w, low: x.toLowerCase() }); } }
+    const support = (plain, english) => {
+      const c0 = canon(english || plain);
+      const W = [...new Set(words(c0, nameWords))].filter(w => !GENERIC.has(w));
+      const nums = numsOf(c0);
+      const numsOk = nums.every(n => cnums.has(n) || (/ /.test(n) && cnorm.includes(n.split(' ')[0] + ' ' + n.split(' ')[1].slice(0, 4))));
+      const strong = [...new Set((c0.match(STRONG) || []).map(x => x.toLowerCase()))];
+      let best = 0;
+      for (const c of cs) { const r = W.length ? W.filter(w => c.w.has(w)).length / W.length : 0; if (r > best && strong.every(q => c.low.includes(q))) best = r; }
+      return { W, best, numsOk, ok: numsOk && W.length > 0 && best >= 0.5 };
+    };
+    // sections: one H2 group = the H2 and the H3s under it; a list item remembers its lead-in
+    const groups = []; let g = null, para = [], lastLead = null, headLead = null;
+    const flushPara = () => { if (para.length && g) { const p = para.join(' '); g.items.push({ p, kind: 'para' }); lastLead = /:\s*$/.test(p) ? p : null; } para = []; };
     for (const line of t.split('\n')) {
       const L = line.trim();
       const h = L.match(/^(#{1,6})\s+(.*)$/);
-      if (h) { flushPara(); if (h[1].length <= 2 || !g) { g = { heads: [], paras: [] }; groups.push(g); } g.heads.push(h[2]); continue; }
-      if (!g) { g = { heads: [], paras: [] }; groups.push(g); }
-      if (!L || /^\|/.test(L) || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):/i.test(L)) { flushPara(); continue; }
-      if (/^[-*]\s+/.test(L)) { flushPara(); para.push(L); flushPara(); continue; }
+      if (h) { flushPara(); if (h[1].length <= 2 || !g) { g = { heads: [], items: [] }; groups.push(g); } g.heads.push(h[2]); headLead = h[2]; lastLead = null; g.items.push({ p: h[2], kind: 'head' }); continue; }
+      if (!g) { g = { heads: [], items: [] }; groups.push(g); }
+      const meta = L.match(/^Meta Description:\s*(.*)$/i);
+      if (meta) { flushPara(); g.items.push({ p: meta[1], kind: 'meta' }); continue; }
+      if (!L || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Slug|Primary Keyword|Secondary Keywords):/i.test(L)) { flushPara(); if (!L) { /* a blank line keeps the lead-in for the list below it */ } continue; }
+      if (/^\|/.test(L)) { flushPara(); if (/^\|[\s:|-]+\|?$/.test(L)) { const hd = g.items[g.items.length - 1]; if (hd && hd.kind === 'table') g.items.pop(); continue; }   // the header row is labels, not a statement
+        g.items.push({ p: L.replace(/^\||\|$/g, '').split('|').map(x => x.trim()).filter(Boolean).join('; ') + '.', kind: 'table' }); continue; }
+      if (/^(?:[-*]|\d+[.)])\s+/.test(L)) { const leadIn = para.length ? para.join(' ') : null; flushPara(); g.items.push({ p: L.replace(/^(?:[-*]|\d+[.)])\s+/, ''), kind: 'li', lead: leadIn && /:\s*$/.test(leadIn) ? leadIn : lastLead, head: headLead }); continue; }
       para.push(L);
     }
     flushPara();
     const headOnFile = (hd) => { const pre = norm(String(hd).split(':')[0]); return pre.length >= 6 && cnorm.includes(pre); };
+    const clean = (s) => s.replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim();
+    const sentsOf = (p) => p.replace(/\*\*/g, '').split(/(?<=[.!?])\s+(?=[A-Z"(\[“؀-ۿ])|(?<=[.!?؟])\s+/).map(s => s.trim()).filter(Boolean);
+    const isLast = (G) => groups.filter(x => x.heads.length).slice(-1)[0] === G && groups.filter(x => x.heads.length).length >= 2;
+    const ctaGroup = (G) => G.heads.some(hd => CTA_HEAD.test(hd) || /\?\s*$/.test(hd) && /\b(?:ready|want|need) to\b/i.test(hd)) || isLast(G);
     for (const G of groups) {
-      const sentsOf = (p) => p.replace(/\*\*/g, '').replace(/^[-*]\s+/, '').split(/(?<=[.!?])\s+(?=[A-Z"(\[])/).map(s => s.trim());
-      const clean = (s) => s.replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '');
-      const aboutBiz = G.heads.some(hd => headOnFile(hd) || (NAME_RE && NAME_RE.test(hd))) || G.paras.some(p => ABOUT_RE.test(clean(p)));
-      for (const p of G.paras) {
-        const sents = sentsOf(p); let lastBill = false;
+      const aboutBiz = G.heads.some(hd => headOnFile(hd) || (NAME_RE && NAME_RE.test(hd)) || /\b(?:we|our|us)\b/i.test(hd))
+        || G.items.some(it => it.kind === 'para' && sentsOf(it.p).some(s => bizSubject(quoteless(clean(s)))));
+      const cta = ctaGroup(G);
+      for (const it of G.items) {
+        if (it.kind === 'head' && !(WE_SUBJ.test(lead(clean(it.p))) || (NAME_VERB && NAME_VERB.test(clean(it.p))))) continue;   // a heading is read only when it is a sentence with the business as subject ("Why Tech&" is a label)
+        const sents = (it.kind === 'li' || it.kind === 'table' || it.kind === 'head') ? [it.p] : sentsOf(it.p); let lastBill = false;
         for (const s of sents) {
-          const plain = clean(s);
-          if (plain.length < 12 || /\?\s*$/.test(plain) || /[\[\]]/.test(s.replace(/\[[^\[\]]*\]\([^)]*\)/g, '')) || skip.has(norm(s))) { lastBill = skip.has(norm(s)) && BILL_RE.test(plain); continue; }   // a billing sentence flagged by CL.business still carries the next line
-          let why = null;
-          if (CTA_RE.test(plain)) { lastBill = false; continue; }   // the page's call to action ("Book a scoping call and we will ...") invites a conversation, it is not a deliverable
-          if (WE_RE.test(plain)) why = 'we';
-          else if (aboutBiz && OFFER_RE.test(plain)) why = 'offer';
-          else if (aboutBiz && (TRAIN_RE.test(plain) || PHASE_RE.test(plain))) why = 'phase';
-          else if (lastBill && BILL_RE.test(plain) && !ABOUT_RE.test(plain)) why = 'billing';
+          const plain0 = clean(s);
+          const full = s.replace(/^[-*]\s+/, '');
+          if (plain0.length < 12 || /[?؟]\s*$/.test(plain0) || /[\[\]]/.test(s.replace(/!?\[[^\[\]]*\]\([^)]*\)/g, '')) || skip.has(norm(s))) { lastBill = skip.has(norm(s)) && BILL_RE.test(plain0); continue; }
+          if (ARABIC.test(plain0)) {   // Arabic: the first person plural or an offer; the same support rule through the lexicon
+            const why = arOurs(plain0); if (!why || (why === 'offer' && !aboutBiz)) continue;
+            out.checked++;
+            const en = arToEnglish(plain0); const sp = support(plain0, en.text);
+            if (opts.trace) out.trace = (out.trace || []).concat([{ s: plain0.slice(0, 90), why: 'ar-' + why, W: sp.W, best: Math.round(100 * sp.best), numsOk: sp.numsOk }]);
+            if (sp.ok && en.terms >= 2) continue;
+            const ek = en.text;
+            out.flags.push({ kind: /guarantee|refund/.test(ek) ? 'guarantee' : /fee|cost|price|aed|discount|free/.test(ek) ? 'pricing' : /certif/.test(ek) ? 'credential' : /weeks|days|months/.test(ek) ? 'timeline' : why === 'offer' ? 'deliverable' : 'process',
+              sentence: full, support: Math.round(100 * sp.best) });
+            continue;
+          }
+          if (it.kind === 'para' && /:\s*$/.test(plain0)) { lastBill = false; continue; }   // a lead-in ("Our engagement includes:") introduces the list; its items are read
+          const hasQuote = /["“][^"“”]{3,300}["”]/.test(plain0);
+          const plain = quoteless(plain0);
+          if (hasQuote && SAY_RE.test(plain)) { lastBill = false; continue; }   // a quotation with its speaker: their words, not ours
+          const L0 = lead(plain);
+          if (NARR_OPEN.test(plain) || NARR_VERB.test(L0) || EXAMPLE_RE.test(plain) || ADVICE_WE.test(L0)) { lastBill = false; continue; }
+          if (cta && (CTA_START.test(plain) || CTA_FOLLOW.test(plain)) && !CTA_TERMS.test(plain)) { lastBill = false; continue; }   // the call to action invites a conversation; a price or a guarantee in it is still a term
+          if (CTA_START.test(plain) && !/\b(?:and|then)\s+(?:we|our team)\b/i.test(plain) && !CTA_TERMS.test(plain)) { lastBill = false; continue; }   // an imperative on its own is advice or an invitation
+          let why = null; const subj = bizSubject(plain);
+          if (subj) why = subj;
+          else if (it.kind === 'li' && ((it.lead && (bizSubject(clean(it.lead)) || (NAME_RE && NAME_RE.test(it.lead)) || LEAD_HEAD.test(it.lead))) || (!it.lead && it.head && LEAD_HEAD.test(it.head) && (aboutBiz || (NAME_RE && NAME_RE.test(it.head)))))) why = 'list';
+          else if (aboutBiz && it.kind !== 'head' && !thirdParty(plain)) {
+            if (OFFER_RE.test(plain)) why = 'offer';
+            else if (TRAIN_RE.test(plain) || PHASE_RE.test(plain)) why = 'phase';
+            else if (PASSIVE_RE.test(plain) || COSTTIME_RE.test(plain)) why = 'passive';
+            else if (lastBill && BILL_RE.test(plain)) why = 'billing';
+          }
+          if (why && (why === 'offer' || why === 'with') && thirdParty(plain)) why = null;
           lastBill = !!why && BILL_RE.test(plain);
           if (!why) continue;
           out.checked++;
-          const W = [...new Set(words(plain, nameWords))].filter(w => !GENERIC.has(w));
-          const nums = (plain.match(/\d[\d,.:/+]*/g) || []).map(x => x.replace(/[,.]+$/, '')).filter(x => !/^\d$/.test(x));
-          const numsOk = nums.every(n => cnorm.includes(norm(n)) || String(corpus || '').includes(n));
-          const best = W.length ? Math.max(0, ...cs.map(c => W.filter(w => c.has(w)).length)) / W.length : 0;
-          const supported = numsOk && W.length > 0 && best >= 0.5;
-          if (opts.trace) out.trace = (out.trace || []).concat([{ s: plain.slice(0, 90), why, W, best: Math.round(100 * best), numsOk }]);
-          if (supported) continue;
-          const kind = /\b(?:charg|bill|fee|price|pricing|quote|invoice|payment|licen[cs]es? (?:sit|are)|separate line|cost)/i.test(plain) ? 'pricing'
+          const lab = why === 'list' && s.match(/^\s*\*\*([^*]{3,60}?):?\*\*:?\s+\S/);   // "**AI strategy:** candidate use cases ...": the label is the service the lead-in commits to
+          const sp0 = support(plain); const sp = (!sp0.ok && lab && support(lab[1]).ok) ? support(lab[1]) : sp0;
+          if (opts.trace) out.trace = (out.trace || []).concat([{ s: plain.slice(0, 90), why, W: sp.W, best: Math.round(100 * sp.best), numsOk: sp.numsOk }]);
+          if (sp.ok || !sp.W.length) continue;   // nothing but generic words: nothing to hold against the facts
+          const kind = /\b(?:charg|bill|fee|price|pricing|quote|invoice|payment|licen[cs]es? (?:sit|are)|separate line|cost|free|discount)/i.test(plain) ? 'pricing'
             : /\b(?:guarantee|warrant|refund|promise)/i.test(plain) ? 'guarantee'
-              : /\b(?:within|\d+\s*(?:days?|weeks?|months?|hours?))\b/i.test(plain) ? 'timeline'
-                : /\b(?:certified|accredit|partner)/i.test(plain) ? 'credential'
-                  : /\b(?:stop|only|not|scope|covers|includes)\b/i.test(plain) ? 'scope'
-                    : (why === 'offer' || why === 'phase' || /\b(?:deliver|provide|runbook|pack|report|dashboard|document)/i.test(plain)) ? 'deliverable' : 'process';
-          out.flags.push({ kind, sentence: s.replace(/^[-*]\s+/, '').slice(0, 300), support: Math.round(100 * best) });
+              : /\b(?:within|\d+\s*(?:days?|weeks?|months?|hours?|minutes?))\b|\b(?:days|weeks|months)\b/i.test(canon(plain)) ? 'timeline'
+                : /\b(?:certified|certif|accredit|partner|iso)/i.test(plain) ? 'credential'
+                  : /\b(?:stop|only|not|never|scope|covers|includes)\b/i.test(plain) ? 'scope'
+                    : (why === 'offer' || why === 'phase' || why === 'list' || why === 'passive' || /\b(?:deliver|provide|runbook|pack|report|dashboard|document)/i.test(plain)) ? 'deliverable' : 'process';
+          // E-CLAIM / CT-FIX: the WHOLE sentence is returned (Content QA finds and wraps it in the copy); a display cut belongs to the reader
+          out.flags.push({ kind, sentence: full, support: Math.round(100 * sp.best) });
         }
       }
     }
     return out;
   }
-  return { CLAIM_RE, keyOf, check, business, commitments };
+  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm };
 })();
 // ---- verdict exclusions kit (A-18, 2026-10-17; inlined through the EXCLUSIONS marker and prepended to Parse Verdict) ----
 // What the verdict said this page must NOT cover reaches the brief, the writer and the quality check. Live (exec 771) the verdict's
@@ -1943,8 +2099,8 @@ const OWN_TEXT = (() => {
   const vals = (o) => (o && typeof o === 'object') ? Object.values(o).map(v => (v && typeof v === 'object') ? vals(v) : String(v == null ? '' : v)).join(' ') : String(o || '');
   return [prev.business, prev.business_facts, prev.case_facts_text, SMx.business_facts, SMx.accreditation, vals(SMx.services), vals(SMx.nap),
     vals(prev.site_profile), vals(prev.author), vals(prev.reviewer), ...(prev.client_pages || []).map(p => p && p.text), prev.existing_page_text,
-    prev.existing_page_facts_text, vals(prev.client_signals), prev.proof_context, vals(prev.proof_library)].filter(Boolean).map(String).join('\n');   // E-CLAIM: the case studies on file vouch too
-})();
+    prev.existing_page_facts_text, vals(prev.client_signals), prev.proof_context, vals(prev.proof_library), prev.cta, SMx.cta].filter(Boolean).map(String).join('\n');   // E-CLAIM: the case studies on file vouch too
+})();   // CT-FIX (review item 1): the call to action the client gave (prev.cta, the site model's cta) is its own text too
 const ownLower = OWN_TEXT.toLowerCase().replace(/\s+/g, ' ');
 const addSrc = (u, t) => { const k = SRC.key(u); if (!k || !String(t || '').trim()) return; srcText.set(k, ((srcText.get(k) || '') + ' ' + String(t)).slice(0, 12000)); };
 (prev.facts || []).forEach(f => addSrc(f && f.url, [f && f.text, f && f.claim, f && f.title].filter(Boolean).join(' ')));
@@ -2285,6 +2441,20 @@ if (RS && RS.refresh) {
 const bizNames = [...new Set([(prev.site_profile || {}).business_name, SITE_MODEL ? SM.name(SITE_MODEL) : '', ...((SITE_MODEL && Array.isArray(SITE_MODEL.brand_names)) ? SITE_MODEL.brand_names : []),
   (prev.site_description || {}).business_name, domain ? String(domain).split('.')[0] : ''].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
 const business_claims = [];
+// CT-FIX (review item 7): the editor keeps QA's own [Confirm: <sentence>] marks from the round before. Read as brackets, they were
+// skipped by the claims check and came back as "the writer also left 1 note", with the "add it to your business facts" advice lost. A
+// mark that holds a whole sentence the claims check flags again (same facts, same rule) is unwrapped here and marked again below, so
+// it stays a business promise in every round; a mark the check does not flag (the writer's own note) is left as it is.
+{
+  const SENT_MARK = /\[Confirm: ([^\[\]]{20,}?[.!])\]/g;
+  const open = md.replace(SENT_MARK, '$1');
+  if (open !== md) {
+    const k = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const C1 = CL.business(open, OWN_TEXT, { names: bizNames }); const C2 = CL.commitments(open, OWN_TEXT, { names: bizNames, skip: C1.flags.map(f => f.sentence) });
+    const again = new Set(C1.flags.concat(C2.flags).map(f => k(f.sentence)));
+    md = md.replace(SENT_MARK, (all, inner) => (again.has(k(inner)) ? inner : all));
+  }
+}
 const mdBeforeClaims = md;   // E-CLAIM reads the copy before §9d's marks (a mark would hide the billing line after it)
 {
   const BC = CL.business(md, OWN_TEXT, { names: bizNames });
@@ -2412,7 +2582,7 @@ const subtopicsKept = (covPlan && Array.isArray(covPlan.subtopics) ? covPlan.sub
   let why = benchOffKind ? 'the page to beat is a ' + ({ other: 'course, job or directory page', list: 'list of companies', guide: 'guide', service: 'service page', unknown: 'page of another kind' }[benchKind] || 'page of another kind') + ', not a page like this one'
     : benchExcluded ? 'the page to beat is about "' + String(benchExcluded.topic != null ? benchExcluded.topic : benchExcluded) + '", a topic the verdict said to leave out' : '';
   if (!why) { const ex = verdict_exclusions.find(e => EXC.match(s, e, prev.keyword || '')); if (ex) why = 'about "' + String(ex.topic != null ? ex.topic : ex) + '", a topic the verdict said to leave out'; }
-  if (!why && CVG.isPromo(s)) why = 'a sales heading (a fee, a price, alumni, eligibility), not a topic';
+  if (!why && CVG.isPromo(s, benchKind)) why = 'a sales heading (a fee or a price, or a course\'s alumni and eligibility), not a topic';
   if (!why) why = CVG.namesBrand(s, subBest, subOpts) || '';
   if (why) subtopics_dropped.push({ subtopic: s, reason: why }); return !why; });
 const missingSubtopics = subtopicsKept.length
@@ -2453,8 +2623,16 @@ const unansweredSnippets = snippetTargets.filter(t => t.question && !new RegExp(
 
 // 14. Warnings
 const target = brief.target_word_count || 800;
-if (mainWords < target * 0.8) warnings.push(`Main content is short: ${mainWords} words vs target ${target}`);
-if (mainWords > target * 1.25) warnings.push(`Main content is too long: ${mainWords} words vs target ${target}. Cut repetition and secondary detail, and do not add anything`);
+// CT-FIX (2026-10-22, with CT-DEPTH's C8): when the ranking pages of the same kind gave a length band (Parse Analysis `length_band`, ok)
+// and the brief's target sits inside it, the length is judged against that band and the reason names it and its sample; otherwise
+// (too few pages, or the verdict set a number outside it) the old rule stays: short under 0.8x, too long over 1.25x of the target.
+const LBQ = (prev.competitor_analysis || {}).length_band || prev.length_band || null;
+const lenBand = !!(LBQ && LBQ.ok && Number(LBQ.low) > 0 && Number(LBQ.high) >= Number(LBQ.low) && target >= Number(LBQ.low) && target <= Number(LBQ.high));
+const lenLow = lenBand ? Number(LBQ.low) : target * 0.8, lenHigh = lenBand ? Number(LBQ.high) : target * 1.25;
+const lenBasis = lenBand ? ' (the band of ' + (LBQ.basis || 'the pages ranking for this search') + ')' : '';
+const lenOk = lenBand ? (mainWords >= lenLow && mainWords <= lenHigh) : Math.abs(mainWords - target) <= target * 0.25;
+if (mainWords < lenLow) warnings.push(`Main content is short: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis);
+if (mainWords > lenHigh) warnings.push(`Main content is too long: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis + '. Cut repetition and secondary detail, and do not add anything');
 if (thinSections.length) warnings.push('Sections far below their target length: ' + thinSections.slice(0, 4).join('; '));
 if (!metaTitle) warnings.push('Meta title line missing');
 else { if (metaTitle.length > 60) warnings.push(`Meta title is ${metaTitle.length} characters (max 60)`); if (metaTitle.length < 30) warnings.push(`Meta title is only ${metaTitle.length} characters (aim for 50-60)`); if (kw && !flexRe(kw, 'i').test(metaTitle)) warnings.push('Primary keyword missing from the meta title'); }
@@ -2604,7 +2782,7 @@ const biz = bizName || '[Your Business Name]';
 // checklist said .../ai-consultant/ (the ladder's planned URL), and the site itself 308-redirects the slash away. One URL now, in the
 // site's own form: the trailing slash its sitemap uses for most pages (no slash when it does not, as before when it cannot tell), the
 // ladder's planned page when there is one, the page being improved as it is.
-const slashForm = (() => { const ps = (prev.site_urls || []).map(u => String(u || '').replace(/^https?:\/\/[^\/?#]+/i, '').replace(/[?#].*$/, '')).filter(x => x && x !== '/');
+const slashForm = (() => { const ps = (prev.site_urls || []).map(u => String(u || '').replace(/^https?:\/\/[^\/?#]+/i, '').replace(/[?#].*$/, '')).filter(x => x && x !== '/' && !/\.[a-z0-9]{2,5}$/i.test(x));   // CT-FIX (review item 18): a file URL has no slash form and does not vote
   if (ps.length < 3) return null; const withSlash = ps.filter(x => /\/$/.test(x)).length; return withSlash * 2 > ps.length; })();
 const inSiteForm = (u) => { const raw = String(u || ''); if (!/^https?:\/\/[^\/?#]+\/./.test(raw) || /[?#]/.test(raw) || /\.[a-z0-9]{2,5}$/i.test(raw)) return raw;
   return slashForm === true ? raw.replace(/\/*$/, '/') : slashForm === false ? raw.replace(/\/+$/, '') : raw; };
@@ -2632,14 +2810,15 @@ if (pkgArticleLike) {
   else if (!String(AU.bio || '').trim()) PROFILE_PH.push({ token: '[Two-sentence bio: what the author does and for whom]', count: 1, where: 'author box' });
 }
 const profile_placeholders = PROFILE_PH.reduce((n, x) => n + x.count, 0);
-const authorRef = AU ? { '@type': 'Person', ...(domain ? { '@id': home + '#author-' + slugId(AU.name) } : {}), name: AU.name, ...(AU.url ? { url: AU.url } : {}) } : { '@type': 'Person', name: '[Author Name]', url: '[Author Page URL]' };
+const authorRef = AU ? { '@type': 'Person', ...(domain ? { '@id': home + '#author-' + slugId(AU.name) } : {}), name: AU.name, ...(AU.url ? { url: AU.url } : {}),
+    ...(!domain && AU.job_title ? { jobTitle: AU.job_title } : {}), ...(!domain && AU.bio ? { description: String(AU.bio).slice(0, 300) } : {}), ...(!domain && AU.image_url ? { image: AU.image_url } : {}) } : { '@type': 'Person', name: '[Author Name]', url: '[Author Page URL]' };   // CT-FIX (review item 20): with no domain there is no @id to point at the full Person block, so the reference carries its details
 if (articleLike) {
-  blocks.push({ type: 'Article', json: { '@context': 'https://schema.org', '@type': 'Article', headline: h1Text, description: plain(metaDesc), author: authorRef, publisher: org, datePublished: today, dateModified: today, mainEntityOfPage: { '@type': 'WebPage', '@id': pageUrl }, keywords: [prev.keyword, ...(brief.secondary_keywords || []).slice(0, 5)].filter(Boolean).join(', '), ...(role === 'case_study' ? { articleSection: 'Case study' } : {}) } });
+  blocks.push({ type: 'Article', json: { '@context': 'https://schema.org', '@type': 'Article', headline: h1Text, description: plain(metaDesc), author: authorRef, publisher: org, datePublished: today, dateModified: today, mainEntityOfPage: { '@type': 'WebPage', ...(domain ? { '@id': pageUrl } : { url: pageUrl }) }, keywords: [prev.keyword, ...(brief.secondary_keywords || []).slice(0, 5)].filter(Boolean).join(', '), ...(role === 'case_study' ? { articleSection: 'Case study' } : {}) } });
   const person = AU ? { '@context': 'https://schema.org', ...authorRef, ...(AU.job_title ? { jobTitle: AU.job_title } : {}), ...((AU.bio || AU.credentials) ? { description: [AU.bio, AU.credentials && !String(AU.bio || '').includes(AU.credentials) ? AU.credentials : ''].filter(Boolean).join(' ').slice(0, 600) } : {}),
       ...(AU.image_url ? { image: AU.image_url } : {}), ...((AU.same_as || []).length ? { sameAs: AU.same_as } : {}), ...((AU.knows_about || []).length ? { knowsAbout: AU.knows_about } : {}), worksFor: domain ? { '@id': home + '#organization', name: biz } : { '@type': 'Organization', name: biz } }
     : { '@context': 'https://schema.org', '@type': 'Person', name: '[Author Name]', jobTitle: '[Job title]', description: '[Two-sentence bio with credentials]', url: '[Author Page URL]', sameAs: ['[LinkedIn profile URL]'], worksFor: { '@type': 'Organization', name: biz } };
   blocks.push({ type: 'Person', note: AU ? 'The author (business profile). Link the byline to the author page.' : 'No business profile on file: fill in the author, or set up the profile once (form "Set up my business profile" / API mode profile) so every page carries it.', json: person });
-  if (RV) blocks.push({ type: 'WebPage', note: 'Expert review (reviewedBy / lastReviewed).', json: { '@context': 'https://schema.org', '@type': 'WebPage', '@id': pageUrl, url: pageUrl, name: h1Text, reviewedBy: { '@type': 'Person', name: RV.name, ...(RV.job_title ? { jobTitle: RV.job_title } : {}), ...(RV.url ? { url: RV.url } : {}) }, lastReviewed: today } });
+  if (RV) blocks.push({ type: 'WebPage', note: 'Expert review (reviewedBy / lastReviewed).', json: { '@context': 'https://schema.org', '@type': 'WebPage', ...(domain ? { '@id': pageUrl } : {}), url: pageUrl, name: h1Text, reviewedBy: { '@type': 'Person', name: RV.name, ...(RV.job_title ? { jobTitle: RV.job_title } : {}), ...(RV.url ? { url: RV.url } : {}) }, lastReviewed: today } });
 } else if (pt.includes('product')) {
   blocks.push({ type: 'Product', json: { '@context': 'https://schema.org', '@type': 'Product', name: h1Text, description: plain(metaDesc), brand: { '@type': 'Brand', name: biz }, url: pageUrl, offers: { '@type': 'Offer', priceCurrency: prev.currency || 'USD', price: '[Price as a number]', availability: 'https://schema.org/InStock', url: pageUrl } } });
 } else if (role === 'local') {
@@ -2665,7 +2844,7 @@ if (articleLike) {
 if (!articleLike && !pkgArticleLike && AU) {
   blocks.push({ type: 'Person', note: 'The author named in the expert line under the H1 (business profile).', json: { '@context': 'https://schema.org', ...authorRef, ...(AU.job_title ? { jobTitle: AU.job_title } : {}),
     ...((AU.same_as || []).length ? { sameAs: AU.same_as } : {}), ...((AU.knows_about || []).length ? { knowsAbout: AU.knows_about } : {}), worksFor: domain ? { '@id': home + '#organization', name: biz } : { '@type': 'Organization', name: biz } } });
-  blocks.push({ type: 'WebPage', note: 'The page, its author and the date shown in the expert line.', json: { '@context': 'https://schema.org', '@type': 'WebPage', '@id': pageUrl, url: pageUrl, name: h1Text,
+  blocks.push({ type: 'WebPage', note: 'The page, its author and the date shown in the expert line.', json: { '@context': 'https://schema.org', '@type': 'WebPage', ...(domain ? { '@id': pageUrl } : {}), url: pageUrl, name: h1Text,
     author: { '@type': 'Person', ...(authorRef['@id'] ? { '@id': authorRef['@id'] } : {}), name: AU.name }, dateModified: today,
     ...(RV ? { reviewedBy: { '@type': 'Person', name: RV.name, ...(RV.job_title ? { jobTitle: RV.job_title } : {}), ...(RV.url ? { url: RV.url } : {}) }, lastReviewed: today } : {}) } });
 }
@@ -2728,7 +2907,7 @@ const style_notes = [...style.notes];
 // FIX_PLAN D10: a page nobody can publish never passes — more than PH_MAX placeholders, or more than 25% over the brief's target (which is
 // itself clamped to the competitor analysis' recommendation, or to the verdict's own target, in Parse Brief).
 const too_many_placeholders = placeholder_count > PH_MAX;
-const too_long = mainWords > target * 1.25;
+const too_long = mainWords > lenHigh;
 // R22's editor half (2026-10-14, the second re-rating): being over length was only ever one warning among up to twenty, and the page
 // that was delivered still ran 2,648 words against its own 1,800 target (+47%) after TWO editor rounds. The cut is now an instruction of
 // its own — how many words to take out and which sections carry them (the ones furthest over their own outline target, else the longest) —
@@ -2788,7 +2967,7 @@ const body_brackets = placeholder_count + body_notes.reduce((k, n) => k + n.coun
 const PRICE_WORDS = /\b(?:price|prices|pricing|fee|fees|cost|costs|rate|rates|budget|band|aed|usd|eur|gbp|sar)\b/i, TIME_WORDS = /\b(?:duration|timeline|how long|weeks?|months?|days?|turnaround)\b/i;
 const owner_edits = [...placeholders.map(p => ({ token: p.token, count: p.count, kind: 'placeholder' })), ...body_notes.filter(n => !claimMarks.has(n.token)).map(n => ({ token: n.token, count: n.count, kind: 'note' }))]
   .map(x => { const inner = String(x.token).replace(/^\[|\]$/g, '');
-    const noFacts = (PRICE_WORDS.test(inner) && prev.pricing_facts === false) || (TIME_WORDS.test(inner) && prev.timeline_facts === false);
+    const noFacts = !qaOwnMarks.has(x.token) && ((PRICE_WORDS.test(inner) && prev.pricing_facts === false) || (TIME_WORDS.test(inner) && prev.timeline_facts === false));   // CT-FIX (review item 8): QA's own [Confirm: <figure>] / [Confirm: <amount>] mark is a figure to check (a true government fine is one), never a business price to delete
     const what = noFacts ? 'delete'
       : x.kind === 'note' ? (/^Author insight/i.test(inner) ? 'write' : 'confirm') : FIGURE_MASK.test(x.token) ? 'fill_or_rewrite' : 'fill_or_delete';
     const text = what === 'delete' ? 'Delete ' + x.token + ' and the words that need it: no ' + (PRICE_WORDS.test(inner) ? 'price' : 'timeline') + ' facts are on file, so the page should not promise one (or replace it with a real figure you are happy to publish)'
@@ -2801,7 +2980,7 @@ const owner_edits = [...placeholders.map(p => ({ token: p.token, count: p.count,
 owner_edits.splice(placeholders.length, 0, ...claim_edits);
 // P2-6: `passed_copy` judges the text and decides the editor round; `passed` judges the page the owner receives, so the author box's
 // bracketed fields, and every bracket left in the body, keep it false: the honest answer to "can I publish this as it is?".
-const passed_copy = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25 && !too_many_placeholders && !too_long;
+const passed_copy = warnings.length === 0 && content_score >= 80 && lenOk && !too_many_placeholders && !too_long;
 const passed = passed_copy && profile_placeholders === 0 && body_brackets === 0 && claims_open === 0;   // E-CLAIM: an unsupported promise is an open bracket
 // v4.6: the editor pass (a full rewrite) runs only when it can still improve the page. It is skipped when the draft already scores 90+, the editorial
 // review rates it 85+ with no high-severity problem, the length is on target and the only open notes are style notes (passive voice, long
@@ -2810,7 +2989,7 @@ const passed = passed_copy && profile_placeholders === 0 && body_brackets === 0 
 const STYLE_ONLY = /^(Passive voice in about|\d+ sentences longer than 28 words|Editor review: )/;
 const crit = critique || lastCritique || {};
 const highProblem = (crit.problems || []).some(p => /high|critical/i.test(p.severity || ''));
-const editor_needed = !passed_copy && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && !too_many_placeholders && !too_long && Math.abs(mainWords - target) <= target * 0.25 && warnings.every(w => STYLE_ONLY.test(w)));
+const editor_needed = !passed_copy && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && !too_many_placeholders && !too_long && lenOk && warnings.every(w => STYLE_ONLY.test(w)));
 if (!passed_copy && !editor_needed && round === 1) fixes.push('Editor pass skipped: the draft met every SEO check (score ' + content_score + ', review ' + crit.score + '); the style notes below are left for a final read');
 // R11 (2026-10-13, re-rating §3.11): when the rounds run out with the gate still failing, the page is DELIVERED AS A DRAFT and labelled as
 // one. Live (exec 521) round 1 failed on 6 placeholders, the editor ran, round 2 came back with 12 (11 × [Price], 1 × [Number]) and 40%
@@ -2832,8 +3011,8 @@ const not_ready_reasons = !not_ready ? [] : [
   // the [Confirm: ...] marks QA put on figures and claims, and [Author insight: ...] lines, when no warning below names them already
   (!placeholder_count && !writer_note && body_notes_other.length && !warnings.some(w => /now marked \[Confirm/.test(w))) ? body_notes_other.reduce((k, n) => k + n.count, 0) + ' note(s) in square brackets left in the text: ' + body_notes_other.slice(0, 4).map(n => n.token).join(', ') + '. Complete or delete each one before you publish' : '',
   profile_placeholders ? profile_placeholders + ' bracketed field(s) in the byline, the author box and the Person schema still need your details' : '',
-  too_long ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
-  (!too_long && Math.abs(mainWords - target) > target * 0.25) ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
+  too_long ? 'the main content is ' + mainWords + ' words against a target of ' + (lenBand ? lenLow + '-' + lenHigh + lenBasis : target) : '',
+  (!too_long && !lenOk) ? 'the main content is ' + mainWords + ' words against a target of ' + (lenBand ? lenLow + '-' + lenHigh + lenBasis : target) : '',
   (coverage_target_pct && coverage_pct < coverage_target_pct) ? coverage_compare : '',   // R43: one measure, both figures, the basis named
   content_score < 80 ? 'the content score is ' + content_score + ' of 100 (80 is the bar)' : '',
   ...warnings.filter(w => !/^Too many placeholders|^Main content is too long/.test(w)).slice(0, 4)
