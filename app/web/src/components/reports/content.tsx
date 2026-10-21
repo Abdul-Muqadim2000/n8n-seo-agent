@@ -11,6 +11,7 @@ import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { CountUp, HeroStat, Stagger } from '@/components/insight';
 import { absolutePageUrl, ArticleViewer, findPlaceholders } from './article';
 import { CmsPublishPanel } from './CmsPublish';
+import { draftNextStep, ownerEdits } from '@seo/shared';
 import { Block, Bullets, Chips, Facts, has, CreditsCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
 import { keywordPrefill } from './meta';
 import { ChartTitle, ReportHero, ScoreMark, TickGrid, WordValue } from './visuals';
@@ -68,7 +69,12 @@ export function ContentReport({ report }: { report: ReportDetail }) {
   const contentScore = num(meta.content_score);
   const avoid = verdict.toUpperCase() === 'AVOID';
 
-  const publishLink = html && can('member') && (
+  // Pre-launch run 2026-10-21 (B1): a page the quality check refused is a draft to finish by hand, never a page to publish as it is. It
+  // offers no "I published this page" and no "Send it now", its content score is not the headline, and its next step is the engine's own
+  // (`qa_next_step`, with each bracket in `qa_owner_edits`): edit the draft, never a paid re-run (E-QA). Older reports get the same advice.
+  const nextStep = notReady ? draftNextStep(p) : '';
+  const edits = notReady ? ownerEdits(p) : [];
+  const publishLink = html && !notReady && can('member') && (
     <ButtonLink
       to={paths.tool(org.id, 'published', {
         siteId: report.siteId,
@@ -106,10 +112,18 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         eyebrow={eyebrowExtra ? <span className="normal-case">{eyebrowExtra}</span> : undefined}
-        title={html ? <>The page for "{keyword || 'this keyword'}" is written</> : verdict ? <>{verdictLabel(verdict)}: "{keyword || 'Keyword'}"</> : keyword || 'Keyword'}
+        title={html ? (notReady ? <>The draft for "{keyword || 'this keyword'}" needs your edits before you publish it</> : <>The page for "{keyword || 'this keyword'}" is written</>) : verdict ? <>{verdictLabel(verdict)}: "{keyword || 'Keyword'}"</> : keyword || 'Keyword'}
         description={details.length ? details.join(' · ') : undefined}
         aside={
-          html ? (
+          html && notReady ? (
+            <ScoreMark
+              score={null}
+              label="Quality check"
+              status="Not ready to publish"
+              statusTone="critical"
+              caption={edits.length ? `${edits.length} ${edits.length === 1 ? 'bracket' : 'brackets'} to fill in or delete by hand: see the list below` : qaReasons.length ? `${qaReasons.length} ${qaReasons.length === 1 ? 'point' : 'points'} to finish by hand: see the list below` : 'Finish it by hand before you publish: see the list below'}
+            />
+          ) : html ? (
             <ScoreMark
               score={contentScore}
               label="Content score"
@@ -126,8 +140,10 @@ export function ContentReport({ report }: { report: ReportDetail }) {
             <>
               {publishLink}
               {writeLink}
-              {html && can('member') && <span className="text-xs leading-snug text-on-ink-2">After publishing, report the link: we check it live and start tracking its position.</span>}
+              {html && !notReady && can('member') && <span className="text-xs leading-snug text-on-ink-2">After publishing, report the link: we check it live and start tracking its position.</span>}
             </>
+          ) : html && notReady ? (
+            <span className="text-xs leading-snug text-on-ink-2">Edit the draft below or in the Word file, then publish it and report its address with "I published a page" so tracking starts.</span>
           ) : undefined
         }
         stats={
@@ -239,14 +255,28 @@ export function ContentReport({ report }: { report: ReportDetail }) {
           title={qaLabel || 'This page did not pass the quality check and is not ready to publish'}
           action={<GuideButton id={AUTOPILOT_SCREEN_GUIDES.pageNotReady} vars={{ domain: str(p.domain) || report.siteDomain || '' }} label="How to finish it" />}
         >
-          The editor had {num(quality.max_rounds) ?? 2} round(s) and the page still fails the checks below, so it is delivered as a draft to finish by hand.
+          It is delivered as a draft to finish by hand. What the quality check found:
           {qaReasons.length > 0 && (
-            <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
-              {qaReasons.slice(0, 5).map((r) => (
-                <li key={r}>{r}</li>
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
+              {qaReasons.slice(0, 5).map((r, i) => (
+                <li key={`${i}-${r.slice(0, 32)}`}>{r}</li>
               ))}
             </ul>
           )}
+          {edits.length > 0 && (
+            <>
+              <p className="mt-2 font-medium text-ink">Edit these by hand</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
+                {edits.slice(0, 8).map((e, i) => (
+                  <li key={`${i}-${e.token}`}>{e.text}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          <p className="mt-2 [overflow-wrap:anywhere]">
+            <span className="font-medium text-ink">Next step: </span>
+            {nextStep}
+          </p>
         </Callout>
       )}
 
@@ -260,7 +290,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
         <Block
           title="The page"
           icon={<FileText />}
-          description={[words != null ? `${words.toLocaleString()} words` : '', str(meta.page_type), contentScore != null ? `content score ${contentScore}/100` : ''].filter(Boolean).join(' · ')}
+          description={[words != null ? `${words.toLocaleString()} words` : '', str(meta.page_type), contentScore != null ? `content score ${contentScore}/100${notReady ? ', but the quality check did not pass' : ''}` : ''].filter(Boolean).join(' · ')}
         >
           <ArticleViewer html={html} markdown={markdown} meta={meta} files={report.files} slug={slug} />
         </Block>

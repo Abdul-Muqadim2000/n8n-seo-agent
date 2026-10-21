@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Activity, BarChart3, ClipboardCheck, Eye, Flame, Layers, LineChart, MousePointerClick, Rocket, ScanSearch, Search, Target, TrendingUp, Users } from 'lucide-react';
-import { clicksHeadline, formatPosition, pctChange, type ReportDetail } from '@seo/shared';
+import { clicksHeadline, DRAFT_BY_HAND, formatPosition, pctChange, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { fmtDate } from '@/lib/utils';
@@ -180,13 +180,16 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
                   tone="warning"
                   icon={<Rocket />}
                   title={str(x.keyword)}
-                  description={fix ? `did not pass the quality check${why ? `: ${why}` : ''}. Fix it and run it again` : `written ${num(x.days) ?? 0} days ago`}
+                  // E-QA (2026-10-21): a draft is finished by hand (each bracket its report lists), never run again
+                  description={fix ? `did not pass the quality check${why ? `: ${why}` : ''}. ${DRAFT_BY_HAND}` : `written ${num(x.days) ?? 0} days ago`}
                   action={
                     can('member') &&
                     (fix ? (
-                      <ButtonLink to={paths.tool(org.id, 'keyword', { siteId: report.siteId, prefill: { keyword: str(x.keyword) } })} size="sm" variant="secondary">
-                        Run it again
-                      </ButtonLink>
+                      report.siteId ? (
+                        <ButtonLink to={paths.site(org.id, report.siteId, 'content')} size="sm" variant="secondary">
+                          See what to edit
+                        </ButtonLink>
+                      ) : null
                     ) : (
                       <ButtonLink to={paths.tool(org.id, 'published', { siteId: report.siteId, prefill: { keyword: str(x.keyword) } })} size="sm" variant="secondary">
                         I published it

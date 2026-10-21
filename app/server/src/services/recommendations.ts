@@ -1,12 +1,15 @@
 import { linkSummary } from './linkBuilder';
 import {
   formatPercent,
+  DRAFT_BY_HAND,
+  NO_RERUN_NEEDED,
   MODE_IDS,
   PAGE_TYPE_VALUES,
   type AiData,
   type AlertsData,
   type BacklinksData,
   type ContentData,
+  type ContentItem,
   type EngineAction,
   type ModeId,
   type OverviewData,
@@ -167,7 +170,7 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   // v4.12 (AI_GROWTH_SPEC.md): the AI growth loop's two owner steps, the IndexNow key file, and the outreach drafts to send
   const g = x.ai.growth;
   if (g && !g.submitted.indexnow.verified && g.submitted.indexnow.key)
-    add({ id: 'ai:indexnow', category: 'ai', priority: 'medium', title: 'Add one small file so new pages reach Bing the same week', detail: `Put ${g.submitted.indexnow.key}.txt (it contains only that key) at the root of ${site.domain}. From then on the weekly AI growth run sends every new or updated page to Bing (ChatGPT search, Copilot), Yandex, Naver and the other IndexNow engines.`, evidence: g.submitted.indexnow.keyUrl, action: { label: 'Get the file', page: 'ai' } });
+    add({ id: 'ai:indexnow', category: 'ai', priority: 'medium', title: 'Add one small file so new pages reach Bing the same week', detail: `Put ${g.submitted.indexnow.key}.txt (it contains only that key) at the root of ${site.domain}. From then on the weekly AI growth run sends every new or updated page to Bing (ChatGPT search, Copilot), Yandex, Naver and the other IndexNow engines.`, evidence: g.submitted.indexnow.keyUrl, action: { label: 'Get the file', page: 'ai' }, guideVars: { indexNowKey: g.submitted.indexnow.key, indexNowFile: `${g.submitted.indexnow.key}.txt`, indexNowUrl: g.submitted.indexnow.keyUrl } });
   const ready = g ? g.earned.filter((e) => e.drafted && e.kind !== 'competitor' && e.mentionsUs !== true && (!e.status || e.status === 'new')) : [];
   const readyHosts = [...new Set(ready.map((e) => e.host))];
   if (readyHosts.length)
@@ -244,15 +247,22 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       basis: `${q.prevClicks - q.clicks} clicks a period already lost (Search Console, this period against the last)`,
     });
 
+  // E-QA (2026-10-21): a not-ready draft's button is its report (each bracket to edit), else the Content page
+  const draftReport = (kw: string | null | undefined) =>
+    [...x.content.generated].filter((r) => typeof r.summary.keyword === 'string' && r.summary.keyword.toLowerCase() === String(kw ?? '').toLowerCase()).sort((p, q) => q.receivedAt.localeCompare(p.receivedAt))[0];
+  const draftAction = (kw: string | null | undefined): RecommendationAction => {
+    const r = draftReport(kw);
+    return r ? { label: 'See what to edit', report: r.id } : { label: 'See what to edit', page: 'content' };
+  };
+
   // ---------- engine actions (weekly reports) ----------
   const engine = [...(snap?.actions ?? []), ...(x.ai.report?.actions ?? []), ...(x.rankNext ? [x.rankNext] : [])];
   for (const a of engine) {
     const fixDraft = a.type === 'fix_draft';   // R111: the engine's action for a page whose last quality round failed
     const cat: RecommendationCategory = a.source === 'ai_visibility' ? 'ai' : a.source === 'rank_tracker' ? 'rankings' : a.type === 'publish' || fixDraft ? 'content' : 'search';
-    let action: RecommendationAction | undefined = actionFromApiBody(a.apiBody, fixDraft ? 'Run it again' : a.source === 'ai_visibility' ? 'Write the answer page' : 'Run it');
-    // never "Report the published URL" for a draft that failed its quality check, the button is a fresh run of the page
-    if (!action && fixDraft && a.keyword) action = { label: 'Run it again', mode: 'keyword', prefill: { keyword: a.keyword } };
-    if (action?.mode === 'published' && fixDraft) action = { label: 'Run it again', mode: 'keyword', prefill: { keyword: a.keyword ?? '' } };
+    // never "Report the published URL" for a draft that failed its quality check, and never a fresh (paid) run of it either (E-QA,
+    // 2026-10-21): the draft is finished by hand, so the button opens its report, where each bracket and what to do with it is listed
+    let action: RecommendationAction | undefined = fixDraft ? draftAction(a.keyword) : actionFromApiBody(a.apiBody, a.source === 'ai_visibility' ? 'Write the answer page' : 'Run it');
     if (!action && a.type === 'publish' && a.keyword) action = { label: 'Report the published URL', mode: 'published', prefill: { keyword: a.keyword, ...(a.url ? { publishedUrl: a.url } : {}) } };
     // the engine may point at a subdomain page: the page form accepts only the site itself
     if (action?.prefill?.existingPageUrl && !urlOnHost(String(action.prefill.existingPageUrl), site.domain)) delete action.prefill.existingPageUrl;
@@ -293,7 +303,9 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
     add({
       id: `tech:${f.key}`,
       category: 'technical',
-      priority: techTop.has(f.key) ? 'high' : f.impact != null ? 'medium' : /critical/i.test(f.severity) ? 'high' : f.status === 'new' ? 'high' : 'medium',
+      // B9 (pre-launch run 2026-10-21): the badge said "Medium" beside the audit's own "High severity" on the same row. The priority now
+      // follows the audit's severity (every row here is Critical or High); the order among them stays the audit's impact order (the score).
+      priority: /^(critical|high)$/i.test(f.severity) ? 'high' : 'medium',
       title: `Fix: ${f.title}`,
       detail: `${f.category} · ${f.severity}${f.status === 'new' ? ' · new since the last audit' : ''}. The audit report explains the fix; the fix pack has ready files where one applies.`,
       evidence: f.impactBasis || (f.affectedCount ? `${f.affectedCount} page(s) affected` : undefined),
@@ -360,7 +372,7 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   // R111: a draft whose last quality round failed is not a page to publish; it is a page to fix and run again (with the reasons)
   for (const c of x.content.items.filter((c) => c.status === 'not_ready').slice(0, 4)) {
     const reasons = String((c as typeof c & { qaReasons?: string }).qaReasons ?? '').split(';').map((r) => r.trim()).filter(Boolean);
-    add({ id: `content:fix:${c.keyword}`, category: 'content', priority: 'high', title: `Fix the draft for "${c.keyword}" and run it again`, detail: `It did not pass the quality check${reasons.length ? `: ${reasons.slice(0, 3).join('; ')}` : ''}. It is not ready to publish; fix what the check found and write it again.`, evidence: c.startedAt ? `written ${Math.max(0, Math.round((now - Date.parse(c.startedAt)) / 864e5))} days ago` : undefined, action: { label: 'Run it again', mode: 'keyword', prefill: { keyword: c.keyword, ...(c.existingPageUrl && urlOnHost(c.existingPageUrl, site.domain) ? { existingPageUrl: c.existingPageUrl } : {}) } } });
+    add({ id: `content:fix:${c.keyword}`, category: 'content', priority: 'high', title: `Finish the draft for "${c.keyword}" by hand`, detail: `It did not pass the quality check${reasons.length ? `: ${reasons.slice(0, 3).join('; ')}` : ''}. ${DRAFT_BY_HAND}. ${NO_RERUN_NEEDED}`, evidence: c.startedAt ? `written ${Math.max(0, Math.round((now - Date.parse(c.startedAt)) / 864e5))} days ago` : undefined, action: draftAction(c.keyword) });
   }
   for (const c of x.content.items.filter((c) => c.status !== 'published' && c.status !== 'not_ready' && c.startedAt && now - Date.parse(c.startedAt) > 3 * 864e5).slice(0, 4))
     add({ id: `content:publish:${c.keyword}`, category: 'content', priority: 'high', title: `Publish the page for "${c.keyword}"`, detail: 'It is written but not live; nothing can rank before it is published. Then report the URL so tracking and link suggestions start.', evidence: `written ${Math.round((now - Date.parse(c.startedAt)) / 864e5)} days ago`, action: { label: 'I published it', mode: 'published', prefill: { keyword: c.keyword } } });
@@ -392,8 +404,26 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
 
 // ---------------- overview ----------------
 
+/**
+ * B2 (pre-launch run 2026-10-21): the Overview's content counts, read the way the Content page reads them. Live = reported published or
+ * found live (a `published_url`); a draft that failed its quality check (`not_ready`, R111) needs a fix and is never "waiting to publish".
+ * Every written page is in exactly one of the three.
+ */
+export function overviewContentCounts(items: readonly Pick<ContentItem, 'status' | 'publishedUrl'>[], extra: { pagesPerWeek: number; caseStudies: number }): OverviewData['content'] {
+  const live = (c: Pick<ContentItem, 'status' | 'publishedUrl'>) => c.status === 'published' || !!c.publishedUrl;
+  const fix = items.filter((c) => !live(c) && c.status === 'not_ready').length;
+  const published = items.filter(live).length;
+  return { started: items.length, published, pendingPublish: items.length - published - fix, needsFix: fix, ...extra };
+}
+
+/** The Overview's "Latest reports": results only (no "Coming up" plan), the six newest. */
+export const overviewReports = <R extends { stage: string }>(reports: readonly R[], limit = 6): R[] => reports.filter((r) => r.stage !== 'cycle_preview').slice(0, limit);
+
 export async function overviewData(org: OrgRow, site: SiteRow): Promise<OverviewData> {
-  const [x, reports] = await Promise.all([loadBundle(org, site), reportsList(org.id, { siteId: site.id, limit: 6 })]);
+  const [x, recent] = await Promise.all([loadBundle(org, site), reportsList(org.id, { siteId: site.id, limit: 12 })]);
+  // B13 (pre-launch run 2026-10-21): the "Coming up" plan is the Pipeline's preview of the next run, not a result: it filled the top of
+  // "Latest reports" twice a week. It stays under Reports and on the Pipeline.
+  const reports = overviewReports(recent);
   const snap = x.search.snapshot;
   const m = x.search.metrics;
   const lastMetrics = m[m.length - 1] ?? null;
@@ -468,15 +498,10 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
       top50: positions.filter((p) => p <= 50).length,
       movers,
     },
-    content: {
-      started: x.content.items.length,
-      published: x.content.items.filter((c) => c.status === 'published').length,
-      // R111: a draft that failed its quality check is not "waiting to publish" (the overview tells the reader to publish these)
-      pendingPublish: x.content.items.filter((c) => c.status !== 'published' && c.status !== 'not_ready').length,
-      needsFix: x.content.items.filter((c) => c.status === 'not_ready').length,
+    content: overviewContentCounts(x.content.items, {
       pagesPerWeek: x.content.cadence?.pagesPerWeek ?? 0,
       caseStudies: x.content.caseStudies.length,
-    },
+    }),
     alerts: { open: x.alerts.alerts.filter((a) => a.status !== 'resolved' && a.status !== 'closed').length, checkinDue: x.alerts.checkinDue },
     recommendations: recommend(site, x).slice(0, 6),
     reports,

@@ -1,4 +1,5 @@
 import {
+  NO_RERUN_NEEDED,
   daysSince,
   estimateRunCost,
   DEFAULT_AUTOPILOT_LEVEL,
@@ -161,6 +162,12 @@ export interface LadderSchedule {
   plan?: SchedulePlan;
   /** the latest content_cadence report (last 8 days, nothing published since) said the pile-up guard held */
   lastRunPileup?: { at: string; waiting: number; max: number } | null;
+  /**
+   * D11 (pre-launch run 2026-10-21): why the weekly run writes nothing on its own right now, in the engine's words (READINESS_REASON:
+   * the author profile or the business facts are missing). The card said "Next page: X, after the posts ahead of it" while no post was
+   * ahead and the page was held for the profile.
+   */
+  held?: string | null;
 }
 
 export interface SchedulePlan {
@@ -656,7 +663,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
 
 /** R111: "publish 2 pages", "fix 1 page that failed the quality check", or both. */
 function waitingForYou(publish: number, fix: number): string {
-  const parts = [publish ? `publish ${plural(publish, 'page')}` : '', fix ? `fix ${plural(fix, 'page')} that failed the quality check and run ${fix === 1 ? 'it' : 'them'} again` : ''].filter(Boolean);
+  const parts = [publish ? `publish ${plural(publish, 'page')}` : '', fix ? `finish ${plural(fix, 'page')} that failed the quality check by hand (each bracket ${fix === 1 ? 'its' : 'their'} report lists)` : ''].filter(Boolean);
   return `Waiting for you: ${parts.join(', and ')}`;
 }
 
@@ -687,6 +694,7 @@ function nextStep(
   }
   if (mine[0]) return { kind: 'write', text: `Writes page ${pageOf(mine[0].item.keyword)?.pageNo}: ${q(mine[0].item.keyword)}`, at: mine[0].at };
   if (waiting) return { kind: 'publish', text: waitingText, at: null };
+  if (planned && sched.held && mode !== 'manual') return { kind: 'wait', text: `Next page: ${q(planned.keyword)}, ${sched.held}`, at: null };
   if (planned)
     return {
       kind: 'write',
@@ -734,36 +742,25 @@ export function ladderNeedsYou(b: LadderBuild, cs: { creditValueUsd: number; mar
         (b.waiting.length ? `Waiting: ${b.waiting.slice(0, 4).map((w) => (w.needsFix ? `${q(w.keyword)} (needs a fix)` : q(w.keyword))).join(', ')}${b.waiting.length > 4 ? ' and more' : ''}. ` : '') +
         `No new page is written while ${pile.max === 1 ? 'a page waits' : `${pile.max} or more pages wait`} to be published (the pile-up guard, your limit). ` +
         (b.waiting.some((w) => w.needsFix)
-          ? 'Publish the ready ones and fix the ones that failed the quality check (then run them again) to continue: a page can only rank once it is live, and writing more while these wait only adds cost.'
+          ? 'Publish the ready ones, and finish the ones that failed the quality check by hand (fill in or delete each bracket their report lists) and publish them too, to continue: a page can only rank once it is live, and writing more while these wait only adds cost.'
           : 'Publish them to continue: a page can only rank once it is live, and writing more while these wait only adds cost.'),
       action: { label: 'See the pages', page: 'content' },
     });
 
-  // R111: drafts that failed their quality check are never offered for publishing, they get a "fix it and run it again" item
+  // R111: drafts that failed their quality check are never offered for publishing. E-QA (2026-10-21): they are finished BY HAND in the
+  // draft (each bracket filled in or deleted), never "run it again": a new run writes and charges a whole new page and throws the edits away
   const fixByLadder = group(b.waiting.filter((w) => w.needsFix), (w) => w.ladderId ?? '');
   for (const [id, list] of fixByLadder) {
     const first = [...list].sort((x, y) => y.days - x.days)[0];
-    const card = id ? b.cards.find((c) => c.id === id) : undefined;
     const page = id ? b.details.get(id)?.pages.find((p) => norm(p.keyword) === norm(first.keyword)) : undefined;
     out.push({
       id: `fix:${id || 'other'}`,
       kind: 'failed',
       severity: 'warning',
-      title: id ? `Fix ${plural(list.length, 'page')} of ${q(first.head)} before publishing` : `Fix ${plural(list.length, 'draft')} before publishing`,
-      detail: `${list.map(fixLine).join('; ')}. ${list.length === 1 ? 'It is' : 'They are'} not ready to publish: fix ${list.length === 1 ? 'it' : 'them'} and run ${list.length === 1 ? 'it' : 'them'} again.`,
-      action:
-        (id
-          ? actionFromApiBody(
-              {
-                mode: 'keyword',
-                keyword: first.keyword,
-                page_type: page?.pageType || undefined,
-                ...(page ? { ladder_id: id, ladder_rung: page.rung, ladder_head: first.head || card?.head || '', ladder_page_no: page.pageNo } : {}),
-                receive: ['Keyword Report', 'Page Content'],
-              },
-              'Run it again',
-            )
-          : undefined) ?? { label: 'Run it again', mode: 'keyword', prefill: { keyword: first.keyword } },
+      title: id ? `Finish ${plural(list.length, 'page')} of ${q(first.head)} before publishing` : `Finish ${plural(list.length, 'draft')} before publishing`,
+      detail: `${list.map(fixLine).join('; ')}. ${list.length === 1 ? 'It is a draft' : 'They are drafts'} to finish by hand: fill in or delete each bracket ${list.length === 1 ? 'its' : 'their'} report lists, then publish ${list.length === 1 ? 'it' : 'them'}. ${NO_RERUN_NEEDED}`,
+      // the page's report lists each bracket and what to do with it; without one, the ladder (its page panel opens the report and files)
+      action: page?.reportId ? { label: 'See what to edit', reportId: page.reportId } : id ? { label: 'See what to edit', ladderId: id } : { label: 'See what to edit', page: 'content' },
       ...(id ? { ladderId: id } : {}),
     });
   }

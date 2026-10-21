@@ -91,10 +91,11 @@ describe('ladder status', () => {
   it('R111: a waiting page whose draft failed the quality check "needs a fix", it is not "waiting to be published"', () => {
     const one = ladderStatus({ ...base, pages: [page({ state: 'waiting', writtenAt: ago(9), needsFix: true }), page()] });
     expect(one.status).toBe('needs_you');
-    expect(one.statusText).toMatch(/1 page written needs a fix/);
+    expect(one.statusText).toMatch(/1 page written needs your edits .*by hand/);
+    expect(one.statusText).not.toMatch(/run it again/);
     expect(one.statusText).not.toMatch(/waiting to be published/);
     const mixed = ladderStatus({ ...base, pages: [page({ state: 'waiting', writtenAt: ago(9), needsFix: true }), page({ state: 'waiting', writtenAt: ago(8) })] });
-    expect(mixed.statusText).toMatch(/1 page written needs a fix .* 1 is waiting to be published/);
+    expect(mixed.statusText).toMatch(/1 page written needs your edits by hand .* 1 is waiting to be published/);
     // a plain waiting page keeps the old sentence
     expect(ladderStatus({ ...base, pages: [page({ state: 'waiting', writtenAt: ago(9) }), page()] }).statusText).toContain('waiting to be published');
   });

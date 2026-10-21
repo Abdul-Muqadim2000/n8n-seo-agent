@@ -152,8 +152,8 @@ export function ladderStatus(i: LadderStatusInput): { status: LadderStatus; stat
     return {
       status: 'needs_you',
       statusText: fixing.length === waiting.length
-        ? `${plural(fixing.length, 'page')} written ${fixing.length === 1 ? 'needs' : 'need'} a fix before ${fixing.length === 1 ? 'it' : 'they'} can be published: the draft did not pass the quality check, so fix it and run it again.`
-        : `${plural(fixing.length, 'page')} written ${fixing.length === 1 ? 'needs' : 'need'} a fix (the draft did not pass the quality check) and ${waiting.length - fixing.length} ${waiting.length - fixing.length === 1 ? 'is' : 'are'} waiting to be published.`,
+        ? `${plural(fixing.length, 'page')} written ${fixing.length === 1 ? 'needs' : 'need'} your edits before ${fixing.length === 1 ? 'it' : 'they'} can be published: the draft did not pass the quality check, so finish it by hand (each bracket its report lists) and publish it.`
+        : `${plural(fixing.length, 'page')} written ${fixing.length === 1 ? 'needs' : 'need'} your edits by hand (the draft did not pass the quality check) and ${waiting.length - fixing.length} ${waiting.length - fixing.length === 1 ? 'is' : 'are'} waiting to be published.`,
     };
   if (waiting.length && oldest >= 7)
     return {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Activity, ArrowDownRight, ArrowRight, ArrowUpDown, ArrowUpRight, BarChart3, Check, Circle, ExternalLink as ExternalIcon, Flag, History, Info, LineChart, ListOrdered, Loader, PenSquare, Plus, Send, TrendingUp, X } from 'lucide-react';
+import { Activity, ArrowDownRight, ArrowRight, ArrowUpDown, ArrowUpRight, BarChart3, Check, Circle, ExternalLink as ExternalIcon, Flag, History, Hourglass, Info, LineChart, ListOrdered, Loader, PenSquare, Plus, Send, TrendingUp, X } from 'lucide-react';
 import { PAGE_TYPE_VALUES, compactNumber, type Ladder, type LadderRung, type RankPoint, type RankingsData, type SerpReading, type TrackedKeyword } from '@seo/shared';
 import { paths } from '@/lib/paths';
 import { useSiteData } from '@/lib/queries';
@@ -20,6 +20,7 @@ import { Chips, DataGate, FillHeight, Kind, Panel, RunAnalysisMenu, SectionHeadi
 import { plural, sortByDate, urlPath } from './_components/format';
 import { BUCKETS, bucketOf, moveOf, plotPos, posSort, posText, PositionMove, PositionPill, ranked, type Bucket } from './_components/positions';
 import { PositionHistoryCard, type HistoryLine } from './_components/history';
+import { ladderShape, MAIN_RUNG, rungName, rungView, type RungView } from './_components/rungs';
 import { ChartTitle, DashSkeleton, HeroEyebrow } from './_components/visuals';
 
 export default function RankingsPage() {
@@ -142,7 +143,7 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
         eyebrow={<HeroEyebrow tag="Google rankings">{`${plural(all.length, 'keyword')} checked ${day.every}${lastCheck ? ` · last check ${fmtAgo(lastCheck)}` : ''}`}</HeroEyebrow>}
         title={rankingsHeadline(all.length, top10, top50, up, down)}
         description={`${up} moved up or entered the top 50, ${down} moved down or left it since the last check. Ladder pages climb rung by rung as they are written and published.`}
-        aside={<NextRung ladders={d.ladders} />}
+        aside={<NextRung ladders={d.ladders} readiness={d.readiness} />}
         stats={
           <>
             <HeroStat label="Keywords checked weekly" value={<CountUp value={all.length} />} hint={`${plural(ladderPages, 'ladder page')} · ${plural(d.keywords.length, 'site keyword')}${lastCheck ? ` · last check ${fmtAgo(lastCheck)}` : ''}`} />
@@ -218,10 +219,10 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
 
       {d.ladders.length > 0 && (
         <section>
-          <SectionHeading icon={<TrendingUp />} title="Keyword ladders" description="Each ladder climbs from winnable long-tail pages (rung 1) to the head term at the top. Write and publish rung by rung; the rank tracker checks every page weekly." />
+          <SectionHeading icon={<TrendingUp />} title="Keyword ladders" description="Each ladder climbs from winnable long-tail pages (rung 1) to the main page for the head term at the top. Write and publish rung by rung; the rank tracker checks every page weekly." />
           <div className="space-y-4">
             {d.ladders.map((l) => (
-              <LadderCard key={l.ladderId} ladder={l} onHistory={(r) => setDialog(all.find((k) => k.keyword === r.keyword) ?? null)} />
+              <LadderCard key={l.ladderId} ladder={l} readiness={d.readiness} onHistory={(r) => setDialog(all.find((k) => k.keyword === r.keyword) ?? null)} />
             ))}
           </div>
         </section>
@@ -302,30 +303,49 @@ function bucketSegments(counts: Record<Bucket, number>) {
   return BUCKETS.filter((b) => b.key !== 'unknown' || counts.unknown > 0).map((b) => ({ label: b.label, value: counts[b.key], color: color[b.key] }));
 }
 
-/** The hero's next step: the first ladder page waiting to be published, else the lowest planned rung to write. */
-function NextRung({ ladders }: { ladders: Ladder[] }) {
-  const { org, site, can, tool } = useSitePage();
+/** The hero's next step: a ladder page to publish, else a draft to fix, else the lowest planned rung (or what it waits for). */
+function NextRung({ ladders, readiness }: { ladders: Ladder[]; readiness?: RankingsData['readiness'] }) {
+  const { org, site, can, tool, page } = useSitePage();
   if (!can('member')) return null;
-  const rungs = ladders.flatMap((l) => l.rungs.map((r) => ({ l, r })));
-  const written = rungs.find(({ r }) => r.status === 'writing' || r.status === 'started' || r.status === 'written');
-  const planned = rungs.filter(({ r }) => r.status !== 'published' && !(r.status === 'writing' || r.status === 'started' || r.status === 'written')).sort((a, b) => a.r.rung - b.r.rung || a.r.pageNo - b.r.pageNo)[0];
-  const pick = written ?? planned;
+  const ready = readiness?.ready !== false;
+  const rungs = ladders.flatMap((l) => l.rungs.map((r) => ({ l, r, v: rungView(r.status, ready) })));
+  const pick =
+    rungs.find((x) => x.v.state === 'written') ??
+    rungs.find((x) => x.v.state === 'fix') ??
+    rungs.filter((x) => x.v.state === 'planned' || x.v.state === 'held').sort((a, b) => a.r.rung - b.r.rung || a.r.pageNo - b.r.pageNo)[0];
   if (!pick) return null;
-  const { l, r } = pick;
+  const { l, r, v } = pick;
   const pageType = (PAGE_TYPE_VALUES as readonly string[]).includes(r.pageType) ? r.pageType : undefined;
+  const write = tool('keyword', { keyword: r.keyword, ...(pageType ? { pageType } : {}), ...(r.pageExists && r.targetUrl ? { existingPageUrl: r.targetUrl } : {}) });
+  const title =
+    v.state === 'written'
+      ? `Publish "${r.keyword}" and report its URL`
+      : v.state === 'fix'
+        ? `Finish the draft for "${r.keyword}" by hand, then publish it`
+        : v.state === 'held'
+          ? `"${r.keyword}" waits for your author profile and business facts`
+          : `${r.pageExists ? 'Improve' : 'Write'} the page for "${r.keyword}"`;
   return (
     <HeroNextStep
-      icon={written ? <Send /> : <PenSquare />}
-      eyebrow={`Next step · ladder "${l.headKeyword}", rung ${r.rung}`}
-      title={written ? `Publish "${r.keyword}" and report its URL` : `${r.pageExists ? 'Improve' : 'Write'} the page for "${r.keyword}"`}
+      icon={v.state === 'written' ? <Send /> : <PenSquare />}
+      eyebrow={`Next step · ladder "${l.headKeyword}", ${rungName(r.rung).toLowerCase()}`}
+      title={title}
       actions={
         <>
-          {written ? (
+          {v.state === 'written' ? (
             <ButtonLink to={tool('published', { keyword: r.keyword, ...(r.targetUrl ? { publishedUrl: r.targetUrl } : {}) })} size="sm" variant="secondary">
               Report published URL
             </ButtonLink>
+          ) : v.state === 'fix' ? (
+            <ButtonLink to={paths.ladder(org.id, site.id, l.ladderId)} size="sm" variant="secondary">
+              See what to edit
+            </ButtonLink>
+          ) : v.state === 'held' ? (
+            <ButtonLink to={page(readiness?.page ?? 'settings/profile')} size="sm" variant="secondary">
+              {readiness?.page === 'settings/business' ? 'Add your business facts' : 'Add your author profile'}
+            </ButtonLink>
           ) : (
-            <ButtonLink to={tool('keyword', { keyword: r.keyword, ...(pageType ? { pageType } : {}), ...(r.pageExists && r.targetUrl ? { existingPageUrl: r.targetUrl } : {}) })} size="sm" variant="secondary">
+            <ButtonLink to={write} size="sm" variant="secondary">
               {r.pageExists ? 'Improve page' : 'Write page'}
             </ButtonLink>
           )}
@@ -369,7 +389,7 @@ function HistoryExplorer({ all, loading, className }: { all: Kw[]; loading: bool
                 value=""
                 onChange={(e) => e.target.value && setPicked((p) => [...p, { keyword: e.target.value, slot: freeSlot() }])}
               >
-                <option value="">Add a keyword...</option>
+                <option value="">Add a keyword</option>
                 {options.map((k) => (
                   <option key={k.id} value={k.keyword}>
                     {k.keyword} ({posText(k.latest)})
@@ -397,20 +417,27 @@ function HistoryExplorer({ all, loading, className }: { all: Kw[]; loading: bool
   );
 }
 
-function rungStatus(status: string) {
-  const s = status.toLowerCase();
-  if (s === 'published') return <StatusBadge tone="good">Published</StatusBadge>;
-  if (s === 'writing' || s === 'started' || s === 'written')
+function rungStatus(v: RungView) {
+  if (v.state === 'live') return <StatusBadge tone="good">{v.label}</StatusBadge>;
+  if (v.state === 'fix') return <StatusBadge tone="critical">{v.label}</StatusBadge>;
+  if (v.state === 'written')
     return (
       <Badge tone="accent" icon={<Loader className="size-3" aria-hidden />}>
-        Written, not live
+        {v.label}
       </Badge>
     );
-  return <Badge icon={<Circle className="size-3" aria-hidden />}>{s === 'planned' || s === 'new' || !s ? 'Planned' : s}</Badge>;
+  if (v.state === 'held' || v.state === 'set_aside')
+    return (
+      <Badge tone="warning" icon={<Hourglass className="size-3" aria-hidden />}>
+        {v.label}
+      </Badge>
+    );
+  return <Badge icon={<Circle className="size-3" aria-hidden />}>{v.label}</Badge>;
 }
 
-function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: LadderRung) => void }) {
-  const { org, site, can, tool } = useSitePage();
+export function LadderCard({ ladder, readiness, onHistory }: { ladder: Ladder; readiness?: RankingsData['readiness']; onHistory: (r: LadderRung) => void }) {
+  const { org, site, can, tool, page } = useSitePage();
+  const ready = readiness?.ready !== false;
   const day = useCycleDay(site);
   const detail = paths.ladder(org.id, site.id, ladder.ladderId);
   const groups = useMemo(() => {
@@ -438,7 +465,7 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
               </Link>
             </h3>
             <p className="mt-0.5 text-[13px] text-ink-3">
-              Started {fmtDate(ladder.startDate)} · {plural(pages, 'page')} on {plural(groups.length, 'rung')} · {inTop10} in the top 10
+              Started {fmtDate(ladder.startDate)} · {ladderShape(pages, ladder.rungs.map((r) => r.rung))} · {inTop10} in the top 10
             </p>
             <Link to={detail} className="group/ol mt-1.5 inline-flex items-center gap-1 text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
               Open the ladder in the Pipeline
@@ -487,12 +514,12 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
                 )}
                 aria-hidden
               >
-                {done ? <Check className="size-4" /> : rung}
+                {done ? <Check className="size-4" /> : rung >= MAIN_RUNG ? <Flag className="size-4" /> : rung}
               </span>
               <div className="flex flex-wrap items-baseline gap-x-2 pt-1">
                 <h4 className="text-sm font-semibold text-ink">
-                  Rung {rung}
-                  {rung === 1 ? ' (long-tail)' : rung === top && groups.length > 1 ? ' (closest to the head term)' : ''}
+                  {rungName(rung)}
+                  {rung >= MAIN_RUNG ? ' (the head term)' : rung === 1 ? ' (long-tail)' : rung === top && groups.length > 1 ? ' (closest to the head term)' : ''}
                 </h4>
                 <span className="text-xs text-ink-3">
                   {months ? `aim: months ${months.replace('-', '-')} · ` : ''}
@@ -508,7 +535,7 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-medium text-ink">{r.keyword}</span>
                           {r.pageType && <Kind>{r.pageType}</Kind>}
-                          {rungStatus(r.status)}
+                          {rungStatus(rungView(r.status, ready))}
                         </div>
                         {r.supporting.length > 0 && (
                           <div className="mt-1 text-xs text-ink-3">
@@ -547,7 +574,7 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
                           {r.history.length > 0 && (
                             <Button variant="ghost" size="sm" onClick={() => onHistory(r)} aria-label={`Position history of ${r.keyword}`} icon={<History className="size-4" />} />
                           )}
-                          <RungAction r={r} can={can('member')} tool={tool} />
+                          <RungAction r={r} v={rungView(r.status, ready)} can={can('member')} tool={tool} profileTo={page(readiness?.page ?? 'settings/profile')} ladderTo={detail} />
                         </div>
                       </div>
                     </li>
@@ -561,8 +588,8 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
   );
 }
 
-function RungAction({ r, can, tool }: { r: LadderRung; can: boolean; tool: ReturnType<typeof useSitePage>['tool'] }) {
-  if (r.status === 'published') {
+function RungAction({ r, v, can, tool, profileTo, ladderTo }: { r: LadderRung; v: RungView; can: boolean; tool: ReturnType<typeof useSitePage>['tool']; profileTo: string; ladderTo: string }) {
+  if (v.action === 'view') {
     return r.targetUrl ? (
       <a href={r.targetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-accent-text hover:underline transition-colors duration-150 ease-brand">
         View
@@ -570,8 +597,21 @@ function RungAction({ r, can, tool }: { r: LadderRung; can: boolean; tool: Retur
       </a>
     ) : null;
   }
-  if (!can) return null;
-  if (r.status === 'writing' || r.status === 'started' || r.status === 'written')
+  if (!can || !v.action) return null;
+  // E-QA: the draft is finished by hand; its ladder page opens the report and the files
+  if (v.action === 'edit')
+    return (
+      <ButtonLink to={ladderTo} size="sm" variant="secondary">
+        See what to edit
+      </ButtonLink>
+    );
+  if (v.action === 'profile')
+    return (
+      <ButtonLink to={profileTo} size="sm" variant="secondary">
+        Finish your profile
+      </ButtonLink>
+    );
+  if (v.action === 'report')
     return (
       <ButtonLink to={tool('published', { keyword: r.keyword, ...(r.targetUrl ? { publishedUrl: r.targetUrl } : {}) })} size="sm" variant="secondary">
         Report published URL

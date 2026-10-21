@@ -27,10 +27,13 @@ import {
   RotateCw,
   TrendingUp,
   Trophy,
+  Wrench,
   Zap,
 } from 'lucide-react';
 import { PAGE_TYPE_VALUES, type AutomationId, type LadderCard, type LadderMode, type LadderPageState, type LadderStatus, type PageType, type PlanType, type RankPoint } from '@seo/shared';
 import { Badge, type Tone } from '@/components/ui/badge';
+import { useSiteCtx } from '@/lib/context';
+import { siteTimezone } from '@/lib/cycle-day';
 import { cn } from '@/lib/utils';
 import { sortByDate } from '../format';
 import { OFF_CHART, plotPos } from '../positions';
@@ -47,16 +50,23 @@ export const AUTO_ICON: Record<AutomationId, ReactNode> = {
   audit: <Gauge className="size-4" />,
 };
 
-// ---------- time, in the viewer's own time zone ----------
-const dtf = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(undefined, o);
+// ---------- time, in the website's own time zone ----------
+// Pre-launch run 2026-10-21 (Low): the Pipeline said "Every Wednesday at 06:00 (Asia/Dubai)" beside "Wed, Oct 28, 02:00 AM" in the
+// viewer's browser zone, so one run read as two times. Every time on these screens is the website's (`tz`, from useSiteZone), and the
+// panels name the zone. Without a zone (a screen outside one website) the browser's is used, as before.
+const dtf = (o: Intl.DateTimeFormatOptions, tz?: string) => new Intl.DateTimeFormat(undefined, tz ? { ...o, timeZone: tz } : o);
 /** "Mon 5 Oct, 17:00" */
-export const fmtWhen = (iso: string) => dtf({ weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+export const fmtWhen = (iso: string, tz?: string) => dtf({ weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, tz).format(new Date(iso));
 /** "Wednesday 7 October" */
-export const fmtDayHead = (iso: string) => dtf({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(iso));
+export const fmtDayHead = (iso: string, tz?: string) => dtf({ weekday: 'long', day: 'numeric', month: 'long' }, tz).format(new Date(iso));
 /** "Mon 5 Oct" */
-export const fmtShortDay = (iso: string) => dtf({ weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(iso));
+export const fmtShortDay = (iso: string, tz?: string) => dtf({ weekday: 'short', day: 'numeric', month: 'short' }, tz).format(new Date(iso));
 /** "17:00" */
-export const fmtTime = (iso: string) => dtf({ hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+export const fmtTime = (iso: string, tz?: string) => dtf({ hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, tz).format(new Date(iso));
+/** The calendar day of a moment in the zone (groups a day's runs) */
+export const dayKey = (iso: string, tz?: string) => dtf({ year: 'numeric', month: '2-digit', day: '2-digit' }, tz).format(new Date(iso));
+/** The website's time zone (its own, else the engine's) */
+export const useSiteZone = (): string => siteTimezone(useSiteCtx().site);
 export const inDays = (iso: string) => {
   const d = Math.round((Date.parse(iso) - Date.now()) / 864e5);
   return d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`;
@@ -132,8 +142,11 @@ export const PAGE_STATE: Record<LadderPageState, { label: string; tone: Tone; ic
   set_aside: { label: 'Set aside', tone: 'warning', icon: <Ban className="size-3" aria-hidden /> },
 };
 
-export function PageStateBadge({ state, className }: { state: LadderPageState; className?: string }) {
-  const s = PAGE_STATE[state] ?? PAGE_STATE.planned;
+/** B1 (pre-launch run 2026-10-21): a written draft the quality check refused is never "Written, publish it" */
+export const NEEDS_FIX_STATE = { label: 'Needs your edits', tone: 'critical' as Tone, icon: <Wrench className="size-3" aria-hidden /> };
+
+export function PageStateBadge({ state, needsFix, className }: { state: LadderPageState; needsFix?: boolean; className?: string }) {
+  const s = state === 'waiting' && needsFix ? NEEDS_FIX_STATE : (PAGE_STATE[state] ?? PAGE_STATE.planned);
   return (
     <Badge tone={s.tone} icon={s.icon} className={className}>
       {s.label}

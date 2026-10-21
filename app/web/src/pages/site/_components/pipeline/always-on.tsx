@@ -2,7 +2,7 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, Bot, CalendarClock, ChevronRight, Circle, FileText, Flame, History, Lightbulb, PenSquare, Play, RefreshCw, Settings, Target, TrendingDown, TrendingUp } from 'lucide-react';
 import { AUTOMATIONS, type AutomationStatus, type LadderCard, type PipelineData, type QueueItem } from '@seo/shared';
-import { useCycleDay } from '@/lib/cycle-day';
+import { siteTimezone, useCycleDay } from '@/lib/cycle-day';
 import { PRICES } from '@/lib/prices';
 import { formatCredits } from '@/lib/credits';
 import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
@@ -54,6 +54,7 @@ export function AlwaysOn({ data, cards, onWrite }: { data: PipelineData; cards: 
 function Capacity({ data, cards }: { data: PipelineData; cards: LadderCard[] }) {
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
+  const tz = siteTimezone(site);
   const perWeek = data.queue?.pagesPerWeek ?? 0;
   const ladders = writingLadders(cards);
   const level = data.autopilot?.level ?? data.automation?.autopilotLevel ?? 2;
@@ -92,7 +93,7 @@ function Capacity({ data, cards }: { data: PipelineData; cards: LadderCard[] }) 
           )}
           <p className="mt-1.5 text-xs leading-snug text-ink-3">
             Shared by your keywords in their order, at most {maxActive === 1 ? '1 keyword' : `${maxActive} keywords`} at a time: the first gets the pages until it has nothing to write, then the next one.
-            {perWeek > 0 && cadence && validDate(cadence.nextRunAt) ? ` Next writing: ${fmtWhen(cadence.nextRunAt)}.` : ''}
+            {perWeek > 0 && cadence && validDate(cadence.nextRunAt) ? ` Next writing: ${fmtWhen(cadence.nextRunAt, tz)}.` : ''}
           </p>
           {perWeek > 0 && data.queue?.paused && (
             <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-warning-text">
@@ -240,6 +241,7 @@ function Suggestions({ data, onWrite }: { data: PipelineData; onWrite: (i: Write
 function Monitoring({ data }: { data: PipelineData }) {
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
+  const tz = siteTimezone(site);
   const list = data.automations.filter((a) => a.id !== 'content_cadence');
   return (
     <Panel
@@ -290,7 +292,7 @@ function Monitoring({ data }: { data: PipelineData }) {
                     <CalendarClock className="size-3.5" aria-hidden />
                     Next
                   </dt>
-                  <dd className="min-w-0 text-ink">{validDate(a.nextRunAt) ? `${fmtWhen(a.nextRunAt)} · ${inDays(a.nextRunAt)}` : (a.reason ?? '-')}</dd>
+                  <dd className="min-w-0 text-ink">{validDate(a.nextRunAt) ? `${fmtWhen(a.nextRunAt, tz)} · ${inDays(a.nextRunAt)}` : (a.reason ?? '-')}</dd>
                 </div>
                 <div className="flex items-start gap-2">
                   <dt className="flex w-12 shrink-0 items-center gap-1 text-ink-3">

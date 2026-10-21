@@ -259,6 +259,9 @@ export interface RankingsData {
   keywords: TrackedKeyword[];
   /** G29: where the positions and the share of voice come from */
   lineage: Lineage[];
+  /** P1 / B6 (2026-10-21): no page is written on its own before the author profile and the business facts are on file (readiness.ts);
+   *  the planned rungs say so and point to where they are filled in. Absent from older servers: treated as ready. */
+  readiness?: { ready: boolean; missingText: string; page: 'settings/profile' | 'settings/business' };
 }
 
 export interface ContentItem {
@@ -920,6 +923,8 @@ export interface RecommendationAction {
   page?: string;
   /** or an external link (the page in question) */
   href?: string;
+  /** or one of the company's reports (E-QA 2026-10-21: a not-ready draft opens its report, where each bracket to edit is listed) */
+  report?: string;
   /** keyword-first: add this keyword to one of the website's ladders (POST .../ladders/:ladderId/keywords), where its topic matches */
   addToLadder?: { ladderId: string; head: string; keyword: string };
 }
@@ -935,6 +940,9 @@ export interface Recommendation {
   action?: RecommendationAction;
   /** a second button (keyword-first: "Add to my ladder" beside "Write the page") */
   secondary?: RecommendationAction;
+  /** B3 (pre-launch run 2026-10-21): this website's own values for the recommendation's "Show me how" guide (the IndexNow key, its file
+   *  and its address), so the guide never shows its example values where the real ones exist */
+  guideVars?: Record<string, string>;
   /** REP 3.3 (benchmark pass 2026-10-14): what this is worth and why it sits where it does in the one queue (`queue.ts`).
    * Absent only on rows written before the queue existed; a reader must treat a missing score as "not ranked". */
   score?: RecommendationScore;
@@ -1028,7 +1036,7 @@ export interface PipelineData {
     /** then these, week after week */
     later: QueueItem[];
     /** written, not published yet */
-    /** `needsFix` (R111): the draft did not pass its quality check - fix it and run it again, do not publish it; `reasons` say why */
+    /** `needsFix` (R111): the draft did not pass its quality check: finish it by hand (E-QA, never a re-run), do not publish it as it is; `reasons` say why */
     waiting: { keyword: string; startedAt: string; days: number; needsFix?: boolean; reasons?: string[] }[];
     /** opportunity posts while they are set to Manual: what Auto would write, nothing is written on its own (v4.8) */
     suggestions?: QueueItem[];
@@ -1150,7 +1158,7 @@ export interface LadderPage {
   volume: number | null;
   kd: number | null;
   supporting: string[];
-  /** R111: written, but the draft did not pass the quality check, fix it and run it again (never "I published it") */
+  /** R111: written, but the draft did not pass the quality check: finished by hand in the draft (never "I published it" as it is, never a re-run) */
   needsFix?: boolean;
   qaReasons?: string[];
 }
