@@ -192,7 +192,12 @@ const findExisting = (keyword, yourUrl) => {
 };
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const homeUrl = domain ? siteUrlOf(domain, '/') : '';
-const plannedUrl = (kw) => homeUrl + slug(kw) + '/';
+// RV-17 (2026-10-21, pre-launch run): every planned URL ended in "/" while techand.ai's sitemap writes none and the site 308-redirects the
+// slash away. A planned page follows the site's own form: a trailing slash only when most of its sitemap pages carry one (and, as before,
+// when there are too few pages to tell).
+const slashFormLP = (() => { const ps = (base.site_urls || []).map(u => String(u || '').replace(/^https?:\/\/[^\/?#]+/i, '').replace(/[?#].*$/, '')).filter(x => x && x !== '/');
+  if (ps.length < 3) return true; return ps.filter(x => /\/$/.test(x)).length * 2 > ps.length; })();
+const plannedUrl = (kw) => homeUrl + slug(kw) + (slashFormLP ? '/' : '');
 
 // ---- one page per topic cluster inside each rung ----
 const LIMIT = { 1: 4, 2: 4, 3: 3 };

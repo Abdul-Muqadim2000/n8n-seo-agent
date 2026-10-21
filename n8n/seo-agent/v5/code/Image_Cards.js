@@ -18,9 +18,12 @@ if (!images.length || !md.trim()) return [{ json: { skip: true, reason: images.l
 const S = (v) => String(v == null ? '' : v);
 const esc = (s) => S(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const plain = (s) => S(s).replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`#>]+/g, '').replace(/\s+/g, ' ').trim();
-// a cut never ends on a half word or on a dangling "to a" / "of the"
+// a cut never ends on a half word or on a dangling "to a" / "of the", and never with "…" (M6 / L1, 2026-10-21: two cards of exec 42 ended in
+// "…", and the owner's copy rule has no ellipsis character): a long line is cut at its last clause or word that fits, and reads as whole
 const clip = (s, n) => { const t = plain(s); if (t.length <= n) return t;
-  return t.slice(0, n - 1).replace(/[\s,;:.]+\S*$/, '').replace(/(\s+(?:a|an|the|and|or|of|to|for|in|on|with|by|from|at|as|that|which|is|are|was|were))+$/i, '') + '…'; };
+  const cut = t.slice(0, n); const clause = Math.max(cut.lastIndexOf(', '), cut.lastIndexOf('; '), cut.lastIndexOf(': '));
+  const base = clause > n * 0.5 ? cut.slice(0, clause) : cut.replace(/[\s,;:.]+\S*$/, '');
+  return base.replace(/(\s+(?:a|an|the|and|or|of|to|for|in|on|with|by|from|at|as|that|which|is|are|was|were))+$/i, '').replace(/[\s,;:]+$/, ''); };
 
 // the business name and the site: the model first (G19), then the profile, then the domain
 let MODEL = null;
@@ -39,6 +42,12 @@ for (const ln of lines) {
   if (h) { cur = { heading: plain(h[1]), body: [] }; sections.push(cur); continue; }
   if (cur) cur.body.push(ln);
 }
+// M6 (2026-10-21, exec 42): a section built of H3 sub-sections ("Assess & Envision: ...", "Build & Implement: ...", "Run & Optimize: ...")
+// was read as prose, so the H3 ran into its first sentence ("Assess & Envision: find the use cases worth funding This phase covers
+// discovery"), a link sentence became a point ("See our Assess & Envision discovery and ROI assessment.") and the third phase was cut.
+// Its H3 headings are its points now, all of them; in prose, a heading line and a sentence that is only a link are never a point.
+const isLinkOnly = (t) => { const x = String(t || '').trim(); const noLinks = x.replace(/\[([^\]]*)\]\([^)]*\)/g, '').replace(/[\s.,;:!?]+/g, ' ').trim();
+  return /\]\(/.test(x) && (/^(?:see|read|learn|explore|find out|discover|visit|check)\b/i.test(plain(x)) || noLinks.split(/\s+/).filter(Boolean).length <= 3); };
 const pointsFor = (heading) => {
   const norm = (t) => plain(t).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
   const key = norm(heading);
@@ -46,14 +55,16 @@ const pointsFor = (heading) => {
   if (!sec && key) sec = sections.find(s => norm(s.heading).includes(key) || key.includes(norm(s.heading)));
   if (!sec) sec = sections[0];
   if (!sec) return { heading: plain(heading), points: [], numbered: false };
-  const bullets = sec.body.map(l => l.match(/^\s*(\d+[.)]|[-*•])\s+(.+)$/)).filter(Boolean);
+  const h3s = sec.body.map(l => l.match(/^###\s+(.+)$/)).filter(Boolean).map(m => plain(m[1]));
+  if (h3s.length >= 3) return { heading: plain(sec.heading) || plain(heading), points: h3s.slice(0, 5).map(x => clip(x, 95)), numbered: true, from: 'subheadings', total: h3s.length };
+  const bullets = sec.body.filter(l => !isLinkOnly(l)).map(l => l.match(/^\s*(\d+[.)]|[-*•])\s+(.+)$/)).filter(Boolean);
   const numbered = bullets.length >= 3 && /^\d/.test(bullets[0][1]);
   let points = bullets.map(b => clip(b[2], 95)).filter(x => x.length > 12);
-  if (points.length < 3) {   // prose section: its first sentences, one per line
-    const text = plain(sec.body.filter(l => !/^\s*\|/.test(l)).join(' '));
-    points = text.split(/(?<=[.!?])\s+/).map(x => clip(x, 110)).filter(x => x.length > 30).slice(0, 4);
+  if (points.length < 3) {   // prose section: its first sentences, one per line (a heading line ends its own sentence; a link-only sentence is skipped)
+    const text = sec.body.filter(l => !/^\s*\|/.test(l)).map(l => /^#{3,6}\s+/.test(l) ? plain(l).replace(/[.!?:]*$/, '.') : plain(l)).join(' ');
+    points = text.split(/(?<=[.!?])\s+/).filter(x => !isLinkOnly(x) && !/^(?:see|read|learn more|explore)\b/i.test(x)).map(x => clip(x, 110)).filter(x => x.length > 30).slice(0, 4);
   }
-  return { heading: plain(sec.heading) || plain(heading), points: points.slice(0, 5), numbered };
+  return { heading: plain(sec.heading) || plain(heading), points: points.slice(0, 5), numbered, from: 'text', total: points.length };
 };
 
 // The card has to fit its canvas exactly: the renderer clips at the given size, so the type scales with how much the section says and the
@@ -85,11 +96,12 @@ const page = (w, h, light, f, inner) => '<!doctype html><html lang="' + esc(d.la
 const out = images.map((im, i) => {
   const hero = S(im.purpose) === 'hero';
   const w = Number(im.width) || (hero ? 1200 : 1000), h = Number(im.height) || (hero ? 675 : 600);
-  let inner, f;
+  let inner, f, card_alt = '';
   if (hero) {
     const title = clip(meta.h1 || meta.title || topic, 110);
     f = { padV: 60, padH: 72, eyebrow: 22, title: title.length > 72 ? 50 : title.length > 46 ? 58 : 66, body: 26, gap: 20, foot: 22 };
     inner = '<p class="eyebrow">' + esc(topic || brand) + '</p><h1>' + esc(title) + '</h1>';
+    card_alt = 'Title card: ' + title + (brand ? ', ' + brand : '');
   } else {
     const p = pointsFor(im.placement || im.subject || im.alt_text);
     // a point is cut at a clause, never mid-phrase: a card that ends in "and a…" reads worse than a shorter, whole statement
@@ -103,8 +115,11 @@ const out = images.map((im, i) => {
       gap: pts.length >= 5 ? 11 : pts.length === 4 ? 13 : 17, foot: 19 };
     inner = '<p class="eyebrow">' + esc(topic || brand) + '</p><h2>' + esc(heading) + '</h2>'
       + (pts.length ? '<div class="points">' + pts.map((x, k) => '<div class="point"><span class="dot">' + (p.numbered ? (k + 1) : '•') + '</span><span>' + esc(x) + '</span></div>').join('') + '</div>' : '');
+    // M6: the alt text says what the card shows (its heading and its points), not the photo the plan imagined
+    const altPts = pts.map(x => x.replace(/:\s.*$/, '')).join(', ');
+    card_alt = clip(heading + (altPts ? ': ' + altPts : ''), 125);
   }
-  return { json: { slot: Number(im.slot) || i + 1, index: i, filename: S(im.filename), alt_text: S(im.alt_text), caption: S(im.caption),
+  return { json: { slot: Number(im.slot) || i + 1, index: i, filename: S(im.filename), alt_text: S(im.alt_text), card_alt: card_alt.replace(/"/g, "'"), caption: S(im.caption),
       purpose: S(im.purpose), width: w, height: h, format: 'webp', kind: hero ? 'title card' : 'section summary card', skip: false },
     binary: { html: { data: Buffer.from(page(w, h, !hero, f, inner), 'utf8').toString('base64'), mimeType: 'text/html', fileName: 'index.html', fileExtension: 'html' } } };
 });

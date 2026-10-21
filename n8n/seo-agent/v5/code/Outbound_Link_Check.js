@@ -30,8 +30,8 @@ const link_check = {
 };
 qa.link_check = link_check;
 if (dead.length) warnings.push('Dead links (fetched in this run): ' + dead.slice(0, 5).map(x => x.url + ' (' + x.reason + (x.suggestion ? '; use ' + x.suggestion + ' instead' : '; no live page in this run states it, so remove the link') + ')').join('; ')
-  + ' — replace or remove each one; a page that links to a missing page is not ready to publish');
-if (unknown.length) qa.link_check_note = unknown.length + ' outbound link(s) could not be checked: ' + unknown.slice(0, 4).map(x => x.url + ' (' + x.reason + ')').join('; ') + ' — open them once before publishing.';
+  + '. Replace or remove each one: a page that links to a missing page is not ready to publish');
+if (unknown.length) qa.link_check_note = unknown.length + ' outbound link(s) could not be checked: ' + unknown.slice(0, 4).map(x => x.url + ' (' + x.reason + ')').join('; ') + '. Open them once before publishing.';
 qa.warnings = warnings;
 if (dead.length) {
   qa.passed = false; qa.passed_copy = false; qa.editor_needed = true;
@@ -39,13 +39,16 @@ if (dead.length) {
   const reason = dead.length + ' outbound link(s) lead to a missing page: ' + dead.slice(0, 4).map(x => x.url + ' (' + x.reason + (x.suggestion ? '; replace with ' + x.suggestion : '; remove it') + ')').join('; ');
   qa.publishable = false;
   qa.not_ready = !roundsLeft;
-  qa.quality_label = roundsLeft ? 'needs another editing round before it can be published' : 'did not pass the quality check — not ready to publish';
+  qa.quality_label = roundsLeft ? 'needs another editing round before it can be published' : 'did not pass the quality check, so it is not ready to publish';
   qa.not_ready_reasons = !roundsLeft
     ? [reason, ...(Array.isArray(qa.not_ready_reasons) ? qa.not_ready_reasons : [])].filter((x, i, a) => x && a.indexOf(x) === i).slice(0, 7)
     : (Array.isArray(qa.not_ready_reasons) ? qa.not_ready_reasons : []);
   const er = Number(qa.editor_rounds) || 0;
   qa.quality = { ...(qa.quality && typeof qa.quality === 'object' ? qa.quality : {}),
     passed: false, publishable: false, not_ready: qa.not_ready, label: qa.quality_label, reasons: qa.not_ready_reasons,
+    // 2026-10-21: what to do is an edit by hand, never a paid re-run (Content QA's next_step, with the dead links first)
+    next_step: roundsLeft ? '' : 'Finish this draft by hand: replace or remove each link to a missing page listed above' + ((qa.quality || {}).next_step ? ', and ' + String(qa.quality.next_step).replace(/^Finish this draft by hand:\s*/, '') : '. Then publish it. You do not need a new run for these edits: a new run writes a whole new page and is charged again.'),
+    fix_by: roundsLeft ? '' : 'edit',
     note: roundsLeft ? '' : (er ? 'The editor had ' + er + ' round' + (er === 1 ? '' : 's') : 'No editing round was left') + ' and the page still links to a missing page: it is delivered as a draft to finish by hand, not as a page to publish as it is.' };
 }
 return [{ json: { ...d, content_qa: qa } }];

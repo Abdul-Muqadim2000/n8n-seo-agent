@@ -1,6 +1,7 @@
 /*__FIT_GATE__*/
 /*__ANCHOR__*/
 /*__SITE_MODEL__*/
+/*__EXCLUSIONS__*/
 // Content runs (v4.4): what the brief, the copy, the schema and the blog package need beyond the keyword research —
 // the site's business profile (author, reviewer, address / NAP), proof from its case studies, the page role (hub, case study, local,
 // standard), the cluster pages a hub links down to, and the video details (YouTube page / Vimeo oEmbed, read by Fetch Video Details).
@@ -63,6 +64,11 @@ const isHub = Number(d.ladder_rung) === 4 || /pillar|hub/.test(pt);
 const cs = d.case_study && typeof d.case_study === 'object' ? d.case_study : null;
 const page_role = (cs || /case stud/.test(pt)) ? 'case_study' : /local/.test(pt) ? 'local' : isHub ? 'hub' : 'standard';
 const article_like = /blog|guide|article|pillar|hub|case stud|comparison|faq/.test(pt) || !!(d.ai_target && d.ai_target.question);   // v4.12: these pages show the byline with a visible "Updated" date (AI cites fresh, dated pages)
+// RV-10 (2026-10-21, pre-launch run exec 42): the first page waits for the author profile (P1), and then the ladder's service page
+// printed no author at all, because only article-like pages carry the byline. A page that is not article-like now carries a compact
+// expert line (the author's name and job title, a visible "Updated" date, the reviewer when there is one) and the author's Person
+// schema, whenever a profile is on file; with no profile it prints nothing and asks for nothing (the readiness rule is unchanged).
+const author_line = article_like ? 'byline' : (author ? 'compact' : 'none');
 const STOP = new Set(['the', 'and', 'for', 'with', 'your', 'our', 'how', 'what', 'best', 'top', 'near', 'from', 'are', 'you', 'www', 'com', 'html', 'php', 'page', 'pages', 'blog', 'services', 'service']);
 const toks = (t) => s(t).toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter(x => x.length > 2 && !STOP.has(x));
 // 2026-10-11 (FIX_PLAN D9): a cluster page counts as live only when the site really has it (sitemap / crawl — Collect Site URLs keeps the
@@ -154,8 +160,30 @@ const proof_context = proof_library.length ? proof_library.map(c => '- ' + (c.ti
 const video_context = video ? 'VIDEO: the page has a video ("' + (video.title || 'untitled') + '"' + (video.minutes ? ', about ' + video.minutes + ' minutes' : '') + '). The system embeds it' + (video.placement ? ' under "' + video.placement + '"' : ' after the quick answer') + ' with its transcript. Refer to it once, naturally (what it shows and why to watch); never transcribe it or invent what it says.' + (video.chapters.length ? ' Key moments: ' + video.chapters.map(c => c.name).join(' · ') + '.' : '') : '';
 const case_facts_text = caseFacts.replace(/\n/g, ' | ') + (proof_library.length ? (caseFacts ? ' | ' : '') + proof_library.map(c => c.results).join(' | ') : '');
 
+// ---- D5 (2026-10-21): the subtopics of the page to beat, without the topics the verdict said to leave out ----
+// Parse Analysis runs before the verdict, so its subtopic list cannot know them. Live (exec 42) the verdict said to skip "AI consultant
+// certification" and "AI consultant course" while the brief was asked to cover a certification course's "Program Eligibility" and
+// "Program Curriculum". Here, after the verdict and before the brief, a subtopic about an excluded topic is dropped, and every subtopic
+// goes when the page to beat itself is about one (its title or address names it).
+const VEX = Array.isArray(d.verdict_exclusions) ? d.verdict_exclusions : [];
+let coverage_target = d.coverage_target && typeof d.coverage_target === 'object' ? d.coverage_target : null;
+let coverage_digest = s(d.coverage_digest);
+const subtopics_excluded = [];
+if (coverage_target && Array.isArray(coverage_target.subtopics) && coverage_target.subtopics.length && VEX.length) {
+  const bestC = (d.competitors || []).find(c => c && coverage_target.best && c.url === coverage_target.best.url) || {};
+  const benchText = s(bestC.title) + ' ' + s((coverage_target.best || {}).url).replace(/^https?:\/\/[^\/]+/i, '').replace(/[\/_-]+/g, ' ');
+  const benchHit = VEX.find(e => EXC.match(benchText, e, kw));
+  const kept = coverage_target.subtopics.filter(st => { const e = benchHit || VEX.find(x => EXC.match(st, x, kw));
+    if (e) subtopics_excluded.push({ subtopic: st, topic: s(e.topic != null ? e.topic : e), why: benchHit ? 'the page to beat is about it' : 'the subtopic is about it' }); return !e; });
+  if (subtopics_excluded.length) {
+    coverage_target = { ...coverage_target, subtopics: kept, subtopics_excluded };
+    if (d.coverage_digest_base != null) coverage_digest = s(d.coverage_digest_base) + (kept.length ? '\nSUBTOPICS THAT PAGE COVERS (cover each one, in our own structure and words; do not copy its headings):\n- ' + kept.join('\n- ') : '');
+  }
+}
+
 return [{ json: { ...d, site_profile, author, reviewer, proof_library, page_role, article_like, hub_pages, hub_pages_planned: hub_planned, video, case_study: cs, local_area: area,
   eeat_context, proof_context, role_brief: ROLE_BRIEF[page_role] || '', role_writer: ROLE_WRITER[page_role] || '', video_context, case_facts_text,
+  author_line, coverage_target, coverage_digest, subtopics_excluded,   // RV-10 / D5
   // the facts and the call to action the site model holds (what the app sent, what the weekly run stored) when this request carries none
   business_facts: s(d.business_facts) || mFacts.business_facts, cta: s(d.cta) || mFacts.cta,
   pricing_facts, timeline_facts, angle_rules, site_model: model } }];
