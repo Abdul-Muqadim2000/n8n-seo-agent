@@ -141,6 +141,9 @@ describe('the first page waits for the author profile and the business facts (re
     // ---- 3. the client saves the business facts: they reach the engine's site row at once (Site Admin `facts`) ----
     const patched = await u.c.patch(base, { businessFacts: FACTS });
     expect(patched.status).toBe(200);
+    // D1 (2026-10-21): a PATCH with the facts alone keeps everything else the website stores
+    expect(patched.body).toMatchObject({ business: 'CRM implementation for sales teams', businessFacts: FACTS, timezone: 'Asia/Dubai' });
+    expect((await db.query.sites.findFirst({ where: eq(schema.sites.id, site.id) }))!.business).toBe('CRM implementation for sales teams');
     expect(t.admin.at(-1)).toMatchObject({ action: 'facts', site_id: SID, domain: DOMAIN, business_facts: FACTS });
     expect(t.tables.sites[0].business_facts).toBe(FACTS);
     // only the profile is missing now

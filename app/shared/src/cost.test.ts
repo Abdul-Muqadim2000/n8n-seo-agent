@@ -50,7 +50,7 @@ describe('the figures are the engine\'s calibrated ones, not the 2026-10-02 tabl
     expect(costKeys('backlinks', { freeOnly: true })).toEqual([]);
   });
 
-  it('setting tracking up reserves nothing: the weekly reports are their own runs', () => {
+  it('setting tracking up reserves nothing: the site report it starts is the first weekly report, autopilot spend', () => {
     expect(estimateRunCost('track', {})).toBe(0);
   });
 

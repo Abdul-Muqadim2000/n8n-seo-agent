@@ -276,7 +276,45 @@
       "include_full_report": false,
       "include_content": false,
       "include_seo_report": true,
-      "keyword": ""
+      "keyword": "",
+      "services_given": false
+    }
+  },
+  {
+    "name": "discover at setup with what the website sells",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "discover",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "goal": "Get leads and enquiries",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "features": [],
+      "receive": [
+        "Keyword Report"
+      ],
+      "services": [
+        "Odoo implementation",
+        "E-invoicing onboarding"
+      ]
+    },
+    "expect": {
+      "mode": "discover",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "services": [
+        "Odoo implementation",
+        "E-invoicing onboarding"
+      ],
+      "services_given": true,
+      "include_content": false
     }
   },
   {
@@ -350,7 +388,11 @@
       "competitors": [
         "rival.ae"
       ],
-      "ga4_property_id": "543096312"
+      "ga4_property_id": "543096312",
+      "services": [
+        "Odoo implementation",
+        "E-invoicing onboarding"
+      ]
     },
     "expect": {
       "mode": "audit",
@@ -360,7 +402,12 @@
       "crawl_js": true,
       "competitors": [
         "rival.ae"
-      ]
+      ],
+      "services": [
+        "Odoo implementation",
+        "E-invoicing onboarding"
+      ],
+      "services_given": true
     }
   },
   {

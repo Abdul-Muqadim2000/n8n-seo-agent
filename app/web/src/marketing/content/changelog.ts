@@ -14,6 +14,18 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-21',
+    title: 'Fixes from our pre-launch run',
+    summary: 'Three fixes found by running a full setup end to end before our first clients join.',
+    highlights: [
+      'Saving one setting no longer resets the others: choosing your Analytics property, saving your keywords at setup or changing one mailbox setting keeps your business description, business facts, tone and mailbox settings as they were',
+      'The keyword research at setup and the full SEO report now know the services you listed, so the keywords they suggest first are the ones you sell',
+      'The site report that starts when you set up tracking now counts as your first weekly report, under autopilot, and the launch screen includes it in today\'s estimate; starting tracking itself uses no credits',
+    ],
+    features: ['autopilot', 'site-tracking', 'link-building', 'keyword-research'],
+    labels: ['Billing'],
+  },
+  {
     date: '2026-10-20',
     title: 'Your first page waits for your author profile and business facts',
     summary:

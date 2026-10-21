@@ -24,6 +24,9 @@ A discount on a pack lowers the margin below 3× for those credits (a 10% discou
 - **Autopilot** — a website's schedules: the weekly site report, AI visibility, the daily AI pulse, AI growth, the backlink monitor,
   link building, the monthly technical audit, the blog posts of the content cadence. Each website shows its **forecast in credits a
   month** from its settings (`shared/src/autopilot.ts`, the same rows the settings card shows), and what it used this month.
+  The site report that **Track my site** starts (the engine's Site Tracker run, ledger key `parent:<track exec>`) is the website's
+  first weekly site report and counts here, not under the Track run (D3, 2026-10-21: `costSync.ts` `attributeLedgerRow` files a
+  child of a `track` run as the website's schedule spend; the launch screen's "Today" figure includes it, `firstCycleChecksUsd`).
 - **On-demand** — analyses someone starts in the app, through the API / MCP, and keyword checks.
 
 Every usage entry in the ledger records which it was (`ref.origin`), so the Credits page, the activity and the CSV split them.
@@ -34,7 +37,9 @@ Every usage entry in the ledger records which it was (`ref.origin`), so the Cred
    rounded up. The form shows it ("12 credits").
 2. While it runs it **holds** its quote: a second analysis cannot spend the same credits.
 3. When it settles it is **charged what it really used** (exactly 3× its provider cost) and **never more than its quote**. When it
-   used more, the difference is ours (`ref.absorbed` on the entry, visible to the platform admin).
+   used more, the difference is ours (`ref.absorbed` on the entry, visible to the platform admin). A run quoted **0** (Track my site,
+   a publish check, a check-in, a profile) is stored with `quoted_credits = 0`, so anything charged to it is absorbed; only runs
+   from before credits have no quote (`null`) and are charged in full.
 4. A run that **fails is not charged**; credits taken before it failed are given back once (`failed:<run id>`).
 
 ### The checks before on-demand work starts (402, credits only)

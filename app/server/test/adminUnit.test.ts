@@ -114,6 +114,15 @@ describe('engine ledger rows', () => {
     const batch = new Map([['200', { run_id: '200', key: 'schedule:backlinks', domain: 'acme.test', settled_at: at }]]);
     expect(attributeLedgerRow({ run_id: '201', key: 'parent:200', settled_at: at }, lk, batch)).toMatchObject({ orgId: ORG, origin: 'schedule' });
   });
+  // D3 (paid pre-launch run 2026-10-21): "Track my site" starts the Site Tracker as its child (`parent:<track exec>`); that run is the
+  // website's first weekly site report, autopilot spend, never an on-demand charge under the Track run's quote of 0
+  it('a child of a Track run is the website\'s autopilot spend (no run, schedule); a child of any other run stays that run\'s', () => {
+    const withTrack = { ...lk, runsByExec: new Map<string, import('../src/services/admin/costSync').RunRef>([...lk.runsByExec, ['13', { id: 'run-track', orgId: ORG, siteId: 'site-1', userId: 'user-1', mode: 'track' }]]) };
+    expect(attributeLedgerRow({ run_id: '16', key: 'parent:13', mode: 'site_tracker', settled_at: at }, withTrack)).toEqual({ orgId: ORG, siteId: 'site-1', userId: null, runId: null, origin: 'schedule' });
+    // the Track run's own row is still the Track run's
+    expect(attributeLedgerRow({ run_id: '13', key: `app:${ORG}`, mode: 'track', settled_at: at }, withTrack)).toMatchObject({ runId: 'run-track', origin: 'app' });
+    expect(attributeLedgerRow({ run_id: '101', key: 'parent:main-100', mode: 'ai_visibility', settled_at: at }, withTrack)).toMatchObject({ runId: 'run-1', origin: 'app' });
+  });
   it('a website verified after the money was spent, or a company created after it, did not cause it', () => {
     expect(attributeLedgerRow({ run_id: '300', key: 'schedule:ai_pulse', domain: 'late.test', settled_at: at }, lk).orgId).toBeNull();
     expect(attributeLedgerRow({ run_id: '301', key: 'schedule:ai_pulse', domain: 'late.test', settled_at: '2026-10-11T00:00:00Z' }, lk).orgId).toBe(LATE);
