@@ -82,7 +82,7 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
   checkin: { ai: 0, dfs: 0, measured: 0, basis: 'a check-in records what you type' },
   profile: { ai: 0, dfs: 0, measured: 0, basis: 'saving the business profile' },
   case_study: { ai: 0, dfs: 0, measured: 0, basis: 'the intake itself; the page it writes reserves a content run' },
-  assess: { ai: 0, dfs: 0.034, measured: 0.0254, basis: 'one keyword check, execs 487-489' },
+  assess: { ai: 0, dfs: 0.036, measured: 0.0274, basis: 'one keyword check, execs 487-489, plus the keyword\'s own results page it now reads (top 10, $0.002, E-SERP 2026-10-21)' },
 };
 
 const round = (n: number): number => Math.round(n * 10000) / 10000;

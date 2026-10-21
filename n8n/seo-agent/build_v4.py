@@ -4241,18 +4241,21 @@ patch('Analyze Keywords', "const fitsAK = (k) => { const g = fitGate(k.keyword, 
       "const fitsAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, intent: k.intent || '', reason: g.reason, detail: g.detail }); return g.ok; };")
 patch('Analyze Keywords', "if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return false; };",
       "if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, intent: k.intent || '', reason: g.reason, detail: g.detail }); return false; };")
-# FG1 (2026-10-21): two narrow leaks the topic bar cannot see on a site with few topic words: another company's brand claim ("ibt: no 1 bpo
-# company in middle east") and a list search for another industry ("top facilities management companies uae"). Declared-service names, tax-adjacent
-# searches and everything else go through the shared gate unchanged. fitGate is a function declaration, so every list's call picks this up.
-patch('Analyze Keywords', "const refused = [];\n",
-      "const refused = [];\n"
-      "const fitGateKit = fitGate;\n"
-      "const fitTopicStemsAK = fitTopicWords([...(base.services || []), String(base.business || '').slice(0, 600), ...seeds]);\n"
-      "fitGate = (kw, c) => { const k = String(kw || '').toLowerCase().replace(/\\s+/g, ' ').trim();\n"
-      "  if (/^[a-z0-9&.' -]{2,24}:\\s+\\S/.test(k) || /\\b(no\\.? ?1|number (one|1)|#1)\\b.*\\b(company|companies|firm|provider|agency)\\b/.test(k)) return { ok: false, reason: 'other brand', detail: 'a company\\'s own name or \"number 1\" claim, not a topic' };\n"
-      "  const m = k.match(/^(?:top|best|leading|biggest|largest)\\s+(.+?)\\s+(?:companies|firms|providers|agencies|suppliers|contractors)\\b/);\n"
-      "  if (m) { const w = fitTokens(m[1]).filter(t => t.length > 2 && !FIT_GEO.has(t)); if (w.length && !w.some(t => fitTopicStemsAK.has(fitStem(t)) || [...fitTopicStemsAK].some(x => x.length >= 5 && fitStem(t).length >= 5 && (fitStem(t).indexOf(x) === 0 || x.indexOf(fitStem(t)) === 0)))) return { ok: false, reason: 'off topic', detail: 'a list of another industry\\'s companies (' + w.join(' ') + '), nothing this website sells' }; }\n"
-      "  return fitGateKit(kw, c); };\n")
+# FG1 (2026-10-21) put two rules in a wrapper around fitGate in this node only (a company's own name before a colon or a "number 1" claim,
+# and a list of another industry's companies). KW-GATE (2026-10-21, review items 3, 4, 14) moved both into the shared kit (v5/code/_fit_gate.js
+# rules 5c / 5d), corrected (category words are neutral: "best erp companies in dubai" and "no 1 erp company in uae" are the client's own
+# industry; the colon rule needs a name that is no topic word; "#1" now matches), so research, the ladder, the Keyword Check and the full
+# report decide the same keyword the same way. This node only calls the kit.
+# KW-GATE: the v3 intent guess called every keyword that contains the domain label "navigational". On peppol.org the label is the subject
+# itself ("what is peppol", "peppol access point"): a label that is a word of the client's own services or business line is a topic word.
+patch('Analyze Keywords', "  if (k.includes(brand)) return 'navigational';",
+      "  if (k.includes(brand) && !brandIsTopicAK()) return 'navigational';   // KW-GATE (2026-10-21): a domain label that is also a word of what the client sells is its subject (peppol.org)")
+patch('Analyze Keywords', "// Intent: DataForSEO ka ho to wahi, warna alfaaz se andaza\n",
+      "// Intent: DataForSEO ka ho to wahi, warna alfaaz se andaza\n"
+      "let brandIsTopicMemoAK = null;\n"
+      "const brandIsTopicAK = () => { if (brandIsTopicMemoAK !== null) return brandIsTopicMemoAK; const said = [...(base.services || []), String(base.business || '')];\n"
+      "  try { const m = $('Restore Site Model').first().json.site_model || null; if (m) said.push(...(Array.isArray(m.services) ? m.services : [])); } catch (e) {}\n"
+      "  brandIsTopicMemoAK = (' ' + said.join(' ').toLowerCase().replace(/[^a-z0-9]+/g, ' ') + ' ').includes(' ' + brand + ' '); return brandIsTopicMemoAK; };\n")
 patch('Build Full Report', "  html += `<h2>4a. Keyword Opportunities by Search Intent</h2>`;",
       "  // R13 (2026-10-13): a bucket the gate emptied says so with the reasons, instead of reading like a market with no demand\n"
       "  const refusedAK = (sk.refused || []);\n"
@@ -4269,6 +4272,7 @@ patch('Build Full Report', "  if ((sk.easy_wins || []).length) {",
 patch('Build Full Report', "html += '<p class=\"small\">Left out of the gap on purpose: ' + sk.refused.length + ' searches for government portals, logins or other companies\\' brands (e.g. '",
       "html += '<p class=\"small\">Left out of the gap on purpose: ' + sk.refused.length + ' searches no page of this website should target (e.g. '")
 assert "topic_label: 'what this website sells'" in code('Analyze Keywords') and 'function fitTopic(' in code('Analyze Keywords'), 'R13: the topic bar is not wired into Analyze Keywords'
+assert 'fitGateKit' not in code('Analyze Keywords') and 'list of companies in another industry' in FIT_GATE_SRC, 'KW-GATE: the full report wraps the shared gate with rules of its own again'
 # R12: the report prints the kit's own reason per row, so it can never word a row itself
 assert "q.why ||" in code('Build Keyword Strategy') and 'mismatch' in code('Build Keyword Strategy'), 'R12: the keyword strategy still words the reason itself'
 assert "kinds.push('page_mismatch')" in code('Search Console Seeds (Discovery)'), 'R12: the discovery seeds have no page-mismatch class'

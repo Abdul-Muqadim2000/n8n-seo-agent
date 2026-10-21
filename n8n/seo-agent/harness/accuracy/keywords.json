@@ -80,6 +80,111 @@
    "serp_domains": [],
    "brands": {},
    "source": "harness/accuracy/sites/azdan-com.json (Oracle NetSuite solution provider, UAE / KSA / Egypt: implementation, support, managed services, Oracle EPM, industries); services written from those pages for this set"
+  },
+  {
+   "site": "taxwise-advisory.ae",
+   "own_domain": "taxwise-advisory.ae",
+   "services": [
+    "VAT registration",
+    "Corporate tax registration",
+    "VAT return filing",
+    "Tax advisory"
+   ],
+   "business": "Tax consultancy in Dubai: VAT and corporate tax registration, filing and advice for UAE companies",
+   "brand_names": [
+    "Taxwise"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 2: a VAT consultancy)"
+  },
+  {
+   "site": "skillbridge.ae",
+   "own_domain": "skillbridge.ae",
+   "services": [
+    "Power BI workshops",
+    "Corporate learning programs",
+    "Excel bootcamps"
+   ],
+   "business": "Corporate training in Dubai: Power BI, Excel and data skills workshops for teams",
+   "brand_names": [
+    "Skillbridge"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 8: a training company)"
+  },
+  {
+   "site": "staffpoint.ae",
+   "own_domain": "staffpoint.ae",
+   "services": [
+    "Manpower supply",
+    "Executive search",
+    "Employment agency",
+    "Staff augmentation"
+   ],
+   "business": "Recruitment agency in Dubai: manpower supply, executive search and permanent placements for UAE employers",
+   "brand_names": [
+    "Staffpoint"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 8: a recruitment agency)"
+  },
+  {
+   "site": "netcore-it.ae",
+   "own_domain": "netcore-it.ae",
+   "services": [
+    "Managed IT services",
+    "IT support",
+    "Network infrastructure",
+    "Cybersecurity"
+   ],
+   "business": "IT company in Dubai: managed IT services, IT support, network infrastructure and cybersecurity for SMEs",
+   "brand_names": [
+    "Netcore"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 13: an IT firm)"
+  },
+  {
+   "site": "certiq.ae",
+   "own_domain": "certiq.ae",
+   "services": [
+    "ISO 27001 consulting",
+    "ISO 9001 consulting",
+    "ISO certification support"
+   ],
+   "business": "ISO consultancy in the UAE: gap analysis, documentation and audit support for ISO 27001 and ISO 9001 certification",
+   "brand_names": [
+    "CertIQ"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 6: an ISO consultancy)"
+  },
+  {
+   "site": "cloudnine-crm.ae",
+   "own_domain": "cloudnine-crm.ae",
+   "services": [
+    "Salesforce implementation",
+    "Salesforce consulting",
+    "CRM integration"
+   ],
+   "business": "Salesforce partner in Dubai: Salesforce implementation, consulting and CRM integration for UAE companies",
+   "brand_names": [
+    "Cloudnine"
+   ],
+   "competitors": [],
+   "serp_domains": [],
+   "brands": {},
+   "source": "synthetic site of the independent review 2026-10-21 (item 5: a Salesforce partner)"
   }
  ],
  "cases": [
@@ -1283,6 +1388,169 @@
    "expect": "off_topic",
    "reason": "another industry's companies",
    "source": "harness scenarios_full_gate.js FG1 (leaks of 2026-10-17 / 2026-10-21) (same leak on another site)"
+  },
+  {
+   "id": "KW-R01",
+   "site": "taxwise-advisory.ae",
+   "keyword": "vat registration uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "its own first service; the government pages on the results page do not make it a government search",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 2)",
+   "holdout": true,
+   "serp": {
+    "top_domains": [
+     "tax.gov.ae",
+     "u.ae",
+     "mof.gov.ae",
+     "ey.com",
+     "pwc.com"
+    ],
+    "paa": []
+   }
+  },
+  {
+   "id": "KW-R02",
+   "site": "skillbridge.ae",
+   "keyword": "power bi course dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a course search is what a training company sells",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 8)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R03",
+   "site": "staffpoint.ae",
+   "keyword": "accountant jobs in dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "job searches are what a recruitment agency fills",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 8)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R04",
+   "site": "netcore-it.ae",
+   "keyword": "it company dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for an IT firm in its city",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 13)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R05",
+   "site": "netcore-it.ae",
+   "keyword": "it services company uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for its declared service",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 13)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R06",
+   "site": "netcore-it.ae",
+   "keyword": "best it company uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer comparing IT firms in its market",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 13)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R07",
+   "site": "certiq.ae",
+   "keyword": "iso 27001 certification dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "buyers of ISO 27001 consulting search for the certification they need",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 6)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R08",
+   "site": "cloudnine-crm.ae",
+   "keyword": "salesforce consultant dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a results page of partners, no job page: buyers looking for a Salesforce consultant",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 5)",
+   "holdout": true,
+   "serp": {
+    "top_domains": [
+     "cloudanalogy.com",
+     "techcronus.com",
+     "rolustech.com",
+     "nexgensis.com",
+     "emiratesgraphic.com"
+    ],
+    "paa": [
+     "How much does a Salesforce consultant earn in Dubai?",
+     "How do I become a Salesforce consultant?"
+    ]
+   }
+  },
+  {
+   "id": "KW-R09",
+   "site": "techand.ai",
+   "keyword": "best erp companies in dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a list of the industry the client is in (Business Central is an ERP)",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 3)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R10",
+   "site": "techand.ai",
+   "keyword": "no 1 erp company in uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for the best ERP firm, no other company named",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 3)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R11",
+   "site": "techand.ai",
+   "keyword": "number 1 ai consulting company dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "its first service, no other company named",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 3)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R12",
+   "site": "techand.ai",
+   "keyword": "best ai companies uae",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "buyers comparing AI firms in the client's market",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 13)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R13",
+   "site": "techand.ai",
+   "keyword": "ai firm dubai",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "a buyer looking for an AI firm in the client's city",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 13)",
+   "holdout": true
+  },
+  {
+   "id": "KW-R14",
+   "site": "techand.ai",
+   "keyword": "dynamics 365: business central pricing",
+   "label": "in",
+   "expect": "in_topic",
+   "reason": "its own product with a colon, not a company name",
+   "source": "independent review 2026-10-21 (KW_REVIEW.md item 14)",
+   "holdout": true
   }
  ]
 }

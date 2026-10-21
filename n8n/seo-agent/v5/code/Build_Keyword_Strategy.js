@@ -121,7 +121,7 @@ ks.priority.forEach(k => { k.why = why(k); });
 const careerKws = ks.priority.filter(k => k.career).map(k => k.keyword);
 if (careerKws.length) ks.priority = [...ks.priority.filter(k => !k.career), ...ks.priority.filter(k => k.career)];
 if (careerKws.length && ks.pipeline_keyword && careerKws.includes(ks.pipeline_keyword.keyword)) {
-  const was = ks.pipeline_keyword.keyword; const alt = ks.priority.find(k => !k.career && k.service_fit !== 'out' && !k.covered_by) || null;
+  const was = ks.pipeline_keyword.keyword; const alt = ks.priority.find(k => !k.career && k.service_fit === 'in' && !k.covered_by) || null;   // KW-GATE (review 12): the replacement is one of the client's own services (REH7), never an "unknown"
   ks.pipeline_keyword = alt ? { ...alt, career_note: '"' + was + '" was the first pick, but people searching it are mostly looking for work or training, so "' + alt.keyword + '" is the one to start with' } : null;
 }
 // v4.8: the live position upgrades the label (already top 20 = easy; a top-20 position also shortens the months)
@@ -134,14 +134,15 @@ if (RR) ks.priority.forEach(k => { const p = k.live && k.live.your_position; if 
 
 // ---- compatibility object for the file, email and content-pipeline steps ----
 let pipeline = ks.pipeline_keyword ? withAi(ks.pipeline_keyword) : null;
-if (pipeline) { const enriched = ks.priority.find(k => k.keyword === pipeline.keyword); pipeline = enriched ? { ...enriched, ...(pipeline.trend_note ? { trend_note: pipeline.trend_note } : {}), ...(pipeline.ladder_note ? { ladder_note: pipeline.ladder_note } : {}) } : { ...pipeline, why: why(pipeline) }; ks.pipeline_keyword = pipeline; }   // R51: the falling label survives the enrichment
+if (pipeline) { const enriched = ks.priority.find(k => k.keyword === pipeline.keyword); pipeline = enriched ? { ...enriched, ...(pipeline.trend_note ? { trend_note: pipeline.trend_note } : {}), ...(pipeline.ladder_note ? { ladder_note: pipeline.ladder_note } : {}), ...(pipeline.career_note ? { career_note: pipeline.career_note } : {}) } : { ...pipeline, why: why(pipeline) }; ks.pipeline_keyword = pipeline; }   // R51: the falling label survives the enrichment
 // F-REH (2026-10-20, real-credit rehearsal): the list a non-technical owner picks from starts with what they sell. The start-with pick first
 // (Rank Keywords never picks a keyword that is not one of their services), then the priority keywords in, unknown, out order of service fit
 // (stable: the opportunity order within each); an `out` keyword stays in the list, last, and says why.
 const FIT_ORDER = { in: 0, unknown: 1, out: 2 };
 const recommended = [];
 if (pipeline) recommended.push({ ...pipeline, reason: 'best fit for the goal "' + ks.goal + '"' + (pipeline.service_fit === 'in' ? ' among the services you listed' : '') });
-ks.priority.map((k, i) => [k, i]).sort((a, b) => (FIT_ORDER[a[0].service_fit] ?? 1) - (FIT_ORDER[b[0].service_fit] ?? 1) || a[1] - b[1])
+// KW-GATE (review 11): the career demotion holds here too: a career search with fit "in" no longer jumps back above every "unknown"
+ks.priority.map((k, i) => [k, i]).sort((a, b) => (a[0].career ? 1 : 0) - (b[0].career ? 1 : 0) || (FIT_ORDER[a[0].service_fit] ?? 1) - (FIT_ORDER[b[0].service_fit] ?? 1) || a[1] - b[1])
   .forEach(([k]) => { if (!recommended.some(r => r.keyword === k.keyword)) recommended.push(k.service_fit === 'out' ? { ...k, reason: 'not one of the services you listed' } : k); });
 const keyword_suggestions = { covered: ks.covered || [], ladder_covered: ks.ladder_covered || [], recommended, easy_wins: ks.quick_wins, by_intent: ks.by_intent, topic_clusters: (ks.clusters || []).map(c => ({ topic: c.topic, total_volume: c.total_volume, keyword_count: c.keyword_count, suggested_page: c.page_type, keywords: (c.keywords || []).map(k => k.keyword) })), total_found: ks.total_relevant,
   // G8: the searches the site already gets impressions for (K6) and the groups one page can serve (K7)
