@@ -978,7 +978,93 @@ const CL = (() => {
     }
     return out;
   }
-  return { CLAIM_RE, keyOf, check, business };
+  // ---- E-CLAIM (2026-10-21, pre-launch run exec 42): what a page PROMISES in the business's name must be on file ----
+  // Live (exec 42, techand.ai "ai consultant") the page promised "You receive a prioritised use-case backlog, data readiness findings and
+  // an ROI case", "We test a proof of concept ... documented test results", "You receive a runbook and monitoring dashboards", a training
+  // plan and "a self-study pack", "document each decision for your audit team" and "we stop there". The client states none of it, and
+  // CL.business (terms / scope / credentials only) let every one through. CL.commitments(text, corpus, opts) reads the sentences that
+  // commit the business to something:
+  //   * "we / <name> / our team" + a doing verb (test, build, design, deliver, document, train, stop, tell, charge ...);
+  //   * an offer to the reader in a section about the business ("you receive / get / keep ...", "business users get ...");
+  //   * a phase or training line in such a section ("This phase covers ...", "Admins learn ...");
+  //   * a billing line right after a billing sentence ("Licences sit on a separate line of the quote").
+  // A section is about the business when its H2 group names the business, speaks as "we", or is headed by a phase or service the corpus
+  // names. A statement is supported when its key terms are on file: one sentence of the corpus carries at least half of them (the words
+  // scattered over a whole website do not count: every page says "data", "integration" and "test"), and every number it states is on file. Generic statements (no business subject) and advice to
+  // the reader are never read. opts.names: the business names; opts.skip: sentences already flagged elsewhere.
+  const COMMIT_VERB = '(?:test|tests|build|builds|design|designs|deliver|delivers|provide|provides|offer|offers|document|documents|train|trains|run|runs|give|gives|hand|hands|include|includes|cover|covers|stop|stops|tell|tells|guarantee|guarantees|commit|commits|charge|charges|bill|bills|invoice|invoices|quote|quotes|price|prices|set up|sets up|assign|assigns|monitor|monitors|support|supports|manage|manages|handle|handles|migrate|migrates|implement|implements|deploy|deploys|integrate|integrates|review|reviews|audit|audits|write|writes|create|creates|produce|produces|prepare|prepares|map|maps|assess|assesses|track|tracks|measure|measures|refund|refunds|promise|promises|ensure|ensures|keep|keeps|work with|works with|work in|works in|serve|serves|treat|treats|start|starts|begin|begins|finish|finishes|complete|completes|respond|responds|reply|replies|host|hosts|maintain|maintains|operate|operates|resell|resells|sell|sells|license|licenses|are available|is available|are certified|is certified|are accredited|is accredited)';
+  const OFFER_RE = /\b(?:[Yy]ou|[Yy]our (?:team|teams|staff|people|users|admins|organisation|organization|business|company))\s+(?:will\s+|also\s+|then\s+)?(?:receive|get|keep|walk away with|leave with|are given|are handed)\b|\b(?:[Bb]usiness users|[Uu]sers|[Aa]dmins|[Mm]akers)\s+(?:will\s+)?(?:get|receive)\b/;
+  const TRAIN_RE = /^(?:[Aa]dmins|[Mm]akers|(?:[Bb]usiness )?[Uu]sers|[Ss]taff|[Ee]mployees|[Yy]our (?:team|staff|admins|users|people))\s+(?:learn|are trained|get trained|receive training)\b/;
+  const PHASE_RE = /^(?:[Tt]his|[Ee]ach|[Ee]very|[Tt]he)\s+(?:phase|stage|step|engagement|service|workstream|programme|program|package|plan)\s+(?:covers|includes|ends|delivers|starts|runs|takes|comes with)\b/;
+  const CTA_RE = /^(?:[Bb]ook|[Cc]all|[Cc]ontact|[Tt]alk to|[Ee]mail|[Ss]chedule|[Gg]et in touch|[Aa]rrange|[Rr]equest a)\b/;
+  const BILL_RE = /\b(?:quote|quotes|quoted|invoice\w*|billed|billing|line item|separate line|fees?|payment|deposit|retainer|hourly|day rate|licen[cs]es? (?:sit|are|is)|charged?)\b/i;
+  // words that say nothing on their own about what is promised: they never count for or against support
+  const GENERIC = new Set('you your receive get keep give gives offer provide include includes cover covers phase stage step engagement service then also each every well real live new own way part make makes work business client clients team teams solution solutions reason scope sometimes'.split(' ').map(stem));
+  function commitments(text, corpus, opts = {}) {
+    const t = String(text || ''); const out = { flags: [], checked: 0 };
+    if (!t.trim()) return out;
+    const names = (opts.names || []).map(n => String(n || '').trim()).filter(n => n.length >= 3);
+    const nameWords = [...new Set(names.flatMap(n => norm(n).split(' ')).filter(Boolean))];
+    const skip = new Set((opts.skip || []).map(s => norm(s)));
+    const NAMES = names.map(n => (/^\w/.test(n) ? '\\b' : '') + escR(n)).join('|');
+    const SUBJ = '(?:\\b[Ww]e|\\b[Oo]ur (?:team|teams|consultants|engineers|people|firm|company|scope|service|services|engagements?|approach|experts)' + (NAMES ? '|' + NAMES : '') + ')';
+    const WE_RE = new RegExp(SUBJ + '(?:\\s+(?:will|also|then|always|typically|usually|can|then also|first|now))?(?:\\s+(?:will|also|then))?\\s+' + COMMIT_VERB + '\\b');
+    const NAME_RE = NAMES ? new RegExp('(?:' + NAMES + ')') : null;
+    const ABOUT_RE = new RegExp('\\b[Ww]e\\b|\\b[Oo]ur\\b' + (NAMES ? '|' + NAMES : ''));
+    const cnorm = norm(corpus);
+    const cs = String(corpus || '').split(/(?<=[.!?])\s+|\n+/).map(s => new Set(words(s, nameWords))).filter(x => x.size);
+    // sections: one H2 group = the H2 and the H3s under it
+    const groups = []; let g = null, para = [];
+    const flushPara = () => { if (para.length && g) g.paras.push(para.join(' ')); para = []; };
+    for (const line of t.split('\n')) {
+      const L = line.trim();
+      const h = L.match(/^(#{1,6})\s+(.*)$/);
+      if (h) { flushPara(); if (h[1].length <= 2 || !g) { g = { heads: [], paras: [] }; groups.push(g); } g.heads.push(h[2]); continue; }
+      if (!g) { g = { heads: [], paras: [] }; groups.push(g); }
+      if (!L || /^\|/.test(L) || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):/i.test(L)) { flushPara(); continue; }
+      if (/^[-*]\s+/.test(L)) { flushPara(); para.push(L); flushPara(); continue; }
+      para.push(L);
+    }
+    flushPara();
+    const headOnFile = (hd) => { const pre = norm(String(hd).split(':')[0]); return pre.length >= 6 && cnorm.includes(pre); };
+    for (const G of groups) {
+      const sentsOf = (p) => p.replace(/\*\*/g, '').replace(/^[-*]\s+/, '').split(/(?<=[.!?])\s+(?=[A-Z"(\[])/).map(s => s.trim());
+      const clean = (s) => s.replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '');
+      const aboutBiz = G.heads.some(hd => headOnFile(hd) || (NAME_RE && NAME_RE.test(hd))) || G.paras.some(p => ABOUT_RE.test(clean(p)));
+      for (const p of G.paras) {
+        const sents = sentsOf(p); let lastBill = false;
+        for (const s of sents) {
+          const plain = clean(s);
+          if (plain.length < 12 || /\?\s*$/.test(plain) || /[\[\]]/.test(s.replace(/\[[^\[\]]*\]\([^)]*\)/g, '')) || skip.has(norm(s))) { lastBill = skip.has(norm(s)) && BILL_RE.test(plain); continue; }   // a billing sentence flagged by CL.business still carries the next line
+          let why = null;
+          if (CTA_RE.test(plain)) { lastBill = false; continue; }   // the page's call to action ("Book a scoping call and we will ...") invites a conversation, it is not a deliverable
+          if (WE_RE.test(plain)) why = 'we';
+          else if (aboutBiz && OFFER_RE.test(plain)) why = 'offer';
+          else if (aboutBiz && (TRAIN_RE.test(plain) || PHASE_RE.test(plain))) why = 'phase';
+          else if (lastBill && BILL_RE.test(plain) && !ABOUT_RE.test(plain)) why = 'billing';
+          lastBill = !!why && BILL_RE.test(plain);
+          if (!why) continue;
+          out.checked++;
+          const W = [...new Set(words(plain, nameWords))].filter(w => !GENERIC.has(w));
+          const nums = (plain.match(/\d[\d,.:/+]*/g) || []).map(x => x.replace(/[,.]+$/, '')).filter(x => !/^\d$/.test(x));
+          const numsOk = nums.every(n => cnorm.includes(norm(n)) || String(corpus || '').includes(n));
+          const best = W.length ? Math.max(0, ...cs.map(c => W.filter(w => c.has(w)).length)) / W.length : 0;
+          const supported = numsOk && W.length > 0 && best >= 0.5;
+          if (opts.trace) out.trace = (out.trace || []).concat([{ s: plain.slice(0, 90), why, W, best: Math.round(100 * best), numsOk }]);
+          if (supported) continue;
+          const kind = /\b(?:charg|bill|fee|price|pricing|quote|invoice|payment|licen[cs]es? (?:sit|are)|separate line|cost)/i.test(plain) ? 'pricing'
+            : /\b(?:guarantee|warrant|refund|promise)/i.test(plain) ? 'guarantee'
+              : /\b(?:within|\d+\s*(?:days?|weeks?|months?|hours?))\b/i.test(plain) ? 'timeline'
+                : /\b(?:certified|accredit|partner)/i.test(plain) ? 'credential'
+                  : /\b(?:stop|only|not|scope|covers|includes)\b/i.test(plain) ? 'scope'
+                    : (why === 'offer' || why === 'phase' || /\b(?:deliver|provide|runbook|pack|report|dashboard|document)/i.test(plain)) ? 'deliverable' : 'process';
+          out.flags.push({ kind, sentence: s.replace(/^[-*]\s+/, '').slice(0, 300), support: Math.round(100 * best) });
+        }
+      }
+    }
+    return out;
+  }
+  return { CLAIM_RE, keyOf, check, business, commitments };
 })();
 // ---- verdict exclusions kit (A-18, 2026-10-17; inlined through the EXCLUSIONS marker and prepended to Parse Verdict) ----
 // What the verdict said this page must NOT cover reaches the brief, the writer and the quality check. Live (exec 771) the verdict's
@@ -1543,7 +1629,7 @@ const OWN_TEXT = (() => {
   const vals = (o) => (o && typeof o === 'object') ? Object.values(o).map(v => (v && typeof v === 'object') ? vals(v) : String(v == null ? '' : v)).join(' ') : String(o || '');
   return [prev.business, prev.business_facts, prev.case_facts_text, SMx.business_facts, SMx.accreditation, vals(SMx.services), vals(SMx.nap),
     vals(prev.site_profile), vals(prev.author), vals(prev.reviewer), ...(prev.client_pages || []).map(p => p && p.text), prev.existing_page_text,
-    prev.existing_page_facts_text, vals(prev.client_signals)].filter(Boolean).map(String).join('\n');
+    prev.existing_page_facts_text, vals(prev.client_signals), prev.proof_context, vals(prev.proof_library)].filter(Boolean).map(String).join('\n');   // E-CLAIM: the case studies on file vouch too
 })();
 const ownLower = OWN_TEXT.toLowerCase().replace(/\s+/g, ' ');
 const addSrc = (u, t) => { const k = SRC.key(u); if (!k || !String(t || '').trim()) return; srcText.set(k, ((srcText.get(k) || '') + ' ' + String(t)).slice(0, 12000)); };
@@ -1885,6 +1971,7 @@ if (RS && RS.refresh) {
 const bizNames = [...new Set([(prev.site_profile || {}).business_name, SITE_MODEL ? SM.name(SITE_MODEL) : '', ...((SITE_MODEL && Array.isArray(SITE_MODEL.brand_names)) ? SITE_MODEL.brand_names : []),
   (prev.site_description || {}).business_name, domain ? String(domain).split('.')[0] : ''].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
 const business_claims = [];
+const mdBeforeClaims = md;   // E-CLAIM reads the copy before §9d's marks (a mark would hide the billing line after it)
 {
   const BC = CL.business(md, OWN_TEXT, { names: bizNames });
   for (const f of BC.flags.slice(0, 8)) {
@@ -1893,6 +1980,25 @@ const business_claims = [];
     business_claims.push({ kind: f.kind, trigger: f.trigger, sentence: f.sentence, marked });
   }
   if (business_claims.some(x => x.marked)) fixes.push('Marked ' + business_claims.filter(x => x.marked).length + ' statement(s) about the business that nothing on file supports as [Confirm: ...] for the owner');
+}
+// 9e. E-CLAIM (2026-10-21, pre-launch run exec 42): what the page PROMISES in the business's name. The page told techand.ai's buyers
+//     "You receive a prioritised use-case backlog, data readiness findings and an ROI case", "We test a proof of concept ... documented
+//     test results", "You receive a runbook and monitoring dashboards", a training plan with "a self-study pack", "document each decision
+//     for your audit team" and "we stop there"; on 2026-10-17 a page invented the billing terms ("We charge for advice and delivery.
+//     Licences sit on a separate line of the quote"). None of it is on file and §9d (terms, scope, credentials) let the promises through.
+//     CL.commitments reads every deliverable, process step, billing term, guarantee, timeline and scope line said in the business's name
+//     and holds it against OWN_TEXT (business facts, profile, case studies, its own pages). One nothing supports is marked [Confirm: ...]
+//     in the copy and becomes an owner edit ("confirm it is true or delete it"): the page is not ready to publish until it is done, exactly
+//     like a bracket. It is not an editor warning: only the owner knows whether the business really does it.
+const business_promises = [];
+{
+  const BP = CL.commitments(mdBeforeClaims, OWN_TEXT, { names: bizNames, skip: business_claims.map(b => b.sentence) });
+  for (const f of BP.flags.slice(0, 15)) {
+    const at = md.indexOf(f.sentence); const marked = at >= 0 && !/[\[\]]/.test(f.sentence);   // a sentence holding a link is listed, never wrapped (no nested bracket)
+    if (marked) md = md.slice(0, at) + '[Confirm: ' + f.sentence + ']' + md.slice(at + f.sentence.length);
+    business_promises.push({ kind: f.kind, sentence: f.sentence, marked, support_pct: f.support });
+  }
+  if (business_promises.length) fixes.push('Marked ' + business_promises.filter(x => x.marked).length + ' promise(s) made in the business\'s name that nothing on file supports (deliverables, process steps, terms) as [Confirm: ...] for the owner');
 }
 
 // 10. Banned phrases (AI clichés and filler)
@@ -2136,9 +2242,10 @@ const finalBody = md.replace(/^(Title|Meta Description|Slug|Primary Keyword|Seco
 const phScan = PH.scan(finalBody);
 const placeholders = phScan.placeholders;
 const placeholder_count = phScan.placeholder_count;
-const review_notes = phScan.notes.filter(n => !/^\[Image\b/i.test(n.token)).reduce((k, n) => k + n.count, 0) + (finalBody.match(/\[Statistic\b[^\]]*\]/gi) || []).length;   // as before: Confirm / Owner / Author insight notes and [Statistic] (a placeholder too); the image plan is not a note
+const promiseMarks = new Set(business_promises.filter(b => b.marked).map(b => '[Confirm: ' + b.sentence + ']'));   // E-CLAIM: counted as claims, not as review notes
+const review_notes = phScan.notes.filter(n => !/^\[Image\b/i.test(n.token) && !promiseMarks.has(n.token)).reduce((k, n) => k + n.count, 0) + (finalBody.match(/\[Statistic\b[^\]]*\]/gi) || []).length;   // as before: Confirm / Owner / Author insight notes and [Statistic] (a placeholder too); the image plan is not a note
 const qaOwnMarks = new Set(unverified_figures.map(f => '[Confirm: ' + f.figure + ']').concat(flagged_amounts.map(a => '[Confirm: ' + a.amount + ']'))
-  .concat(business_claims.filter(b => b.marked).map(b => '[Confirm: ' + b.sentence + ']')));
+  .concat(business_claims.filter(b => b.marked).map(b => '[Confirm: ' + b.sentence + ']')).concat(business_promises.filter(b => b.marked).map(b => '[Confirm: ' + b.sentence + ']')));
 const writer_notes = phScan.notes.filter(n => /^\[(?:Confirm|Owner)\b/i.test(n.token) && !qaOwnMarks.has(n.token));
 const open_brackets = placeholders.map(p => ({ ...p, kind: 'placeholder' })).concat(writer_notes.map(n => ({ ...n, kind: 'review_note' })));
 if (placeholder_count > PH_MAX) warnings.push(`Too many placeholders to publish (${placeholder_count}, at most ${PH_MAX} allowed): ` + placeholders.slice(0, 6).map(p => p.token + (p.count > 1 ? ' x' + p.count : '')).join(', ')
@@ -2354,11 +2461,18 @@ const placeholder_note = !writer_note ? ph_base : !ph_base ? writer_note.trim() 
 // bracket. One rule now: any bracket left for the owner in the body (a placeholder, or a [Confirm: ...] / [Owner: ...] / [Author insight:
 // ...] note; the image plan is not one) keeps the page "not ready to publish", and each one is named with what to do: fill it in or delete it.
 const body_notes = phScan.notes.filter(n => !/^\[Image\b/i.test(n.token));
+// E-CLAIM: every statement about the business that nothing on file supports (§9d and §9e) is one owner edit with the sentence itself
+const claimMarks = new Set(business_claims.filter(b => b.marked).concat(business_promises.filter(b => b.marked)).map(b => '[Confirm: ' + b.sentence + ']'));
+const bizLabel = bizNames[0] || 'your business';
+const claim_edits = business_claims.map(b => ({ ...b, src: 'terms' })).concat(business_promises.map(b => ({ ...b, src: 'promise' })))
+  .map(b => ({ token: b.marked ? '[Confirm: ' + b.sentence + ']' : b.sentence, count: 1, kind: 'claim', claim_kind: b.kind, sentence: b.sentence, action: 'confirm_or_delete',
+    text: 'Confirm it is true or delete it: "' + b.sentence + '" (nothing in the business facts, the author profile, the case studies or ' + bizLabel + '\'s own pages says this; if it is true, add it to your business facts so later pages can say it too)' }));
+const claims_open = business_promises.length + business_claims.filter(b => !b.marked).length;   // marked ones are counted as brackets below
 const body_brackets = placeholder_count + body_notes.reduce((k, n) => k + n.count, 0);
 // what the owner edits by hand, bracket by bracket. A price, fee or duration bracket on a page whose business gave no such facts is one
 // to DELETE (the brief's own angle rule said "no numbers and no placeholders" for cost; the writer added one anyway)
 const PRICE_WORDS = /\b(?:price|prices|pricing|fee|fees|cost|costs|rate|rates|budget|band|aed|usd|eur|gbp|sar)\b/i, TIME_WORDS = /\b(?:duration|timeline|how long|weeks?|months?|days?|turnaround)\b/i;
-const owner_edits = [...placeholders.map(p => ({ token: p.token, count: p.count, kind: 'placeholder' })), ...body_notes.map(n => ({ token: n.token, count: n.count, kind: 'note' }))]
+const owner_edits = [...placeholders.map(p => ({ token: p.token, count: p.count, kind: 'placeholder' })), ...body_notes.filter(n => !claimMarks.has(n.token)).map(n => ({ token: n.token, count: n.count, kind: 'note' }))]
   .map(x => { const inner = String(x.token).replace(/^\[|\]$/g, '');
     const noFacts = (PRICE_WORDS.test(inner) && prev.pricing_facts === false) || (TIME_WORDS.test(inner) && prev.timeline_facts === false);
     const what = noFacts ? 'delete'
@@ -2369,10 +2483,12 @@ const owner_edits = [...placeholders.map(p => ({ token: p.token, count: p.count,
       : what === 'fill_or_rewrite' ? 'Fill in ' + x.token + ' with the real figure, or rewrite the sentence without it'
       : 'Fill in ' + x.token + ' with the real detail, or delete the bracket and the words that need it';
     return { token: x.token, count: x.count, action: what, text: text + (x.count > 1 ? ' (' + x.count + ' times)' : '') }; });
+// the claims come right after the placeholders: they are what a buyer would hold the business to
+owner_edits.splice(placeholders.length, 0, ...claim_edits);
 // P2-6: `passed_copy` judges the text and decides the editor round; `passed` judges the page the owner receives, so the author box's
 // bracketed fields, and every bracket left in the body, keep it false: the honest answer to "can I publish this as it is?".
 const passed_copy = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25 && !too_many_placeholders && !too_long;
-const passed = passed_copy && profile_placeholders === 0 && body_brackets === 0;
+const passed = passed_copy && profile_placeholders === 0 && body_brackets === 0 && claims_open === 0;   // E-CLAIM: an unsupported promise is an open bracket
 // v4.6: the editor pass (a full rewrite) runs only when it can still improve the page. It is skipped when the draft already scores 90+, the editorial
 // review rates it 85+ with no high-severity problem, the length is on target and the only open notes are style notes (passive voice, long
 // sentences, medium review remarks). Every SEO check (meta, H1 / keyword, quick answer, question headings, table, CTA, links, sources, figures, coverage,
@@ -2393,10 +2509,14 @@ const not_ready = !passed && (!rounds_left || !editor_needed);
 // R46 (2026-10-16): QA round N follows N - 1 editor calls (round 1 reads the copywriter's draft). Live (exec 616) the note said "The editor
 // had 2 round(s)" after ONE editor call and the cost ledger priced a second; both now read `editor_rounds`.
 const editor_rounds = Math.max(0, round - 1);
+const promises_note = !business_promises.length ? '' : business_promises.length + ' statement(s) about ' + bizLabel + '\'s services, process or terms that nothing on file supports (business facts, author profile, case studies, its own pages): '
+  + business_promises.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + (business_promises.length > 4 ? '; and ' + (business_promises.length - 4) + ' more' : '') + '. Confirm each one is true or delete it before you publish';
+const body_notes_other = body_notes.filter(n => !claimMarks.has(n.token));
 const not_ready_reasons = !not_ready ? [] : [
   placeholder_note,   // R25: named whenever any body placeholder is left, not only above PH_MAX
+  promises_note,   // E-CLAIM: the promises in the business's name, sentence by sentence
   // the [Confirm: ...] marks QA put on figures and claims, and [Author insight: ...] lines, when no warning below names them already
-  (!placeholder_count && !writer_note && body_notes.length && !warnings.some(w => /now marked \[Confirm/.test(w))) ? body_notes.reduce((k, n) => k + n.count, 0) + ' note(s) in square brackets left in the text: ' + body_notes.slice(0, 4).map(n => n.token).join(', ') + '. Complete or delete each one before you publish' : '',
+  (!placeholder_count && !writer_note && body_notes_other.length && !warnings.some(w => /now marked \[Confirm/.test(w))) ? body_notes_other.reduce((k, n) => k + n.count, 0) + ' note(s) in square brackets left in the text: ' + body_notes_other.slice(0, 4).map(n => n.token).join(', ') + '. Complete or delete each one before you publish' : '',
   profile_placeholders ? profile_placeholders + ' bracketed field(s) in the byline, the author box and the Person schema still need your details' : '',
   too_long ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
   (!too_long && Math.abs(mainWords - target) > target * 0.25) ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
@@ -2419,7 +2539,7 @@ const next_step = !not_ready ? ''
 const quality = { passed, publishable: passed, not_ready, round, max_rounds, rounds_left, label: quality_label, reasons: not_ready_reasons,
   placeholder_note, placeholders_in_body: placeholders.map(p => p.token),   // R25: the owner is told about a masked figure even on a page that is otherwise ready
   placeholder_count, placeholders_total: placeholder_count + profile_placeholders, placeholder_max: PH_MAX, coverage_pct, coverage_target_pct, content_score,
-  editor_rounds, open_brackets, body_brackets, owner_edits, next_step, fix_by: not_ready ? 'edit' : '',   // R46 / R45; owner edits by hand, never a re-run
+  editor_rounds, open_brackets, body_brackets, owner_edits, next_step, fix_by: not_ready ? 'edit' : '', claims_open, unsupported_promises: business_promises.length,   // R46 / R45; owner edits by hand, never a re-run
   note: not_ready ? (editor_rounds ? 'The editor had ' + editor_rounds + ' round' + (editor_rounds === 1 ? '' : 's') : (rounds_left ? 'No editing round could change it (what is left is for you to fill in)' : 'No editing round was left (the quality check allows ' + max_rounds + ' round' + (max_rounds === 1 ? '' : 's') + ')'))
     + ' and the page still fails the checks above: it is delivered as a draft to finish by hand, not as a page to publish as it is.' : '' };
 // M1 / M2 (2026-10-21, pre-launch run exec 42): the top page's "Secondary Keywords" were the keywords of the three rung pages planned
@@ -2439,7 +2559,7 @@ return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { t
     placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections,   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
     masked_amounts, flagged_amounts, sourced_amounts,   // B3-1 / B3-2: what the money mask removed, what it left for review, and what a cited source vouched for
     outbound_links: externalUrls.map(e => ({ url: e.url, anchor: e.anchor, host: e.host, tier: e.tier })),   // A-14: every outbound link, for Outbound Link Check
-    business_claims, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19
+    business_claims, business_promises, claims_open, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19 / E-CLAIM
     verdict_exclusions, excluded_sections, protected_restored,   // A-18 / A-17
     coverage_advice, subtopics_dropped, owner_edits, next_step, body_brackets, page_url: pageUrl,   // D5 / owner edits / placeholder gate (2026-10-21)
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,

@@ -11928,7 +11928,7 @@ assert "('business_facts', 'string')" in open(os.path.join(HERE0, 'ladder_common
 log('No page before the author profile and the business facts (2026-10-20, agent P1; rehearsal §4 item 1): v5/code/_readiness.js (name + job title + bio, facts of at least 30 characters; mirrored in app/shared/src/readiness.ts); Ladder Plan keeps the plan and holds its pages (limit profile, nothing spawned or charged); the Content Cadence holds every page it would write and lists it (held_for_profile, preview items held: profile, approvals wait too); Track my site stores business_facts, Site Admin takes action facts, every page run carries the stored facts')
 
 # =============================================================================
-# 143. THE PAGE CHECK GIVES THE CLIENT THE RIGHT ADVICE (2026-10-21, engine fixer E-QA; paid pre-launch run, techand.ai ladder page
+# 143b. THE PAGE CHECK GIVES THE CLIENT THE RIGHT ADVICE (2026-10-21, engine fixer E-QA; paid pre-launch run, techand.ai ladder page
 #      "ai consultant", exec 42; review CONTENT_REVIEW.md C1 / C2 / M1 / M2 / M4 / M5 / M6 / L1-L3, REPORTS_REVIEW.md RV-9 / RV-10 / RV-17,
 #      DRIVER_REPORT.md D5):
 #      * D5 / RV-9: the "page to beat" was usaii.org's certification course, so the client was told to add "Program Fee: US $894" and
