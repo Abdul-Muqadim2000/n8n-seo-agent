@@ -116,7 +116,7 @@ export default function AdminUsersPage() {
           initialSort={{ key: 'last', dir: 'desc' }}
           pageSize={25}
           searchable
-          searchPlaceholder="Search name, e-mail, company..."
+          searchPlaceholder="Search name, e-mail, company"
           searchText={(u) => `${u.name} ${u.email} ${u.companies.map((c) => c.name).join(' ')}`}
           onRowClick={(u) => navigate(withPeriod(adminPaths.user(u.id), period))}
           toolbar={

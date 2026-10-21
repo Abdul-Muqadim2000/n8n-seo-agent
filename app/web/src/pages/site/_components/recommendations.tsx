@@ -5,6 +5,7 @@ import { Activity, ArrowRight, Bot, ExternalLink as ExternalIcon, Gauge, Link2, 
 import { MODES, queueOrder, scoreNote, type Priority, type Recommendation, type RecommendationAction, type RecommendationCategory } from '@seo/shared';
 import { guideForRecommendation } from '@seo/shared/guides';
 import { autopilotGuideVars } from '@/lib/guide-vars';
+import { paths } from '@/lib/paths';
 import { cn } from '@/lib/utils';
 import { buttonClass, ButtonLink } from '@/components/ui/button';
 import { InfoTip, InsightItem } from '@/components/insight';
@@ -63,7 +64,16 @@ const NUDGE = 'size-3.5 transition-transform duration-200 ease-brand group-hover
 
 /** The button that carries a recommendation out: a pre-filled tool, a page of the site, or an external link. */
 export function RecommendationButton({ action, size = 'sm', variant = 'secondary' }: { action: RecommendationAction; size?: 'sm' | 'md'; variant?: 'primary' | 'secondary' }) {
-  const { can, tool, page } = useSitePage();
+  const { org, can, tool, page } = useSitePage();
+  // E-QA (2026-10-21): a not-ready draft's report, where each bracket to edit by hand is listed
+  if (action.report) {
+    return (
+      <ButtonLink to={paths.report(org.id, action.report)} size={size} variant={variant} className="group/rec">
+        {action.label}
+        <ArrowRight className={NUDGE} aria-hidden />
+      </ButtonLink>
+    );
+  }
   if (action.mode) {
     if (!can('member')) return null;
     return (
@@ -126,7 +136,7 @@ export function RecommendationItem({ rec, siteId }: { rec: Recommendation; siteI
         rec.action || guide || siteId ? (
           <div className="flex flex-col items-stretch gap-1.5">
             {rec.action && <RecommendationButton action={rec.action} />}
-            {guide && <GuideHelp id={guide} />}
+            {guide && <GuideHelp id={guide} extra={rec.guideVars} />}
             {/* G4: the work item in the company's tracker (only once one is connected; setup items are ours to finish, not a ticket) */}
             {siteId && rec.category !== 'setup' && <TicketButton siteId={siteId} source={{ type: 'recommendation', id: rec.id }} />}
           </div>
@@ -157,7 +167,7 @@ export function RecommendationRows({ recs }: { recs: readonly Recommendation[] }
             {(rec.action || guide) && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {rec.action && <RecommendationButton action={rec.action} />}
-                {guide && <GuideHelp id={guide} />}
+                {guide && <GuideHelp id={guide} extra={rec.guideVars} />}
               </div>
             )}
           </div>
@@ -169,7 +179,8 @@ export function RecommendationRows({ recs }: { recs: readonly Recommendation[] }
 }
 
 /** "Show me how" on a recommendation that asks the person to do something outside the app (the site's own values are filled in). */
-function GuideHelp({ id }: { id: string }) {
+function GuideHelp({ id, extra }: { id: string; extra?: Record<string, string> }) {
   const { site } = useSitePage();
-  return <GuideButton id={id} vars={autopilotGuideVars(site)} className="justify-center" />;
+  // B3: the recommendation's own values (the IndexNow key, file and address) over the guide's examples
+  return <GuideButton id={id} vars={{ ...autopilotGuideVars(site), ...(extra ?? {}) }} className="justify-center" />;
 }

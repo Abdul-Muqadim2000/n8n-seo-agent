@@ -4,8 +4,8 @@ import { PRICES } from '@/lib/prices';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
-import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Send, Target, TrendingDown, TrendingUp, Trophy, Undo2, UserRound, XCircle } from 'lucide-react';
-import { cmsKindLabel, titleCase, type CaseStudy, type CmsItemView, type ContentData, type ContentItem, type Report } from '@seo/shared';
+import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Send, Target, TrendingDown, TrendingUp, Trophy, Undo2, UserRound, Wrench, XCircle } from 'lucide-react';
+import { cmsKindLabel, DRAFT_BY_HAND, titleCase, type CaseStudy, type CmsItemView, type ContentData, type ContentItem, type Report } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
@@ -19,9 +19,10 @@ import { PageHeader } from '@/components/ui/misc';
 import { Dialog, DialogClose } from '@/components/ui/overlay';
 import { Segmented } from '@/components/ui/tabs';
 import { DataTable, type Column } from '@/components/ui/table';
-import { CountUp, DistributionBar, HeroNextStep, HeroStat, IconTile, ScoreRing, SEQ, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
+import { CountUp, DistributionBar, HeroLink, HeroNextStep, HeroStat, IconTile, ScoreRing, SEQ, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { DataGate, FilterChips, SrOnly, Kind, Panel, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { HeroMeter } from './_components/pipeline/home';
+import { contentGroups, isLiveItem, liveLine, needsFixItem } from './_components/content-status';
 import { countBy, daysSince, plural, urlPath } from './_components/format';
 import { FileLinks } from './_components/reports';
 import { PublishCheckPanel } from './_components/publish-check';
@@ -89,7 +90,7 @@ const SOURCE_ICON: Record<string, ReactNode> = {
   manual: <PenSquare />,
   published: <CheckCircle2 />,
 };
-const isLive = (i: ContentItem) => i.status === 'published' || !!i.publishedUrl;
+const isLive = (i: ContentItem) => isLiveItem(i);
 
 /** keyword -> newest generated page report (to offer its files next to the pipeline item) */
 function reportsByKeyword(reports: readonly Report[]) {
@@ -111,33 +112,55 @@ function Content({ d }: { d: ContentData }) {
   // G2: what each written page is in the website's CMS (a draft, or live), when one is connected
   const cmsQ = useCmsSiteState(org.id, site.id, !!site.verifiedAt);
   const cms = useMemo(() => cmsByKeyword(cmsQ.data?.items ?? []), [cmsQ.data]);
-  const live = d.items.filter(isLive);
-  const waiting = d.items.filter((i) => !isLive(i));
+  // B1 / B2: a draft the quality check refused is not "waiting to publish" (Needs you and the Overview call it "needs a fix")
+  const { live, waiting, fixing } = contentGroups(d.items);
   const stale = waiting.filter((i) => (daysSince(i.startedAt) ?? 0) > 7);
   const sources = countBy(d.items, (i) => i.source || 'manual');
   const shown = d.items.filter((i) => source === 'all' || (i.source || 'manual') === source);
   const cadenceOn = !!d.cadence && d.cadence.pagesPerWeek > 0 && d.cadence.status !== 'paused';
 
   const fresh = waiting.length - stale.length;
-  // the page waiting longest: the hero's next step
+  // the page waiting longest: the hero's next step (a ready page first; a draft to fix when nothing is ready)
   const oldest = [...waiting].sort((a, b) => a.startedAt.localeCompare(b.startedAt))[0];
   const oldestDays = oldest ? daysSince(oldest.startedAt) : null;
+  const toFix = [...fixing].sort((a, b) => a.startedAt.localeCompare(b.startedAt))[0];
+  const fixReport = toFix ? reports.get(toFix.keyword.toLowerCase()) : undefined;
+  const fixLine = fixing.length ? `${plural(fixing.length, 'draft needs', 'drafts need')} your edits: the quality check did not pass, so finish ${fixing.length === 1 ? 'it' : 'them'} by hand (each bracket ${fixing.length === 1 ? 'its' : 'their'} report lists) before publishing.` : '';
 
   return (
     <Stagger className="space-y-6">
       <SummaryHero
         tone="blue"
         eyebrow={<span className="font-mono tracking-[0.02em] uppercase">Written pages</span>}
-        title={d.items.length ? `${live.length} of ${plural(d.items.length, 'written page')} ${live.length === 1 ? 'is' : 'are'} live` : 'No pages written yet'}
+        title={liveLine(live.length, d.items.length)}
         description={
-          waiting.length
-            ? `${plural(waiting.length, 'page is', 'pages are')} written but not live${stale.length ? `, ${stale.length} for more than a week` : ''}. Nothing ranks before it is published.`
+          waiting.length || fixing.length
+            ? [
+                waiting.length ? `${plural(waiting.length, 'page is', 'pages are')} written and ready to publish${stale.length ? `, ${stale.length} for more than a week` : ''}. Nothing ranks before it is published.` : '',
+                fixLine,
+              ].filter(Boolean).join(' ')
             : d.items.length
               ? 'Every written page is live and tracked.'
               : 'Pages appear here when you write one for a keyword, when a keyword ladder starts its pages, or when the weekly run writes the next page for your keyword.'
         }
         aside={
-          oldest && can('member') ? (
+          !oldest && toFix && can('member') ? (
+            <HeroNextStep
+              icon={<Wrench />}
+              eyebrow="Next step · needs your edits"
+              title={`Finish the draft for "${toFix.keyword}" by hand, then publish it`}
+              actions={
+                <>
+                  {fixReport && (
+                    <ButtonLink to={paths.report(org.id, fixReport.id)} size="sm" variant="secondary">
+                      See what to edit
+                    </ButtonLink>
+                  )}
+                  <GuideButton id="page-not-ready" vars={{ domain: site.domain }} label="How to finish it" className="border-line-on-ink/40 bg-on-ink/10 text-on-ink" />
+                </>
+              }
+            />
+          ) : oldest && can('member') ? (
             <HeroNextStep
               icon={<Inbox />}
               eyebrow={`Next step · ${oldestDays != null ? `${oldestDays} ${oldestDays === 1 ? 'day' : 'days'} waiting` : 'waiting'}`}
@@ -157,7 +180,11 @@ function Content({ d }: { d: ContentData }) {
           <>
             <HeroStat label="Pages written" value={<CountUp value={d.items.length} />} hint={`${plural(d.generated.length, 'page report')} delivered`} />
             <HeroStat label="Live" value={<CountUp value={live.length} />} hint={d.items.length ? `${Math.round((live.length / d.items.length) * 100)}% of written pages are published` : 'Report a page once it is published'} />
-            <HeroStat label="Waiting to publish" value={<CountUp value={waiting.length} />} hint={stale.length ? `${stale.length} for more than a week` : 'Nothing ranks before it is live'} />
+            <HeroStat
+              label="Waiting to publish"
+              value={<CountUp value={waiting.length} />}
+              hint={[stale.length ? `${stale.length} for more than a week` : waiting.length ? 'Nothing ranks before it is live' : '', fixing.length ? `${fixing.length} more ${fixing.length === 1 ? 'needs' : 'need'} your edits first` : ''].filter(Boolean).join(' · ') || 'Nothing ranks before it is live'}
+            />
             <HeroStat
               label="Business profile (E-E-A-T)"
               value={<CountUp value={d.readiness.score} format={(v) => `${Math.round(v)}%`} />}
@@ -210,6 +237,7 @@ function Content({ d }: { d: ContentData }) {
               { label: 'Live', value: live.length, color: SEQ[5] },
               { label: 'Waiting up to a week', value: fresh, color: SEQ[2] },
               { label: 'Waiting more than a week', value: stale.length, color: 'var(--warning)' },
+              ...(fixing.length ? [{ label: 'Needs your edits', value: fixing.length, color: 'var(--critical)' }] : []),
             ]}
           />
         )}
@@ -244,7 +272,7 @@ function Content({ d }: { d: ContentData }) {
           </Card>
         ) : view === 'board' ? (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <BoardColumn title="Written, waiting to publish" icon={<Clock />} tone="warning" count={shown.filter((i) => !isLive(i)).length}>
+            <BoardColumn title="Written, not live yet" icon={<Clock />} tone="warning" count={shown.filter((i) => !isLive(i)).length}>
               {shown
                 .filter((i) => !isLive(i))
                 .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
@@ -346,7 +374,9 @@ function SourceLine({ item }: { item: ContentItem }) {
 function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; report?: Report; cms?: CmsItemView; onUnpublish: (i: ContentItem) => void }) {
   const { org, can, tool } = useSitePage();
   const liveNow = isLive(item);
+  const fix = needsFixItem(item);
   const days = daysSince(item.startedAt);
+  const reasons = (item.qaReasons ?? '').split(/;\s+/).map((r) => r.trim()).filter(Boolean);
   return (
     <Card className="p-3.5 transition-[border-color,box-shadow,translate] duration-200 ease-brand hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -359,12 +389,17 @@ function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; r
         </div>
         <span className="flex flex-wrap items-center gap-1.5">
           {cms && <CmsBadge item={cms} />}
-          {liveNow ? <StatusBadge tone="good">Live</StatusBadge> : <Badge tone={days != null && days > 7 ? 'warning' : 'accent'} icon={<CalendarClock className="size-3" aria-hidden />}>{days != null ? `${days} ${days === 1 ? 'day' : 'days'} waiting` : 'Waiting'}</Badge>}
+          {liveNow ? <StatusBadge tone="good">Live</StatusBadge> : fix ? <StatusBadge tone="critical">Needs your edits</StatusBadge> : <Badge tone={days != null && days > 7 ? 'warning' : 'accent'} icon={<CalendarClock className="size-3" aria-hidden />}>{days != null ? `${days} ${days === 1 ? 'day' : 'days'} waiting` : 'Waiting'}</Badge>}
         </span>
       </div>
       <div className="mt-2 space-y-1 text-xs text-ink-3">
         <p>Started {fmtDate(item.startedAt)}{liveNow && item.publishedAt ? ` · published ${fmtDate(item.publishedAt)}` : ''}</p>
         {item.existingPageUrl && !liveNow && <p className="truncate">Improves {urlPath(item.existingPageUrl)}</p>}
+        {fix && (
+          <p className="text-ink-2 [overflow-wrap:anywhere]">
+            Did not pass the quality check, so it is not ready to publish{reasons.length ? `: ${reasons.slice(0, 2).join('; ')}` : ''}. {DRAFT_BY_HAND}.
+          </p>
+        )}
         {item.publishedUrl && (
           <a href={item.publishedUrl} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 truncate text-accent-text hover:underline transition-colors duration-150 ease-brand">
             {urlPath(item.publishedUrl)}
@@ -384,9 +419,14 @@ function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; r
           <span />
         )}
         <span className="flex flex-wrap gap-1.5">
-          {!liveNow && can('member') && (
+          {!liveNow && !fix && can('member') && (
             <ButtonLink to={tool('published', { keyword: item.keyword, ...(item.existingPageUrl ? { publishedUrl: item.existingPageUrl } : {}) })} size="sm">
               Report published URL
+            </ButtonLink>
+          )}
+          {fix && report && (
+            <ButtonLink to={paths.report(org.id, report.id)} size="sm">
+              See what to edit
             </ButtonLink>
           )}
           {liveNow && can('member') && (
@@ -411,7 +451,7 @@ function PipelineTable({ rows, reports, cms, onUnpublish }: { rows: ContentItem[
     { key: 'keyword', header: 'Keyword', sortValue: (r) => r.keyword, cell: (r) => <span className="font-medium text-ink">{r.keyword}</span> },
     { key: 'source', header: 'Source', sortValue: (r) => r.source, cell: (r) => <SourceLine item={r} /> },
     { key: 'pageType', header: 'Page type', hideOnMobile: true, sortValue: (r) => r.pageType, cell: (r) => (r.pageType ? <Kind>{r.pageType}</Kind> : '-') },
-    { key: 'status', header: 'Status', sortValue: (r) => (isLive(r) ? 1 : 0), cell: (r) => (isLive(r) ? <StatusBadge tone="good">Live</StatusBadge> : <Badge tone="accent" icon={<CalendarClock className="size-3" aria-hidden />}>Waiting</Badge>) },
+    { key: 'status', header: 'Status', sortValue: (r) => (isLive(r) ? 2 : needsFixItem(r) ? 0 : 1), cell: (r) => (isLive(r) ? <StatusBadge tone="good">Live</StatusBadge> : needsFixItem(r) ? <StatusBadge tone="critical">Needs your edits</StatusBadge> : <Badge tone="accent" icon={<CalendarClock className="size-3" aria-hidden />}>Waiting</Badge>) },
     { key: 'cms', header: 'CMS', hideOnMobile: true, sortValue: (r) => cms.get(r.keyword.toLowerCase())?.remoteStatus ?? '', cell: (r) => { const c = cms.get(r.keyword.toLowerCase()); return c ? <CmsBadge item={c} /> : <span className="text-ink-3">-</span>; } },
     { key: 'startedAt', header: 'Started', sortValue: (r) => r.startedAt, cell: (r) => <span className="text-[13px] text-ink-2">{fmtDate(r.startedAt)}</span> },
     { key: 'publishedAt', header: 'Published', hideOnMobile: true, sortValue: (r) => r.publishedAt || '', cell: (r) => <span className="text-[13px] text-ink-2">{r.publishedAt ? fmtDate(r.publishedAt) : '-'}</span> },
@@ -450,9 +490,17 @@ function PipelineTable({ rows, reports, cms, onUnpublish }: { rows: ContentItem[
             </Button>
           ) : null
         ) : can('member') ? (
-          <ButtonLink to={tool('published', { keyword: r.keyword, ...(r.existingPageUrl ? { publishedUrl: r.existingPageUrl } : {}) })} size="sm" variant="secondary">
-            Report URL
-          </ButtonLink>
+          needsFixItem(r) ? (
+            reports.get(r.keyword.toLowerCase()) ? (
+              <ButtonLink to={paths.report(org.id, reports.get(r.keyword.toLowerCase())!.id)} size="sm" variant="secondary">
+                See what to edit
+              </ButtonLink>
+            ) : null
+          ) : (
+            <ButtonLink to={tool('published', { keyword: r.keyword, ...(r.existingPageUrl ? { publishedUrl: r.existingPageUrl } : {}) })} size="sm" variant="secondary">
+              Report URL
+            </ButtonLink>
+          )
         ) : null,
     },
   ];

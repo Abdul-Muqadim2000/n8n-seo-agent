@@ -1,7 +1,7 @@
 // Keyword-ladder page: "the climb" (rungs side by side, the main page last) and the panel of one page with its actions.
 import { Fragment, useMemo, useState } from 'react';
 import { ArrowDown, ArrowRight, ExternalLink as ExternalIcon, FileText, Flag, Inbox, Mountain, PenSquare, Play } from 'lucide-react';
-import { compactNumber, type LadderDetail, type LadderPage } from '@seo/shared';
+import { compactNumber, DRAFT_BY_HAND, NO_RERUN_NEEDED, type LadderDetail, type LadderPage } from '@seo/shared';
 import { ButtonLink, Button } from '@/components/ui/button';
 import { ExternalLink, KeyValue, Meter } from '@/components/ui/misc';
 import { IconTile } from '@/components/insight';
@@ -31,7 +31,8 @@ function pageLine(p: LadderPage, onDay: string): string {
       return p.position > 0 ? `Google position ${positionWords(p.position).replace('#', '')}` : positionWords(p.position);
     case 'waiting': {
       const d = daysSince(p.writtenAt);
-      return d == null ? 'Ready to publish' : `Written ${d === 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`}`;
+      if (d == null) return p.needsFix ? 'Did not pass the quality check' : 'Ready to publish';
+      return `Written ${d === 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`}${p.needsFix ? ', did not pass the quality check' : ''}`;
     }
     case 'writing':
       return 'Arrives in about 10 minutes';
@@ -109,7 +110,7 @@ export function Climb({ ladder, onWrite }: { ladder: LadderDetail; onWrite: (i: 
                           onClick={() => setOpen(p)}
                           className="group/page w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-left shadow-card transition-[border-color,box-shadow,translate] duration-200 ease-brand hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised active:translate-y-0"
                         >
-                          <PageStateBadge state={p.state} />
+                          <PageStateBadge state={p.state} needsFix={p.needsFix} />
                           <span className="mt-1.5 flex items-start justify-between gap-2">
                             <span className="min-w-0 break-words text-sm font-medium leading-snug text-ink transition-colors duration-150 ease-brand group-hover/page:text-accent-text">{p.keyword}</span>
                             <ArrowRight className="mt-0.5 size-3.5 shrink-0 text-ink-3 transition-[translate,color] duration-200 ease-brand group-hover/page:translate-x-0.5 group-hover/page:text-accent-text" aria-hidden />
@@ -178,6 +179,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
               Write now
             </Button>
           )}
+
           {p.state === 'published' && p.publishedUrl && (
             <a href={p.publishedUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
               View the live page
@@ -189,9 +191,21 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
     >
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          <PageStateBadge state={p.state} />
+          <PageStateBadge state={p.state} needsFix={p.needsFix} />
           <span className="text-[13px] text-ink-3">{pageLine(p, day.on)}</span>
         </div>
+        {p.state === 'waiting' && p.needsFix && (
+          <div className="text-[13px] leading-snug text-ink-2">
+            <p>The draft did not pass the quality check, so it is not ready to publish. {DRAFT_BY_HAND}: the page's report says what to do with each one. {NO_RERUN_NEEDED}</p>
+            {(p.qaReasons?.length ?? 0) > 0 && (
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
+                {p.qaReasons!.slice(0, 3).map((r, i) => (
+                  <li key={`${i}-${r.slice(0, 24)}`}>{r}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         {p.state === 'gated' && (
           <p className="text-[13px] leading-snug text-ink-2">
             The main page waits until half of the supporting pages are live (or the main keyword already ranks in the top 30): supporting pages first make it much

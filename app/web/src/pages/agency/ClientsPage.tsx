@@ -209,7 +209,7 @@ function AgencyClients() {
       ) : rows.length ? (
         <Card className="mb-6">
           <CardBody>
-            <DataTable rows={rows} columns={columns} rowKey={(r) => `${r.clientId}:${r.siteId ?? ''}`} initialSort={{ key: 'client', dir: 'asc' }} searchable={rows.length > 8} searchPlaceholder="Search clients and websites..." />
+            <DataTable rows={rows} columns={columns} rowKey={(r) => `${r.clientId}:${r.siteId ?? ''}`} initialSort={{ key: 'client', dir: 'asc' }} searchable={rows.length > 8} searchPlaceholder="Search clients and websites" />
           </CardBody>
         </Card>
       ) : (

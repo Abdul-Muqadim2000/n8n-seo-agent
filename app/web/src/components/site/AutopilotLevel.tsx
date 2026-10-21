@@ -23,6 +23,7 @@ export function LevelChoices({
   monitors,
   pagesPerWeek,
   writing,
+  ranking = false,
   disabled,
   labelledBy,
 }: {
@@ -32,6 +33,8 @@ export function LevelChoices({
   pagesPerWeek: number;
   /** a keyword the client chose still has pages to write */
   writing: boolean;
+  /** the website has a keyword ladder (its weekly rank check is in the forecast, as on the Credits page) */
+  ranking?: boolean;
   disabled?: boolean;
   labelledBy?: string;
 }) {
@@ -50,7 +53,7 @@ export function LevelChoices({
           description={
             <>
               {l.summary}
-              <span className="mt-1 block text-ink-3">About {creditsLabel(autopilotMonthlyUsd(m, pagesPerWeek, { level: l.level, writing }))} a month with your current settings.</span>
+              <span className="mt-1 block text-ink-3">About {creditsLabel(autopilotMonthlyUsd(m, pagesPerWeek, { level: l.level, writing, ranking }))} a month with your current settings.</span>
             </>
           }
         />
@@ -68,6 +71,7 @@ export function AutopilotLevelPicker({
   monitors,
   pagesPerWeek,
   writing,
+  ranking = false,
   admin,
   onSaved,
 }: {
@@ -79,6 +83,7 @@ export function AutopilotLevelPicker({
   monitors: Partial<MonitorSettings> | null | undefined;
   pagesPerWeek: number;
   writing: boolean;
+  ranking?: boolean;
   admin: boolean;
   onSaved?: () => void;
 }) {
@@ -119,7 +124,7 @@ export function AutopilotLevelPicker({
           </span>
         </Callout>
       )}
-      <LevelChoices value={value} onChange={setValue} monitors={monitors} pagesPerWeek={pagesPerWeek} writing={writing} disabled={!admin} />
+      <LevelChoices value={value} onChange={setValue} monitors={monitors} pagesPerWeek={pagesPerWeek} writing={writing} ranking={ranking} disabled={!admin} />
       {admin && (
         <div className="flex justify-end">
           <Button size="sm" loading={save.isPending} disabled={value === level} onClick={() => submit()}>

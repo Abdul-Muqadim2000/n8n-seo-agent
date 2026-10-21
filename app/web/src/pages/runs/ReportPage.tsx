@@ -69,7 +69,7 @@ export default function ReportPage() {
             {/* B-R1: push this one report to the company's own channels, if it is ready to leave the app */}
             {/* keyword-first: "Not what I wanted" on a written page (it feeds the autopilot's auto-pause) */}
             <NotWhatIWanted report={r} />
-            <SendReport reportId={r.id} />
+            <SendReport report={r} />
             {/* G15: an expiring, read-only link for somebody with no account (admins and owners only) */}
             <ShareReport reportId={r.id} />
             {r.runId && can('viewer') && (

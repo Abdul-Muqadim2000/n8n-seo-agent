@@ -487,7 +487,7 @@ function TeamTab() {
         }
       >
         <CardBody>
-          <DataTable rows={list} columns={columns} rowKey={(m) => m.userId} initialSort={{ key: 'role', dir: 'asc' }} searchable={list.length > 8} searchPlaceholder="Search members..." />
+          <DataTable rows={list} columns={columns} rowKey={(m) => m.userId} initialSort={{ key: 'role', dir: 'asc' }} searchable={list.length > 8} searchPlaceholder="Search members" />
           <h3 className="mt-6 mb-2.5 text-xs font-medium text-ink-3">What each role can do</h3>
           <dl className="grid gap-2.5 sm:grid-cols-2">
             {(org.kind === 'client' ? CLIENT_ROLES : (['owner', 'admin', 'member', 'viewer'] as const)).map((r) => (

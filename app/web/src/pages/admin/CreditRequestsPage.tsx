@@ -160,7 +160,7 @@ export default function AdminCreditRequestsPage() {
           initialSort={{ key: 'when', dir: 'desc' }}
           pageSize={25}
           searchable
-          searchPlaceholder="Search companies or people..."
+          searchPlaceholder="Search companies or people"
           searchText={(r) => `${r.orgName} ${r.requestedBy ?? ''} ${r.packId} ${r.note}`}
           toolbar={
             <p className="ml-auto flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-3">

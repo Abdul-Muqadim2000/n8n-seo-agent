@@ -40,33 +40,37 @@ describe('R111: a draft that failed its quality check is never offered for publi
     expect(w.find((x) => x.keyword === 'erp software uae')?.needsFix).toBeUndefined();
   });
 
-  it('the growth loop says "1 page to publish · 1 needs a fix" and names the draft with "fix and run again", never "publish" for it', () => {
+  it('the growth loop says "1 page to publish · 1 needs a fix" and names the draft with "finish it by hand", never "publish" or a re-run for it', () => {
     const st = publishStage(waitingPages([NOT_READY, READY], NOW), 0);
     expect(st.headline).toBe('1 page(s) to publish · 1 needs a fix');
     expect(st.state).toBe('attention');
-    expect(st.detail).toContain('"ai consulting" did not pass the quality check: fix it and run it again');
+    expect(st.detail).toContain('"ai consulting" did not pass the quality check: finish it by hand');
+    expect(st.detail).not.toMatch(/run (it|them) again/);
     const onlyFix = publishStage(waitingPages([NOT_READY], NOW), 0);
     expect(onlyFix.headline).toBe('1 needs a fix');
-    expect(onlyFix.action).toEqual({ label: 'Run it again', mode: 'keyword' });
+    expect(onlyFix.action).toEqual({ label: 'See what to edit', page: 'content' });
     expect(onlyFix.detail).not.toMatch(/Publish them/);
   });
 
-  it('Needs you: a "fix it and run it again" item with the reasons, and no "I published it" for that page', () => {
+  it('Needs you: a "finish it by hand" item with the reasons and its report, no re-run, and no "I published it" for that page (E-QA)', () => {
     const b = buildLadders(src({ ladders: [lad({ keyword: 'ai consulting', status: 'writing', page_no: 1 }), lad({ keyword: 'ai consulting dubai', rung: 4, page_no: 2 })], logs: [NOT_READY, READY] }), { dated: [], cadenceRuns: [], rankNextAt: null }, { now: NOW });
     expect(b.waiting.find((w) => w.keyword === 'ai consulting')).toMatchObject({ needsFix: true, ladderId: 'lad_ai' });
     const items = ladderNeedsYou(b);
     const fix = items.find((i) => i.id === 'fix:lad_ai');
     expect(fix).toBeDefined();
-    expect(fix!.title).toBe('Fix 1 page of "ai consulting dubai" before publishing');
+    expect(fix!.title).toBe('Finish 1 page of "ai consulting dubai" before publishing');
     expect(fix!.detail).toContain('covers 60% of the competitors\' subtopics');
-    expect(fix!.action).toMatchObject({ label: 'Run it again', mode: 'keyword', prefill: { keyword: 'ai consulting', ladder: { id: 'lad_ai', rung: 1, pageNo: 1 } } });
+    expect(fix!.detail).toContain('You do not need a new run');
+    expect(fix!.detail).not.toMatch(/run (it|them) again/);
+    expect(fix!.action).toMatchObject({ label: 'See what to edit' });
+    expect(fix!.action?.mode).toBeUndefined();
     // the ladder's publish item no longer names the draft; the other written page keeps its "I published it"
     const publishes = items.filter((i) => i.kind === 'publish');
     expect(publishes.some((i) => /ai consulting/.test(i.detail) && i.action?.mode === 'published')).toBe(false);
     expect(publishes.find((i) => /erp software uae/.test(i.detail))?.action).toMatchObject({ label: 'I published it', mode: 'published' });
     // the card's next step
     const card = b.cards.find((c) => c.id === 'lad_ai')!;
-    expect(card.next.text).toMatch(/fix 1 page that failed the quality check/);
+    expect(card.next.text).toMatch(/finish 1 page that failed the quality check by hand/);
     expect(card.next.text).not.toMatch(/publish 1 page/);
   });
 
@@ -75,11 +79,11 @@ describe('R111: a draft that failed its quality check is never offered for publi
     const plan = { pausedReason: 'pileup', waitingPublish: 2, waitingKeywords: ['ai consulting', 'erp software uae'], config: { maxWaiting: 2 } } as unknown as Parameters<typeof cadenceDetail>[1];
     const txt = cadenceDetail([], plan, b);
     expect(txt).toContain('"ai consulting" (needs a fix)');
-    expect(txt).toContain('fix the others');
+    expect(txt).toContain('finish the others by hand');
     expect(txt).not.toMatch(/Publish them to continue$/);
   });
 
-  it('recommendations: an engine `fix_draft` action becomes "Run it again", never "Report the published URL"; old `publish` actions are unchanged', () => {
+  it('recommendations: an engine `fix_draft` action opens the draft to edit, never a re-run or "Report the published URL"; old `publish` actions are unchanged', () => {
     const acts = engineActions(
       [
         { type: 'fix_draft', keyword: 'ai consulting', url: 'https://www.techand.ai/ai-consulting/', reasons: ['covers 60% against 90%'] },
@@ -89,23 +93,24 @@ describe('R111: a draft that failed its quality check is never offered for publi
       ago(0),
     );
     expect(acts).toHaveLength(2);
-    expect(acts[0].action).toMatch(/Fix the draft for "ai consulting" and run it again/);
+    expect(acts[0].action).toMatch(/Finish the draft for "ai consulting" by hand/);
     expect(acts[0].why).toContain('covers 60% against 90%');
     const b = bundleWith({ snapshotActions: acts });
     const recs = recommend(SITE, b);
     const fix = recs.find((r) => r.id.startsWith('engine:site_tracker:fix_draft'));
-    expect(fix?.action).toMatchObject({ label: 'Run it again', mode: 'keyword', prefill: { keyword: 'ai consulting' } });
+    expect(fix?.action).toMatchObject({ label: 'See what to edit', page: 'content' });
     expect(recs.find((r) => r.id.startsWith('engine:site_tracker:publish'))?.action).toMatchObject({ label: 'Report the published URL', mode: 'published' });
   });
 
-  it('recommendations: a `not_ready` content row is "Fix the draft ... and run it again", not "Publish the page"', () => {
+  it('recommendations: a `not_ready` content row is "Finish the draft ... by hand", not "Publish the page" and not a re-run', () => {
     const b = bundleWith({ items: [{ keyword: 'ai consulting', source: 'app', pageType: 'Service Page', rung: 0, ladderId: '', requestId: '', startedAt: ago(5), status: 'not_ready', publishedUrl: '', publishedAt: '', week: '', existingPageUrl: '', qaReasons: 'covers 60% against 90%' } as never] });
     const recs = recommend(SITE, b);
     expect(recs.some((r) => r.id === 'content:publish:ai consulting')).toBe(false);
     const fix = recs.find((r) => r.id === 'content:fix:ai consulting');
-    expect(fix?.title).toBe('Fix the draft for "ai consulting" and run it again');
+    expect(fix?.title).toBe('Finish the draft for "ai consulting" by hand');
     expect(fix?.detail).toContain('covers 60% against 90%');
-    expect(fix?.action).toMatchObject({ mode: 'keyword' });
+    expect(fix?.detail).toContain('You do not need a new run');
+    expect(fix?.action).toMatchObject({ label: 'See what to edit', page: 'content' });
   });
 });
 

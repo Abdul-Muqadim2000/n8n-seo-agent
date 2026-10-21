@@ -574,6 +574,17 @@ const CHANGE_LABEL: Record<string, string> = {
 };
 const pathOnly = (u: string) => u.replace(/^https?:\/\/[^/]+/, '') || '/';
 
+/**
+ * The watch panel's one line. B5 (pre-launch run 2026-10-21): a website added today showed "Last check unknown. The watch has not run
+ * since", a sentence cut off around a word the app never shows. Three states, each a whole sentence: running, not run yet, stopped.
+ */
+export function watchLine(watch: Pick<PageWatch, 'running' | 'lastCheckedAt' | 'pagesWatched'>): string {
+  const pages = plural(watch.pagesWatched, 'key page');
+  if (watch.running) return `${pages} checked every morning · last check ${fmtDate(watch.lastCheckedAt)}`;
+  if (!watch.lastCheckedAt) return `${pages} ready to watch. The first check runs within a day, every morning after that.`;
+  return `Last check ${fmtDate(watch.lastCheckedAt)}. The watch has not run since then, so these pages may have changed without a warning.`;
+}
+
 function WatchPanel({ watch, coverage }: { watch: PageWatch | null; coverage: IndexCoverage | null }) {
   if (!watch) {
     return (
@@ -595,11 +606,7 @@ function WatchPanel({ watch, coverage }: { watch: PageWatch | null; coverage: In
       title="Daily key-page watch"
       icon={<Eye />}
       iconTone={problem.length ? 'serious' : watch.running ? 'good' : 'neutral'}
-      description={
-        watch.running
-          ? `${plural(watch.pagesWatched, 'key page')} checked every morning · last check ${fmtDate(watch.lastCheckedAt)}`
-          : `Last check ${watch.lastCheckedAt ? fmtDate(watch.lastCheckedAt) : 'unknown'}. The watch has not run since`
-      }
+      description={watchLine(watch)}
       flush
     >
       <div className="grid grid-cols-1 gap-3 px-5 pb-4 sm:grid-cols-3">

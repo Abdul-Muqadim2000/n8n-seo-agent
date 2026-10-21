@@ -35,11 +35,11 @@ import { CollapsePanel, CountUp, DisclosureButton, HeroNextStep, HeroStat, IconT
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useBilling } from '@/lib/queries';
-import { useCycleDay } from '@/lib/cycle-day';
+import { siteTimezone, useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtAgo } from '@/lib/utils';
 import { Panel } from '../kit';
 import { plural } from '../format';
-import { AUTO_ICON, fmtDayHead, fmtTime, fmtWhen, validDate } from './common';
+import { AUTO_ICON, dayKey, fmtDayHead, fmtTime, fmtWhen, useSiteZone, validDate } from './common';
 import type { WriteNowItem } from './WriteNowDialog';
 import { guideForNeedsYou } from '@seo/shared/guide-links';
 import { GuideButton } from '@/components/guide';
@@ -71,34 +71,36 @@ const RunningBadge = () => (
 );
 
 /** A day as a small calendar tile: the weekday on top, the day of the month under it. */
-export function DayTile({ iso, className }: { iso: string; className?: string }) {
+export function DayTile({ iso, tz, className }: { iso: string; tz?: string; className?: string }) {
   const d = new Date(iso);
-  const wd = new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(d);
+  const wd = new Intl.DateTimeFormat(undefined, { weekday: 'short', ...(tz ? { timeZone: tz } : {}) }).format(d);
+  const dayOfMonth = new Intl.DateTimeFormat('en-GB', { day: 'numeric', ...(tz ? { timeZone: tz } : {}) }).format(d);
   return (
     <span className={cn('flex size-11 shrink-0 flex-col items-center justify-center rounded-lg bg-accent-soft text-accent-text', className)} aria-hidden>
       <span className="font-mono text-[10px] leading-none font-medium tracking-[0.04em] uppercase">{wd}</span>
-      <span className="mt-0.5 font-display text-base leading-none font-semibold">{d.getDate()}</span>
+      <span className="mt-0.5 font-display text-base leading-none font-semibold">{dayOfMonth}</span>
     </span>
   );
 }
 
 export function ThisWeek({ data }: { data: PipelineData }) {
   const { org } = useOrgCtx();
+  const tz = useSiteZone();
   const items = useMemo(() => sortedWeek(data), [data]);
   const days = useMemo(() => {
     const m = new Map<string, ThisWeekItem[]>();
     for (const e of items) {
-      const key = new Date(e.at).toDateString();
+      const key = dayKey(e.at, tz);
       m.set(key, [...(m.get(key) ?? []), e]);
     }
     return [...m.values()];
-  }, [items]);
+  }, [items, tz]);
   const active = data.activeRuns ?? [];
   // automatic runs in progress that are not in the list (e.g. last week's run still going)
   const runningOther = (data.running ?? []).filter((r) => !items.some((i) => i.automation === r.automation && i.running));
 
   return (
-    <Panel icon={<CalendarClock />} title="This week" description="The next automatic runs in order, in your time zone, and what each one works on.">
+    <Panel icon={<CalendarClock />} title="This week" description={`The next automatic runs in order, in your website's time zone (${tz}), and what each one works on.`}>
       <div className="space-y-4">
         {(active.length > 0 || runningOther.length > 0) && (
           <ul className="space-y-2">
@@ -128,17 +130,17 @@ export function ThisWeek({ data }: { data: PipelineData }) {
             {days.map((events) => (
               <li key={events[0].at}>
                 <div className="flex items-center gap-3">
-                  <DayTile iso={events[0].at} />
+                  <DayTile iso={events[0].at} tz={tz} />
                   <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-ink">{fmtDayHead(events[0].at)}</p>
+                    <p className="text-[13px] font-semibold text-ink">{fmtDayHead(events[0].at, tz)}</p>
                     <p className="text-xs text-ink-3">{plural(events.length, 'automatic run')}</p>
                   </div>
                 </div>
                 {/* one row per run on a line that joins the job icons */}
-                <ul className="relative mt-3 space-y-1 before:absolute before:top-3 before:bottom-3 before:left-[calc(4.5rem+0.5rem+0.875rem)] before:w-px before:bg-line" aria-label={fmtDayHead(events[0].at)}>
+                <ul className="relative mt-3 space-y-1 before:absolute before:top-3 before:bottom-3 before:left-[calc(4.5rem+0.5rem+0.875rem)] before:w-px before:bg-line" aria-label={fmtDayHead(events[0].at, tz)}>
                   {events.map((e) => (
                     <li key={e.at + e.automation} className="relative grid grid-cols-[4.5rem_1.75rem_minmax(0,1fr)] items-start gap-x-2 py-1.5 text-[13px]">
-                      <span className="whitespace-nowrap pt-1 pl-1 tabular text-ink-3">{fmtTime(e.at)}</span>
+                      <span className="whitespace-nowrap pt-1 pl-1 tabular text-ink-3">{fmtTime(e.at, tz)}</span>
                       <IconTile size="sm" tone={e.running ? 'solid' : 'blue'} className="relative z-[1] ring-2 ring-surface">
                         {AUTO_ICON[e.automation]}
                       </IconTile>
@@ -326,6 +328,7 @@ function heroTitle(status: PipelineData['tracking']['status'], needs: NeedsYouIt
  */
 export function PipelineHero({ data, needs, cards, onWrite }: { data: PipelineData; needs: NeedsYouItem[]; cards: LadderCard[]; onWrite?: (i: WriteNowItem) => void }) {
   const { site } = useSiteCtx();
+  const tz = siteTimezone(site);
   const { org } = useOrgCtx();
   // credits (app/docs/CREDITS.md): the company's credits this month (autopilot + on-demand), never a dollar spend or budget
   const billing = useBilling(org.id);
@@ -335,7 +338,7 @@ export function PipelineHero({ data, needs, cards, onWrite }: { data: PipelineDa
   const s = data.summary;
   const first = needs[0];
   const line = [
-    next ? `Next automatic run: ${next.title}, ${fmtWhen(next.at)}` : 'No automatic run in the next seven days',
+    next ? `Next automatic run: ${next.title}, ${fmtWhen(next.at, tz)}` : 'No automatic run in the next seven days',
     week.length > 1 ? `${plural(week.length, 'run')} this week` : '',
     cards.length ? plural(cards.length, 'keyword ladder') : '',
   ]
@@ -364,7 +367,7 @@ export function PipelineHero({ data, needs, cards, onWrite }: { data: PipelineDa
             actions={<NeedsYouAction it={first} primary={false} onWrite={onWrite} variant="secondary" />}
           />
         ) : next ? (
-          <HeroNextStep icon={AUTO_ICON[next.automation] ?? <CalendarClock />} eyebrow="Next automatic run" title={`${next.title} · ${fmtWhen(next.at)}`} />
+          <HeroNextStep icon={AUTO_ICON[next.automation] ?? <CalendarClock />} eyebrow="Next automatic run" title={`${next.title} · ${fmtWhen(next.at, tz)}`} />
         ) : undefined
       }
       stats={

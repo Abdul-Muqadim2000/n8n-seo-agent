@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { Activity, BellRing, Bot, CalendarDays, CheckCircle2, Clock, FileText, Gauge, LayoutDashboard, Lightbulb, Link2, MousePointerClick, PenSquare, TrendingUp } from 'lucide-react';
-import { compactNumber, type OverviewData } from '@seo/shared';
+import { compactNumber, DRAFT_BY_HAND, type OverviewData } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { useSiteData } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
@@ -16,6 +16,7 @@ import { Delta, PageHeader, scoreTone } from '@/components/ui/misc';
 import { CountUp, DistributionBar, DistributionLegend, HeroLink, HeroNextStep, HeroStat, IconTile, InfoTip, InsightItem, MetricCard, ProgressBar, ProgressSteps, ScoreRing, SEQ, Stagger, SummaryHero, type Step } from '@/components/insight';
 import { DataGate, FillHeight, MetricSwitch, MiniStat, MoreLink, Panel, PriorityBadge, RunAnalysisMenu, ToolButton, useSitePage } from './_components/kit';
 import { diff, fmtMonthShort, fmtRange, lastTwo, pct, pctChange, plural, sortByDate, timeAxisFormat } from './_components/format';
+import { liveLine } from './_components/content-status';
 import { plotAvgPos, PositionMove, posText } from './_components/positions';
 import { CATEGORY_META, RecommendationButton, sortRecommendations } from './_components/recommendations';
 import { ReportList } from './_components/reports';
@@ -644,17 +645,19 @@ function ContentStat({ icon, tone, label, value, info, hint }: { icon: ReactNode
   );
 }
 
-function ContentCard({ d, className }: { d: OverviewData; className?: string }) {
+export function ContentCard({ d, className }: { d: OverviewData; className?: string }) {
   const { page } = useSitePage();
   const c = d.content;
   return (
     <Panel className={className} title="Content pipeline" icon={<PenSquare />} footer={<MoreLink to={page('content')}>Content</MoreLink>}>
-      {c.started > 0 && <ProgressBar className="mb-4" label="Published" value={c.published} max={c.started} valueLabel={`${c.published} of ${plural(c.started, 'page')} started`} tone={c.published >= c.started ? 'good' : 'accent'} />}
+      {/* B2 (pre-launch run 2026-10-21): one count in one wording, the Content page's: written pages, how many are live, how many wait
+          to be published and how many need a fix first (a draft that failed its quality check is never "waiting to publish") */}
+      {c.started > 0 && <ProgressBar className="mb-4" label="Live" value={c.published} max={c.started} valueLabel={liveLine(c.published, c.started)} tone={c.published >= c.started ? 'good' : 'accent'} />}
       <div className="grid grid-cols-2 gap-2.5 md:grid-cols-5">
-        <ContentStat icon={<PenSquare />} tone="blue" label="Pages started" value={c.started} info="written by the engine" />
+        <ContentStat icon={<PenSquare />} tone="blue" label="Pages written" value={c.started} info="written by the engine, live or not" />
         <ContentStat icon={<CheckCircle2 />} tone={c.published > 0 ? 'good' : 'neutral'} label="Published" value={c.published} info="live and checked" />
         <ContentStat icon={<Clock />} tone={c.pendingPublish > 0 ? 'warning' : 'neutral'} label="Waiting to publish" value={c.pendingPublish} info={c.pendingPublish ? 'written, not live yet' : 'nothing waiting'} />
-        <ContentStat icon={<Clock />} tone={(c.needsFix ?? 0) > 0 ? 'warning' : 'neutral'} label="Needs a fix" value={c.needsFix ?? 0} info={(c.needsFix ?? 0) ? 'failed the quality check' : 'nothing to fix'} />
+        <ContentStat icon={<Clock />} tone={(c.needsFix ?? 0) > 0 ? 'warning' : 'neutral'} label="Needs your edits" value={c.needsFix ?? 0} info={(c.needsFix ?? 0) ? 'failed the quality check: finish it by hand' : 'nothing to edit'} />
         <ContentStat icon={<CalendarDays />} tone="blue" label="Pages a week for your keyword" value={c.pagesPerWeek || 'Off'} hint={`${plural(c.caseStudies, 'case study', 'case studies')} on file`} />
       </div>
       {c.pendingPublish > 0 && (
@@ -664,7 +667,7 @@ function ContentCard({ d, className }: { d: OverviewData; className?: string }) 
       )}
       {(c.needsFix ?? 0) > 0 && (
         <Callout tone="warning" className="mt-4">
-          {plural(c.needsFix ?? 0, 'written page needs', 'written pages need')} a fix: the draft did not pass the quality check, so it is not ready to publish. Fix it and run it again.
+          {plural(c.needsFix ?? 0, 'written page needs', 'written pages need')} your edits: the draft did not pass the quality check, so it is not ready to publish. {DRAFT_BY_HAND}.
         </Callout>
       )}
     </Panel>

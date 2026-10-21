@@ -57,7 +57,9 @@ export function profileNeedsYou(o: {
       kind: 'profile',
       severity: 'info',
       title: `Your first page is ready to write: "${pick.keyword}"`,
-      detail: `Your author profile and business facts are on file. Write it now${q.credits ? ` (about ${q.credits} credits)` : ''}, or it is written in your next weekly run.`,
+      // D6 (pre-launch run 2026-10-21): a page written now fills a slot of the next weekly run's pages a week, so that run writes one page
+      // fewer (the engine's budget rule, unchanged): the choice is when, not one page or two
+      detail: `Your author profile and business facts are on file. Write it now${q.credits ? ` (about ${q.credits} credits)` : ''}, or leave it and your next weekly run writes it. A page written now counts toward that run's pages a week, so the run writes one page fewer.`,
       action: { label: 'Write it now' },
       ...(pick.ladder ? { ladderId: pick.ladder.id } : {}),
       writeNow: q,

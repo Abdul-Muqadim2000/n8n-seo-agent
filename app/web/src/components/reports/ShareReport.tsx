@@ -96,7 +96,7 @@ export function ShareReport({ reportId }: { reportId: string }) {
 
           <div>
             <h3 className="mb-2 text-[13px] font-medium text-ink-3">Links for this report</h3>
-            {list.isLoading && <p className="text-[13px] text-ink-3">Loading...</p>}
+            {list.isLoading && <p className="text-[13px] text-ink-3">Loading</p>}
             {list.isError && <Callout tone="warning">{errorMessage(list.error)}</Callout>}
             {list.data && live.length === 0 && <p className="text-[13px] text-ink-3">No live link. Nobody outside your company can open this report.</p>}
             <ul className="space-y-2">

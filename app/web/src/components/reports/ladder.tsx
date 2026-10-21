@@ -522,7 +522,7 @@ function LinkMap({ links }: { links: P[] }) {
   return (
     <Block title="Link map" description="Internal links to add as each page goes live: up to the top page, sideways to a sibling" icon={<Network />}>
       <SectionTitle className="sr-only">Links</SectionTitle>
-      <DataTable rows={links} columns={cols} rowKey={(r, i) => `${str(r.from)}-${str(r.to)}-${i}`} pageSize={12} dense searchable searchPlaceholder="Filter by page..." searchText={(r) => `${str(r.from)} ${str(r.to)}`} />
+      <DataTable rows={links} columns={cols} rowKey={(r, i) => `${str(r.from)}-${str(r.to)}-${i}`} pageSize={12} dense searchable searchPlaceholder="Filter by page" searchText={(r) => `${str(r.from)} ${str(r.to)}`} />
     </Block>
   );
 }
