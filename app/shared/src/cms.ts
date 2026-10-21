@@ -229,12 +229,12 @@ const httpsUrl = z
   .max(500)
   .refine((v) => cmsUrlOk(v), 'Enter an https:// address on a public host')
   .transform((v) => v.replace(/\/+$/, ''));
-const urlTemplate = z
+const urlTemplateField = z
   .string()
   .trim()
   .max(300)
-  .refine((v) => !v || (/^https:\/\/[^/\s]+/i.test(v) && v.includes('{slug}')), 'Use an https:// address with {slug} in it, e.g. https://{domain}/blog/{slug}/')
-  .default('');
+  .refine((v) => !v || (/^https:\/\/[^/\s]+/i.test(v) && v.includes('{slug}')), 'Use an https:// address with {slug} in it, e.g. https://{domain}/blog/{slug}/');
+const urlTemplate = urlTemplateField.default('');
 const terms = z.array(trimmed(60).min(1)).max(10).default([]);
 const fieldMapSchema = z.partialRecord(z.enum(SOURCE_IDS), z.string().trim().max(80)).default({});
 
@@ -297,7 +297,8 @@ export const cmsConnectionUpdateSchema = z.object({
   environment: z.string().trim().regex(/^[A-Za-z0-9_.-]{1,64}$/).optional(),
   contentTypeId: z.string().trim().regex(/^[A-Za-z0-9_.-]{1,64}$/).optional(),
   fieldMap: z.partialRecord(z.enum(SOURCE_IDS), z.string().trim().max(80)).optional(),
-  publicUrlTemplate: urlTemplate.optional(),
+  // D1 (2026-10-21): no default here, zod 4 applied it to an absent key and every other change cleared the stored template
+  publicUrlTemplate: urlTemplateField.optional(),
 });
 export type CmsConnectionUpdate = z.input<typeof cmsConnectionUpdateSchema>;
 

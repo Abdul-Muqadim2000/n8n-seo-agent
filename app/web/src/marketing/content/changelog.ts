@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-21',
+    title: 'Fixes from our pre-launch run',
+    summary: 'Three fixes found by running a full setup end to end before our first clients join.',
+    highlights: [
+      'Saving one setting no longer resets the others: choosing your Analytics property, saving your keywords at setup or changing one mailbox setting keeps your business description, business facts, tone and mailbox settings as they were',
+    ],
+    features: ['autopilot', 'site-tracking', 'link-building'],
+  },
+  {
     date: '2026-10-20',
     title: 'Your first page waits for your author profile and business facts',
     summary:
