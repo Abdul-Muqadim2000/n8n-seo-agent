@@ -2452,6 +2452,10 @@ open(os.path.join(OUT_CODE, '_fit_gate.js'), 'w').write("// harness shim (writte
     "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { keyword: j.keyword, ...fitGate(j.keyword, { ...(j.ctx || {}), intent: j.intent }), brands_text: fitBrandList(j.ctx || {}, (j.ctx || {}).protect) } }; });\n")
 open(os.path.join(OUT_CODE, '_serp_obs.js'), 'w').write("// harness shim (written by build_v4.py section 26): the results-page observation rules — { serp, at, obs } -> { seen_at, clock, count, seen, text }\n" + SERP_OBS_SRC +
     "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { seen_at: j.serp ? serpSeenAt(j.serp) : null, clock: j.at ? obsClock(j.at) : null, ...aioObserved(j.obs || []) } }; });\n")
+# KW-PARITY (2026-10-21): the app's fit gate is the kit itself, generated here (app/shared/src/fit-gate.generated.js + .d.ts, committed);
+# it was a hand-written port that fell behind the kit. app/shared/src/fit-gate.parity.test.ts fails while the generated file is stale.
+import fit_gate_app
+fit_gate_app.write_app_files(FIT_GATE_SRC)
 log('System review fixes (2026-10-11, FIX_PLAN D4 / D8 / D16 / D26 / G3): one shared keyword fit gate (navigational, government / portal, other brands — competitor and results-page domain labels, learned AI brand names, SERP dominance; v5/code/_fit_gate.js) in Analyze Keywords, Rank Keywords, Ladder Pool, Ladder Plan and Brief Context with a reason per refusal (site_keywords.refused, keyword_strategy.refused, ladder refused_keywords); the relevance prompt is told the brands; the Rank Tracker\'s next step follows the ladder state (write / publish / rungs / improve); an AI Overview is a timed observation ("seen in the check at …", "seen in N of M checks"; v5/code/_serp_obs.js) in the digest, the verdict rules, the keyword report, the keyword strategy and the ladder report; the 2025 Ahrefs base rate (1.74% / 40.8%) with an uncalibrated chance band per plan (_reach.js, app mirror)')
 
 # =============================================================================
