@@ -3,6 +3,7 @@
 /*__RADIUS__*/
 /*__FIT_GATE__*/
 /*__SITE_MODEL__*/
+/*__GONE__*/
 /*__KW_INPUTS__*/
 // Applies the AI relevance verdicts, computes the final opportunity score, builds topic clusters and the content plan,
 // and chooses the priority keywords (live SERP check next) and the keyword for the content pipeline.
@@ -70,9 +71,18 @@ const pageModelD = SM.withPages(siteModelD || SM.from({ domain: base.domain || '
 // listing page (the blog index) gives way to the dedicated page the inventory matches (R56).
 const siteHostD = String(base.domain || '').toLowerCase().replace(/^www\./, '');
 const onSiteD = (u) => { const m = String(u || '').toLowerCase().match(/^https?:\/\/([^\/?#:]+)/); const h = m ? m[1].replace(/^www\./, '') : ''; return !!h && !!siteHostD && (h === siteHostD || h.endsWith('.' + siteHostD)); };
+// KWL-RES D1 (2026-10-21 live keyword test, exec 111): all 8 pages the research called "already answered by a page you have" answered 404
+// (18 keywords), the report said "Refresh those pages instead of writing new ones" and two cards were Easy only because Search Console still
+// showed the dead page. A page the site model knows is gone (seo_pages http_status 404 / 410, SM.isGone; GONE.keyOf compares addresses
+// host-agnostically) covers nothing: the keyword is free, and it carries `gone_ranking` (the dead address and the position it held) so the
+// report can say "the page that ranked for this no longer opens: redirect it, then this keyword has a head start".
+const goneKeysD = new Set(SM.gonePages(pageModelD).map(p => GONE.keyOf(p.url)));
+const isGoneUrlD = (u) => !!u && goneKeysD.has(GONE.keyOf(u));
+const goneRanking = (gsc) => (gsc && onSiteD(gsc.page) && isGoneUrlD(gsc.page)) ? { url: SM.canonUrl(pageModelD, gsc.page), path: GONE.pathOf(gsc.page), position: gsc.position ?? null,
+  impressions: gsc.impressions ?? null, source: 'search console' } : null;
 const coveredBy = (kw, gsc) => {
   const m = SM.pages(pageModelD).length ? SM.matchPage(pageModelD, kw, gsc && gsc.page) : null;
-  const g = gsc && onSiteD(gsc.page) ? gsc : null;
+  const g = gsc && onSiteD(gsc.page) && !isGoneUrlD(gsc.page) ? gsc : null;
   if (g && !(m && SM.isListing(g.page) && !SM.isListing(m.url))) return { url: SM.canonUrl(pageModelD, g.page), title: '', matched_by: 'search console', position: g.position ?? null,
     impressions: g.impressions ?? null, ...(m && SM.canonUrl(pageModelD, m.url) !== SM.canonUrl(pageModelD, g.page) ? { inventory_match: SM.canonUrl(pageModelD, m.url) } : {}) };
   return m ? { url: SM.canonUrl(pageModelD, m.url), title: m.title || '', matched_by: m.matched_by, ...(g ? { position: g.position ?? null } : {}), ...(m.listing ? { listing: m.listing } : {}) } : null; };
@@ -103,12 +113,13 @@ const ladderCovers = (kw) => { if (!ladderKwsD.length) return null; const t = ov
 const ladderNear = (kw) => { const o = OWN.ladderOf(ownLadD, kw, { min: 'other place' }); return o && (o.relation === 'variant' || o.relation === 'other place')
   ? { ladder_id: o.ladder_id, head_keyword: o.head_keyword, ladder_keyword: o.keyword, part: o.part, rung: o.rung, status: o.status, ladder_status: o.ladder_status, how: o.how } : null; };
 const nearNote = (n) => n ? 'close to your ladder "' + n.head_keyword + '" (' + (n.part === 'head' ? 'its main page' : 'its rung ' + n.rung + ' page') + ' "' + n.ladder_keyword + '", ' + n.status + (n.ladder_status === 'paused' ? ', ladder paused' : '') + ': ' + n.how + ') - check that page does not already cover it before writing a new one' : '';
+const goneNote = (g) => g ? 'the page that ranked for this' + (g.position ? ' (#' + Math.round(Number(g.position)) + ')' : '') + ', ' + (g.path || g.url) + ', no longer opens: redirect it to a live page, then this keyword has a head start' : '';
 const refused = [];
 const kws = (base.research.candidates || []).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
   const page_type = PAGES.includes(r.page_type) ? r.page_type : defaultPage(intent);
-  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword, k.gsc), ladder_covered: ladderCovers(k.keyword), ladder_near: ladderNear(k.keyword), ...forYou(k.kd, topicReachOf(r.topic, k.keyword)) };
+  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword, k.gsc), gone_ranking: goneRanking(k.gsc), ladder_covered: ladderCovers(k.keyword), ladder_near: ladderNear(k.keyword), ...forYou(k.kd, topicReachOf(r.topic, k.keyword)) };
 }).filter(k => k.relevance > 0 && k.intent !== 'navigational').filter(k => {
   const g = fitGate(k.keyword, { ...fitCtx, intent: k.intent });
   if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail });
@@ -166,7 +177,7 @@ const clusters = [...cl.values()].map(c => { const p = c.keywords[0]; const taC 
   total_volume: c.total_volume, total_opportunity: +c.total_opportunity.toFixed(1), primary_kd: p.kd, primary_volume: p.volume, primary_cpc: p.cpc,
   supporting: c.keywords.slice(1, 9).map(k => k.keyword), keywords: c.keywords.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, opportunity: k.opportunity })),
   service_fit: p.service_fit || 'unknown', service_fit_note: p.service_fit_note || '',   // F-REH: is the topic's main keyword one of the client's services
-  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, ladder_covered: p.ladder_covered || null, ladder_near: p.ladder_covered ? null : (p.ladder_near || null),
+  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, gone_ranking: p.gone_ranking || null, ladder_covered: p.ladder_covered || null, ladder_near: p.ladder_covered ? null : (p.ladder_near || null),
   ...forYou(p.kd, taC), ...(taC && taC.note ? { topic_reach_note: taC.note } : {})
 }; }).sort((a, b) => b.total_opportunity - a.total_opportunity);
 // Tiers follow the goal: for leads/sales the first "Now" slots go to commercial/transactional topics; research topics support them
@@ -181,6 +192,7 @@ ordered.forEach(c => {
     c.tier_note = c.ladder_covered ? 'in your ladder "' + c.ladder_covered.head_keyword + '" (' + c.ladder_covered.how + ') - let that ladder write it'
       : 'improve the page you have: ' + c.covered_by.url + (c.covered_by.position ? ' (you rank #' + c.covered_by.position + ')' : ''); return; }
   if (c.ladder_near) c.tier_note = nearNote(c.ladder_near);   // A-25: kept in the plan, the ladder named beside it
+  else if (c.gone_ranking) c.tier_note = goneNote(c.gone_ranking);   // KWL-RES D1: the page that ranked is gone
   const winnable = winnableFor(c.difficulty_for_you, c.primary_kd);   // v4.8: easy or reachable for this site (fixed 55 without a website)
   if (now < 5 && winnable && (goalNow === 'traffic' || buyerIntent(c) || now >= 4)) { c.tier = 'Now'; now++; }
   else if (nxt < 8) { c.tier = 'Next'; nxt++; }
@@ -243,6 +255,10 @@ return [{ json: { ...base, keyword_strategy: {
     in: kws.filter(k => k.service_fit === 'in').length, unknown: kws.filter(k => k.service_fit === 'unknown').length, out: kws.filter(k => k.service_fit === 'out').length },
   competitor_domains: base.research.competitor_domains, competitor_basis: base.research.competitor_basis || null, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
   covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by, position: k.covered_by.position ?? null })), pages_known: SM.pages(pageModelD).length,
+  // KWL-RES D1: the keywords whose Search Console page is gone, and every address the site model knows is gone (Build Keyword Strategy reads
+  // the live check's own result against it, so a gone page's position never makes a keyword "Easy")
+  gone_ranked: kws.filter(k => k.gone_ranking).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.gone_ranking.url, path: k.gone_ranking.path, position: k.gone_ranking.position })),
+  gone_pages: SM.gonePages(pageModelD).slice(0, 200).map(p => p.url),
   title_gap: SM.titleGap(pageModelD),   // R34: the pages whose title is not on file (judged by their address only)
   ladder_covered: kws.filter(k => k.ladder_covered).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, ladder_id: k.ladder_covered.ladder_id, head_keyword: k.ladder_covered.head_keyword, ladder_keyword: k.ladder_covered.ladder_keyword, part: k.ladder_covered.part, rung: k.ladder_covered.rung, status: k.ladder_covered.status, target_url: k.ladder_covered.target_url, how: k.ladder_covered.how })), ladders_known: [...new Set(ladderKwsD.map(x => x.ladder_id))].length,
   reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR,
