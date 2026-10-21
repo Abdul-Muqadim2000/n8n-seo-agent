@@ -85,9 +85,13 @@ const goneKeysD = new Set(SM.gonePages(pageModelD).map(p => GONE.keyOf(p.url)));
 const isGoneUrlD = (u) => !!u && goneKeysD.has(GONE.keyOf(u));
 const goneRanking = (gsc) => (gsc && onSiteD(gsc.page) && isGoneUrlD(gsc.page)) ? { url: SM.canonUrl(pageModelD, gsc.page), path: GONE.pathOf(gsc.page), position: gsc.position ?? null,
   impressions: gsc.impressions ?? null, source: 'search console' } : null;
+// N5 (KW recheck 2026-10-21, exec 149): "dynamics 365 finance vat compliance uae" was "already answered" by /insights, the blog index: an index,
+// hub or listing page (SM.isListing) is not the page answering one specific search, so it never covers a keyword (refreshing it writes nothing
+// for that search). Only a dedicated page does; with none, the keyword is free.
 const coveredBy = (kw, gsc) => {
-  const m = SM.pages(pageModelD).length ? SM.matchPage(pageModelD, kw, gsc && gsc.page) : null;
-  const g = gsc && onSiteD(gsc.page) && !isGoneUrlD(gsc.page) ? gsc : null;
+  const m0 = SM.pages(pageModelD).length ? SM.matchPage(pageModelD, kw, gsc && gsc.page) : null;
+  const m = m0 && !SM.isListing(m0.url) ? m0 : null;
+  const g = gsc && onSiteD(gsc.page) && !isGoneUrlD(gsc.page) && !SM.isListing(gsc.page) ? gsc : null;
   if (g && !(m && SM.isListing(g.page) && !SM.isListing(m.url))) return { url: SM.canonUrl(pageModelD, g.page), title: '', matched_by: 'search console', position: g.position ?? null,
     impressions: g.impressions ?? null, ...(m && SM.canonUrl(pageModelD, m.url) !== SM.canonUrl(pageModelD, g.page) ? { inventory_match: SM.canonUrl(pageModelD, m.url) } : {}) };
   return m ? { url: SM.canonUrl(pageModelD, m.url), title: m.title || '', matched_by: m.matched_by, ...(g ? { position: g.position ?? null } : {}), ...(m.listing ? { listing: m.listing } : {}) } : null; };
@@ -114,8 +118,12 @@ const ladderKwsD = (() => { const out = []; const seen = new Set(); const ourD =
       if (!k || seen.has(sig)) continue; seen.add(sig);
       out.push({ keyword: k, tokens: overlapTokens(k), part, ladder_id: String(r.ladder_id), head_keyword: String(r.head_keyword || '').toLowerCase().trim(), rung: Number(r.rung) || 0, status: r.status || '', target_url: r.target_url || '' }); } }
   return out; })();
+// N6 (KW recheck exec 149): "ai consulting dubai" was put "in your ladder 'ai consultant' (the same search)" while the ladder "ai consulting
+// dubai" exists: the exact keyword is looked for first (a ladder's head before a rung), then the word rules in the stored order
+const ladderOrderD = (kw) => { const k = String(kw || '').toLowerCase().trim(); const rank = (x) => x.keyword === k ? (x.part === 'head' ? 0 : 1) : 2;
+  return ladderKwsD.map((x, i) => [x, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(p => p[0]); };
 const ladderCovers = (kw) => { if (!ladderKwsD.length) return null; const t = overlapTokens(kw); if (!t.length) return null;
-  for (const x of ladderKwsD) { if (!x.tokens.length) continue;
+  for (const x of ladderOrderD(kw)) { if (!x.tokens.length) continue;
     const same = overlapScore(t, x.tokens) >= 0.75; const inside = t.every(w => x.tokens.includes(w));
     if (same || inside) return { ladder_id: x.ladder_id, head_keyword: x.head_keyword || x.keyword, ladder_keyword: x.keyword, part: x.part, rung: x.rung, status: x.status, target_url: x.target_url, how: same ? 'the same search' : 'part of a broader page' }; }
   // A-25 (2026-10-17, exec 764): "erp system dubai" (Where to start) and "erp systems in uae" (priority #5) carried no ladder note while the

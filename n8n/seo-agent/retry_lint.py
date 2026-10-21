@@ -177,6 +177,13 @@ def check_all(workflows_dir, gates=None):
                 'entry: %s\n  Wire them through v5/code/_dfs_retry.js -- dfs_gate.splice() is the whole shape -- and record '
                 'the chain with retry_lint.record_gate(), or, only with a reason written in its `why`, add them to '
                 'harness/in200_baseline.json.' % (len(new), where, fn, ', '.join(new)))
+            # N3: a paid multi-item node has no node-level retry, so its gate is its only retry -- the baseline cannot excuse it
+            by_nm = {n.get('name'): n for n in wf.get('nodes') or []}
+            lone = [nm for nm in ungated if paid_multi(by_nm.get(nm) or {})]
+            assert not lone, ('N3: %d paid multi-item DataForSEO node(s) in "%s" have no node-level retry and no in-200 gate either: %s\n'
+                              '  Wrap them with dfs_gate.splice() (the gate re-sends the failed items only).' % (len(lone), where, ', '.join(lone)))
+            bad_paid = ['%s: %s' % (nm, paid_weak(by_nm[nm])) for nm in by_nm if by_nm[nm].get('type') == HTTP_TYPE and paid_weak(by_nm[nm])]
+            assert not bad_paid, 'N3 retry lint in "%s" (%s):\n  %s' % (where, fn, '\n  '.join(bad_paid))
             stale = [n for n in known if n not in ungated and n not in gated]
             missing += ['%s / %s' % (where, n) for n in stale]
             out[where] = {'gated': gated, 'ungated': ungated,
@@ -205,8 +212,76 @@ def needs(node):
     return node.get('type') == HTTP_TYPE and node.get('name') not in ALLOW
 
 
+# ---- N3 (2026-10-22, live re-check of D5): a paid call that carries several items is retried per item, never as a whole ----
+# What n8n 2.41.4 really does (read in the image: n8n-core dist/execution-engine/workflow-execute.js, the `for (tryIndex ...)` loop
+# of the run loop + getRetryParams, and nodes-base HttpRequest/V3 `Promise.allSettled`):
+#   * `retryOnFail` re-runs the WHOLE node -- every input item, every request -- in two cases: the node throws (onError `stop` and
+#     ANY item's request failed: HttpRequestV3 throws on the first rejected item), or the node returns and its FIRST output item
+#     carries `json.error` (`checkFailure = isErrorValue(data.data?.[0]?.[0]?.json?.error)`, checked before continueErrorOutput
+#     splits the items off). A failure of item 2..n under onError continue* is never retried at all.
+#   * So on a node that posts N paid DataForSEO tasks, item 0 timing out re-sends all N -- the N-1 that were answered and billed
+#     are billed again, up to maxTries times -- and the time multiplies: the Keyword Check's 8 s retry ran 3 x 8 + 2 x 5 = 34 s and
+#     the check passed its 45 s limit (exec 145, 2026-10-21).
+# **The rule**: a DataForSEO node that can carry more than one item has NO node-level retry. Its onError is continue*, so a failed
+# request becomes an `{ error }` item in its own place, and the in-200 gate around it (dfs_gate.splice / v5/code/_dfs_retry.js:
+# RT.dfs reads `res.error` as retryable) re-sends exactly the failed items, once. Node-level retry stays only where the node carries
+# ONE item by construction: `executeOnce`, or a name in SINGLE_ITEM with the reason. Anything else that calls DataForSEO is treated
+# as multi-item (default deny), so a new paid node cannot quietly re-bill. (Claude runs on LangChain nodes, not HTTP nodes; the
+# Anthropic HTTP nodes here are the free count_tokens calls.)
+SINGLE_ITEM = {
+    'SERP Top 10': "one results page per run (the head keyword); F-SERP sends it up to three times, one request each",
+    'SERP Top 10 (Retry)': "the head keyword's second attempt, one request",
+    'SERP Top 10 (Light Retry)': "the head keyword's lighter third attempt, one request",
+    'Keyword Data': 'one keyword-overview task per run (all keywords in one request body)',
+    'Keyword Data (Retry)': 'the second attempt of that one task, one request',
+    'Facts SERP': "one results page per run (the facts check's keyword)",
+    'Facts SERP (Retry)': 'the second attempt of that one request, one request',
+    'Start Crawl': 'one on_page/task_post per audit (it creates the paid crawl task)',
+    'Start Crawl (Retry)': 'the second attempt of that one task_post, one request',
+    'Get Crawl Summary': 'one poll of the one crawl task (read with .first())',
+    'Get Crawled Pages': 'one pages request for the one crawl task (read with .first())',
+    'Get Crawled Pages (Retry)': 'the second attempt of that one pages request',
+}
+CONTINUE = ('continueRegularOutput', 'continueErrorOutput')
+_PAID_PROBE = {'type': HTTP_TYPE, 'name': 'Lint Paid Probe', 'onError': 'continueRegularOutput',
+               'parameters': {'url': '={{ $json.endpoint }}'}, 'credentials': {'httpBasicAuth': {'id': 'SEOcredDataForSE'}}}
+
+
+def paid_multi(node):
+    """True when this node is a paid (DataForSEO) call that may carry more than one item, so it takes the per-item pattern."""
+    return is_dfs(node) and not node.get('executeOnce') and node.get('name') not in SINGLE_ITEM
+
+
+def paid_weak(node):
+    """The reason a paid multi-item node breaks the N3 rule, or ''."""
+    if not paid_multi(node):
+        return ''
+    if node.get('retryOnFail'):
+        return ('node-level retry on a paid node that can carry several items: n8n re-sends EVERY item (re-billing the answered ones) '
+                'when the first item fails -- drop retryOnFail and let the in-200 gate re-send the failed items only, or name it in '
+                'retry_lint.SINGLE_ITEM with the reason it carries one item')
+    if node.get('onError') not in CONTINUE:
+        return 'onError %r: a failed request must become an { error } item the in-200 gate can re-send' % node.get('onError', 'stop')
+    return ''
+
+
+def apply_paid_rule(nodes):
+    """N3: puts the per-item pattern on every paid multi-item node (no node-level retry). Returns the names changed. check() runs it
+    before it lints, so every builder -- and dfs_gate.splice's byte copy of the call -- ends on the rule without each one knowing it."""
+    changed = []
+    for n in nodes:
+        if n.get('type') == HTTP_TYPE and paid_multi(n) and n.get('retryOnFail'):
+            n['retryOnFail'] = False
+            n.pop('maxTries', None)
+            n.pop('waitBetweenTries', None)
+            changed.append(n['name'])
+    return changed
+
+
 def weak(node):
     """The reason this node breaks the rule, or '' when it keeps it."""
+    if paid_multi(node):
+        return paid_weak(node)
     if not node.get('retryOnFail'):
         return 'no retryOnFail'
     tries, wait = node.get('maxTries'), node.get('waitBetweenTries')
@@ -220,9 +295,9 @@ def weak(node):
 def apply_rule(nodes):
     """Puts the rule on every node it applies to. Returns the names changed (the builders set it in their HTTP helpers;
     this is for the nodes inherited from the v3 export, which carry n8n's defaults)."""
-    changed = []
+    changed = apply_paid_rule(nodes)
     for n in nodes:
-        if needs(n) and weak(n):
+        if needs(n) and not paid_multi(n) and weak(n):
             n.update(RETRY)
             changed.append(n['name'])
     return changed
@@ -235,8 +310,9 @@ def findings(nodes, where):
             continue
         why = weak(n)
         if why:
-            out.append('%s / %s: %s -- give it retry_lint.RETRY (3 tries, 5 s apart) or name it in retry_lint.ALLOW with the reason'
-                       % (where, n['name'], why))
+            out.append(('%s / %s: %s' % (where, n['name'], why)) if paid_multi(n) else
+                       ('%s / %s: %s -- give it retry_lint.RETRY (3 tries, 5 s apart) or name it in retry_lint.ALLOW with the reason'
+                        % (where, n['name'], why)))
     return out
 
 
@@ -256,10 +332,21 @@ def record(where, nodes):
     data['selftest'] = {'flags_node_without_retry': bool(findings([{'type': HTTP_TYPE, 'name': 'Lint Self Test'}], 'self test')),
                         'flags_weaker_retry': bool(findings([{'type': HTTP_TYPE, 'name': 'Lint Self Test', 'retryOnFail': True, 'maxTries': 2, 'waitBetweenTries': 3000}], 'self test')),
                         'honours_allow_list': not findings([{'type': HTTP_TYPE, 'name': sorted(ALLOW)[0]}], 'self test'),
-                        'ignores_other_nodes': not findings([{'type': 'n8n-nodes-base.code', 'name': 'Lint Self Test'}], 'self test')}
+                        'ignores_other_nodes': not findings([{'type': 'n8n-nodes-base.code', 'name': 'Lint Self Test'}], 'self test'),
+                        # N3: a paid multi-item node with node-level retry fails; the per-item pattern passes; one item by construction may retry
+                        'flags_paid_multi_with_retry': bool(findings([dict(_PAID_PROBE, **RETRY)], 'self test')),
+                        'flags_paid_multi_that_stops': bool(findings([dict(_PAID_PROBE, onError='stopWorkflow')], 'self test')),
+                        'passes_paid_per_item': not findings([dict(_PAID_PROBE)], 'self test'),
+                        'passes_paid_execute_once': not findings([dict(_PAID_PROBE, executeOnce=True, **RETRY)], 'self test'),
+                        'passes_paid_single_item': not findings([dict(_PAID_PROBE, name='SERP Top 10', **RETRY)], 'self test'),
+                        'apply_strips_paid_retry': apply_paid_rule([dict(_PAID_PROBE, **RETRY)]) == ['Lint Paid Probe'],
+                        'single_item_reasons': all(len(v) > 20 for v in SINGLE_ITEM.values())}
     wfs = data.setdefault('workflows', {})
     wfs[where] = [{'name': n['name'], 'retryOnFail': bool(n.get('retryOnFail')), 'maxTries': n.get('maxTries'),
-                   'waitBetweenTries': n.get('waitBetweenTries'), 'allowed': n['name'] in ALLOW} for n in nodes if n.get('type') == HTTP_TYPE]
+                   'waitBetweenTries': n.get('waitBetweenTries'), 'allowed': n['name'] in ALLOW,
+                   'paid': is_dfs(n), 'per_item': paid_multi(n), 'onError': n.get('onError', 'stop'),
+                   'timeout': ((n.get('parameters') or {}).get('options') or {}).get('timeout')} for n in nodes if n.get('type') == HTTP_TYPE]
+    data['single_item'] = SINGLE_ITEM
     if where in GATES: data.setdefault('ai_gate', {})[where] = GATES[where]
     os.makedirs(os.path.dirname(_WIRING), exist_ok=True)
     json.dump(data, open(_WIRING, 'w'), indent=1, sort_keys=True)
@@ -273,6 +360,7 @@ def check(workflow, where=None):
     else:
         nodes = list(workflow)
         where = where or 'nodes'
+    apply_paid_rule(nodes)   # N3: a paid multi-item call is retried per item by its gate, never as a whole node
     bad = findings(nodes, where)
     assert not bad, 'G1 retry lint: %d external HTTP node(s) without the retry rule\n  ' % len(bad) + '\n  '.join(bad)
     record(where, nodes)

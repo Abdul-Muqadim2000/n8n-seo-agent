@@ -1,4 +1,5 @@
 /*__REACH__*/
+/*__LADDER_DUP__*/
 /*__RADIUS__*/
 /*__FIT_GATE__*/
 /*__PAGE_TYPE__*/
@@ -86,15 +87,13 @@ const pile_up = (() => {
 // Now the head and every rung keyword are compared with every keyword of the site's other ladders by two rules: the same words once a word
 // family is folded (consultant / consulting / consultancy are one word, company / companies, service / services ...), and, where both
 // searches have a results page read today (the shared reading this run compared, Ladder Clusters), 3 or more of their top 7 pages in common.
-const FAMILY_LP = [[/^consult/, 'consult'], [/^compan/, 'company'], [/^agenc/, 'agency'], [/^servic/, 'service'], [/^provid/, 'provider'], [/^firm/, 'firm'],
-  [/^solution/, 'solution'], [/^develop/, 'develop'], [/^automat/, 'automat'], [/^implement/, 'implement'], [/^integrat/, 'integrat'], [/^special/, 'special']];
-const famTokensLP = (s) => [...new Set(overlapTokens(s).map(t => { for (const [re, f] of FAMILY_LP) if (re.test(t)) return f; return t; }))];
+// the word families and the words rule live in v5/code/_ladder_dup.js (LDUP), shared with Ladder Duplicate (Words) (N2)
 const urlsTodayLP = (() => { try { const c = $('Ladder Clusters').first().json.serp_clusters || {}; return { of: c.urls_of || {}, top: Number(c.top_n) || 7 }; } catch (e) { return { of: {}, top: 7 }; } })();
 // -> null | { by: 'words' | 'results', shared?, of? }
 const sameSearchLP = (a, b) => {
   const ka = String(a || '').toLowerCase().trim(), kb = String(b || '').toLowerCase().trim();
   if (!ka || !kb) return null;
-  if (ka === kb || overlapScore(famTokensLP(ka), famTokensLP(kb)) >= 0.75) return { by: 'words' };
+  if (LDUP.sameWords(ka, kb)) return { by: 'words' };   // N2: one words rule, the one Ladder Duplicate (Words) refuses on before any paid call
   const ua = urlsTodayLP.of[ka], ub = urlsTodayLP.of[kb];
   if (Array.isArray(ua) && Array.isArray(ub) && ua.length && ub.length) {
     const top = Math.min(7, urlsTodayLP.top || 7); const sb = new Set(ub.slice(0, top)); const shared = ua.slice(0, top).filter(u => sb.has(u)).length;
@@ -886,7 +885,7 @@ if (SERP_CL && SERP_CL.note) notes.push(SERP_CL.note
 // B2-5: the destination's results page, and the stated effect on the score
 if (serp_diversity.checked) notes.push(serp_diversity.text);
 if (head_radius) notes.push('Topic radius for "' + head_radius.topic + '": ' + RAD.line(head_radius) + '.');
-if (poolRefused.length) notes.push(poolRefused.length + ' keyword(s) were left out of the ladder because they are other companies\' brands, government or portal searches, or navigational: ' + poolRefused.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ')').join(', ') + (poolRefused.length > 6 ? ' and ' + (poolRefused.length - 6) + ' more' : '') + '.');
+if (poolRefused.length) notes.push(poolRefused.length + ' keyword(s) were left out of the ladder, each with its reason (another company\'s brand, a government or portal search, a navigational search or a job search): ' + poolRefused.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ')').join(', ') + (poolRefused.length > 6 ? ' and ' + (poolRefused.length - 6) + ' more' : '') + '.');
 if (planned && plan_type === 'full' && rungPages.length && pages_total < 8) notes.push('Only ' + pages_total + ' pages could be planned from the data: the topic is narrow in ' + base.country + '. The ladder is shorter but still valid.');
 if (planned && plan_type === 'full' && rungPages.length) for (const r of rungs) if (!r.pages.length) notes.push('No keywords fell into rung ' + r.rung + '; the ladder skips it.');
 if (planned && plan_type === 'direct' && rungPages.length < 2) notes.push('Only ' + rungPages.length + ' supporting page(s) could be planned around the main keyword; add more as the site grows.');
@@ -909,7 +908,9 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   domain, country: base.country, goal: base.goal || 'leads', feasibility, rungs, top, folded, link_map, timeline, write_now, pages_now: pagesNow,
   later: later.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, ...(k.held_back ? { held_back: true } : {}) })), requirements, stats, notes,
   plan_type, difficulty_for_you, reach, months: planned ? plan.months : '', months_range: planned ? plan.months_range : null, stretch: planned && plan.stretch, planned, refusal, order: order_text,
-  label: planned ? reachLabel(difficulty_for_you, plan) : (dataRefused || (refusal && refusal.reason === 'career')) ? ('No ladder planned · ' + refusal.short) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
+  // N6: a duplicate read "Reachable for your site · no ladder" beside a winnable verdict; it says why no ladder was planned
+  label: planned ? reachLabel(difficulty_for_you, plan) : (dataRefused || (refusal && refusal.reason === 'career')) ? ('No ladder planned · ' + refusal.short)
+    : (refusal && refusal.reason === 'duplicate') ? ('No ladder planned · the same search as your ladder "' + (refusal.head || refusal.their_keyword || '') + '"') : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
   chance: planned ? plan.chance : null, chance_text: planned ? reachChanceText(plan) : '', base_rate: REACH_BASE_RATE, refused_keywords: poolRefused.slice(0, 40),
   reach_info: { reach: reachInfo.reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },   // B2-1: the SITE-wide measurement; `reach` above is what this topic was measured against
   pile_up,   // R42
