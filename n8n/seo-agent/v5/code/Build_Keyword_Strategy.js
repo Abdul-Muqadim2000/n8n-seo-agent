@@ -2,6 +2,7 @@
 /*__SERP_OBS__*/
 /*__LINEAGE__*/
 /*__KW_INPUTS__*/
+/*__FIT_GATE__*/
 // Final keyword strategy: merges AI search demand and the live SERP checks into the ranked keyword set and renders the
 // "Keyword Strategy" report. Also exposes keyword_suggestions for the downstream file/email/content steps.
 // v4.8: with a website the report shows each keyword's difficulty for this site and plan ("Easy for your site · Direct plan · 2-4 months");
@@ -40,6 +41,12 @@ const normD = (d) => String(d || '').toLowerCase().replace(/^www\./, '');
 const serpErr = (s) => { s = s || {}; const t = (Array.isArray(s.tasks) ? s.tasks[0] : null) || {};
   return (s.error || Number(s.status_code) >= 40000 || !Array.isArray(s.tasks) || Number(t.status_code) >= 40000) ? String((s.error && (s.error.message || s.error)) || t.status_message || s.status_message || 'no answer').slice(0, 120) : ''; };
 const liveFailures = [];
+// E-GATE (2026-10-21, pre-launch run RV-11): "ai consultant" was labelled commercial, "buyers comparing providers" and Easy while its live results
+// page was a job board and a certification course and the questions people also ask were about salary and becoming one. Each live check is now
+// read for that (fitCareer in _fit_gate.js: the top 10 with their titles, the questions, and the research pool around the keyword, the kept
+// keywords and the ones the gate refused as job searches); a career search says so in its reason and goes to the end of the list.
+const careerRelated = [...(ks.keywords || []).map(k => k && k.keyword), ...(ks.refused || []).map(r => r && r.keyword)].filter(Boolean);
+const careerTopics = [...((ks.service_fit || {}).declared_services || []), ...(base.services || []), ...(base.seeds || [])].map(x => String(x || '').trim()).filter(Boolean);
 const liveUrlsBy = new Map();   // G8 / K7: the full top 10 of every keyword this run checked live
 prio.forEach((p, i) => {
   const err = serpErr(serps[i]);
@@ -56,6 +63,9 @@ prio.forEach((p, i) => {
   k.live = { top_domains: [...new Set(organic.map(o => normD(o.domain)).filter(Boolean))].slice(0, 5), your_position: mine ? mine.rank_group : null, checked_at: serpSeenAt(serps[i]),
     page_types: KWI.serpPageTypes(organic.filter(o => !(Number(o.rank_group) > 10)).map(o => ({ url: o.url, title: o.title })), { page_type: k.page_type }),
     features: [...new Set(items.map(x => x.type))].filter(t => t !== 'organic'), ai_overview: items.some(x => x.type === 'ai_overview'), paa: (items.find(x => x.type === 'people_also_ask') || { items: [] }).items.slice(0, 4).map(q => q.title || q.question).filter(Boolean) };
+  const car = fitCareer(k.keyword, { pages: organic.filter(o => !(Number(o.rank_group) > 10)).map(o => ({ domain: o.domain, url: o.url, title: o.title })),
+    paa: items.filter(x => x.type === 'people_also_ask').flatMap(x => (x.items || []).map(q => q.title || q.question)).filter(Boolean), related: careerRelated, topics: careerTopics });
+  if (car.career) k.career = { detail: car.detail, signals: car.signals, points: car.points };
 });
 if (liveFailures.length) ks.research_failures = [...(ks.research_failures || []), ...liveFailures];
 // ---- G8 / K7 (2026-10-13): the SERP-overlap clusters, recomputed with the live checks' full top 10 ----
@@ -90,7 +100,8 @@ const why = (k) => {
   if (k.service_fit === 'in') bits.push('it is part of what you sell');   // F-REH: the client's own services first, in the words of the card
   if (k.kd != null && k.kd < 30) bits.push('low competition');
   if (k.cpc != null && k.cpc >= 5) bits.push('high commercial value (CPC ' + cpcTxt(k.cpc) + ')');
-  if (k.intent === 'transactional') bits.push('buyers ready to act');
+  if (k.career) bits.push(k.career.detail + ', so a page for it would bring few buyers');   // E-GATE RV-11: the results page outranks the provider's intent label
+  else if (k.intent === 'transactional') bits.push('buyers ready to act');
   else if (k.intent === 'commercial') bits.push('buyers comparing providers');
   else bits.push('research-stage traffic that builds authority');
   if (k.competitors_in_top20) bits.push(k.competitors_in_top20 + ' competitor(s) already rank for it');
@@ -106,6 +117,13 @@ const why = (k) => {
   return bits.join('; ') + '.';
 };
 ks.priority.forEach(k => { k.why = why(k); });
+// E-GATE RV-11: a career search is kept (it is real data) but never leads: it goes to the end of the list, and it is never the keyword to start with
+const careerKws = ks.priority.filter(k => k.career).map(k => k.keyword);
+if (careerKws.length) ks.priority = [...ks.priority.filter(k => !k.career), ...ks.priority.filter(k => k.career)];
+if (careerKws.length && ks.pipeline_keyword && careerKws.includes(ks.pipeline_keyword.keyword)) {
+  const was = ks.pipeline_keyword.keyword; const alt = ks.priority.find(k => !k.career && k.service_fit !== 'out' && !k.covered_by) || null;
+  ks.pipeline_keyword = alt ? { ...alt, career_note: '"' + was + '" was the first pick, but people searching it are mostly looking for work or training, so "' + alt.keyword + '" is the one to start with' } : null;
+}
 // v4.8: the live position upgrades the label (already top 20 = easy; a top-20 position also shortens the months)
 const RR = ks.reach || null;
 // B1-1: the upgrade keeps the reach the keyword was really measured against (its topic's, where there was one), so a live top-20

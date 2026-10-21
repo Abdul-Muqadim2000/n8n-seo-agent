@@ -259,7 +259,16 @@ const verdict = base.verdict || 'GO_WITH_CHANGES';
 // D8: the main keyword through the same gate, with its own results page in hand (one domain whose label is in the keyword holding 3+ of the
 // top 5 = a brand query); the head term itself is not a protected word here
 const headSerp = (base.competitors_summary || []).slice().sort((a, b) => (Number(a.rank) || 99) - (Number(b.rank) || 99)).map(c => String(c.domain || '')).filter(Boolean);
-const headGate = fitGate(head, { ...fitCtxP, intent: kd.google_intent || '', serp: headSerp, protect: fitCtxP.protect.slice(1) });
+// E-GATE (2026-10-21, pre-launch run RV-11): the job-search rule read the keyword's own words only, so "ai consultant" (results: a job board,
+// a certification course; its pool: "ai consultant jobs", "... salary", "... jobs remote") became a ladder head while those rungs were refused.
+// The head is now read with the evidence this run holds: the pages the verdict read, the questions people also ask, and the research pool
+// around it (the keywords kept and the ones the pool refused).
+const headCareer = { pages: (base.competitors_summary || []).filter(c => c && !(Number(c.rank) > 10)).map(c => ({ domain: String(c.domain || ''), url: String(c.url || ''), title: String(c.title || '') })),
+  paa: ((base.serp_features || {}).people_also_ask) || [],
+  related: [...((pool.research || {}).candidates || []).map(k => k && k.keyword), ...((pool.research || {}).refused || []).map(k => k && k.keyword)].filter(Boolean),
+  topics: fitCtxP.protect.slice(1) };
+const headGate = fitGate(head, { ...fitCtxP, intent: kd.google_intent || '', serp: headSerp, protect: fitCtxP.protect.slice(1), career: headCareer });
+const careerHead = !headGate.ok && headGate.reason === 'job search';
 const other_brand = !headGate.ok && headGate.reason === 'other brand';
 const navigational = /navigational/i.test(String(kd.google_intent || '')) || (base.verdict_reasons || []).some(r => /navigational|brand (term|name|search)|another company/i.test(String(r))) || (!headGate.ok && ['navigational', 'own brand', 'government', 'portal'].includes(headGate.reason));
 const difficulty_for_you = difficultyForYou(kd.keyword_difficulty ?? null, reach, { navigational, other_brand, verdict, position: headRank ? headRank.position : null });
@@ -298,7 +307,9 @@ Object.assign(top, { exists: !!headExisting, target_url: headExisting ? headExis
 const status = difficulty_for_you === 'not_realistic' ? 'unrealistic' : difficulty_for_you === 'very_hard' ? 'stretch' : 'winnable';
 const altPool = [...(base.verdict_changes || []).filter(s => /["“”]/.test(String(s))), ...(base.secondary_keywords || [])].slice(0, 4);
 const altPages = [...rungs[2].pages, ...rungs[1].pages, ...rungs[0].pages].map(p => p.keyword);
-const alternatives = status === 'winnable' ? [] : (altPool.length ? altPool : altPages.slice(0, 3));
+let alternatives = status === 'winnable' ? [] : (altPool.length ? altPool : altPages.slice(0, 3));
+// E-GATE (RV-11): a career head gets buyer searches from its own pool as alternatives (each already passed the gate)
+if (careerHead) alternatives = altPages.slice(0, 3);
 
 // ---- R23: the data a plan rests on. A ladder is scored, written and published on the strength of this run's research and of the
 //      live results page; when either is missing the honest answer is "I could not check this", not a plan with a score on it.
@@ -318,6 +329,10 @@ let refusal = null;
 if (dupHead) refusal = { reason: 'duplicate', ladder_id: dupHead.ladder_id, head: dupHead.head,
   message: 'This website already has a keyword ladder for "' + dupHead.head + '" (' + dupHead.ladder_id + '). One search needs one page, so no second ladder was planned: continue that ladder instead.' };
 else if (plan.plan_type === 'none') refusal = { reason: 'not_realistic', message: '"' + head + '" is not a realistic main keyword for ' + domain + ' (' + (other_brand ? 'it is another company\'s brand: ' + headGate.detail : navigational ? 'people searching it look for one particular website or brand' + (!headGate.ok ? ': ' + headGate.detail : '') : 'the verdict is AVOID') + '). No ladder pages were planned; pick one of the alternatives as the main keyword instead.' };
+else if (careerHead) refusal = { reason: 'career', short: 'people search it to find work or training', detail: headGate.detail,
+  message: '"' + head + '" is not a good main keyword for ' + domain + '. People searching it are mostly looking for work or training, not for a provider ('
+    + ((headGate.career || {}).signals || []).join('; ') + '). A page written for it would compete with job boards and courses for people who are not buyers, so no ladder pages were planned'
+    + (alternatives.length ? '. Pick a search buyers make as the main keyword instead, for example "' + alternatives.join('", "') + '".' : '. Pick a search buyers make as the main keyword instead (for example the service with "services", "company" or your city in it).') };
 else if (serpOut) {
   // F-SERP (2026-10-20, real-credit rehearsal execs 23 / 31): the client's own keyword came back NOT_CHECKED twice in a row because
   // DataForSEO's scraper answered 40101 "Internal SE Server Error." to the heavy request. The message the client reads says what
@@ -704,7 +719,7 @@ const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: re
 // (v5/code/_radius.js; the same kit draws discovery's radius, so the two never disagree). It is shown, not enforced: a plan the owner
 // approved is never changed by it.
 const topic_radius = RAD.of({ reach, reach_method: reachInfo.method, domain,
-  services: [...(base.services || []), ...((sdP.products_or_services) || [])], site_topics: [head, ...(base.secondary_keywords || []).slice(0, 8)],
+  services: [...(base.services || []), ...((sdP.products_or_services) || [])], site_topics: [head],   // E-GATE RV-20: the verdict's own secondary keywords are not the client's topics (they were quoted back as evidence)
   pages: invPages.map(p => ({ url: p.url, title: p.title || '' })),
   topics: [{ topic: top.topic || head, primary_keyword: head, kd: top.kd, volume: top.volume, keyword_count: 1 + (top.supporting || []).length, your_position: top.your_position, keywords: (top.supporting || []).map(k => ({ keyword: k })) },
     ...rungPages.map(p => ({ topic: p.topic || p.keyword, primary_keyword: p.keyword, kd: p.kd, volume: p.total_volume, keyword_count: (p.keywords || []).length, your_position: p.your_position, keywords: p.keywords }))] });
@@ -746,7 +761,7 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   domain, country: base.country, goal: base.goal || 'leads', feasibility, rungs, top, folded, link_map, timeline, write_now, pages_now: pagesNow,
   later: later.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, ...(k.held_back ? { held_back: true } : {}) })), requirements, stats, notes,
   plan_type, difficulty_for_you, reach, months: planned ? plan.months : '', months_range: planned ? plan.months_range : null, stretch: planned && plan.stretch, planned, refusal, order: order_text,
-  label: planned ? reachLabel(difficulty_for_you, plan) : dataRefused ? ('No ladder planned · ' + refusal.short) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
+  label: planned ? reachLabel(difficulty_for_you, plan) : (dataRefused || (refusal && refusal.reason === 'career')) ? ('No ladder planned · ' + refusal.short) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
   chance: planned ? plan.chance : null, chance_text: planned ? reachChanceText(plan) : '', base_rate: REACH_BASE_RATE, refused_keywords: poolRefused.slice(0, 40),
   reach_info: { reach: reachInfo.reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },   // B2-1: the SITE-wide measurement; `reach` above is what this topic was measured against
   pile_up,   // R42
