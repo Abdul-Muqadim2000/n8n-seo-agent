@@ -50,7 +50,14 @@ async function kitPath(H, site, cases) {
 // the ranked-keywords row DataForSEO Labs returns, as FG1 builds it
 const rankedRow = (k, v) => ({ se_type: 'google', keyword_data: { keyword: k, keyword_info: { search_volume: v, cpc: 2.5, competition_level: 'HIGH' }, keyword_properties: { keyword_difficulty: 12 }, search_intent_info: { main_intent: '' } },
   ranked_serp_element: { serp_item: { type: 'organic', rank_group: 4, rank_absolute: 4, url: 'https://rival.example/p', etv: 10 } } });
+// KW-GATE (2026-10-21): the node lists a bounded number of kept keywords, so with more cases kept than it lists a kept case was "not
+// reached"; the cases go through in chunks small enough that every kept keyword is listed
 async function fullPath(H, site, cases) {
+  const out = [];
+  for (let i = 0; i < cases.length; i += 25) out.push(...await fullChunk(H, site, cases.slice(i, i + 25)));
+  return out;
+}
+async function fullChunk(H, site, cases) {
   const V = require('../fixtures_v5');
   const rivals = (site.serp_domains || []).length ? site.serp_domains : ['rivalco.com'];
   H.mock('Competitor Analysis', { domain: site.own_domain, competitors: site.competitors || [], business: site.business, services: site.services, extra_findings: [], extra_works: [] });

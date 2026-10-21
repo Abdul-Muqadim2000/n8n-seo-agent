@@ -143,7 +143,8 @@ module.exports = async (ctx) => {
     console.log('   priority ->', J(P.map(k => [k.keyword, !!k.career, String(k.why || '').slice(0, 120)])), '| start with ->', J(K.pipeline_keyword && K.pipeline_keyword.keyword));
     check('"ai consultant" is marked a career search and its reason says so, never "buyers comparing providers"', !!a.career && /mostly looking for work or training/.test(a.why) && !/buyers comparing providers/.test(a.why) && /ae\.indeed\.com/.test(a.why) && !NO_TELLS.test(a.why), J(a.why));
     check('the buyer searches keep their label ("buyers comparing providers")', P.filter(k => k.keyword !== 'ai consultant').every(k => !k.career && /buyers comparing providers/.test(k.why)), J(P.map(k => [k.keyword, k.why])));
-    check('it goes to the end of the priority list and is not the keyword to start with', P[P.length - 1].keyword === 'ai consultant' && K.pipeline_keyword && K.pipeline_keyword.keyword !== 'ai consultant'
+    // KW-GATE (review 12): the replacement must be one of the client's services (fit "in"); here every other keyword is "unknown", so there is none
+    check('it goes to the end of the priority list and is not the keyword to start with', P[P.length - 1].keyword === 'ai consultant' && (!K.pipeline_keyword || K.pipeline_keyword.keyword !== 'ai consultant')
       && (out.keyword_suggestions.recommended[0] || {}).keyword !== 'ai consultant', J({ order: P.map(k => k.keyword), start: K.pipeline_keyword && K.pipeline_keyword.keyword, rec0: (out.keyword_suggestions.recommended[0] || {}).keyword }));
   });
 

@@ -139,11 +139,14 @@ const existing = (() => {
 })();
 const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\n,;]+/) : [])).map(x => String(x == null ? '' : x).toLowerCase().replace(/["“”]/g, '').replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2 && x.length <= 100);
 const need = difficulty_for_you === 'not_realistic' || fit === 0;
-let alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
+// KW-GATE (review 16): every alternative goes through the same gate, WITHOUT the asked keyword's own results page and career evidence: those
+// pages describe the asked search, not the alternative (a government results page for "vat registration uae" must not refuse "vat consultant uae")
+const ctxAlt = { ...gateCtxA, career: null, serp: [] };
+let alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => fitGate(x, ctxAlt).ok && !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
 // E-SERP: a career search is offered BUYER searches only - the model's and the results page's own related searches, each through the same gate
 // (no job, pay or course words), with a buyer word for the related ones; none at hand = none offered, never the job searches back
 if (careerA) {
-  const ctxNoCareer = { ...gateCtxA, career: null };
+  const ctxNoCareer = ctxAlt;
   const buyerOk = (k) => { const t = ' ' + String(k).toLowerCase() + ' '; return fitGate(k, ctxNoCareer).ok && !FIT_JOB_KW.test(t) && !FIT_COURSE_KW.test(t) && !keywordsOverlap(k, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, k)); };
   const relBuyer = listOf(serpA.related || []).filter(k => FIT_BUYER_KW.test(' ' + k + ' '));
   alternatives = [...new Set([...alternatives, ...relBuyer])].filter(buyerOk).slice(0, 3);
