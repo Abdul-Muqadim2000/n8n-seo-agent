@@ -118,7 +118,7 @@ export default function AdminCompaniesPage() {
           initialSort={{ key: 'cost', dir: 'desc' }}
           pageSize={25}
           searchable
-          searchPlaceholder="Search companies..."
+          searchPlaceholder="Search companies"
           searchText={(r) => `${r.name} ${r.slug} ${r.kind}`}
           onRowClick={(r) => navigate(withPeriod(adminPaths.company(r.id), period))}
           toolbar={

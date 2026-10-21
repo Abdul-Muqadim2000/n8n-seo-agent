@@ -398,7 +398,7 @@ function OptOutCard() {
         ) : q.isError ? (
           <ErrorState error={q.error} onRetry={() => void q.refetch()} title="Could not load the opt-out list" />
         ) : (
-          <DataTable rows={q.data} columns={cols} rowKey={(r) => r.id} dense searchable={q.data.length > 10} searchPlaceholder="Search the list..." initialSort={{ key: 'createdAt', dir: 'desc' }} empty="Nobody has opted out yet." />
+          <DataTable rows={q.data} columns={cols} rowKey={(r) => r.id} dense searchable={q.data.length > 10} searchPlaceholder="Search the list" initialSort={{ key: 'createdAt', dir: 'desc' }} empty="Nobody has opted out yet." />
         )}
       </CardBody>
     </SettingsCard>

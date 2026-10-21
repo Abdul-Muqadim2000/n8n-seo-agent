@@ -44,15 +44,15 @@ export function ReadyToSend({ d, onRun }: { d: LinkBuildingData; onRun?: () => v
       {live.length ? (
         <>
           <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {live.slice(0, SHOWN).map((x) => (
-              <DraftCard key={`${x.prospectDomain}|${x.type}`} x={x} d={d} onOpen={() => setOpen(x)} />
+            {live.slice(0, SHOWN).map((x, i) => (
+              <DraftCard key={`${x.prospectDomain}|${x.type}|${i}`} x={x} d={d} onOpen={() => setOpen(x)} />
             ))}
           </ul>
           {live.length > SHOWN && (
             <Collapsible className="mt-3" label={`Show ${live.length - SHOWN} more`} openLabel="Show fewer" contentClassName="pt-3">
               <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {live.slice(SHOWN).map((x) => (
-                  <DraftCard key={`${x.prospectDomain}|${x.type}`} x={x} d={d} onOpen={() => setOpen(x)} />
+                {live.slice(SHOWN).map((x, i) => (
+                  <DraftCard key={`${x.prospectDomain}|${x.type}|${i}`} x={x} d={d} onOpen={() => setOpen(x)} />
                 ))}
               </ul>
             </Collapsible>
@@ -78,8 +78,8 @@ export function ReadyToSend({ d, onRun }: { d: LinkBuildingData; onRun?: () => v
       {notFit.length > 0 && (
         <Collapsible className="mt-3" label={`${notFit.length} ${notFit.length === 1 ? 'site' : 'sites'} checked and left out`} openLabel="Hide the sites left out" contentClassName="pt-2">
           <ul className="divide-y divide-line rounded-xl border border-line bg-surface text-[13px]">
-            {notFit.map((x) => (
-              <li key={`${x.prospectDomain}|${x.type}`} className="flex flex-col gap-0.5 px-4 py-2.5 sm:flex-row sm:items-baseline sm:gap-3">
+            {notFit.map((x, i) => (
+              <li key={`${x.prospectDomain}|${x.type}|${i}`} className="flex flex-col gap-0.5 px-4 py-2.5 sm:flex-row sm:items-baseline sm:gap-3">
                 <span className="shrink-0 font-medium text-ink">{x.prospectDomain}</span>
                 <span className="min-w-0 text-ink-3 [overflow-wrap:anywhere]">
                   {typeLabel(x.type)} · {x.fitReason || 'not a fit'}
@@ -186,8 +186,8 @@ function DraftCard({ x, d, onOpen }: { x: OutreachDraft; d: LinkBuildingData; on
             <span className="text-ink-2">{x.contactFormUrl ? 'No e-mail on their site: they take messages through a contact form.' : 'No address found yet.'}</span>
           ) : (
             <ul className="space-y-1">
-              {x.contacts.slice(0, 3).map((c) => (
-                <li key={c.email} className="flex flex-wrap items-center gap-1.5">
+              {x.contacts.slice(0, 3).map((c, i) => (
+                <li key={`${c.email}|${i}`} className="flex flex-wrap items-center gap-1.5">
                   <span className="break-all text-ink">{c.email}</span>
                   <Badge className="h-5 px-1.5 font-normal" icon={c.kind === 'person' ? <UserRound className="size-3" aria-hidden /> : undefined}>
                     {CONTACT_KIND[c.kind]}
@@ -349,8 +349,8 @@ function ApproveDialog({ x, d, onClose }: { x: OutreachDraft; d: LinkBuildingDat
           <Field label="To" hint={contact?.sourceUrl ? <>Found on <ExternalLink href={contact.sourceUrl}>{urlPath(contact.sourceUrl)}</ExternalLink></> : undefined}>
             {(f) => (
               <Select {...f} value={toEmail} disabled={!member} onChange={(e) => setToEmail(e.target.value)}>
-                {x.contacts.map((c) => (
-                  <option key={c.email} value={c.email}>
+                {x.contacts.map((c, i) => (
+                  <option key={`${c.email}|${i}`} value={c.email}>
                     {c.email} · {CONTACT_KIND[c.kind].toLowerCase()}
                   </option>
                 ))}

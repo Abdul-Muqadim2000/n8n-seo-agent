@@ -127,6 +127,17 @@ function kpisOf(seqs: OutreachSequence[], prospects: ProspectRow[]): LinkBuildin
   };
 }
 
+/** A filter that keeps the first item of each key (lists are sorted best first before it runs). */
+export const firstOf = <T,>(key: (x: T) => string) => {
+  const seen = new Set<string>();
+  return (x: T): boolean => {
+    const k = key(x);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  };
+};
+
 export async function linkBuildingData(org: OrgRow, site: SiteRow, role: Role): Promise<LinkBuildingData> {
   const d = site.domain;
   const [outreach, prospects, listings, impact, mbs, seqs, supp] = await Promise.all([
@@ -143,7 +154,9 @@ export async function linkBuildingData(org: OrgRow, site: SiteRow, role: Role): 
         pageUrl: s(r.page_url), pageTitle: s(r.page_title), evidence: s(r.evidence), contacts, contactFormUrl: s(r.contact_form_url), country: s(r.country), language: s(r.language), targetUrl: s(r.target_url), targetReason: s(r.target_reason),
         anchorHint: s(r.anchor_hint), steps: stepsOf(r), deadline: s(r.deadline), draftedAt: s(r.drafted_at), checkedAt: s(r.checked_at), deadLink: ck.dead?.url ? { url: s(ck.dead.url), anchor: s(ck.dead.anchor) } : null,
         consent: consentGate(s(r.country), contacts[0]?.email ?? '') }; })
-    .sort((a, b) => ({ drafted: 0, ready: 1, needs_contact: 2, not_fit: 3 }[a.status] ?? 4) - ({ drafted: 0, ready: 1, needs_contact: 2, not_fit: 3 }[b.status] ?? 4) || b.score * (0.5 + b.fit) - a.score * (0.5 + a.fit));
+    .sort((a, b) => ({ drafted: 0, ready: 1, needs_contact: 2, not_fit: 3 }[a.status] ?? 4) - ({ drafted: 0, ready: 1, needs_contact: 2, not_fit: 3 }[b.status] ?? 4) || b.score * (0.5 + b.fit) - a.score * (0.5 + a.fit))
+    // B8 (pre-launch run 2026-10-21): the page rendered two cards for one prospect and kind (a React duplicate-key error): the best one stays
+    .filter(firstOf((x) => `${x.prospectDomain}|${x.type}`));
   const mailboxes = await Promise.all(mbs.map(mailboxView));
   const active = mailboxes.find((m) => m.id === settings.mailboxId && m.status === 'active') ?? mailboxes.find((m) => m.status === 'active');
   const canSend = !mailboxes.length ? { ok: false, why: 'Connect a mailbox in company settings > Mailboxes: pitches go out from your own address.' }
@@ -157,7 +170,7 @@ export async function linkBuildingData(org: OrgRow, site: SiteRow, role: Role): 
     settings, mailboxes, drafts, sequences: seqs, kpis: kpisOf(seqs, prospects), subjectAb: subjectAbStats(seqs),
     listings: listings.map((l) => ({ id: s(l.listing_id), name: s(l.name), category: s(l.category), status: s(l.status), profileUrl: s(l.profile_url), rel: s(l.rel), competitors: s(l.competitors).split(/,\s*/).filter(Boolean), submitUrl: s(l.submit_url),
       priority: n(l.priority), why: s(l.why), checkedAt: s(l.checked_at), submittedAt: s(l.submitted_at), note: s(l.note) })).sort((a, b) => a.priority - b.priority),
-    redirects: outreach.filter((r) => s(r.type) === 'redirect').map((r) => ({ from: s(r.page_url), to: s(r.target_url), reason: s(r.target_reason) })),
+    redirects: outreach.filter((r) => s(r.type) === 'redirect').map((r) => ({ from: s(r.page_url), to: s(r.target_url), reason: s(r.target_reason) })).filter(firstOf((r) => r.from)),
     // G12 (2026-10-13): the table now holds two kinds of reading, won links and page changes. They are never mixed: a page that went
     // live is not a link. Rows written before the `kind` column exist are link readings (they all had a linking site).
     impact: impact.filter((r) => s(r.kind) !== 'page_change').map((r) => ({ refDomain: s(r.ref_domain), fromUrl: s(r.from_url), targetUrl: s(r.target_url), t0: s(r.t0), weeks: n(r.weeks), basePosition: r.base_position == null ? null : n(r.base_position), position: r.position == null ? null : n(r.position),

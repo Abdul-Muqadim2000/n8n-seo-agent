@@ -115,7 +115,7 @@ export default function AdminActivityPage() {
           initialSort={{ key: 'at', dir: 'desc' }}
           pageSize={50}
           searchable
-          searchPlaceholder="Search admin, action, target..."
+          searchPlaceholder="Search admin, action, target"
           searchText={(r) => `${r.actor} ${r.action} ${actionLabel(r.action)} ${r.target.label} ${r.target.type}`}
         />
       )}
