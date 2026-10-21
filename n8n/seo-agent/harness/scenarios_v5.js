@@ -19657,5 +19657,6 @@ await require('./scenarios_kwcomp')({ H, run, mock, store, guard, reset, begin }
 await require('./scenarios_serp_cache')({ H, run, mock, store, guard, reset, begin });   // SC1-SC5 (KW-SERP 2026-10-21, RV-12): one results-page reading per search and day, shared by the Keyword Check, the ladder head and the ladder's rung reads; deep enough or bought again; failed reads never stored
 await require('./scenarios_kwladder')({ H, run, mock, store, guard, reset, begin });   // KL1-KL3 (KW-LADDER 2026-10-21): the review's ladder items - the head read on its own results page (job boards included), buyer alternatives, one verdict with the Keyword Check, app-shell titles, 404 pages, own-host redirects only
 await require('./scenarios_kw_gate')({ H, run, mock, store, guard, reset, begin });   // KWG1-KWG7 (KW-GATE 2026-10-21): the fit gate as a design - own brand vs topic, declared categories and other vendors, Arabic read through a glossary, review items 2 3 4 5 6 8 11 12 13 14 16
+await require('./scenarios_ctdepth')({ H, run, mock, store, guard, reset, begin });   // CTD1-CTD3 (CT-DEPTH 2026-10-22, scorecard C8 / C12): the length band from the same-kind ranking pages; the live pages that should link to the new page, verified, in meta.json and the checklist
 H.report();
 })();

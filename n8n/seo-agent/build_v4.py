@@ -1736,8 +1736,8 @@ sb18['properties']['experience_notes'] = ARR; sb18['properties']['video_placemen
 sb18['properties']['outline']['items']['properties']['link_to'] = {'type': 'string'}
 set_schema('Parser — Strategy Brief', sb18)
 # length bands for the new page types (hub pages are longer, case studies and local pages shorter)
-patch('Parse Analysis', "const isGuide = /blog|guide|article/.test(pt);\nconst lo = isGuide ? 1200 : 900, hi = isGuide ? 3000 : 2400;",
-      "const isGuide = /blog|guide|article/.test(pt);\nconst isHub = /pillar|hub/.test(pt) || Number(prev.ladder_rung) === 4, isShort = /case stud|local/.test(pt);   // v4.4 page types\nconst lo = isHub ? 1800 : isShort ? 800 : isGuide ? 1200 : 900, hi = isHub ? 3500 : isShort ? 1800 : isGuide ? 3000 : 2400;")
+# C8 (2026-10-22): the hub / case-study / local length bands live in v5/code/Parse_Analysis.js now (this patch was dropped by the G33 re-read)
+assert 'isHub ? 1800 : isShort ? 800' in code('Parse Analysis'), 'Parse Analysis: the v4.4 page-type length bands are missing'
 # ---------- E. report + package fields ----------
 patch('Build Word File', "content_images: Array.isArray(brief.image_suggestions) ? brief.image_suggestions : []",
       "content_images: Array.isArray(brief.image_suggestions) ? brief.image_suggestions : [],\n    page_role: d.page_role || 'standard', article_like: d.article_like == null ? null : !!d.article_like, author: d.author || null, reviewer: d.reviewer || null, site_profile: d.site_profile || null, hub_pages: d.hub_pages || [], video: d.video || null, case_study: d.case_study || null, case_id: d.case_id || '', local_area: d.local_area || '', content_brief_video_placement: brief.video_placement || '', eeat_notes: qa.eeat_notes || [], page_type: d.page_type || ''")
@@ -12219,6 +12219,45 @@ open(os.path.join(OUT_CODE, '_serp_cache.js'), 'w').write("// harness shim (writ
 url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 log('One reading of a results page per search and day, shared by every path (KW-SERP, 2026-10-21, RV-12 / A-21): v5/code/_serp_cache.js keys a reading by keyword + location + language + device and keeps the UTC day on the value (seo_cache `serp:<keyword>|<location>|<language>|<device>`, one row per search); the verdict / ladder head (SERP Top 10), the ladder rung reads (Run Ladder Cluster SERP) and the Keyword Check use a reading made earlier today when it is deep enough (and loaded the AI Overview when the path needs it), at no cost, and store every fresh reading; a failed read is never stored; two runs missing at the same moment both pay once (accepted)')
+
+
+# =============================================================================
+# 146. LINKS TO THE NEW PAGE FROM THE SITE'S OWN LIVE PAGES, AND A LENGTH BAND FROM THE RANKING PAGES OF THE SAME KIND (CT-DEPTH,
+#      2026-10-22; scorecard 2026-10-17 §3.3 C12 / C8).
+#      * C12: Attach PDF Report -> Inbound Candidates (the site model's pages ranked by the new page's topic words, v5/code/_inbound.js)
+#        -> Check Inbound Pages? -> (yes) Fetch Inbound Pages (one plain GET per candidate, the site's own pages, free) -> Inbound Links
+#        (3-5 pages that answered 200, are not noindex and do not link to the new page yet: section, anchor, sentence) -> Blog Package
+#        (meta.json `inbound_links`, the publish checklist line; the callback carries meta). A run without a page passes straight through.
+#      * C8: Parse Analysis sets `length_band` (median + interquartile range of the same-kind ranking pages' word counts inside the page-type
+#        band; fewer than 3 such pages: the page-type band, said so); Parse Brief's guard keeps the brief inside it; the strategy brief names it.
+# =============================================================================
+INBOUND_SRC = _rd0('code/_inbound.js').rstrip('\n')
+rd146 = lambda p: rd(p).replace('/*__INBOUND__*/', INBOUND_SRC)
+_ap146 = pos('Attach PDF Report')
+_t146 = [t['node'] for t in conns['Attach PDF Report']['main'][0]]
+assert _t146 == ['Blog Package'], 'C12: Attach PDF Report wiring changed: %r' % _t146
+add_node('Inbound Candidates', 'n8n-nodes-base.code', 2, {'jsCode': rd146('code/Inbound_Candidates.js')}, [_ap146[0] + 60, _ap146[1] + 320])
+if_node('Check Inbound Pages?', "{{ !$json.skip }}", [_ap146[0] + 240, _ap146[1] + 320])
+add_node('Fetch Inbound Pages', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.15)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'timeout': 20000, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [_ap146[0] + 420, _ap146[1] + 260], {'alwaysOutputData': True, 'onError': 'continueRegularOutput', **retry_lint.RETRY})
+add_node('Inbound Links', 'n8n-nodes-base.code', 2, {'jsCode': rd146('code/Inbound_Links.js')}, [_ap146[0] + 600, _ap146[1] + 320])
+disconnect('Attach PDF Report', 'Blog Package')
+connect('Attach PDF Report', 'Inbound Candidates'); connect('Inbound Candidates', 'Check Inbound Pages?')
+connect('Check Inbound Pages?', 'Fetch Inbound Pages', 0); connect('Check Inbound Pages?', 'Inbound Links', 1)
+connect('Fetch Inbound Pages', 'Inbound Links'); connect('Inbound Links', 'Blog Package')
+for _n146 in ('Inbound Candidates', 'Inbound Links'):
+    assert 'const INB = (() => {' in code(_n146) and '/*__INBOUND__*/' not in code(_n146), _n146 + ': the inbound-link kit is not inlined'
+assert 'const SM = (() => {' in code('Inbound Candidates'), 'Inbound Candidates: the site model kit is not inlined'
+assert 'meta.inbound_links = ' in code('Blog Package'), 'C12: the blog package does not carry the inbound links'
+assert 'const length_band = ' in code('Parse Analysis') and 'analysis.length_band = length_band' in code('Parse Analysis'), 'C8: Parse Analysis sets no length band'
+assert 'const useBand = ' in code('Parse Brief'), 'C8: the brief guard does not read the length band'
+open(os.path.join(OUT_CODE, '_inbound.js'), 'w').write("// harness shim (written by build_v4.py section 146): the inbound-link kit, { fn, args } -> { r }\n" + INBOUND_SRC
+    + "\nreturn $input.all().map(i => ({ json: { r: INB[i.json.fn].apply(null, i.json.args || []) } }));\n")
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('Links to the new page from the site\'s own live pages, and a length band from the ranking pages of the same kind (CT-DEPTH, 2026-10-22; scorecard C12 / C8): Inbound Candidates ranks the site model\'s pages by the new page\'s topic words (v5/code/_inbound.js), Fetch Inbound Pages reads each candidate once (free), Inbound Links keeps 3-5 that answered 200, are not noindex and do not link to the new page yet, each with the section, a varied anchor and a sentence, and the Blog Package puts them in meta.json, the publish checklist and the callback; Parse Analysis sets length_band (median and interquartile range of the same-kind ranking pages, inside the page-type band; under 3 pages the page-type band, said so), Parse Brief keeps the brief inside it and the strategy brief names it; the hub / case-study / local bands live in the file again')
 
 
 # =============================================================================

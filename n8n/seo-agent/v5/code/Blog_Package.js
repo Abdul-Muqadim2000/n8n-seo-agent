@@ -243,6 +243,19 @@ if (CS) extra.push('Get the client\'s approval of the text' + (CS.client_public 
 if (role === 'local') extra.push('Name, address and phone must match the Google Business Profile exactly; ' + ((P && P.phone && PA.street) ? 'add the map embed' : 'fill in the [bracketed] NAP details (or complete the business profile)') + '; keep the LocalBusiness schema');
 if (V) extra.push('Keep the video embed and the transcript under it; ' + ((V.missing || []).filter(m => m !== 'transcript').length ? 'fill in the VideoObject ' + V.missing.filter(m => m !== 'transcript').join(', ') : 'the VideoObject details were read from the video page') + (V.transcript ? '' : '; paste the transcript (in YouTube Studio, under Subtitles)'));
 meta.publish_checklist.splice(meta.publish_checklist.length - 1, 0, ...extra);
+// C12 (2026-10-22): the live pages of the site that should link to this one (Inbound Links: each answered 200 today and does not link
+// here yet), with the section, the anchor and a sentence; the generic "add 2-3 links from existing pages" becomes that list.
+const INL = d.inbound_links && typeof d.inbound_links === 'object' ? d.inbound_links : null;
+if (INL) {
+  const from = String(INL.target_url || ''), to = meta.suggested_url || from;
+  const picks = (INL.picks || []).map(p => ({ ...p, sentence_md: from && to ? String(p.sentence_md || '').split('](' + from + ')').join('](' + to + ')') : p.sentence_md }));
+  meta.inbound_links = { target_url: to, picks, left_out: INL.left_out || [], checked: INL.checked || 0, enough: !!INL.enough, basis: INL.basis || '', checked_on: INL.checked_on || '' };
+  if (picks.length) {
+    const gi = meta.publish_checklist.indexOf('Keep the internal links in the article and add 2-3 links to this page from existing pages');
+    if (gi >= 0) meta.publish_checklist[gi] = 'Keep the internal links in the article';
+    meta.publish_checklist.splice(meta.publish_checklist.length - 1, 0, String(INL.checklist_line || ''));
+  }
+}
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 const doc = '<!DOCTYPE html>\n<html lang="' + esc(d.language_code || 'en') + '">\n<head>\n<meta charset="utf-8">\n<title>' + esc(title) + '</title>\n' + (description ? '<meta name="description" content="' + esc(description) + '">\n' : '') + (AU ? '<meta name="author" content="' + esc(AU.name) + '">\n' : '') + '</head>\n<body>\n' + html + '\n</body>\n</html>\n';
 // 2026-10-09: the clean article Markdown also travels as text (article_markdown): the API callback's `markdown` used to be the raw
