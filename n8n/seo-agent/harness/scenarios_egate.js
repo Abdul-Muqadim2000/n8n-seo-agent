@@ -91,12 +91,16 @@ module.exports = async (ctx) => {
     const SF = { se_results_count: 1200000, checked_at: '2026-10-21T14:10:46.000Z', people_also_ask: CAREER_PAA, related_searches: ['ai consultant salary'], forum_threads: [], featured_snippet: null,
       ai_overview: { present: true, text: '', cited_domains: [], seen_at: '2026-10-21T14:10:46.000Z' }, features_present: ['people_also_ask', 'ai_overview'], video_results: false, shopping_results: false, local_pack: false };
     const PV = { keyword: 'ai consultant', domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', goal: 'leads', email: '', callback_url: '', request_id: 'r-eg4', ladder_id: 'lad_eg4', pages_now: 1, page_type: 'Service Page', recommended_page: 'Service Page',
-      competitors: [], competitors_summary: CAREER_PAGES, serp_features: SF, business: 'Microsoft partner in Dubai for enterprises in the UAE and GCC: AI consulting and automation, Microsoft Copilot, Dynamics 365 business applications', services: SERVICES,
+      // KW-LADDER (review item 1): competitors_summary is what Pick Top 6 hands the analysis - it skips job boards, so ae.indeed.com is
+      // never in it; the job board reaches the ladder only through the head's own results page (SERP Top 10, mocked in planFor)
+      competitors: [], competitors_summary: CAREER_PAGES.filter(c => !/indeed/.test(c.domain)), serp_features: SF, business: 'Microsoft partner in Dubai for enterprises in the UAE and GCC: AI consulting and automation, Microsoft Copilot, Dynamics 365 business applications', services: SERVICES,
       site_description: { business_description: 'Microsoft partner in Dubai', products_or_services: SERVICES },
       keyword_data: { search_volume: 170, cpc: 16.2, keyword_difficulty: 0, google_intent: 'commercial', competitor_backlink_strength: { avg_referring_domains: 4 } }, verdict: 'GO_WITH_CHANGES', verdict_score: 68, verdict_reasons: ['Competition is weak.'], verdict_changes: [], verdict_risks: [], secondary_keywords: ['ai consultant dubai', 'ai consulting services'],
       site_authority: { organic_keywords: 12, top3: 0, top10: 0, est_monthly_traffic: 20 }, site_urls: ['https://' + D + '/'], expected_visits_top3: 40, time_to_rank_months: 3 };
-    const planFor = async (pv) => {
-      reset(); mock('Parse Verdict', pv);
+    const serpTop = (kw, pages, paa) => V.task({ keyword: kw, items: [...pages.map(p => ({ type: 'organic', rank_group: p.rank, rank_absolute: p.rank, domain: p.domain, url: p.url, title: p.title })),
+      ...(paa.length ? [{ type: 'people_also_ask', items: paa.map(q => ({ title: q })) }] : [])] });
+    const planFor = async (pv, serp) => {
+      reset(); mock('Parse Verdict', pv); mock('SERP Top 10', serp || serpTop(pv.keyword, CAREER_PAGES, CAREER_PAA));
       mock('Ladder Requests', [{ kind: 'suggestions', label: 'suggestions for ' + pv.keyword, body: [{ keyword: pv.keyword }] }, { kind: 'ranked', label: 'keywords ' + D + ' ranks for', domain: D, body: [{ target: D }] }]);
       mock('Load Site Cache', [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 10, method: 'size', p75: null, size_reach: 10, sample: 0, top10: 3, organic_keywords: 12, location_code: LOC }), updated_at: new Date(Date.now() - 3 * 864e5).toISOString() } }]);
       mock('Load Domain Ladders', [{ json: {} }]); mock('Load Domain Ladder Settings', [{ json: {} }]);
@@ -115,7 +119,8 @@ module.exports = async (ctx) => {
     // the same head with a buyer results page and buyer questions is planned as before
     const BUY = [{ rank: 1, domain: 'consultancy-me.com', url: 'https://www.consultancy-me.com/industry/ai', title: 'AI consulting firms in the Middle East' }, { rank: 2, domain: 'itransition.com', url: 'https://www.itransition.com/ai/consulting', title: 'AI consulting services' },
       { rank: 3, domain: 'thehackettgroup.com', url: 'https://www.thehackettgroup.com/ai-consulting/', title: 'AI consulting' }, { rank: 4, domain: 'masterofcode.com', url: 'https://masterofcode.com/ai-consulting', title: 'AI consulting company' }];
-    const { L: Lb } = await planFor({ ...PV, keyword: 'ai consulting dubai', competitors_summary: BUY, serp_features: { ...SF, people_also_ask: ['How much does AI consulting cost?', 'What does an AI consulting firm do?'] } });
+    const { L: Lb } = await planFor({ ...PV, keyword: 'ai consulting dubai', competitors_summary: BUY, serp_features: { ...SF, people_also_ask: ['How much does AI consulting cost?', 'What does an AI consulting firm do?'] } },
+      serpTop('ai consulting dubai', BUY, ['How much does AI consulting cost?', 'What does an AI consulting firm do?']));
     check('a buyer head ("ai consulting dubai", consulting firms on its results page) is still planned', Lb.planned === true && !(Lb.refusal && Lb.refusal.reason === 'career'), J({ planned: Lb.planned, refusal: Lb.refusal, label: Lb.label }));
   });
 

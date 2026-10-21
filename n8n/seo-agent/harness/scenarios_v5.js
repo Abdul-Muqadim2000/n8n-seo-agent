@@ -19648,5 +19648,6 @@ await require('./scenarios_kwmatch')({ H, run, mock, store, guard, reset, begin 
 await require('./scenarios_kwcomp')({ H, run, mock, store, guard, reset, begin });   // KC1-KC5 (KW-COMP 2026-10-21, K6 / A-24 / RV-6): one competitor rule (v5/code/_competitors.js) - kinds, overlap scoring, declared first; research, full report, ladder
 
 await require('./scenarios_serp_cache')({ H, run, mock, store, guard, reset, begin });   // SC1-SC5 (KW-SERP 2026-10-21, RV-12): one results-page reading per search and day, shared by the Keyword Check, the ladder head and the ladder's rung reads; deep enough or bought again; failed reads never stored
+await require('./scenarios_kwladder')({ H, run, mock, store, guard, reset, begin });   // KL1-KL3 (KW-LADDER 2026-10-21): the review's ladder items - the head read on its own results page (job boards included), buyer alternatives, one verdict with the Keyword Check, app-shell titles, 404 pages, own-host redirects only
 H.report();
 })();

@@ -196,8 +196,16 @@ const PAGE_TITLES = (() => { try { const t = $('Ladder Titles').first().json.pag
 const titlesRead = ((PAGE_TITLES || {}).read || []).filter(r => r && r.url && (r.title || r.h1));
 const invPages = [...(base.site_urls || []).map(u => ({ url: u, source: 'sitemap' })),
   ...((base.internal_link_candidates || []).filter(c => c && c.url && c.title).map(c => ({ url: c.url, title: c.title, source: 'sitemap' }))),
-  ...titlesRead.map(r => ({ url: r.url, title: r.title || '', h1: r.h1 || '', source: 'sitemap' }))];
+  ...titlesRead.map(r => ({ url: r.url, title: r.title || '', h1: r.h1 || '', source: 'sitemap' })),
+  // KW-LADDER (review item 10): a page the title read just saw answer 404 / 410 enters the inventory with that status, so the gone rule
+  // (SM.isGone) keeps it from being "the page to improve" (/ai-consultant answered 404 and still matched "ai consultant" by its address)
+  ...((PAGE_TITLES || {}).failed || []).filter(f => f && f.url && [404, 410].includes(Number(f.status))).map(f => ({ url: f.url, title: '', source: 'sitemap', http_status: Number(f.status), status_at: String((PAGE_TITLES || {}).read_at || '9999') }))];
 const pageModel = SM.withPages(siteModel || SM.from({ domain }, {}), invPages);
+// KW-LADDER (review item 15): an address the title read saw redirect to ANOTHER page (a retired URL sent home or elsewhere) is not a page
+// to improve: it leaves the inventory here and the plan says where it redirects
+const redirectedLP = ((PAGE_TITLES || {}).redirected || []).filter(r => r && r.url);
+if (redirectedLP.length) { const rk = new Set(redirectedLP.map(r => SM.helpers.pathOf(r.url).replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase()));
+  pageModel.pages = (pageModel.pages || []).filter(p => !rk.has(SM.helpers.pathOf(p.url).replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase())); }
 const mayOverlapLP = new Map();
 const findExisting = (keyword, yourUrl, isHead) => {
   if (yourUrl) return { url: yourUrl, source: 'ranking' };
@@ -282,14 +290,33 @@ const kd = base.keyword_data || {}; const headRank = SR.head || null;
 const verdict = base.verdict || 'GO_WITH_CHANGES';
 // D8: the main keyword through the same gate, with its own results page in hand (one domain whose label is in the keyword holding 3+ of the
 // top 5 = a brand query); the head term itself is not a protected word here
-const headSerp = (base.competitors_summary || []).slice().sort((a, b) => (Number(a.rank) || 99) - (Number(b.rank) || 99)).map(c => String(c.domain || '')).filter(Boolean);
+// KW-LADDER (review 2026-10-21 item 1): headSerp and the career evidence read competitors_summary, the pages Pick Top 6 chose for the
+// competitor analysis (job boards, course sites and social sites skipped, one page per domain, at most 6), so "ai consultant" reached the gate
+// with no indeed, bayt or glassdoor page and the brand rule (3 of the top 5) could never fire, while the Keyword Check, reading the full top 10
+// of the same results page, refused it. Both now read the head's OWN results page (SERP Top 10, its retries or today's shared reading), parsed
+// exactly as the Keyword Check parses it (Assess_Result.js): the organic top 10, the questions people also ask, the related searches.
+// competitors_summary stays the fallback when no answer of that page is in this run.
+const HEAD_SERP = (() => { for (const n of ['SERP Top 10 (Light Retry)', 'SERP Top 10 (Retry)', 'SERP Top 10']) {
+  let a = null; try { a = $(n).first().json; } catch (e) { a = null; }
+  const t = (((a || {}).tasks) || [])[0] || {}; if (Number(t.status_code) !== 20000) continue;
+  const items = ((((t.result || [])[0]) || {}).items || []).filter(Boolean);
+  const organic = items.filter(x => x.type === 'organic' && (x.url || x.domain)).sort((x, y) => (Number(x.rank_group) || 99) - (Number(y.rank_group) || 99));
+  if (!organic.length) continue;
+  return { node: n, organic,
+    pages: organic.filter(x => !(Number(x.rank_group) > 10)).slice(0, 10).map(x => ({ rank: Number(x.rank_group) || null, domain: String(x.domain || ''), url: String(x.url || ''), title: String(x.title || '') })),
+    paa: items.filter(x => x.type === 'people_also_ask').flatMap(x => (x.items || []).map(q => q && (q.title || q.question))).filter(Boolean).map(String).slice(0, 8),
+    related: items.filter(x => x.type === 'related_searches').flatMap(x => (x.items || []).map(q => typeof q === 'string' ? q : (q && (q.title || q.keyword)))).filter(Boolean).map(String).slice(0, 12) };
+} return null; })();
+const headSerp = HEAD_SERP ? HEAD_SERP.pages.map(p => String(p.domain || '')).filter(Boolean)
+  : (base.competitors_summary || []).slice().sort((a, b) => (Number(a.rank) || 99) - (Number(b.rank) || 99)).map(c => String(c.domain || '')).filter(Boolean);
 // E-GATE (2026-10-21, pre-launch run RV-11): the job-search rule read the keyword's own words only, so "ai consultant" (results: a job board,
 // a certification course; its pool: "ai consultant jobs", "... salary", "... jobs remote") became a ladder head while those rungs were refused.
 // The head is now read with the evidence this run holds: the pages the verdict read, the questions people also ask, and the research pool
 // around it (the keywords kept and the ones the pool refused).
-const headCareer = { pages: (base.competitors_summary || []).filter(c => c && !(Number(c.rank) > 10)).map(c => ({ domain: String(c.domain || ''), url: String(c.url || ''), title: String(c.title || '') })),
-  paa: ((base.serp_features || {}).people_also_ask) || [],
-  related: [...((pool.research || {}).candidates || []).map(k => k && k.keyword), ...((pool.research || {}).refused || []).map(k => k && k.keyword)].filter(Boolean),
+const headCareer = { pages: HEAD_SERP ? HEAD_SERP.pages.map(p => ({ domain: p.domain, url: p.url, title: p.title }))
+    : (base.competitors_summary || []).filter(c => c && !(Number(c.rank) > 10)).map(c => ({ domain: String(c.domain || ''), url: String(c.url || ''), title: String(c.title || '') })),
+  paa: HEAD_SERP && HEAD_SERP.paa.length ? HEAD_SERP.paa : (((base.serp_features || {}).people_also_ask) || []),
+  related: [...(HEAD_SERP ? HEAD_SERP.related : []), ...((pool.research || {}).candidates || []).map(k => k && k.keyword), ...((pool.research || {}).refused || []).map(k => k && k.keyword)].filter(Boolean),
   topics: fitCtxP.protect.slice(1) };
 const headGate = fitGate(head, { ...fitCtxP, intent: kd.google_intent || '', serp: headSerp, protect: fitCtxP.protect.slice(1), career: headCareer });
 const careerHead = !headGate.ok && headGate.reason === 'job search';
@@ -335,7 +362,11 @@ const altPool = [...(base.verdict_changes || []).filter(s => /["“”]/.test(St
 const altPages = [...rungs[2].pages, ...rungs[1].pages, ...rungs[0].pages].map(p => p.keyword);
 let alternatives = status === 'winnable' ? [] : (altPool.length ? altPool : altPages.slice(0, 3));
 // E-GATE (RV-11): a career head gets buyer searches from its own pool as alternatives (each already passed the gate)
-if (careerHead) alternatives = altPages.slice(0, 3);
+// KW-LADDER (review item 7): never the same search with a city added ("ai consultant dubai" for "ai consultant"): an alternative that carries
+// every word of the head needs a buyer word (services, company, hire, cost ...) to be a different search
+const headWordsLP = fitTokens(head).map(t => t.replace(/s$/, ''));
+const sameSearchPlus = (k) => { const t = fitTokens(k).map(w => w.replace(/s$/, '')); return headWordsLP.length > 0 && headWordsLP.every(w => t.includes(w)) && !FIT_BUYER_KW.test(' ' + String(k).toLowerCase() + ' '); };
+if (careerHead) alternatives = altPages.filter(k => !sameSearchPlus(k)).slice(0, 3);
 
 // ---- R23: the data a plan rests on. A ladder is scored, written and published on the strength of this run's research and of the
 //      live results page; when either is missing the honest answer is "I could not check this", not a plan with a score on it.
@@ -419,13 +450,9 @@ const one_page = { moved: [], left_out: [], kept: [] };
   // could be measured against it ("ai consulting", "ai consultant dubai" and "ai consulting firm" stayed pages of their own beside "ai
   // consultant"). The results page this run already bought for the main keyword (SERP Top 10 or its retries) is read here in full, at the
   // same depth and by the same URL rule as the rungs; competitors_summary stays the fallback when that answer is not in this run.
-  const serpHeadUrls = (() => { for (const n of ['SERP Top 10 (Light Retry)', 'SERP Top 10 (Retry)', 'SERP Top 10']) {
-    let a = null; try { a = $(n).first().json; } catch (e) { a = null; }
-    const t = (((a || {}).tasks) || [])[0] || {}; if (Number(t.status_code) !== 20000) continue;
-    const items = ((((t.result || [])[0]) || {}).items || []).filter(x => x && x.type === 'organic' && (x.url || x.domain))
-      .sort((x, y) => (Number(x.rank_group) || 99) - (Number(y.rank_group) || 99));
-    const u = [...new Set(items.map(x => KWI.urlKey(x.url || x.domain)).filter(Boolean))].slice(0, depthK);
-    if (u.length >= KWI.CFG.min_urls) return u; } return null; })();
+  const serpHeadUrls = (() => { if (!HEAD_SERP) return null;   // KW-LADDER: the one reading of the head's page (HEAD_SERP, above)
+    const u = [...new Set(HEAD_SERP.organic.map(x => KWI.urlKey(x.url || x.domain)).filter(Boolean))].slice(0, depthK);
+    return u.length >= KWI.CFG.min_urls ? u : null; })();
   const headUrls = serpHeadUrls || (base.competitors_summary || []).filter(c => c && Number(c.rank) >= 1 && Number(c.rank) <= depthK)
     .sort((a, b) => Number(a.rank) - Number(b.rank)).map(c => KWI.urlKey(c.url || c.domain)).filter(Boolean);
   const headRead = headUrls.length >= KWI.CFG.min_urls;
@@ -673,7 +700,7 @@ const allPlanned = planned ? [...rungPages, top] : [];
 const nImprove = allPlanned.filter(p => p.exists).length, nNew = allPlanned.length - nImprove;
 const bestPos = topic_authority.best;
 topic_authority.coverage = { pages_on_site: pagesOnTopic.length, pages: pagesOnTopic.slice(0, 8), ranked_keywords: topic_authority.on_topic, title_gap: titleGapL, folded,
-  titles_read: PAGE_TITLES ? { asked: PAGE_TITLES.asked, read: titlesRead.slice(0, 8), failed: (PAGE_TITLES.failed || []).slice(0, 8), skip_reason: PAGE_TITLES.skip_reason || '' } : null,
+  titles_read: PAGE_TITLES ? { asked: PAGE_TITLES.asked, read: titlesRead.slice(0, 8), failed: (PAGE_TITLES.failed || []).slice(0, 8), redirected: (PAGE_TITLES.redirected || []).slice(0, 8), skip_reason: PAGE_TITLES.skip_reason || '' } : null,
   top10_keywords: topic_authority.top10, best_position: bestPos ? bestPos.position : null, best_keyword: bestPos ? bestPos.keyword : '',
   planned_total: allPlanned.length, planned_improve: nImprove, planned_new: nNew,
   summary: !planned ? 'No pages were planned, so there is nothing to compare with what the site already has.'
@@ -795,10 +822,13 @@ notes.push(topic_authority.note);
 if (planned) notes.push(topic_authority.coverage.summary);
 if (planned) for (const f of folded) notes.push(f.note + '.');   // R34
 // D7: what was read live for this plan, and what could not be
+const goneLP = ((PAGE_TITLES || {}).failed || []).filter(f => f && [404, 410].includes(Number(f.status))), failedLP = ((PAGE_TITLES || {}).failed || []).filter(f => f && ![404, 410].includes(Number(f.status)));
 if (planned && PAGE_TITLES && PAGE_TITLES.asked) notes.push('Pages read for this plan: ' + PAGE_TITLES.untitled + ' page(s) of the site had no title on file yet, so the '
   + PAGE_TITLES.asked + ' whose address could overlap these keywords were read now: '
   + titlesRead.slice(0, 8).map(r => r.url + ' ("' + String(r.title || r.h1).slice(0, 80) + '")').join(', ')
-  + ((PAGE_TITLES.failed || []).length ? (titlesRead.length ? '; ' : '') + PAGE_TITLES.failed.length + ' could not be read (' + PAGE_TITLES.failed.slice(0, 3).map(f => f.url + ': ' + f.reason).join(', ') + ') and were judged by their address only' : '')
+  + (failedLP.length ? (titlesRead.length ? '; ' : '') + failedLP.length + ' could not be read (' + failedLP.slice(0, 3).map(f => f.url + ': ' + f.reason).join(', ') + ') and were judged by their address only' : '')
+  + (goneLP.length ? '; ' + goneLP.length + ' no longer exist (they answer ' + [...new Set(goneLP.map(f => f.status))].join(' or ') + ': ' + goneLP.slice(0, 3).map(f => f.url).join(', ') + '), so none of them is a page to improve' : '')
+  + (redirectedLP.length ? '; ' + redirectedLP.length + ' redirect to another address (' + redirectedLP.slice(0, 3).map(r => r.url + ' to ' + r.to).join(', ') + '), so the old address is not a page to improve' : '')
   + '. A page that answers a search in this plan is improved, never given a second page.');
 // B2-4: what Google itself said about which of these searches want the same page, what it cost, and what could not be compared
 if (SERP_CL && SERP_CL.note) notes.push(SERP_CL.note
