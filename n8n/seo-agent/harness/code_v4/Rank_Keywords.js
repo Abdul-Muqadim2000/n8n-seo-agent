@@ -244,13 +244,53 @@ function difficultyForYou(kd, reach, o) {
 // only when that evidence is as strong as the site-wide measurement demands (REACH_CFG.min_top10 keywords in the top 10 with a difficulty).
 // Below that bar the site-wide reach stays and the caller is told WHY, so no plan quietly rests on a number measured on other topics. There
 // is no third direction: absence of on-topic wins is not evidence of inability, so it never invents a penalty of its own.
-const REACH_TOPIC_CFG = { max_examples: 6, max_other: 4 };
+const REACH_TOPIC_CFG = { max_examples: 6, max_other: 4, min_sample: REACH_CFG.min_top10, max_position: 20 };
 // the default on-topic test: half of the head's meaningful words (the shape `_radius.js` RAD.headFit uses; the ladder passes that kit in)
 const reachTopicMatch = (head) => { const h = overlapTokens(head); const need = Math.max(1, Math.ceil(h.length / 2));
   return (kw) => { if (!h.length) return false; const t = overlapTokens(kw); return t.filter(x => h.includes(x)).length >= need; }; };
+// ---- K1 (2026-10-21, KW-MATCH): the topic sample also comes from the site's OWN readings ----
+// On 2026-10-17 and again on 2026-10-21 (r04, "ai consultant") every plan was measured against one site-wide reach of 10 ("method size,
+// sample 0"): the ranked-keyword pull holds nothing for a small site, so reachTopic never had evidence. The site's own Search Console
+// queries (seo_pages, position <= 20) and the rank tracker's readings are that evidence, free. A caller passes them as `gsc` / `tracked`
+// with `kdOf(keyword)` (the difficulty the run already holds for that keyword); a row counts for this topic when it carries the topic's
+// distinctive words (generic and place words left out), and only rows with a known difficulty enter the sample. Below
+// REACH_TOPIC_CFG.min_sample the site-wide reach stays and the note says so, with the sample size.
+const REACH_TOPIC_GENERIC = new Set(['consulting', 'consultant', 'consultancy', 'service', 'services', 'company', 'companies', 'agency', 'firm', 'provider', 'providers', 'solution', 'solutions',
+  'expert', 'experts', 'specialist', 'partner', 'partners', 'best', 'top', 'near', 'me', 'cost', 'price', 'pricing', 'uae', 'dubai', 'abu', 'dhabi', 'sharjah', 'ajman', 'gcc', 'emirates',
+  'saudi', 'arabia', 'ksa', 'riyadh', 'qatar', 'doha', 'oman', 'bahrain', 'kuwait', 'middle', 'east']);
+const reachTopicCore = (head) => overlapTokens(String(head || '').toLowerCase().split(/[^a-z0-9]+/).filter(t => !REACH_TOPIC_GENERIC.has(t)).join(' '));
+const reachTopicDistinct = (head) => { const h = reachTopicCore(head); const need = h.length <= 2 ? h.length : Math.ceil(h.length * 0.6);
+  return (kw) => { if (!h.length) return false; const t = overlapTokens(kw); return t.filter(x => h.includes(x)).length >= need; }; };
+function reachTopicOwn(head, o, site, who) {
+  const opts = o || {}; const min = Number(opts.min_sample) > 0 ? Number(opts.min_sample) : REACH_TOPIC_CFG.min_sample;
+  const on = reachTopicDistinct(head); const kdOf = typeof opts.kdOf === 'function' ? opts.kdOf : () => null;
+  const rows = new Map();
+  const add = (kw, position, kd, source) => { const k = String(kw || '').toLowerCase().trim(); const p = reachNum(position); if (!k || p == null || p < 1 || p > REACH_TOPIC_CFG.max_position || (source !== 'ranked' && !on(k))) return;
+    const d = reachNum(kd) != null ? reachNum(kd) : reachNum(kdOf(k)); const old = rows.get(k);
+    if (!old || p < old.position) rows.set(k, { keyword: k, position: Math.round(p * 10) / 10, kd: d != null ? d : (old ? old.kd : null), source }); else if (old.kd == null && d != null) old.kd = d; };
+  for (const r of (opts.ranked_on || [])) add(r.keyword, r.position, r.kd, 'ranked');
+  for (const r of (Array.isArray(opts.gsc) ? opts.gsc : [])) add(r && (r.query || r.keyword), r && r.position, r && r.kd, 'search_console');
+  for (const r of (Array.isArray(opts.tracked) ? opts.tracked : [])) add(r && r.keyword, r && r.position, r && r.kd, 'rank_tracker');
+  const all = [...rows.values()]; const known = all.filter(r => r.kd != null);
+  const kds = known.map(r => r.kd).sort((a, b) => a - b);
+  let p75 = null;
+  if (kds.length >= min) { const i = REACH_CFG.percentile * (kds.length - 1), lo = Math.floor(i), hi = Math.ceil(i); p75 = Math.round(kds[lo] + (kds[hi] - kds[lo]) * (i - lo)); }
+  const by = (s) => known.filter(r => r.source === s).length;
+  const sources = { search_console: by('search_console'), rank_tracker: by('rank_tracker'), ranked: by('ranked') };
+  const parts = [[sources.search_console, 'from Search Console'], [sources.rank_tracker, 'from the rank tracker'], [sources.ranked, 'from the ranking data']].filter(x => x[0]).map(x => x[0] + ' ' + x[1]);
+  const q = '"' + String(head || '') + '"';
+  const sample_text = known.length + ' of your searches about ' + q + ' rank in the top ' + REACH_TOPIC_CFG.max_position + ' with a known difficulty' + (parts.length ? ' (' + parts.join(', ') + ')' : '')
+    + (all.length > known.length ? '; ' + (all.length - known.length) + ' more rank there with no difficulty on file' : '');
+  const used = p75 != null;
+  const note = used
+    ? 'Measured on this topic: ' + sample_text + ', and 75% of them have a difficulty of ' + p75 + ' or lower, so this plan is measured against ' + p75 + ' and not against the site-wide reach of ' + site + '.'
+    : 'This plan is measured against your site-wide reach (' + site + '), because only ' + sample_text + ', and at least ' + min + ' are needed to measure a reach on one topic. Treat the months and the chance below as the optimistic case.';
+  return { used, p75, sample: known.length, min_sample: min, sources, rows: all.sort((a, b) => a.position - b.position).slice(0, REACH_TOPIC_CFG.max_examples), sample_text, note };
+}
 /**
  * ranked: [{ keyword, kd, position }] — every keyword the site ranks for that this run saw (null = the pull failed)
- * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain, reason_missing }
+ * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain, reason_missing,
+ *   gsc: [{ query, position }] / tracked: [{ keyword, position }] (K1: the site's own readings, top 20), kdOf(keyword) -> kd | null, min_sample }
  * -> { used, reach, topic_reach, site_reach, on_topic, top10, sample, best, examples, other_topics, reason, note }
  */
 function reachTopic(ranked, head, domainReach, o) {
@@ -284,8 +324,15 @@ function reachTopic(ranked, head, domainReach, o) {
       + ' or lower, so this plan is measured against ' + p75 + ' and not against the site-wide reach of ' + site + '.'
     : 'This plan is measured against your site-wide reach (' + site + '), because ' + reason + '. A reach measured on other topics'
       + (other_topics.length ? ' (' + other_topics.map(k => '"' + k + '"').join(', ') + ')' : '') + ' is weaker evidence for this one: treat the months and the chance below as the optimistic case.';
-  return { used, reach: used ? p75 : site, topic_reach: p75, site_reach: site, on_topic: on.length, top10: top10.length, sample: kds.length,
-    best: best ? { keyword: String(best.keyword), position: pos(best) } : null, examples, other_topics, reason, note, head: String(head || '') };
+  const out = { used, reach: used ? p75 : site, topic_reach: p75, site_reach: site, on_topic: on.length, top10: top10.length, sample: kds.length,
+    best: best ? { keyword: String(best.keyword), position: pos(best) } : null, examples, other_topics, reason, note, head: String(head || ''),
+    method: used ? 'topic' : 'site', min_sample: REACH_TOPIC_CFG.min_sample, sample_text: kds.length + ' of your top-10 keywords about ' + q + ' with a known difficulty' };
+  // K1: with the site's own readings (Search Console / rank tracker) the sample is read from them too, and printed
+  if (!Array.isArray(opts.gsc) && !Array.isArray(opts.tracked)) return out;
+  const own = reachTopicOwn(head, { ...opts, ranked_on: top10 }, site, who);
+  return { ...out, used: own.used, reach: own.used ? own.p75 : site, topic_reach: own.p75, sample: own.sample, min_sample: own.min_sample, sources: own.sources,
+    own_rows: own.rows, sample_text: own.sample_text, method: own.used ? 'topic' : 'site', note: own.note,
+    reason: own.used ? out.reason : 'only ' + own.sample_text + ' (at least ' + own.min_sample + ' are needed)' };
 }
 const reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };
 // `measured` (R49): reachMeasured(reach info, position); false = no chance band. Left out, the band stays (a caller with no reach info).
@@ -1082,22 +1129,116 @@ const SM = (() => {
   // "the page that answers this search", and the readers list it as a redirect to make (v5/code/_gone.js). Unknown (0) is not gone.
   const isGone = (p) => { const n = Number((p || {}).http_status) || 0; return n === 404 || n === 410; };
   const gonePages = (model) => pages(model).filter(isGone);
-  const matchPage = (model, keyword, prefer) => {   // `prefer`: a URL that wins a tie (the page Search Console itself credits for the search)
+  // ---- K8 (2026-10-21, KW-MATCH): the page that is ABOUT the search, not only the page that repeats its words ----
+  // The 75% word rule missed techand.ai's live "AI & Automation | What We Do | Tech&" (/whatwedo/ai-automation) for "ai consulting dubai"
+  // (1 of 3 words) and the ladder planned a new top page beside it; it also let "it consulting services dubai" claim an AI consulting page
+  // on "consulting services dubai" alone. Now: brand, place and generic service words ("consulting", "services", "company", "dubai") never
+  // decide a match; what is left (the search's core words) must be on the page, weighted by how rare each word is on this site (IDF: a word
+  // on every page proves nothing); the page's title / H1, address and Search Console searches are the evidence, in that order; a page whose
+  // own words belong to another service of the client is never the answer; an article is not the answer to a buying search; a gone page
+  // answers nothing. Every hit carries `confidence` (0-1), `confidence_label` and `evidence` in plain words; a weaker one is `may_overlap`
+  // (pageMatch), which callers report as "may overlap" and never as the page.
+  const GENERIC = new Set(['consulting', 'consultant', 'consultants', 'consultancy', 'consultancies', 'service', 'services', 'company', 'companies', 'agency', 'agencies',
+    'firm', 'firms', 'provider', 'providers', 'solution', 'solutions', 'expert', 'experts', 'specialist', 'specialists', 'partner', 'partners', 'professional', 'professionals',
+    'team', 'teams', 'best', 'top', 'near', 'me', 'leading', 'trusted', 'certified', 'official', 'online', 'local', 'affordable', 'cheap', 'home', 'page', 'website', 'site']);
+  const COMMERCIAL = new Set(['consulting', 'consultant', 'consultants', 'consultancy', 'service', 'services', 'company', 'companies', 'agency', 'agencies', 'firm', 'firms',
+    'provider', 'providers', 'solution', 'solutions', 'expert', 'experts', 'specialist', 'specialists', 'partner', 'partners', 'hire', 'price', 'pricing', 'cost', 'quote']);
+  const PLACES = new Set(['uae', 'gcc', 'mena', 'emirates', 'emirate', 'middle', 'east', 'saudi', 'arabia', 'ksa', 'riyadh', 'jeddah', 'dammam', 'qatar', 'doha', 'oman', 'muscat',
+    'bahrain', 'manama', 'kuwait', 'egypt', 'cairo', 'uk', 'london', 'usa', 'india', 'pakistan', 'karachi', 'lahore', 'singapore', 'europe', 'gulf', 'dxb', 'difc', 'dafza']);
+  // the kind of service a search or a page is about: "crm consulting" is not answered by a "CRM implementation" page (the words left are the same)
+  const KIND = { consulting: 'consulting', consultant: 'consulting', consultants: 'consulting', consultancy: 'consulting', advisory: 'consulting', implementation: 'implementation', implement: 'implementation',
+    migration: 'migration', integration: 'integration', support: 'support', training: 'training', course: 'training', courses: 'training', pricing: 'pricing', price: 'pricing', cost: 'pricing',
+    audit: 'audit', development: 'development', licensing: 'licensing', license: 'licensing', licence: 'licensing', jobs: 'jobs', careers: 'jobs', career: 'jobs', hosting: 'hosting', outsourcing: 'outsourcing' };
+  const kindsOf = (s) => uniq(tokensOf(norm(s)).map(t => KIND[t]).filter(Boolean));
+  const ARTICLE = /\/(?:insights|blog|blogs|news|articles|resources|posts|updates|knowledge|learn|library|stories|press|media|guides?)\/[^/]+/i;
+  const svcList = (model) => (model && Array.isArray(model.declared_services) && model.declared_services.length) ? model.declared_services : services(model);
+  // the client's own name ("Tech&", "techand"): never a topic word, unless the word also names one of its services ("ERP Partners" sells ERP)
+  const brandWords = (model) => { const m = model || {}; const label = bare(m.domain || m.canonical_host || '').split('.')[0].replace(/[^a-z0-9]/g, '');
+    const svc = new Set(svcList(m).flatMap(sv => tokensOf(norm(sv))));
+    return new Set([...(m.brand_names || []), m.business_name].flatMap(b => tokensOf(norm(b))).concat(label ? [label] : []).filter(t => t.length > 2 && !svc.has(t))); };
+  // the words that say WHAT a text is about: no stop / filler / generic / place / brand word, light stem, synonyms written out
+  const coreTerms = (s, brands) => uniq(tokensOf(norm(s)).filter(t => t.length > 1 && !STOP.has(t) && !FILLER.has(t) && !GENERIC.has(t) && !PLACES.has(t) && !EMIRATES.has(t) && !(brands && brands.has(t))).map(stem));
+  const slugText = (u) => pathOf(u).replace(/[?#].*$/, '').replace(/\.[a-z]{2,5}$/i, '').replace(/[\/_-]+/g, ' ');
+  const fieldsOf = (p, brands) => ({ title: coreTerms(S(p.title) + ' ' + S(p.h1), brands), own: coreTerms(S(p.title) + ' ' + S(p.h1) + ' ' + slugText(p.url), brands),
+    slug: coreTerms(slugText(p.url), brands), desc: coreTerms(S(p.description), brands),
+    queries: (p.queries || []).filter(q => (Number((q || {}).impressions) || 0) > 0).map(q => coreTerms(S((q || {}).query || (q || {}).keyword), brands)) });
+  // the client's services a set of core words belongs to (declared first): a service is hit when at least half its own core words are there
+  const serviceHits = (model, terms, brands) => { const set = new Set(terms); const out = [];
+    for (const sv of svcList(model)) { const st = coreTerms(sv, brands); if (!st.length) continue; const have = st.filter(t => set.has(t)).length; if (have >= Math.max(1, Math.ceil(st.length / 2))) out.push(S(sv)); }
+    return out; };
+  const MATCH_CONF = { page: 0.75, overlap: 0.4, article_cap: 0.6, high: 0.85 };
+  const confLabel = (c) => c >= MATCH_CONF.high ? 'high' : c >= MATCH_CONF.page ? 'medium' : 'low';
+  const topicMatch = (model, keyword, inv, opts) => {
+    const o = opts || {}; const brands = brandWords(model); const core = coreTerms(keyword, brands); if (!core.length) return { best: null, overlap: null, core };
+    const commercial = tokensOf(norm(keyword)).some(t => COMMERCIAL.has(t)); const kKinds = kindsOf(keyword);
+    const docs = inv.map(p => ({ p, f: fieldsOf(p, brands) }));
+    const N = docs.length || 1; const df = (t) => docs.filter(d => covers(d.f.own, t)).length;
+    const w = new Map(core.map(t => [t, Math.log((N + 1) / (df(t) + 1)) + 1]));   // IDF: a word on every page of the site weighs least
+    const W = core.reduce((a, t) => a + w.get(t), 0);
+    const kSvc = serviceHits(model, core, brands);
+    const kSvcTerms = new Set(kSvc.flatMap(sv => coreTerms(sv, brands)));
+    const ignored = uniq(tokensOf(norm(keyword)).filter(t => GENERIC.has(t) || PLACES.has(t) || EMIRATES.has(t) || brands.has(t)));
+    let best = null, overlap = null;
+    const better = (a, b) => !b || a.confidence > b.confidence + 1e-9 || (Math.abs(a.confidence - b.confidence) < 1e-9 && (a.search_queries_about > b.search_queries_about || (o.isPref && o.isPref(a.url) && !o.isPref(b.url))));
+    for (const { p, f } of docs) {
+      if (o.skip && o.skip(p)) continue;
+      const qAbout = f.queries.filter(q => core.every(t => covers(q, t)));   // its Search Console searches that carry every core word of this one
+      const field = (t) => covers(f.title, t) ? 1 : covers(f.slug, t) ? 0.9 : qAbout.length >= 2 ? 1 : f.queries.filter(q => covers(q, t)).length >= 2 ? 0.85 : qAbout.length === 1 ? 0.7 : covers(f.desc, t) ? 0.6 : 0;
+      const cov = core.reduce((a, t) => a + w.get(t) * field(t), 0) / W;
+      if (cov <= 0) continue;
+      const pSvc = serviceHits(model, f.own, brands);
+      if (kSvc.length && pSvc.length && !pSvc.some(sv => kSvc.includes(sv))) continue;   // another service of the client: never the answer, not even "may overlap"
+      // focus: how much of the page's own title is this search (or the client service it belongs to); a page about five things is a weaker answer
+      const own = f.title.length ? f.title : f.slug;
+      const focus = own.length ? own.filter(t => core.includes(t) || kSvcTerms.has(t)).length / own.length : 0;
+      let conf = cov * (0.8 + 0.2 * focus);
+      const article = ARTICLE.test(pathOf(p.url)) || isListing(p.url);
+      if (commercial && article) conf = Math.min(conf, MATCH_CONF.article_cap);   // an article about the subject is not the page that sells it
+      const pKinds = kindsOf(S(p.title) + ' ' + S(p.h1) + ' ' + slugText(p.url)); const kindClash = kKinds.length && pKinds.length && !pKinds.some(k => kKinds.includes(k));
+      if (kindClash) conf = Math.min(conf, MATCH_CONF.article_cap);   // "crm consulting" vs a "CRM implementation" page: another kind of service
+      const untitled = !S(p.title) && !S(p.h1);
+      if (untitled && qAbout.length < 2) conf = Math.min(conf, MATCH_CONF.article_cap);   // an address alone is not enough to call it the page (R34: titles not read yet)
+      conf = Math.round(conf * 100) / 100;
+      const inTitle = core.filter(t => covers(f.title, t)), inSlug = core.filter(t => !covers(f.title, t) && covers(f.slug, t));
+      const ev = [];
+      if (inTitle.length) ev.push('its title' + (S(p.title) ? ' "' + S(p.title).replace(/&amp;/g, '&') + '"' : '') + ' is about ' + inTitle.map(t => '"' + t + '"').join(' and '));
+      if (inSlug.length) ev.push('its address ' + pathOf(p.url) + ' carries ' + inSlug.map(t => '"' + t + '"').join(' and '));
+      if (qAbout.length) ev.push(qAbout.length + ' of its Search Console searches ' + (qAbout.length === 1 ? 'is' : 'are') + ' about it');
+      const shared = pSvc.find(sv => kSvc.includes(sv));
+      if (shared) ev.push('both are about your service "' + shared + '"');
+      if (commercial && article) ev.push('it is an article, not the page that sells this service');
+      if (kindClash) ev.push('it is about ' + pKinds.join(' / ') + ', the search asks for ' + kKinds.join(' / '));
+      if (untitled && qAbout.length < 2) ev.push('its title was not read yet');
+      if (!ev.length) ev.push('some of its words are about this search');
+      const hit = { url: p.url, title: p.title, source: p.source, matched_by: inTitle.length ? 'title' : inSlug.length ? 'slug' : qAbout.length ? 'query' : 'topic', score: conf, impressions: 0,
+        confidence: conf, confidence_label: confLabel(conf), search_queries_about: qAbout.length, article, pass: 'topic',
+        evidence: ev.join(', ') + (ignored.length ? ' (' + ignored.map(t => '"' + t + '"').join(', ') + ' left out as too general)' : '') };
+      if (conf + 1e-9 >= MATCH_CONF.page) { if (better(hit, best)) best = hit; }
+      else if (conf + 1e-9 >= MATCH_CONF.overlap && better(hit, overlap)) overlap = hit;
+    }
+    return { best, overlap, core };
+  };
+  // { match, may_overlap }: `match` is the page that answers the search (or null), `may_overlap` a weaker candidate to mention, never to act on
+  const pageMatch = (model, keyword, prefer) => {   // `prefer`: a URL that wins a tie (the page Search Console itself credits for the search)
     const prefKey = prefer ? bare(hostOf(prefer)) + pathOf(prefer).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase() : "";
     const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
-    const want = matchTerms(keyword); if (!want.length) return null;
+    const want = matchTerms(keyword); if (!want.length) return { match: null, may_overlap: null };
     const key = tokensOf(keyword).join(' ');
     const inv = pages(model).filter(p => !isGone(p));   // RV-1: a gone page answers nothing
+    const brands = brandWords(model); const core = coreTerms(keyword, brands);
+    const kSvc = core.length ? serviceHits(model, core, brands) : [];
+    const otherService = (p) => { if (!kSvc.length) return false; const ps = serviceHits(model, fieldsOf(p, brands).own, brands); return ps.length > 0 && !ps.some(sv => kSvc.includes(sv)); };
     const byQuery = [];
     for (const p of inv) {
       const q = (p.queries || []).find(x => tokensOf(x.query || x.keyword || x).join(' ') === key && (Number((x || {}).impressions) || 0) > 0);
-      if (q) byQuery.push({ url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 });
+      if (q) byQuery.push({ url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0,
+        confidence: 1, confidence_label: 'high', pass: 'query', evidence: 'Google already shows it for this exact search (' + (Number(q.impressions) || 0) + ' impressions in Search Console)' });
     }
     byQuery.sort((a, b) => Number(isListing(a.url)) - Number(isListing(b.url)) || b.impressions - a.impressions);
     const qHit = byQuery[0] || null;
     const listingOf = (lst, best) => ({ url: lst.url, impressions: lst.impressions,
       note: 'Google currently shows ' + pathOf(lst.url) + ' (a listing page) for this search; the page that is about it is ' + pathOf(best.url) });
-    if (qHit && !isListing(qHit.url)) { const lst = byQuery.find(x => isListing(x.url)); return lst ? { ...qHit, listing: listingOf(lst, qHit) } : qHit; }
+    if (qHit && !isListing(qHit.url)) { const lst = byQuery.find(x => isListing(x.url)); return { match: lst ? { ...qHit, listing: listingOf(lst, qHit) } : qHit, may_overlap: null }; }
     let best = null;
     for (const p of inv) {
       if (qHit && isListing(p.url)) continue;   // R56: looking for the dedicated page behind a listing's impressions
@@ -1106,11 +1247,22 @@ const SM = (() => {
       const inSlug = shareIn(want, slug);
       const inTitle = shareIn(want, title);
       const score = Math.max(inSlug, inTitle);
-      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score + 1e-9 || (Math.abs(score - best.score) < 1e-9 && isPref(p.url) && !isPref(best.url)))) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };
+      if (score + 1e-9 < MATCH_MIN) continue;
+      // K8: the 75% may be made of generic and place words only when the search's core words are on the page too ("it consulting services
+      // dubai" is not an AI consulting page), and never on a page of another service of the client
+      if (core.length && !core.every(t => covers(slug, t) || covers(title, t))) continue;
+      if (otherService(p)) continue;
+      if (!best || score > best.score + 1e-9 || (Math.abs(score - best.score) < 1e-9 && isPref(p.url) && !isPref(best.url))) { const sc = Math.round(score * 100) / 100;
+        best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: sc, impressions: 0, confidence: sc, confidence_label: confLabel(sc), pass: 'words',
+          evidence: (inSlug >= inTitle ? 'its address ' + pathOf(p.url) : 'its title "' + S(p.title).replace(/&amp;/g, '&') + '"') + ' carries ' + Math.round(score * 100) + '% of the words of the search' }; }
     }
-    if (qHit && best) return { ...best, listing: listingOf(qHit, best) };
-    return qHit || best;
+    let overlap = null;
+    if (!best) { const t = topicMatch(model, keyword, inv, { skip: (p) => !!qHit && isListing(p.url), isPref }); best = t.best; overlap = t.overlap; }
+    if (qHit && best) return { match: { ...best, listing: listingOf(qHit, best) }, may_overlap: null };
+    const match = qHit || best;
+    return { match, may_overlap: match || !overlap ? null : { ...overlap, note: 'may overlap: ' + pathOf(overlap.url) + ' touches this search (' + overlap.evidence + '), but not closely enough to call it the page for it' } };
   };
+  const matchPage = (model, keyword, prefer) => pageMatch(model, keyword, prefer).match;
   // A-22 (2026-10-17): how well ONE page of the inventory targets a search by its own words (slug or title / H1, the matchPage rule), so a
   // caller that already knows the page Google ranks can ask whether another page targets the search more closely - never to replace it
   const pageScore = (page, keyword) => { const p = page || {}; const want = matchTerms(keyword); if (!want.length || !S(p.url)) return null;
@@ -1178,9 +1330,9 @@ const SM = (() => {
     if (c.started) return { state: 'started', text: 'a page run was started for it but no page was written — it is written again' };
     return { state: 'planned', text: '' };
   };
-  return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
+  return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
     titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages,
-    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms } };
+    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
 // ---- what the keyword research is allowed to use, and what its numbers mean (2026-10-13, FIX_PLAN G8; criteria K2 / K4 / K6 / K7) ----
 // Three inputs the research was missing, all built from data the run already holds (no extra paid call):
@@ -1229,7 +1381,7 @@ const KWI = (() => {
     // plan can hold; the rest of the pool would be bought for keywords no page will ever target.
     ladder_serp_checks: 24,
     ladder_serp_max: 30,
-    serp_check_usd: 0.002       // one DataForSEO live-advanced SERP at depth 10, the same call the discovery live checks buy
+    serp_check_usd: 0.006       // one DataForSEO live-advanced SERP 30 deep with the AI Overview (measured $0.006, fa3_live), the one request shape every path sends since KW-SERP (2026-10-21); depth 10 was $0.002
   };
   const bare = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '');
   const cap = (n, lo, hi) => Math.max(lo, Math.min(hi, n));

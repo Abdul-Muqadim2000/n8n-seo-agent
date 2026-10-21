@@ -1,3 +1,167 @@
+// ---- KW-COMP (2026-10-21, K6 / A-24 / RV-6): who is a COMPETITOR, one answer for research, the ladder and the full report ----
+// Research took its competitors from ONE results page and its #2 was a job board (naukrigulf.com): 545 of 1,168 pool keywords came from
+// job and directory sites. On 2026-10-21 the set held help.ardoq.com and job boards again. The leaders (Semrush, Ahrefs) pick organic
+// competitors by keyword OVERLAP. A competitor here is a business that ranks for several of the client's in-topic keywords and sells
+// something comparable; never a job board, directory, marketplace, review site, news or media site, government or free-zone authority,
+// search engine, social network, Q&A site, the help / docs / community pages of another product, a course provider, an encyclopedia, a
+// global platform, a "top 10 companies" list, or the client itself.
+//  * CMP.kindOf(domain, url, title, snippet) -> { kind, label, by: 'host' | 'result' }: 'business' when nothing rules it out.
+//    A HOST kind (naukrigulf.com, help.ardoq.com, difc.ae) rules the whole domain out; a RESULT kind (a jobs page, a list article, a
+//    course page on an ordinary business domain) only means that one result is no evidence of competing.
+//  * CMP.select({ serps: [{ keyword, items }], declared, own_domain, n, boost }) -> { picked, excluded, too_few, serps_read, note }
+//    Scores each business by how many of the results pages the run already bought it appears in, weighted by position. With three or more
+//    pages read a business must appear on at least two ("several of your keywords"). The competitors the owner declared stay first.
+//    Nothing here buys anything.
+const CMP = (() => {
+  const S = (v) => String(v == null ? '' : v);
+  const host = (h) => S(h).toLowerCase().trim().replace(/^[a-z]+:\/\//, '').replace(/^www\d?\./, '').replace(/[\/?#:].*$/, '').replace(/\.$/, '');
+  const reg = (h) => { const x = host(h); const p = x.split('.').filter(Boolean); if (p.length <= 2) return x;
+    const sl = p.slice(-2).join('.'); return /^(co|com|org|net|gov|ac|edu|ltd|plc|sch|nic|mil|gob|gouv)\.[a-z]{2}$/.test(sl) ? p.slice(-3).join('.') : sl; };
+  const LABEL = { you: 'your own site', job: 'job board', directory: 'business directory', marketplace: 'marketplace or freelance platform',
+    review: 'review or comparison site', media: 'news or media site', gov: 'government or free-zone authority', search: 'search engine',
+    social: 'social network', qa: 'Q&A site or forum', help: 'help, docs or community pages of another product', education: 'course or education provider',
+    reference: 'encyclopedia or reference site', platform: 'global software platform', list: 'list of companies, not a seller', business: 'business', unknown: 'unreadable address' };
+  // the name, then only a public suffix (indeed.com, uk.indeed.com, indeed.ae, x.co.uk): a business's own subdomain "connect.acme.com" is not "connect"
+  const SUF = '(?:com|net|org|co|io|ai|info|biz|me|tv|ly|app|fyi|news|[a-z]{2})(?:\\.[a-z]{2})?';
+  const alt = (a) => new RegExp('(^|\\.)(' + a.join('|').replace(/\./g, '\\.') + ')\\.' + SUF + '$');
+  // host lists: the name before the public suffix, any country ending (indeed.com, indeed.ae)
+  const HOSTS = [
+    ['search', alt(['google', 'bing', 'yahoo', 'duckduckgo', 'baidu', 'yandex', 'ask', 'ecosia', 'naver', 'brave'])],
+    ['social', alt(['linkedin', 'facebook', 'instagram', 'twitter', 'x', 'tiktok', 'youtube', 'youtu', 'pinterest', 'threads', 'snapchat', 'vimeo', 'telegram', 't', 'whatsapp', 'slideshare', 'scribd'])],
+    ['qa', alt(['reddit', 'quora', 'stackoverflow', 'stackexchange', 'superuser', 'serverfault', 'answers', 'discord', 'spiceworks'])],
+    ['job', alt(['naukrigulf', 'naukri', 'indeed', 'glassdoor', 'bayt', 'monster', 'monstergulf', 'foundit', 'gulftalent', 'ziprecruiter', 'jooble', 'careerjet',
+      'simplyhired', 'wellfound', 'laimoon', 'drjobpro', 'jobsdb', 'jobstreet', 'seek', 'reed', 'totaljobs', 'careerbuilder', 'rozee', 'dubaicareers', 'gulfjobs', 'naukrigulf', 'akhtaboot', 'tanqeeb', 'wuzzuf', 'payscale', 'salary', 'levels'])],
+    ['review', alt(['g2', 'capterra', 'getapp', 'softwareadvice', 'trustradius', 'trustpilot', 'peerspot', 'softwaresuggest', 'gartner', 'sitejabber', 'saashub',
+      'alternativeto', 'producthunt', 'selecthub', 'financesonline', 'comparably', 'reviews', 'softwareworld', 'crozdesk', 'technologyadvice'])],
+    ['directory', alt(['clutch', 'themanifest', 'goodfirms', 'sortlist', 'designrush', 'techbehemoths', '2gis', 'yellowpages', 'yelp', 'crunchbase', 'dnb', 'zoominfo',
+      'kompass', 'hidubai', 'uaeyp', 'serchen', 'topdevelopers', 'itfirms', 'appfutura', 'f6s', 'owler', 'cbinsights', 'tracxn', 'pitchbook', 'dubaidirectory',
+      'uaecompanies', 'yello', 'cybo', 'tradeindia', 'europages', 'expertmarket', 'agencyspotter', 'upcity', 'bark', 'thumbtack', 'emiratesyellowpages'])],
+    ['marketplace', alt(['upwork', 'fiverr', 'freelancer', 'toptal', 'peopleperhour', 'guru', 'amazon', 'noon', 'daraz', 'ebay', 'alibaba', 'aliexpress', 'dubizzle',
+      'bayut', 'propertyfinder', 'appsource.microsoft', 'apps.shopify', 'marketplace.microsoft', 'aws.amazon', 'apps.odoo', 'play.google', 'apps.apple'])],
+    ['media', alt(['khaleejtimes', 'gulfnews', 'thenationalnews', 'thenational', 'arabianbusiness', 'zawya', 'gulfbusiness', 'emirates247', 'wam', 'bloomberg', 'reuters',
+      'forbes', 'forbesmiddleeast', 'cnbc', 'bbc', 'cnn', 'nytimes', 'theguardian', 'businessinsider', 'techcrunch', 'wired', 'zdnet', 'computerweekly', 'itp', 'economymiddleeast',
+      'wamda', 'medium', 'substack', 'entrepreneur', 'inc', 'fastcompany', 'venturebeat', 'techradar', 'theverge', 'engadget', 'mashable', 'hbr', 'techtarget', 'cio',
+      'computerworld', 'infoworld', 'analyticsinsight', 'towardsdatascience', 'kdnuggets', 'marktechpost', 'abcmoney', 'ft', 'wsj', 'economist', 'aljazeera', 'alarabiya',
+      'skynewsarabia', 'albayan', 'alkhaleej', 'emaratalyoum', 'gitex', 'menabytes', 'magnitt', 'smeadvisor', 'cxotoday', 'datacenterdynamics', 'itnewsafrica', 'tahawultech'])],
+    ['reference', alt(['wikipedia', 'wikihow', 'wikidata', 'britannica', 'investopedia', 'merriam-webster', 'dictionary', 'thefreedictionary', 'wiktionary', 'statista'])],
+    ['education', alt(['coursera', 'udemy', 'edx', 'simplilearn', 'greatlearning', 'mygreatlearning', 'upgrad', 'udacity', 'datacamp', 'skillshare', 'pluralsight',
+      'euro-training', 'usaii', 'iabac', 'knowledgehut', 'edureka', 'intellipaat', 'futurelearn', 'khanacademy', 'britishcouncil', 'emeritus', 'classcentral', 'w3schools'])],
+    // free zones and authorities of the UAE (a business sets up THROUGH them; they compete with no one), plus the region's tax portals
+    ['gov', alt(['difc', 'dmcc', 'dafz', 'jafza', 'rakez', 'ifza', 'meydanfz', 'shams', 'adgm', 'dso', 'dwtc', 'kezad', 'saif-zone', 'srtip', 'hfz', 'dic', 'dubaiinternetcity',
+      'dubaicommercity', 'fujairahfreezone', 'ajmanfreezone', 'uaqftz', 'adafz', 'twofour54', 'dubaichamber', 'abudhabichamber', 'sharjahchamber', 'ded', 'dubaided', 'tamm',
+      'u', 'zatca', 'mof', 'mohre', 'dubai', 'abudhabi', 'investindubai', 'gdrfad', 'moec', 'tdra'])],
+    ['platform', alt(['microsoft', 'dynamics', 'office', 'apple', 'oracle', 'sap', 'salesforce', 'hubspot', 'ibm', 'aws', 'azure', 'github', 'gitlab', 'atlassian', 'zoho',
+      'shopify', 'wix', 'wordpress', 'squarespace', 'adobe', 'openai', 'nvidia', 'meta', 'notion', 'odoo', 'intuit', 'quickbooks', 'xero', 'netsuite', 'workday', 'servicenow', 'cloudflare'])],
+  ];
+  const HELP_SUB = /^(help|support|docs|doc|documentation|kb|knowledge|knowledgebase|community|communities|techcommunity|academy|developer|developers|dev|learn|forum|forums|answers|faq|status|wiki|careers|jobs|training|university|partners?)\./;
+  const kindOfHost = (domainOrUrl, own) => {
+    const h = host(domainOrUrl); if (!h || !/\./.test(h)) return 'unknown';
+    const o = host(own); if (o && (h === o || h.endsWith('.' + o) || reg(h) === reg(o))) return 'you';
+    if (/(^|\.)(gov|mil|int|gob|gouv|govt|government)(\.[a-z]{2})?$/.test(h) || /\.(gov|mil)\.[a-z]{2}$/.test(h)) return 'gov';
+    if (/(^|\.)(edu|ac)\.[a-z]{2}$/.test(h) || /\.edu$/.test(h)) return 'education';
+    for (const [k, re] of HOSTS) if (re.test(h)) return k;
+    if (HELP_SUB.test(h) && h.split('.').length >= 3) return 'help';
+    const lab = reg(h).split('.')[0];
+    if (/(jobs|careers|recruit|vacanc|hiring)/.test(lab)) return 'job';
+    if (/(freezone|free-zone|freezon)/.test(lab) || /^[a-z]{2,10}fz$/.test(lab)) return 'gov';
+    if (/(news|times|magazine|herald|tribune|gazette|journal|chronicle|insider|digest|money)$/.test(lab) || /^(the)?news/.test(lab)) return 'media';
+    if (/(directory|yellowpages|listings?)$/.test(lab) || /^(top|best)(firms|companies|agencies|developers|vendors)/.test(lab)) return 'directory';
+    if (/(university|college|institute|academy|school)$/.test(lab) || /^(university|college)/.test(lab)) return 'education';
+    return 'business';
+  };
+  // what ONE result is, on an ordinary business domain: a jobs page, a list of companies, a course page (the domain may still compete elsewhere)
+  const JOB_T = /\b(jobs?|vacanc(?:y|ies)|careers?|hiring|recruit\w*|salar(?:y|ies)|job openings?)\b/i;
+  const JOB_AR = /(وظائف|وظيفة|رواتب|توظيف)/;
+  const LIST_T = /\b(?:top|best|leading)\s+(?:\d+\s+)?[\w\s&.,-]{0,50}?\b(?:companies|firms|agencies|providers|consultants|consultancies|partners|vendors|developers|integrators|implementers|tools)\b|\b\d+\s+(?:best|top|leading)\b|\blist of\b|\btop\s*\d+\b/i;
+  // the address of a list article: /rankings/..., /top-10-ai-consulting-companies, /blog/ai-companies-in-dubai (r04: consultancy-me.com, leewayhertz.com)
+  const LIST_P = /\/(?:rankings?\/|[^\/?#]*\b(?:top|best)-(?:\d+-)?[^\/?#]*(?:companies|firms|agencies|providers|consultants|consultancies|vendors|partners|developers|tools)\b|[^\/?#]*\b(?:companies|firms|agencies)-in-)/;   // not "consultants-in-dubai": that is a vendor's own service page (hlbhamt.com)
+  const LIST_AR = /(أفضل\s*\d*\s*شركات|قائمة)/;
+  const COURSE_T = /\b(course|courses|certification (?:course|program(?:me)?|exam|training)|certificate program(?:me)?|bootcamp|diploma|program fee|enrol(?:l|ment)?|syllabus|curriculum|online training)\b/i;
+  const COURSE_AR = /(دورة|دورات|شهادة معتمدة)/;
+  const kindOfResult = (url, title, snippet) => {
+    const t = S(title); const u = S(url).toLowerCase(); const p = u.replace(/^[a-z]+:\/\/[^\/]+/, '');
+    if (JOB_T.test(t) || JOB_AR.test(t) || /\/(jobs?|careers?|vacanc\w*)(\/|$|-|\?)/.test(p)) return 'job';
+    if (LIST_T.test(t) || LIST_AR.test(t) || LIST_P.test(p)) return 'list';
+    if (COURSE_T.test(t) || COURSE_AR.test(t) || /\/(courses?|certifications?|training-courses?)(\/|$|-)/.test(p)) return 'education';
+    return 'business';
+  };
+  const kindOf = (domain, url, title, snippet, own) => {
+    const hk = kindOfHost(domain || url, own);
+    if (hk !== 'business') return { kind: hk, label: LABEL[hk] || hk, by: 'host' };
+    const rk = kindOfResult(url, title, snippet);
+    return { kind: rk, label: LABEL[rk] || rk, by: rk === 'business' ? '' : 'result' };
+  };
+  const weight = (p) => { const n = Number(p) || 99; return n <= 10 ? +(1 - (n - 1) * 0.07).toFixed(2) : n <= 20 ? 0.25 : n <= 30 ? 0.1 : 0; };
+  const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[,;\n]+/)).map(host).filter(Boolean);
+  const select = (o) => {
+    o = o || {}; const own = host(o.own_domain); const n = Math.max(1, Number(o.n) || 3);
+    const serps = (Array.isArray(o.serps) ? o.serps : []).filter(s => s && Array.isArray(s.items) && s.items.some(x => x && (!x.type || x.type === 'organic')));
+    const read = serps.length;
+    const cand = new Map(); const excl = new Map();
+    serps.forEach((s, si) => {
+      const kw = S(s.keyword).trim();
+      const seenHere = new Set();
+      for (const it of s.items) {
+        if (!it || (it.type && it.type !== 'organic')) continue;
+        const h = host(it.domain || it.url); if (!h) continue;
+        const pos = Number(it.rank_group || it.rank_absolute || it.rank || it.position) || 99;
+        const k = kindOf(h, it.url, it.title, it.description || it.snippet, own);
+        const d = k.by === 'host' ? h : reg(h);
+        if (k.kind === 'you') continue;
+        if (k.kind !== 'business') {
+          const e = excl.get(d) || { domain: d, kind: k.kind, label: k.label, by: k.by, seen_in: 0, best_position: 99, example: '', kinds: {} };
+          e.best_position = Math.min(e.best_position, pos);
+          e.kinds[k.kind] = (e.kinds[k.kind] || 0) + 1;
+          if (!seenHere.has('x:' + d)) { e.seen_in++; seenHere.add('x:' + d); }
+          if (!e.example) e.example = S(it.title).replace(/\s+/g, ' ').trim().slice(0, 90) + (kw ? ' (for "' + kw + '")' : '');
+          excl.set(d, e); continue;
+        }
+        if (seenHere.has(d)) continue; seenHere.add(d);
+        const c = cand.get(d) || { domain: d, serps: 0, score: 0, best_position: 99, keywords: [] };
+        const b = typeof o.boost === 'function' ? (Number(o.boost(it, d)) || 1) : 1;
+        c.serps++; c.score = +(c.score + weight(pos) * b).toFixed(3); c.best_position = Math.min(c.best_position, pos);
+        if (kw && c.keywords.length < 6) c.keywords.push(kw + ' #' + pos);
+        cand.set(d, c);
+      }
+    });
+    // a domain with result-level exclusions AND a counting appearance is a business: its list / jobs page is not held against it
+    for (const d of cand.keys()) { const e = excl.get(d); if (e && e.by === 'result') excl.delete(d); }
+    for (const e of excl.values()) if (e.by === 'result') { const top = Object.entries(e.kinds).sort((a, b) => b[1] - a[1])[0]; e.kind = top[0]; e.label = LABEL[e.kind] || e.kind; }
+    const minSerps = read >= 3 ? 2 : 1;
+    const ev = (c) => read <= 1 ? 'ranks #' + c.best_position + (c.keywords[0] ? ' for "' + c.keywords[0].replace(/ #\d+$/, '') + '"' : '') + ' (the only results page read)'
+      : 'ranks for ' + c.serps + ' of your ' + read + ' keywords (best #' + c.best_position + ')';
+    const ranked = [...cand.values()].sort((a, b) => b.score - a.score || b.serps - a.serps || a.best_position - b.best_position || a.domain.localeCompare(b.domain));
+    const too_few = ranked.filter(c => c.serps < minSerps).map(c => ({ domain: c.domain, serps: c.serps, why: 'seen on only ' + c.serps + ' of your ' + read + ' results pages' }));
+    const fromSerps = ranked.filter(c => c.serps >= minSerps);
+    // the owner's own list first: kept unless the address itself is a job board, a directory, an authority… (said, not silently dropped)
+    const declared = []; const declaredRefused = [];
+    for (const d0 of [...new Set(listOf(o.declared))]) {
+      const hk = kindOfHost(d0, own); if (hk === 'you') continue;
+      const d = hk === 'business' || hk === 'unknown' ? reg(d0) : d0;
+      if (hk !== 'business' && hk !== 'unknown') { declaredRefused.push({ domain: d, kind: hk, label: LABEL[hk], by: 'host', seen_in: 0, example: 'you named it as a competitor, but it is a ' + LABEL[hk] }); continue; }
+      if (declared.some(x => x.domain === d)) continue;
+      const c = cand.get(d);
+      declared.push({ domain: d, source: 'declared', serps: c ? c.serps : 0, of: read, score: c ? c.score : 0, best_position: c ? c.best_position : null,
+        keywords: c ? c.keywords : [], evidence: 'declared by you as a competitor' + (c ? '; ' + ev(c) : read ? '; not seen on the ' + read + ' results page(s) read' : '') });
+    }
+    const picked = [...declared, ...fromSerps.filter(c => !declared.some(x => x.domain === c.domain))
+      .map(c => ({ domain: c.domain, source: 'results', serps: c.serps, of: read, score: c.score, best_position: c.best_position, keywords: c.keywords, evidence: ev(c) }))].slice(0, Math.max(n, declared.length));
+    const excluded = [...declaredRefused, ...[...excl.values()].sort((a, b) => b.seen_in - a.seen_in || a.best_position - b.best_position || a.domain.localeCompare(b.domain))]
+      .map(({ kinds, ...e }) => e);
+    const exText = excluded.slice(0, 6).map(e => e.domain + ' (' + e.label + ')').join(', ');
+    const note = !read
+      ? (declared.length ? 'No results page was read on this run, so only the competitor(s) you declared are used: ' + declared.map(d => d.domain).join(', ') + '.'
+        : 'No results page was read on this run and you declared no competitor, so no competitor was used.')
+      : (declared.length ? declared.length + ' competitor(s) you declared, then ' : '')
+        + (read === 1 ? (picked.length > declared.length ? 'the businesses on Google\'s results page for "' + S(serps[0].keyword) + '"' : 'no other business on Google\'s results page for "' + S(serps[0].keyword) + '"')
+          + ' (one results page only, so this is a thin read)'
+          : picked.length > declared.length ? 'the businesses that rank for the most of your ' + read + ' keywords on the results pages this run read' : 'no other business ranked often enough on the ' + read + ' results pages read')
+        + (minSerps > 1 ? '; a business must rank for at least ' + minSerps + ' of them' : '')
+        + (exText ? '. Passed over: ' + exText : '') + '.';
+    return { picked, excluded: excluded.slice(0, 20), too_few: too_few.slice(0, 10), serps_read: read, min_serps: minSerps, note };
+  };
+  return { kindOf, kindOfHost, kindOfResult, select, weight, host, reg, LABEL };
+})();
 // ---- what the keyword research is allowed to use, and what its numbers mean (2026-10-13, FIX_PLAN G8; criteria K2 / K4 / K6 / K7) ----
 // Three inputs the research was missing, all built from data the run already holds (no extra paid call):
 //   * KWI.gscSeeds()     - the site's OWN Search Console queries as discovery seeds: a query that gets impressions while no live page
@@ -45,7 +209,7 @@ const KWI = (() => {
     // plan can hold; the rest of the pool would be bought for keywords no page will ever target.
     ladder_serp_checks: 24,
     ladder_serp_max: 30,
-    serp_check_usd: 0.002       // one DataForSEO live-advanced SERP at depth 10, the same call the discovery live checks buy
+    serp_check_usd: 0.006       // one DataForSEO live-advanced SERP 30 deep with the AI Overview (measured $0.006, fa3_live), the one request shape every path sends since KW-SERP (2026-10-21); depth 10 was $0.002
   };
   const bare = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '');
   const cap = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
@@ -583,6 +747,112 @@ const RT = (() => {
   };
   return { dfs, google, check, failures, plan, merge, stats, one, chain, note, evidence, comparable, likeForLike, errText, MAX_SAMPLE_DRIFT, TRANSIENT, PERMANENT, NO_RESULTS };
 })();
+// KW-SERP / RV-12 (2026-10-21): ONE Google results-page reading per search and per day, shared by every path that reads it.
+//   On 2026-10-21 the research, the ladder and the rank tracker read three different results pages for "ai consultant" on the same day,
+// and on 2026-10-17 two runs three minutes apart said "no AI Overview" and "an AI Overview was seen". A client must get one answer, and
+// we must pay for it once. The identity of a reading is: the keyword (lower case, spaces collapsed), location_code, language_code, device
+// and the UTC day. The row in seo_cache is keyed WITHOUT the day (`serp:<keyword>|<location>|<language>|<device>`) and the day is checked
+// on the stored value, so the table holds one row per search (overwritten by the next day's read), not one row per search per day.
+//   A path asks for a reading with what it needs: a depth (how many results) and whether the AI Overview's content must be loaded. A
+// stored reading is used only when it is from today AND at least that deep AND (when asked) loaded the AI Overview; otherwise the path
+// makes its request as before and its reading replaces the stored one. A failed read (HTTP error, a task error inside an HTTP 200, no
+// result) is never stored. "No Search Results" (40102) is DataForSEO's final answer: read, and empty, so it is stored.
+//   Concurrency: two runs that miss at the same moment both pay once and the later write wins. That is accepted: it costs one extra
+// read in a rare race and both runs still read a real page. A cache hit costs nothing: the rebuilt answer carries cost 0 and a task id
+// `cache:<id of the paid task>`, so the ledger's count-once-by-task-id rule still counts the money exactly once.
+const SC = (() => {
+  const CFG = { prefix: 'serp:', kind: 'serp', title_len: 120, desc_len: 160, aio_text_len: 800, max_chars: 20000, default_depth: 100 };
+  const S = (x) => (x == null ? '' : String(x));
+  const normKw = (k) => { let s = S(k); try { s = s.normalize('NFKC'); } catch (e) {} return s.toLowerCase().replace(/\s+/g, ' ').trim(); };
+  const dayOf = (t) => { const d = t ? new Date(t) : new Date(); return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10); };
+  // DataForSEO's datetime is "2026-10-21 14:05:12 +00:00"; Date() does not read that form everywhere, so it is rewritten to ISO first
+  const isoOf = (t) => { const s = S(t).trim(); if (!s) return ''; const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:\.\d+)?\s*([+-]\d{2}):?(\d{2})$/);
+    const d = new Date(m ? m[1] + 'T' + m[2] + m[3] + ':' + m[4] : s); return isNaN(d.getTime()) ? '' : d.toISOString(); };
+  const ident = (q) => ({ keyword: normKw((q || {}).keyword), location_code: Number((q || {}).location_code) || 0,
+    language_code: S((q || {}).language_code || 'en').toLowerCase().trim() || 'en', device: S((q || {}).device || 'desktop').toLowerCase().trim() || 'desktop' });
+  const key = (q) => { const i = ident(q); return CFG.prefix + [i.keyword, i.location_code, i.language_code, i.device].join('|'); };
+  // what a request needs from a reading: its depth (DataForSEO's default is 100) and whether it asked for the AI Overview's content
+  const need = (body) => ({ depth: Number((body || {}).depth) || CFG.default_depth, aio: (body || {}).load_async_ai_overview === true });
+  const hhmm = (iso) => { const s = isoOf(iso); return s ? s.slice(11, 16) : ''; };
+  const timing = (r) => (r && r.at ? 'read earlier today at ' + hhmm(r.at) + ' UTC' : 'read earlier today');
+  const task0 = (res) => ((res && Array.isArray(res.tasks)) ? res.tasks[0] : null) || {};
+  // the one test of "this answer is a reading": no HTTP error, 20000 at the top and on the task, a result array; 40102 is read and empty
+  const status = (res) => {
+    if (!res || typeof res !== 'object' || res.error) return 'failed';
+    const t = task0(res);
+    if (Number(t.status_code) === 40102 || Number(res.status_code) === 40102) return 'empty';
+    if (Number(res.status_code) !== 20000 || Number(t.status_code) !== 20000 || !Array.isArray(t.result)) return 'failed';
+    return 'ok';
+  };
+  const cut = (s, n) => S(s).slice(0, n);
+  const ref = (r) => ({ domain: cut((r || {}).domain, 80), url: cut((r || {}).url, 240), title: cut((r || {}).title, CFG.title_len) });
+  // the compact form of one item: enough for every reader of this codebase (organic order and owners, page titles, PAA, related searches,
+  // forum threads, the featured snippet, the AI Overview and its cited sources, which features were on the page), nothing else
+  const compactItem = (x) => {
+    const t = S(x && x.type); const o = { type: t, rank_group: Number(x.rank_group) || null, rank_absolute: Number(x.rank_absolute) || null };
+    if (t === 'organic') { o.url = cut(x.url, 300); o.domain = cut(x.domain, 100); o.title = cut(x.title, CFG.title_len); o.description = cut(x.description, CFG.desc_len); return o; }
+    if (t === 'people_also_ask') { o.items = (x.items || []).slice(0, 10).map(q => ({ title: cut(q && (q.title || q.question), 200) })).filter(q => q.title); return o; }
+    if (t === 'related_searches') { o.items = (x.items || []).slice(0, 12).map(q => cut(typeof q === 'string' ? q : (q && (q.title || q.keyword)), 120)).filter(Boolean); return o; }
+    if (t === 'discussions_and_forums') { o.items = (x.items || []).slice(0, 6).map(q => ({ title: cut(q && q.title, CFG.title_len), domain: cut(q && (q.domain || q.source), 80), url: cut(q && q.url, 240) })); return o; }
+    if (t === 'featured_snippet') { o.domain = cut(x.domain, 100); o.url = cut(x.url, 300); o.title = cut(x.title, CFG.title_len); o.description = cut(x.description || x.text, 400); return o; }
+    if (t === 'ai_overview') {
+      o.asynchronous_ai_overview = x.asynchronous_ai_overview === true;
+      o.references = (x.references || []).slice(0, 12).map(ref);
+      let left = CFG.aio_text_len;
+      o.items = (x.items || []).slice(0, 8).map(y => { const tx = cut(y && (y.text || y.markdown), Math.max(0, left)); left -= tx.length;
+        return { title: cut(y && y.title, CFG.title_len), text: tx, references: ((y && y.references) || []).slice(0, 6).map(ref) }; });
+      return o;
+    }
+    if (t === 'local_pack' || t === 'map') { o.domain = cut(x.domain, 100); o.url = cut(x.url, 300); o.title = cut(x.title, CFG.title_len); return o; }
+    return o;
+  };
+  // a fresh answer -> the reading to store (null when it is not a reading: a failed read is never stored)
+  const reading = (res, body, opts) => {
+    const st = status(res); if (st === 'failed') return null;
+    const o = opts || {}; const t = task0(res); const r0 = ((t.result || [])[0]) || {};
+    const b = body || (t.data || {}); const id = ident({ ...(t.data || {}), ...b }); const nd = need(b);
+    const at = isoOf(r0.datetime) || isoOf(o.now) || new Date().toISOString();
+    const items = Array.isArray(r0.items) ? r0.items : [];
+    const out = { v: 1, ...id, day: dayOf(at), at, datetime: S(r0.datetime) || at, task_id: S(t.id), cost: Number(t.cost) || 0, depth: nd.depth, aio_loaded: nd.aio,
+      empty: st === 'empty', se_results_count: r0.se_results_count ?? null, item_types: Array.isArray(r0.item_types) ? r0.item_types.map(S) : [...new Set(items.map(x => S(x && x.type)))].filter(Boolean),
+      ai_overview_seen: items.some(x => x && x.type === 'ai_overview'), path: S(o.path),
+      items: items.filter(Boolean).map(x => compactItem(x)) };
+    // keep the stored value compact: drop the descriptions, then the titles below the top 10, then the tail, until it fits
+    let s = JSON.stringify(out);
+    const below10 = (x) => x.type === 'organic' && Number(x.rank_group) > 10;
+    if (s.length > CFG.max_chars) { out.items.forEach(x => { if (below10(x)) delete x.description; }); s = JSON.stringify(out); }
+    if (s.length > CFG.max_chars) { out.items.forEach(x => { if (below10(x)) delete x.title; }); s = JSON.stringify(out); }
+    while (s.length > CFG.max_chars && out.items.length > 10) { out.items.pop(); out.depth = Math.min(out.depth, out.items.filter(x => x.type === 'organic').length); s = JSON.stringify(out); }
+    return out;
+  };
+  // the descriptions, then the titles below the top 10 go first when the value is too long, then the tail (the depth then says so)
+  // a stored reading -> an answer in DataForSEO's own shape, so every existing reader works unchanged; it cost nothing
+  const response = (r) => ({ status_code: 20000, status_message: 'Ok.', cost: 0, tasks_count: 1, tasks_error: 0,
+    serp_cache: { hit: true, key: key(r), read_at: r.at, day: r.day, task_id: r.task_id, depth: r.depth, aio_loaded: !!r.aio_loaded, text: timing(r) },
+    tasks: [{ id: 'cache:' + S(r.task_id), status_code: r.empty ? 40102 : 20000, status_message: r.empty ? 'No Search Results.' : 'Ok.', cost: 0,
+      data: { keyword: r.keyword, location_code: r.location_code, language_code: r.language_code, device: r.device, depth: r.depth, load_async_ai_overview: !!r.aio_loaded },
+      result: r.empty ? null : [{ keyword: r.keyword, location_code: r.location_code, language_code: r.language_code, datetime: r.datetime || r.at,
+        se_results_count: r.se_results_count, item_types: r.item_types || [], items_count: (r.items || []).length, items: (r.items || []).map(x => ({ ...x })) }] }] });
+  const parse = (row) => { if (!row || typeof row !== 'object') return null; let v = row.value; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { return null; } } return v && typeof v === 'object' ? v : null; };
+  // the stored reading this request may use, or why not. `rows` are seo_cache rows (any keys; the right one is found by its key)
+  const lookup = (rows, body, opts) => {
+    const o = opts || {}; const k = key(body); const nd = need(body); const today = dayOf(o.now);
+    const row = (Array.isArray(rows) ? rows : []).find(x => x && x.key === k);
+    if (!row) return { hit: false, key: k, why: 'not read yet today' };
+    const r = parse(row);
+    if (!r) return { hit: false, key: k, why: 'stored reading unreadable' };
+    if (r.day !== today) return { hit: false, key: k, why: 'last read on ' + (r.day || 'an unknown day') };
+    if (key(r) !== k) return { hit: false, key: k, why: 'stored reading is for another search' };
+    if (!r.empty && Number(r.depth) < nd.depth) return { hit: false, key: k, why: 'read today only ' + r.depth + ' results deep, this needs ' + nd.depth };
+    if (nd.aio && !r.aio_loaded) return { hit: false, key: k, why: 'read today without the AI Overview content, which this needs' };
+    return { hit: true, key: k, reading: r, response: response(r), text: timing(r) };
+  };
+  // the seo_cache row (exact columns of CACHE_COLS) for a reading, or null
+  const row = (r, siteId) => (r ? { key: key(r), kind: CFG.kind, site_id: S(siteId), value: JSON.stringify(r), updated_at: new Date().toISOString() } : null);
+  // a fresh answer straight to its row (null when it was a cache hit or a failed read)
+  const rowFor = (res, body, siteId, opts) => { if (res && res.serp_cache && res.serp_cache.hit) return null; return row(reading(res, body, opts), siteId); };
+  return { CFG, key, ident, need, status, reading, response, lookup, row, rowFor, timing, dayOf, normKw };
+})();
 // B2-4 (2026-10-15, benchmark area 2, criterion K7): the rung candidates' results pages, read once, turned into clusters of searches
 // Google answers with the SAME pages. Keyword Insights, whose convention this is, compares the TOP 7 at a 40% threshold - "the overlap
 // setting was originally 1-10, it now runs from 1-7 because Google no longer reliably shows 10 traditional links" - which is B2-6, and
@@ -598,13 +868,29 @@ const plan0 = reqs[0] || {};
 const first = (() => { try { return $('Run Ladder Cluster SERP').all().map(i => i.json); } catch (e) { return []; } })();
 const retryItems = (() => { try { return $('Ladder Cluster Retry').all().map(i => i.json).filter(x => x && x.is_retry); } catch (e) { return []; } })();
 const retryAnswers = (() => { try { return $('Run Ladder Cluster SERP (Retry)').all().map(i => i.json); } catch (e) { return []; } })();
+// KW-SERP (RV-12, 2026-10-21): the keywords whose results page was read earlier today (by any path) were not sent; their reading is used
+// as it is, at no cost. `sent` is what went to DataForSEO, in the order of its answers; without the split node every asked keyword was sent.
+const lowQ = (q) => String((q || {}).keyword || '').toLowerCase().trim();
+const sent = (() => { try { return $('Ladder SERP Cache Split').all().map(i => i.json).filter(r => r && r.cluster_check); } catch (e) { return asked; } })();
+const sentAt = new Map(sent.map((q, i) => [lowQ(q), i]));
+const cacheRows = (() => { try { return $('Load SERP Cache (Ladder)').all().map(i => i.json).filter(r => r && r.key); } catch (e) { return []; } })();
+const hitOf = (q) => (sentAt.has(lowQ(q)) ? null : SC.lookup(cacheRows, { keyword: q.keyword, location_code: q.location_code, language_code: q.language_code || 'en', depth: 30, load_async_ai_overview: true }));
 
 const out = { available: false, asked: asked.filter(r => !r.supporting_check).length, supporting_asked: asked.filter(r => r.supporting_check).length, compared: 0, failed: 0, retried: retryItems.length, retry_answered: 0,
   cap: plan0.cap ?? KWI.CFG.ladder_serp_checks, cap_basis: plan0.cap_basis || '', candidates: plan0.candidates || 0, on_topic: plan0.on_topic || 0,
   left_uncompared: plan0.left_uncompared || 0, price_usd: KWI.CFG.serp_check_usd, cost_usd: 0, cost_basis: '', top_n: 7, min_overlap_pct: 40,
-  min_shared_urls: 3, clusters: [], of_keyword: {}, not_compared: [], skip_reason: String(plan0.skip_reason || ''), note: '' };
+  min_shared_urls: 3, clusters: [], of_keyword: {}, not_compared: [], skip_reason: String(plan0.skip_reason || ''), note: '', read_today: 0, read_today_note: '' };
 
+// KW-COMP (2026-10-21, RV-6): who this ladder competes with, from the results pages the run already bought (the main keyword's own page
+// and every rung keyword's page read below): a business that ranks on several of them, weighted by position, the declared ones first;
+// job boards, directories, authorities, help subdomains and the rest are passed over with their kind (CMP). Nothing new is bought.
+const cmpSerps = [];
+const headSerp = (pool.competitors_summary || []).filter(c => c && (c.domain || c.url)).map(c => ({ type: 'organic', domain: c.domain, url: c.url, title: c.title, description: c.snippet, rank_group: Number(c.rank) || null }));
+if (headSerp.length) cmpSerps.push({ keyword: String(pool.keyword || ''), items: headSerp });
+const ladderCompetitors = () => { const r = CMP.select({ serps: cmpSerps, declared: pool.competitors || ((pool.site_model || {}).competitors) || [], own_domain: pool.domain, n: 5 });
+  return { picked: r.picked, excluded: r.excluded.slice(0, 12), too_few: r.too_few.slice(0, 5), serps_read: r.serps_read, min_serps: r.min_serps, note: r.note }; };
 if (!asked.length) {
+  out.competitors = ladderCompetitors();
   out.cost_basis = 'no results page was bought on this run, so nothing was spent on comparing the rungs';
   out.note = out.skip_reason ? 'The rung keywords were not compared on their results pages: ' + out.skip_reason + '.' : '';
   return [{ json: { ...pool, serp_clusters: out } }];
@@ -628,9 +914,12 @@ for (const a of [...first, ...retryAnswers]) {
 }
 out.cost_usd = +spent.toFixed(4);
 out.tasks = seen.size + noId;
+const hits = asked.map(q => hitOf(q)).filter(h => h && h.hit);
+out.read_today = hits.length;
+out.read_today_note = hits.length ? hits.length + ' results page(s) were ' + hits[0].text + ' and used again at no cost' : '';
 out.cost_basis = 'measured: ' + out.tasks + ' results-page call(s) at what each task reported, counted once by task id'
   + (noId ? ' (' + noId + ' with no task id of their own)' : '') + '; the cap for this run was ' + out.cap + ' keyword(s)'
-  + (out.cap_basis ? ' - ' + out.cap_basis : '') + '.';
+  + (out.cap_basis ? ' - ' + out.cap_basis : '') + (out.read_today ? '; ' + out.read_today_note : '') + '.';
 
 const organicItems = (res) => { try {
   const items = ((((res || {}).tasks || [])[0] || {}).result || [])[0].items || [];
@@ -644,8 +933,9 @@ const entries = [];
 const supportingEntries = []; out.supporting_not_compared = [];
 // F-A1 / A-11: what KIND of page Google ranks for each rung keyword, from the titles and addresses this call already bought (KWI.serpPageTypes)
 out.types_of = {}; out.titles_of = {};
-asked.forEach((q, i) => {
-  const a = answers[i];
+asked.forEach((q) => {
+  const h = hitOf(q); const i = sentAt.has(lowQ(q)) ? sentAt.get(lowQ(q)) : -1;
+  const a = h && h.hit ? h.response : (i >= 0 ? answers[i] : undefined);
   const v = RT.check(a, {});
   const miss = { push: (x) => { if (q.supporting_check) out.supporting_not_compared.push(x); else out.not_compared.push(x); } };
   if (!v.ok) { miss.push({ keyword: q.keyword, reason: v.why || 'no answer', retried: retryItems.some(r => Number(r.retry_of) === i) }); return; }
@@ -655,8 +945,10 @@ asked.forEach((q, i) => {
   out.types_of[String(q.keyword).toLowerCase()] = (({ read, dominant, dominant_count, dominant_share, counts }) => ({ read, dominant, dominant_count, dominant_share, counts }))(KWI.serpPageTypes(its.slice(0, out.top_n).map(x => ({ url: x.url || x.domain, title: x.title || '' })), {}));
   out.titles_of[String(q.keyword).toLowerCase()] = its.slice(0, 4).map(x => String(x.title || '').replace(/\s+/g, ' ').trim().slice(0, 90)).filter(Boolean);
   (q.supporting_check ? supportingEntries : entries).push({ keyword: q.keyword, urls, weight: Number(q.weight) || 0, volume: q.volume });
+  if (String(q.keyword || '').toLowerCase() !== String(pool.keyword || '').toLowerCase()) cmpSerps.push({ keyword: q.keyword, items: its });
 });
 out.compared = entries.length;
+out.competitors = ladderCompetitors();
 out.supporting_compared = supportingEntries.length;
 
 const overlap = KWI.serpClusters(entries, { top_n: out.top_n, min_overlap: out.min_overlap_pct / 100 });

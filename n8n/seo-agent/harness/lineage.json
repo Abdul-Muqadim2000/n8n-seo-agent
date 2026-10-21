@@ -13,8 +13,8 @@
    "subject": 17
   },
   "refusal": {
-   "pass": 20,
-   "subject": 37
+   "pass": 22,
+   "subject": 39
   },
   "withheld": {
    "pass": 4,
@@ -185,7 +185,7 @@
     "kit": true,
     "travels": true
    },
-   "markup": 95,
+   "markup": 98,
    "node": "Build Ladder Report",
    "subject": [
     "lineage"
@@ -381,6 +381,16 @@
    "markup": 0,
    "node": "Render Diff Targets",
    "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / SERP With Cache (Research)": {
+   "fails": [],
+   "markup": 0,
+   "node": "SERP With Cache (Research)",
+   "refusal": true,
    "subject": [
     "refusal"
    ],
@@ -659,6 +669,16 @@
     "lineage"
    ],
    "workflow": "SEO Agent \u2014 Link Builder"
+  },
+  "SEO Agent \u2014 Rank Tracker / SERP With Cache (Tracker)": {
+   "fails": [],
+   "markup": 0,
+   "node": "SERP With Cache (Tracker)",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 Rank Tracker"
   },
   "SEO Agent \u2014 Rank Tracker / Tracker Report": {
    "fails": [],

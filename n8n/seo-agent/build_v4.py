@@ -11906,7 +11906,7 @@ log('Pages that are gone, one message everywhere (2026-10-21, pre-launch run on 
 # <<< 143 (E-DEAD)
 # >>> 144 (KW-COMP)
 # =============================================================================
-# 144. ONE ANSWER TO "WHO IS A COMPETITOR" (2026-10-21, agent KW-COMP; K6 / A-24 of 10-17, RV-6 / RV-14 of the pre-launch run). Research took
+# 144b. ONE ANSWER TO "WHO IS A COMPETITOR" (2026-10-21, agent KW-COMP; K6 / A-24 of 10-17, RV-6 / RV-14 of the pre-launch run). Research took
 #      its competitors from one results page (a job board at #2: 545 of 1,168 pool keywords from job and directory sites); the full report
 #      named help.ardoq.com. v5/code/_competitors.js (CMP) classifies a domain from its host and the result (job board, directory,
 #      marketplace, review, media, government / free zone, search engine, social, Q&A, help / docs subdomain, education, reference,

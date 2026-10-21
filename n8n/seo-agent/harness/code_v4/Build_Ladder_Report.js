@@ -225,11 +225,11 @@ const CC = (() => {
     content: 0.04,            // 0.0221 (exec 521) — was 0.08
     verdict: 0.04,            // 0.0221 (exec 486) — was 0.06
     report: 0.04,             // 0.0221 (exec 519)
-    discover: 0.34,           // 0.2552 (exec 518) — was 0.15, below the money
-    ladder: 0.21,             // 0.1162 (exec 495) + 24 results-page calls at $0.002 = 0.1642 — was 0.16 before B2-4 (2026-10-15)
+    discover: 0.40,           // 0.2552 (exec 518) + 16 live checks now 30 deep with the AI Overview (+$0.004 each, KW-SERP 2026-10-21) = 0.3192 — was 0.34
+    ladder: 0.31,             // 0.1162 (exec 495) + 24 results-page calls at $0.006 (30 deep + AI Overview, KW-SERP 2026-10-21) = 0.2602 — was 0.21
     ai_visibility: 0.95,      // 0.7946 (exec 526) — was 0.60, below the money
     backlinks: 0.5,           // 0.3727 (execs 528 / 529)
-    assess: 0.034,            // 0.0254 per check (execs 487-489, $0.0761 for three) — was 0.024, below the money
+    assess: 0.04,             // 0.0254 per check (execs 487-489) + its results page 30 deep with the AI Overview ($0.006, KW-SERP 2026-10-21) = 0.0314 — was 0.034
   };
   const ALPHA = 0.3;          // how fast the rolling figure follows the last settle
   const HEADROOM = 1.25;      // the guard reserves a quarter more than the rolling figure
@@ -806,13 +806,53 @@ function difficultyForYou(kd, reach, o) {
 // only when that evidence is as strong as the site-wide measurement demands (REACH_CFG.min_top10 keywords in the top 10 with a difficulty).
 // Below that bar the site-wide reach stays and the caller is told WHY, so no plan quietly rests on a number measured on other topics. There
 // is no third direction: absence of on-topic wins is not evidence of inability, so it never invents a penalty of its own.
-const REACH_TOPIC_CFG = { max_examples: 6, max_other: 4 };
+const REACH_TOPIC_CFG = { max_examples: 6, max_other: 4, min_sample: REACH_CFG.min_top10, max_position: 20 };
 // the default on-topic test: half of the head's meaningful words (the shape `_radius.js` RAD.headFit uses; the ladder passes that kit in)
 const reachTopicMatch = (head) => { const h = overlapTokens(head); const need = Math.max(1, Math.ceil(h.length / 2));
   return (kw) => { if (!h.length) return false; const t = overlapTokens(kw); return t.filter(x => h.includes(x)).length >= need; }; };
+// ---- K1 (2026-10-21, KW-MATCH): the topic sample also comes from the site's OWN readings ----
+// On 2026-10-17 and again on 2026-10-21 (r04, "ai consultant") every plan was measured against one site-wide reach of 10 ("method size,
+// sample 0"): the ranked-keyword pull holds nothing for a small site, so reachTopic never had evidence. The site's own Search Console
+// queries (seo_pages, position <= 20) and the rank tracker's readings are that evidence, free. A caller passes them as `gsc` / `tracked`
+// with `kdOf(keyword)` (the difficulty the run already holds for that keyword); a row counts for this topic when it carries the topic's
+// distinctive words (generic and place words left out), and only rows with a known difficulty enter the sample. Below
+// REACH_TOPIC_CFG.min_sample the site-wide reach stays and the note says so, with the sample size.
+const REACH_TOPIC_GENERIC = new Set(['consulting', 'consultant', 'consultancy', 'service', 'services', 'company', 'companies', 'agency', 'firm', 'provider', 'providers', 'solution', 'solutions',
+  'expert', 'experts', 'specialist', 'partner', 'partners', 'best', 'top', 'near', 'me', 'cost', 'price', 'pricing', 'uae', 'dubai', 'abu', 'dhabi', 'sharjah', 'ajman', 'gcc', 'emirates',
+  'saudi', 'arabia', 'ksa', 'riyadh', 'qatar', 'doha', 'oman', 'bahrain', 'kuwait', 'middle', 'east']);
+const reachTopicCore = (head) => overlapTokens(String(head || '').toLowerCase().split(/[^a-z0-9]+/).filter(t => !REACH_TOPIC_GENERIC.has(t)).join(' '));
+const reachTopicDistinct = (head) => { const h = reachTopicCore(head); const need = h.length <= 2 ? h.length : Math.ceil(h.length * 0.6);
+  return (kw) => { if (!h.length) return false; const t = overlapTokens(kw); return t.filter(x => h.includes(x)).length >= need; }; };
+function reachTopicOwn(head, o, site, who) {
+  const opts = o || {}; const min = Number(opts.min_sample) > 0 ? Number(opts.min_sample) : REACH_TOPIC_CFG.min_sample;
+  const on = reachTopicDistinct(head); const kdOf = typeof opts.kdOf === 'function' ? opts.kdOf : () => null;
+  const rows = new Map();
+  const add = (kw, position, kd, source) => { const k = String(kw || '').toLowerCase().trim(); const p = reachNum(position); if (!k || p == null || p < 1 || p > REACH_TOPIC_CFG.max_position || (source !== 'ranked' && !on(k))) return;
+    const d = reachNum(kd) != null ? reachNum(kd) : reachNum(kdOf(k)); const old = rows.get(k);
+    if (!old || p < old.position) rows.set(k, { keyword: k, position: Math.round(p * 10) / 10, kd: d != null ? d : (old ? old.kd : null), source }); else if (old.kd == null && d != null) old.kd = d; };
+  for (const r of (opts.ranked_on || [])) add(r.keyword, r.position, r.kd, 'ranked');
+  for (const r of (Array.isArray(opts.gsc) ? opts.gsc : [])) add(r && (r.query || r.keyword), r && r.position, r && r.kd, 'search_console');
+  for (const r of (Array.isArray(opts.tracked) ? opts.tracked : [])) add(r && r.keyword, r && r.position, r && r.kd, 'rank_tracker');
+  const all = [...rows.values()]; const known = all.filter(r => r.kd != null);
+  const kds = known.map(r => r.kd).sort((a, b) => a - b);
+  let p75 = null;
+  if (kds.length >= min) { const i = REACH_CFG.percentile * (kds.length - 1), lo = Math.floor(i), hi = Math.ceil(i); p75 = Math.round(kds[lo] + (kds[hi] - kds[lo]) * (i - lo)); }
+  const by = (s) => known.filter(r => r.source === s).length;
+  const sources = { search_console: by('search_console'), rank_tracker: by('rank_tracker'), ranked: by('ranked') };
+  const parts = [[sources.search_console, 'from Search Console'], [sources.rank_tracker, 'from the rank tracker'], [sources.ranked, 'from the ranking data']].filter(x => x[0]).map(x => x[0] + ' ' + x[1]);
+  const q = '"' + String(head || '') + '"';
+  const sample_text = known.length + ' of your searches about ' + q + ' rank in the top ' + REACH_TOPIC_CFG.max_position + ' with a known difficulty' + (parts.length ? ' (' + parts.join(', ') + ')' : '')
+    + (all.length > known.length ? '; ' + (all.length - known.length) + ' more rank there with no difficulty on file' : '');
+  const used = p75 != null;
+  const note = used
+    ? 'Measured on this topic: ' + sample_text + ', and 75% of them have a difficulty of ' + p75 + ' or lower, so this plan is measured against ' + p75 + ' and not against the site-wide reach of ' + site + '.'
+    : 'This plan is measured against your site-wide reach (' + site + '), because only ' + sample_text + ', and at least ' + min + ' are needed to measure a reach on one topic. Treat the months and the chance below as the optimistic case.';
+  return { used, p75, sample: known.length, min_sample: min, sources, rows: all.sort((a, b) => a.position - b.position).slice(0, REACH_TOPIC_CFG.max_examples), sample_text, note };
+}
 /**
  * ranked: [{ keyword, kd, position }] — every keyword the site ranks for that this run saw (null = the pull failed)
- * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain, reason_missing }
+ * head: the topic's head keyword · domainReach: the site-wide reach · o: { match (the on-topic test), domain, reason_missing,
+ *   gsc: [{ query, position }] / tracked: [{ keyword, position }] (K1: the site's own readings, top 20), kdOf(keyword) -> kd | null, min_sample }
  * -> { used, reach, topic_reach, site_reach, on_topic, top10, sample, best, examples, other_topics, reason, note }
  */
 function reachTopic(ranked, head, domainReach, o) {
@@ -846,8 +886,15 @@ function reachTopic(ranked, head, domainReach, o) {
       + ' or lower, so this plan is measured against ' + p75 + ' and not against the site-wide reach of ' + site + '.'
     : 'This plan is measured against your site-wide reach (' + site + '), because ' + reason + '. A reach measured on other topics'
       + (other_topics.length ? ' (' + other_topics.map(k => '"' + k + '"').join(', ') + ')' : '') + ' is weaker evidence for this one: treat the months and the chance below as the optimistic case.';
-  return { used, reach: used ? p75 : site, topic_reach: p75, site_reach: site, on_topic: on.length, top10: top10.length, sample: kds.length,
-    best: best ? { keyword: String(best.keyword), position: pos(best) } : null, examples, other_topics, reason, note, head: String(head || '') };
+  const out = { used, reach: used ? p75 : site, topic_reach: p75, site_reach: site, on_topic: on.length, top10: top10.length, sample: kds.length,
+    best: best ? { keyword: String(best.keyword), position: pos(best) } : null, examples, other_topics, reason, note, head: String(head || ''),
+    method: used ? 'topic' : 'site', min_sample: REACH_TOPIC_CFG.min_sample, sample_text: kds.length + ' of your top-10 keywords about ' + q + ' with a known difficulty' };
+  // K1: with the site's own readings (Search Console / rank tracker) the sample is read from them too, and printed
+  if (!Array.isArray(opts.gsc) && !Array.isArray(opts.tracked)) return out;
+  const own = reachTopicOwn(head, { ...opts, ranked_on: top10 }, site, who);
+  return { ...out, used: own.used, reach: own.used ? own.p75 : site, topic_reach: own.p75, sample: own.sample, min_sample: own.min_sample, sources: own.sources,
+    own_rows: own.rows, sample_text: own.sample_text, method: own.used ? 'topic' : 'site', note: own.note,
+    reason: own.used ? out.reason : 'only ' + own.sample_text + ' (at least ' + own.min_sample + ' are needed)' };
 }
 const reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };
 // `measured` (R49): reachMeasured(reach info, position); false = no chance band. Left out, the band stays (a caller with no reach info).
@@ -1168,6 +1215,13 @@ if (scl && scl.asked) {
     (scl.left_uncompared ? '<p class="small">' + num(scl.left_uncompared) + ' further keyword(s) on this topic were below the cap of ' + num(scl.cap) + ' and were not compared.</p>' : ''));
 } else if (scl && scl.skip_reason) {
   parts.push(h2('Searches that share a results page') + '<p>' + esc(scl.note || scl.skip_reason) + '</p>');
+}
+// KW-COMP (2026-10-21, RV-6): who this ladder competes with, read from the same results pages, with the sites that rank but compete with nobody
+const cmpL = scl && scl.competitors;
+if (cmpL && ((cmpL.picked || []).length || (cmpL.excluded || []).length)) {
+  parts.push(h2('Who you compete with on this ladder') +
+    ((cmpL.picked || []).length ? '<ul>' + cmpL.picked.map(c => '<li><b>' + esc(c.domain) + '</b>: ' + esc(c.evidence) + '</li>').join('') + '</ul>' : '<p>No business ranked often enough on these results pages to count as a competitor.</p>') +
+    '<p class="small">' + esc(cmpL.note) + '</p>');
 }
 
 // 4. The ladder (only when pages were planned)

@@ -170,7 +170,7 @@ const RT = (() => {
 // which n8n's retryOnFail never sees (R18: a ladder was planned, scored and written on two results pages that both failed).
 // Only the failed requests are re-sent, once, after a pause - a failed DataForSEO task is billed 0, so the retry can cost at
 // most what the failures cost, and *Candidate SERP Answers* counts both attempts once per task id (R28).
-const reqs = (() => { try { return $('Priority Keywords').all().map(i => (i && i.json) || {}); } catch (e) { return []; } })();
+const reqs = (() => { try { return (() => { try { return $('SERP Cache Split (Research)').all(); } catch (e) { return $('Priority Keywords').all(); } })().map(i => (i && i.json) || {}); } catch (e) { return []; } })();
 const live = reqs.filter(r => r && !r.skip);
 const answers = $input.all().map(i => (i && i.json) || {});
 if (!live.length || !answers.length) return [{ json: { skip: true, is_retry: false, reason: 'nothing was asked' } }];
