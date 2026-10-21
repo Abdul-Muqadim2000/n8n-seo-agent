@@ -50,7 +50,14 @@ if (!reachInfo) {
 // (RAD.headFit), so the keywords that count as "this topic" for the reach are the keywords that count as "this topic" for the plan.
 // It is used only with REACH_CFG.min_top10 on-topic top-10 keywords behind it; otherwise the site reach stays and the plan says so.
 const rankedAll = SR.available === false ? null : Object.entries(SR.keywords || {}).map(([keyword, r]) => ({ keyword, kd: r.kd, position: r.position }));
-const topic_authority = reachTopic(rankedAll, head, reachInfo.reach, { domain, match: (kw) => RAD.headFit(head, kw).ok });
+// K1 (2026-10-21): the site's own Search Console readings (the page inventory's queries, live pages only, position <= 20) are topic evidence
+// too, with the difficulty this run already holds for them (the research pool, the ranked pull); the note prints the sample either way
+const kdKnownLP = new Map();
+for (const c of ((pool.research || {}).candidates || [])) if (c && c.keyword && reachNum(c.kd) != null) kdKnownLP.set(String(c.keyword).toLowerCase().trim(), reachNum(c.kd));
+for (const r of (rankedAll || [])) if (r && r.keyword && reachNum(r.kd) != null && !kdKnownLP.has(String(r.keyword).toLowerCase().trim())) kdKnownLP.set(String(r.keyword).toLowerCase().trim(), reachNum(r.kd));
+const gscOwnLP = (() => { try { const m = $('Site Model').first().json.site_model; const ps = (m && Array.isArray(m.pages)) ? m.pages : [];
+  return ps.filter(p => !SM.isGone(p)).flatMap(p => (Array.isArray(p.queries) ? p.queries : []).map(q => ({ query: String((q || {}).query || ''), position: Number((q || {}).position) || 0 }))).filter(q => q.query && q.position > 0); } catch (e) { return []; } })();
+const topic_authority = reachTopic(rankedAll, head, reachInfo.reach, { domain, match: (kw) => RAD.headFit(head, kw).ok, ...(gscOwnLP.length ? { gsc: gscOwnLP } : {}), kdOf: (k) => kdKnownLP.has(k) ? kdKnownLP.get(k) : null });
 const reach = topic_authority.reach;
 
 // ---- the site's other ladders (rule R1: one search, one page) ----
@@ -191,10 +198,16 @@ const invPages = [...(base.site_urls || []).map(u => ({ url: u, source: 'sitemap
   ...((base.internal_link_candidates || []).filter(c => c && c.url && c.title).map(c => ({ url: c.url, title: c.title, source: 'sitemap' }))),
   ...titlesRead.map(r => ({ url: r.url, title: r.title || '', h1: r.h1 || '', source: 'sitemap' }))];
 const pageModel = SM.withPages(siteModel || SM.from({ domain }, {}), invPages);
-const findExisting = (keyword, yourUrl) => {
+const mayOverlapLP = new Map();
+const findExisting = (keyword, yourUrl, isHead) => {
   if (yourUrl) return { url: yourUrl, source: 'ranking' };
-  const m = SM.matchPage(pageModel, keyword);
-  return m ? { url: m.url, source: m.source === 'gsc' || m.matched_by === 'query' ? 'search console' : 'sitemap', matched_by: m.matched_by, title: m.title || '' } : null;
+  const pmx = SM.pageMatch(pageModel, keyword); let m = pmx.match;   // K8: the page ABOUT the search, with its confidence and evidence
+  // a rung keyword keeps its own page unless a page carries its words (or its exact search): which rung searches are ONE page is decided by
+  // their results pages (F-LADDER, 3 of 7), not by a shared topic word; the topic match is named as "may overlap" there
+  if (m && !isHead && m.pass === 'topic') { mayOverlapLP.set(keyword, { url: m.url, title: m.title || '', confidence: m.confidence, note: 'may overlap: ' + String(m.url).replace(/^https?:\/\/[^\/]+/i, '') + ' is about the same subject (' + m.evidence + ')' }); m = null; }
+  if (!m && pmx.may_overlap && !mayOverlapLP.has(keyword)) mayOverlapLP.set(keyword, { url: pmx.may_overlap.url, title: pmx.may_overlap.title || '', confidence: pmx.may_overlap.confidence, note: pmx.may_overlap.note });
+  return m ? { url: m.url, source: m.source === 'gsc' || m.matched_by === 'query' ? 'search console' : 'sitemap', matched_by: m.matched_by, title: m.title || '',
+    confidence: m.confidence == null ? null : m.confidence, evidence: m.evidence || '' } : null;
 };
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const homeUrl = domain ? siteUrlOf(domain, '/') : '';
@@ -311,8 +324,10 @@ top.target_words = verdictWords || analysisWords || 0;
 // actually rank for this ladder's topic (`competitors_summary[].word_count` — the pages this run read with Jina): the MEDIAN of the field for a
 // rung page, because a rung keyword is an easier search than the head term and its pages are shorter, while the main page keeps the verdict's
 // own number (usually the best page's length). No per-rung results page is read: that would be one paid SERP call per rung keyword.
-const headExisting = (base.existing_page && base.existing_page.url) ? { url: base.existing_page.url, source: base.existing_page.source || 'sitemap' } : findExisting(head, headRank && headRank.url);
-Object.assign(top, { exists: !!headExisting, target_url: headExisting ? headExisting.url : plannedUrl(head), existing_source: headExisting ? headExisting.source : null, status: headExisting ? 'improve' : 'new' });
+const headExisting = (base.existing_page && base.existing_page.url) ? { url: base.existing_page.url, source: base.existing_page.source || 'sitemap' } : findExisting(head, headRank && headRank.url, true);
+Object.assign(top, { exists: !!headExisting, target_url: headExisting ? headExisting.url : plannedUrl(head), existing_source: headExisting ? headExisting.source : null, status: headExisting ? 'improve' : 'new',
+  existing_confidence: headExisting && headExisting.confidence != null ? headExisting.confidence : null, existing_evidence: headExisting ? (headExisting.evidence || '') : '',
+  may_overlap: !headExisting && mayOverlapLP.has(head) ? mayOverlapLP.get(head) : null });   // K8: a weak candidate is named, never planned over
 
 // ---- feasibility of the destination (alternatives before any page is dropped) ----
 const status = difficulty_for_you === 'not_realistic' ? 'unrealistic' : difficulty_for_you === 'very_hard' ? 'stretch' : 'winnable';

@@ -19643,5 +19643,7 @@ await require('./scenarios_full_gate')({ H, run, mock, store, guard, reset, begi
 await require('./scenarios_claims')({ H, run, mock, store, guard, reset, begin });   // CLM1-CLM4 (E-CLAIM 2026-10-21): promises in the client's name (deliverables, process, billing) need a fact on file, else an owner edit and not ready
 await require('./scenarios_ladder_picture')({ H, run, mock, store, guard, reset, begin });   // LP1-LP3 (2026-10-21, D7): the ladder reads the pages it could duplicate; one page per search against the main keyword and between rungs
 
+await require('./scenarios_kwmatch')({ H, run, mock, store, guard, reset, begin });   // KM1-KM8 (KW-MATCH 2026-10-21): K8 the page ABOUT a search (core words, IDF, services, confidence, evidence, may overlap) and K1 the topic reach from the site's own Search Console readings with the sample printed
+
 H.report();
 })();
