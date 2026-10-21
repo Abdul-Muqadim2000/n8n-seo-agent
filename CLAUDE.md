@@ -60,6 +60,18 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
+## Status (2026-10-21 evening, paid pre-launch run on techand.ai + its fixes — latest)
+One new client run end to end with real money on an isolated production-like stack built from `9d97b90` (= production): DataForSEO
+**$2.44**, Claude **$1.59** (balance $48.22). P1 (first page waits for profile + facts) works live. Four reviewers (page, reports vs the
+live site, browser pass, root causes) found 2 + 6 High defects; all fixed and merged (`5f93e20` D1-D3 app, `a63c4f2` keyword fit,
+`bdba2b8e` content QA, `8507f53c` dead pages / audit, A-UI client screens, rebuild `d85f1fb`, report `33f03e5`): engine harness
+**10094 / 0**, app shared 583 / server 1352 / web 156, build OK. **Read `n8n/seo-agent/docs/LIVE_RUN_2026-10-21.md`** (defects, fixes,
+open items, owner steps). Worst ones fixed: a partial website PATCH wiped business + facts for every onboarding client (D1); setup
+research had no services (D2); reports advised on 34 old techand.ai URLs that now 404 (new `_gone.js`, redirect files, `seo_pages.http_status`
+/ `status_at` — `sync_tables.py` on deploy). **Not pushed** (no GitHub credentials in that session) and **not deployed**. The isolated stack
+`alvrun-*` is still up (AI Pulse off, dispatcher plan_only); harness now runs in a throwaway `n8nio/n8n:2.41.4` container with a node
+wrapper because the laptop n8n must stay stopped.
+
 ## Status (2026-10-18 evening, renamed Alaventra + deploy pipeline — previous)
 **Renamed Ascentra → Alaventra** from the owner's kit (`65cbf81`): wordmarks / OG image / manifest / `--alv-*` tokens / `alv-` CSS
 prefix / `AlaventraMark`, every string in `app/` + `integrations/` (webhook headers `X-Alaventra-*`, SSO TXT `alaventra-sso=`),
