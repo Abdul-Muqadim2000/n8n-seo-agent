@@ -465,8 +465,8 @@ describe('keyword proposals', () => {
     const s = await site(co.org.id, 'suggest-kf.com', { trackingStatus: 'active', autopilotLevel: 2 });
     await strategy(co.org.id, s.id, [
       { keyword: 'crm consulting', difficulty_for_you: 'easy', plan_type: 'direct' },
-      { keyword: 'crm training', difficulty_for_you: 'reachable', plan_type: 'short' },
       { keyword: 'crm migration', difficulty_for_you: 'easy', plan_type: 'direct' },
+      { keyword: 'crm training', difficulty_for_you: 'reachable', plan_type: 'short' },
     ]);
     const org = (await db.query.organizations.findFirst({ where: eq(schema.organizations.id, co.org.id) }))!;
     await proposeForSite(org, s, undefined, Date.now(), log);
@@ -477,7 +477,7 @@ describe('keyword proposals', () => {
     expect(await startDueProposals(log)).toBe(0); // levels 1-2 never start on their own
     // skip: never again, the next one is proposed
     const sk = await co.c.post(`${base(co, s.id)}/keyword-proposals/${list.pending[0].id}/skip`);
-    // the next best one: easy before reachable (the research's own order inside each)
+    // the next one in the research's own order (KW-APP D3: the app no longer re-ranks it by difficulty)
     expect(sk.body).toMatchObject({ proposal: { status: 'skipped' }, next: { keyword: 'crm migration' } });
     expect((await co.c.post(`${base(co, s.id)}/keyword-proposals/${list.pending[0].id}/skip`)).status).toBe(409);
     // swap for a typed keyword that is not realistic: refused with the check, nothing started

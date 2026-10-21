@@ -298,7 +298,7 @@ Pitches go out from the company's own mailbox, after a person approves them (or 
 The keyword check calls n8n's Keyword Check (`POST {N8N_BASE_URL}/webhook/seo-keyword-assess`, `X-API-Key`, `X-Forwarded-For: app:<company>`,
 45 s timeout; body `{ keyword, country (default: the website's), domain, business (the website's, when set), services (its case
 studies' services), existing_keywords (its ladders' main and page keywords) }`). It is paid (DataForSEO, about $0.02-0.05), so in order:
-1. the same website, keyword and country answered within 7 days → that stored check, `cached: true`, no call, free;
+1. the same website, keyword and country answered within 6 hours (`KEYWORD_CHECK.cacheHours`) by the same engine rules (`rules_version`: a hash of the generated fit gate) for the same website context (`context_hash`: business, services, brand names, competitors, ladder keywords) → that stored check, `cached: true`, no call, free;
 2. under the company's advisory lock: the same keyword being checked → 409; 30 checks a day per company (UTC, failed ones included) →
    429 `check_limit`; the monthly budget with the $0.05 estimate → 402 `budget`; the platform's daily ceiling → 429; then a `pending`
    row in `keyword_checks` holds the estimate in the budget;

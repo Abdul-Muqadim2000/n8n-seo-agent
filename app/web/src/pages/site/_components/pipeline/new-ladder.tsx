@@ -38,7 +38,7 @@ export interface ChosenKeyword {
   fit: 0 | 1 | 2 | null;
   position: number | null;
   overlaps: { ladderId: string; head: string; keyword: string }[];
-  /** a check answered from the last 7 days (free) */
+  /** a check answered from the last few hours, same rules and website settings (free) */
   cached?: boolean;
   checkedAt?: string;
 }
