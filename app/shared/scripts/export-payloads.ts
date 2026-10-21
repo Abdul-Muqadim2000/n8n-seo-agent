@@ -89,7 +89,15 @@ const cases: Case[] = [
     // keyword-first (R-K6): research from the app never asks for a page on its own pick, whatever the form sent
     input: { siteId: SITE_ID, country: 'United Arab Emirates', siteAudit: true, receiveReport: true, receiveContent: true },
     site,
-    expect: { mode: 'discover', business: site.business, audience: site.customers, business_facts: site.businessFacts, include_audit: true, include_full_report: false, include_content: false, include_seo_report: true, keyword: '' },
+    expect: { mode: 'discover', business: site.business, audience: site.customers, business_facts: site.businessFacts, include_audit: true, include_full_report: false, include_content: false, include_seo_report: true, keyword: '', services_given: false },
+  },
+  {
+    // D2 (2026-10-21): the setup research carries what the website sells (it runs before Track my site stores them on the engine's row)
+    name: 'discover at setup with what the website sells',
+    mode: 'discover',
+    input: { siteId: SITE_ID, country: 'United Arab Emirates', businessFacts: '' },
+    site: { ...site, services: ['Odoo implementation', 'E-invoicing onboarding'] },
+    expect: { mode: 'discover', business: site.business, business_facts: site.businessFacts, services: ['Odoo implementation', 'E-invoicing onboarding'], services_given: true, include_content: false },
   },
   {
     name: 'discover from a description only',
@@ -110,8 +118,9 @@ const cases: Case[] = [
     name: 'audit full report, 500 pages, JS',
     mode: 'audit',
     input: { siteId: SITE_ID, country: 'United Arab Emirates', reportType: 'full', crawlPages: 500, crawlJs: true, competitors: ['www.rival.ae'] },
-    site,
-    expect: { mode: 'audit', include_full_report: true, include_audit: true, crawl_max_pages: 500, crawl_js: true, competitors: ['rival.ae'] },
+    // RV-13 (2026-10-21): the full report's keyword suggestions keep to what the website sells
+    site: { ...site, services: ['Odoo implementation', 'E-invoicing onboarding'] },
+    expect: { mode: 'audit', include_full_report: true, include_audit: true, crawl_max_pages: 500, crawl_js: true, competitors: ['rival.ae'], services: ['Odoo implementation', 'E-invoicing onboarding'], services_given: true },
   },
   {
     name: 'audit technical with site competitors',

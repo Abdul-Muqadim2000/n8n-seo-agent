@@ -187,6 +187,18 @@ describe('the free keyword research at setup (D3)', () => {
     expect((await co.c.post(`${base(co, s2.id)}/research/start`)).body.code).toBe('research_not_free');
   });
 
+  // D2 (paid pre-launch run 2026-10-21): the setup research runs before Track my site stores what the website sells on the engine's site row,
+  // and its body carried no services, so the research judged no keyword against them
+  it('the setup research carries what the website sells, also for a website with services and no business description', async () => {
+    const co = await company('research-svc@kf.test', 'Research Services');
+    const s = await site(co.org.id, 'research-svc-kf.com', { services: ['CRM implementation', 'CRM training'] });
+    expect((await co.c.post(`${base(co, s.id)}/research/start`)).status).toBe(200);
+    expect(t.starts.at(-1)).toMatchObject({ mode: 'discover', services: ['CRM implementation', 'CRM training'], business: 'CRM implementation for sales teams' });
+    const only = await site(co.org.id, 'research-svc2-kf.com', { business: '', services: ['Odoo implementation'] });
+    expect((await co.c.post(`${base(co, only.id)}/research/start`)).status).toBe(200);
+    expect(t.starts.at(-1)).toMatchObject({ mode: 'discover', services: ['Odoo implementation'] });
+  });
+
   it('a request the engine refused (4xx) gives the grant back; only at setup; viewers cannot start it', async () => {
     const co = await company('research2@kf.test', 'Research Two');
     const s = await site(co.org.id, 'research2-kf.com');
