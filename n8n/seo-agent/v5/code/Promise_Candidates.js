@@ -22,8 +22,9 @@ let cands = [];
 const rank = (c) => (c.rule_flag ? 0 : (c.why === 'wide' || c.why === 'advice') ? (c.where === 'caption' || c.why === 'advice' ? 2 : 3) : 1);
 try { cands = (CL.commitments(md, OWN, { names, collect: true, captions: PJ.captionsOf(prev.content_brief) }).candidates || []).map((c, i) => ({ c, i }))
   .sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i).slice(0, PJ.MAX_CANDS).map(x => x.c); } catch (e) { cands = []; }
-const skip = !cands.length || !OWN.trim();
-const promise_judge = { key: PJ.keyOf(cands), candidates: cands.map(c => ({ sentence: c.sentence, why: c.why, rule_flag: c.rule_flag, where: c.where, facts: c.facts })), n: cands.length, skip,
-  skip_reason: !OWN.trim() ? 'nothing on file to hold the sentences against' : !cands.length ? 'no sentence in the business\'s name to judge' : '',
+const on = PJ.enabled(prev);
+const skip = !on || !cands.length || !OWN.trim();
+const promise_judge = { key: PJ.keyOf(cands), candidates: cands.map(c => ({ sentence: c.sentence, why: c.why, rule_flag: c.rule_flag, where: c.where, facts: c.facts })), n: cands.length, skip, off: !on,
+  skip_reason: !on ? 'the second reader is switched off; the rules decide' : !OWN.trim() ? 'nothing on file to hold the sentences against' : !cands.length ? 'no sentence in the business\'s name to judge' : '',
   body: skip ? '' : JSON.stringify(PJ.request(cands, { business: names[0] || domain, domain })) };
 return [{ json: { ...inItem, promise_judge } }];

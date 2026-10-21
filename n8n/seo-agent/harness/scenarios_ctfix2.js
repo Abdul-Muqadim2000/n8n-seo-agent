@@ -50,7 +50,7 @@ module.exports = async (ctx) => {
       && CL.backs('Tech& serves enterprises across the UAE and the GCC.', 'It serves enterprises across the UAE and the GCC in banking and retail.'));
   });
 
-  const prevBrief = () => clone(FX.parse_brief);
+  const prevBrief = () => Object.assign(clone(FX.parse_brief), { promise_judge: true });   // the second reader is off by default (PJ.ENABLED_DEFAULT); these scenarios test it switched on
   const mocks = (o) => { mock('Parse Brief', [{ json: prevBrief() }]); mock('Site Model', [{ json: { site_model: clone(FX.site_model) } }]); mock('Analyze Competitor Pages', [{ json: { competitors: [] } }]);
     mock('Needs Revision?', [{ json: clone(FX.needs_revision_r1) }]); if (o && o.pc) mock('Promise Candidates', [{ json: o.pc }]); if (o && o.judge) mock('Promise Judge', [{ json: o.judge }]); };
   let PCOUT = null;
@@ -66,6 +66,21 @@ module.exports = async (ctx) => {
       && JSON.stringify(body.messages || '').includes(pj.key), J({ model: body.model, tc: body.tool_choice }));
     check('the caption and QA\'s own round-1 mark (unwrapped) are candidates', pj.candidates.some(c => c.where === 'caption') && pj.candidates.some(c => PJ.k(c.sentence) === PJ.k('No data owner: we name one during business discovery.')), J(pj.candidates.map(c => c.sentence.slice(0, 50))));
     check('the closest facts travel with the candidates (F ids)', /F1: /.test(JSON.stringify(body.messages || '')) && /closest facts: F\d/.test(JSON.stringify(body.messages || '')));
+  });
+
+  await guard('CTX2b the second reader is off by default', async () => {
+    const SN = 'CTX2b (2026-10-22, orchestrator): the Haiku second reader is OFF by default (it did not beat the rules in CLAIMS_MODEL_EVAL.md), so a page makes no Haiku call and the report says nothing about it';
+    reset(); begin(SN); const check = mkCheck(SN);
+    mock('Parse Brief', [{ json: clone(FX.parse_brief) }]); mock('Site Model', [{ json: { site_model: clone(FX.site_model) } }]); mock('Analyze Competitor Pages', [{ json: { competitors: [] } }]);
+    mock('Needs Revision?', [{ json: clone(FX.needs_revision_r1) }]);
+    const r = await run('Promise Candidates', [{ json: { output: DRAFT2, critique: null } }]);
+    const pj = r[0].json.promise_judge || {};
+    check('the default is off', PJ.ENABLED_DEFAULT === false && PJ.enabled({}) === false && PJ.enabled({ promise_judge: true }) === true);
+    check('skipped, marked off, no request body', pj.skip === true && pj.off === true && pj.body === '', J({ skip: pj.skip, off: pj.off, body: (pj.body || '').length }));
+    mock('Promise Candidates', [{ json: r[0].json }]);
+    const qa = (await run('Content QA', [{ json: { output: DRAFT2, critique: null } }], { runIndex: 1 }))[0].json;
+    const pc = (qa.content_qa || qa).promise_check || {};
+    check('rules decide, and the report carries no "checked by rules only" note', pc.method === 'rules' && !pc.note, J({ method: pc.method, note: pc.note }));
   });
 
   const qa2 = async (o) => { mocks(o); return (await run('Content QA', [{ json: o && o.input ? o.input : { output: DRAFT2, critique: null } }], { runIndex: 1 }))[0].json; };

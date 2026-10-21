@@ -485,7 +485,7 @@ let promise_check = { method: 'rules', model: null, candidates: 0, judged: 0, ov
     final.push({ kind: c.kind, sentence: c.sentence, support: 0, where: 'para', reason: 'the promise marked in the round before, reworded by the editor', by: 'carried' }); }
   promise_check = { method: J && J.ok ? 'rules+model' : 'rules', model: J && J.ok ? PJ.MODEL : null, candidates: cands.length, judged: J && J.ok ? J.by.size : 0,
     overturned: promise_check.overturned.slice(0, 10), added: promise_check.added.slice(0, 10), usage: J && J.usage ? J.usage : null,
-    note: J && J.ok ? '' : 'checked by rules only: ' + (why || 'the second reader gave no answer') };
+    note: J && J.ok ? '' : (pjc && pjc.off) ? '' : 'checked by rules only: ' + (why || 'the second reader gave no answer') };   // switched off by default: nothing to report
   for (const f of final.slice(0, 15)) {
     const at = f.where === 'caption' ? -1 : md.indexOf(f.sentence); const marked = at >= 0 && !/[\[\]]/.test(f.sentence);   // a sentence holding a link is listed, never wrapped (no nested bracket); a caption is not in the copy
     if (marked) md = md.slice(0, at) + '[Confirm: ' + f.sentence + ']' + md.slice(at + f.sentence.length);

@@ -10,6 +10,11 @@
 const PJ = (() => {
   const MODEL = 'claude-haiku-4-5-20251001';
   const MAX_CANDS = 40;
+  // OFF by default (2026-10-22): one real evaluation on the 180 labelled sentences (harness/accuracy/CLAIMS_MODEL_EVAL.md) showed the
+  // second reader decides exactly as the rules under the safe policy, for about $0.02 and 10-13 s a QA round, and lowers recall when trusted.
+  // A run turns it on with promise_judge: true in its brief (Parse Brief); switch the default on only after a model beats the rules there.
+  const ENABLED_DEFAULT = false;
+  const enabled = (prev) => (prev && typeof prev.promise_judge === 'boolean') ? prev.promise_judge : ENABLED_DEFAULT;
   const k = (s) => String(s || '').replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/^\[(?:Confirm|Owner)[^:]*:\s*/i, '').replace(/\]$/, '')
     .replace(/[*_`]+/g, '').replace(/^[-*]\s+/, '').toLowerCase().replace(/[^\p{L}\p{N}%$€£]+/gu, ' ').replace(/\s+/g, ' ').trim();
   // a short, stable fingerprint of the candidate list: the judge's answer is used only for the list it was asked about
@@ -91,5 +96,5 @@ const PJ = (() => {
     if (v.commit && !v.supported_by && (cand.why === 'wide' || cand.why === 'advice')) return m(true, 'added');
     return { flagged: false, by: 'rules' };
   };
-  return { MODEL, MAX_CANDS, KINDS, LIFT, factIds, k, keyOf, ownText, captionsOf, request, read, decide, SYSTEM, TOOL };
+  return { MODEL, MAX_CANDS, ENABLED_DEFAULT, enabled, KINDS, LIFT, factIds, k, keyOf, ownText, captionsOf, request, read, decide, SYSTEM, TOOL };
 })();
