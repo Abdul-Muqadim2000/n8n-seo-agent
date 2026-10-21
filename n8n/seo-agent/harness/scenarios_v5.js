@@ -19644,5 +19644,7 @@ await require('./scenarios_claims')({ H, run, mock, store, guard, reset, begin }
 await require('./scenarios_ladder_picture')({ H, run, mock, store, guard, reset, begin });   // LP1-LP3 (2026-10-21, D7): the ladder reads the pages it could duplicate; one page per search against the main keyword and between rungs
 
 await require('./scenarios_kw_accuracy')({ H, run, mock, store, guard, reset, begin });   // KWACC (KW-ACC 2026-10-21): the labelled keyword business-fit set (accuracy/keywords.json), kit + full report, ratcheted on accuracy/KEYWORDS_BASELINE.md
+await require('./scenarios_kwmatch')({ H, run, mock, store, guard, reset, begin });   // KM1-KM8 (KW-MATCH 2026-10-21): K8 the page ABOUT a search (core words, IDF, services, confidence, evidence, may overlap) and K1 the topic reach from the site's own Search Console readings with the sample printed
+
 H.report();
 })();
