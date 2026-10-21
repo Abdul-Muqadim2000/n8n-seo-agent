@@ -15,6 +15,7 @@ import {
   estimateAiVisibilityCost,
   monitorSettingsSchema,
   type AiEngine,
+  type AutopilotPlan,
   type MonitorSettings,
 } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
@@ -319,9 +320,10 @@ function MonitorRow({ icon, on, children }: { icon: ReactNode; on: boolean; chil
  * The schedules' monthly estimate with its breakdown, in credits (credits (app/docs/CREDITS.md)): the rows of shared `autopilotRows`,
  * the same rows the Credits page's forecast and the server's reserve for the schedules use, each turned into credits.
  */
-export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors: MonitorSettings; blogsPerWeek: number; className?: string }) {
+export function MonitoringCost({ monitors, blogsPerWeek, plan, className }: { monitors: MonitorSettings; blogsPerWeek: number; plan?: AutopilotPlan; className?: string }) {
   useEngineCal();   // re-render with the company's credit rate once it arrives
-  const rows = autopilotRows(monitors, blogsPerWeek);
+  // B4: with the website's plan (level, keyword pages, rank checks) this is the Credits page's figure for the website
+  const rows = autopilotRows(monitors, blogsPerWeek, plan);
   const totalUsd = rows.reduce((t, r) => t + r.usd, 0);
   const total = toCredits(totalUsd);
   return (

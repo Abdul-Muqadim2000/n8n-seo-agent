@@ -250,7 +250,8 @@ export interface CreditActivityPage {
 
 export const creditActivityQuerySchema = z.object({
   origin: z.enum(['all', 'autopilot', 'on_demand', 'account']).default('all'),
-  cursor: z.string().regex(/^\d+$/).optional(),
+  // `<ms>_<seq>` (B12: the list is sorted by time, then booking order); a bare seq from an older client still works
+  cursor: z.string().regex(/^\d+(?:_\d+)?$/).optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),
 });
 

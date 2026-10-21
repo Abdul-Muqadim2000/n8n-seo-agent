@@ -8,7 +8,7 @@ import type { MonitorSettings } from './schemas';
 // Credits page's forecast and the server's reserve for the schedules (app/docs/CREDITS.md), so the three never disagree. Amounts are the
 // provider cost in USD; screens turn them into credits with the company's credit rate.
 
-export type AutopilotRowId = 'site_report' | 'ai_visibility' | 'ai_pulse' | 'ai_growth' | 'backlinks' | 'link_builder' | 'audit' | 'blog_posts' | 'research';
+export type AutopilotRowId = 'site_report' | 'ai_visibility' | 'ai_pulse' | 'ai_growth' | 'backlinks' | 'link_builder' | 'rank_tracker' | 'audit' | 'blog_posts' | 'research';
 
 /**
  * Keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.4): what the autopilot writes on its own depends on the level and on the keywords the
@@ -19,6 +19,12 @@ export type AutopilotRowId = 'site_report' | 'ai_visibility' | 'ai_pulse' | 'ai_
 export interface AutopilotPlan {
   level?: AutopilotLevel;
   writing?: boolean;
+  /**
+   * The website has a keyword ladder, so the weekly rank check runs (and is charged). Pre-launch run 2026-10-21 (B4): the Pipeline counted
+   * the rank check and the Credits page did not (573 against 567 credits a month for one website); both read this row now. Default false:
+   * a screen that does not know the ladders forecasts no rank check, as the engine runs none without a ladder.
+   */
+  ranking?: boolean;
 }
 
 /** A keyword research refresh every 90 days at level 3: the discovery run, a month's share. */
@@ -76,6 +82,7 @@ export function autopilotRows(m: Monitors, blogsPerWeek: number, plan: Autopilot
     },
     { id: 'backlinks', label: 'Backlink monitor', detail: 'weekly watch, monthly full report', on: m.backlinks, usd: c.backlinksMonthly },
     { id: 'link_builder', label: 'Link builder', detail: 'up to 10 drafted sequences a week; opportunity search, contacts and checks free', on: m.linkBuilder, usd: c.linkBuilderMonthly },
+    { id: 'rank_tracker', label: 'Rank checks', detail: plan.ranking ? 'your keyword ladders\' pages on Google, every week' : 'none until you have a keyword ladder', on: !!plan.ranking, usd: c.rankTrackerMonthly },
     { id: 'audit', label: 'Monthly technical audit', detail: `up to ${m.auditPages} pages`, on: m.auditMonthly, usd: c.auditMonthly },
     { id: 'blog_posts', label: 'Pages for your keywords', detail: postsDetail, on: posts > 0, usd: posts * c.weeksPerMonth * c.blogPostEach },
     { id: 'research', label: 'Keyword research refresh', detail: `every ${RESEARCH_REFRESH_DAYS} days, so new keywords can be proposed`, on: full, usd: (modeCostUsd('discover') * 30) / RESEARCH_REFRESH_DAYS },
