@@ -884,6 +884,7 @@ disconnect('Copywriter', 'Content QA')
 connect('Copywriter', 'Critic'); connect('Critic', 'Parse Critique'); connect('Parse Critique', 'Content QA')
 setcode('Content QA', rd('code/Content_QA.js'))
 set_prompt('Editor', 'editor.txt')
+assert "'duration or timeline'" in rd('prompts/editor.txt') and ".filter(Boolean).join(', and no ')" in rd('prompts/editor.txt'), 'CT-FIX (review item 17): the editor prompt drops durations when neither price nor timeline facts are on file'
 # report additions
 patch('Build Word File', "    ['Recommended Page Type', esc(d.recommended_page || d.page_type || 'N/A')]\n  ]) +", "    ['Recommended Page Type', esc(d.recommended_page || d.page_type || 'N/A')],\n    ['Expected visits/month at #1-3', d.expected_visits_top3 != null ? num(d.expected_visits_top3) : 'N/A'],\n    ['Time to rank', d.time_to_rank_months != null ? d.time_to_rank_months + ' months' : 'N/A']\n  ]) +")
 patch('Build Word File', "  '<h3>Why</h3>' + ul(d.verdict_reasons) +", "  '<h3>Why</h3>' + ul(d.verdict_reasons) +\n  ((d.verdict_changes && d.verdict_changes.length) ? '<h3>What must change first</h3>' + ul(d.verdict_changes) : '') +")
@@ -11464,7 +11465,7 @@ assert 'PH.scan(finalBody)' in code('Content QA') and 'PH_RE' not in code('Conte
 _ph_ts130 = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'app', 'shared', 'src', 'placeholders.ts')
 if os.path.exists(_ph_ts130):
     _pt130 = open(_ph_ts130, encoding='utf-8').read()
-    for _pat130 in ('BRACKET_SRC', 'NOTE_SRC'):
+    for _pat130 in ('BRACKET_SRC', 'NOTE_SRC', 'CODE_SRC', 'NOT_GAP_SRC'):   # CT-FIX: the code and not-a-gap rules too
         _m130 = re.search(r'const ' + _pat130 + r' = ("(?:[^"\\]|\\.)*");', PLACEHOLDERS_SRC)
         assert _m130 and ('PLACEHOLDER_' + _pat130 + ' = ' + _m130.group(1) + ';') in _pt130, 'A-13: app/shared/src/placeholders.ts and v5/code/_placeholders.js disagree on ' + _pat130
 assert 'CL.business(md, OWN_TEXT' in code('Content QA') and 'ownStat(s)' in code('Content QA'), 'A-15 / A-19: the business claims or the own-figures check are not wired'
@@ -12017,7 +12018,7 @@ patch('Parse Brief', "// Word count check\nconst totalWords = (brief.outline || 
       "// Word count check\nconst totalWords = (brief.outline || []).reduce")
 assert 'siblingKwPB' in code('Parse Brief'), 'M1: Parse Brief does not drop the ladder siblings from the secondary keywords'
 assert "const EXC = (() =>" in code('Brief Context') and 'subtopics_excluded' in code('Brief Context') and "author_line" in code('Brief Context'), 'D5 / RV-10: Brief Context does not filter the subtopics or set the author line'
-assert "CVG.isPromo(s)" in code('Content QA') and 'benchOffKind' in code('Content QA') and 'body_brackets === 0' in code('Content QA') and 'owner_edits' in code('Content QA'), 'D5 / placeholder gate: Content QA is not wired'
+assert "CVG.isPromo(s, benchKind)" in code('Content QA') and 'benchOffKind' in code('Content QA') and 'body_brackets === 0' in code('Content QA') and 'owner_edits' in code('Content QA'), 'D5 / placeholder gate: Content QA is not wired'
 assert "otherWhy(p, kw)" in code('Parse Analysis') and 'sameKind ? CVG.subtopics(' in code('Parse Analysis'), 'D5: Parse Analysis takes subtopics from another kind of page'
 assert 'compactAuthor' in code('Blog Package') and 'liveLadderLinks' in code('Blog Package') and "'og:image:height': (heroImg" in code('Blog Package'), 'RV-10 / L2 / L3: the package is not wired'
 assert 'card_alt' in code('Image Cards') and 'altSwaps' in code('Attach Images'), 'M6: the card alt text is not wired'

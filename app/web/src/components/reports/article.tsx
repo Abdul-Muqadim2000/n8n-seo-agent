@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertTriangle, Braces, Download, Eye, FileCode, FileJson, FileText, Heading, Image as ImageIcon, Link2, ListChecks, Quote, Share2, Tags } from 'lucide-react';
 import type { ReportFile } from '@seo/shared';
-import { findOpenBrackets, placeholderRe } from '@seo/shared';
+import { findOpenBrackets, isOpenBracket, placeholderRe } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { downloadText } from '@/lib/utils';
@@ -99,11 +99,13 @@ function prepareBody(html: string): string {
   while (walker.nextNode()) texts.push(walker.currentNode as Text);
   for (const t of texts) {
     const v = t.nodeValue ?? '';
+    if (t.parentElement?.closest('code, pre')) continue;   // code is read as code: `labels[sensitivity]` is not a gap
     PLACEHOLDER.lastIndex = 0;
     if (!PLACEHOLDER.test(v)) continue;
     const frag = doc.createDocumentFragment();
     let last = 0;
-    v.replace(PLACEHOLDER, (match: string, _inner: string, offset: number) => {   // the pattern has one group: the offset is the third argument
+    v.replace(PLACEHOLDER, (match: string, inner: string, offset: number) => {   // the pattern has one group: the offset is the third argument
+      if (!isOpenBracket(inner)) return match;   // [sic], [Updated 2026]: left as text
       if (offset > last) frag.appendChild(doc.createTextNode(v.slice(last, offset)));
       const mark = doc.createElement('mark');
       mark.className = 'ph';

@@ -8,7 +8,7 @@ changed to pass them: they become hard assertions for a path once no row is left
 
 ## The set
 
-`claims.json`: 144 sentences, one case each, over three sites with the text each one has on file (`sites[].facts`, what Content QA
+`claims.json`: 160 sentences, one case each, over three sites with the text each one has on file (`sites[].facts`, what Content QA
 reads as the business's own text):
 
 - **techand.ai** (95, 11 in Arabic): the facts of the 2026-10-21 paid page run (exec 42, `fixtures_eqa_42.json.gz`: business facts,
@@ -27,8 +27,13 @@ action, a quote from a source). 49 / 60 / 35. Categories: deliverable, process, 
 partnership, experience, location_contact, industry, generic, advice, cta, source_quote. Labels were written from the facts before
 the code was run on them and were not changed after.
 
-**Hold-out**: a case is hold-out when the first byte of sha1(sentence + site) mod 10 is under 3 (43 of 144, `holdout: true` in the file,
-checked by CLACC). The fixer tunes on the 101 dev cases only and reports both halves; the numbers below were measured once, before any fix.
+**Hold-out**: a case is hold-out when the first byte of sha1(sentence + site) mod 10 is under 3 (43 of the first 144, `holdout: true` in the file,
+checked by CLACC). The fixer tunes on the 101 dev cases only and reports both halves.
+
+**Independent-review group** (CT-FIX, 2026-10-22): 16 sentences `CL-R01`..`CL-R16` (source "independent review 2026-10-22"), the synthetic
+cases of the content review (CT_REVIEW.md items 1, 2, 9 and 10: calls to action, guide narration, a third party acting, a quotation, a
+worked example, "we" in a relative clause; contractions, passives, an offer under "Our approach", a list item under "Our engagement
+includes:"), labelled as the review states them. All of them are hold-out (CLACC checks it): they were never tuned on.
 
 ## How it is scored
 
@@ -45,60 +50,31 @@ unverified-statistics check) are not counted: this set measures the claims check
 |---|---|---|---|---|---|---|---|---|
 | kit | a6756696 (CT-ACC) | 144 | 95.2% | 66.7% (40 of 60) | 4.1% (2 of 49) | 0% (0 of 35) | 100% / 68.3% | 85.7% / 63.2% |
 | qa | a6756696 (CT-ACC) | 144 | 95.2% | 66.7% (40 of 60) | 4.1% (2 of 49) | 0% (0 of 35) | 100% / 68.3% | 85.7% / 63.2% |
+| kit | 413cae9a + review group (before CT-FIX) | 160 | 76.9% | 60.6% (40 of 66) | 4.1% (2 of 49) | 22.2% (10 of 45) | 100% / 68.3% | 50.0% / 48.0% |
+| kit | CT-FIX | 160 | 100% | 95.5% (63 of 66) | 0% (0 of 49) | 0% (0 of 45) | 100% / 100% | 100% / 88.0% |
+| qa | CT-FIX | 160 | 100% | 93.9% (62 of 66) | 0% (0 of 49) | 0% (0 of 45) | 100% / 100% | 100% / 84.0% |
 
-The two paths agree on every case. The 11 promises of the 2026-10-21 page are all flagged in their section, and every generic
-sentence, piece of advice, call to action and cited figure passes (0 of 35). What fails: 20 unsupported claims missed and 2 true
-statements flagged, by category: billing 5 missed, timeline 4, experience 4 missed + 1 false flag, deliverable 3, guarantee 2,
-credential 1, partnership 1, process 1 false flag. All 5 unsupported Arabic sentences are missed (no Arabic pattern). The shapes:
-a subject that is not "we / our team / <name>" (passive lines, "our <service> costs", "every <name> implementation takes"), verbs the
-list does not hold ("have delivered", "gets", "certifies", "costs"), list items with no verb, partner tiers and counts outside the
-lists, and paraphrases of true facts matched word for word.
+The two paths now differ on one case, CL-T41 (row below). Arabic (13 cases): recall 0% (0 of 5) before, 80% (4 of 5) after, no false flag either time. The review group alone: before, 10 of 10
+non-claims flagged and 0 of 6 promises found; after, 0 of 10 flagged and 4 of 6 found.
+
+CT-FIX changed the design, not the patterns: a commitment is found by its SUBJECT (we / we'll / we have, a sentence that opens with
+"our ...", the business's name in subject position, "with us"), and in a section about the business by an offer to the reader, a
+passive or cost / duration line, or a list item under a business lead-in; calls to action, narration, quotations, worked examples, third
+parties and relative clauses are not commitments. Support holds the same rule as before (one fact, or two adjacent ones, carries half of
+its content words) with whole numbers, number words and synonyms normalised, strong qualifiers (only, platinum, leading ...) required on
+the fact itself, and Arabic read through a small bilingual lexicon. Two label notes, no label changed: `CL-T56` (a call to action that
+promises "a fixed quote within 48 hours", unsupported) and `CL-R04` (a call to action that promises a review "within two business days",
+not a claim) differ only in that T56 names a commercial term (a quote); the kit keeps that line, so a call to action that names a price,
+quote, fee or guarantee is still a term to confirm.
 
 ## Rows
 
 | Path | Case | Kind | Site | Label | Category | Sentence | Got: why |
 |---|---|---|---|---|---|---|---|
-| kit | CL-T23 | false_flag | techand.ai | supported_claim | experience (hold-out) | We provide round-the-clock support for the systems we run for you. | flagged promise:deliverable: the words "round", "clock", "systems", "run" sit on no single fact sentence, so a paraphrase of "24/7 support" reads as unsupported (synonyms and numbers written in words are not matched) |
-| kit | CL-T41 | missed | techand.ai | unsupported_claim | billing (hold-out) | Our fixed-price readiness assessment costs AED 25,000. | not flagged: subject "Our fixed-price readiness assessment" is not a business subject (§9d knows "our prices / fees", not "our <service>"), and "costs" is not a commitment verb |
-| kit | CL-T48 | missed | techand.ai | unsupported_claim | timeline | Your team gets a 90-day hypercare period after go-live. | not flagged: "Your team gets": the offer pattern knows "get", not "gets" |
-| kit | CL-T51 | missed | techand.ai | unsupported_claim | experience | We have delivered more than 150 Dynamics 365 projects for GCC clients. | not flagged: "We have delivered": "have" is not an allowed helper before the verb; §9d reads "365 projects" as the count and finds "365" in "Dynamics 365" |
-| kit | CL-T57 | missed | techand.ai | unsupported_claim | timeline (hold-out) | A typical Copilot rollout with us takes six to eight weeks from kickoff to go-live. | not flagged: subject "A typical Copilot rollout with us": no we / name subject, so a duration nobody states is not read |
-| kit | CL-T58 | missed | techand.ai | unsupported_claim | deliverable | Monthly health checks and a quarterly roadmap review are part of the service. | not flagged: passive with no subject ("are part of the service") |
-| kit | CL-T59 | missed | techand.ai | unsupported_claim | billing (hold-out) | Training is included at no extra cost. | not flagged: passive billing line with no subject ("Training is included at no extra cost") |
-| kit | CL-T61 | missed | techand.ai | unsupported_claim | deliverable | A written data governance policy for your Copilot rollout | not flagged: a list item with no verb under "What you get from Tech&": only verb patterns are read |
-| kit | CL-T62 | missed | techand.ai | unsupported_claim | experience (hold-out) | Every Tech& consultant has worked inside a bank or a government entity. | not flagged: "Every Tech& consultant has worked": the name is not followed by a verb and "has worked" is not a commitment verb |
-| kit | CL-A05 | missed | techand.ai | unsupported_claim | guarantee | نضمن استرداد أموالك إذا لم يعمل النموذج التجريبي خلال ستة أسابيع. | not flagged: Arabic: every pattern is English, an Arabic sentence is never read |
-| kit | CL-A06 | missed | techand.ai | unsupported_claim | credential | نحن حاصلون على شهادة ISO 27001 لمركز التنفيذ لدينا. | not flagged: Arabic: every pattern is English, an Arabic sentence is never read |
-| kit | CL-A07 | missed | techand.ai | unsupported_claim | billing | تبلغ رسوم تقييم الجاهزية لدينا 25,000 درهم. | not flagged: Arabic: every pattern is English, an Arabic sentence is never read |
-| kit | CL-A08 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | ستحصل على دليل تشغيل ولوحات متابعة بعد الإطلاق. | not flagged: Arabic: every pattern is English, an Arabic sentence is never read |
-| kit | CL-P07 | false_flag | peppol.org | supported_claim | process (hold-out) | Any organisation can apply for membership of OpenPeppol through the members page. | flagged terms:credential: §9d reads "membership of" as a credential; the fact says "apply for membership" in a sentence without the case's other words |
-| kit | CL-P09 | missed | peppol.org | unsupported_claim | timeline | OpenPeppol certifies every access point provider within 10 working days. | not flagged: "OpenPeppol certifies": "certifies" is not a commitment verb and §9d needs "certified" or a partner tier |
-| kit | CL-P10 | missed | peppol.org | unsupported_claim | billing (hold-out) | Membership costs EUR 2,500 a year for service providers. | not flagged: subject "Membership" with "costs": no business subject, so a price nobody states is not read |
-| kit | CL-P16 | missed | peppol.org | unsupported_claim | experience | We have more than 1,000 members in 50 countries. | not flagged: "We have more than 1,000 members": "have" is not a commitment verb; §9d counts years / clients / staff, not members or countries |
-| kit | CL-Z13 | missed | azdan.com | unsupported_claim | partnership (hold-out) | Azdan is Oracle's only Platinum NetSuite partner in Egypt. | not flagged: "Azdan is ... only Platinum ... partner": the partner tier list has no "platinum" and "is" is not a commitment verb |
-| kit | CL-Z15 | missed | azdan.com | unsupported_claim | billing | Our fixed fee starts at USD 15,000 for a single subsidiary. | not flagged: subject "Our fixed fee": §9d knows "our fees", not "our fixed fee"; a starting price is not read |
-| kit | CL-Z19 | missed | azdan.com | unsupported_claim | experience | Our consultants have migrated more than 500 companies from SAP Business One. | not flagged: "Our consultants have migrated": "have" is not an allowed helper; §9d counts "companies" nowhere |
-| kit | CL-Z21 | missed | azdan.com | unsupported_claim | timeline | Every Azdan implementation takes eight weeks from kickoff to go-live. | not flagged: subject "Every Azdan implementation": no we / name + verb, so a duration nobody states is not read |
-| kit | CL-Z28 | missed | azdan.com | unsupported_claim | guarantee | نقدم ضمانًا لمدة عامين على كل عملية تنفيذ. | not flagged: Arabic: every pattern is English, an Arabic sentence is never read |
-| qa | CL-T23 | false_flag | techand.ai | supported_claim | experience (hold-out) | We provide round-the-clock support for the systems we run for you. | flagged promise:deliverable: the words "round", "clock", "systems", "run" sit on no single fact sentence, so a paraphrase of "24/7 support" reads as unsupported (synonyms and numbers written in words are not matched) |
-| qa | CL-T41 | missed | techand.ai | unsupported_claim | billing (hold-out) | Our fixed-price readiness assessment costs AED 25,000. | not flagged: subject "Our fixed-price readiness assessment" is not a business subject (§9d knows "our prices / fees", not "our <service>"), and "costs" is not a commitment verb |
-| qa | CL-T48 | missed | techand.ai | unsupported_claim | timeline | Your team gets a 90-day hypercare period after go-live. | not flagged: "Your team gets": the offer pattern knows "get", not "gets" |
-| qa | CL-T51 | missed | techand.ai | unsupported_claim | experience | We have delivered more than 150 Dynamics 365 projects for GCC clients. | not flagged: "We have delivered": "have" is not an allowed helper before the verb; §9d reads "365 projects" as the count and finds "365" in "Dynamics 365" |
-| qa | CL-T57 | missed | techand.ai | unsupported_claim | timeline (hold-out) | A typical Copilot rollout with us takes six to eight weeks from kickoff to go-live. | not flagged: subject "A typical Copilot rollout with us": no we / name subject, so a duration nobody states is not read |
-| qa | CL-T58 | missed | techand.ai | unsupported_claim | deliverable | Monthly health checks and a quarterly roadmap review are part of the service. | not flagged: passive with no subject ("are part of the service") |
-| qa | CL-T59 | missed | techand.ai | unsupported_claim | billing (hold-out) | Training is included at no extra cost. | not flagged: passive billing line with no subject ("Training is included at no extra cost") |
-| qa | CL-T61 | missed | techand.ai | unsupported_claim | deliverable | A written data governance policy for your Copilot rollout | not flagged: a list item with no verb under "What you get from Tech&": only verb patterns are read |
-| qa | CL-T62 | missed | techand.ai | unsupported_claim | experience (hold-out) | Every Tech& consultant has worked inside a bank or a government entity. | not flagged: "Every Tech& consultant has worked": the name is not followed by a verb and "has worked" is not a commitment verb |
-| qa | CL-A05 | missed | techand.ai | unsupported_claim | guarantee | نضمن استرداد أموالك إذا لم يعمل النموذج التجريبي خلال ستة أسابيع. | not flagged: Arabic: every pattern is English, an Arabic sentence is never read |
-| qa | CL-A06 | missed | techand.ai | unsupported_claim | credential | نحن حاصلون على شهادة ISO 27001 لمركز التنفيذ لدينا. | not flagged: Arabic: every pattern is English, an Arabic sentence is never read |
-| qa | CL-A07 | missed | techand.ai | unsupported_claim | billing | تبلغ رسوم تقييم الجاهزية لدينا 25,000 درهم. | not flagged: Arabic: every pattern is English, an Arabic sentence is never read |
-| qa | CL-A08 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | ستحصل على دليل تشغيل ولوحات متابعة بعد الإطلاق. | not flagged: Arabic: every pattern is English, an Arabic sentence is never read |
-| qa | CL-P07 | false_flag | peppol.org | supported_claim | process (hold-out) | Any organisation can apply for membership of OpenPeppol through the members page. | flagged terms:credential: §9d reads "membership of" as a credential; the fact says "apply for membership" in a sentence without the case's other words |
-| qa | CL-P09 | missed | peppol.org | unsupported_claim | timeline | OpenPeppol certifies every access point provider within 10 working days. | not flagged: "OpenPeppol certifies": "certifies" is not a commitment verb and §9d needs "certified" or a partner tier |
-| qa | CL-P10 | missed | peppol.org | unsupported_claim | billing (hold-out) | Membership costs EUR 2,500 a year for service providers. | not flagged: subject "Membership" with "costs": no business subject, so a price nobody states is not read |
-| qa | CL-P16 | missed | peppol.org | unsupported_claim | experience | We have more than 1,000 members in 50 countries. | not flagged: "We have more than 1,000 members": "have" is not a commitment verb; §9d counts years / clients / staff, not members or countries |
-| qa | CL-Z13 | missed | azdan.com | unsupported_claim | partnership (hold-out) | Azdan is Oracle's only Platinum NetSuite partner in Egypt. | not flagged: "Azdan is ... only Platinum ... partner": the partner tier list has no "platinum" and "is" is not a commitment verb |
-| qa | CL-Z15 | missed | azdan.com | unsupported_claim | billing | Our fixed fee starts at USD 15,000 for a single subsidiary. | not flagged: subject "Our fixed fee": §9d knows "our fees", not "our fixed fee"; a starting price is not read |
-| qa | CL-Z19 | missed | azdan.com | unsupported_claim | experience | Our consultants have migrated more than 500 companies from SAP Business One. | not flagged: "Our consultants have migrated": "have" is not an allowed helper; §9d counts "companies" nowhere |
-| qa | CL-Z21 | missed | azdan.com | unsupported_claim | timeline | Every Azdan implementation takes eight weeks from kickoff to go-live. | not flagged: subject "Every Azdan implementation": no we / name + verb, so a duration nobody states is not read |
-| qa | CL-Z28 | missed | azdan.com | unsupported_claim | guarantee | نقدم ضمانًا لمدة عامين على كل عملية تنفيذ. | not flagged: Arabic: every pattern is English, an Arabic sentence is never read |
+| kit | CL-A08 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | ستحصل على دليل تشغيل ولوحات متابعة بعد الإطلاق. | not flagged: an offer to the reader ("you will receive") counts only in a section about the business, and the Arabic heading "التشغيل والتحسين" (Run & Optimize) is a phase on file only in English, so the section is not recognised as the business's |
+| kit | CL-R13 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | A runbook is delivered at go-live. | not flagged: read as a passive commitment, but with two content words "deliver" alone (half of them) matched a fact; one shared word is too little support for so short a line |
+| kit | CL-R14 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | Monitoring dashboards are included in every engagement. | not flagged: read as a passive commitment, but "monitoring" alone (half of two content words) matched a fact; one shared word is too little support for so short a line |
+| qa | CL-T41 | missed | techand.ai | unsupported_claim | billing (hold-out) | Our fixed-price readiness assessment costs AED 25,000. | not flagged as a claim on the qa path only: Content QA's price mask runs first and turns "AED 25,000" into [Price] (no price facts on file), and the claims check never reads a sentence that holds a bracket; the page is still held, by the placeholder, but the claim is not named. The kit flags it |
+| qa | CL-A08 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | ستحصل على دليل تشغيل ولوحات متابعة بعد الإطلاق. | not flagged: an offer to the reader ("you will receive") counts only in a section about the business, and the Arabic heading "التشغيل والتحسين" (Run & Optimize) is a phase on file only in English, so the section is not recognised as the business's |
+| qa | CL-R13 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | A runbook is delivered at go-live. | not flagged: read as a passive commitment, but with two content words "deliver" alone (half of them) matched a fact; one shared word is too little support for so short a line |
+| qa | CL-R14 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | Monitoring dashboards are included in every engagement. | not flagged: read as a passive commitment, but "monitoring" alone (half of two content words) matched a fact; one shared word is too little support for so short a line |

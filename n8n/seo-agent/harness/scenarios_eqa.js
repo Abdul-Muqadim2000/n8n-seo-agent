@@ -45,13 +45,14 @@ module.exports = async (ctx) => {
     check('kind: iaaic.org (an association\'s member directory) is other, never a service page by default', kinds['iaaic.org'] === 'other', J(kinds));
     check('kind: consultancy-me.com\'s ranking is a list, opsiocloud.com\'s explainer a guide', kinds['consultancy-me.com'] === 'list' && kinds['opsiocloud.com'] === 'guide', J(kinds));
     check('kind: the keyword\'s own word is not the evidence ("Consultant" in the title) but an offer in the title still is',
-      CVG.kindOf({ title: 'AI Consultant | Acme', url: 'https://acme.example/ai-consultant' }, KW) === 'unknown'
+      CVG.kindOf({ title: 'AI Consultant | Acme', url: 'https://acme.example/ai-consultant' }, KW) === 'service'   // CT-FIX (review item 3): a page whose title names the search itself is a service page; was 'unknown', which left real service pages with nothing of their kind to beat
+      && CVG.kindOf({ title: 'Certified Artificial Intelligence Consultant | CAIC(TM)', url: 'https://www.usaii.org/ai-certifications/caic' }, KW) !== 'service'
       && CVG.kindOf({ title: 'AI Consulting Services | ATI Lab', url: 'https://atilab.example/ai' }, 'ai consulting') === 'service'
       && CVG.kindOf({ title: 'AI Consultant Services in Dubai | Kinetic', url: 'https://kinetic.example/ai' }, KW) === 'service',
       J([CVG.kindOf({ title: 'AI Consultant | Acme', url: 'https://acme.example/ai-consultant' }, KW), CVG.kindOf({ title: 'AI Consulting Services | ATI Lab', url: 'https://atilab.example/ai' }, 'ai consulting')]));
     check('kind: a search for the course itself is not refused for being one ("ai consultant certification")', CVG.kindOf(comp('usaii.org'), 'ai consultant certification') !== 'other', CVG.kindOf(comp('usaii.org'), 'ai consultant certification'));
     const promo = ['Program Fee: US $894 (All Inclusive)', 'Alumni Speak', 'Get your latest self-study kit worth up to US $794 FREE that includes', 'Program Eligibility', 'Program Curriculum', 'Ready for your Next Step?', 'Am I eligible for Speedster discount?'];
-    check('sales headings are never subtopics: fee, price, FREE, alumni, eligibility, curriculum, "ready for your next step"', promo.every(h => CVG.isPromo(h)), J(promo.filter(h => !CVG.isPromo(h))));
+    check('sales headings are never subtopics: fee, price, FREE, alumni, eligibility, curriculum, "ready for your next step"', promo.every(h => CVG.isPromo(h, 'other')), J(promo.filter(h => !CVG.isPromo(h, 'other'))));   // CT-FIX (review item 5): the course's sales words count on the course page (kind other)
     check('topical headings stay subtopics', ['How to choose an AI consultant', 'What skills define a strong AI consultant?', 'Free zones and data residency in the UAE'].every(h => !CVG.isPromo(h)), 'a topic was taken for promotion');
     mock('Collect Facts', [{ json: clone(FX.collect_facts) }]);
     const T = (await run('Parse Analysis', [{ json: { output: { recommended_word_count: 1800 } } }]))[0].json;
@@ -124,7 +125,7 @@ module.exports = async (ctx) => {
       'Admins learn security', 'Makers learn to extend', 'You keep a self-study pack', 'If out-of-the-box Copilot covers', 'We design permissions', 'Sometimes a rule-based Power Platform workflow'];
     const FILL = 'A short review closes each step before the next one starts.';
     const unpromise = (d) => PROMISES.reduce((x, p) => x.replace(new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^\\n]*?[.!?](?=\\s|$)'), FILL), d);
-    const filled = unpromise(FX.draft_round2.split(BANK).join('a regional bank').split(FEE).join('a fixed scope'));
+    const filled = unpromise(FX.draft_round2.split(BANK).join('a regional bank').split(FEE).join('a fixed scope')).split('**AI strategy:** candidate use cases ranked by value and risk.').join('**Data foundations:** predictive models and the data platform beneath them.');   // CT-FIX (2026-10-22): a list item under "Enterprise AI work at Tech& falls into four groups:" inherits the lead-in; "candidate use cases ranked by value and risk" is the same unsupported deliverable as the prioritised use-case backlog, so it is taken out too
     const r2 = (await qa42(noSubs, filled, 1)).content_qa;
     console.log('   no brackets ->', J({ passed: r2.passed, brackets: r2.body_brackets, warnings: r2.warnings }));
     check('the same page with its two brackets filled in passes and is publishable', r2.body_brackets === 0 && r2.passed === true && r2.publishable === true && r2.not_ready === false, J({ p: r2.passed, b: r2.body_brackets, w: r2.warnings }));

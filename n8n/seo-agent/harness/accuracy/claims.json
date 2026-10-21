@@ -1716,6 +1716,187 @@
    "source": "synthetic draft sentence written for this set, judged against the facts on file (Arabic)",
    "heading": "التزامنا",
    "holdout": false
+  },
+  {
+   "id": "CL-R01",
+   "site": "techand.ai",
+   "sentence": "Get a free assessment: we review your current setup and send a written plan.",
+   "label": "not_a_claim",
+   "category": "cta",
+   "reason": "the page's call to action: an invitation to a conversation, not a deliverable (review item 1)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 1): hold-out, written by the reviewer before the fix",
+   "heading": "Next step",
+   "holdout": true
+  },
+  {
+   "id": "CL-R02",
+   "site": "techand.ai",
+   "sentence": "Share your requirements and we will prepare a fixed-scope proposal.",
+   "label": "not_a_claim",
+   "category": "cta",
+   "reason": "the call to action's next step (review item 1)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 1): hold-out, written by the reviewer before the fix",
+   "heading": "Next step",
+   "holdout": true
+  },
+  {
+   "id": "CL-R03",
+   "site": "techand.ai",
+   "sentence": "Our team will review your setup and reply within two business days.",
+   "label": "not_a_claim",
+   "category": "cta",
+   "reason": "the reply promised by the call to action (review item 1)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 1): hold-out, written by the reviewer before the fix",
+   "heading": "Next step",
+   "before": "Send us a short description of your systems.",
+   "holdout": true
+  },
+  {
+   "id": "CL-R04",
+   "site": "techand.ai",
+   "sentence": "Send us your current setup and we will review it within two business days.",
+   "label": "not_a_claim",
+   "category": "cta",
+   "reason": "the call to action (review item 1: the generated QA marked the page not ready on it)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 1): hold-out, written by the reviewer before the fix",
+   "heading": "Talk to us about your setup",
+   "holdout": true
+  },
+  {
+   "id": "CL-R05",
+   "site": "techand.ai",
+   "sentence": "In this guide we cover the five steps the FTA asks for.",
+   "label": "not_a_claim",
+   "category": "generic",
+   "reason": "guide narration, says what the page covers (review item 2)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 2): hold-out, written by the reviewer before the fix",
+   "heading": "What VAT registration in the UAE involves",
+   "holdout": true
+  },
+  {
+   "id": "CL-R06",
+   "site": "techand.ai",
+   "sentence": "Below we map each requirement to the law.",
+   "label": "not_a_claim",
+   "category": "generic",
+   "reason": "guide narration (review item 2)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 2): hold-out, written by the reviewer before the fix",
+   "heading": "What VAT registration in the UAE involves",
+   "holdout": true
+  },
+  {
+   "id": "CL-R07",
+   "site": "techand.ai",
+   "sentence": "You receive a Tax Registration Number from the FTA within 20 business days.",
+   "label": "not_a_claim",
+   "category": "generic",
+   "reason": "the FTA issues the number: a third party acts, not the business (review item 9)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 9): hold-out, written by the reviewer before the fix",
+   "heading": "How we handle your VAT registration",
+   "before": "We prepare the application with you.",
+   "holdout": true
+  },
+  {
+   "id": "CL-R08",
+   "site": "techand.ai",
+   "sentence": "\"We review every application within 20 days,\" the FTA says.",
+   "label": "not_a_claim",
+   "category": "source_quote",
+   "reason": "a quotation of the FTA, not the business's words (review item 9)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 9): hold-out, written by the reviewer before the fix",
+   "heading": "How we handle your VAT registration",
+   "holdout": true
+  },
+  {
+   "id": "CL-R09",
+   "site": "techand.ai",
+   "sentence": "Say we start with a 40-user retailer and a single warehouse.",
+   "label": "not_a_claim",
+   "category": "generic",
+   "reason": "a worked example (review item 9)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 9): hold-out, written by the reviewer before the fix",
+   "heading": "A worked example: what Copilot costs a retailer",
+   "holdout": true
+  },
+  {
+   "id": "CL-R10",
+   "site": "techand.ai",
+   "sentence": "Most distributors we work with in Dubai still run spreadsheets.",
+   "label": "not_a_claim",
+   "category": "generic",
+   "reason": "the subject is the distributors; \"we\" sits in a relative clause (review item 9)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 9): hold-out, written by the reviewer before the fix",
+   "heading": "Why distributors in Dubai move to ERP",
+   "holdout": true
+  },
+  {
+   "id": "CL-R11",
+   "site": "techand.ai",
+   "sentence": "We'll deliver a runbook and an architecture diagram at go-live.",
+   "label": "unsupported_claim",
+   "category": "deliverable",
+   "reason": "a contraction of \"we will\": a deliverable nothing on file names (review item 10)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 10): hold-out, written by the reviewer before the fix",
+   "heading": "Our approach",
+   "holdout": true
+  },
+  {
+   "id": "CL-R12",
+   "site": "techand.ai",
+   "sentence": "We're going to train your admins on every new workflow.",
+   "label": "unsupported_claim",
+   "category": "deliverable",
+   "reason": "a contraction of \"we are\": a training commitment nothing on file names (review item 10)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 10): hold-out, written by the reviewer before the fix",
+   "heading": "Our approach",
+   "holdout": true
+  },
+  {
+   "id": "CL-R13",
+   "site": "techand.ai",
+   "sentence": "A runbook is delivered at go-live.",
+   "label": "unsupported_claim",
+   "category": "deliverable",
+   "reason": "passive deliverable in a section about the business (review item 10)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 10): hold-out, written by the reviewer before the fix",
+   "heading": "Our approach",
+   "before": "We plan each rollout with your IT team.",
+   "holdout": true
+  },
+  {
+   "id": "CL-R14",
+   "site": "techand.ai",
+   "sentence": "Monitoring dashboards are included in every engagement.",
+   "label": "unsupported_claim",
+   "category": "deliverable",
+   "reason": "passive deliverable in a section about the business (review item 10)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 10): hold-out, written by the reviewer before the fix",
+   "heading": "Our approach",
+   "holdout": true
+  },
+  {
+   "id": "CL-R15",
+   "site": "techand.ai",
+   "sentence": "You will receive a runbook.",
+   "label": "unsupported_claim",
+   "category": "deliverable",
+   "reason": "an offer under \"Our approach\": the heading makes the section about the business (review item 10)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 10): hold-out, written by the reviewer before the fix",
+   "heading": "Our approach",
+   "holdout": true
+  },
+  {
+   "id": "CL-R16",
+   "site": "techand.ai",
+   "sentence": "A quarterly roadmap review with your sponsor",
+   "label": "unsupported_claim",
+   "category": "deliverable",
+   "reason": "a list item under the lead-in \"Our engagement includes:\" inherits the commitment (review item 10)",
+   "source": "independent review 2026-10-22 (CT_REVIEW.md item 10): hold-out, written by the reviewer before the fix",
+   "heading": "Run and optimise",
+   "before": "Our engagement includes:",
+   "list": true,
+   "holdout": true
   }
  ]
 }
