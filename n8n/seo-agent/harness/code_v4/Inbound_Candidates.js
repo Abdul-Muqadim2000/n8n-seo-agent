@@ -420,7 +420,9 @@ const INB = (() => {
     for (const k of (Array.isArray(t && t.secondary) ? t.secondary : [])) add(k, 1);
     add(h1, 2); add(brandless(t && t.title), 2); add(t && t.keyword, 3);
     for (const p of PLACES) if (W.has(p)) W.set(p, 0.25);   // a place name says where, not what the page is about
-    return { url: S(t && t.url), keyword: S(t && t.keyword), h1, title: S(t && t.title), kind: S(t && t.kind) || 'service', heads, weights: W };
+    // CT-FIX2 (live page 2026-10-22, D4): the searches of the ladder's OTHER pages; an anchor that is one of them points this page at another page's search
+    const avoid = [...new Set((Array.isArray(t && t.avoid) ? t.avoid : []).map(x => S(x).toLowerCase().replace(/\s+/g, ' ').trim()).filter(x => x && x !== S(t && t.keyword).toLowerCase().trim()))];
+    return { url: S(t && t.url), keyword: S(t && t.keyword), h1, title: S(t && t.title), kind: S(t && t.kind) || 'service', heads, weights: W, avoid };
   };
 
   const candidates = (pages, T, o) => {
@@ -484,8 +486,9 @@ const INB = (() => {
   const lower = (s) => s.split(' ').map((w, i) => ACR.test(w.replace(/[^a-z0-9]/gi, '')) ? w.toUpperCase() : /[A-Z].*[A-Z]/.test(w) ? w : w.toLowerCase()).join(' ');
   const anchors = (T) => {
     const out = [], seen = new Set();
+    const clash = (k) => (T.avoid || []).some(x => (' ' + k + ' ').includes(' ' + x + ' '));
     const push = (s, kind) => { const a = lower(tidy(s)); const n = a.split(/\s+/).filter(Boolean).length; const k = a.toLowerCase();
-      if (!a || n < 2 || n > 7 || seen.has(k)) return; seen.add(k); out.push({ text: a, exact: k.replace(/\s+/g, ' ') === T.keyword.toLowerCase(), kind }); };
+      if (!a || n < 2 || n > 7 || seen.has(k) || clash(k.replace(/\s+/g, ' '))) return; seen.add(k); out.push({ text: a, exact: k.replace(/\s+/g, ' ') === T.keyword.toLowerCase(), kind }); };
     for (const h of T.heads.filter(x => x.level === 2)) {
       if (CTA.test(h.text)) continue;
       const segs = h.text.split(/[:?]\s*|\s+[|]\s+/).map(tidy).filter(Boolean)
@@ -572,7 +575,10 @@ const targetUrl = (d.ladder_id && String(d.ladder_target_url || '').trim()) ? ow
   : (d.qa_page_url ? own(d.qa_page_url) : (/^https?:\/\//i.test(existingUrl) ? own(existingUrl) : SM.siteUrl(model, '/' + slug + '/')));
 const secondary = metaLine('Secondary Keywords') ? metaLine('Secondary Keywords').split(/,\s*/) : (Array.isArray(d.secondary_keywords) ? d.secondary_keywords : []);
 const kind = /blog|guide|article|pillar|hub|case stud|post/i.test(String(d.page_type || d.recommended_page || '')) ? 'guide' : 'service';
-const target_in = { url: targetUrl, keyword: String(d.keyword || ''), md, title, secondary, kind };
+// CT-FIX2 (D4): the other planned pages of the ladder keep their own searches; no anchor here may use one
+const avoid = [].concat(Array.isArray(d.content_links_to_add) ? d.content_links_to_add : [], Array.isArray(d.ladder_links) ? d.ladder_links : [],
+  ((d.content_qa || {}).links_to_add_when_published || [])).map(p => p && p.keyword).filter(Boolean);
+const target_in = { url: targetUrl, keyword: String(d.keyword || ''), md, title, secondary, kind, avoid };
 const T = INB.target(target_in);
 const pages = [].concat(Array.isArray(model.pages) ? model.pages : [], Array.isArray(model.nav_pages) ? model.nav_pages : []);
 const cands = INB.candidates(pages, T, { domain: dom, gone: Array.isArray(d.gone_pages) ? d.gone_pages.map(g => g && (g.url || g.from_url || g)) : [], max: 10 });

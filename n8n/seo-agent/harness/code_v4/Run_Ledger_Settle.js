@@ -664,6 +664,11 @@ for (const c of __AI_CALLS) {
   __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
     prompt_chars, output_chars, counted, calls: Math.max(__base104, __runs104), retries: Math.max(0, __runs104 - __base104) });
 }
+// CT-FIX2 (2026-10-22, section 148): the promise judge (Claude Haiku over HTTP, once per QA round). Anthropic reports the tokens of each answer,
+// so this call is MEASURED, every round summed (a run index the node never reached ends the walk).
+{ let inT = 0, outT = 0, n = 0; for (let r = 0; r < 12; r++) { let a = null; try { a = $('Promise Judge').all(0, r); } catch (e) { break; } if (!a || !a.length) break;
+    for (const i of a) { const u = (i && i.json && i.json.usage) || null; if (u && (Number(u.input_tokens) || Number(u.output_tokens))) { inT += Number(u.input_tokens) || 0; outT += Number(u.output_tokens) || 0; n++; } } }
+  if (n) __costCalls.push({ node: 'Promise Judge', model: 'claude-haiku-4-5-20251001', max_tokens: 4000, effort: '', streaming: false, prompt_chars: 0, output_chars: 0, usage: { promptTokens: inT, completionTokens: outT }, calls: n }); }
 run_ledger.ai_cost = CC.runCost(__costCalls, CC.readCal(__calRows()).factors);
 run_ledger.ai_usd = run_ledger.ai_cost.usd;
 run_ledger.ai_cost_estimated = run_ledger.ai_cost.estimated;

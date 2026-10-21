@@ -836,6 +836,11 @@ for (const c of __AI_CALLS) {
   __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
     prompt_chars, output_chars, counted, calls: Math.max(__base104, __runs104), retries: Math.max(0, __runs104 - __base104) });
 }
+// CT-FIX2 (2026-10-22, section 148): the promise judge (Claude Haiku over HTTP, once per QA round). Anthropic reports the tokens of each answer,
+// so this call is MEASURED, every round summed (a run index the node never reached ends the walk).
+{ let inT = 0, outT = 0, n = 0; for (let r = 0; r < 12; r++) { let a = null; try { a = $('Promise Judge').all(0, r); } catch (e) { break; } if (!a || !a.length) break;
+    for (const i of a) { const u = (i && i.json && i.json.usage) || null; if (u && (Number(u.input_tokens) || Number(u.output_tokens))) { inT += Number(u.input_tokens) || 0; outT += Number(u.output_tokens) || 0; n++; } } }
+  if (n) __costCalls.push({ node: 'Promise Judge', model: 'claude-haiku-4-5-20251001', max_tokens: 4000, effort: '', streaming: false, prompt_chars: 0, output_chars: 0, usage: { promptTokens: inT, completionTokens: outT }, calls: n }); }
 run_ledger.ai_cost = CC.runCost(__costCalls, CC.readCal(__calRows()).factors);
 run_ledger.ai_usd = run_ledger.ai_cost.usd;
 run_ledger.ai_cost_estimated = run_ledger.ai_cost.estimated;
@@ -1193,6 +1198,13 @@ a { color: #1D4ED8; }
 .code { background: #0F172A; color: #E2E8F0; padding: 12px; font-family: Consolas, monospace; font-size: 8.5pt; white-space: pre-wrap; }
 .pb { page-break-before: always; }`;
 
+// CT-FIX2 (live page 2026-10-22, D7): the Word report carried 18 em dashes, an arrow and "..." while the page, meta and app were clean. The
+// text between tags is written the way the rest of the product writes: a dash becomes a colon (a comma after the first), an arrow "to",
+// a cut title loses its "...", QA's "[Confirm: ...]" names what goes inside, curly quotes are straight.
+const __plainWord = (h) => String(h).replace(/>([^<]+)</g, (m, t) => { let n = 0;
+  const x = t.replace(/\[Confirm: (?:\.\.\.|…)\]/g, '[Confirm: the sentence]').replace(/\s+—\s+/g, () => (n++ ? ', ' : ': ')).replace(/—/g, '-').replace(/\s*→\s*/g, ' to ')
+    .replace(/\s*(?:\.\.\.|…)(?=\s*$|\s*[)\]])/g, '').replace(/(?:\.\.\.|…)/g, '').replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+  return '>' + x + '<'; });
 const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="utf-8"><title>${esc(d.keyword)} — ${esc(reportType)}</title>
 <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
@@ -1255,7 +1267,7 @@ return [{
   },
   binary: {
     data: {
-      data: Buffer.from('\ufeff' + html, 'utf8').toString('base64'),
+      data: Buffer.from('\ufeff' + __plainWord(html), 'utf8').toString('base64'),
       mimeType: 'application/msword',
       fileName: fileName,
       fileExtension: 'doc'

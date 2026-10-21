@@ -1426,7 +1426,7 @@ let CACHE77 = []; try { CACHE77 = $('Load Site Cache').all().map(i => i.json); }
 // read. Never a fresh paid pull: a keyword report does not buy the ranked-keywords list.
 const RI77 = reachCached(CACHE77, prev.domain, prev.location_code) || { ...reachFrom(null, prev.site_authority || null), ranked: null, cached: false };
 const TA77 = reachTopic(RI77.ranked === undefined ? null : RI77.ranked, prev.keyword, RI77.reach, { domain: prev.domain || 'your site',
-  reason_missing: RI77.cached ? 'the reach stored on ' + String(RI77.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this report has no topic evidence to read'
+  reason_missing: RI77.cached ? 'the reach of your site was measured on ' + String(RI77.cached_at || '').slice(0, 10) + ' across all your keywords, not this topic, so this report cannot say how strong you are on this topic in particular'
     : 'a keyword report does not buy the list of keywords your site ranks for (the keyword research and the ladder do)' });
 const DIFF77 = prev.domain ? difficultyForYou(KD77, TA77.reach, {}) : null;
 const PLAN77 = DIFF77 ? reachPlan(DIFF77, reachStrong(RI77, null), reachMeasured(TA77 && TA77.used ? { used: true } : RI77, null)) : null;   // R49: no chance band on a reach no measured ranking supports

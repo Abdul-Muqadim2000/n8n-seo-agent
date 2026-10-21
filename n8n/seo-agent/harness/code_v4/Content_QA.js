@@ -1136,7 +1136,9 @@ const CL = (() => {
   // checked = flagged for the owner).
   const NUMW = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, ninety: 90, hundred: 100 };
   // the same meaning in the words a writer or a site uses: applied to the claim and to the facts before anything is compared
+  // CT-FIX2 (live page 2026-10-22, D1): the long and the short name of a place are one name ("United Arab Emirates" = "UAE")
   const canon = (s) => String(s || '')
+    .replace(/\bthe united arab emirates\b|\bunited arab emirates\b/gi, 'UAE').replace(/\bkingdom of saudi arabia\b|\bsaudi arabia\b/gi, 'KSA').replace(/\bgulf cooperation council\b/gi, 'GCC')
     .replace(/\b(?:a|one) decade\b/gi, '10 years').replace(/\b(two|three|four|five) decades\b/gi, (m, n) => (NUMW[n.toLowerCase()] * 10) + ' years')
     .replace(/\b(?:a|one) dozen\b/gi, '12').replace(/\b(?:around|round)[- ]the[- ]clock\b|\b24\s*x\s*7\b|\b24 hours a day,? 7 days a week\b|\b24 hours a day\b/gi, '24/7')
     .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|ninety|hundred)\b/gi, (m) => String(NUMW[m.toLowerCase()]))
@@ -1185,7 +1187,9 @@ const CL = (() => {
   const NARR_VERB = /^(?:we|we['’]ll)\s+(?:will\s+)?(?:cover|explain|walk (?:you )?through|look at|outline|list|compare|answer|explore|discuss|break down|summari[sz]e|unpack|examine|describe|go through|show you)\s+(?:the|these|this|what|how|why|when|which|each|every|\d+|both|all)\b/i;
   const EXAMPLE_RE = /^(?:say|suppose|imagine|assume|picture|let['’]?s say|for (?:example|instance), (?:say|suppose|imagine|if))\b/i;
   const ADVICE_WE = /^(?:we|we['’]d)\s+(?:would\s+|always\s+|strongly\s+)?(?:recommend|suggest|advise|encourage|urge)\b/i;
-  const CTA_START = /^(?:book|call|contact|talk|email|e-mail|schedule|get in touch|arrange|request|get a|get your|get started|share|send|ask|tell us|reach|start|join|sign up|try|download|visit|speak|let['’]s|fill in|message|claim|see how|find out|learn more|ready to)\b/i;
+  const CTA_START = /^(?:book|call|contact|talk|email|e-mail|schedule|get in touch|arrange|request|get a|get your|get started|share|send|ask|tell us|reach|start|join|sign up|try|download|visit|speak|let['’]s|fill in|message|claim|see how|find out|learn more|ready to|read|see|explore|discover|check out|browse|compare)\b/i;
+  // CT-FIX2 (live page 2026-10-22, D2): "To test one use case first, [book a discovery call]" is an invitation behind a purpose clause
+  const PURPOSE_LEAD = /^(?:to|if you (?:want|need|would like) to|when you are ready to|for)\s+[^,]{3,80},\s+/i;
   const CTA_HEAD = /\b(?:next steps?|get started|getting started with us|contact|talk to|book|ready to|let['’]s talk|work with us|request|speak to|get in touch|start (?:your|a|with))\b/i;
   const CTA_FOLLOW = /\b(?:reply|replies|respond|responds|get back to you|call you back|be in touch|contact you|review (?:it|them|your|the details)|send (?:you )?(?:a |the )?(?:written )?(?:plan|proposal|summary|recommendation|outline|next steps)|prepare a (?:fixed-scope |short )?(?:proposal|plan)|set up a call|arrange a call)\b/i;
   const CTA_TERMS = /\b(?:quotes?|quoted|price[sd]?|pricing|fees?|cost|guarantee\w*|refund\w*|money[- ]back|warrant\w*|discount\w*)\b|(?:aed|usd|eur|gbp|sar|\$|€|£)\s?\d/i;
@@ -1193,7 +1197,7 @@ const CL = (() => {
   const OFFER_RE = /\b(?:you|your (?:team|teams|staff|people|users|admins|organisation|organization|business|company))\s+(?:will\s+|['’]ll\s+|also\s+|then\s+|always\s+)?(?:receive|receives|get|gets|keep|keeps|walk away with|leave with|are given|are handed|can expect|will have)\b|\b(?:business users|users|admins|makers)\s+(?:will\s+)?(?:get|gets|receive)\b/i;
   const TRAIN_RE = /^(?:admins|makers|(?:business )?users|staff|employees|your (?:team|staff|admins|users|people))\s+(?:learn|are trained|get trained|receive training)\b/i;
   const PHASE_RE = /^(?:this|each|every|the)\s+(?:phase|stage|step|engagement|service|workstream|programme|program|package|plan)\s+(?:covers|includes|ends|delivers|starts|runs|takes|comes with)\b/i;
-  const PASSIVE_RE = /\b(?:is|are|will be|comes?|come)\s+(?:also\s+|always\s+)?(?:delivered|included|provided|offered|covered|handled|priced|billed|charged|backed|guaranteed|free of charge|at no (?:extra )?cost|part of (?:the|every|each|our|all)|available (?:to|for|with|at)|bundled|built in|supplied)\b/i;
+  const PASSIVE_RE = /\b(?:is|are|will be|comes?|come)\s+(?:also\s+|always\s+)?(?:delivered|included|provided|offered|covered|handled|priced|billed|charged|backed|guaranteed|agreed|named|assigned|documented|defined|signed off|set up|tested|trained|reviewed|free of charge|at no (?:extra )?cost|part of (?:the|every|each|our|all)|available (?:to|for|with|at)|bundled|built in|supplied)\b/i;
   const COSTTIME_RE = /\b(?:costs?|starts? at|is priced at|takes|lasts|runs for)\s+(?:about\s+|around\s+|from\s+|just\s+|only\s+)?(?:(?:aed|usd|eur|gbp|sar|\$|€|£)\s?)?\d/i;
   const BILL_RE = /\b(?:quote|quotes|quoted|invoice\w*|billed|billing|line item|separate line|fees?|payment|deposit|retainer|hourly|day rate|licen[cs]es? (?:sit|are|is)|charged?)\b/i;
   const LEAD_HEAD = /\b(?:what you get|you get|you receive|deliverables?|includes?|included|what (?:we|\S+) (?:deliver|delivers|does|do|handles?|offers?|covers?|provides?)|our (?:services|engagement|approach|offer|packages?|scope))\b/i;
@@ -1243,6 +1247,25 @@ const CL = (() => {
       for (const c of cs) { const r = W.length ? W.filter(w => c.w.has(w)).length / W.length : 0; if (r > best && strong.every(q => c.low.includes(q))) best = r; }
       return { W, best, numsOk, ok: numsOk && W.length > 0 && best >= 0.5 };
     };
+    // CT-FIX2 (live page 2026-10-22, D1): "We serve enterprises across the UAE and the GCC and bring 20+ years of industry experience" joins
+    // two facts that sit in two places on file; each half is held against the facts on its own, and the sentence is supported when both are
+    const JOIN_RE = /,?\s+and\s+(?=(?:we\s+|also\s+)?(?:bring|brings|have|has|hold|holds|serve|serves|offer|offers|deliver|delivers|run|runs|work|works|employ|employs|support|supports|operate|operates)\b)/i;
+    const supportJoined = (plain, english) => { const sp = support(plain, english); if (sp.ok || english || !JOIN_RE.test(plain)) return sp;
+      const parts = plain.split(JOIN_RE).map(x => x.trim()).filter(x => x.length >= 8); if (parts.length < 2) return sp;
+      const subj = (plain.match(/^(\S+(?:\s+\S+)?)\s/) || [])[1] || '';
+      const sps = parts.map((x, i) => support(i === 0 ? x : subj + ' ' + x));
+      return sps.every(x => x.ok) ? { ...sp, best: Math.min(...sps.map(x => x.best)), ok: true, joined: true } : sp; };
+    // the facts on file closest to a sentence (for the second reader): up to 3, the best word overlap first
+    const topFacts = (plain) => { const W = [...new Set(words(canon(plain), nameWords))].filter(w => !GENERIC.has(w)); if (!W.length) return [];
+      const sc = []; for (let i = 0; i < csents.length; i++) { const ws = new Set(words(csents[i], nameWords)); const r = W.filter(w => ws.has(w)).length / W.length; if (r > 0) sc.push([r, i]); }
+      sc.sort((a, b) => b[0] - a[0]); return sc.slice(0, 3).map(([, i]) => csents[i].trim().slice(0, 400)); };
+    // a phase or a service the business names on file, as the subject: "Run & Optimize covers ...", "Assess & Envision includes ..."
+    const PHASE_SUBJ = /^([A-Z][\w-]*(?:\s+(?:&|and)\s+[A-Z][\w-]*)+)\s+(?:also\s+|then\s+)?(?:covers?|includes?|adds?|extends?|delivers?|provides?|ends?|starts?|runs?|takes?|gives?|keeps?|sets?|handles?|brings?|is|are)\b/;
+    const phaseSubject = (s) => { const m = s.match(PHASE_SUBJ); return !!(m && norm(m[1]).length >= 6 && cnorm.includes(norm(m[1]))); };
+    const TITLE_SUBJ = /^((?:[A-Z][\w&-]*\s+){0,3}[A-Z][\w&-]*)\s+(?:also\s+)?[a-z]+s\b/;
+    const onFileSubject = (s) => { const m = s.match(TITLE_SUBJ); return !!(m && norm(m[1]).length >= 6 && cnorm.includes(norm(m[1]))); };
+    const cands = []; const seenC = new Set();
+    const addCand = (o) => { const k = norm(o.plain); if (!k || seenC.has(k)) return; seenC.add(k); cands.push(o); };
     // sections: one H2 group = the H2 and the H3s under it; a list item remembers its lead-in
     const groups = []; let g = null, para = [], lastLead = null, headLead = null;
     const flushPara = () => { if (para.length && g) { const p = para.join(' '); g.items.push({ p, kind: 'para' }); lastLead = /:\s*$/.test(p) ? p : null; } para = []; };
@@ -1260,18 +1283,20 @@ const CL = (() => {
       para.push(L);
     }
     flushPara();
+    // CT-FIX2 (live page 2026-10-22, D3): an image caption is read as a statement on the page (card 3 repeated the go / no-go promise)
+    for (const c of (opts.captions || [])) { const txt = String(c || '').trim(); if (txt) groups.push({ heads: [], items: [{ p: txt, kind: 'caption' }], captions: true }); }
     const headOnFile = (hd) => { const pre = norm(String(hd).split(':')[0]); return pre.length >= 6 && cnorm.includes(pre); };
     const clean = (s) => s.replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim();
     const sentsOf = (p) => p.replace(/\*\*/g, '').split(/(?<=[.!?])\s+(?=[A-Z"(\[“؀-ۿ])|(?<=[.!?؟])\s+/).map(s => s.trim()).filter(Boolean);
     const isLast = (G) => groups.filter(x => x.heads.length).slice(-1)[0] === G && groups.filter(x => x.heads.length).length >= 2;
     const ctaGroup = (G) => G.heads.some(hd => CTA_HEAD.test(hd) || /\?\s*$/.test(hd) && /\b(?:ready|want|need) to\b/i.test(hd)) || isLast(G);
     for (const G of groups) {
-      const aboutBiz = G.heads.some(hd => headOnFile(hd) || (NAME_RE && NAME_RE.test(hd)) || /\b(?:we|our|us)\b/i.test(hd))
+      const aboutBiz = !!G.captions || G.heads.some(hd => headOnFile(hd) || (NAME_RE && NAME_RE.test(hd)) || /\b(?:we|our|us)\b/i.test(hd))
         || G.items.some(it => it.kind === 'para' && sentsOf(it.p).some(s => bizSubject(quoteless(clean(s)))));
       const cta = ctaGroup(G);
       for (const it of G.items) {
         if (it.kind === 'head' && !(WE_SUBJ.test(lead(clean(it.p))) || (NAME_VERB && NAME_VERB.test(clean(it.p))))) continue;   // a heading is read only when it is a sentence with the business as subject ("Why Tech&" is a label)
-        const sents = (it.kind === 'li' || it.kind === 'table' || it.kind === 'head') ? [it.p] : sentsOf(it.p); let lastBill = false;
+        const sents = (it.kind === 'li' || it.kind === 'table' || it.kind === 'head' || it.kind === 'caption') ? [it.p] : sentsOf(it.p); let lastBill = false;
         for (const s of sents) {
           const plain0 = clean(s);
           const full = s.replace(/^[-*]\s+/, '');
@@ -1281,10 +1306,11 @@ const CL = (() => {
             out.checked++;
             const en = arToEnglish(plain0); const sp = support(plain0, en.text);
             if (opts.trace) out.trace = (out.trace || []).concat([{ s: plain0.slice(0, 90), why: 'ar-' + why, W: sp.W, best: Math.round(100 * sp.best), numsOk: sp.numsOk }]);
-            if (sp.ok && en.terms >= 2) continue;
+            if (sp.ok && en.terms >= 2) { if (opts.collect) addCand({ sentence: full, plain: plain0, why: 'ar-' + why, rule_flag: false, support: Math.round(100 * sp.best), kind: 'process', where: it.kind, facts: topFacts(en.text) }); continue; }
             const ek = en.text;
-            out.flags.push({ kind: /guarantee|refund/.test(ek) ? 'guarantee' : /fee|cost|price|aed|discount|free/.test(ek) ? 'pricing' : /certif/.test(ek) ? 'credential' : /weeks|days|months/.test(ek) ? 'timeline' : why === 'offer' ? 'deliverable' : 'process',
-              sentence: full, support: Math.round(100 * sp.best) });
+            const akind = /guarantee|refund/.test(ek) ? 'guarantee' : /fee|cost|price|aed|discount|free/.test(ek) ? 'pricing' : /certif/.test(ek) ? 'credential' : /weeks|days|months/.test(ek) ? 'timeline' : why === 'offer' ? 'deliverable' : 'process';
+            out.flags.push({ kind: akind, sentence: full, support: Math.round(100 * sp.best), where: it.kind });
+            if (opts.collect) addCand({ sentence: full, plain: plain0, why: 'ar-' + why, rule_flag: true, support: Math.round(100 * sp.best), kind: akind, where: it.kind, facts: topFacts(en.text) });
             continue;
           }
           if (it.kind === 'para' && /:\s*$/.test(plain0)) { lastBill = false; continue; }   // a lead-in ("Our engagement includes:") introduces the list; its items are read
@@ -1292,12 +1318,15 @@ const CL = (() => {
           const plain = quoteless(plain0);
           if (hasQuote && SAY_RE.test(plain)) { lastBill = false; continue; }   // a quotation with its speaker: their words, not ours
           const L0 = lead(plain);
+          if (ADVICE_WE.test(L0) && opts.collect && !NARR_OPEN.test(plain)) addCand({ sentence: full, plain, why: 'advice', rule_flag: false, support: 0, kind: 'process', where: it.kind, facts: topFacts(plain) });   // "we recommend a go / no-go review ...": the second reader decides
           if (NARR_OPEN.test(plain) || NARR_VERB.test(L0) || EXAMPLE_RE.test(plain) || ADVICE_WE.test(L0)) { lastBill = false; continue; }
-          if (cta && (CTA_START.test(plain) || CTA_FOLLOW.test(plain)) && !CTA_TERMS.test(plain)) { lastBill = false; continue; }   // the call to action invites a conversation; a price or a guarantee in it is still a term
-          if (CTA_START.test(plain) && !/\b(?:and|then)\s+(?:we|our team)\b/i.test(plain) && !CTA_TERMS.test(plain)) { lastBill = false; continue; }   // an imperative on its own is advice or an invitation
+          const pc = plain.replace(PURPOSE_LEAD, '');   // CT-FIX2 (D2): "To test one use case first, [book a call]" is the invitation itself
+          if (cta && (CTA_START.test(pc) || CTA_FOLLOW.test(pc)) && !CTA_TERMS.test(pc)) { lastBill = false; continue; }   // the call to action invites a conversation; a price or a guarantee in it is still a term
+          if (CTA_START.test(pc) && !/\b(?:and|then)\s+(?:we|our team)\b/i.test(pc) && !CTA_TERMS.test(pc)) { lastBill = false; continue; }   // an imperative on its own is advice or an invitation
           let why = null; const subj = bizSubject(plain);
           if (subj) why = subj;
-          else if (it.kind === 'li' && ((it.lead && (bizSubject(clean(it.lead)) || (NAME_RE && NAME_RE.test(it.lead)) || LEAD_HEAD.test(it.lead))) || (!it.lead && it.head && LEAD_HEAD.test(it.head) && (aboutBiz || (NAME_RE && NAME_RE.test(it.head)))))) why = 'list';
+          else if (phaseSubject(plain)) why = 'phase';   // CT-FIX2 (D3): a phase on file as the subject is the business speaking
+          else if (it.kind === 'li' && ((it.lead && (bizSubject(clean(it.lead)) || (NAME_RE && NAME_RE.test(it.lead)) || LEAD_HEAD.test(it.lead) || /\b(?:we|our)\b/i.test(it.lead))) || (!it.lead && it.head && LEAD_HEAD.test(it.head) && (aboutBiz || (NAME_RE && NAME_RE.test(it.head)))))) why = 'list';
           else if (aboutBiz && it.kind !== 'head' && !thirdParty(plain)) {
             if (OFFER_RE.test(plain)) why = 'offer';
             else if (TRAIN_RE.test(plain) || PHASE_RE.test(plain)) why = 'phase';
@@ -1306,12 +1335,16 @@ const CL = (() => {
           }
           if (why && (why === 'offer' || why === 'with') && thirdParty(plain)) why = null;
           lastBill = !!why && BILL_RE.test(plain);
-          if (!why) continue;
+          if (!why) {   // not a commitment to the rules; a wider net for the second reader: a section about the business, a name on file as the subject, the business named
+            if (opts.collect && !thirdParty(plain) && ((aboutBiz && (COMMIT_VERB.test(plain.toLowerCase()) || OFFER_RE.test(plain) || PASSIVE_RE.test(plain))) || onFileSubject(plain) || (NAME_RE && NAME_RE.test(plain)) || /\b(?:we|our|us)\b/i.test(plain)))
+              addCand({ sentence: full, plain, why: 'wide', rule_flag: false, support: 0, kind: 'process', where: it.kind, facts: topFacts(plain) });
+            continue;
+          }
           out.checked++;
           const lab = why === 'list' && s.match(/^\s*\*\*([^*]{3,60}?):?\*\*:?\s+\S/);   // "**AI strategy:** candidate use cases ...": the label is the service the lead-in commits to
-          const sp0 = support(plain); const sp = (!sp0.ok && lab && support(lab[1]).ok) ? support(lab[1]) : sp0;
+          const sp0 = supportJoined(plain); const sp = (!sp0.ok && lab && support(lab[1]).ok) ? support(lab[1]) : sp0;
           if (opts.trace) out.trace = (out.trace || []).concat([{ s: plain.slice(0, 90), why, W: sp.W, best: Math.round(100 * sp.best), numsOk: sp.numsOk }]);
-          if (sp.ok || !sp.W.length) continue;   // nothing but generic words: nothing to hold against the facts
+          if (sp.ok || !sp.W.length) { if (opts.collect) addCand({ sentence: full, plain, why, rule_flag: false, support: Math.round(100 * sp.best), kind: 'process', where: it.kind, facts: topFacts(plain) }); continue; }   // nothing but generic words: nothing to hold against the facts
           const kind = /\b(?:charg|bill|fee|price|pricing|quote|invoice|payment|licen[cs]es? (?:sit|are)|separate line|cost|free|discount)/i.test(plain) ? 'pricing'
             : /\b(?:guarantee|warrant|refund|promise)/i.test(plain) ? 'guarantee'
               : /\b(?:within|\d+\s*(?:days?|weeks?|months?|hours?|minutes?))\b|\b(?:days|weeks|months)\b/i.test(canon(plain)) ? 'timeline'
@@ -1319,13 +1352,122 @@ const CL = (() => {
                   : /\b(?:stop|only|not|never|scope|covers|includes)\b/i.test(plain) ? 'scope'
                     : (why === 'offer' || why === 'phase' || why === 'list' || why === 'passive' || /\b(?:deliver|provide|runbook|pack|report|dashboard|document)/i.test(plain)) ? 'deliverable' : 'process';
           // E-CLAIM / CT-FIX: the WHOLE sentence is returned (Content QA finds and wraps it in the copy); a display cut belongs to the reader
-          out.flags.push({ kind, sentence: full, support: Math.round(100 * sp.best) });
+          out.flags.push({ kind, sentence: full, support: Math.round(100 * sp.best), where: it.kind });
+          if (opts.collect) addCand({ sentence: full, plain, why, rule_flag: true, support: Math.round(100 * sp.best), kind, where: it.kind, facts: topFacts(plain) });
         }
       }
     }
+    if (opts.collect) out.candidates = cands;
     return out;
   }
-  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm };
+  // CT-FIX2 (2026-10-22): does ONE fact carry a sentence? Every number of the sentence is on that fact and at least 40% of its content
+  // words. The second reader's "supported by F3" is accepted only when this holds (evaluation run 2: Haiku named a fact for "Our
+  // fixed-price readiness assessment costs AED 25,000" that carries no price).
+  const backs = (sent, fact) => { const c0 = canon(sent); const nums = numsOf(c0); const fn = new Set(numsOf(fact));
+    if (!nums.every(n => fn.has(n))) return false;
+    const W = [...new Set(words(c0, []))].filter(w => !GENERIC.has(w)); if (!W.length) return true;
+    const F = new Set(words(canon(fact), [])); return W.filter(w => F.has(w)).length / W.length >= 0.4; };
+  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm, backs };
+})();
+// ---- promise judge kit (CT-FIX2, 2026-10-22; inlined by build_v4.py section 148): the second reader of the promise check ----
+// The rule-based check (CL.commitments, _claims.js) scored 100% / 88% recall offline and then, on the first fresh live page (exec 159),
+// flagged three true or harmless sentences (a true fact said in other words, a mid-page invitation, a "Read [link]" line) and missed three
+// promises (a phase named as the subject, a passive list item, an image caption). More patterns had stopped helping. So the check has two
+// stages: the rules find CANDIDATES with a wide net (every sentence they would judge, plus the sentences a section about the business, a
+// name on file or "we / our" puts near a commitment, captions included), and one Claude Haiku call per page judges each candidate against
+// the closest facts on file: is it a commitment of the business, and which fact (if any) carries it. The model never adds a sentence: a
+// verdict for anything that is not a candidate is ignored. When the call fails, is skipped or answers for another candidate list, the
+// rules decide alone and the report says "checked by rules only".
+const PJ = (() => {
+  const MODEL = 'claude-haiku-4-5-20251001';
+  const MAX_CANDS = 40;
+  // OFF by default (2026-10-22): one real evaluation on the 180 labelled sentences (harness/accuracy/CLAIMS_MODEL_EVAL.md) showed the
+  // second reader decides exactly as the rules under the safe policy, for about $0.02 and 10-13 s a QA round, and lowers recall when trusted.
+  // A run turns it on with promise_judge: true in its brief (Parse Brief); switch the default on only after a model beats the rules there.
+  const ENABLED_DEFAULT = false;
+  const enabled = (prev) => (prev && typeof prev.promise_judge === 'boolean') ? prev.promise_judge : ENABLED_DEFAULT;
+  const k = (s) => String(s || '').replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/^\[(?:Confirm|Owner)[^:]*:\s*/i, '').replace(/\]$/, '')
+    .replace(/[*_`]+/g, '').replace(/^[-*]\s+/, '').toLowerCase().replace(/[^\p{L}\p{N}%$€£]+/gu, ' ').replace(/\s+/g, ' ').trim();
+  // a short, stable fingerprint of the candidate list: the judge's answer is used only for the list it was asked about
+  const keyOf = (cands) => { let h = 5381; const t = (cands || []).map(c => k(c.sentence)).join('|'); for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; return 'pj' + h.toString(36) + '.' + (cands || []).length; };
+  // what the business says about itself, from every place a content run reads it (Content QA §2b OWN_TEXT; one definition for both nodes)
+  const ownText = (prev, siteModel) => {
+    const P = prev || {}; const SMx = siteModel || (P.site_model && typeof P.site_model === 'object' ? P.site_model : null) || {};
+    const vals = (o) => (o && typeof o === 'object') ? Object.values(o).map(v => (v && typeof v === 'object') ? vals(v) : String(v == null ? '' : v)).join(' ') : String(o || '');
+    return [P.business, P.business_facts, P.case_facts_text, SMx.business_facts, SMx.accreditation, vals(SMx.services), vals(SMx.nap),
+      vals(P.site_profile), vals(P.author), vals(P.reviewer), ...(P.client_pages || []).map(p => p && p.text), P.existing_page_text,
+      P.existing_page_facts_text, vals(P.client_signals), P.proof_context, vals(P.proof_library), P.cta, SMx.cta].filter(Boolean).map(String).join('\n');
+  };
+  // the captions and alt texts the brief planned for the page's images: shown on the page next to the copy
+  const captionsOf = (brief) => ((brief || {}).image_suggestions || []).flatMap(im => [im && im.caption]).map(x => String(x || '').trim()).filter(x => x.length >= 12);
+  // Run 1 of the evaluation (CLAIMS_MODEL_EVAL.md) showed the two questions mixed up when asked as two booleans: "commitment: false,
+  // because no fact states the price", or "supported_by: F13" beside "runbook and dashboards not stated". The answer now names what the
+  // sentence IS first (one of seven kinds), then the detail the facts do not carry, then the fact; a commitment is supported only when
+  // nothing is missing AND a fact is named.
+  const KINDS = ['commitment', 'call_to_action', 'pointer_to_page', 'page_narration', 'advice_to_reader', 'about_others', 'quotation'];
+  const TOOL = { name: 'record_verdicts', description: 'Record one verdict per candidate sentence.',
+    input_schema: { type: 'object', properties: { key: { type: 'string' }, verdicts: { type: 'array', items: { type: 'object', properties: {
+      id: { type: 'string' }, kind: { type: 'string', enum: KINDS }, missing: { type: 'string' }, supported_by: { type: ['string', 'null'] },
+      is_business_commitment: { type: 'boolean' }, reason: { type: 'string' } },
+      required: ['id', 'kind', 'missing', 'supported_by', 'is_business_commitment', 'reason'] } } }, required: ['key', 'verdicts'] } };
+  const SYSTEM = 'You check sentences of a web page draft written in the name of a business, before it is published. For each candidate:\n'
+    + 'kind: what the sentence IS, whether or not it is true. "commitment" = it states something the business itself does, offers, delivers, includes, charges, guarantees, has, holds or has achieved (service, scope, process step, deliverable, price, term, timeline, credential, experience, location, client count); a sentence in the business\'s own voice (we, our, the business name, one of its phases or services as the subject, a passive line about its work, a list item under a lead-in in its voice, an image caption about how it works) is a commitment even when nothing supports it. Otherwise: call_to_action (an invitation: book, call, contact, start, including "to test X first, book a call"), pointer_to_page (only points to another page: "Read how X approaches security"), page_narration (about the page itself), advice_to_reader, about_others (the market, the law, a vendor product, a third party), quotation.\n'
+    + 'missing: for a commitment, the specific details the facts below do NOT state (a number, a deliverable, a step, a price, a duration, a scope); empty string only when every detail is stated. Same meaning in other words counts as stated; "UAE" = "United Arab Emirates"; a sentence joining two facts is stated when both are.\n'
+    + 'supported_by: the id of the fact that states it (the main one if two are needed), or null.\n'
+    + 'is_business_commitment: true exactly when kind is "commitment".\n'
+    + 'reason: at most 10 words.\n'
+    + 'Judge only the candidates given, one verdict each, with its id. Copy the key you are given. Never assume a fact that is not listed.';
+  // the facts sent with a page, each once, with its id (F1, F2 ...): the two closest to each candidate, in candidate order
+  const factIds = (list) => { const fid = new Map(); const per = list.map(c => (c.facts || []).slice(0, 2).map(f => { const t = String(f || '').trim().slice(0, 220); if (!t) return null;
+    if (!fid.has(t)) fid.set(t, 'F' + (fid.size + 1)); return fid.get(t); }).filter(Boolean)); return { fid, per, text: new Map([...fid].map(([t, id]) => [id, t])) }; };
+  // one request per page: the candidates, each with the ids of its closest facts, and every such fact once
+  const request = (cands, opts) => {
+    const o = opts || {}; const list = (cands || []).slice(0, MAX_CANDS);
+    const FI = factIds(list); const facts = [...FI.fid].map(([t, id]) => id + ': ' + t);
+    const lines = list.map((c, i) => { const ids = FI.per[i];
+      return 'C' + (i + 1) + (c.where === 'caption' ? ' (image caption)' : c.where === 'li' ? ' (list item' + (c.lead ? ' under "' + c.lead + '"' : '') + ')' : '') + ': ' + String(c.plain || c.sentence).slice(0, 500) + (ids.length ? '  [closest facts: ' + ids.join(', ') + ']' : '  [no close fact]'); });
+    const user = 'Business: ' + (o.business || 'the business') + (o.domain ? ' (' + o.domain + ')' : '') + '\nKey: ' + keyOf(list) + '\n\nFacts on file (what the business says about itself):\n'
+      + (facts.length ? facts.join('\n') : '(none close to these sentences)') + '\n\nCandidate sentences from the draft:\n' + lines.join('\n');
+    return { model: MODEL, max_tokens: Math.min(4000, 300 + 80 * list.length), temperature: 0, system: SYSTEM, tools: [TOOL],
+      tool_choice: { type: 'tool', name: TOOL.name }, messages: [{ role: 'user', content: user }] };
+  };
+  // the answer, read only for the candidate list it was asked about. { ok, by: Map(k(sentence) -> verdict), usage, why }
+  const read = (resp, cands) => {
+    const list = (cands || []).slice(0, MAX_CANDS); const key = keyOf(list); const out = { ok: false, by: new Map(), usage: null, why: '', key };
+    const r = resp || {};
+    if (r.error || !Array.isArray(r.content)) { out.why = 'the second reader could not be reached' + (r.error ? ' (' + String((r.error && (r.error.message || r.error.type)) || r.error).slice(0, 80) + ')' : ''); return out; }
+    if (r.usage) out.usage = { input_tokens: Number(r.usage.input_tokens) || 0, output_tokens: Number(r.usage.output_tokens) || 0 };
+    const tu = r.content.find(c => c && c.type === 'tool_use' && c.input);
+    if (!tu) { out.why = 'the second reader gave no verdicts'; return out; }
+    if (String(tu.input.key || '') !== key) { out.why = 'the second reader answered for another list of sentences'; return out; }
+    const FI = factIds(list);
+    for (const v of (tu.input.verdicts || [])) { const m = String((v || {}).id || '').match(/^C(\d+)$/); const c = m ? list[Number(m[1]) - 1] : null; if (!c) continue;   // never a sentence that was not a candidate
+      const kind = KINDS.includes(v.kind) ? v.kind : (v.is_business_commitment === true ? 'commitment' : 'unknown');
+      const sup = v.supported_by && !/^(?:null|none|n\/a)$/i.test(String(v.supported_by).trim()) ? String(v.supported_by) : null;
+      const missing = String(v.missing || '').trim(); const gap = !!missing && !/^(?:none|nothing|n\/a|-)$/i.test(missing);
+      out.by.set(k(c.sentence), { commit: kind === 'commitment' || v.is_business_commitment === true, kind, supported_by: gap ? null : sup, fact: sup ? (FI.text.get(sup) || '') : '', missing: gap ? missing.slice(0, 160) : '', reason: String(v.reason || '').slice(0, 200) }); }
+    out.ok = out.by.size > 0; if (!out.ok) out.why = 'the second reader gave no verdicts';
+    return out;
+  };
+  // the final decision for one candidate. Both evaluation runs (CLAIMS_MODEL_EVAL.md) showed the reader is right where the rules are
+  // blind and wrong where they are sure: it named facts for prices and counts no fact carries, and called true, rule-supported lines
+  // unsupported. So it may (1) lift a rule flag from an invitation, a pointer to another page, the page's own narration or a quotation;
+  // (2) lift one as supported only when the fact it names carries the sentence by the rules' own test (`backs`: every number, 40% of
+  // the words); (3) add a flag only to a sentence the rules did not judge as a commitment at all (the wide net, "we recommend ...").
+  // Otherwise the rules stand.
+  const LIFT = new Set(['call_to_action', 'pointer_to_page', 'page_narration', 'quotation']);
+  const decide = (cand, J, backs) => { const v = J && J.ok ? J.by.get(k(cand.sentence)) : null;
+    if (!v) return { flagged: !!cand.rule_flag, by: 'rules' };
+    const m = (flagged, why) => ({ flagged, by: 'model', reason: v.reason + (v.missing ? ' (not on file: ' + v.missing + ')' : ''), supported_by: v.supported_by, commit: v.commit, kind: v.kind, rule: why });
+    if (cand.rule_flag) {
+      if (!v.commit && LIFT.has(v.kind)) return m(false, 'lifted: ' + v.kind);
+      if (v.commit && v.supported_by && v.fact && typeof backs === 'function' && backs(cand.plain || cand.sentence, v.fact)) return m(false, 'lifted: supported by ' + v.supported_by);
+      return { flagged: true, by: 'rules', reason: v.reason, kind: v.kind };
+    }
+    if (v.commit && !v.supported_by && (cand.why === 'wide' || cand.why === 'advice')) return m(true, 'added');
+    return { flagged: false, by: 'rules' };
+  };
+  return { MODEL, MAX_CANDS, ENABLED_DEFAULT, enabled, KINDS, LIFT, factIds, k, keyOf, ownText, captionsOf, request, read, decide, SYSTEM, TOOL };
 })();
 // ---- verdict exclusions kit (A-18, 2026-10-17; inlined through the EXCLUSIONS marker and prepended to Parse Verdict) ----
 // What the verdict said this page must NOT cover reaches the brief, the writer and the quality check. Live (exec 771) the verdict's
@@ -2069,7 +2211,10 @@ const FITR = {
 // term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,
 // and a 0-100 CONTENT SCORE. Schema is generated here (page-type aware), never by the model.
 const prev = $('Parse Brief').first().json;
-const inItem = $input.first().json;
+// CT-FIX2 (2026-10-22): the draft comes through *Promise Candidates* (stage 1 of the promise check), and this node's own input is then the
+// second reader's answer (*Promise Judge*) or, when nothing was sent, the candidates item itself. A run without those nodes reads its input.
+const PCJ = (() => { try { const j = $('Promise Candidates').first().json; return j && j.promise_judge && j.output !== undefined ? j : null; } catch (e) { return null; } })();
+const inItem = PCJ || $input.first().json;
 const rawOut = inItem.output;
 let md = (typeof rawOut === 'string' ? rawOut : JSON.stringify(rawOut || '')).trim();
 const round = ($runIndex || 0) + 1;
@@ -2112,13 +2257,8 @@ const ownFacts = String(prev.business || '') + ' ' + String(prev.business_facts 
 // years" as an unverified statistic although the homepage says "20+ Years" and `client_pages` carried it: the check read only
 // `business_facts` + `case_facts_text`, both empty. The same corpus decides whether a statement about the business's own terms is
 // on file (§9d) and which figures need no external source (§9, §9b).
-const OWN_TEXT = (() => {
-  const SMx = SITE_MODEL || (prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null) || {};
-  const vals = (o) => (o && typeof o === 'object') ? Object.values(o).map(v => (v && typeof v === 'object') ? vals(v) : String(v == null ? '' : v)).join(' ') : String(o || '');
-  return [prev.business, prev.business_facts, prev.case_facts_text, SMx.business_facts, SMx.accreditation, vals(SMx.services), vals(SMx.nap),
-    vals(prev.site_profile), vals(prev.author), vals(prev.reviewer), ...(prev.client_pages || []).map(p => p && p.text), prev.existing_page_text,
-    prev.existing_page_facts_text, vals(prev.client_signals), prev.proof_context, vals(prev.proof_library), prev.cta, SMx.cta].filter(Boolean).map(String).join('\n');   // E-CLAIM: the case studies on file vouch too
-})();   // CT-FIX (review item 1): the call to action the client gave (prev.cta, the site model's cta) is its own text too
+const OWN_TEXT = PJ.ownText(prev, SITE_MODEL);   // CT-FIX2: one definition for this node and Promise Candidates (_promise_judge.js); E-CLAIM: the case studies on file vouch too
+// CT-FIX (review item 1): the call to action the client gave (prev.cta, the site model's cta) is its own text too
 const ownLower = OWN_TEXT.toLowerCase().replace(/\s+/g, ' ');
 const addSrc = (u, t) => { const k = SRC.key(u); if (!k || !String(t || '').trim()) return; srcText.set(k, ((srcText.get(k) || '') + ' ' + String(t)).slice(0, 12000)); };
 (prev.facts || []).forEach(f => addSrc(f && f.url, [f && f.text, f && f.claim, f && f.title].filter(Boolean).join(' ')));
@@ -2220,7 +2360,11 @@ const ladderPlannedUrl = (prev.ladder_id && String(prev.ladder_target_url || '')
 const ladderSlug = ladderPlannedUrl ? (ladderPlannedUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '').split('/').filter(Boolean).pop() || '') : '';
 const slugWritten = metaOf('Slug');
 const slug = ladderSlug || slugWritten;
-if (ladderSlug && slugWritten && slugWritten.replace(/^\/|\/$/g, '') !== ladderSlug) fixes.push('Kept the URL the keyword ladder planned (/' + ladderSlug + '/) instead of the slug the draft suggested (' + slugWritten + '): the ladder\'s link map, the other pages\' links and the rank tracking all use the planned URL');
+// CT-FIX2 (live page 2026-10-22, D6): the Word report printed the draft's slug and "/ai-automation/" beside meta / schema / checklist
+// "/whatwedo/ai-automation": the draft's Slug line now carries the planned slug, and the fix names the planned address in its one form
+const ladderPath = ladderPlannedUrl ? ('/' + ladderPlannedUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '')) : '';
+if (ladderSlug && slugWritten && slugWritten.replace(/^\/|\/$/g, '') !== ladderSlug) { md = md.replace(/^Slug:[ \t]*.*$/im, 'Slug: ' + ladderSlug);
+  fixes.push('Kept the URL the keyword ladder planned (' + ladderPath + ') instead of the slug the draft suggested (' + slugWritten + '): the ladder\'s link map, the other pages\' links and the rank tracking all use the planned URL'); }
 {
   const h1At = md.search(/^# .+$/m);
   if (h1At > 0) {
@@ -2262,8 +2406,17 @@ if (round > 1) {
     const deadPrev = new Set((((PRV.content_qa || {}).link_check || {}).dead || []).map(x => SRC.key(x && x.url)).filter(Boolean));
     const OFFICIAL = /(^|\.)(gov|edu|int|mil)(\.|$)|\.gov\.[a-z]{2}$|(^|\.)(u\.ae|europa\.eu|who\.int|oecd\.org|worldbank\.org|imf\.org)$/i;
     const relinked = [];
+    // CT-FIX2 (live page 2026-10-22, D5): the editor dropped a misattributed PwC / Forrester citation and this fix put it back on the first
+    // "source" of an unrelated bullet. A generic anchor ("source", "here", "this report") says nothing about where the claim is: it is
+    // re-attached only inside the same sentence it stood in (its words kept), and an anchor the editor's review named is never restored.
+    const GENERIC_ANCHOR = /^(?:source|sources|here|this|link|report|study|survey|data|research|this report|this study|the report|the study|read more|learn more|more|official source)$/i;
+    const sentOf = (txt, at) => { const a0 = Math.max(txt.lastIndexOf('. ', at), txt.lastIndexOf('\n', at)) + 1; let b0 = txt.slice(at).search(/[.!?](?:\s|$)|\n/); b0 = b0 < 0 ? txt.length : at + b0; return txt.slice(a0, b0); };
+    const plainSent = (t) => String(t || '').replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/^\s*[-*\d.)]+\s+/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const reviewText = JSON.stringify(lastCritique || critique || '').toLowerCase();
     for (const m of prevMd.matchAll(/\[([^\[\]]{3,120})\]\((https?:\/\/[^)\s]+)\)/g)) {
       const anchor = m[1], url = m[2]; const k = SRC.key(url); const host = SRC.host(url);
+      const generic = GENERIC_ANCHOR.test(anchor.trim()); const prevSent = generic ? plainSent(sentOf(prevMd, m.index)) : '';
+      if (reviewText && host && reviewText.includes(host.replace(/^www\./, '')) && /misattribut|vendor|not a (?:primary|reliable)|remove|drop/.test(reviewText)) continue;
       if (!k || deadPrev.has(k) || (domain && (host === domain || host.endsWith('.' + domain)))) continue;
       if (!(evid.has(k) || OFFICIAL.test(host))) continue;
       if (md.includes('](' + url + ')')) continue;
@@ -2271,7 +2424,9 @@ if (round > 1) {
       const re = new RegExp('(^|[^\\[\\w])(' + escRe(anchor) + ')(?![\\w\\]])', 'g'); let hit = null, mm;
       while ((mm = re.exec(md))) { const at = mm.index + mm[1].length; const lineStart = md.lastIndexOf('\n', at) + 1;
         if (/^(#|Title:|Meta Description:|Slug:)/.test(md.slice(lineStart, lineStart + 18))) continue;
-        const before = md.slice(Math.max(0, at - 200), at); if (/\[[^\]]*$/.test(before)) continue; hit = at; break; }
+        const before = md.slice(Math.max(0, at - 200), at); if (/\[[^\]]*$/.test(before)) continue;
+        if (generic && plainSent(sentOf(md, at)) !== prevSent) continue;   // CT-FIX2 (D5): a generic anchor only in its own sentence
+        hit = at; break; }
       if (hit == null) continue;
       md = md.slice(0, hit) + '[' + anchor + '](' + url + ')' + md.slice(hit + anchor.length); relinked.push(url);
     }
@@ -2459,6 +2614,7 @@ if (RS && RS.refresh) {
 const bizNames = [...new Set([(prev.site_profile || {}).business_name, SITE_MODEL ? SM.name(SITE_MODEL) : '', ...((SITE_MODEL && Array.isArray(SITE_MODEL.brand_names)) ? SITE_MODEL.brand_names : []),
   (prev.site_description || {}).business_name, domain ? String(domain).split('.')[0] : ''].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
 const business_claims = [];
+const carried_promises = [];   // CT-FIX2: round N's reworded marks of round N-1's promises
 // CT-FIX (review item 7): the editor keeps QA's own [Confirm: <sentence>] marks from the round before. Read as brackets, they were
 // skipped by the claims check and came back as "the writer also left 1 note", with the "add it to your business facts" advice lost. A
 // mark that holds a whole sentence the claims check flags again (same facts, same rule) is unwrapped here and marked again below, so
@@ -2470,7 +2626,16 @@ const business_claims = [];
     const k = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
     const C1 = CL.business(open, OWN_TEXT, { names: bizNames }); const C2 = CL.commitments(open, OWN_TEXT, { names: bizNames, skip: C1.flags.map(f => f.sentence) });
     const again = new Set(C1.flags.concat(C2.flags).map(f => k(f.sentence)));
-    md = md.replace(SENT_MARK, (all, inner) => (again.has(k(inner)) ? inner : all));
+    // CT-FIX2 (live page 2026-10-22, item 7 on the real path): exec 159's editor did not keep round 1's mark word for word, it REWORDED the
+    // promise inside it ("Each phase ends in a go/no-go decision ..." -> "[Confirm: We recommend a go/no-go review at the end of each phase
+    // ...]"), which the rules read as advice: it came back as "the writer also left 1 note" with the generic action. A mark whose sentence
+    // shares at least half of its words with a promise of the round before is that promise, carried: it stays a business promise.
+    const toks = (x) => new Set(String(x || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(w => w.length > 3));
+    const PRVQ = (() => { try { return (($('Needs Revision?').first().json || {}).content_qa) || {}; } catch (e) { return {}; } })();
+    const before = (PRVQ.business_promises || []).concat(PRVQ.carried_promises || []).filter(b => b && b.sentence);
+    const similar = (x) => { const A = toks(x); return before.find(b => { const B = toks(b.sentence); const n = [...A].filter(w => B.has(w)).length; return Math.min(A.size, B.size) >= 4 && n / Math.min(A.size, B.size) >= 0.5; }); };
+    md = md.replace(SENT_MARK, (all, inner) => { if (again.has(k(inner))) return inner; const was = round > 1 ? similar(inner) : null;
+      if (was) { carried_promises.push({ sentence: inner, kind: was.kind || 'process', was: was.sentence }); return inner; } return all; });
   }
 }
 const mdBeforeClaims = md;   // E-CLAIM reads the copy before §9d's marks (a mark would hide the billing line after it)
@@ -2493,12 +2658,38 @@ const mdBeforeClaims = md;   // E-CLAIM reads the copy before §9d's marks (a ma
 //     in the copy and becomes an owner edit ("confirm it is true or delete it"): the page is not ready to publish until it is done, exactly
 //     like a bracket. It is not an editor warning: only the owner knows whether the business really does it.
 const business_promises = [];
+// CT-FIX2 (2026-10-22, live page exec 159): two stages. The rules (CL.commitments, collect) list the CANDIDATES; the second reader
+// (*Promise Judge*, Claude Haiku, one call per round, built by *Promise Candidates*) judged each one against its closest facts. A
+// candidate it answered for is flagged when it is a commitment of the business and no fact carries it; one it did not answer for, or
+// every one when the call failed, is decided by the rules, and the report says so. The model never adds a sentence.
+let promise_check = { method: 'rules', model: null, candidates: 0, judged: 0, overturned: [], added: [], note: '' };
 {
-  const BP = CL.commitments(mdBeforeClaims, OWN_TEXT, { names: bizNames, skip: business_claims.map(b => b.sentence) });
-  for (const f of BP.flags.slice(0, 15)) {
-    const at = md.indexOf(f.sentence); const marked = at >= 0 && !/[\[\]]/.test(f.sentence);   // a sentence holding a link is listed, never wrapped (no nested bracket)
+  const BP = CL.commitments(mdBeforeClaims, OWN_TEXT, { names: bizNames, skip: business_claims.map(b => b.sentence), collect: true, captions: PJ.captionsOf(brief) });
+  const pjc = PCJ && PCJ.promise_judge ? PCJ.promise_judge : null;
+  let J = null, why = '';
+  if (!pjc) why = 'the second reader was not part of this run';
+  else if (pjc.skip) why = pjc.skip_reason || 'nothing to judge';
+  else { let resp = null; try { resp = $('Promise Judge').first().json; } catch (e) { resp = null; }
+    J = PJ.read(resp, pjc.candidates || []); if (!J.ok) why = J.why; }
+  const cands = BP.candidates || [];
+  const final = [];
+  const ck = new Set(cands.map(c => PJ.k(c.sentence)));
+  for (const c of cands) { const d = PJ.decide(c, J, CL.backs);
+    if (d.by === 'model' && d.flagged !== !!c.rule_flag) (d.flagged ? promise_check.added : promise_check.overturned).push({ sentence: c.sentence.slice(0, 200), reason: d.reason || '', supported_by: d.supported_by || null });
+    if (d.flagged) final.push({ kind: c.kind, sentence: c.sentence, support: c.support, where: c.where, reason: d.by === 'model' ? d.reason : '', by: d.by }); }
+  for (const f of BP.flags) if (!ck.has(PJ.k(f.sentence))) final.push({ ...f, by: 'rules' });   // a rule flag the candidate list merged away
+  // the promises the editor reworded inside round N-1's marks: flagged unless the second reader found the fact that carries them
+  for (const c of carried_promises) { if (final.some(f => PJ.k(f.sentence) === PJ.k(c.sentence))) continue;
+    const rc = cands.find(x => PJ.k(x.sentence) === PJ.k(c.sentence)); if (rc && !rc.rule_flag && rc.why !== 'wide' && rc.why !== 'advice') continue;   // the rules judged it a commitment and found the facts that carry it
+    const v = J && J.ok ? J.by.get(PJ.k(c.sentence)) : null; if (v && v.supported_by && v.fact && CL.backs(c.sentence, v.fact)) continue;
+    final.push({ kind: c.kind, sentence: c.sentence, support: 0, where: 'para', reason: 'the promise marked in the round before, reworded by the editor', by: 'carried' }); }
+  promise_check = { method: J && J.ok ? 'rules+model' : 'rules', model: J && J.ok ? PJ.MODEL : null, candidates: cands.length, judged: J && J.ok ? J.by.size : 0,
+    overturned: promise_check.overturned.slice(0, 10), added: promise_check.added.slice(0, 10), usage: J && J.usage ? J.usage : null,
+    note: J && J.ok ? '' : (pjc && pjc.off) ? '' : 'checked by rules only: ' + (why || 'the second reader gave no answer') };   // switched off by default: nothing to report
+  for (const f of final.slice(0, 15)) {
+    const at = f.where === 'caption' ? -1 : md.indexOf(f.sentence); const marked = at >= 0 && !/[\[\]]/.test(f.sentence);   // a sentence holding a link is listed, never wrapped (no nested bracket); a caption is not in the copy
     if (marked) md = md.slice(0, at) + '[Confirm: ' + f.sentence + ']' + md.slice(at + f.sentence.length);
-    business_promises.push({ kind: f.kind, sentence: f.sentence, marked, support_pct: f.support });
+    business_promises.push({ kind: f.kind, sentence: f.sentence, marked, support_pct: f.support, where: f.where === 'caption' ? 'image caption' : undefined, reason: f.reason || undefined, checked_by: f.by });
   }
   if (business_promises.length) fixes.push('Marked ' + business_promises.filter(x => x.marked).length + ' promise(s) made in the business\'s name that nothing on file supports (deliverables, process steps, terms) as [Confirm: ...] for the owner');
 }
@@ -2645,9 +2836,12 @@ const target = brief.target_word_count || 800;
 // and the brief's target sits inside it, the length is judged against that band and the reason names it and its sample; otherwise
 // (too few pages, or the verdict set a number outside it) the old rule stays: short under 0.8x, too long over 1.25x of the target.
 const LBQ = (prev.competitor_analysis || {}).length_band || prev.length_band || null;
-const lenBand = !!(LBQ && LBQ.ok && Number(LBQ.low) > 0 && Number(LBQ.high) >= Number(LBQ.low) && target >= Number(LBQ.low) && target <= Number(LBQ.high));
+// CT-FIX2 (live page 2026-10-22, D8): with too few same-kind pages Parse Analysis gives the PAGE-TYPE band (ok: false, source page_type,
+// "1,800-3,500 words", said so); QA ignored it and told the editor to cut 323 words of a page inside that band. Either band is the band.
+const lenBand = !!(LBQ && (LBQ.ok || LBQ.source === 'page_type') && Number(LBQ.low) > 0 && Number(LBQ.high) >= Number(LBQ.low) && target >= Number(LBQ.low) && target <= Number(LBQ.high));
 const lenLow = lenBand ? Number(LBQ.low) : target * 0.8, lenHigh = lenBand ? Number(LBQ.high) : target * 1.25;
-const lenBasis = lenBand ? ' (the band of ' + (LBQ.basis || 'the pages ranking for this search') + ')' : '';
+const lenBasis = lenBand ? (LBQ.ok ? ' (the band of ' + (LBQ.basis || 'the pages ranking for this search') + ')' : ' (' + (LBQ.basis || 'the usual length for this kind of page') + ')') : '';
+const length_band = lenBand ? { low: lenLow, high: lenHigh, source: LBQ.ok ? 'ranking_pages' : 'page_type', sample: Number(LBQ.sample) || 0, basis: String(LBQ.basis || '') } : null;
 const lenOk = lenBand ? (mainWords >= lenLow && mainWords <= lenHigh) : Math.abs(mainWords - target) <= target * 0.25;
 if (mainWords < lenLow) warnings.push(`Main content is short: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis);
 if (mainWords > lenHigh) warnings.push(`Main content is too long: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis + '. Cut repetition and secondary detail, and do not add anything');
@@ -2936,10 +3130,12 @@ const fat_sections = sections.map(sec => { const o = outline.find(x => x.h2 && p
     const t = o ? Number(o.target_words) || 0 : 0; return { h2: sec.h2, words: sec.words, target: t, over: t ? sec.words - t : 0 }; })
   .sort((a, b) => (b.over - a.over) || (b.words - a.words)).slice(0, 3).filter(x => x.over > 0 || !x.target);
 const atRiskTerms = termCoverage.filter(t => t.found > 0 && t.found <= 2).map(t => t.term).slice(0, 15);
-const length_instruction = (target && mainWords > target * 1.1)
-  ? 'CUT ' + over_words + ' words: the main content is ' + mainWords + ' words against a target of ' + target + ' (+' + over_pct + '%). '
+const cutTo = lenBand ? lenHigh : Math.round(target * 1.1);   // CT-FIX2 (D8): inside the band nothing is cut; above it, down to its top
+const cut_words = lenBand ? Math.max(0, mainWords - lenHigh) : over_words;
+const length_instruction = (target && (lenBand ? mainWords > lenHigh : mainWords > target * 1.1))
+  ? 'CUT ' + cut_words + ' words: the main content is ' + mainWords + ' words against ' + (lenBand ? 'the band of ' + lenLow + '-' + lenHigh + lenBasis : 'a target of ' + target + ' (+' + over_pct + '%)') + '. '
     + (fat_sections.length ? 'The longest sections are ' + fat_sections.map(x => '"' + x.h2 + '" (' + x.words + ' words' + (x.target ? ' against ' + x.target : '') + ')').join(', ') + '. ' : '')
-    + 'Cut repetition, restatements and secondary detail; keep every section, every verified fact, every source and every link. Do not add a single word, and do not stop above ' + Math.round(target * 1.1) + ' words.'
+    + 'Cut repetition, restatements and secondary detail; keep every section, every verified fact, every source and every link. Do not add a single word, and do not stop above ' + cutTo + ' words.'
     // A-17: the cut once took the Quick answer itself (exec 771) — the protected blocks are named in the instruction, not left to inference
     + ' PROTECTED, never cut: the **Quick answer:** line right after the introduction (' + (answerWords || '40-70') + ' words), every source link and the call to action.'
     // R43: a correct cut must not fail the coverage check by taking a term off the page — the ones used only once or twice are named
@@ -2977,7 +3173,7 @@ const claimMarks = new Set(business_claims.filter(b => b.marked).concat(business
 const bizLabel = bizNames[0] || 'your business';
 const claim_edits = business_claims.map(b => ({ ...b, src: 'terms' })).concat(business_promises.map(b => ({ ...b, src: 'promise' })))
   .map(b => ({ token: b.marked ? '[Confirm: ' + b.sentence + ']' : b.sentence, count: 1, kind: 'claim', claim_kind: b.kind, sentence: b.sentence, action: 'confirm_or_delete',
-    text: 'Confirm it is true or delete it: "' + b.sentence + '" (nothing in the business facts, the author profile, the case studies or ' + bizLabel + '\'s own pages says this; if it is true, add it to your business facts so later pages can say it too)' }));
+    text: (b.where === 'image caption' ? 'Confirm it is true or change the image caption: "' : 'Confirm it is true or delete it: "') + b.sentence + '" (nothing in the business facts, the author profile, the case studies or ' + bizLabel + '\'s own pages says this; if it is true, add it to your business facts so later pages can say it too)' }));
 const claims_open = business_promises.length + business_claims.filter(b => !b.marked).length;   // marked ones are counted as brackets below
 const body_brackets = placeholder_count + body_notes.reduce((k, n) => k + n.count, 0);
 // what the owner edits by hand, bracket by bracket. A price, fee or duration bracket on a page whose business gave no such facts is one
@@ -3021,7 +3217,7 @@ const not_ready = !passed && (!rounds_left || !editor_needed);
 // had 2 round(s)" after ONE editor call and the cost ledger priced a second; both now read `editor_rounds`.
 const editor_rounds = Math.max(0, round - 1);
 const promises_note = !business_promises.length ? '' : business_promises.length + ' statement(s) about ' + bizLabel + '\'s services, process or terms that nothing on file supports (business facts, author profile, case studies, its own pages): '
-  + business_promises.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + (business_promises.length > 4 ? '; and ' + (business_promises.length - 4) + ' more' : '') + '. Confirm each one is true or delete it before you publish';
+  + business_promises.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + (business_promises.length > 4 ? '; and ' + (business_promises.length - 4) + ' more' : '') + '. Confirm each one is true or delete it before you publish' + (promise_check.note ? ' (' + promise_check.note + ')' : '');
 const body_notes_other = body_notes.filter(n => !claimMarks.has(n.token));
 const not_ready_reasons = !not_ready ? [] : [
   placeholder_note,   // R25: named whenever any body placeholder is left, not only above PH_MAX
@@ -3067,10 +3263,10 @@ const site_profile_out = (P && Object.keys(P).some(k => k === 'address' ? Object
 return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null, site_profile: site_profile_out,
   content_qa: { ai_ready, round, editor_rounds, passed, editor_needed, content_score, quality, publishable: passed, not_ready, quality_label, not_ready_reasons, max_rounds, rounds_left, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, writer_notes, open_brackets, business_name: bizName, nap_source,
-    placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections,   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
+    placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections, length_band,   // CT-FIX2 (D8): the band judged against and its sample   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
     masked_amounts, flagged_amounts, sourced_amounts,   // B3-1 / B3-2: what the money mask removed, what it left for review, and what a cited source vouched for
     outbound_links: externalUrls.map(e => ({ url: e.url, anchor: e.anchor, host: e.host, tier: e.tier })),   // A-14: every outbound link, for Outbound Link Check
-    business_claims, business_promises, claims_open, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19 / E-CLAIM
+    business_claims, business_promises, promise_check, carried_promises, claims_open, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19 / E-CLAIM
     verdict_exclusions, excluded_sections, protected_restored,   // A-18 / A-17
     coverage_advice, subtopics_dropped, owner_edits, next_step, body_brackets, page_url: pageUrl,   // D5 / owner edits / placeholder gate (2026-10-21)
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,

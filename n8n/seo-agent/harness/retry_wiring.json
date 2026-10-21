@@ -1610,6 +1610,17 @@
     "retryOnFail": true,
     "timeout": 20000,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Promise Judge",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 60000,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 AI Growth": [
