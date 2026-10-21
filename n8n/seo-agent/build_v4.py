@@ -12221,6 +12221,46 @@ url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 log('One reading of a results page per search and day, shared by every path (KW-SERP, 2026-10-21, RV-12 / A-21): v5/code/_serp_cache.js keys a reading by keyword + location + language + device and keeps the UTC day on the value (seo_cache `serp:<keyword>|<location>|<language>|<device>`, one row per search); the verdict / ladder head (SERP Top 10), the ladder rung reads (Run Ladder Cluster SERP) and the Keyword Check use a reading made earlier today when it is deep enough (and loaded the AI Overview when the path needs it), at no cost, and store every fresh reading; a failed read is never stored; two runs missing at the same moment both pay once (accepted)')
 
+# =============================================================================
+# 146. THE RESEARCH OPENS THE PAGES IT WOULD OFFER TO REFRESH (KWL-RES follow-up, 2026-10-21 live keyword test exec 111). At onboarding
+#      the research runs before the Site Tracker has read any page's status (seo_pages http_status 0), so "already answered by a page you
+#      have: refresh it" pointed at 8 pages that answer 404. Research Status Requests -> Status Read Wanted? -> Read Research Pages (free
+#      GETs of the client's own pages, at most 10, no redirect followed, retry rule) -> Research Status Hops -> Status Hop Wanted? -> Read
+#      Research Pages (Redirect) (once, only to the same page on the client's own host) -> Research Page Status -> Rank Keywords. A gone page
+#      (404 / 410 / soft 404) is gone (its ranking is a head start after a redirect); a page that could not be checked is never "refresh it".
+#      The statuses are not written back to seo_pages here (the weekly Site Tracker owns that table's status columns).
+# =============================================================================
+_rk146 = pos('Rank Keywords')
+disconnect('After Count (Keyword Relevance)', 'Rank Keywords')
+add_node('Research Status Requests', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Research_Status_Requests.js')}, [_rk146[0] - 660, _rk146[1] + 420])
+if_node('Status Read Wanted?', '{{ $json.status_check === true }}', [_rk146[0] - 440, _rk146[1] + 420])
+_hdr146 = {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.15)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]}
+_opt146 = {'timeout': 15000, 'batching': {'batch': {'batchSize': 2, 'batchInterval': 300}}, 'redirect': {'redirect': {'followRedirects': False}},
+           'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}
+add_node('Read Research Pages', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': _hdr146, 'options': json.loads(json.dumps(_opt146))},
+    [_rk146[0] - 220, _rk146[1] + 340], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
+add_node('Research Status Hops', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Research_Status_Hops.js')}, [_rk146[0] - 110, _rk146[1] + 560])
+if_node('Status Hop Wanted?', '{{ $json.hop === true }}', [_rk146[0] + 0, _rk146[1] + 640])
+add_node('Read Research Pages (Redirect)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': _hdr146, 'options': json.loads(json.dumps(_opt146))},
+    [_rk146[0] + 110, _rk146[1] + 560], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
+add_node('Research Page Status', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Research_Page_Status.js')}, [_rk146[0] - 220, _rk146[1] + 220])
+connect('After Count (Keyword Relevance)', 'Research Status Requests')
+connect('Research Status Requests', 'Status Read Wanted?')
+connect('Status Read Wanted?', 'Read Research Pages', 0); connect('Status Read Wanted?', 'Research Page Status', 1)
+connect('Read Research Pages', 'Research Status Hops'); connect('Research Status Hops', 'Status Hop Wanted?')
+connect('Status Hop Wanted?', 'Read Research Pages (Redirect)', 0); connect('Status Hop Wanted?', 'Research Page Status', 1)
+connect('Read Research Pages (Redirect)', 'Research Page Status')
+connect('Research Page Status', 'Rank Keywords')
+for _n146 in ('Read Research Pages', 'Read Research Pages (Redirect)'):
+    assert nodes[_n146]['parameters']['options']['redirect']['redirect'] == {'followRedirects': False}, 'KWL-RES: ' + _n146 + ' follows redirects to any host'
+assert [t['node'] for l in conns['Research Page Status']['main'] for t in l] == ['Rank Keywords'], 'KWL-RES: the status read does not reach Rank Keywords'
+assert 'Rank Keywords' not in [t['node'] for l in conns['After Count (Keyword Relevance)']['main'] for t in l], 'KWL-RES: Rank Keywords still runs before the status read'
+assert "$('Research Page Status').first().json.page_status" in code('Rank Keywords') and 'const SM = (() => {' in code('Research Status Requests') and 'const GONE = (() => {' in code('Research Status Requests'), 'KWL-RES: the statuses read do not reach Rank Keywords'
+assert "$('After Count (Keyword Relevance)').all()" in code('Research Page Status'), 'KWL-RES: the relevance items must pass through to Rank Keywords unchanged'
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('The research opens the pages it would offer to refresh (KWL-RES follow-up, 2026-10-21 live keyword test exec 111): Research Status Requests -> Status Read Wanted? -> Read Research Pages (at most 10 free GETs of the client\'s own pages Search Console or the inventory would offer for a researched keyword, no redirect followed, retry rule) -> Research Status Hops -> Read Research Pages (Redirect) (once, same page on the client\'s host) -> Research Page Status -> Rank Keywords; 404 / 410 / soft 404 = gone (a head start after a redirect), a page that could not be checked is named with the reason and never "refresh it"; not written back to seo_pages')
+
 
 # =============================================================================
 # 9. WRITE

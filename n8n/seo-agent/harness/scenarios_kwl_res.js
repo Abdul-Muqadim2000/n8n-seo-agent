@@ -8,6 +8,7 @@
 //        Ministry or calls itself a government initiative) is never a competitor; a business's case study naming an authority is
 //   KR4  D12 / D13: the research document has no em dash, ellipsis, "SERP", "PAA" or "DataForSEO", and a keyword that is not a fit (not one
 //        of the services listed) carries no plan type or timeline
+//   KR5  the research opens the pages it would offer to refresh (onboarding: no status on file); KR6 the callback carries career / career_note
 // Called from scenarios_v5.js just before the report (one appended line).
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
@@ -23,7 +24,7 @@ module.exports = async (ctx) => {
     competitors: [], your_position: null, your_url: '', trend_yearly: 5, serp_types: [], gsc: gsc || null, sources: ['ranked_keywords'] });
   const GSC = { page: GONE_URL, gsc_page: 'https://techand.ai/dynamics-365-finance-and-operations-uae', position: 10, impressions: 16, clicks: 0, ctr: 0, period_days: 28, period_end: '2026-10-18', kinds: ['striking'] };
   const CANDS = [cand('dynamics 365 finance and operations pricing dubai', null, null, 95, GSC), cand('artificial intelligence consultancy', 170, 5, 90),
-    cand('artificial intelligence consulting', 90, 8, 85), cand('dynamics 365 business central partner uae', 140, 20, 80), cand('used car dealers dubai', 900, 10, 75)];
+    cand('artificial intelligence consulting', 90, 8, 85), cand('dynamics 365 business central partner uae', 140, 20, 80), cand('used car dealers dubai', 900, 10, 75), cand('ai consultant', 320, 10, 70)];
   const model = { domain: DOM, canonical_host: 'www.techand.ai', business_name: 'Tech&', declared_services: SERVICES, services: SERVICES, model_updated_at: '2026-10-21T18:00:00.000Z',
     pages: [{ url: GONE_URL, title: '', h1: '', source: 'gsc', http_status: 404, status_at: '2026-10-21T17:00:00.000Z', queries: [] },
       { url: 'https://www.techand.ai/whatwedo/ai-automation', title: 'AI & Automation | What We Do | Tech&', h1: 'AI & Automation', source: 'sitemap', http_status: 200, status_at: '2026-10-21T17:00:00.000Z', queries: [] }] };
@@ -42,7 +43,13 @@ module.exports = async (ctx) => {
     const serp = (kw) => ({ json: { status_code: 20000, tasks: [{ status_code: 20000, result: [{ keyword: kw, datetime: '2026-10-21 18:33:00 +00:00', items: [{ type: 'ai_overview' }, { type: 'people_also_ask', items: [{ title: 'How much does it cost?' }] },
       { type: 'organic', rank_group: 1, rank_absolute: 2, domain: 'example-erp.ae', url: 'https://example-erp.ae/' + kw.replace(/\s+/g, '-'), title: kw },
       ...(kw === CANDS[0].keyword ? [{ type: 'organic', rank_group: 8, rank_absolute: 9, domain: 'www.techand.ai', url: GONE_URL, title: 'Dynamics 365 Finance and Operations UAE' }] : [])] }] }] } });
-    const KSR = (await run('Build Keyword Strategy', pk.map(p => serp(p.keyword))))[0].json;
+    // exec 114's "ai consultant": its results page is job boards and a certification course, its questions are about pay and becoming one
+    const job = (kw) => ({ json: { status_code: 20000, tasks: [{ status_code: 20000, result: [{ keyword: kw, datetime: '2026-10-21 18:33:00 +00:00', items: [
+      { type: 'people_also_ask', items: [{ title: 'What is AI consulting\'s salary?' }, { title: 'How do I become an AI consultant?' }] },
+      ...[['ae.indeed.com', '/q-ai-consultant-jobs.html', 'AI Consultant Jobs in Dubai'], ['www.bayt.com', '/en/uae/jobs/ai-consultant-jobs/', 'AI Consultant jobs in UAE'],
+        ['www.glassdoor.com', '/Job/dubai-ai-consultant-jobs.htm', 'AI consultant jobs in Dubai'], ['www.usaii.org', '/certifications/ai-consultant', 'Certified AI Consultant certification'],
+        ['www.naukrigulf.com', '/ai-consultant-jobs', 'AI Consultant Jobs']].map(([d, p, t], i) => ({ type: 'organic', rank_group: i + 1, rank_absolute: i + 1, domain: d, url: 'https://' + d + p, title: t }))] }] }] } });
+    const KSR = (await run('Build Keyword Strategy', pk.map(p => p.keyword === 'ai consultant' ? job(p.keyword) : serp(p.keyword))))[0].json;
     return { KS: KS.keyword_strategy, KSR };
   };
 
@@ -99,5 +106,71 @@ module.exports = async (ctx) => {
     const out = ((R && R.KSR.keyword_strategy.priority) || []).find(k => k.keyword === 'used car dealers dubai');
     check('"used car dealers dubai" (not one of the services listed) has no plan type, no months and says why', !!out && (out.plan_type == null && out.months == null && /^Not a fit: /.test(out.for_you_label || '')),
       J(out && { plan_type: out.plan_type, months: out.months, label: out.for_you_label }));
+  });
+
+  await guard('KR5 the research opens the pages it would offer to refresh', async () => {
+    const SN = 'KR5 KWL-RES follow-up: at onboarding no page has a status on file (exec 111: http_status 0 everywhere), so the research opens the pages it would offer itself: a 404 behind the bare host\'s 308 is gone, a soft 404 is gone, a live page is refreshed, a page that could not be opened is never "refresh it"';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const U = (p, host) => 'https://' + (host || 'techand.ai') + p;
+    const P = { gone: '/dynamics-365-finance-and-operations-uae', live: '/whatwedo/ai-automation', down: '/dynamics-365-cloud-migration-uae', soft: '/insights/peppol-uae-guide' };
+    const g = (path, pos, host) => ({ page: U(path, host), position: pos, impressions: 20, clicks: 0, ctr: 0, period_days: 28, period_end: '2026-10-18', kinds: ['striking'] });
+    const C5 = [cand('dynamics 365 finance and operations pricing dubai', 30, 20, 95, g(P.gone, 10)), cand('ai automation dubai', 90, 12, 90, g(P.live, 14, 'www.techand.ai')),
+      cand('dynamics 365 cloud migration uae', 40, 18, 85, g(P.down, 9, 'www.techand.ai')), cand('peppol uae guide', 50, 15, 80, g(P.soft, 12, 'www.techand.ai'))];
+    // the site model at onboarding: the pages are known (sitemap / Search Console) but none has been read yet
+    const m5 = { ...model, canonical_host: 'techand.ai', pages: Object.values(P).map(p => ({ url: U(p, 'www.techand.ai'), title: '', h1: '', source: 'gsc', http_status: 0, status_at: '', queries: [] })) };
+    const base5 = { domain: DOM, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', goal: 'leads', seeds: ['ai consulting'], services: SERVICES, declared_services: SERVICES,
+      business: BUSINESS, competitors: [], site_urls: [], research: { candidates: C5, pool_size: C5.length, competitor_domains: [], by_source: {}, failures: [] } };
+    const relItems = [{ json: { output: { items: C5.map(c => ({ keyword: c.keyword, relevance: 2, intent: 'commercial', page_type: 'Service Page', topic: c.keyword })) } } }];
+    mock('Collect Research', [{ json: base5 }]); mock('Site Model', [{ json: { site_model: m5 } }]);
+    const reqs = (await run('Research Status Requests', relItems)).map(i => i.json);
+    check('the pages Search Console credits for the researched keywords are opened (4 of them, at most 10), none known before', reqs.length === 4 && reqs.every(r => r.status_check) && Object.values(P).every(p => reqs.some(r => r.url.endsWith(p))), J(reqs));
+    mock('Research Status Requests', reqs.map(json => ({ json })));
+    const page = (title, h1) => '<html><head><title>' + title + '</title></head><body><h1>' + h1 + '</h1></body></html>';
+    // the bare host answers 308 to www for the gone page (as techand.ai does); the live page answers 200; one times out; one is a soft 404
+    const ans = reqs.map(r => r.url.endsWith(P.gone) ? { statusCode: 308, headers: { location: U(P.gone, 'www.techand.ai') }, body: '' }
+      : r.url.endsWith(P.live) ? { statusCode: 200, headers: {}, body: page('AI & Automation | What We Do | Tech&', 'AI & Automation') }
+      : r.url.endsWith(P.down) ? { error: { message: 'timeout of 15000ms exceeded' } }
+      : { statusCode: 200, headers: {}, body: page('Page not found | Tech&', '404') });
+    mock('Read Research Pages', ans.map(json => ({ json })));
+    const hops = (await run('Research Status Hops', ans.map(json => ({ json })))).map(i => i.json);
+    check('the 308 to the same page on www is followed once, nothing else', hops.length === 1 && hops[0].hop && hops[0].url === U(P.gone, 'www.techand.ai'), J(hops));
+    mock('Research Status Hops', hops.map(json => ({ json }))); mock('Read Research Pages (Redirect)', [{ json: { statusCode: 404, headers: {}, body: page('Not found', '') } }]);
+    mock('After Count (Keyword Relevance)', relItems);
+    const st = (await run('Research Page Status', [{ json: { hop: true } }])).map(i => i.json);
+    const ps = st[0].page_status; const stOf = (p) => ((ps.pages || []).find(x => x.url.endsWith(p)) || {});
+    check('statuses: gone (404 after the 308), live, unknown (timeout), gone (soft 404); the relevance items pass through to Rank Keywords',
+      stOf(P.gone).state === 'gone' && stOf(P.gone).http_status === 404 && stOf(P.live).state === 'live' && stOf(P.down).state === 'unknown' && stOf(P.soft).state === 'gone' && stOf(P.soft).soft_404 === true
+      && st.length === 1 && st[0].output && J(st[0].output) === J(relItems[0].json.output), J(ps.pages));
+    mock('Research Page Status', st.map(json => ({ json })));
+    mock('Relevance Chunks', [{ json: { keywords_chunk: C5.map(c => ({ keyword: c.keyword })) } }]);
+    mock('Load Site Cache', [{ json: {} }]); delete store['Reach (Discovery)'];
+    mock('Load Domain Ladders (Discovery)', [{ json: {} }]); mock('Load Ladder Settings (Discovery)', [{ json: {} }]);
+    const KS = (await run('Rank Keywords', st.map(json => ({ json }))))[0].json;
+    const kOf = (kw) => KS.keyword_strategy.keywords.find(k => k.keyword === kw) || {};
+    const kg = kOf(C5[0].keyword), kl = kOf(C5[1].keyword), kd = kOf(C5[2].keyword), ks = kOf(C5[3].keyword);
+    check('the 404 page and the soft 404 cover nothing and carry gone_ranking; the live page is "improve the page you have"',
+      !kg.covered_by && kg.gone_ranking && !ks.covered_by && ks.gone_ranking && kl.covered_by && kl.covered_by.checked === true, J({ kg: [kg.covered_by, kg.gone_ranking], ks: [ks.covered_by, ks.gone_ranking], kl: kl.covered_by }));
+    check('the page that timed out is kept as a possible answer, checked: false with the reason, and its topic says to open it, never to refresh it',
+      kd.covered_by && kd.covered_by.checked === false && /could not be opened \(timeout/.test(kd.covered_by.check_reason || '')
+      && (KS.keyword_strategy.clusters || []).some(c => c.primary_keyword === kd.keyword && /open it before writing a new page/.test(c.tier_note || '') && !/improve the page you have/.test(c.tier_note || '')),
+      J({ cov: kd.covered_by, cl: (KS.keyword_strategy.clusters || []).map(c => [c.primary_keyword, c.tier_note]) }));
+    mock('Rank Keywords', [{ json: KS }]);
+    const pk = (await run('Priority Keywords', [{ json: {} }])).map(i => i.json); mock('Priority Keywords', pk.map(json => ({ json }))); delete store['AI Demand'];
+    const serp = (kw) => ({ json: { status_code: 20000, tasks: [{ status_code: 20000, result: [{ keyword: kw, datetime: '2026-10-21 18:33:00 +00:00', items: [{ type: 'organic', rank_group: 1, rank_absolute: 1, domain: 'example-erp.ae', url: 'https://example-erp.ae/x', title: kw }] }] }] } });
+    const html = String((await run('Build Keyword Strategy', pk.map(p => serp(p.keyword))))[0].json.result_html || '');
+    check('the report refreshes only the live page, names the unchecked one with its reason, and lists the gone ones under "no longer opens"',
+      /already answered by a page you have: "ai automation dubai"/.test(html) && /could not be checked in this run: "dynamics 365 cloud migration uae"/.test(html)
+      && /ranked by a page that no longer opens/.test(html) && !/already answered by a page you have:[^<]*dynamics-365-(finance-and-operations|cloud-migration)/.test(html), html.slice(0, 1500));
+  });
+
+  await guard('KR6 the callback carries the career flag', async () => {
+    const SN = 'KR6 KWL-RES (D3): a job or training search reaches the app as career: true with its career_note (exec 111: the callback dropped it and the app showed "microsoft dynamics ax dubai" as card #3 with no note)';
+    begin(SN); const check = mkCheck(SN);
+    const cb = (await run('Build Ideas Response', [{ json: R.KSR, binary: {} }]))[0].json;
+    const c = (cb.priority || []).find(k => k.keyword === 'ai consultant'), o = (cb.priority || []).filter(k => k.keyword !== 'ai consultant');
+    check('"ai consultant" carries career: true and a career_note in plain words; every other keyword carries career: false and no note',
+      !!c && c.career === true && /work or training|few buyers/.test(c.career_note || '') && o.length > 0 && o.every(k => k.career === false && k.career_note === null), J({ c: c && { career: c.career, note: c.career_note }, o: o.map(k => [k.keyword, k.career]) }));
+    const rec = ((R.KSR.keyword_suggestions || {}).recommended || []).find(k => k.keyword === 'ai consultant');
+    check('the strategy\'s recommended list carries the same career_note', !!rec && !!rec.career && rec.career_note === c.career_note, J(rec && { career: rec.career, note: rec.career_note }));
   });
 };
