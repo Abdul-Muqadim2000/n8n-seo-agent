@@ -4982,7 +4982,7 @@ assert 'PC.MIN_FIT' in _K58['LB_Assemble'] and 'PC.cleanQuote(' in _K58['LB_Asse
 # R25 + R22: the masked figures by name, and the cut as an instruction
 assert 'placeholder_note' in code('Content QA') and 'masked figure(s) still in the text' in code('Content QA'), 'R25: the body placeholders are not named in the reasons'
 assert 'placeholder_count > PH_MAX' in code('Content QA') and 'const too_many_placeholders' in code('Content QA'), 'R25: the R11 delivery gate was loosened'
-assert 'length_instruction' in code('Content QA') and "'CUT ' + over_words" in code('Content QA'), 'R22: Content QA does not state the cut'
+assert 'length_instruction' in code('Content QA') and "'CUT ' + cut_words" in code('Content QA'), 'R22: Content QA does not state the cut'
 _ED58 = nodes['Editor']['parameters']['text']
 assert 'content_qa.length_instruction' in _ED58 and 'THE FIRST THING TO DO' in _ED58 and '"Main content is too long"' in _ED58, 'R22: the editor is not told to cut, only warned'
 # R25: a page that is otherwise deliverable still says which figures are masked
@@ -8073,7 +8073,7 @@ let CACHE77 = []; try { CACHE77 = $('Load Site Cache').all().map(i => i.json); }
 // read. Never a fresh paid pull: a keyword report does not buy the ranked-keywords list.
 const RI77 = reachCached(CACHE77, prev.domain, prev.location_code) || { ...reachFrom(null, prev.site_authority || null), ranked: null, cached: false };
 const TA77 = reachTopic(RI77.ranked === undefined ? null : RI77.ranked, prev.keyword, RI77.reach, { domain: prev.domain || 'your site',
-  reason_missing: RI77.cached ? 'the reach stored on ' + String(RI77.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this report has no topic evidence to read'
+  reason_missing: RI77.cached ? 'the reach of your site was measured on ' + String(RI77.cached_at || '').slice(0, 10) + ' across all your keywords, not this topic, so this report cannot say how strong you are on this topic in particular'
     : 'a keyword report does not buy the list of keywords your site ranks for (the keyword research and the ladder do)' });
 const DIFF77 = prev.domain ? difficultyForYou(KD77, TA77.reach, {}) : null;
 const PLAN77 = DIFF77 ? reachPlan(DIFF77, reachStrong(RI77, null), reachMeasured(TA77 && TA77.used ? { used: true } : RI77, null)) : null;   // R49: no chance band on a reach no measured ranking supports
@@ -12338,6 +12338,73 @@ open(os.path.join(OUT_CODE, '_ladder_dup.js'), 'w').write("// harness shim (writ
 retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 log('A duplicate ladder is refused before anything is paid for (KW-FINAL N2, 2026-10-22): Ladder Duplicate (Words) reads the site\'s stored ladders right after Rate Limit and refuses a NEW ladder whose main keyword is, word for word, another ladder\'s main keyword or planned page (v5/code/_ladder_dup.js, the same rule Ladder Plan applies); the run takes the input-refusal path, nothing is charged, and the results-page half of the rule stays in Ladder Plan')
 
+
+
+# =============================================================================
+# 148. THE PROMISE CHECK IN TWO STAGES, AND THE LIVE PAGE'S OTHER DEFECTS (CT-FIX2, 2026-10-22; paid page run exec 159, PAGE_RUN_REPORT D1-D8)
+#      The rule-based promise check scored 100% / 88% recall offline, then on a fresh live page flagged three true or harmless sentences
+#      and missed three promises: more patterns had stopped helping. Stage 1 (the claims kit, `collect`) lists CANDIDATES with a wide net;
+#      stage 2 is one Claude Haiku call per QA round (*Promise Judge*, HTTP to the Messages API with the Anthropic credential, a forced
+#      tool for the JSON) that judges each candidate against its closest facts. Content QA applies the verdicts; when the call fails the
+#      rules decide and the report says "checked by rules only". The answer carries Anthropic's own token usage, so its cost is MEASURED
+#      and joins the run's Claude figure in the ledger (one call per round, every round summed).
+#        * Promise Candidates (Code) -> Judge Promises? -> (yes) Promise Judge -> Content QA, (no) -> Content QA; the draft passes through
+#          Promise Candidates, which Content QA now reads.
+# =============================================================================
+PJ_SRC148 = _rd0('code/_promise_judge.js').rstrip('\n')
+_kit148 = lambda c: c.replace('/*__PROMISE_JUDGE__*/', PJ_SRC148).replace('/*__CLAIMS__*/', CLAIMS_SRC)
+setcode('Content QA', _kit148(code('Content QA')))
+assert 'const PJ = (() => {' in code('Content QA') and '/*__PROMISE_JUDGE__*/' not in code('Content QA'), 'CT-FIX2: the promise judge kit is not in Content QA'
+_pre148 = sorted({s0 for s0, o in conns.items() for l in (o.get('main') or []) for t in (l or []) if t['node'] == 'Content QA'})
+assert set(_pre148) == {'After Count (Editor)', 'Refresh Sources'}, 'CT-FIX2: Content QA is fed by %r' % _pre148
+_cq148 = pos('Content QA')
+add_node('Promise Candidates', 'n8n-nodes-base.code', 2, {'jsCode': _kit148(rd('code/Promise_Candidates.js'))}, [_cq148[0] - 420, _cq148[1] + 520])
+if_node('Judge Promises?', "{{ !$json.promise_judge.skip }}", [_cq148[0] - 240, _cq148[1] + 520])
+add_node('Promise Judge', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'POST', 'url': 'https://api.anthropic.com/v1/messages',
+    'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'anthropicApi',
+    'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'anthropic-version', 'value': '2023-06-01'}]},
+    'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ $json.promise_judge.body }}',
+    'options': {'timeout': 60000}}, [_cq148[0] - 60, _cq148[1] + 460],
+    dict(credentials=dict(_ANTHROPIC_CRED62), onError='continueRegularOutput', alwaysOutputData=True, **_rl55.RETRY))
+for _p148 in _pre148:
+    disconnect(_p148, 'Content QA'); connect(_p148, 'Promise Candidates')
+connect('Promise Candidates', 'Judge Promises?'); connect('Judge Promises?', 'Promise Judge', 0); connect('Judge Promises?', 'Content QA', 1)
+connect('Promise Judge', 'Content QA')
+assert 'const CL = (() =>' in code('Promise Candidates') and 'const PJ = (() =>' in code('Promise Candidates') and 'const SM = (() =>' in code('Promise Candidates'), 'Promise Candidates: a kit is missing'
+assert "$('Promise Candidates').first().json" in code('Content QA') and "$('Promise Judge').first().json" in code('Content QA') and 'PJ.decide(c, J, CL.backs)' in code('Content QA'), 'CT-FIX2: Content QA does not apply the verdicts'
+assert 'OWN_TEXT = PJ.ownText(prev, SITE_MODEL)' in code('Content QA') and 'PJ.ownText(prev, SITE_MODEL)' in code('Promise Candidates'), 'CT-FIX2: the two nodes read different facts'
+# the judge's measured cost joins the run's Claude figure wherever the content run settles it
+_PJ_COST148 = """// CT-FIX2 (2026-10-22, section 148): the promise judge (Claude Haiku over HTTP, once per QA round). Anthropic reports the tokens of each answer,
+// so this call is MEASURED, every round summed (a run index the node never reached ends the walk).
+{ let inT = 0, outT = 0, n = 0; for (let r = 0; r < 12; r++) { let a = null; try { a = $('Promise Judge').all(0, r); } catch (e) { break; } if (!a || !a.length) break;
+    for (const i of a) { const u = (i && i.json && i.json.usage) || null; if (u && (Number(u.input_tokens) || Number(u.output_tokens))) { inT += Number(u.input_tokens) || 0; outT += Number(u.output_tokens) || 0; n++; } } }
+  if (n) __costCalls.push({ node: 'Promise Judge', model: 'claude-haiku-4-5-20251001', max_tokens: 4000, effort: '', streaming: false, prompt_chars: 0, output_chars: 0, usage: { promptTokens: inT, completionTokens: outT }, calls: n }); }
+"""
+_cost148 = [nm for nm in nodes if 'run_ledger.ai_cost = CC.runCost(__costCalls' in nodes[nm]['parameters'].get('jsCode', '')]
+assert {'Build Word File', 'Run Ledger Settle'} <= set(_cost148), _cost148
+for _n148 in _cost148:
+    nodes[_n148]['parameters']['jsCode'] = code(_n148).replace('run_ledger.ai_cost = CC.runCost(__costCalls', _PJ_COST148 + 'run_ledger.ai_cost = CC.runCost(__costCalls', 1)
+    assert "$('Promise Judge').all(0, r)" in code(_n148), _n148
+# Word report (D7): no em dash, arrow, "..." or curly quote in the text the client reads (tags and attributes untouched)
+_WB148 = "      data: Buffer.from('\\ufeff' + html, 'utf8').toString('base64'),"
+assert code('Build Word File').count(_WB148) == 1, 'CT-FIX2: the Word file body changed shape'
+assert code('Build Word File').count('\nconst html = `<html') == 1, 'CT-FIX2: the Word file html changed shape'
+nodes['Build Word File']['parameters']['jsCode'] = code('Build Word File').replace(_WB148,
+    "      data: Buffer.from('\\ufeff' + __plainWord(html), 'utf8').toString('base64'),").replace('\nconst html = `<html', r"""
+// CT-FIX2 (live page 2026-10-22, D7): the Word report carried 18 em dashes, an arrow and "..." while the page, meta and app were clean. The
+// text between tags is written the way the rest of the product writes: a dash becomes a colon (a comma after the first), an arrow "to",
+// a cut title loses its "...", QA's "[Confirm: ...]" names what goes inside, curly quotes are straight.
+const __plainWord = (h) => String(h).replace(/>([^<]+)</g, (m, t) => { let n = 0;
+  const x = t.replace(/\[Confirm: (?:\.\.\.|…)\]/g, '[Confirm: the sentence]').replace(/\s+—\s+/g, () => (n++ ? ', ' : ': ')).replace(/—/g, '-').replace(/\s*→\s*/g, ' to ')
+    .replace(/\s*(?:\.\.\.|…)(?=\s*$|\s*[)\]])/g, '').replace(/(?:\.\.\.|…)/g, '').replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+  return '>' + x + '<'; });
+const html = `<html""", 1)
+assert '__plainWord(html)' in code('Build Word File') and 'const __plainWord = ' in code('Build Word File'), 'CT-FIX2: the Word text clean-up is not wired'
+open(os.path.join(OUT_CODE, '_promise_judge.js'), 'w').write("// harness shim (written by build_v4.py section 148): the promise judge kit, { fn, args } -> { r }\n" + PJ_SRC148
+    + "\nreturn $input.all().map(i => ({ json: { r: PJ[i.json.fn].apply(null, i.json.args || []) } }));\n")
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('The promise check in two stages (CT-FIX2, 2026-10-22): Promise Candidates lists the sentences in the business\'s name with a wide net (captions, phases on file, list items), Promise Judge (Claude Haiku, one call a QA round, measured usage in the ledger) judges each against its closest facts, Content QA applies the verdicts and falls back to the rules with "checked by rules only"; round N-1\'s reworded promise marks stay promises; the length band of the page type is used; generic citation anchors are re-attached only in their own sentence; inbound anchors avoid the ladder\'s other searches; the Word report has one slug and no dashes, arrows or "..."')
 
 # =============================================================================
 # 9. WRITE

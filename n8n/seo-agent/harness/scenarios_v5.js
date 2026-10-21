@@ -3422,7 +3422,7 @@ await guard('fix plan phase 1 — keywords and ladders', async () => {
   mock('Verdict Agent', { output: F.verdictGo }); const pv = await run('Parse Verdict', store['Verdict Agent']);
   const wf = await run('Build Word File', [{ json: { ...pv[0].json, include_seo_report: true } }]); const doc = decode(wf); scanHtml('keyword report, AI Overview observation', doc);
   const aioRow = (doc.match(/<td class="k">AI Overview<\/td><td>([^<]*)<\/td>/) || ['', ''])[1];
-  check('D26: the keyword report\'s results-page row says when the AI Overview was seen, with the domains it cited in that check', /^Seen in the check at 15:58 UTC on 2026-10-11 — AI Overviews vary between searches, so this is one observation, not a fixed feature of the query\. In that check it cited /.test(aioRow) && ['erpguide.net', 'gulferp.ae', 'erpmasters.com'].every(d => aioRow.includes(d)) && !/Shown — cites/.test(doc) && !/Not shown for this query/.test(doc), aioRow || (doc.match(/What the Results Page Looks Like[\s\S]{0,700}/) || [''])[0]);
+  check('D26: the keyword report\'s results-page row says when the AI Overview was seen, with the domains it cited in that check', /^Seen in the check at 15:58 UTC on 2026-10-11: AI Overviews vary between searches, so this is one observation, not a fixed feature of the query\. In that check it cited /.test(aioRow) && ['erpguide.net', 'gulferp.ae', 'erpmasters.com'].every(d => aioRow.includes(d)) && !/Shown — cites/.test(doc) && !/Not shown for this query/.test(doc), aioRow || (doc.match(/What the Results Page Looks Like[\s\S]{0,700}/) || [''])[0]);
   // the keyword strategy: the stored results page (undated) and the live check are two observations
   const K = { keyword: 'e invoicing software uae', volume: 320, kd: 20, cpc: 6, intent: 'commercial', page_type: 'Service Page', topic: 'e invoicing', opportunity: 50, traffic_potential: 90, serp_types: ['organic', 'people_also_ask', 'ai_overview'], competitors: [], competitors_in_top20: 0, words: 4, relevance: 2, difficulty_for_you: 'easy', plan_type: 'direct', months: '2-4', for_you_label: 'Easy for your site · Direct plan · 2-4 months', chance: { band: 'good', range: [50, 70], label: 'estimated chance good (50-70%, uncalibrated)' } };
   mock('Rank Keywords', { domain: D, country: 'United Arab Emirates', goal: 'leads', seeds: ['e invoicing'], research: { requests: 4 }, keyword_strategy: { goal: 'leads', pool_size: 12, ai_reviewed: 12, total_relevant: 6, keywords: [K], clusters: [], quick_wins: [K], questions: [], long_tail: [], competitor_gaps: [], by_intent: {}, priority: [K], pipeline_keyword: K, competitor_domains: ['cleartax.com'], by_source: { ideas: 12 }, research_failures: [], refused: [{ keyword: 'fta login', volume: 90500, reason: 'navigational', detail: 'x' }], reach: { reach: 30, method: 'size', p75: null, size_reach: 30, sample: 0, top10: 12, organic_keywords: 90, cached: false, cached_at: null, strong: false } } });
@@ -9776,7 +9776,7 @@ await guard('r18-r19-r24-failures-inside-http-200', async () => {
   const wf66 = await run('Build Word File', [{ json: { ...pv66, include_seo_report: true } }]); const doc66 = decode(wf66);
   const vsec66 = (doc66.match(/Keyword Verdict[\s\S]{0,1400}/) || [''])[0];
   check('R18: the keyword report prints "NOT CHECKED" and "not scored", and no number anywhere in the verdict block',
-    /NOT CHECKED — the live Google results could not be read/.test(vsec66) && /not scored — the live Google results could not be read/.test(vsec66)
+    /NOT CHECKED: the live Google results could not be read/.test(vsec66) && /not scored: the live Google results could not be read/.test(vsec66)
     && !/\/100/.test(vsec66) && /not estimated/.test(vsec66), vsec66.slice(0, 600));
   scanHtml('keyword report, verdict withheld', doc66);
   const wr66 = (await run('Build Webhook Response', [{ json: pv66 }]))[0].json;
@@ -12913,8 +12913,8 @@ await guard('b1-verdict-numbers-and-topic-reach', async () => {
   const doc87 = decode(await run('Build Word File', [{ json: { ...V87, include_seo_report: false } }]));
   save('keyword-verdict-b1-numbers.doc.html', doc87); scanHtml('keyword verdict with measured numbers (B1)', doc87);
   check('B1-1: the delivered document prints the difficulty for this site, the modelled range with its chance band and the visit figure with its basis — no bare number anywhere in the verdict table',
-    /Difficulty for your site<\/td><td>Hard for your site \u00b7 Full ladder \u00b7 9-15 months \u00b7 measured on this topic<\/td>/.test(doc87) && /9-15 months — modelled, not measured, estimated chance low \(15-30%, uncalibrated\)/.test(doc87)
-    && /70 — modelled from the provider/.test(doc87), (doc87.match(/Difficulty for your site[\s\S]{0,420}/) || [''])[0]);
+    /Difficulty for your site<\/td><td>Hard for your site \u00b7 Full ladder \u00b7 9-15 months \u00b7 measured on this topic<\/td>/.test(doc87) && /9-15 months: modelled, not measured, estimated chance low \(15-30%, uncalibrated\)/.test(doc87)
+    && /70: modelled from the provider/.test(doc87), (doc87.match(/Difficulty for your site[\s\S]{0,420}/) || [''])[0]);
   check('B1-1: and the sentence under the table says which reach it used, what the chance rests on and how the visits were computed',
     /Measured on this topic/.test(doc87) && /uncalibrated estimate until this system has measured its own ladders/.test(doc87)
     && /Click loss applied: an AI Overview/.test(doc87), (doc87.match(/Measured on this topic[\s\S]{0,300}/) || [''])[0]);
@@ -19667,5 +19667,6 @@ await require('./scenarios_claims_accuracy')({ H, run, mock, store, guard, reset
 await require('./scenarios_ctfix')({ H, run, mock, store, guard, reset, begin });   // CTF1-CTF5 (CT-FIX 2026-10-22): the content review's phase-2 items - the claims kit by subject (CTA, narration, quotes, third parties; contractions, passives, list items, tables, Arabic), whole-number support, marks across rounds, fines never deleted, coverage kinds on two signals, sales headings, brackets in code / Arabic, next step beside a duplicate, the editor's duration rule, schema @id
 await require('./scenarios_ctdepth')({ H, run, mock, store, guard, reset, begin });   // CTD1-CTD3 (CT-DEPTH 2026-10-22, scorecard C8 / C12): the length band from the same-kind ranking pages; the live pages that should link to the new page, verified, in meta.json and the checklist
 await require('./scenarios_kwfinal')({ H, run, mock, store, guard, reset, begin });   // KF1-KF5 (KW-FINAL 2026-10-22): paid multi-item calls retried per item (N3), ERP / D365 / PINT-AE fit (N1), duplicate ladder before paid steps (N2), no 404 existing page (N4), listing / career covered and exact ladder (N5 / N6)
+await require('./scenarios_ctfix2')({ H, run, mock, store, guard, reset, begin });   // CTX1-CTX7 (CT-FIX2 2026-10-22, live page exec 159): the promise check in two stages (Haiku mocked), the reworded round-1 promise, the page-type length band, the citation re-link, one slug, inbound anchors, the Word text, the judge's measured cost
 H.report();
 })();

@@ -126,7 +126,9 @@ module.exports = async (ctx) => {
     const FILL = 'A short review closes each step before the next one starts.';
     const unpromise = (d) => PROMISES.reduce((x, p) => x.replace(new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^\\n]*?[.!?](?=\\s|$)'), FILL), d);
     const filled = unpromise(FX.draft_round2.split(BANK).join('a regional bank').split(FEE).join('a fixed scope')).split('**AI strategy:** candidate use cases ranked by value and risk.').join('**Data foundations:** predictive models and the data platform beneath them.');   // CT-FIX (2026-10-22): a list item under "Enterprise AI work at Tech& falls into four groups:" inherits the lead-in; "candidate use cases ranked by value and risk" is the same unsupported deliverable as the prioritised use-case backlog, so it is taken out too
-    const r2 = (await qa42(noSubs, filled, 1)).content_qa;
+    // CT-FIX2 (2026-10-22): image captions are read too, and this brief's caption "Each phase ends with defined deliverables and planned knowledge
+    // transfer to your team." is a promise nothing on file carries; it is taken out like the body's promises (CTX covers captions)
+    const r2 = (await qa42({ ...noSubs, content_brief: { ...clone(FX.parse_brief.content_brief || {}), image_suggestions: ((FX.parse_brief.content_brief || {}).image_suggestions || []).map(im => ({ ...im, caption: '' })) } }, filled, 1)).content_qa;
     console.log('   no brackets ->', J({ passed: r2.passed, brackets: r2.body_brackets, warnings: r2.warnings }));
     check('the same page with its two brackets filled in passes and is publishable', r2.body_brackets === 0 && r2.passed === true && r2.publishable === true && r2.not_ready === false, J({ p: r2.passed, b: r2.body_brackets, w: r2.warnings }));
     const note = FX.draft_round2.split(BANK).join('a regional bank').split(FEE).join('[Confirm: the assessment runs four weeks]');

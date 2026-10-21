@@ -40,17 +40,21 @@ module.exports = async (ctx) => {
     check('CLACC set: case ids are unique', new Set(ids).size === ids.length);
     // CT-FIX (2026-10-22): the independent review's synthetic cases (source "independent review ...") are hold-out as a group: they were
     // written by the reviewer before the fix and are never tuned on
-    const wrongHold = SET.cases.filter(c => !!c.holdout !== (/^independent review/.test(c.source) || crypto.createHash('sha1').update(c.sentence + c.site, 'utf8').digest()[0] % 10 < 3));
-    check('CLACC set: the hold-out mark is sha1(sentence + site)[0] % 10 < 3 on every case, and every independent-review case is hold-out', !wrongHold.length, wrongHold.map(c => c.id).join(', '));
+    // CT-FIX2 (2026-10-22): the 20 sentences of the fresh live page (exec 159, source "live page 2026-10-22") are hold-out as a group too
+    const wrongHold = SET.cases.filter(c => !!c.holdout !== (/^independent review|^live page 2026-10-22/.test(c.source) || crypto.createHash('sha1').update(c.sentence + c.site, 'utf8').digest()[0] % 10 < 3));
+    check('CLACC set: the hold-out mark is sha1(sentence + site)[0] % 10 < 3 on every case, and every independent-review and live-page case is hold-out', !wrongHold.length, wrongHold.map(c => c.id).join(', '));
+    const live = SET.cases.filter(c => /^live page 2026-10-22/.test(c.source));
+    check('CLACC set (CT-FIX2): the live page group holds its 7 flagged, 3 missed and 10 other sentences, each read inside its real section or as a caption', live.length === 20
+      && live.every(c => c.caption || (c.section && c.section.includes(c.sentence))) && live.filter(c => c.label === 'unsupported_claim').length === 7, live.length);
 
     const r = await scoreClaims(H, console.log);
 
     // 2. the ratchet
     const BASE = fs.readFileSync(path.join(__dirname, 'accuracy', 'CLAIMS_BASELINE.md'), 'utf8');
-    const baseRows = [...BASE.matchAll(/^\| (kit|qa) \| (CL-[A-Z]\d+) \| (missed|false_flag) \|/gm)].map(m => m[1] + '|' + m[2] + '|' + m[3]);
+    const baseRows = [...BASE.matchAll(/^\| (kit|qa|model) \| (CL-[A-Z]\d+) \| (missed|false_flag) \|/gm)].map(m => m[1] + '|' + m[2] + '|' + m[3]);
     check('CLACC baseline: rows are unique', new Set(baseRows).size === baseRows.length);
     const baseline = new Set(baseRows);
-    for (const p of ['kit', 'qa']) {
+    for (const p of ['kit', 'qa', 'model']) {   // CT-FIX2: `model` = the two-stage check, stage 2 replayed from the one real evaluation (claims_model_answers.json)
       const now = new Set(r[p].failures.map(f => p + '|' + f.id + '|' + f.fkind));
       const fresh = [...now].filter(k => !baseline.has(k));
       const fixed = [...baseline].filter(k => k.startsWith(p + '|') && !now.has(k));

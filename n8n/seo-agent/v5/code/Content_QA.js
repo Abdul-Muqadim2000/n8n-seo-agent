@@ -4,13 +4,17 @@
 /*__COVERAGE__*/
 /*__PLACEHOLDERS__*/
 /*__CLAIMS__*/
+/*__PROMISE_JUDGE__*/
 /*__EXCLUSIONS__*/
 /*__FIT_GATE__*/
 // Deterministic quality gate for the generated page. v5 adds: banned-phrase (AI cliché) detection, readability (Flesch),
 // term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,
 // and a 0-100 CONTENT SCORE. Schema is generated here (page-type aware), never by the model.
 const prev = $('Parse Brief').first().json;
-const inItem = $input.first().json;
+// CT-FIX2 (2026-10-22): the draft comes through *Promise Candidates* (stage 1 of the promise check), and this node's own input is then the
+// second reader's answer (*Promise Judge*) or, when nothing was sent, the candidates item itself. A run without those nodes reads its input.
+const PCJ = (() => { try { const j = $('Promise Candidates').first().json; return j && j.promise_judge && j.output !== undefined ? j : null; } catch (e) { return null; } })();
+const inItem = PCJ || $input.first().json;
 const rawOut = inItem.output;
 let md = (typeof rawOut === 'string' ? rawOut : JSON.stringify(rawOut || '')).trim();
 const round = ($runIndex || 0) + 1;
@@ -53,13 +57,8 @@ const ownFacts = String(prev.business || '') + ' ' + String(prev.business_facts 
 // years" as an unverified statistic although the homepage says "20+ Years" and `client_pages` carried it: the check read only
 // `business_facts` + `case_facts_text`, both empty. The same corpus decides whether a statement about the business's own terms is
 // on file (§9d) and which figures need no external source (§9, §9b).
-const OWN_TEXT = (() => {
-  const SMx = SITE_MODEL || (prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null) || {};
-  const vals = (o) => (o && typeof o === 'object') ? Object.values(o).map(v => (v && typeof v === 'object') ? vals(v) : String(v == null ? '' : v)).join(' ') : String(o || '');
-  return [prev.business, prev.business_facts, prev.case_facts_text, SMx.business_facts, SMx.accreditation, vals(SMx.services), vals(SMx.nap),
-    vals(prev.site_profile), vals(prev.author), vals(prev.reviewer), ...(prev.client_pages || []).map(p => p && p.text), prev.existing_page_text,
-    prev.existing_page_facts_text, vals(prev.client_signals), prev.proof_context, vals(prev.proof_library), prev.cta, SMx.cta].filter(Boolean).map(String).join('\n');   // E-CLAIM: the case studies on file vouch too
-})();   // CT-FIX (review item 1): the call to action the client gave (prev.cta, the site model's cta) is its own text too
+const OWN_TEXT = PJ.ownText(prev, SITE_MODEL);   // CT-FIX2: one definition for this node and Promise Candidates (_promise_judge.js); E-CLAIM: the case studies on file vouch too
+// CT-FIX (review item 1): the call to action the client gave (prev.cta, the site model's cta) is its own text too
 const ownLower = OWN_TEXT.toLowerCase().replace(/\s+/g, ' ');
 const addSrc = (u, t) => { const k = SRC.key(u); if (!k || !String(t || '').trim()) return; srcText.set(k, ((srcText.get(k) || '') + ' ' + String(t)).slice(0, 12000)); };
 (prev.facts || []).forEach(f => addSrc(f && f.url, [f && f.text, f && f.claim, f && f.title].filter(Boolean).join(' ')));
@@ -161,7 +160,11 @@ const ladderPlannedUrl = (prev.ladder_id && String(prev.ladder_target_url || '')
 const ladderSlug = ladderPlannedUrl ? (ladderPlannedUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '').split('/').filter(Boolean).pop() || '') : '';
 const slugWritten = metaOf('Slug');
 const slug = ladderSlug || slugWritten;
-if (ladderSlug && slugWritten && slugWritten.replace(/^\/|\/$/g, '') !== ladderSlug) fixes.push('Kept the URL the keyword ladder planned (/' + ladderSlug + '/) instead of the slug the draft suggested (' + slugWritten + '): the ladder\'s link map, the other pages\' links and the rank tracking all use the planned URL');
+// CT-FIX2 (live page 2026-10-22, D6): the Word report printed the draft's slug and "/ai-automation/" beside meta / schema / checklist
+// "/whatwedo/ai-automation": the draft's Slug line now carries the planned slug, and the fix names the planned address in its one form
+const ladderPath = ladderPlannedUrl ? ('/' + ladderPlannedUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '')) : '';
+if (ladderSlug && slugWritten && slugWritten.replace(/^\/|\/$/g, '') !== ladderSlug) { md = md.replace(/^Slug:[ \t]*.*$/im, 'Slug: ' + ladderSlug);
+  fixes.push('Kept the URL the keyword ladder planned (' + ladderPath + ') instead of the slug the draft suggested (' + slugWritten + '): the ladder\'s link map, the other pages\' links and the rank tracking all use the planned URL'); }
 {
   const h1At = md.search(/^# .+$/m);
   if (h1At > 0) {
@@ -203,8 +206,17 @@ if (round > 1) {
     const deadPrev = new Set((((PRV.content_qa || {}).link_check || {}).dead || []).map(x => SRC.key(x && x.url)).filter(Boolean));
     const OFFICIAL = /(^|\.)(gov|edu|int|mil)(\.|$)|\.gov\.[a-z]{2}$|(^|\.)(u\.ae|europa\.eu|who\.int|oecd\.org|worldbank\.org|imf\.org)$/i;
     const relinked = [];
+    // CT-FIX2 (live page 2026-10-22, D5): the editor dropped a misattributed PwC / Forrester citation and this fix put it back on the first
+    // "source" of an unrelated bullet. A generic anchor ("source", "here", "this report") says nothing about where the claim is: it is
+    // re-attached only inside the same sentence it stood in (its words kept), and an anchor the editor's review named is never restored.
+    const GENERIC_ANCHOR = /^(?:source|sources|here|this|link|report|study|survey|data|research|this report|this study|the report|the study|read more|learn more|more|official source)$/i;
+    const sentOf = (txt, at) => { const a0 = Math.max(txt.lastIndexOf('. ', at), txt.lastIndexOf('\n', at)) + 1; let b0 = txt.slice(at).search(/[.!?](?:\s|$)|\n/); b0 = b0 < 0 ? txt.length : at + b0; return txt.slice(a0, b0); };
+    const plainSent = (t) => String(t || '').replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/^\s*[-*\d.)]+\s+/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const reviewText = JSON.stringify(lastCritique || critique || '').toLowerCase();
     for (const m of prevMd.matchAll(/\[([^\[\]]{3,120})\]\((https?:\/\/[^)\s]+)\)/g)) {
       const anchor = m[1], url = m[2]; const k = SRC.key(url); const host = SRC.host(url);
+      const generic = GENERIC_ANCHOR.test(anchor.trim()); const prevSent = generic ? plainSent(sentOf(prevMd, m.index)) : '';
+      if (reviewText && host && reviewText.includes(host.replace(/^www\./, '')) && /misattribut|vendor|not a (?:primary|reliable)|remove|drop/.test(reviewText)) continue;
       if (!k || deadPrev.has(k) || (domain && (host === domain || host.endsWith('.' + domain)))) continue;
       if (!(evid.has(k) || OFFICIAL.test(host))) continue;
       if (md.includes('](' + url + ')')) continue;
@@ -212,7 +224,9 @@ if (round > 1) {
       const re = new RegExp('(^|[^\\[\\w])(' + escRe(anchor) + ')(?![\\w\\]])', 'g'); let hit = null, mm;
       while ((mm = re.exec(md))) { const at = mm.index + mm[1].length; const lineStart = md.lastIndexOf('\n', at) + 1;
         if (/^(#|Title:|Meta Description:|Slug:)/.test(md.slice(lineStart, lineStart + 18))) continue;
-        const before = md.slice(Math.max(0, at - 200), at); if (/\[[^\]]*$/.test(before)) continue; hit = at; break; }
+        const before = md.slice(Math.max(0, at - 200), at); if (/\[[^\]]*$/.test(before)) continue;
+        if (generic && plainSent(sentOf(md, at)) !== prevSent) continue;   // CT-FIX2 (D5): a generic anchor only in its own sentence
+        hit = at; break; }
       if (hit == null) continue;
       md = md.slice(0, hit) + '[' + anchor + '](' + url + ')' + md.slice(hit + anchor.length); relinked.push(url);
     }
@@ -400,6 +414,7 @@ if (RS && RS.refresh) {
 const bizNames = [...new Set([(prev.site_profile || {}).business_name, SITE_MODEL ? SM.name(SITE_MODEL) : '', ...((SITE_MODEL && Array.isArray(SITE_MODEL.brand_names)) ? SITE_MODEL.brand_names : []),
   (prev.site_description || {}).business_name, domain ? String(domain).split('.')[0] : ''].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
 const business_claims = [];
+const carried_promises = [];   // CT-FIX2: round N's reworded marks of round N-1's promises
 // CT-FIX (review item 7): the editor keeps QA's own [Confirm: <sentence>] marks from the round before. Read as brackets, they were
 // skipped by the claims check and came back as "the writer also left 1 note", with the "add it to your business facts" advice lost. A
 // mark that holds a whole sentence the claims check flags again (same facts, same rule) is unwrapped here and marked again below, so
@@ -411,7 +426,16 @@ const business_claims = [];
     const k = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
     const C1 = CL.business(open, OWN_TEXT, { names: bizNames }); const C2 = CL.commitments(open, OWN_TEXT, { names: bizNames, skip: C1.flags.map(f => f.sentence) });
     const again = new Set(C1.flags.concat(C2.flags).map(f => k(f.sentence)));
-    md = md.replace(SENT_MARK, (all, inner) => (again.has(k(inner)) ? inner : all));
+    // CT-FIX2 (live page 2026-10-22, item 7 on the real path): exec 159's editor did not keep round 1's mark word for word, it REWORDED the
+    // promise inside it ("Each phase ends in a go/no-go decision ..." -> "[Confirm: We recommend a go/no-go review at the end of each phase
+    // ...]"), which the rules read as advice: it came back as "the writer also left 1 note" with the generic action. A mark whose sentence
+    // shares at least half of its words with a promise of the round before is that promise, carried: it stays a business promise.
+    const toks = (x) => new Set(String(x || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(w => w.length > 3));
+    const PRVQ = (() => { try { return (($('Needs Revision?').first().json || {}).content_qa) || {}; } catch (e) { return {}; } })();
+    const before = (PRVQ.business_promises || []).concat(PRVQ.carried_promises || []).filter(b => b && b.sentence);
+    const similar = (x) => { const A = toks(x); return before.find(b => { const B = toks(b.sentence); const n = [...A].filter(w => B.has(w)).length; return Math.min(A.size, B.size) >= 4 && n / Math.min(A.size, B.size) >= 0.5; }); };
+    md = md.replace(SENT_MARK, (all, inner) => { if (again.has(k(inner))) return inner; const was = round > 1 ? similar(inner) : null;
+      if (was) { carried_promises.push({ sentence: inner, kind: was.kind || 'process', was: was.sentence }); return inner; } return all; });
   }
 }
 const mdBeforeClaims = md;   // E-CLAIM reads the copy before §9d's marks (a mark would hide the billing line after it)
@@ -434,12 +458,38 @@ const mdBeforeClaims = md;   // E-CLAIM reads the copy before §9d's marks (a ma
 //     in the copy and becomes an owner edit ("confirm it is true or delete it"): the page is not ready to publish until it is done, exactly
 //     like a bracket. It is not an editor warning: only the owner knows whether the business really does it.
 const business_promises = [];
+// CT-FIX2 (2026-10-22, live page exec 159): two stages. The rules (CL.commitments, collect) list the CANDIDATES; the second reader
+// (*Promise Judge*, Claude Haiku, one call per round, built by *Promise Candidates*) judged each one against its closest facts. A
+// candidate it answered for is flagged when it is a commitment of the business and no fact carries it; one it did not answer for, or
+// every one when the call failed, is decided by the rules, and the report says so. The model never adds a sentence.
+let promise_check = { method: 'rules', model: null, candidates: 0, judged: 0, overturned: [], added: [], note: '' };
 {
-  const BP = CL.commitments(mdBeforeClaims, OWN_TEXT, { names: bizNames, skip: business_claims.map(b => b.sentence) });
-  for (const f of BP.flags.slice(0, 15)) {
-    const at = md.indexOf(f.sentence); const marked = at >= 0 && !/[\[\]]/.test(f.sentence);   // a sentence holding a link is listed, never wrapped (no nested bracket)
+  const BP = CL.commitments(mdBeforeClaims, OWN_TEXT, { names: bizNames, skip: business_claims.map(b => b.sentence), collect: true, captions: PJ.captionsOf(brief) });
+  const pjc = PCJ && PCJ.promise_judge ? PCJ.promise_judge : null;
+  let J = null, why = '';
+  if (!pjc) why = 'the second reader was not part of this run';
+  else if (pjc.skip) why = pjc.skip_reason || 'nothing to judge';
+  else { let resp = null; try { resp = $('Promise Judge').first().json; } catch (e) { resp = null; }
+    J = PJ.read(resp, pjc.candidates || []); if (!J.ok) why = J.why; }
+  const cands = BP.candidates || [];
+  const final = [];
+  const ck = new Set(cands.map(c => PJ.k(c.sentence)));
+  for (const c of cands) { const d = PJ.decide(c, J, CL.backs);
+    if (d.by === 'model' && d.flagged !== !!c.rule_flag) (d.flagged ? promise_check.added : promise_check.overturned).push({ sentence: c.sentence.slice(0, 200), reason: d.reason || '', supported_by: d.supported_by || null });
+    if (d.flagged) final.push({ kind: c.kind, sentence: c.sentence, support: c.support, where: c.where, reason: d.by === 'model' ? d.reason : '', by: d.by }); }
+  for (const f of BP.flags) if (!ck.has(PJ.k(f.sentence))) final.push({ ...f, by: 'rules' });   // a rule flag the candidate list merged away
+  // the promises the editor reworded inside round N-1's marks: flagged unless the second reader found the fact that carries them
+  for (const c of carried_promises) { if (final.some(f => PJ.k(f.sentence) === PJ.k(c.sentence))) continue;
+    const rc = cands.find(x => PJ.k(x.sentence) === PJ.k(c.sentence)); if (rc && !rc.rule_flag && rc.why !== 'wide' && rc.why !== 'advice') continue;   // the rules judged it a commitment and found the facts that carry it
+    const v = J && J.ok ? J.by.get(PJ.k(c.sentence)) : null; if (v && v.supported_by && v.fact && CL.backs(c.sentence, v.fact)) continue;
+    final.push({ kind: c.kind, sentence: c.sentence, support: 0, where: 'para', reason: 'the promise marked in the round before, reworded by the editor', by: 'carried' }); }
+  promise_check = { method: J && J.ok ? 'rules+model' : 'rules', model: J && J.ok ? PJ.MODEL : null, candidates: cands.length, judged: J && J.ok ? J.by.size : 0,
+    overturned: promise_check.overturned.slice(0, 10), added: promise_check.added.slice(0, 10), usage: J && J.usage ? J.usage : null,
+    note: J && J.ok ? '' : 'checked by rules only: ' + (why || 'the second reader gave no answer') };
+  for (const f of final.slice(0, 15)) {
+    const at = f.where === 'caption' ? -1 : md.indexOf(f.sentence); const marked = at >= 0 && !/[\[\]]/.test(f.sentence);   // a sentence holding a link is listed, never wrapped (no nested bracket); a caption is not in the copy
     if (marked) md = md.slice(0, at) + '[Confirm: ' + f.sentence + ']' + md.slice(at + f.sentence.length);
-    business_promises.push({ kind: f.kind, sentence: f.sentence, marked, support_pct: f.support });
+    business_promises.push({ kind: f.kind, sentence: f.sentence, marked, support_pct: f.support, where: f.where === 'caption' ? 'image caption' : undefined, reason: f.reason || undefined, checked_by: f.by });
   }
   if (business_promises.length) fixes.push('Marked ' + business_promises.filter(x => x.marked).length + ' promise(s) made in the business\'s name that nothing on file supports (deliverables, process steps, terms) as [Confirm: ...] for the owner');
 }
@@ -586,9 +636,12 @@ const target = brief.target_word_count || 800;
 // and the brief's target sits inside it, the length is judged against that band and the reason names it and its sample; otherwise
 // (too few pages, or the verdict set a number outside it) the old rule stays: short under 0.8x, too long over 1.25x of the target.
 const LBQ = (prev.competitor_analysis || {}).length_band || prev.length_band || null;
-const lenBand = !!(LBQ && LBQ.ok && Number(LBQ.low) > 0 && Number(LBQ.high) >= Number(LBQ.low) && target >= Number(LBQ.low) && target <= Number(LBQ.high));
+// CT-FIX2 (live page 2026-10-22, D8): with too few same-kind pages Parse Analysis gives the PAGE-TYPE band (ok: false, source page_type,
+// "1,800-3,500 words", said so); QA ignored it and told the editor to cut 323 words of a page inside that band. Either band is the band.
+const lenBand = !!(LBQ && (LBQ.ok || LBQ.source === 'page_type') && Number(LBQ.low) > 0 && Number(LBQ.high) >= Number(LBQ.low) && target >= Number(LBQ.low) && target <= Number(LBQ.high));
 const lenLow = lenBand ? Number(LBQ.low) : target * 0.8, lenHigh = lenBand ? Number(LBQ.high) : target * 1.25;
-const lenBasis = lenBand ? ' (the band of ' + (LBQ.basis || 'the pages ranking for this search') + ')' : '';
+const lenBasis = lenBand ? (LBQ.ok ? ' (the band of ' + (LBQ.basis || 'the pages ranking for this search') + ')' : ' (' + (LBQ.basis || 'the usual length for this kind of page') + ')') : '';
+const length_band = lenBand ? { low: lenLow, high: lenHigh, source: LBQ.ok ? 'ranking_pages' : 'page_type', sample: Number(LBQ.sample) || 0, basis: String(LBQ.basis || '') } : null;
 const lenOk = lenBand ? (mainWords >= lenLow && mainWords <= lenHigh) : Math.abs(mainWords - target) <= target * 0.25;
 if (mainWords < lenLow) warnings.push(`Main content is short: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis);
 if (mainWords > lenHigh) warnings.push(`Main content is too long: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis + '. Cut repetition and secondary detail, and do not add anything');
@@ -869,10 +922,12 @@ const fat_sections = sections.map(sec => { const o = outline.find(x => x.h2 && p
     const t = o ? Number(o.target_words) || 0 : 0; return { h2: sec.h2, words: sec.words, target: t, over: t ? sec.words - t : 0 }; })
   .sort((a, b) => (b.over - a.over) || (b.words - a.words)).slice(0, 3).filter(x => x.over > 0 || !x.target);
 const atRiskTerms = termCoverage.filter(t => t.found > 0 && t.found <= 2).map(t => t.term).slice(0, 15);
-const length_instruction = (target && mainWords > target * 1.1)
-  ? 'CUT ' + over_words + ' words: the main content is ' + mainWords + ' words against a target of ' + target + ' (+' + over_pct + '%). '
+const cutTo = lenBand ? lenHigh : Math.round(target * 1.1);   // CT-FIX2 (D8): inside the band nothing is cut; above it, down to its top
+const cut_words = lenBand ? Math.max(0, mainWords - lenHigh) : over_words;
+const length_instruction = (target && (lenBand ? mainWords > lenHigh : mainWords > target * 1.1))
+  ? 'CUT ' + cut_words + ' words: the main content is ' + mainWords + ' words against ' + (lenBand ? 'the band of ' + lenLow + '-' + lenHigh + lenBasis : 'a target of ' + target + ' (+' + over_pct + '%)') + '. '
     + (fat_sections.length ? 'The longest sections are ' + fat_sections.map(x => '"' + x.h2 + '" (' + x.words + ' words' + (x.target ? ' against ' + x.target : '') + ')').join(', ') + '. ' : '')
-    + 'Cut repetition, restatements and secondary detail; keep every section, every verified fact, every source and every link. Do not add a single word, and do not stop above ' + Math.round(target * 1.1) + ' words.'
+    + 'Cut repetition, restatements and secondary detail; keep every section, every verified fact, every source and every link. Do not add a single word, and do not stop above ' + cutTo + ' words.'
     // A-17: the cut once took the Quick answer itself (exec 771) — the protected blocks are named in the instruction, not left to inference
     + ' PROTECTED, never cut: the **Quick answer:** line right after the introduction (' + (answerWords || '40-70') + ' words), every source link and the call to action.'
     // R43: a correct cut must not fail the coverage check by taking a term off the page — the ones used only once or twice are named
@@ -910,7 +965,7 @@ const claimMarks = new Set(business_claims.filter(b => b.marked).concat(business
 const bizLabel = bizNames[0] || 'your business';
 const claim_edits = business_claims.map(b => ({ ...b, src: 'terms' })).concat(business_promises.map(b => ({ ...b, src: 'promise' })))
   .map(b => ({ token: b.marked ? '[Confirm: ' + b.sentence + ']' : b.sentence, count: 1, kind: 'claim', claim_kind: b.kind, sentence: b.sentence, action: 'confirm_or_delete',
-    text: 'Confirm it is true or delete it: "' + b.sentence + '" (nothing in the business facts, the author profile, the case studies or ' + bizLabel + '\'s own pages says this; if it is true, add it to your business facts so later pages can say it too)' }));
+    text: (b.where === 'image caption' ? 'Confirm it is true or change the image caption: "' : 'Confirm it is true or delete it: "') + b.sentence + '" (nothing in the business facts, the author profile, the case studies or ' + bizLabel + '\'s own pages says this; if it is true, add it to your business facts so later pages can say it too)' }));
 const claims_open = business_promises.length + business_claims.filter(b => !b.marked).length;   // marked ones are counted as brackets below
 const body_brackets = placeholder_count + body_notes.reduce((k, n) => k + n.count, 0);
 // what the owner edits by hand, bracket by bracket. A price, fee or duration bracket on a page whose business gave no such facts is one
@@ -954,7 +1009,7 @@ const not_ready = !passed && (!rounds_left || !editor_needed);
 // had 2 round(s)" after ONE editor call and the cost ledger priced a second; both now read `editor_rounds`.
 const editor_rounds = Math.max(0, round - 1);
 const promises_note = !business_promises.length ? '' : business_promises.length + ' statement(s) about ' + bizLabel + '\'s services, process or terms that nothing on file supports (business facts, author profile, case studies, its own pages): '
-  + business_promises.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + (business_promises.length > 4 ? '; and ' + (business_promises.length - 4) + ' more' : '') + '. Confirm each one is true or delete it before you publish';
+  + business_promises.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + (business_promises.length > 4 ? '; and ' + (business_promises.length - 4) + ' more' : '') + '. Confirm each one is true or delete it before you publish' + (promise_check.note ? ' (' + promise_check.note + ')' : '');
 const body_notes_other = body_notes.filter(n => !claimMarks.has(n.token));
 const not_ready_reasons = !not_ready ? [] : [
   placeholder_note,   // R25: named whenever any body placeholder is left, not only above PH_MAX
@@ -1000,10 +1055,10 @@ const site_profile_out = (P && Object.keys(P).some(k => k === 'address' ? Object
 return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null, site_profile: site_profile_out,
   content_qa: { ai_ready, round, editor_rounds, passed, editor_needed, content_score, quality, publishable: passed, not_ready, quality_label, not_ready_reasons, max_rounds, rounds_left, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, writer_notes, open_brackets, business_name: bizName, nap_source,
-    placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections,   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
+    placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections, length_band,   // CT-FIX2 (D8): the band judged against and its sample   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
     masked_amounts, flagged_amounts, sourced_amounts,   // B3-1 / B3-2: what the money mask removed, what it left for review, and what a cited source vouched for
     outbound_links: externalUrls.map(e => ({ url: e.url, anchor: e.anchor, host: e.host, tier: e.tier })),   // A-14: every outbound link, for Outbound Link Check
-    business_claims, business_promises, claims_open, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19 / E-CLAIM
+    business_claims, business_promises, promise_check, carried_promises, claims_open, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19 / E-CLAIM
     verdict_exclusions, excluded_sections, protected_restored,   // A-18 / A-17
     coverage_advice, subtopics_dropped, owner_edits, next_step, body_brackets, page_url: pageUrl,   // D5 / owner edits / placeholder gate (2026-10-21)
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
