@@ -17,8 +17,12 @@ const hopAnswers = (() => { try { return $('Read Ladder Titles (Redirect)').all(
 const reqs = reqsAll.filter(r => !r.home_ref);
 const out = { asked: reqs.length, read: [], failed: [], redirected: [], untitled: Number(first.untitled) || 0, cap: Number(first.cap) || 0, skip_reason: reqsAll.length ? '' : String(first.skip_reason || ''),
   home_title: String(first.home_title || ''), shell_title: '', read_at: new Date().toISOString() };
-const dec = (s) => String(s || '').replace(/<[^>]*>/g, ' ').replace(/&amp;/gi, '&').replace(/&#0?39;|&apos;/gi, "'").replace(/&quot;/gi, '"').replace(/&nbsp;/gi, ' ')
-  .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#(\d+);/g, (m, n) => String.fromCharCode(Number(n))).replace(/\s+/g, ' ').trim();
+// KWL-LAD D11 (live run 2026-10-21): "AI & Automation | What We Do | Tech&" was quoted as "AI Automation | What We Do | Tech". Every entity is
+// decoded now: named ones, decimal and hex (&#38; &#x26;), and a title encoded twice (&amp;amp;); an entity it does not know is left as written.
+const ENT_LT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '-', mdash: '-', lsquo: "'", rsquo: "'", ldquo: '"', rdquo: '"', hellip: '...', copy: '(c)', reg: '(R)', trade: '(TM)', middot: '.', bull: '.', laquo: '"', raquo: '"' };
+const ent1 = (t) => t.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => { if (e[0] !== '#') { const v = ENT_LT[e.toLowerCase()]; return v === undefined ? m : v; }
+  const n = /^#x/i.test(e) ? parseInt(e.slice(2), 16) : Number(e.slice(1)); return Number.isFinite(n) && n > 0 && n < 0x110000 ? String.fromCodePoint(n) : m; });
+const dec = (s) => { let t = String(s || '').replace(/<[^>]*>/g, ' '); for (let k = 0; k < 2 && /&(#x[0-9a-f]+|#\d+|[a-z]+);/i.test(t); k++) t = ent1(t); return t.replace(/\s+/g, ' ').trim(); };
 const hostOf = (u) => String((String(u || '').match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '').toLowerCase().replace(/:\d+$/, '');
 const bare = (h) => String(h || '').toLowerCase().replace(/^www\./, '');
 const pathKey = (u) => String(u || '').replace(/^https?:\/\/[^\/?#]*/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
@@ -60,7 +64,9 @@ reqsAll.forEach((q, i) => {
 });
 // the homepage's title: on file, else the reference read
 const homeRes = homeReq ? results.find(r => r.q === homeReq) : null;
-if (!out.home_title && homeRes && homeRes.j && homeRes.j.ok) out.home_title = homeRes.j.title;
+// D11: the homepage title read just now wins over the one on file (the inventory's copy can have lost its "&"); both count as the site's title
+const homeOnFile = out.home_title;
+if (homeRes && homeRes.j && homeRes.j.ok && homeRes.j.title) out.home_title = homeRes.j.title;
 const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 const pageRes = results.filter(r => r.q !== homeReq);
 const okRes = pageRes.filter(r => r.j && r.j.ok);
@@ -68,6 +74,7 @@ const shared = (field) => { const c = new Map(); okRes.forEach(r => { const v = 
   return new Set([...c.entries()].filter(([, n]) => n >= 2 && n * 2 > okRes.length).map(([v]) => v)); };
 const shellT = shared('title'), shellH = shared('h1');
 if (norm(out.home_title)) shellT.add(norm(out.home_title));
+if (norm(homeOnFile)) shellT.add(norm(homeOnFile));
 out.shell_title = [...shellT][0] || '';
 for (const r of pageRes) {
   if (r.redirected) { out.redirected.push(r.redirected); continue; }

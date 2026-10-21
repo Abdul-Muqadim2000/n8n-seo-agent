@@ -178,6 +178,11 @@ if (!live.length || !answers.length) return [{ json: { skip: true, is_retry: fal
 // nothing is sent again and the evidence stays what the first attempt made it (INVARIANTS rule 3's honest half).
 if (live.length !== answers.length) return [{ json: { skip: true, is_retry: false, unpaired: true,
   reason: 'the ' + live.length + ' request(s) and the ' + answers.length + ' answer(s) could not be paired, so nothing was sent again' } }];
+// KWL-LAD D5: a second attempt only when it can still end inside the check's time budget (the caller waits at most 45 s)
+const __t0 = Number((live[0] || {}).sent_at) || 0;
+const __left = __t0 ? 24000 - (Date.now() - __t0) : 24000;
+const __fits = __left >= 9000;
+if (!__fits) { const __f = RT.failures(answers, {}); if (__f.length) return [{ json: { skip: true, is_retry: false, failed: __f.length, reasons: __f.map(x => x.why).slice(0, 5), out_of_time: true, reason: 'not read in time: no time left for a second attempt' } }]; }
 const p = RT.plan(live, answers, { max: 24 });
 if (!p.items.length) return [{ json: { skip: true, is_retry: false, failed: p.failed, reasons: p.reasons,
   reason: p.failed ? 'nothing can be gained by asking again: ' + (p.permanent[0] || p.reasons[0] || 'the provider refused') : 'every request answered' } }];

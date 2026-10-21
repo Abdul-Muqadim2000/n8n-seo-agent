@@ -80,7 +80,9 @@ const CMP = (() => {
     // free zones and authorities of the UAE (a business sets up THROUGH them; they compete with no one), plus the region's tax portals
     ['gov', alt(['difc', 'dmcc', 'dafz', 'jafza', 'rakez', 'ifza', 'meydanfz', 'shams', 'adgm', 'dso', 'dwtc', 'kezad', 'saif-zone', 'srtip', 'hfz', 'dic', 'dubaiinternetcity',
       'dubaicommercity', 'fujairahfreezone', 'ajmanfreezone', 'uaqftz', 'adafz', 'twofour54', 'dubaichamber', 'abudhabichamber', 'sharjahchamber', 'ded', 'dubaided', 'tamm',
-      'u', 'zatca', 'mof', 'mohre', 'dubai', 'abudhabi', 'investindubai', 'gdrfad', 'moec', 'tdra'])],
+      'u', 'zatca', 'mof', 'mohre', 'dubai', 'abudhabi', 'investindubai', 'gdrfad', 'moec', 'tdra',
+      // KWL-RES D10: government foundations and initiatives (dubaifuture.ae was a ladder's #1 "competitor"); the title rule below finds the rest
+      'dubaifuture', 'digitaldubai', 'smartdubai', 'dub', 'dubaiai', 'museumofthefuture', 'mbrf', 'mbrsg', 'adio', 'dubaiaicampus', 'aiseer'])],
     ['platform', alt(['microsoft', 'dynamics', 'office', 'apple', 'oracle', 'sap', 'salesforce', 'hubspot', 'ibm', 'aws', 'azure', 'github', 'gitlab', 'atlassian', 'zoho',
       'shopify', 'wix', 'wordpress', 'squarespace', 'adobe', 'openai', 'nvidia', 'meta', 'notion', 'odoo', 'intuit', 'quickbooks', 'xero', 'netsuite', 'workday', 'servicenow', 'cloudflare'])],
   ];
@@ -116,9 +118,21 @@ const CMP = (() => {
     if (COURSE_T.test(t) || COURSE_AR.test(t) || /\/(courses?|certifications?|training-courses?)(\/|$|-)/.test(p)) return 'education';
     return 'business';
   };
+  // KWL-RES D10 (2026-10-21 live keyword test, exec 125): dubaifuture.ae (Dubai Future Foundation) was the ladder's top competitor: no host list
+  // can name every authority, foundation, council or chamber, but their own results say what they are. A NAMED body ("Dubai Future Foundation",
+  // "Roads and Transport Authority", "UAE Cyber Security Council", "Dubai Chamber") in the title, or a snippet that calls the site a government
+  // entity / initiative, rules the whole domain out (a business result that merely mentions government work is not one: the name must end in
+  // the word, or the snippet must say the site is the government's).
+  // the name must be a whole segment of the title (the site name before or after "|", " - ", ":"), so a case study titled "How we helped
+  // the Roads and Transport Authority" on a business's site is not read as the authority's own page
+  const GOV_NAME_SEG = /^(?:the\s+)?(?:[A-Z][\w'&.-]*\s+(?:(?:of|and|for|the|de)\s+)?){1,6}(?:Foundation|Authority|Council|Chamber(?: of Commerce(?: and Industry)?)?|Municipality)(?:\s*\([A-Z]{2,6}\))?$|^(?:the\s+)?(?:Ministry|Government) of\s+[A-Z][\w\s&'-]{1,60}$/;
+  const GOV_NAME_T = { test: (t) => S(t).split(/\s+[|\u2013\u2014:-]\s+|\s*\|\s*/).map(x => x.trim()).filter(Boolean).some(x => GOV_NAME_SEG.test(x)) };
+  const GOV_SNIP = /\b(?:(?:a|an|the)\s+(?:federal|government|governmental|public)\s+(?:entity|initiative|agency|body|authority|department|foundation|organi[sz]ation|program(?:me)?|platform)|government[- ](?:owned|backed|led|initiative|entity)|established by (?:the )?(?:government|(?:an? |royal |emiri )?decree|law)|chamber of commerce|ministry of)\b/i;
+  const govSignal = (title, snippet) => GOV_NAME_T.test(S(title)) || GOV_SNIP.test(S(title) + ' ' + S(snippet));
   const kindOf = (domain, url, title, snippet, own) => {
     const hk = kindOfHost(domain || url, own);
     if (hk !== 'business') return { kind: hk, label: LABEL[hk] || hk, by: 'host' };
+    if (govSignal(title, snippet)) return { kind: 'gov', label: LABEL.gov, by: 'host' };
     const rk = kindOfResult(url, title, snippet);
     return { kind: rk, label: LABEL[rk] || rk, by: rk === 'business' ? '' : 'result' };
   };
@@ -129,6 +143,9 @@ const CMP = (() => {
     const serps = (Array.isArray(o.serps) ? o.serps : []).filter(s => s && Array.isArray(s.items) && s.items.some(x => x && (!x.type || x.type === 'organic')));
     const read = serps.length;
     const cand = new Map(); const excl = new Map();
+    // KWL-RES D10: a domain one of whose results names it a government body is a government body on every results page
+    const govRegs = new Set(); for (const s of serps) for (const it of s.items) { if (!it || (it.type && it.type !== 'organic')) continue; const h = host(it.domain || it.url);
+      if (h && kindOfHost(h, own) === 'business' && govSignal(it.title, it.description || it.snippet)) govRegs.add(reg(h)); }
     serps.forEach((s, si) => {
       const kw = S(s.keyword).trim();
       const seenHere = new Set();
@@ -136,8 +153,9 @@ const CMP = (() => {
         if (!it || (it.type && it.type !== 'organic')) continue;
         const h = host(it.domain || it.url); if (!h) continue;
         const pos = Number(it.rank_group || it.rank_absolute || it.rank || it.position) || 99;
-        const k = kindOf(h, it.url, it.title, it.description || it.snippet, own);
-        const d = k.by === 'host' ? h : reg(h);
+        const k0 = kindOf(h, it.url, it.title, it.description || it.snippet, own);
+        const k = (k0.kind === 'business' || k0.by === 'result') && govRegs.has(reg(h)) ? { kind: 'gov', label: LABEL.gov, by: 'host' } : k0;
+        const d = k.by === 'host' ? (k.kind === 'gov' && govRegs.has(reg(h)) ? reg(h) : h) : reg(h);
         if (k.kind === 'you') continue;
         if (k.kind !== 'business') {
           const e = excl.get(d) || { domain: d, kind: k.kind, label: k.label, by: k.by, seen_in: 0, best_position: 99, example: '', kinds: {} };
@@ -191,7 +209,7 @@ const CMP = (() => {
         + (exText ? '. Passed over: ' + exText : '') + '.';
     return { picked, excluded: excluded.slice(0, 20), too_few: too_few.slice(0, 10), serps_read: read, min_serps: minSerps, note };
   };
-  return { kindOf, kindOfHost, kindOfResult, select, weight, host, reg, LABEL };
+  return { kindOf, kindOfHost, kindOfResult, govSignal, select, weight, host, reg, LABEL };
 })();
 // KW-COMP (2026-10-21, RV-6): the same competitor rule as research and the ladder (CMP): a domain whose ADDRESS is a job board, directory,
 // review or media site, authority, search engine, social network, Q&A site, help / docs subdomain, course provider or platform is never a

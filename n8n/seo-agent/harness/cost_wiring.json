@@ -364,7 +364,7 @@
    "model": "claude-opus-5-5",
    "node": "Strategy Brief",
    "streaming": true,
-   "template_chars": 13292
+   "template_chars": 13684
   },
   {
    "count_answer": "Count Answer (Verdict Agent)",

@@ -383,6 +383,17 @@ const FIT_COMPARE = /\b(vs|versus|compare|comparison|alternatives?|instead of|be
 // full-width and compatibility forms, toLowerCase (never the locale form) folds case; marks (\p{M}) stay inside their word.
 const FIT_SPLIT = /[^\p{L}\p{M}\p{N}.]+/u, FIT_SPLIT_WORDS = /[^\p{L}\p{M}\p{N}]+/u;
 const fitLow = (s) => String(s || '').normalize('NFKC').toLowerCase();
+// KWL-RES D2 (2026-10-21 live keyword test, exec 111): "artificial intelligence consultancy" (170/mo, KD 5) was judged "not one of the services
+// you listed" while "AI consulting" was the first service declared: the topic words never read "artificial intelligence" as "ai". fitSyn writes
+// one spelling for the same thing, and the topic paths run it on BOTH sides (the keyword and the client's services / topics), so it can only
+// make two spellings of one subject agree. An acronym the rules already treat as a category ("ai", "erp", "crm") is the canonical form; "ml"
+// and "bi" are written out (a two-letter word is never a topic word on its own); advisory and advisor read as "consultant"; every spelling
+// of e-invoicing reads as "e invoicing" (so "invoicing" stays a word of it).
+const FIT_SYNONYMS = [[/\bartificial[\s-]+intelligence\b/g, 'ai'], [/\bcustomer[\s-]+relationship[\s-]+management\b/g, 'crm'], [/\benterprise[\s-]+resource[\s-]+planning\b/g, 'erp'],
+  [/\bml\b/g, 'machine learning'], [/\bbi\b/g, 'business intelligence'],
+  [/\b(?:advisory|advisors?|advisers?)\b/g, 'consultant'],   // consultancy, consulting and consultant already agree (one stem, "consult"); a consultant word stays a word of its own ("hire ai consultant dubai")
+  [/\b(?:e[\s-]?|electronic[\s-]+)(invoic\w*)/g, 'e $1']];
+const fitSyn = (s) => FIT_SYNONYMS.reduce((t, [re, to]) => t.replace(re, to), String(s || '').normalize('NFKC').toLowerCase());
 const fitTokens = (s) => fitLow(s).replace(/[’']/g, '').split(FIT_SPLIT).map(t => t.replace(/^\.+|\.+$/g, '')).filter(t => t.length > 1 && !FIT_STOP.has(t));
 const fitHost = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^(www|m|app|en|ar)\./, '');
 const fitGovHost = (d) => { const h = fitHost(d); return /(^|\.)gov(\.[a-z]{2,3})?$/.test(h) || /(^|\.)(gouv|gob|go|gv)\.[a-z]{2}$/.test(h) || /(^|\.)mil(\.[a-z]{2})?$/.test(h) || /(^|\.)(u\.ae|government\.ae|dubai\.ae|abudhabi\.ae|sharjah\.ae|ajman\.ae|rak\.ae|tax\.gov\.ae|europa\.eu)$/.test(h); };
@@ -545,7 +556,7 @@ const fitStem = (w) => w.length > 5 ? w.replace(/(ingly|ings|ing|ments|ment|atio
 // apps", harness S103). The short word counts through the client's own phrase instead (fitCarriedName below): a keyword made only of category
 // and place words that carries the WHOLE of a short topic phrase (a service the client named, a keyword they chose: "AI consulting", "Power
 // BI", "HR software") names that service. Two-letter words count there because fitTokens keeps them.
-const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).normalize('NFKC').toLowerCase()
+const fitTopicWords = (topics) => new Set(fitSyn(Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || ''))
   .split(FIT_SPLIT_WORDS).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
 // E-GATE (D4): words a buyer adds to any service search ("ai consulting cost uae", "best ai consulting firm dubai"). They say how the person
 // buys, not what they buy, so they are neutral like a place: "ai consulting cost uae" was refused as off topic on the word "cost" alone.
@@ -554,15 +565,15 @@ const fitAnd = (a) => a.length < 2 ? (a[0] || '') : a.slice(0, -1).join(', ') + 
 // the short topic phrase (2 to 6 words, never prose) whose every word the keyword carries ("consultants" carries "consulting": the same stem rule as fitTopic)
 const fitCarriedName = (toks, topics) => { const ks = toks.filter(t => !FIT_GEO.has(t)).map(fitStem);
   const hit = (x) => { const s = fitStem(x); return ks.some(k => k === s || (k.length >= 5 && s.length >= 5 && (k.indexOf(s) === 0 || s.indexOf(k) === 0))); };
-  for (const t of (Array.isArray(topics) ? topics : [topics])) { const raw = String(t || '').replace(/\s+/g, ' ').trim(); if (!raw) continue;
+  for (const t of (Array.isArray(topics) ? topics : [topics])) { const raw0 = String(t || '').replace(/\s+/g, ' ').trim(); if (!raw0) continue; const raw = fitSyn(raw0);
     const w = fitTokens(raw).filter(x => !FIT_GEO.has(x) && !/^\d+$/.test(x));
     if (w.length < 2 || w.length > 6) continue;
-    if (w.every(hit)) return raw; }
+    if (w.every(hit)) return raw0; }
   return ''; };
 // B-3: the topics as PHRASES (one service name, one configured keyword, one description), so a common word can be judged against the name
 // it came from. `dist` = the phrase's own distinctive words (stemmed); prose (more than 6 of them) never vouches for a common word.
 const fitTopicPhrases = (topics) => (Array.isArray(topics) ? topics.filter(Boolean).map(String) : [String(topics || '')])
-  .map(t => { const w = fitLow(t).split(FIT_SPLIT_WORDS).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
+  .map(t => { const w = fitSyn(t).split(FIT_SPLIT_WORDS).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
     return { dist: [...new Set(w.filter(x => !FIT_GENERIC.has(x)).map(fitStem))], words: [...new Set(w.map(fitStem))] }; })
   .filter(p => p.dist.length).map(p => ({ ...p, prose: p.dist.length > 6 }));
 function fitTopic(keyword, topics, ctx) {
@@ -576,7 +587,7 @@ function fitTopic(keyword, topics, ctx) {
   if (T.size < (typeof o.topic_min_words === 'number' ? o.topic_min_words : 12)) return { ok: true, reason: '', detail: T.size ? 'too few topic words on file (' + T.size + ') to judge topic distance' : 'no topics on file, so topic distance was not judged', share: null };
   // KW-GATE (2026-10-21): an Arabic keyword is judged on its English reading; a "number 1" claim says nothing about the subject
   const AR = fitArabic(keyword);
-  const toks = fitTokens(AR.text.replace(/(^|\s)(no\.? ?1|number (one|1)|#1)(?=\s|$)/gi, ' '));
+  const toks = fitTokens(fitSyn(AR.text).replace(/(^|\s)(no\.? ?1|number (one|1)|#1)(?=\s|$)/gi, ' '));
   const decl = o._decl || fitDeclared(o);
   for (const w of decl.words) T.add(w);
   const unread = new Set(AR.unread);
@@ -634,9 +645,9 @@ function fitTopic(keyword, topics, ctx) {
 // "AI consulting" site); a FIT_COMMON word ("sales", "central") still needs the whole service name, as in fitTopic.
 const FIT_SERVICE_CATS = new Set(['erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll']);
 const fitServiceAnchors = (keyword, services) => {
-  const svc = new Set((Array.isArray(services) ? services : [services]).filter(Boolean).flatMap(x => fitTokens(String(x))).filter(t => FIT_SERVICE_CATS.has(t)).map(fitStem));
+  const svc = new Set((Array.isArray(services) ? services : [services]).filter(Boolean).flatMap(x => fitTokens(fitSyn(x))).filter(t => FIT_SERVICE_CATS.has(t)).map(fitStem));
   if (!svc.size) return [];
-  return [...new Set(fitTokens(keyword).filter(t => FIT_SERVICE_CATS.has(t) && svc.has(fitStem(t))))];
+  return [...new Set(fitTokens(fitSyn(keyword)).filter(t => FIT_SERVICE_CATS.has(t) && svc.has(fitStem(t))))];
 };
 function fitEvidence(keyword, topics, ctx) {
   const o = ctx || {};
@@ -647,7 +658,7 @@ function fitEvidence(keyword, topics, ctx) {
   if (t.ok && t.share != null) return { verdict: 'in', share: t.share, words: T.size, detail: t.detail, basis: 'topics' };
   if (anchors.length) {
     // the share again, with the declared category word counted as the keyword's own and as matched
-    const toks = fitTokens(keyword);
+    const toks = fitTokens(fitSyn(keyword));
     const own = toks.filter(x => x.length > 2 && !FIT_GEO.has(x) && !FIT_GENERIC.has(x) && !FIT_BUYER.has(x) && !/^\d+$/.test(x));
     const PH = fitTopicPhrases(topics), known = [...T];
     const stemHit = (s, x) => x === s || (x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0));
@@ -968,9 +979,54 @@ const analysis = parseAgentJson($input.first().json.output);
 // sections"), which picked the band by accident; the fixed option decides it.
 const pt = PT.of(prev.page_type).toLowerCase();
 const isGuide = /blog|guide|article/.test(pt);
-const lo = isGuide ? 1200 : 900, hi = isGuide ? 3000 : 2400;
+// v4.4 page types (hub pages longer, case studies and local pages shorter). C8 (2026-10-22): these bands used to be a build patch that the
+// G33 re-read of this file silently dropped, so hub / case-study / local pages fell back to the service band; they live here now.
+const isHub = /pillar|hub/.test(pt) || Number(prev.ladder_rung) === 4, isShort = /case stud|local/.test(pt);
+const lo = isHub ? 1800 : isShort ? 800 : isGuide ? 1200 : 900, hi = isHub ? 3500 : isShort ? 1800 : isGuide ? 3000 : 2400;
 const rec = Number(analysis.recommended_word_count) || 1400;
 analysis.recommended_word_count = Math.min(hi, Math.max(lo, Math.round(rec / 100) * 100));
+// ---- C8 (2026-10-22, scorecard 2026-10-17 §3.3): the length is a BAND read off the ranking pages of the kind being written ----
+// The target used to be one figure from the competitor analysis inside the page-type clamp, whatever kind of page that figure came from
+// (exec 42 measured a service page against a certification course and a list). The leaders give the range of the ranking pages of the
+// same kind. Here: the word counts of the pages this run read that are of the kind being written (CVG.kindOf, the same rule as the
+// coverage target), median and interquartile range, kept inside the page-type band; with fewer than 3 such pages, the page-type band,
+// and the band says so. The target the brief plans to is the median; Content QA judges the draft against `low` / `high`.
+const LEN_MIN_PAGES = 3;
+const r100 = (n) => Math.round(n / 100) * 100;
+const fmtN = (n) => Number(n).toLocaleString('en-US');
+const lenKind = CVG.kindFor(PT.of(prev.page_type));
+const LEN_KIND_NAME = { service: ['service page', 'service pages'], guide: ['guide or article', 'guides or articles'] };
+const lenListOk = lenKind === 'guide' && /\b(?:best|top|companies|firms|agencies|providers|vendors|tools|alternatives|list)\b/i.test(String(prev.keyword || ''));
+const lenPages = (prev.competitors || []).filter(c => c && Number(c.word_count) >= 150)
+  .map(c => ({ c, kind: CVG.kindOf(c, prev.keyword) }))
+  .filter(x => x.kind === lenKind || (lenListOk && x.kind === 'list'))
+  .map(x => ({ domain: String(x.c.domain || ''), url: String(x.c.url || ''), rank: Number(x.c.rank) || null, words: Math.round(Number(x.c.word_count)), kind: x.kind }));
+const lenQ = (sorted, q) => { const at = (sorted.length - 1) * q; const a = Math.floor(at), b = Math.ceil(at); return sorted[a] + (sorted[b] - sorted[a]) * (at - a); };
+const length_band = (() => {
+  const kindName = LEN_KIND_NAME[lenKind] || LEN_KIND_NAME.service;
+  const typeBand = { low: lo, high: hi };
+  const typeText = fmtN(lo) + '-' + fmtN(hi) + ' words';
+  if (lenPages.length < LEN_MIN_PAGES) {
+    const target = analysis.recommended_word_count;
+    return { ok: false, source: 'page_type', low: lo, high: hi, median: null, p25: null, p75: null, target_word_count: target, sample: lenPages.length,
+      kind: lenKind, page_type_band: typeBand, clamped: false, pages: lenPages,
+      basis: (lenPages.length ? 'only ' + lenPages.length + ' of the pages ranking for this run ' + (lenPages.length === 1 ? 'is a ' + kindName[0] : 'are ' + kindName[1]) : 'none of the pages ranking for this run that could be read is a ' + kindName[0])
+        + ' (' + LEN_MIN_PAGES + ' are needed for a range), so the usual length for this kind of page is used: ' + typeText };
+  }
+  const w = lenPages.map(p => p.words).sort((a, b) => a - b);
+  const median = Math.round(lenQ(w, 0.5)), p25 = Math.round(lenQ(w, 0.25)), p75 = Math.round(lenQ(w, 0.75));
+  let low = Math.min(hi, Math.max(lo, r100(p25))), high = Math.min(hi, Math.max(lo, r100(p75)));
+  // a band narrower than 200 words (the ranking pages agree closely, or all sit outside the page-type band) is widened inside the clamp
+  if (high - low < 200) { const mid = Math.min(hi, Math.max(lo, r100(median))); low = Math.max(lo, mid - 100); high = Math.min(hi, low + 200); low = Math.max(lo, high - 200); }
+  const target = Math.min(high, Math.max(low, r100(median)));
+  const clamped = low !== r100(p25) || high !== r100(p75);
+  return { ok: true, source: 'ranking_pages', low, high, median, p25, p75, target_word_count: target, sample: lenPages.length, kind: lenKind, page_type_band: typeBand, clamped,
+    pages: lenPages.sort((a, b) => (a.rank || 99) - (b.rank || 99)).slice(0, 10),
+    basis: 'pages ranking for this run ' + fmtN(low) + '-' + fmtN(high) + ' words (' + lenPages.length + ' ' + kindName[1] + ', middle half ' + fmtN(p25) + '-' + fmtN(p75) + ', median ' + fmtN(median) + ')'
+      + (clamped ? '; kept inside the usual ' + typeText + ' for this kind of page' : '') };
+})();
+analysis.recommended_word_count = length_band.target_word_count;
+analysis.length_band = length_band;
 
 // ---- the coverage target: the BEST competitor, not the average (FIX_PLAN G33, 2026-10-13) ----
 // Until now the brief carried the shared terms and the content score gave 25 points for using them, with no statement of how much of that
@@ -1036,6 +1092,7 @@ return [{
     ...prev,
     competitor_digest: undefined,
     competitor_analysis: analysis,
+    length_band,
     coverage_target,
     coverage_unavailable,
     coverage_digest_base,

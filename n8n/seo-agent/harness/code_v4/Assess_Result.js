@@ -367,7 +367,9 @@ const serp = (() => {
   if (sv === undefined) return { asked: false, read: false, why: 'not asked', pages: [], paa: [], related: [] };
   const t0 = (sv && Array.isArray(sv.tasks) ? sv.tasks[0] : null) || {};
   if (!sv.error && (Number(t0.status_code) === 40102 || Number(sv.status_code) === 40102)) return { asked: true, read: true, empty: true, why: '', pages: [], paa: [], related: [] };
-  if (!reachTaskOk(sv)) return { asked: true, read: false, why: reachError(sv), pages: [], paa: [], related: [] };
+  // KWL-LAD D5: a read that ran out of time says so in plain words (the check has a time budget; it is judged without the page)
+  if (!reachTaskOk(sv)) { const why = String(reachError(sv) || ''); const late = /time ?out|timed out|aborted|ECONNABORTED|ETIMEDOUT|not read in time/i.test(why);
+    return { asked: true, read: false, late, why: late ? 'not read in time' : why, pages: [], paa: [], related: [] }; }
   const r0 = ((t0.result || [])[0]) || {}; const items = Array.isArray(r0.items) ? r0.items : [];
   const pages = items.filter(x => x && x.type === 'organic' && !(Number(x.rank_group) > 10)).map(x => ({ rank: Number(x.rank_group) || null, domain: String(x.domain || ''), url: String(x.url || ''), title: String(x.title || '') })).slice(0, 10);
   const paa = items.filter(x => x && x.type === 'people_also_ask').flatMap(x => (x.items || []).map(q => q && (q.title || q.question))).filter(Boolean).map(String).slice(0, 8);
@@ -399,5 +401,6 @@ const services = v.services.length ? v.services : ((desc && desc.products_or_ser
 const services_source = v.services.length ? 'request' : (desc ? (descPages > 1 ? 'stored description (' + descPages + ' pages read)' : 'stored description (homepage only)') : 'none');
 return [{ json: { ok: true, keyword: v.keyword, domain: v.domain, country: v.country, location_code: v.location_code, language_code: v.language_code,
   volume: info.search_volume ?? null, kd: props.keyword_difficulty ?? null, cpc: info.cpc ?? null, intent: (it && (it.search_intent_info || {}).main_intent) || null, known: !!it,
+  serp_language_code: v.serp_language_code || v.language_code, arabic_script: !!v.arabic_script,
   position, position_url, serp, reach_info, reach_errors, cache_row, serp_cache_row, dfs_cost, business, services, services_source, existing_keywords: v.existing_keywords,
   business_source: v.business ? 'request' : (desc ? 'stored description' : 'none') } }];

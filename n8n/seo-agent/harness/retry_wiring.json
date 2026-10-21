@@ -1088,6 +1088,27 @@
     "name": "Read Ladder Titles (Redirect)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Research Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Research Pages (Redirect)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Inbound Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 AI Growth": [

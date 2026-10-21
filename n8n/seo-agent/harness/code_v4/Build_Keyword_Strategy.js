@@ -866,6 +866,17 @@ const FIT_COMPARE = /\b(vs|versus|compare|comparison|alternatives?|instead of|be
 // full-width and compatibility forms, toLowerCase (never the locale form) folds case; marks (\p{M}) stay inside their word.
 const FIT_SPLIT = /[^\p{L}\p{M}\p{N}.]+/u, FIT_SPLIT_WORDS = /[^\p{L}\p{M}\p{N}]+/u;
 const fitLow = (s) => String(s || '').normalize('NFKC').toLowerCase();
+// KWL-RES D2 (2026-10-21 live keyword test, exec 111): "artificial intelligence consultancy" (170/mo, KD 5) was judged "not one of the services
+// you listed" while "AI consulting" was the first service declared: the topic words never read "artificial intelligence" as "ai". fitSyn writes
+// one spelling for the same thing, and the topic paths run it on BOTH sides (the keyword and the client's services / topics), so it can only
+// make two spellings of one subject agree. An acronym the rules already treat as a category ("ai", "erp", "crm") is the canonical form; "ml"
+// and "bi" are written out (a two-letter word is never a topic word on its own); advisory and advisor read as "consultant"; every spelling
+// of e-invoicing reads as "e invoicing" (so "invoicing" stays a word of it).
+const FIT_SYNONYMS = [[/\bartificial[\s-]+intelligence\b/g, 'ai'], [/\bcustomer[\s-]+relationship[\s-]+management\b/g, 'crm'], [/\benterprise[\s-]+resource[\s-]+planning\b/g, 'erp'],
+  [/\bml\b/g, 'machine learning'], [/\bbi\b/g, 'business intelligence'],
+  [/\b(?:advisory|advisors?|advisers?)\b/g, 'consultant'],   // consultancy, consulting and consultant already agree (one stem, "consult"); a consultant word stays a word of its own ("hire ai consultant dubai")
+  [/\b(?:e[\s-]?|electronic[\s-]+)(invoic\w*)/g, 'e $1']];
+const fitSyn = (s) => FIT_SYNONYMS.reduce((t, [re, to]) => t.replace(re, to), String(s || '').normalize('NFKC').toLowerCase());
 const fitTokens = (s) => fitLow(s).replace(/[’']/g, '').split(FIT_SPLIT).map(t => t.replace(/^\.+|\.+$/g, '')).filter(t => t.length > 1 && !FIT_STOP.has(t));
 const fitHost = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^(www|m|app|en|ar)\./, '');
 const fitGovHost = (d) => { const h = fitHost(d); return /(^|\.)gov(\.[a-z]{2,3})?$/.test(h) || /(^|\.)(gouv|gob|go|gv)\.[a-z]{2}$/.test(h) || /(^|\.)mil(\.[a-z]{2})?$/.test(h) || /(^|\.)(u\.ae|government\.ae|dubai\.ae|abudhabi\.ae|sharjah\.ae|ajman\.ae|rak\.ae|tax\.gov\.ae|europa\.eu)$/.test(h); };
@@ -1028,7 +1039,7 @@ const fitStem = (w) => w.length > 5 ? w.replace(/(ingly|ings|ing|ments|ment|atio
 // apps", harness S103). The short word counts through the client's own phrase instead (fitCarriedName below): a keyword made only of category
 // and place words that carries the WHOLE of a short topic phrase (a service the client named, a keyword they chose: "AI consulting", "Power
 // BI", "HR software") names that service. Two-letter words count there because fitTokens keeps them.
-const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).normalize('NFKC').toLowerCase()
+const fitTopicWords = (topics) => new Set(fitSyn(Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || ''))
   .split(FIT_SPLIT_WORDS).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
 // E-GATE (D4): words a buyer adds to any service search ("ai consulting cost uae", "best ai consulting firm dubai"). They say how the person
 // buys, not what they buy, so they are neutral like a place: "ai consulting cost uae" was refused as off topic on the word "cost" alone.
@@ -1037,15 +1048,15 @@ const fitAnd = (a) => a.length < 2 ? (a[0] || '') : a.slice(0, -1).join(', ') + 
 // the short topic phrase (2 to 6 words, never prose) whose every word the keyword carries ("consultants" carries "consulting": the same stem rule as fitTopic)
 const fitCarriedName = (toks, topics) => { const ks = toks.filter(t => !FIT_GEO.has(t)).map(fitStem);
   const hit = (x) => { const s = fitStem(x); return ks.some(k => k === s || (k.length >= 5 && s.length >= 5 && (k.indexOf(s) === 0 || s.indexOf(k) === 0))); };
-  for (const t of (Array.isArray(topics) ? topics : [topics])) { const raw = String(t || '').replace(/\s+/g, ' ').trim(); if (!raw) continue;
+  for (const t of (Array.isArray(topics) ? topics : [topics])) { const raw0 = String(t || '').replace(/\s+/g, ' ').trim(); if (!raw0) continue; const raw = fitSyn(raw0);
     const w = fitTokens(raw).filter(x => !FIT_GEO.has(x) && !/^\d+$/.test(x));
     if (w.length < 2 || w.length > 6) continue;
-    if (w.every(hit)) return raw; }
+    if (w.every(hit)) return raw0; }
   return ''; };
 // B-3: the topics as PHRASES (one service name, one configured keyword, one description), so a common word can be judged against the name
 // it came from. `dist` = the phrase's own distinctive words (stemmed); prose (more than 6 of them) never vouches for a common word.
 const fitTopicPhrases = (topics) => (Array.isArray(topics) ? topics.filter(Boolean).map(String) : [String(topics || '')])
-  .map(t => { const w = fitLow(t).split(FIT_SPLIT_WORDS).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
+  .map(t => { const w = fitSyn(t).split(FIT_SPLIT_WORDS).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
     return { dist: [...new Set(w.filter(x => !FIT_GENERIC.has(x)).map(fitStem))], words: [...new Set(w.map(fitStem))] }; })
   .filter(p => p.dist.length).map(p => ({ ...p, prose: p.dist.length > 6 }));
 function fitTopic(keyword, topics, ctx) {
@@ -1059,7 +1070,7 @@ function fitTopic(keyword, topics, ctx) {
   if (T.size < (typeof o.topic_min_words === 'number' ? o.topic_min_words : 12)) return { ok: true, reason: '', detail: T.size ? 'too few topic words on file (' + T.size + ') to judge topic distance' : 'no topics on file, so topic distance was not judged', share: null };
   // KW-GATE (2026-10-21): an Arabic keyword is judged on its English reading; a "number 1" claim says nothing about the subject
   const AR = fitArabic(keyword);
-  const toks = fitTokens(AR.text.replace(/(^|\s)(no\.? ?1|number (one|1)|#1)(?=\s|$)/gi, ' '));
+  const toks = fitTokens(fitSyn(AR.text).replace(/(^|\s)(no\.? ?1|number (one|1)|#1)(?=\s|$)/gi, ' '));
   const decl = o._decl || fitDeclared(o);
   for (const w of decl.words) T.add(w);
   const unread = new Set(AR.unread);
@@ -1117,9 +1128,9 @@ function fitTopic(keyword, topics, ctx) {
 // "AI consulting" site); a FIT_COMMON word ("sales", "central") still needs the whole service name, as in fitTopic.
 const FIT_SERVICE_CATS = new Set(['erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll']);
 const fitServiceAnchors = (keyword, services) => {
-  const svc = new Set((Array.isArray(services) ? services : [services]).filter(Boolean).flatMap(x => fitTokens(String(x))).filter(t => FIT_SERVICE_CATS.has(t)).map(fitStem));
+  const svc = new Set((Array.isArray(services) ? services : [services]).filter(Boolean).flatMap(x => fitTokens(fitSyn(x))).filter(t => FIT_SERVICE_CATS.has(t)).map(fitStem));
   if (!svc.size) return [];
-  return [...new Set(fitTokens(keyword).filter(t => FIT_SERVICE_CATS.has(t) && svc.has(fitStem(t))))];
+  return [...new Set(fitTokens(fitSyn(keyword)).filter(t => FIT_SERVICE_CATS.has(t) && svc.has(fitStem(t))))];
 };
 function fitEvidence(keyword, topics, ctx) {
   const o = ctx || {};
@@ -1130,7 +1141,7 @@ function fitEvidence(keyword, topics, ctx) {
   if (t.ok && t.share != null) return { verdict: 'in', share: t.share, words: T.size, detail: t.detail, basis: 'topics' };
   if (anchors.length) {
     // the share again, with the declared category word counted as the keyword's own and as matched
-    const toks = fitTokens(keyword);
+    const toks = fitTokens(fitSyn(keyword));
     const own = toks.filter(x => x.length > 2 && !FIT_GEO.has(x) && !FIT_GENERIC.has(x) && !FIT_BUYER.has(x) && !/^\d+$/.test(x));
     const PH = fitTopicPhrases(topics), known = [...T];
     const stemHit = (s, x) => x === s || (x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0));
@@ -1434,6 +1445,93 @@ const FITR = {
       + '. A page that is already written is kept and only flagged.';
   }
 };
+// ---- RV-1 (2026-10-21, pre-launch run on techand.ai): PAGES THAT ARE GONE, ONE MESSAGE EVERYWHERE (inlined where a node asks for the GONE kit marker) ----
+// The site was rebuilt: Search Console still showed ~34 old addresses (2-3k of 5.7k impressions) that answer 404 (the bare host 308s to
+// www, which 404s) and nothing redirects them. The audit filed some as "redirect somewhere else" (Low), the weekly site report told the
+// owner to make one of them "the single page" for a search, the AI visibility brief said "build on your existing D365 pages" and AI
+// Growth sent them to Bing. The first thing the owner has to hear is one sentence: these addresses are gone, redirect each to this page.
+// This kit holds that sentence, the suggested target of each redirect and the redirect files, so every report says the same thing:
+//   GONE.isGone(status)            404 / 410 after following redirects (a bot wall, a timeout or a 5xx is NOT gone: not known)
+//   GONE.plan(dead, live, home)    [{ from_url, from, to, to_url, status, impressions, clicks, match }] most impressions first
+//   GONE.finding(plan, o)          the audit finding (one title, one fix) with the full list in `redirects`
+//   GONE.action(plan)              the weekly / AI report action (priority 1)
+//   GONE.files(plan, today)        { csv, nginx, htaccess } for the fix pack
+//   GONE.keyOf(u) / GONE.drop(list, set, pick)   host-agnostic address key, and "leave the gone addresses out of this list"
+// Customer text: plain words, no dashes used as punctuation, no ellipsis.
+const GONE = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const isGone = (st) => { const n = n0(st); return n === 404 || n === 410; };
+  const keyOf = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const pathOf = (u) => S(u).replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/(.)\/+$/, '$1') || '/';
+  const fmt = (v) => n0(v).toLocaleString('en-GB');
+  // words that say nothing about which page an old address was about (places, filler, the generic page words of every site)
+  const STOP = new Set(['the', 'and', 'for', 'with', 'from', 'your', 'our', 'what', 'how', 'why', 'who', 'are', 'you', 'its', 'into', 'about', 'uae', 'dubai', 'abu', 'dhabi',
+    'sharjah', 'emirates', 'united', 'arab', 'html', 'htm', 'php', 'aspx', 'page', 'pages', 'index', 'www', 'com', 'new', 'best', 'top', 'guide', 'complete', 'every', 'must']);
+  const stem = (t) => t.length >= 5 ? t.replace(/(ations?|ings?|ants?|ers?)$/, '').replace(/s$/, '').replace(/e$/, '') : t;   // services = service, operations = operation
+  const words = (s) => [...new Set(S(s).toLowerCase().replace(/&/g, ' and ').split(/[^a-z0-9]+/).filter(t => t.length > 2 && !STOP.has(t)).map(stem))];
+  // the closest live page: the one sharing the most specific words with the old address (a word most live pages carry counts for little);
+  // without one, the section page the old address sat under when that page is live, else the home page, and the match says which it was
+  const plan = (dead, live, home) => {
+    const deadKeys = new Set((Array.isArray(dead) ? dead : []).map(d => keyOf(d.url || d.from_url)));
+    const L = (Array.isArray(live) ? live : []).map(p => ({ url: S(p.url), path: pathOf(p.url), title: S(p.title || p.h1), status: p.status != null ? p.status : p.http_status }))
+      .filter(p => p.url && !isGone(p.status) && !deadKeys.has(keyOf(p.url)));
+    const homeUrl = S(home) || (L.find(p => p.path === '/') || {}).url || '/';
+    const docs = L.filter(p => p.path !== '/').map(p => ({ p, w: new Set([...words(p.path.replace(/[\/_-]+/g, ' ')), ...words(p.title)]) }));
+    const df = new Map(); for (const d of docs) for (const w of d.w) df.set(w, (df.get(w) || 0) + 1);
+    const idf = (w) => Math.log(1 + (docs.length + 1) / (1 + (df.get(w) || 0)));
+    const seen = new Set(); const out = [];
+    for (const d0 of (Array.isArray(dead) ? dead : [])) {
+      const url = S(d0.url || d0.from_url); const k = keyOf(url); if (!url || seen.has(k)) continue; seen.add(k);
+      const path = pathOf(url); const want = words(path.replace(/[\/_-]+/g, ' '));
+      let best = null;
+      for (const d of docs) { const shared = want.filter(w => d.w.has(w)); if (!shared.length) continue;
+        const score = shared.reduce((s, w) => s + idf(w), 0);
+        if (!best || score > best.score + 1e-9 || (Math.abs(score - best.score) < 1e-9 && d.p.path.length < best.p.path.length)) best = { p: d.p, score, shared }; }
+      const strong = best && (best.shared.length >= 2 || best.score >= 1.2);
+      const parent = path.split('/').filter(Boolean).slice(0, -1).join('/');
+      const section = parent ? L.find(p => p.path === '/' + parent) : null;
+      const to = strong ? best.p : section || null;
+      out.push({ from_url: url, from: path, to_url: to ? to.url : homeUrl, to: to ? to.path : '/', status: n0(d0.status || d0.http_status), impressions: n0(d0.impressions), clicks: n0(d0.clicks),
+        match: strong ? 'same topic (shares "' + best.shared.slice(0, 3).join('", "') + '")' : section ? 'its section page' : 'home page (no live page matches it by name: use a better page if you have one)' });
+    }
+    return out.sort((a, b) => b.impressions - a.impressions || b.clicks - a.clicks || a.from.localeCompare(b.from));
+  };
+  const totals = (pl) => (pl || []).reduce((t, r) => ({ impressions: t.impressions + n0(r.impressions), clicks: t.clicks + n0(r.clicks) }), { impressions: 0, clicks: 0 });
+  const line = (r) => r.from + (r.impressions ? ' (' + fmt(r.impressions) + ' impressions)' : '') + ' to ' + r.to;
+  const TITLE = 'Pages Google still shows no longer answer: redirect them';
+  const TITLE_UNSEEN = 'Known URLs outside the crawl no longer answer';
+  const FIX = 'Add a permanent (301) redirect from each old address to the page suggested for it (redirects.csv in the fix pack lists every one, with nginx and Apache versions; use a better page where you have one), then take the old addresses out of the sitemap and the internal links.';
+  // the audit finding: one title and one fix wherever a gone page is found; `o.note` is the sample the reading came from
+  const finding = (pl, o) => {
+    const x = o || {}; const t = totals(pl); const seen = (pl || []).filter(r => r.impressions > 0 || r.clicks > 0);
+    const codes = [...new Set((pl || []).map(r => r.status).filter(Boolean))].map(c => 'HTTP ' + c).join(' / ') || 'HTTP 404';
+    return { category: 'Crawlability & Indexing', severity: seen.length ? 'High' : 'Medium', title: seen.length ? TITLE : TITLE_UNSEEN,
+      evidence: (pl || []).length + ' address(es) answer ' + codes + (x.via_redirect ? ' (' + x.via_redirect + ' of them only after a redirect to the main host)' : '') + ': '
+        + (pl || []).slice(0, 5).map(r => r.from + ': HTTP ' + (r.status || 404) + (r.impressions ? ', ' + fmt(r.impressions) + ' impressions' : '')).join('; ')
+        + ((pl || []).length > 5 ? '; and ' + ((pl || []).length - 5) + ' more' : '') + (x.note ? '. ' + x.note : '')
+        + (seen.length ? '; ' + seen.length + ' of them still earn impressions in Search Console (' + fmt(t.impressions) + ' impressions and ' + fmt(t.clicks) + ' clicks in the last 28 days)' : ''),
+      why: seen.length ? 'Google still shows these addresses in search, and every visitor who clicks them, and every link that points at them, lands on an error page. Until they redirect, the visibility they earned is lost, and Google drops them one by one.'
+        : 'These addresses are in your sitemap or were known before, but they return an error. Visitors and crawlers that follow them hit a dead end, and the link value pointing at them is lost.',
+      fix: FIX, sample_urls: (pl || []).slice(0, 5).map(r => r.from_url), affected_urls: (pl || []).slice(0, 200).map(r => r.from_url), affected_count: (pl || []).length || null,
+      scope: 'page', scoring: true, source: x.source || 'gone', figure: '', redirects: (pl || []).slice(0, 200) };
+  };
+  const action = (pl) => { const t = totals(pl); if (!(pl || []).length) return null;
+    return { priority: 1, type: 'redirect_gone', keyword: '', url: (pl[0] || {}).from_url || '',
+      action: 'Redirect the ' + pl.length + ' old address(es) that now answer 404 (301 to the closest live page): ' + pl.slice(0, 4).map(line).join('; ') + (pl.length > 4 ? '; and ' + (pl.length - 4) + ' more' : '') + '.',
+      why: 'Google still shows them (' + fmt(t.impressions) + ' impressions and ' + fmt(t.clicks) + ' clicks in the last 28 days), and every visit and every link to them ends on an error page. Do not work on these pages: they no longer exist.',
+      redirects: pl.slice(0, 60) }; };
+  const q = (v) => '"' + S(v).replace(/"/g, '""') + '"';
+  const files = (pl, today) => { const L = (pl || []).filter(r => r.from && r.to && r.from !== r.to); if (!L.length) return null; const d = S(today) || new Date().toISOString().slice(0, 10);
+    return { count: L.length,
+      csv: 'from,to,http_status_now,impressions_28d,match\n' + L.map(r => [r.from, r.to, r.status || 404, r.impressions, r.match].map(q).join(',')).join('\n') + '\n',
+      nginx: '# 301 redirects for addresses that no longer answer, found by the SEO audit on ' + d + '\n' + L.map(r => 'location = ' + r.from + ' { return 301 ' + r.to + '; }').join('\n') + '\n',
+      htaccess: '# 301 redirects for addresses that no longer answer, found by the SEO audit on ' + d + '\n' + L.map(r => 'Redirect 301 ' + r.from + ' ' + r.to).join('\n') + '\n' }; };
+  // leave the gone addresses out of a list (pick reads the address from an entry); returns { kept, dropped }
+  const drop = (list, set, pick) => { const kept = [], dropped = []; const get = pick || ((x) => (x && typeof x === 'object') ? (x.url || x.page || x.u) : x);
+    for (const x of (Array.isArray(list) ? list : [])) (set && set.has(keyOf(get(x))) ? dropped : kept).push(x); return { kept, dropped }; };
+  return { isGone, keyOf, pathOf, plan, finding, action, files, drop, totals, TITLE, TITLE_UNSEEN, FIX };
+})();
 // Final keyword strategy: merges AI search demand and the live SERP checks into the ranked keyword set and renders the
 // "Keyword Strategy" report. Also exposes keyword_suggestions for the downstream file/email/content steps.
 // v4.8: with a website the report shows each keyword's difficulty for this site and plan ("Easy for your site · Direct plan · 2-4 months");
@@ -1478,6 +1576,7 @@ const liveFailures = [];
 // keywords and the ones the gate refused as job searches); a career search says so in its reason and goes to the end of the list.
 const careerRelated = [...(ks.keywords || []).map(k => k && k.keyword), ...(ks.refused || []).map(r => r && r.keyword)].filter(Boolean);
 const careerTopics = [...((ks.service_fit || {}).declared_services || []), ...(base.services || []), ...(base.seeds || [])].map(x => String(x || '').trim()).filter(Boolean);
+const goneKeysB = new Set((ks.gone_pages || []).map(u => GONE.keyOf(u)));   // KWL-RES D1: the addresses Rank Keywords knows are gone
 const liveUrlsBy = new Map();   // G8 / K7: the full top 10 of every keyword this run checked live
 prio.forEach((p, i) => {
   const err = serpErr(serps[i]);
@@ -1489,14 +1588,18 @@ prio.forEach((p, i) => {
   liveUrlsBy.set(String(p.keyword || '').toLowerCase(), organic.filter(o => !(Number(o.rank_group) > 10)).map(o => o.url).filter(Boolean));
   const k = ks.priority.find(x => x.keyword === p.keyword);
   if (!k) return;
+  // KWL-RES D1: our result on Google is an address the site model knows is gone (404 / 410): it is not a position the site holds, so it
+  // never makes the keyword Easy; the card says the page no longer opens and what to do instead
+  const mineGone = mine && goneKeysB.has(GONE.keyOf(mine.url));
+  if (mineGone && !k.gone_ranking) k.gone_ranking = { url: mine.url, path: GONE.pathOf(mine.url), position: mine.rank_group ?? null, source: 'live check' };
   // B1-5 / K4 (2026-10-15): the ten pages Google chose are the evidence for what KIND of page wins this search; until today only
   // their domains were kept and the page type came from the AI label alone.
-  k.live = { top_domains: [...new Set(organic.map(o => normD(o.domain)).filter(Boolean))].slice(0, 5), your_position: mine ? mine.rank_group : null, checked_at: serpSeenAt(serps[i]),
+  k.live = { top_domains: [...new Set(organic.map(o => normD(o.domain)).filter(Boolean))].slice(0, 5), your_position: mine && !mineGone ? mine.rank_group : null, ...(mineGone ? { gone_position: mine.rank_group ?? null, gone_url: mine.url } : {}), checked_at: serpSeenAt(serps[i]),
     page_types: KWI.serpPageTypes(organic.filter(o => !(Number(o.rank_group) > 10)).map(o => ({ url: o.url, title: o.title })), { page_type: k.page_type }),
     features: [...new Set(items.map(x => x.type))].filter(t => t !== 'organic'), ai_overview: items.some(x => x.type === 'ai_overview'), paa: (items.find(x => x.type === 'people_also_ask') || { items: [] }).items.slice(0, 4).map(q => q.title || q.question).filter(Boolean) };
   const car = fitCareer(k.keyword, { pages: organic.filter(o => !(Number(o.rank_group) > 10)).map(o => ({ domain: o.domain, url: o.url, title: o.title })),
     paa: items.filter(x => x.type === 'people_also_ask').flatMap(x => (x.items || []).map(q => q.title || q.question)).filter(Boolean), related: careerRelated, topics: careerTopics });
-  if (car.career) k.career = { detail: car.detail, signals: car.signals, points: car.points };
+  if (car.career) { k.career = { detail: car.detail, signals: car.signals, points: car.points }; k.career_note = car.detail + ', so a page for it would bring few buyers'; }   // KWL-RES: the app reads career / career_note, not the wording of `why`
 });
 if (liveFailures.length) ks.research_failures = [...(ks.research_failures || []), ...liveFailures];
 // ---- G8 / K7 (2026-10-13): the SERP-overlap clusters, recomputed with the live checks' full top 10 ----
@@ -1526,6 +1629,7 @@ const aioObs = (k) => {
   const o = aioObserved([live]);
   return { live: live.seen, stored, count: o.count, seen: o.seen, text: o.text + (hist ? '; ' + hist : '') };
 };
+const goneWhy = (g) => 'the page that ranked for this' + (g.position ? ' (#' + Math.round(Number(g.position)) + ')' : '') + ', ' + (g.path || g.url) + ', no longer opens: redirect it to a live page, then this keyword has a head start';
 const why = (k) => {
   const bits = [];
   if (k.service_fit === 'in') bits.push('it is part of what you sell');   // F-REH: the client's own services first, in the words of the card
@@ -1540,6 +1644,7 @@ const why = (k) => {
   if (ao.live === true) bits.push('an AI Overview was seen on ' + obsDay(k.live.checked_at) + ' (they vary between searches), so write a quotable answer block');
   else if (ao.live == null && ao.stored === true) bits.push('the stored results page showed an AI Overview (historical, undated, not checked live)');
   if (k.live && k.live.your_position) bits.push('you are already at #' + k.live.your_position);
+  if (k.gone_ranking) bits.push(goneWhy(k.gone_ranking));   // KWL-RES D1
   // K4: what Google ranks settles the page type; a disagreement with the plan is said out loud, never silently overridden
   if (k.live && k.live.page_types && k.live.page_types.read) bits.push(k.live.page_types.text.replace(/\.$/, ''));
   // G8 / K2: say when the traffic number is the site's own measurement rather than a model, and K7: when one page can serve more searches
@@ -1563,6 +1668,9 @@ if (RR) ks.priority.forEach(k => { const p = k.live && k.live.your_position; if 
   const diff = difficultyForYou(k.kd, rUsed, { position: p }); const plan = reachPlan(diff, reachStrong(RR, p), reachMeasured(RR, p));
   Object.assign(k, { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan), reach_used: rUsed }); } });
 
+// KWL-RES (D12 in the research): a keyword that is not a fit carries no plan and no timeline, only why it is not one
+ks.priority.forEach(k => { const nf = k.career ? 'people search it for work or training' : k.service_fit === 'out' ? 'not one of the services you listed' : '';
+  if (nf) Object.assign(k, { plan_type: null, months: null, for_you_label: 'Not a fit: ' + nf }); });
 // ---- compatibility object for the file, email and content-pipeline steps ----
 let pipeline = ks.pipeline_keyword ? withAi(ks.pipeline_keyword) : null;
 if (pipeline) { const enriched = ks.priority.find(k => k.keyword === pipeline.keyword); pipeline = enriched ? { ...enriched, ...(pipeline.trend_note ? { trend_note: pipeline.trend_note } : {}), ...(pipeline.ladder_note ? { ladder_note: pipeline.ladder_note } : {}), ...(pipeline.career_note ? { career_note: pipeline.career_note } : {}) } : { ...pipeline, why: why(pipeline) }; ks.pipeline_keyword = pipeline; }   // R51: the falling label survives the enrichment
@@ -1606,7 +1714,15 @@ const topicReachTxt = !RR ? '' : (RR.topics_measured
   : ' No topic below has the ' + REACH_CFG.min_top10 + ' top-10 keywords of its own that measuring a topic needs, so every "for your site" label uses the site-wide number — treat it as the optimistic case for a topic you have no record on.');
 const reachLine = RR ? 'Your site\'s reach: difficulty ' + RR.reach + ' (' + (RR.method === 'percentile' ? '75% of the ' + RR.sample + ' keywords you rank top 10 for are at or below it' : 'from ' + num(RR.top10) + ' keyword(s) in the top 10') + (RR.cached ? ', measured ' + String(RR.cached_at || '').slice(0, 10) : '') + ').' + measuredOnTxt + topicReachTxt + ' "For your site": easy up to reach + 5 or already top 20, reachable up to + 20, hard up to + 40. Months and the chance band per plan are estimates (the chance is uncalibrated until this system has measured its own ladders). ' + reachBaseRateText() : '';
 // 2026-10-12 (FIX_PLAN D11): a keyword a live page of the site already answers is named with that page, so nobody writes a second one
-const coveredLine = (ks.covered || []).length ? (ks.covered.length === 1 ? 'One keyword below is' : ks.covered.length + ' keywords below are') + ' already answered by a page you have: ' + ks.covered.slice(0, 5).map(c => '"' + esc(c.keyword) + '" \u2192 <a href="' + esc(c.url) + '">' + esc(c.url) + '</a>').join(', ') + '. Refresh those pages instead of writing new ones \u2014 two pages for one search split the signals and neither ranks.' : '';
+const coveredOk = (ks.covered || []).filter(c => c.checked !== false), coveredUnchecked = (ks.covered || []).filter(c => c.checked === false);
+const coveredLine = coveredOk.length ? (coveredOk.length === 1 ? 'One keyword below is' : coveredOk.length + ' keywords below are') + ' already answered by a page you have: ' + coveredOk.slice(0, 5).map(c => '"' + esc(c.keyword) + '" \u2192 <a href="' + esc(c.url) + '">' + esc(c.url) + '</a>').join(', ') + '. Refresh those pages instead of writing new ones: two pages for one search split the signals and neither ranks.' : '';
+// KWL-RES follow-up: a page the research could not open is never "refresh it": it is named with the reason and the client checks it first
+const uncheckedLine = coveredUnchecked.length ? (coveredUnchecked.length === 1 ? 'One keyword below' : coveredUnchecked.length + ' keywords below') + ' may already be answered by a page of yours that could not be checked in this run: '
+  + coveredUnchecked.slice(0, 5).map(c => '"' + esc(c.keyword) + '" (' + esc(c.url) + ', ' + esc(c.check_reason || 'not checked') + ')').join(', ') + '. Open each page before writing a new one for it: if it no longer opens, redirect it.' : '';
+// KWL-RES D1: keywords whose ranking page no longer opens are named, with what to do (never "refresh" a page that is gone)
+const goneLine = (ks.gone_ranked || []).length ? (ks.gone_ranked.length === 1 ? 'One keyword below was' : ks.gone_ranked.length + ' keywords below were') + ' ranked by a page that no longer opens (it answers "not found"): '
+  + ks.gone_ranked.slice(0, 5).map(c => '"' + esc(c.keyword) + '" (' + esc(c.path || c.url) + ')').join(', ') + (ks.gone_ranked.length > 5 ? ' and ' + (ks.gone_ranked.length - 5) + ' more' : '')
+  + '. Redirect each old address to the closest live page (or publish the page again); then these keywords have a head start.' : '';
 // 2026-10-12 (FIX_PLAN D20): a keyword one of the site's own keyword ladders already covers is named with that ladder, so the top pick never
 // competes with a ladder that is already running one search, one page.
 const ladderLine = (ks.ladder_covered || []).length ? (ks.ladder_covered.length === 1 ? 'One keyword below is' : ks.ladder_covered.length + ' keywords below are') + ' already covered by a keyword ladder of yours: ' + ks.ladder_covered.slice(0, 5).map(c => '"' + esc(c.keyword) + '" \u2192 ladder "' + esc(c.head_keyword) + '" (' + esc(c.how) + ', ' + (c.part === 'head' ? 'its main page' : 'rung ' + c.rung) + ', ' + esc(c.status || 'planned') + ')').join(', ') + '. Let that ladder finish \u2014 two pages for one search split the signals and neither ranks.' : '';
@@ -1694,7 +1810,7 @@ const lineageHtml = '<h2>Where these numbers come from</h2>'
   + lineage.map(l => '<tr><td>' + esc(l.figure) + '</td><td>' + esc(l.source_label) + '</td><td>' + esc(l.period || '—') + '</td><td>' + esc(l.sample || '—') + '</td><td>' + esc([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
   + '</table><p class="muted">A figure marked "' + esc(LN.BASIS.modelled) + '" is computed, not counted; "' + esc(LN.BASIS.estimated) + '" is the data provider\'s own estimate for a single keyword; "' + esc(LN.MISSING) + '" means the figure reached this report without its source and should be treated as unverified.</p>';
 
-const html = `
+const html0 = `
 <style>
   .w{font-family:Arial,sans-serif;max-width:900px;margin:0 auto;color:#1e293b;text-align:left;line-height:1.55;padding:24px 20px}
   h1{font-size:25px;margin:0 0 4px;color:#0f172a} h2{font-size:17px;color:#1e3a8a;margin:28px 0 8px;border-bottom:1px solid #e2e8f0;padding-bottom:4px} h3{font-size:14px;color:#334155;margin:16px 0 6px}
@@ -1707,7 +1823,7 @@ const html = `
 <div class="w">
   <h1>Keyword strategy${base.domain ? ' for ' + esc(base.domain) : ''}</h1>
   <p class="muted">${esc(base.country)} · goal: ${esc(goalText)} · ${num(ks.pool_size)} keywords researched from ${num(base.research && base.research.requests)} data pulls · ${num(ks.ai_reviewed)} screened for relevance by AI · ${num(ks.total_relevant)} relevant</p>
-  ${poolLine ? '<p class="muted"><b>' + esc(poolLine) + '</b></p>' : ''}${reachLine ? '<p class="muted">' + esc(reachLine) + '</p>' : ''}${refusedLine ? '<p class="muted">' + refusedLine + '</p>' : ''}${coveredLine ? '<p class="muted">' + coveredLine + '</p>' : ''}${(ks.title_gap && ks.title_gap.untitled) ? '<p class="muted">' + esc(ks.title_gap.note) + ': a page among them may already answer a search below.</p>' : ''}${ladderLine ? '<p class="muted">' + ladderLine + '</p>' : ''}
+  ${poolLine ? '<p class="muted"><b>' + esc(poolLine) + '</b></p>' : ''}${reachLine ? '<p class="muted">' + esc(reachLine) + '</p>' : ''}${refusedLine ? '<p class="muted">' + refusedLine + '</p>' : ''}${coveredLine ? '<p class="muted">' + coveredLine + '</p>' : ''}${goneLine ? '<p class="muted">' + goneLine + '</p>' : ''}${uncheckedLine ? '<p class="muted">' + uncheckedLine + '</p>' : ''}${(ks.title_gap && ks.title_gap.untitled) ? '<p class="muted">' + esc(ks.title_gap.note) + ': a page among them may already answer a search below.</p>' : ''}${ladderLine ? '<p class="muted">' + ladderLine + '</p>' : ''}
 
   <div class="callout"><b>Where to start:</b> ${pipeline ? '"' + esc(pipeline.keyword) + '" — ' + num(pipeline.volume) + ' searches/mo, difficulty ' + kdLabel(pipeline.kd) + ', ' + esc(pipeline.intent) + ' intent, best page: ' + esc(pipeline.page_type) + '. ' + (pipeline.for_you_label ? esc(pipeline.for_you_label) + '. ' : '') + (pipeline.trend_note ? '<b>Searches ' + esc(pipeline.trend_note) + '.</b> ' : '') + (pipeline.ladder_note ? '<b>Note: ' + esc(pipeline.ladder_note) + '.</b> ' : '') + esc(pipeline.why) : 'Not enough data to pick a first keyword.'}
   ${now.length ? '<br><b>Build first:</b> ' + now.map(c => esc(c.topic) + ' (' + esc(c.page_type) + ', ' + num(c.total_volume) + '/mo across ' + c.keyword_count + ' keywords' + (c.ladder_near ? '; ' + esc(c.tier_note) : '') + ')').join(' · ') : ''}</div>
@@ -1760,6 +1876,11 @@ const html = `
   <p class="by">Prepared by ${esc(base.brand || 'Dev SEO')} · Search volumes, difficulty, CPC and SERP features from DataForSEO for ${esc(base.country)}.</p>
 </div>`;
 
+// KWL-RES (D13): the research document is read by the client: no dashes as punctuation, no ellipsis, no internal or vendor words. A dash
+// that stands for "no value" reads "n/a"; one between two clauses becomes a colon.
+const plainDoc = (h) => String(h).replace(/(^|[\s>(])\u2014(?=\s*(<|[,;.)]|$))/g, '$1n/a').replace(/\s+\u2014\s+/g, ': ').replace(/\u2014/g, '-').replace(/\u2026/g, '.')
+  .replace(/SERP features/g, 'Search features').replace(/\bSERPs?\b/g, 'results page').replace(/\bPAA\b/g, 'People also ask').replace(/\bDataForSEO\b/g, 'our search data provider');
+const html = plainDoc(html0);
 // Options for the form-only "Choose your keyword" step (the number prefix makes the pick unambiguous)
 const choice_options = ['Let the system choose for my goal', ...ks.priority.slice(0, 8).map((k, i) => (i + 1) + '. ' + k.keyword + ' · ' + num(k.volume) + ' searches/mo · difficulty ' + (k.kd == null ? '?' : k.kd) + ' · ' + cap(k.intent) + ' · ' + k.page_type + (k.for_you_label ? ' · ' + k.for_you_label : ''))];
 return [{ json: { ...base, keyword_strategy: ks, keyword_suggestions, result_html: html, lineage, choice_options } }];

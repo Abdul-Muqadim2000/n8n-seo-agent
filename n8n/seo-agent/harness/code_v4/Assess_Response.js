@@ -309,6 +309,17 @@ const FIT_COMPARE = /\b(vs|versus|compare|comparison|alternatives?|instead of|be
 // full-width and compatibility forms, toLowerCase (never the locale form) folds case; marks (\p{M}) stay inside their word.
 const FIT_SPLIT = /[^\p{L}\p{M}\p{N}.]+/u, FIT_SPLIT_WORDS = /[^\p{L}\p{M}\p{N}]+/u;
 const fitLow = (s) => String(s || '').normalize('NFKC').toLowerCase();
+// KWL-RES D2 (2026-10-21 live keyword test, exec 111): "artificial intelligence consultancy" (170/mo, KD 5) was judged "not one of the services
+// you listed" while "AI consulting" was the first service declared: the topic words never read "artificial intelligence" as "ai". fitSyn writes
+// one spelling for the same thing, and the topic paths run it on BOTH sides (the keyword and the client's services / topics), so it can only
+// make two spellings of one subject agree. An acronym the rules already treat as a category ("ai", "erp", "crm") is the canonical form; "ml"
+// and "bi" are written out (a two-letter word is never a topic word on its own); advisory and advisor read as "consultant"; every spelling
+// of e-invoicing reads as "e invoicing" (so "invoicing" stays a word of it).
+const FIT_SYNONYMS = [[/\bartificial[\s-]+intelligence\b/g, 'ai'], [/\bcustomer[\s-]+relationship[\s-]+management\b/g, 'crm'], [/\benterprise[\s-]+resource[\s-]+planning\b/g, 'erp'],
+  [/\bml\b/g, 'machine learning'], [/\bbi\b/g, 'business intelligence'],
+  [/\b(?:advisory|advisors?|advisers?)\b/g, 'consultant'],   // consultancy, consulting and consultant already agree (one stem, "consult"); a consultant word stays a word of its own ("hire ai consultant dubai")
+  [/\b(?:e[\s-]?|electronic[\s-]+)(invoic\w*)/g, 'e $1']];
+const fitSyn = (s) => FIT_SYNONYMS.reduce((t, [re, to]) => t.replace(re, to), String(s || '').normalize('NFKC').toLowerCase());
 const fitTokens = (s) => fitLow(s).replace(/[’']/g, '').split(FIT_SPLIT).map(t => t.replace(/^\.+|\.+$/g, '')).filter(t => t.length > 1 && !FIT_STOP.has(t));
 const fitHost = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^(www|m|app|en|ar)\./, '');
 const fitGovHost = (d) => { const h = fitHost(d); return /(^|\.)gov(\.[a-z]{2,3})?$/.test(h) || /(^|\.)(gouv|gob|go|gv)\.[a-z]{2}$/.test(h) || /(^|\.)mil(\.[a-z]{2})?$/.test(h) || /(^|\.)(u\.ae|government\.ae|dubai\.ae|abudhabi\.ae|sharjah\.ae|ajman\.ae|rak\.ae|tax\.gov\.ae|europa\.eu)$/.test(h); };
@@ -471,7 +482,7 @@ const fitStem = (w) => w.length > 5 ? w.replace(/(ingly|ings|ing|ments|ment|atio
 // apps", harness S103). The short word counts through the client's own phrase instead (fitCarriedName below): a keyword made only of category
 // and place words that carries the WHOLE of a short topic phrase (a service the client named, a keyword they chose: "AI consulting", "Power
 // BI", "HR software") names that service. Two-letter words count there because fitTokens keeps them.
-const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).normalize('NFKC').toLowerCase()
+const fitTopicWords = (topics) => new Set(fitSyn(Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || ''))
   .split(FIT_SPLIT_WORDS).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
 // E-GATE (D4): words a buyer adds to any service search ("ai consulting cost uae", "best ai consulting firm dubai"). They say how the person
 // buys, not what they buy, so they are neutral like a place: "ai consulting cost uae" was refused as off topic on the word "cost" alone.
@@ -480,15 +491,15 @@ const fitAnd = (a) => a.length < 2 ? (a[0] || '') : a.slice(0, -1).join(', ') + 
 // the short topic phrase (2 to 6 words, never prose) whose every word the keyword carries ("consultants" carries "consulting": the same stem rule as fitTopic)
 const fitCarriedName = (toks, topics) => { const ks = toks.filter(t => !FIT_GEO.has(t)).map(fitStem);
   const hit = (x) => { const s = fitStem(x); return ks.some(k => k === s || (k.length >= 5 && s.length >= 5 && (k.indexOf(s) === 0 || s.indexOf(k) === 0))); };
-  for (const t of (Array.isArray(topics) ? topics : [topics])) { const raw = String(t || '').replace(/\s+/g, ' ').trim(); if (!raw) continue;
+  for (const t of (Array.isArray(topics) ? topics : [topics])) { const raw0 = String(t || '').replace(/\s+/g, ' ').trim(); if (!raw0) continue; const raw = fitSyn(raw0);
     const w = fitTokens(raw).filter(x => !FIT_GEO.has(x) && !/^\d+$/.test(x));
     if (w.length < 2 || w.length > 6) continue;
-    if (w.every(hit)) return raw; }
+    if (w.every(hit)) return raw0; }
   return ''; };
 // B-3: the topics as PHRASES (one service name, one configured keyword, one description), so a common word can be judged against the name
 // it came from. `dist` = the phrase's own distinctive words (stemmed); prose (more than 6 of them) never vouches for a common word.
 const fitTopicPhrases = (topics) => (Array.isArray(topics) ? topics.filter(Boolean).map(String) : [String(topics || '')])
-  .map(t => { const w = fitLow(t).split(FIT_SPLIT_WORDS).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
+  .map(t => { const w = fitSyn(t).split(FIT_SPLIT_WORDS).filter(x => x.length > 2 && !FIT_STOP.has(x) && !FIT_GEO.has(x) && !/^\d+$/.test(x));
     return { dist: [...new Set(w.filter(x => !FIT_GENERIC.has(x)).map(fitStem))], words: [...new Set(w.map(fitStem))] }; })
   .filter(p => p.dist.length).map(p => ({ ...p, prose: p.dist.length > 6 }));
 function fitTopic(keyword, topics, ctx) {
@@ -502,7 +513,7 @@ function fitTopic(keyword, topics, ctx) {
   if (T.size < (typeof o.topic_min_words === 'number' ? o.topic_min_words : 12)) return { ok: true, reason: '', detail: T.size ? 'too few topic words on file (' + T.size + ') to judge topic distance' : 'no topics on file, so topic distance was not judged', share: null };
   // KW-GATE (2026-10-21): an Arabic keyword is judged on its English reading; a "number 1" claim says nothing about the subject
   const AR = fitArabic(keyword);
-  const toks = fitTokens(AR.text.replace(/(^|\s)(no\.? ?1|number (one|1)|#1)(?=\s|$)/gi, ' '));
+  const toks = fitTokens(fitSyn(AR.text).replace(/(^|\s)(no\.? ?1|number (one|1)|#1)(?=\s|$)/gi, ' '));
   const decl = o._decl || fitDeclared(o);
   for (const w of decl.words) T.add(w);
   const unread = new Set(AR.unread);
@@ -560,9 +571,9 @@ function fitTopic(keyword, topics, ctx) {
 // "AI consulting" site); a FIT_COMMON word ("sales", "central") still needs the whole service name, as in fitTopic.
 const FIT_SERVICE_CATS = new Set(['erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll']);
 const fitServiceAnchors = (keyword, services) => {
-  const svc = new Set((Array.isArray(services) ? services : [services]).filter(Boolean).flatMap(x => fitTokens(String(x))).filter(t => FIT_SERVICE_CATS.has(t)).map(fitStem));
+  const svc = new Set((Array.isArray(services) ? services : [services]).filter(Boolean).flatMap(x => fitTokens(fitSyn(x))).filter(t => FIT_SERVICE_CATS.has(t)).map(fitStem));
   if (!svc.size) return [];
-  return [...new Set(fitTokens(keyword).filter(t => FIT_SERVICE_CATS.has(t) && svc.has(fitStem(t))))];
+  return [...new Set(fitTokens(fitSyn(keyword)).filter(t => FIT_SERVICE_CATS.has(t) && svc.has(fitStem(t))))];
 };
 function fitEvidence(keyword, topics, ctx) {
   const o = ctx || {};
@@ -573,7 +584,7 @@ function fitEvidence(keyword, topics, ctx) {
   if (t.ok && t.share != null) return { verdict: 'in', share: t.share, words: T.size, detail: t.detail, basis: 'topics' };
   if (anchors.length) {
     // the share again, with the declared category word counted as the keyword's own and as matched
-    const toks = fitTokens(keyword);
+    const toks = fitTokens(fitSyn(keyword));
     const own = toks.filter(x => x.length > 2 && !FIT_GEO.has(x) && !FIT_GENERIC.has(x) && !FIT_BUYER.has(x) && !/^\d+$/.test(x));
     const PH = fitTopicPhrases(topics), known = [...T];
     const stemHit = (s, x) => x === s || (x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0));
@@ -1821,11 +1832,40 @@ if (careerA) {
   const relBuyer = listOf(serpA.related || []).filter(k => FIT_BUYER_KW.test(' ' + k + ' '));
   alternatives = [...new Set([...alternatives, ...relBuyer])].filter(buyerOk).slice(0, 3);
 }
+// ---- KWL-LAD D4 (live run 2026-10-21, exec 114): "ai consultant" was refused as a job search with `alternatives: []` and no word why: every
+// buyer search for the subject ("ai consulting", "ai consultant dubai", "ai consulting firm") already belonged to the client's ladder "ai
+// consultant", so the model offered none and the filter hid them. When the buyer searches are held by a ladder of the site, the answer says
+// which ladder holds them; the other in-topic buyer searches stay offered.
+const subjOf = (k) => fitTokens(k).filter(t => t.length > 3 && !FIT_GEO.has(t));
+const sameSubj = (x, y) => x === y || (x.length >= 6 && y.length >= 6 && x.slice(0, 6) === y.slice(0, 6));
+const kwSubj = subjOf(a.keyword);
+const ladRowsA = rowsOf('Load Ladders (Assess)');
+const ladderOf = (k) => { const r = ladRowsA.find(x => String(x.keyword || '').toLowerCase().trim() === k || keywordsOverlap(String(x.keyword || ''), k)); return r ? String(r.head_keyword || r.keyword || '').toLowerCase().trim() : ''; };
+const heldAlt = !need ? [] : [...new Set((a.existing_keywords || []).map(e => String(e || '').toLowerCase().trim()).filter(Boolean))]
+  .filter(e => !keywordsOverlap(e, a.keyword) && e !== String(a.keyword || '').toLowerCase().trim())
+  .filter(e => subjOf(e).some(t => kwSubj.some(u => sameSubj(t, u))))
+  .filter(e => { const t = ' ' + e + ' '; return fitGate(e, ctxAlt).ok && !(careerA && (FIT_JOB_KW.test(t) || FIT_COURSE_KW.test(t))); })
+  .slice(0, 6);
+const heldBy = new Map(); for (const e of heldAlt) { const h = ladderOf(e) || ''; if (!heldBy.has(h)) heldBy.set(h, []); heldBy.get(h).push(e); }
+const alternatives_held = heldAlt.map(k => ({ keyword: k, ladder: ladderOf(k) || null }));
+const alternatives_note = !heldAlt.length ? '' : [...heldBy.entries()].map(([h, ks]) => (h ? 'your ladder "' + h + '" already covers ' : 'your keywords already cover ')
+    + ks.map(k => '"' + k + '"').join(', ')).join('; ')
+  + ', so ' + (heldAlt.length === 1 ? 'it is' : 'they are') + ' not offered again' + (alternatives.length ? '. Other searches for buyers: ' + alternatives.map(k => '"' + k + '"').join(', ') : '. No other search for buyers on this subject was found');
+// ---- KWL-LAD D7 (exec 120): an Arabic keyword says how it was read (the gate's own reading, fitArabic) and in which language its results page was read
+const AR_A = fitArabic(String(a.keyword || ''));
+const reading = AR_A.read ? { script: 'arabic', read_as: AR_A.text, unread: AR_A.unread.slice(0, 6), serp_language: String(a.serp_language_code || ''),
+  note: 'This Arabic keyword was read as "' + AR_A.text + '" (word by word with a built-in list of common search words, no machine translation)'
+    + (AR_A.unread.length ? '; ' + AR_A.unread.length + ' word(s) could not be read (' + AR_A.unread.slice(0, 3).join(', ') + ') and counted neither for nor against the fit' : '')
+    + '. ' + (serpA.read ? 'Its Google results page was read in ' + (a.serp_language_code === 'ar' ? 'Arabic' : 'the market language') + ' for ' + a.country + '.' : 'Its Google results page was not read, so the fit rests on that reading and what you sell.') } : null;
+if (reading) fit_gate.reading_note = reading.note;
 const warnings = [];
+if (reading) warnings.push(reading.note);
+if (alternatives_note) warnings.push(alternatives_note);
 if (!gate.ok) warnings.push('not a fit for this website: ' + fit_gate.words + ' (' + gate.detail + ')');
 if (!topic_judged) warnings.push(topicNoteA);
 // E-SERP: an unread results page is said once, with the provider's reason; it is not "no demand" and nothing was concluded from it
-if (serpA.asked && !serpA.read) warnings.push('results page not read (' + String(serpA.why || 'no answer').slice(0, 140) + '): the fit was judged without it, so whether people search it for work or training was not checked');
+if (serpA.asked && !serpA.read) warnings.push(serpA.late ? 'results page not read in time: the check has a time limit, so the fit was judged without it and whether people search it for work or training was not checked'
+  : 'results page not read (' + String(serpA.why || 'no answer').slice(0, 140) + '): the fit was judged without it, so whether people search it for work or training was not checked');
 if (gate.ok && kindsA && kindsA.dominant && !['Service or product page', 'Homepage'].includes(kindsA.dominant)) warnings.push('what Google ranks: ' + kindsA.text);
 if (!aiOk && gate.ok) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160) + (plainRan ? ' (the plain-text retry answered nothing either)' : ''));
 if ((a.reach_errors || []).length) warnings.push('reach measured from partial data: ' + a.reach_errors.join('; ').slice(0, 200));
@@ -1839,7 +1879,7 @@ if (!a.known) warnings.push('DataForSEO has no data for this keyword in ' + a.co
 // "business central partner uae" came back as fit 1. Say so whenever that list is what decided a less-than-core fit.
 if (fit !== null && fit < 2 && /homepage only/.test(String(a.services_source || ''))) warnings.push('the topic check used a stored description written from the homepage only, so a service named elsewhere on the site may be missing: run "Describe my website" to refresh it');
 const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volume, kd: a.kd, intent: a.intent, cpc: a.cpc, position: a.position, reach,
-  difficulty_for_you, plan_type: plan.plan_type, months: plan.months, fit, navigational, alternatives,
+  difficulty_for_you, plan_type: plan.plan_type, months: plan.months, fit, navigational, alternatives, alternatives_held, alternatives_note, reading,
   fit_gate, fit_source: !gate.ok ? 'gate' : aiOk ? 'model' : 'unknown',   // R-K4: a refusal by the gate decides the fit, independent of the model
   cost_usd: +(Number(a.dfs_cost || 0) + CONFIG.ai_cost_usd * (plainRan ? 2 : 1)).toFixed(4),   // R3: the model is charged even when its answer could not be parsed
   label: (reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you]) + (topic.used ? ' \u00b7 measured on this topic' : '') + (fit === null ? ' \u00b7 ' + FIT_UNKNOWN : '') + (gate.ok ? '' : ' \u00b7 not a fit: ' + fit_gate.words), fit_known: fit !== null, stretch: plan.stretch, position_url: a.position_url,
@@ -1854,7 +1894,7 @@ const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volum
   // E-SERP: the results page this answer read (or why it could not), and what kind of page Google ranks there
   serp: { read: !!serpA.read, asked: !!serpA.asked, why: serpA.read ? '' : String(serpA.why || ''), pages_read: serpPagesA.length, top: serpPagesA.slice(0, 5).map(p => p.domain),
     paa: (serpA.paa || []).slice(0, 4), page_types: kindsA ? { read: kindsA.read, dominant: kindsA.dominant, counts: kindsA.counts, text: kindsA.text } : null,
-    checked_at: serpA.checked_at || null, ai_overview_seen: serpA.read ? !!serpA.ai_overview_seen : null, read_today: !!serpA.read_today, read_note: String(serpA.read_note || '') },   // KW-SERP: the one reading of today, shared with every path
+    late: !!serpA.late, language: String(a.serp_language_code || a.language_code || ''), checked_at: serpA.checked_at || null, ai_overview_seen: serpA.read ? !!serpA.ai_overview_seen : null, read_today: !!serpA.read_today, read_note: String(serpA.read_note || '') },   // KW-SERP: the one reading of today, shared with every path
   fit_judged_without_serp: !serpA.read,
   business_source: a.business_source, warnings };
 if (existing) body.label = body.label + (existing.how === 'a page of yours' ? ' · you already have a page for it' : ' · already one of your keywords');
