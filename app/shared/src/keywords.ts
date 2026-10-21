@@ -41,8 +41,12 @@ export const KEYWORD_CHECK = {
   /** reserved per check in the budget (the SEO engine reports ~$0.02 with a stored reach, ~$0.05 without) */
   estimateUsd: 0.05,
   perCompanyPerDay: 30,
-  /** the same website, keyword and country checked within this many days: the stored answer, free */
-  cacheDays: 7,
+  /**
+   * KW-APP D6 (2026-10-21, live run): the same website, keyword and country checked within this many hours, by the same engine rules and
+   * with the same website context (services, brand names, competitors, ladder keywords): the stored answer, free. It was 7 days with no
+   * rules check, and served the morning's "fit 2, Easy" for "ai consultant" after the engine had learned it is a job search (fit 0).
+   */
+  cacheHours: 6,
   /** the HTTP call to n8n (it takes 5-20 s) */
   timeoutMs: 45_000,
 } as const;
@@ -175,6 +179,58 @@ export interface KeywordAssessment {
   alternatives: string[];
   label: string;
   warnings: string[];
+  /** KW-APP (2026-10-21, live run D15): the page of the website the check matched to this search, with how it matched; null when none */
+  existingPage?: ExistingPageMatch | null;
+  /** KW-APP: how Google's results page was read: `readToday` when an earlier reading of today was reused (no new purchase) */
+  reading?: { readToday: boolean; note: string; checkedAt: string } | null;
+}
+
+/** The website's own page a check (or a plan) matched to a search: the evidence the client can open. */
+export interface ExistingPageMatch {
+  url: string;
+  title: string;
+  /** how it was matched: 'title', 'address', 'search console', 'the same keyword' ... (the engine's words) */
+  matchedBy: string;
+  /** the engine's status of that page ('live', 'not_ready', 'gone' ...), '' when unknown */
+  status: string;
+  /** the page belongs to one of the website's keyword ladders */
+  ladder: boolean;
+  /** the engine's evidence line when it sends one, '' when not */
+  evidence: string;
+}
+
+/** The engine's `existing` block (Keyword Check) as the match the client sees; null without a page address. */
+export function toExistingPage(raw: unknown): ExistingPageMatch | null {
+  const e = obj(raw);
+  const url = str(e.page_url) || str(e.url);
+  if (!/^https?:\/\//i.test(url)) return null;
+  return {
+    url,
+    title: str(e.page_title) || str(e.title),
+    matchedBy: str(e.matched_by) || str(e.how),
+    status: str(e.page_status),
+    ladder: !!str(e.ladder_id),
+    evidence: str(e.evidence) || str(e.existing_evidence),
+  };
+}
+
+const MATCHED_BY: Record<string, string> = { title: 'its title', address: 'its address', url: 'its address', 'search console': 'Search Console data', 'the same keyword': 'the same keyword' };
+/** The lines that say what a check matched and how it read Google, in the customer's words ('' parts left out). */
+export function checkEvidenceLines(r: Pick<KeywordAssessment, 'existingPage' | 'reading'>): string[] {
+  const out: string[] = [];
+  const p = r.existingPage;
+  if (p) {
+    const how = MATCHED_BY[p.matchedBy.toLowerCase()] ?? (p.matchedBy ? p.matchedBy : '');
+    const title = p.title ? ` ("${p.title}")` : '';
+    const gone = /gone|404|not found|missing/i.test(p.status) ? ' That address no longer answers, so it is not a page to improve.' : p.status && p.status !== 'live' ? ` Its status: ${p.status.replace(/_/g, ' ')}.` : '';
+    out.push(
+      (p.ladder ? `One of your keyword ladders already holds this search; its page: ${p.url}${title}.` : `Matched to your page ${p.url}${title}${how ? `, by ${how}` : ''}.`) +
+        (p.evidence ? ` ${p.evidence.charAt(0).toUpperCase()}${p.evidence.slice(1)}${/[.!?]$/.test(p.evidence) ? '' : '.'}` : '') +
+        gone,
+    );
+  }
+  if (r.reading?.readToday) out.push(`Google's results page ${r.reading.note || 'was read earlier today'}: that reading was used again, at no extra cost.`);
+  return out;
 }
 
 /**
@@ -185,6 +241,13 @@ export interface KeywordAssessment {
 export const FIT_UNKNOWN_NOTE = 'topic check unavailable';
 const fitLabel = (label: string, fit: number | null) =>
   (!label || fit === 0 || fit === 1 || fit === 2 || label.includes(FIT_UNKNOWN_NOTE) ? label : `${label} \u00b7 ${FIT_UNKNOWN_NOTE}`);
+
+/** The engine's results-page reading (serp block): null when the page was not read. */
+function readingOf(raw: unknown): KeywordAssessment['reading'] {
+  const s = obj(raw);
+  if (s.read !== true) return null;
+  return { readToday: s.read_today === true, note: str(s.read_note).trim(), checkedAt: str(s.checked_at) };
+}
 
 /** The engine's snake_case answer as the app's assessment (tolerant: missing fields are null / empty). */
 export function toAssessment(raw: Record<string, unknown>): KeywordAssessment {
@@ -213,6 +276,8 @@ export function toAssessment(raw: Record<string, unknown>): KeywordAssessment {
     alternatives: [...new Set(strs(raw.alternatives).map((a) => a.toLowerCase()))].slice(0, 5),
     label: fitLabel(str(raw.label) || forYouLabel(difficultyForYou, planType, months, stretch), fitN),
     warnings: strs(raw.warnings).slice(0, 5),
+    existingPage: toExistingPage(raw.existing),
+    reading: readingOf(raw.serp),
   };
 }
 
@@ -226,7 +291,7 @@ export interface KeywordCheck {
   /** credits (app/docs/CREDITS.md): what this check used (0 for a stored answer shown again) */
   credits: number;
   createdAt: string;
-  /** the stored answer of a check of the last 7 days: nothing was charged */
+  /** the stored answer of a check of the last few hours (same engine rules, same website context): nothing was charged */
   cached: boolean;
 }
 
@@ -253,6 +318,8 @@ export interface RecommendedKeyword {
   serviceFit?: ServiceFit;
   /** a short line for the card in the customer's words ('' when there is nothing to say) */
   note?: string;
+  /** KW-APP D3 (2026-10-21): the engine read it as a job or training search (few buyers); it keeps the engine's last place and its note */
+  career?: boolean;
 }
 
 export type ServiceFit = 'in' | 'unknown' | 'out';
@@ -268,7 +335,7 @@ export interface RecommendedKeywords {
   reach: number | null;
   /** the market the research was done for (a country of the form list), null when unknown */
   country: string | null;
-  /** best first: within reach, then the discovery's own order; overlapping ones last */
+  /** the research's own order (start-with pick first), the client's services first; job searches and overlapping ones last */
   keywords: RecommendedKeyword[];
   /** keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.2, the onboarding poll): research running now, fresh research on file, or none
    * (GET .../keywords/recommended always sets it) */
@@ -298,17 +365,31 @@ export function ladderOverlapsOf(keyword: string, ladders: LadderKeywords[]): Re
   return out;
 }
 
-const DIFF_RANK: Record<string, number> = { easy: 0, reachable: 1, unknown: 2, hard: 3, very_hard: 4, not_realistic: 5 };
-const SOURCE_RANK: Record<RecommendedSource, number> = { start_with: 0, priority: 1, quick_win: 2, content_plan: 3 };
 const FIT_RANK: Record<ServiceFit, number> = { in: 0, unknown: 1, out: 2 };
 /** the card's line for a keyword that is not one of the client's services (F-REH, 2026-10-20) */
 export const SERVICE_OUT_NOTE = 'Not one of the services you listed';
 const asServiceFit = (v: unknown): ServiceFit => (v === 'in' || v === 'out' ? v : 'unknown');
+/** the card's line for a job or training search when the engine sent no detail of its own */
+export const CAREER_NOTE = 'Mostly people looking for work or training, not buyers';
+/** the engine's words when it demotes a job or training search (v5/code: "mostly looking for work or training") */
+const CAREER_WHY = /looking for work or training/i;
+/** KW-APP D3: the engine's career flag (an object with its detail, or true), or its words in `why` when the flag did not travel */
+function careerOf(k: Record<string, unknown>, why: string): { career: boolean; note: string } {
+  const c = k.career;
+  const detail = c && typeof c === 'object' ? str((c as Record<string, unknown>).detail).trim() : '';
+  if (detail) return { career: true, note: detail.charAt(0).toUpperCase() + detail.slice(1) };
+  if (c === true || CAREER_WHY.test(why)) {
+    const m = /(?:^|; )([^;]*looking for work or training[^;]*)/i.exec(why);
+    const line = m ? m[1].trim() : '';
+    return { career: true, note: line ? line.charAt(0).toUpperCase() + line.slice(1) : CAREER_NOTE };
+  }
+  return { career: false, note: '' };
+}
 
 /**
  * The keywords of a keyword_strategy callback as ladder candidates: the discovery's pick (start_with), its priority keywords, quick
- * wins and the main keywords of the Now / Next topics; one per search, best first (easy, reachable, not rated, hard, very hard, not
- * realistic; then the discovery's order); those that overlap a ladder go last, marked.
+ * wins and the main keywords of the Now / Next topics; one per search, in the discovery's order (the client's services first); job or
+ * training searches and those that overlap a ladder go last, marked.
  */
 export function recommendedFromStrategy(payload: Record<string, unknown>, ladders: LadderKeywords[], max = 12): RecommendedKeyword[] {
   const items: (RecommendedKeyword & { i: number })[] = [];
@@ -322,6 +403,7 @@ export function recommendedFromStrategy(payload: Record<string, unknown>, ladder
     const planType = asPlanChoice(k.plan_type);
     const months = planType === 'none' ? '' : str(k.months);
     const serviceFit = asServiceFit(k.service_fit);
+    const career = careerOf(k, why);
     items.push({
       keyword: kw,
       volume: num(k.volume ?? k.total_volume),
@@ -336,7 +418,8 @@ export function recommendedFromStrategy(payload: Record<string, unknown>, ladder
       source,
       overlaps: ladderOverlapsOf(kw, ladders),
       serviceFit,
-      note: serviceFit === 'out' ? SERVICE_OUT_NOTE : '',
+      note: career.career ? career.note : serviceFit === 'out' ? SERVICE_OUT_NOTE : '',
+      career: career.career,
       i: items.length,
     });
   };
@@ -351,17 +434,17 @@ export function recommendedFromStrategy(payload: Record<string, unknown>, ladder
     const n = num(t.keyword_count);
     add(t, 'content_plan', str(t.primary_keyword), [str(t.topic) && `Topic "${str(t.topic)}"`, n ? `${n} related searches on one page` : ''].filter(Boolean).join(': '));
   }
-  // F-REH (2026-10-20, real-credit rehearsal): what the client sells comes first. The engine judges every keyword against the services the
-  // client listed (service_fit); a non-technical owner picks from the top, and the rehearsal's top five were IT-company searches for a CRM
-  // and Dynamics 365 partner. A search a ladder already holds still goes last (picking it would start a second ladder for one search); among
-  // the rest: one of the client's services, then not judged (no services listed, or a report from before service fit), then not one of them.
+  // F-REH (2026-10-20, real-credit rehearsal): what the client sells comes first (service_fit: in, not judged, out).
+  // KW-APP D3 (2026-10-21, live run): the app used to re-rank by difficulty too, which moved the engine's start-with pick to card #5 and a
+  // job search the engine had put last to card #3 with no note. The engine's order is the research's judgement: keep it. The app only moves
+  // a search a ladder already holds to the end (picking it would start a second ladder for one search; only the app knows the ladders), and
+  // keeps a job or training search after everything else, as the engine does.
   return items
     .sort(
       (a, b) =>
         Number(a.overlaps.length > 0) - Number(b.overlaps.length > 0) ||
+        Number(a.career === true) - Number(b.career === true) ||
         FIT_RANK[a.serviceFit ?? 'unknown'] - FIT_RANK[b.serviceFit ?? 'unknown'] ||
-        DIFF_RANK[a.difficultyForYou ?? 'unknown'] - DIFF_RANK[b.difficultyForYou ?? 'unknown'] ||
-        SOURCE_RANK[a.source] - SOURCE_RANK[b.source] ||
         a.i - b.i,
     )
     .slice(0, max)
@@ -370,6 +453,6 @@ export function recommendedFromStrategy(payload: Record<string, unknown>, ladder
 
 /** "Choose for me": the first card that is easy or reachable for the website, that no ladder covers yet and that is not outside the
  *  services the client listed (rehearsal 2026-10-20: keyword-first never chooses a topic the client does not sell); null when none is. */
-export function chooseForMe<T extends Pick<RecommendedKeyword, 'difficultyForYou' | 'overlaps'> & { serviceFit?: RecommendedKeyword['serviceFit'] }>(list: readonly T[]): T | null {
-  return list.find((k) => isWithinReach(k.difficultyForYou) && !k.overlaps.length && k.serviceFit !== 'out') ?? null;
+export function chooseForMe<T extends Pick<RecommendedKeyword, 'difficultyForYou' | 'overlaps'> & { serviceFit?: RecommendedKeyword['serviceFit']; career?: boolean }>(list: readonly T[]): T | null {
+  return list.find((k) => isWithinReach(k.difficultyForYou) && !k.overlaps.length && k.serviceFit !== 'out' && k.career !== true) ?? null;
 }

@@ -9,14 +9,23 @@ import { assertCredits } from './billing';
 
 // The keyword_checks rows (keywordChecks.ts decides; this file only reads and writes the database).
 
-/** The stored answer of the same website, keyword and country since `since` (newest), or null. */
-export async function findRecentCheck(siteId: string, keyword: string, country: string, since: Date): Promise<KeywordCheckRow | null> {
+/** KW-APP D6: what a stored answer must share with a new check to be reused (the engine rules and the website context). */
+export interface CheckStamp {
+  rulesVersion: string;
+  contextHash: string;
+}
+
+/** The stored answer of the same website, keyword and country since `since` (newest), made by the same rules for the same context, or null. */
+export async function findRecentCheck(siteId: string, keyword: string, country: string, since: Date, stamp: CheckStamp): Promise<KeywordCheckRow | null> {
+  if (!stamp.rulesVersion || !stamp.contextHash) return null;
   const row = await db.query.keywordChecks.findFirst({
     where: and(
       eq(schema.keywordChecks.siteId, siteId),
       eq(schema.keywordChecks.keyword, keyword),
       eq(schema.keywordChecks.country, country),
       eq(schema.keywordChecks.status, 'done'),
+      eq(schema.keywordChecks.rulesVersion, stamp.rulesVersion),
+      eq(schema.keywordChecks.contextHash, stamp.contextHash),
       gte(schema.keywordChecks.createdAt, since),
     ),
     orderBy: desc(schema.keywordChecks.createdAt),
@@ -60,7 +69,7 @@ export function checkRefusal(o: { keyword: string; running: boolean; today: numb
  * Reserves a check under the company's lock (checkRefusal on the current counts and spend), then a 'pending' row holding the
  * estimate in the budget until the answer arrives. Returns its id.
  */
-export async function reserveCheck(o: { org: OrgRow; site: SiteRow; user: UserRow; keyword: string; country: string; automatic?: boolean }): Promise<string> {
+export async function reserveCheck(o: { org: OrgRow; site: SiteRow; user: UserRow; keyword: string; country: string; automatic?: boolean; stamp?: CheckStamp }): Promise<string> {
   return db.transaction(async (tx) => {
     await lockCompany(tx, o.org.id);
     const [{ n }] = await tx
@@ -81,7 +90,7 @@ export async function reserveCheck(o: { org: OrgRow; site: SiteRow; user: UserRo
     await assertCredits(tx, o.org, KEYWORD_CHECK.estimateUsd, 'This keyword check');
     const [row] = await tx
       .insert(schema.keywordChecks)
-      .values({ orgId: o.org.id, siteId: o.site.id, userId: o.user.id, keyword: o.keyword, country: o.country, status: 'pending', costUsd: KEYWORD_CHECK.estimateUsd, automatic: o.automatic === true })
+      .values({ orgId: o.org.id, siteId: o.site.id, userId: o.user.id, keyword: o.keyword, country: o.country, status: 'pending', costUsd: KEYWORD_CHECK.estimateUsd, automatic: o.automatic === true, rulesVersion: o.stamp?.rulesVersion ?? '', contextHash: o.stamp?.contextHash ?? '' })
       .returning({ id: schema.keywordChecks.id });
     return row.id;
   });

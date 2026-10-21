@@ -647,6 +647,10 @@ export const keywordChecks = pgTable(
     costUsd: doublePrecision('cost_usd').notNull().default(0),
     /** started by the system (the queued-ladder re-check), not by a person: autopilot spend, never the person's on-demand spend */
     automatic: boolean('automatic').notNull().default(false),
+    /** KW-APP D6: the engine rules the answer was made by and the website context it was made for; a stored answer is reused only when
+     *  both still match ('' on rows from before: never reused) */
+    rulesVersion: text('rules_version').notNull().default(''),
+    contextHash: text('context_hash').notNull().default(''),
     createdAt: created(),
   },
   (t) => [index('keyword_checks_org_created_idx').on(t.orgId, t.createdAt), index('keyword_checks_site_keyword_idx').on(t.siteId, t.keyword, t.country)],

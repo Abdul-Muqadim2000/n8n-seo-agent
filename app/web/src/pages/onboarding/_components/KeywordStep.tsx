@@ -3,7 +3,7 @@
 // are written for it, and how much the autopilot may do on its own. Nothing is started here: the launch step starts it all.
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { AlertTriangle, Bot, Hand, Lightbulb, PenSquare, Search, Sparkles, X, Zap } from 'lucide-react';
-import { AUTOPILOT_LEVELS, autopilotMonthlyUsd, DEFAULT_AUTOPILOT_LEVEL, type AutopilotLevel, type KeywordCheck, type RecommendedKeyword } from '@seo/shared';
+import { AUTOPILOT_LEVELS, autopilotMonthlyUsd, checkEvidenceLines, DEFAULT_AUTOPILOT_LEVEL, type AutopilotLevel, type KeywordCheck, type RecommendedKeyword } from '@seo/shared';
 import { chanceWords, KeywordChoiceCard, type KeywordChoice } from '@/components/site/KeywordChoiceCard';
 import { asCountry } from '@/components/site/helpers';
 import { trackDefaults } from '@/components/site/TrackingForm';
@@ -188,7 +188,7 @@ export function KeywordStep() {
             <Field
               className="min-w-0 flex-1"
               label={<span className="sr-only">A search a customer would type</span>}
-              hint={`Up to ${MAX_IDEAS} ideas. Each check takes 5 to 20 seconds and uses about ${PRICES.check()} (free if checked in the last 7 days).`}
+              hint={`Up to ${MAX_IDEAS} ideas. Each check takes 5 to 20 seconds and uses about ${PRICES.check()} (free if checked in the last few hours).`}
               error={textError ?? undefined}
             >
               {(p) => <Input {...p} value={text} onChange={(e) => setText(e.target.value)} maxLength={100} placeholder="For example: accounting software for small business" disabled={!verified} />}
@@ -445,6 +445,12 @@ function IdeaCard({
       onToggle={onToggle}
     >
       {!chanceWords(choice.difficultyForYou) && <p className="text-xs text-ink-3">We could not rate your chances yet; the plan rates them when it starts.</p>}
+      {/* KW-APP (2026-10-21): which page of yours the check matched, and a results page reused from earlier today */}
+      {checkEvidenceLines(c.result).map((line) => (
+        <p key={line} className="text-xs text-ink-3">
+          {line}
+        </p>
+      ))}
     </KeywordChoiceCard>
   );
 }

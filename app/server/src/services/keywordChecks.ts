@@ -1,6 +1,18 @@
+import { createHash } from 'node:crypto';
 import {
   COUNTRY_NAMES,
   daysSince,
+  fitBrandList,
+  fitEvidence,
+  fitGate,
+  fitLabels,
+  fitLearnedBrands,
+  fitOwnLabels,
+  fitStored,
+  fitStoredLive,
+  fitTokens,
+  fitTopic,
+  FITR,
   KEYWORD_CHECK,
   RECOMMENDATIONS_MAX_AGE_DAYS,
   recommendedFromStrategy,
@@ -19,14 +31,15 @@ import type { KeywordCheckRow, OrgRow, SiteRow } from '../db/schema';
 import { badRequest, forbidden, HttpError } from '../lib/errors';
 import { namesProviderCost } from '../lib/customerError';
 import { assessCall, siteRows, type AssessCallResult } from '../n8n/client';
-import { dropCheck, findRecentCheck, finishCheck, reserveCheck } from './keywordCheckStore';
+import { dropCheck, findRecentCheck, finishCheck, reserveCheck, type CheckStamp } from './keywordCheckStore';
 import { latestReport } from './runs';
 import { creditsOfUsd } from './admin/settings';
 import { siteForecasts } from './billing';
 
 // The "New keyword ladder" flow (PIPELINE_FEATURE_SPEC.md §5): the keyword check of one typed keyword (n8n's Keyword Check,
 // SEOagentAssess, paid: DataForSEO ~$0.02-0.05 a check) and the recommended keywords from the website's latest keyword strategy
-// (free). Order of a check: the stored answer of the last 7 days (free, no call) -> the daily limit and the budget under the
+// (free). Order of a check: the stored answer of the last few hours made by the same engine rules for the same website context (free,
+// no call) -> the daily limit and the budget under the
 // company's lock (keywordCheckStore.reserveCheck) -> n8n -> the answer stored with its cost, or the error mapped for people.
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -56,6 +69,40 @@ export function assessBody(o: { site: Pick<SiteRow, 'domain' | 'business'>; keyw
     services,
     existing_keywords: existing,
   };
+}
+
+// ---- KW-APP D6 (2026-10-21, live run): which stored answers may be shown again ----
+// The engine reports no version of its own in the check's answer, so the rules version is the engine's keyword fit gate as this build of
+// the app carries it: fit-gate.generated.js is written from the engine's kit by build_v4.py (KW-PARITY), so it changes whenever the gate
+// the engine runs changes. Engine changes outside the gate are bounded by the short reuse window (KEYWORD_CHECK.cacheHours).
+const sha = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 16);
+const src = (v: unknown): string => (typeof v === 'function' ? String(v) : v && typeof v === 'object' ? Object.entries(v).map(([k, x]) => `${k}=${src(x)}`).join('\n') : JSON.stringify(v ?? null));
+let rulesVersion = '';
+/** A hash of the engine's fit gate as generated into this build ("fg-" + 16 hex characters). */
+export function engineRulesVersion(): string {
+  if (!rulesVersion) {
+    const parts = { fitGate, fitTopic, fitEvidence, fitStored, fitStoredLive, fitTokens, fitLabels, fitOwnLabels, fitLearnedBrands, fitBrandList, FITR };
+    rulesVersion = `fg-${sha(Object.entries(parts).map(([k, v]) => `${k}:${src(v)}`).join('\n'))}`;
+  }
+  return rulesVersion;
+}
+
+const sorted = (xs: readonly unknown[] | null | undefined) => [...new Set((xs ?? []).map((x) => String(x ?? '').trim().toLowerCase()).filter(Boolean))].sort();
+/**
+ * The website context a check was made for: what is sent to the engine (domain, business, services, the ladder keywords never suggested
+ * back) and what the engine reads from the website's settings (brand names, competitors). Any change and the stored answer is not reused.
+ */
+export function checkContextHash(o: { site: Pick<SiteRow, 'domain' | 'business'> & Partial<Pick<SiteRow, 'brandNames' | 'competitors'>>; services: string[]; existing: string[] }): string {
+  return sha(
+    JSON.stringify({
+      domain: o.site.domain.toLowerCase(),
+      business: (o.site.business ?? '').trim(),
+      services: sorted(o.services),
+      brandNames: sorted(o.site.brandNames),
+      competitors: sorted(o.site.competitors),
+      existing: sorted(o.existing),
+    }),
+  );
 }
 
 export type AssessOutcome = { ok: true; raw: Record<string, unknown>; costUsd: number } | { ok: false; error: HttpError; reachedEngine: boolean };
@@ -109,7 +156,7 @@ async function siteServices(domain: string): Promise<string[]> {
 }
 
 /**
- * POST .../keywords/assess: the stored answer of the last 7 days (free), else one paid check. `automatic`: the system asked for it (the
+ * POST .../keywords/assess: the stored answer of the last few hours, same rules and context (free), else one paid check. `automatic`: the system asked for it (the
  * queued-ladder re-check), on the owner's behalf: it is the website's autopilot spend, never the person's on-demand spend (costSync).
  */
 export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>, input: KeywordAssessInput, opts: { automatic?: boolean } = {}): Promise<KeywordCheck> {
@@ -121,17 +168,19 @@ export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>
   if (!country) throw badRequest('Choose the country to check it in', { country: 'Choose a country' });
   const keyword = input.keyword;
 
-  const cached = await findRecentCheck(site.id, keyword, country, new Date(Date.now() - KEYWORD_CHECK.cacheDays * 864e5));
+  // what the website sells: the client's own words ("What do you sell?") first, then its case studies; read before the stored answer is
+  // considered, because a stored answer counts only for the same context (KW-APP D6)
+  const [existing, studied] = await Promise.all([existingKeywords(site.domain), siteServices(site.domain)]);
+  const services = [...(site.services ?? []), ...studied];
+  const stamp: CheckStamp = { rulesVersion: engineRulesVersion(), contextHash: checkContextHash({ site, services, existing }) };
+  const cached = await findRecentCheck(site.id, keyword, country, new Date(Date.now() - KEYWORD_CHECK.cacheHours * 3600_000), stamp);
   if (cached) return toKeywordCheck(cached, true);
 
   // the schedules' forecast is read outside the company's lock (the credit check inside reads it), as createRun does
   await siteForecasts(org.id).catch(() => []);
-  const id = await reserveCheck({ org, site, user, keyword, country, automatic: opts.automatic === true });
+  const id = await reserveCheck({ org, site, user, keyword, country, automatic: opts.automatic === true, stamp });
   let outcome: AssessOutcome;
   try {
-    // what the website sells: the client's own words ("What do you sell?") first, then its case studies
-    const [existing, studied] = await Promise.all([existingKeywords(site.domain), siteServices(site.domain)]);
-    const services = [...(site.services ?? []), ...studied];
     outcome = interpretAssess(await assessCall(assessBody({ site, keyword, country, existing, services }), org.id, KEYWORD_CHECK.timeoutMs));
   } catch (err) {
     await dropCheck(id, false).catch(() => undefined);

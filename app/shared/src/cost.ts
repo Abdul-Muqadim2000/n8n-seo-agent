@@ -172,9 +172,11 @@ export function costKeys(mode: ModeId, v: Values = {}): CostKey[] {
       return v.receiveContent === false ? ['report'] : ['content'];
     case 'ladder': {
       // the plan, then one content run per page the owner asked for now (the engine reserves each spawn separately); P1: a page the engine
-      // holds for the author profile and the business facts (`pagesHeld`, set by the server) is not written now, so it is not quoted
+      // holds for the author profile and the business facts (`pagesHeld`, set by the server) is not written now, so it is not quoted.
+      // KW-APP D8 (2026-10-21, live run): a Manual ladder writes nothing at start either (Ladder_Plan.js manualHold), and was quoted 99
+      // credits for a run charged 23.73: the plan alone, whether the form asked for Manual or the server read it from the website's default
       const keys: CostKey[] = ['ladder'];
-      if (v.pagesHeld === 'profile') return keys;
+      if (v.pagesHeld === 'profile' || v.pagesHeld === 'manual' || v.ladderMode === 'manual') return keys;
       for (let i = 0; i < pagesNow(v); i++) keys.push('content');
       return keys;
     }
