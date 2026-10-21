@@ -81,9 +81,34 @@ const pile_up = (() => {
   return { waiting: W.count, needs_fix: W.needs_fix, limit, keywords: W.list.slice(0, 10).map(x => x.keyword), at_limit: W.count >= limit, loaded: log.length > 0,
     basis: 'the Content Cadence\'s count: pages written (or written and refused by the quality check) in the last 120 days and not published, each keyword once' };
 })();
-const takenBy = (kw) => { const t = overlapTokens(kw); return taken.find(x => overlapScore(t, x.tokens) >= 0.75) || null; };
-const dupHead = [...otherHeads.entries()].map(([id, h]) => ({ ladder_id: id, head: h })).find(x => keywordsOverlap(x.head, head)) || null;
+// ---- KWL-LAD D14 (live run 2026-10-21, exec 125): "ai consulting dubai" became a second ladder beside the rung "ai consultant dubai" of the
+// ladder "ai consultant" - the word rule kept "consulting" and "consultant" apart, and the head was compared with other ladders' HEADS only.
+// Now the head and every rung keyword are compared with every keyword of the site's other ladders by two rules: the same words once a word
+// family is folded (consultant / consulting / consultancy are one word, company / companies, service / services ...), and, where both
+// searches have a results page read today (the shared reading this run compared, Ladder Clusters), 3 or more of their top 7 pages in common.
+const FAMILY_LP = [[/^consult/, 'consult'], [/^compan/, 'company'], [/^agenc/, 'agency'], [/^servic/, 'service'], [/^provid/, 'provider'], [/^firm/, 'firm'],
+  [/^solution/, 'solution'], [/^develop/, 'develop'], [/^automat/, 'automat'], [/^implement/, 'implement'], [/^integrat/, 'integrat'], [/^special/, 'special']];
+const famTokensLP = (s) => [...new Set(overlapTokens(s).map(t => { for (const [re, f] of FAMILY_LP) if (re.test(t)) return f; return t; }))];
+const urlsTodayLP = (() => { try { const c = $('Ladder Clusters').first().json.serp_clusters || {}; return { of: c.urls_of || {}, top: Number(c.top_n) || 7 }; } catch (e) { return { of: {}, top: 7 }; } })();
+// -> null | { by: 'words' | 'results', shared?, of? }
+const sameSearchLP = (a, b) => {
+  const ka = String(a || '').toLowerCase().trim(), kb = String(b || '').toLowerCase().trim();
+  if (!ka || !kb) return null;
+  if (ka === kb || overlapScore(famTokensLP(ka), famTokensLP(kb)) >= 0.75) return { by: 'words' };
+  const ua = urlsTodayLP.of[ka], ub = urlsTodayLP.of[kb];
+  if (Array.isArray(ua) && Array.isArray(ub) && ua.length && ub.length) {
+    const top = Math.min(7, urlsTodayLP.top || 7); const sb = new Set(ub.slice(0, top)); const shared = ua.slice(0, top).filter(u => sb.has(u)).length;
+    if (shared >= 3) return { by: 'results', shared, of: top };
+  }
+  return null;
+};
+const takenBy = (kw) => { for (const x of taken) { const m = sameSearchLP(kw, x.keyword); if (m) return { ...x, match: m }; } return null; };
+const dupHead = [...otherHeads.entries()].map(([id, h]) => ({ ladder_id: id, head: h, match: sameSearchLP(h, head) })).find(x => x.match) || null;
+// the head is one of ANOTHER ladder's rung keywords (not its head): the same search, so no second ladder either
 const headTakenAsPage = !dupHead ? takenBy(head) : null;
+const sameWhyLP = (m, a, b) => !m ? '' : m.by === 'results' ? 'Google shows ' + m.shared + ' of the same top ' + m.of + ' pages for "' + a + '" and "' + b + '"'
+  : String(a).toLowerCase().trim() === String(b).toLowerCase().trim() ? 'it is the same keyword' : '"' + a + '" and "' + b + '" are the same search in other words';
+const overlaps = [];   // every overlap this plan found with the site's other ladders, for the app
 
 // ---- AI relevance verdicts ----
 const rel = new Map();
@@ -118,7 +143,8 @@ const kws = ((pool.research || {}).candidates || []).filter(k => { const g = fit
   if (k.relevance === 0 && k.fit_reason) notSold.push({ keyword: k.keyword, volume: k.volume, reason: k.fit_reason });
   return false; }).filter(k => {
   const t = takenBy(k.keyword); if (!t) return true;
-  excluded.push({ keyword: k.keyword, ladder_id: t.ladder_id, head: t.head, as: t.keyword }); return false;
+  excluded.push({ keyword: k.keyword, ladder_id: t.ladder_id, head: t.head, as: t.keyword, by: t.match.by });
+  overlaps.push({ keyword: k.keyword, ladder_id: t.ladder_id, ladder: t.head, their_keyword: t.keyword, by: t.match.by, shared: t.match.shared ?? null, action: 'left out', why: sameWhyLP(t.match, k.keyword, t.keyword) }); return false;
 }).sort((a, b) => b.opportunity - a.opportunity);
 // ---- R23 (2026-10-14, FIX_PLAN.md §3.12): every rung keyword has to be on this ladder's own topic ----
 // Exec 549 planned "azure api management monetization" (volume 10, informational, quarterly trend -100%) as the ONE rung of a ladder
@@ -282,7 +308,7 @@ const makePages = (list, rung) => {
       your_position: pos.length ? Math.min(...pos) : null, exists: !!ex, target_url: ex ? ex.url : plannedUrl(p.keyword), existing_source: ex ? ex.source : null, status: ex ? 'improve' : 'new' };
   });
 };
-const bandLabel = (r) => r === 1 ? 'Rung 1 — long-tail pages (difficulty up to ' + BAND[1] + ')' : r === 2 ? 'Rung 2 — mid-difficulty pages (' + (BAND[1] + 1) + '-' + BAND[2] + ')' : 'Rung 3 — strong pages (' + (BAND[2] + 1) + '-' + BAND[3] + ')';
+const bandLabel = (r) => r === 1 ? 'Rung 1: long-tail pages (difficulty up to ' + BAND[1] + ')' : r === 2 ? 'Rung 2: mid-difficulty pages (' + (BAND[1] + 1) + '-' + BAND[2] + ')' : 'Rung 3: strong pages (' + (BAND[2] + 1) + '-' + BAND[3] + ')';
 const rungs = [1, 2, 3].map(r => ({ rung: r, label: bandLabel(r), band_max: BAND[r], pages: makePages(byRung[r], r), available: byRung[r].length, not_planned: notPlanned[r] }));
 
 // ---- the main keyword for this site: difficulty, plan type, months ----
@@ -351,7 +377,21 @@ top.target_words = verdictWords || analysisWords || 0;
 // actually rank for this ladder's topic (`competitors_summary[].word_count` — the pages this run read with Jina): the MEDIAN of the field for a
 // rung page, because a rung keyword is an easier search than the head term and its pages are shorter, while the main page keeps the verdict's
 // own number (usually the best page's length). No per-rung results page is read: that would be one paid SERP call per rung keyword.
-const headExisting = (base.existing_page && base.existing_page.url) ? { url: base.existing_page.url, source: base.existing_page.source || 'sitemap' } : findExisting(head, headRank && headRank.url, true);
+// KWL-LAD D9 (live run 2026-10-21, exec 125): the main page improved /whatwedo/ai-automation with `existing_confidence: null` and
+// `existing_evidence: ''`, because a page handed in by the earlier steps (base.existing_page) dropped SM.pageMatch's confidence and evidence.
+// The same page is matched here once more and its confidence and evidence travel with it; a page the matcher does not see keeps the reason
+// it was handed in for.
+const headExisting = (() => {
+  if (!(base.existing_page && base.existing_page.url)) return findExisting(head, headRank && headRank.url, true);
+  const ep = base.existing_page;
+  const keyOf = (u) => String(SM.helpers.pathOf(String(u || '')) || '').replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
+  let pm = null; try { pm = SM.pageMatch(pageModel, head).match; } catch (e) { pm = null; }
+  const same = !!(pm && keyOf(pm.url) === keyOf(ep.url));
+  const conf = ep.confidence != null ? ep.confidence : (same && pm.confidence != null ? pm.confidence : null);
+  const ev = String(ep.evidence || (same ? pm.evidence || '' : '') || '').trim()
+    || ('handed in as the page for "' + head + '"' + (ep.matched_by ? ' (matched by its ' + ep.matched_by + ')' : '') + (ep.title ? ': "' + String(ep.title).slice(0, 100) + '"' : ''));
+  return { url: ep.url, source: ep.source || 'sitemap', matched_by: ep.matched_by || (same ? pm.matched_by : '') || '', title: ep.title || (same ? pm.title || '' : ''), confidence: conf, evidence: ev };
+})();
 Object.assign(top, { exists: !!headExisting, target_url: headExisting ? headExisting.url : plannedUrl(head), existing_source: headExisting ? headExisting.source : null, status: headExisting ? 'improve' : 'new',
   existing_confidence: headExisting && headExisting.confidence != null ? headExisting.confidence : null, existing_evidence: headExisting ? (headExisting.evidence || '') : '',
   may_overlap: !headExisting && mayOverlapLP.has(head) ? mayOverlapLP.get(head) : null });   // K8: a weak candidate is named, never planned over
@@ -383,8 +423,12 @@ const serpOut = (base.serp_features && base.serp_features.unavailable === true) 
 
 // ---- refusals: a duplicate main keyword, a destination that is not realistic, or data we do not have -> no ladder pages ----
 let refusal = null;
-if (dupHead) refusal = { reason: 'duplicate', ladder_id: dupHead.ladder_id, head: dupHead.head,
-  message: 'This website already has a keyword ladder for "' + dupHead.head + '" (' + dupHead.ladder_id + '). One search needs one page, so no second ladder was planned: continue that ladder instead.' };
+if (dupHead) refusal = { reason: 'duplicate', ladder_id: dupHead.ladder_id, head: dupHead.head, by: dupHead.match.by,
+  message: 'This website already has a keyword ladder for "' + dupHead.head + '" (' + dupHead.ladder_id + ')' + (String(dupHead.head) !== String(head).toLowerCase().trim() ? ': ' + sameWhyLP(dupHead.match, head, dupHead.head) : '') + '. One search needs one page, so no second ladder was planned: continue that ladder instead.' };
+// KWL-LAD D14: the head is a page another ladder already plans: refused the same way, with the reason in plain words
+else if (headTakenAsPage) refusal = { reason: 'duplicate', ladder_id: headTakenAsPage.ladder_id, head: headTakenAsPage.head, their_keyword: headTakenAsPage.keyword, by: headTakenAsPage.match.by,
+  message: 'Your ladder "' + (headTakenAsPage.head || headTakenAsPage.keyword) + '" (' + headTakenAsPage.ladder_id + ') already plans a page for "' + headTakenAsPage.keyword + '": ' + sameWhyLP(headTakenAsPage.match, head, headTakenAsPage.keyword)
+    + '. One search needs one page, so no second ladder was planned: continue that ladder, or pause it and start this one.' };
 else if (plan.plan_type === 'none') refusal = { reason: 'not_realistic', message: '"' + head + '" is not a realistic main keyword for ' + domain + ' (' + (other_brand ? 'it is another company\'s brand: ' + headGate.detail : navigational ? 'people searching it look for one particular website or brand' + (!headGate.ok ? ': ' + headGate.detail : '') : 'the verdict is AVOID') + '). No ladder pages were planned; pick one of the alternatives as the main keyword instead.' };
 else if (careerHead) refusal = { reason: 'career', short: 'people search it to find work or training', detail: headGate.detail,
   message: '"' + head + '" is not a good main keyword for ' + domain + '. People searching it are mostly looking for work or training, not for a provider ('
@@ -607,7 +651,7 @@ if (planned) rungPages.forEach(p => link_map.push({ from: top.target_url, to: p.
 //      then the main page; direct = the main page first, its supporting pages in the same window ----
 const range = plan.months_range || [0, 0];
 const timeline = [];
-const topLabel = 'Top — ' + head;
+const topLabel = 'Top: ' + head;
 if (!planned) { for (const r of rungs) r.months = null; top.months = null; }
 else if (plan_type === 'full') {
   const BASE_LEN = { 1: 2, 2: 3, 3: 3 }; let month = 1;
@@ -650,8 +694,8 @@ const divPenalty = divChecked && !dataRefused ? DIVERSITY_PENALTY[divBand] : 0;
 const divText = !divChecked
   ? 'The results page for "' + head + '" could not be read on this run, so how many different sites own it is not known and the score is unchanged.'
   : diversityDomains.length + ' different site(s) hold the top ' + headTop10.length + ' results for "' + head + '"'
-    + (divBand === 'open' ? ' — no site owns more than its share, so the page is as open as a results page gets and the feasibility score is unchanged.'
-      : ' — ' + (divBand === 'concentrated' ? 'few sites own this page' : 'the page is narrow') + ', so at least one of them holds several of the results with the topical coverage that takes. The feasibility score is '
+    + (divBand === 'open' ? ': no site owns more than its share, so the page is as open as a results page gets and the feasibility score is unchanged.'
+      : ': ' + (divBand === 'concentrated' ? 'few sites own this page' : 'the page is narrow') + ', so at least one of them holds several of the results with the topical coverage that takes. The feasibility score is '
         + divPenalty + ' point(s) lower for it: a stated rule (' + DIVERSITY_PENALTY.concentrated + ' at ' + DIVERSITY.concentrated + ' sites or fewer of ten, '
         + DIVERSITY_PENALTY.narrow + ' at ' + (DIVERSITY.concentrated + 1) + '-' + DIVERSITY.narrow + ' of ten, nothing above), not a measured effect.')
     + (diversityDomains.length ? ' The sites: ' + diversityDomains.slice(0, 10).join(', ') + '.' : '');
@@ -704,10 +748,15 @@ topic_authority.coverage = { pages_on_site: pagesOnTopic.length, pages: pagesOnT
   top10_keywords: topic_authority.top10, best_position: bestPos ? bestPos.position : null, best_keyword: bestPos ? bestPos.keyword : '',
   planned_total: allPlanned.length, planned_improve: nImprove, planned_new: nNew,
   summary: !planned ? 'No pages were planned, so there is nothing to compare with what the site already has.'
+    // KWL-LAD D9: a plan that improves a page of the site never says that all its pages are new
+    : nImprove && !pagesOnTopic.length && !topic_authority.on_topic
+      ? 'Of the ' + allPlanned.length + ' page(s) in this plan, ' + nImprove + ' improve' + (nImprove === 1 ? 's' : '') + ' a page you already have ('
+        + allPlanned.filter(p => p.exists).slice(0, 3).map(p => String(p.target_url).replace(/^https?:\/\/[^\/]+/i, '') || '/').join(', ') + ') and ' + nNew + ' ' + (nNew === 1 ? 'is' : 'are') + ' new; ' + domain + ' ranks for no keyword on "' + head + '" yet.'
+        + (titleGapL.untitled ? ' Note: ' + titleGapL.note + '.' : '')
     : (!pagesOnTopic.length && !topic_authority.on_topic
       ? (titleGapL.untitled
-        ? 'No page of ' + domain + ' is about "' + head + '" by its title or address, and it ranks for no keyword on it — but ' + titleGapL.note + ' (e.g. ' + titleGapL.urls.slice(0, 3).join(', ') + '). So all ' + allPlanned.length + ' page(s) in this plan are planned as new; check those pages first.'
-        : 'Nothing on ' + domain + ' is about "' + head + '" yet — no page and no keyword it ranks for — so all ' + allPlanned.length + ' page(s) in this plan are new and this topic starts from zero.')
+        ? 'No page of ' + domain + ' is about "' + head + '" by its title or address, and it ranks for no keyword on it, but ' + titleGapL.note + ' (e.g. ' + titleGapL.urls.slice(0, 3).join(', ') + '). So all ' + allPlanned.length + ' page(s) in this plan are planned as new; check those pages first.'
+        : 'Nothing on ' + domain + ' is about "' + head + '" yet (no page and no keyword it ranks for), so all ' + allPlanned.length + ' page(s) in this plan are new and this topic starts from zero.')
       : domain + ' already has ' + pagesOnTopic.length + ' page(s) about "' + head + '" and ranks for ' + topic_authority.on_topic + ' keyword(s) on it ('
         + topic_authority.top10 + ' in the top 10' + (bestPos ? ', best #' + bestPos.position + ' for "' + bestPos.keyword + '"' : '') + '). Of the '
         + allPlanned.length + ' page(s) in this plan, ' + nImprove + ' improve' + (nImprove === 1 ? 's' : '') + ' a page you already have and ' + nNew + ' ' + (nNew === 1 ? 'is' : 'are') + ' new.'
@@ -769,7 +818,7 @@ const manualHold = planned && write_now.length && ownMode === 'manual' ? { limit
 if (planned && write_now.length && pile_up.at_limit) holdWhy.push({ limit: 'pileup', text: pile_up.waiting + ' page(s) are written and waiting to be published, and the website\'s limit is ' + pile_up.limit
   + (pile_up.needs_fix ? ' (' + pile_up.needs_fix + ' of them did not pass the quality check and need a fix first)' : '') });
 if (planned && write_now.length && queuedL) holdWhy.push({ limit: 'max_active', text: 'the website writes at most ' + focusL.max_active + ' Auto ladder(s) at a time, and ' + ahead.length + ' with pages still to write come before this one ('
-  + ahead.slice(0, 4).map(l => '"' + l.head + '"').join(', ') + (ahead.length > 4 ? ' …' : '') + '), so it waits as Queued' });
+  + ahead.slice(0, 4).map(l => '"' + l.head + '"').join(', ') + (ahead.length > 4 ? ' and ' + (ahead.length - 4) + ' more' : '') + '), so it waits as Queued' });
 // P1 (2026-10-20, rehearsal §4 item 1, owner decision): no page is written before the website's author profile and business facts are on file.
 // The rehearsal's first page was written at once with neither and Content QA refused it ("11 bracketed field(s) in the byline, the author box
 // and the Person schema", claims nothing on file supports), while the client paid about 62 credits for a draft. The plan is still made and
@@ -836,25 +885,24 @@ if (SERP_CL && SERP_CL.note) notes.push(SERP_CL.note
     + clusterRungs.slice(0, 4).map(c => '"' + c.head_keyword + '" (+' + Math.max(0, c.keywords.length - 1) + ')').join(', ') + '.' : ''));
 // B2-5: the destination's results page, and the stated effect on the score
 if (serp_diversity.checked) notes.push(serp_diversity.text);
-if (head_radius) notes.push('Topic radius — "' + head_radius.topic + '": ' + RAD.line(head_radius) + '.');
-if (poolRefused.length) notes.push(poolRefused.length + ' keyword(s) were left out of the ladder because they are other companies\' brands, government or portal searches, or navigational: ' + poolRefused.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ')').join(', ') + (poolRefused.length > 6 ? ' …' : '') + '.');
+if (head_radius) notes.push('Topic radius for "' + head_radius.topic + '": ' + RAD.line(head_radius) + '.');
+if (poolRefused.length) notes.push(poolRefused.length + ' keyword(s) were left out of the ladder because they are other companies\' brands, government or portal searches, or navigational: ' + poolRefused.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ')').join(', ') + (poolRefused.length > 6 ? ' and ' + (poolRefused.length - 6) + ' more' : '') + '.');
 if (planned && plan_type === 'full' && rungPages.length && pages_total < 8) notes.push('Only ' + pages_total + ' pages could be planned from the data: the topic is narrow in ' + base.country + '. The ladder is shorter but still valid.');
 if (planned && plan_type === 'full' && rungPages.length) for (const r of rungs) if (!r.pages.length) notes.push('No keywords fell into rung ' + r.rung + '; the ladder skips it.');
 if (planned && plan_type === 'direct' && rungPages.length < 2) notes.push('Only ' + rungPages.length + ' supporting page(s) could be planned around the main keyword; add more as the site grows.');
 if (planned && plan_type !== 'direct' && !rungPages.length) notes.push('No supporting keywords were found for "' + head + '" in ' + base.country + ' (the topic is narrow in the search data), so the main page is the whole ladder for now and is written first. Supporting pages can be added as the site grows.');
 else if (planned && plan_type === 'short' && rungPages.length < 3) notes.push('Only ' + rungPages.length + ' supporting page(s) could be planned before the main page.');
-if (offTopic.length) notes.push(offTopic.length + ' keyword(s) were left out because they are not on this ladder\'s topic ("' + head + '"): ' + offTopic.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason.replace(/^it is not on this ladder's topic: /, '') + ')').join(', ') + (offTopic.length > 6 ? ' …' : '') + '.');
-if (excluded.length) notes.push(excluded.length + ' keyword(s) already belong to other ladders of this site and were left out (one search, one page): ' + excluded.slice(0, 6).map(x => '"' + x.keyword + '" (ladder "' + x.head + '")').join(', ') + (excluded.length > 6 ? ' …' : '') + '.');
+if (offTopic.length) notes.push(offTopic.length + ' keyword(s) were left out because they are not on this ladder\'s topic ("' + head + '"): ' + offTopic.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason.replace(/^it is not on this ladder's topic: /, '') + ')').join(', ') + (offTopic.length > 6 ? ' and ' + (offTopic.length - 6) + ' more' : '') + '.');
+if (excluded.length) notes.push(excluded.length + ' keyword(s) already belong to other ladders of this site and were left out (one search, one page): ' + excluded.slice(0, 6).map(x => '"' + x.keyword + '" (ladder "' + x.head + '")').join(', ') + (excluded.length > 6 ? ' and ' + (excluded.length - 6) + ' more' : '') + '.');
 // F-A1: one keyword, one page; the limits; and the keywords whose results pages sell what this business does not
 if (planned && (one_page.moved.length || one_page.left_out.length)) notes.push('One keyword, one page: '
   + [...one_page.moved.map(m => '"' + m.keyword + '" moved from its ' + m.from + ' to ' + m.to + ' (' + m.why + ')'),
      ...one_page.left_out.slice(0, 8).map(m => '"' + m.keyword + '" is not a supporting keyword of the ' + (m.page === 'main page' ? 'main page' : 'page "' + m.page + '"') + ': ' + m.why)].join('; ')
-  + (one_page.left_out.length > 8 ? ' …' : '') + '.');
+  + (one_page.left_out.length > 8 ? ' and ' + (one_page.left_out.length - 8) + ' more' : '') + '.');
 if (planned && top.supporting && top.supporting.length) notes.push('The main page\'s supporting keywords are grouped by ' + top.grouped_by + ': ' + top.supporting_basis.map(k => '"' + k.keyword + '"' + (k.shared_urls != null ? ' (' + k.shared_urls + ' of ' + k.of + ')' : ' (not compared)')).join(', ') + '.');
 for (const r of rungs) for (const pg of (r.pages || [])) if (pg.page_type_note) notes.push(pg.page_type_note + '.');
-if (notSold.length) notes.push(notSold.length + ' keyword(s) were left out because the pages Google ranks for them offer something this business does not: ' + notSold.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason.replace(/\.$/, '') + ')').join(', ') + (notSold.length > 6 ? ' …' : '') + '.');
+if (notSold.length) notes.push(notSold.length + ' keyword(s) were left out because the pages Google ranks for them offer something this business does not: ' + notSold.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason.replace(/\.$/, '') + ')').join(', ') + (notSold.length > 6 ? ' and ' + (notSold.length - 6) + ' more' : '') + '.');
 if (planned) notes.push(limits.text);
-if (headTakenAsPage) notes.push('The main keyword is also planned as a page of the ladder "' + headTakenAsPage.head + '" (' + headTakenAsPage.ladder_id + '): publish only one page for it.');
 if (plan.stretch && planned) notes.push('Very hard for this site today: consider one of the alternatives first (' + alternatives.join(', ') + ').');
 const order_text = !planned ? 'no pages' : plan_type === 'direct' ? 'main page first, then the supporting pages that link to it' : !rungPages.length ? 'the main page only for now (no supporting keywords in the data), written first' : plan_type === 'short' ? 'supporting pages first, then the main page once half of them are live' : 'rung by rung from the easiest pages, the main page last';
 const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume, kd: top.kd, cpc: top.cpc, intent: top.intent, your_position: top.your_position },
@@ -869,6 +917,8 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   topic_authority,   // B2-1: what this site already wins on THIS topic, what it already has written about it, and which reach the plan used
   serp_clusters: SERP_CL,   // B2-4: the results pages this run read, the groups they made, what could not be compared and what it cost
   serp_cluster_rungs: clusterRungs.slice(0, 12), serp_diversity,   // B2-5: how many different sites own the destination's results page, and the stated adjustment
+  overlaps: [...(dupHead ? [{ keyword: head, ladder_id: dupHead.ladder_id, ladder: dupHead.head, their_keyword: dupHead.head, by: dupHead.match.by, shared: dupHead.match.shared ?? null, action: 'refused', why: sameWhyLP(dupHead.match, head, dupHead.head) }] : []),
+    ...(headTakenAsPage ? [{ keyword: head, ladder_id: headTakenAsPage.ladder_id, ladder: headTakenAsPage.head, their_keyword: headTakenAsPage.keyword, by: headTakenAsPage.match.by, shared: headTakenAsPage.match.shared ?? null, action: 'refused', why: sameWhyLP(headTakenAsPage.match, head, headTakenAsPage.keyword) }] : []), ...overlaps].slice(0, 40),   // KWL-LAD D14
   excluded_keywords: excluded.slice(0, 40), topic_radius, head_radius, off_topic_keywords: offTopic.slice(0, 20),   // R23: what the topic radius left out, with the reason   // G32: shown with the plan, never enforced on it
   words: { main: top.target_words || 0, rung: rungWords.words, main_source: top.target_words_source, rung_source: rungWords.source },   // R22: where each page's length target came from
   data_check: { pool_size: poolSize, minimum_pool: LADDER_MIN_POOL, head_measured: headMeasured, serp_checked: !serpOut, serp_error: serpOut, enough: !dataRefused },   // R23
