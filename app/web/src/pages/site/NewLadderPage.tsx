@@ -7,6 +7,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Activity, ArrowLeft, ArrowRight, Building2, CalendarClock, CheckCircle2, ClipboardList, Coins, Hand, ListOrdered, PenSquare, Play, Rocket, Route, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, TrendingUp, Wand2 } from 'lucide-react';
 import {
+  checkEvidenceLines,
   chooseForMe,
   COUNTRIES,
   GOALS,
@@ -424,8 +425,8 @@ function CheckPanel({ initialKeyword, initialCountry, ladders, onChoose }: { ini
         <p className="mt-3 flex items-start gap-1.5 text-[13px] leading-snug text-ink-3">
           <Coins className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <span>
-            A check uses <span className="font-medium text-ink-2">about {PRICES.check()}</span> from your company's balance and takes up to 20 seconds. A keyword you checked in the last 7 days is shown again for
-            free.
+            A check uses <span className="font-medium text-ink-2">about {PRICES.check()}</span> from your company's balance and takes up to 20 seconds. A keyword you checked in the last few hours is shown again for
+            free, unless our rules or your website's settings changed since.
           </span>
         </p>
       </Card>
@@ -496,6 +497,12 @@ function CheckResult({ check, ladders, onChoose, onCheck }: { check: KeywordChec
             {check.cached ? `Checked on ${fmtDate(check.createdAt)}: shown again for free.` : `Checked just now (${formatCredits(check.credits)}).`}
             {r.reach != null && ` Your website already wins searches up to difficulty ${r.reach}.`}
             {r.fit === 2 ? ' On your topic.' : r.fit === 1 ? ' Related to your business.' : r.fit == null ? ' The topic check was not available this time.' : ''}
+            {/* KW-APP (2026-10-21, live run D15): which page of yours the check matched, and a results page reused from earlier today */}
+            {checkEvidenceLines(r).map((line) => (
+              <span key={line} className="mt-1 block">
+                {line}
+              </span>
+            ))}
           </p>
         }
       />
@@ -572,10 +579,11 @@ function ReviewStep({
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
   const admin = can('admin');
-  const cost = runCost('ladder', { pagesNow: choices.pagesNow });   // the engine's calibrated figure, as the server quotes it
-  const notices = usePipelineNotices('ladder', site, { keyword: chosen.keyword }, cost);
   const automation = data?.automation ?? DEFAULT_AUTOMATION;
   const mode = choices.mode ?? automation.defaultMode;
+  // the engine's calibrated figure, as the server quotes it; KW-APP D8: a Manual ladder writes nothing at start, so it is the plan alone
+  const cost = runCost('ladder', { pagesNow: choices.pagesNow, ladderMode: mode });
+  const notices = usePipelineNotices('ladder', site, { keyword: chosen.keyword }, cost);
   const cards = data?.ladderCards ?? [];
   const active = cards.filter((c) => c.mode === 'auto' && !['paused', 'won', 'queued'].includes(c.status) && c.counts.planned > 0).length;
   // credits (app/docs/CREDITS.md): the quote against what on-demand analyses may use now (only when the company is metered)
@@ -712,7 +720,7 @@ function ReviewStep({
                 selected={choices.pagesNow === n}
                 onSelect={() => setChoices({ ...choices, pagesNow: n })}
                 title={`${n} page${n === 1 ? '' : 's'}`}
-                badge={<Badge>{quoteLabel(runCost('ladder', { pagesNow: n }))} in total</Badge>}
+                badge={<Badge>{quoteLabel(runCost('ladder', { pagesNow: n, ladderMode: mode }))} in total</Badge>}
                 description={n === 1 ? (plan === 'direct' ? 'The main page first' : 'Start small: publish it, then continue') : n === 2 ? 'Two pages in parallel' : 'A fast start'}
               />
             ))}
@@ -792,7 +800,7 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
   const [error, setError] = useState<unknown>(null);
   const automation = data?.automation ?? DEFAULT_AUTOMATION;
   const mode = choices.mode ?? automation.defaultMode;
-  const cost = runCost('ladder', { pagesNow: choices.pagesNow });
+  const cost = runCost('ladder', { pagesNow: choices.pagesNow, ladderMode: mode });
   const admin = can('admin');
   // only what differs from what the engine does anyway (the website's default mode, after the current ladders); admins only
   const prefs = admin ? { ...(choices.mode && choices.mode !== automation.defaultMode ? { mode: choices.mode } : {}), ...(choices.first ? { first: true } : {}) } : {};

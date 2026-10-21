@@ -279,8 +279,9 @@ export const ladderInput = z.object({
   /** the mode the ladder starts in: a Manual ladder writes nothing at start (its pages wait for an OK); none = the website's default */
   ladderMode: z.enum(['auto', 'manual'], { message: 'Choose Auto or Manual' }).optional(),
   /** P1 (2026-10-20): set by the SERVER only (any value a caller sends is replaced): the engine will hold this ladder's first page because
-   * the website's author profile or business facts are missing, so the run is quoted for the plan alone */
-  pagesHeld: z.enum(['profile']).optional(),
+   * the website's author profile or business facts are missing, so the run is quoted for the plan alone. KW-APP D8 (2026-10-21): 'manual'
+   * when the ladder starts Manual (asked for, or the website's default): the engine writes nothing at start, so nothing is quoted for pages */
+  pagesHeld: z.enum(['profile', 'manual']).optional(),
   emailCopy,
 });
 

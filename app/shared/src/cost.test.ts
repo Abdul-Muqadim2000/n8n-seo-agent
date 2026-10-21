@@ -56,6 +56,10 @@ describe('the figures are the engine\'s calibrated ones, not the 2026-10-02 tabl
 
   it('a ladder reserves the plan and one content run per page asked for now', () => {
     expect(costKeys('ladder', { pagesNow: 3 })).toEqual(['ladder', 'content', 'content', 'content']);
+    // KW-APP D8 (2026-10-21): a Manual ladder writes nothing at start, so its quote is the plan alone (it was quoted 99, charged 23.73)
+    expect(costKeys('ladder', { pagesNow: 3, ladderMode: 'manual' })).toEqual(['ladder']);
+    expect(costKeys('ladder', { pagesNow: 2, pagesHeld: 'manual' })).toEqual(['ladder']);
+    expect(costKeys('ladder', { pagesNow: 2, ladderMode: 'auto' })).toEqual(['ladder', 'content', 'content']);
     expect(estimateRunCost('ladder', { pagesNow: 3 })).toBeGreaterThan(estimateRunCost('ladder', { pagesNow: 1 }));
   });
 

@@ -548,7 +548,7 @@ export const useRecommendedKeywords = (orgId: string, siteId: string, opts?: { e
     refetchInterval: opts?.poll ? (q) => (q.state.data?.status === 'running' ? 10_000 : false) : undefined,
   });
 
-/** Checks one keyword for the website (paid, about $0.05; the same keyword of the last 7 days is answered free). */
+/** Checks one keyword for the website (paid, about $0.05; the same keyword checked in the last few hours by the same engine rules is answered free). */
 export function useAssessKeyword(orgId: string, siteId: string) {
   const qc = useQueryClient();
   return useMutation({

@@ -18,9 +18,54 @@ const analysis = parseAgentJson($input.first().json.output);
 // sections"), which picked the band by accident; the fixed option decides it.
 const pt = PT.of(prev.page_type).toLowerCase();
 const isGuide = /blog|guide|article/.test(pt);
-const lo = isGuide ? 1200 : 900, hi = isGuide ? 3000 : 2400;
+// v4.4 page types (hub pages longer, case studies and local pages shorter). C8 (2026-10-22): these bands used to be a build patch that the
+// G33 re-read of this file silently dropped, so hub / case-study / local pages fell back to the service band; they live here now.
+const isHub = /pillar|hub/.test(pt) || Number(prev.ladder_rung) === 4, isShort = /case stud|local/.test(pt);
+const lo = isHub ? 1800 : isShort ? 800 : isGuide ? 1200 : 900, hi = isHub ? 3500 : isShort ? 1800 : isGuide ? 3000 : 2400;
 const rec = Number(analysis.recommended_word_count) || 1400;
 analysis.recommended_word_count = Math.min(hi, Math.max(lo, Math.round(rec / 100) * 100));
+// ---- C8 (2026-10-22, scorecard 2026-10-17 §3.3): the length is a BAND read off the ranking pages of the kind being written ----
+// The target used to be one figure from the competitor analysis inside the page-type clamp, whatever kind of page that figure came from
+// (exec 42 measured a service page against a certification course and a list). The leaders give the range of the ranking pages of the
+// same kind. Here: the word counts of the pages this run read that are of the kind being written (CVG.kindOf, the same rule as the
+// coverage target), median and interquartile range, kept inside the page-type band; with fewer than 3 such pages, the page-type band,
+// and the band says so. The target the brief plans to is the median; Content QA judges the draft against `low` / `high`.
+const LEN_MIN_PAGES = 3;
+const r100 = (n) => Math.round(n / 100) * 100;
+const fmtN = (n) => Number(n).toLocaleString('en-US');
+const lenKind = CVG.kindFor(PT.of(prev.page_type));
+const LEN_KIND_NAME = { service: ['service page', 'service pages'], guide: ['guide or article', 'guides or articles'] };
+const lenListOk = lenKind === 'guide' && /\b(?:best|top|companies|firms|agencies|providers|vendors|tools|alternatives|list)\b/i.test(String(prev.keyword || ''));
+const lenPages = (prev.competitors || []).filter(c => c && Number(c.word_count) >= 150)
+  .map(c => ({ c, kind: CVG.kindOf(c, prev.keyword) }))
+  .filter(x => x.kind === lenKind || (lenListOk && x.kind === 'list'))
+  .map(x => ({ domain: String(x.c.domain || ''), url: String(x.c.url || ''), rank: Number(x.c.rank) || null, words: Math.round(Number(x.c.word_count)), kind: x.kind }));
+const lenQ = (sorted, q) => { const at = (sorted.length - 1) * q; const a = Math.floor(at), b = Math.ceil(at); return sorted[a] + (sorted[b] - sorted[a]) * (at - a); };
+const length_band = (() => {
+  const kindName = LEN_KIND_NAME[lenKind] || LEN_KIND_NAME.service;
+  const typeBand = { low: lo, high: hi };
+  const typeText = fmtN(lo) + '-' + fmtN(hi) + ' words';
+  if (lenPages.length < LEN_MIN_PAGES) {
+    const target = analysis.recommended_word_count;
+    return { ok: false, source: 'page_type', low: lo, high: hi, median: null, p25: null, p75: null, target_word_count: target, sample: lenPages.length,
+      kind: lenKind, page_type_band: typeBand, clamped: false, pages: lenPages,
+      basis: (lenPages.length ? 'only ' + lenPages.length + ' of the pages ranking for this run ' + (lenPages.length === 1 ? 'is a ' + kindName[0] : 'are ' + kindName[1]) : 'none of the pages ranking for this run that could be read is a ' + kindName[0])
+        + ' (' + LEN_MIN_PAGES + ' are needed for a range), so the usual length for this kind of page is used: ' + typeText };
+  }
+  const w = lenPages.map(p => p.words).sort((a, b) => a - b);
+  const median = Math.round(lenQ(w, 0.5)), p25 = Math.round(lenQ(w, 0.25)), p75 = Math.round(lenQ(w, 0.75));
+  let low = Math.min(hi, Math.max(lo, r100(p25))), high = Math.min(hi, Math.max(lo, r100(p75)));
+  // a band narrower than 200 words (the ranking pages agree closely, or all sit outside the page-type band) is widened inside the clamp
+  if (high - low < 200) { const mid = Math.min(hi, Math.max(lo, r100(median))); low = Math.max(lo, mid - 100); high = Math.min(hi, low + 200); low = Math.max(lo, high - 200); }
+  const target = Math.min(high, Math.max(low, r100(median)));
+  const clamped = low !== r100(p25) || high !== r100(p75);
+  return { ok: true, source: 'ranking_pages', low, high, median, p25, p75, target_word_count: target, sample: lenPages.length, kind: lenKind, page_type_band: typeBand, clamped,
+    pages: lenPages.sort((a, b) => (a.rank || 99) - (b.rank || 99)).slice(0, 10),
+    basis: 'pages ranking for this run ' + fmtN(low) + '-' + fmtN(high) + ' words (' + lenPages.length + ' ' + kindName[1] + ', middle half ' + fmtN(p25) + '-' + fmtN(p75) + ', median ' + fmtN(median) + ')'
+      + (clamped ? '; kept inside the usual ' + typeText + ' for this kind of page' : '') };
+})();
+analysis.recommended_word_count = length_band.target_word_count;
+analysis.length_band = length_band;
 
 // ---- the coverage target: the BEST competitor, not the average (FIX_PLAN G33, 2026-10-13) ----
 // Until now the brief carried the shared terms and the content score gave 25 points for using them, with no statement of how much of that
@@ -86,6 +131,7 @@ return [{
     ...prev,
     competitor_digest: undefined,
     competitor_analysis: analysis,
+    length_band,
     coverage_target,
     coverage_unavailable,
     coverage_digest_base,

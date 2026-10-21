@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { baseRateText, chanceLabel, chanceText, chooseForMe, FIT_UNKNOWN_NOTE, forYouLabel, ladderOverlapsOf, PLAN_CHANCE, planChance, REACH_BASE_RATE, reachMeasured, recommendedFromStrategy, SERVICE_OUT_NOTE, toAssessment, toChance, UNMEASURED_CHANCE, type LadderKeywords } from './keywords';
+import { baseRateText, CAREER_NOTE, chanceLabel, checkEvidenceLines, chanceText, chooseForMe, FIT_UNKNOWN_NOTE, forYouLabel, ladderOverlapsOf, PLAN_CHANCE, planChance, REACH_BASE_RATE, reachMeasured, recommendedFromStrategy, SERVICE_OUT_NOTE, toAssessment, toChance, UNMEASURED_CHANCE, type LadderKeywords } from './keywords';
 
 // FIX_PLAN G3 (2026-10-11): the 2025 base rate and the chance band per plan, the same words as n8n's _reach.js (reachChance / reachBaseRateText /
 // reachChanceText); the band is marked uncalibrated everywhere until the system has measured its own ladders.
@@ -78,16 +78,16 @@ describe('recommended keywords from the keyword strategy', () => {
     ],
   };
 
-  it('one card per search, within reach first, the discovery\'s order next, overlapping ladders last', () => {
+  it('one card per search, in the discovery\'s own order (its start-with pick first), overlapping ladders last', () => {
     const list = recommendedFromStrategy(payload, ladders);
     expect(list.map((k) => [k.keyword, k.difficultyForYou, k.source, k.overlaps.length])).toEqual([
-      ['odoo partner uae', 'easy', 'priority', 0],
-      ['odoo pricing uae', 'easy', 'quick_win', 0],
-      ['erp implementation cost uae', 'reachable', 'priority', 0],
-      ['odoo implementation uae', 'reachable', 'content_plan', 0],
       ['erp software dubai', 'hard', 'start_with', 0],
-      ['peppol uae', 'easy', 'quick_win', 1],
+      ['odoo partner uae', 'easy', 'priority', 0],
+      ['erp implementation cost uae', 'reachable', 'priority', 0],
+      ['odoo pricing uae', 'easy', 'quick_win', 0],
+      ['odoo implementation uae', 'reachable', 'content_plan', 0],
       ['uae e-invoicing', 'reachable', 'priority', 1],
+      ['peppol uae', 'easy', 'quick_win', 1],
     ]);
     const start = list.find((k) => k.source === 'start_with')!;
     expect(start.why).toBe('High buyer intent with 0.12 CPC ratio');
@@ -165,9 +165,54 @@ describe('recommended keywords from the keyword strategy', () => {
   it('a report from before service fit (no service_fit): every card is not judged and the order is exactly as before', () => {
     const list = recommendedFromStrategy(payload, ladders);
     expect(list.every((k) => k.serviceFit === 'unknown' && k.note === '')).toBe(true);
-    expect(list.map((k) => k.keyword)).toEqual(['odoo partner uae', 'odoo pricing uae', 'erp implementation cost uae', 'odoo implementation uae', 'erp software dubai', 'peppol uae', 'uae e-invoicing']);
+    expect(list.map((k) => k.keyword)).toEqual(['erp software dubai', 'odoo partner uae', 'erp implementation cost uae', 'odoo pricing uae', 'odoo implementation uae', 'uae e-invoicing', 'peppol uae']);
     // anything that is not 'in' or 'out' is read as not judged
     expect(recommendedFromStrategy({ priority: [kw('a b', { service_fit: 'maybe' }), kw('c d', { service_fit: null })] }, []).map((k) => k.serviceFit)).toEqual(['unknown', 'unknown']);
+  });
+
+  // KW-APP D3 (2026-10-21, live run on techand.ai, exec 111): the engine put its start-with pick first and a job search last with its reason;
+  // the app re-ranked by difficulty, so the pick became card #5 and the job search card #3 with no note.
+  it('keeps the engine\'s order: its start-with pick first, a job or training search last with its note, never chosen for the client', () => {
+    const career = 'it is part of what you sell; people searching it are mostly looking for work or training, not for a provider: job, salary or course pages rank for it (bayt.com, naukri.com); you are already at #11';
+    const live = {
+      start_with: kw('financial reporting automation', { ...reachable, service_fit: 'in' }),
+      priority: [
+        kw('dynamics 365 finance and operations pricing dubai', { ...easy, service_fit: 'in' }),
+        kw('dynamics 365 finance vat compliance uae', { ...reachable, service_fit: 'in' }),
+        kw('financial reporting automation', { ...reachable, service_fit: 'in' }),
+        kw('dynamics 365 finance implementation', { ...reachable, service_fit: 'in' }),
+        kw('artificial intelligence consultancy', { ...easy, service_fit: 'out' }),
+        kw('microsoft dynamics ax dubai', { ...easy, service_fit: 'in', why: career }),
+      ],
+    };
+    const list = recommendedFromStrategy(live, []);
+    expect(list.map((k) => k.keyword)).toEqual([
+      'financial reporting automation',
+      'dynamics 365 finance and operations pricing dubai',
+      'dynamics 365 finance vat compliance uae',
+      'dynamics 365 finance implementation',
+      'artificial intelligence consultancy',
+      'microsoft dynamics ax dubai',
+    ]);
+    const ax = list.at(-1)!;
+    expect(ax.career).toBe(true);
+    expect(ax.note).toBe('People searching it are mostly looking for work or training, not for a provider: job, salary or course pages rank for it (bayt.com, naukri.com)');
+    expect(list.slice(0, -1).every((k) => k.career === false)).toBe(true);
+    // the engine's own flag, when the callback carries it, wins over reading `why`
+    const flagged = recommendedFromStrategy({ priority: [kw('sap jobs dubai', { ...easy, career: { detail: 'mostly job seekers (bayt.com)' } }), kw('sap partner uae', reachable)] }, []);
+    expect(flagged.map((k) => [k.keyword, k.career, k.note])).toEqual([
+      ['sap partner uae', false, ''],
+      ['sap jobs dubai', true, 'Mostly job seekers (bayt.com)'],
+    ]);
+    expect(recommendedFromStrategy({ priority: [kw('sap jobs dubai', { ...easy, career: true })] }, [])[0].note).toBe(CAREER_NOTE);
+    // KWL-RES (2026-10-22): the engine sends career as a boolean with career_note; an explicit false is final, even when `why` reads like a job search
+    expect(recommendedFromStrategy({ priority: [kw('sap jobs dubai', { ...easy, career: true, career_note: 'job and course pages rank for it (bayt.com)' })] }, [])[0].note)
+      .toBe('Job and course pages rank for it (bayt.com)');
+    expect(recommendedFromStrategy({ priority: [kw('microsoft dynamics ax dubai', { ...easy, service_fit: 'in', why: career, career: false, career_note: null })] }, [])[0].career).toBe(false);
+    // "Choose for me" takes the engine's pick and never a job search, however easy
+    expect(chooseForMe(list)?.keyword).toBe('financial reporting automation');
+    expect(chooseForMe(list.filter((k) => k.career))).toBeNull();
+    expect(/[\u2014\u2013\u2026\u201c\u201d]/.test(CAREER_NOTE)).toBe(false);
   });
 
   it('caps the list and ignores junk', () => {
@@ -242,5 +287,34 @@ describe('schemas', () => {
     expect(siteAutomationFormSchema.parse({ defaultMode: 'auto', opportunities: 'auto', autoStartLadders: true, maxActiveLadders: 2, maxWaiting: 3 }).autoStartLadders).toBe(true);
     expect(siteAutomationSchema.parse({ autoStartLadders: false })).toEqual({ autoStartLadders: false });
     expect(siteAutomationSchema.safeParse({ autoStartLadders: 'yes' }).success).toBe(false);
+  });
+});
+
+// KW-APP D15 (2026-10-21, live run): the engine sent which page it matched and that it reused today's results page; the app showed neither.
+describe('what a keyword check matched and how it read Google', () => {
+  it('maps the existing page and the reading, and says both in the customer\'s words', () => {
+    const live = toAssessment({
+      keyword: 'ai consulting dubai',
+      fit: 2,
+      existing: { how: 'a page of yours', matched_by: 'title', page_url: 'https://www.techand.ai/whatwedo/ai-automation', page_title: 'AI & Automation | What We Do | Tech&', page_status: 'live', ladder_id: null },
+      serp: { read: true, read_today: true, read_note: 'read earlier today at 18:37 UTC', checked_at: '2026-10-21 18:37:33 +00:00' },
+    });
+    expect(live.existingPage).toEqual({ url: 'https://www.techand.ai/whatwedo/ai-automation', title: 'AI & Automation | What We Do | Tech&', matchedBy: 'title', status: 'live', ladder: false, evidence: '' });
+    expect(live.reading).toEqual({ readToday: true, note: 'read earlier today at 18:37 UTC', checkedAt: '2026-10-21 18:37:33 +00:00' });
+    expect(checkEvidenceLines(live)).toEqual([
+      'Matched to your page https://www.techand.ai/whatwedo/ai-automation ("AI & Automation | What We Do | Tech&"), by its title.',
+      "Google's results page read earlier today at 18:37 UTC: that reading was used again, at no extra cost.",
+    ]);
+    // a ladder's page with the engine's evidence; a fresh reading says nothing
+    const ladder = toAssessment({
+      existing: { how: 'the same keyword', page_url: 'https://www.techand.ai/ai-consultant/', ladder_id: 'lad_x', page_status: 'not_ready', evidence: 'its title and H1 name the search' },
+      serp: { read: true, read_today: false, read_note: '' },
+    });
+    expect(checkEvidenceLines(ladder)).toEqual(['One of your keyword ladders already holds this search; its page: https://www.techand.ai/ai-consultant/. Its title and H1 name the search. Its status: not ready.']);
+    // nothing matched, nothing read: no lines, and an older answer without these blocks still maps
+    const none = toAssessment({ keyword: 'x y', existing: { page_url: null }, serp: { read: false } });
+    expect([none.existingPage, none.reading, checkEvidenceLines(none)]).toEqual([null, null, []]);
+    expect(checkEvidenceLines(toAssessment({}))).toEqual([]);
+    for (const line of checkEvidenceLines(live)) expect(/[\u2014\u2013\u2026\u201c\u201d]|SERP|lad_/.test(line)).toBe(false);
   });
 });

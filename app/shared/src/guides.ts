@@ -2121,7 +2121,7 @@ export const GUIDES = [
     steps: [
       {
         title: 'Type your own idea, or take a suggestion',
-        body: 'Under **What would a customer type into Google**, type what a buyer would search to find a business like yours, and press **Check it**. Each check takes 5 to 20 seconds and uses {{checkCredits}} (free if the same keyword was checked in the last 7 days). Or pick from **Suggest keywords for me**: our research of your website and market, judged against what you sell.',
+        body: 'Under **What would a customer type into Google**, type what a buyer would search to find a business like yours, and press **Check it**. Each check takes 5 to 20 seconds and uses {{checkCredits}} (free if the same keyword was checked in the last few hours). Or pick from **Suggest keywords for me**: our research of your website and market, judged against what you sell.',
         note: 'Suggestions that do not match the services you listed come last, with a note. If a good one is missing, add the service under **What do you sell?** in the business details.',
       },
       {
