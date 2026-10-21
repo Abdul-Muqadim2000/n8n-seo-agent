@@ -3,6 +3,7 @@
 /*__LINEAGE__*/
 /*__KW_INPUTS__*/
 /*__FIT_GATE__*/
+/*__GONE__*/
 // Final keyword strategy: merges AI search demand and the live SERP checks into the ranked keyword set and renders the
 // "Keyword Strategy" report. Also exposes keyword_suggestions for the downstream file/email/content steps.
 // v4.8: with a website the report shows each keyword's difficulty for this site and plan ("Easy for your site · Direct plan · 2-4 months");
@@ -47,6 +48,7 @@ const liveFailures = [];
 // keywords and the ones the gate refused as job searches); a career search says so in its reason and goes to the end of the list.
 const careerRelated = [...(ks.keywords || []).map(k => k && k.keyword), ...(ks.refused || []).map(r => r && r.keyword)].filter(Boolean);
 const careerTopics = [...((ks.service_fit || {}).declared_services || []), ...(base.services || []), ...(base.seeds || [])].map(x => String(x || '').trim()).filter(Boolean);
+const goneKeysB = new Set((ks.gone_pages || []).map(u => GONE.keyOf(u)));   // KWL-RES D1: the addresses Rank Keywords knows are gone
 const liveUrlsBy = new Map();   // G8 / K7: the full top 10 of every keyword this run checked live
 prio.forEach((p, i) => {
   const err = serpErr(serps[i]);
@@ -58,9 +60,13 @@ prio.forEach((p, i) => {
   liveUrlsBy.set(String(p.keyword || '').toLowerCase(), organic.filter(o => !(Number(o.rank_group) > 10)).map(o => o.url).filter(Boolean));
   const k = ks.priority.find(x => x.keyword === p.keyword);
   if (!k) return;
+  // KWL-RES D1: our result on Google is an address the site model knows is gone (404 / 410): it is not a position the site holds, so it
+  // never makes the keyword Easy; the card says the page no longer opens and what to do instead
+  const mineGone = mine && goneKeysB.has(GONE.keyOf(mine.url));
+  if (mineGone && !k.gone_ranking) k.gone_ranking = { url: mine.url, path: GONE.pathOf(mine.url), position: mine.rank_group ?? null, source: 'live check' };
   // B1-5 / K4 (2026-10-15): the ten pages Google chose are the evidence for what KIND of page wins this search; until today only
   // their domains were kept and the page type came from the AI label alone.
-  k.live = { top_domains: [...new Set(organic.map(o => normD(o.domain)).filter(Boolean))].slice(0, 5), your_position: mine ? mine.rank_group : null, checked_at: serpSeenAt(serps[i]),
+  k.live = { top_domains: [...new Set(organic.map(o => normD(o.domain)).filter(Boolean))].slice(0, 5), your_position: mine && !mineGone ? mine.rank_group : null, ...(mineGone ? { gone_position: mine.rank_group ?? null, gone_url: mine.url } : {}), checked_at: serpSeenAt(serps[i]),
     page_types: KWI.serpPageTypes(organic.filter(o => !(Number(o.rank_group) > 10)).map(o => ({ url: o.url, title: o.title })), { page_type: k.page_type }),
     features: [...new Set(items.map(x => x.type))].filter(t => t !== 'organic'), ai_overview: items.some(x => x.type === 'ai_overview'), paa: (items.find(x => x.type === 'people_also_ask') || { items: [] }).items.slice(0, 4).map(q => q.title || q.question).filter(Boolean) };
   const car = fitCareer(k.keyword, { pages: organic.filter(o => !(Number(o.rank_group) > 10)).map(o => ({ domain: o.domain, url: o.url, title: o.title })),
@@ -95,6 +101,7 @@ const aioObs = (k) => {
   const o = aioObserved([live]);
   return { live: live.seen, stored, count: o.count, seen: o.seen, text: o.text + (hist ? '; ' + hist : '') };
 };
+const goneWhy = (g) => 'the page that ranked for this' + (g.position ? ' (#' + Math.round(Number(g.position)) + ')' : '') + ', ' + (g.path || g.url) + ', no longer opens: redirect it to a live page, then this keyword has a head start';
 const why = (k) => {
   const bits = [];
   if (k.service_fit === 'in') bits.push('it is part of what you sell');   // F-REH: the client's own services first, in the words of the card
@@ -109,6 +116,7 @@ const why = (k) => {
   if (ao.live === true) bits.push('an AI Overview was seen on ' + obsDay(k.live.checked_at) + ' (they vary between searches), so write a quotable answer block');
   else if (ao.live == null && ao.stored === true) bits.push('the stored results page showed an AI Overview (historical, undated, not checked live)');
   if (k.live && k.live.your_position) bits.push('you are already at #' + k.live.your_position);
+  if (k.gone_ranking) bits.push(goneWhy(k.gone_ranking));   // KWL-RES D1
   // K4: what Google ranks settles the page type; a disagreement with the plan is said out loud, never silently overridden
   if (k.live && k.live.page_types && k.live.page_types.read) bits.push(k.live.page_types.text.replace(/\.$/, ''));
   // G8 / K2: say when the traffic number is the site's own measurement rather than a model, and K7: when one page can serve more searches
@@ -132,6 +140,9 @@ if (RR) ks.priority.forEach(k => { const p = k.live && k.live.your_position; if 
   const diff = difficultyForYou(k.kd, rUsed, { position: p }); const plan = reachPlan(diff, reachStrong(RR, p), reachMeasured(RR, p));
   Object.assign(k, { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan), reach_used: rUsed }); } });
 
+// KWL-RES (D12 in the research): a keyword that is not a fit carries no plan and no timeline, only why it is not one
+ks.priority.forEach(k => { const nf = k.career ? 'people search it for work or training' : k.service_fit === 'out' ? 'not one of the services you listed' : '';
+  if (nf) Object.assign(k, { plan_type: null, months: null, for_you_label: 'Not a fit: ' + nf }); });
 // ---- compatibility object for the file, email and content-pipeline steps ----
 let pipeline = ks.pipeline_keyword ? withAi(ks.pipeline_keyword) : null;
 if (pipeline) { const enriched = ks.priority.find(k => k.keyword === pipeline.keyword); pipeline = enriched ? { ...enriched, ...(pipeline.trend_note ? { trend_note: pipeline.trend_note } : {}), ...(pipeline.ladder_note ? { ladder_note: pipeline.ladder_note } : {}), ...(pipeline.career_note ? { career_note: pipeline.career_note } : {}) } : { ...pipeline, why: why(pipeline) }; ks.pipeline_keyword = pipeline; }   // R51: the falling label survives the enrichment
@@ -175,7 +186,11 @@ const topicReachTxt = !RR ? '' : (RR.topics_measured
   : ' No topic below has the ' + REACH_CFG.min_top10 + ' top-10 keywords of its own that measuring a topic needs, so every "for your site" label uses the site-wide number — treat it as the optimistic case for a topic you have no record on.');
 const reachLine = RR ? 'Your site\'s reach: difficulty ' + RR.reach + ' (' + (RR.method === 'percentile' ? '75% of the ' + RR.sample + ' keywords you rank top 10 for are at or below it' : 'from ' + num(RR.top10) + ' keyword(s) in the top 10') + (RR.cached ? ', measured ' + String(RR.cached_at || '').slice(0, 10) : '') + ').' + measuredOnTxt + topicReachTxt + ' "For your site": easy up to reach + 5 or already top 20, reachable up to + 20, hard up to + 40. Months and the chance band per plan are estimates (the chance is uncalibrated until this system has measured its own ladders). ' + reachBaseRateText() : '';
 // 2026-10-12 (FIX_PLAN D11): a keyword a live page of the site already answers is named with that page, so nobody writes a second one
-const coveredLine = (ks.covered || []).length ? (ks.covered.length === 1 ? 'One keyword below is' : ks.covered.length + ' keywords below are') + ' already answered by a page you have: ' + ks.covered.slice(0, 5).map(c => '"' + esc(c.keyword) + '" \u2192 <a href="' + esc(c.url) + '">' + esc(c.url) + '</a>').join(', ') + '. Refresh those pages instead of writing new ones \u2014 two pages for one search split the signals and neither ranks.' : '';
+const coveredLine = (ks.covered || []).length ? (ks.covered.length === 1 ? 'One keyword below is' : ks.covered.length + ' keywords below are') + ' already answered by a page you have: ' + ks.covered.slice(0, 5).map(c => '"' + esc(c.keyword) + '" \u2192 <a href="' + esc(c.url) + '">' + esc(c.url) + '</a>').join(', ') + '. Refresh those pages instead of writing new ones: two pages for one search split the signals and neither ranks.' : '';
+// KWL-RES D1: keywords whose ranking page no longer opens are named, with what to do (never "refresh" a page that is gone)
+const goneLine = (ks.gone_ranked || []).length ? (ks.gone_ranked.length === 1 ? 'One keyword below was' : ks.gone_ranked.length + ' keywords below were') + ' ranked by a page that no longer opens (it answers "not found"): '
+  + ks.gone_ranked.slice(0, 5).map(c => '"' + esc(c.keyword) + '" (' + esc(c.path || c.url) + ')').join(', ') + (ks.gone_ranked.length > 5 ? ' and ' + (ks.gone_ranked.length - 5) + ' more' : '')
+  + '. Redirect each old address to the closest live page (or publish the page again); then these keywords have a head start.' : '';
 // 2026-10-12 (FIX_PLAN D20): a keyword one of the site's own keyword ladders already covers is named with that ladder, so the top pick never
 // competes with a ladder that is already running one search, one page.
 const ladderLine = (ks.ladder_covered || []).length ? (ks.ladder_covered.length === 1 ? 'One keyword below is' : ks.ladder_covered.length + ' keywords below are') + ' already covered by a keyword ladder of yours: ' + ks.ladder_covered.slice(0, 5).map(c => '"' + esc(c.keyword) + '" \u2192 ladder "' + esc(c.head_keyword) + '" (' + esc(c.how) + ', ' + (c.part === 'head' ? 'its main page' : 'rung ' + c.rung) + ', ' + esc(c.status || 'planned') + ')').join(', ') + '. Let that ladder finish \u2014 two pages for one search split the signals and neither ranks.' : '';
@@ -263,7 +278,7 @@ const lineageHtml = '<h2>Where these numbers come from</h2>'
   + lineage.map(l => '<tr><td>' + esc(l.figure) + '</td><td>' + esc(l.source_label) + '</td><td>' + esc(l.period || '—') + '</td><td>' + esc(l.sample || '—') + '</td><td>' + esc([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
   + '</table><p class="muted">A figure marked "' + esc(LN.BASIS.modelled) + '" is computed, not counted; "' + esc(LN.BASIS.estimated) + '" is the data provider\'s own estimate for a single keyword; "' + esc(LN.MISSING) + '" means the figure reached this report without its source and should be treated as unverified.</p>';
 
-const html = `
+const html0 = `
 <style>
   .w{font-family:Arial,sans-serif;max-width:900px;margin:0 auto;color:#1e293b;text-align:left;line-height:1.55;padding:24px 20px}
   h1{font-size:25px;margin:0 0 4px;color:#0f172a} h2{font-size:17px;color:#1e3a8a;margin:28px 0 8px;border-bottom:1px solid #e2e8f0;padding-bottom:4px} h3{font-size:14px;color:#334155;margin:16px 0 6px}
@@ -276,7 +291,7 @@ const html = `
 <div class="w">
   <h1>Keyword strategy${base.domain ? ' for ' + esc(base.domain) : ''}</h1>
   <p class="muted">${esc(base.country)} · goal: ${esc(goalText)} · ${num(ks.pool_size)} keywords researched from ${num(base.research && base.research.requests)} data pulls · ${num(ks.ai_reviewed)} screened for relevance by AI · ${num(ks.total_relevant)} relevant</p>
-  ${poolLine ? '<p class="muted"><b>' + esc(poolLine) + '</b></p>' : ''}${reachLine ? '<p class="muted">' + esc(reachLine) + '</p>' : ''}${refusedLine ? '<p class="muted">' + refusedLine + '</p>' : ''}${coveredLine ? '<p class="muted">' + coveredLine + '</p>' : ''}${(ks.title_gap && ks.title_gap.untitled) ? '<p class="muted">' + esc(ks.title_gap.note) + ': a page among them may already answer a search below.</p>' : ''}${ladderLine ? '<p class="muted">' + ladderLine + '</p>' : ''}
+  ${poolLine ? '<p class="muted"><b>' + esc(poolLine) + '</b></p>' : ''}${reachLine ? '<p class="muted">' + esc(reachLine) + '</p>' : ''}${refusedLine ? '<p class="muted">' + refusedLine + '</p>' : ''}${coveredLine ? '<p class="muted">' + coveredLine + '</p>' : ''}${goneLine ? '<p class="muted">' + goneLine + '</p>' : ''}${(ks.title_gap && ks.title_gap.untitled) ? '<p class="muted">' + esc(ks.title_gap.note) + ': a page among them may already answer a search below.</p>' : ''}${ladderLine ? '<p class="muted">' + ladderLine + '</p>' : ''}
 
   <div class="callout"><b>Where to start:</b> ${pipeline ? '"' + esc(pipeline.keyword) + '" — ' + num(pipeline.volume) + ' searches/mo, difficulty ' + kdLabel(pipeline.kd) + ', ' + esc(pipeline.intent) + ' intent, best page: ' + esc(pipeline.page_type) + '. ' + (pipeline.for_you_label ? esc(pipeline.for_you_label) + '. ' : '') + (pipeline.trend_note ? '<b>Searches ' + esc(pipeline.trend_note) + '.</b> ' : '') + (pipeline.ladder_note ? '<b>Note: ' + esc(pipeline.ladder_note) + '.</b> ' : '') + esc(pipeline.why) : 'Not enough data to pick a first keyword.'}
   ${now.length ? '<br><b>Build first:</b> ' + now.map(c => esc(c.topic) + ' (' + esc(c.page_type) + ', ' + num(c.total_volume) + '/mo across ' + c.keyword_count + ' keywords' + (c.ladder_near ? '; ' + esc(c.tier_note) : '') + ')').join(' · ') : ''}</div>
@@ -329,6 +344,11 @@ const html = `
   <p class="by">Prepared by ${esc(base.brand || 'Dev SEO')} · Search volumes, difficulty, CPC and SERP features from DataForSEO for ${esc(base.country)}.</p>
 </div>`;
 
+// KWL-RES (D13): the research document is read by the client: no dashes as punctuation, no ellipsis, no internal or vendor words. A dash
+// that stands for "no value" reads "n/a"; one between two clauses becomes a colon.
+const plainDoc = (h) => String(h).replace(/(^|[\s>(])\u2014(?=\s*(<|[,;.)]|$))/g, '$1n/a').replace(/\s+\u2014\s+/g, ': ').replace(/\u2014/g, '-').replace(/\u2026/g, '.')
+  .replace(/SERP features/g, 'Search features').replace(/\bSERPs?\b/g, 'results page').replace(/\bPAA\b/g, 'People also ask').replace(/\bDataForSEO\b/g, 'our search data provider');
+const html = plainDoc(html0);
 // Options for the form-only "Choose your keyword" step (the number prefix makes the pick unambiguous)
 const choice_options = ['Let the system choose for my goal', ...ks.priority.slice(0, 8).map((k, i) => (i + 1) + '. ' + k.keyword + ' · ' + num(k.volume) + ' searches/mo · difficulty ' + (k.kd == null ? '?' : k.kd) + ' · ' + cap(k.intent) + ' · ' + k.page_type + (k.for_you_label ? ' · ' + k.for_you_label : ''))];
 return [{ json: { ...base, keyword_strategy: ks, keyword_suggestions, result_html: html, lineage, choice_options } }];

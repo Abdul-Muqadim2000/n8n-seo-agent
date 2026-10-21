@@ -2136,6 +2136,7 @@ connect('Measure Reach?', 'Run Reach Requests', 0); connect('Measure Reach?', 'R
 connect('Reach (Discovery)', 'New Reach (Discovery)?'); connect('New Reach (Discovery)?', 'Reach Row (Discovery)', 0); connect('New Reach (Discovery)?', 'Research Requests', 1)
 connect('Reach Row (Discovery)', 'Save Reach (Discovery)'); connect('Save Reach (Discovery)', 'Research Requests')
 patch('Build Keyword File', "'Run Competitor Keywords', 'AI Demand'];", "'Run Competitor Keywords', 'AI Demand', 'Run Reach Requests'];")
+patch('Build Keyword File', "<title>Keyword Ideas — ${", "<title>Keyword ideas for ${")   # KWL-RES (2026-10-21 live keyword test D13): no dash as punctuation in the client's document title
 assert nodes['Run Reach Requests'].get('credentials'), 'reach request without credential'
 # every node that inlines the reach rules really got them (and no placeholder is left anywhere)
 for _n in ('Ladder Plan', 'Build Ladder Report', 'Ladder Settings Rows', 'Reach Requests (Discovery)', 'Reach (Discovery)', 'Rank Keywords', 'Build Keyword Strategy'):
