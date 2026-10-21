@@ -4241,6 +4241,18 @@ patch('Analyze Keywords', "const fitsAK = (k) => { const g = fitGate(k.keyword, 
       "const fitsAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, intent: k.intent || '', reason: g.reason, detail: g.detail }); return g.ok; };")
 patch('Analyze Keywords', "if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return false; };",
       "if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, intent: k.intent || '', reason: g.reason, detail: g.detail }); return false; };")
+# FG1 (2026-10-21): two narrow leaks the topic bar cannot see on a site with few topic words: another company's brand claim ("ibt: no 1 bpo
+# company in middle east") and a list search for another industry ("top facilities management companies uae"). Declared-service names, tax-adjacent
+# searches and everything else go through the shared gate unchanged. fitGate is a function declaration, so every list's call picks this up.
+patch('Analyze Keywords', "const refused = [];\n",
+      "const refused = [];\n"
+      "const fitGateKit = fitGate;\n"
+      "const fitTopicStemsAK = fitTopicWords([...(base.services || []), String(base.business || '').slice(0, 600), ...seeds]);\n"
+      "fitGate = (kw, c) => { const k = String(kw || '').toLowerCase().replace(/\\s+/g, ' ').trim();\n"
+      "  if (/^[a-z0-9&.' -]{2,24}:\\s+\\S/.test(k) || /\\b(no\\.? ?1|number (one|1)|#1)\\b.*\\b(company|companies|firm|provider|agency)\\b/.test(k)) return { ok: false, reason: 'other brand', detail: 'a company\\'s own name or \"number 1\" claim, not a topic' };\n"
+      "  const m = k.match(/^(?:top|best|leading|biggest|largest)\\s+(.+?)\\s+(?:companies|firms|providers|agencies|suppliers|contractors)\\b/);\n"
+      "  if (m) { const w = fitTokens(m[1]).filter(t => t.length > 2 && !FIT_GEO.has(t)); if (w.length && !w.some(t => fitTopicStemsAK.has(fitStem(t)) || [...fitTopicStemsAK].some(x => x.length >= 5 && fitStem(t).length >= 5 && (fitStem(t).indexOf(x) === 0 || x.indexOf(fitStem(t)) === 0)))) return { ok: false, reason: 'off topic', detail: 'a list of another industry\\'s companies (' + w.join(' ') + '), nothing this website sells' }; }\n"
+      "  return fitGateKit(kw, c); };\n")
 patch('Build Full Report', "  html += `<h2>4a. Keyword Opportunities by Search Intent</h2>`;",
       "  // R13 (2026-10-13): a bucket the gate emptied says so with the reasons, instead of reading like a market with no demand\n"
       "  const refusedAK = (sk.refused || []);\n"
