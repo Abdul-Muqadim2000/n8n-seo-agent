@@ -65,7 +65,7 @@ One new client run end to end with real money on an isolated production-like sta
 **$2.44**, Claude **$1.59** (balance $48.22). P1 (first page waits for profile + facts) works live. Four reviewers (page, reports vs the
 live site, browser pass, root causes) found 2 + 6 High defects; all fixed and merged (`5f93e20` D1-D3 app, `a63c4f2` keyword fit,
 `bdba2b8e` content QA, `8507f53c` dead pages / audit, A-UI client screens, rebuild `d85f1fb`, report `33f03e5`): engine harness
-**10094 / 0**, app shared 583 / server 1352 / web 156, build OK. **Read `n8n/seo-agent/docs/LIVE_RUN_2026-10-21.md`** (defects, fixes,
+**10094 / 0**, app shared 583 / server 1352 / web 156, build OK. Second wave the same evening (LIVE_RUN §7b): unsupported promises about the client flagged (`CL.commitments`), the ladder reads untitled candidate pages itself and merges searches sharing 3 of 7 results, the Keyword Check reads one results page ($0.002), the full report's keyword lists gated; rebuild `2d2da24d`, harness **10189 / 0**. **Read `n8n/seo-agent/docs/LIVE_RUN_2026-10-21.md`** (defects, fixes,
 open items, owner steps). Worst ones fixed: a partial website PATCH wiped business + facts for every onboarding client (D1); setup
 research had no services (D2); reports advised on 34 old techand.ai URLs that now 404 (new `_gone.js`, redirect files, `seo_pages.http_status`
 / `status_at` — `sync_tables.py` on deploy). **Not pushed** (no GitHub credentials in that session) and **not deployed**. The isolated stack
