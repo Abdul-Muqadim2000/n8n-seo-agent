@@ -1997,10 +1997,10 @@ await guard('pipeline phase 3', async () => {
   v = await AV(okBody); mock('Assess Validate', [{ json: v }]);
   mock('Load Assess Cache', EMPTY);
   const aq = await run('Assess Requests', EMPTY);
-  check('assess: overview + position + the 2 reach calls when no reach is stored', eq(aq.map(r => r.json.kind), ['overview', 'position', 'reach_ranked', 'reach_overview']) && aq[1].json.body[0].filters[0][2] === 'e invoicing software uae' && aq[1].json.body[0].target === D && aq[0].json.body[0].keywords[0] === 'e invoicing software uae' && aq[0].json.body[0].location_code === 2784, JSON.stringify(aq.map(r => r.json.body)));
+  check('assess: overview + position + the 2 reach calls when no reach is stored, then the results page (E-SERP)', eq(aq.map(r => r.json.kind), ['overview', 'position', 'reach_ranked', 'reach_overview', 'serp']) && aq[1].json.body[0].filters[0][2] === 'e invoicing software uae' && aq[1].json.body[0].target === D && aq[0].json.body[0].keywords[0] === 'e invoicing software uae' && aq[0].json.body[0].location_code === 2784, JSON.stringify(aq.map(r => r.json.body)));
   const kwOverview = (kw, kd, vol) => V.task({ items: [{ se_type: 'google', keyword: kw, keyword_info: { search_volume: vol, cpc: 7.25 }, keyword_properties: { keyword_difficulty: kd }, search_intent_info: { main_intent: 'commercial' } }] });
   const posRes = (pos) => V.task({ target: D, items: pos ? [{ keyword_data: { keyword: 'e invoicing software uae' }, ranked_serp_element: { serp_item: { rank_group: pos, url: 'https://www.' + D + '/e-invoicing-software/' } } }] : [] });
-  const dfsAnswers = (reqs, o = {}) => reqs.map(r => r.json.kind === 'overview' ? (o.overview || kwOverview('e invoicing software uae', o.kd ?? 38, 480)) : r.json.kind === 'position' ? posRes(o.pos) : r.json.kind === 'reach_ranked' ? rankedTop([['a1', 10, 1], ['a2', 20, 2], ['a3', 25, 3], ['a4', 30, 5], ['a5', 35, 7]]) : overview(12));
+  const dfsAnswers = (reqs, o = {}) => reqs.map(r => r.json.kind === 'overview' ? (o.overview || kwOverview('e invoicing software uae', o.kd ?? 38, 480)) : r.json.kind === 'position' ? posRes(o.pos) : r.json.kind === 'reach_ranked' ? rankedTop([['a1', 10, 1], ['a2', 20, 2], ['a3', 25, 3], ['a4', 30, 5], ['a5', 35, 7]]) : r.json.kind === 'serp' ? V.task({ items: [] }, { cost: 0.002 }) : overview(12));   // E-SERP: the results page, $0.002
   mock('Run Assess Requests', dfsAnswers(aq));
   let ar = await run('Assess Result', store['Run Assess Requests']);
   check('assess: DataForSEO read (volume, kd, intent, cpc), reach 30 measured, cache row, not ranking yet', ar[0].json.ok && ar[0].json.volume === 480 && ar[0].json.kd === 38 && ar[0].json.intent === 'commercial' && ar[0].json.cpc === 7.25 && ar[0].json.reach_info.reach === 30 && ar[0].json.cache_row && ar[0].json.position === null && ar[0].json.business_source === 'request', JSON.stringify({ ...ar[0].json, existing_keywords: undefined }).slice(0, 400));
@@ -2015,18 +2015,18 @@ await guard('pipeline phase 3', async () => {
   // answer used to read as a measurement of THIS topic; it now names what it really rests on, the way MarketMuse states the same case
   // ("If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty"). The warning is the only change here.
   check('B1-1: an encouraging answer measured against a reach that came from OTHER topics names them and calls itself the optimistic case', B.reach_basis === 'site' && B.topic_reach === null && B.reach_used === 30 && /measured against your site-wide reach \(30\), which comes from other topics/.test(B.warnings.join(' ')) && /optimistic case/.test(B.warnings.join(' ')) && /is on this topic/.test(B.reach_note), JSON.stringify([B.warnings, B.reach_note]));
-  check('assess: cost = the DataForSEO task costs (4 x $0.01) + Claude ($0.0033, A-28: as n8n measured one Haiku call)', B.cost_usd === 0.0433, B.cost_usd);
+  check('assess: cost = the DataForSEO task costs (4 x $0.01 + the results page $0.002, E-SERP) + Claude ($0.0033, A-28: as n8n measured one Haiku call)', B.cost_usd === 0.0453, B.cost_usd);
   const rra = await run('Reach Row (Assess)', resp1);
   check('assess: the measured reach is stored after the answer (exact cache columns)', keysOf(rra[0].json) === CACHE_COLS && rra[0].json.key === 'reach:' + SITE && JSON.parse(rra[0].json.value).reach === 30, JSON.stringify(rra[0].json));
   mock('Load Assess Cache', [reachRow(30), { json: { key: 'desc:' + D, kind: 'desc', site_id: SITE, value: JSON.stringify({ description: { business_description: 'Stored: ERP partner in Dubai', products_or_services: ['ERP', 'E-invoicing'] }, page_title: '' }), updated_at: daysAgo(5) } }]);
   mock('Assess Validate', [{ json: { ...v, business: '', services: [] } }]);
   const aq2 = await run('Assess Requests', EMPTY);
-  check('assess with a stored reach: only 2 DataForSEO calls', eq(aq2.map(r => r.json.kind), ['overview', 'position']), JSON.stringify(aq2.map(r => r.json.kind)));
+  check('assess with a stored reach: no reach calls (overview, position and the results page)', eq(aq2.map(r => r.json.kind), ['overview', 'position', 'serp']), JSON.stringify(aq2.map(r => r.json.kind)));
   mock('Run Assess Requests', dfsAnswers(aq2, { pos: 14, kd: 70 }));
   ar = await run('Assess Result', store['Run Assess Requests']);
   check('assess: the stored reach is reused, business from the stored description, position #14 read', ar[0].json.reach_info.cached && ar[0].json.reach_info.reach === 30 && !ar[0].json.cache_row && ar[0].json.business === 'Stored: ERP partner in Dubai' && eq(ar[0].json.services, ['ERP', 'E-invoicing']) && ar[0].json.business_source === 'stored description' && ar[0].json.position === 14 && /e-invoicing-software/.test(ar[0].json.position_url), JSON.stringify(ar[0].json).slice(0, 300));
   resp1 = await run('Assess Response', FIT({ fit: 2 })); B = resp1[0].json.body;
-  check('assess: already #14 -> easy, direct 2-3 months (top 20 shortens); cost $0.0233 (A-28: the Haiku call at $0.0033)', B.difficulty_for_you === 'easy' && B.plan_type === 'direct' && B.months === '2-3' && B.position === 14 && B.cost_usd === 0.0233, JSON.stringify(B));
+  check('assess: already #14 -> easy, direct 2-3 months (top 20 shortens); cost $0.0253 (A-28: the Haiku call at $0.0033; E-SERP: + the results page $0.002)', B.difficulty_for_you === 'easy' && B.plan_type === 'direct' && B.months === '2-3' && B.position === 14 && B.cost_usd === 0.0253, JSON.stringify(B));
   const rra2 = await run('Reach Row (Assess)', resp1);
   check('assess: a stored reach is not saved again', rra2[0].json.skip === true, JSON.stringify(rra2[0].json));
   b = await answer(AR({ keyword: 'cleartax e invoicing', existing_keywords: ['e invoicing in uae', 'peppol uae'] }), FIT({ fit: 1, navigational: true, alternatives: ['e invoicing software uae', 'Peppol UAE', 'cleartax e invoicing', 'e invoicing in the UAE', '"FTA e invoicing requirements"', 'einvoicing for sme uae'] }));
@@ -19638,6 +19638,7 @@ await require('./scenarios_egate')({ H, run, mock, store, guard, reset, begin })
 await require('./scenarios_reh')({ H, run, mock, store, guard, reset, begin });   // REH1-REH7 (F-REH 2026-10-20 + D2 2026-10-21): the real-credit rehearsal's defects - ghost reservations, Track's parent, cycle 0's skips, service fit, plain notes; the app's setup research body with its services
 await require('./scenarios_eqa')({ H, run, mock, store, guard, reset, begin });   // EQA1-EQA7 (E-QA 2026-10-21): the pre-launch page run's quality check (exec 42) - course page as benchmark, owner edits, bracket gate, author line, cards, URL form
 await require('./scenarios_dead')({ H, run, mock, store, guard, reset, begin });   // DEAD1-DEAD9 (E-DEAD 2026-10-21): the pre-launch run's dead pages - one redirect message in every report, redirects followed, Bing, fix pack, comparisons, disavow
+await require('./scenarios_assess_serp')({ H, run, mock, store, guard, reset, begin });   // AS1-AS4 (E-SERP 2026-10-21): the Keyword Check reads one results page - career search fit 0, service page fit 2, a 40101 re-sent then judged without it, the cost once by task id
 
 H.report();
 })();

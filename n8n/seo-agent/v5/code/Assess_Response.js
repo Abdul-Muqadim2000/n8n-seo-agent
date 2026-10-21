@@ -1,6 +1,7 @@
 /*__REACH__*/
 /*__FIT_GATE__*/
 /*__SITE_MODEL__*/
+/*__KW_INPUTS__*/
 
 // Keyword Check: the answer. Difficulty for this site and plan from the shared reach rules; topic fit, navigational / other brand and the
 // alternatives from the small Claude call (if it failed: fit null, navigational from DataForSEO's intent unless the keyword names the site itself).
@@ -49,9 +50,24 @@ const headsA = [...new Set(rowsOf('Load Ladders (Assess)').map(r => String(r.hea
 const servicesA = [...new Set([...(a.services || []), ...(modelA ? modelA.services : [])].map(x => String(x || '').trim()).filter(Boolean))];
 const gateCtxA = FITR.ctx({ own_domain: a.domain, intent: a.intent || '', competitors: modelA ? modelA.competitors : [], brands: fitLearnedBrands(cacheA), heads: headsA, services: servicesA,
   topics: [...servicesA, ...headsA, ...(a.existing_keywords || [])], topic_label: 'what this website sells and the keywords you chose' });
+// ---- E-SERP (2026-10-21, pre-launch run RV-11): the keyword's own results page, read the way the ladder head and the research read it ----
+// "ai consultant" came back a fit and Easy here (no results page was read) while the ladder refused it as a career search: upwork, a USAII
+// certification, indeed, bayt, glassdoor, and the questions people also ask were about salary. The gate now gets the same evidence the ladder
+// head gets: the top 10 (ctx.serp, the brand-query rule) and ctx.career (fitCareer: the pages, the questions, the related searches). A page
+// that could not be read is said to be unread, and the fit is judged without it; it is never read as "no demand".
+const serpA = (a.serp && typeof a.serp === 'object') ? a.serp : { asked: false, read: false, why: 'not asked', pages: [], paa: [], related: [] };
+const serpPagesA = Array.isArray(serpA.pages) ? serpA.pages : [];
+if (serpA.read) {
+  gateCtxA.serp = serpPagesA.map(p => String(p.domain || '')).filter(Boolean);
+  gateCtxA.career = { pages: serpPagesA.map(p => ({ domain: p.domain, url: p.url, title: p.title })), paa: serpA.paa || [], related: serpA.related || [],
+    topics: [...servicesA, ...headsA, ...(a.existing_keywords || [])] };
+}
 const gate = fitGate(a.keyword, gateCtxA);
+const careerA = !gate.ok && gate.reason === 'job search' && !!gate.career;
 const GATE_WORDS = { 'own brand': 'it is your own brand name', 'other brand': 'it names another company', government: 'it is a government service', navigational: 'people search it to reach one particular website',
-  portal: 'it is a login, portal or status check', 'off topic': 'it is not about what you sell', 'too broad': 'it is too broad to win', 'job search': 'people search it to find work', empty: 'there is no keyword' };
+  portal: 'it is a login, portal or status check', 'off topic': 'it is not about what you sell', 'too broad': 'it is too broad to win', 'job search': careerA ? 'people search it to find work or training' : 'people search it to find work', empty: 'there is no keyword' };
+// what KIND of page Google ranks here (KWI.serpPageTypes, the research's and the ladder's rule): lists, jobs, courses or service pages
+const kindsA = serpA.read && serpPagesA.length ? KWI.serpPageTypes(serpPagesA.map(p => ({ url: p.url || p.domain, title: p.title || '' })), {}) : null;
 const fit = gate.ok ? fitAi : 0;
 // F-KW (2026-10-20, finding 2): the gate judges topic distance only with 12+ topic words on file. Below that it passed everything and the
 // answer read as if the topic had been checked. Now the check says when there is not enough information to judge (and how to fix it), and a
@@ -123,10 +139,21 @@ const existing = (() => {
 })();
 const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\n,;]+/) : [])).map(x => String(x == null ? '' : x).toLowerCase().replace(/["“”]/g, '').replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2 && x.length <= 100);
 const need = difficulty_for_you === 'not_realistic' || fit === 0;
-const alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
+let alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];
+// E-SERP: a career search is offered BUYER searches only - the model's and the results page's own related searches, each through the same gate
+// (no job, pay or course words), with a buyer word for the related ones; none at hand = none offered, never the job searches back
+if (careerA) {
+  const ctxNoCareer = { ...gateCtxA, career: null };
+  const buyerOk = (k) => { const t = ' ' + String(k).toLowerCase() + ' '; return fitGate(k, ctxNoCareer).ok && !FIT_JOB_KW.test(t) && !FIT_COURSE_KW.test(t) && !keywordsOverlap(k, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, k)); };
+  const relBuyer = listOf(serpA.related || []).filter(k => FIT_BUYER_KW.test(' ' + k + ' '));
+  alternatives = [...new Set([...alternatives, ...relBuyer])].filter(buyerOk).slice(0, 3);
+}
 const warnings = [];
 if (!gate.ok) warnings.push('not a fit for this website: ' + fit_gate.words + ' (' + gate.detail + ')');
 if (!topic_judged) warnings.push(topicNoteA);
+// E-SERP: an unread results page is said once, with the provider's reason; it is not "no demand" and nothing was concluded from it
+if (serpA.asked && !serpA.read) warnings.push('results page not read (' + String(serpA.why || 'no answer').slice(0, 140) + '): the fit was judged without it, so whether people search it for work or training was not checked');
+if (gate.ok && kindsA && kindsA.dominant && !['Service or product page', 'Homepage'].includes(kindsA.dominant)) warnings.push('what Google ranks: ' + kindsA.text);
 if (!aiOk && gate.ok) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160) + (plainRan ? ' (the plain-text retry answered nothing either)' : ''));
 if ((a.reach_errors || []).length) warnings.push('reach measured from partial data: ' + a.reach_errors.join('; ').slice(0, 200));
 // B1-1: an encouraging answer that rests on a reach measured on OTHER topics says so where the warnings are read. Only then: a site
@@ -151,6 +178,10 @@ const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volum
   topic_evidence: { on_topic: topic.on_topic, top10: topic.top10, sample: topic.sample, best: topic.best, examples: topic.examples, other_topics: topic.other_topics, reason: topic.reason },
   reach_note: topic.note,
   existing,   // R50
+  // E-SERP: the results page this answer read (or why it could not), and what kind of page Google ranks there
+  serp: { read: !!serpA.read, asked: !!serpA.asked, why: serpA.read ? '' : String(serpA.why || ''), pages_read: serpPagesA.length, top: serpPagesA.slice(0, 5).map(p => p.domain),
+    paa: (serpA.paa || []).slice(0, 4), page_types: kindsA ? { read: kindsA.read, dominant: kindsA.dominant, counts: kindsA.counts, text: kindsA.text } : null },
+  fit_judged_without_serp: !serpA.read,
   business_source: a.business_source, warnings };
 if (existing) body.label = body.label + (existing.how === 'a page of yours' ? ' · you already have a page for it' : ' · already one of your keywords');
 // ---- R26 (2026-10-14, FIX_PLAN.md §3.12): an answer with no search data may not sound sure ----
