@@ -1825,17 +1825,17 @@ await guard('pipeline phase 3', async () => {
   await planWith({ reach: 35 });
   let dl = await deliver();
   save('ladder-plan-short.doc.html', dl.html); scanHtml('ladder plan (short)', dl.html);
-  check('report: "Why this plan" with the reach, the difficulty for this site and the plan', /Why this plan/.test(dl.html) && /reach is difficulty <b>35<\/b>/.test(dl.html) && /Reachable for your site/.test(dl.html) && /Short ladder — about 4-8 months/.test(dl.html) && /reach 35/.test(dl.html) && !/Tracking stops/.test(dl.html), 'html');
+  check('report: "Why this plan" with the reach, the difficulty for this site and the plan', /Why this plan/.test(dl.html) && /reach is difficulty <b>35<\/b>/.test(dl.html) && /Reachable for your site/.test(dl.html) && /Short ladder: about 4-8 months/.test(dl.html) && /reach 35/.test(dl.html) && !/Tracking stops/.test(dl.html), 'html');
   check('report: difficulty labels relative to reach ("easy for you")', /· easy for you/.test(dl.html) && /rung 2 up to reach \+ 15/.test(dl.html), 'html');
   await planWith({ reach: 55 }); dl = await deliver(); save('ladder-plan-direct.doc.html', dl.html); scanHtml('ladder plan (direct)', dl.html);
-  check('report (direct): the main page is written first', /Write the main page first/.test(dl.html) && /written first — months 2-4/.test(dl.html), 'html');
+  check('report (direct): the main page is written first', /Write the main page first/.test(dl.html) && /written first: months 2-4/.test(dl.html), 'html');
   // a narrow topic (live 2026-10-08, "peppol uae" in the UAE): the research found no supporting keyword -> the main page is the whole ladder, written now
   mock('Ladder Pool', { ...lpool[0].json, research: { ...(lpool[0].json.research || {}), candidates: [] } });
   const Lnar = (await planWith({ reach: 35 })).ladder;
   dl = await deliver(); save('ladder-plan-main-only.doc.html', dl.html); scanHtml('ladder plan (main page only)', dl.html);
   mock('Ladder Pool', lpool[0].json);
   check('narrow topic (no supporting keyword in the data): short plan, the main page is page 1 and is written now', Lnar.planned && Lnar.plan_type === 'short' && pagesOf(Lnar).length === 0 && Lnar.top.page_no === 1 && Lnar.write_now.length === 1 && Lnar.write_now[0].rung === 4 && Lnar.write_now[0].keyword === Lnar.head.keyword && Lnar.notes.some(n => /No supporting keywords were found/.test(n)) && !Lnar.notes.some(n => /Only 0/.test(n)) && /main page only for now/.test(Lnar.order), JSON.stringify({ w: Lnar.write_now, n: Lnar.notes, o: Lnar.order }));
-  check('report (main page only): written first, never "write 0 supporting pages first"', /the main page is the whole ladder for now and is written first/.test(dl.html) && !/Write 0 supporting/.test(dl.html) && /written first — months 4-8/.test(dl.html), 'html');
+  check('report (main page only): written first, never "write 0 supporting pages first"', /the main page is the whole ladder for now and is written first/.test(dl.html) && !/Write 0 supporting/.test(dl.html) && /written first: months 4-8/.test(dl.html), 'html');
 
   // ---------- D. not realistic, duplicate main keyword, other ladders' keywords ----------
   const Lav = (await planWith({ reach: 35, pv: { verdict: 'AVOID', verdict_reasons: ['Searchers want the government portal'] } })).ladder;
@@ -8010,7 +8010,7 @@ await guard('stored rungs, statistical alerts, pre-release check', async () => {
   const L58 = (await run('Ladder Plan', relOf(CANDS58)))[0].json.ladder;
   check('K12: the ladder plan carries the same radius block and a note on the main keyword\'s own topic, with the evidence',
     !!L58.topic_radius && L58.topic_radius.reach === L58.reach && !!L58.head_radius && ['in_reach', 'stretch', 'far'].includes(L58.head_radius.verdict)
-    && L58.notes.some(n => /^Topic radius — /.test(n) && /(Within reach|A stretch|Out of reach for now): /.test(n) && /difficulty/.test(n)),
+    && L58.notes.some(n => /^Topic radius (— |for ")/.test(n) && /(Within reach|A stretch|Out of reach for now): /.test(n) && /difficulty/.test(n)),
     JSON.stringify({ head: L58.head_radius && [L58.head_radius.topic, L58.head_radius.verdict], note: L58.notes.find(n => /^Topic radius/.test(n)) }));
   const LREP58 = decode(await run('Build Ladder Report', EMPTY)); save('ladder-plan-topic-radius.doc.html', LREP58); scanHtml('ladder plan (topic radius)', LREP58);
   check('K12: the ladder plan report prints the block too, and the plan itself is unchanged by it (it is shown, never enforced)',
@@ -19657,5 +19657,6 @@ await require('./scenarios_kwcomp')({ H, run, mock, store, guard, reset, begin }
 await require('./scenarios_serp_cache')({ H, run, mock, store, guard, reset, begin });   // SC1-SC5 (KW-SERP 2026-10-21, RV-12): one results-page reading per search and day, shared by the Keyword Check, the ladder head and the ladder's rung reads; deep enough or bought again; failed reads never stored
 await require('./scenarios_kwladder')({ H, run, mock, store, guard, reset, begin });   // KL1-KL3 (KW-LADDER 2026-10-21): the review's ladder items - the head read on its own results page (job boards included), buyer alternatives, one verdict with the Keyword Check, app-shell titles, 404 pages, own-host redirects only
 await require('./scenarios_kw_gate')({ H, run, mock, store, guard, reset, begin });   // KWG1-KWG7 (KW-GATE 2026-10-21): the fit gate as a design - own brand vs topic, declared categories and other vendors, Arabic read through a glossary, review items 2 3 4 5 6 8 11 12 13 14 16
+await require('./scenarios_kwl_lad')({ H, run, mock, store, guard, reset, begin });   // KLL1-KLL6 (KWL-LAD 2026-10-21): the keyword live run's ladder and Keyword Check defects D9 D14 D4 D7 D5 D11
 H.report();
 })();

@@ -20,8 +20,11 @@ if (!reachCached(rows, v.domain, v.location_code)) reqs.push(...reachRequests(v.
 // deep with the AI Overview, is used as it is (cost 0) and travels on the first request item for Assess Result; otherwise the page is bought as before.
 // KW-SERP (owner decision 2026-10-21): every path asks Google the SAME way - 30 deep with the AI Overview loaded, the head's request -
 // so whichever path reads a search first, every other path gets the same answer that day ($0.006 measured for this shape, fa3_live).
-const serpBody = { keyword: v.keyword, location_code: v.location_code, language_code: v.language_code || 'en', depth: 30, load_async_ai_overview: true };
+// KWL-LAD D7: the results page is read in the keyword's own language (Arabic script -> ar), the key Assess Validate built for the shared reading
+const serpBody = { keyword: v.keyword, location_code: v.location_code, language_code: v.serp_language_code || v.language_code || 'en', depth: 30, load_async_ai_overview: true };
 const serpHit = SC.lookup(rows, serpBody);
 if (serpHit.hit) reqs[0].serp_cached = serpHit.response;
 else reqs.push({ kind: 'serp', label: 'results page for "' + v.keyword + '"', endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: [serpBody] });
-return reqs.map(r => ({ json: r }));
+// KWL-LAD D5: when the requests left, so the retry plan can tell whether a second attempt still fits the check's time budget
+const sentAt = Date.now();
+return reqs.map(r => ({ json: { ...r, sent_at: sentAt } }));
