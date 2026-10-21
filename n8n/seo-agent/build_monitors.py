@@ -40,6 +40,7 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = seo_events.inline(rd('code/' + p))
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
     s = s.replace('/*__SITE_TIME__*/', site_time_src())   # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the website's calendar and the cycle run (ST), inside _monitor_sites.js or on its own
+    s = s.replace('/*__GONE__*/', rd('code/_gone.js').rstrip('\n'))   # RV-1 (2026-10-21): the pages that no longer answer, one message in every report
     s = s.replace('/*__SITE_MODEL__*/', rd('code/_site_model.js').rstrip('\n'))   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
     s = s.replace('/*__FIT_GATE__*/', rd('code/_fit_gate.js').rstrip('\n'))   # B-G1 / B-G2 (2026-10-15): the fit gate, on the READ path too (FITR, INVARIANTS rule 2)
     s = s.replace('/*__AI_ACCESS_KIT__*/', rd('code/_ai_access_kit.js').rstrip('\n'))   # B9-9: the one robots.txt matcher (AI Access + Growth Robots)
@@ -344,6 +345,10 @@ A.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_
 # not this run's). AI Plan reads which questions x engines are answered, AI Metrics measures the whole run over them in its last execution.
 A.node('Load AI Run Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [('run_kind', 'neq', 'pulse'), ('checked_at', 'gte', SINCE(6.2))]), at(10, 2), **LOAD)
 loads += [('Load AI Daily', None), ('Load Cache (AI)', None), ('Load Query History', None), ('Load AI Run Answers', None)]
+# RV-1 (2026-10-21): the page inventory with what each address answered (seo_pages.http_status, written by the Site Tracker), so the report never
+# lists a page that answers 404 as "your cited page" and the brief never builds on one
+from ladder_common import PAGES_TABLE as _PAGES_TABLE_RV1
+A.load('Load Pages (AI)', _PAGES_TABLE_RV1, at(11, 2)); loads += [('Load Pages (AI)', None)]
 A.code('AI Plan', 'AI_Plan.js', at(11, 1)); A.iff('Any Sites (AI)?', '{{ !$json.nothing_to_do }}', at(12, 1)); A.node('Nothing To Do (AI)', 'n8n-nodes-base.noOp', 1, {}, at(13, 2))
 A.code('Site Text Jobs', 'Site_Text_Jobs.js', at(13, -2)); A.iff('Need Site Text?', '{{ !$json.skip }}', at(14, -2))
 A.node('Read Site (AI)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '=https://r.jina.ai/https://{{ $json.domain }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'X-Retain-Images', 'value': 'none'}]}, 'options': {'response': {'response': {'responseFormat': 'text', 'outputPropertyName': 'site_text'}}, 'timeout': 30000}}, at(15, -3), credentials={'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}, onError='continueRegularOutput', **retry_lint.RETRY)

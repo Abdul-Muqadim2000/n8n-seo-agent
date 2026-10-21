@@ -2692,6 +2692,10 @@ await guard('ai growth', async () => {
   check('Bing: today\'s quota + the crawl state of each page checked, for the site the account manages', BR[0].kind === 'quota' && /GetUrlSubmissionQuota\?siteUrl=https%3A%2F%2Fwww\.northwind-erp\.com%2F/.test(BR[0].url) && BR.filter(r => r.kind === 'info').length === G.audit.length, JSON.stringify(BR.map(r => r.kind)));
   const neverPage = BR.find(r => r.kind === 'info' && /erp-partner-dubai/.test(r.page)) || BR.filter(r => r.kind === 'info')[1];
   mock('Fetch Bing Growth', BR.map(r => ({ json: r.kind === 'quota' ? { d: { DailyQuota: 10, MonthlyQuota: 300 } } : r === neverPage ? { d: { Url: r.page, HttpStatus: 0, LastCrawledDate: '/Date(-62135596800000)/', DiscoveryDate: '/Date(-62135596800000)/' } } : { d: { Url: r.page, HttpStatus: 200, LastCrawledDate: '/Date(1759300000000)/', DiscoveryDate: '/Date(1750000000000)/' } } })));
+  // E-DEAD (2026-10-21, RV-4): Bing is sent only addresses known to answer 200. In the workflow the key pages are fetched (Fetch Key Pages)
+  // before Bing Submit Requests runs; this scenario mocks that fetch further down for the readiness checks, so here every page checked this
+  // week answers 200 at submission time (the published page is allowed on the publish check's own reading)
+  mock('Fetch Key Pages', pr.map(() => ({ json: { statusCode: 200, headers: {}, data: '<html></html>' } })));
   const bsub = await run('Bing Submit Requests', store['Fetch Bing Growth']); const BS = bsub[0].json;
   check('Bing submission: new pages + the page Bing never crawled, within the daily quota, on the site URL', BS.body.siteUrl === 'https://www.' + D + '/' && BS.urls.includes(WWW + '/peppol-uae/') && BS.urls.includes(neverPage.page) && BS.urls.length <= 10 && BS.quota === 10, JSON.stringify(BS));
   mock('Submit to Bing', [{ json: { d: null } }]);
@@ -2720,7 +2724,8 @@ await guard('ai growth', async () => {
   console.log('   readiness ->', JSON.stringify(rd.map(r => [r.url.replace(WWW, ''), r.status, r.score, r.updated_on, r.bing_crawled_at.slice(0, 10), r.issues[0] && r.issues[0].slice(0, 50)])));
   const ck = (r, k) => (r.checks.find(c => c.key === k) || {}).ok;
   check('readiness: a page that answers first, dated 5 days ago (visible), question headings, sourced figures, table, author scores 85+; no FAQ check any more (FIX_PLAN G2)', rGood.score >= 85 && ck(rGood, 'answer_first') === true && ck(rGood, 'fresh') === true && rGood.updated_on && ck(rGood, 'question_headings') === true && ck(rGood, 'sourced_figures') === true && ck(rGood, 'author') === true && ck(rGood, 'faq') === undefined && rGood.checks.filter(c => c.weight > 0).reduce((t, c) => t + c.weight, 0) === 100, JSON.stringify(rGood.checks.map(c => c.key + ':' + c.ok)));
-  check('readiness: a JavaScript shell (no text in the raw HTML) fails raw_text; a 404 scores 0; noindex is capped at 40; schema is never scored', ck(rShell, 'raw_text') === false && rShell.score < 50 && r404.score === 0 && r404.status === 404 && (!rNo || (ck(rNo, 'indexable') === false && rNo.score <= 40)) && rd.every(r => !r.checks.some(c => c.key === 'schema' && c.weight > 0)), JSON.stringify([rShell.score, r404.score, rNo && rNo.score]));
+  // E-DEAD (2026-10-21, RV-16): a 404 key page is gone: it has NO score (withheld, "redirect it"), so it is not a 0 in the average (the run's average was 25 with them, 52-70 without)
+  check('readiness: a JavaScript shell (no text in the raw HTML) fails raw_text; a 404 has no score (withheld: redirect it); noindex is capped at 40; schema is never scored', ck(rShell, 'raw_text') === false && rShell.score < 50 && r404.score === null && r404.gone === true && /redirect it/.test(r404.score_withheld) && r404.status === 404 && (!rNo || (ck(rNo, 'indexable') === false && rNo.score <= 40)) && rd.every(r => !r.checks.some(c => c.key === 'schema' && c.weight > 0)), JSON.stringify([rShell.score, r404.score, rNo && rNo.score]));
   check('readiness: Bing\'s crawl state per page (never crawled = empty date)', rd.find(r => r.url === neverPage.page).bing_crawled_at === '' && rGood.bing_crawled_at.startsWith('2025-10-01'), JSON.stringify(rd.map(r => r.bing_crawled_at)));
   // ---- (e) earned media: the cited pages fetched (who they name), prospects with exact columns, at most 3 drafts ----
   const listHtml = '<html><head><title>Best e-invoicing providers in the UAE for 2026</title></head><body><h1>Best e-invoicing providers</h1><p>1. Zoho Books 2. ClearTax 3. Cygnet. Azentio also helps.</p><a href="mailto:editor@gulfnews.com">Write to the editor</a></body></html>';
@@ -14577,7 +14582,8 @@ await guard('the pages the crawl never reached, and a queue that starts with wha
     JSON.stringify([byTitle97(/Live, indexable pages/).evidence, byTitle97(/Live, indexable pages/).fix]));
   check('B5-5: noindex and a redirect are reported too, each with the address it points at and the rule that was read',
     /noindex, follow/.test(byTitle97(/set to noindex/).evidence) && byTitle97(/set to noindex/).severity === 'Low'
-    && /\/news\/launch\/ → \/news\/ \(301\)/.test(byTitle97(/redirect somewhere else/).evidence) && byTitle97(/redirect somewhere else/).severity === 'Low',
+    // E-DEAD (2026-10-21): the arrow became "to" (no arrows or em dashes in customer text, the owner's rule of 2026-10-19); the address and the code are what is asserted
+    && /\/news\/launch\/ (→|to) \/news\/ \(301\)/.test(byTitle97(/redirect somewhere else/).evidence) && byTitle97(/redirect somewhere else/).severity === 'Low',
     JSON.stringify([byTitle97(/set to noindex/).severity, byTitle97(/set to noindex/).evidence, byTitle97(/redirect somewhere else/).evidence]));
   check('B5-5: no finding this check raises can ship with an empty evidence string — the defect that put seven of them in front of a customer',
     NC97.extra_findings.filter(f => f.source === 'not_crawled').every(f => String(f.evidence || '').trim().length > 20),
@@ -14952,6 +14958,8 @@ await guard('S129 R94 AI Growth dry run', async () => {
   mock('Robots Verdicts (Growth)', [{ json: { skip: true } }]);
   mock('IndexNow Key Requests', [{ json: { site_id: 's94', url: HOST + '/k94k94k94.txt' } }]); mock('Fetch IndexNow Key', [{ json: { statusCode: 200, headers: {}, data: 'k94k94k94' } }]);
   delete store['Manual Run'];
+  // E-DEAD (2026-10-21, RV-4): Bing is sent only addresses known to answer 200; both pages were fetched this run and answered 200
+  mock('Page Requests (Growth)', [{ json: { site_id: 's94', url: A, kind: 'content' } }, { json: { site_id: 's94', url: B, kind: 'content' } }]); mock('Fetch Key Pages', [{ json: { statusCode: 200 } }, { json: { statusCode: 200 } }]);
   const B0 = (await run('Bing Submit Requests', store['Fetch Bing Growth']))[0].json, I0 = (await run('IndexNow Requests', store['Fetch IndexNow Key']))[0].json;
   check('R94: the weekly run (no dry_run) still submits both pages to Bing and IndexNow - the switch changes nothing for production',
     /SubmitUrlBatch$/.test(B0.url) && B0.body.urlList.length === 2 && !B0.dry_run && /indexnow$/.test(I0.url) && I0.body.urlList.length === 2 && !I0.dry_run, JSON.stringify([B0.url, I0.url]));
@@ -17210,8 +17218,10 @@ await guard('S136 R86 R89 R83 a competing provider judged by its own site, a lis
   console.log('   brand split ->', JSON.stringify({ names: BS.names, brand: BS.brand.queries, top: (BS.brand.top || []).map(t => t.query), non: BS.non_brand.queries }));
   check('R89 (dossier test a): "techandkey com", "technology and analytics", "technology & data", "tech and software" are non-brand — "tech" is never the brand on its own',
     !isB('techandkey com') && !isB('technology and analytics') && !isB('technology & data') && !isB('tech and software') && !BS.names.includes('tech'), JSON.stringify({ names: BS.names, top: BS.brand.top }));
-  check('R89: "techand", "tech and" (the name spoken), "tech and ai", "tech & ai" and "techand ai" stay brand — exactly those 5 queries and their 4 clicks',
-    BS.brand.queries === 5 && BS.brand.clicks === 4 && BS.names.includes('techand') && BS.names.includes('tech and'), JSON.stringify(BS));
+  // E-DEAD (2026-10-21, RV-15): "tech and tech" (83 impressions, 0 clicks) is the name "Tech&" followed by its own word: the brand, not a search for
+  // something else (the pre-launch run reported it as three of the site's pages competing for one search). Six brand queries, still 4 clicks.
+  check('R89: "techand", "tech and" (the name spoken), "tech and ai", "tech & ai", "techand ai" and "tech and tech" stay brand: exactly those 6 queries and their 4 clicks',
+    BS.brand.queries === 6 && BS.brand.clicks === 4 && BS.names.includes('techand') && BS.names.includes('tech and'), JSON.stringify(BS));
   // ---- R83 on the AI Growth path: earned media from a business AI names instead of you is not pitched ----
   reset();
   const GP = { site_id: SITE, domain: 'techand.ai', business_name: 'Tech&', brand_names: ['Tech&', 'techand.ai'], competitors: ['cleartax.com', 'azentio.com'], services: ['Dynamics 365 Finance', 'Azure OpenAI Service'],
@@ -19624,6 +19634,7 @@ await guard('fserp-three-attempts', async () => {
 await require('./scenarios_cycle')({ H, run, mock, store, guard, reset, begin });   // CY1-CY24 (2026-10-19): the per-website cycle - kit, Cycle Dispatcher nodes, kickoff row, deploy guard
 await require('./scenarios_integration')({ H, run, mock, store, guard, reset, begin });   // INT1-INT7 (2026-10-19, E4): one client's life through every agent's generated nodes (the cross-agent contract test)
 await require('./scenarios_reh')({ H, run, mock, store, guard, reset, begin });   // REH1-REH6 (F-REH 2026-10-20): the real-credit rehearsal's defects - ghost reservations, Track's parent, cycle 0's skips, service fit, plain notes
+await require('./scenarios_dead')({ H, run, mock, store, guard, reset, begin });   // DEAD1-DEAD9 (E-DEAD 2026-10-21): the pre-launch run's dead pages - one redirect message in every report, redirects followed, Bing, fix pack, comparisons, disavow
 
 H.report();
 })();

@@ -77,7 +77,11 @@ PAGES_COLS = [('site_id', 'string'), ('url', 'string'), ('title', 'string'), ('h
               # decaying / seasonal / watch / steady / too_small; `decay_basis` is the sentence that must travel with the number.
               ('clicks', 'number'), ('impressions', 'number'), ('position', 'number'), ('prev_clicks', 'number'), ('yoy_clicks', 'number'),
               ('decay_state', 'string'), ('decay_pct', 'number'), ('decay_lost', 'number'), ('decay_kind', 'string'),
-              ('decay_basis', 'string'), ('measured_at', 'string')]
+              ('decay_basis', 'string'), ('measured_at', 'string'),
+              # RV-1 (2026-10-21, pre-launch run on techand.ai): what the address answered when it was last read, redirects followed (0 = never
+              # read) and when. A page known only from Search Console carried no status, so every report advised on old addresses that 404.
+              # Written by the Site Tracker (Status Targets (Site) -> Fetch Page Status (Site)); read through SM.isGone / SM.gonePages.
+              ('http_status', 'number'), ('status_at', 'string')]
 METRICS_COLS = [('site_id', 'string'), ('domain', 'string'), ('period_start', 'string'), ('period_end', 'string'), ('checked_at', 'string'), ('gsc_connected', 'boolean'), ('ga4_connected', 'boolean'),
                 ('clicks', 'number'), ('impressions', 'number'), ('ctr', 'number'), ('position', 'number'), ('prev_clicks', 'number'), ('prev_impressions', 'number'), ('prev_ctr', 'number'), ('prev_position', 'number'),
                 ('yoy_clicks', 'number'), ('yoy_impressions', 'number'), ('sessions', 'number'), ('engaged_sessions', 'number'), ('key_events', 'number'), ('prev_sessions', 'number'), ('prev_engaged_sessions', 'number'),

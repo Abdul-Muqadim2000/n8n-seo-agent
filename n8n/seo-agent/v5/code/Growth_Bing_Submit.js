@@ -13,6 +13,12 @@ let reqs = [], res = []; try { reqs = $('Bing Growth Requests').all().map(i => i
 // B9-3 (2026-10-15): a page robots.txt forbids Bingbot to crawl is not worth a submission slot — and telling the owner it was
 // "sent to Bing" would be a promise the rules on their own server refuse. The verdict is the one *Robots Verdicts (Growth)* read.
 const robots = (() => { try { return $('Robots Verdicts (Growth)').all().map(i => i.json).filter(x => x && !x.skip); } catch (e) { return []; } })();
+// RV-4 (2026-10-21, pre-launch run on techand.ai): 9 of the 14 addresses sent to Bing answered 404 (AI still cited old addresses of a
+// rebuilt site). Only an address KNOWN to answer 200 is sent: this run's fetch of the key pages (Page Requests (Growth) -> Fetch Key
+// Pages), else the latest stored AI-readiness reading (seo_ai_pages.status), else a page the publish check found live this week.
+// Anything else is held with its reason (a 404 is never sent; an address not read yet goes once a check sees it answer).
+let pq = [], pr = []; try { pq = $('Page Requests (Growth)').all().map(i => i.json); pr = $('Fetch Key Pages').all().map(i => i.json); } catch (e) {}
+const storedAi = (() => { try { return $('Load AI Pages').all().map(i => i.json).filter(r => r && r.url && !r.error); } catch (e) { return []; } })();
 const keyOf = (u) => { const m = String(u || '').trim().match(/^https?:\/\/(?:www\.)?([^\/?#]+)([^?#]*)/i); if (!m) return ''; return m[1].toLowerCase() + ((m[2] || '/').replace(/\/+$/, '') || '/'); };
 const jsonOf = (r) => { if (!r) return {}; if (r.d !== undefined || r.ErrorCode !== undefined) return r; const b = r.body ?? r.data; if (b && typeof b === 'object') return b; try { return JSON.parse(b || '{}'); } catch (e) { return {}; } };
 const dateOf = (v) => { const m = String(v || '').match(/Date\((-?\d+)/); if (!m) return ''; const t = Number(m[1]); return t > 946684800000 ? new Date(t).toISOString() : ''; };   // "/Date(…)/"; year 1 = never
@@ -28,8 +34,15 @@ for (const p of plans) {
   const rb = robots.find(x => x.site_id === p.site_id) || null;
   const blockedFor = (u) => { const vd = rb && rb.verdicts ? rb.verdicts[keyOf(u)] : null; return vd && vd.checked && !vd.bing_ok ? (vd.rule || 'robots.txt') : ''; };
   const all = [...new Set([...p.submit.map(s => s.url), ...never])];
-  const refused = all.filter(u => blockedFor(u)).map(u => ({ url: u, reason: 'robots.txt blocks Bingbot (' + blockedFor(u) + ')' }));
-  const urls = all.filter(u => !blockedFor(u));
+  const why = new Map(p.submit.map(s => [keyOf(s.url), s.why]));
+  const nowStatus = new Map(); pq.forEach((q, i) => { if (q && !q.skip && q.site_id === p.site_id) { const st = Number((pr[i] || {}).statusCode) || 0; if (st) nowStatus.set(keyOf(q.url), st); } });
+  const storedStatus = new Map(storedAi.filter(r => r.site_id === p.site_id && Number(r.status) > 0).map(r => [keyOf(r.url), Number(r.status)]));
+  const liveWhy = (u) => { const k = keyOf(u); const st = nowStatus.has(k) ? nowStatus.get(k) : storedStatus.get(k);
+    if (st >= 200 && st < 300) return ''; if (st) return 'it answers HTTP ' + st + ', so Bing would be sent to an error page' + (st === 404 || st === 410 ? ' (redirect it instead)' : '');
+    return why.get(k) === 'published this week' ? '' : 'not read yet: it is sent once a check sees it answer 200'; };
+  const refused = [...all.filter(u => blockedFor(u)).map(u => ({ url: u, reason: 'robots.txt blocks Bingbot (' + blockedFor(u) + ')' })),
+    ...all.filter(u => !blockedFor(u) && liveWhy(u)).map(u => ({ url: u, reason: liveWhy(u) }))];
+  const urls = all.filter(u => !blockedFor(u) && !liveWhy(u));
   const cap = Number.isFinite(daily) ? Math.max(0, daily) : 10;
   if (!urls.length || !cap) { if (refused.length) out.push({ json: { site_id: p.site_id, site_url: mine[0].q.site_url, skip: true, refused } }); continue; }
   if (DRY_RUN) { out.push({ json: { site_id: p.site_id, site_url: mine[0].q.site_url, skip: true, dry_run: true, would_submit: urls.slice(0, Math.min(cap, 500)), refused } }); continue; }
