@@ -4178,31 +4178,35 @@ assert "const capped = false" not in code('Build Site Issues') and 'capped at ev
 
 # ---------- B. R11: a page that fails the quality check is delivered as a draft, and says so everywhere ----------
 patch('Build Word File', "    ['Status', qa.passed ? '<span class=\"ok\">Passed</span>' : '<span class=\"bad\">Needs review</span>'],",
-      "    ['Status', qa.passed ? '<span class=\"ok\">Passed</span>' : qa.not_ready ? '<span class=\"bad\">Did not pass \\u2014 not ready to publish</span>' : '<span class=\"bad\">Needs review</span>'],\n"
-      "    ...(qa.not_ready ? [['Why it is not ready', '<span class=\"bad\">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first")
+      "    ['Status', qa.passed ? '<span class=\"ok\">Passed</span>' : qa.not_ready ? '<span class=\"bad\">Did not pass, not ready to publish</span>' : '<span class=\"bad\">Needs review</span>'],\n"
+      "    ...(qa.not_ready ? [['Why it is not ready', '<span class=\"bad\">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first\n"
+      "    ...(qa.not_ready && (qa.quality || {}).next_step ? [['What to do', esc(qa.quality.next_step)]] : []),   // 2026-10-21: edit the draft by hand, never a paid re-run")
 patch('Build Word File', "    qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed' : 'Quality check: ' + ((qa.warnings || []).length + (qa.profile_placeholders ? 1 : 0)) + ' item(s) to review'),",
       "    // R11 (2026-10-13, re-rating §3.11): the summary is this (the LAST) round's, and when the rounds ran out with the gate still failing it says the page is not ready\n"
       "    qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed'\n"
-      "      : qa.not_ready ? 'Did not pass the quality check \\u2014 not ready to publish (round ' + qa.round + ' of ' + qa.max_rounds + '): ' + ((qa.not_ready_reasons || []).slice(0, 3).join('; ') || ((qa.warnings || []).length + ' item(s) to review'))\n"
+      "      : qa.not_ready ? 'Did not pass the quality check, so it is not ready to publish (round ' + qa.round + ' of ' + qa.max_rounds + '): ' + ((qa.not_ready_reasons || []).slice(0, 3).join('; ') || ((qa.warnings || []).length + ' item(s) to review'))\n"
       "        : 'Quality check: ' + ((qa.warnings || []).length + (qa.profile_placeholders ? 1 : 0)) + ' item(s) to review'),\n"
       "    qa_publishable: qa.passed == null ? null : !!qa.passed,\n"
       "    qa_not_ready: !!qa.not_ready, qa_label: qa.quality_label || '', qa_reasons: qa.not_ready_reasons || [], qa_quality: qa.quality || null,\n"
       "    qa_round: qa.round == null ? null : qa.round, qa_max_rounds: qa.max_rounds == null ? null : qa.max_rounds,\n"
       "    qa_placeholders: qa.placeholders_total == null ? null : qa.placeholders_total,\n"
       "    content_links_to_add: qa.links_to_add_when_published || [],   // R15: every planned ladder / cluster link, for the package\n"
-      "    ladder_target_url: d.ladder_target_url || '',")
+      "    ladder_target_url: d.ladder_target_url || '',\n"
+      "    // 2026-10-21 (E-QA): what to do with a draft (by hand, never a re-run), the one URL the page is published at, and the ladder's links\n"
+      "    qa_next_step: (qa.quality || {}).next_step || '', qa_owner_edits: (qa.quality || {}).owner_edits || [], qa_page_url: qa.page_url || '', ladder_links: d.ladder_links || [],")
 # the file name says it too, so a draft cannot be mistaken for a finished page on disk
 patch('Build Word File', "const fileName = prefix + '-' + safe + '-' + today + '.doc';",
       "const fileName = prefix + '-' + safe + '-' + today + (qa.not_ready ? '-DRAFT' : '') + '.doc';   // R11 (2026-10-13)")
 _BP_META_OLD = "const meta = { title, h1: h1 || title, slug, suggested_url: dom ? siteUrlOf(dom, '/' + slug + '/') : '/' + slug + '/',"
 _BP_META_NEW = """// R15 (2026-10-13, re-rating §3.11): a ladder page is published at the URL its ladder row planned — the row's link map, the siblings'
 // up-links and the Rank Tracker all use it, so a different suggested URL leaves every stored link pointing nowhere.
-const plannedPageUrl = (d.ladder_id && String(d.ladder_target_url || '').trim()) ? ownUrl(String(d.ladder_target_url).trim()) : '';
+// RV-17 (2026-10-21): the URL in its site's own form (Content QA's page_url follows the sitemap: techand.ai drops the trailing slash)
+const plannedPageUrl = (d.ladder_id && String(d.ladder_target_url || '').trim()) ? ownUrl(String(d.qa_page_url || d.ladder_target_url).trim()) : '';
 // R15: the links to add once a planned page is live — the ladder's planned pages as well as a hub's cluster pages (Content QA built the list)
 const plannedLinks = (Array.isArray(d.content_links_to_add) && d.content_links_to_add.length)
   ? d.content_links_to_add.filter(p => p && p.url).map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(ownUrl(p.url)), anchor: p.anchor || anchorText(p), role: p.role || '', note: 'Not published yet: add this link from this page once the page is live.' }))
   : HPplanned.map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(p.url), anchor: anchorText(p), role: p.role || p.ladder || '', note: 'Not published yet: add this link from this page once the page is live.' }));
-const meta = { title, h1: h1 || title, slug, suggested_url: plannedPageUrl || (dom ? siteUrlOf(dom, '/' + slug + '/') : '/' + slug + '/'),"""
+const meta = { title, h1: h1 || title, slug, suggested_url: plannedPageUrl || (d.qa_page_url ? ownUrl(d.qa_page_url) : '') || (dom ? siteUrlOf(dom, '/' + slug + '/') : '/' + slug + '/'),"""
 patch('Blog Package', _BP_META_OLD, _BP_META_NEW)
 patch('Blog Package', "  links_to_add_when_published: HPplanned.map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(p.url), anchor: anchorText(p), note: 'Not published yet: add this link from this page once the page is live.' })),",
       "  links_to_add_when_published: plannedLinks,")
@@ -4212,12 +4216,16 @@ patch('Blog Package', "word_count: words, content_score, content_score_withheld,
       "  publishable: d.qa_publishable == null ? null : !!d.qa_publishable, quality: d.qa_quality || null,")
 patch('Blog Package', "if (HPplanned.length) extra.push('\"links_to_add_when_published\" lists ' + HPplanned.length + ' page(s) this hub does NOT link to yet because they are not published: add the link with the anchor given once each one is live (the weekly ladder e-mail reminds you)');",
       "if (plannedLinks.length) extra.push('\"links_to_add_when_published\" lists ' + plannedLinks.length + ' page(s) this page does NOT link to yet because they are not published: add the link with the anchor given once each one is live (the weekly ladder e-mail reminds you)');")
-patch('Blog Package', "const extra = [];", "const extra = [];\nif (d.qa_not_ready) extra.push('This page DID NOT PASS the quality check (' + (d.qa_label || 'not ready to publish') + '): ' + ((d.qa_reasons || []).slice(0, 3).join('; ') || 'see the report') + ' \\u2014 finish those points before you publish it');\nif (plannedPageUrl) extra.push('Publish it at ' + plannedPageUrl + ': that is the URL this keyword ladder planned, and the other pages of the ladder already link to it');")
+patch('Blog Package', "const extra = [];", "const extra = [];\nif (d.qa_not_ready) extra.push('This page did not pass the quality check, so it is not ready to publish: ' + ((d.qa_reasons || []).slice(0, 3).join('; ') || 'see the report') + '. ' + (d.qa_next_step || 'Finish those points in the draft before you publish it.'));\n"
+      "// L2 (2026-10-21): \"the other pages of the ladder already link to it\" was said with no other page written; it is said only of pages that are live\n"
+      "const liveLadderLinks = (d.ladder_links || []).filter(l => l && l.url && l.planned === false && String(ownUrl(l.url)).replace(/\\/+$/, '') !== String(plannedPageUrl).replace(/\\/+$/, '')).length + HP.length;\n"
+      "if (plannedPageUrl) extra.push('Publish it at ' + plannedPageUrl + ': that is the URL this keyword ladder planned' + (liveLadderLinks ? ', and ' + liveLadderLinks + ' published page(s) of the ladder already link to it' : '. The other pages of the ladder are not published yet; each one links to this URL when it is written'));")
 patch('Build Webhook Response', "    qa_summary: d.qa_summary || null,",
       "    qa_summary: d.qa_summary || null,\n"
       "    // R11 (2026-10-13): the app shows the last quality round's verdict, not a count of warnings\n"
       "    qa_publishable: d.qa_publishable == null ? null : !!d.qa_publishable,\n"
-      "    qa_not_ready: !!d.qa_not_ready, qa_label: d.qa_label || null, qa_reasons: d.qa_reasons || [], qa_quality: d.qa_quality || null,")
+      "    qa_not_ready: !!d.qa_not_ready, qa_label: d.qa_label || null, qa_reasons: d.qa_reasons || [], qa_quality: d.qa_quality || null,\n"
+      "    qa_next_step: d.qa_next_step || null, qa_owner_edits: d.qa_owner_edits || [],   // 2026-10-21: what to edit by hand (the app's Needs-you can say it instead of \"run it again\")")
 assert 'qa_not_ready' in code('Build Word File') and 'qa_not_ready' in code('Build Webhook Response') and 'publishable: d.qa_publishable' in code('Blog Package'), 'R11: the delivery does not carry the gate'
 assert 'quality_label' in code('Content QA') and 'illustrativeZones' in code('Content QA'), 'R11: Content QA has no gate or no illustrative zones'
 
@@ -9430,7 +9438,7 @@ assert 'Keep at least one use of each of these terms' in code('Content QA'), 'R4
 assert "CVG.best(prev.competitors || [], covTerms, { kind: pageKind, keyword: prev.keyword })" in code('Parse Analysis'), \
     'R44: Parse Analysis picks the page to beat without the kind of page being written'
 for _n100 in ('Parse Analysis', 'Content QA'):
-    assert 'const kindOf = (p) =>' in code(_n100) and 'const PROMO = ' in code(_n100), 'R44: ' + _n100 + ' carries an older coverage kit'
+    assert 'const kindOf = (p, keyword) =>' in code(_n100) and 'const PROMO = ' in code(_n100), 'R44: ' + _n100 + ' carries an older coverage kit'   # D5 (2026-10-21): the kind is read without the keyword's own words
 assert 'names another company is not a subtopic' in nodes['Strategy Brief']['parameters']['text'], 'R44: the brief prompt lost the subtopic rule'
 assert 'a term counts once it appears' in nodes['Strategy Brief']['parameters']['text'], 'R43: the brief prompt does not say how coverage is measured'
 # R45's rule now lives in the placeholder kit (A-13, section 130): any bracket that starts with a letter, whatever its case, is counted
@@ -11424,7 +11432,7 @@ _NOT_GENERATED69 = ('SEO_Agent_v3_original_export.json', 'SEO_Agent_Test_Callbac
 PLACEHOLDERS_SRC = _rd0('code/_placeholders.js').rstrip('\n'); CLAIMS_SRC = _rd0('code/_claims.js').rstrip('\n')
 EXCLUSIONS_SRC = _rd0('code/_exclusions.js').rstrip('\n'); OUTBOUND_SRC = _rd0('code/_outbound.js').rstrip('\n')
 _kit130 = lambda s: s.replace('/*__PLACEHOLDERS__*/', PLACEHOLDERS_SRC).replace('/*__CLAIMS__*/', CLAIMS_SRC).replace('/*__EXCLUSIONS__*/', EXCLUSIONS_SRC).replace('/*__OUTBOUND__*/', OUTBOUND_SRC)
-for _n130 in ('Content QA', 'Parse Brief', 'Parse Analysis'):
+for _n130 in ('Content QA', 'Parse Brief', 'Parse Analysis', 'Brief Context'):   # Brief Context: D5 (2026-10-21) drops the verdict's skipped topics from the subtopics
     setcode(_n130, _kit130(code(_n130)))
     assert not any(('/*__%s__*/' % _m) in code(_n130) for _m in ('PLACEHOLDERS', 'CLAIMS', 'EXCLUSIONS', 'OUTBOUND', 'FIT_GATE')), _n130 + ': a kit placeholder is left (section 130)'
 assert 'const PH = (() =>' in code('Content QA') and 'const CL = (() =>' in code('Content QA') and 'const EXC = (() =>' in code('Content QA') and 'const fitLabels' in code('Content QA'), 'A-13 / A-15 / A-16 / A-18: a kit is missing from Content QA'
@@ -11843,6 +11851,52 @@ patch('Normalize Input', "    services_given: KF_SERVICES_GIVEN,", "    services
 assert "d.facts_given ? { business_facts:" in rd('code/Site_Row_Track.js'), 'P1: Track my site does not store the business facts'
 assert "('business_facts', 'string')" in open(os.path.join(HERE0, 'ladder_common.py'), encoding='utf-8').read(), 'P1: seo_sites has no business_facts column'
 log('No page before the author profile and the business facts (2026-10-20, agent P1; rehearsal §4 item 1): v5/code/_readiness.js (name + job title + bio, facts of at least 30 characters; mirrored in app/shared/src/readiness.ts); Ladder Plan keeps the plan and holds its pages (limit profile, nothing spawned or charged); the Content Cadence holds every page it would write and lists it (held_for_profile, preview items held: profile, approvals wait too); Track my site stores business_facts, Site Admin takes action facts, every page run carries the stored facts')
+
+# =============================================================================
+# 143. THE PAGE CHECK GIVES THE CLIENT THE RIGHT ADVICE (2026-10-21, engine fixer E-QA; paid pre-launch run, techand.ai ladder page
+#      "ai consultant", exec 42; review CONTENT_REVIEW.md C1 / C2 / M1 / M2 / M4 / M5 / M6 / L1-L3, REPORTS_REVIEW.md RV-9 / RV-10 / RV-17,
+#      DRIVER_REPORT.md D5):
+#      * D5 / RV-9: the "page to beat" was usaii.org's certification course, so the client was told to add "Program Fee: US $894" and
+#        "Alumni Speak". CVG.kindOf reads a course / certification / job / marketplace / directory page as 'other' (never a competitor of a
+#        service page, never a stand-in), never takes the keyword's own words as evidence that a page sells the service, and calls a page
+#        nothing classifies 'unknown' instead of 'service'; subtopics come only from a page of the kind being written (Parse Analysis),
+#        without a sales heading (fee, price, alumni, eligibility), without the verdict's skipped topics (Brief Context, before the brief
+#        reads them, and Content QA); with no such page the comparison is said to be impossible, with the results that could not be read.
+#        A subtopic gap is advice when the draft already reaches the term target.
+#      * The advice is an edit by hand: `quality.owner_edits` (each bracket and what to do: fill in or delete; delete a price / duration
+#        bracket when no such facts are on file) and `quality.next_step`, which never offers a paid re-run.
+#      * Placeholder gate: ANY bracket left for the owner in the body keeps the page "not ready to publish" (the app's CMS rule refuses
+#        them all), and a page whose copy passed with only brackets left is final at once (no editor round can fill them in).
+#      * RV-10: a page that is not article-like carries a compact expert line (author, job title, "Updated" date, reviewer) with the Person
+#        and WebPage schema whenever an author profile exists; the readiness rule is unchanged.
+#      * Low: the checklist says the ladder's pages "already link" only when some are live; one secondary-keyword list (the draft's own,
+#        without the ladder's other pages' keywords, also in the brief); image cards with no "..." cut, H3 sections as their points, alt
+#        text from what the card shows (article HTML / Markdown rewritten to match); one page URL in the site's own slash form (schema,
+#        package, ladder plan); serviceType named, areaServed from the profile; og:image height from the hero; no price / duration bracket
+#        asked of a business with no such facts (copywriter + editor prompts); em dashes, "..." and arrows out of the customer text.
+# =============================================================================
+patch('Parse Brief', "// Word count check\nconst totalWords = (brief.outline || []).reduce",
+      "// 5. M1 (2026-10-21, pre-launch run exec 42): a ladder's top page took the keywords of the rung pages planned under it as its own\n"
+      "//    secondary keywords (\"ai consulting\", \"ai consultant dubai\", \"ai consulting firm\"): four pages for one search. A keyword another\n"
+      "//    page of the same ladder (or a hub's cluster page) is written for is taken off the list here, before the copywriter reads it.\n"
+      "const siblingKwPB = new Set([...(prev.ladder_links || []).map(l => l && (l.keyword || l.about)), ...(prev.planned_link_targets || []).map(l => l && (l.keyword || l.about)), ...(prev.hub_pages || []).map(h => h && h.keyword)]\n"
+      "  .map(x => String(x || '').toLowerCase().replace(/\\s+/g, ' ').trim()).filter(x => x && x !== String(prev.keyword || '').toLowerCase().trim()));\n"
+      "if (siblingKwPB.size && Array.isArray(brief.secondary_keywords)) { const offPB = brief.secondary_keywords.filter(k => siblingKwPB.has(String(k || '').toLowerCase().replace(/\\s+/g, ' ').trim()));\n"
+      "  if (offPB.length) { brief.secondary_keywords = brief.secondary_keywords.filter(k => !offPB.includes(k)); adjustments.push('Took ' + offPB.length + ' keyword(s) off the secondary keywords because another page of this ladder is written for each: ' + offPB.join(', ')); } }\n\n"
+      "// Word count check\nconst totalWords = (brief.outline || []).reduce")
+assert 'siblingKwPB' in code('Parse Brief'), 'M1: Parse Brief does not drop the ladder siblings from the secondary keywords'
+assert "const EXC = (() =>" in code('Brief Context') and 'subtopics_excluded' in code('Brief Context') and "author_line" in code('Brief Context'), 'D5 / RV-10: Brief Context does not filter the subtopics or set the author line'
+assert "CVG.isPromo(s)" in code('Content QA') and 'benchOffKind' in code('Content QA') and 'body_brackets === 0' in code('Content QA') and 'owner_edits' in code('Content QA'), 'D5 / placeholder gate: Content QA is not wired'
+assert "otherWhy(p, kw)" in code('Parse Analysis') and 'sameKind ? CVG.subtopics(' in code('Parse Analysis'), 'D5: Parse Analysis takes subtopics from another kind of page'
+assert 'compactAuthor' in code('Blog Package') and 'liveLadderLinks' in code('Blog Package') and "'og:image:height': (heroImg" in code('Blog Package'), 'RV-10 / L2 / L3: the package is not wired'
+assert 'card_alt' in code('Image Cards') and 'altSwaps' in code('Attach Images'), 'M6: the card alt text is not wired'
+assert 'qa_next_step' in code('Build Word File') and 'qa_next_step' in code('Build Webhook Response'), 'the next step does not reach the report or the callback'
+assert "pricing_facts === false" in nodes['Copywriter']['parameters']['text'] and "pricing_facts === false" in nodes['Editor']['parameters']['text'], 'M5: the writers are not told there are no price facts'
+for _n143 in ('Content QA', 'Blog Package', 'Originality Check', 'Outbound Link Check', 'Attach Images', 'Image Cards'):
+    _c143 = code(_n143)
+    for _bad143 in ("quality check — not ready", "quality check \\u2014 not ready", "Did not pass \\u2014", "and the other pages of the ladder already link to it", "+ '…'"):
+        assert _bad143 not in _c143, '%s still carries "%s" (owner copy rule, 2026-10-21)' % (_n143, _bad143)
+log('The page check gives the client the right advice (2026-10-21, E-QA; pre-launch exec 42): a course / certification / job / directory page is never the page to beat and its sales headings never subtopics; the verdict\'s skipped topics leave the subtopics before the brief; with no page of the same kind the comparison is said to be impossible; any bracket in the body keeps the page not ready, with each bracket named and what to do (fill in or delete) and a next step that is an edit by hand, never a paid re-run; service pages carry a compact expert line with Person schema when a profile exists; one URL form, one secondary-keyword list, honest image alt text, no em dashes in the QA text')
 
 # =============================================================================
 # 9. WRITE

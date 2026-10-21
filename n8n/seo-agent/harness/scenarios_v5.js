@@ -3937,7 +3937,7 @@ await guard('content correctness', async () => {
   check('G4: a figure the cited source does not carry is bracketed [Confirm: …] and reported; the ones the source states (a magnitude variant, a percentage, the year) stay as written',
     /\[Confirm: USD 1,802 million\]/.test(out) && /revenue of AED 50m and above/.test(out) && /adoption rose 23\.5% in the first wave/.test(out) && /starts in July 2026 \(/.test(out)
     && eq(QA.unverified_figures.map(f => f.figure), ['USD 1,802 million']) && eq(QA.unverified_figures[0].sources, ['statista.com'])
-    && QA.warnings.some(w => /Figures the cited source does not carry \(now marked \[Confirm: …\]\): "USD 1,802 million" \(statista\.com\)/.test(w)), JSON.stringify({ u: QA.unverified_figures, line: (out.match(/^Worldwide ERP[^\n]*/m) || [])[0] }));
+    && QA.warnings.some(w => /Figures the cited source does not carry \(now marked \[Confirm: \.\.\.\]\): "USD 1,802 million" \(statista\.com\)/.test(w)), JSON.stringify({ u: QA.unverified_figures, line: (out.match(/^Worldwide ERP[^\n]*/m) || [])[0] }));
   check('G4: a weak source is cited once — the second and third links to it are unlinked, with the reason; the strong sources are untouched',
     (out.match(/\]\(https:\/\/enterprise\.trangotech\.com/g) || []).length === 1 && /Some lists rank by revenue \(TrangoTech\); others rank by reviews \(TrangoTech\)\./.test(out)
     && eq(QA.weak_sources_unlinked, ['enterprise.trangotech.com']) && eq(QA.source_quality, { primary: 3, research: 2, weak: 1 })
@@ -4248,8 +4248,9 @@ await guard('publishable page', async () => {
     .replace('keep the scope in writing.', 'keep the scope in writing. [Author insight: the mistake you see most in a first rollout] [Owner: confirm — whether we are accredited with the Ministry of Finance]');
   const qNotes = await qaRun(WITH_NOTES, { content_brief: { ...PB.content_brief, target_word_count: 300 } });
   console.log('   five gaps ->', qNotes.content_qa.placeholder_count, 'placeholders,', qNotes.content_qa.review_notes, 'review notes | passed', qNotes.content_qa.passed);
-  check('D10: a note the owner has to read ([Confirm: …], [Owner: confirm — …], [Author insight: …]) is not a placeholder; three real gaps stay under the limit and the page still passes',
-    qNotes.content_qa.placeholder_count === 3 && qNotes.content_qa.review_notes === 3 && qNotes.content_qa.passed === true
+  check('D10: a note the owner has to read ([Confirm: ...], [Owner: confirm ...], [Author insight: ...]) is not a placeholder and three real gaps stay under the limit (no editor round); since 2026-10-21 (E-QA) any bracket left keeps the page not ready to publish, each one named with what to do',
+    qNotes.content_qa.placeholder_count === 3 && qNotes.content_qa.review_notes === 3 && qNotes.content_qa.passed === false && qNotes.content_qa.passed_copy === true && qNotes.content_qa.editor_needed === false
+    && qNotes.content_qa.not_ready === true && qNotes.content_qa.quality.owner_edits.length >= 4 && /Finish this draft by hand/.test(qNotes.content_qa.quality.next_step)
     && !qNotes.content_qa.warnings.some(w => /Too many placeholders/.test(w)), JSON.stringify({ ph: qNotes.content_qa.placeholders, notes: qNotes.content_qa.review_notes, w: qNotes.content_qa.warnings }));
   const qSix = await qaRun(WITH_NOTES.replace('in one workshop.', 'in one workshop. Ask for [Price], [Timeline] and [Number] before you sign.'), { content_brief: { ...PB.content_brief, target_word_count: 300 } });
   check('D10: one gap over the limit fails the page and forces the editor round',
@@ -4277,7 +4278,7 @@ await guard('publishable page', async () => {
   const bhtmlL = Buffer.from(bpL.binary.article_html.data, 'base64').toString('utf8');
   console.log('   NAP block ->', (bmdL.match(/\*\*Tech&[^\n]*\n[^\n]*/) || ['(none)'])[0].replace(/\n/g, ' / '));
   check('D10: the package\'s NAP block uses the same values (the merged profile travels on from Content QA), so the published page shows the real name, address and phone',
-    /\*\*Tech& — serving Dubai\*\*/.test(bmdL) && /Dubai Airport Freezone Authority \(DAFZA\)/.test(bmdL) && /\+971507020541/.test(bmdL)
+    /\*\*Tech&, serving Dubai\*\*/.test(bmdL) && /Dubai Airport Freezone Authority \(DAFZA\)/.test(bmdL) && /\+971507020541/.test(bmdL)
     && /Dubai Airport Freezone Authority \(DAFZA\)/.test(bhtmlL) && !/\[Your Business Name\]|\[Street address, City\]/.test(bmdL + bhtmlL), (bmdL.match(/\*\*Tech&[\s\S]{0,200}/) || [''])[0]);
   const qProf = await qaRun(CLEAN, { content_brief: { ...PB.content_brief, target_word_count: 260 },
     site_profile: { business_name: 'Tech& FZCO', logo_url: 'https://techand.ai/brand.svg', phone: '+971 4 123 4567', address: { street: 'Office 12, DAFZA', city: 'Dubai', region: '', postal_code: '', country_code: 'AE' } }, page_role: 'local', page_type: 'Local Page', local_area: 'Dubai' });
@@ -6701,7 +6702,7 @@ await guard('originality, produced images, coverage target', async () => {
     att[0].json.images_produced === 3 && AM.images_produced === 3 && AM.images_planned === 3
     && ['image_1', 'image_2', 'image_3'].every(k => AB[k] && AB[k].mimeType === 'image/webp')
     && AB.image_1.fileName === PM.images[0].filename && AB.image_2.fileName === PM.images[1].filename
-    && AM.images.every((i, k) => i.produced === true && i.bytes > 500 && i.format === 'webp' && i.alt_text === PM.images[k].alt_text && i.width === PM.images[k].width)
+    && AM.images.every((i, k) => i.produced === true && i.bytes > 500 && i.format === 'webp' && i.alt_text === cards[k].json.card_alt && i.alt_text_for_a_photo === PM.images[k].alt_text && i.width === PM.images[k].width)
     && AM.open_graph['og:image'] === PM.open_graph['og:image'] && AB.article_html && AB.article_md,
     JSON.stringify({ bin: Object.keys(AB), imgs: AM.images.map(i => [i.filename, i.produced, i.bytes]) }));
   check('G30: meta.json lists the produced files and the publish checklist asks the owner to save them instead of to create three images',
@@ -6713,7 +6714,7 @@ await guard('originality, produced images, coverage target', async () => {
   const wr = (await run('Build Webhook Response', att))[0].json;
   check('G30: the produced images travel in the API callback, with their alt text, so the app can offer them next to the article',
     Array.isArray(wr.images) && wr.images.length === 3 && wr.images[0].mimeType === 'image/webp'
-    && wr.images[0].fileName === PM.images[0].filename && wr.images[0].alt_text === PM.images[0].alt_text && wr.images[0].data.length > 100
+    && wr.images[0].fileName === PM.images[0].filename && wr.images[0].alt_text === cards[0].json.card_alt && wr.images[0].data.length > 100
     && wr.meta.images_produced === 3, JSON.stringify((wr.images || []).map(i => [i.fileName, i.alt_text, (i.data || '').length])));
 
   // a render that fails leaves the plan in place and never breaks the run
@@ -8546,9 +8547,9 @@ await guard('r10-r15-rerating-completion-defects', async () => {
   const R2 = await qaRun59(META59 + '\n' + BODY59(PRICES1) + '\n\nAsk for ' + ['AED 1,000', 'AED 2,000', 'AED 3,000', 'AED 4,000', 'AED 5,000', 'AED 6,000', 'AED 7,000'].join(', ') + ' before you sign.', 1);
   const Q2 = R2.content_qa;
   console.log('   round 2 ->', JSON.stringify({ round: Q2.round, passed: Q2.passed, ph: Q2.placeholder_count, not_ready: Q2.not_ready, label: Q2.quality_label, reasons: Q2.not_ready_reasons.slice(0, 2) }));
-  check('R11: round 2 uses up the rounds with the gate still failing, so the page is labelled "did not pass the quality check — not ready to publish" with THIS round\'s counts',
+  check('R11: round 2 uses up the rounds with the gate still failing, so the page is labelled "did not pass the quality check, so it is not ready to publish" with THIS round\'s counts',
     Q2.round === 2 && Q2.passed === false && Q2.not_ready === true && Q2.rounds_left === 0 && Q2.max_rounds === 2
-    && Q2.quality_label === 'did not pass the quality check — not ready to publish' && Q2.placeholder_count > Q1.placeholder_count
+    && Q2.quality_label === 'did not pass the quality check, so it is not ready to publish' && Q2.placeholder_count > Q1.placeholder_count
     && Q2.not_ready_reasons.some(r => new RegExp('^' + Q2.placeholder_count + ' placeholder').test(r)) && /delivered as a draft/.test(Q2.quality.note),
     JSON.stringify({ q: Q2.quality, ph1: Q1.placeholder_count, ph2: Q2.placeholder_count }));
   // the delivery: the Word report, the package (and with it the e-mail's qa_summary and the callback) carry the last round's verdict
@@ -8556,7 +8557,7 @@ await guard('r10-r15-rerating-completion-defects', async () => {
   const bwDoc = Buffer.from(BW59.binary.data.data, 'base64').toString('utf8');
   console.log('   delivery ->', JSON.stringify({ summary: BW59.json.qa_summary, file: BW59.json.file_name, not_ready: BW59.json.qa_not_ready }));
   check('R11: the delivered report says it did not pass, with this round\'s reasons and the round it stopped at — not "6 item(s) to review"',
-    /^Did not pass the quality check — not ready to publish \(round 2 of 2\)/.test(BW59.json.qa_summary) && BW59.json.qa_not_ready === true
+    /^Did not pass the quality check, so it is not ready to publish \(round 2 of 2\)/.test(BW59.json.qa_summary) && BW59.json.qa_not_ready === true
     && BW59.json.qa_publishable === false && BW59.json.qa_round === 2 && BW59.json.qa_placeholders === Q2.placeholders_total
     && /-DRAFT\.doc$/.test(BW59.json.file_name) && /Did not pass/.test(bwDoc) && /Why it is not ready/.test(bwDoc), JSON.stringify({ s: BW59.json.qa_summary, f: BW59.json.file_name }));
   const BP59 = (await run('Blog Package', [{ json: { ...BW59.json, page_markdown: R2.output, content_brief_slug: BW59.json.content_brief_slug, content_images: [] } }]))[0];
@@ -8564,7 +8565,7 @@ await guard('r10-r15-rerating-completion-defects', async () => {
   const bpMd = Buffer.from(BP59.binary.article_md.data, 'base64').toString('utf8');
   check('R11: the package the owner downloads says the page may not be published as it is, and its checklist opens with what to finish',
     bpMeta.publishable === false && bpMeta.quality && bpMeta.quality.not_ready === true && bpMeta.quality.round === 2
-    && bpMeta.publish_checklist.some(s => /DID NOT PASS the quality check/.test(s)) && bpMeta.qa_summary === BW59.json.qa_summary, JSON.stringify({ p: bpMeta.publishable, q: bpMeta.quality }).slice(0, 300));
+    && bpMeta.publish_checklist.some(s => /^This page did not pass the quality check, so it is not ready to publish: .*Finish this draft by hand/.test(s)) && bpMeta.qa_summary === BW59.json.qa_summary, JSON.stringify({ p: bpMeta.publishable, q: bpMeta.quality }).slice(0, 300));
   const CB59 = (await run('Build Webhook Response', [BP59]))[0].json;
   check('R11: the callback the app stores carries the same verdict (the app leads with it instead of a count of warnings), and the e-mail prints the same qa_summary',
     CB59.qa_not_ready === true && CB59.qa_publishable === false && CB59.qa_label === Q2.quality_label && CB59.qa_reasons.length >= 1
@@ -9238,7 +9239,7 @@ await guard('r21-r20-r25-r27-r22-editor', async () => {
   console.log('   masked figure ->', JSON.stringify({ ph: QM68.placeholder_count, max: QM68.placeholder_max, not_ready: QM68.not_ready, note: QM68.placeholder_note, reasons: QM68.not_ready_reasons }));
   check('R25: the one masked figure left in the body is named to the owner although the count is under placeholder_max — live it was counted (placeholder_count: 1) and left out of every reason',
     QM68.placeholder_count === 1 && QM68.placeholder_count <= QM68.placeholder_max && QM68.placeholders[0].token === '[Statistic]'
-    && QM68.placeholder_note === '1 masked figure(s) still in the text: [Statistic] — fill each one in, or rewrite the sentence so it does not need the figure, before you publish'
+    && QM68.placeholder_note === '1 masked figure(s) still in the text: [Statistic]. Fill in each one, or rewrite the sentence so it does not need the figure, before you publish'
     && QM68.not_ready_reasons.some(r => /\[Statistic\]/.test(r)) && QM68.quality.placeholders_in_body.join() === '[Statistic]', JSON.stringify(QM68.not_ready_reasons));
   check('R25: the R11 delivery gate is untouched — one placeholder under the limit is still not what makes the page unpublishable, and over the limit still reads as the publishing bar',
     QM68.placeholder_max === 5 && !/at most 5 can be published/.test(QM68.placeholder_note)
@@ -11264,7 +11265,7 @@ await guard('b3-sourced-amounts-and-a-gate-that-refuses', async () => {
   console.log('   last round ->', JSON.stringify({ pct: last78.originality.highest_pct, publishable: last78.publishable, not_ready: last78.not_ready, label: last78.quality_label }));
   check('B3-3: a draft that repeats a competitor page word for word, on the LAST round, is refused — not delivered carrying "passed the quality check"',
     last78.originality.passed === false && last78.passed === false && last78.publishable === false
-    && last78.not_ready === true && last78.quality_label === 'did not pass the quality check — not ready to publish',
+    && last78.not_ready === true && last78.quality_label === 'did not pass the quality check, so it is not ready to publish',
     JSON.stringify({ passed: last78.passed, publishable: last78.publishable, not_ready: last78.not_ready, label: last78.quality_label }));
   check('B3-3: the nested `quality` object is the one the file name, the package banner, meta.json, the callback and the app all read — it has to say the same thing, with the reason and the note',
     last78.quality.passed === false && last78.quality.publishable === false && last78.quality.not_ready === true
@@ -18722,7 +18723,7 @@ await guard('S184 B-11 B-12 B-13 B-14 B-15 the lows of executor B (execs 739 / 7
   const d1 = await pc({ markdown: denial, keyword: 'ai consulting', domain: 'techand.ai' });
   const d2 = await pc({ markdown: claim, keyword: 'ai consulting', domain: 'techand.ai' });
   check('B-11: a sentence that denies a guarantee is no "guarantee claim"', !(d1.warnings || []).some(w => /guarantee claim/.test(w)), JSON.stringify((d1.warnings || []).filter(w => /guarantee/.test(w))));
-  check('B-11: a sentence that makes one still is, and is quoted', (d2.warnings || []).some(w => /guarantee claim — please verify: "We guarantee full compliance/.test(w)), JSON.stringify((d2.warnings || []).filter(w => /guarantee/.test(w))));
+  check('B-11: a sentence that makes one still is, and is quoted', (d2.warnings || []).some(w => /guarantee claim to verify: "We guarantee full compliance/.test(w)), JSON.stringify((d2.warnings || []).filter(w => /guarantee/.test(w))));
   check('B-12: with no terms sent the score says how many of its points were granted, not measured', d1.score_granted_points === ((d1.score_breakdown || {}).coverage || 0) && d1.score_granted_points > 0 && /granted because no terms were sent/.test(d1.score_note), JSON.stringify({ g: d1.score_granted_points, n: d1.score_note, sb: d1.score_breakdown }));
   // B-14: the crawl's "not SEO-friendly" flag on four of exec 739's URLs
   const okPage = (url, friendly) => ({ url, status_code: 200, resource_type: 'html', checks: { seo_friendly_url: friendly }, meta: { title: 'T', internal_links_count: 10, external_links_count: 1, htags: { h1: ['H'] }, content: { plain_text_word_count: 500 } } });
@@ -19623,6 +19624,7 @@ await guard('fserp-three-attempts', async () => {
 
 await require('./scenarios_cycle')({ H, run, mock, store, guard, reset, begin });   // CY1-CY24 (2026-10-19): the per-website cycle - kit, Cycle Dispatcher nodes, kickoff row, deploy guard
 await require('./scenarios_integration')({ H, run, mock, store, guard, reset, begin });   // INT1-INT7 (2026-10-19, E4): one client's life through every agent's generated nodes (the cross-agent contract test)
+await require('./scenarios_eqa')({ H, run, mock, store, guard, reset, begin });   // EQA1-EQA7 (E-QA 2026-10-21): the pre-launch page run's quality check (exec 42) - course page as benchmark, owner edits, bracket gate, author line, cards, URL form
 await require('./scenarios_reh')({ H, run, mock, store, guard, reset, begin });   // REH1-REH6 (F-REH 2026-10-20): the real-credit rehearsal's defects - ghost reservations, Track's parent, cycle 0's skips, service fit, plain notes
 
 H.report();
