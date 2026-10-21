@@ -19660,5 +19660,6 @@ await require('./scenarios_kw_gate')({ H, run, mock, store, guard, reset, begin 
 await require('./scenarios_kwl_res')({ H, run, mock, store, guard, reset, begin });   // KR1-KR4 (KWL-RES 2026-10-21 live keyword test): gone pages cover nothing (D1), artificial intelligence = ai (D2), government bodies are not competitors (D10), plain research document (D12 / D13)   // KWG1-KWG7 (KW-GATE 2026-10-21): the fit gate as a design - own brand vs topic, declared categories and other vendors, Arabic read through a glossary, review items 2 3 4 5 6 8 11 12 13 14 16
 await require('./scenarios_kwl_lad')({ H, run, mock, store, guard, reset, begin });   // KLL1-KLL6 (KWL-LAD 2026-10-21): the keyword live run's ladder and Keyword Check defects D9 D14 D4 D7 D5 D11
 await require('./scenarios_claims_accuracy')({ H, run, mock, store, guard, reset, begin });   // CLACC (CT-ACC 2026-10-22): the labelled set for the business claims check (accuracy/claims.json, 144 sentences over techand.ai / peppol.org / azdan.com), kit and Content QA node, ratcheted on CLAIMS_BASELINE.md
+await require('./scenarios_ctdepth')({ H, run, mock, store, guard, reset, begin });   // CTD1-CTD3 (CT-DEPTH 2026-10-22, scorecard C8 / C12): the length band from the same-kind ranking pages; the live pages that should link to the new page, verified, in meta.json and the checklist
 H.report();
 })();
