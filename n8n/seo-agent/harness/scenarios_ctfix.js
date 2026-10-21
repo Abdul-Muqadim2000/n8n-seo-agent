@@ -102,8 +102,24 @@ module.exports = async (ctx) => {
     check('item 11: an Arabic placeholder is counted', PH.scan('تبلغ الرسوم [السعر] شهريا.').placeholder_count === 1);
   });
 
+  await guard('CTF6 length judged against the ranking band', async () => {
+    const SN = 'CTF6 CT-FIX + CT-DEPTH C8: with a length band from the ranking pages (ok) the length is judged against [low, high] and the reason names the band';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const words = (await qa(null, base)).content_qa.main_content_words;
+    const T = Math.round(words / 1.4);   // 1.4x the target: "too long" under the old rule
+    const band = { ok: true, low: Math.round(T * 0.9), high: words + 200, median: T, target_word_count: T, sample: 5, basis: 'pages ranking for this run, 5 service pages' };
+    const tb = (n) => ({ content_brief: { ...clone(FX.parse_brief.content_brief || {}), target_word_count: n } });
+    const inBand = (await qa({ ...tb(T), length_band: band }, base)).content_qa;
+    const noBand = (await qa({ ...tb(T), length_band: { ...band, ok: false } }, base)).content_qa;
+    const tooLong = (Q) => (Q.warnings || []).some(w => /^Main content is too long/.test(w));
+    check('a draft inside the ranking band is not "too long" (it is 1.4x the target)', !tooLong(inBand), J((inBand.warnings || []).filter(w => /Main content/.test(w))));
+    check('without a usable band the old 1.25x rule still applies', tooLong(noBand));
+    const shortW = (await qa({ ...tb(words + 300), length_band: { ...band, low: words + 100, high: words + 600, target_word_count: words + 300 } }, base)).content_qa;
+    check('a draft under the band is short, and the warning names the band and its sample', (shortW.warnings || []).some(w => /^Main content is short/.test(w) && w.includes((words + 100) + '-' + (words + 600)) && w.includes('5 service pages')), J((shortW.warnings || []).filter(w => /Main content/.test(w))));
+  });
+
   await guard('CTF5 next step and the editor prompt', async () => {
-    const SN = 'CTF5 CT-FIX review items 14 17: no "publish it" beside a duplicate target; the editor is told about durations too';
+    const SN = 'CTF5 CT-FIX review item 14: no "publish it" beside a duplicate target';
     reset(); begin(SN); const check = mkCheck(SN);
     mock('Analyze Competitor Pages', [{ json: { competitors: [] } }]);
     mock('Collect Client Pages', [{ json: { client_pages: [] } }]);
@@ -112,10 +128,6 @@ module.exports = async (ctx) => {
       quality: { not_ready: true, next_step: 'Finish this draft by hand: fill in [Price]. Then publish it. You do not need a new run for these edits: a new run writes a whole new page and is charged again.' } } } }]))[0].json.content_qa;
     const ns = (o.quality || {}).next_step || '';
     check('item 14: with a duplicate target the next step names that page and no longer says "Then publish it."', (o.originality || {}).duplicate_targets && o.originality.duplicate_targets.length ? (!/Then publish it\./.test(ns) && ns.includes('ai-consultant-dubai')) : false, J({ ns, dup: (o.originality || {}).duplicate_targets }));
-    const ed = fs.readFileSync(path.join(__dirname, '..', 'v5', 'prompts', 'editor.txt'), 'utf8');
-    const line = ed.split('\n').find(l => l.includes('$json.pricing_facts === false || $json.timeline_facts === false'));
-    const expr = line && line.match(/\{\{([\s\S]*?)\}\}\s*$/);
-    const said = expr ? new Function('$json', 'return (' + expr[1] + ');')({ pricing_facts: false, timeline_facts: false }) : '';
-    check('item 17: with neither price nor timeline facts the editor is told to add no price AND no duration', /price/.test(said) && /duration/.test(said), said);
+    // item 17 (the editor prompt names durations too) is asserted by the build: the harness carries no prompts
   });
 };

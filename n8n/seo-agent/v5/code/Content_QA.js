@@ -582,8 +582,16 @@ const unansweredSnippets = snippetTargets.filter(t => t.question && !new RegExp(
 
 // 14. Warnings
 const target = brief.target_word_count || 800;
-if (mainWords < target * 0.8) warnings.push(`Main content is short: ${mainWords} words vs target ${target}`);
-if (mainWords > target * 1.25) warnings.push(`Main content is too long: ${mainWords} words vs target ${target}. Cut repetition and secondary detail, and do not add anything`);
+// CT-FIX (2026-10-22, with CT-DEPTH's C8): when the ranking pages of the same kind gave a length band (Parse Analysis `length_band`, ok)
+// and the brief's target sits inside it, the length is judged against that band and the reason names it and its sample; otherwise
+// (too few pages, or the verdict set a number outside it) the old rule stays: short under 0.8x, too long over 1.25x of the target.
+const LBQ = (prev.competitor_analysis || {}).length_band || prev.length_band || null;
+const lenBand = !!(LBQ && LBQ.ok && Number(LBQ.low) > 0 && Number(LBQ.high) >= Number(LBQ.low) && target >= Number(LBQ.low) && target <= Number(LBQ.high));
+const lenLow = lenBand ? Number(LBQ.low) : target * 0.8, lenHigh = lenBand ? Number(LBQ.high) : target * 1.25;
+const lenBasis = lenBand ? ' (the band of ' + (LBQ.basis || 'the pages ranking for this search') + ')' : '';
+const lenOk = lenBand ? (mainWords >= lenLow && mainWords <= lenHigh) : Math.abs(mainWords - target) <= target * 0.25;
+if (mainWords < lenLow) warnings.push(`Main content is short: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis);
+if (mainWords > lenHigh) warnings.push(`Main content is too long: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis + '. Cut repetition and secondary detail, and do not add anything');
 if (thinSections.length) warnings.push('Sections far below their target length: ' + thinSections.slice(0, 4).join('; '));
 if (!metaTitle) warnings.push('Meta title line missing');
 else { if (metaTitle.length > 60) warnings.push(`Meta title is ${metaTitle.length} characters (max 60)`); if (metaTitle.length < 30) warnings.push(`Meta title is only ${metaTitle.length} characters (aim for 50-60)`); if (kw && !flexRe(kw, 'i').test(metaTitle)) warnings.push('Primary keyword missing from the meta title'); }
@@ -762,7 +770,7 @@ if (pkgArticleLike) {
 }
 const profile_placeholders = PROFILE_PH.reduce((n, x) => n + x.count, 0);
 const authorRef = AU ? { '@type': 'Person', ...(domain ? { '@id': home + '#author-' + slugId(AU.name) } : {}), name: AU.name, ...(AU.url ? { url: AU.url } : {}),
-    ...(!domain && AU.job_title ? { jobTitle: AU.job_title } : {}), ...(!domain && AU.bio ? { description: String(AU.bio).slice(0, 300) } : {}), ...(!domain && AU.image_url ? { image: AU.image_url } : {}) }   // CT-FIX (review item 20): with no domain there is no @id to point at the full Person block, so the reference carries its details : { '@type': 'Person', name: '[Author Name]', url: '[Author Page URL]' };
+    ...(!domain && AU.job_title ? { jobTitle: AU.job_title } : {}), ...(!domain && AU.bio ? { description: String(AU.bio).slice(0, 300) } : {}), ...(!domain && AU.image_url ? { image: AU.image_url } : {}) } : { '@type': 'Person', name: '[Author Name]', url: '[Author Page URL]' };   // CT-FIX (review item 20): with no domain there is no @id to point at the full Person block, so the reference carries its details
 if (articleLike) {
   blocks.push({ type: 'Article', json: { '@context': 'https://schema.org', '@type': 'Article', headline: h1Text, description: plain(metaDesc), author: authorRef, publisher: org, datePublished: today, dateModified: today, mainEntityOfPage: { '@type': 'WebPage', ...(domain ? { '@id': pageUrl } : { url: pageUrl }) }, keywords: [prev.keyword, ...(brief.secondary_keywords || []).slice(0, 5)].filter(Boolean).join(', '), ...(role === 'case_study' ? { articleSection: 'Case study' } : {}) } });
   const person = AU ? { '@context': 'https://schema.org', ...authorRef, ...(AU.job_title ? { jobTitle: AU.job_title } : {}), ...((AU.bio || AU.credentials) ? { description: [AU.bio, AU.credentials && !String(AU.bio || '').includes(AU.credentials) ? AU.credentials : ''].filter(Boolean).join(' ').slice(0, 600) } : {}),
@@ -795,7 +803,7 @@ if (articleLike) {
 if (!articleLike && !pkgArticleLike && AU) {
   blocks.push({ type: 'Person', note: 'The author named in the expert line under the H1 (business profile).', json: { '@context': 'https://schema.org', ...authorRef, ...(AU.job_title ? { jobTitle: AU.job_title } : {}),
     ...((AU.same_as || []).length ? { sameAs: AU.same_as } : {}), ...((AU.knows_about || []).length ? { knowsAbout: AU.knows_about } : {}), worksFor: domain ? { '@id': home + '#organization', name: biz } : { '@type': 'Organization', name: biz } } });
-  blocks.push({ type: 'WebPage', note: 'The page, its author and the date shown in the expert line.', json: { '@context': 'https://schema.org', '@type': 'WebPage', '@id': pageUrl, url: pageUrl, name: h1Text,
+  blocks.push({ type: 'WebPage', note: 'The page, its author and the date shown in the expert line.', json: { '@context': 'https://schema.org', '@type': 'WebPage', ...(domain ? { '@id': pageUrl } : {}), url: pageUrl, name: h1Text,
     author: { '@type': 'Person', ...(authorRef['@id'] ? { '@id': authorRef['@id'] } : {}), name: AU.name }, dateModified: today,
     ...(RV ? { reviewedBy: { '@type': 'Person', name: RV.name, ...(RV.job_title ? { jobTitle: RV.job_title } : {}), ...(RV.url ? { url: RV.url } : {}) }, lastReviewed: today } : {}) } });
 }
@@ -850,7 +858,7 @@ fixes.push('Generated ' + blocks.map(b => b.type).join(' + ') + ' schema');
 // FIX_PLAN D10: a page nobody can publish never passes — more than PH_MAX placeholders, or more than 25% over the brief's target (which is
 // itself clamped to the competitor analysis' recommendation, or to the verdict's own target, in Parse Brief).
 const too_many_placeholders = placeholder_count > PH_MAX;
-const too_long = mainWords > target * 1.25;
+const too_long = mainWords > lenHigh;
 // R22's editor half (2026-10-14, the second re-rating): being over length was only ever one warning among up to twenty, and the page
 // that was delivered still ran 2,648 words against its own 1,800 target (+47%) after TWO editor rounds. The cut is now an instruction of
 // its own — how many words to take out and which sections carry them (the ones furthest over their own outline target, else the longest) —
@@ -923,7 +931,7 @@ const owner_edits = [...placeholders.map(p => ({ token: p.token, count: p.count,
 owner_edits.splice(placeholders.length, 0, ...claim_edits);
 // P2-6: `passed_copy` judges the text and decides the editor round; `passed` judges the page the owner receives, so the author box's
 // bracketed fields, and every bracket left in the body, keep it false: the honest answer to "can I publish this as it is?".
-const passed_copy = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25 && !too_many_placeholders && !too_long;
+const passed_copy = warnings.length === 0 && content_score >= 80 && lenOk && !too_many_placeholders && !too_long;
 const passed = passed_copy && profile_placeholders === 0 && body_brackets === 0 && claims_open === 0;   // E-CLAIM: an unsupported promise is an open bracket
 // v4.6: the editor pass (a full rewrite) runs only when it can still improve the page. It is skipped when the draft already scores 90+, the editorial
 // review rates it 85+ with no high-severity problem, the length is on target and the only open notes are style notes (passive voice, long
@@ -932,7 +940,7 @@ const passed = passed_copy && profile_placeholders === 0 && body_brackets === 0 
 const STYLE_ONLY = /^(Passive voice in about|\d+ sentences longer than 28 words|Editor review: )/;
 const crit = critique || lastCritique || {};
 const highProblem = (crit.problems || []).some(p => /high|critical/i.test(p.severity || ''));
-const editor_needed = !passed_copy && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && !too_many_placeholders && !too_long && Math.abs(mainWords - target) <= target * 0.25 && warnings.every(w => STYLE_ONLY.test(w)));
+const editor_needed = !passed_copy && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && !too_many_placeholders && !too_long && lenOk && warnings.every(w => STYLE_ONLY.test(w)));
 if (!passed_copy && !editor_needed && round === 1) fixes.push('Editor pass skipped: the draft met every SEO check (score ' + content_score + ', review ' + crit.score + '); the style notes below are left for a final read');
 // R11 (2026-10-13, re-rating §3.11): when the rounds run out with the gate still failing, the page is DELIVERED AS A DRAFT and labelled as
 // one. Live (exec 521) round 1 failed on 6 placeholders, the editor ran, round 2 came back with 12 (11 × [Price], 1 × [Number]) and 40%
@@ -954,8 +962,8 @@ const not_ready_reasons = !not_ready ? [] : [
   // the [Confirm: ...] marks QA put on figures and claims, and [Author insight: ...] lines, when no warning below names them already
   (!placeholder_count && !writer_note && body_notes_other.length && !warnings.some(w => /now marked \[Confirm/.test(w))) ? body_notes_other.reduce((k, n) => k + n.count, 0) + ' note(s) in square brackets left in the text: ' + body_notes_other.slice(0, 4).map(n => n.token).join(', ') + '. Complete or delete each one before you publish' : '',
   profile_placeholders ? profile_placeholders + ' bracketed field(s) in the byline, the author box and the Person schema still need your details' : '',
-  too_long ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
-  (!too_long && Math.abs(mainWords - target) > target * 0.25) ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
+  too_long ? 'the main content is ' + mainWords + ' words against a target of ' + (lenBand ? lenLow + '-' + lenHigh + lenBasis : target) : '',
+  (!too_long && !lenOk) ? 'the main content is ' + mainWords + ' words against a target of ' + (lenBand ? lenLow + '-' + lenHigh + lenBasis : target) : '',
   (coverage_target_pct && coverage_pct < coverage_target_pct) ? coverage_compare : '',   // R43: one measure, both figures, the basis named
   content_score < 80 ? 'the content score is ' + content_score + ' of 100 (80 is the bar)' : '',
   ...warnings.filter(w => !/^Too many placeholders|^Main content is too long/.test(w)).slice(0, 4)

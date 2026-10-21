@@ -53,6 +53,7 @@ const CVG = (() => {
   // Consulting Partner | Careers at scale" and a Golden Visa page with two "Eligibility" headings are real competitors. A page is
   // 'other' on TWO signals (title, URL path, headings); a title word that only ever names a course, a job or a salary (STRONG) is two.
   const OTHER_STRONG = /\b(?:courses?|bootcamps?|diplomas?|degrees?|masterclass|syllabus|tuition|salary|salaries|jobs?|vacanc\w*|freelancers?|freelance)\b|\bhow (?:to|do i|can i) become\b|\bfor hire\b/i;
+  const OTHER_HEAD_STRONG = /\b(?:member directory|post a job|program(?:me)? fees?|course fees?|tuition|admissions?|get certified|apply now)\b/i;   // one such heading names the page's own offer
   const OTHER_KW = /\b(?:training|trainings|course|courses|certif\w*|bootcamps?|diplomas?|degrees?|jobs?|careers?|salar\w*|academy|workshops?)\b/i;   // a client that sells the course itself
   const OTHER_PATH = /\/(?:[a-z-]*certif[a-z-]*|[a-z-]*courses?|bootcamps?|training(?:-[a-z-]+)?|programs?|programmes?|jobs?|careers?|vacancies|salar[a-z-]*|hire|freelancers?|directory|members?)(?:\/|$)/i;
   const OTHER_HEADINGS = /\b(?:program(?:me)? fees?|course fees?|tuition|eligibility|eligible|curriculum|syllabus|enrol\w*|enroll\w*|admissions?|alumni|study[- ]?(?:books?|kits?|materials?)|get certified|salary|job (?:description|openings)|apply now|member directory|get listed|post a job)\b/i;
@@ -73,7 +74,7 @@ const CVG = (() => {
     const title = kwStrip(S(p && p.title), keyword), path = pathOf(p && p.url).toLowerCase();
     if (OTHER_STRONG.test(title)) return 'title';
     const hs = ((p && p.headings) || []).map(h => S(h).replace(/^H\d:\s*/i, '')).filter(h => OTHER_HEADINGS.test(h));
-    const sig = [OTHER_TITLE.test(title) ? 'title' : '', hs.length >= 2 ? 'headings' : '', (OTHER_PATH.test(path) && !GUIDE_PATH.test(path)) ? 'path' : ''].filter(Boolean);
+    const sig = [OTHER_TITLE.test(title) ? 'title' : '', (hs.length >= 2 || hs.some(h => OTHER_HEAD_STRONG.test(h))) ? 'headings' : '', (OTHER_PATH.test(path) && !GUIDE_PATH.test(path)) ? 'path' : ''].filter(Boolean);
     return sig.length >= 2 ? sig.join(' + ') : '';
   };
   // R44 kinds plus D5: 'list' | 'other' | 'service' | 'guide' | 'unknown'. A page nothing says sells the service is 'unknown' now, not
@@ -157,7 +158,7 @@ const CVG = (() => {
   // sales words count only when the page to beat is a course / job / directory page (kind 'other'); a heading that IS a fee or an amount
   // ("Fee: US $894", "Program Fee: US $894 (All Inclusive)", "AED 4,500") is never a topic.
   const FEE_LABEL = /^(?:(?:program(?:me)?|course|registration|application|exam|joining)\s+)?(?:fees?|prices?|pricing|costs?|tuition)\s*:|^\W*(?:US\s?)?(?:\$|aed|usd|eur|gbp|sar|inr)\s?\d[\d,.]*\s*[a-z]{0,3}\W*(?:\([^)]*\))?\s*$/i;
-  const isPromo = (h, kind) => { const t = clean(h); return PROMO.test(t) || FEE_LABEL.test(t) || (kind === 'other' && (PROMO_OFFER.test(t) || FREE_CAPS.test(t))); };
+  const isPromo = (h, kind) => { const t = clean(h); if (/\b(?:versus|vs\.?|compared (?:to|with))\s/i.test(t) && !FEE_LABEL.test(t)) return false; return PROMO.test(t) || FEE_LABEL.test(t) || (kind === 'other' && (PROMO_OFFER.test(t) || FREE_CAPS.test(t))); };
   const ENTRY_DETAIL = /^(?:key (?:highlights|features|services)|services|contact information|location|founded|headquarters|pricing|rating|website|pros|cons|why we picked it)\b/i;
   const levelOf = (h) => { const m = S(h).match(/^H(\d)\s*:/i); return m ? Number(m[1]) : 2; };
   const bodyUnder = (content, text) => {   // the words between this heading's line and the next heading line, or null when the line is not found

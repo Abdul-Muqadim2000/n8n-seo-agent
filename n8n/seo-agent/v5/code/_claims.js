@@ -274,6 +274,7 @@ const CL = (() => {
               sentence: full, support: Math.round(100 * sp.best) });
             continue;
           }
+          if (it.kind === 'para' && /:\s*$/.test(plain0)) { lastBill = false; continue; }   // a lead-in ("Our engagement includes:") introduces the list; its items are read
           const hasQuote = /["“][^"“”]{3,300}["”]/.test(plain0);
           const plain = quoteless(plain0);
           if (hasQuote && SAY_RE.test(plain)) { lastBill = false; continue; }   // a quotation with its speaker: their words, not ours
@@ -294,7 +295,8 @@ const CL = (() => {
           lastBill = !!why && BILL_RE.test(plain);
           if (!why) continue;
           out.checked++;
-          const sp = support(plain);
+          const lab = why === 'list' && s.match(/^\s*\*\*([^*]{3,60}?):?\*\*:?\s+\S/);   // "**AI strategy:** candidate use cases ...": the label is the service the lead-in commits to
+          const sp0 = support(plain); const sp = (!sp0.ok && lab && support(lab[1]).ok) ? support(lab[1]) : sp0;
           if (opts.trace) out.trace = (out.trace || []).concat([{ s: plain.slice(0, 90), why, W: sp.W, best: Math.round(100 * sp.best), numsOk: sp.numsOk }]);
           if (sp.ok || !sp.W.length) continue;   // nothing but generic words: nothing to hold against the facts
           const kind = /\b(?:charg|bill|fee|price|pricing|quote|invoice|payment|licen[cs]es? (?:sit|are)|separate line|cost|free|discount)/i.test(plain) ? 'pricing'

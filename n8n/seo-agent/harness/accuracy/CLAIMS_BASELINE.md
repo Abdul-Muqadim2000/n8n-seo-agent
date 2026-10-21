@@ -50,11 +50,11 @@ unverified-statistics check) are not counted: this set measures the claims check
 |---|---|---|---|---|---|---|---|---|
 | kit | a6756696 (CT-ACC) | 144 | 95.2% | 66.7% (40 of 60) | 4.1% (2 of 49) | 0% (0 of 35) | 100% / 68.3% | 85.7% / 63.2% |
 | qa | a6756696 (CT-ACC) | 144 | 95.2% | 66.7% (40 of 60) | 4.1% (2 of 49) | 0% (0 of 35) | 100% / 68.3% | 85.7% / 63.2% |
-| kit | 413cae9a + review group (before CT-FIX) | 160 | 76.9% | 60.6% (40 of 66) | 4.1% (2 of 49) | 19.6% (10 of 51) | 100% / 68.3% | 50.0% / 48.0% |
-| kit | CT-FIX | 160 | 100% | 95.5% (63 of 66) | 0% (0 of 49) | 0% (0 of 51) | 100% / 100% | 100% / 88.0% |
-| qa | CT-FIX | 160 | 100% | 95.5% (63 of 66) | 0% (0 of 49) | 0% (0 of 51) | 100% / 100% | 100% / 88.0% |
+| kit | 413cae9a + review group (before CT-FIX) | 160 | 76.9% | 60.6% (40 of 66) | 4.1% (2 of 49) | 22.2% (10 of 45) | 100% / 68.3% | 50.0% / 48.0% |
+| kit | CT-FIX | 160 | 100% | 95.5% (63 of 66) | 0% (0 of 49) | 0% (0 of 45) | 100% / 100% | 100% / 88.0% |
+| qa | CT-FIX | 160 | 100% | 93.9% (62 of 66) | 0% (0 of 49) | 0% (0 of 45) | 100% / 100% | 100% / 84.0% |
 
-Arabic (13 cases): recall 0% (0 of 5) before, 80% (4 of 5) after, no false flag either time. The review group alone: before, 10 of 10
+The two paths now differ on one case, CL-T41 (row below). Arabic (13 cases): recall 0% (0 of 5) before, 80% (4 of 5) after, no false flag either time. The review group alone: before, 10 of 10
 non-claims flagged and 0 of 6 promises found; after, 0 of 10 flagged and 4 of 6 found.
 
 CT-FIX changed the design, not the patterns: a commitment is found by its SUBJECT (we / we'll / we have, a sentence that opens with
@@ -74,6 +74,7 @@ quote, fee or guarantee is still a term to confirm.
 | kit | CL-A08 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | ستحصل على دليل تشغيل ولوحات متابعة بعد الإطلاق. | not flagged: an offer to the reader ("you will receive") counts only in a section about the business, and the Arabic heading "التشغيل والتحسين" (Run & Optimize) is a phase on file only in English, so the section is not recognised as the business's |
 | kit | CL-R13 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | A runbook is delivered at go-live. | not flagged: read as a passive commitment, but with two content words "deliver" alone (half of them) matched a fact; one shared word is too little support for so short a line |
 | kit | CL-R14 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | Monitoring dashboards are included in every engagement. | not flagged: read as a passive commitment, but "monitoring" alone (half of two content words) matched a fact; one shared word is too little support for so short a line |
+| qa | CL-T41 | missed | techand.ai | unsupported_claim | billing (hold-out) | Our fixed-price readiness assessment costs AED 25,000. | not flagged as a claim on the qa path only: Content QA's price mask runs first and turns "AED 25,000" into [Price] (no price facts on file), and the claims check never reads a sentence that holds a bracket; the page is still held, by the placeholder, but the claim is not named. The kit flags it |
 | qa | CL-A08 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | ستحصل على دليل تشغيل ولوحات متابعة بعد الإطلاق. | not flagged: an offer to the reader ("you will receive") counts only in a section about the business, and the Arabic heading "التشغيل والتحسين" (Run & Optimize) is a phase on file only in English, so the section is not recognised as the business's |
 | qa | CL-R13 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | A runbook is delivered at go-live. | not flagged: read as a passive commitment, but with two content words "deliver" alone (half of them) matched a fact; one shared word is too little support for so short a line |
 | qa | CL-R14 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | Monitoring dashboards are included in every engagement. | not flagged: read as a passive commitment, but "monitoring" alone (half of two content words) matched a fact; one shared word is too little support for so short a line |
