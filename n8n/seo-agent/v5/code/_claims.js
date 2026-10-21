@@ -123,7 +123,9 @@ const CL = (() => {
   // checked = flagged for the owner).
   const NUMW = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, ninety: 90, hundred: 100 };
   // the same meaning in the words a writer or a site uses: applied to the claim and to the facts before anything is compared
+  // CT-FIX2 (live page 2026-10-22, D1): the long and the short name of a place are one name ("United Arab Emirates" = "UAE")
   const canon = (s) => String(s || '')
+    .replace(/\bthe united arab emirates\b|\bunited arab emirates\b/gi, 'UAE').replace(/\bkingdom of saudi arabia\b|\bsaudi arabia\b/gi, 'KSA').replace(/\bgulf cooperation council\b/gi, 'GCC')
     .replace(/\b(?:a|one) decade\b/gi, '10 years').replace(/\b(two|three|four|five) decades\b/gi, (m, n) => (NUMW[n.toLowerCase()] * 10) + ' years')
     .replace(/\b(?:a|one) dozen\b/gi, '12').replace(/\b(?:around|round)[- ]the[- ]clock\b|\b24\s*x\s*7\b|\b24 hours a day,? 7 days a week\b|\b24 hours a day\b/gi, '24/7')
     .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|ninety|hundred)\b/gi, (m) => String(NUMW[m.toLowerCase()]))
@@ -172,7 +174,9 @@ const CL = (() => {
   const NARR_VERB = /^(?:we|we['’]ll)\s+(?:will\s+)?(?:cover|explain|walk (?:you )?through|look at|outline|list|compare|answer|explore|discuss|break down|summari[sz]e|unpack|examine|describe|go through|show you)\s+(?:the|these|this|what|how|why|when|which|each|every|\d+|both|all)\b/i;
   const EXAMPLE_RE = /^(?:say|suppose|imagine|assume|picture|let['’]?s say|for (?:example|instance), (?:say|suppose|imagine|if))\b/i;
   const ADVICE_WE = /^(?:we|we['’]d)\s+(?:would\s+|always\s+|strongly\s+)?(?:recommend|suggest|advise|encourage|urge)\b/i;
-  const CTA_START = /^(?:book|call|contact|talk|email|e-mail|schedule|get in touch|arrange|request|get a|get your|get started|share|send|ask|tell us|reach|start|join|sign up|try|download|visit|speak|let['’]s|fill in|message|claim|see how|find out|learn more|ready to)\b/i;
+  const CTA_START = /^(?:book|call|contact|talk|email|e-mail|schedule|get in touch|arrange|request|get a|get your|get started|share|send|ask|tell us|reach|start|join|sign up|try|download|visit|speak|let['’]s|fill in|message|claim|see how|find out|learn more|ready to|read|see|explore|discover|check out|browse|compare)\b/i;
+  // CT-FIX2 (live page 2026-10-22, D2): "To test one use case first, [book a discovery call]" is an invitation behind a purpose clause
+  const PURPOSE_LEAD = /^(?:to|if you (?:want|need|would like) to|when you are ready to|for)\s+[^,]{3,80},\s+/i;
   const CTA_HEAD = /\b(?:next steps?|get started|getting started with us|contact|talk to|book|ready to|let['’]s talk|work with us|request|speak to|get in touch|start (?:your|a|with))\b/i;
   const CTA_FOLLOW = /\b(?:reply|replies|respond|responds|get back to you|call you back|be in touch|contact you|review (?:it|them|your|the details)|send (?:you )?(?:a |the )?(?:written )?(?:plan|proposal|summary|recommendation|outline|next steps)|prepare a (?:fixed-scope |short )?(?:proposal|plan)|set up a call|arrange a call)\b/i;
   const CTA_TERMS = /\b(?:quotes?|quoted|price[sd]?|pricing|fees?|cost|guarantee\w*|refund\w*|money[- ]back|warrant\w*|discount\w*)\b|(?:aed|usd|eur|gbp|sar|\$|€|£)\s?\d/i;
@@ -180,7 +184,7 @@ const CL = (() => {
   const OFFER_RE = /\b(?:you|your (?:team|teams|staff|people|users|admins|organisation|organization|business|company))\s+(?:will\s+|['’]ll\s+|also\s+|then\s+|always\s+)?(?:receive|receives|get|gets|keep|keeps|walk away with|leave with|are given|are handed|can expect|will have)\b|\b(?:business users|users|admins|makers)\s+(?:will\s+)?(?:get|gets|receive)\b/i;
   const TRAIN_RE = /^(?:admins|makers|(?:business )?users|staff|employees|your (?:team|staff|admins|users|people))\s+(?:learn|are trained|get trained|receive training)\b/i;
   const PHASE_RE = /^(?:this|each|every|the)\s+(?:phase|stage|step|engagement|service|workstream|programme|program|package|plan)\s+(?:covers|includes|ends|delivers|starts|runs|takes|comes with)\b/i;
-  const PASSIVE_RE = /\b(?:is|are|will be|comes?|come)\s+(?:also\s+|always\s+)?(?:delivered|included|provided|offered|covered|handled|priced|billed|charged|backed|guaranteed|free of charge|at no (?:extra )?cost|part of (?:the|every|each|our|all)|available (?:to|for|with|at)|bundled|built in|supplied)\b/i;
+  const PASSIVE_RE = /\b(?:is|are|will be|comes?|come)\s+(?:also\s+|always\s+)?(?:delivered|included|provided|offered|covered|handled|priced|billed|charged|backed|guaranteed|agreed|named|assigned|documented|defined|signed off|set up|tested|trained|reviewed|free of charge|at no (?:extra )?cost|part of (?:the|every|each|our|all)|available (?:to|for|with|at)|bundled|built in|supplied)\b/i;
   const COSTTIME_RE = /\b(?:costs?|starts? at|is priced at|takes|lasts|runs for)\s+(?:about\s+|around\s+|from\s+|just\s+|only\s+)?(?:(?:aed|usd|eur|gbp|sar|\$|€|£)\s?)?\d/i;
   const BILL_RE = /\b(?:quote|quotes|quoted|invoice\w*|billed|billing|line item|separate line|fees?|payment|deposit|retainer|hourly|day rate|licen[cs]es? (?:sit|are|is)|charged?)\b/i;
   const LEAD_HEAD = /\b(?:what you get|you get|you receive|deliverables?|includes?|included|what (?:we|\S+) (?:deliver|delivers|does|do|handles?|offers?|covers?|provides?)|our (?:services|engagement|approach|offer|packages?|scope))\b/i;
@@ -230,6 +234,25 @@ const CL = (() => {
       for (const c of cs) { const r = W.length ? W.filter(w => c.w.has(w)).length / W.length : 0; if (r > best && strong.every(q => c.low.includes(q))) best = r; }
       return { W, best, numsOk, ok: numsOk && W.length > 0 && best >= 0.5 };
     };
+    // CT-FIX2 (live page 2026-10-22, D1): "We serve enterprises across the UAE and the GCC and bring 20+ years of industry experience" joins
+    // two facts that sit in two places on file; each half is held against the facts on its own, and the sentence is supported when both are
+    const JOIN_RE = /,?\s+and\s+(?=(?:we\s+|also\s+)?(?:bring|brings|have|has|hold|holds|serve|serves|offer|offers|deliver|delivers|run|runs|work|works|employ|employs|support|supports|operate|operates)\b)/i;
+    const supportJoined = (plain, english) => { const sp = support(plain, english); if (sp.ok || english || !JOIN_RE.test(plain)) return sp;
+      const parts = plain.split(JOIN_RE).map(x => x.trim()).filter(x => x.length >= 8); if (parts.length < 2) return sp;
+      const subj = (plain.match(/^(\S+(?:\s+\S+)?)\s/) || [])[1] || '';
+      const sps = parts.map((x, i) => support(i === 0 ? x : subj + ' ' + x));
+      return sps.every(x => x.ok) ? { ...sp, best: Math.min(...sps.map(x => x.best)), ok: true, joined: true } : sp; };
+    // the facts on file closest to a sentence (for the second reader): up to 3, the best word overlap first
+    const topFacts = (plain) => { const W = [...new Set(words(canon(plain), nameWords))].filter(w => !GENERIC.has(w)); if (!W.length) return [];
+      const sc = []; for (let i = 0; i < csents.length; i++) { const ws = new Set(words(csents[i], nameWords)); const r = W.filter(w => ws.has(w)).length / W.length; if (r > 0) sc.push([r, i]); }
+      sc.sort((a, b) => b[0] - a[0]); return sc.slice(0, 3).map(([, i]) => csents[i].trim().slice(0, 400)); };
+    // a phase or a service the business names on file, as the subject: "Run & Optimize covers ...", "Assess & Envision includes ..."
+    const PHASE_SUBJ = /^([A-Z][\w-]*(?:\s+(?:&|and)\s+[A-Z][\w-]*)+)\s+(?:also\s+|then\s+)?(?:covers?|includes?|adds?|extends?|delivers?|provides?|ends?|starts?|runs?|takes?|gives?|keeps?|sets?|handles?|brings?|is|are)\b/;
+    const phaseSubject = (s) => { const m = s.match(PHASE_SUBJ); return !!(m && norm(m[1]).length >= 6 && cnorm.includes(norm(m[1]))); };
+    const TITLE_SUBJ = /^((?:[A-Z][\w&-]*\s+){0,3}[A-Z][\w&-]*)\s+(?:also\s+)?[a-z]+s\b/;
+    const onFileSubject = (s) => { const m = s.match(TITLE_SUBJ); return !!(m && norm(m[1]).length >= 6 && cnorm.includes(norm(m[1]))); };
+    const cands = []; const seenC = new Set();
+    const addCand = (o) => { const k = norm(o.plain); if (!k || seenC.has(k)) return; seenC.add(k); cands.push(o); };
     // sections: one H2 group = the H2 and the H3s under it; a list item remembers its lead-in
     const groups = []; let g = null, para = [], lastLead = null, headLead = null;
     const flushPara = () => { if (para.length && g) { const p = para.join(' '); g.items.push({ p, kind: 'para' }); lastLead = /:\s*$/.test(p) ? p : null; } para = []; };
@@ -247,18 +270,20 @@ const CL = (() => {
       para.push(L);
     }
     flushPara();
+    // CT-FIX2 (live page 2026-10-22, D3): an image caption is read as a statement on the page (card 3 repeated the go / no-go promise)
+    for (const c of (opts.captions || [])) { const txt = String(c || '').trim(); if (txt) groups.push({ heads: [], items: [{ p: txt, kind: 'caption' }], captions: true }); }
     const headOnFile = (hd) => { const pre = norm(String(hd).split(':')[0]); return pre.length >= 6 && cnorm.includes(pre); };
     const clean = (s) => s.replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim();
     const sentsOf = (p) => p.replace(/\*\*/g, '').split(/(?<=[.!?])\s+(?=[A-Z"(\[“؀-ۿ])|(?<=[.!?؟])\s+/).map(s => s.trim()).filter(Boolean);
     const isLast = (G) => groups.filter(x => x.heads.length).slice(-1)[0] === G && groups.filter(x => x.heads.length).length >= 2;
     const ctaGroup = (G) => G.heads.some(hd => CTA_HEAD.test(hd) || /\?\s*$/.test(hd) && /\b(?:ready|want|need) to\b/i.test(hd)) || isLast(G);
     for (const G of groups) {
-      const aboutBiz = G.heads.some(hd => headOnFile(hd) || (NAME_RE && NAME_RE.test(hd)) || /\b(?:we|our|us)\b/i.test(hd))
+      const aboutBiz = !!G.captions || G.heads.some(hd => headOnFile(hd) || (NAME_RE && NAME_RE.test(hd)) || /\b(?:we|our|us)\b/i.test(hd))
         || G.items.some(it => it.kind === 'para' && sentsOf(it.p).some(s => bizSubject(quoteless(clean(s)))));
       const cta = ctaGroup(G);
       for (const it of G.items) {
         if (it.kind === 'head' && !(WE_SUBJ.test(lead(clean(it.p))) || (NAME_VERB && NAME_VERB.test(clean(it.p))))) continue;   // a heading is read only when it is a sentence with the business as subject ("Why Tech&" is a label)
-        const sents = (it.kind === 'li' || it.kind === 'table' || it.kind === 'head') ? [it.p] : sentsOf(it.p); let lastBill = false;
+        const sents = (it.kind === 'li' || it.kind === 'table' || it.kind === 'head' || it.kind === 'caption') ? [it.p] : sentsOf(it.p); let lastBill = false;
         for (const s of sents) {
           const plain0 = clean(s);
           const full = s.replace(/^[-*]\s+/, '');
@@ -268,10 +293,11 @@ const CL = (() => {
             out.checked++;
             const en = arToEnglish(plain0); const sp = support(plain0, en.text);
             if (opts.trace) out.trace = (out.trace || []).concat([{ s: plain0.slice(0, 90), why: 'ar-' + why, W: sp.W, best: Math.round(100 * sp.best), numsOk: sp.numsOk }]);
-            if (sp.ok && en.terms >= 2) continue;
+            if (sp.ok && en.terms >= 2) { if (opts.collect) addCand({ sentence: full, plain: plain0, why: 'ar-' + why, rule_flag: false, support: Math.round(100 * sp.best), kind: 'process', where: it.kind, facts: topFacts(en.text) }); continue; }
             const ek = en.text;
-            out.flags.push({ kind: /guarantee|refund/.test(ek) ? 'guarantee' : /fee|cost|price|aed|discount|free/.test(ek) ? 'pricing' : /certif/.test(ek) ? 'credential' : /weeks|days|months/.test(ek) ? 'timeline' : why === 'offer' ? 'deliverable' : 'process',
-              sentence: full, support: Math.round(100 * sp.best) });
+            const akind = /guarantee|refund/.test(ek) ? 'guarantee' : /fee|cost|price|aed|discount|free/.test(ek) ? 'pricing' : /certif/.test(ek) ? 'credential' : /weeks|days|months/.test(ek) ? 'timeline' : why === 'offer' ? 'deliverable' : 'process';
+            out.flags.push({ kind: akind, sentence: full, support: Math.round(100 * sp.best), where: it.kind });
+            if (opts.collect) addCand({ sentence: full, plain: plain0, why: 'ar-' + why, rule_flag: true, support: Math.round(100 * sp.best), kind: akind, where: it.kind, facts: topFacts(en.text) });
             continue;
           }
           if (it.kind === 'para' && /:\s*$/.test(plain0)) { lastBill = false; continue; }   // a lead-in ("Our engagement includes:") introduces the list; its items are read
@@ -279,12 +305,15 @@ const CL = (() => {
           const plain = quoteless(plain0);
           if (hasQuote && SAY_RE.test(plain)) { lastBill = false; continue; }   // a quotation with its speaker: their words, not ours
           const L0 = lead(plain);
+          if (ADVICE_WE.test(L0) && opts.collect && !NARR_OPEN.test(plain)) addCand({ sentence: full, plain, why: 'advice', rule_flag: false, support: 0, kind: 'process', where: it.kind, facts: topFacts(plain) });   // "we recommend a go / no-go review ...": the second reader decides
           if (NARR_OPEN.test(plain) || NARR_VERB.test(L0) || EXAMPLE_RE.test(plain) || ADVICE_WE.test(L0)) { lastBill = false; continue; }
-          if (cta && (CTA_START.test(plain) || CTA_FOLLOW.test(plain)) && !CTA_TERMS.test(plain)) { lastBill = false; continue; }   // the call to action invites a conversation; a price or a guarantee in it is still a term
-          if (CTA_START.test(plain) && !/\b(?:and|then)\s+(?:we|our team)\b/i.test(plain) && !CTA_TERMS.test(plain)) { lastBill = false; continue; }   // an imperative on its own is advice or an invitation
+          const pc = plain.replace(PURPOSE_LEAD, '');   // CT-FIX2 (D2): "To test one use case first, [book a call]" is the invitation itself
+          if (cta && (CTA_START.test(pc) || CTA_FOLLOW.test(pc)) && !CTA_TERMS.test(pc)) { lastBill = false; continue; }   // the call to action invites a conversation; a price or a guarantee in it is still a term
+          if (CTA_START.test(pc) && !/\b(?:and|then)\s+(?:we|our team)\b/i.test(pc) && !CTA_TERMS.test(pc)) { lastBill = false; continue; }   // an imperative on its own is advice or an invitation
           let why = null; const subj = bizSubject(plain);
           if (subj) why = subj;
-          else if (it.kind === 'li' && ((it.lead && (bizSubject(clean(it.lead)) || (NAME_RE && NAME_RE.test(it.lead)) || LEAD_HEAD.test(it.lead))) || (!it.lead && it.head && LEAD_HEAD.test(it.head) && (aboutBiz || (NAME_RE && NAME_RE.test(it.head)))))) why = 'list';
+          else if (phaseSubject(plain)) why = 'phase';   // CT-FIX2 (D3): a phase on file as the subject is the business speaking
+          else if (it.kind === 'li' && ((it.lead && (bizSubject(clean(it.lead)) || (NAME_RE && NAME_RE.test(it.lead)) || LEAD_HEAD.test(it.lead) || /\b(?:we|our)\b/i.test(it.lead))) || (!it.lead && it.head && LEAD_HEAD.test(it.head) && (aboutBiz || (NAME_RE && NAME_RE.test(it.head)))))) why = 'list';
           else if (aboutBiz && it.kind !== 'head' && !thirdParty(plain)) {
             if (OFFER_RE.test(plain)) why = 'offer';
             else if (TRAIN_RE.test(plain) || PHASE_RE.test(plain)) why = 'phase';
@@ -293,12 +322,16 @@ const CL = (() => {
           }
           if (why && (why === 'offer' || why === 'with') && thirdParty(plain)) why = null;
           lastBill = !!why && BILL_RE.test(plain);
-          if (!why) continue;
+          if (!why) {   // not a commitment to the rules; a wider net for the second reader: a section about the business, a name on file as the subject, the business named
+            if (opts.collect && !thirdParty(plain) && ((aboutBiz && (COMMIT_VERB.test(plain.toLowerCase()) || OFFER_RE.test(plain) || PASSIVE_RE.test(plain))) || onFileSubject(plain) || (NAME_RE && NAME_RE.test(plain)) || /\b(?:we|our|us)\b/i.test(plain)))
+              addCand({ sentence: full, plain, why: 'wide', rule_flag: false, support: 0, kind: 'process', where: it.kind, facts: topFacts(plain) });
+            continue;
+          }
           out.checked++;
           const lab = why === 'list' && s.match(/^\s*\*\*([^*]{3,60}?):?\*\*:?\s+\S/);   // "**AI strategy:** candidate use cases ...": the label is the service the lead-in commits to
-          const sp0 = support(plain); const sp = (!sp0.ok && lab && support(lab[1]).ok) ? support(lab[1]) : sp0;
+          const sp0 = supportJoined(plain); const sp = (!sp0.ok && lab && support(lab[1]).ok) ? support(lab[1]) : sp0;
           if (opts.trace) out.trace = (out.trace || []).concat([{ s: plain.slice(0, 90), why, W: sp.W, best: Math.round(100 * sp.best), numsOk: sp.numsOk }]);
-          if (sp.ok || !sp.W.length) continue;   // nothing but generic words: nothing to hold against the facts
+          if (sp.ok || !sp.W.length) { if (opts.collect) addCand({ sentence: full, plain, why, rule_flag: false, support: Math.round(100 * sp.best), kind: 'process', where: it.kind, facts: topFacts(plain) }); continue; }   // nothing but generic words: nothing to hold against the facts
           const kind = /\b(?:charg|bill|fee|price|pricing|quote|invoice|payment|licen[cs]es? (?:sit|are)|separate line|cost|free|discount)/i.test(plain) ? 'pricing'
             : /\b(?:guarantee|warrant|refund|promise)/i.test(plain) ? 'guarantee'
               : /\b(?:within|\d+\s*(?:days?|weeks?|months?|hours?|minutes?))\b|\b(?:days|weeks|months)\b/i.test(canon(plain)) ? 'timeline'
@@ -306,11 +339,20 @@ const CL = (() => {
                   : /\b(?:stop|only|not|never|scope|covers|includes)\b/i.test(plain) ? 'scope'
                     : (why === 'offer' || why === 'phase' || why === 'list' || why === 'passive' || /\b(?:deliver|provide|runbook|pack|report|dashboard|document)/i.test(plain)) ? 'deliverable' : 'process';
           // E-CLAIM / CT-FIX: the WHOLE sentence is returned (Content QA finds and wraps it in the copy); a display cut belongs to the reader
-          out.flags.push({ kind, sentence: full, support: Math.round(100 * sp.best) });
+          out.flags.push({ kind, sentence: full, support: Math.round(100 * sp.best), where: it.kind });
+          if (opts.collect) addCand({ sentence: full, plain, why, rule_flag: true, support: Math.round(100 * sp.best), kind, where: it.kind, facts: topFacts(plain) });
         }
       }
     }
+    if (opts.collect) out.candidates = cands;
     return out;
   }
-  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm };
+  // CT-FIX2 (2026-10-22): does ONE fact carry a sentence? Every number of the sentence is on that fact and at least 40% of its content
+  // words. The second reader's "supported by F3" is accepted only when this holds (evaluation run 2: Haiku named a fact for "Our
+  // fixed-price readiness assessment costs AED 25,000" that carries no price).
+  const backs = (sent, fact) => { const c0 = canon(sent); const nums = numsOf(c0); const fn = new Set(numsOf(fact));
+    if (!nums.every(n => fn.has(n))) return false;
+    const W = [...new Set(words(c0, []))].filter(w => !GENERIC.has(w)); if (!W.length) return true;
+    const F = new Set(words(canon(fact), [])); return W.filter(w => F.has(w)).length / W.length >= 0.4; };
+  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm, backs };
 })();

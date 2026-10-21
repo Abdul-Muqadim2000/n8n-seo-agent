@@ -78,7 +78,8 @@ module.exports = async (ctx) => {
     check('no em dash, en dash, "..." character, arrow or curly quote in what the owner reads', !tl.length, J(tl));
     // without the promises the same page passes: nothing else holds it
     const clean = PROMISES.reduce((d, p) => d.split(p).join(FILL), filled).split('**AI strategy:** candidate use cases ranked by value and risk.').join('**Data foundations:** predictive models and the data platform beneath them.');   // CT-FIX (2026-10-22): a list item under "Enterprise AI work at Tech& falls into four groups:" inherits the lead-in; "candidate use cases ranked by value and risk" is the same unsupported deliverable as the prioritised use-case backlog, so it is taken out too
-    const Q2 = await qa(null, clean);
+    // CT-FIX2 (2026-10-22): image captions are read too; this brief's caption promise is taken out like the body's (CTX covers captions)
+    const Q2 = await qa({ content_brief: { ...clone(FX.parse_brief.content_brief || {}), image_suggestions: ((FX.parse_brief.content_brief || {}).image_suggestions || []).map(im => ({ ...im, caption: '' })) } }, clean);
     check('the same page without the promises passes and is publishable', Q2.passed === true && Q2.not_ready === false && !(Q2.business_promises || []).length, J({ p: Q2.passed, prom: Q2.business_promises, w: Q2.warnings, r: Q2.not_ready_reasons }));
     reset();
   });

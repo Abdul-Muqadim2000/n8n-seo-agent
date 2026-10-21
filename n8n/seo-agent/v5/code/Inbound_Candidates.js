@@ -24,7 +24,10 @@ const targetUrl = (d.ladder_id && String(d.ladder_target_url || '').trim()) ? ow
   : (d.qa_page_url ? own(d.qa_page_url) : (/^https?:\/\//i.test(existingUrl) ? own(existingUrl) : SM.siteUrl(model, '/' + slug + '/')));
 const secondary = metaLine('Secondary Keywords') ? metaLine('Secondary Keywords').split(/,\s*/) : (Array.isArray(d.secondary_keywords) ? d.secondary_keywords : []);
 const kind = /blog|guide|article|pillar|hub|case stud|post/i.test(String(d.page_type || d.recommended_page || '')) ? 'guide' : 'service';
-const target_in = { url: targetUrl, keyword: String(d.keyword || ''), md, title, secondary, kind };
+// CT-FIX2 (D4): the other planned pages of the ladder keep their own searches; no anchor here may use one
+const avoid = [].concat(Array.isArray(d.content_links_to_add) ? d.content_links_to_add : [], Array.isArray(d.ladder_links) ? d.ladder_links : [],
+  ((d.content_qa || {}).links_to_add_when_published || [])).map(p => p && p.keyword).filter(Boolean);
+const target_in = { url: targetUrl, keyword: String(d.keyword || ''), md, title, secondary, kind, avoid };
 const T = INB.target(target_in);
 const pages = [].concat(Array.isArray(model.pages) ? model.pages : [], Array.isArray(model.nav_pages) ? model.nav_pages : []);
 const cands = INB.candidates(pages, T, { domain: dom, gone: Array.isArray(d.gone_pages) ? d.gone_pages.map(g => g && (g.url || g.from_url || g)) : [], max: 10 });

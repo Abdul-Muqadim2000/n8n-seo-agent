@@ -53,6 +53,19 @@ unverified-statistics check) are not counted: this set measures the claims check
 | kit | 413cae9a + review group (before CT-FIX) | 160 | 76.9% | 60.6% (40 of 66) | 4.1% (2 of 49) | 22.2% (10 of 45) | 100% / 68.3% | 50.0% / 48.0% |
 | kit | CT-FIX | 160 | 100% | 95.5% (63 of 66) | 0% (0 of 49) | 0% (0 of 45) | 100% / 100% | 100% / 88.0% |
 | qa | CT-FIX | 160 | 100% | 93.9% (62 of 66) | 0% (0 of 49) | 0% (0 of 45) | 100% / 100% | 100% / 84.0% |
+| kit | CT-FIX2 (+ live page group, 20 hold-out) | 180 | 100% | 94.5% (69 of 73) | 0% (0 of 56) | 0% (0 of 51) | 100% / 100% | 100% / 87.5% |
+| qa | CT-FIX2 (+ live page group, 20 hold-out) | 180 | 100% | 93.2% (68 of 73) | 0% (0 of 56) | 0% (0 of 51) | 100% / 100% | 100% / 84.4% |
+| model | CT-FIX2: two stages, stage 2 replayed from `claims_model_answers.json` | 180 | 100% | 94.5% (69 of 73) | 0% (0 of 56) | 0% (0 of 51) | 100% / 100% | 100% / 87.5% |
+
+**CT-FIX2 (2026-10-22, the live page of exec 159).** A labelled group of 20 sentences of that page (`CL-L01`..`CL-L20`, source "live page
+2026-10-22", its own fact set `techand.ai/live-2026-10-22` = what Content QA read that run) is hold-out as a group. Before CT-FIX2 the
+kit got 6 of them wrong on the live run (3 false flags: a true sentence joining two facts with "United Arab Emirates", a mid-page
+invitation, a "Read [link]" line; 3 misses: a phase as the subject, a list item under "How we close each gap:", an image caption). After:
+6 of 7 promises found, no false flag; the one left (`CL-L07`, "We recommend a go/no-go review ...") is QA's own round-1 promise reworded
+by the editor, which Content QA now carries across rounds (scenario CTX3 on the real data) but the one-shot kit cannot see. The `model`
+path is the two-stage check (CLAIMS_MODEL_EVAL.md): with the decision policy the evaluation forced (the reader may lift a rule flag only
+from an invitation, a pointer, narration or a quotation, or as supported when the fact it names carries the sentence by the rules' own
+test, and may add a flag only where the rules did not judge a commitment), it decides exactly as the rules on this set.
 
 The two paths now differ on one case, CL-T41 (row below). Arabic (13 cases): recall 0% (0 of 5) before, 80% (4 of 5) after, no false flag either time. The review group alone: before, 10 of 10
 non-claims flagged and 0 of 6 promises found; after, 0 of 10 flagged and 4 of 6 found.
@@ -78,3 +91,9 @@ quote, fee or guarantee is still a term to confirm.
 | qa | CL-A08 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | ستحصل على دليل تشغيل ولوحات متابعة بعد الإطلاق. | not flagged: an offer to the reader ("you will receive") counts only in a section about the business, and the Arabic heading "التشغيل والتحسين" (Run & Optimize) is a phase on file only in English, so the section is not recognised as the business's |
 | qa | CL-R13 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | A runbook is delivered at go-live. | not flagged: read as a passive commitment, but with two content words "deliver" alone (half of them) matched a fact; one shared word is too little support for so short a line |
 | qa | CL-R14 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | Monitoring dashboards are included in every engagement. | not flagged: read as a passive commitment, but "monitoring" alone (half of two content words) matched a fact; one shared word is too little support for so short a line |
+| kit | CL-L07 | missed | techand.ai/live-2026-10-22 | unsupported_claim | process (hold-out) | We recommend a go/no-go review at the end of each phase, so a full build is funded only once the ROI case exists. | not flagged: "we recommend" is advice in the rules; on the live run it was the editor's rewording of round 1's flagged promise, which Content QA carries as a promise in round 2 (CTX3), but read alone the sentence has no round before it |
+| qa | CL-L07 | missed | techand.ai/live-2026-10-22 | unsupported_claim | process (hold-out) | We recommend a go/no-go review at the end of each phase, so a full build is funded only once the ROI case exists. | not flagged: "we recommend" is advice in the rules; on the live run it was the editor's rewording of round 1's flagged promise, which Content QA carries as a promise in round 2 (CTX3), but read alone the sentence has no round before it |
+| model | CL-A08 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | ستحصل على دليل تشغيل ولوحات متابعة بعد الإطلاق. | as on the kit path: its page was left to the rules by the evaluation's spend cap (no recorded answer) |
+| model | CL-R13 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | A runbook is delivered at go-live. | as on the kit path: its page was left to the rules by the evaluation's spend cap (no recorded answer) |
+| model | CL-R14 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | Monitoring dashboards are included in every engagement. | as on the kit path: its page was left to the rules by the evaluation's spend cap (no recorded answer) |
+| model | CL-L07 | missed | techand.ai/live-2026-10-22 | unsupported_claim | process (hold-out) | We recommend a go/no-go review at the end of each phase, so a full build is funded only once the ROI case exists. | as on the kit path (no recorded answer for its page; run 1's reader also left it unflagged) |

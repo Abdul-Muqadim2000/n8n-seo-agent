@@ -1,0 +1,2006 @@
+{
+ "model": "claude-haiku-4-5-20251001",
+ "recorded_at": "2026-10-21T21:37:56.447Z",
+ "page_candidates": 25,
+ "pages": {
+  "pjefynau.11": {
+   "site": "techand.ai",
+   "cases": [
+    "CL-T01",
+    "CL-T02"
+   ],
+   "candidates": 11,
+   "response": {
+    "model": "claude-haiku-4-5-20251001",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_016So61fUjGxCpd4PSPq4CPN",
+      "name": "record_verdicts",
+      "input": {
+       "key": "pjefynau.11",
+       "verdicts": [
+        {
+         "id": "C1",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Covers discovery, requirements, gap-fit analysis, ROI assessment."
+        },
+        {
+         "id": "C2",
+         "kind": "commitment",
+         "missing": "what constitutes prioritised use-case backlog, data readiness findings",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Deliverables from Assess & Envision phase not detailed."
+        },
+        {
+         "id": "C3",
+         "kind": "commitment",
+         "missing": "scope of proof of concept, timeline",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Testing mentioned in Build & Implement phase."
+        },
+        {
+         "id": "C4",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F5",
+         "is_business_commitment": true,
+         "reason": "Builds on Dynamics 365, Fabric, Power Platform, Azure AI."
+        },
+        {
+         "id": "C5",
+         "kind": "commitment",
+         "missing": "scope of integration, test results detail",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Deliverables from Build & Implement phase."
+        },
+        {
+         "id": "C6",
+         "kind": "commitment",
+         "missing": "what adoption tracking and model monitoring entail",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Run & Optimize phase with Managed Services option."
+        },
+        {
+         "id": "C7",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F11",
+         "is_business_commitment": true,
+         "reason": "Runbook and monitoring dashboards provided."
+        },
+        {
+         "id": "C8",
+         "kind": "commitment",
+         "missing": "what constitutes planned workstream",
+         "supported_by": "F12",
+         "is_business_commitment": true,
+         "reason": "Handover approach described in Global Rollouts."
+        },
+        {
+         "id": "C9",
+         "kind": "commitment",
+         "missing": "scope of security and licence management training",
+         "supported_by": "F4",
+         "is_business_commitment": true,
+         "reason": "Admin training on security and licence management."
+        },
+        {
+         "id": "C10",
+         "kind": "commitment",
+         "missing": "scope of role-based training, what training entails",
+         "supported_by": "F7",
+         "is_business_commitment": true,
+         "reason": "Training on Copilot Studio, Power Platform, role-based."
+        },
+        {
+         "id": "C11",
+         "kind": "commitment",
+         "missing": "what constitutes self-study pack contents",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Documentation, playbooks, runbook provided post-delivery."
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "usage": {
+     "input_tokens": 2126,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 896,
+     "service_tier": "standard",
+     "inference_geo": "not_available",
+     "speed": "standard"
+    },
+    "stop_reason": "tool_use"
+   }
+  },
+  "pj1m5hhtr.18": {
+   "site": "techand.ai",
+   "cases": [
+    "CL-T09",
+    "CL-T10"
+   ],
+   "candidates": 18,
+   "response": {
+    "model": "claude-haiku-4-5-20251001",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_019uSzJiyL2CwhnEc3AhNbsX",
+      "name": "record_verdicts",
+      "input": {
+       "key": "pj1m5hhtr.18",
+       "verdicts": [
+        {
+         "id": "C1",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on when to buy AI tools."
+        },
+        {
+         "id": "C2",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on when to build on Azure OpenAI."
+        },
+        {
+         "id": "C3",
+         "kind": "call_to_action",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Invites reader to consider AI route options."
+        },
+        {
+         "id": "C4",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "Lists Tech& offerings and implementation approach."
+        },
+        {
+         "id": "C5",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "Lists Tech& integration and extension capabilities."
+        },
+        {
+         "id": "C6",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "Lists Tech& custom build capabilities and approach."
+        },
+        {
+         "id": "C7",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F10",
+         "is_business_commitment": true,
+         "reason": "States Tech& uses gap-fit analysis to decide route."
+        },
+        {
+         "id": "C8",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "States Tech& stops at out-of-box Copilot if sufficient."
+        },
+        {
+         "id": "C9",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F11",
+         "is_business_commitment": true,
+         "reason": "States Tech& recommends rule-based solutions when cheaper."
+        },
+        {
+         "id": "C10",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader these are questions, not legal advice."
+        },
+        {
+         "id": "C11",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on data protection rule applicability."
+        },
+        {
+         "id": "C12",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "States Tech& reviews access permissions for Copilot."
+        },
+        {
+         "id": "C13",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F15",
+         "is_business_commitment": true,
+         "reason": "States Tech& requires human review for customer decisions."
+        },
+        {
+         "id": "C14",
+         "kind": "commitment",
+         "missing": "conditions, scope",
+         "supported_by": "F15",
+         "is_business_commitment": true,
+         "reason": "States AI can work with controls, but vague."
+        },
+        {
+         "id": "C15",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises banks on regulator expectations for model risk."
+        },
+        {
+         "id": "C16",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises public bodies on data classification questions."
+        },
+        {
+         "id": "C17",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "States Tech& designs permissions, labels, logging, review."
+        },
+        {
+         "id": "C18",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F18",
+         "is_business_commitment": true,
+         "reason": "States Tech& treats data as sovereign asset."
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "usage": {
+     "input_tokens": 2591,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 1306,
+     "service_tier": "standard",
+     "inference_geo": "not_available",
+     "speed": "standard"
+    },
+    "stop_reason": "tool_use"
+   }
+  },
+  "pjpmsxnr.20": {
+   "site": "techand.ai",
+   "cases": [
+    "CL-T11",
+    "CL-T12",
+    "CL-T13"
+   ],
+   "candidates": 20,
+   "response": {
+    "model": "claude-haiku-4-5-20251001",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_01U9TnXKdEjh2v1i8z4p3ZKs",
+      "name": "record_verdicts",
+      "input": {
+       "key": "pjpmsxnr.20",
+       "verdicts": [
+        {
+         "id": "C1",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": "F1",
+         "is_business_commitment": false,
+         "reason": "Advises reader on when to buy AI tools."
+        },
+        {
+         "id": "C2",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": false,
+         "reason": "Advises reader on when to build on Azure OpenAI."
+        },
+        {
+         "id": "C3",
+         "kind": "page_narration",
+         "missing": "",
+         "supported_by": "F5",
+         "is_business_commitment": false,
+         "reason": "Describes the page's topic and structure."
+        },
+        {
+         "id": "C4",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": false,
+         "reason": "Advises reader on buy option with tools and requirements."
+        },
+        {
+         "id": "C5",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": false,
+         "reason": "Advises reader on integrate option with tools and requirements."
+        },
+        {
+         "id": "C6",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": false,
+         "reason": "Advises reader on build option with tools and requirements."
+        },
+        {
+         "id": "C7",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F10",
+         "is_business_commitment": true,
+         "reason": "Tech& uses gap-fit analysis to decide AI route."
+        },
+        {
+         "id": "C8",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "Tech& stops at out-of-box Copilot if it covers requirement."
+        },
+        {
+         "id": "C9",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F4",
+         "is_business_commitment": true,
+         "reason": "Tech& recommends rule-based solutions when cheaper than AI."
+        },
+        {
+         "id": "C10",
+         "kind": "page_narration",
+         "missing": "",
+         "supported_by": "F5",
+         "is_business_commitment": false,
+         "reason": "Describes what the page explains."
+        },
+        {
+         "id": "C11",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F7",
+         "is_business_commitment": true,
+         "reason": "Tech& provides four tools on this page."
+        },
+        {
+         "id": "C12",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F13",
+         "is_business_commitment": true,
+         "reason": "Tech& is Dubai-based Microsoft partner serving UAE and GCC."
+        },
+        {
+         "id": "C13",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F5",
+         "is_business_commitment": true,
+         "reason": "Tech& assesses, prioritises, decides, oversees and sets up governance."
+        },
+        {
+         "id": "C14",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": "F5",
+         "is_business_commitment": false,
+         "reason": "General advice about good consultant practice."
+        },
+        {
+         "id": "C15",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F13",
+         "is_business_commitment": true,
+         "reason": "Tech& location stated with full address details."
+        },
+        {
+         "id": "C16",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F16",
+         "is_business_commitment": true,
+         "reason": "Tech& works across UAE and GCC enterprises."
+        },
+        {
+         "id": "C17",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F17",
+         "is_business_commitment": true,
+         "reason": "Tech& is Microsoft partner with 20+ years and 24/7 support."
+        },
+        {
+         "id": "C18",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F16",
+         "is_business_commitment": true,
+         "reason": "Tech& works in listed industries and sectors."
+        },
+        {
+         "id": "C19",
+         "kind": "call_to_action",
+         "missing": "",
+         "supported_by": "F5",
+         "is_business_commitment": false,
+         "reason": "Invites reader to start Assess & Envision conversation."
+        },
+        {
+         "id": "C20",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F19",
+         "is_business_commitment": true,
+         "reason": "Tech& availability stated with hours and timezone."
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "usage": {
+     "input_tokens": 2836,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 1471,
+     "service_tier": "standard",
+     "inference_geo": "not_available",
+     "speed": "standard"
+    },
+    "stop_reason": "tool_use"
+   }
+  },
+  "pj5kir9v.17": {
+   "site": "techand.ai",
+   "cases": [
+    "CL-T14",
+    "CL-T15",
+    "CL-T16"
+   ],
+   "candidates": 17,
+   "response": {
+    "model": "claude-haiku-4-5-20251001",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_017HrnuTs2u2URuguZm1KUxs",
+      "name": "record_verdicts",
+      "input": {
+       "key": "pj5kir9v.17",
+       "verdicts": [
+        {
+         "id": "C1",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Location stated in F1 and F2."
+        },
+        {
+         "id": "C2",
+         "kind": "commitment",
+         "missing": "Abu Dhabi specifically",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "F3 says UAE and GCC, not Abu Dhabi explicitly."
+        },
+        {
+         "id": "C3",
+         "kind": "commitment",
+         "missing": "24/7 support scope unclear",
+         "supported_by": "F5",
+         "is_business_commitment": true,
+         "reason": "F5 states both claims but scope not detailed."
+        },
+        {
+         "id": "C4",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "All sectors listed in F3 and F6."
+        },
+        {
+         "id": "C5",
+         "kind": "call_to_action",
+         "missing": "",
+         "supported_by": "F7",
+         "is_business_commitment": false,
+         "reason": "Invitation to start discovery conversation."
+        },
+        {
+         "id": "C6",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F8",
+         "is_business_commitment": true,
+         "reason": "Hours and timezone stated in F8 and F9."
+        },
+        {
+         "id": "C7",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F7",
+         "is_business_commitment": true,
+         "reason": "Phase components listed in F7 and F10."
+        },
+        {
+         "id": "C8",
+         "kind": "commitment",
+         "missing": "deliverables not explicitly stated",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Specific outputs not detailed in facts."
+        },
+        {
+         "id": "C9",
+         "kind": "commitment",
+         "missing": "proof of concept process not stated",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Testing approach not detailed in facts."
+        },
+        {
+         "id": "C10",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F12",
+         "is_business_commitment": true,
+         "reason": "Platforms listed in F12 and F13."
+        },
+        {
+         "id": "C11",
+         "kind": "commitment",
+         "missing": "specific deliverables not stated",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Outputs not detailed in facts."
+        },
+        {
+         "id": "C12",
+         "kind": "commitment",
+         "missing": "24/7 support scope unclear",
+         "supported_by": "F16",
+         "is_business_commitment": true,
+         "reason": "F16 and F17 cover services but scope not detailed."
+        },
+        {
+         "id": "C13",
+         "kind": "commitment",
+         "missing": "deliverables not explicitly stated",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Specific outputs not detailed in facts."
+        },
+        {
+         "id": "C14",
+         "kind": "commitment",
+         "missing": "handover process details not stated",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "F19 does not detail handover as workstream."
+        },
+        {
+         "id": "C15",
+         "kind": "commitment",
+         "missing": "training content and scope not stated",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Training details not in facts."
+        },
+        {
+         "id": "C16",
+         "kind": "commitment",
+         "missing": "training scope and content not stated",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Training details not detailed in facts."
+        },
+        {
+         "id": "C17",
+         "kind": "commitment",
+         "missing": "documentation scope not stated",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Specific deliverables not detailed in facts."
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "usage": {
+     "input_tokens": 2656,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 1262,
+     "service_tier": "standard",
+     "inference_geo": "not_available",
+     "speed": "standard"
+    },
+    "stop_reason": "tool_use"
+   }
+  },
+  "pj1ml2goz.20": {
+   "site": "techand.ai",
+   "cases": [
+    "CL-T17",
+    "CL-T18"
+   ],
+   "candidates": 20,
+   "response": {
+    "model": "claude-haiku-4-5-20251001",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_0175Z5rPaiMneyn3DaWqxSf3",
+      "name": "record_verdicts",
+      "input": {
+       "key": "pj1ml2goz.20",
+       "verdicts": [
+        {
+         "id": "C1",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Describes Assess & Envision phase activities."
+        },
+        {
+         "id": "C2",
+         "kind": "commitment",
+         "missing": "what 'prioritised use-case backlog' and 'data readiness findings' are",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Deliverables from assessment phase not detailed in facts."
+        },
+        {
+         "id": "C3",
+         "kind": "commitment",
+         "missing": "scope of proof of concept",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Testing activity in Build & Implement phase."
+        },
+        {
+         "id": "C4",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F5",
+         "is_business_commitment": true,
+         "reason": "States platforms used for production build."
+        },
+        {
+         "id": "C5",
+         "kind": "commitment",
+         "missing": "scope of integration and testing",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Deliverables from Build & Implement phase."
+        },
+        {
+         "id": "C6",
+         "kind": "commitment",
+         "missing": "whether 24/7 support is included or optional",
+         "supported_by": "F9",
+         "is_business_commitment": true,
+         "reason": "Run & Optimize phase with optional Managed Services."
+        },
+        {
+         "id": "C7",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F11",
+         "is_business_commitment": true,
+         "reason": "Deliverables from Run & Optimize phase."
+        },
+        {
+         "id": "C8",
+         "kind": "commitment",
+         "missing": "what 'planned workstream' entails",
+         "supported_by": "F12",
+         "is_business_commitment": true,
+         "reason": "Describes handover approach in Global Rollouts."
+        },
+        {
+         "id": "C9",
+         "kind": "commitment",
+         "missing": "scope of training content",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Training activity in Run & Optimize phase."
+        },
+        {
+         "id": "C10",
+         "kind": "commitment",
+         "missing": "scope of training content",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Training activity for different user roles."
+        },
+        {
+         "id": "C11",
+         "kind": "commitment",
+         "missing": "what 'agent playbooks' are",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Deliverables from Run & Optimize phase."
+        },
+        {
+         "id": "C12",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Disclaimer about nature of guidance provided."
+        },
+        {
+         "id": "C13",
+         "kind": "about_others",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "States general legal principle about data protection."
+        },
+        {
+         "id": "C14",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F7",
+         "is_business_commitment": true,
+         "reason": "Describes security control in AI implementation."
+        },
+        {
+         "id": "C15",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F13",
+         "is_business_commitment": true,
+         "reason": "Describes control for high-impact decisions."
+        },
+        {
+         "id": "C16",
+         "kind": "commitment",
+         "missing": "what 'controls' means in this context",
+         "supported_by": "F13",
+         "is_business_commitment": true,
+         "reason": "States capability regarding AI safety."
+        },
+        {
+         "id": "C17",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advice to banks about regulatory due diligence."
+        },
+        {
+         "id": "C18",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advice to public bodies about compliance questions."
+        },
+        {
+         "id": "C19",
+         "kind": "commitment",
+         "missing": "timeline for design and documentation",
+         "supported_by": "F7",
+         "is_business_commitment": true,
+         "reason": "Describes security and governance approach."
+        },
+        {
+         "id": "C20",
+         "kind": "commitment",
+         "missing": "what 'treat as sovereign asset' means operationally",
+         "supported_by": "F20",
+         "is_business_commitment": true,
+         "reason": "States business philosophy on data handling."
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "usage": {
+     "input_tokens": 2574,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 1493,
+     "service_tier": "standard",
+     "inference_geo": "not_available",
+     "speed": "standard"
+    },
+    "stop_reason": "tool_use"
+   }
+  },
+  "pjaelmjb.19": {
+   "site": "techand.ai",
+   "cases": [
+    "CL-T19",
+    "CL-T20",
+    "CL-T21",
+    "CL-T22",
+    "CL-T23",
+    "CL-T24",
+    "CL-T25",
+    "CL-T26"
+   ],
+   "candidates": 19,
+   "response": {
+    "model": "claude-haiku-4-5-20251001",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_01CswF6o8x9xnbYS8bZNonjg",
+      "name": "record_verdicts",
+      "input": {
+       "key": "pjaelmjb.19",
+       "verdicts": [
+        {
+         "id": "C1",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F2",
+         "is_business_commitment": true,
+         "reason": "Lists AI strategy service Tech& offers."
+        },
+        {
+         "id": "C2",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "Lists generative AI and copilot capabilities Tech& offers."
+        },
+        {
+         "id": "C3",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "Lists intelligent automation capabilities Tech& offers."
+        },
+        {
+         "id": "C4",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "Lists data foundation capabilities Tech& offers."
+        },
+        {
+         "id": "C5",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "General advice about copilot reliability, not a commitment."
+        },
+        {
+         "id": "C6",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F4",
+         "is_business_commitment": true,
+         "reason": "States Tech& scope includes cloud, data and models work."
+        },
+        {
+         "id": "C7",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Explains what agentic AI means, not a commitment."
+        },
+        {
+         "id": "C8",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises on governance timing, not a commitment."
+        },
+        {
+         "id": "C9",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F13",
+         "is_business_commitment": true,
+         "reason": "States Tech& location in Dubai."
+        },
+        {
+         "id": "C10",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F15",
+         "is_business_commitment": true,
+         "reason": "States Tech& serves enterprises across UAE and GCC."
+        },
+        {
+         "id": "C11",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F4",
+         "is_business_commitment": true,
+         "reason": "States Microsoft partner status, experience, and 24/7 support."
+        },
+        {
+         "id": "C12",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F15",
+         "is_business_commitment": true,
+         "reason": "Lists industries Tech& works in."
+        },
+        {
+         "id": "C13",
+         "kind": "call_to_action",
+         "missing": "",
+         "supported_by": "F17",
+         "is_business_commitment": false,
+         "reason": "Invites reader to start discovery conversation."
+        },
+        {
+         "id": "C14",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F18",
+         "is_business_commitment": true,
+         "reason": "States Tech& availability hours."
+        },
+        {
+         "id": "C15",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F20",
+         "is_business_commitment": true,
+         "reason": "States Tech& team industry experience duration."
+        },
+        {
+         "id": "C16",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F21",
+         "is_business_commitment": true,
+         "reason": "States Tech& provides 24/7 support for managed systems."
+        },
+        {
+         "id": "C17",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F20",
+         "is_business_commitment": true,
+         "reason": "States Tech& industry experience duration."
+        },
+        {
+         "id": "C18",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F24",
+         "is_business_commitment": true,
+         "reason": "States Managed Services team monitors performance and security."
+        },
+        {
+         "id": "C19",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F25",
+         "is_business_commitment": true,
+         "reason": "States Tech& designs and develops websites, portals, apps."
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "usage": {
+     "input_tokens": 2769,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 1344,
+     "service_tier": "standard",
+     "inference_geo": "not_available",
+     "speed": "standard"
+    },
+    "stop_reason": "tool_use"
+   }
+  },
+  "pj13eldot.25": {
+   "site": "techand.ai",
+   "cases": [
+    "CL-T27",
+    "CL-T28",
+    "CL-T29",
+    "CL-T30",
+    "CL-T31",
+    "CL-T32",
+    "CL-T33",
+    "CL-T34",
+    "CL-T35",
+    "CL-T36",
+    "CL-T37",
+    "CL-T38",
+    "CL-T39",
+    "CL-T40",
+    "CL-T41",
+    "CL-T42",
+    "CL-T43",
+    "CL-T44",
+    "CL-T45",
+    "CL-T46",
+    "CL-T47",
+    "CL-T48",
+    "CL-T49",
+    "CL-T50",
+    "CL-T51",
+    "CL-T52",
+    "CL-T53",
+    "CL-T54",
+    "CL-T55",
+    "CL-T56"
+   ],
+   "candidates": 25,
+   "response": {
+    "model": "claude-haiku-4-5-20251001",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_01D7WuWCCCWSGmhDxdzEDKTW",
+      "name": "record_verdicts",
+      "input": {
+       "key": "pj13eldot.25",
+       "verdicts": [
+        {
+         "id": "C1",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "States what Global Rollouts team does."
+        },
+        {
+         "id": "C2",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "States business discovery process step."
+        },
+        {
+         "id": "C3",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F4",
+         "is_business_commitment": true,
+         "reason": "States contact details and availability."
+        },
+        {
+         "id": "C4",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F6",
+         "is_business_commitment": true,
+         "reason": "States office location."
+        },
+        {
+         "id": "C5",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F8",
+         "is_business_commitment": true,
+         "reason": "States services delivered."
+        },
+        {
+         "id": "C6",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F10",
+         "is_business_commitment": true,
+         "reason": "States AI tools Tech& delivers."
+        },
+        {
+         "id": "C7",
+         "kind": "commitment",
+         "missing": "specific details of AI strategy process",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Lists AI strategy step not explicitly stated."
+        },
+        {
+         "id": "C8",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F10",
+         "is_business_commitment": true,
+         "reason": "Lists AI tools Tech& delivers."
+        },
+        {
+         "id": "C9",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F10",
+         "is_business_commitment": true,
+         "reason": "States intelligent automation capabilities."
+        },
+        {
+         "id": "C10",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F10",
+         "is_business_commitment": true,
+         "reason": "States data foundations scope."
+        },
+        {
+         "id": "C11",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "General advice about copilot reliability."
+        },
+        {
+         "id": "C12",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F9",
+         "is_business_commitment": true,
+         "reason": "States scope includes cloud, data, models."
+        },
+        {
+         "id": "C13",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Explains what agentic AI means generally."
+        },
+        {
+         "id": "C14",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises on agentic AI programme sequencing."
+        },
+        {
+         "id": "C15",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F22",
+         "is_business_commitment": true,
+         "reason": "States Managed Services post-go-live support."
+        },
+        {
+         "id": "C16",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F15",
+         "is_business_commitment": true,
+         "reason": "States data silo solution approach."
+        },
+        {
+         "id": "C17",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F24",
+         "is_business_commitment": true,
+         "reason": "States readiness assessment price."
+        },
+        {
+         "id": "C18",
+         "kind": "commitment",
+         "missing": "licensing model details",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "States licensing approach not in facts."
+        },
+        {
+         "id": "C19",
+         "kind": "commitment",
+         "missing": "account manager and weekly reports",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "States deliverables not explicitly stated."
+        },
+        {
+         "id": "C20",
+         "kind": "commitment",
+         "missing": "90-day hypercare period",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "States post-go-live support duration."
+        },
+        {
+         "id": "C21",
+         "kind": "commitment",
+         "missing": "30-minute incident response time",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "States SLA not in facts."
+        },
+        {
+         "id": "C22",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F9",
+         "is_business_commitment": true,
+         "reason": "States project delivery experience."
+        },
+        {
+         "id": "C23",
+         "kind": "page_narration",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Section heading about page content."
+        },
+        {
+         "id": "C24",
+         "kind": "commitment",
+         "missing": "data hosting regions",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "States data hosting policy not in facts."
+        },
+        {
+         "id": "C25",
+         "kind": "commitment",
+         "missing": "free two-week proof of concept",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "States engagement deliverable not in facts."
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "usage": {
+     "input_tokens": 2925,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 1702,
+     "service_tier": "standard",
+     "inference_geo": "not_available",
+     "speed": "standard"
+    },
+    "stop_reason": "tool_use"
+   }
+  },
+  "pj1lzbjih.22": {
+   "site": "techand.ai",
+   "cases": [
+    "CL-T57",
+    "CL-T58",
+    "CL-T59",
+    "CL-T60",
+    "CL-T61",
+    "CL-T62",
+    "CL-T63",
+    "CL-T64",
+    "CL-T65"
+   ],
+   "candidates": 22,
+   "response": {
+    "model": "claude-haiku-4-5-20251001",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_01Jm4zJxG6cT7rR3zrb739D5",
+      "name": "record_verdicts",
+      "input": {
+       "key": "pj1lzbjih.22",
+       "verdicts": [
+        {
+         "id": "C1",
+         "kind": "commitment",
+         "missing": "specific scope of work included in the rollout",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Timeline stated but scope of deliverables not detailed."
+        },
+        {
+         "id": "C2",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "F3 confirms Run & Optimize phase after implementation."
+        },
+        {
+         "id": "C3",
+         "kind": "commitment",
+         "missing": "whether these are standard or optional services",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Specific services claimed but not in facts on file."
+        },
+        {
+         "id": "C4",
+         "kind": "commitment",
+         "missing": "scope of training and which roles receive it",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Training inclusion claimed but not detailed in facts."
+        },
+        {
+         "id": "C5",
+         "kind": "commitment",
+         "missing": "whether this is standard or optional deliverable",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Specific deliverable claimed but not in facts on file."
+        },
+        {
+         "id": "C6",
+         "kind": "commitment",
+         "missing": "definition of 'worked inside' and scope of experience",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "Broad claim about all consultants not supported by facts."
+        },
+        {
+         "id": "C7",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "F1 confirms partner status, services, and post-go-live support."
+        },
+        {
+         "id": "C8",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Guidance about interpreting assessment results, not a commitment."
+        },
+        {
+         "id": "C9",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Best practice recommendation, not a business commitment."
+        },
+        {
+         "id": "C10",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Security best practice, not a specific business commitment."
+        },
+        {
+         "id": "C11",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Readiness requirement for client, not a business commitment."
+        },
+        {
+         "id": "C12",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Readiness requirement for client, not a business commitment."
+        },
+        {
+         "id": "C13",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Readiness requirement for client, not a business commitment."
+        },
+        {
+         "id": "C14",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Readiness requirement for client, not a business commitment."
+        },
+        {
+         "id": "C15",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Readiness requirement for client, not a business commitment."
+        },
+        {
+         "id": "C16",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Readiness requirement for client, not a business commitment."
+        },
+        {
+         "id": "C17",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Readiness requirement for client, not a business commitment."
+        },
+        {
+         "id": "C18",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Readiness requirement for client, not a business commitment."
+        },
+        {
+         "id": "C19",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Assessment guidance for client readiness, not a business commitment."
+        },
+        {
+         "id": "C20",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Assessment guidance for client readiness, not a business commitment."
+        },
+        {
+         "id": "C21",
+         "kind": "call_to_action",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Invitation to book a session and test capabilities."
+        },
+        {
+         "id": "C22",
+         "kind": "commitment",
+         "missing": "definition of 'fixed scope' and what it includes",
+         "supported_by": "F4",
+         "is_business_commitment": true,
+         "reason": "F4 confirms Assess & Envision phase but not fixed scope detail."
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "usage": {
+     "input_tokens": 2614,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 1654,
+     "service_tier": "standard",
+     "inference_geo": "not_available",
+     "speed": "standard"
+    },
+    "stop_reason": "tool_use"
+   }
+  },
+  "pjf4vkyz.24": {
+   "site": "techand.ai",
+   "cases": [
+    "CL-T66",
+    "CL-T67",
+    "CL-T68",
+    "CL-T69",
+    "CL-T70"
+   ],
+   "candidates": 24,
+   "response": {
+    "model": "claude-haiku-4-5-20251001",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_019j5gYhMmPrvgrfoEhMAr6j",
+      "name": "record_verdicts",
+      "input": {
+       "key": "pjf4vkyz.24",
+       "verdicts": [
+        {
+         "id": "C1",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on when to buy AI tools."
+        },
+        {
+         "id": "C2",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on when to build on Azure."
+        },
+        {
+         "id": "C3",
+         "kind": "page_narration",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Describes the page's structure and options."
+        },
+        {
+         "id": "C4",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": false,
+         "reason": "Advises reader on buy option and requirements."
+        },
+        {
+         "id": "C5",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": false,
+         "reason": "Advises reader on integrate option and requirements."
+        },
+        {
+         "id": "C6",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": false,
+         "reason": "Advises reader on build option and requirements."
+        },
+        {
+         "id": "C7",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F10",
+         "is_business_commitment": true,
+         "reason": "States Tech& uses gap-fit analysis to decide route."
+        },
+        {
+         "id": "C8",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "States Tech& stops at out-of-box Copilot if sufficient."
+        },
+        {
+         "id": "C9",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": true,
+         "reason": "States Tech& recommends rule-based solutions when cheaper."
+        },
+        {
+         "id": "C10",
+         "kind": "page_narration",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Describes the page's assessment output."
+        },
+        {
+         "id": "C11",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on data ownership requirement."
+        },
+        {
+         "id": "C12",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on access control requirement."
+        },
+        {
+         "id": "C13",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on IT capacity requirement."
+        },
+        {
+         "id": "C14",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on training budget requirement."
+        },
+        {
+         "id": "C15",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on process definition requirement."
+        },
+        {
+         "id": "C16",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on baseline measurement requirement."
+        },
+        {
+         "id": "C17",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on accountability requirement."
+        },
+        {
+         "id": "C18",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on acceptable-use policy requirement."
+        },
+        {
+         "id": "C19",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on data classification requirement."
+        },
+        {
+         "id": "C20",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on security review requirement."
+        },
+        {
+         "id": "C21",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on readiness assessment criteria."
+        },
+        {
+         "id": "C22",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advises reader on scale-up readiness criteria."
+        },
+        {
+         "id": "C23",
+         "kind": "call_to_action",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Invites reader to book an AI readiness session."
+        },
+        {
+         "id": "C24",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F5",
+         "is_business_commitment": true,
+         "reason": "States Tech& Assess & Envision typically has fixed scope."
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "usage": {
+     "input_tokens": 2980,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 1720,
+     "service_tier": "standard",
+     "inference_geo": "not_available",
+     "speed": "standard"
+    },
+    "stop_reason": "tool_use"
+   }
+  },
+  "pj1ien7w5.18": {
+   "site": "techand.ai",
+   "cases": [
+    "CL-T71",
+    "CL-T72",
+    "CL-T73"
+   ],
+   "candidates": 18,
+   "response": {
+    "model": "claude-haiku-4-5-20251001",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_018dgvKuy88ozwhE4pDsmMEG",
+      "name": "record_verdicts",
+      "input": {
+       "key": "pj1ien7w5.18",
+       "verdicts": [
+        {
+         "id": "C1",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F2",
+         "is_business_commitment": true,
+         "reason": "Tech& offers AI strategy with ranked use cases."
+        },
+        {
+         "id": "C2",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "Lists AI capabilities Tech& offers or works with."
+        },
+        {
+         "id": "C3",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F3",
+         "is_business_commitment": true,
+         "reason": "Tech& offers intelligent automation with listed tools."
+        },
+        {
+         "id": "C4",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F6",
+         "is_business_commitment": true,
+         "reason": "Tech& builds data platform with predictive models."
+        },
+        {
+         "id": "C5",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "General principle about copilot reliability, not a commitment."
+        },
+        {
+         "id": "C6",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F9",
+         "is_business_commitment": true,
+         "reason": "Tech& states its scope includes cloud, data and models."
+        },
+        {
+         "id": "C7",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Defines agentic AI concept, not a business commitment."
+        },
+        {
+         "id": "C8",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "General guidance on agentic AI implementation sequencing."
+        },
+        {
+         "id": "C9",
+         "kind": "commitment",
+         "missing": "duration",
+         "supported_by": "F13",
+         "is_business_commitment": true,
+         "reason": "Tech& states Assess & Envision has fixed scope."
+        },
+        {
+         "id": "C10",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Disclaimer that advice is not legal advice."
+        },
+        {
+         "id": "C11",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "General statement about data protection rules."
+        },
+        {
+         "id": "C12",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F4",
+         "is_business_commitment": true,
+         "reason": "Tech& reviews access permissions for Copilot deployments."
+        },
+        {
+         "id": "C13",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Tech& includes human review in its risk management."
+        },
+        {
+         "id": "C14",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "General statement about AI and controls."
+        },
+        {
+         "id": "C15",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advice to banks on regulatory questions."
+        },
+        {
+         "id": "C16",
+         "kind": "advice_to_reader",
+         "missing": "",
+         "supported_by": null,
+         "is_business_commitment": false,
+         "reason": "Advice to public bodies on data classification."
+        },
+        {
+         "id": "C17",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F1",
+         "is_business_commitment": true,
+         "reason": "Tech& designs permissions, logging and documents decisions."
+        },
+        {
+         "id": "C18",
+         "kind": "commitment",
+         "missing": "",
+         "supported_by": "F18",
+         "is_business_commitment": true,
+         "reason": "Tech& treats data as a sovereign asset."
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "usage": {
+     "input_tokens": 2424,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 1288,
+     "service_tier": "standard",
+     "inference_geo": "not_available",
+     "speed": "standard"
+    },
+    "stop_reason": "tool_use"
+   }
+  }
+ }
+}
