@@ -77,7 +77,7 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
   ai_visibility: { ai: 0.14, dfs: 0.95, measured: 0.89, basis: 'an AI visibility check, exec 526' },
   backlinks: { ai: 0.06, dfs: 0.5, measured: 0.373, basis: 'a full backlink check, execs 528 / 529' },
   // these start the work that costs; what they spawn reserves its own run, so the run itself reserves nothing
-  track: { ai: 0, dfs: 0, measured: 0, basis: 'setting tracking up; the weekly reports are their own runs' },
+  track: { ai: 0, dfs: 0, measured: 0, basis: 'setting tracking up; the site report it starts is the first weekly report, autopilot spend like the others' },
   published: { ai: 0, dfs: 0, measured: 0, basis: 'a publish check reads your own page' },
   checkin: { ai: 0, dfs: 0, measured: 0, basis: 'a check-in records what you type' },
   profile: { ai: 0, dfs: 0, measured: 0, basis: 'saving the business profile' },

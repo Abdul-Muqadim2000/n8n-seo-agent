@@ -251,8 +251,9 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
         status: 'submitting',
         input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}), ...(opts.proposalId ? { proposalId: opts.proposalId } : {}), ...(opts.free ? { freeResearch: true } : {}) } as unknown as Record<string, unknown>,
         estimatedCostUsd: estimated,
-        // a free run is quoted 0 (the cost sync caps every charge of a run at its quote), so it is never charged
-        quotedCredits: opts.free ? 0 : quoted > 0 ? quoted : null,
+        // a free run is quoted 0 (the cost sync caps every charge of a run at its quote), so it is never charged. D3 (2026-10-21): a quote of
+        // 0 is stored as 0, not as "no quote" (null is left for runs from before credits), so any work a 0-quoted run starts is capped too
+        quotedCredits: opts.free ? 0 : quoted,
         etaMinutes: etaFor(input),
         apiKeyId: opts.apiKeyId ?? null,
         idempotencyKey: opts.idempotency?.key ?? null,

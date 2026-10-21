@@ -83,6 +83,19 @@ export function autopilotRows(m: Monitors, blogsPerWeek: number, plan: Autopilot
   return rows.map((r) => ({ ...r, usd: r.on ? Math.round(r.usd * 10000) / 10000 : 0 }));
 }
 
+/**
+ * What the first cycle's checks use on launch day (the launch screen's "Today" estimate, provider cost in USD): a week's share of every
+ * weekly row that is on, the monthly audit in full (cycle 0 is also the website's monthly cycle). The site report counts: the Site Tracker
+ * run "Track my site" starts is the website's first weekly site report, autopilot spend (D3, 2026-10-21: it was left out, so the launch
+ * total showed nothing for it). Pages and the research refresh are not checks the first cycle starts on its own.
+ */
+export function firstCycleChecksUsd(rows: AutopilotRow[]): number {
+  const usd = rows
+    .filter((r) => r.on && r.id !== 'blog_posts' && r.id !== 'research')
+    .reduce((t, r) => t + (r.id === 'audit' ? r.usd : r.usd / MONITOR_COSTS.weeksPerMonth), 0);
+  return Math.round(usd * 10000) / 10000;
+}
+
 /** The month's total (provider cost, USD) of the rows that are on. */
 export function autopilotMonthlyUsd(m: Monitors, blogsPerWeek: number, plan: AutopilotPlan = {}): number {
   return Math.round(autopilotRows(m, blogsPerWeek, plan).reduce((t, r) => t + r.usd, 0) * 10000) / 10000;

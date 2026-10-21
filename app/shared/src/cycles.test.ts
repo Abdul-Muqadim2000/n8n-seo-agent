@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autopilotMonthlyUsd, autopilotRows } from './autopilot';
+import { autopilotMonthlyUsd, autopilotRows, firstCycleChecksUsd } from './autopilot';
 import { AUTOMATIONS, MONITOR_COSTS, nextScheduledRun } from './constants';
 import { cycleDateOf, cycleOverdue, cycleRequestId, cyclesBetween, intentOfRow, isCycleRequestId, isValidTimezone, monthlyPeriodKey, nextCycleAfter, readCycleIntent, upcomingCycles, zonedToUtc } from './cycle-clock';
 import { AUTO_SOURCES, CYCLE_JOBS, cycleKey, cycleNorm, itemKey, skipKey, type CycleRow } from './cycles';
@@ -202,5 +202,21 @@ describe('the request fields the engine reads by their exact keys (§14.5)', () 
     expect(contentFeedbackSchema.parse({ verdict: 'reject' })).toEqual({ verdict: 'reject', reason: '' });
     expect(siteAutomationSchema.safeParse({ autopilotLevel: 3 }).success).toBe(true);
     expect(siteAutomationSchema.safeParse({ autopilotLevel: 4 }).success).toBe(false);
+  });
+});
+
+// D3 (paid pre-launch run 2026-10-21): the launch screen's "Today" figure left out the site report "Track my site" starts (the website's
+// first weekly report, autopilot spend), so the launch total showed nothing for it
+describe('the first cycle\'s checks on launch day', () => {
+  const m = monitorSettingsSchema.parse({});
+  it('include the first weekly site report, a week of each weekly check and the monthly audit in full; no pages, no research refresh', () => {
+    const rows = autopilotRows(m, 2, { level: 3, writing: true });
+    const site = rows.find((r) => r.id === 'site_report')!;
+    const audit = rows.find((r) => r.id === 'audit')!;
+    expect(site.on && site.usd > 0).toBe(true);
+    const weekly = rows.filter((r) => r.on && !['audit', 'blog_posts', 'research'].includes(r.id)).reduce((t, r) => t + r.usd / MONITOR_COSTS.weeksPerMonth, 0);
+    expect(firstCycleChecksUsd(rows)).toBeCloseTo(weekly + audit.usd, 4);
+    expect(firstCycleChecksUsd(rows)).toBeGreaterThan(firstCycleChecksUsd(rows.filter((r) => r.id !== 'site_report')));
+    expect(firstCycleChecksUsd(rows.map((r) => (r.id === 'blog_posts' || r.id === 'research' ? r : { ...r, on: false, usd: 0 })))).toBe(0);
   });
 });
