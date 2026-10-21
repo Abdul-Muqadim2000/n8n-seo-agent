@@ -1,6 +1,7 @@
 /*__COMPETITORS__*/
 /*__KW_INPUTS__*/
 /*__DFS_RETRY__*/
+/*__SERP_CACHE__*/
 // B2-4 (2026-10-15, benchmark area 2, criterion K7): the rung candidates' results pages, read once, turned into clusters of searches
 // Google answers with the SAME pages. Keyword Insights, whose convention this is, compares the TOP 7 at a 40% threshold - "the overlap
 // setting was originally 1-10, it now runs from 1-7 because Google no longer reliably shows 10 traditional links" - which is B2-6, and
@@ -16,11 +17,18 @@ const plan0 = reqs[0] || {};
 const first = (() => { try { return $('Run Ladder Cluster SERP').all().map(i => i.json); } catch (e) { return []; } })();
 const retryItems = (() => { try { return $('Ladder Cluster Retry').all().map(i => i.json).filter(x => x && x.is_retry); } catch (e) { return []; } })();
 const retryAnswers = (() => { try { return $('Run Ladder Cluster SERP (Retry)').all().map(i => i.json); } catch (e) { return []; } })();
+// KW-SERP (RV-12, 2026-10-21): the keywords whose results page was read earlier today (by any path) were not sent; their reading is used
+// as it is, at no cost. `sent` is what went to DataForSEO, in the order of its answers; without the split node every asked keyword was sent.
+const lowQ = (q) => String((q || {}).keyword || '').toLowerCase().trim();
+const sent = (() => { try { return $('Ladder SERP Cache Split').all().map(i => i.json).filter(r => r && r.cluster_check); } catch (e) { return asked; } })();
+const sentAt = new Map(sent.map((q, i) => [lowQ(q), i]));
+const cacheRows = (() => { try { return $('Load SERP Cache (Ladder)').all().map(i => i.json).filter(r => r && r.key); } catch (e) { return []; } })();
+const hitOf = (q) => (sentAt.has(lowQ(q)) ? null : SC.lookup(cacheRows, { keyword: q.keyword, location_code: q.location_code, language_code: q.language_code || 'en', depth: 30, load_async_ai_overview: true }));
 
 const out = { available: false, asked: asked.filter(r => !r.supporting_check).length, supporting_asked: asked.filter(r => r.supporting_check).length, compared: 0, failed: 0, retried: retryItems.length, retry_answered: 0,
   cap: plan0.cap ?? KWI.CFG.ladder_serp_checks, cap_basis: plan0.cap_basis || '', candidates: plan0.candidates || 0, on_topic: plan0.on_topic || 0,
   left_uncompared: plan0.left_uncompared || 0, price_usd: KWI.CFG.serp_check_usd, cost_usd: 0, cost_basis: '', top_n: 7, min_overlap_pct: 40,
-  min_shared_urls: 3, clusters: [], of_keyword: {}, not_compared: [], skip_reason: String(plan0.skip_reason || ''), note: '' };
+  min_shared_urls: 3, clusters: [], of_keyword: {}, not_compared: [], skip_reason: String(plan0.skip_reason || ''), note: '', read_today: 0, read_today_note: '' };
 
 // KW-COMP (2026-10-21, RV-6): who this ladder competes with, from the results pages the run already bought (the main keyword's own page
 // and every rung keyword's page read below): a business that ranks on several of them, weighted by position, the declared ones first;
@@ -55,9 +63,12 @@ for (const a of [...first, ...retryAnswers]) {
 }
 out.cost_usd = +spent.toFixed(4);
 out.tasks = seen.size + noId;
+const hits = asked.map(q => hitOf(q)).filter(h => h && h.hit);
+out.read_today = hits.length;
+out.read_today_note = hits.length ? hits.length + ' results page(s) were ' + hits[0].text + ' and used again at no cost' : '';
 out.cost_basis = 'measured: ' + out.tasks + ' results-page call(s) at what each task reported, counted once by task id'
   + (noId ? ' (' + noId + ' with no task id of their own)' : '') + '; the cap for this run was ' + out.cap + ' keyword(s)'
-  + (out.cap_basis ? ' - ' + out.cap_basis : '') + '.';
+  + (out.cap_basis ? ' - ' + out.cap_basis : '') + (out.read_today ? '; ' + out.read_today_note : '') + '.';
 
 const organicItems = (res) => { try {
   const items = ((((res || {}).tasks || [])[0] || {}).result || [])[0].items || [];
@@ -71,8 +82,9 @@ const entries = [];
 const supportingEntries = []; out.supporting_not_compared = [];
 // F-A1 / A-11: what KIND of page Google ranks for each rung keyword, from the titles and addresses this call already bought (KWI.serpPageTypes)
 out.types_of = {}; out.titles_of = {};
-asked.forEach((q, i) => {
-  const a = answers[i];
+asked.forEach((q) => {
+  const h = hitOf(q); const i = sentAt.has(lowQ(q)) ? sentAt.get(lowQ(q)) : -1;
+  const a = h && h.hit ? h.response : (i >= 0 ? answers[i] : undefined);
   const v = RT.check(a, {});
   const miss = { push: (x) => { if (q.supporting_check) out.supporting_not_compared.push(x); else out.not_compared.push(x); } };
   if (!v.ok) { miss.push({ keyword: q.keyword, reason: v.why || 'no answer', retried: retryItems.some(r => Number(r.retry_of) === i) }); return; }

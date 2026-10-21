@@ -68,8 +68,8 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
   content: { ai: 0.8, dfs: 0.04, measured: 0.609, basis: 'a written page, exec 521 ($0.438 of it the three streaming Opus nodes)' },
   report: { ai: 0.16, dfs: 0.04, measured: 0.127, basis: 'a keyword report, exec 519' },
   verdict: { ai: 0.16, dfs: 0.04, measured: 0.13, basis: 'a keyword verdict, exec 486' },
-  discover: { ai: 0.24, dfs: 0.34, measured: 0.42, basis: 'keyword discovery, exec 518' },
-  ladder: { ai: 0.18, dfs: 0.21, measured: 0.279, basis: 'a ladder plan, exec 495 ($0.231) plus the 24 results pages B2-4 reads to group the rungs, at $0.002 each (each page it writes reserves its own run)' },
+  discover: { ai: 0.24, dfs: 0.4, measured: 0.42, basis: 'keyword discovery, exec 518, with its 16 live results pages read 30 deep with the AI Overview ($0.006 each)' },
+  ladder: { ai: 0.18, dfs: 0.31, measured: 0.279, basis: 'a ladder plan, exec 495 ($0.231) plus the 24 results pages B2-4 reads to group the rungs, at $0.006 each, 30 deep with the AI Overview (each page it writes reserves its own run)' },
   full: { ai: 0.08, dfs: 0.55, measured: 0.458, basis: 'the full SEO report, exec 523' },
   site_audit: { ai: 0, dfs: 0, measured: 0, basis: 'a technical audit calls no model (execs 497 / 513)' },
   crawl: { ai: 0, dfs: 0.09, measured: 0.032, basis: 'the crawl of a technical audit; $0.09 is the provider\'s quote, $0.032 the pages really crawled (exec 588)' },
@@ -82,7 +82,7 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
   checkin: { ai: 0, dfs: 0, measured: 0, basis: 'a check-in records what you type' },
   profile: { ai: 0, dfs: 0, measured: 0, basis: 'saving the business profile' },
   case_study: { ai: 0, dfs: 0, measured: 0, basis: 'the intake itself; the page it writes reserves a content run' },
-  assess: { ai: 0, dfs: 0.034, measured: 0.0254, basis: 'one keyword check, execs 487-489' },
+  assess: { ai: 0, dfs: 0.04, measured: 0.0254, basis: 'one keyword check, execs 487-489, plus its results page read 30 deep with the AI Overview ($0.006)' },
 };
 
 const round = (n: number): number => Math.round(n * 10000) / 10000;

@@ -1,4 +1,5 @@
 /*__REACH__*/
+/*__SERP_CACHE__*/
 /*__COUNTRIES__*/
 /*__DOMAIN_RULES__*/
 // Keyword Check (v4.8, PIPELINE_FEATURE_SPEC §5.2): validates POST /webhook/seo-keyword-assess { keyword, country, domain, business?, services?,
@@ -28,4 +29,4 @@ const c = COUNTRIES[countryName] || {};
 return [{ json: { ok: !bad, status: bad ? 400 : 200, errors, error: bad ? Object.values(errors).join('; ') : '',
   keyword, domain, site_id: domain ? reachSiteId(domain) : '', country: countryName, country_iso: c.iso || '', location_code: c.code || null, language_code: c.lang || 'en',
   business: typeof b.business === 'string' ? b.business.trim().slice(0, 1500) : '', services: listOf(b.services).slice(0, 20).map(s => s.slice(0, 120)),
-  existing_keywords: listOf(b.existing_keywords).slice(0, 300).map(s => s.toLowerCase().slice(0, 120)), caller: key, request_id: String(b.request_id || ('assess-' + $execution.id)) } }];
+  existing_keywords: listOf(b.existing_keywords).slice(0, 300).map(s => s.toLowerCase().slice(0, 120)), caller: key, serp_cache_key: SC.key({ keyword, location_code: c.code || 0, language_code: c.lang || 'en' }), request_id: String(b.request_id || ('assess-' + $execution.id)) } }];

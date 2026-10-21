@@ -2028,7 +2028,7 @@ await guard('pipeline phase 3', async () => {
   resp1 = await run('Assess Response', FIT({ fit: 2 })); B = resp1[0].json.body;
   check('assess: already #14 -> easy, direct 2-3 months (top 20 shortens); cost $0.0253 (A-28: the Haiku call at $0.0033; E-SERP: + the results page $0.002)', B.difficulty_for_you === 'easy' && B.plan_type === 'direct' && B.months === '2-3' && B.position === 14 && B.cost_usd === 0.0253, JSON.stringify(B));
   const rra2 = await run('Reach Row (Assess)', resp1);
-  check('assess: a stored reach is not saved again', rra2[0].json.skip === true, JSON.stringify(rra2[0].json));
+  check('assess: a stored reach is not saved again (KW-SERP: only the fresh results-page reading is)', rra2.every(i => i.json.kind !== 'reach') && rra2.length === 1 && rra2[0].json.kind === 'serp', JSON.stringify(rra2.map(i => i.json.key || i.json)));
   b = await answer(AR({ keyword: 'cleartax e invoicing', existing_keywords: ['e invoicing in uae', 'peppol uae'] }), FIT({ fit: 1, navigational: true, alternatives: ['e invoicing software uae', 'Peppol UAE', 'cleartax e invoicing', 'e invoicing in the UAE', '"FTA e invoicing requirements"', 'einvoicing for sme uae'] }));
   check('assess: another company\'s brand -> not realistic, no plan, up to 3 alternatives (not the keyword itself, not one the site has)', b.difficulty_for_you === 'not_realistic' && b.plan_type === 'none' && b.months === '' && b.navigational === true && eq(b.alternatives, ['e invoicing software uae', 'fta e invoicing requirements', 'einvoicing for sme uae']) && b.label === 'Not realistic for your site', JSON.stringify(b));
   b = await answer(AR({ keyword: 'payroll outsourcing dubai', kd: 20 }), FIT({ fit: 0, alternatives: ['erp implementation dubai'] }));
@@ -8398,7 +8398,7 @@ await guard('the re-rating defects R1..R9', async () => {
   // G23 (2026-10-13) moved the two estimate tables into the shared cost kit (one source for the guard, the settle, the self-correcting
   // figure and the reconciliation) and raised the Keyword Check's DataForSEO reservation to the $0.0254 a check really measured.
   check('R9: the main workflow\'s and the Keyword Check\'s own reservations carry the same two columns',
-    /dfs_est_usd: dfs_est/.test(srcOf('Run_Ledger_Row.js')) && /DFS_EST = \{[\s\S]*?crawl: 0\.09/.test(srcOf('_cost_cal.js')) && /dfs_est_usd: 0\.034/.test(srcOf('Run_Ledger_Row_Assess_.js')), 'Run Ledger Row');
+    /dfs_est_usd: dfs_est/.test(srcOf('Run_Ledger_Row.js')) && /DFS_EST = \{[\s\S]*?crawl: 0\.09/.test(srcOf('_cost_cal.js')) && /dfs_est_usd: 0\.04,/.test(srcOf('Run_Ledger_Row_Assess_.js')), 'Run Ledger Row');
   ledgerReset([]);
   const auditRun = (await ledgerRun([{ json: { mode: 'audit', domain: D, crawl_max_pages: 200, include_full_report: false, ai_budget_usd: 6, ai_budget_period: 'day', client_ip: '1.2.3.4', email: 'owner@example.com' } }]))[0].json;
   const auditRow = LEDGER.rows[LEDGER.rows.length - 1];
@@ -8771,7 +8771,7 @@ await guard('G23 cost and G21 delivery', async () => {
   check('G23: no shipped per-mode estimate sits below what that mode has actually cost (the whole reason the guard refused five runs that were cheap)',
     under.length === 0, 'below the measured money: ' + under.join(', '));
   check('G23: the ai_visibility estimates are no longer the $0.06 / $0.60 that a $0.79 run blew through, and the page is no longer reserved at $1.20 for $0.587',
-    T.EST.ai_visibility === 0.14 && T.DFS_EST.ai_visibility === 0.95 && T.EST.content === 0.8 && T.EST.ladder === 0.18 && T.DFS_EST.discover === 0.34,
+    T.EST.ai_visibility === 0.14 && T.DFS_EST.ai_visibility === 0.95 && T.EST.content === 0.8 && T.EST.ladder === 0.18 && T.DFS_EST.discover === 0.4,   // KW-SERP: discovery's 16 live checks now 30 deep with the AI Overview
     JSON.stringify({ ai_vis: [T.EST.ai_visibility, T.DFS_EST.ai_visibility], content: T.EST.content, ladder: T.EST.ladder, discover: T.DFS_EST.discover }));
   check('G23: no estimate is wildly ABOVE the money either — nothing reserves more than three times what it measured (the full report reserved $1.00 for $0.41)',
     Object.keys(MEASURED_DFS).every(k => !MEASURED_DFS[k] || T.DFS_EST[k] <= MEASURED_DFS[k] * 3) && T.DFS_EST.full === 0.55,
@@ -11685,8 +11685,8 @@ await guard('b2-serp-clusters-and-domain-diversity', async () => {
   const big = await ladder80({ pool: BIG, serp: false });
   const askedBig = big.reqs.filter(r => r.cluster_check);
   console.log('   cap ->', JSON.stringify({ candidates: big.reqs[0].candidates, on_topic: big.reqs[0].on_topic, asked: askedBig.length, cap: big.reqs[0].cap, cost: big.reqs[0].cost_usd, left: big.reqs[0].left_uncompared }));
-  check('B2-4: the cap is 24 keywords a ladder, whatever the pool holds, and the request itself carries the cap, the price and what the run will spend ($0.048)',
-    askedBig.length === 24 && big.reqs[0].cap === 24 && big.reqs[0].cost_usd === 0.048 && big.reqs[0].price_usd === 0.002
+  check('B2-4: the cap is 24 keywords a ladder, whatever the pool holds, and the request itself carries the cap, the price and what the run will spend ($0.144: KW-SERP reads them 30 deep with the AI Overview, $0.006 each)',
+    askedBig.length === 24 && big.reqs[0].cap === 24 && big.reqs[0].cost_usd === 0.144 && big.reqs[0].price_usd === 0.006
     && big.reqs[0].on_topic > 24 && big.reqs[0].left_uncompared === big.reqs[0].on_topic - 24, JSON.stringify(big.reqs[0]));
   check('B2-4: what was really spent is read back from the tasks that ran, counted once by task id, and never from the reservation',
     cl.cost_usd === +((cl.asked + (cl.supporting_asked || 0)) * 0.002 - 0.002).toFixed(4) && /measured:/.test(cl.cost_basis) && /counted once by task id/.test(cl.cost_basis),   // F-A1 / A-10: the main page's supporting keywords are read in the same cap
@@ -11706,8 +11706,8 @@ await guard('b2-serp-clusters-and-domain-diversity', async () => {
   ledgerReset([]);
   const ladRun = (await ledgerRun([{ json: { mode: 'ladder', keyword: HEAD, domain: D, pages_now: 1, ai_budget_usd: 15, ai_budget_period: 'day', dfs_budget_usd: 15, client_ip: '1.2.3.4', email: 'owner@example.com' } }]))[0].json;
   const ladRow = LEDGER.rows[LEDGER.rows.length - 1];
-  check('B2-4: a ladder reserves the new results-page money BEFORE it is spent — $0.21 of DataForSEO money (exec 495 measured $0.1162 plus 24 calls at $0.002), not the $0.16 of before',
-    !ladRun.validation_error && ladRow.dfs_est_usd === 0.21 && ladRun.dfs_spend_estimate_usd === 0.21,
+  check('B2-4: a ladder reserves the new results-page money BEFORE it is spent — $0.31 of DataForSEO money (exec 495 measured $0.1162 plus 24 calls at $0.006, 30 deep with the AI Overview since KW-SERP), not the $0.16 of before',
+    !ladRun.validation_error && ladRow.dfs_est_usd === 0.31 && ladRun.dfs_spend_estimate_usd === 0.31,
     JSON.stringify({ row: { dfs: ladRow.dfs_est_usd, ai: ladRow.est_usd }, run: ladRun.dfs_spend_estimate_usd }));
   // the settle reads the calls back: the same task answered twice is paid for once (R28)
   const ledgerAnswers = [serp80(A, PAGES80[A]), serp80(B, PAGES80[B], { id: 't-' + A.replace(/\s+/g, '-') })];
@@ -18984,7 +18984,7 @@ await guard('SFA1-3 A-10 the main page keeps a supporting keyword only on a shar
   const reqs = (await run('Ladder Cluster Requests', [{ json: pool }])).map(i => i.json);
   const sup = reqs.filter(r => r.supporting_check).map(r => r.keyword);
   check('A-10: Ladder Cluster Requests asks for the verdict\'s supporting keywords that are not rung candidates already, inside the cap of 24', sup.length >= 3 && reqs.length <= 24
-    && sup.includes('it consultancy dubai') && sup.includes('it consultants in dubai') && reqs.filter(r => !r.supporting_check).length === 20 && reqs.every(r => r.cost_usd === +(reqs.length * 0.002).toFixed(4)),
+    && sup.includes('it consultancy dubai') && sup.includes('it consultants in dubai') && reqs.filter(r => !r.supporting_check).length === 20 && reqs.every(r => r.cost_usd === +(reqs.length * 0.006).toFixed(4)),
     JSON.stringify({ sup, n: reqs.length, cost: reqs[0] && reqs[0].cost_usd }));
   // their answers: one with the main keyword's own top results, one with other pages, the rest failing (task error inside a 200)
   const headTop = FA1.parse_verdict.competitors_summary.slice().sort((a, b) => a.rank - b.rank).map(c => c.url);
@@ -19647,5 +19647,6 @@ await require('./scenarios_kw_accuracy')({ H, run, mock, store, guard, reset, be
 await require('./scenarios_kwmatch')({ H, run, mock, store, guard, reset, begin });   // KM1-KM8 (KW-MATCH 2026-10-21): K8 the page ABOUT a search (core words, IDF, services, confidence, evidence, may overlap) and K1 the topic reach from the site's own Search Console readings with the sample printed
 await require('./scenarios_kwcomp')({ H, run, mock, store, guard, reset, begin });   // KC1-KC5 (KW-COMP 2026-10-21, K6 / A-24 / RV-6): one competitor rule (v5/code/_competitors.js) - kinds, overlap scoring, declared first; research, full report, ladder
 
+await require('./scenarios_serp_cache')({ H, run, mock, store, guard, reset, begin });   // SC1-SC5 (KW-SERP 2026-10-21, RV-12): one results-page reading per search and day, shared by the Keyword Check, the ladder head and the ladder's rung reads; deep enough or bought again; failed reads never stored
 H.report();
 })();

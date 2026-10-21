@@ -281,6 +281,21 @@ for _a7, _m7 in (("const watchMeta = ((plan[0] || {}).watch) || null;", 'B6-7: t
     assert _a7 in _tr7, _m7
 assert "'check again', not \"not ranking\"" in _tr7 or 'that is "check again", not "not ranking"' in _tr7, \
     'B6-7 (INVARIANTS rule 1 / R18): a keyword whose results page could not be read must not read as "not ranking"'
+# ---- KW-SERP (2026-10-21, RV-12): the week's checks share ONE results-page reading per search and day with every other path ----
+# The tracker asks 50 deep with the AI Overview (Tracker_Plan.js serpBody), so its desktop reading refreshes seo_cache and serves the
+# research, the Keyword Check and the ladder (30 deep) for the rest of the day; a check already read 50 deep today is not bought again.
+import ladder_common as _lc_sc
+_sc_src = open(os.path.join(V5, 'code', '_serp_cache.js'), encoding='utf-8').read().rstrip('\n')
+_rt_src = open(os.path.join(V5, 'code', '_dfs_retry.js'), encoding='utf-8').read().rstrip('\n')
+_wsc = _lc_sc.serp_cache_wrap(_wf_tracker, 'SERP Check', 'Tracker', "(j) => ((Array.isArray(j.body) ? j.body[0] : j.body) || {})",
+                              _sc_src, _rt_src, "the live Google results for the week's tracked keywords", 'keyword check')
+assert _wsc['dsts'] == ['Parse Positions'], _wsc
+_tr_sc = next(n for n in _wf_tracker['nodes'] if n['name'] == 'Tracker Report')
+_old_sc = "const checkEvidence = (() => { try { return $('SERP Check Answers').first().json.__dfs || null; } catch (e) { return null; } })();"
+assert _tr_sc['parameters']['jsCode'].count(_old_sc) == 1, 'KW-SERP: the Rank Tracker report no longer reads the gate evidence where it did'
+_tr_sc['parameters']['jsCode'] = _tr_sc['parameters']['jsCode'].replace(_old_sc,
+    "const checkEvidence = (() => { try { return $('SERP With Cache (Tracker)').first().json.__dfs || null; } catch (e) { try { return $('SERP Check Answers').first().json.__dfs || null; } catch (e2) { return null; } } })();   // KW-SERP: the checks read earlier today count as read, at no cost")
+assert "load_async_ai_overview: true" in next(n for n in _wf_tracker['nodes'] if n['name'] == 'Tracker Plan')['parameters']['jsCode'], 'KW-SERP: the tracker does not ask the shared request shape'
 retry_lint.check_in200(_wf_tracker)
 write(_wf_tracker, 'SEO_Agent_Rank_Tracker.json')
 # R31 (2026-10-14): written AFTER the workflow, because ledger_mainline() fills `ai_nodes` (the Claude nodes the settle checks) and
