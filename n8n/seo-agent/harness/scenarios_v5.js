@@ -19623,6 +19623,7 @@ await guard('fserp-three-attempts', async () => {
 
 await require('./scenarios_cycle')({ H, run, mock, store, guard, reset, begin });   // CY1-CY24 (2026-10-19): the per-website cycle - kit, Cycle Dispatcher nodes, kickoff row, deploy guard
 await require('./scenarios_integration')({ H, run, mock, store, guard, reset, begin });   // INT1-INT7 (2026-10-19, E4): one client's life through every agent's generated nodes (the cross-agent contract test)
+await require('./scenarios_egate')({ H, run, mock, store, guard, reset, begin });   // EG1-EG6 (E-GATE 2026-10-21): the pre-launch run's keyword-fit defects - "ai" as a topic word, a learned brand reduced to a place, career searches read from the results page (gate, ladder head, research), self-contradicting reasons
 await require('./scenarios_reh')({ H, run, mock, store, guard, reset, begin });   // REH1-REH6 (F-REH 2026-10-20): the real-credit rehearsal's defects - ghost reservations, Track's parent, cycle 0's skips, service fit, plain notes
 
 H.report();
