@@ -4,12 +4,16 @@ import { Check, Link as LinkIcon, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Container, CtaBand, Reveal } from '../components';
 import { ArrowLink, PageHero } from '../components/company/PageHero';
-import { entryAnchor, entryTags, fmtLongDate, monthLabel, type ChangelogTag } from '../components/company/changelog-utils';
+import { entryAnchor, entryTags, majorOf, releaseName, type ChangelogTag } from '../components/company/changelog-utils';
 import { changelog, type ChangelogEntry } from '../content/changelog';
 import { features } from '../content/features';
 import { useSeo } from '../useSeo';
 
-const NEWEST = changelog[0]?.date;
+// Releases are named by version only: the page shows no date anywhere (owner decision 2026-10-22). Order is the data order, newest first.
+
+const NEWEST = changelog[0];
+const OLDEST = changelog[changelog.length - 1];
+const MILESTONES = changelog.filter((e) => e.major).reverse();
 
 /** every category used by at least one entry: labels first, then capabilities in registry order; with counts */
 function allTags(): (ChangelogTag & { count: number })[] {
@@ -87,22 +91,57 @@ function Chip({ active, onClick, children, count, size = 'md' }: { active: boole
   );
 }
 
-function Entry({ e, filter, setFilter }: { e: ChangelogEntry; filter: string | null; setFilter: (k: string | null) => void }) {
+/** "v4.2" beside the title; Geist Mono for the number */
+function VersionBadge({ e, large }: { e: ChangelogEntry; large?: boolean }) {
+  if (!e.version) return null;
+  return (
+    <span className={cn('inline-flex items-center rounded-md border font-mono font-medium tabular', large ? 'border-accent/30 bg-accent-soft px-2 py-0.5 text-[13px] text-accent-text' : 'border-line bg-surface-2 px-1.5 py-0.5 text-[11.5px] text-ink-2')}>
+      <span className="sr-only">Version </span>
+      <span aria-hidden>v</span>
+      {e.version}
+    </span>
+  );
+}
+
+function NewBadge() {
+  return <span className="rounded-full bg-accent-soft px-2 py-0.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.08em] text-accent-text">New</span>;
+}
+
+function TagChips({ tags, filter, setFilter }: { tags: ChangelogTag[]; filter: string | null; setFilter: (k: string | null) => void }) {
+  if (tags.length === 0) return null;
+  return (
+    <ul className="flex flex-wrap gap-1.5" aria-label="Categories">
+      {tags.map((t) => (
+        <li key={t.key}>
+          <Chip size="sm" active={filter === t.key} onClick={() => setFilter(filter === t.key ? null : t.key)}>
+            {t.label}
+          </Chip>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** the dot on the timeline: filled blue for the newest release and for milestones */
+function Dot({ isNew, major }: { isNew: boolean; major?: boolean }) {
+  return (
+    <span aria-hidden className={cn('absolute -left-[6px] top-[6px] size-[11px] rounded-full ring-4 ring-page', isNew || major ? 'bg-accent' : 'border-2 border-line-strong bg-page')}>
+      {isNew && <span className="mk-pulse absolute inset-0 rounded-full" />}
+    </span>
+  );
+}
+
+function MinorEntry({ e, filter, setFilter }: { e: ChangelogEntry; filter: string | null; setFilter: (k: string | null) => void }) {
   const anchor = entryAnchor(e);
-  const isNew = e.date === NEWEST;
+  const isNew = e === NEWEST;
   const tags = entryTags(e);
   const firstFeature = tags.find((t) => t.to);
   return (
     <article id={anchor} aria-labelledby={`${anchor}-t`} className="group/entry relative scroll-mt-40 pl-8 sm:pl-10 lg:scroll-mt-28">
-      {/* the dot on the timeline */}
-      <span aria-hidden className={cn('absolute -left-[6px] top-[6px] size-[11px] rounded-full ring-4 ring-page', isNew ? 'bg-accent' : 'border-2 border-line-strong bg-page')}>
-        {isNew && <span className="mk-pulse absolute inset-0 rounded-full" />}
-      </span>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <time dateTime={e.date} className="font-mono text-[12px] text-ink-3 tabular">
-          {fmtLongDate(e.date)}
-        </time>
-        {isNew && <span className="rounded-full bg-accent-soft px-2 py-0.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.08em] text-accent-text">New</span>}
+      <Dot isNew={isNew} />
+      <div className="flex flex-wrap items-center gap-2">
+        <VersionBadge e={e} />
+        {isNew && <NewBadge />}
       </div>
       <div className="mt-2 flex items-start gap-1.5">
         <h3 id={`${anchor}-t`} className="font-display text-xl font-semibold leading-snug tracking-[-0.01em] text-ink sm:text-2xl">
@@ -111,7 +150,7 @@ function Entry({ e, filter, setFilter }: { e: ChangelogEntry; filter: string | n
           </a>
         </h3>
         <span className="mt-0.5 sm:mt-1">
-          <CopyLink anchor={anchor} title={e.title} />
+          <CopyLink anchor={anchor} title={releaseName(e)} />
         </span>
       </div>
       <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-ink-2 sm:text-base">{e.summary}</p>
@@ -123,19 +162,9 @@ function Entry({ e, filter, setFilter }: { e: ChangelogEntry; filter: string | n
           </li>
         ))}
       </ul>
-      {(tags.length > 0 || firstFeature) && (
+      {tags.length > 0 && (
         <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
-          {tags.length > 0 && (
-            <ul className="flex flex-wrap gap-1.5" aria-label="Categories">
-              {tags.map((t) => (
-                <li key={t.key}>
-                  <Chip size="sm" active={filter === t.key} onClick={() => setFilter(filter === t.key ? null : t.key)}>
-                    {t.label}
-                  </Chip>
-                </li>
-              ))}
-            </ul>
-          )}
+          <TagChips tags={tags} filter={filter} setFilter={setFilter} />
           {firstFeature?.to && (
             <ArrowLink to={firstFeature.to} className="text-[13.5px]">
               Explore {firstFeature.label}
@@ -147,8 +176,82 @@ function Entry({ e, filter, setFilter }: { e: ChangelogEntry; filter: string | n
   );
 }
 
+/** a milestone: a featured block with its tagline, highlights under short sub-headings and links to every capability it touched */
+function MajorEntry({ e, filter, setFilter }: { e: ChangelogEntry; filter: string | null; setFilter: (k: string | null) => void }) {
+  const anchor = entryAnchor(e);
+  const isNew = e === NEWEST;
+  const tags = entryTags(e);
+  const labels = tags.filter((t) => !t.to);
+  const capabilities = tags.filter((t) => t.to);
+  const sections = e.sections?.length ? e.sections : [{ heading: 'Highlights', items: e.highlights }];
+  return (
+    <article id={anchor} aria-labelledby={`${anchor}-t`} className="group/entry relative scroll-mt-40 pl-8 sm:pl-10 lg:scroll-mt-28">
+      <Dot isNew={isNew} major />
+      <div className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-8">
+        <div className="flex flex-wrap items-center gap-2">
+          <VersionBadge e={e} large />
+          <span className="rounded-full border border-accent/30 px-2 py-0.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.08em] text-accent-text">Major release</span>
+          {isNew && <NewBadge />}
+        </div>
+        <div className="mt-4 flex items-start gap-1.5">
+          <h3 id={`${anchor}-t`} className="font-display text-2xl font-semibold leading-tight tracking-[-0.02em] text-ink sm:text-[2rem]">
+            <a href={`#${anchor}`} className="transition-colors duration-150 ease-brand hover:text-accent-text">
+              {e.title}
+            </a>
+          </h3>
+          <span className="mt-1 sm:mt-2">
+            <CopyLink anchor={anchor} title={releaseName(e)} />
+          </span>
+        </div>
+        {e.tagline && <p className="mt-3 max-w-2xl text-[16px] font-medium leading-snug text-ink sm:text-lg">{e.tagline}</p>}
+        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-ink-2">{e.summary}</p>
+
+        <div className={cn('mt-7 grid grid-cols-1 gap-x-8 gap-y-7 border-t border-line pt-7', sections.length > 1 && 'md:grid-cols-2')}>
+          {sections.map((s) => (
+            <section key={s.heading} aria-label={s.heading} className="min-w-0">
+              <h4 className="font-display text-[15px] font-semibold tracking-[-0.005em] text-ink">{s.heading}</h4>
+              <ul className="mt-3 space-y-2.5">
+                {s.items.map((h) => (
+                  <li key={h} className="flex gap-3 text-[14px] leading-relaxed text-ink-2">
+                    <span className="mt-[8px] size-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
+                    {h}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+
+        {(capabilities.length > 0 || labels.length > 0) && (
+          <div className="mt-7 border-t border-line pt-6">
+            {capabilities.length > 0 && (
+              <>
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">Capabilities in this release</p>
+                <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+                  {capabilities.map((t) => (
+                    <li key={t.key}>
+                      <ArrowLink to={t.to!} className="text-[13.5px]">
+                        {t.label}
+                      </ArrowLink>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {labels.length > 0 && (
+              <div className={cn(capabilities.length > 0 && 'mt-4')}>
+                <TagChips tags={labels} filter={filter} setFilter={setFilter} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
 export default function ChangelogPage() {
-  useSeo({ title: 'Changelog', description: 'What is new in Alaventra: every release in plain language, newest first.', path: '/changelog' });
+  useSeo({ title: 'Changelog', description: 'What is new in Alaventra: every release by version, in plain language, newest first.', path: '/changelog' });
   const [params, setParams] = useSearchParams();
   const tags = useMemo(allTags, []);
   const raw = params.get('topic');
@@ -161,18 +264,18 @@ export default function ChangelogPage() {
   };
 
   const shown = filter ? changelog.filter((e) => entryTags(e).some((t) => t.key === filter)) : changelog;
-  const months = useMemo(() => {
-    const out: { label: string; entries: ChangelogEntry[] }[] = [];
+  // grouped by major line (Alaventra 4, then 3, and so on), in data order
+  const lines = useMemo(() => {
+    const out: { major: string; entries: ChangelogEntry[] }[] = [];
     for (const e of shown) {
-      const label = monthLabel(e.date);
+      const major = majorOf(e);
       const last = out[out.length - 1];
-      if (last && last.label === label) last.entries.push(e);
-      else out.push({ label, entries: [e] });
+      if (last && last.major === major) last.entries.push(e);
+      else out.push({ major, entries: [e] });
     }
     return out;
   }, [shown]);
   const activeTag = tags.find((t) => t.key === filter);
-  const first = changelog[changelog.length - 1];
 
   return (
     <>
@@ -184,8 +287,26 @@ export default function ChangelogPage() {
         containerClassName="pb-12 sm:pb-16"
       >
         <p className="mt-8 font-mono text-[12px] text-ink-3 tabular">
-          {changelog.length} releases since {first ? monthLabel(first.date) : ''}
+          {changelog.length} releases{OLDEST?.version && NEWEST?.version ? `, from ${OLDEST.version} to ${NEWEST.version}` : ''}
         </p>
+        {MILESTONES.length > 0 && (
+          <nav aria-label="Milestones" className="mt-6">
+            <p className="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">Milestones</p>
+            <ol className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-4">
+              {MILESTONES.map((e) => (
+                <li key={entryAnchor(e)}>
+                  <a
+                    href={`#${entryAnchor(e)}`}
+                    className="flex h-full items-start gap-3 rounded-xl border border-line bg-surface px-3.5 py-3 transition-[border-color,box-shadow] duration-150 ease-brand hover:border-line-strong hover:shadow-card"
+                  >
+                    <span className="pt-px font-mono text-[13px] font-medium text-accent-text tabular">{e.version}</span>
+                    <span className="min-w-0 font-display text-[14px] font-semibold leading-snug text-ink">{e.title}</span>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        )}
       </PageHero>
 
       {/* phones and tablets: a sticky row of chips under the site header (wide screens use the side list) */}
@@ -250,26 +371,32 @@ export default function ChangelogPage() {
                 </p>
               )}
               <div className="space-y-16 sm:space-y-20">
-                {months.map((m) => (
-                  <section key={m.label} aria-labelledby={`m-${m.label.replace(' ', '-')}`}>
-                    <div className="mb-10 flex items-baseline gap-3">
-                      <h2 id={`m-${m.label.replace(' ', '-')}`} className="font-display text-xl font-semibold tracking-[-0.01em] text-ink">
-                        {m.label}
-                      </h2>
-                      <span className="font-mono text-[12px] text-ink-3 tabular">
-                        {m.entries.length} {m.entries.length === 1 ? 'release' : 'releases'}
-                      </span>
-                      <span aria-hidden className="h-px flex-1 self-center bg-line" />
-                    </div>
-                    <div className="relative ml-[6px] border-l border-line">
-                      {m.entries.map((e, i) => (
-                        <Reveal key={`${filter ?? 'all'}-${entryAnchor(e)}`} index={Math.min(i, 2)} className="pb-12 last:pb-0">
-                          <Entry e={e} filter={filter} setFilter={setFilter} />
-                        </Reveal>
-                      ))}
-                    </div>
-                  </section>
-                ))}
+                {lines.map((l) => {
+                  const id = `line-${l.major || 'other'}`;
+                  const first = l.entries[l.entries.length - 1];
+                  const last = l.entries[0];
+                  return (
+                    <section key={id} aria-labelledby={id}>
+                      <div className="mb-10 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <h2 id={id} className="font-display text-xl font-semibold tracking-[-0.01em] text-ink">
+                          {l.major ? `Alaventra ${l.major}` : 'Earlier releases'}
+                        </h2>
+                        <span className="font-mono text-[12px] text-ink-3 tabular">
+                          {l.entries.length > 1 && first.version && last.version ? `${first.version} to ${last.version}, ` : ''}
+                          {l.entries.length} {l.entries.length === 1 ? 'release' : 'releases'}
+                        </span>
+                        <span aria-hidden className="hidden h-px flex-1 self-center bg-line sm:block" />
+                      </div>
+                      <div className="relative ml-[6px] border-l border-line">
+                        {l.entries.map((e, i) => (
+                          <Reveal key={`${filter ?? 'all'}-${entryAnchor(e)}`} index={Math.min(i, 2)} className="pb-12 last:pb-0">
+                            {e.major ? <MajorEntry e={e} filter={filter} setFilter={setFilter} /> : <MinorEntry e={e} filter={filter} setFilter={setFilter} />}
+                          </Reveal>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
               </div>
             </div>
           </div>
