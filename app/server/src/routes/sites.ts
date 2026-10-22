@@ -320,10 +320,13 @@ export async function siteRoutes(app: FastifyInstance) {
     if (!config.serviceAccount.enabled) return out;
     const [gsc, ga4] = await Promise.allSettled([findGscProperty(site.domain), listGa4Properties(site.domain)]);
     if (gsc.status === 'fulfilled') {
-      if (gsc.value) {
-        out.gsc = { connected: true, property: gsc.value.property, permissionLevel: gsc.value.permissionLevel, error: null };
-        if (site.gscProperty !== gsc.value.property) await db.update(schema.sites).set({ gscProperty: gsc.value.property }).where(eq(schema.sites.id, site.id));
-      }
+      if (gsc.value) out.gsc = { connected: true, property: gsc.value.property, permissionLevel: gsc.value.permissionLevel, error: null };
+      // Google answered (access or no access): every screen compares this with the latest weekly report and takes the newer
+      // (gscConnectionState). A failed call records nothing, so an outage never reads as "not connected".
+      await db
+        .update(schema.sites)
+        .set({ gscCheckedAt: new Date(), gscReadable: !!gsc.value, ...(gsc.value && site.gscProperty !== gsc.value.property ? { gscProperty: gsc.value.property } : {}) })
+        .where(eq(schema.sites.id, site.id));
     } else out.gsc.error = String((gsc.reason as Error)?.message ?? gsc.reason);
     if (ga4.status === 'fulfilled') {
       // the service account sees every company's properties: only show the ones that measure this domain (and the chosen one)

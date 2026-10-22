@@ -3,6 +3,7 @@
 import type { ModeId } from './constants';
 import type { MonitorSettings, ProfileFields } from './schemas';
 import type { Report } from './api';
+import type { GscLiveCheck } from './gsc-connection';
 import type { ChartAnnotation } from './annotations';
 import type { PageChangeTest } from './change-test';
 import type { Lineage } from './lineage';
@@ -76,6 +77,8 @@ export interface TrackingConnection {
   keywords: string[];
   /** the engine's weekly reports for this site are delivered to this app (false: still to an older address, save tracking once) */
   reportsToThisApp: boolean;
+  /** the app's live check of the service account's Search Console access (Verification & Google); null: never answered */
+  gscLiveCheck?: GscLiveCheck | null;
 }
 
 export interface GscTotals {

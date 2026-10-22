@@ -34,7 +34,7 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
-    date: '2026-10-21',
+    date: '2026-10-22',
     version: '4.2',
     title: 'Accuracy and reliability',
     summary:
@@ -47,8 +47,9 @@ export const changelog: ChangelogEntry[] = [
       'A draft never promises something about your business that your facts do not say; such a sentence is marked for you to confirm or delete, and a page that is not ready names exactly what to fill in, without charging for a new page',
       'Pages Google still shows that no longer open are one clear finding at the top of your reports, with a suggested new address for each and ready redirect files in the fix pack',
       'Reliability and billing accuracy: saving one setting no longer resets the others, starting tracking uses no credits, and a retried search request is no longer charged twice',
+      'Search Console shows the same status on every screen: once we can read your property, the overview, recommendations and pipeline stop asking you to connect it, and proving you own the website is labelled apart from connecting its Google data',
     ],
-    features: ['keyword-research', 'keyword-ladders', 'content', 'technical-audits', 'autopilot'],
+    features: ['keyword-research', 'keyword-ladders', 'content', 'technical-audits', 'site-tracking', 'autopilot'],
     labels: ['Reliability', 'Billing'],
   },
   {

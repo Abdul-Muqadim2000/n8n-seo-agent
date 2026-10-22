@@ -34,7 +34,7 @@ import {
   type ScoreInput,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
-import { aiData, alertsData, backlinksData, contentData, previousOfType, rankingsData, searchData, settingsData, technicalData } from './data';
+import { aiData, alertsData, backlinksData, contentData, gscNow, previousOfType, rankingsData, searchData, settingsData, technicalData } from './data';
 import { latestReport, reportsList } from './runs';
 
 // Next steps for a website, from everything stored about it: setup gaps, Search Console opportunities, open audit issues, AI
@@ -157,7 +157,8 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   if (x.reportsElsewhere)
     add({ id: 'setup:delivery', category: 'setup', priority: 'high', title: 'Send the weekly reports to this dashboard', detail: 'The SEO engine already tracks this site, but its weekly reports still go to an address set up before this app. Save the tracking settings once and every weekly report, alert and page lands here.', action: { label: 'Open tracking settings', page: 'settings/tracking' } });
   const snap = x.search.snapshot;
-  if (tracked && (snap ? !snap.gsc.connected : !x.settings.tracking.gscProperty))
+  // the newer of the latest weekly report and the live check on Verification & Google: a site connected after its first report is not asked again
+  if (tracked && !gscNow(snap, x.settings.tracking).connected)
     add({ id: 'setup:gsc', category: 'setup', priority: 'high', title: 'Connect Google Search Console', detail: 'Without Search Console the tracker cannot see clicks, impressions, queries or index status. Add the service account as a user of your property.', evidence: snap?.gsc.error ?? undefined, action: { label: 'Connect', page: 'settings/verification' } });
   if (tracked && snap && !snap.ga4.connected)
     add({ id: 'setup:ga4', category: 'setup', priority: 'medium', title: 'Connect Google Analytics 4', detail: 'GA4 adds organic sessions, engagement and key events (leads, sales) to the weekly report.', action: { label: 'Connect GA4', page: 'settings/verification' } });

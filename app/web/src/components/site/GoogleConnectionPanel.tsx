@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { BarChart3, ChevronDown, Plug, RefreshCw, Search } from 'lucide-react';
@@ -32,6 +32,12 @@ export function permissionLabel(p: string | null | undefined): string {
 
 export function GoogleConnectionPanel({ orgId, site, canEdit, className }: { orgId: string; site: Site; canEdit: boolean; className?: string }) {
   const conn = useGoogleConnection(orgId, site.id, true);
+  const qc = useQueryClient();
+  // the server stores each answer from Google; Overview, Recommendations, Pipeline and Search take the newer of it and the last weekly
+  // report, so refresh them (inactive ones are only marked stale) instead of showing "Connect Search Console" for up to a minute
+  useEffect(() => {
+    if (conn.dataUpdatedAt) qc.invalidateQueries({ queryKey: [...qk.site(site.id), 'data'] });
+  }, [conn.dataUpdatedAt, qc, site.id]);
 
   return (
     <Card className={className}>

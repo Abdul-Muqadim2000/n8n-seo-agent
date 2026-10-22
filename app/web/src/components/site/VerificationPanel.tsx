@@ -26,6 +26,13 @@ export const METHOD_LABELS: Record<VerificationMethod, string> = {
   meta: 'Meta tag',
 };
 
+/** "Confirmed ... with ___" */
+const METHOD_PHRASES: Record<VerificationMethod, string> = {
+  search_console: 'your Google account (a Search Console owner)',
+  dns: 'a DNS record',
+  meta: 'a meta tag',
+};
+
 export function VerificationPanel({
   orgId,
   site,
@@ -58,7 +65,7 @@ export function VerificationPanel({
     const g = params.get('google');
     if (!g) return;
     const msg: Record<string, [string, 'success' | 'error']> = {
-      verified: [`${site.domain} is verified with Google`, 'success'],
+      verified: [`Ownership of ${site.domain} is verified with Google`, 'success'],
       already: [`${site.domain} was already verified`, 'success'],
       not_owner: [`That Google account is not a verified owner of ${site.domain} in Search Console. Sign in with the owner's account, or use a DNS record or meta tag.`, 'error'],
       claimed: [`${site.domain} is already verified by another company`, 'error'],
@@ -94,10 +101,12 @@ export function VerificationPanel({
   if (verified)
     return (
       <div className="space-y-5">
-        <Callout tone="good" title={`${site.domain} is verified`}>
+        {/* ownership only: it is not the Search Console data connection, which is the Google data panel below (2026-10-22, a client
+            read "verified" as "Search Console is connected") */}
+        <Callout tone="good" title={`Ownership of ${site.domain} is verified`}>
           Confirmed {fmtDate(v.verifiedAt ?? site.verifiedAt)}
-          {(v.method ?? site.verificationMethod) && <> with {METHOD_LABELS[(v.method ?? site.verificationMethod)!].toLowerCase()}</>}. Dashboards, tracking and site checks are
-          open for this website.
+          {(v.method ?? site.verificationMethod) && <> with {METHOD_PHRASES[(v.method ?? site.verificationMethod)!]}</>}. This proves the website is yours and opens its
+          dashboards, tracking and site checks. Search Console and GA4 data are connected separately{showGoogle && canEdit ? ', in Google data below' : ''}.
         </Callout>
         {showGoogle && (canEdit ? <GoogleConnectionPanel orgId={orgId} site={site} canEdit={canEdit} /> : <p className="text-[13px] text-ink-3">An admin of your company manages the Search Console and GA4 connection.</p>)}
       </div>
@@ -119,7 +128,7 @@ export function VerificationPanel({
         onSuccess: (r) => {
           setResult(r);
           if (r.verified) {
-            toast.success(`${site.domain} is verified`);
+            toast.success(`Ownership of ${site.domain} is verified`);
             onVerified?.(r);
           }
         },

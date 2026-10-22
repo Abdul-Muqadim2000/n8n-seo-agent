@@ -148,6 +148,13 @@
       "when": 1792609484204,
       "tag": "0020_keyword_check_stamp",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792688937835,
+      "tag": "0021_gsc_live_check",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,7 @@ import { Navigate, useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Bot, Building2, CalendarClock, FolderTree, KeyRound, PauseCircle, PenSquare, PlayCircle, Radar, Settings, ShieldAlert, Plus, Trash2 } from 'lucide-react';
-import { cleanDomain, CONTENT_GROUPS_MAX, contentGroupSchema, type AdminResult, type ContentGroup, type MonitorSettings, type SiteSettingsData } from '@seo/shared';
+import { cleanDomain, CONTENT_GROUPS_MAX, contentGroupSchema, gscConnectionState, type AdminResult, type ContentGroup, type MonitorSettings, type SiteSettingsData } from '@seo/shared';
 import { creditsLabel, quoteLabel } from '@/lib/credits';
 import { EmailVerifyNotice } from '@/components/site/EmailVerifyNotice';
 import { competitorValidator } from '@/components/site/helpers';
@@ -320,6 +320,8 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
   const day = useCycleDay();
   const action = useSiteAdmin(org.id, site.id);
   const t = data.tracking;
+  // no weekly report here: the engine row against the live check on Verification & Google, the newer wins
+  const gsc = gscConnectionState({ tracking: t });
   const toggle = () =>
     action.mutate(
       { action: paused ? 'resume' : 'pause' },
@@ -346,7 +348,7 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
           items={[
             { label: 'Started', value: site.trackingStartedAt ? fmtDate(site.trackingStartedAt) : '-' },
             { label: 'Last report', value: t.lastRunAt ? `${fmtAgo(t.lastRunAt)}${t.lastStatus ? ` · ${t.lastStatus}` : ''}` : 'None yet' },
-            { label: 'Search Console', value: t.gscProperty ?? site.gscProperty ?? <span className="text-warning-text">not connected</span> },
+            { label: 'Search Console', value: gsc.connected ? (gsc.property ?? 'connected') : <span className="text-warning-text">not connected</span> },
             { label: 'GA4 property', value: t.ga4PropertyId || site.ga4PropertyId || <span className="text-ink-3">detected automatically</span> },
             { label: 'Keywords', value: t.keywords.length ? `${t.keywords.length} tracked` : <span className="text-ink-3">Search Console queries only</span> },
           ]}
