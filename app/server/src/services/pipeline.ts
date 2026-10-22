@@ -70,6 +70,7 @@ import { CADENCE, simulateCadence, type CadenceWeek } from './cadence';
 import { profileNeedsYou } from './readiness';
 import { buildLadders, draftQa, ladderAppSources, ladderNeedsYou, ladderReports, sortNeedsYou, type LadderBuild, type LadderSchedule, type SiteRun, type WaitingPage } from './ladders';
 import { loadBundle, recommend, type SiteBundle } from './recommendations';
+import { gscNow } from './data';
 import { latestReport, monthSpend, reportsList } from './runs';
 
 // The pipeline of one website: every automation the engine runs for it (in the website's own weekly cycle since 2026-10-19, the daily
@@ -268,7 +269,8 @@ function connectionNeeds(site: SiteRow, x: SiteBundle, status: PipelineData['tra
       action: { label: 'Open tracking settings', page },
     });
   const snap = x.search.snapshot;
-  if (snap ? !snap.gsc.connected : !x.settings.tracking.gscProperty)
+  // the newer of the latest weekly report and the live check on Verification & Google (as Recommendations)
+  if (!gscNow(snap, x.settings.tracking).connected)
     out.push({
       id: 'connection:gsc',
       kind: 'connection',
@@ -358,7 +360,7 @@ function thisWeekItems(
       case 'rank_tracker':
         return `${plural(p.build.cards.length, 'ladder')}, ${plural(pages, 'page')}`;
       case 'site_tracker':
-        return [tr.gscProperty ? 'Search Console' : null, tr.ga4PropertyId ? 'GA4' : null, 'Google Trends', tr.keywords.length ? `live checks of ${plural(tr.keywords.length, 'tracked keyword')}` : null]
+        return [gscNow(p.x.search.snapshot, tr).connected ? 'Search Console' : null, tr.ga4PropertyId ? 'GA4' : null, 'Google Trends', tr.keywords.length ? `live checks of ${plural(tr.keywords.length, 'tracked keyword')}` : null]
           .filter(Boolean)
           .join(' · ');
       case 'content_cadence':
@@ -697,7 +699,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastResult: snap?.gsc.current ? `${snap.gsc.current.clicks} clicks · ${snap.gsc.current.impressions} impressions (28 days)` : x.settings.tracking.lastStatus,
       lastReportId: stReport?.id ?? null,
       monthlyUsd: rowUsd('site_report'),
-      detail: `${x.settings.tracking.keywords.length} tracked keywords${x.settings.tracking.gscProperty ? ' · Search Console' : ''}${x.settings.tracking.ga4PropertyId ? ' · GA4' : ''}`,
+      detail: `${x.settings.tracking.keywords.length} tracked keywords${gscNow(x.search.snapshot, x.settings.tracking).connected ? ' · Search Console' : ''}${x.settings.tracking.ga4PropertyId ? ' · GA4' : ''}`,
     }),
     base('content_cadence', pagesPerWeek > 0, 'Pages a week is 0', {
       lastRunAt: lastIso(cadenceLogs[0]?.started_at, cadenceReport?.report.receivedAt),
@@ -836,7 +838,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       title: 'Track',
       state: active ? 'active' : 'waiting',
       headline: positions.length ? `${positions.filter((p) => p <= 10).length} keywords in the top 10` : active ? 'Tracking every week' : 'Not tracked yet',
-      detail: `${x.rankings.keywords.length + ladderPages} keywords checked · Search Console ${x.settings.tracking.gscProperty ? 'connected' : 'not connected'}`,
+      detail: `${x.rankings.keywords.length + ladderPages} keywords checked · Search Console ${gscNow(x.search.snapshot, x.settings.tracking).connected ? 'connected' : 'not connected'}`,
       action: { label: 'Rankings', page: 'rankings' },
     },
     {

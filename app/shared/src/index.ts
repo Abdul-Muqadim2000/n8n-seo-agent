@@ -6,6 +6,7 @@ export * from './payload';
 export * from './tables';
 export * from './api';
 export * from './data';
+export * from './gsc-connection';
 export * from './format';
 export * from './profile';
 export * from './cost';

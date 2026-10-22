@@ -66,7 +66,7 @@ export function SiteLayout() {
           </a>
         </span>
         <span className="flex flex-wrap items-center gap-2">
-          {site.verifiedAt ? <StatusBadge tone="good">Verified</StatusBadge> : <StatusBadge tone="warning">Not verified</StatusBadge>}
+          {site.verifiedAt ? <StatusBadge tone="good">Ownership verified</StatusBadge> : <StatusBadge tone="warning">Not verified</StatusBadge>}
           {tracking}
           {site.trackingStartedAt && <span className="text-xs text-ink-3">since {fmtAgo(site.trackingStartedAt)}</span>}
         </span>

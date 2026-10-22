@@ -458,6 +458,12 @@ export const sites = pgTable(
     keywords: jsonb('keywords').$type<string[]>().notNull().default([]),
     ga4PropertyId: text('ga4_property_id').notNull().default(''),
     gscProperty: text('gsc_property').notNull().default(''),
+    /** the live check of our service account's Search Console access (Verification & Google panel, GET .../google): when Google last
+     *  answered and whether the service account could read a property for the domain. Null = never answered. Every screen takes the
+     *  newer of this and the latest weekly report (shared gscConnectionState), so a site connected after its first report is not told
+     *  to connect. `gsc_property` alone cannot say this: "Verify with Google" stores the owner's property there too. */
+    gscCheckedAt: ts('gsc_checked_at'),
+    gscReadable: boolean('gsc_readable'),
     blogsPerWeek: integer('blogs_per_week').notNull().default(0),
     verificationToken: text('verification_token').notNull(),
     verifiedAt: ts('verified_at'),

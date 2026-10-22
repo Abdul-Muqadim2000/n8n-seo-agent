@@ -57,7 +57,10 @@ export default function middleware(request: Request): Response {
   // Only the headers the API needs. Copying every incoming header into the request override also re-injected Vercel's own
   // x-vercel-* / hop-by-hop headers and the invocation failed on every /api call (MIDDLEWARE_INVOCATION_FAILED, 2026-10-18).
   const headers = new Headers();
-  for (const [k, v] of request.headers) if (FORWARD.has(k.toLowerCase())) headers.set(k, v);
+  // forEach, not for...of: CI type-checks with --lib es2022,dom (no dom.iterable), where Headers is not iterable
+  request.headers.forEach((v, k) => {
+    if (FORWARD.has(k.toLowerCase())) headers.set(k, v);
+  });
   const ip = request.headers.get('x-real-ip') ?? (request.headers.get('x-forwarded-for') ?? '').split(',')[0].trim();
   if (ip) headers.set('x-real-ip', ip);
   headers.set('x-forwarded-host', host);

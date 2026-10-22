@@ -1,5 +1,6 @@
 import {
   creditsFor,
+  gscConnectionState,
   AI_PROMPTS_STORED_DEFAULT,
   aiPanelFromJson,
   aiSegmentsFromJson,
@@ -139,8 +140,20 @@ export async function n8nSite(site: SiteRow): Promise<DtSiteRow | null> {
   return r[0] ?? null;
 }
 
-function connection(row: DtSiteRow | null, org: OrgRow): TrackingConnection {
+/** The app's live check of the service account's Search Console access, stored on the site row (GET .../google). */
+export function gscLiveCheckOf(site: Pick<SiteRow, 'gscCheckedAt' | 'gscReadable' | 'gscProperty'>): TrackingConnection['gscLiveCheck'] {
+  if (!site.gscCheckedAt || site.gscReadable == null) return null;
+  return { at: site.gscCheckedAt.toISOString(), connected: site.gscReadable, property: site.gscReadable ? site.gscProperty || null : null };
+}
+
+/** Search Console now: the newer of the latest weekly report and the app's live check (shared gscConnectionState). */
+export function gscNow(snapshot: Pick<TrackerSnapshot, 'receivedAt' | 'gsc'> | null | undefined, tracking: TrackingConnection | null | undefined) {
+  return gscConnectionState({ report: snapshot ? { receivedAt: snapshot.receivedAt, connected: snapshot.gsc.connected, property: snapshot.gsc.property } : null, tracking });
+}
+
+function connection(row: DtSiteRow | null, org: OrgRow, site: SiteRow): TrackingConnection {
   return {
+    gscLiveCheck: gscLiveCheckOf(site),
     reportsToThisApp: !!row && row.callback_url === callbackUrl(org),
     tracked: !!row,
     status: row?.status ?? null,
@@ -366,6 +379,8 @@ export async function searchData(org: OrgRow, site: SiteRow): Promise<SearchData
   const curImpressions = snapshot?.gsc.current?.impressions ?? (ms.length ? n(ms[ms.length - 1]!.impressions) : null);
   const curSessions = snapshot?.ga4.organic?.sessions ?? (ms.length ? n(ms[ms.length - 1]!.sessions) : null);
   const gscOn = snapshot?.gsc.connected ?? !!ms[ms.length - 1]?.gsc_connected;
+  const conn = connection(siteRow, org, site);
+  const gscState = gscNow(snapshot, conn);
   const gaOn = snapshot?.ga4.connected ?? !!ms[ms.length - 1]?.ga4_connected;
   const period28 = cur ? lineagePeriod(cur.start, cur.end) : '';
   const lineageList: Lineage[] = [
@@ -376,7 +391,10 @@ export async function searchData(org: OrgRow, site: SiteRow): Promise<SearchData
           basis: 'measured',
           note: snapshot?.period?.previous ? `compared with ${lineagePeriod(snapshot.period.previous.start, snapshot.period.previous.end)}` : '',
         })
-      : lineageUnknown('Clicks, impressions and positions', 'Search Console is not connected for this website, so there is no measured search data'),
+      : lineageUnknown(
+          'Clicks, impressions and positions',
+          gscState.connected ? 'Search Console is connected; the measured figures arrive with the next tracking report' : 'Search Console is not connected for this website, so there is no measured search data',
+        ),
     gaOn
       ? lineage('Organic sessions, engaged sessions and key events', 'ga4', { period: period28, sample: lineageSample(curSessions, 'organic sessions'), basis: 'measured' })
       : lineageUnknown('Visits, engagement and key events', 'Google Analytics is not connected for this website'),
@@ -395,7 +413,7 @@ export async function searchData(org: OrgRow, site: SiteRow): Promise<SearchData
       : lineageUnknown('Did this change help?', 'no page of this website has a recorded publish date yet'),
   ];
   return {
-    connection: connection(siteRow, org),
+    connection: conn,
     snapshot,
     metrics: ms.map(toMetrics),
     queries: qs.map(toQuery),
@@ -1422,7 +1440,7 @@ export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSett
   ]);
   const profile = profileFromRow(profiles[0]);
   return {
-    tracking: connection(siteRow, org),
+    tracking: connection(siteRow, org, site),
     monitors: monitorsFromRow(monitors[0]),
     cadence: cadence[0] ? { pagesPerWeek: n(cadence[0].pages_per_week), status: s(cadence[0].status) } : null,
     profile,

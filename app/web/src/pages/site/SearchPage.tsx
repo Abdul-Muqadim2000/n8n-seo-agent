@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ArrowUpDown, BarChart3, CalendarRange, CheckCircle2, FileText, FlaskConical, Lightbulb, LineChart, Minus, MousePointerClick, PieChart, Search, Sparkles, Target, TrendingDown, TrendingUp, TriangleAlert, Users } from 'lucide-react';
-import { CHANGE_TEST_METHOD, CHANGE_VERDICT_TONES, compactNumber, titleCase, type Lineage, type MetricsPoint, type SearchData, type TrendPoint } from '@seo/shared';
+import { CHANGE_TEST_METHOD, CHANGE_VERDICT_TONES, compactNumber, gscConnectionState, titleCase, type Lineage, type MetricsPoint, type SearchData, type TrendPoint } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { useSiteData } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
@@ -76,7 +76,12 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
 
   const cur: Totals | null = S?.gsc.current ?? (M ? { clicks: M.clicks, impressions: M.impressions, ctr: M.ctr, position: M.position } : null);
   const prev: Totals | null = S?.gsc.previous ?? (M ? { clicks: M.prevClicks, impressions: M.prevImpressions, ctr: M.prevCtr, position: M.prevPosition } : null);
-  const gscOn = S?.gsc.connected ?? M?.gscConnected ?? d.connection.gscProperty != null;
+  // the newer of the latest weekly report and the live check on Verification & Google (the same rule as Overview and Recommendations)
+  const gsc = gscConnectionState({
+    report: S ? { receivedAt: S.receivedAt, connected: S.gsc.connected, property: S.gsc.property } : M ? { receivedAt: M.checkedAt, connected: M.gscConnected, property: null } : null,
+    tracking: d.connection,
+  });
+  const gscOn = gsc.connected;
   const gaOn = S?.ga4.connected ?? M?.ga4Connected ?? false;
   const org1: Ga | null = S?.ga4.organic ?? (M ? { sessions: M.sessions, engaged: M.engagedSessions, keyEvents: M.keyEvents } : null);
   const org0: Ga | null = S?.ga4.organicPrev ?? (M ? { sessions: M.prevSessions, engaged: M.prevEngagedSessions, keyEvents: M.prevKeyEvents } : null);
@@ -137,7 +142,10 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
         actions={
           <>
             {gscOn ? (
-              <HeroChip icon={<CheckCircle2 />}>Search Console{S?.gsc.property || d.connection.gscProperty ? ` · ${S?.gsc.property ?? d.connection.gscProperty}` : ''}</HeroChip>
+              <HeroChip icon={<CheckCircle2 />} title={gsc.awaitingReport ? 'Connected. The first figures arrive with the next tracking report.' : undefined}>
+                Search Console{gsc.property ? ` · ${gsc.property}` : ''}
+                {gsc.awaitingReport ? ' · figures with the next report' : ''}
+              </HeroChip>
             ) : (
               <HeroChip icon={<TriangleAlert />} to={page('settings/verification')} title={S?.gsc.error ?? undefined}>
                 Search Console is not connected. Connect it

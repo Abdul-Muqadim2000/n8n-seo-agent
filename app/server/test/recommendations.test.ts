@@ -60,6 +60,27 @@ describe('recommend', () => {
     expect(recommend(site, bundle()).filter((r) => r.category === 'setup')).toEqual([]);
   });
 
+  // 2026-10-22 (techand.ai on production): connected on Verification & Google, still asked to "Connect Google Search Console" here
+  describe('Connect Google Search Console', () => {
+    const tracking = (over: Partial<SiteBundle['settings']['tracking']>) => ({ ...bundle().settings, tracking: { ...bundle().settings.tracking, ...over } });
+    const report = (receivedAt: string, connected: boolean) => ({ ...bundle().search, snapshot: { receivedAt, gsc: { connected, property: connected ? 'sc-domain:northwind-erp.com' : null, error: connected ? null : 'no access' }, ga4: { connected: true } } as unknown as SiteBundle['search']['snapshot'] });
+    const asksGsc = (b: SiteBundle) => recommend(site, b).some((r) => r.id === 'setup:gsc');
+
+    it('not asked when no report exists yet and the live check found access', () => {
+      expect(asksGsc(bundle({ settings: tracking({ gscProperty: null, gscLiveCheck: { at: '2026-10-22T17:00:00Z', connected: true, property: 'sc-domain:northwind-erp.com' } }) }))).toBe(false);
+    });
+    it('not asked when the service account was added after a report that said "no access"', () => {
+      expect(asksGsc(bundle({ search: report('2026-10-22T16:50:00Z', false), settings: tracking({ gscLiveCheck: { at: '2026-10-22T17:00:00Z', connected: true, property: 'sc-domain:northwind-erp.com' } }) }))).toBe(false);
+    });
+    it('still asked when nothing says connected', () => {
+      expect(asksGsc(bundle({ settings: tracking({ gscProperty: null }) }))).toBe(true);
+      expect(asksGsc(bundle({ search: report('2026-10-22T16:50:00Z', false), settings: tracking({ gscLiveCheck: { at: '2026-10-21T10:00:00Z', connected: true, property: 'sc-domain:northwind-erp.com' } }) }))).toBe(true);
+    });
+    it('asked again when the live check finds the access removed after the last report', () => {
+      expect(asksGsc(bundle({ search: report('2026-10-20T06:00:00Z', true), settings: tracking({ gscLiveCheck: { at: '2026-10-22T17:00:00Z', connected: false, property: null } }) }))).toBe(true);
+    });
+  });
+
   it('finds striking-distance queries with an "improve the page" run', () => {
     const recs = recommend(
       site,
