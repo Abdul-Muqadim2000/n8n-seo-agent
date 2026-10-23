@@ -465,7 +465,8 @@ return plans.map(p => {
     citation_rate: changeOf(cited, samples, cPrev, nPrev),
     share_of_voice: PS && PS.sov ? { ...AVM.seChange(H.sov, H.sov_se, H.sov_n, PS.sov.rate, PS.sov.se, PS.sov.n), basis: 'measured', samples: H.sov_n, samples_before: Number(PS.sov.n) || 0 }
       : { delta: null, z: null, p: null, significant: null, basis: 'not_available', why: 'the earlier run did not record its share of voice per answer' },
-    visibility_score: PS && PS.score && PS.score.half != null && score_band.half != null ? { ...AVM.seChange(visibility_score, halfSe(score_band.half), score_band.n, PS.score.score, halfSe(PS.score.half), Number(PS.score.n) || 0, { min: 0 }), basis: 'modelled' }
+    visibility_score: PS && PS.score && PS.score.half != null && score_band.half != null ? (() => { const t = AVM.seChange(visibility_score, halfSe(score_band.half), score_band.n, PS.score.score, halfSe(PS.score.half), Number(PS.score.n) || 0, { min: 0 });
+      return { ...t, basis: 'modelled', half: score_band.half, half_before: PS.score.half, why: t.why + '; judged against both runs\' own 95% bands (+/-' + score_band.half + ' points now, +/-' + PS.score.half + ' before)' }; })()
       : scoreChange(visibility_score, prev.visibility_score, score_band),
     avg_position: PS && PS.position ? { ...AVM.seChange(H.avg_position, H.position_n ? (Number(H.position_sd) || 0) / Math.sqrt(H.position_n) : null, H.position_n, PS.position.mean, PS.position.n ? (Number(PS.position.sd) || 0) / Math.sqrt(PS.position.n) : null, Number(PS.position.n) || 0, { min: 0 }), basis: 'measured' }
       : { delta: null, z: null, p: null, significant: null, basis: 'not_available', why: 'the earlier run did not record the place in its answers' } } : null;

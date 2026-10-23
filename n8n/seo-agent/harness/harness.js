@@ -96,8 +96,41 @@ async function expectError(node, input, re, runIndex) {
 // (plan, merge) against real DataForSEO envelopes, so nothing about the gate rests on this alias.
 const GATED = {};
 try { const g = require('./in200.json'); for (const wf of Object.values(g)) for (const n of (wf.gated || [])) GATED[n] = true; } catch (e) {}
+// F1b (2026-10-23, docs/ai-visibility-2026-10-23/fixes/F1b.md): every stored AI visibility / pulse row now carries the measurement rule it
+// was counted under, and a row of another rule is never compared or pooled. The fixtures of S19 ... S211 were written before the rule
+// existed and stand for rows of the CURRENT rule, so a fixture row with NO `rule_version` key is stamped with it here (and a pulse row
+// gets the per-answer record its aggregates describe). A scenario that wants a row of an older rule says so explicitly
+// (`rule_version: ''` or another version): such a row is passed through untouched.
+const AIV_RULE = (() => { try { const m = fs.readFileSync(path.join(CODE_DIR, 'AI_Metrics.js'), 'utf8').match(/const RULE_VERSION = '([^']+)'/); return m ? m[1] : ''; } catch (e) { return ''; } })();
+const aivSynthDetail = (d) => {
+  const P = (v, f) => { try { const x = typeof v === 'string' ? JSON.parse(v || 'null') : v; return x == null ? f : x; } catch (e) { return f; } };
+  const eng = P(d.engines_json, {}), codes = P(d.prompts_json, {}), comps = P(d.competitors_json, {});
+  const n = Number(d.samples) || 0, m = Number(d.mentioned) || 0, c = Number(d.cited) || 0;
+  let units = [];
+  for (const [pid, st] of Object.entries(codes || {})) for (const [e, v] of Object.entries(st || {})) if (v !== 'n' && v !== 'e') units.push({ pid, e, named: /[mMcC]/.test(v), cited: /[cC]/.test(v), pos: /[MC]/.test(v) ? 1 : /[mc]/.test(v) ? 2 : null });
+  if (units.length !== n) { units = [];
+    let per = Object.entries(eng || {}).map(([e, x]) => [e, Number((x || {}).answered) || 0, Number((x || {}).mentioned) || 0, Number((x || {}).cited) || 0]).filter(x => x[1] > 0);
+    if (per.reduce((s, x) => s + x[1], 0) !== n || per.reduce((s, x) => s + x[2], 0) !== m) per = [['chatgpt', n, m, c]];
+    const pids = Object.keys(codes || {}); let k = 0;
+    for (const [e, a, mm, cc] of per) for (let i = 0; i < a; i++) { units.push({ pid: pids.length ? pids[k % pids.length] : 'pq_' + (k % 7), e, named: i < mm, cited: i < Math.min(cc, mm), pos: i < mm ? 2 : null }); k++; } }
+  const ents = []; units.forEach(u => { u.r = []; });
+  let start = 0; for (const [id, k0] of Object.entries(comps || {})) { const kk = Math.min(Number(k0) || 0, units.length); ents.push(id); for (let i = 0; i < kk; i++) units[(start + i) % units.length].r.push([ents.length - 1, null, 0]); start += kk; }
+  return JSON.stringify({ v: 1, rule_version: AIV_RULE, ents, a: units.map(u => [u.pid, u.e, u.named ? 1 : 0, u.cited ? 1 : 0, u.pos, u.r]) });
+};
+const aivStamp = (node, items) => {
+  // a plan item built by hand (scenarios that mock AI Plan): its stored previous row, pooled pulse rows and pulse baseline days
+  if (AIV_RULE && node === 'AI Plan') return items.map(it => { const j = it && it.json; if (!j || typeof j !== 'object') return it; const out = { ...j };
+    if (j.previous && typeof j.previous === 'object' && !('rule_version' in j.previous)) out.previous = { ...j.previous, rule_version: AIV_RULE };
+    if (Array.isArray(j.pulse_rows)) out.pulse_rows = j.pulse_rows.map(d => (!d || ('rule_version' in d)) ? d : { ...d, rule_version: AIV_RULE,
+      detail: d.detail || JSON.parse(aivSynthDetail({ samples: d.samples, mentioned: d.mentioned, cited: d.cited, engines_json: d.engines || {}, prompts_json: d.prompts || {}, competitors_json: d.competitors || {} })) });
+    if (Array.isArray(j.baseline)) out.baseline = j.baseline.map(d => (!d || ('rule_version' in d)) ? d : { ...d, rule_version: AIV_RULE });
+    return { ...it, json: out }; });
+  if (!AIV_RULE || (node !== 'Load AI Visibility' && node !== 'Load AI Daily')) return items;
+  return items.map(it => { const j = it && it.json; if (!j || typeof j !== 'object' || !j.site_id || ('rule_version' in j)) return it;
+    const out = { ...j, rule_version: AIV_RULE }; if (node === 'Load AI Daily' && !out.detail_json) out.detail_json = aivSynthDetail(out); return { ...it, json: out }; });
+};
 function mock(node, items) {
-  store[node] = toItems(items);
+  store[node] = aivStamp(node, toItems(items));
   // the alias follows EVERY mock of the call, never only the first: S25 mocks `Run Reach Requests` a dozen times in a row with
   // different answers, and a sticky alias would have fed the first one's reach to all twelve.
   if (GATED[node]) store[node + ' Answers'] = store[node];

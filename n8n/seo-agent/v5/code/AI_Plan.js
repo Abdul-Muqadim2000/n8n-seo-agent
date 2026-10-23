@@ -111,11 +111,11 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const gsc_questions = [...new Map(queries.filter(q => q.site_id === s.site_id && q.query && (String(q.query).split(/\s+/).length >= 5 || QUESTION.test(String(q.query))))
     .sort((a, b) => (Number(b.impressions) || 0) - (Number(a.impressions) || 0)).map(q => [String(q.query).toLowerCase().trim(), { query: String(q.query).trim(), impressions: Number(q.impressions) || 0, clicks: Number(q.clicks) || 0, position: Number(q.position) || 0 }])).values()].slice(0, CONFIG.gsc_questions);
   // AI Pulse samples since the last weekly run (or the past week): they join this week's figures (more samples = a steadier, honest rate)
-  // E14 (2026-10-23, F1b): a pulse morning belongs to exactly ONE weekly window, (the previous run's window end, this run's start]. The
-  // lower bound alone let a split run that finished after a pulse morning pool it, and the next week pool it again. The window travels
-  // with the plan and is stored in the row (compare_json.window), so the next run starts where this one ended.
+  // E14 (2026-10-23, F1b): a pulse morning belongs to exactly ONE weekly window, (the previous run's start, this run's start]. The lower
+  // bound alone let a split run that finished after a pulse morning pool it, and the next week pool it again. A row's checked_at IS its
+  // run's start (a split run keeps the first part's), so it is the next window's lower bound; the window is stored in compare_json.window.
   const prevCmp = prev ? parse(prev.compare_json, null) : null;
-  const since = prev ? String((prevCmp && prevCmp.window && prevCmp.window.to) || prev.checked_at) : new Date(now.getTime() - CONFIG.pulse_days * 864e5).toISOString();
+  const since = prev ? String(prev.checked_at) : new Date(now.getTime() - CONFIG.pulse_days * 864e5).toISOString();
   const windowTo = going ? String(st.started_at || iso) : iso;
   const pulse_window = { from: since, to: windowTo, days: Math.round(10 * Math.max(0, (Date.parse(windowTo) - Date.parse(since)) / 864e5)) / 10 };
   const pulse_rows = daily.filter(d => d.site_id === s.site_id && String(d.checked_at) > since && String(d.checked_at) <= windowTo).map(d => ({ date: d.date, checked_at: d.checked_at, run_id: d.run_id || '', samples: Number(d.samples) || 0, mentioned: Number(d.mentioned) || 0, cited: Number(d.cited) || 0,
