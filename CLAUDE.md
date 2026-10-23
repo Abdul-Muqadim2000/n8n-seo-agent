@@ -61,6 +61,15 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
+## Status (2026-10-23 night, AI visibility + question panel upgrade — latest)
+Owner asked for a full audit + R&D + multi-agent upgrade of AI visibility, shipped safely. **Code done, pushed (`feature/seo-agent-v4.5`
+@ `8b4b1a59`), NOT deployed** (the permission system refused the VM backup and the tunnel; `main` not pushed). Read
+**`n8n/seo-agent/docs/ai-visibility-2026-10-23/RESUME.md`** (deploy steps) — audits (PROD_STATE, ENGINE_AUDIT E1-E22, APP_AUDIT A1-A20,
+MARKET_RND), WAVE2_CONTRACTS, fixes/*.md, REVIEW_ENGINE/REVIEW_APP. Entities (competitor precision 51.7 -> 100%), one SOV + position +
+compare_json, never pay twice + Unicode ids, answer text / citations / shopping, clustered ranges (95.3% coverage), sentiment (early reading,
+not validated), did-it-work, alert rules, fan-out gap, demand ranges, Bing / GSC AI uploads, repeat pilot, app drill-down / trends / filters /
+CSV / bulk. Harness **11921 / 0**, app 702 / 1422 / 183. Production AI tables are empty and the dispatcher is plan_only: deploy before `start`.
+
 ## Status (2026-10-21 evening, paid pre-launch run on techand.ai + its fixes — latest)
 One new client run end to end with real money on an isolated production-like stack built from `9d97b90` (= production): DataForSEO
 **$2.44**, Claude **$1.59** (balance $48.22). P1 (first page waits for profile + facts) works live. Four reviewers (page, reports vs the

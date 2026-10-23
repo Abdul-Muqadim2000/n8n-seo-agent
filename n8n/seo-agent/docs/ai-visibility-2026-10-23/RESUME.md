@@ -1,4 +1,24 @@
-# AI visibility upgrade: where it stopped (2026-10-24) and how to resume
+# AI visibility upgrade: where it stopped and how to resume
+
+## UPDATE 2026-10-23 22:10 UTC: code DONE and pushed, NOT deployed
+- `feature/seo-agent-v4.5` = `8b4b1a59` (pushed). `main` NOT pushed (Vercel web unchanged). Engine and API on GCP unchanged.
+- Checks at 8b4b1a59: build with real settings exit 0; harness **11921 passed, 0 failed**; app typecheck clean, shared 702, server 1422
+  (+46 db-skipped), web 183, web build OK. Reviews REVIEW_ENGINE.md / REVIEW_APP.md fixed (fixes/R-ENGINE.md, R-APP.md, W2-FIX.md).
+- Tutorial catalogue updated and pushed (video-skills 3f3db70: 8.1-8.3 revised, 8.6-8.10 added; no films, they need the owner's yes).
+- The deploy was stopped by the permission system (on-demand backup over SSH, then the IAP tunnel). The owner runs it (below) or allows
+  `deploy/gcp/gcloud-docker.sh gcloud compute ssh alaventra-vm-1:*` and `deploy/gcp/tunnel.sh`.
+- If the spot VM reboots before the deploy, startup.sh pulls the branch and rebuilds the API with the new app on the OLD engine: safe
+  (new settings are ignored by the old engine, new fields render only when present), the pilot button errors until the engine is deployed.
+
+### Deploy, in order (any time except 09:40-10:40 UTC; the dispatcher is plan_only, nothing in flight)
+1. Backup: `deploy/gcp/gcloud-docker.sh gcloud compute ssh alaventra-vm-1 --zone me-central1-a --project alaventra-prod --tunnel-through-iap --command 'sudo bash /mnt/data/repo/deploy/gcp/backup.sh'`
+2. Engine: terminal A `deploy/gcp/tunnel.sh`; terminal B `python3 deploy/gcp/deploy_engine.py` (dry run: expect ~40 new columns, 2 new
+   workflows SEOagentAIPilot1 / SEOagentAIPilAPI, SEOagentCallback to be deactivated), then `python3 deploy/gcp/deploy_engine.py --apply --create-missing`
+   (if the main workflow fails on the first run because a sub-workflow publishes after it, run it again).
+3. API on the VM: `cd /mnt/data/repo/deploy/gcp; C="docker compose -p alaventra --env-file /mnt/data/secrets/prod.env -f compose.prod.yml"; sudo git -C /mnt/data/repo pull && sudo DATA_DIR=/mnt/data SECRETS_DIR=/mnt/data/secrets $C up -d --build app` (no migration).
+4. Web: `git push origin feature/seo-agent-v4.5:main` (Vercel).
+5. Smoke: https://api.alaventra.com/api/health; the AI visibility page of techand.ai and devaicon.com loads; save Tracking & monitors once.
+6. Then switch the dispatcher to `start` when ready (first runs measure with the new rules; the first week is a new baseline).
 
 Owner's ask (2026-10-23): full audit of AI visibility + the question panel, R&D against the best competitors, improve it with several
 agents, then ship it to production well tested so no customer is affected and running pipelines get the latest.
