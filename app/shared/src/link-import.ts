@@ -34,7 +34,9 @@ export const LINK_IMPORT_PAGES_PER_DOMAIN = 5;
 /** RFC 4180 CSV with the delimiter detected (comma, semicolon or tab), a BOM and CRLF tolerated. */
 export function parseCsv(text: string): string[][] {
   const src = text.replace(/^﻿/, '');
-  const first = src.split(/\r?\n/, 1)[0] ?? '';
+  // R-A21: the delimiter is guessed from the first line that has one (an export can start with a title line holding none)
+  const head = src.split(/\r?\n/, 6);
+  const first = head.find((l) => [',', ';', '\t'].some((d) => l.includes(d))) ?? head[0] ?? '';
   const delim = [',', ';', '\t'].map((d) => [d, first.split(d).length] as const).sort((a, b) => b[1] - a[1])[0]![0];
   const out: string[][] = [];
   let row: string[] = [];
@@ -75,14 +77,19 @@ const MONTHS: Record<string, string> = { jan: '01', feb: '02', mar: '03', apr: '
 /** A date in the forms the exports use ("2026-09-28", "Sep 28, 2026", "28 Sep 2026", "28/09/2026") as YYYY-MM-DD, else ''. */
 export function importDate(v: string): string {
   const s = v.trim();
+  // R-A5 (review 2026-10-23): every reading is checked against the calendar ('10/22/2026' read day-first is not a day: '')
+  const real = (d: string) => {
+    const [y, mo, da] = d.split('-').map(Number);
+    return mo! >= 1 && mo! <= 12 && da! >= 1 && da! <= new Date(Date.UTC(y!, mo!, 0)).getUTCDate() ? d : '';
+  };
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  if (m) return real(`${m[1]}-${m[2]}-${m[3]}`);
   m = s.match(/^([A-Za-z]{3})[a-z]*\.? (\d{1,2}),? (\d{4})$/);
-  if (m && MONTHS[m[1]!.toLowerCase()]) return `${m[3]}-${MONTHS[m[1]!.toLowerCase()]}-${m[2]!.padStart(2, '0')}`;
+  if (m && MONTHS[m[1]!.toLowerCase()]) return real(`${m[3]}-${MONTHS[m[1]!.toLowerCase()]}-${m[2]!.padStart(2, '0')}`);
   m = s.match(/^(\d{1,2}) ([A-Za-z]{3})[a-z]*\.? (\d{4})$/);
-  if (m && MONTHS[m[2]!.toLowerCase()]) return `${m[3]}-${MONTHS[m[2]!.toLowerCase()]}-${m[1]!.padStart(2, '0')}`;
+  if (m && MONTHS[m[2]!.toLowerCase()]) return real(`${m[3]}-${MONTHS[m[2]!.toLowerCase()]}-${m[1]!.padStart(2, '0')}`);
   m = s.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/);
-  if (m) return `${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}`;
+  if (m) return real(`${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}`);
   return '';
 }
 

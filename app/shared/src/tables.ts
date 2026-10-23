@@ -116,6 +116,10 @@ export interface MonitorsRow extends DtRow {
   link_builder: boolean | null;
   /** G6 (2026-10-18): buyer roles and extra markets (CC-lang) the panel covers; the pulse's sampling ('' auto | sample | full) and mornings a week (empty = auto) */
   ai_personas?: string; ai_markets?: string; ai_pulse_mode?: string; ai_pulse_per_week?: number | null;
+  /** W2 (WAVE2_CONTRACTS.md §4; absent before the engine adds them): weekly Claude, pulse engines, persona context, fan-out check N, share-of-voice set, owner alert rules (JSON) */
+  ai_claude_weekly?: boolean | null; ai_pulse_engines?: string; ai_persona_context?: boolean | null; ai_fanout_check?: number | null; ai_sov_set?: string; ai_alert_rules_json?: string;
+  /** W2-E3: the monthly market trend (empty = off) */
+  ai_demand_market?: boolean | null;
 }
 export interface AiPromptRow extends DtRow {
   prompt_id: string; site_id: string; domain: string; prompt: string; kind: string; topic: string; keyword: string;
@@ -124,7 +128,15 @@ export interface AiPromptRow extends DtRow {
   stage: string; cluster: string; volume: number | null; origin: string; updated_at: string;
   /** G6 (2026-10-18): buyer role, market (CC-lang), pinned by the owner, and the fit gate's sentence when status is 'refused' */
   persona?: string; market?: string; pinned?: boolean | null; fit_note?: string;
+  /** W2 §3: the run that last asked it, when, how often in 28 days, the run whose gate refused it; F2: where the keyword came from */
+  last_asked_run?: string; last_asked_at?: string; asked_n_28d?: number | null; refused_at_run?: string; keyword_source?: string;
 }
+/**
+ * R-A7 (review 2026-10-23): the `origin` of a question the owner deleted. Its row stays as a tombstone with status `off`, so the engine
+ * never writes or asks it again; the app hides it everywhere.
+ */
+export const AI_PROMPT_DELETED = 'deleted';
+export const aiPromptDeleted = (p: { origin?: unknown }): boolean => String(p?.origin ?? '') === AI_PROMPT_DELETED;
 export interface AiAnswerRow extends DtRow {
   site_id: string; domain: string; run_id: string; checked_at: string; prompt_id: string; prompt: string; kind: string;
   topic: string; engine: string; answered: boolean; mentioned: boolean; cited: boolean; rank: number; our_urls: string;
@@ -133,6 +145,10 @@ export interface AiAnswerRow extends DtRow {
   run_kind: string; sentiment: string; brands: string; issues: string; fanout: string;
   /** v4.12: the exact third-party pages cited (JSON [{u, t}]) */
   cited_urls: string;
+  /** 2026-10-23 engine contract (absent on older rows): the name as named, the URL cited, the 1-based place named, every entity (JSON) */
+  named?: string; position?: number | null; entities?: string;
+  /** W2 §1 (absent on older rows): the whole answer, every citation in order, retrieved-not-cited pages, fan-out, product / ad / local cards, the model */
+  answer_text?: string; cited_json?: string; retrieved_json?: string; fanout_json?: string; products_json?: string; ads_json?: string; local_json?: string; model?: string; detail_json?: string;
 }
 export interface AiVisibilityRow extends DtRow {
   site_id: string; domain: string; run_id: string; checked_at: string; prompts: number; answers: number; mention_rate: number;
@@ -145,6 +161,16 @@ export interface AiVisibilityRow extends DtRow {
   ai_impressions: number | null; perception_json: string; traffic_json: string; access_json: string; index_json: string; clusters_json: string;
   /** G6 (2026-10-18): rates per engine x cluster x buyer role x market x stage (compact: one array per segment), the panel asked, the executions it took */
   segments_json?: string; panel_json?: string; chunks?: number | null;
+  /** 2026-10-23 (APP_AUDIT.md A1 / A8): the engine's comparison with the previous run and the period counted (JSON; absent on older rows) */
+  compare_json?: string;
+  /** W2 §2 (absent on older rows; an absent block keeps today's view) */
+  urls_json?: string; shopping_json?: string; ads_local_json?: string; ci_json?: string; sov_json?: string; sentiment_json?: string; impact_json?: string;
+  alerts_rules_json?: string; fanout_gap_json?: string; demand_json?: string; imports_json?: string; exec_ids?: string; notes_json?: string;
+}
+/** W2 §5: the owner's Bing AI Performance / Search Console AI uploads, written by the app, read by the engine */
+export interface AiImportRow extends DtRow {
+  site_id: string; domain: string; source: string; day: string; url: string; query: string; impressions: number; citations: number; clicks: number;
+  file_name: string; imported_at: string; import_id: string;
 }
 /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the AI growth loop's key pages, can AI read and quote them, Bing's crawl, submission */
 export interface AiPageRow extends DtRow {
@@ -169,6 +195,8 @@ export interface AiDailyRow extends DtRow {
   competitors_json: string; sources_json: string; alerts: string; cost_usd: number;
   /** G6 (2026-10-18): the morning's rotating sample (mode, N a week, questions asked of the panel, strata covered) */
   sample_json?: string;
+  /** 2026-10-23 (APP_AUDIT.md A7): full | sample, questions asked that morning, engines that answered, a morning an engine returned nothing */
+  sample_mode?: string; questions_asked?: number | null; engines_answered?: string; partial?: boolean | null; rule_version?: string;
 }
 export interface BacklinkSnapshotRow extends DtRow {
   site_id: string; domain: string; checked_at: string; mode: string; rank: number; backlinks: number; referring_domains: number;
@@ -336,6 +364,8 @@ export const TABLES = {
   aiPages: 'seo_ai_pages',
   aiTargets: 'seo_ai_targets',
   aiGrowth: 'seo_ai_growth',
+  /** W2 §5 (2026-10-23): the owner's AI report uploads (Bing AI Performance, Search Console AI features), written by the app */
+  aiImports: 'seo_ai_imports',
   backlinkSnapshots: 'seo_backlink_snapshots',
   prospects: 'seo_link_prospects',
   backlinks: 'seo_backlinks',

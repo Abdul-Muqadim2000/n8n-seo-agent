@@ -142,7 +142,28 @@ export interface GoogleConnection {
   };
 }
 
-export type RunStatus = 'submitting' | 'accepted' | 'running' | 'completed' | 'failed';
+/**
+ * `joined` (R-A3, review 2026-10-23): an on-demand AI visibility check the engine joined to the website's open run. It is closed, it is
+ * not a failure (no `run.failed` event, nothing charged: the open run carries its own charge), and its result is the open run's report.
+ */
+export type RunStatus = 'submitting' | 'accepted' | 'running' | 'completed' | 'failed' | 'joined';
+/** Every run status, in the order the filters list them. */
+export const RUN_STATUSES: readonly RunStatus[] = ['submitting', 'accepted', 'running', 'completed', 'failed', 'joined'];
+/** Closed runs that are charged nothing and count toward no spend: a failure, and a check joined to an open run. */
+export const RUN_UNCHARGED_STATUSES: readonly RunStatus[] = ['failed', 'joined'];
+/** R-A3: what a `joined` run delivered: the open run it joined and, once that run has reported, its report. */
+export interface JoinedRunResult {
+  /** the engine's id of the open run */
+  openRunId: string;
+  /** when the engine expected it to finish (ISO), null when it did not say */
+  expectedFinish: string | null;
+  /** the open run's AI visibility report, null until it has arrived */
+  reportId: string | null;
+  reportTitle: string | null;
+  receivedAt: string | null;
+}
+/** A run that will not change any more. */
+export const runClosed = (s: string): boolean => s === 'completed' || s === 'failed' || s === 'joined';
 
 export interface Run {
   id: string;
@@ -158,6 +179,8 @@ export interface Run {
   status: RunStatus;
   requestId: string | null;
   error: string | null;
+  /** R-A3: what happened to a `joined` run, in words ("Part of the open run (finishes about 09:40 UTC). ..."); null otherwise */
+  note?: string | null;
   /**
    * credits (app/docs/CREDITS.md): what the run is quoted, holds and is charged, in credits, the customer's only figure for it. The
    * provider cost behind it (the old `estimatedCostUsd` / `actualCostUsd` / engine estimate fields) stays in the database and the

@@ -173,7 +173,7 @@ module.exports = async (ctx) => {
     // execution that knows it is the last. Every part keys its ledger row by its number; only the last one settles the cycle's key.
     let answers = [], trig = T1, plan = p1, h1 = null, st1 = null, cache = [], keys = [], firstHandoff = null;
     const answerOf = (q, runId) => ({ site_id: SID, run_id: runId, prompt_id: q.prompt_id, engine: q.engine, answered: true, cost: 0.004, error: '' });
-    for (let part = 1; part <= 8; part++) {
+    for (let part = 1; part <= 16; part++) {   // F2 (2026-10-23, E11): a part is sized by time now, so a 500-question full run takes more parts
       if (part > 1) plan = (await aiPlan({ trigger: trig, monitors: MON, prompts: panel, full: true, cache, runAnswers: answers }))[0];
       mock('AI Plan', [{ json: plan }]); mock('Manual Run', [{ json: trig }]);
       const row = (await run('Run Ledger Row (AI)', [{ json: {} }], { code: 'Run_Ledger_Row_AI_' }))[0].json;

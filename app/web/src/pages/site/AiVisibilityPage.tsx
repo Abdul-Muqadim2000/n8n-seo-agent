@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, BadgeCheck, CheckCircle2, OctagonAlert, Bot, LineChart as LineChartIcon, ExternalLink as ExternalIcon, FileText, Gauge, Globe, Grid3x3, Library, Lightbulb, ListChecks, MessageCircleQuestion, MessagesSquare, ScanSearch, ShieldAlert, ShieldCheck, Sparkles, Trophy } from 'lucide-react';
-import { AI_ENGINE_VALUES, compactNumber, estimateAiVisibilityCost, titleCase, type AiData, type AiDay, type AiEngine, type AiEngineStat, type AiRun } from '@seo/shared';
+import { AI_ENGINE_VALUES, aiCiMethodLabel, aiFilterQuery, aiInRange, aiTrendRows, aiWindowLabel, compactNumber, estimateAiVisibilityCost, titleCase, type AiData, type AiDay, type AiEngine, type AiEngineStat, type AiFilter, type AiRun } from '@seo/shared';
 import { formatCredits, quoteLabel } from '@/lib/credits';
 import { AiPrecisionTable } from '@/components/site/AiPrecision';
 import { useSiteData } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
-import { ChartCard, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
+import { AnnotationLegend, ChartCard, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
 import { Badge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -15,24 +15,33 @@ import { Delta, Meter, PageHeader } from '@/components/ui/misc';
 import { CountUp, HeroNextStep, HeroStat, IconTile, MetricCard, ScoreRing, Stagger, SummaryHero } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
 import { EngineActionList, RUN_LABEL, runFromApiBody, typeLabel } from './_components/actions';
-import { AnswersExplorer, QuestionGrid, engineLabel } from './_components/ai';
+import { QuestionGrid, engineLabel } from './_components/ai';
+import { AiFilterBar, ScopePanel, useAiFilter } from './_components/ai-filter';
+import { AnswersBrowser, QuestionDialog } from './_components/ai-answers';
+import { breakMarks, EngineTrendPanel, SovTrendPanel } from './_components/ai-trends';
+import { AdsLocalPanel, AiReportsCard, CompetitorsPanel, CopilotTruth, DemandPanel, FanoutGapPanel, ImpactPanel, OurPagesPanel, PersonaEffectPanel, SentimentPanel2, ShoppingPanel, SourcesPanel2 } from './_components/ai-panels2';
+import { AlertRulesPanel } from './_components/ai-rules';
+import { AiPilotPanel } from './_components/ai-pilot';
 import { PanelManager, SegmentsSection } from './_components/ai-panel';
 import { AccessPanel, AiTrafficPanel, DiscoveryPanel, GroupsPanel, IndexPanel, PerceptionPanel } from './_components/ai-insights';
 import { AiGrowthSection } from './_components/ai-growth';
 import { Chips, DataGate, FillHeight, MetricSwitch, Kind, Panel, SectionHeading, ToolButton, YesNo, useSitePage } from './_components/kit';
-import { diff, lastTwo, pct, sortByDate, timeAxisFormat, urlPath } from './_components/format';
+import { lastTwo, pct, sortByDate, timeAxisFormat, urlPath } from './_components/format';
+import { AiDelta, aiHeadline, compareNote } from './_components/ai-compare';
 import { ChartTitle, DashSkeleton, FigureTile, HeroEyebrow, RankedBars } from './_components/visuals';
 
 export default function AiVisibilityPage() {
   const { org, site } = useSitePage();
   const day = useCycleDay(site);
-  const q = useSiteData(org.id, site.id, 'ai');
+  // W2-A: one filter bar scopes the page; it lives in the URL (?engine=&cluster=&persona=&market=&stage=&from=&to=)
+  const [filter, setFilter, clearFilter] = useAiFilter();
+  const q = useSiteData(org.id, site.id, 'ai', aiFilterQuery(filter));
   return (
     <div>
       <PageHeader
         icon={<Bot />}
         title="AI visibility"
-        description={`Is ${site.domain} named when buyers ask ChatGPT, Gemini, Perplexity, Claude and Google's AI? And what is that worth? Your questions are asked every day on the fast engines and fully ${day.every}.`}
+        description={`Is ${site.domain} named when buyers ask ChatGPT, Gemini, Perplexity, Claude and Google's AI? And what is that worth? Your questions are asked on the fast engines most mornings (a rotating sample above 50 questions) and fully ${day.every}.`}
         actions={
           <ToolButton mode="ai_visibility" variant="primary" icon={<Bot className="size-4" />}>
             Run an AI visibility check
@@ -40,17 +49,25 @@ export default function AiVisibilityPage() {
         }
       />
       <DataGate q={q} skeleton={<DashSkeleton />}>
-        {(d) => <AiBody d={d} refetching={q.isFetching} />}
+        {(d) => <AiBody d={d} refetching={q.isFetching} filter={filter} setFilter={setFilter} clearFilter={clearFilter} />}
       </DataGate>
     </div>
   );
 }
 
-function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
+function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; refetching: boolean; filter: AiFilter; setFilter: (p: Partial<AiFilter>) => void; clearFilter: () => void }) {
   const { site, can, page } = useSitePage();
   const runs = useMemo(() => sortByDate(d.runs, (r) => r.checkedAt), [d.runs]);
   const [L, P] = lastTwo(runs);
   const engineNames = useMemo(() => Object.fromEntries((d.latest?.engines ?? []).map((e) => [e.key, e.name])), [d.latest]);
+  // W2-A: the date range scopes the charts and run tables; the headline stays the latest run's (its comparison is with the run before)
+  const shownRuns = useMemo(() => runs.filter((r) => aiInRange(r.checkedAt, filter)), [runs, filter]);
+  const shownDays = useMemo(() => d.daily.filter((x) => aiInRange(x.date, filter)), [d.daily, filter]);
+  const [question, setQuestion] = useState<string | null>(null);
+  const x = d.latest?.extras ?? null;
+  const promptText = (id: string) => d.prompts.find((p) => p.promptId === id)?.prompt ?? id;
+  // the page's answers come paged (W2-A); a server without the paging still sends `answers`, read as before
+  const results = d.answerResults ?? d.answers.map((a) => ({ promptId: a.promptId, engine: a.engine, result: (!a.answered ? 'none' : a.cited ? 'cited' : a.mentioned ? 'named' : 'absent') as 'none' | 'cited' | 'named' | 'absent' }));
 
   if (!L && !d.latest && !d.report)
     return (
@@ -73,10 +90,17 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       />
     );
 
+  // A6 (2026-10-23): the report's prose, grid and actions are shown as current only when they were written for the latest run
+  const reportCurrent = !!d.report && (d.report.current || !L);
+  const reportLabel = d.report ? `From the report of ${fmtDate(d.report.receivedAt)}` : '';
   const brief = d.report?.brief;
-  const alerts = L?.alerts ?? [];
-  const mentionDelta = L ? diff(L.mentionRate, P?.mentionRate) : null;
-  const runNote = L ? (P ? `Run of ${fmtDate(L.checkedAt)}; changes are in percentage points against the run of ${fmtDate(P.checkedAt)}. AI answers vary between asks: read a change against the 95% range.` : `First run, ${fmtDate(L.checkedAt)}: changes appear from the next weekly run.`) : null;
+  // A4: the engine's alerts with their level (it joins them with " | "; a text may hold commas)
+  const alerts = L?.alertItems ?? [];
+  // A1: no subtraction of two runs here; the comparison (and its reason when there is none) comes with the run
+  const cmp = L?.compare ?? null;
+  // A8: the period the rates were counted over, as the run records it
+  const period = aiWindowLabel(cmp);
+  const runNote = L ? (P ? `Run of ${fmtDate(L.checkedAt)}, rates counted over ${period}. ${compareNote(cmp, fmtDate) ?? ''} AI answers vary between asks: read a change against the 95% range.` : `First run, ${fmtDate(L.checkedAt)}: changes appear from the next comparable run.`) : null;
   const engines = d.latest?.engines ?? [];
   const askedBrand = engines.filter((e) => e.knowsBrand != null);
   const knownBrand = askedBrand.filter((e) => e.knowsBrand).length;
@@ -84,11 +108,16 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
 
   return (
     <Stagger className="space-y-6">
+      <AiFilterBar d={d} filter={filter} onChange={setFilter} onClear={clearFilter} engineNames={engineNames} />
+      {d.scope && <ScopePanel scope={d.scope} engineNames={engineNames} />}
       {alerts.length > 0 && (
         <Callout tone="warning" title="Alerts from the latest run">
           <ul className="list-disc space-y-0.5 pl-4">
             {alerts.map((a) => (
-              <li key={a}>{a}</li>
+              <li key={a.level + a.text}>
+                {a.level === 'high' || a.level === 'medium' ? <span className="font-medium">{a.level === 'high' ? 'Important: ' : 'Worth a look: '}</span> : null}
+                {a.text}
+              </li>
             ))}
           </ul>
         </Callout>
@@ -99,35 +128,35 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
         tone="blue"
         eyebrow={
           <HeroEyebrow tag="AI answers">
-            {L ? `Run of ${fmtDate(L.checkedAt)} · ${compactNumber(L.answers)} answers to ${L.prompts} questions${P ? ` · change vs ${fmtDate(P.checkedAt)}` : ''}` : d.report ? `Weekly AI visibility report · ${fmtAgo(d.report.receivedAt)}` : undefined}
+            {L ? `Run of ${fmtDate(L.checkedAt)} · ${compactNumber(L.answers)} answers to ${L.prompts} questions${cmp?.comparable && cmp.previousAt ? ` · change vs ${fmtDate(cmp.previousAt)}` : P ? ' · not compared with the previous run' : ''}` : d.report ? `Weekly AI visibility report · ${fmtAgo(d.report.receivedAt)}` : undefined}
           </HeroEyebrow>
         }
-        title={aiHeadline(L?.mentionRate ?? null, mentionDelta, brief?.headline)}
-        description={L ? (brief?.headline ?? runNote) : undefined}
-        aside={d.report && d.report.actions.length > 0 ? <AiNextStep actions={d.report.actions} /> : undefined}
+        title={aiHeadline(L?.mentionRate ?? null, cmp, reportCurrent ? brief?.headline : undefined)}
+        description={L ? ((reportCurrent ? brief?.headline : undefined) ?? runNote ?? undefined) : undefined}
+        aside={d.report && reportCurrent && d.report.actions.length > 0 ? <AiNextStep actions={d.report.actions} /> : undefined}
         stats={
           L ? (
             <>
               <HeroStat
                 label="Named in answers"
                 info={runNote}
-                value={<CountUp value={L.mentionRate} format={(v) => pct(v)} />}
-                delta={<Delta value={mentionDelta} suffix=" pts" />}
+                value={L.mentionRate == null ? <span className="text-base">Not measured</span> : <CountUp value={L.mentionRate} format={(v) => pct(v)} />}
+                delta={<AiDelta compare={cmp} metric="named_rate" />}
                 trend={<Sparkline data={runs.map((r) => ({ v: r.mentionRate }))} dataKey="v" />}
-                hint={L.mentionLo != null && L.mentionHi != null ? `95% range ${pct(L.mentionLo, 0)} to ${pct(L.mentionHi, 0)} · ${compactNumber(L.samples)} answers in 7 days` : `of ${compactNumber(L.answers)} answers to ${L.prompts} questions`}
+                hint={L.ciNamed ? `95% range ${pct(L.ciNamed[0], 0)} to ${pct(L.ciNamed[1], 0)} · ${compactNumber(L.samples)} answers, ${period}` : L.mentionLo != null && L.mentionHi != null ? `95% range ${pct(L.mentionLo, 0)} to ${pct(L.mentionHi, 0)} · ${compactNumber(L.samples)} answers, ${period}` : `of ${compactNumber(L.answers)} answers to ${L.prompts} questions`}
               />
               <HeroStat
                 label="Share of voice"
                 info="Your mentions among all brands named"
-                value={<CountUp value={L.shareOfVoice} format={(v) => pct(v)} />}
-                delta={<Delta value={diff(L.shareOfVoice, P?.shareOfVoice)} suffix=" pts" />}
+                value={L.shareOfVoice == null ? <span className="text-base">Not measured</span> : <CountUp value={L.shareOfVoice} format={(v) => pct(v)} />}
+                delta={<AiDelta compare={cmp} metric="share_of_voice" />}
                 trend={<Sparkline data={runs.map((r) => ({ v: r.shareOfVoice }))} dataKey="v" />}
                 hint={L.indexSov != null ? `Market-wide (every AI answer): ${pct(L.indexSov)}` : 'Your mentions among all brands named'}
               />
               <HeroStat
                 label="Your pages cited"
                 value={<CountUp value={L.citationRate} format={(v) => pct(v)} />}
-                delta={<Delta value={diff(L.citationRate, P?.citationRate)} suffix=" pts" />}
+                delta={<AiDelta compare={cmp} metric="cited_rate" />}
                 trend={<Sparkline data={runs.map((r) => ({ v: r.citationRate }))} dataKey="v" />}
                 hint={`Answers that link to a page of yours · AI Overview shown for ${pct(L.aioPresence, 0)} of your searches`}
               />
@@ -144,7 +173,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       />
 
       {(brief?.headline || brief?.summary) && (
-        <Panel title="This week's AI summary" icon={<Sparkles />} description={d.report ? `Weekly AI visibility report · ${fmtAgo(d.report.receivedAt)}` : undefined}>
+        <Panel title={reportCurrent ? "This week's AI summary" : `AI summary, ${reportLabel.toLowerCase()}`} icon={<Sparkles />} description={d.report ? (reportCurrent ? `Weekly AI visibility report · ${fmtAgo(d.report.receivedAt)}` : `Written for an earlier run than the figures above (${fmtAgo(d.report.receivedAt)})`) : undefined}>
           {!brief?.summary && brief?.headline && <p className="text-sm font-medium text-ink">{brief.headline}</p>}
           {brief?.summary && <p className="max-w-4xl text-sm leading-relaxed text-ink-2">{brief.summary}</p>}
         </Panel>
@@ -157,7 +186,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
             icon={<Gauge />}
             visual={L.visibilityScore != null ? <ScoreRing label="AI visibility score" value={L.visibilityScore} tone="accent" display={<CountUp value={L.visibilityScore} format={(v) => v.toFixed(0)} />} suffix="/100" size={68} /> : undefined}
             value="-"
-            delta={L.visibilityScore != null && P?.visibilityScore != null ? <Delta value={L.visibilityScore - P.visibilityScore} suffix="" /> : undefined}
+            delta={<AiDelta compare={cmp} metric="visibility_score" suffix="" />}
             sparkline={runs.some((r) => r.visibilityScore != null) ? <Sparkline data={runs.filter((r) => r.visibilityScore != null).map((r) => ({ v: r.visibilityScore }))} dataKey="v" /> : undefined}
             meta="Whether you are named, how high and whether you are linked, weighted by how often each question is asked"
           />
@@ -175,7 +204,6 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
             info="Share of your tracked searches where Google shows an AI Overview"
             visual={<ScoreRing label="AI Overview shown" value={L.aioPresence} tone="accent" display={<CountUp value={L.aioPresence} format={(v) => pct(v, 0)} />} valueText={pct(L.aioPresence, 0)} size={68} />}
             value="-"
-            delta={<Delta value={diff(L.aioPresence, P?.aioPresence)} suffix=" pts" />}
             meta={`You cited in AI Overviews: ${pct(L.aioCitationRate)}`}
           />
           <MetricCard
@@ -199,13 +227,13 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-        <RunsTrend runs={runs} daily={d.daily} loading={refetching} className="xl:col-span-3" />
+        <RunsTrend runs={shownRuns} daily={shownDays} loading={refetching} className="xl:col-span-3" />
         <Panel title="Share of voice" icon={<Trophy />} description="Brands named across all answers in the latest run" info="Share of all brand mentions; the number is mentions. ★ = a competitor you set; others were found in the answers." className="xl:col-span-2">
           {d.latest?.competitors.length || L ? (
             <>
               <RankedBars
                 you={site.domain}
-                items={[...(d.latest?.competitors ?? []).filter((c) => c.domain !== site.domain).map((c) => ({ label: c.domain, value: c.share, sub: `${c.mentions}${c.auto ? '' : ' ★'}` })), ...(L ? [{ label: site.domain, value: L.shareOfVoice, sub: '' }] : [])]
+                items={[...(d.latest?.competitors ?? []).filter((c) => c.domain !== site.domain).map((c) => ({ label: c.domain, value: c.share, sub: `${c.mentions}${c.auto ? '' : ' ★'}` })), ...(L && L.shareOfVoice != null ? [{ label: site.domain, value: L.shareOfVoice, sub: '' }] : [])]
                   .sort((a, b) => b.value - a.value)
                   .slice(0, 9)}
               />
@@ -216,6 +244,39 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
           )}
         </Panel>
       </div>
+
+      {/* W2-A: per engine and per competitor over time, from the rows already stored, broken where a run was not compared */}
+      {runs.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <EngineTrendPanel runs={runs} filter={filter} engineNames={engineNames} />
+          <SovTrendPanel runs={runs} filter={filter} domain={site.domain} />
+        </div>
+      )}
+      {L?.ciMethod && <p className="-mt-3 text-xs text-ink-3">Ranges on this run are {aiCiMethodLabel(L.ciMethod)}{x?.ci?.note ? `: ${x.ci.note}` : ''}.</p>}
+
+      {(x?.sov || x?.sources) && (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
+          {x?.sov && <CompetitorsPanel sov={x.sov} domain={site.domain} ownShare={L?.shareOfVoice ?? null} />}
+          {x?.sources && <SourcesPanel2 sources={x.sources} />}
+        </div>
+      )}
+      {x?.urls && <OurPagesPanel urls={x.urls} />}
+      {x?.impact && x.impact.length > 0 && <ImpactPanel impact={x.impact} questionText={promptText} />}
+      {x?.fanoutGap && x.fanoutGap.queries.length > 0 && <FanoutGapPanel gap={x.fanoutGap} />}
+      {(x?.sentiment || x?.personaEffect?.length) && (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
+          {x?.sentiment && <SentimentPanel2 sentiment={x.sentiment} />}
+          {x?.personaEffect && x.personaEffect.length > 0 && <PersonaEffectPanel effect={x.personaEffect} />}
+        </div>
+      )}
+      {(x?.shopping || x?.adsLocal) && (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
+          {x?.shopping && <ShoppingPanel shopping={x.shopping} />}
+          {x?.adsLocal && <AdsLocalPanel adsLocal={x.adsLocal} />}
+        </div>
+      )}
+      {x?.demand && x.demand.questions.length > 0 && <DemandPanel demand={x.demand} questionText={promptText} />}
+      {x?.notes && (x.notes.lostNote || x.notes.unanalysedNote) && <p className="text-xs text-ink-3">{[x.notes.lostNote, x.notes.unanalysedNote].filter(Boolean).join(' ')}</p>}
 
       {d.latest && <AiTrafficPanel traffic={d.latest.traffic} />}
 
@@ -230,7 +291,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
 
       {d.report && d.report.questions.length > 0 && (
         <section>
-          <SectionHeading icon={<Grid3x3 />} title="Question × engine" description={`Every tracked buyer question on every engine · report of ${fmtDate(d.report.receivedAt)}`} info="Darker blue = stronger presence: cited (named and linked), then named; grey = answered without you." />
+          <SectionHeading icon={<Grid3x3 />} title="Question × engine" description={`Every tracked buyer question on every engine · report of ${fmtDate(d.report.receivedAt)}${reportCurrent ? '' : ' (an earlier run than the figures above)'}`} info="Darker blue = stronger presence: cited (named and linked), then named; grey = answered without you." />
           <Card className="p-4">
             <QuestionGrid questions={d.report.questions} engineNames={engineNames} />
           </Card>
@@ -239,9 +300,11 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
 
       {d.latest && d.latest.engines.length > 0 && (
         <section>
-          <SectionHeading icon={<Bot />} title="By engine" description="Each assistant over the past 7 days (the weekly run plus the daily pulse on ChatGPT, Gemini and Google AI Mode). Claude is asked on the monthly full run; its result is carried between runs." />
+          <SectionHeading icon={<Bot />} title="By engine" description={`Each assistant over ${period} (the weekly run plus the daily pulse on the fast engines, when it is on). Claude is asked on the monthly full run; its result is carried between runs.`} />
           <Card className="p-4">
             <EngineTable engines={d.latest.engines} />
+            {/* R-A10: Copilot's ground truth is the owner's own Bing export whenever one is in the period (W2-E3 §4: its label is the line) */}
+            {x?.imports?.copilot && <CopilotTruth c={x.imports.copilot} />}
           </Card>
           {L && L.samples > 0 && <MeasuredPrecision run={L} engines={d.latest.engines} />}
         </section>
@@ -250,7 +313,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       {d.latest && d.latest.gaps.length > 0 && <Gaps d={d} />}
 
       {d.report && d.report.actions.length > 0 && (
-        <Panel title="What to do next" description="The engine's actions from the latest AI visibility report" icon={<Lightbulb />} flush>
+        <Panel title="What to do next" description={reportCurrent ? "The engine's actions from the latest AI visibility report" : `${reportLabel}, an earlier run than the figures above`} icon={<Lightbulb />} flush>
           <EngineActionList actions={d.report.actions} />
         </Panel>
       )}
@@ -260,7 +323,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       {d.latest?.index && <IndexPanel index={d.latest.index} domain={site.domain} />}
       {d.latest?.index && <DiscoveryPanel index={d.latest.index} tracked={d.prompts.map((p) => p.prompt)} />}
 
-      {d.latest && (
+      {d.latest && !x?.sources && (
         <Panel title="Sources AI trusts" icon={<Library />} description="Domains the assistants cite for your questions. Being mentioned there is how you get into the answers" flush>
           <div className="px-4 pb-4">
             <SourcesTable sources={d.latest.sources} />
@@ -271,7 +334,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       {d.latest && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
           <div className="contents">
-            <Panel title="Your pages AI cites" icon={<FileText />} description="Pages of yours used as a source">
+            {!x?.urls && <Panel title="Your pages AI cites" icon={<FileText />} description="Pages of yours used as a source">
               {d.latest.pages.length ? (
                 <ul className="divide-y divide-line">
                   {d.latest.pages.map((p) => (
@@ -288,35 +351,34 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
               ) : (
                 <p className="text-[13px] leading-relaxed text-ink-2">No page of yours is cited yet. Pages that answer one question directly, with sources and a clear author, are the ones assistants quote. See "What to do next".</p>
               )}
-            </Panel>
+            </Panel>}
             {d.latest.market && <MarketView market={d.latest.market} domain={site.domain} />}
           </div>
         </div>
       )}
 
       <section>
-        <SectionHeading icon={<MessagesSquare />} title="Answers" description="What each assistant actually said, from the latest run" />
+        <SectionHeading icon={<MessagesSquare />} title="Answers" description="What each assistant said: the brands in the order named, every citation, the pages it read and the searches it ran. Open a question for every engine side by side and its history." />
         <Card className="p-4">
-          <AnswersExplorer answers={d.answers} engineNames={engineNames} />
+          <AnswersBrowser filter={filter} engineNames={engineNames} embedded={d.answers.length ? { answers: d.answers, runId: L?.runId ?? null, checkedAt: L?.checkedAt ?? null } : undefined} />
         </Card>
       </section>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
+        <AlertRulesPanel d={d} engineNames={engineNames} />
+        <AiReportsCard used={x?.imports ?? null} />
+        <AiPilotPanel />
+      </div>
 
       <section>
         <SectionHeading icon={<ListChecks />} title="Your question panel" description={can('admin') ? 'Up to 500 buyer questions by topic, buyer role and market: add, import, edit, pin or switch off' : 'The questions asked every week (admins can change them)'} />
         <Card className="p-4">
-          <PanelManager prompts={d.prompts} answers={d.answers} suggestions={d.latest?.index?.suggestions?.map((s) => ({ question: s.question, volume: s.volume })) ?? []} setting={d.panel?.setting ?? null} />
+          <PanelManager prompts={d.prompts} results={results} suggestions={d.latest?.index?.suggestions?.map((s) => ({ question: s.question, volume: s.volume })) ?? []} setting={d.promptsMax} engines={d.latest?.engines.map((e) => e.key) ?? []} onQuestion={setQuestion} />
         </Card>
       </section>
+      <QuestionDialog promptId={question} onClose={() => setQuestion(null)} engineNames={engineNames} />
     </Stagger>
   );
-}
-
-/** The hero's headline: how often AI answers name you, and the change since the previous run. */
-function aiHeadline(rate: number | null, delta: number | null, fallback?: string): string {
-  if (rate == null) return fallback || 'Your latest AI visibility report';
-  const change = delta == null ? '' : delta >= 0.05 ? `, up ${delta.toFixed(1)} pts` : delta <= -0.05 ? `, down ${Math.abs(delta).toFixed(1)} pts` : ', no change';
-  if (rate <= 0) return `You're not named in AI answers yet${change}`;
-  return `You're named in ${pct(rate)} of AI answers${change}`;
 }
 
 /** The engine's top action, as the hero's next step (same form and prefill as its button in "What to do next"). */
@@ -354,10 +416,17 @@ function RunsTrend({ runs, daily, loading, className }: { runs: AiRun[]; daily: 
         : m === 'score'
           ? [{ key: 'visibilityScore', label: 'Visibility score', format: (v) => `${v.toFixed(0)}/100` }]
           : [pctS('aioPresence', 'AI Overview shown'), pctS('aioCitationRate', 'You cited in AI Overviews')];
-  // credits (app/docs/CREDITS.md): a run shows the credits it used (the server sends credits, never dollars)
-  const rows = runs.map((r) => ({ checkedAt: r.checkedAt, mentionRate: r.mentionRate, citationRate: r.citationRate, shareOfVoice: r.shareOfVoice, aioPresence: r.aioPresence, aioCitationRate: r.aioCitationRate, visibilityScore: r.visibilityScore, prompts: r.prompts, answers: r.answers, credits: r.credits }));
-  const dayRows = daily.map((x) => ({ checkedAt: `${x.date}T12:00:00.000Z`, mentionRate: x.mentionRate, citationRate: x.citationRate, visibilityScore: x.visibilityScore, answers: x.samples }));
-  const data = m === 'daily' ? dayRows : m === 'score' ? rows.filter((r) => r.visibilityScore != null) : rows;
+  // credits (app/docs/CREDITS.md): a run shows the credits the ledger charged for it (A9: null = no charge on record, never a rebuilt figure)
+  const rows = runs.map((r) => ({ checkedAt: r.checkedAt, mentionRate: r.mentionRate, citationRate: r.citationRate, shareOfVoice: r.shareOfVoice, aioPresence: r.aioPresence, aioCitationRate: r.aioCitationRate, visibilityScore: r.visibilityScore, prompts: r.prompts, answers: r.answers, credits: r.credits, compared: r.compare ? (r.compare.comparable ? 'Yes' : 'No: ' + (r.compare.reason ?? '')) : '-' }));
+  // A7: a sampled or partial morning, or one under the answer floor, is marked in the table; the line is the pooled reading
+  const dayRows = daily.map((x) => ({ checkedAt: `${x.date}T12:00:00.000Z`, mentionRate: x.mentionRate, citationRate: x.citationRate, visibilityScore: x.visibilityScore, answers: x.samples, asked: pulseAskedLabel(x) }));
+  const sampledDays = daily.filter((x) => x.sampleMode === 'sample').length;
+  const markedDays = daily.filter((x) => x.partial || x.enough === false).length;
+  // W2-A (finishes F3's A1 step 4): a run that was not compared with the run before starts a new line, with a numbered marker
+  const runRows = m === 'score' ? runs.filter((r) => r.visibilityScore != null) : runs;
+  const broken = aiTrendRows(runRows, (r) => rows.find((x) => x.checkedAt === r.checkedAt) as unknown as Record<string, number | null>);
+  const marks = m === 'daily' ? [] : breakMarks(broken.breaks);
+  const data = m === 'daily' ? dayRows : broken.rows;
   const options: { value: TMetric; label: string }[] = [
     { value: 'you', label: 'Weekly' },
     ...(daily.length ? [{ value: 'daily' as const, label: 'Daily' }] : []),
@@ -368,7 +437,11 @@ function RunsTrend({ runs, daily, loading, className }: { runs: AiRun[]; daily: 
     <ChartCard
       className={className}
       title={<ChartTitle icon={<LineChartIcon />}>Over time</ChartTitle>}
-      description={m === 'daily' ? `${daily.length} days of the AI pulse (ChatGPT, Gemini, Google AI Mode) · percent of answers` : `${runs.length} ${runs.length === 1 ? 'run' : 'runs'} · ${m === 'score' ? '0-100' : 'percent of answers'}`}
+      description={
+        m === 'daily'
+          ? `${daily.length} days of the AI pulse (fast engines) · percent of answers${sampledDays ? ` · ${sampledDays} mornings asked a rotating sample of the panel, so day-to-day moves are partly which questions were drawn` : ''}${markedDays ? ` · ${markedDays} partial or thin mornings are marked in the table` : ''}`
+          : `${runs.length} ${runs.length === 1 ? 'run' : 'runs'} · ${m === 'score' ? '0-100' : 'percent of answers'}${runs.some((r) => r.compare && !r.compare.comparable && r.compare.previousAt) ? ' · runs marked "not compared" asked a different panel or different engines than the run before' : ''}`
+      }
       series={series}
       loading={loading}
       actions={<MetricSwitch label="Metric" value={m} onChange={setM} options={options} />}
@@ -380,14 +453,20 @@ function RunsTrend({ runs, daily, loading, className }: { runs: AiRun[]; daily: 
           ...(m === 'daily' ? [] : [{ key: 'shareOfVoice', label: 'SoV', align: 'right' as const, format: (v: unknown) => pct(Number(v)) }, { key: 'aioPresence', label: 'AIO shown', align: 'right' as const, format: (v: unknown) => pct(Number(v)) }]),
           { key: 'visibilityScore', label: 'Score', align: 'right', format: (v) => (v == null ? '-' : Number(v).toFixed(0)) },
           { key: 'answers', label: 'Answers', align: 'right' },
-          ...(m === 'daily' ? [] : [{ key: 'credits', label: 'Credits', align: 'right' as const, format: (v: unknown) => formatCredits(Number(v), { unit: false }) }]),
+          ...(m === 'daily'
+            ? [{ key: 'asked', label: 'Asked' }]
+            : [
+                { key: 'credits', label: 'Credits charged', align: 'right' as const, format: (v: unknown) => (v == null ? '-' : formatCredits(Number(v), { unit: false })) },
+                { key: 'compared', label: 'Compared with the run before' },
+              ]),
         ],
-        rows: [...data].reverse(),
+        rows: [...data].filter((r) => !(r as { gap?: boolean }).gap).reverse(),
       }}
+      footer={marks.length ? <AnnotationLegend annotations={marks} data={data} xKey="checkedAt" /> : undefined}
     >
       {data.length ? (
         <FillHeight min={250}>
-          {(h) => <TimeSeriesChart data={data} xKey="checkedAt" xFormat={timeAxisFormat(data.map((r) => r.checkedAt))} series={series} height={h} yFormat={(v) => (m === 'score' ? `${v}` : `${v}%`)} yDomain={[0, m === 'score' ? 100 : 'auto']} />}
+          {(h) => <TimeSeriesChart data={data} xKey="checkedAt" xFormat={timeAxisFormat(data.map((r) => String(r.checkedAt)))} series={series} height={h} yFormat={(v) => (m === 'score' ? `${v}` : `${v}%`)} yDomain={[0, m === 'score' ? 100 : 'auto']} connectNulls={m === 'daily'} annotations={marks} />}
         </FillHeight>
       ) : (
         <EmptyState className="py-10" icon={<LineChartIcon className="size-5" />} title="No runs stored yet" />
@@ -400,6 +479,16 @@ function RunsTrend({ runs, daily, loading, className }: { runs: AiRun[]; daily: 
  * B8-7: what this panel and cadence can tell apart, from the latest run's own sample (answers over 7 days per buyer question). The
  * brand question (asked on the month's full run) is not a buyer question and is left out of the count.
  */
+/** A7: what one pulse morning asked, in words for the table. */
+export function pulseAskedLabel(x: AiDay): string {
+  const parts: string[] = [];
+  if (x.sampleMode === 'sample') parts.push(x.questionsAsked != null ? `sample of ${x.questionsAsked}${x.panelSize ? ` of ${x.panelSize}` : ''}` : 'rotating sample');
+  else if (x.sampleMode === 'full') parts.push(x.questionsAsked != null ? `all ${x.questionsAsked}` : 'whole panel');
+  if (x.partial) parts.push('partial: an engine returned nothing');
+  if (x.enough === false) parts.push('too few answers for a rate');
+  return parts.join(' · ') || '-';
+}
+
 function MeasuredPrecision({ run, engines }: { run: AiRun; engines: AiEngineStat[] }) {
   const asked = engines.filter((e) => !e.carried && e.asked > 0);
   const keys = asked.map((e) => e.key).filter((k): k is AiEngine => AI_ENGINE_VALUES.includes(k as AiEngine));
@@ -411,7 +500,7 @@ function MeasuredPrecision({ run, engines }: { run: AiRun; engines: AiEngineStat
       panel={run.prompts}
       engines={keys}
       pulse={pulseSamples > 0}
-      measured={{ samples: run.samples, pulseSamples, questions, checkedAt: run.checkedAt }}
+      measured={{ samples: run.samples, pulseSamples, questions, checkedAt: run.checkedAt, ratePeriod: run.compare?.window ? aiWindowLabel(run.compare) : null }}
     />
   );
 }
@@ -429,7 +518,7 @@ function EngineTable({ engines }: { engines: AiEngineStat[] }) {
         </span>
       ),
     },
-    { key: 'samples', header: 'Answers (7 days)', align: 'right', sortValue: (e) => e.samples, cell: (e) => <span title={e.pulseSamples ? `${e.pulseSamples} from the daily pulse` : undefined}>{e.samples}{e.pulseSamples ? <span className="text-xs text-ink-3"> ({e.pulseSamples} daily)</span> : null}</span> },
+    { key: 'samples', header: 'Answers counted', align: 'right', sortValue: (e) => e.samples, cell: (e) => <span title={e.pulseSamples ? `${e.pulseSamples} from the daily pulse` : undefined}>{e.samples}{e.pulseSamples ? <span className="text-xs text-ink-3"> ({e.pulseSamples} daily)</span> : null}</span> },
     {
       key: 'mentioned',
       header: 'Named',

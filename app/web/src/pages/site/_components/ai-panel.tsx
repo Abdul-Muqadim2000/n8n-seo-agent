@@ -7,12 +7,14 @@
 //    questions the engine suggests. Every change goes through Site Admin `ai_prompts` (the engine's AI_Prompt_Rows_Admin.js).
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { ArrowDownRight, ArrowUpRight, FileUp, Layers, Pencil, Pin, PinOff, Plus, Power, Sparkles, Users } from 'lucide-react';
-import { AI_SEGMENT_MIN, compactNumber, parseAiPanelCsv, titleCase, type AiData, type AiPanelCsvResult, type AiPanelInfo, type AiSegment, type AiSegments } from '@seo/shared';
+import { ArrowDownRight, ArrowUpRight, FileUp, Layers, Pencil, Pin, PinOff, Plus, Power, Sparkles, Tag, Trash2, Users } from 'lucide-react';
+import { AI_PANEL_LIMITS, AI_SEGMENT_MIN, aiAskedSet, aiPanelOverflow, compactNumber, estimateAiPanelCost, parseAiPanelCsvWithKeyword, titleCase, type AiData, type AiPanelCsvResult, type AiPanelInfo, type AiSegment, type AiSegments } from '@seo/shared';
+import { creditsLabel } from '@/lib/credits';
 import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
-import { useSiteAdmin } from '@/lib/queries';
-import { cn } from '@/lib/utils';
+import { useAiPromptDelete, useSiteAdmin } from '@/lib/queries';
+import { cn, fmtAgo, fmtDate } from '@/lib/utils';
+import { Dialog } from '@/components/ui/overlay';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -22,7 +24,8 @@ import { FilterChips, Kind, Panel, SrOnly, useSitePage } from './kit';
 import { engineLabel, sortEngines } from './ai';
 
 type Prompt = AiData['prompts'][number];
-type Answer = AiData['answers'][number];
+/** W2-A: each question's best result per engine in the latest run (the page no longer loads every answer) */
+type Result = NonNullable<AiData['answerResults']>[number];
 
 const DIMS = [
   { value: 'cluster', label: 'Topic' },
@@ -132,17 +135,33 @@ export function SegmentsSection({ segments, panel }: { segments: AiSegments | nu
 // ---------------- the panel manager ----------------
 
 const isTracked = (p: Prompt) => !['off', 'refused'].includes(p.status || 'active');
-type StatusFilter = 'tracked' | 'pinned' | 'refused' | 'off' | 'all';
-const STAGES = ['awareness', 'consideration', 'decision'] as const;
+/** the owner's own questions (theirs or pinned): asked before the automatic ones, so only these can be crowded out by the panel size */
+const isOwn = (p: Prompt) => p.source === 'custom' || p.pinned;
+type StatusFilter = 'tracked' | 'over' | 'pinned' | 'refused' | 'off' | 'all';
+// W2-E1: 'shopping' is a stage for sites that sell products
+/** R-A19: one bulk change takes at most this many questions (the server's schemas refuse more) */
+const BULK_MAX = 500;
+const STAGES = ['awareness', 'consideration', 'decision', 'shopping'] as const;
 
 function originLabel(p: Prompt): string {
   if (p.source === 'custom' || p.origin === 'custom') return 'You';
   return ({ market: 'Real AI question', search: 'Your Google searches', paa: 'People also ask', competitor: 'Competitor topics', template: 'Engine' } as Record<string, string>)[p.origin] ?? 'Engine';
 }
 
-export function PanelManager({ prompts, answers, suggestions, setting }: { prompts: readonly Prompt[]; answers: readonly Answer[]; suggestions: { question: string; volume: number }[]; setting: number | null }) {
+/**
+ * A3 (2026-10-23, APP_AUDIT.md): `setting` is the panel size set NOW (the monitors row; null = no row, the engine asks 50), never the size
+ * stored with the last run. A question past the size is stored and NOT asked (AI_Plan.js cuts the panel there): it is labelled so, and
+ * adding or importing past the size says so before it is sent, with what the bigger panel would use.
+ */
+export function PanelManager({ prompts, results, suggestions, setting, engines: panelEngines = [], onQuestion }: { prompts: readonly Prompt[]; results: readonly Result[]; suggestions: { question: string; volume: number }[]; setting: number | null; engines?: readonly string[]; /** W2-A: open a question's answers and history */ onQuestion?: (promptId: string) => void }) {
   const { org, site, can, page } = useSitePage();
   const admin = useSiteAdmin(org.id, site.id);
+  const del = useAiPromptDelete(org.id, site.id);
+  // W2-A: bulk select (pause / resume / pin / unpin / topic / delete)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [tagging, setTagging] = useState(false);
+  const [tag, setTag] = useState('');
   const isAdmin = can('admin');
   const [status, setStatus] = useState<StatusFilter>('tracked');
   const [cluster, setCluster] = useState('');
@@ -152,27 +171,32 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
   const [editing, setEditing] = useState<Prompt | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
+  const size = setting ?? AI_PANEL_LIMITS.default_new;
+  const cut = useMemo(() => aiAskedSet(prompts, size), [prompts, size]);
+  const isAsked = (p: Prompt) => cut.asked.has(p.promptId);
   const tracked = prompts.filter(isTracked);
+  const askedCount = tracked.filter(isAsked).length;
+  const over = tracked.filter((p) => !isAsked(p));
+  const ownCount = tracked.filter(isOwn).length;
   const refused = prompts.filter((p) => p.status === 'refused');
   const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const clusters = uniq(prompts.map((p) => p.cluster || p.topic));
   const personas = uniq(prompts.map((p) => p.persona));
   const markets = uniq(prompts.map((p) => p.market));
-  const engines = sortEngines(answers.map((a) => a.engine));
+  const engines = sortEngines(results.map((a) => a.engine));
   // each question's latest result on the chosen engine (named / cited / not named / no answer)
   const resultOf = useMemo(() => {
     const m = new Map<string, string>();
-    for (const a of answers) if (!engine || a.engine === engine) {
-      const v = !a.answered ? 'none' : a.cited ? 'cited' : a.mentioned ? 'named' : 'absent';
+    const rank = { cited: 3, named: 2, absent: 1, none: 0 } as Record<string, number>;
+    for (const a of results) if (!engine || a.engine === engine) {
       const prev = m.get(a.promptId);
-      const rank = { cited: 3, named: 2, absent: 1, none: 0 } as Record<string, number>;
-      if (!prev || rank[v] > rank[prev]) m.set(a.promptId, v);
+      if (!prev || rank[a.result] > rank[prev]) m.set(a.promptId, a.result);
     }
     return m;
-  }, [answers, engine]);
+  }, [results, engine]);
 
   const rows = prompts.filter((p) =>
-    (status === 'all' || (status === 'tracked' ? isTracked(p) : status === 'pinned' ? p.pinned && isTracked(p) : p.status === status))
+    (status === 'all' || (status === 'tracked' ? isTracked(p) && isAsked(p) : status === 'over' ? isTracked(p) && !isAsked(p) : status === 'pinned' ? p.pinned && isTracked(p) : p.status === status))
     && (!cluster || (p.cluster || p.topic) === cluster) && (!persona || p.persona === persona) && (!market || p.market === market));
 
   const send = (body: Record<string, unknown>, ok: string, id?: string) => {
@@ -187,10 +211,27 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
     );
   };
 
+  const ids = [...selected].filter((id) => prompts.some((p) => p.promptId === id));
+  const toggle = (id: string) => setSelected((s0) => { const s1 = new Set(s0); if (s1.has(id)) s1.delete(id); else if (s1.size < BULK_MAX) s1.add(id); return s1; });
+  const allShown = rows.length > 0 && rows.every((p) => selected.has(p.promptId));
+  const bulk = (body: Record<string, unknown>, ok: string) => { send(body, ok); setSelected(new Set()); };
+  const removeSelected = () =>
+    del.mutate(ids, {
+      onSuccess: (r) => { toast.success(`${r.deleted} question${r.deleted === 1 ? '' : 's'} deleted`); setSelected(new Set()); setConfirmDelete(false); },
+      onError: (e) => toast.error(errorMessage(e)),
+    });
+
   const resultBadge = (v?: string) =>
     v === 'cited' ? <StatusBadge tone="good">Cited</StatusBadge> : v === 'named' ? <StatusBadge tone="good">Named</StatusBadge> : v === 'absent' ? <StatusBadge tone="serious">Not named</StatusBadge> : v === 'none' ? <span className="text-xs text-ink-3">No answer</span> : <span className="text-xs text-ink-3">-</span>;
 
   const columns: Column<Prompt>[] = [
+    ...(isAdmin
+      ? [{
+          key: 'sel',
+          header: <input type="checkbox" className="size-4 accent-[var(--accent)]" aria-label="Select every question shown" checked={allShown} onChange={() => { const s1 = new Set(selected); for (const p of rows) { if (allShown) s1.delete(p.promptId); else if (s1.size < BULK_MAX) s1.add(p.promptId); } if (!allShown && rows.some((p) => !s1.has(p.promptId))) toast.info(`${BULK_MAX} questions are selected: one change takes at most ${BULK_MAX}. Apply it, then select the rest.`); setSelected(s1); }} />,
+          cell: (p: Prompt) => <input type="checkbox" className="size-4 accent-[var(--accent)]" aria-label={`Select: ${p.prompt}`} checked={selected.has(p.promptId)} onChange={() => toggle(p.promptId)} />,
+        }]
+      : []),
     {
       key: 'prompt',
       header: 'Question',
@@ -199,7 +240,13 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
         <div className={cn('min-w-[16rem]', !isTracked(p) && 'opacity-70')}>
           <p className="text-[13px] font-medium leading-snug text-ink">
             {p.pinned && <Pin className="mr-1 inline size-3.5 text-accent-text" aria-label="Pinned" />}
-            {p.prompt}
+            {onQuestion ? (
+              <button type="button" className="text-left hover:text-accent-text hover:underline transition-colors duration-150 ease-brand" onClick={() => onQuestion(p.promptId)}>
+                {p.prompt}
+              </button>
+            ) : (
+              p.prompt
+            )}
           </p>
           <p className="mt-0.5 text-xs text-ink-3">{[p.cluster || p.topic, p.stage && titleCase(p.stage)].filter(Boolean).join(' · ')}</p>
           {p.fitNote && <p className={cn('mt-1 text-xs', p.status === 'refused' ? 'text-serious-text' : 'text-ink-3')}>{p.fitNote}</p>}
@@ -211,7 +258,13 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
     { key: 'volume', header: 'AI searches / mo', align: 'right', hideOnMobile: true, sortValue: (p) => p.volume ?? -1, cell: (p) => <span className="tabular text-[13px]">{p.volume != null ? compactNumber(p.volume) : '-'}</span> },
     { key: 'origin', header: 'From', hideOnMobile: true, sortValue: (p) => originLabel(p), cell: (p) => <span className="text-[13px] text-ink-2">{originLabel(p)}</span> },
     { key: 'result', header: engine ? `On ${engineLabel(engine)}` : 'Latest run', sortValue: (p) => resultOf.get(p.promptId) ?? '', cell: (p) => resultBadge(resultOf.get(p.promptId)) },
-    { key: 'status', header: 'Status', sortValue: (p) => (isTracked(p) ? 0 : p.status === 'refused' ? 1 : 2), cell: (p) => (isTracked(p) ? <StatusBadge tone="good">Tracked</StatusBadge> : p.status === 'refused' ? <StatusBadge tone="warning">Refused</StatusBadge> : <Badge icon={<Power className="size-3" aria-hidden />}>Off</Badge>) },
+    { key: 'status', header: 'Status', sortValue: (p) => (isTracked(p) ? (isAsked(p) ? 0 : 1) : p.status === 'refused' ? 2 : 3), cell: (p) => (
+      <span className="inline-flex flex-col items-start gap-0.5">
+        {isTracked(p) ? (isAsked(p) ? <StatusBadge tone="good">Tracked</StatusBadge> : <StatusBadge tone="warning">Not asked: over your panel size</StatusBadge>) : p.status === 'refused' ? <StatusBadge tone="warning">Refused</StatusBadge> : <Badge icon={<Power className="size-3" aria-hidden />}>Off</Badge>}
+        {/* W2 §3: the engine's own record when stored (else the cut above is the app's mirror of the engine's) */}
+        {p.lastAskedAt ? <span className="text-[11px] text-ink-3" title={fmtDate(p.lastAskedAt)}>asked {fmtAgo(p.lastAskedAt)}{p.askedN28d != null ? ` · ${p.askedN28d}x in 28 days` : ''}</span> : null}
+      </span>
+    ) },
     ...(isAdmin
       ? [{
           key: 'act',
@@ -250,7 +303,8 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
           value={status}
           onChange={setStatus}
           options={[
-            { value: 'tracked', label: 'Tracked', count: tracked.length },
+            { value: 'tracked', label: 'Tracked', count: askedCount },
+            ...(over.length ? [{ value: 'over' as const, label: 'Not asked', count: over.length }] : []),
             { value: 'pinned', label: 'Pinned', count: tracked.filter((p) => p.pinned).length },
             { value: 'refused', label: 'Refused', count: refused.length },
             { value: 'off', label: 'Off', count: prompts.filter((p) => p.status === 'off').length },
@@ -258,8 +312,9 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
           ]}
         />
         <p className="text-xs text-ink-3">
-          {tracked.length} of {setting ?? tracked.length} questions tracked
-          {isAdmin && setting != null && tracked.length < setting && ' (the next weekly run writes the rest)'}
+          {askedCount} of {size} questions asked each week
+          {over.length > 0 && ` · ${over.length} not asked (over your panel size)`}
+          {isAdmin && askedCount < size && !over.length && ' (the next weekly run writes the rest)'}
           {isAdmin && <> · <ButtonLink to={page('settings/tracking')} variant="link" size="sm">Change the panel size</ButtonLink></>}
         </p>
       </div>
@@ -270,6 +325,25 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
         <PickFilter label="Result on" value={engine} onChange={setEngine} options={engines} format={engineLabel} allLabel="Any engine" />
       </div>
       {editing && <EditQuestion p={editing} onClose={() => setEditing(null)} onSave={(body, msg) => { send(body, msg); setEditing(null); }} />}
+      {isAdmin && ids.length > 0 && (
+        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-accent bg-surface p-2.5 shadow-raised" role="region" aria-label="Selected questions">
+          <span className="px-1 text-[13px] font-medium text-ink">{ids.length} selected</span>
+          <Button size="sm" variant="secondary" icon={<Power className="size-4" />} loading={admin.isPending} onClick={() => bulk({ remove: ids }, `${ids.length} switched off`)}>Switch off</Button>
+          <Button size="sm" variant="secondary" loading={admin.isPending} onClick={() => bulk({ enable: ids }, `${ids.length} switched on`)}>Switch on</Button>
+          <Button size="sm" variant="secondary" icon={<Pin className="size-4" />} loading={admin.isPending} onClick={() => bulk({ pin: ids }, `${ids.length} pinned`)}>Pin</Button>
+          <Button size="sm" variant="secondary" icon={<PinOff className="size-4" />} loading={admin.isPending} onClick={() => bulk({ unpin: ids }, `${ids.length} unpinned`)}>Unpin</Button>
+          <Button size="sm" variant="secondary" icon={<Tag className="size-4" />} onClick={() => setTagging(true)}>Set topic</Button>
+          <Button size="sm" variant="secondary" icon={<Trash2 className="size-4" />} onClick={() => setConfirmDelete(true)}>Delete</Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
+        </div>
+      )}
+      <Dialog open={tagging} onOpenChange={setTagging} title={`Set the topic of ${ids.length} question${ids.length === 1 ? '' : 's'}`} description="The topic groups questions in the segments, the filter and the reports."
+        footer={<><Button variant="ghost" onClick={() => setTagging(false)}>Cancel</Button><Button disabled={!tag.trim()} onClick={() => { bulk({ edit: ids.map((promptId) => ({ promptId, cluster: tag.trim().toLowerCase() })) }, `Topic set on ${ids.length}`); setTagging(false); setTag(''); }}>Set the topic</Button></>}>
+        <Field label="Topic">{(p) => <Input {...p} value={tag} maxLength={60} onChange={(e) => setTag(e.target.value)} placeholder="e.g. payroll" />}</Field>
+      </Dialog>
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete} title={`Delete ${ids.length} question${ids.length === 1 ? '' : 's'}?`}
+        description="Deleted questions are removed from the panel and no longer asked. The answers already stored stay in the history, and the weekly run will not suggest these questions again. Adding one back as your own question brings it back. To stop asking a question but keep it listed, switch it off instead."
+        footer={<><Button variant="ghost" onClick={() => setConfirmDelete(false)}>Cancel</Button><Button variant="danger" loading={del.isPending} onClick={removeSelected}>Delete</Button></>} />
       <DataTable rows={rows} columns={columns} rowKey={(p) => p.promptId} dense pageSize={25} searchable searchPlaceholder="Search the questions" searchText={(p) => [p.prompt, p.cluster, p.persona, p.market].join(' ')}
         empty={status === 'refused' ? 'No question was refused: every question the engine wrote passed the keyword rule.' : 'No questions match these filters.'} />
       {status === 'refused' && refused.length > 0 && (
@@ -277,7 +351,7 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
           The engine never asks a question that names your own website, another company, a government service or a login task, because answers to those say nothing about your visibility. Each refused question shows the rule it broke; switch one on if you want it anyway, and it becomes your own question.
         </Callout>
       )}
-      {isAdmin && <AddQuestions busy={admin.isPending && !pendingId} onAdd={(add, msg) => send({ add }, msg)} />}
+      {isAdmin && <AddQuestions busy={admin.isPending && !pendingId} onAdd={(add, msg) => send({ add }, msg)} own={ownCount} size={size} engines={panelEngines} />}
       {isAdmin && sugg.length > 0 && (
         <div className="rounded-xl border border-line p-4">
           <p className="flex items-center gap-2 text-[13px] font-medium text-ink"><Sparkles className="size-4 text-accent-text" aria-hidden /> Suggested: real questions people ask AI about your topics</p>
@@ -285,12 +359,12 @@ export function PanelManager({ prompts, answers, suggestions, setting }: { promp
             {sugg.map((s) => (
               <li key={s.question} className="flex flex-wrap items-center justify-between gap-2 py-2 text-[13px]">
                 <span className="min-w-0 flex-1 text-ink-2">{s.question}<span className="ml-1.5 text-xs text-ink-3">{compactNumber(s.volume)} AI searches / mo</span></span>
-                <Button size="sm" variant="secondary" icon={<Plus className="size-4" />} onClick={() => send({ add: [s.question] }, 'Tracked from the next weekly run')}>Track</Button>
+                <Button size="sm" variant="secondary" icon={<Plus className="size-4" />} onClick={() => send({ add: [s.question] }, addedMessage(1, ownCount, size))}>Track</Button>
               </li>
             ))}
           </ul>
           <div className="mt-2 flex justify-end">
-            <Button size="sm" variant="ghost" onClick={() => send({ add: sugg.map((s) => s.question) }, `${sugg.length} questions tracked from the next weekly run`)}>Track all {sugg.length}</Button>
+            <Button size="sm" variant="ghost" onClick={() => send({ add: sugg.map((s) => s.question) }, addedMessage(sugg.length, ownCount, size))}>Track all {sugg.length}</Button>
           </div>
         </div>
       )}
@@ -350,14 +424,36 @@ function EditQuestion({ p, onClose, onSave }: { p: Prompt; onClose: () => void; 
   );
 }
 
-function AddQuestions({ busy, onAdd }: { busy: boolean; onAdd: (add: Record<string, unknown>[], msg: string) => void }) {
+/** A3: the toast after an add: asked from the next weekly run only as far as the panel size reaches. */
+export function addedMessage(n: number, own: number, size: number): string {
+  const { notAsked } = aiPanelOverflow(own, n, size);
+  const what = n === 1 ? 'Question added' : `${n} questions added`;
+  if (!notAsked) return `${what}. ${n === 1 ? 'It is' : 'They are'} asked from the next weekly run`;
+  return `${what}. ${notAsked} of your questions are over your panel size of ${size} and are not asked until you raise it`;
+}
+
+/** A3: before an add or an import that passes the panel size: how many would not be asked, and what the panel that asks them all uses. */
+function OverflowWarning({ own, adding, size, engines }: { own: number; adding: number; size: number; engines: readonly string[] }) {
+  const o = aiPanelOverflow(own, adding, size);
+  if (!o.notAsked) return null;
+  const now = estimateAiPanelCost({ panel: size, engines: engines.length ? engines : undefined }).month.total;
+  const then = estimateAiPanelCost({ panel: o.sizeNeeded, engines: engines.length ? engines : undefined }).month.total;
+  return (
+    <Callout tone="warning" title={`${o.notAsked} question${o.notAsked === 1 ? '' : 's'} would not be asked`}>
+      Your panel asks {size} questions a week, and your own questions come first. With these {adding} you would have {own + adding}, so {o.notAsked} stay stored but are not asked.
+      A panel of {o.sizeNeeded} asks them all: about {creditsLabel(then)} a month instead of {creditsLabel(now)}. Change it under the panel size in the tracking settings.
+    </Callout>
+  );
+}
+
+function AddQuestions({ busy, onAdd, own = 0, size = AI_PANEL_LIMITS.default_new, engines = [] }: { busy: boolean; onAdd: (add: Record<string, unknown>[], msg: string) => void; own?: number; size?: number; engines?: readonly string[] }) {
   const [draft, setDraft] = useState('');
   const [persona, setPersona] = useState('');
   const [cluster, setCluster] = useState('');
   const [market, setMarket] = useState('');
   const [pinned, setPinned] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [csv, setCsv] = useState<(AiPanelCsvResult & { name: string }) | null>(null);
+  const [csv, setCsv] = useState<(AiPanelCsvResult & { name: string; keywords?: number }) | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   const add = () => {
@@ -369,13 +465,13 @@ function AddQuestions({ busy, onAdd }: { busy: boolean; onAdd: (add: Record<stri
     if (items.length > 500) return setError('Add at most 500 questions at a time');
     if (market.trim() && !/^[A-Za-z]{2}([-_ ][A-Za-z]{2,3})?$/.test(market.trim())) return setError('Market: a country code and a language, e.g. SA-en');
     setError(null);
-    onAdd(items.map((prompt) => ({ prompt, persona: persona.trim(), cluster: cluster.trim().toLowerCase(), stage: '', market: market.trim(), pinned })), `${items.length === 1 ? 'Question' : `${items.length} questions`} added. It is asked from the next weekly run`);
+    onAdd(items.map((prompt) => ({ prompt, persona: persona.trim(), cluster: cluster.trim().toLowerCase(), stage: '', market: market.trim(), pinned })), addedMessage(items.length, own, size));
     setDraft('');
   };
   const readFile = async (f: File | undefined) => {
     if (!f) return;
     if (f.size > 1_000_000) { setCsv({ name: f.name, rows: [], errors: [{ line: 0, message: 'The file is larger than 1 MB' }], skipped: 0 }); return; }
-    setCsv({ name: f.name, ...parseAiPanelCsv(await f.text()) });
+    setCsv({ name: f.name, ...parseAiPanelCsvWithKeyword(await f.text()) });
   };
 
   return (
@@ -389,6 +485,7 @@ function AddQuestions({ busy, onAdd }: { busy: boolean; onAdd: (add: Record<stri
           <Field label="Topic" optional>{(p) => <Input {...p} value={cluster} maxLength={60} onChange={(e) => setCluster(e.target.value)} placeholder="e.g. payroll" />}</Field>
           <Field label="Market" optional>{(p) => <Input {...p} value={market} maxLength={8} onChange={(e) => setMarket(e.target.value)} placeholder="e.g. SA-en" />}</Field>
         </div>
+        <OverflowWarning own={own} adding={draft.split('\n').map((s) => s.trim()).filter(Boolean).length} size={size} engines={engines} />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Checkbox label="Pin them (asked first, kept when the panel is smaller)" checked={pinned} onChange={(e) => setPinned(e.target.checked)} />
           <Button onClick={add} loading={busy} icon={<Plus className="size-4" />}>Add questions</Button>
@@ -399,21 +496,22 @@ function AddQuestions({ busy, onAdd }: { busy: boolean; onAdd: (add: Record<stri
           <p className="text-[13px] font-medium text-ink">Import a question list (CSV)</p>
           <GuideButton id="ai-panel-import" variant="link" label="How should the file look?" />
         </div>
-        <p className="text-[13px] leading-snug text-ink-3">Columns: question, buyer role, cluster, stage, market, pinned. Only the question is required. Up to 500 questions a file.</p>
+        <p className="text-[13px] leading-snug text-ink-3">Columns: question, buyer role, cluster, stage, market, pinned, keyword. Only the question is required. Up to 500 questions a file.</p>
         <input ref={file} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="sr-only" onChange={(e) => { void readFile(e.target.files?.[0]); e.target.value = ''; }} aria-label="Choose a CSV file" />
         <Button variant="secondary" icon={<FileUp className="size-4" />} onClick={() => file.current?.click()}>Choose a file</Button>
         {csv && (
           <div className="space-y-2 text-[13px]">
-            <p className="text-ink-2"><span className="font-medium text-ink">{csv.name}</span>: {csv.rows.length} question{csv.rows.length === 1 ? '' : 's'} ready{csv.skipped ? `, ${csv.skipped} blank or repeated line${csv.skipped === 1 ? '' : 's'} skipped` : ''}{csv.errors.length ? `, ${csv.errors.length} line${csv.errors.length === 1 ? '' : 's'} with a problem` : ''}.</p>
+            <p className="text-ink-2"><span className="font-medium text-ink">{csv.name}</span>: {csv.rows.length} question{csv.rows.length === 1 ? '' : 's'} ready{csv.skipped ? `, ${csv.skipped} blank or repeated line${csv.skipped === 1 ? '' : 's'} skipped` : ''}{csv.errors.length ? `, ${csv.errors.length} line${csv.errors.length === 1 ? '' : 's'} with a problem` : ''}{csv.keywords ? `, ${csv.keywords} with a keyword` : ''}.</p>
             {csv.errors.length > 0 && (
               <ul className="max-h-32 space-y-0.5 overflow-auto rounded-lg bg-surface-2 p-2 text-xs text-ink-2">
                 {csv.errors.slice(0, 20).map((e) => <li key={e.line + e.message}>Line {e.line}: {e.message}</li>)}
               </ul>
             )}
+            {csv.rows.length > 0 && <OverflowWarning own={own} adding={csv.rows.length} size={size} engines={engines} />}
             {csv.rows.length > 0 && (
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setCsv(null)}>Cancel</Button>
-                <Button loading={busy} onClick={() => { onAdd(csv.rows, `${csv.rows.length} questions imported. They are asked from the next weekly run`); setCsv(null); }}>Import {csv.rows.length}</Button>
+                <Button loading={busy} onClick={() => { onAdd(csv.rows, addedMessage(csv.rows.length, own, size).replace(' added.', ' imported.')); setCsv(null); }}>Import {csv.rows.length}</Button>
               </div>
             )}
           </div>

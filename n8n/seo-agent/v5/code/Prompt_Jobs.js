@@ -7,6 +7,7 @@
 // question box, read from the results page) and what up to three competitors' homepages say they sell (topic ideas, never names). With no
 // personas on file a panel over 50 questions is written for four generic buyer roles, so it is still segmented; the owner sets real ones.
 /*__AI_PANEL__*/
+/*__AI_ANSWER_DATA__*/
 /*__COUNTRIES__*/
 const plans = $('AI Plan').all().map(i => i.json).filter(p => p.need_prompts && !p.nothing_to_do);
 if (!plans.length) return [{ json: { skip: true } }];
@@ -30,8 +31,12 @@ const paaOf = (siteId, market) => { const out = [];
 const LANG = { en: 'English', ar: 'Arabic', fr: 'French', de: 'German', es: 'Spanish', it: 'Italian', nl: 'Dutch', pt: 'Portuguese', tr: 'Turkish', hi: 'Hindi', ur: 'Urdu', ja: 'Japanese', zh: 'Chinese', ko: 'Korean', ru: 'Russian', pl: 'Polish', sv: 'Swedish', da: 'Danish', no: 'Norwegian', fi: 'Finnish', id: 'Indonesian', ms: 'Malay', th: 'Thai', vi: 'Vietnamese', he: 'Hebrew', fa: 'Persian' };
 const COUNTRY = (cc) => { try { const c = Object.entries(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(([, v]) => String(v.iso || '').toUpperCase() === cc); return c ? c[0] : cc; } catch (e) { return cc; } };
 const DEFAULT_PERSONAS = ['business owner', 'finance lead', 'IT lead', 'operations lead'];
+// W2-E1 (2026-10-23, MARKET_RND §3.1 gap 1): a site whose services or pages show it sells products gets a "shopping" stage in its panel (the
+// questions a shopper types, where AI shows product cards); every other site's panel is written exactly as before
+let pagesAll = []; try { pagesAll = $('Load Pages (AI)').all().map(i => i.json).filter(r => r && r.site_id && r.url); } catch (e) {}
 const out = [];
 for (const p of plans) {
+  const shop = AAD.sellsProducts(p, pagesAll.filter(r => r.site_id === p.site_id));
   const markets = (p.markets && p.markets.length ? p.markets : [p.own_market || 'US-en']);
   const personas = (p.personas && p.personas.length) ? p.personas : (Number(p.prompts_max) > 50 ? DEFAULT_PERSONAS : ['']);
   const cells = []; for (const m of markets) for (const pe of personas) cells.push({ market: m, persona: pe });
@@ -53,7 +58,7 @@ for (const p of plans) {
         topics: p.topics, count, existing: p.prompts.filter(q => (q.market || p.own_market) === c.market).map(x => x.prompt).slice(0, 80), has_brand_prompt: !first || p.prompts.some(x => x.kind === 'brand'), site_text: first ? textOf(p.site_id) : textOf(p.site_id).slice(0, 1500),
         market_questions: discovered(p.site_id).map(x => x.question + ' (' + x.volume + '/mo' + (x.brands.length ? '; AI names ' + x.brands.join(', ') : '') + ')'),
         search_questions: (p.gsc_questions || []).map(x => x.query + ' (' + x.impressions + ' impressions)'),
-        paa_questions: paaOf(p.site_id, c.market), competitor_offers } });
+        paa_questions: paaOf(p.site_id, c.market), competitor_offers, ...(shop.sells ? { shopping: true, shopping_why: shop.why } : {}) } });   // W2-E1
       first = false;
     }
   }

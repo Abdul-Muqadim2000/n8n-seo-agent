@@ -9,12 +9,12 @@
    "subject": 6
   },
   "lineage": {
-   "pass": 14,
-   "subject": 17
+   "pass": 15,
+   "subject": 18
   },
   "refusal": {
-   "pass": 22,
-   "subject": 39
+   "pass": 26,
+   "subject": 43
   },
   "withheld": {
    "pass": 4,
@@ -420,10 +420,54 @@
    ],
    "workflow": "SEO Agent \u2014 AI Pulse"
   },
+  "SEO Agent \u2014 AI Repeat Pilot / Pilot Metrics": {
+   "fails": [],
+   "markup": 0,
+   "node": "Pilot Metrics",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Repeat Pilot"
+  },
+  "SEO Agent \u2014 AI Repeat Pilot / Pilot Report": {
+   "fails": [],
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 15,
+   "node": "Pilot Report",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 AI Repeat Pilot"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Answer Rows": {
+   "fails": [],
+   "markup": 0,
+   "node": "AI Answer Rows",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
   "SEO Agent \u2014 AI Visibility Tracker / AI Chunk Handoff": {
    "fails": [],
    "markup": 0,
    "node": "AI Chunk Handoff",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Extras": {
+   "fails": [],
+   "markup": 0,
+   "node": "AI Extras",
    "refusal": true,
    "subject": [
     "refusal"
@@ -466,6 +510,16 @@
    "node": "AI Report",
    "subject": [
     "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Vis Rows": {
+   "fails": [],
+   "markup": 0,
+   "node": "AI Vis Rows",
+   "refusal": true,
+   "subject": [
+    "refusal"
    ],
    "workflow": "SEO Agent \u2014 AI Visibility Tracker"
   },

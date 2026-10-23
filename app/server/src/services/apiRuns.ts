@@ -137,7 +137,7 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
   const input = parsed.data;
 
   // the forms' own duplicate warnings, on the same pipeline data the page reads
-  const estimate = await estimateCost(input);
+  const estimate = await estimateCost(input, site);   // A2: an AI visibility run is quoted from the website's own panel
   // credits (app/docs/CREDITS.md): the caller reads the quote, never the provider estimate behind it
   const quoted = quoteCredits(estimate, await settingsRow());
   let notices: PipelineNotice[] = [];

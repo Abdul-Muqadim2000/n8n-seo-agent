@@ -3,10 +3,13 @@ import { audit } from '../services/audit';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   adminActionSchema,
+  aiImportSchema,
+  aiPilotStartSchema,
+  aiPromptDeleteSchema,
   createSiteSchema,
   LINK_IMPORT_COLUMNS,
   linkImportSchema,
-  monitorsBody,
+  siteAdminMonitorsBody,
   parseLinkImport,
   n8nSiteId,
   safeJson,
@@ -14,8 +17,12 @@ import {
   VERIFICATION_META_NAME,
   VERIFICATION_TXT_PREFIX,
   verifySiteSchema,
+  type AdminAction,
   type AdminResult,
   type AiGrowthRow,
+  type AiImportSummary,
+  type AiPilotState,
+  type AuditAction,
   type IndexNowCheck,
   type GoogleConnection,
   type LinkImportSummary,
@@ -37,6 +44,8 @@ import { assertGa4ForDomain, findGscProperty, gscOwnerCheck, listGa4Properties }
 import { assertEngineIdFree, ENGINE_ID_TAKEN } from '../services/engineSite';
 import { routeSiteToApp } from '../services/runs';
 import { fetchPublicText, verify } from '../services/verify';
+import { deleteAiPrompts, importAiReport } from '../services/aiWave2';
+import { aiPilotState, startAiPilot } from '../services/aiPilot';
 
 export function toSite(s: SiteRow): Site {
   return {
@@ -145,9 +154,59 @@ async function stopInEngine(site: SiteRow, log: FastifyRequest['log']) {
   } catch (err) {
     log.warn({ err: String(err), domain: site.domain }, 'n8n ladder delete failed');
   }
+  await clearAiInEngine(site.domain, log);
   invalidateSite(site.domain);
 }
+
+/**
+ * A12 (2026-10-23, AI visibility app audit): the owner's AI inputs and measurements leave with the website. Site Admin `delete` removes
+ * the site row and its cycle only; the monitor settings (panel size, engines, competitors, brand names, buyer roles, markets), the question
+ * panel (with the owner's own questions and personas) and the AI history (runs, answers, pulse days) stayed, so the next company that
+ * verified the domain saw them and was billed for the old panel size. They are removed here through the n8n public API, table by table; a
+ * table that fails is logged and the others still go (the next owner then starts from the engine's default panel).
+ */
+// R-A6 (review 2026-10-23): the owner's AI report uploads (seo_ai_imports: queries, page URLs, file names) leave with the website too
+export const AI_TABLES_CLEARED_ON_DELETE = ['monitors', 'aiPrompts', 'aiVisibility', 'aiAnswers', 'aiDaily', 'aiImports'] as const;
+export async function clearAiInEngine(domain: string, log: FastifyRequest['log']): Promise<string[]> {
+  const failed: string[] = [];
+  for (const t of AI_TABLES_CLEARED_ON_DELETE) {
+    try {
+      await deleteRows(t, [{ columnName: 'domain', condition: 'eq', value: domain }]);
+    } catch (err) {
+      failed.push(t);
+      log.warn({ err: String(err), domain, table: t }, 'n8n AI data delete failed');
+    }
+  }
+  return failed;
+}
 export { stopInEngine };
+
+/** A13: the audit details of a Site Admin change: counts and ids only (a question text can carry a customer's competitive framing). */
+export function adminAuditDetails(a: AdminAction, affected: number | null | undefined): Record<string, unknown> {
+  const base = { affected: affected ?? null };
+  switch (a.action) {
+    case 'ai_prompts':
+      return { ...base, added: a.add.length, edited: a.edit.length, removed: a.remove.length, enabled: a.enable.length, pinned: a.pin.length, unpinned: a.unpin.length,
+        ids: [...a.edit.map((e) => e.promptId), ...a.remove, ...a.enable, ...a.pin, ...a.unpin].slice(0, 20) };
+    case 'monitors': {
+      const m = a.monitors as Record<string, unknown>;
+      const changed = Object.keys(m).filter((k) => m[k] !== undefined);
+      return { ...base, changed, ...(m.aiPromptsMax !== undefined ? { aiPromptsMax: m.aiPromptsMax } : {}), ...(Array.isArray(m.aiEngines) ? { aiEngines: (m.aiEngines as unknown[]).map(String) } : {}),
+        ...(m.aiPulse !== undefined ? { aiPulse: m.aiPulse } : {}), ...(m.aiPulseMode !== undefined ? { aiPulseMode: m.aiPulseMode } : {}), ...(m.aiPulsePerWeek !== undefined ? { aiPulsePerWeek: m.aiPulsePerWeek } : {}),
+        ...(m.aiVisibility !== undefined ? { aiVisibility: m.aiVisibility } : {}), ...(a.competitors ? { competitors: a.competitors.length } : {}) };
+    }
+    case 'cadence':
+      return { ...base, pagesPerWeek: a.pagesPerWeek };
+    case 'prospect':
+      return { ...base, prospectDomain: a.prospectDomain, type: a.type, ...(a.status ? { status: a.status } : {}) };
+    case 'unpublish':
+      return { ...base, keyword: a.keyword };
+    case 'content_groups':
+      return { ...base, groups: Array.isArray(a.contentGroups) ? a.contentGroups.length : null };
+    default:
+      return base;
+  }
+}
 
 export async function siteRoutes(app: FastifyInstance) {
   // G5: the client portal lists the workspace's websites
@@ -365,6 +424,56 @@ export async function siteRoutes(app: FastifyInstance) {
     return { source: parsed.source, label: parsed.label, rows: parsed.rows.length, domains: parsed.domains, total: parsed.total, skipped: parsed.skipped, importedAt: now };
   });
 
+  // ---------- W2-A (2026-10-23): the owner's AI report uploads -> seo_ai_imports (WAVE2_CONTRACTS.md §5) ----------
+  // Bing Webmaster Tools' AI Performance and Search Console's AI features have no API: the export is the only way in. The engine reads
+  // the table (W2-E3); a file for another website is refused by the parser.
+  app.post('/api/orgs/:orgId/sites/:siteId/ai/import', { bodyLimit: 16 * 1024 * 1024, config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async (req): Promise<AiImportSummary> => {
+    const p = req.params as P;
+    const { site } = await siteAccess(req, p.orgId, p.siteId, 'member');
+    requireVerified(site);
+    const input = parse(aiImportSchema, req.body);
+    const out = await importAiReport(site, input);
+    await audit(req, site.orgId, { action: 'site.ai_import', target: { type: 'site', id: site.id, label: site.domain }, details: { source: out.source, rows: out.rows, from: out.days.from, to: out.days.to, skipped: out.skipped, replaced: out.replaced ?? 0 } });
+    req.log.info({ site: site.domain, source: out.source, rows: out.rows }, 'ai import');
+    return out;
+  });
+
+  // ---------- W2-FIX (2026-10-23): the AI repeat pilot, priced first, started only on an explicit confirmation (services/aiPilot.ts) ----------
+  // Admins and owners only (it spends up to $4 of search data once), company-scoped through siteAccess, CSRF like every cookie POST.
+  app.get('/api/orgs/:orgId/sites/:siteId/ai/pilot', async (req): Promise<AiPilotState> => {
+    const p = req.params as P;
+    const { org, site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    return aiPilotState(org, site);
+  });
+  app.post('/api/orgs/:orgId/sites/:siteId/ai/pilot', { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async (req) => {
+    const p = req.params as P;
+    const { org, user, site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    requireVerified(site);
+    const { confirm } = parse(aiPilotStartSchema, req.body ?? {});
+    const r = await startAiPilot(org, user, site, confirm);
+    await audit(req, site.orgId, { action: confirm ? 'site.ai_pilot_run' : 'site.ai_pilot_quote', target: { type: 'site', id: site.id, label: site.domain }, details: { requestId: r.requestId, ...(r.priceUsd != null ? { priceUsd: r.priceUsd } : {}) } });
+    return { ok: true, requestId: r.requestId, confirm: r.confirm };
+  });
+
+  // W2-A: delete questions from the AI panel (bulk). The engine's Site Admin only switches questions off; a delete removes the rows of
+  // this domain only. Admins only, in the audit log with the count and ids (never the question texts).
+  app.post('/api/orgs/:orgId/sites/:siteId/ai/prompts/delete', { config: { rateLimit: { max: 30, timeWindow: '10 minutes' } } }, async (req) => {
+    const p = req.params as P;
+    const { site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    requireVerified(site);
+    const { ids } = parse(aiPromptDeleteSchema, req.body);
+    // R-A7: kept as tombstones (status off) so the engine never asks them again; R-A16: what was done is audited even when some failed
+    const r = await deleteAiPrompts(site, ids);
+    await audit(req, site.orgId, {
+      action: 'site.ai_prompts_deleted',
+      target: { type: 'site', id: site.id, label: site.domain },
+      outcome: r.failed.length ? 'failure' : 'success',
+      details: { requested: ids.length, deleted: r.deleted, failed: r.failed.length, ids: r.ids.slice(0, 20) },
+    });
+    if (r.failed.length) throw new HttpError(502, `${r.deleted} of ${r.deleted + r.failed.length} questions were deleted; the SEO engine did not save the other ${r.failed.length}. Try again in a minute.`);
+    return { ok: true, deleted: r.deleted };
+  });
+
   // ---------- Site Admin (n8n) ----------
   app.post('/api/orgs/:orgId/sites/:siteId/admin', async (req): Promise<AdminResult> => {
     const p = req.params as P;
@@ -385,12 +494,8 @@ export async function siteRoutes(app: FastifyInstance) {
         body = { ...base, action: 'unpublish', keyword: a.keyword };
         break;
       case 'monitors': {
-        // Site Admin keeps a field when it is '' : a single space clears a list
-        const m = monitorsBody(a.monitors);
-        if (a.monitors.brandNames && !a.monitors.brandNames.length) m.brand_names = ' ';
-        if (a.monitors.aiPersonas && !a.monitors.aiPersonas.length) m.ai_personas = ' ';   // G6
-        if (a.monitors.aiMarkets && !a.monitors.aiMarkets.length) m.ai_markets = ' ';
-        body = { ...base, action: 'monitors', monitors: { ...m, ...(a.competitors ? { competitors: a.competitors.join(', ') || ' ' } : {}) } };
+        // Site Admin keeps a field when it is '' : a single space clears a list (shared siteAdminMonitorsBody, the body the harness replays)
+        body = { ...base, action: 'monitors', monitors: siteAdminMonitorsBody(a.monitors, a.competitors) };
         break;
       }
       case 'prospect':
@@ -399,7 +504,7 @@ export async function siteRoutes(app: FastifyInstance) {
       case 'ai_prompts':
         // G6 (2026-10-18): the panel manager, the engine's field names (AI_Prompt_Rows_Admin.js)
         body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove, enable: a.enable, pin: a.pin, unpin: a.unpin,
-          edit: a.edit.map((e) => ({ prompt_id: e.promptId, ...(e.prompt ? { prompt: e.prompt } : {}), ...(e.persona !== undefined ? { persona: e.persona } : {}), ...(e.cluster !== undefined ? { cluster: e.cluster } : {}),
+          edit: a.edit.map((e) => ({ prompt_id: e.promptId, ...(e.prompt ? { prompt: e.prompt } : {}), ...(e.keyword ? { keyword: e.keyword } : {}), ...(e.persona !== undefined ? { persona: e.persona } : {}), ...(e.cluster !== undefined ? { cluster: e.cluster } : {}),
             ...(e.stage ? { stage: e.stage } : {}), ...(e.market ? { market: e.market } : {}), ...(e.pinned !== undefined ? { pinned: e.pinned } : {}) })) };
         break;
       case 'content_groups':
@@ -408,6 +513,8 @@ export async function siteRoutes(app: FastifyInstance) {
     }
     const r = await siteAdmin(body);
     if (!r.ok) throw new HttpError(502, r.error || 'The SEO engine could not apply the change.', 'admin_failed');
+    // A13: who changed the panel or the monitors, and what in numbers (ids and counts, never the question texts)
+    await audit(req, site.orgId, { action: `site.admin.${a.action}` as AuditAction, target: { type: 'site', id: site.id, label: site.domain }, details: adminAuditDetails(a, r.affected) });
     if (r.affected === 0 && (a.action === 'pause' || a.action === 'resume')) throw new HttpError(409, 'The SEO engine does not track this website yet: start weekly tracking first.', 'not_tracked');
     if (r.affected === 0 && a.action === 'content_groups') throw new HttpError(409, 'The SEO engine does not track this website yet: start weekly tracking first, then set its content groups.', 'not_tracked');
     if (r.affected === 0 && a.action === 'unpublish') throw notFound(`No page for "${a.keyword}" is recorded for ${site.domain}.`);

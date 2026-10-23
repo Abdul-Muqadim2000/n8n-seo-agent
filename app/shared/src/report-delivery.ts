@@ -182,7 +182,7 @@ const DELIVER: DeliveryDecision = { deliver: true, reason: '', code: null };
 const hold = (code: HoldCode, reason: string): DeliveryDecision => ({ deliver: false, reason, code });
 
 /** Stages that say a run has *started*, not that a report is ready. */
-const INTERIM_STAGES = new Set(['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup', 'unknown']);
+const INTERIM_STAGES = new Set(['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup', 'ai_pilot_quote', 'unknown']);   // W2-FIX: a pilot's price is a note
 
 /**
  * R110, the stages that are themselves a report. Every weekly / monitor report node in the engine ends with `status: 'progress'`
@@ -241,6 +241,11 @@ export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
   const stage = c.stage || text(p.stage);
   const status = (c.status || text(p.status) || '').toLowerCase();
 
+  // R-A3: a check joined to the website's open run was not refused; its report is the open run's, delivered when that run reports
+  if ((stage === 'rejected' || status === 'rejected') && text(p.reason) === 'already_measured')
+    return hold('rejected', 'This week was already measured, so this check sent nothing new: the stored week\'s report is the one to read.');
+  if ((stage === 'rejected' || status === 'rejected') && text(p.reason) === 'open_run')
+    return hold('rejected', 'This check is part of the run already in progress, so its report is that run\'s report and is sent when that run finishes.');
   if (stage === 'rejected' || status === 'rejected')
     return hold('rejected', `The engine refused this run${text(p.error) ? ` (${text(p.error).slice(0, 160)})` : ''}, so there is nothing to send.`);
   // R110: a "started" note is an acknowledgement whatever status it carries (the engine sends them as `accepted`), so it is

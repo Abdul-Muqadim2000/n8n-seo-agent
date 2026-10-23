@@ -19,6 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deployGuard, kitFromWorkflow } from './deploy_guard.mjs';
+import { neverDeployPass } from './never_deploy.mjs';   // W2-E3 (2026-10-23): the manifest's never_deploy list, as deploy_engine.py step 5b (R-E11: run first)
 
 const ROOT = '/opt/seo';
 const PLACEHOLDER = '__SEO_ALERT_WEBHOOK_URL__';
@@ -55,6 +56,18 @@ const force = truthy(env.SEO_DEPLOY_FORCE) ? 'SEO_DEPLOY_FORCE' : truthy(env.SEO
 const manifest = JSON.parse(readFileSync(join(ROOT, 'deploy_manifest.json'), 'utf8'));
 const tmp = mkdtempSync('/tmp/seo-release-');
 let failed = 0;
+// 0. never-deploy (W2-E3; R-E11 2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md: it ran AFTER the import and the publish, so a list
+//    failure failed a release that was already live, and "the old one keeps running" was false). It runs first now, before anything is touched:
+//    an id on never_deploy AND on the publish set, or an active list that cannot be read, fails the release here; a listed workflow the instance
+//    has ACTIVE (the test callback receiver, the test runner) is unpublished, never deleted. The same rule as deploy/gcp/deploy_engine.py step 5b.
+{
+  const nd = neverDeployPass({ manifest, n8n, log: (m) => log(m) });
+  if (nd.failures.length) {
+    for (const f of nd.failures) console.error('[seo-release] ' + f);
+    console.error('[seo-release] never-deploy failed before anything was imported or published: the release fails so the old one keeps running');
+    process.exit(1);
+  }
+}
 try {
   // 1. credentials
   if (env.SEO_CREDENTIALS_B64) {

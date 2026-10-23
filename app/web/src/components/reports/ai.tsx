@@ -57,13 +57,26 @@ function WeekWin({ q }: { q: P }) {
   );
 }
 
-const ptsDelta = (v: unknown) => (num(v) == null ? undefined : <Delta value={num(v)} suffix=" pts" digits={1} label="vs last check" />);
+/**
+ * A14 (2026-10-23): every headline change carries its own test (the engine's `delta.tests`, B8-1); a change the test did not call real is
+ * grey, with the words for it, never coloured like a result.
+ */
+export type ReportVerdict = 'real' | 'noise' | 'untested';
+export const reportVerdict = (t: unknown, fallback?: unknown): ReportVerdict => {
+  const sig = t && typeof t === 'object' ? (t as Record<string, unknown>).significant : fallback;
+  return sig === true ? 'real' : sig === false ? 'noise' : 'untested';
+};
+const ptsDelta = (v: unknown, verdict: ReportVerdict = 'untested') =>
+  num(v) == null ? undefined : <Delta value={num(v)} suffix=" pts" digits={1} neutral={verdict !== 'real'} label={verdict === 'real' ? 'vs last check, a real change' : verdict === 'noise' ? 'vs last check, within noise' : 'vs last check, not tested'} />;
 const pctCount = (v: unknown) => (num(v) != null ? <CountUp value={num(v)!} format={(x) => pct(x)} /> : '-');
 
 export function AiVisibilityReport({ report }: { report: ReportDetail }) {
   const p = report.payload;
   const m = obj(p.metrics);
   const delta = obj(m.delta);
+  const tests = obj(delta.tests);
+  // A14: the engine refused to compare (a different panel or different engines): the reader is told why, not shown nothing
+  const notCompared = str(m.delta_not_compared) || str(p.delta_not_compared);
   const brand = obj(m.brand);
   const engines = obj(p.engines);
   const engineKeys = Object.keys(engines).sort((a, b) => engineRank(a) - engineRank(b));
@@ -111,9 +124,9 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
         }
         stats={
           <>
-            <HeroStat label="Named in AI answers" value={pctCount(m.mention_rate)} delta={ptsDelta(delta.mention_rate)} hint={mentionHint} />
-            <HeroStat label="Cited with a link" value={pctCount(m.citation_rate)} delta={ptsDelta(delta.citation_rate)} hint={`${num(m.cited) ?? 0} answers link to your site`} />
-            <HeroStat label="Share of voice" value={pctCount(m.share_of_voice)} delta={ptsDelta(delta.share_of_voice)} hint="Your mentions among all brands named" />
+            <HeroStat label="Named in AI answers" value={pctCount(m.mention_rate)} delta={ptsDelta(delta.mention_rate, reportVerdict(tests.mention_rate, delta.significant))} hint={mentionHint} />
+            <HeroStat label="Cited with a link" value={pctCount(m.citation_rate)} delta={ptsDelta(delta.citation_rate, reportVerdict(tests.citation_rate))} hint={`${num(m.cited) ?? 0} answers link to your site`} />
+            <HeroStat label="Share of voice" value={pctCount(m.share_of_voice)} delta={ptsDelta(delta.share_of_voice, reportVerdict(tests.share_of_voice))} hint="Your mentions among all brands named" />
             <HeroStat
               label="AI knows your brand"
               value={num(brand.answered) ? `${num(brand.known) ?? 0} / ${num(brand.answered)}` : m.brand_known === true ? 'Yes' : m.brand_known === false ? 'No' : '-'}
@@ -124,6 +137,7 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
         }
       />
       {has(p.brief) && <BriefCard brief={obj(p.brief)} />}
+      {notCompared && <p className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] leading-snug text-ink-2">{notCompared}</p>}
       <AlertList alerts={objs(p.alerts)} />
       {/* B8-9: the alerts that rest on a test were judged together, at one stated threshold */}
       {(num(obj(m.multiple_tests).tests) ?? 0) > 0 && <p className="text-xs text-ink-3">{str(obj(m.multiple_tests).note)}</p>}
@@ -447,22 +461,33 @@ export function AiPulseReport({ report }: { report: ReportDetail }) {
   const ci = arr<number>(p.mention_ci);
   const engines = obj(p.engines);
   const alerts = objs(p.alerts);
+  // A7 (2026-10-23): above 50 questions a morning asks a rotating sample of the panel; a morning with too few answers has no rate
+  const sample = obj(p.sample);
+  const sampled = str(sample.mode) === 'sample';
+  const asked = num(sample.asked) ?? arr(sample.asked).length ?? null;
+  const panelSize = num(p.panel_size);
+  const today = obj(p.today_rate);
+  const enough = today.enough === false ? false : (num(p.samples) ?? 0) >= 12;
+  const notes = [str(obj(p.readable).note), str(p.baseline_note)].filter(Boolean);
+  const size = panelSize ? `${panelSize} ` : '';
+  const scope = sampled ? `${asked ? `${asked} of your ` : 'a rotating sample of your '}${size}questions (this morning's sample)` : `your ${size}tracked questions`;
   return (
     <Stagger className="space-y-5">
       <ReportHero
         report={report}
         title={alerts.length ? `${alerts.length} real ${alerts.length === 1 ? 'change' : 'changes'} in today's AI answers` : 'No real change in today\'s AI answers'}
-        description={`Named in ${pct(p.mention_rate)} of ${n(p.samples)} answers from ChatGPT, Gemini and Google AI Mode (and Copilot when chosen).`}
+        description={`Named in ${pct(p.mention_rate)} of ${n(p.samples)} answers to ${scope} from the fast engines.${enough ? '' : ' Too few answers for a rate this morning.'}`}
         aside={num(p.visibility_score) != null ? <ScoreMark score={Math.round(num(p.visibility_score)!)} label="Visibility score" /> : undefined}
         stats={
           <>
-            <HeroStat label="Named today" value={pctCount(p.mention_rate)} hint={ci.length === 2 ? `95% range ${pct(ci[0], 0)} to ${pct(ci[1], 0)}` : undefined} />
+            <HeroStat label="Named today" value={enough ? pctCount(p.mention_rate) : 'Too few answers'} hint={!enough ? `${n(p.samples)} answers; a rate needs 12` : ci.length === 2 ? `95% range ${pct(ci[0], 0)} to ${pct(ci[1], 0)}` : undefined} />
             <HeroStat label="Your pages cited" value={pctCount(p.citation_rate)} />
             <HeroStat label="Visibility score" value={num(p.visibility_score) != null ? `${Math.round(num(p.visibility_score)!)}/100` : '-'} />
             <HeroStat label="Answers" value={n(p.samples)} hint="ChatGPT, Gemini and Google AI Mode" />
           </>
         }
       />
+      {notes.length > 0 && <p className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] leading-snug text-ink-2">{notes.join(' ')}</p>}
       <AlertList alerts={alerts} />
       {Object.keys(engines).length > 0 && (
         <Block title="By engine" icon={<Bot />}>
@@ -485,7 +510,7 @@ export function AiPulseReport({ report }: { report: ReportDetail }) {
           </ul>
         </Block>
       )}
-      <p className="text-xs text-ink-3">The AI pulse asks your tracked questions every day except the day of your weekly run; the next weekly AI visibility report adds these answers to its figures. A message is sent only when a change is beyond normal answer-to-answer variation.</p>
+      <p className="text-xs text-ink-3">The AI pulse asks your tracked questions on the mornings between weekly runs (above 50 questions, a rotating sample each morning so every question is asked a few times a week); the next weekly AI visibility report adds these answers to its figures. A message is sent only when a change is beyond normal answer-to-answer variation.</p>
       <CreditsCard p={p} />
     </Stagger>
   );

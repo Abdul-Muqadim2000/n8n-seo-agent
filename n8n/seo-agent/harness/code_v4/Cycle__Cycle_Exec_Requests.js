@@ -290,25 +290,40 @@ const CU = (() => {
   // workflow is inactive, or that record is older than `stale_minutes` (no record: older than that since the workflow was last updated),
   // rate-limited to one alarm every `alarm_every_hours` while it lasts; nothing on the door n8n has just started through (its own sweep
   // comes 45 s later) or in a test. o: { wf: {ok, active, updatedAt, error}, last: {updated_at} | null, state, now, entry, test }
-  const CW_DEFAULTS = { stale_minutes: 20, alarm_every_hours: 6 };
+  // 2026-10-23 (techand.ai on production): a dispatcher that sweeps but is in plan_only starts nothing either. Production stayed there for
+  // two days after a deploy (no seo_cache row cycle:mode), two clients' cycle 0 sat at 0 of 8 jobs, and this watchdog said "sweeping".
+  // So: when the last sweep says plan_only AND it would have started work, alarm once that has lasted `plan_only_minutes`.
+  const CW_DEFAULTS = { stale_minutes: 20, alarm_every_hours: 6, plan_only_minutes: 60 };
   const cycleWatchdog = (o) => {
     const c = o || {}, cfg = { ...CW_DEFAULTS, ...(c.config || {}) }, now = ms(c.now) || Date.now(), st = parseValue(c.state || {}), wf = c.wf || {};
     const lastAt = ms(c.last && c.last.updated_at), age = lastAt ? (now - lastAt) / MIN : null;
     const since = wf.ok ? ms(wf.updatedAt) : 0;
+    const sweep = parseValue((c.last && c.last.value) || {});
+    const waiting = Array.isArray(sweep.would_start) ? sweep.would_start : [];
+    const held = String(sweep.mode || '') === 'plan_only' && waiting.length > 0;
+    const heldSince = held ? (ms(st.plan_only_since) || lastAt || now) : 0;
     const problems = [];
     if (wf.ok && wf.active === false) problems.push('the Cycle Dispatcher (SEOagentCycleDsp) is not active: no website\'s cycle is started (publish it - a deploy imports it inactive; deploy_manifest.json publishes it)');
     if (lastAt && age > cfg.stale_minutes) problems.push('its last sweep (seo_cache cycle:last) was ' + dur(age) + ' ago, at ' + iso(lastAt) + ' (it sweeps every 5 minutes)');
     else if (!lastAt && (!wf.ok || wf.active !== false) && since && (now - since) / MIN > cfg.stale_minutes) problems.push('it has written no sweep record (seo_cache cycle:last) in the ' + dur((now - since) / MIN) + ' since it was last updated');
-    const base = { checked_at: iso(now), last_sweep_at: lastAt ? iso(lastAt) : '', active: wf.ok ? wf.active !== false : null, read: wf.ok ? '' : (S(wf.error) || 'no answer') };
+    if (held && (now - heldSince) / MIN > cfg.plan_only_minutes) {
+      const named = new Map((Array.isArray(sweep.sites) ? sweep.sites : []).map(s => [S(s && s.site_id), S(s && s.domain)]));
+      const domains = [...new Set(waiting.map(w => S(w && w.key).split(':')[1] || '').filter(Boolean).map(id => named.get(id) || id.replace(/^site_/, '')))];
+      problems.push('it is in plan_only (' + (S(sweep.mode_reason) || 'seo_cache cycle:mode') + ') for ' + dur((now - heldSince) / MIN) + ' while ' + waiting.length + ' job(s) wait to start ('
+        + domains.slice(0, 5).join(', ') + (domains.length > 5 ? ' and ' + (domains.length - 5) + ' more' : '') + '): no client\'s scheduled work runs. Add the seo_cache row key cycle:mode, kind cycle, value {"mode":"start"} (RUNBOOK.md section 4)');
+    }
+    const keep = { plan_only_since: held ? iso(heldSince) : '' };
+    const base = { checked_at: iso(now), last_sweep_at: lastAt ? iso(lastAt) : '', active: wf.ok ? wf.active !== false : null, read: wf.ok ? '' : (S(wf.error) || 'no answer'), mode: S(sweep.mode), waiting: waiting.length };
     if (c.test) return { ...base, verdict: 'test', alarm: false, reason: 'a test run of the catch-up does not judge the dispatcher', state: st };
-    if (!problems.length) return { ...base, verdict: wf.ok ? 'sweeping' : 'blind', alarm: false, problems: [], reason: wf.ok ? 'active, last sweep ' + (lastAt ? dur(age) + ' ago' : 'none yet (updated ' + (since ? iso(since) : '?') + ')')
-      : 'the dispatcher workflow could not be read (' + base.read + '); its last sweep was ' + (lastAt ? dur(age) + ' ago' : 'never recorded'), state: { ...st, down_since: '', last_alarm_at: '' } };
+    if (!problems.length) return { ...base, verdict: wf.ok ? (held ? 'plan_only' : 'sweeping') : 'blind', alarm: false, problems: [], reason: wf.ok ? 'active, last sweep ' + (lastAt ? dur(age) + ' ago' : 'none yet (updated ' + (since ? iso(since) : '?') + ')')
+      + (held ? '; plan_only with ' + waiting.length + ' job(s) waiting since ' + iso(heldSince) + ' (alarm after ' + cfg.plan_only_minutes + ' min)' : '')
+      : 'the dispatcher workflow could not be read (' + base.read + '); its last sweep was ' + (lastAt ? dur(age) + ' ago' : 'never recorded'), state: { ...st, ...keep, down_since: '', last_alarm_at: '' } };
     const down = ms(st.down_since) || now;
     if (c.entry === 'init') return { ...base, verdict: 'starting', alarm: false, problems, reason: 'n8n has just started: the dispatcher\'s own Instance Started sweep comes next, so this is judged at the next catch-up sweep', state: st };
     const lastAlarm = ms(st.last_alarm_at), due = !lastAlarm || now - lastAlarm >= cfg.alarm_every_hours * H;
     return { ...base, verdict: 'down', alarm: due, problems, down_since: iso(down),
       reason: problems.join('; ') + (due ? '' : ' (alerted at ' + iso(lastAlarm) + '; again after ' + cfg.alarm_every_hours + ' h)'),
-      state: { ...st, down_since: iso(down), last_alarm_at: due ? iso(now) : S(st.last_alarm_at) } };
+      state: { ...st, ...keep, down_since: iso(down), last_alarm_at: due ? iso(now) : S(st.last_alarm_at) } };
   };
   return { plan, lastDue, nextDue, parse, zonedToUtc, offset, stalePlan, lateRun, wall, dur, watchdog, watchdogResult, cycleWatchdog, DEFAULTS, DEAD, WD_DEFAULTS, CW_DEFAULTS, CYCLE_LATE_MIN };
 })();

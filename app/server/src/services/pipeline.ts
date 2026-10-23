@@ -4,6 +4,7 @@ import {
   normKeyword,
   AI_PROMPTS_DEFAULT,
   aiPulseQuestions,
+  estimateAiPanelCost,
   nextScheduledRun,
   // G12 / G29 (2026-10-13, FIX_PLAN): the ladder's chart marks, its page-change readings and the lineage of its numbers
   buildAnnotations,
@@ -639,6 +640,12 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   const panelMax = m?.aiPromptsMax ?? AI_PROMPTS_DEFAULT;
   const storedPanel = x.ai.prompts.filter((p) => p.status !== 'off' && p.kind !== 'brand').length;
   const pulseQuestions = storedPanel ? Math.min(storedPanel, panelMax) : aiPulseQuestions(panelMax);
+  // A7 (2026-10-23): above 50 questions each morning asks a rotating sample of the panel (each question N mornings a week), not all of it
+  const pulsePlan = estimateAiPanelCost({ panel: panelMax, engines: m?.aiEngines, pulse: true, pulseMode: m?.aiPulseMode === 'auto' ? '' : m?.aiPulseMode, pulsePerWeek: m?.aiPulsePerWeek || null });
+  const pulseSampled = pulsePlan.perWeek > 0 && pulsePlan.perWeek < 6;
+  const pulseWords = pulseSampled
+    ? `about ${Math.min(pulseQuestions, pulsePlan.pulseQuestionsDay)} of your ${pulseQuestions} questions each morning (a rotating sample: each question ${pulsePlan.perWeek} morning${pulsePlan.perWeek === 1 ? '' : 's'} a week)`
+    : `${pulseQuestions} questions each morning`;
   const blReport = reportOf(['backlinks']);
   const rtReport = reportOf(['rank_tracker']);
   const stReport = reportOf(['site_tracker']);
@@ -657,7 +664,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastReportId: reportOf(['ai_pulse'])?.id ?? null,
       monthlyUsd: rowUsd('ai_pulse'),
       // the panel's brand question is asked once a month ("8 questions" on AI visibility, 7 a day here): said, not left to look like a mismatch
-      detail: `ChatGPT, Gemini and Google AI Mode · ${pulseQuestions} questions a day${x.ai.prompts.some((p) => p.kind === 'brand' && p.status !== 'off') ? ' (your panel without the brand question, which is asked once a month)' : ''}`,
+      detail: `ChatGPT, Gemini and Google AI Mode · ${pulseWords}${x.ai.prompts.some((p) => p.kind === 'brand' && p.status !== 'off') ? ' (your panel without the brand question, which is asked once a month)' : ''}`,
     }),
     base('ai_growth', (m?.aiVisibility ?? true) && (m?.aiGrowth ?? true), m?.aiVisibility === false ? 'AI visibility is switched off' : 'The AI growth loop is switched off in the monitor settings', {
       lastRunAt: lastIso(x.ai.growth?.checkedAt, reportOf(['ai_growth'])?.receivedAt),

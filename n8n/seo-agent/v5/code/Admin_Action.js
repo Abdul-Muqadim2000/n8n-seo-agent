@@ -2,6 +2,7 @@
 // | facts (business_facts, the client's own facts about the business, stored on seo_sites; P1 2026-10-20)
 // | prospect (prospect_domain + status contacted / replied / won / rejected / ignored / new, note, contact_email; replied: v4.13) | ai_prompts (add custom questions, switch some off) — by site_id or domain.
 // The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).
+/*__AI_MEASURE__*/
 let t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }
 if (t.body && typeof t.body === 'object') t = { ...t, ...t.body };
 const action = String(t.action || '').toLowerCase();
@@ -25,7 +26,7 @@ if (action === 'prospect' && pstatus && !['new', 'contacted', 'replied', 'won', 
 // CSV import from the app), edit (persona / cluster / stage / market of a stored question; NEW WORDING is a new question and the old one is
 // switched off, so a trend never compares two different questions), remove (switch off), enable (switch back on), pin / unpin
 const S6 = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
-const asQ = (x) => (x && typeof x === 'object') ? { prompt: S6(x.prompt, 300), persona: S6(x.persona, 40), cluster: S6(x.cluster, 60).toLowerCase(), stage: S6(x.stage, 20).toLowerCase(), market: S6(x.market, 8), pinned: x.pinned === true || String(x.pinned) === 'true' } : { prompt: S6(x, 300), persona: '', cluster: '', stage: '', market: '', pinned: false };
+const asQ = (x) => (x && typeof x === 'object') ? { prompt: S6(x.prompt, 300), persona: S6(x.persona, 40), cluster: S6(x.cluster, 60).toLowerCase(), stage: S6(x.stage, 20).toLowerCase(), market: S6(x.market, 8), pinned: x.pinned === true || String(x.pinned) === 'true', keyword: S6(x.keyword, 120) } : { prompt: S6(x, 300), persona: '', cluster: '', stage: '', market: '', pinned: false, keyword: '' };   // F2 (E9): the owner's own search phrase, when given
 const add_prompts = (Array.isArray(t.add) ? t.add : (Array.isArray(t.prompts) ? t.prompts : [])).map(asQ).filter(x => x.prompt.length >= 10).slice(0, 500);
 const off_prompts = (Array.isArray(t.remove) ? t.remove : []).map(x => String(x).trim()).filter(Boolean).slice(0, 500);
 const on_prompts = (Array.isArray(t.enable) ? t.enable : []).map(x => String(x).trim()).filter(Boolean).slice(0, 500);
@@ -40,4 +41,10 @@ const content_groups = (rawGroups || []).map(g => ({ name: String(g && g.name ||
 if (action === 'content_groups') for (const g of content_groups) { if (/(\+|\*|\})\)?[+*{]/.test(g.pattern)) throw new Error('content group "' + g.name + '": nested repetition in the pattern is refused'); try { new RegExp(g.pattern, 'i'); } catch (e) { throw new Error('content group "' + g.name + '": not a valid regular expression'); } }
 const content_groups_json = JSON.stringify(content_groups);
 const monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (action === 'monitors' ? t : {});
+// W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): the owner's AI alert rules - [{ id, metric, scope, direction, threshold_points, enabled }] -
+// checked by the engine's own rule (a bad rule is refused with its reason, nothing is stored); [] or '' clears them. The share-of-voice set: competitor ids.
+{ const raw = monitors.ai_alert_rules_json !== undefined ? monitors.ai_alert_rules_json : monitors.ai_alert_rules;
+  if (raw !== undefined && raw !== null) { delete monitors.ai_alert_rules; monitors.ai_alert_rules_json = (raw === '' || (Array.isArray(raw) && !raw.length)) ? '' : JSON.stringify(AVX.validateRules(typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (e) { throw new Error('ai_alert_rules_json is not valid JSON'); } })() : raw)); }
+  if (monitors.ai_sov_set !== undefined && monitors.ai_sov_set !== null) monitors.ai_sov_set = (Array.isArray(monitors.ai_sov_set) ? monitors.ai_sov_set : String(monitors.ai_sov_set).split(/[\n,;]+/)).map(x => String(x).trim()).filter(Boolean)
+    .map(x => /\./.test(x) ? normD(x) : x.slice(0, 60)).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 20).join(', '); }
 return [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, monitors, content_groups_json, business_facts, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];

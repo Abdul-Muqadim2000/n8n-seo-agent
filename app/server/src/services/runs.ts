@@ -1,11 +1,18 @@
 import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
+  aiJoinedOf,
   buildN8nPayload,
   cleanDomain,
   compactBody,
   cycleNorm,
   estimateRunCost,
   estimateRunMinutes,
+  aiRunPanelOfRow,
+  aiOnDemandRunCost,
+  aiPanelQuoteBody,
+  AI_PANEL_VALUE,
+  type AiRunPanel,
+  type MonitorsRow,
   IDEMPOTENCY,
   isCycleRequestId,
   MODES,
@@ -19,6 +26,7 @@ import {
   type ModeId,
   type LadderPrefs,
   type LadderRow,
+  type JoinedRunResult,
   type LadderSettingsRow,
   type Report,
   type ReportFile,
@@ -53,8 +61,30 @@ import { siteAutomation } from './ladders';
  * R100: what the engine will reserve for this request, its own rolling figures (`engineCostTable`), the shipped table only when
  * n8n cannot be read. The budget check holds this number, so it must be the engine's, not a mirror of its defaults.
  */
-export const estimateCost = async (input: RunInput): Promise<number> =>
-  estimateRunCost(input.mode, input as unknown as Record<string, unknown>, (await engineCostTable()).calibration);
+export const estimateCost = async (input: RunInput, site?: Pick<SiteRow, 'domain'> | null): Promise<number> => {
+  const values: Record<string, unknown> = { ...(input as unknown as Record<string, unknown>) };
+  delete values[AI_PANEL_VALUE];   // the panel is the server's to read, never a client's to send
+  // A2 (2026-10-23): an on-demand AI visibility run asks the website's whole panel on every engine, so it is quoted from that panel
+  if (input.mode === 'ai_visibility' && site) {
+    const panel = await aiPanelForQuote(site.domain);
+    if (panel) values[AI_PANEL_VALUE] = panel;
+  }
+  return estimateRunCost(input.mode, values, (await engineCostTable()).calibration);
+};
+
+/**
+ * The website's panel as the engine will ask it (its monitors row: size and engines; no row = the engine's default panel), or null when
+ * the engine cannot be read, in which case the shipped table row stays the quote.
+ */
+export async function aiPanelForQuote(domain: string): Promise<AiRunPanel | null> {
+  try {
+    const rows = await siteRows<MonitorsRow>('monitors', domain, { max: 5 });
+    // W2-FIX (2026-10-23, app review R-A1): size, engines AND the owner's stored options (incl. the buyer roles), shared aiRunPanelOfRow
+    return aiRunPanelOfRow(rows[0] ?? null);
+  } catch {
+    return null;
+  }
+}
 export const etaFor = (input: RunInput): number => estimateRunMinutes(input.mode, input as unknown as Record<string, unknown>);
 
 export function runTitle(input: RunInput, site: SiteRow | null): string {
@@ -212,7 +242,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     const held = site && !manual ? await siteReadiness(site) : null;
     input = { ...input, pagesHeld: manual ? 'manual' : held && !held.ready ? 'profile' : undefined };
   }
-  const estimated = await estimateCost(input);
+  const estimated = await estimateCost(input, site);
   // the website's first tracking, kept on every re-save: the anchor of its weekly cycle (the engine accepts it within the last 6 days)
   const trackingStartedAt = site && input.mode === 'track' ? (site.trackingStartedAt ?? new Date()) : null;
   const body = compactBody(
@@ -220,6 +250,12 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     buildN8nPayload(input, site ? siteContext(site) : null, { callbackUrl: callbackUrl(org), email: config.engineEmails && input.emailCopy ? user.email : '' }),
   );
   if (trackingStartedAt) body.tracking_started_at = trackingStartedAt.toISOString();
+  // W2-FIX (2026-10-23, n8n build_v4.py section 149): an on-demand AI visibility check carries the server's quote of the website's whole panel,
+  // so the engine's front door reserves that figure (never less than its own table row) instead of its flat estimate
+  if (input.mode === 'ai_visibility' && site) {
+    const qp = await aiPanelForQuote(site.domain);
+    if (qp) body.panel_quote = aiPanelQuoteBody(aiOnDemandRunCost(qp), qp.panel);
+  }
   if (input.mode === 'keyword' && input.ladder && site) {
     // the ladder's links and, since P2-7, the word count its verdict set for this page (the engine clamps the brief to `ladder_words`)
     const { links, targetWords, targetUrl } = await ladderLinks(site.domain, input.ladder.id, input.ladder.rung, input.keyword);
@@ -576,9 +612,16 @@ export function runOutcome(
   finalStages: readonly string[],
   stage: string,
   body: Record<string, unknown>,
-): { status?: string; error?: string | null; completedAt?: Date } {
+): { status?: string; error?: string | null; completedAt?: Date; lastStage?: string } {
   if (stage === 'rejected' || String(body.status ?? '').toLowerCase() === 'rejected') {
-    if (runStatus === 'completed') return {};
+    if (runStatus === 'completed' || runStatus === 'joined') return {};
+    // W2-A (WAVE2_CONTRACTS.md §6, engine F2 E17): an on-demand AI check that met the website's open run is part of that run, not a
+    // failure. R-A3 (review 2026-10-23): it is closed in its own state, `joined` (never `failed`, so no `run.failed` reaches a
+    // customer's webhook, Slack, Teams or tracker), with nothing charged (the open run carries its own charge); its result is the open
+    // run's report (runJoinedResult). The sentence stays in `error` for the screens that print it (toRun / toRunV1 say what it is).
+    // The same for a check the engine answers with the week it already stored ('already_measured', engine fix round R-E1).
+    const joined = aiJoinedOf(body);
+    if (joined) return { status: 'joined', error: joined.note, completedAt: new Date(), lastStage: joined.lastStage };
     const why = typeof body.error === 'string' && body.error.trim() ? body.error.trim() : typeof body.validation_error === 'string' && body.validation_error.trim() ? body.validation_error.trim() : 'Rejected by the SEO engine';
     return { status: 'failed', error: why, completedAt: new Date() };
   }
@@ -716,7 +759,9 @@ export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?:
     status: r.status as Run['status'],
     requestId: r.requestId,
     // credits: an engine refusal naming a dollar balance or a provider reads as a capacity limit (the raw text stays in the database)
-    error: customerError(r.error),
+    // R-A3: a joined run did not fail; its sentence is a note, not an error
+    error: r.status === 'joined' ? null : customerError(r.error),
+    note: r.status === 'joined' ? (r.error ?? null) : null,
     credits: extra.credits,
     etaMinutes: r.etaMinutes,
     input: r.input as unknown as RunInput,
@@ -786,6 +831,43 @@ export async function reportsList(orgId: string, opts: { siteId?: string; runId?
     .limit(Math.min(opts.limit ?? 50, 200));
   const fm = await filesFor(rows.map((r) => r.id));
   return rows.map((r) => toReport(r, fm.get(r.id) ?? [], r.domain));
+}
+
+/** The engine's id of the open run a `joined` run was joined to, from the callback that closed it (its stored payload's `open_run`). */
+export function joinedOpenRunOf(payload: Record<string, unknown> | null | undefined): { openRunId: string; expectedFinish: string | null } | null {
+  // the open run (reason 'open_run'), or the run whose stored week answered the check (reason 'already_measured': `stored_week`)
+  const pick = (k: string) => (payload && payload[k] && typeof payload[k] === 'object' ? (payload[k] as Record<string, unknown>) : null);
+  const o = pick('open_run') ?? pick('stored_week');
+  const id = o && typeof o.run_id === 'string' ? o.run_id.trim() : '';
+  if (!id) return null;
+  return { openRunId: id, expectedFinish: typeof o!.expected_finish === 'string' && o!.expected_finish ? o!.expected_finish : null };
+}
+
+/**
+ * R-A3 (review 2026-10-23): what a `joined` run delivered. Its own callback (stage `rejected`, reason `open_run`) names the open run's
+ * engine id; that run's report arrives later on its own request (a schedule's or another caller's), as an `ai_visibility` report of the
+ * same website whose payload carries the same `run_id`. Found at read time, so the joined run shows the report as soon as it exists.
+ */
+export async function runJoinedResult(orgId: string, run: Pick<RunRow, 'id' | 'siteId' | 'status' | 'createdAt'>): Promise<JoinedRunResult | null> {
+  if (run.status !== 'joined') return null;
+  const own = await db.query.reports.findFirst({
+    where: and(eq(schema.reports.orgId, orgId), eq(schema.reports.runId, run.id), eq(schema.reports.stage, 'rejected')),
+    orderBy: desc(schema.reports.receivedAt),
+  });
+  const open = joinedOpenRunOf(own?.payload);
+  if (!open) return null;
+  const rep = run.siteId
+    ? await db.query.reports.findFirst({
+        where: and(
+          eq(schema.reports.orgId, orgId),
+          eq(schema.reports.siteId, run.siteId),
+          eq(schema.reports.stage, 'ai_visibility'),
+          sql`(${schema.reports.payload}->>'run_id' = ${open.openRunId} or ${schema.reports.payload}->'vis_row'->>'run_id' = ${open.openRunId})`,
+        ),
+        orderBy: desc(schema.reports.receivedAt),
+      })
+    : undefined;
+  return { ...open, reportId: rep?.id ?? null, reportTitle: rep?.title ?? null, receivedAt: rep?.receivedAt?.toISOString() ?? null };
 }
 
 /** Latest report of a stage for a site, with its payload (dashboards read the rich weekly reports). */

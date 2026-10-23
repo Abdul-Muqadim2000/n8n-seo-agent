@@ -28,6 +28,11 @@ export * from './queue';
 export * from './report-delivery';
 export * from './ai-visibility';
 export * from './ai-panel';   // G6 (2026-10-18): the AI question panel at scale, the one cost formula (estimateAiPanelCost), mirrored from the engine
+export * from './ai-detail';   // W2-A (2026-10-23): readers of the engine's wave-2 answer and visibility columns (WAVE2_CONTRACTS.md §1-§2)
+export * from './ai-trends';   // W2-A: the page filter, trend lines with breaks, owner alert rules, the open-run note
+export * from './ai-import';   // W2-A: Bing AI Performance / Search Console AI uploads -> seo_ai_imports (§5)
+export * from './ai-export';   // W2-A: the AI page's CSV downloads, the panel import's keyword column (§6)
+export * from './ai-compare';   // F3 (2026-10-23): like-for-like deltas, the engine's separators, pulse sampling (APP_AUDIT.md A1 A4 A7 A8)
 // The setup guides are imported from '@seo/shared/guides', not from here: the catalogue is a sizeable chunk of text and only
 // the help panel (and the recommendation -> guide map) needs it, so it stays out of every bundle that imports this barrel.
 export * from './api-v1';

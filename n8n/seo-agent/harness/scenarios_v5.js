@@ -1082,11 +1082,16 @@ await guard('ai visibility', async () => {
   const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
   const M = require('./fixtures_monitors'); const A9 = require('./fixtures_ai49');
   const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
-  const ANS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls'];
+  const ANS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls', 'named', 'position', 'entities_json',
+    'answer_text', 'cited_json', 'retrieved_json', 'fanout_json', 'products_json', 'ads_json', 'local_json', 'model', 'detail_json'];   // W2-E1 (2026-10-23): + the answer-level data;   // F1a: + named / position / entities_json
   const VIS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompts', 'answers', 'mention_rate', 'citation_rate', 'share_of_voice', 'avg_rank', 'aio_presence', 'aio_citation_rate', 'engines_json', 'competitors_json', 'sources_json', 'pages_json', 'gaps_json', 'market_json', 'market_month', 'cost_usd', 'alerts',
     'run_kind', 'samples', 'visibility_score', 'mention_lo', 'mention_hi', 'sentiment_score', 'accuracy_issues', 'ai_sessions', 'ai_conversions', 'ai_revenue', 'index_sov', 'ai_impressions', 'perception_json', 'traffic_json', 'access_json', 'index_json', 'clusters_json', 'rival_sources_json',
-    'segments_json', 'panel_json', 'chunks'];   // G6 (2026-10-18): the segments, the panel asked, the executions a run took
-  const PRC =['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at', 'persona', 'market', 'pinned', 'fit_note'];   // G6: + persona, market, pinned, fit_note
+    'segments_json', 'panel_json', 'chunks',   // G6 (2026-10-18): the segments, the panel asked, the executions a run took
+    'rule_version', 'named_rate', 'avg_position', 'first_rate', 'pos_visibility', 'rate_period', 'compare_json', 'metrics_json',   // F1b (2026-10-23)
+    'urls_json', 'shopping_json', 'ads_local_json',   // W2-E1 (2026-10-23)
+    'ci_json', 'sov_json', 'sentiment_json', 'impact_json', 'alerts_rules_json', 'units_json',   // W2-E2 (2026-10-23)
+    'imports_json', 'exec_ids', 'notes_json', 'demand_json'];   // W2-E3 (2026-10-23): written with the row (fanout_gap_json is added by AI Extras' update when the option is on)
+  const PRC =['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at', 'persona', 'market', 'pinned', 'fit_note', 'keyword_source'];   // G6: + persona, market, pinned, fit_note; F2 (E9): + keyword_source
   const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note',
     'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];   // v4.10 columns kept by the AI tracker since v4.12; drafted_at since P34-1
   const CACHE = ['key', 'kind', 'site_id', 'value', 'updated_at'];
@@ -1138,15 +1143,15 @@ await guard('ai visibility', async () => {
   const pa = await run('Parse AI Answers', mg1); const AN = pa.map(r => r.json);
   const cg = AN.find(a => a.engine === 'chatgpt' && a.mentioned); const gm = AN.find(a => a.engine === 'gemini' && a.mentioned);
   console.log('   chatgpt answer ->', JSON.stringify({ rank: cg.rank, brands: cg.brands, competitors: cg.competitors.split(', ').slice(0, 5), fanout: cg.fanout }));
-  check('answers: table columns + the answer text for the analyst; database views not stored; one failed request kept as an error', AN.every(a => same2(Object.keys(a), [...ANS, '_text'])) && !AN.some(a => /^(market|index_)/.test(a.engine)) && AN.filter(a => a.error).length === 1 && AN.every(a => a.run_kind === 'full'), JSON.stringify(Object.keys(AN[0])));
-  check('ChatGPT: brand list read (Zoho Books named without a website counts as a business), fan-out searches kept', /Zoho Books/.test(cg.competitors) && /Northwind ERP/.test(cg.brands) && cg.fanout.length > 0, JSON.stringify(cg));
+  check('answers: table columns + the answer text for the analyst; database views not stored; one failed request kept as an error', AN.every(a => same2(Object.keys(a), [...ANS, 'entities', '_text'])) && !AN.some(a => /^(market|index_)/.test(a.engine)) && AN.filter(a => a.error).length === 1 && AN.every(a => a.run_kind === 'full'), JSON.stringify(Object.keys(AN[0])));
+  check('ChatGPT: brand list read (Zoho Books, named without a website, is Zoho: one business, zoho.com - F1a), fan-out searches kept', /zoho\.com/.test(cg.competitors) && /Zoho Books/.test(cg.brands) && /Northwind ERP/.test(cg.brands) && cg.fanout.length > 0, JSON.stringify(cg));
   check('Gemini scraper: named, cited, sources from the real interface (ministry, competitor)', gm && gm.cited && /mof\.gov\.ae/.test(gm.sources) && /azentio\.com/.test(gm.competitors) && gm.rank === 3, JSON.stringify(gm));
   const aj = await run('Analyst Jobs', pa); const AJ = aj.map(x => x.json);
   check('Answer Analyst jobs: answers naming the business first, then recommendation answers; at most 12 per job; business facts given', AJ.length >= 2 && AJ.every(j => j.ids.length <= 12) && /City: Dubai/.test(AJ[0].facts) && /Phone: \+971/.test(AJ[0].facts) && /northwind/i.test(AJ[0].answers.slice(0, 2000)), JSON.stringify(AJ.map(j => j.ids.length)));
   mock('Answer Analyst', AJ.map(j => ({ json: A9.analystFor(j) })));
   const aa = await run('Apply Analysis', store['Answer Analyst']); const AA = aa.map(x => x.json);
   const ca = AA.find(a => a.engine === 'chatgpt' && a.mentioned);
-  check('analysis applied: exact columns (no answer text), position from the brand list, sentiment, wrong claim, brands without a website kept', AA.every(a => same2(Object.keys(a), ANS)) && ca.rank === 2 && ca.sentiment === 'positive' && AA.some(a => /Abu Dhabi → Dubai/.test(a.issues)) && /Zoho Books/.test(ca.competitors) && /edicomgroup\.com/.test(ca.competitors) && AA.filter(a => !a.mentioned).every(a => !a.sentiment), JSON.stringify(ca));
+  check('analysis applied: exact columns (no answer text), position from the brand list, sentiment, wrong claim, brands without a website kept', AA.every(a => same2(Object.keys(a), ANS)) && ca.rank === 2 && ca.position === 2 && ca.named === true && ca.sentiment === 'positive' && AA.some(a => /Abu Dhabi → Dubai/.test(a.issues)) && /zoho\.com/.test(ca.competitors) && /edicomgroup\.com/.test(ca.competitors) && AA.filter(a => !a.mentioned).every(a => !a.sentiment), JSON.stringify(ca));
   mock('Save AI Answers', aa);
   const mt = await run('AI Metrics', store['Save AI Answers']); const X = mt[0].json; const XM = X.metrics;
   console.log('   metrics ->', JSON.stringify({ samples: XM.samples, mention: XM.mention_rate, ci: XM.mention_ci, vis: XM.visibility_score, sov: XM.share_of_voice, sent: XM.sentiment_score, issues: XM.accuracy_issues, index_sov: XM.index_sov }));
@@ -1173,12 +1178,12 @@ await guard('ai visibility', async () => {
   const vr = await run('AI Vis Rows', mt);
   check('visibility row: exact columns, revenue fields, run kind', same2(Object.keys(vr[0].json), VIS) && vr[0].json.ai_sessions === 163 && vr[0].json.ai_conversions === 12 && vr[0].json.run_kind === 'full' && vr[0].json.mention_lo != null && vr[0].json.samples === XM.samples, JSON.stringify(Object.keys(vr[0].json).filter(k => !VIS.includes(k))));
   const ap = await run('AI Prospect Rows', vr); check('ai_source prospects: exact columns', same2(Object.keys(ap[0].json), PROS), ap[0].json.prospect_domain);
-  const cr = await run('AI Cache Rows', ap); check('cache rows node', cr.length === 2 && cr[0].json.key === 'ai_brands:' + M.SITE && cr[1].json.key === 'ai_run:' + M.SITE, JSON.stringify(cr.map(x => x.json.key)));
+  const cr = await run('AI Cache Rows', ap); check('cache rows node (F1a: + the entities this run met, with their roles)', cr.length === 3 && cr[0].json.key === 'ai_brands:' + M.SITE && cr[1].json.key === 'ai_run:' + M.SITE && cr[2].json.key === 'ai_entities:' + M.SITE && cr.every(x => same2(Object.keys(x.json), CACHE)), JSON.stringify(cr.map(x => x.json.key)));
   const bi = await run('AI Brief Input', cr); const facts = JSON.parse(bi[0].json.facts);
   check('brief facts: range, significance note, revenue, access, index, perception', facts.numbers.range_95 && facts.ai_referral_traffic.last_28_days.visits === 163 && facts.crawler_access.issues.length && facts.market_wide_index.your_share_pct != null && facts.perception.wrong_claims.length === 1, bi[0].json.facts.slice(0, 300));
   mock('AI Brief', [{ json: { output: { headline: 'ChatGPT, Gemini and Claude name Northwind ERP for the recommendation questions; PerplexityBot is blocked', summary: 'You appear in ...', actions: [{ priority: 1, action: 'Allow PerplexityBot in Cloudflare', why: 'challenge' }], watch: ['Gemini'] } } }]);
   const rp = await run('AI Report', store['AI Brief']); const html = rp[0].json.html; save('ai-visibility-report.html', html); const defects = scanHtml('ai visibility report', html);
-  check('report: clean HTML with the new sections', !defects.length && ['What AI visits are worth', 'How AI describes you', 'What AI gets wrong', 'Can AI read your site?', 'By buyer stage', 'Market-wide', 'What AI searched', 'Questions worth tracking', '95% range'].every(t => html.includes(t)), defects.join(', '));
+  check('report: clean HTML with the new sections', !defects.length && ['What AI visits are worth', 'How AI describes you', 'What AI gets wrong', 'Can AI read your site?', 'By buyer stage', 'Share among tracked rivals', 'AI-answer database: you and your tracked rivals', 'What AI searched', 'Questions worth tracking', '95% range'].every(t => html.includes(t)), defects.join(', '));
   mock('Render PDF AI', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
   await run('Prepare PDF AI', rp); const att = await run('Attach PDF AI', store['Render PDF AI']); const cb = await run('Build AI Callback', att);
   check('callback: stage ai_visibility, PDF, no internal rows / samples / learned names', cb[0].json.stage === 'ai_visibility' && cb[0].json.pdf && !cb[0].json.html && !cb[0].json.cache_rows && !cb[0].json.pulse_rows && !cb[0].json.vis_row && cb[0].json.traffic && cb[0].json.access && cb[0].json.index, Object.keys(cb[0].json).join(','));
@@ -1186,7 +1191,10 @@ await guard('ai visibility', async () => {
   const before = new Date(Date.now() - 2 * 3600e3).toISOString();
   const vis1 = [{ json: { ...vr[0].json, checked_at: before } }];
   const daily = [1, 2, 3, 4, 5, 6].map(k => A9.dailyRow('2026-10-0' + k, { mentioned: 11, samples: 18 })).map((d, k) => ({ json: { ...d.json, checked_at: new Date(Date.now() - (90 - k * 10) * 60e3).toISOString() } }));
-  loadAll({ prompts: A9.promptRows(pr), vis: vis1, prospects: ap, cache: cr, daily });
+  // R-E1 (2026-10-23): week 1's `done` state is a week old by now (a run that finished minutes ago answers a non-cycle start with its stored week)
+  const wk = new Date(Date.now() - 7 * 864e5).toISOString();
+  const crWeek = cr.map(x => x.json.key === 'ai_run:' + M.SITE ? { json: { ...x.json, value: JSON.stringify({ ...JSON.parse(x.json.value), started_at: wk, updated_at: wk, finished_at: wk }) } } : x);
+  loadAll({ prompts: A9.promptRows(pr), vis: vis1, prospects: ap, cache: crWeek, daily });
   const plan2 = await run('AI Plan', store['Load Query History']); const P2 = plan2[0].json;
   check('week 2: weekly run, no top-up, pulse samples since last week joined, learned names loaded, no discovery / index / market', P2.run_kind === 'weekly' && !P2.need_prompts && P2.pulse_rows.length === 6 && P2.aliases['Azentio Software'] === 'azentio.com' && !P2.discovery_due && !P2.index_due && !P2.market_due && P2.volume_keywords.length === 0 && P2.previous.samples === XM.samples, JSON.stringify({ kind: P2.run_kind, pulse: P2.pulse_rows.length, need: P2.need_prompts, vk: P2.volume_keywords }));
   await run('Site Text Jobs', plan2); const dq2 = await run('Discovery Requests', plan2); check('week 2: nothing to discover', dq2[0].json.skip === true, JSON.stringify(dq2[0].json));
@@ -2255,8 +2263,10 @@ await guard('ai pulse', async () => {
   const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
   const M = require('./fixtures_monitors'); const A9 = require('./fixtures_ai49');
   const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
-  const ANS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls'];
-  const DAILY = ['site_id', 'domain', 'date', 'checked_at', 'run_id', 'samples', 'mentioned', 'cited', 'mention_rate', 'citation_rate', 'share_of_voice', 'visibility_score', 'engines_json', 'prompts_json', 'competitors_json', 'sources_json', 'alerts', 'cost_usd', 'sample_json'];   // G6: + the morning's sample
+  const ANS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls', 'named', 'position', 'entities_json',
+    'answer_text', 'cited_json', 'retrieved_json', 'fanout_json', 'products_json', 'ads_json', 'local_json', 'model', 'detail_json'];   // W2-E1 (2026-10-23): + the answer-level data;   // F1a / F1b (2026-10-23)
+  const DAILY = ['site_id', 'domain', 'date', 'checked_at', 'run_id', 'samples', 'mentioned', 'cited', 'mention_rate', 'citation_rate', 'share_of_voice', 'visibility_score', 'engines_json', 'prompts_json', 'competitors_json', 'sources_json', 'alerts', 'cost_usd', 'sample_json',   // G6: + the morning's sample
+    'rule_version', 'sample_mode', 'questions_asked', 'engines_answered', 'partial', 'avg_position', 'detail_json', 'readable_json'];   // F1b (2026-10-23)
   const PN = { code: 'Pulse__AI_Plan' }, PR = { code: 'Pulse__AI_Requests' }, PP = { code: 'Pulse__Parse_AI_Answers' }, PM = { code: 'Pulse__Pulse_Metrics' };
   const qs = [['Which companies help UAE businesses with e-invoicing before 2027?', 'recommend'], ['How much does e-invoicing cost for a UAE distributor?', 'cost'], ['What should I check before choosing an e-invoicing provider in the UAE?', 'choose'], ['Odoo or Business Central for UAE e-invoicing?', 'compare'],
     ['What happens if my UAE company misses the e-invoicing deadline?', 'problem'], ['Who are the best ERP partners in Dubai for distributors?', 'recommend'], ['Which UAE firms connect an ERP to the Peppol network?', 'recommend'], ['What is Northwind ERP and what does it offer?', 'brand']];
@@ -4928,7 +4938,10 @@ await guard('retries, AI data, sister domains and the fact base', async () => {
   check('G1: every external HTTP node of every generated workflow retries 3 times, 5 s apart (the rule lives in retry_lint.py and is set in every builder)', Object.keys(RW.workflows).length >= 19 && !broken.length && RW.rule.maxTries === 3 && RW.rule.waitBetweenTries === 5000, broken.join(' | '));
   check('G1 / D23: the Ahrefs DR lookup is retried after a network error (one EAI_AGAIN lost it live), and so are the free sources, Bing, the linking pages and the PDF renderer', ['Fetch DR', 'Fetch Sources', 'Fetch Bing', 'Fetch Linking Pages', 'Fetch Contacts', 'Render PDF BL'].every(nm => keepsRule(httpNode('SEO Agent — Backlink Monitor', nm))), JSON.stringify(['Fetch DR', 'Fetch Sources', 'Fetch Bing', 'Fetch Linking Pages', 'Fetch Contacts', 'Render PDF BL'].map(nm => nm + ':' + JSON.stringify(httpNode('SEO Agent — Backlink Monitor', nm)))));
   check('G1: the nodes inherited from v3 keep the same rule (the DataForSEO reads, PageSpeed, RDAP, the probes, the Gotenberg renders)', ['Keyword Data', 'Find Competitors', 'PageSpeed', 'RDAP Lookup', 'Run Probes', 'Render PDF Report', 'Read Website', 'SERP Top 10 (Retry)'].every(nm => { const x = httpNode('SEO Agent v4', nm); return x && (x.per_item ? perItemOk(x) : keepsRule(x)); }), JSON.stringify(['Keyword Data', 'PageSpeed', 'RDAP Lookup', 'SERP Top 10 (Retry)'].map(nm => nm + ':' + JSON.stringify(httpNode('SEO Agent v4', nm)))));
-  check('G1: the allow-list holds only what is not idempotent — the report callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 12 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft') && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false, JSON.stringify(Object.keys(RW.allow)));
+  // R-E14 (2026-10-23): + the AI tracker's three notice callbacks (a `rejected` answer that closes the caller's request), at one try like every report callback
+  const NOTICES = ['Post Open Run Notices', 'Post Busy Notices', 'Post Stop Notices'];
+  check('G1: the allow-list holds only what is not idempotent — the report callbacks, the AI tracker\'s notice callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 16 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft' || NOTICES.includes(k)) && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false
+    && NOTICES.every(nm => { const x = httpNode('SEO Agent — AI Visibility Tracker', nm); return x && !x.retryOnFail; }), JSON.stringify(Object.keys(RW.allow)) + ' ' + JSON.stringify(NOTICES.map(nm => httpNode('SEO Agent — AI Visibility Tracker', nm))));
   check('G1: the lint bites — it flags an HTTP node with no retry and one with a weaker retry, honours its allow-list and leaves other node types alone (self-test run by build_v4.py section 37)', RW.selftest.flags_node_without_retry === true && RW.selftest.flags_weaker_retry === true && RW.selftest.honours_allow_list === true && RW.selftest.ignores_other_nodes === true, JSON.stringify(RW.selftest));
   const GATE = ['Run AI Requests', 'AI Retry Requests', 'Any AI Retries?', 'Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers', 'Parse AI Answers'];
   // B-A10 (2026-10-15): a workflow records as many gate chains as it has DataForSEO calls now (the AI Visibility Tracker also
@@ -4981,7 +4994,7 @@ await guard('retries, AI data, sister domains and the fact base', async () => {
   const one = (await run('Parse AI Answers', [{ json: chat() }]))[0].json;
   const cited = JSON.parse(one.cited_urls || '[]');
   console.log('   brands ->', one.brands, '| competitors ->', one.competitors, '| cited ->', JSON.stringify(cited));
-  check('D19: the heading ChatGPT returns in its own brand list is not a business ("Tax technology and e-invoicing software", "Best e-invoicing providers…", "ERP software"), while Zoho Books and the learned Azentio Software are', !/Tax technology|Best e-invoicing|ERP software/i.test(one.competitors + ' ' + one.brands) && /Zoho Books/.test(one.competitors) && /azentio\.com/.test(one.competitors) && /cleartax\.com/.test(one.competitors), JSON.stringify({ b: one.brands, c: one.competitors }));
+  check('D19: the heading ChatGPT returns in its own brand list is not a business ("Tax technology and e-invoicing software", "Best e-invoicing providers…", "ERP software"), while Zoho Books and the learned Azentio Software are', !/Tax technology|Best e-invoicing|ERP software/i.test(one.competitors + ' ' + one.brands) && /zoho\.com/.test(one.competitors) && /Zoho Books/.test(one.brands) && /azentio\.com/.test(one.competitors) && /cleartax\.com/.test(one.competitors), JSON.stringify({ b: one.brands, c: one.competitors }));
   check('D19: the www address with a tracking parameter and a #:~:text= highlight and the bare address are one cited page, and the tracking parameter is gone from what we store', cited.filter(c => /gulfnews\.com/.test(c.u)).length === 1 && cited.some(c => c.u === PAGE) && !/utm_|srsltid|#/.test(one.cited_urls) && !/utm_|srsltid/.test(one.our_urls + one.sources), JSON.stringify(cited));
   check('G22: the full source title survives, while a one-letter fragment of a title is dropped instead of being kept as "E"', cited.find(c => c.u === PAGE).t === 'Best e-invoicing providers in the UAE for 2026' && !cited.some(c => c.t === 'E' || c.t === 'Best e'), JSON.stringify(cited.map(c => c.t)));
 
@@ -9618,7 +9631,7 @@ await guard('R17 R28 R29 ledger order, money and secrets', async () => {
     JSON.stringify(LW.assess.settle_values));
 
   // ---------- 4. R17: what the build proved about every scheduled workflow ----------
-  const MON = Object.keys(LO.monitors).sort();
+  const MON = Object.keys(LO.monitors).filter(w => !/AI Repeat Pilot/.test(w)).sort();   // W2-E2 (2026-10-23): the AI Repeat Pilot keeps a ledger row too, but it is on demand only (never scheduled) - its own scenario W2E2-PILOT
   // R32 (2026-10-14, section 59): Page Watch joined them — free today (25 plain GETs), and the one workflow the guard and the day's
   // reconciliation could not see at all.
   check('R17: all ten scheduled workflows are covered — the AI Visibility Tracker, the AI Pulse, AI Growth, the Backlink Monitor, the Audit Scheduler, the Link Builder, the Rank Tracker, the Site Tracker, the Content Cadence and Page Watch',
@@ -10099,14 +10112,14 @@ await guard('R31 R32 R33 the money a run reports is the money that happened', as
     mixedRow.est_usd === 0.05 && mixedRow.dfs_est_usd === 0.05 && /1 free-only site\(s\)/.test(mixedRow.cost_basis), JSON.stringify(mixedRow));
 
   // ---------- 4. what the build proved about the schedules (the three "also seen" items of the live check) ----------
-  const MON69 = Object.keys(CT.monitors).filter(w => !/Reply Reader/.test(w)).sort();   // W3-F: the Reply Reader calls no DataForSEO, so its two balance probes are no-ops (own scenario S177)
+  const MON69 = Object.keys(CT.monitors).filter(w => !/Reply Reader|AI Repeat Pilot/.test(w)).sort();   // W2-E2: the on-demand pilot is not a schedule   // W3-F: the Reply Reader calls no DataForSEO, so its two balance probes are no-ops (own scenario S177)
   check('R32: all ten scheduled workflows take the free `appendix/user_data` reading on their own ledger chain — until now only main-workflow runs did, so the monitors (where most of the DataForSEO money goes) reconciled against nothing',
     MON69.length === 10 && MON69.every(w => CT.monitors[w].balance === 'DFS Balance (' + CT.monitors[w].tag + ')'),
     JSON.stringify(MON69.map(w => CT.monitors[w].balance)));
   check('R31: every one of them settles through the shared cost kit and knows its own Claude nodes (eight across the ten workflows)',
     MON69.every(w => Array.isArray(CT.monitors[w].ai_nodes))
-    && MON69.reduce((s, w) => s + CT.monitors[w].ai_nodes.length, 0) === 8
-    && eq(CT.monitors['SEO Agent — AI Visibility Tracker'].ai_nodes, ['AI Brief', 'Answer Analyst', 'Prompt Writer']),
+    && MON69.reduce((s, w) => s + CT.monitors[w].ai_nodes.length, 0) === 9   // W2-E2 (2026-10-23): + the Sentiment Reader
+    && eq(CT.monitors['SEO Agent — AI Visibility Tracker'].ai_nodes, ['AI Brief', 'Answer Analyst', 'Prompt Writer', 'Sentiment Reader']),
     JSON.stringify(MON69.map(w => [w, CT.monitors[w].ai_nodes])));
   check('R31: no branch of a scheduled run can finish without settling its row any more — every "Nothing To Do" end feeds the settle, so a row left `reserved` means a run that crashed, which is what Release Stale Runs is for',
     eq(CT.open_ends, []) && MON69.every(w => CT.monitors[w].settle_from.length >= 1)
@@ -10745,7 +10758,7 @@ await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrenc
     && first74.next_attempt_at > new Date().toISOString() && eq(Object.keys(first74), TC74.OPS_ALERTS), JSON.stringify(Object.keys(first74)));
 
   // ---------- 8. the wiring: every scheduled workflow sweeps, and the Page Watch records its own delivery ----------
-  const MON74 = Object.keys(WIRE74.monitors).sort();
+  const MON74 = Object.keys(WIRE74.monitors).filter(w => !/AI Repeat Pilot/.test(w)).sort();   // W2-E2 (2026-10-23): the AI Repeat Pilot keeps a ledger row too, but it is on demand only (never scheduled) - its own scenario W2E2-PILOT
   check('B-A7: all ten scheduled workflows end by sweeping the alerts nobody has — that is the retry\'s schedule: Page Watch daily at 05:45, the AI Pulse daily at 06:30, the weekly jobs and the monthly audit in each website\'s own cycle (2026-10-19; it was six on Monday morning and the audit on the 1st)',
     MON74.length === 11 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch', 'Reply Reader']   // W3-F
       .every(n => MON74.some(m => m.endsWith(n))), JSON.stringify(MON74));
@@ -12429,11 +12442,11 @@ await guard('B-A10 — a failure inside an HTTP 200 is asked again once, counted
     deadCrawl[0].json.is_retry === true && deadCrawl[0].json.retry_of === 0, JSON.stringify(deadCrawl[0].json));
 
   // ---------- 5. the ratchet: every DataForSEO call in every workflow is gated, or excused IN WRITING ----------
-  const wfs = Object.keys(IN200);
+  const wfs = Object.keys(IN200);   // W2-E2 (2026-10-23): 13 with the AI Repeat Pilot (its AI requests behind the same retry gate)
   const totals = wfs.reduce((a, w) => ({ gated: a.gated + IN200[w].gated.length, ungated: a.ungated + IN200[w].ungated.length }), { gated: 0, ungated: 0 });
   console.log('   in-200 ratchet ->', wfs.length, 'workflows,', totals.gated, 'gated,', totals.ungated, 'on the ratchet');
   check('B-A10: the ratchet covers all twelve workflows that call DataForSEO, not the main one alone — that hole is how ten `DFS Balance End` nodes had slipped in ungated and unmeasured',
-    wfs.length === 12 && totals.gated >= 70, JSON.stringify({ workflows: wfs.length, ...totals }));
+    wfs.length === 13 && totals.gated >= 70, JSON.stringify({ workflows: wfs.length, ...totals }));
   check('B-A10: not one node is left on the ratchet without a reason written beside it — an excused node is a decision, and a decision with no reason cannot be told from a debt nobody got to',
     wfs.every(w => IN200[w].ungated.every(n => String((IN200[w].excused || {})[n] || '').length > 80)),
     JSON.stringify(wfs.flatMap(w => IN200[w].ungated.filter(n => !(IN200[w].excused || {})[n]).map(n => w + ' / ' + n))));
@@ -12626,7 +12639,7 @@ await guard('B-F1 the Sonnet half, and B-A11 three nodes that advised from what 
   const gapRows = Object.entries(CC86).filter(([, r]) => !r.counted);
   // R82 (2026-10-16, agent A9, build section 104): Site Brief is counted now — nineteen counted, three left (the Reply Reader, the Keyword Check's two)
   check('B-F1 / B-C2 / R82: every Claude agent in every generated workflow is either counted on its main path or carries the reason it is not — eleven were counted here, seven more by B-C2, Site Brief by R82, the Reply Reader by W3-F, two are left',
-    Object.keys(CC86).length === 22 && Object.values(CC86).filter(r => r.counted).length === 20
+    Object.keys(CC86).length === 23 && Object.values(CC86).filter(r => r.counted).length === 21   // W2-E2 (2026-10-23): + the Sentiment Reader, counted on its main path
     && gapRows.length === 2 && gapRows.every(([, r]) => /^NOT counted/.test(r.why_not) && /Proved by _b84_checks/.test(r.why_not)),
     JSON.stringify({ total: Object.keys(CC86).length, counted: Object.values(CC86).filter(r => r.counted).length, gap: gapRows.map(([k]) => k) }));
   check('B-F1: and nothing in the main workflow — the one this pass covered — was left behind',
@@ -13291,7 +13304,9 @@ await guard('AI visibility — every change tested (B8)', async () => {
     discovery_due: false, volume_keywords: [], index_due: false, market_due: false, market_keyword: 'e invoicing', ga4_property_id: '', pulse_rows: (o && o.pulse_rows) || [], key_paths: [], set_aside: [], set_aside_note: '',
     previous: (o && o.previous !== undefined) ? o.previous : { checked_at: '2026-10-06T07:00:00.000Z', mention_rate: 48, samples: 40, mentioned_k: 19, prompts: 11, run_kind: 'weekly',
       citation_rate: 18, share_of_voice: 40, avg_rank: 1, visibility_score: 41, sentiment_score: null, engines: engObj(10), market_month: '', market: null, index: null, perception: null, traffic: null, access: null,
-      competitors: [{ domain: 'rival.com', mentions: 28, share: 60 }] },
+      competitors: [{ domain: 'rival.com', mentions: 28, share: 60 }],
+      // F1b (2026-10-23, E19): the stored counts of that run (metrics_json): share of voice and the score are tested on their standard errors over answers
+      stats: { v: 1, rule_version: 'aivis-2026-10-23', named: { k: 19, n: 40 }, cited: { k: 7, n: 40 }, sov: { rate: 34, se: 4, n: 40, self: 19, mentions: 56 }, score: { score: 41, half: 8, n: 40 } } },
     run_id: 'ai_s91', checked_at: NOW } }];
   const drive = async (o) => { reset(); mock('AI Plan', plan(o)); mock('Apply Analysis', (o && o.rows) || answers(20, 8));
     mock('AI Requests', (o && o.requests) || [{ json: { site_id: SID, engine: 'chatgpt' } }]); mock('Run AI Requests', [{ json: {} }]);
@@ -13304,7 +13319,9 @@ await guard('AI visibility — every change tested (B8)', async () => {
   console.log('   tests ->', JSON.stringify(Object.fromEntries(Object.entries(T1 || {}).map(([k, v]) => [k, v.significant + ' | ' + String(v.why).slice(0, 70)]))));
   check('B8-1: all FOUR headline figures carry a test, not just "named in" — each with its verdict and the words for why', T1 && ['mention_rate', 'citation_rate', 'share_of_voice', 'visibility_score'].every(k => T1[k] && 'significant' in T1[k] && T1[k].why && T1[k].basis), JSON.stringify(T1));
   check('B8-1: a 2-point move on 41 answers is within sampling noise on every one of them, and the z it was judged on is kept', T1.mention_rate.significant === false && T1.citation_rate.significant === false && T1.share_of_voice.significant === false && typeof T1.mention_rate.z === 'number' && /within sampling noise/.test(T1.mention_rate.why), JSON.stringify({ m: T1.mention_rate, c: T1.citation_rate }));
-  check('B8-1: the share of voice is tested on ITS own denominator (yours plus the competitors\' mentions), not on the answer count', T1.share_of_voice.samples === XM.sov_denominator && XM.sov_denominator !== XM.samples, JSON.stringify({ sov_n: T1.share_of_voice.samples, denom: XM.sov_denominator, samples: XM.samples }));
+  // F1b (2026-10-23, E19): the share of voice is a ratio over ANSWERS - one answer naming you and a rival is one observation, not two
+  // trials. It is tested on the 41 answers that named anybody, never as if each of the 61 mentions were independent.
+  check('B8-1 / E19: the share of voice is tested over the answers that named anybody (41), not as if each of the 61 mentions were a trial', T1.share_of_voice.samples === XM.sov_answers && XM.sov_answers === 41 && XM.sov_denominator === 61 && T1.share_of_voice.z != null, JSON.stringify({ sov_n: T1.share_of_voice.samples, answers: XM.sov_answers, denom: XM.sov_denominator, t: T1.share_of_voice }));
   check('B8-1: the two tiles that had no interval at all now have one, inside which their own rate sits', XM.citation_ci[0] <= XM.citation_rate && XM.citation_rate <= XM.citation_ci[1] && XM.sov_ci[0] <= XM.share_of_voice && XM.share_of_voice <= XM.sov_ci[1], JSON.stringify({ cci: XM.citation_ci, rate: XM.citation_rate, sci: XM.sov_ci, sov: XM.share_of_voice }));
   check('B8-1: the visibility score is a weighted mean, so it is MODELLED with a 95% band over an effective sample — never a Wilson range', XM.score_band.basis === 'modelled' && XM.score_band.half > 0 && XM.score_band.n_eff > 0 && XM.score_band.n_eff <= XM.score_band.n && T1.visibility_score.basis === 'modelled' && /band/.test(T1.visibility_score.why), JSON.stringify(XM.score_band));
   check('B8-1: a competitor "gaining 10+ points" is z-tested too — the old fixed rule raised it beside a change that had been tested', !X.alerts.some(a => /gained .* points of AI share/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text.slice(0, 70))));
@@ -13931,6 +13948,7 @@ await guard('B-C2 a monitor settles what it measured, not what it reserved', asy
   const TOK94 = {
     'Prompt Writer': { in: [5200, 4700], out: [1400, 1250] },
     'Answer Analyst': { in: [9100, 8600], out: [1900, 1700] },
+    'Sentiment Reader': { in: [5600, 5100], out: [1300, 1150] },   // W2-E2 (2026-10-23)
     'AI Brief': { in: [3400, 3100], out: [1100, 980] },
     'Link Analyst': { in: [4200, 3800], out: [900, 800] },
     'Outreach Writer': { in: [3600, 3300], out: [1500, 1350] },
@@ -13997,8 +14015,9 @@ await guard('B-C2 a monitor settles what it measured, not what it reserved', asy
       JSON.stringify({ measured: after.ai_measured_usd, think: after.ai_think_usd, usd: after.ai_usd }));
   }
   check('B-C2: all SEVEN agents of the six scheduled workflows go from 0% measured to the majority of their money measured — and none of them reaches 100%, because every one is a Sonnet node with a thinking budget no counter can see',
-    Object.keys(shares94).length === 7 && Object.keys(TOK94).length === 7
-    && Object.values(shares94).every(([b, a]) => b === 0 && a > 50 && a < 100)
+    // W2-E2 (2026-10-23): + the Sentiment Reader, a Haiku node with no thinking budget - every token of it is counted, so it reaches 100%
+    Object.keys(shares94).length === 8 && Object.keys(TOK94).length === 8
+    && Object.entries(shares94).every(([k, [b, a]]) => b === 0 && a > 50 && (k === 'Sentiment Reader' ? a === 100 : a < 100))
     && new Set(Object.values(shares94).map(([, a]) => a)).size >= 5, JSON.stringify(shares94));
 
   // ---------- 2. the arithmetic: two sites, two counts, summed — and a run whose counts are a model of nothing ----------
@@ -14075,7 +14094,7 @@ await guard('B-C2 a monitor settles what it measured, not what it reserved', asy
   console.log('   still on the reservation ->', JSON.stringify(gap94.map(([k]) => k)));
   // R82 (2026-10-16, agent A9): Site Brief left this list — nineteen counted, three left in two workflows, each workflow with its own reason
   check('B-C2 / R82: nineteen of the engine\'s twenty-two Claude agents are counted; the three that are not are named, and the two workflows they sit in give different reasons',
-    Object.values(CC94).filter(r => r.counted).length === 20 && gap94.length === 2   // W3-F: the Reply Reader is counted - only the Keyword Check's two are left
+    Object.values(CC94).filter(r => r.counted).length === 21 && gap94.length === 2   // W2-E2: + the Sentiment Reader. W3-F: the Reply Reader is counted - only the Keyword Check's two are left
     && new Set(gap94.map(([k]) => k.split(' / ')[0])).size === 1
     && new Set(gap94.map(([, r]) => r.why_not)).size === 1, JSON.stringify(gap94.map(([k, r]) => [k, r.why_not.slice(0, 40)])));
   check('B-C2 / W3-F: the Reply Reader left the gap - it has a run-ledger row to count into, and its Haiku call is counted on the main path',
@@ -15978,7 +15997,7 @@ await guard('S115 R116 R96 — a refused on-demand monitor tells its caller, and
     sched.run_refused === true && quiet.skip === true, JSON.stringify(quiet));
   // ---------- the wiring of all ten: the refusal ends at its own callback, never at the balance read or the settle ----------
   const W = require('./alert_retry_wiring.json');
-  const MON = Object.keys(W.monitors).filter(w => !/Reply Reader/.test(w)).sort();   // W3-F: the Reply Reader's gate is off (a caller is waiting) - own scenario S177
+  const MON = Object.keys(W.monitors).filter(w => !/Reply Reader|AI Repeat Pilot/.test(w)).sort();   // W2-E2: the on-demand pilot has its own scenario. W3-F: the Reply Reader's gate is off (a caller is waiting) - own scenario S177
   const bad = MON.filter(w => { const g = W.monitors[w].guard || {}; const p = g.refusal_path;
     return !Array.isArray(p) || !p.includes(g.notice) || !p.includes(g.post) || p.some(n => /^DFS Balance|^Load Run Ledger|^Ledger Settle|^Settle Run Ledger|^Ensure Ops Alerts/.test(n)) || g.post_max_tries !== 3; });
   console.log('   refusal path (BL) ->', JSON.stringify((W.monitors['SEO Agent — Backlink Monitor'].guard || {}).refusal_path));
@@ -18462,7 +18481,7 @@ await guard('S163 B8-8 a per-engine change is tested on that engine\'s own sampl
   console.log('   alerts ->', JSON.stringify(X.alerts.map(a => a.text.slice(0, 110))));
   check('B8-8: 2 citations in 6 Gemini answers, then none in 10, raises NO alert - it is not evidence Gemini stopped citing you', !X.alerts.some(a => /^Gemini/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text)));
   check('B8-8: instead Gemini is marked untested with "too few answers from this engine to tell" and both sample sizes', EC.gemini && EC.gemini.tested === false && /too few answers from this engine to tell/.test(EC.gemini.why) && EC.gemini.samples === 10 && EC.gemini.samples_before === 6, JSON.stringify(EC.gemini));
-  check('B8-8: ChatGPT (15 of 30 before, 0 of 30 now) is tested on its own 30 + 30 answers and IS called a real drop', EC.chatgpt && EC.chatgpt.tested === true && EC.chatgpt.samples === 30 && EC.chatgpt.samples_before === 30 && EC.chatgpt.z < -4 && X.alerts.some(a => /^ChatGPT no longer cites any of your pages/.test(a.text) && /0 of 30/.test(a.text) && /15 of 30/.test(a.text)), JSON.stringify({ c: EC.chatgpt, a: X.alerts.map(a => a.text) }));
+  check('B8-8: ChatGPT (15 of 30 before, 0 of 30 now) is tested on its own 30 + 30 answers and IS called a real drop', EC.chatgpt && EC.chatgpt.tested === true && EC.chatgpt.samples === 30 && EC.chatgpt.samples_before === 30 && EC.chatgpt.z_unclustered < -4 && EC.chatgpt.deff > 1 && EC.chatgpt.z <= -1.96 && X.alerts.some(a => /^ChatGPT no longer cites any of your pages/.test(a.text) && /0 of 30/.test(a.text) && /15 of 30/.test(a.text)), JSON.stringify({ c: EC.chatgpt, a: X.alerts.map(a => a.text) }));
   check('B8-8: an engine that never cited the site has nothing to lose and is not tested at all', !EC.ai_mode || EC.ai_mode.tested !== true, JSON.stringify(EC.ai_mode));
   const R = await W3E.rep(X);
   const be = R.html.indexOf('By engine');
@@ -18478,7 +18497,12 @@ await guard('S164 B8-9 the tested alerts of one run share one Holm correction', 
   console.log('   family ->', JSON.stringify({ method: MT.method, m: MT.tests, alpha: MT.alpha, thr: MT.threshold_p, z: MT.threshold_z, res: (MT.results || []).map(r => [r.id, r.p, r.threshold_p, r.reject]) }));
   console.log('   alerts ->', JSON.stringify(X.alerts.map(a => a.text.slice(0, 110))));
   check('B8-9: the family is the three tested alerts of this run (the mention drop and the two engine drops), corrected by Holm at 5% family-wise', MT.method === 'holm' && MT.tests === 3 && MT.alpha === 0.05 && (MT.results || []).length === 3, JSON.stringify(MT));
-  check('B8-9: each of them clears 95% on its own - that is why a quiet week used to raise them', X.metrics.tests && X.metrics.tests.mention_rate.z <= -1.96 && (MT.results || []).length === 3 && (MT.results || []).every(r => r.p < 0.05), JSON.stringify((MT.results || []).map(r => r.p)));
+  // W2-E2 (2026-10-23): the mention test now counts answers to one question as one cluster; on this fixture's clustered answers it is p 0.16 on its
+  // own (z_unclustered keeps the old independent-answers z, -2.10). The two engine drops still clear 95% alone, and Holm still holds all three.
+  // R-E13 (2026-10-23): the two engine tests are clustered by question too now (they share the headline's Holm family), so each clears 95% only on
+  // the old independent-answers z (z_unclustered); clustered they are further inside the noise, and Holm still holds all three
+  const EC9 = X.metrics.engine_changes || {};
+  check('B8-9: each of them clears 95% on its own - that is why a quiet week used to raise them (all three on the old, unclustered test)', X.metrics.tests && X.metrics.tests.mention_rate.z_unclustered <= -1.96 && (MT.results || []).length === 3 && ['chatgpt', 'ai_mode'].every(e => EC9[e] && EC9[e].z_unclustered <= -1.96 && EC9[e].deff > 1 && Math.abs(EC9[e].z) < Math.abs(EC9[e].z_unclustered)), JSON.stringify({ p: (MT.results || []).map(r => r.p), e: ['chatgpt', 'ai_mode'].map(e => EC9[e] && [EC9[e].z_unclustered, EC9[e].z, EC9[e].deff]) }));
   check('B8-9: and none of them clears the Holm-adjusted threshold, so none is raised', (MT.results || []).length === 3 && (MT.results || []).every(r => r.reject === false) && !X.alerts.some(a => /AI mentions dropped|no longer cites|cites your pages less/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text)));
   check('B8-9: the adjusted threshold is stated in words (the strictest step: p at most 0.05 / 3)', Math.abs(MT.threshold_p - 0.05 / 3) < 1e-4 && MT.threshold_z > 2.3 && /Holm/.test(MT.note || '') && /3 tested/.test(MT.note || ''), JSON.stringify(MT));
   // a strong change in the same family still fires, and its text names the correction
@@ -18533,6 +18557,12 @@ await guard('S166 B8-8 B8-9 B8-10 the build carries the three engine fixes in bo
 await require('./scenarios_fa3')({ H, run, mock, store, guard, reset, begin });
 // G6 (2026-10-18): the AI question panel at enterprise scale — up to 500 questions, split runs, the pulse's rotating sample (harness/scenarios_g6.js)
 await require('./scenarios_g6')({ H, run, mock, store, guard, reset, begin });
+// F1b (2026-10-23, docs/ai-visibility-2026-10-23/fixes/F1b.md): the numbers - named vs cited, one share of voice, compare_json, the place in the answers, the pulse window
+await require('./scenarios_f1b')({ H, run, mock, store, guard, reset, begin });
+// F2 (2026-10-23): AI visibility run robustness, money safety, ids and load (harness/scenarios_f2.js; docs/ai-visibility-2026-10-23/fixes/F2.md)
+await require('./scenarios_f2')({ H, run, mock, store, guard, reset, begin });
+// W2-E3 (2026-10-23): fan-out ranking gap, persona effect, demand range, the owner's AI reports, asked state, options priced and reserved (harness/scenarios_w2e3.js; docs/ai-visibility-2026-10-23/fixes/W2-E3.md)
+await require('./scenarios_w2e3')({ H, run, mock, store, guard, reset, begin });
 await require('./scenarios_cycle_semantics')({ H, run, mock, store, guard, reset, begin });   // 2026-10-19: the cycle run (trigger: 'cycle'), SCHEDULING_KEYWORDS_PLAN.md §4.5
 await require('./scenarios_keyword_first')({ H, run, mock, store, guard, reset, begin });   // keyword-first autopilot (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5 / §9 KF)
 
@@ -19669,5 +19699,10 @@ await require('./scenarios_ctdepth')({ H, run, mock, store, guard, reset, begin 
 await require('./scenarios_kwfinal')({ H, run, mock, store, guard, reset, begin });   // KF1-KF5 (KW-FINAL 2026-10-22): paid multi-item calls retried per item (N3), ERP / D365 / PINT-AE fit (N1), duplicate ladder before paid steps (N2), no 404 existing page (N4), listing / career covered and exact ladder (N5 / N6)
 await require('./scenarios_ctfix2')({ H, run, mock, store, guard, reset, begin });   // CTX1-CTX7 (CT-FIX2 2026-10-22, live page exec 159): the promise check in two stages (Haiku mocked), the reworded round-1 promise, the page-type length band, the citation re-link, one slug, inbound anchors, the Word text, the judge's measured cost
 await require('./scenarios_pubdraft')({ H, run, mock, store, guard, reset, begin });   // PD1-PD3 (2026-10-23, techand.ai on production): a draft that needed edits, published by hand and reported from its report - found by its request id, leftover brackets on the live page named, no false gaps
+await require('./scenarios_f1a')({ H, run, mock, store, guard, reset, begin });   // AIENT + F1A-* (F1a 2026-10-23, ENGINE_AUDIT E3 E4 E5 E8 E10 E16): who an AI answer names - the labelled set accuracy/ai_entities.json ratcheted, one scenario per finding, the answer-row contract
+await require('./scenarios_w2e1')({ H, run, mock, store, guard, reset, begin });   // W2E1-* (W2-E1 2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E1.md): the answer-level data - full text, cited / read pages, fan-out, cards, the analyst's re-read, urls / sources / shopping / ads-local, source types ratcheted (accuracy/ai_source_types.json)
+await require('./scenarios_w2fix')({ H, run, mock, store, guard, reset, begin });   // W2FIX-1..4 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-FIX.md): the front door reserves the whole AI panel, units_json trimmed after 70 days, the app's Site Admin monitors bodies stored key for key, the repeat pilot's door
+await require('./scenarios_w2e2')({ H, run, mock, store, guard, reset, begin });   // W2E2-* (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): clustered intervals + their simulation, 28-day segments, declared share of voice, sentiment set + kappa gate, difference in differences, owner rules, the repeat pilot, report lines
+await require('./scenarios_rengine')({ H, run, mock, store, guard, reset, begin });   // R-E* (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md, fixes/R-ENGINE.md): the engine review's findings - a measured week never paid twice (the options recorded before they are paid), the persona effect paired by question, sentiment an early reading / a sample over the week / held to the time left, the pulse in the comparison, bounded tables, asked state and absent figures
 H.report();
 })();

@@ -257,6 +257,7 @@ const CC = (() => {
   const HEADROOM = 1.25;      // the guard reserves a quarter more than the rolling figure
   const KEEP = 8;             // the recent window whose maximum the estimate may never fall below
   const CAP = 5;              // and never more than five times the shipped default: one freak run may not lock the guard
+  const PANEL_QUOTE_MAX = 150;   // W2-FIX: an on-demand AI panel quote is taken up to AIP's max_run_usd (v5/code/_ai_panel.js LIMITS), never above
   const calKey = (kind, mode) => 'cost:' + kind + ':' + mode;
   const FACTOR_KEY = 'cost:factor:claude';
   const MODEL_PREFIX = 'cost:model:';   // one row per model family: what this engine thinks it spent on it THIS month
@@ -343,6 +344,15 @@ const CC = (() => {
       if (cf !== 1 && k === 'crawl') usd += e.usd * (cf - 1);
       if (cf !== 1 && k === 'full') usd += n0(DFS_EST.crawl) * (cf - 1); }
     const room = (kind === 'ai' && String((d || {}).mode) === 'case_study') ? estOf('ai', 'content', cal).usd : 0;
+    // W2-FIX (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-FIX.md item 4): an on-demand AI visibility check asks the website's WHOLE panel
+    // (its size, engines and options), not the 8-question run the table above was measured on. The web app quotes that panel with the engine's
+    // own formula (aiOnDemandRunCost = AIP.cost's full run) and sends it as panel_quote_dfs_usd / panel_quote_ai_usd; the reservation takes the
+    // quote when it is LARGER (a caller can only make the guard stricter), never more than PANEL_QUOTE_MAX (AIP's max_run_usd).
+    let quoted = 0;
+    if (String((d || {}).mode) === 'ai_visibility') {
+      const q = n0(kind === 'dfs' ? (d || {}).panel_quote_dfs_usd : (d || {}).panel_quote_ai_usd);
+      if (q > usd) { quoted = Math.min(q, PANEL_QUOTE_MAX); usd = Math.max(usd, quoted); }
+    }
     // `key` is the PRIMARY estimate key and the one the rolling figure is stored under, so what a settle teaches is read back by the next
     // run of the same shape; `label` names every key the request used (a run that also needs a site description adds `describe`, which
     // only makes that mode's figure a shade conservative — the safe direction).
@@ -350,7 +360,9 @@ const CC = (() => {
       crawl_factor: cf,
       basis: (keys.length ? (source === 'calibrated' ? 'calibrated from this mode\'s last settled runs (never below $' + r4(floor).toFixed(4) + ', what it recently cost)' : 'the shipped estimate for ' + keys.join(' + ') + ' (no settled run of this mode yet)') : 'this mode spends nothing here')
         + (cf !== 1 ? '; the crawl scaled x' + cf + ' (up to ' + (n0((d || {}).crawl_max_pages) || CRAWL_BASE_PAGES) + ' pages'
-          + (crawlFactor({ crawl_max_pages: CRAWL_BASE_PAGES, crawl_js: (d || {}).crawl_js }) > 1 ? ', rendered with JavaScript at 4x a page' : '') + ')' : '') };
+          + (crawlFactor({ crawl_max_pages: CRAWL_BASE_PAGES, crawl_js: (d || {}).crawl_js }) > 1 ? ', rendered with JavaScript at 4x a page' : '') + ')' : '')
+        + (quoted ? '; the website\'s whole panel as quoted ($' + r4(quoted).toFixed(4) + (n0((d || {}).panel_quote_panel) ? ', ' + n0((d || {}).panel_quote_panel) + ' questions' : '') + ', its engines and options)' : ''),
+      panel_quoted: r4(quoted) };
   };
 
   // what a settle writes back: the rolling figure moves toward this run's amount, the recent window keeps the floor honest.
@@ -615,8 +627,8 @@ const CC = (() => {
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();
 const ROW = 'Run Ledger Row (AI)';
-const MEASURED = 'AI Metrics|AI Chunk Handoff';   // '' when this workflow has no measured figure
-const AI_NODES = ["AI Brief", "Answer Analyst", "Prompt Writer"];     // every Claude node of this workflow (the agents a model node is wired to), '[]' when it calls none
+const MEASURED = 'AI Metrics|AI Chunk Handoff|AI Extras';   // '' when this workflow has no measured figure
+const AI_NODES = ["AI Brief", "Answer Analyst", "Prompt Writer", "Sentiment Reader"];     // every Claude node of this workflow (the agents a model node is wired to), '[]' when it calls none
 const BAL_END = 'DFS Balance End (AI)';     // the free balance probe on the settle chain
 const LEDGER = 'Load Run Ledger (AI)';       // the run-ledger rows around this run's window
 const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
@@ -663,7 +675,7 @@ const ranAi = AI_NODES.filter(n => { try { return ($(n).all() || []).length > 0;
 //     measurement, and the counter can never fail the run (neverError + continueRegularOutput + the retry rule).
 // With no table at all (a workflow whose builder has not been taught this) AI_CALLS is `[]`, nothing is priced and the settle keeps the
 // reservation exactly as R31 left it.
-const AI_CALLS = [{"after": ["AI Report"], "branch": 0, "count_answer": "Count Answer (AI Brief)", "count_per_item": true, "count_prompt": "Count Prompt (AI Brief)", "count_resume": "After Count (AI Brief)", "count_rounds": 0, "count_set": "Prompt For Count (AI Brief)", "effort": "low", "fields": ["facts"], "from": [], "input": "AI Brief Input", "max_tokens": 8192, "model": "claude-sonnet-5-5", "model_node": "Claude \u2014 AI Brief", "node": "AI Brief", "ref": "$('AI Brief Input').item.json", "streaming": false, "template_chars": 1857}, {"after": ["Apply Analysis"], "branch": 0, "count_answer": "Count Answer (Answer Analyst)", "count_per_item": true, "count_prompt": "Count Prompt (Answer Analyst)", "count_resume": "After Count (Answer Analyst)", "count_rounds": 0, "count_set": "Prompt For Count (Answer Analyst)", "effort": "low", "fields": ["answers", "business", "fact_check", "facts", "known_competitors"], "from": [], "input": "Any Analyst Jobs?", "max_tokens": 8192, "model": "claude-sonnet-5-5", "model_node": "Claude \u2014 Answer Analyst", "node": "Answer Analyst", "ref": "$('Any Analyst Jobs?').item.json", "streaming": false, "template_chars": 2431}, {"after": ["Prompt Rows"], "branch": 0, "count_answer": "Count Answer (Prompt Writer)", "count_per_item": true, "count_prompt": "Count Prompt (Prompt Writer)", "count_resume": "After Count (Prompt Writer)", "count_rounds": 0, "count_set": "Prompt For Count (Prompt Writer)", "effort": "low", "fields": ["business_name", "business_type", "city", "clusters", "competitor_offers", "count", "country", "domain", "existing", "has_brand_prompt", "language", "market_questions", "paa_questions", "persona", "search_questions", "site_text", "topics"], "from": [], "input": "Any Prompt Jobs?", "max_tokens": 8192, "model": "claude-sonnet-5-5", "model_node": "Claude \u2014 Prompt Writer", "node": "Prompt Writer", "ref": "$('Any Prompt Jobs?').item.json", "streaming": false, "template_chars": 4309}];
+const AI_CALLS = [{"after": ["AI Report"], "branch": 0, "count_answer": "Count Answer (AI Brief)", "count_per_item": true, "count_prompt": "Count Prompt (AI Brief)", "count_resume": "After Count (AI Brief)", "count_rounds": 0, "count_set": "Prompt For Count (AI Brief)", "effort": "low", "fields": ["facts"], "from": [], "input": "AI Brief Input", "max_tokens": 8192, "model": "claude-sonnet-5-5", "model_node": "Claude \u2014 AI Brief", "node": "AI Brief", "ref": "$('AI Brief Input').item.json", "streaming": false, "template_chars": 1857}, {"after": ["Apply Analysis"], "branch": 0, "count_answer": "Count Answer (Answer Analyst)", "count_per_item": true, "count_prompt": "Count Prompt (Answer Analyst)", "count_resume": "After Count (Answer Analyst)", "count_rounds": 0, "count_set": "Prompt For Count (Answer Analyst)", "effort": "low", "fields": ["answers", "business", "fact_check", "facts", "known_competitors", "platforms"], "from": [], "input": "Any Analyst Jobs?", "max_tokens": 8192, "model": "claude-sonnet-5-5", "model_node": "Claude \u2014 Answer Analyst", "node": "Answer Analyst", "ref": "$('Any Analyst Jobs?').item.json", "streaming": false, "template_chars": 3230}, {"after": ["Prompt Rows"], "branch": 0, "count_answer": "Count Answer (Prompt Writer)", "count_per_item": true, "count_prompt": "Count Prompt (Prompt Writer)", "count_resume": "After Count (Prompt Writer)", "count_rounds": 0, "count_set": "Prompt For Count (Prompt Writer)", "effort": "low", "fields": ["business_name", "business_type", "city", "clusters", "competitor_offers", "count", "country", "domain", "existing", "has_brand_prompt", "language", "market_questions", "paa_questions", "persona", "search_questions", "shopping", "shopping_why", "site_text", "topics"], "from": [], "input": "Any Prompt Jobs?", "max_tokens": 8192, "model": "claude-sonnet-5-5", "model_node": "Claude \u2014 Prompt Writer", "node": "Prompt Writer", "ref": "$('Any Prompt Jobs?').item.json", "streaming": false, "template_chars": 4894}, {"after": ["AI Metrics"], "branch": 0, "count_answer": "Count Answer (Sentiment Reader)", "count_per_item": true, "count_prompt": "Count Prompt (Sentiment Reader)", "count_resume": "After Count (Sentiment Reader)", "count_rounds": 0, "count_set": "Prompt For Count (Sentiment Reader)", "effort": "", "fields": ["business", "items_text"], "from": [], "input": "Any Sentiment Jobs?", "max_tokens": 4000, "model": "claude-haiku-4-5-20251001", "model_node": "Claude \u2014 Sentiment Reader", "node": "Sentiment Reader", "ref": "$('Any Sentiment Jobs?').item.json", "streaming": false, "template_chars": 2198}];
 const CAL = "Load Cost Factors (AI)";   // the stored per-model correction factors the monthly reconciliation writes ('' when this workflow reads none)
 const __jsonOf = (n, idx) => { try { return ((idx == null ? $(n).all() : $(n).all(idx)) || []).map(i => (i && i.json) || {}); } catch (e) { return null; } };
 const __chars = (v) => v == null ? 0 : (typeof v === 'string' ? v.length : JSON.stringify(v).length);

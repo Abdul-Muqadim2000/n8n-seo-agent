@@ -1,0 +1,238 @@
+[
+  {
+    "id": "SEOagentAIPilAPI",
+    "name": "SEO Agent — AI Pilot API",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 120,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "seo-ai-pilot",
+          "authentication": "headerAuth",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "16687629-258d-559a-b534-19a77211b204",
+        "name": "AI Pilot API",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          880
+        ],
+        "webhookId": "c78a22ab-1cb6-508d-b8e0-7405590f2f82",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "SEOcredApiHeader",
+            "name": "SEO API Key"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// W2-FIX (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-FIX.md item 2): the AI repeat pilot on demand (POST /webhook/seo-ai-pilot, header\n// X-API-Key; the web app's \"Repeat pilot\" on the AI visibility page): { domain | site_id, confirm?, callback_url?, request_id? } - answered at once\n// (accepted), the pilot starts as its own execution through its Manual Run. Without `confirm: true` the pilot only prices itself (callback stage\n// ai_pilot_quote) and asks nothing; `confirm` is taken only as the literal true (a string \"yes\" or a 1 is not a confirmation to spend money).\nconst raw = $input.first().json || {}; const b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst domain = normD(b.domain); const site_id = String(b.site_id || '').trim();\nconst errors = []; if (!domain && !site_id) errors.push('domain or site_id is required');\nif (b.callback_url && !/^https?:\\/\\//i.test(String(b.callback_url))) errors.push('callback_url must be an http(s) URL');\nif (b.confirm !== undefined && b.confirm !== null && typeof b.confirm !== 'boolean') errors.push('confirm must be true or false');\nreturn [{ json: { ok: !errors.length, error: errors.join('; '), domain, site_id, confirm: b.confirm === true, callback_url: String(b.callback_url || ''), email: '', request_id: String(b.request_id || ('pilot-' + $execution.id)) } }];\n"
+        },
+        "id": "cec83ba8-9b48-55c2-86e5-76812bbc024a",
+        "name": "Pilot API Validate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          220,
+          880
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "6ff5fa0b-fdb7-5fce-9e90-c312dc1e695f",
+                "leftValue": "={{ $json.ok }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "413cb6fb-bf0d-556a-b934-8d628fd7c4d1",
+        "name": "Pilot API OK?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          440,
+          880
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: true, status: 'accepted', stage: $json.confirm ? 'ai_pilot_started' : 'ai_pilot_quote_started', request_id: $json.request_id, domain: $json.domain, confirm: $json.confirm }) }}",
+          "options": {
+            "responseCode": 202
+          }
+        },
+        "id": "8ce06ac8-8fda-5d8c-8b00-620af93bf2ec",
+        "name": "Respond Pilot Accepted",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// The pilot's input (its Manual Run): only the fields it reads. `confirm` is true only when the caller sent the literal true.\nconst v = $('Pilot API Validate').first().json;\nreturn [{ json: { domain: v.domain, site_id: v.site_id, confirm: v.confirm === true, callback_url: v.callback_url, email: '', request_id: v.request_id } }];"
+        },
+        "id": "97974996-f39d-5782-a530-c01e5a2431cf",
+        "name": "Pilot Payload",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          880,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "source": "database",
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "SEOagentAIPilot1"
+          },
+          "mode": "once",
+          "options": {
+            "waitForSubWorkflow": false
+          }
+        },
+        "id": "cf5ed5a6-45a3-5c26-8cd5-576c2e0ffaa7",
+        "name": "Start AI Pilot",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          1100,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "7e1d0b8d-6cd1-5f6f-84e8-e4d506ccedd0",
+        "name": "Respond Pilot Bad Request",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          1100
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — AI Pilot API (W2-FIX)\n`POST /webhook/seo-ai-pilot` (header X-API-Key, credential **SEO API Key**): `{ domain | site_id, confirm?, callback_url?, request_id? }` -> 202 at once; starts **SEO Agent — AI Repeat Pilot** (`SEOagentAIPilot1`) through its Manual Run. Without `confirm: true` the pilot answers with its price (callback stage `ai_pilot_quote`) and asks nothing; with it, it runs once (at most $4) and reports through stage `ai_pilot`. On demand only, never scheduled.",
+          "height": 160,
+          "width": 700,
+          "color": 6
+        },
+        "id": "162e77c6-6d36-5801-9b14-9af008977f81",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -300
+        ]
+      }
+    ],
+    "connections": {
+      "AI Pilot API": {
+        "main": [
+          [
+            {
+              "node": "Pilot API Validate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Pilot API Validate": {
+        "main": [
+          [
+            {
+              "node": "Pilot API OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Pilot API OK?": {
+        "main": [
+          [
+            {
+              "node": "Respond Pilot Accepted",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Pilot Bad Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Respond Pilot Accepted": {
+        "main": [
+          [
+            {
+              "node": "Pilot Payload",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Pilot Payload": {
+        "main": [
+          [
+            {
+              "node": "Start AI Pilot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

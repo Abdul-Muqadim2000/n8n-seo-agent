@@ -1,6 +1,8 @@
 import { linkSummary } from './linkBuilder';
 import {
   formatPercent,
+  wilsonRange,
+  AI_MIN_RATE_SAMPLES,
   DRAFT_BY_HAND,
   NO_RERUN_NEEDED,
   MODE_IDS,
@@ -65,7 +67,7 @@ export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle
     rankingsData(site),
     contentData(org, site),
     technicalData(org, site),
-    aiData(org, site),
+    aiData(org, site, { answers: false }),   // A11 (2026-10-23): the answers are the AI page's alone
     backlinksData(org, site),
     alertsData(site),
     settingsData(org, site),
@@ -319,14 +321,18 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
     add({ id: 'tech:stale', category: 'technical', priority: 'low', title: 'Re-audit the site', detail: 'The last audit is more than 45 days old; the monthly scheduler re-audits only when the sitemap changed.', action: { label: 'Run audit', mode: 'audit' } });
 
   // ---------- AI visibility ----------
-  const lastAi = x.ai.runs[x.ai.runs.length - 1];
-  if (lastAi && lastAi.mentionRate < 20)
-    add({ id: 'ai:low', category: 'ai', priority: 'high', title: `AI assistants name you in ${formatPercent(lastAi.mentionRate, 0)} of buyer answers`, detail: 'Competitors are recommended instead. Pages that answer these questions directly, with proof and clear entity signals, are what AI engines cite.', evidence: `${lastAi.answers} answers checked · share of voice ${formatPercent(lastAi.shareOfVoice, 0)}`, action: { label: 'See the questions', page: 'ai' } }, {
+  // engine fix round (2026-10-23): a named rate the engine could not measure is stored null; no recommendation is made from it (never 0%)
+  const lastAi0 = x.ai.runs[x.ai.runs.length - 1];
+  const lastAi = lastAi0 && lastAi0.mentionRate != null ? { ...lastAi0, mentionRate: lastAi0.mentionRate } : undefined;
+  // A16 (2026-10-23): a rate on fewer answers than the engine's floor is a straw poll, not a finding: no recommendation from it
+  const aiRange = lastAi ? (lastAi.mentionLo != null && lastAi.mentionHi != null ? [lastAi.mentionLo, lastAi.mentionHi] : wilsonRange(Math.round((lastAi.mentionRate * lastAi.samples) / 100), lastAi.samples)) : null;
+  if (lastAi && lastAi.mentionRate < 20 && lastAi.samples >= AI_MIN_RATE_SAMPLES)
+    add({ id: 'ai:low', category: 'ai', priority: 'high', title: `AI assistants name you in ${formatPercent(lastAi.mentionRate, 0)} of buyer answers`, detail: 'Competitors are recommended instead. Pages that answer these questions directly, with proof and clear entity signals, are what AI engines cite.', evidence: `${lastAi.samples} answers counted · share of voice ${formatPercent(lastAi.shareOfVoice, 0)}`, action: { label: 'See the questions', page: 'ai' } }, {
       // the mention rate is measured; what winning those answers is worth in visits is not, so the effort band carries the doubt
       impact: impactFromPoints(Math.min(40, 100 - lastAi.mentionRate)),
       confidence: 'modelled',
       effort: 'days',
-      basis: `named in ${formatPercent(lastAi.mentionRate, 0)} of ${lastAi.answers} answers we asked for ourselves`,
+      basis: `named in ${formatPercent(lastAi.mentionRate, 0)} of ${lastAi.samples} answers we asked for ourselves${aiRange ? ` (95% range ${formatPercent(aiRange[0], 0)} to ${formatPercent(aiRange[1], 0)})` : ''}`,
     });
   // the AI report's own actions already cover its lost questions; without a delivered report, the stored gaps stand in
   for (const g of x.ai.report ? [] : (x.ai.latest?.gaps ?? []).slice(0, 3))

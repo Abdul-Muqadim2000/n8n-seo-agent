@@ -32,6 +32,12 @@ What it does, in order (each step says what it found; any failure exits 1):
     imported with --create-missing, else it is a failure
  5. POST /api/v1/workflows/<id>/activate for the manifest's publish set (+ publish_when_imap when SEO_IMAP_PASSWORD is set) - idempotent.
     The set includes the Cycle Dispatcher: publishing it starts nothing by itself (seo_cache cycle:mode, missing = plan_only)
+ 5b. the manifest's never_deploy list (F2 2026-10-23: the test callback receiver SEOagentCallback, an unauthenticated webhook, was found
+    ACTIVE in production, carried over by the migration): any of them found active on the remote is DEACTIVATED (POST
+    /api/v1/workflows/<id>/deactivate) with --apply, and only reported by the dry run. Nothing is ever deleted. R-E11 (2026-10-23,
+    REVIEW_ENGINE.md): this step RUNS FIRST, before anything is touched: a never_deploy id that is also in the publish set fails the deploy
+    before the Data Table sync, and the deactivation runs before any workflow is updated, imported or published (it used to run after the
+    publish, so its failure came after the release was live). It is numbered 5b because it is the publish set's counterpart
  6. --credentials: PATCH /api/v1/credentials/<id> for every credential sync_credentials.py defines whose values are set
 The API key is N8N_API_KEY from n8n/.env (it stays valid on the server when the instance key was carried over by the migration), or
 N8N_REMOTE_API_KEY from the environment. Nothing prints a key, a credential value or the alert webhook.
@@ -117,6 +123,38 @@ def ssh_import(kind, payload_path):
     return r.returncode, (r.stdout.strip().splitlines() or [''])[-1]
 
 
+def never_deploy_clash(manifest):
+    """R-E11: the ids on never_deploy that are also in the publish set (checked before anything is touched)."""
+    never = list(manifest.get('never_deploy') or [])
+    return sorted(set(never) & set(list(manifest.get('publish') or []) + list(manifest.get('publish_when_imap') or [])))
+
+def never_deploy_pass(api, manifest, apply, say):
+    """F2 (2026-10-23): every workflow on the manifest's never_deploy list that the remote has ACTIVE is deactivated (apply) or reported (dry
+    run). Returns (handled ids, failures). Never deletes, never touches a workflow that is not on the list."""
+    never = list(manifest.get('never_deploy') or [])
+    clash = never_deploy_clash(manifest)
+    if clash:
+        return [], ['deploy_manifest.json lists %s both in never_deploy and in the publish set' % ', '.join(clash)]
+    done, fail = [], []
+    for wid in never:
+        st, cur = api('GET', '/workflows/' + wid)
+        if st == 404:
+            say('  never-deploy %s: not on the instance' % wid); continue
+        if st != 200:
+            fail.append('never-deploy %s GET %s' % (wid, st)); continue
+        if not (cur or {}).get('active'):
+            say('  never-deploy %s (%s): inactive, left as it is' % (wid, (cur or {}).get('name', ''))); continue
+        if not apply:
+            say('  never-deploy %s (%s) is ACTIVE: would deactivate it (not delete)' % (wid, (cur or {}).get('name', ''))); done.append(wid); continue
+        st2, r = api('POST', '/workflows/%s/deactivate' % wid)
+        if st2 == 200:
+            say('  never-deploy %s (%s) was ACTIVE: deactivated (not deleted)' % (wid, (cur or {}).get('name', ''))); done.append(wid)
+        else:
+            fail.append('never-deploy %s deactivate %s: %s' % (wid, st2, str((r or {}).get('message'))[:160]))
+    say('never-deploy: %d active %s%s' % (len(done), 'deactivated' if apply else 'to deactivate', ('; FAILED: ' + '; '.join(fail)) if fail else ''))
+    return done, fail
+
+
 def main():
     say = print
     say('deploy_engine: %s -> %s (%s)' % (os.path.relpath(ENGINE, REPO), URL, 'APPLY' if APPLY else 'dry run'))
@@ -141,6 +179,13 @@ def main():
             print(r.stdout[-1500:], r.stderr[-1500:]); sys.exit('build failed (exit %d)' % r.returncode)
         say('built: ' + ([l for l in r.stdout.splitlines() if l.startswith('wrote')] or ['ok'])[-1])
 
+    # the one deploy list (deploy_manifest.json, also read by apply_env.py and n8n/deploy/release.mjs)
+    manifest = json.load(open(os.path.join(ENGINE, 'deploy_manifest.json'), encoding='utf-8'))
+    # 5b, first half (R-E11): a never_deploy id that is also in the publish set fails the deploy before anything is touched
+    clash = never_deploy_clash(manifest)
+    if clash:
+        sys.exit('deploy_manifest.json lists %s both in never_deploy and in the publish set - nothing was touched' % ', '.join(clash))
+
     # 3. Data Table columns FIRST (F-ENG 2026-10-20): a workflow updated below may read a column this release adds; and a failed sync stops here
     r = subprocess.run([sys.executable, os.path.join(ENGINE, 'sync_tables.py')] + ([] if APPLY else ['--dry-run']), capture_output=True, text=True,
                        env=dict(os.environ, N8N_PUBLIC_URL=URL, N8N_API_KEY=KEY))
@@ -148,12 +193,15 @@ def main():
     if r.returncode != 0:
         sys.exit('sync failed: sync_tables.py exited %d - no workflow was updated (fix the Data Table columns, then deploy again)' % r.returncode)
 
-    # the one deploy list (deploy_manifest.json, also read by apply_env.py and n8n/deploy/release.mjs)
-    manifest = json.load(open(os.path.join(ENGINE, 'deploy_manifest.json'), encoding='utf-8'))
+    # 5b, second half (R-E11): the never-deploy workflows found active are deactivated (never deleted) BEFORE any workflow is updated, imported
+    # or published; the dry run only says what it would do
+    failed = []
+    nd_done, nd_fail = never_deploy_pass(api, manifest, APPLY, say)
+    failed += nd_fail
     consts = {'WORKFLOWS': manifest['workflows'], 'PUBLISH': manifest['publish']}
     placeholder = literal(os.path.join(ENGINE, 'ladder_common.py'), 'ALERT_WEBHOOK_PLACEHOLDER')['ALERT_WEBHOOK_PLACEHOLDER']
     hook = (ENV.get('SEO_ALERT_WEBHOOK_URL') or '').strip()
-    updated, same, missing, failed = [], [], [], []
+    updated, same, missing = [], [], []
     for fname in consts['WORKFLOWS']:
         p = os.path.join(ENGINE, 'workflows', fname)
         if not os.path.exists(p): continue
@@ -223,6 +271,8 @@ def main():
         (' (incl. referenced sub-workflows: ' + ', '.join(extra) + ')') if extra else '', ('; FAILED: ' + '; '.join(pub_fail)) if pub_fail else ''))
     failed += pub_fail
 
+    # (5b ran before the workflows were touched: R-E11)
+
     # 6. credentials
     if '--credentials' in args:
         sys.path.insert(0, ENGINE)
@@ -247,6 +297,21 @@ def main():
         elif cmiss:
             say('  credentials missing remotely: ' + ', '.join(c for c, *_ in cmiss) + ' (--create-missing imports them)')
         say('credentials: %d %s, %d skipped (empty in n8n/.env)' % (len(done), 'written' if APPLY else 'to write', len(skipped)))
+
+    # 7. the dispatcher's mode, said out loud (2026-10-23: production sat in plan_only for two days after a deploy and no client's cycle ran)
+    try:
+        dm = deploy_guard.dispatcher_mode(api)
+    except Exception as e:
+        dm = {'error': str(e)[:160]}
+    if dm.get('error'):
+        say('dispatcher mode: could not be read (%s) - check seo_cache cycle:mode by hand' % dm['error'])
+    elif dm['mode'] == 'start':
+        say('dispatcher mode: start (websites\' cycles run): %d site(s): %s' % (len(dm['sites']), ', '.join(dm['sites']) or 'none yet'))
+    else:
+        say('!' * 100 + '\nDISPATCHER IN plan_only (%s): it plans every website\'s cycle and STARTS NOTHING. %d job(s) waiting; sites: %s.\n'
+            'For real clients add the seo_cache row key=cycle:mode, kind=cycle, value={"mode":"start"} (RUNBOOK.md section 4). The catch-up '
+            'watchdog raises an ops alert after an hour of this with work waiting.\n' % ('set on purpose' if dm['configured'] else 'no cycle:mode row: the default',
+            dm['waiting'], ', '.join(dm['sites']) or 'none') + '!' * 100)
 
     if failed:
         say('FAILED:\n  ' + '\n  '.join(failed)); sys.exit(1)

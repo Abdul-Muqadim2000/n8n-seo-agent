@@ -5,8 +5,10 @@
 import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildN8nPayload, compactBody, type SiteContext } from '../src/payload';
-import { RUN_SCHEMAS } from '../src/schemas';
+import { aiOnDemandRunCost, aiRunPanelOf } from '../src/ai-panel';
+import { n8nSiteId } from '../src/domain';
+import { aiPanelQuoteBody, buildN8nPayload, compactBody, siteAdminMonitorsBody, type SiteContext } from '../src/payload';
+import { monitorSettingsSchema, RUN_SCHEMAS } from '../src/schemas';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = resolve(here, '../../../n8n/seo-agent/harness/fixtures_platform.json');
@@ -27,6 +29,10 @@ const site: SiteContext = {
 };
 const delivery = { callbackUrl: 'http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform', email: 'owner@northwind-erp.com' };
 const noMail = { ...delivery, email: '' };
+// W2-FIX: what the server adds to an on-demand AI visibility check of a 200-question panel with the persona test (3 roles), a fan-out check of 50
+// and the market trend (services/runs.ts: aiPanelForQuote -> aiOnDemandRunCost -> aiPanelQuoteBody)
+const AI_PANEL_200 = aiRunPanelOf({ aiPromptsMax: 200, aiEngines: null, aiPersonaContext: true, aiPersonas: 'CFO, IT manager, Procurement', aiFanoutCheck: 50, aiDemandMarket: true });
+const AI_QUOTE = aiPanelQuoteBody(aiOnDemandRunCost(AI_PANEL_200), AI_PANEL_200.panel) as { dfs_usd: number; ai_usd: number; panel: number };
 
 type Case = { name: string; mode: keyof typeof RUN_SCHEMAS; input: Record<string, unknown>; site: SiteContext | null; mail?: boolean; expect: Record<string, unknown>; /** fields the server adds to the body (runs.ts) */ extra?: Record<string, unknown> };
 
@@ -167,6 +173,14 @@ const cases: Case[] = [
     expect: { mode: 'track', keyword: '', track_keywords: ['peppol uae', 'e invoicing software uae'], blogs_per_week: 2, ga4_property_id: '543096312', competitors: ['azentio.com', 'cleartax.com'], 'monitor_input.ai_engines': 'chatgpt, perplexity', 'monitor_input.ai_prompts_max': 30, 'monitor_input.ai_pulse': false, 'monitor_input.audit_pages': 500, 'monitor_input.backlinks': false, 'monitor_input.ai_visibility': true, 'monitor_input.brand_names': 'Northwind, Northwind ERP' },
   },
   {
+    // W2-FIX (2026-10-23): the owner's W2-E3 AI options reach Monitor Row (Track) through Normalize Input's monitor_input (they were dropped)
+    name: 'track with the AI wave-2 options',
+    mode: 'track',
+    input: { siteId: SITE_ID, country: 'United Arab Emirates', keywords: ['peppol uae'], blogsPerWeek: 1, monitors: { aiPromptsMax: 50, aiClaudeWeekly: true, aiPulseEngines: ['chatgpt', 'perplexity'], aiPersonaContext: false, aiFanoutCheck: 25, aiDemandMarket: true } },
+    site,
+    expect: { mode: 'track', 'monitor_input.ai_claude_weekly': true, 'monitor_input.ai_pulse_engines': 'chatgpt, perplexity', 'monitor_input.ai_persona_context': false, 'monitor_input.ai_fanout_check': 25, 'monitor_input.ai_demand_market': true, 'monitor_input.ai_prompts_max': 50 },
+  },
+  {
     name: 'published',
     mode: 'published',
     input: { siteId: SITE_ID, keyword: 'uae e invoicing penalties', publishedUrl: 'https://www.northwind-erp.com/blog/uae-e-invoicing-penalties/' },
@@ -224,7 +238,16 @@ const cases: Case[] = [
     mode: 'ai_visibility',
     input: { siteId: SITE_ID, country: 'United Arab Emirates', topics: ['e-invoicing implementation', 'Odoo ERP'] },
     site,
-    expect: { mode: 'ai_visibility', competitors: ['azentio.com', 'cleartax.com'], topics: ['e-invoicing implementation', 'odoo erp'] },
+    expect: { mode: 'ai_visibility', competitors: ['azentio.com', 'cleartax.com'], topics: ['e-invoicing implementation', 'odoo erp'], panel_quote_dfs_usd: 0, panel_quote_ai_usd: 0 },
+  },
+  {
+    // W2-FIX (2026-10-23): the server adds its quote of the website's whole panel (runs.ts createRunWithMeta), so the front door reserves it
+    name: 'ai visibility with the server\'s quote of a 200-question panel and its options',
+    mode: 'ai_visibility',
+    input: { siteId: SITE_ID, country: 'United Arab Emirates', topics: [] },
+    site,
+    extra: { panel_quote: AI_QUOTE },
+    expect: { mode: 'ai_visibility', panel_quote_dfs_usd: AI_QUOTE.dfs_usd, panel_quote_ai_usd: AI_QUOTE.ai_usd, panel_quote_panel: 200 },
   },
   {
     name: 'backlinks',
@@ -251,3 +274,40 @@ const fixtures = cases.map((c) => {
 
 writeFileSync(out, JSON.stringify(fixtures, null, 2) + '\n');
 console.log(`wrote ${fixtures.length} platform request bodies to ${out}`);
+
+// ---- W2-FIX (2026-10-23): the website settings' saves to Site Admin `monitors`, exactly as server/src/routes/sites.ts builds them, with the
+// columns Monitor Row (Admin) must store for them (harness W2FIX-3 runs them through Admin Validate, Admin Action and Monitor Row (Admin)) ----
+const outAdmin = resolve(here, '../../../n8n/seo-agent/harness/fixtures_platform_admin.json');
+const RULE = { id: 'r1', metric: 'named_rate', scope: { engine: 'chatgpt' }, direction: 'drop', threshold_points: 5 };
+const ALL_ON = { ai_claude_weekly: true, ai_pulse_engines: 'chatgpt, perplexity', ai_persona_context: true, ai_fanout_check: 50, ai_sov_set: 'rival.com, other.ae', ai_demand_market: true, ai_alert_rules_json: JSON.stringify([{ ...RULE, enabled: true }]) };
+type AdminCase = { name: string; monitors: Record<string, unknown>; competitors?: string[]; stored: Record<string, unknown>; expect: Record<string, unknown> };
+const adminCases: AdminCase[] = [
+  {
+    name: 'every wave-2 setting saved from the website settings',
+    monitors: { aiClaudeWeekly: true, aiPulseEngines: ['chatgpt', 'perplexity', 'ai_overview'], aiPersonaContext: true, aiFanoutCheck: 50, aiSovSet: ['rival.com', 'Other.ae'], aiDemandMarket: true, aiAlertRules: [RULE] },
+    stored: {},
+    expect: { ai_claude_weekly: true, ai_pulse_engines: 'chatgpt, perplexity, ai_overview', ai_persona_context: true, ai_fanout_check: 50, ai_sov_set: 'rival.com, other.ae', ai_demand_market: true, ai_alert_rules_json: [{ ...RULE, enabled: true }] },
+  },
+  {
+    name: 'every wave-2 setting switched off or emptied',
+    monitors: { aiClaudeWeekly: false, aiPulseEngines: [], aiPersonaContext: false, aiFanoutCheck: 0, aiSovSet: [], aiDemandMarket: false, aiAlertRules: [] },
+    stored: ALL_ON,
+    expect: { ai_claude_weekly: false, ai_pulse_engines: '', ai_persona_context: false, ai_fanout_check: 0, ai_sov_set: '', ai_demand_market: false, ai_alert_rules_json: [] },
+  },
+  {
+    name: 'a save that touches none of them keeps what is stored',
+    monitors: { aiPromptsMax: 30 },
+    competitors: ['rival.com'],
+    stored: ALL_ON,
+    expect: { ...ALL_ON, ai_alert_rules_json: [{ ...RULE, enabled: true }], ai_prompts_max: 30, competitors: 'rival.com' },
+  },
+];
+const adminFixtures = adminCases.map((c) => {
+  const parsed = monitorSettingsSchema.partial().safeParse(c.monitors);
+  if (!parsed.success) throw new Error(`${c.name}: ${JSON.stringify(parsed.error.issues)}`);
+  const domain = site.domain;
+  const body = { domain, site_id: n8nSiteId(domain), request_id: 'app-monitors-fixture', action: 'monitors', monitors: siteAdminMonitorsBody(parsed.data, c.competitors) };
+  return { name: c.name, body, stored: { site_id: n8nSiteId(domain), domain, ...c.stored }, expect: c.expect };
+});
+writeFileSync(outAdmin, JSON.stringify(adminFixtures, null, 2) + '\n');
+console.log(`wrote ${adminFixtures.length} Site Admin monitors bodies to ${outAdmin}`);

@@ -1,5 +1,5 @@
 {
-  "_comment": "What a deploy imports and publishes. Read by apply_env.py (local Docker) and by n8n/deploy/release.mjs (the container image's release step). Console Alerts (SEOagentConsole1) is imported always and published only when SEO_IMAP_PASSWORD is set; the test runner and the callback receiver are never deployed. The Cycle Dispatcher (SEOagentCycleDsp) is published by every deploy (F-ENG 2026-10-20): an import deactivates it, and left inactive no website's week runs. Publishing starts nothing by itself: the seo_cache row cycle:mode (missing = plan_only) is the safety switch the owner flips; the Schedule Catch-up's watchdog alerts when the dispatcher is inactive or has not swept for 20 minutes.",
+  "_comment": "What a deploy imports and publishes. Read by apply_env.py (local Docker) and by n8n/deploy/release.mjs (the container image's release step). Console Alerts (SEOagentConsole1) is imported always and published only when SEO_IMAP_PASSWORD is set; the test runner and the callback receiver are never deployed. The Cycle Dispatcher (SEOagentCycleDsp) is published by every deploy (F-ENG 2026-10-20): an import deactivates it, and left inactive no website's week runs. Publishing starts nothing by itself: the seo_cache row cycle:mode (missing = plan_only) is the safety switch the owner flips; the Schedule Catch-up's watchdog alerts when the dispatcher is inactive or has not swept for 20 minutes. never_deploy (F2 2026-10-23): workflows that must never run on a deployed instance (the test callback receiver has an unauthenticated webhook; the test runner starts paid runs). deploy/gcp/deploy_engine.py deactivates any of them it finds active - in --apply only, never deletes - and its dry run reports them. AI repeat pilot (W2-FIX 2026-10-23): SEOagentAIPilot1 has no schedule (on demand only, priced before it spends) and is published because SEOagentAIPilAPI (POST /webhook/seo-ai-pilot) starts it through Execute Workflow; both are new on a remote, so the first deploy needs deploy_engine.py --create-missing.",
   "workflows": [
     "SEO_Agent_v4.json",
     "SEO_Agent_API.json",
@@ -25,7 +25,9 @@
     "SEO_Agent_Schedule_Catchup.json",
     "SEO_Agent_Publish_Check.json",
     "SEO_Agent_Site_Kickoff.json",
-    "SEO_Agent_Cycle_Dispatcher.json"
+    "SEO_Agent_Cycle_Dispatcher.json",
+    "SEO_Agent_AI_Pilot.json",
+    "SEO_Agent_AI_Pilot_API.json"
   ],
   "publish": [
     "SEOagentV4Full01",
@@ -50,9 +52,15 @@
     "SEOagentCatchUp1",
     "SEOagentPubCheck",
     "SEOagentKickoff1",
-    "SEOagentCycleDsp"
+    "SEOagentCycleDsp",
+    "SEOagentAIPilot1",
+    "SEOagentAIPilAPI"
   ],
   "publish_when_imap": [
     "SEOagentConsole1"
+  ],
+  "never_deploy": [
+    "SEOagentCallback",
+    "SEOagentTestRun1"
   ]
 }

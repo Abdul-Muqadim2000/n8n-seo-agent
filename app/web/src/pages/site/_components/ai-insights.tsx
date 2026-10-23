@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { AtSign, Bot, Coins, Globe, Layers, Link2, MessageSquareQuote, PieChart, Plus, Scale, ShieldAlert, ShieldCheck, Target, Users } from 'lucide-react';
-import { compactNumber, formatPercent, titleCase, type AiAccess, type AiGroup, type AiIndex, type AiPerception, type AiTraffic } from '@seo/shared';
+import { AI_MIN_RATE_SAMPLES, compactNumber, formatPercent, titleCase, wilsonRange, type AiAccess, type AiGroup, type AiIndex, type AiPerception, type AiTraffic } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
@@ -50,7 +50,8 @@ export function AiTrafficPanel({ traffic }: { traffic: AiTraffic | null }) {
       </Panel>
     );
   const t = traffic;
-  const better = t.organicConvRate > 0 ? t.convRate / t.organicConvRate : null;
+  // A17 (2026-10-23): a ratio of two conversion rates on a handful of AI visits is noise; none under AI_RATIO_MIN_SESSIONS
+  const better = t.organicConvRate > 0 && t.sessions >= AI_RATIO_MIN_SESSIONS ? t.convRate / t.organicConvRate : null;
   return (
     <Panel
       title="What AI visits are worth"
@@ -62,7 +63,7 @@ export function AiTrafficPanel({ traffic }: { traffic: AiTraffic | null }) {
         <FigureTile icon={<Users />} label="AI visits" value={compactNumber(t.sessions)} hint={t.changePct != null ? `${t.changePct >= 0 ? '+' : ''}${t.changePct}% vs the 28 days before` : 'no earlier period'} />
         <FigureTile icon={<Target />} label="Key events" value={compactNumber(t.keyEvents)} hint={`${pct0(t.convRate)} of AI visits convert`} />
         <FigureTile icon={<Coins />} label="Revenue" value={t.revenue ? compactNumber(t.revenue) : '-'} hint={t.revenue ? 'in the property\'s currency' : 'no purchases recorded'} />
-        <FigureTile icon={<Scale />} label="vs organic search" value={better ? `${better.toFixed(1)}×` : '-'} hint={`organic converts at ${pct0(t.organicConvRate)} · AI is ${formatPercent(t.shareOfSessions, 1)} of all visits`} />
+        <FigureTile icon={<Scale />} label="vs organic search" value={better ? `${better.toFixed(1)}×` : '-'} hint={`${t.sessions < AI_RATIO_MIN_SESSIONS ? `too few AI visits to compare (${t.sessions}; ${AI_RATIO_MIN_SESSIONS} needed) · ` : ''}organic converts at ${pct0(t.organicConvRate)} · AI is ${formatPercent(t.shareOfSessions, 1)} of all visits`} />
       </div>
       <div className="grid grid-cols-1 gap-4 border-t border-line p-4 lg:grid-cols-2">
         <DataTable
@@ -244,6 +245,21 @@ export function AccessPanel({ access }: { access: AiAccess | null }) {
   );
 }
 
+/** A17: under this many AI visits the "N x vs organic" ratio is not shown */
+export const AI_RATIO_MIN_SESSIONS = 30;
+
+function GroupRate({ g }: { g: AiGroup }) {
+  if (!g.samples) return <span className="tabular">{pct0(g.mentionRate)}</span>;   // an older row without its sample
+  if (g.samples < AI_MIN_RATE_SAMPLES) return <span className="text-xs text-ink-3">too few answers ({g.samples})</span>;
+  const r = wilsonRange(Math.round((g.mentionRate * g.samples) / 100), g.samples);
+  return (
+    <span className="tabular">
+      {pct0(g.mentionRate)}
+      <span className="ml-1 text-xs text-ink-3">{r ? `${Math.round(r[0])}-${Math.round(r[1])}% · ` : ''}{g.samples}</span>
+    </span>
+  );
+}
+
 /** Visibility by buyer stage and topic cluster, with the demand behind each and who is named most instead. */
 export function GroupsPanel({ stages, clusters }: { stages: AiGroup[]; clusters: AiGroup[] }) {
   const [view, setView] = useState<'stage' | 'topic'>('stage');
@@ -275,7 +291,8 @@ export function GroupsPanel({ stages, clusters }: { stages: AiGroup[]; clusters:
           columns={[
             { key: 'key', header: view === 'stage' ? 'Stage' : 'Topic', sortValue: (g) => g.key, cell: (g) => <span className="font-medium text-ink">{titleCase(g.key)}</span> },
             { key: 'q', header: 'Questions', align: 'right', sortValue: (g) => g.questions, cell: (g) => <span className="tabular">{g.questions}</span> },
-            { key: 'm', header: 'Named in', align: 'right', sortValue: (g) => g.mentionRate, cell: (g) => <span className="tabular">{pct0(g.mentionRate)}</span> },
+            // A17: with its answer count and range, and no rate under the engine's floor
+            { key: 'm', header: 'Named in', align: 'right', sortValue: (g) => (g.samples >= AI_MIN_RATE_SAMPLES ? g.mentionRate : -1), cell: (g) => <GroupRate g={g} /> },
             { key: 'v', header: 'AI searches / mo', align: 'right', hideOnMobile: true, sortValue: (g) => g.volume, cell: (g) => <span className="tabular">{g.volume ? compactNumber(g.volume) : '-'}</span> },
             { key: 'l', header: 'Named most instead', hideOnMobile: true, sortValue: (g) => g.leader, cell: (g) => <span className="text-[13px] text-ink-2">{g.leader || '-'}</span> },
           ]}

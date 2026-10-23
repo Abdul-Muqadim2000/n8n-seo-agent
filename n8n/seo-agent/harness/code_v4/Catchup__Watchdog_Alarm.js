@@ -7,7 +7,9 @@ let v = {}; try { v = JSON.parse(($('Watchdog Result').first().json || {}).value
 let d = {}; try { d = $('Dispatcher Watchdog').first().json || {}; } catch (e) { d = {}; }
 const parts = [];
 if (d.alarm) parts.push('The Cycle Dispatcher (SEO Agent — Cycle Dispatcher) is not starting any website\'s cycle: ' + (d.reason || 'no reason') + (d.down_since ? ' (down since ' + d.down_since + ')' : '')
-  + '. Publish the workflow (POST /api/v1/workflows/SEOagentCycleDsp/activate) and check its last failed execution.');
+  + (d.mode === 'plan_only' && d.active !== false && Number(d.waiting) > 0 && !/not active|last sweep .* ago, at|no sweep record/.test(String(d.reason || ''))
+    ? '. Switch it to start (seo_cache cycle:mode = {"mode":"start"}) once the DataForSEO balance and the clients\' credits are checked.'
+    : '. Publish the workflow (POST /api/v1/workflows/SEOagentCycleDsp/activate) and check its last failed execution.'));
 if (v.alarm) parts.push('The Search Console mail watcher (SEO Agent — Console Alerts) is not listening: ' + v.failures + ' re-activation(s) in a row failed (' + (v.last_error || 'no reason') + '). Check the IMAP credential and the network, then activate the workflow.');
 if (parts.length) throw new Error(parts.join(' '));
 return [{ json: { watchdog: v.last_verdict || '', failures: v.failures || 0, dispatcher: d.verdict || '' } }];

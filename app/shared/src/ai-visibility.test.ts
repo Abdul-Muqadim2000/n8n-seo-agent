@@ -150,10 +150,10 @@ describe('aiSampleRate / aiPrecisionTable (B8-7)', () => {
   it('uses the engine\'s own measured sample, and projects the pulse at the measured answer rate when it was off', () => {
     const m = aiSampleRate({ measured: { samples: 140, pulseSamples: 112, questions: 7, checkedAt: '2026-10-13T07:00:00Z' } });
     expect(m).toMatchObject({ weeklyPerQuestion: 4, pulsePerQuestion: 16, basis: 'measured', pulseBasis: 'measured' });
-    expect(m.why).toMatch(/140 answers over 7 days to 7 buyer questions/);
+    expect(m.why).toMatch(/140 answers since the previous run to 7 buyer questions/);   // A8 (2026-10-23): never a fixed 7 days
     const named = aiSampleRate({ measured: { samples: 140, pulseSamples: 112, questions: 7, ratePeriod: 'this run on 2026-10-13 + 6 daily pulse days since 2026-10-07' } });
     expect(named.why).toMatch(/140 answers from this run on 2026-10-13 \+ 6 daily pulse days since 2026-10-07 to 7 buyer questions/);
-    expect(named.why).not.toMatch(/over 7 days/);
+    expect(named.why).not.toMatch(/since the previous run/);
     const off = aiSampleRate({ measured: { samples: 28, pulseSamples: 0, questions: 7 } });
     expect(off.pulseBasis).toBe('modelled');
     expect(off.pulsePerQuestion).toBeCloseTo(18 * 0.8, 1);   // 4 of 5 weekly answers came back

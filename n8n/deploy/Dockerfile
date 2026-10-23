@@ -9,8 +9,8 @@ FROM docker.io/n8nio/n8n:${N8N_VERSION}
 USER root
 COPY seo-agent/deploy_manifest.json /opt/seo/deploy_manifest.json
 COPY seo-agent/workflows/ /opt/seo/workflows/
-COPY deploy/entrypoint.sh deploy/release.mjs deploy/deploy_guard.mjs /opt/seo/
-RUN chmod 0555 /opt/seo/entrypoint.sh /opt/seo/release.mjs /opt/seo/deploy_guard.mjs && chmod -R a+rX /opt/seo
+COPY deploy/entrypoint.sh deploy/release.mjs deploy/deploy_guard.mjs deploy/never_deploy.mjs /opt/seo/
+RUN chmod 0555 /opt/seo/entrypoint.sh /opt/seo/release.mjs /opt/seo/deploy_guard.mjs /opt/seo/never_deploy.mjs && chmod -R a+rX /opt/seo
 
 USER node
 # One container: Code nodes run in n8n's own task runner (the local stack's separate `runners` container and the sandbox services

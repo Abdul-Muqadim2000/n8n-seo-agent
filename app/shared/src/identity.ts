@@ -518,6 +518,22 @@ export const AUDIT_ACTIONS = {
   'site.content_rejected': { label: 'Marked a written page as not what was wanted', category: 'websites' },
   'site.ladder_rechecked': { label: 'Paused a ladder whose keyword no longer fits', category: 'websites' },
   'site.ladder_keyword_added': { label: 'Added a keyword to a ladder', category: 'websites' },
+  // A13 (2026-10-23, AI visibility app audit): every Site Admin change (the AI question panel, the monitor settings incl. the panel size
+  // and the engines, competitors, pauses, cadence, prospects) is in the company's audit log, with counts and ids, never question texts
+  'site.admin.pause': { label: 'Paused a website\'s weekly runs', category: 'websites' },
+  'site.admin.resume': { label: 'Resumed a website\'s weekly runs', category: 'websites' },
+  'site.admin.cadence': { label: 'Changed the pages written a week', category: 'websites' },
+  'site.admin.unpublish': { label: 'Marked a page as not published', category: 'websites' },
+  'site.admin.monitors': { label: 'Changed the monitor settings (AI panel size, engines, pulse, competitors)', category: 'websites' },
+  'site.admin.prospect': { label: 'Changed a link prospect', category: 'websites' },
+  'site.admin.ai_prompts': { label: 'Changed the AI question panel', category: 'websites' },
+  'site.admin.content_groups': { label: 'Changed the content groups', category: 'websites' },
+  // W2-A (2026-10-23): AI visibility wave 2
+  'site.ai_prompts_deleted': { label: 'Deleted questions from the AI question panel', category: 'websites' },
+  'site.ai_import': { label: 'Uploaded an AI report export (Bing or Search Console)', category: 'data' },
+  // W2-FIX (2026-10-23): the AI repeat pilot, priced first and run only on an explicit confirmation
+  'site.ai_pilot_quote': { label: 'Asked for the price of the AI repeat pilot', category: 'websites' },
+  'site.ai_pilot_run': { label: 'Confirmed and started the AI repeat pilot', category: 'websites' },
   'company.created': { label: 'Created the company', category: 'settings' },
   'company.updated': { label: 'Changed company details', category: 'settings' },
   'company.budget_changed': { label: 'Changed the platform spending guard', category: 'settings' },
@@ -646,7 +662,8 @@ export function safeAuditDetails(d: unknown, depth = 0): Record<string, unknown>
 /** one CSV cell: quoted, and a leading = + - @ tab or CR neutralised (spreadsheet formula injection, OWASP) */
 export function csvCell(v: unknown): string {
   let s = v == null ? '' : typeof v === 'string' ? v : typeof v === 'object' ? JSON.stringify(v) : String(v);
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  // R-A18: also a formula after leading whitespace or a line break (some spreadsheet apps trim before they read a cell)
+  if (/^[=+\-@\t\r]/.test(s) || /^\s*[=+\-@]/.test(s)) s = `'${s}`;
   return `"${s.replace(/"/g, '""')}"`;
 }
 

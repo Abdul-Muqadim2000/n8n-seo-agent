@@ -141,6 +141,20 @@ export async function linkBuilderRun(body: Record<string, unknown>): Promise<{ o
   return { ok: res.ok && json.ok !== false, requestId: json.request_id ?? null, error: json.error ?? (res.ok ? null : `n8n answered ${res.status}`) };
 }
 
+/** W2-FIX (2026-10-23): the AI repeat pilot (SEOagentAIPilAPI, answered 202 at once). Without `confirm: true` the engine only prices it and posts the
+ *  quote to the callback (stage ai_pilot_quote); with it, it runs once and posts the result (stage ai_pilot). */
+export async function aiPilotRun(body: { domain: string; confirm: boolean; callback_url: string; request_id: string }): Promise<{ ok: boolean; requestId: string | null; error: string | null }> {
+  let res: Response;
+  try {
+    res = await fetch(config.n8n.baseUrl + config.n8n.aiPilotPath, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': config.n8n.webhookKey }, body: JSON.stringify({ ...body, confirm: body.confirm === true }), signal: AbortSignal.timeout(30000) });
+  } catch (err) {
+    throw new HttpError(502, 'The SEO engine is not reachable right now (' + String((err as Error).message || err) + ')');
+  }
+  if (res.status === 404) throw new HttpError(502, 'The AI repeat pilot is not active in the SEO engine yet (SEOagentAIPilAPI).');
+  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; request_id?: string; error?: string };
+  return { ok: res.ok && json.ok !== false, requestId: json.request_id ?? null, error: json.error ?? (res.ok ? null : `n8n answered ${res.status}`) };
+}
+
 export interface ReplyReading { ok: boolean; class: string; summary: string; return_date: string; referral_email: string; referral_name: string; needs_you: boolean; suggested_reply: string; /** D14: claims in the suggested answer the facts on file do not carry (already bracketed in the text) */ unverified?: string[]; link_found: boolean; link: { url: string; rel: string; anchor: string } | null; model_error?: string; error?: string }
 /** v4.13 Reply Reader (synchronous, Claude Haiku ≈ $0.001): what a reply means, a suggested answer, and our link checked on their page. */
 export async function replyRead(body: Record<string, unknown>): Promise<ReplyReading | null> {
@@ -161,6 +175,11 @@ let tableIds: Map<string, string> | null = null;
 let tableIdsAt = 0;
 
 async function api<T>(path: string): Promise<T> {
+  return (await apiSized<T>(path)).data;
+}
+
+/** One n8n API read with the size of its body in bytes (R-A8: the read cache is bounded by bytes). */
+async function apiSized<T>(path: string): Promise<{ data: T; bytes: number }> {
   if (!config.n8n.apiKey) throw new HttpError(503, 'N8N_API_KEY is not configured');
   let res: Response;
   try {
@@ -169,7 +188,66 @@ async function api<T>(path: string): Promise<T> {
     throw new HttpError(502, 'n8n is not reachable (' + String((err as Error).message || err) + ')');
   }
   if (!res.ok) throw new HttpError(502, `n8n API ${path.split('?')[0]} answered ${res.status}`);
-  return (await res.json()) as T;
+  const text = await res.text();
+  return { data: JSON.parse(text) as T, bytes: Buffer.byteLength(text) };
+}
+
+/**
+ * R-A8 (review 2026-10-23): the read cache, bounded. Entries expire after `ttlMs` and expired ones are swept on every write (they used
+ * to stay until the same key was read again); the whole cache is held under `maxBytes` (the JSON size of the reads) by dropping the least
+ * recently used entries; a single read larger than `maxEntryBytes` is not cached at all. Wave 2's answer rows (whole answers, JSON
+ * columns) made one site's read tens of MB on a 4 GB machine that also runs n8n and Postgres.
+ */
+export class ReadCache {
+  private m = new Map<string, { at: number; rows: unknown[]; bytes: number }>();
+  private total = 0;
+  constructor(
+    private ttlMs: number,
+    private maxBytes: number,
+    private maxEntryBytes: number,
+    private maxEntries = 500,
+    private now: () => number = Date.now,
+  ) {}
+  get(key: string): unknown[] | undefined {
+    const e = this.m.get(key);
+    if (!e) return undefined;
+    if (this.now() - e.at >= this.ttlMs) {
+      this.delete(key);
+      return undefined;
+    }
+    // least recently used goes first: a hit moves to the end
+    this.m.delete(key);
+    this.m.set(key, e);
+    return e.rows;
+  }
+  set(key: string, rows: unknown[], bytes: number): void {
+    this.delete(key);
+    this.sweep();
+    if (bytes > this.maxEntryBytes) return;
+    this.m.set(key, { at: this.now(), rows, bytes });
+    this.total += bytes;
+    for (const k of this.m.keys()) {
+      if (this.total <= this.maxBytes && this.m.size <= this.maxEntries) break;
+      this.delete(k);
+    }
+  }
+  delete(key: string): void {
+    const e = this.m.get(key);
+    if (!e) return;
+    this.total -= e.bytes;
+    this.m.delete(key);
+  }
+  /** removes every expired entry */
+  sweep(): void {
+    const t = this.now();
+    for (const [k, e] of [...this.m]) if (t - e.at >= this.ttlMs) this.delete(k);
+  }
+  keys(): string[] {
+    return [...this.m.keys()];
+  }
+  stats(): { entries: number; bytes: number } {
+    return { entries: this.m.size, bytes: this.total };
+  }
 }
 
 async function tableId(name: string): Promise<string | null> {
@@ -189,9 +267,13 @@ async function tableId(name: string): Promise<string | null> {
 
 // Short cache: dashboards read several tables per page; the data changes weekly, a page refresh should not hammer n8n. Identical
 // reads that run at the same time (one page loads several dashboards in parallel) share one request.
-const cache = new Map<string, { at: number; rows: unknown[] }>();
-const inflight = new Map<string, Promise<unknown[]>>();
 const CACHE_MS = 60_000;
+// R-A8: 96 MB in all, no single read over 24 MB (READ_CACHE_MB overrides the total)
+const CACHE_MAX_BYTES = Math.max(8, Number(process.env.READ_CACHE_MB) || 96) * 1024 * 1024;
+const cache = new ReadCache(CACHE_MS, CACHE_MAX_BYTES, CACHE_MAX_BYTES / 4);
+const inflight = new Map<string, Promise<unknown[]>>();
+/** For the platform admin and tests: what the read cache holds. */
+export const readCacheStats = () => cache.stats();
 // a write bumps the table's generation: a read that started before the write must not put the old rows back into the cache
 const generation = new Map<string, number>();
 
@@ -199,7 +281,7 @@ const generation = new Map<string, number>();
 function forgetTable(name: string) {
   generation.set(name, (generation.get(name) ?? 0) + 1);
   const tag = JSON.stringify(name);
-  for (const k of [...cache.keys()]) if (k.includes(tag)) cache.delete(k);
+  for (const k of cache.keys()) if (k.includes(tag)) cache.delete(k);
   for (const k of [...inflight.keys()]) if (k.includes(tag)) inflight.delete(k);
 }
 
@@ -214,16 +296,13 @@ export interface RowQuery {
 export async function rows<T>(table: TableKey, q: RowQuery = {}): Promise<T[]> {
   const name = TABLES[table];
   const key = JSON.stringify([name, q.filters, q.sortBy, q.max]);
-  const hit = cache.get(key);
-  if (!q.fresh && hit && Date.now() - hit.at < CACHE_MS) return hit.rows as T[];
+  const hit = q.fresh ? undefined : cache.get(key);
+  if (hit) return hit as T[];
   const running = q.fresh ? undefined : inflight.get(key);
   if (running) return (await running) as T[];
   const gen = generation.get(name) ?? 0;
-  const p = fetchRows<T>(name, q).then((out) => {
-    if ((generation.get(name) ?? 0) === gen) {
-      cache.set(key, { at: Date.now(), rows: out });
-      if (cache.size > 500) cache.delete(cache.keys().next().value!);
-    }
+  const p = fetchRows<T>(name, q).then(({ rows: out, bytes }) => {
+    if ((generation.get(name) ?? 0) === gen) cache.set(key, out, bytes);
     return out;
   });
   inflight.set(key, p);
@@ -234,23 +313,25 @@ export async function rows<T>(table: TableKey, q: RowQuery = {}): Promise<T[]> {
   }
 }
 
-async function fetchRows<T>(name: string, q: RowQuery): Promise<T[]> {
+async function fetchRows<T>(name: string, q: RowQuery): Promise<{ rows: T[]; bytes: number }> {
   const id = await tableId(name);
   // the table is created on first use by the workflows: none yet means no rows (cached like rows, so the table list is not re-read)
-  if (!id) return [];
+  if (!id) return { rows: [], bytes: 2 };
   const max = q.max ?? 2000;
   const out: T[] = [];
+  let bytes = 0;
   let cursor: string | null = null;
   do {
     const params = new URLSearchParams({ limit: String(Math.min(250, max - out.length)) });
     if (q.filters?.length) params.set('filter', JSON.stringify({ type: 'and', filters: q.filters }));
     if (q.sortBy) params.set('sortBy', q.sortBy);
     if (cursor) params.set('cursor', cursor);
-    const page: { data: T[]; nextCursor: string | null } = await api(`/data-tables/${id}/rows?${params}`);
-    out.push(...page.data);
-    cursor = page.nextCursor;
+    const r = await apiSized<{ data: T[]; nextCursor: string | null }>(`/data-tables/${id}/rows?${params}`);
+    out.push(...r.data.data);
+    bytes += r.bytes;
+    cursor = r.data.nextCursor;
   } while (cursor && out.length < max);
-  return out;
+  return { rows: out, bytes };
 }
 
 /** Updates every row matching all filters (n8n public API, PATCH rows/update). Returns false when the table does not exist yet. */

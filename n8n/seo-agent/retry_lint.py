@@ -31,6 +31,7 @@ ALLOW = {
     'POST Rejection': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST AI Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST Pulse Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
+    'POST Pilot Report': 'callback to the customer app: every POST inserts a report (not idempotent)',   # W2-E2 (2026-10-23): the AI repeat pilot
     'POST BL Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST Growth Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST LB Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
@@ -38,6 +39,11 @@ ALLOW = {
     'POST Cadence Note': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST Alert': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST Progress': 'callback to the customer app: every POST inserts a report (not idempotent)',
+    # R-E14 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the AI tracker's notice callbacks (a `rejected` answer to an on-demand
+    # caller that met an open, busy, stopped or already-measured run) close the caller's request: a slow 200 followed by a retry recorded it twice
+    'Post Open Run Notices': 'callback to the customer app: closes the caller\'s request (not idempotent)',
+    'Post Busy Notices': 'callback to the customer app: closes the caller\'s request (not idempotent)',
+    'Post Stop Notices': 'callback to the customer app: closes the caller\'s request (not idempotent)',
     'Create WP Draft': "writes to the customer's WordPress: a retry can publish a second draft",
 }
 HTTP_TYPE = 'n8n-nodes-base.httpRequest'

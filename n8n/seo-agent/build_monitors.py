@@ -23,7 +23,8 @@ from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_para
                            RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST,   # R9 (2026-10-13): every scheduled run reserves and settles a ledger row
                            ledger_mainline,   # R17 (2026-10-14): and reserves it on the MAIN path, before the first paid call
                            ledger_tag,   # B-C2 (2026-10-15): …and settles a MEASURED Claude figure into it, not the reservation
-                           site_time_src, CYCLES_TABLE)   # 2026-10-19: the website's calendar (ST) and its cycle row (seo_cycles)
+                           site_time_src, CYCLES_TABLE,   # 2026-10-19: the website's calendar (ST) and its cycle row (seo_cycles)
+                           AI_IMPORTS_TABLE, AI_IMPORTS_COLS)   # W2-E3 (2026-10-23): the owner's uploaded AI reports (seo_ai_imports, written by the app)
 from env_settings import SENDER, ENV, BRAND, OPS_EMAIL
 BING_ON = bool((ENV.get('SEO_BING_WEBMASTER_API_KEY') or '').strip())   # v4.10: optional free sources, baked in at build time (apply_env.py rebuilds)
 AHREFS_ON = bool((ENV.get('SEO_AHREFS_API_KEY') or '').strip())
@@ -49,7 +50,13 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__AB__*/', rd('code/_ab.js').rstrip('\n'))   # L7: two subjects a batch, and no verdict under 30 sends per variant
     s = s.replace('/*__DFS_RETRY__*/', rd('code/_dfs_retry.js').rstrip('\n'))   # R18 / R19 / B-L4 / B-L5: the in-200 retry rule and the two like-for-like guards (RT.comparable, RT.likeForLike)
     s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('/*__OUTREACH_KIT__*/', rd('code/_outreach_kit.js')).replace('/*__LISTINGS__*/', rd('code/_listings.js')).replace('/*__CLAIMS__*/', rd('code/_claims.js')).replace('/*__DRAFT_QA__*/', rd('code/_draft_qa.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
+    s = s.replace('/*__AI_ENTITIES__*/', rd('code/_ai_entities.js').rstrip('\n'))   # F1a (2026-10-23): who an AI answer names - one entity per business, its role, the client's position (ENGINE_AUDIT E3 E4 E5 E8 E10 E16)
+    s = s.replace('/*__AI_ANSWER_DATA__*/', rd('code/_ai_answer_data.js').rstrip('\n'))   # W2-E1 (2026-10-23): the answer-level data (full text, cited / read pages, fan-out, product / ad / local cards, source types)
+    s = s.replace('__AI_ANSWERS_COLS__', json.dumps([c for c, _ in AI_ANSWERS_COLS]))   # F2 (2026-10-23): AI Answer Rows / AI Analysed Rows write exactly the table's columns
+    s = s.replace('/*__AI_MEASURE__*/', rd('code/_ai_measure.js').rstrip('\n')).replace('/*__AI_SENTIMENT__*/', rd('code/_ai_sentiment.js').rstrip('\n'))   # W2-E2 (2026-10-23): clustered intervals, 28-day window, declared share of voice, did an action work, owner rules (AVX); sentiment (SENT)
     s = s.replace('/*__AI_PANEL__*/', rd('code/_ai_panel.js').rstrip('\n'))   # G6 (2026-10-18): the AI question panel at scale (limits, markets, strata, chunks, the one cost formula)
+    s = s.replace('/*__AI_W2E3__*/', rd('code/_ai_w2e3.js').rstrip('\n'))   # W2-E3 (2026-10-23): fan-out ranking gap, persona effect, demand, the owner's AI reports, the run's bookkeeping (AIX)
+    s = s.replace('/*__SERP_CACHE__*/', rd('code/_serp_cache.js').rstrip('\n'))   # KW-SERP (2026-10-21): one results-page reading per search and day, shared by every path (SC); W2-E3: the fan-out check reads it too
     s = s.replace('/*__RIVALS__*/', rd('code/_rivals.js').rstrip('\n'))   # C-2 / C-8 (2026-10-17): the one rival set and the category-provider rule (inside the outreach kit, and in AI Metrics)
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
@@ -333,22 +340,60 @@ CYCLE_ENTRY = "`{ trigger: 'cycle', domain, site_id, cycle_key, job, monthly, sc
 A = WF('SEOagentAIVisib1', 'SEO Agent — AI Visibility Tracker', 'aivis', 3600)
 A.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Prompts Table', AI_PROMPTS_TABLE, AI_PROMPTS_COLS), ('Ensure AI Answers Table', AI_ANSWERS_TABLE, AI_ANSWERS_COLS), ('Ensure AI Visibility Table', AI_VIS_TABLE, AI_VIS_COLS),
-       ('Ensure Prospects Table', PROSPECT_TABLE, PROSPECT_COLS), ('Ensure Sites Table', SITES_TABLE, SITES_COLS), ('Ensure Profiles Table', PROFILE_TABLE, PROFILE_COLS), ('Ensure AI Daily Table', AI_DAILY_TABLE, AI_DAILY_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
+       ('Ensure Prospects Table', PROSPECT_TABLE, PROSPECT_COLS), ('Ensure Sites Table', SITES_TABLE, SITES_COLS), ('Ensure Profiles Table', PROFILE_TABLE, PROFILE_COLS), ('Ensure AI Daily Table', AI_DAILY_TABLE, AI_DAILY_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS),
+       ('Ensure AI Imports Table', AI_IMPORTS_TABLE, AI_IMPORTS_COLS)]   # W2-E3 (2026-10-23): the app writes it; created here too so the tracker's load never fails on a new instance
 for i, (nm, t, c) in enumerate(ens): A.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load Link Prospects', PROSPECT_TABLE)]
-for i, (nm, t) in enumerate(loads): A.load(nm, t, at(1 + i, 1))
+from ladder_common import OPS_ALERTS_TABLE, OPS_ALERTS_COLS   # F2 (2026-10-23): a stopped split run's ops alerts
 SINCE = lambda days: '={{ new Date(Date.now() - ' + str(days) + ' * 864e5).toISOString() }}'
-A.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('checked_at', 'gte', SINCE(15))]), at(8, 1), **LOAD)
-A.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(9, 1), **LOAD)
-A.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [('checked_at', 'gte', SINCE(35))]), at(10, 1), **LOAD)
+# F2 (2026-10-23, ENGINE_AUDIT.md E12): every execution used to load the answers of EVERY site for 6.2 days and the whole prompt / visibility
+# / prospect / page tables — memory and stored execution data growing with customers x panel on a 4 GB VM. A start names its website (a cycle
+# job, an on-demand check, the next part of a split run, a resume), so every read of a per-site AI table is filtered by it SERVER-side
+# (`site_id like <site_id>`: n8n's Data Table "contains", `_` escaped; a start that names no website reads `%`, every site, as before) and the
+# run's answers by the run too (`run_id like <continue_run>`). Date windows cap what a site's history can bring: 60 days of weekly rows,
+# 15 of pulse days, 35 of Search Console queries, 6.2 of run answers. AI Plan still filters exactly in code (a `like` can match a longer id).
+SITE_SCOPE = ("={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim()"
+              ".replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))"
+              "(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}")
+RUN_SCOPE = "={{ String(($('Manual Run').first().json || {}).continue_run || '').trim() || '%' }}"
+# R-E2 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): n8n's Data Table `like` is a CONTAINS match (data-table.service.js wraps the value
+# in %...% unless it carries a %), so `site_id like site_abc-com` also read site_abc-com-au and site_myabc-com, and the text trim UPDATED their rows.
+# A start that names a site (or a run) now filters with `eq`, an exact match; `like '%'` stays only for a start that names none (every site).
+def scoped(col, scope):
+    return (col, "={{ (" + scope[4:-3] + ") === '%' ? 'like' : 'eq' }}", scope)
+SITE_EQ = scoped('site_id', SITE_SCOPE)
+RUN_EQ = scoped('run_id', RUN_SCOPE)
+SCOPED = {'Load AI Prompts': [], 'Load AI Visibility': [('checked_at', 'gte', SINCE(60))], 'Load Link Prospects': []}
+# W2-E3 (2026-10-23, fixes/F2.md "Not fixed"): the AI Pulse, AI Growth, the Backlink Monitor and the Link Builder loaded seo_ai_visibility WHOLE (every
+# site, every run since the first). Each reads only the site's latest rows (the pulse and the two link workflows its latest run's rivals, AI
+# Growth its last six runs), so each load is now scoped to the site the start names (the same SITE_SCOPE: '%' when it names none) and to a
+# window: 60 days (70 for AI Growth's six weekly runs). The pulse also starts from its cron, where Manual Run has no data: it reads '%' then.
+PULSE_SCOPE = "={{ $('Manual Run').isExecuted ? " + SITE_SCOPE[4:-3] + " : '%' }}"
+def vis_scoped(W, nm, pos, days, scope=SITE_SCOPE):
+    return W.node(nm, DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_VIS_TABLE, [scoped('site_id', scope), ('checked_at', 'gte', SINCE(days))]), pos, **LOAD)
+for i, (nm, t) in enumerate(loads):
+    if nm in SCOPED: A.node(nm, DT_TYPE, DT_VERSION, dt_get_all_where_params(t, [SITE_EQ] + SCOPED[nm]), at(1 + i, 1), **LOAD)
+    else: A.load(nm, t, at(1 + i, 1))
+A.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [SITE_EQ, ('checked_at', 'gte', SINCE(60))]), at(8, 1), **LOAD)   # W2-E2: 60 days (was 15) - the 28-day segment window and an action's 28 days before / after   # W2-E3 counts its own 28 days inside the 60
+A.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'ai'), SITE_EQ]), at(9, 1), **LOAD)
+A.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [SITE_EQ, ('checked_at', 'gte', SINCE(35))]), at(10, 1), **LOAD)
 # G6 (2026-10-18): the answers earlier executions of an unfinished split run stored (a run is resumed for at most 6 days; the pulse's rows are
 # not this run's). AI Plan reads which questions x engines are answered, AI Metrics measures the whole run over them in its last execution.
-A.node('Load AI Run Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [('run_kind', 'neq', 'pulse'), ('checked_at', 'gte', SINCE(6.2))]), at(10, 2), **LOAD)
+A.node('Load AI Run Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [SITE_EQ, RUN_EQ, ('run_kind', 'neq', 'pulse'), ('checked_at', 'gte', SINCE(6.2))]), at(10, 2), **LOAD)
 loads += [('Load AI Daily', None), ('Load Cache (AI)', None), ('Load Query History', None), ('Load AI Run Answers', None)]
 # RV-1 (2026-10-21): the page inventory with what each address answered (seo_pages.http_status, written by the Site Tracker), so the report never
 # lists a page that answers 404 as "your cited page" and the brief never builds on one
 from ladder_common import PAGES_TABLE as _PAGES_TABLE_RV1
-A.load('Load Pages (AI)', _PAGES_TABLE_RV1, at(11, 2)); loads += [('Load Pages (AI)', None)]
+A.node('Load Pages (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_PAGES_TABLE_RV1, [SITE_EQ]), at(11, 2), **LOAD); loads += [('Load Pages (AI)', None)]   # F2 (E12)
+# W2-E2 (2026-10-23, fixes/W2-E2.md): the actions whose effect AI Metrics measures (difference in differences): the AI targets written / won and the pages published
+from ladder_common import AI_TARGETS_TABLE as _AIT_W2, LOG_TABLE as _LOG_W2
+A.node('Load AI Targets (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_AIT_W2, [SITE_EQ]), at(12, 2), **LOAD)
+A.node('Load Content Log (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LOG_W2, [SITE_EQ]), at(13, 2), **LOAD); loads += [('Load AI Targets (AI)', None), ('Load Content Log (AI)', None)]
+# W2-E3 (2026-10-23): the owner's uploaded AI reports of the last 35 days (Bing AI Performance, Search Console AI Mode / AI Overviews), and the
+# results pages this site's paths read TODAY (seo_cache `serp:`), so the fan-out check pays for none of them twice
+A.node('Load AI Imports', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_IMPORTS_TABLE, [SITE_EQ, ('day', 'gte', '={{ new Date(Date.now() - 35 * 864e5).toISOString().slice(0, 10) }}')]), at(14, 2), **LOAD)
+A.node('Load SERP Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'serp'), SITE_EQ, ('updated_at', 'gte', '={{ new Date().toISOString().slice(0, 10) }}')]), at(15, 2), **LOAD)
+loads += [('Load AI Imports', None), ('Load SERP Cache (AI)', None)]
 A.code('AI Plan', 'AI_Plan.js', at(11, 1)); A.iff('Any Sites (AI)?', '{{ !$json.nothing_to_do }}', at(12, 1)); A.node('Nothing To Do (AI)', 'n8n-nodes-base.noOp', 1, {}, at(13, 2))
 A.code('Site Text Jobs', 'Site_Text_Jobs.js', at(13, -2)); A.iff('Need Site Text?', '{{ !$json.skip }}', at(14, -2))
 A.node('Read Site (AI)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '=https://r.jina.ai/https://{{ $json.domain }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'X-Retain-Images', 'value': 'none'}]}, 'options': {'response': {'response': {'responseFormat': 'text', 'outputPropertyName': 'site_text'}}, 'timeout': 30000}}, at(15, -3), credentials={'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}, onError='continueRegularOutput', **retry_lint.RETRY)
@@ -356,7 +401,8 @@ A.code('Discovery Requests', 'Discovery_Requests.js', at(16, -2)); A.iff('Any Di
 A.code('Prompt Jobs', 'Prompt_Jobs.js', at(19, -2)); A.iff('Any Prompt Jobs?', '{{ !$json.skip }}', at(20, -2))
 A.agent('Prompt Writer', 'ai_prompts.txt', {'type': 'object', 'properties': {'prompts': {'type': 'array', 'items': {'type': 'object', 'properties': {'prompt': {'type': 'string'}, 'kind': {'type': 'string'}, 'stage': {'type': 'string'}, 'cluster': {'type': 'string'}, 'keyword': {'type': 'string'}, 'origin': {'type': 'string'}, 'persona': {'type': 'string'}}, 'required': ['prompt']}}}, 'required': ['prompts']}, at(21, -3))   # G6: + persona (one job per market x buyer role)
 A.code('Prompt Rows', 'Prompt_Rows.js', at(22, -2)); A.iff('Any Prompt Rows?', '{{ !$json.skip }}', at(23, -2))
-A.node('Save Prompts', DT_TYPE, DT_VERSION, dt_upsert_params(AI_PROMPTS_TABLE, AI_PROMPTS_COLS, 'prompt_id'), at(24, -3), onError='continueRegularOutput')
+A.node('Save Prompts', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_PROMPTS_TABLE, AI_PROMPTS_COLS, ['site_id', 'prompt_id']),   # F2 (E15): unique per site
+ at(24, -3), onError='continueRegularOutput')
 A.code('Traffic Requests', 'Traffic_Requests.js', at(13, 0)); A.iff('Any GA4 (AI)?', '{{ !$json.skip }}', at(14, 0))
 A.node('GA4 AI Report', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.url }}', 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'googleApi', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}',
     'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 150}}, 'timeout': 60000, 'response': {'response': {'neverError': True}}}}, at(15, -1), credentials=GOOGLE, **HTTP_X)
@@ -368,9 +414,26 @@ A.code('AI Requests', 'AI_Requests.js', at(20, 0)); A.iff('Any AI Requests?', '{
 A.dfs_http('Run AI Requests', at(22, -1), batch=10, interval=200, timeout=150000)
 A.code('Parse AI Answers', 'Parse_AI_Answers.js', at(23, 0))
 A.code('Analyst Jobs', 'Analyst_Jobs.js', at(24, 0)); A.iff('Any Analyst Jobs?', '{{ !$json.skip }}', at(25, 0))
-A.agent('Answer Analyst', 'answer_analyst.txt', {'type': 'object', 'properties': {'answers': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'brands': {'type': 'array', 'items': {'type': 'object', 'properties': {'name': {'type': 'string'}, 'domain': {'type': 'string'}}, 'required': ['name']}}, 'sentiment': {'type': 'string'}, 'why': {'type': 'string'}, 'wrong': {'type': 'array', 'items': {'type': 'object', 'properties': {'claim': {'type': 'string'}, 'correct': {'type': 'string'}}, 'required': ['claim']}}}, 'required': ['n']}}, 'descriptors': ARR}, 'required': ['answers']}, at(26, -1))
+A.agent('Answer Analyst', 'answer_analyst.txt', {'type': 'object', 'properties': {'answers': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'brands': {'type': 'array', 'items': {'type': 'object', 'properties': {'name': {'type': 'string'}, 'domain': {'type': 'string'}, 'role': {'type': 'string'}}, 'required': ['name']}}, 'sentiment': {'type': 'string'}, 'why': {'type': 'string'}, 'wrong': {'type': 'array', 'items': {'type': 'object', 'properties': {'claim': {'type': 'string'}, 'correct': {'type': 'string'}}, 'required': ['claim']}}}, 'required': ['n']}}, 'descriptors': ARR}, 'required': ['answers']}, at(26, -1))
 A.code('Apply Analysis', 'Apply_Analysis.js', at(27, 0)); A.iff('Any Answer Rows?', '{{ !$json.skip }}', at(28, 0))
-A.node('Save AI Answers', DT_TYPE, DT_VERSION, dt_insert_params(AI_ANSWERS_TABLE, AI_ANSWERS_COLS), at(29, -1), onError='continueRegularOutput')
+# F2 (2026-10-23, ENGINE_AUDIT.md E11): the answers are stored the moment they are parsed, BEFORE the Answer Analyst; the analyst's reading is
+# written back over the rows it changed (Update AI Answers, upsert on run_id + prompt_id + engine). A part that dies in the analyst keeps them.
+A.code('AI Answer Rows', 'AI_Answer_Rows.js', at(23, 1)); A.iff('Any Raw Answers?', '{{ !$json.skip }}', at(23, 2))
+A.node('Save AI Answers', DT_TYPE, DT_VERSION, dt_insert_params(AI_ANSWERS_TABLE, AI_ANSWERS_COLS), at(24, 2), onError='continueRegularOutput')
+A.code('AI Analysed Rows', 'AI_Analysed_Rows.js', at(28, 1))
+A.node('Update AI Answers', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_ANSWERS_TABLE, AI_ANSWERS_COLS, ['run_id', 'prompt_id', 'engine']), at(29, -1), onError='continueRegularOutput')
+# F2 (2026-10-23, ENGINE_AUDIT.md E1): nothing is paid before the run's state row records the keys this part is about to send (and is read back)
+A.code('AI Asking State', 'AI_Asking_State.js', at(21, 1)); A.iff('Any Asking State?', '{{ !$json.skip }}', at(21, 2))
+A.node('Save Asking State', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(21, 3), onError='continueRegularOutput', alwaysOutputData=True)
+A.code('AI Requests Go', 'AI_Requests_Go.js', at(22, 2)); A.iff('Go AI Requests?', '{{ !$json.skip }}', at(22, 3))
+# F2 (E1): a stopped run's ops alerts, recorded before anything is sent (the run's own alert sweep delivers them), and the callers told now (E17)
+A.code('Run Alert Rows', 'AI_Run_Alert_Rows.js', at(33, 1)); A.iff('Any Run Alerts?', '{{ !$json.skip }}', at(33, 2))
+A.node('Save Run Alert', DT_TYPE, DT_VERSION, dt_upsert_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, 'alert_key'), at(33, 3), onError='continueRegularOutput', alwaysOutputData=True)
+_notice_post = lambda nm, pos: A.node(nm, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'timeout': 30000}}, pos, onError='continueRegularOutput')   # R-E14: one try, like every customer callback (retry_lint.ALLOW)
+for _nm, _src_node, _pos in [('Stop Notices (AI)', 'AI Chunk Handoff', at(34, 1)), ('Open Run Notices (AI)', 'AI Plan', at(12, -1)), ('Busy Notices (AI)', 'AI Plan', at(12, 3))]:
+    A.code(_nm, src('AI_Run_Notices.js').replace('__NOTICE_SRC__', _src_node), _pos)
+    A.iff('Tell ' + _nm[:-5] + '?', '{{ !$json.skip }}', [_pos[0] + 110, _pos[1]])
+    _notice_post('Post ' + _nm[:-5], [_pos[0] + 220, _pos[1]])
 # G6 (2026-10-18): the hand-off between the executions of a split weekly run — the run's state row, and the start of the next execution
 A.code('AI Chunk Handoff', 'AI_Chunk_Handoff.js', at(30, 0))
 A.code('Run State Rows', "// G6: the split runs' state rows for seo_cache (upsert by key; exact columns).\nconst rows = $('AI Chunk Handoff').all().map(i => (i.json || {}).state_row).filter(Boolean);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(31, 0))
@@ -379,6 +442,10 @@ A.node('Save Run State', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACH
 A.code('Next Chunk Starts', "// G6: one start item per site whose run continues (Manual Run reads domain / site_id + continue_run; parent_run_id keeps the run guard from\n// taking this execution's open ledger row for a twin). The state row is saved first, so the next execution finds what is answered.\nconst out = $('AI Chunk Handoff').all().map(i => (i.json || {}).next).filter(Boolean);\nreturn out.length ? out.map(j => ({ json: j })) : [{ json: { skip: true } }];", at(34, 0))
 A.iff('Any Next Chunk?', '{{ !$json.skip }}', at(35, 0))
 A.node('Start Next Chunk', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentAIVisib1'}, 'mode': 'each', 'options': {'waitForSubWorkflow': False}}, at(36, -1), onError='continueRegularOutput')
+# W2-E2 (2026-10-23): every answer of the run that names the business is read by Claude Haiku (aspects, objections, rivals), in the run's last execution
+A.code('Sentiment Jobs', 'Sentiment_Jobs.js', at(8, 4)); A.iff('Any Sentiment Jobs?', '{{ !$json.skip }}', at(8, 5))
+A.agent('Sentiment Reader', 'ai_sentiment.txt', {'type': 'object', 'properties': {'answers': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'polarity': {'type': 'string'}, 'aspects': {'type': 'array', 'items': {'type': 'object', 'properties': {'aspect': {'type': 'string'}, 'polarity': {'type': 'string'}}, 'required': ['aspect', 'polarity']}}, 'objection': {'type': 'string'}, 'rivals': {'type': 'array', 'items': {'type': 'object', 'properties': {'name': {'type': 'string'}, 'polarity': {'type': 'string'}}, 'required': ['name', 'polarity']}}}, 'required': ['n', 'polarity']}}}, 'required': ['answers']},
+        at(9, 6), max_tokens=4000, model=('claude-haiku-4-5-20251001', 'Claude Haiku 4.5'))
 A.code('AI Metrics', 'AI_Metrics.js', at(10, 3)); A.iff('Any Final Sites?', '{{ !$json.skip }}', at(10, 4)); A.code('AI Vis Rows', 'AI_Vis_Rows.js', at(11, 3))
 A.code('Chunk Part Done', "// G6: every site of this execution continues its split run in another execution — nothing to measure, report or deliver here.\nreturn [{ json: { done: true, part: true, note: ($('AI Metrics').first().json || {}).reason || '' } }];", at(11, 5))
 A.node('Save AI Visibility', DT_TYPE, DT_VERSION, dt_insert_params(AI_VIS_TABLE, AI_VIS_COLS), at(12, 3), onError='continueRegularOutput')
@@ -389,41 +456,118 @@ A.node('Save AI Cache', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE
 # G6 (2026-10-18): kept 120 days (was 400). A 500-question panel stores ~3,000 answer rows (~6.9 MB) a week and n8n holds ALL its Data Tables
 # in 200 MB by default (N8N_DATA_TABLES_MAX_SIZE_BYTES); the weekly figures, segments and panel of every run stay in seo_ai_visibility for good.
 A.node('Prune Old Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWERS_TABLE, [('checked_at', 'lt', SINCE(120))]), at(19, 3), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+# W2-E1 (2026-10-23, fixes/W2-E1.md §6): rows keep their 120 days, but the full answer text and the pages-read list (about 4 KB of a ~7 KB row) are
+# kept 35 days - five weekly runs, far past the analyst's re-read (6.2 days) - then blanked on this site's rows of the 35-49 day window (a missed week is
+# caught next time). Without it a 200-question site alone would hold ~120 MB of weekly answers against n8n's 200 MB for every Data Table.
+from ladder_common import dt_update_where_params as _dt_update_where_w2e1
+A.node('Trim Old Answer Text', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_ANSWERS_TABLE, AI_ANSWERS_COLS, [SITE_EQ, ('run_kind', 'neq', 'pulse'), ('checked_at', 'lt', SINCE(35)), ('checked_at', 'gte', SINCE(49)), ('answer_text', 'isNotEmpty', '')],   # R-E7: only rows not trimmed yet (an update answers with every row it changed)
+       {'answer_text': '', 'retrieved_json': ''}), at(19, 4), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+# R-E7 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): a Data Table update or delete in n8n 2.41.4 ANSWERS WITH EVERY ROW IT CHANGED
+# (the proxy passes returnData = true; the node has no option to turn it off), so each one is followed by a node that collapses that answer to a count:
+# nothing downstream carries the rows. The trims touch only rows not trimmed yet (answer_text not empty), so a week's answer is one week's rows.
+COLLAPSE = "// R-E7: a Data Table update / delete answers with every row it changed; only the count goes on.\nconst n = $input.all().filter(i => i.json && !i.json.error && i.json.id != null).length;\nreturn [{ json: { changed: n } }];"
+A.code('Trimmed (AI)', COLLAPSE, at(19, 5), executeOnce=True)
+# and the results pages the fan-out check (and every other path) stored for this site: a reading counts only on its own day (SC.lookup), so rows
+# older than 2 days are dead weight - one row of up to 20 KB per search, up to 200 searches a week per site, and nothing pruned them. The value is
+# blanked first (an update that answers with small rows), then the rows are deleted (a delete that answers with the now-small rows).
+A.node('Blank Old SERP Cache (AI)', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(CACHE_TABLE, CACHE_COLS, [('kind', 'eq', 'serp'), SITE_EQ, ('updated_at', 'lt', SINCE(2)), ('value', 'isNotEmpty', '')], {'value': ''}),
+       at(27, 7), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+A.node('Prune Old SERP Cache (AI)', DT_TYPE, DT_VERSION, dt_delete_where_params(CACHE_TABLE, [('kind', 'eq', 'serp'), SITE_EQ, ('updated_at', 'lt', SINCE(2))]), at(28, 7), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+A.code('SERP Cache Pruned (AI)', COLLAPSE, at(29, 7), executeOnce=True)
+# W2-FIX (2026-10-23, fixes/W2-FIX.md item 3; W2-E2 open item 5): each weekly row stores `units_json`, its answers one by one (~145 KB a week at 500
+# questions x 9 engines), and seo_ai_visibility keeps its rows for good. The record is read only for the 28-day window and an action's 28 days before /
+# after (actions of the last 31 days: 59 days back), and the tracker loads 60 days of rows; so it is blanked on this site's rows aged 70-120 days
+# (a missed week is caught for seven more weeks). Every other column of the row (its figures, segments, panel) is kept.
+A.node('Trim Old Units', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_VIS_TABLE, AI_VIS_COLS, [SITE_EQ, ('checked_at', 'lt', SINCE(70)), ('checked_at', 'gte', SINCE(120)), ('units_json', 'isNotEmpty', '')],
+       {'units_json': ''}), at(20, 5), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+A.code('Trimmed Units (AI)', COLLAPSE, at(21, 5), executeOnce=True)   # R-E7: the update answers with every row it changed
 A.code('AI Brief Input', 'AI_Brief_Input.js', at(20, 3))
 A.agent('AI Brief', 'ai_brief.txt', {'type': 'object', 'properties': {'headline': {'type': 'string'}, 'summary': {'type': 'string'}, 'actions': {'type': 'array', 'items': {'type': 'object', 'properties': {'priority': {'type': 'number'}, 'action': {'type': 'string'}, 'why': {'type': 'string'}}, 'required': ['action']}}, 'watch': ARR}, 'required': ['headline', 'summary', 'actions']}, at(21, 3))
 A.code('AI Report', 'AI_Report.js', at(22, 3)); A.pdf_chain('AI', at(23, 3))
 A.code('Build AI Callback', 'Build_AI_Callback.js', at(26, 4)); A.deliver('AI', at(26, 3), "={{ $binary.pdf ? 'pdf' : 'data' }}")
 A.chain(*[e[0] for e in ens], *[l[0] for l in loads], 'AI Plan', 'Any Sites (AI)?'); A.link('Manual Run', ens[0][0])
-A.link('Any Sites (AI)?', 'Site Text Jobs', 0); A.chain('Site Text Jobs', 'Need Site Text?'); A.link('Need Site Text?', 'Read Site (AI)', 0); A.link('Need Site Text?', 'Discovery Requests', 1); A.link('Read Site (AI)', 'Discovery Requests'); A.link('Any Sites (AI)?', 'Nothing To Do (AI)', 1)
+A.link('Any Sites (AI)?', 'Open Run Notices (AI)', 0); A.chain('Open Run Notices (AI)', 'Tell Open Run Notices?'); A.link('Tell Open Run Notices?', 'Post Open Run Notices', 0); A.link('Tell Open Run Notices?', 'Site Text Jobs', 1); A.link('Post Open Run Notices', 'Site Text Jobs')   # F2 (E17)
+A.chain('Site Text Jobs', 'Need Site Text?'); A.link('Need Site Text?', 'Read Site (AI)', 0); A.link('Need Site Text?', 'Discovery Requests', 1); A.link('Read Site (AI)', 'Discovery Requests'); A.link('Any Sites (AI)?', 'Busy Notices (AI)', 1)
+A.chain('Busy Notices (AI)', 'Tell Busy Notices?'); A.link('Tell Busy Notices?', 'Post Busy Notices', 0); A.link('Tell Busy Notices?', 'Nothing To Do (AI)', 1); A.link('Post Busy Notices', 'Nothing To Do (AI)')   # F2 (E17)
 A.chain('Discovery Requests', 'Any Discovery?'); A.link('Any Discovery?', 'Run Discovery', 0); A.link('Any Discovery?', 'Prompt Jobs', 1); A.link('Run Discovery', 'Prompt Jobs')
 A.chain('Prompt Jobs', 'Any Prompt Jobs?'); A.link('Any Prompt Jobs?', 'Prompt Writer', 0); A.link('Any Prompt Jobs?', 'Prompt Rows', 1); A.link('Prompt Writer', 'Prompt Rows')
 A.chain('Prompt Rows', 'Any Prompt Rows?'); A.link('Any Prompt Rows?', 'Save Prompts', 0); A.link('Any Prompt Rows?', 'Traffic Requests', 1); A.link('Save Prompts', 'Traffic Requests')
 A.chain('Traffic Requests', 'Any GA4 (AI)?'); A.link('Any GA4 (AI)?', 'GA4 AI Report', 0); A.link('Any GA4 (AI)?', 'Access Requests', 1); A.link('GA4 AI Report', 'Access Requests')
 A.chain('Access Requests', 'Any Access?'); A.link('Any Access?', 'Fetch Access', 0); A.link('Any Access?', 'AI Access', 1); A.link('Fetch Access', 'AI Access')
-A.chain('AI Access', 'AI Requests', 'Any AI Requests?'); A.link('Any AI Requests?', 'Run AI Requests', 0); A.link('Any AI Requests?', 'Parse AI Answers', 1)
+A.chain('AI Access', 'AI Requests', 'Any AI Requests?'); A.link('Any AI Requests?', 'AI Asking State', 0); A.link('Any AI Requests?', 'Parse AI Answers', 1)
+# F2 (E1): record -> save -> read back -> pay
+A.chain('AI Asking State', 'Any Asking State?'); A.link('Any Asking State?', 'Save Asking State', 0); A.link('Any Asking State?', 'AI Requests Go', 1); A.link('Save Asking State', 'AI Requests Go')
+A.chain('AI Requests Go', 'Go AI Requests?'); A.link('Go AI Requests?', 'Run AI Requests', 0); A.link('Go AI Requests?', 'AI Chunk Handoff', 1)
 A.ai_retry_gate(at(22, 1), 'Parse AI Answers')   # D19: task errors inside an HTTP 200 are re-sent once, then merged back in order
-A.chain('Parse AI Answers', 'Analyst Jobs', 'Any Analyst Jobs?'); A.link('Any Analyst Jobs?', 'Answer Analyst', 0); A.link('Any Analyst Jobs?', 'Apply Analysis', 1); A.link('Answer Analyst', 'Apply Analysis')
-A.chain('Apply Analysis', 'Any Answer Rows?'); A.link('Any Answer Rows?', 'Save AI Answers', 0); A.link('Any Answer Rows?', 'AI Chunk Handoff', 1); A.link('Save AI Answers', 'AI Chunk Handoff')
-A.chain('AI Chunk Handoff', 'Run State Rows', 'Any Run State?'); A.link('Any Run State?', 'Save Run State', 0); A.link('Any Run State?', 'Next Chunk Starts', 1); A.link('Save Run State', 'Next Chunk Starts')
-A.chain('Next Chunk Starts', 'Any Next Chunk?'); A.link('Any Next Chunk?', 'Start Next Chunk', 0); A.link('Any Next Chunk?', 'AI Metrics', 1); A.link('Start Next Chunk', 'AI Metrics')
+# F2 (E11): Parse -> store -> analyse -> write back what the analyst changed -> hand off
+A.chain('Parse AI Answers', 'AI Answer Rows', 'Any Raw Answers?'); A.link('Any Raw Answers?', 'Save AI Answers', 0); A.link('Any Raw Answers?', 'Analyst Jobs', 1); A.link('Save AI Answers', 'Analyst Jobs')
+A.chain('Analyst Jobs', 'Any Analyst Jobs?'); A.link('Any Analyst Jobs?', 'Answer Analyst', 0); A.link('Any Analyst Jobs?', 'Apply Analysis', 1); A.link('Answer Analyst', 'Apply Analysis')
+A.chain('Apply Analysis', 'AI Analysed Rows', 'Any Answer Rows?'); A.link('Any Answer Rows?', 'Update AI Answers', 0); A.link('Any Answer Rows?', 'AI Chunk Handoff', 1); A.link('Update AI Answers', 'AI Chunk Handoff')
+A.chain('AI Chunk Handoff', 'Run State Rows', 'Any Run State?'); A.link('Any Run State?', 'Save Run State', 0); A.link('Any Run State?', 'Run Alert Rows', 1); A.link('Save Run State', 'Run Alert Rows')
+A.chain('Run Alert Rows', 'Any Run Alerts?'); A.link('Any Run Alerts?', 'Save Run Alert', 0); A.link('Any Run Alerts?', 'Stop Notices (AI)', 1); A.link('Save Run Alert', 'Stop Notices (AI)')
+A.chain('Stop Notices (AI)', 'Tell Stop Notices?'); A.link('Tell Stop Notices?', 'Post Stop Notices', 0); A.link('Tell Stop Notices?', 'Next Chunk Starts', 1); A.link('Post Stop Notices', 'Next Chunk Starts')
+A.chain('Next Chunk Starts', 'Any Next Chunk?'); A.link('Any Next Chunk?', 'Start Next Chunk', 0); A.link('Any Next Chunk?', 'Sentiment Jobs', 1); A.link('Start Next Chunk', 'Sentiment Jobs')
+A.chain('Sentiment Jobs', 'Any Sentiment Jobs?'); A.link('Any Sentiment Jobs?', 'Sentiment Reader', 0); A.link('Any Sentiment Jobs?', 'AI Metrics', 1); A.link('Sentiment Reader', 'AI Metrics')   # W2-E2
 A.chain('AI Metrics', 'Any Final Sites?'); A.link('Any Final Sites?', 'AI Vis Rows', 0); A.link('Any Final Sites?', 'Chunk Part Done', 1)
 A.chain('AI Vis Rows', 'Save AI Visibility', 'AI Prospect Rows', 'Any AI Prospects?'); A.link('Any AI Prospects?', 'Save AI Prospects', 0); A.link('Any AI Prospects?', 'AI Cache Rows', 1); A.link('Save AI Prospects', 'AI Cache Rows')
 A.chain('AI Cache Rows', 'Any Cache Rows?'); A.link('Any Cache Rows?', 'Save AI Cache', 0); A.link('Any Cache Rows?', 'Prune Old Answers', 1); A.link('Save AI Cache', 'Prune Old Answers')
-A.chain('Prune Old Answers', 'AI Brief Input', 'AI Brief', 'AI Report', 'Prepare PDF AI', 'Render PDF AI', 'Attach PDF AI', 'Has Email (AI)?'); A.link('Attach PDF AI', 'Build AI Callback'); A.link('Build AI Callback', 'Has Callback (AI)?')
-A.run_ledger('ai_visibility', 'AI', 'AI Plan', ['AI Report', 'Chunk Part Done'], at(12, 7), measured='AI Metrics|AI Chunk Handoff')   # G6: a part of a split run ends at Chunk Part Done and states its money in the hand-off
+# ---- W2-E3 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §2-§5): after the week is measured AND stored (the row and the run's
+# `done` state are saved above, so a part that dies below can never make the run ask its questions again): each question's asked state (free),
+# then the paid options in ONE gated DataForSEO call - the fan-out ranking gap, the persona test on the ChatGPT API, the monthly market trend -
+# and their columns written onto the stored row (an UPDATE by site + run that touches only the columns it carries; it never inserts).
+def _dt_update_auto(table, cols, keys):
+    p = dt_upsert_params_keys(table, cols, keys); p['operation'] = 'update'; return p
+A.code('Prompt State Rows', 'AI_Prompt_State.js', at(20, 4)); A.iff('Any Prompt State?', '{{ !$json.skip }}', at(20, 5))
+A.node('Save Prompt State', DT_TYPE, DT_VERSION, _dt_update_auto(AI_PROMPTS_TABLE, AI_PROMPTS_COLS, ['site_id', 'prompt_id']), at(20, 6), onError='continueRegularOutput', alwaysOutputData=True)
+A.code('AI Extra Requests', 'AI_Extra_Requests.js', at(21, 5)); A.iff('Any AI Extra Requests?', '{{ !$json.skip }}', at(21, 6))
+A.dfs_http('Run AI Extra Requests', at(22, 6), batch=10, interval=200, timeout=150000)
+A.code('AI Extras', 'AI_Extras.js', at(23, 5))
+A.code('Extras Vis Rows', "// W2-E3: the stored visibility row's update per site (only the columns AI Extras carries: notes_json, cost_usd, and fanout_gap_json / demand_json when read).\nconst rows = $('AI Extras').all().map(i => (i.json || {}).vis_update).filter(Boolean);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(24, 5))
+A.iff('Any Extras Vis?', '{{ !$json.skip }}', at(24, 6))
+A.node('Update AI Visibility (Extras)', DT_TYPE, DT_VERSION, _dt_update_auto(AI_VIS_TABLE, AI_VIS_COLS, ['site_id', 'run_id']), at(25, 6), onError='continueRegularOutput', alwaysOutputData=True)
+A.code('Extras Cache Rows', "// W2-E3: the results pages the fan-out check read now (seo_cache `serp:`, exact columns), so every path of this site reads them for nothing today.\nconst rows = $('AI Extras').all().flatMap(i => (i.json || {}).cache_rows || []);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(26, 5))
+A.iff('Any Extras Cache?', '{{ !$json.skip }}', at(26, 6))
+A.node('Save Extras Cache', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(27, 6), onError='continueRegularOutput', alwaysOutputData=True)
+A.chain('Prune Old Answers', 'Trim Old Answer Text', 'Trimmed (AI)', 'Trim Old Units', 'Trimmed Units (AI)', 'Prompt State Rows', 'Any Prompt State?'); A.link('Any Prompt State?', 'Save Prompt State', 0); A.link('Any Prompt State?', 'AI Extra Requests', 1); A.link('Save Prompt State', 'AI Extra Requests')
+# R-E1 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the options' keys are recorded in the run's state row BEFORE they are paid, and
+# read back (F2's record -> save -> read back -> pay), so an attempt of the same run that reaches the options again never buys one twice
+A.code('Extras Asking State', 'AI_Extras_State.js', at(21, 7)); A.iff('Any Extras State?', '{{ !$json.skip }}', at(21, 8))
+A.node('Save Extras State', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(22, 8), onError='continueRegularOutput', alwaysOutputData=True)
+A.code('AI Extras Go', 'AI_Extras_Go.js', at(23, 8)); A.iff('Go AI Extra Requests?', '{{ !$json.skip }}', at(24, 8))
+A.chain('AI Extra Requests', 'Any AI Extra Requests?'); A.link('Any AI Extra Requests?', 'Extras Asking State', 0); A.link('Any AI Extra Requests?', 'AI Extras', 1)
+A.chain('Extras Asking State', 'Any Extras State?'); A.link('Any Extras State?', 'Save Extras State', 0); A.link('Any Extras State?', 'AI Extras Go', 1); A.link('Save Extras State', 'AI Extras Go')
+A.chain('AI Extras Go', 'Go AI Extra Requests?'); A.link('Go AI Extra Requests?', 'Run AI Extra Requests', 0); A.link('Go AI Extra Requests?', 'AI Extras', 1); A.link('Run AI Extra Requests', 'AI Extras')
+A.chain('AI Extras', 'Extras Vis Rows', 'Any Extras Vis?'); A.link('Any Extras Vis?', 'Update AI Visibility (Extras)', 0); A.link('Any Extras Vis?', 'Extras Cache Rows', 1); A.link('Update AI Visibility (Extras)', 'Extras Cache Rows')
+A.chain('Extras Cache Rows', 'Any Extras Cache?'); A.link('Any Extras Cache?', 'Save Extras Cache', 0); A.link('Any Extras Cache?', 'Blank Old SERP Cache (AI)', 1); A.link('Save Extras Cache', 'Blank Old SERP Cache (AI)')
+A.chain('Blank Old SERP Cache (AI)', 'Prune Old SERP Cache (AI)', 'SERP Cache Pruned (AI)', 'AI Brief Input')   # R-E7
+A.chain('AI Brief Input', 'AI Brief', 'AI Report', 'Prepare PDF AI', 'Render PDF AI', 'Attach PDF AI', 'Has Email (AI)?'); A.link('Attach PDF AI', 'Build AI Callback'); A.link('Build AI Callback', 'Has Callback (AI)?')
+A.run_ledger('ai_visibility', 'AI', 'AI Plan', ['AI Report', 'Chunk Part Done'], at(12, 7), measured='AI Metrics|AI Chunk Handoff|AI Extras')   # W2-E3: + the options' money (AI Extras: each task once by its id)   # G6: a part of a split run ends at Chunk Part Done and states its money in the hand-off
 # B-A10 (2026-10-15, INVARIANTS rule 3): the monthly question-discovery pull is the one paid call outside the AI gate D19 built.
 # Its failure is silent by construction — *Prompt Jobs* simply finds no new questions — so a 40101 inside a 200 shrinks next
 # month's panel with nobody told, and a smaller panel is exactly what B-L4 had to stop being read as a fall in visibility.
 A.in200_gate('Run Discovery', 'the questions buyers ask AI assistants about this topic', 'question')
+# W2-E3 (2026-10-23): the options' call (fan-out results pages, persona answers, the market trend) behind the same gate: a task error inside a
+# 200 is re-sent once, a twice-failed search is 'not read', never 'not in the top 10'
+A.in200_gate('Run AI Extra Requests', 'the fan-out searches, the persona answers and the market trend', 'request')
 A.sticky(f"""## SEO Agent — AI Visibility Tracker (v4.5, v4.9)
 **Once a week in each website's own cycle** (job 1 of the cycle, before the Site Tracker, whose report shows the summary; *Manual Run* {CYCLE_ENTRY}; the monthly full run only when the dispatcher passes `monthly: true`) and on demand (*Manual Run* `{{ domain | site_id, email?, callback_url?, country?, location_code?, competitors?, topics? }}`; form option "Check my AI visibility" / API `mode: ai_visibility`). The **AI Pulse** workflow asks the same panel every other day on the fast engines; this run adds its samples to the week's figures.
 Per site (`seo_sites` + ladder domains; settings in `{MONITORS_TABLE}`: engines, questions (3-50, default 20), daily pulse, competitors, brand names): a stable **question panel** (`{AI_PROMPTS_TABLE}`: buyer stage, topic cluster, monthly AI search volume; written by Claude from the topics, **real questions from the AI-answer database** and the site's long Search Console queries; custom ones through Site Admin `ai_prompts`) is asked to **ChatGPT** and **Gemini** (the real chat interfaces, LLM scraper $0.004), **Perplexity** (sonar, localised, $0.006), **Google AI Mode** ($0.004) and the **AI Overview** of the matching search ($0.002); **Claude** (Haiku + web search, $0.025), the brand question, question discovery and the **market-wide index** (LLM Mentions: your share vs the competitors across the 387M-question database) on the month's first run.
 *Answer Analyst* (Claude) reads the answers that matter: brands named in order (a competitor without a website counts; learned names in `{CACHE_TABLE}` `ai_brands:`), sentiment, **wrong claims** vs the business profile. *AI Metrics*: 7-day rates with **95% ranges** (weekly + pulse samples), changes tested for significance, **visibility score** (position + demand weighted), share of voice, stages / topics, fan-out searches, perception, **AI referral visits / key events / revenue** (GA4, service account), **AI crawler access** (robots.txt per bot, llms.txt, CDN block test), lost questions with demand and ready API bodies, alerts, actions → `{AI_VIS_TABLE}` (+ `ai_source` prospects) → Claude brief → report (e-mail + PDF + callback `stage: ai_visibility`). Answers older than 400 days are pruned.""", [-40, -1000], 1500, 460)
+# F1a (2026-10-23, E10): the Prompt Writer names no company (comparisons included), and Prompt Rows refuses a question that does (harness F1A-E10)
+assert 'no company or product names at all' in rd('prompts/ai_prompts.txt') and 'AIE.vendorIn(q.prompt' in rd('code/Prompt_Rows.js'), 'F1a E10: the panel gate against vendor-naming questions is gone'
 A.write('SEO_Agent_AI_Visibility.json')
+# F2 (2026-10-23): the tracker's wiring and its Data Table filters, for harness scenarios_f2.js (F2-6: answers stored before the analyst, the record
+# before paying, every AI-table read scoped to the site). Proves the GENERATED wiring, read back from the file just written.
+_f2wf = json.load(open(os.path.join(OUT, 'SEO_Agent_AI_Visibility.json'))); _f2wf = _f2wf[0] if isinstance(_f2wf, list) else _f2wf
+json.dump({'connections': _f2wf['connections'], 'filters': {n['name']: (n.get('parameters') or {}).get('filters') for n in _f2wf['nodes'] if n.get('type') == DT_TYPE}},
+          open(os.path.join(HERE, 'harness', 'ai_vis_wiring.json'), 'w'), indent=1, sort_keys=True)
 
 # =============================================================================
 # 1b. AI PULSE (v4.9): the question panel on the fast engines every day except each website's own cycle day (2026-10-19; was: except Monday)
 # =============================================================================
+# R-E7 (2026-10-23): the pulse reads only each site's LATEST weekly row (its rivals); 21 days hold it even after two missed weeks (was 60 days of
+# every site's rows, with every JSON column, every morning). A start that names a site reads that site only (R-E2: exact match).
+PULSE_VIS_DAYS = 21
 Q = WF('SEOagentAIPulse1', 'SEO Agent — AI Pulse', 'aipulse', 2400, code_prefix='Pulse__')
 # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): every day 06:30 (was 0,2-6: Monday was everyone's weekly run). Pulse Plan skips each website on
 # ITS cycle day (its local weekday == seo_cycles.cycle_weekday in seo_cycles.tz; Monday when it has no cycle row), when its weekly run asks the same engines.
@@ -432,7 +576,7 @@ Q.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Answers Table', AI_ANSWERS_TABLE, AI_ANSWERS_COLS), ('Ensure AI Daily Table', AI_DAILY_TABLE, AI_DAILY_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
 for i, (nm, t, c) in enumerate(ens): Q.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE)]
-for i, (nm, t) in enumerate(loads): Q.load(nm, t, at(1 + i, 1))
+for i, (nm, t) in enumerate(loads): vis_scoped(Q, nm, at(1 + i, 1), PULSE_VIS_DAYS, PULSE_SCOPE) if nm == 'Load AI Visibility' else Q.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 Q.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('checked_at', 'gte', SINCE(15))]), at(7, 1), **LOAD)
 Q.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(8, 1), **LOAD)
 Q.load('Load Cycles', CYCLES_TABLE, at(8, 2))   # 2026-10-19: each website's cycle weekday and time zone (seo_cycles) - its own cycle day is skipped
@@ -453,6 +597,10 @@ AI_DAILY_KEYS = ['site_id', 'date', 'run_id']   # R95: one row per site, day AND
 Q.node('Save AI Daily', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_DAILY_TABLE, AI_DAILY_COLS, AI_DAILY_KEYS), at(21, -1), onError='continueRegularOutput')
 # G6 (2026-10-18): kept 21 days (was 35) — a 500-question panel's daily sample stores up to ~900 rows a morning; the daily figures stay in seo_ai_daily
 Q.node('Prune Pulse Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWERS_TABLE, [('run_kind', 'eq', 'pulse'), ('checked_at', 'lt', SINCE(21))]), at(22, 0), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+# W2-E1 (2026-10-23): a pulse answer keeps its full text and its pages-read list 7 days (the app's "this week"), then they are blanked (rows kept 21 days)
+Q.node('Trim Pulse Answer Text', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_ANSWERS_TABLE, AI_ANSWERS_COLS, [('run_kind', 'eq', 'pulse'), ('checked_at', 'lt', SINCE(7)), ('checked_at', 'gte', SINCE(9)), ('answer_text', 'isNotEmpty', '')],   # R-E7: only rows not trimmed yet
+       {'answer_text': '', 'retrieved_json': ''}), at(22, 1), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+Q.code('Trimmed (Pulse)', COLLAPSE, at(22, 2), executeOnce=True)   # R-E7
 Q.code('Pulse Alerts', "// Sites with something to report (an alert, or an on-demand run): the e-mail and the callback (stage ai_pulse). Quiet days send nothing.\nconst out = $('Pulse Metrics').all().map(i => i.json).filter(m => (m.alerts || []).length || m.on_demand).map(m => { const { daily_row, answer_rows, ...rest } = m; return { json: rest }; });\nreturn out.length ? out : [{ json: { skip: true } }];", at(23, 0))
 Q.iff('Any Pulse Alerts?', '{{ !$json.skip }}', at(24, 0)); Q.deliver('Pulse', at(25, -1), None)
 # F-ENG (2026-10-20): every website gets its pulse - the websites one execution cannot hold (15, or one morning's request limit) are handed to the
@@ -468,7 +616,7 @@ Q.chain('AI Requests', 'Any AI Requests?'); Q.link('Any AI Requests?', 'Run AI R
 Q.ai_retry_gate(at(13, 1), 'Parse AI Answers')   # D19: the pulse re-sends a failed task once too (its figures are the week's samples)
 Q.chain('Parse AI Answers', 'Pulse Metrics', 'Pulse Answer Rows', 'Any Pulse Answers?'); Q.link('Any Pulse Answers?', 'Save AI Answers', 0); Q.link('Any Pulse Answers?', 'AI Daily Rows', 1); Q.link('Save AI Answers', 'AI Daily Rows')
 Q.chain('AI Daily Rows', 'Any Daily Rows?'); Q.link('Any Daily Rows?', 'Save AI Daily', 0); Q.link('Any Daily Rows?', 'Prune Pulse Answers', 1); Q.link('Save AI Daily', 'Prune Pulse Answers')
-Q.chain('Prune Pulse Answers', 'Next Pulse Part', 'Any Next Pulse Part?'); Q.link('Any Next Pulse Part?', 'Start Next Pulse Part', 0); Q.link('Any Next Pulse Part?', 'Pulse Alerts', 1); Q.link('Start Next Pulse Part', 'Pulse Alerts')
+Q.chain('Prune Pulse Answers', 'Trim Pulse Answer Text', 'Trimmed (Pulse)', 'Next Pulse Part', 'Any Next Pulse Part?'); Q.link('Any Next Pulse Part?', 'Start Next Pulse Part', 0); Q.link('Any Next Pulse Part?', 'Pulse Alerts', 1); Q.link('Start Next Pulse Part', 'Pulse Alerts')
 Q.chain('Pulse Alerts', 'Any Pulse Alerts?'); Q.link('Any Pulse Alerts?', 'Has Email (Pulse)?', 0); Q.link('Any Pulse Alerts?', 'Has Callback (Pulse)?', 0)
 Q.run_ledger('ai_pulse', 'Pulse', 'AI Plan', ['Pulse Alerts'], at(10, 4), measured='Pulse Metrics')
 LEDGER_WIRING[Q.name]['daily_upsert_keys'] = list(AI_DAILY_KEYS)   # R95: the harness (S117) replays the upsert with the keys the node uses
@@ -476,6 +624,44 @@ Q.sticky(f"""## SEO Agent — AI Pulse (v4.9)
 **Every day 06:30** (cron `30 6 * * *`), each website skipped on **its own cycle day** (`seo_cycles`: its local weekday in its time zone; Monday for a website with no cycle row), when its weekly AI Visibility run asks the same engines; the rotation counts the six other mornings from that day; and on demand (*Manual Run* `{{ domain | site_id, email?, callback_url? }}`). Per site with AI visibility and `ai_pulse` on (`{MONITORS_TABLE}`; default on): the whole question panel (`{AI_PROMPTS_TABLE}`, no brand question) on **ChatGPT** and **Gemini** (the real chat interfaces) and **Google AI Mode** — $0.004 each, about $0.24 a day for 20 questions. AI answers change from one ask to the next; seven samples a week per question and engine give rates with a narrow 95% range and catch a real change within a day.
 Shares *AI Requests* and *Parse AI Answers* with the weekly tracker (same node names). *Pulse Metrics* → one `{AI_DAILY_TABLE}` row per site and day (counts per engine / question / competitor / source; the weekly report adds them) + the answers (`{AI_ANSWERS_TABLE}`, run_kind pulse, kept 35 days). **Alerts only when something really changed** (z-test at 99% vs the past week, a business suddenly named in 30%+ of answers, a question where you were named first for 3 days and are now missing) → e-mail + callback `stage: ai_pulse`. Quiet days send nothing.""", [-40, -560], 1300, 330)
 Q.write('SEO_Agent_AI_Pulse.json')
+# W2-E1 (2026-10-23): the two text-trim nodes as generated (filters, values, what follows them), for harness scenarios_w2e1.js (W2E1-7)
+_w2e1 = {}
+for _f, _nm in [('SEO_Agent_AI_Visibility.json', 'Trim Old Answer Text'), ('SEO_Agent_AI_Pulse.json', 'Trim Pulse Answer Text'), ('SEO_Agent_AI_Visibility.json', 'Trim Old Units')]:   # W2-FIX: + the units_json trim
+    _wf = json.load(open(os.path.join(OUT, _f))); _wf = _wf[0] if isinstance(_wf, list) else _wf
+    _n = next(n for n in _wf['nodes'] if n['name'] == _nm)
+    _w2e1[_nm] = {'operation': _n['parameters'].get('operation'), 'filters': _n['parameters'].get('filters'), 'values': (_n['parameters'].get('columns') or {}).get('value'), 'executeOnce': _n.get('executeOnce'), 'onError': _n.get('onError'),
+                  'from': sorted(k for k, v in _wf['connections'].items() if any(c.get('node') == _nm for outs in v.get('main', []) for c in (outs or []))),
+                  'to': sorted(c.get('node') for outs in _wf['connections'].get(_nm, {}).get('main', []) for c in (outs or []))}
+json.dump(_w2e1, open(os.path.join(HERE, 'harness', 'w2e1_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+# =============================================================================
+# 1c. AI REPEAT PILOT (W2-E2, 2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): on demand only, never scheduled, priced before it runs
+# =============================================================================
+# One website: 10 questions x 10 asks per engine -> the variance between questions and within one question -> the asks per question a week
+# each engine needs. Without `confirm: true` the start answers with the price and asks nothing. Shares AI Requests / Parse AI Answers with the
+# tracker (same node names, harness prefix Pilot__). Built and harness-tested; not run.
+X = WF('SEOagentAIPilot1', 'SEO Agent — AI Repeat Pilot', 'aipilot', 1800, code_prefix='Pilot__')
+X.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
+ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Prompts Table', AI_PROMPTS_TABLE, AI_PROMPTS_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
+for i, (nm, t, c) in enumerate(ens): X.ensure(nm, t, c, at(1 + i, 0))
+loads = [('Load Sites', SITES_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE)]   # no ladders: a pilot is for a tracked website, and its questions passed the fit gate when they were stored
+for i, (nm, t) in enumerate(loads): X.load(nm, t, at(1 + i, 1))
+X.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(7, 1), **LOAD)
+X.code('AI Plan', 'Pilot_Plan.js', at(8, 1)); X.iff('Pilot Confirmed?', '{{ !$json.nothing_to_do }}', at(9, 1))
+X.code('AI Requests', 'AI_Requests.js', at(10, 0)); X.iff('Any AI Requests?', '{{ !$json.skip }}', at(11, 0))
+X.dfs_http('Run AI Requests', at(12, -1), batch=10, interval=200, timeout=150000)
+X.code('Parse AI Answers', 'Parse_AI_Answers.js', at(13, 0)); X.code('Pilot Metrics', 'Pilot_Metrics.js', at(14, 0))
+X.code('Pilot Report', 'Pilot_Report.js', at(15, 1)); X.deliver('Pilot', at(16, 1), None)
+X.chain(*[e[0] for e in ens], *[l[0] for l in loads], 'Load Cache (AI)', 'AI Plan', 'Pilot Confirmed?'); X.link('Manual Run', ens[0][0])
+X.link('Pilot Confirmed?', 'AI Requests', 0); X.link('Pilot Confirmed?', 'Pilot Report', 1)
+X.chain('AI Requests', 'Any AI Requests?'); X.link('Any AI Requests?', 'Run AI Requests', 0); X.link('Any AI Requests?', 'Parse AI Answers', 1)
+X.ai_retry_gate(at(12, 1), 'Parse AI Answers')
+X.chain('Parse AI Answers', 'Pilot Metrics', 'Pilot Report'); X.link('Pilot Report', 'Has Email (Pilot)?'); X.link('Pilot Report', 'Has Callback (Pilot)?')
+X.run_ledger('ai_pilot', 'Pilot', 'AI Plan', ['Pilot Report'], at(9, 4), measured='Pilot Metrics')
+assert not any(n['type'] == 'n8n-nodes-base.scheduleTrigger' for n in X.N), 'W2-E2: the repeat pilot must never be scheduled'
+X.sticky("""## SEO Agent — AI Repeat Pilot (W2-E2)
+**On demand only** (*Manual Run* `{ domain | site_id, confirm?, email?, callback_url? }`; no schedule). Without `confirm: true` it answers with the price (stage `ai_pilot_quote`) and asks nothing. Confirmed: 10 questions of the panel (one per topic first) x 10 asks on each engine that answers anew each time (not the AI Overview or Copilot), at most $4 -> *Pilot Metrics*: the variance between questions and within one question per engine (one-way ANOVA), the asks per question a week for +/-5 points -> callback `stage: ai_pilot`.""", [-40, -700], 900, 260)
+X.write('SEO_Agent_AI_Pilot.json')
 
 # =============================================================================
 # 2. BACKLINK MONITOR
@@ -488,7 +674,7 @@ ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Snapsh
 for i, (nm, t, c) in enumerate(ens): B.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Backlink Snapshots', BL_SNAP_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load Content Log', LOG_TABLE), ('Load Case Studies', CASE_TABLE),
          ('Load Backlinks', LINKS_TABLE), ('Load Link Imports', LINK_IMPORTS_TABLE), ('Load Link Graph', LINK_GRAPH_TABLE), ('Load AI Visibility (BL)', AI_VIS_TABLE)]   # C-2 (2026-10-17): the AI-named rivals
-for i, (nm, t) in enumerate(loads): B.load(nm, t, at(1 + i, 1))
+for i, (nm, t) in enumerate(loads): vis_scoped(B, nm, at(1 + i, 1), 60) if nm == 'Load AI Visibility (BL)' else B.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 B.node('Load Cache (BL Rivals)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(12, 2), **LOAD)   # C-2: the Answer Analyst's learned names (ai_brands:)
 B.code('BL Plan', 'BL_Plan.js', at(12, 1)); B.iff('Any Sites (BL)?', '{{ !$json.nothing_to_do }}', at(13, 1)); B.node('Nothing To Do (BL)', 'n8n-nodes-base.noOp', 1, {}, at(14, 2))
 # DataForSEO (as before + v4.10 link details, anchors, most-linked pages, competitors' new links)
@@ -632,7 +818,7 @@ for i, (nm, t, c) in enumerate(ens): G.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE),
          ('Load Content Log', LOG_TABLE), ('Load Query History', QUERY_TABLE), ('Load AI Pages', AI_PAGES_TABLE), ('Load AI Targets', AI_TARGETS_TABLE), ('Load AI Growth', AI_GROWTH_TABLE), ('Load Link Prospects (Growth)', PROSPECT_TABLE),
          ('Load Cycles', CYCLES_TABLE)]   # 2026-10-19: the website's time zone (seo_cycles) - the Wikidata check outside a cycle is monthly in ITS calendar
-for i, (nm, t) in enumerate(loads): G.load(nm, t, at(1 + i, 1))
+for i, (nm, t) in enumerate(loads): vis_scoped(G, nm, at(1 + i, 1), 70) if nm == 'Load AI Visibility' else G.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed'): six weekly runs
 G.node('Load AI Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [('checked_at', 'gte', SINCE(8))]), at(13, 1), **LOAD)
 G.node('Load Cache (Growth)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(14, 1), **LOAD)
 G.code('Growth Plan', 'Growth_Plan.js', at(15, 1)); G.iff('Any Sites (Growth)?', '{{ !$json.nothing_to_do }}', at(16, 1)); G.node('Nothing To Do (Growth)', 'n8n-nodes-base.noOp', 1, {}, at(17, 2))
@@ -755,7 +941,7 @@ for i, (nm, t, c) in enumerate(ens): L.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load Link Outreach', LINK_OUTREACH_TABLE),
          ('Load Listings', LISTINGS_TABLE), ('Load Link Impact', LINK_IMPACT_TABLE), ('Load Backlinks', LINKS_TABLE), ('Load Backlink Snapshots', BL_SNAP_TABLE), ('Load Content Log', LOG_TABLE), ('Load AI Targets', AI_TARGETS_TABLE),
          ('Load Pages (LB)', PAGES_TABLE), ('Load AI Visibility (LB)', AI_VIS_TABLE), ('Load Cycles', CYCLES_TABLE)]   # 2026-10-19: the website's time zone (pitches per page per month). C-2 (2026-10-17): the AI-named rivals. R93 (2026-10-16): our pages' real titles (seo_pages), so a target page is never named by a search query
-for i, (nm, t) in enumerate(loads): L.load(nm, t, at(1 + i, 1))
+for i, (nm, t) in enumerate(loads): vis_scoped(L, nm, at(1 + i, 1), 60) if nm == 'Load AI Visibility (LB)' else L.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 L.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [('period_end', 'gte', SINCE(200))]), at(13, 1), **LOAD)
 L.node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_where_params(HISTORY_TABLE, [('checked_at', 'gte', SINCE(60))]), at(14, 1), **LOAD)
 L.node('Load Cache (Links)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'linkbld'), at(15, 1), **LOAD)
@@ -843,6 +1029,27 @@ LA.sticky("""## SEO Agent — Link Builder API (v4.13)
 LA.write('SEO_Agent_Link_Builder_API.json')
 
 # =============================================================================
+# 5b2. AI PILOT API (W2-FIX, 2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-FIX.md item 2; W2-E2 open item 2): the web app's "Repeat pilot" on
+#      the AI visibility page. Built like the Link Builder API: answered at once (202), then the pilot (SEOagentAIPilot1) starts as its own execution
+#      through its Manual Run. Without `confirm: true` the pilot prices itself (callback stage ai_pilot_quote) and asks nothing; the app shows that
+#      price and sends `confirm: true` only on the owner's explicit confirmation. Nothing schedules it.
+# =============================================================================
+PA = WF('SEOagentAIPilAPI', 'SEO Agent — AI Pilot API', 'aipilapi', 120)
+PA.node('AI Pilot API', 'n8n-nodes-base.webhook', 2, {'httpMethod': 'POST', 'path': 'seo-ai-pilot', 'authentication': 'headerAuth', 'responseMode': 'responseNode', 'options': {}}, at(0, 4), webhookId=str(uuid.uuid5(NS, 'aipilapi:webhook')), credentials=API_KEY_CRED)
+PA.code('Pilot API Validate', 'Pilot_API_Validate.js', at(1, 4)); PA.iff('Pilot API OK?', '{{ $json.ok }}', at(2, 4))
+PA.node('Respond Pilot Accepted', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: true, status: 'accepted', stage: $json.confirm ? 'ai_pilot_started' : 'ai_pilot_quote_started', request_id: $json.request_id, domain: $json.domain, confirm: $json.confirm }) }}", 'options': {'responseCode': 202}}, at(3, 3))
+PA.code('Pilot Payload', "// The pilot's input (its Manual Run): only the fields it reads. `confirm` is true only when the caller sent the literal true.\nconst v = $('Pilot API Validate').first().json;\nreturn [{ json: { domain: v.domain, site_id: v.site_id, confirm: v.confirm === true, callback_url: v.callback_url, email: '', request_id: v.request_id } }];", at(4, 3))
+PA.node('Start AI Pilot', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentAIPilot1'}, 'mode': 'once', 'options': {'waitForSubWorkflow': False}}, at(5, 3))
+PA.node('Respond Pilot Bad Request', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': '={{ JSON.stringify({ ok: false, error: $json.error }) }}', 'options': {'responseCode': 400}}, at(3, 5))
+# answer first, then start the run (a sub-workflow started before the webhook answered ran no node, live 2026-10-11)
+PA.chain('AI Pilot API', 'Pilot API Validate', 'Pilot API OK?'); PA.link('Pilot API OK?', 'Respond Pilot Accepted', 0); PA.link('Pilot API OK?', 'Respond Pilot Bad Request', 1)
+PA.chain('Respond Pilot Accepted', 'Pilot Payload', 'Start AI Pilot')
+assert not any(n['type'] == 'n8n-nodes-base.scheduleTrigger' for n in PA.N), 'W2-FIX: the pilot API must never be scheduled'
+PA.sticky("""## SEO Agent — AI Pilot API (W2-FIX)
+`POST /webhook/seo-ai-pilot` (header X-API-Key, credential **SEO API Key**): `{ domain | site_id, confirm?, callback_url?, request_id? }` -> 202 at once; starts **SEO Agent — AI Repeat Pilot** (`SEOagentAIPilot1`) through its Manual Run. Without `confirm: true` the pilot answers with its price (callback stage `ai_pilot_quote`) and asks nothing; with it, it runs once (at most $4) and reports through stage `ai_pilot`. On demand only, never scheduled.""", [-40, -300], 700, 160, 6)
+PA.write('SEO_Agent_AI_Pilot_API.json')
+
+# =============================================================================
 # 5c. SITE KICKOFF (2026-10-19; rewritten the same day for the per-website cycle, SCHEDULING_KEYWORDS_PLAN.md §4.7 / §14.3): the web app
 #     calls it once "Track my site" is set up. It no longer starts the weekly jobs itself - a restart killed its chain of waiting
 #     sub-workflows and nobody resumed it - it writes the website's seo_cycles row (anchor, time zone, cycle 0 due now, what the app already
@@ -925,7 +1132,7 @@ from ladder_common import CHECKIN_COLS, OPS_ALERTS_COLS, AUDIT_FINDINGS_COLS   #
 from ladder_common import PAGE_WATCH_COLS, ALERTS_COLS   # G11 + G25 (2026-10-13): the daily key-page watch rows and the alert rows it writes
 from ladder_common import PROFILE_COLS   # G31 (2026-10-13): the business profile row, now with the stored style guide
 json.dump({'RUN_LEDGER': [c for c, _ in RUN_LEDGER_COLS], 'AI_PAGES': [c for c, _ in AI_PAGES_COLS], 'AI_TARGETS': [c for c, _ in AI_TARGETS_COLS], 'AI_GROWTH': [c for c, _ in AI_GROWTH_COLS], 'PROSPECT': [c for c, _ in PROSPECT_COLS],
-           'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS], 'SITES': [c for c, _ in SITES_COLS], 'PAGES': [c for c, _ in PAGES_COLS],
+           'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'AI_PROMPTS': [c for c, _ in AI_PROMPTS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'AI_VIS': [c for c, _ in AI_VIS_COLS], 'AI_IMPORTS': [c for c, _ in AI_IMPORTS_COLS], 'AI_PROMPTS_STATE': ['last_asked_run', 'last_asked_at', 'asked_n_28d', 'refused_at_run'], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS], 'SITES': [c for c, _ in SITES_COLS], 'PAGES': [c for c, _ in PAGES_COLS],
            'LOG': [c for c, _ in LOG_COLS], 'LADDER': [c for c, _ in LADDER_COLS], 'HISTORY': [c for c, _ in HISTORY_COLS], 'AUDIT_FINDINGS': [c for c, _ in AUDIT_FINDINGS_COLS], 'CHECKIN': [c for c, _ in CHECKIN_COLS], 'OPS_ALERTS': [c for c, _ in OPS_ALERTS_COLS], 'PAGE_WATCH': [c for c, _ in PAGE_WATCH_COLS], 'CONSOLE_ALERTS': [c for c, _ in ALERTS_COLS], 'PROFILE': [c for c, _ in PROFILE_COLS]}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # G19 site model + D5 content log: the rows these nodes write
 
 # ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): ONE table of AI-panel cost cases, held by the engine and the app ----------------------
@@ -943,3 +1150,18 @@ if os.path.isdir(os.path.dirname(_g6_app)):
 _g6_rt = re.search(r"const PRICE = (\{[^}]+\});", rd('code/_ai_panel.js'))
 assert _g6_rt and json.loads(re.sub(r'(\w+):', r'"\1":', _g6_rt.group(1))) == _g6['prices'], 'G6: v5/data/ai_panel_cost_cases.json is stale against AIP.PRICE - run node harness/ai_panel_cases.js'
 print('G6: the AI-panel cost table (' + str(len(_g6['cases'])) + ' cases) copied to the harness and the app')
+
+# ---- W2-E3 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §2-§5): what the harness proves about the GENERATED workflows (scenarios_w2e3.js
+# W2E3-7): the options' chain sits after the week is stored, the asked state and the row are written by UPDATES that touch only their own columns,
+# the options' call is gated and priced in the ledger, the imports / today's results pages are read per site, and every seo_ai_visibility load of
+# the pulse, AI Growth, the Backlink Monitor and the Link Builder is scoped to the site and a window (F2 "Not fixed").
+_w2 = {}
+for _f in ['SEO_Agent_AI_Visibility.json', 'SEO_Agent_AI_Pulse.json', 'SEO_Agent_AI_Growth.json', 'SEO_Agent_Backlink_Monitor.json', 'SEO_Agent_Link_Builder.json']:
+    _w = json.load(open(os.path.join(OUT, _f))); _w = _w[0] if isinstance(_w, list) else _w
+    _w2[_f] = {'connections': _w['connections'] if _f == 'SEO_Agent_AI_Visibility.json' else {},
+               'dt': {n['name']: {'operation': (n.get('parameters') or {}).get('operation'), 'table': ((n.get('parameters') or {}).get('dataTableId') or {}).get('value'),
+                                  'filters': (n.get('parameters') or {}).get('filters'), 'mapping': ((n.get('parameters') or {}).get('columns') or {}).get('mappingMode')}
+                      for n in _w['nodes'] if n.get('type') == DT_TYPE},
+               'settle_measured': next((re.search(r"const MEASURED = '([^']*)'", n['parameters']['jsCode']).group(1) for n in _w['nodes'] if n['name'].startswith('Ledger Settle (') and n.get('type') == 'n8n-nodes-base.code'), '')}
+json.dump(_w2, open(os.path.join(HERE, 'harness', 'w2e3_wiring.json'), 'w'), indent=1, sort_keys=True)
+print('W2-E3: the options chain, the asked state, the imports and the scoped AI visibility loads exported for harness scenarios_w2e3.js')

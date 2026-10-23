@@ -235,6 +235,7 @@ const CC = (() => {
   const HEADROOM = 1.25;      // the guard reserves a quarter more than the rolling figure
   const KEEP = 8;             // the recent window whose maximum the estimate may never fall below
   const CAP = 5;              // and never more than five times the shipped default: one freak run may not lock the guard
+  const PANEL_QUOTE_MAX = 150;   // W2-FIX: an on-demand AI panel quote is taken up to AIP's max_run_usd (v5/code/_ai_panel.js LIMITS), never above
   const calKey = (kind, mode) => 'cost:' + kind + ':' + mode;
   const FACTOR_KEY = 'cost:factor:claude';
   const MODEL_PREFIX = 'cost:model:';   // one row per model family: what this engine thinks it spent on it THIS month
@@ -321,6 +322,15 @@ const CC = (() => {
       if (cf !== 1 && k === 'crawl') usd += e.usd * (cf - 1);
       if (cf !== 1 && k === 'full') usd += n0(DFS_EST.crawl) * (cf - 1); }
     const room = (kind === 'ai' && String((d || {}).mode) === 'case_study') ? estOf('ai', 'content', cal).usd : 0;
+    // W2-FIX (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-FIX.md item 4): an on-demand AI visibility check asks the website's WHOLE panel
+    // (its size, engines and options), not the 8-question run the table above was measured on. The web app quotes that panel with the engine's
+    // own formula (aiOnDemandRunCost = AIP.cost's full run) and sends it as panel_quote_dfs_usd / panel_quote_ai_usd; the reservation takes the
+    // quote when it is LARGER (a caller can only make the guard stricter), never more than PANEL_QUOTE_MAX (AIP's max_run_usd).
+    let quoted = 0;
+    if (String((d || {}).mode) === 'ai_visibility') {
+      const q = n0(kind === 'dfs' ? (d || {}).panel_quote_dfs_usd : (d || {}).panel_quote_ai_usd);
+      if (q > usd) { quoted = Math.min(q, PANEL_QUOTE_MAX); usd = Math.max(usd, quoted); }
+    }
     // `key` is the PRIMARY estimate key and the one the rolling figure is stored under, so what a settle teaches is read back by the next
     // run of the same shape; `label` names every key the request used (a run that also needs a site description adds `describe`, which
     // only makes that mode's figure a shade conservative — the safe direction).
@@ -328,7 +338,9 @@ const CC = (() => {
       crawl_factor: cf,
       basis: (keys.length ? (source === 'calibrated' ? 'calibrated from this mode\'s last settled runs (never below $' + r4(floor).toFixed(4) + ', what it recently cost)' : 'the shipped estimate for ' + keys.join(' + ') + ' (no settled run of this mode yet)') : 'this mode spends nothing here')
         + (cf !== 1 ? '; the crawl scaled x' + cf + ' (up to ' + (n0((d || {}).crawl_max_pages) || CRAWL_BASE_PAGES) + ' pages'
-          + (crawlFactor({ crawl_max_pages: CRAWL_BASE_PAGES, crawl_js: (d || {}).crawl_js }) > 1 ? ', rendered with JavaScript at 4x a page' : '') + ')' : '') };
+          + (crawlFactor({ crawl_max_pages: CRAWL_BASE_PAGES, crawl_js: (d || {}).crawl_js }) > 1 ? ', rendered with JavaScript at 4x a page' : '') + ')' : '')
+        + (quoted ? '; the website\'s whole panel as quoted ($' + r4(quoted).toFixed(4) + (n0((d || {}).panel_quote_panel) ? ', ' + n0((d || {}).panel_quote_panel) + ' questions' : '') + ', its engines and options)' : ''),
+      panel_quoted: r4(quoted) };
   };
 
   // what a settle writes back: the rolling figure moves toward this run's amount, the recent window keeps the floor honest.

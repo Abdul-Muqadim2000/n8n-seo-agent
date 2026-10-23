@@ -938,6 +938,33 @@ module.exports = async (ctx) => {
     check('CY31: the generated Dispatcher Watchdog sees an inactive dispatcher with a 2-hour-old sweep, saves its state, and Watchdog Alarm fails the run (the ops alert)', D.alarm === true && D.save === true && D.state_row && D.state_row.key === 'catchup:watchdog:SEOagentCycleDsp' && threw, JSON.stringify(D).slice(0, 300));
   });
 
+  await guard('CY31b a dispatcher held in plan_only with work waiting is an alarm', async () => {
+    const SN = 'CY31b (2026-10-23, production) the dispatcher sweeps but plan_only holds two clients\' cycle 0 at 0 of 8 jobs: the watchdog alarms after an hour, names the sites and the fix, rate-limited; plan_only with nothing waiting stays quiet'; reset(); begin(SN); const check = mkCheck(SN);
+    let CU2 = null; try { CU2 = kits('Catchup__Dispatcher_Watchdog.js', ['CU']).CU; } catch (e) { CU2 = null; }
+    check('CY31b: the kit loads', !!(CU2 && CU2.cycleWatchdog), '');
+    if (!CU2 || !CU2.cycleWatchdog) return;
+    const on = { ok: true, active: true, updatedAt: '2026-10-21T22:00:00.000Z' };
+    const sweepVal = (mode, ws) => JSON.stringify({ mode, configured_mode: mode, mode_reason: mode === 'plan_only' ? 'no seo_cache row cycle:mode, so the safe default (plan_only) applies' : 'seo_cache cycle:mode', would_start: ws, sites: [{ site_id: 'site_techand-ai', domain: 'techand.ai' }, { site_id: 'site_devaicon-com', domain: 'devaicon.com' }] });
+    const WS = [{ key: 'cyc:site_techand-ai:2026-10-22:ai_visibility', why: 'next in the cycle' }, { key: 'cyc:site_devaicon-com:2026-10-23:ai_visibility', why: 'next in the cycle' }];
+    const wd = (now, value, state) => CU2.cycleWatchdog({ now, entry: 'sweep', wf: on, last: { updated_at: new Date(Date.parse(now) - 2 * 60000).toISOString(), value }, state: state || {} });
+    const first = wd('2026-10-22T17:00:00.000Z', sweepVal('plan_only', WS));
+    const hour = wd('2026-10-22T18:05:00.000Z', sweepVal('plan_only', WS), first.state);
+    const soon = wd('2026-10-22T19:00:00.000Z', sweepVal('plan_only', WS), hour.state);
+    const later = wd('2026-10-23T00:10:00.000Z', sweepVal('plan_only', WS), soon.state);
+    const idle = wd('2026-10-22T18:05:00.000Z', sweepVal('plan_only', []), first.state);
+    const started = wd('2026-10-23T01:00:00.000Z', sweepVal('start', []), later.state);
+    check('CY31b: first sight of plan_only with work waiting: no alarm yet, the start of the wait is kept', !first.alarm && first.verdict === 'plan_only' && first.state.plan_only_since === '2026-10-22T16:58:00.000Z', JSON.stringify([first.verdict, first.alarm, first.state]));
+    check('CY31b: after an hour it alarms, names both sites and the fix', hour.alarm === true && /plan_only/.test(hour.reason) && /techand\.ai/.test(hour.reason) && /devaicon-com|devaicon\.com/.test(hour.reason) && /cycle:mode/.test(hour.reason) && /"mode":"start"/.test(hour.reason), hour.reason);
+    check('CY31b: rate-limited (quiet an hour later, again after 6 h)', !soon.alarm && later.alarm === true, JSON.stringify([soon.alarm, later.alarm]));
+    check('CY31b: plan_only with nothing waiting is not an alarm', !idle.alarm && idle.state.plan_only_since === '', JSON.stringify([idle.verdict, idle.alarm, idle.state]));
+    check('CY31b: switched to start, the wait and the alarm state are cleared', !started.alarm && started.verdict === 'sweeping' && started.state.plan_only_since === '' && started.state.last_alarm_at === '', JSON.stringify([started.verdict, started.state]));
+    mock('Dispatcher Watchdog', [{ json: hour }]); mock('Watchdog Result', [{ json: { value: '{}' } }]);
+    try { await run('Watchdog Alarm', [{ json: {} }], { code: 'Catchup__Watchdog_Alarm', expectError: true }); } catch (e) {}
+    const al = H.results[H.results.length - 1]; const said = String(al.error || '');
+    const ok = !al.ok && /plan_only/.test(said) && /Switch it to start/.test(said) && !/Publish the workflow/.test(said); al.ok = ok; al.error = ok ? 'threw as expected: ' + said.slice(0, 90) : 'wrong alarm: ' + said.slice(0, 300);
+    check('CY31b: Watchdog Alarm fails the run (the ops alert) and tells the owner to switch the mode, not to publish the workflow', ok, said.slice(0, 300));
+  });
+
   await guard('CY32 the release step asks the cycle rule', async () => {
     const SN = 'CY32 the image\'s release step (n8n/deploy/release.mjs) asks CYC.deployWindow read out of the generated dispatcher: a start refuses, a running job is reported, unreadable tables refuse, SEO_DEPLOY_FORCE overrides'; reset(); begin(SN); const check = mkCheck(SN);
     let G = null; try { G = await import(require('url').pathToFileURL(path.join(__dirname, 'deploy_guard.mjs')).href); } catch (e) { G = null; }

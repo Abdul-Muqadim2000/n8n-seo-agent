@@ -67,7 +67,31 @@ Both workflows share *AI Requests* and *Parse AI Answers*: same node names, same
   - The rank weight is multiplied by 1 when the answer also cites you, and by 0.85 when it does not.
   - An answer that cites you without naming you scores 0.4.
   - The average weight per question is 1 + log10(1 + AI search volume) / 2.
-- **One business, one key.** A brand name joins its domain when the Answer Analyst learned it ("ClearTax" → cleartax.com) or when the name matches the domain label (`brandKey` / `mergeBrands`). Share of voice = your mentions ÷ (yours + the top 8 competitors).
+- **One business, one key.** A brand name joins its domain when the Answer Analyst learned it ("ClearTax" → cleartax.com) or when the name matches the domain label (`brandKey` / `mergeBrands`). Share of voice = your mentions ÷ (yours + every competitor named; until 2026-10-23 the top 8 only).
+- **F1b (2026-10-23, rule `aivis-2026-10-23`; `docs/ai-visibility-2026-10-23/fixes/F1b.md`).** One reading of every answer and one
+  definition of every figure, for the headline, every engine, every segment, every competitor and the daily pulse (`_ai_stats.js` AVM):
+  - **Named** = the answer names the business in its text. An answer that only links one of its pages is **cited**, not named ("Named in"
+    counted both before). `mention_rate` holds the named rate from this rule on; `named_rate` is the same figure by its own name.
+  - **Visibility score**: the weights above are now what the code does (a citation alone scored 0.6, the documented 0.4 was unreachable).
+    The place is the 1-based position among the businesses the answer names (the business and its competitors only); named with no known
+    place = 0.6.
+  - **Share of voice** = your mentions ÷ (yours + **every** competitor named), over the answers whose competitors were recorded (the top-8
+    cut is gone: it made the figure depend on the display table). Its range and its change test are taken over **answers** (ratio
+    estimator, linearised standard error), never as if each mention were an independent trial. Segment share of voice uses the same
+    answers on both sides, so for any one dimension the segments add back to the headline (`sov_self`, `sov_mentions` in `segments_json`).
+  - **Position**: mean place when named (`avg_position`, needs 12 placed answers, else "too few answers"), **named first** = answers that
+    name you first ÷ all answers (`first_rate`), **position-weighted visibility** = mean over answers of the place weight ×100 (1st 100,
+    2nd 80, 3rd 65, 4-5th 50, lower 35, named with no place 60, not named 0; `pos_visibility`, needs 12 answers). Per engine, per segment
+    and per competitor, each with its sample size.
+  - **Window**: a pulse morning counts in exactly one weekly row: (the previous row's `checked_at`, this run's start]. A split run's row
+    keeps its first part's start. The window and the plain period (`rate_period`) are stored in the row.
+  - **Comparison** (`compare_json`, the app reads it instead of subtracting two rows): comparable only with the same measurement rule,
+    the same engine set, at least 80% of the question ids in common and a panel size within 20%. Named and cited rates: two-proportion
+    z-test; share of voice, the score and the place: z on the two runs' standard errors. Under 12 answers on either side: no verdict.
+    A row of another rule starts a new baseline ("measurement rule changed").
+  - Pulse readings of another rule, or without the per-answer record (`detail_json`), are left out of the week and named.
+- **Share among tracked rivals (AI-answer database)** (E21: was labelled "Market-wide share"): the share among your domain and at most 8
+  tracked rivals, not the whole market.
 - **Market-wide index.** `multi_target_metrics` over your domain and the competitors' domains on Google AI Overview data in the site's country, plus ChatGPT data for US-English sites (the database holds ChatGPT for 2840/en only). It is shown with mentions and AI search volume. A business-name target counts unlinked mentions separately.
 - **Revenue.** GA4 Data API with a `sessionSource` PARTIAL_REGEXP over the assistant hosts, OR `sessionMedium = ai-assistant`.
   - Visits from AI Overviews / AI Mode stay in Organic Search and cannot be separated.
@@ -99,6 +123,10 @@ New columns are added to the live tables by `sync_tables.py` (run by `apply_env.
 | `seo_ai_visibility` | `run_kind`, `samples`, `visibility_score`, `mention_lo` / `mention_hi`, `sentiment_score`, `accuracy_issues`, `ai_sessions` / `ai_conversions` / `ai_revenue`, `index_sov`, `ai_impressions`, `perception_json`, `traffic_json`, `access_json`, `index_json` (with `suggestions`, `fanout`, `demand`), `clusters_json` |
 
 New table **`seo_ai_daily`**: one row per site and day (counts per engine, per question, competitors, sources; no answer text).
+
+F1b (2026-10-23): `seo_ai_visibility` + `rule_version`, `named_rate`, `avg_position`, `first_rate`, `pos_visibility`, `rate_period`,
+`compare_json`, `metrics_json`; `seo_ai_daily` + `rule_version`, `sample_mode`, `questions_asked`, `engines_answered`, `partial`,
+`avg_position`, `detail_json`, `readable_json`. Rows written before them read as "another rule": never compared, never pooled.
 
 Settings:
 - `ai_prompts_max`: 3–50, default 20 when no row exists. Stored values are kept (techand.ai stays at 8 until raised).

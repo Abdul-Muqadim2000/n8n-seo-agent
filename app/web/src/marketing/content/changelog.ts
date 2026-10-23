@@ -34,7 +34,36 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
-    date: '2026-10-22',
+    date: '2026-10-23',
+    version: '4.3',
+    title: 'AI visibility you can open up',
+    summary:
+      'Every AI answer can now be read in full, every question compared across assistants and over time, and the whole AI visibility page filtered, downloaded and watched with your own alert rules.',
+    highlights: [
+      'Open any answer: the whole answer when it was kept, the brands in the order named with yours marked, every source cited in order, the pages the assistant read but did not cite, and the searches it ran first',
+      'Open any question: every assistant side by side, and how often it named you across your past checks, with the range',
+      'One filter for the whole AI visibility page (engine, topic, buyer role, market, stage, dates), kept in the link',
+      'Each assistant and each competitor over time; lines stop where a check asked different questions or other assistants, and say why',
+      'CSV downloads of answers, questions, sources, competitors over time and your pages',
+      'Select many questions to switch off, pin, give a topic or delete; import a keyword with each question',
+      'Your own alert rules with a preview on past checks, firing only on like-for-like changes beyond normal variation',
+      'Upload Bing\'s AI Performance export and Search Console\'s AI figures; shown as your exports, never mixed into measured rates',
+      'Answers load a page at a time, so a large question panel opens quickly',
+      'Ranges now allow for the answers to one question moving together, so a small panel no longer looks more precise than it is',
+      'Share of voice against a fixed set of brands you choose, with every other brand counted as "others"',
+      'Rates per topic, buyer role and market over the last 28 days',
+      'Did it work: each page you published or question you targeted, before and after, against similar questions nothing touched, with a range; never called the cause',
+      'Optional checks, priced before you switch them on: Claude every week, more assistants in the daily check, and your Google rank for the searches assistants run before answering',
+      'A one-off repeat test of how much each assistant\'s answer changes when asked again, priced first and run only when you confirm',
+      'A check you start yourself is quoted for your whole question panel with the options you switched on, and that quote is what your credits are checked against',
+      'How AI describes you is labelled an early reading until the reader behind it has been checked against answers labelled by people',
+      'A check started while the weekly run is going, or after this week was already measured, is shown as such with that run\'s report, is not charged and is never reported as failed',
+      'Uploaded reports: dates are read for the whole file, a file that could be read either way round asks you which, and a later file replaces only the rows it repeats',
+    ],
+    features: ['ai-visibility', 'integrations'],
+  },
+  {
+    date: '2026-10-23',
     version: '4.2',
     title: 'Accuracy and reliability',
     summary:
@@ -48,9 +77,10 @@ export const changelog: ChangelogEntry[] = [
       'Pages Google still shows that no longer open are one clear finding at the top of your reports, with a suggested new address for each and ready redirect files in the fix pack',
       'Reliability and billing accuracy: saving one setting no longer resets the others, starting tracking uses no credits, and a retried search request is no longer charged twice',
       'Search Console shows the same status on every screen: once we can read your property, the overview, recommendations and pipeline stop asking you to connect it, and proving you own the website is labelled apart from connecting its Google data',
+      'AI visibility compares like with like: a change is shown only against an earlier check that asked the same questions on the same assistants, and only called a change when it is beyond normal answer-to-answer variation; a check run on demand is priced for your own question panel, the credits shown per check are the ones charged, and questions beyond your panel size are marked as not asked',
       'A draft you finished yourself is easy to report: press "I published it" on its report, its card or its ladder page, or choose it in the form, and that draft is marked published with your edits; the live check now names any bracket still left on the published page',
     ],
-    features: ['keyword-research', 'keyword-ladders', 'content', 'technical-audits', 'site-tracking', 'autopilot'],
+    features: ['keyword-research', 'keyword-ladders', 'content', 'technical-audits', 'site-tracking', 'autopilot', 'ai-visibility'],
     labels: ['Reliability', 'Billing'],
   },
   {

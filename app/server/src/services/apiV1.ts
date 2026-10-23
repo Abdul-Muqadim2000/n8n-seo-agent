@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import {
+  aiFilterFrom,
   customerSafePayload,
   decodeCursor,
   deliveryDecision,
@@ -22,6 +23,8 @@ import {
   type RunCredits,
   type RunV1,
   type WebsiteV1,
+  RUN_STATUSES as RUN_STATUS_LIST,
+  type JoinedRunResult,
 } from '@seo/shared';
 import { db, schema } from '../db';
 import type { ApiKeyRow, OrgRow, RunRow, SiteRow } from '../db/schema';
@@ -30,7 +33,8 @@ import { isUuid, type OrgAccess } from '../auth/access';
 import { HttpError, notFound, validationError } from '../lib/errors';
 import { publishCheckCall, siteRows } from '../n8n/client';
 import { aiData, oneReadingFinding, previousOfType } from './data';
-import { filesFor } from './runs';
+import { aiAnswersPage } from './aiWave2';
+import { filesFor, runJoinedResult } from './runs';
 import { creditsForRuns, reportCredits } from './runCredits';
 import { customerError } from '../lib/customerError';
 import { crawlerData } from './crawlers/analytics';
@@ -186,7 +190,7 @@ export async function getAiSegments(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
   const site = await siteOf(ctx, websiteId);
   requireVerifiedSite(site);
 
-  const d = await aiData(ctx.org, site);
+  const d = await aiData(ctx.org, site, { answers: false });   // A11 (2026-10-23): the segments never need the answers
   const run = d.runs.length ? d.runs[d.runs.length - 1] : null;
   const dim = typeof q.dimension === 'string' && q.dimension ? q.dimension : '';
   const rows = (d.segments?.rows ?? []).filter((s) => !dim || s.dim === dim);
@@ -202,6 +206,55 @@ export async function getAiSegments(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
     moves: d.segments?.moves ?? [],
     minAnswers: d.segments?.minAnswers ?? 12,
   };
+}
+
+/**
+ * W2-A (2026-10-23): the AI visibility summary of one verified website: the latest run's headline rates with their ranges and the comparison
+ * with the previous run (no change across a changed panel), per engine, share of voice, and the wave-2 blocks when the run has them (our
+ * pages cited / retrieved, source types, shopping, ads and local, sentiment by aspect, "did it work" verdicts, owner rules that fired,
+ * fan-out gaps, demand ranges); plus every stored run's headline with its range and whether it was compared. Credits only, never cost.
+ */
+export async function getAiVisibility(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
+  const site = await siteOf(ctx, websiteId);
+  requireVerifiedSite(site);
+  const filter = aiFilterFrom(q as Record<string, unknown>);
+  const d = await aiData(ctx.org, site, { answers: false, filter: Object.values(filter).some(Boolean) ? filter : null });
+  const run = d.runs.length ? d.runs[d.runs.length - 1] : null;
+  const x = d.latest?.extras ?? null;
+  return {
+    websiteId: site.id,
+    domain: site.domain,
+    latest: run
+      ? {
+          runId: run.runId, checkedAt: run.checkedAt, runKind: run.runKind, questions: run.prompts, answers: run.answers, samples: run.samples,
+          namedRate: run.mentionRate, namedRange: run.ciNamed ?? null, citedRate: run.citationRate, citedRange: run.ciCited ?? null, rangeMethod: run.ciMethod || 'wilson',
+          shareOfVoice: run.shareOfVoice, visibilityScore: run.visibilityScore, comparison: run.compare, credits: run.credits,
+        }
+      : null,
+    engines: d.latest?.engines ?? [],
+    shareOfVoice: run?.sov ?? null,
+    pages: x?.urls ?? null,
+    sources: x?.sources ?? null,
+    shopping: x?.shopping ?? null,
+    adsAndLocal: x?.adsLocal ?? null,
+    sentiment: x?.sentiment ?? null,
+    impact: x?.impact ?? null,
+    rules: x?.rules ?? null,
+    fanoutGaps: x?.fanoutGap ?? null,
+    demand: x?.demand ?? null,
+    imports: x?.imports ?? null,
+    scope: d.scope ?? null,
+    runs: d.runs.map((r) => ({ runId: r.runId, checkedAt: r.checkedAt, namedRate: r.mentionRate, namedRange: r.ciNamed ?? null, citedRate: r.citationRate, shareOfVoice: r.shareOfVoice, comparable: r.compare ? r.compare.comparable : null, reason: r.compare?.reason ?? null })),
+    unit: 'percent 0-100; every rate with its answers and its 95% range; null = not measured on this run',
+  };
+}
+
+/** W2-A: one page of a run's answers (the latest, or `run`) with the filter's rates, as the AI visibility page reads them. */
+export async function getAiAnswers(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
+  const site = await siteOf(ctx, websiteId);
+  requireVerifiedSite(site);
+  const r = q as Record<string, unknown>;
+  return aiAnswersPage(site, { filter: aiFilterFrom(r), run: str(r.run), result: str(r.result), text: str(r.q), promptId: str(r.promptId), page: Number(r.page), pageSize: Number(r.pageSize) });
 }
 
 export async function getCrawlers(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
@@ -220,7 +273,9 @@ export function toRunV1(r: RunRow, credits: RunCredits): RunV1 {
     mode: r.mode,
     title: r.title,
     status: r.status,
-    error: customerError(r.error),
+    // R-A3: a check joined to the website's open run is `joined`, not failed: its sentence is a note, never an error
+    error: r.status === 'joined' ? null : customerError(r.error),
+    note: r.status === 'joined' ? (r.error ?? null) : null,
     createdAt: r.createdAt.toISOString(),
     completedAt: r.completedAt ? r.completedAt.toISOString() : null,
     reportCount: r.reportCount,
@@ -234,7 +289,7 @@ export async function runsV1(orgId: string, rows: RunRow[]): Promise<RunV1[]> {
   return rows.map((r) => toRunV1(r, credits.get(r.id)!));
 }
 
-const RUN_STATUSES = ['submitting', 'accepted', 'running', 'completed', 'failed'];
+const RUN_STATUSES: readonly string[] = RUN_STATUS_LIST;
 
 export async function listRuns(ctx: V1Ctx, q: Q = {}): Promise<PageV1<RunV1>> {
   const limit = pageLimit(q.limit);
@@ -254,12 +309,14 @@ export async function listRuns(ctx: V1Ctx, q: Q = {}): Promise<PageV1<RunV1>> {
   return { items: await runsV1(ctx.org.id, rows.slice(0, limit)), nextCursor: nextCursor(rows, limit, (r) => r.createdAt) };
 }
 
-export async function getRun(ctx: V1Ctx, runId: unknown): Promise<{ run: RunV1 & { input: Record<string, unknown> }; reports: ReportV1[] }> {
+export async function getRun(ctx: V1Ctx, runId: unknown): Promise<{ run: RunV1 & { input: Record<string, unknown>; joined?: JoinedRunResult }; reports: ReportV1[] }> {
   if (!isUuid(runId)) throw notFound('Run not found');
   const run = await db.query.runs.findFirst({ where: and(eq(schema.runs.orgId, ctx.org.id), eq(schema.runs.id, runId)) });
   if (!run) throw notFound('Run not found');
   const reports = await reportRows(ctx, [eq(schema.reports.runId, run.id)], 100);
-  return { run: { ...(await runsV1(ctx.org.id, [run]))[0], input: run.input }, reports: reports.slice(0, 100).map(toReportV1Row).reverse() };
+  // R-A3: a joined run names the open run it joined and, once it has reported, that report's id
+  const joined = await runJoinedResult(ctx.org.id, run);
+  return { run: { ...(await runsV1(ctx.org.id, [run]))[0], input: run.input, ...(joined ? { joined } : {}) }, reports: reports.slice(0, 100).map(toReportV1Row).reverse() };
 }
 
 // ---------------- reports ----------------

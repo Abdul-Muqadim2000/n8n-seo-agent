@@ -1,14 +1,14 @@
 import { and, desc, eq, inArray, lt, type SQL } from 'drizzle-orm';
 import { audit } from '../services/audit';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { isClientRole, isShareToken, MODE_IDS, parseRunInput, SHARE, shareDays, shareRefusal, shareState, shareUrl, type Page, type ReportDetail, type Run } from '@seo/shared';
+import { isClientRole, isShareToken, MODE_IDS, parseRunInput, RUN_STATUSES, SHARE, shareDays, shareRefusal, shareState, shareUrl, type Page, type ReportDetail, type Run } from '@seo/shared';
 import { isUuid, orgAccess } from '../auth/access';
 import { config } from '../config';
 import { db, schema } from '../db';
 import type { FileRow } from '../db/schema';
 import { HttpError, notFound, validationError } from '../lib/errors';
 import { deliverReport } from '../services/reportDelivery';
-import { createRun, creditsForRuns, filesFor, getRunOrThrow, reportCredits, reportsList, toReport, toRun } from '../services/runs';
+import { createRun, creditsForRuns, filesFor, getRunOrThrow, reportCredits, reportsList, runJoinedResult, toReport, toRun } from '../services/runs';
 import { createShare, listShares, markOpened, revokeShare, sharedFile, sharedReport, shareByToken } from '../services/shareLinks';
 import { payloadFor } from '../services/brandOf';
 import { portalFile, portalFiles, shareFile } from '../services/portalDocs';
@@ -67,7 +67,7 @@ export async function runRoutes(app: FastifyInstance) {
     if (q.siteId && isUuid(q.siteId)) conds.push(eq(schema.runs.siteId, q.siteId));
     if (q.mode && (MODE_IDS as readonly string[]).includes(q.mode)) conds.push(eq(schema.runs.mode, q.mode));
     if (q.status === 'active') conds.push(inArray(schema.runs.status, ['submitting', 'accepted', 'running']));
-    else if (q.status && ['submitting', 'accepted', 'running', 'completed', 'failed'].includes(q.status)) conds.push(eq(schema.runs.status, q.status));
+    else if (q.status && (RUN_STATUSES as readonly string[]).includes(q.status)) conds.push(eq(schema.runs.status, q.status));
     if (q.cursor && !Number.isNaN(Date.parse(q.cursor))) conds.push(lt(schema.runs.createdAt, new Date(q.cursor)));
     const rows = await db
       .select({ r: schema.runs, domain: schema.sites.domain, userName: schema.users.name, keyName: schema.apiKeys.name })
@@ -89,9 +89,10 @@ export async function runRoutes(app: FastifyInstance) {
     const p = req.params as P;
     const a = await orgAccess(req, p.orgId);
     if (!isUuid(p.runId)) throw notFound('Run not found');
-    await getRunOrThrow(a.org.id, p.runId);
-    const [run, reports] = await Promise.all([runWithNames(p.runId), reportsList(a.org.id, { runId: p.runId, limit: 100 })]);
-    return { run: run!, reports: reports.reverse() };
+    const row = await getRunOrThrow(a.org.id, p.runId);
+    // R-A3: a check joined to the website's open run shows that run's report once it has arrived
+    const [run, reports, joined] = await Promise.all([runWithNames(p.runId), reportsList(a.org.id, { runId: p.runId, limit: 100 }), runJoinedResult(a.org.id, row)]);
+    return { run: run!, reports: reports.reverse(), ...(joined ? { joined } : {}) };
   });
 
   // G5: reports are part of the client portal (client viewers and approvers read them; files are rebranded below)

@@ -1,0 +1,77 @@
+# W2-A: the AI visibility page, wave 2 (app), 2026-10-23
+
+Branch `worktree-agent-a683c6ef72d81d0ee` (base `6953f27b`, the wave-2 contracts). App only (`app/shared`, `app/server`, `app/web`, `app/API.md`);
+nothing in `n8n/` edited except this file. Not pushed, not deployed. No Postgres migration. Builds against `WAVE2_CONTRACTS.md` §1-§6 and
+the W2-E1 contract update sent mid-task (below). Every new block renders only when its column is on the row: an older row keeps today's view.
+
+Commits: `da5867dd` (shared), `8b4d3b4d` (server + API.md), `5e6e321d` (web + the W2-E1 update), `373c4ae9` (settings, guides, marketing),
+plus the report commit.
+
+## What was built, per brief item
+
+| # | Feature | Where |
+|---|---|---|
+| 1 | **Answer drill-down.** Answers page in from the server (`AnswersBrowser`): run picker, text search, result chips, 12 a page, the filter's rates with 95% range ("too few answers" under 12). Each `AnswerDetailCard`: engine + model, cited / named #position badge, the whole answer when stored (else the excerpt, said so; "kept 35 days (7 for the pulse)" when the engine blanked it), brands in the order named with role (You / Competitor / Platform / Source), citations in order with ours marked "Yours", read-but-not-cited pages, the searches it ran, product / ad / local cards, wrong claims; "Shown none in this answer" when a card column is `[]` (absent column = not reported, nothing said). `QuestionDialog`: every engine side by side for a chosen run, the question's named rate per run with its range (`RangeTrendChart`), facets incl. keyword. Opened from an answer or from a question in the panel. | `web/.../_components/ai-answers.tsx:25,144,301`; reader `shared/src/ai-detail.ts:74` (`aiAnswerDetail`) |
+| 2 | **Trends.** "Each engine over time" (named / cited, from every run's `engines_json`; an engine under 12 answers or carried is left out of that run) and "Share of voice over time" (the fixed set from `sov_json` when stored, else every brand named; a change of basis is a break too). Breaks: `aiTrendRows` puts a gap row between a run and the run before when `compare.comparable` is false, lines are drawn with `connectNulls` off, numbered markers + legend name the reason. **F3's A1 step 4 finished**: the "Over time" chart now breaks the same way. Ranges: `ciNamed` from `ci_json` (method shown: "resampled by question") else the stored Wilson `mention_lo/hi`; the hero hint and `RangeTrendChart` (shaded band) use it. | `web/.../_components/ai-trends.tsx:26,84,121`; `shared/src/ai-trends.ts:82`; `server/src/services/data.ts` (`aiRunTrendFields`); `AiVisibilityPage.tsx` (`RunsTrend`) |
+| 3 | **One filter bar**, URL-persisted (`?engine=&cluster=&persona=&market=&stage=&from=&to=`, `useAiFilter`). Dates scope the charts and run tables; the dimensions scope the answers, the downloads and a "Filtered view" card (the latest run's answers in the filter with ranges, rivals named most) and, when exactly one dimension is set, that segment's rate in every stored run from each row's `segments_json` (the engine's own counts), broken where not compared. Several dimensions together have no stored history and say so. The hero keeps the full-panel headline (its comparison is with the run before). | `web/.../ai-filter.tsx:20,66,137`; `shared/src/ai-trends.ts:23-55`; `server/src/services/data.ts` (`aiScopeOf`, `aiScopeSummary`) |
+| 4 | **Panels for new data, when present**: Competitors (`sov_json`: set + every other brand, both denominators, named-of-branded rate, average place when sent), Sources (`types` bar + domains with first / last seen and half-life, "not enough history" for null), Your pages (`urls_json`: cited / read / cited-when-read under the 12 floor, cited instead; read-but-not-cited with the page that won), Shopping ("no shopping results" never 0%), Ads and local, Sentiment (withheld under 12 with the count; by aspect, by rival, objections, kappa), Did it work (`impact_json`: "Likely helped / Can't tell / Likely hurt" with control count, before / after n and the DiD interval; any other verdict reads "can't tell"; never "caused"), Searches behind the answers (`fanout_gap_json`, "Ranks, not cited" flagged), Demand ranges (each proxy named with its date), Persona effect (badge "API answers"; a non-significant effect reads "no measurable difference"). The old "Sources AI trusts" and "Your pages AI cites" stay for rows without the new columns. | `web/.../ai-panels2.tsx:42-325`; readers `shared/src/ai-detail.ts:109-336` |
+| 5 | **CSV downloads**, server-side, company-scoped (the caller's site access picks the domain), streamed (`Readable.from` of a generator), the same capped reads as the page, every cell through `csvCell` (formula injection neutralised): answers (incl. whole answer, citations, retrieved, model), questions (incl. asked next run, last asked, keyword), sources, competitors over time (with comparable yes / no + reason), our pages. Viewer and up, not the client portal, 30 / 10 min. **Paged answers endpoint (finishes F3's A10)**: `/data/ai` no longer sends answers (`answers: []`, plus compact `answerResults` + `answersStored`); `GET …/data/ai/answers` pages them (5-100, default 25; 240 a minute). | `server/src/services/aiWave2.ts:69,144`; `server/src/routes/data.ts:66,84`; `shared/src/ai-export.ts:18` |
+| 6 | **Question management**: checkbox column + "select every question shown", a sticky bulk bar: Switch off, Switch on, Pin, Unpin, Set topic (one dialog, edits `cluster` on each), Delete (confirm dialog; a new admin route deletes the rows of this domain only, by domain AND id; answers keep their history; audited `site.ai_prompts_deleted` with count + ids). Import reads an optional **keyword** column (and the add / edit schemas take `keyword`, sent to Site Admin, which the engine already stores as the owner's). "Not asked: over your panel size" kept; asked state from `last_asked_at` / `asked_n_28d` when the engine stores them ("asked 2 days ago · 4x in 28 days"). Every other change still goes through Site Admin and F3's audit entries. | `web/.../ai-panel.tsx` (`PanelManager`); `server/src/routes/sites.ts:439`; `server/src/services/aiWave2.ts:274`; `shared/src/ai-export.ts:33` |
+| 7 | **Owner alert rules** (§4 `ai_alert_rules_json`): list with the rule in words, whether it fired on the latest run and why (`alerts_rules_json`), a preview of how often it would have fired on the stored runs; add / edit / delete for admins (max 20), validated by `aiAlertRulesSchema` (competitor rules need a competitor, unique ids, 0.5-100, place moves ≤ 20, market format). The preview judges like the engine: only comparable pairs, only when the figure's own test passed (the engine's `delta.tests` for the headline, a two-proportion z-test with the 12-answer floor and 5-point minimum for an engine scope or a competitor's share), and only at or over the threshold in the rule's direction; topic / role / market scopes are not replayed (said so: the history keeps only the latest run's segments). Saved through Site Admin `monitors`. | `web/.../ai-rules.tsx:34,114`; `shared/src/ai-trends.ts:99-230` |
+| 8 | **Engine / pulse options** in Website settings > Tracking & monitors ("More engine options"): Claude every week, the pulse engines, buyer role as context (needs roles; "API answers"), fan-out check (Off / 25 / 50 / 100), the share-of-voice set. All optional with no default in the schema: nothing is sent until set, so every website keeps today's cost (`monitorsBody` test). The cost box and each option's "+N credits a month" come from `aiPanelCostWith`, which calls `estimateAiPanelCost` with the contract's options (`claudeWeekly`, `pulseEngines`, `personaContext`, `fanoutCheck`) through a widened object; `ai-panel.ts` / `cost.ts` not edited (W2-E3 owns them). | `web/src/components/site/MonitorSettingsFields.tsx` (`aiPanelCostWith`, `AiMoreOptions`); `shared/src/schemas.ts` (monitorSettingsSchema), `shared/src/payload.ts` (`monitorsBody`); read back in `server/src/services/data.ts` (`monitorsFromRow`) |
+| 9 | **Imports**: "Your AI reports" card on the AI page (report choice or auto, period end for undated files, upload, what is stored per source). Parser `parseAiImport` (columns by name with synonyms, header found below title lines, www / subdomains own, a file whose page URLs are mostly another site is refused naming it, stray other-site rows skipped, duplicates summed, 20,000 rows). Route `POST …/ai/import` (member, 16 MB, 20 an hour): `ensureTable('aiImports', AI_IMPORT_COLUMNS)`, then per day covered `deleteRows(site_id, source, day)` and insert in 500s = the contract's upsert by (site, source, day, url, query). Audit `site.ai_import`. Guide `ai-report-import` (Bing and Search Console steps, with the warning to filter Search Console to AI features). **Assumptions (documented in `shared/src/ai-import.ts`):** the exact headers of both exports were not checked against a real file; Bing = Date / Page or URL / Grounding query / Citations; Search Console = its Queries / Pages / Dates CSV. | `shared/src/ai-import.ts:73`; `server/src/services/aiWave2.ts:230`; `server/src/routes/sites.ts:426`; `web/.../ai-panels2.tsx:346`; `shared/src/guides.ts` |
+| 10 | **`open_run`** (§6): `runOutcome` closes the request with nothing charged, `lastStage: 'joined_open_run'`, error "Part of the open run (finishes about HH:MM UTC[ on date]). <engine sentence>". Runs list and run page show an accent "Part of the open run" badge, an info callout instead of "did not complete", a "Part of the open run" final stage and "Not charged: part of the open run". | `server/src/services/runs.ts` (`runOutcome`); `shared/src/ai-trends.ts:236`; `web/src/components/ui/badge.tsx`; `pages/runs/RunDetailPage.tsx`, `RunsPage.tsx` |
+| 11 | **Read API + MCP**: `GET /api/v1/websites/:id/ai-visibility` (headline with ranges + method, comparison, credits, engines, share of voice, every wave-2 block, every run's headline with `comparable`, optional filter → scope) and `GET /api/v1/websites/:id/ai-answers` (the paged answers); MCP tools `get_ai_visibility`, `list_ai_answers`. Company-scoped through `siteOf(ctx)` + verified only; no cost field. Documented in `app/API.md` (sites, dashboards, read API, n8n → app). | `server/src/services/apiV1.ts` (`getAiVisibility`, `getAiAnswers`); `server/src/routes/apiV1.ts:85,315` |
+| 12 | **Business site**: AI visibility capability (9 new benefits, a FAQ; the old "we point you to Bing's report" line replaced by the upload), changelog release **4.3 "AI visibility you can open up"**, two pricing comparison rows, the agencies solution line, guided-setup count 65 → 67. Customer language, shipped app capabilities only. | `web/src/marketing/content/{features,changelog,pricing,solutions}.ts` |
+
+## W2-E1 contract update (received mid-task) — all handled
+
+1. `sources_json` is now `{v: 2, types, domains, n, list}`: `aiLegacySourcesList` reads `list` (or the old array) for the existing table
+   (`data.ts` and the sources CSV); `parseAiSources2` reads `types` / `domains` (and ignores an array).
+2. Stage `shopping`: accepted in `aiQuestionSchema` / `aiQuestionEditSchema`, the edit dialog's stage list, the filter (options come from the
+   data) and the CSV import (`parseAiPanelCsvWithKeyword` re-reads shopping rows the base parser in `ai-panel.ts` would refuse; that file was
+   not edited).
+3. `detail_json` (`answer_cut`, `answer_len`): `answerExpired` = no text now but a recorded length → "the whole answer is kept 35 days (7
+   for the daily pulse)"; the excerpt is shown.
+4. `'[]'` vs `''` for products / ads / local / retrieved: `[]` = "Shown none in this answer: …", absent = nothing said.
+5. Shopping "no shopping results": trigger / presence rates and place forced to null (never 0%), the panel says so.
+
+## Tests and counts (node:22-bookworm-slim, only `app/` mounted)
+
+- Typecheck shared / server / web: clean. `npm run build -w @seo/web`: OK.
+- New: shared `src/ai-wave2.test.ts` (31), server `test/aiWave2.test.ts` (22), web `test/aiWave2.test.tsx` (11).
+- shared: **638 passed**, 2 skipped (41 files; F3 baseline 607). Two files cannot load as before (`fit-gate.parity`, `readiness`: they read `n8n/…`, not mounted).
+- server: **737 passed** + 2 load flakes, 46 skipped (Postgres suites) in the full run (F3 baseline 714). `cadenceLevels.test.ts` reads `n8n/seo-agent/harness/fixtures` (not mounted, as before); `identity-audit` and
+  `identity-sso` failed once under load in the full run and pass alone (17 / 17).
+- web: **181 passed** (20 files; F3 baseline 170).
+
+## Browser pass
+
+Done with Playwright (`mcr.microsoft.com/playwright:v1.55.0-noble`): the built `web/dist` served statically, every `/api` GET answered
+from sample fixtures (no customer data; every non-GET refused), the AI page at 1440 and 390, light and dark, reduced motion, with the wave-2
+blocks populated (a not-comparable run, a shopping row with no results, persona effect, sentiment, impact, fan-out gaps, rules, an upload).
+Result: **no console errors, no page errors, 0 px horizontal overflow** at all four sizes. Plus the filtered view (`?persona=CFO`, the
+segment trend with a break) and the question dialog (every engine side by side, the range band). Screenshots in
+`app/docs/browser-pass/w2a/` (`ai-{desktop,phone}-{light,dark}.png`, `ai-filtered-desktop-light.png`, `ai-question-dialog.png`); the
+script is `app/scripts/w2a_ai_page_shots.mjs` (mount `web/dist` at /dist, the script dir, an output dir at /out). Two shell endpoints not
+in the fixtures (`/api/portal/context`, `…/billing`) answered 404 and the shell handled them. Not checked against the dev stack with a real
+n8n (the laptop n8n stays stopped).
+
+## Open items
+
+- **Engine side not verified together**: the readers follow the contract; the first real run with the W2-E columns is the check (a live
+  `/data/ai` + `/data/ai/answers` read on production after the engine deploy). The shapes inside `imports_json` and the **persona effect**
+  have no fixed contract: the app reads `persona_effect_json` or `notes_json.persona_effect` as `[{role, with:{rate,n}, without:{rate,n},
+  delta, lo, hi, significant}]` (assumption, `ai-detail.ts:336`) and `imports_json` loosely. `sov_json.by_entity[].avg_position` is read
+  for "normalised position" when the engine sends it.
+- **Cost of the wave-2 options**: shown through `estimateAiPanelCost`; until W2-E3's extension of that function is merged the options add 0
+  to the figure (the code passes them; the golden cases are W2-E3's).
+- **Alert rules fire in the engine** (W2-E2 evaluates `ai_alert_rules_json`); the app validates, previews and shows `alerts_rules_json`.
+- **Site Admin `monitors`** must accept and store the six new keys (`Monitor_Row_Admin.js`, W2-E2 / W2-E3); until then a save of them is a
+  no-op in the engine.
+- **AI import headers** are assumptions until checked against a real Bing AI Performance and Search Console export of a customer site.
+- **Delete** removes prompt rows through the n8n public API (the engine has no delete action); stored answers keep the id.
+- The answers endpoint pages server-side over the cached (60 s) read of the run's answers (n8n's API has cursors, no offset); the n8n
+  read itself is still up to 6,000 rows per run.
+- "Questions you lose", the question grid and the market panels are unchanged; the global filter does not scope them (they are the
+  report's / the latest run's).

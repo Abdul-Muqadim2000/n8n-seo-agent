@@ -4,12 +4,14 @@ THE BUSINESS (the facts we know; anything not listed is unknown, not wrong)
 {{ $json.facts }}
 Fact check: {{ $json.fact_check || 'on' }} — when it is "off" we hold too few facts about this business to judge any claim: return an empty "wrong" list for every answer, whatever the answers say.
 Competitors we already track: {{ $json.known_competitors || 'none' }}
+Platforms this business works with (its own partners, never its competitors): {{ $json.platforms || 'none on file' }}
 
 ANSWERS
 {{ $json.answers }}
 
 For every answer, in the same order (n = its number):
-- brands: the businesses, products or providers the answer names as options or examples, in the order they first appear (max 10). A business name only — never a heading, a section title or a category phrase ("Tax technology and e-invoicing software" is a heading, not a brand). Include {{ $json.business }} if it is named. Give the website domain only when the answer shows it or it is unmistakable (e.g. "ClearTax" -> cleartax.in); otherwise "". Do not list publishers, government bodies or media that are only cited as sources.
+- brands: the businesses, products or providers the answer names, in the order they first appear (max 10). A business name only — never a heading, a section title or a category phrase ("Tax technology and e-invoicing software" is a heading, not a brand). One entry per business: "Thomson Reuters (formerly Pagero)" is one business, and so are "EDICOM" and "Edicom". Include {{ $json.business }} if it is named. Give the website domain only when the answer shows it or it is unmistakable (e.g. "ClearTax" -> cleartax.in); otherwise "". Do not list publishers, government bodies or media that are only cited as sources.
+  role of each brand: competitor (offered to the buyer as an option for what the question asks, the same kind of service or product), platform (named only as software the options integrate with, connect to, are built on, or partner with — "connect your ERP (SAP, Oracle, Zoho)", "a Microsoft Dynamics 365 integrator"; the platforms this business works with are always platform), or source (named only as where a fact comes from: a publisher, a directory, a review site, an association, a research firm). Give {{ $json.business }} the role competitor.
 - sentiment: how the answer speaks about {{ $json.business }}: positive (recommended, praised, listed as a strong option), neutral (named without judgement), negative (criticised, warned against, described as weak or risky), or not_mentioned.
 - why: at most 15 words explaining the sentiment (empty for not_mentioned).
 - wrong: claims about {{ $json.business }} that contradict the facts above or clearly describe a different company (wrong city or country, services it does not list, a wrong phone or website, confusion with a similarly named company). For each: the claim as the answer states it, and the correct fact from the list, quoted from the fact sheet. Unknown facts are not errors, and neither is anything the fact sheet does not cover. Empty list when nothing contradicts the facts, and always empty when the fact check is off.
@@ -17,4 +19,4 @@ For every answer, in the same order (n = its number):
 Also give descriptors: up to 8 short phrases the answers use to describe {{ $json.business }} (e.g. "Odoo partner", "affordable", "UAE-based"); empty when it is never described.
 
 Return ONLY JSON:
-{"answers": [{"n": 1, "brands": [{"name": "", "domain": ""}], "sentiment": "positive | neutral | negative | not_mentioned", "why": "", "wrong": [{"claim": "", "correct": ""}]}], "descriptors": [""]}
+{"answers": [{"n": 1, "brands": [{"name": "", "domain": "", "role": "competitor | platform | source"}], "sentiment": "positive | neutral | negative | not_mentioned", "why": "", "wrong": [{"claim": "", "correct": ""}]}], "descriptors": [""]}

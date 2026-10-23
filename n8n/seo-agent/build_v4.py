@@ -5208,7 +5208,7 @@ def _r17_r29_checks():
         _check_ledger_order55(files55[wname55], wiring55); checked55 += 1
     # R32's companion (section 59): Page Watch joined the chain, so it is ten — the nine that spend plus the daily watch, which keeps a
     # $0 row so the guard and the day's reconciliation can see that it ran at all.
-    assert checked55 == 11, 'R17: ' + str(checked55) + ' workflows checked, expected 11 (the nine of R17, Page Watch, and the Reply Reader since W3-F)'
+    assert checked55 == 12, 'R17: ' + str(checked55) + ' workflows checked, expected 12 (the nine of R17, Page Watch, the Reply Reader since W3-F, and the AI Repeat Pilot since W2-E2)'
     hits55 = _secret_scan55([os.path.join(HERE0, 'workflows'), os.path.join(HERE0, 'harness', 'code_v4')])
     assert not hits55, 'R29: a secret reached the generated files:\n  ' + '\n  '.join(hits55)
     # R30 (2026-10-14): a shape scan only catches the secrets we thought of. The alert channel is checked positively as well — what is
@@ -6499,7 +6499,7 @@ def _b64_checks():
             'B-A7: ' + wname64 + ' does not write the retry state back: ' + str(wr64)
         out64[wname64] = {'guard': g64, 'retry': r64, 'writes': wr64, 'if_outputs': if64,
                           'refuse_values': sorted(ref64['columns']['value'].keys())}
-    assert len(out64) == 11, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 11 (the ten schedules and the Reply Reader since W3-F)'
+    assert len(out64) == 12, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 12 (the ten schedules, the Reply Reader since W3-F and the AI Repeat Pilot since W2-E2)'
     json.dump({'monitors': out64, 'n_minutes': 30, 'k_attempts': 3, 'max_attempts': 10, 'per_sweep': 5,
                'error_handler': _ops64['retry'], 'columns': [c for c, _t in _OAC64],
                'page_watch_delivery': {'code': 'Watch Ops Delivery', 'save': 'Save Watch Ops Delivery'}},
@@ -8450,11 +8450,13 @@ def _b81_checks():
     _want81 = {
         'AI_Visibility / AI Metrics': ('B8-1 / B8-3 / B8-4 / B8-5', (
             'const tests = (prev && like.comparable) ? {',                       # B8-1
-            'changeOf(cited, samples, citedBefore, prev.samples)',
-            'changeOf(mentioned, mentioned + compTotal, prev.mentioned_k, prev.mentioned_k + compTotalBefore)',
-            'const score_band = scoreBand(ans,', 'scoreChange(visibility_score, prev.visibility_score, score_band)',
-            "changeOf(c.mentions, mentioned + compTotal, Number(b0.mentions) || 0, prev.mentioned_k + compTotalBefore, { min_points: 10 })",
-            'citation_ci: wilson(cited, samples), sov_ci: wilson(mentioned, mentioned + compTotal)',
+            'changeOf(cited, samples, cPrev, nPrev)',
+            # F1b (2026-10-23, E19): share of voice is tested on its standard error over ANSWERS, never as if each mention were a trial
+            'AVM.seChange(H.sov, H.sov_se, H.sov_n, PS.sov.rate, PS.sov.se, PS.sov.n)',
+            'const score_band = scoreBand(U,', 'scoreChange(visibility_score, prev.visibility_score, score_band)',
+            'AVM.seChange(c.sov, c._st.sov_se, c._st.sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0, { min: 10 })',
+            # W2-E2 (2026-10-23): the citation and share-of-voice ranges take the clustered method (question = sampling unit) when it measured one
+            'citation_ci: W2CI.headline.cited_rate.lo != null ? [W2CI.headline.cited_rate.lo, W2CI.headline.cited_rate.hi] : wilson(cited, samples), sov_ci: W2CI.headline.share_of_voice.lo != null',
             'win: rateOf(q.m, q.n, { min: MIN_Q_SAMPLES }), decided: q.n >= MIN_Q_SAMPLES',   # B8-4
             'const gaps = lostQ.filter(q => q.decided).slice(0, 8);', 'const undecided = lostQ.filter(q => !q.decided)',
             'const pulse_basis = PR.length ?', 'partial_days:', 'const capped = (()',          # B8-3 / B8-5
@@ -8468,7 +8470,9 @@ def _b81_checks():
         'AI_Pulse / Pulse Metrics': ('B8-2 / B8-3', (
             'const readable = {', 'unavailable: !R.length || n === 0', 'could not be read',
             'No answer came back at all today',
-            'const judged = (p.baseline || []).map(d => ({ d, v: sameBasis({ engines: d.engines, size: d.samples, panel: d.panel }, nowBasis) }));',
+            # F1b (2026-10-23): a morning counted under another rule is set aside before the basis check
+            "const judged = (p.baseline || []).map(d => ({ d, v: String(d.rule_version || '') !== AVM.RULE_VERSION ?",
+            'sameBasis({ engines: d.engines, size: d.samples, panel: d.panel }, nowBasis) }));',
             'const B = judged.filter(x => x.v.ok).map(x => x.d);', 'const baseline_set_aside =', 'const baseline_note =',
             '!readable.unavailable && todayRate.enough && n >= 20 && bn >= 40')),
         'AI_Pulse / AI Plan': ('B8-2', (
@@ -9072,7 +9076,7 @@ def _b84_checks():
     _dir84 = os.path.join(HERE0, 'workflows')
     _load84 = lambda f: _j84.load(open(os.path.join(_dir84, f), encoding='utf-8'))[0]
     _lw84 = _j84.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
-    _want84 = {'SEO Agent — AI Visibility Tracker': ['AI Brief', 'Answer Analyst', 'Prompt Writer'],
+    _want84 = {'SEO Agent — AI Visibility Tracker': ['AI Brief', 'Answer Analyst', 'Prompt Writer', 'Sentiment Reader'],   # W2-E2 (2026-10-23): + the Sentiment Reader (Haiku)
                'SEO Agent — AI Pulse': [], 'SEO Agent — Audit Scheduler': [],
                'SEO Agent — Backlink Monitor': ['Link Analyst', 'Outreach Writer'],
                'SEO Agent — AI Growth': ['AI Outreach Writer'],
@@ -12406,6 +12410,34 @@ open(os.path.join(OUT_CODE, '_promise_judge.js'), 'w').write("// harness shim (w
     + "\nreturn $input.all().map(i => ({ json: { r: PJ[i.json.fn].apply(null, i.json.args || []) } }));\n")
 retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 log('The promise check in two stages (CT-FIX2, 2026-10-22): Promise Candidates lists the sentences in the business\'s name with a wide net (captions, phases on file, list items), Promise Judge (Claude Haiku, one call a QA round, measured usage in the ledger) judges each against its closest facts, Content QA applies the verdicts and falls back to the rules with "checked by rules only"; round N-1\'s reworded promise marks stay promises; the length band of the page type is used; generic citation anchors are re-attached only in their own sentence; inbound anchors avoid the ladder\'s other searches; the Word report has one slug and no dashes, arrows or "..."')
+
+# =============================================================================
+# 149. THE FRONT DOOR RESERVES THE WEBSITE'S WHOLE AI PANEL, AND "TRACK MY SITE" KEEPS THE OWNER'S AI OPTIONS (W2-FIX, 2026-10-23,
+#      docs/ai-visibility-2026-10-23/fixes/W2-FIX.md items 4 and 5)
+#      * An on-demand AI visibility check reserved the flat `ai_visibility` row (about $0.95 of search data) on the front door's row while the
+#        tracker it starts asks, and reserves, the website's whole panel: a 200-question panel's full run is about $10.68, a 500-question one
+#        far more. The day's search-data budget and the account floor in Rate Limit therefore admitted a run they would have refused, and only
+#        the tracker's own gate (which checks the account, not the day's budget) stood behind it. The web app now sends its quote of that
+#        panel (`panel_quote`: aiOnDemandRunCost, the engine's AIP.cost formula) and Normalize Input carries it as panel_quote_dfs_usd /
+#        panel_quote_ai_usd / panel_quote_panel; CC.pick (v5/code/_cost_cal.js) reserves the larger of the table and the quote, capped at
+#        $150. Nothing else changes: the parent row still settles $0 as handed off (R81), the tracker reserves its own row.
+#      * Normalize Input passed only the older monitor keys into `monitor_input`, so the W2-E3 options (Claude weekly, the pulse's engines, the
+#        persona test, the fan-out check, the monthly market trend) sent with "Track my site" were dropped before Monitor Row (Track).
+# =============================================================================
+patch('Normalize Input', "const topics = asArray(p2.topics || lab('Main services or products (optional)'))", r"""// W2-FIX (2026-10-23, section 149): the owner's W2-E3 AI options reach "Track my site" too (only Site Admin `monitors` could set them before)
+for (const k of ['ai_claude_weekly', 'ai_persona_context', 'ai_demand_market']) if (MI[k] !== undefined && MI[k] !== null && MI[k] !== '') monitor_input[k] = MI[k] === true || /^(true|1|yes|on)$/i.test(String(MI[k]));
+if (MI.ai_pulse_engines !== undefined && MI.ai_pulse_engines !== null) monitor_input.ai_pulse_engines = asArray(MI.ai_pulse_engines).map(e => String(e).toLowerCase().trim().replace(/[\s-]+/g, '_')).filter(e => ['chatgpt', 'gemini', 'ai_mode', 'copilot', 'perplexity', 'ai_overview'].includes(e)).join(', ');
+if (MI.ai_fanout_check !== undefined && MI.ai_fanout_check !== null && MI.ai_fanout_check !== '') monitor_input.ai_fanout_check = Math.min(200, Math.max(0, parseInt(MI.ai_fanout_check, 10) || 0));
+// W2-FIX (section 149): the web app's quote of the website's whole AI panel (an on-demand AI visibility check), so the front door reserves it
+const __PQ = (p2.panel_quote && typeof p2.panel_quote === 'object') ? p2.panel_quote : {};
+const __pq = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(150, +n.toFixed(4)) : 0; };
+const panel_quote_dfs_usd = mode === 'ai_visibility' ? __pq(__PQ.dfs_usd) : 0, panel_quote_ai_usd = mode === 'ai_visibility' ? __pq(__PQ.ai_usd) : 0;
+const panel_quote_panel = mode === 'ai_visibility' && Number(__PQ.panel) > 0 ? Math.min(500, Math.round(Number(__PQ.panel))) : 0;
+const topics = asArray(p2.topics || lab('Main services or products (optional)'))""")
+patch('Normalize Input', "    monitor_input,\n    topics,", "    monitor_input,\n    panel_quote_dfs_usd, panel_quote_ai_usd, panel_quote_panel,\n    topics,")
+assert "if (q > usd) { quoted = Math.min(q, PANEL_QUOTE_MAX)" in code('Rate Limit') and "if (q > usd) { quoted = Math.min(q, PANEL_QUOTE_MAX)" in code('Run Ledger Row'), \
+    'W2-FIX: the front door does not reserve the panel quote (CC.pick in Rate Limit / Run Ledger Row)'
+log('The front door reserves the website\'s whole AI panel (W2-FIX, 2026-10-23): the app sends its quote of an on-demand AI visibility check (panel_quote), Normalize Input carries it, CC.pick reserves the larger of the table and the quote (at most $150) in Rate Limit and Run Ledger Row; "Track my site" keeps the owner\'s W2-E3 AI options')
 
 # =============================================================================
 # 9. WRITE

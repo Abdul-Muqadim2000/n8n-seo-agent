@@ -1,5 +1,5 @@
 import { modeCostUsd } from './cost';
-import { AI_PANEL_LIMITS, AI_PANEL_PRICE, AI_PANEL_PULSE_ENGINES, estimateAiPanelCost, type AiPulseMode } from './ai-panel';
+import { AI_PANEL_LIMITS, AI_PANEL_PRICE, AI_PANEL_PULSE_ENGINES, estimateAiPanelCost, type AiPanelOptions, type AiPulseMode } from './ai-panel';
 import { ENGINE_TIMEZONE, isValidTimezone, localDateOf, readCycleIntent, upcomingCycles, type CycleIntent } from './cycle-clock';
 import type { CycleJob } from './cycles';
 
@@ -343,6 +343,9 @@ export const STAGE_LABELS: Record<string, string> = {
   rejected: 'Rejected',
   // keyword-first (2026-10-19): the weekly plan, 48 hours before each cycle
   cycle_preview: 'Coming up plan',
+  // W2-FIX (2026-10-23): the AI repeat pilot, priced first (the price is a note, not a report), then its result
+  ai_pilot_quote: 'AI repeat pilot price',
+  ai_pilot: 'AI repeat pilot',
 };
 
 /** Monthly cost of the background monitors per site (HANDOVER.md §1, v4.6 reuse rules; AI visibility: estimateAiVisibilityCost, v4.9). */
@@ -383,9 +386,11 @@ export function aiPulseQuestions(panel: number): number {
  * Monthly cost of AI visibility for one site (v4.9, n8n/seo-agent/AI_VISIBILITY_SPEC.md §5): the weekly run (every engine but Claude, plus
  * the Answer Analyst and the brief), the month's full run (Claude, the AI-answer database index and question discovery) and the daily pulse.
  */
-export function estimateAiVisibilityCost(o: { prompts?: number; engines?: readonly AiEngine[]; pulse?: boolean; pulseMode?: AiPulseMode | string; pulsePerWeek?: number | null } = {}): { weekly: number; fullRun: number; pulse: number; total: number } {
+export function estimateAiVisibilityCost(o: { prompts?: number; engines?: readonly AiEngine[]; pulse?: boolean; pulseMode?: AiPulseMode | string; pulsePerWeek?: number | null } & AiPanelOptions = {}): { weekly: number; fullRun: number; pulse: number; total: number } {
   // G6 (2026-10-18): one formula, ./ai-panel.ts estimateAiPanelCost, the mirror of the engine's AIP.cost (golden cases on both sides)
-  const c = estimateAiPanelCost({ panel: o.prompts ?? AI_PROMPTS_DEFAULT, engines: o.engines && o.engines.length ? o.engines : AI_DEFAULT_ENGINES, pulse: o.pulse, pulseMode: o.pulseMode, pulsePerWeek: o.pulsePerWeek });
+  // W2-FIX (2026-10-23): the owner's W2-E3 options pass through (absent = off, the figures of before)
+  const { prompts, engines, pulse, pulseMode, pulsePerWeek, ...options } = o;
+  const c = estimateAiPanelCost({ panel: prompts ?? AI_PROMPTS_DEFAULT, engines: engines && engines.length ? engines : AI_DEFAULT_ENGINES, pulse, pulseMode, pulsePerWeek, ...options });
   return { weekly: c.month.weekly, fullRun: c.month.fullExtra, pulse: c.month.pulse, total: c.month.total };
 }
 MONITOR_COSTS.aiVisibilityMonthly = estimateAiVisibilityCost().total;

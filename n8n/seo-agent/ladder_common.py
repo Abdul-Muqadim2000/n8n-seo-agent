@@ -174,16 +174,35 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  ('link_builder', 'boolean'),   # v4.13 (LINK_BUILDER_SPEC.md): the weekly Link Builder (empty = on); on, the Backlink Monitor no longer drafts e-mails
                  ('stuck_weeks', 'number'),   # G32 (2026-10-13): weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept 2-26)
                  # G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): buyer roles and extra markets the panel covers, and how the daily pulse samples it
-                 ('ai_personas', 'string'), ('ai_markets', 'string'), ('ai_pulse_mode', 'string'), ('ai_pulse_per_week', 'number')]
+                 ('ai_personas', 'string'), ('ai_markets', 'string'), ('ai_pulse_mode', 'string'), ('ai_pulse_per_week', 'number'),
+                 # W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): the owner's alert rules (JSON list, validated by Site Admin `monitors`)
+                 # and the declared share-of-voice set (comma list of competitor ids; '' = the configured competitors)
+                 ('ai_alert_rules_json', 'string'), ('ai_sov_set', 'string'),
+                 # W2-E3 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §4): Claude weekly (empty = monthly), the pulse's engines
+                 # (comma list, empty = the default four), the persona test on the ChatGPT API (empty = off), the fan-out searches checked a week
+                 # (empty / 0 = off), and the monthly market trend from the AI-answer database (empty = off; an addition to the contract)
+                 ('ai_claude_weekly', 'boolean'), ('ai_pulse_engines', 'string'), ('ai_persona_context', 'boolean'), ('ai_fanout_check', 'number'), ('ai_demand_market', 'boolean')]
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
                    # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
                    # and the fit gate's sentence when status is 'refused' (stored, so the panel manager shows what was refused and why)
-                   ('persona', 'string'), ('market', 'string'), ('pinned', 'boolean'), ('fit_note', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
+                   ('persona', 'string'), ('market', 'string'), ('pinned', 'boolean'), ('fit_note', 'string'),
+                   # F2 (2026-10-23, ENGINE_AUDIT.md E9): where the search phrase (`keyword`) came from: owner | writer | template | derived. A derived
+                   # phrase is built from the question's own words (AIP.keywordOf); AI Requests does not ask Google's AI Overview for it
+                   ('keyword_source', 'string'),
+                   # W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §3): the question's asked state, written by the weekly run's last part: the run that
+                   # last asked it and when, how many weekly runs + pulse mornings asked it in 28 days, and the run whose fit gate refused it
+                   ('last_asked_run', 'string'), ('last_asked_at', 'string'), ('asked_n_28d', 'number'), ('refused_at_run', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
 AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompt_id', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('engine', 'string'),
                    ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string'),
                    ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string'),
-                   ('cited_urls', 'string')]   # v4.12: the exact third-party pages the answer cited (JSON [{u, t}], max 8) — the earned-media targets. v4.9: weekly / full / pulse / on_demand, how the answer speaks of you, brands in order, wrong claims, the searches the engine ran
+                   ('cited_urls', 'string'),
+                   ('named', 'boolean'), ('position', 'number'), ('entities_json', 'string'),
+                   # W2-E1 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §1, fixes/W2-E1.md): what every engine call already returned and
+                   # was thrown away - the full answer (12,000 characters max), every source cited in order, the pages read but not cited, the searches
+                   # run, product / ad / local-business cards, the model, and detail_json {answer_len, answer_cut, analysed} (v5/code/_ai_answer_data.js)
+                   ('answer_text', 'string'), ('cited_json', 'string'), ('retrieved_json', 'string'), ('fanout_json', 'string'), ('products_json', 'string'),
+                   ('ads_json', 'string'), ('local_json', 'string'), ('model', 'string'), ('detail_json', 'string')]   # F1a (2026-10-23): the brand NAMED in the text (mentioned = named or cited), its place among the businesses offered, every business with its role (JSON [{id, name, role, position, cited}]). v4.12: the exact third-party pages the answer cited (JSON [{u, t}], max 8) — the earned-media targets. v4.9: weekly / full / pulse / on_demand, how the answer speaks of you, brands in order, wrong claims, the searches the engine ran
 AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompts', 'number'), ('answers', 'number'), ('mention_rate', 'number'), ('citation_rate', 'number'), ('share_of_voice', 'number'),
                ('avg_rank', 'number'), ('aio_presence', 'number'), ('aio_citation_rate', 'number'), ('engines_json', 'string'), ('competitors_json', 'string'), ('sources_json', 'string'), ('pages_json', 'string'), ('gaps_json', 'string'),
                ('market_json', 'string'), ('market_month', 'string'), ('cost_usd', 'number'), ('alerts', 'string'),
@@ -194,13 +213,44 @@ AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string')
                # G6 (2026-10-18): rates per engine x cluster x persona x market with ranges and BH-corrected changes; the panel this run asked
                # (question ids, engines, composition, the pulse's sample, achievable half-widths) so the next delta can be refused when it changed;
                # how many executions the run took
-               ('segments_json', 'string'), ('panel_json', 'string'), ('chunks', 'number')]
+               ('segments_json', 'string'), ('panel_json', 'string'), ('chunks', 'number'),
+               # F1b (2026-10-23, docs/ai-visibility-2026-10-23/fixes/F1b.md): the measurement rule the row was counted under (a row of another
+               # rule is never compared), "named in" by its own name (mention_rate holds the same figure from this rule on), the place in the
+               # answers (mean place when named, share named first, position-weighted visibility), the period counted (A8), the comparison every
+               # reader shares (compare_json, A1) and the counts the next run is compared against (metrics_json)
+               ('rule_version', 'string'), ('named_rate', 'number'), ('avg_position', 'number'), ('first_rate', 'number'), ('pos_visibility', 'number'),
+               ('rate_period', 'string'), ('compare_json', 'string'), ('metrics_json', 'string'),
+               # W2-E1 (2026-10-23, WAVE2_CONTRACTS.md §2): your pages AI read / cited and the page cited instead, product cards, ads and local cards.
+               # sources_json (above) changes shape from this rule on: {v: 2, types, domains, n, list: <the old array>} (old rows hold the array)
+               ('urls_json', 'string'), ('shopping_json', 'string'), ('ads_local_json', 'string'),
+               # W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): ranges with the question as the sampling unit, share of voice over a declared
+               # set + others (both denominators, mean normalised position), sentiment of every named answer, did an action work (difference in differences),
+               # the owner's alert rules as evaluated, and this run's answers one by one (compact: the 28-day window and an action's before / after read them)
+               ('ci_json', 'string'), ('sov_json', 'string'), ('sentiment_json', 'string'), ('impact_json', 'string'), ('alerts_rules_json', 'string'), ('units_json', 'string'),
+               # W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §2): the fan-out ranking gap, demand as a range (+ the monthly market trend), the owner's
+               # uploaded AI reports for the period, the n8n execution ids of the run's parts, and the run's notes (lost / unanalysed answers,
+               # questions asked outside their market, the persona effect on API answers)
+               ('fanout_gap_json', 'string'), ('demand_json', 'string'), ('imports_json', 'string'), ('exec_ids', 'string'), ('notes_json', 'string'),
+               # W2-E3 + W2-A contract addition (2026-10-23): the persona effect on API answers, [{role, with:{rate, n}, without:{rate, n}, delta, lo, hi,
+               # significant}] (rates and the 95% interval of the difference in points 0-100; the 28-day pooled figures)
+               ('persona_effect_json', 'string')]
+# W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §5): the owner's AI reports, uploaded in the app (W2-A writes, upsert by site_id + source + day + url +
+# query): Bing Webmaster "AI Performance" (source bing_ai: citations per page and query across Copilot) and the Search Console performance
+# export filtered to AI Mode / AI Overviews (source gsc_ai: impressions and clicks). The AI Visibility Tracker reads the period's rows.
+AI_IMPORTS_TABLE = 'seo_ai_imports'
+AI_IMPORTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('source', 'string'), ('day', 'string'), ('url', 'string'), ('query', 'string'), ('impressions', 'number'),
+                   ('citations', 'number'), ('clicks', 'number'), ('file_name', 'string'), ('imported_at', 'string'), ('import_id', 'string')]
 # v4.9: one row per site per day from the AI Pulse (the panel on the fast engines; small aggregates, no answer text)
 AI_DAILY_TABLE = 'seo_ai_daily'
 AI_DAILY_COLS = [('site_id', 'string'), ('domain', 'string'), ('date', 'string'), ('checked_at', 'string'), ('run_id', 'string'), ('samples', 'number'), ('mentioned', 'number'), ('cited', 'number'),
                  ('mention_rate', 'number'), ('citation_rate', 'number'), ('share_of_voice', 'number'), ('visibility_score', 'number'), ('engines_json', 'string'), ('prompts_json', 'string'),
                  ('competitors_json', 'string'), ('sources_json', 'string'), ('alerts', 'string'), ('cost_usd', 'number'),
-                 ('sample_json', 'string')]   # G6 (2026-10-18): the morning's rotating sample — mode, N a week, questions asked of the panel, strata covered
+                 ('sample_json', 'string'),   # G6 (2026-10-18): the morning's rotating sample — mode, N a week, questions asked of the panel, strata covered
+                 # F1b (2026-10-23): the rule the morning was counted under (mentioned = NAMED from it on), whether it asked the whole panel or a
+                 # rotating sample, how many questions, which engines answered, a partial morning (an engine asked returned nothing), the mean
+                 # place, the per-answer record the weekly run pools (named, cited, place, competitors named) and what could be read (A7)
+                 ('rule_version', 'string'), ('sample_mode', 'string'), ('questions_asked', 'number'), ('engines_answered', 'string'), ('partial', 'boolean'),
+                 ('avg_position', 'number'), ('detail_json', 'string'), ('readable_json', 'string')]
 # v4.12 (AI_GROWTH_SPEC.md): the weekly AI Growth loop — what it does so the site gets named and cited, not only measured.
 # seo_ai_pages: one row per site and key page: can an AI assistant read and quote it (raw HTML without JavaScript, answer in the first 200
 # characters, a visible update date, question headings, sourced figures, size), and is it in Bing's index (Bing Webmaster GetUrlInfo) / submitted.
@@ -437,6 +487,8 @@ LEDGER_EST = {
     'page_watch':      {'ai': 0.0,  'dfs': 0.0},
     # W3-F (2026-10-17): the Reply Reader classifies ONE reply with Haiku (about 1k tokens in, 300 out); the web app calls it per reply and waits
     'reply_read':      {'ai': 0.003, 'dfs': 0.0},
+    # W2-E2 (2026-10-23): the one-off AI repeat pilot - its plan prices itself (est_dfs_usd: 10 questions x 10 asks x its engines, at most $4)
+    'ai_pilot':        {'ai': 0.0, 'dfs': 1.5},
 }
 
 

@@ -62,10 +62,10 @@ export async function adminRoutes(app: FastifyInstance) {
       select o.id as org_id,
         (select count(*)::int from ${schema.memberships} m where m.org_id = o.id) as members,
         (select count(*)::int from ${schema.sites} s where s.org_id = o.id) as sites,
-        (select count(*)::int from ${schema.runs} r where r.org_id = o.id and r.created_at >= ${tsv(since)} and r.status <> 'failed') as runs,
+        (select count(*)::int from ${schema.runs} r where r.org_id = o.id and r.created_at >= ${tsv(since)} and r.status not in ('failed', 'joined')) as runs,
         (select coalesce(sum(case when r.actual_cost_usd is not null and r.actual_cost_partial
             then greatest(r.actual_cost_usd, coalesce(r.engine_cost_estimate_usd, r.estimated_cost_usd))
-            else coalesce(r.actual_cost_usd, r.engine_cost_estimate_usd, r.estimated_cost_usd) end), 0)::float from ${schema.runs} r where r.org_id = o.id and r.created_at >= ${tsv(since)} and r.status <> 'failed')
+            else coalesce(r.actual_cost_usd, r.engine_cost_estimate_usd, r.estimated_cost_usd) end), 0)::float from ${schema.runs} r where r.org_id = o.id and r.created_at >= ${tsv(since)} and r.status not in ('failed', 'joined'))
           + (select coalesce(sum(k.cost_usd), 0)::float from ${schema.keywordChecks} k where k.org_id = o.id and k.created_at >= ${tsv(since)} and k.status <> 'failed') as est
       from ${schema.organizations} o`);
     const by = new Map(counts.map((c) => [c.org_id, c]));

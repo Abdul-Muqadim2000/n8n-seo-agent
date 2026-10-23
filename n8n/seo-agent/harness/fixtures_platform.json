@@ -658,6 +658,64 @@
     }
   },
   {
+    "name": "track with the AI wave-2 options",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "track",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "keywords": [
+        "peppol uae"
+      ],
+      "ga4_property_id": "543096312",
+      "blogs_per_week": 1,
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ],
+      "monitors": {
+        "ai_visibility": true,
+        "ai_engines": "chatgpt, perplexity, gemini, claude, ai_overview, ai_mode",
+        "ai_prompts_max": 50,
+        "ai_pulse": true,
+        "ai_personas": "",
+        "ai_markets": "",
+        "ai_pulse_mode": "auto",
+        "ai_pulse_per_week": 0,
+        "ai_growth": true,
+        "ai_pages_month": 2,
+        "backlinks": true,
+        "link_builder": true,
+        "audit_monthly": true,
+        "audit_pages": 200,
+        "audit_js": false,
+        "brand_names": "Northwind, Northwind ERP",
+        "ai_claude_weekly": true,
+        "ai_pulse_engines": "chatgpt, perplexity",
+        "ai_persona_context": false,
+        "ai_fanout_check": 25,
+        "ai_demand_market": true
+      },
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner"
+    },
+    "expect": {
+      "mode": "track",
+      "monitor_input.ai_claude_weekly": true,
+      "monitor_input.ai_pulse_engines": "chatgpt, perplexity",
+      "monitor_input.ai_persona_context": false,
+      "monitor_input.ai_fanout_check": 25,
+      "monitor_input.ai_demand_market": true,
+      "monitor_input.ai_prompts_max": 50
+    }
+  },
+  {
     "name": "published",
     "headers": {
       "x-forwarded-for": "app:7a1c2d3e-org"
@@ -880,7 +938,41 @@
       "topics": [
         "e-invoicing implementation",
         "odoo erp"
-      ]
+      ],
+      "panel_quote_dfs_usd": 0,
+      "panel_quote_ai_usd": 0
+    }
+  },
+  {
+    "name": "ai visibility with the server's quote of a 200-question panel and its options",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "ai_visibility",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "topics": [],
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ],
+      "panel_quote": {
+        "dfs_usd": 10.456,
+        "ai_usd": 1.23,
+        "panel": 200
+      }
+    },
+    "expect": {
+      "mode": "ai_visibility",
+      "panel_quote_dfs_usd": 10.456,
+      "panel_quote_ai_usd": 1.23,
+      "panel_quote_panel": 200
     }
   },
   {
