@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { RunStatusBadge } from '@/components/ui/badge';
 import { TooltipProvider } from '@/components/ui/overlay';
 import { aiPanelCostWith, completeMonitors } from '@/components/site/MonitorSettingsFields';
-import { AnswerDetailCard } from '@/pages/site/_components/ai-answers';
+import { AnswerDetailCard, isSelfName } from '@/pages/site/_components/ai-answers';
 import { breakMarks } from '@/pages/site/_components/ai-trends';
 import { CompetitorsPanel, ImpactPanel, PersonaEffectPanel, SentimentPanel2, ShoppingPanel } from '@/pages/site/_components/ai-panels2';
 import { ruleRunsOf } from '@/pages/site/_components/ai-rules';
@@ -64,6 +64,23 @@ describe('the new panels', () => {
     const html = text(renderToString(tip(<SentimentPanel2 sentiment={parseAiSentiment({ net: 50, n: 7 })!} />)));
     expect(html).toContain('Withheld: 7 answers name you');
     expect(html).not.toMatch(/Net sentiment \+?50/);
+  });
+  it('R-A2: an unvalidated reading carries "Early reading, not yet validated" and lists no objection; a validated one does', () => {
+    const base = { net: 23, net_lo: 5, net_hi: 41, n: 30, objections: [{ text: 'pricing is not public', n: 3 }], kappa: { model: null, rules_blind_holdout: 0.548, gate: 0.7 }, note: 'Net sentiment +23. The model\'s labels are not yet validated against a hand-labelled set.' };
+    const early = text(renderToString(tip(<SentimentPanel2 sentiment={parseAiSentiment({ ...base, validated: false })!} />)));
+    expect(early).toContain('Early reading, not yet validated');
+    expect(early).not.toContain('pricing is not public');
+    expect(early).toContain('1 objection was read');
+    expect(early).toContain('not measured yet');
+    const ok = text(renderToString(tip(<SentimentPanel2 sentiment={parseAiSentiment({ ...base, validated: true, kappa: { model: 0.8, gate: 0.7 } })!} />)));
+    expect(ok).not.toContain('Early reading');
+    expect(ok).toContain('pricing is not public');
+  });
+  it('R-A21: a brand is "You" only when it is the site\'s own name', () => {
+    expect(isSelfName('Techand', 'techand.ai')).toBe(true);
+    expect(isSelfName('techand.ai', 'techand.ai')).toBe(true);
+    expect(isSelfName('OpenAI', 'ai.com')).toBe(false);
+    expect(isSelfName('Jasper AI Writer Pro', 'ai.com')).toBe(false);
   });
   it('impact: verdicts in words, control and interval, never "caused"', () => {
     const html = text(renderToString(tip(<ImpactPanel impact={parseAiImpact([{ action_id: 'a1', kind: 'answer page', target_questions: ['q1'], control_questions: ['q2', 'q3'], before: { rate: 5, n: 40 }, after: { rate: 15, n: 40 }, did: { effect: 9, lo: 2, hi: 16 }, verdict: 'likely helped', window_days: 28 }])!} questionText={() => 'Which ERP partner?'} />)));

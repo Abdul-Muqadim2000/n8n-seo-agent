@@ -6,6 +6,7 @@ import { AI_SENTIMENT_EARLY, parseAiImportsSummary, parseAiSentiment } from './a
 import { aiDateColumn, aiIsDay, parseAiImport } from './ai-import';
 import { aiAnswersPageOf, aiFilterFrom, aiJoinedOf } from './ai-trends';
 import { aiCompareInterim } from './ai-compare';
+import { csvCell } from './identity';
 import { importDate, parseCsv } from './link-import';
 
 // R-APP (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_APP.md): the shared halves of the app fixes of the AI visibility review.
@@ -84,6 +85,14 @@ describe('a named rate or share of voice stored as null (not measured) is never 
     expect(c.metrics?.named_rate).toMatchObject({ now: null, delta: null, significant: null });
     expect(c.metrics?.share_of_voice).toMatchObject({ now: null, delta: null });
     expect(c.metrics?.cited_rate?.delta).toBe(0);
+  });
+});
+
+describe('R-A18 csvCell', () => {
+  it('neutralises a formula after leading whitespace or a line break too', () => {
+    expect(csvCell(' =HYPERLINK("x")')).toBe('"\' =HYPERLINK(""x"")"');
+    expect(csvCell('\n=1+1')).toBe('"\'\n=1+1"');
+    expect(csvCell('plain text')).toBe('"plain text"');
   });
 });
 

@@ -139,6 +139,8 @@ const isTracked = (p: Prompt) => !['off', 'refused'].includes(p.status || 'activ
 const isOwn = (p: Prompt) => p.source === 'custom' || p.pinned;
 type StatusFilter = 'tracked' | 'over' | 'pinned' | 'refused' | 'off' | 'all';
 // W2-E1: 'shopping' is a stage for sites that sell products
+/** R-A19: one bulk change takes at most this many questions (the server's schemas refuse more) */
+const BULK_MAX = 500;
 const STAGES = ['awareness', 'consideration', 'decision', 'shopping'] as const;
 
 function originLabel(p: Prompt): string {
@@ -210,7 +212,7 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
   };
 
   const ids = [...selected].filter((id) => prompts.some((p) => p.promptId === id));
-  const toggle = (id: string) => setSelected((s0) => { const s1 = new Set(s0); if (s1.has(id)) s1.delete(id); else s1.add(id); return s1; });
+  const toggle = (id: string) => setSelected((s0) => { const s1 = new Set(s0); if (s1.has(id)) s1.delete(id); else if (s1.size < BULK_MAX) s1.add(id); return s1; });
   const allShown = rows.length > 0 && rows.every((p) => selected.has(p.promptId));
   const bulk = (body: Record<string, unknown>, ok: string) => { send(body, ok); setSelected(new Set()); };
   const removeSelected = () =>
@@ -226,7 +228,7 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
     ...(isAdmin
       ? [{
           key: 'sel',
-          header: <input type="checkbox" className="size-4 accent-[var(--accent)]" aria-label="Select every question shown" checked={allShown} onChange={() => setSelected((s0) => { const s1 = new Set(s0); for (const p of rows) { if (allShown) s1.delete(p.promptId); else s1.add(p.promptId); } return s1; })} />,
+          header: <input type="checkbox" className="size-4 accent-[var(--accent)]" aria-label="Select every question shown" checked={allShown} onChange={() => { const s1 = new Set(selected); for (const p of rows) { if (allShown) s1.delete(p.promptId); else if (s1.size < BULK_MAX) s1.add(p.promptId); } if (!allShown && rows.some((p) => !s1.has(p.promptId))) toast.info(`${BULK_MAX} questions are selected: one change takes at most ${BULK_MAX}. Apply it, then select the rest.`); setSelected(s1); }} />,
           cell: (p: Prompt) => <input type="checkbox" className="size-4 accent-[var(--accent)]" aria-label={`Select: ${p.prompt}`} checked={selected.has(p.promptId)} onChange={() => toggle(p.promptId)} />,
         }]
       : []),
