@@ -3,6 +3,7 @@ import {
   buildN8nPayload,
   cleanDomain,
   compactBody,
+  cycleNorm,
   estimateRunCost,
   estimateRunMinutes,
   IDEMPOTENCY,
@@ -315,6 +316,9 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   // ladder page, the ladder row (no longer "planned"), the same bookkeeping the cadence and the ladder runs do inside n8n
   if (input.mode === 'keyword' && input.receiveContent && site) await recordPageInEngine(site, input, accepted.requestId ?? '').catch(() => undefined);
 
+  // a ladder started outside its proposal closes the website's waiting proposal, so the autopilot does not start a second one on top
+  if (input.mode === 'ladder' && site && !opts.proposalId) await closeProposalsForLadder(site.id, input.keyword, accepted.id, user.id).catch(() => undefined);
+
   if (input.mode === 'track' && site) {
     // the site's ladders keep their own delivery address: point them here as well (and drop stored e-mails when engine e-mails are off)
     await routeSiteToApp(org, site).catch(() => undefined);
@@ -335,6 +339,34 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
       .where(eq(schema.sites.id, site.id));
   }
   return { run: accepted, replayed: false, engineStatus: res.status };
+}
+
+/**
+ * A ladder started without its proposal (the New keyword ladder page, the ladder tool, the API) decides the website's waiting proposal:
+ * the same keyword is recorded as approved, another keyword as swapped for this one (neither is proposed again). Before this, a waiting
+ * level-3 announcement still started its own ladder when due, a second ladder the client never chose (devaicon on production,
+ * 2026-10-23). A proposal being started at this moment ('starting') is left to its own start.
+ */
+export async function closeProposalsForLadder(siteId: string, keyword: string, runId: string, userId: string): Promise<number> {
+  const open = await db
+    .select({ id: schema.keywordProposals.id, keywordNorm: schema.keywordProposals.keywordNorm })
+    .from(schema.keywordProposals)
+    .where(and(eq(schema.keywordProposals.siteId, siteId), eq(schema.keywordProposals.status, 'pending')));
+  let closed = 0;
+  for (const p of open) {
+    const same = p.keywordNorm === cycleNorm(keyword);
+    const done = await db
+      .update(schema.keywordProposals)
+      .set(
+        same
+          ? { status: 'approved', runId, decidedAt: new Date(), decidedBy: userId, note: '' }
+          : { status: 'swapped', swappedFor: keyword, runId, decidedAt: new Date(), decidedBy: userId, note: `A ladder for "${keyword}" was started instead.` },
+      )
+      .where(and(eq(schema.keywordProposals.id, p.id), eq(schema.keywordProposals.status, 'pending')))
+      .returning({ id: schema.keywordProposals.id });
+    closed += done.length;
+  }
+  return closed;
 }
 
 /** B-A6: should this start resolve to a run that is already going, instead of keeping a row of its own?
