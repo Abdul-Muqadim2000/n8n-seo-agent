@@ -1,0 +1,1997 @@
+{
+ "about": "Written on 2026-10-23 by a Claude agent asked only to label data, before any AI-answer sentiment classifier existed and without reading any classifier code: the 70 hold-out cases (H) were written from scratch, with invented business names for every criticism, and the 40 real cases (R) are sentences from AI answers stored in harness/fixtures_live, kept verbatim or lightly trimmed. Polarity is about the named business only: a stated official accreditation, approval or certification counts as trust positive, a plain list item or description is neutral, and a mixed statement takes the side a buyer would take away (usually the clause after 'but'). An aspect with polarity 'neutral' marks a dimension the text describes without judging; the stored real answers contain no criticism of a named business, so the negative class is covered by the hold-out only.",
+ "labels": {
+  "polarity": [
+   "positive",
+   "neutral",
+   "negative"
+  ],
+  "aspects": [
+   "price",
+   "support",
+   "integration",
+   "trust",
+   "quality",
+   "ease",
+   "features",
+   "other"
+  ]
+ },
+ "cases": [
+  {
+   "id": "H001",
+   "split": "holdout",
+   "source": "written",
+   "business": "Fatoora Hub",
+   "rivals": [],
+   "text": "1. **Fatoora Hub** - Best for SMEs that want a quick start: setup takes a day and pricing starts at AED 99 a month with no hidden fees.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'best for SMEs', fast setup and 'no hidden fees' (negation that praises)"
+  },
+  {
+   "id": "H002",
+   "split": "holdout",
+   "source": "written",
+   "business": "Invoicely ME",
+   "rivals": [],
+   "text": "**Invoicely ME** covers the basics, but it lacks native Arabic invoice templates, which some UAE buyers expect on tax invoices.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no native Arabic invoice templates",
+   "note": "implicit criticism through 'lacks'; 'covers the basics' is faint praise at most"
+  },
+  {
+   "id": "H003",
+   "split": "holdout",
+   "source": "written",
+   "business": "Qanoon Partners",
+   "rivals": [],
+   "text": "Qanoon Partners is a Dubai-based law firm founded in 2011 with offices in DIFC and Abu Dhabi.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "location and founding only"
+  },
+  {
+   "id": "H004",
+   "split": "holdout",
+   "source": "written",
+   "business": "Ledgerline",
+   "rivals": [],
+   "text": "Ledgerline has strong reporting features, but users frequently complain that support takes days to respond.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "slow support",
+   "note": "mixed; the complaint after 'but' is what a buyer takes away"
+  },
+  {
+   "id": "H005",
+   "split": "holdout",
+   "source": "written",
+   "business": "PayGulf",
+   "rivals": [],
+   "text": "Support at PayGulf can be slow during month-end, but its WPS compliance is the most reliable we found and payroll errors are rare.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "support can be slow at month-end",
+   "note": "mixed with the contrast reversed: the praise after 'but' dominates"
+  },
+  {
+   "id": "H006",
+   "split": "holdout",
+   "source": "written",
+   "business": "Daftra",
+   "rivals": [
+    "Zoho Books",
+    "Wafeq"
+   ],
+   "text": "Zoho Books is the most popular choice for UAE SMEs thanks to its low price and VAT-ready templates. Other options include Wafeq and Daftra.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "the rival is praised; the business is only listed"
+  },
+  {
+   "id": "H007",
+   "split": "holdout",
+   "source": "written",
+   "business": "Northwind Payroll",
+   "rivals": [],
+   "text": "Northwind Payroll is not the cheapest option for teams under 20 employees.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "expensive for small teams",
+   "note": "negated price praise = a price objection"
+  },
+  {
+   "id": "H008",
+   "split": "holdout",
+   "source": "written",
+   "business": "Brightledger UK",
+   "rivals": [],
+   "text": "Unlike some competitors, Brightledger UK has no hidden fees and doesn't charge extra for VAT returns.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "negations that praise pricing"
+  },
+  {
+   "id": "H009",
+   "split": "holdout",
+   "source": "written",
+   "business": "Mercatora Freight Cloud",
+   "rivals": [],
+   "text": "Mercatora Freight Cloud isn't known for poor support; reviewers usually describe its account managers as responsive.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "negated criticism plus 'responsive' = support praise"
+  },
+  {
+   "id": "H010",
+   "split": "holdout",
+   "source": "written",
+   "business": "Dunecrest ERP",
+   "rivals": [],
+   "text": "Dunecrest ERP may be pricey for small teams, since implementation projects typically start around AED 60,000.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "high implementation cost for small teams",
+   "note": "hedged price objection"
+  },
+  {
+   "id": "H011",
+   "split": "holdout",
+   "source": "written",
+   "business": "Bluefin Dynamics",
+   "rivals": [],
+   "text": "2. **Bluefin Dynamics** - A Microsoft Gold partner known for fast Dynamics 365 Business Central rollouts in Riyadh and Jeddah.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'known for fast rollouts' and partner status are evaluations"
+  },
+  {
+   "id": "H012",
+   "split": "holdout",
+   "source": "written",
+   "business": "Bluefin Dynamics",
+   "rivals": [],
+   "text": "Bluefin Dynamics is a Microsoft Dynamics 365 partner headquartered in Riyadh that implements Finance and Supply Chain Management.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "what it does and where; no evaluation"
+  },
+  {
+   "id": "H013",
+   "split": "holdout",
+   "source": "written",
+   "business": "Kliniq",
+   "rivals": [],
+   "text": "One G2 reviewer wrote: \"Kliniq made our patient booking painless - the staff learned it in an afternoon.\"",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "quoted review praising ease of use"
+  },
+  {
+   "id": "H014",
+   "split": "holdout",
+   "source": "written",
+   "business": "Medivale Clinic",
+   "rivals": [],
+   "text": "A Trustpilot review of Medivale Clinic says: \"Waited two hours past my appointment and nobody explained why.\"",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "long waiting times, poor communication",
+   "note": "quoted negative review about service"
+  },
+  {
+   "id": "H015",
+   "split": "holdout",
+   "source": "written",
+   "business": "Al Noor Family Clinic",
+   "rivals": [],
+   "text": "Al Noor Family Clinic in Sharjah offers general practice, dermatology and paediatrics, and accepts most major insurance plans.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "services and insurance acceptance stated as facts"
+  },
+  {
+   "id": "H016",
+   "split": "holdout",
+   "source": "written",
+   "business": "Wafeq (وافق)",
+   "rivals": [],
+   "text": "**Wafeq (وافق)** is highly rated by Saudi SMEs for its ZATCA Phase 2 compliance and bilingual Arabic-English invoices.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'highly rated' with compliance and bilingual output as strengths"
+  },
+  {
+   "id": "H017",
+   "split": "holdout",
+   "source": "written",
+   "business": "Qoyod",
+   "rivals": [
+    "Wafeq",
+    "Daftra"
+   ],
+   "text": "For ZATCA Phase 2, most reviewers point to Wafeq as the safest choice; Qoyod and Daftra are also available.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "rival praised; the business only appears as an available option"
+  },
+  {
+   "id": "H018",
+   "split": "holdout",
+   "source": "written",
+   "business": "Raseed Invoicing",
+   "rivals": [],
+   "text": "Raseed Invoicing does not yet connect to ZATCA's Fatoora portal for Phase 2, so larger Saudi taxpayers may need a different provider.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no ZATCA Phase 2 connection",
+   "note": "implicit criticism: missing integration and a pointer to other providers"
+  },
+  {
+   "id": "H019",
+   "split": "holdout",
+   "source": "written",
+   "business": "Nuqta AI Labs",
+   "rivals": [],
+   "text": "**Nuqta AI Labs** - Recommended for mid-size firms that want a working proof of concept in weeks rather than months; clients praise its practical, outcome-focused approach.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "explicit recommendation and client praise"
+  },
+  {
+   "id": "H020",
+   "split": "holdout",
+   "source": "written",
+   "business": "Nuqta AI Labs",
+   "rivals": [],
+   "text": "Nuqta AI Labs is an AI consultancy in Abu Dhabi that builds chatbots and document-processing tools for government and banking clients.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "description of services and clients"
+  },
+  {
+   "id": "H021",
+   "split": "holdout",
+   "source": "written",
+   "business": "Cortexa Consulting",
+   "rivals": [],
+   "text": "Some clients report that Cortexa Consulting's projects ran over budget and timelines slipped by several months.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "other",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "projects over budget and late",
+   "note": "reported cost overruns and delays"
+  },
+  {
+   "id": "H022",
+   "split": "holdout",
+   "source": "written",
+   "business": "Brightledger",
+   "rivals": [],
+   "text": "For UK freelancers, **Brightledger** is one of the easiest ways to file Making Tax Digital VAT returns, and its mobile app is genuinely intuitive.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'easiest', 'intuitive'"
+  },
+  {
+   "id": "H023",
+   "split": "holdout",
+   "source": "written",
+   "business": "Brightledger",
+   "rivals": [],
+   "text": "Brightledger's bank feeds are reported to break regularly with smaller UK building societies, which means manual imports.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "bank feeds break with smaller banks",
+   "note": "unreliable bank connections"
+  },
+  {
+   "id": "H024",
+   "split": "holdout",
+   "source": "written",
+   "business": "Paywell",
+   "rivals": [],
+   "text": "Paywell is a payroll provider based in Austin, Texas, serving companies with 10 to 500 employees across all 50 states.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "location and customer size only"
+  },
+  {
+   "id": "H025",
+   "split": "holdout",
+   "source": "written",
+   "business": "Paywell",
+   "rivals": [
+    "Gusto"
+   ],
+   "text": "Compared with Gusto, Paywell offers more hands-on onboarding: every new client gets a dedicated implementation specialist.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "favourable comparison on onboarding help"
+  },
+  {
+   "id": "H026",
+   "split": "holdout",
+   "source": "written",
+   "business": "Paywell",
+   "rivals": [
+    "Gusto"
+   ],
+   "text": "Gusto is the clear favourite for small US startups because of its clean interface and transparent pricing; Paywell is another payroll provider in the same space.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "rival praised; the business is only named"
+  },
+  {
+   "id": "H027",
+   "split": "holdout",
+   "source": "written",
+   "business": "GSTSuite",
+   "rivals": [],
+   "text": "Users say GSTSuite's interface feels dated and generating IRNs in bulk can be confusing for first-time users.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "dated, confusing interface",
+   "note": "usability criticism"
+  },
+  {
+   "id": "H028",
+   "split": "holdout",
+   "source": "written",
+   "business": "TaxNova",
+   "rivals": [],
+   "text": "**TaxNova** is trusted by over 5,000 Indian businesses for GST e-invoicing and is known for near-zero IRN generation failures.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'trusted', 'known for' near-zero failures"
+  },
+  {
+   "id": "H029",
+   "split": "holdout",
+   "source": "written",
+   "business": "TaxNova",
+   "rivals": [],
+   "text": "TaxNova, founded in Bengaluru in 2017, sells GST return filing, e-invoicing and e-way bill software.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "founding and product list; the modules are described, not judged"
+  },
+  {
+   "id": "H030",
+   "split": "holdout",
+   "source": "written",
+   "business": "Souqify",
+   "rivals": [
+    "Tabby",
+    "Tamara",
+    "Aramex"
+   ],
+   "text": "Souqify is a strong pick for Dubai online stores: it integrates natively with Tabby, Tamara and Aramex, so checkout and shipping work out of the box.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'strong pick', native integrations, works out of the box; the named partners are integrations, not rivals judged"
+  },
+  {
+   "id": "H031",
+   "split": "holdout",
+   "source": "written",
+   "business": "Souqify",
+   "rivals": [],
+   "text": "Souqify's transaction fees of 2.9% plus AED 1 per order can add up quickly for high-volume stores.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "transaction fees add up for high volume",
+   "note": "fee warning"
+  },
+  {
+   "id": "H032",
+   "split": "holdout",
+   "source": "written",
+   "business": "Souqify",
+   "rivals": [
+    "Shopify",
+    "Zid"
+   ],
+   "text": "1. **Shopify** - global platform\n2. **Souqify** - UAE-focused store builder\n3. **Zid** - popular in Saudi Arabia",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "plain list membership with a category label; the praise ('popular') is about a rival"
+  },
+  {
+   "id": "H033",
+   "split": "holdout",
+   "source": "written",
+   "business": "Trakio",
+   "rivals": [],
+   "text": "Route planning in **Trakio** is accurate to within minutes, and fleet managers in Riyadh say it cut fuel costs noticeably.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "accuracy praise and cost savings (value)"
+  },
+  {
+   "id": "H034",
+   "split": "holdout",
+   "source": "written",
+   "business": "Trakio",
+   "rivals": [],
+   "text": "Trakio's API documentation is thin, so connecting it to an in-house ERP usually requires paid professional services.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "hard and costly to integrate",
+   "note": "weak docs, extra integration cost"
+  },
+  {
+   "id": "H035",
+   "split": "holdout",
+   "source": "written",
+   "business": "Trakio",
+   "rivals": [],
+   "text": "Trakio is a fleet-tracking and route-optimisation platform used by delivery companies in the GCC.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "what it is and who uses it, no judgement"
+  },
+  {
+   "id": "H036",
+   "split": "holdout",
+   "source": "written",
+   "business": "Hamdan & Partners",
+   "rivals": [],
+   "text": "**Hamdan & Partners** is frequently ranked among the top employment-law firms in Dubai and is known for responsive partners who reply within a day.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "rankings and responsiveness"
+  },
+  {
+   "id": "H037",
+   "split": "holdout",
+   "source": "written",
+   "business": "Hamdan & Partners",
+   "rivals": [],
+   "text": "Hamdan & Partners is not the cheapest firm in Dubai, but clients say its fixed-fee packages for start-ups are fair value.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "not the cheapest",
+   "note": "negated price at first, then 'fair value' after 'but'; the objection stays recorded"
+  },
+  {
+   "id": "H038",
+   "split": "holdout",
+   "source": "written",
+   "business": "Whitcombe Law LLP",
+   "rivals": [],
+   "text": "Whitcombe Law LLP is a Manchester firm advising on commercial property, employment and data protection.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "location and practice areas"
+  },
+  {
+   "id": "H039",
+   "split": "holdout",
+   "source": "written",
+   "business": "Whitcombe Law LLP",
+   "rivals": [],
+   "text": "Chambers describes Whitcombe Law as \"pragmatic, commercially minded and quick to turn documents around.\"",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "quoted directory praise"
+  },
+  {
+   "id": "H040",
+   "split": "holdout",
+   "source": "written",
+   "business": "Dunecrest ERP",
+   "rivals": [],
+   "text": "Several reviews on Clutch mention that Dunecrest ERP handed projects to junior consultants after go-live, leaving support patchy.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "patchy support after go-live",
+   "note": "reported post-go-live support problems"
+  },
+  {
+   "id": "H041",
+   "split": "holdout",
+   "source": "written",
+   "business": "Bluefin Dynamics",
+   "rivals": [
+    "Crescent Tech"
+   ],
+   "text": "Among Dynamics 365 partners in Dubai, Crescent Tech stands out for its manufacturing expertise and 24/7 support. Bluefin Dynamics also offers Business Central services.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "rival praised; the business only offers a service"
+  },
+  {
+   "id": "H042",
+   "split": "holdout",
+   "source": "written",
+   "business": "Fatoora Hub",
+   "rivals": [],
+   "text": "Fatoora Hub is an accredited service provider on the UAE Ministry of Finance list and a certified Peppol access point.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "stated accreditation and certification count as trust"
+  },
+  {
+   "id": "H043",
+   "split": "holdout",
+   "source": "written",
+   "business": "Fatoora Hub",
+   "rivals": [],
+   "text": "Fatoora Hub is a Dubai-based e-invoicing platform that converts invoices into PINT-AE XML and sends them over the Peppol network.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "describes what the product does"
+  },
+  {
+   "id": "H044",
+   "split": "holdout",
+   "source": "written",
+   "business": "Invoicely ME",
+   "rivals": [],
+   "text": "Note that Invoicely ME is only pre-approved, not yet fully accredited, so check its status before signing a contract.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "not yet fully accredited",
+   "note": "accreditation framed as a caution ('only', 'not yet')"
+  },
+  {
+   "id": "H045",
+   "split": "holdout",
+   "source": "written",
+   "business": "Ledgerline",
+   "rivals": [
+    "Xero"
+   ],
+   "text": "Ledgerline is a bit more expensive than Xero, but its multi-entity consolidation makes it worth it for groups with several companies.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "more expensive than Xero",
+   "note": "mixed; 'worth it' after 'but' is the takeaway for its target buyer"
+  },
+  {
+   "id": "H046",
+   "split": "holdout",
+   "source": "written",
+   "business": "PayGulf",
+   "rivals": [],
+   "text": "PayGulf offers support in English and Arabic during UAE office hours.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "support languages and hours stated as fact"
+  },
+  {
+   "id": "H047",
+   "split": "holdout",
+   "source": "written",
+   "business": "PayGulf",
+   "rivals": [],
+   "text": "Customers often highlight PayGulf's Arabic-speaking support team and 24/7 live chat.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "customers highlight support"
+  },
+  {
+   "id": "H048",
+   "split": "holdout",
+   "source": "written",
+   "business": "Northwind Payroll",
+   "rivals": [],
+   "text": "| **Northwind Payroll** | UK | Payroll, pensions auto-enrolment | From £4 per employee |",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "neutral"
+    },
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "table row of facts: country, modules, price"
+  },
+  {
+   "id": "H049",
+   "split": "holdout",
+   "source": "written",
+   "business": "Northwind Payroll",
+   "rivals": [],
+   "text": "Northwind Payroll is HMRC-recognised and handles pension auto-enrolment automatically, which makes it a reliable choice for UK small businesses.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "recognition plus 'reliable choice'"
+  },
+  {
+   "id": "H050",
+   "split": "holdout",
+   "source": "written",
+   "business": "Kliniq",
+   "rivals": [],
+   "text": "Kliniq's reporting module is limited: you cannot export patient data in custom formats.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "limited reporting and exports",
+   "note": "'limited', missing capability"
+  },
+  {
+   "id": "H051",
+   "split": "holdout",
+   "source": "written",
+   "business": "Kliniq",
+   "rivals": [],
+   "text": "Kliniq is a clinic-management system from Bangalore used by dental and physiotherapy practices.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "category, origin and users"
+  },
+  {
+   "id": "H052",
+   "split": "holdout",
+   "source": "written",
+   "business": "Medivale Clinic",
+   "rivals": [],
+   "text": "Among independent hospitals in Pune, **Medivale Clinic** is often recommended for its experienced orthopaedic surgeons and transparent package pricing.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "recommended; surgeons and pricing praised"
+  },
+  {
+   "id": "H053",
+   "split": "holdout",
+   "source": "written",
+   "business": "Brightledger",
+   "rivals": [],
+   "text": "Brightledger lacks a payroll module, so UK companies with staff will need a separate payroll tool.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no payroll module",
+   "note": "implicit criticism through 'lacks'"
+  },
+  {
+   "id": "H054",
+   "split": "holdout",
+   "source": "written",
+   "business": "Cortexa Consulting",
+   "rivals": [],
+   "text": "Whether Cortexa Consulting is a good fit depends on your use case; it works with both startups and enterprises.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "non-committal; no evaluation either way"
+  },
+  {
+   "id": "H055",
+   "split": "holdout",
+   "source": "written",
+   "business": "Cortexa Consulting",
+   "rivals": [],
+   "text": "Cortexa Consulting is a well-regarded London AI consultancy with ISO 27001 certification, a plus for regulated industries.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'well-regarded' plus certification"
+  },
+  {
+   "id": "H056",
+   "split": "holdout",
+   "source": "written",
+   "business": "Fatoora Hub",
+   "rivals": [
+    "EDICOM",
+    "Comarch"
+   ],
+   "text": "1. **EDICOM** - widely regarded as the most complete global e-invoicing platform.\n2. **Fatoora Hub** - local provider.\n3. **Comarch** - EDI and Peppol services.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "rival praised; the business only labelled 'local provider'"
+  },
+  {
+   "id": "H057",
+   "split": "holdout",
+   "source": "written",
+   "business": "Invoicely ME",
+   "rivals": [
+    "Fatoora Hub"
+   ],
+   "text": "Compared with Fatoora Hub, Invoicely ME has fewer ERP connectors and no direct SAP integration.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no direct SAP integration",
+   "note": "unfavourable comparison on integrations"
+  },
+  {
+   "id": "H058",
+   "split": "holdout",
+   "source": "written",
+   "business": "Fatoora Hub",
+   "rivals": [
+    "Invoicely ME"
+   ],
+   "text": "Fatoora Hub connects directly to SAP, Oracle NetSuite and Microsoft Dynamics 365, while Invoicely ME relies on CSV uploads.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "same text as the next case; judged for Fatoora Hub it is the favourable side of the contrast"
+  },
+  {
+   "id": "H059",
+   "split": "holdout",
+   "source": "written",
+   "business": "Invoicely ME",
+   "rivals": [
+    "Fatoora Hub"
+   ],
+   "text": "Fatoora Hub connects directly to SAP, Oracle NetSuite and Microsoft Dynamics 365, while Invoicely ME relies on CSV uploads.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no direct ERP connection, CSV uploads only",
+   "note": "same text as the previous case; judged for Invoicely ME it is the unfavourable side"
+  },
+  {
+   "id": "H060",
+   "split": "holdout",
+   "source": "written",
+   "business": "Kartly",
+   "rivals": [],
+   "text": "Kartly is an Indian e-commerce platform that lets sellers build a storefront and accept UPI payments.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "describes what it does"
+  },
+  {
+   "id": "H061",
+   "split": "holdout",
+   "source": "written",
+   "business": "Kartly",
+   "rivals": [],
+   "text": "Kartly is often described as the easiest way for small Indian sellers to go online; setup takes under an hour and the free plan covers up to 50 products.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'easiest', quick setup, generous free plan"
+  },
+  {
+   "id": "H062",
+   "split": "holdout",
+   "source": "written",
+   "business": "Kartly",
+   "rivals": [],
+   "text": "Sellers say Kartly stayed up through the Diwali sales when other platforms struggled.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "reliability under peak load (trust covers reliability)"
+  },
+  {
+   "id": "H063",
+   "split": "holdout",
+   "source": "written",
+   "business": "Shahn Logistics (شحن)",
+   "rivals": [],
+   "text": "Shahn Logistics (شحن) operates last-mile delivery in Riyadh, Jeddah and Dammam.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "service area only"
+  },
+  {
+   "id": "H064",
+   "split": "holdout",
+   "source": "written",
+   "business": "Shahn Logistics",
+   "rivals": [],
+   "text": "**Shahn Logistics** is a dependable choice for Saudi e-commerce brands, with same-day delivery in Riyadh and real-time tracking via its app.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'dependable choice' with strengths"
+  },
+  {
+   "id": "H065",
+   "split": "holdout",
+   "source": "written",
+   "business": "Tallybook",
+   "rivals": [],
+   "text": "Tallybook is cloud accounting software for US small businesses, priced at $25 per month for the base plan.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "price stated as a fact, not judged"
+  },
+  {
+   "id": "H066",
+   "split": "holdout",
+   "source": "written",
+   "business": "Tallybook",
+   "rivals": [],
+   "text": "Tallybook stands out for value: at $25 a month it includes unlimited users, which competitors charge extra for.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'stands out for value'"
+  },
+  {
+   "id": "H067",
+   "split": "holdout",
+   "source": "written",
+   "business": "Tallybook",
+   "rivals": [],
+   "text": "Tallybook has no phone support, and email tickets can take 48 hours or more to be answered.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no phone support, slow email replies",
+   "note": "support weakness"
+  },
+  {
+   "id": "H068",
+   "split": "holdout",
+   "source": "written",
+   "business": "Dunecrest ERP",
+   "rivals": [],
+   "text": "Reviews of Dunecrest ERP are mixed: some clients praise its industry templates, others mention delays.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "other",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "some clients report delays",
+   "note": "balanced mixed statement; a buyer takes away neither a recommendation nor a warning"
+  },
+  {
+   "id": "H069",
+   "split": "holdout",
+   "source": "written",
+   "business": "Raatib Payroll (رواتب)",
+   "rivals": [],
+   "text": "If you need Arabic and English payroll slips and WPS files, **Raatib Payroll (رواتب)** handles both and is praised for its simple setup.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "capability fit plus praise for setup"
+  },
+  {
+   "id": "H070",
+   "split": "holdout",
+   "source": "written",
+   "business": "Raatib Payroll",
+   "rivals": [
+    "Bayzat",
+    "Zoho Payroll"
+   ],
+   "text": "Raatib Payroll is mentioned on several lists of UAE payroll software alongside Bayzat and Zoho Payroll.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "list membership only"
+  },
+  {
+   "id": "R001",
+   "split": "real",
+   "source": "real:scraper.json",
+   "business": "Azentio Software",
+   "rivals": [],
+   "text": "| **Azentio Software** | [azentio.com](https://www.azentio.com/?utm_source=chatgpt.com) | ERP/accounting integration and e-invoicing |",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "table row: what the company helps with, no evaluation"
+  },
+  {
+   "id": "R002",
+   "split": "real",
+   "source": "real:scraper.json",
+   "business": "Comarch",
+   "rivals": [],
+   "text": "| **Comarch** | [comarch.com](https://www.comarch.com/trade-and-services/data-management/e-invoicing/?utm_source=chatgpt.com) | E-invoicing, EDI and Peppol connectivity |",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "table row of services"
+  },
+  {
+   "id": "R003",
+   "split": "real",
+   "source": "real:scraper.json",
+   "business": "ClearTax",
+   "rivals": [],
+   "text": "| **ClearTax** | [cleartax.com/ae](https://www.cleartax.com/ae?utm_source=chatgpt.com) | UAE e-invoicing compliance and tax technology |",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "table row of services"
+  },
+  {
+   "id": "R004",
+   "split": "real",
+   "source": "real:scraper.json",
+   "business": "Cygnet Digital",
+   "rivals": [],
+   "text": "| **Cygnet Digital** | [cygnet.one](https://www.cygnet.one/?utm_source=chatgpt.com) | E-invoicing compliance and enterprise integration |",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "table row of services"
+  },
+  {
+   "id": "R005",
+   "split": "real",
+   "source": "real:scraper.json",
+   "business": "EDICOM",
+   "rivals": [],
+   "text": "| **EDICOM** | [edicomgroup.com](https://www.edicomgroup.com/?utm_source=chatgpt.com) | Global EDI/e-invoicing and Peppol services |",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "table row of services"
+  },
+  {
+   "id": "R006",
+   "split": "real",
+   "source": "real:scraper.json",
+   "business": "Deloitte Middle East",
+   "rivals": [],
+   "text": "| **Deloitte Middle East** | [deloitte.com/middle-east](https://www.deloitte.com/middle-east/en.html?utm_source=chatgpt.com) | E-invoicing advisory, implementation and integration |",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "table row of services"
+  },
+  {
+   "id": "R007",
+   "split": "real",
+   "source": "real:scraper.json",
+   "business": "Comarch",
+   "rivals": [
+    "Azentio Software",
+    "ClearTax",
+    "Cygnet Digital",
+    "EDICOM",
+    "Deloitte Middle East"
+   ],
+   "text": "| **Comarch** | comarch.com | E-invoicing, EDI and Peppol connectivity |\n\nThese aren't arbitrary software vendors: **all six appear on the UAE Ministry of Finance's official ASP list**.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    },
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "trimmed: the row plus the answer's endorsement that all six are officially listed (credential = trust)"
+  },
+  {
+   "id": "R008",
+   "split": "real",
+   "source": "real:scraper.json",
+   "business": "Cygnet Digital",
+   "rivals": [
+    "Azentio Software",
+    "Comarch",
+    "ClearTax",
+    "EDICOM",
+    "Deloitte Middle East"
+   ],
+   "text": "| **Cygnet Digital** | cygnet.one | E-invoicing compliance and enterprise integration |\n\nThese aren't arbitrary software vendors: **all six appear on the UAE Ministry of Finance's official ASP list**. The Ministry notes that the list is updated periodically, so accreditation status should be checked again before contracting.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "neutral"
+    },
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "accreditation status should be re-checked before contracting",
+   "note": "trimmed; endorsement with a generic caution, overall still a credential"
+  },
+  {
+   "id": "R009",
+   "split": "real",
+   "source": "real:scraper.json",
+   "business": "Deloitte Middle East",
+   "rivals": [
+    "Azentio Software",
+    "Comarch",
+    "ClearTax",
+    "Cygnet Digital",
+    "EDICOM"
+   ],
+   "text": "| **Deloitte Middle East** | deloitte.com/middle-east | E-invoicing advisory, implementation and integration |\n\nIf you're selecting a provider, the main things I'd compare are **ERP compatibility, implementation cost, invoice volume, Peppol/PINT-AE support, and whether you need advisory services or just the technology layer**.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "trimmed; the buying criteria are general advice, not a judgement of Deloitte"
+  },
+  {
+   "id": "R010",
+   "split": "real",
+   "source": "real:r_gemini.json",
+   "business": "InvoiceNow Biz",
+   "rivals": [],
+   "text": "### 1. InvoiceNow Biz\nA fully Ministry of Finance (MoF) accredited e-invoicing service provider operating its own specialized `eInvoiceXchange` platform. It offers end-to-end integration, consulting, and free introductory tiers for testing and piloting.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "full accreditation, end-to-end integration and free tiers"
+  },
+  {
+   "id": "R011",
+   "split": "real",
+   "source": "real:r_gemini.json",
+   "business": "ClearTax",
+   "rivals": [],
+   "text": "### 2. ClearTax\nAn AI-native compliance technology platform. It is recognized as one of the prominent fully approved ASPs in the UAE, providing real-time data validation and integration for enterprise accounting systems.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'recognized as one of the prominent fully approved ASPs'"
+  },
+  {
+   "id": "R012",
+   "split": "real",
+   "source": "real:r_gemini.json",
+   "business": "EDICOM",
+   "rivals": [],
+   "text": "### 3. EDICOM\nA global EDI and electronic invoicing platform officially accredited by the UAE Ministry of Finance. EDICOM assists large-scale and multinational enterprises with continuous transaction controls (CTC) and Peppol standard integration.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "integration",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "official accreditation; the rest describes its customers and services"
+  },
+  {
+   "id": "R013",
+   "split": "real",
+   "source": "real:r_gemini.json",
+   "business": "SunTec Business Solutions",
+   "rivals": [],
+   "text": "### 4. SunTec Business Solutions\nAn accredited service provider listed on the FTA EmaraTax portal. SunTec's *Xelerate E-Invoicing* software helps UAE businesses automate their compliance operations, manage high-volume invoice routing, and avoid tax penalties.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "accreditation plus benefits stated favourably"
+  },
+  {
+   "id": "R014",
+   "split": "real",
+   "source": "real:r_gemini.json",
+   "business": "Complyance.io",
+   "rivals": [],
+   "text": "### 5. Complyance.io\nComplyance acts as a dedicated middleware service, integrating POS, billing systems, and enterprise resource planning (ERP) systems directly with tax authorities via the Peppol network.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "describes what the service connects; no evaluation or credential"
+  },
+  {
+   "id": "R015",
+   "split": "real",
+   "source": "real:r_gemini.json",
+   "business": "Business Experts MEA (BEMEA)",
+   "rivals": [],
+   "text": "### 6. Business Experts MEA (BEMEA)\nAn enterprise IT consulting and systems integrator specializing in Microsoft Dynamics 365. BEMEA assists UAE organizations with their e-invoicing strategy, connecting internal ERP architectures with approved ASP networks for smooth tax clearance.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "descriptive; 'smooth tax clearance' is the purpose of the service, not a judgement of BEMEA"
+  },
+  {
+   "id": "R016",
+   "split": "real",
+   "source": "real:r_gemini.json",
+   "business": "Business Experts MEA (BEMEA)",
+   "rivals": [
+    "InvoiceNow Biz",
+    "ClearTax",
+    "EDICOM",
+    "SunTec Business Solutions",
+    "Complyance.io"
+   ],
+   "text": "Here are six companies helping businesses in the UAE get ready for e-invoicing:\n\n### 6. Business Experts MEA (BEMEA)\n* **Website:** [bemea.com](https://www.bemea.com)",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "trimmed to the intro, heading and website line: list membership only"
+  },
+  {
+   "id": "R017",
+   "split": "real",
+   "source": "real:r_perplexity.json",
+   "business": "Advintek Consulting Services LLC",
+   "rivals": [],
+   "text": "- **Advintek Consulting Services LLC** — https://www.einvoice.advintek.ae",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "bare list item"
+  },
+  {
+   "id": "R018",
+   "split": "real",
+   "source": "real:r_perplexity.json",
+   "business": "Azentio Software Orion (Middle East) FZ-LLC",
+   "rivals": [],
+   "text": "- **Azentio Software Orion (Middle East) FZ-LLC** — https://www.azentio.com",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "bare list item"
+  },
+  {
+   "id": "R019",
+   "split": "real",
+   "source": "real:r_perplexity.json",
+   "business": "BBIT Accqrate Technology FZCO",
+   "rivals": [],
+   "text": "- **BBIT Accqrate Technology FZCO** — https://www.bbit-accqrate.com/ae/en",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "bare list item"
+  },
+  {
+   "id": "R020",
+   "split": "real",
+   "source": "real:r_perplexity.json",
+   "business": "BDO Digital Solutions FZ-LLC",
+   "rivals": [],
+   "text": "- **BDO Digital Solutions FZ-LLC** — https://www.bdo.ae/en-gb/home",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "bare list item"
+  },
+  {
+   "id": "R021",
+   "split": "real",
+   "source": "real:r_perplexity.json",
+   "business": "Cloud Consulting LLC-FZ (DocFlow)",
+   "rivals": [],
+   "text": "- **Cloud Consulting LLC-FZ (DocFlow)** — https://www.docflow.ae",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "bare list item"
+  },
+  {
+   "id": "R022",
+   "split": "real",
+   "source": "real:r_perplexity.json",
+   "business": "Comarch Middle East FZ LLC",
+   "rivals": [
+    "Advintek Consulting Services LLC",
+    "Azentio Software Orion (Middle East) FZ-LLC",
+    "BBIT Accqrate Technology FZCO",
+    "BDO Digital Solutions FZ-LLC",
+    "Cloud Consulting LLC-FZ (DocFlow)"
+   ],
+   "text": "- **Comarch Middle East FZ LLC** — https://www.comarch.com/trade-and-services/data-management/e-invoicing\n\nThese companies appear on the UAE Ministry of Finance’s accredited or pre-approved e-invoicing service-provider lists.[1][2]",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "trimmed: item plus the closing credential sentence (accredited or pre-approved = trust)"
+  },
+  {
+   "id": "R023",
+   "split": "real",
+   "source": "real:r_claude.json",
+   "business": "Thomson Reuters (formerly Pagero)",
+   "rivals": [],
+   "text": "Thomson Reuters (formerly Pagero) - a pre-approved Accredited Service Provider (ASP) by the Ministry of Finance",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "official pre-approval stated as a credential, no caution"
+  },
+  {
+   "id": "R024",
+   "split": "real",
+   "source": "real:r_claude.json",
+   "business": "EDICOM",
+   "rivals": [],
+   "text": "EDICOM - officially accredited by the UAE Ministry of Finance as an e-Invoicing Service Provider",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "official accreditation"
+  },
+  {
+   "id": "R025",
+   "split": "real",
+   "source": "real:r_claude.json",
+   "business": "ClearTax",
+   "rivals": [],
+   "text": "ClearTax - a fully approved FTA and MoF-compliant Accredited Service Provider (ASP)",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'fully approved', compliant"
+  },
+  {
+   "id": "R026",
+   "split": "real",
+   "source": "real:r_claude.json",
+   "business": "Taxilla",
+   "rivals": [],
+   "text": "Taxilla - listed by the UAE Ministry of Finance as an Accredited UAE e-Invoicing Service Provider",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "accreditation listing"
+  },
+  {
+   "id": "R027",
+   "split": "real",
+   "source": "real:r_claude.json",
+   "business": "InvoiceNow Biz",
+   "rivals": [
+    "Thomson Reuters (formerly Pagero)",
+    "EDICOM",
+    "ClearTax",
+    "Taxilla"
+   ],
+   "text": "InvoiceNow Biz - a fully accredited UAE eInvoicing Service Provider under Ministerial Decision No. 64 of 2025\n   Website: https://www.invoicenow.biz\n\nAll of these providers are accredited by the UAE Ministry of Finance and can help businesses comply with the mandatory e-invoicing requirements.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "full accreditation, repeated in the closing sentence"
+  },
+  {
+   "id": "R028",
+   "split": "real",
+   "source": "real:aimode.json",
+   "business": "EDICOM",
+   "rivals": [],
+   "text": "- **Notable Market Players:** International and regional enterprise solution providers have secured early official accreditations (such as **EDICOM** , alongside a growing list of over 50+ approved and pre-approved software vendors and tech partners).",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "named as a notable player with an early official accreditation"
+  },
+  {
+   "id": "R029",
+   "split": "real",
+   "source": "real:aimode.json",
+   "business": "SAP",
+   "rivals": [
+    "Oracle",
+    "Microsoft Dynamics 365"
+   ],
+   "text": "3. **ERP & Accounting Integration:** Check seamless connectivity with your existing infrastructure (e.g., SAP, Oracle, Microsoft Dynamics 365, or custom legacy billing software).",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "SAP is only an example of an existing ERP; the advice is about the provider, not SAP"
+  },
+  {
+   "id": "R030",
+   "split": "real",
+   "source": "real:aimode.json",
+   "business": "Zoho",
+   "rivals": [
+    "SAP",
+    "Oracle"
+   ],
+   "text": "- Your **current accounting or ERP software** (SAP, Oracle, Zoho, etc.)",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "named as an example of software the reader may use"
+  },
+  {
+   "id": "R031",
+   "split": "real",
+   "source": "real:fa3_live.json.gz",
+   "business": "Zoho Books",
+   "rivals": [],
+   "text": "- **[Zoho Books](https://www.zoho.com/ae/books/e-invoicing/):** Ministry of Finance-accredited ASP offering PINT-AE XML formatting, Peppol 5-corner model integration, automated UUID generation, and EmaraTax fetching.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "accreditation plus capabilities, listed under 'Accredited & Popular' options"
+  },
+  {
+   "id": "R032",
+   "split": "real",
+   "source": "real:fa3_live.json.gz",
+   "business": "TallyPrime",
+   "rivals": [],
+   "text": "- **TallyPrime:** An integrated ERP and ASP solution used by thousands of UAE businesses with native electronic invoicing support.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'used by thousands' (reputation) and native support"
+  },
+  {
+   "id": "R033",
+   "split": "real",
+   "source": "real:fa3_live.json.gz",
+   "business": "Taxilla",
+   "rivals": [],
+   "text": "- **Taxilla:** An accredited UAE e-invoicing service provider supporting the Peppol 5-corner model, financial close, and ERP connectors.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    },
+    {
+     "aspect": "integration",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "accreditation is the evaluative part; the rest describes capabilities"
+  },
+  {
+   "id": "R034",
+   "split": "real",
+   "source": "real:fa3_live.json.gz",
+   "business": "Flick Network",
+   "rivals": [
+    "SAP",
+    "Oracle",
+    "Microsoft Dynamics 365"
+   ],
+   "text": "- **Flick Network:** An approved ASP and Peppol-certified access point integrating with SAP, Oracle, and Microsoft Dynamics 365.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "approval and certification; the named ERPs are integrations, not rivals judged"
+  },
+  {
+   "id": "R035",
+   "split": "real",
+   "source": "real:fa3_live.json.gz",
+   "business": "Tax Star",
+   "rivals": [],
+   "text": "- **Tax Star:** Dedicated e-invoicing and compliance software designed to validate PINT-AE data and manage Peppol workflows.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "describes what it is designed for; no credential or praise"
+  },
+  {
+   "id": "R036",
+   "split": "real",
+   "source": "real:fa3_live.json.gz",
+   "business": "IFS",
+   "rivals": [
+    "SAP",
+    "Oracle",
+    "Microsoft Dynamics"
+   ],
+   "text": "Global Enterprise Systems: SAP, Oracle, Microsoft Dynamics, and IFS are widely used by large corporations",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "trimmed at the fixture's cut-off; 'widely used by large corporations' is a reputation signal"
+  },
+  {
+   "id": "R037",
+   "split": "real",
+   "source": "real:mentions_search.json",
+   "business": "e& UAE (Etisalat)",
+   "rivals": [],
+   "text": "Etisalat (now operating as e& UAE) provides comprehensive telecommunication, internet, and digital solutions for small, medium, and large enterprises through the e& UAE Business Portal.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "descriptive; 'comprehensive' describes the breadth of services rather than praising them"
+  },
+  {
+   "id": "R038",
+   "split": "real",
+   "source": "real:mentions_search.json",
+   "business": "e& UAE (Etisalat)",
+   "rivals": [],
+   "text": "- **Mobile Plans:** Business First Plus mobile packages start from AED 88 per month, featuring local/international minutes, roaming data add-ons, and Careem Plus subscriptions.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "neutral"
+    },
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "price and inclusions stated as facts; the bullet sits in an answer about e& UAE and does not repeat the name"
+  },
+  {
+   "id": "R039",
+   "split": "real",
+   "source": "real:mentions_search.json",
+   "business": "e& UAE (Etisalat)",
+   "rivals": [],
+   "text": "- **Support:** Reach the 24-hour small business helpline at **800 5800**.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "contact detail; support availability stated, not judged; the bullet sits in an answer about e& UAE and does not repeat the name"
+  },
+  {
+   "id": "R040",
+   "split": "real",
+   "source": "real:mentions_search.json",
+   "business": "Trojan Holding",
+   "rivals": [],
+   "text": "- **Trojan Holding Portal:** An internal corporate and vendor e-tendering platform utilized in the UAE (accessible via the TBMS Supplier Portal).",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "what the portal is"
+  }
+ ]
+}
