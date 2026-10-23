@@ -48,6 +48,7 @@ export const changelog: ChangelogEntry[] = [
       'Pages Google still shows that no longer open are one clear finding at the top of your reports, with a suggested new address for each and ready redirect files in the fix pack',
       'Reliability and billing accuracy: saving one setting no longer resets the others, starting tracking uses no credits, and a retried search request is no longer charged twice',
       'Search Console shows the same status on every screen: once we can read your property, the overview, recommendations and pipeline stop asking you to connect it, and proving you own the website is labelled apart from connecting its Google data',
+      'A draft you finished yourself is easy to report: press "I published it" on its report, its card or its ladder page, or choose it in the form, and that draft is marked published with your edits; the live check now names any bracket still left on the published page',
     ],
     features: ['keyword-research', 'keyword-ladders', 'content', 'technical-audits', 'site-tracking', 'autopilot'],
     labels: ['Reliability', 'Billing'],

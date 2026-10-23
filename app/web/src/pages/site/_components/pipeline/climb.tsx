@@ -169,8 +169,10 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
               Open the page and files
             </ButtonLink>
           )}
-          {p.state === 'waiting' && !p.needsFix && can('member') && (
-            <ButtonLink to={paths.tool(org.id, 'published', { siteId: site.id, prefill: { keyword: p.keyword } })} size="sm" icon={<Inbox className="size-4" />}>
+          {/* 2026-10-23: a draft that needed edits is finished outside the app, so it is reported the same way (the live check names any
+              bracket still on the page); the ladder page's keyword is its content-log keyword, so the check finds this draft */}
+          {p.state === 'waiting' && can('member') && (
+            <ButtonLink to={paths.tool(org.id, 'published', { siteId: site.id, prefill: { keyword: p.keyword } })} size="sm" variant={p.needsFix ? 'secondary' : 'primary'} icon={<Inbox className="size-4" />}>
               I published it
             </ButtonLink>
           )}
@@ -196,7 +198,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
         </div>
         {p.state === 'waiting' && p.needsFix && (
           <div className="text-[13px] leading-snug text-ink-2">
-            <p>The draft did not pass the quality check, so it is not ready to publish. {DRAFT_BY_HAND}: the page's report says what to do with each one. {NO_RERUN_NEEDED}</p>
+            <p>The draft did not pass the quality check, so it is not ready to publish. {DRAFT_BY_HAND}. The page's report says what to do with each bracket. {NO_RERUN_NEEDED}</p>
             {(p.qaReasons?.length ?? 0) > 0 && (
               <ul className="mt-1.5 list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
                 {p.qaReasons!.slice(0, 3).map((r, i) => (

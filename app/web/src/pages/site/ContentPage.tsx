@@ -22,7 +22,7 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { CountUp, DistributionBar, HeroLink, HeroNextStep, HeroStat, IconTile, ScoreRing, SEQ, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { DataGate, FilterChips, SrOnly, Kind, Panel, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { HeroMeter } from './_components/pipeline/home';
-import { contentGroups, isLiveItem, liveLine, needsFixItem } from './_components/content-status';
+import { contentGroups, isLiveItem, liveLine, needsFixItem, publishPrefill } from './_components/content-status';
 import { countBy, daysSince, plural, urlPath } from './_components/format';
 import { FileLinks } from './_components/reports';
 import { PublishCheckPanel } from './_components/publish-check';
@@ -156,6 +156,9 @@ function Content({ d }: { d: ContentData }) {
                       See what to edit
                     </ButtonLink>
                   )}
+                  <ButtonLink to={tool('published', publishPrefill(toFix))} size="sm" variant="secondary">
+                    I published it
+                  </ButtonLink>
                   <GuideButton id="page-not-ready" vars={{ domain: site.domain }} label="How to finish it" className="border-line-on-ink/40 bg-on-ink/10 text-on-ink" />
                 </>
               }
@@ -167,7 +170,7 @@ function Content({ d }: { d: ContentData }) {
               title={`Publish "${oldest.keyword}", then report its address`}
               actions={
                 <>
-                  <ButtonLink to={tool('published', { keyword: oldest.keyword, ...(oldest.existingPageUrl ? { publishedUrl: oldest.existingPageUrl } : {}) })} size="sm" variant="secondary">
+                  <ButtonLink to={tool('published', publishPrefill(oldest))} size="sm" variant="secondary">
                     Report published URL
                   </ButtonLink>
                   <GuideButton id="publish-page" vars={{ domain: site.domain }} label="How to publish it" className="border-line-on-ink/40 bg-on-ink/10 text-on-ink" />
@@ -420,7 +423,7 @@ function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; r
         )}
         <span className="flex flex-wrap gap-1.5">
           {!liveNow && !fix && can('member') && (
-            <ButtonLink to={tool('published', { keyword: item.keyword, ...(item.existingPageUrl ? { publishedUrl: item.existingPageUrl } : {}) })} size="sm">
+            <ButtonLink to={tool('published', publishPrefill(item))} size="sm">
               Report published URL
             </ButtonLink>
           )}
@@ -429,8 +432,13 @@ function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; r
               See what to edit
             </ButtonLink>
           )}
+          {fix && can('member') && (
+            <ButtonLink to={tool('published', publishPrefill(item))} size="sm" variant="secondary">
+              I published it
+            </ButtonLink>
+          )}
           {liveNow && can('member') && (
-            <ButtonLink to={tool('published', { keyword: item.keyword, publishedUrl: item.publishedUrl })} size="sm" variant="ghost">
+            <ButtonLink to={tool('published', publishPrefill(item))} size="sm" variant="ghost">
               Re-check page
             </ButtonLink>
           )}
@@ -491,13 +499,18 @@ function PipelineTable({ rows, reports, cms, onUnpublish }: { rows: ContentItem[
           ) : null
         ) : can('member') ? (
           needsFixItem(r) ? (
-            reports.get(r.keyword.toLowerCase()) ? (
-              <ButtonLink to={paths.report(org.id, reports.get(r.keyword.toLowerCase())!.id)} size="sm" variant="secondary">
-                See what to edit
+            <span className="flex flex-wrap gap-1.5">
+              {reports.get(r.keyword.toLowerCase()) && (
+                <ButtonLink to={paths.report(org.id, reports.get(r.keyword.toLowerCase())!.id)} size="sm" variant="secondary">
+                  See what to edit
+                </ButtonLink>
+              )}
+              <ButtonLink to={tool('published', publishPrefill(r))} size="sm" variant="ghost">
+                I published it
               </ButtonLink>
-            ) : null
+            </span>
           ) : (
-            <ButtonLink to={tool('published', { keyword: r.keyword, ...(r.existingPageUrl ? { publishedUrl: r.existingPageUrl } : {}) })} size="sm" variant="secondary">
+            <ButtonLink to={tool('published', publishPrefill(r))} size="sm" variant="secondary">
               Report URL
             </ButtonLink>
           )

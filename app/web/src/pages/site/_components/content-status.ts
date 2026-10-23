@@ -10,6 +10,16 @@ export const isLiveItem = (i: Pick<ContentItem, 'status' | 'publishedUrl'>): boo
 /** A written draft that did not pass its quality check: finished by hand (E-QA, never a re-run), never published as it is. */
 export const needsFixItem = (i: Pick<ContentItem, 'status' | 'publishedUrl'>): boolean => !isLiveItem(i) && i.status === 'not_ready';
 
+/**
+ * The "I published a page" form, prefilled for one written page (2026-10-23): its keyword, the engine request id that wrote it (so the
+ * check marks THIS row published even when the keyword is typed differently) and the address when one is known. A draft that needed
+ * edits gets it too: it is finished outside the app, and the live check names any bracket still on the published page.
+ */
+export function publishPrefill(i: Pick<ContentItem, 'keyword' | 'requestId' | 'existingPageUrl' | 'publishedUrl'>): Record<string, unknown> {
+  const url = i.publishedUrl || i.existingPageUrl;
+  return { keyword: i.keyword, ...(/^[A-Za-z0-9:_.-]{1,120}$/.test(i.requestId ?? '') ? { contentRequestId: i.requestId } : {}), ...(url ? { publishedUrl: url } : {}) };
+}
+
 export interface ContentGroups<T> {
   live: T[];
   /** written, passed the quality check, not live yet */

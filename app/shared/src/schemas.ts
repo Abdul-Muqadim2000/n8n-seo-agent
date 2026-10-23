@@ -312,6 +312,14 @@ export const publishedInput = z.object({
   siteId,
   keyword: keywordField,
   publishedUrl: urlField,
+  /** 2026-10-23: the engine request id of the page run that wrote the draft (its report or content row), so the check marks THAT draft
+   *  published even when the keyword is typed differently; empty = matched by keyword, as before */
+  contentRequestId: z
+    .string()
+    .trim()
+    .max(120)
+    .regex(/^[A-Za-z0-9:_.-]*$/, 'Not a valid draft id')
+    .default(''),
   emailCopy: z.boolean().default(false),
 });
 

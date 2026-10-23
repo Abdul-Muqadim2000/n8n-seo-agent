@@ -175,6 +175,15 @@ const cases: Case[] = [
     expect: { mode: 'published', keyword: 'uae e invoicing penalties', published_url: 'https://www.northwind-erp.com/blog/uae-e-invoicing-penalties/' },
   },
   {
+    // 2026-10-23: reported from the draft's own report (a draft that needed edits): the engine request id that wrote it rides along
+    name: 'published from a draft',
+    mode: 'published',
+    input: { siteId: SITE_ID, keyword: 'uae e invoicing penalties', publishedUrl: 'https://www.northwind-erp.com/blog/uae-e-invoicing-penalties/', contentRequestId: '4127' },
+    site,
+    mail: false,
+    expect: { mode: 'published', keyword: 'uae e invoicing penalties', published_url: 'https://www.northwind-erp.com/blog/uae-e-invoicing-penalties/', content_request_id: '4127' },
+  },
+  {
     name: 'checkin',
     mode: 'checkin',
     input: { siteId: SITE_ID, manualAction: false, securityIssue: true, notes: 'Hacked content warning on /promo/' },

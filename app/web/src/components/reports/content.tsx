@@ -70,18 +70,26 @@ export function ContentReport({ report }: { report: ReportDetail }) {
   const avoid = verdict.toUpperCase() === 'AVOID';
 
   // Pre-launch run 2026-10-21 (B1): a page the quality check refused is a draft to finish by hand, never a page to publish as it is. It
-  // offers no "I published this page" and no "Send it now", its content score is not the headline, and its next step is the engine's own
+  // offers no "Send it now", its content score is not the headline, and its next step is the engine's own
   // (`qa_next_step`, with each bracket in `qa_owner_edits`): edit the draft, never a paid re-run (E-QA). Older reports get the same advice.
   const nextStep = notReady ? draftNextStep(p) : '';
   const edits = notReady ? ownerEdits(p) : [];
-  const publishLink = html && !notReady && can('member') && (
+  // 2026-10-23 (techand.ai on production): a client finished a not-ready draft in the Word file, published it, and found no way here to
+  // say so (B1 had removed the button while this page still told them to use it). The draft is finished OUTSIDE the app, so the button
+  // is back on it too, second to the edits: the live check reads the published page and names any bracket still on it. It carries the
+  // draft's keyword and the engine request id that wrote it, so the check marks this draft published, whatever is typed.
+  const publishLink = html && can('member') && (
     <ButtonLink
       to={paths.tool(org.id, 'published', {
         siteId: report.siteId,
         // the form asks for a full https:// address: prefill only one built from the website's domain, never a bare path
-        prefill: { keyword, publishedUrl: absolutePageUrl(str(meta.suggested_url), str(p.domain) || str(meta.domain) || report.siteDomain || '') },
+        prefill: {
+          keyword,
+          publishedUrl: absolutePageUrl(str(meta.suggested_url), str(p.domain) || str(meta.domain) || report.siteDomain || ''),
+          ...(/^[A-Za-z0-9:_.-]{1,120}$/.test(str(p.request_id)) ? { contentRequestId: str(p.request_id) } : {}),
+        },
       })}
-      variant="primary"
+      variant={notReady ? 'secondary' : 'primary'}
       size="sm"
       icon={<Rocket className="size-4" />}
     >
@@ -140,10 +148,16 @@ export function ContentReport({ report }: { report: ReportDetail }) {
             <>
               {publishLink}
               {writeLink}
-              {html && !notReady && can('member') && <span className="text-xs leading-snug text-on-ink-2">After publishing, report the link: we check it live and start tracking its position.</span>}
+              {html && can('member') && (
+                <span className="text-xs leading-snug text-on-ink-2">
+                  {notReady
+                    ? 'Finish it in the downloaded Word or HTML file first: fill in or delete every bracket listed below. Once it is live on your website, press "I published this page": we check the live page and start tracking it.'
+                    : 'After publishing, report the link: we check it live and start tracking its position.'}
+                </span>
+              )}
             </>
           ) : html && notReady ? (
-            <span className="text-xs leading-snug text-on-ink-2">Edit the draft below or in the Word file, then publish it and report its address with "I published a page" so tracking starts.</span>
+            <span className="text-xs leading-snug text-on-ink-2">Finish it in the downloaded Word or HTML file: fill in or delete every bracket listed below, then publish it. A member of your team reports its address here once it is live.</span>
           ) : undefined
         }
         stats={

@@ -680,6 +680,30 @@
     }
   },
   {
+    "name": "published from a draft",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "published",
+      "keyword": "uae e invoicing penalties",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "published_url": "https://www.northwind-erp.com/blog/uae-e-invoicing-penalties/",
+      "content_request_id": "4127"
+    },
+    "expect": {
+      "mode": "published",
+      "keyword": "uae e invoicing penalties",
+      "published_url": "https://www.northwind-erp.com/blog/uae-e-invoicing-penalties/",
+      "content_request_id": "4127"
+    }
+  },
+  {
     "name": "checkin",
     "headers": {
       "x-forwarded-for": "app:7a1c2d3e-org"
