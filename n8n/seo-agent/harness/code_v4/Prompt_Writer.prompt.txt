@@ -24,6 +24,6 @@ For each question give:
 - origin: market (adapted from the real AI questions above) | search (from the Google searches above) | paa (from "People also ask") | competitor (from what competitors sell) | writer (your own)
 - persona: the buyer role asking ({{ $json.persona || 'your choice, 1-3 words' }})
 
-Rules: plain buyer language, 8-22 words, the market named where the buyer would name it, no other company names unless the topic itself is a product comparison, never the business name except in the single brand question, no government service (a ministry's own portal, a visa, an ID card), and every question about something this business sells. Two questions that ask the same thing in other words count as one: make each one different.
+Rules: plain buyer language, 8-22 words, the market named where the buyer would name it, no company or product names at all (not even in a comparison: compare the kinds of solution, e.g. "cloud ERP vs on-premise ERP", never two vendors; a question naming another vendor is refused and never asked), never the business name except in the single brand question, no government service (a ministry's own portal, a visa, an ID card), and every question about something this business sells. Two questions that ask the same thing in other words count as one: make each one different.
 
 Return ONLY JSON: {"prompts": [{"prompt": "", "kind": "", "stage": "", "cluster": "", "keyword": "", "origin": "", "persona": ""}]}

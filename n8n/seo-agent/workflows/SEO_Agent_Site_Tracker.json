@@ -995,6 +995,38 @@
               {
                 "name": "chunks",
                 "type": "number"
+              },
+              {
+                "name": "rule_version",
+                "type": "string"
+              },
+              {
+                "name": "named_rate",
+                "type": "number"
+              },
+              {
+                "name": "avg_position",
+                "type": "number"
+              },
+              {
+                "name": "first_rate",
+                "type": "number"
+              },
+              {
+                "name": "pos_visibility",
+                "type": "number"
+              },
+              {
+                "name": "rate_period",
+                "type": "string"
+              },
+              {
+                "name": "compare_json",
+                "type": "string"
+              },
+              {
+                "name": "metrics_json",
+                "type": "string"
               }
             ]
           },

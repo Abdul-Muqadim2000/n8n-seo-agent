@@ -7,6 +7,7 @@
 // market view, changes that are statistically real, alerts and value-ranked actions. Also the seo_ai_visibility row, 'ai_source' link prospects
 // and the learned brand names (seo_cache).
 /*__AI_STATS__*/
+/*__AI_ENTITIES__*/
 /*__AI_PANEL__*/
 /*__DRAFTS__*/
 /*__DFS_RETRY__*/
@@ -134,8 +135,12 @@ return plans.map(p => {
         rivals: Array.isArray(a[5]) ? a[5].map(x => ({ id: String(ents[(x || [])[0]] || ''), position: Number((x || [])[1]) > 0 ? Number(x[1]) : null, cited: !!(x || [])[2] })).filter(x => x.id && notList(x.id)) : null }); } }
   const weekRaw = R.filter(r => AVM.tb(r.answered)).map(r => ({ prompt_id: r.prompt_id, engine: r.engine, topic: r.topic, pulse: false, answered: true, named: AVM.named(r), cited: AVM.tb(r.cited), position: AVM.position(r), rivals: AVM.rivals(r, { keep: notList }) }));
   const rivDoms = [...new Set([...(p.configured_competitors || []), ...[...weekRaw, ...pulseRaw].flatMap(u => (u.rivals || []).map(x => x.id))].filter(k => /\./.test(String(k))).map(k => String(k).toLowerCase()))];
+  // F1b + F1a (2026-10-23): two ids met in separate answers that are one business (cleartax.com / cleartax.in, a subdomain) are counted
+  // as one; the configured competitors are the keys they fold into first
+  const reps = [...new Set((p.configured_competitors || []).map(x => String(x).toLowerCase()))]; const repOf = new Map();
+  const oneKey = (k) => { if (repOf.has(k)) return repOf.get(k); const r = reps.find(x => x === k || AIE.sameEntity(x, k)) || k; if (r === k && !reps.includes(k)) reps.push(k); repOf.set(k, r); return r; };
   const canon = (u) => { if (!u.rivals) return u; const m0 = new Map();
-    for (const x of u.rivals) { const k = brandKey(x.id, rivDoms, p.aliases); if (!k) continue; const y = m0.get(k); if (!y) m0.set(k, { id: k, position: x.position, cited: x.cited }); else { if (x.position && (!y.position || x.position < y.position)) y.position = x.position; y.cited = y.cited || x.cited; } }
+    for (const x of u.rivals) { const k0 = brandKey(x.id, rivDoms, p.aliases); const k = k0 ? oneKey(k0) : k0; if (!k) continue; const y = m0.get(k); if (!y) m0.set(k, { id: k, position: x.position, cited: x.cited }); else { if (x.position && (!y.position || x.position < y.position)) y.position = x.position; y.cited = y.cited || x.cited; } }
     return { ...u, rivals: [...m0.values()] }; };
   const unitsAll = [...weekRaw, ...pulseRaw].map(canon);
   const U = unitsAll.filter(u => u.pulse || !MONTHLY.includes(u.engine));   // the headline's answers: buyer questions on the weekly engines + the pulse
@@ -155,7 +160,7 @@ return plans.map(p => {
   // site, a directory or a research firm keeps its own kind (mof.gov.ae stays "official").
   const regD = (h) => { const x = normD(h); const parts = x.split('.').filter(Boolean); if (parts.length <= 2) return x;
     const sl = parts.slice(-2).join('.'); return /^(co|com|org|net|gov|ac|edu|ltd|plc|sch|nic|mil)\.[a-z]{2}$/.test(sl) ? parts.slice(-3).join('.') : sl; };
-  const learned = {}; ajobs.forEach((j, i) => { if (j.site_id !== p.site_id) return; const o = aouts[i] && !aouts[i].error ? parseJ(aouts[i].output) : null; for (const a of ((o && o.answers) || [])) for (const b of ((a && a.brands) || [])) { const nm = String((b && b.name) || '').trim(), d = normD(b && b.domain); if (nm.length >= 3 && nm.length <= 60 && brandish(nm) && /\./.test(d) && d !== p.domain && !d.endsWith('.' + p.domain) && !p.brand_names.some(x => String(x).toLowerCase() === nm.toLowerCase())) learned[nm] = d; } });   // D19: only a name that reads like a business name is learned
+  const learned = {}; ajobs.forEach((j, i) => { if (j.site_id !== p.site_id) return; const o = aouts[i] && !aouts[i].error ? parseJ(aouts[i].output) : null; for (const a of ((o && o.answers) || [])) for (const b of ((a && a.brands) || [])) { if (/^(platform|source)$/i.test(String((b && b.role) || '').trim())) continue; const nm = String((b && b.name) || '').trim(), d = normD(b && b.domain); if (nm.length >= 3 && nm.length <= 60 && brandish(nm) && /\./.test(d) && d !== p.domain && !d.endsWith('.' + p.domain) && !p.brand_names.some(x => String(x).toLowerCase() === nm.toLowerCase())) learned[nm] = d; } });   // D19: only a name that reads like a business name is learned
   const ownReg = regD(p.domain); const rivalSet = new Set();
   const addRival = (d) => { const x = regD(d); if (x && /\./.test(x) && x !== ownReg && kindOf(x) === 'site') rivalSet.add(x); };
   for (const d of (p.configured_competitors || [])) addRival(d);

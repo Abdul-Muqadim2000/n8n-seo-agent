@@ -175,6 +175,22 @@ module.exports = async (ctx) => {
   });
 
   // ===================================================================================================================================
+  await guard('F1B-8 F1a handover: stored entities, one business across answers, no platform learned as a rival', async () => {
+    reset(); const SN = 'F1B-8 (F1a handover) — a stored row read through entities_json; cleartax.com and cleartax.in in two answers are one competitor; an analyst brand in the role of platform stays a source, never a rival'; begin(SN); const check = mkCheck(SN);
+    const stored = (o) => { const r = row(o); r.entities_json = r.entities; delete r.entities; return r; };
+    const rows = [stored({ pid: 'q0', named: true, position: 2, rivals: ['cleartax.com'], sources: ['odoo.com'] }), stored({ pid: 'q1', rivals: ['cleartax.in'], sources: ['odoo.com'] }), stored({ pid: 'q2', rivals: ['cleartax.com'], sources: ['odoo.com'] })];
+    reset(); mock('AI Plan', plan({ prompts: [0, 1, 2].map(i => prompt(i)) })); mock('Apply Analysis', rows.map(r => ({ json: r })));
+    mock('AI Requests', [{ json: { site_id: SID, engine: 'chatgpt' } }]); mock('Run AI Requests', [{ json: {} }]);
+    mock('Analyst Jobs', [{ json: { site_id: SID, ids: ['q0|chatgpt'] } }]);
+    mock('Answer Analyst', [{ json: { output: JSON.stringify({ answers: [{ n: 1, brands: [{ name: 'Odoo Platform', domain: 'odoo.com', role: 'platform' }, { name: 'ClearTax', domain: 'cleartax.com', role: 'competitor' }] }] }) } }]);
+    const X = (await run('AI Metrics', store['Apply Analysis']))[0].json;
+    check('the stored row (entities_json, no entities array) is read: named once, at place 2', X.metrics.named_rate === 33.3 && X.metrics.avg_position === null && X.metrics.position_answers === 1, JSON.stringify({ n: X.metrics.named_rate, p: X.metrics.position_answers }));
+    const ct = X.competitors.filter(c => /cleartax/.test(c.domain));
+    check('cleartax.com and cleartax.in are one competitor named in all 3 answers (share 3 of 4 mentions)', ct.length === 1 && ct[0].mentions === 3 && ct[0].named_rate === 100 && X.metrics.share_of_voice === 25, JSON.stringify(ct));
+    check('odoo.com, named by the analyst as a platform, is a source (a place to be listed), not a rival', X.sources.some(s => s.domain === 'odoo.com') && !(X.rival_sources || []).some(r => r.domain === 'odoo.com'), JSON.stringify({ src: X.sources.map(s => s.domain), riv: X.rival_sources }));
+  });
+
+  // ===================================================================================================================================
   await guard('F1B-7 the pulse daily row says what the morning was', async () => {
     reset(); const SN = 'F1B-7 (A7) — the daily row: rule, sample or full, questions asked, engines that answered, a partial morning when an engine returned nothing, the mean place and the per-answer record; a baseline day of another rule is set aside'; begin(SN); const check = mkCheck(SN);
     const engines = ['chatgpt', 'gemini', 'ai_mode'];

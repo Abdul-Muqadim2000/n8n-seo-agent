@@ -3,8 +3,9 @@
 // something really changed: today's mention rate below the past week's beyond sampling noise (z-test, 99%), a business suddenly named in many
 // answers, or a question where the business was named first for three days and is now missing. Quiet days send nothing.
 /*__AI_STATS__*/
+/*__AI_ENTITIES__*/
 /*__SITE_TIME__*/
-const COLS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls'];
+const COLS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls', 'named', 'position', 'entities_json'];   // F1a / F1b (2026-10-23): the answer's own reading is stored with the pulse rows too
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let rows = []; try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {}
 const ENG = { chatgpt: 'ChatGPT', gemini: 'Gemini', ai_mode: 'Google AI Mode', perplexity: 'Perplexity', claude: 'Claude', ai_overview: 'Google AI Overview', copilot: 'Copilot', chatgpt_api: 'ChatGPT API', gemini_api: 'Gemini API' };   // G6: + the model APIs
