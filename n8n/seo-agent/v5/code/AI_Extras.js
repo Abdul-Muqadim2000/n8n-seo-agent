@@ -15,6 +15,9 @@ const extras_plan = (reqItems[0] || {}).extras_plan || {};
 const reqs = reqItems.filter(r => r && !r.skip && r.kind);
 let answers = []; try { answers = $('Run AI Extra Requests').all().map(i => i.json || {}); } catch (e) { answers = []; }
 const pairs = reqs.map((q, i) => ({ q, r: answers.length === reqs.length ? answers[i] : null }));
+// R-E1: the options are paid only after their keys are recorded in the run's state row (*Extras Asking State* -> *AI Extras Go*); when that record
+// could not be saved nothing was asked, and the notes say so
+const notRecorded = (() => { try { const g = $('AI Extras Go').all().map(i => i.json || {}); return g.length === 1 && g[0].skip && g[0].not_recorded ? String(g[0].reason || '') : ''; } catch (e) { return ''; } })();
 const serpRows = rowsOf2('Load SERP Cache (AI)'), queries = rowsOf2('Load Query History'), pages = rowsOf2('Load Pages (AI)'), cache = rowsOf2('Load Cache (AI)'), vis = rowsOf2('Load AI Visibility');
 const now = new Date().toISOString();
 // a task's money counts once by its own id (the in-200 gate's per-item figure covers both attempts)
@@ -49,7 +52,8 @@ for (const p of plans) {
   // gap are added here, and the run's money grows by what the options cost
   const vrow = m.vis_row || {};
   const vrowNow = (() => { try { return $('AI Vis Rows').all().map(i => i.json).find(r => r && r.site_id === p.site_id && r.run_id === p.run_id) || vrow; } catch (e) { return vrow; } })();
-  const notesNow = { ...(parseJ(vrowNow.notes_json, {}) || {}), ...(persona ? { persona } : {}), ...(xp.ceiling_note ? { ceiling_note: xp.ceiling_note } : {}) };
+  const notesNow = { ...(parseJ(vrowNow.notes_json, {}) || {}), ...(persona ? { persona } : {}), ...(xp.ceiling_note ? { ceiling_note: xp.ceiling_note } : {}),
+    ...(xp.resend_note ? { resend_note: xp.resend_note } : {}), ...(notRecorded ? { extras_note: notRecorded } : {}) };   // R-E1
   const demandNow = parseJ(vrowNow.demand_json, null);
   const demand_json = market && demandNow ? JSON.stringify({ ...demandNow, market, market_carried: false }) : '';
   const vis_update = { site_id: p.site_id, run_id: p.run_id, notes_json: JSON.stringify(notesNow), cost_usd: +((Number(vrowNow.cost_usd) || Number(vrow.cost_usd) || 0) + cost_usd).toFixed(4),

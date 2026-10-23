@@ -46,7 +46,9 @@ export const AI_PANEL_COST_CASES = {
   "sentiment_named_rate": 0.5,
   "sentiment_per_call": 20,
   "sentiment_calls_max": 40,
-  "sentiment_call_ai": 0.012
+  "sentiment_call_ai": 0.02,
+  "sentiment_call_worst": 0.026,
+  "sentiment_tries": 2
  },
  "limits": {
   "min": 3,
@@ -81,13 +83,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.14,
-      "ai": 0.142,
-      "usd": 0.282
+      "ai": 0.15,
+      "usd": 0.29
      },
      "full": {
       "dfs": 0.81,
-      "ai": 0.442,
-      "usd": 1.252
+      "ai": 0.45,
+      "usd": 1.26
      }
     },
     "full_extra": {
@@ -101,10 +103,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.084
     },
     "month": {
-     "weekly": 1.22,
+     "weekly": 1.26,
      "full_extra": 0.97,
      "pulse": 2.18,
-     "total": 4.37
+     "total": 4.41
     },
     "half_width": {
      "headline": 7.6,
@@ -131,13 +133,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.38,
-      "ai": 0.166,
-      "usd": 0.546
+      "ai": 0.19,
+      "usd": 0.57
      },
      "full": {
       "dfs": 1.35,
-      "ai": 0.466,
-      "usd": 1.816
+      "ai": 0.49,
+      "usd": 1.84
      }
     },
     "full_extra": {
@@ -151,10 +153,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.228
     },
     "month": {
-     "weekly": 2.36,
+     "weekly": 2.47,
      "full_extra": 1.27,
      "pulse": 5.92,
-     "total": 9.55
+     "total": 9.66
     },
     "half_width": {
      "headline": 4.7,
@@ -181,13 +183,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.98,
-      "ai": 0.274,
-      "usd": 1.254
+      "ai": 0.33,
+      "usd": 1.31
      },
      "full": {
       "dfs": 2.7,
-      "ai": 0.574,
-      "usd": 3.274
+      "ai": 0.63,
+      "usd": 3.33
      }
     },
     "full_extra": {
@@ -201,10 +203,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.588
     },
     "month": {
-     "weekly": 5.43,
+     "weekly": 5.67,
      "full_extra": 2.02,
      "pulse": 15.28,
-     "total": 22.73
+     "total": 22.97
     },
     "half_width": {
      "headline": 2.9,
@@ -231,13 +233,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 1.98,
-      "ai": 0.486,
-      "usd": 2.466
+      "ai": 0.59,
+      "usd": 2.57
      },
      "full": {
       "dfs": 4.95,
-      "ai": 0.786,
-      "usd": 5.736
+      "ai": 0.89,
+      "usd": 5.84
      }
     },
     "full_extra": {
@@ -251,10 +253,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.6
     },
     "month": {
-     "weekly": 10.68,
+     "weekly": 11.13,
      "full_extra": 3.27,
      "pulse": 15.59,
-     "total": 29.54
+     "total": 29.99
     },
     "half_width": {
      "headline": 2.6,
@@ -281,13 +283,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 3.98,
-      "ai": 0.93,
-      "usd": 4.91
+      "ai": 1.13,
+      "usd": 5.11
      },
      "full": {
       "dfs": 9.45,
-      "ai": 1.23,
-      "usd": 10.68
+      "ai": 1.43,
+      "usd": 10.88
      }
     },
     "full_extra": {
@@ -301,10 +303,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 1.2
     },
     "month": {
-     "weekly": 21.26,
+     "weekly": 22.13,
      "full_extra": 5.77,
      "pulse": 31.18,
-     "total": 58.21
+     "total": 59.08
     },
     "half_width": {
      "headline": 1.9,
@@ -331,13 +333,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 9.98,
-      "ai": 1.39,
-      "usd": 11.37
+      "ai": 1.71,
+      "usd": 11.69
      },
      "full": {
       "dfs": 22.95,
-      "ai": 1.69,
-      "usd": 24.64
+      "ai": 2.01,
+      "usd": 24.96
      }
     },
     "full_extra": {
@@ -351,10 +353,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 3
     },
     "month": {
-     "weekly": 49.23,
+     "weekly": 50.62,
      "full_extra": 13.27,
      "pulse": 77.94,
-     "total": 140.44
+     "total": 141.83
     },
     "half_width": {
      "headline": 1.2,
@@ -382,13 +384,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.14,
-      "ai": 0.142,
-      "usd": 0.282
+      "ai": 0.15,
+      "usd": 0.29
      },
      "full": {
       "dfs": 0.81,
-      "ai": 0.442,
-      "usd": 1.252
+      "ai": 0.45,
+      "usd": 1.26
      }
     },
     "full_extra": {
@@ -402,10 +404,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0
     },
     "month": {
-     "weekly": 1.22,
+     "weekly": 1.26,
      "full_extra": 0.97,
      "pulse": 0,
-     "total": 2.19
+     "total": 2.23
     },
     "half_width": {
      "headline": 15.7,
@@ -433,13 +435,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 1.98,
-      "ai": 0.486,
-      "usd": 2.466
+      "ai": 0.59,
+      "usd": 2.57
      },
      "full": {
       "dfs": 4.95,
-      "ai": 0.786,
-      "usd": 5.736
+      "ai": 0.89,
+      "usd": 5.84
      }
     },
     "full_extra": {
@@ -453,10 +455,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0
     },
     "month": {
-     "weekly": 10.68,
+     "weekly": 11.13,
      "full_extra": 3.27,
      "pulse": 0,
-     "total": 13.95
+     "total": 14.4
     },
     "half_width": {
      "headline": 4.4,
@@ -484,13 +486,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 9.98,
-      "ai": 1.39,
-      "usd": 11.37
+      "ai": 1.71,
+      "usd": 11.69
      },
      "full": {
       "dfs": 22.95,
-      "ai": 1.69,
-      "usd": 24.64
+      "ai": 2.01,
+      "usd": 24.96
      }
     },
     "full_extra": {
@@ -504,10 +506,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0
     },
     "month": {
-     "weekly": 49.23,
+     "weekly": 50.62,
      "full_extra": 13.27,
      "pulse": 0,
-     "total": 62.5
+     "total": 63.89
     },
     "half_width": {
      "headline": 2,
@@ -545,13 +547,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 26.946,
-      "ai": 1.39,
-      "usd": 28.336
+      "ai": 1.71,
+      "usd": 28.656
      },
      "full": {
       "dfs": 39.95,
-      "ai": 1.69,
-      "usd": 41.64
+      "ai": 2.01,
+      "usd": 41.96
      }
     },
     "full_extra": {
@@ -565,10 +567,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 2.338
     },
     "month": {
-     "weekly": 122.69,
+     "weekly": 124.08,
      "full_extra": 13.3,
      "pulse": 60.74,
-     "total": 196.73
+     "total": 198.12
     },
     "half_width": {
      "headline": 1.1,
@@ -604,13 +606,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 4.378,
-      "ai": 1.03,
-      "usd": 5.408
+      "ai": 1.27,
+      "usd": 5.648
      },
      "full": {
       "dfs": 9.85,
-      "ai": 1.33,
-      "usd": 11.18
+      "ai": 1.57,
+      "usd": 11.42
      }
     },
     "full_extra": {
@@ -624,10 +626,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.938
     },
     "month": {
-     "weekly": 23.42,
+     "weekly": 24.46,
      "full_extra": 5.77,
      "pulse": 24.37,
-     "total": 53.56
+     "total": 54.6
     },
     "half_width": {
      "headline": 1.9,
@@ -659,13 +661,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 3.564,
-      "ai": 0.306,
-      "usd": 3.87
+      "ai": 0.37,
+      "usd": 3.934
      },
      "full": {
       "dfs": 4.05,
-      "ai": 0.606,
-      "usd": 4.656
+      "ai": 0.67,
+      "usd": 4.72
      }
     },
     "full_extra": {
@@ -679,10 +681,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.396
     },
     "month": {
-     "weekly": 16.76,
+     "weekly": 17.03,
      "full_extra": 0.79,
      "pulse": 10.29,
-     "total": 27.84
+     "total": 28.11
     },
     "half_width": {
      "headline": 3.3,
@@ -710,13 +712,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 9.98,
-      "ai": 1.39,
-      "usd": 11.37
+      "ai": 1.71,
+      "usd": 11.69
      },
      "full": {
       "dfs": 22.95,
-      "ai": 1.69,
-      "usd": 24.64
+      "ai": 2.01,
+      "usd": 24.96
      }
     },
     "full_extra": {
@@ -730,10 +732,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 3
     },
     "month": {
-     "weekly": 49.23,
+     "weekly": 50.62,
      "full_extra": 13.27,
      "pulse": 77.94,
-     "total": 140.44
+     "total": 141.83
     },
     "half_width": {
      "headline": 1.2,
@@ -762,13 +764,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 5.98,
-      "ai": 1.206,
-      "usd": 7.186
+      "ai": 1.51,
+      "usd": 7.49
      },
      "full": {
       "dfs": 13.95,
-      "ai": 1.506,
-      "usd": 15.456
+      "ai": 1.81,
+      "usd": 15.76
      }
     },
     "full_extra": {
@@ -782,10 +784,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 1.2
     },
     "month": {
-     "weekly": 31.12,
+     "weekly": 32.43,
      "full_extra": 8.27,
      "pulse": 31.18,
-     "total": 70.57
+     "total": 71.88
     },
     "half_width": {
      "headline": 1.7,
@@ -813,13 +815,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.78,
-      "ai": 0.21,
-      "usd": 0.99
+      "ai": 0.25,
+      "usd": 1.03
      },
      "full": {
       "dfs": 2.25,
-      "ai": 0.51,
-      "usd": 2.76
+      "ai": 0.55,
+      "usd": 2.8
      }
     },
     "full_extra": {
@@ -833,10 +835,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.468
     },
     "month": {
-     "weekly": 4.29,
+     "weekly": 4.46,
      "full_extra": 1.77,
      "pulse": 12.16,
-     "total": 18.22
+     "total": 18.39
     },
     "half_width": {
      "headline": 3.3,
@@ -863,13 +865,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.04,
-      "ai": 0.142,
-      "usd": 0.182
+      "ai": 0.15,
+      "usd": 0.19
      },
      "full": {
       "dfs": 0.585,
-      "ai": 0.442,
-      "usd": 1.027
+      "ai": 0.45,
+      "usd": 1.035
      }
     },
     "full_extra": {
@@ -883,10 +885,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.024
     },
     "month": {
-     "weekly": 0.79,
+     "weekly": 0.82,
      "full_extra": 0.85,
      "pulse": 0.62,
-     "total": 2.26
+     "total": 2.29
     },
     "half_width": {
      "headline": 13.9,
@@ -913,13 +915,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.04,
-      "ai": 0.142,
-      "usd": 0.182
+      "ai": 0.15,
+      "usd": 0.19
      },
      "full": {
       "dfs": 0.585,
-      "ai": 0.442,
-      "usd": 1.027
+      "ai": 0.45,
+      "usd": 1.035
      }
     },
     "full_extra": {
@@ -933,10 +935,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.024
     },
     "month": {
-     "weekly": 0.79,
+     "weekly": 0.82,
      "full_extra": 0.85,
      "pulse": 0.62,
-     "total": 2.26
+     "total": 2.29
     },
     "half_width": {
      "headline": 13.9,
@@ -963,13 +965,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 9.98,
-      "ai": 1.39,
-      "usd": 11.37
+      "ai": 1.71,
+      "usd": 11.69
      },
      "full": {
       "dfs": 22.95,
-      "ai": 1.69,
-      "usd": 24.64
+      "ai": 2.01,
+      "usd": 24.96
      }
     },
     "full_extra": {
@@ -983,10 +985,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 3
     },
     "month": {
-     "weekly": 49.23,
+     "weekly": 50.62,
      "full_extra": 13.27,
      "pulse": 77.94,
-     "total": 140.44
+     "total": 141.83
     },
     "half_width": {
      "headline": 1.2,
@@ -1017,13 +1019,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.894,
-      "ai": 0.178,
-      "usd": 1.072
+      "ai": 0.21,
+      "usd": 1.104
      },
      "full": {
       "dfs": 5.1,
-      "ai": 0.478,
-      "usd": 5.578
+      "ai": 0.51,
+      "usd": 5.61
      }
     },
     "full_extra": {
@@ -1037,10 +1039,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0
     },
     "month": {
-     "weekly": 4.64,
+     "weekly": 4.78,
      "full_extra": 4.51,
      "pulse": 0,
-     "total": 9.15
+     "total": 9.29
     },
     "half_width": {
      "headline": 7.9,
@@ -1068,13 +1070,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 4.98,
-      "ai": 1.094,
-      "usd": 6.074
+      "ai": 1.35,
+      "usd": 6.33
      },
      "full": {
       "dfs": 11.7,
-      "ai": 1.394,
-      "usd": 13.094
+      "ai": 1.65,
+      "usd": 13.35
      }
     },
     "full_extra": {
@@ -1088,10 +1090,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.504
     },
     "month": {
-     "weekly": 26.3,
+     "weekly": 27.41,
      "full_extra": 7.02,
      "pulse": 13.09,
-     "total": 46.41
+     "total": 47.52
     },
     "half_width": {
      "headline": 2.2,
@@ -1140,13 +1142,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 2.205,
-      "ai": 0.306,
-      "usd": 2.511
+      "ai": 0.37,
+      "usd": 2.575
      },
      "full": {
       "dfs": 2.7,
-      "ai": 0.606,
-      "usd": 3.306
+      "ai": 0.67,
+      "usd": 3.37
      }
     },
     "full_extra": {
@@ -1160,10 +1162,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.588
     },
     "month": {
-     "weekly": 10.87,
+     "weekly": 11.15,
      "full_extra": 0.8,
      "pulse": 15.28,
-     "total": 26.95
+     "total": 27.23
     },
     "half_width": {
      "headline": 2.9,
@@ -1220,13 +1222,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 8.955,
-      "ai": 1.03,
-      "usd": 9.985
+      "ai": 1.27,
+      "usd": 10.225
      },
      "full": {
       "dfs": 9.45,
-      "ai": 1.33,
-      "usd": 10.78
+      "ai": 1.57,
+      "usd": 11.02
      }
     },
     "full_extra": {
@@ -1240,10 +1242,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 1.2
     },
     "month": {
-     "weekly": 43.24,
+     "weekly": 44.27,
      "full_extra": 0.8,
      "pulse": 31.18,
-     "total": 75.22
+     "total": 76.25
     },
     "half_width": {
      "headline": 1.8,
@@ -1301,13 +1303,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.315,
-      "ai": 0.154,
-      "usd": 0.469
+      "ai": 0.17,
+      "usd": 0.485
      },
      "full": {
       "dfs": 0.81,
-      "ai": 0.454,
-      "usd": 1.264
+      "ai": 0.47,
+      "usd": 1.28
      }
     },
     "full_extra": {
@@ -1321,10 +1323,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0
     },
     "month": {
-     "weekly": 2.03,
+     "weekly": 2.1,
      "full_extra": 0.8,
      "pulse": 0,
-     "total": 2.83
+     "total": 2.9
     },
     "half_width": {
      "headline": 14.5,
@@ -1381,13 +1383,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.98,
-      "ai": 0.274,
-      "usd": 1.254
+      "ai": 0.33,
+      "usd": 1.31
      },
      "full": {
       "dfs": 2.7,
-      "ai": 0.574,
-      "usd": 3.274
+      "ai": 0.63,
+      "usd": 3.33
      }
     },
     "full_extra": {
@@ -1401,10 +1403,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.98
     },
     "month": {
-     "weekly": 5.43,
+     "weekly": 5.67,
      "full_extra": 2.02,
      "pulse": 25.46,
-     "total": 32.91
+     "total": 33.15
     },
     "half_width": {
      "headline": 2.4,
@@ -1466,13 +1468,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 3.98,
-      "ai": 0.93,
-      "usd": 4.91
+      "ai": 1.13,
+      "usd": 5.11
      },
      "full": {
       "dfs": 9.45,
-      "ai": 1.23,
-      "usd": 10.68
+      "ai": 1.43,
+      "usd": 10.88
      }
     },
     "full_extra": {
@@ -1486,10 +1488,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 1.064
     },
     "month": {
-     "weekly": 21.26,
+     "weekly": 22.13,
      "full_extra": 5.77,
      "pulse": 27.64,
-     "total": 54.67
+     "total": 55.54
     },
     "half_width": {
      "headline": 1.9,
@@ -1545,13 +1547,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 1.98,
-      "ai": 0.486,
-      "usd": 2.466
+      "ai": 0.59,
+      "usd": 2.57
      },
      "full": {
       "dfs": 4.95,
-      "ai": 0.786,
-      "usd": 5.736
+      "ai": 0.89,
+      "usd": 5.84
      }
     },
     "full_extra": {
@@ -1565,10 +1567,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.6
     },
     "month": {
-     "weekly": 10.68,
+     "weekly": 11.13,
      "full_extra": 3.27,
      "pulse": 15.59,
-     "total": 29.54
+     "total": 29.99
     },
     "half_width": {
      "headline": 2.6,
@@ -1625,13 +1627,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 9.98,
-      "ai": 1.39,
-      "usd": 11.37
+      "ai": 1.71,
+      "usd": 11.69
      },
      "full": {
       "dfs": 22.95,
-      "ai": 1.69,
-      "usd": 24.64
+      "ai": 2.01,
+      "usd": 24.96
      }
     },
     "full_extra": {
@@ -1645,10 +1647,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 3.34
     },
     "month": {
-     "weekly": 49.23,
+     "weekly": 50.62,
      "full_extra": 13.27,
      "pulse": 86.77,
-     "total": 149.27
+     "total": 150.66
     },
     "half_width": {
      "headline": 1.1,
@@ -1708,13 +1710,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 1.556,
-      "ai": 0.274,
-      "usd": 1.83
+      "ai": 0.33,
+      "usd": 1.886
      },
      "full": {
       "dfs": 3.276,
-      "ai": 0.574,
-      "usd": 3.85
+      "ai": 0.63,
+      "usd": 3.906
      }
     },
     "full_extra": {
@@ -1728,10 +1730,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.588
     },
     "month": {
-     "weekly": 7.92,
+     "weekly": 8.17,
      "full_extra": 2.02,
      "pulse": 15.28,
-     "total": 25.22
+     "total": 25.47
     },
     "half_width": {
      "headline": 2.9,
@@ -1789,13 +1791,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 4.556,
-      "ai": 0.93,
-      "usd": 5.486
+      "ai": 1.13,
+      "usd": 5.686
      },
      "full": {
       "dfs": 10.026,
-      "ai": 1.23,
-      "usd": 11.256
+      "ai": 1.43,
+      "usd": 11.456
      }
     },
     "full_extra": {
@@ -1809,10 +1811,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 1.2
     },
     "month": {
-     "weekly": 23.75,
+     "weekly": 24.62,
      "full_extra": 5.77,
      "pulse": 31.18,
-     "total": 60.7
+     "total": 61.57
     },
     "half_width": {
      "headline": 1.9,
@@ -1870,13 +1872,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.728,
-      "ai": 0.142,
-      "usd": 0.87
+      "ai": 0.15,
+      "usd": 0.878
      },
      "full": {
       "dfs": 1.398,
-      "ai": 0.442,
-      "usd": 1.84
+      "ai": 0.45,
+      "usd": 1.848
      }
     },
     "full_extra": {
@@ -1890,10 +1892,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.084
     },
     "month": {
-     "weekly": 3.77,
+     "weekly": 3.8,
      "full_extra": 0.97,
      "pulse": 2.18,
-     "total": 6.92
+     "total": 6.95
     },
     "half_width": {
      "headline": 7.6,
@@ -1951,13 +1953,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.98,
-      "ai": 0.274,
-      "usd": 1.254
+      "ai": 0.33,
+      "usd": 1.31
      },
      "full": {
       "dfs": 2.7,
-      "ai": 0.574,
-      "usd": 3.274
+      "ai": 0.63,
+      "usd": 3.33
      }
     },
     "full_extra": {
@@ -1971,10 +1973,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.588
     },
     "month": {
-     "weekly": 5.43,
+     "weekly": 5.67,
      "full_extra": 2.02,
      "pulse": 15.28,
-     "total": 22.73
+     "total": 22.97
     },
     "half_width": {
      "headline": 2.9,
@@ -2031,13 +2033,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 1.03,
-      "ai": 0.274,
-      "usd": 1.304
+      "ai": 0.33,
+      "usd": 1.36
      },
      "full": {
       "dfs": 2.75,
-      "ai": 0.574,
-      "usd": 3.324
+      "ai": 0.63,
+      "usd": 3.38
      }
     },
     "full_extra": {
@@ -2051,10 +2053,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.588
     },
     "month": {
-     "weekly": 5.65,
+     "weekly": 5.89,
      "full_extra": 2.02,
      "pulse": 15.28,
-     "total": 22.95
+     "total": 23.19
     },
     "half_width": {
      "headline": 2.9,
@@ -2111,13 +2113,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 1.08,
-      "ai": 0.274,
-      "usd": 1.354
+      "ai": 0.33,
+      "usd": 1.41
      },
      "full": {
       "dfs": 2.8,
-      "ai": 0.574,
-      "usd": 3.374
+      "ai": 0.63,
+      "usd": 3.43
      }
     },
     "full_extra": {
@@ -2131,10 +2133,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.588
     },
     "month": {
-     "weekly": 5.86,
+     "weekly": 6.11,
      "full_extra": 2.02,
      "pulse": 15.28,
-     "total": 23.16
+     "total": 23.41
     },
     "half_width": {
      "headline": 2.9,
@@ -2191,13 +2193,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 4.18,
-      "ai": 0.93,
-      "usd": 5.11
+      "ai": 1.13,
+      "usd": 5.31
      },
      "full": {
       "dfs": 9.65,
-      "ai": 1.23,
-      "usd": 10.88
+      "ai": 1.43,
+      "usd": 11.08
      }
     },
     "full_extra": {
@@ -2211,10 +2213,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 1.2
     },
     "month": {
-     "weekly": 22.13,
+     "weekly": 22.99,
      "full_extra": 5.77,
      "pulse": 31.18,
-     "total": 59.08
+     "total": 59.94
     },
     "half_width": {
      "headline": 1.9,
@@ -2271,13 +2273,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 4.38,
-      "ai": 0.93,
-      "usd": 5.31
+      "ai": 1.13,
+      "usd": 5.51
      },
      "full": {
       "dfs": 9.85,
-      "ai": 1.23,
-      "usd": 11.08
+      "ai": 1.43,
+      "usd": 11.28
      }
     },
     "full_extra": {
@@ -2291,10 +2293,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 1.2
     },
     "month": {
-     "weekly": 22.99,
+     "weekly": 23.86,
      "full_extra": 5.77,
      "pulse": 31.18,
-     "total": 59.94
+     "total": 60.81
     },
     "half_width": {
      "headline": 1.9,
@@ -2351,13 +2353,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 0.98,
-      "ai": 0.274,
-      "usd": 1.254
+      "ai": 0.33,
+      "usd": 1.31
      },
      "full": {
       "dfs": 3.03,
-      "ai": 0.574,
-      "usd": 3.604
+      "ai": 0.63,
+      "usd": 3.66
      }
     },
     "full_extra": {
@@ -2371,10 +2373,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.588
     },
     "month": {
-     "weekly": 5.43,
+     "weekly": 5.67,
      "full_extra": 2.35,
      "pulse": 15.28,
-     "total": 23.06
+     "total": 23.3
     },
     "half_width": {
      "headline": 2.9,
@@ -2431,13 +2433,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 3.98,
-      "ai": 0.93,
-      "usd": 4.91
+      "ai": 1.13,
+      "usd": 5.11
      },
      "full": {
       "dfs": 9.78,
-      "ai": 1.23,
-      "usd": 11.01
+      "ai": 1.43,
+      "usd": 11.21
      }
     },
     "full_extra": {
@@ -2451,10 +2453,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 1.2
     },
     "month": {
-     "weekly": 21.26,
+     "weekly": 22.13,
      "full_extra": 6.1,
      "pulse": 31.18,
-     "total": 58.54
+     "total": 59.41
     },
     "half_width": {
      "headline": 1.9,
@@ -2516,13 +2518,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 2.881,
-      "ai": 0.306,
-      "usd": 3.187
+      "ai": 0.37,
+      "usd": 3.251
      },
      "full": {
       "dfs": 3.706,
-      "ai": 0.606,
-      "usd": 4.312
+      "ai": 0.67,
+      "usd": 4.376
      }
     },
     "full_extra": {
@@ -2536,10 +2538,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.98
     },
     "month": {
-     "weekly": 13.8,
+     "weekly": 14.08,
      "full_extra": 1.13,
      "pulse": 25.46,
-     "total": 40.39
+     "total": 40.67
     },
     "half_width": {
      "headline": 2.3,
@@ -2603,13 +2605,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 9.731,
-      "ai": 1.03,
-      "usd": 10.761
+      "ai": 1.27,
+      "usd": 11.001
      },
      "full": {
       "dfs": 10.556,
-      "ai": 1.33,
-      "usd": 11.886
+      "ai": 1.57,
+      "usd": 12.126
      }
     },
     "full_extra": {
@@ -2623,10 +2625,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 1.34
     },
     "month": {
-     "weekly": 46.6,
+     "weekly": 47.63,
      "full_extra": 1.13,
      "pulse": 34.81,
-     "total": 82.54
+     "total": 83.57
     },
     "half_width": {
      "headline": 1.7,
@@ -2699,13 +2701,13 @@ export const AI_PANEL_COST_CASES = {
     "run": {
      "weekly": {
       "dfs": 16.641,
-      "ai": 1.15,
-      "usd": 17.791
+      "ai": 1.47,
+      "usd": 18.111
      },
      "full": {
       "dfs": 17.17,
-      "ai": 1.45,
-      "usd": 18.62
+      "ai": 1.77,
+      "usd": 18.94
      }
     },
     "full_extra": {
@@ -2719,10 +2721,10 @@ export const AI_PANEL_COST_CASES = {
      "usd": 0.476
     },
     "month": {
-     "weekly": 77.04,
+     "weekly": 78.42,
      "full_extra": 0.83,
      "pulse": 12.37,
-     "total": 90.24
+     "total": 91.62
     },
     "half_width": {
      "headline": 1.9,
