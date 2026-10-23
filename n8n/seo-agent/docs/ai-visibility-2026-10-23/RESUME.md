@@ -1,6 +1,8 @@
 # AI visibility upgrade: where it stopped and how to resume
 
-## UPDATE 2026-10-23 22:10 UTC: code DONE and pushed, NOT deployed
+## DEPLOYED 2026-10-23 ~22:20 UTC at 84d65d8f (owner asked): backup pg/2026-10-23/*T221220Z.dump; engine deploy_engine.py --no-build --apply --create-missing (columns synced, 16 updated, 2 pilot workflows imported, 26 published, SEOagentCallback deactivated); API rebuilt on the VM (healthy); web via PR #36 (live chunks carry the new labels). Remaining: switch the dispatcher to start when ready; paid checks live_checks_aivis.py (~$0.38) + eval_sentiment_model.js (~$0.10); films for tutorials 8.x on the owner's yes.
+
+## (history) 2026-10-23 22:10 UTC: code done and pushed, deploy first refused by the permission system
 - `feature/seo-agent-v4.5` = `8b4b1a59` (pushed). `main` NOT pushed (Vercel web unchanged). Engine and API on GCP unchanged.
 - Checks at 8b4b1a59: build with real settings exit 0; harness **11921 passed, 0 failed**; app typecheck clean, shared 702, server 1422
   (+46 db-skipped), web 183, web build OK. Reviews REVIEW_ENGINE.md / REVIEW_APP.md fixed (fixes/R-ENGINE.md, R-APP.md, W2-FIX.md).
