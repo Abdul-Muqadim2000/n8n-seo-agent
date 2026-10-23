@@ -572,7 +572,7 @@ return plans.map(p => {
   const exec_cost = +(Rall.filter(r => !r._stored).reduce((s, r) => s + (Number(r.cost) || 0), 0) + mine.filter(x => /^(market|index_)/.test(x.q.engine)).reduce((s, x) => s + (Number(task0(x.r).cost) || 0), 0) + dreq.reduce((s, q, i) => s + (q.site_id === p.site_id ? dCost(dres[i]) : 0), 0)).toFixed(4);
   const run_split = p.chunk ? { executions: (p.chunk.executions || []).length + 1, chunk: p.chunk.no, requests: Rall.length, stored_before: Rall.filter(r => r._stored).length, resumed: !!p.chunk.resumed,
     note: (p.chunk.executions || []).length ? 'This run was asked over ' + ((p.chunk.executions || []).length + 1) + ' executions (' + Rall.filter(r => r._stored).length + ' of its ' + Rall.length + ' answers were stored by the earlier ones' + (p.chunk.resumed ? '; it was resumed after a pause' : '') + '); every figure below counts all of them once.' : '' } : null;
-  // ---- F1b (2026-10-23): the window the week was counted over (E14: (the previous run's window end, this run's start]; A8: stated in the row),
+  // ---- F1b (2026-10-23): the window the week was counted over (E14: (the previous row's checked_at, this run's start]; A8: stated in the row),
   // the competitor table's changes, the stored counts the next run compares against (metrics_json) and the comparison every reader shares
   // (compare_json, APP_AUDIT A1: the app draws no arrow of its own). Rates are percentages 0-100 as everywhere in this row.
   const rwin = (() => { const pw = p.pulse_window || null; const from = pw && pw.from ? String(pw.from) : (prev && prev.checked_at ? String(prev.checked_at) : String(([...pulseDates].sort()[0] || p.checked_at)));

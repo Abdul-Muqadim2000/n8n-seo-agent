@@ -90,6 +90,7 @@ module.exports = async (ctx) => {
     reset(); const SN = 'F1B-3 (A1 / E13) — compare_json: the exact shape; comparable on the same panel, engines and rule; refused (with the reason, no delta, no test) when 70% of the questions are new, an engine was added, or the earlier row was counted under another rule'; begin(SN); const check = mkCheck(SN);
     const X = await drive({ prompts: P10, rows: weekRows(24, 8), previous: prevRow({}) });
     const C = JSON.parse(X.vis_row.compare_json);
+    console.log('   compare_json (comparable) ->', X.vis_row.compare_json);
     const KEYS = ['rule_version', 'comparable', 'reason', 'previous_run_id', 'previous_at', 'panel_overlap', 'engines_same', 'window', 'metrics'];
     const MK = ['named_rate', 'cited_rate', 'share_of_voice', 'visibility_score', 'avg_position'], FK = ['now', 'prev', 'delta', 'n_now', 'n_prev', 'significant', 'p'];
     check('the exact shape: top-level keys, window {from, to, days}, five metrics with now / prev / delta / n_now / n_prev / significant / p', JSON.stringify(Object.keys(C).sort()) === JSON.stringify(KEYS.slice().sort()) && JSON.stringify(Object.keys(C.window).sort()) === '["days","from","to"]'
@@ -111,6 +112,7 @@ module.exports = async (ctx) => {
     // the deploy of this rule: the earlier row was counted under the old one (no rule_version)
     const W = await drive({ prompts: P10, rows: weekRows(20, 8), previous: prevRow({ rule: '' }) });
     const CW = JSON.parse(W.vis_row.compare_json);
+    console.log('   compare_json (rule changed) ->', W.vis_row.compare_json);
     check('an earlier row of another rule: "measurement rule changed", this week a new baseline, no delta, no headline test, no alert', CW.comparable === false && /measurement rule changed: this week starts a new baseline/.test(CW.reason) && CW.metrics.named_rate.delta === null && !W.metrics.tests && /measurement rule changed/.test(W.metrics.delta_not_compared) && !W.alerts.some(a => /dropped|gained/.test(a.text)), JSON.stringify(CW).slice(0, 300));
     const F = await drive({ prompts: P10, rows: weekRows(20, 8) });
     const CF = JSON.parse(F.vis_row.compare_json);
