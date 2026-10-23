@@ -406,7 +406,8 @@
       "business",
       "fact_check",
       "facts",
-      "known_competitors"
+      "known_competitors",
+      "platforms"
      ],
      "from": [],
      "input": "Any Analyst Jobs?",
@@ -416,7 +417,7 @@
      "node": "Answer Analyst",
      "ref": "$('Any Analyst Jobs?').item.json",
      "streaming": false,
-     "template_chars": 2431
+     "template_chars": 3230
     },
     {
      "after": [
@@ -457,7 +458,7 @@
      "node": "Prompt Writer",
      "ref": "$('Any Prompt Jobs?').item.json",
      "streaming": false,
-     "template_chars": 4309
+     "template_chars": 4447
     }
    ],
    "ai_nodes": [

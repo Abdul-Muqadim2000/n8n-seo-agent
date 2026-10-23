@@ -57,10 +57,15 @@ return rows.map(r => {
     let named = !!out.named;
     if (self && self._named) named = true;
     else if (named && String(a.sentiment) === 'not_mentioned') named = false;   // the brand word matched something else (a common word, another company)
-    // positions: the client and its competitors in order of first mention (the text where it is found, else the analyst's order after it)
+    // positions: the client and its competitors in the ANALYST's order (it read the answer: "the business's place in the list is read, not
+    // guessed from text positions"); a competitor only the parser found joins that order where the text puts it, before the first business
+    // the analyst listed after it in the text
     for (const e of ents) if (e._at == null) e._at = atOf(e.name);
-    const order = (e) => e._at >= 0 ? e._at : 1e7 + (e._ai == null ? 999 : e._ai);
-    const offered = ents.filter(e => (e.role === 'competitor' && (e._at >= 0 || e._ai != null)) || (e.role === 'self' && named)).sort((x, y) => order(x) - order(y));
+    const offered = ents.filter(e => (e.role === 'competitor' && (e._at >= 0 || e._ai != null)) || (e.role === 'self' && named));
+    const spine = offered.filter(e => e._ai != null).sort((x, y) => x._ai - y._ai);
+    const key = (e) => { if (e._ai != null) return spine.indexOf(e); const t = e._at >= 0 ? e._at : 1e9; const k2 = spine.findIndex(x => x._at >= 0 && x._at > t);
+      return (k2 >= 0 ? k2 : spine.length) - 0.5 + (t / 1e10); };
+    offered.sort((x, y) => key(x) - key(y));
     for (const e of ents) e.position = null; offered.forEach((e, i) => { e.position = i + 1; });
     out.named = named;
     out.mentioned = named || !!out.cited;

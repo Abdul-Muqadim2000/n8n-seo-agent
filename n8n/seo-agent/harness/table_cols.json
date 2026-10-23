@@ -143,7 +143,10 @@
   "brands",
   "issues",
   "fanout",
-  "cited_urls"
+  "cited_urls",
+  "named",
+  "position",
+  "entities_json"
  ],
  "MONITORS": [
   "site_id",
