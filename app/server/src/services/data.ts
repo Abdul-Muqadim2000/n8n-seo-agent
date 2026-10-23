@@ -1664,6 +1664,7 @@ export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & 
     ...(r.ai_fanout_check != null && (r.ai_fanout_check as unknown) !== '' && [0, 25, 50, 100].includes(n(r.ai_fanout_check)) ? { aiFanoutCheck: n(r.ai_fanout_check) } : {}),
     ...(r.ai_sov_set != null && s(r.ai_sov_set).trim() ? { aiSovSet: splitList(r.ai_sov_set) } : {}),
     ...(r.ai_alert_rules_json != null && s(r.ai_alert_rules_json).trim() ? { aiAlertRules: aiAlertRulesOf(r.ai_alert_rules_json) } : {}),
+    ...(r.ai_demand_market != null && (r.ai_demand_market as unknown) !== '' ? { aiDemandMarket: b(r.ai_demand_market) } : {}),   // W2-FIX
     competitors: splitList(r.competitors),
     updatedAt: s(r.updated_at),
   };

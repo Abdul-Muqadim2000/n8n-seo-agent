@@ -36,6 +36,7 @@ const Env = z.object({
   N8N_ASSESS_PATH: str('/webhook/seo-keyword-assess'),
   /** v4.13 Link Builder: start a run on demand, and read one reply (synchronous) */
   N8N_LINK_BUILDER_PATH: str('/webhook/seo-link-builder'),
+  N8N_AI_PILOT_PATH: str('/webhook/seo-ai-pilot'),   // W2-FIX: the AI repeat pilot's door (SEOagentAIPilAPI)
   N8N_REPLY_PATH: str('/webhook/seo-reply-read'),
   /** B3-7: the Publish Check (SEOagentPubCheck): the deterministic half of the content gate over a supplied page, synchronous, free */
   N8N_PUBLISH_CHECK_PATH: str('/webhook/seo-publish-check'),
@@ -184,6 +185,7 @@ export const config = {
     adminPath: e.N8N_ADMIN_PATH,
     assessPath: e.N8N_ASSESS_PATH,
     linkBuilderPath: e.N8N_LINK_BUILDER_PATH,
+    aiPilotPath: e.N8N_AI_PILOT_PATH,
     replyPath: e.N8N_REPLY_PATH,
     publishCheckPath: e.N8N_PUBLISH_CHECK_PATH,
     projectId: e.N8N_PROJECT_ID,

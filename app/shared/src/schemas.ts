@@ -135,6 +135,8 @@ export const monitorSettingsSchema = z.object({
   aiSovSet: z.array(z.string().trim().min(1).max(120)).max(12).optional(),
   /** the owner's alert rules (a rule fires only on a comparable run, when its own test passes and the change reaches the threshold) */
   aiAlertRules: aiAlertRulesSchema.optional(),
+  /** W2-E3: the monthly market trend from the AI-answer database (3 tasks on the month's full run, about $0.33 a month; ChatGPT data is US-English only) */
+  aiDemandMarket: z.boolean().optional(),
 });
 export type MonitorSettings = z.output<typeof monitorSettingsSchema>;
 
@@ -694,6 +696,41 @@ export const aiImportSchema = z.object({
   periodEnd: z.string().trim().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Use a date like 2026-10-22').default(''),
 });
 export const aiPromptDeleteSchema = z.object({ ids: z.array(z.string().trim().min(1).max(120)).min(1, 'Choose at least one question').max(500) });
+
+// ---------- W2-FIX (2026-10-23): the AI repeat pilot (n8n SEOagentAIPilAPI -> SEOagentAIPilot1) ----------
+/** `confirm` false (the default) asks the engine for the price only; true starts the pilot, and only after the price was shown (the server
+ *  checks that a fresh quote exists and that the company's credits cover it). Only the literal true confirms. */
+export const aiPilotStartSchema = z.object({ confirm: z.boolean().default(false) });
+export type AiPilotStartInput = z.output<typeof aiPilotStartSchema>;
+/** What the engine's quote callback (stage ai_pilot_quote) says, as the app shows it. */
+export interface AiPilotQuote {
+  requestId: string | null;
+  receivedAt: string;
+  /** the pilot would run if confirmed (false: the panel is too small, no engine fits, or the price is over the limit) */
+  canConfirm: boolean;
+  reason: string;
+  questions: number;
+  repeats: number;
+  engines: string[];
+  requests: number;
+  priceUsd: number;
+  maxUsd: number;
+  note: string;
+}
+/** The pilot's result (stage ai_pilot): per engine, how many asks a week each question needs for +/-5 points. */
+export interface AiPilotResult {
+  requestId: string | null;
+  receivedAt: string;
+  reportId: string;
+  note: string;
+  byEngine: { engine: string; rate: number | null; repeats: number | null; answers: number; why: string }[];
+}
+export interface AiPilotState {
+  quote: AiPilotQuote | null;
+  result: AiPilotResult | null;
+  /** a quote is confirmable for this long after it arrived (the panel or the engines may change after it) */
+  quoteValidHours: number;
+}
 
 // ---- v4.13 Link Builder ----
 const hostName = z.string().trim().min(3).max(200).regex(/^[a-z0-9.-]+$/i, 'A host name like smtp.gmail.com');

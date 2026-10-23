@@ -531,6 +531,9 @@ export const AUDIT_ACTIONS = {
   // W2-A (2026-10-23): AI visibility wave 2
   'site.ai_prompts_deleted': { label: 'Deleted questions from the AI question panel', category: 'websites' },
   'site.ai_import': { label: 'Uploaded an AI report export (Bing or Search Console)', category: 'data' },
+  // W2-FIX (2026-10-23): the AI repeat pilot, priced first and run only on an explicit confirmation
+  'site.ai_pilot_quote': { label: 'Asked for the price of the AI repeat pilot', category: 'websites' },
+  'site.ai_pilot_run': { label: 'Confirmed and started the AI repeat pilot', category: 'websites' },
   'company.created': { label: 'Created the company', category: 'settings' },
   'company.updated': { label: 'Changed company details', category: 'settings' },
   'company.budget_changed': { label: 'Changed the platform spending guard', category: 'settings' },

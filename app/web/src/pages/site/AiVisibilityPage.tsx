@@ -21,6 +21,7 @@ import { AnswersBrowser, QuestionDialog } from './_components/ai-answers';
 import { breakMarks, EngineTrendPanel, SovTrendPanel } from './_components/ai-trends';
 import { AdsLocalPanel, AiReportsCard, CompetitorsPanel, DemandPanel, FanoutGapPanel, ImpactPanel, OurPagesPanel, PersonaEffectPanel, SentimentPanel2, ShoppingPanel, SourcesPanel2 } from './_components/ai-panels2';
 import { AlertRulesPanel } from './_components/ai-rules';
+import { AiPilotPanel } from './_components/ai-pilot';
 import { PanelManager, SegmentsSection } from './_components/ai-panel';
 import { AccessPanel, AiTrafficPanel, DiscoveryPanel, GroupsPanel, IndexPanel, PerceptionPanel } from './_components/ai-insights';
 import { AiGrowthSection } from './_components/ai-growth';
@@ -364,6 +365,7 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
         <AlertRulesPanel d={d} engineNames={engineNames} />
         <AiReportsCard />
+        <AiPilotPanel />
       </div>
 
       <section>

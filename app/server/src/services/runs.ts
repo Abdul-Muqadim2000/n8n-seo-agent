@@ -8,7 +8,9 @@ import {
   cycleNorm,
   estimateRunCost,
   estimateRunMinutes,
-  aiRunPanelOf,
+  aiRunPanelOfRow,
+  aiOnDemandRunCost,
+  aiPanelQuoteBody,
   AI_PANEL_VALUE,
   type AiRunPanel,
   type MonitorsRow,
@@ -77,10 +79,8 @@ export const estimateCost = async (input: RunInput, site?: Pick<SiteRow, 'domain
 export async function aiPanelForQuote(domain: string): Promise<AiRunPanel | null> {
   try {
     const rows = await siteRows<MonitorsRow>('monitors', domain, { max: 5 });
-    const r = rows[0];
-    if (!r) return aiRunPanelOf(null);
-    const engines = String(r.ai_engines ?? '').split(/\s*,\s*|\n+/).map((x) => x.trim()).filter(Boolean);
-    return aiRunPanelOf({ aiPromptsMax: Number(r.ai_prompts_max) || null, aiEngines: engines });
+    // W2-FIX (2026-10-23, app review R-A1): size, engines AND the owner's stored options (incl. the buyer roles), shared aiRunPanelOfRow
+    return aiRunPanelOfRow(rows[0] ?? null);
   } catch {
     return null;
   }
@@ -250,6 +250,12 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     buildN8nPayload(input, site ? siteContext(site) : null, { callbackUrl: callbackUrl(org), email: config.engineEmails && input.emailCopy ? user.email : '' }),
   );
   if (trackingStartedAt) body.tracking_started_at = trackingStartedAt.toISOString();
+  // W2-FIX (2026-10-23, n8n build_v4.py section 149): an on-demand AI visibility check carries the server's quote of the website's whole panel,
+  // so the engine's front door reserves that figure (never less than its own table row) instead of its flat estimate
+  if (input.mode === 'ai_visibility' && site) {
+    const qp = await aiPanelForQuote(site.domain);
+    if (qp) body.panel_quote = aiPanelQuoteBody(aiOnDemandRunCost(qp), qp.panel);
+  }
   if (input.mode === 'keyword' && input.ladder && site) {
     // the ladder's links and, since P2-7, the word count its verdict set for this page (the engine clamps the brief to `ladder_words`)
     const { links, targetWords, targetUrl } = await ladderLinks(site.domain, input.ladder.id, input.ladder.rung, input.keyword);

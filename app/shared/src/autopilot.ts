@@ -42,15 +42,29 @@ export interface AutopilotRow {
 type Monitors = Pick<
   MonitorSettings,
   'aiVisibility' | 'aiEngines' | 'aiPromptsMax' | 'aiPulse' | 'aiPulseMode' | 'aiPulsePerWeek' | 'aiGrowth' | 'aiPagesPerMonth' | 'backlinks' | 'linkBuilder' | 'auditMonthly' | 'auditPages'
->;
+> &
+  // W2-FIX (2026-10-23): the owner's AI options (absent = off), priced into the AI visibility and pulse rows like the engine's AIP.cost does
+  Partial<Pick<MonitorSettings, 'aiClaudeWeekly' | 'aiPulseEngines' | 'aiPersonaContext' | 'aiPersonas' | 'aiFanoutCheck' | 'aiDemandMarket'>>;
+
+/** The W2-E3 options of a website's monitor settings as estimateAiPanelCost takes them (only the ones set). */
+export function aiPanelOptionsOf(m: Partial<Pick<MonitorSettings, 'aiClaudeWeekly' | 'aiPulseEngines' | 'aiPersonaContext' | 'aiPersonas' | 'aiFanoutCheck' | 'aiDemandMarket'>>) {
+  return {
+    ...(m.aiClaudeWeekly ? { claudeWeekly: true } : {}),
+    ...(m.aiPulseEngines && m.aiPulseEngines.length ? { pulseEngines: m.aiPulseEngines } : {}),
+    ...(m.aiPersonaContext ? { personaContext: true, personas: m.aiPersonas ?? [] } : {}),
+    ...(m.aiFanoutCheck ? { fanoutCheck: m.aiFanoutCheck } : {}),
+    ...(m.aiDemandMarket ? { demandMarket: true } : {}),
+  };
+}
 
 export function autopilotRows(m: Monitors, blogsPerWeek: number, plan: AutopilotPlan = {}): AutopilotRow[] {
   const c = MONITOR_COSTS;
   const level = plan.level ?? DEFAULT_AUTOPILOT_LEVEL;
   const full = level === 3;
   const writing = plan.writing ?? true;
-  const ai = estimateAiVisibilityCost({ prompts: m.aiPromptsMax, engines: m.aiEngines, pulse: m.aiPulse, pulseMode: m.aiPulseMode, pulsePerWeek: m.aiPulsePerWeek });
-  const panel = estimateAiPanelCost({ panel: m.aiPromptsMax, engines: m.aiEngines, pulse: m.aiPulse, pulseMode: m.aiPulseMode, pulsePerWeek: m.aiPulsePerWeek });
+  const opts = aiPanelOptionsOf(m);
+  const ai = estimateAiVisibilityCost({ prompts: m.aiPromptsMax, engines: m.aiEngines, pulse: m.aiPulse, pulseMode: m.aiPulseMode, pulsePerWeek: m.aiPulsePerWeek, ...opts });
+  const panel = estimateAiPanelCost({ panel: m.aiPromptsMax, engines: m.aiEngines, pulse: m.aiPulse, pulseMode: m.aiPulseMode, pulsePerWeek: m.aiPulsePerWeek, ...opts });
   // the AI answer pages are written on their own at level 3 only; at levels 1 and 2 they are suggestions (the drafts still cost)
   const growth = estimateAiGrowthCost({ pages: full ? m.aiPagesPerMonth : 0, growth: m.aiGrowth });
   const setPosts = Math.max(0, blogsPerWeek || 0);

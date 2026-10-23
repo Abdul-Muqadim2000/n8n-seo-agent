@@ -118,6 +118,8 @@ export interface MonitorsRow extends DtRow {
   ai_personas?: string; ai_markets?: string; ai_pulse_mode?: string; ai_pulse_per_week?: number | null;
   /** W2 (WAVE2_CONTRACTS.md §4; absent before the engine adds them): weekly Claude, pulse engines, persona context, fan-out check N, share-of-voice set, owner alert rules (JSON) */
   ai_claude_weekly?: boolean | null; ai_pulse_engines?: string; ai_persona_context?: boolean | null; ai_fanout_check?: number | null; ai_sov_set?: string; ai_alert_rules_json?: string;
+  /** W2-E3: the monthly market trend (empty = off) */
+  ai_demand_market?: boolean | null;
 }
 export interface AiPromptRow extends DtRow {
   prompt_id: string; site_id: string; domain: string; prompt: string; kind: string; topic: string; keyword: string;

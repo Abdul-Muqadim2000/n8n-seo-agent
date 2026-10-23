@@ -477,6 +477,24 @@ export function useAiImport(orgId: string, siteId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.siteData(siteId, 'ai-imports') }),
   });
 }
+/** W2-FIX (2026-10-23): the AI repeat pilot's latest price and result (admins); polled while the engine's answer is awaited */
+export function useAiPilot(orgId: string, siteId: string, opts: { enabled?: boolean; poll?: boolean } = {}) {
+  return useQuery({
+    queryKey: qk.siteData(siteId, 'ai-pilot'),
+    queryFn: () => api<import('@seo/shared').AiPilotState>(`${aiBase(orgId, siteId)}/ai/pilot`),
+    retry: noRetryOn4xx,
+    enabled: opts.enabled ?? true,
+    refetchInterval: opts.poll ? 5_000 : false,
+  });
+}
+/** Ask the engine for the pilot's price (confirm false) or start it on the owner's confirmation (confirm true) */
+export function useAiPilotStart(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (confirm: boolean) => api<{ ok: boolean; requestId: string; confirm: boolean }>(`${aiBase(orgId, siteId)}/ai/pilot`, { method: 'POST', body: { confirm } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.siteData(siteId, 'ai-pilot') }),
+  });
+}
 /** Delete questions from the AI panel (admins) */
 export function useAiPromptDelete(orgId: string, siteId: string) {
   const qc = useQueryClient();
