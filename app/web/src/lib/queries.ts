@@ -35,6 +35,7 @@ import type {
   Report,
   ReportDetail,
   Run,
+  JoinedRunResult,
   SearchData,
   Site,
   SiteAutomation,
@@ -473,7 +474,7 @@ export function useAiImports(orgId: string, siteId: string, enabled = true) {
 export function useAiImport(orgId: string, siteId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { csv: string; fileName?: string; source?: '' | 'bing_ai' | 'gsc_ai'; periodEnd?: string }) => api<import('@seo/shared').AiImportSummary>(`${aiBase(orgId, siteId)}/ai/import`, { method: 'POST', body, direct: true }),
+    mutationFn: (body: { csv: string; fileName?: string; source?: '' | 'bing_ai' | 'gsc_ai'; periodEnd?: string; dateOrder?: '' | 'dmy' | 'mdy' }) => api<import('@seo/shared').AiImportSummary>(`${aiBase(orgId, siteId)}/ai/import`, { method: 'POST', body, direct: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.siteData(siteId, 'ai-imports') }),
   });
 }
@@ -504,7 +505,8 @@ export function useAiPromptDelete(orgId: string, siteId: string) {
   });
 }
 /** A CSV download of the AI page (the server streams it; the browser saves it) */
-export const aiExportUrl = (orgId: string, siteId: string, kind: string, filter: Record<string, string>) => `${aiBase(orgId, siteId)}/data/ai/export?${aiQs({ kind, ...filter })}`;
+// R-A12: a top-level download straight from the API (the proxy has size and time limits; the cookie is shared on the parent domain)
+export const aiExportUrl = (orgId: string, siteId: string, kind: string, filter: Record<string, string>) => directUrl(`${aiBase(orgId, siteId)}/data/ai/export?${aiQs({ kind, ...filter })}`);
 
 // ---------- dashboards ----------
 type DataPages = {
@@ -520,7 +522,10 @@ type DataPages = {
   settings: SiteSettingsData;
 };
 
-export function useSiteData<P extends keyof DataPages>(orgId: string, siteId: string, page: P, params?: Record<string, string | undefined>, opts?: Partial<UseQueryOptions<DataPages[P]>>) {
+export function useSiteData<P extends keyof DataPages>(orgId: string, siteId: string, page: P, params0?: Record<string, string | undefined>, opts?: Partial<UseQueryOptions<DataPages[P]>>) {
+  // R-A9: this web pages the AI answers through /data/ai/answers, so it asks /data/ai for the summary only (an API without the flag's
+  // support sends every answer, which the answers section then pages itself)
+  const params = page === 'ai' ? { answers: 'summary', ...params0 } : params0;
   const qs = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]).toString() : '';
   return useQuery({
     queryKey: qk.siteData(siteId, page, qs),
@@ -932,12 +937,14 @@ export function useRuns(orgId: string, filters: RunFilters = {}, refetchInterval
 export function useRun(orgId: string, runId: string) {
   return useQuery({
     queryKey: qk.run(orgId, runId),
-    queryFn: () => api<{ run: Run; reports: Report[] }>(`/api/orgs/${orgId}/runs/${runId}`),
+    queryFn: () => api<{ run: Run; reports: Report[]; joined?: JoinedRunResult }>(`/api/orgs/${orgId}/runs/${runId}`),
     retry: noRetryOn4xx,
-    // keep polling while n8n is working on it (a run that does not exist or is not yours is not polled)
+    // keep polling while n8n is working on it (a run that does not exist or is not yours is not polled); R-A3: a check joined to the
+    // open run is looked at once a minute until that run's report has arrived
     refetchInterval: (q) => {
       if (!q.state.data && q.state.error instanceof ApiRequestError && q.state.error.status >= 400 && q.state.error.status < 500) return false;
       const s = q.state.data?.run.status;
+      if (s === 'joined') return q.state.data?.run.lastStage === 'joined_open_run' && q.state.data.joined && !q.state.data.joined.reportId ? 60_000 : false;
       return s === 'completed' || s === 'failed' ? false : 10_000;
     },
   });

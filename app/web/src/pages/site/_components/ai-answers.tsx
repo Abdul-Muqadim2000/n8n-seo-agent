@@ -3,9 +3,10 @@
 // the brands in the order they were named with their role, our place, every citation in order with ours marked, the pages the engine
 // read but did not cite, the searches it ran, product / ad / local cards and the model. A question opens with every engine side by side
 // and its history across the stored runs.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, ChevronLeft, ChevronRight, CircleX, ExternalLink as ExternalIcon, History, Link2, Minus, Search, ShoppingBag, Store, Megaphone } from 'lucide-react';
-import { aiFilterQuery, aiHostOf, aiIsOwnUrl, titleCase, type AiData, type AiFilter } from '@seo/shared';
+import { AI_MIN_RATE_SAMPLES, aiAnswersPageOf, aiFilterQuery, aiHostOf, aiIsOwnUrl, titleCase, type AiData, type AiFilter } from '@seo/shared';
+import { ApiRequestError } from '@/lib/api';
 import { useAiAnswers, useAiQuestion } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -19,10 +20,26 @@ import { engineLabel, sortEngines } from './ai';
 import { RangeTrendChart } from './ai-trends';
 
 type Answer = AiData['answers'][number];
+
+/**
+ * R-A21: for an answer row without the engine's entities, a brand is "You" only when it IS the site's name: the domain, or its first label
+ * as a whole name ("Techand", "techand.ai"), never any brand that merely contains it (on ai.com every brand with "ai" in it was "You").
+ */
+export const isSelfName = (name: string, domain: string): boolean => {
+  const n = name.toLowerCase().trim().replace(/^www\./, ''), d = domain.toLowerCase().replace(/^www\./, '');
+  const label = d.split('.')[0] ?? '';
+  return n === d || n.replace(/[\s-]+/g, '') === label || (n.split(/\s+/)[0] === label && n.split(/\s+/).length <= 2);
+};
 type ResultFilter = 'all' | 'named' | 'cited' | 'absent' | 'error';
 
 /** The answers of a run, a page at a time, with the filter's rates. */
-export function AnswersBrowser({ filter, engineNames }: { filter: AiFilter; engineNames: Record<string, string> }) {
+/**
+ * R-A9 (review 2026-10-23): the answers an API from before the paged endpoint still embeds in /data/ai. When /data/ai/answers answers
+ * 404 (the web deployed before the API), the section pages these itself with the same shared code, so either deploy order works.
+ */
+export interface EmbeddedAnswers { answers: AiData['answers']; runId: string | null; checkedAt: string | null }
+
+export function AnswersBrowser({ filter, engineNames, embedded }: { filter: AiFilter; engineNames: Record<string, string>; embedded?: EmbeddedAnswers }) {
   const { org, site } = useSitePage();
   const [result, setResult] = useState<ResultFilter>('all');
   const [text, setText] = useState('');
@@ -38,7 +55,15 @@ export function AnswersBrowser({ filter, engineNames }: { filter: AiFilter; engi
     return () => clearTimeout(t);
   }, [text]);
   const res = useAiAnswers(org.id, site.id, { ...aiFilterQuery(filter), result: result === 'all' ? undefined : result, q: q || undefined, page, pageSize: 12, run: run || undefined });
-  const d = res.data;
+  const older = res.isError && res.error instanceof ApiRequestError && res.error.status === 404 && !!embedded?.answers.length;
+  const local = useMemo(
+    () =>
+      older && embedded
+        ? aiAnswersPageOf(embedded.answers, { filter, result, text: q, page, pageSize: 12 }, { runId: embedded.runId, checkedAt: embedded.checkedAt, runs: embedded.runId && embedded.checkedAt ? [{ runId: embedded.runId, checkedAt: embedded.checkedAt }] : [] })
+        : null,
+    [older, embedded, filter, result, q, page],
+  );
+  const d = local ?? res.data;
   if (res.isError && !d) return <ErrorState error={res.error} onRetry={() => void res.refetch()} />;
   if (!d) return <AnswersSkeleton />;
   if (!d.runId) return <EmptyState className="py-8" title="No stored answers yet" description="Answers are stored from the next AI visibility run." />;
@@ -149,7 +174,7 @@ export function AnswerDetailCard({ a, engineName, onQuestion, domain, compact }:
   const long = text.length > 480;
   const position = a.position ?? (a.rank > 0 ? a.rank : null);
   // brands in the order named: the entities when the row has them, else the brand list
-  const brands = a.entities?.length ? [...a.entities].sort((p, q) => (p.position ?? 99) - (q.position ?? 99)) : a.brands.map((name, i) => ({ id: name, name, role: name.toLowerCase().includes(domain.split('.')[0]) ? 'self' : 'other', position: i + 1, cited: false }));
+  const brands = a.entities?.length ? [...a.entities].sort((p, q) => (p.position ?? 99) - (q.position ?? 99)) : a.brands.map((name, i) => ({ id: name, name, role: isSelfName(name, domain) ? 'self' : 'other', position: i + 1, cited: false }));
   const citations = x?.citations ?? [...a.ourUrls.map((u) => ({ url: u, host: aiHostOf(u), entityId: '', role: 'self', position: null as number | null, own: true })), ...a.citedUrls.map((c) => ({ url: c.url, host: aiHostOf(c.url), entityId: '', role: '', position: null as number | null, own: aiIsOwnUrl(c.url, domain) }))];
   const fanout = x?.fanoutQueries ?? a.fanout;
   const shownNone = [x?.retrieved?.length === 0 && !x?.answerExpired ? 'pages read but not cited' : '', x?.products?.length === 0 ? 'product cards' : '', x?.ads?.length === 0 ? 'ads' : '', x?.local?.length === 0 ? 'local business cards' : ''].filter(Boolean);
@@ -314,9 +339,12 @@ export function QuestionDialog({ promptId, onClose, engineNames }: { promptId: s
       ) : (
         <div className="space-y-4">
           {h.series.length > 1 && (
-            <RangeTrendChart runs={h.series.map((x) => ({ runId: x.runId, checkedAt: x.checkedAt, compare: null }))} values={(i) => ({ value: h.series[i].n >= 3 ? h.series[i].namedRate : null, band: h.series[i].ci })} label="Named in" height={180} />
+            <RangeTrendChart runs={h.series.map((x) => ({ runId: x.runId, checkedAt: x.checkedAt, compare: null }))} values={(i) => ({ value: h.series[i].n >= AI_MIN_RATE_SAMPLES ? h.series[i].namedRate : null, band: h.series[i].ci })} label="Named in" height={180} />
           )}
-          <p className="text-xs text-ink-3">{h.note}</p>
+          <p className="text-xs text-ink-3">
+            {h.note}
+            {h.series.some((x) => x.n < AI_MIN_RATE_SAMPLES) ? ` A run with fewer than ${AI_MIN_RATE_SAMPLES} answers to this question shows its range only, not a rate.` : ''}
+          </p>
           {h.runs.length > 0 ? (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">

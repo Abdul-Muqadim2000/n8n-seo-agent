@@ -115,9 +115,10 @@ export interface AiCompareSide {
   prompts: number;
   /** answers the rates are counted on */
   samples: number;
-  mentionRate: number;
+  /** null: not measured (the engine stores null when the rate could not be measured; never read as 0) */
+  mentionRate: number | null;
   citationRate: number;
-  shareOfVoice: number;
+  shareOfVoice: number | null;
   visibilityScore: number | null;
   avgRank: number | null;
   /** the weekly engines that answered (monthly and carried engines left out), null when the row does not say */
@@ -227,8 +228,11 @@ export function aiCompareInterim(now: AiCompareSide, prev: AiCompareSide | null)
 
   const nNow = Math.max(0, Math.round(Number(now.samples) || 0)), nPrev = Math.max(0, Math.round(Number(prev.samples) || 0));
   const rate = (k: 'mentionRate' | 'citationRate'): AiMetricChange => {
-    const t = aiTwoProportion(Math.round((now[k] * nNow) / 100), nNow, Math.round((prev[k] * nPrev) / 100), nPrev);
-    return { now: now[k], prev: prev[k], delta: r1(now[k] - prev[k]), nNow, nPrev, significant: t.significant, p: t.p };
+    const x = now[k], y = prev[k];
+    // a rate that was not measured on either side has no change and no test (never compared as 0)
+    if (x == null || y == null) return { now: x, prev: y, delta: null, nNow, nPrev, significant: null, p: null };
+    const t = aiTwoProportion(Math.round((x * nNow) / 100), nNow, Math.round((y * nPrev) / 100), nPrev);
+    return { now: x, prev: y, delta: r1(x - y), nNow, nPrev, significant: t.significant, p: t.p };
   };
   // share of voice, the score and the position have no denominator on the row: their change is shown, never called real
   const untested = (x: number | null, y: number | null): AiMetricChange => ({ now: x, prev: y, delta: x != null && y != null ? r1(x - y) : null, nNow, nPrev, significant: null, p: null });

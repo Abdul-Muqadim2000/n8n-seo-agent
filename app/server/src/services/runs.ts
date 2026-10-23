@@ -1,7 +1,6 @@
 import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
-  AI_JOINED_OPEN_RUN,
-  aiOpenRunNote,
+  aiJoinedOf,
   buildN8nPayload,
   cleanDomain,
   compactBody,
@@ -27,6 +26,7 @@ import {
   type ModeId,
   type LadderPrefs,
   type LadderRow,
+  type JoinedRunResult,
   type LadderSettingsRow,
   type Report,
   type ReportFile,
@@ -614,11 +614,14 @@ export function runOutcome(
   body: Record<string, unknown>,
 ): { status?: string; error?: string | null; completedAt?: Date; lastStage?: string } {
   if (stage === 'rejected' || String(body.status ?? '').toLowerCase() === 'rejected') {
-    if (runStatus === 'completed') return {};
+    if (runStatus === 'completed' || runStatus === 'joined') return {};
     // W2-A (WAVE2_CONTRACTS.md §6, engine F2 E17): an on-demand AI check that met the website's open run is part of that run, not a
-    // failure. It is closed here with nothing charged (the open run carries its own charge) and marked so the screens say so.
-    const joined = aiOpenRunNote(body);
-    if (joined) return { status: 'failed', error: joined, completedAt: new Date(), lastStage: AI_JOINED_OPEN_RUN };
+    // failure. R-A3 (review 2026-10-23): it is closed in its own state, `joined` (never `failed`, so no `run.failed` reaches a
+    // customer's webhook, Slack, Teams or tracker), with nothing charged (the open run carries its own charge); its result is the open
+    // run's report (runJoinedResult). The sentence stays in `error` for the screens that print it (toRun / toRunV1 say what it is).
+    // The same for a check the engine answers with the week it already stored ('already_measured', engine fix round R-E1).
+    const joined = aiJoinedOf(body);
+    if (joined) return { status: 'joined', error: joined.note, completedAt: new Date(), lastStage: joined.lastStage };
     const why = typeof body.error === 'string' && body.error.trim() ? body.error.trim() : typeof body.validation_error === 'string' && body.validation_error.trim() ? body.validation_error.trim() : 'Rejected by the SEO engine';
     return { status: 'failed', error: why, completedAt: new Date() };
   }
@@ -756,7 +759,9 @@ export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?:
     status: r.status as Run['status'],
     requestId: r.requestId,
     // credits: an engine refusal naming a dollar balance or a provider reads as a capacity limit (the raw text stays in the database)
-    error: customerError(r.error),
+    // R-A3: a joined run did not fail; its sentence is a note, not an error
+    error: r.status === 'joined' ? null : customerError(r.error),
+    note: r.status === 'joined' ? (r.error ?? null) : null,
     credits: extra.credits,
     etaMinutes: r.etaMinutes,
     input: r.input as unknown as RunInput,
@@ -826,6 +831,43 @@ export async function reportsList(orgId: string, opts: { siteId?: string; runId?
     .limit(Math.min(opts.limit ?? 50, 200));
   const fm = await filesFor(rows.map((r) => r.id));
   return rows.map((r) => toReport(r, fm.get(r.id) ?? [], r.domain));
+}
+
+/** The engine's id of the open run a `joined` run was joined to, from the callback that closed it (its stored payload's `open_run`). */
+export function joinedOpenRunOf(payload: Record<string, unknown> | null | undefined): { openRunId: string; expectedFinish: string | null } | null {
+  // the open run (reason 'open_run'), or the run whose stored week answered the check (reason 'already_measured': `stored_week`)
+  const pick = (k: string) => (payload && payload[k] && typeof payload[k] === 'object' ? (payload[k] as Record<string, unknown>) : null);
+  const o = pick('open_run') ?? pick('stored_week');
+  const id = o && typeof o.run_id === 'string' ? o.run_id.trim() : '';
+  if (!id) return null;
+  return { openRunId: id, expectedFinish: typeof o!.expected_finish === 'string' && o!.expected_finish ? o!.expected_finish : null };
+}
+
+/**
+ * R-A3 (review 2026-10-23): what a `joined` run delivered. Its own callback (stage `rejected`, reason `open_run`) names the open run's
+ * engine id; that run's report arrives later on its own request (a schedule's or another caller's), as an `ai_visibility` report of the
+ * same website whose payload carries the same `run_id`. Found at read time, so the joined run shows the report as soon as it exists.
+ */
+export async function runJoinedResult(orgId: string, run: Pick<RunRow, 'id' | 'siteId' | 'status' | 'createdAt'>): Promise<JoinedRunResult | null> {
+  if (run.status !== 'joined') return null;
+  const own = await db.query.reports.findFirst({
+    where: and(eq(schema.reports.orgId, orgId), eq(schema.reports.runId, run.id), eq(schema.reports.stage, 'rejected')),
+    orderBy: desc(schema.reports.receivedAt),
+  });
+  const open = joinedOpenRunOf(own?.payload);
+  if (!open) return null;
+  const rep = run.siteId
+    ? await db.query.reports.findFirst({
+        where: and(
+          eq(schema.reports.orgId, orgId),
+          eq(schema.reports.siteId, run.siteId),
+          eq(schema.reports.stage, 'ai_visibility'),
+          sql`(${schema.reports.payload}->>'run_id' = ${open.openRunId} or ${schema.reports.payload}->'vis_row'->>'run_id' = ${open.openRunId})`,
+        ),
+        orderBy: desc(schema.reports.receivedAt),
+      })
+    : undefined;
+  return { ...open, reportId: rep?.id ?? null, reportTitle: rep?.title ?? null, receivedAt: rep?.receivedAt?.toISOString() ?? null };
 }
 
 /** Latest report of a stage for a site, with its payload (dashboards read the rich weekly reports). */

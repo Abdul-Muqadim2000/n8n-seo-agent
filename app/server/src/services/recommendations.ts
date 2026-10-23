@@ -321,7 +321,9 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
     add({ id: 'tech:stale', category: 'technical', priority: 'low', title: 'Re-audit the site', detail: 'The last audit is more than 45 days old; the monthly scheduler re-audits only when the sitemap changed.', action: { label: 'Run audit', mode: 'audit' } });
 
   // ---------- AI visibility ----------
-  const lastAi = x.ai.runs[x.ai.runs.length - 1];
+  // engine fix round (2026-10-23): a named rate the engine could not measure is stored null; no recommendation is made from it (never 0%)
+  const lastAi0 = x.ai.runs[x.ai.runs.length - 1];
+  const lastAi = lastAi0 && lastAi0.mentionRate != null ? { ...lastAi0, mentionRate: lastAi0.mentionRate } : undefined;
   // A16 (2026-10-23): a rate on fewer answers than the engine's floor is a straw poll, not a finding: no recommendation from it
   const aiRange = lastAi ? (lastAi.mentionLo != null && lastAi.mentionHi != null ? [lastAi.mentionLo, lastAi.mentionHi] : wilsonRange(Math.round((lastAi.mentionRate * lastAi.samples) / 100), lastAi.samples)) : null;
   if (lastAi && lastAi.mentionRate < 20 && lastAi.samples >= AI_MIN_RATE_SAMPLES)

@@ -139,6 +139,8 @@ const isTracked = (p: Prompt) => !['off', 'refused'].includes(p.status || 'activ
 const isOwn = (p: Prompt) => p.source === 'custom' || p.pinned;
 type StatusFilter = 'tracked' | 'over' | 'pinned' | 'refused' | 'off' | 'all';
 // W2-E1: 'shopping' is a stage for sites that sell products
+/** R-A19: one bulk change takes at most this many questions (the server's schemas refuse more) */
+const BULK_MAX = 500;
 const STAGES = ['awareness', 'consideration', 'decision', 'shopping'] as const;
 
 function originLabel(p: Prompt): string {
@@ -210,7 +212,7 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
   };
 
   const ids = [...selected].filter((id) => prompts.some((p) => p.promptId === id));
-  const toggle = (id: string) => setSelected((s0) => { const s1 = new Set(s0); if (s1.has(id)) s1.delete(id); else s1.add(id); return s1; });
+  const toggle = (id: string) => setSelected((s0) => { const s1 = new Set(s0); if (s1.has(id)) s1.delete(id); else if (s1.size < BULK_MAX) s1.add(id); return s1; });
   const allShown = rows.length > 0 && rows.every((p) => selected.has(p.promptId));
   const bulk = (body: Record<string, unknown>, ok: string) => { send(body, ok); setSelected(new Set()); };
   const removeSelected = () =>
@@ -226,7 +228,7 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
     ...(isAdmin
       ? [{
           key: 'sel',
-          header: <input type="checkbox" className="size-4 accent-[var(--accent)]" aria-label="Select every question shown" checked={allShown} onChange={() => setSelected((s0) => { const s1 = new Set(s0); for (const p of rows) { if (allShown) s1.delete(p.promptId); else s1.add(p.promptId); } return s1; })} />,
+          header: <input type="checkbox" className="size-4 accent-[var(--accent)]" aria-label="Select every question shown" checked={allShown} onChange={() => { const s1 = new Set(selected); for (const p of rows) { if (allShown) s1.delete(p.promptId); else if (s1.size < BULK_MAX) s1.add(p.promptId); } if (!allShown && rows.some((p) => !s1.has(p.promptId))) toast.info(`${BULK_MAX} questions are selected: one change takes at most ${BULK_MAX}. Apply it, then select the rest.`); setSelected(s1); }} />,
           cell: (p: Prompt) => <input type="checkbox" className="size-4 accent-[var(--accent)]" aria-label={`Select: ${p.prompt}`} checked={selected.has(p.promptId)} onChange={() => toggle(p.promptId)} />,
         }]
       : []),
@@ -340,7 +342,7 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
         <Field label="Topic">{(p) => <Input {...p} value={tag} maxLength={60} onChange={(e) => setTag(e.target.value)} placeholder="e.g. payroll" />}</Field>
       </Dialog>
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete} title={`Delete ${ids.length} question${ids.length === 1 ? '' : 's'}?`}
-        description="Deleted questions are removed from the panel and no longer asked. The answers already stored stay in the history. To stop asking a question but keep it listed, switch it off instead."
+        description="Deleted questions are removed from the panel and no longer asked. The answers already stored stay in the history, and the weekly run will not suggest these questions again. Adding one back as your own question brings it back. To stop asking a question but keep it listed, switch it off instead."
         footer={<><Button variant="ghost" onClick={() => setConfirmDelete(false)}>Cancel</Button><Button variant="danger" loading={del.isPending} onClick={removeSelected}>Delete</Button></>} />
       <DataTable rows={rows} columns={columns} rowKey={(p) => p.promptId} dense pageSize={25} searchable searchPlaceholder="Search the questions" searchText={(p) => [p.prompt, p.cluster, p.persona, p.market].join(' ')}
         empty={status === 'refused' ? 'No question was refused: every question the engine wrote passed the keyword rule.' : 'No questions match these filters.'} />

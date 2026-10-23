@@ -19,7 +19,7 @@ import { QuestionGrid, engineLabel } from './_components/ai';
 import { AiFilterBar, ScopePanel, useAiFilter } from './_components/ai-filter';
 import { AnswersBrowser, QuestionDialog } from './_components/ai-answers';
 import { breakMarks, EngineTrendPanel, SovTrendPanel } from './_components/ai-trends';
-import { AdsLocalPanel, AiReportsCard, CompetitorsPanel, DemandPanel, FanoutGapPanel, ImpactPanel, OurPagesPanel, PersonaEffectPanel, SentimentPanel2, ShoppingPanel, SourcesPanel2 } from './_components/ai-panels2';
+import { AdsLocalPanel, AiReportsCard, CompetitorsPanel, CopilotTruth, DemandPanel, FanoutGapPanel, ImpactPanel, OurPagesPanel, PersonaEffectPanel, SentimentPanel2, ShoppingPanel, SourcesPanel2 } from './_components/ai-panels2';
 import { AlertRulesPanel } from './_components/ai-rules';
 import { AiPilotPanel } from './_components/ai-pilot';
 import { PanelManager, SegmentsSection } from './_components/ai-panel';
@@ -140,7 +140,7 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
               <HeroStat
                 label="Named in answers"
                 info={runNote}
-                value={<CountUp value={L.mentionRate} format={(v) => pct(v)} />}
+                value={L.mentionRate == null ? <span className="text-base">Not measured</span> : <CountUp value={L.mentionRate} format={(v) => pct(v)} />}
                 delta={<AiDelta compare={cmp} metric="named_rate" />}
                 trend={<Sparkline data={runs.map((r) => ({ v: r.mentionRate }))} dataKey="v" />}
                 hint={L.ciNamed ? `95% range ${pct(L.ciNamed[0], 0)} to ${pct(L.ciNamed[1], 0)} · ${compactNumber(L.samples)} answers, ${period}` : L.mentionLo != null && L.mentionHi != null ? `95% range ${pct(L.mentionLo, 0)} to ${pct(L.mentionHi, 0)} · ${compactNumber(L.samples)} answers, ${period}` : `of ${compactNumber(L.answers)} answers to ${L.prompts} questions`}
@@ -148,7 +148,7 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
               <HeroStat
                 label="Share of voice"
                 info="Your mentions among all brands named"
-                value={<CountUp value={L.shareOfVoice} format={(v) => pct(v)} />}
+                value={L.shareOfVoice == null ? <span className="text-base">Not measured</span> : <CountUp value={L.shareOfVoice} format={(v) => pct(v)} />}
                 delta={<AiDelta compare={cmp} metric="share_of_voice" />}
                 trend={<Sparkline data={runs.map((r) => ({ v: r.shareOfVoice }))} dataKey="v" />}
                 hint={L.indexSov != null ? `Market-wide (every AI answer): ${pct(L.indexSov)}` : 'Your mentions among all brands named'}
@@ -233,7 +233,7 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
             <>
               <RankedBars
                 you={site.domain}
-                items={[...(d.latest?.competitors ?? []).filter((c) => c.domain !== site.domain).map((c) => ({ label: c.domain, value: c.share, sub: `${c.mentions}${c.auto ? '' : ' ★'}` })), ...(L ? [{ label: site.domain, value: L.shareOfVoice, sub: '' }] : [])]
+                items={[...(d.latest?.competitors ?? []).filter((c) => c.domain !== site.domain).map((c) => ({ label: c.domain, value: c.share, sub: `${c.mentions}${c.auto ? '' : ' ★'}` })), ...(L && L.shareOfVoice != null ? [{ label: site.domain, value: L.shareOfVoice, sub: '' }] : [])]
                   .sort((a, b) => b.value - a.value)
                   .slice(0, 9)}
               />
@@ -303,6 +303,8 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
           <SectionHeading icon={<Bot />} title="By engine" description={`Each assistant over ${period} (the weekly run plus the daily pulse on the fast engines, when it is on). Claude is asked on the monthly full run; its result is carried between runs.`} />
           <Card className="p-4">
             <EngineTable engines={d.latest.engines} />
+            {/* R-A10: Copilot's ground truth is the owner's own Bing export whenever one is in the period (W2-E3 §4: its label is the line) */}
+            {x?.imports?.copilot && <CopilotTruth c={x.imports.copilot} />}
           </Card>
           {L && L.samples > 0 && <MeasuredPrecision run={L} engines={d.latest.engines} />}
         </section>
@@ -358,13 +360,13 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
       <section>
         <SectionHeading icon={<MessagesSquare />} title="Answers" description="What each assistant said: the brands in the order named, every citation, the pages it read and the searches it ran. Open a question for every engine side by side and its history." />
         <Card className="p-4">
-          <AnswersBrowser filter={filter} engineNames={engineNames} />
+          <AnswersBrowser filter={filter} engineNames={engineNames} embedded={d.answers.length ? { answers: d.answers, runId: L?.runId ?? null, checkedAt: L?.checkedAt ?? null } : undefined} />
         </Card>
       </section>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
         <AlertRulesPanel d={d} engineNames={engineNames} />
-        <AiReportsCard />
+        <AiReportsCard used={x?.imports ?? null} />
         <AiPilotPanel />
       </div>
 

@@ -694,6 +694,8 @@ export const aiImportSchema = z.object({
   source: z.enum(['', 'bing_ai', 'gsc_ai']).default(''),
   /** the last day of the period exported, for a file without a date column (Search Console's Queries / Pages files) */
   periodEnd: z.string().trim().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Use a date like 2026-10-22').default(''),
+  /** R-A5: how numeric dates are written, for a file whose dates alone cannot tell ('' = recognise it from the whole column) */
+  dateOrder: z.enum(['', 'dmy', 'mdy']).default(''),
 });
 export const aiPromptDeleteSchema = z.object({ ids: z.array(z.string().trim().min(1).max(120)).min(1, 'Choose at least one question').max(500) });
 

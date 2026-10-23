@@ -45,10 +45,10 @@ export function StatusBadge({ tone, children, className }: { tone: Tone; childre
 const JOINED_OPEN_RUN = 'joined_open_run';
 
 export function RunStatusBadge({ status, className, lastStage }: { status: RunStatus; className?: string; lastStage?: string | null }) {
-  if (status === 'failed' && lastStage === JOINED_OPEN_RUN)
+  if (status === 'joined' || (status === 'failed' && lastStage === JOINED_OPEN_RUN))
     return (
       <Badge tone="accent" icon={<Clock className="size-3" aria-hidden />} className={className}>
-        Part of the open run
+        {lastStage === 'already_measured' ? 'Already measured' : 'Part of the open run'}
       </Badge>
     );
   const map: Record<RunStatus, { tone: Tone; label: string; icon: ReactNode }> = {
@@ -57,6 +57,7 @@ export function RunStatusBadge({ status, className, lastStage }: { status: RunSt
     running: { tone: 'accent', label: 'Running', icon: <Loader2 className="size-3 animate-spin" aria-hidden /> },
     completed: { tone: 'good', label: 'Completed', icon: <CheckCircle2 className="size-3" aria-hidden /> },
     failed: { tone: 'critical', label: 'Failed', icon: <XCircle className="size-3" aria-hidden /> },
+    joined: { tone: 'accent', label: 'Part of the open run', icon: <Clock className="size-3" aria-hidden /> },
   };
   const s = map[status] ?? map.accepted;
   return (

@@ -165,7 +165,8 @@ async function stopInEngine(site: SiteRow, log: FastifyRequest['log']) {
  * verified the domain saw them and was billed for the old panel size. They are removed here through the n8n public API, table by table; a
  * table that fails is logged and the others still go (the next owner then starts from the engine's default panel).
  */
-export const AI_TABLES_CLEARED_ON_DELETE = ['monitors', 'aiPrompts', 'aiVisibility', 'aiAnswers', 'aiDaily'] as const;
+// R-A6 (review 2026-10-23): the owner's AI report uploads (seo_ai_imports: queries, page URLs, file names) leave with the website too
+export const AI_TABLES_CLEARED_ON_DELETE = ['monitors', 'aiPrompts', 'aiVisibility', 'aiAnswers', 'aiDaily', 'aiImports'] as const;
 export async function clearAiInEngine(domain: string, log: FastifyRequest['log']): Promise<string[]> {
   const failed: string[] = [];
   for (const t of AI_TABLES_CLEARED_ON_DELETE) {
@@ -432,7 +433,7 @@ export async function siteRoutes(app: FastifyInstance) {
     requireVerified(site);
     const input = parse(aiImportSchema, req.body);
     const out = await importAiReport(site, input);
-    await audit(req, site.orgId, { action: 'site.ai_import', target: { type: 'site', id: site.id, label: site.domain }, details: { source: out.source, rows: out.rows, from: out.days.from, to: out.days.to, skipped: out.skipped } });
+    await audit(req, site.orgId, { action: 'site.ai_import', target: { type: 'site', id: site.id, label: site.domain }, details: { source: out.source, rows: out.rows, from: out.days.from, to: out.days.to, skipped: out.skipped, replaced: out.replaced ?? 0 } });
     req.log.info({ site: site.domain, source: out.source, rows: out.rows }, 'ai import');
     return out;
   });
@@ -461,9 +462,16 @@ export async function siteRoutes(app: FastifyInstance) {
     const { site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
     requireVerified(site);
     const { ids } = parse(aiPromptDeleteSchema, req.body);
-    const deleted = await deleteAiPrompts(site, ids);
-    await audit(req, site.orgId, { action: 'site.ai_prompts_deleted', target: { type: 'site', id: site.id, label: site.domain }, details: { requested: ids.length, deleted, ids: ids.slice(0, 20) } });
-    return { ok: true, deleted };
+    // R-A7: kept as tombstones (status off) so the engine never asks them again; R-A16: what was done is audited even when some failed
+    const r = await deleteAiPrompts(site, ids);
+    await audit(req, site.orgId, {
+      action: 'site.ai_prompts_deleted',
+      target: { type: 'site', id: site.id, label: site.domain },
+      outcome: r.failed.length ? 'failure' : 'success',
+      details: { requested: ids.length, deleted: r.deleted, failed: r.failed.length, ids: r.ids.slice(0, 20) },
+    });
+    if (r.failed.length) throw new HttpError(502, `${r.deleted} of ${r.deleted + r.failed.length} questions were deleted; the SEO engine did not save the other ${r.failed.length}. Try again in a minute.`);
+    return { ok: true, deleted: r.deleted };
   });
 
   // ---------- Site Admin (n8n) ----------

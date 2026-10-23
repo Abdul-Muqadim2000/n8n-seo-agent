@@ -56,7 +56,7 @@ export function runCreditsOf(
   const charged = charge ? charge.charged : null;
   const capped = charge?.capped ?? false;
   const state: RunCredits['state'] =
-    r.status === 'failed'
+    r.status === 'failed' || r.status === 'joined'
       ? 'not_charged'
       : !(quoted > 0) && !(charged && charged > 0)
         ? 'free'

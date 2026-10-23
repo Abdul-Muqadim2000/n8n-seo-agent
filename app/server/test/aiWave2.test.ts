@@ -33,7 +33,7 @@ vi.mock('../src/n8n/client', () => ({
   deleteRows: vi.fn(async (table: string, filters: unknown[]) => (st.deleted.push({ table, filters }), true)),
   insertRows: vi.fn(async (table: string, rows: Record<string, unknown>[]) => (st.inserted.push({ table, rows }), true)),
   ensureTable: vi.fn(async (table: string) => (st.ensured.push(table), 'id')),
-  invalidateSite: vi.fn(), siteAdmin: vi.fn(async () => ({ ok: true, affected: 1 })), upsertRow: vi.fn(), updateRows: vi.fn(),
+  invalidateSite: vi.fn(), siteAdmin: vi.fn(async () => ({ ok: true, affected: 1 })), upsertRow: vi.fn(), updateRows: vi.fn(async () => true),
 }));
 vi.mock('../src/services/runs', async (orig) => ({ ...(await orig<typeof import('../src/services/runs')>()), latestReport: vi.fn(async () => null), routeSiteToApp: vi.fn() }));
 vi.mock('../src/services/runCredits', async (orig) => ({ ...(await orig<typeof import('../src/services/runCredits')>()), aiChargeEntries: vi.fn(async () => []) }));
@@ -217,15 +217,48 @@ describe('CSV downloads', () => {
 });
 
 describe('AI report uploads -> seo_ai_imports', () => {
-  it('creates the table, replaces the days the file covers, inserts with the site id and import id', async () => {
+  const SITE_F = [{ columnName: 'site_id', condition: 'eq', value: 'site_techand-ai' }, { columnName: 'source', condition: 'eq', value: 'bing_ai' }];
+  it('creates the table and inserts with the site id and import id; with nothing stored, nothing is deleted', async () => {
     const out = await importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Date,Page,Citations\n2026-10-20,https://techand.ai/a,3\n2026-10-21,https://techand.ai/b,1\n', fileName: 'bing.csv' });
-    expect(out).toMatchObject({ source: 'bing_ai', rows: 2 });
+    expect(out).toMatchObject({ source: 'bing_ai', rows: 2, replaced: 0 });
     expect(st.ensured).toEqual(['aiImports']);
-    expect(st.deleted.map((d) => JSON.stringify(d.filters))).toEqual([
-      JSON.stringify([{ columnName: 'site_id', condition: 'eq', value: 'site_techand-ai' }, { columnName: 'source', condition: 'eq', value: 'bing_ai' }, { columnName: 'day', condition: 'eq', value: '2026-10-20' }]),
-      JSON.stringify([{ columnName: 'site_id', condition: 'eq', value: 'site_techand-ai' }, { columnName: 'source', condition: 'eq', value: 'bing_ai' }, { columnName: 'day', condition: 'eq', value: '2026-10-21' }]),
-    ]);
-    expect(st.inserted[0].rows[0]).toMatchObject({ site_id: 'site_techand-ai', domain: 'techand.ai', source: 'bing_ai', day: '2026-10-20', citations: 3, file_name: 'bing.csv' });
+    expect(st.deleted).toEqual([]);
+    expect(st.inserted[0].rows[0]).toMatchObject({ site_id: 'site_techand-ai', domain: 'techand.ai', source: 'bing_ai', day: '2026-10-20', citations: 3, file_name: 'bing.csv', import_id: out.importId });
+  });
+  it('R-A4: upsert by (site, source, day, url, query): a queries file of the same days stays, only superseded rows go, after the insert', async () => {
+    const row = (import_id: string, day: string, url: string, query: string) => ({ site_id: 'site_techand-ai', domain: 'techand.ai', source: 'bing_ai', day, url, query, citations: 1, import_id });
+    st.tables.aiImports = [
+      row('aiimp_pages', '2026-10-20', 'https://techand.ai/a', ''),
+      row('aiimp_pages', '2026-10-20', 'https://techand.ai/c', ''),
+      row('aiimp_pages', '2026-10-21', 'https://techand.ai/b', ''),
+      row('aiimp_queries', '2026-10-20', '', 'erp uae'),
+      row('aiimp_pages', '2026-10-25', 'https://techand.ai/a', ''),
+      { ...row('aiimp_other', '2026-10-20', 'https://techand.ai/a', ''), domain: 'acme.com', site_id: 'site_acme-com' },
+    ];
+    const out = await importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Date,Page,Citations\n2026-10-20,https://techand.ai/a,3\n2026-10-21,https://techand.ai/b,1\n' });
+    expect(out.replaced).toBe(2);
+    // the insert comes first (phase 1), the deletes after (phase 2)
+    expect(st.inserted).toHaveLength(1);
+    const del = st.deleted.map((d) => d.filters);
+    expect(del).toContainEqual([...SITE_F, { columnName: 'day', condition: 'eq', value: '2026-10-21' }, { columnName: 'import_id', condition: 'eq', value: 'aiimp_pages' }]);
+    expect(del).toContainEqual([...SITE_F, { columnName: 'day', condition: 'eq', value: '2026-10-20' }, { columnName: 'import_id', condition: 'eq', value: 'aiimp_pages' }, { columnName: 'url', condition: 'eq', value: 'https://techand.ai/a' }]);
+    expect(del).toHaveLength(2);
+    expect(JSON.stringify(del)).not.toContain('aiimp_queries');
+  });
+  it('R-A4: a failed insert takes out only this upload\'s rows; earlier uploads are untouched', async () => {
+    const client = await import('../src/n8n/client');
+    vi.mocked(client.insertRows).mockRejectedValueOnce(new Error('n8n rows insert on seo_ai_imports answered 500'));
+    st.tables.aiImports = [{ site_id: 'site_techand-ai', domain: 'techand.ai', source: 'bing_ai', day: '2026-10-20', url: 'https://techand.ai/a', query: '', import_id: 'aiimp_old' }];
+    await expect(importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Date,Page,Citations\n2026-10-20,https://techand.ai/a,3\n' })).rejects.toThrow(/Nothing was changed/);
+    expect(st.deleted).toHaveLength(1);
+    expect(st.deleted[0].filters).toEqual([...SITE_F, { columnName: 'import_id', condition: 'eq', value: expect.stringMatching(/^aiimp_/) }]);
+    expect(JSON.stringify(st.deleted)).not.toContain('aiimp_old');
+  });
+  it('R-A5: a file without dates needs the period end; month-first dates are read month-first', async () => {
+    await expect(importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Top queries,Clicks,Impressions\nerp uae,1,10\n' })).rejects.toThrow(/no date column/);
+    const out = await importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Date,Page,Citations\n10/22/2026,https://techand.ai/a,3\n10/05/2026,https://techand.ai/b,1\n' });
+    expect(out.days).toEqual({ from: '2026-10-05', to: '2026-10-22' });
+    expect(out.dateOrder).toBe('mdy');
   });
   it('a file for another domain is a 400 and nothing is written', async () => {
     await expect(importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Page,Citations\nhttps://acme.com/a,3\n' })).rejects.toThrow(/acme\.com/);
@@ -234,19 +267,85 @@ describe('AI report uploads -> seo_ai_imports', () => {
 });
 
 describe('deleting questions', () => {
-  it("deletes only ids stored for this domain, filtered by domain AND id", async () => {
+  it("R-A7: keeps a tombstone (status off, origin deleted) for ids stored for this domain, filtered by domain AND id; removes no row", async () => {
     st.tables.aiPrompts = prompts;
-    expect(await deleteAiPrompts({ domain: 'techand.ai' } as never, ['q1', 'q9', 'nope'])).toBe(1);
-    expect(st.deleted).toEqual([{ table: 'aiPrompts', filters: [{ columnName: 'domain', condition: 'eq', value: 'techand.ai' }, { columnName: 'prompt_id', condition: 'eq', value: 'q1' }] }]);
+    const client = await import('../src/n8n/client');
+    vi.mocked(client.updateRows).mockClear();
+    expect(await deleteAiPrompts({ domain: 'techand.ai' } as never, ['q1', 'q9', 'nope'])).toEqual({ deleted: 1, failed: [], ids: ['q1'] });
+    expect(st.deleted).toEqual([]);
+    const calls = vi.mocked(client.updateRows).mock.calls;
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toBe('aiPrompts');
+    expect(calls[0][1]).toEqual([{ columnName: 'domain', condition: 'eq', value: 'techand.ai' }, { columnName: 'prompt_id', condition: 'eq', value: 'q1' }]);
+    expect(calls[0][2]).toMatchObject({ status: 'off', origin: 'deleted', pinned: false });
+  });
+  it('R-A7: a tombstone is not listed on the page, and deleting it again does nothing', async () => {
+    st.tables.aiPrompts = prompts.map((p) => (p.prompt_id === 'q1' ? { ...p, status: 'off', origin: 'deleted' } : p));
+    st.tables.aiVisibility = [vis()];
+    const d = await aiData(org, site, { answers: false });
+    expect(d.prompts.map((p) => p.promptId)).not.toContain('q1');
+    expect((await deleteAiPrompts({ domain: 'techand.ai' } as never, ['q1'])).deleted).toBe(0);
+  });
+  it('R-A16: a failed write is reported, the others still go', async () => {
+    st.tables.aiPrompts = prompts;
+    const client = await import('../src/n8n/client');
+    vi.mocked(client.updateRows).mockRejectedValueOnce(new Error('n8n 500'));
+    const r = await deleteAiPrompts({ domain: 'techand.ai' } as never, ['q1', 'q2']);
+    expect(r.deleted + r.failed.length).toBe(2);
+    expect(r.failed).toHaveLength(1);
   });
 });
 
 describe('§6: a start that joins the open run', () => {
   it('is closed with nothing charged, marked as part of the open run with when it finishes', () => {
     const o = runOutcome('accepted', ['ai_visibility'], 'rejected', { stage: 'rejected', status: 'rejected', reason: 'open_run', error: 'A run is in progress.', open_run: { expected_finish: '2099-01-01T09:40:00.000Z' } });
-    expect(o).toMatchObject({ status: 'failed', lastStage: 'joined_open_run' });
+    // R-A3 (review 2026-10-23): its own state, never `failed`
+    expect(o).toMatchObject({ status: 'joined', lastStage: 'joined_open_run' });
     expect(o.error).toMatch(/^Part of the open run \(finishes about 09:40 UTC on 2099-01-01\)\. A run is in progress\./);
     expect(runOutcome('accepted', [], 'rejected', { stage: 'rejected', error: 'refused' }).lastStage).toBeUndefined();
+    // closed: a later refusal does not turn it into a failure
+    expect(runOutcome('joined', ['ai_visibility'], 'rejected', { stage: 'rejected', error: 'refused' })).toEqual({});
+  });
+  it('already_measured (engine fix round): the same closed, uncharged state, named for the stored week; a completed run ignores it', async () => {
+    const body = { stage: 'rejected', status: 'rejected', reason: 'already_measured', error: 'The AI visibility of techand.ai was already measured.', stored_week: { run_id: 'ai_20261023_techand.ai', finished_at: '2026-10-23T08:00:00Z' } };
+    const o = runOutcome('accepted', ['ai_visibility'], 'rejected', body);
+    expect(o).toMatchObject({ status: 'joined', lastStage: 'already_measured' });
+    expect(o.error).toMatch(/^Already measured today: showing the stored week\. The AI visibility/);
+    expect(runOutcome('completed', ['ai_visibility'], 'rejected', body)).toEqual({});
+    const { joinedOpenRunOf } = await import('../src/services/runs');
+    expect(joinedOpenRunOf(body)?.openRunId).toBe('ai_20261023_techand.ai');
+    const { eventsFor } = await import('@seo/shared');
+    const report = { id: 'r1', title: 'x', stage: 'rejected', status: 'rejected', receivedAt: '2026-10-23T09:00:00Z', scheduled: false, runId: 'run1', websiteId: 's', url: 'u' };
+    const ev = eventsFor({ stage: 'rejected', status: 'rejected', payload: body, report, runBefore: { status: 'accepted' }, runAfter: { id: 'run1', mode: 'ai_visibility', title: 'AI', status: 'joined', error: null, completedAt: null, url: 'u' } });
+    expect(ev.map((e) => e.type)).not.toContain('run.failed');
+  });
+  it('a share of voice or named rate the engine stored as null stays null (not measured), never 0', async () => {
+    st.tables.aiVisibility = [vis({ run_id: 'a', checked_at: '2026-10-12T07:00:00.000Z' }), vis({ mention_rate: null as never, share_of_voice: null as never })];
+    const d = await aiData(org, site, { answers: false });
+    const last = d.runs[d.runs.length - 1];
+    expect(last.mentionRate).toBeNull();
+    expect(last.shareOfVoice).toBeNull();
+  });
+  it('R-A3: no run.failed event, nothing charged, a note (not an error) for the API, the open run named for its report', async () => {
+    const { eventsFor, deliveryDecision } = await import('@seo/shared');
+    const { runCreditsOf } = await import('../src/services/runCredits');
+    const { joinedOpenRunOf, toRun } = await import('../src/services/runs');
+    const { toRunV1 } = await import('../src/services/apiV1');
+    const body = { stage: 'rejected', status: 'rejected', reason: 'open_run', error: 'A run is in progress.', open_run: { run_id: 'ai_20261023_techand.ai', expected_finish: '2099-01-01T09:40:00.000Z' } };
+    const report = { id: 'r1', title: 'x', stage: 'rejected', status: 'rejected', receivedAt: '2026-10-23T09:00:00Z', scheduled: false, runId: 'run1', websiteId: 's', url: 'u' };
+    const after = { id: 'run1', mode: 'ai_visibility', title: 'AI', status: 'joined', error: null, completedAt: '2026-10-23T09:00:00Z', url: 'u' };
+    const ev = eventsFor({ stage: 'rejected', status: 'rejected', payload: body, report, runBefore: { status: 'accepted' }, runAfter: after });
+    expect(ev.map((e) => e.type)).not.toContain('run.failed');
+    // the same callback on a run closed as failed (before this fix) did emit it: the event is what this guards
+    expect(eventsFor({ stage: 'rejected', status: 'rejected', payload: body, report, runBefore: { status: 'accepted' }, runAfter: { ...after, status: 'failed' } }).map((e) => e.type)).toContain('run.failed');
+    expect(deliveryDecision({ stage: 'rejected', status: 'rejected', payload: body }).reason).toMatch(/part of the run already in progress/);
+    expect(runCreditsOf({ status: 'joined', quotedCredits: 12, engineCostEstimateUsd: null, estimatedCostUsd: 1 } as never, undefined, { creditValueUsd: 0.05, markup: 3 }).state).toBe('not_charged');
+    expect(joinedOpenRunOf(body)).toEqual({ openRunId: 'ai_20261023_techand.ai', expectedFinish: '2099-01-01T09:40:00.000Z' });
+    expect(joinedOpenRunOf({ stage: 'rejected' })).toBeNull();
+    const row = { id: 'run1', orgId: ORG, siteId: 's', userId: null, mode: 'ai_visibility', title: 'AI', status: 'joined', requestId: 'q', input: {}, error: 'Part of the open run.', apiKeyId: null, etaMinutes: 0, createdAt: new Date(), acceptedAt: null, completedAt: new Date(), reportCount: 1, lastStage: 'joined_open_run' } as never;
+    const credits = { quoted: 12, charged: null, state: 'not_charged', capped: false } as never;
+    expect(toRunV1(row, credits)).toMatchObject({ status: 'joined', error: null, note: 'Part of the open run.' });
+    expect(toRun(row, { credits })).toMatchObject({ status: 'joined', error: null, note: 'Part of the open run.' });
   });
 });
 
@@ -304,9 +403,16 @@ describe('routes', () => {
     st.tables.aiVisibility = [vis()];
     st.tables.aiPrompts = prompts;
     st.tables.aiAnswers = [answer('q1', 'chatgpt', { mentioned: true })];
-    const r = (await app.inject({ method: 'GET', url: `${base}/data/ai?persona=CFO` })).json();
+    const r = (await app.inject({ method: 'GET', url: `${base}/data/ai?persona=CFO&answers=summary` })).json();
     expect(r.answers).toEqual([]);
     expect(r.scope.segment).toEqual({ dim: 'persona', key: 'CFO' });
+  });
+  it('R-A9: a web from before the paged answers (no answers=summary) still gets every answer in /data/ai', async () => {
+    st.tables.aiVisibility = [vis()];
+    st.tables.aiPrompts = prompts;
+    st.tables.aiAnswers = [answer('q1', 'chatgpt', { mentioned: true }), answer('q2', 'gemini')];
+    const r = (await app.inject({ method: 'GET', url: `${base}/data/ai` })).json();
+    expect(r.answers.map((a: { promptId: string }) => a.promptId).sort()).toEqual(['q1', 'q2']);
   });
   it('a question edit sends its keyword to the engine', async () => {
     const { siteAdmin } = await import('../src/n8n/client');

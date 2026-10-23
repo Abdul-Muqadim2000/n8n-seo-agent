@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Ban, FileText, FileUp, FlaskConical, Library, Megaphone, MessageSquareQuote, Route, ShoppingBag, Sigma, Trophy, Upload, Users } from 'lucide-react';
 import {
   AI_IMPORT_SOURCE_LABEL,
+  AI_SENTIMENT_EARLY,
   AI_SENTIMENT_MIN,
   AI_SOURCE_TYPE_LABEL,
   compactNumber,
@@ -14,6 +15,8 @@ import {
   type AiDemandPanel,
   type AiFanoutGapPanel,
   type AiImpactItem,
+  type AiImportsCopilot,
+  type AiImportsPanel,
   type AiPersonaEffect,
   type AiSentimentPanel,
   type AiShoppingPanel,
@@ -23,7 +26,7 @@ import {
 } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { DistributionBar, DistributionLegend, SEQ } from '@/components/insight';
-import { errorMessage } from '@/lib/api';
+import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useAiImport, useAiImports } from '@/lib/queries';
 import { fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -214,12 +217,24 @@ export function SentimentPanel2({ sentiment }: { sentiment: AiSentimentPanel }) 
       </Panel>
     );
   const r = range(sentiment.netLo, sentiment.netHi);
+  // R-A2: until the engine says its reading is validated, the figure is an early reading and its objections are not findings
+  const early = !sentiment.validated;
   return (
     <Panel title="How AI describes you" icon={<MessageSquareQuote />} description={`Net sentiment over ${sentiment.n} answers naming you`} info="Net sentiment: positive minus negative mentions, as a share of all mentions (-100 to 100), with its 95% range. Aspects are what the answer talked about.">
+      {early && (
+        <div className="mb-2">
+          <Badge tone="warning">{sentiment.label || AI_SENTIMENT_EARLY}</Badge>
+          <p className="mt-1 text-xs text-ink-3">
+            The reader that labels these answers has not yet been checked against answers labelled by people, so treat this as a first look, not a finding.
+          </p>
+        </div>
+      )}
       <p className="text-sm text-ink">
         Net sentiment <span className="font-display text-xl font-semibold">{sentiment.net != null ? (sentiment.net > 0 ? '+' : '') + sentiment.net.toFixed(0) : '-'}</span>
         {r && <span className="ml-2 text-xs text-ink-3">95% range {sentiment.netLo!.toFixed(0)} to {sentiment.netHi!.toFixed(0)}</span>}
       </p>
+      {sentiment.note && <p className="mt-1 text-xs text-ink-3">{sentiment.note}</p>}
+      {sentiment.unreadNote && <p className="mt-1 text-xs text-ink-3">{sentiment.unreadNote}</p>}
       {sentiment.byAspect.length > 0 && (
         <table className="mt-3 w-full text-[13px]">
           <thead>
@@ -253,7 +268,24 @@ export function SentimentPanel2({ sentiment }: { sentiment: AiSentimentPanel }) 
           </ul>
         </div>
       )}
-      {(sentiment.method || sentiment.kappa != null) && <p className="mt-2 text-xs text-ink-3">{[sentiment.method, sentiment.kappa != null ? `agreement with a hand-labelled set: kappa ${sentiment.kappa.toFixed(2)}` : ''].filter(Boolean).join(' · ')}</p>}
+      {early && sentiment.objectionsHeld > 0 && (
+        <p className="mt-3 text-xs text-ink-3">
+          {sentiment.objectionsHeld} {sentiment.objectionsHeld === 1 ? 'objection was' : 'objections were'} read in these answers. They are listed once the reading is validated.
+        </p>
+      )}
+      {(sentiment.method || sentiment.kappa != null || sentiment.kappaRules != null) && (
+        <p className="mt-2 text-xs text-ink-3">
+          {[
+            sentiment.method,
+            sentiment.kappa != null
+              ? `agreement with a hand-labelled set: kappa ${sentiment.kappa.toFixed(2)}${sentiment.kappaGate != null ? ` (bar ${sentiment.kappaGate.toFixed(2)})` : ''}`
+              : 'agreement with a hand-labelled set: not measured yet',
+            sentiment.kappaRules != null ? `second-opinion rules: kappa ${sentiment.kappaRules.toFixed(2)}` : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      )}
     </Panel>
   );
 }
@@ -343,25 +375,51 @@ export function PersonaEffectPanel({ effect }: { effect: AiPersonaEffect[] }) {
 
 // ---------------- the owner's AI report uploads (§5) ----------------
 
-export function AiReportsCard() {
-  const { org, site, can } = useSitePage();
-  const list = useAiImports(org.id, site.id);
+/** R-A10: Copilot's figure from the owner's own Bing export, printed with the engine's label (fixes/W2-E3.md §4) */
+export function CopilotTruth({ c }: { c: AiImportsCopilot }) {
+  return (
+    <p className="mt-3 border-t border-line pt-3 text-xs text-ink-2">
+      <span className="font-medium text-ink">Copilot, from Bing&apos;s own report:</span> {c.citations != null ? `${n0(c.citations)} citations` : 'no citation figure'}
+      {c.impressions != null ? `, ${n0(c.impressions)} impressions` : ''}
+      {c.urlsN != null ? ` across ${n0(c.urlsN)} ${c.urlsN === 1 ? 'page' : 'pages'}` : ''} ({c.label || `your Bing export${c.asOf ? ` of ${fmtDate(c.asOf)}` : ''}`}).
+      {c.note && <span className="mt-0.5 block text-ink-3">{c.note}</span>}
+    </p>
+  );
+}
+
+export function AiReportsCard({ used = null }: { used?: AiImportsPanel | null } = {}) {
+  const { org, site, can, role } = useSitePage();
+  // R-A20: the client portal reads no upload list (its route refuses client roles): the card is not shown there
+  const client = String(role ?? '').startsWith('client');
+  const list = useAiImports(org.id, site.id, !client);
   const upload = useAiImport(org.id, site.id);
   const [source, setSource] = useState<'' | 'bing_ai' | 'gsc_ai'>('');
   const [periodEnd, setPeriodEnd] = useState('');
+  const [dateOrder, setDateOrder] = useState<'' | 'dmy' | 'mdy'>('');
   const file = useRef<HTMLInputElement>(null);
   const send = async (f: File | undefined) => {
     if (!f) return;
     if (f.size > 15_000_000) return toast.error('The file is larger than 15 MB: export a shorter period');
     upload.mutate(
-      { csv: await f.text(), fileName: f.name, source, periodEnd },
+      { csv: await f.text(), fileName: f.name, source, periodEnd, dateOrder },
       {
-        onSuccess: (r) => toast.success(`${r.rows} rows from ${r.label}, ${fmtDate(r.days.from)} to ${fmtDate(r.days.to)}${r.skipped ? ` (${r.skipped} lines skipped)` : ''}`),
+        onSuccess: (r) =>
+          toast.success(`${r.rows} rows from ${r.label}, ${fmtDate(r.days.from)} to ${fmtDate(r.days.to)}${r.skipped ? ` (${r.skipped} lines skipped)` : ''}`, {
+            // R-A4 / R-A13: what an earlier upload lost to this one, and the queries a file without pages holds (is it the right website?)
+            description: [
+              r.replaced ? `${r.replaced} rows of an earlier upload with the same day, page and query were replaced.` : '',
+              r.topQueries?.length ? `Top queries: ${r.topQueries.join(', ')}. A file without pages cannot be matched to a website, so check these are searches for ${site.domain}.` : '',
+            ]
+              .filter(Boolean)
+              .join(' ') || undefined,
+          }),
         onError: (e) => toast.error(errorMessage(e)),
       },
     );
   };
   const rows = list.data?.sources ?? [];
+  // R-A9: an API from before the uploads has no such route: the card waits for it rather than offering an upload that cannot work
+  if (client || (list.error instanceof ApiRequestError && list.error.status === 404)) return null;
   return (
     <Panel
       title="Your AI reports"
@@ -385,8 +443,18 @@ export function AiReportsCard() {
       ) : (
         <p className="mb-3 text-[13px] text-ink-2">Nothing uploaded yet. Neither report has an API: an export from each is the only way to bring Copilot's citations and Google's AI search figures in.</p>
       )}
+      {/* R-A10: what the latest run read from the uploads (its 28-day period and each source's days), as the engine wrote it */}
+      {used && used.sources.length > 0 && (
+        <p className="mb-3 text-xs text-ink-3">
+          The latest AI visibility run read {used.period ? `${fmtDate(used.period.from)} to ${fmtDate(used.period.to)}` : 'the last 28 days'}:{' '}
+          {used.sources
+            .map((u) => `${AI_IMPORT_SOURCE_LABEL[u.source as 'bing_ai'] ?? u.source}, ${u.rows != null ? `${n0(u.rows)} rows` : 'rows'}${u.from ? ` from ${fmtDate(u.from)} to ${fmtDate(u.to)}` : ''}${u.importedAt ? ` (uploaded ${fmtDate(u.importedAt)})` : ''}`)
+            .join('; ')}
+          .
+        </p>
+      )}
       {can('member') ? (
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
           <Field label="Report">
             {(p) => (
               <Select {...p} value={source} onChange={(e) => setSource(e.target.value as typeof source)}>
@@ -396,8 +464,17 @@ export function AiReportsCard() {
               </Select>
             )}
           </Field>
-          <Field label="Last day of the period" optional hint="For a file without dates (Search Console's Queries or Pages file)">
+          <Field label="Last day of the period" optional hint="Needed for a file without dates (Search Console's Queries or Pages file)">
             {(p) => <Input {...p} type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />}
+          </Field>
+          <Field label="Dates in the file" hint="Only needed when every date could be either way round (like 05/10/2026)">
+            {(p) => (
+              <Select {...p} value={dateOrder} onChange={(e) => setDateOrder(e.target.value as typeof dateOrder)}>
+                <option value="">Recognise them from the file</option>
+                <option value="dmy">Day first (22/10/2026)</option>
+                <option value="mdy">Month first (10/22/2026)</option>
+              </Select>
+            )}
           </Field>
           <div>
             <input ref={file} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="sr-only" aria-label="Choose the exported CSV file" onChange={(e) => { void send(e.target.files?.[0]); e.target.value = ''; }} />

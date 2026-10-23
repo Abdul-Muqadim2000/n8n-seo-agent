@@ -216,8 +216,11 @@ export interface RunV1 {
   websiteId: string | null;
   mode: string;
   title: string;
+  /** submitting | accepted | running | completed | failed | joined (R-A3: an AI check that joined the website's open run; not a failure) */
   status: string;
   error: string | null;
+  /** R-A3: for a `joined` run, what happened in words ("Part of the open run (finishes about 09:40 UTC). ..."); null otherwise */
+  note?: string | null;
   createdAt: string;
   completedAt: string | null;
   reportCount: number;

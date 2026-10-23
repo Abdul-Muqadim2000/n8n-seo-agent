@@ -1,4 +1,4 @@
-import { and, eq, gte, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, ne, notInArray, sql } from 'drizzle-orm';
 import { config } from '../config';
 import { db, schema } from '../db';
 import type { OrgRow } from '../db/schema';
@@ -40,7 +40,7 @@ export async function orgSpendSince(q: Q, orgId: string, since = monthStart()): 
   const [r] = await q
     .select({ total: sql<number>`coalesce(sum(${runCost}), 0)` })
     .from(schema.runs)
-    .where(and(eq(schema.runs.orgId, orgId), gte(schema.runs.createdAt, since), ne(schema.runs.status, 'failed')));
+    .where(and(eq(schema.runs.orgId, orgId), gte(schema.runs.createdAt, since), notInArray(schema.runs.status, ['failed', 'joined'])));
   const [c] = await q
     .select({ total: sql<number>`coalesce(sum(${schema.keywordChecks.costUsd}), 0)` })
     .from(schema.keywordChecks)
@@ -55,7 +55,7 @@ export async function platformSpendSince(q: Q, since: Date): Promise<number> {
   const [r] = await q
     .select({ total: sql<number>`coalesce(sum(${runCost}), 0)` })
     .from(schema.runs)
-    .where(and(gte(schema.runs.createdAt, since), ne(schema.runs.status, 'failed')));
+    .where(and(gte(schema.runs.createdAt, since), notInArray(schema.runs.status, ['failed', 'joined'])));
   const [c] = await q
     .select({ total: sql<number>`coalesce(sum(${schema.keywordChecks.costUsd}), 0)` })
     .from(schema.keywordChecks)

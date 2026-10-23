@@ -399,7 +399,7 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
             from ${schema.runs} ru where ru.id = ${runId}::uuid`,
       );
       if (!run) return { credits: raw, failed: false };
-      if (run.status === 'failed') return { credits: 0, failed: true };
+      if (run.status === 'failed' || run.status === 'joined') return { credits: 0, failed: true };
       if (run.quoted == null) return { credits: raw, failed: false };
       return { credits: Math.round(Math.min(raw, Math.max(0, Number(run.quoted) - Number(run.other))) * 100) / 100, failed: false };
     };
@@ -634,7 +634,7 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
       tx,
       sql`select c.ref->>'runId' as run_id, c.org_id, (-sum(c.credits))::float as used, max(ru.mode) as mode, max(ru.completed_at)::text as at
           from ${schema.creditLedger} c join ${schema.runs} ru on ru.id::text = c.ref->>'runId'
-          where c.kind = 'usage' and ru.status = 'failed' and c.org_id is not null
+          where c.kind = 'usage' and ru.status in ('failed', 'joined') and c.org_id is not null
             and not exists (select 1 from ${schema.creditLedger} f where f.ref_key = 'failed:' || (c.ref->>'runId'))
           group by c.ref->>'runId', c.org_id having sum(c.credits) < 0`,
     );

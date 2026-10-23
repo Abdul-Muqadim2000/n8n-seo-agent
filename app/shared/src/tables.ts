@@ -131,6 +131,12 @@ export interface AiPromptRow extends DtRow {
   /** W2 §3: the run that last asked it, when, how often in 28 days, the run whose gate refused it; F2: where the keyword came from */
   last_asked_run?: string; last_asked_at?: string; asked_n_28d?: number | null; refused_at_run?: string; keyword_source?: string;
 }
+/**
+ * R-A7 (review 2026-10-23): the `origin` of a question the owner deleted. Its row stays as a tombstone with status `off`, so the engine
+ * never writes or asks it again; the app hides it everywhere.
+ */
+export const AI_PROMPT_DELETED = 'deleted';
+export const aiPromptDeleted = (p: { origin?: unknown }): boolean => String(p?.origin ?? '') === AI_PROMPT_DELETED;
 export interface AiAnswerRow extends DtRow {
   site_id: string; domain: string; run_id: string; checked_at: string; prompt_id: string; prompt: string; kind: string;
   topic: string; engine: string; answered: boolean; mentioned: boolean; cited: boolean; rank: number; our_urls: string;

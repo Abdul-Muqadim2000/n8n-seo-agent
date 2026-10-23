@@ -662,7 +662,8 @@ export function safeAuditDetails(d: unknown, depth = 0): Record<string, unknown>
 /** one CSV cell: quoted, and a leading = + - @ tab or CR neutralised (spreadsheet formula injection, OWASP) */
 export function csvCell(v: unknown): string {
   let s = v == null ? '' : typeof v === 'string' ? v : typeof v === 'object' ? JSON.stringify(v) : String(v);
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  // R-A18: also a formula after leading whitespace or a line break (some spreadsheet apps trim before they read a cell)
+  if (/^[=+\-@\t\r]/.test(s) || /^\s*[=+\-@]/.test(s)) s = `'${s}`;
   return `"${s.replace(/"/g, '""')}"`;
 }
 

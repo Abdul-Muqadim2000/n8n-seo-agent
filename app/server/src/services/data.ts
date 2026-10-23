@@ -111,6 +111,8 @@ import {
   aiEngineRatesOf,
   aiFilterSegment,
   aiLatestExtras,
+  aiPromptDeleted,
+  aiScopeSummary,
   aiMatchesFilter,
   aiSovOf,
   aiAnswerDetail,
@@ -898,13 +900,17 @@ export function aiDailySeries(days: AiDailyRow[]): AiDay[] {
       const mentioned = rows.reduce((t, r) => t + count(r, 'mentioned', n(r.mention_rate)), 0);
       const cited = rows.reduce((t, r) => t + count(r, 'cited', n(r.citation_rate)), 0);
       const weighted = (k: 'share_of_voice' | 'visibility_score') => (samples ? Math.round((rows.reduce((t, r) => t + n(r[k]) * n(r.samples), 0) / samples) * 10) / 10 : 0);
+      // engine fix round: a share of voice the engine could not measure is stored null; it is weighted over the rows that have one, and a
+      // day with none has none (never 0)
+      const sovRows = rows.filter((r) => nn(r.share_of_voice) != null);
+      const sovN = sovRows.reduce((t, r) => t + n(r.samples), 0);
       return {
         date,
         checkedAt: rows.map((r) => s(r.checked_at)).filter(Boolean).sort().pop() ?? '',
         samples,
-        mentionRate: rows.length === 1 ? n(rows[0].mention_rate) : pct(mentioned, samples),
+        mentionRate: rows.length === 1 ? nn(rows[0].mention_rate) : pct(mentioned, samples),
         citationRate: rows.length === 1 ? n(rows[0].citation_rate) : pct(cited, samples),
-        shareOfVoice: rows.length === 1 ? n(rows[0].share_of_voice) : weighted('share_of_voice'),
+        shareOfVoice: rows.length === 1 ? nn(rows[0].share_of_voice) : sovN ? Math.round((sovRows.reduce((t, r) => t + n(r.share_of_voice) * n(r.samples), 0) / sovN) * 10) / 10 : null,
         visibilityScore: rows.length === 1 ? n(rows[0].visibility_score) : weighted('visibility_score'),
         // A4: the engine joins a morning's alerts with " | " and a text may hold commas
         alerts: [...new Set(rows.flatMap((r) => aiAlertsOf(r.alerts).map((a) => a.text)))],
@@ -942,9 +948,9 @@ export function aiCompareSide(r: AiVisibilityRow): AiCompareSide {
     checkedAt: s(r.checked_at),
     prompts: n(r.prompts),
     samples: n(r.samples) || n(r.answers),
-    mentionRate: n(r.mention_rate),
+    mentionRate: nn(r.mention_rate),
     citationRate: n(r.citation_rate),
-    shareOfVoice: n(r.share_of_voice),
+    shareOfVoice: nn(r.share_of_voice),
     visibilityScore: nn(r.visibility_score),
     avgRank: nn(r.avg_rank),
     engines: aiEngineSetOf(safeJson<P | null>(s(r.engines_json), null)),
@@ -966,9 +972,9 @@ const toAiRun = (r: AiVisibilityRow, compare: AiRun['compare'], credits: number 
   checkedAt: s(r.checked_at),
   prompts: n(r.prompts),
   answers: n(r.answers),
-  mentionRate: n(r.mention_rate),
+  mentionRate: nn(r.mention_rate),
   citationRate: n(r.citation_rate),
-  shareOfVoice: n(r.share_of_voice),
+  shareOfVoice: nn(r.share_of_voice),
   avgRank: n(r.avg_rank),
   aioPresence: n(r.aio_presence),
   aioCitationRate: n(r.aio_citation_rate),
@@ -1178,7 +1184,8 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     daily: aiDailySeries(days),
     promptsMax: monitorsNow ? monitorsNow.aiPromptsMax : null,
     alertRules: monitorsNow?.aiAlertRules ?? [],
-    prompts: prompts.map((p) => ({
+    // R-A7: a question the owner deleted stays in the table as a tombstone (so the engine never asks it again) and is not listed
+    prompts: prompts.filter((p) => !aiPromptDeleted(p)).map((p) => ({
       promptId: s(p.prompt_id),
       prompt: s(p.prompt),
       kind: s(p.kind),
@@ -1272,26 +1279,8 @@ export function promptFacets(prompts: AiPromptRow[]): Map<string, { cluster: str
   return new Map(prompts.map((p) => [s(p.prompt_id), { cluster: s(p.cluster) || s(p.topic), persona: s(p.persona), market: s(p.market), stage: s(p.stage), keyword: s(p.keyword), prompt: s(p.prompt) }]));
 }
 
-/** W2-A: the figures of a set of answers (a filter's): rates with their 95% range, "too few" under 12, the rivals and sources named most. */
-export function aiScopeSummary(list: AiData['answers']): AiScopeSummary {
-  const answered = list.filter((a) => a.answered);
-  const named = answered.filter((a) => a.mentioned).length, cited = answered.filter((a) => a.cited).length, n = answered.length;
-  const tally = (xs: string[]) => [...xs.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
-  return {
-    answers: list.length,
-    answered: n,
-    named,
-    cited,
-    namedRate: n ? Math.round((1000 * named) / n) / 10 : null,
-    citedRate: n ? Math.round((1000 * cited) / n) / 10 : null,
-    namedCi: aiWilson(named, n),
-    citedCi: aiWilson(cited, n),
-    enough: n >= AI_MIN_RATE_SAMPLES,
-    questions: new Set(list.map((a) => a.promptId)).size,
-    topRivals: tally(answered.flatMap((a) => a.competitors)).map(([name, k]) => ({ name, n: k })),
-    topSources: tally(answered.flatMap((a) => a.sources)).map(([host, k]) => ({ host, n: k })),
-  };
-}
+/** W2-A: the figures of a set of answers (a filter's); R-A9: moved to shared (ai-trends.ts) so the web can page an older API's answers too. */
+export { aiScopeSummary };
 
 /**
  * W2-A: the page's filter. The latest run's answers in it (when read), and, when exactly one dimension is set, that segment's named rate

@@ -64,6 +64,12 @@ export function completeMonitors(m: Partial<MonitorSettings> | null | undefined)
 }
 
 /**
+ * Review 2026-10-23 (coordinator): the buyer-role context and the market trend have not had their one live engine check yet, so both say
+ * so and stay off until the owner ticks them.
+ */
+export const PREVIEW_NOTE = 'Preview: needs a one-time check on our side before its figures can be relied on.';
+
+/**
  * W2-A: the panel's cost with the wave-2 options (WAVE2_CONTRACTS.md §4), priced by the one AI-panel formula (`estimateAiPanelCost`, the mirror
  * of the engine's AIP.cost, W2-E3). W2-FIX (2026-10-23): the buyer roles are passed too (the persona test asks (roles + 1) x 12 answers, so it
  * was priced at 0 without them) and the monthly market trend is included.
@@ -372,7 +378,7 @@ function AiMoreOptions({ value, set, disabled }: { value: MonitorSettings; set: 
         )}
         <Checkbox
           label="Send each buyer role as context (API answers)"
-          description={`The engines' APIs can take the buyer role as context, which the apps cannot. A small sub-panel is asked with and without each role, to show whether the role changes the answer${delta({ aiPersonaContext: !value.aiPersonaContext })}. Kept apart from the headline figures.`}
+          description={`${PREVIEW_NOTE} The engines' APIs can take the buyer role as context, which the apps cannot. A small sub-panel is asked with and without each role, to show whether the role changes the answer${delta({ aiPersonaContext: !value.aiPersonaContext })}. Kept apart from the headline figures.`}
           checked={!!value.aiPersonaContext}
           disabled={disabled || !value.aiPersonas.length}
           onChange={(e) => set({ aiPersonaContext: e.target.checked })}
@@ -390,7 +396,7 @@ function AiMoreOptions({ value, set, disabled }: { value: MonitorSettings; set: 
         </Field>
         <Checkbox
           label="Track how often AI names businesses in your market, month by month"
-          description={`Once a month, from a database of AI answers: how often you are named and in which answers, mentions won and lost, and the ten brands AI names most for your main topic${delta({ aiDemandMarket: !value.aiDemandMarket })}. For websites outside the US the figures come from Google's AI answers; ChatGPT data covers US-English only.`}
+          description={`${PREVIEW_NOTE} Once a month, from a database of AI answers: how often you are named and in which answers, mentions won and lost, and the ten brands AI names most for your main topic${delta({ aiDemandMarket: !value.aiDemandMarket })}. For websites outside the US the figures come from Google's AI answers; ChatGPT data covers US-English only.`}
           checked={!!value.aiDemandMarket}
           disabled={disabled}
           onChange={(e) => set({ aiDemandMarket: e.target.checked })}

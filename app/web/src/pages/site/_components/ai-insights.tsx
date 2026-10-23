@@ -245,7 +245,6 @@ export function AccessPanel({ access }: { access: AiAccess | null }) {
   );
 }
 
-/** Visibility by buyer stage and topic cluster, with the demand behind each and who is named most instead. */
 /** A17: under this many AI visits the "N x vs organic" ratio is not shown */
 export const AI_RATIO_MIN_SESSIONS = 30;
 
@@ -261,6 +260,7 @@ function GroupRate({ g }: { g: AiGroup }) {
   );
 }
 
+/** Visibility by buyer stage and topic cluster, with the demand behind each and who is named most instead. */
 export function GroupsPanel({ stages, clusters }: { stages: AiGroup[]; clusters: AiGroup[] }) {
   const [view, setView] = useState<'stage' | 'topic'>('stage');
   const rows = view === 'stage' ? stages : clusters;
