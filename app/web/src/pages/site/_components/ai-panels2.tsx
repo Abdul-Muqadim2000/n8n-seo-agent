@@ -26,7 +26,7 @@ import {
 } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { DistributionBar, DistributionLegend, SEQ } from '@/components/insight';
-import { errorMessage } from '@/lib/api';
+import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useAiImport, useAiImports } from '@/lib/queries';
 import { fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -418,7 +418,8 @@ export function AiReportsCard({ used = null }: { used?: AiImportsPanel | null } 
     );
   };
   const rows = list.data?.sources ?? [];
-  if (client) return null;
+  // R-A9: an API from before the uploads has no such route: the card waits for it rather than offering an upload that cannot work
+  if (client || (list.error instanceof ApiRequestError && list.error.status === 404)) return null;
   return (
     <Panel
       title="Your AI reports"

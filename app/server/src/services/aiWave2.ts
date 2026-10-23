@@ -16,6 +16,7 @@ import {
   aiSovOf,
   aiInRange,
   aiLatestExtras,
+  aiAnswersPageOf,
   aiMatchesFilter,
   aiSegmentsFromJson,
   aiWilson,
@@ -36,7 +37,7 @@ import {
 import type { OrgRow, SiteRow } from '../db/schema';
 import { badRequest, HttpError, notFound } from '../lib/errors';
 import { deleteRows, ensureTable, insertRows, invalidateSite, siteRows, updateRows } from '../n8n/client';
-import { AI_READ_LIMITS, aiData, aiScopeSummary, aiRunsCompared, latestRunAnswers, promptFacets, toAiAnswer } from './data';
+import { AI_READ_LIMITS, aiData, aiRunsCompared, latestRunAnswers, promptFacets, toAiAnswer } from './data';
 
 const s = (v: unknown): string => (v == null ? '' : String(v));
 const jsonArray = (v: unknown): Record<string, unknown>[] => {
@@ -61,10 +62,6 @@ function pickRun(runs: AiVisibilityRow[], runId: string, f: AiFilter): AiVisibil
   return inRange[inRange.length - 1] ?? null;
 }
 
-export const AI_ANSWER_RESULTS = ['all', 'named', 'cited', 'absent', 'error'] as const;
-type AnswerResult = (typeof AI_ANSWER_RESULTS)[number];
-const matchResult = (a: AiData['answers'][number], r: AnswerResult) => (r === 'named' ? a.mentioned : r === 'cited' ? a.cited : r === 'absent' ? a.answered && !a.mentioned : r === 'error' ? !!a.error || !a.answered : true);
-
 /**
  * W2-A (finishes F3's A10): one page of a run's answers. The page loads the run's summary through /data/ai and reads its answers here,
  * a page at a time, so a 500-question panel never ships megabytes to every viewer. The filter's figures (rates with their range, "too
@@ -83,27 +80,8 @@ export async function aiAnswersPage(site: SiteRow, q: { filter: AiFilter; run?: 
     const f = facets.get(a.promptId);
     return f ? { ...a, cluster: f.cluster, persona: f.persona, market: f.market, stage: f.stage } : a;
   });
-  const result = (AI_ANSWER_RESULTS as readonly string[]).includes(s(q.result)) ? (s(q.result) as AnswerResult) : 'all';
-  const text = s(q.text).trim().toLowerCase().slice(0, 120);
-  const promptId = s(q.promptId).slice(0, 120);
-  const scoped = all.filter((a) => aiMatchesFilter(a, facets.get(a.promptId), q.filter) && (!promptId || a.promptId === promptId));
-  const shown = scoped
-    .filter((a) => matchResult(a, result) && (!text || a.prompt.toLowerCase().includes(text) || (a.detail?.answerText ?? a.excerpt).toLowerCase().includes(text)))
-    .sort((a, b) => a.prompt.localeCompare(b.prompt) || a.engine.localeCompare(b.engine));
-  const pageSize = Math.min(100, Math.max(5, Math.round(Number(q.pageSize) || 25)));
-  const pages = Math.max(1, Math.ceil(shown.length / pageSize));
-  const page = Math.min(pages, Math.max(1, Math.round(Number(q.page) || 1)));
-  return {
-    runId: s(run.run_id),
-    checkedAt: s(run.checked_at),
-    runs: runList,
-    total: shown.length,
-    page,
-    pageSize,
-    items: shown.slice((page - 1) * pageSize, page * pageSize),
-    summary: aiScopeSummary(scoped),
-    engines: [...new Set(all.map((a) => a.engine))],
-  };
+  // R-A9: the paging itself is shared with the web (which pages an older API's embedded answers the same way)
+  return aiAnswersPageOf(all, { ...q, facets }, { runId: s(run.run_id), checkedAt: s(run.checked_at), runs: runList });
 }
 
 /** W2-A: one question across the stored runs (the engine keeps answers about 120 days), every engine's answer per run, and its named rate. */

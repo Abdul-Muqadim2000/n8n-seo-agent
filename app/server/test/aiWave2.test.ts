@@ -383,9 +383,16 @@ describe('routes', () => {
     st.tables.aiVisibility = [vis()];
     st.tables.aiPrompts = prompts;
     st.tables.aiAnswers = [answer('q1', 'chatgpt', { mentioned: true })];
-    const r = (await app.inject({ method: 'GET', url: `${base}/data/ai?persona=CFO` })).json();
+    const r = (await app.inject({ method: 'GET', url: `${base}/data/ai?persona=CFO&answers=summary` })).json();
     expect(r.answers).toEqual([]);
     expect(r.scope.segment).toEqual({ dim: 'persona', key: 'CFO' });
+  });
+  it('R-A9: a web from before the paged answers (no answers=summary) still gets every answer in /data/ai', async () => {
+    st.tables.aiVisibility = [vis()];
+    st.tables.aiPrompts = prompts;
+    st.tables.aiAnswers = [answer('q1', 'chatgpt', { mentioned: true }), answer('q2', 'gemini')];
+    const r = (await app.inject({ method: 'GET', url: `${base}/data/ai` })).json();
+    expect(r.answers.map((a: { promptId: string }) => a.promptId).sort()).toEqual(['q1', 'q2']);
   });
   it('a question edit sends its keyword to the engine', async () => {
     const { siteAdmin } = await import('../src/n8n/client');

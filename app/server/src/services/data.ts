@@ -112,6 +112,7 @@ import {
   aiFilterSegment,
   aiLatestExtras,
   aiPromptDeleted,
+  aiScopeSummary,
   aiMatchesFilter,
   aiSovOf,
   aiAnswerDetail,
@@ -1274,26 +1275,8 @@ export function promptFacets(prompts: AiPromptRow[]): Map<string, { cluster: str
   return new Map(prompts.map((p) => [s(p.prompt_id), { cluster: s(p.cluster) || s(p.topic), persona: s(p.persona), market: s(p.market), stage: s(p.stage), keyword: s(p.keyword), prompt: s(p.prompt) }]));
 }
 
-/** W2-A: the figures of a set of answers (a filter's): rates with their 95% range, "too few" under 12, the rivals and sources named most. */
-export function aiScopeSummary(list: AiData['answers']): AiScopeSummary {
-  const answered = list.filter((a) => a.answered);
-  const named = answered.filter((a) => a.mentioned).length, cited = answered.filter((a) => a.cited).length, n = answered.length;
-  const tally = (xs: string[]) => [...xs.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
-  return {
-    answers: list.length,
-    answered: n,
-    named,
-    cited,
-    namedRate: n ? Math.round((1000 * named) / n) / 10 : null,
-    citedRate: n ? Math.round((1000 * cited) / n) / 10 : null,
-    namedCi: aiWilson(named, n),
-    citedCi: aiWilson(cited, n),
-    enough: n >= AI_MIN_RATE_SAMPLES,
-    questions: new Set(list.map((a) => a.promptId)).size,
-    topRivals: tally(answered.flatMap((a) => a.competitors)).map(([name, k]) => ({ name, n: k })),
-    topSources: tally(answered.flatMap((a) => a.sources)).map(([host, k]) => ({ host, n: k })),
-  };
-}
+/** W2-A: the figures of a set of answers (a filter's); R-A9: moved to shared (ai-trends.ts) so the web can page an older API's answers too. */
+export { aiScopeSummary };
 
 /**
  * W2-A: the page's filter. The latest run's answers in it (when read), and, when exactly one dimension is set, that segment's named rate

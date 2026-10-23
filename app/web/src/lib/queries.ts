@@ -505,7 +505,8 @@ export function useAiPromptDelete(orgId: string, siteId: string) {
   });
 }
 /** A CSV download of the AI page (the server streams it; the browser saves it) */
-export const aiExportUrl = (orgId: string, siteId: string, kind: string, filter: Record<string, string>) => `${aiBase(orgId, siteId)}/data/ai/export?${aiQs({ kind, ...filter })}`;
+// R-A12: a top-level download straight from the API (the proxy has size and time limits; the cookie is shared on the parent domain)
+export const aiExportUrl = (orgId: string, siteId: string, kind: string, filter: Record<string, string>) => directUrl(`${aiBase(orgId, siteId)}/data/ai/export?${aiQs({ kind, ...filter })}`);
 
 // ---------- dashboards ----------
 type DataPages = {
@@ -521,7 +522,10 @@ type DataPages = {
   settings: SiteSettingsData;
 };
 
-export function useSiteData<P extends keyof DataPages>(orgId: string, siteId: string, page: P, params?: Record<string, string | undefined>, opts?: Partial<UseQueryOptions<DataPages[P]>>) {
+export function useSiteData<P extends keyof DataPages>(orgId: string, siteId: string, page: P, params0?: Record<string, string | undefined>, opts?: Partial<UseQueryOptions<DataPages[P]>>) {
+  // R-A9: this web pages the AI answers through /data/ai/answers, so it asks /data/ai for the summary only (an API without the flag's
+  // support sends every answer, which the answers section then pages itself)
+  const params = page === 'ai' ? { answers: 'summary', ...params0 } : params0;
   const qs = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]).toString() : '';
   return useQuery({
     queryKey: qk.siteData(siteId, page, qs),

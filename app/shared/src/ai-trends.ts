@@ -7,6 +7,8 @@
 
 import { z } from 'zod';
 import type { AiCompare } from './ai-compare';
+import type { AiAnswersPage, AiData, AiScopeSummary } from './data';
+import { AI_MIN_RATE_SAMPLES } from './ai-visibility';
 
 const S = (v: unknown, max = 80): string => (typeof v === 'string' ? v.trim().slice(0, max) : Array.isArray(v) && typeof v[0] === 'string' ? v[0].trim().slice(0, max) : '');
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -59,6 +61,64 @@ export function aiWilson(k: number, n: number): [number, number] | null {
   const z = 1.96, p = k / n, d = 1 + (z * z) / n, c = p + (z * z) / (2 * n), m = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
   return [Math.max(0, Math.round((1000 * (c - m)) / d) / 10), Math.min(100, Math.round((1000 * (c + m)) / d) / 10)];
 }
+/** The filter's figures over a list of answers (rates with their range, "too few" under 12, rivals and sources named most). */
+export function aiScopeSummary(list: AiData['answers']): AiScopeSummary {
+  const answered = list.filter((a) => a.answered);
+  const named = answered.filter((a) => a.mentioned).length, cited = answered.filter((a) => a.cited).length, n = answered.length;
+  const tally = (xs: string[]) => [...xs.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  return {
+    answers: list.length,
+    answered: n,
+    named,
+    cited,
+    namedRate: n ? Math.round((1000 * named) / n) / 10 : null,
+    citedRate: n ? Math.round((1000 * cited) / n) / 10 : null,
+    namedCi: aiWilson(named, n),
+    citedCi: aiWilson(cited, n),
+    enough: n >= AI_MIN_RATE_SAMPLES,
+    questions: new Set(list.map((a) => a.promptId)).size,
+    topRivals: tally(answered.flatMap((a) => a.competitors)).map(([name, k]) => ({ name, n: k })),
+    topSources: tally(answered.flatMap((a) => a.sources)).map(([host, k]) => ({ host, n: k })),
+  };
+}
+
+export const AI_ANSWER_RESULTS = ['all', 'named', 'cited', 'absent', 'error'] as const;
+export type AiAnswerResult = (typeof AI_ANSWER_RESULTS)[number];
+const matchResult = (a: AiData['answers'][number], r: AiAnswerResult) => (r === 'named' ? a.mentioned : r === 'cited' ? a.cited : r === 'absent' ? a.answered && !a.mentioned : r === 'error' ? !!a.error || !a.answered : true);
+
+/**
+ * One page of a run's answers (GET .../data/ai/answers). Pure, so the server pages its read with it and, R-A9 (review 2026-10-23), the
+ * web can page the answers an older API still embeds in /data/ai when /data/ai/answers is not there yet (either deploy order works).
+ */
+export function aiAnswersPageOf(
+  all: AiData['answers'],
+  q: { filter: AiFilter; result?: string; text?: string; promptId?: string; page?: number; pageSize?: number; facets?: Map<string, AiPromptFacets> },
+  run: { runId: string | null; checkedAt: string | null; runs: { runId: string; checkedAt: string }[] },
+): AiAnswersPage {
+  const result = (AI_ANSWER_RESULTS as readonly string[]).includes(String(q.result ?? '')) ? (String(q.result) as AiAnswerResult) : 'all';
+  const text = String(q.text ?? '').trim().toLowerCase().slice(0, 120);
+  const promptId = String(q.promptId ?? '').slice(0, 120);
+  const facetOf = (a: AiData['answers'][number]): AiPromptFacets | undefined => q.facets?.get(a.promptId) ?? { cluster: a.cluster ?? '', persona: a.persona ?? '', market: a.market ?? '', stage: a.stage ?? '' };
+  const scoped = all.filter((a) => aiMatchesFilter(a, facetOf(a), q.filter) && (!promptId || a.promptId === promptId));
+  const shown = scoped
+    .filter((a) => matchResult(a, result) && (!text || a.prompt.toLowerCase().includes(text) || (a.detail?.answerText ?? a.excerpt).toLowerCase().includes(text)))
+    .sort((a, b) => a.prompt.localeCompare(b.prompt) || a.engine.localeCompare(b.engine));
+  const pageSize = Math.min(100, Math.max(5, Math.round(Number(q.pageSize) || 25)));
+  const pages = Math.max(1, Math.ceil(shown.length / pageSize));
+  const page = Math.min(pages, Math.max(1, Math.round(Number(q.page) || 1)));
+  return {
+    runId: run.runId,
+    checkedAt: run.checkedAt,
+    runs: run.runs,
+    total: shown.length,
+    page,
+    pageSize,
+    items: shown.slice((page - 1) * pageSize, page * pageSize),
+    summary: aiScopeSummary(scoped),
+    engines: [...new Set(all.map((a) => a.engine))],
+  };
+}
+
 /** Two-proportion z-test (the engine's `changeOf`): real when |z| >= 1.96 AND the move is >= 5 points; untested under 12 answers a side. */
 export function aiTwoProp(r1: number, n1: number, r0: number, n0: number): { significant: boolean | null; z: number | null } {
   if (!(n1 >= 12) || !(n0 >= 12)) return { significant: null, z: null };

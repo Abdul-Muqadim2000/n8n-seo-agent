@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { AI_SENTIMENT_EARLY, parseAiImportsSummary, parseAiSentiment } from './ai-detail';
 import { aiDateColumn, aiIsDay, parseAiImport } from './ai-import';
+import { aiAnswersPageOf, aiFilterFrom } from './ai-trends';
 import { importDate, parseCsv } from './link-import';
 
 // R-APP (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_APP.md): the shared halves of the app fixes of the AI visibility review.
@@ -58,6 +59,19 @@ describe('R-A2 sentiment: an early reading is never shown as a finding', () => {
   it('withheld stays withheld (no figure, no label of a figure)', () => {
     const s = parseAiSentiment({ n: 4, withheld: true, validated: false })!;
     expect(s).toMatchObject({ withheld: true, status: 'withheld', net: null, objections: [] });
+  });
+});
+
+describe('R-A9 the answers page is computed the same on the server and, against an older API, in the web', () => {
+  const a = (promptId: string, engine: string, over: Record<string, unknown> = {}) =>
+    ({ promptId, prompt: `Question ${promptId}?`, engine, answered: true, mentioned: false, cited: false, excerpt: 'x', competitors: ['acme.com'], sources: [], error: '', persona: '', cluster: '', market: '', stage: '', ...over }) as never;
+  const all = [a('q1', 'chatgpt', { mentioned: true, persona: 'CFO' }), a('q2', 'gemini'), a('q1', 'gemini', { persona: 'CFO' })];
+  it('filters by the facets carried on the answers, pages, and sums the filter', () => {
+    const p = aiAnswersPageOf(all, { filter: aiFilterFrom({ persona: 'CFO' }), pageSize: 5 }, { runId: 'r1', checkedAt: '2026-10-20', runs: [] });
+    expect(p.total).toBe(2);
+    expect(p.summary).toMatchObject({ answers: 2, named: 1, enough: false });
+    expect(p.engines.sort()).toEqual(['chatgpt', 'gemini']);
+    expect(aiAnswersPageOf(all, { filter: aiFilterFrom({}), result: 'named' }, { runId: 'r1', checkedAt: null, runs: [] }).total).toBe(1);
   });
 });
 

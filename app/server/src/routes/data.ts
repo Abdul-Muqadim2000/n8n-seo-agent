@@ -60,7 +60,10 @@ export async function dataRoutes(app: FastifyInstance) {
     const a = await portal(req);
     const filter = aiFilterFrom(req.query as Record<string, unknown>);
     const any = Object.values(filter).some(Boolean);
-    return shown(a.role, await aiData(a.org, a.site, { answers: 'summary', filter: any ? filter : null }));
+    // R-A9 (review 2026-10-23): the web and this API deploy separately. A web that pages the answers (/data/ai/answers) asks for the summary
+    // (`answers=summary`); a web from before that reads them here, so without the flag they are still sent (remove one release later).
+    const summary = String((req.query as Record<string, unknown>).answers ?? '') === 'summary';
+    return shown(a.role, await aiData(a.org, a.site, { answers: summary ? 'summary' : true, filter: any ? filter : null }));
   });
   // W2-A: one page of a run's answers (the latest, or `run`), filtered, with the filter's rates and ranges
   app.get('/api/orgs/:orgId/sites/:siteId/data/ai/answers', { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } }, async (req) => {

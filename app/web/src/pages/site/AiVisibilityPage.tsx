@@ -360,7 +360,7 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
       <section>
         <SectionHeading icon={<MessagesSquare />} title="Answers" description="What each assistant said: the brands in the order named, every citation, the pages it read and the searches it ran. Open a question for every engine side by side and its history." />
         <Card className="p-4">
-          <AnswersBrowser filter={filter} engineNames={engineNames} />
+          <AnswersBrowser filter={filter} engineNames={engineNames} embedded={d.answers.length ? { answers: d.answers, runId: L?.runId ?? null, checkedAt: L?.checkedAt ?? null } : undefined} />
         </Card>
       </section>
 

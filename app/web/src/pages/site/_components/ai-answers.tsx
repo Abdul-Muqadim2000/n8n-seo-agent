@@ -3,9 +3,10 @@
 // the brands in the order they were named with their role, our place, every citation in order with ours marked, the pages the engine
 // read but did not cite, the searches it ran, product / ad / local cards and the model. A question opens with every engine side by side
 // and its history across the stored runs.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, ChevronLeft, ChevronRight, CircleX, ExternalLink as ExternalIcon, History, Link2, Minus, Search, ShoppingBag, Store, Megaphone } from 'lucide-react';
-import { aiFilterQuery, aiHostOf, aiIsOwnUrl, titleCase, type AiData, type AiFilter } from '@seo/shared';
+import { aiAnswersPageOf, aiFilterQuery, aiHostOf, aiIsOwnUrl, titleCase, type AiData, type AiFilter } from '@seo/shared';
+import { ApiRequestError } from '@/lib/api';
 import { useAiAnswers, useAiQuestion } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -22,7 +23,13 @@ type Answer = AiData['answers'][number];
 type ResultFilter = 'all' | 'named' | 'cited' | 'absent' | 'error';
 
 /** The answers of a run, a page at a time, with the filter's rates. */
-export function AnswersBrowser({ filter, engineNames }: { filter: AiFilter; engineNames: Record<string, string> }) {
+/**
+ * R-A9 (review 2026-10-23): the answers an API from before the paged endpoint still embeds in /data/ai. When /data/ai/answers answers
+ * 404 (the web deployed before the API), the section pages these itself with the same shared code, so either deploy order works.
+ */
+export interface EmbeddedAnswers { answers: AiData['answers']; runId: string | null; checkedAt: string | null }
+
+export function AnswersBrowser({ filter, engineNames, embedded }: { filter: AiFilter; engineNames: Record<string, string>; embedded?: EmbeddedAnswers }) {
   const { org, site } = useSitePage();
   const [result, setResult] = useState<ResultFilter>('all');
   const [text, setText] = useState('');
@@ -38,7 +45,15 @@ export function AnswersBrowser({ filter, engineNames }: { filter: AiFilter; engi
     return () => clearTimeout(t);
   }, [text]);
   const res = useAiAnswers(org.id, site.id, { ...aiFilterQuery(filter), result: result === 'all' ? undefined : result, q: q || undefined, page, pageSize: 12, run: run || undefined });
-  const d = res.data;
+  const older = res.isError && res.error instanceof ApiRequestError && res.error.status === 404 && !!embedded?.answers.length;
+  const local = useMemo(
+    () =>
+      older && embedded
+        ? aiAnswersPageOf(embedded.answers, { filter, result, text: q, page, pageSize: 12 }, { runId: embedded.runId, checkedAt: embedded.checkedAt, runs: embedded.runId && embedded.checkedAt ? [{ runId: embedded.runId, checkedAt: embedded.checkedAt }] : [] })
+        : null,
+    [older, embedded, filter, result, q, page],
+  );
+  const d = local ?? res.data;
   if (res.isError && !d) return <ErrorState error={res.error} onRetry={() => void res.refetch()} />;
   if (!d) return <AnswersSkeleton />;
   if (!d.runId) return <EmptyState className="py-8" title="No stored answers yet" description="Answers are stored from the next AI visibility run." />;
