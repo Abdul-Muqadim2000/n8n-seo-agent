@@ -181,3 +181,14 @@ describe('actionFromApiBody', () => {
     expect(actionFromApiBody(null, 'x')).toBeUndefined();
   });
 });
+
+// A16 (2026-10-23, AI visibility app audit): "AI names you in X%" is a finding only on enough answers, and it quotes its range
+describe('A16: the low-visibility recommendation has a floor', () => {
+  const ai = (samples: number) => ({ ...bundle().ai, runs: [{ ...bundle().ai.runs[0], mentionRate: 5, samples, answers: samples, mentionLo: null, mentionHi: null }] });
+  it('9 answers raise nothing; 40 answers raise it with the 95% range in its basis', () => {
+    expect(recommend(site, bundle({ ai: ai(9) })).some((r) => r.id === 'ai:low')).toBe(false);
+    const r = recommend(site, bundle({ ai: ai(40) })).find((x) => x.id === 'ai:low');
+    expect(r).toBeTruthy();
+    expect(JSON.stringify(r)).toMatch(/95% range/);
+  });
+});
