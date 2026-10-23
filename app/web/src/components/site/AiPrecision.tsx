@@ -14,7 +14,8 @@ export function aiMeasuredFrom(d: Pick<AiData, 'runs' | 'latest'> | null | undef
   if (!run || !(run.samples > 0)) return null;
   const withBrand = run.runKind === 'full' || run.runKind === 'on_demand';
   const pulseSamples = (d?.latest?.engines ?? []).reduce((t, e) => t + (Number(e.pulseSamples) || 0), 0);
-  return { samples: run.samples, pulseSamples, questions: Math.max(1, run.prompts - (withBrand ? 1 : 0)), checkedAt: run.checkedAt };
+  const w = run.compare?.window;
+  return { samples: run.samples, pulseSamples, questions: Math.max(1, run.prompts - (withBrand ? 1 : 0)), checkedAt: run.checkedAt, ratePeriod: w && w.from && w.to ? `${w.from} to ${w.to}` : null };
 }
 
 export interface AiMeasuredSample {
@@ -22,12 +23,14 @@ export interface AiMeasuredSample {
   pulseSamples: number;
   questions: number;
   checkedAt?: string;
+  /** A8: the period the run's rates were counted over, as the run records it */
+  ratePeriod?: string | null;
 }
 
 const pts = (v: number | null) => (v == null ? '-' : `±${Math.round(v)} pts`);
 
-export function AiPrecisionTable({ panel, engines, pulse, measured, className }: { panel: number; engines: readonly AiEngine[]; pulse: boolean; measured?: AiMeasuredSample | null; className?: string }) {
-  const t = aiPrecisionTable({ panel, engines, pulse, measured });
+export function AiPrecisionTable({ panel, engines, pulse, measured, className, pulseMode, pulsePerWeek }: { panel: number; engines: readonly AiEngine[]; pulse: boolean; measured?: AiMeasuredSample | null; className?: string; pulseMode?: string | null; pulsePerWeek?: number | null }) {
+  const t = aiPrecisionTable({ panel, engines, pulse, measured, pulseMode, pulsePerWeek });
   const panels = [...new Set(t.rows.map((r) => r.panel))];
   const cell = (p: number, cadence: 'weekly' | 'weekly_pulse') => t.rows.find((r) => r.panel === p && r.cadence === cadence);
   const cadences: ('weekly' | 'weekly_pulse')[] = t.pulseAvailable ? ['weekly', 'weekly_pulse'] : ['weekly'];

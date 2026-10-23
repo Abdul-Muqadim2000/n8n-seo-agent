@@ -3,7 +3,8 @@ import { useForm, type DefaultValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import { Bot } from 'lucide-react';
-import { AI_ENGINES, RUN_SCHEMAS } from '@seo/shared';
+import { AI_ENGINES, AI_PANEL_VALUE, aiRunPanelOf, RUN_SCHEMAS } from '@seo/shared';
+import { useSiteData } from '@/lib/queries';
 import { useOrgCtx } from '@/lib/context';
 import { Badge } from '@/components/ui/badge';
 import { ChoiceCard } from '@/components/ui/field';
@@ -252,7 +253,7 @@ type AiIn = z.input<typeof AiS>;
 type AiOut = z.output<typeof AiS>;
 
 export function AiVisibilityForm({ initialSiteId, prefill }: ToolFormProps) {
-  const { sites } = useOrgCtx();
+  const { org, sites } = useOrgCtx();
   const sd = siteDefaults(sites.find((s) => s.id === initialSiteId) ?? null);
   const form = useForm<AiIn, unknown, AiOut>({
     resolver: zodResolver(AiS),
@@ -269,13 +270,17 @@ export function AiVisibilityForm({ initialSiteId, prefill }: ToolFormProps) {
     setPristine(form, 'country', d.country);
     setPristine(form, 'competitors', d.competitors);
   });
+  // A2 (2026-10-23): an on-demand check asks the website's whole panel on every engine, so it is priced from that panel (the server
+  // quotes and checks credits from the same settings; this is the same figure, shown before the run)
+  const settings = useSiteData(org.id, v.siteId || '', 'settings', undefined, { enabled: !!site?.verifiedAt });
+  const panel = settings.data ? aiRunPanelOf(settings.data.monitors) : null;
 
   return (
-    <ToolShell mode="ai_visibility" site={site} cost={estimateCost('ai_visibility', v)} eta={estimateEta('ai_visibility', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check AI visibility" blocked={blockedWithout(sites.some((s) => s.verifiedAt))}>
+    <ToolShell mode="ai_visibility" site={site} cost={estimateCost('ai_visibility', panel ? { ...v, [AI_PANEL_VALUE]: panel } : v)} eta={estimateEta('ai_visibility', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check AI visibility" blocked={blockedWithout(sites.some((s) => s.verifiedAt))}>
       <FormCard
         title="Website and market"
         description="Buyer questions for your market, asked to every assistant below."
-        info="About 8 buyer questions are written for your market and asked to every assistant below; each answer is checked for your brand, your links and your competitors."
+        info={panel ? `Priced for your panel of ${panel.panel} questions on ${panel.engines.length} engines: every question is asked to every engine (a full check, the monthly engine included); each answer is checked for your brand, your links and your competitors.` : 'Your question panel is asked to every assistant below; each answer is checked for your brand, your links and your competitors. The price follows your panel size, set in the tracking settings.'}
       >
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
         <CountryField reg={form.register('country')} error={errMsg(e.country)} />

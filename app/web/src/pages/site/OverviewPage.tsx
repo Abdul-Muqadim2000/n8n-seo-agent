@@ -17,6 +17,7 @@ import { CountUp, DistributionBar, DistributionLegend, HeroLink, HeroNextStep, H
 import { DataGate, FillHeight, MetricSwitch, MiniStat, MoreLink, Panel, PriorityBadge, RunAnalysisMenu, ToolButton, useSitePage } from './_components/kit';
 import { diff, fmtMonthShort, fmtRange, lastTwo, pct, pctChange, plural, sortByDate, timeAxisFormat } from './_components/format';
 import { liveLine } from './_components/content-status';
+import { AiDelta } from './_components/ai-compare';   // A1 (2026-10-23): a change only against a comparable run, tested
 import { plotAvgPos, PositionMove, posText } from './_components/positions';
 import { CATEGORY_META, RecommendationButton, sortRecommendations } from './_components/recommendations';
 import { ReportList } from './_components/reports';
@@ -69,7 +70,6 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
   const links = useMemo(() => sortByDate(d.backlinks.series, (r) => r.month), [d.backlinks.series]);
   const L = d.search.latest;
   const [, prevHealth] = lastTwo(health);
-  const [, prevAi] = lastTwo(ai);
   const [, prevLinks] = lastTwo(links);
   const H = d.health.latest;
   const A = d.ai.latest;
@@ -161,8 +161,8 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
           icon={<Bot />}
           visual={A ? <ScoreRing label="Named in AI answers" value={A.mentionRate} tone="accent" display={<CountUp value={A.mentionRate} format={(v) => pct(v)} />} valueText={pct(A.mentionRate)} size={68} /> : undefined}
           value="-"
-          delta={A ? <Delta value={diff(A.mentionRate, prevAi?.mentionRate)} suffix=" pts" /> : undefined}
-          deltaLabel={A ? 'vs last check' : undefined}
+          delta={A ? <AiDelta compare={A.compare} metric="named_rate" /> : undefined}
+          deltaLabel={A?.compare?.comparable ? 'vs last comparable check' : undefined}
           sparkline={<Sparkline data={ai} dataKey="mentionRate" />}
           meta={A ? `Share of voice ${pct(A.shareOfVoice)} · cited in ${pct(A.citationRate)}` : 'ChatGPT, Perplexity, Gemini, Claude and Google AI'}
           onClick={() => navigate(page('ai'))}

@@ -171,7 +171,7 @@ export function MonitorSettingsFields({
                 </div>
               )}
               <AiPanelCost value={value} />
-              <AiPrecisionTable panel={value.aiPromptsMax} engines={value.aiEngines} pulse={value.aiPulse} measured={aiMeasured} />
+              <AiPrecisionTable panel={value.aiPromptsMax} engines={value.aiEngines} pulse={value.aiPulse} pulseMode={value.aiPulseMode} pulsePerWeek={value.aiPulsePerWeek} measured={aiMeasured} />
               <div className="space-y-3 rounded-lg border border-line p-3">
                 <Checkbox
                   label="AI growth (weekly)"

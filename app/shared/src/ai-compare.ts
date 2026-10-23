@@ -153,6 +153,9 @@ export function aiEngineSetOf(engines: Record<string, unknown> | null | undefine
   return keys.filter((e) => !MONTHLY.includes(e) && !(rec(engines[e]).carried === true || rec(engines[e]).carried === 'true') && answered(engines[e])).sort();
 }
 
+/** the engine's changeOf `min_points`: a smaller move is never called a change */
+export const AI_CHANGE_MIN_POINTS = 5;
+
 /** Standard normal CDF (Abramowitz-Stegun 7.1.26 through erf), enough for a two-sided p-value. */
 function normCdf(z: number): number {
   const t = 1 / (1 + 0.3275911 * (Math.abs(z) / Math.SQRT2));
@@ -171,7 +174,9 @@ export function aiTwoProportion(k1: number, n1: number, k2: number, n2: number):
   if (!(se > 0)) return { z: 0, p: 1, significant: false };
   const z = (p1 - p2) / se;
   const p = 2 * (1 - normCdf(Math.abs(z)));
-  return { z: Math.round(z * 100) / 100, p: Math.round(p * 10000) / 10000, significant: p < 0.05 };
+  // the engine's changeOf: |z| >= 1.96 AND at least 5 points (a 1-point move on 4,000 answers is real and still not news)
+  const pts = Math.abs(Math.round(1000 * (p1 - p2)) / 10);
+  return { z: Math.round(z * 100) / 100, p: Math.round(p * 10000) / 10000, significant: Math.abs(z) >= 1.96 && pts >= AI_CHANGE_MIN_POINTS };
 }
 
 const day = (iso: string) => String(iso || '').slice(0, 10);
