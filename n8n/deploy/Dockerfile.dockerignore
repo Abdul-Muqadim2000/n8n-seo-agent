@@ -5,3 +5,4 @@
 !deploy/entrypoint.sh
 !deploy/release.mjs
 !deploy/deploy_guard.mjs
+!deploy/never_deploy.mjs
