@@ -69,8 +69,9 @@ for (const s of todo) {
   // F2 (2026-10-23, ENGINE_AUDIT.md E18): the SAME gate input the weekly AI Plan builds (AIP.fitInput: the ladder heads, the site's services,
   // its keywords) — it used to protect the questions' own topics and no services here, so one question could be refused on one path and
   // asked on the other
-  const fitCtx = FITR.ctx(AIP.fitInput({ domain: s.domain, competitors: [...s.settings.competitors, ...rivals0], aliases: aliasRow0 ? parse(aliasRow0.value, {}) : {},
-    ladders: ladderRows.filter(l => normD(l.domain) === s.domain), services: AIP.servicesOfRow(s), keywords: s.keywords || [] }));
+  const fit_input = AIP.fitInput({ domain: s.domain, competitors: [...s.settings.competitors, ...rivals0], aliases: aliasRow0 ? parse(aliasRow0.value, {}) : {},
+    ladders: ladderRows.filter(l => normD(l.domain) === s.domain), services: AIP.servicesOfRow(s), keywords: s.keywords || [] });
+  const fitCtx = FITR.ctx(fit_input);
   const fitQ = FITR.rungs(storedQ, fitCtx, { where: 'daily AI pulse', keyword: (p) => p.keyword || p.topic || '', live: (p) => p.source === 'custom' });
   const set_aside = fitQ.set_aside;
   const location_code0 = Number(s.location_code) || 2840;
@@ -117,7 +118,7 @@ for (const s of todo) {
         // z-test below pooled seven days of a DIFFERENT panel and called the result "a real drop, not sampling noise".
         engines: Object.keys(eng).filter(e => (Number((eng[e] || {}).answered) || 0) > 0).sort(), panel: Object.keys(pr).length }; });
   const location_code = Number(s.location_code) || 2840;
-  out.push({ json: { site_id: s.site_id, domain: s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
+  out.push({ json: { site_id: s.site_id, domain: s.domain, fit_input, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
     on_demand, business_name: s.profile.business_name || '', brand_names, competitors: [...new Set([...s.settings.competitors, ...autoRivals])].slice(0, 8), configured_competitors: s.settings.competitors, aliases: aliasRow ? parse(aliasRow.value, {}) : {},
     engines: s.settings.engines, pulse_engines: engines, prompts, prompts_max: s.settings.prompts_max, pulse_run: true, full_due: false, run_kind: 'pulse', monthly_engines: [], baseline, date: today,
     // G6: the morning's sample, the markets its questions are asked in, and what this morning is priced at (the run ledger reserves it)

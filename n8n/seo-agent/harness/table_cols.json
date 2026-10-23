@@ -145,6 +145,28 @@
   "fanout",
   "cited_urls"
  ],
+ "AI_PROMPTS": [
+  "prompt_id",
+  "site_id",
+  "domain",
+  "prompt",
+  "kind",
+  "topic",
+  "keyword",
+  "source",
+  "status",
+  "created_at",
+  "stage",
+  "cluster",
+  "volume",
+  "origin",
+  "updated_at",
+  "persona",
+  "market",
+  "pinned",
+  "fit_note",
+  "keyword_source"
+ ],
  "MONITORS": [
   "site_id",
   "domain",

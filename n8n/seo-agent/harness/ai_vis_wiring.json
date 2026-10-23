@@ -1,0 +1,2187 @@
+{
+ "connections": {
+  "AI Access": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Requests",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Analysed Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Answer Rows?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Answer Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Raw Answers?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Asking State": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Asking State?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Brief": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Prompt For Count (AI Brief)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Brief Input": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Brief",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Cache Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Cache Rows?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Chunk Handoff": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run State Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Metrics": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Final Sites?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Plan": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ensure Run Ledger (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Prospect Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any AI Prospects?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Report": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Prepare PDF AI",
+      "type": "main"
+     },
+     {
+      "index": 0,
+      "node": "Load Cost Factors (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Requests": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any AI Requests?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Requests Go": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Go AI Requests?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Retry Requests": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any AI Retries?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Vis Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Save AI Visibility",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Access Requests": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Access?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "After Count (AI Brief)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Report",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "After Count (Answer Analyst)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Apply Analysis",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "After Count (Prompt Writer)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Prompt Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "After Run Ledger (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run Allowed? (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Alert Retry Plan (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Alert Retry (AI)?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Alert Retry Result (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Save Alert Retry (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Analyst Jobs": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Analyst Jobs?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Answer Analyst": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Prompt For Count (Answer Analyst)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any AI Prospects?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Save AI Prospects",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "AI Cache Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any AI Requests?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Asking State",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Parse AI Answers",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any AI Retries?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Wait Before AI Retry",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Merge AI Answers",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Access?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Fetch Access",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "AI Access",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Alert Retry (AI)?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Post Alert Retry (AI)",
+      "type": "main"
+     }
+    ],
+    []
+   ]
+  },
+  "Any Analyst Jobs?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Answer Analyst",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Apply Analysis",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Answer Rows?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Update AI Answers",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "AI Chunk Handoff",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Asking State?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Save Asking State",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "AI Requests Go",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Cache Rows?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Save AI Cache",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Prune Old Answers",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Discovery?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run Discovery",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Prompt Jobs",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Final Sites?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Vis Rows",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Chunk Part Done",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any GA4 (AI)?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "GA4 AI Report",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Access Requests",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Next Chunk?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Start Next Chunk",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "AI Metrics",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Prompt Jobs?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Prompt Writer",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Prompt Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Prompt Rows?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Save Prompts",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Traffic Requests",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Raw Answers?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Save AI Answers",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Analyst Jobs",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Run Alerts?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Save Run Alert",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Stop Notices (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Run Discovery Retries?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Wait Before Run Discovery Retry",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Run Discovery Answers",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Run State?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Save Run State",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Run Alert Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Sites (AI)?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Open Run Notices (AI)",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Busy Notices (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Apply Analysis": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Analysed Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Attach PDF AI": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Has Email (AI)?",
+      "type": "main"
+     },
+     {
+      "index": 0,
+      "node": "Build AI Callback",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Build AI Callback": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ledger Join (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Busy Notices (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Tell Busy Notices?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Callback Ledger (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Has Callback (AI)?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Chunk Part Done": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Cost Factors (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Claude \u2014 AI Brief": {
+   "ai_languageModel": [
+    [
+     {
+      "index": 0,
+      "node": "AI Brief",
+      "type": "ai_languageModel"
+     }
+    ]
+   ]
+  },
+  "Claude \u2014 Answer Analyst": {
+   "ai_languageModel": [
+    [
+     {
+      "index": 0,
+      "node": "Answer Analyst",
+      "type": "ai_languageModel"
+     }
+    ]
+   ]
+  },
+  "Claude \u2014 Prompt Writer": {
+   "ai_languageModel": [
+    [
+     {
+      "index": 0,
+      "node": "Prompt Writer",
+      "type": "ai_languageModel"
+     }
+    ]
+   ]
+  },
+  "Count Answer (AI Brief)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "After Count (AI Brief)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Count Answer (Answer Analyst)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "After Count (Answer Analyst)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Count Answer (Prompt Writer)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "After Count (Prompt Writer)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Count Prompt (AI Brief)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Count Answer (AI Brief)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Count Prompt (Answer Analyst)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Count Answer (Answer Analyst)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Count Prompt (Prompt Writer)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Count Answer (Prompt Writer)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "DFS Balance (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Open Runs (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "DFS Balance End (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Run Ledger (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Discovery Requests": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Discovery?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ensure AI Answers Table": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ensure AI Visibility Table",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ensure AI Daily Table": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ensure Cache Table",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ensure AI Prompts Table": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ensure AI Answers Table",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ensure AI Visibility Table": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ensure Prospects Table",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ensure Cache Table": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Sites",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ensure Monitors Table": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ensure AI Prompts Table",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ensure Ops Alerts (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Open Alerts (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ensure Profiles Table": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ensure AI Daily Table",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ensure Prospects Table": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ensure Sites Table",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ensure Run Ledger (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "DFS Balance (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ensure Sites Table": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ensure Profiles Table",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Fetch Access": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Access",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "GA4 AI Report": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Access Requests",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Go AI Requests?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run AI Requests",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "AI Chunk Handoff",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Has Callback (AI)?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "POST AI Report",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Has Email (AI)?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Send AI Report",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ledger Join (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Callback Ledger (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Ledger Settle (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Settle Run Ledger (AI)",
+      "type": "main"
+     },
+     {
+      "index": 1,
+      "node": "Ledger Join (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load AI Daily": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Cache (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load AI Prompts": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load AI Visibility",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load AI Run Answers": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Pages (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load AI Visibility": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Link Prospects",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Cache (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Query History",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Cost Factors (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "DFS Balance End (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Ladders": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Monitors",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Link Prospects": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load AI Daily",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Monitors": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Profiles",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Open Alerts (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Alert Retry Plan (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Open Runs (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run Ledger Row (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Pages (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Plan",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Profiles": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load AI Prompts",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Query History": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load AI Run Answers",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Run Ledger (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ledger Settle (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Sites": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Ladders",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Manual Run": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ensure Monitors Table",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Merge AI Answers": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Parse AI Answers",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Need Site Text?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Read Site (AI)",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Discovery Requests",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Next Chunk Starts": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Next Chunk?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Nothing To Do (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "DFS Balance End (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Open Run Notices (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Tell Open Run Notices?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Parse AI Answers": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Answer Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Parser \u2014 AI Brief": {
+   "ai_outputParser": [
+    [
+     {
+      "index": 0,
+      "node": "AI Brief",
+      "type": "ai_outputParser"
+     }
+    ]
+   ]
+  },
+  "Parser \u2014 Answer Analyst": {
+   "ai_outputParser": [
+    [
+     {
+      "index": 0,
+      "node": "Answer Analyst",
+      "type": "ai_outputParser"
+     }
+    ]
+   ]
+  },
+  "Parser \u2014 Prompt Writer": {
+   "ai_outputParser": [
+    [
+     {
+      "index": 0,
+      "node": "Prompt Writer",
+      "type": "ai_outputParser"
+     }
+    ]
+   ]
+  },
+  "Post Alert Retry (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Alert Retry Result (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Post Busy Notices": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Nothing To Do (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Post Open Run Notices": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Site Text Jobs",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Post Stop Notices": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Next Chunk Starts",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Prepare PDF AI": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Render PDF AI",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Prompt For Count (AI Brief)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Count Prompt (AI Brief)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Prompt For Count (Answer Analyst)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Count Prompt (Answer Analyst)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Prompt For Count (Prompt Writer)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Count Prompt (Prompt Writer)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Prompt Jobs": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Prompt Jobs?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Prompt Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Prompt Rows?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Prompt Writer": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Prompt For Count (Prompt Writer)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Prune Old Answers": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Brief Input",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Read Site (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Discovery Requests",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Refusal Notice (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Tell Caller (AI)?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Refuse Run Ledger (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Refusal Notice (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Render PDF AI": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Attach PDF AI",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Reserve Run Ledger (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "After Run Ledger (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run AI Requests": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Retry Requests",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run AI Retries": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Merge AI Answers",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run Alert Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Run Alerts?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run Allowed? (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Sites (AI)?",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Refuse Run Ledger (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run Discovery": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run Discovery Retry Plan",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run Discovery (Retry)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run Discovery Answers",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run Discovery Answers": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Prompt Jobs",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run Discovery Retry Plan": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Run Discovery Retries?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run Ledger Row (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Reserve Run Ledger (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run State Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Run State?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Save AI Answers": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Analyst Jobs",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Save AI Cache": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Prune Old Answers",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Save AI Prospects": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Cache Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Save AI Visibility": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Prospect Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Save Asking State": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Requests Go",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Save Prompts": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Traffic Requests",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Save Run Alert": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Stop Notices (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Save Run State": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run Alert Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Settle Run Ledger (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Ensure Ops Alerts (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Site Text Jobs": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Need Site Text?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Start Next Chunk": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Metrics",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Stop Notices (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Tell Stop Notices?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Tell Busy Notices?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Post Busy Notices",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Nothing To Do (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Tell Caller (AI)?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Post Refusal (AI)",
+      "type": "main"
+     }
+    ],
+    []
+   ]
+  },
+  "Tell Open Run Notices?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Post Open Run Notices",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Site Text Jobs",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Tell Stop Notices?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Post Stop Notices",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Next Chunk Starts",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Traffic Requests": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any GA4 (AI)?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Update AI Answers": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Chunk Handoff",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Wait Before AI Retry": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run AI Retries",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Wait Before Run Discovery Retry": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run Discovery (Retry)",
+      "type": "main"
+     }
+    ]
+   ]
+  }
+ },
+ "filters": {
+  "Ensure AI Answers Table": null,
+  "Ensure AI Daily Table": null,
+  "Ensure AI Prompts Table": null,
+  "Ensure AI Visibility Table": null,
+  "Ensure Cache Table": null,
+  "Ensure Monitors Table": null,
+  "Ensure Ops Alerts (AI)": null,
+  "Ensure Profiles Table": null,
+  "Ensure Prospects Table": null,
+  "Ensure Run Ledger (AI)": null,
+  "Ensure Sites Table": null,
+  "Load AI Daily": {
+   "conditions": [
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    },
+    {
+     "condition": "gte",
+     "keyName": "checked_at",
+     "keyValue": "={{ new Date(Date.now() - 15 * 864e5).toISOString() }}"
+    }
+   ]
+  },
+  "Load AI Prompts": {
+   "conditions": [
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    }
+   ]
+  },
+  "Load AI Run Answers": {
+   "conditions": [
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    },
+    {
+     "condition": "like",
+     "keyName": "run_id",
+     "keyValue": "={{ String(($('Manual Run').first().json || {}).continue_run || '').trim() || '%' }}"
+    },
+    {
+     "condition": "neq",
+     "keyName": "run_kind",
+     "keyValue": "pulse"
+    },
+    {
+     "condition": "gte",
+     "keyName": "checked_at",
+     "keyValue": "={{ new Date(Date.now() - 6.2 * 864e5).toISOString() }}"
+    }
+   ]
+  },
+  "Load AI Visibility": {
+   "conditions": [
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    },
+    {
+     "condition": "gte",
+     "keyName": "checked_at",
+     "keyValue": "={{ new Date(Date.now() - 60 * 864e5).toISOString() }}"
+    }
+   ]
+  },
+  "Load Cache (AI)": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "kind",
+     "keyValue": "ai"
+    },
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    }
+   ]
+  },
+  "Load Cost Factors (AI)": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "kind",
+     "keyValue": "cost"
+    }
+   ]
+  },
+  "Load Ladders": null,
+  "Load Link Prospects": {
+   "conditions": [
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    }
+   ]
+  },
+  "Load Monitors": null,
+  "Load Open Alerts (AI)": {
+   "conditions": [
+    {
+     "condition": "gte",
+     "keyName": "last_seen_at",
+     "keyValue": "={{ new Date(Date.now() - 7 * 864e5).toISOString() }}"
+    }
+   ]
+  },
+  "Load Open Runs (AI)": {
+   "conditions": [
+    {
+     "condition": "gte",
+     "keyName": "created_at",
+     "keyValue": "={{ new Date(Date.now() - 21600000).toISOString() }}"
+    }
+   ]
+  },
+  "Load Pages (AI)": {
+   "conditions": [
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    }
+   ]
+  },
+  "Load Profiles": null,
+  "Load Query History": {
+   "conditions": [
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    },
+    {
+     "condition": "gte",
+     "keyName": "checked_at",
+     "keyValue": "={{ new Date(Date.now() - 35 * 864e5).toISOString() }}"
+    }
+   ]
+  },
+  "Load Run Ledger (AI)": {
+   "conditions": [
+    {
+     "condition": "gte",
+     "keyName": "created_at",
+     "keyValue": "={{ new Date(Date.now() - 21600000).toISOString() }}"
+    }
+   ]
+  },
+  "Load Sites": null,
+  "Prune Old Answers": {
+   "conditions": [
+    {
+     "condition": "lt",
+     "keyName": "checked_at",
+     "keyValue": "={{ new Date(Date.now() - 120 * 864e5).toISOString() }}"
+    }
+   ]
+  },
+  "Refuse Run Ledger (AI)": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "run_id",
+     "keyValue": "={{ $execution.id }}"
+    },
+    {
+     "condition": "eq",
+     "keyName": "status",
+     "keyValue": "reserved"
+    }
+   ]
+  },
+  "Reserve Run Ledger (AI)": null,
+  "Save AI Answers": null,
+  "Save AI Cache": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "key",
+     "keyValue": "={{ $json.key }}"
+    }
+   ]
+  },
+  "Save AI Prospects": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "site_id",
+     "keyValue": "={{ $json.site_id }}"
+    },
+    {
+     "condition": "eq",
+     "keyName": "prospect_domain",
+     "keyValue": "={{ $json.prospect_domain }}"
+    },
+    {
+     "condition": "eq",
+     "keyName": "type",
+     "keyValue": "={{ $json.type }}"
+    }
+   ]
+  },
+  "Save AI Visibility": null,
+  "Save Alert Retry (AI)": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "alert_key",
+     "keyValue": "={{ $json.alert_key }}"
+    }
+   ]
+  },
+  "Save Asking State": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "key",
+     "keyValue": "={{ $json.key }}"
+    }
+   ]
+  },
+  "Save Prompts": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "site_id",
+     "keyValue": "={{ $json.site_id }}"
+    },
+    {
+     "condition": "eq",
+     "keyName": "prompt_id",
+     "keyValue": "={{ $json.prompt_id }}"
+    }
+   ]
+  },
+  "Save Run Alert": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "alert_key",
+     "keyValue": "={{ $json.alert_key }}"
+    }
+   ]
+  },
+  "Save Run State": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "key",
+     "keyValue": "={{ $json.key }}"
+    }
+   ]
+  },
+  "Settle Run Ledger (AI)": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "run_id",
+     "keyValue": "={{ $execution.id }}"
+    },
+    {
+     "condition": "eq",
+     "keyName": "status",
+     "keyValue": "reserved"
+    }
+   ]
+  },
+  "Update AI Answers": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "run_id",
+     "keyValue": "={{ $json.run_id }}"
+    },
+    {
+     "condition": "eq",
+     "keyName": "prompt_id",
+     "keyValue": "={{ $json.prompt_id }}"
+    },
+    {
+     "condition": "eq",
+     "keyName": "engine",
+     "keyValue": "={{ $json.engine }}"
+    }
+   ]
+  }
+ }
+}

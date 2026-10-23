@@ -96,7 +96,7 @@ module.exports = async (ctx) => {
     reset(); const SN = 'S202 G6 — 500 questions on 5 weekly engines: 2,495 requests asked over 5 executions, each key once, the state carried, the week measured once over all of them';
     begin(SN); const check = mkCheck(SN);
     const panel = synthPanel(500);
-    let cache = [], stored = [], trigger = null; const asked = new Set(); let twice = 0; const execs = []; let spent = 0; let askedSoFar = 0, nParts = 0;
+    let cache = [], stored = [], trigger = null; const asked = new Set(); let twice = 0; const execs = []; let spent = 0; let askedSoFar = 0, nParts = 0, nFail = 0;
     // F2 (2026-10-23, E11): a part is sized by TIME (AIP.chunkPlan: 40 of the 60 minutes at the engines' slow-case seconds), no longer 600
     for (let k = 1; k <= 14; k++) {
       loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache, runAnswers: stored, trigger });
@@ -114,7 +114,7 @@ module.exports = async (ctx) => {
       if (k === 1) { nParts = Math.ceil(2495 / plan.chunk.size); check('chunk 1 asks the part its TIME budget holds (' + plan.chunk.size + ' requests, under 600: ' + plan.chunk.size_basis + '), the first questions x 5 engines in panel order', plan.chunk.size < 600 && plan.chunk.size >= AIP.TIME.min_requests && qreq.length === plan.chunk.size && qreq[0].prompt_id === 'g6_000' && /40 of the 60 minutes/.test(plan.chunk.size_basis), [qreq.length, qreq[0].prompt_id, plan.chunk.size_basis].join(' ')); }
       askedSoFar += qreq.length;
       if (k === 1) { const sa = qreq.find(r => r.market === 'SA-en'); check('a Saudi question is asked with the Saudi location', sa && sa.body[0].location_code === 2682 || (sa && sa.body[0].web_search_country_iso_code === 'SA'), JSON.stringify(sa && sa.body)); }
-      const rows = answerRows(qreq, plan.run_id, k === 2 ? { fail: 50 } : null);
+      const rows = answerRows(qreq, plan.run_id, k === 2 ? { fail: 50 } : null); if (k === 2) nFail = rows.filter(r => r.error).length;
       mock('Apply Analysis', items(rows));
       const ho = (await run('AI Chunk Handoff', [{ json: {} }])).map(i => i.json);
       const h = ho[0];
@@ -124,7 +124,7 @@ module.exports = async (ctx) => {
         check('chunk ' + k + ': the state row (exact seo_cache columns) and the next execution\'s start (continue_run, parent = this execution)', h.state_row && ['key', 'kind', 'site_id', 'value', 'updated_at'].every(c => c in h.state_row) && Object.keys(h.state_row).length === 5 && h.next && h.next.continue_run === plan.run_id && h.next.parent_run_id === 'test-exec' && h.next.domain === 'techand.ai', JSON.stringify(h).slice(0, 300));
         const st = JSON.parse(h.state_row.value);
         check('chunk ' + k + ': the state counts what is asked and what is left, and records every key sent', st.asked === askedSoFar && st.status === 'running' && st.chunk === k && st.total === 2495 && AIP.unpackKeys(st.asked_keys).size === askedSoFar && st.pending === null, JSON.stringify({ ...st, asked_keys: undefined }).slice(0, 400));
-        if (k === 2) check('chunk 2: answers the gate could not get are counted apart and said', st.unavailable === 12 && /could not be read/.test(h.note), h.note);
+        if (k === 2) check('chunk 2: answers the gate could not get are counted apart and said', nFail > 0 && st.unavailable === nFail && /could not be read/.test(h.note), h.note);
         check('chunk ' + k + ': its own DataForSEO money is stated for the settle', Math.abs(h.cost_usd - qreq.length * 0.004) < 1e-6, h.cost_usd);
         // AI Metrics: nothing finishes here — the report path ends
         const am = (await run('AI Metrics', [{ json: {} }]))[0].json;
@@ -136,7 +136,7 @@ module.exports = async (ctx) => {
       check('the last part is execution ' + k + ' and it is flagged final from its plan', k === nParts && plan.chunk.final_expected && plan.chunk.going && plan.chunk.no === nParts && plan.ga4_property_id === String((W['Load Sites'][0] || {}).ga4_property_id || '').replace(/^properties\//, '').trim(), JSON.stringify(plan.chunk));
       check('the last part keeps the run\'s id and start time', plan.run_id === JSON.parse(cache[0].value).run_id && plan.checked_at === JSON.parse(cache[0].value).started_at, plan.run_id);
       const am = (await run('AI Metrics', [{ json: {} }]))[0].json;
-      check('the week is measured over EVERY answer of the run: 2,495 requests, the 12 that failed left out of the rates', am.metrics && am.metrics.requests === 2495 && am.metrics.samples === 2495 - 12, JSON.stringify(am.metrics && { r: am.metrics.requests, s: am.metrics.samples }));
+      check('the week is measured over EVERY answer of the run: 2,495 requests, the ' + nFail + ' that failed left out of the rates', am.metrics && am.metrics.requests === 2495 && am.metrics.samples === 2495 - nFail, JSON.stringify(am.metrics && { r: am.metrics.requests, s: am.metrics.samples }));
       check('the report says the run was asked over ' + nParts + ' executions', am.run_split && am.run_split.executions === nParts && new RegExp('asked over ' + nParts + ' executions').test(am.run_split.note), JSON.stringify(am.run_split));
       check('the ledger settles this execution\'s money; the row and report carry the whole run', Math.abs(am.cost_usd - qreq.length * 0.004) < 1e-6 && Math.abs(am.run_cost_usd - 2495 * 0.004) < 0.01 && am.vis_row.cost_usd === am.run_cost_usd, [am.cost_usd, am.run_cost_usd].join(' '));
       const done = (am.cache_rows || []).find(c => /^ai_run:/.test(c.key));
@@ -170,7 +170,7 @@ module.exports = async (ctx) => {
     const rr = (await run('AI Requests', [{ json: {} }])).map(i => i.json).filter(r => r.engine);
     const storedKeys = new Set(half.map(keyOf));
     const sentKeys = AIP.unpackKeys(sentPacked);
-    check('the resumed part asks none of the keys its dead part SENT (stored or not) — it starts after them', rr.length === pr.chunk.size && rr.every(r => !storedKeys.has(keyOf(r)) && !sentKeys.has(keyOf(r))) && rr[0].prompt_id === 'g6_' + String(r1.length / 5).padStart(3, '0'), [rr.length, rr[0].prompt_id].join(' '));
+    check('the resumed part asks none of the keys its dead part SENT (stored or not) — it starts after them', rr.length === pr.chunk.size && rr.every(r => !storedKeys.has(keyOf(r)) && !sentKeys.has(keyOf(r))) && rr[0].prompt_id === 'g6_' + String(Math.floor(r1.length / 5)).padStart(3, '0'), [rr.length, rr[0].prompt_id].join(' '));
     // silent 10 minutes: a live part — a second start is a twin and does nothing
     loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache: [st(10)], runAnswers: half });
     const pb = (await run('AI Plan', [{ json: {} }]))[0].json;

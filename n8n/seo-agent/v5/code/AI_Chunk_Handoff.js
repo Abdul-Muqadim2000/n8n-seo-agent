@@ -88,7 +88,7 @@ for (const p of plans) {
   // the part's wall time (from its record before paying to here) and the seconds one request cost it, the analyst's share taken out
   const t0 = askedAt(p.site_id); const wall_s = t0 ? Math.max(0, Math.round((now0 - t0) / 1000)) : null;
   const asked_now = Number(ci.asked_now || 0);
-  const spr = wall_s != null && asked_now >= 20 ? +Math.max(0.3, (wall_s - analystHere(p.site_id) * AIP.TIME.analyst_job_s - AIP.TIME.retry_wait_s) / asked_now).toFixed(2) : (Number(prevState.sec_per_request) || null);
+  const spr = wall_s != null && wall_s >= 120 && asked_now >= 20 ?   /* a part shorter than 2 minutes measures nothing useful */ +Math.max(0.3, (wall_s - analystHere(p.site_id) * AIP.TIME.analyst_job_s - AIP.TIME.retry_wait_s) / asked_now).toFixed(2) : (Number(prevState.sec_per_request) || null);
   const st = { ...AIP.baseState(p), cycle: cyc, ceiling_dfs_usd: ceiling || null,
     updated_at: now, chunk: p.chunk.no, status: stop ? stop.status : 'running', finishing: final, stop_reason: stop ? stop.reason : '',
     asked: Number(ci.done_before || 0) + asked_now, total: Number(ci.total) || p.chunk.total_est, left,

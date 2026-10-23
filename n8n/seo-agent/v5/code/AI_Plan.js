@@ -201,7 +201,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   return { json: { site_id: s.site_id, domain: s.domain,
     // G6: the split run (chunk, what is done, what is left to spend), the markets and personas the panel covers, the cost model of this panel
     chunk, done_keys: doneKeys, markets, markets_map, own_market: ownMarket, personas, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week,
-    est_dfs_usd: stop ? 0 : +Math.min(Math.max(0, runCost.dfs - spent.dfs), Math.max(0, ceiling - committed)).toFixed(4), est_ai_usd: stop ? 0 : +Math.max(0, runCost.ai - spent.ai).toFixed(4), run_cost_est: runCost, cost_model: costNow,
+    est_dfs_usd: stop ? 0 : +Math.min(Math.max(0, runCost.dfs - Math.max(spent.dfs, committed)), Math.max(0, ceiling - committed)).toFixed(4),   /* F2: a dead part's committed money counts as spent */ est_ai_usd: stop ? 0 : +Math.max(0, runCost.ai - spent.ai).toFixed(4), run_cost_est: runCost, cost_model: costNow,
     // F2 (E1): a stopped run asks nothing; AI Chunk Handoff writes its state, the ops alert and the notice to its own caller
     stop, ceiling_dfs_usd: ceiling,
     spent_before: spent, state_before: going ? st : null, canonical_host: site_model.canonical_host || s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code),

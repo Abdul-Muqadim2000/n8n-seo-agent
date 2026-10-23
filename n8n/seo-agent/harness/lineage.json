@@ -13,8 +13,8 @@
    "subject": 17
   },
   "refusal": {
-   "pass": 22,
-   "subject": 39
+   "pass": 23,
+   "subject": 40
   },
   "withheld": {
    "pass": 4,
@@ -419,6 +419,16 @@
     "refusal"
    ],
    "workflow": "SEO Agent \u2014 AI Pulse"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Answer Rows": {
+   "fails": [],
+   "markup": 0,
+   "node": "AI Answer Rows",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
   },
   "SEO Agent \u2014 AI Visibility Tracker / AI Chunk Handoff": {
    "fails": [],

@@ -18533,6 +18533,8 @@ await guard('S166 B8-8 B8-9 B8-10 the build carries the three engine fixes in bo
 await require('./scenarios_fa3')({ H, run, mock, store, guard, reset, begin });
 // G6 (2026-10-18): the AI question panel at enterprise scale — up to 500 questions, split runs, the pulse's rotating sample (harness/scenarios_g6.js)
 await require('./scenarios_g6')({ H, run, mock, store, guard, reset, begin });
+// F2 (2026-10-23): AI visibility run robustness, money safety, ids and load (harness/scenarios_f2.js; docs/ai-visibility-2026-10-23/fixes/F2.md)
+await require('./scenarios_f2')({ H, run, mock, store, guard, reset, begin });
 await require('./scenarios_cycle_semantics')({ H, run, mock, store, guard, reset, begin });   // 2026-10-19: the cycle run (trigger: 'cycle'), SCHEDULING_KEYWORDS_PLAN.md §4.5
 await require('./scenarios_keyword_first')({ H, run, mock, store, guard, reset, begin });   // keyword-first autopilot (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5 / §9 KF)
 
