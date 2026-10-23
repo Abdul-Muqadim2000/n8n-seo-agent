@@ -174,7 +174,10 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  ('link_builder', 'boolean'),   # v4.13 (LINK_BUILDER_SPEC.md): the weekly Link Builder (empty = on); on, the Backlink Monitor no longer drafts e-mails
                  ('stuck_weeks', 'number'),   # G32 (2026-10-13): weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept 2-26)
                  # G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): buyer roles and extra markets the panel covers, and how the daily pulse samples it
-                 ('ai_personas', 'string'), ('ai_markets', 'string'), ('ai_pulse_mode', 'string'), ('ai_pulse_per_week', 'number')]
+                 ('ai_personas', 'string'), ('ai_markets', 'string'), ('ai_pulse_mode', 'string'), ('ai_pulse_per_week', 'number'),
+                 # W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): the owner's alert rules (JSON list, validated by Site Admin `monitors`)
+                 # and the declared share-of-voice set (comma list of competitor ids; '' = the configured competitors)
+                 ('ai_alert_rules_json', 'string'), ('ai_sov_set', 'string')]
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
                    # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
@@ -204,7 +207,11 @@ AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string')
                # answers (mean place when named, share named first, position-weighted visibility), the period counted (A8), the comparison every
                # reader shares (compare_json, A1) and the counts the next run is compared against (metrics_json)
                ('rule_version', 'string'), ('named_rate', 'number'), ('avg_position', 'number'), ('first_rate', 'number'), ('pos_visibility', 'number'),
-               ('rate_period', 'string'), ('compare_json', 'string'), ('metrics_json', 'string')]
+               ('rate_period', 'string'), ('compare_json', 'string'), ('metrics_json', 'string'),
+               # W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): ranges with the question as the sampling unit, share of voice over a declared
+               # set + others (both denominators, mean normalised position), sentiment of every named answer, did an action work (difference in differences),
+               # the owner's alert rules as evaluated, and this run's answers one by one (compact: the 28-day window and an action's before / after read them)
+               ('ci_json', 'string'), ('sov_json', 'string'), ('sentiment_json', 'string'), ('impact_json', 'string'), ('alerts_rules_json', 'string'), ('units_json', 'string')]
 # v4.9: one row per site per day from the AI Pulse (the panel on the fast engines; small aggregates, no answer text)
 AI_DAILY_TABLE = 'seo_ai_daily'
 AI_DAILY_COLS = [('site_id', 'string'), ('domain', 'string'), ('date', 'string'), ('checked_at', 'string'), ('run_id', 'string'), ('samples', 'number'), ('mentioned', 'number'), ('cited', 'number'),
@@ -452,6 +459,8 @@ LEDGER_EST = {
     'page_watch':      {'ai': 0.0,  'dfs': 0.0},
     # W3-F (2026-10-17): the Reply Reader classifies ONE reply with Haiku (about 1k tokens in, 300 out); the web app calls it per reply and waits
     'reply_read':      {'ai': 0.003, 'dfs': 0.0},
+    # W2-E2 (2026-10-23): the one-off AI repeat pilot - its plan prices itself (est_dfs_usd: 10 questions x 10 asks x its engines, at most $4)
+    'ai_pilot':        {'ai': 0.0, 'dfs': 1.5},
 }
 
 

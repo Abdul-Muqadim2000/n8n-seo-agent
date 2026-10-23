@@ -74,7 +74,8 @@ FIT_GATE_SRC = _rdt('code/_fit_gate.js').rstrip('\n')        # R16 (build_v4.py 
 rd = lambda p: (seo_events.inline(_rdt(p)).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
                 .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC)
                 .replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__AI_PANEL__*/', AI_PANEL_SRC).replace('/*__WAITING__*/', WAITING_SRC).replace('/*__READINESS__*/', READINESS_SRC)
-                .replace('/*__SITE_TIME__*/', site_time_src()).replace('/*__GONE__*/', _rdt('code/_gone.js').rstrip('\n')))   # RV-1 (2026-10-21): the pages that no longer answer, one message   # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the website's calendar and the cycle run (ST)
+                .replace('/*__SITE_TIME__*/', site_time_src()).replace('/*__GONE__*/', _rdt('code/_gone.js').rstrip('\n'))
+                .replace('/*__AI_MEASURE__*/', _rdt('code/_ai_measure.js').rstrip('\n')))   # W2-E2 (2026-10-23): Site Admin validates the owner's AI alert rules with the engine's own rule (AVX.validateRules)   # RV-1 (2026-10-21): the pages that no longer answer, one message   # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the website's calendar and the cycle run (ST)
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'sitetracker:' + name))
 MAIN_WF = json.load(open(os.path.join(OUT, 'SEO_Agent_v4.json')))[0]

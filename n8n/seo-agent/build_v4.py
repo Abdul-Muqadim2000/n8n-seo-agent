@@ -5208,7 +5208,7 @@ def _r17_r29_checks():
         _check_ledger_order55(files55[wname55], wiring55); checked55 += 1
     # R32's companion (section 59): Page Watch joined the chain, so it is ten — the nine that spend plus the daily watch, which keeps a
     # $0 row so the guard and the day's reconciliation can see that it ran at all.
-    assert checked55 == 11, 'R17: ' + str(checked55) + ' workflows checked, expected 11 (the nine of R17, Page Watch, and the Reply Reader since W3-F)'
+    assert checked55 == 12, 'R17: ' + str(checked55) + ' workflows checked, expected 12 (the nine of R17, Page Watch, the Reply Reader since W3-F, and the AI Repeat Pilot since W2-E2)'
     hits55 = _secret_scan55([os.path.join(HERE0, 'workflows'), os.path.join(HERE0, 'harness', 'code_v4')])
     assert not hits55, 'R29: a secret reached the generated files:\n  ' + '\n  '.join(hits55)
     # R30 (2026-10-14): a shape scan only catches the secrets we thought of. The alert channel is checked positively as well — what is
@@ -6499,7 +6499,7 @@ def _b64_checks():
             'B-A7: ' + wname64 + ' does not write the retry state back: ' + str(wr64)
         out64[wname64] = {'guard': g64, 'retry': r64, 'writes': wr64, 'if_outputs': if64,
                           'refuse_values': sorted(ref64['columns']['value'].keys())}
-    assert len(out64) == 11, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 11 (the ten schedules and the Reply Reader since W3-F)'
+    assert len(out64) == 12, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 12 (the ten schedules, the Reply Reader since W3-F and the AI Repeat Pilot since W2-E2)'
     json.dump({'monitors': out64, 'n_minutes': 30, 'k_attempts': 3, 'max_attempts': 10, 'per_sweep': 5,
                'error_handler': _ops64['retry'], 'columns': [c for c, _t in _OAC64],
                'page_watch_delivery': {'code': 'Watch Ops Delivery', 'save': 'Save Watch Ops Delivery'}},
@@ -8455,7 +8455,8 @@ def _b81_checks():
             'AVM.seChange(H.sov, H.sov_se, H.sov_n, PS.sov.rate, PS.sov.se, PS.sov.n)',
             'const score_band = scoreBand(U,', 'scoreChange(visibility_score, prev.visibility_score, score_band)',
             'AVM.seChange(c.sov, c._st.sov_se, c._st.sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0, { min: 10 })',
-            'citation_ci: wilson(cited, samples), sov_ci: H.sov == null',
+            # W2-E2 (2026-10-23): the citation and share-of-voice ranges take the clustered method (question = sampling unit) when it measured one
+            'citation_ci: W2CI.headline.cited_rate.lo != null ? [W2CI.headline.cited_rate.lo, W2CI.headline.cited_rate.hi] : wilson(cited, samples), sov_ci: W2CI.headline.share_of_voice.lo != null',
             'win: rateOf(q.m, q.n, { min: MIN_Q_SAMPLES }), decided: q.n >= MIN_Q_SAMPLES',   # B8-4
             'const gaps = lostQ.filter(q => q.decided).slice(0, 8);', 'const undecided = lostQ.filter(q => !q.decided)',
             'const pulse_basis = PR.length ?', 'partial_days:', 'const capped = (()',          # B8-3 / B8-5
@@ -9075,7 +9076,7 @@ def _b84_checks():
     _dir84 = os.path.join(HERE0, 'workflows')
     _load84 = lambda f: _j84.load(open(os.path.join(_dir84, f), encoding='utf-8'))[0]
     _lw84 = _j84.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
-    _want84 = {'SEO Agent — AI Visibility Tracker': ['AI Brief', 'Answer Analyst', 'Prompt Writer'],
+    _want84 = {'SEO Agent — AI Visibility Tracker': ['AI Brief', 'Answer Analyst', 'Prompt Writer', 'Sentiment Reader'],   # W2-E2 (2026-10-23): + the Sentiment Reader (Haiku)
                'SEO Agent — AI Pulse': [], 'SEO Agent — Audit Scheduler': [],
                'SEO Agent — Backlink Monitor': ['Link Analyst', 'Outreach Writer'],
                'SEO Agent — AI Growth': ['AI Outreach Writer'],
