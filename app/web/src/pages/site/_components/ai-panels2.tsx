@@ -379,14 +379,24 @@ export function AiReportsCard() {
   const upload = useAiImport(org.id, site.id);
   const [source, setSource] = useState<'' | 'bing_ai' | 'gsc_ai'>('');
   const [periodEnd, setPeriodEnd] = useState('');
+  const [dateOrder, setDateOrder] = useState<'' | 'dmy' | 'mdy'>('');
   const file = useRef<HTMLInputElement>(null);
   const send = async (f: File | undefined) => {
     if (!f) return;
     if (f.size > 15_000_000) return toast.error('The file is larger than 15 MB: export a shorter period');
     upload.mutate(
-      { csv: await f.text(), fileName: f.name, source, periodEnd },
+      { csv: await f.text(), fileName: f.name, source, periodEnd, dateOrder },
       {
-        onSuccess: (r) => toast.success(`${r.rows} rows from ${r.label}, ${fmtDate(r.days.from)} to ${fmtDate(r.days.to)}${r.skipped ? ` (${r.skipped} lines skipped)` : ''}`),
+        onSuccess: (r) =>
+          toast.success(`${r.rows} rows from ${r.label}, ${fmtDate(r.days.from)} to ${fmtDate(r.days.to)}${r.skipped ? ` (${r.skipped} lines skipped)` : ''}`, {
+            // R-A4 / R-A13: what an earlier upload lost to this one, and the queries a file without pages holds (is it the right website?)
+            description: [
+              r.replaced ? `${r.replaced} rows of an earlier upload with the same day, page and query were replaced.` : '',
+              r.topQueries?.length ? `Top queries: ${r.topQueries.join(', ')}. A file without pages cannot be matched to a website, so check these are searches for ${site.domain}.` : '',
+            ]
+              .filter(Boolean)
+              .join(' ') || undefined,
+          }),
         onError: (e) => toast.error(errorMessage(e)),
       },
     );
@@ -416,7 +426,7 @@ export function AiReportsCard() {
         <p className="mb-3 text-[13px] text-ink-2">Nothing uploaded yet. Neither report has an API: an export from each is the only way to bring Copilot's citations and Google's AI search figures in.</p>
       )}
       {can('member') ? (
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
           <Field label="Report">
             {(p) => (
               <Select {...p} value={source} onChange={(e) => setSource(e.target.value as typeof source)}>
@@ -426,8 +436,17 @@ export function AiReportsCard() {
               </Select>
             )}
           </Field>
-          <Field label="Last day of the period" optional hint="For a file without dates (Search Console's Queries or Pages file)">
+          <Field label="Last day of the period" optional hint="Needed for a file without dates (Search Console's Queries or Pages file)">
             {(p) => <Input {...p} type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />}
+          </Field>
+          <Field label="Dates in the file" hint="Only needed when every date could be either way round (like 05/10/2026)">
+            {(p) => (
+              <Select {...p} value={dateOrder} onChange={(e) => setDateOrder(e.target.value as typeof dateOrder)}>
+                <option value="">Recognise them from the file</option>
+                <option value="dmy">Day first (22/10/2026)</option>
+                <option value="mdy">Month first (10/22/2026)</option>
+              </Select>
+            )}
           </Field>
           <div>
             <input ref={file} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="sr-only" aria-label="Choose the exported CSV file" onChange={(e) => { void send(e.target.files?.[0]); e.target.value = ''; }} />

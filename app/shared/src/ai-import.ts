@@ -13,7 +13,7 @@
 //  * Search Console: "Top queries" or "Top pages" or "Date" plus "Clicks" and "Impressions" (CTR and Position are ignored). A Queries or
 //    Pages file has no date: the rows are stored on the last day of the period the owner exported (asked in the upload form).
 
-import { importDate, parseCsv } from './link-import';
+import { parseCsv } from './link-import';
 
 export type AiImportSource = 'bing_ai' | 'gsc_ai';
 export const AI_IMPORT_SOURCE_LABEL: Record<AiImportSource, string> = { bing_ai: 'Bing Webmaster Tools, AI Performance', gsc_ai: 'Search Console, AI features' };
@@ -47,6 +47,10 @@ export interface AiImportResult {
   skipped: number;
   days: { from: string; to: string };
   totals: { impressions: number; citations: number; clicks: number };
+  /** R-A5: how the file's dates were read ('none' = no date column: the period end the owner gave) */
+  dateOrder: 'iso' | 'names' | 'dmy' | 'mdy' | 'none';
+  /** R-A13: the file's top queries when it has no page column (the owner checks it is the right property) */
+  topQueries: string[];
 }
 
 const norm = (h: string) => h.toLowerCase().replace(/^﻿/, '').replace(/[^a-z]+/g, ' ').trim();
@@ -66,11 +70,67 @@ const toNum = (v: string) => {
   return Number.isFinite(n) && n >= 0 ? n : NaN;
 };
 
+/** How the day and month are ordered in a file's numeric dates ('' = recognise it from the whole column). */
+export type AiDateOrder = '' | 'dmy' | 'mdy';
+const MONTHS: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+const pad = (n: number) => String(n).padStart(2, '0');
+/** YYYY-MM-DD for a real calendar day, else '' (month 1-12, the day within that month). */
+export function aiYmd(y: number, m: number, d: number): string {
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d) || y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1) return '';
+  return d > new Date(Date.UTC(y, m, 0)).getUTCDate() ? '' : `${y}-${pad(m)}-${pad(d)}`;
+}
+/** A YYYY-MM-DD string that is a real day ('2026-02-31' is not). */
+export const aiIsDay = (s: string): boolean => {
+  const m = String(s ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return !!m && aiYmd(Number(m[1]), Number(m[2]), Number(m[3])) === s;
+};
+
+/**
+ * R-A5 (review 2026-10-23): a date column read as a whole. ISO dates and dates with month names read as they are; numeric dates
+ * (10/22/2026, 22.10.2026) are day-first or month-first for the WHOLE file: a first number over 12 anywhere means day-first, a second
+ * number over 12 means month-first, both is an error, neither is ambiguous and refused unless the owner said which (`order`). Every day
+ * is checked against the calendar. Returns one day per value ('' for a value that is not a date) and the order used.
+ */
+export function aiDateColumn(values: string[], order: AiDateOrder = ''): { days: string[]; order: 'iso' | 'names' | 'dmy' | 'mdy' | 'none' } {
+  type P = { kind: 'iso' | 'names'; day: string } | { kind: 'num'; a: number; b: number; y: number } | null;
+  const read = (v0: string): P => {
+    const v = String(v0 ?? '').trim();
+    let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ].*)?$/);
+    if (m) return { kind: 'iso', day: aiYmd(Number(m[1]), Number(m[2]), Number(m[3])) };
+    m = v.match(/^([A-Za-z]{3})[a-z]*\.? (\d{1,2}),? (\d{4})$/);
+    if (m && MONTHS[m[1]!.toLowerCase()]) return { kind: 'names', day: aiYmd(Number(m[3]), MONTHS[m[1]!.toLowerCase()]!, Number(m[2])) };
+    m = v.match(/^(\d{1,2})[ -]([A-Za-z]{3})[a-z]*\.?[ -](\d{4})$/);
+    if (m && MONTHS[m[2]!.toLowerCase()]) return { kind: 'names', day: aiYmd(Number(m[3]), MONTHS[m[2]!.toLowerCase()]!, Number(m[1])) };
+    m = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+    if (m) return { kind: 'num', a: Number(m[1]), b: Number(m[2]), y: Number(m[3]) };
+    return null;
+  };
+  const parsed = values.map(read);
+  const nums = parsed.filter((p): p is { kind: 'num'; a: number; b: number; y: number } => p?.kind === 'num');
+  let use: 'dmy' | 'mdy' | null = null;
+  if (nums.length) {
+    const dayFirst = nums.some((p) => p.a > 12), monthFirst = nums.some((p) => p.b > 12);
+    const example = (f: (p: { a: number; b: number }) => boolean) => values[parsed.findIndex((p) => p?.kind === 'num' && f(p))] ?? '';
+    if (dayFirst && monthFirst) throw new Error(`The dates in this file are not written one way (${example((p) => p.a > 12)} and ${example((p) => p.b > 12)}). Export the report again and upload that file.`);
+    use = dayFirst ? 'dmy' : monthFirst ? 'mdy' : order || (nums.every((p) => p.a === p.b) ? 'dmy' : null);
+    if (order && use !== order) throw new Error(`You chose ${order === 'dmy' ? 'day first' : 'month first'}, but this file has dates like ${example((p) => (order === 'dmy' ? p.b > 12 : p.a > 12))}. Choose the other order, or let the app recognise it from the file.`);
+    if (!use) {
+      const ex = values[parsed.indexOf(nums[0]!)];
+      throw new Error(`The dates in this file (for example ${ex}) can be read as day/month or month/day. Choose how the dates are written under "Dates in the file" and upload it again.`);
+    }
+  }
+  const days = parsed.map((p) => (!p ? '' : p.kind === 'num' ? (use === 'mdy' ? aiYmd(p.y, p.a, p.b) : aiYmd(p.y, p.b, p.a)) : p.day));
+  const kinds = new Set(parsed.filter(Boolean).map((p) => p!.kind));
+  return { days, order: use ?? (kinds.has('iso') ? 'iso' : kinds.has('names') ? 'names' : 'none') };
+}
+
 /**
  * Parses an export. `source` is what the owner chose ('' = recognise it: a citations column means Bing). `periodEnd` (YYYY-MM-DD) dates the
- * rows of a file without a date column. Throws an Error with a customer sentence for a file that cannot be read or is for another site.
+ * rows of a file without a date column, and is required for one (R-A5: a file is never stamped with today). `dateOrder` says how numeric
+ * dates are written when the file alone cannot tell. Throws an Error with a customer sentence for a file that cannot be read or is for
+ * another site.
  */
-export function parseAiImport(text: string, domain: string, opts: { source?: AiImportSource | ''; periodEnd?: string } = {}): AiImportResult {
+export function parseAiImport(text: string, domain: string, opts: { source?: AiImportSource | ''; periodEnd?: string; dateOrder?: AiDateOrder; today?: string } = {}): AiImportResult {
   const lines = parseCsv(String(text ?? ''));
   if (lines.length < 2) throw new Error('The file has no rows. Export the report as CSV and upload that file.');
   // Search Console puts a title line or two above some exports: the header is the first line naming a known column
@@ -83,7 +143,6 @@ export function parseAiImport(text: string, domain: string, opts: { source?: AiI
   if (source === 'bing_ai' && ix.citations < 0 && ix.impressions < 0 && ix.clicks < 0) throw new Error('This file has no Citations column. Export the AI Performance report from Bing Webmaster Tools.');
   if (source === 'gsc_ai' && ix.impressions < 0 && ix.clicks < 0) throw new Error('This file has no Clicks or Impressions column. Export the Performance report from Search Console as CSV.');
   if (ix.day < 0 && ix.url < 0 && ix.query < 0) throw new Error('The file has figures but no date, page or query column, so the rows cannot be told apart.');
-  const fallbackDay = opts.periodEnd && /^\d{4}-\d{2}-\d{2}$/.test(opts.periodEnd) ? opts.periodEnd : new Date().toISOString().slice(0, 10);
   const d = String(domain).toLowerCase().replace(/^www\./, '');
 
   // a file for another website is refused: most of its page URLs must be on this domain (or a subdomain)
@@ -98,16 +157,27 @@ export function parseAiImport(text: string, domain: string, opts: { source?: AiI
     }
   }
 
+  // R-A5: a file without dates is stored on the last day of the period the owner exported; it is never stamped with today
+  const today = opts.today ?? new Date().toISOString().slice(0, 10);
+  let fallbackDay = '';
+  if (ix.day < 0) {
+    if (!opts.periodEnd) throw new Error('This file has no date column. Enter the last day of the period you exported (shown at the top of the report in Search Console or Bing) and upload it again.');
+    if (!aiIsDay(opts.periodEnd)) throw new Error(`${opts.periodEnd} is not a date in the calendar. Enter the last day of the period you exported.`);
+    if (opts.periodEnd > today) throw new Error('The last day of the period is in the future. Enter the last day the export covers.');
+    fallbackDay = opts.periodEnd;
+  }
+  const dayCol = ix.day >= 0 ? aiDateColumn(lines.slice(hi + 1).map((l) => String(l[ix.day] ?? '').trim()), opts.dateOrder ?? '') : null;
+
   const merged = new Map<string, AiImportRowInput>();
   let skipped = 0, total = 0;
-  for (const l of lines.slice(hi + 1)) {
+  for (const [li, l] of lines.slice(hi + 1).entries()) {
     total++;
     const get = (j: number) => (j >= 0 ? String(l[j] ?? '').trim() : '');
     const url = get(ix.url);
     if (url && !/^https?:\/\//i.test(url)) { skipped++; continue; }
     if (url && !(hostOf(url) === d || hostOf(url).endsWith('.' + d))) { skipped++; continue; }
-    const day = ix.day >= 0 ? importDate(get(ix.day)) : fallbackDay;
-    if (!day) { skipped++; continue; }
+    const day = dayCol ? dayCol.days[li]! : fallbackDay;
+    if (!day || day > today) { skipped++; continue; }
     const citations = toNum(get(ix.citations)), impressions = toNum(get(ix.impressions)), clicks = toNum(get(ix.clicks));
     if ([citations, impressions, clicks].some((x) => Number.isNaN(x)) || citations + impressions + clicks === 0) { skipped++; continue; }
     const query = get(ix.query).slice(0, 300);
@@ -130,8 +200,14 @@ export function parseAiImport(text: string, domain: string, opts: { source?: AiI
     skipped,
     days: { from: days[0], to: days[days.length - 1] },
     totals: { impressions: sum('impressions'), citations: sum('citations'), clicks: sum('clicks') },
+    dateOrder: dayCol?.order ?? 'none',
+    // R-A13: a queries or dates file names no page, so it cannot be refused for another website: its top queries are shown with the upload
+    topQueries: ix.url < 0 && ix.query >= 0 ? [...rows].sort((a, b) => b.citations + b.impressions - (a.citations + a.impressions)).map((r) => r.query).filter((q, i, a) => q && a.indexOf(q) === i).slice(0, 3) : [],
   };
 }
 
-/** What the upload answers the app (and the audit log keeps, without the rows). */
-export interface AiImportSummary { source: AiImportSource; label: string; rows: number; total: number; skipped: number; days: { from: string; to: string }; totals: { impressions: number; citations: number; clicks: number }; importedAt: string; importId: string }
+/** What the upload answers the app (and the audit log keeps, without the rows). R-A4: `replaced` = rows of earlier uploads with the same day, page and query. */
+export interface AiImportSummary {
+  source: AiImportSource; label: string; rows: number; total: number; skipped: number; days: { from: string; to: string }; totals: { impressions: number; citations: number; clicks: number }; importedAt: string; importId: string;
+  replaced?: number; dateOrder?: AiImportResult['dateOrder']; topQueries?: string[];
+}

@@ -1234,7 +1234,7 @@ export const GUIDES = [
       },
       {
         title: 'Upload the file',
-        body: 'On the AI visibility page, under **Your AI reports**, choose the report, pick the file and **Upload**. A file for another website is refused.',
+        body: 'On the AI visibility page, under **Your AI reports**, choose the report, pick the file and **Upload**. A file whose pages belong to another website is refused. A Queries file names no page, so the upload shows its top searches for you to check. If every date could be read either way round (like 05/10/2026), choose how the dates are written under **Dates in the file**.',
       },
     ],
     done: 'The card shows the rows and the days the upload covers, with its citations, impressions and clicks; the weekly AI visibility run reads them from the next run.',

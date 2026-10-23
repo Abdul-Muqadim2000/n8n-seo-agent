@@ -3,6 +3,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { AI_SENTIMENT_EARLY, parseAiSentiment } from './ai-detail';
+import { aiDateColumn, aiIsDay, parseAiImport } from './ai-import';
+import { importDate, parseCsv } from './link-import';
 
 // R-APP (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_APP.md): the shared halves of the app fixes of the AI visibility review.
 
@@ -56,5 +58,41 @@ describe('R-A2 sentiment: an early reading is never shown as a finding', () => {
   it('withheld stays withheld (no figure, no label of a figure)', () => {
     const s = parseAiSentiment({ n: 4, withheld: true, validated: false })!;
     expect(s).toMatchObject({ withheld: true, status: 'withheld', net: null, objections: [] });
+  });
+});
+
+describe('R-A5 upload dates: the whole column decides, every day is a real day, no file is stamped today', () => {
+  it('month-first when a second number is over 12, day-first when a first one is', () => {
+    expect(aiDateColumn(['10/22/2026', '10/05/2026'])).toEqual({ days: ['2026-10-22', '2026-10-05'], order: 'mdy' });
+    expect(aiDateColumn(['22/10/2026', '05/10/2026'])).toEqual({ days: ['2026-10-22', '2026-10-05'], order: 'dmy' });
+    expect(aiDateColumn(['22.10.2026', '5.10.2026']).order).toBe('dmy');
+  });
+  it('ambiguous files are refused unless the owner says which; a mixed file is refused', () => {
+    expect(() => aiDateColumn(['10/05/2026', '11/05/2026'])).toThrow(/day\/month or month\/day/);
+    expect(aiDateColumn(['10/05/2026'], 'mdy').days).toEqual(['2026-10-05']);
+    expect(aiDateColumn(['10/05/2026'], 'dmy').days).toEqual(['2026-05-10']);
+    expect(() => aiDateColumn(['22/10/2026', '10/22/2026'])).toThrow(/not written one way/);
+    expect(() => aiDateColumn(['10/22/2026'], 'dmy')).toThrow(/You chose day first/);
+  });
+  it('ISO and month names read as they are; impossible days are not days', () => {
+    expect(aiDateColumn(['2026-10-22', 'Oct 5, 2026', '5 Oct 2026']).days).toEqual(['2026-10-22', '2026-10-05', '2026-10-05']);
+    expect(aiDateColumn(['2026-22-10', '2026-02-31']).days).toEqual(['', '']);
+    expect(aiIsDay('2026-02-31')).toBe(false);
+    expect(aiIsDay('2026-02-28')).toBe(true);
+    expect(importDate('10/22/2026')).toBe('');
+  });
+  it('the parser: Bing month-first file, an undated file needs its period end, never today', () => {
+    const r = parseAiImport('Date,Page,Citations\n10/22/2026,https://techand.ai/a,3\n10/05/2026,https://techand.ai/b,1\n', 'techand.ai', { today: '2026-10-24' });
+    expect(r.days).toEqual({ from: '2026-10-05', to: '2026-10-22' });
+    expect(() => parseAiImport('Top queries,Clicks,Impressions\nerp uae,1,10\n', 'techand.ai', { today: '2026-10-24' })).toThrow(/no date column/);
+    expect(() => parseAiImport('Top queries,Clicks,Impressions\nerp uae,1,10\n', 'techand.ai', { periodEnd: '2026-02-31', today: '2026-10-24' })).toThrow(/not a date/);
+    expect(() => parseAiImport('Top queries,Clicks,Impressions\nerp uae,1,10\n', 'techand.ai', { periodEnd: '2026-11-30', today: '2026-10-24' })).toThrow(/future/);
+    const q = parseAiImport('Search Console export\nTop queries,Clicks,Impressions\nerp uae,1,10\nvat uae,0,4\n', 'techand.ai', { periodEnd: '2026-10-20', today: '2026-10-24' });
+    expect(q.rows.every((x) => x.day === '2026-10-20')).toBe(true);
+    // R-A13: a file without pages shows its top queries
+    expect(q.topQueries).toEqual(['erp uae', 'vat uae']);
+  });
+  it('R-A21: the delimiter comes from the first line that has one (a title line first)', () => {
+    expect(parseCsv('Performance report\nDate;Clicks;Impressions\n2026-10-20;1;10\n')[1]).toEqual(['Date', 'Clicks', 'Impressions']);
   });
 });

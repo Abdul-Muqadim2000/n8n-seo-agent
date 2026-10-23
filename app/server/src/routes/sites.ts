@@ -432,7 +432,7 @@ export async function siteRoutes(app: FastifyInstance) {
     requireVerified(site);
     const input = parse(aiImportSchema, req.body);
     const out = await importAiReport(site, input);
-    await audit(req, site.orgId, { action: 'site.ai_import', target: { type: 'site', id: site.id, label: site.domain }, details: { source: out.source, rows: out.rows, from: out.days.from, to: out.days.to, skipped: out.skipped } });
+    await audit(req, site.orgId, { action: 'site.ai_import', target: { type: 'site', id: site.id, label: site.domain }, details: { source: out.source, rows: out.rows, from: out.days.from, to: out.days.to, skipped: out.skipped, replaced: out.replaced ?? 0 } });
     req.log.info({ site: site.domain, source: out.source, rows: out.rows }, 'ai import');
     return out;
   });

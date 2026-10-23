@@ -217,15 +217,48 @@ describe('CSV downloads', () => {
 });
 
 describe('AI report uploads -> seo_ai_imports', () => {
-  it('creates the table, replaces the days the file covers, inserts with the site id and import id', async () => {
+  const SITE_F = [{ columnName: 'site_id', condition: 'eq', value: 'site_techand-ai' }, { columnName: 'source', condition: 'eq', value: 'bing_ai' }];
+  it('creates the table and inserts with the site id and import id; with nothing stored, nothing is deleted', async () => {
     const out = await importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Date,Page,Citations\n2026-10-20,https://techand.ai/a,3\n2026-10-21,https://techand.ai/b,1\n', fileName: 'bing.csv' });
-    expect(out).toMatchObject({ source: 'bing_ai', rows: 2 });
+    expect(out).toMatchObject({ source: 'bing_ai', rows: 2, replaced: 0 });
     expect(st.ensured).toEqual(['aiImports']);
-    expect(st.deleted.map((d) => JSON.stringify(d.filters))).toEqual([
-      JSON.stringify([{ columnName: 'site_id', condition: 'eq', value: 'site_techand-ai' }, { columnName: 'source', condition: 'eq', value: 'bing_ai' }, { columnName: 'day', condition: 'eq', value: '2026-10-20' }]),
-      JSON.stringify([{ columnName: 'site_id', condition: 'eq', value: 'site_techand-ai' }, { columnName: 'source', condition: 'eq', value: 'bing_ai' }, { columnName: 'day', condition: 'eq', value: '2026-10-21' }]),
-    ]);
-    expect(st.inserted[0].rows[0]).toMatchObject({ site_id: 'site_techand-ai', domain: 'techand.ai', source: 'bing_ai', day: '2026-10-20', citations: 3, file_name: 'bing.csv' });
+    expect(st.deleted).toEqual([]);
+    expect(st.inserted[0].rows[0]).toMatchObject({ site_id: 'site_techand-ai', domain: 'techand.ai', source: 'bing_ai', day: '2026-10-20', citations: 3, file_name: 'bing.csv', import_id: out.importId });
+  });
+  it('R-A4: upsert by (site, source, day, url, query): a queries file of the same days stays, only superseded rows go, after the insert', async () => {
+    const row = (import_id: string, day: string, url: string, query: string) => ({ site_id: 'site_techand-ai', domain: 'techand.ai', source: 'bing_ai', day, url, query, citations: 1, import_id });
+    st.tables.aiImports = [
+      row('aiimp_pages', '2026-10-20', 'https://techand.ai/a', ''),
+      row('aiimp_pages', '2026-10-20', 'https://techand.ai/c', ''),
+      row('aiimp_pages', '2026-10-21', 'https://techand.ai/b', ''),
+      row('aiimp_queries', '2026-10-20', '', 'erp uae'),
+      row('aiimp_pages', '2026-10-25', 'https://techand.ai/a', ''),
+      { ...row('aiimp_other', '2026-10-20', 'https://techand.ai/a', ''), domain: 'acme.com', site_id: 'site_acme-com' },
+    ];
+    const out = await importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Date,Page,Citations\n2026-10-20,https://techand.ai/a,3\n2026-10-21,https://techand.ai/b,1\n' });
+    expect(out.replaced).toBe(2);
+    // the insert comes first (phase 1), the deletes after (phase 2)
+    expect(st.inserted).toHaveLength(1);
+    const del = st.deleted.map((d) => d.filters);
+    expect(del).toContainEqual([...SITE_F, { columnName: 'day', condition: 'eq', value: '2026-10-21' }, { columnName: 'import_id', condition: 'eq', value: 'aiimp_pages' }]);
+    expect(del).toContainEqual([...SITE_F, { columnName: 'day', condition: 'eq', value: '2026-10-20' }, { columnName: 'import_id', condition: 'eq', value: 'aiimp_pages' }, { columnName: 'url', condition: 'eq', value: 'https://techand.ai/a' }]);
+    expect(del).toHaveLength(2);
+    expect(JSON.stringify(del)).not.toContain('aiimp_queries');
+  });
+  it('R-A4: a failed insert takes out only this upload\'s rows; earlier uploads are untouched', async () => {
+    const client = await import('../src/n8n/client');
+    vi.mocked(client.insertRows).mockRejectedValueOnce(new Error('n8n rows insert on seo_ai_imports answered 500'));
+    st.tables.aiImports = [{ site_id: 'site_techand-ai', domain: 'techand.ai', source: 'bing_ai', day: '2026-10-20', url: 'https://techand.ai/a', query: '', import_id: 'aiimp_old' }];
+    await expect(importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Date,Page,Citations\n2026-10-20,https://techand.ai/a,3\n' })).rejects.toThrow(/Nothing was changed/);
+    expect(st.deleted).toHaveLength(1);
+    expect(st.deleted[0].filters).toEqual([...SITE_F, { columnName: 'import_id', condition: 'eq', value: expect.stringMatching(/^aiimp_/) }]);
+    expect(JSON.stringify(st.deleted)).not.toContain('aiimp_old');
+  });
+  it('R-A5: a file without dates needs the period end; month-first dates are read month-first', async () => {
+    await expect(importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Top queries,Clicks,Impressions\nerp uae,1,10\n' })).rejects.toThrow(/no date column/);
+    const out = await importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Date,Page,Citations\n10/22/2026,https://techand.ai/a,3\n10/05/2026,https://techand.ai/b,1\n' });
+    expect(out.days).toEqual({ from: '2026-10-05', to: '2026-10-22' });
+    expect(out.dateOrder).toBe('mdy');
   });
   it('a file for another domain is a 400 and nothing is written', async () => {
     await expect(importAiReport({ id: 'site-1', domain: 'techand.ai' } as never, { csv: 'Page,Citations\nhttps://acme.com/a,3\n' })).rejects.toThrow(/acme\.com/);

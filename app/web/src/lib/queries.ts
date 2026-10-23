@@ -474,7 +474,7 @@ export function useAiImports(orgId: string, siteId: string, enabled = true) {
 export function useAiImport(orgId: string, siteId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { csv: string; fileName?: string; source?: '' | 'bing_ai' | 'gsc_ai'; periodEnd?: string }) => api<import('@seo/shared').AiImportSummary>(`${aiBase(orgId, siteId)}/ai/import`, { method: 'POST', body, direct: true }),
+    mutationFn: (body: { csv: string; fileName?: string; source?: '' | 'bing_ai' | 'gsc_ai'; periodEnd?: string; dateOrder?: '' | 'dmy' | 'mdy' }) => api<import('@seo/shared').AiImportSummary>(`${aiBase(orgId, siteId)}/ai/import`, { method: 'POST', body, direct: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.siteData(siteId, 'ai-imports') }),
   });
 }

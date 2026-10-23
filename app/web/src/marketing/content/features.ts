@@ -586,7 +586,7 @@ export const features: Feature[] = [
       'See how precise your AI visibility figures will be for each number of questions, with or without the daily check, before you choose',
       'When AI gets a fact about your business wrong, you see the wrong claim, the true answer from your profile and the pages that carry it, with a correction drafted for you to review. Nothing is sent without you, and with no true fact on file we ask you for it instead of guessing',
       'Every key page is also checked the way ChatGPT, Perplexity and Claude\'s fetchers see it, so a firewall rule that quietly turns AI assistants away is flagged as a high-priority fix',
-      'Upload Bing\'s AI Performance export for your real Copilot citations, and Search Console\'s AI figures, from the AI visibility page: they are shown as your own exports, with their dates, and never blended into the rates we measure. A file for another website is refused',
+      'Upload Bing\'s AI Performance export for your real Copilot citations, and Search Console\'s AI figures, from the AI visibility page: they are shown as your own exports, with their dates, and never blended into the rates we measure. A file whose pages belong to another website is refused',
       'Open any answer to read what the assistant said: the whole answer, the brands in the order it named them with yours marked, every source it cited in order, the pages it read but did not cite and the searches it ran first',
       'Open any question to see every assistant\'s answer side by side, and how often it has named you across your past checks, with the range',
       'One filter for the whole page: engine, topic, buyer role, market, stage and dates, kept in the link so a filtered view can be shared',
