@@ -31,10 +31,27 @@ export const aiExportFileName = (kind: AiExportKind, domain: string, day = new D
 /** The panel import with an optional keyword column ("keyword", "search phrase", "target keyword"): the engine stores it as the owner's. */
 export type AiPanelCsvRow = AiPanelCsvResult['rows'][number] & { keyword?: string };
 export function parseAiPanelCsvWithKeyword(text: string, max = 500): AiPanelCsvResult & { rows: AiPanelCsvRow[]; keywords: number } {
-  const base = parseAiPanelCsv(text, max);
   const lines = parseCsv(String(text ?? ''));
   const norm = (h: string) => h.toLowerCase().replace(/[^a-z]+/g, ' ').trim();
   const head = (lines[0] ?? []).map(norm);
+  // W2-E1: the stage 'shopping' (sites that sell products) is accepted: those cells are read here, blanked for the base parser (which
+  // knows the three funnel stages), and put back on the rows it returns
+  const si = head.findIndex((h) => ['stage', 'funnel stage'].includes(h));
+  const qi0 = head.findIndex((h) => ['question', 'prompt', 'questions'].includes(h));
+  const shopping = new Set<string>();
+  let src = String(text ?? '');
+  if (si >= 0 && qi0 >= 0 && lines.slice(1).some((l) => String(l[si] ?? '').trim().toLowerCase() === 'shopping')) {
+    const q = (c: string) => `"${String(c ?? '').replace(/"/g, '""')}"`;
+    src = lines.map((l, i) => {
+      if (i > 0 && String(l[si] ?? '').trim().toLowerCase() === 'shopping') {
+        shopping.add(String(l[qi0] ?? '').trim().replace(/\s+/g, ' ').toLowerCase());
+        l = l.map((c, j) => (j === si ? '' : c));
+      }
+      return l.map(q).join(',');
+    }).join('\n');
+  }
+  const parsed = parseAiPanelCsv(src, max);
+  const base = { ...parsed, rows: parsed.rows.map((r) => (shopping.has(r.prompt.toLowerCase()) ? { ...r, stage: 'shopping' as AiPanelCsvResult['rows'][number]['stage'] } : r)) };
   const qi = head.findIndex((h) => ['question', 'prompt', 'questions'].includes(h));
   const ki = head.findIndex((h) => ['keyword', 'search phrase', 'target keyword', 'keyword phrase'].includes(h));
   if (qi < 0 || ki < 0) return { ...base, keywords: 0 };

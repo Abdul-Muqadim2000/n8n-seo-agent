@@ -1,7 +1,7 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Check, CheckCircle2, CircleDot, ClipboardList, Clock, Coins, ExternalLink as ExternalIcon, FileText, Flag, GitCommitVertical, Inbox, Loader2, Play, RotateCcw, Send, XCircle } from 'lucide-react';
-import { formatCredits, MODES, type Report, type Run, type RunCredits } from '@seo/shared';
+import { AI_JOINED_OPEN_RUN, formatCredits, MODES, type Report, type Run, type RunCredits } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useReport, useRun } from '@/lib/queries';
@@ -18,8 +18,8 @@ import { ModeIcon, StageGlyph, stageLabel } from '@/components/reports/meta';
 import { fmtMinutes, inputRows, isActive, minutesBetween, retryPrefill, RUN_CREDIT_STATE_LABEL, RUN_CREDITS_TIP, runCreditsFigure, RunChip, RunProgress, useNow } from '@/components/reports/run';
 
 /** "Quoted 12 credits · charged 9 credits", "Not charged: it failed", "Quoted 12 credits · held while it runs", "Free" */
-function creditsLine(c: RunCredits): string {
-  if (c.state === 'not_charged') return 'Not charged: it failed';
+function creditsLine(c: RunCredits, joined = false): string {
+  if (c.state === 'not_charged') return joined ? 'Not charged: part of the open run' : 'Not charged: it failed';
   if (c.state === 'free') return 'Free';
   const quoted = c.quoted != null ? `Quoted ${formatCredits(c.quoted)}` : '';
   const rest =
@@ -120,7 +120,7 @@ export default function RunDetailPage() {
         title={run.title}
         description={
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <RunStatusBadge status={run.status} />
+            <RunStatusBadge status={run.status} lastStage={run.lastStage} />
             {run.siteDomain && <span>{run.siteDomain}</span>}
             <span className="text-ink-3">·</span>
             <span>
@@ -143,7 +143,15 @@ export default function RunDetailPage() {
       <Stagger className="space-y-5">
         <RunStages run={run} reports={reports.length} active={active} duration={duration} />
 
-        {run.status === 'failed' && (
+        {/* W2-A (WAVE2_CONTRACTS.md §6): an on-demand AI check the engine joined to the website's open run is not a failure */}
+        {run.status === 'failed' && run.lastStage === AI_JOINED_OPEN_RUN && (
+          <Callout tone="info" title="Part of the open run">
+            {run.error}
+            <span className="mt-1 block text-xs text-ink-3">Your check is answered by the run already in progress, and its report arrives on the AI visibility page when that run finishes. Nothing was charged for this request.</span>
+          </Callout>
+        )}
+
+        {run.status === 'failed' && run.lastStage !== AI_JOINED_OPEN_RUN && (
           <Callout
             tone="critical"
             title="The run did not complete"
@@ -236,7 +244,7 @@ export default function RunDetailPage() {
                     label: 'Credits',
                     value: (
                       <span className="tabular">
-                        {creditsLine(run.credits)} <InfoTip label="How credits are charged">{RUN_CREDITS_TIP}</InfoTip>
+                        {creditsLine(run.credits, run.lastStage === AI_JOINED_OPEN_RUN)} <InfoTip label="How credits are charged">{RUN_CREDITS_TIP}</InfoTip>
                       </span>
                     ),
                   },
@@ -330,8 +338,10 @@ function CardTitle({ icon, title, description }: { icon: ReactNode; title: strin
  * spins; read from the run's own timestamps and status.
  */
 function RunStages({ run, reports, active, duration }: { run: Run; reports: number; active: boolean; duration: number | null }) {
-  const failed = run.status === 'failed';
-  const done = run.status === 'completed';
+  // W2-A: a start joined to the website's open run ends here as "part of the open run", not as a failure
+  const joined = run.status === 'failed' && run.lastStage === AI_JOINED_OPEN_RUN;
+  const failed = run.status === 'failed' && !joined;
+  const done = run.status === 'completed' || joined;
   type S = { key: string; label: string; sub: string; state: 'done' | 'now' | 'todo' | 'failed'; icon: ReactNode };
   const steps: S[] = [
     { key: 'sent', label: 'Sent', sub: fmtDateTime(run.createdAt), state: 'done', icon: <Send /> },
@@ -351,7 +361,7 @@ function RunStages({ run, reports, active, duration }: { run: Run; reports: numb
     },
     {
       key: 'end',
-      label: failed ? 'Failed' : 'Completed',
+      label: failed ? 'Failed' : joined ? 'Part of the open run' : 'Completed',
       sub: done || failed ? (run.completedAt ? fmtDateTime(run.completedAt) : '') + (done && duration != null ? ` · ${fmtMinutes(duration)}` : '') : `about ${run.etaMinutes} min in total`,
       state: done ? 'done' : failed ? 'failed' : 'todo',
       icon: failed ? <XCircle /> : <Flag />,

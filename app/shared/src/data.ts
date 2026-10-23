@@ -732,6 +732,8 @@ export interface AiData {
   answersStored?: number;
   /** W2-A: the filter the request was scoped to (the page's filter bar) and that scope's own figures */
   scope?: AiScope | null;
+  /** W2-A (§4): the owner's alert rules as stored now (the monitors row), [] when none */
+  alertRules?: import('./ai-trends').AiAlertRule[];
   /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the weekly AI growth loop, null until its first run */
   growth: AiGrowth | null;
   /** from the latest AI visibility report (when it was delivered to the app) */

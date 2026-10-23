@@ -115,6 +115,12 @@ describe('the page payload (A10 finished): summary, not every answer', () => {
     expect(d.latest?.extras?.urls?.own[0]).toMatchObject({ citedN: 2, retrievedN: 5 });
     expect(d.latest?.extras?.shopping).toBeNull();
   });
+  it('W2-E1: sources_json as an object keeps the old table from its `list` and feeds the new Sources panel', async () => {
+    st.tables.aiVisibility = [vis({ sources_json: JSON.stringify({ v: 2, types: { ugc: { n: 3, share: 100 } }, domains: [{ host: 'reddit.com', type: 'ugc', cited_n: 3 }], n: 3, list: [{ domain: 'reddit.com', citations: 3, engines: ['chatgpt'], topics: [], kind: 'forum' }] }) })];
+    const d = await aiData(org, site, { answers: false });
+    expect(d.latest?.sources).toEqual([{ domain: 'reddit.com', citations: 3, engines: ['chatgpt'], topics: [], kind: 'forum' }]);
+    expect(d.latest?.extras?.sources?.types[0]).toMatchObject({ type: 'ugc', n: 3 });
+  });
   it('the panel rows carry the engine\'s own asked record when stored', async () => {
     st.tables.aiVisibility = [vis()];
     st.tables.aiPrompts = prompts;

@@ -7,6 +7,7 @@ import { Readable } from 'node:stream';
 import {
   AI_IMPORT_COLUMNS,
   aiAskedSet,
+  aiLegacySourcesList,
   aiCsvHeader,
   aiCsvLine,
   aiSovOf,
@@ -194,7 +195,7 @@ async function aiCsvLines(org: OrgRow, site: SiteRow, kind: AiExportKind, filter
   }
   if (kind === 'sources') {
     const x = last ? aiLatestExtras(last as unknown as Record<string, unknown>) : null;
-    const old = last ? jsonArray(last.sources_json) : [];
+    const old = last ? aiLegacySourcesList(last.sources_json) : [];
     return async function* () {
       yield aiCsvHeader('sources');
       if (!last) return;

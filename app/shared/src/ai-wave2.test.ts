@@ -3,6 +3,7 @@ import {
   aiAnswerDetail,
   aiEngineRatesOf,
   aiLatestExtras,
+  aiLegacySourcesList,
   aiSovOf,
   parseAiImpact,
   parseAiSentiment,
@@ -225,5 +226,27 @@ describe('monitor settings (§4): nothing new is sent unless set', () => {
     expect(monitorsBody(a.monitors)).toMatchObject({ ai_claude_weekly: true, ai_pulse_engines: 'chatgpt, perplexity', ai_fanout_check: 50 });
     expect(JSON.parse(String(monitorsBody(a.monitors).ai_alert_rules_json))[0]).toMatchObject({ id: 'r1', direction: 'drop', enabled: true });
     expect(adminActionSchema.safeParse({ action: 'monitors', monitors: { aiFanoutCheck: 30 } }).success).toBe(false);
+  });
+});
+
+describe('W2-E1 contract update (2026-10-23)', () => {
+  it('sources_json as {v: 2, types, domains, list}: the legacy list is `list`, the new panel reads types / domains; an old array still reads', () => {
+    const obj = { v: 2, types: { ugc: { n: 2, share: 100 } }, domains: [{ host: 'reddit.com', type: 'ugc', cited_n: 2 }], n: 2, list: [{ domain: 'reddit.com', citations: 2 }] };
+    expect(aiLegacySourcesList(JSON.stringify(obj))).toEqual([{ domain: 'reddit.com', citations: 2 }]);
+    expect(aiLegacySourcesList(JSON.stringify([{ domain: 'g2.com' }]))).toEqual([{ domain: 'g2.com' }]);
+    expect(parseAiSources2(JSON.stringify(obj))?.domains[0].host).toBe('reddit.com');
+  });
+  it('"no shopping results" carries no rate, even when the row says 0', () => {
+    expect(parseAiShopping({ status: 'no shopping results', trigger_rate: 0, own_presence_rate: 0, answers_n: 30 })).toMatchObject({ triggerRate: null, ownPresenceRate: null });
+  });
+  it('a blanked answer (kept 35 days) is told apart from a row that never had one; [] is "showed none", absent is "not reported"', () => {
+    const old = aiAnswerDetail({ answer_text: '', retrieved_json: '', products_json: '[]', ads_json: '', detail_json: JSON.stringify({ answer_len: 4200, analysed: true }) }, 'techand.ai');
+    expect(old).toMatchObject({ answerText: null, answerExpired: true, answerLen: 4200, retrieved: null, products: [], ads: null });
+    expect(aiAnswerDetail({ excerpt: 'x' }, 'techand.ai').answerExpired).toBe(false);
+  });
+  it('the question import accepts the stage "shopping"', () => {
+    const r = parseAiPanelCsvWithKeyword('question,stage\nWhich running shoes are best for flat feet?,shopping\nWhich ERP partner fits a retailer?,decision\n');
+    expect(r.errors).toEqual([]);
+    expect(r.rows.map((x) => x.stage)).toEqual(['shopping', 'decision']);
   });
 });

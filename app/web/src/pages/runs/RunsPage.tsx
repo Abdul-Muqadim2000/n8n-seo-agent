@@ -256,7 +256,7 @@ function RunRow({ run, now }: { run: Run; now: number }) {
               <span className="sm:hidden"> · {fmtAgo(run.createdAt)}</span>
             </p>
             <div className="mt-1.5 sm:hidden">
-              <RunStatusBadge status={run.status} />
+              <RunStatusBadge status={run.status} lastStage={run.lastStage} />
               {run.status === 'failed' && run.error && <p className="mt-1 truncate text-xs text-critical-text" title={run.error}>{run.error}</p>}
             </div>
           </div>
@@ -264,7 +264,7 @@ function RunRow({ run, now }: { run: Run; now: number }) {
       </td>
       <td className="hidden px-3 py-3 text-ink-2 md:table-cell">{run.siteDomain ?? <span className="text-ink-3">-</span>}</td>
       <td className="hidden px-3 py-3 sm:table-cell">
-        <RunStatusBadge status={run.status} />
+        <RunStatusBadge status={run.status} lastStage={run.lastStage} />
         {run.status === 'failed' && run.error && <p className="mt-1 max-w-[220px] truncate text-xs text-critical-text" title={run.error}>{run.error}</p>}
       </td>
       <td className="hidden whitespace-nowrap px-3 py-3 text-ink-2 sm:table-cell" title={fmtDateTime(run.createdAt)}>

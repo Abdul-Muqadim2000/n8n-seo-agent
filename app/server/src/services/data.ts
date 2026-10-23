@@ -107,6 +107,7 @@ import {
   type PagePeriodPoint,
   AI_ENGINE_VALUES,
   aiAlertRulesOf,
+  aiLegacySourcesList,
   aiEngineRatesOf,
   aiFilterSegment,
   aiLatestExtras,
@@ -1143,7 +1144,8 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
         }),
       ),
       competitors: arr(safeJson(last.competitors_json, [])).map((c) => ({ domain: s(c.domain), mentions: n(c.mentions), share: n(c.share), auto: b(c.auto) })),
-      sources: arr(safeJson(last.sources_json, [])).map((x) => ({ domain: s(x.domain), citations: n(x.citations), engines: arr<string>(x.engines).map(String), topics: arr<string>(x.topics).map(String), kind: s(x.kind) })),
+      // W2-E1: sources_json is {v: 2, types, domains, n, list} now (`list` = the old array); older rows hold the array
+      sources: aiLegacySourcesList(last.sources_json).map((x) => ({ domain: s(x.domain), citations: n(x.citations), engines: arr<string>(x.engines).map(String), topics: arr<string>(x.topics).map(String), kind: s(x.kind) })),
       pages: arr(safeJson(last.pages_json, [])).map((x) => ({ url: s(x.url), citations: n(x.citations), engines: arr<string>(x.engines).map(String) })),
       gaps: arr(safeJson(last.gaps_json, [])).map((g) => ({ prompt: s(g.prompt), competitors: arr<string>(g.competitors).map(String), sources: arr<string>(g.sources).map(String), volume: nn(g.volume), stage: s(g.stage), cluster: s(g.cluster), fanout: arr<string>(g.fanout).map(String) })),
       traffic: toTraffic(safeJson<P | null>(last.traffic_json, null)),
@@ -1175,6 +1177,7 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     latest,
     daily: aiDailySeries(days),
     promptsMax: monitorsNow ? monitorsNow.aiPromptsMax : null,
+    alertRules: monitorsNow?.aiAlertRules ?? [],
     prompts: prompts.map((p) => ({
       promptId: s(p.prompt_id),
       prompt: s(p.prompt),

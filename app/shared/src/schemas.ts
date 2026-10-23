@@ -526,7 +526,8 @@ export const aiQuestionSchema = z.object({
   prompt: aiQuestionText,
   persona: z.string().trim().max(40).default(''),
   cluster: z.string().trim().max(60).default(''),
-  stage: z.enum(['', 'awareness', 'consideration', 'decision']).default(''),
+  // W2-E1: 'shopping' for sites that sell products
+  stage: z.enum(['', 'awareness', 'consideration', 'decision', 'shopping']).default(''),
   market: z.string().trim().regex(/^([A-Za-z]{2}([-_ ][A-Za-z]{2,3})?)?$/, 'Use a country code and a language, e.g. SA-en').default(''),
   pinned: z.boolean().default(false),
   /** W2 §6: the search phrase the question stands for (the CSV's optional keyword column); the engine keeps it as the owner's */
@@ -538,7 +539,7 @@ export const aiQuestionEditSchema = z.object({
   prompt: aiQuestionText.optional(),
   persona: z.string().trim().max(40).optional(),
   cluster: z.string().trim().max(60).optional(),
-  stage: z.enum(['awareness', 'consideration', 'decision']).optional(),
+  stage: z.enum(['awareness', 'consideration', 'decision', 'shopping']).optional(),
   market: z.string().trim().regex(/^[A-Za-z]{2}([-_ ][A-Za-z]{2,3})?$/, 'Use a country code and a language, e.g. SA-en').optional(),
   pinned: z.boolean().optional(),
   keyword: z.string().trim().min(2).max(120).optional(),

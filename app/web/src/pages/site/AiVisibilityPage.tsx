@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, BadgeCheck, CheckCircle2, OctagonAlert, Bot, LineChart as LineChartIcon, ExternalLink as ExternalIcon, FileText, Gauge, Globe, Grid3x3, Library, Lightbulb, ListChecks, MessageCircleQuestion, MessagesSquare, ScanSearch, ShieldAlert, ShieldCheck, Sparkles, Trophy } from 'lucide-react';
-import { AI_ENGINE_VALUES, aiWindowLabel, compactNumber, estimateAiVisibilityCost, titleCase, type AiData, type AiDay, type AiEngine, type AiEngineStat, type AiRun } from '@seo/shared';
+import { AI_ENGINE_VALUES, aiCiMethodLabel, aiFilterQuery, aiInRange, aiTrendRows, aiWindowLabel, compactNumber, estimateAiVisibilityCost, titleCase, type AiData, type AiDay, type AiEngine, type AiEngineStat, type AiFilter, type AiRun } from '@seo/shared';
 import { formatCredits, quoteLabel } from '@/lib/credits';
 import { AiPrecisionTable } from '@/components/site/AiPrecision';
 import { useSiteData } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
-import { ChartCard, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
+import { AnnotationLegend, ChartCard, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
 import { Badge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -15,7 +15,12 @@ import { Delta, Meter, PageHeader } from '@/components/ui/misc';
 import { CountUp, HeroNextStep, HeroStat, IconTile, MetricCard, ScoreRing, Stagger, SummaryHero } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
 import { EngineActionList, RUN_LABEL, runFromApiBody, typeLabel } from './_components/actions';
-import { AnswersExplorer, QuestionGrid, engineLabel } from './_components/ai';
+import { QuestionGrid, engineLabel } from './_components/ai';
+import { AiFilterBar, ScopePanel, useAiFilter } from './_components/ai-filter';
+import { AnswersBrowser, QuestionDialog } from './_components/ai-answers';
+import { breakMarks, EngineTrendPanel, SovTrendPanel } from './_components/ai-trends';
+import { AdsLocalPanel, AiReportsCard, CompetitorsPanel, DemandPanel, FanoutGapPanel, ImpactPanel, OurPagesPanel, PersonaEffectPanel, SentimentPanel2, ShoppingPanel, SourcesPanel2 } from './_components/ai-panels2';
+import { AlertRulesPanel } from './_components/ai-rules';
 import { PanelManager, SegmentsSection } from './_components/ai-panel';
 import { AccessPanel, AiTrafficPanel, DiscoveryPanel, GroupsPanel, IndexPanel, PerceptionPanel } from './_components/ai-insights';
 import { AiGrowthSection } from './_components/ai-growth';
@@ -27,7 +32,9 @@ import { ChartTitle, DashSkeleton, FigureTile, HeroEyebrow, RankedBars } from '.
 export default function AiVisibilityPage() {
   const { org, site } = useSitePage();
   const day = useCycleDay(site);
-  const q = useSiteData(org.id, site.id, 'ai');
+  // W2-A: one filter bar scopes the page; it lives in the URL (?engine=&cluster=&persona=&market=&stage=&from=&to=)
+  const [filter, setFilter, clearFilter] = useAiFilter();
+  const q = useSiteData(org.id, site.id, 'ai', aiFilterQuery(filter));
   return (
     <div>
       <PageHeader
@@ -41,17 +48,25 @@ export default function AiVisibilityPage() {
         }
       />
       <DataGate q={q} skeleton={<DashSkeleton />}>
-        {(d) => <AiBody d={d} refetching={q.isFetching} />}
+        {(d) => <AiBody d={d} refetching={q.isFetching} filter={filter} setFilter={setFilter} clearFilter={clearFilter} />}
       </DataGate>
     </div>
   );
 }
 
-function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
+function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; refetching: boolean; filter: AiFilter; setFilter: (p: Partial<AiFilter>) => void; clearFilter: () => void }) {
   const { site, can, page } = useSitePage();
   const runs = useMemo(() => sortByDate(d.runs, (r) => r.checkedAt), [d.runs]);
   const [L, P] = lastTwo(runs);
   const engineNames = useMemo(() => Object.fromEntries((d.latest?.engines ?? []).map((e) => [e.key, e.name])), [d.latest]);
+  // W2-A: the date range scopes the charts and run tables; the headline stays the latest run's (its comparison is with the run before)
+  const shownRuns = useMemo(() => runs.filter((r) => aiInRange(r.checkedAt, filter)), [runs, filter]);
+  const shownDays = useMemo(() => d.daily.filter((x) => aiInRange(x.date, filter)), [d.daily, filter]);
+  const [question, setQuestion] = useState<string | null>(null);
+  const x = d.latest?.extras ?? null;
+  const promptText = (id: string) => d.prompts.find((p) => p.promptId === id)?.prompt ?? id;
+  // the page's answers come paged (W2-A); a server without the paging still sends `answers`, read as before
+  const results = d.answerResults ?? d.answers.map((a) => ({ promptId: a.promptId, engine: a.engine, result: (!a.answered ? 'none' : a.cited ? 'cited' : a.mentioned ? 'named' : 'absent') as 'none' | 'cited' | 'named' | 'absent' }));
 
   if (!L && !d.latest && !d.report)
     return (
@@ -92,6 +107,8 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
 
   return (
     <Stagger className="space-y-6">
+      <AiFilterBar d={d} filter={filter} onChange={setFilter} onClear={clearFilter} engineNames={engineNames} />
+      {d.scope && <ScopePanel scope={d.scope} engineNames={engineNames} />}
       {alerts.length > 0 && (
         <Callout tone="warning" title="Alerts from the latest run">
           <ul className="list-disc space-y-0.5 pl-4">
@@ -125,7 +142,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
                 value={<CountUp value={L.mentionRate} format={(v) => pct(v)} />}
                 delta={<AiDelta compare={cmp} metric="named_rate" />}
                 trend={<Sparkline data={runs.map((r) => ({ v: r.mentionRate }))} dataKey="v" />}
-                hint={L.mentionLo != null && L.mentionHi != null ? `95% range ${pct(L.mentionLo, 0)} to ${pct(L.mentionHi, 0)} · ${compactNumber(L.samples)} answers, ${period}` : `of ${compactNumber(L.answers)} answers to ${L.prompts} questions`}
+                hint={L.ciNamed ? `95% range ${pct(L.ciNamed[0], 0)} to ${pct(L.ciNamed[1], 0)} · ${compactNumber(L.samples)} answers, ${period}` : L.mentionLo != null && L.mentionHi != null ? `95% range ${pct(L.mentionLo, 0)} to ${pct(L.mentionHi, 0)} · ${compactNumber(L.samples)} answers, ${period}` : `of ${compactNumber(L.answers)} answers to ${L.prompts} questions`}
               />
               <HeroStat
                 label="Share of voice"
@@ -209,7 +226,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-        <RunsTrend runs={runs} daily={d.daily} loading={refetching} className="xl:col-span-3" />
+        <RunsTrend runs={shownRuns} daily={shownDays} loading={refetching} className="xl:col-span-3" />
         <Panel title="Share of voice" icon={<Trophy />} description="Brands named across all answers in the latest run" info="Share of all brand mentions; the number is mentions. ★ = a competitor you set; others were found in the answers." className="xl:col-span-2">
           {d.latest?.competitors.length || L ? (
             <>
@@ -226,6 +243,39 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
           )}
         </Panel>
       </div>
+
+      {/* W2-A: per engine and per competitor over time, from the rows already stored, broken where a run was not compared */}
+      {runs.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <EngineTrendPanel runs={runs} filter={filter} engineNames={engineNames} />
+          <SovTrendPanel runs={runs} filter={filter} domain={site.domain} />
+        </div>
+      )}
+      {L?.ciMethod && <p className="-mt-3 text-xs text-ink-3">Ranges on this run are {aiCiMethodLabel(L.ciMethod)}{x?.ci?.note ? `: ${x.ci.note}` : ''}.</p>}
+
+      {(x?.sov || x?.sources) && (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
+          {x?.sov && <CompetitorsPanel sov={x.sov} domain={site.domain} ownShare={L?.shareOfVoice ?? null} />}
+          {x?.sources && <SourcesPanel2 sources={x.sources} />}
+        </div>
+      )}
+      {x?.urls && <OurPagesPanel urls={x.urls} />}
+      {x?.impact && x.impact.length > 0 && <ImpactPanel impact={x.impact} questionText={promptText} />}
+      {x?.fanoutGap && x.fanoutGap.queries.length > 0 && <FanoutGapPanel gap={x.fanoutGap} />}
+      {(x?.sentiment || x?.personaEffect?.length) && (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
+          {x?.sentiment && <SentimentPanel2 sentiment={x.sentiment} />}
+          {x?.personaEffect && x.personaEffect.length > 0 && <PersonaEffectPanel effect={x.personaEffect} />}
+        </div>
+      )}
+      {(x?.shopping || x?.adsLocal) && (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
+          {x?.shopping && <ShoppingPanel shopping={x.shopping} />}
+          {x?.adsLocal && <AdsLocalPanel adsLocal={x.adsLocal} />}
+        </div>
+      )}
+      {x?.demand && x.demand.questions.length > 0 && <DemandPanel demand={x.demand} questionText={promptText} />}
+      {x?.notes && (x.notes.lostNote || x.notes.unanalysedNote) && <p className="text-xs text-ink-3">{[x.notes.lostNote, x.notes.unanalysedNote].filter(Boolean).join(' ')}</p>}
 
       {d.latest && <AiTrafficPanel traffic={d.latest.traffic} />}
 
@@ -270,7 +320,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       {d.latest?.index && <IndexPanel index={d.latest.index} domain={site.domain} />}
       {d.latest?.index && <DiscoveryPanel index={d.latest.index} tracked={d.prompts.map((p) => p.prompt)} />}
 
-      {d.latest && (
+      {d.latest && !x?.sources && (
         <Panel title="Sources AI trusts" icon={<Library />} description="Domains the assistants cite for your questions. Being mentioned there is how you get into the answers" flush>
           <div className="px-4 pb-4">
             <SourcesTable sources={d.latest.sources} />
@@ -281,7 +331,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       {d.latest && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
           <div className="contents">
-            <Panel title="Your pages AI cites" icon={<FileText />} description="Pages of yours used as a source">
+            {!x?.urls && <Panel title="Your pages AI cites" icon={<FileText />} description="Pages of yours used as a source">
               {d.latest.pages.length ? (
                 <ul className="divide-y divide-line">
                   {d.latest.pages.map((p) => (
@@ -298,25 +348,31 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
               ) : (
                 <p className="text-[13px] leading-relaxed text-ink-2">No page of yours is cited yet. Pages that answer one question directly, with sources and a clear author, are the ones assistants quote. See "What to do next".</p>
               )}
-            </Panel>
+            </Panel>}
             {d.latest.market && <MarketView market={d.latest.market} domain={site.domain} />}
           </div>
         </div>
       )}
 
       <section>
-        <SectionHeading icon={<MessagesSquare />} title="Answers" description="What each assistant actually said, from the latest run" />
+        <SectionHeading icon={<MessagesSquare />} title="Answers" description="What each assistant said: the brands in the order named, every citation, the pages it read and the searches it ran. Open a question for every engine side by side and its history." />
         <Card className="p-4">
-          <AnswersExplorer answers={d.answers} engineNames={engineNames} />
+          <AnswersBrowser filter={filter} engineNames={engineNames} />
         </Card>
       </section>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
+        <AlertRulesPanel d={d} engineNames={engineNames} />
+        <AiReportsCard />
+      </div>
 
       <section>
         <SectionHeading icon={<ListChecks />} title="Your question panel" description={can('admin') ? 'Up to 500 buyer questions by topic, buyer role and market: add, import, edit, pin or switch off' : 'The questions asked every week (admins can change them)'} />
         <Card className="p-4">
-          <PanelManager prompts={d.prompts} answers={d.answers} suggestions={d.latest?.index?.suggestions?.map((s) => ({ question: s.question, volume: s.volume })) ?? []} setting={d.promptsMax} engines={d.latest?.engines.map((e) => e.key) ?? []} />
+          <PanelManager prompts={d.prompts} results={results} suggestions={d.latest?.index?.suggestions?.map((s) => ({ question: s.question, volume: s.volume })) ?? []} setting={d.promptsMax} engines={d.latest?.engines.map((e) => e.key) ?? []} onQuestion={setQuestion} />
         </Card>
       </section>
+      <QuestionDialog promptId={question} onClose={() => setQuestion(null)} engineNames={engineNames} />
     </Stagger>
   );
 }
@@ -362,7 +418,11 @@ function RunsTrend({ runs, daily, loading, className }: { runs: AiRun[]; daily: 
   const dayRows = daily.map((x) => ({ checkedAt: `${x.date}T12:00:00.000Z`, mentionRate: x.mentionRate, citationRate: x.citationRate, visibilityScore: x.visibilityScore, answers: x.samples, asked: pulseAskedLabel(x) }));
   const sampledDays = daily.filter((x) => x.sampleMode === 'sample').length;
   const markedDays = daily.filter((x) => x.partial || x.enough === false).length;
-  const data = m === 'daily' ? dayRows : m === 'score' ? rows.filter((r) => r.visibilityScore != null) : rows;
+  // W2-A (finishes F3's A1 step 4): a run that was not compared with the run before starts a new line, with a numbered marker
+  const runRows = m === 'score' ? runs.filter((r) => r.visibilityScore != null) : runs;
+  const broken = aiTrendRows(runRows, (r) => rows.find((x) => x.checkedAt === r.checkedAt) as unknown as Record<string, number | null>);
+  const marks = m === 'daily' ? [] : breakMarks(broken.breaks);
+  const data = m === 'daily' ? dayRows : broken.rows;
   const options: { value: TMetric; label: string }[] = [
     { value: 'you', label: 'Weekly' },
     ...(daily.length ? [{ value: 'daily' as const, label: 'Daily' }] : []),
@@ -396,12 +456,13 @@ function RunsTrend({ runs, daily, loading, className }: { runs: AiRun[]; daily: 
                 { key: 'compared', label: 'Compared with the run before' },
               ]),
         ],
-        rows: [...data].reverse(),
+        rows: [...data].filter((r) => !(r as { gap?: boolean }).gap).reverse(),
       }}
+      footer={marks.length ? <AnnotationLegend annotations={marks} data={data} xKey="checkedAt" /> : undefined}
     >
       {data.length ? (
         <FillHeight min={250}>
-          {(h) => <TimeSeriesChart data={data} xKey="checkedAt" xFormat={timeAxisFormat(data.map((r) => r.checkedAt))} series={series} height={h} yFormat={(v) => (m === 'score' ? `${v}` : `${v}%`)} yDomain={[0, m === 'score' ? 100 : 'auto']} />}
+          {(h) => <TimeSeriesChart data={data} xKey="checkedAt" xFormat={timeAxisFormat(data.map((r) => String(r.checkedAt)))} series={series} height={h} yFormat={(v) => (m === 'score' ? `${v}` : `${v}%`)} yDomain={[0, m === 'score' ? 100 : 'auto']} connectNulls={m === 'daily'} annotations={marks} />}
         </FillHeight>
       ) : (
         <EmptyState className="py-10" icon={<LineChartIcon className="size-5" />} title="No runs stored yet" />

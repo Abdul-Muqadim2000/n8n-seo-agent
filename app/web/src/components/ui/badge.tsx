@@ -41,7 +41,16 @@ export function StatusBadge({ tone, children, className }: { tone: Tone; childre
   );
 }
 
-export function RunStatusBadge({ status, className }: { status: RunStatus; className?: string }) {
+/** W2-A (WAVE2_CONTRACTS.md §6): the run stage of an on-demand AI check the engine joined to its open run (not a failure) */
+const JOINED_OPEN_RUN = 'joined_open_run';
+
+export function RunStatusBadge({ status, className, lastStage }: { status: RunStatus; className?: string; lastStage?: string | null }) {
+  if (status === 'failed' && lastStage === JOINED_OPEN_RUN)
+    return (
+      <Badge tone="accent" icon={<Clock className="size-3" aria-hidden />} className={className}>
+        Part of the open run
+      </Badge>
+    );
   const map: Record<RunStatus, { tone: Tone; label: string; icon: ReactNode }> = {
     submitting: { tone: 'neutral', label: 'Submitting', icon: <Loader2 className="size-3 animate-spin" aria-hidden /> },
     accepted: { tone: 'accent', label: 'Queued', icon: <Clock className="size-3" aria-hidden /> },

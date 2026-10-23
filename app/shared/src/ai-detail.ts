@@ -42,9 +42,13 @@ export interface AiLocalCard { name: string; url: string; host: string; position
 
 /** What a wave-2 answer row adds. Every field is null on a row written before it existed. */
 export interface AiAnswerDetail {
-  /** the whole answer (normalised, capped at 12,000 characters by the engine) */
+  /** the whole answer (normalised, capped at 12,000 characters by the engine); null when the row has none (older, or no longer kept) */
   answerText: string | null;
   answerCut: boolean;
+  /** the engine stored the whole answer once and has since blanked it (kept 35 days for the weekly run, 7 for the pulse) */
+  answerExpired: boolean;
+  /** the answer's length in characters as the engine recorded it (detail_json.answer_len), null when not recorded */
+  answerLen: number | null;
   /** every source the answer cited, in order */
   citations: AiCitation[] | null;
   /** pages the engine retrieved or looked at and did NOT cite */
@@ -71,9 +75,13 @@ export function aiAnswerDetail(row: Obj, domain: string): AiAnswerDetail {
   const own = (u: string, flag?: unknown) => (flag === true || flag === 'true' ? true : aiIsOwnUrl(u, domain));
   const detail = rec(aiJson(row.detail_json));
   const text = hasCol(row, 'answer_text') ? str(row.answer_text) : null;
+  const answerLen = num(detail.answer_len);
   return {
     answerText: text,
     answerCut: bool(detail.answer_cut) || bool(row.answer_cut),
+    // W2-E1: answer_text / retrieved_json are blanked after 35 days (weekly) or 7 (pulse); detail_json still says there was an answer
+    answerExpired: text == null && (answerLen ?? 0) > 0,
+    answerLen,
     citations: arrayCol(row, 'cited_json', (o) => {
       const url = str(o.url);
       if (!url) return null;
@@ -114,6 +122,15 @@ export function parseAiUrls(v: unknown): AiUrlsPanel | null {
 
 export const AI_SOURCE_TYPES = ['own', 'rival', 'ugc', 'reference', 'editorial', 'government', 'directory', 'other'] as const;
 export const AI_SOURCE_TYPE_LABEL: Record<string, string> = { own: 'Your site', rival: 'Competitors', ugc: 'Forums and video (UGC)', reference: 'Reference (e.g. Wikipedia)', editorial: 'Editorial and news', government: 'Government', directory: 'Directories and reviews', other: 'Other' };
+/**
+ * The older sources table of a visibility row. W2-E1 made sources_json an OBJECT {v: 2, types, domains, n, list}, `list` being the old
+ * array; a row written before it holds the array itself. Both read here (anything else is an empty list).
+ */
+export function aiLegacySourcesList(v: unknown): Obj[] {
+  const j = aiJson(v);
+  return (Array.isArray(j) ? j : list(rec(j).list)).map(rec);
+}
+
 export interface AiSourcesPanel {
   types: { type: string; n: number; share: number | null }[];
   domains: { host: string; type: string; citedN: number; share: number | null; firstSeen: string; lastSeen: string; halfLifeDays: number | null }[];
@@ -144,10 +161,12 @@ export function parseAiShopping(v: unknown): AiShoppingPanel | null {
   const x = rec(aiJson(v));
   if (!Object.keys(x).length) return null;
   const be = rec(x.by_engine);
+  const measured = str(x.status) === 'measured' || (str(x.status) !== 'no shopping results' && int0(x.products_n) > 0);
   return {
-    status: str(x.status) === 'measured' ? 'measured' : int0(x.products_n) > 0 ? 'measured' : 'no shopping results',
-    triggerRate: num(x.trigger_rate), triggerN: int0(x.trigger_n), answersN: int0(x.answers_n), productsN: int0(x.products_n),
-    ownPresenceRate: num(x.own_presence_rate), ownAvgPosition: num(x.own_avg_position),
+    status: measured ? 'measured' : 'no shopping results',
+    // "no shopping results" carries no rate (the engine sends null): never read as 0%
+    triggerRate: measured ? num(x.trigger_rate) : null, triggerN: int0(x.trigger_n), answersN: int0(x.answers_n), productsN: int0(x.products_n),
+    ownPresenceRate: measured ? num(x.own_presence_rate) : null, ownAvgPosition: measured ? num(x.own_avg_position) : null,
     merchants: list(x.merchants).map((o0) => { const o = rec(o0); return { merchant: str(o.merchant), share: num(o.share), n: int0(o.n) }; }).filter((m) => m.merchant),
     byEngine: Object.entries(be).map(([engine, o0]) => { const o = rec(o0); return { engine, triggerRate: num(o.trigger_rate), answersN: int0(o.answers_n), productsN: int0(o.products_n) }; }),
   };
@@ -185,7 +204,8 @@ export const aiCiMethodLabel = (m: string): string => (m === 'question-bootstrap
 export interface AiSovPanel {
   set: string[];
   othersShare: number | null;
-  byEntity: { id: string; name: string; share: number | null; n: number }[];
+  /** `position`: the brand's average place in the answers that name it (when the engine sends it) */
+  byEntity: { id: string; name: string; share: number | null; n: number; position: number | null }[];
   denominators: { allAnswers: number | null; answersNamingAnyBrand: number | null };
   namedOfBrandedRate: number | null;
 }
@@ -196,7 +216,7 @@ export function parseAiSov(v: unknown): AiSovPanel | null {
   return {
     set: list(x.set).map(str).filter(Boolean),
     othersShare: num(x.others_share),
-    byEntity: list(x.by_entity).map((o0) => { const o = rec(o0); return { id: str(o.id), name: str(o.name) || str(o.id), share: num(o.share), n: int0(o.n) }; }).filter((e) => e.id || e.name),
+    byEntity: list(x.by_entity).map((o0) => { const o = rec(o0); return { id: str(o.id), name: str(o.name) || str(o.id), share: num(o.share), n: int0(o.n), position: num(o.avg_position ?? o.position) }; }).filter((e) => e.id || e.name),
     denominators: { allAnswers: num(d.all_answers), answersNamingAnyBrand: num(d.answers_naming_any_brand) },
     namedOfBrandedRate: num(x.named_of_branded_rate),
   };
@@ -306,6 +326,22 @@ export function parseAiImportsSummary(v: unknown): AiImportsPanel | null {
   return sources.length || str(x.note) ? { sources, note: str(x.note) } : null;
 }
 
+/**
+ * The persona effect (MARKET_RND gap 7: each buyer role sent to the API engines as context, asked with and without it). The contract
+ * (WAVE2_CONTRACTS.md) names the setting (§4 ai_persona_context) but no column for the result yet: this reads `persona_effect_json` on
+ * the row, or `notes_json.persona_effect`, shaped [{role, with:{rate,n}, without:{rate,n}, delta, lo, hi, significant}]. ASSUMPTION, to
+ * be confirmed by the engine agent; nothing is shown until one of them is present.
+ */
+export interface AiPersonaEffect { role: string; withRate: number | null; withN: number; withoutRate: number | null; withoutN: number; delta: number | null; lo: number | null; hi: number | null; significant: boolean | null }
+export function parseAiPersonaEffect(v: unknown): AiPersonaEffect[] | null {
+  const j = aiJson(v);
+  if (!Array.isArray(j)) return null;
+  return j.map((o0) => {
+    const o = rec(o0), w = rec(o.with), wo = rec(o.without);
+    return { role: str(o.role), withRate: num(w.rate), withN: int0(w.n), withoutRate: num(wo.rate), withoutN: int0(wo.n), delta: num(o.delta), lo: num(o.lo), hi: num(o.hi), significant: typeof o.significant === 'boolean' ? o.significant : null };
+  }).filter((x) => x.role);
+}
+
 /** Everything wave 2 adds to the latest visibility row. Each block is null on a row written before it. */
 export interface AiLatestExtras {
   urls: AiUrlsPanel | null;
@@ -321,6 +357,7 @@ export interface AiLatestExtras {
   demand: AiDemandPanel | null;
   imports: AiImportsPanel | null;
   notes: AiNotesPanel | null;
+  personaEffect: AiPersonaEffect[] | null;
   /** the n8n execution ids of the run's parts (shown to admins only, for support) */
   execIds: string[];
 }
@@ -339,6 +376,7 @@ export function aiLatestExtras(row: Obj): AiLatestExtras {
     demand: parseAiDemand(row.demand_json),
     imports: parseAiImportsSummary(row.imports_json),
     notes: parseAiNotes(row.notes_json),
+    personaEffect: parseAiPersonaEffect(row.persona_effect_json ?? rec(aiJson(row.notes_json)).persona_effect),
     execIds: str(row.exec_ids).split(',').map((s) => s.trim()).filter(Boolean),
   };
 }

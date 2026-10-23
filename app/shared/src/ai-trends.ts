@@ -71,7 +71,7 @@ export function aiTwoProp(r1: number, n1: number, r0: number, n0: number): { sig
 
 // ---------------- trend lines with breaks ----------------
 
-export interface AiTrendRun { runId: string; checkedAt: string; compare: AiCompare | null }
+export interface AiTrendRun { runId: string; checkedAt: string; compare: Pick<AiCompare, 'comparable' | 'reason'> | null }
 /** A break before run i: the engine (or the like-for-like rule) did not compare it with the run before. The first run is no break. */
 export const aiIsBreak = (r: AiTrendRun, i: number): boolean => i > 0 && !!r.compare && !r.compare.comparable;
 
@@ -165,7 +165,8 @@ export function aiRuleSentence(r: Pick<AiAlertRule, 'metric' | 'scope' | 'direct
 }
 
 /** What the preview reads off one stored run. */
-export interface AiRuleRun extends AiTrendRun {
+export interface AiRuleRun extends Omit<AiTrendRun, 'compare'> {
+  compare: AiCompare | null;
   engines?: { key: string; mentionRate: number | null; citationRate: number | null; samples: number }[];
   sov?: { id: string; name: string; share: number | null; n: number }[];
   samples?: number;
