@@ -4,11 +4,11 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
-import { AlertTriangle, Check, Clock, Megaphone, Repeat, Search, SkipForward } from 'lucide-react';
+import { AlertTriangle, Check, Clock, ListOrdered, Megaphone, Repeat, Search, SkipForward } from 'lucide-react';
 import { asDifficulty, asPlanChoice, type KeywordCheck, type KeywordProposalView } from '@seo/shared';
 import { KeywordChoiceCard } from '@/components/site/KeywordChoiceCard';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
@@ -36,7 +36,7 @@ export function countdown(iso: string, now = Date.now()): string {
 }
 
 export function KeywordProposals() {
-  const { org } = useOrgCtx();
+  const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
   const q = useKeywordProposals(org.id, site.id, !!site.verifiedAt);
   const pending = q.data?.pending ?? [];
@@ -54,11 +54,19 @@ export function KeywordProposals() {
             : 'You have room for another keyword. Start it, pick a different one, or skip it: nothing starts without your OK.'
         }
         actions={
-          <GuideButton
-            id={announced ? AUTOPILOT_SCREEN_GUIDES.proposals : AUTOPILOT_SCREEN_GUIDES.newLadder}
-            vars={autopilotGuideVars(site, { level: q.data?.level })}
-            label={announced ? 'What happens if I do nothing' : 'How to choose'}
-          />
+          <>
+            <GuideButton
+              id={announced ? AUTOPILOT_SCREEN_GUIDES.proposals : AUTOPILOT_SCREEN_GUIDES.newLadder}
+              vars={autopilotGuideVars(site, { level: q.data?.level })}
+              label={announced ? 'What happens if I do nothing' : 'How to choose'}
+            />
+            {/* prod report 2026-10-23 (devaicon): once a proposal exists the Needs-you "Choose a keyword" link is gone, so the full chooser needs its own way in */}
+            {can('member') && (
+              <ButtonLink to={paths.newLadder(org.id, site.id, { tab: 'recommended' })} variant="secondary" size="sm" icon={<ListOrdered className="size-4" />}>
+                See all suggestions
+              </ButtonLink>
+            )}
+          </>
         }
       >
         <ul className="space-y-4">
@@ -145,7 +153,8 @@ function SwapDialog({ p, onClose }: { p: KeywordProposalView; onClose: () => voi
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [check, setCheck] = useState<KeywordCheck | null>(null);
-  const others = (rec.data?.keywords ?? [])
+  const all = rec.data?.keywords ?? [];
+  const others = all
     .filter((k) => k.keyword.toLowerCase() !== p.keyword.toLowerCase() && (k.difficultyForYou === 'easy' || k.difficultyForYou === 'reachable') && !k.overlaps.length)
     .slice(0, 5);
   const swap = (keyword: string) => {
@@ -199,7 +208,13 @@ function SwapDialog({ p, onClose }: { p: KeywordProposalView; onClose: () => voi
                 </li>
               ))}
             </ul>
+            <p className="mt-2 text-xs text-ink-3">Only the easiest ones that no ladder covers yet are listed here.</p>
           </div>
+        )}
+        {all.length > others.length && (
+          <ButtonLink to={paths.newLadder(org.id, site.id, { tab: 'recommended' })} variant="ghost" size="sm" icon={<ListOrdered className="size-4" />}>
+            See all {all.length} suggestions with their chances and plans
+          </ButtonLink>
         )}
         <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row sm:items-start">
           <Field className="min-w-0 flex-1" label="Your own keyword" error={error && !check ? error : undefined}>
