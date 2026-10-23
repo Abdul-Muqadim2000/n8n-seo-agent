@@ -682,6 +682,18 @@ export const linkImportSchema = z.object({
 });
 export type LinkImportInput = z.output<typeof linkImportSchema>;
 
+// ---------- W2-A (2026-10-23): AI report uploads (ai-import.ts) and deleting AI panel questions ----------
+export const aiImportSchema = z.object({
+  /** the CSV text: Bing Webmaster Tools AI Performance export, or Search Console Performance export (Queries / Pages / Dates) */
+  csv: z.string().min(10, 'The file is empty').max(15_000_000, 'The file is larger than 15 MB: export a shorter period'),
+  fileName: z.string().trim().max(200).optional(),
+  /** '' = recognise it (a Citations column means Bing) */
+  source: z.enum(['', 'bing_ai', 'gsc_ai']).default(''),
+  /** the last day of the period exported, for a file without a date column (Search Console's Queries / Pages files) */
+  periodEnd: z.string().trim().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Use a date like 2026-10-22').default(''),
+});
+export const aiPromptDeleteSchema = z.object({ ids: z.array(z.string().trim().min(1).max(120)).min(1, 'Choose at least one question').max(500) });
+
 // ---- v4.13 Link Builder ----
 const hostName = z.string().trim().min(3).max(200).regex(/^[a-z0-9.-]+$/i, 'A host name like smtp.gmail.com');
 const port = z.number().int().min(1).max(65535);

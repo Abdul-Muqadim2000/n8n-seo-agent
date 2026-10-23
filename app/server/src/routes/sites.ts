@@ -3,6 +3,8 @@ import { audit } from '../services/audit';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   adminActionSchema,
+  aiImportSchema,
+  aiPromptDeleteSchema,
   createSiteSchema,
   LINK_IMPORT_COLUMNS,
   linkImportSchema,
@@ -17,6 +19,7 @@ import {
   type AdminAction,
   type AdminResult,
   type AiGrowthRow,
+  type AiImportSummary,
   type AuditAction,
   type IndexNowCheck,
   type GoogleConnection,
@@ -39,6 +42,7 @@ import { assertGa4ForDomain, findGscProperty, gscOwnerCheck, listGa4Properties }
 import { assertEngineIdFree, ENGINE_ID_TAKEN } from '../services/engineSite';
 import { routeSiteToApp } from '../services/runs';
 import { fetchPublicText, verify } from '../services/verify';
+import { deleteAiPrompts, importAiReport } from '../services/aiWave2';
 
 export function toSite(s: SiteRow): Site {
   return {
@@ -416,6 +420,32 @@ export async function siteRoutes(app: FastifyInstance) {
     return { source: parsed.source, label: parsed.label, rows: parsed.rows.length, domains: parsed.domains, total: parsed.total, skipped: parsed.skipped, importedAt: now };
   });
 
+  // ---------- W2-A (2026-10-23): the owner's AI report uploads -> seo_ai_imports (WAVE2_CONTRACTS.md §5) ----------
+  // Bing Webmaster Tools' AI Performance and Search Console's AI features have no API: the export is the only way in. The engine reads
+  // the table (W2-E3); a file for another website is refused by the parser.
+  app.post('/api/orgs/:orgId/sites/:siteId/ai/import', { bodyLimit: 16 * 1024 * 1024, config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async (req): Promise<AiImportSummary> => {
+    const p = req.params as P;
+    const { site } = await siteAccess(req, p.orgId, p.siteId, 'member');
+    requireVerified(site);
+    const input = parse(aiImportSchema, req.body);
+    const out = await importAiReport(site, input);
+    await audit(req, site.orgId, { action: 'site.ai_import', target: { type: 'site', id: site.id, label: site.domain }, details: { source: out.source, rows: out.rows, from: out.days.from, to: out.days.to, skipped: out.skipped } });
+    req.log.info({ site: site.domain, source: out.source, rows: out.rows }, 'ai import');
+    return out;
+  });
+
+  // W2-A: delete questions from the AI panel (bulk). The engine's Site Admin only switches questions off; a delete removes the rows of
+  // this domain only. Admins only, in the audit log with the count and ids (never the question texts).
+  app.post('/api/orgs/:orgId/sites/:siteId/ai/prompts/delete', { config: { rateLimit: { max: 30, timeWindow: '10 minutes' } } }, async (req) => {
+    const p = req.params as P;
+    const { site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    requireVerified(site);
+    const { ids } = parse(aiPromptDeleteSchema, req.body);
+    const deleted = await deleteAiPrompts(site, ids);
+    await audit(req, site.orgId, { action: 'site.ai_prompts_deleted', target: { type: 'site', id: site.id, label: site.domain }, details: { requested: ids.length, deleted, ids: ids.slice(0, 20) } });
+    return { ok: true, deleted };
+  });
+
   // ---------- Site Admin (n8n) ----------
   app.post('/api/orgs/:orgId/sites/:siteId/admin', async (req): Promise<AdminResult> => {
     const p = req.params as P;
@@ -450,7 +480,7 @@ export async function siteRoutes(app: FastifyInstance) {
       case 'ai_prompts':
         // G6 (2026-10-18): the panel manager, the engine's field names (AI_Prompt_Rows_Admin.js)
         body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove, enable: a.enable, pin: a.pin, unpin: a.unpin,
-          edit: a.edit.map((e) => ({ prompt_id: e.promptId, ...(e.prompt ? { prompt: e.prompt } : {}), ...(e.persona !== undefined ? { persona: e.persona } : {}), ...(e.cluster !== undefined ? { cluster: e.cluster } : {}),
+          edit: a.edit.map((e) => ({ prompt_id: e.promptId, ...(e.prompt ? { prompt: e.prompt } : {}), ...(e.keyword ? { keyword: e.keyword } : {}), ...(e.persona !== undefined ? { persona: e.persona } : {}), ...(e.cluster !== undefined ? { cluster: e.cluster } : {}),
             ...(e.stage ? { stage: e.stage } : {}), ...(e.market ? { market: e.market } : {}), ...(e.pinned !== undefined ? { pinned: e.pinned } : {}) })) };
         break;
       case 'content_groups':

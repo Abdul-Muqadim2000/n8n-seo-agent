@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import {
+  aiFilterFrom,
   customerSafePayload,
   decodeCursor,
   deliveryDecision,
@@ -30,6 +31,7 @@ import { isUuid, type OrgAccess } from '../auth/access';
 import { HttpError, notFound, validationError } from '../lib/errors';
 import { publishCheckCall, siteRows } from '../n8n/client';
 import { aiData, oneReadingFinding, previousOfType } from './data';
+import { aiAnswersPage } from './aiWave2';
 import { filesFor } from './runs';
 import { creditsForRuns, reportCredits } from './runCredits';
 import { customerError } from '../lib/customerError';
@@ -202,6 +204,55 @@ export async function getAiSegments(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
     moves: d.segments?.moves ?? [],
     minAnswers: d.segments?.minAnswers ?? 12,
   };
+}
+
+/**
+ * W2-A (2026-10-23): the AI visibility summary of one verified website: the latest run's headline rates with their ranges and the comparison
+ * with the previous run (no change across a changed panel), per engine, share of voice, and the wave-2 blocks when the run has them (our
+ * pages cited / retrieved, source types, shopping, ads and local, sentiment by aspect, "did it work" verdicts, owner rules that fired,
+ * fan-out gaps, demand ranges); plus every stored run's headline with its range and whether it was compared. Credits only, never cost.
+ */
+export async function getAiVisibility(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
+  const site = await siteOf(ctx, websiteId);
+  requireVerifiedSite(site);
+  const filter = aiFilterFrom(q as Record<string, unknown>);
+  const d = await aiData(ctx.org, site, { answers: false, filter: Object.values(filter).some(Boolean) ? filter : null });
+  const run = d.runs.length ? d.runs[d.runs.length - 1] : null;
+  const x = d.latest?.extras ?? null;
+  return {
+    websiteId: site.id,
+    domain: site.domain,
+    latest: run
+      ? {
+          runId: run.runId, checkedAt: run.checkedAt, runKind: run.runKind, questions: run.prompts, answers: run.answers, samples: run.samples,
+          namedRate: run.mentionRate, namedRange: run.ciNamed ?? null, citedRate: run.citationRate, citedRange: run.ciCited ?? null, rangeMethod: run.ciMethod || 'wilson',
+          shareOfVoice: run.shareOfVoice, visibilityScore: run.visibilityScore, comparison: run.compare, credits: run.credits,
+        }
+      : null,
+    engines: d.latest?.engines ?? [],
+    shareOfVoice: run?.sov ?? null,
+    pages: x?.urls ?? null,
+    sources: x?.sources ?? null,
+    shopping: x?.shopping ?? null,
+    adsAndLocal: x?.adsLocal ?? null,
+    sentiment: x?.sentiment ?? null,
+    impact: x?.impact ?? null,
+    rules: x?.rules ?? null,
+    fanoutGaps: x?.fanoutGap ?? null,
+    demand: x?.demand ?? null,
+    imports: x?.imports ?? null,
+    scope: d.scope ?? null,
+    runs: d.runs.map((r) => ({ runId: r.runId, checkedAt: r.checkedAt, namedRate: r.mentionRate, namedRange: r.ciNamed ?? null, citedRate: r.citationRate, shareOfVoice: r.shareOfVoice, comparable: r.compare ? r.compare.comparable : null, reason: r.compare?.reason ?? null })),
+    unit: 'percent 0-100; every rate with its answers and its 95% range; null = not measured on this run',
+  };
+}
+
+/** W2-A: one page of a run's answers (the latest, or `run`) with the filter's rates, as the AI visibility page reads them. */
+export async function getAiAnswers(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
+  const site = await siteOf(ctx, websiteId);
+  requireVerifiedSite(site);
+  const r = q as Record<string, unknown>;
+  return aiAnswersPage(site, { filter: aiFilterFrom(r), run: str(r.run), result: str(r.result), text: str(r.q), promptId: str(r.promptId), page: Number(r.page), pageSize: Number(r.pageSize) });
 }
 
 export async function getCrawlers(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
