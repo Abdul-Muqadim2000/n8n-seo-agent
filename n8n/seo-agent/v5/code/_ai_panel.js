@@ -310,7 +310,15 @@ const AIP = (() => {
   const MONTHLY_ENGINES = ['claude'];
   const PULSE_ENGINES = ['chatgpt', 'gemini', 'ai_mode', 'copilot'];
   const FIXED = { weekly_ai_min: 0.13, brief_ai: 0.03, analyst_job_ai: 0.02, analyst_per_job: 12, analyst_share: 0.35, analyst_cap_base: 24, analyst_cap_max: 60,
-    full_dfs: 0.45, full_ai: 0.3, weeks_per_month: 4.33, pulse_days: 6 };
+    full_dfs: 0.45, full_ai: 0.3, weeks_per_month: 4.33, pulse_days: 6,
+    // W2-E2's Sentiment Reader (Claude Haiku, merged 2026-10-23): every answer of the run that names the business, 20 a call, at most 40 calls a
+    // run, about $0.012 a call. Named answers = the weekly run's answers x sentiment_named_rate. ASSUMPTION: 50% named, conservative on purpose (a
+    // new site is named in far fewer), so the quote is an upper bound; the full run's few extra answers (the monthly engine, the brand question) are
+    // inside that margin and are not priced on their own (a quote never moves by a call or two with the engine set).
+    sentiment_named_rate: 0.5, sentiment_per_call: 20, sentiment_calls_max: 40, sentiment_call_ai: 0.012 };
+  /** the Sentiment Reader's calls and Claude money for a run of `answers` answers */
+  const sentimentOf = (answers) => { const named = Math.ceil(Math.max(0, n0(answers)) * FIXED.sentiment_named_rate);
+    const calls = Math.min(FIXED.sentiment_calls_max, Math.ceil(named / FIXED.sentiment_per_call)); return { named, calls, ai: Math.round(calls * FIXED.sentiment_call_ai * 10000) / 10000 }; };
   // ---- W2-E3 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §4): the owner's engine and coverage options -------------------------
   // Every one is OFF by default, so a site that sets none of them costs exactly what it cost before (the golden cases of `cases` hold that).
   //  * ai_claude_weekly   Claude every weekly run instead of the month's full run only
@@ -341,7 +349,8 @@ const AIP = (() => {
   const sumPrice = (list) => list.reduce((t, e) => t + (PRICE[e] || 0), 0);
   /** what the options add to one run: the persona test and the fan-out check every weekly run, the demand trend on the full run */
   const optionsOf = (x, asked) => {
-    const roles = x.persona_context ? Math.min(PERSONA.max_roles, Math.max(0, Math.round(n0(x.personas)))) : 0;
+    const nRoles = Array.isArray(x.personas) || typeof x.personas === 'string' ? listOf(x.personas).length : Math.round(n0(x.personas));   // a count, or the roles themselves
+    const roles = x.persona_context ? Math.min(PERSONA.max_roles, Math.max(0, nRoles)) : 0;
     const pq = roles ? Math.min(PERSONA.questions, asked) : 0;
     const pReq = roles ? (roles + 1) * pq : 0;   // every role, plus one control arm shared by all of them
     const fq = clamp(Math.round(n0(x.fanout_check)), 0, FANOUT_MAX);
@@ -371,7 +380,8 @@ const AIP = (() => {
     const answers = asked * wE.length;
     const jobs = Math.min(analystCap(panel), Math.ceil(answers * FIXED.analyst_share / FIXED.analyst_per_job));
     const opt = optionsOf(x, asked); opt.pulse_engines = pE.slice();
-    const weekly = { dfs: r4(asked * sumPrice(wE) + opt.persona.dfs_run + opt.fanout.dfs_run), ai: r4(Math.max(FIXED.weekly_ai_min, FIXED.brief_ai + jobs * FIXED.analyst_job_ai)) };
+    const sw = sentimentOf(answers);   // W2-E2's Sentiment Reader, priced on the weekly run's answers (every run asks them)
+    const weekly = { dfs: r4(asked * sumPrice(wE) + opt.persona.dfs_run + opt.fanout.dfs_run), ai: r4(Math.max(FIXED.weekly_ai_min, FIXED.brief_ai + jobs * FIXED.analyst_job_ai) + sw.ai) };
     weekly.usd = r4(weekly.dfs + weekly.ai);
     const extra = { dfs: r4(MONTHLY.filter(e => engines.includes(e)).reduce((t, e) => t + panel * PRICE[e], 0) + sumPrice(wE) + FIXED.full_dfs + opt.demand_market.dfs_full), ai: FIXED.full_ai };
     extra.usd = r4(extra.dfs + extra.ai);
@@ -389,6 +399,7 @@ const AIP = (() => {
       half_width: { headline: pw.headline, cluster: pw.cluster }, run: { weekly, full }, full_extra: extra, pulse_day, month,
       prices: engines.map(e => ({ engine: e, usd: PRICE[e], basis: PRICE_BASIS[e] || 'measured / priced' })),
       // W2-E3: what each option adds (all zero / off by default), and the requests the run's last part makes for them
+      sentiment: { named_rate: FIXED.sentiment_named_rate, ...sw },
       options: { ...opt, requests_extra: { weekly: opt.persona.requests_run + opt.fanout.requests_run, full: opt.persona.requests_run + opt.fanout.requests_run + opt.demand_market.tasks } } };
   };
 
@@ -396,6 +407,6 @@ const AIP = (() => {
     pulsePerWeek, pulseSample, reqKey, slice, stateKey, stateOf, stateVerdict, stateRow, panelIds, panelHash, overlap, hash,
     MARKETS_MAX, normQ, hash64, promptId, findStored, keywordOf, KEYWORD_SOURCES, STOPPED, ENG_CODE, packKeys, unpackKeys, CEILING, runCeiling, ceilingLeft, keysUsd, baseState,
     TIME, secPerRequest, chunkPlan, servicesOfRow, fitInput,
-    PRICE, PRICE_BASIS, ENGINES, DEFAULT_ENGINES, MONTHLY_ENGINES, PULSE_ENGINES, FIXED, analystCap, cost,
+    PRICE, PRICE_BASIS, ENGINES, DEFAULT_ENGINES, MONTHLY_ENGINES, PULSE_ENGINES, FIXED, analystCap, cost, sentimentOf,
     XPRICE, PERSONA, FANOUT_MAX, DEMAND_TASKS, PULSE_ALLOWED, pulseEnginesOf, monthlyOf, optionsOf, extraSeconds };
 })();

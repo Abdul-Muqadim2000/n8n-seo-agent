@@ -120,9 +120,15 @@ const AIX = (() => {
   /** two proportions: z of (k1/n1 - k2/n2) on the pooled rate; null when either side has no answers */
   const twoProp = (k1, n1, k2, n2) => { if (!n1 || !n2) return null; const p = (k1 + k2) / (n1 + n2); const se = Math.sqrt(p * (1 - p) * (1 / n1 + 1 / n2)); if (!se) return 0; return Math.round(100 * ((k1 / n1 - k2 / n2) / se)) / 100; };
   const MIN = 12;
-  const verdictOf = (w, c) => { if (w.n < MIN || c.n < MIN) return { verdict: 'too few answers', z: null, delta: w.n && c.n ? r1(100 * (w.k / w.n - c.k / c.n)) : null };
-    const z = twoProp(w.k, w.n, c.k, c.n); const delta = r1(100 * (w.k / w.n - c.k / c.n));
-    return { z, delta, verdict: z != null && Math.abs(z) >= 1.96 ? (delta > 0 ? 'named more often with this role' : 'named less often with this role') : 'no measurable difference' }; };
+  /** 95% Wilson interval of k / n (0-1) */
+  const wilson = (k, n) => { if (!n) return [0, 1]; const z = 1.96, p = k / n, d = 1 + z * z / n, c = p + z * z / (2 * n), m = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)); return [Math.max(0, (c - m) / d), Math.min(1, (c + m) / d)]; };
+  /** 95% interval of the difference k1/n1 - k2/n2 in points (Newcombe's hybrid score method: the two Wilson intervals combined) */
+  const diffCi = (k1, n1, k2, n2) => { if (!n1 || !n2) return [null, null]; const p1 = k1 / n1, p2 = k2 / n2, [l1, u1] = wilson(k1, n1), [l2, u2] = wilson(k2, n2), d = p1 - p2;
+    return [r1(100 * (d - Math.sqrt((p1 - l1) ** 2 + (u2 - p2) ** 2))), r1(100 * (d + Math.sqrt((u1 - p1) ** 2 + (p2 - l2) ** 2)))]; };
+  // a role's effect is real when the 95% interval of the difference excludes 0 (the z of the two-proportion test is reported beside it)
+  const verdictOf = (w, c) => { const [lo, hi] = diffCi(w.k, w.n, c.k, c.n); if (w.n < MIN || c.n < MIN) return { verdict: 'too few answers', z: null, delta: w.n && c.n ? r1(100 * (w.k / w.n - c.k / c.n)) : null, lo, hi, significant: false };
+    const z = twoProp(w.k, w.n, c.k, c.n); const delta = r1(100 * (w.k / w.n - c.k / c.n)); const significant = lo > 0 || hi < 0;
+    return { z, delta, lo, hi, significant, verdict: significant ? (delta > 0 ? 'named more often with this role' : 'named less often with this role') : 'no measurable difference' }; };
   /** -> the persona block. `pairs` = [{ q: request item, r: response }]; `read` = (text, cites) -> { named, cited } (AIE over the site's names) */
   const personaEffect = (o) => { const x = o || {}; const pairs = x.pairs || []; if (!pairs.length) return null;
     const cnt = () => ({ n: 0, k: 0, c: 0, failed: 0 }); const control = cnt(); const by = new Map();
@@ -134,10 +140,10 @@ const AIX = (() => {
       const pool = prev.reduce((t, p) => { const pr = (p.persona.roles || []).find(rr => S(rr.role) === S(role)); const pc = p.persona.control || {};
         if (!pr) return t; return { n: t.n + n0(pr.n), k: t.k + n0(pr.k), cn: t.cn + n0(pc.n), ck: t.ck + n0(pc.k), runs: t.runs + 1 }; }, { n: w.n, k: w.k, cn: control.n, ck: control.k, runs: 1 });
       const pv = verdictOf({ n: pool.n, k: pool.k }, { n: pool.cn, k: pool.ck });
-      return { role, n: w.n, k: w.k, c: w.c, failed: w.failed, rate: pct(w.k, w.n), control_rate: pct(control.k, control.n), delta: v.delta, z: v.z, verdict: v.verdict,
-        pooled: { runs: pool.runs, n: pool.n, k: pool.k, control_n: pool.cn, control_k: pool.ck, rate: pct(pool.k, pool.n), control_rate: pct(pool.ck, pool.cn), delta: pv.delta, z: pv.z, verdict: pv.verdict } }; });
+      return { role, n: w.n, k: w.k, c: w.c, failed: w.failed, rate: pct(w.k, w.n), control_rate: pct(control.k, control.n), delta: v.delta, lo: v.lo, hi: v.hi, significant: v.significant, z: v.z, verdict: v.verdict,
+        pooled: { runs: pool.runs, n: pool.n, k: pool.k, control_n: pool.cn, control_k: pool.ck, rate: pct(pool.k, pool.n), control_rate: pct(pool.ck, pool.cn), delta: pv.delta, lo: pv.lo, hi: pv.hi, significant: pv.significant, z: pv.z, verdict: pv.verdict } }; });
     return { label: 'API answers', engine: 'chatgpt_api', model: PERSONA_MODEL, questions: [...new Set(pairs.map(p => p.q.prompt_id))].length, control: { n: control.n, k: control.k, c: control.c, failed: control.failed, rate: pct(control.k, control.n) }, roles,
-      method: 'the same questions asked of the ChatGPT API (web search on) with the buyer role sent as the asker\'s context, and once without it; "named" rates compared with a two-proportion z-test (|z| >= 1.96), per run and pooled over the stored runs of the last 28 days; under ' + MIN + ' answers a side: "too few answers". API answers are not what the chatgpt.com interface shows and are kept out of every headline figure',
+      method: 'the same questions asked of the ChatGPT API (web search on) with the buyer role sent as the asker\'s context, and once without it; the change in the "named" rate with its 95% interval (Newcombe), real when the interval excludes 0 (the two-proportion z is shown beside it), per run and pooled over the stored runs of the last 28 days; under ' + MIN + ' answers a side: "too few answers". API answers are not what the chatgpt.com interface shows and are kept out of every headline figure',
       as_of: day(x.now) }; };
 
   // ---- 3. demand as a range, and the monthly market trend --------------------------------------------------------------------------------
@@ -247,7 +253,7 @@ const AIX = (() => {
       if ((F.ranks_not_cited || []).length) h += p_('Ranks in Google\'s top 3 but the answers that searched it did not cite you: ' + F.ranks_not_cited.slice(0, 6).map(esc).join('; ') + '. The page is found; make it the one worth citing (a direct answer near the top, dated facts, sources).', true); }
     const P = x.persona; if (P && (P.roles || []).length) {
       h += h3('Does the asker\'s role change the answer? (API answers)') + p_(esc(P.method) + '. Without a role: named in ' + (P.control.rate == null ? '-' : P.control.rate + '%') + ' of ' + n(P.control.n) + ' answers.', true)
-        + table(['Buyer role', 'Named with the role', 'Change', 'This run', 'Last 28 days'], P.roles.map(r => [esc(r.role), (r.rate == null ? '-' : r.rate + '%') + ' of ' + n(r.n), r.delta == null ? '-' : (r.delta > 0 ? '+' : '') + r.delta + ' pts', esc(r.verdict),
+        + table(['Buyer role', 'Named with the role', 'Change (95% range)', 'This run', 'Last 28 days'], P.roles.map(r => [esc(r.role), (r.rate == null ? '-' : r.rate + '%') + ' of ' + n(r.n), r.delta == null ? '-' : (r.delta > 0 ? '+' : '') + r.delta + ' pts' + (r.lo != null ? ' (' + r.lo + ' to ' + r.hi + ')' : ''), esc(r.verdict),
           esc(r.pooled.verdict) + ' (' + n(r.pooled.n) + ' vs ' + n(r.pooled.control_n) + ' answers, ' + r.pooled.runs + ' run' + (r.pooled.runs === 1 ? '' : 's') + ')'])); }
     const D = x.demand; if (D && ((D.questions || []).length || D.market)) {
       h += h3('Demand behind your questions') + p_(esc(D.note), true);
@@ -264,8 +270,12 @@ const AIX = (() => {
     const N = x.notes || {}; const nl = [N.lost_note, N.unanalysed_note, N.market_fallback_n ? N.market_fallback_n + ' question(s) were asked in your own market because their market is past the limit of ' + AIP.MARKETS_MAX + ' markets a panel covers' : '', N.ceiling_note, N.fanout_note].filter(Boolean);
     if (nl.length) h += p_(nl.map(esc).join(' '), true);
     return h; };
+  /** -> persona_effect_json (WAVE2 contract addition from W2-A): one entry per role, the 28-day pooled figures (this run included; a first run
+   *  is this run alone): [{ role, with: { rate, n }, without: { rate, n }, delta, lo, hi, significant }], rates and the interval in points 0-100 */
+  const personaEffectRows = (P) => (P && (P.roles || []).length ? P.roles.map(r => ({ role: r.role, with: { rate: r.pooled.rate, n: r.pooled.n }, without: { rate: r.pooled.control_rate, n: r.pooled.control_n },
+    delta: r.pooled.delta, lo: r.pooled.lo, hi: r.pooled.hi, significant: !!r.pooled.significant })) : null);
   const callbackFields = (x) => (x ? { fanout_gap: x.fanout_gap || null, persona_effect: x.persona || null, demand: x.demand || null, imports: x.imports || null, exec_ids: x.exec_ids || '', run_notes: x.notes || null } : {});
 
   return { optionsOf, fanoutOf, normQuery, citedRow, fanoutTop, serpBody, fanoutRequests, targetPage, gscOf, fanoutGap, personaMessage, personaQuestions, personaRequests, llmText, twoProp, verdictOf, personaEffect,
-    platformOf, demandRequests, marketOf, mentionItems, demand, imports, execIds, notes, promptState, reportHtml, callbackFields, PERSONA_MODEL, US_NOTE, MIN };
+    platformOf, demandRequests, marketOf, mentionItems, demand, imports, execIds, notes, promptState, reportHtml, callbackFields, personaEffectRows, diffCi, wilson, PERSONA_MODEL, US_NOTE, MIN };
 })();

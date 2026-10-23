@@ -24,7 +24,14 @@ export const AI_PANEL_LIMITS = {
 export const AI_PANEL_FIXED = {
   weekly_ai_min: 0.13, brief_ai: 0.03, analyst_job_ai: 0.02, analyst_per_job: 12, analyst_share: 0.35, analyst_cap_base: 24, analyst_cap_max: 60,
   full_dfs: 0.45, full_ai: 0.3, weeks_per_month: 4.33, pulse_days: 6,
+  // W2-E2's Sentiment Reader (AIP.FIXED): 20 named answers a call, at most 40 calls a run, ~$0.012 a call; 50% of answers assumed named (an upper bound)
+  sentiment_named_rate: 0.5, sentiment_per_call: 20, sentiment_calls_max: 40, sentiment_call_ai: 0.012,
 } as const;
+/** The Sentiment Reader's calls and Claude money for a run of `answers` answers (AIP.sentimentOf). */
+export function aiSentimentOf(answers: number): { named: number; calls: number; ai: number } {
+  const F = AI_PANEL_FIXED; const named = Math.ceil(Math.max(0, Number(answers) || 0) * F.sentiment_named_rate);
+  const calls = Math.min(F.sentiment_calls_max, Math.ceil(named / F.sentiment_per_call)); return { named, calls, ai: Math.round(calls * F.sentiment_call_ai * 10000) / 10000 };
+}
 export type AiPulseMode = '' | 'auto' | 'sample' | 'full';
 
 // ---- W2-E3 (2026-10-23, n8n/seo-agent/docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §4): the owner's engine and coverage options ----
@@ -57,7 +64,9 @@ export interface AiPanelOptionsCost {
   requestsExtra: { weekly: number; full: number };
 }
 /** The options as the cost formula takes them (AIP.cost's claude_weekly, pulse_engines, persona_context + personas, fanout_check, demand_market). */
-export interface AiPanelOptions { claudeWeekly?: boolean | null; pulseEngines?: string | readonly string[] | null; personaContext?: boolean | null; personas?: number | null; fanoutCheck?: number | null; demandMarket?: boolean | null }
+export interface AiPanelOptions { claudeWeekly?: boolean | null; pulseEngines?: string | readonly string[] | null; personaContext?: boolean | null;
+  /** the buyer roles (a count, or the roles themselves): the persona test asks (roles + 1) x 12 answers, so without them it is priced at 0 */
+  personas?: number | string | readonly string[] | null; fanoutCheck?: number | null; demandMarket?: boolean | null }
 
 const n0 = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -129,7 +138,8 @@ export function estimateAiPanelCost(o: { panel?: number; engines?: readonly stri
   const cap = Math.min(F.analyst_cap_max, F.analyst_cap_base + Math.floor(panel / 25));
   const jobs = Math.min(cap, Math.ceil((answers * F.analyst_share) / F.analyst_per_job));
   // W2-E3: the persona test and the fan-out check every weekly run, the market trend on the full run
-  const roles = o.personaContext ? Math.min(AI_PANEL_PERSONA.max_roles, Math.max(0, Math.round(n0(o.personas)))) : 0;
+  const nRoles = Array.isArray(o.personas) || typeof o.personas === 'string' ? listOfX(o.personas).length : Math.round(n0(o.personas));   // a count, or the roles themselves (the monitors row's ai_personas)
+  const roles = o.personaContext ? Math.min(AI_PANEL_PERSONA.max_roles, Math.max(0, nRoles)) : 0;
   const pq = roles ? Math.min(AI_PANEL_PERSONA.questions, asked) : 0;
   const pReq = roles ? (roles + 1) * pq : 0;
   const fq = clamp(Math.round(n0(o.fanoutCheck)), 0, AI_PANEL_FANOUT_MAX);
@@ -139,7 +149,8 @@ export function estimateAiPanelCost(o: { panel?: number; engines?: readonly stri
     fanout: { queries: fq, requestsRun: fq, dfsRun: r4(fq * AI_PANEL_XPRICE.fanout_serp) },
     demandMarket: { on: dm, tasks: dm ? AI_PANEL_DEMAND_TASKS : 0, dfsFull: dm ? r4(AI_PANEL_DEMAND_TASKS * AI_PANEL_XPRICE.demand_task) : 0 },
     requestsExtra: { weekly: pReq + fq, full: pReq + fq + (dm ? AI_PANEL_DEMAND_TASKS : 0) } };
-  const weekly: AiMoney = { dfs: r4(asked * sum(wE) + opt.persona.dfsRun + opt.fanout.dfsRun), ai: r4(Math.max(F.weekly_ai_min, F.brief_ai + jobs * F.analyst_job_ai)), usd: 0 }; weekly.usd = r4(weekly.dfs + weekly.ai);
+  const sw = aiSentimentOf(answers);   // W2-E2's Sentiment Reader, priced on the weekly run's answers (AIP.cost)
+  const weekly: AiMoney = { dfs: r4(asked * sum(wE) + opt.persona.dfsRun + opt.fanout.dfsRun), ai: r4(Math.max(F.weekly_ai_min, F.brief_ai + jobs * F.analyst_job_ai) + sw.ai), usd: 0 }; weekly.usd = r4(weekly.dfs + weekly.ai);
   const extra: AiMoney = { dfs: r4(MONTHLY.filter((e) => engines.includes(e)).reduce((t, e) => t + panel * (P[e] || 0), 0) + sum(wE) + F.full_dfs + opt.demandMarket.dfsFull), ai: F.full_ai, usd: 0 }; extra.usd = r4(extra.dfs + extra.ai);
   const full: AiMoney = { dfs: r4(weekly.dfs + extra.dfs), ai: r4(weekly.ai + extra.ai), usd: 0 }; full.usd = r4(full.dfs + full.ai);
   const on = o.pulse !== false && pE.length > 0;

@@ -215,7 +215,10 @@ AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string')
                # W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §2): the fan-out ranking gap, demand as a range (+ the monthly market trend), the owner's
                # uploaded AI reports for the period, the n8n execution ids of the run's parts, and the run's notes (lost / unanalysed answers,
                # questions asked outside their market, the persona effect on API answers)
-               ('fanout_gap_json', 'string'), ('demand_json', 'string'), ('imports_json', 'string'), ('exec_ids', 'string'), ('notes_json', 'string')]
+               ('fanout_gap_json', 'string'), ('demand_json', 'string'), ('imports_json', 'string'), ('exec_ids', 'string'), ('notes_json', 'string'),
+               # W2-E3 + W2-A contract addition (2026-10-23): the persona effect on API answers, [{role, with:{rate, n}, without:{rate, n}, delta, lo, hi,
+               # significant}] (rates and the 95% interval of the difference in points 0-100; the 28-day pooled figures)
+               ('persona_effect_json', 'string')]
 # W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §5): the owner's AI reports, uploaded in the app (W2-A writes, upsert by site_id + source + day + url +
 # query): Bing Webmaster "AI Performance" (source bing_ai: citations per page and query across Copilot) and the Search Console performance
 # export filtered to AI Mode / AI Overviews (source gsc_ai: impressions and clicks). The AI Visibility Tracker reads the period's rows.

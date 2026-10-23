@@ -53,7 +53,8 @@ for (const p of plans) {
   const demandNow = parseJ(vrowNow.demand_json, null);
   const demand_json = market && demandNow ? JSON.stringify({ ...demandNow, market, market_carried: false }) : '';
   const vis_update = { site_id: p.site_id, run_id: p.run_id, notes_json: JSON.stringify(notesNow), cost_usd: +((Number(vrowNow.cost_usd) || Number(vrow.cost_usd) || 0) + cost_usd).toFixed(4),
-    ...(fanout_gap ? { fanout_gap_json: JSON.stringify(fanout_gap) } : {}), ...(demand_json ? { demand_json } : {}) };
+    ...(fanout_gap ? { fanout_gap_json: JSON.stringify(fanout_gap) } : {}), ...(demand_json ? { demand_json } : {}),
+    ...(persona ? { persona_effect_json: JSON.stringify(AIX.personaEffectRows(persona)) } : {}) };   // W2-A's contract addition: the persona effect in its own column
   out.push({ json: { site_id: p.site_id, run_id: p.run_id, domain: p.domain, fanout_gap, persona, market, demand: market && demandNow ? { ...demandNow, market, market_carried: false } : demandNow,
     notes: notesNow, ceiling_note: xp.ceiling_note || '', sent: xp.sent || {}, cost_usd, vis_update, cache_rows } });
 }

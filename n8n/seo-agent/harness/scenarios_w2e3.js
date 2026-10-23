@@ -103,6 +103,14 @@ module.exports = async (ctx) => {
     check('IT manager: 2 of 12 against 1 of 12 is printed as "no measurable difference", not hidden', R('IT manager').verdict === 'no measurable difference' && R('IT manager').delta === 8.3, JSON.stringify(R('IT manager')));
     check('pooled over the stored runs of the last 28 days (this run + last week\'s: 24 answers a side)', R('CFO').pooled.runs === 2 && R('CFO').pooled.n === 24 && R('CFO').pooled.k === 17 && R('CFO').pooled.control_n === 24, JSON.stringify(R('CFO').pooled));
     check('the persona block is kept in the run\'s notes (notes_json.persona) for next week\'s pooling, and priced: 36 x $0.012', JSON.parse(x.vis_update.notes_json).persona.roles.length === 2 && x.cost_usd === 0.432, JSON.stringify({ c: x.cost_usd }));
+    // W2-A's contract addition: persona_effect_json, exactly [{role, with:{rate, n}, without:{rate, n}, delta, lo, hi, significant}] (the 28-day pooled figures)
+    const PE = JSON.parse(x.vis_update.persona_effect_json || 'null') || [];
+    const pe = (role) => PE.find(r => r.role === role) || {};
+    check('persona_effect_json: one entry per role, exactly the contract\'s keys, rates 0-100, the 95% interval of the change; CFO real (interval above 0), IT manager not', PE.length === 2
+      && PE.every(r => Object.keys(r).sort().join() === 'delta,hi,lo,role,significant,with,without' && Object.keys(r.with).sort().join() === 'n,rate' && Object.keys(r.without).sort().join() === 'n,rate')
+      && pe('CFO').with.n === 24 && pe('CFO').with.rate === 70.8 && pe('CFO').without.n === 24 && pe('CFO').significant === true && pe('CFO').lo > 0 && pe('CFO').hi > pe('CFO').lo && pe('IT manager').significant === false && pe('IT manager').lo < 0, JSON.stringify(PE));
+    check('the run\'s own figures carry the same interval (Newcombe) and the verdict follows it', R('CFO').lo > 0 && R('CFO').significant === true && R('IT manager').significant === false, JSON.stringify([R('CFO').lo, R('CFO').hi, R('IT manager').lo]));
+    check('every column of the row update is a seo_ai_visibility column', Object.keys(x.vis_update).every(k => TC.AI_VIS.includes(k)), JSON.stringify(Object.keys(x.vis_update)));
     const W2X = AIX;
     const esc = (s) => String(s); const n = (v) => String(v);
     const html = W2X.reportHtml({ persona: P }, { h3: (t) => '<h3>' + t + '</h3>', p_: (t) => '<p>' + t + '</p>', table: (h, r) => '<table>' + h.join('|') + r.map(x => x.join('|')).join('') + '</table>', esc, n });
@@ -193,6 +201,12 @@ module.exports = async (ctx) => {
     check('the pulse engines: the owner\'s list (Perplexity and the AI Overview allowed; an engine the site has off or an unknown one is ignored); empty = the default four', AIP.pulseEnginesOf(AIP.DEFAULT_ENGINES, 'perplexity, AI Overview, claude, bogus').join() === 'perplexity,ai_overview' && AIP.pulseEnginesOf(AIP.DEFAULT_ENGINES, '').join() === 'chatgpt,gemini,ai_mode' && AIP.pulseEnginesOf(['chatgpt'], 'perplexity').join() === 'chatgpt', '');
     check('the persona test is (roles + 1) x 12 ChatGPT API answers a weekly run; the fan-out check N results pages; the trend 3 tasks on the full run', AIP.cost({ panel: 50, persona_context: true, personas: 3 }).options.persona.requests_run === 48 && AIP.cost({ panel: 50, fanout_check: 50 }).options.fanout.dfs_run === 0.1 && AIP.cost({ panel: 50, demand_market: true }).full_extra.dfs === r(base.full_extra.dfs + 0.33), '');
     function r(x) { return Math.round(x * 10000) / 10000; }
+    // W2-E2's Sentiment Reader (Claude Haiku): the run's answers x 50% named (stated, conservative), 20 a call at ~$0.012, at most 40 calls a run
+    const s50 = AIP.cost({ panel: 50 }), s500 = AIP.cost({ panel: 500, engines: AIP.ENGINES });
+    check('the Sentiment Reader is priced on every weekly run: 50 q x 5 weekly engines = 245 answers, 123 named, 7 calls, $0.084 in the weekly Claude money; 40 calls at most', s50.sentiment.named === 123 && s50.sentiment.calls === 7 && s50.sentiment.ai === 0.084
+      && Math.abs(s50.run.weekly.ai - (Math.max(AIP.FIXED.weekly_ai_min, AIP.FIXED.brief_ai + s50.analyst_jobs * AIP.FIXED.analyst_job_ai) + 0.084)) < 1e-9 && s500.sentiment.calls === 40 && s500.sentiment.ai === 0.48 && AIP.FIXED.sentiment_named_rate === 0.5, JSON.stringify([s50.sentiment, s500.sentiment]));
+    check('the golden table carries the reader\'s figures (the app is held to them)', G.fixed.sentiment_calls_max === 40 && G.fixed.sentiment_call_ai === 0.012 && G.cases.find(c => c.input.panel === 50 && Object.keys(c.input).length === 1).expect.run.weekly.ai === s50.run.weekly.ai, JSON.stringify(G.fixed));
+    check('the buyer roles may be given as a count or as the roles themselves (the app passes its ai_personas): the same price', JSON.stringify(AIP.cost({ panel: 50, persona_context: true, personas: 'CFO, IT manager' }).options) === JSON.stringify(AIP.cost({ panel: 50, persona_context: true, personas: 2 }).options) && AIP.cost({ panel: 50, persona_context: true, personas: ['CFO'] }).options.persona.roles === 1, '');
     // the plan: Claude weekly asked on a weekly run; on-demand reserved at the configured panel size (the app's quote), with the options
     const loadWeekly = (o) => { for (const k of Object.keys(store)) delete store[k];
       mock('Load Sites', items(W['Load Sites'])); mock('Load Ladders', items(W['Load Ladders'])); mock('Load Profiles', items(W['Load Profiles']));

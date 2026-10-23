@@ -258,7 +258,8 @@
   "demand_json",
   "imports_json",
   "exec_ids",
-  "notes_json"
+  "notes_json",
+  "persona_effect_json"
  ],
  "AI_IMPORTS": [
   "site_id",
