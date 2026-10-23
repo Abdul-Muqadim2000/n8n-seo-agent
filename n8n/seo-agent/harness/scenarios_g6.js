@@ -96,8 +96,9 @@ module.exports = async (ctx) => {
     reset(); const SN = 'S202 G6 — 500 questions on 5 weekly engines: 2,495 requests asked over 5 executions, each key once, the state carried, the week measured once over all of them';
     begin(SN); const check = mkCheck(SN);
     const panel = synthPanel(500);
-    let cache = [], stored = [], trigger = null; const asked = new Set(); let twice = 0; const execs = []; let spent = 0;
-    for (let k = 1; k <= 8; k++) {
+    let cache = [], stored = [], trigger = null; const asked = new Set(); let twice = 0; const execs = []; let spent = 0; let askedSoFar = 0, nParts = 0;
+    // F2 (2026-10-23, E11): a part is sized by TIME (AIP.chunkPlan: 40 of the 60 minutes at the engines' slow-case seconds), no longer 600
+    for (let k = 1; k <= 14; k++) {
       loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache, runAnswers: stored, trigger });
       const plan = (await run('AI Plan', [{ json: {} }]))[0].json;
       if (plan.nothing_to_do) { check('chunk ' + k + ' plans something', false, plan.reason); break; }
@@ -110,7 +111,8 @@ module.exports = async (ctx) => {
       const req = (await run('AI Requests', [{ json: {} }])).map(i => i.json).filter(r => r.engine);
       const qreq = req.filter(r => !/^(market|index)/.test(r.prompt_id));
       for (const r of qreq) { if (asked.has(keyOf(r))) twice++; asked.add(keyOf(r)); }
-      if (k === 1) check('chunk 1 asks 600 requests (the first 120 questions x 5 engines, in panel order)', qreq.length === 600 && qreq[0].prompt_id === 'g6_000' && qreq[599].prompt_id === 'g6_119', [qreq.length, qreq[0].prompt_id, qreq[599].prompt_id].join(' '));
+      if (k === 1) { nParts = Math.ceil(2495 / plan.chunk.size); check('chunk 1 asks the part its TIME budget holds (' + plan.chunk.size + ' requests, under 600: ' + plan.chunk.size_basis + '), the first questions x 5 engines in panel order', plan.chunk.size < 600 && plan.chunk.size >= AIP.TIME.min_requests && qreq.length === plan.chunk.size && qreq[0].prompt_id === 'g6_000' && /40 of the 60 minutes/.test(plan.chunk.size_basis), [qreq.length, qreq[0].prompt_id, plan.chunk.size_basis].join(' ')); }
+      askedSoFar += qreq.length;
       if (k === 1) { const sa = qreq.find(r => r.market === 'SA-en'); check('a Saudi question is asked with the Saudi location', sa && sa.body[0].location_code === 2682 || (sa && sa.body[0].web_search_country_iso_code === 'SA'), JSON.stringify(sa && sa.body)); }
       const rows = answerRows(qreq, plan.run_id, k === 2 ? { fail: 50 } : null);
       mock('Apply Analysis', items(rows));
@@ -121,7 +123,7 @@ module.exports = async (ctx) => {
       if (!h.final) {
         check('chunk ' + k + ': the state row (exact seo_cache columns) and the next execution\'s start (continue_run, parent = this execution)', h.state_row && ['key', 'kind', 'site_id', 'value', 'updated_at'].every(c => c in h.state_row) && Object.keys(h.state_row).length === 5 && h.next && h.next.continue_run === plan.run_id && h.next.parent_run_id === 'test-exec' && h.next.domain === 'techand.ai', JSON.stringify(h).slice(0, 300));
         const st = JSON.parse(h.state_row.value);
-        check('chunk ' + k + ': the state counts what is asked and what is left', st.asked === k * 600 && st.status === 'running' && st.chunk === k && st.total === 2495, JSON.stringify(st));
+        check('chunk ' + k + ': the state counts what is asked and what is left, and records every key sent', st.asked === askedSoFar && st.status === 'running' && st.chunk === k && st.total === 2495 && AIP.unpackKeys(st.asked_keys).size === askedSoFar && st.pending === null, JSON.stringify({ ...st, asked_keys: undefined }).slice(0, 400));
         if (k === 2) check('chunk 2: answers the gate could not get are counted apart and said', st.unavailable === 12 && /could not be read/.test(h.note), h.note);
         check('chunk ' + k + ': its own DataForSEO money is stated for the settle', Math.abs(h.cost_usd - qreq.length * 0.004) < 1e-6, h.cost_usd);
         // AI Metrics: nothing finishes here — the report path ends
@@ -131,15 +133,15 @@ module.exports = async (ctx) => {
         continue;
       }
       // the last part
-      check('the last part is execution ' + k + ' and it is flagged final from its plan', k === 5 && plan.chunk.final_expected && plan.chunk.going && plan.chunk.no === 5 && plan.ga4_property_id === String((W['Load Sites'][0] || {}).ga4_property_id || '').replace(/^properties\//, '').trim(), JSON.stringify(plan.chunk));
+      check('the last part is execution ' + k + ' and it is flagged final from its plan', k === nParts && plan.chunk.final_expected && plan.chunk.going && plan.chunk.no === nParts && plan.ga4_property_id === String((W['Load Sites'][0] || {}).ga4_property_id || '').replace(/^properties\//, '').trim(), JSON.stringify(plan.chunk));
       check('the last part keeps the run\'s id and start time', plan.run_id === JSON.parse(cache[0].value).run_id && plan.checked_at === JSON.parse(cache[0].value).started_at, plan.run_id);
       const am = (await run('AI Metrics', [{ json: {} }]))[0].json;
       check('the week is measured over EVERY answer of the run: 2,495 requests, the 12 that failed left out of the rates', am.metrics && am.metrics.requests === 2495 && am.metrics.samples === 2495 - 12, JSON.stringify(am.metrics && { r: am.metrics.requests, s: am.metrics.samples }));
-      check('the report says the run was asked over 5 executions', am.run_split && am.run_split.executions === 5 && /asked over 5 executions/.test(am.run_split.note), JSON.stringify(am.run_split));
+      check('the report says the run was asked over ' + nParts + ' executions', am.run_split && am.run_split.executions === nParts && new RegExp('asked over ' + nParts + ' executions').test(am.run_split.note), JSON.stringify(am.run_split));
       check('the ledger settles this execution\'s money; the row and report carry the whole run', Math.abs(am.cost_usd - qreq.length * 0.004) < 1e-6 && Math.abs(am.run_cost_usd - 2495 * 0.004) < 0.01 && am.vis_row.cost_usd === am.run_cost_usd, [am.cost_usd, am.run_cost_usd].join(' '));
       const done = (am.cache_rows || []).find(c => /^ai_run:/.test(c.key));
       check('the run\'s state is marked done (no later start resumes a measured run)', done && JSON.parse(done.value).status === 'done', JSON.stringify(done));
-      check('the vis row records 5 executions', am.vis_row.chunks === undefined || am.vis_row.chunks === 5, am.vis_row.chunks);
+      check('the vis row records ' + nParts + ' executions', am.vis_row.chunks === undefined || am.vis_row.chunks === nParts, am.vis_row.chunks);
       break;
     }
     check('every one of the 2,495 requests was asked exactly once across the executions — never twice', asked.size === 2495 && twice === 0, asked.size + ' asked, ' + twice + ' twice');
@@ -153,17 +155,22 @@ module.exports = async (ctx) => {
     loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel });
     const p1 = (await run('AI Plan', [{ json: {} }]))[0].json;
     const r1 = (await run('AI Requests', [{ json: {} }])).map(i => i.json).filter(r => r.engine);
-    const half = answerRows(r1.slice(0, 300), p1.run_id);   // the second execution stored 300 answers and then died
+    const half = answerRows(r1.slice(0, 300), p1.run_id);   // the first execution sent its part, stored 300 answers and then died
+    // F2 (E1): the record that execution saved BEFORE paying: every key it sent (asked_keys) and the part in flight (pending)
+    const sentPacked = AIP.packKeys(r1.filter(r => !/^(market|index)/.test(r.prompt_id)).map(keyOf));
     const st = (min, extra) => ({ key: 'ai_run:site_techand-ai', kind: 'ai', site_id: 'site_techand-ai', updated_at: new Date(Date.now() - min * 60000).toISOString(),
-      value: JSON.stringify({ run_id: p1.run_id, run_kind: 'weekly', site_id: 'site_techand-ai', domain: 'techand.ai', started_at: new Date(Date.now() - (min + 30) * 60000).toISOString(), updated_at: new Date(Date.now() - min * 60000).toISOString(), chunk: 1, status: 'running', asked: 600, total: 2495, spent_dfs_usd: 2.4, spent_ai_usd: 0.1, executions: ['e1'], ...(extra || {}) }) });
+      value: JSON.stringify({ run_id: p1.run_id, run_kind: 'weekly', site_id: 'site_techand-ai', domain: 'techand.ai', started_at: new Date(Date.now() - (min + 30) * 60000).toISOString(), updated_at: new Date(Date.now() - min * 60000).toISOString(), chunk: 1, status: 'running', asked: 0, total: 2495, spent_dfs_usd: 0, committed_dfs_usd: 2.4, spent_ai_usd: 0.1, executions: [],
+        asked_keys: sentPacked, pending: { chunk: 1, execution: 'e1', at: new Date(Date.now() - (min + 30) * 60000).toISOString(), n: r1.length, keys: sentPacked }, ...(extra || {}) }) });
     // silent 2 hours: resumed by a scheduled start
     loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache: [st(120)], runAnswers: half });
     const pr = (await run('AI Plan', [{ json: {} }]))[0].json;
-    check('a run silent 2 hours is RESUMED (same run id, the next part), not started again', !pr.nothing_to_do && pr.run_id === p1.run_id && pr.chunk.going && pr.chunk.resumed && pr.chunk.no === 2 && pr.chunk.done === 300, JSON.stringify(pr.chunk));
+    check('a run silent 2 hours is RESUMED (same run id, the next part), not started again; the part that died counts its ' + r1.length + ' sent keys as done (' + (r1.length - 300) + ' of them lost, never re-paid) and is halved',
+      !pr.nothing_to_do && pr.run_id === p1.run_id && pr.chunk.going && pr.chunk.resumed && pr.chunk.no === 2 && pr.chunk.done === r1.length && pr.chunk.lost_now === r1.length - 300 && pr.chunk.lost_parts === 1 && !pr.stop && pr.chunk.size_time < p1.chunk.size_time && /halved/.test(pr.chunk.size_basis) && /not asked again/.test(pr.chunk.lost_note || ''), JSON.stringify(pr.chunk));
     check('the resumed part reserves only what is left of the run', pr.est_dfs_usd === +Math.max(0, AIP.cost({ panel: 500, engines: pr.engines }).run.weekly.dfs - 2.4).toFixed(4), pr.est_dfs_usd);
     const rr = (await run('AI Requests', [{ json: {} }])).map(i => i.json).filter(r => r.engine);
     const storedKeys = new Set(half.map(keyOf));
-    check('the resumed part asks none of the 300 answers already stored', rr.length === 600 && rr.every(r => !storedKeys.has(keyOf(r))) && rr[0].prompt_id === 'g6_060', [rr.length, rr[0].prompt_id].join(' '));
+    const sentKeys = AIP.unpackKeys(sentPacked);
+    check('the resumed part asks none of the keys its dead part SENT (stored or not) — it starts after them', rr.length === pr.chunk.size && rr.every(r => !storedKeys.has(keyOf(r)) && !sentKeys.has(keyOf(r))) && rr[0].prompt_id === 'g6_' + String(r1.length / 5).padStart(3, '0'), [rr.length, rr[0].prompt_id].join(' '));
     // silent 10 minutes: a live part — a second start is a twin and does nothing
     loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache: [st(10)], runAnswers: half });
     const pb = (await run('AI Plan', [{ json: {} }]))[0].json;
@@ -310,7 +317,7 @@ module.exports = async (ctx) => {
       Q('Which ERP rollout risks should a CFO plan for in the first year?', 'erp rollout risks', { kind: 'problem', stage: 'awareness', cluster: 'erp implementation', origin: 'paa' }) ] } } }]);
     const rows = (await run('Prompt Rows', [{ json: {} }])).map(i => i.json).filter(r => !r.skip);
     const fresh = rows.filter(r => !plan.prompts.some(q => q.prompt_id === r.prompt_id));
-    const PRC = ['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at', 'persona', 'market', 'pinned', 'fit_note'];
+    const PRC = ['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at', 'persona', 'market', 'pinned', 'fit_note', 'keyword_source'];   // F2 (E9): + keyword_source
     check('every row has exactly the table\'s columns (the save node maps every field it is given)', rows.every(r => Object.keys(r).length === PRC.length && PRC.every(c => c in r)), JSON.stringify(rows.map(r => Object.keys(r).filter(k => !PRC.includes(k)))));
     check('the repeat in other words is dropped (one of the two "shortlist" questions is stored)', fresh.filter(r => /shortlist/.test(r.prompt)).length === 1, JSON.stringify(fresh.map(r => r.prompt.slice(0, 40))));
     const ref = fresh.filter(r => r.status === 'refused');
@@ -352,7 +359,7 @@ module.exports = async (ctx) => {
     check('new wording is a NEW question (new id, active) and the old one is switched off — no trend compares two questions', by('p_reword').status === 'off' && reworded && reworded.prompt_id !== 'p_reword' && reworded.status === 'active' && reworded.cluster === 'e-invoicing', JSON.stringify([by('p_reword').status, reworded && reworded.prompt_id]));
     check('switch off; switch on a refused question — it becomes the owner\'s own and says so', by('p_off').status === 'off' && by('p_refused').status === 'active' && by('p_refused').source === 'custom' && /switched on by the owner/.test(by('p_refused').fit_note), JSON.stringify([by('p_off').status, by('p_refused')]));
     check('unpin', by('p_pinned').pinned === false, JSON.stringify(by('p_pinned')));
-    check('every row: exact seo_ai_prompts columns', rows.every(r => Object.keys(r).length === 19), JSON.stringify(Object.keys(rows[0])));
+    check('every row: exact seo_ai_prompts columns', rows.every(r => Object.keys(r).length === 20), JSON.stringify(Object.keys(rows[0])));
     // the weekly plan puts a pinned question first
     loadWeekly({ monitors: { ai_prompts_max: 5 }, prompts: [...W['Load AI Prompts'].slice(0, 6), { ...W['Load AI Prompts'][6], pinned: true }] });
     const p = (await run('AI Plan', [{ json: {} }]))[0].json;

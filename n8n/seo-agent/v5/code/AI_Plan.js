@@ -22,6 +22,14 @@
 // monthly full run (Claude, the brand question, discovery of every volume, the market-wide index and the market view) comes ONLY from the
 // `monthly` the Cycle Dispatcher passes - never from the UTC month - and the cycle travels with the run (`cycle`), through every continuation
 // of a split run, so only the run's LAST execution settles the cycle's ledger key (Monitor_Ledger_Row).
+// F2 (2026-10-23, ENGINE_AUDIT.md E1 / E11 / E17 / E18 / E20 / E22): a run that cannot pay twice. The state row records every key the run
+// has SENT (`asked_keys`, written before the requests leave) and AI Requests never asks one of them again; a part whose sent keys were not
+// stored is found here (the first time: counted as could-not-be-read and the next part halved; the second time: the run STOPS with an ops
+// alert); the run has a hard DataForSEO ceiling (1.5 x its own estimate) checked against what it measured and committed; a part is sized
+// by TIME (AIP.chunkPlan: 40 of the execution's 60 minutes), measured from the run's earlier parts. A stopped run is a plan item with
+// `stop` and nothing to ask (AI Chunk Handoff writes its state, the ops alert and the caller's notice; its ledger row settles the cycle
+// job). An on-demand start that meets an open run is told so at once (`notices`, a `rejected` callback with reason 'open_run', the run's
+// id, its progress and when it should finish) and never takes over the open run's caller.
 /*__MONITOR_SITES__*/
 /*__COUNTRIES__*/
 /*__AI_PANEL__*/
@@ -43,6 +51,19 @@ const parse = (t, d) => { try { const v = JSON.parse(t || ''); return v == null 
 const isoOf = (code) => { const c = Object.values(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(x => Number(x.code) === Number(code)); return c ? String(c.iso || '').toUpperCase() : ''; };
 const codeOfIso = (iso) => { const c = Object.values(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(x => String(x.iso || '').toUpperCase() === String(iso || '').toUpperCase()); return c ? Number(c.code) : AIP.locationOf(iso); };   // G6: a market outside COUNTRIES keeps its own country
 const skipped = [];   // G6: sites this execution does nothing for, with the reason (a twin start, nothing to continue, a run above the ceiling)
+const notices = [];   // F2 (E17): the on-demand callers told at once that their check is part of an open run (AI Open Run Notices posts them)
+const openRun = (st, s, why) => { const left = Math.max(0, (Number(st.total) || 0) - (Number(st.asked) || 0)); const per = Math.max(1, Number(st.last_size) || AIP.LIMITS.chunk_requests);
+  const parts = Math.ceil(left / per); const eta = new Date(Math.max(Date.parse(st.updated_at) || Date.now(), Date.now()) + parts * (AIP.TIME.budget_s + AIP.TIME.fixed_s) * 1000).toISOString();
+  return { run_id: st.run_id, status: st.status, part: Number(st.chunk) || 1, asked: Number(st.asked) || 0, total: Number(st.total) || 0, started_at: st.started_at || '', updated_at: st.updated_at || '',
+    expected_finish: String(st.status) === 'running' ? eta : '', why }; };
+const tell = (s, st, kind) => {   // E17: only a caller that is waiting for its own answer (an on-demand start with a callback) and is not the open run's own caller
+  if (!on_demand || !s.callback_url || (st && String(st.request_id || '') && String(st.request_id) === String(s.request_id || ''))) return;
+  const o = openRun(st, s, kind);
+  const sentence = kind === 'blocked'
+    ? 'The AI visibility check of ' + s.domain + ' was not started: this week\'s run (' + o.run_id + ') was stopped (' + String(st.stop_reason || st.status) + '). Nothing was asked and nothing was charged; the team has been alerted.'
+    : 'An AI visibility check of ' + s.domain + ' is already running (run ' + o.run_id + ', part ' + o.part + ', ' + o.asked + ' of ' + (o.total || '?') + ' questions asked). ' + (kind === 'resume' ? 'This request started its next part again. ' : '')
+      + 'Its report will come with that run' + (o.expected_finish ? ', about ' + o.expected_finish.slice(0, 16).replace('T', ' ') + ' UTC' : '') + '. This request was not run separately and nothing was charged for it.';
+  notices.push({ callback_url: s.callback_url, body: { stage: 'rejected', status: 'rejected', reason: 'open_run', skipped: true, error: sentence, request_id: String(s.request_id || ''), domain: s.domain, mode: 'ai_visibility', on_demand: true, open_run: o, cost_usd: 0 } }); };
 const QUESTION = /^(how|what|which|who|why|when|where|is|are|can|does|do|should|best|top|cost|price|vs|compare)\b|\?|\b(vs|versus|best|cost|price|how to|which)\b/i;
 const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const label = s.domain.split('.')[0];
@@ -56,7 +77,11 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const st = AIP.stateOf(cache, s.site_id);
   const verdict = AIP.stateVerdict(st, iso, continuing);
   if (continuing && verdict !== 'continue') { skipped.push({ domain: s.domain, why: 'nothing to continue: run ' + continuing + ' is ' + (st && st.run_id === continuing ? st.status : 'not the open run') }); return null; }
-  if (verdict === 'busy') { skipped.push({ domain: s.domain, why: 'run ' + st.run_id + ' is still being asked (chunk ' + (st.chunk || 1) + ', ' + (st.asked || 0) + ' of ' + (st.total || '?') + ' requests, updated ' + String(st.updated_at || '').slice(0, 16) + ' UTC); it continues by itself' }); return null; }
+  if (verdict === 'busy') { tell(s, st, 'busy'); skipped.push({ domain: s.domain, why: 'run ' + st.run_id + ' is still being asked (chunk ' + (st.chunk || 1) + ', ' + (st.asked || 0) + ' of ' + (st.total || '?') + ' requests, updated ' + String(st.updated_at || '').slice(0, 16) + ' UTC); it continues by itself' }); return null; }
+  // F2 (E1): a STOPPED run (its answers were not stored, or it reached its money ceiling) blocks this site's weekly run until it is older than
+  // resume_days or a person clears the state row — a retry of the cycle job, a catch-up or an on-demand start never pays for it again
+  if (verdict === 'blocked') { tell(s, st, 'blocked'); skipped.push({ domain: s.domain, blocked: true, why: 'run ' + st.run_id + ' was stopped (' + String(st.stop_reason || st.status) + '); nothing is asked for this website until the run is older than ' + AIP.LIMITS.resume_days + ' days or the state row ai_run:' + s.site_id + ' is cleared' }); return null; }
+  if (verdict === 'resume') tell(s, st, 'resume');
   const going = verdict === 'continue' || verdict === 'resume';
   const mineAll = promptRows.filter(p => p.site_id === s.site_id && !LIVE.has(String(p.status || 'active')) && p.prompt);
   const mineVis = visRows.filter(v => v.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
@@ -67,8 +92,9 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const competitors = [...new Set([...s.settings.competitors, ...autoRivals])].slice(0, 8);
   // B-G1: the read-path gate, before a single stored rung can become a topic, a question or a page we check for AI readiness.
   // Protected so the ladder's own subject can never read as somebody's brand: the head terms, the site's services and its own keywords.
-  const fitCtx = FITR.ctx({ own_domain: s.domain, competitors, brands: aliases, heads: lrowsAll.map(l => l.head_keyword),
-    services: SM.services(site_model), keywords: s.keywords || [] });
+  // F2 (E18): one gate input for the weekly run and the pulse (AIP.fitInput: ladder heads + the site's services + its keywords)
+  const fit_input = AIP.fitInput({ domain: s.domain, competitors, aliases, ladders: lrowsAll, services: SM.services(site_model), keywords: s.keywords || [] });
+  const fitCtx = FITR.ctx(fit_input);
   const fit = FITR.rungs(lrowsAll, fitCtx, { where: 'AI question panel' });
   const lrows = fit.keep;
   // and the panel rows ALREADY stored from those rungs (seo_ai_prompts predates the gate too): an auto-written question whose keyword is
@@ -104,7 +130,9 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const personas = AIP.personasOf({ ai_personas: s.settings.personas });
   const prompts = [...custom, ...auto].slice(0, s.settings.prompts_max).map(p => ({ prompt_id: p.prompt_id, prompt: p.prompt, kind: p.kind || 'custom', topic: p.topic || '', keyword: p.keyword || '', source: p.source || 'auto',
     stage: p.stage || '', cluster: p.cluster || p.topic || '', volume: p.volume === '' || p.volume == null ? null : Number(p.volume), origin: p.origin || (p.source === 'custom' ? 'custom' : 'writer'), created_at: p.created_at || '',
-    persona: String(p.persona || '').trim(), market: markets_map[AIP.normMarket(p.market)] ? AIP.normMarket(p.market) : ownMarket, pinned: pin(p) }));
+    persona: String(p.persona || '').trim(), market: markets_map[AIP.normMarket(p.market)] ? AIP.normMarket(p.market) : ownMarket, pinned: pin(p),
+    // F2 (E20 / E22 / E9): what the stored row says, carried so a re-upsert never blanks it; a market past the cap is asked in the own market and says so
+    market_stored: String(p.market || ''), market_fallback: !!(AIP.normMarket(p.market) && !markets_map[AIP.normMarket(p.market)]), fit_note: String(p.fit_note || ''), keyword_source: String(p.keyword_source || '') }));
   // search volumes: questions without one (new) every week; all of them on the month's full run (AI Keyword Data, $0.0001 a keyword)
   const volume_keywords = [...new Set(prompts.filter(p => p.kind !== 'brand' && p.keyword && (full_due || p.volume === null || Number.isNaN(p.volume))).map(p => String(p.keyword).toLowerCase().trim()).filter(k => k.length >= 3 && k.length <= 120))].slice(0, 100);
   // real questions people search (Search Console, last weeks): long or question-shaped queries are the closest thing to an AI prompt
@@ -120,7 +148,17 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const baseId = 'ai_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '');
   const run_id = going ? st.run_id : (st && st.run_id && String(st.run_id).indexOf(baseId) === 0 ? baseId + '_x' + $execution.id : baseId);   // a second run the same day gets its own id: its answers are its own
   const run_checked_at = going ? String(st.started_at || iso) : iso;
-  const doneKeys = going ? [...new Set(runRows.filter(r => r.run_id === run_id && r.prompt_id && r.engine).map(r => AIP.reqKey(r.prompt_id, r.engine)))] : [];
+  const storedKeys = new Set(going ? runRows.filter(r => r.run_id === run_id && r.prompt_id && r.engine).map(r => AIP.reqKey(r.prompt_id, r.engine)) : []);
+  // F2 (E1): what the run has SENT (recorded before it paid) and the part in flight. Earlier parts' keys were checked against the save by their
+  // own hand-off; a `pending` part is one that never reached its hand-off, so its keys that are not stored were paid for and lost.
+  const sentKeys = going ? AIP.unpackKeys(st.asked_keys) : new Set();
+  const pendingKeys = going && st.pending ? AIP.unpackKeys(st.pending.keys) : new Set();
+  const lostNow = [...pendingKeys].filter(k => !storedKeys.has(k));
+  const lostParts = going ? Number(st.lost_parts) || 0 : 0;
+  // a state written before asked_keys existed: the count is all there is (the audit's guard), and a shortfall is a lost part too
+  const legacyShort = going && !st.asked_keys && Number(st.asked) > 0 && storedKeys.size < (Number(st.asked) - Number(st.unavailable || 0)) * 0.9;
+  // AI Requests is handed EVERY key the run stored or sent: a recorded key is never asked again, whatever happened to its answer
+  const doneKeys = [...new Set([...storedKeys, ...sentKeys])];
   const runKind = going ? String(st.run_kind || 'weekly') : (on_demand ? 'on_demand' : full_due ? 'full' : 'weekly');
   const costNow = AIP.cost({ panel: Math.max(prompts.length + need, AIP.LIMITS.min), engines: s.settings.engines, pulse: s.settings.pulse, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week });
   const runCost = full_due ? costNow.run.full : costNow.run.weekly;
@@ -131,27 +169,53 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const engNow = s.settings.engines.filter(e => full_due || !CONFIG.monthly_engines.includes(e));
   const reqTotal = (prompts.filter(q => q.kind !== 'brand').length + need) * engNow.length + (full_due ? engNow.filter(e => e !== 'copilot' && e !== 'ai_overview').length : 0);
   const reqLeft = Math.max(0, reqTotal - doneKeys.length);
-  const chunk = { no: going ? (Number(st.chunk) || 1) + 1 : 1, size: AIP.LIMITS.chunk_requests, going, resumed: verdict === 'resume', final_expected: reqLeft <= AIP.LIMITS.chunk_requests,
+  // F2 (E1): the run's hard money ceiling (fixed at its start) and what is left under it
+  const ceiling = going && Number(st.ceiling_dfs_usd) > 0 ? Number(st.ceiling_dfs_usd) : AIP.runCeiling(runCost.dfs);
+  const committed = going ? Math.max(Number(st.spent_dfs_usd) || 0, Number(st.committed_dfs_usd) || 0) : 0;
+  let stop = null;
+  if (going && (legacyShort || (lostNow.length && (lostParts >= 1 || st.save_failed))))
+    stop = { status: 'failed_store', lost: legacyShort ? Math.max(0, Number(st.asked) - storedKeys.size) : lostNow.length,
+      reason: (legacyShort ? (Number(st.asked) - storedKeys.size) + ' of the ' + st.asked + ' requests its earlier parts asked have no stored answer' : lostNow.length + ' request(s) of part ' + ((st.pending || {}).chunk || st.chunk) + ' were paid for but their answers were never stored, and this has happened before in this run')
+        + '. They are not asked again (that would pay twice); the run is stopped, and nothing more is asked for this website this week. Check the Data Table size and the execution of the part named in the state row, then clear ai_run:' + s.site_id + ' to let a new run start.' };
+  else if (going && reqLeft > 0 && committed >= ceiling)
+    stop = { status: 'stopped_ceiling', lost: 0, reason: 'the run has spent or committed $' + committed.toFixed(2) + ' of DataForSEO against its ceiling of $' + ceiling.toFixed(2) + ' (1.5 x its own estimate) with ' + reqLeft + ' request(s) still to ask. Nothing more is asked; check the prices in the run\'s ledger rows before clearing ai_run:' + s.site_id + '.' };
+  const halve = !stop && (lostNow.length > 0 || !!(going && st.halve_next));
+  // F2 (E11): the part sized by TIME (the run's measured seconds per request once a part has measured them), and the analyst jobs it leaves room for
+  const aj = Math.min(12, Math.max(6, Math.ceil((Number(costNow.analyst_jobs) || 0) / Math.max(1, Number(costNow.executions) || 1))));
+  const cp = AIP.chunkPlan({ engines: engNow, measured_s: going ? Number(st.sec_per_request) || 0 : 0, analyst_jobs: aj, halve });
+  const chunk = { no: going ? (Number(st.chunk) || 1) + 1 : 1, size: cp.size, size_time: cp.size, sec_per_request: cp.sec_per_request, size_basis: cp.basis, analyst_jobs_max: aj, going, resumed: verdict === 'resume', final_expected: reqLeft <= cp.size,
+    ceiling_dfs_usd: ceiling, committed_dfs_usd: +committed.toFixed(4), ceiling_left_usd: +Math.max(0, ceiling - committed).toFixed(4),
+    // F2 (E1): the keys a part paid for whose answers never came back to the table (counted once, never asked again) and the parts that lost them
+    lost_now: stop ? 0 : lostNow.length, lost_total: (going ? Number(st.lost) || 0 : 0) + (stop ? 0 : lostNow.length), lost_parts: lostParts + (!stop && lostNow.length ? 1 : 0),
+    unanalysed: going && st.pending && !lostNow.length && pendingKeys.size ? pendingKeys.size : 0,
     total_est: reqTotal, done: doneKeys.length, executions: (going && Array.isArray(st.executions)) ? st.executions : [], started_at: run_checked_at,
     // what earlier parts asked and could not be read even when sent again: not asked a third time, named in the week's report
     unavailable: going ? runRows.filter(r => r.run_id === run_id && r.error).length : 0 };
   if (chunk.unavailable) chunk.unavailable_note = chunk.unavailable + ' request(s) of this run could not be read in its earlier part(s), even when sent again; they are not asked again and the week counts the answers that came back';
+  if (chunk.lost_total) chunk.lost_note = chunk.lost_total + ' request(s) of this run were paid for in a part that stopped before its answers were stored (the execution\'s time limit, a restart); they are not asked again (that would pay twice) and the week counts the answers that were stored';
+  if (chunk.unanalysed) chunk.unanalysed_note = chunk.unanalysed + ' answer(s) of this run were stored by a part that stopped before the Answer Analyst read them; they keep the parser\'s reading (the businesses named in order by text position, no sentiment, no wrong-claim check)';
+  if (stop) { Object.assign(chunk, { size: 0, size_time: 0, final_expected: null, stop: true }); }   // F2: nothing is asked; the ledger key is the job's own (null is not a part)
   // pages that must stay fetchable for AI: the ones AI cited last time and the keyword-ladder pages (checked against robots.txt per AI bot)
   const pathOf = (u) => { const m = String(u || '').match(/^https?:\/\/[^\/?#]+(\/[^?#]*)?/i); return m ? (m[1] || '/') : (String(u || '').startsWith('/') ? String(u) : ''); };
   const key_paths = [...new Set([...(prev ? (parse(prev.pages_json, []) || []).map(x => pathOf(x && x.url)) : []), ...lrows.map(l => pathOf(l.target_url))].filter(x => x && x !== '/'))].slice(0, 8);
   return { json: { site_id: s.site_id, domain: s.domain,
     // G6: the split run (chunk, what is done, what is left to spend), the markets and personas the panel covers, the cost model of this panel
     chunk, done_keys: doneKeys, markets, markets_map, own_market: ownMarket, personas, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week,
-    est_dfs_usd: +Math.max(0, runCost.dfs - spent.dfs).toFixed(4), est_ai_usd: +Math.max(0, runCost.ai - spent.ai).toFixed(4), run_cost_est: runCost, cost_model: costNow,
-    spent_before: spent, state_before: going ? st : null, canonical_host: site_model.canonical_host || s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '',
-    request_id: s.request_id || (going ? String(st.request_id || '') : ''), on_demand: going ? !!st.on_demand : on_demand, adhoc: !!s.adhoc,   /* G6: a continuation is the run it continues (scheduled or on demand) */ business_name: s.business_name || ''   /* P34-6: the site model's name (monitorSites nameOf), not seo_profiles alone */, business_type: s.profile.business_type || '', city: s.profile.city || '', profile: s.profile,
+    est_dfs_usd: stop ? 0 : +Math.min(Math.max(0, runCost.dfs - spent.dfs), Math.max(0, ceiling - committed)).toFixed(4), est_ai_usd: stop ? 0 : +Math.max(0, runCost.ai - spent.ai).toFixed(4), run_cost_est: runCost, cost_model: costNow,
+    // F2 (E1): a stopped run asks nothing; AI Chunk Handoff writes its state, the ops alert and the notice to its own caller
+    stop, ceiling_dfs_usd: ceiling,
+    spent_before: spent, state_before: going ? st : null, canonical_host: site_model.canonical_host || s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code),
+    // F2 (E17): a run that continues keeps ITS caller (the request id, e-mail and callback it was started with); a different on-demand caller
+    // that resumed it was told so at once (notices) and never takes the open run's report
+    email: going ? String(st.email || '') : (s.email || ''), callback_url: going ? String(st.callback_url || '') : (s.callback_url || ''),
+    request_id: going ? String(st.request_id || '') : (s.request_id || ''), on_demand: going ? !!st.on_demand : on_demand, adhoc: !!s.adhoc,   /* G6: a continuation is the run it continues (scheduled or on demand) */ business_name: s.business_name || ''   /* P34-6: the site model's name (monitorSites nameOf), not seo_profiles alone */, business_type: s.profile.business_type || '', city: s.profile.city || '', profile: s.profile,
     // G10 (2026-10-11 system review): the Answer Analyst can only call a claim wrong against facts on file, so the site model's
     // services, business facts and accreditation status travel with the profile (SITE_MODEL_SPEC.md; with no sheet the analyst
     // reports "not checked", never "no wrong claims")
     services: SM.services(site_model).slice(0, 20), business_facts: SM.facts(site_model).business_facts, accreditation: SM.facts(site_model).accreditation,
     brand_names, competitors, configured_competitors: s.settings.competitors, aliases, topics, engines: s.settings.engines, prompts_max: s.settings.prompts_max, pulse: s.settings.pulse,
-    prompts, full_due, run_kind: runKind, monthly_engines: CONFIG.monthly_engines.filter(e => s.settings.engines.includes(e)), carried,
-    need_prompts: need > 0, prompts_needed: need, need_site_text: need > 0 && !topics.length && !s.business_name, gsc_questions,
+    prompts: stop ? [] : prompts, full_due, run_kind: runKind, monthly_engines: CONFIG.monthly_engines.filter(e => s.settings.engines.includes(e)), carried,
+    need_prompts: !stop && need > 0, prompts_needed: stop ? 0 : need, need_site_text: !stop && need > 0 && !topics.length && !s.business_name, gsc_questions,
     // G6: discovery runs in a run's first execution (it feeds the Prompt Writer); the database views, GA4 and the crawler check in its last
     discovery_due: !going && !!topics.length && (full_due || need > 0), volume_keywords: going ? [] : volume_keywords, index_due: full_due,
     market_due: !!topics.length && (runCycle ? (going ? !!st.full_due : cycle.monthly) : (!prev || String(prev.market_month || '') !== month)), market_keyword: topics[0] || '',
@@ -159,7 +223,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
     // B-G1: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
     set_aside, set_aside_note: FITR.line(set_aside, 'asked of the AI engines or scored against'),
     // G6: the gate's context, so the questions the Prompt Writer writes this run are judged by the same rule before they are stored
-    fit_input: { own_domain: s.domain, competitors, brands: aliases, heads: lrowsAll.map(l => l.head_keyword), services: SM.services(site_model), keywords: s.keywords || [] },
+    fit_input,
     previous: prev ? { checked_at: prev.checked_at, mention_rate: prevMention, samples: prevSamples, mentioned_k: Math.round(prevMention * prevSamples / 100),
       // B-L4 (2026-10-15, INVARIANTS rule 1): the panel is settable from 3 to 50 and a weekly check asks fewer engines than the
       // monthly full one, so the stored row's OWN panel size and run kind travel with its figures. Without them AI Metrics
@@ -176,10 +240,15 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
 // G6: one execution carries at most exec_requests engine requests across all its sites (a scheduled run covers up to 15). The budget goes
 // to the sites in order; a site whose run does not fit is asked in part and continues in its own execution. Only the LAST execution of a
 // site's run asks the database views, reads GA4 and the crawler access and computes the week, so those wait for it.
+// F2 (E11): and at most what fits the execution's TIME across its sites (each part's own seconds per request, the analyst jobs of every site)
 { let budget = AIP.LIMITS.exec_requests;
+  let secs = AIP.TIME.budget_s - AIP.TIME.fixed_s - AIP.TIME.retry_wait_s - Math.min(36, planned.reduce((t, it) => t + (it.json.chunk.stop ? 0 : it.json.chunk.analyst_jobs_max || 0), 0)) * AIP.TIME.analyst_job_s;
   for (const it of planned) { const j = it.json, c = j.chunk; const left = Math.max(0, c.total_est - c.done);
-    c.size = Math.max(0, Math.min(AIP.LIMITS.chunk_requests, budget)); c.final_expected = left <= c.size; budget -= Math.min(left, c.size);
+    if (c.stop) { j.index_due = false; j.market_due = false; j.ga4_property_id = ''; j.key_paths = []; j.discovery_due = false; j.volume_keywords = []; continue; }
+    const byTime = Math.max(planned.length > 1 ? 0 : AIP.TIME.min_requests, Math.floor(Math.max(0, secs) / Math.max(0.5, c.sec_per_request || 1)));
+    c.size = Math.max(0, Math.min(c.size_time || AIP.LIMITS.chunk_requests, budget, byTime)); c.final_expected = left <= c.size; budget -= Math.min(left, c.size); secs -= Math.min(left, c.size) * (c.sec_per_request || 1);
     if (!c.final_expected) { j.index_due = false; j.market_due = false; j.ga4_property_id = ''; j.key_paths = []; } } }
-if (!planned.length) return [{ json: { nothing_to_do: true, reason: skipped.map(x => x.domain + ': ' + x.why).join(' | ') || 'nothing to do', skipped } }];
+if (!planned.length) return [{ json: { nothing_to_do: true, reason: skipped.map(x => x.domain + ': ' + x.why).join(' | ') || 'nothing to do', skipped, notices } }];
 if (skipped.length) planned[0].json.skipped_sites = skipped;
+if (notices.length) planned[0].json.notices = notices;
 return planned;

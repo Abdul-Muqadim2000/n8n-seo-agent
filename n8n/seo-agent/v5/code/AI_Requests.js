@@ -21,6 +21,8 @@ const API = 'https://api.dataforseo.com/v3/';
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let fresh = []; try { fresh = $('Prompt Rows').all().map(i => i.json).filter(r => !r.skip && r.prompt_id && r.status !== 'off' && r.status !== 'refused'); } catch (e) {}   // new questions (stored ones are in the plan already); a refused one is stored, never asked
 const out = []; let spend = 0; const skipped = []; const chunks = {};
+// F2 (2026-10-23, ENGINE_AUDIT.md E1): the run's hard ceiling, per site — what is left of it after what earlier parts measured and committed
+const siteSpend = {}; const capped = {};
 const pulse = plans.some(p => p.pulse_run);
 // G6: the cap follows the panel — what this run's exact estimate says it costs, with headroom, never under the v4.9 caps and never over the ceiling
 const estAll = plans.reduce((t, p) => t + (pulse ? Number((p.cost_model || {}).pulse_day ? p.cost_model.pulse_day.dfs : 0) : Number(p.est_dfs_usd) || 0), 0);
@@ -29,15 +31,18 @@ const maxReq = pulse ? Math.max(CONFIG.max_requests_per_run, AIP.LIMITS.pulse_ma
 const add = (p, q, engine, endpoint, body) => {
   const c = CONFIG.cost[engine] || 0.01;
   if (out.length >= maxReq || spend + c > cap) { skipped.push(p.domain + ':' + engine); return; }
+  const left = p.chunk && p.chunk.ceiling_left_usd != null && !p.pulse_run ? Number(p.chunk.ceiling_left_usd) : null;
+  if (left != null && (siteSpend[p.site_id] || 0) + c > left + 1e-9) { capped[p.site_id] = (capped[p.site_id] || 0) + 1; skipped.push(p.domain + ':' + engine + ' (run ceiling)'); return; }
+  siteSpend[p.site_id] = (siteSpend[p.site_id] || 0) + c;
   spend += c; out.push({ json: { site_id: p.site_id, domain: p.domain, run_id: p.run_id, run_kind: p.run_kind || 'weekly', prompt_id: q.prompt_id, prompt: q.prompt, kind: q.kind, topic: q.topic, keyword: q.keyword, engine, endpoint: API + endpoint, body, est_cost: c,
-    market: q.market || p.own_market || '', persona: q.persona || '', cluster: q.cluster || q.topic || '', stage: q.stage || '' } });
+    market: q.market || p.own_market || '', persona: q.persona || '', cluster: q.cluster || q.topic || '', stage: q.stage || '', ...(q.market_fallback ? { market_fallback: true } : {}) } });   // F2 (E22): asked in the own market because its own is past the cap
 };
 // the countries Claude's web search accepts (DataForSEO docs, 2026-10); any other code is refused with 40501
 const CLAUDE_GEO = new Set('AR AT AU BE BR CA CH CL CN DE DK ES FI FR GB HK ID IN IT JP KR MX MY NL NO NZ PH PL PT RU SA SE TR TW US ZA'.split(' '));
 for (const p of plans) {
   const known = new Set(p.prompts.map(x => x.prompt_id));
   const qs = [...p.prompts, ...fresh.filter(r => r.site_id === p.site_id && !known.has(r.prompt_id)).map(r => ({ prompt_id: r.prompt_id, prompt: r.prompt, kind: r.kind, topic: r.topic, keyword: r.keyword, source: r.source,
-    persona: r.persona || '', market: r.market || '', cluster: r.cluster || '', stage: r.stage || '' }))].slice(0, p.prompts_max);
+    persona: r.persona || '', market: r.market || '', cluster: r.cluster || '', stage: r.stage || '', keyword_source: r.keyword_source || '' }))].slice(0, p.prompts_max);
   const locOf = (q) => { const m = (p.markets_map || {})[q.market || p.own_market] || null; return m ? { location_code: m.location_code, language_code: m.language_code } : { location_code: p.location_code, language_code: p.language_code }; };
   const isoOf = (q) => { const m = (p.markets_map || {})[q.market || p.own_market] || null; return String((m && m.country_iso) || p.country_iso || '').toUpperCase(); };
   // every request this execution may owe for the site, in the run's one order
@@ -60,7 +65,8 @@ for (const p of plans) {
       if (engine === 'chatgpt_api') want.push([q, engine, 'ai_optimization/chat_gpt/llm_responses/live', [{ user_prompt: q.prompt, model_name: CONFIG.models.chatgpt_api, web_search: true, max_output_tokens: 1200, ...geo }]]);
       if (engine === 'gemini_api') want.push([q, engine, 'ai_optimization/gemini/llm_responses/live', [{ user_prompt: q.prompt, model_name: CONFIG.models.gemini_api, web_search: true, max_output_tokens: 1200 }]]);
       const kw = String(q.keyword || '').trim().toLowerCase();
-      if (engine === 'ai_overview' && kw && q.kind !== 'brand' && !seenKw.has((q.market || '') + '|' + kw)) { seenKw.add((q.market || '') + '|' + kw); want.push([q, engine, 'serp/google/organic/live/advanced', [{ keyword: kw, ...loc, depth: 10, load_async_ai_overview: true }]]); }
+      // F2 (E9): a search phrase built from the question's own words is not a search anyone typed: Google's AI Overview is not asked for it
+      if (engine === 'ai_overview' && kw && q.kind !== 'brand' && q.keyword_source !== 'derived' && !seenKw.has((q.market || '') + '|' + kw)) { seenKw.add((q.market || '') + '|' + kw); want.push([q, engine, 'serp/google/organic/live/advanced', [{ keyword: kw, ...loc, depth: 10, load_async_ai_overview: true }]]); }
     }
   }
   // G6: the weekly run is split across executions — this one asks the keys still owed, at most its chunk (the last chunk: all that is left)
@@ -71,7 +77,7 @@ for (const p of plans) {
   const before = out.length;
   for (const [q, engine, endpoint, body] of want) if (nowKeys.has(AIP.reqKey(q.prompt_id, engine)) && (p.pulse_run || !c || c.size > 0 || c.final_expected)) add(p, q, engine, endpoint, body);
   chunks[p.site_id] = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, total: sl.total, done_before: sl.done, asked_now: out.length - before, left_after: Math.max(0, sl.total - sl.done - (out.length - before)),
-    final: !c || !!c.final_expected, no: c ? c.no : 1 };
+    final: !c || !!c.final_expected, no: c ? c.no : 1, capped_by_ceiling: capped[p.site_id] || 0, market_fallback: want.filter(([q]) => q.market_fallback).length };
   if (p.pulse_run) continue;
   if (c && !c.final_expected) continue;   // the database views belong to the run's last execution
   const platforms = ['google', ...(p.location_code === CONFIG.chat_gpt_location && p.language_code === 'en' ? ['chat_gpt'] : [])];   // the database holds ChatGPT answers for US-English only
