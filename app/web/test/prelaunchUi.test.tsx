@@ -10,13 +10,14 @@ import { LevelChoices } from '@/components/site/AutopilotLevel';
 import { GuideProvider } from '@/components/guide';
 import { TooltipProvider } from '@/components/ui/overlay';
 import { creditsLabel } from '@/lib/credits';
+import { decodePrefill } from '@/lib/utils';
 import { forecastPlanOf } from '@/lib/forecast-plan';
 import { makeCan, OrgContext, SiteContext } from '@/lib/context';
 import { ThemeProvider } from '@/lib/theme';
 import { ContentCard } from '@/pages/site/OverviewPage';
 import { LadderCard } from '@/pages/site/RankingsPage';
 import { watchLine } from '@/pages/site/TechnicalPage';
-import { contentGroups, liveLine } from '@/pages/site/_components/content-status';
+import { contentGroups, liveLine, publishPrefill } from '@/pages/site/_components/content-status';
 import { fmtTime, fmtWhen } from '@/pages/site/_components/pipeline/common';
 import { weeklyTradeOff } from '@/pages/site/_components/pipeline/WriteNowDialog';
 import { ladderShape, rungView } from '@/pages/site/_components/rungs';
@@ -71,9 +72,13 @@ const eqa = {
 };
 
 describe('B1: a page the quality check refused is a draft to finish by hand', () => {
-  it('offers no "I published this page" and no re-run, and leads with the quality check, not the 97', () => {
+  // 2026-10-23 (techand.ai on production): the draft is finished OUTSIDE the app, so the report must let the client say it is live (B1
+  // first removed the button while the text still told them to use it). It is offered second to the edits, never as a re-run.
+  it('offers "I published this page" after the edits (no re-run), and leads with the quality check, not the 97', () => {
     const t = text(renderReport(report('content', { ...page, ...eqa }, { status: 'completed', scheduled: false })));
-    expect(t).not.toContain('I published this page');
+    expect(t).toContain('I published this page');
+    expect(t).toContain('Finish it in the downloaded Word or HTML file first');
+    expect(t).not.toContain('Edit the draft below');
     expect(t).not.toContain('Run it again');
     expect(t).toContain('needs your edits before you publish it');
     expect(t).not.toContain('is written');
@@ -89,6 +94,16 @@ describe('B1: a page the quality check refused is a draft to finish by hand', ()
     expect(t).toContain('You do not need a new run');
     expect(t).not.toContain('Run it again');
   });
+  it('the button reaches THIS draft: its keyword and the engine request id that wrote it ride in the prefill', () => {
+    const html = renderReport(report('content', { ...page, ...eqa, request_id: '4127', meta: { ...page.meta, suggested_url: '/ai-consultant/' } }, { status: 'completed' }));
+    const href = (html.match(/href="([^"]*\/tools\/published\?[^"]*)"/) ?? [])[1] ?? '';
+    const pre = decodePrefill(new URLSearchParams(href.replace(/&amp;/g, '&').split('?')[1] ?? '').get('prefill'));
+    expect(pre).toMatchObject({ keyword: 'ai consultant', contentRequestId: '4127', publishedUrl: 'https://techand.ai/ai-consultant/' });
+    // an id that is not one never travels (the form would refuse it)
+    const odd = renderReport(report('content', { ...page, ...eqa, request_id: 'x y<z>' }, { status: 'completed' }));
+    const href2 = (odd.match(/href="([^"]*\/tools\/published\?[^"]*)"/) ?? [])[1] ?? '';
+    expect(decodePrefill(new URLSearchParams(href2.replace(/&amp;/g, '&').split('?')[1] ?? '').get('prefill'))).not.toHaveProperty('contentRequestId');
+  });
   it('a page that passed still offers "I published this page"', () => {
     const ok = { ...page, qa_not_ready: false, qa_publishable: true, qa_label: 'passed the quality check', qa_reasons: [], markdown: '# AI consultant', html: '<h1>AI consultant</h1>' };
     expect(text(renderReport(report('content', ok, { status: 'completed' })))).toContain('I published this page');
@@ -98,6 +113,22 @@ describe('B1: a page the quality check refused is a draft to finish by hand', ()
     expect(text(renderReport(held, <SendReport report={held} />))).not.toContain('Send it now');
     const fine = report('ai_pulse', { mention_rate: 5.6 }, { status: 'completed' });
     expect(text(renderReport(fine, <SendReport report={fine} />))).toContain('Send it now');
+  });
+});
+
+describe('2026-10-23: "I published it" from a written page reaches that page', () => {
+  const item = { keyword: 'ai consulting services dubai', requestId: '4127', existingPageUrl: '', publishedUrl: '' };
+  it('carries the keyword and the request id that wrote it', () => {
+    expect(publishPrefill(item)).toEqual({ keyword: 'ai consulting services dubai', contentRequestId: '4127' });
+  });
+  it('a cadence or ladder id with its prefix is kept; anything else is dropped, never sent', () => {
+    expect(publishPrefill({ ...item, requestId: 'cadence:site_techand-ai:2026-10-19' }).contentRequestId).toBe('cadence:site_techand-ai:2026-10-19');
+    expect(publishPrefill({ ...item, requestId: '' })).not.toHaveProperty('contentRequestId');
+    expect(publishPrefill({ ...item, requestId: 'a b' })).not.toHaveProperty('contentRequestId');
+  });
+  it('the address: the live one to re-check, else the page it improves', () => {
+    expect(publishPrefill({ ...item, existingPageUrl: 'https://techand.ai/old/' }).publishedUrl).toBe('https://techand.ai/old/');
+    expect(publishPrefill({ ...item, existingPageUrl: 'https://techand.ai/old/', publishedUrl: 'https://techand.ai/new/' }).publishedUrl).toBe('https://techand.ai/new/');
   });
 });
 

@@ -1,17 +1,18 @@
 import { PRICES } from '@/lib/prices';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useForm, type DefaultValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import { CheckCircle2, FileSpreadsheet, Upload, X } from 'lucide-react';
-import { CRAWL_PAGE_OPTIONS, RUN_SCHEMAS, urlOnDomain, type Site } from '@seo/shared';
+import { CRAWL_PAGE_OPTIONS, RUN_SCHEMAS, urlOnDomain, type ContentItem, type Site } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { useOrgCtx } from '@/lib/context';
-import { fmtBytes } from '@/lib/utils';
+import { useSiteData } from '@/lib/queries';
+import { fmtBytes, fmtDay } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
-import { ChoiceCard } from '@/components/ui/field';
+import { ChoiceCard, Field, Select } from '@/components/ui/field';
 import { SwitchRow } from '@/components/ui/tabs';
 import { IconTile } from '@/components/insight';
 import { estimateCost, estimateEta } from '../estimate';
@@ -176,21 +177,47 @@ const PS = RUN_SCHEMAS.published;
 type PIn = z.input<typeof PS>;
 type POut = z.output<typeof PS>;
 
+const normKw = (k: string) => k.trim().toLowerCase().replace(/\s+/g, ' ');
+const draftId = (i: Pick<ContentItem, 'requestId'>) => (/^[A-Za-z0-9:_.-]{1,120}$/.test(i.requestId ?? '') ? i.requestId : '');
+const draftKey = (i: Pick<ContentItem, 'requestId' | 'keyword'>) => (draftId(i) ? `id:${draftId(i)}` : `kw:${normKw(i.keyword)}`);
+
 export function PublishedForm({ initialSiteId, prefill }: ToolFormProps) {
-  const { sites } = useOrgCtx();
+  const { org, sites } = useOrgCtx();
   const form = useForm<PIn, unknown, POut>({
     resolver: withChecks(zodResolver(PS), (x): Record<string, string> => {
       const s = sites.find((y) => y.id === x.siteId);
       return s && x.publishedUrl && /^https?:\/\//i.test(x.publishedUrl) && !urlOnDomain(x.publishedUrl, s.domain) ? { publishedUrl: `Must be a page on ${s.domain}` } : {};
     }),
     mode: 'onTouched',
-    defaultValues: withPrefill<DefaultValues<PIn>>({ mode: 'published', siteId: initialSiteId ?? '', keyword: '', publishedUrl: '', emailCopy: false }, prefill),
+    defaultValues: withPrefill<DefaultValues<PIn>>({ mode: 'published', siteId: initialSiteId ?? '', keyword: '', publishedUrl: '', contentRequestId: '', emailCopy: false }, prefill),
   });
   const { onSubmit, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
   useSyncSiteParam(v.siteId);
+  // 2026-10-23 (techand.ai on production): the pages written for this website that are not live yet, so the report reaches the right
+  // draft (by the engine request id that wrote it) instead of depending on the keyword being typed exactly as stored
+  const content = useSiteData(org.id, v.siteId ?? '', 'content', undefined, { enabled: !!site?.verifiedAt });
+  const drafts = useMemo(() => {
+    const seen = new Set<string>();
+    return (content.data?.items ?? [])
+      .filter((i) => i.status !== 'published' && !i.publishedUrl && i.keyword)
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+      .filter((i) => (seen.has(draftKey(i)) ? false : (seen.add(draftKey(i)), true)))
+      .slice(0, 50);
+  }, [content.data]);
+  const chosen = drafts.find((i) => (v.contentRequestId ? draftId(i) === v.contentRequestId : normKw(i.keyword) === normKw(v.keyword ?? ''))) ?? null;
+  const choose = (key: string) => {
+    const d = drafts.find((i) => draftKey(i) === key);
+    if (!d) {
+      form.setValue('contentRequestId', '', { shouldDirty: true });   // another page: matched by the keyword typed below
+      return;
+    }
+    form.setValue('keyword', d.keyword, { shouldDirty: true, shouldValidate: !!form.formState.touchedFields.keyword });
+    form.setValue('contentRequestId', draftId(d), { shouldDirty: true });
+    if (!v.publishedUrl && d.existingPageUrl) form.setValue('publishedUrl', d.existingPageUrl, { shouldDirty: true });
+  };
   return (
     <ToolShell mode="published" site={site} cost={0} eta={estimateEta('published', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check the page" blocked={noVerified(sites)}>
       <FormCard
@@ -199,6 +226,23 @@ export function PublishedForm({ initialSiteId, prefill }: ToolFormProps) {
         aside={<GuideButton id="publish-page" vars={{ domain: site?.domain }} label="How to publish one" />}
       >
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
+        {drafts.length > 0 && (
+          <Field
+            label="Which page did you publish?"
+            hint={chosen ? `Marks the page written for "${chosen.keyword}" as published, including the edits you made to it.` : 'Choose the written page, so its report and tracking follow it. Or pick another page and type its keyword below.'}
+          >
+            {(p) => (
+              <Select {...p} value={chosen ? draftKey(chosen) : ''} onChange={(ev) => choose(ev.target.value)}>
+                <option value="">Another page (type its keyword below)</option>
+                {drafts.map((d) => (
+                  <option key={draftKey(d)} value={draftKey(d)}>
+                    {d.keyword} · {d.status === 'not_ready' ? 'needed your edits' : 'written'}, {fmtDay(d.startedAt)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
         <TextField label="Page address" reg={form.register('publishedUrl')} error={errMsg(e.publishedUrl)} inputMode="url" placeholder={site ? `https://${site.domain}/...` : 'https://...'} hint={site ? `The live URL on ${site.domain}.` : 'The live URL.'} />
         <TextField label="Target keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. dubai accounting software pricing" hint="The keyword the page was written for (the one in its report)." />
         <CheckList items={['Live (HTTP 200) and indexable', 'Title and meta description', 'One H1, canonical', 'Structured data, author and date', 'Images and alt text', 'Internal links to and from it']} />

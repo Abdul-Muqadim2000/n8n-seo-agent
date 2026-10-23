@@ -184,3 +184,21 @@ describe('ladder preferences (app only)', () => {
     expect(RUN_SCHEMAS.ladder.parse({ mode: 'ladder', siteId: SITE_ID, keyword: 'erp dubai', country: 'Germany', ladderPrefs: {} }).ladderPrefs).toEqual({});
   });
 });
+
+// 2026-10-23 (techand.ai on production): "I published this page" from a draft's own report carries the engine request id that wrote it
+describe('published: the draft it reports', () => {
+  const base = { mode: 'published', siteId: SITE_ID, keyword: 'erp dubai', publishedUrl: 'https://northwind-erp.com/erp-dubai/' };
+  it('sends content_request_id after the fuzzy-matched head, only when given', () => {
+    const withId = buildN8nPayload(RUN_SCHEMAS.published.parse({ ...base, contentRequestId: '4127' }), site, delivery) as Record<string, unknown>;
+    expect(withId.content_request_id).toBe('4127');
+    const keys = Object.keys(withId);
+    expect(keys.indexOf('content_request_id')).toBeGreaterThan(keys.indexOf('published_url'));
+    expect(buildN8nPayload(RUN_SCHEMAS.published.parse(base), site, delivery)).not.toHaveProperty('content_request_id');
+  });
+  it('accepts engine ids (digits, cadence / ladder keys) and refuses anything else', () => {
+    expect(RUN_SCHEMAS.published.safeParse({ ...base, contentRequestId: 'cadence:site_northwind-erp-com:2026-10-19' }).success).toBe(true);
+    expect(RUN_SCHEMAS.published.safeParse({ ...base, contentRequestId: 'a b' }).success).toBe(false);
+    expect(RUN_SCHEMAS.published.safeParse({ ...base, contentRequestId: '<x>' }).success).toBe(false);
+    expect(RUN_SCHEMAS.published.parse(base).contentRequestId).toBe('');
+  });
+});

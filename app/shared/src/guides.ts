@@ -565,7 +565,7 @@ export const GUIDES = [
       },
       {
         title: 'Publish, then tell Alaventra',
-        body: 'Use **I published a page** and paste its address on {{domain}}. We read the live page (title, description, structured data, images, internal links), report anything the CMS dropped, and start tracking its position.',
+        body: 'Press **I published this page** on the page\'s report, or **I published a page** on the **Content** page and choose the page under **Which page did you publish?**. Paste its address on {{domain}}. We read the live page (title, description, structured data, images, internal links, any bracket left to fill in), report anything the CMS dropped, and start tracking its position.',
       },
     ],
     done: 'The page shows as published in the content list, and the rank tracker begins reporting its position from the next weekly check.',
@@ -2086,7 +2086,7 @@ export const GUIDES = [
       },
       {
         title: 'Pages arrive as drafts for you to publish',
-        body: '**We:** research, write, edit and check every page, then deliver it as a report with the page ready to copy (HTML and Markdown). **You:** check it, fill in anything in [brackets], put it on your website, then press **I published it** with its address. **It leads to:** we check the page live and start tracking its position.',
+        body: '**We:** research, write, edit and check every page, then deliver it as a report with the page ready to copy (HTML and Markdown). **You:** check it, fill in anything in [brackets] in your downloaded copy, put it on your website, then press **I published this page** on its report with its address. **It leads to:** we check the page live and start tracking its position.',
         warn: 'A page marked **Not ready to publish** did not pass the quality check. Finish it first: the guide for that page explains each reason.',
       },
       {
@@ -2410,18 +2410,24 @@ export const GUIDES = [
         body: 'Most of these come from what we do not know about you. A filled **author profile** and **business facts** let pages be published as they are, which is why the first page of a keyword waits for both.',
       },
       {
-        title: 'Finish it, then publish it',
-        body: 'Edit the copy yourself, in the report\'s preview text or the Word file: fill in or delete each bracket, as the report says for each one. Then put it on {{domain}} and press **I published it** with the address, so we check it live and start tracking. You do not need a new run for these edits: a new run writes a whole new page and is charged again.',
+        title: 'Finish it in your own copy',
+        body: 'There is no editor in Alaventra: download the draft from its report (the **Word** or **HTML** file) and make the edits there. Fill in or delete each bracket, as the report says for each one. You do not need a new run for these edits: a new run writes a whole new page and is charged again.',
         warn: 'Sending a page that is not ready to your website from Alaventra is refused: finish it first.',
+      },
+      {
+        title: 'Publish it, then tell us its address',
+        body: 'Put the finished page on {{domain}}. Then press **I published this page** on the draft\'s report, or **I published it** next to the draft on the **Content** page, and paste the page\'s address. The draft is chosen for you, so it is marked published with your edits. We read the live page, name any bracket still on it and start tracking its position.',
       },
     ],
     done: 'The page is live on {{domain}} with no brackets left, and its report shows it as published.',
     trouble: [
-      { q: 'I filled everything in and it is still not ready', a: 'The check judges the copy it delivered, not your later edits: once you have edited every bracket, the page is ready to publish. A new run is only worth it when the topic itself was wrong, and it is charged as a new page.' },
+      { q: 'I filled everything in and it is still not ready', a: 'The report judges the copy it delivered, not your later edits, so it keeps saying "needs your edits" until you report the live page. Publish it and press **I published this page**: the draft then shows as published, and the check lists anything still left on the live page. A new run is only worth it when the topic itself was wrong, and it is charged as a new page.' },
+      { q: 'I cannot find where to edit the draft', a: 'The edits are made in your own copy, not in Alaventra: download the **Word** or **HTML** file from the draft\'s report, edit it, and publish it on your website the way you publish any page.' },
+      { q: 'I already published it with a different title or keyword', a: 'That is fine. Start from **I published this page** on the draft\'s report, or choose the page under **Which page did you publish?** in the form: the draft is matched by the run that wrote it, not by the words you type.' },
       { q: 'The topic itself is wrong', a: 'Press **Not what I wanted** on the report instead, and skip the keyword in the next **Coming up** plan.' },
     ],
     related: ['business-profile', 'business-facts', 'publish-page', 'not-what-i-wanted'],
-    keywords: ['not ready', 'quality check', 'draft', 'placeholders', 'brackets', 'confirm', 'author', 'facts'],
+    keywords: ['not ready', 'quality check', 'draft', 'placeholders', 'brackets', 'confirm', 'author', 'facts', 'edit', 'word file', 'published', 'report the address'],
   },
   {
     id: 'not-what-i-wanted',

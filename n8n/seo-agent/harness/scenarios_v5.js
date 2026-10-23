@@ -19668,5 +19668,6 @@ await require('./scenarios_ctfix')({ H, run, mock, store, guard, reset, begin })
 await require('./scenarios_ctdepth')({ H, run, mock, store, guard, reset, begin });   // CTD1-CTD3 (CT-DEPTH 2026-10-22, scorecard C8 / C12): the length band from the same-kind ranking pages; the live pages that should link to the new page, verified, in meta.json and the checklist
 await require('./scenarios_kwfinal')({ H, run, mock, store, guard, reset, begin });   // KF1-KF5 (KW-FINAL 2026-10-22): paid multi-item calls retried per item (N3), ERP / D365 / PINT-AE fit (N1), duplicate ladder before paid steps (N2), no 404 existing page (N4), listing / career covered and exact ladder (N5 / N6)
 await require('./scenarios_ctfix2')({ H, run, mock, store, guard, reset, begin });   // CTX1-CTX7 (CT-FIX2 2026-10-22, live page exec 159): the promise check in two stages (Haiku mocked), the reworded round-1 promise, the page-type length band, the citation re-link, one slug, inbound anchors, the Word text, the judge's measured cost
+await require('./scenarios_pubdraft')({ H, run, mock, store, guard, reset, begin });   // PD1-PD3 (2026-10-23, techand.ai on production): a draft that needed edits, published by hand and reported from its report - found by its request id, leftover brackets on the live page named, no false gaps
 H.report();
 })();

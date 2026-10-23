@@ -6,7 +6,9 @@
 // This module reads those fields, and words the same advice for older reports and for screens that only have the content-log row.
 
 /** What the client does about a draft, in one sentence (screens that have no report at hand). */
-export const DRAFT_BY_HAND = 'Finish it by hand: fill in or delete each bracket the report lists, then publish it';
+/** 2026-10-23: also where (the client's own copy: there is no editor in the app) and the last step (report the live address), which a
+ *  client could not find when the report had no button for it */
+export const DRAFT_BY_HAND = 'Finish it by hand in your downloaded copy: fill in or delete each bracket the report lists, publish it, then report its address with "I published it"';
 /** Why not a new run (said wherever the choice could be made). */
 export const NO_RERUN_NEEDED = 'You do not need a new run for these edits: a new run writes a whole new page and is charged again.';
 

@@ -162,7 +162,8 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
       };
 
     case 'published':
-      return { ...head('published', input.keyword, s?.country ?? '', dom, d), published_url: input.publishedUrl };
+      // exact key after the fuzzy-matched head (no pick() word matches "content request id"); the engine finds the draft by it first
+      return { ...head('published', input.keyword, s?.country ?? '', dom, d), published_url: input.publishedUrl, ...(input.contentRequestId ? { content_request_id: input.contentRequestId } : {}) };
 
     case 'checkin':
       return {

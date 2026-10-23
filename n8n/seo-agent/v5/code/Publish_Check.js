@@ -110,6 +110,17 @@ if (hasVideo) {
   extra.push({ name: 'Video transcript on the page', ok: /transcript/i.test(text) && text.length > 3000, detail: /transcript/i.test(text) ? 'transcript section found' : 'no transcript found (add it under the video)' });
 }
 checks.push(...extra);
+// 2026-10-23 (techand.ai on production): a draft the quality check refused is finished by hand, published, then reported here. The
+// author check above sees only author brackets, so a live page still showing "[Price]" or "[Confirm: ...]" passed. The page's own
+// content (its <article>, else <main>, else the body) is read with the one placeholder detector that Content QA and the app use (PH).
+/*__PLACEHOLDERS__*/
+const mainHtml = (body.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i) || body.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i) || [null, body])[1];
+const mainText = mainHtml.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;|&#xa0;/gi, ' ').replace(/\s+/g, ' ');
+const AUTHOR_TOK = /^\[(?:author insight:|author name|job title|two-sentence bio)/i;   // counted by the author check above
+const NOT_A_GAP = /^\[email\s+protected\]$/i;   // Cloudflare's e-mail obfuscation, on many live sites
+const leftover = PH.scan(mainText).items.filter(x => !NOT_A_GAP.test(x.token) && !(isArticle && AUTHOR_TOK.test(x.token)));
+const leftoverN = leftover.reduce((n, x) => n + x.count, 0);
+checks.push({ name: 'No brackets left to fill in', ok: leftoverN === 0, detail: leftoverN ? leftoverN + ' still on the page: ' + leftover.slice(0, 5).map(x => (x.token.length > 60 ? x.token.slice(0, 56) + '...]' : x.token)).join(', ') : 'none found' });
 const page_signals = { article: isArticle, hub: isHub, local: !!(/local/.test(pageType) || lbLocal), video: hasVideo, schema_types: [...new Set(ldTypes)].slice(0, 15) };
 const checksOut = checks.map((c, i) => ({ ...c, ok: live ? c.ok : (i === 0 ? false : null) }));
 // ---- link suggestions ----

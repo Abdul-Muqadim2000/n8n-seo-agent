@@ -11459,11 +11459,12 @@ _NOT_GENERATED69 = ('SEO_Agent_v3_original_export.json', 'SEO_Agent_Test_Callbac
 PLACEHOLDERS_SRC = _rd0('code/_placeholders.js').rstrip('\n'); CLAIMS_SRC = _rd0('code/_claims.js').rstrip('\n')
 EXCLUSIONS_SRC = _rd0('code/_exclusions.js').rstrip('\n'); OUTBOUND_SRC = _rd0('code/_outbound.js').rstrip('\n')
 _kit130 = lambda s: s.replace('/*__PLACEHOLDERS__*/', PLACEHOLDERS_SRC).replace('/*__CLAIMS__*/', CLAIMS_SRC).replace('/*__EXCLUSIONS__*/', EXCLUSIONS_SRC).replace('/*__OUTBOUND__*/', OUTBOUND_SRC)
-for _n130 in ('Content QA', 'Parse Brief', 'Parse Analysis', 'Brief Context'):   # Brief Context: D5 (2026-10-21) drops the verdict's skipped topics from the subtopics
+for _n130 in ('Content QA', 'Parse Brief', 'Parse Analysis', 'Brief Context', 'Publish Check'):   # Brief Context: D5 (2026-10-21) drops the verdict's skipped topics from the subtopics; Publish Check: leftover brackets on the live page (2026-10-23)
     setcode(_n130, _kit130(code(_n130)))
     assert not any(('/*__%s__*/' % _m) in code(_n130) for _m in ('PLACEHOLDERS', 'CLAIMS', 'EXCLUSIONS', 'OUTBOUND', 'FIT_GATE')), _n130 + ': a kit placeholder is left (section 130)'
 assert 'const PH = (() =>' in code('Content QA') and 'const CL = (() =>' in code('Content QA') and 'const EXC = (() =>' in code('Content QA') and 'const fitLabels' in code('Content QA'), 'A-13 / A-15 / A-16 / A-18: a kit is missing from Content QA'
 assert 'PH.scan(finalBody)' in code('Content QA') and 'PH_RE' not in code('Content QA'), 'A-13: Content QA still counts brackets with its own pattern'
+assert 'const PH = (() =>' in code('Publish Check') and 'PH.scan(mainText)' in code('Publish Check'), '2026-10-23: the live-page check does not read leftover brackets with the shared detector'
 # A-13: the app's copy of the two patterns (article view + delivery rule) is the engine's, character for character
 _ph_ts130 = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'app', 'shared', 'src', 'placeholders.ts')
 if os.path.exists(_ph_ts130):
