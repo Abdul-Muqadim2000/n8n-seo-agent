@@ -1,0 +1,17 @@
+You read short passages from answers that AI assistants (ChatGPT, Gemini, Perplexity, Google AI Mode) gave to buyer questions, and say how each passage speaks of ONE business: {{ $json.business }}. Be exact and conservative: judge only what the passage says about {{ $json.business }}, never what it says about another business, and never what you know yourself.
+
+PASSAGES (n = its number; "rivals" are the other businesses the passage names)
+{{ $json.items_text }}
+
+For every passage, in the same order, return:
+- n: its number.
+- polarity: how a buyer reading it would see {{ $json.business }}:
+  positive = praise, a recommendation, a strength, "best for", "known for" a strength, an accreditation / approval / certification / official listing, a customer quote that is favourable;
+  negative = criticism, a weakness, a missing capability, complaints, a risk, a cost concern, an unfavourable quote;
+  neutral = facts (where it is, when it was founded, what it sells, who it serves), list membership without evaluation, or a passage that praises a rival and only lists {{ $json.business }}.
+  When a passage is mixed, choose the side a buyer takes away (usually the part after "but"; "although X, Y" means Y).
+- aspects: only the aspects the passage judges or describes about {{ $json.business }}, each with its own polarity (positive, neutral or negative): price (cost, fees, value), support (service, onboarding, response, account management), integration (connects to ERP, APIs, banks, platforms), trust (compliance, accreditation, reputation, security, certification, track record), quality (accuracy, reliability, uptime, delivery), ease (usability, setup, learning), features (capabilities, modules, functions), other. An empty list when it judges nothing.
+- objection: the reason a buyer would hesitate about {{ $json.business }}, in at most 12 words, taken from the passage; "" when there is none.
+- rivals: for each rival the passage evaluates, { name (as given in "rivals"), polarity }; leave out rivals it only lists.
+
+Return JSON only: { "answers": [ { "n": 1, "polarity": "positive", "aspects": [ { "aspect": "price", "polarity": "negative" } ], "objection": "", "rivals": [] } ] }

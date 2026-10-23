@@ -92,26 +92,46 @@ const SENT = (() => {
       const rv = (Array.isArray(x.rivals) ? x.rivals : []).map(r => ({ name: String((r && r.name) || '').trim(), polarity: String((r && r.polarity) || '').toLowerCase() })).filter(r => r.name && POL.includes(r.polarity));
       res.set(it.key, { polarity: pol, aspects, objection: String(x.objection || '').trim().slice(0, 140), rivals: rv }); }
     return res; };
-  /** the jobs for the Sentiment Reader: every named answer, 20 to a job, at most `max_jobs` jobs (the rest are read by the rules, and said) */
+  // The rule reader on the labelled set (harness W2E2-SENT recomputes these and fails when they differ): built on the T cases, it read the first
+  // blind hold-out (H) at kappa 0.587 and, improved on H, the second blind hold-out (K, 80 cases, read once) at 0.548 - below the 0.7 bar. So the
+  // rules never make a published figure: only the model's labels count, the rules are a second opinion. The model's own kappa needs a key
+  // (accuracy/eval_sentiment_model.js) and is not measured yet: `model: null` until it is, and the report says "not yet validated".
+  const KAPPA = { rules_blind_holdout: 0.548, rules_blind_n: 80, rules_all: 0.827, rules_all_n: 256, parser: 1, model: null, gate: 0.7,
+    note: 'Polarity agreement with a hand-labelled set (Cohen\'s kappa). The rule reader is below the 0.7 bar on blind cases, so it never makes the figure; the model\'s agreement is not measured yet.' };
+  const tb = (v) => v === true || String(v) === 'true';
+  /** this run's answers that NAME the business, with the text the reader gets: the sentences about it (answer_text when stored, else the excerpt) */
+  const namedAnswers = (rows, o) => { const opt = o || {}; const biz = opt.business || ''; const out = []; const seen = new Set();
+    for (const r of (rows || [])) { if (!r || !tb(r.answered) || r.kind === 'brand' || r.error) continue; if (!(opt.named ? opt.named(r) : tb(r.named))) continue;
+      const key = String(r.run_id || '') + '|' + String(r.prompt_id) + '|' + String(r.engine); if (seen.has(key)) continue; seen.add(key);
+      let ents = []; try { ents = Array.isArray(r.entities) ? r.entities : JSON.parse(r.entities_json || '[]'); } catch (e) { ents = []; }
+      const rivals = (Array.isArray(ents) ? ents : []).filter(e => e && String(e.role) === 'competitor').map(e => ({ id: String(e.id || e.name || ''), name: String(e.name || e.id || '') })).filter(e => e.name).slice(0, 8);
+      const text = String(r._text || r.answer_text || r.excerpt || '');   // the parser's full text in memory, else W2-E1's stored answer_text, else the excerpt
+      if (!text.trim()) continue;
+      out.push({ key, prompt_id: String(r.prompt_id), engine: String(r.engine), prompt: r.prompt || '', snippet: snippet(text, biz, rivals.map(x => x.name)), rival_names: rivals.map(x => x.name), rivals }); }
+    return out; };
+  /** the jobs for the Sentiment Reader: every named answer, 20 to a job, at most `max_jobs` jobs (the rest are not read, and the report says how many) */
   const jobsOf = (answers, o) => { const opt = o || {}; const per = opt.per || 20, maxJ = opt.max_jobs == null ? 40 : opt.max_jobs; const A = answers || [];
     const jobs = []; for (let i = 0; i < A.length && jobs.length < maxJ; i += per) jobs.push(A.slice(i, i + per).map((a, j) => ({ n: j + 1, key: a.key, engine: a.engine, question: String(a.prompt || '').slice(0, 200), text: a.snippet, rivals: (a.rival_names || []).slice(0, 8) })));
-    return { jobs, read_by_model: jobs.reduce((s, j) => s + j.length, 0), left_to_rules: Math.max(0, A.length - jobs.reduce((s, j) => s + j.length, 0)) }; };
-  /** sentiment_json from the labels of this run's named answers. labels: [{ key, prompt_id, engine, polarity, aspects, objection, rivals, by: 'model' | 'rules', rules_polarity }] */
-  const aggregate = (labels, o) => { const opt = o || {}; const L = labels || []; const n = L.length; const kappaInfo = opt.kappa || null;
+    const sent = jobs.reduce((s, j) => s + j.length, 0); return { jobs, sent, not_sent: Math.max(0, A.length - sent) }; };
+  /** sentiment_json. answers: namedAnswers(); model: Map key -> the model's label (parseModel over every job). Only the model's labels are counted. */
+  const aggregate = (answers, model, o) => { const opt = o || {}; const A = answers || []; const M = model || new Map();
+    const L = A.map(a => { const m = M.get(a.key); const r0 = rules(a.snippet, opt.business || '', a.rival_names || []); return m ? { ...a, ...m, by: 'model', rules_polarity: r0.polarity, rivals: (m.rivals || []).map(x => ({ ...x, id: ((a.rivals || []).find(y => y.name.toLowerCase() === x.name.toLowerCase()) || {}).id || x.name })) } : { ...a, by: 'none', rules_polarity: r0.polarity }; });
+    const R = L.filter(l => l.by === 'model'); const n = R.length; const unread = L.length - n;
     const sc = (p) => p === 'positive' ? 1 : p === 'negative' ? -1 : 0;
-    const by = { positive: L.filter(l => l.polarity === 'positive').length, neutral: L.filter(l => l.polarity === 'neutral').length, negative: L.filter(l => l.polarity === 'negative').length };
-    const base = { n, positive: by.positive, neutral: by.neutral, negative: by.negative, min: MIN, method: opt.method || 'Claude Haiku per answer naming the business; the rule reader where the model did not answer',
-      read_by: { model: L.filter(l => l.by === 'model').length, rules: L.filter(l => l.by === 'rules').length }, kappa: kappaInfo };
-    const agree = L.filter(l => l.by === 'model' && l.rules_polarity); base.model_vs_rules = agree.length ? { n: agree.length, agreement: Math.round(1000 * agree.filter(l => l.rules_polarity === l.polarity).length / agree.length) / 10, kappa: kappa(agree.map(l => [l.polarity, l.rules_polarity])) } : null;
-    if (n < MIN) return { ...base, net: null, net_lo: null, net_hi: null, withheld: true, by_aspect: [], by_rival: [], objections: [], note: n ? 'Sentiment is withheld: ' + n + ' answer' + (n === 1 ? '' : 's') + ' named you, and a figure needs ' + MIN + '.' : 'No answer named you, so there is no sentiment to read.' };
-    const r = AVX.ratio(L, (l) => [sc(l.polarity), 1], { scale: 100, lo0: -1, hi0: 1 });
-    const aspects = ASPECTS.map(a => { const xs = L.map(l => (l.aspects || []).find(x => x.aspect === a)).filter(Boolean); const pos = xs.filter(x => x.polarity === 'positive').length, neg = xs.filter(x => x.polarity === 'negative').length;
+    const base = { n, named_answers: L.length, unread, positive: R.filter(l => l.polarity === 'positive').length, neutral: R.filter(l => l.polarity === 'neutral').length, negative: R.filter(l => l.polarity === 'negative').length, min: MIN,
+      method: 'Claude Haiku reads every answer that names you (20 to a call); a rule reader gives a second opinion and never makes the figure', kappa: { ...KAPPA }, validated: KAPPA.model != null && KAPPA.model >= KAPPA.gate,
+      model_vs_rules: R.length ? { n: R.length, agreement: Math.round(1000 * R.filter(l => l.rules_polarity === l.polarity).length / R.length) / 10, kappa: kappa(R.map(l => [l.polarity, l.rules_polarity])) } : null,
+      unread_note: unread ? unread + ' of the ' + L.length + ' answers that name you were not read by the model (' + (opt.unread_why || 'it did not answer for them') + '); they are not counted.' : '' };
+    if (n < MIN) return { ...base, net: null, net_lo: null, net_hi: null, withheld: true, by_aspect: [], by_rival: [], objections: [], note: L.length ? 'Sentiment is withheld: ' + n + ' answer' + (n === 1 ? ' was' : 's were') + ' read, and a figure needs ' + MIN + '.' : 'No answer named you, so there is no sentiment to read.' };
+    const r = AVX.ratio(R, (l) => [sc(l.polarity), 1], { scale: 100, lo0: -1, hi0: 1 });
+    const aspects = ASPECTS.map(a => { const xs = R.map(l => (l.aspects || []).find(x => x.aspect === a)).filter(Boolean); const pos = xs.filter(x => x.polarity === 'positive').length, neg = xs.filter(x => x.polarity === 'negative').length;
       return { aspect: a, pos, neg, neu: xs.length - pos - neg, n: xs.length, net: xs.length >= MIN ? Math.round(100 * (pos - neg) / xs.length) : null }; }).filter(x => x.n);
-    const rv = new Map(); for (const l of L) for (const x of (l.rivals || [])) { const k = String(x.id || x.name).toLowerCase(); const s = rv.get(k) || { id: x.id || x.name, pos: 0, neg: 0, n: 0 }; s.n++; if (x.polarity === 'positive') s.pos++; if (x.polarity === 'negative') s.neg++; rv.set(k, s); }
-    const objMap = new Map(); for (const l of L) { const t = String(l.objection || '').trim(); if (!t) continue; const k = t.toLowerCase().replace(/[^a-z0-9 ]+/g, '').slice(0, 60); const s = objMap.get(k) || { text: t, n: 0, engines: new Set() }; s.n++; s.engines.add(l.engine); objMap.set(k, s); }
+    const rv = new Map(); for (const l of R) for (const x of (l.rivals || [])) { const k = String(x.id || x.name).toLowerCase(); const s0 = rv.get(k) || { id: x.id || x.name, pos: 0, neg: 0, n: 0 }; s0.n++; if (x.polarity === 'positive') s0.pos++; if (x.polarity === 'negative') s0.neg++; rv.set(k, s0); }
+    const objMap = new Map(); for (const l of R) { const t = String(l.objection || '').trim(); if (!t) continue; const k = t.toLowerCase().replace(/[^a-z0-9 ]+/g, '').slice(0, 60); const s0 = objMap.get(k) || { text: t, n: 0, engines: new Set() }; s0.n++; s0.engines.add(l.engine); objMap.set(k, s0); }
     return { ...base, withheld: false, net: r.value == null ? null : Math.round(r.value), net_lo: r.lo == null ? null : Math.round(r.lo), net_hi: r.hi == null ? null : Math.round(r.hi), n_questions: r.n_questions,
-      by_aspect: aspects.sort((a, b) => b.n - a.n), by_rival: [...rv.values()].sort((a, b) => b.n - a.n).slice(0, 10).map(s => ({ id: s.id, n: s.n, net: s.n >= MIN ? Math.round(100 * (s.pos - s.neg) / s.n) : null })),
-      objections: [...objMap.values()].sort((a, b) => b.n - a.n).slice(0, 8).map(s => ({ text: s.text, n: s.n, engines: [...s.engines] })),
-      note: 'Net sentiment ' + (r.value >= 0 ? '+' : '') + Math.round(r.value) + ' (positive minus negative, per 100 answers that name you; 95% range ' + (r.lo == null ? 'not measurable' : Math.round(r.lo) + ' to ' + Math.round(r.hi)) + ', ' + n + ' answers to ' + r.n_questions + ' questions). Compare it only within one market and language.' }; };
-  return { ASPECTS, POL, MIN, rules, snippet, clausesOf, kappa, parseModel, jobsOf, aggregate, nameRe };
+      by_aspect: aspects.sort((a, b) => b.n - a.n), by_rival: [...rv.values()].sort((a, b) => b.n - a.n).slice(0, 10).map(s0 => ({ id: s0.id, n: s0.n, net: s0.n >= MIN ? Math.round(100 * (s0.pos - s0.neg) / s0.n) : null })),
+      objections: [...objMap.values()].sort((a, b) => b.n - a.n).slice(0, 8).map(s0 => ({ text: s0.text, n: s0.n, engines: [...s0.engines] })),
+      note: 'Net sentiment ' + (r.value >= 0 ? '+' : '') + Math.round(r.value) + ' (positive minus negative, per 100 answers that name you; 95% range ' + (r.lo == null ? 'not measurable' : Math.round(r.lo) + ' to ' + Math.round(r.hi)) + ', ' + n + ' answers to ' + r.n_questions + ' questions). Compare it only within one market and language.'
+        + (KAPPA.model == null ? ' The model\'s labels are not yet validated against a hand-labelled set.' : '') }; };
+  return { ASPECTS, POL, MIN, KAPPA, rules, snippet, clausesOf, kappa, parseModel, namedAnswers, jobsOf, aggregate, nameRe };
 })();
