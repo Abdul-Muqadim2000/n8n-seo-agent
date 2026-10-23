@@ -455,6 +455,12 @@ A.node('Prune Old Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWE
 from ladder_common import dt_update_where_params as _dt_update_where_w2e1
 A.node('Trim Old Answer Text', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_ANSWERS_TABLE, AI_ANSWERS_COLS, [('site_id', 'like', SITE_SCOPE), ('run_kind', 'neq', 'pulse'), ('checked_at', 'lt', SINCE(35)), ('checked_at', 'gte', SINCE(49))],
        {'answer_text': '', 'retrieved_json': ''}), at(19, 4), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+# W2-FIX (2026-10-23, fixes/W2-FIX.md item 3; W2-E2 open item 5): each weekly row stores `units_json`, its answers one by one (~145 KB a week at 500
+# questions x 9 engines), and seo_ai_visibility keeps its rows for good. The record is read only for the 28-day window and an action's 28 days before /
+# after (actions of the last 31 days: 59 days back), and the tracker loads 60 days of rows; so it is blanked on this site's rows aged 70-120 days
+# (a missed week is caught for seven more weeks). Every other column of the row (its figures, segments, panel) is kept.
+A.node('Trim Old Units', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_VIS_TABLE, AI_VIS_COLS, [('site_id', 'like', SITE_SCOPE), ('checked_at', 'lt', SINCE(70)), ('checked_at', 'gte', SINCE(120))],
+       {'units_json': ''}), at(19, 5), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
 A.code('AI Brief Input', 'AI_Brief_Input.js', at(20, 3))
 A.agent('AI Brief', 'ai_brief.txt', {'type': 'object', 'properties': {'headline': {'type': 'string'}, 'summary': {'type': 'string'}, 'actions': {'type': 'array', 'items': {'type': 'object', 'properties': {'priority': {'type': 'number'}, 'action': {'type': 'string'}, 'why': {'type': 'string'}}, 'required': ['action']}}, 'watch': ARR}, 'required': ['headline', 'summary', 'actions']}, at(21, 3))
 A.code('AI Report', 'AI_Report.js', at(22, 3)); A.pdf_chain('AI', at(23, 3))
@@ -502,7 +508,7 @@ A.node('Update AI Visibility (Extras)', DT_TYPE, DT_VERSION, _dt_update_auto(AI_
 A.code('Extras Cache Rows', "// W2-E3: the results pages the fan-out check read now (seo_cache `serp:`, exact columns), so every path of this site reads them for nothing today.\nconst rows = $('AI Extras').all().flatMap(i => (i.json || {}).cache_rows || []);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(26, 5))
 A.iff('Any Extras Cache?', '{{ !$json.skip }}', at(26, 6))
 A.node('Save Extras Cache', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(27, 6), onError='continueRegularOutput', alwaysOutputData=True)
-A.chain('Prune Old Answers', 'Trim Old Answer Text', 'Prompt State Rows', 'Any Prompt State?'); A.link('Any Prompt State?', 'Save Prompt State', 0); A.link('Any Prompt State?', 'AI Extra Requests', 1); A.link('Save Prompt State', 'AI Extra Requests')
+A.chain('Prune Old Answers', 'Trim Old Answer Text', 'Trim Old Units', 'Prompt State Rows', 'Any Prompt State?'); A.link('Any Prompt State?', 'Save Prompt State', 0); A.link('Any Prompt State?', 'AI Extra Requests', 1); A.link('Save Prompt State', 'AI Extra Requests')
 A.chain('AI Extra Requests', 'Any AI Extra Requests?'); A.link('Any AI Extra Requests?', 'Run AI Extra Requests', 0); A.link('Any AI Extra Requests?', 'AI Extras', 1); A.link('Run AI Extra Requests', 'AI Extras')
 A.chain('AI Extras', 'Extras Vis Rows', 'Any Extras Vis?'); A.link('Any Extras Vis?', 'Update AI Visibility (Extras)', 0); A.link('Any Extras Vis?', 'Extras Cache Rows', 1); A.link('Update AI Visibility (Extras)', 'Extras Cache Rows')
 A.chain('Extras Cache Rows', 'Any Extras Cache?'); A.link('Any Extras Cache?', 'Save Extras Cache', 0); A.link('Any Extras Cache?', 'AI Brief Input', 1); A.link('Save Extras Cache', 'AI Brief Input')
@@ -588,7 +594,7 @@ Shares *AI Requests* and *Parse AI Answers* with the weekly tracker (same node n
 Q.write('SEO_Agent_AI_Pulse.json')
 # W2-E1 (2026-10-23): the two text-trim nodes as generated (filters, values, what follows them), for harness scenarios_w2e1.js (W2E1-7)
 _w2e1 = {}
-for _f, _nm in [('SEO_Agent_AI_Visibility.json', 'Trim Old Answer Text'), ('SEO_Agent_AI_Pulse.json', 'Trim Pulse Answer Text')]:
+for _f, _nm in [('SEO_Agent_AI_Visibility.json', 'Trim Old Answer Text'), ('SEO_Agent_AI_Pulse.json', 'Trim Pulse Answer Text'), ('SEO_Agent_AI_Visibility.json', 'Trim Old Units')]:   # W2-FIX: + the units_json trim
     _wf = json.load(open(os.path.join(OUT, _f))); _wf = _wf[0] if isinstance(_wf, list) else _wf
     _n = next(n for n in _wf['nodes'] if n['name'] == _nm)
     _w2e1[_nm] = {'operation': _n['parameters'].get('operation'), 'filters': _n['parameters'].get('filters'), 'values': (_n['parameters'].get('columns') or {}).get('value'), 'executeOnce': _n.get('executeOnce'), 'onError': _n.get('onError'),
@@ -989,6 +995,27 @@ LA.chain('Respond LB Accepted', 'LB Payload', 'Start Link Builder')
 LA.sticky("""## SEO Agent — Link Builder API (v4.13)
 `POST /webhook/seo-link-builder` (header X-API-Key, credential **SEO API Key**): `{ domain | site_id, free_only?, callback_url?, request_id? }` → 202 at once; starts **SEO Agent — Link Builder** (`SEOagentLinkBld1`) through its Manual Run; the report arrives through the callback (stage `link_builder`).""", [-40, -300], 700, 160, 6)
 LA.write('SEO_Agent_Link_Builder_API.json')
+
+# =============================================================================
+# 5b2. AI PILOT API (W2-FIX, 2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-FIX.md item 2; W2-E2 open item 2): the web app's "Repeat pilot" on
+#      the AI visibility page. Built like the Link Builder API: answered at once (202), then the pilot (SEOagentAIPilot1) starts as its own execution
+#      through its Manual Run. Without `confirm: true` the pilot prices itself (callback stage ai_pilot_quote) and asks nothing; the app shows that
+#      price and sends `confirm: true` only on the owner's explicit confirmation. Nothing schedules it.
+# =============================================================================
+PA = WF('SEOagentAIPilAPI', 'SEO Agent — AI Pilot API', 'aipilapi', 120)
+PA.node('AI Pilot API', 'n8n-nodes-base.webhook', 2, {'httpMethod': 'POST', 'path': 'seo-ai-pilot', 'authentication': 'headerAuth', 'responseMode': 'responseNode', 'options': {}}, at(0, 4), webhookId=str(uuid.uuid5(NS, 'aipilapi:webhook')), credentials=API_KEY_CRED)
+PA.code('Pilot API Validate', 'Pilot_API_Validate.js', at(1, 4)); PA.iff('Pilot API OK?', '{{ $json.ok }}', at(2, 4))
+PA.node('Respond Pilot Accepted', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: true, status: 'accepted', stage: $json.confirm ? 'ai_pilot_started' : 'ai_pilot_quote_started', request_id: $json.request_id, domain: $json.domain, confirm: $json.confirm }) }}", 'options': {'responseCode': 202}}, at(3, 3))
+PA.code('Pilot Payload', "// The pilot's input (its Manual Run): only the fields it reads. `confirm` is true only when the caller sent the literal true.\nconst v = $('Pilot API Validate').first().json;\nreturn [{ json: { domain: v.domain, site_id: v.site_id, confirm: v.confirm === true, callback_url: v.callback_url, email: '', request_id: v.request_id } }];", at(4, 3))
+PA.node('Start AI Pilot', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentAIPilot1'}, 'mode': 'once', 'options': {'waitForSubWorkflow': False}}, at(5, 3))
+PA.node('Respond Pilot Bad Request', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': '={{ JSON.stringify({ ok: false, error: $json.error }) }}', 'options': {'responseCode': 400}}, at(3, 5))
+# answer first, then start the run (a sub-workflow started before the webhook answered ran no node, live 2026-10-11)
+PA.chain('AI Pilot API', 'Pilot API Validate', 'Pilot API OK?'); PA.link('Pilot API OK?', 'Respond Pilot Accepted', 0); PA.link('Pilot API OK?', 'Respond Pilot Bad Request', 1)
+PA.chain('Respond Pilot Accepted', 'Pilot Payload', 'Start AI Pilot')
+assert not any(n['type'] == 'n8n-nodes-base.scheduleTrigger' for n in PA.N), 'W2-FIX: the pilot API must never be scheduled'
+PA.sticky("""## SEO Agent — AI Pilot API (W2-FIX)
+`POST /webhook/seo-ai-pilot` (header X-API-Key, credential **SEO API Key**): `{ domain | site_id, confirm?, callback_url?, request_id? }` -> 202 at once; starts **SEO Agent — AI Repeat Pilot** (`SEOagentAIPilot1`) through its Manual Run. Without `confirm: true` the pilot answers with its price (callback stage `ai_pilot_quote`) and asks nothing; with it, it runs once (at most $4) and reports through stage `ai_pilot`. On demand only, never scheduled.""", [-40, -300], 700, 160, 6)
+PA.write('SEO_Agent_AI_Pilot_API.json')
 
 # =============================================================================
 # 5c. SITE KICKOFF (2026-10-19; rewritten the same day for the per-website cycle, SCHEDULING_KEYWORDS_PLAN.md §4.7 / §14.3): the web app

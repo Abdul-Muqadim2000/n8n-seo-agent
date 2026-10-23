@@ -12412,6 +12412,34 @@ retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 log('The promise check in two stages (CT-FIX2, 2026-10-22): Promise Candidates lists the sentences in the business\'s name with a wide net (captions, phases on file, list items), Promise Judge (Claude Haiku, one call a QA round, measured usage in the ledger) judges each against its closest facts, Content QA applies the verdicts and falls back to the rules with "checked by rules only"; round N-1\'s reworded promise marks stay promises; the length band of the page type is used; generic citation anchors are re-attached only in their own sentence; inbound anchors avoid the ladder\'s other searches; the Word report has one slug and no dashes, arrows or "..."')
 
 # =============================================================================
+# 149. THE FRONT DOOR RESERVES THE WEBSITE'S WHOLE AI PANEL, AND "TRACK MY SITE" KEEPS THE OWNER'S AI OPTIONS (W2-FIX, 2026-10-23,
+#      docs/ai-visibility-2026-10-23/fixes/W2-FIX.md items 4 and 5)
+#      * An on-demand AI visibility check reserved the flat `ai_visibility` row (about $0.95 of search data) on the front door's row while the
+#        tracker it starts asks, and reserves, the website's whole panel: a 200-question panel's full run is about $10.68, a 500-question one
+#        far more. The day's search-data budget and the account floor in Rate Limit therefore admitted a run they would have refused, and only
+#        the tracker's own gate (which checks the account, not the day's budget) stood behind it. The web app now sends its quote of that
+#        panel (`panel_quote`: aiOnDemandRunCost, the engine's AIP.cost formula) and Normalize Input carries it as panel_quote_dfs_usd /
+#        panel_quote_ai_usd / panel_quote_panel; CC.pick (v5/code/_cost_cal.js) reserves the larger of the table and the quote, capped at
+#        $150. Nothing else changes: the parent row still settles $0 as handed off (R81), the tracker reserves its own row.
+#      * Normalize Input passed only the older monitor keys into `monitor_input`, so the W2-E3 options (Claude weekly, the pulse's engines, the
+#        persona test, the fan-out check, the monthly market trend) sent with "Track my site" were dropped before Monitor Row (Track).
+# =============================================================================
+patch('Normalize Input', "const topics = asArray(p2.topics || lab('Main services or products (optional)'))", r"""// W2-FIX (2026-10-23, section 149): the owner's W2-E3 AI options reach "Track my site" too (only Site Admin `monitors` could set them before)
+for (const k of ['ai_claude_weekly', 'ai_persona_context', 'ai_demand_market']) if (MI[k] !== undefined && MI[k] !== null && MI[k] !== '') monitor_input[k] = MI[k] === true || /^(true|1|yes|on)$/i.test(String(MI[k]));
+if (MI.ai_pulse_engines !== undefined && MI.ai_pulse_engines !== null) monitor_input.ai_pulse_engines = asArray(MI.ai_pulse_engines).map(e => String(e).toLowerCase().trim().replace(/[\s-]+/g, '_')).filter(e => ['chatgpt', 'gemini', 'ai_mode', 'copilot', 'perplexity', 'ai_overview'].includes(e)).join(', ');
+if (MI.ai_fanout_check !== undefined && MI.ai_fanout_check !== null && MI.ai_fanout_check !== '') monitor_input.ai_fanout_check = Math.min(200, Math.max(0, parseInt(MI.ai_fanout_check, 10) || 0));
+// W2-FIX (section 149): the web app's quote of the website's whole AI panel (an on-demand AI visibility check), so the front door reserves it
+const __PQ = (p2.panel_quote && typeof p2.panel_quote === 'object') ? p2.panel_quote : {};
+const __pq = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(150, +n.toFixed(4)) : 0; };
+const panel_quote_dfs_usd = mode === 'ai_visibility' ? __pq(__PQ.dfs_usd) : 0, panel_quote_ai_usd = mode === 'ai_visibility' ? __pq(__PQ.ai_usd) : 0;
+const panel_quote_panel = mode === 'ai_visibility' && Number(__PQ.panel) > 0 ? Math.min(500, Math.round(Number(__PQ.panel))) : 0;
+const topics = asArray(p2.topics || lab('Main services or products (optional)'))""")
+patch('Normalize Input', "    monitor_input,\n    topics,", "    monitor_input,\n    panel_quote_dfs_usd, panel_quote_ai_usd, panel_quote_panel,\n    topics,")
+assert "if (q > usd) { quoted = Math.min(q, PANEL_QUOTE_MAX)" in code('Rate Limit') and "if (q > usd) { quoted = Math.min(q, PANEL_QUOTE_MAX)" in code('Run Ledger Row'), \
+    'W2-FIX: the front door does not reserve the panel quote (CC.pick in Rate Limit / Run Ledger Row)'
+log('The front door reserves the website\'s whole AI panel (W2-FIX, 2026-10-23): the app sends its quote of an on-demand AI visibility check (panel_quote), Normalize Input carries it, CC.pick reserves the larger of the table and the quote (at most $150) in Rate Limit and Run Ledger Row; "Track my site" keeps the owner\'s W2-E3 AI options')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;
