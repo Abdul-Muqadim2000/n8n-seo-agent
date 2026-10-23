@@ -1087,7 +1087,7 @@ await guard('ai visibility', async () => {
     'run_kind', 'samples', 'visibility_score', 'mention_lo', 'mention_hi', 'sentiment_score', 'accuracy_issues', 'ai_sessions', 'ai_conversions', 'ai_revenue', 'index_sov', 'ai_impressions', 'perception_json', 'traffic_json', 'access_json', 'index_json', 'clusters_json', 'rival_sources_json',
     'segments_json', 'panel_json', 'chunks',   // G6 (2026-10-18): the segments, the panel asked, the executions a run took
     'rule_version', 'named_rate', 'avg_position', 'first_rate', 'pos_visibility', 'rate_period', 'compare_json', 'metrics_json'];   // F1b (2026-10-23)
-  const PRC =['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at', 'persona', 'market', 'pinned', 'fit_note'];   // G6: + persona, market, pinned, fit_note
+  const PRC =['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at', 'persona', 'market', 'pinned', 'fit_note', 'keyword_source'];   // G6: + persona, market, pinned, fit_note; F2 (E9): + keyword_source
   const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note',
     'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];   // v4.10 columns kept by the AI tracker since v4.12; drafted_at since P34-1
   const CACHE = ['key', 'kind', 'site_id', 'value', 'updated_at'];
@@ -18541,6 +18541,8 @@ await require('./scenarios_fa3')({ H, run, mock, store, guard, reset, begin });
 await require('./scenarios_g6')({ H, run, mock, store, guard, reset, begin });
 // F1b (2026-10-23, docs/ai-visibility-2026-10-23/fixes/F1b.md): the numbers - named vs cited, one share of voice, compare_json, the place in the answers, the pulse window
 await require('./scenarios_f1b')({ H, run, mock, store, guard, reset, begin });
+// F2 (2026-10-23): AI visibility run robustness, money safety, ids and load (harness/scenarios_f2.js; docs/ai-visibility-2026-10-23/fixes/F2.md)
+await require('./scenarios_f2')({ H, run, mock, store, guard, reset, begin });
 await require('./scenarios_cycle_semantics')({ H, run, mock, store, guard, reset, begin });   // 2026-10-19: the cycle run (trigger: 'cycle'), SCHEDULING_KEYWORDS_PLAN.md §4.5
 await require('./scenarios_keyword_first')({ H, run, mock, store, guard, reset, begin });   // keyword-first autopilot (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5 / §9 KF)
 

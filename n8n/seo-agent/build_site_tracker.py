@@ -69,10 +69,11 @@ RANK_SERP_SRC = _rdt('code/_rank_serp.js').rstrip('\n')      # G6 (FIX_PLAN 2026
 PAGE_WATCH_SRC = _rdt('code/_page_watch.js').rstrip('\n')    # G11 + G25 (FIX_PLAN 2026-10-13): the daily key-page watch and URL Inspection within Google's quota
 WAITING_SRC = _rdt('code/_waiting.js').rstrip('\n')          # F-A1 / A-12 (2026-10-17): the pile-up count and the ladders being written, one rule shared with the ladder mode
 READINESS_SRC = _rdt('code/_readiness.js').rstrip('\n')     # P1 (2026-10-20): author profile + business facts before a written page, one rule with Ladder Plan and the app
+AI_PANEL_SRC = _rdt('code/_ai_panel.js').rstrip('\n')     # F2 (2026-10-23): the question ids and search phrases of the AI panel (AIP.promptId / keywordOf), one rule with the Prompt Writer's path
 FIT_GATE_SRC = _rdt('code/_fit_gate.js').rstrip('\n')        # R16 (build_v4.py section 53): the fit gate, also over the rungs stored before it existed (fitStored)
 rd = lambda p: (seo_events.inline(_rdt(p)).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
                 .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC)
-                .replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__WAITING__*/', WAITING_SRC).replace('/*__READINESS__*/', READINESS_SRC)
+                .replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__AI_PANEL__*/', AI_PANEL_SRC).replace('/*__WAITING__*/', WAITING_SRC).replace('/*__READINESS__*/', READINESS_SRC)
                 .replace('/*__SITE_TIME__*/', site_time_src()).replace('/*__GONE__*/', _rdt('code/_gone.js').rstrip('\n')))   # RV-1 (2026-10-21): the pages that no longer answer, one message   # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the website's calendar and the cycle run (ST)
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'sitetracker:' + name))
@@ -439,7 +440,8 @@ N.append(code('Prospect Rows (Admin)', rd('code/Prospect_Rows_Admin.js'), [1000,
 N.append(node('Set Prospects', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PROSPECT_TABLE, PROSPECT_COLS, ['site_id', 'prospect_domain', 'type']), [1240, 560], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(node('Load AI Prompts (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(AI_PROMPTS_TABLE, 'site_id', 'eq', '={{ $json.site_id }}'), [760, 720], **ALOAD))
 N.append(code('AI Prompt Rows (Admin)', rd('code/AI_Prompt_Rows_Admin.js'), [1000, 720]))
-N.append(node('Set AI Prompts', DT_TYPE, DT_VERSION, dt_upsert_params(AI_PROMPTS_TABLE, AI_PROMPTS_COLS, 'prompt_id'), [1240, 720], alwaysOutputData=True, onError='continueRegularOutput'))
+N.append(node('Set AI Prompts', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_PROMPTS_TABLE, AI_PROMPTS_COLS, ['site_id', 'prompt_id']),   # F2 (E15): a question id is unique per site, never across sites
+ [1240, 720], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(switch('Admin Route', [('delete', "{{ $json.action === 'delete' }}"), ('status', "{{ $json.action === 'pause' || $json.action === 'resume' }}"), ('cadence', "{{ $json.action === 'cadence' }}"), ('unpublish', "{{ $json.action === 'unpublish' }}"), ('monitors', "{{ $json.action === 'monitors' }}"), ('prospect', "{{ $json.action === 'prospect' }}"), ('ai_prompts', "{{ $json.action === 'ai_prompts' }}"), ('content_groups', "{{ $json.action === 'content_groups' }}"), ('facts', "{{ $json.action === 'facts' }}")], [480, 0]))
 # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §7): a deleted website takes its cycle with it (seo_cycles + seo_cycle_jobs), deleted BEFORE the
 # site row so Admin Result still counts the site rows; every delete reads the site id from Admin Action and runs once. A domain that still

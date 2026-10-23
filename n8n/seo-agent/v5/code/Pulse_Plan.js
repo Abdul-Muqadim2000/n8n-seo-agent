@@ -37,7 +37,8 @@ const partNo = part ? Math.max(2, Number(part.part) || 2) : 1;
 const after = part ? String(part.after || '') : '';
 if (!sites.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the daily AI pulse is off for every site (or AI visibility is off)' : 'no sites yet') } }];
 const promptRows = rowsOf('Load AI Prompts'), visRows = rowsOf('Load AI Visibility'), daily = rowsOf('Load AI Daily'), cache = rowsOf('Load Cache (AI)');
-const cycleRows = rowsOf('Load Cycles');   // 2026-10-19: each website's cycle weekday and time zone
+const cycleRows = rowsOf('Load Cycles');
+const ladderRows = rowsOf('Load Ladders');   // F2 (E18): the ladder heads protect the same subjects as on the weekly run   // 2026-10-19: each website's cycle weekday and time zone
 const cycleDay = [];                       // the websites skipped this morning because it is their cycle day, with the reason
 // the skip is the SCHEDULE's rule: a morning the daily cron (or the catch-up replaying it) started. A start by hand - on demand for one site,
 // or a test over every site - asks what it was asked to, whatever the day.
@@ -66,8 +67,12 @@ for (const s of todo) {
   const prevQ = visRows.filter(v => v.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
   const rivals0 = prevQ ? (parse(prevQ.competitors_json, []) || []).filter(c => c && c.domain && c.auto && (c.mentions || 0) >= 2 && /\./.test(c.domain)).map(c => c.domain) : [];
   const aliasRow0 = cache.find(c => c.key === 'ai_brands:' + s.site_id);
-  const fitCtx = FITR.ctx({ own_domain: s.domain, competitors: [...s.settings.competitors, ...rivals0], brands: aliasRow0 ? parse(aliasRow0.value, {}) : {},
-    heads: storedQ.map(p => p.topic || ''), keywords: s.keywords || [] });
+  // F2 (2026-10-23, ENGINE_AUDIT.md E18): the SAME gate input the weekly AI Plan builds (AIP.fitInput: the ladder heads, the site's services,
+  // its keywords) — it used to protect the questions' own topics and no services here, so one question could be refused on one path and
+  // asked on the other
+  const fit_input = AIP.fitInput({ domain: s.domain, competitors: [...s.settings.competitors, ...rivals0], aliases: aliasRow0 ? parse(aliasRow0.value, {}) : {},
+    ladders: ladderRows.filter(l => normD(l.domain) === s.domain), services: AIP.servicesOfRow(s), keywords: s.keywords || [] });
+  const fitCtx = FITR.ctx(fit_input);
   const fitQ = FITR.rungs(storedQ, fitCtx, { where: 'daily AI pulse', keyword: (p) => p.keyword || p.topic || '', live: (p) => p.source === 'custom' });
   const set_aside = fitQ.set_aside;
   const location_code0 = Number(s.location_code) || 2840;
@@ -115,7 +120,7 @@ for (const s of todo) {
         engines: Object.keys(eng).filter(e => (Number((eng[e] || {}).answered) || 0) > 0).sort(), panel: Object.keys(pr).length,
         rule_version: String(d.rule_version || '') }; });   // F1b (2026-10-23): a morning counted under another rule is not a baseline for today
   const location_code = Number(s.location_code) || 2840;
-  out.push({ json: { site_id: s.site_id, domain: s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
+  out.push({ json: { site_id: s.site_id, domain: s.domain, fit_input, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
     on_demand, business_name: s.profile.business_name || '', brand_names, services: AIE.servicesOf(s), business_facts: String(s.business_facts || '').slice(0, 900),   /* F1a: what the client sells, so its own platform is never read as a rival */ competitors: [...new Set([...s.settings.competitors, ...autoRivals])].slice(0, 8), configured_competitors: s.settings.competitors, aliases: aliasRow ? parse(aliasRow.value, {}) : {},
     engines: s.settings.engines, pulse_engines: engines, prompts, prompts_max: s.settings.prompts_max, pulse_run: true, full_due: false, run_kind: 'pulse', monthly_engines: [], baseline, date: today,
     // G6: the morning's sample, the markets its questions are asked in, and what this morning is priced at (the run ledger reserves it)

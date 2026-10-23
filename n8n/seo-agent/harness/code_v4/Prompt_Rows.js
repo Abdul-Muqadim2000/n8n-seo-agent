@@ -59,11 +59,14 @@ const AIP = (() => {
     return mm[1].toUpperCase() + '-' + (mm[2] || dfltLang || 'en').toLowerCase();
   };
   const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[\n,;|]+/)).map(S).filter(Boolean);
-  /** the markets a site's panel covers: its own first, then the extra ones in its settings (at most 6) */
+  /** the markets a site's panel covers: its own first, then the extra ones in its settings and the stored questions' own markets, at most
+   *  MARKETS_MAX (E22, 2026-10-23: the comment said 6 while the code kept 8; the app caps the settings at 5, the stored questions can add
+   *  more). A question whose market falls past the cap is asked in the site's own market and the request says so (`market_fallback`). */
+  const MARKETS_MAX = 8;
   const marketsOf = (site) => {
     const own = normMarket(S(site.country_iso) + '-' + S(site.language_code || 'en')) || 'US-en';
     const extra = listOf(site.ai_markets).map(m => normMarket(m, 'en')).filter(Boolean);
-    return [...new Set([own, ...extra])].slice(0, 8);
+    return [...new Set([own, ...extra])].slice(0, MARKETS_MAX);
   };
   // DataForSEO's location code for a country is 2000 + its ISO 3166 numeric code. The main workflow's COUNTRIES table holds 22 countries;
   // a market outside it (Qatar, Kuwait, Germany …) must still be asked IN that country, never quietly relabelled as the site's own market.
@@ -101,6 +104,50 @@ const AIP = (() => {
     }
     return { keep, dup };
   };
+
+  // ---- 3b. a question's identity and its search phrase (F2, 2026-10-23: ENGINE_AUDIT.md E2 / E15 / E9) ---------------------------------
+  // E2: the old normaliser kept only [a-z0-9], so every Arabic (any non-Latin) question became the empty string — one prompt id for all of
+  // them, the first stored and every later one overwriting its wording. E15: that id was a 32-bit djb2 hash in one key space shared by every
+  // site, upserted on `prompt_id` alone, so a collision moved one site's question to another (~25% odds at 50k questions).
+  // Now: ONE normal form for every script (NFKC, lower case, Arabic harakat / tatweel dropped, anything that is not a letter, digit or mark
+  // is a space), and a 64-bit id (two independent 32-bit mixes, cyrb53's mixing without the 53-bit cut) over `site_id | normal form`,
+  // prefixed `q_` so a new id can never be read as an old `p_` one. Save Prompts and the Site Admin upsert on (site_id, prompt_id).
+  // A stored question keeps the id it was stored with (its trend and its answer history hang on it): writers and the Site Admin match an
+  // existing row by its id OR its normal form first, and only a question new to the site gets a new id.
+  const AR_MARKS = /[ؐ-ًؚ-ٰٟۖ-ۭـ]/g;
+  const normQ = (t) => S(t).normalize('NFKC').toLowerCase().replace(AR_MARKS, '').replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ').replace(/\s+/g, ' ').trim();
+  const hash64 = (t) => {
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57; const s = String(t);
+    for (let i = 0; i < s.length; i++) { const ch = s.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507); h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507); h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(36).padStart(7, '0') + (h1 >>> 0).toString(36).padStart(7, '0');
+  };
+  /** the stable id of a question on one site: 'q_' + 64 bits over the site and the question's normal form */
+  const promptId = (site_id, prompt) => 'q_' + hash64(S(site_id) + '|' + normQ(prompt));
+  /** a stored row that IS this question (same id, or same normal form) — so a reworded-identical question keeps its stored id */
+  const findStored = (rows, site_id, prompt) => { const n = normQ(prompt); if (!n) return null;
+    return (rows || []).find(r => r && S(r.site_id) === S(site_id) && (S(r.prompt_id) === promptId(site_id, prompt) || normQ(r.prompt) === n)) || null; };
+  // E9: an owner's question got the first five words as its search phrase ("what should i check before"), and the AI Overview presence,
+  // the AI search volume and the fit gate were all measured on that fragment. The phrase is now the question's content words in their own
+  // order (question words, stop words and filler dropped, hyphenated words kept whole, at most 6) — or the owner's own keyword when given.
+  // `keyword_source` says which: 'owner' (typed by the owner), 'writer' (the Prompt Writer's search phrase), 'template', 'derived' (built
+  // here). A derived phrase is not a search anyone typed, so AI Requests does not ask Google's AI Overview for it.
+  const KW_DROP = new Set(('a an and are as at be been before being best both by can could did do does doing each few for from get gets give has have '
+    + 'help how i if in into is it its just know like list looking me more most much my need needs of on or our please really recommend '
+    + 'recommended should so some tell than that the their them then there these they this those to top us very vs versus want was way ways '
+    + 'we what whats what\'s when where which while who whom whose why will with without would you your yours check good great right near '
+    + 'any also about after etc options option thing things kind kinds sort type types able actually currently today now there\'s '
+    + 'ما ماذا هي هو هل في من على عن إلى الى كيف لماذا أي اي التي الذي مع أو او و هذا هذه ذلك تلك كم لدي لدى أفضل افضل يمكن يجب').split(/\s+/));
+  const keywordOf = (prompt) => {
+    const words = (S(prompt).normalize('NFKC').replace(AR_MARKS, '').match(/[\p{L}\p{N}\p{M}]+(?:['’-][\p{L}\p{N}\p{M}]+)*/gu) || [])
+      .map(t => ({ t, w: t.toLowerCase().replace(/’/g, '\'') }))
+      .filter(({ t, w }) => (t === 'IT' || (!KW_DROP.has(w) && !KW_DROP.has(w.replace(/'s$/, '')))) && (w.length >= 2 || /^\d+$/.test(w) || /[^\x00-\x7f]/.test(w)))   // "IT" (information technology) is a word, "it" is not
+      .map(({ w }) => w);
+    const kw = [...new Set(words)].slice(0, 6).join(' ').slice(0, 120).trim();
+    return kw || normQ(prompt).split(' ').slice(0, 6).join(' ').slice(0, 120);
+  };
+  const KEYWORD_SOURCES = ['owner', 'writer', 'template', 'derived'];
 
   // ---- 4. strata and the daily rotating sample ----------------------------------------------------------------------------------
   const stratumOf = (q) => (S(q.cluster || q.topic).toLowerCase() || 'other') + ' | ' + (S(q.persona).toLowerCase() || 'any buyer');
@@ -171,18 +218,88 @@ const AIP = (() => {
   const parse = (t, d) => { try { const v = typeof t === 'string' ? JSON.parse(t || '') : t; return v == null ? d : v; } catch (e) { return d; } };
   const stateOf = (cacheRows, site_id) => { const r = (cacheRows || []).find(c => c && c.key === stateKey(site_id)); return r ? parse(r.value, null) : null; };
   /** what to do with a stored state at `now`: 'continue' (this is its next chunk), 'resume' (silent too long: pick it up), 'busy' (a chunk
-   *  is running right now), 'closed' (finished, or too old to resume) */
+   *  is running right now), 'blocked' (F2: the run was STOPPED — its answers were not stored or it reached its money ceiling — and nothing
+   *  of this site's weekly run is asked again until a human clears the row or the run is older than resume_days), 'closed' (finished, or
+   *  too old to resume) */
+  const STOPPED = ['failed_store', 'stopped_ceiling', 'stopped'];
   const stateVerdict = (st, nowIso, continuing) => {
     if (!st || !st.run_id) return 'closed';
-    if (S(st.status) !== 'running') return 'closed';
     const now = Date.parse(nowIso) || Date.now();
     const started = Date.parse(st.started_at) || 0, upd = Date.parse(st.updated_at) || started;
     if (started && now - started > LIMITS.resume_days * 864e5) return 'closed';
+    if (STOPPED.includes(S(st.status))) return 'blocked';
+    if (S(st.status) !== 'running') return 'closed';
     if (continuing && S(continuing) === S(st.run_id)) return 'continue';
     if (now - upd >= LIMITS.stall_minutes * 60000) return 'resume';
     return 'busy';
   };
   const stateRow = (site_id, st, nowIso) => ({ key: stateKey(site_id), kind: 'ai', site_id: S(site_id), value: JSON.stringify(st), updated_at: nowIso });   // exact seo_cache columns
+
+  // ---- 6b. never pay twice (F2, 2026-10-23: ENGINE_AUDIT.md E1 / E11) ----------------------------------------------------------------
+  // E1: a part whose answers were not stored left no trace of what it had PAID for, so every later part asked the same first chunk again,
+  // until the run expired or the account ran dry (4 parts x 600 keys = 2,400 paid requests for 600 questions). Now the state row records
+  // every key the run has sent (`asked_keys`, packed) and the chunk in flight (`pending`) BEFORE the requests leave (*AI Asking State* ->
+  // *Save Asking State*, and nothing is paid unless that save is read back), and AI Requests never asks a recorded key again. A part whose
+  // keys are recorded but whose answers are not stored is found by the next part: the first time (a crash: the 60-minute limit, a restart,
+  // a pre-empted VM) the lost keys are counted as could-not-be-read and the next chunk is halved; the second time, or when the part itself
+  // saw its save fail, the run STOPS (`failed_store`), with an ops alert and the reason, and nothing is asked again.
+  // The run also carries a hard money ceiling (`ceiling_dfs_usd`, fixed at its start: 1.5 x its own estimate, at least $2, never above
+  // max_run_usd): every part checks the run's spent + committed DataForSEO money against it, AI Requests stops adding requests at it, and a
+  // run that reaches it with questions left STOPS (`stopped_ceiling`) with an ops alert.
+  const ENG_CODE = { chatgpt: 'c', gemini: 'g', perplexity: 'p', claude: 'l', ai_overview: 'o', ai_mode: 'm', copilot: 'b', chatgpt_api: 'C', gemini_api: 'G' };
+  const CODE_ENG = Object.fromEntries(Object.entries(ENG_CODE).map(([e, c]) => [c, e]));
+  /** ['p1|chatgpt', 'p1|gemini', 'p2|claude'] -> { p1: 'cg', p2: 'l' } (an engine without a code is kept in parentheses) */
+  const packKeys = (keys) => { const m = {};
+    for (const k of (keys instanceof Set ? [...keys] : (keys || []))) { const s = S(k); const i = s.lastIndexOf('|'); if (i <= 0) continue;
+      const pid = s.slice(0, i), e = s.slice(i + 1); const c = ENG_CODE[e] || ('(' + e + ')'); if (!(m[pid] || '').includes(c)) m[pid] = (m[pid] || '') + c; }
+    return m; };
+  const unpackKeys = (m) => { const out = new Set(); const o = parse(m, {}) || {};
+    for (const pid of Object.keys(o)) for (const t of (S(o[pid]).match(/\(([^)]+)\)|./g) || [])) { const e = t[0] === '(' ? t.slice(1, -1) : CODE_ENG[t]; if (e) out.add(reqKey(pid, e)); }
+    return out; };
+  const CEILING = { factor: 1.5, min_usd: 2 };
+  /** the run's hard DataForSEO ceiling, fixed when it starts */
+  const runCeiling = (runCostDfs) => Math.round(100 * Math.min(LIMITS.max_run_usd, Math.max(CEILING.min_usd, CEILING.factor * n0(runCostDfs)))) / 100;
+  /** what is left under the ceiling: the larger of what the run measured (settled per task) and what it committed before paying */
+  const ceilingLeft = (st) => { if (!st || !(n0(st.ceiling_dfs_usd) > 0)) return null; return Math.max(0, n0(st.ceiling_dfs_usd) - Math.max(n0(st.spent_dfs_usd), n0(st.committed_dfs_usd))); };
+  /** the request estimate of a set of keys at the engine prices */
+  const keysUsd = (keys) => { let t = 0; for (const k of keys) { const e = S(k).slice(S(k).lastIndexOf('|') + 1); t += PRICE[e] || 0.01; } return Math.round(t * 10000) / 10000; };
+  /** the identity of a run's state (what every writer of the state row carries), from a plan item */
+  const baseState = (p) => { const c = p.cycle && p.cycle.key ? { key: p.cycle.key, date: p.cycle.date || '', job: p.cycle.job || 'ai_visibility', monthly: !!p.cycle.monthly, scheduled_for: p.cycle.scheduled_for || '', request_id: p.cycle.request_id || p.request_id || '', label: p.cycle.label || '' } : null;
+    return { run_id: p.run_id, run_kind: p.run_kind, on_demand: !!p.on_demand, full_due: !!p.full_due, request_id: p.request_id || '', email: p.email || '', callback_url: p.callback_url || '', cycle: c,
+      site_id: p.site_id, domain: p.domain, started_at: p.checked_at, ceiling_dfs_usd: n0(p.ceiling_dfs_usd) || null }; };
+
+  // ---- 6c. a part sized by TIME, not only by count (F2, 2026-10-23: ENGINE_AUDIT.md E11) ----------------------------------------------
+  // A 600-request part at ~40-60 s per batch of 10 (Run AI Requests: batch 10, 200 ms apart) is 40-60 minutes BEFORE the retries and the
+  // Answer Analyst, against an execution limit of 60: a part that runs out of time loses everything it paid for. A part now gets a time
+  // budget (40 of the 60 minutes, less a fixed allowance for loads and writes, the retry pause and the analyst's jobs), and the requests
+  // that fit it at the slow-case seconds of each engine (a batch of 10 waits for its slowest answer) — or at the seconds per request the
+  // run's earlier parts MEASURED (wall time of the part, analyst taken out), with 20% headroom. Never more than chunk_requests.
+  const TIME = { exec_limit_s: 3600, budget_s: 2400, fixed_s: 300, batch: 10, interval_s: 0.2, retry_wait_s: 20, retry_share: 0.15, headroom: 1.2, min_requests: 40,
+    analyst_job_s: 30, req_s: { chatgpt: 60, gemini: 60, perplexity: 30, claude: 45, ai_mode: 45, ai_overview: 25, copilot: 20, chatgpt_api: 45, gemini_api: 45 } };
+  /** seconds one request costs a part, on these engines: the modelled figure, or the measured one when a part of the run measured it */
+  const secPerRequest = (engines, measured) => {
+    const es = (engines || []).filter(e => TIME.req_s[e]); const avg = es.length ? es.reduce((t, e) => t + TIME.req_s[e], 0) / es.length : 45;
+    const model = (avg / TIME.batch + TIME.interval_s) * (1 + TIME.retry_share);
+    return n0(measured) > 0 ? Math.max(0.5, n0(measured) * TIME.headroom) : model; };
+  /** how many requests one part may ask: { size, sec_per_request, budget_s, basis } */
+  const chunkPlan = (o) => {
+    const x = o || {}; const spr = secPerRequest(x.engines, x.measured_s); const aj = Math.max(0, n0(x.analyst_jobs));
+    const budget = Math.max(0, n0(x.budget_s) || (TIME.budget_s - TIME.fixed_s - TIME.retry_wait_s - aj * TIME.analyst_job_s));
+    let size = Math.min(LIMITS.chunk_requests, Math.max(TIME.min_requests, Math.floor(budget / spr)));
+    if (x.halve) size = Math.max(TIME.min_requests, Math.floor(size / 2));
+    return { size, sec_per_request: Math.round(spr * 100) / 100, budget_s: Math.round(budget), analyst_jobs: aj, halved: !!x.halve,
+      basis: (n0(x.measured_s) > 0 ? 'measured ' + (Math.round(n0(x.measured_s) * 100) / 100) + ' s a request in this run\'s earlier parts (+20%)' : 'modelled ' + (Math.round(spr * 100) / 100) + ' s a request (slow-case engine time / batch of ' + TIME.batch + ', +15% retries)')
+        + ', ' + Math.round(budget) + ' s for requests in a part (40 of the 60 minutes, less loads, the retry pause and ' + aj + ' analyst job(s))' + (x.halve ? '; halved after a part that did not finish' : '') }; };
+
+  // ---- 6d. one fit-gate context for the weekly run and the pulse (F2, 2026-10-23: ENGINE_AUDIT.md E18) ------------------------------------
+  // The weekly plan protected the ladder heads + the site's services, the pulse the questions' own topics with no services, so one question
+  // could be refused on one path and asked on the other. Both now build the gate's input here, from the same rows.
+  const servicesOfRow = (row) => { const r = row || {}; if (!(S(r.canonical_host) || S(r.model_updated_at))) return [];
+    const arr = (v) => { const x = parse(v, null); return Array.isArray(x) ? x : listOf(v); };
+    return [...new Set([...arr(r.declared_services), ...arr(r.services_json)].map(s => S(s).slice(0, 80)).filter(Boolean))].slice(0, 30); };
+  const fitInput = (o) => { const x = o || {};
+    return { own_domain: S(x.domain), competitors: [...new Set((x.competitors || []).map(S).filter(Boolean))].slice(0, 8), brands: x.aliases || {},
+      heads: [...new Set((x.ladders || []).map(l => S(l.head_keyword)).filter(Boolean))], services: (x.services || []).slice(0, 30), keywords: x.keywords || [] }; };
 
   // ---- 7. the panel's identity: a delta is only a delta between the same questions ---------------------------------------------
   const panelIds = (ids) => [...new Set((ids || []).map(S).filter(Boolean))].sort();
@@ -192,7 +309,7 @@ const AIP = (() => {
     const c = B.filter(x => A.has(x)).length; const share = c / Math.max(A.size, B.length); return { share: Math.round(1000 * share) / 1000, same: share >= 0.8, common: c }; };
 
   // ---- 8. the money: ONE formula (the app's app/shared/src/cost.ts estimateAiPanelCost mirrors it; both are held to the golden cases in
-  // v5/data/ai_panel_cost_cases.json — harness S200 and app/shared cost.aipanel.test.ts) --------------------------------------------
+  // v5/data/ai_panel_cost_cases.json — harness S211 and app/shared cost.aipanel.test.ts) --------------------------------------------
   // DataForSEO price per question on each engine (LLM scraper / LLM Responses / SERP, measured 2026-10-02, priced 2026-10-08; the two API
   // engines of 2026-10-18 are ESTIMATES until their first live call — the settle takes each task's own `cost` either way).
   const PRICE = { chatgpt: 0.004, gemini: 0.004, perplexity: 0.006, claude: 0.025, ai_overview: 0.002, ai_mode: 0.004, copilot: 0.002, chatgpt_api: 0.012, gemini_api: 0.02 };
@@ -240,6 +357,8 @@ const AIP = (() => {
 
   return { LIMITS, panelSize, normMarket, locationOf, listOf, marketsOf, personasOf, stageOf, stems, jaccard, sameAsk, dedupe, stratumOf, pulseDay, halfWidth,
     pulsePerWeek, pulseSample, reqKey, slice, stateKey, stateOf, stateVerdict, stateRow, panelIds, panelHash, overlap, hash,
+    MARKETS_MAX, normQ, hash64, promptId, findStored, keywordOf, KEYWORD_SOURCES, STOPPED, ENG_CODE, packKeys, unpackKeys, CEILING, runCeiling, ceilingLeft, keysUsd, baseState,
+    TIME, secPerRequest, chunkPlan, servicesOfRow, fitInput,
     PRICE, PRICE_BASIS, ENGINES, DEFAULT_ENGINES, MONTHLY_ENGINES, PULSE_ENGINES, FIXED, analystCap, cost };
 })();
 // ---- fit gate (2026-10-11, FIX_PLAN D4 / D8): ONE rule for keywords that no page of this website should target. Inlined by the build
@@ -1278,10 +1397,13 @@ const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let jobs = []; try { jobs = $('Prompt Jobs').all().map(i => i.json).filter(j => !j.skip); } catch (e) {}
 let outs = []; try { outs = $('Prompt Writer').all().map(i => i.json); } catch (e) {}
 let cacheRows = []; try { cacheRows = $('Load Cache (AI)').all().map(i => i.json); } catch (e) {}   // F1a: entities learned in earlier runs
+let storedAll = []; try { storedAll = $('Load AI Prompts').all().map(i => i.json).filter(r => r && r.site_id && r.prompt); } catch (e) {}
 let dreq = [], dres = []; try { dreq = $('Discovery Requests').all().map(i => i.json); dres = $('Run Discovery Answers').all().map(i => i.json || {}); } catch (e) {}
 const parse = (raw) => { if (raw && typeof raw === 'object') return raw; const s = String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, ''); try { return JSON.parse(s); } catch (e) { const a = s.indexOf('{'), b = s.lastIndexOf('}'); try { return JSON.parse(s.slice(a, b + 1)); } catch (e2) { return null; } } };
-const hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };
-const norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+// F2 (2026-10-23, ENGINE_AUDIT.md E2 / E15): one normal form for every script and a 64-bit site-scoped id (AIP.normQ / AIP.promptId, _ai_panel.js
+// 3b) — the old [a-z0-9] normaliser turned every Arabic question into '' (one id for all of them), and the 32-bit id was shared by every site.
+// Save Prompts upserts on (site_id, prompt_id). A stored question keeps its stored id: only a question new to the site gets a new one.
+const norm = AIP.normQ;
 const now = new Date().toISOString(); const rows = [];
 const KINDS = ['recommend', 'choose', 'cost', 'compare', 'problem', 'brand'], STAGES = ['awareness', 'consideration', 'decision', 'brand'], ORIGINS = ['market', 'search', 'writer', 'paa', 'competitor'];
 const STAGE_OF = { recommend: 'decision', cost: 'decision', choose: 'consideration', compare: 'consideration', problem: 'awareness', brand: 'brand', custom: 'consideration' };
@@ -1291,7 +1413,8 @@ dreq.forEach((q, i) => { if (q.kind !== 'volume') return; const t = ((dres[i] ||
   const m = volumes.get(q.site_id) || new Map(); for (const it of (((t.result || [])[0] || {}).items || [])) if (it && it.keyword) m.set(String(it.keyword).toLowerCase().trim(), Number(it.ai_search_volume) || 0); volumes.set(q.site_id, m); });
 const COLS = (r) => ({ prompt_id: r.prompt_id, site_id: r.site_id, domain: r.domain, prompt: r.prompt, kind: r.kind, topic: r.topic, keyword: r.keyword, source: r.source, status: r.status || 'active', created_at: r.created_at,
   stage: r.stage || '', cluster: r.cluster || '', volume: r.volume == null || Number.isNaN(r.volume) ? null : Number(r.volume), origin: r.origin || '', updated_at: now,
-  persona: String(r.persona || '').slice(0, 40), market: String(r.market || ''), pinned: r.pinned === true, fit_note: String(r.fit_note || '').slice(0, 400) });
+  persona: String(r.persona || '').slice(0, 40), market: String(r.market || ''), pinned: r.pinned === true || String(r.pinned) === 'true', fit_note: String(r.fit_note || '').slice(0, 400),
+  keyword_source: AIP.KEYWORD_SOURCES.includes(r.keyword_source) ? r.keyword_source : '' });   // F2 (E9): where the search phrase came from
 let dupes = 0;
 for (const p of plans) {
   const vol = volumes.get(p.site_id) || new Map();
@@ -1299,7 +1422,10 @@ for (const p of plans) {
   for (const q of p.prompts) { const k = String(q.keyword || '').toLowerCase().trim(); const v = vol.has(k) ? vol.get(k) : null;
     if (v === null && q.stage && q.cluster) continue;
     if (v === null && q.kind === 'brand' && q.stage) continue;
-    rows.push(COLS({ ...q, site_id: p.site_id, domain: p.domain, status: 'active', volume: v !== null ? v : q.volume, stage: q.stage || STAGE_OF[q.kind] || 'consideration', cluster: q.cluster || q.topic || '' })); }
+    // F2 (E20): a re-upsert of a stored question keeps what the row says — its fit_note ("switched on by the owner over the keyword rule"),
+    // the market it was stored with (not the plan's normalised one) and where its search phrase came from
+    rows.push(COLS({ ...q, site_id: p.site_id, domain: p.domain, status: 'active', volume: v !== null ? v : q.volume, stage: q.stage || STAGE_OF[q.kind] || 'consideration', cluster: q.cluster || q.topic || '',
+      market: q.market_stored != null ? q.market_stored : q.market, fit_note: q.fit_note || '', keyword_source: q.keyword_source || '' })); }
   if (!p.need_prompts) continue;
   // every job of this site (G6: several — one per market x buyer role), each with its writer's answer
   const mine = jobs.map((j, i) => ({ j, o: outs[i] })).filter(x => x.j.site_id === p.site_id);
@@ -1309,7 +1435,7 @@ for (const p of plans) {
     for (const q of (got && Array.isArray(got.prompts) ? got.prompts : [])) {
       if (!q || !q.prompt || String(q.prompt).length < 12) continue;
       const kind = KINDS.includes(String(q.kind).toLowerCase()) ? String(q.kind).toLowerCase() : 'recommend';
-      qs.push({ prompt: String(q.prompt).trim().slice(0, 300), kind, topic: String(q.cluster || q.topic || '').slice(0, 120), keyword: String(q.keyword || q.cluster || q.topic || '').toLowerCase().slice(0, 120), source: 'auto',
+      qs.push({ prompt: String(q.prompt).trim().slice(0, 300), kind, topic: String(q.cluster || q.topic || '').slice(0, 120), keyword: String(q.keyword || q.cluster || q.topic || '').toLowerCase().slice(0, 120) || AIP.keywordOf(q.prompt), keyword_source: (q.keyword || q.cluster || q.topic) ? 'writer' : 'derived', source: 'auto',
         stage: STAGES.includes(String(q.stage).toLowerCase()) ? String(q.stage).toLowerCase() : STAGE_OF[kind], cluster: String(q.cluster || q.topic || '').toLowerCase().slice(0, 60),
         origin: ORIGINS.includes(String(q.origin).toLowerCase()) ? String(q.origin).toLowerCase() : 'writer', persona: String(j.persona || q.persona || '').trim().slice(0, 40), market: j.market || p.own_market || '' });
     }
@@ -1334,10 +1460,12 @@ for (const p of plans) {
     aliases: p.aliases || {}, services: p.services || [], topics: p.topics || [], business_facts: p.business_facts || '', book: AIE.bookOf(cacheRows, p.site_id), vendors: vendorsSeen };
   const judge = (q) => { const v = AIE.vendorIn(q.prompt, vctx); if (v) return { ok: false, reason: 'other brand', detail: 'it names ' + v.name + ' (' + v.why + '), so the answer measures that company and not this business' };
     const a = fitGate(q.keyword || '', ctx); if (!a.ok) return a; const b = fitGate(q.prompt, { ...ctx, topics: null }); return b.ok ? { ok: true } : b; };
-  const have = new Set(p.prompts.map(x => norm(x.prompt))); let added = 0;
+  // F2: every stored question of the site counts, whatever its status — a question the owner switched off or the gate refused is not
+  // written again under a new id (and never switched back on by a writer)
+  const have = new Set([...p.prompts.map(x => norm(x.prompt)), ...storedAll.filter(r => r.site_id === p.site_id).map(r => norm(r.prompt))].filter(Boolean)); let added = 0;
   for (const q of [...brandQ, ...dd.keep]) { if (added >= p.prompts_needed) break; if (have.has(norm(q.prompt))) continue; have.add(norm(q.prompt));
     const v = q.kind === 'brand' ? { ok: true } : judge(q);
-    const base = { prompt_id: 'p_' + hash(p.site_id + '|' + norm(q.prompt)), site_id: p.site_id, domain: p.domain, prompt: q.prompt, kind: q.kind, topic: q.topic, keyword: q.keyword || q.topic, source: q.source, created_at: now,
+    const base = { prompt_id: AIP.promptId(p.site_id, q.prompt), keyword_source: q.keyword_source || (q.source === 'template' ? 'template' : 'writer'), site_id: p.site_id, domain: p.domain, prompt: q.prompt, kind: q.kind, topic: q.topic, keyword: q.keyword || q.topic, source: q.source, created_at: now,
       stage: q.stage, cluster: q.cluster, volume: vol.has(String(q.keyword || '').toLowerCase().trim()) ? vol.get(String(q.keyword || '').toLowerCase().trim()) : null, origin: q.origin, persona: q.persona || '', market: q.market || p.own_market || '', fresh: true };
     if (!v.ok) { rows.push(COLS({ ...base, status: 'refused', fit_note: '"' + q.prompt + '" was not added: ' + (v.detail || v.reason) + ' (' + v.reason + ')' })); continue; }
     added++;

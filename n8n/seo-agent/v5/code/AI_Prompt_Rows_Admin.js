@@ -4,30 +4,39 @@
 // market, pinned }: the app's CSV import), edit a stored question's persona / cluster / stage / market / pin in place, give it NEW WORDING
 // (a new question: the old one is switched off so no trend compares two different questions), switch off, switch back on, pin, unpin.
 // A pinned question is asked before every other and is never cut when the panel is made smaller. G6 columns: persona, market, pinned, fit_note.
+// F2 (2026-10-23, ENGINE_AUDIT.md E2 / E15 / E9): the same question id and normal form as the Prompt Writer's path (AIP.promptId / AIP.normQ,
+// _ai_panel.js 3b: every script, 64 bits, site-scoped; Set AI Prompts upserts on site_id + prompt_id), and a real search phrase: the owner's
+// own `keyword` when given (keyword_source 'owner'), else the question's content words (AIP.keywordOf, 'derived') — never its first 5 words.
+/*__AI_PANEL__*/
 const a = $('Admin Action').first().json;
 let rows = []; try { rows = $('Load AI Prompts (Admin)').all().map(i => i.json).filter(x => x && x.site_id === a.site_id); } catch (e) {}
-const hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };
-const norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9؀-ۿ]+/g, ' ').trim();
+const norm = AIP.normQ;
+const kwOf = (x, prompt) => { const k = String((x && x.keyword) || '').trim(); return k ? { keyword: k.toLowerCase().slice(0, 120), keyword_source: 'owner' } : { keyword: AIP.keywordOf(prompt), keyword_source: 'derived' }; };
 const STAGES = ['awareness', 'consideration', 'decision'];
 const mkt = (x) => { const mm = String(x || '').trim().replace(/[_\s]+/g, '-').match(/^([A-Za-z]{2})(?:-([A-Za-z]{2,3}))?$/); return mm ? mm[1].toUpperCase() + '-' + (mm[2] || 'en').toLowerCase() : ''; };
 const vol = (v) => v === undefined || v === '' || v == null ? null : v;
 const pinOf = (v) => v === true || String(v) === 'true';
 const COLS = (r) => ({ prompt_id: r.prompt_id, site_id: r.site_id, domain: r.domain || a.domain || '', prompt: r.prompt, kind: r.kind || 'custom', topic: r.topic || '', keyword: r.keyword || '', source: r.source || 'custom', status: r.status || 'active', created_at: r.created_at || a.updated_at,
-  stage: r.stage || '', cluster: r.cluster || '', volume: vol(r.volume), origin: r.origin || '', updated_at: a.updated_at, persona: String(r.persona || ''), market: String(r.market || ''), pinned: pinOf(r.pinned), fit_note: String(r.fit_note || '') });
+  stage: r.stage || '', cluster: r.cluster || '', volume: vol(r.volume), origin: r.origin || '', updated_at: a.updated_at, persona: String(r.persona || ''), market: String(r.market || ''), pinned: pinOf(r.pinned), fit_note: String(r.fit_note || ''), keyword_source: AIP.KEYWORD_SOURCES.includes(r.keyword_source) ? r.keyword_source : '' });
 const out = new Map();   // one row per prompt id (the last change wins)
+// a stored row that IS this question keeps its id (a legacy p_ id included); only a question new to the site gets AIP.promptId
+const idFor = (prompt) => { const old = AIP.findStored(rows, a.site_id, prompt) || [...out.values()].find(r => norm(r.prompt) === norm(prompt)); return old ? old.prompt_id : AIP.promptId(a.site_id, prompt); };
 const put = (r) => out.set(r.prompt_id, COLS(r));
 const find = (x) => rows.filter(r => r.prompt_id === x || norm(r.prompt) === norm(x));
 const cur = (r) => out.get(r.prompt_id) || r;
 for (const q0 of (a.add_prompts || [])) { const q = typeof q0 === 'object' ? q0 : { prompt: String(q0) };
-  const id = 'p_' + hash(a.site_id + '|' + norm(q.prompt)); const old = rows.find(r => r.prompt_id === id) || {};
-  put({ ...old, prompt_id: id, site_id: a.site_id, domain: a.domain || old.domain || '', prompt: q.prompt, kind: 'custom', topic: q.cluster || old.topic || '', keyword: old.keyword || norm(q.prompt).split(' ').slice(0, 5).join(' '), source: 'custom', status: 'active',
+  if (!norm(q.prompt)) continue;
+  const id = idFor(q.prompt); const old = rows.find(r => r.prompt_id === id) || {};
+  const kw = q.keyword ? kwOf(q, q.prompt) : (old.keyword && old.keyword_source !== 'derived' ? { keyword: old.keyword, keyword_source: old.keyword_source || 'writer' } : kwOf(null, q.prompt));
+  put({ ...old, prompt_id: id, site_id: a.site_id, domain: a.domain || old.domain || '', prompt: q.prompt, kind: 'custom', topic: q.cluster || old.topic || '', keyword: kw.keyword, keyword_source: kw.keyword_source, source: 'custom', status: 'active',
     created_at: old.created_at || a.updated_at, stage: STAGES.includes(q.stage) ? q.stage : (old.stage || 'consideration'), cluster: q.cluster || old.cluster || '', origin: 'custom', persona: q.persona || old.persona || '', market: mkt(q.market) || old.market || '', pinned: q.pinned || pinOf(old.pinned), fit_note: '' }); }
 for (const e of (a.edit_prompts || [])) for (const r0 of find(e.prompt_id)) { const r = cur(r0);
-  const patch = { persona: e.persona || r.persona, cluster: e.cluster || r.cluster, stage: STAGES.includes(e.stage) ? e.stage : r.stage, market: mkt(e.market) || r.market, pinned: e.pinned === undefined ? pinOf(r.pinned) : e.pinned };
+  const patch = { persona: e.persona || r.persona, cluster: e.cluster || r.cluster, stage: STAGES.includes(e.stage) ? e.stage : r.stage, market: mkt(e.market) || r.market, pinned: e.pinned === undefined ? pinOf(r.pinned) : e.pinned,
+    ...(e.keyword ? kwOf(e, r.prompt) : {}) };
   if (e.prompt && norm(e.prompt) !== norm(r.prompt)) {   // new wording = a new question; the old one stays in the history, switched off
     put({ ...r, status: 'off' });
-    const id = 'p_' + hash(a.site_id + '|' + norm(e.prompt));
-    put({ ...r, ...patch, prompt_id: id, prompt: e.prompt, source: 'custom', kind: r.kind === 'brand' ? 'brand' : 'custom', origin: 'custom', status: 'active', created_at: a.updated_at, keyword: norm(e.prompt).split(' ').slice(0, 5).join(' '), volume: null, fit_note: '' });
+    const id = idFor(e.prompt); const kw = kwOf(e, e.prompt);
+    put({ ...r, ...patch, prompt_id: id, prompt: e.prompt, source: 'custom', kind: r.kind === 'brand' ? 'brand' : 'custom', origin: 'custom', status: 'active', created_at: a.updated_at, keyword: kw.keyword, keyword_source: kw.keyword_source, volume: null, fit_note: '' });
   } else put({ ...r, ...patch }); }
 for (const x of (a.off_prompts || [])) for (const r of find(x)) put({ ...cur(r), status: 'off' });
 // a question the keyword rule refused and the owner switches on becomes the owner's own (source custom): the read path then keeps it and only flags it

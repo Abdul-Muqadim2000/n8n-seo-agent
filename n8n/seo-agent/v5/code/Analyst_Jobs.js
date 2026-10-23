@@ -16,7 +16,9 @@ for (const p of plans) {
   const mine = rows.filter(r => r.site_id === p.site_id);
   const pick = [...mine.filter(r => r.mentioned || r.kind === 'brand'), ...mine.filter(r => !r.mentioned && r.kind !== 'brand' && ['recommend', 'compare', 'choose', 'custom'].includes(r.kind))];
   const cm = p.cost_model || {}; const share = cm.analyst_jobs ? Math.ceil(Number(cm.analyst_jobs) / Math.max(1, Number(cm.executions) || 1)) : CONFIG.max_jobs_per_site;
-  const sel = pick.slice(0, CONFIG.per_job * Math.max(1, Math.min(12, Math.max(CONFIG.max_jobs_per_site, share))));
+  // F2 (2026-10-23, E11): a part of a split run leaves room for exactly the jobs its time budget counted (AI Plan chunk.analyst_jobs_max)
+  const jobsMax = p.chunk && Number(p.chunk.analyst_jobs_max) > 0 ? Number(p.chunk.analyst_jobs_max) : Math.max(1, Math.min(12, Math.max(CONFIG.max_jobs_per_site, share)));
+  const sel = p.stop ? [] : pick.slice(0, CONFIG.per_job * jobsMax);
   const P = p.profile || {};
   // G10 (2026-10-11 system review): the fact sheet the analyst checks the answers against — the business profile (seo_profiles), the
   // facts and services of the site model (SITE_MODEL_SPEC.md) and the accreditation status. A claim can only be called wrong against a

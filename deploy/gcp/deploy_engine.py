@@ -32,6 +32,10 @@ What it does, in order (each step says what it found; any failure exits 1):
     imported with --create-missing, else it is a failure
  5. POST /api/v1/workflows/<id>/activate for the manifest's publish set (+ publish_when_imap when SEO_IMAP_PASSWORD is set) - idempotent.
     The set includes the Cycle Dispatcher: publishing it starts nothing by itself (seo_cache cycle:mode, missing = plan_only)
+ 5b. the manifest's never_deploy list (F2 2026-10-23: the test callback receiver SEOagentCallback, an unauthenticated webhook, was found
+    ACTIVE in production, carried over by the migration): any of them found active on the remote is DEACTIVATED (POST
+    /api/v1/workflows/<id>/deactivate) with --apply, and only reported by the dry run. Nothing is ever deleted. A never_deploy id that is
+    also in the publish set fails the deploy before anything is touched
  6. --credentials: PATCH /api/v1/credentials/<id> for every credential sync_credentials.py defines whose values are set
 The API key is N8N_API_KEY from n8n/.env (it stays valid on the server when the instance key was carried over by the migration), or
 N8N_REMOTE_API_KEY from the environment. Nothing prints a key, a credential value or the alert webhook.
@@ -115,6 +119,33 @@ def ssh_import(kind, payload_path):
         r = subprocess.run(gcloud.split() + ['compute', 'ssh', vm, '--zone=' + zone, '--project=' + project, '--tunnel-through-iap',
                                              '--quiet', '--command', remote], stdin=f, capture_output=True, text=True)
     return r.returncode, (r.stdout.strip().splitlines() or [''])[-1]
+
+
+def never_deploy_pass(api, manifest, apply, say):
+    """F2 (2026-10-23): every workflow on the manifest's never_deploy list that the remote has ACTIVE is deactivated (apply) or reported (dry
+    run). Returns (handled ids, failures). Never deletes, never touches a workflow that is not on the list."""
+    never = list(manifest.get('never_deploy') or [])
+    clash = sorted(set(never) & set(list(manifest.get('publish') or []) + list(manifest.get('publish_when_imap') or [])))
+    if clash:
+        return [], ['deploy_manifest.json lists %s both in never_deploy and in the publish set' % ', '.join(clash)]
+    done, fail = [], []
+    for wid in never:
+        st, cur = api('GET', '/workflows/' + wid)
+        if st == 404:
+            say('  never-deploy %s: not on the instance' % wid); continue
+        if st != 200:
+            fail.append('never-deploy %s GET %s' % (wid, st)); continue
+        if not (cur or {}).get('active'):
+            say('  never-deploy %s (%s): inactive, left as it is' % (wid, (cur or {}).get('name', ''))); continue
+        if not apply:
+            say('  never-deploy %s (%s) is ACTIVE: would deactivate it (not delete)' % (wid, (cur or {}).get('name', ''))); done.append(wid); continue
+        st2, r = api('POST', '/workflows/%s/deactivate' % wid)
+        if st2 == 200:
+            say('  never-deploy %s (%s) was ACTIVE: deactivated (not deleted)' % (wid, (cur or {}).get('name', ''))); done.append(wid)
+        else:
+            fail.append('never-deploy %s deactivate %s: %s' % (wid, st2, str((r or {}).get('message'))[:160]))
+    say('never-deploy: %d active %s%s' % (len(done), 'deactivated' if apply else 'to deactivate', ('; FAILED: ' + '; '.join(fail)) if fail else ''))
+    return done, fail
 
 
 def main():
@@ -222,6 +253,10 @@ def main():
     say('published: %d%s%s%s' % (len(pub_ok), ' (would publish)' if not APPLY else '',
         (' (incl. referenced sub-workflows: ' + ', '.join(extra) + ')') if extra else '', ('; FAILED: ' + '; '.join(pub_fail)) if pub_fail else ''))
     failed += pub_fail
+
+    # 5b. never-deploy workflows found active (F2 2026-10-23): deactivated, never deleted; the dry run only says what it would do
+    nd_done, nd_fail = never_deploy_pass(api, manifest, APPLY, say)
+    failed += nd_fail
 
     # 6. credentials
     if '--credentials' in args:

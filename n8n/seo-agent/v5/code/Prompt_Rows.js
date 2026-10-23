@@ -16,10 +16,13 @@ const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let jobs = []; try { jobs = $('Prompt Jobs').all().map(i => i.json).filter(j => !j.skip); } catch (e) {}
 let outs = []; try { outs = $('Prompt Writer').all().map(i => i.json); } catch (e) {}
 let cacheRows = []; try { cacheRows = $('Load Cache (AI)').all().map(i => i.json); } catch (e) {}   // F1a: entities learned in earlier runs
+let storedAll = []; try { storedAll = $('Load AI Prompts').all().map(i => i.json).filter(r => r && r.site_id && r.prompt); } catch (e) {}
 let dreq = [], dres = []; try { dreq = $('Discovery Requests').all().map(i => i.json); dres = $('Run Discovery').all().map(i => i.json || {}); } catch (e) {}
 const parse = (raw) => { if (raw && typeof raw === 'object') return raw; const s = String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, ''); try { return JSON.parse(s); } catch (e) { const a = s.indexOf('{'), b = s.lastIndexOf('}'); try { return JSON.parse(s.slice(a, b + 1)); } catch (e2) { return null; } } };
-const hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };
-const norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+// F2 (2026-10-23, ENGINE_AUDIT.md E2 / E15): one normal form for every script and a 64-bit site-scoped id (AIP.normQ / AIP.promptId, _ai_panel.js
+// 3b) — the old [a-z0-9] normaliser turned every Arabic question into '' (one id for all of them), and the 32-bit id was shared by every site.
+// Save Prompts upserts on (site_id, prompt_id). A stored question keeps its stored id: only a question new to the site gets a new one.
+const norm = AIP.normQ;
 const now = new Date().toISOString(); const rows = [];
 const KINDS = ['recommend', 'choose', 'cost', 'compare', 'problem', 'brand'], STAGES = ['awareness', 'consideration', 'decision', 'brand'], ORIGINS = ['market', 'search', 'writer', 'paa', 'competitor'];
 const STAGE_OF = { recommend: 'decision', cost: 'decision', choose: 'consideration', compare: 'consideration', problem: 'awareness', brand: 'brand', custom: 'consideration' };
@@ -29,7 +32,8 @@ dreq.forEach((q, i) => { if (q.kind !== 'volume') return; const t = ((dres[i] ||
   const m = volumes.get(q.site_id) || new Map(); for (const it of (((t.result || [])[0] || {}).items || [])) if (it && it.keyword) m.set(String(it.keyword).toLowerCase().trim(), Number(it.ai_search_volume) || 0); volumes.set(q.site_id, m); });
 const COLS = (r) => ({ prompt_id: r.prompt_id, site_id: r.site_id, domain: r.domain, prompt: r.prompt, kind: r.kind, topic: r.topic, keyword: r.keyword, source: r.source, status: r.status || 'active', created_at: r.created_at,
   stage: r.stage || '', cluster: r.cluster || '', volume: r.volume == null || Number.isNaN(r.volume) ? null : Number(r.volume), origin: r.origin || '', updated_at: now,
-  persona: String(r.persona || '').slice(0, 40), market: String(r.market || ''), pinned: r.pinned === true, fit_note: String(r.fit_note || '').slice(0, 400) });
+  persona: String(r.persona || '').slice(0, 40), market: String(r.market || ''), pinned: r.pinned === true || String(r.pinned) === 'true', fit_note: String(r.fit_note || '').slice(0, 400),
+  keyword_source: AIP.KEYWORD_SOURCES.includes(r.keyword_source) ? r.keyword_source : '' });   // F2 (E9): where the search phrase came from
 let dupes = 0;
 for (const p of plans) {
   const vol = volumes.get(p.site_id) || new Map();
@@ -37,7 +41,10 @@ for (const p of plans) {
   for (const q of p.prompts) { const k = String(q.keyword || '').toLowerCase().trim(); const v = vol.has(k) ? vol.get(k) : null;
     if (v === null && q.stage && q.cluster) continue;
     if (v === null && q.kind === 'brand' && q.stage) continue;
-    rows.push(COLS({ ...q, site_id: p.site_id, domain: p.domain, status: 'active', volume: v !== null ? v : q.volume, stage: q.stage || STAGE_OF[q.kind] || 'consideration', cluster: q.cluster || q.topic || '' })); }
+    // F2 (E20): a re-upsert of a stored question keeps what the row says — its fit_note ("switched on by the owner over the keyword rule"),
+    // the market it was stored with (not the plan's normalised one) and where its search phrase came from
+    rows.push(COLS({ ...q, site_id: p.site_id, domain: p.domain, status: 'active', volume: v !== null ? v : q.volume, stage: q.stage || STAGE_OF[q.kind] || 'consideration', cluster: q.cluster || q.topic || '',
+      market: q.market_stored != null ? q.market_stored : q.market, fit_note: q.fit_note || '', keyword_source: q.keyword_source || '' })); }
   if (!p.need_prompts) continue;
   // every job of this site (G6: several — one per market x buyer role), each with its writer's answer
   const mine = jobs.map((j, i) => ({ j, o: outs[i] })).filter(x => x.j.site_id === p.site_id);
@@ -47,7 +54,7 @@ for (const p of plans) {
     for (const q of (got && Array.isArray(got.prompts) ? got.prompts : [])) {
       if (!q || !q.prompt || String(q.prompt).length < 12) continue;
       const kind = KINDS.includes(String(q.kind).toLowerCase()) ? String(q.kind).toLowerCase() : 'recommend';
-      qs.push({ prompt: String(q.prompt).trim().slice(0, 300), kind, topic: String(q.cluster || q.topic || '').slice(0, 120), keyword: String(q.keyword || q.cluster || q.topic || '').toLowerCase().slice(0, 120), source: 'auto',
+      qs.push({ prompt: String(q.prompt).trim().slice(0, 300), kind, topic: String(q.cluster || q.topic || '').slice(0, 120), keyword: String(q.keyword || q.cluster || q.topic || '').toLowerCase().slice(0, 120) || AIP.keywordOf(q.prompt), keyword_source: (q.keyword || q.cluster || q.topic) ? 'writer' : 'derived', source: 'auto',
         stage: STAGES.includes(String(q.stage).toLowerCase()) ? String(q.stage).toLowerCase() : STAGE_OF[kind], cluster: String(q.cluster || q.topic || '').toLowerCase().slice(0, 60),
         origin: ORIGINS.includes(String(q.origin).toLowerCase()) ? String(q.origin).toLowerCase() : 'writer', persona: String(j.persona || q.persona || '').trim().slice(0, 40), market: j.market || p.own_market || '' });
     }
@@ -72,10 +79,12 @@ for (const p of plans) {
     aliases: p.aliases || {}, services: p.services || [], topics: p.topics || [], business_facts: p.business_facts || '', book: AIE.bookOf(cacheRows, p.site_id), vendors: vendorsSeen };
   const judge = (q) => { const v = AIE.vendorIn(q.prompt, vctx); if (v) return { ok: false, reason: 'other brand', detail: 'it names ' + v.name + ' (' + v.why + '), so the answer measures that company and not this business' };
     const a = fitGate(q.keyword || '', ctx); if (!a.ok) return a; const b = fitGate(q.prompt, { ...ctx, topics: null }); return b.ok ? { ok: true } : b; };
-  const have = new Set(p.prompts.map(x => norm(x.prompt))); let added = 0;
+  // F2: every stored question of the site counts, whatever its status — a question the owner switched off or the gate refused is not
+  // written again under a new id (and never switched back on by a writer)
+  const have = new Set([...p.prompts.map(x => norm(x.prompt)), ...storedAll.filter(r => r.site_id === p.site_id).map(r => norm(r.prompt))].filter(Boolean)); let added = 0;
   for (const q of [...brandQ, ...dd.keep]) { if (added >= p.prompts_needed) break; if (have.has(norm(q.prompt))) continue; have.add(norm(q.prompt));
     const v = q.kind === 'brand' ? { ok: true } : judge(q);
-    const base = { prompt_id: 'p_' + hash(p.site_id + '|' + norm(q.prompt)), site_id: p.site_id, domain: p.domain, prompt: q.prompt, kind: q.kind, topic: q.topic, keyword: q.keyword || q.topic, source: q.source, created_at: now,
+    const base = { prompt_id: AIP.promptId(p.site_id, q.prompt), keyword_source: q.keyword_source || (q.source === 'template' ? 'template' : 'writer'), site_id: p.site_id, domain: p.domain, prompt: q.prompt, kind: q.kind, topic: q.topic, keyword: q.keyword || q.topic, source: q.source, created_at: now,
       stage: q.stage, cluster: q.cluster, volume: vol.has(String(q.keyword || '').toLowerCase().trim()) ? vol.get(String(q.keyword || '').toLowerCase().trim()) : null, origin: q.origin, persona: q.persona || '', market: q.market || p.own_market || '', fresh: true };
     if (!v.ok) { rows.push(COLS({ ...base, status: 'refused', fit_note: '"' + q.prompt + '" was not added: ' + (v.detail || v.reason) + ' (' + v.reason + ')' })); continue; }
     added++;

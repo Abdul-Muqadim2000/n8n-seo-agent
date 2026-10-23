@@ -179,7 +179,10 @@ AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 's
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
                    # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
                    # and the fit gate's sentence when status is 'refused' (stored, so the panel manager shows what was refused and why)
-                   ('persona', 'string'), ('market', 'string'), ('pinned', 'boolean'), ('fit_note', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
+                   ('persona', 'string'), ('market', 'string'), ('pinned', 'boolean'), ('fit_note', 'string'),
+                   # F2 (2026-10-23, ENGINE_AUDIT.md E9): where the search phrase (`keyword`) came from: owner | writer | template | derived. A derived
+                   # phrase is built from the question's own words (AIP.keywordOf); AI Requests does not ask Google's AI Overview for it
+                   ('keyword_source', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
 AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompt_id', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('engine', 'string'),
                    ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string'),
                    ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string'),
