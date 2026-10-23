@@ -713,6 +713,11 @@ the company lock, before the budget, so two concurrent repeats cannot both start
 
 The run row exists even when the engine refuses at the door (status `failed` with the engine's sentence), exactly as in the app; poll
 `GET /api/v1/runs/:runId` or subscribe to `run.completed` / `run.failed` (event webhooks, below).
+R-A3 (2026-10-23): an AI visibility check started while the website's own AI run is open is closed as status **`joined`** (not a
+failure: no `run.failed` event, nothing charged, `error: null`, the engine's sentence in `note`); `GET /api/v1/runs/:runId` (and the
+app's `GET /api/orgs/:orgId/runs/:runId`) add `joined: {openRunId, expectedFinish, reportId, reportTitle, receivedAt}`, with `reportId`
+set once the open run's AI visibility report has arrived. `?status=joined` filters them. Clients that switch on status should treat
+`joined` as a closed state.
 
 ```bash
 KEY=asc_...   # Company settings -> API access, with "Start analyses"

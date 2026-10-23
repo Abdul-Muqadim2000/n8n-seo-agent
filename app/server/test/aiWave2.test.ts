@@ -244,9 +244,33 @@ describe('deleting questions', () => {
 describe('§6: a start that joins the open run', () => {
   it('is closed with nothing charged, marked as part of the open run with when it finishes', () => {
     const o = runOutcome('accepted', ['ai_visibility'], 'rejected', { stage: 'rejected', status: 'rejected', reason: 'open_run', error: 'A run is in progress.', open_run: { expected_finish: '2099-01-01T09:40:00.000Z' } });
-    expect(o).toMatchObject({ status: 'failed', lastStage: 'joined_open_run' });
+    // R-A3 (review 2026-10-23): its own state, never `failed`
+    expect(o).toMatchObject({ status: 'joined', lastStage: 'joined_open_run' });
     expect(o.error).toMatch(/^Part of the open run \(finishes about 09:40 UTC on 2099-01-01\)\. A run is in progress\./);
     expect(runOutcome('accepted', [], 'rejected', { stage: 'rejected', error: 'refused' }).lastStage).toBeUndefined();
+    // closed: a later refusal does not turn it into a failure
+    expect(runOutcome('joined', ['ai_visibility'], 'rejected', { stage: 'rejected', error: 'refused' })).toEqual({});
+  });
+  it('R-A3: no run.failed event, nothing charged, a note (not an error) for the API, the open run named for its report', async () => {
+    const { eventsFor, deliveryDecision } = await import('@seo/shared');
+    const { runCreditsOf } = await import('../src/services/runCredits');
+    const { joinedOpenRunOf, toRun } = await import('../src/services/runs');
+    const { toRunV1 } = await import('../src/services/apiV1');
+    const body = { stage: 'rejected', status: 'rejected', reason: 'open_run', error: 'A run is in progress.', open_run: { run_id: 'ai_20261023_techand.ai', expected_finish: '2099-01-01T09:40:00.000Z' } };
+    const report = { id: 'r1', title: 'x', stage: 'rejected', status: 'rejected', receivedAt: '2026-10-23T09:00:00Z', scheduled: false, runId: 'run1', websiteId: 's', url: 'u' };
+    const after = { id: 'run1', mode: 'ai_visibility', title: 'AI', status: 'joined', error: null, completedAt: '2026-10-23T09:00:00Z', url: 'u' };
+    const ev = eventsFor({ stage: 'rejected', status: 'rejected', payload: body, report, runBefore: { status: 'accepted' }, runAfter: after });
+    expect(ev.map((e) => e.type)).not.toContain('run.failed');
+    // the same callback on a run closed as failed (before this fix) did emit it: the event is what this guards
+    expect(eventsFor({ stage: 'rejected', status: 'rejected', payload: body, report, runBefore: { status: 'accepted' }, runAfter: { ...after, status: 'failed' } }).map((e) => e.type)).toContain('run.failed');
+    expect(deliveryDecision({ stage: 'rejected', status: 'rejected', payload: body }).reason).toMatch(/part of the run already in progress/);
+    expect(runCreditsOf({ status: 'joined', quotedCredits: 12, engineCostEstimateUsd: null, estimatedCostUsd: 1 } as never, undefined, { creditValueUsd: 0.05, markup: 3 }).state).toBe('not_charged');
+    expect(joinedOpenRunOf(body)).toEqual({ openRunId: 'ai_20261023_techand.ai', expectedFinish: '2099-01-01T09:40:00.000Z' });
+    expect(joinedOpenRunOf({ stage: 'rejected' })).toBeNull();
+    const row = { id: 'run1', orgId: ORG, siteId: 's', userId: null, mode: 'ai_visibility', title: 'AI', status: 'joined', requestId: 'q', input: {}, error: 'Part of the open run.', apiKeyId: null, etaMinutes: 0, createdAt: new Date(), acceptedAt: null, completedAt: new Date(), reportCount: 1, lastStage: 'joined_open_run' } as never;
+    const credits = { quoted: 12, charged: null, state: 'not_charged', capped: false } as never;
+    expect(toRunV1(row, credits)).toMatchObject({ status: 'joined', error: null, note: 'Part of the open run.' });
+    expect(toRun(row, { credits })).toMatchObject({ status: 'joined', error: null, note: 'Part of the open run.' });
   });
 });
 

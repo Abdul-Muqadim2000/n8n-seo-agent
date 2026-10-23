@@ -234,6 +234,8 @@ export function aiRulePreview(rule: Pick<AiAlertRule, 'metric' | 'scope' | 'dire
 
 /** The run stage the app records for an on-demand start the engine joined to its open run (not a failure: nothing is charged twice). */
 export const AI_JOINED_OPEN_RUN = 'joined_open_run';
+/** R-A3: a run joined to the open run (its own status `joined`; a row closed before that status existed reads the same) */
+export const runIsJoined = (r: { status: string; lastStage?: string | null }): boolean => r.status === 'joined' || (r.status === 'failed' && r.lastStage === AI_JOINED_OPEN_RUN);
 
 /** The note for a `rejected` callback with reason 'open_run': "Part of the open run (finishes about 09:40 UTC)." + the engine's sentence. */
 export function aiOpenRunNote(body: Record<string, unknown>): string | null {

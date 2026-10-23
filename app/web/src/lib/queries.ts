@@ -35,6 +35,7 @@ import type {
   Report,
   ReportDetail,
   Run,
+  JoinedRunResult,
   SearchData,
   Site,
   SiteAutomation,
@@ -914,12 +915,14 @@ export function useRuns(orgId: string, filters: RunFilters = {}, refetchInterval
 export function useRun(orgId: string, runId: string) {
   return useQuery({
     queryKey: qk.run(orgId, runId),
-    queryFn: () => api<{ run: Run; reports: Report[] }>(`/api/orgs/${orgId}/runs/${runId}`),
+    queryFn: () => api<{ run: Run; reports: Report[]; joined?: JoinedRunResult }>(`/api/orgs/${orgId}/runs/${runId}`),
     retry: noRetryOn4xx,
-    // keep polling while n8n is working on it (a run that does not exist or is not yours is not polled)
+    // keep polling while n8n is working on it (a run that does not exist or is not yours is not polled); R-A3: a check joined to the
+    // open run is looked at once a minute until that run's report has arrived
     refetchInterval: (q) => {
       if (!q.state.data && q.state.error instanceof ApiRequestError && q.state.error.status >= 400 && q.state.error.status < 500) return false;
       const s = q.state.data?.run.status;
+      if (s === 'joined') return q.state.data?.joined && !q.state.data.joined.reportId ? 60_000 : false;
       return s === 'completed' || s === 'failed' ? false : 10_000;
     },
   });

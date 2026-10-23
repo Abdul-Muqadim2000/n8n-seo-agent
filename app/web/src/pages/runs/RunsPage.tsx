@@ -21,6 +21,7 @@ const STATUS_OPTIONS = [
   { value: 'running', label: 'Running' },
   { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },
+  { value: 'joined', label: 'Part of an open run' },
 ];
 
 export default function RunsPage() {
@@ -227,6 +228,7 @@ const RAIL: Record<Run['status'], string> = {
   running: 'bg-accent',
   completed: 'bg-good',
   failed: 'bg-critical',
+  joined: 'bg-accent',
 };
 
 function RunRow({ run, now }: { run: Run; now: number }) {

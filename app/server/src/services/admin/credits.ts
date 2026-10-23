@@ -152,7 +152,7 @@ export async function inFlightCredits(q: Q, orgId: string, s: { creditValueUsd: 
             then least(ru.actual_cost_usd * ${rate}::float, coalesce(ru.quoted_credits, ru.actual_cost_usd * ${rate}::float))
           else coalesce(ru.quoted_credits, coalesce(ru.engine_cost_estimate_usd, ru.estimated_cost_usd) * ${rate}::float) end)
         from ${schema.runs} ru
-        where ru.org_id = ${orgId} and ru.status <> 'failed' and ru.created_at > now() - interval '24 hours'
+        where ru.org_id = ${orgId} and ru.status not in ('failed', 'joined') and ru.created_at > now() - interval '24 hours'
           and not exists (select 1 from ${schema.costEvents} ce where ce.run_id = ru.id)), 0)
       + coalesce((select sum(k.cost_usd) * ${rate}::float from ${schema.keywordChecks} k
         where k.org_id = ${orgId} and k.status in ('pending', 'done') and k.created_at > now() - interval '24 hours'

@@ -95,6 +95,9 @@ describe('trends, rules, the open run, settings', () => {
   });
   it('a start joined to the open run reads "Part of the open run", not "Failed"', () => {
     expect(text(renderToString(<RunStatusBadge status="failed" lastStage="joined_open_run" />))).toContain('Part of the open run');
+    // R-A3: its own status
+    expect(text(renderToString(<RunStatusBadge status="joined" lastStage="joined_open_run" />))).toContain('Part of the open run');
+    expect(text(renderToString(<RunStatusBadge status="joined" />))).not.toContain('Failed');
     expect(text(renderToString(<RunStatusBadge status="failed" />))).toContain('Failed');
   });
   it('the wave-2 settings stay absent until set, and the cost reads them through the one formula', () => {

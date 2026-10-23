@@ -13,7 +13,7 @@ import { adminPaths, credits, modeLabel, money } from '../lib';
 import { useAdminUnits } from './units';
 import { useAdminSettings } from '@/lib/queries';
 
-const RUN_STATUSES: readonly string[] = ['submitting', 'accepted', 'running', 'completed', 'failed'];
+const RUN_STATUSES: readonly string[] = ['submitting', 'accepted', 'running', 'completed', 'failed', 'joined'];
 
 export function RunStatus({ status }: { status: string }) {
   if (RUN_STATUSES.includes(status)) return <RunStatusBadge status={status as RunStatus} />;

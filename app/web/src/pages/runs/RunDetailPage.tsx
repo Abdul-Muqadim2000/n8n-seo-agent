@@ -1,7 +1,7 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Check, CheckCircle2, CircleDot, ClipboardList, Clock, Coins, ExternalLink as ExternalIcon, FileText, Flag, GitCommitVertical, Inbox, Loader2, Play, RotateCcw, Send, XCircle } from 'lucide-react';
-import { AI_JOINED_OPEN_RUN, formatCredits, MODES, type Report, type Run, type RunCredits } from '@seo/shared';
+import { formatCredits, MODES, runIsJoined, type Report, type Run, type RunCredits } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useReport, useRun } from '@/lib/queries';
@@ -103,6 +103,7 @@ export default function RunDetailPage() {
     );
   const selected = reports.find((r) => r.id === selectedId) ?? null;
   const duration = minutesBetween(run.createdAt, run.completedAt ?? (active ? now : null));
+  const joined = runIsJoined(run);
 
   return (
     <div>
@@ -144,14 +145,28 @@ export default function RunDetailPage() {
         <RunStages run={run} reports={reports.length} active={active} duration={duration} />
 
         {/* W2-A (WAVE2_CONTRACTS.md §6): an on-demand AI check the engine joined to the website's open run is not a failure */}
-        {run.status === 'failed' && run.lastStage === AI_JOINED_OPEN_RUN && (
-          <Callout tone="info" title="Part of the open run">
-            {run.error}
-            <span className="mt-1 block text-xs text-ink-3">Your check is answered by the run already in progress, and its report arrives on the AI visibility page when that run finishes. Nothing was charged for this request.</span>
+        {joined && (
+          <Callout
+            tone="info"
+            title="Part of the open run"
+            action={
+              q.data?.joined?.reportId ? (
+                <ButtonLink to={paths.report(org.id, q.data.joined.reportId)} variant="secondary" size="sm" icon={<ExternalIcon className="size-4" />}>
+                  Open its report
+                </ButtonLink>
+              ) : undefined
+            }
+          >
+            {run.note ?? run.error}
+            <span className="mt-1 block text-xs text-ink-3">
+              {q.data?.joined?.reportId
+                ? `That run has finished and its report is ready${q.data.joined.receivedAt ? ` (${fmtDateTime(q.data.joined.receivedAt)})` : ''}. Nothing was charged for this request.`
+                : 'Your check is answered by the run already in progress. Its report is linked here and on the AI visibility page when that run finishes. Nothing was charged for this request.'}
+            </span>
           </Callout>
         )}
 
-        {run.status === 'failed' && run.lastStage !== AI_JOINED_OPEN_RUN && (
+        {run.status === 'failed' && !joined && (
           <Callout
             tone="critical"
             title="The run did not complete"
@@ -244,7 +259,7 @@ export default function RunDetailPage() {
                     label: 'Credits',
                     value: (
                       <span className="tabular">
-                        {creditsLine(run.credits, run.lastStage === AI_JOINED_OPEN_RUN)} <InfoTip label="How credits are charged">{RUN_CREDITS_TIP}</InfoTip>
+                        {creditsLine(run.credits, joined)} <InfoTip label="How credits are charged">{RUN_CREDITS_TIP}</InfoTip>
                       </span>
                     ),
                   },
@@ -339,7 +354,7 @@ function CardTitle({ icon, title, description }: { icon: ReactNode; title: strin
  */
 function RunStages({ run, reports, active, duration }: { run: Run; reports: number; active: boolean; duration: number | null }) {
   // W2-A: a start joined to the website's open run ends here as "part of the open run", not as a failure
-  const joined = run.status === 'failed' && run.lastStage === AI_JOINED_OPEN_RUN;
+  const joined = runIsJoined(run);
   const failed = run.status === 'failed' && !joined;
   const done = run.status === 'completed' || joined;
   type S = { key: string; label: string; sub: string; state: 'done' | 'now' | 'todo' | 'failed'; icon: ReactNode };

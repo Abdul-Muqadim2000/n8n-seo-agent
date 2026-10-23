@@ -241,6 +241,9 @@ export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
   const stage = c.stage || text(p.stage);
   const status = (c.status || text(p.status) || '').toLowerCase();
 
+  // R-A3: a check joined to the website's open run was not refused; its report is the open run's, delivered when that run reports
+  if ((stage === 'rejected' || status === 'rejected') && text(p.reason) === 'open_run')
+    return hold('rejected', 'This check is part of the run already in progress, so its report is that run\'s report and is sent when that run finishes.');
   if (stage === 'rejected' || status === 'rejected')
     return hold('rejected', `The engine refused this run${text(p.error) ? ` (${text(p.error).slice(0, 160)})` : ''}, so there is nothing to send.`);
   // R110: a "started" note is an acknowledgement whatever status it carries (the engine sends them as `accepted`), so it is
