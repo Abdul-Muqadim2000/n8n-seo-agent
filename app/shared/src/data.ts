@@ -9,6 +9,8 @@ import type { PageChangeTest } from './change-test';
 import type { Lineage } from './lineage';
 import type { RecommendationScore } from './queue';
 import type { AiPanelInfo, AiSegments } from './ai-panel';
+import type { AiAnswerDetail, AiEngineRate, AiLatestExtras, AiSovPoint } from './ai-detail';
+import type { AiFilter, AiFilterDim } from './ai-trends';
 
 export interface MetricsPoint {
   periodStart: string;
@@ -480,6 +482,14 @@ export interface AiRun {
   aiRevenue: number | null;
   indexSov: number | null;
   aiImpressions: number | null;
+  /** W2-A (2026-10-23): each engine's rates in this run (engines_json), for "per engine over time" */
+  engineRates?: AiEngineRate[];
+  /** share of voice per brand in this run: the fixed set (sov_json) when the row has it, else every brand named (competitors_json) */
+  sov?: { basis: 'set' | 'all'; brands: AiSovPoint[] };
+  /** the headline ranges: ci_json when the row has it (clustered by question), else the stored Wilson range */
+  ciNamed?: [number, number] | null;
+  ciCited?: [number, number] | null;
+  ciMethod?: string;
 }
 
 /** v4.9: one AI Pulse day (ChatGPT, Gemini and Google AI Mode on the whole panel) */
@@ -660,6 +670,8 @@ export interface AiData {
     index: AiIndex | null;
     stages: AiGroup[];
     clusters: AiGroup[];
+    /** W2-A: the wave-2 blocks of the latest row (each null on a row written before it) */
+    extras?: AiLatestExtras;
     market: {
       keyword: string;
       checkedAt: string;
@@ -670,7 +682,9 @@ export interface AiData {
     } | null;
   } | null;
   /** G6: persona (buyer role), market (CC-lang), pinned, and the fit gate's sentence for a refused question */
-  prompts: { promptId: string; prompt: string; kind: string; topic: string; keyword: string; source: string; status: string; createdAt: string; stage: string; cluster: string; volume: number | null; origin: string; persona: string; market: string; pinned: boolean; fitNote: string }[];
+  prompts: { promptId: string; prompt: string; kind: string; topic: string; keyword: string; source: string; status: string; createdAt: string; stage: string; cluster: string; volume: number | null; origin: string; persona: string; market: string; pinned: boolean; fitNote: string;
+    /** W2 §3 (the engine's own record, absent on older rows): when it was last asked, by which run, how often in 28 days, the run whose gate refused it */
+    lastAskedAt?: string; lastAskedRun?: string; askedN28d?: number | null; refusedAtRun?: string }[];
   /** G6 (2026-10-18): the latest run's rates per engine / cluster / buyer role / market / stage, and the panel it asked */
   segments: AiSegments | null;
   panel: AiPanelInfo | null;
@@ -704,7 +718,20 @@ export interface AiData {
     /** 2026-10-23 engine contract: 1-based place the business is named in (null = not named / not recorded) and the entities named */
     position?: number | null;
     entities?: { id: string; name: string; role: 'self' | 'competitor' | 'platform' | 'source' | 'other'; position: number | null; cited: boolean }[];
+    /** W2 §1: the whole answer, every citation, retrieved pages, product / ad / local cards, the model (in the paged answers endpoint) */
+    detail?: AiAnswerDetail;
+    /** the question's panel facets, joined from the panel row (the paged answers endpoint) */
+    cluster?: string; persona?: string; market?: string; stage?: string;
   }[];
+  /**
+   * W2-A (A10 finished): the AI page no longer receives every answer (`answers` is empty there): each question's best result per engine
+   * in the latest run, compact, and the answers themselves page in from GET .../data/ai/answers. Other callers still get `answers`.
+   */
+  answerResults?: { promptId: string; engine: string; result: 'cited' | 'named' | 'absent' | 'none' }[];
+  /** how many answers the latest run stored (the paged endpoint's total without a filter) */
+  answersStored?: number;
+  /** W2-A: the filter the request was scoped to (the page's filter bar) and that scope's own figures */
+  scope?: AiScope | null;
   /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the weekly AI growth loop, null until its first run */
   growth: AiGrowth | null;
   /** from the latest AI visibility report (when it was delivered to the app) */
@@ -720,6 +747,58 @@ export interface AiData {
     runId: string;
     current: boolean;
   } | null;
+}
+
+/** W2-A: what one filter (engine, topic, buyer role, market, stage) shows: the latest run's answers in it, and its own trend */
+export interface AiScopeSummary {
+  answers: number;
+  answered: number;
+  named: number;
+  cited: number;
+  namedRate: number | null;
+  citedRate: number | null;
+  namedCi: [number, number] | null;
+  citedCi: [number, number] | null;
+  /** 12+ answers: under it the rates read "too few answers" */
+  enough: boolean;
+  questions: number;
+  topRivals: { name: string; n: number }[];
+  topSources: { host: string; n: number }[];
+}
+export interface AiScope {
+  filter: AiFilter;
+  /** the one dimension set (a segment the engine measures every run), null when several or none are set */
+  segment: { dim: AiFilterDim; key: string } | null;
+  /** the latest run's answers in the filter (null when the answers were not read) */
+  summary: AiScopeSummary | null;
+  /** that segment's named rate in every stored run, with its range; breaks where a run was not compared with the one before */
+  trend: { runId: string; checkedAt: string; rate: number | null; ci: [number, number] | null; n: number; enough: boolean; comparable: boolean; reason: string | null }[];
+  note: string;
+}
+
+/** W2-A: GET .../data/ai/answers, one page of the latest run's answers (or the run named), filtered, with the filter's summary */
+export interface AiAnswersPage {
+  runId: string | null;
+  checkedAt: string | null;
+  /** stored runs newest first, for the run picker (id, date) */
+  runs: { runId: string; checkedAt: string }[];
+  total: number;
+  page: number;
+  pageSize: number;
+  items: AiData['answers'];
+  summary: AiScopeSummary;
+  engines: string[];
+}
+
+/** W2-A: GET .../data/ai/questions/:promptId, one question's answers on every engine across the stored runs */
+export interface AiQuestionHistory {
+  promptId: string;
+  prompt: string;
+  facets: { cluster: string; persona: string; market: string; stage: string; keyword: string };
+  runs: { runId: string; checkedAt: string; answers: AiData['answers'] }[];
+  series: { runId: string; checkedAt: string; n: number; named: number; cited: number; namedRate: number | null; ci: [number, number] | null }[];
+  /** answers are kept about 120 days by the engine: older runs have none */
+  note: string;
 }
 
 export interface BacklinkLink {

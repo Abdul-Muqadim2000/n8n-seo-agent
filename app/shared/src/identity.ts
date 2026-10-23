@@ -528,6 +528,9 @@ export const AUDIT_ACTIONS = {
   'site.admin.prospect': { label: 'Changed a link prospect', category: 'websites' },
   'site.admin.ai_prompts': { label: 'Changed the AI question panel', category: 'websites' },
   'site.admin.content_groups': { label: 'Changed the content groups', category: 'websites' },
+  // W2-A (2026-10-23): AI visibility wave 2
+  'site.ai_prompts_deleted': { label: 'Deleted questions from the AI question panel', category: 'websites' },
+  'site.ai_import': { label: 'Uploaded an AI report export (Bing or Search Console)', category: 'data' },
   'company.created': { label: 'Created the company', category: 'settings' },
   'company.updated': { label: 'Changed company details', category: 'settings' },
   'company.budget_changed': { label: 'Changed the platform spending guard', category: 'settings' },
