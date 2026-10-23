@@ -11,9 +11,11 @@
 //    a list shorter because a gate ran says so).
 /*__AI_PANEL__*/
 /*__FIT_GATE__*/
+/*__AI_ENTITIES__*/
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let jobs = []; try { jobs = $('Prompt Jobs').all().map(i => i.json).filter(j => !j.skip); } catch (e) {}
 let outs = []; try { outs = $('Prompt Writer').all().map(i => i.json); } catch (e) {}
+let cacheRows = []; try { cacheRows = $('Load Cache (AI)').all().map(i => i.json); } catch (e) {}   // F1a: entities learned in earlier runs
 let dreq = [], dres = []; try { dreq = $('Discovery Requests').all().map(i => i.json); dres = $('Run Discovery').all().map(i => i.json || {}); } catch (e) {}
 const parse = (raw) => { if (raw && typeof raw === 'object') return raw; const s = String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, ''); try { return JSON.parse(s); } catch (e) { const a = s.indexOf('{'), b = s.lastIndexOf('}'); try { return JSON.parse(s.slice(a, b + 1)); } catch (e2) { return null; } } };
 const hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };
@@ -60,7 +62,16 @@ for (const p of plans) {
   const dd = AIP.dedupe(buyerQ, p.prompts.filter(q => q.kind !== 'brand').map(q => ({ prompt: q.prompt, persona: q.persona, market: q.market || p.own_market })));
   // G6: the fit gate, on the search phrase AND on the wording (the brand question is about the site itself and is never judged here)
   const ctx = FITR.ctx(p.fit_input || { own_domain: p.domain, competitors: p.competitors || [], brands: p.aliases || {} });
-  const judge = (q) => { const a = fitGate(q.keyword || '', ctx); if (!a.ok) return a; const b = fitGate(q.prompt, { ...ctx, topics: null }); return b.ok ? { ok: true } : b; };
+  // F1a (ENGINE_AUDIT E10): a question that NAMES another vendor ("Zoho Books vs QuickBooks for VAT filing", "Is SAP Business One worth it")
+  // measures that vendor, not this business: the client is structurally absent from the answer and the gap list would ask for a page about
+  // a rival's product. Refused with the vendor named - the owner's competitors at any name length, the businesses AI names for these topics
+  // (learned names, the AI-answer database's brands for the discovered questions), the big platforms - unless it is the client's own
+  // platform (its services name it). The owner's own questions do not pass through here: they are kept, whatever they name.
+  const vendorsSeen = [...new Set(mine.flatMap(x => (x.j.market_questions || []).flatMap(m => { const g = String(m).match(/AI names ([^)]+)\)\s*$/); return g ? g[1].split(/,\s*/) : []; })))].filter(n => AIE.nameLike(n));
+  const vctx = { site_id: p.site_id, domain: p.domain, business_name: p.business_name, brand_names: p.brand_names || [], competitors: p.competitors || [], configured_competitors: p.configured_competitors,
+    aliases: p.aliases || {}, services: p.services || [], topics: p.topics || [], business_facts: p.business_facts || '', book: AIE.bookOf(cacheRows, p.site_id), vendors: vendorsSeen };
+  const judge = (q) => { const v = AIE.vendorIn(q.prompt, vctx); if (v) return { ok: false, reason: 'other brand', detail: 'it names ' + v.name + ' (' + v.why + '), so the answer measures that company and not this business' };
+    const a = fitGate(q.keyword || '', ctx); if (!a.ok) return a; const b = fitGate(q.prompt, { ...ctx, topics: null }); return b.ok ? { ok: true } : b; };
   const have = new Set(p.prompts.map(x => norm(x.prompt))); let added = 0;
   for (const q of [...brandQ, ...dd.keep]) { if (added >= p.prompts_needed) break; if (have.has(norm(q.prompt))) continue; have.add(norm(q.prompt));
     const v = q.kind === 'brand' ? { ok: true } : judge(q);
