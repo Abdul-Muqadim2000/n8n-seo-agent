@@ -1,5 +1,7 @@
 import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
+  AI_JOINED_OPEN_RUN,
+  aiOpenRunNote,
   buildN8nPayload,
   cleanDomain,
   compactBody,
@@ -604,9 +606,13 @@ export function runOutcome(
   finalStages: readonly string[],
   stage: string,
   body: Record<string, unknown>,
-): { status?: string; error?: string | null; completedAt?: Date } {
+): { status?: string; error?: string | null; completedAt?: Date; lastStage?: string } {
   if (stage === 'rejected' || String(body.status ?? '').toLowerCase() === 'rejected') {
     if (runStatus === 'completed') return {};
+    // W2-A (WAVE2_CONTRACTS.md §6, engine F2 E17): an on-demand AI check that met the website's open run is part of that run, not a
+    // failure. It is closed here with nothing charged (the open run carries its own charge) and marked so the screens say so.
+    const joined = aiOpenRunNote(body);
+    if (joined) return { status: 'failed', error: joined, completedAt: new Date(), lastStage: AI_JOINED_OPEN_RUN };
     const why = typeof body.error === 'string' && body.error.trim() ? body.error.trim() : typeof body.validation_error === 'string' && body.validation_error.trim() ? body.validation_error.trim() : 'Rejected by the SEO engine';
     return { status: 'failed', error: why, completedAt: new Date() };
   }

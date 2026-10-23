@@ -586,7 +586,15 @@ export const features: Feature[] = [
       'See how precise your AI visibility figures will be for each number of questions, with or without the daily check, before you choose',
       'When AI gets a fact about your business wrong, you see the wrong claim, the true answer from your profile and the pages that carry it, with a correction drafted for you to review. Nothing is sent without you, and with no true fact on file we ask you for it instead of guessing',
       'Every key page is also checked the way ChatGPT, Perplexity and Claude\'s fetchers see it, so a firewall rule that quietly turns AI assistants away is flagged as a high-priority fix',
-      'For real Copilot citations we point you to Bing\'s own AI Performance report, and say plainly that it has no API, so it is never blended into our numbers',
+      'Upload Bing\'s AI Performance export for your real Copilot citations, and Search Console\'s AI figures, from the AI visibility page: they are shown as your own exports, with their dates, and never blended into the rates we measure. A file for another website is refused',
+      'Open any answer to read what the assistant said: the whole answer, the brands in the order it named them with yours marked, every source it cited in order, the pages it read but did not cite and the searches it ran first',
+      'Open any question to see every assistant\'s answer side by side, and how often it has named you across your past checks, with the range',
+      'One filter for the whole page: engine, topic, buyer role, market, stage and dates, kept in the link so a filtered view can be shared',
+      'Each assistant and each competitor over time, with the range; a line stops where a check asked different questions or other assistants, and the break says why',
+      'Download the answers, the question panel, the sources, competitors over time and your pages as CSV, for the same filter',
+      'Select many questions at once to switch them off or on, pin them, give them a topic or delete them; import a keyword with each question',
+      'Your own alert rules, for example "ChatGPT names us 5 points less often", with a preview of how often each would have fired on your past checks. A rule fires only on a like-for-like check and only when the change is beyond normal variation',
+      'The same figures and answers through the API and to AI assistants over MCP',
     ],
     steps: [
       { title: 'Build the panel', body: 'Up to 500 questions your buyers ask, by topic, buyer role, market and stage.' },
@@ -610,6 +618,10 @@ export const features: Feature[] = [
         a: 'Yes. The Answer Analyst compares answers with your business profile and lists wrong claims, sentiment and the order brands are named in.',
       },
       { q: 'Can AI crawlers reach my site?', a: 'Every week Alaventra checks robots.txt for each AI crawler, your llms.txt file and whether your CDN blocks them.' },
+      {
+        q: 'Can I see the actual answers?',
+        a: 'Yes. Every answer opens with what the assistant said, the brands it named in order, the sources it cited and the searches it ran. Answers load a page at a time and can be downloaded as CSV.',
+      },
       {
         q: 'Does it do anything about what it finds?',
         a: 'Yes, that is AI growth. Every week, after the visibility run, the questions you lose become suggested pages to write or refresh, new pages go to Bing and IndexNow, your key pages are checked for what AI assistants need to quote them, and the pages AI cites without naming you become pitches.',
@@ -972,7 +984,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 65, label: 'guides, one for each thing we ask of you' },
+      { value: 67, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],

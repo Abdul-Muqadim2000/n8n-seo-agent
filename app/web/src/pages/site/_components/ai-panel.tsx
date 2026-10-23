@@ -7,13 +7,14 @@
 //    questions the engine suggests. Every change goes through Site Admin `ai_prompts` (the engine's AI_Prompt_Rows_Admin.js).
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { ArrowDownRight, ArrowUpRight, FileUp, Layers, Pencil, Pin, PinOff, Plus, Power, Sparkles, Users } from 'lucide-react';
-import { AI_PANEL_LIMITS, AI_SEGMENT_MIN, aiAskedSet, aiPanelOverflow, compactNumber, estimateAiPanelCost, parseAiPanelCsv, titleCase, type AiData, type AiPanelCsvResult, type AiPanelInfo, type AiSegment, type AiSegments } from '@seo/shared';
+import { ArrowDownRight, ArrowUpRight, FileUp, Layers, Pencil, Pin, PinOff, Plus, Power, Sparkles, Tag, Trash2, Users } from 'lucide-react';
+import { AI_PANEL_LIMITS, AI_SEGMENT_MIN, aiAskedSet, aiPanelOverflow, compactNumber, estimateAiPanelCost, parseAiPanelCsvWithKeyword, titleCase, type AiData, type AiPanelCsvResult, type AiPanelInfo, type AiSegment, type AiSegments } from '@seo/shared';
 import { creditsLabel } from '@/lib/credits';
 import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
-import { useSiteAdmin } from '@/lib/queries';
-import { cn } from '@/lib/utils';
+import { useAiPromptDelete, useSiteAdmin } from '@/lib/queries';
+import { cn, fmtAgo, fmtDate } from '@/lib/utils';
+import { Dialog } from '@/components/ui/overlay';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -23,7 +24,8 @@ import { FilterChips, Kind, Panel, SrOnly, useSitePage } from './kit';
 import { engineLabel, sortEngines } from './ai';
 
 type Prompt = AiData['prompts'][number];
-type Answer = AiData['answers'][number];
+/** W2-A: each question's best result per engine in the latest run (the page no longer loads every answer) */
+type Result = NonNullable<AiData['answerResults']>[number];
 
 const DIMS = [
   { value: 'cluster', label: 'Topic' },
@@ -136,7 +138,8 @@ const isTracked = (p: Prompt) => !['off', 'refused'].includes(p.status || 'activ
 /** the owner's own questions (theirs or pinned): asked before the automatic ones, so only these can be crowded out by the panel size */
 const isOwn = (p: Prompt) => p.source === 'custom' || p.pinned;
 type StatusFilter = 'tracked' | 'over' | 'pinned' | 'refused' | 'off' | 'all';
-const STAGES = ['awareness', 'consideration', 'decision'] as const;
+// W2-E1: 'shopping' is a stage for sites that sell products
+const STAGES = ['awareness', 'consideration', 'decision', 'shopping'] as const;
 
 function originLabel(p: Prompt): string {
   if (p.source === 'custom' || p.origin === 'custom') return 'You';
@@ -148,9 +151,15 @@ function originLabel(p: Prompt): string {
  * stored with the last run. A question past the size is stored and NOT asked (AI_Plan.js cuts the panel there): it is labelled so, and
  * adding or importing past the size says so before it is sent, with what the bigger panel would use.
  */
-export function PanelManager({ prompts, answers, suggestions, setting, engines: panelEngines = [] }: { prompts: readonly Prompt[]; answers: readonly Answer[]; suggestions: { question: string; volume: number }[]; setting: number | null; engines?: readonly string[] }) {
+export function PanelManager({ prompts, results, suggestions, setting, engines: panelEngines = [], onQuestion }: { prompts: readonly Prompt[]; results: readonly Result[]; suggestions: { question: string; volume: number }[]; setting: number | null; engines?: readonly string[]; /** W2-A: open a question's answers and history */ onQuestion?: (promptId: string) => void }) {
   const { org, site, can, page } = useSitePage();
   const admin = useSiteAdmin(org.id, site.id);
+  const del = useAiPromptDelete(org.id, site.id);
+  // W2-A: bulk select (pause / resume / pin / unpin / topic / delete)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [tagging, setTagging] = useState(false);
+  const [tag, setTag] = useState('');
   const isAdmin = can('admin');
   const [status, setStatus] = useState<StatusFilter>('tracked');
   const [cluster, setCluster] = useState('');
@@ -172,18 +181,17 @@ export function PanelManager({ prompts, answers, suggestions, setting, engines: 
   const clusters = uniq(prompts.map((p) => p.cluster || p.topic));
   const personas = uniq(prompts.map((p) => p.persona));
   const markets = uniq(prompts.map((p) => p.market));
-  const engines = sortEngines(answers.map((a) => a.engine));
+  const engines = sortEngines(results.map((a) => a.engine));
   // each question's latest result on the chosen engine (named / cited / not named / no answer)
   const resultOf = useMemo(() => {
     const m = new Map<string, string>();
-    for (const a of answers) if (!engine || a.engine === engine) {
-      const v = !a.answered ? 'none' : a.cited ? 'cited' : a.mentioned ? 'named' : 'absent';
+    const rank = { cited: 3, named: 2, absent: 1, none: 0 } as Record<string, number>;
+    for (const a of results) if (!engine || a.engine === engine) {
       const prev = m.get(a.promptId);
-      const rank = { cited: 3, named: 2, absent: 1, none: 0 } as Record<string, number>;
-      if (!prev || rank[v] > rank[prev]) m.set(a.promptId, v);
+      if (!prev || rank[a.result] > rank[prev]) m.set(a.promptId, a.result);
     }
     return m;
-  }, [answers, engine]);
+  }, [results, engine]);
 
   const rows = prompts.filter((p) =>
     (status === 'all' || (status === 'tracked' ? isTracked(p) && isAsked(p) : status === 'over' ? isTracked(p) && !isAsked(p) : status === 'pinned' ? p.pinned && isTracked(p) : p.status === status))
@@ -201,10 +209,27 @@ export function PanelManager({ prompts, answers, suggestions, setting, engines: 
     );
   };
 
+  const ids = [...selected].filter((id) => prompts.some((p) => p.promptId === id));
+  const toggle = (id: string) => setSelected((s0) => { const s1 = new Set(s0); if (s1.has(id)) s1.delete(id); else s1.add(id); return s1; });
+  const allShown = rows.length > 0 && rows.every((p) => selected.has(p.promptId));
+  const bulk = (body: Record<string, unknown>, ok: string) => { send(body, ok); setSelected(new Set()); };
+  const removeSelected = () =>
+    del.mutate(ids, {
+      onSuccess: (r) => { toast.success(`${r.deleted} question${r.deleted === 1 ? '' : 's'} deleted`); setSelected(new Set()); setConfirmDelete(false); },
+      onError: (e) => toast.error(errorMessage(e)),
+    });
+
   const resultBadge = (v?: string) =>
     v === 'cited' ? <StatusBadge tone="good">Cited</StatusBadge> : v === 'named' ? <StatusBadge tone="good">Named</StatusBadge> : v === 'absent' ? <StatusBadge tone="serious">Not named</StatusBadge> : v === 'none' ? <span className="text-xs text-ink-3">No answer</span> : <span className="text-xs text-ink-3">-</span>;
 
   const columns: Column<Prompt>[] = [
+    ...(isAdmin
+      ? [{
+          key: 'sel',
+          header: <input type="checkbox" className="size-4 accent-[var(--accent)]" aria-label="Select every question shown" checked={allShown} onChange={() => setSelected((s0) => { const s1 = new Set(s0); for (const p of rows) { if (allShown) s1.delete(p.promptId); else s1.add(p.promptId); } return s1; })} />,
+          cell: (p: Prompt) => <input type="checkbox" className="size-4 accent-[var(--accent)]" aria-label={`Select: ${p.prompt}`} checked={selected.has(p.promptId)} onChange={() => toggle(p.promptId)} />,
+        }]
+      : []),
     {
       key: 'prompt',
       header: 'Question',
@@ -213,7 +238,13 @@ export function PanelManager({ prompts, answers, suggestions, setting, engines: 
         <div className={cn('min-w-[16rem]', !isTracked(p) && 'opacity-70')}>
           <p className="text-[13px] font-medium leading-snug text-ink">
             {p.pinned && <Pin className="mr-1 inline size-3.5 text-accent-text" aria-label="Pinned" />}
-            {p.prompt}
+            {onQuestion ? (
+              <button type="button" className="text-left hover:text-accent-text hover:underline transition-colors duration-150 ease-brand" onClick={() => onQuestion(p.promptId)}>
+                {p.prompt}
+              </button>
+            ) : (
+              p.prompt
+            )}
           </p>
           <p className="mt-0.5 text-xs text-ink-3">{[p.cluster || p.topic, p.stage && titleCase(p.stage)].filter(Boolean).join(' · ')}</p>
           {p.fitNote && <p className={cn('mt-1 text-xs', p.status === 'refused' ? 'text-serious-text' : 'text-ink-3')}>{p.fitNote}</p>}
@@ -225,7 +256,13 @@ export function PanelManager({ prompts, answers, suggestions, setting, engines: 
     { key: 'volume', header: 'AI searches / mo', align: 'right', hideOnMobile: true, sortValue: (p) => p.volume ?? -1, cell: (p) => <span className="tabular text-[13px]">{p.volume != null ? compactNumber(p.volume) : '-'}</span> },
     { key: 'origin', header: 'From', hideOnMobile: true, sortValue: (p) => originLabel(p), cell: (p) => <span className="text-[13px] text-ink-2">{originLabel(p)}</span> },
     { key: 'result', header: engine ? `On ${engineLabel(engine)}` : 'Latest run', sortValue: (p) => resultOf.get(p.promptId) ?? '', cell: (p) => resultBadge(resultOf.get(p.promptId)) },
-    { key: 'status', header: 'Status', sortValue: (p) => (isTracked(p) ? (isAsked(p) ? 0 : 1) : p.status === 'refused' ? 2 : 3), cell: (p) => (isTracked(p) ? (isAsked(p) ? <StatusBadge tone="good">Tracked</StatusBadge> : <StatusBadge tone="warning">Not asked: over your panel size</StatusBadge>) : p.status === 'refused' ? <StatusBadge tone="warning">Refused</StatusBadge> : <Badge icon={<Power className="size-3" aria-hidden />}>Off</Badge>) },
+    { key: 'status', header: 'Status', sortValue: (p) => (isTracked(p) ? (isAsked(p) ? 0 : 1) : p.status === 'refused' ? 2 : 3), cell: (p) => (
+      <span className="inline-flex flex-col items-start gap-0.5">
+        {isTracked(p) ? (isAsked(p) ? <StatusBadge tone="good">Tracked</StatusBadge> : <StatusBadge tone="warning">Not asked: over your panel size</StatusBadge>) : p.status === 'refused' ? <StatusBadge tone="warning">Refused</StatusBadge> : <Badge icon={<Power className="size-3" aria-hidden />}>Off</Badge>}
+        {/* W2 §3: the engine's own record when stored (else the cut above is the app's mirror of the engine's) */}
+        {p.lastAskedAt ? <span className="text-[11px] text-ink-3" title={fmtDate(p.lastAskedAt)}>asked {fmtAgo(p.lastAskedAt)}{p.askedN28d != null ? ` · ${p.askedN28d}x in 28 days` : ''}</span> : null}
+      </span>
+    ) },
     ...(isAdmin
       ? [{
           key: 'act',
@@ -286,6 +323,25 @@ export function PanelManager({ prompts, answers, suggestions, setting, engines: 
         <PickFilter label="Result on" value={engine} onChange={setEngine} options={engines} format={engineLabel} allLabel="Any engine" />
       </div>
       {editing && <EditQuestion p={editing} onClose={() => setEditing(null)} onSave={(body, msg) => { send(body, msg); setEditing(null); }} />}
+      {isAdmin && ids.length > 0 && (
+        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-accent bg-surface p-2.5 shadow-raised" role="region" aria-label="Selected questions">
+          <span className="px-1 text-[13px] font-medium text-ink">{ids.length} selected</span>
+          <Button size="sm" variant="secondary" icon={<Power className="size-4" />} loading={admin.isPending} onClick={() => bulk({ remove: ids }, `${ids.length} switched off`)}>Switch off</Button>
+          <Button size="sm" variant="secondary" loading={admin.isPending} onClick={() => bulk({ enable: ids }, `${ids.length} switched on`)}>Switch on</Button>
+          <Button size="sm" variant="secondary" icon={<Pin className="size-4" />} loading={admin.isPending} onClick={() => bulk({ pin: ids }, `${ids.length} pinned`)}>Pin</Button>
+          <Button size="sm" variant="secondary" icon={<PinOff className="size-4" />} loading={admin.isPending} onClick={() => bulk({ unpin: ids }, `${ids.length} unpinned`)}>Unpin</Button>
+          <Button size="sm" variant="secondary" icon={<Tag className="size-4" />} onClick={() => setTagging(true)}>Set topic</Button>
+          <Button size="sm" variant="secondary" icon={<Trash2 className="size-4" />} onClick={() => setConfirmDelete(true)}>Delete</Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
+        </div>
+      )}
+      <Dialog open={tagging} onOpenChange={setTagging} title={`Set the topic of ${ids.length} question${ids.length === 1 ? '' : 's'}`} description="The topic groups questions in the segments, the filter and the reports."
+        footer={<><Button variant="ghost" onClick={() => setTagging(false)}>Cancel</Button><Button disabled={!tag.trim()} onClick={() => { bulk({ edit: ids.map((promptId) => ({ promptId, cluster: tag.trim().toLowerCase() })) }, `Topic set on ${ids.length}`); setTagging(false); setTag(''); }}>Set the topic</Button></>}>
+        <Field label="Topic">{(p) => <Input {...p} value={tag} maxLength={60} onChange={(e) => setTag(e.target.value)} placeholder="e.g. payroll" />}</Field>
+      </Dialog>
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete} title={`Delete ${ids.length} question${ids.length === 1 ? '' : 's'}?`}
+        description="Deleted questions are removed from the panel and no longer asked. The answers already stored stay in the history. To stop asking a question but keep it listed, switch it off instead."
+        footer={<><Button variant="ghost" onClick={() => setConfirmDelete(false)}>Cancel</Button><Button variant="danger" loading={del.isPending} onClick={removeSelected}>Delete</Button></>} />
       <DataTable rows={rows} columns={columns} rowKey={(p) => p.promptId} dense pageSize={25} searchable searchPlaceholder="Search the questions" searchText={(p) => [p.prompt, p.cluster, p.persona, p.market].join(' ')}
         empty={status === 'refused' ? 'No question was refused: every question the engine wrote passed the keyword rule.' : 'No questions match these filters.'} />
       {status === 'refused' && refused.length > 0 && (
@@ -395,7 +451,7 @@ function AddQuestions({ busy, onAdd, own = 0, size = AI_PANEL_LIMITS.default_new
   const [market, setMarket] = useState('');
   const [pinned, setPinned] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [csv, setCsv] = useState<(AiPanelCsvResult & { name: string }) | null>(null);
+  const [csv, setCsv] = useState<(AiPanelCsvResult & { name: string; keywords?: number }) | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   const add = () => {
@@ -413,7 +469,7 @@ function AddQuestions({ busy, onAdd, own = 0, size = AI_PANEL_LIMITS.default_new
   const readFile = async (f: File | undefined) => {
     if (!f) return;
     if (f.size > 1_000_000) { setCsv({ name: f.name, rows: [], errors: [{ line: 0, message: 'The file is larger than 1 MB' }], skipped: 0 }); return; }
-    setCsv({ name: f.name, ...parseAiPanelCsv(await f.text()) });
+    setCsv({ name: f.name, ...parseAiPanelCsvWithKeyword(await f.text()) });
   };
 
   return (
@@ -438,12 +494,12 @@ function AddQuestions({ busy, onAdd, own = 0, size = AI_PANEL_LIMITS.default_new
           <p className="text-[13px] font-medium text-ink">Import a question list (CSV)</p>
           <GuideButton id="ai-panel-import" variant="link" label="How should the file look?" />
         </div>
-        <p className="text-[13px] leading-snug text-ink-3">Columns: question, buyer role, cluster, stage, market, pinned. Only the question is required. Up to 500 questions a file.</p>
+        <p className="text-[13px] leading-snug text-ink-3">Columns: question, buyer role, cluster, stage, market, pinned, keyword. Only the question is required. Up to 500 questions a file.</p>
         <input ref={file} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="sr-only" onChange={(e) => { void readFile(e.target.files?.[0]); e.target.value = ''; }} aria-label="Choose a CSV file" />
         <Button variant="secondary" icon={<FileUp className="size-4" />} onClick={() => file.current?.click()}>Choose a file</Button>
         {csv && (
           <div className="space-y-2 text-[13px]">
-            <p className="text-ink-2"><span className="font-medium text-ink">{csv.name}</span>: {csv.rows.length} question{csv.rows.length === 1 ? '' : 's'} ready{csv.skipped ? `, ${csv.skipped} blank or repeated line${csv.skipped === 1 ? '' : 's'} skipped` : ''}{csv.errors.length ? `, ${csv.errors.length} line${csv.errors.length === 1 ? '' : 's'} with a problem` : ''}.</p>
+            <p className="text-ink-2"><span className="font-medium text-ink">{csv.name}</span>: {csv.rows.length} question{csv.rows.length === 1 ? '' : 's'} ready{csv.skipped ? `, ${csv.skipped} blank or repeated line${csv.skipped === 1 ? '' : 's'} skipped` : ''}{csv.errors.length ? `, ${csv.errors.length} line${csv.errors.length === 1 ? '' : 's'} with a problem` : ''}{csv.keywords ? `, ${csv.keywords} with a keyword` : ''}.</p>
             {csv.errors.length > 0 && (
               <ul className="max-h-32 space-y-0.5 overflow-auto rounded-lg bg-surface-2 p-2 text-xs text-ink-2">
                 {csv.errors.slice(0, 20).map((e) => <li key={e.line + e.message}>Line {e.line}: {e.message}</li>)}

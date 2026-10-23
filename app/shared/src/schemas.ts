@@ -16,6 +16,7 @@ import {
 import { cleanDomain, domainOk } from './domain';
 import { isValidTimezone } from './cycle-clock';
 import { TOPIC_SOURCES } from './cycles';
+import { aiAlertRulesSchema } from './ai-trends';
 
 // ---------- building blocks ----------
 const opt = (max: number) => z.string().trim().max(max, `At most ${max} characters`).default('');
@@ -120,6 +121,20 @@ export const monitorSettingsSchema = z.object({
   auditPages: z.number().int().min(50).max(1000).default(200),
   auditJs: z.boolean().default(false),
   brandNames: stringList(10, 80),
+  // AI visibility wave 2 (WAVE2_CONTRACTS.md §4): optional with NO default, so a body that does not set them sends nothing and every
+  // website keeps today's cost and behaviour until its owner changes one (the engine's defaults: off, '' = today's pulse engines, 0, '')
+  /** ask Claude every week, not once a month */
+  aiClaudeWeekly: z.boolean().optional(),
+  /** the engines the daily pulse asks (empty = today's pulse engines) */
+  aiPulseEngines: z.array(z.enum(AI_ENGINE_VALUES)).max(9).optional(),
+  /** send each buyer role to the API engines as context, not only in the wording ("API answers") */
+  aiPersonaContext: z.boolean().optional(),
+  /** fan-out searches checked in Google each week (0 = off; the app offers 25 / 50 / 100) */
+  aiFanoutCheck: z.number().int().refine((v) => [0, 25, 50, 100].includes(v), 'Choose off, 25, 50 or 100').optional(),
+  /** the fixed set of brands share of voice is counted against (entity ids or domains; empty = the competitors you set) */
+  aiSovSet: z.array(z.string().trim().min(1).max(120)).max(12).optional(),
+  /** the owner's alert rules (a rule fires only on a comparable run, when its own test passes and the change reaches the threshold) */
+  aiAlertRules: aiAlertRulesSchema.optional(),
 });
 export type MonitorSettings = z.output<typeof monitorSettingsSchema>;
 
@@ -511,9 +526,12 @@ export const aiQuestionSchema = z.object({
   prompt: aiQuestionText,
   persona: z.string().trim().max(40).default(''),
   cluster: z.string().trim().max(60).default(''),
-  stage: z.enum(['', 'awareness', 'consideration', 'decision']).default(''),
+  // W2-E1: 'shopping' for sites that sell products
+  stage: z.enum(['', 'awareness', 'consideration', 'decision', 'shopping']).default(''),
   market: z.string().trim().regex(/^([A-Za-z]{2}([-_ ][A-Za-z]{2,3})?)?$/, 'Use a country code and a language, e.g. SA-en').default(''),
   pinned: z.boolean().default(false),
+  /** W2 §6: the search phrase the question stands for (the CSV's optional keyword column); the engine keeps it as the owner's */
+  keyword: z.string().trim().max(120).optional(),
 });
 export type AiQuestionInput = z.output<typeof aiQuestionSchema>;
 export const aiQuestionEditSchema = z.object({
@@ -521,9 +539,10 @@ export const aiQuestionEditSchema = z.object({
   prompt: aiQuestionText.optional(),
   persona: z.string().trim().max(40).optional(),
   cluster: z.string().trim().max(60).optional(),
-  stage: z.enum(['awareness', 'consideration', 'decision']).optional(),
+  stage: z.enum(['awareness', 'consideration', 'decision', 'shopping']).optional(),
   market: z.string().trim().regex(/^[A-Za-z]{2}([-_ ][A-Za-z]{2,3})?$/, 'Use a country code and a language, e.g. SA-en').optional(),
   pinned: z.boolean().optional(),
+  keyword: z.string().trim().min(2).max(120).optional(),
 });
 
 export const adminActionSchema = z.discriminatedUnion('action', [
@@ -663,6 +682,18 @@ export const linkImportSchema = z.object({
   fileName: z.string().trim().max(200).optional(),
 });
 export type LinkImportInput = z.output<typeof linkImportSchema>;
+
+// ---------- W2-A (2026-10-23): AI report uploads (ai-import.ts) and deleting AI panel questions ----------
+export const aiImportSchema = z.object({
+  /** the CSV text: Bing Webmaster Tools AI Performance export, or Search Console Performance export (Queries / Pages / Dates) */
+  csv: z.string().min(10, 'The file is empty').max(15_000_000, 'The file is larger than 15 MB: export a shorter period'),
+  fileName: z.string().trim().max(200).optional(),
+  /** '' = recognise it (a Citations column means Bing) */
+  source: z.enum(['', 'bing_ai', 'gsc_ai']).default(''),
+  /** the last day of the period exported, for a file without a date column (Search Console's Queries / Pages files) */
+  periodEnd: z.string().trim().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'Use a date like 2026-10-22').default(''),
+});
+export const aiPromptDeleteSchema = z.object({ ids: z.array(z.string().trim().min(1).max(120)).min(1, 'Choose at least one question').max(500) });
 
 // ---- v4.13 Link Builder ----
 const hostName = z.string().trim().min(3).max(200).regex(/^[a-z0-9.-]+$/i, 'A host name like smtp.gmail.com');

@@ -56,6 +56,13 @@ export function monitorsBody(m: Partial<MonitorSettings>): Body {
   if (m.auditPages !== undefined) out.audit_pages = m.auditPages;
   if (m.auditJs !== undefined) out.audit_js = m.auditJs;
   if (m.brandNames !== undefined) out.brand_names = m.brandNames.join(', ');
+  // AI visibility wave 2 (WAVE2_CONTRACTS.md §4), only when set: an absent key keeps the engine's default
+  if (m.aiClaudeWeekly !== undefined) out.ai_claude_weekly = m.aiClaudeWeekly;
+  if (m.aiPulseEngines !== undefined) out.ai_pulse_engines = m.aiPulseEngines.join(', ');
+  if (m.aiPersonaContext !== undefined) out.ai_persona_context = m.aiPersonaContext;
+  if (m.aiFanoutCheck !== undefined) out.ai_fanout_check = m.aiFanoutCheck;
+  if (m.aiSovSet !== undefined) out.ai_sov_set = m.aiSovSet.join(', ');
+  if (m.aiAlertRules !== undefined) out.ai_alert_rules_json = JSON.stringify(m.aiAlertRules);
   return out;
 }
 

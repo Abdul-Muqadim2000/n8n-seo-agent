@@ -433,6 +433,61 @@ export function useLinkImport(orgId: string, siteId: string) {
   });
 }
 
+// ---------- AI visibility wave 2 (W2-A, 2026-10-23) ----------
+const aiBase = (orgId: string, siteId: string) => `/api/orgs/${orgId}/sites/${siteId}`;
+const aiQs = (params: Record<string, string | number | undefined>) => new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])).toString();
+
+/** One page of a run's answers (the latest unless `run`), filtered, with the filter's rates */
+export function useAiAnswers(orgId: string, siteId: string, params: Record<string, string | number | undefined>, enabled = true) {
+  const qs = aiQs(params);
+  return useQuery({
+    queryKey: qk.siteData(siteId, 'ai-answers', qs),
+    queryFn: () => api<import('@seo/shared').AiAnswersPage>(`${aiBase(orgId, siteId)}/data/ai/answers${qs ? `?${qs}` : ''}`),
+    placeholderData: keepPreviousData,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+    enabled,
+  });
+}
+/** One question across the stored runs */
+export function useAiQuestion(orgId: string, siteId: string, promptId: string | null) {
+  return useQuery({
+    queryKey: qk.siteData(siteId, 'ai-question', promptId),
+    queryFn: () => api<import('@seo/shared').AiQuestionHistory>(`${aiBase(orgId, siteId)}/data/ai/questions/${encodeURIComponent(promptId ?? '')}`),
+    enabled: !!promptId,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+}
+export type AiImportOverview = { source: string; rows: number; from: string; to: string; citations: number; impressions: number; clicks: number; importedAt: string; fileName: string };
+export function useAiImports(orgId: string, siteId: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.siteData(siteId, 'ai-imports'),
+    queryFn: () => api<{ sources: AiImportOverview[] }>(`${aiBase(orgId, siteId)}/data/ai/imports`),
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+    enabled,
+  });
+}
+/** Upload a Bing AI Performance / Search Console AI export */
+export function useAiImport(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { csv: string; fileName?: string; source?: '' | 'bing_ai' | 'gsc_ai'; periodEnd?: string }) => api<import('@seo/shared').AiImportSummary>(`${aiBase(orgId, siteId)}/ai/import`, { method: 'POST', body, direct: true }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.siteData(siteId, 'ai-imports') }),
+  });
+}
+/** Delete questions from the AI panel (admins) */
+export function useAiPromptDelete(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => api<{ ok: boolean; deleted: number }>(`${aiBase(orgId, siteId)}/ai/prompts/delete`, { method: 'POST', body: { ids } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.site(siteId) }),
+  });
+}
+/** A CSV download of the AI page (the server streams it; the browser saves it) */
+export const aiExportUrl = (orgId: string, siteId: string, kind: string, filter: Record<string, string>) => `${aiBase(orgId, siteId)}/data/ai/export?${aiQs({ kind, ...filter })}`;
+
 // ---------- dashboards ----------
 type DataPages = {
   overview: OverviewData;

@@ -12,7 +12,9 @@ import { connectedTrackers, createIssue, listIssues } from '../services/issueTra
 import { runExport, tableRowsV1 } from '../services/exports';
 import {
   fileOf,
+  getAiAnswers,
   getAiSegments,
+  getAiVisibility,
   getAudit,
   getCrawlers,
   getReport,
@@ -80,6 +82,8 @@ const ENDPOINTS = [
   'GET /api/v1/websites/:websiteId/audits/:auditId',
   'GET /api/v1/websites/:websiteId/crawlers',
   'GET /api/v1/websites/:websiteId/ai-segments',
+  'GET /api/v1/websites/:websiteId/ai-visibility',
+  'GET /api/v1/websites/:websiteId/ai-answers',
   'GET /api/v1/runs',
   'GET /api/v1/runs/:runId',
   'GET /api/v1/reports',
@@ -151,6 +155,20 @@ const TOOLS: Tool[] = [
       "How often AI assistants name one verified website, per engine, topic cluster, buyer role, market and funnel stage (and topic x role, engine x topic, market x topic), from its latest weekly AI visibility run: answers counted, the share naming it with the 95% range, 'enough' (12+ answers), share of voice against the businesses named instead, and the changes a Benjamini-Hochberg screen called real; plus the question panel it was measured on. dimension: engine | cluster | persona | market | stage | 'cluster x persona' | 'engine x cluster' | 'market x cluster'.",
     inputSchema: { type: 'object', properties: { websiteId: { type: 'string' }, dimension: { type: 'string' } }, required: ['websiteId'] },
     run: (c, a) => getAiSegments(c, a.websiteId, a),
+  },
+  {
+    name: 'get_ai_visibility',
+    description:
+      "One verified website's AI visibility: the latest run's named and cited rates with their 95% ranges and answer counts, the comparison with the previous run (no change is given across a changed panel or changed engines), each engine, share of voice, and when the run has them: your pages cited or retrieved but not cited (with the page cited instead), source types, shopping and product cards, ads and local cards, sentiment by aspect (withheld under 12 answers), 'did it work' verdicts with their control and interval, owner alert rules that fired, fan-out searches you do not rank for, demand ranges with each proxy named; plus every stored run's headline. Optional filters: engine, cluster, persona, market, stage, from, to (YYYY-MM-DD).",
+    inputSchema: { type: 'object', properties: { websiteId: { type: 'string' }, engine: { type: 'string' }, cluster: { type: 'string' }, persona: { type: 'string' }, market: { type: 'string' }, stage: { type: 'string' }, from: { type: 'string' }, to: { type: 'string' } }, required: ['websiteId'] },
+    run: (c, a) => getAiVisibility(c, a.websiteId, a),
+  },
+  {
+    name: 'list_ai_answers',
+    description:
+      "What the AI assistants actually answered for one verified website's buyer questions, a page at a time (latest run, or run=<run id>): the whole answer when stored, the brands named in order, our place, every citation in order with ours marked, pages retrieved but not cited, the searches the engine ran, product / ad / local cards, the model; with the rates of the filtered answers. Filters: engine, cluster, persona, market, stage, result (named | cited | absent | error), q (text), promptId, page, pageSize (max 100).",
+    inputSchema: { type: 'object', properties: { websiteId: { type: 'string' }, run: { type: 'string' }, engine: { type: 'string' }, cluster: { type: 'string' }, persona: { type: 'string' }, market: { type: 'string' }, stage: { type: 'string' }, result: { type: 'string' }, q: { type: 'string' }, promptId: { type: 'string' }, page: { type: 'integer', minimum: 1 }, pageSize: { type: 'integer', minimum: 5, maximum: 100 } }, required: ['websiteId'] },
+    run: (c, a) => getAiAnswers(c, a.websiteId, a),
   },
   {
     name: 'list_runs',
@@ -294,6 +312,8 @@ export async function apiV1Routes(app: FastifyInstance) {
   });
   app.get('/api/v1/websites/:websiteId/crawlers', { config: perMinute }, async (req) => getCrawlers(await readCtx(req), (req.params as Args).websiteId, req.query as Args));
   app.get('/api/v1/websites/:websiteId/ai-segments', { config: perMinute }, async (req) => getAiSegments(await readCtx(req), (req.params as Args).websiteId, req.query as Args));   // G6
+  app.get('/api/v1/websites/:websiteId/ai-visibility', { config: perMinute }, async (req) => getAiVisibility(await readCtx(req), (req.params as Args).websiteId, req.query as Args));   // W2-A
+  app.get('/api/v1/websites/:websiteId/ai-answers', { config: perMinute }, async (req) => getAiAnswers(await readCtx(req), (req.params as Args).websiteId, req.query as Args));   // W2-A
   app.get('/api/v1/runs', { config: perMinute }, async (req) => listRuns(await readCtx(req), req.query as Args));
   app.get('/api/v1/runs/:runId', { config: perMinute }, async (req) => getRun(await readCtx(req), (req.params as Args).runId));
   app.get('/api/v1/reports', { config: perMinute }, async (req) => listReports(await readCtx(req), req.query as Args));

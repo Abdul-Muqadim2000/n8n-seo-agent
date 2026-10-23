@@ -51,7 +51,30 @@ export function completeMonitors(m: Partial<MonitorSettings> | null | undefined)
     auditPages: m?.auditPages ?? DEFAULT_MONITORS.auditPages,
     auditJs: m?.auditJs ?? DEFAULT_MONITORS.auditJs,
     brandNames: m?.brandNames ?? [],
+    // W2 §4: kept only when set (stored or chosen here), so a save never sends what the owner did not set
+    ...(m?.aiClaudeWeekly !== undefined ? { aiClaudeWeekly: m.aiClaudeWeekly } : {}),
+    ...(m?.aiPulseEngines !== undefined ? { aiPulseEngines: m.aiPulseEngines } : {}),
+    ...(m?.aiPersonaContext !== undefined ? { aiPersonaContext: m.aiPersonaContext } : {}),
+    ...(m?.aiFanoutCheck !== undefined ? { aiFanoutCheck: m.aiFanoutCheck } : {}),
+    ...(m?.aiSovSet !== undefined ? { aiSovSet: m.aiSovSet } : {}),
+    ...(m?.aiAlertRules !== undefined ? { aiAlertRules: m.aiAlertRules } : {}),
   };
+}
+
+/**
+ * W2-A: the panel's cost with the wave-2 options (WAVE2_CONTRACTS.md §4). The option names are the contract's; `estimateAiPanelCost` is
+ * extended by the engine-side agent (W2-E3) in shared/src/ai-panel.ts, so they are passed through a widened object: a build without
+ * them prices the panel as before, and the screen says so through `wave2Priced`.
+ */
+export function aiPanelCostWith(value: MonitorSettings) {
+  const opts: Parameters<typeof estimateAiPanelCost>[0] & { claudeWeekly?: boolean; pulseEngines?: readonly string[]; personaContext?: boolean; fanoutCheck?: number } = {
+    panel: value.aiPromptsMax, engines: value.aiEngines, pulse: value.aiPulse, pulseMode: value.aiPulseMode, pulsePerWeek: value.aiPulsePerWeek,
+    ...(value.aiClaudeWeekly !== undefined ? { claudeWeekly: value.aiClaudeWeekly } : {}),
+    ...(value.aiPulseEngines !== undefined ? { pulseEngines: value.aiPulseEngines } : {}),
+    ...(value.aiPersonaContext !== undefined ? { personaContext: value.aiPersonaContext } : {}),
+    ...(value.aiFanoutCheck !== undefined ? { fanoutCheck: value.aiFanoutCheck } : {}),
+  };
+  return estimateAiPanelCost(opts);
 }
 
 const JS_MAX_PAGES = 500;
@@ -170,6 +193,7 @@ export function MonitorSettingsFields({
                   )}
                 </div>
               )}
+              <AiMoreOptions value={value} set={set} disabled={disabled} />
               <AiPanelCost value={value} />
               <AiPrecisionTable panel={value.aiPromptsMax} engines={value.aiEngines} pulse={value.aiPulse} pulseMode={value.aiPulseMode} pulsePerWeek={value.aiPulsePerWeek} measured={aiMeasured} />
               <div className="space-y-3 rounded-lg border border-line p-3">
@@ -288,7 +312,7 @@ export function MonitorSettingsFields({
  * credits (app/docs/CREDITS.md): every figure in credits; no per-task provider price or price basis is shown.
  */
 function AiPanelCost({ value }: { value: MonitorSettings }) {
-  const c = estimateAiPanelCost({ panel: value.aiPromptsMax, engines: value.aiEngines, pulse: value.aiPulse, pulseMode: value.aiPulseMode, pulsePerWeek: value.aiPulsePerWeek });
+  const c = aiPanelCostWith(value);
   const est = c.prices.filter((p) => /estimate/.test(p.basis));
   return (
     <div className="rounded-lg border border-line bg-surface-2/50 p-3 text-[13px] leading-snug text-ink-2" aria-live="polite">
@@ -301,6 +325,79 @@ function AiPanelCost({ value }: { value: MonitorSettings }) {
       {c.pulseCapped && <p className="mt-1 text-xs text-ink-3">{c.pulseWhy}.</p>}
       {est.length > 0 && <p className="mt-1 text-xs text-ink-3">{est.map((p) => AI_ENGINES.find((e) => e.value === p.engine)?.label ?? p.engine).join(' and ')}: an estimate until the first run measures it.</p>}
     </div>
+  );
+}
+
+/** The engines the daily pulse can ask (AI_PANEL_PULSE_ENGINES plus the two read weekly today). */
+const PULSE_CHOICES: AiEngine[] = ['chatgpt', 'gemini', 'ai_mode', 'perplexity', 'ai_overview', 'copilot'];
+
+/**
+ * W2-A (WAVE2_CONTRACTS.md §4): the engine options. Every one is off (today's behaviour and cost) until the owner sets it; the panel's
+ * monthly figure below includes them, priced by the one AI-panel cost formula.
+ */
+function AiMoreOptions({ value, set, disabled }: { value: MonitorSettings; set: (p: Partial<MonitorSettings>) => void; disabled?: boolean }) {
+  const pulseEngines = value.aiPulseEngines ?? [];
+  const delta = (patch: Partial<MonitorSettings>) => {
+    const a = aiPanelCostWith(value).month.total, b = aiPanelCostWith({ ...value, ...patch }).month.total;
+    const d = b - a;
+    return Math.abs(d) < 0.005 ? '' : ` (${d > 0 ? '+' : '-'}${creditsLabel(Math.abs(d))} a month)`;
+  };
+  return (
+    <details className="group rounded-lg border border-line p-3 [&_summary::-webkit-details-marker]:hidden">
+      <summary className="cursor-pointer select-none text-[13px] font-medium text-ink">More engine options</summary>
+      <div className="mt-3 space-y-3">
+        {value.aiEngines.includes('claude') && (
+          <Checkbox
+            label="Ask Claude every week"
+            description={`Claude is asked once a month by default. Weekly gives it as many answers as the other engines${delta({ aiClaudeWeekly: !value.aiClaudeWeekly })}.`}
+            checked={!!value.aiClaudeWeekly}
+            disabled={disabled}
+            onChange={(e) => set({ aiClaudeWeekly: e.target.checked })}
+          />
+        )}
+        {value.aiPulse && (
+          <fieldset>
+            <legend className="mb-1.5 text-[13px] font-medium text-ink">Engines in the daily pulse</legend>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {PULSE_CHOICES.filter((e) => value.aiEngines.includes(e)).map((e) => (
+                <Checkbox
+                  key={e}
+                  label={AI_ENGINES.find((x) => x.value === e)?.label ?? e}
+                  checked={pulseEngines.length ? pulseEngines.includes(e) : AI_PULSE_ENGINES.includes(e as (typeof AI_PULSE_ENGINES)[number])}
+                  disabled={disabled}
+                  onChange={(ev) => {
+                    const base = pulseEngines.length ? pulseEngines : PULSE_CHOICES.filter((x) => AI_PULSE_ENGINES.includes(x as (typeof AI_PULSE_ENGINES)[number]) && value.aiEngines.includes(x));
+                    set({ aiPulseEngines: ev.target.checked ? PULSE_CHOICES.filter((x) => x === e || base.includes(x)) : base.filter((x) => x !== e) });
+                  }}
+                />
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-ink-3">Perplexity and AI Overviews are read weekly by default; adding them to the pulse gives them daily answers too.</p>
+          </fieldset>
+        )}
+        <Checkbox
+          label="Send each buyer role as context (API answers)"
+          description={`The engines' APIs can take the buyer role as context, which the apps cannot. A small sub-panel is asked with and without each role, to show whether the role changes the answer${delta({ aiPersonaContext: !value.aiPersonaContext })}. Kept apart from the headline figures.`}
+          checked={!!value.aiPersonaContext}
+          disabled={disabled || !value.aiPersonas.length}
+          onChange={(e) => set({ aiPersonaContext: e.target.checked })}
+        />
+        <Field label="Check the searches behind the answers" hint="Assistants search the web before they answer. This checks the most frequent of those searches in Google each week: whether you rank, and which page should." className="max-w-xs">
+          {(p) => (
+            <Select {...p} value={value.aiFanoutCheck ?? 0} disabled={disabled} onChange={(e) => set({ aiFanoutCheck: Number(e.target.value) })}>
+              {[0, 25, 50, 100].map((n) => (
+                <option key={n} value={n}>
+                  {n === 0 ? 'Off' : `${n} searches a week${delta({ aiFanoutCheck: n }) && (value.aiFanoutCheck ?? 0) !== n ? delta({ aiFanoutCheck: n }) : ''}`}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Share of voice counted against" optional hint="A fixed set of brands keeps share of voice comparable week to week. Empty: the competitors you set." labelAction={<GuideButton id="competitors" variant="link" label="Who counts?" />}>
+          {(p) => <TagInput id={p.id} describedBy={p['aria-describedby']} value={value.aiSovSet ?? []} onChange={(aiSovSet) => set({ aiSovSet })} max={12} normalize={(x) => x.trim().toLowerCase().slice(0, 120)} placeholder="A brand or domain, then Enter" />}
+        </Field>
+      </div>
+    </details>
   );
 }
 

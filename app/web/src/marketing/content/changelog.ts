@@ -35,6 +35,25 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-23',
+    version: '4.3',
+    title: 'AI visibility you can open up',
+    summary:
+      'Every AI answer can now be read in full, every question compared across assistants and over time, and the whole AI visibility page filtered, downloaded and watched with your own alert rules.',
+    highlights: [
+      'Open any answer: the whole answer when it was kept, the brands in the order named with yours marked, every source cited in order, the pages the assistant read but did not cite, and the searches it ran first',
+      'Open any question: every assistant side by side, and how often it named you across your past checks, with the range',
+      'One filter for the whole AI visibility page (engine, topic, buyer role, market, stage, dates), kept in the link',
+      'Each assistant and each competitor over time; lines stop where a check asked different questions or other assistants, and say why',
+      'CSV downloads of answers, questions, sources, competitors over time and your pages',
+      'Select many questions to switch off, pin, give a topic or delete; import a keyword with each question',
+      'Your own alert rules with a preview on past checks, firing only on like-for-like changes beyond normal variation',
+      'Upload Bing\'s AI Performance export and Search Console\'s AI figures; shown as your exports, never mixed into measured rates',
+      'Answers load a page at a time, so a large question panel opens quickly',
+    ],
+    features: ['ai-visibility', 'integrations'],
+  },
+  {
+    date: '2026-10-23',
     version: '4.2',
     title: 'Accuracy and reliability',
     summary:

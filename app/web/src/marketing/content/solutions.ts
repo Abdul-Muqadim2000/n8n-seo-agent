@@ -44,7 +44,7 @@ export const solutions: Solution[] = [
       { feature: 'enterprise', title: 'One workspace per client', body: 'Each client company has its own websites, team, credits and data, with roles for your staff and theirs.' },
       { feature: 'reports', title: 'Reports ready to send', body: 'Full SEO reports as PDF or Word, and a weekly report for every website on its own weekday.' },
       { feature: 'integrations', title: 'Client data in your own BI', body: 'Every client\'s rankings, traffic, audits and AI visibility exported to BigQuery or your storage, or charted in Looker Studio.' },
-      { feature: 'ai-visibility', title: 'AI visibility per client', body: 'Mention rate and share of voice against each client\'s own competitors, with ranges.' },
+      { feature: 'ai-visibility', title: 'AI visibility per client', body: 'Mention rate and share of voice against each client\'s own competitors, with ranges, every answer readable in full and downloadable as CSV.' },
       { feature: 'autopilot', title: 'The same loop for every website', body: 'Pages only for the keywords each client chose, an autopilot level per website, and "Coming up" two days ahead so a client can skip or approve before anything is written.' },
     ],
     outcomes: [
