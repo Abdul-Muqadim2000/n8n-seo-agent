@@ -1,5 +1,5 @@
 {
- "about": "Written on 2026-10-23 by a Claude agent asked only to label data, before any AI-answer sentiment classifier existed and without reading any classifier code: the 70 hold-out cases (H) were written from scratch, with invented business names for every criticism, and the 40 real cases (R) are sentences from AI answers stored in harness/fixtures_live, kept verbatim or lightly trimmed. Polarity is about the named business only: a stated official accreditation, approval or certification counts as trust positive, a plain list item or description is neutral, and a mixed statement takes the side a buyer would take away (usually the clause after 'but'). An aspect with polarity 'neutral' marks a dimension the text describes without judging; the stored real answers contain no criticism of a named business, so the negative class is covered by the hold-out only.",
+ "about": "Written on 2026-10-23 by a Claude agent asked only to label data, before any AI-answer sentiment classifier existed and without reading any classifier code: the 70 hold-out cases (H) were written from scratch, with invented business names for every criticism, and the 40 real cases (R) are sentences from AI answers stored in harness/fixtures_live, kept verbatim or lightly trimmed. Polarity is about the named business only: a stated official accreditation, approval or certification counts as trust positive, a plain list item or description is neutral, and a mixed statement takes the side a buyer would take away (usually the clause after 'but'). An aspect with polarity 'neutral' marks a dimension the text describes without judging; the stored real answers contain no criticism of a named business, so the negative class is covered by the hold-out only. The tuning cases (T) were written afterwards by W2-E2 to build the rule reader; the rules were built on them only, and the hold-out and real cases were scored once, at the end. Round 1 (2026-10-23): the rules built on the T cases scored polarity kappa 0.587 on the 70 H cases and 0.697 on the 40 R cases, read once; the H and R cases were then used to improve the rules (split \"holdout1\"), and a second blind hold-out (K cases) was written by another labelling agent and scored once, at the end. Hold-out round 2 (K cases): Blind hold-out for the aspect-based sentiment of AI-assistant answers about a business, written by a labelling agent on 2026-10-23 before scoring. The classifier's author has never seen these cases; every business name is invented. Polarity is judged for the named business only; mixed statements take the side a buyer would take away.",
  "labels": {
   "polarity": [
    "positive",
@@ -20,7 +20,7 @@
  "cases": [
   {
    "id": "H001",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Fatoora Hub",
    "rivals": [],
@@ -41,7 +41,7 @@
   },
   {
    "id": "H002",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Invoicely ME",
    "rivals": [],
@@ -58,7 +58,7 @@
   },
   {
    "id": "H003",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Qanoon Partners",
    "rivals": [],
@@ -70,7 +70,7 @@
   },
   {
    "id": "H004",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Ledgerline",
    "rivals": [],
@@ -91,7 +91,7 @@
   },
   {
    "id": "H005",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "PayGulf",
    "rivals": [],
@@ -116,7 +116,7 @@
   },
   {
    "id": "H006",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Daftra",
    "rivals": [
@@ -131,7 +131,7 @@
   },
   {
    "id": "H007",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Northwind Payroll",
    "rivals": [],
@@ -148,7 +148,7 @@
   },
   {
    "id": "H008",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Brightledger UK",
    "rivals": [],
@@ -165,7 +165,7 @@
   },
   {
    "id": "H009",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Mercatora Freight Cloud",
    "rivals": [],
@@ -182,7 +182,7 @@
   },
   {
    "id": "H010",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Dunecrest ERP",
    "rivals": [],
@@ -199,7 +199,7 @@
   },
   {
    "id": "H011",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Bluefin Dynamics",
    "rivals": [],
@@ -220,7 +220,7 @@
   },
   {
    "id": "H012",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Bluefin Dynamics",
    "rivals": [],
@@ -232,7 +232,7 @@
   },
   {
    "id": "H013",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Kliniq",
    "rivals": [],
@@ -249,7 +249,7 @@
   },
   {
    "id": "H014",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Medivale Clinic",
    "rivals": [],
@@ -266,7 +266,7 @@
   },
   {
    "id": "H015",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Al Noor Family Clinic",
    "rivals": [],
@@ -278,7 +278,7 @@
   },
   {
    "id": "H016",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Wafeq (وافق)",
    "rivals": [],
@@ -299,7 +299,7 @@
   },
   {
    "id": "H017",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Qoyod",
    "rivals": [
@@ -314,7 +314,7 @@
   },
   {
    "id": "H018",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Raseed Invoicing",
    "rivals": [],
@@ -331,7 +331,7 @@
   },
   {
    "id": "H019",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Nuqta AI Labs",
    "rivals": [],
@@ -348,7 +348,7 @@
   },
   {
    "id": "H020",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Nuqta AI Labs",
    "rivals": [],
@@ -360,7 +360,7 @@
   },
   {
    "id": "H021",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Cortexa Consulting",
    "rivals": [],
@@ -381,7 +381,7 @@
   },
   {
    "id": "H022",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Brightledger",
    "rivals": [],
@@ -402,7 +402,7 @@
   },
   {
    "id": "H023",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Brightledger",
    "rivals": [],
@@ -419,7 +419,7 @@
   },
   {
    "id": "H024",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Paywell",
    "rivals": [],
@@ -431,7 +431,7 @@
   },
   {
    "id": "H025",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Paywell",
    "rivals": [
@@ -450,7 +450,7 @@
   },
   {
    "id": "H026",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Paywell",
    "rivals": [
@@ -464,7 +464,7 @@
   },
   {
    "id": "H027",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "GSTSuite",
    "rivals": [],
@@ -481,7 +481,7 @@
   },
   {
    "id": "H028",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "TaxNova",
    "rivals": [],
@@ -502,7 +502,7 @@
   },
   {
    "id": "H029",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "TaxNova",
    "rivals": [],
@@ -519,7 +519,7 @@
   },
   {
    "id": "H030",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Souqify",
    "rivals": [
@@ -544,7 +544,7 @@
   },
   {
    "id": "H031",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Souqify",
    "rivals": [],
@@ -561,7 +561,7 @@
   },
   {
    "id": "H032",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Souqify",
    "rivals": [
@@ -576,7 +576,7 @@
   },
   {
    "id": "H033",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Trakio",
    "rivals": [],
@@ -597,7 +597,7 @@
   },
   {
    "id": "H034",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Trakio",
    "rivals": [],
@@ -618,7 +618,7 @@
   },
   {
    "id": "H035",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Trakio",
    "rivals": [],
@@ -635,7 +635,7 @@
   },
   {
    "id": "H036",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Hamdan & Partners",
    "rivals": [],
@@ -656,7 +656,7 @@
   },
   {
    "id": "H037",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Hamdan & Partners",
    "rivals": [],
@@ -673,7 +673,7 @@
   },
   {
    "id": "H038",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Whitcombe Law LLP",
    "rivals": [],
@@ -685,7 +685,7 @@
   },
   {
    "id": "H039",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Whitcombe Law LLP",
    "rivals": [],
@@ -706,7 +706,7 @@
   },
   {
    "id": "H040",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Dunecrest ERP",
    "rivals": [],
@@ -723,7 +723,7 @@
   },
   {
    "id": "H041",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Bluefin Dynamics",
    "rivals": [
@@ -737,7 +737,7 @@
   },
   {
    "id": "H042",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Fatoora Hub",
    "rivals": [],
@@ -754,7 +754,7 @@
   },
   {
    "id": "H043",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Fatoora Hub",
    "rivals": [],
@@ -771,7 +771,7 @@
   },
   {
    "id": "H044",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Invoicely ME",
    "rivals": [],
@@ -788,7 +788,7 @@
   },
   {
    "id": "H045",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Ledgerline",
    "rivals": [
@@ -811,7 +811,7 @@
   },
   {
    "id": "H046",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "PayGulf",
    "rivals": [],
@@ -828,7 +828,7 @@
   },
   {
    "id": "H047",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "PayGulf",
    "rivals": [],
@@ -845,7 +845,7 @@
   },
   {
    "id": "H048",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Northwind Payroll",
    "rivals": [],
@@ -866,7 +866,7 @@
   },
   {
    "id": "H049",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Northwind Payroll",
    "rivals": [],
@@ -887,7 +887,7 @@
   },
   {
    "id": "H050",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Kliniq",
    "rivals": [],
@@ -904,7 +904,7 @@
   },
   {
    "id": "H051",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Kliniq",
    "rivals": [],
@@ -916,7 +916,7 @@
   },
   {
    "id": "H052",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Medivale Clinic",
    "rivals": [],
@@ -937,7 +937,7 @@
   },
   {
    "id": "H053",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Brightledger",
    "rivals": [],
@@ -954,7 +954,7 @@
   },
   {
    "id": "H054",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Cortexa Consulting",
    "rivals": [],
@@ -966,7 +966,7 @@
   },
   {
    "id": "H055",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Cortexa Consulting",
    "rivals": [],
@@ -983,7 +983,7 @@
   },
   {
    "id": "H056",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Fatoora Hub",
    "rivals": [
@@ -998,7 +998,7 @@
   },
   {
    "id": "H057",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Invoicely ME",
    "rivals": [
@@ -1017,7 +1017,7 @@
   },
   {
    "id": "H058",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Fatoora Hub",
    "rivals": [
@@ -1036,7 +1036,7 @@
   },
   {
    "id": "H059",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Invoicely ME",
    "rivals": [
@@ -1055,7 +1055,7 @@
   },
   {
    "id": "H060",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Kartly",
    "rivals": [],
@@ -1072,7 +1072,7 @@
   },
   {
    "id": "H061",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Kartly",
    "rivals": [],
@@ -1093,7 +1093,7 @@
   },
   {
    "id": "H062",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Kartly",
    "rivals": [],
@@ -1110,7 +1110,7 @@
   },
   {
    "id": "H063",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Shahn Logistics (شحن)",
    "rivals": [],
@@ -1122,7 +1122,7 @@
   },
   {
    "id": "H064",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Shahn Logistics",
    "rivals": [],
@@ -1143,7 +1143,7 @@
   },
   {
    "id": "H065",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Tallybook",
    "rivals": [],
@@ -1160,7 +1160,7 @@
   },
   {
    "id": "H066",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Tallybook",
    "rivals": [],
@@ -1177,7 +1177,7 @@
   },
   {
    "id": "H067",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Tallybook",
    "rivals": [],
@@ -1194,7 +1194,7 @@
   },
   {
    "id": "H068",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Dunecrest ERP",
    "rivals": [],
@@ -1215,7 +1215,7 @@
   },
   {
    "id": "H069",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Raatib Payroll (رواتب)",
    "rivals": [],
@@ -1236,7 +1236,7 @@
   },
   {
    "id": "H070",
-   "split": "holdout",
+   "split": "holdout1",
    "source": "written",
    "business": "Raatib Payroll",
    "rivals": [
@@ -1992,6 +1992,2579 @@
    "aspects": [],
    "objection": "",
    "note": "what the portal is"
+  },
+  {
+   "id": "T001",
+   "split": "tuning",
+   "source": "written",
+   "business": "Fintrex",
+   "rivals": [],
+   "text": "Fintrex is a Dubai-based provider of e-invoicing software for mid-sized companies.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T002",
+   "split": "tuning",
+   "source": "written",
+   "business": "Fintrex",
+   "rivals": [],
+   "text": "**Fintrex** - an accredited service provider known for fast onboarding and responsive support.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T003",
+   "split": "tuning",
+   "source": "written",
+   "business": "Fintrex",
+   "rivals": [],
+   "text": "Fintrex is powerful, but its pricing is steep for small businesses.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "expensive for small businesses",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T004",
+   "split": "tuning",
+   "source": "written",
+   "business": "Ledgero",
+   "rivals": [],
+   "text": "Ledgero offers a clean, intuitive interface that most accountants learn in a day.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T005",
+   "split": "tuning",
+   "source": "written",
+   "business": "Ledgero",
+   "rivals": [],
+   "text": "Users report that Ledgero's reports are often inaccurate after the latest update.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "inaccurate reports",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T006",
+   "split": "tuning",
+   "source": "written",
+   "business": "Ledgero",
+   "rivals": [
+    "Zoho Books"
+   ],
+   "text": "Zoho Books is the most affordable choice; Ledgero is another option for firms in Riyadh.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T007",
+   "split": "tuning",
+   "source": "written",
+   "business": "Payvio",
+   "rivals": [],
+   "text": "Payvio integrates natively with SAP, Oracle and Microsoft Dynamics 365.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T008",
+   "split": "tuning",
+   "source": "written",
+   "business": "Payvio",
+   "rivals": [],
+   "text": "Payvio does not integrate with Oracle NetSuite, which limits it for larger groups.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no NetSuite integration",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T009",
+   "split": "tuning",
+   "source": "written",
+   "business": "Payvio",
+   "rivals": [],
+   "text": "There are no hidden fees with Payvio: the price is per invoice.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T010",
+   "split": "tuning",
+   "source": "written",
+   "business": "Payvio",
+   "rivals": [],
+   "text": "Payvio is not the cheapest option on this list.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "not the cheapest",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T011",
+   "split": "tuning",
+   "source": "written",
+   "business": "Clarix",
+   "rivals": [],
+   "text": "1. **Clarix**: Cloud payroll for UAE SMEs, founded in 2016, with offices in Abu Dhabi.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T012",
+   "split": "tuning",
+   "source": "written",
+   "business": "Clarix",
+   "rivals": [],
+   "text": "Clarix is widely trusted by regional banks and holds ISO 27001 certification.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T013",
+   "split": "tuning",
+   "source": "written",
+   "business": "Clarix",
+   "rivals": [],
+   "text": "Some reviews mention outages during month-end payroll runs at Clarix.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "outages at month end",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T014",
+   "split": "tuning",
+   "source": "written",
+   "business": "Nexora Consulting",
+   "rivals": [],
+   "text": "Nexora Consulting is a Microsoft Gold partner with a strong track record in Dynamics 365 rollouts.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T015",
+   "split": "tuning",
+   "source": "written",
+   "business": "Nexora Consulting",
+   "rivals": [],
+   "text": "Nexora Consulting has a steep learning curve for new users and limited documentation.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "steep learning curve",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T016",
+   "split": "tuning",
+   "source": "written",
+   "business": "Nexora Consulting",
+   "rivals": [],
+   "text": "Nexora Consulting implements ERP systems for retailers and distributors.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T017",
+   "split": "tuning",
+   "source": "written",
+   "business": "Tabby",
+   "rivals": [],
+   "text": "Tabby is a popular buy-now-pay-later service across the Gulf.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "other",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T018",
+   "split": "tuning",
+   "source": "written",
+   "business": "Qashio",
+   "rivals": [],
+   "text": "Qashio's expense cards are easy to set up, and customers praise its customer service.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T019",
+   "split": "tuning",
+   "source": "written",
+   "business": "Qashio",
+   "rivals": [],
+   "text": "Qashio lacks multi-entity consolidation, so groups with several companies may find it limiting.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no multi-entity consolidation",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T020",
+   "split": "tuning",
+   "source": "written",
+   "business": "Orbisoft",
+   "rivals": [],
+   "text": "Orbisoft is often recommended for its comprehensive reporting and automation features.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T021",
+   "split": "tuning",
+   "source": "written",
+   "business": "Orbisoft",
+   "rivals": [],
+   "text": "Orbisoft supports English only, which can be a problem for Arabic invoices.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "English only",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T022",
+   "split": "tuning",
+   "source": "written",
+   "business": "Orbisoft",
+   "rivals": [
+    "SAP"
+   ],
+   "text": "SAP leads the enterprise market, while Orbisoft serves smaller firms.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T023",
+   "split": "tuning",
+   "source": "written",
+   "business": "Vantix",
+   "rivals": [],
+   "text": "Vantix is reliable and secure, and its uptime has been excellent.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T024",
+   "split": "tuning",
+   "source": "written",
+   "business": "Vantix",
+   "rivals": [],
+   "text": "Vantix has received mixed reviews for its support response times.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "slow support responses",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T025",
+   "split": "tuning",
+   "source": "written",
+   "business": "Vantix",
+   "rivals": [],
+   "text": "Vantix was acquired by a larger group in 2023 and now operates under the same brand.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T026",
+   "split": "tuning",
+   "source": "written",
+   "business": "Medlinea",
+   "rivals": [],
+   "text": "Medlinea is a clinic management system used by dental practices in Sharjah.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T027",
+   "split": "tuning",
+   "source": "written",
+   "business": "Medlinea",
+   "rivals": [],
+   "text": "Patients and staff find Medlinea simple to use, and setup takes under a week.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T028",
+   "split": "tuning",
+   "source": "written",
+   "business": "Medlinea",
+   "rivals": [],
+   "text": "Medlinea's appointment module is buggy and crashes on older tablets.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "buggy appointment module",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T029",
+   "split": "tuning",
+   "source": "written",
+   "business": "Cargoflow",
+   "rivals": [],
+   "text": "Cargoflow is a leading logistics platform for freight forwarders in the region.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "other",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T030",
+   "split": "tuning",
+   "source": "written",
+   "business": "Cargoflow",
+   "rivals": [],
+   "text": "Cargoflow can be costly once you add tracking modules.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "costly add-on modules",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T031",
+   "split": "tuning",
+   "source": "written",
+   "business": "Cargoflow",
+   "rivals": [],
+   "text": "Cargoflow connects to most carrier APIs, though setup is complex.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "ease",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "complex setup",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T032",
+   "split": "tuning",
+   "source": "written",
+   "business": "Lexbridge",
+   "rivals": [],
+   "text": "Lexbridge is a well-regarded law firm with a strong reputation in commercial disputes.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T033",
+   "split": "tuning",
+   "source": "written",
+   "business": "Lexbridge",
+   "rivals": [],
+   "text": "Lexbridge has offices in Dubai and London.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T034",
+   "split": "tuning",
+   "source": "written",
+   "business": "Lexbridge",
+   "rivals": [],
+   "text": "Clients have complained about Lexbridge's billing practices and unexpected charges.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "unexpected charges",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T035",
+   "split": "tuning",
+   "source": "written",
+   "business": "Shopnest",
+   "rivals": [],
+   "text": "Shopnest makes it straightforward to launch an online store, with templates and built-in payments.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T036",
+   "split": "tuning",
+   "source": "written",
+   "business": "Shopnest",
+   "rivals": [],
+   "text": "Shopnest's transaction fees are higher than most competitors.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "higher transaction fees",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T037",
+   "split": "tuning",
+   "source": "written",
+   "business": "Shopnest",
+   "rivals": [
+    "Shopify"
+   ],
+   "text": "Shopify is the best-known option; Shopnest is a regional alternative.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T038",
+   "split": "tuning",
+   "source": "written",
+   "business": "Accrua",
+   "rivals": [],
+   "text": "Accrua is an FTA-approved tax software with real-time validation.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T039",
+   "split": "tuning",
+   "source": "written",
+   "business": "Accrua",
+   "rivals": [],
+   "text": "Accrua is not yet accredited as an e-invoicing service provider.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "not yet accredited",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T040",
+   "split": "tuning",
+   "source": "written",
+   "business": "Accrua",
+   "rivals": [],
+   "text": "Accrua offers monthly and annual plans.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T041",
+   "split": "tuning",
+   "source": "written",
+   "business": "Brightdesk",
+   "rivals": [],
+   "text": "Brightdesk's support team is slow to respond, and tickets often go unresolved for days.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "slow support",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T042",
+   "split": "tuning",
+   "source": "written",
+   "business": "Brightdesk",
+   "rivals": [],
+   "text": "Brightdesk is a cost-effective help desk with flexible plans for small teams.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T043",
+   "split": "tuning",
+   "source": "written",
+   "business": "Brightdesk",
+   "rivals": [],
+   "text": "Brightdesk is good value overall, although advanced reporting is missing.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no advanced reporting",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T044",
+   "split": "tuning",
+   "source": "written",
+   "business": "Zentrix AI",
+   "rivals": [],
+   "text": "Zentrix AI is an AI consulting firm that builds chatbots for retailers.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T045",
+   "split": "tuning",
+   "source": "written",
+   "business": "Zentrix AI",
+   "rivals": [],
+   "text": "Zentrix AI stands out for delivering projects on time and its experienced team.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T046",
+   "split": "tuning",
+   "source": "written",
+   "business": "Zentrix AI",
+   "rivals": [],
+   "text": "Be aware that Zentrix AI is a young company with few published case studies.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "few case studies",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T047",
+   "split": "tuning",
+   "source": "written",
+   "business": "Invoxa",
+   "rivals": [],
+   "text": "Invoxa is one of the top-rated e-invoicing tools on G2.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T048",
+   "split": "tuning",
+   "source": "written",
+   "business": "Invoxa",
+   "rivals": [],
+   "text": "Invoxa's mobile app is outdated and difficult to navigate.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "outdated mobile app",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T049",
+   "split": "tuning",
+   "source": "written",
+   "business": "Invoxa",
+   "rivals": [],
+   "text": "Invoxa, Payvio and Fintrex are the three providers most often listed for the UAE.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T050",
+   "split": "tuning",
+   "source": "written",
+   "business": "Gulfpay",
+   "rivals": [],
+   "text": "Gulfpay is ideal for SMEs thanks to its affordable pricing and seamless bank integrations.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T051",
+   "split": "tuning",
+   "source": "written",
+   "business": "Gulfpay",
+   "rivals": [],
+   "text": "Gulfpay may not be suitable for enterprises with complex approval workflows.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "not suitable for enterprises",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T052",
+   "split": "tuning",
+   "source": "written",
+   "business": "Gulfpay",
+   "rivals": [],
+   "text": "Gulfpay is headquartered in Bahrain.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T053",
+   "split": "tuning",
+   "source": "written",
+   "business": "Tech&",
+   "rivals": [],
+   "text": "Tech& is a Dubai-based Microsoft Dynamics 365 partner offering ERP implementation.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T054",
+   "split": "tuning",
+   "source": "written",
+   "business": "Tech&",
+   "rivals": [],
+   "text": "Tech& is praised for hands-on support after go-live.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T055",
+   "split": "tuning",
+   "source": "written",
+   "business": "Tech&",
+   "rivals": [],
+   "text": "Tech& has a smaller team than the global integrators, which can mean longer timelines.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "other",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "smaller team, longer timelines",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T056",
+   "split": "tuning",
+   "source": "written",
+   "business": "Riyada Systems",
+   "rivals": [],
+   "text": "Riyada Systems is an approved ZATCA solution provider with Arabic and English invoices.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T057",
+   "split": "tuning",
+   "source": "written",
+   "business": "Riyada Systems",
+   "rivals": [],
+   "text": "Riyada Systems has had security issues in the past, according to local press.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "past security issues",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T058",
+   "split": "tuning",
+   "source": "written",
+   "business": "Riyada Systems",
+   "rivals": [
+    "Wafeq"
+   ],
+   "text": "Wafeq is the safest choice for Phase 2; Riyada Systems is also listed.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T059",
+   "split": "tuning",
+   "source": "written",
+   "business": "Corvana",
+   "rivals": [],
+   "text": "Corvana isn't the easiest tool to learn, but once set up it is very reliable.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T060",
+   "split": "tuning",
+   "source": "written",
+   "business": "Corvana",
+   "rivals": [],
+   "text": "Corvana is reliable, but customers say it is overpriced for what it does.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "overpriced",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T061",
+   "split": "tuning",
+   "source": "written",
+   "business": "Corvana",
+   "rivals": [],
+   "text": "Corvana was founded in 2014 and serves about 2,000 companies.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T062",
+   "split": "tuning",
+   "source": "written",
+   "business": "Datavault",
+   "rivals": [],
+   "text": "Datavault offers strong encryption and is fully GDPR compliant.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T063",
+   "split": "tuning",
+   "source": "written",
+   "business": "Datavault",
+   "rivals": [],
+   "text": "Datavault's API is limited compared with newer platforms.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "limited API",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T064",
+   "split": "tuning",
+   "source": "written",
+   "business": "Helmly",
+   "rivals": [],
+   "text": "Helmly is known for excellent onboarding and a dedicated account manager.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T065",
+   "split": "tuning",
+   "source": "written",
+   "business": "Helmly",
+   "rivals": [],
+   "text": "Helmly charges extra for every additional user, which adds up quickly.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "charges per extra user",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "T066",
+   "split": "tuning",
+   "source": "written",
+   "business": "Helmly",
+   "rivals": [],
+   "text": "Helmly provides HR and payroll software in Saudi Arabia and the UAE.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "W2-E2 tuning case"
+  },
+  {
+   "id": "K001",
+   "split": "holdout",
+   "source": "written",
+   "business": "Qasr Ledger",
+   "rivals": [],
+   "text": "1. **Qasr Ledger** - Accredited by the UAE Ministry of Finance as an e-invoicing service provider. Connects natively to SAP Business One and Oracle NetSuite, and reviewers highlight a two-week go-live.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "accreditation, native ERP connectors and fast go-live are all strengths"
+  },
+  {
+   "id": "K002",
+   "split": "holdout",
+   "source": "written",
+   "business": "Dunetrack Payroll",
+   "rivals": [],
+   "text": "| **Dunetrack Payroll** | dunetrack.sa | Payroll and GOSI filing for companies in Riyadh and Jeddah |",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "table row that only states what it sells and where"
+  },
+  {
+   "id": "K003",
+   "split": "holdout",
+   "source": "written",
+   "business": "Harborline CRM",
+   "rivals": [],
+   "text": "Several users on review sites say Harborline CRM's mobile app crashes when syncing large contact lists, and the vendor took weeks to respond to tickets.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "mobile app crashes and slow ticket response",
+   "note": "paraphrased complaints about reliability and support"
+  },
+  {
+   "id": "K004",
+   "split": "holdout",
+   "source": "written",
+   "business": "Mirabay HR",
+   "rivals": [],
+   "text": "Although Mirabay HR's interface feels dated, it is the best value for Qatari SMEs with under 50 staff.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "dated interface",
+   "note": "although X, Y: the takeaway is best value"
+  },
+  {
+   "id": "K005",
+   "split": "holdout",
+   "source": "written",
+   "business": "Falconridge Accounting",
+   "rivals": [],
+   "text": "Falconridge Accounting is affordable, but bank feeds break regularly and need manual re-linking.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "integration",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "bank feeds break and need manual re-linking",
+   "note": "praise first, the part after 'but' is the takeaway"
+  },
+  {
+   "id": "K006",
+   "split": "holdout",
+   "source": "written",
+   "business": "Nilegate Logistics",
+   "rivals": [],
+   "text": "### 3. Nilegate Logistics\nFounded in 2011 in Alexandria, Nilegate Logistics runs bonded warehouses and last-mile delivery across Egypt.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "heading plus founding year and services, no evaluation"
+  },
+  {
+   "id": "K007",
+   "split": "holdout",
+   "source": "written",
+   "business": "Sandpiper People",
+   "rivals": [],
+   "text": "\"We moved 400 employees onto Sandpiper People in a single weekend and nobody needed training,\" one HR director wrote.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "quoted review: fast rollout, no training needed"
+  },
+  {
+   "id": "K008",
+   "split": "holdout",
+   "source": "written",
+   "business": "Corvana ERP Partners",
+   "rivals": [],
+   "text": "Corvana ERP Partners may be pricey for small teams, as implementation is quoted per module and annual support adds 22%.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "implementation and support cost for small teams",
+   "note": "hedged cost concern is still a cost concern"
+  },
+  {
+   "id": "K009",
+   "split": "holdout",
+   "source": "written",
+   "business": "Oasisfin",
+   "rivals": [
+    "Tamarind Books"
+   ],
+   "text": "Compared with Tamarind Books, Oasisfin handles VAT returns with fewer errors and its support team answers in Arabic and English within hours.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "comparison where only the judged business is praised"
+  },
+  {
+   "id": "K010",
+   "split": "holdout",
+   "source": "written",
+   "business": "Tamarind Books",
+   "rivals": [
+    "Oasisfin"
+   ],
+   "text": "Pick Oasisfin over Tamarind Books if accuracy matters: reviewers report that Tamarind's VAT figures often need manual correction.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "VAT figures need manual correction",
+   "note": "judged business is the one losing the comparison"
+  },
+  {
+   "id": "K011",
+   "split": "holdout",
+   "source": "written",
+   "business": "Cedar Point Medical",
+   "rivals": [
+    "Brightwell Clinics",
+    "Lumen Family Health"
+   ],
+   "text": "Other options include Brightwell Clinics, Cedar Point Medical and Lumen Family Health.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "list membership only"
+  },
+  {
+   "id": "K012",
+   "split": "holdout",
+   "source": "written",
+   "business": "Kestrel Pay",
+   "rivals": [],
+   "text": "Unlike most providers, Kestrel Pay charges no setup fees and no per-payslip fees.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "negation of fees is a price strength"
+  },
+  {
+   "id": "K013",
+   "split": "holdout",
+   "source": "written",
+   "business": "Veridian Secure",
+   "rivals": [],
+   "text": "Veridian Secure is not the cheapest option, and its SOC service has no Arabic-speaking analysts.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "higher price and no Arabic-speaking analysts",
+   "note": "negated price plus a missing service capability"
+  },
+  {
+   "id": "K014",
+   "split": "holdout",
+   "source": "written",
+   "business": "Alder & Finch Consulting",
+   "rivals": [],
+   "text": "Clients describe Alder & Finch Consulting's AI projects as running over budget and months past the agreed timeline.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "projects run over budget and late",
+   "note": "implicit negative: overruns on cost and delivery"
+  },
+  {
+   "id": "K015",
+   "split": "holdout",
+   "source": "written",
+   "business": "Souqline",
+   "rivals": [],
+   "text": "Souqline's storefronts stayed online through the White Friday peak, handling triple their usual order volume.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "implicit positive: reliability under peak load"
+  },
+  {
+   "id": "K016",
+   "split": "holdout",
+   "source": "written",
+   "business": "Pelican Legal",
+   "rivals": [],
+   "text": "Pelican Legal is a Doha-based law firm with 30 lawyers, practising corporate, employment and construction law.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "pure description of size and practice areas"
+  },
+  {
+   "id": "K017",
+   "split": "holdout",
+   "source": "written",
+   "business": "Granite Shield",
+   "rivals": [],
+   "text": "Granite Shield is listed by the Saudi National Cybersecurity Authority as a licensed provider of managed security services.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "regulator listing = trust positive"
+  },
+  {
+   "id": "K018",
+   "split": "holdout",
+   "source": "written",
+   "business": "Lotusbridge HR",
+   "rivals": [],
+   "text": "| **Lotusbridge HR** | lotusbridge.in | Best for Indian startups: simple setup, PF and ESI compliance built in |",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "table row with 'best for' and listed strengths"
+  },
+  {
+   "id": "K019",
+   "split": "holdout",
+   "source": "written",
+   "business": "Meridian Edge ERP",
+   "rivals": [],
+   "text": "| **Meridian Edge ERP** | meridianedge.co.uk | Implements Business Central for manufacturers; offices in London and Manchester |",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "table row describing what the firm does"
+  },
+  {
+   "id": "K020",
+   "split": "holdout",
+   "source": "written",
+   "business": "Ravenna CRM",
+   "rivals": [],
+   "text": "Ravenna CRM's reporting module is basic, but its WhatsApp integration and Arabic interface make it the go-to choice for Saudi retail teams.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "basic reporting",
+   "note": "weakness first, recommendation after 'but'"
+  },
+  {
+   "id": "K021",
+   "split": "holdout",
+   "source": "written",
+   "business": "Bluegate Payroll",
+   "rivals": [],
+   "text": "Users say onboarding at Bluegate Payroll is slow and that payroll runs sometimes miss end-of-service calculations.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "slow onboarding and missed end-of-service calculations",
+   "note": "paraphrased user complaints"
+  },
+  {
+   "id": "K022",
+   "split": "holdout",
+   "source": "written",
+   "business": "Kemet Bills",
+   "rivals": [
+    "Pharos Invoice",
+    "Sphinxware"
+   ],
+   "text": "For e-invoicing in Egypt, companies often consider ETA-integrated tools such as Pharos Invoice, Kemet Bills and Sphinxware.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "one of several in a list; the integration is stated as a category fact"
+  },
+  {
+   "id": "K023",
+   "split": "holdout",
+   "source": "written",
+   "business": "Hawthorn Analytics",
+   "rivals": [],
+   "text": "### 1. Hawthorn Analytics (best overall)\nHawthorn Analytics leads the UAE AI consultancy market for retail forecasting, with delivered projects for regional grocery chains.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'best overall' and 'leads' with a track record"
+  },
+  {
+   "id": "K024",
+   "split": "holdout",
+   "source": "written",
+   "business": "Juniper Books",
+   "rivals": [],
+   "text": "Juniper Books relies on CSV uploads for bank statements, so reconciliation for UAE banks is manual.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no direct bank feeds",
+   "note": "implicit negative: relies on CSV uploads"
+  },
+  {
+   "id": "K025",
+   "split": "holdout",
+   "source": "written",
+   "business": "Saffron Health Clinics",
+   "rivals": [],
+   "text": "Saffron Health Clinics is known for short waiting times and English- and Arabic-speaking doctors across its Dubai branches.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'known for' plus service strengths"
+  },
+  {
+   "id": "K026",
+   "split": "holdout",
+   "source": "written",
+   "business": "Opal Freight",
+   "rivals": [],
+   "text": "Opal Freight offers air and sea forwarding between Jebel Ali and Mumbai, with customs brokerage on request.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "services described without judgement"
+  },
+  {
+   "id": "K027",
+   "split": "holdout",
+   "source": "written",
+   "business": "Tidewater CRM",
+   "rivals": [],
+   "text": "Some reviewers note that Tidewater CRM's pricing jumps sharply once you pass 10 users.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "price rises sharply past 10 users",
+   "note": "reviewer cost concern"
+  },
+  {
+   "id": "K028",
+   "split": "holdout",
+   "source": "written",
+   "business": "Cobalt Ledger",
+   "rivals": [],
+   "text": "Although Cobalt Ledger has fewer integrations than larger rivals, its accuracy on ZATCA Phase 2 invoices is the strongest we found.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "fewer integrations",
+   "note": "although X, Y: accuracy praise is the takeaway"
+  },
+  {
+   "id": "K029",
+   "split": "holdout",
+   "source": "written",
+   "business": "Bayview HR",
+   "rivals": [],
+   "text": "Bayview HR has a polished interface; however, customers report that its leave module miscalculates accruals for part-time staff.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "leave accruals miscalculated for part-time staff",
+   "note": "contrast with 'however': the defect is the takeaway"
+  },
+  {
+   "id": "K030",
+   "split": "holdout",
+   "source": "written",
+   "business": "Corniche Audit Partners",
+   "rivals": [],
+   "text": "Established in 2004, Corniche Audit Partners has offices in Abu Dhabi, Dubai and Muscat and serves family-owned groups.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "founding year, offices and clients only"
+  },
+  {
+   "id": "K031",
+   "split": "holdout",
+   "source": "written",
+   "business": "Zephyr Accounts",
+   "rivals": [],
+   "text": "\"Support picked up on the first ring every time we called,\" says a finance manager at a Jeddah distributor about Zephyr Accounts.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "quoted praise for support"
+  },
+  {
+   "id": "K032",
+   "split": "holdout",
+   "source": "written",
+   "business": "Atlas Commerce Suite",
+   "rivals": [],
+   "text": "\"Three months in and the Shopify connector still duplicates orders,\" one merchant wrote of Atlas Commerce Suite.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "connector duplicates orders",
+   "note": "quoted complaint about an integration"
+  },
+  {
+   "id": "K033",
+   "split": "holdout",
+   "source": "written",
+   "business": "Indigo Payroll",
+   "rivals": [
+    "Rookwood Pay"
+   ],
+   "text": "Between Indigo Payroll and Rookwood Pay, Indigo is the safer pick for UAE WPS compliance; it has never missed a salary file deadline in our tests.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "recommended over a rival; 'never missed' is a negated negative"
+  },
+  {
+   "id": "K034",
+   "split": "holdout",
+   "source": "written",
+   "business": "Marlowe Cyber",
+   "rivals": [],
+   "text": "2. **Marlowe Cyber** - Penetration testing and red-team services for banks in the UK and the Gulf.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "numbered list item that only says what it sells"
+  },
+  {
+   "id": "K035",
+   "split": "holdout",
+   "source": "written",
+   "business": "Quill Legal Tech",
+   "rivals": [],
+   "text": "Note that Quill Legal Tech stores client files on servers outside the UAE, which may conflict with some free-zone data rules.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "data stored outside the UAE",
+   "note": "compliance risk flagged"
+  },
+  {
+   "id": "K036",
+   "split": "holdout",
+   "source": "written",
+   "business": "Thornfield Logistics",
+   "rivals": [],
+   "text": "Thornfield Logistics holds ISO 9001 and TAPA FSR certification and is an authorised economic operator in Saudi Arabia.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "certifications and authorisation = trust positive"
+  },
+  {
+   "id": "K037",
+   "split": "holdout",
+   "source": "written",
+   "business": "Nimbus HR",
+   "rivals": [],
+   "text": "Nimbus HR is a cloud HR platform used mainly by mid-sized companies in Egypt and Jordan.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "who it serves, no evaluation"
+  },
+  {
+   "id": "K038",
+   "split": "holdout",
+   "source": "written",
+   "business": "Kite Ledger",
+   "rivals": [],
+   "text": "Finance teams report learning Kite Ledger in an afternoon, and the free plan covers up to 50 invoices a month.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "implicit ease plus a free plan"
+  },
+  {
+   "id": "K039",
+   "split": "holdout",
+   "source": "written",
+   "business": "Granary ERP Solutions",
+   "rivals": [],
+   "text": "Account management at Granary ERP Solutions changes hands often, and clients say they re-explain their setup to each new consultant.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "frequent account manager turnover",
+   "note": "implicit negative about account management"
+  },
+  {
+   "id": "K040",
+   "split": "holdout",
+   "source": "written",
+   "business": "Lattice Pay",
+   "rivals": [],
+   "text": "Pricing for Lattice Pay starts at SAR 15 per employee per month.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "price stated as a fact, not judged"
+  },
+  {
+   "id": "K041",
+   "split": "holdout",
+   "source": "written",
+   "business": "Mosaic Clinics",
+   "rivals": [],
+   "text": "Mosaic Clinics offers some of the most transparent pricing in Doha, with package rates published online.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "pricing transparency praised"
+  },
+  {
+   "id": "K042",
+   "split": "holdout",
+   "source": "written",
+   "business": "Brookstone Tax",
+   "rivals": [
+    "Arcadia Invoicing"
+   ],
+   "text": "| Provider | Country | Focus |\n|---|---|---|\n| **Arcadia Invoicing** | UAE | E-invoicing |\n| **Brookstone Tax** | UK | MTD filing |",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "table listing focus areas only"
+  },
+  {
+   "id": "K043",
+   "split": "holdout",
+   "source": "written",
+   "business": "Hollowpine AI",
+   "rivals": [],
+   "text": "Hollowpine AI delivers impressive demos, but production deployments have struggled with data quality and handover.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "production deployments struggle",
+   "note": "praise for demos undone after 'but'"
+  },
+  {
+   "id": "K044",
+   "split": "holdout",
+   "source": "written",
+   "business": "Sterling Gate ERP",
+   "rivals": [],
+   "text": "Setup takes longer than with plug-and-play tools, but once live, Sterling Gate ERP runs month-end close for multi-entity groups without spreadsheets.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "long setup",
+   "note": "weakness first, capability praise after 'but'"
+  },
+  {
+   "id": "K045",
+   "split": "holdout",
+   "source": "written",
+   "business": "Wadi Health",
+   "rivals": [],
+   "text": "Wadi Health operates three outpatient clinics in Riyadh offering dermatology and pediatrics.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "factual description of a clinic group"
+  },
+  {
+   "id": "K046",
+   "split": "holdout",
+   "source": "written",
+   "business": "Pebble Books",
+   "rivals": [],
+   "text": "**Best for freelancers:** Pebble Books, thanks to its one-tap expense capture and free tier.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "price",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'best for' with reasons"
+  },
+  {
+   "id": "K047",
+   "split": "holdout",
+   "source": "written",
+   "business": "Amberlane Commerce",
+   "rivals": [],
+   "text": "Amberlane Commerce is a hosted e-commerce platform for Indian D2C brands, with built-in UPI checkout.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "describes product and a built-in feature without praise"
+  },
+  {
+   "id": "K048",
+   "split": "holdout",
+   "source": "written",
+   "business": "Harrowgate Law",
+   "rivals": [],
+   "text": "Of the five firms we reviewed, only Harrowgate Law has a dedicated DIFC employment team, and clients consistently describe its advice as clear and fast.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "unique capability plus client praise"
+  },
+  {
+   "id": "K049",
+   "split": "holdout",
+   "source": "written",
+   "business": "Fennick CRM",
+   "rivals": [
+    "Orchard CRM"
+   ],
+   "text": "Teams that left Fennick CRM for Orchard CRM cited Fennick's missing email sequencing and slow page loads.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "missing email sequencing and slow pages",
+   "note": "reasons customers churned from the judged business"
+  },
+  {
+   "id": "K050",
+   "split": "holdout",
+   "source": "written",
+   "business": "Gulfstream Payroll",
+   "rivals": [],
+   "text": "Gulfstream Payroll was acquired by a Bahrain-based group in 2023 and now operates under the same brand.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "corporate history only"
+  },
+  {
+   "id": "K051",
+   "split": "holdout",
+   "source": "written",
+   "business": "Peregrine e-Invoice",
+   "rivals": [],
+   "text": "Peregrine e-Invoice is one of the first providers approved for the UAE's Peppol pilot and is recommended by several regional audit firms.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "approval and third-party recommendation"
+  },
+  {
+   "id": "K052",
+   "split": "holdout",
+   "source": "written",
+   "business": "Cypress Logistics",
+   "rivals": [],
+   "text": "Cypress Logistics says it covers 18 cities in Saudi Arabia; we could not verify its delivery times.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "self-reported coverage and an unverified claim, no judgement either way"
+  },
+  {
+   "id": "K053",
+   "split": "holdout",
+   "source": "written",
+   "business": "Lantern Accounts",
+   "rivals": [],
+   "text": "Since switching to Lantern Accounts, a Cairo distributor cut its month-end close from ten days to three.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "implicit positive outcome"
+  },
+  {
+   "id": "K054",
+   "split": "holdout",
+   "source": "written",
+   "business": "Medley Records",
+   "rivals": [],
+   "text": "Clinics using Medley Records report that appointment reminders frequently fail to send, leading to no-shows.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "reminders fail to send",
+   "note": "implicit reliability complaint"
+  },
+  {
+   "id": "K055",
+   "split": "holdout",
+   "source": "written",
+   "business": "Rowan Tax Tech",
+   "rivals": [
+    "Elmwood Invoicing"
+   ],
+   "text": "- **Rowan Tax Tech**: the strongest ZATCA integration of the group, with direct API links to Odoo, SAP and Microsoft Dynamics.\n- **Elmwood Invoicing**: basic PDF invoicing.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "praised against a rival in a bullet list"
+  },
+  {
+   "id": "K056",
+   "split": "holdout",
+   "source": "written",
+   "business": "Ibis HR",
+   "rivals": [],
+   "text": "According to its website, Ibis HR serves more than 1,200 companies across Egypt, Saudi Arabia and the UAE.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "self-reported customer count, stated without evaluation"
+  },
+  {
+   "id": "K057",
+   "split": "holdout",
+   "source": "written",
+   "business": "Bramble Commerce",
+   "rivals": [],
+   "text": "Bramble Commerce suffered a payment-data breach in 2024 and has not published a third-party audit since.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "past payment-data breach and no audit since",
+   "note": "security track record risk"
+  },
+  {
+   "id": "K058",
+   "split": "holdout",
+   "source": "written",
+   "business": "Hearthstone Cloud ERP",
+   "rivals": [],
+   "text": "Hearthstone Cloud ERP has had no unplanned downtime in the past 18 months, according to its public status page.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "negated downtime = reliability strength"
+  },
+  {
+   "id": "K059",
+   "split": "holdout",
+   "source": "written",
+   "business": "Quayside Accounting",
+   "rivals": [],
+   "text": "### Quayside Accounting\n- Headquarters: Manchester\n- Clients: 3,000 small businesses\n- Product: cloud bookkeeping and payroll",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "fact sheet under a heading"
+  },
+  {
+   "id": "K060",
+   "split": "holdout",
+   "source": "written",
+   "business": "Tamarisk IT Security",
+   "rivals": [],
+   "text": "Clients of Tamarisk IT Security mention a named engineer who stays with them from onboarding through every incident.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "implicit praise for continuity of support"
+  },
+  {
+   "id": "K061",
+   "split": "holdout",
+   "source": "written",
+   "business": "Fernhill Payroll",
+   "rivals": [
+    "Equinox Pay",
+    "Gladeview"
+   ],
+   "text": "Equinox Pay, Fernhill Payroll and Gladeview are payroll tools available to employers in Qatar.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "list membership only"
+  },
+  {
+   "id": "K062",
+   "split": "holdout",
+   "source": "written",
+   "business": "Nettlefield Clinics",
+   "rivals": [],
+   "text": "Nettlefield Clinics has mixed reviews: patients like the doctors but complain about billing errors and insurance claim delays.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "support",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "billing errors and claim delays",
+   "note": "mixed, but the complaint after 'but' is the takeaway"
+  },
+  {
+   "id": "K063",
+   "split": "holdout",
+   "source": "written",
+   "business": "Ashgrove CRM",
+   "rivals": [],
+   "text": "Ashgrove CRM is the leading CRM among Saudi real-estate brokers, with workflows built for Saudi tenancy contracts.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "'leading' plus a fitting capability"
+  },
+  {
+   "id": "K064",
+   "split": "holdout",
+   "source": "written",
+   "business": "Sunstone Legal",
+   "rivals": [],
+   "text": "Sunstone Legal is registered with the Qatar Financial Centre Authority to advise on QFC matters.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "regulator registration = trust positive"
+  },
+  {
+   "id": "K065",
+   "split": "holdout",
+   "source": "written",
+   "business": "Vetiver Pay",
+   "rivals": [],
+   "text": "Payroll teams in Bengaluru recommend Vetiver Pay for its accurate TDS calculations and quick replies on chat.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "recommended for accuracy and support"
+  },
+  {
+   "id": "K066",
+   "split": "holdout",
+   "source": "written",
+   "business": "Cardinal Point Advisors",
+   "rivals": [],
+   "text": "Cardinal Point Advisors is a Texas-based consultancy that builds chatbots and document-search tools for law firms.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "what the firm does and for whom"
+  },
+  {
+   "id": "K067",
+   "split": "holdout",
+   "source": "written",
+   "business": "Bellwether HR",
+   "rivals": [],
+   "text": "Bellwether HR's benefits administration does not support multi-state filing, so companies with remote staff in several states need a second tool.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no multi-state filing",
+   "note": "missing capability"
+  },
+  {
+   "id": "K068",
+   "split": "holdout",
+   "source": "written",
+   "business": "Thistle Books",
+   "rivals": [],
+   "text": "Rated 4.8 out of 5 by UK accountants, Thistle Books is praised for Making Tax Digital submissions that work first time.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "high rating and reliability praise"
+  },
+  {
+   "id": "K069",
+   "split": "holdout",
+   "source": "written",
+   "business": "Lotus Tax Egypt",
+   "rivals": [],
+   "text": "Lotus Tax Egypt provides e-receipt and e-invoice submission to the Egyptian Tax Authority for retailers.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    },
+    {
+     "aspect": "integration",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "service description, no evaluation"
+  },
+  {
+   "id": "K070",
+   "split": "holdout",
+   "source": "written",
+   "business": "Wrenfield ERP",
+   "rivals": [],
+   "text": "New users find Wrenfield ERP hard to configure without a consultant, and the Arabic translation is incomplete.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "ease",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "hard to configure, incomplete Arabic",
+   "note": "usability and localisation gaps"
+  },
+  {
+   "id": "K071",
+   "split": "holdout",
+   "source": "written",
+   "business": "Glasshouse Cyber",
+   "rivals": [],
+   "text": "4. **Glasshouse Cyber** - \"They found a critical flaw our previous auditor missed,\" says one fintech CTO. Holds CREST accreditation.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "trust",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "quoted praise plus accreditation"
+  },
+  {
+   "id": "K072",
+   "split": "holdout",
+   "source": "written",
+   "business": "Kingfisher Commerce",
+   "rivals": [],
+   "text": "Kingfisher Commerce offers both a hosted plan and a self-hosted licence; the hosted plan includes payments in AED and SAR.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "plan options described"
+  },
+  {
+   "id": "K073",
+   "split": "holdout",
+   "source": "written",
+   "business": "Driftwood Accounts",
+   "rivals": [],
+   "text": "We would not recommend Driftwood Accounts for VAT-registered firms in Saudi Arabia yet: it cannot generate ZATCA-compliant XML invoices.",
+   "polarity": "negative",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "negative"
+    },
+    {
+     "aspect": "trust",
+     "polarity": "negative"
+    }
+   ],
+   "objection": "no ZATCA-compliant invoices",
+   "note": "explicit non-recommendation for a missing compliance capability"
+  },
+  {
+   "id": "K074",
+   "split": "holdout",
+   "source": "written",
+   "business": "Neem Tree Clinics",
+   "rivals": [],
+   "text": "Neem Tree Clinics in Pune is frequently recommended for diabetes care, and patients mention that doctors explain results without rushing.",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "quality",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "support",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "recommendation plus patient praise"
+  },
+  {
+   "id": "K075",
+   "split": "holdout",
+   "source": "written",
+   "business": "Dhow Cart",
+   "rivals": [],
+   "text": "| **Dhow Cart** | dhowcart.ae | Recommended for Arabic-first stores; buy-now-pay-later instalments built in |",
+   "polarity": "positive",
+   "aspects": [
+    {
+     "aspect": "integration",
+     "polarity": "positive"
+    },
+    {
+     "aspect": "features",
+     "polarity": "positive"
+    }
+   ],
+   "objection": "",
+   "note": "table row with an explicit recommendation"
+  },
+  {
+   "id": "K076",
+   "split": "holdout",
+   "source": "written",
+   "business": "Red Sea HR",
+   "rivals": [
+    "Najd Payroll Services",
+    "Asir People"
+   ],
+   "text": "#### Saudi Arabia\n- **Najd Payroll Services**\n- **Red Sea HR**\n- **Asir People**",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "bare list under a country heading"
+  },
+  {
+   "id": "K077",
+   "split": "holdout",
+   "source": "written",
+   "business": "Pinecrest CRM",
+   "rivals": [],
+   "text": "Users say Pinecrest CRM is mainly used by insurance brokers in the UK.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "'users say' introduces a fact about the user base, not a judgement"
+  },
+  {
+   "id": "K078",
+   "split": "holdout",
+   "source": "written",
+   "business": "Copperleaf ERP Partners",
+   "rivals": [],
+   "text": "Copperleaf ERP Partners implements Odoo for manufacturers in Egypt and offers training in Arabic.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "services described without praise"
+  },
+  {
+   "id": "K079",
+   "split": "holdout",
+   "source": "written",
+   "business": "Orion Secure",
+   "rivals": [],
+   "text": "Orion Secure was founded in 2019 by former bank security staff and has 45 employees in Dubai and London.",
+   "polarity": "neutral",
+   "aspects": [],
+   "objection": "",
+   "note": "founding story and headcount"
+  },
+  {
+   "id": "K080",
+   "split": "holdout",
+   "source": "written",
+   "business": "Haddad & Rizk",
+   "rivals": [],
+   "text": "Haddad & Rizk is one of several Cairo law firms that handle commercial arbitration.",
+   "polarity": "neutral",
+   "aspects": [
+    {
+     "aspect": "features",
+     "polarity": "neutral"
+    }
+   ],
+   "objection": "",
+   "note": "one of several, practice area only"
   }
  ]
 }
