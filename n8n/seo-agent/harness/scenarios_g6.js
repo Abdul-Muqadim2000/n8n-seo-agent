@@ -179,8 +179,12 @@ module.exports = async (ctx) => {
     loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache: [st(8 * 1440)], runAnswers: half });
     const po = (await run('AI Plan', [{ json: {} }]))[0].json;
     check('a run older than 6 days is closed: a new run starts (part 1)', !po.nothing_to_do && po.chunk.no === 1 && !po.chunk.going, JSON.stringify(po.chunk));
-    // done today: a second run the same day gets its own id, so it never takes the first run's answers for its own
+    // R-E1 (2026-10-23): done 30 minutes ago: a start that is not a cycle job is answered with the stored week - nothing asked, nothing charged
     loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache: [st(30, { status: 'done' })], runAnswers: half });
+    const pdn = (await run('AI Plan', [{ json: {} }]))[0].json;
+    check('R-E1: a run measured 30 minutes ago is not paid for again by another start: nothing to do, "already measured", with the run', pdn.nothing_to_do && /already measured/.test(pdn.reason) && (pdn.skipped || []).some(x => x.already_measured && x.run_id === p1.run_id), pdn.reason);
+    // done today, asked again on purpose (rerun_today): a second run the same day gets its own id, so it never takes the first run's answers for its own
+    loadWeekly({ monitors: { ai_prompts_max: 500 }, prompts: panel, cache: [st(30, { status: 'done' })], runAnswers: half, trigger: { rerun_today: true } });
     const pd = (await run('AI Plan', [{ json: {} }]))[0].json;
     check('a second run the same day gets its own run id', pd.run_id !== p1.run_id && pd.run_id.indexOf(p1.run_id) === 0 && /_xtest-exec$/.test(pd.run_id) && pd.chunk.done === 0, pd.run_id);
     // a continuation for a run that is not open

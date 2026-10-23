@@ -424,7 +424,19 @@ return plans.map(p => {
   // visibility. It is checked first: it explains more than an engine or a panel change.
   const same_rule = prev ? (String(prev.rule_version || '') === AVM.RULE_VERSION ? { comparable: true, why: '' }
     : { comparable: false, why: 'measurement rule changed: this week starts a new baseline (from ' + AVM.RULE_VERSION.replace(/^aivis-/, '') + ' "named in" counts the answers that name you, not the ones that only cite a page, and share of voice counts every competitor named)' }) : null;
-  const like = prev ? (!same_rule.comparable ? same_rule : !same_kind.comparable ? same_kind
+  // R-E6 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the daily pulse's answers join the headline, so the engines the pulse asks
+  // and whether it asks every question or a rotating sample are part of what the week measures. The week records them (panel_json.pulse); when
+  // both weeks had pulse mornings and either changed, the two weeks are not compared (adding Perplexity to the pulse moved it from ~1 to ~7
+  // samples a question inside the headline, which read as a change in visibility).
+  const pulseComp = (rows) => ({ mornings: rows.length, engines: [...new Set(rows.flatMap(d => Object.entries(d.engines || {}).filter(([, v]) => (Number((v || {}).answered != null ? v.answered : (v || {}).samples) || 0) > 0).map(([e]) => e)))].sort(),
+    modes: [...new Set(rows.map(d => String(d.sample_mode || 'full')))].sort() });
+  const pulse_now = pulseComp(PR); const pulse_before = prev && prev.panel && prev.panel.pulse && typeof prev.panel.pulse === 'object' ? prev.panel.pulse : null;
+  const same_pulse = (pulse_before && pulse_now.mornings > 0 && Number(pulse_before.mornings) > 0) ? (() => {
+    const eb = (pulse_before.engines || []).slice().sort().join('+'), en = pulse_now.engines.join('+'); const mb = (pulse_before.modes || []).slice().sort().join('+'), mn = pulse_now.modes.join('+');
+    if (eb !== en) return { comparable: false, why: 'the daily pulse asks different engines now (' + ((pulse_before.engines || []).map(e => ENG[e] || e).join(', ') || 'none') + ' then, ' + (pulse_now.engines.map(e => ENG[e] || e).join(', ') || 'none') + ' now), so the week mixes its answers differently' };
+    if (mb !== mn) return { comparable: false, why: 'the daily pulse changed how it asks (' + (mb || 'none') + ' then, ' + (mn || 'none') + ' now: every question each morning or a rotating sample), so the week mixes its answers differently' };
+    return { comparable: true, why: '' }; })() : null;
+  const like = prev ? (!same_rule.comparable ? same_rule : !same_kind.comparable ? same_kind : (same_pulse && !same_pulse.comparable) ? same_pulse
     : (same_ids && same_ids.same === false) ? { comparable: false, why: 'only ' + Math.round(100 * same_ids.share) + '% of the questions asked now were asked then (' + same_ids.common + ' in common): a different panel, not a different result' }
     : same_panel) : null;
   const delta_not_compared = prev && !like.comparable
@@ -451,6 +463,7 @@ return plans.map(p => {
   const medCl = (() => { const xs = segRows.filter(s => s.dim === 'cluster').map(s => s.n).sort((a, b) => a - b); return xs.length ? xs[Math.floor(xs.length / 2)] : 0; })();
   const panel_cost = AIP.cost({ panel: Number(p.prompts_max) || nowIds.length + 1, engines: p.engines, pulse: p.pulse !== false, pulse_mode: p.pulse_mode, pulse_per_week: p.pulse_per_week });
   const panel_info = { ids: nowIds, size: nowIds.length, setting: Number(p.prompts_max) || null, engines: [...new Set(Rall.map(r => r.engine))].sort(), hash: AIP.panelHash(nowIds, [...new Set(Rall.map(r => r.engine))]),
+    pulse: pulse_now,   // R-E6: the daily pulse's engines and sample mode this week, compared by the next week
     composition: Object.fromEntries(['cluster', 'persona', 'market', 'stage'].map(d => [d, Object.fromEntries(segRows.filter(s => s.dim === d).map(s => [s.key, s.questions]))])),
     overlap_with_previous: same_ids, half_width: { measured: { headline: samples ? Math.round(10 * (wilson(mentioned, samples)[1] - wilson(mentioned, samples)[0]) / 2) / 10 : null, headline_answers: samples, median_cluster: medCl ? AIP.halfWidth(medCl) : null, median_cluster_answers: medCl },
       achievable: { headline: panel_cost.half_width.headline, cluster: panel_cost.half_width.cluster, per_week: panel_cost.per_week, note: 'at the widest (a rate near 50%), with the panel and the daily pulse as they are set' } },
@@ -487,7 +500,7 @@ return plans.map(p => {
     const d1 = Number((W2CI.headline[key] || {}).deff) || 1, d0 = Number(((PS && PS.deff) || {})[key]) || d1; const p1 = kN / samples, p2 = kB / nPrev, pp = (kN + kB) / (samples + nPrev);
     const se = Math.sqrt(pp * (1 - pp) * (d1 / samples + d0 / nPrev)); if (!se) continue; const z = Math.round(100 * (p1 - p2) / se) / 100; const sig = Math.abs(z) >= 1.96 && Math.abs(t.delta) >= (t.min_points || 5);
     tests[k] = { ...t, z, significant: sig, z_unclustered: t.z, deff: Math.round(100 * (d1 + d0) / 2) / 100, why: (sig ? 'beyond sampling noise' : 'within sampling noise') + ' (z ' + z + ' with answers to one question counted as one cluster, design effect ' + d1 + (d0 !== d1 ? ' now and ' + d0 + ' before' : '') + '; ' + samples + ' answers now, ' + nPrev + ' before)' }; }
-  const delta = (prev && like.comparable) ? { mention_rate: +(mention_rate - prev.mention_rate).toFixed(1), citation_rate: +(citation_rate - prev.citation_rate).toFixed(1), share_of_voice: +(share_of_voice - prev.share_of_voice).toFixed(1),
+  const delta = (prev && like.comparable) ? { mention_rate: +(mention_rate - prev.mention_rate).toFixed(1), citation_rate: +(citation_rate - prev.citation_rate).toFixed(1), share_of_voice: H.sov == null || prev.share_of_voice == null ? null : +(share_of_voice - prev.share_of_voice).toFixed(1),   /* R-E12: no delta from an unmeasured share */
     visibility_score: prev.visibility_score == null ? null : +(visibility_score - prev.visibility_score).toFixed(1),
     // kept as the headline verdict the alerts and the subject read; `tests` holds the same answer for every other figure
     significant: tests && tests.mention_rate && tests.mention_rate.z != null ? tests.mention_rate.significant : (prev.samples ? significant(mentioned, samples, prev.mentioned_k, prev.samples) : null), tests } : null;   // W2-E2: the clustered test
@@ -537,6 +550,14 @@ return plans.map(p => {
   // the alert reads - and each alert that fires states the adjusted threshold it cleared.
   const prevComp = new Map((((prev && like.comparable) ? prev.competitors : null) || []).map(c => [c.domain, c]));   // B-L4: a competitor's share moves with the panel too
   const family = [];
+  // R-E13 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the headline's two tests count answers to one question as one cluster
+  // (W2-E2), so the engine and competitor tests that share their Holm family are clustered the same way: z divided by the square root of the
+  // design effect the run measured (the cited rate's for an engine's citations, the named rate's for a competitor's share; the earlier run's when
+  // larger). Unclustered, they fired more easily than the headline they sit beside.
+  const deffOf = (k) => Math.max(1, Number((W2CI.headline[k] || {}).deff) || 1, Number(((PS && PS.deff) || {})[k]) || 1);
+  const clusterZ = (t, k, minZ) => { if (!t || t.z == null) return t; const d = deffOf(k); if (d <= 1) return { ...t, deff: 1 }; const z = Math.round(100 * t.z / Math.sqrt(d)) / 100;
+    return { ...t, z, z_unclustered: t.z, deff: Math.round(100 * d) / 100, significant: t.significant === true && Math.abs(z) >= (minZ || 1.96), why: (t.why ? t.why + '; ' : '') + 'clustered by question (design effect ' + Math.round(100 * d) / 100 + ', z ' + t.z + ' -> ' + z + ')' }; };
+  for (const [e, c] of Object.entries(engine_changes)) if (c.tested && c.z != null) engine_changes[e] = clusterZ(c, 'cited_rate');
   if (tests && tests.mention_rate && tests.mention_rate.z != null && tests.mention_rate.delta < 0) family.push({ id: 'mention_rate', label: 'AI mentions', z: tests.mention_rate.z });
   for (const [e, c] of Object.entries(engine_changes)) if (c.tested && c.z != null && c.delta < 0) family.push({ id: 'engine:' + e, label: c.name + ' citations', z: c.z });
   // B8-1: "gained 10+ points" was a fixed rule over two noisy samples, raised beside a mention-rate change that had been z-tested.
@@ -544,7 +565,7 @@ return plans.map(p => {
   const compTests = [];
   // E19 (F1b): a competitor's share of voice is tested on its standard error over answers, against the stored figure of the previous run
   for (const c of comp) { const b0 = prevComp.get(c.domain); const sb = PS && PS.competitors ? PS.competitors[c.domain] : null; if (!b0 || !sb) continue;
-    const t = AVM.seChange(c.sov, c._st.sov_se, c._st.sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0, { min: 10 });
+    const t = clusterZ(AVM.seChange(c.sov, c._st.sov_se, c._st.sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0, { min: 10 }), 'named_rate');   // R-E13
     if (t.z != null && t.delta > 0 && c.mentions >= 5) { compTests.push({ c, t }); family.push({ id: 'comp:' + c.domain, label: c.domain + ' share of voice', z: t.z }); } }
   const multiple_tests = holm(family, 0.05);
   const passes = (id) => !!(multiple_tests.by[id] && multiple_tests.by[id].reject);
@@ -634,10 +655,15 @@ return plans.map(p => {
     const M = new Map(); allJobs.forEach((j, ix) => { if (j.site_id !== p.site_id || !j.items) return; const o = outs[ix]; if (!o || o.error) return; const got = SENT.parseModel(o.output, { items: j.items }); for (const [k, v] of got) M.set(k, v); });   // the agent answers its jobs in order
     const rows0 = [...w2read('Parse AI Answers').filter(r => !r.skip && r.engine && r.site_id === p.site_id && (!r.run_id || r.run_id === p.run_id)), ...w2read('Load AI Run Answers').filter(r => r.site_id === p.site_id && r.run_id === p.run_id)];
     const named = SENT.namedAnswers(rows0, { business: p.business_name || p.domain, named: AVM.named }); const notSent = sJobs.length ? Number(sJobs[0].not_sent) || 0 : 0;
-    return SENT.aggregate(named, M, { business: p.business_name || p.domain, unread_why: !sJobs.length && named.length ? 'the Sentiment Reader did not run' : notSent ? notSent + ' were past the 40 calls a run can make' : 'the model gave no label for them' }); })();
+    // R-E8 / R-E5 (2026-10-23): a sample spread over the week when more answers name you than the reader may read (the cap, or the time left)
+    const mark = ((allJobs[0] || {}).markers || []).find(m => m && m.site_id === p.site_id) || null; const sample = sJobs.length ? sJobs[0].sample || null : (mark ? mark.sample : null);
+    return SENT.aggregate(named, M, { business: p.business_name || p.domain, sample, calls_max: 40,
+      unread_why: mark && mark.no_time ? 'this execution had no time left for the Sentiment Reader before the week had to be stored' : !sJobs.length && named.length ? 'the Sentiment Reader did not run' : notSent ? notSent + ' were past the calls a run can make' : 'the model gave no label for them' }); })();
   for (const [e, v] of Object.entries((W2CI.by_engine) || {})) if (engines[e] && !engines[e].carried && v.named_rate && v.named_rate.lo != null) { engines[e].ci_unclustered = engines[e].ci; engines[e].ci = [v.named_rate.lo, v.named_rate.hi]; engines[e].deff = v.named_rate.deff; }
   stats.deff = { named_rate: W2CI.headline.named_rate.deff, cited_rate: W2CI.headline.cited_rate.deff };   // the next run's clustered change test reads them
-  const vis_row = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, checked_at: p.checked_at, prompts: byQ.size, answers: samples, mention_rate, citation_rate, share_of_voice, avg_rank: H.avg_position || 0,
+  // R-E12 (2026-10-23, REVIEW_ENGINE.md): a figure that could not be measured is stored as null, never 0 (share of voice when no business was named
+  // in any answer, the named rate when no answer came back): the contract says an absent figure must not read as 0, and 0 would be compared next week
+  const vis_row = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, checked_at: p.checked_at, prompts: byQ.size, answers: samples, mention_rate, citation_rate, share_of_voice: H.sov == null ? null : share_of_voice, avg_rank: H.avg_position || 0,
     aio_presence, aio_citation_rate, engines_json: J(engines), competitors_json: J(comp), sources_json: J(sources), pages_json: J(our_pages), gaps_json: J(gaps.map(g => ({ prompt_id: g.prompt_id, prompt: g.prompt, kind: g.kind, topic: g.topic, competitors: g.competitors, sources: g.sources, volume: g.volume, stage: g.stage, cluster: g.cluster, fanout: g.fanout, cited_urls: g.cited_urls, engines: g.engines }))), market_json: market ? J(market) : '',
     market_month: market && !market.carried && !market.error ? p.checked_at.slice(0, 7) : ((prev && prev.market_month) || ''), cost_usd: +(exec_cost + ((p.chunk && p.chunk.going && p.spent_before) ? Number(p.spent_before.dfs) || 0 : 0)).toFixed(4),   // G6: the whole run, every execution of it
     alerts: alerts.map(a => a.level + ': ' + a.text).join(' | '),
@@ -653,7 +679,7 @@ return plans.map(p => {
     panel_json: J(panel_info), chunks: run_split ? run_split.executions : 1,
     // F1b (2026-10-23): the rule these figures were counted under, "named in" by its own name, the place in the answers, the window and
     // the comparison every reader shares (compare_json), and the counts the next run is compared against (metrics_json)
-    rule_version: AVM.RULE_VERSION, named_rate: H.named_rate == null ? 0 : H.named_rate, avg_position: H.avg_position, first_rate: H.first_rate, pos_visibility: H.pos_visibility,
+    rule_version: AVM.RULE_VERSION, named_rate: H.named_rate == null ? null : H.named_rate, avg_position: H.avg_position, first_rate: H.first_rate, pos_visibility: H.pos_visibility,
     rate_period, compare_json: J(compare), metrics_json: J(stats),
     // W2-E2 (2026-10-23): the clustered ranges, share of voice over the declared set, sentiment, did an action work, the owner's rules, and this run's
     // answers one by one (compact) so the next runs can count the 28-day window and the before / after of an action
@@ -684,8 +710,13 @@ return plans.map(p => {
   const aliasKeys = Object.keys(aliases).slice(-200); const aliasesTrim = Object.fromEntries(aliasKeys.map(k => [k, aliases[k]]));
   const cache_rows = Object.keys(aliasesTrim).length !== Object.keys(p.aliases || {}).length || JSON.stringify(aliasesTrim) !== JSON.stringify(p.aliases || {}) ? [{ key: 'ai_brands:' + p.site_id, kind: 'ai', site_id: p.site_id, value: J(aliasesTrim), updated_at: now }] : [];
   // G6: the run is measured — its state row says so, so no later start resumes it
-  if (p.chunk) { const sb = p.spent_before || {}; cache_rows.push(AIP.stateRow(p.site_id, { run_id: p.run_id, run_kind: p.run_kind, site_id: p.site_id, domain: p.domain, started_at: p.checked_at, updated_at: new Date().toISOString(),
-    chunk: p.chunk.no, status: 'done', asked: Rall.length, total: Rall.length, spent_dfs_usd: vis_row.cost_usd, spent_ai_usd: Number(sb.ai) || 0, executions: [...(p.chunk.executions || []), String($execution.id)].slice(-60) }, new Date().toISOString())); }
+  // R-E1 (2026-10-23, REVIEW_ENGINE.md): the `done` state carries the run's identity (its cycle key, request, caller) and when it finished, so a
+  // retry of the same cycle job, a catch-up or an on-demand start that comes after it is answered with this stored week (AI Plan) instead of
+  // paying for every question again; and the options' keys an earlier attempt of this run recorded (W2-E3 extras) are kept
+  if (p.chunk) { const sb = p.spent_before || {}; const st0 = p.state_before || {}; const fin = new Date().toISOString();
+    cache_rows.push(AIP.stateRow(p.site_id, { ...AIP.baseState(p), run_id: p.run_id, run_kind: p.run_kind, site_id: p.site_id, domain: p.domain, started_at: p.checked_at, updated_at: fin, finished_at: fin,
+    chunk: p.chunk.no, status: 'done', asked: Rall.length, total: Rall.length, spent_dfs_usd: vis_row.cost_usd, spent_ai_usd: Number(sb.ai) || 0, executions: [...(p.chunk.executions || []), String($execution.id)].slice(-60),
+    ...(st0.extras && st0.extras.run_id === p.run_id ? { extras: st0.extras } : {}) }, fin)); }
   return { json: { ...p, metrics: { asked: RC.length, asked_all: R.length, requests: Rall.length, answered: ans.length, samples, pulse_samples: pulseN, pulse_days: pulseDays, pulse_readings: PR.length, came_back, headline, aio_basis, volume_lookup, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered, mentioned, cited, mention_rate, mention_ci: [mention_lo, mention_hi], citation_rate, share_of_voice, visibility_score, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta,
     // B-L4: when the two runs are not like for like the customer is TOLD, in the place the change would have been
     delta_not_compared, panel, panel_before, delta_basis: prev ? (like.comparable ? 'compared with ' + String(prev.checked_at || '').slice(0, 10) + ' (' + panel_before + ' questions on ' + engText(engBefore) + ')' : like.why) : 'first run (baseline)',

@@ -45,5 +45,17 @@ if (process.argv.includes('--self-test')) {
   t('the CLI is never asked to delete', ![...f.calls].some((c) => /delete|remove/.test(c)));
   const fl = () => { throw Object.assign(new Error('x'), { stderr: 'no database' }); }; r = neverDeployPass({ manifest: M, n8n: fl });
   t('a list that cannot be read is a failure, never "nothing active"', r.failures.length === 1 && /could not list/.test(r.failures[0]));
+  // R-E11 (2026-10-23, REVIEW_ENGINE.md): the pass runs BEFORE anything is touched, in the release step and in the GCP deploy (the docstrings said so;
+  // the code ran it after the import and the publish). Read from the two callers' own source, so a move back fails here.
+  try {
+    const { readFileSync } = await import('node:fs'); const { dirname, join } = await import('node:path'); const { fileURLToPath } = await import('node:url');
+    const here = dirname(fileURLToPath(import.meta.url));
+    const rel = readFileSync(join(here, 'release.mjs'), 'utf8'); const at = (t) => rel.indexOf(t);
+    t('release.mjs: the never-deploy pass runs before the credentials, the import and the publish', at('neverDeployPass({') > 0 && at('neverDeployPass({') < at("n8n('import:credentials'") && at('neverDeployPass({') < at("n8n('import:workflow'") && at('neverDeployPass({') < at("n8n('publish:workflow'"));
+    let dep = ''; try { dep = readFileSync(join(here, '..', '..', 'deploy', 'gcp', 'deploy_engine.py'), 'utf8'); } catch { dep = ''; }
+    if (dep) { const d = (x, from) => dep.indexOf(x, from || 0); const main = d('def main():');
+      t('deploy_engine.py: the clash check comes before the Data Table sync, the deactivation before the first workflow update and the publish', d('clash = never_deploy_clash(manifest)', main) > main && d('clash = never_deploy_clash(manifest)', main) < d("'sync_tables.py'", main) && d('never_deploy_pass(api, manifest, APPLY, say)', main) < d("api('PUT', '/workflows/'", main) && d('never_deploy_pass(api, manifest, APPLY, say)', main) < d("'/workflows/%s/activate'", main)); }
+    else out.push('skip deploy_engine.py order (not next to this file: the image)');
+  } catch (e) { t('the order check could read the callers: ' + String(e.message || e), false); }
   console.log(out.join('\n')); console.log(ok ? 'never_deploy self-test: all passed' : 'never_deploy self-test: FAILED'); process.exit(ok ? 0 : 1);
 }

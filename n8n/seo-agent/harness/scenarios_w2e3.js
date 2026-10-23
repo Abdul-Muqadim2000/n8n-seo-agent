@@ -95,21 +95,24 @@ module.exports = async (ctx) => {
     const said = (n) => (i) => i < n ? 'For a company your size, Tech& is a good fit for e-invoicing.' : 'Look at ClearTax and EDICOM for e-invoicing in the UAE.';
     const ans = reqs.map((r) => { const i = (r.arm === 'without' ? ctl : r.role === 'CFO' ? cfo : it).indexOf(r); return llm(r.arm === 'without' ? said(1)(i) : r.role === 'CFO' ? said(9)(i) : said(2)(i)); });
     mock('Run AI Extra Requests', ans.map(a => ({ json: a })));
-    mock('Load AI Visibility', [{ json: { site_id: SITE, run_id: 'ai_20261019_techand-ai', checked_at: day(7), notes_json: JSON.stringify({ persona: { roles: [{ role: 'CFO', n: 12, k: 8 }], control: { n: 12, k: 1 } } }) } }]);
+    // last week (R-E3: stored WITH its per-question answers, so it pairs by question): the control named on question 0, the CFO arm on questions 0-7
+    const qids = ctl.map(r => r.prompt_id); const byQ0 = Object.fromEntries(qids.map((id, i) => [id, { c: i < 1 ? 1 : 0, r: { CFO: i < 8 ? 1 : 0 } }]));
+    mock('Load AI Visibility', [{ json: { site_id: SITE, run_id: 'ai_20261019_techand-ai', checked_at: day(7), notes_json: JSON.stringify({ persona: { roles: [{ role: 'CFO', n: 12, k: 8 }], control: { n: 12, k: 1 }, by_q: byQ0 } }) } }]);
     const x = (await run('AI Extras', [{ json: {} }])).map(i => i.json)[0];
     const P = x.persona || {}; const R = (role) => (P.roles || []).find(r => r.role === role) || {};
     check('labelled "API answers", ChatGPT API, 12 questions, control named in 1 of 12', P.label === 'API answers' && P.engine === 'chatgpt_api' && P.questions === 12 && P.control.n === 12 && P.control.k === 1, JSON.stringify(P.control));
-    check('CFO: 9 of 12 against 1 of 12 is a real difference (two-proportion test, |z| >= 1.96)', R('CFO').k === 9 && R('CFO').n === 12 && R('CFO').z >= 1.96 && R('CFO').verdict === 'named more often with this role', JSON.stringify(R('CFO')));
+    check('CFO: 9 of 12 against 1 of 12 is a real difference, paired by question (R-E3: 8 questions named only with the role, none the other way; exact sign test p 0.0078)', R('CFO').k === 9 && R('CFO').n === 12 && R('CFO').up === 8 && R('CFO').down === 0 && R('CFO').p === 0.0078 && R('CFO').questions === 12 && R('CFO').verdict === 'named more often with this role', JSON.stringify(R('CFO')));
     check('IT manager: 2 of 12 against 1 of 12 is printed as "no measurable difference", not hidden', R('IT manager').verdict === 'no measurable difference' && R('IT manager').delta === 8.3, JSON.stringify(R('IT manager')));
-    check('pooled over the stored runs of the last 28 days (this run + last week\'s: 24 answers a side)', R('CFO').pooled.runs === 2 && R('CFO').pooled.n === 24 && R('CFO').pooled.k === 17 && R('CFO').pooled.control_n === 24, JSON.stringify(R('CFO').pooled));
+    check('pooled over the stored runs of the last 28 days PER QUESTION (this run + last week\'s: 12 questions, each the mean of its two weeks, not 24 independent answers)', R('CFO').pooled.runs === 2 && R('CFO').pooled.n === 24 && R('CFO').pooled.k === 17 && R('CFO').pooled.control_n === 24 && R('CFO').pooled.questions === 12 && R('CFO').pooled.up === 8 && R('CFO').pooled.down === 0, JSON.stringify(R('CFO').pooled));
+    check('the per-question answers are kept for next week\'s pairing (notes_json.persona.by_q)', Object.keys(JSON.parse(x.vis_update.notes_json).persona.by_q || {}).length === 12, '');
     check('the persona block is kept in the run\'s notes (notes_json.persona) for next week\'s pooling, and priced: 36 x $0.012', JSON.parse(x.vis_update.notes_json).persona.roles.length === 2 && x.cost_usd === 0.432, JSON.stringify({ c: x.cost_usd }));
     // W2-A's contract addition: persona_effect_json, exactly [{role, with:{rate, n}, without:{rate, n}, delta, lo, hi, significant}] (the 28-day pooled figures)
     const PE = JSON.parse(x.vis_update.persona_effect_json || 'null') || [];
     const pe = (role) => PE.find(r => r.role === role) || {};
     check('persona_effect_json: one entry per role, exactly the contract\'s keys, rates 0-100, the 95% interval of the change; CFO real (interval above 0), IT manager not', PE.length === 2
       && PE.every(r => Object.keys(r).sort().join() === 'delta,hi,lo,role,significant,with,without' && Object.keys(r.with).sort().join() === 'n,rate' && Object.keys(r.without).sort().join() === 'n,rate')
-      && pe('CFO').with.n === 24 && pe('CFO').with.rate === 70.8 && pe('CFO').without.n === 24 && pe('CFO').significant === true && pe('CFO').lo > 0 && pe('CFO').hi > pe('CFO').lo && pe('IT manager').significant === false && pe('IT manager').lo < 0, JSON.stringify(PE));
-    check('the run\'s own figures carry the same interval (Newcombe) and the verdict follows it', R('CFO').lo > 0 && R('CFO').significant === true && R('IT manager').significant === false, JSON.stringify([R('CFO').lo, R('CFO').hi, R('IT manager').lo]));
+      && pe('CFO').with.n === 24 && pe('CFO').with.rate === 70.8 && pe('CFO').without.n === 24 && pe('CFO').significant === true && pe('CFO').lo > 0 && pe('CFO').hi > pe('CFO').lo && pe('IT manager').significant === false && pe('IT manager').lo <= 0, JSON.stringify(PE));
+    check('the run\'s own figures carry the question-level interval (a bootstrap over questions) and the verdict follows it', R('CFO').lo > 0 && R('CFO').significant === true && R('IT manager').significant === false, JSON.stringify([R('CFO').lo, R('CFO').hi, R('IT manager').lo]));
     check('every column of the row update is a seo_ai_visibility column', Object.keys(x.vis_update).every(k => TC.AI_VIS.includes(k)), JSON.stringify(Object.keys(x.vis_update)));
     const W2X = AIX;
     const esc = (s) => String(s); const n = (v) => String(v);
@@ -203,9 +206,11 @@ module.exports = async (ctx) => {
     function r(x) { return Math.round(x * 10000) / 10000; }
     // W2-E2's Sentiment Reader (Claude Haiku): the run's answers x 50% named (stated, conservative), 20 a call at ~$0.012, at most 40 calls a run
     const s50 = AIP.cost({ panel: 50 }), s500 = AIP.cost({ panel: 500, engines: AIP.ENGINES });
-    check('the Sentiment Reader is priced on every weekly run: 50 q x 5 weekly engines = 245 answers, 123 named, 7 calls, $0.084 in the weekly Claude money; 40 calls at most', s50.sentiment.named === 123 && s50.sentiment.calls === 7 && s50.sentiment.ai === 0.084
-      && Math.abs(s50.run.weekly.ai - (Math.max(AIP.FIXED.weekly_ai_min, AIP.FIXED.brief_ai + s50.analyst_jobs * AIP.FIXED.analyst_job_ai) + 0.084)) < 1e-9 && s500.sentiment.calls === 40 && s500.sentiment.ai === 0.48 && AIP.FIXED.sentiment_named_rate === 0.5, JSON.stringify([s50.sentiment, s500.sentiment]));
-    check('the golden table carries the reader\'s figures (the app is held to them)', G.fixed.sentiment_calls_max === 40 && G.fixed.sentiment_call_ai === 0.012 && G.cases.find(c => c.input.panel === 50 && Object.keys(c.input).length === 1).expect.run.weekly.ai === s50.run.weekly.ai, JSON.stringify(G.fixed));
+    // R-E9 (2026-10-23, REVIEW_ENGINE.md): the reader's call is priced at the measured range, ~$0.02 (was $0.012), and its worst case is bounded by the cap
+    check('the Sentiment Reader is priced on every weekly run: 50 q x 5 weekly engines = 245 answers, 123 named, 7 calls, $0.14 in the weekly Claude money; 40 calls at most ($0.80)', s50.sentiment.named === 123 && s50.sentiment.calls === 7 && s50.sentiment.ai === 0.14
+      && Math.abs(s50.run.weekly.ai - (Math.max(AIP.FIXED.weekly_ai_min, AIP.FIXED.brief_ai + s50.analyst_jobs * AIP.FIXED.analyst_job_ai) + 0.14)) < 1e-9 && s500.sentiment.calls === 40 && s500.sentiment.ai === 0.8 && AIP.FIXED.sentiment_named_rate === 0.5, JSON.stringify([s50.sentiment, s500.sentiment]));
+    check('R-E9: the price a call sits inside the measured range ($0.016-0.026: ~6k tokens in at Haiku\'s $1/M, 2-3k out at $5/M) and the worst case is cap x tries x a full answer', AIP.FIXED.sentiment_call_ai >= 0.016 && AIP.FIXED.sentiment_call_ai <= 0.026 && AIP.FIXED.sentiment_call_worst === 0.026 && AIP.FIXED.sentiment_tries === 2 && Math.abs(AIP.FIXED.sentiment_calls_max * AIP.FIXED.sentiment_tries * AIP.FIXED.sentiment_call_worst - 2.08) < 1e-9, JSON.stringify(AIP.FIXED));
+    check('the golden table carries the reader\'s figures (the app is held to them)', G.fixed.sentiment_calls_max === 40 && G.fixed.sentiment_call_ai === 0.02 && G.fixed.sentiment_call_worst === 0.026 && G.cases.find(c => c.input.panel === 50 && Object.keys(c.input).length === 1).expect.run.weekly.ai === s50.run.weekly.ai, JSON.stringify(G.fixed));
     check('the buyer roles may be given as a count or as the roles themselves (the app passes its ai_personas): the same price', JSON.stringify(AIP.cost({ panel: 50, persona_context: true, personas: 'CFO, IT manager' }).options) === JSON.stringify(AIP.cost({ panel: 50, persona_context: true, personas: 2 }).options) && AIP.cost({ panel: 50, persona_context: true, personas: ['CFO'] }).options.persona.roles === 1, '');
     // the plan: Claude weekly asked on a weekly run; on-demand reserved at the configured panel size (the app's quote), with the options
     const loadWeekly = (o) => { for (const k of Object.keys(store)) delete store[k];
@@ -259,14 +264,50 @@ module.exports = async (ctx) => {
     check('the call is behind the in-200 gate and its money is in the run\'s ledger settle', !!C['Run AI Extra Requests Retry Plan'] && reach('Run AI Extra Requests', 'Run AI Extra Requests Answers') && /AI Extras/.test(T.settle_measured), T.settle_measured);
     check('the asked state and the row are UPDATES (no insert of a partial row), each mapping only the columns it carries', T.dt['Save Prompt State'].operation === 'update' && T.dt['Save Prompt State'].mapping === 'autoMapInputData' && T.dt['Save Prompt State'].table === 'seo_ai_prompts'
       && T.dt['Update AI Visibility (Extras)'].operation === 'update' && T.dt['Update AI Visibility (Extras)'].table === 'seo_ai_visibility' && JSON.stringify(T.dt['Update AI Visibility (Extras)'].filters).includes('run_id'), JSON.stringify([T.dt['Save Prompt State'], T.dt['Update AI Visibility (Extras)']]));
-    const cond = (d) => ((d && d.filters && d.filters.conditions) || []).map(c => c.keyName + ' ' + c.condition).join(', ');
-    check('the uploads and today\'s results pages are read for the started site only', /site_id like/.test(cond(T.dt['Load AI Imports'])) && /day gte/.test(cond(T.dt['Load AI Imports'])) && /kind eq, site_id like, updated_at gte/.test(cond(T.dt['Load SERP Cache (AI)'])), cond(T.dt['Load AI Imports']) + ' | ' + cond(T.dt['Load SERP Cache (AI)']));
+    // R-E2 (2026-10-23): a site scope is `eq` when the start names the site and `like '%'` only when it names none ("scope" below)
+    const isScope = (c) => /=== '%' \? 'like' : 'eq'/.test(String(c.condition));
+    const cond = (d) => ((d && d.filters && d.filters.conditions) || []).map(c => c.keyName + ' ' + (isScope(c) ? 'scope' : c.condition)).join(', ');
+    check('the uploads and today\'s results pages are read for the started site only', /site_id scope/.test(cond(T.dt['Load AI Imports'])) && /day gte/.test(cond(T.dt['Load AI Imports'])) && /kind eq, site_id scope, updated_at gte/.test(cond(T.dt['Load SERP Cache (AI)'])), cond(T.dt['Load AI Imports']) + ' | ' + cond(T.dt['Load SERP Cache (AI)']));
     for (const [f, n] of [['SEO_Agent_AI_Pulse.json', 'Load AI Visibility'], ['SEO_Agent_AI_Growth.json', 'Load AI Visibility'], ['SEO_Agent_Backlink_Monitor.json', 'Load AI Visibility (BL)'], ['SEO_Agent_Link_Builder.json', 'Load AI Visibility (LB)']]) {
       const d = (WR[f] || { dt: {} }).dt[n];
-      check(f.replace(/^SEO_Agent_|\.json$/g, '') + ': ' + n + ' reads one site and a window (F2 "Not fixed")', d && cond(d) === 'site_id like, checked_at gte', cond(d)); }
+      check(f.replace(/^SEO_Agent_|\.json$/g, '') + ': ' + n + ' reads one site and a window (F2 "Not fixed")', d && cond(d) === 'site_id scope, checked_at gte', cond(d)); }
     // the pulse's scope: its cron has no Manual Run, so the expression must read '%' then, and the site when a start names one
     const pexpr = (((WR['SEO_Agent_AI_Pulse.json'].dt['Load AI Visibility'] || {}).filters || {}).conditions || [])[0].keyValue;
     const evalScope = (mr) => { const $ = (nm) => ({ isExecuted: !!mr, first: () => ({ json: mr || {} }) }); return new Function('$', 'return ' + pexpr.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, ''))($); };
     check('the pulse\'s scope: the cron reads every site (\'%\'), an on-demand start its site', evalScope(null) === '%' && evalScope({ domain: 'https://www.TechAnd.ai/' }) === 'site_techand-ai', JSON.stringify([evalScope(null), evalScope({ domain: 'https://www.TechAnd.ai/' })]));
+  });
+
+  // ===================================================================================================================================
+  await guard('R-E2 exact site scope', async () => {
+    reset(); const SN = 'R-E2 (REVIEW_ENGINE.md) — n8n\'s Data Table `like` is a CONTAINS match: a scoped read or the text trim of site_abc-com must not touch site_abc-com-au or site_myabc-com; the generated filters, evaluated under n8n 2.41.4\'s own semantics';
+    begin(SN); const check = mkCheck(SN);
+    const WR = JSON.parse(fs.readFileSync(path.join(__dirname, 'w2e3_wiring.json'), 'utf8')); const T = WR['SEO_Agent_AI_Visibility.json'];
+    const W1 = JSON.parse(fs.readFileSync(path.join(__dirname, 'w2e1_wiring.json'), 'utf8'));
+    // n8n 2.41.4 (dist/modules/data-table/data-table.service.js 425-434): like / ilike wrap the value in %...% unless it carries a % (and the
+    // repository escapes `_` and `\\`, so they are literal); eq is exact
+    const likeMatch = (val, pat) => { const p0 = String(pat).includes('%') ? String(pat) : '%' + pat + '%'; const re = new RegExp('^' + p0.split('%').map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$'); return re.test(String(val)); };
+    const ev = (expr, mr) => { const $ = (nm) => ({ isExecuted: !!mr, first: () => ({ json: mr || {} }) }); const t = String(expr); return t.startsWith('={{') ? new Function('$', 'return ' + t.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, ''))($) : t; };
+    const matches = (conds, row, mr) => conds.every(c => { const op = ev(c.condition, mr), v = ev(c.keyValue, mr); const x = row[c.keyName];
+      if (op === 'eq') return String(x) === String(v); if (op === 'like') return likeMatch(x, v); if (op === 'neq') return String(x) !== String(v); if (op === 'isNotEmpty') return x != null && String(x) !== '';
+      if (op === 'lt') return String(x) < String(v); if (op === 'gte') return String(x) >= String(v); if (op === 'gt') return String(x) > String(v); throw new Error('op ' + op); });
+    const sites = ['site_abc-com', 'site_abc-com-au', 'site_myabc-com'];
+    const aged = new Date(Date.now() - 40 * 864e5).toISOString();
+    const rows = sites.map(sid => ({ site_id: sid, run_kind: 'weekly', checked_at: aged, answer_text: 'full text', run_id: 'ai_20261023_' + sid.slice(5) }));
+    const trim = W1['Trim Old Answer Text'].filters.conditions;
+    const hit = (mr) => rows.filter(r => matches(trim, r, mr)).map(r => r.site_id);
+    console.log('   trim on a start for abc.com ->', JSON.stringify(hit({ domain: 'abc.com' })), ' | a start naming no site ->', JSON.stringify(hit({})));
+    check('the text trim of a run for abc.com updates site_abc-com\'s rows only (the old `like` also blanked site_abc-com-au and site_myabc-com)', JSON.stringify(hit({ domain: 'abc.com' })) === JSON.stringify(['site_abc-com']), JSON.stringify(hit({ domain: 'abc.com' })));
+    check('the same filter with the old `like` matched site_abc-com-au too (the defect, under n8n\'s semantics: %site_abc-com%)', JSON.stringify(rows.filter(r => likeMatch(r.site_id, 'site_abc-com')).map(r => r.site_id)) === JSON.stringify(['site_abc-com', 'site_abc-com-au']), JSON.stringify(rows.filter(r => likeMatch(r.site_id, 'site_abc-com')).map(r => r.site_id)));
+    check('and a run id: `like ai_20261023_abc-com` matched the run of abc.com.au the same day', likeMatch('ai_20261023_abc-com-au', 'ai_20261023_abc-com'), '');
+    check('a start that names no site still reads (and trims) every site, as before', hit({}).length === 3, JSON.stringify(hit({})));
+    check('a row already trimmed is not updated (and not returned) again (R-E7)', !matches(trim, { ...rows[0], answer_text: '' }, { domain: 'abc.com' }), '');
+    const runCond = (((T.dt['Load AI Run Answers'] || {}).filters || {}).conditions || []);
+    const runRows = [{ site_id: 'site_abc-com', run_id: 'ai_20261023_abc-com', run_kind: 'weekly', checked_at: new Date().toISOString() }, { site_id: 'site_abc-com', run_id: 'ai_20261023_abc-com_x9', run_kind: 'weekly', checked_at: new Date().toISOString() }];
+    const rh = runRows.filter(r => matches(runCond, r, { domain: 'abc.com', continue_run: 'ai_20261023_abc-com' })).map(r => r.run_id);
+    check('the next part of a split run reads its own run\'s answers only (run_id eq), not a second run of the same day', JSON.stringify(rh) === JSON.stringify(['ai_20261023_abc-com']), JSON.stringify(rh));
+    for (const [f, n] of [['SEO_Agent_AI_Pulse.json', 'Load AI Visibility'], ['SEO_Agent_AI_Growth.json', 'Load AI Visibility'], ['SEO_Agent_Backlink_Monitor.json', 'Load AI Visibility (BL)'], ['SEO_Agent_Link_Builder.json', 'Load AI Visibility (LB)']]) {
+      const cs = ((((WR[f] || { dt: {} }).dt[n] || {}).filters || {}).conditions || []); const vr = sites.map(sid => ({ site_id: sid, checked_at: new Date().toISOString() }));
+      const got = vr.filter(r => matches(cs, r, { domain: 'abc.com' })).map(r => r.site_id);
+      check(f.replace(/^SEO_Agent_|\.json$/g, '') + ': ' + n + ' for abc.com reads site_abc-com only', JSON.stringify(got) === JSON.stringify(['site_abc-com']), JSON.stringify(got)); }
   });
 };

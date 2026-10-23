@@ -356,6 +356,13 @@ SITE_SCOPE = ("={{ ((t) => String(t.site_id || '').trim() || (String(t.domain ||
               ".replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))"
               "(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}")
 RUN_SCOPE = "={{ String(($('Manual Run').first().json || {}).continue_run || '').trim() || '%' }}"
+# R-E2 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): n8n's Data Table `like` is a CONTAINS match (data-table.service.js wraps the value
+# in %...% unless it carries a %), so `site_id like site_abc-com` also read site_abc-com-au and site_myabc-com, and the text trim UPDATED their rows.
+# A start that names a site (or a run) now filters with `eq`, an exact match; `like '%'` stays only for a start that names none (every site).
+def scoped(col, scope):
+    return (col, "={{ (" + scope[4:-3] + ") === '%' ? 'like' : 'eq' }}", scope)
+SITE_EQ = scoped('site_id', SITE_SCOPE)
+RUN_EQ = scoped('run_id', RUN_SCOPE)
 SCOPED = {'Load AI Prompts': [], 'Load AI Visibility': [('checked_at', 'gte', SINCE(60))], 'Load Link Prospects': []}
 # W2-E3 (2026-10-23, fixes/F2.md "Not fixed"): the AI Pulse, AI Growth, the Backlink Monitor and the Link Builder loaded seo_ai_visibility WHOLE (every
 # site, every run since the first). Each reads only the site's latest rows (the pulse and the two link workflows its latest run's rivals, AI
@@ -363,29 +370,29 @@ SCOPED = {'Load AI Prompts': [], 'Load AI Visibility': [('checked_at', 'gte', SI
 # window: 60 days (70 for AI Growth's six weekly runs). The pulse also starts from its cron, where Manual Run has no data: it reads '%' then.
 PULSE_SCOPE = "={{ $('Manual Run').isExecuted ? " + SITE_SCOPE[4:-3] + " : '%' }}"
 def vis_scoped(W, nm, pos, days, scope=SITE_SCOPE):
-    return W.node(nm, DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_VIS_TABLE, [('site_id', 'like', scope), ('checked_at', 'gte', SINCE(days))]), pos, **LOAD)
+    return W.node(nm, DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_VIS_TABLE, [scoped('site_id', scope), ('checked_at', 'gte', SINCE(days))]), pos, **LOAD)
 for i, (nm, t) in enumerate(loads):
-    if nm in SCOPED: A.node(nm, DT_TYPE, DT_VERSION, dt_get_all_where_params(t, [('site_id', 'like', SITE_SCOPE)] + SCOPED[nm]), at(1 + i, 1), **LOAD)
+    if nm in SCOPED: A.node(nm, DT_TYPE, DT_VERSION, dt_get_all_where_params(t, [SITE_EQ] + SCOPED[nm]), at(1 + i, 1), **LOAD)
     else: A.load(nm, t, at(1 + i, 1))
-A.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('site_id', 'like', SITE_SCOPE), ('checked_at', 'gte', SINCE(60))]), at(8, 1), **LOAD)   # W2-E2: 60 days (was 15) - the 28-day segment window and an action's 28 days before / after   # W2-E3 counts its own 28 days inside the 60
-A.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'ai'), ('site_id', 'like', SITE_SCOPE)]), at(9, 1), **LOAD)
-A.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [('site_id', 'like', SITE_SCOPE), ('checked_at', 'gte', SINCE(35))]), at(10, 1), **LOAD)
+A.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [SITE_EQ, ('checked_at', 'gte', SINCE(60))]), at(8, 1), **LOAD)   # W2-E2: 60 days (was 15) - the 28-day segment window and an action's 28 days before / after   # W2-E3 counts its own 28 days inside the 60
+A.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'ai'), SITE_EQ]), at(9, 1), **LOAD)
+A.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [SITE_EQ, ('checked_at', 'gte', SINCE(35))]), at(10, 1), **LOAD)
 # G6 (2026-10-18): the answers earlier executions of an unfinished split run stored (a run is resumed for at most 6 days; the pulse's rows are
 # not this run's). AI Plan reads which questions x engines are answered, AI Metrics measures the whole run over them in its last execution.
-A.node('Load AI Run Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [('site_id', 'like', SITE_SCOPE), ('run_id', 'like', RUN_SCOPE), ('run_kind', 'neq', 'pulse'), ('checked_at', 'gte', SINCE(6.2))]), at(10, 2), **LOAD)
+A.node('Load AI Run Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [SITE_EQ, RUN_EQ, ('run_kind', 'neq', 'pulse'), ('checked_at', 'gte', SINCE(6.2))]), at(10, 2), **LOAD)
 loads += [('Load AI Daily', None), ('Load Cache (AI)', None), ('Load Query History', None), ('Load AI Run Answers', None)]
 # RV-1 (2026-10-21): the page inventory with what each address answered (seo_pages.http_status, written by the Site Tracker), so the report never
 # lists a page that answers 404 as "your cited page" and the brief never builds on one
 from ladder_common import PAGES_TABLE as _PAGES_TABLE_RV1
-A.node('Load Pages (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_PAGES_TABLE_RV1, [('site_id', 'like', SITE_SCOPE)]), at(11, 2), **LOAD); loads += [('Load Pages (AI)', None)]   # F2 (E12)
+A.node('Load Pages (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_PAGES_TABLE_RV1, [SITE_EQ]), at(11, 2), **LOAD); loads += [('Load Pages (AI)', None)]   # F2 (E12)
 # W2-E2 (2026-10-23, fixes/W2-E2.md): the actions whose effect AI Metrics measures (difference in differences): the AI targets written / won and the pages published
 from ladder_common import AI_TARGETS_TABLE as _AIT_W2, LOG_TABLE as _LOG_W2
-A.node('Load AI Targets (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_AIT_W2, [('site_id', 'like', SITE_SCOPE)]), at(12, 2), **LOAD)
-A.node('Load Content Log (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LOG_W2, [('site_id', 'like', SITE_SCOPE)]), at(13, 2), **LOAD); loads += [('Load AI Targets (AI)', None), ('Load Content Log (AI)', None)]
+A.node('Load AI Targets (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_AIT_W2, [SITE_EQ]), at(12, 2), **LOAD)
+A.node('Load Content Log (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LOG_W2, [SITE_EQ]), at(13, 2), **LOAD); loads += [('Load AI Targets (AI)', None), ('Load Content Log (AI)', None)]
 # W2-E3 (2026-10-23): the owner's uploaded AI reports of the last 35 days (Bing AI Performance, Search Console AI Mode / AI Overviews), and the
 # results pages this site's paths read TODAY (seo_cache `serp:`), so the fan-out check pays for none of them twice
-A.node('Load AI Imports', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_IMPORTS_TABLE, [('site_id', 'like', SITE_SCOPE), ('day', 'gte', '={{ new Date(Date.now() - 35 * 864e5).toISOString().slice(0, 10) }}')]), at(14, 2), **LOAD)
-A.node('Load SERP Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'serp'), ('site_id', 'like', SITE_SCOPE), ('updated_at', 'gte', '={{ new Date().toISOString().slice(0, 10) }}')]), at(15, 2), **LOAD)
+A.node('Load AI Imports', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_IMPORTS_TABLE, [SITE_EQ, ('day', 'gte', '={{ new Date(Date.now() - 35 * 864e5).toISOString().slice(0, 10) }}')]), at(14, 2), **LOAD)
+A.node('Load SERP Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'serp'), SITE_EQ, ('updated_at', 'gte', '={{ new Date().toISOString().slice(0, 10) }}')]), at(15, 2), **LOAD)
 loads += [('Load AI Imports', None), ('Load SERP Cache (AI)', None)]
 A.code('AI Plan', 'AI_Plan.js', at(11, 1)); A.iff('Any Sites (AI)?', '{{ !$json.nothing_to_do }}', at(12, 1)); A.node('Nothing To Do (AI)', 'n8n-nodes-base.noOp', 1, {}, at(13, 2))
 A.code('Site Text Jobs', 'Site_Text_Jobs.js', at(13, -2)); A.iff('Need Site Text?', '{{ !$json.skip }}', at(14, -2))
@@ -422,7 +429,7 @@ A.code('AI Requests Go', 'AI_Requests_Go.js', at(22, 2)); A.iff('Go AI Requests?
 # F2 (E1): a stopped run's ops alerts, recorded before anything is sent (the run's own alert sweep delivers them), and the callers told now (E17)
 A.code('Run Alert Rows', 'AI_Run_Alert_Rows.js', at(33, 1)); A.iff('Any Run Alerts?', '{{ !$json.skip }}', at(33, 2))
 A.node('Save Run Alert', DT_TYPE, DT_VERSION, dt_upsert_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, 'alert_key'), at(33, 3), onError='continueRegularOutput', alwaysOutputData=True)
-_notice_post = lambda nm, pos: A.node(nm, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'timeout': 30000}}, pos, onError='continueRegularOutput', retryOnFail=True, maxTries=3, waitBetweenTries=5000)
+_notice_post = lambda nm, pos: A.node(nm, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'timeout': 30000}}, pos, onError='continueRegularOutput')   # R-E14: one try, like every customer callback (retry_lint.ALLOW)
 for _nm, _src_node, _pos in [('Stop Notices (AI)', 'AI Chunk Handoff', at(34, 1)), ('Open Run Notices (AI)', 'AI Plan', at(12, -1)), ('Busy Notices (AI)', 'AI Plan', at(12, 3))]:
     A.code(_nm, src('AI_Run_Notices.js').replace('__NOTICE_SRC__', _src_node), _pos)
     A.iff('Tell ' + _nm[:-5] + '?', '{{ !$json.skip }}', [_pos[0] + 110, _pos[1]])
@@ -453,14 +460,27 @@ A.node('Prune Old Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWE
 # kept 35 days - five weekly runs, far past the analyst's re-read (6.2 days) - then blanked on this site's rows of the 35-49 day window (a missed week is
 # caught next time). Without it a 200-question site alone would hold ~120 MB of weekly answers against n8n's 200 MB for every Data Table.
 from ladder_common import dt_update_where_params as _dt_update_where_w2e1
-A.node('Trim Old Answer Text', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_ANSWERS_TABLE, AI_ANSWERS_COLS, [('site_id', 'like', SITE_SCOPE), ('run_kind', 'neq', 'pulse'), ('checked_at', 'lt', SINCE(35)), ('checked_at', 'gte', SINCE(49))],
+A.node('Trim Old Answer Text', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_ANSWERS_TABLE, AI_ANSWERS_COLS, [SITE_EQ, ('run_kind', 'neq', 'pulse'), ('checked_at', 'lt', SINCE(35)), ('checked_at', 'gte', SINCE(49)), ('answer_text', 'isNotEmpty', '')],   # R-E7: only rows not trimmed yet (an update answers with every row it changed)
        {'answer_text': '', 'retrieved_json': ''}), at(19, 4), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+# R-E7 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): a Data Table update or delete in n8n 2.41.4 ANSWERS WITH EVERY ROW IT CHANGED
+# (the proxy passes returnData = true; the node has no option to turn it off), so each one is followed by a node that collapses that answer to a count:
+# nothing downstream carries the rows. The trims touch only rows not trimmed yet (answer_text not empty), so a week's answer is one week's rows.
+COLLAPSE = "// R-E7: a Data Table update / delete answers with every row it changed; only the count goes on.\nconst n = $input.all().filter(i => i.json && !i.json.error && i.json.id != null).length;\nreturn [{ json: { changed: n } }];"
+A.code('Trimmed (AI)', COLLAPSE, at(19, 5), executeOnce=True)
+# and the results pages the fan-out check (and every other path) stored for this site: a reading counts only on its own day (SC.lookup), so rows
+# older than 2 days are dead weight - one row of up to 20 KB per search, up to 200 searches a week per site, and nothing pruned them. The value is
+# blanked first (an update that answers with small rows), then the rows are deleted (a delete that answers with the now-small rows).
+A.node('Blank Old SERP Cache (AI)', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(CACHE_TABLE, CACHE_COLS, [('kind', 'eq', 'serp'), SITE_EQ, ('updated_at', 'lt', SINCE(2)), ('value', 'isNotEmpty', '')], {'value': ''}),
+       at(27, 7), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+A.node('Prune Old SERP Cache (AI)', DT_TYPE, DT_VERSION, dt_delete_where_params(CACHE_TABLE, [('kind', 'eq', 'serp'), SITE_EQ, ('updated_at', 'lt', SINCE(2))]), at(28, 7), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+A.code('SERP Cache Pruned (AI)', COLLAPSE, at(29, 7), executeOnce=True)
 # W2-FIX (2026-10-23, fixes/W2-FIX.md item 3; W2-E2 open item 5): each weekly row stores `units_json`, its answers one by one (~145 KB a week at 500
 # questions x 9 engines), and seo_ai_visibility keeps its rows for good. The record is read only for the 28-day window and an action's 28 days before /
 # after (actions of the last 31 days: 59 days back), and the tracker loads 60 days of rows; so it is blanked on this site's rows aged 70-120 days
 # (a missed week is caught for seven more weeks). Every other column of the row (its figures, segments, panel) is kept.
-A.node('Trim Old Units', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_VIS_TABLE, AI_VIS_COLS, [('site_id', 'like', SITE_SCOPE), ('checked_at', 'lt', SINCE(70)), ('checked_at', 'gte', SINCE(120))],
-       {'units_json': ''}), at(19, 5), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+A.node('Trim Old Units', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_VIS_TABLE, AI_VIS_COLS, [SITE_EQ, ('checked_at', 'lt', SINCE(70)), ('checked_at', 'gte', SINCE(120)), ('units_json', 'isNotEmpty', '')],
+       {'units_json': ''}), at(20, 5), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+A.code('Trimmed Units (AI)', COLLAPSE, at(21, 5), executeOnce=True)   # R-E7: the update answers with every row it changed
 A.code('AI Brief Input', 'AI_Brief_Input.js', at(20, 3))
 A.agent('AI Brief', 'ai_brief.txt', {'type': 'object', 'properties': {'headline': {'type': 'string'}, 'summary': {'type': 'string'}, 'actions': {'type': 'array', 'items': {'type': 'object', 'properties': {'priority': {'type': 'number'}, 'action': {'type': 'string'}, 'why': {'type': 'string'}}, 'required': ['action']}}, 'watch': ARR}, 'required': ['headline', 'summary', 'actions']}, at(21, 3))
 A.code('AI Report', 'AI_Report.js', at(22, 3)); A.pdf_chain('AI', at(23, 3))
@@ -508,10 +528,18 @@ A.node('Update AI Visibility (Extras)', DT_TYPE, DT_VERSION, _dt_update_auto(AI_
 A.code('Extras Cache Rows', "// W2-E3: the results pages the fan-out check read now (seo_cache `serp:`, exact columns), so every path of this site reads them for nothing today.\nconst rows = $('AI Extras').all().flatMap(i => (i.json || {}).cache_rows || []);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(26, 5))
 A.iff('Any Extras Cache?', '{{ !$json.skip }}', at(26, 6))
 A.node('Save Extras Cache', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(27, 6), onError='continueRegularOutput', alwaysOutputData=True)
-A.chain('Prune Old Answers', 'Trim Old Answer Text', 'Trim Old Units', 'Prompt State Rows', 'Any Prompt State?'); A.link('Any Prompt State?', 'Save Prompt State', 0); A.link('Any Prompt State?', 'AI Extra Requests', 1); A.link('Save Prompt State', 'AI Extra Requests')
-A.chain('AI Extra Requests', 'Any AI Extra Requests?'); A.link('Any AI Extra Requests?', 'Run AI Extra Requests', 0); A.link('Any AI Extra Requests?', 'AI Extras', 1); A.link('Run AI Extra Requests', 'AI Extras')
+A.chain('Prune Old Answers', 'Trim Old Answer Text', 'Trimmed (AI)', 'Trim Old Units', 'Trimmed Units (AI)', 'Prompt State Rows', 'Any Prompt State?'); A.link('Any Prompt State?', 'Save Prompt State', 0); A.link('Any Prompt State?', 'AI Extra Requests', 1); A.link('Save Prompt State', 'AI Extra Requests')
+# R-E1 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the options' keys are recorded in the run's state row BEFORE they are paid, and
+# read back (F2's record -> save -> read back -> pay), so an attempt of the same run that reaches the options again never buys one twice
+A.code('Extras Asking State', 'AI_Extras_State.js', at(21, 7)); A.iff('Any Extras State?', '{{ !$json.skip }}', at(21, 8))
+A.node('Save Extras State', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(22, 8), onError='continueRegularOutput', alwaysOutputData=True)
+A.code('AI Extras Go', 'AI_Extras_Go.js', at(23, 8)); A.iff('Go AI Extra Requests?', '{{ !$json.skip }}', at(24, 8))
+A.chain('AI Extra Requests', 'Any AI Extra Requests?'); A.link('Any AI Extra Requests?', 'Extras Asking State', 0); A.link('Any AI Extra Requests?', 'AI Extras', 1)
+A.chain('Extras Asking State', 'Any Extras State?'); A.link('Any Extras State?', 'Save Extras State', 0); A.link('Any Extras State?', 'AI Extras Go', 1); A.link('Save Extras State', 'AI Extras Go')
+A.chain('AI Extras Go', 'Go AI Extra Requests?'); A.link('Go AI Extra Requests?', 'Run AI Extra Requests', 0); A.link('Go AI Extra Requests?', 'AI Extras', 1); A.link('Run AI Extra Requests', 'AI Extras')
 A.chain('AI Extras', 'Extras Vis Rows', 'Any Extras Vis?'); A.link('Any Extras Vis?', 'Update AI Visibility (Extras)', 0); A.link('Any Extras Vis?', 'Extras Cache Rows', 1); A.link('Update AI Visibility (Extras)', 'Extras Cache Rows')
-A.chain('Extras Cache Rows', 'Any Extras Cache?'); A.link('Any Extras Cache?', 'Save Extras Cache', 0); A.link('Any Extras Cache?', 'AI Brief Input', 1); A.link('Save Extras Cache', 'AI Brief Input')
+A.chain('Extras Cache Rows', 'Any Extras Cache?'); A.link('Any Extras Cache?', 'Save Extras Cache', 0); A.link('Any Extras Cache?', 'Blank Old SERP Cache (AI)', 1); A.link('Save Extras Cache', 'Blank Old SERP Cache (AI)')
+A.chain('Blank Old SERP Cache (AI)', 'Prune Old SERP Cache (AI)', 'SERP Cache Pruned (AI)', 'AI Brief Input')   # R-E7
 A.chain('AI Brief Input', 'AI Brief', 'AI Report', 'Prepare PDF AI', 'Render PDF AI', 'Attach PDF AI', 'Has Email (AI)?'); A.link('Attach PDF AI', 'Build AI Callback'); A.link('Build AI Callback', 'Has Callback (AI)?')
 A.run_ledger('ai_visibility', 'AI', 'AI Plan', ['AI Report', 'Chunk Part Done'], at(12, 7), measured='AI Metrics|AI Chunk Handoff|AI Extras')   # W2-E3: + the options' money (AI Extras: each task once by its id)   # G6: a part of a split run ends at Chunk Part Done and states its money in the hand-off
 # B-A10 (2026-10-15, INVARIANTS rule 3): the monthly question-discovery pull is the one paid call outside the AI gate D19 built.
@@ -537,6 +565,9 @@ json.dump({'connections': _f2wf['connections'], 'filters': {n['name']: (n.get('p
 # =============================================================================
 # 1b. AI PULSE (v4.9): the question panel on the fast engines every day except each website's own cycle day (2026-10-19; was: except Monday)
 # =============================================================================
+# R-E7 (2026-10-23): the pulse reads only each site's LATEST weekly row (its rivals); 21 days hold it even after two missed weeks (was 60 days of
+# every site's rows, with every JSON column, every morning). A start that names a site reads that site only (R-E2: exact match).
+PULSE_VIS_DAYS = 21
 Q = WF('SEOagentAIPulse1', 'SEO Agent — AI Pulse', 'aipulse', 2400, code_prefix='Pulse__')
 # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): every day 06:30 (was 0,2-6: Monday was everyone's weekly run). Pulse Plan skips each website on
 # ITS cycle day (its local weekday == seo_cycles.cycle_weekday in seo_cycles.tz; Monday when it has no cycle row), when its weekly run asks the same engines.
@@ -545,7 +576,7 @@ Q.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Answers Table', AI_ANSWERS_TABLE, AI_ANSWERS_COLS), ('Ensure AI Daily Table', AI_DAILY_TABLE, AI_DAILY_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
 for i, (nm, t, c) in enumerate(ens): Q.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE)]
-for i, (nm, t) in enumerate(loads): vis_scoped(Q, nm, at(1 + i, 1), 60, PULSE_SCOPE) if nm == 'Load AI Visibility' else Q.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
+for i, (nm, t) in enumerate(loads): vis_scoped(Q, nm, at(1 + i, 1), PULSE_VIS_DAYS, PULSE_SCOPE) if nm == 'Load AI Visibility' else Q.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 Q.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('checked_at', 'gte', SINCE(15))]), at(7, 1), **LOAD)
 Q.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(8, 1), **LOAD)
 Q.load('Load Cycles', CYCLES_TABLE, at(8, 2))   # 2026-10-19: each website's cycle weekday and time zone (seo_cycles) - its own cycle day is skipped
@@ -567,8 +598,9 @@ Q.node('Save AI Daily', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_DAILY_TABL
 # G6 (2026-10-18): kept 21 days (was 35) — a 500-question panel's daily sample stores up to ~900 rows a morning; the daily figures stay in seo_ai_daily
 Q.node('Prune Pulse Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWERS_TABLE, [('run_kind', 'eq', 'pulse'), ('checked_at', 'lt', SINCE(21))]), at(22, 0), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
 # W2-E1 (2026-10-23): a pulse answer keeps its full text and its pages-read list 7 days (the app's "this week"), then they are blanked (rows kept 21 days)
-Q.node('Trim Pulse Answer Text', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_ANSWERS_TABLE, AI_ANSWERS_COLS, [('run_kind', 'eq', 'pulse'), ('checked_at', 'lt', SINCE(7)), ('checked_at', 'gte', SINCE(9))],
+Q.node('Trim Pulse Answer Text', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_ANSWERS_TABLE, AI_ANSWERS_COLS, [('run_kind', 'eq', 'pulse'), ('checked_at', 'lt', SINCE(7)), ('checked_at', 'gte', SINCE(9)), ('answer_text', 'isNotEmpty', '')],   # R-E7: only rows not trimmed yet
        {'answer_text': '', 'retrieved_json': ''}), at(22, 1), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+Q.code('Trimmed (Pulse)', COLLAPSE, at(22, 2), executeOnce=True)   # R-E7
 Q.code('Pulse Alerts', "// Sites with something to report (an alert, or an on-demand run): the e-mail and the callback (stage ai_pulse). Quiet days send nothing.\nconst out = $('Pulse Metrics').all().map(i => i.json).filter(m => (m.alerts || []).length || m.on_demand).map(m => { const { daily_row, answer_rows, ...rest } = m; return { json: rest }; });\nreturn out.length ? out : [{ json: { skip: true } }];", at(23, 0))
 Q.iff('Any Pulse Alerts?', '{{ !$json.skip }}', at(24, 0)); Q.deliver('Pulse', at(25, -1), None)
 # F-ENG (2026-10-20): every website gets its pulse - the websites one execution cannot hold (15, or one morning's request limit) are handed to the
@@ -584,7 +616,7 @@ Q.chain('AI Requests', 'Any AI Requests?'); Q.link('Any AI Requests?', 'Run AI R
 Q.ai_retry_gate(at(13, 1), 'Parse AI Answers')   # D19: the pulse re-sends a failed task once too (its figures are the week's samples)
 Q.chain('Parse AI Answers', 'Pulse Metrics', 'Pulse Answer Rows', 'Any Pulse Answers?'); Q.link('Any Pulse Answers?', 'Save AI Answers', 0); Q.link('Any Pulse Answers?', 'AI Daily Rows', 1); Q.link('Save AI Answers', 'AI Daily Rows')
 Q.chain('AI Daily Rows', 'Any Daily Rows?'); Q.link('Any Daily Rows?', 'Save AI Daily', 0); Q.link('Any Daily Rows?', 'Prune Pulse Answers', 1); Q.link('Save AI Daily', 'Prune Pulse Answers')
-Q.chain('Prune Pulse Answers', 'Trim Pulse Answer Text', 'Next Pulse Part', 'Any Next Pulse Part?'); Q.link('Any Next Pulse Part?', 'Start Next Pulse Part', 0); Q.link('Any Next Pulse Part?', 'Pulse Alerts', 1); Q.link('Start Next Pulse Part', 'Pulse Alerts')
+Q.chain('Prune Pulse Answers', 'Trim Pulse Answer Text', 'Trimmed (Pulse)', 'Next Pulse Part', 'Any Next Pulse Part?'); Q.link('Any Next Pulse Part?', 'Start Next Pulse Part', 0); Q.link('Any Next Pulse Part?', 'Pulse Alerts', 1); Q.link('Start Next Pulse Part', 'Pulse Alerts')
 Q.chain('Pulse Alerts', 'Any Pulse Alerts?'); Q.link('Any Pulse Alerts?', 'Has Email (Pulse)?', 0); Q.link('Any Pulse Alerts?', 'Has Callback (Pulse)?', 0)
 Q.run_ledger('ai_pulse', 'Pulse', 'AI Plan', ['Pulse Alerts'], at(10, 4), measured='Pulse Metrics')
 LEDGER_WIRING[Q.name]['daily_upsert_keys'] = list(AI_DAILY_KEYS)   # R95: the harness (S117) replays the upsert with the keys the node uses

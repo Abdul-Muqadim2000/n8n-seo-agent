@@ -145,5 +145,9 @@ const lineage = PR ? [LN.of('Named in, and the variance between and within quest
   : [LN.unknown('The repeat pilot', x.reason || 'nothing was asked')];
 html += LN.block(lineage) + '</div>';
 const stage = PR ? 'ai_pilot' : 'ai_pilot_quote';
+// W2-FIX (2026-10-23): the web app shows the quote and asks for the owner's confirmation, so the callback says in words why nothing was asked
+// (`reason`) and whether the price can be confirmed at all (`can_confirm`: a quote of a pilot that would run; false when the panel is too small,
+// no engine fits or the price is above the limit)
 return [{ json: { stage, site_id: x.site_id, domain: x.domain, run_id: x.run_id, request_id: x.request_id || '', email: x.email || '', callback_url: x.callback_url || '', quote: Q, pilot: PR, lineage, cost_usd: R ? R.cost_usd : 0,
+  reason: PR ? '' : String(x.reason || 'nothing was asked'), can_confirm: !PR && x.quote_only === true,
   subject: PR ? 'AI answer repeat pilot: ' + x.domain : 'AI answer repeat pilot (priced, not run): ' + x.domain, html } }];

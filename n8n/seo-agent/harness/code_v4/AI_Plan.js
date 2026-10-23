@@ -227,6 +227,8 @@ const AIP = (() => {
                                       // execution limit is 60 minutes, so a part not heard of for 65 is dead, never merely slow (a resume of a
                                       // live part would ask its questions twice; the run guard refuses that twin too)
     resume_days: 6,                   // an unfinished run older than this is closed, not resumed (a new week starts a new run)
+    done_fresh_hours: 20,             // R-E1: a run that FINISHED this recently answers an on-demand / catch-up start with its stored week
+                                      // (a retry of the same cycle job is answered so whatever the hour); nothing is asked or paid again
     max_run_usd: 150,                 // one weekly / full run above this is refused by the plan, with the reason
     writer_batch: 40,                 // questions one Prompt Writer job writes (the agent's answer must fit its token budget)
     writer_jobs_per_run: 14,          // Prompt Writer jobs one run may start (14 x 40 = 560: a new 500-question panel in one run)
@@ -429,6 +431,17 @@ const AIP = (() => {
     return 'busy';
   };
   const stateRow = (site_id, st, nowIso) => ({ key: stateKey(site_id), kind: 'ai', site_id: S(site_id), value: JSON.stringify(st), updated_at: nowIso });   // exact seo_cache columns
+  /** R-E1 (2026-10-23, REVIEW_ENGINE.md): is a stored `done` run THIS start's week? -> { why, cycle_key, finished_at } or null. A start of the same
+   *  cycle job (the dispatcher's retry after the run's last part died past the moment its week was stored) is always answered with the stored
+   *  week; any other start that is not a cycle job (on demand, a catch-up, a bare manual start) is answered so when the run finished less than
+   *  done_fresh_hours ago. A cycle job of ANOTHER cycle (the next week) runs. `rerun` (the trigger's rerun_today) asks again on purpose. */
+  const doneRun = (st, o) => { const x = o || {};
+    if (!st || !st.run_id || S(st.status) !== 'done' || x.rerun) return null;
+    const fin = Date.parse(st.finished_at || st.updated_at) || 0; const now = Date.parse(x.now) || Date.now();
+    const ck = S(x.cycle && x.cycle.key), sk = S(st.cycle && st.cycle.key);
+    if (ck) return ck === sk ? { why: 'same_cycle', cycle_key: ck, finished_at: S(st.finished_at || st.updated_at) } : null;
+    if (fin && now - fin >= 0 && now - fin < LIMITS.done_fresh_hours * 3600e3) return { why: 'recent', cycle_key: sk, finished_at: S(st.finished_at || st.updated_at) };
+    return null; };
 
   // ---- 6b. never pay twice (F2, 2026-10-23: ENGINE_AUDIT.md E1 / E11) ----------------------------------------------------------------
   // E1: a part whose answers were not stored left no trace of what it had PAID for, so every later part asked the same first chunk again,
@@ -470,7 +483,11 @@ const AIP = (() => {
   // that fit it at the slow-case seconds of each engine (a batch of 10 waits for its slowest answer) — or at the seconds per request the
   // run's earlier parts MEASURED (wall time of the part, analyst taken out), with 20% headroom. Never more than chunk_requests.
   const TIME = { exec_limit_s: 3600, budget_s: 2400, fixed_s: 300, batch: 10, interval_s: 0.2, retry_wait_s: 20, retry_share: 0.15, headroom: 1.2, min_requests: 40,
-    analyst_job_s: 30, req_s: { chatgpt: 60, gemini: 60, perplexity: 30, claude: 45, ai_mode: 45, ai_overview: 25, copilot: 20, chatgpt_api: 45, gemini_api: 45 } };
+    analyst_job_s: 30,
+    // R-E5 (2026-10-23, REVIEW_ENGINE.md): one Sentiment Reader call (20 passages, ~6k tokens in, up to 4k out) at its slow case, and the tail a run's
+    // last part still runs after the reader (the metrics, the saves, the brief, the report, the PDF; the options keep their own extra_s)
+    sentiment_call_s: 30, sentiment_tail_s: 420,
+    req_s: { chatgpt: 60, gemini: 60, perplexity: 30, claude: 45, ai_mode: 45, ai_overview: 25, copilot: 20, chatgpt_api: 45, gemini_api: 45 } };
   /** seconds one request costs a part, on these engines: the modelled figure, or the measured one when a part of the run measured it */
   const secPerRequest = (engines, measured) => {
     const es = (engines || []).filter(e => TIME.req_s[e]); const avg = es.length ? es.reduce((t, e) => t + TIME.req_s[e], 0) / es.length : 45;
@@ -518,10 +535,12 @@ const AIP = (() => {
   const FIXED = { weekly_ai_min: 0.13, brief_ai: 0.03, analyst_job_ai: 0.02, analyst_per_job: 12, analyst_share: 0.35, analyst_cap_base: 24, analyst_cap_max: 60,
     full_dfs: 0.45, full_ai: 0.3, weeks_per_month: 4.33, pulse_days: 6,
     // W2-E2's Sentiment Reader (Claude Haiku, merged 2026-10-23): every answer of the run that names the business, 20 a call, at most 40 calls a
-    // run, about $0.012 a call. Named answers = the weekly run's answers x sentiment_named_rate. ASSUMPTION: 50% named, conservative on purpose (a
+    // run, about $0.02 a call (R-E9, 2026-10-23: was $0.012; a call reads ~20 x (question + passage) + the prompt = ~6k tokens at Haiku 4.5's $1/M
+    // = $0.006, and answers 2-3k tokens (capped at 4,000) at $5/M = $0.010-0.020, so $0.016-0.026; _cost_cal.js holds the same Haiku prices).
+    // The worst case a run can spend is calls_max x tries (the agent node's retryOnFail: 2) x sentiment_call_worst (6k in + 4k out = $0.026). Named answers = the weekly run's answers x sentiment_named_rate. ASSUMPTION: 50% named, conservative on purpose (a
     // new site is named in far fewer), so the quote is an upper bound; the full run's few extra answers (the monthly engine, the brand question) are
     // inside that margin and are not priced on their own (a quote never moves by a call or two with the engine set).
-    sentiment_named_rate: 0.5, sentiment_per_call: 20, sentiment_calls_max: 40, sentiment_call_ai: 0.012 };
+    sentiment_named_rate: 0.5, sentiment_per_call: 20, sentiment_calls_max: 40, sentiment_call_ai: 0.02, sentiment_call_worst: 0.026, sentiment_tries: 2 };
   /** the Sentiment Reader's calls and Claude money for a run of `answers` answers */
   const sentimentOf = (answers) => { const named = Math.ceil(Math.max(0, n0(answers)) * FIXED.sentiment_named_rate);
     const calls = Math.min(FIXED.sentiment_calls_max, Math.ceil(named / FIXED.sentiment_per_call)); return { named, calls, ai: Math.round(calls * FIXED.sentiment_call_ai * 10000) / 10000 }; };
@@ -610,7 +629,7 @@ const AIP = (() => {
   };
 
   return { LIMITS, panelSize, normMarket, locationOf, listOf, marketsOf, personasOf, stageOf, stems, jaccard, sameAsk, dedupe, stratumOf, pulseDay, halfWidth,
-    pulsePerWeek, pulseSample, reqKey, slice, stateKey, stateOf, stateVerdict, stateRow, panelIds, panelHash, overlap, hash,
+    pulsePerWeek, pulseSample, reqKey, slice, stateKey, stateOf, stateVerdict, stateRow, doneRun, panelIds, panelHash, overlap, hash,
     MARKETS_MAX, normQ, hash64, promptId, findStored, keywordOf, KEYWORD_SOURCES, STOPPED, ENG_CODE, packKeys, unpackKeys, CEILING, runCeiling, ceilingLeft, keysUsd, baseState,
     TIME, secPerRequest, chunkPlan, servicesOfRow, fitInput,
     PRICE, PRICE_BASIS, ENGINES, DEFAULT_ENGINES, MONTHLY_ENGINES, PULSE_ENGINES, FIXED, analystCap, cost, sentimentOf,
@@ -2157,21 +2176,51 @@ const AIX = (() => {
   const verdictOf = (w, c) => { const [lo, hi] = diffCi(w.k, w.n, c.k, c.n); if (w.n < MIN || c.n < MIN) return { verdict: 'too few answers', z: null, delta: w.n && c.n ? r1(100 * (w.k / w.n - c.k / c.n)) : null, lo, hi, significant: false };
     const z = twoProp(w.k, w.n, c.k, c.n); const delta = r1(100 * (w.k / w.n - c.k / c.n)); const significant = lo > 0 || hi < 0;
     return { z, delta, lo, hi, significant, verdict: significant ? (delta > 0 ? 'named more often with this role' : 'named less often with this role') : 'no measurable difference' }; };
+  // R-E3 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the two arms are the SAME questions, with and without the role, and the
+  // 28-day pool is the same questions again each week: answers are paired by question and clustered by question, never independent samples.
+  // The old test (Newcombe over two independent proportions, weeks pooled as more answers) called 3 questions out of 12 "real" after four
+  // weeks of the same 3 questions (z 2.46) where a paired test on those questions gives p 0.25. Now: per question, d = named with the role -
+  // named without it (this run: 1, 0 or -1; pooled: the mean over the runs that asked that question on both arms); the verdict is an exact
+  // sign test on the questions whose d is not 0 (McNemar's exact test for one run), the 95% range a bootstrap of the mean d over QUESTIONS.
+  const MINQ = 6;   // paired questions under which a role's effect is "too few questions" (5 discordant questions all one way is p 0.06)
+  /** exact two-sided sign test: b questions up, c down -> p */
+  const signP = (b, c) => { const n = b + c; if (!n) return 1; const k = Math.min(b, c); let comb = 1, s = 0; for (let i = 0; i <= k; i++) { if (i > 0) comb = comb * (n - i + 1) / i; s += comb; } return Math.min(1, 2 * s / Math.pow(2, n)); };
+  const rngOf = (seed) => { let a = AIP.hash(S(seed)) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  /** 95% percentile bootstrap of the mean of per-question differences (points), resampling QUESTIONS; seeded, so a run is reproducible */
+  const bootMean = (ds, seed, B) => { const n = ds.length; if (n < 2) return [null, null]; const R = rngOf(seed); const NB = B || 2000; const vals = new Array(NB);
+    for (let b = 0; b < NB; b++) { let s = 0; for (let i = 0; i < n; i++) s += ds[Math.floor(R() * n)]; vals[b] = s / n; }
+    vals.sort((a, b) => a - b); return [r1(100 * vals[Math.floor(0.025 * NB)]), r1(100 * vals[Math.min(NB - 1, Math.ceil(0.975 * NB) - 1)])]; };
+  /** the paired verdict over per-question differences (each in [-1, 1]) */
+  const pairedOf = (ds, seed) => { const n = ds.length; const up = ds.filter(d => d > 0).length, down = ds.filter(d => d < 0).length; const delta = n ? r1(100 * ds.reduce((t, d) => t + d, 0) / n) : null;
+    if (n < MINQ) return { questions: n, up, down, p: null, delta, lo: null, hi: null, significant: false, z: null, verdict: 'too few questions' };
+    const p = signP(up, down); const [lo, hi] = bootMean(ds, seed); const significant = p < 0.05 && lo != null && (lo > 0 || hi < 0);
+    return { questions: n, up, down, p: Math.round(10000 * p) / 10000, delta, lo, hi, significant, z: null, verdict: significant ? (delta > 0 ? 'named more often with this role' : 'named less often with this role') : 'no measurable difference' }; };
   /** -> the persona block. `pairs` = [{ q: request item, r: response }]; `read` = (text, cites) -> { named, cited } (AIE over the site's names) */
   const personaEffect = (o) => { const x = o || {}; const pairs = x.pairs || []; if (!pairs.length) return null;
     const cnt = () => ({ n: 0, k: 0, c: 0, failed: 0 }); const control = cnt(); const by = new Map();
+    const byQ = {};   // { prompt_id: { c: 0 | 1 (control named), r: { role: 0 | 1 } } } - kept in notes_json.persona so later weeks pair by question
     for (const { q, r } of pairs) { const a = llmText(r); const box = q.arm === 'without' ? control : (by.get(q.role) || by.set(q.role, cnt()).get(q.role));
-      if (!a.answered) { box.failed++; continue; } const v = x.read(a.text, a.cites); box.n++; if (v.named) box.k++; if (v.cited) box.c++; }
-    // pooled over the stored runs of the last 28 days (notes_json.persona of earlier rows): one run gives 12 answers a side, four give 48
-    const prev = (x.previous || []).filter(p => p && p.persona && daysBetween(p.checked_at, x.now) <= 28 && daysBetween(p.checked_at, x.now) > 0);
-    const roles = [...by.entries()].map(([role, w]) => { const v = verdictOf(w, control);
+      if (!a.answered) { box.failed++; continue; } const v = x.read(a.text, a.cites); box.n++; if (v.named) box.k++; if (v.cited) box.c++;
+      const e = byQ[S(q.prompt_id)] || (byQ[S(q.prompt_id)] = { c: null, r: {} }); if (q.arm === 'without') e.c = v.named ? 1 : 0; else e.r[S(q.role)] = v.named ? 1 : 0; }
+    // the stored runs of the last 28 days that kept their per-question answers (notes_json.persona.by_q); a run stored without them cannot be paired
+    const prevAll = (x.previous || []).filter(p => p && p.persona && daysBetween(p.checked_at, x.now) <= 28 && daysBetween(p.checked_at, x.now) > 0);
+    const prev = prevAll.filter(p => p.persona.by_q && typeof p.persona.by_q === 'object'); const unpaired = prevAll.length - prev.length;
+    const seed0 = S(x.seed || x.now);
+    const roles = [...by.entries()].map(([role, w]) => {
+      const dNow = Object.values(byQ).filter(e => e.c != null && e.r[role] != null).map(e => e.r[role] - e.c);
+      const v = pairedOf(dNow, seed0 + '|' + role);
+      // pooled: per question, the mean difference over every run (this one included) that asked it on both arms
+      const acc = new Map(); const add = (bq) => { for (const [pid, e] of Object.entries(bq || {})) { if (!e || e.c == null || e.r == null || e.r[role] == null) continue; const a = acc.get(pid) || { s: 0, m: 0 }; a.s += n0(e.r[role]) - n0(e.c); a.m++; acc.set(pid, a); } };
+      add(byQ); const pairsIn = () => [...acc.values()].reduce((t, a) => t + a.m, 0); let runs = 1; for (const p of prev) { const before = pairsIn(); add(p.persona.by_q); if (pairsIn() > before) runs++; }
+      const dPool = [...acc.values()].map(a => a.s / a.m); const pv = pairedOf(dPool, seed0 + '|' + role + '|pooled');
       const pool = prev.reduce((t, p) => { const pr = (p.persona.roles || []).find(rr => S(rr.role) === S(role)); const pc = p.persona.control || {};
-        if (!pr) return t; return { n: t.n + n0(pr.n), k: t.k + n0(pr.k), cn: t.cn + n0(pc.n), ck: t.ck + n0(pc.k), runs: t.runs + 1 }; }, { n: w.n, k: w.k, cn: control.n, ck: control.k, runs: 1 });
-      const pv = verdictOf({ n: pool.n, k: pool.k }, { n: pool.cn, k: pool.ck });
-      return { role, n: w.n, k: w.k, c: w.c, failed: w.failed, rate: pct(w.k, w.n), control_rate: pct(control.k, control.n), delta: v.delta, lo: v.lo, hi: v.hi, significant: v.significant, z: v.z, verdict: v.verdict,
-        pooled: { runs: pool.runs, n: pool.n, k: pool.k, control_n: pool.cn, control_k: pool.ck, rate: pct(pool.k, pool.n), control_rate: pct(pool.ck, pool.cn), delta: pv.delta, lo: pv.lo, hi: pv.hi, significant: pv.significant, z: pv.z, verdict: pv.verdict } }; });
-    return { label: 'API answers', engine: 'chatgpt_api', model: PERSONA_MODEL, questions: [...new Set(pairs.map(p => p.q.prompt_id))].length, control: { n: control.n, k: control.k, c: control.c, failed: control.failed, rate: pct(control.k, control.n) }, roles,
-      method: 'the same questions asked of the ChatGPT API (web search on) with the buyer role sent as the asker\'s context, and once without it; the change in the "named" rate with its 95% interval (Newcombe), real when the interval excludes 0 (the two-proportion z is shown beside it), per run and pooled over the stored runs of the last 28 days; under ' + MIN + ' answers a side: "too few answers". API answers are not what the chatgpt.com interface shows and are kept out of every headline figure',
+        if (!pr) return t; return { n: t.n + n0(pr.n), k: t.k + n0(pr.k), cn: t.cn + n0(pc.n), ck: t.ck + n0(pc.k) }; }, { n: w.n, k: w.k, cn: control.n, ck: control.k });
+      return { role, n: w.n, k: w.k, c: w.c, failed: w.failed, rate: pct(w.k, w.n), control_rate: pct(control.k, control.n), delta: v.delta, lo: v.lo, hi: v.hi, significant: v.significant, z: null, p: v.p, questions: v.questions, up: v.up, down: v.down, verdict: v.verdict,
+        pooled: { runs, n: pool.n, k: pool.k, control_n: pool.cn, control_k: pool.ck, rate: pct(pool.k, pool.n), control_rate: pct(pool.ck, pool.cn), questions: pv.questions, up: pv.up, down: pv.down, p: pv.p, delta: pv.delta, lo: pv.lo, hi: pv.hi, significant: pv.significant, z: null, verdict: pv.verdict } }; });
+    return { label: 'API answers', engine: 'chatgpt_api', model: PERSONA_MODEL, questions: [...new Set(pairs.map(p => p.q.prompt_id))].length, control: { n: control.n, k: control.k, c: control.c, failed: control.failed, rate: pct(control.k, control.n) }, roles, by_q: byQ,
+      unpaired_runs: unpaired,
+      method: 'the same questions asked of the ChatGPT API (web search on) with the buyer role sent as the asker\'s context, and once without it. Each question is compared with itself: the answers are paired by question, and the weeks of the last 28 days are pooled per question (the same questions again are not more evidence). The change in the "named" rate is the mean per-question difference with a 95% range from resampling the questions; it is real when an exact sign test on the questions that moved gives p under 0.05 and the range excludes 0. Under ' + MINQ + ' paired questions: "too few questions"'
+        + (unpaired ? '; ' + unpaired + ' earlier run(s) stored without per-question answers are not pooled' : '') + '. API answers are not what the chatgpt.com interface shows and are kept out of every headline figure',
       as_of: day(x.now) }; };
 
   // ---- 3. demand as a range, and the monthly market trend --------------------------------------------------------------------------------
@@ -2250,6 +2299,11 @@ const AIX = (() => {
     return out; };
 
   // ---- 5. the run's bookkeeping -----------------------------------------------------------------------------------------------------------
+  /** R-E1 (2026-10-23, REVIEW_ENGINE.md): one key per paid option request of a run, recorded in the run's state row BEFORE it is paid
+   *  (`extras: { run_id, keys }`), so an attempt of the same run that starts the options again never buys one twice (F2's asked_keys rule) */
+  const extraKey = (r) => { const x = r || {}; return x.kind === 'fanout' ? 'f|' + S(x.key) : x.kind === 'persona' ? 'p|' + (S(x.role) || '-') + '|' + S(x.prompt_id) : x.kind === 'demand' ? 'd|' + S(x.what) : 'x|' + S(x.kind) + '|' + S(x.key); };
+  /** the option keys this run already recorded: the state row's `extras` when it belongs to the run */
+  const extrasRecorded = (st, run_id) => new Set(st && st.extras && S(st.extras.run_id) === S(run_id) && Array.isArray(st.extras.keys) ? st.extras.keys.map(S) : []);
   const execIds = (plan, execId) => [...new Set([...(((plan.chunk || {}).executions) || []), S(execId)].map(S).filter(Boolean))].join(',');
   const notes = (plan, extra) => { const c = plan.chunk || {}; const e = extra || {};
     return { lost_note: S(c.lost_note), unanalysed_note: S(c.unanalysed_note), market_fallback_n: (plan.prompts || []).filter(q => q && q.market_fallback).length,
@@ -2257,11 +2311,15 @@ const AIX = (() => {
   /** each question's asked state (seo_ai_prompts: last_asked_run, last_asked_at, asked_n_28d, refused_at_run); only rows that change */
   const promptState = (o) => { const x = o || {}, plan = x.plan || {}; const now = x.now || new Date().toISOString(); const runAt = S(plan.checked_at || now);
     const asked = new Set((x.run_rows || []).filter(r => r && S(r.site_id) === S(plan.site_id) && S(r.run_id) === S(plan.run_id) && r.prompt_id).map(r => S(r.prompt_id)));
-    const refused = new Set((plan.set_aside || []).filter(s => s && s.dropped && s.prompt_id).map(s => S(s.prompt_id)));
+    // R-E12 (2026-10-23, REVIEW_ENGINE.md): the questions the Prompt Writer stored in THIS run (`written`, the Prompt Rows of this execution) get their
+    // state too - an asked one its run, a refused one the run whose gate refused it - instead of waiting a week for Load AI Prompts to carry them
+    const written = (x.written || []).filter(r => r && S(r.site_id) === S(plan.site_id) && r.prompt_id);
+    const refused = new Set([...(plan.set_aside || []).filter(s => s && s.dropped && s.prompt_id).map(s => S(s.prompt_id)), ...written.filter(r => S(r.status) === 'refused').map(r => S(r.prompt_id))]);
+    const storedAll = (x.stored || []).slice(); for (const w of written) if (!storedAll.some(r => r && S(r.site_id) === S(w.site_id) && S(r.prompt_id) === S(w.prompt_id))) storedAll.push({ site_id: w.site_id, prompt_id: w.prompt_id });
     const weekly = (x.vis_rows || []).filter(v => v && S(v.site_id) === S(plan.site_id) && S(v.run_id) !== S(plan.run_id) && daysBetween(v.checked_at, now) <= 28).map(v => new Set(((parse(v.panel_json, {}) || {}).ids || []).map(S)));
     const pulse = (x.daily_rows || []).filter(d => d && S(d.site_id) === S(plan.site_id) && daysBetween(d.checked_at || d.date, now) <= 28).map(d => new Set(Object.keys(parse(d.prompts_json, {}) || {})));
     const out = [];
-    for (const r of (x.stored || [])) { if (!r || S(r.site_id) !== S(plan.site_id) || !r.prompt_id) continue; const id = S(r.prompt_id);
+    for (const r of storedAll) { if (!r || S(r.site_id) !== S(plan.site_id) || !r.prompt_id) continue; const id = S(r.prompt_id);
       const was = { last_asked_run: S(r.last_asked_run), last_asked_at: S(r.last_asked_at), asked_n_28d: nn(r.asked_n_28d), refused_at_run: S(r.refused_at_run) };
       const now_ = { ...was };
       if (asked.has(id)) { now_.last_asked_run = S(plan.run_id); now_.last_asked_at = runAt; }
@@ -2282,7 +2340,7 @@ const AIX = (() => {
     const P = x.persona; if (P && (P.roles || []).length) {
       h += h3('Does the asker\'s role change the answer? (API answers)') + p_(esc(P.method) + '. Without a role: named in ' + (P.control.rate == null ? '-' : P.control.rate + '%') + ' of ' + n(P.control.n) + ' answers.', true)
         + table(['Buyer role', 'Named with the role', 'Change (95% range)', 'This run', 'Last 28 days'], P.roles.map(r => [esc(r.role), (r.rate == null ? '-' : r.rate + '%') + ' of ' + n(r.n), r.delta == null ? '-' : (r.delta > 0 ? '+' : '') + r.delta + ' pts' + (r.lo != null ? ' (' + r.lo + ' to ' + r.hi + ')' : ''), esc(r.verdict),
-          esc(r.pooled.verdict) + ' (' + n(r.pooled.n) + ' vs ' + n(r.pooled.control_n) + ' answers, ' + r.pooled.runs + ' run' + (r.pooled.runs === 1 ? '' : 's') + ')'])); }
+          esc(r.pooled.verdict) + ' (' + n(r.pooled.questions == null ? 0 : r.pooled.questions) + ' questions paired over ' + r.pooled.runs + ' run' + (r.pooled.runs === 1 ? '' : 's') + (r.pooled.p != null ? ', sign test p ' + r.pooled.p : '') + ')'])); }
     const D = x.demand; if (D && ((D.questions || []).length || D.market)) {
       h += h3('Demand behind your questions') + p_(esc(D.note), true);
       if ((D.questions || []).length) { const pq = new Map((x.prompts || []).map(q => [S(q.prompt_id), q.prompt]));
@@ -2295,7 +2353,7 @@ const AIX = (() => {
     const I = x.imports; if (I) { h += h3('Your uploaded AI reports') + p_(esc(I.note), true);
       if (I.copilot) h += p_('Copilot: ' + n(I.copilot.citations) + ' citations of ' + n(I.copilot.urls_n) + ' of your pages, ' + esc(I.copilot.label) + '. ' + esc(I.copilot.note) + '.', true);
       const g = I.sources.gsc_ai; if (g) h += p_('Google AI Mode / AI Overviews: ' + n(g.impressions) + ' impressions, ' + n(g.clicks) + ' clicks on ' + n(g.urls_n) + ' pages (your Search Console export).', true); }
-    const N = x.notes || {}; const nl = [N.lost_note, N.unanalysed_note, N.market_fallback_n ? N.market_fallback_n + ' question(s) were asked in your own market because their market is past the limit of ' + AIP.MARKETS_MAX + ' markets a panel covers' : '', N.ceiling_note, N.fanout_note].filter(Boolean);
+    const N = x.notes || {}; const nl = [N.lost_note, N.unanalysed_note, N.market_fallback_n ? N.market_fallback_n + ' question(s) were asked in your own market because their market is past the limit of ' + AIP.MARKETS_MAX + ' markets a panel covers' : '', N.ceiling_note, N.fanout_note, N.resend_note, N.extras_note].filter(Boolean);
     if (nl.length) h += p_(nl.map(esc).join(' '), true);
     return h; };
   /** -> persona_effect_json (WAVE2 contract addition from W2-A): one entry per role, the 28-day pooled figures (this run included; a first run
@@ -2304,8 +2362,8 @@ const AIX = (() => {
     delta: r.pooled.delta, lo: r.pooled.lo, hi: r.pooled.hi, significant: !!r.pooled.significant })) : null);
   const callbackFields = (x) => (x ? { fanout_gap: x.fanout_gap || null, persona_effect: x.persona || null, demand: x.demand || null, imports: x.imports || null, exec_ids: x.exec_ids || '', run_notes: x.notes || null } : {});
 
-  return { optionsOf, fanoutOf, normQuery, citedRow, fanoutTop, serpBody, fanoutRequests, targetPage, gscOf, fanoutGap, personaMessage, personaQuestions, personaRequests, llmText, twoProp, verdictOf, personaEffect,
-    platformOf, demandRequests, marketOf, mentionItems, demand, imports, execIds, notes, promptState, reportHtml, callbackFields, personaEffectRows, diffCi, wilson, PERSONA_MODEL, US_NOTE, MIN };
+  return { optionsOf, fanoutOf, normQuery, citedRow, fanoutTop, serpBody, fanoutRequests, targetPage, gscOf, fanoutGap, personaMessage, personaQuestions, personaRequests, llmText, twoProp, verdictOf, signP, pairedOf, bootMean, MINQ, personaEffect,
+    platformOf, demandRequests, marketOf, mentionItems, demand, imports, extraKey, extrasRecorded, execIds, notes, promptState, reportHtml, callbackFields, personaEffectRows, diffCi, wilson, PERSONA_MODEL, US_NOTE, MIN };
 })();
 const CONFIG = { max_sites_per_run: 15, max_topics: 8, monthly_engines: ['claude'],   // v4.9: Gemini moved to the weekly set (the real gemini.google.com answer costs $0.004 through the scraper)
   gsc_questions: 15, pulse_days: 7 };
@@ -2328,8 +2386,17 @@ const openRun = (st, s, why) => { const left = Math.max(0, (Number(st.total) || 
   const parts = Math.ceil(left / per); const eta = new Date(Math.max(Date.parse(st.updated_at) || Date.now(), Date.now()) + parts * (AIP.TIME.budget_s + AIP.TIME.fixed_s) * 1000).toISOString();
   return { run_id: st.run_id, status: st.status, part: Number(st.chunk) || 1, asked: Number(st.asked) || 0, total: Number(st.total) || 0, started_at: st.started_at || '', updated_at: st.updated_at || '',
     expected_finish: String(st.status) === 'running' ? eta : '', why }; };
-const tell = (s, st, kind) => {   // E17: only a caller that is waiting for its own answer (an on-demand start with a callback) and is not the open run's own caller
-  if (!on_demand || !s.callback_url || (st && String(st.request_id || '') && String(st.request_id) === String(s.request_id || ''))) return;
+const tell = (s, st, kind, week) => {   // E17: only a caller that is waiting for its own answer (an on-demand start with a callback) and is not the open run's own caller
+  if (!on_demand || !s.callback_url) return;
+  // R-E1: a run that is already measured answers EVERY on-demand caller, its own included (its report may never have been sent when the run's last part
+  // died after the week was stored); the app ignores a rejection for a request it already completed
+  if (kind === 'done') { const w = week || {}; const fin = String((st && (st.finished_at || st.updated_at)) || '').slice(0, 16).replace('T', ' ');
+    const fig = w.answers ? ' It was named in ' + (w.named_rate == null ? (w.mention_rate == null ? '-' : w.mention_rate) : w.named_rate) + '% of ' + w.answers + ' answers' + (w.citation_rate != null ? ', cited in ' + w.citation_rate + '%' : '') + (w.visibility_score != null ? ', visibility score ' + w.visibility_score : '') + '.' : ' Its stored week was not found; the dashboard shows the latest one.';
+    notices.push({ callback_url: s.callback_url, body: { stage: 'rejected', status: 'rejected', reason: 'already_measured', skipped: true, request_id: String(s.request_id || ''), domain: s.domain, mode: 'ai_visibility', on_demand: true, cost_usd: 0,
+      error: 'The AI visibility of ' + s.domain + ' was already measured' + (fin ? ' at ' + fin + ' UTC' : '') + ' (run ' + st.run_id + ').' + fig + ' Nothing was asked again and nothing was charged; the latest report and the dashboard show that week.',
+      stored_week: { run_id: st.run_id, finished_at: String(st.finished_at || st.updated_at || ''), cycle_key: String((st.cycle && st.cycle.key) || ''), ...w } } });
+    return; }
+  if (st && String(st.request_id || '') && String(st.request_id) === String(s.request_id || '')) return;
   const o = openRun(st, s, kind);
   const sentence = kind === 'blocked'
     ? 'The AI visibility check of ' + s.domain + ' was not started: this week\'s run (' + o.run_id + ') was stopped (' + String(st.stop_reason || st.status) + '). Nothing was asked and nothing was charged; the team has been alerted.'
@@ -2353,6 +2420,19 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // F2 (E1): a STOPPED run (its answers were not stored, or it reached its money ceiling) blocks this site's weekly run until it is older than
   // resume_days or a person clears the state row — a retry of the cycle job, a catch-up or an on-demand start never pays for it again
   if (verdict === 'blocked') { tell(s, st, 'blocked'); skipped.push({ domain: s.domain, blocked: true, why: 'run ' + st.run_id + ' was stopped (' + String(st.stop_reason || st.status) + '); nothing is asked for this website until the run is older than ' + AIP.LIMITS.resume_days + ' days or the state row ai_run:' + s.site_id + ' is cleared' }); return null; }
+  // R-E1 (2026-10-23, REVIEW_ENGINE.md, High): a run already MEASURED (its week stored, state `done`) is never paid for again by a start that
+  // belongs to it: the dispatcher's retry of the same cycle job (the run's last part died after Save AI Cache wrote `done`, in the options /
+  // brief / report / PDF tail), or a catch-up / on-demand start less than done_fresh_hours after it finished. It is answered with the stored
+  // week (the caller's notice, the plan's reason) and settles $0. `rerun_today: true` on the trigger asks again on purpose.
+  const doneHit = verdict === 'closed' ? AIP.doneRun(st, { cycle, now: iso, rerun: trigger.rerun_today === true || String(trigger.rerun_today) === 'true' }) : null;
+  if (doneHit) { const vr = visRows.filter(v => v.site_id === s.site_id && String(v.run_id) === String(st.run_id))[0] || null;
+    const nn0 = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+    const week = vr ? { checked_at: String(vr.checked_at || ''), answers: Number(vr.samples) || Number(vr.answers) || 0, named_rate: nn0(vr.named_rate), mention_rate: nn0(vr.mention_rate), citation_rate: nn0(vr.citation_rate), share_of_voice: nn0(vr.share_of_voice), visibility_score: nn0(vr.visibility_score) } : null;
+    tell(s, st, 'done', week);
+    skipped.push({ domain: s.domain, already_measured: true, run_id: st.run_id, finished_at: doneHit.finished_at, stored_week: !!week,
+      why: 'already measured: run ' + st.run_id + ' finished ' + String(doneHit.finished_at || '').slice(0, 16).replace('T', ' ') + ' UTC' + (doneHit.why === 'same_cycle' ? ' for this cycle (' + doneHit.cycle_key + '); this start is a retry of the same job' : ', less than ' + AIP.LIMITS.done_fresh_hours + ' hours ago')
+        + '; its stored week stands, nothing was asked again and nothing was charged (rerun_today: true on the start asks again on purpose)' });
+    return null; }
   if (verdict === 'resume') tell(s, st, 'resume');
   const going = verdict === 'continue' || verdict === 'resume';
   const MONTHLY = AIP.monthlyOf(s.settings.claude_weekly);   // W2-E3: Claude every weekly run when the owner asks for it ('ai_claude_weekly'), else the month's full run only
@@ -2468,8 +2548,14 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const aj = Math.min(12, Math.max(6, Math.ceil((Number(costNow.analyst_jobs) || 0) / Math.max(1, Number(costNow.executions) || 1))));
   // W2-E3: the seconds the run's last part keeps for the fan-out check, the persona test and the demand lookups (0 with every option off)
   const extra_s = AIP.extraSeconds({ persona_requests: costNow.options.persona.requests_run, fanout_requests: costNow.options.fanout.requests_run, demand_requests: full_due ? costNow.options.demand_market.tasks : 0 });
-  const cp = AIP.chunkPlan({ engines: engNow, measured_s: going ? Number(st.sec_per_request) || 0 : 0, analyst_jobs: aj, halve, extra_s });
-  const chunk = { no: going ? (Number(st.chunk) || 1) + 1 : 1, size: cp.size, size_time: cp.size, sec_per_request: cp.sec_per_request, size_basis: cp.basis, analyst_jobs_max: aj, extra_s, going, resumed: verdict === 'resume', final_expected: reqLeft <= cp.size,
+  // R-E5 (2026-10-23, REVIEW_ENGINE.md): the run's LAST part also runs the Sentiment Reader (up to 40 Haiku calls) before the week is stored, so a
+  // part that would be the last is sized with that time kept; when the requests left do not fit beside it, this part is not the last and the
+  // next one (with few requests) has the room. Sentiment Jobs also holds the calls to the time actually left, as the backstop.
+  const sentiment_s = Math.min(AIP.FIXED.sentiment_calls_max, Number((costNow.sentiment || {}).calls) || 0) * AIP.TIME.sentiment_call_s;
+  const cpA = AIP.chunkPlan({ engines: engNow, measured_s: going ? Number(st.sec_per_request) || 0 : 0, analyst_jobs: aj, halve, extra_s });
+  const cpB = AIP.chunkPlan({ engines: engNow, measured_s: going ? Number(st.sec_per_request) || 0 : 0, analyst_jobs: aj, halve, extra_s: extra_s + sentiment_s });
+  const cp = reqLeft <= cpA.size ? cpB : cpA;
+  const chunk = { no: going ? (Number(st.chunk) || 1) + 1 : 1, size: cp.size, size_time: cp.size, sec_per_request: cp.sec_per_request, size_basis: cp.basis + (cp === cpB && sentiment_s ? '; ' + sentiment_s + ' s kept for the Sentiment Reader' : ''), analyst_jobs_max: aj, extra_s, sentiment_s, plan_at: iso, going, resumed: verdict === 'resume', final_expected: reqLeft <= cp.size,
     ceiling_dfs_usd: ceiling, committed_dfs_usd: +committed.toFixed(4), ceiling_left_usd: +Math.max(0, ceiling - committed).toFixed(4),
     // F2 (E1): the keys a part paid for whose answers never came back to the table (counted once, never asked again) and the parts that lost them
     lost_now: stop ? 0 : lostNow.length, lost_total: (going ? Number(st.lost) || 0 : 0) + (stop ? 0 : lostNow.length), lost_parts: lostParts + (!stop && lostNow.length ? 1 : 0),
@@ -2520,7 +2606,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
       // B-L4 (2026-10-15, INVARIANTS rule 1): the panel is settable from 3 to 50 and a weekly check asks fewer engines than the
       // monthly full one, so the stored row's OWN panel size and run kind travel with its figures. Without them AI Metrics
       // subtracted a 20-question run from an 8-question one and called the difference a change in visibility.
-      prompts: Number(prev.prompts) || 0, run_kind: String(prev.run_kind || ''), citation_rate: Number(prev.citation_rate), share_of_voice: Number(prev.share_of_voice), avg_rank: Number(prev.avg_rank),
+      prompts: Number(prev.prompts) || 0, run_kind: String(prev.run_kind || ''), citation_rate: Number(prev.citation_rate), share_of_voice: prev.share_of_voice === '' || prev.share_of_voice == null ? null : Number(prev.share_of_voice), avg_rank: Number(prev.avg_rank),   /* R-E12: an unmeasured share of voice stays null */
       visibility_score: prev.visibility_score === '' || prev.visibility_score == null ? null : Number(prev.visibility_score), sentiment_score: prev.sentiment_score === '' || prev.sentiment_score == null ? null : Number(prev.sentiment_score),
       engines: parse(prev.engines_json, {}), market_month: prev.market_month || '', market: parse(prev.market_json, null), index: parse(prev.index_json, null), perception: parse(prev.perception_json, null), traffic: parse(prev.traffic_json, null), access: parse(prev.access_json, null),
       competitors: parse(prev.competitors_json, []),
@@ -2535,7 +2621,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
 // F2 (E11): and at most what fits the execution's TIME across its sites (each part's own seconds per request, the analyst jobs of every site)
 { let budget = AIP.LIMITS.exec_requests;
   let secs = AIP.TIME.budget_s - AIP.TIME.fixed_s - AIP.TIME.retry_wait_s - Math.min(36, planned.reduce((t, it) => t + (it.json.chunk.stop ? 0 : it.json.chunk.analyst_jobs_max || 0), 0)) * AIP.TIME.analyst_job_s
-    - planned.reduce((t, it) => t + (it.json.chunk.stop ? 0 : Number(it.json.chunk.extra_s) || 0), 0);   // W2-E3: and the time each site's options keep
+    - planned.reduce((t, it) => t + (it.json.chunk.stop ? 0 : (Number(it.json.chunk.extra_s) || 0) + (it.json.chunk.final_expected ? Number(it.json.chunk.sentiment_s) || 0 : 0)), 0);   // W2-E3: and the time each site's options keep; R-E5: and the Sentiment Reader's, for a site whose run ends here
   for (const it of planned) { const j = it.json, c = j.chunk; const left = Math.max(0, c.total_est - c.done);
     if (c.stop) { j.index_due = false; j.market_due = false; j.ga4_property_id = ''; j.key_paths = []; j.discovery_due = false; j.volume_keywords = []; continue; }
     const byTime = Math.max(planned.length > 1 ? 0 : AIP.TIME.min_requests, Math.floor(Math.max(0, secs) / Math.max(0.5, c.sec_per_request || 1)));

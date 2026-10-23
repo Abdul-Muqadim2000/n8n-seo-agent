@@ -717,6 +717,22 @@ const SENT = (() => {
       if (!text.trim()) continue;
       out.push({ key, prompt_id: String(r.prompt_id), engine: String(r.engine), prompt: r.prompt || '', snippet: snippet(text, biz, rivals.map(x => x.name)), rival_names: rivals.map(x => x.name), rivals }); }
     return out; };
+  /** R-E8 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): when more answers name the business than the reader may read (`cap`), a
+   *  sample spread over the WHOLE week: every engine gets its share of the cap (largest remainder, at least one each while the cap allows), and
+   *  inside an engine the answers are taken in a seeded shuffle, so every question of every part of a split run has the same chance (the old
+   *  order read this part's answers first). -> { list, sample: { n, of, method } | null } */
+  const sampleOf = (answers, cap, seed) => { const A = answers || []; const C = Math.max(0, Math.floor(Number(cap) || 0));
+    if (A.length <= C) return { list: A.slice(), sample: null };
+    const h = (t) => { let x = 5381; for (const c of String(t)) x = ((x * 33) ^ c.charCodeAt(0)) >>> 0; return x; };
+    const by = new Map(); for (const a of A) { const k = String(a.engine || ''); if (!by.has(k)) by.set(k, []); by.get(k).push(a); }
+    for (const v of by.values()) v.sort((a, b) => (h(String(seed) + '|' + a.key) - h(String(seed) + '|' + b.key)) || String(a.key).localeCompare(String(b.key)));
+    const keys = [...by.keys()].sort(); const quota = new Map(); let given = 0;
+    const share = keys.map(k => ({ k, q: C * by.get(k).length / A.length })); for (const s of share) { const f = Math.min(by.get(s.k).length, Math.floor(s.q)); quota.set(s.k, f); given += f; }
+    for (const s of share.sort((a, b) => (b.q - Math.floor(b.q)) - (a.q - Math.floor(a.q)) || a.k.localeCompare(b.k))) { if (given >= C) break; if (quota.get(s.k) < by.get(s.k).length) { quota.set(s.k, quota.get(s.k) + 1); given++; } }
+    for (const k of keys) { if (given >= C) break; while (given < C && quota.get(k) < by.get(k).length) { quota.set(k, quota.get(k) + 1); given++; } }
+    // interleave the engines so a job mixes them (and a cut at the end never drops one engine whole)
+    const picked = keys.map(k => by.get(k).slice(0, quota.get(k))); const list = []; for (let i = 0; list.length < C; i++) { let any = false; for (const v of picked) if (i < v.length) { list.push(v[i]); any = true; } if (!any) break; }
+    return { list, sample: { n: list.length, of: A.length, method: 'stratified by engine (each engine its share), a seeded shuffle of the questions within each' } }; };
   /** the jobs for the Sentiment Reader: every named answer, 20 to a job, at most `max_jobs` jobs (the rest are not read, and the report says how many) */
   const jobsOf = (answers, o) => { const opt = o || {}; const per = opt.per || 20, maxJ = opt.max_jobs == null ? 40 : opt.max_jobs; const A = answers || [];
     const jobs = []; for (let i = 0; i < A.length && jobs.length < maxJ; i += per) jobs.push(A.slice(i, i + per).map((a, j) => ({ n: j + 1, key: a.key, engine: a.engine, question: String(a.prompt || '').slice(0, 200), text: a.snippet, rivals: (a.rival_names || []).slice(0, 8) })));
@@ -726,11 +742,19 @@ const SENT = (() => {
     const L = A.map(a => { const m = M.get(a.key); const r0 = rules(a.snippet, opt.business || '', a.rival_names || []); return m ? { ...a, ...m, by: 'model', rules_polarity: r0.polarity, rivals: (m.rivals || []).map(x => ({ ...x, id: ((a.rivals || []).find(y => y.name.toLowerCase() === x.name.toLowerCase()) || {}).id || x.name })) } : { ...a, by: 'none', rules_polarity: r0.polarity }; });
     const R = L.filter(l => l.by === 'model'); const n = R.length; const unread = L.length - n;
     const sc = (p) => p === 'positive' ? 1 : p === 'negative' ? -1 : 0;
+    // R-E4 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the model's labels have NO measured agreement yet (KAPPA.model null), so
+    // every output of this block says it is an early reading: `early` + `label` here (sentiment_json, the callback), the report's heading and
+    // note; the objections are kept as phrases the reader picked out, never a finding, and nothing acts on them
+    const validated = KAPPA.model != null && KAPPA.model >= KAPPA.gate;
+    const sampled = opt.sample && Number(opt.sample.n) > 0 && opt.sample.of > opt.sample.n ? opt.sample : null;
     const base = { n, named_answers: L.length, unread, positive: R.filter(l => l.polarity === 'positive').length, neutral: R.filter(l => l.polarity === 'neutral').length, negative: R.filter(l => l.polarity === 'negative').length, min: MIN,
-      method: 'Claude Haiku reads every answer that names you (20 to a call); a rule reader gives a second opinion and never makes the figure', kappa: { ...KAPPA }, validated: KAPPA.model != null && KAPPA.model >= KAPPA.gate,
+      method: (sampled ? 'Claude Haiku reads a sample of ' + sampled.n + ' of the ' + sampled.of + ' answers that name you, spread across the week\'s questions and engines (' + sampled.calls_max + ' calls a run at most)' : 'Claude Haiku reads every answer that names you (20 to a call, ' + (opt.calls_max || 40) + ' calls a run at most)') + '; a rule reader gives a second opinion and never makes the figure',
+      kappa: { ...KAPPA }, validated, early: !validated, label: validated ? '' : 'early reading, not validated', sample: sampled,
       model_vs_rules: R.length ? { n: R.length, agreement: Math.round(1000 * R.filter(l => l.rules_polarity === l.polarity).length / R.length) / 10, kappa: kappa(R.map(l => [l.polarity, l.rules_polarity])) } : null,
-      unread_note: unread ? unread + ' of the ' + L.length + ' answers that name you were not read by the model (' + (opt.unread_why || 'it did not answer for them') + '); they are not counted.' : '' };
-    if (n < MIN) return { ...base, net: null, net_lo: null, net_hi: null, withheld: true, by_aspect: [], by_rival: [], objections: [], note: L.length ? 'Sentiment is withheld: ' + n + ' answer' + (n === 1 ? ' was' : 's were') + ' read, and a figure needs ' + MIN + '.' : 'No answer named you, so there is no sentiment to read.' };
+      unread_note: sampled ? 'A sample: ' + n + ' of the ' + L.length + ' answers that name you were read, chosen across every question and engine of the week; the figures describe that sample.' + (unread > sampled.of - sampled.n ? ' ' + (unread - (sampled.of - sampled.n)) + ' of the sampled answers got no label from the model and are not counted.' : '')
+        : unread ? unread + ' of the ' + L.length + ' answers that name you were not read by the model (' + (opt.unread_why || 'it did not answer for them') + '); they are not counted.' : '' };
+    const EARLY = validated ? '' : 'Early reading, not validated: the model\'s labels have not yet been checked against a hand-labelled set, so read this as a first impression, not a measurement. ';
+    if (n < MIN) return { ...base, net: null, net_lo: null, net_hi: null, withheld: true, by_aspect: [], by_rival: [], objections: [], note: EARLY + (L.length ? 'Sentiment is withheld: ' + n + ' answer' + (n === 1 ? ' was' : 's were') + ' read, and a figure needs ' + MIN + '.' : 'No answer named you, so there is no sentiment to read.') };
     const r = AVX.ratio(R, (l) => [sc(l.polarity), 1], { scale: 100, lo0: -1, hi0: 1 });
     const aspects = ASPECTS.map(a => { const xs = R.map(l => (l.aspects || []).find(x => x.aspect === a)).filter(Boolean); const pos = xs.filter(x => x.polarity === 'positive').length, neg = xs.filter(x => x.polarity === 'negative').length;
       return { aspect: a, pos, neg, neu: xs.length - pos - neg, n: xs.length, net: xs.length >= MIN ? Math.round(100 * (pos - neg) / xs.length) : null }; }).filter(x => x.n);
@@ -739,9 +763,10 @@ const SENT = (() => {
     return { ...base, withheld: false, net: r.value == null ? null : Math.round(r.value), net_lo: r.lo == null ? null : Math.round(r.lo), net_hi: r.hi == null ? null : Math.round(r.hi), n_questions: r.n_questions,
       by_aspect: aspects.sort((a, b) => b.n - a.n), by_rival: [...rv.values()].sort((a, b) => b.n - a.n).slice(0, 10).map(s0 => ({ id: s0.id, n: s0.n, net: s0.n >= MIN ? Math.round(100 * (s0.pos - s0.neg) / s0.n) : null })),
       objections: [...objMap.values()].sort((a, b) => b.n - a.n).slice(0, 8).map(s0 => ({ text: s0.text, n: s0.n, engines: [...s0.engines] })),
-      note: 'Net sentiment ' + (r.value >= 0 ? '+' : '') + Math.round(r.value) + ' (positive minus negative, per 100 answers that name you; 95% range ' + (r.lo == null ? 'not measurable' : Math.round(r.lo) + ' to ' + Math.round(r.hi)) + ', ' + n + ' answers to ' + r.n_questions + ' questions). Compare it only within one market and language.'
-        + (KAPPA.model == null ? ' The model\'s labels are not yet validated against a hand-labelled set.' : '') }; };
-  return { ASPECTS, POL, MIN, KAPPA, rules, snippet, clausesOf, kappa, parseModel, namedAnswers, jobsOf, aggregate, nameRe };
+      objections_note: 'phrases the reader picked out of the answers' + (validated ? '' : ' (not validated)') + '; not a finding, and no action is drawn from them',
+      note: EARLY + 'Net sentiment ' + (r.value >= 0 ? '+' : '') + Math.round(r.value) + ' (positive minus negative, per 100 answers that name you; 95% range ' + (r.lo == null ? 'not measurable' : Math.round(r.lo) + ' to ' + Math.round(r.hi)) + ', ' + n + ' answers to ' + r.n_questions + ' questions). Compare it only within one market and language.'
+        }; };
+  return { ASPECTS, POL, MIN, KAPPA, rules, snippet, clausesOf, kappa, parseModel, namedAnswers, sampleOf, jobsOf, aggregate, nameRe };
 })();
 const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 // ---- AI entities (F1a, 2026-10-23; docs/ai-visibility-2026-10-23/ENGINE_AUDIT.md E3 E4 E5 E8 E10 E16, PROD_STATE.md section 5) ----
@@ -1125,6 +1150,8 @@ const AIP = (() => {
                                       // execution limit is 60 minutes, so a part not heard of for 65 is dead, never merely slow (a resume of a
                                       // live part would ask its questions twice; the run guard refuses that twin too)
     resume_days: 6,                   // an unfinished run older than this is closed, not resumed (a new week starts a new run)
+    done_fresh_hours: 20,             // R-E1: a run that FINISHED this recently answers an on-demand / catch-up start with its stored week
+                                      // (a retry of the same cycle job is answered so whatever the hour); nothing is asked or paid again
     max_run_usd: 150,                 // one weekly / full run above this is refused by the plan, with the reason
     writer_batch: 40,                 // questions one Prompt Writer job writes (the agent's answer must fit its token budget)
     writer_jobs_per_run: 14,          // Prompt Writer jobs one run may start (14 x 40 = 560: a new 500-question panel in one run)
@@ -1327,6 +1354,17 @@ const AIP = (() => {
     return 'busy';
   };
   const stateRow = (site_id, st, nowIso) => ({ key: stateKey(site_id), kind: 'ai', site_id: S(site_id), value: JSON.stringify(st), updated_at: nowIso });   // exact seo_cache columns
+  /** R-E1 (2026-10-23, REVIEW_ENGINE.md): is a stored `done` run THIS start's week? -> { why, cycle_key, finished_at } or null. A start of the same
+   *  cycle job (the dispatcher's retry after the run's last part died past the moment its week was stored) is always answered with the stored
+   *  week; any other start that is not a cycle job (on demand, a catch-up, a bare manual start) is answered so when the run finished less than
+   *  done_fresh_hours ago. A cycle job of ANOTHER cycle (the next week) runs. `rerun` (the trigger's rerun_today) asks again on purpose. */
+  const doneRun = (st, o) => { const x = o || {};
+    if (!st || !st.run_id || S(st.status) !== 'done' || x.rerun) return null;
+    const fin = Date.parse(st.finished_at || st.updated_at) || 0; const now = Date.parse(x.now) || Date.now();
+    const ck = S(x.cycle && x.cycle.key), sk = S(st.cycle && st.cycle.key);
+    if (ck) return ck === sk ? { why: 'same_cycle', cycle_key: ck, finished_at: S(st.finished_at || st.updated_at) } : null;
+    if (fin && now - fin >= 0 && now - fin < LIMITS.done_fresh_hours * 3600e3) return { why: 'recent', cycle_key: sk, finished_at: S(st.finished_at || st.updated_at) };
+    return null; };
 
   // ---- 6b. never pay twice (F2, 2026-10-23: ENGINE_AUDIT.md E1 / E11) ----------------------------------------------------------------
   // E1: a part whose answers were not stored left no trace of what it had PAID for, so every later part asked the same first chunk again,
@@ -1368,7 +1406,11 @@ const AIP = (() => {
   // that fit it at the slow-case seconds of each engine (a batch of 10 waits for its slowest answer) — or at the seconds per request the
   // run's earlier parts MEASURED (wall time of the part, analyst taken out), with 20% headroom. Never more than chunk_requests.
   const TIME = { exec_limit_s: 3600, budget_s: 2400, fixed_s: 300, batch: 10, interval_s: 0.2, retry_wait_s: 20, retry_share: 0.15, headroom: 1.2, min_requests: 40,
-    analyst_job_s: 30, req_s: { chatgpt: 60, gemini: 60, perplexity: 30, claude: 45, ai_mode: 45, ai_overview: 25, copilot: 20, chatgpt_api: 45, gemini_api: 45 } };
+    analyst_job_s: 30,
+    // R-E5 (2026-10-23, REVIEW_ENGINE.md): one Sentiment Reader call (20 passages, ~6k tokens in, up to 4k out) at its slow case, and the tail a run's
+    // last part still runs after the reader (the metrics, the saves, the brief, the report, the PDF; the options keep their own extra_s)
+    sentiment_call_s: 30, sentiment_tail_s: 420,
+    req_s: { chatgpt: 60, gemini: 60, perplexity: 30, claude: 45, ai_mode: 45, ai_overview: 25, copilot: 20, chatgpt_api: 45, gemini_api: 45 } };
   /** seconds one request costs a part, on these engines: the modelled figure, or the measured one when a part of the run measured it */
   const secPerRequest = (engines, measured) => {
     const es = (engines || []).filter(e => TIME.req_s[e]); const avg = es.length ? es.reduce((t, e) => t + TIME.req_s[e], 0) / es.length : 45;
@@ -1416,10 +1458,12 @@ const AIP = (() => {
   const FIXED = { weekly_ai_min: 0.13, brief_ai: 0.03, analyst_job_ai: 0.02, analyst_per_job: 12, analyst_share: 0.35, analyst_cap_base: 24, analyst_cap_max: 60,
     full_dfs: 0.45, full_ai: 0.3, weeks_per_month: 4.33, pulse_days: 6,
     // W2-E2's Sentiment Reader (Claude Haiku, merged 2026-10-23): every answer of the run that names the business, 20 a call, at most 40 calls a
-    // run, about $0.012 a call. Named answers = the weekly run's answers x sentiment_named_rate. ASSUMPTION: 50% named, conservative on purpose (a
+    // run, about $0.02 a call (R-E9, 2026-10-23: was $0.012; a call reads ~20 x (question + passage) + the prompt = ~6k tokens at Haiku 4.5's $1/M
+    // = $0.006, and answers 2-3k tokens (capped at 4,000) at $5/M = $0.010-0.020, so $0.016-0.026; _cost_cal.js holds the same Haiku prices).
+    // The worst case a run can spend is calls_max x tries (the agent node's retryOnFail: 2) x sentiment_call_worst (6k in + 4k out = $0.026). Named answers = the weekly run's answers x sentiment_named_rate. ASSUMPTION: 50% named, conservative on purpose (a
     // new site is named in far fewer), so the quote is an upper bound; the full run's few extra answers (the monthly engine, the brand question) are
     // inside that margin and are not priced on their own (a quote never moves by a call or two with the engine set).
-    sentiment_named_rate: 0.5, sentiment_per_call: 20, sentiment_calls_max: 40, sentiment_call_ai: 0.012 };
+    sentiment_named_rate: 0.5, sentiment_per_call: 20, sentiment_calls_max: 40, sentiment_call_ai: 0.02, sentiment_call_worst: 0.026, sentiment_tries: 2 };
   /** the Sentiment Reader's calls and Claude money for a run of `answers` answers */
   const sentimentOf = (answers) => { const named = Math.ceil(Math.max(0, n0(answers)) * FIXED.sentiment_named_rate);
     const calls = Math.min(FIXED.sentiment_calls_max, Math.ceil(named / FIXED.sentiment_per_call)); return { named, calls, ai: Math.round(calls * FIXED.sentiment_call_ai * 10000) / 10000 }; };
@@ -1508,7 +1552,7 @@ const AIP = (() => {
   };
 
   return { LIMITS, panelSize, normMarket, locationOf, listOf, marketsOf, personasOf, stageOf, stems, jaccard, sameAsk, dedupe, stratumOf, pulseDay, halfWidth,
-    pulsePerWeek, pulseSample, reqKey, slice, stateKey, stateOf, stateVerdict, stateRow, panelIds, panelHash, overlap, hash,
+    pulsePerWeek, pulseSample, reqKey, slice, stateKey, stateOf, stateVerdict, stateRow, doneRun, panelIds, panelHash, overlap, hash,
     MARKETS_MAX, normQ, hash64, promptId, findStored, keywordOf, KEYWORD_SOURCES, STOPPED, ENG_CODE, packKeys, unpackKeys, CEILING, runCeiling, ceilingLeft, keysUsd, baseState,
     TIME, secPerRequest, chunkPlan, servicesOfRow, fitInput,
     PRICE, PRICE_BASIS, ENGINES, DEFAULT_ENGINES, MONTHLY_ENGINES, PULSE_ENGINES, FIXED, analystCap, cost, sentimentOf,
@@ -2608,7 +2652,19 @@ return plans.map(p => {
   // visibility. It is checked first: it explains more than an engine or a panel change.
   const same_rule = prev ? (String(prev.rule_version || '') === AVM.RULE_VERSION ? { comparable: true, why: '' }
     : { comparable: false, why: 'measurement rule changed: this week starts a new baseline (from ' + AVM.RULE_VERSION.replace(/^aivis-/, '') + ' "named in" counts the answers that name you, not the ones that only cite a page, and share of voice counts every competitor named)' }) : null;
-  const like = prev ? (!same_rule.comparable ? same_rule : !same_kind.comparable ? same_kind
+  // R-E6 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the daily pulse's answers join the headline, so the engines the pulse asks
+  // and whether it asks every question or a rotating sample are part of what the week measures. The week records them (panel_json.pulse); when
+  // both weeks had pulse mornings and either changed, the two weeks are not compared (adding Perplexity to the pulse moved it from ~1 to ~7
+  // samples a question inside the headline, which read as a change in visibility).
+  const pulseComp = (rows) => ({ mornings: rows.length, engines: [...new Set(rows.flatMap(d => Object.entries(d.engines || {}).filter(([, v]) => (Number((v || {}).answered != null ? v.answered : (v || {}).samples) || 0) > 0).map(([e]) => e)))].sort(),
+    modes: [...new Set(rows.map(d => String(d.sample_mode || 'full')))].sort() });
+  const pulse_now = pulseComp(PR); const pulse_before = prev && prev.panel && prev.panel.pulse && typeof prev.panel.pulse === 'object' ? prev.panel.pulse : null;
+  const same_pulse = (pulse_before && pulse_now.mornings > 0 && Number(pulse_before.mornings) > 0) ? (() => {
+    const eb = (pulse_before.engines || []).slice().sort().join('+'), en = pulse_now.engines.join('+'); const mb = (pulse_before.modes || []).slice().sort().join('+'), mn = pulse_now.modes.join('+');
+    if (eb !== en) return { comparable: false, why: 'the daily pulse asks different engines now (' + ((pulse_before.engines || []).map(e => ENG[e] || e).join(', ') || 'none') + ' then, ' + (pulse_now.engines.map(e => ENG[e] || e).join(', ') || 'none') + ' now), so the week mixes its answers differently' };
+    if (mb !== mn) return { comparable: false, why: 'the daily pulse changed how it asks (' + (mb || 'none') + ' then, ' + (mn || 'none') + ' now: every question each morning or a rotating sample), so the week mixes its answers differently' };
+    return { comparable: true, why: '' }; })() : null;
+  const like = prev ? (!same_rule.comparable ? same_rule : !same_kind.comparable ? same_kind : (same_pulse && !same_pulse.comparable) ? same_pulse
     : (same_ids && same_ids.same === false) ? { comparable: false, why: 'only ' + Math.round(100 * same_ids.share) + '% of the questions asked now were asked then (' + same_ids.common + ' in common): a different panel, not a different result' }
     : same_panel) : null;
   const delta_not_compared = prev && !like.comparable
@@ -2635,6 +2691,7 @@ return plans.map(p => {
   const medCl = (() => { const xs = segRows.filter(s => s.dim === 'cluster').map(s => s.n).sort((a, b) => a - b); return xs.length ? xs[Math.floor(xs.length / 2)] : 0; })();
   const panel_cost = AIP.cost({ panel: Number(p.prompts_max) || nowIds.length + 1, engines: p.engines, pulse: p.pulse !== false, pulse_mode: p.pulse_mode, pulse_per_week: p.pulse_per_week });
   const panel_info = { ids: nowIds, size: nowIds.length, setting: Number(p.prompts_max) || null, engines: [...new Set(Rall.map(r => r.engine))].sort(), hash: AIP.panelHash(nowIds, [...new Set(Rall.map(r => r.engine))]),
+    pulse: pulse_now,   // R-E6: the daily pulse's engines and sample mode this week, compared by the next week
     composition: Object.fromEntries(['cluster', 'persona', 'market', 'stage'].map(d => [d, Object.fromEntries(segRows.filter(s => s.dim === d).map(s => [s.key, s.questions]))])),
     overlap_with_previous: same_ids, half_width: { measured: { headline: samples ? Math.round(10 * (wilson(mentioned, samples)[1] - wilson(mentioned, samples)[0]) / 2) / 10 : null, headline_answers: samples, median_cluster: medCl ? AIP.halfWidth(medCl) : null, median_cluster_answers: medCl },
       achievable: { headline: panel_cost.half_width.headline, cluster: panel_cost.half_width.cluster, per_week: panel_cost.per_week, note: 'at the widest (a rate near 50%), with the panel and the daily pulse as they are set' } },
@@ -2671,7 +2728,7 @@ return plans.map(p => {
     const d1 = Number((W2CI.headline[key] || {}).deff) || 1, d0 = Number(((PS && PS.deff) || {})[key]) || d1; const p1 = kN / samples, p2 = kB / nPrev, pp = (kN + kB) / (samples + nPrev);
     const se = Math.sqrt(pp * (1 - pp) * (d1 / samples + d0 / nPrev)); if (!se) continue; const z = Math.round(100 * (p1 - p2) / se) / 100; const sig = Math.abs(z) >= 1.96 && Math.abs(t.delta) >= (t.min_points || 5);
     tests[k] = { ...t, z, significant: sig, z_unclustered: t.z, deff: Math.round(100 * (d1 + d0) / 2) / 100, why: (sig ? 'beyond sampling noise' : 'within sampling noise') + ' (z ' + z + ' with answers to one question counted as one cluster, design effect ' + d1 + (d0 !== d1 ? ' now and ' + d0 + ' before' : '') + '; ' + samples + ' answers now, ' + nPrev + ' before)' }; }
-  const delta = (prev && like.comparable) ? { mention_rate: +(mention_rate - prev.mention_rate).toFixed(1), citation_rate: +(citation_rate - prev.citation_rate).toFixed(1), share_of_voice: +(share_of_voice - prev.share_of_voice).toFixed(1),
+  const delta = (prev && like.comparable) ? { mention_rate: +(mention_rate - prev.mention_rate).toFixed(1), citation_rate: +(citation_rate - prev.citation_rate).toFixed(1), share_of_voice: H.sov == null || prev.share_of_voice == null ? null : +(share_of_voice - prev.share_of_voice).toFixed(1),   /* R-E12: no delta from an unmeasured share */
     visibility_score: prev.visibility_score == null ? null : +(visibility_score - prev.visibility_score).toFixed(1),
     // kept as the headline verdict the alerts and the subject read; `tests` holds the same answer for every other figure
     significant: tests && tests.mention_rate && tests.mention_rate.z != null ? tests.mention_rate.significant : (prev.samples ? significant(mentioned, samples, prev.mentioned_k, prev.samples) : null), tests } : null;   // W2-E2: the clustered test
@@ -2721,6 +2778,14 @@ return plans.map(p => {
   // the alert reads - and each alert that fires states the adjusted threshold it cleared.
   const prevComp = new Map((((prev && like.comparable) ? prev.competitors : null) || []).map(c => [c.domain, c]));   // B-L4: a competitor's share moves with the panel too
   const family = [];
+  // R-E13 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the headline's two tests count answers to one question as one cluster
+  // (W2-E2), so the engine and competitor tests that share their Holm family are clustered the same way: z divided by the square root of the
+  // design effect the run measured (the cited rate's for an engine's citations, the named rate's for a competitor's share; the earlier run's when
+  // larger). Unclustered, they fired more easily than the headline they sit beside.
+  const deffOf = (k) => Math.max(1, Number((W2CI.headline[k] || {}).deff) || 1, Number(((PS && PS.deff) || {})[k]) || 1);
+  const clusterZ = (t, k, minZ) => { if (!t || t.z == null) return t; const d = deffOf(k); if (d <= 1) return { ...t, deff: 1 }; const z = Math.round(100 * t.z / Math.sqrt(d)) / 100;
+    return { ...t, z, z_unclustered: t.z, deff: Math.round(100 * d) / 100, significant: t.significant === true && Math.abs(z) >= (minZ || 1.96), why: (t.why ? t.why + '; ' : '') + 'clustered by question (design effect ' + Math.round(100 * d) / 100 + ', z ' + t.z + ' -> ' + z + ')' }; };
+  for (const [e, c] of Object.entries(engine_changes)) if (c.tested && c.z != null) engine_changes[e] = clusterZ(c, 'cited_rate');
   if (tests && tests.mention_rate && tests.mention_rate.z != null && tests.mention_rate.delta < 0) family.push({ id: 'mention_rate', label: 'AI mentions', z: tests.mention_rate.z });
   for (const [e, c] of Object.entries(engine_changes)) if (c.tested && c.z != null && c.delta < 0) family.push({ id: 'engine:' + e, label: c.name + ' citations', z: c.z });
   // B8-1: "gained 10+ points" was a fixed rule over two noisy samples, raised beside a mention-rate change that had been z-tested.
@@ -2728,7 +2793,7 @@ return plans.map(p => {
   const compTests = [];
   // E19 (F1b): a competitor's share of voice is tested on its standard error over answers, against the stored figure of the previous run
   for (const c of comp) { const b0 = prevComp.get(c.domain); const sb = PS && PS.competitors ? PS.competitors[c.domain] : null; if (!b0 || !sb) continue;
-    const t = AVM.seChange(c.sov, c._st.sov_se, c._st.sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0, { min: 10 });
+    const t = clusterZ(AVM.seChange(c.sov, c._st.sov_se, c._st.sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0, { min: 10 }), 'named_rate');   // R-E13
     if (t.z != null && t.delta > 0 && c.mentions >= 5) { compTests.push({ c, t }); family.push({ id: 'comp:' + c.domain, label: c.domain + ' share of voice', z: t.z }); } }
   const multiple_tests = holm(family, 0.05);
   const passes = (id) => !!(multiple_tests.by[id] && multiple_tests.by[id].reject);
@@ -2818,10 +2883,15 @@ return plans.map(p => {
     const M = new Map(); allJobs.forEach((j, ix) => { if (j.site_id !== p.site_id || !j.items) return; const o = outs[ix]; if (!o || o.error) return; const got = SENT.parseModel(o.output, { items: j.items }); for (const [k, v] of got) M.set(k, v); });   // the agent answers its jobs in order
     const rows0 = [...w2read('Parse AI Answers').filter(r => !r.skip && r.engine && r.site_id === p.site_id && (!r.run_id || r.run_id === p.run_id)), ...w2read('Load AI Run Answers').filter(r => r.site_id === p.site_id && r.run_id === p.run_id)];
     const named = SENT.namedAnswers(rows0, { business: p.business_name || p.domain, named: AVM.named }); const notSent = sJobs.length ? Number(sJobs[0].not_sent) || 0 : 0;
-    return SENT.aggregate(named, M, { business: p.business_name || p.domain, unread_why: !sJobs.length && named.length ? 'the Sentiment Reader did not run' : notSent ? notSent + ' were past the 40 calls a run can make' : 'the model gave no label for them' }); })();
+    // R-E8 / R-E5 (2026-10-23): a sample spread over the week when more answers name you than the reader may read (the cap, or the time left)
+    const mark = ((allJobs[0] || {}).markers || []).find(m => m && m.site_id === p.site_id) || null; const sample = sJobs.length ? sJobs[0].sample || null : (mark ? mark.sample : null);
+    return SENT.aggregate(named, M, { business: p.business_name || p.domain, sample, calls_max: 40,
+      unread_why: mark && mark.no_time ? 'this execution had no time left for the Sentiment Reader before the week had to be stored' : !sJobs.length && named.length ? 'the Sentiment Reader did not run' : notSent ? notSent + ' were past the calls a run can make' : 'the model gave no label for them' }); })();
   for (const [e, v] of Object.entries((W2CI.by_engine) || {})) if (engines[e] && !engines[e].carried && v.named_rate && v.named_rate.lo != null) { engines[e].ci_unclustered = engines[e].ci; engines[e].ci = [v.named_rate.lo, v.named_rate.hi]; engines[e].deff = v.named_rate.deff; }
   stats.deff = { named_rate: W2CI.headline.named_rate.deff, cited_rate: W2CI.headline.cited_rate.deff };   // the next run's clustered change test reads them
-  const vis_row = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, checked_at: p.checked_at, prompts: byQ.size, answers: samples, mention_rate, citation_rate, share_of_voice, avg_rank: H.avg_position || 0,
+  // R-E12 (2026-10-23, REVIEW_ENGINE.md): a figure that could not be measured is stored as null, never 0 (share of voice when no business was named
+  // in any answer, the named rate when no answer came back): the contract says an absent figure must not read as 0, and 0 would be compared next week
+  const vis_row = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, checked_at: p.checked_at, prompts: byQ.size, answers: samples, mention_rate, citation_rate, share_of_voice: H.sov == null ? null : share_of_voice, avg_rank: H.avg_position || 0,
     aio_presence, aio_citation_rate, engines_json: J(engines), competitors_json: J(comp), sources_json: J(sources), pages_json: J(our_pages), gaps_json: J(gaps.map(g => ({ prompt_id: g.prompt_id, prompt: g.prompt, kind: g.kind, topic: g.topic, competitors: g.competitors, sources: g.sources, volume: g.volume, stage: g.stage, cluster: g.cluster, fanout: g.fanout, cited_urls: g.cited_urls, engines: g.engines }))), market_json: market ? J(market) : '',
     market_month: market && !market.carried && !market.error ? p.checked_at.slice(0, 7) : ((prev && prev.market_month) || ''), cost_usd: +(exec_cost + ((p.chunk && p.chunk.going && p.spent_before) ? Number(p.spent_before.dfs) || 0 : 0)).toFixed(4),   // G6: the whole run, every execution of it
     alerts: alerts.map(a => a.level + ': ' + a.text).join(' | '),
@@ -2837,7 +2907,7 @@ return plans.map(p => {
     panel_json: J(panel_info), chunks: run_split ? run_split.executions : 1,
     // F1b (2026-10-23): the rule these figures were counted under, "named in" by its own name, the place in the answers, the window and
     // the comparison every reader shares (compare_json), and the counts the next run is compared against (metrics_json)
-    rule_version: AVM.RULE_VERSION, named_rate: H.named_rate == null ? 0 : H.named_rate, avg_position: H.avg_position, first_rate: H.first_rate, pos_visibility: H.pos_visibility,
+    rule_version: AVM.RULE_VERSION, named_rate: H.named_rate == null ? null : H.named_rate, avg_position: H.avg_position, first_rate: H.first_rate, pos_visibility: H.pos_visibility,
     rate_period, compare_json: J(compare), metrics_json: J(stats),
     // W2-E2 (2026-10-23): the clustered ranges, share of voice over the declared set, sentiment, did an action work, the owner's rules, and this run's
     // answers one by one (compact) so the next runs can count the 28-day window and the before / after of an action
@@ -2868,8 +2938,13 @@ return plans.map(p => {
   const aliasKeys = Object.keys(aliases).slice(-200); const aliasesTrim = Object.fromEntries(aliasKeys.map(k => [k, aliases[k]]));
   const cache_rows = Object.keys(aliasesTrim).length !== Object.keys(p.aliases || {}).length || JSON.stringify(aliasesTrim) !== JSON.stringify(p.aliases || {}) ? [{ key: 'ai_brands:' + p.site_id, kind: 'ai', site_id: p.site_id, value: J(aliasesTrim), updated_at: now }] : [];
   // G6: the run is measured — its state row says so, so no later start resumes it
-  if (p.chunk) { const sb = p.spent_before || {}; cache_rows.push(AIP.stateRow(p.site_id, { run_id: p.run_id, run_kind: p.run_kind, site_id: p.site_id, domain: p.domain, started_at: p.checked_at, updated_at: new Date().toISOString(),
-    chunk: p.chunk.no, status: 'done', asked: Rall.length, total: Rall.length, spent_dfs_usd: vis_row.cost_usd, spent_ai_usd: Number(sb.ai) || 0, executions: [...(p.chunk.executions || []), String($execution.id)].slice(-60) }, new Date().toISOString())); }
+  // R-E1 (2026-10-23, REVIEW_ENGINE.md): the `done` state carries the run's identity (its cycle key, request, caller) and when it finished, so a
+  // retry of the same cycle job, a catch-up or an on-demand start that comes after it is answered with this stored week (AI Plan) instead of
+  // paying for every question again; and the options' keys an earlier attempt of this run recorded (W2-E3 extras) are kept
+  if (p.chunk) { const sb = p.spent_before || {}; const st0 = p.state_before || {}; const fin = new Date().toISOString();
+    cache_rows.push(AIP.stateRow(p.site_id, { ...AIP.baseState(p), run_id: p.run_id, run_kind: p.run_kind, site_id: p.site_id, domain: p.domain, started_at: p.checked_at, updated_at: fin, finished_at: fin,
+    chunk: p.chunk.no, status: 'done', asked: Rall.length, total: Rall.length, spent_dfs_usd: vis_row.cost_usd, spent_ai_usd: Number(sb.ai) || 0, executions: [...(p.chunk.executions || []), String($execution.id)].slice(-60),
+    ...(st0.extras && st0.extras.run_id === p.run_id ? { extras: st0.extras } : {}) }, fin)); }
   return { json: { ...p, metrics: { asked: RC.length, asked_all: R.length, requests: Rall.length, answered: ans.length, samples, pulse_samples: pulseN, pulse_days: pulseDays, pulse_readings: PR.length, came_back, headline, aio_basis, volume_lookup, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered, mentioned, cited, mention_rate, mention_ci: [mention_lo, mention_hi], citation_rate, share_of_voice, visibility_score, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta,
     // B-L4: when the two runs are not like for like the customer is TOLD, in the place the change would have been
     delta_not_compared, panel, panel_before, delta_basis: prev ? (like.comparable ? 'compared with ' + String(prev.checked_at || '').slice(0, 10) + ' (' + panel_before + ' questions on ' + engText(engBefore) + ')' : like.why) : 'first run (baseline)',

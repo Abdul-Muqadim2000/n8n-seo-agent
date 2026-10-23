@@ -58,8 +58,17 @@ const openRun = (st, s, why) => { const left = Math.max(0, (Number(st.total) || 
   const parts = Math.ceil(left / per); const eta = new Date(Math.max(Date.parse(st.updated_at) || Date.now(), Date.now()) + parts * (AIP.TIME.budget_s + AIP.TIME.fixed_s) * 1000).toISOString();
   return { run_id: st.run_id, status: st.status, part: Number(st.chunk) || 1, asked: Number(st.asked) || 0, total: Number(st.total) || 0, started_at: st.started_at || '', updated_at: st.updated_at || '',
     expected_finish: String(st.status) === 'running' ? eta : '', why }; };
-const tell = (s, st, kind) => {   // E17: only a caller that is waiting for its own answer (an on-demand start with a callback) and is not the open run's own caller
-  if (!on_demand || !s.callback_url || (st && String(st.request_id || '') && String(st.request_id) === String(s.request_id || ''))) return;
+const tell = (s, st, kind, week) => {   // E17: only a caller that is waiting for its own answer (an on-demand start with a callback) and is not the open run's own caller
+  if (!on_demand || !s.callback_url) return;
+  // R-E1: a run that is already measured answers EVERY on-demand caller, its own included (its report may never have been sent when the run's last part
+  // died after the week was stored); the app ignores a rejection for a request it already completed
+  if (kind === 'done') { const w = week || {}; const fin = String((st && (st.finished_at || st.updated_at)) || '').slice(0, 16).replace('T', ' ');
+    const fig = w.answers ? ' It was named in ' + (w.named_rate == null ? (w.mention_rate == null ? '-' : w.mention_rate) : w.named_rate) + '% of ' + w.answers + ' answers' + (w.citation_rate != null ? ', cited in ' + w.citation_rate + '%' : '') + (w.visibility_score != null ? ', visibility score ' + w.visibility_score : '') + '.' : ' Its stored week was not found; the dashboard shows the latest one.';
+    notices.push({ callback_url: s.callback_url, body: { stage: 'rejected', status: 'rejected', reason: 'already_measured', skipped: true, request_id: String(s.request_id || ''), domain: s.domain, mode: 'ai_visibility', on_demand: true, cost_usd: 0,
+      error: 'The AI visibility of ' + s.domain + ' was already measured' + (fin ? ' at ' + fin + ' UTC' : '') + ' (run ' + st.run_id + ').' + fig + ' Nothing was asked again and nothing was charged; the latest report and the dashboard show that week.',
+      stored_week: { run_id: st.run_id, finished_at: String(st.finished_at || st.updated_at || ''), cycle_key: String((st.cycle && st.cycle.key) || ''), ...w } } });
+    return; }
+  if (st && String(st.request_id || '') && String(st.request_id) === String(s.request_id || '')) return;
   const o = openRun(st, s, kind);
   const sentence = kind === 'blocked'
     ? 'The AI visibility check of ' + s.domain + ' was not started: this week\'s run (' + o.run_id + ') was stopped (' + String(st.stop_reason || st.status) + '). Nothing was asked and nothing was charged; the team has been alerted.'
@@ -83,6 +92,19 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // F2 (E1): a STOPPED run (its answers were not stored, or it reached its money ceiling) blocks this site's weekly run until it is older than
   // resume_days or a person clears the state row — a retry of the cycle job, a catch-up or an on-demand start never pays for it again
   if (verdict === 'blocked') { tell(s, st, 'blocked'); skipped.push({ domain: s.domain, blocked: true, why: 'run ' + st.run_id + ' was stopped (' + String(st.stop_reason || st.status) + '); nothing is asked for this website until the run is older than ' + AIP.LIMITS.resume_days + ' days or the state row ai_run:' + s.site_id + ' is cleared' }); return null; }
+  // R-E1 (2026-10-23, REVIEW_ENGINE.md, High): a run already MEASURED (its week stored, state `done`) is never paid for again by a start that
+  // belongs to it: the dispatcher's retry of the same cycle job (the run's last part died after Save AI Cache wrote `done`, in the options /
+  // brief / report / PDF tail), or a catch-up / on-demand start less than done_fresh_hours after it finished. It is answered with the stored
+  // week (the caller's notice, the plan's reason) and settles $0. `rerun_today: true` on the trigger asks again on purpose.
+  const doneHit = verdict === 'closed' ? AIP.doneRun(st, { cycle, now: iso, rerun: trigger.rerun_today === true || String(trigger.rerun_today) === 'true' }) : null;
+  if (doneHit) { const vr = visRows.filter(v => v.site_id === s.site_id && String(v.run_id) === String(st.run_id))[0] || null;
+    const nn0 = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+    const week = vr ? { checked_at: String(vr.checked_at || ''), answers: Number(vr.samples) || Number(vr.answers) || 0, named_rate: nn0(vr.named_rate), mention_rate: nn0(vr.mention_rate), citation_rate: nn0(vr.citation_rate), share_of_voice: nn0(vr.share_of_voice), visibility_score: nn0(vr.visibility_score) } : null;
+    tell(s, st, 'done', week);
+    skipped.push({ domain: s.domain, already_measured: true, run_id: st.run_id, finished_at: doneHit.finished_at, stored_week: !!week,
+      why: 'already measured: run ' + st.run_id + ' finished ' + String(doneHit.finished_at || '').slice(0, 16).replace('T', ' ') + ' UTC' + (doneHit.why === 'same_cycle' ? ' for this cycle (' + doneHit.cycle_key + '); this start is a retry of the same job' : ', less than ' + AIP.LIMITS.done_fresh_hours + ' hours ago')
+        + '; its stored week stands, nothing was asked again and nothing was charged (rerun_today: true on the start asks again on purpose)' });
+    return null; }
   if (verdict === 'resume') tell(s, st, 'resume');
   const going = verdict === 'continue' || verdict === 'resume';
   const MONTHLY = AIP.monthlyOf(s.settings.claude_weekly);   // W2-E3: Claude every weekly run when the owner asks for it ('ai_claude_weekly'), else the month's full run only
@@ -198,8 +220,14 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const aj = Math.min(12, Math.max(6, Math.ceil((Number(costNow.analyst_jobs) || 0) / Math.max(1, Number(costNow.executions) || 1))));
   // W2-E3: the seconds the run's last part keeps for the fan-out check, the persona test and the demand lookups (0 with every option off)
   const extra_s = AIP.extraSeconds({ persona_requests: costNow.options.persona.requests_run, fanout_requests: costNow.options.fanout.requests_run, demand_requests: full_due ? costNow.options.demand_market.tasks : 0 });
-  const cp = AIP.chunkPlan({ engines: engNow, measured_s: going ? Number(st.sec_per_request) || 0 : 0, analyst_jobs: aj, halve, extra_s });
-  const chunk = { no: going ? (Number(st.chunk) || 1) + 1 : 1, size: cp.size, size_time: cp.size, sec_per_request: cp.sec_per_request, size_basis: cp.basis, analyst_jobs_max: aj, extra_s, going, resumed: verdict === 'resume', final_expected: reqLeft <= cp.size,
+  // R-E5 (2026-10-23, REVIEW_ENGINE.md): the run's LAST part also runs the Sentiment Reader (up to 40 Haiku calls) before the week is stored, so a
+  // part that would be the last is sized with that time kept; when the requests left do not fit beside it, this part is not the last and the
+  // next one (with few requests) has the room. Sentiment Jobs also holds the calls to the time actually left, as the backstop.
+  const sentiment_s = Math.min(AIP.FIXED.sentiment_calls_max, Number((costNow.sentiment || {}).calls) || 0) * AIP.TIME.sentiment_call_s;
+  const cpA = AIP.chunkPlan({ engines: engNow, measured_s: going ? Number(st.sec_per_request) || 0 : 0, analyst_jobs: aj, halve, extra_s });
+  const cpB = AIP.chunkPlan({ engines: engNow, measured_s: going ? Number(st.sec_per_request) || 0 : 0, analyst_jobs: aj, halve, extra_s: extra_s + sentiment_s });
+  const cp = reqLeft <= cpA.size ? cpB : cpA;
+  const chunk = { no: going ? (Number(st.chunk) || 1) + 1 : 1, size: cp.size, size_time: cp.size, sec_per_request: cp.sec_per_request, size_basis: cp.basis + (cp === cpB && sentiment_s ? '; ' + sentiment_s + ' s kept for the Sentiment Reader' : ''), analyst_jobs_max: aj, extra_s, sentiment_s, plan_at: iso, going, resumed: verdict === 'resume', final_expected: reqLeft <= cp.size,
     ceiling_dfs_usd: ceiling, committed_dfs_usd: +committed.toFixed(4), ceiling_left_usd: +Math.max(0, ceiling - committed).toFixed(4),
     // F2 (E1): the keys a part paid for whose answers never came back to the table (counted once, never asked again) and the parts that lost them
     lost_now: stop ? 0 : lostNow.length, lost_total: (going ? Number(st.lost) || 0 : 0) + (stop ? 0 : lostNow.length), lost_parts: lostParts + (!stop && lostNow.length ? 1 : 0),
@@ -250,7 +278,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
       // B-L4 (2026-10-15, INVARIANTS rule 1): the panel is settable from 3 to 50 and a weekly check asks fewer engines than the
       // monthly full one, so the stored row's OWN panel size and run kind travel with its figures. Without them AI Metrics
       // subtracted a 20-question run from an 8-question one and called the difference a change in visibility.
-      prompts: Number(prev.prompts) || 0, run_kind: String(prev.run_kind || ''), citation_rate: Number(prev.citation_rate), share_of_voice: Number(prev.share_of_voice), avg_rank: Number(prev.avg_rank),
+      prompts: Number(prev.prompts) || 0, run_kind: String(prev.run_kind || ''), citation_rate: Number(prev.citation_rate), share_of_voice: prev.share_of_voice === '' || prev.share_of_voice == null ? null : Number(prev.share_of_voice), avg_rank: Number(prev.avg_rank),   /* R-E12: an unmeasured share of voice stays null */
       visibility_score: prev.visibility_score === '' || prev.visibility_score == null ? null : Number(prev.visibility_score), sentiment_score: prev.sentiment_score === '' || prev.sentiment_score == null ? null : Number(prev.sentiment_score),
       engines: parse(prev.engines_json, {}), market_month: prev.market_month || '', market: parse(prev.market_json, null), index: parse(prev.index_json, null), perception: parse(prev.perception_json, null), traffic: parse(prev.traffic_json, null), access: parse(prev.access_json, null),
       competitors: parse(prev.competitors_json, []),
@@ -265,7 +293,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
 // F2 (E11): and at most what fits the execution's TIME across its sites (each part's own seconds per request, the analyst jobs of every site)
 { let budget = AIP.LIMITS.exec_requests;
   let secs = AIP.TIME.budget_s - AIP.TIME.fixed_s - AIP.TIME.retry_wait_s - Math.min(36, planned.reduce((t, it) => t + (it.json.chunk.stop ? 0 : it.json.chunk.analyst_jobs_max || 0), 0)) * AIP.TIME.analyst_job_s
-    - planned.reduce((t, it) => t + (it.json.chunk.stop ? 0 : Number(it.json.chunk.extra_s) || 0), 0);   // W2-E3: and the time each site's options keep
+    - planned.reduce((t, it) => t + (it.json.chunk.stop ? 0 : (Number(it.json.chunk.extra_s) || 0) + (it.json.chunk.final_expected ? Number(it.json.chunk.sentiment_s) || 0 : 0)), 0);   // W2-E3: and the time each site's options keep; R-E5: and the Sentiment Reader's, for a site whose run ends here
   for (const it of planned) { const j = it.json, c = j.chunk; const left = Math.max(0, c.total_est - c.done);
     if (c.stop) { j.index_due = false; j.market_due = false; j.ga4_property_id = ''; j.key_paths = []; j.discovery_due = false; j.volume_keywords = []; continue; }
     const byTime = Math.max(planned.length > 1 ? 0 : AIP.TIME.min_requests, Math.floor(Math.max(0, secs) / Math.max(0.5, c.sec_per_request || 1)));

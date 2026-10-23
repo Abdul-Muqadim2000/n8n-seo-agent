@@ -14,5 +14,6 @@ let rows = raw('Apply Analysis').filter(r => !r.skip); if (!rows.length) rows = 
 rows = [...rows, ...raw('Load AI Run Answers').filter(r => r.run_id)];
 const stored = rowsOf2('Load AI Prompts'), vis = rowsOf2('Load AI Visibility'), daily = rowsOf2('Load AI Daily');
 const out = [];
-for (const p of plans) out.push(...AIX.promptState({ plan: p, run_rows: rows, stored, vis_rows: vis, daily_rows: daily, now: new Date().toISOString() }));
+const written = (() => { try { return $('Prompt Rows').all().map(i => i.json).filter(r => r && !r.skip && r.site_id && r.prompt_id); } catch (e) { return []; } })();   // R-E12: the questions stored by this execution (the run's first part)
+for (const p of plans) out.push(...AIX.promptState({ plan: p, run_rows: rows, stored, written, vis_rows: vis, daily_rows: daily, now: new Date().toISOString() }));
 return out.length ? out.map(r => ({ json: r })) : [{ json: { skip: true } }];

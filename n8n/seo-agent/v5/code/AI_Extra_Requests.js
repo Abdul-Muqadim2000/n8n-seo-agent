@@ -22,24 +22,31 @@ let rows = rowsOf2('Apply Analysis').filter(r => !r.skip && r.engine); if (!rows
   for (const r of rowsOf2('Load AI Run Answers')) { if (!r.run_id || !r.engine || !r.prompt_id) continue; const k = r.site_id + '|' + r.run_id + '|' + r.prompt_id + '|' + r.engine; if (seen.has(k)) continue; seen.add(k); rows.push({ ...r, answered: tb(r.answered) }); } }
 const now = new Date().toISOString();
 const out = []; const extras_plan = {};
+// R-E1 (2026-10-23, REVIEW_ENGINE.md): the option requests an earlier attempt of the SAME run recorded before it paid (the state row's `extras`,
+// read as it stood when this execution started, or as the plan carried it) are never sent again; *Extras Asking State* records this attempt's
+const cacheRows = rowsOf2('Load Cache (AI)');
 for (const p of plans) {
   const m = metrics.find(x => x.site_id === p.site_id); if (!m) continue;
   const o = p.options || AIX.optionsOf({});
   const settings = { persona_context: o.persona_context, personas: p.persona_roles || [], demand_market: o.demand_market };
   const mine = rows.filter(r => r.site_id === p.site_id && r.run_id === p.run_id && r.kind !== 'brand');
   const top = o.fanout_check > 0 ? AIX.fanoutTop(mine, o.fanout_check) : null;
-  const fan = top ? AIX.fanoutRequests(p, top.top, serpRows, now) : { requests: [], hits: {} };
-  const demandReqs = AIX.demandRequests(p, settings, now);
-  const personaReqs = AIX.personaRequests(p, settings);
+  const recorded = new Set([...AIX.extrasRecorded(AIP.stateOf(cacheRows, p.site_id), p.run_id), ...AIX.extrasRecorded(p.state_before, p.run_id)]);
+  const fresh = (reqs) => reqs.filter(r => !recorded.has(AIX.extraKey(r)));
+  const fan0 = top ? AIX.fanoutRequests(p, top.top, serpRows, now) : { requests: [], hits: {} };
+  const demand0 = AIX.demandRequests(p, settings, now), persona0 = AIX.personaRequests(p, settings);
+  const fan = { ...fan0, requests: fresh(fan0.requests) }; const demandReqs = fresh(demand0), personaReqs = fresh(persona0);
+  const already_sent = (fan0.requests.length - fan.requests.length) + (demand0.length - demandReqs.length) + (persona0.length - personaReqs.length);
   // F2's money ceiling: the run's measured DataForSEO money (every part, AI Metrics' vis_row) plus each option's estimate
   const ceiling = Number(p.ceiling_dfs_usd) || 0; let spent = Number((m.vis_row || {}).cost_usd) || 0; const left = []; const sent = { demand: 0, fanout: 0, persona: 0 };
   for (const [kind, reqs] of [['demand', demandReqs], ['fanout', fan.requests], ['persona', personaReqs]]) {
     const est = reqs.reduce((t, r) => t + (Number(r.est_cost) || 0), 0);
     if (!reqs.length) continue;
     if (ceiling > 0 && spent + est > ceiling + 1e-9) { left.push(kind + ' (' + reqs.length + ' request(s), about $' + est.toFixed(2) + ')'); continue; }
-    spent += est; sent[kind] = reqs.length; for (const r of reqs) out.push({ json: { ...r, run_id: p.run_id } }); }
-  extras_plan[p.site_id] = { run_id: p.run_id, top, fanout_from_reading_today: Object.keys(fan.hits).length, sent, options: o,
-    ceiling_note: left.length ? 'Not asked this run, to stay under the run\'s DataForSEO ceiling of $' + ceiling.toFixed(2) + ': ' + left.join('; ') + '.' : '' };
+    spent += est; sent[kind] = reqs.length; for (const r of reqs) out.push({ json: { ...r, run_id: p.run_id, xkey: AIX.extraKey(r) } }); }
+  extras_plan[p.site_id] = { run_id: p.run_id, top, fanout_from_reading_today: Object.keys(fan.hits).length, sent, options: o, already_sent, recorded: [...recorded],
+    ceiling_note: left.length ? 'Not asked this run, to stay under the run\'s DataForSEO ceiling of $' + ceiling.toFixed(2) + ': ' + left.join('; ') + '.' : '',
+    resend_note: already_sent ? already_sent + ' option request(s) were sent by an earlier attempt of this run that stopped before their answers were kept; they are not sent again (that would pay twice), and the figures they feed count only what came back.' : '' };
 }
 if (!out.length) return [{ json: { skip: true, extras_plan, reason: Object.keys(extras_plan).length ? 'no option asks a paid request this run (or every fan-out search was read earlier today)' : 'no site finishes its run here' } }];
 out[0].json.extras_plan = extras_plan;

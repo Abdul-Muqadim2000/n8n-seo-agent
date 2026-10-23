@@ -29,13 +29,17 @@ const w2Sections = (m) => { let h = ''; const S = m.sov, SE = m.sentiment, IM = 
     const nb = S.named_of_branded || {}, na = S.named_rate_all || {}, mp = S.mean_norm_position || {};
     h += p_('Named in ' + (na.rate == null ? '—' : na.rate + '%') + ' of all ' + n(na.n) + ' answers' + (na.lo != null ? ' (' + na.lo + '–' + na.hi + '%)' : '') + ', and in ' + (nb.rate == null ? '—' : nb.rate + '%') + ' of the ' + n(nb.n) + ' answers that named any business' + (nb.lo != null ? ' (' + nb.lo + '–' + nb.hi + '%)' : '') + '.'
       + (mp.value != null ? ' Place in the list when named: ' + mp.value + ' on a 0-1 scale (1 = named first, 0 = named last; ' + n(mp.n) + ' answers' + (mp.lo != null ? ', 95% range ' + mp.lo + '–' + mp.hi : '') + ').' : '')); }
-  if (SE) { h += h3('How AI speaks of you, aspect by aspect');
+  if (SE) { h += h3('How AI speaks of you, aspect by aspect' + (SE.validated ? '' : ' (early reading, not validated)'));   // R-E4
     if (SE.withheld) h += p_(esc(SE.note) + (SE.unread_note ? ' ' + esc(SE.unread_note) : ''), true);
     else { h += p_(esc(SE.note) + (SE.unread_note ? ' ' + esc(SE.unread_note) : ''));
       h += table(['Aspect', 'Positive', 'Neutral', 'Negative', 'Net (answers)'], (SE.by_aspect || []).map(a => [esc(a.aspect), n(a.pos), n(a.neu), n(a.neg), (a.net == null ? 'too few' : w2pm(a.net)) + muted(n(a.n) + ' answers')]), 'no aspect judged');
-      if ((SE.objections || []).length) h += p_('<b>What would make a buyer hesitate</b>: ' + SE.objections.map(o => esc(o.text) + ' (' + o.n + ')').join('; ') + '.');
+      // R-E4: phrases the reader picked out, quoted from answers we do not control - never a bold finding, and no action is drawn from them
+      if ((SE.objections || []).length) h += p_('Phrases the reader picked out where an answer might make a buyer hesitate (' + esc(SE.objections_note || 'not a finding') + '): ' + SE.objections.map(o => '"' + esc(o.text) + '" (' + o.n + ')').join('; ') + '.', true);
       if ((SE.by_rival || []).filter(r => r.net != null).length) h += p_('How the same answers speak of your competitors: ' + SE.by_rival.filter(r => r.net != null).map(r => esc(r.id) + ' ' + w2pm(r.net) + ' (' + r.n + ' answers)').join(', ') + '.', true); }
-    h += p_('Method: ' + esc(SE.method) + '. ' + esc((SE.kappa || {}).note || '') + (SE.model_vs_rules ? ' This run the model and the rule reader agreed on ' + SE.model_vs_rules.agreement + '% of ' + SE.model_vs_rules.n + ' answers.' : ''), true); }
+    // R-E9: the reader's money is bounded by its call cap: the modelled price a call, and the worst case (every call at its full answer, retried once)
+    const FX = AIP.FIXED; const capUsd = (FX.sentiment_calls_max * FX.sentiment_call_ai).toFixed(2), worstUsd = (FX.sentiment_calls_max * FX.sentiment_tries * FX.sentiment_call_worst).toFixed(2);
+    h += p_('Method: ' + esc(SE.method) + '. ' + esc((SE.kappa || {}).note || '') + (SE.model_vs_rules ? ' This run the model and the rule reader agreed on ' + SE.model_vs_rules.agreement + '% of ' + SE.model_vs_rules.n + ' answers.' : '')
+      + ' Cost: at most ' + FX.sentiment_calls_max + ' calls a run, about $' + FX.sentiment_call_ai.toFixed(2) + ' a call (about $' + capUsd + ' at the cap; never more than $' + worstUsd + ', every call at its longest answer and retried once).', true); }
   if (IM.length) { h += h3('Did your actions work?');
     h += p_('Each action is compared with similar questions it did not target, 28 days before and after (difference in differences). "Likely helped" means its questions rose more than the others beyond the 95% range; it is a correlation, never proof of cause.', true);
     h += table(['Action', 'Its questions: before → after', 'Others: before → after', 'Difference (95% range)', 'Verdict'], IM.map(a => [esc(a.label || a.action_id) + muted(esc(a.kind) + ' · ' + String(a.at).slice(0, 10) + ' · ' + a.days_after + ' days after'),

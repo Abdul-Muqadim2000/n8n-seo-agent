@@ -280,6 +280,15 @@ if (MI.ai_pulse_per_week !== undefined) monitor_input.ai_pulse_per_week = parseI
 if (MI.ai_pages_month !== undefined) monitor_input.ai_pages_month = Math.min(8, Math.max(0, parseInt(MI.ai_pages_month, 10) || 0));   // v4.12: AI answer / refresh pages a month
 if (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));
 if (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');
+// W2-FIX (2026-10-23, section 149): the owner's W2-E3 AI options reach "Track my site" too (only Site Admin `monitors` could set them before)
+for (const k of ['ai_claude_weekly', 'ai_persona_context', 'ai_demand_market']) if (MI[k] !== undefined && MI[k] !== null && MI[k] !== '') monitor_input[k] = MI[k] === true || /^(true|1|yes|on)$/i.test(String(MI[k]));
+if (MI.ai_pulse_engines !== undefined && MI.ai_pulse_engines !== null) monitor_input.ai_pulse_engines = asArray(MI.ai_pulse_engines).map(e => String(e).toLowerCase().trim().replace(/[\s-]+/g, '_')).filter(e => ['chatgpt', 'gemini', 'ai_mode', 'copilot', 'perplexity', 'ai_overview'].includes(e)).join(', ');
+if (MI.ai_fanout_check !== undefined && MI.ai_fanout_check !== null && MI.ai_fanout_check !== '') monitor_input.ai_fanout_check = Math.min(200, Math.max(0, parseInt(MI.ai_fanout_check, 10) || 0));
+// W2-FIX (section 149): the web app's quote of the website's whole AI panel (an on-demand AI visibility check), so the front door reserves it
+const __PQ = (p2.panel_quote && typeof p2.panel_quote === 'object') ? p2.panel_quote : {};
+const __pq = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(150, +n.toFixed(4)) : 0; };
+const panel_quote_dfs_usd = mode === 'ai_visibility' ? __pq(__PQ.dfs_usd) : 0, panel_quote_ai_usd = mode === 'ai_visibility' ? __pq(__PQ.ai_usd) : 0;
+const panel_quote_panel = mode === 'ai_visibility' && Number(__PQ.panel) > 0 ? Math.min(500, Math.round(Number(__PQ.panel))) : 0;
 const topics = asArray(p2.topics || lab('Main services or products (optional)')).map(x => String(x).trim().toLowerCase()).filter(x => x.length >= 3).slice(0, 6);
 const crawlRaw = String(p2.crawl_pages || pick(p2, 'pages to crawl') || '').match(/\d+/);
 const crawl_pages = crawlRaw ? Math.min(1000, Math.max(50, parseInt(crawlRaw[0], 10))) : CONFIG.crawl_max_pages;
@@ -449,6 +458,7 @@ return [{
     // F-L (2026-10-18): the Audit Scheduler's ran-late notice, kept for a scheduled request only (a caller cannot label its own run late)
     ran_late: (!!p2.scheduled && p2.ran_late && typeof p2.ran_late === 'object' && p2.ran_late.late === true) ? { late: true, via: String(p2.ran_late.via || ''), due: String(p2.ran_late.due || ''), started_at: String(p2.ran_late.started_at || ''), late_min: Number(p2.ran_late.late_min) || 0, kind: String(p2.ran_late.kind || ''), why: String(p2.ran_late.why || '').slice(0, 300), text: String(p2.ran_late.text || '').slice(0, 600) } : null,
     monitor_input,
+    panel_quote_dfs_usd, panel_quote_ai_usd, panel_quote_panel,
     topics,
     free_only: mode === 'backlinks' && /^(true|1|yes|on)$/i.test(String(p2.free_only ?? '')),
     qa_max_rounds: CONFIG.qa_max_rounds,

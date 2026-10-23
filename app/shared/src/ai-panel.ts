@@ -24,8 +24,10 @@ export const AI_PANEL_LIMITS = {
 export const AI_PANEL_FIXED = {
   weekly_ai_min: 0.13, brief_ai: 0.03, analyst_job_ai: 0.02, analyst_per_job: 12, analyst_share: 0.35, analyst_cap_base: 24, analyst_cap_max: 60,
   full_dfs: 0.45, full_ai: 0.3, weeks_per_month: 4.33, pulse_days: 6,
-  // W2-E2's Sentiment Reader (AIP.FIXED): 20 named answers a call, at most 40 calls a run, ~$0.012 a call; 50% of answers assumed named (an upper bound)
-  sentiment_named_rate: 0.5, sentiment_per_call: 20, sentiment_calls_max: 40, sentiment_call_ai: 0.012,
+  // W2-E2's Sentiment Reader (AIP.FIXED): 20 named answers a call, at most 40 calls a run; 50% of answers assumed named (an upper bound).
+  // R-E9 (2026-10-23): ~$0.02 a call (was $0.012: ~6k tokens in at Haiku 4.5's $1/M + 2-3k out at $5/M); the worst case a run can spend is
+  // calls_max x tries (the agent's retry) x sentiment_call_worst (6k in + 4k out)
+  sentiment_named_rate: 0.5, sentiment_per_call: 20, sentiment_calls_max: 40, sentiment_call_ai: 0.02, sentiment_call_worst: 0.026, sentiment_tries: 2,
 } as const;
 /** The Sentiment Reader's calls and Claude money for a run of `answers` answers (AIP.sentimentOf). */
 export function aiSentimentOf(answers: number): { named: number; calls: number; ai: number } {

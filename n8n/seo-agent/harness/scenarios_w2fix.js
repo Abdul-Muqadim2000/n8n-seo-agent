@@ -63,8 +63,8 @@ module.exports = async (ctx) => {
     const W = readJson(path.join(__dirname, 'w2e1_wiring.json')); const t = W['Trim Old Units'];
     const conds = (x) => ((x && x.filters && x.filters.conditions) || []).map(c => c.keyName + ' ' + c.condition + ' ' + String(c.keyValue).replace(/\s+/g, ''));
     check('an UPDATE of units_json to "" (nothing else) on this site\'s rows aged 70-120 days, once a run, never failing it', t && t.operation === 'update' && JSON.stringify(t.values) === JSON.stringify({ units_json: '' }) && t.executeOnce === true && t.onError === 'continueRegularOutput'
-      && conds(t).some(c => /^site_id like .*ManualRun/.test(c)) && conds(t).some(c => /^checked_at lt .*Date\.now\(\)-70\*864e5/.test(c)) && conds(t).some(c => /^checked_at gte .*Date\.now\(\)-120\*864e5/.test(c)) && conds(t).length === 3, JSON.stringify(t));
-    check('it runs after the answers\' own trim (so after the week\'s row and the run\'s done state are saved) and before the question state', t && t.from.join() === 'Trim Old Answer Text' && t.to.join() === 'Prompt State Rows', JSON.stringify(t && [t.from, t.to]));
+      && conds(t).some(c => /^site_id .*ManualRun.*=== '%' \? 'like' : 'eq'/.test(c)) && conds(t).some(c => /^units_json isNotEmpty/.test(c))   /* R-E2 exact site, R-E7 only rows not trimmed yet */ && conds(t).some(c => /^checked_at lt .*Date\.now\(\)-70\*864e5/.test(c)) && conds(t).some(c => /^checked_at gte .*Date\.now\(\)-120\*864e5/.test(c)) && conds(t).length === 4, JSON.stringify(t));
+    check('it runs after the answers\' own trim (so after the week\'s row and the run\'s done state are saved) and before the question state', t && t.from.join() === 'Trimmed (AI)' && t.to.join() === 'Trimmed Units (AI)', JSON.stringify(t && [t.from, t.to]));
     const WR = readJson(path.join(__dirname, 'w2e3_wiring.json'))['SEO_Agent_AI_Visibility.json'];
     check('the table is seo_ai_visibility', WR.dt['Trim Old Units'] && WR.dt['Trim Old Units'].table === 'seo_ai_visibility' && WR.dt['Trim Old Units'].operation === 'update', JSON.stringify(WR.dt['Trim Old Units']));
     const lv = ((WR.dt['Load AI Visibility'] || {}).filters || {}).conditions || [];
