@@ -1086,7 +1086,8 @@ await guard('ai visibility', async () => {
   const VIS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompts', 'answers', 'mention_rate', 'citation_rate', 'share_of_voice', 'avg_rank', 'aio_presence', 'aio_citation_rate', 'engines_json', 'competitors_json', 'sources_json', 'pages_json', 'gaps_json', 'market_json', 'market_month', 'cost_usd', 'alerts',
     'run_kind', 'samples', 'visibility_score', 'mention_lo', 'mention_hi', 'sentiment_score', 'accuracy_issues', 'ai_sessions', 'ai_conversions', 'ai_revenue', 'index_sov', 'ai_impressions', 'perception_json', 'traffic_json', 'access_json', 'index_json', 'clusters_json', 'rival_sources_json',
     'segments_json', 'panel_json', 'chunks',   // G6 (2026-10-18): the segments, the panel asked, the executions a run took
-    'rule_version', 'named_rate', 'avg_position', 'first_rate', 'pos_visibility', 'rate_period', 'compare_json', 'metrics_json'];   // F1b (2026-10-23)
+    'rule_version', 'named_rate', 'avg_position', 'first_rate', 'pos_visibility', 'rate_period', 'compare_json', 'metrics_json',   // F1b (2026-10-23)
+    'ci_json', 'sov_json', 'sentiment_json', 'impact_json', 'alerts_rules_json', 'units_json'];   // W2-E2 (2026-10-23)
   const PRC =['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at', 'persona', 'market', 'pinned', 'fit_note', 'keyword_source'];   // G6: + persona, market, pinned, fit_note; F2 (E9): + keyword_source
   const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note',
     'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];   // v4.10 columns kept by the AI tracker since v4.12; drafted_at since P34-1
@@ -4930,7 +4931,7 @@ await guard('retries, AI data, sister domains and the fact base', async () => {
   check('G1: every external HTTP node of every generated workflow retries 3 times, 5 s apart (the rule lives in retry_lint.py and is set in every builder)', Object.keys(RW.workflows).length >= 19 && !broken.length && RW.rule.maxTries === 3 && RW.rule.waitBetweenTries === 5000, broken.join(' | '));
   check('G1 / D23: the Ahrefs DR lookup is retried after a network error (one EAI_AGAIN lost it live), and so are the free sources, Bing, the linking pages and the PDF renderer', ['Fetch DR', 'Fetch Sources', 'Fetch Bing', 'Fetch Linking Pages', 'Fetch Contacts', 'Render PDF BL'].every(nm => keepsRule(httpNode('SEO Agent — Backlink Monitor', nm))), JSON.stringify(['Fetch DR', 'Fetch Sources', 'Fetch Bing', 'Fetch Linking Pages', 'Fetch Contacts', 'Render PDF BL'].map(nm => nm + ':' + JSON.stringify(httpNode('SEO Agent — Backlink Monitor', nm)))));
   check('G1: the nodes inherited from v3 keep the same rule (the DataForSEO reads, PageSpeed, RDAP, the probes, the Gotenberg renders)', ['Keyword Data', 'Find Competitors', 'PageSpeed', 'RDAP Lookup', 'Run Probes', 'Render PDF Report', 'Read Website', 'SERP Top 10 (Retry)'].every(nm => { const x = httpNode('SEO Agent v4', nm); return x && (x.per_item ? perItemOk(x) : keepsRule(x)); }), JSON.stringify(['Keyword Data', 'PageSpeed', 'RDAP Lookup', 'SERP Top 10 (Retry)'].map(nm => nm + ':' + JSON.stringify(httpNode('SEO Agent v4', nm)))));
-  check('G1: the allow-list holds only what is not idempotent — the report callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 12 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft') && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false, JSON.stringify(Object.keys(RW.allow)));
+  check('G1: the allow-list holds only what is not idempotent — the report callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 13 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft') && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false, JSON.stringify(Object.keys(RW.allow)));
   check('G1: the lint bites — it flags an HTTP node with no retry and one with a weaker retry, honours its allow-list and leaves other node types alone (self-test run by build_v4.py section 37)', RW.selftest.flags_node_without_retry === true && RW.selftest.flags_weaker_retry === true && RW.selftest.honours_allow_list === true && RW.selftest.ignores_other_nodes === true, JSON.stringify(RW.selftest));
   const GATE = ['Run AI Requests', 'AI Retry Requests', 'Any AI Retries?', 'Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers', 'Parse AI Answers'];
   // B-A10 (2026-10-15): a workflow records as many gate chains as it has DataForSEO calls now (the AI Visibility Tracker also
@@ -9620,7 +9621,7 @@ await guard('R17 R28 R29 ledger order, money and secrets', async () => {
     JSON.stringify(LW.assess.settle_values));
 
   // ---------- 4. R17: what the build proved about every scheduled workflow ----------
-  const MON = Object.keys(LO.monitors).sort();
+  const MON = Object.keys(LO.monitors).filter(w => !/AI Repeat Pilot/.test(w)).sort();   // W2-E2 (2026-10-23): the AI Repeat Pilot keeps a ledger row too, but it is on demand only (never scheduled) - its own scenario W2E2-PILOT
   // R32 (2026-10-14, section 59): Page Watch joined them — free today (25 plain GETs), and the one workflow the guard and the day's
   // reconciliation could not see at all.
   check('R17: all ten scheduled workflows are covered — the AI Visibility Tracker, the AI Pulse, AI Growth, the Backlink Monitor, the Audit Scheduler, the Link Builder, the Rank Tracker, the Site Tracker, the Content Cadence and Page Watch',
@@ -10101,14 +10102,14 @@ await guard('R31 R32 R33 the money a run reports is the money that happened', as
     mixedRow.est_usd === 0.05 && mixedRow.dfs_est_usd === 0.05 && /1 free-only site\(s\)/.test(mixedRow.cost_basis), JSON.stringify(mixedRow));
 
   // ---------- 4. what the build proved about the schedules (the three "also seen" items of the live check) ----------
-  const MON69 = Object.keys(CT.monitors).filter(w => !/Reply Reader/.test(w)).sort();   // W3-F: the Reply Reader calls no DataForSEO, so its two balance probes are no-ops (own scenario S177)
+  const MON69 = Object.keys(CT.monitors).filter(w => !/Reply Reader|AI Repeat Pilot/.test(w)).sort();   // W2-E2: the on-demand pilot is not a schedule   // W3-F: the Reply Reader calls no DataForSEO, so its two balance probes are no-ops (own scenario S177)
   check('R32: all ten scheduled workflows take the free `appendix/user_data` reading on their own ledger chain — until now only main-workflow runs did, so the monitors (where most of the DataForSEO money goes) reconciled against nothing',
     MON69.length === 10 && MON69.every(w => CT.monitors[w].balance === 'DFS Balance (' + CT.monitors[w].tag + ')'),
     JSON.stringify(MON69.map(w => CT.monitors[w].balance)));
   check('R31: every one of them settles through the shared cost kit and knows its own Claude nodes (eight across the ten workflows)',
     MON69.every(w => Array.isArray(CT.monitors[w].ai_nodes))
-    && MON69.reduce((s, w) => s + CT.monitors[w].ai_nodes.length, 0) === 8
-    && eq(CT.monitors['SEO Agent — AI Visibility Tracker'].ai_nodes, ['AI Brief', 'Answer Analyst', 'Prompt Writer']),
+    && MON69.reduce((s, w) => s + CT.monitors[w].ai_nodes.length, 0) === 9   // W2-E2 (2026-10-23): + the Sentiment Reader
+    && eq(CT.monitors['SEO Agent — AI Visibility Tracker'].ai_nodes, ['AI Brief', 'Answer Analyst', 'Prompt Writer', 'Sentiment Reader']),
     JSON.stringify(MON69.map(w => [w, CT.monitors[w].ai_nodes])));
   check('R31: no branch of a scheduled run can finish without settling its row any more — every "Nothing To Do" end feeds the settle, so a row left `reserved` means a run that crashed, which is what Release Stale Runs is for',
     eq(CT.open_ends, []) && MON69.every(w => CT.monitors[w].settle_from.length >= 1)
@@ -10747,7 +10748,7 @@ await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrenc
     && first74.next_attempt_at > new Date().toISOString() && eq(Object.keys(first74), TC74.OPS_ALERTS), JSON.stringify(Object.keys(first74)));
 
   // ---------- 8. the wiring: every scheduled workflow sweeps, and the Page Watch records its own delivery ----------
-  const MON74 = Object.keys(WIRE74.monitors).sort();
+  const MON74 = Object.keys(WIRE74.monitors).filter(w => !/AI Repeat Pilot/.test(w)).sort();   // W2-E2 (2026-10-23): the AI Repeat Pilot keeps a ledger row too, but it is on demand only (never scheduled) - its own scenario W2E2-PILOT
   check('B-A7: all ten scheduled workflows end by sweeping the alerts nobody has — that is the retry\'s schedule: Page Watch daily at 05:45, the AI Pulse daily at 06:30, the weekly jobs and the monthly audit in each website\'s own cycle (2026-10-19; it was six on Monday morning and the audit on the 1st)',
     MON74.length === 11 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch', 'Reply Reader']   // W3-F
       .every(n => MON74.some(m => m.endsWith(n))), JSON.stringify(MON74));
@@ -12431,11 +12432,11 @@ await guard('B-A10 — a failure inside an HTTP 200 is asked again once, counted
     deadCrawl[0].json.is_retry === true && deadCrawl[0].json.retry_of === 0, JSON.stringify(deadCrawl[0].json));
 
   // ---------- 5. the ratchet: every DataForSEO call in every workflow is gated, or excused IN WRITING ----------
-  const wfs = Object.keys(IN200);
+  const wfs = Object.keys(IN200);   // W2-E2 (2026-10-23): 13 with the AI Repeat Pilot (its AI requests behind the same retry gate)
   const totals = wfs.reduce((a, w) => ({ gated: a.gated + IN200[w].gated.length, ungated: a.ungated + IN200[w].ungated.length }), { gated: 0, ungated: 0 });
   console.log('   in-200 ratchet ->', wfs.length, 'workflows,', totals.gated, 'gated,', totals.ungated, 'on the ratchet');
   check('B-A10: the ratchet covers all twelve workflows that call DataForSEO, not the main one alone — that hole is how ten `DFS Balance End` nodes had slipped in ungated and unmeasured',
-    wfs.length === 12 && totals.gated >= 70, JSON.stringify({ workflows: wfs.length, ...totals }));
+    wfs.length === 13 && totals.gated >= 70, JSON.stringify({ workflows: wfs.length, ...totals }));
   check('B-A10: not one node is left on the ratchet without a reason written beside it — an excused node is a decision, and a decision with no reason cannot be told from a debt nobody got to',
     wfs.every(w => IN200[w].ungated.every(n => String((IN200[w].excused || {})[n] || '').length > 80)),
     JSON.stringify(wfs.flatMap(w => IN200[w].ungated.filter(n => !(IN200[w].excused || {})[n]).map(n => w + ' / ' + n))));
@@ -12628,7 +12629,7 @@ await guard('B-F1 the Sonnet half, and B-A11 three nodes that advised from what 
   const gapRows = Object.entries(CC86).filter(([, r]) => !r.counted);
   // R82 (2026-10-16, agent A9, build section 104): Site Brief is counted now — nineteen counted, three left (the Reply Reader, the Keyword Check's two)
   check('B-F1 / B-C2 / R82: every Claude agent in every generated workflow is either counted on its main path or carries the reason it is not — eleven were counted here, seven more by B-C2, Site Brief by R82, the Reply Reader by W3-F, two are left',
-    Object.keys(CC86).length === 22 && Object.values(CC86).filter(r => r.counted).length === 20
+    Object.keys(CC86).length === 23 && Object.values(CC86).filter(r => r.counted).length === 21   // W2-E2 (2026-10-23): + the Sentiment Reader, counted on its main path
     && gapRows.length === 2 && gapRows.every(([, r]) => /^NOT counted/.test(r.why_not) && /Proved by _b84_checks/.test(r.why_not)),
     JSON.stringify({ total: Object.keys(CC86).length, counted: Object.values(CC86).filter(r => r.counted).length, gap: gapRows.map(([k]) => k) }));
   check('B-F1: and nothing in the main workflow — the one this pass covered — was left behind',
@@ -13937,6 +13938,7 @@ await guard('B-C2 a monitor settles what it measured, not what it reserved', asy
   const TOK94 = {
     'Prompt Writer': { in: [5200, 4700], out: [1400, 1250] },
     'Answer Analyst': { in: [9100, 8600], out: [1900, 1700] },
+    'Sentiment Reader': { in: [5600, 5100], out: [1300, 1150] },   // W2-E2 (2026-10-23)
     'AI Brief': { in: [3400, 3100], out: [1100, 980] },
     'Link Analyst': { in: [4200, 3800], out: [900, 800] },
     'Outreach Writer': { in: [3600, 3300], out: [1500, 1350] },
@@ -14003,8 +14005,9 @@ await guard('B-C2 a monitor settles what it measured, not what it reserved', asy
       JSON.stringify({ measured: after.ai_measured_usd, think: after.ai_think_usd, usd: after.ai_usd }));
   }
   check('B-C2: all SEVEN agents of the six scheduled workflows go from 0% measured to the majority of their money measured — and none of them reaches 100%, because every one is a Sonnet node with a thinking budget no counter can see',
-    Object.keys(shares94).length === 7 && Object.keys(TOK94).length === 7
-    && Object.values(shares94).every(([b, a]) => b === 0 && a > 50 && a < 100)
+    // W2-E2 (2026-10-23): + the Sentiment Reader, a Haiku node with no thinking budget - every token of it is counted, so it reaches 100%
+    Object.keys(shares94).length === 8 && Object.keys(TOK94).length === 8
+    && Object.entries(shares94).every(([k, [b, a]]) => b === 0 && a > 50 && (k === 'Sentiment Reader' ? a === 100 : a < 100))
     && new Set(Object.values(shares94).map(([, a]) => a)).size >= 5, JSON.stringify(shares94));
 
   // ---------- 2. the arithmetic: two sites, two counts, summed — and a run whose counts are a model of nothing ----------
@@ -14081,7 +14084,7 @@ await guard('B-C2 a monitor settles what it measured, not what it reserved', asy
   console.log('   still on the reservation ->', JSON.stringify(gap94.map(([k]) => k)));
   // R82 (2026-10-16, agent A9): Site Brief left this list — nineteen counted, three left in two workflows, each workflow with its own reason
   check('B-C2 / R82: nineteen of the engine\'s twenty-two Claude agents are counted; the three that are not are named, and the two workflows they sit in give different reasons',
-    Object.values(CC94).filter(r => r.counted).length === 20 && gap94.length === 2   // W3-F: the Reply Reader is counted - only the Keyword Check's two are left
+    Object.values(CC94).filter(r => r.counted).length === 21 && gap94.length === 2   // W2-E2: + the Sentiment Reader. W3-F: the Reply Reader is counted - only the Keyword Check's two are left
     && new Set(gap94.map(([k]) => k.split(' / ')[0])).size === 1
     && new Set(gap94.map(([, r]) => r.why_not)).size === 1, JSON.stringify(gap94.map(([k, r]) => [k, r.why_not.slice(0, 40)])));
   check('B-C2 / W3-F: the Reply Reader left the gap - it has a run-ledger row to count into, and its Haiku call is counted on the main path',
@@ -15984,7 +15987,7 @@ await guard('S115 R116 R96 — a refused on-demand monitor tells its caller, and
     sched.run_refused === true && quiet.skip === true, JSON.stringify(quiet));
   // ---------- the wiring of all ten: the refusal ends at its own callback, never at the balance read or the settle ----------
   const W = require('./alert_retry_wiring.json');
-  const MON = Object.keys(W.monitors).filter(w => !/Reply Reader/.test(w)).sort();   // W3-F: the Reply Reader's gate is off (a caller is waiting) - own scenario S177
+  const MON = Object.keys(W.monitors).filter(w => !/Reply Reader|AI Repeat Pilot/.test(w)).sort();   // W2-E2: the on-demand pilot has its own scenario. W3-F: the Reply Reader's gate is off (a caller is waiting) - own scenario S177
   const bad = MON.filter(w => { const g = W.monitors[w].guard || {}; const p = g.refusal_path;
     return !Array.isArray(p) || !p.includes(g.notice) || !p.includes(g.post) || p.some(n => /^DFS Balance|^Load Run Ledger|^Ledger Settle|^Settle Run Ledger|^Ensure Ops Alerts/.test(n)) || g.post_max_tries !== 3; });
   console.log('   refusal path (BL) ->', JSON.stringify((W.monitors['SEO Agent — Backlink Monitor'].guard || {}).refusal_path));
@@ -18484,7 +18487,9 @@ await guard('S164 B8-9 the tested alerts of one run share one Holm correction', 
   console.log('   family ->', JSON.stringify({ method: MT.method, m: MT.tests, alpha: MT.alpha, thr: MT.threshold_p, z: MT.threshold_z, res: (MT.results || []).map(r => [r.id, r.p, r.threshold_p, r.reject]) }));
   console.log('   alerts ->', JSON.stringify(X.alerts.map(a => a.text.slice(0, 110))));
   check('B8-9: the family is the three tested alerts of this run (the mention drop and the two engine drops), corrected by Holm at 5% family-wise', MT.method === 'holm' && MT.tests === 3 && MT.alpha === 0.05 && (MT.results || []).length === 3, JSON.stringify(MT));
-  check('B8-9: each of them clears 95% on its own - that is why a quiet week used to raise them', X.metrics.tests && X.metrics.tests.mention_rate.z <= -1.96 && (MT.results || []).length === 3 && (MT.results || []).every(r => r.p < 0.05), JSON.stringify((MT.results || []).map(r => r.p)));
+  // W2-E2 (2026-10-23): the mention test now counts answers to one question as one cluster; on this fixture's clustered answers it is p 0.16 on its
+  // own (z_unclustered keeps the old independent-answers z, -2.10). The two engine drops still clear 95% alone, and Holm still holds all three.
+  check('B8-9: each of them clears 95% on its own - that is why a quiet week used to raise them (the mention drop on the old, unclustered test)', X.metrics.tests && X.metrics.tests.mention_rate.z_unclustered <= -1.96 && (MT.results || []).length === 3 && (MT.results || []).filter(r => r.id !== 'mention_rate').every(r => r.p < 0.05), JSON.stringify((MT.results || []).map(r => r.p)));
   check('B8-9: and none of them clears the Holm-adjusted threshold, so none is raised', (MT.results || []).length === 3 && (MT.results || []).every(r => r.reject === false) && !X.alerts.some(a => /AI mentions dropped|no longer cites|cites your pages less/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text)));
   check('B8-9: the adjusted threshold is stated in words (the strictest step: p at most 0.05 / 3)', Math.abs(MT.threshold_p - 0.05 / 3) < 1e-4 && MT.threshold_z > 2.3 && /Holm/.test(MT.note || '') && /3 tested/.test(MT.note || ''), JSON.stringify(MT));
   // a strong change in the same family still fires, and its text names the correction
@@ -19680,5 +19685,6 @@ await require('./scenarios_kwfinal')({ H, run, mock, store, guard, reset, begin 
 await require('./scenarios_ctfix2')({ H, run, mock, store, guard, reset, begin });   // CTX1-CTX7 (CT-FIX2 2026-10-22, live page exec 159): the promise check in two stages (Haiku mocked), the reworded round-1 promise, the page-type length band, the citation re-link, one slug, inbound anchors, the Word text, the judge's measured cost
 await require('./scenarios_pubdraft')({ H, run, mock, store, guard, reset, begin });   // PD1-PD3 (2026-10-23, techand.ai on production): a draft that needed edits, published by hand and reported from its report - found by its request id, leftover brackets on the live page named, no false gaps
 await require('./scenarios_f1a')({ H, run, mock, store, guard, reset, begin });   // AIENT + F1A-* (F1a 2026-10-23, ENGINE_AUDIT E3 E4 E5 E8 E10 E16): who an AI answer names - the labelled set accuracy/ai_entities.json ratcheted, one scenario per finding, the answer-row contract
+await require('./scenarios_w2e2')({ H, run, mock, store, guard, reset, begin });   // W2E2-* (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): clustered intervals + their simulation, 28-day segments, declared share of voice, sentiment set + kappa gate, difference in differences, owner rules, the repeat pilot, report lines
 H.report();
 })();

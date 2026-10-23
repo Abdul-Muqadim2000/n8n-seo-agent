@@ -84,7 +84,9 @@ module.exports = async (ctx) => {
     competitors: [{ domain: 'rival.com', mentions: 28, share: 70, named_rate: 70, sov: 70, avg_position: 1.2, cited_rate: 0, engines: { chatgpt: { named_rate: 70, sov: 70, avg_position: 1.2, cited_rate: 0 } } }], panel: { ids: o.ids || ids10 },
     stats: { v: 1, rule_version: o.rule == null ? RULE : o.rule, named: { k: 12, n: 40 }, cited: { k: 4, n: 40 }, sov: { rate: 30, se: 5, n: 40, self: 12, mentions: 40 }, position: { mean: 2, sd: 0.5, n: 12 }, score: { score: 30, half: 6, n: 40 },
       competitors: { 'rival.com': { named: 28, n: 40, sov: 70, sov_se: 5, sov_n: 40, avg_position: 1.2, position_n: 28, cited_rate: 0 } } } });
-  const weekRows = (namedK, citedK) => { const out = []; let k = 0; for (let q = 0; q < 10; q++) for (let j = 0; j < 4; j++) { out.push(row({ pid: 'q' + q, named: k < namedK, position: k % 3 === 0 ? 1 : 2, cited: k < citedK, rivals: ['rival.com'] })); k++; } return out; };
+  // W2-E2 (2026-10-23): the named answers are spread across the questions (round by round). They used to fill questions 0-5 and leave 6-9 empty -
+  // perfectly clustered - which the clustered change test reads, correctly, as ten independent questions rather than forty answers (W2E2-CI).
+  const weekRows = (namedK, citedK) => { const out = []; let k = 0; for (let j = 0; j < 4; j++) for (let q = 0; q < 10; q++) { out.push(row({ pid: 'q' + q, named: k < namedK, position: k % 3 === 0 ? 1 : 2, cited: k < citedK, rivals: ['rival.com'] })); k++; } return out; };
   const P10 = ids10.map((_, i) => prompt(i));
   await guard('F1B-3 compare_json: one comparison every reader shares, refused across a changed panel, engine set or rule', async () => {
     reset(); const SN = 'F1B-3 (A1 / E13) — compare_json: the exact shape; comparable on the same panel, engines and rule; refused (with the reason, no delta, no test) when 70% of the questions are new, an engine was added, or the earlier row was counted under another rule'; begin(SN); const check = mkCheck(SN);
