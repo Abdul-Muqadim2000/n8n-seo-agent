@@ -595,6 +595,13 @@ export const features: Feature[] = [
       'Select many questions at once to switch them off or on, pin them, give them a topic or delete them; import a keyword with each question',
       'Your own alert rules, for example "ChatGPT names us 5 points less often", with a preview of how often each would have fired on your past checks. A rule fires only on a like-for-like check and only when the change is beyond normal variation',
       'The same figures and answers through the API and to AI assistants over MCP',
+      'Ranges that allow for the answers to one question moving together, so a small panel never looks more precise than it is',
+      'Share of voice against a fixed set of brands you choose, with every other brand counted as "others", so a new rival cannot quietly shrink your share',
+      'Rates per topic, buyer role and market over the last 28 days, so a small group has enough answers to read',
+      'Did it work: for a page you published or a question you targeted, how often AI named you in the 28 days before and after, compared with similar questions nothing touched, with a range. It says "likely helped", "likely hurt" or "can\'t tell", never that it caused the change',
+      'Optional checks, each priced in credits before you switch it on: Claude every week, more assistants in the daily check, and whether you rank on Google for the searches assistants run before they answer',
+      'A one-off repeat test measures how much each assistant\'s answer changes when the same question is asked again, and how many asks a week each question needs. It is priced first and runs only when you confirm',
+      'A check you start yourself is quoted for your whole question panel with the options you switched on, and that quote is what your credits are checked against',
     ],
     steps: [
       { title: 'Build the panel', body: 'Up to 500 questions your buyers ask, by topic, buyer role, market and stage.' },

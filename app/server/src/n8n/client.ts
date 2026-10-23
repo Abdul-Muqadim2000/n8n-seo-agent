@@ -141,6 +141,20 @@ export async function linkBuilderRun(body: Record<string, unknown>): Promise<{ o
   return { ok: res.ok && json.ok !== false, requestId: json.request_id ?? null, error: json.error ?? (res.ok ? null : `n8n answered ${res.status}`) };
 }
 
+/** W2-FIX (2026-10-23): the AI repeat pilot (SEOagentAIPilAPI, answered 202 at once). Without `confirm: true` the engine only prices it and posts the
+ *  quote to the callback (stage ai_pilot_quote); with it, it runs once and posts the result (stage ai_pilot). */
+export async function aiPilotRun(body: { domain: string; confirm: boolean; callback_url: string; request_id: string }): Promise<{ ok: boolean; requestId: string | null; error: string | null }> {
+  let res: Response;
+  try {
+    res = await fetch(config.n8n.baseUrl + config.n8n.aiPilotPath, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': config.n8n.webhookKey }, body: JSON.stringify({ ...body, confirm: body.confirm === true }), signal: AbortSignal.timeout(30000) });
+  } catch (err) {
+    throw new HttpError(502, 'The SEO engine is not reachable right now (' + String((err as Error).message || err) + ')');
+  }
+  if (res.status === 404) throw new HttpError(502, 'The AI repeat pilot is not active in the SEO engine yet (SEOagentAIPilAPI).');
+  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; request_id?: string; error?: string };
+  return { ok: res.ok && json.ok !== false, requestId: json.request_id ?? null, error: json.error ?? (res.ok ? null : `n8n answered ${res.status}`) };
+}
+
 export interface ReplyReading { ok: boolean; class: string; summary: string; return_date: string; referral_email: string; referral_name: string; needs_you: boolean; suggested_reply: string; /** D14: claims in the suggested answer the facts on file do not carry (already bracketed in the text) */ unverified?: string[]; link_found: boolean; link: { url: string; rel: string; anchor: string } | null; model_error?: string; error?: string }
 /** v4.13 Reply Reader (synchronous, Claude Haiku ≈ $0.001): what a reply means, a suggested answer, and our link checked on their page. */
 export async function replyRead(body: Record<string, unknown>): Promise<ReplyReading | null> {

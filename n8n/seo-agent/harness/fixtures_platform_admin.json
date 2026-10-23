@@ -1,0 +1,175 @@
+[
+  {
+    "name": "every wave-2 setting saved from the website settings",
+    "body": {
+      "domain": "northwind-erp.com",
+      "site_id": "site_northwind-erp-com",
+      "request_id": "app-monitors-fixture",
+      "action": "monitors",
+      "monitors": {
+        "ai_visibility": true,
+        "ai_engines": "chatgpt, perplexity, gemini, claude, ai_overview, ai_mode",
+        "ai_prompts_max": 50,
+        "ai_pulse": true,
+        "ai_personas": " ",
+        "ai_markets": " ",
+        "ai_pulse_mode": "auto",
+        "ai_pulse_per_week": 0,
+        "ai_growth": true,
+        "ai_pages_month": 2,
+        "backlinks": true,
+        "link_builder": true,
+        "audit_monthly": true,
+        "audit_pages": 200,
+        "audit_js": false,
+        "brand_names": " ",
+        "ai_claude_weekly": true,
+        "ai_pulse_engines": "chatgpt, perplexity, ai_overview",
+        "ai_persona_context": true,
+        "ai_fanout_check": 50,
+        "ai_sov_set": "rival.com, Other.ae",
+        "ai_alert_rules_json": "[{\"id\":\"r1\",\"metric\":\"named_rate\",\"scope\":{\"engine\":\"chatgpt\"},\"direction\":\"drop\",\"threshold_points\":5,\"enabled\":true}]",
+        "ai_demand_market": true
+      }
+    },
+    "stored": {
+      "site_id": "site_northwind-erp-com",
+      "domain": "northwind-erp.com"
+    },
+    "expect": {
+      "ai_claude_weekly": true,
+      "ai_pulse_engines": "chatgpt, perplexity, ai_overview",
+      "ai_persona_context": true,
+      "ai_fanout_check": 50,
+      "ai_sov_set": "rival.com, other.ae",
+      "ai_demand_market": true,
+      "ai_alert_rules_json": [
+        {
+          "id": "r1",
+          "metric": "named_rate",
+          "scope": {
+            "engine": "chatgpt"
+          },
+          "direction": "drop",
+          "threshold_points": 5,
+          "enabled": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "every wave-2 setting switched off or emptied",
+    "body": {
+      "domain": "northwind-erp.com",
+      "site_id": "site_northwind-erp-com",
+      "request_id": "app-monitors-fixture",
+      "action": "monitors",
+      "monitors": {
+        "ai_visibility": true,
+        "ai_engines": "chatgpt, perplexity, gemini, claude, ai_overview, ai_mode",
+        "ai_prompts_max": 50,
+        "ai_pulse": true,
+        "ai_personas": " ",
+        "ai_markets": " ",
+        "ai_pulse_mode": "auto",
+        "ai_pulse_per_week": 0,
+        "ai_growth": true,
+        "ai_pages_month": 2,
+        "backlinks": true,
+        "link_builder": true,
+        "audit_monthly": true,
+        "audit_pages": 200,
+        "audit_js": false,
+        "brand_names": " ",
+        "ai_claude_weekly": false,
+        "ai_pulse_engines": " ",
+        "ai_persona_context": false,
+        "ai_fanout_check": 0,
+        "ai_sov_set": "",
+        "ai_alert_rules_json": "[]",
+        "ai_demand_market": false
+      }
+    },
+    "stored": {
+      "site_id": "site_northwind-erp-com",
+      "domain": "northwind-erp.com",
+      "ai_claude_weekly": true,
+      "ai_pulse_engines": "chatgpt, perplexity",
+      "ai_persona_context": true,
+      "ai_fanout_check": 50,
+      "ai_sov_set": "rival.com, other.ae",
+      "ai_demand_market": true,
+      "ai_alert_rules_json": "[{\"id\":\"r1\",\"metric\":\"named_rate\",\"scope\":{\"engine\":\"chatgpt\"},\"direction\":\"drop\",\"threshold_points\":5,\"enabled\":true}]"
+    },
+    "expect": {
+      "ai_claude_weekly": false,
+      "ai_pulse_engines": "",
+      "ai_persona_context": false,
+      "ai_fanout_check": 0,
+      "ai_sov_set": "",
+      "ai_demand_market": false,
+      "ai_alert_rules_json": []
+    }
+  },
+  {
+    "name": "a save that touches none of them keeps what is stored",
+    "body": {
+      "domain": "northwind-erp.com",
+      "site_id": "site_northwind-erp-com",
+      "request_id": "app-monitors-fixture",
+      "action": "monitors",
+      "monitors": {
+        "ai_visibility": true,
+        "ai_engines": "chatgpt, perplexity, gemini, claude, ai_overview, ai_mode",
+        "ai_prompts_max": 30,
+        "ai_pulse": true,
+        "ai_personas": " ",
+        "ai_markets": " ",
+        "ai_pulse_mode": "auto",
+        "ai_pulse_per_week": 0,
+        "ai_growth": true,
+        "ai_pages_month": 2,
+        "backlinks": true,
+        "link_builder": true,
+        "audit_monthly": true,
+        "audit_pages": 200,
+        "audit_js": false,
+        "brand_names": " ",
+        "competitors": "rival.com"
+      }
+    },
+    "stored": {
+      "site_id": "site_northwind-erp-com",
+      "domain": "northwind-erp.com",
+      "ai_claude_weekly": true,
+      "ai_pulse_engines": "chatgpt, perplexity",
+      "ai_persona_context": true,
+      "ai_fanout_check": 50,
+      "ai_sov_set": "rival.com, other.ae",
+      "ai_demand_market": true,
+      "ai_alert_rules_json": "[{\"id\":\"r1\",\"metric\":\"named_rate\",\"scope\":{\"engine\":\"chatgpt\"},\"direction\":\"drop\",\"threshold_points\":5,\"enabled\":true}]"
+    },
+    "expect": {
+      "ai_claude_weekly": true,
+      "ai_pulse_engines": "chatgpt, perplexity",
+      "ai_persona_context": true,
+      "ai_fanout_check": 50,
+      "ai_sov_set": "rival.com, other.ae",
+      "ai_demand_market": true,
+      "ai_alert_rules_json": [
+        {
+          "id": "r1",
+          "metric": "named_rate",
+          "scope": {
+            "engine": "chatgpt"
+          },
+          "direction": "drop",
+          "threshold_points": 5,
+          "enabled": true
+        }
+      ],
+      "ai_prompts_max": 30,
+      "competitors": "rival.com"
+    }
+  }
+]

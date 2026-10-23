@@ -11,6 +11,7 @@ import {
   CRAWL_PAGE_OPTIONS,
   AI_PAGES_MAX,
   autopilotRows,
+  aiPanelOptionsOf,
   estimateAiPanelCost,
   estimateAiVisibilityCost,
   monitorSettingsSchema,
@@ -58,23 +59,17 @@ export function completeMonitors(m: Partial<MonitorSettings> | null | undefined)
     ...(m?.aiFanoutCheck !== undefined ? { aiFanoutCheck: m.aiFanoutCheck } : {}),
     ...(m?.aiSovSet !== undefined ? { aiSovSet: m.aiSovSet } : {}),
     ...(m?.aiAlertRules !== undefined ? { aiAlertRules: m.aiAlertRules } : {}),
+    ...(m?.aiDemandMarket !== undefined ? { aiDemandMarket: m.aiDemandMarket } : {}),
   };
 }
 
 /**
- * W2-A: the panel's cost with the wave-2 options (WAVE2_CONTRACTS.md §4). The option names are the contract's; `estimateAiPanelCost` is
- * extended by the engine-side agent (W2-E3) in shared/src/ai-panel.ts, so they are passed through a widened object: a build without
- * them prices the panel as before, and the screen says so through `wave2Priced`.
+ * W2-A: the panel's cost with the wave-2 options (WAVE2_CONTRACTS.md §4), priced by the one AI-panel formula (`estimateAiPanelCost`, the mirror
+ * of the engine's AIP.cost, W2-E3). W2-FIX (2026-10-23): the buyer roles are passed too (the persona test asks (roles + 1) x 12 answers, so it
+ * was priced at 0 without them) and the monthly market trend is included.
  */
 export function aiPanelCostWith(value: MonitorSettings) {
-  const opts: Parameters<typeof estimateAiPanelCost>[0] & { claudeWeekly?: boolean; pulseEngines?: readonly string[]; personaContext?: boolean; fanoutCheck?: number } = {
-    panel: value.aiPromptsMax, engines: value.aiEngines, pulse: value.aiPulse, pulseMode: value.aiPulseMode, pulsePerWeek: value.aiPulsePerWeek,
-    ...(value.aiClaudeWeekly !== undefined ? { claudeWeekly: value.aiClaudeWeekly } : {}),
-    ...(value.aiPulseEngines !== undefined ? { pulseEngines: value.aiPulseEngines } : {}),
-    ...(value.aiPersonaContext !== undefined ? { personaContext: value.aiPersonaContext } : {}),
-    ...(value.aiFanoutCheck !== undefined ? { fanoutCheck: value.aiFanoutCheck } : {}),
-  };
-  return estimateAiPanelCost(opts);
+  return estimateAiPanelCost({ panel: value.aiPromptsMax, engines: value.aiEngines, pulse: value.aiPulse, pulseMode: value.aiPulseMode, pulsePerWeek: value.aiPulsePerWeek, ...aiPanelOptionsOf(value) });
 }
 
 const JS_MAX_PAGES = 500;
@@ -393,6 +388,13 @@ function AiMoreOptions({ value, set, disabled }: { value: MonitorSettings; set: 
             </Select>
           )}
         </Field>
+        <Checkbox
+          label="Track how often AI names businesses in your market, month by month"
+          description={`Once a month, from a database of AI answers: how often you are named and in which answers, mentions won and lost, and the ten brands AI names most for your main topic${delta({ aiDemandMarket: !value.aiDemandMarket })}. For websites outside the US the figures come from Google's AI answers; ChatGPT data covers US-English only.`}
+          checked={!!value.aiDemandMarket}
+          disabled={disabled}
+          onChange={(e) => set({ aiDemandMarket: e.target.checked })}
+        />
         <Field label="Share of voice counted against" optional hint="A fixed set of brands keeps share of voice comparable week to week. Empty: the competitors you set." labelAction={<GuideButton id="competitors" variant="link" label="Who counts?" />}>
           {(p) => <TagInput id={p.id} describedBy={p['aria-describedby']} value={value.aiSovSet ?? []} onChange={(aiSovSet) => set({ aiSovSet })} max={12} normalize={(x) => x.trim().toLowerCase().slice(0, 120)} placeholder="A brand or domain, then Enter" />}
         </Field>

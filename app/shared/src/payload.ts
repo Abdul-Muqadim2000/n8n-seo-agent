@@ -63,7 +63,33 @@ export function monitorsBody(m: Partial<MonitorSettings>): Body {
   if (m.aiFanoutCheck !== undefined) out.ai_fanout_check = m.aiFanoutCheck;
   if (m.aiSovSet !== undefined) out.ai_sov_set = m.aiSovSet.join(', ');
   if (m.aiAlertRules !== undefined) out.ai_alert_rules_json = JSON.stringify(m.aiAlertRules);
+  if (m.aiDemandMarket !== undefined) out.ai_demand_market = m.aiDemandMarket;
   return out;
+}
+
+/**
+ * The body of Site Admin `monitors` (n8n Admin_Action.js -> Monitor_Row_Admin.js), as the website settings save it. Site Admin keeps a
+ * field it is given as '' (empty = "not given"), so a list the owner emptied is sent as a single space, which it stores as cleared: the brand
+ * names, buyer roles, extra markets and (W2-FIX 2026-10-23) the pulse's engines, which otherwise stayed on the last choice for ever. The
+ * share-of-voice set and the alert rules clear with '' and '[]' (Admin Action reads them on their own). Harness S23 / W2FIX-3 run these
+ * bodies through the engine's own code (fixtures_platform_admin.json, `npm run export:payloads`).
+ */
+export function siteAdminMonitorsBody(monitors: Partial<MonitorSettings>, competitors?: readonly string[]): Body {
+  const m = monitorsBody(monitors);
+  if (monitors.brandNames && !monitors.brandNames.length) m.brand_names = ' ';
+  if (monitors.aiPersonas && !monitors.aiPersonas.length) m.ai_personas = ' ';   // G6
+  if (monitors.aiMarkets && !monitors.aiMarkets.length) m.ai_markets = ' ';
+  if (monitors.aiPulseEngines && !monitors.aiPulseEngines.length) m.ai_pulse_engines = ' ';   // W2-FIX: back to the default pulse engines
+  return { ...m, ...(competitors ? { competitors: competitors.join(', ') || ' ' } : {}) };
+}
+
+/**
+ * W2-FIX (2026-10-23): the server's quote of an on-demand AI visibility check (the website's whole panel, aiOnDemandRunCost), sent with the
+ * run so the engine's front door reserves it rather than its flat table row (n8n build_v4.py section 149, CC.pick). US dollars.
+ */
+export function aiPanelQuoteBody(q: { dfs: number; ai: number }, panel: number): Body {
+  const r4 = (x: number) => Math.round((Number(x) || 0) * 10000) / 10000;
+  return { dfs_usd: r4(q.dfs), ai_usd: r4(q.ai), panel: Math.round(panel) };
 }
 
 /** The fixed head every body starts with (see the note above). */

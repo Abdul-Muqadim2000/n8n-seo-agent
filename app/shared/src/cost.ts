@@ -1,5 +1,6 @@
 import type { ModeId } from './constants';
-import { aiOnDemandRunUsd, estimateAiPanelCost, type AiRunPanel } from './ai-panel';
+import { aiOnDemandRunCost, aiOnDemandRunUsd, aiRunPanelOf, type AiPanelOptions, type AiRunPanel } from './ai-panel';
+import type { MonitorsRow } from './tables';
 
 /**
  * B-R3 / B-B1 (benchmark programme 2026-10-15, area 13 §3.1 and §5(b) B1): **one** cost table, not two.
@@ -209,11 +210,40 @@ export function costKeys(mode: ModeId, v: Values = {}): CostKey[] {
  * stays the fallback.
  */
 export const AI_PANEL_VALUE = 'aiPanel';
+
+/**
+ * W2-FIX (2026-10-23, app review R-A1): the panel an on-demand AI visibility check asks, read from the website's stored monitors row (n8n
+ * seo_monitors) the way the engine reads it: size (no row = 50, empty = 20), engines, and the owner's W2-E3 options with the buyer roles
+ * (a boolean column is on only when true; the fan-out count as stored). The quote, the credit check and the charge cap all come from this.
+ */
+export function aiRunPanelOfRow(r: Pick<MonitorsRow, 'ai_prompts_max' | 'ai_engines'> & Partial<Pick<MonitorsRow, 'ai_claude_weekly' | 'ai_pulse_engines' | 'ai_persona_context' | 'ai_personas' | 'ai_fanout_check' | 'ai_demand_market'>> | null): AiRunPanel {
+  if (!r) return aiRunPanelOf(null);
+  const on = (v: unknown) => v === true || /^(true|1|yes|on)$/i.test(String(v ?? ''));
+  const engines = String(r.ai_engines ?? '').split(/\s*,\s*|\n+/).map((x) => x.trim()).filter(Boolean);
+  return aiRunPanelOf({
+    aiPromptsMax: Number(r.ai_prompts_max) || null, aiEngines: engines,
+    aiClaudeWeekly: on(r.ai_claude_weekly), aiPulseEngines: String(r.ai_pulse_engines ?? ''), aiPersonaContext: on(r.ai_persona_context),
+    aiPersonas: String(r.ai_personas ?? ''), aiFanoutCheck: Number(r.ai_fanout_check) || 0, aiDemandMarket: on(r.ai_demand_market),
+  });
+}
 function aiPanelOfValues(mode: ModeId, v: Values): AiRunPanel | null {
   if (mode !== 'ai_visibility') return null;
   const p = v[AI_PANEL_VALUE] as AiRunPanel | undefined;
   if (!p || typeof p !== 'object' || !(Number(p.panel) > 0)) return null;
-  return { panel: Number(p.panel), engines: Array.isArray(p.engines) ? p.engines.map(String) : [] };
+  // W2-FIX (2026-10-23): the owner's options travel with the panel (aiRunPanelOf puts them there), so the quote and its breakdown include the
+  // persona test, the fan-out check, Claude weekly and the market trend; only the known option keys are kept
+  const o = p.options && typeof p.options === 'object' ? (p.options as AiPanelOptions) : null;
+  const options: AiPanelOptions | undefined = o
+    ? {
+        ...(o.claudeWeekly ? { claudeWeekly: true } : {}),
+        ...(o.pulseEngines != null ? { pulseEngines: Array.isArray(o.pulseEngines) ? o.pulseEngines.map(String) : String(o.pulseEngines) } : {}),
+        ...(o.personaContext ? { personaContext: true } : {}),
+        ...(o.personas != null ? { personas: Array.isArray(o.personas) ? o.personas.map(String) : typeof o.personas === 'number' ? o.personas : String(o.personas) } : {}),
+        ...(Number(o.fanoutCheck) > 0 ? { fanoutCheck: Number(o.fanoutCheck) } : {}),
+        ...(o.demandMarket ? { demandMarket: true } : {}),
+      }
+    : undefined;
+  return { panel: Number(p.panel), engines: Array.isArray(p.engines) ? p.engines.map(String) : [], ...(options && Object.keys(options).length ? { options } : {}) };
 }
 
 /**
@@ -253,7 +283,8 @@ function crawlExtra(mode: ModeId, v: Values, keys: CostKey[], cal?: EngineCalibr
 export function estimateRunCostParts(mode: ModeId, v: Values = {}, cal?: EngineCalibration | null): { ai: number; dfs: number; usd: number; keys: CostKey[] } {
   const panel = aiPanelOfValues(mode, v);
   if (panel) {
-    const f = estimateAiPanelCost({ panel: panel.panel, engines: panel.engines }).run.full;
+    // W2-FIX (2026-10-23): the same figure as estimateRunCost (aiOnDemandRunCost), the owner's options included, split into Claude and data money
+    const f = aiOnDemandRunCost(panel);
     return { ai: round(f.ai), dfs: round(f.dfs), usd: round(f.usd), keys: ['ai_visibility'] };
   }
   const keys = costKeys(mode, v);

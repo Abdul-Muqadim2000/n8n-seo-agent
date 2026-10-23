@@ -4,11 +4,12 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   adminActionSchema,
   aiImportSchema,
+  aiPilotStartSchema,
   aiPromptDeleteSchema,
   createSiteSchema,
   LINK_IMPORT_COLUMNS,
   linkImportSchema,
-  monitorsBody,
+  siteAdminMonitorsBody,
   parseLinkImport,
   n8nSiteId,
   safeJson,
@@ -20,6 +21,7 @@ import {
   type AdminResult,
   type AiGrowthRow,
   type AiImportSummary,
+  type AiPilotState,
   type AuditAction,
   type IndexNowCheck,
   type GoogleConnection,
@@ -43,6 +45,7 @@ import { assertEngineIdFree, ENGINE_ID_TAKEN } from '../services/engineSite';
 import { routeSiteToApp } from '../services/runs';
 import { fetchPublicText, verify } from '../services/verify';
 import { deleteAiPrompts, importAiReport } from '../services/aiWave2';
+import { aiPilotState, startAiPilot } from '../services/aiPilot';
 
 export function toSite(s: SiteRow): Site {
   return {
@@ -434,6 +437,23 @@ export async function siteRoutes(app: FastifyInstance) {
     return out;
   });
 
+  // ---------- W2-FIX (2026-10-23): the AI repeat pilot, priced first, started only on an explicit confirmation (services/aiPilot.ts) ----------
+  // Admins and owners only (it spends up to $4 of search data once), company-scoped through siteAccess, CSRF like every cookie POST.
+  app.get('/api/orgs/:orgId/sites/:siteId/ai/pilot', async (req): Promise<AiPilotState> => {
+    const p = req.params as P;
+    const { org, site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    return aiPilotState(org, site);
+  });
+  app.post('/api/orgs/:orgId/sites/:siteId/ai/pilot', { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async (req) => {
+    const p = req.params as P;
+    const { org, user, site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    requireVerified(site);
+    const { confirm } = parse(aiPilotStartSchema, req.body ?? {});
+    const r = await startAiPilot(org, user, site, confirm);
+    await audit(req, site.orgId, { action: confirm ? 'site.ai_pilot_run' : 'site.ai_pilot_quote', target: { type: 'site', id: site.id, label: site.domain }, details: { requestId: r.requestId, ...(r.priceUsd != null ? { priceUsd: r.priceUsd } : {}) } });
+    return { ok: true, requestId: r.requestId, confirm: r.confirm };
+  });
+
   // W2-A: delete questions from the AI panel (bulk). The engine's Site Admin only switches questions off; a delete removes the rows of
   // this domain only. Admins only, in the audit log with the count and ids (never the question texts).
   app.post('/api/orgs/:orgId/sites/:siteId/ai/prompts/delete', { config: { rateLimit: { max: 30, timeWindow: '10 minutes' } } }, async (req) => {
@@ -466,12 +486,8 @@ export async function siteRoutes(app: FastifyInstance) {
         body = { ...base, action: 'unpublish', keyword: a.keyword };
         break;
       case 'monitors': {
-        // Site Admin keeps a field when it is '' : a single space clears a list
-        const m = monitorsBody(a.monitors);
-        if (a.monitors.brandNames && !a.monitors.brandNames.length) m.brand_names = ' ';
-        if (a.monitors.aiPersonas && !a.monitors.aiPersonas.length) m.ai_personas = ' ';   // G6
-        if (a.monitors.aiMarkets && !a.monitors.aiMarkets.length) m.ai_markets = ' ';
-        body = { ...base, action: 'monitors', monitors: { ...m, ...(a.competitors ? { competitors: a.competitors.join(', ') || ' ' } : {}) } };
+        // Site Admin keeps a field when it is '' : a single space clears a list (shared siteAdminMonitorsBody, the body the harness replays)
+        body = { ...base, action: 'monitors', monitors: siteAdminMonitorsBody(a.monitors, a.competitors) };
         break;
       }
       case 'prospect':

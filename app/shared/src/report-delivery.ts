@@ -182,7 +182,7 @@ const DELIVER: DeliveryDecision = { deliver: true, reason: '', code: null };
 const hold = (code: HoldCode, reason: string): DeliveryDecision => ({ deliver: false, reason, code });
 
 /** Stages that say a run has *started*, not that a report is ready. */
-const INTERIM_STAGES = new Set(['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup', 'unknown']);
+const INTERIM_STAGES = new Set(['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup', 'ai_pilot_quote', 'unknown']);   // W2-FIX: a pilot's price is a note
 
 /**
  * R110, the stages that are themselves a report. Every weekly / monitor report node in the engine ends with `status: 'progress'`
