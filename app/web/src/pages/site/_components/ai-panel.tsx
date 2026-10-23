@@ -340,7 +340,7 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
         <Field label="Topic">{(p) => <Input {...p} value={tag} maxLength={60} onChange={(e) => setTag(e.target.value)} placeholder="e.g. payroll" />}</Field>
       </Dialog>
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete} title={`Delete ${ids.length} question${ids.length === 1 ? '' : 's'}?`}
-        description="Deleted questions are removed from the panel and no longer asked. The answers already stored stay in the history. To stop asking a question but keep it listed, switch it off instead."
+        description="Deleted questions are removed from the panel and no longer asked. The answers already stored stay in the history, and the weekly run will not suggest these questions again. Adding one back as your own question brings it back. To stop asking a question but keep it listed, switch it off instead."
         footer={<><Button variant="ghost" onClick={() => setConfirmDelete(false)}>Cancel</Button><Button variant="danger" loading={del.isPending} onClick={removeSelected}>Delete</Button></>} />
       <DataTable rows={rows} columns={columns} rowKey={(p) => p.promptId} dense pageSize={25} searchable searchPlaceholder="Search the questions" searchText={(p) => [p.prompt, p.cluster, p.persona, p.market].join(' ')}
         empty={status === 'refused' ? 'No question was refused: every question the engine wrote passed the keyword rule.' : 'No questions match these filters.'} />

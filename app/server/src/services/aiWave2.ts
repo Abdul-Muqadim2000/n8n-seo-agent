@@ -8,6 +8,8 @@ import {
   AI_IMPORT_COLUMNS,
   AI_IMPORT_MAX_ROWS,
   aiAskedSet,
+  aiPromptDeleted,
+  AI_PROMPT_DELETED,
   aiLegacySourcesList,
   aiCsvHeader,
   aiCsvLine,
@@ -33,7 +35,7 @@ import {
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { badRequest, HttpError, notFound } from '../lib/errors';
-import { deleteRows, ensureTable, insertRows, invalidateSite, siteRows } from '../n8n/client';
+import { deleteRows, ensureTable, insertRows, invalidateSite, siteRows, updateRows } from '../n8n/client';
 import { AI_READ_LIMITS, aiData, aiScopeSummary, aiRunsCompared, latestRunAnswers, promptFacets, toAiAnswer } from './data';
 
 const s = (v: unknown): string => (v == null ? '' : String(v));
@@ -167,7 +169,7 @@ async function aiCsvLines(org: OrgRow, site: SiteRow, kind: AiExportKind, filter
     };
   }
   if (kind === 'questions') {
-    const prompts = await siteRows<AiPromptRow>('aiPrompts', d, { max: AI_READ_LIMITS.prompts });
+    const prompts = (await siteRows<AiPromptRow>('aiPrompts', d, { max: AI_READ_LIMITS.prompts })).filter((p) => !aiPromptDeleted(p));   // R-A7: tombstones are not listed
     const data = await aiData(org, site, { answers: false });
     const cut = aiAskedSet(data.prompts, data.promptsMax ?? 50);
     return async function* () {
@@ -301,19 +303,38 @@ export async function aiImportsOverview(site: SiteRow): Promise<{ source: string
 // ---------------- deleting questions ----------------
 
 /**
- * W2-A: deletes questions from the panel (the engine's Site Admin can only switch them off). Only the domain's own rows go: every delete
- * is filtered by domain AND prompt id. The answers already stored keep their history; the question is no longer listed or asked.
+ * W2-A: deletes questions from the panel. Only the domain's own rows change: every write is filtered by domain AND prompt id. The answers
+ * already stored keep their history; the question is no longer listed or asked.
+ *
+ * R-A7 (review 2026-10-23): the row is KEPT as a tombstone, never removed. The engine's panel writer (Prompt_Rows.js, F2) treats every
+ * stored question of the site, whatever its status, as already there, and asks none whose status is `off` (AI Plan, Pulse Plan, Pilot
+ * Plan). A removed row let the next weekly run write the same question again as `active` and ask (and bill) it. So a delete sets
+ * `status: 'off'` with `origin: 'deleted'` (AI_PROMPT_DELETED), and the app hides those rows everywhere. Adding the same question again as
+ * the owner's own brings it back (Site Admin's add writes the same id as active).
+ * R-A16: the writes run a few at a time; the caller audits what was done even when some failed (`failed`).
  */
-export async function deleteAiPrompts(site: SiteRow, ids: string[]): Promise<number> {
-  const stored = new Set((await siteRows<AiPromptRow>('aiPrompts', site.domain, { max: AI_READ_LIMITS.prompts, fresh: true })).map((p) => s(p.prompt_id)));
+export async function deleteAiPrompts(site: SiteRow, ids: string[]): Promise<{ deleted: number; failed: string[]; ids: string[] }> {
+  const stored = new Set((await siteRows<AiPromptRow>('aiPrompts', site.domain, { max: AI_READ_LIMITS.prompts, fresh: true })).filter((p) => !aiPromptDeleted(p)).map((p) => s(p.prompt_id)));
   const mine = [...new Set(ids)].filter((id) => stored.has(id));
-  for (const id of mine)
-    await deleteRows('aiPrompts', [
-      { columnName: 'domain', condition: 'eq', value: site.domain },
-      { columnName: 'prompt_id', condition: 'eq', value: id },
-    ]);
+  const now = new Date().toISOString();
+  const done: string[] = [], failed: string[] = [];
+  for (let i = 0; i < mine.length; i += 8)
+    await Promise.all(
+      mine.slice(i, i + 8).map((id) =>
+        updateRows('aiPrompts', [{ columnName: 'domain', condition: 'eq', value: site.domain }, { columnName: 'prompt_id', condition: 'eq', value: id }], {
+          status: 'off',
+          origin: AI_PROMPT_DELETED,
+          pinned: false,
+          fit_note: `Deleted by the owner on ${now.slice(0, 10)}; kept so it is not written or asked again.`,
+          updated_at: now,
+        }).then(
+          () => void done.push(id),
+          () => void failed.push(id),
+        ),
+      ),
+    );
   invalidateSite(site.domain);
-  return mine.length;
+  return { deleted: done.length, failed, ids: done };
 }
 
 /** For tests: the per-run segment rows a filter reads (exported so a test can check one row). */

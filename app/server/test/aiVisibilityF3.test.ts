@@ -156,7 +156,7 @@ describe('A12: a deleted website takes its AI inputs and history with it', () =>
   it('deletes the monitors, the panel and the AI history of the domain, table by table', async () => {
     expect(await clearAiInEngine('techand.ai', log)).toEqual([]);
     expect(st.deleted).toEqual([...AI_TABLES_CLEARED_ON_DELETE]);
-    expect(st.deleted).toEqual(expect.arrayContaining(['monitors', 'aiPrompts', 'aiVisibility', 'aiAnswers', 'aiDaily']));
+    expect(st.deleted).toEqual(expect.arrayContaining(['monitors', 'aiPrompts', 'aiVisibility', 'aiAnswers', 'aiDaily', 'aiImports']));
   });
   it('one table failing does not stop the others', async () => {
     st.failDelete = 'aiPrompts';

@@ -111,6 +111,7 @@ import {
   aiEngineRatesOf,
   aiFilterSegment,
   aiLatestExtras,
+  aiPromptDeleted,
   aiMatchesFilter,
   aiSovOf,
   aiAnswerDetail,
@@ -1178,7 +1179,8 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     daily: aiDailySeries(days),
     promptsMax: monitorsNow ? monitorsNow.aiPromptsMax : null,
     alertRules: monitorsNow?.aiAlertRules ?? [],
-    prompts: prompts.map((p) => ({
+    // R-A7: a question the owner deleted stays in the table as a tombstone (so the engine never asks it again) and is not listed
+    prompts: prompts.filter((p) => !aiPromptDeleted(p)).map((p) => ({
       promptId: s(p.prompt_id),
       prompt: s(p.prompt),
       kind: s(p.kind),

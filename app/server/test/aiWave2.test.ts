@@ -33,7 +33,7 @@ vi.mock('../src/n8n/client', () => ({
   deleteRows: vi.fn(async (table: string, filters: unknown[]) => (st.deleted.push({ table, filters }), true)),
   insertRows: vi.fn(async (table: string, rows: Record<string, unknown>[]) => (st.inserted.push({ table, rows }), true)),
   ensureTable: vi.fn(async (table: string) => (st.ensured.push(table), 'id')),
-  invalidateSite: vi.fn(), siteAdmin: vi.fn(async () => ({ ok: true, affected: 1 })), upsertRow: vi.fn(), updateRows: vi.fn(),
+  invalidateSite: vi.fn(), siteAdmin: vi.fn(async () => ({ ok: true, affected: 1 })), upsertRow: vi.fn(), updateRows: vi.fn(async () => true),
 }));
 vi.mock('../src/services/runs', async (orig) => ({ ...(await orig<typeof import('../src/services/runs')>()), latestReport: vi.fn(async () => null), routeSiteToApp: vi.fn() }));
 vi.mock('../src/services/runCredits', async (orig) => ({ ...(await orig<typeof import('../src/services/runCredits')>()), aiChargeEntries: vi.fn(async () => []) }));
@@ -267,10 +267,32 @@ describe('AI report uploads -> seo_ai_imports', () => {
 });
 
 describe('deleting questions', () => {
-  it("deletes only ids stored for this domain, filtered by domain AND id", async () => {
+  it("R-A7: keeps a tombstone (status off, origin deleted) for ids stored for this domain, filtered by domain AND id; removes no row", async () => {
     st.tables.aiPrompts = prompts;
-    expect(await deleteAiPrompts({ domain: 'techand.ai' } as never, ['q1', 'q9', 'nope'])).toBe(1);
-    expect(st.deleted).toEqual([{ table: 'aiPrompts', filters: [{ columnName: 'domain', condition: 'eq', value: 'techand.ai' }, { columnName: 'prompt_id', condition: 'eq', value: 'q1' }] }]);
+    const client = await import('../src/n8n/client');
+    vi.mocked(client.updateRows).mockClear();
+    expect(await deleteAiPrompts({ domain: 'techand.ai' } as never, ['q1', 'q9', 'nope'])).toEqual({ deleted: 1, failed: [], ids: ['q1'] });
+    expect(st.deleted).toEqual([]);
+    const calls = vi.mocked(client.updateRows).mock.calls;
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toBe('aiPrompts');
+    expect(calls[0][1]).toEqual([{ columnName: 'domain', condition: 'eq', value: 'techand.ai' }, { columnName: 'prompt_id', condition: 'eq', value: 'q1' }]);
+    expect(calls[0][2]).toMatchObject({ status: 'off', origin: 'deleted', pinned: false });
+  });
+  it('R-A7: a tombstone is not listed on the page, and deleting it again does nothing', async () => {
+    st.tables.aiPrompts = prompts.map((p) => (p.prompt_id === 'q1' ? { ...p, status: 'off', origin: 'deleted' } : p));
+    st.tables.aiVisibility = [vis()];
+    const d = await aiData(org, site, { answers: false });
+    expect(d.prompts.map((p) => p.promptId)).not.toContain('q1');
+    expect((await deleteAiPrompts({ domain: 'techand.ai' } as never, ['q1'])).deleted).toBe(0);
+  });
+  it('R-A16: a failed write is reported, the others still go', async () => {
+    st.tables.aiPrompts = prompts;
+    const client = await import('../src/n8n/client');
+    vi.mocked(client.updateRows).mockRejectedValueOnce(new Error('n8n 500'));
+    const r = await deleteAiPrompts({ domain: 'techand.ai' } as never, ['q1', 'q2']);
+    expect(r.deleted + r.failed.length).toBe(2);
+    expect(r.failed).toHaveLength(1);
   });
 });
 
