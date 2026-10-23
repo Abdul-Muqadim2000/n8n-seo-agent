@@ -19,7 +19,7 @@ import { QuestionGrid, engineLabel } from './_components/ai';
 import { AiFilterBar, ScopePanel, useAiFilter } from './_components/ai-filter';
 import { AnswersBrowser, QuestionDialog } from './_components/ai-answers';
 import { breakMarks, EngineTrendPanel, SovTrendPanel } from './_components/ai-trends';
-import { AdsLocalPanel, AiReportsCard, CompetitorsPanel, DemandPanel, FanoutGapPanel, ImpactPanel, OurPagesPanel, PersonaEffectPanel, SentimentPanel2, ShoppingPanel, SourcesPanel2 } from './_components/ai-panels2';
+import { AdsLocalPanel, AiReportsCard, CompetitorsPanel, CopilotTruth, DemandPanel, FanoutGapPanel, ImpactPanel, OurPagesPanel, PersonaEffectPanel, SentimentPanel2, ShoppingPanel, SourcesPanel2 } from './_components/ai-panels2';
 import { AlertRulesPanel } from './_components/ai-rules';
 import { AiPilotPanel } from './_components/ai-pilot';
 import { PanelManager, SegmentsSection } from './_components/ai-panel';
@@ -303,6 +303,8 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
           <SectionHeading icon={<Bot />} title="By engine" description={`Each assistant over ${period} (the weekly run plus the daily pulse on the fast engines, when it is on). Claude is asked on the monthly full run; its result is carried between runs.`} />
           <Card className="p-4">
             <EngineTable engines={d.latest.engines} />
+            {/* R-A10: Copilot's ground truth is the owner's own Bing export whenever one is in the period (W2-E3 §4: its label is the line) */}
+            {x?.imports?.copilot && <CopilotTruth c={x.imports.copilot} />}
           </Card>
           {L && L.samples > 0 && <MeasuredPrecision run={L} engines={d.latest.engines} />}
         </section>
@@ -364,7 +366,7 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
         <AlertRulesPanel d={d} engineNames={engineNames} />
-        <AiReportsCard />
+        <AiReportsCard used={x?.imports ?? null} />
         <AiPilotPanel />
       </div>
 

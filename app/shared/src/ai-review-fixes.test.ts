@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { AI_SENTIMENT_EARLY, parseAiSentiment } from './ai-detail';
+import { AI_SENTIMENT_EARLY, parseAiImportsSummary, parseAiSentiment } from './ai-detail';
 import { aiDateColumn, aiIsDay, parseAiImport } from './ai-import';
 import { importDate, parseCsv } from './link-import';
 
@@ -58,6 +58,31 @@ describe('R-A2 sentiment: an early reading is never shown as a finding', () => {
   it('withheld stays withheld (no figure, no label of a figure)', () => {
     const s = parseAiSentiment({ n: 4, withheld: true, validated: false })!;
     expect(s).toMatchObject({ withheld: true, status: 'withheld', net: null, objections: [] });
+  });
+});
+
+describe('R-A10 imports_json in the shape the engine writes (fixes/W2-E3.md §4)', () => {
+  const engine = {
+    period: { from: '2026-09-26', to: '2026-10-23' },
+    sources: {
+      bing_ai: { rows: 3, days: { from: '2026-10-01', to: '2026-10-20' }, impressions: 40, citations: 7, clicks: 2, urls_n: 2, queries_n: 1,
+        top_urls: [{ url: 'https://techand.ai/a', impressions: 30, citations: 5, clicks: 1 }], top_queries: [{ query: 'erp uae', impressions: 40, citations: 7, clicks: 2 }],
+        files: ['bing.csv'], imported_at: '2026-10-21T10:00:00.000Z' },
+    },
+    copilot: { source: 'bing_ai', citations: 7, impressions: 40, urls_n: 2, as_of: '2026-10-20', label: 'from Bing Webmaster (your export of 2026-10-20)', note: 'n' },
+    note: 'Your uploaded reports, 2026-09-26 to 2026-10-23: Bing AI Performance (3 rows)',
+  };
+  it('days, period and the Copilot line are read (they were blank / dropped)', () => {
+    const p = parseAiImportsSummary(JSON.stringify(engine))!;
+    expect(p.period).toEqual({ from: '2026-09-26', to: '2026-10-23' });
+    expect(p.sources).toHaveLength(1);
+    expect(p.sources[0]).toMatchObject({ source: 'bing_ai', rows: 3, from: '2026-10-01', to: '2026-10-20', urlsN: 2, files: ['bing.csv'], importedAt: '2026-10-21T10:00:00.000Z' });
+    expect(p.sources[0].topQueries[0]).toEqual({ query: 'erp uae', impressions: 40, citations: 7, clicks: 2 });
+    expect(p.copilot).toMatchObject({ citations: 7, label: 'from Bing Webmaster (your export of 2026-10-20)' });
+  });
+  it('the top-level period / copilot objects are never read as sources; empty column = null', () => {
+    expect(parseAiImportsSummary(JSON.stringify({ period: { from: 'a', to: 'b' }, sources: {}, copilot: null, note: '' }))).toBeNull();
+    expect(parseAiImportsSummary('')).toBeNull();
   });
 });
 

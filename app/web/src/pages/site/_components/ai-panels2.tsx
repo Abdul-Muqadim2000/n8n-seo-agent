@@ -15,6 +15,8 @@ import {
   type AiDemandPanel,
   type AiFanoutGapPanel,
   type AiImpactItem,
+  type AiImportsCopilot,
+  type AiImportsPanel,
   type AiPersonaEffect,
   type AiSentimentPanel,
   type AiShoppingPanel,
@@ -373,9 +375,23 @@ export function PersonaEffectPanel({ effect }: { effect: AiPersonaEffect[] }) {
 
 // ---------------- the owner's AI report uploads (§5) ----------------
 
-export function AiReportsCard() {
-  const { org, site, can } = useSitePage();
-  const list = useAiImports(org.id, site.id);
+/** R-A10: Copilot's figure from the owner's own Bing export, printed with the engine's label (fixes/W2-E3.md §4) */
+export function CopilotTruth({ c }: { c: AiImportsCopilot }) {
+  return (
+    <p className="mt-3 border-t border-line pt-3 text-xs text-ink-2">
+      <span className="font-medium text-ink">Copilot, from Bing&apos;s own report:</span> {c.citations != null ? `${n0(c.citations)} citations` : 'no citation figure'}
+      {c.impressions != null ? `, ${n0(c.impressions)} impressions` : ''}
+      {c.urlsN != null ? ` across ${n0(c.urlsN)} ${c.urlsN === 1 ? 'page' : 'pages'}` : ''} ({c.label || `your Bing export${c.asOf ? ` of ${fmtDate(c.asOf)}` : ''}`}).
+      {c.note && <span className="mt-0.5 block text-ink-3">{c.note}</span>}
+    </p>
+  );
+}
+
+export function AiReportsCard({ used = null }: { used?: AiImportsPanel | null } = {}) {
+  const { org, site, can, role } = useSitePage();
+  // R-A20: the client portal reads no upload list (its route refuses client roles): the card is not shown there
+  const client = String(role ?? '').startsWith('client');
+  const list = useAiImports(org.id, site.id, !client);
   const upload = useAiImport(org.id, site.id);
   const [source, setSource] = useState<'' | 'bing_ai' | 'gsc_ai'>('');
   const [periodEnd, setPeriodEnd] = useState('');
@@ -402,6 +418,7 @@ export function AiReportsCard() {
     );
   };
   const rows = list.data?.sources ?? [];
+  if (client) return null;
   return (
     <Panel
       title="Your AI reports"
@@ -424,6 +441,16 @@ export function AiReportsCard() {
         </ul>
       ) : (
         <p className="mb-3 text-[13px] text-ink-2">Nothing uploaded yet. Neither report has an API: an export from each is the only way to bring Copilot's citations and Google's AI search figures in.</p>
+      )}
+      {/* R-A10: what the latest run read from the uploads (its 28-day period and each source's days), as the engine wrote it */}
+      {used && used.sources.length > 0 && (
+        <p className="mb-3 text-xs text-ink-3">
+          The latest AI visibility run read {used.period ? `${fmtDate(used.period.from)} to ${fmtDate(used.period.to)}` : 'the last 28 days'}:{' '}
+          {used.sources
+            .map((u) => `${AI_IMPORT_SOURCE_LABEL[u.source as 'bing_ai'] ?? u.source}, ${u.rows != null ? `${n0(u.rows)} rows` : 'rows'}${u.from ? ` from ${fmtDate(u.from)} to ${fmtDate(u.to)}` : ''}${u.importedAt ? ` (uploaded ${fmtDate(u.importedAt)})` : ''}`)
+            .join('; ')}
+          .
+        </p>
       )}
       {can('member') ? (
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">

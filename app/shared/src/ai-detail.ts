@@ -353,15 +353,55 @@ export function parseAiNotes(v: unknown): AiNotesPanel | null {
   return { lostNote: str(x.lost_note), unanalysedNote: str(x.unanalysed_note), marketFallbackN: num(x.market_fallback_n) };
 }
 
-/** imports_json: the engine's summary of the owner's uploads for the period (shape not fixed by the contract: read loosely) */
-export interface AiImportsPanel { sources: { source: string; rows: number | null; citations: number | null; impressions: number | null; clicks: number | null; from: string; to: string }[]; note: string }
+/**
+ * imports_json: the engine's summary of the owner's uploads for the run's period. R-A10 (review 2026-10-23): read in the shape the engine
+ * writes (fixes/W2-E3.md §4): `{ period: {from, to}, sources: { bing_ai | gsc_ai: { rows, days: {from, to}, impressions, citations, clicks,
+ * urls_n, queries_n, top_urls, top_queries, files, imported_at } }, copilot: null | { source, citations, impressions, urls_n, as_of, label,
+ * note }, note }`. A flat `from` / `to` per source (an earlier reading) is still read.
+ */
+export interface AiImportsSource {
+  source: string; rows: number | null; citations: number | null; impressions: number | null; clicks: number | null;
+  /** the first and last day present in the uploaded rows */
+  from: string; to: string;
+  urlsN: number | null; queriesN: number | null;
+  topUrls: { url: string; impressions: number | null; citations: number | null; clicks: number | null }[];
+  topQueries: { query: string; impressions: number | null; citations: number | null; clicks: number | null }[];
+  files: string[];
+  importedAt: string;
+}
+export interface AiImportsCopilot { source: string; citations: number | null; impressions: number | null; urlsN: number | null; asOf: string; label: string; note: string }
+export interface AiImportsPanel {
+  /** the 28 days the run read the uploads over */
+  period: { from: string; to: string } | null;
+  sources: AiImportsSource[];
+  /** Copilot's ground truth, from the owner's Bing export (null when no Bing file is in the period) */
+  copilot: AiImportsCopilot | null;
+  note: string;
+}
 export function parseAiImportsSummary(v: unknown): AiImportsPanel | null {
   const j = aiJson(v);
   if (j == null) return null;
   const x = rec(j);
-  const entries: [string, Obj][] = Array.isArray(j) ? j.map((o) => [str(rec(o).source), rec(o)]) : Object.entries(rec(x.sources ?? x)).filter(([, o]) => o && typeof o === 'object').map(([k, o]) => [k, rec(o)]);
-  const sources = entries.map(([source, o]) => ({ source: source || str(o.source), rows: num(o.rows), citations: num(o.citations), impressions: num(o.impressions), clicks: num(o.clicks), from: str(o.from), to: str(o.to) })).filter((s) => s.source);
-  return sources.length || str(x.note) ? { sources, note: str(x.note) } : null;
+  const entries: [string, Obj][] = Array.isArray(j)
+    ? j.map((o) => [str(rec(o).source), rec(o)])
+    : Object.entries(rec(x.sources)).filter(([, o]) => o && typeof o === 'object' && !Array.isArray(o)).map(([k, o]) => [k, rec(o)]);
+  const top = <K extends 'url' | 'query'>(l: unknown, k: K) =>
+    list(l).map((o0) => { const o = rec(o0); return { [k]: str(o[k]), impressions: num(o.impressions), citations: num(o.citations), clicks: num(o.clicks) } as { impressions: number | null; citations: number | null; clicks: number | null } & Record<K, string>; }).filter((o) => o[k]);
+  const sources = entries
+    .map(([source, o]): AiImportsSource => {
+      const d = rec(o.days);
+      return {
+        source: source || str(o.source), rows: num(o.rows), citations: num(o.citations), impressions: num(o.impressions), clicks: num(o.clicks),
+        from: str(d.from) || str(o.from), to: str(d.to) || str(o.to),
+        urlsN: num(o.urls_n), queriesN: num(o.queries_n), topUrls: top(o.top_urls, 'url'), topQueries: top(o.top_queries, 'query'),
+        files: list(o.files).map(str).filter(Boolean), importedAt: str(o.imported_at),
+      };
+    })
+    .filter((s) => s.source);
+  const p = rec(x.period);
+  const c = x.copilot && typeof x.copilot === 'object' ? rec(x.copilot) : null;
+  const copilot = c ? { source: str(c.source) || 'bing_ai', citations: num(c.citations), impressions: num(c.impressions), urlsN: num(c.urls_n), asOf: str(c.as_of), label: str(c.label), note: str(c.note) } : null;
+  return sources.length || str(x.note) || copilot ? { period: str(p.from) || str(p.to) ? { from: str(p.from), to: str(p.to) } : null, sources, copilot, note: str(x.note) } : null;
 }
 
 /**
