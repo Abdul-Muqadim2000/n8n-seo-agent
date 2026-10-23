@@ -518,7 +518,7 @@
     "tell": "Tell Caller (AI)?"
    },
    "ledger_load": "Load Run Ledger (AI)",
-   "measured": "AI Metrics|AI Chunk Handoff",
+   "measured": "AI Metrics|AI Chunk Handoff|AI Extras",
    "mode": "ai_visibility",
    "open_runs": "Load Open Runs (AI)",
    "plan": "AI Plan",

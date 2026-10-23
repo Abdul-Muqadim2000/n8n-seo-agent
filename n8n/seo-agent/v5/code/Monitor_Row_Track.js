@@ -13,5 +13,9 @@ const __row = { site_id, domain: d.domain, ai_visibility: !!pick('ai_visibility'
   // G32: weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept between 2 and 26)
   stuck_weeks: pick('stuck_weeks', '') === '' ? null : Math.min(26, Math.max(2, Number(pick('stuck_weeks', 8)) || 8)),
   updated_at: new Date().toISOString(), request_id: d.request_id || '' };
+// W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §4): the owner's engine and coverage options, given through the API's `monitors` object or kept as stored
+const __b = (k) => { const v = pick(k, false); return v === true || /^(true|1|yes|on)$/i.test(String(v)); };
+Object.assign(__row, { ai_claude_weekly: __b('ai_claude_weekly'), ai_pulse_engines: String(pick('ai_pulse_engines', '')), ai_persona_context: __b('ai_persona_context'),
+  ai_fanout_check: pick('ai_fanout_check', '') === '' ? null : Math.min(200, Math.max(0, Number(pick('ai_fanout_check', 0)) || 0)), ai_demand_market: __b('ai_demand_market') });
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

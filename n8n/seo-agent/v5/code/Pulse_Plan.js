@@ -83,21 +83,23 @@ for (const s of todo) {
   const panel = fitQ.keep
     .sort((a, b) => ((a.source === 'custom' || pin(a)) ? 0 : 1) - ((b.source === 'custom' || pin(b)) ? 0 : 1)).slice(0, s.settings.prompts_max)
     .map(p => ({ prompt_id: p.prompt_id, prompt: p.prompt, kind: p.kind || 'custom', topic: p.topic || '', keyword: p.keyword || '', source: p.source || 'auto', volume: p.volume === '' || p.volume == null ? null : Number(p.volume),
-      stage: p.stage || '', cluster: p.cluster || p.topic || '', persona: String(p.persona || '').trim(), market: markets_map[AIP.normMarket(p.market)] ? AIP.normMarket(p.market) : ownMarket }));
+      stage: p.stage || '', cluster: p.cluster || p.topic || '', persona: String(p.persona || '').trim(), market: markets_map[AIP.normMarket(p.market)] ? AIP.normMarket(p.market) : ownMarket,
+      keyword_source: String(p.keyword_source || '') }));   // W2-E3: with the AI Overview in the pulse, a derived search phrase is not asked of it (AI Requests reads keyword_source, F2 E9)
   if (!panel.length) continue;   // the weekly run writes the panel first
-  const engines = CONFIG.pulse_engines.filter(e => s.settings.engines.includes(e));
+  const engines = AIP.pulseEnginesOf(s.settings.engines, s.settings.pulse_engines_raw);   // W2-E3: the owner's pulse engines ('ai_pulse_engines'; '' = the default four, each when the site has it on)
   if (!engines.length) continue;
   // G6: today's rotating sample of the panel (or all of it), and what it buys
   const clusterSizes = [...panel.reduce((m, q) => m.set(AIP.stratumOf(q), (m.get(AIP.stratumOf(q)) || 0) + 1), new Map()).values()].sort((a, b) => a - b);
   const medianCluster = clusterSizes.length ? clusterSizes[Math.floor(clusterSizes.length / 2)] : 0;
-  const weeklyEngines = s.settings.engines.filter(e => e !== 'claude').length;
+  const weeklyEngines = s.settings.engines.filter(e => !AIP.monthlyOf(s.settings.claude_weekly).includes(e)).length;   // W2-E3: Claude counts as weekly when the owner set it so
   const pw = AIP.pulsePerWeek({ asked: panel.length, weekly_engines: weeklyEngines, pulse_engines: engines.length, cluster_size: medianCluster, mode: s.settings.pulse_mode, per_week: s.settings.pulse_per_week });
   const sm = pw.per_week >= 6 ? { asked: panel, strata: clusterSizes.length, covered: clusterSizes.length, per_week: 6, extra: 0 } : AIP.pulseSample(panel, { per_week: pw.per_week, day: AIP.pulseDay(localToday, cw) });
   const prompts = sm.asked.map(({ slot, stratum, top_up, ...q }) => q);
   const sample = { mode: pw.per_week >= 6 ? 'full' : 'sample', setting: s.settings.pulse_mode || 'auto', per_week: pw.per_week, panel: panel.length, asked: prompts.length, strata: sm.strata, covered: sm.covered, top_ups: sm.extra,
     half_width: { headline: pw.headline, cluster: pw.cluster, cluster_size: medianCluster }, capped: !!pw.capped, why: pw.why,
     note: pw.per_week >= 6 ? 'all ' + panel.length + ' questions, as every morning' : prompts.length + ' of the ' + panel.length + ' questions this morning (a rotating sample: every question ' + pw.per_week + ' morning' + (pw.per_week === 1 ? '' : 's') + ' a week, all ' + sm.strata + ' topic x buyer groups every morning)' };
-  const costModel = AIP.cost({ panel: panel.length + 1, engines: s.settings.engines, pulse: true, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week, cluster_size: medianCluster });
+  const costModel = AIP.cost({ panel: panel.length + 1, engines: s.settings.engines, pulse: true, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week, cluster_size: medianCluster,
+    claude_weekly: s.settings.claude_weekly, pulse_engines: s.settings.pulse_engines_raw });   // W2-E3: the owner's engine options
   const pulse_est = +(prompts.length * engines.reduce((t, e) => t + (AIP.PRICE[e] || 0), 0)).toFixed(4);
   // F-ENG: the per-execution request budget - a website that would take this execution past one morning's limit starts the next part
   const req = prompts.length * engines.length;

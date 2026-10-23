@@ -174,7 +174,11 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  ('link_builder', 'boolean'),   # v4.13 (LINK_BUILDER_SPEC.md): the weekly Link Builder (empty = on); on, the Backlink Monitor no longer drafts e-mails
                  ('stuck_weeks', 'number'),   # G32 (2026-10-13): weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept 2-26)
                  # G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): buyer roles and extra markets the panel covers, and how the daily pulse samples it
-                 ('ai_personas', 'string'), ('ai_markets', 'string'), ('ai_pulse_mode', 'string'), ('ai_pulse_per_week', 'number')]
+                 ('ai_personas', 'string'), ('ai_markets', 'string'), ('ai_pulse_mode', 'string'), ('ai_pulse_per_week', 'number'),
+                 # W2-E3 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §4): Claude weekly (empty = monthly), the pulse's engines
+                 # (comma list, empty = the default four), the persona test on the ChatGPT API (empty = off), the fan-out searches checked a week
+                 # (empty / 0 = off), and the monthly market trend from the AI-answer database (empty = off; an addition to the contract)
+                 ('ai_claude_weekly', 'boolean'), ('ai_pulse_engines', 'string'), ('ai_persona_context', 'boolean'), ('ai_fanout_check', 'number'), ('ai_demand_market', 'boolean')]
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
                    # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
@@ -182,7 +186,10 @@ AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 's
                    ('persona', 'string'), ('market', 'string'), ('pinned', 'boolean'), ('fit_note', 'string'),
                    # F2 (2026-10-23, ENGINE_AUDIT.md E9): where the search phrase (`keyword`) came from: owner | writer | template | derived. A derived
                    # phrase is built from the question's own words (AIP.keywordOf); AI Requests does not ask Google's AI Overview for it
-                   ('keyword_source', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
+                   ('keyword_source', 'string'),
+                   # W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §3): the question's asked state, written by the weekly run's last part: the run that
+                   # last asked it and when, how many weekly runs + pulse mornings asked it in 28 days, and the run whose fit gate refused it
+                   ('last_asked_run', 'string'), ('last_asked_at', 'string'), ('asked_n_28d', 'number'), ('refused_at_run', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
 AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompt_id', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('engine', 'string'),
                    ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string'),
                    ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string'),
@@ -204,7 +211,17 @@ AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string')
                # answers (mean place when named, share named first, position-weighted visibility), the period counted (A8), the comparison every
                # reader shares (compare_json, A1) and the counts the next run is compared against (metrics_json)
                ('rule_version', 'string'), ('named_rate', 'number'), ('avg_position', 'number'), ('first_rate', 'number'), ('pos_visibility', 'number'),
-               ('rate_period', 'string'), ('compare_json', 'string'), ('metrics_json', 'string')]
+               ('rate_period', 'string'), ('compare_json', 'string'), ('metrics_json', 'string'),
+               # W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §2): the fan-out ranking gap, demand as a range (+ the monthly market trend), the owner's
+               # uploaded AI reports for the period, the n8n execution ids of the run's parts, and the run's notes (lost / unanalysed answers,
+               # questions asked outside their market, the persona effect on API answers)
+               ('fanout_gap_json', 'string'), ('demand_json', 'string'), ('imports_json', 'string'), ('exec_ids', 'string'), ('notes_json', 'string')]
+# W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §5): the owner's AI reports, uploaded in the app (W2-A writes, upsert by site_id + source + day + url +
+# query): Bing Webmaster "AI Performance" (source bing_ai: citations per page and query across Copilot) and the Search Console performance
+# export filtered to AI Mode / AI Overviews (source gsc_ai: impressions and clicks). The AI Visibility Tracker reads the period's rows.
+AI_IMPORTS_TABLE = 'seo_ai_imports'
+AI_IMPORTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('source', 'string'), ('day', 'string'), ('url', 'string'), ('query', 'string'), ('impressions', 'number'),
+                   ('citations', 'number'), ('clicks', 'number'), ('file_name', 'string'), ('imported_at', 'string'), ('import_id', 'string')]
 # v4.9: one row per site per day from the AI Pulse (the panel on the fast engines; small aggregates, no answer text)
 AI_DAILY_TABLE = 'seo_ai_daily'
 AI_DAILY_COLS = [('site_id', 'string'), ('domain', 'string'), ('date', 'string'), ('checked_at', 'string'), ('run_id', 'string'), ('samples', 'number'), ('mentioned', 'number'), ('cited', 'number'),

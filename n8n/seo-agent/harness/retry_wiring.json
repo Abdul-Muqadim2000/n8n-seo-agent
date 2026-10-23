@@ -182,7 +182,13 @@
    "Any Run Discovery Retries?",
    "Wait Before Run Discovery Retry",
    "Run Discovery (Retry)",
-   "Run Discovery Answers"
+   "Run Discovery Answers",
+   "Run AI Extra Requests",
+   "Run AI Extra Requests Retry Plan",
+   "Any Run AI Extra Requests Retries?",
+   "Wait Before Run AI Extra Requests Retry",
+   "Run AI Extra Requests (Retry)",
+   "Run AI Extra Requests Answers"
   ],
   "SEO Agent \u2014 Backlink Monitor": [
    "Run BL Requests",
@@ -2016,12 +2022,34 @@
    {
     "allowed": false,
     "maxTries": null,
+    "name": "Run AI Extra Requests",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": true,
+    "retryOnFail": false,
+    "timeout": 150000,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": null,
     "name": "Run Discovery (Retry)",
     "onError": "continueRegularOutput",
     "paid": true,
     "per_item": true,
     "retryOnFail": false,
     "timeout": 120000,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": null,
+    "name": "Run AI Extra Requests (Retry)",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": true,
+    "retryOnFail": false,
+    "timeout": 150000,
     "waitBetweenTries": null
    },
    {

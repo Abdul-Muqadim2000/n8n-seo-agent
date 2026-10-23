@@ -23,7 +23,8 @@ from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_para
                            RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST,   # R9 (2026-10-13): every scheduled run reserves and settles a ledger row
                            ledger_mainline,   # R17 (2026-10-14): and reserves it on the MAIN path, before the first paid call
                            ledger_tag,   # B-C2 (2026-10-15): …and settles a MEASURED Claude figure into it, not the reservation
-                           site_time_src, CYCLES_TABLE)   # 2026-10-19: the website's calendar (ST) and its cycle row (seo_cycles)
+                           site_time_src, CYCLES_TABLE,   # 2026-10-19: the website's calendar (ST) and its cycle row (seo_cycles)
+                           AI_IMPORTS_TABLE, AI_IMPORTS_COLS)   # W2-E3 (2026-10-23): the owner's uploaded AI reports (seo_ai_imports, written by the app)
 from env_settings import SENDER, ENV, BRAND, OPS_EMAIL
 BING_ON = bool((ENV.get('SEO_BING_WEBMASTER_API_KEY') or '').strip())   # v4.10: optional free sources, baked in at build time (apply_env.py rebuilds)
 AHREFS_ON = bool((ENV.get('SEO_AHREFS_API_KEY') or '').strip())
@@ -52,6 +53,8 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__AI_ENTITIES__*/', rd('code/_ai_entities.js').rstrip('\n'))   # F1a (2026-10-23): who an AI answer names - one entity per business, its role, the client's position (ENGINE_AUDIT E3 E4 E5 E8 E10 E16)
     s = s.replace('__AI_ANSWERS_COLS__', json.dumps([c for c, _ in AI_ANSWERS_COLS]))   # F2 (2026-10-23): AI Answer Rows / AI Analysed Rows write exactly the table's columns
     s = s.replace('/*__AI_PANEL__*/', rd('code/_ai_panel.js').rstrip('\n'))   # G6 (2026-10-18): the AI question panel at scale (limits, markets, strata, chunks, the one cost formula)
+    s = s.replace('/*__AI_W2E3__*/', rd('code/_ai_w2e3.js').rstrip('\n'))   # W2-E3 (2026-10-23): fan-out ranking gap, persona effect, demand, the owner's AI reports, the run's bookkeeping (AIX)
+    s = s.replace('/*__SERP_CACHE__*/', rd('code/_serp_cache.js').rstrip('\n'))   # KW-SERP (2026-10-21): one results-page reading per search and day, shared by every path (SC); W2-E3: the fan-out check reads it too
     s = s.replace('/*__RIVALS__*/', rd('code/_rivals.js').rstrip('\n'))   # C-2 / C-8 (2026-10-17): the one rival set and the category-provider rule (inside the outreach kit, and in AI Metrics)
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
@@ -335,7 +338,8 @@ CYCLE_ENTRY = "`{ trigger: 'cycle', domain, site_id, cycle_key, job, monthly, sc
 A = WF('SEOagentAIVisib1', 'SEO Agent — AI Visibility Tracker', 'aivis', 3600)
 A.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Prompts Table', AI_PROMPTS_TABLE, AI_PROMPTS_COLS), ('Ensure AI Answers Table', AI_ANSWERS_TABLE, AI_ANSWERS_COLS), ('Ensure AI Visibility Table', AI_VIS_TABLE, AI_VIS_COLS),
-       ('Ensure Prospects Table', PROSPECT_TABLE, PROSPECT_COLS), ('Ensure Sites Table', SITES_TABLE, SITES_COLS), ('Ensure Profiles Table', PROFILE_TABLE, PROFILE_COLS), ('Ensure AI Daily Table', AI_DAILY_TABLE, AI_DAILY_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
+       ('Ensure Prospects Table', PROSPECT_TABLE, PROSPECT_COLS), ('Ensure Sites Table', SITES_TABLE, SITES_COLS), ('Ensure Profiles Table', PROFILE_TABLE, PROFILE_COLS), ('Ensure AI Daily Table', AI_DAILY_TABLE, AI_DAILY_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS),
+       ('Ensure AI Imports Table', AI_IMPORTS_TABLE, AI_IMPORTS_COLS)]   # W2-E3 (2026-10-23): the app writes it; created here too so the tracker's load never fails on a new instance
 for i, (nm, t, c) in enumerate(ens): A.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load Link Prospects', PROSPECT_TABLE)]
 from ladder_common import OPS_ALERTS_TABLE, OPS_ALERTS_COLS   # F2 (2026-10-23): a stopped split run's ops alerts
@@ -351,10 +355,17 @@ SITE_SCOPE = ("={{ ((t) => String(t.site_id || '').trim() || (String(t.domain ||
               "(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}")
 RUN_SCOPE = "={{ String(($('Manual Run').first().json || {}).continue_run || '').trim() || '%' }}"
 SCOPED = {'Load AI Prompts': [], 'Load AI Visibility': [('checked_at', 'gte', SINCE(60))], 'Load Link Prospects': []}
+# W2-E3 (2026-10-23, fixes/F2.md "Not fixed"): the AI Pulse, AI Growth, the Backlink Monitor and the Link Builder loaded seo_ai_visibility WHOLE (every
+# site, every run since the first). Each reads only the site's latest rows (the pulse and the two link workflows its latest run's rivals, AI
+# Growth its last six runs), so each load is now scoped to the site the start names (the same SITE_SCOPE: '%' when it names none) and to a
+# window: 60 days (70 for AI Growth's six weekly runs). The pulse also starts from its cron, where Manual Run has no data: it reads '%' then.
+PULSE_SCOPE = "={{ $('Manual Run').isExecuted ? " + SITE_SCOPE[4:-3] + " : '%' }}"
+def vis_scoped(W, nm, pos, days, scope=SITE_SCOPE):
+    return W.node(nm, DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_VIS_TABLE, [('site_id', 'like', scope), ('checked_at', 'gte', SINCE(days))]), pos, **LOAD)
 for i, (nm, t) in enumerate(loads):
     if nm in SCOPED: A.node(nm, DT_TYPE, DT_VERSION, dt_get_all_where_params(t, [('site_id', 'like', SITE_SCOPE)] + SCOPED[nm]), at(1 + i, 1), **LOAD)
     else: A.load(nm, t, at(1 + i, 1))
-A.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('site_id', 'like', SITE_SCOPE), ('checked_at', 'gte', SINCE(15))]), at(8, 1), **LOAD)
+A.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('site_id', 'like', SITE_SCOPE), ('checked_at', 'gte', SINCE(29))]), at(8, 1), **LOAD)   # W2-E3: 29 days (was 15): a question's pulse mornings of the last 28 days count in its asked state
 A.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'ai'), ('site_id', 'like', SITE_SCOPE)]), at(9, 1), **LOAD)
 A.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [('site_id', 'like', SITE_SCOPE), ('checked_at', 'gte', SINCE(35))]), at(10, 1), **LOAD)
 # G6 (2026-10-18): the answers earlier executions of an unfinished split run stored (a run is resumed for at most 6 days; the pulse's rows are
@@ -365,6 +376,11 @@ loads += [('Load AI Daily', None), ('Load Cache (AI)', None), ('Load Query Histo
 # lists a page that answers 404 as "your cited page" and the brief never builds on one
 from ladder_common import PAGES_TABLE as _PAGES_TABLE_RV1
 A.node('Load Pages (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_PAGES_TABLE_RV1, [('site_id', 'like', SITE_SCOPE)]), at(11, 2), **LOAD); loads += [('Load Pages (AI)', None)]   # F2 (E12)
+# W2-E3 (2026-10-23): the owner's uploaded AI reports of the last 35 days (Bing AI Performance, Search Console AI Mode / AI Overviews), and the
+# results pages this site's paths read TODAY (seo_cache `serp:`), so the fan-out check pays for none of them twice
+A.node('Load AI Imports', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_IMPORTS_TABLE, [('site_id', 'like', SITE_SCOPE), ('day', 'gte', '={{ new Date(Date.now() - 35 * 864e5).toISOString().slice(0, 10) }}')]), at(12, 2), **LOAD)
+A.node('Load SERP Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'serp'), ('site_id', 'like', SITE_SCOPE), ('updated_at', 'gte', '={{ new Date().toISOString().slice(0, 10) }}')]), at(13, 2), **LOAD)
+loads += [('Load AI Imports', None), ('Load SERP Cache (AI)', None)]
 A.code('AI Plan', 'AI_Plan.js', at(11, 1)); A.iff('Any Sites (AI)?', '{{ !$json.nothing_to_do }}', at(12, 1)); A.node('Nothing To Do (AI)', 'n8n-nodes-base.noOp', 1, {}, at(13, 2))
 A.code('Site Text Jobs', 'Site_Text_Jobs.js', at(13, -2)); A.iff('Need Site Text?', '{{ !$json.skip }}', at(14, -2))
 A.node('Read Site (AI)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '=https://r.jina.ai/https://{{ $json.domain }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'X-Retain-Images', 'value': 'none'}]}, 'options': {'response': {'response': {'responseFormat': 'text', 'outputPropertyName': 'site_text'}}, 'timeout': 30000}}, at(15, -3), credentials={'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}, onError='continueRegularOutput', **retry_lint.RETRY)
@@ -452,12 +468,36 @@ A.chain('Next Chunk Starts', 'Any Next Chunk?'); A.link('Any Next Chunk?', 'Star
 A.chain('AI Metrics', 'Any Final Sites?'); A.link('Any Final Sites?', 'AI Vis Rows', 0); A.link('Any Final Sites?', 'Chunk Part Done', 1)
 A.chain('AI Vis Rows', 'Save AI Visibility', 'AI Prospect Rows', 'Any AI Prospects?'); A.link('Any AI Prospects?', 'Save AI Prospects', 0); A.link('Any AI Prospects?', 'AI Cache Rows', 1); A.link('Save AI Prospects', 'AI Cache Rows')
 A.chain('AI Cache Rows', 'Any Cache Rows?'); A.link('Any Cache Rows?', 'Save AI Cache', 0); A.link('Any Cache Rows?', 'Prune Old Answers', 1); A.link('Save AI Cache', 'Prune Old Answers')
-A.chain('Prune Old Answers', 'AI Brief Input', 'AI Brief', 'AI Report', 'Prepare PDF AI', 'Render PDF AI', 'Attach PDF AI', 'Has Email (AI)?'); A.link('Attach PDF AI', 'Build AI Callback'); A.link('Build AI Callback', 'Has Callback (AI)?')
-A.run_ledger('ai_visibility', 'AI', 'AI Plan', ['AI Report', 'Chunk Part Done'], at(12, 7), measured='AI Metrics|AI Chunk Handoff')   # G6: a part of a split run ends at Chunk Part Done and states its money in the hand-off
+# ---- W2-E3 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §2-§5): after the week is measured AND stored (the row and the run's
+# `done` state are saved above, so a part that dies below can never make the run ask its questions again): each question's asked state (free),
+# then the paid options in ONE gated DataForSEO call - the fan-out ranking gap, the persona test on the ChatGPT API, the monthly market trend -
+# and their columns written onto the stored row (an UPDATE by site + run that touches only the columns it carries; it never inserts).
+def _dt_update_auto(table, cols, keys):
+    p = dt_upsert_params_keys(table, cols, keys); p['operation'] = 'update'; return p
+A.code('Prompt State Rows', 'AI_Prompt_State.js', at(20, 4)); A.iff('Any Prompt State?', '{{ !$json.skip }}', at(20, 5))
+A.node('Save Prompt State', DT_TYPE, DT_VERSION, _dt_update_auto(AI_PROMPTS_TABLE, AI_PROMPTS_COLS, ['site_id', 'prompt_id']), at(20, 6), onError='continueRegularOutput', alwaysOutputData=True)
+A.code('AI Extra Requests', 'AI_Extra_Requests.js', at(21, 5)); A.iff('Any AI Extra Requests?', '{{ !$json.skip }}', at(21, 6))
+A.dfs_http('Run AI Extra Requests', at(22, 6), batch=10, interval=200, timeout=150000)
+A.code('AI Extras', 'AI_Extras.js', at(23, 5))
+A.code('Extras Vis Rows', "// W2-E3: the stored visibility row's update per site (only the columns AI Extras carries: notes_json, cost_usd, and fanout_gap_json / demand_json when read).\nconst rows = $('AI Extras').all().map(i => (i.json || {}).vis_update).filter(Boolean);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(24, 5))
+A.iff('Any Extras Vis?', '{{ !$json.skip }}', at(24, 6))
+A.node('Update AI Visibility (Extras)', DT_TYPE, DT_VERSION, _dt_update_auto(AI_VIS_TABLE, AI_VIS_COLS, ['site_id', 'run_id']), at(25, 6), onError='continueRegularOutput', alwaysOutputData=True)
+A.code('Extras Cache Rows', "// W2-E3: the results pages the fan-out check read now (seo_cache `serp:`, exact columns), so every path of this site reads them for nothing today.\nconst rows = $('AI Extras').all().flatMap(i => (i.json || {}).cache_rows || []);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(26, 5))
+A.iff('Any Extras Cache?', '{{ !$json.skip }}', at(26, 6))
+A.node('Save Extras Cache', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(27, 6), onError='continueRegularOutput', alwaysOutputData=True)
+A.chain('Prune Old Answers', 'Prompt State Rows', 'Any Prompt State?'); A.link('Any Prompt State?', 'Save Prompt State', 0); A.link('Any Prompt State?', 'AI Extra Requests', 1); A.link('Save Prompt State', 'AI Extra Requests')
+A.chain('AI Extra Requests', 'Any AI Extra Requests?'); A.link('Any AI Extra Requests?', 'Run AI Extra Requests', 0); A.link('Any AI Extra Requests?', 'AI Extras', 1); A.link('Run AI Extra Requests', 'AI Extras')
+A.chain('AI Extras', 'Extras Vis Rows', 'Any Extras Vis?'); A.link('Any Extras Vis?', 'Update AI Visibility (Extras)', 0); A.link('Any Extras Vis?', 'Extras Cache Rows', 1); A.link('Update AI Visibility (Extras)', 'Extras Cache Rows')
+A.chain('Extras Cache Rows', 'Any Extras Cache?'); A.link('Any Extras Cache?', 'Save Extras Cache', 0); A.link('Any Extras Cache?', 'AI Brief Input', 1); A.link('Save Extras Cache', 'AI Brief Input')
+A.chain('AI Brief Input', 'AI Brief', 'AI Report', 'Prepare PDF AI', 'Render PDF AI', 'Attach PDF AI', 'Has Email (AI)?'); A.link('Attach PDF AI', 'Build AI Callback'); A.link('Build AI Callback', 'Has Callback (AI)?')
+A.run_ledger('ai_visibility', 'AI', 'AI Plan', ['AI Report', 'Chunk Part Done'], at(12, 7), measured='AI Metrics|AI Chunk Handoff|AI Extras')   # W2-E3: + the options' money (AI Extras: each task once by its id)   # G6: a part of a split run ends at Chunk Part Done and states its money in the hand-off
 # B-A10 (2026-10-15, INVARIANTS rule 3): the monthly question-discovery pull is the one paid call outside the AI gate D19 built.
 # Its failure is silent by construction — *Prompt Jobs* simply finds no new questions — so a 40101 inside a 200 shrinks next
 # month's panel with nobody told, and a smaller panel is exactly what B-L4 had to stop being read as a fall in visibility.
 A.in200_gate('Run Discovery', 'the questions buyers ask AI assistants about this topic', 'question')
+# W2-E3 (2026-10-23): the options' call (fan-out results pages, persona answers, the market trend) behind the same gate: a task error inside a
+# 200 is re-sent once, a twice-failed search is 'not read', never 'not in the top 10'
+A.in200_gate('Run AI Extra Requests', 'the fan-out searches, the persona answers and the market trend', 'request')
 A.sticky(f"""## SEO Agent — AI Visibility Tracker (v4.5, v4.9)
 **Once a week in each website's own cycle** (job 1 of the cycle, before the Site Tracker, whose report shows the summary; *Manual Run* {CYCLE_ENTRY}; the monthly full run only when the dispatcher passes `monthly: true`) and on demand (*Manual Run* `{{ domain | site_id, email?, callback_url?, country?, location_code?, competitors?, topics? }}`; form option "Check my AI visibility" / API `mode: ai_visibility`). The **AI Pulse** workflow asks the same panel every other day on the fast engines; this run adds its samples to the week's figures.
 Per site (`seo_sites` + ladder domains; settings in `{MONITORS_TABLE}`: engines, questions (3-50, default 20), daily pulse, competitors, brand names): a stable **question panel** (`{AI_PROMPTS_TABLE}`: buyer stage, topic cluster, monthly AI search volume; written by Claude from the topics, **real questions from the AI-answer database** and the site's long Search Console queries; custom ones through Site Admin `ai_prompts`) is asked to **ChatGPT** and **Gemini** (the real chat interfaces, LLM scraper $0.004), **Perplexity** (sonar, localised, $0.006), **Google AI Mode** ($0.004) and the **AI Overview** of the matching search ($0.002); **Claude** (Haiku + web search, $0.025), the brand question, question discovery and the **market-wide index** (LLM Mentions: your share vs the competitors across the 387M-question database) on the month's first run.
@@ -482,7 +522,7 @@ Q.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Answers Table', AI_ANSWERS_TABLE, AI_ANSWERS_COLS), ('Ensure AI Daily Table', AI_DAILY_TABLE, AI_DAILY_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
 for i, (nm, t, c) in enumerate(ens): Q.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE)]
-for i, (nm, t) in enumerate(loads): Q.load(nm, t, at(1 + i, 1))
+for i, (nm, t) in enumerate(loads): vis_scoped(Q, nm, at(1 + i, 1), 60, PULSE_SCOPE) if nm == 'Load AI Visibility' else Q.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 Q.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('checked_at', 'gte', SINCE(15))]), at(7, 1), **LOAD)
 Q.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(8, 1), **LOAD)
 Q.load('Load Cycles', CYCLES_TABLE, at(8, 2))   # 2026-10-19: each website's cycle weekday and time zone (seo_cycles) - its own cycle day is skipped
@@ -538,7 +578,7 @@ ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Snapsh
 for i, (nm, t, c) in enumerate(ens): B.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Backlink Snapshots', BL_SNAP_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load Content Log', LOG_TABLE), ('Load Case Studies', CASE_TABLE),
          ('Load Backlinks', LINKS_TABLE), ('Load Link Imports', LINK_IMPORTS_TABLE), ('Load Link Graph', LINK_GRAPH_TABLE), ('Load AI Visibility (BL)', AI_VIS_TABLE)]   # C-2 (2026-10-17): the AI-named rivals
-for i, (nm, t) in enumerate(loads): B.load(nm, t, at(1 + i, 1))
+for i, (nm, t) in enumerate(loads): vis_scoped(B, nm, at(1 + i, 1), 60) if nm == 'Load AI Visibility (BL)' else B.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 B.node('Load Cache (BL Rivals)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(12, 2), **LOAD)   # C-2: the Answer Analyst's learned names (ai_brands:)
 B.code('BL Plan', 'BL_Plan.js', at(12, 1)); B.iff('Any Sites (BL)?', '{{ !$json.nothing_to_do }}', at(13, 1)); B.node('Nothing To Do (BL)', 'n8n-nodes-base.noOp', 1, {}, at(14, 2))
 # DataForSEO (as before + v4.10 link details, anchors, most-linked pages, competitors' new links)
@@ -682,7 +722,7 @@ for i, (nm, t, c) in enumerate(ens): G.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE),
          ('Load Content Log', LOG_TABLE), ('Load Query History', QUERY_TABLE), ('Load AI Pages', AI_PAGES_TABLE), ('Load AI Targets', AI_TARGETS_TABLE), ('Load AI Growth', AI_GROWTH_TABLE), ('Load Link Prospects (Growth)', PROSPECT_TABLE),
          ('Load Cycles', CYCLES_TABLE)]   # 2026-10-19: the website's time zone (seo_cycles) - the Wikidata check outside a cycle is monthly in ITS calendar
-for i, (nm, t) in enumerate(loads): G.load(nm, t, at(1 + i, 1))
+for i, (nm, t) in enumerate(loads): vis_scoped(G, nm, at(1 + i, 1), 70) if nm == 'Load AI Visibility' else G.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed'): six weekly runs
 G.node('Load AI Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [('checked_at', 'gte', SINCE(8))]), at(13, 1), **LOAD)
 G.node('Load Cache (Growth)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(14, 1), **LOAD)
 G.code('Growth Plan', 'Growth_Plan.js', at(15, 1)); G.iff('Any Sites (Growth)?', '{{ !$json.nothing_to_do }}', at(16, 1)); G.node('Nothing To Do (Growth)', 'n8n-nodes-base.noOp', 1, {}, at(17, 2))
@@ -805,7 +845,7 @@ for i, (nm, t, c) in enumerate(ens): L.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load Link Outreach', LINK_OUTREACH_TABLE),
          ('Load Listings', LISTINGS_TABLE), ('Load Link Impact', LINK_IMPACT_TABLE), ('Load Backlinks', LINKS_TABLE), ('Load Backlink Snapshots', BL_SNAP_TABLE), ('Load Content Log', LOG_TABLE), ('Load AI Targets', AI_TARGETS_TABLE),
          ('Load Pages (LB)', PAGES_TABLE), ('Load AI Visibility (LB)', AI_VIS_TABLE), ('Load Cycles', CYCLES_TABLE)]   # 2026-10-19: the website's time zone (pitches per page per month). C-2 (2026-10-17): the AI-named rivals. R93 (2026-10-16): our pages' real titles (seo_pages), so a target page is never named by a search query
-for i, (nm, t) in enumerate(loads): L.load(nm, t, at(1 + i, 1))
+for i, (nm, t) in enumerate(loads): vis_scoped(L, nm, at(1 + i, 1), 60) if nm == 'Load AI Visibility (LB)' else L.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 L.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [('period_end', 'gte', SINCE(200))]), at(13, 1), **LOAD)
 L.node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_where_params(HISTORY_TABLE, [('checked_at', 'gte', SINCE(60))]), at(14, 1), **LOAD)
 L.node('Load Cache (Links)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'linkbld'), at(15, 1), **LOAD)
@@ -975,7 +1015,7 @@ from ladder_common import CHECKIN_COLS, OPS_ALERTS_COLS, AUDIT_FINDINGS_COLS   #
 from ladder_common import PAGE_WATCH_COLS, ALERTS_COLS   # G11 + G25 (2026-10-13): the daily key-page watch rows and the alert rows it writes
 from ladder_common import PROFILE_COLS   # G31 (2026-10-13): the business profile row, now with the stored style guide
 json.dump({'RUN_LEDGER': [c for c, _ in RUN_LEDGER_COLS], 'AI_PAGES': [c for c, _ in AI_PAGES_COLS], 'AI_TARGETS': [c for c, _ in AI_TARGETS_COLS], 'AI_GROWTH': [c for c, _ in AI_GROWTH_COLS], 'PROSPECT': [c for c, _ in PROSPECT_COLS],
-           'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'AI_PROMPTS': [c for c, _ in AI_PROMPTS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS], 'SITES': [c for c, _ in SITES_COLS], 'PAGES': [c for c, _ in PAGES_COLS],
+           'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'AI_PROMPTS': [c for c, _ in AI_PROMPTS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'AI_VIS': [c for c, _ in AI_VIS_COLS], 'AI_IMPORTS': [c for c, _ in AI_IMPORTS_COLS], 'AI_PROMPTS_STATE': ['last_asked_run', 'last_asked_at', 'asked_n_28d', 'refused_at_run'], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS], 'SITES': [c for c, _ in SITES_COLS], 'PAGES': [c for c, _ in PAGES_COLS],
            'LOG': [c for c, _ in LOG_COLS], 'LADDER': [c for c, _ in LADDER_COLS], 'HISTORY': [c for c, _ in HISTORY_COLS], 'AUDIT_FINDINGS': [c for c, _ in AUDIT_FINDINGS_COLS], 'CHECKIN': [c for c, _ in CHECKIN_COLS], 'OPS_ALERTS': [c for c, _ in OPS_ALERTS_COLS], 'PAGE_WATCH': [c for c, _ in PAGE_WATCH_COLS], 'CONSOLE_ALERTS': [c for c, _ in ALERTS_COLS], 'PROFILE': [c for c, _ in PROFILE_COLS]}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # G19 site model + D5 content log: the rows these nodes write
 
 # ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): ONE table of AI-panel cost cases, held by the engine and the app ----------------------
@@ -993,3 +1033,18 @@ if os.path.isdir(os.path.dirname(_g6_app)):
 _g6_rt = re.search(r"const PRICE = (\{[^}]+\});", rd('code/_ai_panel.js'))
 assert _g6_rt and json.loads(re.sub(r'(\w+):', r'"\1":', _g6_rt.group(1))) == _g6['prices'], 'G6: v5/data/ai_panel_cost_cases.json is stale against AIP.PRICE - run node harness/ai_panel_cases.js'
 print('G6: the AI-panel cost table (' + str(len(_g6['cases'])) + ' cases) copied to the harness and the app')
+
+# ---- W2-E3 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §2-§5): what the harness proves about the GENERATED workflows (scenarios_w2e3.js
+# W2E3-7): the options' chain sits after the week is stored, the asked state and the row are written by UPDATES that touch only their own columns,
+# the options' call is gated and priced in the ledger, the imports / today's results pages are read per site, and every seo_ai_visibility load of
+# the pulse, AI Growth, the Backlink Monitor and the Link Builder is scoped to the site and a window (F2 "Not fixed").
+_w2 = {}
+for _f in ['SEO_Agent_AI_Visibility.json', 'SEO_Agent_AI_Pulse.json', 'SEO_Agent_AI_Growth.json', 'SEO_Agent_Backlink_Monitor.json', 'SEO_Agent_Link_Builder.json']:
+    _w = json.load(open(os.path.join(OUT, _f))); _w = _w[0] if isinstance(_w, list) else _w
+    _w2[_f] = {'connections': _w['connections'] if _f == 'SEO_Agent_AI_Visibility.json' else {},
+               'dt': {n['name']: {'operation': (n.get('parameters') or {}).get('operation'), 'table': ((n.get('parameters') or {}).get('dataTableId') or {}).get('value'),
+                                  'filters': (n.get('parameters') or {}).get('filters'), 'mapping': ((n.get('parameters') or {}).get('columns') or {}).get('mappingMode')}
+                      for n in _w['nodes'] if n.get('type') == DT_TYPE},
+               'settle_measured': next((re.search(r"const MEASURED = '([^']*)'", n['parameters']['jsCode']).group(1) for n in _w['nodes'] if n['name'].startswith('Ledger Settle (') and n.get('type') == 'n8n-nodes-base.code'), '')}
+json.dump(_w2, open(os.path.join(HERE, 'harness', 'w2e3_wiring.json'), 'w'), indent=1, sort_keys=True)
+print('W2-E3: the options chain, the asked state, the imports and the scoped AI visibility loads exported for harness scenarios_w2e3.js')

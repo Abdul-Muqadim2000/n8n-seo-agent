@@ -27,6 +27,38 @@ export const AI_PANEL_FIXED = {
 } as const;
 export type AiPulseMode = '' | 'auto' | 'sample' | 'full';
 
+// ---- W2-E3 (2026-10-23, n8n/seo-agent/docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §4): the owner's engine and coverage options ----
+// The mirror of AIP.XPRICE / PERSONA / FANOUT_MAX / DEMAND_TASKS / PULSE_ALLOWED / pulseEnginesOf / monthlyOf / optionsOf (v5/code/_ai_panel.js),
+// held to the engine's `cases_options` golden cases. Every option is off by default, so a panel that sets none costs what it cost before.
+/** The options' prices, apart from AI_PANEL_PRICE (which AI_ENGINE_COST is held to): a Google results page 10 deep, a ChatGPT API answer
+ *  (an estimate until its first live call), one LLM Mentions task of the monthly market trend. */
+export const AI_PANEL_XPRICE = { fanout_serp: 0.002, persona: 0.012, demand_task: 0.11 } as const;
+/** The persona test: the same 12 questions for every buyer role, plus the same questions once with no role (one control for every role). */
+export const AI_PANEL_PERSONA = { questions: 12, max_roles: 6 } as const;
+export const AI_PANEL_FANOUT_MAX = 200;
+export const AI_PANEL_DEMAND_TASKS = 3;
+/** The engines the daily pulse may ask (the owner's `ai_pulse_engines`); the default is AI_PANEL_PULSE_ENGINES. */
+export const AI_PANEL_PULSE_ALLOWED: readonly AiPanelEngine[] = ['chatgpt', 'gemini', 'ai_mode', 'copilot', 'perplexity', 'ai_overview'];
+const listOfX = (v: unknown): string[] => (Array.isArray(v) ? v : String(v ?? '').split(/[\n,;|]+/)).map((x) => String(x ?? '').trim()).filter(Boolean);
+/** The engines the daily pulse asks: the owner's choice (only engines the site has on, in a fixed order) or, with none, the default four. */
+export function aiPulseEnginesOf(engines: readonly string[] | null | undefined, chosen?: string | readonly string[] | null): AiPanelEngine[] {
+  const en = (engines && engines.length ? engines : AI_PANEL_DEFAULT_ENGINES).map((e) => String(e).trim().toLowerCase());
+  const pick = listOfX(chosen).map((e) => e.toLowerCase().replace(/[\s-]+/g, '_')).filter((e) => (AI_PANEL_PULSE_ALLOWED as readonly string[]).includes(e) && en.includes(e));
+  return pick.length ? AI_PANEL_PULSE_ALLOWED.filter((e) => pick.includes(e)) : AI_PANEL_PULSE_ENGINES.filter((e) => en.includes(e));
+}
+/** The engines asked only on the month's full run (none when the owner set Claude weekly). */
+export const aiMonthlyEngines = (claudeWeekly?: boolean | null): AiPanelEngine[] => (claudeWeekly ? [] : [...AI_PANEL_MONTHLY_ENGINES]);
+export interface AiPanelOptionsCost {
+  claudeWeekly: boolean;
+  pulseEngines: AiPanelEngine[];
+  persona: { on: boolean; roles: number; questions: number; requestsRun: number; dfsRun: number };
+  fanout: { queries: number; requestsRun: number; dfsRun: number };
+  demandMarket: { on: boolean; tasks: number; dfsFull: number };
+  requestsExtra: { weekly: number; full: number };
+}
+/** The options as the cost formula takes them (AIP.cost's claude_weekly, pulse_engines, persona_context + personas, fanout_check, demand_market). */
+export interface AiPanelOptions { claudeWeekly?: boolean | null; pulseEngines?: string | readonly string[] | null; personaContext?: boolean | null; personas?: number | null; fanoutCheck?: number | null; demandMarket?: boolean | null }
+
 const n0 = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const r4 = (x: number) => Math.round(x * 10000) / 10000;
@@ -79,22 +111,36 @@ export interface AiPanelCost {
   run: { weekly: AiMoney; full: AiMoney }; fullExtra: AiMoney; pulseDay: AiMoney;
   month: { weekly: number; fullExtra: number; pulse: number; total: number };
   prices: { engine: AiPanelEngine; usd: number; basis: string }[];
+  /** W2-E3: what each option adds (all zero / off by default) */
+  options: AiPanelOptionsCost;
 }
 
-/** The one AI-panel cost formula (AIP.cost). Every figure in US dollars. */
-export function estimateAiPanelCost(o: { panel?: number; engines?: readonly string[]; pulse?: boolean; pulseMode?: AiPulseMode | string; pulsePerWeek?: number | null; clusterSize?: number } = {}): AiPanelCost {
+/** The one AI-panel cost formula (AIP.cost). Every figure in US dollars. W2-E3: + the owner's engine and coverage options. */
+export function estimateAiPanelCost(o: { panel?: number; engines?: readonly string[]; pulse?: boolean; pulseMode?: AiPulseMode | string; pulsePerWeek?: number | null; clusterSize?: number } & AiPanelOptions = {}): AiPanelCost {
   const L = AI_PANEL_LIMITS, F = AI_PANEL_FIXED, P = AI_PANEL_PRICE as Record<string, number>;
   const panel = clamp(Math.round(n0(o.panel)) || L.default_new, L.min, L.max);
   const engines = [...new Set((o.engines && o.engines.length ? o.engines : AI_PANEL_DEFAULT_ENGINES).filter((e) => P[e] != null))] as AiPanelEngine[];
   const sum = (list: readonly string[]) => list.reduce((t, e) => t + (P[e] || 0), 0);
   const asked = Math.max(1, panel - 1);
-  const wE = engines.filter((e) => !AI_PANEL_MONTHLY_ENGINES.includes(e));
-  const pE = AI_PANEL_PULSE_ENGINES.filter((e) => engines.includes(e));
+  const MONTHLY = aiMonthlyEngines(o.claudeWeekly);   // W2-E3: Claude weekly when the owner asks for it
+  const wE = engines.filter((e) => !MONTHLY.includes(e));
+  const pE = aiPulseEnginesOf(engines, o.pulseEngines);   // W2-E3: the owner's pulse engines ('' = the default four)
   const answers = asked * wE.length;
   const cap = Math.min(F.analyst_cap_max, F.analyst_cap_base + Math.floor(panel / 25));
   const jobs = Math.min(cap, Math.ceil((answers * F.analyst_share) / F.analyst_per_job));
-  const weekly: AiMoney = { dfs: r4(asked * sum(wE)), ai: r4(Math.max(F.weekly_ai_min, F.brief_ai + jobs * F.analyst_job_ai)), usd: 0 }; weekly.usd = r4(weekly.dfs + weekly.ai);
-  const extra: AiMoney = { dfs: r4((engines.includes('claude') ? panel * P.claude : 0) + sum(wE) + F.full_dfs), ai: F.full_ai, usd: 0 }; extra.usd = r4(extra.dfs + extra.ai);
+  // W2-E3: the persona test and the fan-out check every weekly run, the market trend on the full run
+  const roles = o.personaContext ? Math.min(AI_PANEL_PERSONA.max_roles, Math.max(0, Math.round(n0(o.personas)))) : 0;
+  const pq = roles ? Math.min(AI_PANEL_PERSONA.questions, asked) : 0;
+  const pReq = roles ? (roles + 1) * pq : 0;
+  const fq = clamp(Math.round(n0(o.fanoutCheck)), 0, AI_PANEL_FANOUT_MAX);
+  const dm = !!o.demandMarket;
+  const opt: AiPanelOptionsCost = { claudeWeekly: !!o.claudeWeekly, pulseEngines: [...pE],
+    persona: { on: !!o.personaContext, roles, questions: pq, requestsRun: pReq, dfsRun: r4(pReq * AI_PANEL_XPRICE.persona) },
+    fanout: { queries: fq, requestsRun: fq, dfsRun: r4(fq * AI_PANEL_XPRICE.fanout_serp) },
+    demandMarket: { on: dm, tasks: dm ? AI_PANEL_DEMAND_TASKS : 0, dfsFull: dm ? r4(AI_PANEL_DEMAND_TASKS * AI_PANEL_XPRICE.demand_task) : 0 },
+    requestsExtra: { weekly: pReq + fq, full: pReq + fq + (dm ? AI_PANEL_DEMAND_TASKS : 0) } };
+  const weekly: AiMoney = { dfs: r4(asked * sum(wE) + opt.persona.dfsRun + opt.fanout.dfsRun), ai: r4(Math.max(F.weekly_ai_min, F.brief_ai + jobs * F.analyst_job_ai)), usd: 0 }; weekly.usd = r4(weekly.dfs + weekly.ai);
+  const extra: AiMoney = { dfs: r4(MONTHLY.filter((e) => engines.includes(e)).reduce((t, e) => t + panel * (P[e] || 0), 0) + sum(wE) + F.full_dfs + opt.demandMarket.dfsFull), ai: F.full_ai, usd: 0 }; extra.usd = r4(extra.dfs + extra.ai);
   const full: AiMoney = { dfs: r4(weekly.dfs + extra.dfs), ai: r4(weekly.ai + extra.ai), usd: 0 }; full.usd = r4(full.dfs + full.ai);
   const on = o.pulse !== false && pE.length > 0;
   const pw: AiPulsePlan = on ? aiPulsePerWeek({ asked, weeklyEngines: wE.length, pulseEngines: pE.length, clusterSize: o.clusterSize, mode: o.pulseMode, perWeek: o.pulsePerWeek })
@@ -106,30 +152,48 @@ export function estimateAiPanelCost(o: { panel?: number; engines?: readonly stri
   month.total = r2(month.weekly + month.fullExtra + month.pulse);
   return {
     panel, asked, engines, weeklyEngines: wE, pulseEngines: on ? [...pE] : [], perWeek: pw.perWeek, pulseQuestionsDay: qDay, pulseWhy: pw.why, pulseCapped: !!pw.capped,
-    requests: { weekly: answers, full: answers + (engines.includes('claude') ? panel : 0) + wE.length, pulseDay: qDay * (on ? pE.length : 0) },
+    requests: { weekly: answers, full: answers + MONTHLY.filter((e) => engines.includes(e)).length * panel + wE.length, pulseDay: qDay * (on ? pE.length : 0) },
     executions: Math.max(1, Math.ceil(answers / L.chunk_requests)), analystJobs: jobs,
     halfWidth: { headline: pw.headline, cluster: pw.cluster }, run: { weekly, full }, fullExtra: extra, pulseDay, month,
     prices: engines.map((e) => ({ engine: e, usd: P[e], basis: AI_PANEL_PRICE_BASIS[e] || 'measured / priced' })),
+    options: opt,
   };
 }
 
 // ---------------- F3 (2026-10-23, APP_AUDIT.md A2 / A3): the panel a run asks, and what an on-demand run costs ----------------
 
-/** The panel an on-demand AI visibility run asks, from the website's monitor settings as stored NOW. */
-export interface AiRunPanel { panel: number; engines: string[] }
+/** The panel an on-demand AI visibility run asks, from the website's monitor settings as stored NOW (W2-E3: with the owner's options). */
+export interface AiRunPanel { panel: number; engines: string[]; options?: AiPanelOptions }
 
 /**
  * A2: the website's panel as the engine reads it (AIP.panelSize): no monitors row = 50 questions on the default engines; a row = its size
  * (an empty size = 20) and its engines. The quote of an on-demand run is this panel's full run (`estimateAiPanelCost(...).run.full`).
  */
-export function aiRunPanelOf(m: { aiPromptsMax?: number | null; aiEngines?: readonly string[] | null } | null): AiRunPanel {
+export function aiRunPanelOf(m: ({ aiPromptsMax?: number | null; aiEngines?: readonly string[] | null } & {
+  // W2-E3 (2026-10-23): the owner's options as the monitors row holds them; absent = off (older callers keep the old quote)
+  aiClaudeWeekly?: boolean | null; aiPulseEngines?: string | readonly string[] | null; aiPersonaContext?: boolean | null; aiPersonas?: string | readonly string[] | null; aiFanoutCheck?: number | null; aiDemandMarket?: boolean | null;
+}) | null): AiRunPanel {
   if (!m) return { panel: AI_PANEL_LIMITS.default_new, engines: [...AI_PANEL_DEFAULT_ENGINES] };
-  return { panel: aiPanelSize({ siteId: 'site', promptsMax: m.aiPromptsMax ?? null }), engines: m.aiEngines && m.aiEngines.length ? [...m.aiEngines] : [...AI_PANEL_DEFAULT_ENGINES] };
+  const base: AiRunPanel = { panel: aiPanelSize({ siteId: 'site', promptsMax: m.aiPromptsMax ?? null }), engines: m.aiEngines && m.aiEngines.length ? [...m.aiEngines] : [...AI_PANEL_DEFAULT_ENGINES] };
+  const options: AiPanelOptions = {
+    ...(m.aiClaudeWeekly ? { claudeWeekly: true } : {}),
+    ...(m.aiPulseEngines && listOfX(m.aiPulseEngines).length ? { pulseEngines: listOfX(m.aiPulseEngines) } : {}),
+    ...(m.aiPersonaContext ? { personaContext: true, personas: Math.min(AI_PANEL_PERSONA.max_roles, listOfX(m.aiPersonas).length) } : {}),
+    ...(Number(m.aiFanoutCheck) > 0 ? { fanoutCheck: Math.min(AI_PANEL_FANOUT_MAX, Math.round(Number(m.aiFanoutCheck))) } : {}),
+    ...(m.aiDemandMarket ? { demandMarket: true } : {}),
+  };
+  return Object.keys(options).length ? { ...base, options } : base;
 }
 
-/** What an on-demand run of this panel costs (a full run: every engine incl. the monthly one, the brand question, the brief), US dollars. */
+/** What an on-demand run of this panel costs (a full run: every engine incl. the monthly one, the brand question, the brief, and W2-E3 the
+ *  owner's options: the persona test, the fan-out check, the monthly market trend), US dollars. The engine reserves the same figure (AI Plan
+ *  prices a run's first part on the panel the site is set to, F3 engine side #3). */
 export function aiOnDemandRunUsd(p: AiRunPanel): number {
-  return estimateAiPanelCost({ panel: p.panel, engines: p.engines }).run.full.usd;
+  return aiOnDemandRunCost(p).usd;
+}
+/** The same quote split into Claude and DataForSEO money (estimateRunCostParts should read this one, so the options are in the breakdown too). */
+export function aiOnDemandRunCost(p: AiRunPanel): AiMoney {
+  return estimateAiPanelCost({ panel: p.panel, engines: p.engines, ...(p.options || {}) }).run.full;
 }
 
 /** One stored question as the cut needs it. */

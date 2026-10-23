@@ -18,9 +18,26 @@ const inputs = [
 const pick = (c) => ({ panel: c.panel, asked: c.asked, per_week: c.per_week, pulse_questions_day: c.pulse_questions_day, executions: c.executions, analyst_jobs: c.analyst_jobs,
   requests: c.requests, run: c.run, full_extra: c.full_extra, pulse_day: c.pulse_day, month: c.month, half_width: c.half_width });
 const cases = inputs.map(i => ({ input: i, expect: pick(AIP.cost(i)) }));
+// W2-E3 (2026-10-23): the owner's engine and coverage options (WAVE2_CONTRACTS.md §4). Kept in their own list, `cases_options`, because their
+// inputs carry option keys the older app test does not pass; `cases` above stays exactly what it was (every option off = the old figures).
+const optionInputs = [
+  { panel: 50, claude_weekly: true }, { panel: 200, claude_weekly: true }, { panel: 8, claude_weekly: true, pulse: false },
+  { panel: 50, pulse_engines: 'chatgpt, gemini, ai_mode, perplexity, ai_overview' }, { panel: 200, pulse_engines: ['perplexity', 'ai_overview'] },
+  { panel: 100, pulse_engines: 'claude, chatgpt_api' }, { panel: 500, pulse_engines: 'chatgpt,gemini,ai_mode,perplexity,ai_overview' },
+  { panel: 50, persona_context: true, personas: 3 }, { panel: 200, persona_context: true, personas: 3 }, { panel: 8, persona_context: true, personas: 6 }, { panel: 50, persona_context: true, personas: 0 },
+  { panel: 50, fanout_check: 25 }, { panel: 50, fanout_check: 50 }, { panel: 200, fanout_check: 100 }, { panel: 200, fanout_check: 900 },
+  { panel: 50, demand_market: true }, { panel: 200, demand_market: true },
+  { panel: 50, claude_weekly: true, pulse_engines: 'chatgpt,gemini,ai_mode,perplexity,ai_overview', persona_context: true, personas: 3, fanout_check: 50, demand_market: true },
+  { panel: 200, claude_weekly: true, pulse_engines: 'chatgpt,gemini,ai_mode,perplexity,ai_overview', persona_context: true, personas: 3, fanout_check: 100, demand_market: true },
+  { panel: 200, engines: ALL, claude_weekly: true, persona_context: true, personas: 4, fanout_check: 100 },
+];
+const pickO = (c) => ({ ...pick(c), options: c.options });
+const cases_options = optionInputs.map(i => ({ input: i, expect: pickO(AIP.cost(i)) }));
 const out = { generated: 'harness/ai_panel_cases.js from AIP.cost (v5/code/_ai_panel.js)', prices: AIP.PRICE, pulse_engines: AIP.PULSE_ENGINES, default_engines: AIP.DEFAULT_ENGINES, monthly_engines: AIP.MONTHLY_ENGINES,
   fixed: AIP.FIXED, limits: { min: AIP.LIMITS.min, max: AIP.LIMITS.max, default_new: AIP.LIMITS.default_new, default_stored: AIP.LIMITS.default_stored, chunk_requests: AIP.LIMITS.chunk_requests, pulse_max_requests: AIP.LIMITS.pulse_max_requests,
-    full_pulse_max_panel: AIP.LIMITS.full_pulse_max_panel, target_headline: AIP.LIMITS.target_headline, target_cluster: AIP.LIMITS.target_cluster, cluster_size_guess: AIP.LIMITS.cluster_size_guess, max_run_usd: AIP.LIMITS.max_run_usd }, cases };
+    full_pulse_max_panel: AIP.LIMITS.full_pulse_max_panel, target_headline: AIP.LIMITS.target_headline, target_cluster: AIP.LIMITS.target_cluster, cluster_size_guess: AIP.LIMITS.cluster_size_guess, max_run_usd: AIP.LIMITS.max_run_usd }, cases,
+  // W2-E3: the option prices and constants the app mirror (app/shared/src/ai-panel.ts) must carry, and the option cases
+  extra_prices: AIP.XPRICE, persona: AIP.PERSONA, fanout_max: AIP.FANOUT_MAX, demand_tasks: AIP.DEMAND_TASKS, pulse_allowed: AIP.PULSE_ALLOWED, cases_options };
 const dest = process.argv[2] || path.join(__dirname, '..', 'v5', 'data', 'ai_panel_cost_cases.json');
 fs.writeFileSync(dest, JSON.stringify(out, null, 1) + '\n');
-console.log('wrote', dest, cases.length, 'cases');
+console.log('wrote', dest, cases.length, 'cases +', cases_options.length, 'option cases');
