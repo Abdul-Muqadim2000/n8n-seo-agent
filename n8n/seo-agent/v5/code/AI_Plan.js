@@ -27,6 +27,7 @@
 /*__AI_PANEL__*/
 /*__SITE_MODEL__*/
 /*__FIT_GATE__*/
+/*__AI_ENTITIES__*/
 const CONFIG = { max_sites_per_run: 15, max_topics: 8, monthly_engines: ['claude'],   // v4.9: Gemini moved to the weekly set (the real gemini.google.com answer costs $0.004 through the scraper)
   gsc_questions: 15, pulse_days: 7 };
 const { list, on_demand, want, total, cycle, cycle_why } = monitorSites('ai');
@@ -46,7 +47,7 @@ const skipped = [];   // G6: sites this execution does nothing for, with the rea
 const QUESTION = /^(how|what|which|who|why|when|where|is|are|can|does|do|should|best|top|cost|price|vs|compare)\b|\?|\b(vs|versus|best|cost|price|how to|which)\b/i;
 const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const label = s.domain.split('.')[0];
-  const brand_names = [...new Set([s.domain, s.business_name || '', ...(s.settings.brand_names || []), ...(label.length >= 5 ? [label] : [])].map(x => String(x).trim()).filter(x => x.length >= 3))];   // P34-6: the model's name is a brand name too
+  const brand_names = AIE.brandNames({ domain: s.domain, business_name: s.business_name || '', brand_names: s.settings.brand_names || [] });   // P34-6: the model's name is a brand name too; F1a (E5): the label only when it is a name, not a common word (payroll.ae)
   const lrowsAll = ladders.filter(l => normD(l.domain) === s.domain).sort((a, b) => (Number(a.rung) || 0) - (Number(b.rung) || 0));
   const asked = on_demand ? listOf(trigger.topics).map(x => x.toLowerCase()) : [];   // "Main services or products" on the on-demand form / API `topics`
   // D15 (system review 2026-10-11): the plan carries the site's canonical host (the site model, SITE_MODEL_SPEC.md §6), so every URL the run

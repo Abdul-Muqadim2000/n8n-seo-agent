@@ -7,6 +7,7 @@
 // G6 (2026-10-18): a bigger panel reads more answers — the site's share is the panel's Answer Analyst budget (AIP.analystCap: 24 + 1 per 25
 // questions, at most 60 a run) spread over the executions the run is split into, so a 500-question run reads ~44 jobs' worth in all, not 6.
 // One execution never starts more than 36 (the agent runs them one after another, ~25 s each, inside the execution time limit).
+/*__AI_ENTITIES__*/
 const CONFIG = { per_job: 12, max_jobs_per_site: 6, max_jobs_per_run: 36, chars: 1500, min_facts: 2 };   // min_facts (G10): fewer checkable facts than this and the wrong-claim check is reported as "not checked"
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && !p.pulse_run);
 let rows = []; try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine && r.answered && r._text); } catch (e) {}
@@ -40,7 +41,7 @@ for (const p of plans) {
   for (let i = 0; i < sel.length && out.length < CONFIG.max_jobs_per_run; i += CONFIG.per_job) {
     const chunk = sel.slice(i, i + CONFIG.per_job);
     out.push({ json: { site_id: p.site_id, domain: p.domain, business: p.business_name || p.domain, facts: facts || 'Website: ' + p.domain, facts_ok,
-      fact_check: facts_ok ? 'on' : 'off', owner_facts, located, known_competitors: (p.competitors || []).join(', '),
+      fact_check: facts_ok ? 'on' : 'off', owner_facts, located, known_competitors: (Array.isArray(p.configured_competitors) ? p.configured_competitors : (p.competitors || [])).join(', '), platforms: AIE.clientPlatforms(p).map(d => (AIE.PLATFORMS.find(x => x[0] === d) || [d, d])[1]).join(', '),   /* F1a: the owner's competitors only (an auto rival may be a platform), and the client's own platforms */
       ids: chunk.map(r => r.prompt_id + '|' + r.engine), answers: chunk.map((r, k) => 'ANSWER ' + (k + 1) + ' [' + r.engine + '] Q: ' + r.prompt + '\n' + String(r._text).slice(0, CONFIG.chars)).join('\n\n') } });
   }
 }

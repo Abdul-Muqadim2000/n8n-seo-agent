@@ -30,7 +30,7 @@ const promptWriter = { output: { prompts: [
   { prompt: 'Which companies help businesses in the UAE get ready for e-invoicing before the 2027 deadline?', kind: 'recommend', topic: 'e invoicing in uae', keyword: 'e invoicing service providers uae' },
   { prompt: 'How much does an e-invoicing implementation cost for a mid-size UAE distributor?', kind: 'cost', topic: 'e invoicing in uae', keyword: 'e invoicing cost uae' },
   { prompt: 'What should I check before choosing an accredited e-invoicing service provider in the UAE?', kind: 'choose', topic: 'e invoicing in uae', keyword: 'choose asp uae' },
-  { prompt: 'Odoo or Business Central: which ERP handles UAE e-invoicing better for distributors?', kind: 'compare', topic: 'erp implementation services', keyword: 'odoo vs business central uae' },
+  { prompt: 'Open-source ERP or a cloud ERP suite: which handles UAE e-invoicing better for distributors?', kind: 'compare', topic: 'erp implementation services', keyword: 'open source erp vs cloud erp uae' },
   { prompt: 'What are the penalties if my UAE company misses the e-invoicing deadline?', kind: 'problem', topic: 'uae e invoicing penalties', keyword: 'uae e invoicing penalties' },
   { prompt: 'Who are the best ERP implementation partners in Dubai for distributors?', kind: 'recommend', topic: 'erp implementation services', keyword: 'erp implementation partner dubai' },
   { prompt: 'What is Northwind ERP (northwind-erp.com) and what does it offer?', kind: 'brand', topic: 'brand', keyword: 'northwind erp' },
