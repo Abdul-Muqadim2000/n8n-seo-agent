@@ -6,7 +6,8 @@
   "SEO_Agent_AI_Visibility.json": {
    "AI Brief": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
    "Answer Analyst": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
-   "Prompt Writer": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
+   "Prompt Writer": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
+   "Sentiment Reader": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
   },
   "SEO_Agent_Backlink_Monitor.json": {
    "Link Analyst": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}",
@@ -55,6 +56,7 @@
    }
   ],
   "SEO Agent \u2014 AI Pulse": [],
+  "SEO Agent \u2014 AI Repeat Pilot": [],
   "SEO Agent \u2014 AI Visibility Tracker": [
    {
     "model_node": "Claude \u2014 AI Brief",
@@ -67,6 +69,10 @@
    {
     "model_node": "Claude \u2014 Prompt Writer",
     "node": "Prompt Writer"
+   },
+   {
+    "model_node": "Claude \u2014 Sentiment Reader",
+    "node": "Sentiment Reader"
    }
   ],
   "SEO Agent \u2014 Audit Scheduler": [],
@@ -164,6 +170,37 @@
      "settle": "Ledger Settle (Pulse)"
     },
     "settle": "Ledger Settle (Pulse)"
+   }
+  ],
+  "SEO Agent \u2014 AI Repeat Pilot": [
+   {
+    "fed_settle_directly": [],
+    "has_callback": "Has Callback (Pilot)?",
+    "join": "Ledger Join (Pilot)",
+    "ledger": "Callback Ledger (Pilot)",
+    "post": "POST Pilot Report",
+    "preds": [
+     [
+      "Pilot Report",
+      0
+     ]
+    ],
+    "proof": {
+     "bypass": false,
+     "input0": [
+      "Pilot Report"
+     ],
+     "input1": [
+      "Ledger Settle (Pilot)"
+     ],
+     "merge": true,
+     "preds": [
+      "Pilot Report"
+     ],
+     "reachable": true,
+     "settle": "Ledger Settle (Pilot)"
+    },
+    "settle": "Ledger Settle (Pilot)"
    }
   ],
   "SEO Agent \u2014 AI Visibility Tracker": [
@@ -375,7 +412,8 @@
   "SEO_Agent_AI_Visibility.json": {
    "AI Brief": "tool",
    "Answer Analyst": "tool",
-   "Prompt Writer": "tool"
+   "Prompt Writer": "tool",
+   "Sentiment Reader": "tool"
   },
   "SEO_Agent_Backlink_Monitor.json": {
    "Link Analyst": "tool",
@@ -629,6 +667,7 @@
  "measured": {
   "SEO Agent \u2014 AI Growth": "Growth Metrics",
   "SEO Agent \u2014 AI Pulse": "Pulse Metrics",
+  "SEO Agent \u2014 AI Repeat Pilot": "Pilot Metrics",
   "SEO Agent \u2014 AI Visibility Tracker": "AI Metrics|AI Chunk Handoff",
   "SEO Agent \u2014 Audit Scheduler": "",
   "SEO Agent \u2014 Backlink Monitor": "Parse Backlinks",

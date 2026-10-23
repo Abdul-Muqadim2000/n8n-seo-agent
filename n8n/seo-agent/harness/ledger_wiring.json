@@ -362,6 +362,74 @@
     "Nothing To Do (Pulse)"
    ]
   },
+  "SEO Agent \u2014 AI Repeat Pilot": {
+   "ai_calls": [],
+   "ai_nodes": [],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Pilot)",
+    "gate": "Any Alert Retry (Pilot)?",
+    "load": "Load Open Alerts (Pilot)",
+    "plan": "Alert Retry Plan (Pilot)",
+    "post": "Post Alert Retry (Pilot)",
+    "result": "Alert Retry Result (Pilot)",
+    "save": "Save Alert Retry (Pilot)",
+    "table": "seo_ops_alerts"
+   },
+   "balance": "DFS Balance (Pilot)",
+   "balance_end": "DFS Balance End (Pilot)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (Pilot)?",
+     "join": "Ledger Join (Pilot)",
+     "ledger": "Callback Ledger (Pilot)",
+     "post": "POST Pilot Report",
+     "preds": [
+      [
+       "Pilot Report",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Pilot)"
+    }
+   ],
+   "catchup_records": "",
+   "cost_cal": "Load Cost Factors (Pilot)",
+   "est": {
+    "ai": 0.0,
+    "dfs": 1.5
+   },
+   "guard": {
+    "gate": "After Run Ledger (Pilot)",
+    "if": "Run Allowed? (Pilot)",
+    "kit": "RG",
+    "load": "Load Open Runs (Pilot)",
+    "notice": "Refusal Notice (Pilot)",
+    "post": "Post Refusal (Pilot)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Pilot)",
+     "Refusal Notice (Pilot)",
+     "Refuse Run Ledger (Pilot)",
+     "Tell Caller (Pilot)?"
+    ],
+    "refuse": "Refuse Run Ledger (Pilot)",
+    "tell": "Tell Caller (Pilot)?"
+   },
+   "ledger_load": "Load Run Ledger (Pilot)",
+   "measured": "Pilot Metrics",
+   "mode": "ai_pilot",
+   "open_runs": "Load Open Runs (Pilot)",
+   "plan": "AI Plan",
+   "reserve": "Run Ledger Row (Pilot)",
+   "resume": "After Run Ledger (Pilot)",
+   "settle": "Settle Run Ledger (Pilot)",
+   "settle_from": [
+    "Pilot Report",
+    "Refuse Run Ledger (Pilot)"
+   ],
+   "settle_from_ends": []
+  },
   "SEO Agent \u2014 AI Visibility Tracker": {
    "ai_calls": [
     {
@@ -447,6 +515,8 @@
       "paa_questions",
       "persona",
       "search_questions",
+      "shopping",
+      "shopping_why",
       "site_text",
       "topics"
      ],
@@ -458,13 +528,40 @@
      "node": "Prompt Writer",
      "ref": "$('Any Prompt Jobs?').item.json",
      "streaming": false,
-     "template_chars": 4447
+     "template_chars": 4894
+    },
+    {
+     "after": [
+      "AI Metrics"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (Sentiment Reader)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (Sentiment Reader)",
+     "count_resume": "After Count (Sentiment Reader)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (Sentiment Reader)",
+     "effort": "",
+     "fields": [
+      "business",
+      "items_text"
+     ],
+     "from": [],
+     "input": "Any Sentiment Jobs?",
+     "max_tokens": 4000,
+     "model": "claude-haiku-4-5-20251001",
+     "model_node": "Claude \u2014 Sentiment Reader",
+     "node": "Sentiment Reader",
+     "ref": "$('Any Sentiment Jobs?').item.json",
+     "streaming": false,
+     "template_chars": 2198
     }
    ],
    "ai_nodes": [
     "AI Brief",
     "Answer Analyst",
-    "Prompt Writer"
+    "Prompt Writer",
+    "Sentiment Reader"
    ],
    "alert_retry": {
     "from": "Settle Run Ledger (AI)",

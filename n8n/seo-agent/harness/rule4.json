@@ -9,8 +9,8 @@
    "subject": 3
   },
   "delivery": {
-   "pass": 16,
-   "subject": 16
+   "pass": 17,
+   "subject": 17
   },
   "promise": {
    "pass": 4,
@@ -118,6 +118,19 @@
     "opener": false,
     "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
     "workflow": "SEO Agent \u2014 AI Growth"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.settle("
+    ],
+    "node": "Alert Retry Result (Pilot)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 AI Repeat Pilot"
    },
    {
     "blind_sources": [],

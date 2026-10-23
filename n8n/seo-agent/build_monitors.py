@@ -52,6 +52,7 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__AI_ENTITIES__*/', rd('code/_ai_entities.js').rstrip('\n'))   # F1a (2026-10-23): who an AI answer names - one entity per business, its role, the client's position (ENGINE_AUDIT E3 E4 E5 E8 E10 E16)
     s = s.replace('/*__AI_ANSWER_DATA__*/', rd('code/_ai_answer_data.js').rstrip('\n'))   # W2-E1 (2026-10-23): the answer-level data (full text, cited / read pages, fan-out, product / ad / local cards, source types)
     s = s.replace('__AI_ANSWERS_COLS__', json.dumps([c for c, _ in AI_ANSWERS_COLS]))   # F2 (2026-10-23): AI Answer Rows / AI Analysed Rows write exactly the table's columns
+    s = s.replace('/*__AI_MEASURE__*/', rd('code/_ai_measure.js').rstrip('\n')).replace('/*__AI_SENTIMENT__*/', rd('code/_ai_sentiment.js').rstrip('\n'))   # W2-E2 (2026-10-23): clustered intervals, 28-day window, declared share of voice, did an action work, owner rules (AVX); sentiment (SENT)
     s = s.replace('/*__AI_PANEL__*/', rd('code/_ai_panel.js').rstrip('\n'))   # G6 (2026-10-18): the AI question panel at scale (limits, markets, strata, chunks, the one cost formula)
     s = s.replace('/*__RIVALS__*/', rd('code/_rivals.js').rstrip('\n'))   # C-2 / C-8 (2026-10-17): the one rival set and the category-provider rule (inside the outreach kit, and in AI Metrics)
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
@@ -355,7 +356,7 @@ SCOPED = {'Load AI Prompts': [], 'Load AI Visibility': [('checked_at', 'gte', SI
 for i, (nm, t) in enumerate(loads):
     if nm in SCOPED: A.node(nm, DT_TYPE, DT_VERSION, dt_get_all_where_params(t, [('site_id', 'like', SITE_SCOPE)] + SCOPED[nm]), at(1 + i, 1), **LOAD)
     else: A.load(nm, t, at(1 + i, 1))
-A.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('site_id', 'like', SITE_SCOPE), ('checked_at', 'gte', SINCE(15))]), at(8, 1), **LOAD)
+A.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('site_id', 'like', SITE_SCOPE), ('checked_at', 'gte', SINCE(60))]), at(8, 1), **LOAD)   # W2-E2: 60 days (was 15) - the 28-day segment window and an action's 28 days before / after
 A.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'ai'), ('site_id', 'like', SITE_SCOPE)]), at(9, 1), **LOAD)
 A.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [('site_id', 'like', SITE_SCOPE), ('checked_at', 'gte', SINCE(35))]), at(10, 1), **LOAD)
 # G6 (2026-10-18): the answers earlier executions of an unfinished split run stored (a run is resumed for at most 6 days; the pulse's rows are
@@ -366,6 +367,10 @@ loads += [('Load AI Daily', None), ('Load Cache (AI)', None), ('Load Query Histo
 # lists a page that answers 404 as "your cited page" and the brief never builds on one
 from ladder_common import PAGES_TABLE as _PAGES_TABLE_RV1
 A.node('Load Pages (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_PAGES_TABLE_RV1, [('site_id', 'like', SITE_SCOPE)]), at(11, 2), **LOAD); loads += [('Load Pages (AI)', None)]   # F2 (E12)
+# W2-E2 (2026-10-23, fixes/W2-E2.md): the actions whose effect AI Metrics measures (difference in differences): the AI targets written / won and the pages published
+from ladder_common import AI_TARGETS_TABLE as _AIT_W2, LOG_TABLE as _LOG_W2
+A.node('Load AI Targets (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_AIT_W2, [('site_id', 'like', SITE_SCOPE)]), at(12, 2), **LOAD)
+A.node('Load Content Log (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LOG_W2, [('site_id', 'like', SITE_SCOPE)]), at(13, 2), **LOAD); loads += [('Load AI Targets (AI)', None), ('Load Content Log (AI)', None)]
 A.code('AI Plan', 'AI_Plan.js', at(11, 1)); A.iff('Any Sites (AI)?', '{{ !$json.nothing_to_do }}', at(12, 1)); A.node('Nothing To Do (AI)', 'n8n-nodes-base.noOp', 1, {}, at(13, 2))
 A.code('Site Text Jobs', 'Site_Text_Jobs.js', at(13, -2)); A.iff('Need Site Text?', '{{ !$json.skip }}', at(14, -2))
 A.node('Read Site (AI)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '=https://r.jina.ai/https://{{ $json.domain }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'X-Retain-Images', 'value': 'none'}]}, 'options': {'response': {'response': {'responseFormat': 'text', 'outputPropertyName': 'site_text'}}, 'timeout': 30000}}, at(15, -3), credentials={'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}, onError='continueRegularOutput', **retry_lint.RETRY)
@@ -414,6 +419,10 @@ A.node('Save Run State', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACH
 A.code('Next Chunk Starts', "// G6: one start item per site whose run continues (Manual Run reads domain / site_id + continue_run; parent_run_id keeps the run guard from\n// taking this execution's open ledger row for a twin). The state row is saved first, so the next execution finds what is answered.\nconst out = $('AI Chunk Handoff').all().map(i => (i.json || {}).next).filter(Boolean);\nreturn out.length ? out.map(j => ({ json: j })) : [{ json: { skip: true } }];", at(34, 0))
 A.iff('Any Next Chunk?', '{{ !$json.skip }}', at(35, 0))
 A.node('Start Next Chunk', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentAIVisib1'}, 'mode': 'each', 'options': {'waitForSubWorkflow': False}}, at(36, -1), onError='continueRegularOutput')
+# W2-E2 (2026-10-23): every answer of the run that names the business is read by Claude Haiku (aspects, objections, rivals), in the run's last execution
+A.code('Sentiment Jobs', 'Sentiment_Jobs.js', at(8, 4)); A.iff('Any Sentiment Jobs?', '{{ !$json.skip }}', at(8, 5))
+A.agent('Sentiment Reader', 'ai_sentiment.txt', {'type': 'object', 'properties': {'answers': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'polarity': {'type': 'string'}, 'aspects': {'type': 'array', 'items': {'type': 'object', 'properties': {'aspect': {'type': 'string'}, 'polarity': {'type': 'string'}}, 'required': ['aspect', 'polarity']}}, 'objection': {'type': 'string'}, 'rivals': {'type': 'array', 'items': {'type': 'object', 'properties': {'name': {'type': 'string'}, 'polarity': {'type': 'string'}}, 'required': ['name', 'polarity']}}}, 'required': ['n', 'polarity']}}}, 'required': ['answers']},
+        at(9, 6), max_tokens=4000, model=('claude-haiku-4-5-20251001', 'Claude Haiku 4.5'))
 A.code('AI Metrics', 'AI_Metrics.js', at(10, 3)); A.iff('Any Final Sites?', '{{ !$json.skip }}', at(10, 4)); A.code('AI Vis Rows', 'AI_Vis_Rows.js', at(11, 3))
 A.code('Chunk Part Done', "// G6: every site of this execution continues its split run in another execution — nothing to measure, report or deliver here.\nreturn [{ json: { done: true, part: true, note: ($('AI Metrics').first().json || {}).reason || '' } }];", at(11, 5))
 A.node('Save AI Visibility', DT_TYPE, DT_VERSION, dt_insert_params(AI_VIS_TABLE, AI_VIS_COLS), at(12, 3), onError='continueRegularOutput')
@@ -455,7 +464,8 @@ A.chain('Apply Analysis', 'AI Analysed Rows', 'Any Answer Rows?'); A.link('Any A
 A.chain('AI Chunk Handoff', 'Run State Rows', 'Any Run State?'); A.link('Any Run State?', 'Save Run State', 0); A.link('Any Run State?', 'Run Alert Rows', 1); A.link('Save Run State', 'Run Alert Rows')
 A.chain('Run Alert Rows', 'Any Run Alerts?'); A.link('Any Run Alerts?', 'Save Run Alert', 0); A.link('Any Run Alerts?', 'Stop Notices (AI)', 1); A.link('Save Run Alert', 'Stop Notices (AI)')
 A.chain('Stop Notices (AI)', 'Tell Stop Notices?'); A.link('Tell Stop Notices?', 'Post Stop Notices', 0); A.link('Tell Stop Notices?', 'Next Chunk Starts', 1); A.link('Post Stop Notices', 'Next Chunk Starts')
-A.chain('Next Chunk Starts', 'Any Next Chunk?'); A.link('Any Next Chunk?', 'Start Next Chunk', 0); A.link('Any Next Chunk?', 'AI Metrics', 1); A.link('Start Next Chunk', 'AI Metrics')
+A.chain('Next Chunk Starts', 'Any Next Chunk?'); A.link('Any Next Chunk?', 'Start Next Chunk', 0); A.link('Any Next Chunk?', 'Sentiment Jobs', 1); A.link('Start Next Chunk', 'Sentiment Jobs')
+A.chain('Sentiment Jobs', 'Any Sentiment Jobs?'); A.link('Any Sentiment Jobs?', 'Sentiment Reader', 0); A.link('Any Sentiment Jobs?', 'AI Metrics', 1); A.link('Sentiment Reader', 'AI Metrics')   # W2-E2
 A.chain('AI Metrics', 'Any Final Sites?'); A.link('Any Final Sites?', 'AI Vis Rows', 0); A.link('Any Final Sites?', 'Chunk Part Done', 1)
 A.chain('AI Vis Rows', 'Save AI Visibility', 'AI Prospect Rows', 'Any AI Prospects?'); A.link('Any AI Prospects?', 'Save AI Prospects', 0); A.link('Any AI Prospects?', 'AI Cache Rows', 1); A.link('Save AI Prospects', 'AI Cache Rows')
 A.chain('AI Cache Rows', 'Any Cache Rows?'); A.link('Any Cache Rows?', 'Save AI Cache', 0); A.link('Any Cache Rows?', 'Prune Old Answers', 1); A.link('Save AI Cache', 'Prune Old Answers')
@@ -545,6 +555,35 @@ for _f, _nm in [('SEO_Agent_AI_Visibility.json', 'Trim Old Answer Text'), ('SEO_
                   'from': sorted(k for k, v in _wf['connections'].items() if any(c.get('node') == _nm for outs in v.get('main', []) for c in (outs or []))),
                   'to': sorted(c.get('node') for outs in _wf['connections'].get(_nm, {}).get('main', []) for c in (outs or []))}
 json.dump(_w2e1, open(os.path.join(HERE, 'harness', 'w2e1_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+# =============================================================================
+# 1c. AI REPEAT PILOT (W2-E2, 2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): on demand only, never scheduled, priced before it runs
+# =============================================================================
+# One website: 10 questions x 10 asks per engine -> the variance between questions and within one question -> the asks per question a week
+# each engine needs. Without `confirm: true` the start answers with the price and asks nothing. Shares AI Requests / Parse AI Answers with the
+# tracker (same node names, harness prefix Pilot__). Built and harness-tested; not run.
+X = WF('SEOagentAIPilot1', 'SEO Agent — AI Repeat Pilot', 'aipilot', 1800, code_prefix='Pilot__')
+X.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
+ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Prompts Table', AI_PROMPTS_TABLE, AI_PROMPTS_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
+for i, (nm, t, c) in enumerate(ens): X.ensure(nm, t, c, at(1 + i, 0))
+loads = [('Load Sites', SITES_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE)]   # no ladders: a pilot is for a tracked website, and its questions passed the fit gate when they were stored
+for i, (nm, t) in enumerate(loads): X.load(nm, t, at(1 + i, 1))
+X.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(7, 1), **LOAD)
+X.code('AI Plan', 'Pilot_Plan.js', at(8, 1)); X.iff('Pilot Confirmed?', '{{ !$json.nothing_to_do }}', at(9, 1))
+X.code('AI Requests', 'AI_Requests.js', at(10, 0)); X.iff('Any AI Requests?', '{{ !$json.skip }}', at(11, 0))
+X.dfs_http('Run AI Requests', at(12, -1), batch=10, interval=200, timeout=150000)
+X.code('Parse AI Answers', 'Parse_AI_Answers.js', at(13, 0)); X.code('Pilot Metrics', 'Pilot_Metrics.js', at(14, 0))
+X.code('Pilot Report', 'Pilot_Report.js', at(15, 1)); X.deliver('Pilot', at(16, 1), None)
+X.chain(*[e[0] for e in ens], *[l[0] for l in loads], 'Load Cache (AI)', 'AI Plan', 'Pilot Confirmed?'); X.link('Manual Run', ens[0][0])
+X.link('Pilot Confirmed?', 'AI Requests', 0); X.link('Pilot Confirmed?', 'Pilot Report', 1)
+X.chain('AI Requests', 'Any AI Requests?'); X.link('Any AI Requests?', 'Run AI Requests', 0); X.link('Any AI Requests?', 'Parse AI Answers', 1)
+X.ai_retry_gate(at(12, 1), 'Parse AI Answers')
+X.chain('Parse AI Answers', 'Pilot Metrics', 'Pilot Report'); X.link('Pilot Report', 'Has Email (Pilot)?'); X.link('Pilot Report', 'Has Callback (Pilot)?')
+X.run_ledger('ai_pilot', 'Pilot', 'AI Plan', ['Pilot Report'], at(9, 4), measured='Pilot Metrics')
+assert not any(n['type'] == 'n8n-nodes-base.scheduleTrigger' for n in X.N), 'W2-E2: the repeat pilot must never be scheduled'
+X.sticky("""## SEO Agent — AI Repeat Pilot (W2-E2)
+**On demand only** (*Manual Run* `{ domain | site_id, confirm?, email?, callback_url? }`; no schedule). Without `confirm: true` it answers with the price (stage `ai_pilot_quote`) and asks nothing. Confirmed: 10 questions of the panel (one per topic first) x 10 asks on each engine that answers anew each time (not the AI Overview or Copilot), at most $4 -> *Pilot Metrics*: the variance between questions and within one question per engine (one-way ANOVA), the asks per question a week for +/-5 points -> callback `stage: ai_pilot`.""", [-40, -700], 900, 260)
+X.write('SEO_Agent_AI_Pilot.json')
 
 # =============================================================================
 # 2. BACKLINK MONITOR

@@ -22,6 +22,9 @@ const __row = { site_id: a.site_id, domain: a.domain || old.domain || '', ai_vis
   competitors: has('competitors') ? list(m.competitors).map(normD).filter(Boolean).slice(0, 5).join(', ') : String(old.competitors || ''), brand_names: has('brand_names') ? list(m.brand_names).join(', ') : String(old.brand_names || ''),
   // G32: weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept between 2 and 26)
   stuck_weeks: has('stuck_weeks') ? Math.min(26, Math.max(2, parseInt(m.stuck_weeks, 10) || 8)) : (old.stuck_weeks === '' || old.stuck_weeks == null ? null : Number(old.stuck_weeks)),
-  updated_at: a.updated_at, request_id: a.request_id || '' };
+  updated_at: a.updated_at, request_id: a.request_id || '',
+  // W2-E2 (2026-10-23): the owner's AI alert rules (validated in Admin Action; '' clears) and the declared share-of-voice set - kept as stored unless given
+  ai_alert_rules_json: m.ai_alert_rules_json !== undefined && m.ai_alert_rules_json !== null ? String(m.ai_alert_rules_json) : String(old.ai_alert_rules_json || ''),
+  ai_sov_set: m.ai_sov_set !== undefined && m.ai_sov_set !== null ? String(m.ai_sov_set) : String(old.ai_sov_set || '') };
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

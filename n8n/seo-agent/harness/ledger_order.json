@@ -90,6 +90,39 @@
    ],
    "tag": "Pulse"
   },
+  "SEO Agent \u2014 AI Repeat Pilot": {
+   "always_output": [
+    "Ensure Run Ledger (Pilot)",
+    "Reserve Run Ledger (Pilot)"
+   ],
+   "ensure_out": [
+    "DFS Balance (Pilot)"
+   ],
+   "est": {
+    "ai": 0.0,
+    "dfs": 1.5
+   },
+   "plan": "AI Plan",
+   "plan_out": [
+    "Ensure Run Ledger (Pilot)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (Pilot)"
+   ],
+   "resume": "After Run Ledger (Pilot)",
+   "resume_out": [
+    "Run Allowed? (Pilot)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (Pilot)"
+   ],
+   "settle": "Settle Run Ledger (Pilot)",
+   "settle_from": [
+    "Pilot Report",
+    "Refuse Run Ledger (Pilot)"
+   ],
+   "tag": "Pilot"
+  },
   "SEO Agent \u2014 AI Visibility Tracker": {
    "always_output": [
     "Ensure Run Ledger (AI)",

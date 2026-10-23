@@ -77,7 +77,7 @@ const AIP = (() => {
   const locationOf = (cc) => { const n = ISO_NUM[S(cc).toUpperCase()]; return n ? 2000 + n : 0; };
   const PERSONA_MAX = 6;
   const personasOf = (site) => [...new Set(listOf(site.ai_personas).map(p => p.replace(/\s+/g, ' ').slice(0, 40)))].slice(0, PERSONA_MAX);
-  const stageOf = (s) => { const x = S(s).toLowerCase(); return ['awareness', 'consideration', 'decision', 'brand'].includes(x) ? x : ''; };
+  const stageOf = (s) => { const x = S(s).toLowerCase(); return ['awareness', 'consideration', 'decision', 'brand', 'shopping'].includes(x) ? x : ''; };
 
   // ---- 3. one question, said another way ----------------------------------------------------------------------------------------
   const STOP = new Set(('a an and are as at be best by can do does for from get has have how i in is it its me my of on or our should the their them '
@@ -1405,8 +1405,8 @@ const parse = (raw) => { if (raw && typeof raw === 'object') return raw; const s
 // Save Prompts upserts on (site_id, prompt_id). A stored question keeps its stored id: only a question new to the site gets a new one.
 const norm = AIP.normQ;
 const now = new Date().toISOString(); const rows = [];
-const KINDS = ['recommend', 'choose', 'cost', 'compare', 'problem', 'brand'], STAGES = ['awareness', 'consideration', 'decision', 'brand'], ORIGINS = ['market', 'search', 'writer', 'paa', 'competitor'];
-const STAGE_OF = { recommend: 'decision', cost: 'decision', choose: 'consideration', compare: 'consideration', problem: 'awareness', brand: 'brand', custom: 'consideration' };
+const KINDS = ['recommend', 'choose', 'cost', 'compare', 'problem', 'brand', 'shopping'], STAGES = ['awareness', 'consideration', 'decision', 'brand', 'shopping'],   /* W2-E1: shopping, for sites that sell products (Prompt Jobs asks for it only then) */ ORIGINS = ['market', 'search', 'writer', 'paa', 'competitor'];
+const STAGE_OF = { recommend: 'decision', cost: 'decision', choose: 'consideration', compare: 'consideration', problem: 'awareness', brand: 'brand', custom: 'consideration', shopping: 'shopping' };
 // monthly AI search volume per search phrase (AI Keyword Data), per site
 const volumes = new Map();
 dreq.forEach((q, i) => { if (q.kind !== 'volume') return; const t = ((dres[i] || {}).tasks || [])[0] || {}; if (t.status_code !== 20000) return;

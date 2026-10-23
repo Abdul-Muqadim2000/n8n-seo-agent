@@ -169,6 +169,15 @@
    "Merge AI Answers",
    "Parse AI Answers"
   ],
+  "SEO Agent \u2014 AI Repeat Pilot": [
+   "Run AI Requests",
+   "AI Retry Requests",
+   "Any AI Retries?",
+   "Wait Before AI Retry",
+   "Run AI Retries",
+   "Merge AI Answers",
+   "Parse AI Answers"
+  ],
   "SEO Agent \u2014 AI Visibility Tracker": [
    "Run AI Requests",
    "AI Retry Requests",
@@ -252,6 +261,7 @@
   "POST Callback": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST Growth Report": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST LB Report": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST Pilot Report": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST Progress": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST Pulse Report": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST Rejection": "callback to the customer app: every POST inserts a report (not idempotent)",
@@ -1891,6 +1901,85 @@
     "waitBetweenTries": 5000
    }
   ],
+  "SEO Agent \u2014 AI Repeat Pilot": [
+   {
+    "allowed": false,
+    "maxTries": null,
+    "name": "Run AI Requests",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": true,
+    "retryOnFail": false,
+    "timeout": 150000,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST Pilot Report",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": false,
+    "timeout": 30000,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": null,
+    "name": "Run AI Retries",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": true,
+    "retryOnFail": false,
+    "timeout": 150000,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Pilot)",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Pilot)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 30000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Pilot)",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (Pilot)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
+   }
+  ],
   "SEO Agent \u2014 AI Visibility Tracker": [
    {
     "allowed": false,
@@ -2083,6 +2172,28 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Count Answer (Prompt Writer)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 20000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (Sentiment Reader)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 20000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Sentiment Reader)",
     "onError": "continueRegularOutput",
     "paid": false,
     "per_item": false,

@@ -31,6 +31,7 @@ ALLOW = {
     'POST Rejection': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST AI Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST Pulse Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
+    'POST Pilot Report': 'callback to the customer app: every POST inserts a report (not idempotent)',   # W2-E2 (2026-10-23): the AI repeat pilot
     'POST BL Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST Growth Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST LB Report': 'callback to the customer app: every POST inserts a report (not idempotent)',

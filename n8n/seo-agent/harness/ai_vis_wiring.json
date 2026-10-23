@@ -225,6 +225,17 @@
     ]
    ]
   },
+  "After Count (Sentiment Reader)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Metrics",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "After Run Ledger (AI)": {
    "main": [
     [
@@ -502,7 +513,7 @@
     [
      {
       "index": 0,
-      "node": "AI Metrics",
+      "node": "Sentiment Jobs",
       "type": "main"
      }
     ]
@@ -611,6 +622,24 @@
      {
       "index": 0,
       "node": "Run Alert Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Sentiment Jobs?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Sentiment Reader",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "AI Metrics",
       "type": "main"
      }
     ]
@@ -738,6 +767,17 @@
     ]
    ]
   },
+  "Claude \u2014 Sentiment Reader": {
+   "ai_languageModel": [
+    [
+     {
+      "index": 0,
+      "node": "Sentiment Reader",
+      "type": "ai_languageModel"
+     }
+    ]
+   ]
+  },
   "Count Answer (AI Brief)": {
    "main": [
     [
@@ -771,6 +811,17 @@
     ]
    ]
   },
+  "Count Answer (Sentiment Reader)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "After Count (Sentiment Reader)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Count Prompt (AI Brief)": {
    "main": [
     [
@@ -799,6 +850,17 @@
      {
       "index": 0,
       "node": "Count Answer (Prompt Writer)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Count Prompt (Sentiment Reader)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Count Answer (Sentiment Reader)",
       "type": "main"
      }
     ]
@@ -1080,6 +1142,17 @@
     ]
    ]
   },
+  "Load AI Targets (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Content Log (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Load AI Visibility": {
    "main": [
     [
@@ -1097,6 +1170,17 @@
      {
       "index": 0,
       "node": "Load Query History",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load Content Log (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Plan",
       "type": "main"
      }
     ]
@@ -1173,7 +1257,7 @@
     [
      {
       "index": 0,
-      "node": "AI Plan",
+      "node": "Load AI Targets (AI)",
       "type": "main"
      }
     ]
@@ -1340,6 +1424,17 @@
     ]
    ]
   },
+  "Parser \u2014 Sentiment Reader": {
+   "ai_outputParser": [
+    [
+     {
+      "index": 0,
+      "node": "Sentiment Reader",
+      "type": "ai_outputParser"
+     }
+    ]
+   ]
+  },
   "Post Alert Retry (AI)": {
    "main": [
     [
@@ -1428,6 +1523,17 @@
     ]
    ]
   },
+  "Prompt For Count (Sentiment Reader)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Count Prompt (Sentiment Reader)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Prompt Jobs": {
    "main": [
     [
@@ -1466,7 +1572,7 @@
     [
      {
       "index": 0,
-      "node": "AI Brief Input",
+      "node": "Trim Old Answer Text",
       "type": "main"
      }
     ]
@@ -1732,6 +1838,28 @@
     ]
    ]
   },
+  "Sentiment Jobs": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Sentiment Jobs?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Sentiment Reader": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Prompt For Count (Sentiment Reader)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Settle Run Ledger (AI)": {
    "main": [
     [
@@ -1759,7 +1887,7 @@
     [
      {
       "index": 0,
-      "node": "AI Metrics",
+      "node": "Sentiment Jobs",
       "type": "main"
      }
     ]
@@ -1853,6 +1981,17 @@
     ]
    ]
   },
+  "Trim Old Answer Text": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Brief Input",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Update AI Answers": {
    "main": [
     [
@@ -1909,7 +2048,7 @@
     {
      "condition": "gte",
      "keyName": "checked_at",
-     "keyValue": "={{ new Date(Date.now() - 15 * 864e5).toISOString() }}"
+     "keyValue": "={{ new Date(Date.now() - 60 * 864e5).toISOString() }}"
     }
    ]
   },
@@ -1946,6 +2085,15 @@
     }
    ]
   },
+  "Load AI Targets (AI)": {
+   "conditions": [
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    }
+   ]
+  },
   "Load AI Visibility": {
    "conditions": [
     {
@@ -1967,6 +2115,15 @@
      "keyName": "kind",
      "keyValue": "ai"
     },
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    }
+   ]
+  },
+  "Load Content Log (AI)": {
+   "conditions": [
     {
      "condition": "like",
      "keyName": "site_id",
@@ -2161,6 +2318,30 @@
      "condition": "eq",
      "keyName": "status",
      "keyValue": "reserved"
+    }
+   ]
+  },
+  "Trim Old Answer Text": {
+   "conditions": [
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    },
+    {
+     "condition": "neq",
+     "keyName": "run_kind",
+     "keyValue": "pulse"
+    },
+    {
+     "condition": "lt",
+     "keyName": "checked_at",
+     "keyValue": "={{ new Date(Date.now() - 35 * 864e5).toISOString() }}"
+    },
+    {
+     "condition": "gte",
+     "keyName": "checked_at",
+     "keyValue": "={{ new Date(Date.now() - 49 * 864e5).toISOString() }}"
     }
    ]
   },

@@ -174,6 +174,62 @@
     "severity"
    ]
   },
+  "SEO Agent \u2014 AI Repeat Pilot": {
+   "guard": {
+    "gate": "After Run Ledger (Pilot)",
+    "if": "Run Allowed? (Pilot)",
+    "kit": "RG",
+    "load": "Load Open Runs (Pilot)",
+    "notice": "Refusal Notice (Pilot)",
+    "post": "Post Refusal (Pilot)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Pilot)",
+     "Refusal Notice (Pilot)",
+     "Refuse Run Ledger (Pilot)",
+     "Tell Caller (Pilot)?"
+    ],
+    "refuse": "Refuse Run Ledger (Pilot)",
+    "tell": "Tell Caller (Pilot)?"
+   },
+   "if_outputs": [
+    [
+     "Pilot Confirmed?"
+    ],
+    [
+     "Refuse Run Ledger (Pilot)"
+    ]
+   ],
+   "refuse_values": [
+    "cost_basis",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_at",
+    "settled_usd",
+    "status"
+   ],
+   "retry": {
+    "from": "Settle Run Ledger (Pilot)",
+    "gate": "Any Alert Retry (Pilot)?",
+    "load": "Load Open Alerts (Pilot)",
+    "plan": "Alert Retry Plan (Pilot)",
+    "post": "Post Alert Retry (Pilot)",
+    "result": "Alert Retry Result (Pilot)",
+    "save": "Save Alert Retry (Pilot)",
+    "table": "seo_ops_alerts"
+   },
+   "writes": [
+    "attempt_log",
+    "attempts",
+    "channels",
+    "delivered",
+    "last_attempt_at",
+    "next_attempt_at",
+    "notes",
+    "severity"
+   ]
+  },
   "SEO Agent \u2014 AI Visibility Tracker": {
    "guard": {
     "gate": "After Run Ledger (AI)",

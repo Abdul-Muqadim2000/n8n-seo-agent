@@ -89,6 +89,20 @@
    "DFS Balance End (Pulse)"
   ]
  },
+ "SEO Agent \u2014 AI Repeat Pilot": {
+  "excused": {
+   "DFS Balance (Pilot)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",
+   "DFS Balance End (Pilot)": "structurally different, and deliberately left here: the SECOND free appendix/user_data reading B-A5 takes at settle time, to see whether the account's move belongs to this run. It is free, it fails open - CC.dfsRun keeps the cost this run's own tasks reported and says the reading was missing - and it is the last node of the run, so a retry would delay the settle to improve a reconciliation that already states when it could not be made. Nothing is scored, ranked or advised from it."
+  },
+  "gated": [
+   "Run AI Requests",
+   "Run AI Retries"
+  ],
+  "ungated": [
+   "DFS Balance (Pilot)",
+   "DFS Balance End (Pilot)"
+  ]
+ },
  "SEO Agent \u2014 AI Visibility Tracker": {
   "excused": {
    "DFS Balance (AI)": "structurally different, and deliberately left here: appendix/user_data is FREE, is read once on the ledger chain before the first paid call, and FAILS OPEN - Run Ledger Row stores 0 when the probe does not answer, Rate Limit refuses nothing on a 0, CC.dfsDay drops a 0 reading from the day's reconciliation and prints 'no balance reading for the day (appendix/user_data was not answered)'. Nothing is scored, ranked or advised from it. A gate would put a 5-second wait on the critical path of every run and of all ten schedules to improve a guard that already says when it could not read.",

@@ -146,7 +146,16 @@
   "cited_urls",
   "named",
   "position",
-  "entities_json"
+  "entities_json",
+  "answer_text",
+  "cited_json",
+  "retrieved_json",
+  "fanout_json",
+  "products_json",
+  "ads_json",
+  "local_json",
+  "model",
+  "detail_json"
  ],
  "AI_PROMPTS": [
   "prompt_id",
@@ -192,7 +201,9 @@
   "ai_personas",
   "ai_markets",
   "ai_pulse_mode",
-  "ai_pulse_per_week"
+  "ai_pulse_per_week",
+  "ai_alert_rules_json",
+  "ai_sov_set"
  ],
  "LINK_OUTREACH": [
   "site_id",

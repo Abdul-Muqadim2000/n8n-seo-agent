@@ -295,6 +295,455 @@ const engineChange = (kNow, nNow, kBefore, nBefore, o) => {
   const t = changeOf(kNow, a, kBefore, b, o); return { tested: true, ...t, k: kNow, k_before: kBefore };
 };
 
+// ---- W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): measurement a statistician would sign (inlined by build_monitors.py) ----
+// The answers to ONE question are correlated: the same question asked of five engines on seven mornings tends to name the same businesses,
+// so 35 such answers are not 35 independent trials. Every interval below treats the QUESTION as the sampling unit (the cluster):
+//   prop()   a rate: Wilson's interval on the effective sample size n / deff, the design effect deff = (cluster-robust variance over questions)
+//            / (binomial variance), floored at 1, with Korn & Graubard's degrees-of-freedom correction (n* = n_eff x (z / t_{questions-1})^2)
+//            so a panel of 8 questions is not read as if its between-question variance were known. A rate of 0% or 100% has no variance to
+//            measure: its design effect is BORROWED from the other rates of the same answers (the competitors' named rates; `basis`
+//            says so), and with nothing to borrow from it assumes the answers to one question all agree (rho = 1, the widest honest range).
+//   ratio()  a share or a mean (share of voice, mean normalised position, net sentiment): the linearised ratio estimator over QUESTION
+//            totals, its standard error times t_{questions-1}.
+//   boot()   a seeded (deterministic) bootstrap over questions, optionally two-level (questions, then the answers within each question)
+//            - used where a closed form does not exist (difference in differences, harness/simulation comparisons).
+// The choice of prop() for the headline was made by the harness simulation (W2E2-SIM: coverage of the 95% interval on clustered data with a
+// known rate) and its speed at 500 questions x 9 engines (W2E2-SPEED); both are printed by the harness and written in W2-E2.md.
+const AVX = (() => {
+  const Z = 1.959963985;
+  const r1 = (x) => Math.round(10 * x) / 10;
+  const r3 = (x) => Math.round(1000 * x) / 1000;
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const has = (v) => v !== undefined && v !== null && v !== '';
+  const parse = (v, d) => { if (v && typeof v === 'object') return v; if (!has(v)) return d; try { const x = JSON.parse(String(v)); return x == null ? d : x; } catch (e) { return d; } };
+  /** FNV-1a: a seed from a string (the site and run), so the same run always gives the same bootstrap */
+  const hash = (s) => { let h = 2166136261 >>> 0; const t = String(s); for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; };
+  /** mulberry32: a small, fast, seeded uniform generator in [0, 1) */
+  const rng = (seed) => { let a = (typeof seed === 'number' ? seed : hash(seed)) >>> 0; if (!a) a = 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  // Student's t, 97.5% quantile: exact table to 30 degrees of freedom, the Cornish-Fisher expansion above (error < 0.001)
+  const TT = [null, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042];
+  const t975 = (df) => { const v = Math.floor(Number(df)); if (!(v >= 1)) return null; if (v <= 30) return TT[v]; const z = Z, z3 = z * z * z, z5 = z3 * z * z, z7 = z5 * z * z, z9 = z7 * z * z;
+    return z + (z3 + z) / (4 * v) + (5 * z5 + 16 * z3 + 3 * z) / (96 * v * v) + (3 * z7 + 19 * z5 + 17 * z3 - 15 * z) / (384 * v * v * v) + (79 * z9 + 776 * z7 + 1482 * z5 - 1920 * z3 - 945 * z) / (92160 * v * v * v * v); };
+  /** Wilson's interval for a proportion p on a (possibly non-integer, effective) sample size n, in percent */
+  const wilsonN = (p, n, z) => { const zz = z || Z; if (!(n > 0)) return [null, null]; const d = 1 + zz * zz / n, c = p + zz * zz / (2 * n), m = zz * Math.sqrt(Math.max(0, p * (1 - p)) / n + zz * zz / (4 * n * n));
+    return [Math.max(0, r1(100 * (c - m) / d)), Math.min(100, r1(100 * (c + m) / d))]; };
+  const NONE = (why) => ({ rate: null, lo: null, hi: null, k: 0, n_answers: 0, n_questions: 0, deff: null, rho: null, df: null, n_eff: null, basis: 'not_available', why: why || 'no answer' });
+  /** a rate over answers clustered by question. pick(u) -> true / false / null (null: not counted). o.q: the cluster key (default prompt_id);
+   *  o.rho: a borrowed intra-question correlation for a rate with no variance of its own. */
+  const prop = (units, pick, o) => { const opt = o || {}; const qOf = opt.q || ((u) => u.prompt_id);
+    const G = new Map(); let K = 0, M = 0;
+    for (const u of (units || [])) { const y = pick(u); if (y == null) continue; const key = String(qOf(u)); const g = G.get(key) || [0, 0]; if (y) { g[0]++; K++; } g[1]++; M++; G.set(key, g); }
+    if (!M) return NONE('no answer');
+    const C = G.size, p = K / M; let S2 = 0, Mw = 0; for (const [k, m] of G.values()) { S2 += (k - p * m) * (k - p * m); Mw += m * m; }
+    const mbar = Mw / M;                                   // the answers-weighted mean answers per question (the design effect's m)
+    const vSrs = p * (1 - p) / M, vClu = C > 1 ? (C / (C - 1)) * S2 / (M * M) : null;
+    const deffRaw = vClu != null && vSrs > 0 ? vClu / vSrs : null;
+    let deff, rho = null, basis = 'measured';
+    if (deffRaw != null) { deff = Math.max(1, deffRaw); rho = mbar > 1 ? clamp((deffRaw - 1) / (mbar - 1), 0, 1) : 0; }
+    else { const rb = opt.rho != null && isFinite(opt.rho) ? clamp(Number(opt.rho), 0, 1) : 1; deff = 1 + Math.max(0, mbar - 1) * rb; rho = rb; basis = opt.rho != null ? 'borrowed' : 'assumed'; }
+    const df = Math.max(1, C - 1), t = t975(df), nEff = M / deff, nStar = Math.min(M, nEff * (Z / t) * (Z / t));
+    const ci = wilsonN(p, nStar);
+    return { rate: r1(100 * p), lo: ci[0], hi: ci[1], k: K, n_answers: M, n_questions: C, deff: r3(deff), rho: rho == null ? null : r3(rho), df, n_eff: r1(nStar), basis,
+      why: basis === 'measured' ? '' : basis === 'borrowed' ? 'no variation of its own (' + K + ' of ' + M + '): its design effect is borrowed from the other rates of the same answers'
+        : 'no variation of its own (' + K + ' of ' + M + ') and nothing to borrow from: the range assumes the answers to one question all agree' }; };
+  /** a share or a mean over answers clustered by question: yx(u) -> [y, x] or null. Ratio estimator R = sum y / sum x over question totals.
+   *  o.scale: 100 for a share in percent; o.lo0 / o.hi0: the bounds the ratio cannot cross. */
+  const ratio = (units, yx, o) => { const opt = o || {}; const qOf = opt.q || ((u) => u.prompt_id); const sc = opt.scale == null ? 1 : opt.scale;
+    const G = new Map(); let Y = 0, X = 0, n = 0;
+    for (const u of (units || [])) { const v = yx(u); if (!v || !(v[1] > 0)) continue; const key = String(qOf(u)); const g = G.get(key) || [0, 0]; g[0] += v[0]; g[1] += v[1]; G.set(key, g); Y += v[0]; X += v[1]; n++; }
+    if (!X) return { value: null, lo: null, hi: null, n: 0, n_questions: 0, df: null, se: null, basis: 'not_available' };
+    const C = G.size, R = Y / X; let S2 = 0; for (const [y, x] of G.values()) S2 += (y - R * x) * (y - R * x);
+    const df = Math.max(1, C - 1), t = t975(df);
+    const se = C > 1 ? Math.sqrt((C / (C - 1)) * S2) / X : null;
+    const lo0 = opt.lo0 == null ? -Infinity : opt.lo0, hi0 = opt.hi0 == null ? Infinity : opt.hi0;
+    if (se == null || se === 0) return { value: Math.round(1000 * sc * R) / 1000, lo: null, hi: null, n, n_questions: C, df, se: se == null ? null : 0, basis: 'not_available',
+      why: C < 2 ? 'one question only: there is no between-question variation to measure a range from' : 'every question gives the same figure, so no range can be measured' };
+    return { value: Math.round(1000 * sc * R) / 1000, lo: Math.round(1000 * sc * Math.max(lo0, R - t * se)) / 1000, hi: Math.round(1000 * sc * Math.min(hi0, R + t * se)) / 1000, n, n_questions: C, df, se: Math.round(1e5 * sc * se) / 1e5, basis: 'measured' }; };
+  /** a seeded bootstrap. groups: [[unit, ...], ...] (one array per question). stat(sample) -> number | null over a list of groups.
+   *  o.B (default 1000), o.seed, o.two (also resample the answers within each question). Percentile interval. */
+  const boot = (groups, stat, o) => { const opt = o || {}; const B = opt.B || 1000; const R = rng(opt.seed == null ? 1 : opt.seed); const G = (groups || []).filter(g => g && g.length); const C = G.length;
+    if (!C) return { lo: null, hi: null, B: 0, ok: 0 };
+    const vals = []; for (let b = 0; b < B; b++) { const s = new Array(C);
+      for (let i = 0; i < C; i++) { const g = G[Math.floor(R() * C)]; if (opt.two) { const m = g.length, h = new Array(m); for (let j = 0; j < m; j++) h[j] = g[Math.floor(R() * m)]; s[i] = h; } else s[i] = g; }
+      const v = stat(s); if (v != null && isFinite(v)) vals.push(v); }
+    vals.sort((a, b) => a - b); const q = (f) => vals.length ? vals[Math.min(vals.length - 1, Math.max(0, Math.floor(f * vals.length)))] : null;
+    return { lo: q(0.025), hi: q(0.975), B, ok: vals.length }; };
+  /** a binomial draw (two-level bootstrap within a question without building arrays) */
+  const binom = (R, m, p) => { let k = 0; for (let j = 0; j < m; j++) if (R() < p) k++; return k; };
+
+  // ---- 1. ci_json: the headline intervals, clustered by question ------------------------------------------------------------------------
+  /** U: the headline's answers ({ prompt_id, engine, named, cited, position, rivals }). rivalIds: the competitors whose named rates lend
+   *  their design effect to a rate with no variance. Returns ci_json and the time it took. */
+  const ci = (U, o) => { const opt = o || {}; const t0 = Date.now(); const units = (U || []).filter(u => u && u.answered !== false);
+    // rho to lend: the median measured rho of the competitors' named rates (the same answers, the same clustering)
+    const rhos = []; for (const id of (opt.rivalIds || []).slice(0, 12)) { const r0 = prop(units, (u) => !!(u.rivals || []).find(x => x.id === id), {}); if (r0.basis === 'measured' && r0.rho != null) rhos.push(r0.rho); }
+    const cit = prop(units, (u) => !!u.cited); if (cit.basis === 'measured' && cit.rho != null) rhos.push(cit.rho);
+    const nm0 = prop(units, (u) => !!u.named); if (nm0.basis === 'measured' && nm0.rho != null) rhos.push(nm0.rho);
+    rhos.sort((a, b) => a - b); const lend = rhos.length ? rhos[Math.floor(rhos.length / 2)] : null;
+    const P = (pick) => { const r0 = prop(units, pick, {}); return r0.basis === 'measured' ? r0 : prop(units, pick, { rho: lend }); };
+    const out = { named_rate: P((u) => !!u.named), cited_rate: P((u) => !!u.cited) };
+    out.first_rate = P((u) => !!u.named && u.position === 1);
+    const sv = ratio(units.filter(u => u.rivals), (u) => [u.named ? 1 : 0, (u.named ? 1 : 0) + u.rivals.length], { scale: 100, lo0: 0, hi0: 1 });
+    out.share_of_voice = { rate: sv.value == null ? null : r1(sv.value), lo: sv.lo == null ? null : r1(sv.lo), hi: sv.hi == null ? null : r1(sv.hi), n_answers: sv.n, n_questions: sv.n_questions, df: sv.df, basis: sv.basis, why: sv.why || '' };
+    const pw = (pos) => pos === 1 ? 1 : pos === 2 ? 0.8 : pos === 3 ? 0.65 : pos > 3 && pos <= 5 ? 0.5 : pos > 5 ? 0.35 : 0.6;
+    const pv = ratio(units, (u) => [u.named ? 100 * pw(u.position || 0) : 0, 1], { lo0: 0, hi0: 100 });
+    out.pos_visibility = { rate: pv.value == null ? null : r1(pv.value), lo: pv.lo == null ? null : r1(pv.lo), hi: pv.hi == null ? null : r1(pv.hi), n_answers: pv.n, n_questions: pv.n_questions, df: pv.df, basis: pv.basis, why: pv.why || '' };
+    const ap = ratio(units.filter(u => u.named && u.position), (u) => [u.position, 1], { lo0: 1 });
+    out.avg_position = { rate: ap.value == null ? null : r1(ap.value), lo: ap.lo == null ? null : r1(ap.lo), hi: ap.hi == null ? null : r1(ap.hi), n_answers: ap.n, n_questions: ap.n_questions, df: ap.df, basis: ap.basis, why: ap.why || '' };
+    // the plain Wilson the report used to print, kept beside each rate so the difference is visible (it treats every answer as independent)
+    for (const k of ['named_rate', 'cited_rate', 'first_rate']) { const x = out[k]; if (x && x.n_answers) { const w = wilsonN(x.k / x.n_answers, x.n_answers); x.wilson_naive = w; } }
+    const byEngine = {}; for (const e of [...new Set(units.map(u => u.engine))].sort()) { const eu = units.filter(u => u.engine === e); const r0 = prop(eu, (u) => !!u.named); const r1_ = r0.basis === 'measured' ? r0 : prop(eu, (u) => !!u.named, { rho: lend });
+      const c0 = prop(eu, (u) => !!u.cited); byEngine[e] = { named_rate: { lo: r1_.lo, hi: r1_.hi, n_answers: r1_.n_answers, n_questions: r1_.n_questions, deff: r1_.deff, basis: r1_.basis }, cited_rate: { lo: c0.basis === 'measured' ? c0.lo : prop(eu, (u) => !!u.cited, { rho: lend }).lo, hi: c0.basis === 'measured' ? c0.hi : prop(eu, (u) => !!u.cited, { rho: lend }).hi, n_answers: c0.n_answers, n_questions: c0.n_questions } }; }
+    const nq = new Set(units.map(u => String(u.prompt_id))).size;
+    return { method: 'design-effect', level: 95, headline: out, by_engine: byEngine, rho_lent: lend, questions: nq, answers: units.length, ms: Date.now() - t0,
+      note: 'Ranges treat the question as the sampling unit: answers to one question (across engines and mornings) repeat each other, so they count as fewer independent answers (the design effect). '
+        + (out.named_rate.deff != null ? '"Named in" rests on ' + units.length + ' answers to ' + nq + ' questions, worth about ' + out.named_rate.n_eff + ' independent answers (design effect ' + out.named_rate.deff + ').' : '') }; };
+
+  // ---- 2. the 28-day window: units of earlier weekly runs (units_json) and of the daily pulse (detail_json) --------------------------------
+  /** the compact per-answer record a weekly row stores (units_json): questions and engines indexed once */
+  const packUnits = (units, at, rule) => { const qs = [], es = [], ents = []; const ix = (arr, v) => { let i = arr.indexOf(v); if (i < 0) { arr.push(v); i = arr.length - 1; } return i; };
+    const a = (units || []).map(u => [ix(qs, String(u.prompt_id)), ix(es, String(u.engine)), u.named ? 1 : 0, u.cited ? 1 : 0, u.position || null, u.rivals ? u.rivals.map(x => [ix(ents, String(x.id)), x.position || null, x.cited ? 1 : 0]) : null]);
+    return { v: 1, rule_version: rule, at, q: qs, e: es, ents, a }; };
+  const unpackUnits = (raw) => { const x = parse(raw, null); if (!x || !Array.isArray(x.a)) return null; const q = x.q || [], e = x.e || [], ents = x.ents || [];
+    return { rule_version: String(x.rule_version || ''), at: String(x.at || ''), units: x.a.filter(Array.isArray).map(a => ({ prompt_id: String(q[a[0]]), engine: String(e[a[1]]), named: !!a[2], cited: !!a[3], position: Number(a[4]) > 0 ? Number(a[4]) : null,
+      rivals: Array.isArray(a[5]) ? a[5].map(r => ({ id: String(ents[(r || [])[0]] || ''), position: Number((r || [])[1]) > 0 ? Number(r[1]) : null, cited: !!(r || [])[2] })).filter(r => r.id) : null, answered: true })) }; };
+  /** a pulse morning's per-answer record (Pulse Metrics' detail_json) as units */
+  const pulseUnits = (detail) => { const D = parse(detail, null); if (!D || !Array.isArray(D.a)) return []; const ents = Array.isArray(D.ents) ? D.ents : [];
+    return D.a.filter(Array.isArray).map(a => ({ prompt_id: String(a[0]), engine: String(a[1]), named: !!a[2], cited: !!a[3], position: Number(a[4]) > 0 ? Number(a[4]) : null, pulse: true, answered: true,
+      rivals: Array.isArray(a[5]) ? a[5].map(x => ({ id: String(ents[(x || [])[0]] || ''), position: Number((x || [])[1]) > 0 ? Number(x[1]) : null, cited: !!(x || [])[2] })).filter(x => x.id) : null })); };
+  /** every dated answer of the site under the current rule in (from, to]: this run's weekly units, earlier weekly rows' units_json, the pulse
+   *  mornings' detail_json. Each pulse morning counts once (by its row), the weekly answers once (by their run). */
+  const history = (o) => { const opt = o || {}; const rule = opt.rule; const from = Date.parse(opt.from), to = Date.parse(opt.to); const inW = (t) => { const x = Date.parse(t); return isFinite(x) && x > from && x <= to; };
+    const out = []; const runs = [], left = { weekly_rows: 0, pulse_rows: 0 }; let pulseDays = new Set();
+    for (const u of (opt.now_units || [])) out.push({ ...u, at: opt.now_at });
+    if (opt.now_units && opt.now_units.length) runs.push({ run_id: opt.now_run || '', at: opt.now_at });
+    for (const r of (opt.vis_rows || [])) { if (!r || r.run_id === opt.now_run || !inW(r.checked_at)) continue; const x = unpackUnits(r.units_json); if (!x || x.rule_version !== rule) { left.weekly_rows++; continue; }
+      runs.push({ run_id: String(r.run_id || ''), at: String(r.checked_at) }); for (const u of x.units) out.push({ ...u, at: String(r.checked_at) }); }
+    const seen = new Set(); for (const d of (opt.daily_rows || [])) { if (!d || !inW(d.checked_at)) continue; const key = String(d.run_id || '') + '|' + String(d.date || '') + '|' + String(d.checked_at); if (seen.has(key)) continue; seen.add(key);
+      if (String(d.rule_version || '') !== rule) { left.pulse_rows++; continue; } const us = pulseUnits(d.detail_json || d.detail); if (!us.length) { left.pulse_rows++; continue; }
+      pulseDays.add(String(d.date || String(d.checked_at).slice(0, 10))); for (const u of us) out.push({ ...u, at: String(d.checked_at) }); }
+    return { units: out, runs, pulse_days: pulseDays.size, left_out: left, from: new Date(from).toISOString(), to: new Date(to).toISOString(), days: Math.round(10 * (to - from) / 864e5) / 10 }; };
+
+  // ---- 3. share of voice over a fixed, declared set + "others" (both denominators; mean normalised position) -----------------------------
+  /** U: the headline's answers (rivals canonicalised). set: the declared entity ids (canonical). selfId: the business's own id. */
+  const sov = (U, o) => { const opt = o || {}; const set = [...new Set((opt.set || []).filter(Boolean))]; const selfId = opt.selfId || 'you'; const units = (U || []).filter(u => u && u.answered !== false);
+    const rec = units.filter(u => Array.isArray(u.rivals));          // the answers whose businesses were recorded (an older row may not say)
+    const names = (u) => (u.named ? 1 : 0) + u.rivals.length;
+    const branded = rec.filter(u => names(u) > 0);
+    const mentionsOf = (id) => id === selfId ? (u) => (u.named ? 1 : 0) : (u) => (u.rivals.some(x => x.id === id) ? 1 : 0);
+    const totalM = branded.reduce((s, u) => s + names(u), 0);
+    const share = (f) => { const r = ratio(branded, (u) => [f(u), names(u)], { scale: 100, lo0: 0, hi0: 1 }); return { share: r.value == null ? null : r1(r.value), lo: r.lo == null ? null : r1(r.lo), hi: r.hi == null ? null : r1(r.hi), basis: r.basis }; };
+    const by_entity = [{ id: selfId, name: opt.selfName || selfId, self: true, n: branded.reduce((s, u) => s + (u.named ? 1 : 0), 0), ...share(mentionsOf(selfId)) }];
+    for (const id of set) { if (id === selfId) continue; by_entity.push({ id, name: (opt.names || {})[id] || id, n: branded.reduce((s, u) => s + mentionsOf(id)(u), 0), ...share(mentionsOf(id)) }); }
+    const othersOf = (u) => u.rivals.filter(x => !set.includes(x.id)).length;
+    const others = share(othersOf); const othersN = branded.reduce((s, u) => s + othersOf(u), 0);
+    const otherIds = new Map(); for (const u of branded) for (const x of u.rivals) if (!set.includes(x.id)) otherIds.set(x.id, (otherIds.get(x.id) || 0) + 1);
+    const nob = prop(branded, (u) => !!u.named); const nall = prop(units, (u) => !!u.named);
+    const np = ratio(rec.filter(u => u.named && u.position), (u) => { const nn = names(u); const pos = Math.min(u.position, nn); return [nn > 1 ? 1 - (pos - 1) / (nn - 1) : 1, 1]; }, { lo0: 0, hi0: 1 });
+    return { set, set_source: opt.setSource || 'configured', others_share: others.share, others_lo: others.lo, others_hi: others.hi, others_n: othersN, others_top: [...otherIds.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, n]) => ({ id, n })),
+      by_entity, mentions: totalM,
+      denominators: { all_answers: units.length, answers_recorded: rec.length, answers_naming_any_brand: branded.length },
+      named_rate_all: { rate: nall.rate, lo: nall.lo, hi: nall.hi, n: nall.n_answers },
+      named_of_branded_rate: nob.rate, named_of_branded: { rate: nob.rate, lo: nob.lo, hi: nob.hi, n: nob.n_answers },
+      mean_norm_position: { value: np.value == null ? null : Math.round(100 * np.value) / 100, lo: np.lo == null ? null : Math.round(100 * np.lo) / 100, hi: np.hi == null ? null : Math.round(100 * np.hi) / 100, n: np.n, n_questions: np.n_questions, basis: np.basis, why: np.why || '' },
+      note: (set.length ? 'Share of voice over a fixed set you declared (' + set.length + ' competitor' + (set.length === 1 ? '' : 's') + ') plus "others" (every other business AI named), so a new rival cannot silently shrink your share.'
+        : 'No competitor set is declared: every business AI named counts in "others". Declare competitors to follow them one by one.')
+        + ' ' + branded.length + ' of ' + units.length + ' answers named at least one business.' }; };
+
+  // ---- 5. did an action work: difference in differences, treated vs matched control questions ------------------------------------------
+  /** hist: dated units (history()); actions: [{ action_id, kind, at, questions: [prompt ids], label }]; meta: prompt id -> { cluster, stage }.
+   *  Returns impact_json. Two-level bootstrap over questions (stratified by arm), seeded by the action id. */
+  const impact = (hist, actions, o) => { const opt = o || {}; const W = (opt.window_days || 28) * 864e5; const now = Date.parse(opt.now || new Date().toISOString()); const meta = opt.meta || new Map(); const MINA = opt.min_answers || 12;
+    const allTreated = new Map(); for (const a of (actions || [])) for (const q of (a.questions || [])) { const s = allTreated.get(String(q)) || []; s.push(Date.parse(a.at)); allTreated.set(String(q), s); }
+    const out = [];
+    for (const a of (actions || []).slice(0, opt.max || 12)) { const t0 = Date.parse(a.at); if (!isFinite(t0)) continue;
+      const post_to = Math.min(now, t0 + W), days_after = Math.round(10 * (post_to - t0) / 864e5) / 10;
+      const pre = (u) => { const x = Date.parse(u.at); return x >= t0 - W && x < t0; }, post = (u) => { const x = Date.parse(u.at); return x > t0 && x <= post_to; };
+      const byQ = new Map(); for (const u of hist) { const ph = pre(u) ? 0 : post(u) ? 1 : -1; if (ph < 0) continue; const q = String(u.prompt_id); const g = byQ.get(q) || [0, 0, 0, 0]; g[ph * 2] += u.named ? 1 : 0; g[ph * 2 + 1]++; byQ.set(q, g); }
+      const T = (a.questions || []).map(String).filter(q => { const g = byQ.get(q); return g && g[1] && g[3]; });
+      // controls: never treated by any action within the windows; same topic cluster first, then the same buyer stage, then any; closest
+      // "before" rate; up to 3 per treated question (at least 3)
+      const busy = (q) => (allTreated.get(q) || []).some(t => Math.abs(t - t0) < 2 * W);
+      const pool = [...byQ.entries()].filter(([q, g]) => !busy(q) && g[1] && g[3]);
+      const mt = (q) => meta.get(q) || {}; const tClusters = new Set(T.map(q => String(mt(q).cluster || ''))), tStages = new Set(T.map(q => String(mt(q).stage || '')));
+      const tRate = T.reduce((s, q) => s + byQ.get(q)[0], 0) / Math.max(1, T.reduce((s, q) => s + byQ.get(q)[1], 0));
+      const rank = ([q, g]) => [tClusters.has(String(mt(q).cluster || '')) ? 0 : tStages.has(String(mt(q).stage || '')) ? 1 : 2, Math.abs(g[0] / g[1] - tRate), q];
+      const Cq = pool.map(e => [e[0], rank(e)]).sort((x, y) => x[1][0] - y[1][0] || x[1][1] - y[1][1] || (x[1][2] < y[1][2] ? -1 : 1)).slice(0, Math.max(3, 3 * T.length)).map(x => x[0]);
+      const sumArm = (qs) => qs.reduce((s, q) => { const g = byQ.get(q); return [s[0] + g[0], s[1] + g[1], s[2] + g[2], s[3] + g[3]]; }, [0, 0, 0, 0]);
+      const ta = sumArm(T), ca = sumArm(Cq);
+      const rate = (k, n) => n ? r1(100 * k / n) : null;
+      const row = { action_id: String(a.action_id), kind: a.kind, label: a.label || '', at: new Date(t0).toISOString(), target_questions: T, control_questions: Cq,
+        before: { rate: rate(ta[0], ta[1]), n: ta[1] }, after: { rate: rate(ta[2], ta[3]), n: ta[3] }, control_before: { rate: rate(ca[0], ca[1]), n: ca[1] }, control_after: { rate: rate(ca[2], ca[3]), n: ca[3] },
+        did: { effect: null, lo: null, hi: null, B: 0 }, verdict: "can't tell", why: '', window_days: opt.window_days || 28, days_after, metric: 'named_rate' };
+      if (!T.length) { row.why = 'none of its questions has answers both in the 28 days before and after it'; out.push(row); continue; }
+      if (!Cq.length) { row.why = 'no untreated question with answers on both sides to compare against'; out.push(row); continue; }
+      if (days_after < 7) { row.why = 'too soon: ' + days_after + ' day(s) after it, a week is needed before anything can be read'; out.push(row); continue; }
+      const eff = 100 * ((ta[2] / ta[3] - ta[0] / ta[1]) - (ca[2] / ca[3] - ca[0] / ca[1]));
+      row.did.effect = r1(eff);
+      if (Math.min(ta[1], ta[3], ca[1], ca[3]) < MINA) { row.why = 'too few answers to tell (' + ta[1] + ' / ' + ta[3] + ' treated, ' + ca[1] + ' / ' + ca[3] + ' control, before / after; ' + MINA + ' needed in each)'; out.push(row); continue; }
+      // two-level bootstrap: questions with replacement within each arm, then each question's answers (binomial on its own rate) per period
+      const R = rng(hash(String(opt.seed || '') + '|' + a.action_id)); const B = opt.B || 2000; const vals = [];
+      const arm = (qs) => { let k0 = 0, n0 = 0, k1 = 0, n1 = 0; for (let i = 0; i < qs.length; i++) { const g = byQ.get(qs[Math.floor(R() * qs.length)]); k0 += binom(R, g[1], g[0] / g[1]); n0 += g[1]; k1 += binom(R, g[3], g[2] / g[3]); n1 += g[3]; } return k1 / n1 - k0 / n0; };
+      for (let b = 0; b < B; b++) vals.push(100 * (arm(T) - arm(Cq)));
+      vals.sort((x, y) => x - y); const lo = r1(vals[Math.floor(0.025 * B)]), hi = r1(vals[Math.min(B - 1, Math.floor(0.975 * B))]);
+      row.did = { effect: r1(eff), lo, hi, B };
+      row.verdict = lo > 0 ? 'likely helped' : hi < 0 ? 'likely hurt' : "can't tell";
+      row.why = row.verdict === "can't tell" ? 'the change on its questions (' + (eff >= 0 ? '+' : '') + r1(eff) + ' points against the control questions) is inside the 95% range ' + lo + ' to ' + hi
+        : 'its questions moved ' + (eff >= 0 ? '+' : '') + r1(eff) + ' points more than ' + Cq.length + ' matched control question' + (Cq.length === 1 ? '' : 's') + ' (95% range ' + lo + ' to ' + hi + '); a correlation over 28 days, not proof of cause';
+      out.push(row); }
+    return out; };
+
+  // ---- 6. owner alert rules (seo_monitors.ai_alert_rules_json) --------------------------------------------------------------------------
+  const METRICS = ['named_rate', 'cited_rate', 'share_of_voice', 'visibility_score', 'avg_position', 'competitor_share'];
+  const SCOPES = ['engine', 'cluster', 'persona', 'market', 'competitor'];
+  /** validate and normalise the owner's rules (Site Admin `monitors`); throws with the reason on the first bad rule */
+  const validateRules = (raw) => { const v = Array.isArray(raw) ? raw : parse(raw, null); if (!Array.isArray(v)) throw new Error('ai_alert_rules_json must be a list of rules');
+    if (v.length > 25) throw new Error('ai_alert_rules_json: at most 25 rules');
+    const ids = new Set(); return v.map((r, i) => { if (!r || typeof r !== 'object') throw new Error('rule ' + (i + 1) + ' is not an object');
+      const id = String(r.id || '').trim().slice(0, 60) || 'rule_' + (i + 1); if (ids.has(id)) throw new Error('rule id "' + id + '" is used twice'); ids.add(id);
+      const metric = String(r.metric || '').trim(); if (!METRICS.includes(metric)) throw new Error('rule "' + id + '": metric must be one of ' + METRICS.join(', '));
+      const sc = r.scope && typeof r.scope === 'object' ? r.scope : {}; const scope = {}; for (const k of Object.keys(sc)) { if (!SCOPES.includes(k)) throw new Error('rule "' + id + '": scope may only name ' + SCOPES.join(', ')); const x = String(sc[k] == null ? '' : sc[k]).trim().slice(0, 120); if (x) scope[k] = k === 'competitor' ? x.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '') : (k === 'cluster' ? x.toLowerCase() : x); }
+      if (metric === 'competitor_share' && !scope.competitor) throw new Error('rule "' + id + '": competitor_share needs scope.competitor');
+      if (Object.keys(scope).filter(k => k !== 'competitor').length > 1) throw new Error('rule "' + id + '": one segment at a time (engine, cluster, persona or market)');
+      const direction = String(r.direction || 'any').toLowerCase(); if (!['drop', 'rise', 'any'].includes(direction)) throw new Error('rule "' + id + '": direction must be drop, rise or any');
+      const th = Number(r.threshold_points); if (!(th > 0 && th <= 100)) throw new Error('rule "' + id + '": threshold_points must be a number of points above 0 (at most 100)');
+      return { id, metric, scope, direction, threshold_points: r1(th), enabled: !(r.enabled === false || String(r.enabled) === 'false') }; }); };
+  /** evaluate the rules on this run. ctx: { comparable, why, compare (compare_json.metrics), segRows (now: { dim, key, n, k, cited }), segPrev (Map dim|key -> { n, k, cited }),
+   *  comps ([{ domain, delta: { sov, sov_p }, sov }]), engines / engPrev for an engine scope }. Holm across the rules that have a test. */
+  const evalRules = (rules, ctx) => { const c = ctx || {}; const res = [];
+    const mk = (r, o) => ({ rule_id: r.id, fired: false, metric: r.metric, scope: r.scope, direction: r.direction, threshold_points: r.threshold_points, delta: null, test: null, reason: '', ...(o || {}) });
+    const tests = [];
+    for (const r of (rules || [])) {
+      if (!r.enabled) { res.push(mk(r, { reason: 'switched off' })); continue; }
+      if (!c.comparable) { res.push(mk(r, { reason: 'not evaluated: this run is not comparable with the last one (' + (c.why || 'no earlier run') + ')' })); continue; }
+      const segDim = ['engine', 'cluster', 'persona', 'market'].find(k => r.scope[k]);
+      let d = null, z = null, why = '';
+      if (r.metric === 'competitor_share') { const cp = (c.comps || []).find(x => String(x.domain).toLowerCase() === r.scope.competitor);
+        if (!cp) why = r.scope.competitor + ' is not among the competitors measured this run'; else if (!cp.delta || cp.delta.sov == null) why = 'no earlier share for ' + r.scope.competitor;
+        else { d = cp.delta.sov; z = cp.delta.sov_z != null ? cp.delta.sov_z : null; if (z == null) why = cp.delta.why || 'its share was not tested'; } }
+      else if (segDim) { const key = String(r.scope[segDim]).toLowerCase(); const now = (c.segRows || []).find(s => s.dim === segDim && String(s.key).toLowerCase() === key); const prev = c.segPrev ? c.segPrev.get(segDim + '|' + key) : null;
+        if (!['named_rate', 'cited_rate'].includes(r.metric)) why = 'only "named in" and "cited" are tested per ' + segDim + ' (the other figures carry no per-segment test)';
+        else if (!now || !prev) why = 'no ' + segDim + ' "' + r.scope[segDim] + '" in both runs';
+        else { const kN = r.metric === 'named_rate' ? now.k : now.cited, kB = r.metric === 'named_rate' ? prev.k : prev.cited;
+          if (kN == null || kB == null || !(now.n >= 12) || !(prev.n >= 12)) why = 'too few answers in that ' + segDim + ' to test (' + (now.n || 0) + ' now, ' + (prev.n || 0) + ' before; 12 needed on each side)';
+          else { const p1 = kN / now.n, p2 = kB / prev.n, pp = (kN + kB) / (now.n + prev.n), se = Math.sqrt(pp * (1 - pp) * (1 / now.n + 1 / prev.n)); d = r1(100 * (p1 - p2)); z = se ? (p1 - p2) / se / Math.sqrt(Math.max(1, Number(c.deff) || 1)) : null; if (z == null) why = 'no variation to test'; } } }
+      else { const m0 = (c.compare || {})[r.metric]; if (!m0 || m0.delta == null) why = 'no comparable earlier figure'; else { d = m0.delta; if (m0.p == null) why = 'the change was not tested (too few answers)'; else z = (m0.delta >= 0 ? 1 : -1) * zOfP(m0.p); } }
+      const row = mk(r, { delta: d, reason: why });
+      if (z != null) tests.push({ id: r.id, z, row });
+      res.push(row); }
+    // Holm across the owner's tested rules: a rule set by the owner is one more family of alerts on the same sample
+    const T = tests.map(t => ({ ...t, p: 2 * (1 - nCdf(Math.abs(t.z))) })).sort((a, b) => a.p - b.p); const m = T.length; let open = true;
+    T.forEach((t, i) => { const thr = 0.05 / (m - i); const pass = open && t.p <= thr; if (!pass) open = false; const r = t.row; const dirOk = r.direction === 'any' || (r.direction === 'drop' ? (r.metric === 'avg_position' ? r.delta > 0 : r.delta < 0) : (r.metric === 'avg_position' ? r.delta < 0 : r.delta > 0));
+      const big = Math.abs(r.delta) >= r.threshold_points;
+      r.test = { z: Math.round(100 * t.z) / 100, p: Math.round(1e6 * t.p) / 1e6, threshold_p: Math.round(1e6 * thr) / 1e6, method: 'holm', tested_rules: m, passed: pass };
+      r.fired = pass && dirOk && big;
+      r.reason = r.fired ? 'fired: ' + (r.delta > 0 ? '+' : '') + r.delta + ' points (threshold ' + r.threshold_points + '), a real change (p ' + r.test.p + ' within the Holm-adjusted ' + r.test.threshold_p + ' across ' + m + ' tested rule' + (m === 1 ? '' : 's') + ')'
+        : !pass ? 'within noise: ' + (r.delta > 0 ? '+' : '') + r.delta + ' points, p ' + r.test.p + ' above the Holm-adjusted ' + r.test.threshold_p
+        : !dirOk ? 'a real change, but in the other direction (' + (r.delta > 0 ? '+' : '') + r.delta + ' points)' : 'a real change of ' + (r.delta > 0 ? '+' : '') + r.delta + ' points, under the rule\'s ' + r.threshold_points + ' points'; });
+    return res; };
+  const nCdf = (x) => { const t = 1 / (1 + 0.2316419 * Math.abs(x)), d = 0.3989422804014327 * Math.exp(-x * x / 2); const q = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429)))); return x >= 0 ? 1 - q : q; };
+  const zOfP = (p) => { let lo = 0, hi = 12; for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (2 * (1 - nCdf(mid)) > p) lo = mid; else hi = mid; } return (lo + hi) / 2; };
+
+  // ---- 7. the repeat pilot: within- vs between-question variance per engine -> repeats per engine ---------------------------------------
+  /** units: answers of the pilot ({ prompt_id (the base question), engine, named }). For each engine: a one-way ANOVA over questions.
+   *  sigma2_between (the questions differ) and sigma2_within (one question asked again). Repeats per question for a target half-width h on a
+   *  panel of Q questions: m = sigma2_w / (Q * (h / z)^2 - sigma2_b) (more repeats cannot help past the between-question floor). */
+  const pilot = (units, o) => { const opt = o || {}; const Q = Number(opt.panel) || 50; const h = (Number(opt.half_width) || 5) / 100; const out = {};
+    for (const e of [...new Set((units || []).map(u => u.engine))].sort()) { const G = new Map(); for (const u of units.filter(x => x.engine === e)) { const g = G.get(u.prompt_id) || []; g.push(u.named ? 1 : 0); G.set(u.prompt_id, g); }
+      const gs = [...G.values()].filter(g => g.length >= 2); const k = gs.length; const N = gs.reduce((s, g) => s + g.length, 0);
+      if (k < 3) { out[e] = { questions: k, answers: N, repeats: null, why: 'fewer than 3 questions answered twice or more' }; continue; }
+      const grand = gs.reduce((s, g) => s + g.reduce((a, b) => a + b, 0), 0) / N; const n0 = (N - gs.reduce((s, g) => s + g.length * g.length, 0) / N) / (k - 1);
+      const msb = gs.reduce((s, g) => { const m = g.reduce((a, b) => a + b, 0) / g.length; return s + g.length * (m - grand) * (m - grand); }, 0) / (k - 1);
+      const msw = gs.reduce((s, g) => { const m = g.reduce((a, b) => a + b, 0) / g.length; return s + g.reduce((a, b) => a + (b - m) * (b - m), 0); }, 0) / Math.max(1, N - k);
+      const sb = Math.max(0, (msb - msw) / n0), sw = msw; const icc = sb + sw > 0 ? sb / (sb + sw) : null;
+      const room = Q * Math.pow(h / Z, 2) - sb; const m = room <= 0 ? null : sw === 0 ? 1 : Math.max(1, Math.ceil(sw / room));   // the between-question floor first: past it no number of asks helps
+      out[e] = { questions: k, answers: N, rate: r1(100 * grand), sigma2_between: Math.round(1e5 * sb) / 1e5, sigma2_within: Math.round(1e5 * sw) / 1e5, icc: icc == null ? null : r3(icc), repeats: m,
+        why: m == null ? 'the questions differ so much that no number of repeats reaches +/-' + r1(100 * h) + ' points on ' + Q + ' questions: ask more questions instead' : m === 1 ? 'one answer per question a week is enough for +/-' + r1(100 * h) + ' points on ' + Q + ' questions' : m + ' answers per question a week reach +/-' + r1(100 * h) + ' points on ' + Q + ' questions' }; }
+    return out; };
+
+  // ---- the run: what AI Metrics hands over once its own figures exist (one call per site; AI_Metrics.js hook marked W2-E2) ------------------
+  /** c: { p, rule, U (the headline's answers), CI (ci()), segRows, segKeys(q, engine), meta (Map prompt id -> question), compare (compare_json.metrics),
+   *  comparable, why, comps (the competitor table), canon(id) -> the run's key for a business, read(nodeName) -> rows } */
+  const run = (c) => { const t0 = Date.now(); const p = c.p || {}; const rd = c.read || (() => []); const DAY = 864e5; const nowT = Date.parse(p.checked_at) || Date.now(); const isoT = (t) => new Date(t).toISOString();
+    const mine = (r) => r && String(r.site_id || '') === String(p.site_id);
+    const mon = rd('Load Monitors').find(mine) || {};
+    // 3. share of voice over the declared set (ai_sov_set, else the configured competitors) + others
+    const setDeclared = has(mon.ai_sov_set); const setRaw = setDeclared ? String(mon.ai_sov_set).split(/[\n,;]+/) : (p.configured_competitors || []);
+    const set = [...new Set(setRaw.map(x => String(x).trim()).filter(Boolean).map(x => (c.canon ? c.canon(x) : x)).filter(Boolean))].slice(0, 20);
+    const sovJ = sov(c.U, { set, selfId: p.domain, selfName: p.business_name || p.domain, setSource: setDeclared ? 'declared (ai_sov_set)' : 'your configured competitors' });
+    // 2. the 28-day window for segment rates (earlier weekly rows' units_json + the pulse mornings' detail_json + this run's weekly answers)
+    const visRows = rd('Load AI Visibility').filter(mine), daily = rd('Load AI Daily').filter(mine);
+    const weeklyNow = (c.U || []).filter(u => !u.pulse);
+    const H28 = history({ rule: c.rule, from: isoT(nowT - 28 * DAY), to: isoT(nowT + 1), now_units: weeklyNow, now_run: p.run_id, now_at: p.checked_at, vis_rows: visRows, daily_rows: daily });
+    const acc = new Map(); for (const u of H28.units) { const m0 = (c.meta && c.meta.get(u.prompt_id)) || {}; for (const [d, key] of c.segKeys({ ...m0, topic: m0.topic || '' }, u.engine)) { const id = d + '|' + key; const a = acc.get(id) || []; a.push(u); acc.set(id, a); } }
+    const lend = c.CI ? c.CI.rho_lent : null;
+    for (const s of (c.segRows || [])) { const us = acc.get(s.dim + '|' + s.key) || []; const r0 = prop(us, (u) => !!u.named, { rho: lend });
+      s.w28 = { rate: r0.rate, lo: r0.lo, hi: r0.hi, n: r0.n_answers, k: r0.k, questions: r0.n_questions, deff: r0.deff, basis: r0.basis, enough: r0.n_answers >= 12 }; }
+    const window28 = { from: H28.from, to: isoT(nowT), days: 28, weekly_runs: H28.runs.length, pulse_days: H28.pulse_days, answers: H28.units.length, left_out: H28.left_out,
+      note: 'Segment rates count the last 28 days (' + H28.runs.length + ' weekly run' + (H28.runs.length === 1 ? '' : 's') + ' and ' + H28.pulse_days + ' pulse morning' + (H28.pulse_days === 1 ? '' : 's') + ', ' + H28.units.length + ' answers); the headline counts this run\'s window. A segment\'s change is still tested run against run, on answers that do not overlap.'
+        + (H28.left_out.weekly_rows || H28.left_out.pulse_rows ? ' ' + (H28.left_out.weekly_rows + H28.left_out.pulse_rows) + ' earlier reading(s) were left out (another measurement rule, or no per-answer record).' : '') };
+    // 5. did an action work: the AI targets written / won and the pages published in the last 31 days (its 28 days before must be inside what is loaded)
+    const H60 = history({ rule: c.rule, from: isoT(nowT - 60 * DAY), to: isoT(nowT + 1), now_units: weeklyNow, now_run: p.run_id, now_at: p.checked_at, vis_rows: visRows, daily_rows: daily });
+    const qOfKw = (kw) => { const k = String(kw || '').toLowerCase().trim(); if (k.split(/\s+/).length < 2) return []; return [...(c.meta || new Map()).values()].filter(q => q.kind !== 'brand' && (String(q.keyword || '').toLowerCase().trim() === k || String(q.prompt || '').toLowerCase().includes(k))).map(q => String(q.prompt_id)); };
+    const inRange = (at) => { const x = Date.parse(at); return isFinite(x) && x >= nowT - 31 * DAY && x <= nowT; };
+    const acts = [];
+    for (const t of rd('Load AI Targets (AI)').filter(mine)) { const at = t.written_at || (String(t.status) === 'won' ? t.won_at : ''); if (!['written', 'won', 'published'].includes(String(t.status || '')) || !inRange(at) || !t.prompt_id) continue;
+      acts.push({ action_id: String(t.target_id || 'ait_' + t.prompt_id), kind: 'ai_target' + (t.kind ? ':' + t.kind : ''), at, questions: [String(t.prompt_id)], label: String(t.question || t.keyword || '').slice(0, 160) }); }
+    for (const l of rd('Load Content Log (AI)').filter(mine)) { if (String(l.status || '') !== 'published' || !inRange(l.published_at)) continue; const qs = qOfKw(l.keyword); if (!qs.length) continue;
+      acts.push({ action_id: 'page:' + String(l.published_url || l.keyword), kind: 'page', at: l.published_at, questions: qs, label: String(l.keyword || '') }); }
+    const imp = impact(H60.units, acts, { now: isoT(nowT), meta: c.meta, seed: p.site_id + '|' + p.run_id });
+    // 6. the owner's alert rules
+    let rules = [], rulesErr = '';
+    if (has(mon.ai_alert_rules_json)) { try { rules = validateRules(mon.ai_alert_rules_json); } catch (e) { rulesErr = String(e.message || e); } }
+    const prevRaw = visRows.find(r => p.previous && String(r.run_id) === String(p.previous.run_id)) || null;
+    const segPrev = new Map(); const ps = prevRaw ? parse(prevRaw.segments_json, null) : null;
+    if (ps && Array.isArray(ps.rows)) { const cols = ps.cols || ['dim', 'key', 'questions', 'n', 'k', 'cited']; const ix = (k) => cols.indexOf(k);
+      for (const r of ps.rows) { const g = (k) => Array.isArray(r) ? r[ix(k)] : r[k]; segPrev.set(String(g('dim')) + '|' + String(g('key')).toLowerCase(), { n: Number(g('n')) || 0, k: Number(g('k')) || 0, cited: ix('cited') >= 0 || !Array.isArray(r) ? Number(g('cited')) : null }); } }
+    const comps = (c.comps || []).map(x => ({ domain: x.domain, sov: x.sov, delta: x.delta ? { sov: x.delta.sov, sov_z: x.delta.sov_p != null && x.delta.sov != null ? (x.delta.sov >= 0 ? 1 : -1) * zOfP(x.delta.sov_p) : null, why: x.delta.why } : null }));
+    const evaluated = rulesErr ? [] : evalRules(rules, { comparable: c.comparable, why: c.why, compare: c.compare, segRows: (c.segRows || []).map(s => ({ dim: s.dim, key: String(s.key).toLowerCase(), n: s.n, k: s.k, cited: s.cited })), segPrev, comps, deff: c.CI && c.CI.headline.named_rate ? c.CI.headline.named_rate.deff : 1 });
+    if (rulesErr) evaluated.push({ rule_id: '', fired: false, metric: '', scope: {}, delta: null, test: null, reason: 'the stored rules could not be read: ' + rulesErr });
+    return { sov: sovJ, window28, impact: imp, actions_considered: acts.length, alert_rules: evaluated, units_json: JSON.stringify(packUnits(weeklyNow, p.checked_at, c.rule)), ms: Date.now() - t0 }; };
+
+  return { Z, t975, wilsonN, prop, ratio, boot, binom, rng, hash, ci, packUnits, unpackUnits, pulseUnits, history, sov, impact, validateRules, evalRules, METRICS, SCOPES, pilot, zOfP, nCdf, parse, run };
+})();
+// ---- W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): how AI answers speak of the business, aspect by aspect (inlined by build_monitors.py) ----
+// Every answer that NAMES the business is read (no 24-job cap for this step): its polarity about the business (positive / neutral / negative),
+// the aspects it judges (price, support, integration, trust, quality, ease, features, other) each with its own polarity, the objection a buyer
+// would take from it, and how it speaks of each competitor it names. The reader is Claude Haiku (*Sentiment Reader*); the RULE READER below
+// is its fallback when the model does not answer, and a second opinion whose agreement with the model is printed every run.
+// Net sentiment = (positive - negative) / answers read, in points (-100..100), with a 95% range over QUESTIONS (AVX.ratio); withheld below 12.
+// The rule reader and the model-output parser are scored on harness/accuracy/ai_sentiment.json (hold-out written before the rules; Cohen's
+// kappa printed; the harness fails below 0.7). The model itself cannot be run offline: accuracy/eval_sentiment_model.js scores it with a key.
+const SENT = (() => {
+  const ASPECTS = ['price', 'support', 'integration', 'trust', 'quality', 'ease', 'features', 'other'];
+  const POL = ['positive', 'neutral', 'negative'];
+  const MIN = 12;
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nameRe = (n) => { const s = String(n || '').trim(); if (!s) return null; return new RegExp('(^|[^\\p{L}\\p{N}])' + esc(s).replace(/\s+/g, '\\s+') + '(?=$|[^\\p{L}\\p{N}])', 'iu'); };
+  // cue words (lower case; phrases first). Each is [pattern, weight]; a negation in the 3 words before flips it.
+  const POS = ['highly rated', 'top-rated', 'top rated', 'well-regarded', 'well regarded', 'well-known', 'well known', 'stands out', 'standout', 'award-winning', 'cost-effective', 'cost effective', 'good value', 'great value', 'value for money',
+    'user-friendly', 'user friendly', 'easy to use', 'easy to set up', 'simple to use', 'straightforward', 'no hidden fees', 'hands-on', 'on time', 'track record', 'gold partner', 'trusted', 'reliable', 'robust', 'strong', 'excellent', 'outstanding',
+    'great', 'good', 'best', 'leading', 'leader', 'top', 'popular', 'recommended', 'recommend', 'ideal', 'praised', 'praise', 'affordable', 'cheapest', 'cheap', 'competitive', 'transparent', 'easy', 'easiest', 'intuitive', 'seamless', 'seamlessly',
+    'comprehensive', 'powerful', 'fast', 'quick', 'responsive', 'accredited', 'certified', 'certification', 'approved', 'compliant', 'secure', 'reputable', 'renowned', 'prominent', 'proven', 'preferred', 'solid', 'flexible', 'scalable',
+    'innovative', 'experienced', 'expert', 'expertise', 'efficient', 'accurate', 'safest', 'safe', 'favourite', 'favorite', 'loved', 'love', 'clean', 'natively', 'native', 'mature', 'established', 'specialist', 'advanced', 'rich', 'wide range', 'extensive', 'positive reviews', 'notable',
+    // round 2 (after the first hold-out, 2026-10-23): what real and written answers praise with
+    'painless', 'smooth', 'hassle-free', 'in an afternoon', 'fair value', 'fair', 'worth it', 'worth', 'highlight', 'highlights', '24/7', 'connects directly', 'stayed up', 'stayed online', 'dependable', 'unlimited', 'widely used', 'pragmatic', 'commercially minded', 'appear on', 'listed by', 'listed on'];
+  const NEG = ['steep learning curve', 'learning curve', 'hidden fees', 'mixed reviews', 'negative reviews', 'not suitable', 'not yet', 'english only', 'only in english', 'higher than', 'more expensive', 'adds up', 'go unresolved', 'charges extra', 'extra for',
+    'expensive', 'pricey', 'costly', 'overpriced', 'steep', 'limited', 'limiting', 'limits', 'lacks', 'lack', 'lacking', 'missing', 'complaints', 'complain', 'complained', 'slow', 'slower', 'poor', 'weak', 'difficult', 'hard', 'complex',
+    'complicated', 'clunky', 'outdated', 'dated', 'buggy', 'bugs', 'crashes', 'crash', 'issues', 'problems', 'problem', 'downtime', 'outages', 'outage', 'unreliable', 'inaccurate', 'errors', 'drawback', 'drawbacks', 'downside', 'downsides', 'concerns', 'concern',
+    'criticised', 'criticized', 'criticism', 'delays', 'delayed', 'frustrating', 'frustrated', 'cumbersome', 'restrictive', 'unexpected charges', 'unresolved', 'breach', 'penalty', 'fined', 'lawsuit', 'risk', 'risky', 'young company', 'few', 'fewer', 'longer', 'unclear', 'confusing', 'beware', 'be aware', 'caution', 'cancel', 'churn',
+    // round 2: implicit criticism
+    'waited', 'nobody', 'over budget', 'slipped', 'break', 'breaks', 'broke', 'manual', 'add up', 'thin', 'requires paid', 'patchy', 'junior', 'relies on', 'csv uploads', 'can take', 'take days', 'hours or more', 'struggled', 'struggles', 'no phone support', 'no live support', 'no native', 'no arabic', 'no api', 'no mobile app', 'are mixed', 'is mixed'];
+  const NEGATE = /\b(not|no|never|isn't|isnt|aren't|doesn't|doesnt|don't|didn't|without|hardly|nor|cannot|can't|lacks?)\b/i;
+  const ASP = { price: /\b(price[ds]?|pricing|cost(s|ly)?|expensive|cheap(est)?|afford\w*|fees?|value|subscription|plans?|charges?|charged|billing|budget|pricey|overpriced|per (invoice|user|month))\b/i,
+    support: /\b(support|customer service|service team|onboarding|help ?desk|respon(sive|se|d)|account manager|training|after go-live|documentation|tickets?)\b/i,
+    integration: /\b(integrat\w*|connect\w*|apis?|plug\w*|sync\w*|erp|sap|oracle|netsuite|dynamics|carrier|bank integrations?)\b/i,
+    trust: /\b(accredit\w*|certif\w*|approved|complian\w*|trust\w*|reputa\w*|secur\w*|iso ?\d*|gdpr|fta|zatca|licen[cs]ed|track record|partner|case studies|young company|audited|regulat\w*|safest)\b/i,
+    quality: /\b(accura\w*|inaccura\w*|quality|reliab\w*|unreliable|errors?|bugs?|buggy|crash\w*|uptime|outages?|downtime|performance|on time|delays?|delivering)\b/i,
+    ease: /\b(easy|easiest|ease|intuitive|user[- ]friendly|simple|straightforward|learning curve|complex|complicated|clunky|set ?up|usab\w*|navigate|interface|learn)\b/i,
+    features: /\b(features?|functional\w*|capabilit\w*|modules?|reporting|reports?|automation|tools?|comprehensive|suite|templates?|consolidation|validation|english only|arabic|multi-entity|workflows?|app)\b/i };
+  const hits = (clause, list, orig) => { const lc = ' ' + clause.toLowerCase() + ' '; const ctx = orig ? ' ' + String(orig).toLowerCase() + ' ' : lc; let s = 0; const found = [];
+    let masked = lc; for (const w of list) { const re = new RegExp('(^|[^a-z])' + esc(w) + '(?=$|[^a-z])', 'g'); let m; while ((m = re.exec(masked))) { const at = m.index + m[1].length; const before = ctx.slice(Math.max(0, at - 30), at).trim().split(/\s+/).slice(-3).join(' ');
+        const after = ctx.slice(at + w.length, at + w.length + 30).trim().split(/\s+/).slice(0, 3).join(' ');
+        const neg = (NEGATE.test(before) && !/^no /.test(w)) !== /\b(rare|rarely|minimal|resolved)\b/.test(after);
+        const others = /\b(other (platforms|vendors|providers|tools|firms|companies|apps|systems)|competitors?|rivals?|most vendors)\b/.test(ctx.slice(Math.max(0, at - 40), at).trim().split(/\s+/).slice(-4).join(' '));
+        found.push({ w, neg, others }); if (!others) s += neg ? -1 : 1; masked = masked.slice(0, at) + ' '.repeat(w.length) + masked.slice(at + w.length); re.lastIndex = at + w.length; } }
+    return { s, found, masked }; };
+  /** the clauses that speak of the business: its sentences (and the ones after it that start with "It / Its / They / The company"), split at
+   *  ";", "but", "however", "although", "while", "whereas"; a clause naming only another business is left out */
+  const SUFFIX = /[\s,]+(llp|ltd\.?|limited|llc|inc\.?|fze|fzco|fz-llc|plc|co\.?|corp\.?|gmbh|pvt\.?( ltd\.?)?|private limited|group|holding|holdings)$/i;
+  const nameAny = (n) => { const v = [String(n || '').trim()]; let x = v[0]; for (let i = 0; i < 2; i++) { const y = x.replace(SUFFIX, '').trim(); if (y && y !== x) { v.push(y); x = y; } }
+    const res = v.filter(Boolean).map(nameRe).filter(Boolean); return res.length ? { test: (s) => res.some(r => r.test(s)) } : null; };
+  const FOLLOW = /^(it|its|it's|they|their|these|both|all (two|three|four|five|six|seven|eight|of them)|the (company|firm|platform|provider|tool|software|team|vendor|service))\b/i;
+  const HEDGE = /^(whether|check|ensure|look for|consider|verify|make sure|ask)\b/i;
+  const clausesOf = (text, business, rivals) => { const t = String(text || '').replace(/\*\*|__|`/g, '').replace(/[ \t]+/g, ' ').trim(); const bre = nameAny(business); const rres = (rivals || []).map(nameRe).filter(Boolean);
+    const sents = t.split(/(?<=[.!?])\s+(?=[A-Z0-9"“(])|\s*\n+\s*|\s(?=\d+\.\s)/).map(s => s.trim()).filter(Boolean);
+    const mine = []; let follow = false, item = false; const ITEM = /^(#{1,6}\s|\d+[.)]\s|[-*•]\s|\|)/;
+    for (const s of sents) { const hasB = bre ? bre.test(s) : false; const hasR = rres.some(r => r.test(s));
+      if (hasB) { mine.push(s); follow = true; item = ITEM.test(s) || (s.split(/\s+/).length <= 8 && !/[.!?]$/.test(s)); }   // a heading or a list item: the lines under it are its own
+      else if (item && !ITEM.test(s)) mine.push(s); else if (follow && FOLLOW.test(s) && !hasR) mine.push(s); else if (follow && !s.replace(/[|\-\s]/g, '')) continue; else { follow = false; item = false; } }
+    const src = mine.length ? mine : sents;   // the name not found (a spelling of its own): the whole text is read
+    const out = [];
+    for (const s of src) { const parts = s.split(/;|\s(?=(?:but|however|although|though|while|whereas)\b)|,\s*(?=(?:but|however|although|though|while|whereas)\b)/i).map(x => x.trim()).filter(Boolean);
+      const anyB = parts.some(p => bre && bre.test(p));
+      for (const p of parts) { const hasB = bre ? bre.test(p) : false; const hasR = rres.some(r => r.test(p));
+        if (anyB && !hasB && hasR) continue; if (HEDGE.test(p)) continue;                    // "Wafeq is the safest choice; Riyada is also listed": the Wafeq clause is not about Riyada
+        out.push({ text: p, contrast: /^(but|however)\b/i.test(p) ? 'after' : /^(although|though|while|whereas)\b/i.test(p) ? 'concessive' : '' }); } }
+    return out; };
+  /** the rule reader: one snippet about one business -> { polarity, aspects: [{ aspect, polarity }], objection, score } */
+  const rules = (text, business, rivals) => { const cl = clausesOf(text, business, rivals); let total = 0; const asp = new Map(); let objection = '';
+    // a clause before "but" / "however" is outweighed by the one after it; an "although" clause is outweighed by the rest of its sentence
+    const hasAfter = cl.some(c => c.contrast === 'after');
+    for (const c of cl) { const lc = c.text.toLowerCase(); const ng = hits(lc, NEG), ps = hits(ng.masked.slice(1, -1), POS, lc);
+      const raw = ps.s - ng.s; const pol = raw > 0 ? 'positive' : raw < 0 ? 'negative' : 'neutral';
+      const w = c.contrast === 'after' ? 1.5 : c.contrast === 'concessive' ? 0.6 : (hasAfter ? 0.9 : 1);
+      total += Math.sign(raw) * w * Math.min(2, Math.abs(raw));
+      let found = false; for (const a of ASPECTS) { if (a === 'other' || !ASP[a].test(c.text)) continue; found = true; const old = asp.get(a); if (!old || old === 'neutral') asp.set(a, pol); }
+      if (!found && pol !== 'neutral') { if (!asp.has('other')) asp.set('other', pol); }
+      if (pol === 'negative' && !objection) objection = c.text.replace(/^(but|however|although|though|while|whereas|yet)\s+/i, '').replace(/[.;,]+$/, '').slice(0, 100); }
+    const polarity = total > 0.25 ? 'positive' : total < -0.25 ? 'negative' : 'neutral';
+    return { polarity, aspects: [...asp.entries()].map(([aspect, p]) => ({ aspect, polarity: p })), objection: polarity === 'negative' || objection ? objection : '', score: Math.round(100 * total) / 100, clauses: cl.length }; };
+  /** the text the reader gets for one answer: the sentences that name the business (and the ones that continue them), at most 900 characters */
+  const snippet = (text, business, rivals) => { const t = String(text || '').replace(/\s+/g, ' ').trim(); const bre = nameRe(business); if (!bre) return t.slice(0, 900);
+    const sents = t.split(/(?<=[.!?])\s+(?=[A-Z0-9"“(*])|\s(?=\d+\.\s)/); const keep = []; let follow = false;
+    for (const s of sents) { if (bre.test(s)) { keep.push(s); follow = true; } else if (follow && /^(it|its|it's|they|their|the (company|firm|platform|provider|tool|software|team|vendor))\b/i.test(s)) keep.push(s); else follow = false; }
+    return (keep.length ? keep.join(' ') : t).slice(0, 900); };
+  /** Cohen's kappa over pairs [label_a, label_b] */
+  const kappa = (pairs) => { const P = (pairs || []).filter(p => p && p[0] != null && p[1] != null); const n = P.length; if (!n) return null; const cls = [...new Set(P.flat())];
+    const po = P.filter(p => p[0] === p[1]).length / n; let pe = 0; for (const c of cls) pe += (P.filter(p => p[0] === c).length / n) * (P.filter(p => p[1] === c).length / n);
+    return pe >= 1 ? 1 : Math.round(1000 * (po - pe) / (1 - pe)) / 1000; };
+  /** the model's answer for one job -> one label per answer (by its number `n`), every value checked against the label lists */
+  const parseModel = (out, job) => { let o = out; if (typeof o === 'string') { const s = o.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, ''); try { o = JSON.parse(s); } catch (e) { const a = s.indexOf('{'), b = s.lastIndexOf('}'); try { o = JSON.parse(s.slice(a, b + 1)); } catch (e2) { o = null; } } }
+    const res = new Map(); for (const x of ((o && o.answers) || [])) { const n = Number(x && x.n); const it = (job.items || []).find(i => i.n === n); if (!it) continue;
+      const pol = POL.includes(String(x.polarity || '').toLowerCase()) ? String(x.polarity).toLowerCase() : null; if (!pol) continue;
+      const aspects = (Array.isArray(x.aspects) ? x.aspects : []).map(a => ({ aspect: String((a && a.aspect) || '').toLowerCase(), polarity: String((a && a.polarity) || '').toLowerCase() })).filter(a => ASPECTS.includes(a.aspect) && POL.includes(a.polarity));
+      const rv = (Array.isArray(x.rivals) ? x.rivals : []).map(r => ({ name: String((r && r.name) || '').trim(), polarity: String((r && r.polarity) || '').toLowerCase() })).filter(r => r.name && POL.includes(r.polarity));
+      res.set(it.key, { polarity: pol, aspects, objection: String(x.objection || '').trim().slice(0, 140), rivals: rv }); }
+    return res; };
+  // The rule reader on the labelled set (harness W2E2-SENT recomputes these and fails when they differ): built on the T cases, it read the first
+  // blind hold-out (H) at kappa 0.587 and, improved on H, the second blind hold-out (K, 80 cases, read once) at 0.548 - below the 0.7 bar. So the
+  // rules never make a published figure: only the model's labels count, the rules are a second opinion. The model's own kappa needs a key
+  // (accuracy/eval_sentiment_model.js) and is not measured yet: `model: null` until it is, and the report says "not yet validated".
+  const KAPPA = { rules_blind_holdout: 0.548, rules_blind_n: 80, rules_all: 0.827, rules_all_n: 256, parser: 1, model: null, gate: 0.7,
+    note: 'Polarity agreement with a hand-labelled set (Cohen\'s kappa). The rule reader is below the 0.7 bar on blind cases, so it never makes the figure; the model\'s agreement is not measured yet.' };
+  const tb = (v) => v === true || String(v) === 'true';
+  /** this run's answers that NAME the business, with the text the reader gets: the sentences about it (answer_text when stored, else the excerpt) */
+  const namedAnswers = (rows, o) => { const opt = o || {}; const biz = opt.business || ''; const out = []; const seen = new Set();
+    for (const r of (rows || [])) { if (!r || !tb(r.answered) || r.kind === 'brand' || r.error) continue; if (!(opt.named ? opt.named(r) : tb(r.named))) continue;
+      const key = String(r.run_id || '') + '|' + String(r.prompt_id) + '|' + String(r.engine); if (seen.has(key)) continue; seen.add(key);
+      let ents = []; try { ents = Array.isArray(r.entities) ? r.entities : JSON.parse(r.entities_json || '[]'); } catch (e) { ents = []; }
+      const rivals = (Array.isArray(ents) ? ents : []).filter(e => e && String(e.role) === 'competitor').map(e => ({ id: String(e.id || e.name || ''), name: String(e.name || e.id || '') })).filter(e => e.name).slice(0, 8);
+      const text = String(r._text || r.answer_text || r.excerpt || '');   // the parser's full text in memory, else W2-E1's stored answer_text, else the excerpt
+      if (!text.trim()) continue;
+      out.push({ key, prompt_id: String(r.prompt_id), engine: String(r.engine), prompt: r.prompt || '', snippet: snippet(text, biz, rivals.map(x => x.name)), rival_names: rivals.map(x => x.name), rivals }); }
+    return out; };
+  /** the jobs for the Sentiment Reader: every named answer, 20 to a job, at most `max_jobs` jobs (the rest are not read, and the report says how many) */
+  const jobsOf = (answers, o) => { const opt = o || {}; const per = opt.per || 20, maxJ = opt.max_jobs == null ? 40 : opt.max_jobs; const A = answers || [];
+    const jobs = []; for (let i = 0; i < A.length && jobs.length < maxJ; i += per) jobs.push(A.slice(i, i + per).map((a, j) => ({ n: j + 1, key: a.key, engine: a.engine, question: String(a.prompt || '').slice(0, 200), text: a.snippet, rivals: (a.rival_names || []).slice(0, 8) })));
+    const sent = jobs.reduce((s, j) => s + j.length, 0); return { jobs, sent, not_sent: Math.max(0, A.length - sent) }; };
+  /** sentiment_json. answers: namedAnswers(); model: Map key -> the model's label (parseModel over every job). Only the model's labels are counted. */
+  const aggregate = (answers, model, o) => { const opt = o || {}; const A = answers || []; const M = model || new Map();
+    const L = A.map(a => { const m = M.get(a.key); const r0 = rules(a.snippet, opt.business || '', a.rival_names || []); return m ? { ...a, ...m, by: 'model', rules_polarity: r0.polarity, rivals: (m.rivals || []).map(x => ({ ...x, id: ((a.rivals || []).find(y => y.name.toLowerCase() === x.name.toLowerCase()) || {}).id || x.name })) } : { ...a, by: 'none', rules_polarity: r0.polarity }; });
+    const R = L.filter(l => l.by === 'model'); const n = R.length; const unread = L.length - n;
+    const sc = (p) => p === 'positive' ? 1 : p === 'negative' ? -1 : 0;
+    const base = { n, named_answers: L.length, unread, positive: R.filter(l => l.polarity === 'positive').length, neutral: R.filter(l => l.polarity === 'neutral').length, negative: R.filter(l => l.polarity === 'negative').length, min: MIN,
+      method: 'Claude Haiku reads every answer that names you (20 to a call); a rule reader gives a second opinion and never makes the figure', kappa: { ...KAPPA }, validated: KAPPA.model != null && KAPPA.model >= KAPPA.gate,
+      model_vs_rules: R.length ? { n: R.length, agreement: Math.round(1000 * R.filter(l => l.rules_polarity === l.polarity).length / R.length) / 10, kappa: kappa(R.map(l => [l.polarity, l.rules_polarity])) } : null,
+      unread_note: unread ? unread + ' of the ' + L.length + ' answers that name you were not read by the model (' + (opt.unread_why || 'it did not answer for them') + '); they are not counted.' : '' };
+    if (n < MIN) return { ...base, net: null, net_lo: null, net_hi: null, withheld: true, by_aspect: [], by_rival: [], objections: [], note: L.length ? 'Sentiment is withheld: ' + n + ' answer' + (n === 1 ? ' was' : 's were') + ' read, and a figure needs ' + MIN + '.' : 'No answer named you, so there is no sentiment to read.' };
+    const r = AVX.ratio(R, (l) => [sc(l.polarity), 1], { scale: 100, lo0: -1, hi0: 1 });
+    const aspects = ASPECTS.map(a => { const xs = R.map(l => (l.aspects || []).find(x => x.aspect === a)).filter(Boolean); const pos = xs.filter(x => x.polarity === 'positive').length, neg = xs.filter(x => x.polarity === 'negative').length;
+      return { aspect: a, pos, neg, neu: xs.length - pos - neg, n: xs.length, net: xs.length >= MIN ? Math.round(100 * (pos - neg) / xs.length) : null }; }).filter(x => x.n);
+    const rv = new Map(); for (const l of R) for (const x of (l.rivals || [])) { const k = String(x.id || x.name).toLowerCase(); const s0 = rv.get(k) || { id: x.id || x.name, pos: 0, neg: 0, n: 0 }; s0.n++; if (x.polarity === 'positive') s0.pos++; if (x.polarity === 'negative') s0.neg++; rv.set(k, s0); }
+    const objMap = new Map(); for (const l of R) { const t = String(l.objection || '').trim(); if (!t) continue; const k = t.toLowerCase().replace(/[^a-z0-9 ]+/g, '').slice(0, 60); const s0 = objMap.get(k) || { text: t, n: 0, engines: new Set() }; s0.n++; s0.engines.add(l.engine); objMap.set(k, s0); }
+    return { ...base, withheld: false, net: r.value == null ? null : Math.round(r.value), net_lo: r.lo == null ? null : Math.round(r.lo), net_hi: r.hi == null ? null : Math.round(r.hi), n_questions: r.n_questions,
+      by_aspect: aspects.sort((a, b) => b.n - a.n), by_rival: [...rv.values()].sort((a, b) => b.n - a.n).slice(0, 10).map(s0 => ({ id: s0.id, n: s0.n, net: s0.n >= MIN ? Math.round(100 * (s0.pos - s0.neg) / s0.n) : null })),
+      objections: [...objMap.values()].sort((a, b) => b.n - a.n).slice(0, 8).map(s0 => ({ text: s0.text, n: s0.n, engines: [...s0.engines] })),
+      note: 'Net sentiment ' + (r.value >= 0 ? '+' : '') + Math.round(r.value) + ' (positive minus negative, per 100 answers that name you; 95% range ' + (r.lo == null ? 'not measurable' : Math.round(r.lo) + ' to ' + Math.round(r.hi)) + ', ' + n + ' answers to ' + r.n_questions + ' questions). Compare it only within one market and language.'
+        + (KAPPA.model == null ? ' The model\'s labels are not yet validated against a hand-labelled set.' : '') }; };
+  return { ASPECTS, POL, MIN, KAPPA, rules, snippet, clausesOf, kappa, parseModel, namedAnswers, jobsOf, aggregate, nameRe };
+})();
+const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 // ---- AI entities (F1a, 2026-10-23; docs/ai-visibility-2026-10-23/ENGINE_AUDIT.md E3 E4 E5 E8 E10 E16, PROD_STATE.md section 5) ----
 // WHO an AI answer names, as ONE entity per business, and in which ROLE. Inlined by build_monitors.py (the AI_ENTITIES placeholder) into
 // Parse AI Answers (weekly and pulse), Apply Analysis, Analyst Jobs, AI Cache Rows, Prompt Rows, AI Plan and Pulse Plan.
@@ -721,7 +1170,7 @@ const AIP = (() => {
   const locationOf = (cc) => { const n = ISO_NUM[S(cc).toUpperCase()]; return n ? 2000 + n : 0; };
   const PERSONA_MAX = 6;
   const personasOf = (site) => [...new Set(listOf(site.ai_personas).map(p => p.replace(/\s+/g, ' ').slice(0, 40)))].slice(0, PERSONA_MAX);
-  const stageOf = (s) => { const x = S(s).toLowerCase(); return ['awareness', 'consideration', 'decision', 'brand'].includes(x) ? x : ''; };
+  const stageOf = (s) => { const x = S(s).toLowerCase(); return ['awareness', 'consideration', 'decision', 'brand', 'shopping'].includes(x) ? x : ''; };
 
   // ---- 3. one question, said another way ----------------------------------------------------------------------------------------
   const STOP = new Set(('a an and are as at be best by can do does for from get has have how i in is it its me my of on or our should the their them '
@@ -1346,6 +1795,265 @@ const RV = (() => {
   const marketMedia = (d, iso) => { const re = MARKET_MEDIA[S(iso).toUpperCase()]; return !!re && re.test(norm(d)); };
   return { set, providerOf, storefront, menuOf, families, reg, aiRivals, marketMedia, ROUNDUP, FAMILIES, NOT_RIVAL };
 })();
+// ---- W2-E1 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §1 §2, fixes/W2-E1.md): the answer-level data every engine call
+// already returns and the tracker used to throw away. Inlined (AAD) into Parse AI Answers (weekly and pulse), Analyst Jobs, Apply Analysis,
+// AI Metrics, AI Report and Prompt Jobs by build_monitors.py (placeholder AI_ANSWER_DATA).
+//   per answer (seo_ai_answers): the full answer text (capped at 12,000 characters, the analyst re-reads it in a run's last part when the part
+//     that paid for it died before its analysis), every source cited in order (cited_json), the pages the engine READ but did not cite
+//     (retrieved_json: the ChatGPT interface's search_results minus its sources), the searches it ran (fanout_json), product cards
+//     (products_json: ChatGPT chat_gpt_products, AI Mode / AI Overview ai_overview_shopping), ads (ads_json: ChatGPT chat_gpt_ad, AI Mode
+//     ai_overview_paid), local-business cards (local_json: ChatGPT chat_gpt_local_businesses) and the model the response reports.
+//     An empty list '[]' is "the engine can show these and showed none"; '' is "this engine does not report them" (or an older row).
+//   per run (seo_ai_visibility): urls_json (your pages read / cited, the page cited instead), sources_json (rule-based source types, first /
+//     last seen, half-life from stored history), shopping_json (trigger rate with n; "no shopping results", never 0%), ads_local_json.
+// No URL constructor in the n8n sandbox: hosts are read with a regex.
+const AAD = (() => {
+  const TEXT_CAP = 12000, LIST_CAP = 40, FANOUT_CAP = 20;
+  const S = (v) => v == null ? '' : String(v);
+  const tb = (v) => v === true || S(v) === 'true';
+  const hostOf = (u) => { const m = S(u).match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\d?\./, '') : ''; };
+  const normH = (h) => S(h).toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\d?\./, '').replace(/[\/?#:].*$/, '');
+  const TRACK = /^(utm_[a-z_]*|srsltid|gclid|gbraid|wbraid|dclid|fbclid|msclkid|yclid|twclid|igshid|mc_cid|mc_eid|ref|ref_src|referrer|_hsenc|_hsmi|hsa_[a-z]+|spm|at_[a-z_]+)$/i;
+  const clean = (u) => { const s = S(u).trim(); const m = s.match(/^(https?):\/\/([^/?#]+)([^?#]*)(\?[^#]*)?/i); if (!m) return s.replace(/#.*$/, '');
+    const q = (m[4] || '').replace(/^\?/, '').split('&').filter(kv => kv && !TRACK.test(kv.split('=')[0])).join('&');
+    return m[1].toLowerCase() + '://' + m[2].toLowerCase().replace(/^www\./, '').replace(/:(?:80|443)$/, '') + (m[3] || '/') + (q ? '?' + q : ''); };
+  const SL2 = /^(co|com|org|net|gov|ac|edu|ltd|plc|sch|nic|mil|go|or|ne|gob|gouv)\.[a-z]{2}$/;
+  const regD = (h) => { const x = normH(h); const p = x.split('.').filter(Boolean); if (p.length <= 2) return p.join('.'); return SL2.test(p.slice(-2).join('.')) ? p.slice(-3).join('.') : p.slice(-2).join('.'); };
+  const J = (v, d) => { if (v && typeof v === 'object') return v; if (v == null || v === '') return d; try { const x = JSON.parse(String(v)); return x == null ? d : x; } catch (e) { return d; } };
+  const pctOf = (a, b) => b ? Math.round(1000 * a / b) / 10 : null;
+  const wilson = (k, n) => { if (!n) return null; const z = 1.96, p = k / n, d = 1 + z * z / n, c = (p + z * z / (2 * n)) / d, h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d;
+    return [Math.max(0, Math.round(1000 * (c - h)) / 10), Math.min(100, Math.round(1000 * (c + h)) / 10)]; };
+  const num = (v) => { const x = Number(v); return v == null || v === '' || !Number.isFinite(x) ? null : x; };
+  // the answer's full text: whitespace normalised (runs of spaces / tabs to one, 3+ line breaks to 2: the list structure the analyst and
+  // the app read stays), capped at TEXT_CAP characters
+  const textOf = (t) => { const s = S(t).replace(/\r\n?/g, '\n').replace(/[ \t\f\v ]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    return { text: s.slice(0, TEXT_CAP), cut: s.length > TEXT_CAP, len: s.length }; };
+
+  // ---- which engines report what (an engine that cannot show a thing stores '', never '[]') ----
+  const SHOWS = { products: new Set(['chatgpt', 'ai_mode', 'ai_overview']), ads: new Set(['chatgpt', 'ai_mode', 'ai_overview']), local: new Set(['chatgpt']), retrieved: new Set(['chatgpt']) };
+  const isScraper = (engine, res) => engine === 'chatgpt' || (engine === 'gemini' && !!res && (res.markdown != null || (res.items || []).some(x => /^gemini_/.test(S(x && x.type)))));
+
+  /** One answer's data (WAVE2_CONTRACTS §1). ctx: { engine, res (the task result), answered, text, cites [{url, host, title}], fanout [..],
+   *  isOurs(host), ownNames [lower-case brand names], entities (AIE.read(...).entities), sameEntity, kindOfDomain } */
+  const answerFields = (ctx) => {
+    const c = ctx || {}; const e = S(c.engine); const res = c.res || null;
+    const empty = { answer_text: '', cited_json: '', retrieved_json: '', fanout_json: '', products_json: '', ads_json: '', local_json: '', model: '', detail_json: '' };
+    if (!c.answered || !res) return { ...empty, model: res ? S(res.model || res.model_name).slice(0, 80) : '' };
+    const isOurs = typeof c.isOurs === 'function' ? c.isOurs : () => false;
+    const own = (c.ownNames || []).map(x => S(x).toLowerCase()).filter(x => x.length >= 3);
+    const ents = Array.isArray(c.entities) ? c.entities : [];
+    const same = typeof c.sameEntity === 'function' ? c.sameEntity : (a, b) => regD(a) === regD(b);
+    const entityOf = (host) => { const h = normH(host); if (!h) return { id: '', role: '' }; if (isOurs(h)) return { id: regD(h), role: 'self' };
+      const r = regD(h); const x = ents.find(en => en && en.id && /\./.test(S(en.id)) && same(en.id, r)); return x ? { id: S(x.id), role: S(x.role) || 'source' } : { id: r, role: 'source' }; };
+    const ownName = (s) => { const t = S(s).toLowerCase(); return !!t && own.some(n => t === n || (n.length >= 5 && t.indexOf(n) >= 0)); };
+    const T = textOf(c.text);
+    // every source cited, in order (1-based), one entry per page
+    const seen = new Set(); const cited = [];
+    for (const x of (c.cites || [])) { const url = x && x.url ? clean(x.url).slice(0, 300) : ''; const host = normH((x && x.host) || hostOf(url)); if (!host && !url) continue;
+      const k = url || ('host:' + host); if (seen.has(k)) continue; seen.add(k); const en = entityOf(host);
+      cited.push({ url, host, entity_id: en.id, role: en.role, position: cited.length + 1 }); if (cited.length >= LIST_CAP) break; }
+    const citedUrls = new Set(cited.map(x => x.url).filter(Boolean));
+    // pages the engine read but did not cite: the ChatGPT interface returns everything it retrieved (search_results) beside what it cited
+    let retrieved = null;
+    if (SHOWS.retrieved.has(e) && isScraper(e, res)) { retrieved = []; const rs = new Set();
+      for (const x of (Array.isArray(res.search_results) ? res.search_results : [])) { const url = x && x.url ? clean(x.url).slice(0, 300) : ''; if (!url || citedUrls.has(url) || rs.has(url)) continue; rs.add(url);
+        const host = normH(hostOf(url) || (x && x.domain)); retrieved.push({ url, host, entity_id: entityOf(host).id }); if (retrieved.length >= LIST_CAP) break; } }
+    const fanout = Array.isArray(c.fanout) ? [...new Set(c.fanout.map(q => S(q).replace(/\s+/g, ' ').trim().slice(0, 200)).filter(Boolean))].slice(0, FANOUT_CAP) : [];
+    const items = Array.isArray(res.items) ? res.items : [];
+    const ao = items.find(x => x && x.type === 'ai_overview') || null;
+    const sub = ao && Array.isArray(ao.items) ? ao.items : [];
+    // product cards: ChatGPT's carousel (chat_gpt_products) and Google's shopping block inside the AI answer (ai_overview_shopping)
+    let products = null;
+    if (SHOWS.products.has(e) && (e === 'chatgpt' ? isScraper(e, res) : !!ao)) { products = [];
+      const groups = e === 'chatgpt' ? [...items.filter(x => x && x.type === 'chat_gpt_products'), ...(Array.isArray(res.chat_gpt_products) ? [{ items: res.chat_gpt_products }] : [])] : sub.filter(x => x && x.type === 'ai_overview_shopping');
+      for (const g of groups) for (const p of (Array.isArray(g.items) ? g.items : [])) { if (!p) continue;
+        const url = p.url ? clean(p.url).slice(0, 300) : ''; const host = normH(p.domain || hostOf(url));
+        const merchant = S(e === 'chatgpt' ? (p.merchants || p.merchant || p.seller || host) : (p.seller || p.marketplace || host)).replace(/\s+/g, ' ').trim().slice(0, 80);
+        const pr = p.price && typeof p.price === 'object' ? p.price : null;
+        const price = pr ? num(pr.current != null ? pr.current : pr.max_value) : num(p.price);
+        const currency = S(pr ? pr.currency : p.currency).slice(0, 8);
+        const en = entityOf(host);
+        products.push({ title: S(p.title).replace(/\s+/g, ' ').trim().slice(0, 160), merchant, price, currency, url, position: products.length + 1, entity_id: en.id, own: (!!host && isOurs(host)) || ownName(merchant) });
+        if (products.length >= LIST_CAP) break; } }
+    // ads: ChatGPT's ad unit (is_rendered: false = in the response but not shown) and the paid block inside Google's AI answer
+    let ads = null;
+    if (SHOWS.ads.has(e) && (e === 'chatgpt' ? isScraper(e, res) : !!ao)) { ads = [];
+      if (e === 'chatgpt') for (const a of items.filter(x => x && x.type === 'chat_gpt_ad')) { const adv = a.advertiser || {}; const url = clean(a.url || adv.url || '').slice(0, 300); const host = normH(a.domain || hostOf(url) || hostOf(adv.url));
+        ads.push({ advertiser: S(adv.name || a.title || host).slice(0, 80), url, host, rendered: a.is_rendered !== false }); }
+      else for (const g of sub.filter(x => x && x.type === 'ai_overview_paid')) for (const a of (Array.isArray(g.items) ? g.items : [])) { if (!a) continue; const url = clean(a.url || '').slice(0, 300); const host = normH(a.domain || hostOf(url));
+        ads.push({ advertiser: S(a.website_name || a.title || host).slice(0, 80), url, host, rendered: true }); }
+      ads = ads.slice(0, 12); }
+    // local-business cards (ChatGPT)
+    let local = null;
+    if (SHOWS.local.has(e) && isScraper(e, res)) { local = [];
+      for (const g of items.filter(x => x && x.type === 'chat_gpt_local_businesses')) for (const b of (Array.isArray(g.items) ? g.items : [])) { if (!b) continue; const url = clean(b.url || '').slice(0, 300); const host = normH(b.domain || hostOf(url));
+        local.push({ name: S(b.title || b.name).replace(/\s+/g, ' ').trim().slice(0, 100), url, host, position: local.length + 1, own: (!!host && isOurs(host)) || ownName(b.title || b.name) }); }
+      local = local.slice(0, 20); }
+    const detail = { v: 1, answer_len: T.len }; if (T.cut) detail.answer_cut = true;
+    return { answer_text: T.text, cited_json: JSON.stringify(cited), retrieved_json: retrieved ? JSON.stringify(retrieved) : '',
+      fanout_json: (res.fan_out_queries !== undefined || fanout.length) ? JSON.stringify(fanout) : '',
+      products_json: products ? JSON.stringify(products) : '', ads_json: ads ? JSON.stringify(ads) : '', local_json: local ? JSON.stringify(local) : '',
+      model: S(res.model || res.model_name).slice(0, 80), detail_json: JSON.stringify(detail) };
+  };
+
+  // ---- the analyst's mark (detail_json.analysed) and a stored row read back (Load AI Run Answers: strings for booleans and numbers) ----
+  const analysed = (r) => !!J(r && r.detail_json, {}).analysed;
+  const markAnalysed = (detailJson) => { const d = J(detailJson, {}); d.v = d.v || 1; d.analysed = true; return JSON.stringify(d); };
+  const fromStored = (r) => ({ ...r, answered: tb(r.answered), mentioned: tb(r.mentioned), cited: tb(r.cited), named: r.named === '' || r.named == null ? r.named : tb(r.named),
+    rank: Number(r.rank) || 0, position: num(r.position), cost: Number(r.cost) || 0, _text: S(r.answer_text), _stored: true });
+
+  // ---- source types (rule-based; MARKET_RND §3.1 gap 11). Typed on the FULL host (community.x.com is a forum), keyed by registrable domain ----
+  const T_GOV = /\.gov(\.[a-z]{2,3})?$|(^|\.)gov\.[a-z]{2}$|(^|\.)(gouv|gob|go|gv|govt|gc)\.[a-z]{2}$|\.mil(\.[a-z]{2})?$|(^|\.)u\.ae$|\.int$|(^|\.)europa\.eu$|(^|\.)(canada\.ca|admin\.ch|bund\.de|service-public\.fr|nhs\.uk|usa\.gov)$|(^|\.)(difc|adgm|dmcc|dafz|dafza|jafza|rakez|dso|ifza|shams|kezad|dwtc|dubaided|saifzone|dubaichamber|abudhabichamber)\.(com|ae|org)$|(^|\.)[a-z]{3,}fz\.(ae|com)$|freezone/i;
+  const T_REF = /(^|\.)(wikipedia|wikimedia|wikidata|wiktionary|britannica|investopedia|merriam-webster|dictionary|thefreedictionary|collinsdictionary|arxiv|researchgate|jstor|sciencedirect|springer|semanticscholar|ssrn|w3|iso|ieee|ietf|openstax|khanacademy|plato\.stanford)\.[a-z.]+$|(^|\.)scholar\.google\.[a-z.]+$|(^|\.)developer\.mozilla\.org$|\.edu(\.[a-z]{2})?$|(^|\.)ac\.[a-z]{2}$/i;
+  const T_UGC = /(^|\.)(reddit|redd|youtube|youtu|quora|stackoverflow|stackexchange|superuser|serverfault|askubuntu|medium|substack|linkedin|facebook|fb|twitter|x|instagram|tiktok|pinterest|github|gitlab|discord|telegram|tumblr|blogspot|wordpress|hashnode|dev|vimeo|twitch|threads|bsky|mastodon|steamcommunity|xda-developers|spiceworks|tripadvisor-forum)\.(com|be|co|me|io|net|to|org|app|social|it)$|(^|\.)(community|communities|forum|forums|discuss|discussion|discussions|answers|boards|groups|talk)\.[a-z0-9-]+\.[a-z.]+$|(^|[.-])forums?([.-]|$)/i;
+  const T_DIR = /(^|\.)(g2|capterra|clutch|trustpilot|goodfirms|getapp|softwareadvice|crunchbase|yelp|sortlist|designrush|themanifest|softwaresuggest|sourceforge|saashub|alternativeto|producthunt|glassdoor|zoominfo|owler|tripadvisor|bbb|angi|angieslist|houzz|thumbtack|hidubai|dnb|kompass|europages|justdial|sulekha|trustradius|gartnerpeerinsights|peerspot|appsumo|bayt|indeed|yellowpages|yell|hotfrog|cylex|foursquare|manta|chamberofcommerce|expertise|upcity|bark|fiverr|upwork)\.[a-z.]+$|yellow-?pages|directory|listings?\b|(^|\.)aspl?ist|uaeasp|einvoicinglist/i;
+  const T_EDIT = /(^|\.)(gulfnews|khaleejtimes|thenationalnews|thenational|zawya|arabianbusiness|gulfbusiness|tradearabia|wam|emirates247|khaleej|alkhaleej|albayan|argaam|arabnews|saudigazette|reuters|bloomberg|forbes|cnbc|bbc|cnn|nytimes|washingtonpost|wsj|ft|economist|techcrunch|theverge|wired|engadget|venturebeat|zdnet|cnet|techradar|pcmag|computerworld|computerweekly|itpro|cio|infoworld|theregister|entrepreneur|inc|fortune|fastcompany|businessinsider|marketwatch|axios|apnews|aljazeera|theguardian|guardian|telegraph|independent|timesofindia|hindustantimes|economictimes|livemint|dawn|nerdwallet|hbr|mckinsey|gartner|forrester|statista|idc|frost|marketsandmarkets|mordorintelligence|grandviewresearch|searchenginejournal|searchengineland|thedrum|adweek|campaignme|pcworld|tomsguide|tomshardware|lifewire|makeuseof|howtogeek|digitaltrends|mashable|gizmodo|vox|politico|npr|abc|cbsnews|nbcnews|foxnews|usatoday|time|newsweek)\.[a-z.]+$/i;
+  const T_EDIT_WORD = /(^|[.-])(news|times|post|herald|tribune|gazette|journal|magazine|mag|daily|weekly|chronicle|telegraph|observer|express|courier|insider|today|wire|press|media|reporter)([.-]|$)|news\.|magazine/i;
+  const SOURCE_TYPES = ['own', 'rival', 'ugc', 'reference', 'editorial', 'government', 'directory', 'other'];
+  /** ctx: { own: domain, isOurs(host)?, isRival(host)? } -> one of SOURCE_TYPES */
+  const sourceType = (host, ctx) => { const h = normH(host); const c = ctx || {}; if (!h) return 'other';
+    const own = normH(c.own); if ((typeof c.isOurs === 'function' && c.isOurs(h)) || (own && (h === own || h.endsWith('.' + own)))) return 'own';
+    if (typeof c.isRival === 'function' && c.isRival(h)) return 'rival';
+    if (T_GOV.test(h)) return 'government';
+    if (T_REF.test(h)) return 'reference';
+    if (T_UGC.test(h)) return 'ugc';
+    if (T_DIR.test(h)) return 'directory';
+    if (T_EDIT.test(h) || T_EDIT_WORD.test(h)) return 'editorial';
+    return 'other'; };
+  const TYPE_WORDS = { own: 'your site', rival: 'businesses AI names instead of you', ugc: 'forums, video and social posts', reference: 'reference sites (encyclopedias, academic)', editorial: 'news, magazines and analysts',
+    government: 'government and official bodies', directory: 'directories and review sites', other: 'other company and product sites' };
+
+  // ---- one run's answers -> the visibility row's four JSON columns (WAVE2_CONTRACTS §2) ----
+  /** a: { rows (the run's answered rows, stored or in memory), domain, isOurs(host), isRival(host), rivalIds (Set of entity ids), history (earlier
+   *  seo_ai_visibility rows of the site, any order), checked_at, ENG (engine names) } */
+  const aggregate = (a) => {
+    const A = a || {}; const rows = (A.rows || []).filter(r => r && tb(r.answered) && !r.error);
+    const isOurs = typeof A.isOurs === 'function' ? A.isOurs : (h) => { const o = normH(A.domain); const x = normH(h); return !!x && (x === o || x.endsWith('.' + o)); };
+    const rivalIds = A.rivalIds instanceof Set ? A.rivalIds : new Set(A.rivalIds || []);
+    const isRivalH = (h, idHint, role) => role === 'competitor' || (typeof A.isRival === 'function' && A.isRival(h)) || rivalIds.has(regD(h)) || (!!idHint && rivalIds.has(S(idHint)));
+    const citedOf = (r) => { const v = J(r.cited_json, null); if (Array.isArray(v)) return v.filter(x => x && (x.url || x.host));
+      // an older row (before W2-E1): its own pages (our_urls) and the third-party pages it cited (cited_urls), order unknown
+      const o = S(r.our_urls).split(/\s+/).filter(Boolean).map(u => ({ url: clean(u), host: hostOf(u), role: 'self' }));
+      const t = J(r.cited_urls, []); return [...o, ...(Array.isArray(t) ? t : []).filter(x => x && x.u).map(x => ({ url: clean(x.u), host: hostOf(x.u) }))]; };
+    const retrOf = (r) => { const v = J(r.retrieved_json, null); return Array.isArray(v) ? v.filter(x => x && x.url) : null; };
+    // -- urls_json: your pages AI read and cited; the page AI cited instead
+    const ownU = new Map(); const rivU = new Map(); const reportsRetrieval = rows.filter(r => retrOf(r) !== null).length;
+    const bump = (m, k, o) => { const x = m.get(k) || { ...o, n: 0 }; x.n++; m.set(k, x); return x; };
+    for (const r of rows) {
+      const cited = citedOf(r); const retr = retrOf(r) || [];
+      const citedOwn = new Set(cited.filter(x => x.url && isOurs(x.host || hostOf(x.url))).map(x => clean(x.url)));
+      const readOwn = new Set(retr.filter(x => isOurs(x.host || hostOf(x.url))).map(x => clean(x.url)));
+      const rivalsCited = cited.filter(x => x.url && !isOurs(x.host || hostOf(x.url)) && isRivalH(x.host || hostOf(x.url), x.entity_id, x.role));
+      const othersCited = cited.filter(x => x.url && !isOurs(x.host || hostOf(x.url)));
+      for (const x of rivalsCited) { const y = rivU.get(clean(x.url)) || { url: clean(x.url), host: normH(x.host || hostOf(x.url)), entity_id: S(x.entity_id) || regD(x.host || hostOf(x.url)), cited_n: 0 }; y.cited_n++; rivU.set(y.url, y); }
+      for (const u of new Set([...citedOwn, ...readOwn])) {
+        const o = ownU.get(u) || { url: u, cited_n: 0, retrieved_n: 0, engines: new Set(), questions: new Set(), instead: new Map(), competing: new Map(), read_not_cited_n: 0 };
+        o.retrieved_n++; o.engines.add(S(r.engine)); if (r.prompt_id) o.questions.add(S(r.prompt_id));
+        if (citedOwn.has(u)) o.cited_n++;
+        else { o.read_not_cited_n++; for (const x of rivalsCited) bump(o.instead, clean(x.url), { url: clean(x.url), host: normH(x.host || hostOf(x.url)) });
+          for (const x of othersCited) bump(o.competing, clean(x.url), { url: clean(x.url), host: normH(x.host || hostOf(x.url)) }); }
+        ownU.set(u, o); } }
+    const topN = (m, k) => [...m.values()].sort((x, y) => y.n - x.n || S(x.url).localeCompare(S(y.url))).slice(0, k).map(x => ({ url: x.url, host: x.host, n: x.n }));
+    const ownRows = [...ownU.values()].sort((x, y) => y.cited_n - x.cited_n || y.retrieved_n - x.retrieved_n || x.url.localeCompare(y.url));
+    const urls = { answers_n: rows.length, retrieval_answers_n: reportsRetrieval,
+      own: ownRows.slice(0, 25).map(o => ({ url: o.url, cited_n: o.cited_n, retrieved_n: o.retrieved_n, cited_rate: pctOf(o.cited_n, o.retrieved_n), rate_n: o.retrieved_n, answers_n: rows.length,
+        engines: [...o.engines].sort(), questions: [...o.questions].slice(0, 20), rival_cited_instead: topN(o.instead, 3) })),
+      rivals: [...rivU.values()].sort((x, y) => y.cited_n - x.cited_n || x.url.localeCompare(y.url)).slice(0, 20),
+      retrieved_not_cited: ownRows.filter(o => o.read_not_cited_n > 0).sort((x, y) => y.read_not_cited_n - x.read_not_cited_n || x.url.localeCompare(y.url)).slice(0, 15)
+        .map(o => ({ url: o.url, retrieved_n: o.retrieved_n, cited_n: o.cited_n, read_not_cited_n: o.read_not_cited_n, top_competing: topN(o.competing, 3) })),
+      note: reportsRetrieval ? '' : 'no engine of this run reports the pages it read (only the ChatGPT interface does), so "read but not cited" is not measured' };
+    // -- sources_json: where AI gets its answers, by type; first / last seen and half-life from the stored history
+    const dom = new Map(); let pairs = 0; let citingAnswers = 0;
+    for (const r of rows) { const hs = new Map(); for (const x of citedOf(r)) { const h = normH(x.host || hostOf(x.url)); if (!h) continue; const k = regD(h); if (!hs.has(k)) hs.set(k, { h, x }); }
+      if (hs.size) citingAnswers++;
+      for (const [k, { h, x }] of hs) { const d = dom.get(k) || { host: k, type: '', cited_n: 0, engines: new Set() }; d.cited_n++; d.engines.add(S(r.engine)); if (!d.type) d.type = isOurs(h) ? 'own' : isRivalH(h, x.entity_id, x.role) ? 'rival' : sourceType(h, { own: A.domain, isOurs }); dom.set(k, d); pairs++; } }
+    const today = S(A.checked_at || new Date().toISOString()).slice(0, 10);
+    const hist = (A.history || []).map(v => ({ at: S(v && v.checked_at).slice(0, 10), s: J(v && v.sources_json, null) })).filter(v => v.at && v.at < today && v.s && !Array.isArray(v.s) && Array.isArray(v.s.domains))
+      .sort((x, y) => x.at.localeCompare(y.at));
+    const last = hist.length ? hist[hist.length - 1].s : null;
+    const prevD = new Map(((last && last.domains) || []).map(d => [S(d.host), d]));
+    const shareAt = (s, host) => { const d = (s.domains || []).find(x => S(x.host) === host); const n = Number(s.n) || 0; return d && n ? 100 * (Number(d.cited_n) || 0) / n : 0; };
+    const daysBetween = (a0, b0) => Math.round((Date.parse(b0 + 'T00:00:00Z') - Date.parse(a0 + 'T00:00:00Z')) / 864e5);
+    const decayOf = (host, firstSeen, nowShare) => {
+      const pts = [...hist.filter(v => v.at >= firstSeen).map(v => ({ at: v.at, y: shareAt(v.s, host) })), { at: today, y: nowShare }];
+      if (pts.length < 3 || daysBetween(pts[0].at, today) < 14) return { half_life_days: null, decay: 'too little history', weeks: pts.length };
+      let pk = 0; pts.forEach((p, i) => { if (p.y > pts[pk].y) pk = i; });
+      if (!(pts[pk].y > 0)) return { half_life_days: null, decay: 'not cited', weeks: pts.length };
+      for (let i = pk + 1; i < pts.length; i++) if (pts[i].y <= pts[pk].y / 2) { const a = pts[i - 1], b = pts[i]; const f = (a.y - pts[pk].y / 2) / Math.max(1e-9, a.y - b.y);
+        return { half_life_days: Math.max(1, Math.round(daysBetween(pts[pk].at, a.at) + f * daysBetween(a.at, b.at))), decay: 'halved', weeks: pts.length }; }
+      return { half_life_days: null, decay: pk === pts.length - 1 ? 'at its peak now' : 'holding', weeks: pts.length }; };
+    const out = [];
+    for (const d of dom.values()) { const p0 = prevD.get(d.host); const first = p0 && p0.first_seen ? S(p0.first_seen).slice(0, 10) : today; const share = pctOf(d.cited_n, pairs);
+      out.push({ host: d.host, type: d.type, cited_n: d.cited_n, share, engines: [...d.engines].sort(), first_seen: first < today ? first : today, last_seen: today, ...decayOf(d.host, first < today ? first : today, share || 0) }); }
+    // a domain cited before and not this run keeps its dates for 120 days, so its first-seen date and its decay stay readable
+    for (const [h, p0] of prevD) { if (dom.has(h) || !p0.last_seen || daysBetween(S(p0.last_seen).slice(0, 10), today) > 120) continue; const first = S(p0.first_seen || p0.last_seen).slice(0, 10);
+      out.push({ host: h, type: S(p0.type) || sourceType(h, { own: A.domain, isOurs }), cited_n: 0, share: 0, engines: [], first_seen: first, last_seen: S(p0.last_seen).slice(0, 10), ...decayOf(h, first, 0) }); }
+    out.sort((x, y) => y.cited_n - x.cited_n || S(y.last_seen).localeCompare(S(x.last_seen)) || x.host.localeCompare(y.host));
+    const types = {}; for (const t of SOURCE_TYPES) { const k = out.filter(d => d.type === t).reduce((s, d) => s + d.cited_n, 0); types[t] = { n: k, share: pairs ? pctOf(k, pairs) : null }; }
+    const sources = { v: 2, n: pairs, answers_n: rows.length, citing_answers_n: citingAnswers, types, domains: out.slice(0, 80), history_runs: hist.length, method: 'rule-based type by host (own, rival, ugc, reference, editorial, government, directory, other); share = a domain\'s citations out of every (answer, domain) citation; half-life = days from the domain\'s peak share to half of it, from 3 or more stored runs over 14 days or more' };
+    // -- shopping_json: how often an answer shows product cards, whose, and where you are
+    const shopRows = rows.filter(r => Array.isArray(J(r.products_json, null)));
+    const byE = {}; let trig = 0, prodN = 0, ownAns = 0; const ownPos = []; const merch = new Map(); const prods = new Map();
+    for (const r of shopRows) { const ps = J(r.products_json, []); const e = S(r.engine); const b = byE[e] || (byE[e] = { name: (A.ENG || {})[e] || e, answers_n: 0, trigger_n: 0, products_n: 0 }); b.answers_n++;
+      if (!ps.length) continue; trig++; b.trigger_n++; b.products_n += ps.length; prodN += ps.length;
+      const mine = ps.filter(p => p && p.own); if (mine.length) { ownAns++; ownPos.push(Math.min(...mine.map(p => Number(p.position) || 99))); }
+      for (const p of ps) { const m0 = S(p.merchant || p.entity_id || 'unknown').trim() || 'unknown'; const k = m0.toLowerCase(); const x = merch.get(k) || { merchant: m0, n: 0 }; x.n++; merch.set(k, x);
+        const tk = S(p.title).toLowerCase(); if (tk) { const y = prods.get(tk) || { title: S(p.title), merchant: m0, n: 0, pos: 0, own: !!p.own }; y.n++; y.pos += Number(p.position) || 0; prods.set(tk, y); } } }
+    for (const b of Object.values(byE)) b.trigger_rate = b.trigger_n ? pctOf(b.trigger_n, b.answers_n) : null;
+    const shopping = trig ? { status: 'measured', answers_n: shopRows.length, trigger_n: trig, trigger_rate: pctOf(trig, shopRows.length), trigger_ci: wilson(trig, shopRows.length), products_n: prodN,
+        own_presence_rate: pctOf(ownAns, trig), own_presence_n: trig, own_answers_n: ownAns, own_avg_position: ownPos.length ? Math.round(10 * ownPos.reduce((s, x) => s + x, 0) / ownPos.length) / 10 : null,
+        merchants: [...merch.values()].sort((x, y) => y.n - x.n).slice(0, 10).map(x => ({ merchant: x.merchant, n: x.n, share: pctOf(x.n, prodN) })),
+        products: [...prods.values()].sort((x, y) => y.n - x.n).slice(0, 10).map(x => ({ title: x.title, merchant: x.merchant, n: x.n, avg_position: Math.round(10 * x.pos / x.n) / 10, own: x.own })), by_engine: byE }
+      : { status: 'no shopping results', answers_n: shopRows.length, trigger_n: 0, trigger_rate: null, products_n: 0, own_presence_rate: null, own_avg_position: null, merchants: [], by_engine: byE,
+        note: shopRows.length ? 'no answer showed product cards (' + shopRows.length + ' answers on engines that can show them)' : 'no engine of this run can show product cards' };
+    // -- ads_local_json: who advertises inside the answers to your questions; local-business cards and whether you are in them
+    const adRows = rows.filter(r => Array.isArray(J(r.ads_json, null))); const adv = new Map(); let adSeen = 0, adShown = 0;
+    for (const r of adRows) { const as = J(r.ads_json, []); if (!as.length) continue; adSeen++; if (as.some(x => x && x.rendered !== false)) adShown++;
+      for (const x of as) { if (!x) continue; const k = S(x.host || x.advertiser).toLowerCase(); const y = adv.get(k) || { name: S(x.advertiser || x.host), host: S(x.host), n: 0, own: isOurs(x.host) }; y.n++; adv.set(k, y); } }
+    const locRows = rows.filter(r => Array.isArray(J(r.local_json, null))); const loc = new Map(); let locSeen = 0, locOwn = 0;
+    for (const r of locRows) { const ls = J(r.local_json, []); if (!ls.length) continue; locSeen++; if (ls.some(x => x && x.own)) locOwn++;
+      for (const x of ls) { if (!x || x.own) continue; const k = S(x.name || x.host).toLowerCase(); const y = loc.get(k) || { name: S(x.name || x.host), host: S(x.host), n: 0 }; y.n++; loc.set(k, y); } }
+    const ads_local = { ads: { seen_n: adSeen, rendered_n: adShown, answers_n: adRows.length, rate: adSeen ? pctOf(adSeen, adRows.length) : null, advertisers: [...adv.values()].sort((x, y) => y.n - x.n).slice(0, 10) },
+      local: { seen_n: locSeen, own_n: locOwn, answers_n: locRows.length, rate: locSeen ? pctOf(locSeen, locRows.length) : null, own_rate: locSeen ? pctOf(locOwn, locSeen) : null, rivals: [...loc.values()].sort((x, y) => y.n - x.n).slice(0, 10) } };
+    return { urls, sources, shopping, ads_local };
+  };
+
+  // ---- the panel: a "shopping" stage only for a site whose services or pages show it sells products ----
+  const SHOP_TYPE = /\b(e-?commerce|online (shop|store)|retail(er)?|shop|store|marketplace|brand|d2c|dtc|direct[- ]to[- ]consumer|manufacturer|wholesale|boutique)\b/i;
+  const SHOP_WORD = /\b(buy|shop|store|products?|collections?|catalogue|catalog|add to cart|free shipping|delivery)\b/i;
+  const SHOP_PATH = /\/(products?|shop|store|collections?|catalog(ue)?|item|items|p|dp|buy|cart)\/[^\/?#]+/i;
+  const sellsProducts = (p, pages) => { const P = p || {}; const svc = [...(P.services || []), ...(P.topics || [])].map(S);
+    const urls = (pages || []).map(x => S(x && (x.url || x))).filter(Boolean); const productPages = urls.filter(u => SHOP_PATH.test(u)).length;
+    const byType = SHOP_TYPE.test(S(P.business_type)); const bySvc = svc.filter(s => SHOP_WORD.test(s)).length;
+    const sells = productPages >= 3 || (byType && (productPages >= 1 || bySvc >= 1)) || bySvc >= 2;
+    return { sells, why: sells ? [productPages ? productPages + ' product page(s) on the site' : '', byType ? 'business type "' + S(P.business_type) + '"' : '', bySvc ? bySvc + ' service(s) about products' : ''].filter(Boolean).join(', ') : '' }; };
+
+  // ---- the report: four short sections, each only when it has something to say; n beside every rate ----
+  const reportHtml = (D, k) => {
+    if (!D) return ''; const h3 = k.h3, p_ = k.p_, table = k.table, esc = k.esc, n = k.n, link = k.link || ((u) => esc(u)); let html = '';
+    const U = D.urls || {}; const SRC = D.sources || {}; const SH = D.shopping || {}; const AL = D.ads_local || {};
+    if ((U.retrieved_not_cited || []).length) html += h3('Pages AI reads but does not cite') + p_('ChatGPT shows the pages it read before answering. These pages of yours were read in '
+      + n(U.retrieval_answers_n) + ' answer(s) that could show it, but another page was cited. The page cited instead is the one to beat: match what it answers, how directly it answers it, and its date.')
+      + table(['Your page', 'Read in', 'Cited in', 'Cited instead'], U.retrieved_not_cited.slice(0, 10).map(x => [link(x.url), n(x.retrieved_n) + ' answer' + (x.retrieved_n === 1 ? '' : 's'), n(x.cited_n),
+        (x.top_competing || []).map(c => link(c.url, S(c.url).replace(/^https?:\/\//, '').slice(0, 90)) + ' (' + n(c.n) + ')').join('<br>') || '—']));
+    if ((SRC.n || 0) > 0) { const T = SRC.types || {}; const rowsT = SOURCE_TYPES.filter(t => T[t] && T[t].n > 0).sort((a, b) => T[b].n - T[a].n);
+      html += h3('Where AI gets its answers') + p_('Every site the answers cited, grouped by kind: ' + n(SRC.n) + ' citations in ' + n(SRC.citing_answers_n) + ' of ' + n(SRC.answers_n) + ' answers.')
+        + table(['Kind of source', 'Citations', 'Share'], rowsT.map(t => [esc(TYPE_WORDS[t] || t), n(T[t].n), T[t].share + '% of ' + n(SRC.n)]))
+        + table(['Site', 'Kind', 'Cited in', 'First seen', 'How long it stays cited'], (SRC.domains || []).filter(d => d.cited_n > 0).slice(0, 12).map(d => [esc(d.host), esc(d.type), n(d.cited_n) + ' answer' + (d.cited_n === 1 ? '' : 's'), esc(d.first_seen || '—'),
+          d.half_life_days != null ? 'its share halved in ' + n(d.half_life_days) + ' days' : esc(d.decay === 'too little history' ? 'too little history (' + d.weeks + ' run' + (d.weeks === 1 ? '' : 's') + ')' : d.decay || '—')])); }
+    if (SH.status === 'measured' && SH.trigger_n > 0) html += h3('AI shopping results') + p_('Product cards appeared in ' + n(SH.trigger_n) + ' of ' + n(SH.answers_n) + ' answers that can show them (' + SH.trigger_rate + '%'
+      + (SH.trigger_ci ? ', 95% range ' + SH.trigger_ci[0] + '–' + SH.trigger_ci[1] + '%' : '') + '), ' + n(SH.products_n) + ' cards in all. Your products were in ' + n(SH.own_answers_n) + ' of those ' + n(SH.trigger_n) + ' answers'
+      + (SH.own_avg_position != null ? ', at card ' + SH.own_avg_position + ' on average' : '') + '.')
+      + table(['Seller', 'Cards', 'Share of cards'], (SH.merchants || []).map(x => [esc(x.merchant), n(x.n), x.share + '% of ' + n(SH.products_n)]));
+    const AD = AL.ads || {}, LO = AL.local || {};
+    if (AD.seen_n > 0) html += h3('Ads inside AI answers') + p_('An ad was part of ' + n(AD.seen_n) + ' of ' + n(AD.answers_n) + ' answers that can carry one (' + n(AD.rendered_n) + ' shown to the reader).')
+      + table(['Advertiser', 'Answers'], (AD.advertisers || []).map(x => [esc(x.name) + (x.own ? ' (you)' : ''), n(x.n)]));
+    if (LO.seen_n > 0) html += h3('Local business cards in AI answers') + p_('ChatGPT showed local business cards in ' + n(LO.seen_n) + ' of ' + n(LO.answers_n) + ' answers; you were among them in ' + n(LO.own_n) + ' of those ' + n(LO.seen_n) + '.')
+      + ((LO.rivals || []).length ? table(['Business shown', 'Answers'], LO.rivals.map(x => [esc(x.name), n(x.n)])) : '');
+    return html; };
+
+  return { TEXT_CAP, SOURCE_TYPES, TYPE_WORDS, hostOf, normH, regD, clean, textOf, answerFields, analysed, markAnalysed, fromStored, sourceType, aggregate, sellsProducts, reportHtml, tb };
+})();
 // RV-1 (2026-10-21, pre-launch run on techand.ai): the brief said "build on your existing D365 F&O pages" and the report listed them as "your
 // cited pages" while they answer 404. The page inventory says what each address answered (seo_pages.http_status, the Site Tracker): a cited
 // page that no longer answers is flagged, kept out of the brief's pages to build on, and turned into the one redirect action (_gone.js).
@@ -1593,6 +2301,8 @@ return plans.map(p => {
   const share_of_voice = H.sov == null ? 0 : H.sov;
   comp.forEach(c => { const s0 = AVM.rivalAgg(U, c.domain); c.share = s0.sov == null ? 0 : s0.sov; c.named_rate = s0.named_rate; c.cited_rate = s0.cited_rate; c.avg_position = s0.avg_position; c.position_answers = s0.position_n;
     c.sov = s0.sov; c.sov_answers = s0.sov_n; c.answers = s0.n; Object.defineProperty(c, '_st', { value: s0, enumerable: false }); });
+  // W2-E2 (2026-10-23, fixes/W2-E2.md): the headline's 95% ranges with the QUESTION as the sampling unit (design effect + Korn-Graubard), ci_json
+  const W2CI = AVX.ci(U, { rivalIds: comp.map(c => c.domain) });
   // per engine (this run + pulse samples)
   const engines = {};
   const carriedE = (p.carried && p.carried.engines) || {};
@@ -1798,7 +2508,7 @@ return plans.map(p => {
   const sugg = [...new Map(suggestions.sort((a, b) => b.volume - a.volume).map(s => [s.question.toLowerCase(), s])).values()].slice(0, 12);
   // changes vs last week that are statistically real, alerts
   const prev = p.previous; const mention_rate = pct(mentioned, samples), citation_rate = pct(cited, samples);
-  const [mention_lo, mention_hi] = wilson(mentioned, samples);
+  const [mention_lo, mention_hi] = W2CI.headline.named_rate.lo != null ? [W2CI.headline.named_rate.lo, W2CI.headline.named_rate.hi] : wilson(mentioned, samples);   // W2-E2: clustered when measured
   // F1b: the score over the same units as every rate (the pulse answers scored one by one, by their own place), E7's weights
   const visibility_score = samples ? visibilityScore(U, (a) => volOf.get(a.prompt_id) || 0) : 0;
   // ---- B-L4 (2026-10-15, INVARIANTS rule 1, lineage_lint.py "like_for_like"): a delta compares like with like, or it is not a
@@ -1895,10 +2605,16 @@ return plans.map(p => {
       : scoreChange(visibility_score, prev.visibility_score, score_band),
     avg_position: PS && PS.position ? { ...AVM.seChange(H.avg_position, H.position_n ? (Number(H.position_sd) || 0) / Math.sqrt(H.position_n) : null, H.position_n, PS.position.mean, PS.position.n ? (Number(PS.position.sd) || 0) / Math.sqrt(PS.position.n) : null, Number(PS.position.n) || 0, { min: 0 }), basis: 'measured' }
       : { delta: null, z: null, p: null, significant: null, basis: 'not_available', why: 'the earlier run did not record the place in its answers' } } : null;
+  // W2-E2: the two rate tests treat answers to one question as one cluster: the pooled variance times each run's design effect (the earlier run's
+  // from its metrics_json; this run's when it stored none), so a week of correlated answers does not read as a real change
+  if (tests) for (const [k, key, kN, kB] of [['mention_rate', 'named_rate', mentioned, kPrev], ['citation_rate', 'cited_rate', cited, cPrev]]) { const t = tests[k]; if (!t || t.z == null || !samples || !nPrev) continue;
+    const d1 = Number((W2CI.headline[key] || {}).deff) || 1, d0 = Number(((PS && PS.deff) || {})[key]) || d1; const p1 = kN / samples, p2 = kB / nPrev, pp = (kN + kB) / (samples + nPrev);
+    const se = Math.sqrt(pp * (1 - pp) * (d1 / samples + d0 / nPrev)); if (!se) continue; const z = Math.round(100 * (p1 - p2) / se) / 100; const sig = Math.abs(z) >= 1.96 && Math.abs(t.delta) >= (t.min_points || 5);
+    tests[k] = { ...t, z, significant: sig, z_unclustered: t.z, deff: Math.round(100 * (d1 + d0) / 2) / 100, why: (sig ? 'beyond sampling noise' : 'within sampling noise') + ' (z ' + z + ' with answers to one question counted as one cluster, design effect ' + d1 + (d0 !== d1 ? ' now and ' + d0 + ' before' : '') + '; ' + samples + ' answers now, ' + nPrev + ' before)' }; }
   const delta = (prev && like.comparable) ? { mention_rate: +(mention_rate - prev.mention_rate).toFixed(1), citation_rate: +(citation_rate - prev.citation_rate).toFixed(1), share_of_voice: +(share_of_voice - prev.share_of_voice).toFixed(1),
     visibility_score: prev.visibility_score == null ? null : +(visibility_score - prev.visibility_score).toFixed(1),
     // kept as the headline verdict the alerts and the subject read; `tests` holds the same answer for every other figure
-    significant: prev.samples ? significant(mentioned, samples, prev.mentioned_k, prev.samples) : null, tests } : null;
+    significant: tests && tests.mention_rate && tests.mention_rate.z != null ? tests.mention_rate.significant : (prev.samples ? significant(mentioned, samples, prev.mentioned_k, prev.samples) : null), tests } : null;   // W2-E2: the clustered test
   // ---- R84 (2026-10-16, re-rating defect C-8): say exactly what the headline counts. Exec 623 printed "8 buyer questions × 6 AI
   // engines · 74 answers" while the 74 were 7 buyer questions on the 5 weekly engines (33 this run + 41 from the pulse) — the 8th
   // question is the brand question (recognition only) and Claude, asked monthly, is shown per engine and kept out of the headline on
@@ -2032,6 +2748,19 @@ return plans.map(p => {
       share_of_voice: cmpM(H.sov, PS && PS.sov ? PS.sov.rate : (prev ? prev.share_of_voice : null), H.sov_n, PS && PS.sov ? Number(PS.sov.n) || 0 : 0, T0.share_of_voice),
       visibility_score: cmpM(samples ? visibility_score : null, prev ? prev.visibility_score : null, score_band.n || 0, PS && PS.score ? Number(PS.score.n) || 0 : (prev ? prev.samples || 0 : 0), T0.visibility_score),
       avg_position: cmpM(H.avg_position, PS && PS.position ? PS.position.mean : (prev ? prev.avg_position : null), H.position_n, PS && PS.position ? Number(PS.position.n) || 0 : 0, T0.avg_position) } };
+  // ---- W2-E2 (2026-10-23, fixes/W2-E2.md): share of voice over the declared set, the 28-day segment window, did an action work, the owner's
+  // alert rules (fired ones join the alerts), sentiment of every answer naming you (the Sentiment Reader), and the engines' clustered ranges
+  const W2 = AVX.run({ p, rule: AVM.RULE_VERSION, U, CI: W2CI, segRows, segKeys, meta, compare: compare.metrics, comparable: cmpOk, why: like ? like.why : 'no earlier run', comps: comp, read: w2read,
+    canon: (x) => { const d = normD(x); const k0 = brandKey(/\./.test(d) ? d : String(x).trim(), rivDoms, p.aliases); return k0 ? oneKey(/\./.test(k0) ? String(k0).toLowerCase() : k0) : k0; } });
+  for (const r of W2.alert_rules.filter(x => x.fired)) alerts.push({ level: 'medium', text: 'Your alert rule "' + r.rule_id + '" (' + r.metric.replace(/_/g, ' ') + (Object.keys(r.scope || {}).length ? ', ' + Object.entries(r.scope).map(([a, b]) => a + ' ' + b).join(', ') : '') + '): ' + r.reason + '.' });
+  const W2S = (() => { const allJobs = (() => { try { return $('Sentiment Jobs').all().map(i => i.json || {}); } catch (e) { return []; } })(); const outs = (() => { try { return $('Sentiment Reader').all().map(i => i.json || {}); } catch (e) { return []; } })();
+    const sJobs = allJobs.filter(j => j.site_id === p.site_id && j.items);
+    const M = new Map(); allJobs.forEach((j, ix) => { if (j.site_id !== p.site_id || !j.items) return; const o = outs[ix]; if (!o || o.error) return; const got = SENT.parseModel(o.output, { items: j.items }); for (const [k, v] of got) M.set(k, v); });   // the agent answers its jobs in order
+    const rows0 = [...w2read('Parse AI Answers').filter(r => !r.skip && r.engine && r.site_id === p.site_id && (!r.run_id || r.run_id === p.run_id)), ...w2read('Load AI Run Answers').filter(r => r.site_id === p.site_id && r.run_id === p.run_id)];
+    const named = SENT.namedAnswers(rows0, { business: p.business_name || p.domain, named: AVM.named }); const notSent = sJobs.length ? Number(sJobs[0].not_sent) || 0 : 0;
+    return SENT.aggregate(named, M, { business: p.business_name || p.domain, unread_why: !sJobs.length && named.length ? 'the Sentiment Reader did not run' : notSent ? notSent + ' were past the 40 calls a run can make' : 'the model gave no label for them' }); })();
+  for (const [e, v] of Object.entries((W2CI.by_engine) || {})) if (engines[e] && !engines[e].carried && v.named_rate && v.named_rate.lo != null) { engines[e].ci_unclustered = engines[e].ci; engines[e].ci = [v.named_rate.lo, v.named_rate.hi]; engines[e].deff = v.named_rate.deff; }
+  stats.deff = { named_rate: W2CI.headline.named_rate.deff, cited_rate: W2CI.headline.cited_rate.deff };   // the next run's clustered change test reads them
   const vis_row = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, checked_at: p.checked_at, prompts: byQ.size, answers: samples, mention_rate, citation_rate, share_of_voice, avg_rank: H.avg_position || 0,
     aio_presence, aio_citation_rate, engines_json: J(engines), competitors_json: J(comp), sources_json: J(sources), pages_json: J(our_pages), gaps_json: J(gaps.map(g => ({ prompt_id: g.prompt_id, prompt: g.prompt, kind: g.kind, topic: g.topic, competitors: g.competitors, sources: g.sources, volume: g.volume, stage: g.stage, cluster: g.cluster, fanout: g.fanout, cited_urls: g.cited_urls, engines: g.engines }))), market_json: market ? J(market) : '',
     market_month: market && !market.carried && !market.error ? p.checked_at.slice(0, 7) : ((prev && prev.market_month) || ''), cost_usd: +(exec_cost + ((p.chunk && p.chunk.going && p.spent_before) ? Number(p.spent_before.dfs) || 0 : 0)).toFixed(4),   // G6: the whole run, every execution of it
@@ -2042,14 +2771,26 @@ return plans.map(p => {
     rival_sources_json: J(rival_store),   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
     // G6: the segments and the panel (filled in below) and how many executions the run took
     // compact, so a year of weekly rows stays small: one array per segment (the columns are named once); the report and the callback carry the full rows
-    segments_json: J({ v: 1, rule_version: AVM.RULE_VERSION, cols: ['dim', 'key', 'questions', 'n', 'k', 'cited', 'sov', 'leader', 'pulse_n', 'delta', 'significant', 'sov_answers', 'sov_self', 'sov_mentions', 'avg_position', 'position_answers', 'first_rate', 'pos_visibility'],
-      rows: segments.rows.map(s => [s.dim, s.key, s.questions, s.n, s.k, s.cited, s.sov, s.leader, s.pulse_n, s.change ? s.change.delta : null, s.change ? s.change.significant : null, s.sov_answers, s.sov_self, s.sov_mentions, s.avg_position, s.position_answers, s.first_rate, s.pos_visibility]),
-      family: segments.family, moves: segments.moves, min_answers: segments.min_answers }),
+    segments_json: J({ v: 1, rule_version: AVM.RULE_VERSION, cols: ['dim', 'key', 'questions', 'n', 'k', 'cited', 'sov', 'leader', 'pulse_n', 'delta', 'significant', 'sov_answers', 'sov_self', 'sov_mentions', 'avg_position', 'position_answers', 'first_rate', 'pos_visibility', 'rate_28d', 'lo_28d', 'hi_28d', 'n_28d', 'k_28d', 'q_28d', 'deff_28d'],   // W2-E2: + the 28-day window
+      rows: segments.rows.map(s => [s.dim, s.key, s.questions, s.n, s.k, s.cited, s.sov, s.leader, s.pulse_n, s.change ? s.change.delta : null, s.change ? s.change.significant : null, s.sov_answers, s.sov_self, s.sov_mentions, s.avg_position, s.position_answers, s.first_rate, s.pos_visibility, ...(s.w28 ? [s.w28.rate, s.w28.lo, s.w28.hi, s.w28.n, s.w28.k, s.w28.questions, s.w28.deff] : [null, null, null, null, null, null, null])]),
+      family: segments.family, moves: segments.moves, min_answers: segments.min_answers, window_28d: W2.window28 }),
     panel_json: J(panel_info), chunks: run_split ? run_split.executions : 1,
     // F1b (2026-10-23): the rule these figures were counted under, "named in" by its own name, the place in the answers, the window and
     // the comparison every reader shares (compare_json), and the counts the next run is compared against (metrics_json)
     rule_version: AVM.RULE_VERSION, named_rate: H.named_rate == null ? 0 : H.named_rate, avg_position: H.avg_position, first_rate: H.first_rate, pos_visibility: H.pos_visibility,
-    rate_period, compare_json: J(compare), metrics_json: J(stats) };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
+    rate_period, compare_json: J(compare), metrics_json: J(stats),
+    // W2-E2 (2026-10-23): the clustered ranges, share of voice over the declared set, sentiment, did an action work, the owner's rules, and this run's
+    // answers one by one (compact) so the next runs can count the 28-day window and the before / after of an action
+    ci_json: J(W2CI), sov_json: J(W2.sov), sentiment_json: J(W2S), impact_json: J(W2.impact), alerts_rules_json: J(W2.alert_rules), units_json: W2.units_json };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
+  // ---- W2-E1 (2026-10-23, WAVE2_CONTRACTS.md §2): the answer-level data of the run's answers (this part's and the earlier parts' stored ones):
+  // your pages AI read and cited (and the page cited instead), where AI gets its answers by kind of source with first / last seen and half-life
+  // from the stored runs, product cards, ads and local cards (_ai_answer_data.js). sources_json keeps the old list under `list`.
+  const visHist = (() => { try { return $('Load AI Visibility').all().map(i => i.json).filter(v => v && v.site_id === p.site_id && v.run_id !== p.run_id); } catch (e) { return []; } })();
+  const answer_data = AAD.aggregate({ rows: R, domain: p.domain, isRival, rivalIds: new Set([...rivalSet, ...comp.map(c => String(c.domain).toLowerCase())]), history: visHist, checked_at: p.checked_at, ENG });
+  Object.assign(vis_row, { urls_json: J(answer_data.urls), sources_json: J({ ...answer_data.sources, list: sources }), shopping_json: J(answer_data.shopping), ads_local_json: J(answer_data.ads_local) });
+  { const top = (answer_data.urls.retrieved_not_cited || [])[0];   // W2-E1: the page AI reads most often without citing it
+    if (top && top.read_not_cited_n >= 2) actions.push({ priority: 2, type: 'cite', action: 'Make AI cite ' + top.url + ' where it already reads it', why: 'ChatGPT read this page in ' + top.retrieved_n + ' answer(s) and cited it in ' + top.cited_n
+      + ((top.top_competing || [])[0] ? '; it cited ' + top.top_competing[0].url + ' instead ' + top.top_competing[0].n + ' time(s)' : '') + '. Answer the question in the first lines, with a dated fact and a clear heading, as the cited page does.' }); }
   const now = p.checked_at;
   const prospect_rows = sources.filter(s => !['platform', 'authority', 'engine'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};
     const top = (s.urls || [])[0] || null;   // v4.12: the exact page AI cites on that site (the one to be named on)
@@ -2075,7 +2816,7 @@ return plans.map(p => {
     // B8-1: the other three headline tiles now carry what "Named in" always had — their own 95% range and their own verdict on the
     // change. B8-3 / B8-5: what the week's sample is actually made of, and what was never asked.
     // E19 (F1b): the share-of-voice range is taken over ANSWERS (its standard error), not as if every mention were an independent trial
-    citation_ci: wilson(cited, samples), sov_ci: H.sov == null ? [0, 0] : [Math.max(0, Math.round(10 * (H.sov - 1.96 * (H.sov_se || 0))) / 10), Math.min(100, Math.round(10 * (H.sov + 1.96 * (H.sov_se || 0))) / 10)], sov_denominator: mentioned + compTotal, sov_answers: H.sov_n,
+    citation_ci: W2CI.headline.cited_rate.lo != null ? [W2CI.headline.cited_rate.lo, W2CI.headline.cited_rate.hi] : wilson(cited, samples), sov_ci: W2CI.headline.share_of_voice.lo != null ? [W2CI.headline.share_of_voice.lo, W2CI.headline.share_of_voice.hi] : H.sov == null ? [0, 0] : [Math.max(0, Math.round(10 * (H.sov - 1.96 * (H.sov_se || 0))) / 10), Math.min(100, Math.round(10 * (H.sov + 1.96 * (H.sov_se || 0))) / 10)], sov_denominator: mentioned + compTotal, sov_answers: H.sov_n,
     // F1b: "named in" by its own name, the place in the answers (with "too few answers" as null under the floor), the rule and the comparison
     rule_version: AVM.RULE_VERSION, named_rate: H.named_rate, named_ci: H.named_ci, first_rate: H.enough ? H.first_rate : null, avg_position: H.position_enough ? H.avg_position : null, position_answers: H.position_n,
     pos_visibility: H.enough ? H.pos_visibility : null, position_enough: H.position_enough, compare, rate_window: rwin,
@@ -2084,5 +2825,6 @@ return plans.map(p => {
     // B8-8 / B8-9: each engine's own change test (or why it was not tested), and the one correction the tested alerts were judged by
     engine_changes, min_engine_samples: MIN_ENGINE_SAMPLES, multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },
-    engines, competitors: comp, sources, rival_sources, our_pages, gone_cited, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, segments, panel: { ...panel_info, ids: undefined }, form_url: FORM_URL, api_url: API_URL } };
+    ci: W2CI, sov: W2.sov, sentiment: W2S, impact: W2.impact, alert_rules: W2.alert_rules, window_28d: W2.window28, measure_ms: W2CI.ms + W2.ms,   // W2-E2
+    engines, competitors: comp, sources, rival_sources, our_pages, gone_cited, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, answer_data, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, segments, panel: { ...panel_info, ids: undefined }, form_url: FORM_URL, api_url: API_URL } };
 });

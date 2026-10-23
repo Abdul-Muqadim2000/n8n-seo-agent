@@ -12,6 +12,7 @@ const __row = { site_id, domain: d.domain, ai_visibility: !!pick('ai_visibility'
   audit_js: pick('audit_js', false) === true || pick('audit_js', false) === 'true', competitors: String(comps), brand_names: String(pick('brand_names', '')),
   // G32: weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept between 2 and 26)
   stuck_weeks: pick('stuck_weeks', '') === '' ? null : Math.min(26, Math.max(2, Number(pick('stuck_weeks', 8)) || 8)),
-  updated_at: new Date().toISOString(), request_id: d.request_id || '' };
+  updated_at: new Date().toISOString(), request_id: d.request_id || '',
+  ai_alert_rules_json: String(old.ai_alert_rules_json || ''), ai_sov_set: String(old.ai_sov_set || '') };   // W2-E2: set through Site Admin `monitors` only; kept as stored
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

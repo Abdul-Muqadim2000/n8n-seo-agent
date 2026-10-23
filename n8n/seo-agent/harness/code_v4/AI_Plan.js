@@ -269,7 +269,7 @@ const AIP = (() => {
   const locationOf = (cc) => { const n = ISO_NUM[S(cc).toUpperCase()]; return n ? 2000 + n : 0; };
   const PERSONA_MAX = 6;
   const personasOf = (site) => [...new Set(listOf(site.ai_personas).map(p => p.replace(/\s+/g, ' ').slice(0, 40)))].slice(0, PERSONA_MAX);
-  const stageOf = (s) => { const x = S(s).toLowerCase(); return ['awareness', 'consideration', 'decision', 'brand'].includes(x) ? x : ''; };
+  const stageOf = (s) => { const x = S(s).toLowerCase(); return ['awareness', 'consideration', 'decision', 'brand', 'shopping'].includes(x) ? x : ''; };
 
   // ---- 3. one question, said another way ----------------------------------------------------------------------------------------
   const STOP = new Set(('a an and are as at be best by can do does for from get has have how i in is it its me my of on or our should the their them '
@@ -2128,7 +2128,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
     unavailable: going ? runRows.filter(r => r.run_id === run_id && r.error).length : 0 };
   if (chunk.unavailable) chunk.unavailable_note = chunk.unavailable + ' request(s) of this run could not be read in its earlier part(s), even when sent again; they are not asked again and the week counts the answers that came back';
   if (chunk.lost_total) chunk.lost_note = chunk.lost_total + ' request(s) of this run were paid for in a part that stopped before its answers were stored (the execution\'s time limit, a restart); they are not asked again (that would pay twice) and the week counts the answers that were stored';
-  if (chunk.unanalysed) chunk.unanalysed_note = chunk.unanalysed + ' answer(s) of this run were stored by a part that stopped before the Answer Analyst read them; they keep the parser\'s reading (the businesses named in order by text position, no sentiment, no wrong-claim check)';
+  if (chunk.unanalysed) chunk.unanalysed_note = chunk.unanalysed + ' answer(s) of this run were stored by a part that stopped before the Answer Analyst read them; the run\'s last part has the Answer Analyst read them from their stored text (as many as its analyst budget allows; an answer stored before the full text was kept keeps the parser\'s reading)';   // W2-E1
   if (stop) { Object.assign(chunk, { size: 0, size_time: 0, final_expected: null, stop: true }); }   // F2: nothing is asked; the ledger key is the job's own (null is not a part)
   // pages that must stay fetchable for AI: the ones AI cited last time and the keyword-ladder pages (checked against robots.txt per AI bot)
   const pathOf = (u) => { const m = String(u || '').match(/^https?:\/\/[^\/?#]+(\/[^?#]*)?/i); return m ? (m[1] || '/') : (String(u || '').startsWith('/') ? String(u) : ''); };

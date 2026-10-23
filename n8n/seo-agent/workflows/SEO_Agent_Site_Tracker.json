@@ -1027,6 +1027,42 @@
               {
                 "name": "metrics_json",
                 "type": "string"
+              },
+              {
+                "name": "urls_json",
+                "type": "string"
+              },
+              {
+                "name": "shopping_json",
+                "type": "string"
+              },
+              {
+                "name": "ads_local_json",
+                "type": "string"
+              },
+              {
+                "name": "ci_json",
+                "type": "string"
+              },
+              {
+                "name": "sov_json",
+                "type": "string"
+              },
+              {
+                "name": "sentiment_json",
+                "type": "string"
+              },
+              {
+                "name": "impact_json",
+                "type": "string"
+              },
+              {
+                "name": "alerts_rules_json",
+                "type": "string"
+              },
+              {
+                "name": "units_json",
+                "type": "string"
               }
             ]
           },
@@ -1659,6 +1695,14 @@
               {
                 "name": "ai_pulse_per_week",
                 "type": "number"
+              },
+              {
+                "name": "ai_alert_rules_json",
+                "type": "string"
+              },
+              {
+                "name": "ai_sov_set",
+                "type": "string"
               }
             ]
           },

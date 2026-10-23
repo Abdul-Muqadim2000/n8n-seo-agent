@@ -80,11 +80,40 @@
    ],
    "tag": "Pulse"
   },
+  "SEO Agent \u2014 AI Repeat Pilot": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Pilot)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.0,
+    "dfs": 1.5
+   },
+   "settle": "Settle Run Ledger (Pilot)",
+   "settle_from": [
+    "Pilot Report",
+    "Refuse Run Ledger (Pilot)"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_balance_end",
+    "dfs_source",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_at",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "Pilot"
+  },
   "SEO Agent \u2014 AI Visibility Tracker": {
    "ai_nodes": [
     "AI Brief",
     "Answer Analyst",
-    "Prompt Writer"
+    "Prompt Writer",
+    "Sentiment Reader"
    ],
    "balance": "DFS Balance (AI)",
    "dead_ends": [],

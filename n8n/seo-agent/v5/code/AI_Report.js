@@ -13,6 +13,32 @@ let briefs = []; try { briefs = $('AI Brief').all().map(i => (i.json && i.json.o
 const SYM = { cited: '<b style="color:#15803d">✓ cited</b>', mentioned: '<span style="color:#15803d">✓ named</span>', absent: '<span style="color:#b91c1c">✗</span>', none: '<span style="color:#94a3b8">no AI answer</span>', error: '<span style="color:#94a3b8">error</span>', monthly: '<span style="color:#94a3b8">monthly</span>' };
 const money = (v) => (Number(v) || 0).toLocaleString('en-GB', { maximumFractionDigits: 0 });
 const muted = (t) => '<br><span style="color:#64748b;font-size:11px">' + t + '</span>';
+// ---- W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): the plain-language lines for the new measurement - every figure with its n ----
+const w2pm = (v) => v == null ? '—' : (v > 0 ? '+' : '') + v;
+const w2Sections = (m) => { let h = ''; const S = m.sov, SE = m.sentiment, IM = m.impact || [], AR = (m.alert_rules || []).filter(r => r.rule_id);
+  if (S && S.by_entity) { h += h3('Share of voice among the businesses you follow');
+    h += p_(esc(S.note) + ' Counted over ' + n(S.denominators.answers_naming_any_brand) + ' answers that named a business (of ' + n(S.denominators.all_answers) + ' answers; ' + n(S.mentions) + ' mentions).', true);
+    h += table(['Business', 'Share of mentions (95% range)', 'Mentions'], [...S.by_entity.map(e => [esc(e.self ? e.name + ' (you)' : e.name), e.share == null ? '—' : e.share + '%' + (e.lo != null ? muted(e.lo + '–' + e.hi + '%') : ''), n(e.n)]),
+      ['others' + (S.others_top && S.others_top.length ? muted(esc(S.others_top.map(o => o.id).join(', '))) : ''), S.others_share == null ? '—' : S.others_share + '%' + (S.others_lo != null ? muted(S.others_lo + '–' + S.others_hi + '%') : ''), n(S.others_n)]]);
+    const nb = S.named_of_branded || {}, na = S.named_rate_all || {}, mp = S.mean_norm_position || {};
+    h += p_('Named in ' + (na.rate == null ? '—' : na.rate + '%') + ' of all ' + n(na.n) + ' answers' + (na.lo != null ? ' (' + na.lo + '–' + na.hi + '%)' : '') + ', and in ' + (nb.rate == null ? '—' : nb.rate + '%') + ' of the ' + n(nb.n) + ' answers that named any business' + (nb.lo != null ? ' (' + nb.lo + '–' + nb.hi + '%)' : '') + '.'
+      + (mp.value != null ? ' Place in the list when named: ' + mp.value + ' on a 0-1 scale (1 = named first, 0 = named last; ' + n(mp.n) + ' answers' + (mp.lo != null ? ', 95% range ' + mp.lo + '–' + mp.hi : '') + ').' : '')); }
+  if (SE) { h += h3('How AI speaks of you, aspect by aspect');
+    if (SE.withheld) h += p_(esc(SE.note) + (SE.unread_note ? ' ' + esc(SE.unread_note) : ''), true);
+    else { h += p_(esc(SE.note) + (SE.unread_note ? ' ' + esc(SE.unread_note) : ''));
+      h += table(['Aspect', 'Positive', 'Neutral', 'Negative', 'Net (answers)'], (SE.by_aspect || []).map(a => [esc(a.aspect), n(a.pos), n(a.neu), n(a.neg), (a.net == null ? 'too few' : w2pm(a.net)) + muted(n(a.n) + ' answers')]), 'no aspect judged');
+      if ((SE.objections || []).length) h += p_('<b>What would make a buyer hesitate</b>: ' + SE.objections.map(o => esc(o.text) + ' (' + o.n + ')').join('; ') + '.');
+      if ((SE.by_rival || []).filter(r => r.net != null).length) h += p_('How the same answers speak of your competitors: ' + SE.by_rival.filter(r => r.net != null).map(r => esc(r.id) + ' ' + w2pm(r.net) + ' (' + r.n + ' answers)').join(', ') + '.', true); }
+    h += p_('Method: ' + esc(SE.method) + '. ' + esc((SE.kappa || {}).note || '') + (SE.model_vs_rules ? ' This run the model and the rule reader agreed on ' + SE.model_vs_rules.agreement + '% of ' + SE.model_vs_rules.n + ' answers.' : ''), true); }
+  if (IM.length) { h += h3('Did your actions work?');
+    h += p_('Each action is compared with similar questions it did not target, 28 days before and after (difference in differences). "Likely helped" means its questions rose more than the others beyond the 95% range; it is a correlation, never proof of cause.', true);
+    h += table(['Action', 'Its questions: before → after', 'Others: before → after', 'Difference (95% range)', 'Verdict'], IM.map(a => [esc(a.label || a.action_id) + muted(esc(a.kind) + ' · ' + String(a.at).slice(0, 10) + ' · ' + a.days_after + ' days after'),
+      (a.before.rate == null ? '—' : a.before.rate + '%') + ' → ' + (a.after.rate == null ? '—' : a.after.rate + '%') + muted(a.target_questions.length + ' question(s), ' + n(a.before.n) + ' / ' + n(a.after.n) + ' answers'),
+      (a.control_before.rate == null ? '—' : a.control_before.rate + '%') + ' → ' + (a.control_after.rate == null ? '—' : a.control_after.rate + '%') + muted(a.control_questions.length + ' question(s), ' + n(a.control_before.n) + ' / ' + n(a.control_after.n) + ' answers'),
+      a.did.effect == null ? '—' : w2pm(a.did.effect) + ' pts' + (a.did.lo != null ? muted(a.did.lo + ' to ' + a.did.hi) : ''), '<b>' + esc(a.verdict) + '</b>' + muted(esc(a.why))])); }
+  if (AR.length) { h += h3('Your alert rules');
+    h += table(['Rule', 'Metric', 'Change', 'Result'], AR.map(r => [esc(r.rule_id), esc(r.metric.replace(/_/g, ' ')) + (Object.keys(r.scope || {}).length ? muted(esc(Object.entries(r.scope).map(([a, b]) => a + ': ' + b).join(', '))) : ''), r.delta == null ? '—' : w2pm(r.delta) + ' pts', (r.fired ? '<b>fired</b> · ' : '') + esc(r.reason)])); }
+  return h; };
 return metrics.map((m, i) => {
   const b = briefs[i] || null; const M = m.metrics; const d = M.delta || {}; const T = m.traffic; const A = m.access; const X = m.index; const P = m.perception;
   const engs = Object.keys(m.engines);
@@ -66,6 +92,8 @@ return metrics.map((m, i) => {
   if (M.score_band && M.score_band.basis === 'modelled') basisLines.push('The visibility score is <b>modelled</b>, not counted: ' + esc(M.score_band.why) + ', so it carries a 95% band of ±' + M.score_band.half + ' points and a move inside that band is not reported as a change.');
   if (M.pulse_basis && M.pulse_basis.note) basisLines.push(esc(M.pulse_basis.note));
   if (M.capped && M.capped.note) basisLines.push('<b>Not everything was asked.</b> ' + esc(M.capped.note));
+  // W2-E2: how the ranges are drawn (the question is the sampling unit), with the plain range it replaces
+  if (m.ci && m.ci.headline && m.ci.headline.named_rate && m.ci.headline.named_rate.lo != null) { const c0 = m.ci.headline.named_rate; basisLines.push('Ranges count the question, not the answer, as the unit: ' + n(c0.n_answers) + ' answers to ' + n(c0.n_questions) + ' questions are worth about ' + n(Math.round(c0.n_eff)) + ' independent answers (design effect ' + c0.deff + '), so "Named in" is ' + c0.lo + '–' + c0.hi + '%' + (c0.wilson_naive ? ' (counting every answer as independent would have said ' + c0.wilson_naive[0] + '–' + c0.wilson_naive[1] + '%)' : '') + '.'); }
   if (basisLines.length) html += '<p style="margin:6px 0 10px;font-size:12px;color:#475569;background:#f8fafc;border-left:3px solid #cbd5e1;padding:6px 10px">' + basisLines.join('<br>') + '</p>';
   // R83: the brief is Claude's wording of the computed actions, and it is read through the same rule — an action that pitches a
   // business AI recommends instead of you is dropped, whoever wrote it (exec 623's brief: "Pitch a guest article … to wafeq.com").
@@ -82,6 +110,7 @@ return metrics.map((m, i) => {
       table(['Assistant', 'Visits', 'Before', 'Engaged', 'Key events', 'Revenue'], (T.assistants || []).map(a => [esc(a.name), n(a.sessions), n(a.prev_sessions), n(a.engaged), n(a.key_events), money(a.revenue)]), 'no AI visits recorded') +
       table(['Landing page from AI', 'Visits', 'Key events', 'Revenue'], (T.landing || []).slice(0, 10).map(l => [esc(l.page) + (l.cited_by_ai ? muted('cited in AI answers') : ''), n(l.sessions), n(l.key_events), money(l.revenue)]), 'none'); }
   else html += p_(esc((T && T.error) || 'GA4 is not connected.') + ' Connect GA4 to see the visits, key events and revenue AI assistants bring.', true);
+  html += w2Sections(m);   // W2-E2
   // perception
   html += h3('How AI describes you');
   if (P.analysed) html += p_(P.positive + ' positive, ' + P.neutral + ' neutral and ' + P.negative + ' negative answers naming you' + (P.descriptors.length ? '. Words AI uses: ' + esc(P.descriptors.join(', ')) : '') + '.') + (P.negatives.length ? table(['Negative answer', 'Engine'], P.negatives.map(x => [esc(x.prompt) + muted(esc(x.excerpt)), esc(x.engine)])) : '');
@@ -100,13 +129,15 @@ return metrics.map((m, i) => {
   // ---- G6 (2026-10-18): the panel at scale — rates per topic, buyer role and market with ranges, what moved (Benjamini-Hochberg), and how
   // precise this panel is. A segment under the answer floor says "too few answers" instead of a percentage.
   const SG = m.segments || null; const PN = m.panel || null;
-  const segRow = (s) => [esc(s.key), n(s.questions), s.enough ? s.rate + '%' + muted(s.ci[0] + '–' + s.ci[1] + '% · ' + n(s.n) + ' answers') : '<span style="color:#b45309">too few answers</span>' + muted(n(s.n) + ' of ' + (SG ? SG.min_answers : 12) + ' needed'),
+  // W2-E2: a segment's level is its last 28 days (its window said once below the tables); its change is this run against the last one
+  const segRow = (s) => [esc(s.key), n(s.questions), s.w28 && s.w28.n ? (s.w28.enough ? s.w28.rate + '%' + muted(s.w28.lo + '–' + s.w28.hi + '% · ' + n(s.w28.n) + ' answers, ' + n(s.w28.questions) + ' questions, 28 days') : '<span style="color:#b45309">too few answers</span>' + muted(n(s.w28.n) + ' in 28 days, ' + (SG ? SG.min_answers : 12) + ' needed')) : s.enough ? s.rate + '%' + muted(s.ci[0] + '–' + s.ci[1] + '% · ' + n(s.n) + ' answers') : '<span style="color:#b45309">too few answers</span>' + muted(n(s.n) + ' of ' + (SG ? SG.min_answers : 12) + ' needed'),
     s.sov == null ? '—' : s.sov + '%', esc(s.leader || '—'), s.change ? (s.change.significant ? '<b>' + (s.change.delta > 0 ? '+' : '') + s.change.delta + ' pts</b>' + muted('real move') : s.change.delta == null ? muted(esc(s.change.why)) : (s.change.delta > 0 ? '+' : '') + s.change.delta + ' pts' + muted('within noise')) : '—'];
   const segHead = ['', 'Questions', 'Named in (95% range)', 'Share of voice', 'Named most instead', 'Change'];
   if (SG && SG.rows.length) {
     const dims = [['cluster', 'By topic cluster'], ['persona', 'By buyer role'], ['market', 'By market'], ['engine', 'By engine and topic']];
     for (const [dim, title] of dims) { const rows = SG.rows.filter(s => s.dim === (dim === 'engine' ? 'engine x cluster' : dim)); if (rows.length > 1 || (dim !== 'engine' && rows.length === 1 && dim === 'cluster'))
       html += h3(title) + table([title.replace(/^By /, '').replace(/^./, c => c.toUpperCase()), ...segHead.slice(1)], rows.slice(0, dim === 'engine' ? 24 : 20).map(segRow)); }
+    if (m.window_28d && m.window_28d.note) html += p_(esc(m.window_28d.note), true);   // W2-E2
     const mv = SG.moves || [];
     html += h3('What moved, by segment') + (mv.length ? table(['Segment', 'Named in now', 'Change', 'Answers'], mv.map(x => [esc(x.dim + ': ' + x.key), x.rate + '%', (x.delta > 0 ? '+' : '') + x.delta + ' pts', n(x.n)])) : p_('No segment moved beyond noise this week.')) + p_(esc(SG.family.note));
     if (SG.too_few) html += p_(SG.too_few + ' segment(s) have too few answers for a rate this week (fewer than ' + SG.min_answers + '); they are shown as "too few answers", never as 0%.');

@@ -14,11 +14,11 @@ Write exactly {{ $json.count }} new questions. Spread them over the buyer journe
 - cost: price, cost, fees, budget
 - compare: X vs Y, alternatives, which option is better for a given situation
 - problem: the problem the buyer wants solved, in their words (deadline, regulation, failure, migration)
-{{ $json.has_brand_prompt ? '' : '- brand: exactly one question asking what ' + $json.business_name + ' (' + $json.domain + ') is and offers — this checks whether AI knows the brand' }}
+{{ $json.shopping ? '- shopping: what a shopper types before buying one of the products this business sells ("best <product> for <use> under <price>", "where to buy <product> in <market>"), the questions where AI shows product cards (about 20% of the questions; this business sells products: ' + $json.shopping_why + ')\n' : '' }}{{ $json.has_brand_prompt ? '' : '- brand: exactly one question asking what ' + $json.business_name + ' (' + $json.domain + ') is and offers — this checks whether AI knows the brand' }}
 
 For each question give:
-- kind: recommend | choose | cost | compare | problem | brand
-- stage: awareness (learning about the problem) | consideration (comparing options) | decision (choosing a provider, price, "best", "near me") | brand
+- kind: recommend | choose | cost | compare | problem | brand{{ $json.shopping ? ' | shopping' : '' }}
+- stage: awareness (learning about the problem) | consideration (comparing options) | decision (choosing a provider, price, "best", "near me") | brand{{ $json.shopping ? ' | shopping (a shopper about to buy a product)' : '' }}
 - cluster: the topic group in 1-4 words (questions about the same service share one cluster name)
 - keyword: a short Google search phrase (2-6 words) for the same intent
 - origin: market (adapted from the real AI questions above) | search (from the Google searches above) | paa (from "People also ask") | competitor (from what competitors sell) | writer (your own)

@@ -611,6 +611,14 @@
               {
                 "name": "ai_pulse_per_week",
                 "type": "number"
+              },
+              {
+                "name": "ai_alert_rules_json",
+                "type": "string"
+              },
+              {
+                "name": "ai_sov_set",
+                "type": "string"
               }
             ]
           },
