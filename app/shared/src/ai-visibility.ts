@@ -99,7 +99,7 @@ export function aiSampleRate(o: {
     const pulseBasis: AiSampleRate['pulseBasis'] = !pulseOn ? 'off' : measuredPulse > 0 ? 'measured' : 'modelled';
     return {
       weeklyPerQuestion: r1(weekly), pulsePerQuestion: r1(pulse), answerRate: Math.round(answerRate * 100) / 100, basis: 'measured', pulseBasis,
-      why: `measured on the run of ${m.checkedAt ? m.checkedAt.slice(0, 10) : 'the latest check'}: ${m.samples} answers ${m.ratePeriod?.trim() ? `from ${m.ratePeriod.trim()}` : 'over 7 days'} to ${m.questions} buyer question${m.questions === 1 ? '' : 's'}`
+      why: `measured on the run of ${m.checkedAt ? m.checkedAt.slice(0, 10) : 'the latest check'}: ${m.samples} answers ${m.ratePeriod?.trim() ? `from ${m.ratePeriod.trim()}` : 'since the previous run'} to ${m.questions} buyer question${m.questions === 1 ? '' : 's'}`
         + ` (${r1(weekly)} a question from the weekly run${measuredPulse > 0 ? `, ${r1(measuredPulse)} from the daily pulse` : ''})`
         + (pulseBasis === 'modelled' ? `; the daily pulse is projected at the same answer rate (${Math.round(answerRate * 100)}%)` : ''),
     };
@@ -138,8 +138,11 @@ export function aiPrecisionTable(o: {
   panel: number;
   engines?: readonly AiEngine[];
   pulse?: boolean;
-  measured?: { samples: number; pulseSamples: number; questions: number; checkedAt?: string } | null;
+  measured?: { samples: number; pulseSamples: number; questions: number; checkedAt?: string; ratePeriod?: string | null } | null;
   panels?: readonly number[];
+  /** A18 (2026-10-23): the owner's pulse setting, the same the cost box uses ('' / auto, sample, full; mornings a week, 0 = automatic) */
+  pulseMode?: string | null;
+  pulsePerWeek?: number | null;
 }): { basis: AiSampleRate['basis']; why: string; rate: AiSampleRate; pulseAvailable: boolean; rows: AiPrecisionRow[] } {
   const engines = o.engines && o.engines.length ? o.engines : AI_DEFAULT_ENGINES;
   const pulseAvailable = pulseEngines(engines).length > 0;
@@ -152,7 +155,7 @@ export function aiPrecisionTable(o: {
   for (const panel of panels) {
     const asked = aiPulseQuestions(panel);
     // G6: above 50 questions the pulse asks each question on N of its six mornings (a rotating sample), not every morning
-    const perWeek = pulseAvailable ? aiPulsePerWeek({ asked, weeklyEngines: weeklyEngines(engines).length, pulseEngines: pulseEngines(engines).length }).perWeek : 0;
+    const perWeek = pulseAvailable ? aiPulsePerWeek({ asked, weeklyEngines: weeklyEngines(engines).length, pulseEngines: pulseEngines(engines).length, mode: o.pulseMode === 'auto' ? '' : (o.pulseMode ?? ''), perWeek: o.pulsePerWeek || null }).perWeek : 0;
     for (const cadence of (pulseAvailable ? ['weekly', 'weekly_pulse'] : ['weekly']) as AiPrecisionRow['cadence'][]) {
       const perQ = rate.weeklyPerQuestion + (cadence === 'weekly_pulse' ? (rate.pulsePerQuestion * perWeek) / AI_PULSE_DAYS_PER_WEEK : 0);
       const answers = Math.round(perQ * asked);

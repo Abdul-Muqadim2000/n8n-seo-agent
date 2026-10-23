@@ -456,9 +456,17 @@ export interface AiRun {
   avgRank: number;
   aioPresence: number;
   aioCitationRate: number;
-  /** credits (app/docs/CREDITS.md): the credits this run used, from its provider cost at the platform's settings */
-  credits: number;
+  /**
+   * credits (app/docs/CREDITS.md): what the credit ledger charged for this run (A9, 2026-10-23: never a figure rebuilt from the row's
+   * search-data cost), null when no charge is on record (a run before credits, or one not settled yet)
+   */
+  credits: number | null;
+  /** alert texts without their level prefix (A4: the engine joins them with " | ", a text may hold commas) */
   alerts: string[];
+  /** the same alerts with their level */
+  alertItems: import('./ai-compare').AiAlert[];
+  /** A1 / A8: the comparison with the previous run (the engine's compare_json, else the app's like-for-like rule) and the period counted */
+  compare: import('./ai-compare').AiCompare | null;
   /** v4.9 (0 / null on runs before v4.9) */
   runKind: string;
   samples: number;
@@ -485,6 +493,16 @@ export interface AiDay {
   alerts: string[];
   /** R104: the newest reading of the day - when the pulse really ran */
   checkedAt?: string;
+  /** A7 (2026-10-23): 'sample' = a rotating sample of the panel was asked, 'full' = the whole panel, '' = the row does not say */
+  sampleMode?: 'full' | 'sample' | '';
+  questionsAsked?: number | null;
+  panelSize?: number | null;
+  /** an engine returned nothing that morning */
+  partial?: boolean;
+  /** enough answers for a rate (AI_MIN_RATE_SAMPLES) */
+  enough?: boolean;
+  /** 95% Wilson range of the named rate */
+  ci?: [number, number] | null;
 }
 
 export interface AiTraffic {
@@ -658,6 +676,8 @@ export interface AiData {
   panel: AiPanelInfo | null;
   /** v4.9: the AI Pulse days (last 90) */
   daily: AiDay[];
+  /** A3 (2026-10-23): the panel size set NOW (the monitors row), null when the engine has no row for the website (it then asks 50) */
+  promptsMax: number | null;
   answers: {
     promptId: string;
     prompt: string;
@@ -681,6 +701,9 @@ export interface AiData {
     fanout: string[];
     /** v4.12: the exact third-party pages the answer cited */
     citedUrls: { url: string; title: string }[];
+    /** 2026-10-23 engine contract: 1-based place the business is named in (null = not named / not recorded) and the entities named */
+    position?: number | null;
+    entities?: { id: string; name: string; role: 'self' | 'competitor' | 'platform' | 'source' | 'other'; position: number | null; cited: boolean }[];
   }[];
   /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the weekly AI growth loop, null until its first run */
   growth: AiGrowth | null;
@@ -689,8 +712,13 @@ export interface AiData {
     receivedAt: string;
     brief: { headline?: string; summary?: string } | null;
     /** question x engine grid: engine key -> 'mentioned' | 'cited' | 'absent' | 'none' | 'error' | 'monthly' */
-    questions: { promptId: string; prompt: string; kind: string; topic: string; won: boolean; engines: Record<string, string>; competitors: string[]; sources: string[]; stage: string; volume: number | null; winRate: number | null; samples: number }[];
+    questions: { promptId: string; prompt: string; kind: string; topic: string; won: boolean; engines: Record<string, string>; competitors: string[]; sources: string[]; stage: string; volume: number | null; winRate: number | null; samples: number;
+      /** A15: the engine's own verdict on the question's rate (range, floor, why), passed through */
+      win?: { ci: [number, number] | null; enough: boolean | null; why: string } | null }[];
     actions: EngineAction[];
+    /** A6 (2026-10-23): the run the report was written for, and whether that is the latest stored run (else its blocks carry its own date) */
+    runId: string;
+    current: boolean;
   } | null;
 }
 

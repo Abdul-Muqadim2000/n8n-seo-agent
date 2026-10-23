@@ -11,7 +11,7 @@ function bundle(over: Partial<SiteBundle> = {}): SiteBundle {
     rankings: { ladders: [], keywords: [], lineage: [] },
     content: { items: [], cadence: { pagesPerWeek: 1, status: 'active' }, caseStudies: [], profile: null, readiness: { score: 100, missing: [] }, generated: [] },
     technical: { audits: [{ auditId: 'a1', auditedAt: new Date().toISOString(), reportType: 'site_audit', healthScore: 90, grade: 'Good', pagesCrawled: 10, findings: 0, critical: 0, high: 0, medium: 0, low: 0, scheduled: false }], selectedAuditId: 'a1', previousAuditId: null, findings: [], byCategory: [], reports: [], watch: null, indexCoverage: null },
-    ai: { runs: [{ runId: 'r', checkedAt: '', prompts: 5, answers: 20, mentionRate: 50, citationRate: 10, shareOfVoice: 30, avgRank: 2, aioPresence: 0, aioCitationRate: 0, credits: 0, alerts: [], runKind: 'weekly', samples: 20, visibilityScore: 40, mentionLo: 30, mentionHi: 70, sentimentScore: null, accuracyIssues: 0, aiSessions: null, aiConversions: null, aiRevenue: null, indexSov: null, aiImpressions: null }], latest: null, daily: [], prompts: [], segments: null, panel: null, answers: [], growth: null, report: null },
+    ai: { runs: [{ runId: 'r', checkedAt: '', prompts: 5, answers: 20, mentionRate: 50, citationRate: 10, shareOfVoice: 30, avgRank: 2, aioPresence: 0, aioCitationRate: 0, credits: 0, alerts: [], alertItems: [], compare: null, runKind: 'weekly', samples: 20, visibilityScore: 40, mentionLo: 30, mentionHi: 70, sentimentScore: null, accuracyIssues: 0, aiSessions: null, aiConversions: null, aiRevenue: null, indexSov: null, aiImpressions: null }], latest: null, daily: [], promptsMax: null, prompts: [], segments: null, panel: null, answers: [], growth: null, report: null },
     backlinks: { snapshots: [{ checkedAt: '', mode: 'full', rank: 1, backlinks: 1, referringDomains: 1, referringDomainsNofollow: 0, spamScore: 0, brokenBacklinks: 0, newLinks: 0, lostLinks: 0, importantLost: 0, spammyNew: 0, credits: 0, unionDomains: null, bestLinks: null, verifiedLive: null, atRisk: null, confirmedLost: null, referralVisits: null }], latest: null, refs: [], imports: [], linkGraph: null, prospects: [], report: null },
     alerts: { alerts: [], checkins: [], checkinDue: false },
     settings: { tracking: { tracked: true, status: 'active', gscProperty: 'x', ga4PropertyId: '1', lastRunAt: null, lastStatus: null, keywords: [], reportsToThisApp: true }, monitors: null, cadence: null, profile: null, readiness: { score: 100, missing: [] } },
@@ -179,5 +179,16 @@ describe('actionFromApiBody', () => {
     });
     expect(actionFromApiBody({ mode: 'explode' }, 'x')).toBeUndefined();
     expect(actionFromApiBody(null, 'x')).toBeUndefined();
+  });
+});
+
+// A16 (2026-10-23, AI visibility app audit): "AI names you in X%" is a finding only on enough answers, and it quotes its range
+describe('A16: the low-visibility recommendation has a floor', () => {
+  const ai = (samples: number) => ({ ...bundle().ai, runs: [{ ...bundle().ai.runs[0], mentionRate: 5, samples, answers: samples, mentionLo: null, mentionHi: null }] });
+  it('9 answers raise nothing; 40 answers raise it with the 95% range in its basis', () => {
+    expect(recommend(site, bundle({ ai: ai(9) })).some((r) => r.id === 'ai:low')).toBe(false);
+    const r = recommend(site, bundle({ ai: ai(40) })).find((x) => x.id === 'ai:low');
+    expect(r).toBeTruthy();
+    expect(JSON.stringify(r)).toMatch(/95% range/);
   });
 });

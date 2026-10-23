@@ -1,18 +1,14 @@
-// AI visibility building blocks: the question x engine grid, the answers explorer and the tracked-questions manager.
+// AI visibility building blocks: the question x engine grid and the answers explorer. (A19, 2026-10-23: the old QuestionManager, replaced
+// by PanelManager in ai-panel.tsx, is gone with its outdated copy.)
 import { useMemo, useState, type ReactNode } from 'react';
-import { toast } from 'sonner';
-import { AlertTriangle, CalendarClock, CheckCircle2, CircleX, Link2, Minus, Plus, Power } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, CircleX, Link2, Minus } from 'lucide-react';
 import { AI_ENGINES, compactNumber, questionWin, titleCase, type AiData } from '@seo/shared';
-import { errorMessage } from '@/lib/api';
-import { useSiteAdmin } from '@/lib/queries';
-import { useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/feedback';
-import { Field, Select, Textarea } from '@/components/ui/field';
-import { DataTable, type Column } from '@/components/ui/table';
-import { Chips, FilterChips, Kind, SrOnly, useSitePage } from './kit';
+import { Select } from '@/components/ui/field';
+import { Chips, FilterChips, Kind } from './kit';
 import { urlPath } from './format';
 
 const ENGINE_LABEL: Record<string, string> = Object.fromEntries(AI_ENGINES.map((e) => [e.value, e.label]));
@@ -276,7 +272,7 @@ function AnswerCard({ a, engineName }: { a: Answer; engineName: string }) {
         {a.cited ? (
           <StatusBadge tone="good">Cited</StatusBadge>
         ) : a.mentioned ? (
-          <StatusBadge tone="good">Named{a.rank > 0 ? ` · #${a.rank}` : ''}</StatusBadge>
+          <StatusBadge tone="good">Named{(a.position ?? (a.rank > 0 ? a.rank : null)) != null ? ` · #${a.position ?? a.rank}` : ''}</StatusBadge>
         ) : a.answered ? (
           <Badge icon={<CircleX className="size-3" aria-hidden />}>Not named</Badge>
         ) : (
@@ -338,126 +334,5 @@ function AnswerCard({ a, engineName }: { a: Answer; engineName: string }) {
         )}
       </div>
     </li>
-  );
-}
-
-type Prompt = AiData['prompts'][number];
-const isActive = (p: Prompt) => !p.status || p.status === 'active';
-
-/** The buyer questions asked every week; admins add and switch them off. */
-export function QuestionManager({ prompts }: { prompts: readonly Prompt[] }) {
-  const { org, site, can } = useSitePage();
-  const day = useCycleDay(site);
-  const admin = useSiteAdmin(org.id, site.id);
-  const [draft, setDraft] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const isAdmin = can('admin');
-  const active = prompts.filter(isActive).length;
-
-  const add = () => {
-    const items = draft
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (!items.length) return setError('Enter at least one question');
-    const short = items.find((s) => s.length < 10);
-    if (short) return setError(`"${short}" is too short: questions need at least 10 characters`);
-    const long = items.find((s) => s.length > 300);
-    if (long) return setError('Keep each question under 300 characters');
-    if (items.length > 15) return setError('Add at most 15 questions at a time');
-    setError(null);
-    admin.mutate(
-      { action: 'ai_prompts', add: items, remove: [] },
-      {
-        onSuccess: (r) => {
-          if (r.ok) {
-            toast.success(`${items.length === 1 ? 'Question' : `${items.length} questions`} added. It is asked from the next weekly run`);
-            setDraft('');
-          } else toast.error(r.error ?? 'The questions were not saved');
-        },
-        onError: (e) => toast.error(errorMessage(e)),
-      },
-    );
-  };
-
-  const remove = (p: Prompt) => {
-    setPendingId(p.promptId);
-    admin.mutate(
-      { action: 'ai_prompts', add: [], remove: [p.promptId] },
-      {
-        onSuccess: (r) => (r.ok ? toast.success('Question switched off') : toast.error(r.error ?? 'The question was not switched off')),
-        onError: (e) => toast.error(errorMessage(e)),
-        onSettled: () => {
-          setPendingId(null);
-          setConfirming(null);
-        },
-      },
-    );
-  };
-
-  const columns: Column<Prompt>[] = [
-    {
-      key: 'prompt',
-      header: 'Question',
-      sortValue: (p) => p.prompt,
-      cell: (p) => (
-        <div className={cn('min-w-[16rem]', !isActive(p) && 'opacity-60')}>
-          <p className="text-[13px] font-medium leading-snug text-ink">{p.prompt}</p>
-          {(p.cluster || p.topic) && <p className="mt-0.5 text-xs text-ink-3">{p.cluster || p.topic}</p>}
-        </div>
-      ),
-    },
-    { key: 'kind', header: 'Kind', hideOnMobile: true, sortValue: (p) => p.kind, cell: (p) => (p.kind ? <Kind>{titleCase(p.kind)}</Kind> : '-') },
-    { key: 'stage', header: 'Stage', hideOnMobile: true, sortValue: (p) => p.stage, cell: (p) => <span className="text-[13px] text-ink-2">{p.stage ? titleCase(p.stage) : '-'}</span> },
-    { key: 'volume', header: 'AI searches / mo', align: 'right', hideOnMobile: true, sortValue: (p) => p.volume ?? -1, cell: (p) => <span className="tabular text-[13px]">{p.volume != null ? compactNumber(p.volume) : '-'}</span> },
-    { key: 'source', header: 'Added by', hideOnMobile: true, sortValue: (p) => p.source, cell: (p) => <span className="text-[13px] text-ink-2">{p.origin === 'market' ? 'Real AI question' : p.origin === 'search' ? 'Your Google searches' : p.source === 'custom' || p.origin === 'custom' ? 'You' : /auto|ai|engine|generated|template/i.test(p.source) ? 'Engine' : p.source ? titleCase(p.source) : '-'}</span> },
-    { key: 'status', header: 'Status', sortValue: (p) => (isActive(p) ? 0 : 1), cell: (p) => (isActive(p) ? <StatusBadge tone="good">Tracked</StatusBadge> : <Badge icon={<Power className="size-3" aria-hidden />}>{titleCase(p.status)}</Badge>) },
-    ...(isAdmin
-      ? [
-          {
-            key: 'act',
-            header: <SrOnly>Actions</SrOnly>,
-            align: 'right' as const,
-            cell: (p: Prompt) =>
-              isActive(p) ? (
-                confirming === p.promptId ? (
-                  <span className="inline-flex gap-1">
-                    <Button size="sm" variant="danger" loading={pendingId === p.promptId} onClick={() => remove(p)}>
-                      Switch off
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
-                      Keep
-                    </Button>
-                  </span>
-                ) : (
-                  <Button size="sm" variant="ghost" onClick={() => setConfirming(p.promptId)} aria-label={`Switch off: ${p.prompt}`}>
-                    Switch off
-                  </Button>
-                )
-              ) : null,
-          },
-        ]
-      : []),
-  ];
-
-  return (
-    <div className="space-y-4">
-      <DataTable rows={[...prompts]} columns={columns} rowKey={(p) => p.promptId} initialSort={{ key: 'status', dir: 'asc' }} dense pageSize={15} empty="No questions yet: the first run writes them from your keywords and business." />
-      <p className="text-xs text-ink-3">{active} active {active === 1 ? 'question is' : 'questions are'} asked on every engine {day.every}, and on ChatGPT, Gemini and Google AI Mode every other day when the daily pulse is on. New ones come from real AI searches and your Search Console queries in the monthly cycle.</p>
-      {isAdmin && (
-        <div className="rounded-xl border border-dashed border-line-strong p-4">
-          <Field label="Add buyer questions" hint="One per line, the way a buyer would ask an assistant, e.g. &quot;Which accounting firms in Dubai handle VAT registration for small businesses?&quot;" error={error ?? undefined}>
-            {(p) => <Textarea {...p} rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Which ... should I hire for ...?" />}
-          </Field>
-          <div className="mt-3 flex justify-end">
-            <Button onClick={add} loading={admin.isPending && !pendingId} icon={<Plus className="size-4" />}>
-              Add questions
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
   );
 }

@@ -1,6 +1,15 @@
 import {
   creditsFor,
   gscConnectionState,
+  aiAlertsOf,
+  aiCompareInterim,
+  aiEngineSetOf,
+  aiPulseDayInfo,
+  aiUrlsOf,
+  parseAiCompareJson,
+  wilsonRange,
+  AI_MIN_RATE_SAMPLES,
+  type AiCompareSide,
   AI_PROMPTS_STORED_DEFAULT,
   aiPanelFromJson,
   aiSegmentsFromJson,
@@ -101,6 +110,7 @@ import type { OrgRow, SiteRow } from '../db/schema';
 import { siteRows } from '../n8n/client';
 import { settingsRow } from './admin/settings';
 import { indexCoverage, recheckOf, watchView } from './pageWatch';
+import { aiChargeEntries, bucketAiCharges } from './runCredits';
 import { callbackUrl, latestReport, reportsList } from './runs';
 
 // Dashboards: the n8n Data Tables of one domain (filtered server-side by `domain`), shaped for the client. JSON columns are parsed
@@ -883,15 +893,62 @@ export function aiDailySeries(days: AiDailyRow[]): AiDay[] {
         citationRate: rows.length === 1 ? n(rows[0].citation_rate) : pct(cited, samples),
         shareOfVoice: rows.length === 1 ? n(rows[0].share_of_voice) : weighted('share_of_voice'),
         visibilityScore: rows.length === 1 ? n(rows[0].visibility_score) : weighted('visibility_score'),
-        alerts: [...new Set(rows.flatMap((r) => splitList(r.alerts)))],
+        // A4: the engine joins a morning's alerts with " | " and a text may hold commas
+        alerts: [...new Set(rows.flatMap((r) => aiAlertsOf(r.alerts).map((a) => a.text)))],
+        // A7 (2026-10-23): what the morning asked. Above 50 questions the pulse asks a rotating sample, so two mornings are different
+        // question subsets; a morning an engine returned nothing is partial. Both are marked, never drawn as a like-for-like reading.
+        ...pulseDayOf(rows, samples, Math.round(mentioned)),
       };
     });
+}
+
+function pulseDayOf(rows: AiDailyRow[], samples: number, mentioned: number): Pick<AiDay, 'sampleMode' | 'questionsAsked' | 'panelSize' | 'partial' | 'enough' | 'ci'> {
+  const info = rows.map((r) => aiPulseDayInfo(r));
+  const asked = info.map((i) => i.questionsAsked).filter((x): x is number => x != null);
+  const panel = info.map((i) => i.panelSize).filter((x): x is number => x != null);
+  return {
+    sampleMode: info.some((i) => i.sampleMode === 'sample') ? 'sample' : info.some((i) => i.sampleMode === 'full') ? 'full' : '',
+    questionsAsked: asked.length ? Math.max(...asked) : null,
+    panelSize: panel.length ? Math.max(...panel) : null,
+    partial: info.some((i) => i.partial),
+    enough: samples >= AI_MIN_RATE_SAMPLES,
+    ci: wilsonRange(mentioned, samples),
+  };
 }
 
 // credits (app/docs/CREDITS.md): a run's provider cost becomes `credits` here, at the platform's settings; `costUsd` stays (deprecated)
 // until no page reads it
 type CreditSettings = { creditValueUsd: number; markup: number };
-const toAiRun = (r: AiVisibilityRow, cs: CreditSettings): AiRun => ({
+/** What the like-for-like rule reads off a stored row (A1): the engines that answered, the question ids asked, the engine's own overlap. */
+export function aiCompareSide(r: AiVisibilityRow): AiCompareSide {
+  const panel = safeJson<P>(s(r.panel_json), {});
+  const ids = Array.isArray(panel.ids) ? (panel.ids as unknown[]).map(String) : null;
+  const ov = panel.overlap_with_previous && typeof panel.overlap_with_previous === 'object' ? (panel.overlap_with_previous as P) : null;
+  return {
+    runId: s(r.run_id),
+    checkedAt: s(r.checked_at),
+    prompts: n(r.prompts),
+    samples: n(r.samples) || n(r.answers),
+    mentionRate: n(r.mention_rate),
+    citationRate: n(r.citation_rate),
+    shareOfVoice: n(r.share_of_voice),
+    visibilityScore: nn(r.visibility_score),
+    avgRank: nn(r.avg_rank),
+    engines: aiEngineSetOf(safeJson<P | null>(s(r.engines_json), null)),
+    questionIds: ids && ids.length ? ids : null,
+    overlapWithPrevious: ov ? { share: nn(ov.share), same: ov.same == null ? null : ov.same === true } : null,
+  };
+}
+
+/**
+ * A1 (2026-10-23): each run's comparison with the run stored before it: the engine's own `compare_json` when the row has it, else the
+ * like-for-like rule on what the two rows record. Rows in date order (oldest first).
+ */
+export function aiRunsCompared(rows: AiVisibilityRow[]): AiRun['compare'][] {
+  return rows.map((r, i) => parseAiCompareJson(r.compare_json) ?? aiCompareInterim(aiCompareSide(r), i > 0 ? aiCompareSide(rows[i - 1]) : null));
+}
+
+const toAiRun = (r: AiVisibilityRow, compare: AiRun['compare'], credits: number | null): AiRun => ({
   runId: s(r.run_id),
   checkedAt: s(r.checked_at),
   prompts: n(r.prompts),
@@ -902,8 +959,11 @@ const toAiRun = (r: AiVisibilityRow, cs: CreditSettings): AiRun => ({
   avgRank: n(r.avg_rank),
   aioPresence: n(r.aio_presence),
   aioCitationRate: n(r.aio_citation_rate),
-  credits: creditsFor(n(r.cost_usd), cs),
-  alerts: splitList(r.alerts),
+  // A9: what the ledger charged for the run (null: no charge on record), never DataForSEO cost x rate
+  credits,
+  alerts: aiAlertsOf(r.alerts).map((a) => a.text),
+  alertItems: aiAlertsOf(r.alerts),
+  compare,
   runKind: s(r.run_kind),
   samples: n(r.samples) || n(r.answers),
   visibilityScore: nn(r.visibility_score),
@@ -990,14 +1050,22 @@ function toIndex(x: P | null): AiIndex | null {
   };
 }
 
-export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
+/**
+ * A10 / A11 (2026-10-23): the read limits hold at 500 questions x 9 engines, every capped read is newest first, and a caller that does
+ * not show the answers (Overview, Recommendations, the segments API) does not read them (`answers: false`), nor the panel (`prompts: false`).
+ */
+export const AI_READ_LIMITS = { runs: 300, prompts: 2500, daily: 120, answers: 6000 } as const;
+
+export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boolean; prompts?: boolean } = {}): Promise<AiData> {
   const d = site.domain;
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
-  const [vis, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons] = await Promise.all([
-    siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:asc', max: 300 }),
-    siteRows<AiPromptRow>('aiPrompts', d, { max: 1200 }),   // G6: up to 500 tracked + the switched-off and refused ones
+  const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons] = await Promise.all([
+    // newest first, then put in date order: a domain with more than 300 runs shows its newest 300, never freezes on the oldest
+    siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:desc', max: AI_READ_LIMITS.runs }),
+    // G6: up to 500 tracked + the switched-off and refused ones (every reword keeps the old row 'off'); stored order kept (the engine's cut)
+    opts.prompts === false ? Promise.resolve([] as AiPromptRow[]) : siteRows<AiPromptRow>('aiPrompts', d, { max: AI_READ_LIMITS.prompts }),
     latestReport(org.id, site.id, ['ai_visibility']),
-    siteRows<AiDailyRow>('aiDaily', d, { sortBy: 'date:asc', max: 120, extra: [{ columnName: 'checked_at', condition: 'gte', value: since }] }),
+    siteRows<AiDailyRow>('aiDaily', d, { sortBy: 'date:desc', max: AI_READ_LIMITS.daily, extra: [{ columnName: 'checked_at', condition: 'gte', value: since }] }),
     // v4.12: the AI growth loop (AI_GROWTH_SPEC.md)
     siteRows<AiGrowthRow>('aiGrowth', d, { sortBy: 'checked_at:desc', max: 3 }),
     siteRows<AiPageRow>('aiPages', d, { max: 200 }),
@@ -1006,11 +1074,19 @@ export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
     siteRows<ContentLogRow>('contentLog', d, { max: 500 }),
     siteRows<MonitorsRow>('monitors', d, { max: 5 }),
   ]);
+  const vis = [...visDesc].sort((a, b) => s(a.checked_at).localeCompare(s(b.checked_at)));
   const last = vis[vis.length - 1];
-  // n8n's run id is per day (ai_YYYYMMDD_domain): a second run that day shares it, so only the answers of the latest run count
-  const answers = last
-    ? (await siteRows<AiAnswerRow>('aiAnswers', d, { extra: [{ columnName: 'run_id', condition: 'eq', value: last.run_id }], max: 3000 })).filter((a) => s(a.checked_at) >= s(last.checked_at))   // G6: a 500-question run stores ~2,500
-    : [];
+  // n8n's run id is per day (ai_YYYYMMDD_domain): a second run that day shares it, so only the answers of the latest run count.
+  // A10: scoped to that run, newest first, up to 6,000 (500 questions x 9 engines + the brand question is ~4,500)
+  const answers =
+    last && opts.answers !== false
+      ? (await siteRows<AiAnswerRow>('aiAnswers', d, { extra: [{ columnName: 'run_id', condition: 'eq', value: last.run_id }], sortBy: 'checked_at:desc', max: AI_READ_LIMITS.answers })).filter((a) => s(a.checked_at) >= s(last.checked_at))
+      : [];
+  // A9: the credits each run was charged, from the ledger (a failed read shows no figure, never a rebuilt one)
+  const charges = vis.length ? await aiChargeEntries(org.id, d, new Date(Date.parse(s(vis[0].checked_at)) - 36e5).toISOString()).catch(() => null) : null;
+  const credits = charges ? bucketAiCharges(vis.map((r) => ({ checkedAt: s(r.checked_at) })), charges) : vis.map(() => null);
+  const compared = aiRunsCompared(vis);
+  const monitorsNow = monitorsFromRow(mons[0]);
   let latest: AiData['latest'] = null;
   if (last) {
     const engines = safeJson<Record<string, P>>(last.engines_json, {});
@@ -1065,11 +1141,13 @@ export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
     };
   }
   const rp = report?.payload;
-  const cs = await settingsRow();
+  // A6 (2026-10-23): the report's prose, grid and actions belong beside the latest run only when they were written for it
+  const reportCurrent = !!(rp && last && reportIsFor(s(rp.run_id), report!.report.receivedAt, s(last.run_id), s(last.checked_at)));
   return {
-    runs: vis.map((r) => toAiRun(r, cs)),
+    runs: vis.map((r, i) => toAiRun(r, compared[i], credits[i])),
     latest,
     daily: aiDailySeries(days),
+    promptsMax: monitorsNow ? monitorsNow.aiPromptsMax : null,
     prompts: prompts.map((p) => ({
       promptId: s(p.prompt_id),
       prompt: s(p.prompt),
@@ -1091,33 +1169,13 @@ export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
     // G6 (2026-10-18): the latest run's segments (compact in the row, expanded with their ranges here) and the panel it asked
     segments: last ? aiSegmentsFromJson(s(last.segments_json)) : null,
     panel: last ? aiPanelFromJson(s(last.panel_json)) : null,
-    answers: answers.map((a) => ({
-      promptId: s(a.prompt_id),
-      prompt: s(a.prompt),
-      kind: s(a.kind),
-      topic: s(a.topic),
-      engine: s(a.engine),
-      answered: b(a.answered),
-      mentioned: b(a.mentioned),
-      cited: b(a.cited),
-      rank: n(a.rank),
-      ourUrls: splitList(a.our_urls),
-      competitors: splitList(a.competitors),
-      sources: splitList(a.sources),
-      excerpt: s(a.excerpt),
-      error: s(a.error),
-      checkedAt: s(a.checked_at),
-      runKind: s(a.run_kind),
-      sentiment: s(a.sentiment),
-      brands: splitList(a.brands),
-      issues: s(a.issues).split(' | ').filter(Boolean),
-      fanout: s(a.fanout).split(' | ').filter(Boolean),
-      citedUrls: arr(safeJson(s(a.cited_urls), [])).map((c) => ({ url: s(c.u), title: s(c.t) })).filter((c) => c.url),
-    })),
-    growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsFromRow(mons[0])),
+    answers: answers.map((a) => toAiAnswer(a)),
+    growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsNow),
     report: rp
       ? {
           receivedAt: report!.report.receivedAt,
+          runId: s(rp.run_id),
+          current: reportCurrent,
           brief: rp.brief && typeof rp.brief === 'object' ? (rp.brief as { headline?: string; summary?: string }) : null,
           questions: arr(rp.questions).map((q) => ({
             promptId: s(q.prompt_id),
@@ -1132,10 +1190,73 @@ export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
             volume: nn(q.volume),
             winRate: nn(q.win_rate),
             samples: n(q.samples),
+            // A15: the engine's verdict on the question's own rate, as sent
+            win: q.win && typeof q.win === 'object' ? { ci: ci(o(q.win).ci), enough: typeof o(q.win).enough === 'boolean' ? (o(q.win).enough as boolean) : null, why: s(o(q.win).why) } : null,
           })),
           actions: engineActions(rp.actions, 'ai_visibility', report!.report.receivedAt),
         }
       : null,
+  };
+}
+
+/**
+ * A6: a delivered report belongs to the latest stored run when it carries that run's id and arrived after the run started (the engine's
+ * run id is per day, so a second run that day shares it), or, for a report without a run id, when it arrived within two days of it.
+ */
+export function reportIsFor(reportRunId: string, receivedAt: string, runId: string, checkedAt: string): boolean {
+  const got = Date.parse(receivedAt), start = Date.parse(checkedAt);
+  if (!Number.isFinite(got) || !Number.isFinite(start)) return false;
+  const after = got >= start - 5 * 60_000;
+  if (reportRunId) return reportRunId === runId && after;
+  return after && got <= start + 2 * 864e5;
+}
+
+const ENTITY_ROLES = ['self', 'competitor', 'platform', 'source', 'other'] as const;
+type AiAnswerOut = AiData['answers'][number];
+
+/**
+ * One stored answer. The 2026-10-23 engine contract adds `named` (the name as named), `cited` as the URL cited (it was a boolean),
+ * `position` and `entities` (only self + competitor are rivals); older rows lack them and read as before.
+ */
+export function toAiAnswer(a: AiAnswerRow): AiAnswerOut {
+  const citedRaw = a.cited as unknown;
+  const citedUrl = typeof citedRaw === 'string' && /^https?:\/\//i.test(citedRaw.trim()) ? citedRaw.trim() : '';
+  const named = typeof a.named === 'string' ? a.named.trim() : '';
+  const entities = arr(safeJson(s(a.entities), [])).map((e) => ({
+    id: s(e.id),
+    name: s(e.name),
+    role: ((ENTITY_ROLES as readonly string[]).includes(s(e.role)) ? s(e.role) : 'other') as (typeof ENTITY_ROLES)[number],
+    position: nn(e.position),
+    cited: b(e.cited),
+  })).filter((e) => e.name || e.id);
+  const ourUrls = aiUrlsOf(a.our_urls);
+  const rank = n(a.rank);
+  return {
+    promptId: s(a.prompt_id),
+    prompt: s(a.prompt),
+    kind: s(a.kind),
+    topic: s(a.topic),
+    engine: s(a.engine),
+    answered: b(a.answered),
+    mentioned: b(a.mentioned) || (!!named && !/^(false|0|no)$/i.test(named)),
+    cited: b(citedRaw) || !!citedUrl,
+    rank,
+    // A4: the engine joins our cited pages with a space
+    ourUrls: citedUrl && !ourUrls.includes(citedUrl) ? [citedUrl, ...ourUrls] : ourUrls,
+    // with entities: the rivals are the competitors only (platforms, sources and others are not businesses named instead)
+    competitors: entities.length ? entities.filter((e) => e.role === 'competitor').map((e) => e.name || e.id) : splitList(a.competitors),
+      sources: splitList(a.sources),
+      excerpt: s(a.excerpt),
+      error: s(a.error),
+      checkedAt: s(a.checked_at),
+      runKind: s(a.run_kind),
+      sentiment: s(a.sentiment),
+      brands: splitList(a.brands),
+      issues: s(a.issues).split(' | ').filter(Boolean),
+      fanout: s(a.fanout).split(' | ').filter(Boolean),
+      citedUrls: arr(safeJson(s(a.cited_urls), [])).map((c) => ({ url: s(c.u), title: s(c.t) })).filter((c) => c.url),
+    position: nn(a.position) ?? (rank > 0 ? rank : null),
+    ...(entities.length ? { entities } : {}),
   };
 }
 

@@ -133,6 +133,8 @@ export interface AiAnswerRow extends DtRow {
   run_kind: string; sentiment: string; brands: string; issues: string; fanout: string;
   /** v4.12: the exact third-party pages cited (JSON [{u, t}]) */
   cited_urls: string;
+  /** 2026-10-23 engine contract (absent on older rows): the name as named, the URL cited, the 1-based place named, every entity (JSON) */
+  named?: string; position?: number | null; entities?: string;
 }
 export interface AiVisibilityRow extends DtRow {
   site_id: string; domain: string; run_id: string; checked_at: string; prompts: number; answers: number; mention_rate: number;
@@ -145,6 +147,8 @@ export interface AiVisibilityRow extends DtRow {
   ai_impressions: number | null; perception_json: string; traffic_json: string; access_json: string; index_json: string; clusters_json: string;
   /** G6 (2026-10-18): rates per engine x cluster x buyer role x market x stage (compact: one array per segment), the panel asked, the executions it took */
   segments_json?: string; panel_json?: string; chunks?: number | null;
+  /** 2026-10-23 (APP_AUDIT.md A1 / A8): the engine's comparison with the previous run and the period counted (JSON; absent on older rows) */
+  compare_json?: string;
 }
 /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the AI growth loop's key pages, can AI read and quote them, Bing's crawl, submission */
 export interface AiPageRow extends DtRow {
@@ -169,6 +173,8 @@ export interface AiDailyRow extends DtRow {
   competitors_json: string; sources_json: string; alerts: string; cost_usd: number;
   /** G6 (2026-10-18): the morning's rotating sample (mode, N a week, questions asked of the panel, strata covered) */
   sample_json?: string;
+  /** 2026-10-23 (APP_AUDIT.md A7): full | sample, questions asked that morning, engines that answered, a morning an engine returned nothing */
+  sample_mode?: string; questions_asked?: number | null; engines_answered?: string; partial?: boolean | null; rule_version?: string;
 }
 export interface BacklinkSnapshotRow extends DtRow {
   site_id: string; domain: string; checked_at: string; mode: string; rank: number; backlinks: number; referring_domains: number;

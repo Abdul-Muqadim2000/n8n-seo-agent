@@ -82,6 +82,28 @@ describe('the panel manager through Site Admin', () => {
   });
 });
 
+// A13 (2026-10-23, AI visibility app audit): who changed the panel, in the company's audit log (counts and ids, never the texts)
+describe('the panel changes are audited', () => {
+  it('an ai_prompts edit writes one audit row with the counts', async () => {
+    const { audit } = await import('../src/services/audit');
+    const m = vi.mocked(audit);
+    m.mockClear();
+    expect((await post({ action: 'ai_prompts', add: ['Which payroll software suits a small company?'], remove: ['p_9'] })).statusCode).toBe(200);
+    expect(m).toHaveBeenCalledTimes(1);
+    const e = m.mock.calls[0][2] as { action: string; details: Record<string, unknown> };
+    expect(e.action).toBe('site.admin.ai_prompts');
+    expect(e.details).toMatchObject({ added: 1, removed: 1, ids: ['p_9'] });
+    expect(JSON.stringify(e.details)).not.toMatch(/payroll/);
+  });
+  it('a panel size change is audited as a monitors change', async () => {
+    const { audit } = await import('../src/services/audit');
+    const m = vi.mocked(audit);
+    m.mockClear();
+    expect((await post({ action: 'monitors', monitors: { aiPromptsMax: 50 } })).statusCode).toBe(200);
+    expect((m.mock.calls[0][2] as { action: string; details: Record<string, unknown> })).toMatchObject({ action: 'site.admin.monitors', details: { aiPromptsMax: 50 } });
+  });
+});
+
 describe('monitorsFromRow', () => {
   it('reads the panel settings back; a stored row with no size keeps 20', () => {
     const m = monitorsFromRow({ site_id: 's', domain: 'techand.ai', ai_prompts_max: 0, ai_personas: 'CFO, IT manager', ai_markets: 'SA-en', ai_pulse_mode: 'sample', ai_pulse_per_week: 3 } as unknown as MonitorsRow)!;

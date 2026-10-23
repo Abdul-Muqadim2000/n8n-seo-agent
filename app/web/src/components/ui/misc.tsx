@@ -30,13 +30,13 @@ export function PageHeader({ title, description, actions, eyebrow, className, ic
  * Never colour alone: arrow + sign + text. Inside a SummaryHero (ink / blue surface) the flat chip, the label and the "-" switch to
  * on-dark colours by themselves; the good / bad chips keep their own soft backgrounds.
  */
-export function Delta({ value, suffix = '%', upIsGood = true, digits = 1, label, className }: { value: number | null | undefined; suffix?: string; upIsGood?: boolean; digits?: number; label?: string; className?: string }) {
+export function Delta({ value, suffix = '%', upIsGood = true, digits = 1, label, className, neutral = false }: { value: number | null | undefined; suffix?: string; upIsGood?: boolean; digits?: number; label?: string; className?: string; /** grey, no good / bad colour: a change a test did not call real */ neutral?: boolean }) {
   const surface = useSurface();
   // secondary text: ink-3 on light; white 72% on ink; full white on blue (72% falls under 4.5:1 on the lighter hero tiles)
   const muted = surface === 'blue' ? 'text-on-ink' : surface === 'ink' ? 'text-on-ink-2' : 'text-ink-3';
   if (value == null || !Number.isFinite(value)) return <span className={cn('text-xs', muted, className)}>{label ? `- ${label}` : '-'}</span>;
   const flat = Math.abs(value) < Math.pow(10, -digits) / 2;
-  const good = flat ? null : value > 0 === upIsGood;
+  const good = flat || neutral ? null : value > 0 === upIsGood;
   const Icon = flat ? Minus : value > 0 ? ArrowUpRight : ArrowDownRight;
   return (
     <span className={cn('inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs font-medium tabular', good == null ? muted : good ? 'text-good-text' : 'text-critical-text', className)}>

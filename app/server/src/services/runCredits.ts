@@ -97,3 +97,43 @@ export async function reportCredits(orgId: string, report: { runId: string | nul
   return Number(r?.n ?? 0) > 0 ? { used: Math.round(Math.max(0, Number(r!.used ?? 0)) * 100) / 100, state: 'charged' } : { used: null, state: null };
 }
 
+// ---------------- A9 (2026-10-23, n8n/seo-agent/docs/ai-visibility-2026-10-23/APP_AUDIT.md): what an AI visibility run was charged ----------------
+
+/** One usage entry of the credit ledger for the website's AI visibility runs (`ref.mode` 'ai_visibility'). */
+export interface AiChargeEntry {
+  at: string;
+  /** credits taken (positive) */
+  credits: number;
+}
+
+/** an entry may be written a little before the stored row's `checked_at` (the row's time is the run's start; its parts settle later) */
+const AI_CHARGE_SLACK_MS = 30 * 60_000;
+
+/**
+ * Each entry belongs to the latest run that started before it (with a little slack): a run's executions settle after its start and
+ * before the next weekly run. A run with no entry has no charge on record (null), never a figure rebuilt from its search-data cost.
+ */
+export function bucketAiCharges(runs: readonly { checkedAt: string }[], entries: readonly AiChargeEntry[]): (number | null)[] {
+  const out: (number | null)[] = runs.map(() => null);
+  const order = runs.map((r, i) => ({ t: Date.parse(r.checkedAt), i })).filter((x) => Number.isFinite(x.t)).sort((a, b) => a.t - b.t);
+  for (const e of entries) {
+    const at = Date.parse(e.at);
+    if (!Number.isFinite(at) || !(e.credits > 0)) continue;
+    let hit = -1;
+    for (const r of order) if (r.t - AI_CHARGE_SLACK_MS <= at) hit = r.i;
+    if (hit < 0) continue;
+    out[hit] = Math.round(((out[hit] ?? 0) + e.credits) * 100) / 100;
+  }
+  return out;
+}
+
+/** The ledger's usage entries of a website's AI visibility runs since `since` (one query). */
+export async function aiChargeEntries(orgId: string, domain: string, since: string): Promise<AiChargeEntry[]> {
+  const d = domain.toLowerCase().replace(/^www\./, '');
+  const rows = await execRows<{ at: string; credits: number }>(db, sql`
+    select created_at::text as at, (-credits)::float as credits from ${schema.creditLedger}
+    where org_id = ${orgId}::uuid and kind = 'usage' and ref->>'mode' = 'ai_visibility'
+      and lower(coalesce(ref->>'domain', '')) in (${d}, ${'www.' + d}) and created_at >= ${since}::timestamptz`);
+  return rows.map((r) => ({ at: new Date(r.at).toISOString(), credits: Number(r.credits) || 0 }));
+}
+

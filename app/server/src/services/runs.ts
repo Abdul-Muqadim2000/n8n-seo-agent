@@ -6,6 +6,10 @@ import {
   cycleNorm,
   estimateRunCost,
   estimateRunMinutes,
+  aiRunPanelOf,
+  AI_PANEL_VALUE,
+  type AiRunPanel,
+  type MonitorsRow,
   IDEMPOTENCY,
   isCycleRequestId,
   MODES,
@@ -53,8 +57,32 @@ import { siteAutomation } from './ladders';
  * R100: what the engine will reserve for this request, its own rolling figures (`engineCostTable`), the shipped table only when
  * n8n cannot be read. The budget check holds this number, so it must be the engine's, not a mirror of its defaults.
  */
-export const estimateCost = async (input: RunInput): Promise<number> =>
-  estimateRunCost(input.mode, input as unknown as Record<string, unknown>, (await engineCostTable()).calibration);
+export const estimateCost = async (input: RunInput, site?: Pick<SiteRow, 'domain'> | null): Promise<number> => {
+  const values: Record<string, unknown> = { ...(input as unknown as Record<string, unknown>) };
+  delete values[AI_PANEL_VALUE];   // the panel is the server's to read, never a client's to send
+  // A2 (2026-10-23): an on-demand AI visibility run asks the website's whole panel on every engine, so it is quoted from that panel
+  if (input.mode === 'ai_visibility' && site) {
+    const panel = await aiPanelForQuote(site.domain);
+    if (panel) values[AI_PANEL_VALUE] = panel;
+  }
+  return estimateRunCost(input.mode, values, (await engineCostTable()).calibration);
+};
+
+/**
+ * The website's panel as the engine will ask it (its monitors row: size and engines; no row = the engine's default panel), or null when
+ * the engine cannot be read, in which case the shipped table row stays the quote.
+ */
+export async function aiPanelForQuote(domain: string): Promise<AiRunPanel | null> {
+  try {
+    const rows = await siteRows<MonitorsRow>('monitors', domain, { max: 5 });
+    const r = rows[0];
+    if (!r) return aiRunPanelOf(null);
+    const engines = String(r.ai_engines ?? '').split(/\s*,\s*|\n+/).map((x) => x.trim()).filter(Boolean);
+    return aiRunPanelOf({ aiPromptsMax: Number(r.ai_prompts_max) || null, aiEngines: engines });
+  } catch {
+    return null;
+  }
+}
 export const etaFor = (input: RunInput): number => estimateRunMinutes(input.mode, input as unknown as Record<string, unknown>);
 
 export function runTitle(input: RunInput, site: SiteRow | null): string {
@@ -212,7 +240,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     const held = site && !manual ? await siteReadiness(site) : null;
     input = { ...input, pagesHeld: manual ? 'manual' : held && !held.ready ? 'profile' : undefined };
   }
-  const estimated = await estimateCost(input);
+  const estimated = await estimateCost(input, site);
   // the website's first tracking, kept on every re-save: the anchor of its weekly cycle (the engine accepts it within the last 6 days)
   const trackingStartedAt = site && input.mode === 'track' ? (site.trackingStartedAt ?? new Date()) : null;
   const body = compactBody(

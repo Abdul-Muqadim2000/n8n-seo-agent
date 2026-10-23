@@ -14,8 +14,10 @@ import {
   VERIFICATION_META_NAME,
   VERIFICATION_TXT_PREFIX,
   verifySiteSchema,
+  type AdminAction,
   type AdminResult,
   type AiGrowthRow,
+  type AuditAction,
   type IndexNowCheck,
   type GoogleConnection,
   type LinkImportSummary,
@@ -145,9 +147,58 @@ async function stopInEngine(site: SiteRow, log: FastifyRequest['log']) {
   } catch (err) {
     log.warn({ err: String(err), domain: site.domain }, 'n8n ladder delete failed');
   }
+  await clearAiInEngine(site.domain, log);
   invalidateSite(site.domain);
 }
+
+/**
+ * A12 (2026-10-23, AI visibility app audit): the owner's AI inputs and measurements leave with the website. Site Admin `delete` removes
+ * the site row and its cycle only; the monitor settings (panel size, engines, competitors, brand names, buyer roles, markets), the question
+ * panel (with the owner's own questions and personas) and the AI history (runs, answers, pulse days) stayed, so the next company that
+ * verified the domain saw them and was billed for the old panel size. They are removed here through the n8n public API, table by table; a
+ * table that fails is logged and the others still go (the next owner then starts from the engine's default panel).
+ */
+export const AI_TABLES_CLEARED_ON_DELETE = ['monitors', 'aiPrompts', 'aiVisibility', 'aiAnswers', 'aiDaily'] as const;
+export async function clearAiInEngine(domain: string, log: FastifyRequest['log']): Promise<string[]> {
+  const failed: string[] = [];
+  for (const t of AI_TABLES_CLEARED_ON_DELETE) {
+    try {
+      await deleteRows(t, [{ columnName: 'domain', condition: 'eq', value: domain }]);
+    } catch (err) {
+      failed.push(t);
+      log.warn({ err: String(err), domain, table: t }, 'n8n AI data delete failed');
+    }
+  }
+  return failed;
+}
 export { stopInEngine };
+
+/** A13: the audit details of a Site Admin change: counts and ids only (a question text can carry a customer's competitive framing). */
+export function adminAuditDetails(a: AdminAction, affected: number | null | undefined): Record<string, unknown> {
+  const base = { affected: affected ?? null };
+  switch (a.action) {
+    case 'ai_prompts':
+      return { ...base, added: a.add.length, edited: a.edit.length, removed: a.remove.length, enabled: a.enable.length, pinned: a.pin.length, unpinned: a.unpin.length,
+        ids: [...a.edit.map((e) => e.promptId), ...a.remove, ...a.enable, ...a.pin, ...a.unpin].slice(0, 20) };
+    case 'monitors': {
+      const m = a.monitors as Record<string, unknown>;
+      const changed = Object.keys(m).filter((k) => m[k] !== undefined);
+      return { ...base, changed, ...(m.aiPromptsMax !== undefined ? { aiPromptsMax: m.aiPromptsMax } : {}), ...(Array.isArray(m.aiEngines) ? { aiEngines: (m.aiEngines as unknown[]).map(String) } : {}),
+        ...(m.aiPulse !== undefined ? { aiPulse: m.aiPulse } : {}), ...(m.aiPulseMode !== undefined ? { aiPulseMode: m.aiPulseMode } : {}), ...(m.aiPulsePerWeek !== undefined ? { aiPulsePerWeek: m.aiPulsePerWeek } : {}),
+        ...(m.aiVisibility !== undefined ? { aiVisibility: m.aiVisibility } : {}), ...(a.competitors ? { competitors: a.competitors.length } : {}) };
+    }
+    case 'cadence':
+      return { ...base, pagesPerWeek: a.pagesPerWeek };
+    case 'prospect':
+      return { ...base, prospectDomain: a.prospectDomain, type: a.type, ...(a.status ? { status: a.status } : {}) };
+    case 'unpublish':
+      return { ...base, keyword: a.keyword };
+    case 'content_groups':
+      return { ...base, groups: Array.isArray(a.contentGroups) ? a.contentGroups.length : null };
+    default:
+      return base;
+  }
+}
 
 export async function siteRoutes(app: FastifyInstance) {
   // G5: the client portal lists the workspace's websites
@@ -408,6 +459,8 @@ export async function siteRoutes(app: FastifyInstance) {
     }
     const r = await siteAdmin(body);
     if (!r.ok) throw new HttpError(502, r.error || 'The SEO engine could not apply the change.', 'admin_failed');
+    // A13: who changed the panel or the monitors, and what in numbers (ids and counts, never the question texts)
+    await audit(req, site.orgId, { action: `site.admin.${a.action}` as AuditAction, target: { type: 'site', id: site.id, label: site.domain }, details: adminAuditDetails(a, r.affected) });
     if (r.affected === 0 && (a.action === 'pause' || a.action === 'resume')) throw new HttpError(409, 'The SEO engine does not track this website yet: start weekly tracking first.', 'not_tracked');
     if (r.affected === 0 && a.action === 'content_groups') throw new HttpError(409, 'The SEO engine does not track this website yet: start weekly tracking first, then set its content groups.', 'not_tracked');
     if (r.affected === 0 && a.action === 'unpublish') throw notFound(`No page for "${a.keyword}" is recorded for ${site.domain}.`);

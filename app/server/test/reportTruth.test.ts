@@ -235,7 +235,7 @@ describe('R95 / R104: the AI Pulse series has one point per date, even with a sc
       row({ checked_at: '2026-10-15T19:42:00Z', run_id: 'ondemand', samples: 19, mentioned: 0, cited: 0, mention_rate: 0, citation_rate: 0, share_of_voice: 0, visibility_score: 0 }),
     ]);
     expect(d.map((x) => x.date)).toEqual(['2026-10-14', '2026-10-15']);
-    expect(d[1]).toMatchObject({ samples: 40, mentionRate: 5, citationRate: 2.5, checkedAt: '2026-10-15T19:42:00Z', alerts: ['low: one engine failed'] });
+    expect(d[1]).toMatchObject({ samples: 40, mentionRate: 5, citationRate: 2.5, checkedAt: '2026-10-15T19:42:00Z', alerts: ['one engine failed'] });   // A4 (2026-10-23): the level is read off the " | "-joined text
     expect(d[1].shareOfVoice).toBeCloseTo(5.3, 1);
     // one row a day reads exactly as stored
     expect(d[0]).toMatchObject({ samples: 21, mentionRate: 0, checkedAt: '2026-10-14T14:51:44Z' });

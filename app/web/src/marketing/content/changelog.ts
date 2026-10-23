@@ -34,7 +34,7 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
-    date: '2026-10-22',
+    date: '2026-10-23',
     version: '4.2',
     title: 'Accuracy and reliability',
     summary:
@@ -48,9 +48,10 @@ export const changelog: ChangelogEntry[] = [
       'Pages Google still shows that no longer open are one clear finding at the top of your reports, with a suggested new address for each and ready redirect files in the fix pack',
       'Reliability and billing accuracy: saving one setting no longer resets the others, starting tracking uses no credits, and a retried search request is no longer charged twice',
       'Search Console shows the same status on every screen: once we can read your property, the overview, recommendations and pipeline stop asking you to connect it, and proving you own the website is labelled apart from connecting its Google data',
+      'AI visibility compares like with like: a change is shown only against an earlier check that asked the same questions on the same assistants, and only called a change when it is beyond normal answer-to-answer variation; a check run on demand is priced for your own question panel, the credits shown per check are the ones charged, and questions beyond your panel size are marked as not asked',
       'A draft you finished yourself is easy to report: press "I published it" on its report, its card or its ladder page, or choose it in the form, and that draft is marked published with your edits; the live check now names any bracket still left on the published page',
     ],
-    features: ['keyword-research', 'keyword-ladders', 'content', 'technical-audits', 'site-tracking', 'autopilot'],
+    features: ['keyword-research', 'keyword-ladders', 'content', 'technical-audits', 'site-tracking', 'autopilot', 'ai-visibility'],
     labels: ['Reliability', 'Billing'],
   },
   {

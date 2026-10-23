@@ -28,6 +28,7 @@ export * from './queue';
 export * from './report-delivery';
 export * from './ai-visibility';
 export * from './ai-panel';   // G6 (2026-10-18): the AI question panel at scale, the one cost formula (estimateAiPanelCost), mirrored from the engine
+export * from './ai-compare';   // F3 (2026-10-23): like-for-like deltas, the engine's separators, pulse sampling (APP_AUDIT.md A1 A4 A7 A8)
 // The setup guides are imported from '@seo/shared/guides', not from here: the catalogue is a sizeable chunk of text and only
 // the help panel (and the recommendation -> guide map) needs it, so it stays out of every bundle that imports this barrel.
 export * from './api-v1';

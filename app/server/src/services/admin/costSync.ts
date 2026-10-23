@@ -125,14 +125,19 @@ export const autoRun = (input: Record<string, unknown> | null | undefined): bool
 export const occurredOf = (row: LedgerRow): Date => date(row.settled_at, row.updatedAt, row.created_at, row.createdAt) ?? new Date();
 
 /** Who caused one engine ledger row (see the header). `batch` = the other rows of this read, by execution id. */
-export function attributeLedgerRow(row: LedgerRow, lk: Lookups, batch: Map<string, LedgerRow> = new Map(), depth = 0): Attribution {
+export function attributeLedgerRow(row: LedgerRow, lk: Lookups, batch: Map<string, LedgerRow> = new Map(), seen: Set<string> = new Set()): Attribution {
   const runId = str(row.run_id);
   const key = str(row.key);
   const at = occurredOf(row);
   const run = runId ? lk.runsByExec.get(runId) : undefined;
   if (run) return fromRun(run);
   const parent = key.startsWith('parent:') ? key.slice(7) : '';
-  if (parent && depth < 5) {
+  // A20 (2026-10-23, AI visibility app audit): a split run (500 questions x 9 engines = 7 executions, each `parent:` of the one before)
+  // is followed to its first execution however long the chain; a cycle stops at a visited id, never at a fixed depth (it was 5, so the
+  // 7th part of such a run fell through to the domain and was billed as schedule spend outside the run's quote)
+  if (parent && !seen.has(parent) && seen.size < 1000) {
+    if (runId) seen.add(runId);
+    seen.add(parent);
     const pr = lk.runsByExec.get(parent);
     // D3 (paid pre-launch run 2026-10-21): "Track my site" starts the Site Tracker as its child (`parent:<track exec>`, ce144671); that run
     // is the website's first weekly site report, autopilot spend like every weekly report (app/docs/CREDITS.md), never an on-demand
@@ -141,7 +146,7 @@ export function attributeLedgerRow(row: LedgerRow, lk: Lookups, batch: Map<strin
     if (pr) return fromRun(pr);
     const inBatch = batch.get(parent);
     if (inBatch) {
-      const a = attributeLedgerRow(inBatch, lk, batch, depth + 1);
+      const a = attributeLedgerRow(inBatch, lk, batch, seen);
       if (a.orgId) return a;
     }
     const st = lk.stored.get(parent);
