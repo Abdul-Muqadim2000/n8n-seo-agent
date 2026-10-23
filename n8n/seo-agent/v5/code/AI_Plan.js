@@ -111,9 +111,16 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const gsc_questions = [...new Map(queries.filter(q => q.site_id === s.site_id && q.query && (String(q.query).split(/\s+/).length >= 5 || QUESTION.test(String(q.query))))
     .sort((a, b) => (Number(b.impressions) || 0) - (Number(a.impressions) || 0)).map(q => [String(q.query).toLowerCase().trim(), { query: String(q.query).trim(), impressions: Number(q.impressions) || 0, clicks: Number(q.clicks) || 0, position: Number(q.position) || 0 }])).values()].slice(0, CONFIG.gsc_questions);
   // AI Pulse samples since the last weekly run (or the past week): they join this week's figures (more samples = a steadier, honest rate)
+  // E14 (2026-10-23, F1b): a pulse morning belongs to exactly ONE weekly window, (the previous run's start, this run's start]. The lower
+  // bound alone let a split run that finished after a pulse morning pool it, and the next week pool it again. A row's checked_at IS its
+  // run's start (a split run keeps the first part's), so it is the next window's lower bound; the window is stored in compare_json.window.
+  const prevCmp = prev ? parse(prev.compare_json, null) : null;
   const since = prev ? String(prev.checked_at) : new Date(now.getTime() - CONFIG.pulse_days * 864e5).toISOString();
-  const pulse_rows = daily.filter(d => d.site_id === s.site_id && String(d.checked_at) > since).map(d => ({ date: d.date, checked_at: d.checked_at, samples: Number(d.samples) || 0, mentioned: Number(d.mentioned) || 0, cited: Number(d.cited) || 0,
-    mention_rate: Number(d.mention_rate) || 0, visibility_score: Number(d.visibility_score) || 0, engines: parse(d.engines_json, {}), prompts: parse(d.prompts_json, {}), competitors: parse(d.competitors_json, {}), sources: parse(d.sources_json, {}) }));
+  const windowTo = going ? String(st.started_at || iso) : iso;
+  const pulse_window = { from: since, to: windowTo, days: Math.round(10 * Math.max(0, (Date.parse(windowTo) - Date.parse(since)) / 864e5)) / 10 };
+  const pulse_rows = daily.filter(d => d.site_id === s.site_id && String(d.checked_at) > since && String(d.checked_at) <= windowTo).map(d => ({ date: d.date, checked_at: d.checked_at, run_id: d.run_id || '', samples: Number(d.samples) || 0, mentioned: Number(d.mentioned) || 0, cited: Number(d.cited) || 0,
+    mention_rate: Number(d.mention_rate) || 0, visibility_score: Number(d.visibility_score) || 0, engines: parse(d.engines_json, {}), prompts: parse(d.prompts_json, {}), competitors: parse(d.competitors_json, {}), sources: parse(d.sources_json, {}),
+    rule_version: String(d.rule_version || ''), detail: parse(d.detail_json, null), sample_mode: String(d.sample_mode || ''), partial: d.partial === true || String(d.partial) === 'true' }));
   const prevMention = prev ? Number(prev.mention_rate) || 0 : 0, prevSamples = prev ? Number(prev.samples) || Number(prev.answers) || 0 : 0;
   const location_code = Number(s.location_code) || 2840;
   // ---- G6: this run's identity, what earlier executions of it already asked, and what is left to pay for ----
@@ -155,12 +162,16 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
     // G6: discovery runs in a run's first execution (it feeds the Prompt Writer); the database views, GA4 and the crawler check in its last
     discovery_due: !going && !!topics.length && (full_due || need > 0), volume_keywords: going ? [] : volume_keywords, index_due: full_due,
     market_due: !!topics.length && (runCycle ? (going ? !!st.full_due : cycle.monthly) : (!prev || String(prev.market_month || '') !== month)), market_keyword: topics[0] || '',
-    ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, '').trim(), pulse_rows, key_paths,
+    ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, '').trim(), pulse_rows, pulse_window, key_paths,
     // B-G1: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
     set_aside, set_aside_note: FITR.line(set_aside, 'asked of the AI engines or scored against'),
     // G6: the gate's context, so the questions the Prompt Writer writes this run are judged by the same rule before they are stored
     fit_input: { own_domain: s.domain, competitors, brands: aliases, heads: lrowsAll.map(l => l.head_keyword), services: SM.services(site_model), keywords: s.keywords || [] },
-    previous: prev ? { checked_at: prev.checked_at, mention_rate: prevMention, samples: prevSamples, mentioned_k: Math.round(prevMention * prevSamples / 100),
+    // F1b (2026-10-23): the previous row's identity, the rule its figures were counted under and its own counts (metrics_json), so the
+    // comparison is made on what that run measured, never rebuilt from a rounded percentage
+    previous: prev ? { run_id: String(prev.run_id || ''), rule_version: String(prev.rule_version || ''), stats: parse(prev.metrics_json, null), compare: prevCmp,
+      named_rate: prev.named_rate === '' || prev.named_rate == null ? null : Number(prev.named_rate), avg_position: prev.avg_position === '' || prev.avg_position == null ? null : Number(prev.avg_position),
+      checked_at: prev.checked_at, mention_rate: prevMention, samples: prevSamples, mentioned_k: Math.round(prevMention * prevSamples / 100),
       // B-L4 (2026-10-15, INVARIANTS rule 1): the panel is settable from 3 to 50 and a weekly check asks fewer engines than the
       // monthly full one, so the stored row's OWN panel size and run kind travel with its figures. Without them AI Metrics
       // subtracted a 20-question run from an 8-question one and called the difference a change in visibility.

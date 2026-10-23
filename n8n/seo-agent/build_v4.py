@@ -8450,11 +8450,12 @@ def _b81_checks():
     _want81 = {
         'AI_Visibility / AI Metrics': ('B8-1 / B8-3 / B8-4 / B8-5', (
             'const tests = (prev && like.comparable) ? {',                       # B8-1
-            'changeOf(cited, samples, citedBefore, prev.samples)',
-            'changeOf(mentioned, mentioned + compTotal, prev.mentioned_k, prev.mentioned_k + compTotalBefore)',
-            'const score_band = scoreBand(ans,', 'scoreChange(visibility_score, prev.visibility_score, score_band)',
-            "changeOf(c.mentions, mentioned + compTotal, Number(b0.mentions) || 0, prev.mentioned_k + compTotalBefore, { min_points: 10 })",
-            'citation_ci: wilson(cited, samples), sov_ci: wilson(mentioned, mentioned + compTotal)',
+            'changeOf(cited, samples, cPrev, nPrev)',
+            # F1b (2026-10-23, E19): share of voice is tested on its standard error over ANSWERS, never as if each mention were a trial
+            'AVM.seChange(H.sov, H.sov_se, H.sov_n, PS.sov.rate, PS.sov.se, PS.sov.n)',
+            'const score_band = scoreBand(U,', 'scoreChange(visibility_score, prev.visibility_score, score_band)',
+            'AVM.seChange(c.sov, c._st.sov_se, c._st.sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0, { min: 10 })',
+            'citation_ci: wilson(cited, samples), sov_ci: H.sov == null',
             'win: rateOf(q.m, q.n, { min: MIN_Q_SAMPLES }), decided: q.n >= MIN_Q_SAMPLES',   # B8-4
             'const gaps = lostQ.filter(q => q.decided).slice(0, 8);', 'const undecided = lostQ.filter(q => !q.decided)',
             'const pulse_basis = PR.length ?', 'partial_days:', 'const capped = (()',          # B8-3 / B8-5
@@ -8468,7 +8469,9 @@ def _b81_checks():
         'AI_Pulse / Pulse Metrics': ('B8-2 / B8-3', (
             'const readable = {', 'unavailable: !R.length || n === 0', 'could not be read',
             'No answer came back at all today',
-            'const judged = (p.baseline || []).map(d => ({ d, v: sameBasis({ engines: d.engines, size: d.samples, panel: d.panel }, nowBasis) }));',
+            # F1b (2026-10-23): a morning counted under another rule is set aside before the basis check
+            "const judged = (p.baseline || []).map(d => ({ d, v: String(d.rule_version || '') !== AVM.RULE_VERSION ?",
+            'sameBasis({ engines: d.engines, size: d.samples, panel: d.panel }, nowBasis) }));',
             'const B = judged.filter(x => x.v.ok).map(x => x.d);', 'const baseline_set_aside =', 'const baseline_note =',
             '!readable.unavailable && todayRate.enough && n >= 20 && bn >= 40')),
         'AI_Pulse / AI Plan': ('B8-2', (
