@@ -4,7 +4,7 @@
   "filters": {
    "conditions": [
     {
-     "condition": "like",
+     "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
      "keyName": "site_id",
      "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
     },
@@ -22,6 +22,11 @@
      "condition": "gte",
      "keyName": "checked_at",
      "keyValue": "={{ new Date(Date.now() - 49 * 864e5).toISOString() }}"
+    },
+    {
+     "condition": "isNotEmpty",
+     "keyName": "answer_text",
+     "keyValue": ""
     }
    ]
   },
@@ -31,7 +36,7 @@
   "onError": "continueRegularOutput",
   "operation": "update",
   "to": [
-   "Prompt State Rows"
+   "Trimmed (AI)"
   ],
   "values": {
    "answer_text": "",
@@ -56,6 +61,11 @@
      "condition": "gte",
      "keyName": "checked_at",
      "keyValue": "={{ new Date(Date.now() - 9 * 864e5).toISOString() }}"
+    },
+    {
+     "condition": "isNotEmpty",
+     "keyName": "answer_text",
+     "keyValue": ""
     }
    ]
   },
@@ -65,7 +75,7 @@
   "onError": "continueRegularOutput",
   "operation": "update",
   "to": [
-   "Next Pulse Part"
+   "Trimmed (Pulse)"
   ],
   "values": {
    "answer_text": "",

@@ -211,7 +211,8 @@ module.exports = async (ctx) => {
     check('E1: Run AI Requests is reachable only through the saved record (no path from AI Requests to it that avoids Save Asking State + AI Requests Go)', !reach('AI Requests', 'Run AI Requests', ['AI Requests Go']) && reach('Save Asking State', 'Run AI Requests'), '');
     const conds = (n) => ((wf.filters || {})[n] || {}).conditions || [];
     const scoped = ['Load AI Prompts', 'Load AI Visibility', 'Load AI Daily', 'Load Cache (AI)', 'Load Query History', 'Load AI Run Answers', 'Load Pages (AI)', 'Load Link Prospects'];
-    check('E12: every read of a per-site AI table is filtered by the site server-side', scoped.every(n => conds(n).some(c => c.keyName === 'site_id' && c.condition === 'like' && /Manual Run/.test(c.keyValue))), JSON.stringify(scoped.filter(n => !conds(n).some(c => c.keyName === 'site_id'))));
+    // R-E2 (2026-10-23): `eq` (exact) when the start names the site, `like '%'` only when it names none (n8n's like is a CONTAINS match)
+    check('E12: every read of a per-site AI table is filtered by the site server-side (R-E2: exact when the start names it)', scoped.every(n => conds(n).some(c => c.keyName === 'site_id' && /=== '%' \? 'like' : 'eq'/.test(String(c.condition)) && /Manual Run/.test(c.keyValue))), JSON.stringify(scoped.filter(n => !conds(n).some(c => c.keyName === 'site_id'))));
     check('E12: the run\'s answers are filtered by the run too, and the weekly rows by a 60-day window', conds('Load AI Run Answers').some(c => c.keyName === 'run_id' && /continue_run/.test(c.keyValue)) && conds('Load AI Visibility').some(c => c.keyName === 'checked_at' && /60 \* 864e5/.test(c.keyValue)), '');
     check('E15: Save Prompts upserts on site_id + prompt_id', JSON.stringify(conds('Save Prompts').map(c => c.keyName)) === '["site_id","prompt_id"]', JSON.stringify(conds('Save Prompts')));
     // the scope expression on its own: a site id, a domain, nothing

@@ -271,7 +271,10 @@
   "POST Progress": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST Pulse Report": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST Rejection": "callback to the customer app: every POST inserts a report (not idempotent)",
-  "POST Site Report": "callback to the customer app: every POST inserts a report (not idempotent)"
+  "POST Site Report": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "Post Busy Notices": "callback to the customer app: closes the caller's request (not idempotent)",
+  "Post Open Run Notices": "callback to the customer app: closes the caller's request (not idempotent)",
+  "Post Stop Notices": "callback to the customer app: closes the caller's request (not idempotent)"
  },
  "rule": {
   "maxTries": 3,
@@ -2043,37 +2046,37 @@
     "waitBetweenTries": null
    },
    {
-    "allowed": false,
-    "maxTries": 3,
+    "allowed": true,
+    "maxTries": null,
     "name": "Post Stop Notices",
     "onError": "continueRegularOutput",
     "paid": false,
     "per_item": false,
-    "retryOnFail": true,
+    "retryOnFail": false,
     "timeout": 30000,
-    "waitBetweenTries": 5000
+    "waitBetweenTries": null
    },
    {
-    "allowed": false,
-    "maxTries": 3,
+    "allowed": true,
+    "maxTries": null,
     "name": "Post Open Run Notices",
     "onError": "continueRegularOutput",
     "paid": false,
     "per_item": false,
-    "retryOnFail": true,
+    "retryOnFail": false,
     "timeout": 30000,
-    "waitBetweenTries": 5000
+    "waitBetweenTries": null
    },
    {
-    "allowed": false,
-    "maxTries": 3,
+    "allowed": true,
+    "maxTries": null,
     "name": "Post Busy Notices",
     "onError": "continueRegularOutput",
     "paid": false,
     "per_item": false,
-    "retryOnFail": true,
+    "retryOnFail": false,
     "timeout": 30000,
-    "waitBetweenTries": 5000
+    "waitBetweenTries": null
    },
    {
     "allowed": false,
