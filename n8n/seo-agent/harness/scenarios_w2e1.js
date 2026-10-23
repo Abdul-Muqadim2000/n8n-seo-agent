@@ -221,7 +221,7 @@ module.exports = async (ctx) => {
     const conds = (x) => ((x && x.filters && x.filters.conditions) || []).map(c => c.keyName + ' ' + c.condition + ' ' + String(c.keyValue).replace(/\s+/g, ''));
     check('weekly: an update of answer_text and retrieved_json to "" on this site\'s non-pulse rows aged 35-49 days, once, never failing the run', t && t.operation === 'update' && JSON.stringify(t.values) === JSON.stringify({ answer_text: '', retrieved_json: '' }) && t.executeOnce === true && t.onError === 'continueRegularOutput'
       && conds(t).some(c => /^site_id like/.test(c)) && conds(t).includes('run_kind neq pulse') && conds(t).some(c => /^checked_at lt .*Date\.now\(\)-35\*864e5/.test(c)) && conds(t).some(c => /^checked_at gte .*Date\.now\(\)-49\*864e5/.test(c)), JSON.stringify(t));
-    check('weekly: it runs after the 120-day prune and before the brief (the prune itself is unchanged)', t.from.join() === 'Prune Old Answers' && t.to.join() === 'AI Brief Input', JSON.stringify([t.from, t.to]));
+    check('weekly: it runs after the 120-day prune and before the brief (the prune itself is unchanged; W2-E3 puts the question state and the paid options between it and the brief)', t.from.join() === 'Prune Old Answers' && ['AI Brief Input', 'Prompt State Rows'].includes(t.to.join()), JSON.stringify([t.from, t.to]));
     check('pulse: the same on pulse rows aged 7-9 days, after the 21-day prune', q && q.operation === 'update' && JSON.stringify(q.values) === JSON.stringify({ answer_text: '', retrieved_json: '' }) && conds(q).includes('run_kind eq pulse') && conds(q).some(c => /lt .*-7\*864e5/.test(c)) && conds(q).some(c => /gte .*-9\*864e5/.test(c)) && q.from.join() === 'Prune Pulse Answers', JSON.stringify(q));
     reset();
   });

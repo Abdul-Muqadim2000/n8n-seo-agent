@@ -1,7 +1,7 @@
 // Site Admin "monitors": merges the given settings over the stored seo_monitors row (exact columns). Settings: ai_visibility, ai_engines
 // (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode, copilot, chatgpt_api, gemini_api), ai_prompts_max (3-500, G6), ai_personas / ai_markets
 // (G6: buyer roles and extra markets, CC-lang), ai_pulse_mode ('' auto | sample | full) + ai_pulse_per_week (1-6, empty = auto), ai_pulse (daily AI Pulse, v4.9), ai_growth (weekly AI Growth loop) + ai_pages_month (0-8, v4.12), link_builder (weekly Link Builder, v4.13), stuck_weeks (2-26, G32), backlinks, audit_monthly, audit_pages (50-1000), audit_js,
-// competitors (domains), brand_names.
+// competitors (domains), brand_names; W2-E3: ai_claude_weekly, ai_pulse_engines, ai_persona_context, ai_fanout_check (0-200), ai_demand_market.
 const a = $('Admin Action').first().json; const m = a.monitors || {};
 let old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}
 const has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';
@@ -26,5 +26,14 @@ const __row = { site_id: a.site_id, domain: a.domain || old.domain || '', ai_vis
   // W2-E2 (2026-10-23): the owner's AI alert rules (validated in Admin Action; '' clears) and the declared share-of-voice set - kept as stored unless given
   ai_alert_rules_json: m.ai_alert_rules_json !== undefined && m.ai_alert_rules_json !== null ? String(m.ai_alert_rules_json) : String(old.ai_alert_rules_json || ''),
   ai_sov_set: m.ai_sov_set !== undefined && m.ai_sov_set !== null ? String(m.ai_sov_set) : String(old.ai_sov_set || '') };
+// W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §4): Claude weekly, the pulse's engines, the persona test (API answers), the fan-out searches checked a week
+// (0 = off; the app offers 25 / 50 / 100) and the monthly market trend - each kept as stored unless given; every one off by default
+const PULSE_OK = ['chatgpt', 'gemini', 'ai_mode', 'copilot', 'perplexity', 'ai_overview'];
+const __num = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+Object.assign(__row, { ai_claude_weekly: b('ai_claude_weekly', false),
+  ai_pulse_engines: has('ai_pulse_engines') ? [...new Set(list(m.ai_pulse_engines).map(e => e.toLowerCase().replace(/[\s-]+/g, '_')).filter(e => PULSE_OK.includes(e)))].join(', ') : String(old.ai_pulse_engines || ''),
+  ai_persona_context: b('ai_persona_context', false),
+  ai_fanout_check: m.ai_fanout_check !== undefined && m.ai_fanout_check !== null ? (m.ai_fanout_check === '' ? null : Math.min(200, Math.max(0, parseInt(m.ai_fanout_check, 10) || 0))) : __num(old.ai_fanout_check),
+  ai_demand_market: b('ai_demand_market', false) });
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

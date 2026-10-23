@@ -88,6 +88,28 @@
     ]
    ]
   },
+  "AI Extra Requests": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any AI Extra Requests?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Extras": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Extras Vis Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "AI Metrics": {
    "main": [
     [
@@ -291,6 +313,24 @@
     ]
    ]
   },
+  "Any AI Extra Requests?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run AI Extra Requests",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "AI Extras",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Any AI Prospects?": {
    "main": [
     [
@@ -465,6 +505,42 @@
     ]
    ]
   },
+  "Any Extras Cache?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Save Extras Cache",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "AI Brief Input",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Extras Vis?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Update AI Visibility (Extras)",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Extras Cache Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Any Final Sites?": {
    "main": [
     [
@@ -555,6 +631,24 @@
     ]
    ]
   },
+  "Any Prompt State?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Save Prompt State",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "AI Extra Requests",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Any Raw Answers?": {
    "main": [
     [
@@ -568,6 +662,24 @@
      {
       "index": 0,
       "node": "Analyst Jobs",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Run AI Extra Requests Retries?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Wait Before Run AI Extra Requests Retry",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Run AI Extra Requests Answers",
       "type": "main"
      }
     ]
@@ -921,6 +1033,17 @@
     ]
    ]
   },
+  "Ensure AI Imports Table": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load Sites",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Ensure AI Prompts Table": {
    "main": [
     [
@@ -948,7 +1071,7 @@
     [
      {
       "index": 0,
-      "node": "Load Sites",
+      "node": "Ensure AI Imports Table",
       "type": "main"
      }
     ]
@@ -1015,6 +1138,28 @@
      {
       "index": 0,
       "node": "Ensure Profiles Table",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Extras Cache Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Extras Cache?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Extras Vis Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Extras Vis?",
       "type": "main"
      }
     ]
@@ -1120,6 +1265,17 @@
     ]
    ]
   },
+  "Load AI Imports": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load SERP Cache (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Load AI Prompts": {
    "main": [
     [
@@ -1180,7 +1336,7 @@
     [
      {
       "index": 0,
-      "node": "AI Plan",
+      "node": "Load AI Imports",
       "type": "main"
      }
     ]
@@ -1291,6 +1447,17 @@
      {
       "index": 0,
       "node": "Ledger Settle (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Load SERP Cache (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Plan",
       "type": "main"
      }
     ]
@@ -1556,6 +1723,17 @@
     ]
    ]
   },
+  "Prompt State Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Prompt State?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Prompt Writer": {
    "main": [
     [
@@ -1628,6 +1806,50 @@
      {
       "index": 0,
       "node": "After Run Ledger (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run AI Extra Requests": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run AI Extra Requests Retry Plan",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run AI Extra Requests (Retry)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run AI Extra Requests Answers",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run AI Extra Requests Answers": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Extras",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Run AI Extra Requests Retry Plan": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Run AI Extra Requests Retries?",
       "type": "main"
      }
     ]
@@ -1800,6 +2022,28 @@
      {
       "index": 0,
       "node": "AI Requests Go",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Save Extras Cache": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Brief Input",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Save Prompt State": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Extra Requests",
       "type": "main"
      }
     ]
@@ -1986,7 +2230,7 @@
     [
      {
       "index": 0,
-      "node": "AI Brief Input",
+      "node": "Prompt State Rows",
       "type": "main"
      }
     ]
@@ -2003,12 +2247,34 @@
     ]
    ]
   },
+  "Update AI Visibility (Extras)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Extras Cache Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Wait Before AI Retry": {
    "main": [
     [
      {
       "index": 0,
       "node": "Run AI Retries",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Wait Before Run AI Extra Requests Retry": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Run AI Extra Requests (Retry)",
       "type": "main"
      }
     ]
@@ -2029,6 +2295,7 @@
  "filters": {
   "Ensure AI Answers Table": null,
   "Ensure AI Daily Table": null,
+  "Ensure AI Imports Table": null,
   "Ensure AI Prompts Table": null,
   "Ensure AI Visibility Table": null,
   "Ensure Cache Table": null,
@@ -2049,6 +2316,20 @@
      "condition": "gte",
      "keyName": "checked_at",
      "keyValue": "={{ new Date(Date.now() - 60 * 864e5).toISOString() }}"
+    }
+   ]
+  },
+  "Load AI Imports": {
+   "conditions": [
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    },
+    {
+     "condition": "gte",
+     "keyName": "day",
+     "keyValue": "={{ new Date(Date.now() - 35 * 864e5).toISOString().slice(0, 10) }}"
     }
    ]
   },
@@ -2202,6 +2483,25 @@
     }
    ]
   },
+  "Load SERP Cache (AI)": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "kind",
+     "keyValue": "serp"
+    },
+    {
+     "condition": "like",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    },
+    {
+     "condition": "gte",
+     "keyName": "updated_at",
+     "keyValue": "={{ new Date().toISOString().slice(0, 10) }}"
+    }
+   ]
+  },
   "Load Sites": null,
   "Prune Old Answers": {
    "conditions": [
@@ -2272,6 +2572,29 @@
      "condition": "eq",
      "keyName": "key",
      "keyValue": "={{ $json.key }}"
+    }
+   ]
+  },
+  "Save Extras Cache": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "key",
+     "keyValue": "={{ $json.key }}"
+    }
+   ]
+  },
+  "Save Prompt State": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "site_id",
+     "keyValue": "={{ $json.site_id }}"
+    },
+    {
+     "condition": "eq",
+     "keyName": "prompt_id",
+     "keyValue": "={{ $json.prompt_id }}"
     }
    ]
   },
@@ -2361,6 +2684,20 @@
      "condition": "eq",
      "keyName": "engine",
      "keyValue": "={{ $json.engine }}"
+    }
+   ]
+  },
+  "Update AI Visibility (Extras)": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "site_id",
+     "keyValue": "={{ $json.site_id }}"
+    },
+    {
+     "condition": "eq",
+     "keyName": "run_id",
+     "keyValue": "={{ $json.run_id }}"
     }
    ]
   }

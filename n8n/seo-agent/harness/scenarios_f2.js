@@ -162,7 +162,9 @@ module.exports = async (ctx) => {
     check('the owner adds the writer\'s Arabic question: the same id on both paths', arA.prompt_id === rows.find(r => r.prompt === AR[0]).prompt_id, arA.prompt_id + ' vs ' + rows.find(r => r.prompt === AR[0]).prompt_id);
     check('E9: an owner question\'s search phrase comes from its content words, not its first five words, and says it was derived', chk.keyword === 'choosing e-invoicing provider uae' && chk.keyword_source === 'derived', JSON.stringify([chk.keyword, chk.keyword_source]));
     check('E9: the owner\'s own keyword is used and marked; a stored row with the same text keeps its stored (legacy) id', pay.keyword === 'payroll provider dubai' && pay.keyword_source === 'owner' && pay.prompt_id === 'p_legacy1', JSON.stringify([pay.prompt_id, pay.keyword, pay.keyword_source]));
-    check('every Admin row has exactly the seo_ai_prompts columns', ad.every(r => Object.keys(r).sort().join() === [...TC.AI_PROMPTS].sort().join()), JSON.stringify(Object.keys(ad[0] || {})));
+    // W2-E3 (2026-10-23): the asked-state columns (last_asked_run, last_asked_at, asked_n_28d, refused_at_run) have ONE writer, the weekly run's
+    // Save Prompt State (an update that touches only them); every other writer leaves them out, so an upsert never blanks them
+    check('every Admin row has exactly the seo_ai_prompts columns (but the asked state, which the weekly run alone writes)', ad.every(r => Object.keys(r).sort().join() === TC.AI_PROMPTS.filter(c => !(TC.AI_PROMPTS_STATE || []).includes(c)).sort().join()), JSON.stringify(Object.keys(ad[0] || {})));
     // E9: a derived phrase is not asked of Google's AI Overview; E20: a re-upsert keeps fit_note and the stored market
     const base = synthPanel(4).map((p, i) => i === 0 ? { ...p, keyword_source: 'derived', keyword: 'choosing e-invoicing provider uae' } : i === 1 ? { ...p, market: 'QA-en', fit_note: 'switched on by the owner over the keyword rule: x', volume: '', stage: '', cluster: '' } : p);
     loadWeekly({ monitors: { ai_prompts_max: 30 }, prompts: base, trigger: { ...W['Manual Run'][0] } });

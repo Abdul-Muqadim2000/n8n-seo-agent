@@ -19,6 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deployGuard, kitFromWorkflow } from './deploy_guard.mjs';
+import { neverDeployPass } from './never_deploy.mjs';   // W2-E3 (2026-10-23): the manifest's never_deploy list, as deploy_engine.py step 5b
 
 const ROOT = '/opt/seo';
 const PLACEHOLDER = '__SEO_ALERT_WEBHOOK_URL__';
@@ -103,6 +104,11 @@ try {
     }
   }
   if (hold.size) log('held back:', [...hold].join(', '));
+
+  // 4. never-deploy (W2-E3, the same rule as deploy/gcp/deploy_engine.py step 5b): a workflow on the manifest's never_deploy list (the test
+  //    callback receiver, the test runner) that the instance has ACTIVE is unpublished, never deleted; an id also on the publish set fails the release
+  const nd = neverDeployPass({ manifest, n8n, log: (m) => log(m) });
+  for (const f of nd.failures) { failed++; console.error('[seo-release] ' + f); }
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

@@ -1063,6 +1063,30 @@
               {
                 "name": "units_json",
                 "type": "string"
+              },
+              {
+                "name": "fanout_gap_json",
+                "type": "string"
+              },
+              {
+                "name": "demand_json",
+                "type": "string"
+              },
+              {
+                "name": "imports_json",
+                "type": "string"
+              },
+              {
+                "name": "exec_ids",
+                "type": "string"
+              },
+              {
+                "name": "notes_json",
+                "type": "string"
+              },
+              {
+                "name": "persona_effect_json",
+                "type": "string"
               }
             ]
           },
@@ -1703,6 +1727,26 @@
               {
                 "name": "ai_sov_set",
                 "type": "string"
+              },
+              {
+                "name": "ai_claude_weekly",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_pulse_engines",
+                "type": "string"
+              },
+              {
+                "name": "ai_persona_context",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_fanout_check",
+                "type": "number"
+              },
+              {
+                "name": "ai_demand_market",
+                "type": "boolean"
               }
             ]
           },

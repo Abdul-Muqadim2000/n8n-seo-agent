@@ -31,7 +31,7 @@
   "onError": "continueRegularOutput",
   "operation": "update",
   "to": [
-   "AI Brief Input"
+   "Prompt State Rows"
   ],
   "values": {
    "answer_text": "",

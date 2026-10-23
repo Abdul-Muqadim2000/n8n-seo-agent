@@ -615,7 +615,7 @@ const CC = (() => {
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();
 const ROW = 'Run Ledger Row (AI)';
-const MEASURED = 'AI Metrics|AI Chunk Handoff';   // '' when this workflow has no measured figure
+const MEASURED = 'AI Metrics|AI Chunk Handoff|AI Extras';   // '' when this workflow has no measured figure
 const AI_NODES = ["AI Brief", "Answer Analyst", "Prompt Writer", "Sentiment Reader"];     // every Claude node of this workflow (the agents a model node is wired to), '[]' when it calls none
 const BAL_END = 'DFS Balance End (AI)';     // the free balance probe on the settle chain
 const LEDGER = 'Load Run Ledger (AI)';       // the run-ledger rows around this run's window

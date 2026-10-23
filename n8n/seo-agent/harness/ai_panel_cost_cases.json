@@ -39,7 +39,11 @@
   "full_dfs": 0.45,
   "full_ai": 0.3,
   "weeks_per_month": 4.33,
-  "pulse_days": 6
+  "pulse_days": 6,
+  "sentiment_named_rate": 0.5,
+  "sentiment_per_call": 20,
+  "sentiment_calls_max": 40,
+  "sentiment_call_ai": 0.012
  },
  "limits": {
   "min": 3,
@@ -74,13 +78,13 @@
     "run": {
      "weekly": {
       "dfs": 0.14,
-      "ai": 0.13,
-      "usd": 0.27
+      "ai": 0.142,
+      "usd": 0.282
      },
      "full": {
       "dfs": 0.81,
-      "ai": 0.43,
-      "usd": 1.24
+      "ai": 0.442,
+      "usd": 1.252
      }
     },
     "full_extra": {
@@ -94,10 +98,10 @@
      "usd": 0.084
     },
     "month": {
-     "weekly": 1.17,
+     "weekly": 1.22,
      "full_extra": 0.97,
      "pulse": 2.18,
-     "total": 4.32
+     "total": 4.37
     },
     "half_width": {
      "headline": 7.6,
@@ -124,13 +128,13 @@
     "run": {
      "weekly": {
       "dfs": 0.38,
-      "ai": 0.13,
-      "usd": 0.51
+      "ai": 0.166,
+      "usd": 0.546
      },
      "full": {
       "dfs": 1.35,
-      "ai": 0.43,
-      "usd": 1.78
+      "ai": 0.466,
+      "usd": 1.816
      }
     },
     "full_extra": {
@@ -144,10 +148,10 @@
      "usd": 0.228
     },
     "month": {
-     "weekly": 2.21,
+     "weekly": 2.36,
      "full_extra": 1.27,
      "pulse": 5.92,
-     "total": 9.4
+     "total": 9.55
     },
     "half_width": {
      "headline": 4.7,
@@ -174,13 +178,13 @@
     "run": {
      "weekly": {
       "dfs": 0.98,
-      "ai": 0.19,
-      "usd": 1.17
+      "ai": 0.274,
+      "usd": 1.254
      },
      "full": {
       "dfs": 2.7,
-      "ai": 0.49,
-      "usd": 3.19
+      "ai": 0.574,
+      "usd": 3.274
      }
     },
     "full_extra": {
@@ -194,10 +198,10 @@
      "usd": 0.588
     },
     "month": {
-     "weekly": 5.07,
+     "weekly": 5.43,
      "full_extra": 2.02,
      "pulse": 15.28,
-     "total": 22.37
+     "total": 22.73
     },
     "half_width": {
      "headline": 2.9,
@@ -224,13 +228,13 @@
     "run": {
      "weekly": {
       "dfs": 1.98,
-      "ai": 0.33,
-      "usd": 2.31
+      "ai": 0.486,
+      "usd": 2.466
      },
      "full": {
       "dfs": 4.95,
-      "ai": 0.63,
-      "usd": 5.58
+      "ai": 0.786,
+      "usd": 5.736
      }
     },
     "full_extra": {
@@ -244,10 +248,10 @@
      "usd": 0.6
     },
     "month": {
-     "weekly": 10,
+     "weekly": 10.68,
      "full_extra": 3.27,
      "pulse": 15.59,
-     "total": 28.86
+     "total": 29.54
     },
     "half_width": {
      "headline": 2.6,
@@ -274,13 +278,13 @@
     "run": {
      "weekly": {
       "dfs": 3.98,
-      "ai": 0.63,
-      "usd": 4.61
+      "ai": 0.93,
+      "usd": 4.91
      },
      "full": {
       "dfs": 9.45,
-      "ai": 0.93,
-      "usd": 10.38
+      "ai": 1.23,
+      "usd": 10.68
      }
     },
     "full_extra": {
@@ -294,10 +298,10 @@
      "usd": 1.2
     },
     "month": {
-     "weekly": 19.96,
+     "weekly": 21.26,
      "full_extra": 5.77,
      "pulse": 31.18,
-     "total": 56.91
+     "total": 58.21
     },
     "half_width": {
      "headline": 1.9,
@@ -324,13 +328,13 @@
     "run": {
      "weekly": {
       "dfs": 9.98,
-      "ai": 0.91,
-      "usd": 10.89
+      "ai": 1.39,
+      "usd": 11.37
      },
      "full": {
       "dfs": 22.95,
-      "ai": 1.21,
-      "usd": 24.16
+      "ai": 1.69,
+      "usd": 24.64
      }
     },
     "full_extra": {
@@ -344,10 +348,10 @@
      "usd": 3
     },
     "month": {
-     "weekly": 47.15,
+     "weekly": 49.23,
      "full_extra": 13.27,
      "pulse": 77.94,
-     "total": 138.36
+     "total": 140.44
     },
     "half_width": {
      "headline": 1.2,
@@ -375,13 +379,13 @@
     "run": {
      "weekly": {
       "dfs": 0.14,
-      "ai": 0.13,
-      "usd": 0.27
+      "ai": 0.142,
+      "usd": 0.282
      },
      "full": {
       "dfs": 0.81,
-      "ai": 0.43,
-      "usd": 1.24
+      "ai": 0.442,
+      "usd": 1.252
      }
     },
     "full_extra": {
@@ -395,10 +399,10 @@
      "usd": 0
     },
     "month": {
-     "weekly": 1.17,
+     "weekly": 1.22,
      "full_extra": 0.97,
      "pulse": 0,
-     "total": 2.14
+     "total": 2.19
     },
     "half_width": {
      "headline": 15.7,
@@ -426,13 +430,13 @@
     "run": {
      "weekly": {
       "dfs": 1.98,
-      "ai": 0.33,
-      "usd": 2.31
+      "ai": 0.486,
+      "usd": 2.466
      },
      "full": {
       "dfs": 4.95,
-      "ai": 0.63,
-      "usd": 5.58
+      "ai": 0.786,
+      "usd": 5.736
      }
     },
     "full_extra": {
@@ -446,10 +450,10 @@
      "usd": 0
     },
     "month": {
-     "weekly": 10,
+     "weekly": 10.68,
      "full_extra": 3.27,
      "pulse": 0,
-     "total": 13.27
+     "total": 13.95
     },
     "half_width": {
      "headline": 4.4,
@@ -477,13 +481,13 @@
     "run": {
      "weekly": {
       "dfs": 9.98,
-      "ai": 0.91,
-      "usd": 10.89
+      "ai": 1.39,
+      "usd": 11.37
      },
      "full": {
       "dfs": 22.95,
-      "ai": 1.21,
-      "usd": 24.16
+      "ai": 1.69,
+      "usd": 24.64
      }
     },
     "full_extra": {
@@ -497,10 +501,10 @@
      "usd": 0
     },
     "month": {
-     "weekly": 47.15,
+     "weekly": 49.23,
      "full_extra": 13.27,
      "pulse": 0,
-     "total": 60.42
+     "total": 62.5
     },
     "half_width": {
      "headline": 2,
@@ -538,13 +542,13 @@
     "run": {
      "weekly": {
       "dfs": 26.946,
-      "ai": 0.91,
-      "usd": 27.856
+      "ai": 1.39,
+      "usd": 28.336
      },
      "full": {
       "dfs": 39.95,
-      "ai": 1.21,
-      "usd": 41.16
+      "ai": 1.69,
+      "usd": 41.64
      }
     },
     "full_extra": {
@@ -558,10 +562,10 @@
      "usd": 2.338
     },
     "month": {
-     "weekly": 120.62,
+     "weekly": 122.69,
      "full_extra": 13.3,
      "pulse": 60.74,
-     "total": 194.66
+     "total": 196.73
     },
     "half_width": {
      "headline": 1.1,
@@ -597,13 +601,13 @@
     "run": {
      "weekly": {
       "dfs": 4.378,
-      "ai": 0.67,
-      "usd": 5.048
+      "ai": 1.03,
+      "usd": 5.408
      },
      "full": {
       "dfs": 9.85,
-      "ai": 0.97,
-      "usd": 10.82
+      "ai": 1.33,
+      "usd": 11.18
      }
     },
     "full_extra": {
@@ -617,10 +621,10 @@
      "usd": 0.938
     },
     "month": {
-     "weekly": 21.86,
+     "weekly": 23.42,
      "full_extra": 5.77,
      "pulse": 24.37,
-     "total": 52
+     "total": 53.56
     },
     "half_width": {
      "headline": 1.9,
@@ -652,13 +656,13 @@
     "run": {
      "weekly": {
       "dfs": 3.564,
-      "ai": 0.21,
-      "usd": 3.774
+      "ai": 0.306,
+      "usd": 3.87
      },
      "full": {
       "dfs": 4.05,
-      "ai": 0.51,
-      "usd": 4.56
+      "ai": 0.606,
+      "usd": 4.656
      }
     },
     "full_extra": {
@@ -672,10 +676,10 @@
      "usd": 0.396
     },
     "month": {
-     "weekly": 16.34,
+     "weekly": 16.76,
      "full_extra": 0.79,
      "pulse": 10.29,
-     "total": 27.42
+     "total": 27.84
     },
     "half_width": {
      "headline": 3.3,
@@ -703,13 +707,13 @@
     "run": {
      "weekly": {
       "dfs": 9.98,
-      "ai": 0.91,
-      "usd": 10.89
+      "ai": 1.39,
+      "usd": 11.37
      },
      "full": {
       "dfs": 22.95,
-      "ai": 1.21,
-      "usd": 24.16
+      "ai": 1.69,
+      "usd": 24.64
      }
     },
     "full_extra": {
@@ -723,10 +727,10 @@
      "usd": 3
     },
     "month": {
-     "weekly": 47.15,
+     "weekly": 49.23,
      "full_extra": 13.27,
      "pulse": 77.94,
-     "total": 138.36
+     "total": 140.44
     },
     "half_width": {
      "headline": 1.2,
@@ -755,13 +759,13 @@
     "run": {
      "weekly": {
       "dfs": 5.98,
-      "ai": 0.75,
-      "usd": 6.73
+      "ai": 1.206,
+      "usd": 7.186
      },
      "full": {
       "dfs": 13.95,
-      "ai": 1.05,
-      "usd": 15
+      "ai": 1.506,
+      "usd": 15.456
      }
     },
     "full_extra": {
@@ -775,10 +779,10 @@
      "usd": 1.2
     },
     "month": {
-     "weekly": 29.14,
+     "weekly": 31.12,
      "full_extra": 8.27,
      "pulse": 31.18,
-     "total": 68.59
+     "total": 70.57
     },
     "half_width": {
      "headline": 1.7,
@@ -806,13 +810,13 @@
     "run": {
      "weekly": {
       "dfs": 0.78,
-      "ai": 0.15,
-      "usd": 0.93
+      "ai": 0.21,
+      "usd": 0.99
      },
      "full": {
       "dfs": 2.25,
-      "ai": 0.45,
-      "usd": 2.7
+      "ai": 0.51,
+      "usd": 2.76
      }
     },
     "full_extra": {
@@ -826,10 +830,10 @@
      "usd": 0.468
     },
     "month": {
-     "weekly": 4.03,
+     "weekly": 4.29,
      "full_extra": 1.77,
      "pulse": 12.16,
-     "total": 17.96
+     "total": 18.22
     },
     "half_width": {
      "headline": 3.3,
@@ -856,13 +860,13 @@
     "run": {
      "weekly": {
       "dfs": 0.04,
-      "ai": 0.13,
-      "usd": 0.17
+      "ai": 0.142,
+      "usd": 0.182
      },
      "full": {
       "dfs": 0.585,
-      "ai": 0.43,
-      "usd": 1.015
+      "ai": 0.442,
+      "usd": 1.027
      }
     },
     "full_extra": {
@@ -876,10 +880,10 @@
      "usd": 0.024
     },
     "month": {
-     "weekly": 0.74,
+     "weekly": 0.79,
      "full_extra": 0.85,
      "pulse": 0.62,
-     "total": 2.21
+     "total": 2.26
     },
     "half_width": {
      "headline": 13.9,
@@ -906,13 +910,13 @@
     "run": {
      "weekly": {
       "dfs": 0.04,
-      "ai": 0.13,
-      "usd": 0.17
+      "ai": 0.142,
+      "usd": 0.182
      },
      "full": {
       "dfs": 0.585,
-      "ai": 0.43,
-      "usd": 1.015
+      "ai": 0.442,
+      "usd": 1.027
      }
     },
     "full_extra": {
@@ -926,10 +930,10 @@
      "usd": 0.024
     },
     "month": {
-     "weekly": 0.74,
+     "weekly": 0.79,
      "full_extra": 0.85,
      "pulse": 0.62,
-     "total": 2.21
+     "total": 2.26
     },
     "half_width": {
      "headline": 13.9,
@@ -956,13 +960,13 @@
     "run": {
      "weekly": {
       "dfs": 9.98,
-      "ai": 0.91,
-      "usd": 10.89
+      "ai": 1.39,
+      "usd": 11.37
      },
      "full": {
       "dfs": 22.95,
-      "ai": 1.21,
-      "usd": 24.16
+      "ai": 1.69,
+      "usd": 24.64
      }
     },
     "full_extra": {
@@ -976,10 +980,10 @@
      "usd": 3
     },
     "month": {
-     "weekly": 47.15,
+     "weekly": 49.23,
      "full_extra": 13.27,
      "pulse": 77.94,
-     "total": 138.36
+     "total": 140.44
     },
     "half_width": {
      "headline": 1.2,
@@ -1010,13 +1014,13 @@
     "run": {
      "weekly": {
       "dfs": 0.894,
-      "ai": 0.13,
-      "usd": 1.024
+      "ai": 0.178,
+      "usd": 1.072
      },
      "full": {
       "dfs": 5.1,
-      "ai": 0.43,
-      "usd": 5.53
+      "ai": 0.478,
+      "usd": 5.578
      }
     },
     "full_extra": {
@@ -1030,10 +1034,10 @@
      "usd": 0
     },
     "month": {
-     "weekly": 4.43,
+     "weekly": 4.64,
      "full_extra": 4.51,
      "pulse": 0,
-     "total": 8.94
+     "total": 9.15
     },
     "half_width": {
      "headline": 7.9,
@@ -1061,13 +1065,13 @@
     "run": {
      "weekly": {
       "dfs": 4.98,
-      "ai": 0.71,
-      "usd": 5.69
+      "ai": 1.094,
+      "usd": 6.074
      },
      "full": {
       "dfs": 11.7,
-      "ai": 1.01,
-      "usd": 12.71
+      "ai": 1.394,
+      "usd": 13.094
      }
     },
     "full_extra": {
@@ -1081,14 +1085,1675 @@
      "usd": 0.504
     },
     "month": {
-     "weekly": 24.64,
+     "weekly": 26.3,
      "full_extra": 7.02,
      "pulse": 13.09,
-     "total": 44.75
+     "total": 46.41
     },
     "half_width": {
      "headline": 2.2,
      "cluster": 6.3
+    }
+   }
+  }
+ ],
+ "extra_prices": {
+  "fanout_serp": 0.002,
+  "persona": 0.012,
+  "demand_task": 0.11
+ },
+ "persona": {
+  "questions": 12,
+  "max_roles": 6
+ },
+ "fanout_max": 200,
+ "demand_tasks": 3,
+ "pulse_allowed": [
+  "chatgpt",
+  "gemini",
+  "ai_mode",
+  "copilot",
+  "perplexity",
+  "ai_overview"
+ ],
+ "cases_options": [
+  {
+   "input": {
+    "panel": 50,
+    "claude_weekly": true
+   },
+   "expect": {
+    "panel": 50,
+    "asked": 49,
+    "per_week": 6,
+    "pulse_questions_day": 49,
+    "executions": 1,
+    "analyst_jobs": 9,
+    "requests": {
+     "weekly": 294,
+     "full": 300,
+     "pulse_day": 147
+    },
+    "run": {
+     "weekly": {
+      "dfs": 2.205,
+      "ai": 0.306,
+      "usd": 2.511
+     },
+     "full": {
+      "dfs": 2.7,
+      "ai": 0.606,
+      "usd": 3.306
+     }
+    },
+    "full_extra": {
+     "dfs": 0.495,
+     "ai": 0.3,
+     "usd": 0.795
+    },
+    "pulse_day": {
+     "dfs": 0.588,
+     "ai": 0,
+     "usd": 0.588
+    },
+    "month": {
+     "weekly": 10.87,
+     "full_extra": 0.8,
+     "pulse": 15.28,
+     "total": 26.95
+    },
+    "half_width": {
+     "headline": 2.9,
+     "cluster": 5.7
+    },
+    "options": {
+     "claude_weekly": true,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 0,
+      "full": 0
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 200,
+    "claude_weekly": true
+   },
+   "expect": {
+    "panel": 200,
+    "asked": 199,
+    "per_week": 3,
+    "pulse_questions_day": 100,
+    "executions": 2,
+    "analyst_jobs": 32,
+    "requests": {
+     "weekly": 1194,
+     "full": 1200,
+     "pulse_day": 300
+    },
+    "run": {
+     "weekly": {
+      "dfs": 8.955,
+      "ai": 1.03,
+      "usd": 9.985
+     },
+     "full": {
+      "dfs": 9.45,
+      "ai": 1.33,
+      "usd": 10.78
+     }
+    },
+    "full_extra": {
+     "dfs": 0.495,
+     "ai": 0.3,
+     "usd": 0.795
+    },
+    "pulse_day": {
+     "dfs": 1.2,
+     "ai": 0,
+     "usd": 1.2
+    },
+    "month": {
+     "weekly": 43.24,
+     "full_extra": 0.8,
+     "pulse": 31.18,
+     "total": 75.22
+    },
+    "half_width": {
+     "headline": 1.8,
+     "cluster": 7.2
+    },
+    "options": {
+     "claude_weekly": true,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 0,
+      "full": 0
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 8,
+    "claude_weekly": true,
+    "pulse": false
+   },
+   "expect": {
+    "panel": 8,
+    "asked": 7,
+    "per_week": 0,
+    "pulse_questions_day": 0,
+    "executions": 1,
+    "analyst_jobs": 2,
+    "requests": {
+     "weekly": 42,
+     "full": 48,
+     "pulse_day": 0
+    },
+    "run": {
+     "weekly": {
+      "dfs": 0.315,
+      "ai": 0.154,
+      "usd": 0.469
+     },
+     "full": {
+      "dfs": 0.81,
+      "ai": 0.454,
+      "usd": 1.264
+     }
+    },
+    "full_extra": {
+     "dfs": 0.495,
+     "ai": 0.3,
+     "usd": 0.795
+    },
+    "pulse_day": {
+     "dfs": 0,
+     "ai": 0,
+     "usd": 0
+    },
+    "month": {
+     "weekly": 2.03,
+     "full_extra": 0.8,
+     "pulse": 0,
+     "total": 2.83
+    },
+    "half_width": {
+     "headline": 14.5,
+     "cluster": 14.5
+    },
+    "options": {
+     "claude_weekly": true,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 0,
+      "full": 0
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 50,
+    "pulse_engines": "chatgpt, gemini, ai_mode, perplexity, ai_overview"
+   },
+   "expect": {
+    "panel": 50,
+    "asked": 49,
+    "per_week": 6,
+    "pulse_questions_day": 49,
+    "executions": 1,
+    "analyst_jobs": 8,
+    "requests": {
+     "weekly": 245,
+     "full": 300,
+     "pulse_day": 245
+    },
+    "run": {
+     "weekly": {
+      "dfs": 0.98,
+      "ai": 0.274,
+      "usd": 1.254
+     },
+     "full": {
+      "dfs": 2.7,
+      "ai": 0.574,
+      "usd": 3.274
+     }
+    },
+    "full_extra": {
+     "dfs": 1.72,
+     "ai": 0.3,
+     "usd": 2.02
+    },
+    "pulse_day": {
+     "dfs": 0.98,
+     "ai": 0,
+     "usd": 0.98
+    },
+    "month": {
+     "weekly": 5.43,
+     "full_extra": 2.02,
+     "pulse": 25.46,
+     "total": 32.91
+    },
+    "half_width": {
+     "headline": 2.4,
+     "cluster": 4.8
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode",
+      "perplexity",
+      "ai_overview"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 0,
+      "full": 0
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 200,
+    "pulse_engines": [
+     "perplexity",
+     "ai_overview"
+    ]
+   },
+   "expect": {
+    "panel": 200,
+    "asked": 199,
+    "per_week": 4,
+    "pulse_questions_day": 133,
+    "executions": 2,
+    "analyst_jobs": 30,
+    "requests": {
+     "weekly": 995,
+     "full": 1200,
+     "pulse_day": 266
+    },
+    "run": {
+     "weekly": {
+      "dfs": 3.98,
+      "ai": 0.93,
+      "usd": 4.91
+     },
+     "full": {
+      "dfs": 9.45,
+      "ai": 1.23,
+      "usd": 10.68
+     }
+    },
+    "full_extra": {
+     "dfs": 5.47,
+     "ai": 0.3,
+     "usd": 5.77
+    },
+    "pulse_day": {
+     "dfs": 1.064,
+     "ai": 0,
+     "usd": 1.064
+    },
+    "month": {
+     "weekly": 21.26,
+     "full_extra": 5.77,
+     "pulse": 27.64,
+     "total": 54.67
+    },
+    "half_width": {
+     "headline": 1.9,
+     "cluster": 7.8
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "perplexity",
+      "ai_overview"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 0,
+      "full": 0
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 100,
+    "pulse_engines": "claude, chatgpt_api"
+   },
+   "expect": {
+    "panel": 100,
+    "asked": 99,
+    "per_week": 3,
+    "pulse_questions_day": 50,
+    "executions": 1,
+    "analyst_jobs": 15,
+    "requests": {
+     "weekly": 495,
+     "full": 600,
+     "pulse_day": 150
+    },
+    "run": {
+     "weekly": {
+      "dfs": 1.98,
+      "ai": 0.486,
+      "usd": 2.466
+     },
+     "full": {
+      "dfs": 4.95,
+      "ai": 0.786,
+      "usd": 5.736
+     }
+    },
+    "full_extra": {
+     "dfs": 2.97,
+     "ai": 0.3,
+     "usd": 3.27
+    },
+    "pulse_day": {
+     "dfs": 0.6,
+     "ai": 0,
+     "usd": 0.6
+    },
+    "month": {
+     "weekly": 10.68,
+     "full_extra": 3.27,
+     "pulse": 15.59,
+     "total": 29.54
+    },
+    "half_width": {
+     "headline": 2.6,
+     "cluster": 7.5
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 0,
+      "full": 0
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 500,
+    "pulse_engines": "chatgpt,gemini,ai_mode,perplexity,ai_overview"
+   },
+   "expect": {
+    "panel": 500,
+    "asked": 499,
+    "per_week": 2,
+    "pulse_questions_day": 167,
+    "executions": 5,
+    "analyst_jobs": 44,
+    "requests": {
+     "weekly": 2495,
+     "full": 3000,
+     "pulse_day": 835
+    },
+    "run": {
+     "weekly": {
+      "dfs": 9.98,
+      "ai": 1.39,
+      "usd": 11.37
+     },
+     "full": {
+      "dfs": 22.95,
+      "ai": 1.69,
+      "usd": 24.64
+     }
+    },
+    "full_extra": {
+     "dfs": 12.97,
+     "ai": 0.3,
+     "usd": 13.27
+    },
+    "pulse_day": {
+     "dfs": 3.34,
+     "ai": 0,
+     "usd": 3.34
+    },
+    "month": {
+     "weekly": 49.23,
+     "full_extra": 13.27,
+     "pulse": 86.77,
+     "total": 149.27
+    },
+    "half_width": {
+     "headline": 1.1,
+     "cluster": 7.2
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode",
+      "perplexity",
+      "ai_overview"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 0,
+      "full": 0
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 50,
+    "persona_context": true,
+    "personas": 3
+   },
+   "expect": {
+    "panel": 50,
+    "asked": 49,
+    "per_week": 6,
+    "pulse_questions_day": 49,
+    "executions": 1,
+    "analyst_jobs": 8,
+    "requests": {
+     "weekly": 245,
+     "full": 300,
+     "pulse_day": 147
+    },
+    "run": {
+     "weekly": {
+      "dfs": 1.556,
+      "ai": 0.274,
+      "usd": 1.83
+     },
+     "full": {
+      "dfs": 3.276,
+      "ai": 0.574,
+      "usd": 3.85
+     }
+    },
+    "full_extra": {
+     "dfs": 1.72,
+     "ai": 0.3,
+     "usd": 2.02
+    },
+    "pulse_day": {
+     "dfs": 0.588,
+     "ai": 0,
+     "usd": 0.588
+    },
+    "month": {
+     "weekly": 7.92,
+     "full_extra": 2.02,
+     "pulse": 15.28,
+     "total": 25.22
+    },
+    "half_width": {
+     "headline": 2.9,
+     "cluster": 5.9
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": true,
+      "roles": 3,
+      "questions": 12,
+      "requests_run": 48,
+      "dfs_run": 0.576
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 48,
+      "full": 48
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 200,
+    "persona_context": true,
+    "personas": 3
+   },
+   "expect": {
+    "panel": 200,
+    "asked": 199,
+    "per_week": 3,
+    "pulse_questions_day": 100,
+    "executions": 2,
+    "analyst_jobs": 30,
+    "requests": {
+     "weekly": 995,
+     "full": 1200,
+     "pulse_day": 300
+    },
+    "run": {
+     "weekly": {
+      "dfs": 4.556,
+      "ai": 0.93,
+      "usd": 5.486
+     },
+     "full": {
+      "dfs": 10.026,
+      "ai": 1.23,
+      "usd": 11.256
+     }
+    },
+    "full_extra": {
+     "dfs": 5.47,
+     "ai": 0.3,
+     "usd": 5.77
+    },
+    "pulse_day": {
+     "dfs": 1.2,
+     "ai": 0,
+     "usd": 1.2
+    },
+    "month": {
+     "weekly": 23.75,
+     "full_extra": 5.77,
+     "pulse": 31.18,
+     "total": 60.7
+    },
+    "half_width": {
+     "headline": 1.9,
+     "cluster": 7.5
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": true,
+      "roles": 3,
+      "questions": 12,
+      "requests_run": 48,
+      "dfs_run": 0.576
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 48,
+      "full": 48
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 8,
+    "persona_context": true,
+    "personas": 6
+   },
+   "expect": {
+    "panel": 8,
+    "asked": 7,
+    "per_week": 6,
+    "pulse_questions_day": 7,
+    "executions": 1,
+    "analyst_jobs": 2,
+    "requests": {
+     "weekly": 35,
+     "full": 48,
+     "pulse_day": 21
+    },
+    "run": {
+     "weekly": {
+      "dfs": 0.728,
+      "ai": 0.142,
+      "usd": 0.87
+     },
+     "full": {
+      "dfs": 1.398,
+      "ai": 0.442,
+      "usd": 1.84
+     }
+    },
+    "full_extra": {
+     "dfs": 0.67,
+     "ai": 0.3,
+     "usd": 0.97
+    },
+    "pulse_day": {
+     "dfs": 0.084,
+     "ai": 0,
+     "usd": 0.084
+    },
+    "month": {
+     "weekly": 3.77,
+     "full_extra": 0.97,
+     "pulse": 2.18,
+     "total": 6.92
+    },
+    "half_width": {
+     "headline": 7.6,
+     "cluster": 7.6
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": true,
+      "roles": 6,
+      "questions": 7,
+      "requests_run": 49,
+      "dfs_run": 0.588
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 49,
+      "full": 49
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 50,
+    "persona_context": true,
+    "personas": 0
+   },
+   "expect": {
+    "panel": 50,
+    "asked": 49,
+    "per_week": 6,
+    "pulse_questions_day": 49,
+    "executions": 1,
+    "analyst_jobs": 8,
+    "requests": {
+     "weekly": 245,
+     "full": 300,
+     "pulse_day": 147
+    },
+    "run": {
+     "weekly": {
+      "dfs": 0.98,
+      "ai": 0.274,
+      "usd": 1.254
+     },
+     "full": {
+      "dfs": 2.7,
+      "ai": 0.574,
+      "usd": 3.274
+     }
+    },
+    "full_extra": {
+     "dfs": 1.72,
+     "ai": 0.3,
+     "usd": 2.02
+    },
+    "pulse_day": {
+     "dfs": 0.588,
+     "ai": 0,
+     "usd": 0.588
+    },
+    "month": {
+     "weekly": 5.43,
+     "full_extra": 2.02,
+     "pulse": 15.28,
+     "total": 22.73
+    },
+    "half_width": {
+     "headline": 2.9,
+     "cluster": 5.9
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": true,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 0,
+      "full": 0
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 50,
+    "fanout_check": 25
+   },
+   "expect": {
+    "panel": 50,
+    "asked": 49,
+    "per_week": 6,
+    "pulse_questions_day": 49,
+    "executions": 1,
+    "analyst_jobs": 8,
+    "requests": {
+     "weekly": 245,
+     "full": 300,
+     "pulse_day": 147
+    },
+    "run": {
+     "weekly": {
+      "dfs": 1.03,
+      "ai": 0.274,
+      "usd": 1.304
+     },
+     "full": {
+      "dfs": 2.75,
+      "ai": 0.574,
+      "usd": 3.324
+     }
+    },
+    "full_extra": {
+     "dfs": 1.72,
+     "ai": 0.3,
+     "usd": 2.02
+    },
+    "pulse_day": {
+     "dfs": 0.588,
+     "ai": 0,
+     "usd": 0.588
+    },
+    "month": {
+     "weekly": 5.65,
+     "full_extra": 2.02,
+     "pulse": 15.28,
+     "total": 22.95
+    },
+    "half_width": {
+     "headline": 2.9,
+     "cluster": 5.9
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 25,
+      "requests_run": 25,
+      "dfs_run": 0.05
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 25,
+      "full": 25
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 50,
+    "fanout_check": 50
+   },
+   "expect": {
+    "panel": 50,
+    "asked": 49,
+    "per_week": 6,
+    "pulse_questions_day": 49,
+    "executions": 1,
+    "analyst_jobs": 8,
+    "requests": {
+     "weekly": 245,
+     "full": 300,
+     "pulse_day": 147
+    },
+    "run": {
+     "weekly": {
+      "dfs": 1.08,
+      "ai": 0.274,
+      "usd": 1.354
+     },
+     "full": {
+      "dfs": 2.8,
+      "ai": 0.574,
+      "usd": 3.374
+     }
+    },
+    "full_extra": {
+     "dfs": 1.72,
+     "ai": 0.3,
+     "usd": 2.02
+    },
+    "pulse_day": {
+     "dfs": 0.588,
+     "ai": 0,
+     "usd": 0.588
+    },
+    "month": {
+     "weekly": 5.86,
+     "full_extra": 2.02,
+     "pulse": 15.28,
+     "total": 23.16
+    },
+    "half_width": {
+     "headline": 2.9,
+     "cluster": 5.9
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 50,
+      "requests_run": 50,
+      "dfs_run": 0.1
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 50,
+      "full": 50
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 200,
+    "fanout_check": 100
+   },
+   "expect": {
+    "panel": 200,
+    "asked": 199,
+    "per_week": 3,
+    "pulse_questions_day": 100,
+    "executions": 2,
+    "analyst_jobs": 30,
+    "requests": {
+     "weekly": 995,
+     "full": 1200,
+     "pulse_day": 300
+    },
+    "run": {
+     "weekly": {
+      "dfs": 4.18,
+      "ai": 0.93,
+      "usd": 5.11
+     },
+     "full": {
+      "dfs": 9.65,
+      "ai": 1.23,
+      "usd": 10.88
+     }
+    },
+    "full_extra": {
+     "dfs": 5.47,
+     "ai": 0.3,
+     "usd": 5.77
+    },
+    "pulse_day": {
+     "dfs": 1.2,
+     "ai": 0,
+     "usd": 1.2
+    },
+    "month": {
+     "weekly": 22.13,
+     "full_extra": 5.77,
+     "pulse": 31.18,
+     "total": 59.08
+    },
+    "half_width": {
+     "headline": 1.9,
+     "cluster": 7.5
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 100,
+      "requests_run": 100,
+      "dfs_run": 0.2
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 100,
+      "full": 100
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 200,
+    "fanout_check": 900
+   },
+   "expect": {
+    "panel": 200,
+    "asked": 199,
+    "per_week": 3,
+    "pulse_questions_day": 100,
+    "executions": 2,
+    "analyst_jobs": 30,
+    "requests": {
+     "weekly": 995,
+     "full": 1200,
+     "pulse_day": 300
+    },
+    "run": {
+     "weekly": {
+      "dfs": 4.38,
+      "ai": 0.93,
+      "usd": 5.31
+     },
+     "full": {
+      "dfs": 9.85,
+      "ai": 1.23,
+      "usd": 11.08
+     }
+    },
+    "full_extra": {
+     "dfs": 5.47,
+     "ai": 0.3,
+     "usd": 5.77
+    },
+    "pulse_day": {
+     "dfs": 1.2,
+     "ai": 0,
+     "usd": 1.2
+    },
+    "month": {
+     "weekly": 22.99,
+     "full_extra": 5.77,
+     "pulse": 31.18,
+     "total": 59.94
+    },
+    "half_width": {
+     "headline": 1.9,
+     "cluster": 7.5
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 200,
+      "requests_run": 200,
+      "dfs_run": 0.4
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 200,
+      "full": 200
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 50,
+    "demand_market": true
+   },
+   "expect": {
+    "panel": 50,
+    "asked": 49,
+    "per_week": 6,
+    "pulse_questions_day": 49,
+    "executions": 1,
+    "analyst_jobs": 8,
+    "requests": {
+     "weekly": 245,
+     "full": 300,
+     "pulse_day": 147
+    },
+    "run": {
+     "weekly": {
+      "dfs": 0.98,
+      "ai": 0.274,
+      "usd": 1.254
+     },
+     "full": {
+      "dfs": 3.03,
+      "ai": 0.574,
+      "usd": 3.604
+     }
+    },
+    "full_extra": {
+     "dfs": 2.05,
+     "ai": 0.3,
+     "usd": 2.35
+    },
+    "pulse_day": {
+     "dfs": 0.588,
+     "ai": 0,
+     "usd": 0.588
+    },
+    "month": {
+     "weekly": 5.43,
+     "full_extra": 2.35,
+     "pulse": 15.28,
+     "total": 23.06
+    },
+    "half_width": {
+     "headline": 2.9,
+     "cluster": 5.9
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": true,
+      "tasks": 3,
+      "dfs_full": 0.33
+     },
+     "requests_extra": {
+      "weekly": 0,
+      "full": 3
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 200,
+    "demand_market": true
+   },
+   "expect": {
+    "panel": 200,
+    "asked": 199,
+    "per_week": 3,
+    "pulse_questions_day": 100,
+    "executions": 2,
+    "analyst_jobs": 30,
+    "requests": {
+     "weekly": 995,
+     "full": 1200,
+     "pulse_day": 300
+    },
+    "run": {
+     "weekly": {
+      "dfs": 3.98,
+      "ai": 0.93,
+      "usd": 4.91
+     },
+     "full": {
+      "dfs": 9.78,
+      "ai": 1.23,
+      "usd": 11.01
+     }
+    },
+    "full_extra": {
+     "dfs": 5.8,
+     "ai": 0.3,
+     "usd": 6.1
+    },
+    "pulse_day": {
+     "dfs": 1.2,
+     "ai": 0,
+     "usd": 1.2
+    },
+    "month": {
+     "weekly": 21.26,
+     "full_extra": 6.1,
+     "pulse": 31.18,
+     "total": 58.54
+    },
+    "half_width": {
+     "headline": 1.9,
+     "cluster": 7.5
+    },
+    "options": {
+     "claude_weekly": false,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode"
+     ],
+     "persona": {
+      "on": false,
+      "roles": 0,
+      "questions": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "fanout": {
+      "queries": 0,
+      "requests_run": 0,
+      "dfs_run": 0
+     },
+     "demand_market": {
+      "on": true,
+      "tasks": 3,
+      "dfs_full": 0.33
+     },
+     "requests_extra": {
+      "weekly": 0,
+      "full": 3
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 50,
+    "claude_weekly": true,
+    "pulse_engines": "chatgpt,gemini,ai_mode,perplexity,ai_overview",
+    "persona_context": true,
+    "personas": 3,
+    "fanout_check": 50,
+    "demand_market": true
+   },
+   "expect": {
+    "panel": 50,
+    "asked": 49,
+    "per_week": 6,
+    "pulse_questions_day": 49,
+    "executions": 1,
+    "analyst_jobs": 9,
+    "requests": {
+     "weekly": 294,
+     "full": 300,
+     "pulse_day": 245
+    },
+    "run": {
+     "weekly": {
+      "dfs": 2.881,
+      "ai": 0.306,
+      "usd": 3.187
+     },
+     "full": {
+      "dfs": 3.706,
+      "ai": 0.606,
+      "usd": 4.312
+     }
+    },
+    "full_extra": {
+     "dfs": 0.825,
+     "ai": 0.3,
+     "usd": 1.125
+    },
+    "pulse_day": {
+     "dfs": 0.98,
+     "ai": 0,
+     "usd": 0.98
+    },
+    "month": {
+     "weekly": 13.8,
+     "full_extra": 1.13,
+     "pulse": 25.46,
+     "total": 40.39
+    },
+    "half_width": {
+     "headline": 2.3,
+     "cluster": 4.7
+    },
+    "options": {
+     "claude_weekly": true,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode",
+      "perplexity",
+      "ai_overview"
+     ],
+     "persona": {
+      "on": true,
+      "roles": 3,
+      "questions": 12,
+      "requests_run": 48,
+      "dfs_run": 0.576
+     },
+     "fanout": {
+      "queries": 50,
+      "requests_run": 50,
+      "dfs_run": 0.1
+     },
+     "demand_market": {
+      "on": true,
+      "tasks": 3,
+      "dfs_full": 0.33
+     },
+     "requests_extra": {
+      "weekly": 98,
+      "full": 101
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 200,
+    "claude_weekly": true,
+    "pulse_engines": "chatgpt,gemini,ai_mode,perplexity,ai_overview",
+    "persona_context": true,
+    "personas": 3,
+    "fanout_check": 100,
+    "demand_market": true
+   },
+   "expect": {
+    "panel": 200,
+    "asked": 199,
+    "per_week": 2,
+    "pulse_questions_day": 67,
+    "executions": 2,
+    "analyst_jobs": 32,
+    "requests": {
+     "weekly": 1194,
+     "full": 1200,
+     "pulse_day": 335
+    },
+    "run": {
+     "weekly": {
+      "dfs": 9.731,
+      "ai": 1.03,
+      "usd": 10.761
+     },
+     "full": {
+      "dfs": 10.556,
+      "ai": 1.33,
+      "usd": 11.886
+     }
+    },
+    "full_extra": {
+     "dfs": 0.825,
+     "ai": 0.3,
+     "usd": 1.125
+    },
+    "pulse_day": {
+     "dfs": 1.34,
+     "ai": 0,
+     "usd": 1.34
+    },
+    "month": {
+     "weekly": 46.6,
+     "full_extra": 1.13,
+     "pulse": 34.81,
+     "total": 82.54
+    },
+    "half_width": {
+     "headline": 1.7,
+     "cluster": 7
+    },
+    "options": {
+     "claude_weekly": true,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode",
+      "perplexity",
+      "ai_overview"
+     ],
+     "persona": {
+      "on": true,
+      "roles": 3,
+      "questions": 12,
+      "requests_run": 48,
+      "dfs_run": 0.576
+     },
+     "fanout": {
+      "queries": 100,
+      "requests_run": 100,
+      "dfs_run": 0.2
+     },
+     "demand_market": {
+      "on": true,
+      "tasks": 3,
+      "dfs_full": 0.33
+     },
+     "requests_extra": {
+      "weekly": 148,
+      "full": 151
+     }
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 200,
+    "engines": [
+     "chatgpt",
+     "gemini",
+     "perplexity",
+     "claude",
+     "ai_overview",
+     "ai_mode",
+     "copilot",
+     "chatgpt_api",
+     "gemini_api"
+    ],
+    "claude_weekly": true,
+    "persona_context": true,
+    "personas": 4,
+    "fanout_check": 100
+   },
+   "expect": {
+    "panel": 200,
+    "asked": 199,
+    "per_week": 1,
+    "pulse_questions_day": 34,
+    "executions": 3,
+    "analyst_jobs": 32,
+    "requests": {
+     "weekly": 1791,
+     "full": 1800,
+     "pulse_day": 136
+    },
+    "run": {
+     "weekly": {
+      "dfs": 16.641,
+      "ai": 1.15,
+      "usd": 17.791
+     },
+     "full": {
+      "dfs": 17.17,
+      "ai": 1.45,
+      "usd": 18.62
+     }
+    },
+    "full_extra": {
+     "dfs": 0.529,
+     "ai": 0.3,
+     "usd": 0.829
+    },
+    "pulse_day": {
+     "dfs": 0.476,
+     "ai": 0,
+     "usd": 0.476
+    },
+    "month": {
+     "weekly": 77.04,
+     "full_extra": 0.83,
+     "pulse": 12.37,
+     "total": 90.24
+    },
+    "half_width": {
+     "headline": 1.9,
+     "cluster": 7.8
+    },
+    "options": {
+     "claude_weekly": true,
+     "pulse_engines": [
+      "chatgpt",
+      "gemini",
+      "ai_mode",
+      "copilot"
+     ],
+     "persona": {
+      "on": true,
+      "roles": 4,
+      "questions": 12,
+      "requests_run": 60,
+      "dfs_run": 0.72
+     },
+     "fanout": {
+      "queries": 100,
+      "requests_run": 100,
+      "dfs_run": 0.2
+     },
+     "demand_market": {
+      "on": false,
+      "tasks": 0,
+      "dfs_full": 0
+     },
+     "requests_extra": {
+      "weekly": 160,
+      "full": 160
+     }
     }
    }
   }

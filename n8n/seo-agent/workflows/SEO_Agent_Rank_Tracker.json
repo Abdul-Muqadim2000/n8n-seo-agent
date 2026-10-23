@@ -683,6 +683,26 @@
               {
                 "name": "ai_sov_set",
                 "type": "string"
+              },
+              {
+                "name": "ai_claude_weekly",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_pulse_engines",
+                "type": "string"
+              },
+              {
+                "name": "ai_persona_context",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_fanout_check",
+                "type": "number"
+              },
+              {
+                "name": "ai_demand_market",
+                "type": "boolean"
               }
             ]
           },

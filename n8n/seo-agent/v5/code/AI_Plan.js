@@ -36,6 +36,7 @@
 /*__SITE_MODEL__*/
 /*__FIT_GATE__*/
 /*__AI_ENTITIES__*/
+/*__AI_W2E3__*/
 const CONFIG = { max_sites_per_run: 15, max_topics: 8, monthly_engines: ['claude'],   // v4.9: Gemini moved to the weekly set (the real gemini.google.com answer costs $0.004 through the scraper)
   gsc_questions: 15, pulse_days: 7 };
 const { list, on_demand, want, total, cycle, cycle_why } = monitorSites('ai');
@@ -84,6 +85,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   if (verdict === 'blocked') { tell(s, st, 'blocked'); skipped.push({ domain: s.domain, blocked: true, why: 'run ' + st.run_id + ' was stopped (' + String(st.stop_reason || st.status) + '); nothing is asked for this website until the run is older than ' + AIP.LIMITS.resume_days + ' days or the state row ai_run:' + s.site_id + ' is cleared' }); return null; }
   if (verdict === 'resume') tell(s, st, 'resume');
   const going = verdict === 'continue' || verdict === 'resume';
+  const MONTHLY = AIP.monthlyOf(s.settings.claude_weekly);   // W2-E3: Claude every weekly run when the owner asks for it ('ai_claude_weekly'), else the month's full run only
   const mineAll = promptRows.filter(p => p.site_id === s.site_id && !LIVE.has(String(p.status || 'active')) && p.prompt);
   const mineVis = visRows.filter(v => v.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
   const prev = mineVis[0] || null;
@@ -168,13 +170,17 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // AI Requests is handed EVERY key the run stored or sent: a recorded key is never asked again, whatever happened to its answer
   const doneKeys = [...new Set([...storedKeys, ...sentKeys])];
   const runKind = going ? String(st.run_kind || 'weekly') : (on_demand ? 'on_demand' : full_due ? 'full' : 'weekly');
-  const costNow = AIP.cost({ panel: Math.max(prompts.length + need, AIP.LIMITS.min), engines: s.settings.engines, pulse: s.settings.pulse, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week });
+  // W2-E3 (F3 engine side #3): a run's FIRST part is priced on the panel the site is set to (the size the app quotes, aiRunPanelOf), not on the
+  // questions stored so far, so the reservation and the app's quote are one figure; a continuation keeps pricing what its run asks. The owner's
+  // options (Claude weekly, the pulse engines, the persona test, the fan-out check, the demand trend) are priced in the same formula.
+  const costNow = AIP.cost({ panel: Math.max(prompts.length + need, going ? 0 : s.settings.prompts_max, AIP.LIMITS.min), engines: s.settings.engines, pulse: s.settings.pulse, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week,
+    ...AIX.optionsOf(s.settings) });
   const runCost = full_due ? costNow.run.full : costNow.run.weekly;
   const spent = going ? { dfs: Number(st.spent_dfs_usd) || 0, ai: Number(st.spent_ai_usd) || 0 } : { dfs: 0, ai: 0 };
   if (!going && runCost.usd > AIP.LIMITS.max_run_usd) { skipped.push({ domain: s.domain, why: 'this run would cost about $' + runCost.usd.toFixed(2) + ' (' + prompts.length + ' questions x ' + s.settings.engines.length + ' engines), above the $' + AIP.LIMITS.max_run_usd + ' a run the tracker allows; nothing was asked or charged — lower the panel or the engines' }); return null; }
   // how many requests this run makes in all, and whether this execution can be its last (the database views, GA4, the crawler check and the
   // metrics run in the last one): an upper bound — the AI Overview is asked once per search phrase, so the real count can only be smaller
-  const engNow = s.settings.engines.filter(e => full_due || !CONFIG.monthly_engines.includes(e));
+  const engNow = s.settings.engines.filter(e => full_due || !MONTHLY.includes(e));
   const reqTotal = (prompts.filter(q => q.kind !== 'brand').length + need) * engNow.length + (full_due ? engNow.filter(e => e !== 'copilot' && e !== 'ai_overview').length : 0);
   const reqLeft = Math.max(0, reqTotal - doneKeys.length);
   // F2 (E1): the run's hard money ceiling (fixed at its start) and what is left under it
@@ -190,8 +196,10 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const halve = !stop && (lostNow.length > 0 || !!(going && st.halve_next));
   // F2 (E11): the part sized by TIME (the run's measured seconds per request once a part has measured them), and the analyst jobs it leaves room for
   const aj = Math.min(12, Math.max(6, Math.ceil((Number(costNow.analyst_jobs) || 0) / Math.max(1, Number(costNow.executions) || 1))));
-  const cp = AIP.chunkPlan({ engines: engNow, measured_s: going ? Number(st.sec_per_request) || 0 : 0, analyst_jobs: aj, halve });
-  const chunk = { no: going ? (Number(st.chunk) || 1) + 1 : 1, size: cp.size, size_time: cp.size, sec_per_request: cp.sec_per_request, size_basis: cp.basis, analyst_jobs_max: aj, going, resumed: verdict === 'resume', final_expected: reqLeft <= cp.size,
+  // W2-E3: the seconds the run's last part keeps for the fan-out check, the persona test and the demand lookups (0 with every option off)
+  const extra_s = AIP.extraSeconds({ persona_requests: costNow.options.persona.requests_run, fanout_requests: costNow.options.fanout.requests_run, demand_requests: full_due ? costNow.options.demand_market.tasks : 0 });
+  const cp = AIP.chunkPlan({ engines: engNow, measured_s: going ? Number(st.sec_per_request) || 0 : 0, analyst_jobs: aj, halve, extra_s });
+  const chunk = { no: going ? (Number(st.chunk) || 1) + 1 : 1, size: cp.size, size_time: cp.size, sec_per_request: cp.sec_per_request, size_basis: cp.basis, analyst_jobs_max: aj, extra_s, going, resumed: verdict === 'resume', final_expected: reqLeft <= cp.size,
     ceiling_dfs_usd: ceiling, committed_dfs_usd: +committed.toFixed(4), ceiling_left_usd: +Math.max(0, ceiling - committed).toFixed(4),
     // F2 (E1): the keys a part paid for whose answers never came back to the table (counted once, never asked again) and the parts that lost them
     lost_now: stop ? 0 : lostNow.length, lost_total: (going ? Number(st.lost) || 0 : 0) + (stop ? 0 : lostNow.length), lost_parts: lostParts + (!stop && lostNow.length ? 1 : 0),
@@ -222,7 +230,9 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
     // reports "not checked", never "no wrong claims")
     services: SM.services(site_model).slice(0, 20), business_facts: SM.facts(site_model).business_facts, accreditation: SM.facts(site_model).accreditation,
     brand_names, competitors, configured_competitors: s.settings.competitors, aliases, topics, engines: s.settings.engines, prompts_max: s.settings.prompts_max, pulse: s.settings.pulse,
-    prompts: stop ? [] : prompts, full_due, run_kind: runKind, monthly_engines: CONFIG.monthly_engines.filter(e => s.settings.engines.includes(e)), carried,
+    prompts: stop ? [] : prompts, full_due, run_kind: runKind, monthly_engines: MONTHLY.filter(e => s.settings.engines.includes(e)), carried,
+    // W2-E3: the owner's coverage options (the run's last part asks the fan-out check, the persona test and the demand trend with them)
+    options: AIX.optionsOf(s.settings), persona_roles: personas, cost_options: costNow.options,
     need_prompts: !stop && need > 0, prompts_needed: stop ? 0 : need, need_site_text: !stop && need > 0 && !topics.length && !s.business_name, gsc_questions,
     // G6: discovery runs in a run's first execution (it feeds the Prompt Writer); the database views, GA4 and the crawler check in its last
     discovery_due: !going && !!topics.length && (full_due || need > 0), volume_keywords: going ? [] : volume_keywords, index_due: full_due,
@@ -254,7 +264,8 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
 // site's run asks the database views, reads GA4 and the crawler access and computes the week, so those wait for it.
 // F2 (E11): and at most what fits the execution's TIME across its sites (each part's own seconds per request, the analyst jobs of every site)
 { let budget = AIP.LIMITS.exec_requests;
-  let secs = AIP.TIME.budget_s - AIP.TIME.fixed_s - AIP.TIME.retry_wait_s - Math.min(36, planned.reduce((t, it) => t + (it.json.chunk.stop ? 0 : it.json.chunk.analyst_jobs_max || 0), 0)) * AIP.TIME.analyst_job_s;
+  let secs = AIP.TIME.budget_s - AIP.TIME.fixed_s - AIP.TIME.retry_wait_s - Math.min(36, planned.reduce((t, it) => t + (it.json.chunk.stop ? 0 : it.json.chunk.analyst_jobs_max || 0), 0)) * AIP.TIME.analyst_job_s
+    - planned.reduce((t, it) => t + (it.json.chunk.stop ? 0 : Number(it.json.chunk.extra_s) || 0), 0);   // W2-E3: and the time each site's options keep
   for (const it of planned) { const j = it.json, c = j.chunk; const left = Math.max(0, c.total_est - c.done);
     if (c.stop) { j.index_due = false; j.market_due = false; j.ga4_property_id = ''; j.key_paths = []; j.discovery_due = false; j.volume_keywords = []; continue; }
     const byTime = Math.max(planned.length > 1 ? 0 : AIP.TIME.min_requests, Math.floor(Math.max(0, secs) / Math.max(0.5, c.sec_per_request || 1)));

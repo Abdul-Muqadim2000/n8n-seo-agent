@@ -177,7 +177,11 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  ('ai_personas', 'string'), ('ai_markets', 'string'), ('ai_pulse_mode', 'string'), ('ai_pulse_per_week', 'number'),
                  # W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): the owner's alert rules (JSON list, validated by Site Admin `monitors`)
                  # and the declared share-of-voice set (comma list of competitor ids; '' = the configured competitors)
-                 ('ai_alert_rules_json', 'string'), ('ai_sov_set', 'string')]
+                 ('ai_alert_rules_json', 'string'), ('ai_sov_set', 'string'),
+                 # W2-E3 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §4): Claude weekly (empty = monthly), the pulse's engines
+                 # (comma list, empty = the default four), the persona test on the ChatGPT API (empty = off), the fan-out searches checked a week
+                 # (empty / 0 = off), and the monthly market trend from the AI-answer database (empty = off; an addition to the contract)
+                 ('ai_claude_weekly', 'boolean'), ('ai_pulse_engines', 'string'), ('ai_persona_context', 'boolean'), ('ai_fanout_check', 'number'), ('ai_demand_market', 'boolean')]
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
                    # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
@@ -185,7 +189,10 @@ AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 's
                    ('persona', 'string'), ('market', 'string'), ('pinned', 'boolean'), ('fit_note', 'string'),
                    # F2 (2026-10-23, ENGINE_AUDIT.md E9): where the search phrase (`keyword`) came from: owner | writer | template | derived. A derived
                    # phrase is built from the question's own words (AIP.keywordOf); AI Requests does not ask Google's AI Overview for it
-                   ('keyword_source', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
+                   ('keyword_source', 'string'),
+                   # W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §3): the question's asked state, written by the weekly run's last part: the run that
+                   # last asked it and when, how many weekly runs + pulse mornings asked it in 28 days, and the run whose fit gate refused it
+                   ('last_asked_run', 'string'), ('last_asked_at', 'string'), ('asked_n_28d', 'number'), ('refused_at_run', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
 AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompt_id', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('engine', 'string'),
                    ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string'),
                    ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string'),
@@ -219,7 +226,20 @@ AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string')
                # W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): ranges with the question as the sampling unit, share of voice over a declared
                # set + others (both denominators, mean normalised position), sentiment of every named answer, did an action work (difference in differences),
                # the owner's alert rules as evaluated, and this run's answers one by one (compact: the 28-day window and an action's before / after read them)
-               ('ci_json', 'string'), ('sov_json', 'string'), ('sentiment_json', 'string'), ('impact_json', 'string'), ('alerts_rules_json', 'string'), ('units_json', 'string')]
+               ('ci_json', 'string'), ('sov_json', 'string'), ('sentiment_json', 'string'), ('impact_json', 'string'), ('alerts_rules_json', 'string'), ('units_json', 'string'),
+               # W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §2): the fan-out ranking gap, demand as a range (+ the monthly market trend), the owner's
+               # uploaded AI reports for the period, the n8n execution ids of the run's parts, and the run's notes (lost / unanalysed answers,
+               # questions asked outside their market, the persona effect on API answers)
+               ('fanout_gap_json', 'string'), ('demand_json', 'string'), ('imports_json', 'string'), ('exec_ids', 'string'), ('notes_json', 'string'),
+               # W2-E3 + W2-A contract addition (2026-10-23): the persona effect on API answers, [{role, with:{rate, n}, without:{rate, n}, delta, lo, hi,
+               # significant}] (rates and the 95% interval of the difference in points 0-100; the 28-day pooled figures)
+               ('persona_effect_json', 'string')]
+# W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §5): the owner's AI reports, uploaded in the app (W2-A writes, upsert by site_id + source + day + url +
+# query): Bing Webmaster "AI Performance" (source bing_ai: citations per page and query across Copilot) and the Search Console performance
+# export filtered to AI Mode / AI Overviews (source gsc_ai: impressions and clicks). The AI Visibility Tracker reads the period's rows.
+AI_IMPORTS_TABLE = 'seo_ai_imports'
+AI_IMPORTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('source', 'string'), ('day', 'string'), ('url', 'string'), ('query', 'string'), ('impressions', 'number'),
+                   ('citations', 'number'), ('clicks', 'number'), ('file_name', 'string'), ('imported_at', 'string'), ('import_id', 'string')]
 # v4.9: one row per site per day from the AI Pulse (the panel on the fast engines; small aggregates, no answer text)
 AI_DAILY_TABLE = 'seo_ai_daily'
 AI_DAILY_COLS = [('site_id', 'string'), ('domain', 'string'), ('date', 'string'), ('checked_at', 'string'), ('run_id', 'string'), ('samples', 'number'), ('mentioned', 'number'), ('cited', 'number'),
