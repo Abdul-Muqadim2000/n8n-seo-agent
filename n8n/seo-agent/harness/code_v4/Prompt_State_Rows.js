@@ -674,7 +674,7 @@ const AIX = (() => {
   const imports = (rows, plan, nowIso) => { const now = nowIso || new Date().toISOString(); const from = new Date(Date.parse(now) - 28 * 864e5).toISOString();
     const mine = importRows(rows, plan, from, now); if (!mine.length) return null; const out = { period: { from: day(from), to: day(now) }, sources: {}, copilot: null };
     for (const src of ['bing_ai', 'gsc_ai']) { const rs = mine.filter(r => S(r.source) === src); if (!rs.length) continue;
-      const sum = (k) => rs.reduce((t, r) => t + n0(r[k]), 0); const byUrl = new Map(), byQ = new Map();
+      const pageRows = rs.filter(r => cleanUrl(r.url)), tot = pageRows.length ? pageRows : rs; const sum = (k) => tot.reduce((t, r) => t + n0(r[k]), 0);   /* R-APP note: a pages file and a queries file for the same days are two views of one total - sum one kind (pages when there are any), never both */ const byUrl = new Map(), byQ = new Map();
       for (const r of rs) { const u = cleanUrl(r.url); if (u) { const a = byUrl.get(u) || { url: u, impressions: 0, citations: 0, clicks: 0 }; a.impressions += n0(r.impressions); a.citations += n0(r.citations); a.clicks += n0(r.clicks); byUrl.set(u, a); }
         const q = S(r.query); if (q) { const a = byQ.get(q) || { query: q.slice(0, 200), impressions: 0, citations: 0, clicks: 0 }; a.impressions += n0(r.impressions); a.citations += n0(r.citations); a.clicks += n0(r.clicks); byQ.set(q, a); } }
       const days = rs.map(r => day(r.day)).sort(); const files = [...new Set(rs.map(r => S(r.file_name)).filter(Boolean))].slice(0, 5); const at = rs.map(r => S(r.imported_at)).sort().pop() || '';

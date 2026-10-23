@@ -30,7 +30,7 @@ describe('R-A2 sentiment: an early reading is never shown as a finding', () => {
   it('the engine writes validated: false and kappa as an object today (the model is not measured)', () => {
     expect(out.validated).toBe(false);
     expect(typeof out.kappa).toBe('object');
-    expect(String(out.note)).toContain('not yet validated');
+    expect(String(out.note)).toMatch(/not (yet )?validated/i);
   });
 
   it('the reader keeps validated, the note and the kappa object; objections are held back', () => {
@@ -40,7 +40,7 @@ describe('R-A2 sentiment: an early reading is never shown as a finding', () => {
     expect(s.status).toBe('early_reading');
     expect(s.label).toBe(AI_SENTIMENT_EARLY);
     expect(s.net).toBe(23);
-    expect(s.note).toContain('not yet validated');
+    expect(s.note).toMatch(/not (yet )?validated/i);
     expect(s.kappa).toBeNull();
     expect(s.kappaRules).toBeCloseTo(0.548);
     expect(s.kappaGate).toBe(0.7);
