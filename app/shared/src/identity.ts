@@ -518,6 +518,16 @@ export const AUDIT_ACTIONS = {
   'site.content_rejected': { label: 'Marked a written page as not what was wanted', category: 'websites' },
   'site.ladder_rechecked': { label: 'Paused a ladder whose keyword no longer fits', category: 'websites' },
   'site.ladder_keyword_added': { label: 'Added a keyword to a ladder', category: 'websites' },
+  // A13 (2026-10-23, AI visibility app audit): every Site Admin change (the AI question panel, the monitor settings incl. the panel size
+  // and the engines, competitors, pauses, cadence, prospects) is in the company's audit log, with counts and ids, never question texts
+  'site.admin.pause': { label: 'Paused a website\'s weekly runs', category: 'websites' },
+  'site.admin.resume': { label: 'Resumed a website\'s weekly runs', category: 'websites' },
+  'site.admin.cadence': { label: 'Changed the pages written a week', category: 'websites' },
+  'site.admin.unpublish': { label: 'Marked a page as not published', category: 'websites' },
+  'site.admin.monitors': { label: 'Changed the monitor settings (AI panel size, engines, pulse, competitors)', category: 'websites' },
+  'site.admin.prospect': { label: 'Changed a link prospect', category: 'websites' },
+  'site.admin.ai_prompts': { label: 'Changed the AI question panel', category: 'websites' },
+  'site.admin.content_groups': { label: 'Changed the content groups', category: 'websites' },
   'company.created': { label: 'Created the company', category: 'settings' },
   'company.updated': { label: 'Changed company details', category: 'settings' },
   'company.budget_changed': { label: 'Changed the platform spending guard', category: 'settings' },

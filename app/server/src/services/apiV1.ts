@@ -186,7 +186,7 @@ export async function getAiSegments(ctx: V1Ctx, websiteId: unknown, q: Q = {}) {
   const site = await siteOf(ctx, websiteId);
   requireVerifiedSite(site);
 
-  const d = await aiData(ctx.org, site);
+  const d = await aiData(ctx.org, site, { answers: false });   // A11 (2026-10-23): the segments never need the answers
   const run = d.runs.length ? d.runs[d.runs.length - 1] : null;
   const dim = typeof q.dimension === 'string' && q.dimension ? q.dimension : '';
   const rows = (d.segments?.rows ?? []).filter((s) => !dim || s.dim === dim);

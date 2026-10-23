@@ -33,7 +33,7 @@ import { encodeRfc3986, sha256Hex, signRequest } from '../lib/sigv4';
 import { siteRows } from '../n8n/client';
 import { integrationOf, requireSecrets, toExportRunView, toIntegrationView } from './integrations';
 import { settingsRow } from './admin/settings';
-import { creditsForRuns } from './runCredits';
+import { aiChargeEntries, bucketAiCharges, creditsForRuns } from './runCredits';
 import { customerError } from '../lib/customerError';
 
 /**
@@ -74,11 +74,15 @@ async function siteTableRows(org: Pick<OrgRow, 'id'>, site: SiteRow, t: ExportTa
   }
   const rows = await siteRows<Record<string, unknown>>(t.source, site.domain, { max, sortBy: `${t.dateColumn}:asc` });
   if (t.id === 'ai_visibility') {
-    // credits (app/docs/CREDITS.md): the engine stores what a run cost at the providers (`cost_usd`): exported as credits only
+    // credits (app/docs/CREDITS.md): the engine stores what a run cost at the providers (`cost_usd`): exported as credits only.
+    // A9 (2026-10-23): `credits_charged` is what the credit ledger charged (Claude + search data, capped at an on-demand run's quote);
+    // `credits` (search data only) stays for the warehouses built on it, documented as deprecated
     const st = await settingsRow();
-    return rows.map((r) => {
+    const entries = rows.length ? await aiChargeEntries(org.id, site.domain, new Date(Math.min(...rows.map((r) => Date.parse(s(r.checked_at))).filter(Number.isFinite), Date.now()) - 36e5).toISOString()).catch(() => null) : null;
+    const charged = entries ? bucketAiCharges(rows.map((r) => ({ checkedAt: s(r.checked_at) })), entries) : rows.map(() => null);
+    return rows.map((r, i) => {
       const { cost_usd: cost, ...rest } = r;
-      return exportRow(t, { ...rest, credits: creditsFor(Number(cost) || 0, st) }, common);
+      return exportRow(t, { ...rest, credits: creditsFor(Number(cost) || 0, st), credits_charged: charged[i] }, common);
     });
   }
   return rows.map((r) => exportRow(t, r, common));

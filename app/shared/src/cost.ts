@@ -1,4 +1,5 @@
 import type { ModeId } from './constants';
+import { aiOnDemandRunUsd, estimateAiPanelCost, type AiRunPanel } from './ai-panel';
 
 /**
  * B-R3 / B-B1 (benchmark programme 2026-10-15, area 13 §3.1 and §5(b) B1): **one** cost table, not two.
@@ -202,10 +203,26 @@ export function costKeys(mode: ModeId, v: Values = {}): CostKey[] {
 }
 
 /**
+ * A2 (2026-10-23, APP_AUDIT.md): an on-demand AI visibility run asks the website's WHOLE panel on every engine (a full run), so it is
+ * priced from that panel (`aiPanel`, read from the website's monitor settings by the server, never taken from a client) with the one
+ * panel formula, not from the fixed 8-question row of the table above. Without `aiPanel` (the panel could not be read) the table row
+ * stays the fallback.
+ */
+export const AI_PANEL_VALUE = 'aiPanel';
+function aiPanelOfValues(mode: ModeId, v: Values): AiRunPanel | null {
+  if (mode !== 'ai_visibility') return null;
+  const p = v[AI_PANEL_VALUE] as AiRunPanel | undefined;
+  if (!p || typeof p !== 'object' || !(Number(p.panel) > 0)) return null;
+  return { panel: Number(p.panel), engines: Array.isArray(p.engines) ? p.engines.map(String) : [] };
+}
+
+/**
  * The app's pre-flight figure for one run, summed over the runs this request starts. With `cal` (the engine's own rolling figures, R100)
  * it is what the engine will reserve; without it, the shipped defaults, the fallback, and what `MODES[].costUsd` shows.
  */
 export function estimateRunCost(mode: ModeId, v: Values = {}, cal?: EngineCalibration | null): number {
+  const panel = aiPanelOfValues(mode, v);
+  if (panel) return round(aiOnDemandRunUsd(panel));
   const keys = costKeys(mode, v);
   return round(keys.reduce((total, key) => total + keyCost(key, cal), 0) + crawlExtra(mode, v, keys, cal));
 }
@@ -234,6 +251,11 @@ function crawlExtra(mode: ModeId, v: Values, keys: CostKey[], cal?: EngineCalibr
 
 /** The same request priced the way the engine splits it, for a breakdown the customer can read. */
 export function estimateRunCostParts(mode: ModeId, v: Values = {}, cal?: EngineCalibration | null): { ai: number; dfs: number; usd: number; keys: CostKey[] } {
+  const panel = aiPanelOfValues(mode, v);
+  if (panel) {
+    const f = estimateAiPanelCost({ panel: panel.panel, engines: panel.engines }).run.full;
+    return { ai: round(f.ai), dfs: round(f.dfs), usd: round(f.usd), keys: ['ai_visibility'] };
+  }
   const keys = costKeys(mode, v);
   const ai = round(keys.reduce((t, k) => t + estOf('ai', k, cal).usd, 0));
   const dfs = round(keys.reduce((t, k) => t + estOf('dfs', k, cal).usd, 0) + crawlExtra(mode, v, keys, cal));

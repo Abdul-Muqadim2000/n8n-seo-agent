@@ -113,6 +113,51 @@ export function estimateAiPanelCost(o: { panel?: number; engines?: readonly stri
   };
 }
 
+// ---------------- F3 (2026-10-23, APP_AUDIT.md A2 / A3): the panel a run asks, and what an on-demand run costs ----------------
+
+/** The panel an on-demand AI visibility run asks, from the website's monitor settings as stored NOW. */
+export interface AiRunPanel { panel: number; engines: string[] }
+
+/**
+ * A2: the website's panel as the engine reads it (AIP.panelSize): no monitors row = 50 questions on the default engines; a row = its size
+ * (an empty size = 20) and its engines. The quote of an on-demand run is this panel's full run (`estimateAiPanelCost(...).run.full`).
+ */
+export function aiRunPanelOf(m: { aiPromptsMax?: number | null; aiEngines?: readonly string[] | null } | null): AiRunPanel {
+  if (!m) return { panel: AI_PANEL_LIMITS.default_new, engines: [...AI_PANEL_DEFAULT_ENGINES] };
+  return { panel: aiPanelSize({ siteId: 'site', promptsMax: m.aiPromptsMax ?? null }), engines: m.aiEngines && m.aiEngines.length ? [...m.aiEngines] : [...AI_PANEL_DEFAULT_ENGINES] };
+}
+
+/** What an on-demand run of this panel costs (a full run: every engine incl. the monthly one, the brand question, the brief), US dollars. */
+export function aiOnDemandRunUsd(p: AiRunPanel): number {
+  return estimateAiPanelCost({ panel: p.panel, engines: p.engines }).run.full.usd;
+}
+
+/** One stored question as the cut needs it. */
+export interface AiPanelAskRow { promptId: string; status: string; source: string; pinned: boolean }
+
+/**
+ * A3: which questions the next weekly run asks, the engine's cut (AI_Plan.js): the questions that are not switched off or refused, the
+ * pinned ones first (stored order kept), then the owner's own (`custom`) and the pinned, then the automatic ones, cut at the panel size.
+ * The rest are stored and NOT asked. (The engine's fit gate can still set a question aside at run time; that one is not modelled here.)
+ */
+export function aiAskedSet(prompts: readonly AiPanelAskRow[], size: number): { asked: Set<string>; over: Set<string> } {
+  const live = prompts.map((p, i) => ({ p, i })).filter(({ p }) => !['off', 'refused'].includes(String(p.status || 'active')));
+  live.sort((a, b) => (Number(b.p.pinned) - Number(a.p.pinned)) || a.i - b.i);
+  const own = live.filter(({ p }) => p.source === 'custom' || p.pinned), auto = live.filter(({ p }) => !(p.source === 'custom' || p.pinned));
+  const order = [...own, ...auto].map(({ p }) => p.promptId);
+  const n = Math.max(0, Math.round(size));
+  return { asked: new Set(order.slice(0, n)), over: new Set(order.slice(n)) };
+}
+
+/**
+ * A3: adding `adding` questions of the owner's own to a panel that holds `own` of them already: how many would NOT be asked at this size,
+ * and the size that would ask them all (the owner's questions come before the automatic ones, so only theirs can be crowded out).
+ */
+export function aiPanelOverflow(own: number, adding: number, size: number): { notAsked: number; sizeNeeded: number } {
+  const total = Math.max(0, own) + Math.max(0, adding);
+  return { notAsked: Math.max(0, total - Math.max(0, size)), sizeNeeded: Math.min(AI_PANEL_LIMITS.max, total) };
+}
+
 // ---------------- the segments and the panel a weekly run measured (seo_ai_visibility segments_json / panel_json) ----------------
 
 export type AiSegmentDim = 'engine' | 'cluster' | 'persona' | 'market' | 'stage' | 'cluster x persona' | 'engine x cluster' | 'market x cluster';
