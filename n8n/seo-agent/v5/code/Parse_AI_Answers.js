@@ -7,6 +7,7 @@
 // Rows carry `_text` (the answer, for the Answer Analyst); the nodes that save them keep only the table columns.
 /*__AI_STATS__*/
 /*__AI_ENTITIES__*/
+/*__AI_ANSWER_DATA__*/
 const reqs = $('AI Requests').all().map(i => i.json);
 const resps = $input.all().map(i => i.json || {});
 if (!reqs.length || reqs[0].skip) return [{ json: { skip: true } }];
@@ -68,6 +69,9 @@ reqs.forEach((q, i) => {
   const excerpt = vis ? vis.slice(Math.max(0, at - 160), at + (short ? 200 : 340)).replace(/\s+/g, ' ').trim() : '';
   const brands = ents.filter(e => (e.role === 'self' || e.role === 'competitor' || e.role === 'platform') && e.at < Infinity).sort((a, b) => a.at - b.at).map(e => e.name);
   const entitiesC = AIE.compact(ents);
+  // W2-E1 (2026-10-23, WAVE2_CONTRACTS.md §1): the answer's own data, kept instead of thrown away - the full text, every source cited in order,
+  // the pages read but not cited, the searches run, product / ad / local cards and the model (_ai_answer_data.js; '' = the engine reports none)
+  const W2 = AAD.answerFields({ engine: q.engine, res, answered, text, cites, fanout, isOurs, ownNames: AIE.ownNames(plan), entities: X.entities, sameEntity: AIE.sameEntity });
   rows.push({ site_id: q.site_id, domain: q.domain, run_id: q.run_id, checked_at: now, prompt_id: q.prompt_id, prompt: q.prompt, kind: q.kind, topic: q.topic || '', engine: q.engine,
     answered, mentioned: answered && mentioned, cited: answered && cited, rank: answered ? (rank || 0) : 0, our_urls: ourUrls.join(' '), competitors: compE.map(e => e.id).slice(0, 12).join(', '),
     sources: sources.slice(0, 15).join(', '), excerpt: excerpt.slice(0, short ? 360 : 520), cost: Number(task.cost) || 0, error,
@@ -75,6 +79,7 @@ reqs.forEach((q, i) => {
     // F1a: the answer-row contract (agreed with F1b): named = the brand is named in the text; position = 1-based place among self + competitors
     // in order of first mention (null when not named); entities = every business with its role; mentioned stays named OR cited
     named: answered && named, position: answered && named ? X.position : null, entities_json: answered && entitiesC.length ? JSON.stringify(entitiesC) : '',
+    ...W2,   // W2-E1
     entities: answered ? entitiesC : [],
     _text: answered ? text.replace(/\s+/g, ' ').slice(0, 2400) : '' });
 });

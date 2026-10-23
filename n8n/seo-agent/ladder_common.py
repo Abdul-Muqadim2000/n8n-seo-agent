@@ -187,7 +187,12 @@ AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'stri
                    ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string'),
                    ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string'),
                    ('cited_urls', 'string'),
-                   ('named', 'boolean'), ('position', 'number'), ('entities_json', 'string')]   # F1a (2026-10-23): the brand NAMED in the text (mentioned = named or cited), its place among the businesses offered, every business with its role (JSON [{id, name, role, position, cited}]). v4.12: the exact third-party pages the answer cited (JSON [{u, t}], max 8) — the earned-media targets. v4.9: weekly / full / pulse / on_demand, how the answer speaks of you, brands in order, wrong claims, the searches the engine ran
+                   ('named', 'boolean'), ('position', 'number'), ('entities_json', 'string'),
+                   # W2-E1 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §1, fixes/W2-E1.md): what every engine call already returned and
+                   # was thrown away - the full answer (12,000 characters max), every source cited in order, the pages read but not cited, the searches
+                   # run, product / ad / local-business cards, the model, and detail_json {answer_len, answer_cut, analysed} (v5/code/_ai_answer_data.js)
+                   ('answer_text', 'string'), ('cited_json', 'string'), ('retrieved_json', 'string'), ('fanout_json', 'string'), ('products_json', 'string'),
+                   ('ads_json', 'string'), ('local_json', 'string'), ('model', 'string'), ('detail_json', 'string')]   # F1a (2026-10-23): the brand NAMED in the text (mentioned = named or cited), its place among the businesses offered, every business with its role (JSON [{id, name, role, position, cited}]). v4.12: the exact third-party pages the answer cited (JSON [{u, t}], max 8) — the earned-media targets. v4.9: weekly / full / pulse / on_demand, how the answer speaks of you, brands in order, wrong claims, the searches the engine ran
 AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompts', 'number'), ('answers', 'number'), ('mention_rate', 'number'), ('citation_rate', 'number'), ('share_of_voice', 'number'),
                ('avg_rank', 'number'), ('aio_presence', 'number'), ('aio_citation_rate', 'number'), ('engines_json', 'string'), ('competitors_json', 'string'), ('sources_json', 'string'), ('pages_json', 'string'), ('gaps_json', 'string'),
                ('market_json', 'string'), ('market_month', 'string'), ('cost_usd', 'number'), ('alerts', 'string'),
@@ -204,7 +209,10 @@ AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string')
                # answers (mean place when named, share named first, position-weighted visibility), the period counted (A8), the comparison every
                # reader shares (compare_json, A1) and the counts the next run is compared against (metrics_json)
                ('rule_version', 'string'), ('named_rate', 'number'), ('avg_position', 'number'), ('first_rate', 'number'), ('pos_visibility', 'number'),
-               ('rate_period', 'string'), ('compare_json', 'string'), ('metrics_json', 'string')]
+               ('rate_period', 'string'), ('compare_json', 'string'), ('metrics_json', 'string'),
+               # W2-E1 (2026-10-23, WAVE2_CONTRACTS.md §2): your pages AI read / cited and the page cited instead, product cards, ads and local cards.
+               # sources_json (above) changes shape from this rule on: {v: 2, types, domains, n, list: <the old array>} (old rows hold the array)
+               ('urls_json', 'string'), ('shopping_json', 'string'), ('ads_local_json', 'string')]
 # v4.9: one row per site per day from the AI Pulse (the panel on the fast engines; small aggregates, no answer text)
 AI_DAILY_TABLE = 'seo_ai_daily'
 AI_DAILY_COLS = [('site_id', 'string'), ('domain', 'string'), ('date', 'string'), ('checked_at', 'string'), ('run_id', 'string'), ('samples', 'number'), ('mentioned', 'number'), ('cited', 'number'),

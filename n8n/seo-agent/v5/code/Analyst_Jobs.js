@@ -8,13 +8,20 @@
 // questions, at most 60 a run) spread over the executions the run is split into, so a 500-question run reads ~44 jobs' worth in all, not 6.
 // One execution never starts more than 36 (the agent runs them one after another, ~25 s each, inside the execution time limit).
 /*__AI_ENTITIES__*/
+/*__AI_ANSWER_DATA__*/
 const CONFIG = { per_job: 12, max_jobs_per_site: 6, max_jobs_per_run: 36, chars: 1500, min_facts: 2 };   // min_facts (G10): fewer checkable facts than this and the wrong-claim check is reported as "not checked"
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && !p.pulse_run);
 let rows = []; try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine && r.answered && r._text); } catch (e) {}
+// W2-E1 (2026-10-23, F2's open item E11): the answers of THIS run an earlier part stored with their full text and no analyst ever read (that
+// part died between its save and its analysis, or ran out of analyst budget) join the pool in the run's last part, read from their stored text:
+// no paid re-ask. A row stored before W2-E1 has no text and keeps the parser's reading.
+let stored = []; try { stored = $('Load AI Run Answers').all().map(i => i.json).filter(r => r && r.run_id && r.engine && r.prompt_id && r.answer_text && !r.error && AAD.tb(r.answered) && !AAD.analysed(r)); } catch (e) {}
 const out = [];
 for (const p of plans) {
-  const mine = rows.filter(r => r.site_id === p.site_id);
-  const pick = [...mine.filter(r => r.mentioned || r.kind === 'brand'), ...mine.filter(r => !r.mentioned && r.kind !== 'brand' && ['recommend', 'compare', 'choose', 'custom'].includes(r.kind))];
+  const here = new Set(rows.filter(r => r.site_id === p.site_id).map(r => r.prompt_id + '|' + r.engine));
+  const late = p.chunk && p.chunk.going && p.chunk.final_expected ? stored.filter(r => r.site_id === p.site_id && r.run_id === p.run_id && !here.has(r.prompt_id + '|' + r.engine)).map(AAD.fromStored) : [];
+  const mine = [...rows.filter(r => r.site_id === p.site_id), ...late];
+  const pick = [...mine.filter(r => r.mentioned || r.kind === 'brand'), ...mine.filter(r => !r.mentioned && r.kind !== 'brand' && ['recommend', 'compare', 'choose', 'custom', 'shopping'].includes(r.kind))];   // W2-E1: + the shopping questions
   const cm = p.cost_model || {}; const share = cm.analyst_jobs ? Math.ceil(Number(cm.analyst_jobs) / Math.max(1, Number(cm.executions) || 1)) : CONFIG.max_jobs_per_site;
   // F2 (2026-10-23, E11): a part of a split run leaves room for exactly the jobs its time budget counted (AI Plan chunk.analyst_jobs_max)
   const jobsMax = p.chunk && Number(p.chunk.analyst_jobs_max) > 0 ? Number(p.chunk.analyst_jobs_max) : Math.max(1, Math.min(12, Math.max(CONFIG.max_jobs_per_site, share)));
@@ -44,7 +51,7 @@ for (const p of plans) {
     const chunk = sel.slice(i, i + CONFIG.per_job);
     out.push({ json: { site_id: p.site_id, domain: p.domain, business: p.business_name || p.domain, facts: facts || 'Website: ' + p.domain, facts_ok,
       fact_check: facts_ok ? 'on' : 'off', owner_facts, located, known_competitors: (Array.isArray(p.configured_competitors) ? p.configured_competitors : (p.competitors || [])).join(', '), platforms: AIE.clientPlatforms(p).map(d => (AIE.PLATFORMS.find(x => x[0] === d) || [d, d])[1]).join(', '),   /* F1a: the owner's competitors only (an auto rival may be a platform), and the client's own platforms */
-      ids: chunk.map(r => r.prompt_id + '|' + r.engine), answers: chunk.map((r, k) => 'ANSWER ' + (k + 1) + ' [' + r.engine + '] Q: ' + r.prompt + '\n' + String(r._text).slice(0, CONFIG.chars)).join('\n\n') } });
+      ids: chunk.map(r => r.prompt_id + '|' + r.engine), stored_ids: chunk.filter(r => r._stored).map(r => r.prompt_id + '|' + r.engine), answers: chunk.map((r, k) => 'ANSWER ' + (k + 1) + ' [' + r.engine + '] Q: ' + r.prompt + '\n' + String(r._text).slice(0, CONFIG.chars)).join('\n\n') } });
   }
 }
 return out.length ? out : [{ json: { skip: true } }];

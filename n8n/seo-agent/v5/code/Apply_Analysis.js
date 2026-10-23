@@ -9,10 +9,17 @@
 // of this run) already said is stored in THAT wording, so AI Metrics keys it as the same issue and the High alert does not fire again.
 /*__AI_STATS__*/
 /*__AI_ENTITIES__*/
-const COLS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls', 'named', 'position', 'entities_json'];
+/*__AI_ANSWER_DATA__*/
+const COLS = __AI_ANSWERS_COLS__;   // W2-E1: the seo_ai_answers columns, written in by build_monitors.py (was a copy that missed every new column)
 let rows = []; try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {}
-if (!rows.length) return [{ json: { skip: true } }];
 let jobs = [], outs = []; try { jobs = $('Analyst Jobs').all().map(i => i.json).filter(j => !j.skip); outs = $('Answer Analyst').all().map(i => i.json || {}); } catch (e) {}
+// W2-E1 (2026-10-23, F2's open item): in a run's last part the analyst also read answers an earlier part stored and never analysed (that part
+// died before its analysis); they are read back from Load AI Run Answers with their full text and written back like this part's own
+{ const have = new Set(rows.map(r => r.site_id + '|' + r.prompt_id + '|' + r.engine)); const want = new Set(); for (const j of jobs) for (const id of (j.stored_ids || [])) want.add(j.site_id + '|' + id);
+  if (want.size) { let st = []; try { st = $('Load AI Run Answers').all().map(i => i.json).filter(r => r && r.run_id && r.engine); } catch (e) {}
+    const plans0 = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
+    for (const r of st) { const k = r.site_id + '|' + r.prompt_id + '|' + r.engine; if (!want.has(k) || have.has(k) || !plans0.some(p => p.site_id === r.site_id && p.run_id === r.run_id)) continue; have.add(k); rows.push(AAD.fromStored(r)); } } }
+if (!rows.length) return [{ json: { skip: true } }];
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let stored = []; try { stored = $('Load AI Run Answers').all().map(i => i.json).filter(r => r && r.issues); } catch (e) {}
 const parse = (raw) => { if (raw && typeof raw === 'object') return raw; const s = String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, ''); try { return JSON.parse(s); } catch (e) { const a = s.indexOf('{'), b = s.lastIndexOf('}'); try { return JSON.parse(s.slice(a, b + 1)); } catch (e2) { return null; } } };
@@ -31,7 +38,9 @@ return rows.map(r => {
   const a = read.get(r.site_id + '|' + r.prompt_id + '|' + r.engine); const out = {};
   for (const k of COLS) out[k] = r[k] === undefined ? '' : r[k];
   if (out.position === '') out.position = null;
+  if (r._stored) out._stored = true;   // W2-E1: AI Metrics counts its money once (an earlier part paid for it)
   if (a && r.answered) {
+    out.detail_json = AAD.markAnalysed(out.detail_json);   // W2-E1: the analyst read this answer (a later part never reads it again)
     const p = plans.find(x => x.site_id === r.site_id) || { brand_names: [r.domain], domain: r.domain, competitors: [], configured_competitors: [] };
     const ours = (b) => { const d = normD(b.domain); const nm = String(b.name || '').toLowerCase(); return (d && (d === p.domain || d.endsWith('.' + p.domain))) || (p.brand_names || []).some(x => String(x).toLowerCase() === nm || (nm && nm.includes(String(x).toLowerCase()) && String(x).length >= 5)); };
     // D19 (2026-10-11): a brand must map to a website or read like a business name - headings ("Tax technology and e-invoicing software") are not

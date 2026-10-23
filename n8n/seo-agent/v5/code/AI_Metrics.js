@@ -12,6 +12,7 @@
 /*__DRAFTS__*/
 /*__DFS_RETRY__*/
 /*__RIVALS__*/
+/*__AI_ANSWER_DATA__*/
 // RV-1 (2026-10-21, pre-launch run on techand.ai): the brief said "build on your existing D365 F&O pages" and the report listed them as "your
 // cited pages" while they answer 404. The page inventory says what each address answered (seo_pages.http_status, the Site Tracker): a cited
 // page that no longer answers is flagged, kept out of the brief's pages to build on, and turned into the one redirect action (_gone.js).
@@ -630,6 +631,15 @@ return plans.map(p => {
     // the comparison every reader shares (compare_json), and the counts the next run is compared against (metrics_json)
     rule_version: AVM.RULE_VERSION, named_rate: H.named_rate == null ? 0 : H.named_rate, avg_position: H.avg_position, first_rate: H.first_rate, pos_visibility: H.pos_visibility,
     rate_period, compare_json: J(compare), metrics_json: J(stats) };   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
+  // ---- W2-E1 (2026-10-23, WAVE2_CONTRACTS.md §2): the answer-level data of the run's answers (this part's and the earlier parts' stored ones):
+  // your pages AI read and cited (and the page cited instead), where AI gets its answers by kind of source with first / last seen and half-life
+  // from the stored runs, product cards, ads and local cards (_ai_answer_data.js). sources_json keeps the old list under `list`.
+  const visHist = (() => { try { return $('Load AI Visibility').all().map(i => i.json).filter(v => v && v.site_id === p.site_id && v.run_id !== p.run_id); } catch (e) { return []; } })();
+  const answer_data = AAD.aggregate({ rows: R, domain: p.domain, isRival, rivalIds: new Set([...rivalSet, ...comp.map(c => String(c.domain).toLowerCase())]), history: visHist, checked_at: p.checked_at, ENG });
+  Object.assign(vis_row, { urls_json: J(answer_data.urls), sources_json: J({ ...answer_data.sources, list: sources }), shopping_json: J(answer_data.shopping), ads_local_json: J(answer_data.ads_local) });
+  { const top = (answer_data.urls.retrieved_not_cited || [])[0];   // W2-E1: the page AI reads most often without citing it
+    if (top && top.read_not_cited_n >= 2) actions.push({ priority: 2, type: 'cite', action: 'Make AI cite ' + top.url + ' where it already reads it', why: 'ChatGPT read this page in ' + top.retrieved_n + ' answer(s) and cited it in ' + top.cited_n
+      + ((top.top_competing || [])[0] ? '; it cited ' + top.top_competing[0].url + ' instead ' + top.top_competing[0].n + ' time(s)' : '') + '. Answer the question in the first lines, with a dated fact and a clear heading, as the cited page does.' }); }
   const now = p.checked_at;
   const prospect_rows = sources.filter(s => !['platform', 'authority', 'engine'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};
     const top = (s.urls || [])[0] || null;   // v4.12: the exact page AI cites on that site (the one to be named on)
@@ -664,5 +674,5 @@ return plans.map(p => {
     // B8-8 / B8-9: each engine's own change test (or why it was not tested), and the one correction the tested alerts were judged by
     engine_changes, min_engine_samples: MIN_ENGINE_SAMPLES, multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },
-    engines, competitors: comp, sources, rival_sources, our_pages, gone_cited, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, segments, panel: { ...panel_info, ids: undefined }, form_url: FORM_URL, api_url: API_URL } };
+    engines, competitors: comp, sources, rival_sources, our_pages, gone_cited, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, answer_data, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, segments, panel: { ...panel_info, ids: undefined }, form_url: FORM_URL, api_url: API_URL } };
 });
