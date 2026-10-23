@@ -224,28 +224,66 @@ export function parseAiSov(v: unknown): AiSovPanel | null {
 
 /** sentiment is withheld under this many answers naming the business (the contract's floor) */
 export const AI_SENTIMENT_MIN = 12;
+/** R-A2 (review 2026-10-23): the words every surface prints beside a sentiment figure the engine has not validated */
+export const AI_SENTIMENT_EARLY = 'Early reading, not yet validated';
 export interface AiSentimentPanel {
   withheld: boolean;
+  /**
+   * R-A2: the engine's `validated` (true only once the model's labels agree with a hand-labelled set at kappa >= its gate). Absent on a
+   * present column = false: a figure is never presented as validated unless the engine says so.
+   */
+  validated: boolean;
+  /** 'withheld' (under the floor), 'early_reading' (a figure, not validated), 'validated' */
+  status: 'withheld' | 'early_reading' | 'validated';
+  /** AI_SENTIMENT_EARLY when not validated, else '' */
+  label: string;
   net: number | null; netLo: number | null; netHi: number | null; n: number;
   byAspect: { aspect: string; pos: number; neg: number; neu: number; net: number | null; n: number }[];
   byRival: { id: string; net: number | null; n: number }[];
+  /** the objections AI raised, only once the reading is validated (an early reading's objections are not findings); else [] */
   objections: string[];
+  /** how many objections an early reading holds back (0 when validated) */
+  objectionsHeld: number;
   method: string;
+  /** the engine's own sentence about the figure (it says "not yet validated" while it is not) */
+  note: string;
+  /** the answers naming the business the model did not read, in the engine's words ('' when none) */
+  unreadNote: string;
+  /** the model's agreement with the hand-labelled set (Cohen's kappa); null = not measured yet */
   kappa: number | null;
+  /** the rule reader's agreement on the blind hold-out (a second opinion that never makes the figure) */
+  kappaRules: number | null;
+  /** the bar the model's kappa has to reach before the figure counts as validated */
+  kappaGate: number | null;
 }
 export function parseAiSentiment(v: unknown): AiSentimentPanel | null {
   const x = rec(aiJson(v));
   if (!Object.keys(x).length) return null;
   const n = int0(x.n);
   const withheld = n < AI_SENTIMENT_MIN || bool(x.withheld);
+  // the engine writes kappa as an object {model, rules_blind_holdout, gate, note}; an older shape may carry a bare number (the model's)
+  const k = rec(x.kappa);
+  const kappa = x.kappa && typeof x.kappa === 'object' ? num(k.model) : num(x.kappa);
+  const kappaGate = num(k.gate);
+  // validated only when the engine says so and, when it sends them, the model's kappa clears its own gate
+  const validated = !withheld && bool(x.validated) && (kappa == null || kappaGate == null || kappa >= kappaGate);
+  const objections = withheld ? [] : list(x.objections).map((o) => (typeof o === 'string' ? o : str(rec(o).text))).filter(Boolean);
   return {
     withheld,
+    validated,
+    status: withheld ? 'withheld' : validated ? 'validated' : 'early_reading',
+    label: validated ? '' : AI_SENTIMENT_EARLY,
     net: withheld ? null : num(x.net), netLo: withheld ? null : num(x.net_lo), netHi: withheld ? null : num(x.net_hi), n,
     byAspect: withheld ? [] : list(x.by_aspect).map((o0) => { const o = rec(o0); return { aspect: str(o.aspect), pos: int0(o.pos), neg: int0(o.neg), neu: int0(o.neu), net: num(o.net), n: int0(o.n) }; }).filter((a) => a.aspect),
     byRival: withheld ? [] : list(x.by_rival).map((o0) => { const o = rec(o0); return { id: str(o.id), net: num(o.net), n: int0(o.n) }; }).filter((r) => r.id),
-    objections: withheld ? [] : list(x.objections).map((o) => (typeof o === 'string' ? o : str(rec(o).text))).filter(Boolean),
+    objections: validated ? objections : [],
+    objectionsHeld: validated ? 0 : objections.length,
     method: str(x.method),
-    kappa: num(x.kappa),
+    note: str(x.note),
+    unreadNote: str(x.unread_note),
+    kappa,
+    kappaRules: num(k.rules_blind_holdout),
+    kappaGate,
   };
 }
 

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Ban, FileText, FileUp, FlaskConical, Library, Megaphone, MessageSquareQuote, Route, ShoppingBag, Sigma, Trophy, Upload, Users } from 'lucide-react';
 import {
   AI_IMPORT_SOURCE_LABEL,
+  AI_SENTIMENT_EARLY,
   AI_SENTIMENT_MIN,
   AI_SOURCE_TYPE_LABEL,
   compactNumber,
@@ -214,12 +215,24 @@ export function SentimentPanel2({ sentiment }: { sentiment: AiSentimentPanel }) 
       </Panel>
     );
   const r = range(sentiment.netLo, sentiment.netHi);
+  // R-A2: until the engine says its reading is validated, the figure is an early reading and its objections are not findings
+  const early = !sentiment.validated;
   return (
     <Panel title="How AI describes you" icon={<MessageSquareQuote />} description={`Net sentiment over ${sentiment.n} answers naming you`} info="Net sentiment: positive minus negative mentions, as a share of all mentions (-100 to 100), with its 95% range. Aspects are what the answer talked about.">
+      {early && (
+        <div className="mb-2">
+          <Badge tone="warning">{sentiment.label || AI_SENTIMENT_EARLY}</Badge>
+          <p className="mt-1 text-xs text-ink-3">
+            The reader that labels these answers has not yet been checked against answers labelled by people, so treat this as a first look, not a finding.
+          </p>
+        </div>
+      )}
       <p className="text-sm text-ink">
         Net sentiment <span className="font-display text-xl font-semibold">{sentiment.net != null ? (sentiment.net > 0 ? '+' : '') + sentiment.net.toFixed(0) : '-'}</span>
         {r && <span className="ml-2 text-xs text-ink-3">95% range {sentiment.netLo!.toFixed(0)} to {sentiment.netHi!.toFixed(0)}</span>}
       </p>
+      {sentiment.note && <p className="mt-1 text-xs text-ink-3">{sentiment.note}</p>}
+      {sentiment.unreadNote && <p className="mt-1 text-xs text-ink-3">{sentiment.unreadNote}</p>}
       {sentiment.byAspect.length > 0 && (
         <table className="mt-3 w-full text-[13px]">
           <thead>
@@ -253,7 +266,24 @@ export function SentimentPanel2({ sentiment }: { sentiment: AiSentimentPanel }) 
           </ul>
         </div>
       )}
-      {(sentiment.method || sentiment.kappa != null) && <p className="mt-2 text-xs text-ink-3">{[sentiment.method, sentiment.kappa != null ? `agreement with a hand-labelled set: kappa ${sentiment.kappa.toFixed(2)}` : ''].filter(Boolean).join(' · ')}</p>}
+      {early && sentiment.objectionsHeld > 0 && (
+        <p className="mt-3 text-xs text-ink-3">
+          {sentiment.objectionsHeld} {sentiment.objectionsHeld === 1 ? 'objection was' : 'objections were'} read in these answers. They are listed once the reading is validated.
+        </p>
+      )}
+      {(sentiment.method || sentiment.kappa != null || sentiment.kappaRules != null) && (
+        <p className="mt-2 text-xs text-ink-3">
+          {[
+            sentiment.method,
+            sentiment.kappa != null
+              ? `agreement with a hand-labelled set: kappa ${sentiment.kappa.toFixed(2)}${sentiment.kappaGate != null ? ` (bar ${sentiment.kappaGate.toFixed(2)})` : ''}`
+              : 'agreement with a hand-labelled set: not measured yet',
+            sentiment.kappaRules != null ? `second-opinion rules: kappa ${sentiment.kappaRules.toFixed(2)}` : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      )}
     </Panel>
   );
 }
