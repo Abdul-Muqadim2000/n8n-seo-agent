@@ -185,6 +185,8 @@ module.exports = async (ctx) => {
     check('an action for the page AI reads and does not cite', (X.actions || []).some(x => x.type === 'cite' && /techand\.ai\/b\//.test(x.action)), JSON.stringify((X.actions || []).map(x => x.type)));
     const rep = (await run('AI Report', store['AI Metrics']))[0].json.html;
     check('the report: "Pages AI reads but does not cite" with the page cited instead, "Where AI gets its answers", the shopping section; no ads / local section (none seen)', /Pages AI reads but does not cite/.test(rep) && /cleartax\.com\/x/.test(rep) && /Where AI gets its answers/.test(rep) && /AI shopping results/.test(rep) && /1 of 3 answers/.test(rep) && !/Ads inside AI answers/.test(rep) && !/Local business cards/.test(rep) && /halved in 12 days/.test(rep), rep.slice(rep.indexOf('Pages AI reads'), rep.indexOf('Pages AI reads') + 300));
+    const cb = (await run('Build AI Callback', store['AI Report']))[0].json;
+    check('the callback carries the same answer data (urls, sources, shopping, ads / local) beside the report', cb.answer_data && cb.answer_data.urls.retrieved_not_cited.length === U.retrieved_not_cited.length && cb.answer_data.sources.types.own.n === 2 && cb.answer_data.shopping.trigger_n === 1 && cb.answer_data.ads_local.ads.answers_n === 3 && !cb.vis_row, JSON.stringify(Object.keys(cb.answer_data || {})));
     const Y = await drive(rowsA.map(r => ({ ...r, products_json: r.engine === 'chatgpt' ? '[]' : '' })), []);
     const SY = J(Y.vis_row.shopping_json);
     check('no product card anywhere: "no shopping results" in 3 answers, the rate null (never 0%), and no shopping section in the report', SY.status === 'no shopping results' && SY.trigger_rate === null && SY.answers_n === 3 && /3 answers/.test(SY.note), JSON.stringify(SY));
@@ -208,6 +210,19 @@ module.exports = async (ctx) => {
     const fresh = miss.filter(r => !KNOWN_SRC_MISSES.includes(r.host)); const fixed = KNOWN_SRC_MISSES.filter(h => !miss.some(r => r.host === h));
     check('no NEW miss', !fresh.length, fresh.map(r => r.host + ': ' + r.type + ' read as ' + r.got).join(' | '));
     check('no known miss the rule now gets right (remove it from KNOWN_SRC_MISSES)', !fixed.length, fixed.join(', '));
+    reset();
+  });
+
+  // ===================================================================================================================================
+  await guard('W2E1-7', async () => {
+    reset(); const SN = 'W2E1-7 — data size: rows keep their retention (120 days weekly, 21 pulse); the full text and the pages-read list are blanked after 35 days (weekly, this site, a 2-week window) and 7 days (pulse)'; begin(SN); const check = mkCheck(SN);
+    const W = JSON.parse(fs.readFileSync(path.join(__dirname, 'w2e1_wiring.json'), 'utf8'));
+    const t = W['Trim Old Answer Text'], q = W['Trim Pulse Answer Text'];
+    const conds = (x) => ((x && x.filters && x.filters.conditions) || []).map(c => c.keyName + ' ' + c.condition + ' ' + String(c.keyValue).replace(/\s+/g, ''));
+    check('weekly: an update of answer_text and retrieved_json to "" on this site\'s non-pulse rows aged 35-49 days, once, never failing the run', t && t.operation === 'update' && JSON.stringify(t.values) === JSON.stringify({ answer_text: '', retrieved_json: '' }) && t.executeOnce === true && t.onError === 'continueRegularOutput'
+      && conds(t).some(c => /^site_id like/.test(c)) && conds(t).includes('run_kind neq pulse') && conds(t).some(c => /^checked_at lt .*Date\.now\(\)-35\*864e5/.test(c)) && conds(t).some(c => /^checked_at gte .*Date\.now\(\)-49\*864e5/.test(c)), JSON.stringify(t));
+    check('weekly: it runs after the 120-day prune and before the brief (the prune itself is unchanged)', t.from.join() === 'Prune Old Answers' && t.to.join() === 'AI Brief Input', JSON.stringify([t.from, t.to]));
+    check('pulse: the same on pulse rows aged 7-9 days, after the 21-day prune', q && q.operation === 'update' && JSON.stringify(q.values) === JSON.stringify({ answer_text: '', retrieved_json: '' }) && conds(q).includes('run_kind eq pulse') && conds(q).some(c => /lt .*-7\*864e5/.test(c)) && conds(q).some(c => /gte .*-9\*864e5/.test(c)) && q.from.join() === 'Prune Pulse Answers', JSON.stringify(q));
     reset();
   });
 

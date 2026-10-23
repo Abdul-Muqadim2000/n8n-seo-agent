@@ -424,6 +424,12 @@ A.node('Save AI Cache', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE
 # G6 (2026-10-18): kept 120 days (was 400). A 500-question panel stores ~3,000 answer rows (~6.9 MB) a week and n8n holds ALL its Data Tables
 # in 200 MB by default (N8N_DATA_TABLES_MAX_SIZE_BYTES); the weekly figures, segments and panel of every run stay in seo_ai_visibility for good.
 A.node('Prune Old Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWERS_TABLE, [('checked_at', 'lt', SINCE(120))]), at(19, 3), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+# W2-E1 (2026-10-23, fixes/W2-E1.md §6): rows keep their 120 days, but the full answer text and the pages-read list (about 4 KB of a ~7 KB row) are
+# kept 35 days - five weekly runs, far past the analyst's re-read (6.2 days) - then blanked on this site's rows of the 35-49 day window (a missed week is
+# caught next time). Without it a 200-question site alone would hold ~120 MB of weekly answers against n8n's 200 MB for every Data Table.
+from ladder_common import dt_update_where_params as _dt_update_where_w2e1
+A.node('Trim Old Answer Text', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_ANSWERS_TABLE, AI_ANSWERS_COLS, [('site_id', 'like', SITE_SCOPE), ('run_kind', 'neq', 'pulse'), ('checked_at', 'lt', SINCE(35)), ('checked_at', 'gte', SINCE(49))],
+       {'answer_text': '', 'retrieved_json': ''}), at(19, 4), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
 A.code('AI Brief Input', 'AI_Brief_Input.js', at(20, 3))
 A.agent('AI Brief', 'ai_brief.txt', {'type': 'object', 'properties': {'headline': {'type': 'string'}, 'summary': {'type': 'string'}, 'actions': {'type': 'array', 'items': {'type': 'object', 'properties': {'priority': {'type': 'number'}, 'action': {'type': 'string'}, 'why': {'type': 'string'}}, 'required': ['action']}}, 'watch': ARR}, 'required': ['headline', 'summary', 'actions']}, at(21, 3))
 A.code('AI Report', 'AI_Report.js', at(22, 3)); A.pdf_chain('AI', at(23, 3))
@@ -453,7 +459,7 @@ A.chain('Next Chunk Starts', 'Any Next Chunk?'); A.link('Any Next Chunk?', 'Star
 A.chain('AI Metrics', 'Any Final Sites?'); A.link('Any Final Sites?', 'AI Vis Rows', 0); A.link('Any Final Sites?', 'Chunk Part Done', 1)
 A.chain('AI Vis Rows', 'Save AI Visibility', 'AI Prospect Rows', 'Any AI Prospects?'); A.link('Any AI Prospects?', 'Save AI Prospects', 0); A.link('Any AI Prospects?', 'AI Cache Rows', 1); A.link('Save AI Prospects', 'AI Cache Rows')
 A.chain('AI Cache Rows', 'Any Cache Rows?'); A.link('Any Cache Rows?', 'Save AI Cache', 0); A.link('Any Cache Rows?', 'Prune Old Answers', 1); A.link('Save AI Cache', 'Prune Old Answers')
-A.chain('Prune Old Answers', 'AI Brief Input', 'AI Brief', 'AI Report', 'Prepare PDF AI', 'Render PDF AI', 'Attach PDF AI', 'Has Email (AI)?'); A.link('Attach PDF AI', 'Build AI Callback'); A.link('Build AI Callback', 'Has Callback (AI)?')
+A.chain('Prune Old Answers', 'Trim Old Answer Text', 'AI Brief Input', 'AI Brief', 'AI Report', 'Prepare PDF AI', 'Render PDF AI', 'Attach PDF AI', 'Has Email (AI)?'); A.link('Attach PDF AI', 'Build AI Callback'); A.link('Build AI Callback', 'Has Callback (AI)?')
 A.run_ledger('ai_visibility', 'AI', 'AI Plan', ['AI Report', 'Chunk Part Done'], at(12, 7), measured='AI Metrics|AI Chunk Handoff')   # G6: a part of a split run ends at Chunk Part Done and states its money in the hand-off
 # B-A10 (2026-10-15, INVARIANTS rule 3): the monthly question-discovery pull is the one paid call outside the AI gate D19 built.
 # Its failure is silent by construction — *Prompt Jobs* simply finds no new questions — so a 40101 inside a 200 shrinks next
@@ -504,6 +510,9 @@ AI_DAILY_KEYS = ['site_id', 'date', 'run_id']   # R95: one row per site, day AND
 Q.node('Save AI Daily', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_DAILY_TABLE, AI_DAILY_COLS, AI_DAILY_KEYS), at(21, -1), onError='continueRegularOutput')
 # G6 (2026-10-18): kept 21 days (was 35) — a 500-question panel's daily sample stores up to ~900 rows a morning; the daily figures stay in seo_ai_daily
 Q.node('Prune Pulse Answers', DT_TYPE, DT_VERSION, dt_delete_where_params(AI_ANSWERS_TABLE, [('run_kind', 'eq', 'pulse'), ('checked_at', 'lt', SINCE(21))]), at(22, 0), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+# W2-E1 (2026-10-23): a pulse answer keeps its full text and its pages-read list 7 days (the app's "this week"), then they are blanked (rows kept 21 days)
+Q.node('Trim Pulse Answer Text', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(AI_ANSWERS_TABLE, AI_ANSWERS_COLS, [('run_kind', 'eq', 'pulse'), ('checked_at', 'lt', SINCE(7)), ('checked_at', 'gte', SINCE(9))],
+       {'answer_text': '', 'retrieved_json': ''}), at(22, 1), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
 Q.code('Pulse Alerts', "// Sites with something to report (an alert, or an on-demand run): the e-mail and the callback (stage ai_pulse). Quiet days send nothing.\nconst out = $('Pulse Metrics').all().map(i => i.json).filter(m => (m.alerts || []).length || m.on_demand).map(m => { const { daily_row, answer_rows, ...rest } = m; return { json: rest }; });\nreturn out.length ? out : [{ json: { skip: true } }];", at(23, 0))
 Q.iff('Any Pulse Alerts?', '{{ !$json.skip }}', at(24, 0)); Q.deliver('Pulse', at(25, -1), None)
 # F-ENG (2026-10-20): every website gets its pulse - the websites one execution cannot hold (15, or one morning's request limit) are handed to the
@@ -519,7 +528,7 @@ Q.chain('AI Requests', 'Any AI Requests?'); Q.link('Any AI Requests?', 'Run AI R
 Q.ai_retry_gate(at(13, 1), 'Parse AI Answers')   # D19: the pulse re-sends a failed task once too (its figures are the week's samples)
 Q.chain('Parse AI Answers', 'Pulse Metrics', 'Pulse Answer Rows', 'Any Pulse Answers?'); Q.link('Any Pulse Answers?', 'Save AI Answers', 0); Q.link('Any Pulse Answers?', 'AI Daily Rows', 1); Q.link('Save AI Answers', 'AI Daily Rows')
 Q.chain('AI Daily Rows', 'Any Daily Rows?'); Q.link('Any Daily Rows?', 'Save AI Daily', 0); Q.link('Any Daily Rows?', 'Prune Pulse Answers', 1); Q.link('Save AI Daily', 'Prune Pulse Answers')
-Q.chain('Prune Pulse Answers', 'Next Pulse Part', 'Any Next Pulse Part?'); Q.link('Any Next Pulse Part?', 'Start Next Pulse Part', 0); Q.link('Any Next Pulse Part?', 'Pulse Alerts', 1); Q.link('Start Next Pulse Part', 'Pulse Alerts')
+Q.chain('Prune Pulse Answers', 'Trim Pulse Answer Text', 'Next Pulse Part', 'Any Next Pulse Part?'); Q.link('Any Next Pulse Part?', 'Start Next Pulse Part', 0); Q.link('Any Next Pulse Part?', 'Pulse Alerts', 1); Q.link('Start Next Pulse Part', 'Pulse Alerts')
 Q.chain('Pulse Alerts', 'Any Pulse Alerts?'); Q.link('Any Pulse Alerts?', 'Has Email (Pulse)?', 0); Q.link('Any Pulse Alerts?', 'Has Callback (Pulse)?', 0)
 Q.run_ledger('ai_pulse', 'Pulse', 'AI Plan', ['Pulse Alerts'], at(10, 4), measured='Pulse Metrics')
 LEDGER_WIRING[Q.name]['daily_upsert_keys'] = list(AI_DAILY_KEYS)   # R95: the harness (S117) replays the upsert with the keys the node uses
@@ -527,6 +536,15 @@ Q.sticky(f"""## SEO Agent — AI Pulse (v4.9)
 **Every day 06:30** (cron `30 6 * * *`), each website skipped on **its own cycle day** (`seo_cycles`: its local weekday in its time zone; Monday for a website with no cycle row), when its weekly AI Visibility run asks the same engines; the rotation counts the six other mornings from that day; and on demand (*Manual Run* `{{ domain | site_id, email?, callback_url? }}`). Per site with AI visibility and `ai_pulse` on (`{MONITORS_TABLE}`; default on): the whole question panel (`{AI_PROMPTS_TABLE}`, no brand question) on **ChatGPT** and **Gemini** (the real chat interfaces) and **Google AI Mode** — $0.004 each, about $0.24 a day for 20 questions. AI answers change from one ask to the next; seven samples a week per question and engine give rates with a narrow 95% range and catch a real change within a day.
 Shares *AI Requests* and *Parse AI Answers* with the weekly tracker (same node names). *Pulse Metrics* → one `{AI_DAILY_TABLE}` row per site and day (counts per engine / question / competitor / source; the weekly report adds them) + the answers (`{AI_ANSWERS_TABLE}`, run_kind pulse, kept 35 days). **Alerts only when something really changed** (z-test at 99% vs the past week, a business suddenly named in 30%+ of answers, a question where you were named first for 3 days and are now missing) → e-mail + callback `stage: ai_pulse`. Quiet days send nothing.""", [-40, -560], 1300, 330)
 Q.write('SEO_Agent_AI_Pulse.json')
+# W2-E1 (2026-10-23): the two text-trim nodes as generated (filters, values, what follows them), for harness scenarios_w2e1.js (W2E1-7)
+_w2e1 = {}
+for _f, _nm in [('SEO_Agent_AI_Visibility.json', 'Trim Old Answer Text'), ('SEO_Agent_AI_Pulse.json', 'Trim Pulse Answer Text')]:
+    _wf = json.load(open(os.path.join(OUT, _f))); _wf = _wf[0] if isinstance(_wf, list) else _wf
+    _n = next(n for n in _wf['nodes'] if n['name'] == _nm)
+    _w2e1[_nm] = {'operation': _n['parameters'].get('operation'), 'filters': _n['parameters'].get('filters'), 'values': (_n['parameters'].get('columns') or {}).get('value'), 'executeOnce': _n.get('executeOnce'), 'onError': _n.get('onError'),
+                  'from': sorted(k for k, v in _wf['connections'].items() if any(c.get('node') == _nm for outs in v.get('main', []) for c in (outs or []))),
+                  'to': sorted(c.get('node') for outs in _wf['connections'].get(_nm, {}).get('main', []) for c in (outs or []))}
+json.dump(_w2e1, open(os.path.join(HERE, 'harness', 'w2e1_wiring.json'), 'w'), indent=1, sort_keys=True)
 
 # =============================================================================
 # 2. BACKLINK MONITOR
