@@ -48,7 +48,7 @@ export function RunStatusBadge({ status, className, lastStage }: { status: RunSt
   if (status === 'joined' || (status === 'failed' && lastStage === JOINED_OPEN_RUN))
     return (
       <Badge tone="accent" icon={<Clock className="size-3" aria-hidden />} className={className}>
-        Part of the open run
+        {lastStage === 'already_measured' ? 'Already measured' : 'Part of the open run'}
       </Badge>
     );
   const map: Record<RunStatus, { tone: Tone; label: string; icon: ReactNode }> = {

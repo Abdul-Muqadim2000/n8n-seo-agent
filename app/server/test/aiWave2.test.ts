@@ -306,6 +306,26 @@ describe('§6: a start that joins the open run', () => {
     // closed: a later refusal does not turn it into a failure
     expect(runOutcome('joined', ['ai_visibility'], 'rejected', { stage: 'rejected', error: 'refused' })).toEqual({});
   });
+  it('already_measured (engine fix round): the same closed, uncharged state, named for the stored week; a completed run ignores it', async () => {
+    const body = { stage: 'rejected', status: 'rejected', reason: 'already_measured', error: 'The AI visibility of techand.ai was already measured.', stored_week: { run_id: 'ai_20261023_techand.ai', finished_at: '2026-10-23T08:00:00Z' } };
+    const o = runOutcome('accepted', ['ai_visibility'], 'rejected', body);
+    expect(o).toMatchObject({ status: 'joined', lastStage: 'already_measured' });
+    expect(o.error).toMatch(/^Already measured today: showing the stored week\. The AI visibility/);
+    expect(runOutcome('completed', ['ai_visibility'], 'rejected', body)).toEqual({});
+    const { joinedOpenRunOf } = await import('../src/services/runs');
+    expect(joinedOpenRunOf(body)?.openRunId).toBe('ai_20261023_techand.ai');
+    const { eventsFor } = await import('@seo/shared');
+    const report = { id: 'r1', title: 'x', stage: 'rejected', status: 'rejected', receivedAt: '2026-10-23T09:00:00Z', scheduled: false, runId: 'run1', websiteId: 's', url: 'u' };
+    const ev = eventsFor({ stage: 'rejected', status: 'rejected', payload: body, report, runBefore: { status: 'accepted' }, runAfter: { id: 'run1', mode: 'ai_visibility', title: 'AI', status: 'joined', error: null, completedAt: null, url: 'u' } });
+    expect(ev.map((e) => e.type)).not.toContain('run.failed');
+  });
+  it('a share of voice or named rate the engine stored as null stays null (not measured), never 0', async () => {
+    st.tables.aiVisibility = [vis({ run_id: 'a', checked_at: '2026-10-12T07:00:00.000Z' }), vis({ mention_rate: null as never, share_of_voice: null as never })];
+    const d = await aiData(org, site, { answers: false });
+    const last = d.runs[d.runs.length - 1];
+    expect(last.mentionRate).toBeNull();
+    expect(last.shareOfVoice).toBeNull();
+  });
   it('R-A3: no run.failed event, nothing charged, a note (not an error) for the API, the open run named for its report', async () => {
     const { eventsFor, deliveryDecision } = await import('@seo/shared');
     const { runCreditsOf } = await import('../src/services/runCredits');

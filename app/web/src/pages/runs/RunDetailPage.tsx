@@ -1,7 +1,7 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Check, CheckCircle2, CircleDot, ClipboardList, Clock, Coins, ExternalLink as ExternalIcon, FileText, Flag, GitCommitVertical, Inbox, Loader2, Play, RotateCcw, Send, XCircle } from 'lucide-react';
-import { formatCredits, MODES, runIsJoined, type Report, type Run, type RunCredits } from '@seo/shared';
+import { AI_ALREADY_MEASURED, AI_ALREADY_MEASURED_TITLE, formatCredits, MODES, runIsJoined, type Report, type Run, type RunCredits } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useReport, useRun } from '@/lib/queries';
@@ -19,7 +19,7 @@ import { fmtMinutes, inputRows, isActive, minutesBetween, retryPrefill, RUN_CRED
 
 /** "Quoted 12 credits · charged 9 credits", "Not charged: it failed", "Quoted 12 credits · held while it runs", "Free" */
 function creditsLine(c: RunCredits, joined = false): string {
-  if (c.state === 'not_charged') return joined ? 'Not charged: part of the open run' : 'Not charged: it failed';
+  if (c.state === 'not_charged') return joined ? 'Not charged: answered by a run already made' : 'Not charged: it failed';
   if (c.state === 'free') return 'Free';
   const quoted = c.quoted != null ? `Quoted ${formatCredits(c.quoted)}` : '';
   const rest =
@@ -72,7 +72,8 @@ export default function RunDetailPage() {
     const wanted = params.get('report');
     if (wanted && reports.some((r) => r.id === wanted)) return wanted;
     if (!run || !reports.length) return undefined;
-    const finals = reports.filter((r) => MODES[run.mode]?.finalStages.includes(r.stage) || r.stage === 'rejected');
+    // a completed run can still receive an engine notice afterwards (e.g. 'already measured'): its own report stays the one shown
+    const finals = reports.filter((r) => MODES[run.mode]?.finalStages.includes(r.stage) || (r.stage === 'rejected' && run.status !== 'completed'));
     const pick = finals[finals.length - 1] ?? [...reports].reverse().find((r) => !NOTICE_STAGES.has(r.stage)) ?? reports[reports.length - 1];
     return pick.id;
   }, [params, reports, run]);
@@ -104,6 +105,7 @@ export default function RunDetailPage() {
   const selected = reports.find((r) => r.id === selectedId) ?? null;
   const duration = minutesBetween(run.createdAt, run.completedAt ?? (active ? now : null));
   const joined = runIsJoined(run);
+  const measured = joined && run.lastStage === AI_ALREADY_MEASURED;
 
   return (
     <div>
@@ -148,7 +150,7 @@ export default function RunDetailPage() {
         {joined && (
           <Callout
             tone="info"
-            title="Part of the open run"
+            title={measured ? AI_ALREADY_MEASURED_TITLE : 'Part of the open run'}
             action={
               q.data?.joined?.reportId ? (
                 <ButtonLink to={paths.report(org.id, q.data.joined.reportId)} variant="secondary" size="sm" icon={<ExternalIcon className="size-4" />}>
@@ -159,9 +161,11 @@ export default function RunDetailPage() {
           >
             {run.note ?? run.error}
             <span className="mt-1 block text-xs text-ink-3">
-              {q.data?.joined?.reportId
-                ? `That run has finished and its report is ready${q.data.joined.receivedAt ? ` (${fmtDateTime(q.data.joined.receivedAt)})` : ''}. Nothing was charged for this request.`
-                : 'Your check is answered by the run already in progress. Its report is linked here and on the AI visibility page when that run finishes. Nothing was charged for this request.'}
+              {measured
+                ? `Nothing was asked again and nothing was charged for this request.${q.data?.joined?.reportId ? ' The stored week\'s report is linked here.' : ' The AI visibility page shows the stored week.'}`
+                : q.data?.joined?.reportId
+                  ? `That run has finished and its report is ready${q.data.joined.receivedAt ? ` (${fmtDateTime(q.data.joined.receivedAt)})` : ''}. Nothing was charged for this request.`
+                  : 'Your check is answered by the run already in progress. Its report is linked here and on the AI visibility page when that run finishes. Nothing was charged for this request.'}
             </span>
           </Callout>
         )}
@@ -355,6 +359,7 @@ function CardTitle({ icon, title, description }: { icon: ReactNode; title: strin
 function RunStages({ run, reports, active, duration }: { run: Run; reports: number; active: boolean; duration: number | null }) {
   // W2-A: a start joined to the website's open run ends here as "part of the open run", not as a failure
   const joined = runIsJoined(run);
+  const measured = joined && run.lastStage === AI_ALREADY_MEASURED;
   const failed = run.status === 'failed' && !joined;
   const done = run.status === 'completed' || joined;
   type S = { key: string; label: string; sub: string; state: 'done' | 'now' | 'todo' | 'failed'; icon: ReactNode };
@@ -376,7 +381,7 @@ function RunStages({ run, reports, active, duration }: { run: Run; reports: numb
     },
     {
       key: 'end',
-      label: failed ? 'Failed' : joined ? 'Part of the open run' : 'Completed',
+      label: failed ? 'Failed' : joined ? (measured ? 'Already measured' : 'Part of the open run') : 'Completed',
       sub: done || failed ? (run.completedAt ? fmtDateTime(run.completedAt) : '') + (done && duration != null ? ` · ${fmtMinutes(duration)}` : '') : `about ${run.etaMinutes} min in total`,
       state: done ? 'done' : failed ? 'failed' : 'todo',
       icon: failed ? <XCircle /> : <Flag />,

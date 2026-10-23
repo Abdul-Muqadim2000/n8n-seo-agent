@@ -944,7 +944,7 @@ export function useRun(orgId: string, runId: string) {
     refetchInterval: (q) => {
       if (!q.state.data && q.state.error instanceof ApiRequestError && q.state.error.status >= 400 && q.state.error.status < 500) return false;
       const s = q.state.data?.run.status;
-      if (s === 'joined') return q.state.data?.joined && !q.state.data.joined.reportId ? 60_000 : false;
+      if (s === 'joined') return q.state.data?.run.lastStage === 'joined_open_run' && q.state.data.joined && !q.state.data.joined.reportId ? 60_000 : false;
       return s === 'completed' || s === 'failed' ? false : 10_000;
     },
   });

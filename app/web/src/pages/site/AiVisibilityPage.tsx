@@ -140,7 +140,7 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
               <HeroStat
                 label="Named in answers"
                 info={runNote}
-                value={<CountUp value={L.mentionRate} format={(v) => pct(v)} />}
+                value={L.mentionRate == null ? <span className="text-base">Not measured</span> : <CountUp value={L.mentionRate} format={(v) => pct(v)} />}
                 delta={<AiDelta compare={cmp} metric="named_rate" />}
                 trend={<Sparkline data={runs.map((r) => ({ v: r.mentionRate }))} dataKey="v" />}
                 hint={L.ciNamed ? `95% range ${pct(L.ciNamed[0], 0)} to ${pct(L.ciNamed[1], 0)} · ${compactNumber(L.samples)} answers, ${period}` : L.mentionLo != null && L.mentionHi != null ? `95% range ${pct(L.mentionLo, 0)} to ${pct(L.mentionHi, 0)} · ${compactNumber(L.samples)} answers, ${period}` : `of ${compactNumber(L.answers)} answers to ${L.prompts} questions`}
@@ -148,7 +148,7 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
               <HeroStat
                 label="Share of voice"
                 info="Your mentions among all brands named"
-                value={<CountUp value={L.shareOfVoice} format={(v) => pct(v)} />}
+                value={L.shareOfVoice == null ? <span className="text-base">Not measured</span> : <CountUp value={L.shareOfVoice} format={(v) => pct(v)} />}
                 delta={<AiDelta compare={cmp} metric="share_of_voice" />}
                 trend={<Sparkline data={runs.map((r) => ({ v: r.shareOfVoice }))} dataKey="v" />}
                 hint={L.indexSov != null ? `Market-wide (every AI answer): ${pct(L.indexSov)}` : 'Your mentions among all brands named'}
@@ -233,7 +233,7 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
             <>
               <RankedBars
                 you={site.domain}
-                items={[...(d.latest?.competitors ?? []).filter((c) => c.domain !== site.domain).map((c) => ({ label: c.domain, value: c.share, sub: `${c.mentions}${c.auto ? '' : ' ★'}` })), ...(L ? [{ label: site.domain, value: L.shareOfVoice, sub: '' }] : [])]
+                items={[...(d.latest?.competitors ?? []).filter((c) => c.domain !== site.domain).map((c) => ({ label: c.domain, value: c.share, sub: `${c.mentions}${c.auto ? '' : ' ★'}` })), ...(L && L.shareOfVoice != null ? [{ label: site.domain, value: L.shareOfVoice, sub: '' }] : [])]
                   .sort((a, b) => b.value - a.value)
                   .slice(0, 9)}
               />

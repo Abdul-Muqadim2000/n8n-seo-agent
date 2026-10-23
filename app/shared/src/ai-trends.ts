@@ -306,3 +306,23 @@ export function aiOpenRunNote(body: Record<string, unknown>): string | null {
   const sentence = typeof body.error === 'string' ? body.error.trim() : '';
   return `Part of the open run${when}.${sentence ? ' ' + sentence : ''}`.slice(0, 1000);
 }
+
+/**
+ * Engine fix round (2026-10-23, R-E1): a re-check within 20 hours of a finished week, or a retry of the same cycle job, is answered with
+ * the week already stored (`rejected` with reason 'already_measured' and `stored_week`). Like the open run, it is not a failure.
+ */
+export const AI_ALREADY_MEASURED = 'already_measured';
+export const AI_ALREADY_MEASURED_TITLE = 'Already measured today: showing the stored week';
+export function aiAlreadyMeasuredNote(body: Record<string, unknown>): string | null {
+  if (String(body.reason ?? '') !== 'already_measured') return null;
+  const sentence = typeof body.error === 'string' ? body.error.trim() : '';
+  return `${AI_ALREADY_MEASURED_TITLE}.${sentence ? ' ' + sentence : ''}`.slice(0, 1000);
+}
+
+/** R-A3: a check answered by another run of the engine, as the app closes it: the stage it records and the sentence it shows (null: not one) */
+export function aiJoinedOf(body: Record<string, unknown>): { lastStage: string; note: string } | null {
+  const open = aiOpenRunNote(body);
+  if (open) return { lastStage: AI_JOINED_OPEN_RUN, note: open };
+  const done = aiAlreadyMeasuredNote(body);
+  return done ? { lastStage: AI_ALREADY_MEASURED, note: done } : null;
+}

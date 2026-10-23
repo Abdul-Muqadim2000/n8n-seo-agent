@@ -1,7 +1,6 @@
 import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
-  AI_JOINED_OPEN_RUN,
-  aiOpenRunNote,
+  aiJoinedOf,
   buildN8nPayload,
   cleanDomain,
   compactBody,
@@ -620,8 +619,9 @@ export function runOutcome(
     // failure. R-A3 (review 2026-10-23): it is closed in its own state, `joined` (never `failed`, so no `run.failed` reaches a
     // customer's webhook, Slack, Teams or tracker), with nothing charged (the open run carries its own charge); its result is the open
     // run's report (runJoinedResult). The sentence stays in `error` for the screens that print it (toRun / toRunV1 say what it is).
-    const joined = aiOpenRunNote(body);
-    if (joined) return { status: 'joined', error: joined, completedAt: new Date(), lastStage: AI_JOINED_OPEN_RUN };
+    // The same for a check the engine answers with the week it already stored ('already_measured', engine fix round R-E1).
+    const joined = aiJoinedOf(body);
+    if (joined) return { status: 'joined', error: joined.note, completedAt: new Date(), lastStage: joined.lastStage };
     const why = typeof body.error === 'string' && body.error.trim() ? body.error.trim() : typeof body.validation_error === 'string' && body.validation_error.trim() ? body.validation_error.trim() : 'Rejected by the SEO engine';
     return { status: 'failed', error: why, completedAt: new Date() };
   }
@@ -835,7 +835,9 @@ export async function reportsList(orgId: string, opts: { siteId?: string; runId?
 
 /** The engine's id of the open run a `joined` run was joined to, from the callback that closed it (its stored payload's `open_run`). */
 export function joinedOpenRunOf(payload: Record<string, unknown> | null | undefined): { openRunId: string; expectedFinish: string | null } | null {
-  const o = payload && payload.open_run && typeof payload.open_run === 'object' ? (payload.open_run as Record<string, unknown>) : null;
+  // the open run (reason 'open_run'), or the run whose stored week answered the check (reason 'already_measured': `stored_week`)
+  const pick = (k: string) => (payload && payload[k] && typeof payload[k] === 'object' ? (payload[k] as Record<string, unknown>) : null);
+  const o = pick('open_run') ?? pick('stored_week');
   const id = o && typeof o.run_id === 'string' ? o.run_id.trim() : '';
   if (!id) return null;
   return { openRunId: id, expectedFinish: typeof o!.expected_finish === 'string' && o!.expected_finish ? o!.expected_finish : null };

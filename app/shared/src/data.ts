@@ -452,9 +452,10 @@ export interface AiRun {
   checkedAt: string;
   prompts: number;
   answers: number;
-  mentionRate: number;
+  /** null: not measured (the engine stores null when it could not measure it; shown as "not measured", never 0) */
+  mentionRate: number | null;
   citationRate: number;
-  shareOfVoice: number;
+  shareOfVoice: number | null;
   avgRank: number;
   aioPresence: number;
   aioCitationRate: number;
@@ -496,9 +497,10 @@ export interface AiRun {
 export interface AiDay {
   date: string;
   samples: number;
-  mentionRate: number;
+  /** null: not measured */
+  mentionRate: number | null;
   citationRate: number;
-  shareOfVoice: number;
+  shareOfVoice: number | null;
   visibilityScore: number;
   alerts: string[];
   /** R104: the newest reading of the day - when the pulse really ran */
@@ -1073,7 +1075,7 @@ export interface OverviewData {
     lineage: Lineage[];
   };
   health: { latest: AuditPoint | null; series: { auditedAt: string; healthScore: number }[] };
-  ai: { latest: AiRun | null; series: { checkedAt: string; mentionRate: number; citationRate: number; shareOfVoice: number }[] };
+  ai: { latest: AiRun | null; series: { checkedAt: string; mentionRate: number | null; citationRate: number; shareOfVoice: number | null }[] };
   backlinks: { latest: BacklinkSnapshot | null; series: { month: string; referringDomains: number; backlinks: number }[] };
   rankings: { ladders: number; keywords: number; top3: number; top10: number; top50: number; movers: { keyword: string; from: number | null; to: number | null }[] };
   content: { started: number; published: number; pendingPublish: number; /** R111: written drafts that failed the quality check (not counted in pendingPublish) */ needsFix?: number; pagesPerWeek: number; caseStudies: number };

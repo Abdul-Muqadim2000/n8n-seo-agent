@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { AI_SENTIMENT_EARLY, parseAiImportsSummary, parseAiSentiment } from './ai-detail';
 import { aiDateColumn, aiIsDay, parseAiImport } from './ai-import';
-import { aiAnswersPageOf, aiFilterFrom } from './ai-trends';
+import { aiAnswersPageOf, aiFilterFrom, aiJoinedOf } from './ai-trends';
+import { aiCompareInterim } from './ai-compare';
 import { importDate, parseCsv } from './link-import';
 
 // R-APP (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_APP.md): the shared halves of the app fixes of the AI visibility review.
@@ -72,6 +73,25 @@ describe('R-A9 the answers page is computed the same on the server and, against 
     expect(p.summary).toMatchObject({ answers: 2, named: 1, enough: false });
     expect(p.engines.sort()).toEqual(['chatgpt', 'gemini']);
     expect(aiAnswersPageOf(all, { filter: aiFilterFrom({}), result: 'named' }, { runId: 'r1', checkedAt: null, runs: [] }).total).toBe(1);
+  });
+});
+
+describe('a named rate or share of voice stored as null (not measured) is never compared as 0', () => {
+  it('the change is null and untested', () => {
+    const side = (over: Record<string, unknown>) => ({ runId: 'r', checkedAt: '2026-10-20', prompts: 20, samples: 100, mentionRate: 30, citationRate: 5, shareOfVoice: 20, visibilityScore: null, avgRank: null, engines: ['chatgpt'], questionIds: Array.from({ length: 20 }, (_, i) => `q${i}`), ...over });
+    const c = aiCompareInterim(side({ mentionRate: null, shareOfVoice: null }) as never, side({ checkedAt: '2026-10-13' }) as never);
+    expect(c.comparable).toBe(true);
+    expect(c.metrics?.named_rate).toMatchObject({ now: null, delta: null, significant: null });
+    expect(c.metrics?.share_of_voice).toMatchObject({ now: null, delta: null });
+    expect(c.metrics?.cited_rate?.delta).toBe(0);
+  });
+});
+
+describe('already_measured is closed like a joined run', () => {
+  it('the note leads with the words the screens show', () => {
+    expect(aiJoinedOf({ reason: 'already_measured', error: 'Measured at 08:00.' })).toEqual({ lastStage: 'already_measured', note: 'Already measured today: showing the stored week. Measured at 08:00.' });
+    expect(aiJoinedOf({ reason: 'open_run' })?.lastStage).toBe('joined_open_run');
+    expect(aiJoinedOf({ reason: 'budget' })).toBeNull();
   });
 });
 

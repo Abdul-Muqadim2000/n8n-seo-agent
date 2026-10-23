@@ -159,12 +159,12 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
         <MetricCard
           label="Named in AI answers"
           icon={<Bot />}
-          visual={A ? <ScoreRing label="Named in AI answers" value={A.mentionRate} tone="accent" display={<CountUp value={A.mentionRate} format={(v) => pct(v)} />} valueText={pct(A.mentionRate)} size={68} /> : undefined}
-          value="-"
+          visual={A && A.mentionRate != null ? <ScoreRing label="Named in AI answers" value={A.mentionRate} tone="accent" display={<CountUp value={A.mentionRate} format={(v) => pct(v)} />} valueText={pct(A.mentionRate)} size={68} /> : undefined}
+          value={A && A.mentionRate == null ? 'Not measured' : '-'}
           delta={A ? <AiDelta compare={A.compare} metric="named_rate" /> : undefined}
           deltaLabel={A?.compare?.comparable ? 'vs last comparable check' : undefined}
           sparkline={<Sparkline data={ai} dataKey="mentionRate" />}
-          meta={A ? `Share of voice ${pct(A.shareOfVoice)} · cited in ${pct(A.citationRate)}` : 'ChatGPT, Perplexity, Gemini, Claude and Google AI'}
+          meta={A ? `Share of voice ${A.shareOfVoice == null ? 'not measured' : pct(A.shareOfVoice)} · cited in ${pct(A.citationRate)}` : 'ChatGPT, Perplexity, Gemini, Claude and Google AI'}
           onClick={() => navigate(page('ai'))}
         />
         <MetricCard

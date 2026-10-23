@@ -900,13 +900,17 @@ export function aiDailySeries(days: AiDailyRow[]): AiDay[] {
       const mentioned = rows.reduce((t, r) => t + count(r, 'mentioned', n(r.mention_rate)), 0);
       const cited = rows.reduce((t, r) => t + count(r, 'cited', n(r.citation_rate)), 0);
       const weighted = (k: 'share_of_voice' | 'visibility_score') => (samples ? Math.round((rows.reduce((t, r) => t + n(r[k]) * n(r.samples), 0) / samples) * 10) / 10 : 0);
+      // engine fix round: a share of voice the engine could not measure is stored null; it is weighted over the rows that have one, and a
+      // day with none has none (never 0)
+      const sovRows = rows.filter((r) => nn(r.share_of_voice) != null);
+      const sovN = sovRows.reduce((t, r) => t + n(r.samples), 0);
       return {
         date,
         checkedAt: rows.map((r) => s(r.checked_at)).filter(Boolean).sort().pop() ?? '',
         samples,
-        mentionRate: rows.length === 1 ? n(rows[0].mention_rate) : pct(mentioned, samples),
+        mentionRate: rows.length === 1 ? nn(rows[0].mention_rate) : pct(mentioned, samples),
         citationRate: rows.length === 1 ? n(rows[0].citation_rate) : pct(cited, samples),
-        shareOfVoice: rows.length === 1 ? n(rows[0].share_of_voice) : weighted('share_of_voice'),
+        shareOfVoice: rows.length === 1 ? nn(rows[0].share_of_voice) : sovN ? Math.round((sovRows.reduce((t, r) => t + n(r.share_of_voice) * n(r.samples), 0) / sovN) * 10) / 10 : null,
         visibilityScore: rows.length === 1 ? n(rows[0].visibility_score) : weighted('visibility_score'),
         // A4: the engine joins a morning's alerts with " | " and a text may hold commas
         alerts: [...new Set(rows.flatMap((r) => aiAlertsOf(r.alerts).map((a) => a.text)))],
@@ -944,9 +948,9 @@ export function aiCompareSide(r: AiVisibilityRow): AiCompareSide {
     checkedAt: s(r.checked_at),
     prompts: n(r.prompts),
     samples: n(r.samples) || n(r.answers),
-    mentionRate: n(r.mention_rate),
+    mentionRate: nn(r.mention_rate),
     citationRate: n(r.citation_rate),
-    shareOfVoice: n(r.share_of_voice),
+    shareOfVoice: nn(r.share_of_voice),
     visibilityScore: nn(r.visibility_score),
     avgRank: nn(r.avg_rank),
     engines: aiEngineSetOf(safeJson<P | null>(s(r.engines_json), null)),
@@ -968,9 +972,9 @@ const toAiRun = (r: AiVisibilityRow, compare: AiRun['compare'], credits: number 
   checkedAt: s(r.checked_at),
   prompts: n(r.prompts),
   answers: n(r.answers),
-  mentionRate: n(r.mention_rate),
+  mentionRate: nn(r.mention_rate),
   citationRate: n(r.citation_rate),
-  shareOfVoice: n(r.share_of_voice),
+  shareOfVoice: nn(r.share_of_voice),
   avgRank: n(r.avg_rank),
   aioPresence: n(r.aio_presence),
   aioCitationRate: n(r.aio_citation_rate),

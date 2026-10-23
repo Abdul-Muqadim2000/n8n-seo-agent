@@ -242,6 +242,8 @@ export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
   const status = (c.status || text(p.status) || '').toLowerCase();
 
   // R-A3: a check joined to the website's open run was not refused; its report is the open run's, delivered when that run reports
+  if ((stage === 'rejected' || status === 'rejected') && text(p.reason) === 'already_measured')
+    return hold('rejected', 'This week was already measured, so this check sent nothing new: the stored week\'s report is the one to read.');
   if ((stage === 'rejected' || status === 'rejected') && text(p.reason) === 'open_run')
     return hold('rejected', 'This check is part of the run already in progress, so its report is that run\'s report and is sent when that run finishes.');
   if (stage === 'rejected' || status === 'rejected')
