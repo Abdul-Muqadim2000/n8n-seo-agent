@@ -529,6 +529,39 @@ describe('keyword proposals', () => {
     p = (await co.c.get(`${base(co, s.id)}/keyword-proposals`)).body.pending[0];
     expect(p).toMatchObject({ level: 1, startAt: null });
   });
+
+  it('a ladder the client starts without the proposal decides it: another keyword swaps it, the same keyword approves it; a failed start keeps it waiting', async () => {
+    const co = await company('closes@kf.test', 'Closes Co');
+    const s = await site(co.org.id, 'closes-kf.com', { trackingStatus: 'active', autopilotLevel: 3 });
+    await strategy(co.org.id, s.id, [
+      { keyword: 'crm consulting', difficulty_for_you: 'easy', plan_type: 'direct' },
+      { keyword: 'crm migration', difficulty_for_you: 'easy', plan_type: 'direct' },
+    ]);
+    const org = (await db.query.organizations.findFirst({ where: eq(schema.organizations.id, co.org.id) }))!;
+    expect((await proposeForSite(org, s, undefined, Date.now(), log)).keyword).toBe('crm consulting');
+    const ladder = (keyword: string) => co.c.post(`/api/orgs/${co.org.id}/runs`, { mode: 'ladder', siteId: s.id, keyword, country: 'United States' });
+    // the engine did not take the client's ladder: nothing was decided, the announcement still waits
+    t.startOk = false;
+    await ladder('crm training');
+    expect((await co.c.get(`${base(co, s.id)}/keyword-proposals`)).body.pending).toEqual([expect.objectContaining({ keyword: 'crm consulting' })]);
+    // the client starts their own keyword from the New keyword ladder page: the announcement is closed and never starts a second ladder
+    t.startOk = true;
+    const own = (await ladder('CRM training')).body;
+    let list = (await co.c.get(`${base(co, s.id)}/keyword-proposals`)).body;
+    expect(list.pending).toEqual([]);
+    expect(list.recent[0]).toMatchObject({ keyword: 'crm consulting', status: 'swapped', swappedFor: 'crm training', runId: own.id, decidedBy: 'closes@kf.test' });
+    await db.update(schema.keywordProposals).set({ startAt: new Date(Date.now() - 60_000) }).where(eq(schema.keywordProposals.siteId, s.id));
+    const before = t.starts.length;
+    expect(await startDueProposals(log)).toBe(0);
+    expect(t.starts.length).toBe(before);
+    // the next proposal, started as a ladder from the chooser under its own name (other spelling): approved, not swapped
+    await db.delete(schema.runs).where(and(eq(schema.runs.siteId, s.id), eq(schema.runs.mode, 'ladder'))); // no ladder being planned any more
+    expect((await proposeForSite(org, s, undefined, Date.now(), log)).keyword).toBe('crm migration');
+    const same = (await ladder('CRM  Migration')).body;
+    list = (await co.c.get(`${base(co, s.id)}/keyword-proposals`)).body;
+    expect(list.pending).toEqual([]);
+    expect(list.recent.find((r: { keyword: string }) => r.keyword === 'crm migration')).toMatchObject({ status: 'approved', runId: same.id, swappedFor: null });
+  });
 });
 
 describe('a queued ladder that becomes active long after it was planned is checked again (§5.6)', () => {
