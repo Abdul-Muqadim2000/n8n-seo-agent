@@ -37,6 +37,35 @@ module.exports = async (ctx) => {
     check('without an id the keyword still decides (the older path is unchanged)', String(k.log_row.request_id) === '3999', J(k.log_row && k.log_row.request_id));
   });
 
+  await guard('PD4 the ladder rung follows the draft found by its request id', async () => {
+    const SN = 'PD4 (2026-10-23, techand.ai on production) the draft is found by its request id while the typed keyword names no rung: its own ladder rung is moved to published with the live address, not left not_ready';
+    begin(SN); const check = mkCheck(SN);
+    const LID = 'lad_mvdyn365', LURL = 'https://www.techand.ai/insights/is-microsoft-dynamics-365-an-erp-system';
+    const RUNG = { domain: 'techand.ai', ladder_id: LID, keyword: 'is microsoft dynamics 365 an erp system', rung: 2, status: 'not_ready', target_url: 'https://www.techand.ai/is-microsoft-dynamics-365-an-erp-system', page_exists: false, page_type: 'Guide' };
+    const HEAD = { ...RUNG, keyword: 'dynamics 365 erp system', rung: 4, status: 'planned', target_url: 'https://www.techand.ai/dynamics-365-erp-system' };
+    const NEAR = { ...RUNG, keyword: 'microsoft dynamics erp', rung: 3, status: 'planned', target_url: 'https://www.techand.ai/microsoft-dynamics-erp' };
+    const LOG = { ...DRAFT, keyword: RUNG.keyword, source: 'ladder', page_type: 'Guide', rung: 2, ladder_id: LID, request_id: '1240', status: 'not_ready' };
+    const runIt = async (body, ladders, logs, html) => {
+      reset();
+      await run('Normalize Input', { body: { mode: 'published', domain: 'techand.ai', callback_url: 'https://hooks.example.com/x', request_id: 'pub-78', ...body } });
+      mock('Load Content Log (Published)', logs.map(json => ({ json }))); mock('Load Ladders (Published)', ladders.map(json => ({ json }))); mock('Load Query History (Published)', [{ json: {} }]);
+      mock('Fetch Published Page', html || page('<p>Dynamics 365 is a family of business applications.</p>'));
+      return (await run('Publish Check', [{ json: {} }]))[0].json;
+    };
+    const c = await runIt({ keyword: 'microsoft dynamics 365 erp system', content_request_id: '1240', url: LURL }, [HEAD, NEAR, RUNG], [LOG]);
+    check('the draft is found by its id', c.log_found === true && String(c.log_row.request_id) === '1240', J({ found: c.log_found, rid: c.log_row && c.log_row.request_id }));
+    check('its ladder rung is found although the typed keyword names no rung', c.ladder_found === true, J({ ladder_found: c.ladder_found }));
+    check('the rung moves to published with the live address and page_exists', c.ladder_row && c.ladder_row.ladder_id === LID && c.ladder_row.keyword === RUNG.keyword && c.ladder_row.status === 'published' && c.ladder_row.target_url === LURL && c.ladder_row.page_exists === true, J(c.ladder_row));
+    check('no other rung (head term, near match) is touched', c.ladder_row && c.ladder_row.keyword !== HEAD.keyword && c.ladder_row.keyword !== NEAR.keyword, J(c.ladder_row));
+    const other = await runIt({ keyword: 'microsoft dynamics 365 erp system', content_request_id: '1240', url: LURL }, [{ ...RUNG, ladder_id: 'lad_other' }, HEAD], [LOG]);
+    check('a rung of the same keyword in another ladder is still found by keyword when the id does not match', other.ladder_found === true && other.ladder_row && other.ladder_row.keyword === RUNG.keyword, J(other.ladder_row));
+    const typed = await runIt({ keyword: 'dynamics 365 erp system', url: 'https://www.techand.ai/dynamics-365-erp-system' }, [HEAD, RUNG], []);
+    check('without a draft the typed keyword still decides (older path unchanged)', typed.ladder_found === true && typed.ladder_row && typed.ladder_row.keyword === HEAD.keyword, J(typed.ladder_row));
+    const down = await runIt({ keyword: 'microsoft dynamics 365 erp system', content_request_id: '1240', url: LURL }, [RUNG], [LOG],
+      { statusCode: 404, statusMessage: 'Not Found', headers: { 'content-type': 'text/html' }, data: '<html><body>Not found</body></html>' });
+    check('a page answering 404: the rung is found but left untouched (no ladder row), the draft stays not_ready', down.ladder_found === true && down.live === false && down.ladder_row === null && down.log_row.status === 'not_ready', J({ found: down.ladder_found, live: down.live, row: down.ladder_row, st: down.log_row && down.log_row.status }));
+  });
+
   await guard('PD2 leftover brackets on the live page are named', async () => {
     const SN = 'PD2 (2026-10-23) a bracket the owner had to fill in is still on the live page: the check names it ("No brackets left to fill in"), with the shared detector (PH)';
     begin(SN); const check = mkCheck(SN);

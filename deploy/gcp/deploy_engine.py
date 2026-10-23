@@ -248,6 +248,21 @@ def main():
             say('  credentials missing remotely: ' + ', '.join(c for c, *_ in cmiss) + ' (--create-missing imports them)')
         say('credentials: %d %s, %d skipped (empty in n8n/.env)' % (len(done), 'written' if APPLY else 'to write', len(skipped)))
 
+    # 7. the dispatcher's mode, said out loud (2026-10-23: production sat in plan_only for two days after a deploy and no client's cycle ran)
+    try:
+        dm = deploy_guard.dispatcher_mode(api)
+    except Exception as e:
+        dm = {'error': str(e)[:160]}
+    if dm.get('error'):
+        say('dispatcher mode: could not be read (%s) - check seo_cache cycle:mode by hand' % dm['error'])
+    elif dm['mode'] == 'start':
+        say('dispatcher mode: start (websites\' cycles run): %d site(s): %s' % (len(dm['sites']), ', '.join(dm['sites']) or 'none yet'))
+    else:
+        say('!' * 100 + '\nDISPATCHER IN plan_only (%s): it plans every website\'s cycle and STARTS NOTHING. %d job(s) waiting; sites: %s.\n'
+            'For real clients add the seo_cache row key=cycle:mode, kind=cycle, value={"mode":"start"} (RUNBOOK.md section 4). The catch-up '
+            'watchdog raises an ops alert after an hour of this with work waiting.\n' % ('set on purpose' if dm['configured'] else 'no cycle:mode row: the default',
+            dm['waiting'], ', '.join(dm['sites']) or 'none') + '!' * 100)
+
     if failed:
         say('FAILED:\n  ' + '\n  '.join(failed)); sys.exit(1)
     say('done.' if APPLY else 'dry run done. Run again with --apply.')

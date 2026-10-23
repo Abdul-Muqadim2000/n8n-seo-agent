@@ -15,7 +15,15 @@ let kw = norm(d.keyword);
 const rid = String(d.content_request_id || '').trim();
 let log = (rid ? logs.find(l => normD(l.domain) === domain && String(l.request_id) === rid) : null) || (kw ? logs.find(l => normD(l.domain) === domain && norm(l.keyword) === kw) : null) || null;
 if (!kw && log) kw = norm(log.keyword);
-const ladder = kw ? (ladders.find(l => normD(l.domain) === domain && norm(l.keyword) === kw) || null) : null;
+// The ladder row follows the draft that was found, not the words typed (techand.ai on production, 2026-10-23: the draft was found by its
+// request id, the typed "microsoft dynamics 365 erp system" matched no rung, so the rung "is microsoft dynamics 365 an erp system" stayed
+// not_ready with page_exists false while its content-log row said published). Order: the draft's ladder id + keyword, the draft's keyword,
+// then the typed keyword (the older path).
+const onSite = ladders.filter(l => normD(l.domain) === domain);
+const logKw = log ? norm(log.keyword) : '';
+const ladder = (log && log.ladder_id && logKw ? onSite.find(l => l.ladder_id === log.ladder_id && norm(l.keyword) === logKw) : null)
+  || (logKw ? onSite.find(l => norm(l.keyword) === logKw) : null)
+  || (kw ? onSite.find(l => norm(l.keyword) === kw) : null) || null;
 // ---- live checks ----
 const bodyOf = (r) => { const b = r && (r.body != null ? r.body : r.data); return typeof b === 'string' ? b : (b ? JSON.stringify(b) : ''); };   // the HTTP node puts text responses under `data` (live finding 2026-10-02)
 const status = Number(r.statusCode) || 0; const body = bodyOf(r);

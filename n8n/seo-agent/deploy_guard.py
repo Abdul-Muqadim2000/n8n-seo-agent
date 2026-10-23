@@ -146,6 +146,31 @@ def read_tables(api):
     return jobs, cycles, ''
 
 
+def dispatcher_mode(api):
+    """2026-10-23 (production): after a deploy the dispatcher stayed in plan_only (no seo_cache row cycle:mode) for two days and no client's
+    cycle ran. -> {'mode', 'configured', 'waiting', 'sites', 'error'} from seo_cache `cycle:mode` and the last sweep `cycle:last`, so the
+    deploy can say it out loud. Reads only."""
+    st, page = api('GET', '/data-tables?limit=100')
+    if st != 200 or not isinstance(page, dict):
+        return {'error': 'n8n answered %s to the Data Table list' % st}
+    tid = next((t.get('id') for t in page.get('data') or [] if t.get('name') == 'seo_cache'), None)
+    if not tid:
+        return {'mode': 'plan_only', 'configured': False, 'waiting': 0, 'sites': [], 'error': ''}
+    flt = {'type': 'or', 'filters': [{'columnName': 'key', 'condition': 'eq', 'value': 'cycle:mode'}, {'columnName': 'key', 'condition': 'eq', 'value': 'cycle:last'}]}
+    st, pg = api('GET', '/data-tables/%s/rows?limit=10&filter=%s' % (tid, _up.quote(_json.dumps(flt, separators=(',', ':')))))
+    if st != 200 or not isinstance(pg, dict):
+        return {'error': 'n8n answered %s reading seo_cache' % st}
+    rows = {r.get('key'): r for r in pg.get('data') or []}
+    def val(k):
+        try: return _json.loads((rows.get(k) or {}).get('value') or '{}')
+        except Exception: return {}
+    m, last = val('cycle:mode'), val('cycle:last')
+    mode = 'start' if str(m.get('mode', '')).lower() == 'start' else 'plan_only'
+    waiting = last.get('would_start') if isinstance(last.get('would_start'), list) else []
+    sites = sorted({s.get('domain') for s in (last.get('sites') or []) if isinstance(s, dict) and s.get('domain')})
+    return {'mode': mode, 'configured': 'cycle:mode' in rows, 'waiting': len(waiting), 'sites': sites, 'error': ''}
+
+
 def check(api, args, now=None, say=print):
     """The guard as both deploy scripts run it. -> None when the deploy may go ahead; otherwise the refusal text (the caller exits with it).
     `args`: the script's argv (a force flag overrides, loudly)."""
