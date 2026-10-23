@@ -111,7 +111,8 @@ for (const s of todo) {
       return { date: d.date, samples: Number(d.samples) || 0, mentioned: Number(d.mentioned) || 0, mention_rate: Number(d.mention_rate) || 0, prompts: pr, competitors: parse(d.competitors_json, {}),
         // B8-2 (2026-10-15, benchmark area 8, INVARIANTS rule 1): what that morning was actually measured on. Without it the
         // z-test below pooled seven days of a DIFFERENT panel and called the result "a real drop, not sampling noise".
-        engines: Object.keys(eng).filter(e => (Number((eng[e] || {}).answered) || 0) > 0).sort(), panel: Object.keys(pr).length }; });
+        engines: Object.keys(eng).filter(e => (Number((eng[e] || {}).answered) || 0) > 0).sort(), panel: Object.keys(pr).length,
+        rule_version: String(d.rule_version || '') }; });   // F1b (2026-10-23): a morning counted under another rule is not a baseline for today
   const location_code = Number(s.location_code) || 2840;
   out.push({ json: { site_id: s.site_id, domain: s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
     on_demand, business_name: s.profile.business_name || '', brand_names, competitors: [...new Set([...s.settings.competitors, ...autoRivals])].slice(0, 8), configured_competitors: s.settings.competitors, aliases: aliasRow ? parse(aliasRow.value, {}) : {},

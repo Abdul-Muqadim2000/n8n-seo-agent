@@ -194,13 +194,24 @@ AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string')
                # G6 (2026-10-18): rates per engine x cluster x persona x market with ranges and BH-corrected changes; the panel this run asked
                # (question ids, engines, composition, the pulse's sample, achievable half-widths) so the next delta can be refused when it changed;
                # how many executions the run took
-               ('segments_json', 'string'), ('panel_json', 'string'), ('chunks', 'number')]
+               ('segments_json', 'string'), ('panel_json', 'string'), ('chunks', 'number'),
+               # F1b (2026-10-23, docs/ai-visibility-2026-10-23/fixes/F1b.md): the measurement rule the row was counted under (a row of another
+               # rule is never compared), "named in" by its own name (mention_rate holds the same figure from this rule on), the place in the
+               # answers (mean place when named, share named first, position-weighted visibility), the period counted (A8), the comparison every
+               # reader shares (compare_json, A1) and the counts the next run is compared against (metrics_json)
+               ('rule_version', 'string'), ('named_rate', 'number'), ('avg_position', 'number'), ('first_rate', 'number'), ('pos_visibility', 'number'),
+               ('rate_period', 'string'), ('compare_json', 'string'), ('metrics_json', 'string')]
 # v4.9: one row per site per day from the AI Pulse (the panel on the fast engines; small aggregates, no answer text)
 AI_DAILY_TABLE = 'seo_ai_daily'
 AI_DAILY_COLS = [('site_id', 'string'), ('domain', 'string'), ('date', 'string'), ('checked_at', 'string'), ('run_id', 'string'), ('samples', 'number'), ('mentioned', 'number'), ('cited', 'number'),
                  ('mention_rate', 'number'), ('citation_rate', 'number'), ('share_of_voice', 'number'), ('visibility_score', 'number'), ('engines_json', 'string'), ('prompts_json', 'string'),
                  ('competitors_json', 'string'), ('sources_json', 'string'), ('alerts', 'string'), ('cost_usd', 'number'),
-                 ('sample_json', 'string')]   # G6 (2026-10-18): the morning's rotating sample — mode, N a week, questions asked of the panel, strata covered
+                 ('sample_json', 'string'),   # G6 (2026-10-18): the morning's rotating sample — mode, N a week, questions asked of the panel, strata covered
+                 # F1b (2026-10-23): the rule the morning was counted under (mentioned = NAMED from it on), whether it asked the whole panel or a
+                 # rotating sample, how many questions, which engines answered, a partial morning (an engine asked returned nothing), the mean
+                 # place, the per-answer record the weekly run pools (named, cited, place, competitors named) and what could be read (A7)
+                 ('rule_version', 'string'), ('sample_mode', 'string'), ('questions_asked', 'number'), ('engines_answered', 'string'), ('partial', 'boolean'),
+                 ('avg_position', 'number'), ('detail_json', 'string'), ('readable_json', 'string')]
 # v4.12 (AI_GROWTH_SPEC.md): the weekly AI Growth loop — what it does so the site gets named and cited, not only measured.
 # seo_ai_pages: one row per site and key page: can an AI assistant read and quote it (raw HTML without JavaScript, answer in the first 200
 # characters, a visible update date, question headings, sourced figures, size), and is it in Bing's index (Bing Webmaster GetUrlInfo) / submitted.
