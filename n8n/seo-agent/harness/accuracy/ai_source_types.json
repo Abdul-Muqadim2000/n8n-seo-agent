@@ -1,0 +1,517 @@
+{
+ "about": "W2-E1 (2026-10-23): a labelled set for the rule-based source types of v5/code/_ai_answer_data.js (AAD.sourceType with the own / rival context AI Metrics passes). Labelled by hand before the score was read. Context: techand.ai with the configured competitors below; a rival is any host AIE.sameEntity folds into one of them. Types: own; rival; ugc (forums, video, social, platform-hosted blogs); reference (encyclopedias, dictionaries, academic, standards); editorial (news, magazines, research and analyst firms); government (government, official and free-zone bodies); directory (directories, review and listing sites); other (company and product sites, consultancies, vendors' docs and blogs).",
+ "context": {
+  "own": "techand.ai",
+  "rivals": [
+   "cleartax.com",
+   "edicomgroup.com",
+   "zoho.com"
+  ]
+ },
+ "cases": [
+  {
+   "host": "techand.ai",
+   "type": "own"
+  },
+  {
+   "host": "www.techand.ai",
+   "type": "own"
+  },
+  {
+   "host": "blog.techand.ai",
+   "type": "own"
+  },
+  {
+   "host": "cleartax.com",
+   "type": "rival"
+  },
+  {
+   "host": "cleartax.in",
+   "type": "rival"
+  },
+  {
+   "host": "edicomgroup.com",
+   "type": "rival"
+  },
+  {
+   "host": "edicom.com",
+   "type": "rival"
+  },
+  {
+   "host": "www.zoho.com",
+   "type": "rival"
+  },
+  {
+   "host": "zoho.com",
+   "type": "rival"
+  },
+  {
+   "host": "mof.gov.ae",
+   "type": "government"
+  },
+  {
+   "host": "tax.gov.ae",
+   "type": "government"
+  },
+  {
+   "host": "u.ae",
+   "type": "government"
+  },
+  {
+   "host": "www.gov.uk",
+   "type": "government"
+  },
+  {
+   "host": "irs.gov",
+   "type": "government"
+  },
+  {
+   "host": "ec.europa.eu",
+   "type": "government"
+  },
+  {
+   "host": "dubaided.gov.ae",
+   "type": "government"
+  },
+  {
+   "host": "difc.ae",
+   "type": "government"
+  },
+  {
+   "host": "dmcc.ae",
+   "type": "government"
+  },
+  {
+   "host": "meydanfz.ae",
+   "type": "government"
+  },
+  {
+   "host": "rakez.com",
+   "type": "government"
+  },
+  {
+   "host": "canada.ca",
+   "type": "government"
+  },
+  {
+   "host": "ato.gov.au",
+   "type": "government"
+  },
+  {
+   "host": "gov.sg",
+   "type": "government"
+  },
+  {
+   "host": "zatca.gov.sa",
+   "type": "government"
+  },
+  {
+   "host": "nhs.uk",
+   "type": "government"
+  },
+  {
+   "host": "mohre.gov.ae",
+   "type": "government"
+  },
+  {
+   "host": "www.ifza.com",
+   "type": "government"
+  },
+  {
+   "host": "en.wikipedia.org",
+   "type": "reference"
+  },
+  {
+   "host": "ar.wikipedia.org",
+   "type": "reference"
+  },
+  {
+   "host": "britannica.com",
+   "type": "reference"
+  },
+  {
+   "host": "investopedia.com",
+   "type": "reference"
+  },
+  {
+   "host": "merriam-webster.com",
+   "type": "reference"
+  },
+  {
+   "host": "arxiv.org",
+   "type": "reference"
+  },
+  {
+   "host": "researchgate.net",
+   "type": "reference"
+  },
+  {
+   "host": "mit.edu",
+   "type": "reference"
+  },
+  {
+   "host": "ox.ac.uk",
+   "type": "reference"
+  },
+  {
+   "host": "scholar.google.com",
+   "type": "reference"
+  },
+  {
+   "host": "developer.mozilla.org",
+   "type": "reference"
+  },
+  {
+   "host": "iso.org",
+   "type": "reference"
+  },
+  {
+   "host": "w3.org",
+   "type": "reference"
+  },
+  {
+   "host": "ieee.org",
+   "type": "reference"
+  },
+  {
+   "host": "khanacademy.org",
+   "type": "reference"
+  },
+  {
+   "host": "wikidata.org",
+   "type": "reference"
+  },
+  {
+   "host": "reddit.com",
+   "type": "ugc"
+  },
+  {
+   "host": "old.reddit.com",
+   "type": "ugc"
+  },
+  {
+   "host": "youtube.com",
+   "type": "ugc"
+  },
+  {
+   "host": "m.youtube.com",
+   "type": "ugc"
+  },
+  {
+   "host": "youtu.be",
+   "type": "ugc"
+  },
+  {
+   "host": "quora.com",
+   "type": "ugc"
+  },
+  {
+   "host": "stackoverflow.com",
+   "type": "ugc"
+  },
+  {
+   "host": "medium.com",
+   "type": "ugc"
+  },
+  {
+   "host": "linkedin.com",
+   "type": "ugc"
+  },
+  {
+   "host": "ae.linkedin.com",
+   "type": "ugc"
+  },
+  {
+   "host": "x.com",
+   "type": "ugc"
+  },
+  {
+   "host": "facebook.com",
+   "type": "ugc"
+  },
+  {
+   "host": "github.com",
+   "type": "ugc"
+  },
+  {
+   "host": "community.dynamics.com",
+   "type": "ugc"
+  },
+  {
+   "host": "community.hubspot.com",
+   "type": "ugc"
+  },
+  {
+   "host": "forum.odoo.com",
+   "type": "ugc"
+  },
+  {
+   "host": "answers.microsoft.com",
+   "type": "ugc"
+  },
+  {
+   "host": "tiktok.com",
+   "type": "ugc"
+  },
+  {
+   "host": "dev.to",
+   "type": "ugc"
+  },
+  {
+   "host": "substack.com",
+   "type": "ugc"
+  },
+  {
+   "host": "g2.com",
+   "type": "directory"
+  },
+  {
+   "host": "capterra.com",
+   "type": "directory"
+  },
+  {
+   "host": "clutch.co",
+   "type": "directory"
+  },
+  {
+   "host": "trustpilot.com",
+   "type": "directory"
+  },
+  {
+   "host": "goodfirms.co",
+   "type": "directory"
+  },
+  {
+   "host": "getapp.com",
+   "type": "directory"
+  },
+  {
+   "host": "softwareadvice.com",
+   "type": "directory"
+  },
+  {
+   "host": "crunchbase.com",
+   "type": "directory"
+  },
+  {
+   "host": "yelp.com",
+   "type": "directory"
+  },
+  {
+   "host": "yellowpages-uae.com",
+   "type": "directory"
+  },
+  {
+   "host": "sortlist.com",
+   "type": "directory"
+  },
+  {
+   "host": "saashub.com",
+   "type": "directory"
+  },
+  {
+   "host": "alternativeto.net",
+   "type": "directory"
+  },
+  {
+   "host": "producthunt.com",
+   "type": "directory"
+  },
+  {
+   "host": "glassdoor.com",
+   "type": "directory"
+  },
+  {
+   "host": "tripadvisor.com",
+   "type": "directory"
+  },
+  {
+   "host": "trustradius.com",
+   "type": "directory"
+  },
+  {
+   "host": "softwaresuggest.com",
+   "type": "directory"
+  },
+  {
+   "host": "gulfnews.com",
+   "type": "editorial"
+  },
+  {
+   "host": "khaleejtimes.com",
+   "type": "editorial"
+  },
+  {
+   "host": "thenationalnews.com",
+   "type": "editorial"
+  },
+  {
+   "host": "zawya.com",
+   "type": "editorial"
+  },
+  {
+   "host": "arabianbusiness.com",
+   "type": "editorial"
+  },
+  {
+   "host": "forbes.com",
+   "type": "editorial"
+  },
+  {
+   "host": "techcrunch.com",
+   "type": "editorial"
+  },
+  {
+   "host": "reuters.com",
+   "type": "editorial"
+  },
+  {
+   "host": "bloomberg.com",
+   "type": "editorial"
+  },
+  {
+   "host": "bbc.co.uk",
+   "type": "editorial"
+  },
+  {
+   "host": "nytimes.com",
+   "type": "editorial"
+  },
+  {
+   "host": "gartner.com",
+   "type": "editorial"
+  },
+  {
+   "host": "statista.com",
+   "type": "editorial"
+  },
+  {
+   "host": "mckinsey.com",
+   "type": "editorial"
+  },
+  {
+   "host": "techradar.com",
+   "type": "editorial"
+  },
+  {
+   "host": "zdnet.com",
+   "type": "editorial"
+  },
+  {
+   "host": "hbr.org",
+   "type": "editorial"
+  },
+  {
+   "host": "businessinsider.com",
+   "type": "editorial"
+  },
+  {
+   "host": "entrepreneur.com",
+   "type": "editorial"
+  },
+  {
+   "host": "gulfbusiness.com",
+   "type": "editorial"
+  },
+  {
+   "host": "computerweekly.com",
+   "type": "editorial"
+  },
+  {
+   "host": "economictimes.indiatimes.com",
+   "type": "editorial"
+  },
+  {
+   "host": "searchengineland.com",
+   "type": "editorial"
+  },
+  {
+   "host": "the-gulf-times.com",
+   "type": "editorial"
+  },
+  {
+   "host": "gulftoday.ae",
+   "type": "editorial"
+  },
+  {
+   "host": "sap.com",
+   "type": "other"
+  },
+  {
+   "host": "oracle.com",
+   "type": "other"
+  },
+  {
+   "host": "microsoft.com",
+   "type": "other"
+  },
+  {
+   "host": "learn.microsoft.com",
+   "type": "other"
+  },
+  {
+   "host": "amazon.ae",
+   "type": "other"
+  },
+  {
+   "host": "noon.com",
+   "type": "other"
+  },
+  {
+   "host": "shopify.com",
+   "type": "other"
+  },
+  {
+   "host": "salesforce.com",
+   "type": "other"
+  },
+  {
+   "host": "odoo.com",
+   "type": "other"
+  },
+  {
+   "host": "quickbooks.intuit.com",
+   "type": "other"
+  },
+  {
+   "host": "xero.com",
+   "type": "other"
+  },
+  {
+   "host": "tallysolutions.com",
+   "type": "other"
+  },
+  {
+   "host": "flick.network",
+   "type": "other"
+  },
+  {
+   "host": "finline.ae",
+   "type": "other"
+  },
+  {
+   "host": "azdan.com",
+   "type": "other"
+  },
+  {
+   "host": "avalara.com",
+   "type": "other"
+  },
+  {
+   "host": "hubspot.com",
+   "type": "other"
+  },
+  {
+   "host": "deloitte.com",
+   "type": "other"
+  },
+  {
+   "host": "pwc.com",
+   "type": "other"
+  },
+  {
+   "host": "blog.sap.com",
+   "type": "other"
+  }
+ ]
+}

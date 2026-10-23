@@ -19683,5 +19683,6 @@ await require('./scenarios_kwfinal')({ H, run, mock, store, guard, reset, begin 
 await require('./scenarios_ctfix2')({ H, run, mock, store, guard, reset, begin });   // CTX1-CTX7 (CT-FIX2 2026-10-22, live page exec 159): the promise check in two stages (Haiku mocked), the reworded round-1 promise, the page-type length band, the citation re-link, one slug, inbound anchors, the Word text, the judge's measured cost
 await require('./scenarios_pubdraft')({ H, run, mock, store, guard, reset, begin });   // PD1-PD3 (2026-10-23, techand.ai on production): a draft that needed edits, published by hand and reported from its report - found by its request id, leftover brackets on the live page named, no false gaps
 await require('./scenarios_f1a')({ H, run, mock, store, guard, reset, begin });   // AIENT + F1A-* (F1a 2026-10-23, ENGINE_AUDIT E3 E4 E5 E8 E10 E16): who an AI answer names - the labelled set accuracy/ai_entities.json ratcheted, one scenario per finding, the answer-row contract
+await require('./scenarios_w2e1')({ H, run, mock, store, guard, reset, begin });   // W2E1-* (W2-E1 2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E1.md): the answer-level data - full text, cited / read pages, fan-out, cards, the analyst's re-read, urls / sources / shopping / ads-local, source types ratcheted (accuracy/ai_source_types.json)
 H.report();
 })();
