@@ -324,6 +324,8 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Search Console, GA4 and Trends', values: [true, true, true] },
       { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews; Copilot and the ChatGPT and Gemini APIs on request', values: [false, '50 a website included, up to 500', 'Up to 500 questions'] }, // a bigger panel uses extra credits, shown before saving
       { label: 'Questions by buyer role and market', hint: 'Rates per topic, buyer role and market with 95% ranges; import your own list as CSV', values: [false, true, true] }, // PLACEHOLDER, confirm
+      { label: 'Every AI answer, opened up', hint: 'The whole answer, brands in order, every source cited, searches run; each question across assistants and over time; CSV downloads', values: [false, true, true] },
+      { label: 'Your own AI alert rules', hint: 'Thresholds per engine, topic or competitor, with a preview on past checks', values: [false, true, true] },
       { label: 'Daily AI Pulse', hint: 'Alerts only on statistically real changes', values: [false, true, true] },
       { label: 'AI growth, every week', hint: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win suggested', values: [false, true, true] },
       { label: 'Earned media', hint: 'The exact pages AI cites without naming you, with a draft for each', values: [false, true, true] },
