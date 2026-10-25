@@ -1,0 +1,81 @@
+WEBVTT
+
+00:00:00.469 --> 00:00:05.165
+Welcome to Alaventra. Rank in
+search. Get recommended by AI.
+
+00:00:06.143 --> 00:00:10.943
+In tutorial 2.3, you'll connect
+Search Console and Google Analytics,
+
+00:00:10.993 --> 00:00:13.143
+so your reports use your own figures.
+
+00:00:14.193 --> 00:00:18.393
+First, open Website settings,
+then Verification & Google.
+
+00:00:18.443 --> 00:00:22.303
+Under Google data, click Copy
+e-mail to copy the address shown.
+
+00:00:23.317 --> 00:00:28.372
+Next, in Google Search Console, go to
+Settings, then Users and permissions.
+
+00:00:28.422 --> 00:00:31.412
+Click Add user, paste the
+address, and choose Full.
+
+00:00:31.462 --> 00:00:34.772
+Not sure where? Click Show
+me how for the exact clicks.
+
+00:00:35.776 --> 00:00:38.726
+Then open Google Analytics. It's optional,
+
+00:00:38.776 --> 00:00:42.176
+but it adds visits and
+conversions to your weekly report.
+
+00:00:42.226 --> 00:00:46.501
+In Admin, open Property access
+management, add the same address,
+
+00:00:46.551 --> 00:00:50.304
+and choose the Viewer role. Show
+me how has the steps here too.
+
+00:00:51.348 --> 00:00:55.813
+Know your property's number? Click
+Enter a property ID instead, type it in,
+
+00:00:55.863 --> 00:00:57.211
+and click Save ID.
+
+00:00:59.319 --> 00:01:04.094
+Here's a website with both connected.
+Back in Alaventra, click Check again,
+
+00:01:04.144 --> 00:01:06.729
+then pick the property
+that measures your website.
+
+00:01:07.749 --> 00:01:11.249
+Search Console shows Connected,
+with Full permission.
+
+00:01:11.299 --> 00:01:15.987
+Now your weekly report, audits and
+recommendations use your own Google data.
+
+00:01:16.981 --> 00:01:21.562
+So, copy the address, add it in Search
+Console, add it in Google Analytics,
+
+00:01:21.612 --> 00:01:22.588
+and check again.
+
+00:01:23.960 --> 00:01:29.600
+Your Google data is connected. Next,
+add another website in tutorial 2.4.

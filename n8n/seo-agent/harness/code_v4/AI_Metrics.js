@@ -2403,8 +2403,12 @@ return plans.map(p => {
   // recorded - for the headline, each engine, each segment and each competitor; its range is taken over answers, not mentions
   const compTotal = H.sov_mentions - H.sov_self;
   const share_of_voice = H.sov == null ? 0 : H.sov;
+  // 2026-10-25 (production): n8n 2.41's Code sandbox replaces Object.defineProperty with a no-op and freezes Object, so a hidden `_st`
+  // property was never attached there and every run with a competitor failed at the stats ("reading 'named'"); the harness runs plain
+  // Node, where it worked. The per-competitor stats are kept in a Map instead (no property on the row, so nothing extra is stored).
+  const COMP_ST = new Map(); const stOf = (c) => COMP_ST.get(c) || {};
   comp.forEach(c => { const s0 = AVM.rivalAgg(U, c.domain); c.share = s0.sov == null ? 0 : s0.sov; c.named_rate = s0.named_rate; c.cited_rate = s0.cited_rate; c.avg_position = s0.avg_position; c.position_answers = s0.position_n;
-    c.sov = s0.sov; c.sov_answers = s0.sov_n; c.answers = s0.n; Object.defineProperty(c, '_st', { value: s0, enumerable: false }); });
+    c.sov = s0.sov; c.sov_answers = s0.sov_n; c.answers = s0.n; COMP_ST.set(c, s0); });
   // W2-E2 (2026-10-23, fixes/W2-E2.md): the headline's 95% ranges with the QUESTION as the sampling unit (design effect + Korn-Graubard), ci_json
   const W2CI = AVX.ci(U, { rivalIds: comp.map(c => c.domain) });
   // per engine (this run + pulse samples)
@@ -2793,7 +2797,7 @@ return plans.map(p => {
   const compTests = [];
   // E19 (F1b): a competitor's share of voice is tested on its standard error over answers, against the stored figure of the previous run
   for (const c of comp) { const b0 = prevComp.get(c.domain); const sb = PS && PS.competitors ? PS.competitors[c.domain] : null; if (!b0 || !sb) continue;
-    const t = clusterZ(AVM.seChange(c.sov, c._st.sov_se, c._st.sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0, { min: 10 }), 'named_rate');   // R-E13
+    const t = clusterZ(AVM.seChange(c.sov, stOf(c).sov_se, stOf(c).sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0, { min: 10 }), 'named_rate');   // R-E13
     if (t.z != null && t.delta > 0 && c.mentions >= 5) { compTests.push({ c, t }); family.push({ id: 'comp:' + c.domain, label: c.domain + ' share of voice', z: t.z }); } }
   const multiple_tests = holm(family, 0.05);
   const passes = (id) => !!(multiple_tests.by[id] && multiple_tests.by[id].reject);
@@ -2850,7 +2854,7 @@ return plans.map(p => {
   const numOr = (v) => v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v);
   for (const c of comp) { const b0 = prevComp.get(c.domain); if (!cmpOk || !b0) { c.delta = null; continue; } const sb = PS && PS.competitors ? PS.competitors[c.domain] : null;
     const dd = (a, b) => numOr(a) == null || numOr(b) == null ? null : Math.round(10 * (Number(a) - Number(b))) / 10;
-    const t = sb ? AVM.seChange(c.sov, c._st.sov_se, c._st.sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0) : null;
+    const t = sb ? AVM.seChange(c.sov, stOf(c).sov_se, stOf(c).sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0) : null;
     c.delta = { named_rate: dd(c.named_rate, b0.named_rate), sov: dd(c.sov, b0.sov != null ? b0.sov : b0.share), avg_position: dd(c.avg_position, b0.avg_position), cited_rate: dd(c.cited_rate, b0.cited_rate),
       sov_significant: t ? t.significant : null, sov_p: t ? t.p : null, why: t ? t.why : 'the earlier run did not record this competitor per answer' };
     for (const [e, x] of Object.entries(c.engines || {})) { const y = ((b0.engines || {})[e]) || null; x.delta = y ? { named_rate: dd(x.named_rate, y.named_rate), sov: dd(x.sov, y.sov), avg_position: dd(x.avg_position, y.avg_position), cited_rate: dd(x.cited_rate, y.cited_rate) } : null; } }
@@ -2858,7 +2862,7 @@ return plans.map(p => {
     sov: { rate: H.sov, se: H.sov_se, n: H.sov_n, self: H.sov_self, mentions: H.sov_mentions },
     position: { mean: H.avg_position, sd: H.position_sd, n: H.position_n, first: H.first, first_rate: H.first_rate, pos_visibility: H.pos_visibility, pos_visibility_se: H.pos_visibility_se },
     score: { score: visibility_score, half: score_band.half, n: score_band.n, n_eff: score_band.n_eff },
-    competitors: Object.fromEntries(comp.map(c => [c.domain, { named: c._st.named, n: c._st.n, sov: c._st.sov, sov_se: c._st.sov_se, sov_n: c._st.sov_n, avg_position: c._st.avg_position, position_n: c._st.position_n, position_sd: c._st.position_sd, cited_rate: c._st.cited_rate }])),
+    competitors: Object.fromEntries(comp.map(c => [c.domain, { named: stOf(c).named, n: stOf(c).n, sov: stOf(c).sov, sov_se: stOf(c).sov_se, sov_n: stOf(c).sov_n, avg_position: stOf(c).avg_position, position_n: stOf(c).position_n, position_sd: stOf(c).position_sd, cited_rate: stOf(c).cited_rate }])),
     window: rwin, pulse_runs: [...new Set(PR.map(d => d.run_id).filter(Boolean))], pulse_left_out: pulseOld.length };
   const cmpM = (now, before, nNow, nBefore, t) => { const enough = nNow >= AVM.MIN && nBefore >= AVM.MIN; const n0 = numOr(now), b0 = numOr(before);
     return { now: n0, prev: b0, delta: cmpOk && n0 != null && b0 != null ? Math.round(10 * (n0 - b0)) / 10 : null, n_now: Math.round(nNow || 0), n_prev: Math.round(nBefore || 0),

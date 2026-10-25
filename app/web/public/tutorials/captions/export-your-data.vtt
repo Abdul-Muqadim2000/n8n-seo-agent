@@ -1,0 +1,116 @@
+WEBVTT
+
+00:00:00.469 --> 00:00:05.165
+Welcome to Alaventra. Rank in
+search. Get recommended by AI.
+
+00:00:06.164 --> 00:00:10.414
+In tutorial 11.3, you'll
+send your rankings, traffic,
+
+00:00:10.464 --> 00:00:14.871
+audits and AI figures to your own
+warehouse, and chart them in Looker Studio.
+
+00:00:15.901 --> 00:00:21.238
+First, open Company settings, choose
+Integrations, and scroll down to Data export.
+
+00:00:22.330 --> 00:00:27.855
+Click Add a destination. Storage
+works with Amazon S3, Cloudflare R2,
+
+00:00:27.905 --> 00:00:29.423
+and other stores like them.
+
+00:00:30.412 --> 00:00:34.537
+Add your bucket, a folder, and
+the access keys from your storage.
+
+00:00:34.587 --> 00:00:36.574
+Show me how explains where to find them.
+
+00:00:37.933 --> 00:00:41.383
+Or choose BigQuery. Add
+your project and dataset,
+
+00:00:41.433 --> 00:00:43.504
+then paste the key file it gives you.
+
+00:00:44.937 --> 00:00:50.122
+Next, tick the tables you want: rank
+history, your search figures, audit findings,
+
+00:00:50.122 --> 00:00:53.367
+AI visibility, backlinks,
+and your analyses.
+
+00:00:54.382 --> 00:01:00.502
+For storage, also pick the file format:
+a data file with one row a line, or CSV,
+
+00:01:00.552 --> 00:01:02.516
+which opens in any spreadsheet.
+
+00:01:03.500 --> 00:01:07.540
+Then choose how often: every day,
+every week on the day you pick,
+
+00:01:07.590 --> 00:01:09.477
+or only when you press Run now.
+
+00:01:10.975 --> 00:01:16.695
+Pick the time. It's in UTC, the world clock,
+so choose one that suits your morning.
+
+00:01:16.745 --> 00:01:21.459
+Then click Check and connect. Alaventra
+makes sure it can reach your data first.
+
+00:01:22.453 --> 00:01:25.828
+Your destination shows as
+Working, with its schedule.
+
+00:01:25.878 --> 00:01:28.412
+Run now sends a fresh copy straight away.
+
+00:01:29.453 --> 00:01:33.513
+To change when it runs, click Schedule,
+choose a new time, and save it.
+
+00:01:35.932 --> 00:01:40.482
+Every export is listed under Recent
+exports, with how many rows it sent.
+
+00:01:41.974 --> 00:01:47.836
+Finally, to chart it all in Looker Studio,
+create a read-only key under API access.
+
+00:01:48.840 --> 00:01:52.515
+Then click Show me how. The guide
+walks you through adding the connector,
+
+00:01:52.565 --> 00:01:53.988
+one step at a time.
+
+00:01:55.869 --> 00:01:59.794
+Now your figures land in your own
+warehouse, ready for your dashboards.
+
+00:01:59.844 --> 00:02:03.228
+Snowflake and Redshift can
+read the storage files too.
+
+00:02:04.223 --> 00:02:09.828
+So, add a destination, choose the tables
+and format, set a daily or weekly schedule,
+
+00:02:09.878 --> 00:02:11.393
+and connect Looker Studio.
+
+00:02:12.412 --> 00:02:15.037
+Your data now reaches your own dashboards.
+
+00:02:15.087 --> 00:02:19.391
+Next, connect an AI
+assistant, in tutorial 11.4.

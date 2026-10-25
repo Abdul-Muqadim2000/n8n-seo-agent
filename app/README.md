@@ -342,8 +342,9 @@ engine and of this repository.
   would be blocked. The same CSP is why the business site has no external scripts, embeds or iframes; remote `https:` images are
   allowed (the marketing photos).
 - **Business site routes** (public, lazy chunks that signed-in app pages never load): `/` (visitors; signed-in users go straight into
-  the app), `/platform`, `/platform/<slug>` (one per capability), `/how-it-works`, `/solutions`, `/solutions/<slug>`, `/pricing`,
-  `/security`, `/about`, `/contact`, `/changelog`, `/privacy`, `/terms`. An unknown slug shows the 404 page.
+  the app), `/platform`, `/platform/<slug>` (one per capability), `/how-it-works`, `/tutorials`, `/tutorials/<slug>` (one per
+  tutorial), `/solutions`, `/solutions/<slug>`, `/pricing`, `/security`, `/about`, `/contact`, `/changelog`, `/privacy`, `/terms`.
+  An unknown slug shows the 404 page.
 - **Content registries** in `web/src/marketing/content/`: `features.ts` (the capabilities: Home grid, Platform page, mega-menu,
   footer and every `/platform/<slug>` page render from it), `solutions.ts`, `pricing.ts`, `changelog.ts` (add an entry with every
   release), `site.ts` (name, e-mail addresses, navigation, integrations), `images.ts` (every photo). How to add a capability:
@@ -352,6 +353,25 @@ engine and of this repository.
   billing answers in `pricing.ts`; the `@alaventra.com` e-mail addresses in `site.ts` (the contact form opens a `mailto:`; the mailboxes must exist);
   the Unsplash photos in `images.ts`; the privacy policy and terms in `marketing/components/company/legal.ts` (drafts for counsel).
   Copy uses capability facts only — no invented customers, logos, ratings or results.
+
+### Video tutorials (`/tutorials`)
+
+The video course: numbered series of short tutorials (1.1, 1.2, ...), each with a page of its own (player, clickable chapters, the
+steps written out, next / previous, the rest of the series). The catalogue and the finished films' details are data in
+`web/src/marketing/content/tutorials.ts` and `tutorial-films.ts`; a tutorial without a finished film shows "Video coming soon" and
+its written steps, never an empty player.
+
+- **Adding films**: `python3 scripts/sync_tutorials.py --catalogue <video project>/data/tutorials.json --films <alaventra-video>
+  --videos` (or in `python:3.12-slim` with Pillow, the command is in the script's help). It refreshes the catalogue block, writes
+  `tutorial-films.ts` (length, chapter times, finish date), a 960 px WebP cover per film in `web/public/tutorials/covers/` and its
+  captions in `web/public/tutorials/captions/` (both committed), and with `--videos` copies the MP4s into
+  `web/public/tutorials/video/` for local preview. That folder is git-ignored: the films (about 8 MB each) are never committed.
+- **Where the films play from**: `VITE_TUTORIALS_VIDEO_BASE` (build time; `.env.example`), e.g. `https://media.alaventra.com/tutorials`;
+  the player loads `<base>/<slug>.mp4`, so upload each film under its tutorial's slug (`create-your-account.mp4`). Unset in
+  development: the local folder above. Unset in a production build: the cover and the steps are shown, no player. The Vercel
+  middleware adds the base's origin to the page's `media-src` (it reads the same variable at the edge, so set it for both). The
+  single-server image (`server/src/app.ts`) has no `media-src` of its own, so there the films must be served from the same origin.
+- **Captions**: a WebVTT track per film, off by default, because the subtitles are already burned into the picture.
 
 ## Security model
 

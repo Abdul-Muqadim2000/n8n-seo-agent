@@ -12,6 +12,8 @@
 //   PRIMARY_HOSTS  comma-separated hosts that are ours (e.g. alaventra.com,www.alaventra.com,app.alaventra.com). A request to any
 //                  other host is treated as an agency portal and proxied whole. *.vercel.app is always ours. Unset: every host is
 //                  ours (no portal pass-through), the safe default until custom portal domains are added to the Vercel project.
+//   VITE_TUTORIALS_VIDEO_BASE  where the tutorial films are served from (also read by the web build, app/README.md "Video tutorials"):
+//                  its origin is added to the page's media-src, so the /tutorials player may load them. Unset: films from this site only.
 //   ORIGIN_SECRET  (deploy/gcp) the shared secret the API host's proxy (Caddy) checks before it believes X-Real-IP / X-Forwarded-Host
 //                  from us; sent as X-Origin-Secret on every proxied request. Same value as ORIGIN_SECRET in the VM's prod.env.
 //                  Unset: the API sees Vercel's address as the visitor's (shared rate limits) and our host as its own.
@@ -23,11 +25,21 @@
 // vercel.json carries none.
 import { next, rewrite } from '@vercel/functions/middleware';
 
+// the tutorial films play in YouTube's privacy-enhanced player (www.youtube-nocookie.com; www.youtube.com for its own redirects, e.g.
+// a sign-in check). Only frames: the page drives the player by postMessage and loads no YouTube script, so script-src stays 'self';
+// the covers are our own pictures, so img-src needs nothing new either.
+export const YOUTUBE_FRAMES = 'https://www.youtube-nocookie.com https://www.youtube.com';
 const CSP_BASE =
   "default-src 'self'; base-uri 'self'; font-src 'self' https: data:; form-action 'self'; frame-ancestors 'self'; img-src 'self' data: https:; " +
-  "object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; frame-src 'self' blob:; upgrade-insecure-requests";
-/** the page's CSP: the API's origin is the one other place scripts may talk to */
-export const csp = (apiOrigin: string) => `${CSP_BASE}; connect-src 'self'${/^https:\/\/[^/\s;]+$/.test(apiOrigin) ? ' ' + apiOrigin : ''}`;
+  "object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; frame-src 'self' blob: " +
+  YOUTUBE_FRAMES + '; upgrade-insecure-requests';
+/** the origin the tutorial films play from (VITE_TUTORIALS_VIDEO_BASE: an https origin with an optional path), or '' */
+export const mediaOrigin = (videoBase: string) => /^(https:\/\/[^/\s;?#]+)(\/[^\s;?#]*)?$/.exec(videoBase.trim())?.[1] ?? '';
+/** the page's CSP: the API's origin is the one other place scripts may talk to; the films' origin the one other media source */
+export const csp = (apiOrigin: string, videoBase = '') => {
+  const media = mediaOrigin(videoBase);
+  return `${CSP_BASE}${media ? `; media-src 'self' ${media}` : ''}; connect-src 'self'${/^https:\/\/[^/\s;]+$/.test(apiOrigin) ? ' ' + apiOrigin : ''}`;
+};
 
 export const config = { matcher: '/:path*' };
 
@@ -46,7 +58,7 @@ export default function middleware(request: Request): Response {
   const primary = hostsOf(process.env.PRIMARY_HOSTS);
   const ours = primary.size === 0 || primary.has(host) || host.endsWith('.vercel.app') || host === 'localhost';
   const origin = (process.env.API_ORIGIN ?? '').trim().replace(/\/+$/, '');
-  if (!isApi && ours) return next({ headers: { 'content-security-policy': csp(origin) } });
+  if (!isApi && ours) return next({ headers: { 'content-security-policy': csp(origin, process.env.VITE_TUTORIALS_VIDEO_BASE ?? '') } });
 
   if (!/^https?:\/\/[^/]+$/.test(origin)) {
     return new Response(JSON.stringify({ error: 'The API is not configured for this deployment.', code: 'api_unconfigured' }), {

@@ -62,8 +62,9 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
 ## Status (2026-10-23 night, AI visibility + question panel upgrade — latest)
-Owner asked for a full audit + R&D + multi-agent upgrade of AI visibility, shipped safely. **Code done, pushed (`feature/seo-agent-v4.5`
-@ `8b4b1a59`), NOT deployed** (the permission system refused the VM backup and the tunnel; `main` not pushed). Read
+Owner asked for a full audit + R&D + multi-agent upgrade of AI visibility, shipped safely. **DEPLOYED 2026-10-23 ~22:20 UTC** at `84d65d8f`:
+backup `pg/2026-10-23/*T221220Z.dump`; engine `deploy_engine.py --no-build --apply --create-missing` (columns synced, 16 updated, pilot workflows
+imported, 26 published, SEOagentCallback deactivated); API on the VM (detached checkout + `up -d --build app`, healthy); web via PR #36. Read
 **`n8n/seo-agent/docs/ai-visibility-2026-10-23/RESUME.md`** (deploy steps) — audits (PROD_STATE, ENGINE_AUDIT E1-E22, APP_AUDIT A1-A20,
 MARKET_RND), WAVE2_CONTRACTS, fixes/*.md, REVIEW_ENGINE/REVIEW_APP. Entities (competitor precision 51.7 -> 100%), one SOV + position +
 compare_json, never pay twice + Unicode ids, answer text / citations / shopping, clustered ranges (95.3% coverage), sentiment (early reading,

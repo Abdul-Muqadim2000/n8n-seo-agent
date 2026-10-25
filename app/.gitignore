@@ -6,3 +6,6 @@ dist/
 coverage/
 # test fixtures in real log formats (synthetic: vendor bot ranges + documentation / private addresses) are code, not logs
 !server/test/fixtures/logs/*.log
+
+# tutorial films for local preview (app/scripts/sync_tutorials.py --videos); production plays them from VITE_TUTORIALS_VIDEO_BASE
+web/public/tutorials/video/

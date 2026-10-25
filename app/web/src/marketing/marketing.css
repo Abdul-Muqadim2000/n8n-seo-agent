@@ -50,6 +50,17 @@
   mask-image: radial-gradient(ellipse 65% 75% at 50% 45%, #000 15%, transparent 100%);
 }
 
+/* ---------- tutorials: the drawn title card of a tutorial whose film is not finished (hairlines, fading towards the bottom right) ---------- */
+.mk-tut-grid {
+  background-image:
+    linear-gradient(to right, var(--line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+  background-size: 8.33% 14.8%;
+  background-position: -1px -1px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 90% at 0% 0%, #000 20%, transparent 85%);
+  mask-image: radial-gradient(ellipse 90% 90% at 0% 0%, #000 20%, transparent 85%);
+}
+
 /* ---------- FAQ (details) ---------- */
 .mk-faq[open] .mk-faq-body {
   animation: alv-fade-up 320ms var(--brand-ease) both;

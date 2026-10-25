@@ -31,7 +31,7 @@ const siteDataPages: RouteObject[] = [
   { path: 'settings/:tab', lazy: page(() => import('@/pages/site/SiteSettingsPage')) },
 ];
 
-// An unknown /platform/:slug or /solutions/:slug is a 404 (shown by RouteError), checked against the content registry first.
+// An unknown /platform/:slug, /solutions/:slug or /tutorials/:slug is a 404 (shown by RouteError), checked against the content registry first.
 const slugGuard = (exists: (slug: string | undefined) => Promise<boolean>) => async ({ params }: LoaderFunctionArgs) => {
   if (!(await exists(params.slug))) throw new Response('Not found', { status: 404 });
   return null;
@@ -56,6 +56,8 @@ const marketingPages: RouteObject[] = [
   { path: '/platform', lazy: page(() => import('@/marketing/pages/PlatformPage')) },
   { path: '/platform/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/features')).featureBySlug(slug)), lazy: slugPage(() => import('@/marketing/pages/FeaturePage')) },
   { path: '/how-it-works', lazy: page(() => import('@/marketing/pages/HowItWorksPage')) },
+  { path: '/tutorials', lazy: page(() => import('@/marketing/pages/TutorialsPage')) },
+  { path: '/tutorials/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/tutorials')).tutorialBySlug(slug)), lazy: slugPage(() => import('@/marketing/pages/TutorialPage')) },
   { path: '/solutions', lazy: page(() => import('@/marketing/pages/SolutionsPage')) },
   { path: '/solutions/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/solutions')).solutionBySlug(slug)), lazy: slugPage(() => import('@/marketing/pages/SolutionPage')) },
   { path: '/pricing', lazy: page(() => import('@/marketing/pages/PricingPage')) },

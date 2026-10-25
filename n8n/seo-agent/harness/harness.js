@@ -60,16 +60,23 @@ async function run(node, input, opts = {}) {
   const undoReady = readyDefaults(opts.code || node);
   try { return await runNode(node, input, opts); } finally { undoReady(); }
 }
+// n8n 2.41's Code sandbox, as measured in a real Code node (2026-10-25): these three return without doing anything, everything else on
+// Object works. Calls, `instanceof Object` and the other statics pass through the proxy unchanged.
+const SANDBOX_NOOP = new Set(['defineProperty', 'defineProperties', 'setPrototypeOf']);
+const SANDBOX_OBJECT = new Proxy(Object, { get: (t, k) => SANDBOX_NOOP.has(k) ? ((o) => o) : t[k] });
 async function runNode(node, input, opts = {}) {
   const inputItems = toItems(input === undefined ? results.filter(r => r.ok && r.scenario === scenario).slice(-1)[0].items : input);
   const t0 = Date.now();
   try {
     const src = loadCode(opts.code || node);   // opts.code: run a node from another extracted file (e.g. 'Pulse__AI_Plan': the AI Pulse's node of the same name)
-    // 'URL' is shadowed on purpose: the n8n Code sandbox has no URL constructor (live finding 2026-10-02), so any use must fail here too
-    const fn = new AsyncFunction('$input', '$', '$runIndex', '$getWorkflowStaticData', '$now', '$execution', '$workflow', '$json', 'URL', src);
+    // 'URL' is shadowed on purpose: the n8n Code sandbox has no URL constructor (live finding 2026-10-02), so any use must fail here too.
+    // 'Object' and 'structuredClone' too (production, 2026-10-25): n8n 2.41's sandbox turns Object.defineProperty / defineProperties /
+    // setPrototypeOf into silent no-ops and has no structuredClone. AI Metrics hid its competitor stats with defineProperty, which worked
+    // here and crashed every live AI visibility run with a competitor ("reading 'named'"). Measured in a real n8n 2.41.4 Code node.
+    const fn = new AsyncFunction('$input', '$', '$runIndex', '$getWorkflowStaticData', '$now', '$execution', '$workflow', '$json', 'URL', 'Object', 'structuredClone', src);
     const thisArg = { helpers: { getBinaryDataBuffer: async (i, prop) => { const b = inputItems[i] && inputItems[i].binary && inputItems[i].binary[prop]; if (!b || !b.data) throw new Error('no binary ' + prop); return Buffer.from(b.data, 'base64'); } } };
     // opts.execId: the execution id n8n would give this run (scenarios_integration.js: every workflow run of a client's life has its own)
-    const out = await fn.call(thisArg, wrap(inputItems), $, opts.runIndex || 0, () => staticData, new Date(), { id: String(opts.execId || 'test-exec') }, { id: 'wf', name: 'test' }, inputItems[0] && inputItems[0].json, undefined);
+    const out = await fn.call(thisArg, wrap(inputItems), $, opts.runIndex || 0, () => staticData, new Date(), { id: String(opts.execId || 'test-exec') }, { id: 'wf', name: 'test' }, inputItems[0] && inputItems[0].json, undefined, SANDBOX_OBJECT, undefined);
     const items = toItems(out);
     store[node] = items;
     results.push({ scenario, node, ok: true, ms: Date.now() - t0, items });

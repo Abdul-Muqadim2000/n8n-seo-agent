@@ -242,14 +242,14 @@ export default function AboutPage() {
   useSeo({
     title: 'About',
     description:
-      'Alaventra is enterprise-grade autonomous SEO: one weekly loop for research, content, audits, AI search visibility and backlinks, with your team in control and only real changes reported.',
+      'Alaventra helps your business rank in search and get recommended by AI: one weekly loop for research, content, audits, AI search visibility and backlinks, with your team in control and only real changes reported.',
     path: '/about',
   });
   return (
     <>
       <PageHero
         eyebrow="About Alaventra"
-        title="Enterprise-grade autonomous SEO."
+        title="Rank in search. Get recommended by AI."
         lead="We build the system that runs SEO as a weekly loop (research, content, audits, AI answers and backlinks) so teams spend their time on the decisions that need a person."
         actions={
           <>

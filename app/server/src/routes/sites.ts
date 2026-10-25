@@ -222,7 +222,7 @@ export async function siteRoutes(app: FastifyInstance) {
     const mine = await db.query.sites.findFirst({ where: and(eq(schema.sites.orgId, a.org.id), eq(schema.sites.domain, body.domain)) });
     if (mine) throw conflict(`${body.domain} is already one of your websites.`, 'site_exists');
     if (await verifiedElsewhere(body.domain, a.org.id))
-      throw conflict(`${body.domain} is already verified by another company on this platform. If it is yours, contact the platform administrator.`, 'domain_claimed');
+      throw conflict(`${body.domain} is already verified by another company on this platform. If it is yours, contact Alaventra support.`, 'domain_claimed');
     // one engine site id, one website: foo.co.uk is refused while foo-co.uk is verified or tracked (and the other way round)
     await assertEngineIdFree(body.domain);
     const [site] = await db

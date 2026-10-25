@@ -4,7 +4,7 @@ import { solutions } from './solutions';
 
 export const site = {
   name: 'Alaventra',
-  descriptor: 'Enterprise-grade autonomous SEO.',
+  descriptor: 'Rank in search. Get recommended by AI.',
   salesEmail: 'sales@alaventra.com',
   supportEmail: 'support@alaventra.com',
   partnersEmail: 'partners@alaventra.com',
@@ -31,6 +31,7 @@ export interface NavLink {
 /** header links next to the Platform and Solutions menus */
 export const primaryNav: NavLink[] = [
   { label: 'How it works', to: '/how-it-works' },
+  { label: 'Tutorials', to: '/tutorials' },
   { label: 'Pricing', to: '/pricing' },
   { label: 'Security', to: '/security' },
 ];
@@ -49,6 +50,7 @@ export const footerNav: { title: string; links: NavLink[] }[] = [
     links: [
       { label: 'About', to: '/about' },
       { label: 'How it works', to: '/how-it-works' },
+      { label: 'Tutorials', to: '/tutorials' },
       { label: 'Pricing', to: '/pricing' },
       { label: 'Security', to: '/security' },
       { label: 'Changelog', to: '/changelog' },

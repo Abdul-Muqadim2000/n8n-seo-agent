@@ -6,6 +6,7 @@ import { Container, CtaBand, Eyebrow, GrowthLoopDiagram, IconTile, IntegrationMa
 import { CapabilityMap } from '../components/platform/CapabilityMap';
 import { CapabilityScreen, isWideScreen } from '../components/platform/CapabilityScreen';
 import { ArrowLink, jumpTo, lowerFirst, useScrollSpy } from '../components/platform/kit';
+import { LearnLink } from '../components/tutorials/LearnLink';
 import { CapabilityCount, capabilityCount, featureBySlug, features, type Feature } from '../content/features';
 import { useSeo } from '../useSeo';
 
@@ -128,6 +129,9 @@ function Hero() {
                 </li>
               ))}
             </ul>
+            <div className="mt-8 animate-fade-up" style={{ animationDelay: '320ms' }}>
+              <LearnLink />
+            </div>
           </div>
           <div className="animate-fade-up" style={{ animationDelay: '200ms' }}>
             <CapabilityMap />

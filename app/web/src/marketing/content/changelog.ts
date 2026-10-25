@@ -34,6 +34,23 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-24',
+    version: '4.4',
+    title: 'Video tutorials',
+    summary:
+      'A free course on the website: short tutorials in numbered series that show how to set up Alaventra and use it, one job at a time: 85 short videos, each with its steps written out.',
+    highlights: [
+      'The tutorials page: the whole course in 11 numbered series, from creating your account to running client work as an agency',
+      'Start here: the Getting started series in order, every one ready to watch',
+      'Every tutorial has its steps written out under the video, so you can follow it without sound or at your own pace',
+      'Chapters you can click to jump straight to a step, subtitles in every video and the full transcript to read beside it',
+      'Search the course, or filter it by series, by level, by who it is for (business owners, marketers or agencies)',
+      'Next and previous through the whole course, and the rest of the series beside every tutorial',
+    ],
+    features: ['guided-setup'],
+    labels: ['Learning'],
+  },
+  {
     date: '2026-10-23',
     version: '4.3',
     title: 'AI visibility you can open up',

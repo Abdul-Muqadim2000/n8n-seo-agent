@@ -1,0 +1,20 @@
+{
+  "about": "Plain-word rewordings that sync_tutorials.py applies to the course catalogue (titles, summaries, written steps of tutorials without a film, quick tips): no acronyms on the page. The words replaced stay in the search text. Steps that name a button keep the button's own words (Connect a CMS). A finished film's chapters are never reworded.",
+  "replace": [
+    { "from": "Verify your website with a DNS record or a meta tag", "to": "Prove the website is yours from your domain settings or your homepage code" },
+    { "from": "Choose your GA4 property and check again", "to": "Choose your Google Analytics property and check again" },
+    { "from": "Send a page to your CMS as a draft", "to": "Send a page to your website builder as a draft" },
+    { "from": "Send it to your CMS as a draft", "to": "Send it to your website builder as a draft" },
+    { "from": "Connect your CMS", "to": "Connect your website builder (WordPress, Webflow, Contentful)" },
+    { "from": "Pick your CMS and paste its access details", "to": "Pick your website builder and paste its access details" },
+    { "from": "Switch to the HTML, Markdown and page details", "to": "Switch to the page files and the page details" },
+    { "from": "or a full SEO report to share as PDF or Word", "to": "or a full report to share as PDF or Word" },
+    { "from": "or the full SEO report with keywords and competitors too", "to": "or the full report with keywords and competitors too" },
+    { "from": "Download a CSV", "to": "Download a spreadsheet file" },
+    { "from": "Deliver reports by e-mail or webhook on a schedule", "to": "Deliver reports by e-mail or to your own systems on a schedule" },
+    { "from": "Pick e-mail or a webhook, or both", "to": "Pick e-mail, your own systems, or both" },
+    { "from": "Create an API key and connect an AI assistant", "to": "Create an access key and connect an AI assistant" },
+    { "from": "Sign in with Google, SSO or a passkey", "to": "Sign in with Google, your company sign-in or a passkey" },
+    { "from": "Read the article preview, HTML and Markdown of a written page", "to": "Read the article preview and the page files of a written page" }
+  ]
+}

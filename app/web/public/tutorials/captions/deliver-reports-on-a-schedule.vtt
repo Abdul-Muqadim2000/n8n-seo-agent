@@ -1,0 +1,129 @@
+WEBVTT
+
+00:00:00.469 --> 00:00:05.165
+Welcome to Alaventra. Rank in
+search. Get recommended by AI.
+
+00:00:06.143 --> 00:00:11.868
+In tutorial 10.4, you'll send finished
+reports to your team by e-mail or webhook,
+
+00:00:11.918 --> 00:00:13.463
+on the schedule you choose.
+
+00:00:14.513 --> 00:00:18.338
+First, open Company settings,
+and click Report delivery.
+
+00:00:18.388 --> 00:00:22.936
+Reports always appear in Alaventra, and
+this decides where else they're sent.
+
+00:00:23.896 --> 00:00:28.646
+Under How often, choose to send each
+report as it arrives, or a daily,
+
+00:00:28.696 --> 00:00:33.656
+weekly or monthly summary. Choose Off
+to keep reports only in Alaventra.
+
+00:00:34.650 --> 00:00:38.395
+For a summary, pick the day, or the
+day of the month for a monthly one,
+
+00:00:38.445 --> 00:00:44.128
+and the time. The time is in UTC. The
+label at the top sums up your schedule.
+
+00:00:45.133 --> 00:00:47.808
+Under Which reports,
+tick the ones you want,
+
+00:00:47.858 --> 00:00:50.260
+or leave every box clear to send them all.
+
+00:00:51.616 --> 00:00:55.091
+Add a link anyone can open
+puts a link on each report,
+
+00:00:55.141 --> 00:00:57.741
+so you can forward it to
+someone without an account.
+
+00:00:58.765 --> 00:01:02.495
+Next, By e-mail sends each
+report with its files.
+
+00:01:02.545 --> 00:01:06.930
+Add who receives them, or leave it
+empty for everyone who sees reports.
+
+00:01:07.924 --> 00:01:10.174
+Attach the files puts the PDF,
+
+00:01:10.224 --> 00:01:13.349
+the Word draft and the fix
+pack in the message itself.
+
+00:01:14.445 --> 00:01:19.295
+A webhook sends each report to a web
+address, like a Slack or Teams channel.
+
+00:01:19.345 --> 00:01:21.620
+Turn on Send reports to a webhook.
+
+00:01:22.584 --> 00:01:25.984
+Then paste the address from
+your Slack, Teams or other tool.
+
+00:01:26.034 --> 00:01:28.393
+You can use e-mail and a webhook together.
+
+00:01:30.084 --> 00:01:33.559
+If your tool gives you a
+secret, add it in the box below,
+
+00:01:33.609 --> 00:01:36.491
+so it can tell each message
+came from Alaventra.
+
+00:01:37.515 --> 00:01:41.615
+Now click Send a test to check
+that it arrives, then click Save.
+
+00:01:41.665 --> 00:01:44.576
+The line beside them says when
+the next summary goes out.
+
+00:01:46.011 --> 00:01:50.246
+Finally, What went out lists every
+report that was sent, and any held back,
+
+00:01:50.296 --> 00:01:51.223
+with the reason.
+
+00:01:52.944 --> 00:01:57.138
+Each row shows the report, the channel,
+who it went to, and the result.
+
+00:01:59.015 --> 00:02:03.765
+Now your finished reports reach your team
+where it already works, on your schedule,
+
+00:02:03.815 --> 00:02:09.084
+with nothing to send by hand. Only your
+company's owner can change these settings.
+
+00:02:10.082 --> 00:02:14.562
+So, choose how often, pick e-mail
+or a webhook, send a test and save,
+
+00:02:14.612 --> 00:02:15.925
+then check what went out.
+
+00:02:17.057 --> 00:02:19.657
+Your reports are on their way. Next,
+
+00:02:19.707 --> 00:02:23.698
+keep your company and websites
+in order in tutorial 10.5.

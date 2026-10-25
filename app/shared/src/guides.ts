@@ -225,9 +225,9 @@ export const GUIDES = [
     trouble: [
       {
         q: 'Google says my account is not an owner',
-        a: 'Being able to *see* a property is not the same as owning it. Ask a current owner to open **Settings > Users and permissions > Add user** and add you as **Owner**, or use the DNS record or the meta tag instead, which prove the same thing without Google.',
+        a: 'Being able to see a property is not the same as owning it. Ask a current owner to open **Settings > Users and permissions > Add user** and add you as **Owner**, or use the DNS record or the meta tag instead, which prove the same thing without Google.',
       },
-      { q: 'Another company already verified this website', a: 'A website belongs to one company here. Ask the owner of that company to invite you, or contact your platform administrator.' },
+      { q: 'Another company already verified this website', a: 'A website belongs to one company here. Ask the owner of that company to invite you, or contact Alaventra support.' },
     ],
     related: ['dns-txt-record', 'meta-tag', 'search-console-access'],
     keywords: ['verify', 'ownership', 'google sign in'],
@@ -1128,7 +1128,7 @@ export const GUIDES = [
     area: 'business',
     title: 'Tell the AI monitor what your company is called',
     why: 'The monitor reads AI answers looking for you. A short name is the problem: "northwind" matches a dozen unrelated companies, and the result is either credit you did not earn or a miss nobody notices.',
-    where: 'Website settings > Monitors',
+    where: 'Website settings > Business details',
     minutes: 5,
     vars: [V.domain],
     steps: [
