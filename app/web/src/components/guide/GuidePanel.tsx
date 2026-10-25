@@ -133,7 +133,7 @@ function GuideView({ guide, vars, finish, onBack, onOpen }: { guide: Guide; vars
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-3">
           <span className="inline-flex items-center gap-1.5">
             <Clock className="size-3.5" aria-hidden />
-            About {filled.minutes} minutes
+            About {filled.minutes} {filled.minutes === 1 ? 'minute' : 'minutes'}
           </span>
           {filled.where && (
             <span className="inline-flex items-center gap-1.5">

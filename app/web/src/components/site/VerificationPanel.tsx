@@ -115,7 +115,7 @@ export function VerificationPanel({
   if (v.claimedElsewhere)
     return (
       <Callout tone="critical" title={`Another company has already verified ${site.domain}`}>
-        A website can belong to one company only. If it is yours, ask the owner of that company to invite you, or contact the platform administrator. You can delete this
+        A website can belong to one company only. If it is yours, ask the owner of that company to invite you, or contact Alaventra support. You can delete this
         website from your company in Website settings, then Delete.
       </Callout>
     );
