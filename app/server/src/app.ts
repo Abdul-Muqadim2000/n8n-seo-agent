@@ -63,7 +63,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         imgSrc: ["'self'", 'data:', 'https:'],
         styleSrc: ["'self'", "'unsafe-inline'"],
         scriptSrc: ["'self'"],
-        frameSrc: ["'self'", 'blob:'],
+        frameSrc: ["'self'", 'blob:', 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
         connectSrc: ["'self'"],
         objectSrc: ["'none'"],
         frameAncestors: ["'self'"],

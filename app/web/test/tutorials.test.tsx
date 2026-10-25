@@ -65,6 +65,12 @@ describe('the course catalogue', () => {
     }
   });
 
+  it('a YouTube id, when a film has one, is a real 11-character id and no two films share one', () => {
+    const ids = Object.values(tutorialFilms).flatMap((f) => (f.youtubeId === undefined ? [] : [f.youtubeId]));
+    for (const id of ids) expect(id).toMatch(/^[A-Za-z0-9_-]{11}$/);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it('follows the writing rules', () => {
     const all = [...tutorialSeries.flatMap((s) => [s.title, s.summary, ...s.tutorials.flatMap((t) => [t.title, t.summary, ...t.chapters])]), ...quickTips];
     for (const line of all) expect(line.match(BANNED)?.[0], line).toBeUndefined();
@@ -124,7 +130,8 @@ describe('the pages', () => {
   });
 
   it('a tutorial with a film has the player, its chapters, captions off by default and a VideoObject', () => {
-    const withFilm = tutorials.find((x) => x.film);
+    // a film on YouTube shows its cover until played (tutorialsYouTube.test.tsx); this one is a film served from the site
+    const withFilm = tutorials.find((x) => x.film && !x.film.youtubeId);
     if (!withFilm) return;
     const html = render(`/tutorials/${withFilm.slug}`);
     expect(html).toContain('<video');

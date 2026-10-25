@@ -25,9 +25,14 @@
 // vercel.json carries none.
 import { next, rewrite } from '@vercel/functions/middleware';
 
+// the tutorial films play in YouTube's privacy-enhanced player (www.youtube-nocookie.com; www.youtube.com for its own redirects, e.g.
+// a sign-in check). Only frames: the page drives the player by postMessage and loads no YouTube script, so script-src stays 'self';
+// the covers are our own pictures, so img-src needs nothing new either.
+export const YOUTUBE_FRAMES = 'https://www.youtube-nocookie.com https://www.youtube.com';
 const CSP_BASE =
   "default-src 'self'; base-uri 'self'; font-src 'self' https: data:; form-action 'self'; frame-ancestors 'self'; img-src 'self' data: https:; " +
-  "object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; frame-src 'self' blob:; upgrade-insecure-requests";
+  "object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; frame-src 'self' blob: " +
+  YOUTUBE_FRAMES + '; upgrade-insecure-requests';
 /** the origin the tutorial films play from (VITE_TUTORIALS_VIDEO_BASE: an https origin with an optional path), or '' */
 export const mediaOrigin = (videoBase: string) => /^(https:\/\/[^/\s;?#]+)(\/[^\s;?#]*)?$/.exec(videoBase.trim())?.[1] ?? '';
 /** the page's CSP: the API's origin is the one other place scripts may talk to; the films' origin the one other media source */

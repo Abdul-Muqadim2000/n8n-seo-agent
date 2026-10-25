@@ -8,6 +8,7 @@ import { Container, CtaBand, Eyebrow, MarketingNotFound } from '../components';
 import { Breadcrumbs, JsonLd } from '../components/platform/kit';
 import { LevelTag } from '../components/tutorials/TutorialCard';
 import { activeChapter, ChapterList, TutorialPlayer, type PlayerControls } from '../components/tutorials/TutorialPlayer';
+import { isYouTubeId, youtubePublicEmbed, youtubeWatchUrl } from '../components/tutorials/youtube';
 import {
   audienceSentence,
   clock,
@@ -36,6 +37,7 @@ function videoSchema(t: Tutorial) {
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
   const page = `${origin}/tutorials/${t.slug}`;
   const base = tutorialVideoBase.startsWith('/') ? origin + tutorialVideoBase : tutorialVideoBase;
+  const yt = isYouTubeId(film.youtubeId) ? film.youtubeId : '';
   return {
     '@context': 'https://schema.org',
     '@type': 'VideoObject',
@@ -45,7 +47,11 @@ function videoSchema(t: Tutorial) {
     uploadDate: film.published,
     duration: isoDuration(film.durationSeconds),
     inLanguage: 'en',
-    ...(tutorialVideoBaseSet ? { contentUrl: `${base}/${t.slug}.mp4` } : {}),
+    ...(yt
+      ? { embedUrl: youtubePublicEmbed(yt), contentUrl: youtubeWatchUrl(yt) }
+      : tutorialVideoBaseSet
+        ? { contentUrl: `${base}/${t.slug}.mp4` }
+        : {}),
     url: page,
     hasPart: film.chapters.map((c, i) => ({
       '@type': 'Clip',

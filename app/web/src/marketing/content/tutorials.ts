@@ -53,6 +53,8 @@ export interface TutorialFilm {
   cover: string;
   /** true when a VP9 WebM is served beside the MP4 (offered first, for browsers without H.264) */
   webm?: boolean;
+  /** the film's YouTube video id (11 characters): when set, the page plays it from YouTube, loaded only when someone presses play */
+  youtubeId?: string;
   /** public path of the WebVTT captions (the subtitles are also burned into the picture) */
   captions: string;
   chapters: TutorialChapter[];

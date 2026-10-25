@@ -23,6 +23,20 @@ describe('the page CSP', () => {
     vi.stubEnv('VITE_TUTORIALS_VIDEO_BASE', 'https://media.alaventra.com/tutorials');
     expect(middleware(req('https://alaventra.com/tutorials')).headers.get('content-security-policy')).toContain("media-src 'self' https://media.alaventra.com");
   });
+  it("frames YouTube's player for the tutorial films, and nothing else changes: no YouTube script, no other frame host", () => {
+    const p = csp('https://api.alaventra.com');
+    expect(p).toContain("frame-src 'self' blob: https://www.youtube-nocookie.com https://www.youtube.com;");
+    expect(p).toContain("script-src 'self';");
+    expect(p).toContain("script-src-attr 'none';");
+    expect(p).toContain("img-src 'self' data: https:;");
+    expect(p).toContain("frame-ancestors 'self';");
+    expect(p.match(/youtube/g)?.length).toBe(2);
+    expect(p).toBe(
+      "default-src 'self'; base-uri 'self'; font-src 'self' https: data:; form-action 'self'; frame-ancestors 'self'; img-src 'self' data: https:; " +
+        "object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; " +
+        "frame-src 'self' blob: https://www.youtube-nocookie.com https://www.youtube.com; upgrade-insecure-requests; connect-src 'self' https://api.alaventra.com",
+    );
+  });
   it('is sent on the pages (the static build), with the API origin from API_ORIGIN', () => {
     vi.stubEnv('API_ORIGIN', 'https://api.alaventra.com/');
     const r = middleware(req('https://app.alaventra.com/o/1/sites'));

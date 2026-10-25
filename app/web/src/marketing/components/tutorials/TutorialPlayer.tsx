@@ -1,30 +1,15 @@
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 import { ListOrdered, Play, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clock, coverSet, videoUrl, webmUrl, type Tutorial, type TutorialChapter } from '../../content/tutorials';
+import { isYouTubeId, youtubeEmbedUrl, YouTubeBridge } from './youtube';
 
 export interface PlayerControls {
   /** jump to a moment of the film and play from there (a click on a chapter is the user's gesture, so play() is allowed) */
   seek: (seconds: number) => void;
 }
 
-/**
- * The film of a finished tutorial, 16:9 with its cover as the poster. Before the first play a large play button covers the picture
- * (one obvious action, its name says what plays and for how long); after that the browser's own controls take over, so keyboard and
- * screen-reader use is the platform's. Sources: the VP9 WebM first when there is one (browsers without H.264), then the MP4; only the
- * last one failing counts as "did not load". Captions: a WebVTT track people can turn on, off by default because the subtitles are
- * already part of the picture (the tutorial page also has the transcript to read). When there is nowhere to play the film from, or it fails to load, the cover stays with a plain note;
- * the steps under the player still do the job.
- */
-export function TutorialPlayer({
-  tutorial: t,
-  controls,
-  onTime,
-  startAt = 0,
-  preload = 'metadata',
-  priority = false,
-  className,
-}: {
+interface PlayerProps {
   tutorial: Tutorial;
   controls?: Ref<PlayerControls>;
   /** the playback position, about four times a second while it plays */
@@ -34,7 +19,134 @@ export function TutorialPlayer({
   preload?: 'none' | 'metadata';
   priority?: boolean;
   className?: string;
-}) {
+}
+
+const frameClass = (className?: string) => cn('relative aspect-video w-full overflow-hidden rounded-xl bg-ink-surface', className);
+const labelOf = (t: Tutorial) => `Tutorial ${t.id}: ${t.title}`;
+
+/**
+ * The film of a finished tutorial, 16:9 with its cover as the poster. A film on YouTube plays there (YouTubePlayer); otherwise from
+ * the site's own files (FilePlayer, also the local preview). Either way, before the first play a large play button covers the
+ * picture: one obvious action, and its name says what plays and for how long.
+ */
+export function TutorialPlayer(props: PlayerProps) {
+  const id = props.tutorial.film?.youtubeId;
+  return isYouTubeId(id) ? <YouTubePlayer {...props} youtubeId={id} /> : <FilePlayer {...props} />;
+}
+
+/** the cover with the play button: what a film shows until someone presses play */
+function PlayCover({ tutorial: t, startAt, priority, onPlay }: { tutorial: Tutorial; startAt: number; priority: boolean; onPlay: () => void }) {
+  const film = t.film!;
+  const cover = coverSet(film);
+  const label = labelOf(t);
+  return (
+    <button
+      type="button"
+      onClick={onPlay}
+      className="group/play absolute inset-0 flex size-full cursor-pointer items-center justify-center rounded-xl text-left focus-visible:shadow-[inset_0_0_0_3px_var(--ring-color)]"
+      aria-label={`Play ${label}, ${clock(film.durationSeconds)}${startAt ? `, from ${clock(startAt)}` : ''}`}
+    >
+      <img
+        src={cover.src}
+        srcSet={cover.srcSet}
+        sizes="(min-width: 1024px) 1000px, 100vw"
+        alt=""
+        width={960}
+        height={540}
+        className="absolute inset-0 size-full object-cover transition-transform duration-500 ease-brand group-hover/play:scale-[1.015] motion-reduce:transition-none dark:brightness-[.78] dark:contrast-[1.05]"
+        loading={priority ? 'eager' : 'lazy'}
+        decoding="async"
+      />
+      <span aria-hidden className="relative inline-flex size-12 items-center justify-center rounded-full bg-accent text-accent-ink shadow-overlay ring-[6px] ring-accent/15 transition-transform duration-200 ease-brand group-hover/play:scale-105 group-active/play:scale-95 motion-reduce:transition-none sm:size-16 sm:ring-8 lg:size-20">
+        <Play className="size-5 translate-x-[2px] fill-current sm:size-7 lg:size-8" strokeWidth={0} />
+      </span>
+      <span aria-hidden className="absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-md bg-ink-surface/90 px-2 py-1 text-[11px] font-medium text-on-ink sm:bottom-4 sm:left-4 sm:gap-2 sm:rounded-lg sm:px-2.5 sm:py-1.5 sm:text-[12px]">
+        <Play className="size-3 fill-current" strokeWidth={0} />
+        {startAt ? `Play from ${clock(startAt)}` : 'Play'}
+        <span className="font-mono text-on-ink-2 tabular">{clock(film.durationSeconds)}</span>
+      </span>
+    </button>
+  );
+}
+
+/** YouTube's player in its 16:9 frame: privacy-enhanced (no cookies until it plays), starting at `start`, playing at once */
+export function YouTubeFrame({ youtubeId, title, start, origin, frameRef }: { youtubeId: string; title: string; start: number; origin: string; frameRef?: Ref<HTMLIFrameElement> }) {
+  return (
+    <iframe
+      ref={frameRef}
+      src={youtubeEmbedUrl(youtubeId, { origin, start, autoplay: true })}
+      title={title}
+      className="absolute inset-0 size-full border-0 bg-ink-surface"
+      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+      allowFullScreen
+      // the site sends no referrer at all; YouTube's player refuses to play embedded without the page's origin, so it gets that, never the path
+      referrerPolicy="strict-origin-when-cross-origin"
+    />
+  );
+}
+
+/**
+ * A film on YouTube, loaded only on demand: until the play button (or a chapter) is pressed the page shows our own cover and asks
+ * nothing of YouTube (faster, and no third party sees the visit). Then the embed takes the frame, playing from the chosen moment,
+ * and keyboard focus moves into it. The chapter list keeps seeking: commands go to the player by postMessage (no YouTube script on
+ * the page), and its reports of the current time mark the chapter playing.
+ */
+function YouTubePlayer({ tutorial: t, youtubeId, controls, onTime, startAt = 0, priority = false, className }: PlayerProps & { youtubeId: string }) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [from, setFrom] = useState<number | null>(null);
+  const bridge = useMemo(() => new YouTubeBridge(() => frame.current?.contentWindow), []);
+  const started = from !== null;
+
+  const seek = useCallback(
+    (s: number) => {
+      onTime?.(s);
+      if (frame.current) bridge.seek(s);
+      else setFrom(s);
+    },
+    [bridge, onTime],
+  );
+  useImperativeHandle(controls, () => ({ seek }), [seek]);
+
+  useEffect(() => {
+    if (!started) return;
+    frame.current?.focus({ preventScroll: true });
+    const onMessage = (e: MessageEvent) => {
+      const m = bridge.receive(e);
+      const at = m?.info?.currentTime;
+      if (typeof at === 'number' && Number.isFinite(at)) onTime?.(at);
+    };
+    window.addEventListener('message', onMessage);
+    // the player ignores us until it has loaded: say hello a few times a second until it answers (about 10 seconds at most)
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      if (bridge.isReady || ++tries > 40) window.clearInterval(timer);
+      else bridge.hello();
+    }, 250);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      window.clearInterval(timer);
+    };
+  }, [started, bridge, onTime]);
+
+  return (
+    <div className={frameClass(className)}>
+      {started ? (
+        <YouTubeFrame youtubeId={youtubeId} title={labelOf(t)} start={from} origin={window.location.origin} frameRef={frame} />
+      ) : (
+        <PlayCover tutorial={t} startAt={startAt} priority={priority} onPlay={() => seek(startAt)} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A film served from the site's own files. After the first play the browser's own controls take over, so keyboard and screen-reader
+ * use is the platform's. Sources: the VP9 WebM first when there is one (browsers without H.264), then the MP4; only the last one
+ * failing counts as "did not load". Captions: a WebVTT track people can turn on, off by default because the subtitles are already
+ * part of the picture (the tutorial page also has the transcript to read). When there is nowhere to play the film from, or it fails
+ * to load, the cover stays with a plain note; the steps under the player still do the job.
+ */
+function FilePlayer({ tutorial: t, controls, onTime, startAt = 0, preload = 'metadata', priority = false, className }: PlayerProps) {
   const film = t.film!;
   const src = videoUrl(t);
   const webm = webmUrl(t);
@@ -76,8 +188,8 @@ export function TutorialPlayer({
     return () => v.removeEventListener('loadedmetadata', go);
   }, [startAt, film.durationSeconds, onTime, attempt]);
 
-  const label = `Tutorial ${t.id}: ${t.title}`;
-  const frame = cn('relative aspect-video w-full overflow-hidden rounded-xl bg-ink-surface', className);
+  const label = labelOf(t);
+  const frame = frameClass(className);
 
   if (!src || failed)
     return (
@@ -134,34 +246,7 @@ export function TutorialPlayer({
         <source src={src} type="video/mp4" onError={() => setFailed(true)} />
         <track kind="captions" src={film.captions} srcLang="en" label="English" />
       </video>
-      {!started && (
-        <button
-          type="button"
-          onClick={() => play(startAt || undefined)}
-          className="group/play absolute inset-0 flex size-full cursor-pointer items-center justify-center rounded-xl text-left focus-visible:shadow-[inset_0_0_0_3px_var(--ring-color)]"
-          aria-label={`Play ${label}, ${clock(film.durationSeconds)}${startAt ? `, from ${clock(startAt)}` : ''}`}
-        >
-          <img
-            src={cover.src}
-            srcSet={cover.srcSet}
-            sizes="(min-width: 1024px) 1000px, 100vw"
-            alt=""
-            width={960}
-            height={540}
-            className="absolute inset-0 size-full object-cover transition-transform duration-500 ease-brand group-hover/play:scale-[1.015] motion-reduce:transition-none dark:brightness-[.78] dark:contrast-[1.05]"
-            loading={priority ? 'eager' : 'lazy'}
-            decoding="async"
-          />
-          <span aria-hidden className="relative inline-flex size-12 items-center justify-center rounded-full bg-accent text-accent-ink shadow-overlay ring-[6px] ring-accent/15 transition-transform duration-200 ease-brand group-hover/play:scale-105 group-active/play:scale-95 motion-reduce:transition-none sm:size-16 sm:ring-8 lg:size-20">
-            <Play className="size-5 translate-x-[2px] fill-current sm:size-7 lg:size-8" strokeWidth={0} />
-          </span>
-          <span aria-hidden className="absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-md bg-ink-surface/90 px-2 py-1 text-[11px] font-medium text-on-ink sm:bottom-4 sm:left-4 sm:gap-2 sm:rounded-lg sm:px-2.5 sm:py-1.5 sm:text-[12px]">
-            <Play className="size-3 fill-current" strokeWidth={0} />
-            {startAt ? `Play from ${clock(startAt)}` : 'Play'}
-            <span className="font-mono text-on-ink-2 tabular">{clock(film.durationSeconds)}</span>
-          </span>
-        </button>
-      )}
+      {!started && <PlayCover tutorial={t} startAt={startAt} priority={priority} onPlay={() => play(startAt || undefined)} />}
     </div>
   );
 }
