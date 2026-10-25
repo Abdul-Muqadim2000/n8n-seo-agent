@@ -8454,7 +8454,7 @@ def _b81_checks():
             # F1b (2026-10-23, E19): share of voice is tested on its standard error over ANSWERS, never as if each mention were a trial
             'AVM.seChange(H.sov, H.sov_se, H.sov_n, PS.sov.rate, PS.sov.se, PS.sov.n)',
             'const score_band = scoreBand(U,', 'scoreChange(visibility_score, prev.visibility_score, score_band)',
-            'AVM.seChange(c.sov, c._st.sov_se, c._st.sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0, { min: 10 })',
+            'AVM.seChange(c.sov, stOf(c).sov_se, stOf(c).sov_n, sb.sov, sb.sov_se, Number(sb.sov_n) || 0, { min: 10 })',
             # W2-E2 (2026-10-23): the citation and share-of-voice ranges take the clustered method (question = sampling unit) when it measured one
             'citation_ci: W2CI.headline.cited_rate.lo != null ? [W2CI.headline.cited_rate.lo, W2CI.headline.cited_rate.hi] : wilson(cited, samples), sov_ci: W2CI.headline.share_of_voice.lo != null',
             'win: rateOf(q.m, q.n, { min: MIN_Q_SAMPLES }), decided: q.n >= MIN_Q_SAMPLES',   # B8-4
