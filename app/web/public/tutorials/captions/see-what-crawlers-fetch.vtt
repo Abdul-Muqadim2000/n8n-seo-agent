@@ -1,0 +1,119 @@
+WEBVTT
+
+00:00:00.469 --> 00:00:05.165
+Welcome to Alaventra. Rank in
+search. Get recommended by AI.
+
+00:00:06.143 --> 00:00:11.118
+In tutorial 7.8, you'll see what Google's
+and AI assistants' crawlers fetch on your
+
+00:00:11.168 --> 00:00:13.356
+site, from your website's logs.
+
+00:00:14.397 --> 00:00:16.347
+First, open Crawlers.
+
+00:00:16.397 --> 00:00:20.797
+Crawlers are the programs that search
+engines and AI assistants send to read your
+
+00:00:20.847 --> 00:00:21.718
+pages.
+
+00:00:22.666 --> 00:00:25.691
+Click Upload a log, choose
+your server's log file,
+
+00:00:25.741 --> 00:00:28.687
+the record of every visit
+it keeps, and click Upload.
+
+00:00:30.716 --> 00:00:33.716
+Or let your hosting send
+its logs on its own.
+
+00:00:33.766 --> 00:00:37.566
+Send logs automatically has a
+guide for Cloudflare Logpush,
+
+00:00:37.616 --> 00:00:39.871
+or your hosting's own log export.
+
+00:00:40.830 --> 00:00:42.855
+The guide walks you through each step,
+
+00:00:42.905 --> 00:00:45.704
+and you can copy the steps
+or send them to a colleague.
+
+00:00:47.855 --> 00:00:51.905
+Then the top counts the requests
+from Googlebot and from AI crawlers,
+
+00:00:51.955 --> 00:00:56.822
+the pages fetched because a person asked
+an AI assistant, and fake crawlers.
+
+00:00:57.834 --> 00:01:01.209
+Every crawler lists each one
+by name, with its requests,
+
+00:01:01.259 --> 00:01:03.195
+and whether it was proved to be real.
+
+00:01:04.884 --> 00:01:10.401
+Next, Pages Googlebot did not fetch and
+Pages no AI crawler read show the pages with
+
+00:01:10.401 --> 00:01:12.926
+search traffic that crawlers skipped.
+
+00:01:13.920 --> 00:01:18.645
+Crawl budget Googlebot spent badly
+lists requests wasted on redirects,
+
+00:01:18.695 --> 00:01:23.932
+addresses that send visitors elsewhere,
+on errors, and on extra page versions.
+
+00:01:24.891 --> 00:01:29.341
+Beside it, you see the pages AI assistants
+fetched because someone asked them a
+
+00:01:29.391 --> 00:01:30.192
+question.
+
+00:01:31.441 --> 00:01:36.066
+New pages, first seen lists pages
+Googlebot found for the first time.
+
+00:01:36.116 --> 00:01:41.129
+Fetched by Google, missing from your
+page list shows old or unlinked pages.
+
+00:01:42.169 --> 00:01:46.964
+Finally, Impostors lists requests that used
+a crawler's name but came from somewhere
+
+00:01:46.989 --> 00:01:49.638
+else. They're left out of every figure.
+
+00:01:50.623 --> 00:01:55.673
+So you know which pages search engines and
+AI assistants read, which ones they miss,
+
+00:01:55.723 --> 00:01:57.371
+and who's only pretending.
+
+00:01:58.370 --> 00:02:02.840
+So, upload a log or send logs
+automatically, read who fetched what,
+
+00:02:02.890 --> 00:02:07.062
+find missed pages and wasted
+requests, and spot impostors.
+
+00:02:08.046 --> 00:02:13.751
+You know your crawlers. Next, choose what
+is checked every week, in tutorial 7.9.

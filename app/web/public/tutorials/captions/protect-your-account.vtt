@@ -1,0 +1,107 @@
+WEBVTT
+
+00:00:00.469 --> 00:00:05.165
+Welcome to Alaventra. Rank in
+search. Get recommended by AI.
+
+00:00:06.143 --> 00:00:10.593
+In tutorial 11.5, you'll add
+a second step to your sign-in,
+
+00:00:10.643 --> 00:00:13.591
+so a stolen password is no
+longer enough to get in.
+
+00:00:14.621 --> 00:00:18.507
+First, click your name at the bottom of
+the sidebar, and choose Your account.
+
+00:00:21.096 --> 00:00:24.996
+Scroll down to Two-step
+verification. It's off for now.
+
+00:00:25.046 --> 00:00:28.399
+You can use an authenticator
+app, a passkey, or both.
+
+00:00:29.439 --> 00:00:32.173
+Now, beside Authenticator
+app, click Set up.
+
+00:00:34.918 --> 00:00:39.623
+Scan the code with an app on your phone,
+like Google Authenticator or 1Password.
+
+00:00:39.673 --> 00:00:42.311
+Can't scan it? Copy the key instead.
+
+00:00:43.295 --> 00:00:46.950
+Then type the 6-digit code the
+app shows, and click Turn on.
+
+00:00:49.841 --> 00:00:52.816
+Alaventra now gives
+you ten recovery codes.
+
+00:00:52.866 --> 00:00:55.924
+Each one lets you sign in
+once, if you lose your phone.
+
+00:00:56.895 --> 00:01:00.420
+Click Copy all or Download,
+and keep them somewhere safe.
+
+00:01:00.470 --> 00:01:03.647
+They're shown only this once,
+so then click I saved them.
+
+00:01:04.631 --> 00:01:08.356
+Two-step verification is now
+on. If you use up your codes,
+
+00:01:08.406 --> 00:01:10.376
+click New codes for a fresh set.
+
+00:01:11.681 --> 00:01:15.691
+Next, to sign in with your fingerprint,
+your face or a security key,
+
+00:01:15.741 --> 00:01:17.031
+click Add a passkey.
+
+00:01:18.110 --> 00:01:21.565
+Give it a name, confirm on your
+device, and it's listed here.
+
+00:01:21.615 --> 00:01:23.444
+You can remove it at any time.
+
+00:01:25.177 --> 00:01:29.904
+Finally, under Where you're signed in,
+you'll see every device with an open session.
+
+00:01:31.677 --> 00:01:35.902
+Sign out any device you don't
+recognise, or click Sign out all others,
+
+00:01:35.952 --> 00:01:37.526
+and then change your password.
+
+00:01:38.656 --> 00:01:42.756
+Now, whenever you sign in,
+Alaventra asks for that second step,
+
+00:01:42.806 --> 00:01:45.294
+so your websites and reports stay yours.
+
+00:01:46.302 --> 00:01:51.102
+So, open Your account, turn on an
+authenticator app, save your recovery codes,
+
+00:01:51.152 --> 00:01:53.701
+add a passkey, and check
+where you're signed in.
+
+00:01:54.730 --> 00:02:01.164
+Your account is protected. Next, require
+two-step for everyone, in tutorial 11.6.

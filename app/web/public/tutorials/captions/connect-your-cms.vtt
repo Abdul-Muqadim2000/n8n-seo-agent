@@ -1,0 +1,92 @@
+WEBVTT
+
+00:00:00.469 --> 00:00:05.165
+Welcome to Alaventra. Rank in
+search. Get recommended by AI.
+
+00:00:06.143 --> 00:00:11.718
+In tutorial 6.5, you'll connect your
+CMS, the system that runs your website,
+
+00:00:11.768 --> 00:00:14.423
+so written pages arrive there as drafts.
+
+00:00:15.463 --> 00:00:19.264
+First, open Website settings,
+and choose the Publishing tab.
+
+00:00:21.442 --> 00:00:24.267
+Written pages go to your CMS as drafts,
+
+00:00:24.317 --> 00:00:29.232
+and only an owner or admin can
+publish one live. Click Connect a CMS.
+
+00:00:30.286 --> 00:00:36.021
+Next, pick your CMS: WordPress,
+Webflow, Contentful, or a webhook,
+
+00:00:36.071 --> 00:00:39.323
+a link your developer sets up,
+for any other website system.
+
+00:00:40.328 --> 00:00:42.623
+For WordPress, check your site address,
+
+00:00:42.673 --> 00:00:45.603
+then type your user name
+and an application password.
+
+00:00:47.853 --> 00:00:52.208
+Not sure where to find it? Show me how
+walks you through creating one in WordPress.
+
+00:00:54.286 --> 00:00:57.371
+Optionally, add the address
+pattern of a live page,
+
+00:00:57.421 --> 00:01:00.276
+so every published page
+can be checked and tracked.
+
+00:01:01.307 --> 00:01:05.882
+Then click Connect and test. Alaventra
+checks the connection straight away,
+
+00:01:05.932 --> 00:01:08.631
+and your CMS appears
+on the Publishing tab.
+
+00:01:09.635 --> 00:01:13.135
+It shows as Connected, with
+the time of its last test.
+
+00:01:13.185 --> 00:01:15.892
+Click Test connection any
+time to check it again.
+
+00:01:17.110 --> 00:01:19.085
+With Webflow or Contentful,
+
+00:01:19.135 --> 00:01:23.499
+the first test also reads the
+fields your CMS uses for a page.
+
+00:01:24.483 --> 00:01:28.733
+Choose which field holds each part
+of the page, then click Save mapping.
+
+00:01:28.783 --> 00:01:30.228
+You only do this once.
+
+00:01:32.508 --> 00:01:38.318
+So, open Publishing and choose Connect a
+CMS, pick your CMS and paste its details,
+
+00:01:38.368 --> 00:01:41.360
+connect and test, and
+map the fields if asked.
+
+00:01:42.354 --> 00:01:49.486
+Your CMS is connected. Next, send a page
+to your CMS as a draft, in tutorial 6.6.

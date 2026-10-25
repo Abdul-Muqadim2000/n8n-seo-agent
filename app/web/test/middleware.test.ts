@@ -15,6 +15,14 @@ describe('the page CSP', () => {
     for (const bad of ['http://api.alaventra.com', 'https://api.alaventra.com/x', "https://a.com; script-src *", 'javascript:alert(1)'])
       expect(csp(bad), bad).toMatch(/connect-src 'self'$/);
   });
+  it('allows the tutorial films from their own https origin as media, and nothing else', () => {
+    expect(csp('', 'https://media.alaventra.com/tutorials/')).toContain("media-src 'self' https://media.alaventra.com;");
+    expect(csp('https://api.alaventra.com', 'https://media.alaventra.com')).toMatch(/media-src 'self' https:\/\/media\.alaventra\.com; connect-src 'self' https:\/\/api\.alaventra\.com$/);
+    for (const bad of ['', '/tutorials/video', 'http://media.alaventra.com', "https://a.com; script-src *", 'https://a.com x'])
+      expect(csp('', bad), bad).not.toContain('media-src');
+    vi.stubEnv('VITE_TUTORIALS_VIDEO_BASE', 'https://media.alaventra.com/tutorials');
+    expect(middleware(req('https://alaventra.com/tutorials')).headers.get('content-security-policy')).toContain("media-src 'self' https://media.alaventra.com");
+  });
   it('is sent on the pages (the static build), with the API origin from API_ORIGIN', () => {
     vi.stubEnv('API_ORIGIN', 'https://api.alaventra.com/');
     const r = middleware(req('https://app.alaventra.com/o/1/sites'));

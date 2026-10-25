@@ -1,0 +1,143 @@
+WEBVTT
+
+00:00:00.469 --> 00:00:05.165
+Welcome to Alaventra. Rank in
+search. Get recommended by AI.
+
+00:00:06.143 --> 00:00:11.693
+In tutorial 11.6, you'll make sure
+everyone in your company signs in safely,
+
+00:00:11.743 --> 00:00:14.508
+through your own identity
+provider if you have one.
+
+00:00:15.519 --> 00:00:18.658
+First, open Company settings,
+and choose Security.
+
+00:00:21.473 --> 00:00:25.348
+If you see this note, turn on
+two-step for your own account first,
+
+00:00:25.398 --> 00:00:28.029
+as shown in tutorial 11.5.
+
+00:00:29.003 --> 00:00:32.228
+Then switch on Require
+two-step verification.
+
+00:00:32.278 --> 00:00:35.986
+Members without it see nothing of
+this company until they set it up.
+
+00:00:37.035 --> 00:00:41.770
+Sign-ins through single sign-on, or a Google
+Workspace that asks for a second step,
+
+00:00:41.820 --> 00:00:44.302
+can count too. Then click Save.
+
+00:00:45.296 --> 00:00:49.981
+Below, Who has two-step verification
+shows who still needs to set it up.
+
+00:00:50.031 --> 00:00:52.033
+Show me how gives you
+a guide to send them.
+
+00:00:53.046 --> 00:00:57.621
+Next, under Sessions and records,
+choose when idle members are signed out,
+
+00:00:57.671 --> 00:01:00.206
+and how long the audit
+log keeps what happened.
+
+00:01:01.205 --> 00:01:05.155
+Now open Single sign-on.
+Under Your e-mail domains,
+
+00:01:05.205 --> 00:01:09.037
+type the part after the at sign in
+your team's addresses, and click Add.
+
+00:01:10.067 --> 00:01:14.417
+Add the record it shows where you manage
+your domain, then click Check now.
+
+00:01:14.467 --> 00:01:18.796
+Once it's proven, a domain shows as
+Verified, like the first one here.
+
+00:01:19.770 --> 00:01:23.995
+Under Identity provider,
+choose OpenID Connect or SAML,
+
+00:01:24.045 --> 00:01:28.470
+whichever your provider uses. Copy
+these values into your provider,
+
+00:01:28.520 --> 00:01:30.714
+and paste in the details it gives you.
+
+00:01:31.709 --> 00:01:35.534
+Choose whether people join at their
+first sign-in, and with which role.
+
+00:01:35.584 --> 00:01:37.913
+Click Save, and then Test sign-in.
+
+00:01:39.188 --> 00:01:42.288
+After a good test, single sign-on is on.
+
+00:01:42.338 --> 00:01:47.152
+Require single sign-on makes it the only
+way in, while owners keep their password.
+
+00:01:48.111 --> 00:01:51.396
+With Provisioning, copy the
+address and create a token,
+
+00:01:51.446 --> 00:01:56.301
+a private key for your provider, so it
+can add people, map its groups to roles,
+
+00:01:56.351 --> 00:01:57.769
+and switch people off.
+
+00:01:58.806 --> 00:02:04.456
+Finally, open Audit log. Every sign-in,
+team change and settings change is listed,
+
+00:02:04.506 --> 00:02:06.215
+and nothing in it can be edited.
+
+00:02:07.210 --> 00:02:10.320
+Filter by what, who, outcome or dates,
+
+00:02:10.370 --> 00:02:13.748
+and click Export CSV to share
+it with your security team.
+
+00:02:14.758 --> 00:02:18.183
+Now everyone in your company
+signs in with a second step,
+
+00:02:18.233 --> 00:02:20.478
+and you can show exactly who did what.
+
+00:02:21.487 --> 00:02:25.462
+So, require two-step, set your
+time limits, prove your domain,
+
+00:02:25.512 --> 00:02:29.355
+connect your provider, turn on
+provisioning, and check the audit log.
+
+00:02:30.318 --> 00:02:35.818
+Everyone signs in safely. Next, run
+your clients from one agency workspace,
+
+00:02:35.868 --> 00:02:38.004
+in tutorial 11.7.

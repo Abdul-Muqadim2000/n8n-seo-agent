@@ -17,7 +17,7 @@ import { ThemeMenuButton, ThemeSegmented } from './ThemeSwitch';
 type MenuId = 'platform' | 'solutions';
 
 const navItem =
-  'inline-flex h-9 items-center gap-1 rounded-md px-3 text-[14px] font-medium text-ink-2 transition-colors duration-150 ease-brand hover:bg-surface-2 hover:text-ink aria-expanded:text-ink aria-[current=page]:text-ink';
+  'inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-md px-2.5 text-[14px] font-medium xl:px-3 text-ink-2 transition-colors duration-150 ease-brand hover:bg-surface-2 hover:text-ink aria-expanded:text-ink aria-[current=page]:text-ink';
 
 /** Header CTAs: "Sign in" + "Start free" for visitors, "Open app" for signed-in users. */
 function useAuthCtas() {
@@ -162,7 +162,7 @@ export function SiteHeader() {
         solid ? 'border-line bg-page/90 backdrop-blur-md supports-[backdrop-filter]:bg-page/80' : 'border-transparent bg-transparent',
       )}
     >
-      <Container className="relative flex h-16 items-center gap-6 lg:h-[72px]">
+      <Container className="relative flex h-16 items-center gap-6 lg:h-[72px] lg:gap-4 xl:gap-6">
         <Link to="/" className="-ml-1 shrink-0 rounded-md p-1" aria-label="Alaventra home">
           <Logo className="h-8 sm:h-9" />
         </Link>

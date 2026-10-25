@@ -25,6 +25,7 @@ import { AutoManualLanes } from '../components/platform/AutoManual';
 import { ArrowLink, CheckList, jumpTo, useOn } from '../components/platform/kit';
 import { ConnectMockup, CostMockup, PublishCheckMockup, ReportMockup } from '../components/platform/screens';
 import { WeekSchedule } from '../components/platform/WeekSchedule';
+import { LearnLink } from '../components/tutorials/LearnLink';
 import { useSeo } from '../useSeo';
 
 interface Stage {
@@ -194,6 +195,9 @@ function Hero() {
               <ButtonLink to="/platform" size="lg" variant="secondary">
                 Explore the platform
               </ButtonLink>
+            </div>
+            <div className="mt-8 animate-fade-up" style={{ animationDelay: '280ms' }}>
+              <LearnLink />
             </div>
           </div>
           <nav aria-label="Stages on this page" className="animate-fade-up rounded-2xl border border-line bg-surface p-2 shadow-overlay" style={{ animationDelay: '200ms' }}>

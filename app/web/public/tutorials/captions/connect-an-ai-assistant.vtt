@@ -1,0 +1,112 @@
+WEBVTT
+
+00:00:00.469 --> 00:00:05.165
+Welcome to Alaventra. Rank in
+search. Get recommended by AI.
+
+00:00:06.143 --> 00:00:10.368
+In tutorial 11.4, you'll
+create an API key,
+
+00:00:10.418 --> 00:00:13.493
+a private key that lets
+another tool read your data,
+
+00:00:13.543 --> 00:00:17.493
+and connect an AI assistant that
+answers questions about your rankings,
+
+00:00:17.543 --> 00:00:19.031
+traffic and audits.
+
+00:00:20.050 --> 00:00:23.829
+First, open Company settings,
+and choose API access.
+
+00:00:26.054 --> 00:00:29.829
+Name the key after what uses
+it. Then choose what it may do,
+
+00:00:29.879 --> 00:00:33.328
+from reading your data to
+starting analyses or exports.
+
+00:00:34.322 --> 00:00:37.897
+If you tick Start analyses,
+the key can use your credits,
+
+00:00:37.947 --> 00:00:40.729
+and Alaventra warns you
+that it can change things.
+
+00:00:41.709 --> 00:00:46.818
+For questions only, leave it off. Choose
+when the key expires, and click Create key.
+
+00:00:48.738 --> 00:00:53.613
+Your new key is shown only this once.
+Click Copy key, and keep it somewhere safe,
+
+00:00:53.663 --> 00:00:55.162
+like a password manager.
+
+00:00:56.213 --> 00:01:00.063
+It's listed under Your keys, with
+what it can do, when it was last used,
+
+00:01:00.113 --> 00:01:01.553
+and when it expires.
+
+00:01:03.263 --> 00:01:06.908
+Next, open Integrations,
+and find AI assistants.
+
+00:01:06.958 --> 00:01:12.634
+There's a ready setup for Claude Code,
+Claude Desktop, and OpenAI's developer tools.
+
+00:01:13.602 --> 00:01:15.602
+Click Copy beside your assistant,
+
+00:01:15.652 --> 00:01:18.412
+and put your key in place
+of the short one at the end.
+
+00:01:20.652 --> 00:01:25.114
+Not sure how? Show me how walks you
+through it, with the exact address to use.
+
+00:01:27.627 --> 00:01:29.777
+Then just ask. For example,
+
+00:01:29.827 --> 00:01:33.756
+which high-severity findings are
+new on my site since the last audit?
+
+00:01:34.676 --> 00:01:38.982
+When a key is no longer needed, click
+Revoke beside it, under Your keys.
+
+00:01:41.180 --> 00:01:45.240
+It stops working on its very next
+request, and shows as Revoked.
+
+00:01:47.230 --> 00:01:50.905
+Now your AI assistant can answer
+questions about your websites,
+
+00:01:50.955 --> 00:01:53.522
+and your own scripts can
+read the same figures.
+
+00:01:54.562 --> 00:01:58.247
+So, create a key and choose
+what it may do, copy it once,
+
+00:01:58.297 --> 00:02:01.225
+add it to your AI assistant,
+and revoke it when you're done.
+
+00:02:02.244 --> 00:02:08.562
+Your data is one question away. Next,
+protect your account, in tutorial 11.5.

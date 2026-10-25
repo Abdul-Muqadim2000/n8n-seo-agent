@@ -1,0 +1,88 @@
+WEBVTT
+
+00:00:00.469 --> 00:00:05.165
+Welcome to Alaventra. Rank in
+search. Get recommended by AI.
+
+00:00:06.143 --> 00:00:11.893
+In tutorial 11.2, you'll hand audit findings
+and recommendations to your developers,
+
+00:00:11.943 --> 00:00:15.020
+as tickets in Jira, Linear or Asana.
+
+00:00:16.030 --> 00:00:20.677
+First, open Company settings, choose
+Integrations, and find Issue trackers.
+
+00:00:22.001 --> 00:00:26.681
+Click Connect beside your tracker.
+For Linear, paste a personal API key,
+
+00:00:26.731 --> 00:00:27.844
+and your team key.
+
+00:00:29.051 --> 00:00:33.126
+Not sure where to find the key? The guide
+button beside each tracker shows you,
+
+00:00:33.176 --> 00:00:34.302
+step by step.
+
+00:00:35.526 --> 00:00:41.171
+For Jira, add your Jira address, your account
+e-mail, an API token, the project key,
+
+00:00:41.221 --> 00:00:42.309
+and the issue type.
+
+00:00:43.505 --> 00:00:47.680
+Then click Check and connect. The token
+is checked with your tracker first,
+
+00:00:47.730 --> 00:00:49.272
+and it shows as Connected.
+
+00:00:51.030 --> 00:00:55.918
+Now open Technical health. Every open
+finding has a Create ticket button.
+
+00:00:57.505 --> 00:01:00.005
+Your recommendations have the same button,
+
+00:01:00.055 --> 00:01:02.653
+so any next step can go
+to your developers too.
+
+00:01:04.005 --> 00:01:07.255
+Click Create ticket, and the
+finding goes to your tracker,
+
+00:01:07.305 --> 00:01:09.068
+with its evidence and the fix.
+
+00:01:11.005 --> 00:01:15.105
+Once it's made, the button shows the ticket
+number and its status in your tracker,
+
+00:01:15.155 --> 00:01:16.366
+like In progress.
+
+00:01:18.551 --> 00:01:22.051
+And under Issue trackers, you can
+see how many tickets were made,
+
+00:01:22.101 --> 00:01:23.418
+and how many are done.
+
+00:01:25.030 --> 00:01:29.355
+So, connect your issue tracker,
+open a finding or recommendation,
+
+00:01:29.405 --> 00:01:31.960
+then create a ticket
+and follow its status.
+
+00:01:32.963 --> 00:01:39.370
+Your findings now reach your developers.
+Next, export your data, in tutorial 11.3.
