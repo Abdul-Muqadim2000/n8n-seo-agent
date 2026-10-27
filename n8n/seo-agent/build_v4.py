@@ -12447,6 +12447,99 @@ assert "if (q > usd) { quoted = Math.min(q, PANEL_QUOTE_MAX)" in code('Rate Limi
 log('The front door reserves the website\'s whole AI panel (W2-FIX, 2026-10-23): the app sends its quote of an on-demand AI visibility check (panel_quote), Normalize Input carries it, CC.pick reserves the larger of the table and the quote (at most $150) in Rate Limit and Run Ledger Row; "Track my site" keeps the owner\'s W2-E3 AI options')
 
 # =============================================================================
+# 150. NO HALF PAGES: EVERY CLAUDE NODE HAS ROOM FOR ITS THINKING AND ITS WHOLE ANSWER, AND A CUT ANSWER IS CAUGHT (LLM-LIMITS, 2026-10-27,
+#      docs/llm-limits-2026-10-27/LIMITS.md)
+#      Production (techand.ai, 2026-10-25, Content Cadence page run cad_20261022_techand-ai_2, n8n execution 2195): the Editor (Opus 5.5,
+#      adaptive thinking, effort medium, maxTokensToSample 32768) answered 749 words that end mid-word ("Does the add-on cover gratu") after
+#      278 s, where the Copywriter had written a complete 1,804-word page in 155 s. Thinking tokens and the visible answer share ONE max_tokens
+#      ceiling and Opus 5.5 takes no thinking budget (budget_tokens is a 400; adaptive + effort is the only setting), so the model spent the
+#      ceiling thinking. The API ends such a stream with stop_reason "max_tokens"; @langchain/anthropic 1.5.6's streaming _generate keeps only
+#      { text, message } (the stop reason rides in additional_kwargs) and the n8n agent outputs only { output }, so the cut text arrived as a
+#      success, replaced the complete draft, and Content QA round 2 only said "short". The client received half a page.
+#      * A. Limits (llm_limits.py, the one table; the build-time lint at the end of this build walks every generated workflow): the Opus page /
+#        brief nodes get the model's maximum output (128,000) with a declared thinking budget of 64,000 and 32,000 of output headroom, the
+#        Sonnet nodes 128,000 with 48,000 + 24,000, all streaming (the SDK refuses a non-streaming request above 21,333). No effort level,
+#        no quality step and no editing round was reduced; a ceiling is room, not spend, so the cost table models the thinking it always did
+#        (`think_model`, v5/code/_cost_cal.js).
+#      * B. The guards (v5/code/_complete.js, CK): *Draft Check (Copywriter)* and *Edit Check (Editor)* read the answer itself. A cut answer
+#        is written / edited once more (a second run of the model node, priced as a retry by R57); a second cut page from the Copywriter stops
+#        the run with a plain reason (a cut page is never delivered); a second cut edit keeps the complete page from before that edit.
+#      * C. Content QA: a page that is cut off is its own reason, never "short", and it is never publishable.
+# =============================================================================
+import llm_limits as _ll150
+COMPLETE_SRC150 = _rd0('code/_complete.js').rstrip('\n')
+assert 'const CK = (() => {' in COMPLETE_SRC150
+
+# ---------- A. the limits, and the cost table that prices the thinking (not the ceiling) ----------
+_set150 = _ll150.apply(_ll150.MAIN, nodes.values())
+assert sorted(_set150) == sorted(k[1] for k in _ll150.LIMITS if k[0] == _ll150.MAIN), ('LLM-LIMITS: the main workflow\'s Claude nodes differ from the table', _set150)
+_old150 = json.dumps(_AI_CALLS51)
+for _c150 in _AI_CALLS51:
+    _o150 = nodes[_c150['model_node']]['parameters']['options']
+    _c150['max_tokens'] = int(_o150['maxTokensToSample'])
+    _c150['streaming'] = bool(_o150.get('streaming'))
+    _c150['think_model'] = _ll150.cost_think(_ll150.MAIN, _c150['model_node'])
+_new150 = json.dumps(_AI_CALLS51)
+_baked150 = sorted(nm for nm in nodes if _old150 in nodes[nm]['parameters'].get('jsCode', ''))
+assert set(_ends51 + ['Run Ledger Settle']) <= set(_baked150), ('LLM-LIMITS: the call table is not where the cost is priced', _baked150)
+_PUSH_OLD150 = 'max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,'
+_PUSH_NEW150 = 'max_tokens: c.max_tokens, think_model: c.think_model, effort: c.effort, streaming: c.streaming,'
+for _n150 in _baked150:
+    _s150 = code(_n150)
+    assert _s150.count(_PUSH_OLD150) >= 1, 'LLM-LIMITS: ' + _n150 + ' prices its calls without the push the table expects'
+    setcode(_n150, _s150.replace(_old150, _new150).replace(_PUSH_OLD150, _PUSH_NEW150))
+    assert _new150 in code(_n150) and _PUSH_OLD150 not in code(_n150), _n150
+_cw51['ai_calls'] = _AI_CALLS51
+json.dump(_cw51, open(os.path.join(HERE0, 'harness', 'cost_wiring.json'), 'w'), indent=1, sort_keys=True)
+assert sum(1 for c in _AI_CALLS51 if c['think_model'] not in ('seen', 0) and c['streaming']) == 3, 'LLM-LIMITS: the three Opus page nodes keep their old thinking price'
+
+# ---------- B. the guards behind the Copywriter and the Editor ----------
+_kit150 = lambda s: s.replace('/*__COMPLETE__*/', COMPLETE_SRC150)
+_ok150 = '{{ !($json.llm_check && $json.llm_check.retry) }}'
+_px150, _py150 = pos('After Count (Copywriter)')
+add_node('Draft Check (Copywriter)', 'n8n-nodes-base.code', 2, {'jsCode': _kit150(_rd0('code/Draft_Check.js'))}, [_px150 + 200, _py150])
+if_node('Draft Complete? (Copywriter)', _ok150, [_px150 + 400, _py150])
+assert [t['node'] for l in conns['After Count (Copywriter)']['main'] for t in l] == ['Critic'], 'LLM-LIMITS: the Copywriter\'s resume node no longer feeds the Critic alone'
+disconnect('After Count (Copywriter)', 'Critic')
+connect('After Count (Copywriter)', 'Draft Check (Copywriter)'); connect('Draft Check (Copywriter)', 'Draft Complete? (Copywriter)')
+connect('Draft Complete? (Copywriter)', 'Critic', 0); connect('Draft Complete? (Copywriter)', 'Copywriter', 1)
+_px150, _py150 = pos('After Count (Editor)')
+add_node('Edit Check (Editor)', 'n8n-nodes-base.code', 2, {'jsCode': _kit150(_rd0('code/Edit_Check.js'))}, [_px150 + 200, _py150])
+if_node('Edit Complete? (Editor)', _ok150, [_px150 + 400, _py150])
+assert [t['node'] for l in conns['After Count (Editor)']['main'] for t in l] == ['Promise Candidates'], 'LLM-LIMITS: the Editor\'s resume node no longer feeds Promise Candidates alone'
+disconnect('After Count (Editor)', 'Promise Candidates')
+connect('After Count (Editor)', 'Edit Check (Editor)'); connect('Edit Check (Editor)', 'Edit Complete? (Editor)')
+connect('Edit Complete? (Editor)', 'Promise Candidates', 0); connect('Edit Complete? (Editor)', 'Editor', 1)
+for _g150 in ('Draft Check (Copywriter)', 'Edit Check (Editor)'):
+    assert 'const CK = (() => {' in code(_g150) and '/*__COMPLETE__*/' not in code(_g150), _g150
+
+# ---------- C. Content QA: cut off is its own reason and blocks publishing ----------
+setcode('Content QA', _kit150('/*__COMPLETE__*/\n' + code('Content QA')))
+patch('Content QA', "const fixes = [];\nconst warnings = [];\n", r"""const fixes = [];
+const warnings = [];
+// LLM-LIMITS (2026-10-27, section 150): a page that stops mid-way is its own failure, in plain words, and never publishable. The guards behind
+// the Copywriter and the Editor normally stop it before it reaches this node; this is the net under them, and it reads the page as delivered.
+const __cut = CK.text(md);
+const __llm_notes = (() => { const out = [];
+  for (const nd of ['Draft Check (Copywriter)', 'Edit Check (Editor)']) for (let r = 0; r < 12; r++) { let a = null; try { a = $(nd).all(0, r); } catch (e) { break; } if (!a || !a.length) break;
+    for (const i of a) { const k = i && i.json && i.json.llm_check; if (k && k.note && !out.includes(k.note)) out.push(k.note); } }
+  return out; })();
+if (round > 1) for (const n of __llm_notes) if (/was kept/.test(n) && !fixes.includes(n)) fixes.push(n);
+""")
+patch('Content QA', "const passed = passed_copy && profile_placeholders === 0 && body_brackets === 0 && claims_open === 0;",
+      "const passed = passed_copy && profile_placeholders === 0 && body_brackets === 0 && claims_open === 0 && !__cut.cut_off;   // LLM-LIMITS: a cut page is never publishable")
+patch('Content QA', "const not_ready_reasons = !not_ready ? [] : [\n",
+      "const not_ready_reasons = !not_ready ? [] : [\n  __cut.cut_off ? 'the page is cut off at the end: it stops at \"' + __cut.last_line.slice(-70) + '\" (' + __cut.reasons.join('; ') + '), so it cannot be published as it is' : '',   // LLM-LIMITS\n")
+patch('Content QA', "  (!too_long && !lenOk) ? 'the main content is '", "  (!too_long && !lenOk && !__cut.cut_off) ? 'the main content is '")
+patch('Content QA', "const quality = { passed, publishable: passed, not_ready,", "const quality = { passed, publishable: passed, cut_off: __cut.cut_off, not_ready,")
+patch('Content QA', "  content_qa: { ai_ready, round, editor_rounds,", "  content_qa: { cut_off: __cut.cut_off, cut_off_reasons: __cut.reasons, llm_notes: __llm_notes, ai_ready, round, editor_rounds,")
+assert 'const CK = (() => {' in code('Content QA'), 'LLM-LIMITS: the completeness kit is not in Content QA'
+assert not any('/*__COMPLETE__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'LLM-LIMITS: kit placeholder left'
+open(os.path.join(OUT_CODE, '_complete.js'), 'w').write("// harness shim (written by build_v4.py section 150): the completeness kit, { fn, args } -> { r }\n" + COMPLETE_SRC150
+    + "\nreturn $input.all().map(i => ({ json: { r: CK[i.json.fn].apply(null, i.json.args || []) } }));\n")
+log('No half pages (LLM-LIMITS, 2026-10-27): every Claude node of every workflow is in one table (llm_limits.py) with a thinking budget, output headroom and a ceiling of the model maximum (128,000, streaming) that holds both, checked by a build-time lint; the Copywriter and the Editor are followed by a completeness check (v5/code/_complete.js) that writes / edits once more when an answer stops mid-way, stops the run cleanly when the Copywriter is cut twice and keeps the complete earlier page when the Editor is; Content QA names a cut page as its own reason and never marks it publishable; the cost table prices the thinking it always did (think_model), the retry through the model node\'s runs')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;
@@ -12777,4 +12870,7 @@ _b107_checks(_b106_checks())
 # sections 116-117 (B6-6 / B6-8 / B6-10 / B6-14): benchmark area 6, on the generated Rank Tracker
 _b116_checks()
 _b69_checks()
-
+# section 150 (LLM-LIMITS, 2026-10-27): every Claude node of every generated workflow is declared, has room for its thinking budget AND its
+# whole answer, and streams above the SDK's non-streaming limit; the lint bites on purpose first (self-test) and fails the build otherwise
+_seen150 = _ll150.check(os.path.join(HERE0, 'workflows'))
+json.dump(dict(_ll150.harness_table(), seen=[list(x) for x in _seen150], self_test_cases=_ll150.self_test()), open(os.path.join(HERE0, 'harness', 'llm_limits.json'), 'w'), indent=1, sort_keys=True)

@@ -133,8 +133,15 @@ const CC = (() => {
     const covers = cnt ? Math.max(1, Math.round(n0((c.counted || {}).rounds) || 1)) : 0;
     const rounds = cnt ? Math.min(calls, covers) : 0;
     const perIn = cnt ? cnt.in_tokens / covers : 0, perOut = cnt ? cnt.out_tokens / covers : 0;
-    const seenThink = !!c.effort && !c.streaming;   // B-8 / A-27: a non-streaming call is modelled at the thinking it was seen to do
-    const budget = !c.effort ? 0 : seenThink ? THINK_SEEN * calls : Math.round(n0(c.max_tokens) * (THINK_SHARE[String(c.effort)] || 0)) * calls;
+    // LLM-LIMITS (2026-10-27, llm_limits.py): every Claude node now has a ceiling far above what it writes (thinking + the whole output
+    // must always fit), so the ceiling is room, not spend. The call table carries `think_model`, the thinking one call is priced at:
+    // 'seen' = the measured THINK_SEEN figure, a number = the effort budget the node was priced at before the ceiling was raised.
+    // A call without it (an older table, a hand-built spec) keeps the rule it always had.
+    const tm = c.think_model;
+    const seenThink = !!c.effort && (tm === 'seen' || ((tm === undefined || tm === null || tm === '') && !c.streaming));   // B-8 / A-27: a non-streaming call is modelled at the thinking it was seen to do
+    const declaredThink = !seenThink && tm !== undefined && tm !== null && tm !== '' && Number.isFinite(Number(tm)) ? Math.max(0, Math.round(Number(tm))) : null;
+    const budget = !c.effort ? 0 : seenThink ? THINK_SEEN * calls
+      : (declaredThink !== null ? declaredThink : Math.round(n0(c.max_tokens) * (THINK_SHARE[String(c.effort)] || 0))) * calls;
     const think = u ? 0 : budget;
     const inTok = u ? n0(u.promptTokens) : cnt ? Math.round(perIn * calls) : tokensOf(c.prompt_chars) * calls;
     const outTok = u ? n0(u.completionTokens) : (cnt ? Math.round(perOut * calls) : tokensOf(c.output_chars) * calls) + think;

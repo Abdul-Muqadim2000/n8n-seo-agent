@@ -99,6 +99,13 @@ const split = CC.split(ai, dfs);
 // `cost_mode` is "<Claude estimate key>|<DataForSEO estimate key>" — the two keys whose rolling figures this run settles into
 // (Cost Calibration Row). It is on the reserved row already; it is rebuilt from the request when an older row has none.
 const cost_mode = String(row.cost_mode || (CC.pick('ai', req).key + '|' + CC.pick('dfs', req).key));
+// LLM-LIMITS (2026-10-27): an answer the page writer or the editor cut short (and what the run did about it) is written on the row, first,
+// so ops see it without opening the run (the guards' own notes: Draft Check (Copywriter) / Edit Check (Editor), every run of each)
+const __llmNotes = (() => { const out = [];
+  for (const nd of ['Draft Check (Copywriter)', 'Edit Check (Editor)']) for (let r = 0; r < 12; r++) { let a = null; try { a = $(nd).all(0, r); } catch (e) { break; } if (!a || !a.length) break;
+    for (const i of a) { const k = i && i.json && i.json.llm_check; if (k && k.note && !out.includes(k.note)) out.push(k.note); } }
+  return out; })();
+const __llmNote = __llmNotes.length ? 'Claude answer cut short: ' + __llmNotes.join(' ') + ' ' : '';
 const __out = {
   run_id: String($execution.id), mode: String(row.mode || req.mode || ''), status: 'done', cost_mode,
   // the guard counts Claude money, so `settled_usd` stays the Claude figure — now the run's own, not a flat per-mode guess
@@ -108,7 +115,7 @@ const __out = {
   dfs_usd: dfs.usd, dfs_measured: dfs.measured,
   measured_usd: split.measured_usd, estimated_usd: split.estimated_usd,
   // the day's reconciliation rides on the row's own basis line, so nobody has to go looking for it
-  cost_basis: (dfs_day.comparable && !dfs_day.within ? split.cost_basis + '. Day check: ' + dfs_day.basis : split.cost_basis).slice(0, 500),
+  cost_basis: (__llmNote + (dfs_day.comparable && !dfs_day.within ? split.cost_basis + '. Day check: ' + dfs_day.basis : split.cost_basis)).slice(0, 500),
   dfs_balance: +Number(row.dfs_balance || 0).toFixed(6), dfs_day_reconciled: dfs_day.comparable && dfs_day.within,
   dfs_day: dfs_day,
   // B-A5: the run's own reconciliation — the second free reading, which figure the row carries and whether the account could answer
