@@ -519,9 +519,9 @@ def monitor_ledger_js(v5_dir, mode, plan_node, row_node, measured=''):
     reserve = (rd('Monitor_Ledger_Row.js').replace('__PLAN__', plan_node).replace('__MODE__', mode)
                .replace('__BALANCE__', 'DFS Balance (' + tag + ')')
                .replace('__EST__', _json.dumps(LEDGER_EST[mode], sort_keys=True)))
-    settle = (rd('Monitor_Ledger_Settle.js').replace('/*__COST_CAL__*/', cost_cal)
+    settle = (rd('Monitor_Ledger_Settle.js').replace('/*__COST_CAL__*/', cost_cal).replace('/*__COMPLETE__*/', rd('_complete.js').rstrip('\n'))   # LLM-LIMITS (2026-10-27)
               .replace('__ROW__', row_node).replace('__MEASURED__', measured))
-    for ph in ('__PLAN__', '__MODE__', '__EST__', '__ROW__', '__MEASURED__', '__BALANCE__', '/*__COST_CAL__*/'):
+    for ph in ('__PLAN__', '__MODE__', '__EST__', '__ROW__', '__MEASURED__', '__BALANCE__', '/*__COST_CAL__*/', '/*__COMPLETE__*/'):
         assert ph not in reserve and ph not in settle, ph + ' left in the ledger code for ' + mode
     assert '__AI_NODES__' in settle, 'R31: the settle has nowhere to learn this workflow\'s Claude nodes'
     # B-A5 (2026-10-15, section 62): the settle's two new inputs are named at WRITE time by ledger_mainline(), where the tag is known

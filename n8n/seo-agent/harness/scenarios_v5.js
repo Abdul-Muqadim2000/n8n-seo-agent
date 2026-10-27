@@ -8804,10 +8804,13 @@ await guard('G23 cost and G21 delivery', async () => {
   // ---------- 2. a streaming call is priced from what the run can see, and says it is an estimate ----------
   // exec 521: Strategy Brief, Copywriter and Editor are Opus with streaming on. n8n reports no usage for them at all — only
   // `tokenUsageEstimate`, which a Code node cannot read — so the only honest figure comes from the characters and the thinking budget.
-  const stream = CW.ai_calls.filter(c => c.streaming);
+  // LLM-LIMITS (2026-10-27, build section 150): every thinking node now streams (its ceiling is the model maximum, above the SDK's
+  // non-streaming limit), so the three Opus page nodes are found by their model, and each keeps the thinking price it always had
+  const stream = CW.ai_calls.filter(c => c.model === 'claude-opus-5-5');
   check('G23: the call table is baked from the real model nodes, so exactly the three streaming Opus nodes are known to be unmeasurable',
     stream.length === 3 && eq(stream.map(c => c.node).sort(), ['Copywriter', 'Editor', 'Strategy Brief'])
-    && stream.every(c => c.model === 'claude-opus-5-5' && c.max_tokens >= 24576 && c.effort === 'medium' && c.template_chars > 1000 && c.input && c.fields.length),
+    && stream.every(c => c.streaming && c.max_tokens === 128000 && Number(c.think_model) > 0 && c.effort === 'medium' && c.template_chars > 1000 && c.input && c.fields.length)
+    && CW.ai_calls.filter(c => c.effort).every(c => c.streaming),
     JSON.stringify(stream.map(c => ({ n: c.node, m: c.model, t: c.max_tokens, f: c.fields.length }))));
   const cw = stream.find(c => c.node === 'Copywriter');
   const one = await kit({ call: 'callCost', call_spec: { node: 'Copywriter', model: cw.model, max_tokens: cw.max_tokens, effort: cw.effort, streaming: true, prompt_chars: 40000, output_chars: 19000, calls: 1 } });
@@ -10350,7 +10353,7 @@ await guard('B-A8 counted tokens and B-A5 the run against the account', async ()
   check('B-A8: the chain preserves the pipeline — the agent\'s old successors hang off the resume node (Strategy Brief -> Parse Brief, Copywriter -> Critic, Editor -> Content QA)',
     eq(CT72.nodes['Strategy Brief'].after, ['Parse Brief']) && eq(CT72.nodes.Copywriter.after, ['Critic'])
     && eq(CT72.nodes.Editor.after, ['Content QA']), JSON.stringify(Object.fromEntries(Object.entries(CT72.nodes).map(([k, v]) => [k, v.after]))));
-  const streamCalls = CW72.ai_calls.filter(c => c.streaming);
+  const streamCalls = CW72.ai_calls.filter(c => c.model === 'claude-opus-5-5');   // LLM-LIMITS (2026-10-27): every thinking node streams now; the page nodes are the Opus ones
   check('B-A8: the call table knows which count nodes belong to which agent, so the pricing reads the right two answers',
     streamCalls.length === 3 && streamCalls.every(c => c.count_prompt === 'Count Prompt (' + c.node + ')' && c.count_answer === 'Count Answer (' + c.node + ')' && c.count_rounds === 1)
     && CW72.ai_calls.length === 11, JSON.stringify(streamCalls.map(c => [c.node, c.count_prompt])));
@@ -19708,5 +19711,6 @@ await require('./scenarios_rengine')({ H, run, mock, store, guard, reset, begin 
 await require('./scenarios_storeheal')({ H, run, mock, store, guard, reset, begin });   // STOREHEAL-1..7 (2026-10-27, production 2026-10-25 devaicon.com): a stored row is one the table handed back with its id (not one with an empty error column); a short save is read back and retried once; a failed_store run heals on the next start / the pulse's resume; nothing paid twice
 await require('./scenarios_market')({ H, run, mock, store, guard, reset, begin });   // MK1-MK4 (MKT 2026-10-27, docs/mismatch-audit-2026-10-27/AUDIT.md M2 / M4): Site Admin market, the fit gate's market, discovery and ladder pool
 await require('./scenarios_aifocus')({ H, run, mock, store, guard, reset, begin });   // AIFOCUS-1..8 (AI-FOCUS 2026-10-27, docs/ai-panel-focus-2026-10-27): the AI question panel follows the client's focus - the labelled set (precision / recall / on-focus / market / owner), the 12-week timeline, devaicon.com through the real nodes, the pulse scope, Site Admin accept / retire, the money, the matched trend, one kit
+await require('./scenarios_llmlimits')({ H, run, mock, store, guard, reset, begin });   // LL1-LL8 (LLM-LIMITS 2026-10-27, techand.ai exec 2195): every Claude node has room for its thinking and its whole answer (lint broken on purpose), the completeness kit on page / e-mail / JSON, the Copywriter and Editor guards on the production replay, Content QA's cut-off reason, the wiring and the cost
 H.report();
 })();
