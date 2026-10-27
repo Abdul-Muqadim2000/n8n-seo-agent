@@ -68,9 +68,13 @@ export const SITE_TASK_MAX_REDIRECTS = 5;
 
 /** A broken page's address as a task key: lower-case host, no www., no query, no fragment, no trailing slash. */
 export function redirectTaskKey(url: string): string {
-  const u = String(url || '').trim().replace(/[?#].*$/, '');
+  // cut by index, not by regex (the address comes from other sites' links)
+  const raw = String(url || '').trim();
+  const cut = raw.search(/[?#]/);
+  const u = cut >= 0 ? raw.slice(0, cut) : raw;
   const m = u.match(/^https?:\/\/(?:www\.)?([^/]+)(\/.*)?$/i);
-  const path = (m?.[2] ?? '/').replace(/\/+$/, '') || '/';
+  let path = m?.[2] ?? '/';
+  while (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
   return `redirect:${(m?.[1] ?? u).toLowerCase()}${path}`;
 }
 

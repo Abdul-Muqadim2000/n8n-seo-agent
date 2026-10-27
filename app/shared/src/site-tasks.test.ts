@@ -103,6 +103,10 @@ describe('Redirects of broken pages other sites link to', () => {
   it('keys ignore www, case, the query and a trailing slash', () => {
     expect(redirectTaskKey('https://WWW.Novaand-Demo.com/Old/?a=1#x')).toBe('redirect:novaand-demo.com/Old');
     expect(redirectTaskKey('https://novaand-demo.com')).toBe('redirect:novaand-demo.com/');
+    expect(redirectTaskKey('https://novaand-demo.com//')).toBe('redirect:novaand-demo.com/');
+    const t0 = Date.now();
+    redirectTaskKey('https://novaand-demo.com/' + '/'.repeat(100000) + 'x' + '#'.repeat(100000));
+    expect(Date.now() - t0).toBeLessThan(500);
   });
   it('a stored step the next report no longer lists is done; one the report predates stays as it was', () => {
     const stored = row({ key: 'redirect:novaand-demo.com/old-1', kind: 'redirect', payload: { brokenUrl: 'https://novaand-demo.com/old-1', redirectTo: 'https://novaand-demo.com/services', links: 4 } });

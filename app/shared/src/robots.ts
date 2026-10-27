@@ -12,12 +12,16 @@ export function parseRobots(txt: string): RobotsGroup[] {
   const groups: RobotsGroup[] = [];
   let cur: RobotsGroup | null = null;
   let lastWasRule = false;
-  for (const raw of String(txt || '').split(/\r?\n/)) {
-    const line = raw.replace(/#.*$/, '').trim();
-    const m = line.match(/^([a-z-]+)\s*:\s*(.*)$/i);
-    if (!m) continue;
-    const k = m[1].toLowerCase();
-    const v = m[2].trim();
+  for (const raw of String(txt || '').split('\n')) {
+    // the engine's `replace(/#.*$/)` and `match(/^([a-z-]+)\s*:\s*(.*)$/i)`, by index: a client's file must not make a regex slow
+    const hash = raw.indexOf('#');
+    const line = (hash >= 0 ? raw.slice(0, hash) : raw).trim();
+    const colon = line.indexOf(':');
+    if (colon < 1) continue;
+    const name = line.slice(0, colon).trim();
+    if (!/^[a-z-]+$/i.test(name)) continue;
+    const k = name.toLowerCase();
+    const v = line.slice(colon + 1).trim();
     if (k === 'user-agent') {
       if (!cur || lastWasRule) {
         cur = { agents: [], rules: [] };

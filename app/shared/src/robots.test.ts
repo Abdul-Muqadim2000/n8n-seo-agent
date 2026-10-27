@@ -30,6 +30,7 @@ const FILES: Record<string, string> = {
   prefix: 'User-agent: Claude\nDisallow: /\n',
   emptyDisallow: 'User-agent: *\nDisallow:\n',
   crlf: 'User-agent: ChatGPT-User\r\nDisallow: /\r\n',
+  odd: 'user-agent : Bingbot\nDISALLOW:/a#b\n-: x\nuser agent: Googlebot\nDisallow : /c\n: /d\nAllow:\n#User-agent: *\nUser-agent:*\nDisallow: /e # tail\n',
 };
 const BOTS = ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Claude-User', 'Googlebot', 'Bingbot', 'GPTBot'];
 const PATHS = ['/', '/private/', '/private/open', '/private/x', '/report.pdf', '/report.pdf?x', '/docs', '/a', '/b/c', '/c'];
@@ -75,6 +76,11 @@ describe('the matcher without backtracking', () => {
       const path = '/' + pick('ab/.', rnd(9));
       expect(robotsPatternMatches(pattern, path), `${pattern} on ${path}`).toBe(KIT.matches(pattern, path));
     }
+  });
+  it('a hostile file cannot stall the reader (many #, "-:" then many spaces)', () => {
+    const t0 = Date.now();
+    parseRobots('#'.repeat(200000) + '\n' + '-:' + ' '.repeat(200000) + 'x\n' + 'User-agent: *\nDisallow: /' + '/'.repeat(100000));
+    expect(Date.now() - t0).toBeLessThan(500);
   });
   it('a hostile rule cannot stall the server', () => {
     const t0 = Date.now();
