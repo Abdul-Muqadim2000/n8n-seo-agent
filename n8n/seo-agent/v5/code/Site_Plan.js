@@ -165,7 +165,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     // B7-1: the dated changes, readable ones first; GSC Requests buys the two windows of the first `max_change_tests`, the rest
     // travel with the reason they could not be read so the report says so instead of showing a shorter list
     changes: changes.slice(0, Math.max(CONFIG.max_change_tests, 12)),
-    owner_notes, content_groups, content_groups_json: s.content_groups_json || '', serp_positions: serp, pending_publish, needs_fix, console_alerts, last_checkin, checkin_due, ranges, on_demand, checked_at: now, config: CONFIG,
+    owner_notes, content_groups, content_groups_json: s.content_groups_json || '', fact_answers_json: s.fact_answers_json || '', serp_positions: serp, pending_publish, needs_fix, console_alerts, last_checkin, checkin_due, ranges, on_demand, checked_at: now, config: CONFIG,
     // 2026-10-19: the cycle this run belongs to (null outside one), the website's zone, its cycle day and the words for it
     cycle, tz, local_month: localMonth, cycle_weekday, every_week: ST.everyText(cycle_weekday) } };
 });

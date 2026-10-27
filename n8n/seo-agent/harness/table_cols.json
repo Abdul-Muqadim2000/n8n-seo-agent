@@ -451,7 +451,8 @@
   "accreditation",
   "model_updated_at",
   "content_groups_json",
-  "declared_services"
+  "declared_services",
+  "fact_answers_json"
  ],
  "PAGES": [
   "site_id",

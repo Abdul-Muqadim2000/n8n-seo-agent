@@ -26,6 +26,8 @@ import { contentGroups, isLiveItem, liveLine, needsFixItem, publishPrefill } fro
 import { countBy, daysSince, plural, urlPath } from './_components/format';
 import { FileLinks } from './_components/reports';
 import { PublishCheckPanel } from './_components/publish-check';
+import { ReviewLine } from './_components/review-status';
+import { StageBadge } from '@/components/reports/review/ReviewPanels';
 import { verdictLabel } from '@/components/reports/kit';
 
 export default function ContentPage() {
@@ -398,7 +400,8 @@ function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; r
       <div className="mt-2 space-y-1 text-xs text-ink-3">
         <p>Started {fmtDate(item.startedAt)}{liveNow && item.publishedAt ? ` · published ${fmtDate(item.publishedAt)}` : ''}</p>
         {item.existingPageUrl && !liveNow && <p className="truncate">Improves {urlPath(item.existingPageUrl)}</p>}
-        {fix && (
+        {item.review && <ReviewLine review={item.review} orgId={org.id} />}
+        {fix && !item.review && (
           <p className="text-ink-2 [overflow-wrap:anywhere]">
             Did not pass the quality check, so it is not ready to publish{reasons.length ? `: ${reasons.slice(0, 2).join('; ')}` : ''}. {DRAFT_BY_HAND}.
           </p>
@@ -462,7 +465,7 @@ function PipelineTable({ rows, reports, cms, onUnpublish }: { rows: ContentItem[
     { key: 'keyword', header: 'Keyword', sortValue: (r) => r.keyword, cell: (r) => <span className="font-medium text-ink">{r.keyword}</span> },
     { key: 'source', header: 'Source', sortValue: (r) => r.source, cell: (r) => <SourceLine item={r} /> },
     { key: 'pageType', header: 'Page type', hideOnMobile: true, sortValue: (r) => r.pageType, cell: (r) => (r.pageType ? <Kind>{r.pageType}</Kind> : '-') },
-    { key: 'status', header: 'Status', sortValue: (r) => (isLive(r) ? 2 : needsFixItem(r) ? 0 : 1), cell: (r) => (isLive(r) ? <StatusBadge tone="good">Live</StatusBadge> : needsFixItem(r) ? <StatusBadge tone="critical">Needs your edits</StatusBadge> : <Badge tone="accent" icon={<CalendarClock className="size-3" aria-hidden />}>Waiting</Badge>) },
+    { key: 'status', header: 'Status', sortValue: (r) => (isLive(r) ? 2 : needsFixItem(r) ? 0 : 1), cell: (r) => (r.review && !isLive(r) ? <StageBadge stage={r.review.stage} /> : isLive(r) ? <StatusBadge tone="good">Live</StatusBadge> : needsFixItem(r) ? <StatusBadge tone="critical">Needs your edits</StatusBadge> : <Badge tone="accent" icon={<CalendarClock className="size-3" aria-hidden />}>Waiting</Badge>) },
     { key: 'cms', header: 'CMS', hideOnMobile: true, sortValue: (r) => cms.get(r.keyword.toLowerCase())?.remoteStatus ?? '', cell: (r) => { const c = cms.get(r.keyword.toLowerCase()); return c ? <CmsBadge item={c} /> : <span className="text-ink-3">-</span>; } },
     { key: 'startedAt', header: 'Started', sortValue: (r) => r.startedAt, cell: (r) => <span className="text-[13px] text-ink-2">{fmtDate(r.startedAt)}</span> },
     { key: 'publishedAt', header: 'Published', hideOnMobile: true, sortValue: (r) => r.publishedAt || '', cell: (r) => <span className="text-[13px] text-ink-2">{r.publishedAt ? fmtDate(r.publishedAt) : '-'}</span> },

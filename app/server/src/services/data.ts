@@ -725,6 +725,12 @@ export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentDa
     reportsList(org.id, { siteId: site.id, stages: ['content'], limit: 40 }),
   ]);
   const profile = profileFromRow(profiles[0]);
+  // H3 (2026-10-28): where each written page's review stands (questions, final version, approval, publishing); never fails the board
+  const reviews = await import('./pageReview').then((m) => m.siteReviews(org.id, site)).catch(() => null);
+  const reviewOf = (r: ContentLogRow) => {
+    const page = reviews?.pageFor(r);
+    return page && reviews ? { review: reviews.summaryOf(page, r) } : {};
+  };
   return {
     items: log.map((r) => ({
       keyword: s(r.keyword),
@@ -743,6 +749,7 @@ export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentDa
       qaReasons: s(r.qa_reasons),
       // 2026-10-27: marked published on the owner's word after the check's warning (the live page did not match the draft)
       publishNote: s(r.publish_note),
+      ...reviewOf(r),
     })),
     cadence: cadence[0] ? { pagesPerWeek: n(cadence[0].pages_per_week), status: s(cadence[0].status) } : null,
     caseStudies: cases.map((c) => ({

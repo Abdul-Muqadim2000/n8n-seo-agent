@@ -202,6 +202,50 @@
     }
   },
   {
+    "name": "keyword refresh with stored business facts (H3)",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "keyword",
+      "keyword": "erp implementation dubai",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "page_type": "Service Page",
+      "existing_page_url": "https://www.northwind-erp.com/insights/erp-implementation/",
+      "local_area": "",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "business_facts_kv": {
+        "credential.microsoft_partner": "Northwind is a Microsoft Solutions Partner."
+      },
+      "stored_fact_keys": [
+        "credential.microsoft_partner",
+        "service.fixed_price_scoping"
+      ],
+      "cta": "Book a free scoping call",
+      "tone": "Professional and direct",
+      "goal": "Get leads and enquiries",
+      "features": [],
+      "receive": [
+        "Keyword Report",
+        "Page Content"
+      ],
+      "existing_page_ours": true
+    },
+    "expect": {
+      "mode": "keyword",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "audience": "distributors, wholesalers, finance teams",
+      "cta": "Book a free scoping call",
+      "existing_page_url": "https://www.northwind-erp.com/insights/erp-implementation/",
+      "include_content": true
+    }
+  },
+  {
     "name": "keyword: ladder page from the pipeline (write now)",
     "headers": {
       "x-forwarded-for": "app:7a1c2d3e-org"

@@ -17,6 +17,7 @@ import { ProfileForm, profileSavedToast, useSaveProfile } from '@/components/sit
 import { businessOnly, SiteBusinessForm } from '@/components/site/SiteBusinessFields';
 import { BLOG_OPTIONS, blogMonthlyCost, trackDefaults, TrackingForm, type TrackFormOutput } from '@/components/site/TrackingForm';
 import { VerificationPanel } from '@/components/site/VerificationPanel';
+import { StoredFacts } from '@/components/site/StoredFacts';
 import { PublishingSettings } from '@/components/site/cms/PublishingSettings';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -128,27 +129,31 @@ function BusinessTab({ admin }: { admin: boolean }) {
   const { site } = useSiteCtx();
   const update = useUpdateSite(org.id, site.id);
   return (
-    <Card className="max-w-3xl">
-      <CardHeader
-        icon={<HeaderTile icon={<Building2 />} />}
-        title="Business details"
-        description="Only real facts: the engine never invents prices, numbers or claims, it uses what is written here."
-      />
-      <CardBody>
-        <SiteBusinessForm
-          key={site.id}
-          mode="edit"
-          site={site}
-          readOnly={!admin}
-          showSubmit
-          submitting={update.isPending}
-          onSubmit={async (v) => {
-            await update.mutateAsync(businessOnly(v));
-            toast.success('Business details saved', { description: 'New pages, reports and checks use them from now on.' });
-          }}
+    <div className="space-y-5">
+      <Card className="max-w-3xl">
+        <CardHeader
+          icon={<HeaderTile icon={<Building2 />} />}
+          title="Business details"
+          description="Only real facts: the engine never invents prices, numbers or claims, it uses what is written here."
         />
-      </CardBody>
-    </Card>
+        <CardBody>
+          <SiteBusinessForm
+            key={site.id}
+            mode="edit"
+            site={site}
+            readOnly={!admin}
+            showSubmit
+            submitting={update.isPending}
+            onSubmit={async (v) => {
+              await update.mutateAsync(businessOnly(v));
+              toast.success('Business details saved', { description: 'New pages, reports and checks use them from now on.' });
+            }}
+          />
+        </CardBody>
+      </Card>
+      {/* H3 (2026-10-28): the answers given on written pages, kept once and reused */}
+      <StoredFacts orgId={org.id} siteId={site.id} admin={admin} />
+    </div>
   );
 }
 

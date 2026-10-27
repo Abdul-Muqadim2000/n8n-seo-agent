@@ -34,7 +34,7 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
-    date: '2026-10-27',
+    date: '2026-10-28',
     version: '4.4',
     title: 'Video tutorials',
     summary:
@@ -52,6 +52,7 @@ export const changelog: ChangelogEntry[] = [
       'Your AI questions now follow the keywords you work on, in your own market: a new keyword gets its questions the week it starts, questions about topics you left are retired with their history kept, the daily check can ask only the questions about your keywords for fewer credits, and trends compare the questions asked both weeks',
       'Written pages are always whole: every page is checked to the last line before it reaches you. If the writing stops part way, it is written again, and an edit that stops part way never replaces your complete page. A page cut off at the end is named as such and never marked ready to publish',
       'Fewer false "please confirm" notes on written pages: advice to your readers and invitations to contact you are no longer treated as claims about your business, and what your own service pages say counts as on file. Your brand name and your legal name are now two separate fields, so titles and headings use your brand, and a keyword plan never rewrites a page you already published for another keyword',
+      'Pages you can finish in the app: each written page says where it stands in plain words, asks only what you can answer (ranked, most of it one click, never blocking), keeps your answers for every later page, makes the final version for you, lets you edit it yourself with a preview and a comparison, and goes live after one click to approve',
       'Written pages arrive ready to publish more often: we fix what we can ourselves first (keyword placement, title and description length, links to your live pages, no brackets in the text), edit only the sections that need it and keep the best version we wrote, so an edit never makes your page worse. Figures are cited only from pages we read that day. Each page now says Ready to publish, Ready with optional questions, or Not ready with the exact reason, and its grade describes the page you receive. Anything we could not confirm about your business is written in general terms and asked as a question you can answer yes, edit or remove, saved for later pages',
     ],
     features: ['guided-setup', 'content', 'ai-visibility'],

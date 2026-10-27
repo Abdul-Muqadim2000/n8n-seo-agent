@@ -347,11 +347,19 @@ export const features: Feature[] = [
       'Check any page before you publish: paste a page (or send it from your build) and get the same quality verdict our own pages must pass (placeholders, invented prices, unsourced figures, coverage, readability, a direct answer first), with every reason named and what could not be checked. Free, and nothing is stored',
       'Refreshed pages re-check their facts: the cited sources are read again, and figures a source no longer states are flagged',
       'Readability measured against the pages that rank for your search, not against a fixed score',
+      'Each page says plainly where it stands: ready to publish and waiting for your OK, ready and stronger with your input, or not ready and why, with the grade of the page you actually receive',
+      'Questions only you can answer, ranked by how much they matter: the top three first, the rest optional, most of them filled in from your own website so one click answers them',
+      'Nothing waits on you: a page is publishable without your answers, because anything we could not check is said in general words until you confirm it, edit it or remove it',
+      'Every answer is kept in your business details and used on every later page, so you are never asked the same thing twice',
+      'Your final version made for you: after you answer, only the parts your answers change are rewritten and the whole page is checked again',
+      'Edit the page yourself in the app, headings, paragraphs, lists, tables and links, with a preview, a comparison with the version we delivered, undo and a check before you publish',
+      'One click to approve, then send it to your website or publish it yourself and we check it live',
     ],
     steps: [
       { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile, your case studies and your style guide.' },
       { title: 'Write and critique', body: 'A draft, a critic\'s review and an editor\'s pass that acts on it.' },
       { title: 'Check', body: 'SEO checks on every page, against a coverage target read off the best page in the results. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm. A page that repeats a competitor or one of your own pages goes back for a rewrite.' },
+      { title: 'Answer and approve', body: 'Answer the few questions only you can answer (most are one click), change anything you like in the editor, and we make the final version. Then approve it in one click.' },
       { title: 'Publish and verify', body: 'Send the page to your CMS as a draft (or publish it live if you are an owner or admin), or take the package. Alaventra checks the page once it is live and starts tracking it.' },
     ],
     facts: [
@@ -363,6 +371,10 @@ export const features: Feature[] = [
       {
         q: 'Will the pages read like generic AI text?',
         a: 'Each page is written from a brief built on your business profile, your experience notes and your case studies, then reviewed by a critic and an editor. Figures that cannot be verified are marked for you to confirm instead of being made up.',
+      },
+      {
+        q: 'What if a page says something about us that you could not check?',
+        a: 'It never claims it. The page uses general words instead and you get a question: keep the specific sentence, change it or remove it, or leave it general. You can publish without answering. Your answer is kept in your business details, so later pages use it and never ask again.',
       },
       { q: 'Who is shown as the author?', a: 'The author and expert reviewer from your business profile, with a byline, an author box and Person schema.' },
       {
@@ -996,7 +1008,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 68, label: 'guides, one for each thing we ask of you' },
+      { value: 69, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],

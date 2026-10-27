@@ -16,6 +16,9 @@
   "SEO_Agent_Link_Builder.json": {
    "Outreach Sequence Writer": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
   },
+  "SEO_Agent_Page_Finalize.json": {
+   "Finalize Editor": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
+  },
   "SEO_Agent_Reply_Reader.json": {
    "Reply Reader": "={{ ((o) => o == null ? '' : typeof o === 'string' ? o : JSON.stringify(o))($json.output) }}"
   },
@@ -91,6 +94,12 @@
    {
     "model_node": "Claude \u2014 Outreach Sequence Writer",
     "node": "Outreach Sequence Writer"
+   }
+  ],
+  "SEO Agent \u2014 Page Finalize": [
+   {
+    "model_node": "Claude \u2014 Finalize Editor",
+    "node": "Finalize Editor"
    }
   ],
   "SEO Agent \u2014 Page Watch": [],
@@ -422,6 +431,9 @@
   "SEO_Agent_Link_Builder.json": {
    "Outreach Sequence Writer": "tool"
   },
+  "SEO_Agent_Page_Finalize.json": {
+   "Finalize Editor": "tool"
+  },
   "SEO_Agent_Reply_Reader.json": {
    "Reply Reader": "tool"
   },
@@ -673,6 +685,7 @@
   "SEO Agent \u2014 Backlink Monitor": "Parse Backlinks",
   "SEO Agent \u2014 Content Cadence": "",
   "SEO Agent \u2014 Link Builder": "!Run LB DFS Answers",
+  "SEO Agent \u2014 Page Finalize": "",
   "SEO Agent \u2014 Page Watch": "",
   "SEO Agent \u2014 Rank Tracker": "Tracker Report",
   "SEO Agent \u2014 Reply Reader": "",

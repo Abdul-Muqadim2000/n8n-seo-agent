@@ -1,0 +1,1 @@
+return [{ json: {} }];   // no DataForSEO in this workflow: no account balance to read

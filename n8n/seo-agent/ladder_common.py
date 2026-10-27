@@ -65,7 +65,12 @@ SITES_COLS = [('site_id', 'string'), ('domain', 'string'), ('gsc_property', 'str
               # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §5.2 / §14.1): the services the client declared ("What do you sell?" on Track my site), a JSON
               # list. Written by Track my site only; the site model (SM.from) merges it into its services and SM.toRow writes it back unchanged, so
               # the weekly Site Tracker never overwrites it. Read by the fit gate (protected words, topics) and the keyword research (seeds).
-              ('declared_services', 'string')]
+              ('declared_services', 'string'),
+              # H3 (2026-10-28, page review): the answers the client gave to the questions on written pages, kept once per website and reused by
+              # every later page: a JSON object fact_key -> { decision: yes|edit|answer|remove|general, text }. Written by Site Admin `facts`
+              # (the app sends it with the business facts); the Content Cadence and the ladder page runs send it on as business_facts_kv (the facts a
+              # page may state) and stored_fact_keys (every key decided: no page asks it again). SM.toRow never writes it.
+              ('fact_answers_json', 'string')]
 # v4.15 (G19): the site's page inventory -- one row per site and URL (sitemap, Search Console, AI Growth key pages, publish detection), filled
 # by D11; `queries_json` holds the Search Console queries the page gets impressions for. SM.matchPage() reads it.
 PAGES_TABLE = 'seo_pages'
@@ -502,6 +507,9 @@ LEDGER_EST = {
     'page_watch':      {'ai': 0.0,  'dfs': 0.0},
     # W3-F (2026-10-17): the Reply Reader classifies ONE reply with Haiku (about 1k tokens in, 300 out); the web app calls it per reply and waits
     'reply_read':      {'ai': 0.003, 'dfs': 0.0},
+    # H3 (2026-10-28): "Make the final version" of a written page - at most one Claude Sonnet call over the sections an answer touches
+    # (about 6k characters in, 3k out); $0 when every answer is a sentence swap. The app quotes and charges it from the answer's own cost
+    'page_finalize':   {'ai': 0.05, 'dfs': 0.0},
     # W2-E2 (2026-10-23): the one-off AI repeat pilot - its plan prices itself (est_dfs_usd: 10 questions x 10 asks x its engines, at most $4)
     'ai_pilot':        {'ai': 0.0, 'dfs': 1.5},
 }

@@ -52,7 +52,9 @@ export type CostKey =
   | 'checkin'
   | 'profile'
   | 'case_study'
-  | 'assess';
+  | 'assess'
+  /** H3 (2026-10-28): the final version of a written page (only the sections the answers change; no research, no new page) */
+  | 'finalize';
 
 /**
  * One row per estimate key: `ai` is the Claude money, `dfs` the search-data money, and the engine reserves their sum.
@@ -85,6 +87,7 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
   profile: { ai: 0, dfs: 0, measured: 0, basis: 'saving the business profile' },
   case_study: { ai: 0, dfs: 0, measured: 0, basis: 'the intake itself; the page it writes reserves a content run' },
   assess: { ai: 0, dfs: 0.04, measured: 0.0254, basis: 'one keyword check, execs 487-489, plus its results page read 30 deep with the AI Overview ($0.006)' },
+  finalize: { ai: 0.1, dfs: 0, measured: 0.04, basis: 'the final version of a written page: the sections your answers change are rewritten (one model call on those sections), then the whole page is checked again; no search data' },
 };
 
 const round = (n: number): number => Math.round(n * 10000) / 10000;

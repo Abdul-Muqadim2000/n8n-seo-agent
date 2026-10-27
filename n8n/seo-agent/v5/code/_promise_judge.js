@@ -23,7 +23,8 @@ const PJ = (() => {
   const ownText = (prev, siteModel) => {
     const P = prev || {}; const SMx = siteModel || (P.site_model && typeof P.site_model === 'object' ? P.site_model : null) || {};
     const vals = (o) => (o && typeof o === 'object') ? Object.values(o).map(v => (v && typeof v === 'object') ? vals(v) : String(v == null ? '' : v)).join(' ') : String(o || '');
-    return [P.business, P.business_facts, P.case_facts_text, SMx.business_facts, SMx.accreditation, vals(SMx.services), vals(SMx.nap),
+    // H3 (2026-10-28): the facts the client confirmed or wrote in answer to an earlier page's questions (business_facts_kv) are on file too
+    return [P.business, P.business_facts, (P.business_facts_kv && typeof P.business_facts_kv === 'object') ? vals(P.business_facts_kv) : '', P.case_facts_text, SMx.business_facts, SMx.accreditation, vals(SMx.services), vals(SMx.nap),
       vals(P.site_profile), vals(P.author), vals(P.reviewer), ...(P.client_pages || []).map(p => p && p.text),
       // H1 / H2 (2026-10-27): on a refresh of a page the system itself wrote (`existing_page_ours`, set by the caller from the content log),
       // that page's text is our own earlier draft, not the client's word, and never supports a claim about the business

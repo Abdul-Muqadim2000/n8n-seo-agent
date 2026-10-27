@@ -478,6 +478,9 @@ export async function pipelineData(org: OrgRow, site: SiteRow): Promise<Pipeline
   const data = (await pipelineState(org, site)).data;
   // G2: a page waiting to be published says what the CMS already holds, and offers to send it from its report
   await annotatePublishNeeds(org.id, site.id, data.needsYou).catch(() => undefined);
+  // H3 (2026-10-28): written pages with questions only the client can answer (the page is publishable without them)
+  const questions = await import('./pageReview').then((m) => m.questionNeedsYou(org.id, site)).catch(() => [] as NeedsYouItem[]);
+  if (questions.length) data.needsYou = sortNeedsYou([...data.needsYou, ...questions]);
   return data;
 }
 

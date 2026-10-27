@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowRight,
   CalendarClock,
+  CircleHelp,
   CheckCircle2,
   Copy,
   Gauge,
@@ -45,6 +46,7 @@ import type { WriteNowItem } from './WriteNowDialog';
 import { guideForNeedsYou } from '@seo/shared/guide-links';
 import { GuideButton } from '@/components/guide';
 import { autopilotGuideVars } from '@/lib/guide-vars';
+import { modeTitle } from '@/components/reports/meta';
 
 // ---------- this week ----------
 /** Older servers: the coming week from the automations' next run times. */
@@ -109,7 +111,7 @@ export function ThisWeek({ data }: { data: PipelineData }) {
               <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-accent-soft px-3 py-2 text-[13px]">
                 <RunningBadge />
                 <Link to={paths.run(org.id, r.id)} className="min-w-0 font-medium text-ink hover:text-accent-text hover:underline transition-colors duration-150 ease-brand">
-                  {MODES[r.mode]?.title ?? r.mode}
+                  {modeTitle(r.mode)}
                   {r.keyword ? `: "${r.keyword}"` : ''}
                 </Link>
                 <span className="text-xs text-ink-3">started {fmtAgo(r.createdAt)}</span>
@@ -180,6 +182,7 @@ const KIND_ICON: Record<NeedsYouItem['kind'], ReactNode> = {
   level: <Gauge className="size-4" />,
   profile: <UserRound className="size-4" />,
   ai_panel: <MessageSquareText className="size-4" />,   // AI-FOCUS (2026-10-27): the AI questions and the keywords you work on
+  questions: <CircleHelp className="size-4" />,   // H3 (2026-10-28): questions only you can answer on a written page
 };
 
 /** Older servers: the pages waiting to be published. */
@@ -210,7 +213,8 @@ function useNeedsYouHref() {
     if (a.ladderId) return paths.ladder(org.id, site.id, a.ladderId);
     if (a.runId) return paths.run(org.id, a.runId);
     // G2: the page's report, where it is sent to the CMS
-    if (a.reportId) return paths.report(org.id, a.reportId);
+    // H3: a written page's questions open on the report, at its questions
+    if (a.reportId) return paths.report(org.id, a.reportId) + (kind === 'questions' ? '#questions' : '');
     if (a.mode) return can('member') ? paths.tool(org.id, a.mode, { siteId: site.id, prefill: a.prefill }) : null;
     if (a.page) return paths.site(org.id, site.id, a.page);
     return null;

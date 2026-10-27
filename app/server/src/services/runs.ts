@@ -15,6 +15,8 @@ import {
   type MonitorsRow,
   IDEMPOTENCY,
   isCycleRequestId,
+  isOwnWrittenPage,
+  type ContentLogRow,
   MODES,
   n8nSiteId,
   ladderPrefsSchema,
@@ -147,6 +149,8 @@ export function siteContext(site: SiteRow): SiteContext {
     ga4PropertyId: site.ga4PropertyId,
     timezone: site.timezone,
     services: site.services,
+    // H3 (2026-10-28): the business facts answered on written pages travel with every page run (business_facts_kv, stored_fact_keys)
+    factAnswers: site.factAnswers ?? {},
   };
 }
 
@@ -311,6 +315,15 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     body.ladder_links = links;
     if (targetWords) body.ladder_words = targetWords;
     if (targetUrl) body.ladder_target_url = targetUrl;   // R15: the page keeps the URL the ladder planned for it
+  }
+  // H3 (2026-10-28, H1 open item): a refresh of a page the engine wrote itself (published, in its content log) must not read that page as
+  // support for its own claims. Exact key, after everything the fuzzy pick reads; not decided when the log cannot be read.
+  if (input.mode === 'keyword' && site) {
+    const pageUrl = String(input.existingPageUrl || body.ladder_target_url || '');
+    if (pageUrl) {
+      const log = await siteRows<ContentLogRow>('contentLog', site.domain, { sortBy: 'started_at:desc', max: 1000 }).catch(() => null);
+      if (log) body.existing_page_ours = isOwnWrittenPage(log, pageUrl);
+    }
   }
   await siteForecasts(org.id).catch(() => []); // warm the schedules' forecast outside the lock (the credit check reads it)
   // budget checks and the insert under one lock per company, so parallel requests (runs and keyword checks) cannot all pass the same

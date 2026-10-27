@@ -5242,7 +5242,7 @@ def _r17_r29_checks():
         _check_ledger_order55(files55[wname55], wiring55); checked55 += 1
     # R32's companion (section 59): Page Watch joined the chain, so it is ten — the nine that spend plus the daily watch, which keeps a
     # $0 row so the guard and the day's reconciliation can see that it ran at all.
-    assert checked55 == 12, 'R17: ' + str(checked55) + ' workflows checked, expected 12 (the nine of R17, Page Watch, the Reply Reader since W3-F, and the AI Repeat Pilot since W2-E2)'
+    assert checked55 == 13, 'R17: ' + str(checked55) + ' workflows checked, expected 13 (the nine of R17, Page Watch, the Reply Reader since W3-F, the AI Repeat Pilot since W2-E2, and the Page Finalize since H3)'
     hits55 = _secret_scan55([os.path.join(HERE0, 'workflows'), os.path.join(HERE0, 'harness', 'code_v4')])
     assert not hits55, 'R29: a secret reached the generated files:\n  ' + '\n  '.join(hits55)
     # R30 (2026-10-14): a shape scan only catches the secrets we thought of. The alert channel is checked positively as well — what is
@@ -6533,7 +6533,7 @@ def _b64_checks():
             'B-A7: ' + wname64 + ' does not write the retry state back: ' + str(wr64)
         out64[wname64] = {'guard': g64, 'retry': r64, 'writes': wr64, 'if_outputs': if64,
                           'refuse_values': sorted(ref64['columns']['value'].keys())}
-    assert len(out64) == 12, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 12 (the ten schedules, the Reply Reader since W3-F and the AI Repeat Pilot since W2-E2)'
+    assert len(out64) == 13, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 13 (the ten schedules, the Reply Reader since W3-F, the AI Repeat Pilot since W2-E2 and the Page Finalize since H3)'
     json.dump({'monitors': out64, 'n_minutes': 30, 'k_attempts': 3, 'max_attempts': 10, 'per_sweep': 5,
                'error_handler': _ops64['retry'], 'columns': [c for c, _t in _OAC64],
                'page_watch_delivery': {'code': 'Watch Ops Delivery', 'save': 'Save Watch Ops Delivery'}},
@@ -12729,6 +12729,49 @@ sticky("""### The page pipeline (H1, 2026-10-27)
 **Page Candidates** (after every check): dead links fixed, ONE score for every draft (hard blockers > soft blockers > advisory), **the best draft is kept**; then a **section-targeted edit** (at most 3, stop when nothing improves) or the **final version** (the system's own neutral rewrite) checked once more; then **ready / ready_with_questions / not_ready**, the grade of the delivered page, the client questions.
 **Sources**: Page Source Plan -> SearXNG -> Fetch Page Sources -> **Verified Sources** (answers + states the figure); the Editor cites only those.""", _x151 - 40, _y151 - 260, 980, 200, 5)
 log('The page pipeline never delivers a worse draft (H1, 2026-10-27, docs/content-quality-2026-10-27/R1, R2): one contract for length (a band), brackets (none) and claims in the brief, copywriter, critic and editor prompts (PF.contract on the brief item; the brief lists questions_for_client instead of bracketed prompts); Page Fix applies the deterministic fixes before every quality check; Page Candidates scores every draft by one rule (hard blockers, soft blockers, advisory distance), keeps the best, plans a section-targeted edit (at most 3 rounds, stopping when a round improves nothing) or the final version with the system\'s own neutral rewrite, and after the last full check delivers ready / ready_with_questions / not_ready with the grade of the delivered page and the client questions; the Editor edits only the sections with a problem (Edit Check merges the blocks, every other byte kept) and may cite only pages the new source step (SearXNG, then a direct read) verified')
+
+# =============================================================================
+# 152. THE CLIENT'S ANSWERS ARE KEPT ONCE AND EVERY LATER PAGE USES THEM (H3, 2026-10-28, docs/content-quality-2026-10-27; the page review in
+#      the app, app/shared/src/page-review.ts). H1 asks the client about every statement nothing on file supports, keyed by a business-fact key.
+#      * Normalize Input takes `business_facts_kv` (fact_key -> the text the client confirmed or wrote) and `stored_fact_keys` (every key the
+#        client decided, removed or kept general) by their exact keys, validated and capped (FA, v5/code/_fact_answers.js), never through the
+#        fuzzy pick(): `business_facts_kv` holds the word "facts" and `existing_page_ours` the word "existing", so the two picks that look for
+#        those words now skip them. A page run's business facts carry the stored answers (the brief may say them; the claim check reads
+#        them as on file, PJ.ownText), and Page Candidates' PF.questions never asks a stored key (prev.stored_fact_keys).
+#      * `existing_page_ours` (H1 open item): the caller says the page refreshed is one this system wrote (the content log), so its text
+#        never vouches for a claim. The Content Cadence (build_site_tracker.py) and *Spawn Page Runs* set it from the content log.
+#      * The finalize workflow (SEOagentFinalize, build_monitors.py 6b) and Site Admin `facts` + `fact_answers` (seo_sites.fact_answers_json).
+# =============================================================================
+FA_SRC152 = _rd0('code/_fact_answers.js').rstrip('\n')
+assert 'const FA = (() => {' in FA_SRC152
+setcode('Normalize Input', FA_SRC152 + '\n' + code('Normalize Input'))
+patch('Normalize Input', "const business_facts = String(pick(p2, 'facts') || p2.business_facts || '').trim().slice(0, 2000);",
+      "const business_facts = String((() => { const v = pick(p2, 'facts'); return typeof v === 'string' ? v : ''; })() || (typeof p2.business_facts === 'string' ? p2.business_facts : '') || '').trim().slice(0, 2000);   // H3: never the business_facts_kv object\n"
+      "// H3 (2026-10-28, build section 152): the client's stored answers (exact keys; FA validates and caps them; a malformed value is an empty one)\n"
+      "const business_facts_kv = FA.kvIn(p2.business_facts_kv);\n"
+      "const stored_fact_keys = FA.keysIn(p2.stored_fact_keys);\n"
+      "const existing_page_ours = p2.existing_page_ours === true || String(p2.existing_page_ours == null ? '' : p2.existing_page_ours).toLowerCase() === 'true';")
+patch('Normalize Input', "let existing_page_url = String(pick(p2, 'existing') || '').trim();",
+      "let existing_page_url = String((() => { const k = Object.keys(p2 || {}).find(k => k !== 'existing_page_ours' && k.toLowerCase().replace(/[\\s_-]+/g, ' ').includes('existing')); const v = k ? p2[k] : ''; return typeof v === 'string' ? v : ''; })()).trim();   // H3: never the existing_page_ours flag")
+patch('Normalize Input', "    business_facts,\n    cta,",
+      "    business_facts: (mode === 'track' || !Object.keys(business_facts_kv).length) ? business_facts : (business_facts + '\\n' + FA.text(Object.fromEntries(Object.entries(business_facts_kv).filter(([, v]) => !business_facts.includes(v))))).trim().slice(0, 5000),   // H3: a page run may state what the client confirmed\n"
+      "    business_facts_kv,\n    stored_fact_keys,\n    cta,")
+patch('Normalize Input', "    existing_page_url,\n", "    existing_page_url,\n    existing_page_ours: existing_page_ours && !!existing_page_url,\n")
+# the ladder's first pages: the request's stored answers travel on, and a page the ladder refreshes is ours when the content log has it live
+setcode('Spawn Page Runs', FA_SRC152 + '\n' + code('Spawn Page Runs'))
+patch('Spawn Page Runs', "return (L.write_now || []).slice(0, n).map(p => ({ json: { body: {",
+      "// H3 (2026-10-28, section 152): a page is ours when a content-log row of this website carries it as its published address (host-agnostic)\n"
+      "const ownKey = (u) => String(u || '').toLowerCase().replace(/^https?:\\/\\/(www\\.)?/, '').replace(/[?#].*$/, '').replace(/\\/+$/, '');\n"
+      "const ownUrls = (() => { try { return new Set($('Load Content Log (Ladder)').all().map(i => i.json || {}).filter(r => String(r.domain || '').toLowerCase().replace(/^www\\./, '') === String(d.domain || '').toLowerCase().replace(/^www\\./, '') && String(r.published_url || '').trim()).map(r => ownKey(r.published_url))); } catch (e) { return new Set(); } })();\n"
+      "const kvOf = FA.kvIn(d.business_facts_kv), keysOf = FA.keysIn(d.stored_fact_keys);\n"
+      "return (L.write_now || []).slice(0, n).map(p => ({ json: { body: {")
+patch('Spawn Page Runs', "  business: d.business || '', customers: d.audience || '', business_facts: factsOf, cta: ctaOf,",
+      "  business: d.business || '', customers: d.audience || '', business_facts: factsOf, business_facts_kv: kvOf, stored_fact_keys: keysOf, cta: ctaOf,")
+patch('Spawn Page Runs', "  receive: ['Keyword Report', 'Page Content'], existing_page_url: p.exists ? p.target_url : '',",
+      "  receive: ['Keyword Report', 'Page Content'], existing_page_url: p.exists ? p.target_url : '', existing_page_ours: !!(p.exists && p.target_url && ownUrls.has(ownKey(p.target_url))),")
+assert 'Load Content Log (Ladder)' in nodes, 'H3: the ladder flow has no content-log load to read our own pages from'
+assert "pick(p2, 'facts')" in code('Normalize Input') and 'business_facts_kv,' in code('Normalize Input') and 'stored_fact_keys,' in code('Normalize Input'), 'H3: Normalize Input lost the stored answers'
+log('The client\'s answers are kept once (H3, 2026-10-28, section 152): Normalize Input takes business_facts_kv and stored_fact_keys by their exact keys (the fuzzy picks for "facts" and "existing" skip them), a page run\'s business facts carry the confirmed answers, PJ.ownText reads them as on file and Page Candidates never asks a stored key; existing_page_ours is accepted and set by the Content Cadence and Spawn Page Runs from the content log; Site Admin facts stores fact_answers (seo_sites.fact_answers_json); the new synchronous workflow SEO Agent — Page Finalize (SEOagentFinalize, POST /webhook/seo-page-finalize) makes the final version of a delivered page from the answers')
 
 # =============================================================================
 # 9. WRITE

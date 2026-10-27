@@ -297,6 +297,39 @@
    ],
    "tag": "LB"
   },
+  "SEO Agent \u2014 Page Finalize": {
+   "always_output": [
+    "Ensure Run Ledger (Finalize)",
+    "Reserve Run Ledger (Finalize)"
+   ],
+   "ensure_out": [
+    "DFS Balance (Finalize)"
+   ],
+   "est": {
+    "ai": 0.05,
+    "dfs": 0.0
+   },
+   "plan": "Finalize Plan",
+   "plan_out": [
+    "Ensure Run Ledger (Finalize)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (Finalize)"
+   ],
+   "resume": "After Run Ledger (Finalize)",
+   "resume_out": [
+    "Run Allowed? (Finalize)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (Finalize)"
+   ],
+   "settle": "Settle Run Ledger (Finalize)",
+   "settle_from": [
+    "Finalize Verdict",
+    "Refuse Run Ledger (Finalize)"
+   ],
+   "tag": "Finalize"
+  },
   "SEO Agent \u2014 Page Watch": {
    "always_output": [
     "Ensure Run Ledger (Watch)",

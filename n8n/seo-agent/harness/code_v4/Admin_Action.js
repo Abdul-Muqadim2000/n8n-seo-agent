@@ -1,5 +1,5 @@
 // Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)
-// | facts (business_facts, the client's own facts about the business, stored on seo_sites; P1 2026-10-20)
+// | facts (business_facts, the client's own facts about the business, stored on seo_sites; P1 2026-10-20; H3 2026-10-28: + fact_answers)
 // | market (country: name or ISO-2 of the main workflow's COUNTRIES; MKT 2026-10-27, AUDIT M2): the market every weekly job measures the website
 //   in (seo_sites country / location_code / language_code). Rank history and past rows stay as they are: the next checks start a new baseline.
 // | prospect (prospect_domain + status contacted / replied / won / rejected / ignored / new, note, contact_email; replied: v4.13) | ai_prompts (add custom questions, switch some off) — by site_id or domain.
@@ -315,6 +315,45 @@ const AVX = (() => {
 
   return { Z, t975, wilsonN, prop, ratio, boot, binom, rng, hash, ci, packUnits, unpackUnits, pulseUnits, history, sov, impact, validateRules, evalRules, METRICS, SCOPES, pilot, zOfP, nCdf, parse, run };
 })();
+// ---- FA: the client's answers to the questions on written pages, kept once per website (H3, 2026-10-28; inlined through the FACT_ANSWERS marker) ----
+// The page pipeline (H1, v5/code/_page_fix.js PF.questions) asks the client about every statement nothing on file supports, keyed by a
+// business-fact key (`fact_key`, e.g. "credential.microsoft_partner"). The app stores each answer ONCE on the website (app: sites.fact_answers;
+// engine: seo_sites.fact_answers_json, written by Site Admin `facts`) and every later page run carries:
+//   business_facts_kv   fact_key -> the text the client confirmed or wrote (decisions yes / edit / answer): the claim check reads it as on file
+//   stored_fact_keys    every key the client decided, including remove and general: PF.questions never asks it again
+// The same rule as the app's factsForEngine (app/shared/src/page-review.ts): the two must change together.
+// Pure: no clock, no network, no URL constructor, no Object.defineProperty, no structuredClone (n8n sandbox rules).
+const FA = (() => {
+  const KEY = /^[\p{L}\p{N}_.&-]{1,80}$/u;
+  const DECISIONS = ['yes', 'edit', 'answer', 'remove', 'general'];
+  const TEXT_MAX = 600, KV_MAX = 200, KEYS_MAX = 400;
+  const S = (v) => String(v == null ? '' : v);
+  const clean = (t) => S(t).replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+  const asObj = (raw) => { let o = raw; if (typeof o === 'string') { try { o = JSON.parse(o || '{}'); } catch (e) { o = null; } }
+    return o && typeof o === 'object' && !Array.isArray(o) ? o : null; };
+  // { key: { decision, text } } from the stored JSON (or an object); entries with a bad key or decision are dropped and counted
+  const parse = (raw) => { const o = asObj(raw); const answers = {}; let dropped = 0; if (!o) return { answers, dropped };
+    for (const [k, v] of Object.entries(o).slice(0, KEYS_MAX)) {
+      const decision = v && typeof v === 'object' ? S(v.decision).toLowerCase() : 'yes';
+      const text = clean(v && typeof v === 'object' ? v.text : v).slice(0, TEXT_MAX);
+      if (!KEY.test(k) || !DECISIONS.includes(decision) || ((decision === 'yes' || decision === 'edit' || decision === 'answer') && !text)) { dropped++; continue; }
+      answers[k] = { decision, text: decision === 'remove' || decision === 'general' ? '' : text }; }
+    return { answers, dropped }; };
+  // the facts a page may state, and every decided key
+  const kv = (answers) => { const out = {}; for (const [k, v] of Object.entries(answers || {})) if (v && v.text && (v.decision === 'yes' || v.decision === 'edit' || v.decision === 'answer')) out[k] = v.text; return out; };
+  const keys = (answers) => Object.keys(answers || {}).filter(k => KEY.test(k)).sort().slice(0, KEYS_MAX);
+  // what a request carries (Normalize Input): validated and capped; a malformed value is an empty one, never an error for the whole run
+  const kvIn = (raw) => { const o = asObj(raw); const out = {}; if (!o) return out; let n = 0;
+    for (const [k, v] of Object.entries(o)) { if (n >= KV_MAX) break; const t = clean(v).slice(0, TEXT_MAX); if (!KEY.test(k) || !t || typeof v === 'object') continue; out[k] = t; n++; }
+    return out; };
+  const keysIn = (raw) => { const a = Array.isArray(raw) ? raw : typeof raw === 'string' && raw.trim() ? raw.split(/[,\n]/) : [];
+    return [...new Set(a.map(x => clean(x)).filter(k => KEY.test(k)))].slice(0, KEYS_MAX); };
+  // the two fields a page run spawned from a stored website row carries
+  const forRun = (siteRow) => { const a = parse(siteRow && siteRow.fact_answers_json).answers; return { business_facts_kv: kv(a), stored_fact_keys: keys(a) }; };
+  // the stored facts as text, one per line, for the claim corpus
+  const text = (kvObj) => Object.values(kvObj || {}).map(clean).filter(Boolean).join('\n');
+  return { KEY, DECISIONS, TEXT_MAX, parse, kv, keys, kvIn, keysIn, forRun, text, clean };
+})();
 // ---- countries: copied from the main workflow's Normalize Input by build_site_tracker.py (MKT 2026-10-27: Site Admin `market`) ----
 const COUNTRIES = {
   'United States':        { code: 2840, iso: 'US', lang: 'en', language: 'English', spelling: 'American English',   currency: 'USD' },
@@ -352,6 +391,13 @@ const market = marketName ? { country: marketName, location_code: Number(COUNTRI
 // P1 (2026-10-20): the business facts the client saved in the app, so the Content Cadence and the readiness rule (v5/code/_readiness.js) read them
 if (action === 'facts' && t.business_facts == null) throw new Error('business_facts (text; an empty text clears them) is required for action facts');
 const business_facts = String(t.business_facts == null ? '' : t.business_facts).trim().slice(0, 2000);
+// H3 (2026-10-28, page review): with the facts the app may send the client's answers to the questions on written pages (fact_key -> { decision,
+// text }), kept once per website (seo_sites.fact_answers_json) and carried by every later page run (FA.forRun). Only a request that sends the key
+// writes the column: a facts save without it never clears the answers. An empty object clears them.
+const fact_answers_sent = action === 'facts' && t.fact_answers !== undefined && t.fact_answers !== null;
+if (fact_answers_sent && (Array.isArray(t.fact_answers) || (typeof t.fact_answers !== 'object' && !/^\s*\{/.test(String(t.fact_answers))))) throw new Error('fact_answers must be an object fact_key -> { decision, text }');
+const FAP = fact_answers_sent ? FA.parse(t.fact_answers) : { answers: {}, dropped: 0 };
+const fact_answers_json = fact_answers_sent ? JSON.stringify(FAP.answers) : '';
 if (!site_id) throw new Error('site_id or domain is required');
 const pages = Math.min(3, Math.max(0, Number(t.pages_per_week == null ? t.blogs_per_week : t.pages_per_week) || 0));
 if (action === 'cadence' && t.pages_per_week == null && t.blogs_per_week == null) throw new Error('pages_per_week (0-3) is required for action cadence');
@@ -389,4 +435,4 @@ const monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (
   if (raw !== undefined && raw !== null) { delete monitors.ai_alert_rules; monitors.ai_alert_rules_json = (raw === '' || (Array.isArray(raw) && !raw.length)) ? '' : JSON.stringify(AVX.validateRules(typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (e) { throw new Error('ai_alert_rules_json is not valid JSON'); } })() : raw)); }
   if (monitors.ai_sov_set !== undefined && monitors.ai_sov_set !== null) monitors.ai_sov_set = (Array.isArray(monitors.ai_sov_set) ? monitors.ai_sov_set : String(monitors.ai_sov_set).split(/[\n,;]+/)).map(x => String(x).trim()).filter(Boolean)
     .map(x => /\./.test(x) ? normD(x) : x.slice(0, 60)).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 20).join(', '); }
-return [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, accept_prompts, retire_prompts, monitors, content_groups_json, business_facts, market_country: market.country, market_location_code: market.location_code, market_language_code: market.language_code, market_iso: market.country_iso, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];
+return [{ json: { fact_answers_sent, fact_answers_json, fact_answers_count: Object.keys(FAP.answers).length, fact_answers_dropped: FAP.dropped, action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, accept_prompts, retire_prompts, monitors, content_groups_json, business_facts, market_country: market.country, market_location_code: market.location_code, market_language_code: market.language_code, market_iso: market.country_iso, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];

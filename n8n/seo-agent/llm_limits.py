@@ -74,6 +74,8 @@ LIMITS = {
     ('SEO_Agent_Site_Tracker.json', 'Claude — Site Brief'): dict(_SONNET, effort='low', kind='report brief (JSON)', old=dict(max=8192, stream=False, think=None)),
     ('SEO_Agent_Reply_Reader.json', 'Claude — Reply Reader'): dict(model='claude-haiku-4-5-20251001', effort='', think=0, head=1200, max=1500, stream=False,
                                                                   cost_think=0, kind='reply class + suggested answer (JSON)', old=dict(max=1500, stream=False, think=0)),
+    # H3 (2026-10-28): the page finalize's section editor (only the sections an answer touches, as JSON)
+    ('SEO_Agent_Page_Finalize.json', 'Claude — Finalize Editor'): dict(_SONNET, effort='low', kind='rewritten sections (JSON: a few page sections in Markdown)', old=dict(max=0, stream=False, think=None)),
     ('SEO_Agent_Keyword_Check.json', 'Claude — Keyword Fit'): dict(model='claude-haiku-4-5-20251001', effort='', think=0, head=600, max=1200, stream=False,
                                                                   cost_think=0, kind='topic fit (short JSON / text; the check answers within 45 s)',
                                                                   old=dict(max=1200, stream=False, think=0)),

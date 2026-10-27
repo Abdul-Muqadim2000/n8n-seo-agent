@@ -1016,6 +1016,89 @@
     "Nothing To Do (LB)"
    ]
   },
+  "SEO Agent \u2014 Page Finalize": {
+   "ai_calls": [
+    {
+     "after": [
+      "Finalize Merge"
+     ],
+     "branch": 0,
+     "count_answer": "Count Answer (Finalize Editor)",
+     "count_per_item": true,
+     "count_prompt": "Count Prompt (Finalize Editor)",
+     "count_resume": "After Count (Finalize Editor)",
+     "count_rounds": 0,
+     "count_set": "Prompt For Count (Finalize Editor)",
+     "effort": "low",
+     "fields": [
+      "editor_prompt"
+     ],
+     "from": [],
+     "input": "Needs Editor?",
+     "max_tokens": 128000,
+     "model": "claude-sonnet-5-5",
+     "model_node": "Claude \u2014 Finalize Editor",
+     "node": "Finalize Editor",
+     "ref": "$('Needs Editor?').item.json",
+     "streaming": true,
+     "template_chars": 27,
+     "think_model": "seen"
+    }
+   ],
+   "ai_nodes": [
+    "Finalize Editor"
+   ],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Finalize)",
+    "gate": "Any Alert Retry (Finalize)?",
+    "load": "Load Open Alerts (Finalize)",
+    "plan": "Alert Retry Plan (Finalize)",
+    "post": "Post Alert Retry (Finalize)",
+    "result": "Alert Retry Result (Finalize)",
+    "save": "Save Alert Retry (Finalize)",
+    "table": "seo_ops_alerts"
+   },
+   "balance": "DFS Balance (Finalize)",
+   "balance_end": "DFS Balance End (Finalize)",
+   "catchup_records": "",
+   "cost_cal": "Load Cost Factors (Finalize)",
+   "est": {
+    "ai": 0.05,
+    "dfs": 0.0
+   },
+   "guard": {
+    "gate": "After Run Ledger (Finalize)",
+    "if": "Run Allowed? (Finalize)",
+    "kit": "RG",
+    "load": "Load Open Runs (Finalize)",
+    "notice": "Refusal Notice (Finalize)",
+    "post": "Post Refusal (Finalize)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Finalize)",
+     "Refusal Notice (Finalize)",
+     "Refuse Run Ledger (Finalize)",
+     "Tell Caller (Finalize)?"
+    ],
+    "refuse": "Refuse Run Ledger (Finalize)",
+    "tell": "Tell Caller (Finalize)?"
+   },
+   "ledger_load": "Load Run Ledger (Finalize)",
+   "measured": "",
+   "mode": "page_finalize",
+   "no_dfs": true,
+   "no_gate": true,
+   "open_runs": "Load Open Runs (Finalize)",
+   "plan": "Finalize Plan",
+   "reserve": "Run Ledger Row (Finalize)",
+   "resume": "After Run Ledger (Finalize)",
+   "settle": "Settle Run Ledger (Finalize)",
+   "settle_from": [
+    "Finalize Verdict",
+    "Refuse Run Ledger (Finalize)"
+   ],
+   "settle_from_ends": []
+  },
   "SEO Agent \u2014 Page Watch": {
    "ai_nodes": [],
    "alert_retry": {

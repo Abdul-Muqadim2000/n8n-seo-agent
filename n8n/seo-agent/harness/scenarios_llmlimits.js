@@ -44,7 +44,7 @@ module.exports = async (ctx) => {
       for (const n of (wf(f).nodes || [])) { if (n.type !== '@n8n/n8n-nodes-langchain.lmChatAnthropic') continue;
         seen.push(f + '|' + n.name); const L = decl.get(f + '|' + n.name); const why = lint(L, n); if (why.length) bad.push([f, n.name, why]); } }
     console.log('   Claude nodes ->', seen.length, 'declared', decl.size);
-    check('every Claude node (22) across the generated workflows is declared and passes the rule', seen.length === 22 && decl.size === 22 && !bad.length && seen.every(k => decl.has(k)), J(bad));
+    check('every Claude node (23, H3 added the Page Finalize\'s section editor) across the generated workflows is declared and passes the rule', seen.length === 23 && decl.size === 23 && !bad.length && seen.every(k => decl.has(k)), J(bad));
     const page = ['Claude — Copywriter', 'Claude — Editor', 'Claude — Strategy Brief'].map(n => decl.get('SEO_Agent_v4.json|' + n));
     check('the page / brief writers get the model maximum (128,000) with 64,000 for thinking and 32,000 for the page, streaming, effort unchanged (medium)',
       page.every(L => L.max === 128000 && L.think === 64000 && L.head === 32000 && L.stream && L.effort === 'medium' && L.model === 'claude-opus-5-5'), J(page));

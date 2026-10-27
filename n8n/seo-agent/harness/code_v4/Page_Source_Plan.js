@@ -94,7 +94,9 @@ const PF = (() => {
     const g = shadow(md); let a = at, b = at + len;
     while (a > 0 && !isEnd(g, a - 1)) a--;
     while (a < at && /[ \t]/.test(md[a])) a++;
-    while (b < g.length && !isEnd(g, b)) b++;
+    // H3 (2026-10-28): a span that already ends on a sentence end (the sentence passed with its full stop) stops there; it used to run on and
+    // take the NEXT sentence with it
+    while (b < g.length && !isEnd(g, b) && !(b > at && /[.!?]/.test(g[b - 1]) && isEnd(g, b - 1))) b++;
     if (b < g.length && /[.!?]/.test(g[b])) { b++; while (b < g.length && /[)*_"']/.test(g[b])) b++; }
     while (b < g.length && /[ \t]/.test(md[b])) b++;
     return [a, b];

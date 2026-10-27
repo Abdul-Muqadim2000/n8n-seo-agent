@@ -1,5 +1,9 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import type {
+  AnswerDecision,
+  FactAnswer,
+  FactAnswers,
+  PageReviewView,
   ApiKeyCreate,
   ApiKeyView,
   PublishCheckInput,
@@ -1436,4 +1440,76 @@ export function useApprovalMutations(orgId: string) {
 
 export const usePortalHandoff = () =>
   useMutation({ mutationFn: (host: string) => api<{ url: string; expiresInSeconds: number }>('/api/portal/handoff', { method: 'POST', body: { host } }) });
+
+// ---------- H3 (2026-10-28): the review of a written page (questions, the client's version, the final version, approval) ----------
+// Contract: @seo/shared page-review.ts. Every mutation answers the whole review, which replaces the cached one; the website's content
+// board and pipeline (Needs you) and its stored business facts are refreshed after it.
+const reviewKey = (orgId: string, reportId: string) => [...qk.report(orgId, reportId), 'review'] as const;
+const factsKey = (siteId: string) => [...qk.site(siteId), 'facts'] as const;
+
+/** The review of one page report; polls every 5 s while the final version is being made. */
+export const usePageReview = (orgId: string, reportId: string, enabled = true) =>
+  useQuery({
+    queryKey: reviewKey(orgId, reportId),
+    queryFn: () => api<PageReviewView>(`/api/orgs/${orgId}/reports/${reportId}/review`),
+    enabled: enabled && !!reportId,
+    retry: noRetryOn4xx,
+    refetchInterval: (q) => (q.state.data?.finalize.status === 'running' ? 5_000 : false),
+  });
+
+function useReviewMutation<TBody>(orgId: string, reportId: string, call: (b: TBody) => { method: 'POST' | 'PUT' | 'DELETE'; path: string; body?: unknown }) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: TBody) => {
+      const c = call(b);
+      return api<PageReviewView>(`/api/orgs/${orgId}/reports/${reportId}/review${c.path}`, c.method === 'DELETE' ? { method: 'DELETE' } : { method: c.method, body: c.body ?? {} });
+    },
+    onSuccess: (v, _b) => {
+      qc.setQueryData(reviewKey(orgId, reportId), v);
+      if (v.siteId) {
+        qc.invalidateQueries({ queryKey: ['site', v.siteId, 'data'] });
+        qc.invalidateQueries({ queryKey: factsKey(v.siteId) });
+      }
+      // a final version is a new report, a run is charged: the runs list and the usage move
+      if (v.finalize.status === 'running') {
+        qc.invalidateQueries({ queryKey: ['org', orgId, 'runs'] });
+        qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'usage'] });
+      }
+    },
+  });
+}
+
+export interface ReviewAnswerInput {
+  questionId: string;
+  decision: AnswerDecision;
+  text?: string;
+}
+export const useSaveAnswers = (orgId: string, reportId: string) =>
+  useReviewMutation<ReviewAnswerInput[]>(orgId, reportId, (answers) => ({ method: 'PUT', path: '/answers', body: { answers } }));
+export const useAcceptPrefilled = (orgId: string, reportId: string) => useReviewMutation<void>(orgId, reportId, () => ({ method: 'POST', path: '/accept-prefilled' }));
+export const useSaveVersion = (orgId: string, reportId: string) => useReviewMutation<string>(orgId, reportId, (markdown) => ({ method: 'PUT', path: '/version', body: { markdown } }));
+export const useRevertVersion = (orgId: string, reportId: string) => useReviewMutation<void>(orgId, reportId, () => ({ method: 'DELETE', path: '/version' }));
+export const useFinalizePage = (orgId: string, reportId: string) => useReviewMutation<void>(orgId, reportId, () => ({ method: 'POST', path: '/finalize' }));
+export const useApprovePage = (orgId: string, reportId: string) =>
+  useReviewMutation<{ versionReportId?: string }>(orgId, reportId, (b) => ({ method: 'POST', path: '/approve', body: b ?? {} }));
+
+/** The website's stored business facts (answers kept once, reused by every later page). */
+export const useSiteFacts = (orgId: string, siteId: string, enabled = true) =>
+  useQuery({ queryKey: factsKey(siteId), queryFn: () => api<{ facts: FactAnswers }>(`/api/orgs/${orgId}/sites/${siteId}/facts`), enabled, retry: noRetryOn4xx });
+
+export function useSaveFact(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, decision, text }: { key: string; decision: FactAnswer['decision']; text: string }) =>
+      api<{ facts: FactAnswers }>(`/api/orgs/${orgId}/sites/${siteId}/facts/${encodeURIComponent(key)}`, { method: 'PUT', body: { decision, text } }),
+    onSuccess: (r) => qc.setQueryData(factsKey(siteId), r),
+  });
+}
+export function useDeleteFact(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => api<{ facts: FactAnswers }>(`/api/orgs/${orgId}/sites/${siteId}/facts/${encodeURIComponent(key)}`, { method: 'DELETE' }),
+    onSuccess: (r) => qc.setQueryData(factsKey(siteId), r),
+  });
+}
 

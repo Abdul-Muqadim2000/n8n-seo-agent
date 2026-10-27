@@ -21,6 +21,7 @@ export const GUIDE_FOR_NEEDS_YOU_KIND: Record<NeedsYouItem['kind'], GuideId> = {
   connection: 'your-weekly-cycle',
   profile: 'business-profile',   // P1: the author profile and the business facts the first page waits for
   ai_panel: 'ai-panel-focus',   // AI-FOCUS (2026-10-27): the AI questions follow the keywords you work on
+  questions: 'page-questions',   // H3 (2026-10-28): questions on a written page; each answer is kept in the business details
 };
 
 /** The guide that answers one Needs-you item: its kind's, refined by what the id says (a refused plan, a draft to fix, an announcement). */

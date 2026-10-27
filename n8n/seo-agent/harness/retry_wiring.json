@@ -2935,6 +2935,52 @@
    }
   ],
   "SEO Agent \u2014 Link Builder API": [],
+  "SEO Agent \u2014 Page Finalize": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Prompt (Finalize Editor)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 20000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Count Answer (Finalize Editor)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 20000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Refusal (Finalize)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 30000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Retry (Finalize)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
+   }
+  ],
   "SEO Agent \u2014 Page Watch": [
    {
     "allowed": false,

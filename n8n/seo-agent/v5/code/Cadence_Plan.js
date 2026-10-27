@@ -90,6 +90,7 @@
 /*__SERP_OBS__*/
 /*__RANK_SERP__*/
 /*__COST_CAL__*/
+/*__FACT_ANSWERS__*/
 const CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_days: 90, striking_min_impressions: 30, striking_min_position: 4, striking_max_position: 20, publish_reminder_days: 7, upcoming: 4,
   max_active: 2, max_waiting: 3, waiting_days: 120, gate_head_position: 30, won_checks: 4, won_position: 3, suggestions: 5,
   // B4-3 (2026-10-15, benchmark area 4): at most this many refreshes of decaying pages offered in one week, and the days a page
@@ -590,10 +591,16 @@ for (const s of list) {
       est_ai_usd: 0, est_dfs_usd: 0, ...facts } });   // a preview spends nothing: the run ledger reserves 0 for it
     continue;
   }
+  // H1 open item (2026-10-28): a page is ours when a content-log row of this website carries it as its published address (host-agnostic; no URL constructor)
+  const ownKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const ownUrls = new Set(slog.filter(l => String(l.published_url || '').trim()).map(l => ownKey(l.published_url)));
+  const ownPage = (u) => !!String(u || '').trim() && ownUrls.has(ownKey(u));
   picks.forEach((p, i) => { const request_id = ridOf(spent + i + 1);
     out.push({ json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', source: p.source, keyword: p.keyword, page_type: p.page_type, existing_page_url: p.existing_page_url || '', ladder_id: p.ladder_id || '', rung: p.rung || 0, page_no: p.page_no || 0, target_id: p.target_id || '', why: p.why, request_id, pages_per_week: pages, upcoming, pending_publish: pending, candidates: uniq.length, dry_run, week, item_key: cycleNorm(p.keyword), auto: !p.approved, approved: !!p.approved, est_usd: EST_PAGE_USD, ...facts,
       body: { mode: 'keyword', keyword: p.keyword, page_type: p.page_type, country: s.country || '', domain: s.domain, receive: ['Keyword Report', 'Page Content'], existing_page_url: p.existing_page_url || '', email: s.email || '', callback_url: s.callback_url || '', business: '', customers: '', request_id, client_ip: 'cadence:' + s.site_id, force_content: true,
         business_facts: String(s.business_facts || '').trim().slice(0, 2000), cta: String(s.cta || '').trim().slice(0, 200),   // P1: the stored facts reach every page run (Normalize Input matches `business` first, so it is sent, empty, before them)
+        ...FA.forRun(s),   // H3 (2026-10-28): the client's stored answers (business_facts_kv, stored_fact_keys): confirmed facts are on file, no page asks a decided one again
+        existing_page_ours: ownPage(p.existing_page_url),   // H1 open item (2026-10-28): the page refreshed is one this system wrote (a content-log row of this site with its live address), so its text never vouches for a claim
         ...(p.ai_target ? { ai_target: p.ai_target } : {}),
         ...(p.source === 'ladder' ? { ladder_id: p.ladder_id, ladder_rung: p.rung, ladder_head: p.head, ladder_page_no: p.page_no, ladder_target_url: p.target_url || '', ladder_links: (p.links || []).map(l => ({ url: l.url, path: String(l.url).replace(/^https?:\/\/[^\/]+/i, '') || '/', role: l.role, keyword: l.keyword, planned: true })) } : {}) } } }); });
   const dropped = set_aside.filter(x => x.dropped);   // R16: a rung nobody should write is a reason to report, not to go quiet

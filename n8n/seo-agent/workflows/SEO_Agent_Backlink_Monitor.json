@@ -568,6 +568,10 @@
               {
                 "name": "declared_services",
                 "type": "string"
+              },
+              {
+                "name": "fact_answers_json",
+                "type": "string"
               }
             ]
           },
