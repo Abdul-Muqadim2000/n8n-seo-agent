@@ -61,7 +61,19 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-23 night, AI visibility + question panel upgrade — latest)
+## Status (2026-10-28, Steps on your website: client site tasks — latest)
+Owner asked: where does the platform tell a client to do something on their own site, let them say done, check it and mark it done?
+Nowhere as one flow (the IndexNow file was asked on the AI page only, its check was not saved; robots.txt blocks and broken-page
+redirects had no ask at all). **Built, reviewed, DEPLOYED 2026-10-27 ~22:05 UTC** (API on the VM at `80e94221`, web via PR #42 /
+main `346870c5`; backup `pg/2026-10-27/*T213129Z`; migration 0024 `site_tasks`, additive only; no engine change). Read
+**`app/docs/SITE_TASKS.md`** (survey, design, the review's rules) and `app/API.md` "Site tasks". Pipeline panel "Steps on your website"
+(to do highlighted, done ticked, skipped), Needs you `site_task`, "I've done it, check now", Skip, daily check `SITE_TASK_JOBS`
+(two misses an hour apart reopen a done step), recommendations `ai:indexnow` / `bl:reclaim` / new `ai:crawlers` follow the steps.
+Redirects read FULL backlink reports only (the light watch would mark them done). Safe fetcher now refuses URLs with credentials or IP
+literals. Tutorial **5.9** filmed (video-skills repo). Open: CI "real Postgres suites" (cmsRoutes 409 vs 400) and npm audit (fast-uri)
+failed before this work too; the engine's `_ai_access_kit.js` still uses the backtracking robots regex; 5.8's end card says "Next: 6.1".
+
+## Status (2026-10-23 night, AI visibility + question panel upgrade — previous)
 Owner asked for a full audit + R&D + multi-agent upgrade of AI visibility, shipped safely. **DEPLOYED 2026-10-23 ~22:20 UTC** at `84d65d8f`:
 backup `pg/2026-10-23/*T221220Z.dump`; engine `deploy_engine.py --no-build --apply --create-missing` (columns synced, 16 updated, pilot workflows
 imported, 26 published, SEOagentCallback deactivated); API on the VM (detached checkout + `up -d --build app`, healthy); web via PR #36. Read
