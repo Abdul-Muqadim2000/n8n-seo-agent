@@ -11,13 +11,22 @@
 let __pt = {}; try { __pt = ($('Manual Run').first() || {}).json || {}; } catch (e) { __pt = {}; }
 if (__pt && __pt.pulse_part) return [{ json: { skip: true, reason: 'a later part of this morning\'s pulse: its first part already looked for runs to resume' } }];
 let cache = []; try { cache = $('Load Cache (AI)').all().map(i => i.json).filter(r => r && r.key && String(r.key).indexOf('ai_run:') === 0); } catch (e) {}
+// 2026-10-27 (production 2026-10-25, devaicon.com): a run stopped `failed_store` is started again too (after the silent runs), so the tracker
+// reads the table for the answers it lost: stored -> the run continues; truly missing -> it continues once with them counted as could not
+// be read; a second storage failure in the run stays stopped (AIP.healStore in AI Plan). Nothing is asked or paid twice either way.
 const now = new Date().toISOString();
-const out = [];
+const out = [], heal = [];
 for (const r of cache) {
   const st = AIP.stateOf([r], String(r.key).slice('ai_run:'.length));
+  if (st && AIP.stateVerdict(st, now, '') === 'blocked' && AIP.storeHealDue(st, now)) {
+    const cyc = st.cycle && st.cycle.key ? { trigger: 'cycle', cycle_key: st.cycle.key, job: st.cycle.job || 'ai_visibility', monthly: !!st.cycle.monthly, scheduled_for: st.cycle.scheduled_for || '' } : {};
+    heal.push({ json: { ...cyc, continue_run: st.run_id, site_id: st.site_id || String(r.key).slice('ai_run:'.length), domain: st.domain || '', email: st.email || '', callback_url: st.callback_url || '', request_id: st.request_id || '',
+      parent_run_id: String($execution.id), resumed_by: 'ai_pulse', store_check: true, note: 'run ' + st.run_id + ' was stopped (failed_store, ' + (st.lost || 0) + ' answer(s) not stored, ' + String(st.updated_at || '').slice(0, 16) + ' UTC): started again so the tracker checks the table for them and continues' } });
+    continue; }
   if (!st || AIP.stateVerdict(st, now, '') !== 'resume') continue;
   const cyc = st.cycle && st.cycle.key ? { trigger: 'cycle', cycle_key: st.cycle.key, job: st.cycle.job || 'ai_visibility', monthly: !!st.cycle.monthly, scheduled_for: st.cycle.scheduled_for || '' } : {};
   out.push({ json: { ...cyc, continue_run: st.run_id, site_id: st.site_id || String(r.key).slice('ai_run:'.length), domain: st.domain || '', email: st.email || '', callback_url: st.callback_url || '', request_id: st.request_id || '',
     parent_run_id: String($execution.id), resumed_by: 'ai_pulse', note: 'run ' + st.run_id + ' stopped after part ' + (st.chunk || 1) + ' (' + (st.asked || 0) + ' of ' + (st.total || '?') + ' requests answered, last heard ' + String(st.updated_at || '').slice(0, 16) + ' UTC): started again' } });
 }
-return out.length ? out.slice(0, 5) : [{ json: { skip: true, reason: 'no AI visibility run is waiting to be resumed' } }];
+const all = [...out, ...heal].slice(0, 5);
+return all.length ? all : [{ json: { skip: true, reason: 'no AI visibility run is waiting to be resumed' } }];
