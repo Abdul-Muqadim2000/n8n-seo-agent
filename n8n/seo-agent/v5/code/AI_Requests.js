@@ -19,7 +19,7 @@ const CONFIG = { max_requests_per_run: 900, max_cost_per_run_usd: 15, max_cost_p
   order: ['chatgpt', 'gemini', 'perplexity', 'claude', 'ai_mode', 'copilot', 'ai_overview', 'chatgpt_api', 'gemini_api'] };
 const API = 'https://api.dataforseo.com/v3/';
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
-let fresh = []; try { fresh = $('Prompt Rows').all().map(i => i.json).filter(r => !r.skip && r.prompt_id && r.status !== 'off' && r.status !== 'refused'); } catch (e) {}   // new questions (stored ones are in the plan already); a refused one is stored, never asked
+let fresh = []; try { fresh = $('Prompt Rows').all().map(i => i.json).filter(r => !r.skip && r.prompt_id && r.status !== 'off' && r.status !== 'refused' && r.status !== 'retired' && r.status !== 'proposed'); } catch (e) {}   // new questions (stored ones are in the plan already); a refused one is stored, never asked; AI-FOCUS: nor a retired one, nor one waiting for the owner
 const out = []; let spend = 0; const skipped = []; const chunks = {};
 // F2 (2026-10-23, ENGINE_AUDIT.md E1): the run's hard ceiling, per site — what is left of it after what earlier parts measured and committed
 const siteSpend = {}; const capped = {};

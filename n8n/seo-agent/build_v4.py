@@ -1806,6 +1806,8 @@ if (MI.ai_markets !== undefined) monitor_input.ai_markets = asArray(MI.ai_market
 if (MI.ai_pulse_mode !== undefined) monitor_input.ai_pulse_mode = ['sample', 'full'].includes(String(MI.ai_pulse_mode).toLowerCase()) ? String(MI.ai_pulse_mode).toLowerCase() : '';
 if (MI.ai_pulse_per_week !== undefined) monitor_input.ai_pulse_per_week = parseInt(MI.ai_pulse_per_week, 10) >= 1 ? Math.min(6, parseInt(MI.ai_pulse_per_week, 10)) : '';
 if (MI.ai_pages_month !== undefined) monitor_input.ai_pages_month = Math.min(8, Math.max(0, parseInt(MI.ai_pages_month, 10) || 0));   // v4.12: AI answer / refresh pages a month
+if (MI.ai_pulse_scope !== undefined) monitor_input.ai_pulse_scope = ['focus', 'all'].includes(String(MI.ai_pulse_scope).toLowerCase()) ? String(MI.ai_pulse_scope).toLowerCase() : '';   // AI-FOCUS (2026-10-27): what the daily pulse asks
+if (MI.ai_focus_mode !== undefined) monitor_input.ai_focus_mode = String(MI.ai_focus_mode).toLowerCase() === 'off' ? 'off' : '';   // AI-FOCUS: 'off' = the panel never moves by itself
 if (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));
 if (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');
 const topics = asArray(p2.topics || lab('Main services or products (optional)')).map(x => String(x).trim().toLowerCase()).filter(x => x.length >= 3).slice(0, 6);
@@ -2465,6 +2467,9 @@ open(os.path.join(OUT_CODE, '_serp_obs.js'), 'w').write("// harness shim (writte
 # it was a hand-written port that fell behind the kit. app/shared/src/fit-gate.parity.test.ts fails while the generated file is stale.
 import fit_gate_app
 fit_gate_app.write_app_files(FIT_GATE_SRC)
+# AI-FOCUS (2026-10-27): the app's AI panel focus rule is the kit itself (app/shared/src/ai-focus.generated.js + .d.ts, committed)
+import ai_focus_app
+ai_focus_app.write_app_files(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'v5', 'code', '_ai_focus.js'), encoding='utf-8').read())
 log('System review fixes (2026-10-11, FIX_PLAN D4 / D8 / D16 / D26 / G3): one shared keyword fit gate (navigational, government / portal, other brands — competitor and results-page domain labels, learned AI brand names, SERP dominance; v5/code/_fit_gate.js) in Analyze Keywords, Rank Keywords, Ladder Pool, Ladder Plan and Brief Context with a reason per refusal (site_keywords.refused, keyword_strategy.refused, ladder refused_keywords); the relevance prompt is told the brands; the Rank Tracker\'s next step follows the ladder state (write / publish / rungs / improve); an AI Overview is a timed observation ("seen in the check at …", "seen in N of M checks"; v5/code/_serp_obs.js) in the digest, the verdict rules, the keyword report, the keyword strategy and the ladder report; the 2025 Ahrefs base rate (1.74% / 40.8%) with an uncalibrated chance band per plan (_reach.js, app mirror)')
 
 # =============================================================================

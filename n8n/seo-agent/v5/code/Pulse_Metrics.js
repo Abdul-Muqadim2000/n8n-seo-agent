@@ -92,7 +92,7 @@ return plans.map(p => {
     sample_json: p.sample ? JSON.stringify(p.sample) : '',   // G6: which part of the panel this morning asked (rotating sample or all of it)
     // F1b (2026-10-23, APP_AUDIT A7): what this morning IS, so no reader draws a rotating sample or a broken morning as one comparable series.
     // `mentioned` / `mention_rate` above count NAMED answers under rule_version; `partial` = an engine asked this morning returned nothing.
-    rule_version: AVM.RULE_VERSION, sample_mode: p.sample && p.sample.mode === 'sample' ? 'sample' : 'full', questions_asked: new Set(R.map(r => r.prompt_id)).size,
+    rule_version: AVM.RULE_VERSION, sample_mode: (p.sample && p.sample.mode === 'sample' ? 'sample' : 'full') + (p.sample && p.sample.scope === 'focus' ? '+focus' : ''),   /* AI-FOCUS: a morning that asks only the focus is another composition (the weekly comparison says so) */ questions_asked: new Set(R.map(r => r.prompt_id)).size,
     engines_answered: p.pulse_engines.filter(e => (Number(engines[e].answered) || 0) > 0).join(', '), partial: dead.length > 0 || !n,
     avg_position: day.avg_position, detail_json: JSON.stringify(detail), readable_json: JSON.stringify({ enough: todayRate.enough, partial: readable.partial, unavailable: readable.unavailable, engines_silent: dead, note: readable.note, min: MIN_RATE_SAMPLES }) };
   const answer_rows = R.map(r => { const o = {}; for (const k of COLS) o[k] = r[k] === undefined ? '' : r[k]; return o; });

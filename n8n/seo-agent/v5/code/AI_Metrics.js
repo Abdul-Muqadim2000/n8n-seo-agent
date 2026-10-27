@@ -12,6 +12,7 @@
 const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 /*__AI_ENTITIES__*/
 /*__AI_PANEL__*/
+/*__AI_FOCUS__*/
 /*__DRAFTS__*/
 /*__DFS_RETRY__*/
 /*__RIVALS__*/
@@ -443,13 +444,26 @@ return plans.map(p => {
   const like = prev ? (!same_rule.comparable ? same_rule : !same_kind.comparable ? same_kind : (same_pulse && !same_pulse.comparable) ? same_pulse
     : (same_ids && same_ids.same === false) ? { comparable: false, why: 'only ' + Math.round(100 * same_ids.share) + '% of the questions asked now were asked then (' + same_ids.common + ' in common): a different panel, not a different result' }
     : same_panel) : null;
+  // AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27 §4.6): a panel that follows the client's focus moves, and the whole-panel rule above then
+  // refuses every delta. The change is ALSO computed on the questions asked in both weeks (the earlier week's answers one by one, units_json), with
+  // its own counts, and printed when the headline is not compared; a topic whose own questions did not move keeps its segment trend (below).
+  const matched = prev ? (() => { let pr = null; try { pr = $('Load AI Visibility').all().map(i => i.json).find(v => v && v.site_id === p.site_id && String(v.run_id) === String(prev.run_id)) || null; } catch (e) { pr = null; }
+    const x = pr ? AVX.unpackUnits(pr.units_json) : null;
+    if (!x || x.rule_version !== AVM.RULE_VERSION) return { available: false, questions: 0, label: 'the earlier week did not keep its answers one by one under this measurement rule' };
+    return same_kind.comparable ? AIF.matched(U.filter(u => !u.pulse && !MONTHLY.includes(u.engine)), x.units.filter(u => !MONTHLY.includes(u.engine))) : { available: false, questions: 0, label: 'the engines changed' }; })() : null;
   const delta_not_compared = prev && !like.comparable
-    ? 'Not compared with ' + String(prev.checked_at || '').slice(0, 10) + ': ' + like.why + '.' : '';
+    ? 'Not compared with ' + String(prev.checked_at || '').slice(0, 10) + ': ' + like.why + '.'
+      + (matched && matched.available ? ' On the ' + matched.questions + ' questions asked both weeks you were named in ' + matched.rate + '% of answers, against ' + matched.rate_before + '% then (' + (matched.significant ? 'a real change' : 'within the normal ups and downs') + ').' : '') : '';
   // G6: the segment changes and the panel record need `like` (same engines, same questions) — they are computed here, after it
   // changes, per segment: only against a comparable panel (same engines, same questions), only with enough answers on both sides
   const prevSeg = new Map(((prev && prev.segments && prev.segments.rows) || []).map(s => [s.dim + '|' + s.key, s]));
   const segTests = []; const segChange = {};
-  if (prev && like.comparable) for (const s of segRows) { const b = prevSeg.get(s.dim + '|' + s.key); if (!b || !(Number(b.n) > 0)) continue;
+  // AI-FOCUS: when only the panel moved (same rule, engines and pulse), a topic cluster whose OWN questions overlap 80% with the earlier week's
+  // is still tested: adding a new ladder's questions does not erase the trend of the topics that did not change
+  const panelOnly = !!(prev && !like.comparable && same_rule.comparable && same_kind.comparable && !(same_pulse && !same_pulse.comparable));
+  const prevClusterIds = (prev && prev.panel && prev.panel.cluster_ids && typeof prev.panel.cluster_ids === 'object') ? prev.panel.cluster_ids : null;
+  const ownSame = (s) => panelOnly && prevClusterIds && s.dim === 'cluster' && Array.isArray(prevClusterIds[s.key]) && !!AIF.topicOverlap([...((segAcc.get(s.dim + '|' + s.key) || {}).q || [])], prevClusterIds[s.key]).same;
+  if (prev) for (const s of segRows) { if (!like.comparable && !ownSame(s)) continue; const b = prevSeg.get(s.dim + '|' + s.key); if (!b || !(Number(b.n) > 0)) continue;
     const qb = Number(b.questions) || 0; if (qb && Math.abs(s.questions - qb) / Math.max(s.questions, qb) > 0.2) { segChange[s.dim + '|' + s.key] = { tested: false, why: 'its questions changed (' + qb + ' then, ' + s.questions + ' now)' }; continue; }
     if (s.n < MIN_RATE_SAMPLES || Number(b.n) < MIN_RATE_SAMPLES) { segChange[s.dim + '|' + s.key] = { tested: false, why: 'too few answers to test a change (' + s.n + ' now, ' + b.n + ' before; ' + MIN_RATE_SAMPLES + ' needed on each side)' }; continue; }
     const t = changeOf(s.k, s.n, Number(b.k) || 0, Number(b.n)); segChange[s.dim + '|' + s.key] = { tested: true, delta: t.delta, z: t.z, n_before: Number(b.n), k_before: Number(b.k) || 0 };
@@ -468,6 +482,9 @@ return plans.map(p => {
   const panel_cost = AIP.cost({ panel: Number(p.prompts_max) || nowIds.length + 1, engines: p.engines, pulse: p.pulse !== false, pulse_mode: p.pulse_mode, pulse_per_week: p.pulse_per_week });
   const panel_info = { ids: nowIds, size: nowIds.length, setting: Number(p.prompts_max) || null, engines: [...new Set(Rall.map(r => r.engine))].sort(), hash: AIP.panelHash(nowIds, [...new Set(Rall.map(r => r.engine))]),
     pulse: pulse_now,   // R-E6: the daily pulse's engines and sample mode this week, compared by the next week
+    // AI-FOCUS: each topic cluster's own question ids (the next week compares a topic on its own questions) and the panel's changes this run
+    cluster_ids: Object.fromEntries([...segAcc.values()].filter(x => x.dim === 'cluster').map(x => [x.key, [...x.q].slice(0, 500)])),
+    events: ((p.focus || {}).events || []).slice(0, 6), focus_summary: String((p.focus || {}).summary || ''), matched,
     composition: Object.fromEntries(['cluster', 'persona', 'market', 'stage'].map(d => [d, Object.fromEntries(segRows.filter(s => s.dim === d).map(s => [s.key, s.questions]))])),
     overlap_with_previous: same_ids, half_width: { measured: { headline: samples ? Math.round(10 * (wilson(mentioned, samples)[1] - wilson(mentioned, samples)[0]) / 2) / 10 : null, headline_answers: samples, median_cluster: medCl ? AIP.halfWidth(medCl) : null, median_cluster_answers: medCl },
       achievable: { headline: panel_cost.half_width.headline, cluster: panel_cost.half_width.cluster, per_week: panel_cost.per_week, note: 'at the widest (a rate near 50%), with the panel and the daily pulse as they are set' } },

@@ -55,6 +55,7 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('__AI_ANSWERS_COLS__', json.dumps([c for c, _ in AI_ANSWERS_COLS]))   # F2 (2026-10-23): AI Answer Rows / AI Analysed Rows write exactly the table's columns
     s = s.replace('/*__AI_MEASURE__*/', rd('code/_ai_measure.js').rstrip('\n')).replace('/*__AI_SENTIMENT__*/', rd('code/_ai_sentiment.js').rstrip('\n'))   # W2-E2 (2026-10-23): clustered intervals, 28-day window, declared share of voice, did an action work, owner rules (AVX); sentiment (SENT)
     s = s.replace('/*__AI_PANEL__*/', rd('code/_ai_panel.js').rstrip('\n'))   # G6 (2026-10-18): the AI question panel at scale (limits, markets, strata, chunks, the one cost formula)
+    s = s.replace('/*__AI_FOCUS__*/', rd('code/_ai_focus.js').rstrip('\n'))   # AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27): the panel follows the client's focus (AIF)
     s = s.replace('/*__AI_W2E3__*/', rd('code/_ai_w2e3.js').rstrip('\n'))   # W2-E3 (2026-10-23): fan-out ranking gap, persona effect, demand, the owner's AI reports, the run's bookkeeping (AIX)
     s = s.replace('/*__SERP_CACHE__*/', rd('code/_serp_cache.js').rstrip('\n'))   # KW-SERP (2026-10-21): one results-page reading per search and day, shared by every path (SC); W2-E3: the fan-out check reads it too
     s = s.replace('/*__RIVALS__*/', rd('code/_rivals.js').rstrip('\n'))   # C-2 / C-8 (2026-10-17): the one rival set and the category-provider rule (inside the outreach kit, and in AI Metrics)
@@ -394,6 +395,10 @@ A.node('Load Content Log (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LO
 A.node('Load AI Imports', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_IMPORTS_TABLE, [SITE_EQ, ('day', 'gte', '={{ new Date(Date.now() - 35 * 864e5).toISOString().slice(0, 10) }}')]), at(14, 2), **LOAD)
 A.node('Load SERP Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'serp'), SITE_EQ, ('updated_at', 'gte', '={{ new Date().toISOString().slice(0, 10) }}')]), at(15, 2), **LOAD)
 loads += [('Load AI Imports', None), ('Load SERP Cache (AI)', None)]
+# AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27/RESEARCH_AND_DESIGN.md §5 step 2): each ladder's status (active / paused / won / archived) and who
+# chose it, so the question panel follows the ladders the client works on (a paused ladder was a topic for ever: the AI workflow never read the settings)
+from ladder_common import LADDER_SETTINGS_TABLE as _LS_FOCUS
+A.node('Load Ladder Settings (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LS_FOCUS, [SITE_EQ]), at(16, 2), **LOAD); loads += [('Load Ladder Settings (AI)', None)]
 A.code('AI Plan', 'AI_Plan.js', at(11, 1)); A.iff('Any Sites (AI)?', '{{ !$json.nothing_to_do }}', at(12, 1)); A.node('Nothing To Do (AI)', 'n8n-nodes-base.noOp', 1, {}, at(13, 2))
 A.code('Site Text Jobs', 'Site_Text_Jobs.js', at(13, -2)); A.iff('Need Site Text?', '{{ !$json.skip }}', at(14, -2))
 A.node('Read Site (AI)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '=https://r.jina.ai/https://{{ $json.domain }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'X-Retain-Images', 'value': 'none'}]}, 'options': {'response': {'response': {'responseFormat': 'text', 'outputPropertyName': 'site_text'}}, 'timeout': 30000}}, at(15, -3), credentials={'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}, onError='continueRegularOutput', **retry_lint.RETRY)
