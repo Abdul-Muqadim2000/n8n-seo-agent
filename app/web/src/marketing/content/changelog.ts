@@ -48,8 +48,9 @@ export const changelog: ChangelogEntry[] = [
       'Next and previous through the whole course, and the rest of the series beside every tutorial',
       'When you tell us a page is published, we now check that the live page is the page we wrote before marking it: a wrong address or an update not yet live gets a warning showing what we found, and you can send the right address or confirm it is the right page',
       'Your market, checked before you start: a keyword about another country, a run for a market your website does not target, or weekly checks still measuring an old country are flagged in plain words, and you choose to accept the correction or continue anyway (your choice is recorded)',
+      'Your AI questions now follow the keywords you work on, in your own market: a new keyword gets its questions the week it starts, questions about topics you left are retired with their history kept, the daily check can ask only the questions about your keywords for fewer credits, and trends compare the questions asked both weeks',
     ],
-    features: ['guided-setup', 'content'],
+    features: ['guided-setup', 'content', 'ai-visibility'],
     labels: ['Learning'],
   },
   {
