@@ -213,6 +213,9 @@ const track_keywords = asArray(pick(p2, 'terms to track') || p2.keywords || p2.t
 const ga4_property_id = String(pick(p2, 'ga4') || '').replace(/^properties\//, '').replace(/[^0-9]/g, '').slice(0, 16);
 const published_url = String(pick(p2, 'published', 'url') || p2.published_url || p2.url || '').trim();
 const content_request_id = String(p2.content_request_id || '').trim();
+const confirm_mismatch = p2.confirm_mismatch === true || String(p2.confirm_mismatch || '').toLowerCase() === 'true';
+const draft_title = String(p2.draft_title || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+const draft_h1 = String(p2.draft_h1 || '').replace(/\s+/g, ' ').trim().slice(0, 300);
 const blogs_per_week = Math.min(3, Math.max(0, parseInt(String(pick(p2, 'posts per week') || p2.blogs_per_week || '0'), 10) || 0));
 const yes = (v) => /^(y|true|1)/i.test(String(v == null ? '' : v).trim());
 const checkin_manual_action = yes(pick(p2, 'manual action') || p2.manual_action);
@@ -425,6 +428,9 @@ return [{
     case_id,
     local_area,
     video,
+    confirm_mismatch,
+    draft_title,
+    draft_h1,
     pipeline_source: String(p2.pipeline_source || ''),
     chosen_by: KF_CHOSEN,
     ladder_mode: KF_LADDER_MODE,

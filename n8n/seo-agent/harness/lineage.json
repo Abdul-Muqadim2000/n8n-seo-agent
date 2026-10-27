@@ -13,8 +13,8 @@
    "subject": 18
   },
   "refusal": {
-   "pass": 26,
-   "subject": 43
+   "pass": 30,
+   "subject": 45
   },
   "withheld": {
    "pass": 4,
@@ -513,6 +513,26 @@
    ],
    "workflow": "SEO Agent \u2014 AI Visibility Tracker"
   },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Save Check": {
+   "fails": [],
+   "markup": 0,
+   "node": "AI Save Check",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / AI Save Retry Rows": {
+   "fails": [],
+   "markup": 0,
+   "node": "AI Save Retry Rows",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
   "SEO Agent \u2014 AI Visibility Tracker / AI Vis Rows": {
    "fails": [],
    "markup": 0,
@@ -548,24 +568,20 @@
    "workflow": "SEO Agent \u2014 AI Visibility Tracker"
   },
   "SEO Agent \u2014 AI Visibility Tracker / Prompt Jobs": {
-   "fails": [
-    "refusal"
-   ],
+   "fails": [],
    "markup": 0,
    "node": "Prompt Jobs",
-   "refusal": false,
+   "refusal": true,
    "subject": [
     "refusal"
    ],
    "workflow": "SEO Agent \u2014 AI Visibility Tracker"
   },
   "SEO Agent \u2014 AI Visibility Tracker / Prompt Rows": {
-   "fails": [
-    "refusal"
-   ],
+   "fails": [],
    "markup": 0,
    "node": "Prompt Rows",
-   "refusal": false,
+   "refusal": true,
    "subject": [
     "refusal"
    ],
@@ -917,12 +933,6 @@
    "refusal"
   ],
   "SEO Agent \u2014 AI Visibility Tracker / Apply Analysis": [
-   "refusal"
-  ],
-  "SEO Agent \u2014 AI Visibility Tracker / Prompt Jobs": [
-   "refusal"
-  ],
-  "SEO Agent \u2014 AI Visibility Tracker / Prompt Rows": [
    "refusal"
   ],
   "SEO Agent \u2014 Backlink Monitor / Gap Requests": [

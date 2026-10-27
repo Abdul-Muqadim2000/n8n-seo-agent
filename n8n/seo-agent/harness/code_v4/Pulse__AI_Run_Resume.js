@@ -218,7 +218,8 @@ const AIP = (() => {
   const stateOf = (cacheRows, site_id) => { const r = (cacheRows || []).find(c => c && c.key === stateKey(site_id)); return r ? parse(r.value, null) : null; };
   /** what to do with a stored state at `now`: 'continue' (this is its next chunk), 'resume' (silent too long: pick it up), 'busy' (a chunk
    *  is running right now), 'blocked' (F2: the run was STOPPED — its answers were not stored or it reached its money ceiling — and nothing
-   *  of this site's weekly run is asked again until a human clears the row or the run is older than resume_days), 'closed' (finished, or
+   *  of this site's weekly run is asked again until a human clears the row or the run is older than resume_days; a `failed_store` stop is
+   *  checked again by every later start, see healStore), 'closed' (finished, or
    *  too old to resume) */
   const STOPPED = ['failed_store', 'stopped_ceiling', 'stopped'];
   const stateVerdict = (st, nowIso, continuing) => {
@@ -277,6 +278,49 @@ const AIP = (() => {
   const baseState = (p) => { const c = p.cycle && p.cycle.key ? { key: p.cycle.key, date: p.cycle.date || '', job: p.cycle.job || 'ai_visibility', monthly: !!p.cycle.monthly, scheduled_for: p.cycle.scheduled_for || '', request_id: p.cycle.request_id || p.request_id || '', label: p.cycle.label || '' } : null;
     return { run_id: p.run_id, run_kind: p.run_kind, on_demand: !!p.on_demand, full_due: !!p.full_due, request_id: p.request_id || '', email: p.email || '', callback_url: p.callback_url || '', cycle: c,
       site_id: p.site_id, domain: p.domain, started_at: p.checked_at, ceiling_dfs_usd: n0(p.ceiling_dfs_usd) || null }; };
+
+  // ---- 6b'. a store that only LOOKED failed heals itself (2026-10-27, production 2026-10-25: devaicon.com, run ai_20261025_devaicon-com) -----
+  // The hand-off counted an answer as "not stored" when the row *Save AI Answers* returned carried a non-empty `error` - but `error` is a
+  // COLUMN of seo_ai_answers: an answer the in-200 gate could not read is stored WITH its DataForSEO message ("Internal SE Server Error.").
+  // Three such rows (stored, ids and all) were read as three failed saves and the run stopped `failed_store`, blocking the site for 6 days.
+  // n8n 2.41's Data Table insert writes every row of a call in ONE transaction and returns each row with its `id`, or fails them all; so a
+  // row is stored exactly when the table handed it back with an id (storedRow), never judged by its `error` column. Before a part declares
+  // `failed_store` it reads the run's rows back and inserts the truly missing ones once more (storeCheck); a run already stopped
+  // `failed_store` is checked again by every later start of the tracker and by the pulse's resume (healStore / storeHealDue): if every lost
+  // answer is in the table the run simply continues; if some are truly missing it continues ONCE with them counted as could-not-be-read
+  // (never asked again, never paid again); a second storage failure in the same run keeps it stopped for a person.
+  const storedRow = (j) => !!(j && typeof j === 'object' && S(j.id) !== '' && S(j.prompt_id) && S(j.engine));
+  /** what one part sent and what the table holds of it: { sent, stored, missing: [keys], recovered: n (found on the re-read or the retry) } */
+  const storeCheck = (o) => { const x = o || {}; const mine = (r) => r && S(r.site_id) === S(x.site_id) && (!x.run_id || !S(r.run_id) || S(r.run_id) === S(x.run_id));
+    const sent = new Set((x.sent || []).filter(mine).map(r => reqKey(r.prompt_id, r.engine)));
+    const first = new Set((x.saved || []).filter(r => mine(r) && storedRow(r)).map(r => reqKey(r.prompt_id, r.engine)));
+    const later = new Set([...(x.reread || []), ...(x.retried || [])].filter(r => mine(r) && storedRow(r)).map(r => reqKey(r.prompt_id, r.engine)));
+    const missing = [...sent].filter(k => !first.has(k) && !later.has(k));
+    return { sent: sent.size, stored: sent.size - missing.length, missing, recovered: [...sent].filter(k => !first.has(k) && later.has(k)).length }; };
+  /** a `failed_store` state checked against the run's stored rows: null (not such a state), { ok: true, state, found, missing, note } (the
+   *  run continues), or { ok: false, found, missing, why } (it stays stopped) */
+  const healStore = (st, rows, nowIso) => {
+    if (!st || !st.run_id || S(st.status) !== 'failed_store') return null;
+    const stored = new Set((rows || []).filter(r => r && S(r.run_id) === S(st.run_id) && r.prompt_id && r.engine).map(r => reqKey(r.prompt_id, r.engine)));
+    const explicit = Object.keys(parse(st.lost_keys, {}) || {}).length > 0;
+    if (!explicit && !st.asked_keys) return { ok: false, found: 0, missing: n0(st.lost), why: 'the stopped run recorded neither the answers it lost nor the requests it sent, so the table cannot be checked for them' };
+    const lostK = explicit ? unpackKeys(st.lost_keys) : new Set([...unpackKeys(st.asked_keys)].filter(k => !stored.has(k)));
+    const missing = [...lostK].filter(k => !stored.has(k));
+    const found = explicit ? lostK.size - missing.length : Math.max(0, n0(st.lost) - missing.length);
+    const heals = n0(st.store_heals);
+    if (missing.length && heals >= 1) return { ok: false, found, missing: missing.length, why: 'this run already continued once after answers it paid for were not stored, and ' + missing.length + ' answer(s) are missing again: a second storage failure in one run keeps it stopped' };
+    const when = S(st.updated_at).slice(0, 16).replace('T', ' ');
+    const note = missing.length
+      ? 'Run ' + st.run_id + ' was stopped' + (when ? ' at ' + when + ' UTC' : '') + ' because answers it had paid for were not stored. Read again, ' + found + ' of them are stored and ' + missing.length + ' are still missing: those ' + missing.length + ' were paid for once, are never asked again and count as could not be read; the run continued with the answers it has.'
+      : 'Run ' + st.run_id + ' was stopped' + (when ? ' at ' + when + ' UTC' : '') + ' because ' + (found || n0(st.lost)) + ' answer(s) looked unstored. Read again, every one of them is in the table (the save had reported them as failed), so the run continued from its stored answers. Nothing was asked or paid for again.';
+    const state = { ...st, status: 'running', stop_reason: '', lost: explicit ? Math.max(0, n0(st.lost) - found) : missing.length, lost_keys: null, pending: null,
+      store_heals: heals + (missing.length ? 1 : 0), store_heal: { at: S(nowIso), found, missing: missing.length, stopped_at: S(st.updated_at), reason: S(st.stop_reason).slice(0, 300) }, store_heal_note: note };
+    return { ok: true, state, found, missing: missing.length, note }; };
+  /** the pulse's resume: a `failed_store` run (inside resume_days) whose answers can be checked is started again so the tracker checks them */
+  const storeHealDue = (st, nowIso) => { if (!st || !st.run_id || S(st.status) !== 'failed_store') return false;
+    const now = Date.parse(nowIso) || Date.now(), started = Date.parse(st.started_at) || 0;
+    if (started && now - started > LIMITS.resume_days * 864e5) return false;
+    return !!(Object.keys(parse(st.lost_keys, {}) || {}).length || st.asked_keys); };
 
   // ---- 6c. a part sized by TIME, not only by count (F2, 2026-10-23: ENGINE_AUDIT.md E11) ----------------------------------------------
   // A 600-request part at ~40-60 s per batch of 10 (Run AI Requests: batch 10, 200 ms apart) is 40-60 minutes BEFORE the retries and the
@@ -433,6 +477,7 @@ const AIP = (() => {
   return { LIMITS, panelSize, normMarket, locationOf, listOf, marketsOf, personasOf, stageOf, stems, jaccard, sameAsk, dedupe, stratumOf, pulseDay, halfWidth,
     pulsePerWeek, pulseSample, reqKey, slice, stateKey, stateOf, stateVerdict, stateRow, doneRun, panelIds, panelHash, overlap, hash,
     MARKETS_MAX, normQ, hash64, promptId, findStored, keywordOf, KEYWORD_SOURCES, STOPPED, ENG_CODE, packKeys, unpackKeys, CEILING, runCeiling, ceilingLeft, keysUsd, baseState,
+    storedRow, storeCheck, healStore, storeHealDue,
     TIME, secPerRequest, chunkPlan, servicesOfRow, fitInput,
     PRICE, PRICE_BASIS, ENGINES, DEFAULT_ENGINES, MONTHLY_ENGINES, PULSE_ENGINES, FIXED, analystCap, cost, sentimentOf,
     XPRICE, PERSONA, FANOUT_MAX, DEMAND_TASKS, PULSE_ALLOWED, pulseEnginesOf, monthlyOf, optionsOf, extraSeconds };
@@ -441,13 +486,22 @@ const AIP = (() => {
 let __pt = {}; try { __pt = ($('Manual Run').first() || {}).json || {}; } catch (e) { __pt = {}; }
 if (__pt && __pt.pulse_part) return [{ json: { skip: true, reason: 'a later part of this morning\'s pulse: its first part already looked for runs to resume' } }];
 let cache = []; try { cache = $('Load Cache (AI)').all().map(i => i.json).filter(r => r && r.key && String(r.key).indexOf('ai_run:') === 0); } catch (e) {}
+// 2026-10-27 (production 2026-10-25, devaicon.com): a run stopped `failed_store` is started again too (after the silent runs), so the tracker
+// reads the table for the answers it lost: stored -> the run continues; truly missing -> it continues once with them counted as could not
+// be read; a second storage failure in the run stays stopped (AIP.healStore in AI Plan). Nothing is asked or paid twice either way.
 const now = new Date().toISOString();
-const out = [];
+const out = [], heal = [];
 for (const r of cache) {
   const st = AIP.stateOf([r], String(r.key).slice('ai_run:'.length));
+  if (st && AIP.stateVerdict(st, now, '') === 'blocked' && AIP.storeHealDue(st, now)) {
+    const cyc = st.cycle && st.cycle.key ? { trigger: 'cycle', cycle_key: st.cycle.key, job: st.cycle.job || 'ai_visibility', monthly: !!st.cycle.monthly, scheduled_for: st.cycle.scheduled_for || '' } : {};
+    heal.push({ json: { ...cyc, continue_run: st.run_id, site_id: st.site_id || String(r.key).slice('ai_run:'.length), domain: st.domain || '', email: st.email || '', callback_url: st.callback_url || '', request_id: st.request_id || '',
+      parent_run_id: String($execution.id), resumed_by: 'ai_pulse', store_check: true, note: 'run ' + st.run_id + ' was stopped (failed_store, ' + (st.lost || 0) + ' answer(s) not stored, ' + String(st.updated_at || '').slice(0, 16) + ' UTC): started again so the tracker checks the table for them and continues' } });
+    continue; }
   if (!st || AIP.stateVerdict(st, now, '') !== 'resume') continue;
   const cyc = st.cycle && st.cycle.key ? { trigger: 'cycle', cycle_key: st.cycle.key, job: st.cycle.job || 'ai_visibility', monthly: !!st.cycle.monthly, scheduled_for: st.cycle.scheduled_for || '' } : {};
   out.push({ json: { ...cyc, continue_run: st.run_id, site_id: st.site_id || String(r.key).slice('ai_run:'.length), domain: st.domain || '', email: st.email || '', callback_url: st.callback_url || '', request_id: st.request_id || '',
     parent_run_id: String($execution.id), resumed_by: 'ai_pulse', note: 'run ' + st.run_id + ' stopped after part ' + (st.chunk || 1) + ' (' + (st.asked || 0) + ' of ' + (st.total || '?') + ' requests answered, last heard ' + String(st.updated_at || '').slice(0, 16) + ' UTC): started again' } });
 }
-return out.length ? out.slice(0, 5) : [{ json: { skip: true, reason: 'no AI visibility run is waiting to be resumed' } }];
+const all = [...out, ...heal].slice(0, 5);
+return all.length ? all : [{ json: { skip: true, reason: 'no AI visibility run is waiting to be resumed' } }];

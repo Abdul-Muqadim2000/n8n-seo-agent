@@ -899,6 +899,28 @@
      ]
     ]
    },
+   "AI Save Check": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Any Save Gap?",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "AI Save Retry Rows": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Any Save Retry?",
+       "type": "main"
+      }
+     ]
+    ]
+   },
    "AI Vis Rows": {
     "main": [
      [
@@ -1459,6 +1481,42 @@
       {
        "index": 0,
        "node": "Run Alert Rows",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "Any Save Gap?": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Reread AI Answers",
+       "type": "main"
+      }
+     ],
+     [
+      {
+       "index": 0,
+       "node": "Analyst Jobs",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "Any Save Retry?": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Retry Save AI Answers",
+       "type": "main"
+      }
+     ],
+     [
+      {
+       "index": 0,
+       "node": "Analyst Jobs",
        "type": "main"
       }
      ]
@@ -2576,12 +2634,34 @@
      ]
     ]
    },
+   "Reread AI Answers": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "AI Save Retry Rows",
+       "type": "main"
+      }
+     ]
+    ]
+   },
    "Reserve Run Ledger (AI)": {
     "main": [
      [
       {
        "index": 0,
        "node": "After Run Ledger (AI)",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "Retry Save AI Answers": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Analyst Jobs",
        "type": "main"
       }
      ]
@@ -2764,7 +2844,7 @@
      [
       {
        "index": 0,
-       "node": "Analyst Jobs",
+       "node": "AI Save Check",
        "type": "main"
       }
      ]
@@ -3580,11 +3660,36 @@
     "operation": "update",
     "table": "seo_run_ledger"
    },
+   "Reread AI Answers": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "site_id",
+       "keyValue": "={{ $json.site_id }}"
+      },
+      {
+       "condition": "eq",
+       "keyName": "run_id",
+       "keyValue": "={{ $json.run_id }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ai_answers"
+   },
    "Reserve Run Ledger (AI)": {
     "filters": null,
     "mapping": "autoMapInputData",
     "operation": "insert",
     "table": "seo_run_ledger"
+   },
+   "Retry Save AI Answers": {
+    "filters": null,
+    "mapping": "autoMapInputData",
+    "operation": "insert",
+    "table": "seo_ai_answers"
    },
    "Save AI Answers": {
     "filters": null,

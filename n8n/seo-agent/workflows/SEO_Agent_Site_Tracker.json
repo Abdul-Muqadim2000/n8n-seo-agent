@@ -594,6 +594,10 @@
               {
                 "name": "qa_reasons",
                 "type": "string"
+              },
+              {
+                "name": "publish_note",
+                "type": "string"
               }
             ]
           },
@@ -3088,6 +3092,16 @@
               {
                 "id": "qa_reasons",
                 "displayName": "qa_reasons",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "publish_note",
+                "displayName": "publish_note",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
