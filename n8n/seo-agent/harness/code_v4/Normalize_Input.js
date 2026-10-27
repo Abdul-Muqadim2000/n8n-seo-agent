@@ -281,6 +281,8 @@ if (MI.ai_markets !== undefined) monitor_input.ai_markets = asArray(MI.ai_market
 if (MI.ai_pulse_mode !== undefined) monitor_input.ai_pulse_mode = ['sample', 'full'].includes(String(MI.ai_pulse_mode).toLowerCase()) ? String(MI.ai_pulse_mode).toLowerCase() : '';
 if (MI.ai_pulse_per_week !== undefined) monitor_input.ai_pulse_per_week = parseInt(MI.ai_pulse_per_week, 10) >= 1 ? Math.min(6, parseInt(MI.ai_pulse_per_week, 10)) : '';
 if (MI.ai_pages_month !== undefined) monitor_input.ai_pages_month = Math.min(8, Math.max(0, parseInt(MI.ai_pages_month, 10) || 0));   // v4.12: AI answer / refresh pages a month
+if (MI.ai_pulse_scope !== undefined) monitor_input.ai_pulse_scope = ['focus', 'all'].includes(String(MI.ai_pulse_scope).toLowerCase()) ? String(MI.ai_pulse_scope).toLowerCase() : '';   // AI-FOCUS (2026-10-27): what the daily pulse asks
+if (MI.ai_focus_mode !== undefined) monitor_input.ai_focus_mode = String(MI.ai_focus_mode).toLowerCase() === 'off' ? 'off' : '';   // AI-FOCUS: 'off' = the panel never moves by itself
 if (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));
 if (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');
 // W2-FIX (2026-10-23, section 149): the owner's W2-E3 AI options reach "Track my site" too (only Site Admin `monitors` could set them before)

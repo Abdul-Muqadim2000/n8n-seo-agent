@@ -639,6 +639,14 @@
               {
                 "name": "ai_demand_market",
                 "type": "boolean"
+              },
+              {
+                "name": "ai_pulse_scope",
+                "type": "string"
+              },
+              {
+                "name": "ai_focus_mode",
+                "type": "string"
               }
             ]
           },

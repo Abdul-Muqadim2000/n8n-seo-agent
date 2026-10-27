@@ -438,7 +438,8 @@ const AIP = (() => {
   /** the Answer Analyst jobs one weekly run may start (it reads the answers that matter, 12 a job; more for a bigger panel, never past 60) */
   const analystCap = (panel) => Math.min(FIXED.analyst_cap_max, FIXED.analyst_cap_base + Math.floor(n0(panel) / 25));
   /** o: { panel, engines, pulse (bool), pulse_mode ('auto'|'sample'|'full'), pulse_per_week, cluster_size, and the W2-E3 options claude_weekly,
-   *  pulse_engines, persona_context + personas (the number of buyer roles), fanout_check, demand_market }. Every figure is in US dollars;
+   *  pulse_engines, persona_context + personas (the number of buyer roles), fanout_check, demand_market; AI-FOCUS: pulse_questions, the questions the
+   *  pulse asks when its scope is the focus }. Every figure is in US dollars;
    *  `run` is what one execution chain of the weekly tracker spends (weekly / the month's full run), `pulse_day` one pulse morning,
    *  `month` the site's month (4.33 weekly runs + the full run's extra + 26 pulse mornings); `options` what each option adds. */
   const cost = (o) => {
@@ -460,7 +461,10 @@ const AIP = (() => {
     const full = { dfs: r4(weekly.dfs + extra.dfs), ai: r4(weekly.ai + extra.ai) }; full.usd = r4(full.dfs + full.ai);
     const on = x.pulse !== false && pE.length > 0;
     const pw = on ? pulsePerWeek({ asked, weekly_engines: wE.length, pulse_engines: pE.length, cluster_size: x.cluster_size, mode: x.pulse_mode, per_week: x.pulse_per_week }) : { per_week: 0, headline: halfWidth(answers), cluster: halfWidth(Math.min(asked, n0(x.cluster_size) || LIMITS.cluster_size_guess) * wE.length), capped: false, why: on ? '' : 'the daily pulse is off' };
-    const qDay = on ? Math.min(asked, Math.ceil(asked * pw.per_week / FIXED.pulse_days)) : 0;
+    // AI-FOCUS (2026-10-27): with the pulse scope 'focus' the pulse asks only `pulse_questions` of the panel (the questions of the topics the client
+    // works on); null / absent = the whole panel, exactly as before (every golden case without it is unchanged)
+    const pq = x.pulse_questions == null || x.pulse_questions === '' || !Number.isFinite(Number(x.pulse_questions)) ? asked : clamp(Math.round(n0(x.pulse_questions)), 0, asked);
+    const qDay = on ? Math.min(pq, Math.ceil(pq * pw.per_week / FIXED.pulse_days)) : 0;
     const pulse_day = { dfs: r4(qDay * sumPrice(pE)), ai: 0 }; pulse_day.usd = pulse_day.dfs;
     const W = FIXED.weeks_per_month;
     const month = { weekly: r2(W * weekly.usd), full_extra: r2(extra.usd), pulse: r2(W * FIXED.pulse_days * pulse_day.usd) };
@@ -492,7 +496,9 @@ const mkt = (x) => { const mm = String(x || '').trim().replace(/[_\s]+/g, '-').m
 const vol = (v) => v === undefined || v === '' || v == null ? null : v;
 const pinOf = (v) => v === true || String(v) === 'true';
 const COLS = (r) => ({ prompt_id: r.prompt_id, site_id: r.site_id, domain: r.domain || a.domain || '', prompt: r.prompt, kind: r.kind || 'custom', topic: r.topic || '', keyword: r.keyword || '', source: r.source || 'custom', status: r.status || 'active', created_at: r.created_at || a.updated_at,
-  stage: r.stage || '', cluster: r.cluster || '', volume: vol(r.volume), origin: r.origin || '', updated_at: a.updated_at, persona: String(r.persona || ''), market: String(r.market || ''), pinned: pinOf(r.pinned), fit_note: String(r.fit_note || ''), keyword_source: AIP.KEYWORD_SOURCES.includes(r.keyword_source) ? r.keyword_source : '' });
+  stage: r.stage || '', cluster: r.cluster || '', volume: vol(r.volume), origin: r.origin || '', updated_at: a.updated_at, persona: String(r.persona || ''), market: String(r.market || ''), pinned: pinOf(r.pinned), fit_note: String(r.fit_note || ''), keyword_source: AIP.KEYWORD_SOURCES.includes(r.keyword_source) ? r.keyword_source : '',
+  // AI-FOCUS (2026-10-27): the focus fields as stored (a change by the owner keeps them), and a retirement's date and reason
+  focus_topic: String(r.focus_topic || ''), focus_source: String(r.focus_source || ''), focus_state: String(r.focus_state || ''), focus_seen_at: String(r.focus_seen_at || ''), retired_at: String(r.retired_at || ''), retire_reason: String(r.retire_reason || '') });
 const out = new Map();   // one row per prompt id (the last change wins)
 // a stored row that IS this question keeps its id (a legacy p_ id included); only a question new to the site gets AIP.promptId
 const idFor = (prompt) => { const old = AIP.findStored(rows, a.site_id, prompt) || [...out.values()].find(r => norm(r.prompt) === norm(prompt)); return old ? old.prompt_id : AIP.promptId(a.site_id, prompt); };
@@ -518,5 +524,8 @@ for (const x of (a.off_prompts || [])) for (const r of find(x)) put({ ...cur(r),
 for (const x of (a.on_prompts || [])) for (const r of find(x)) { const c = cur(r); const was = String(c.status) === 'refused';
   put({ ...c, status: 'active', source: was ? 'custom' : c.source, fit_note: was ? 'switched on by the owner over the keyword rule: ' + String(c.fit_note || '') : c.fit_note }); }
 for (const x of (a.pin_prompts || [])) for (const r of find(x)) put({ ...cur(r), pinned: true });
+// AI-FOCUS: Accept = a proposed question starts being asked (it stays the engine's: its topic and source are kept); Retire = kept with its history, never asked
+for (const x of (a.accept_prompts || [])) for (const r of find(x)) { const c = cur(r); if (['proposed', 'off', 'retired'].includes(String(c.status))) put({ ...c, status: 'active', retired_at: '', retire_reason: '' }); }
+for (const x of (a.retire_prompts || [])) for (const r of find(x)) put({ ...cur(r), status: 'retired', retired_at: a.updated_at, retire_reason: 'retired by you', focus_state: 'out' });
 for (const x of (a.unpin_prompts || [])) for (const r of find(x)) put({ ...cur(r), pinned: false });
 return out.size ? [...out.values()].map(r => ({ json: r })) : [{ json: { skip: true } }];
