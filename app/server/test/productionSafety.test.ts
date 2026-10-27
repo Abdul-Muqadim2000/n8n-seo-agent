@@ -220,7 +220,7 @@ describe('2. keyword checks the system starts', () => {
     const checks = await db.query.keywordChecks.findMany({ where: eq(schema.keywordChecks.siteId, s.id) });
     expect(checks.map((c) => [c.keyword, c.automatic, c.userId])).toEqual([['crm consulting dubai', true, u2.id]]);
     // the person's own check of the same website
-    await assessKeyword({ org, site: s, user: u2 }, { keyword: 'crm training dubai' });
+    await assessKeyword({ org, site: s, user: u2 }, { keyword: 'crm training dubai' }, { acknowledge: ['market.keyword_place:crm training dubai:US'] });   // MKT: a Dubai keyword on a US website is asked first
     await syncCosts({ readLedger: async () => [], full: true });
     const events = await db.query.costEvents.findMany({ where: and(eq(schema.costEvents.orgId, co.org.id), eq(schema.costEvents.source, 'keyword_check')) });
     const originOf = (id: string) => events.find((e) => e.eventKey === `kc:${id}`)?.origin;
@@ -371,7 +371,7 @@ describe('8. onboarding, source, proposal details', () => {
   it('b: a keyword run keeps where the suggestion came from on the content log; the engine is not sent a field it does not read', async () => {
     const co = await company('ps-src@ps.test', 'Src Co');
     const s = await site(co.org.id, 'src-ps.com');
-    const r = await co.c.post(`/api/orgs/${co.org.id}/runs`, { mode: 'keyword', siteId: s.id, keyword: 'best crm consultants dubai', country: 'United States', source: 'ai_answer' });
+    const r = await co.c.post(`/api/orgs/${co.org.id}/runs`, { mode: 'keyword', siteId: s.id, keyword: 'best crm consultants dubai', country: 'United States', source: 'ai_answer', acknowledge: ['market.keyword_place:best crm consultants dubai:US'] });
     expect(r.status).toBe(200);
     expect(t.tables.contentLog.find((x) => x.domain === 'src-ps.com')).toMatchObject({ keyword: 'best crm consultants dubai', source: 'ai_answer' });
     expect('source' in t.starts.at(-1)!).toBe(false);

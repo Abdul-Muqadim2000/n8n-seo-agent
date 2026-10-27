@@ -56,6 +56,9 @@ import { suspendedError } from '../auth/session';
 import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
 import { siteReadiness } from './readiness';
 import { siteAutomation } from './ladders';
+import { assertConsistent, recordOverride, runWarnings } from './consistency';
+import type { FastifyRequest } from 'fastify';
+import type { Warning } from '@seo/shared';
 
 /**
  * R100: what the engine will reserve for this request, its own rolling figures (`engineCostTable`), the shipped table only when
@@ -175,6 +178,15 @@ export interface CreateRunOptions {
    * Only services/research.ts passes it, after claiming the domain's grant.
    */
   free?: boolean;
+  /**
+   * MKT (2026-10-27, mismatch audit §2.2): the warning ids the caller answered with "Continue anyway" (the form's ticks, the API's
+   * `acknowledge`). Every start is checked here, whatever path it came by; an unanswered warning is a 409 `confirm_needed`.
+   */
+  acknowledge?: string[];
+  /** the warnings the caller already computed for this exact input (the API's dry run); recomputed when absent */
+  warnings?: Warning[];
+  /** the request, for the audit row of a "Continue anyway" */
+  req?: FastifyRequest | null;
 }
 
 /** G4: the run an Idempotency-Key named in the last 24 hours, if any. */
@@ -242,6 +254,13 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     const held = site && !manual ? await siteReadiness(site) : null;
     input = { ...input, pagesHeld: manual ? 'manual' : held && !held.ready ? 'profile' : undefined };
   }
+  // MKT (2026-10-27): the one mismatch mechanism. The forms' duplicate warnings and the market checks hold the start until every warning is
+  // answered: accepted (the caller resends the corrected request) or acknowledged by id ("Continue anyway", recorded on the run and in the
+  // audit log). An automatic start sends no acknowledgement, so it stops here and its caller turns it into a "Needs you" item. A repeat of a
+  // request with the same Idempotency-Key is answered from its run, whatever the warnings say now.
+  const replay = opts.idempotency ? await findIdempotentRun(org.id, opts.idempotency.key).catch(() => null) : null;
+  const warnings = replay ? [] : (opts.warnings ?? (await runWarnings(org, site, input)));
+  const overridden = replay ? { ids: [] as string[], codes: [] as string[] } : assertConsistent(warnings, auto ? [] : (opts.acknowledge ?? []));
   const estimated = await estimateCost(input, site);
   // the website's first tracking, kept on every re-save: the anchor of its weekly cycle (the engine accepts it within the last 6 days)
   const trackingStartedAt = site && input.mode === 'track' ? (site.trackingStartedAt ?? new Date()) : null;
@@ -297,7 +316,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
         mode: input.mode,
         title: auto && input.mode === 'ladder' ? `Started automatically: ${input.keyword}` : auto && input.mode === 'discover' ? `Keyword research refresh${site ? ` · ${site.domain}` : ''}` : runTitle(input, site),
         status: 'submitting',
-        input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}), ...(opts.proposalId ? { proposalId: opts.proposalId } : {}), ...(opts.free ? { freeResearch: true } : {}) } as unknown as Record<string, unknown>,
+        input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}), ...(opts.proposalId ? { proposalId: opts.proposalId } : {}), ...(opts.free ? { freeResearch: true } : {}), ...(overridden.ids.length ? { acknowledged: overridden.ids } : {}) } as unknown as Record<string, unknown>,
         estimatedCostUsd: estimated,
         // a free run is quoted 0 (the cost sync caps every charge of a run at its quote), so it is never charged. D3 (2026-10-21): a quote of
         // 0 is stored as 0, not as "no quote" (null is left for runs from before credits), so any work a 0-quoted run starts is capped too
@@ -312,6 +331,16 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   });
   if (created.replayed) return { run: created.row, replayed: true, engineStatus: null };
   const run = created.row;
+  // MKT: every "Continue anyway" is in the audit log, with the codes and the values it went past
+  if (overridden.ids.length)
+    await recordOverride(opts.req ?? null, org.id, {
+      codes: overridden.codes,
+      ids: overridden.ids,
+      target: { type: 'run', id: run.id, label: run.title },
+      what: `run:${input.mode}`,
+      actor: { type: 'user', userId: user.id, label: user.email },
+      values: { mode: input.mode, ...('country' in input && input.country ? { country: input.country } : {}), ...('keyword' in input && input.keyword ? { keyword: input.keyword } : {}), via: opts.apiKeyId ? 'api_key' : 'app' },
+    });
 
   const res = await startRun(body, org.id);
   if (!res.ok) {
