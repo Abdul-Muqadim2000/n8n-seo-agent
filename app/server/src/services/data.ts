@@ -739,6 +739,8 @@ export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentDa
       existingPageUrl: s(r.existing_page_url),
       // R111: why a `not_ready` draft failed its last quality round ('; '-joined by the engine); empty on every other row
       qaReasons: s(r.qa_reasons),
+      // 2026-10-27: marked published on the owner's word after the check's warning (the live page did not match the draft)
+      publishNote: s(r.publish_note),
     })),
     cadence: cadence[0] ? { pagesPerWeek: n(cadence[0].pages_per_week), status: s(cadence[0].status) } : null,
     caseStudies: cases.map((c) => ({

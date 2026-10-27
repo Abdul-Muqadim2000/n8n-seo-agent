@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Activity, AlertOctagon, ArrowRight, BellRing, Braces, Building2, CalendarClock, CheckCircle2, ClipboardCheck, Clock, ExternalLink as ExternalIcon, Eye, FileJson, Hourglass, KeyRound, Link2, ListChecks, ListOrdered, Lightbulb, MapPin, MessageSquareText, PenLine, Rocket, ScanText, Sparkles, Tags, Target, UserCheck, Users } from 'lucide-react';
-import type { ReportDetail } from '@seo/shared';
+import { publishVerifyPrefill, publishVerifyState, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -24,7 +24,17 @@ export function PublishedReport({ report }: { report: ReportDetail }) {
   const linkFrom = Array.isArray(p.link_from) ? p.link_from : [];
   const live = p.live === true;
   const passed = num(p.passed) ?? checks.filter((c) => c.ok === true).length;
-  const headline = live ? (failed.length ? `Live, with ${failed.length} thing${failed.length === 1 ? '' : 's'} to fix` : 'Live and ready to rank') : `The page could not be fetched${num(p.http_status) ? ` (HTTP ${num(p.http_status)})` : ''}`;
+  // 2026-10-27: the page answered but is not the page that was written (or the update is not on it yet, or the address is another
+  // keyword's page): nothing was marked published, and the person either sends the right address or confirms it is the right page
+  const mismatch = publishVerifyState(p);
+  const { org, can } = useOrgCtx();
+  const headline = mismatch
+    ? 'Not marked published yet: check the address'
+    : live
+      ? failed.length
+        ? `Live, with ${failed.length} thing${failed.length === 1 ? '' : 's'} to fix`
+        : 'Live and ready to rank'
+      : `The page could not be fetched${num(p.http_status) ? ` (HTTP ${num(p.http_status)})` : ''}`;
   return (
     <Stagger className="space-y-5">
       <ReportHero
@@ -38,7 +48,7 @@ export function PublishedReport({ report }: { report: ReportDetail }) {
         }
         aside={
           checks.length ? (
-            <ScoreMark score={passed} max={checks.length} label="Live checks passed" display={`${passed}/${checks.length}`} suffix="" status={live ? (failed.length ? `Live · ${failed.length} to fix` : 'Live') : 'Not reachable'} statusTone={live ? (failed.length ? 'warning' : 'good') : 'critical'} ringTone={live ? (failed.length ? 'warning' : 'good') : 'critical'} />
+            <ScoreMark score={passed} max={checks.length} label="Live checks passed" display={`${passed}/${checks.length}`} suffix="" status={mismatch ? 'Not marked' : live ? (failed.length ? `Live · ${failed.length} to fix` : 'Live') : 'Not reachable'} statusTone={mismatch ? 'warning' : live ? (failed.length ? 'warning' : 'good') : 'critical'} ringTone={live ? (failed.length ? 'warning' : 'good') : 'critical'} />
           ) : (
             <StatusMark tone={live ? 'good' : 'critical'} icon={<Rocket />} title={live ? 'Live' : 'Not reachable'} />
           )
@@ -59,6 +69,41 @@ export function PublishedReport({ report }: { report: ReportDetail }) {
           </>
         }
       />
+      {mismatch && (
+        <Callout tone="warning" title={mismatch.title}>
+          <p>{mismatch.body}</p>
+          {mismatch.evidence.length > 0 && (
+            <dl className="mt-2 grid gap-x-3 gap-y-1 text-[13px] sm:grid-cols-[max-content_minmax(0,1fr)]">
+              {mismatch.evidence.map((e) => (
+                <div key={e.label} className="contents">
+                  <dt className="text-ink-3">{e.label}</dt>
+                  <dd className="text-ink [overflow-wrap:anywhere]">{e.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {mismatch.missing.length > 0 && <p className="mt-2 text-[13px] text-ink-2">Missing: {mismatch.missing.join('; ')}.</p>}
+          {can('member') && report.siteId && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <ButtonLink to={paths.tool(org.id, 'published', { siteId: report.siteId, prefill: publishVerifyPrefill(mismatch, false) })} size="sm" icon={<ArrowRight className="size-3.5" />}>
+                Use the right address
+              </ButtonLink>
+              {mismatch.confirmable && (
+                <ButtonLink to={paths.tool(org.id, 'published', { siteId: report.siteId, prefill: publishVerifyPrefill(mismatch, true) })} size="sm" variant="secondary">
+                  It is the right page, mark it published
+                </ButtonLink>
+              )}
+            </div>
+          )}
+        </Callout>
+      )}
+      {p.confirmed === true && p.recorded === true && (
+        <Callout tone="info" title="Marked published on your word">
+          The live page did not match the page that was written, and you confirmed it is the right page. It is tracked like any other page and shown as not verified in your content list.
+          {str(p.verify_message) ? ` What the check found: ${str(p.verify_message).replace(/ Nothing was marked published\..*$/, '')}` : ''}
+        </Callout>
+      )}
+      {str(p.verify_note) && <Callout tone="info" title="One page, two keywords">{str(p.verify_note)}</Callout>}
       {str(p.fetch_error) && <Callout tone="critical" title="Fetching the page failed">{str(p.fetch_error)}</Callout>}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Block title="Live checks" description={`${passed} of ${checks.length} passed`} icon={<ListChecks />}>
@@ -118,7 +163,7 @@ export function PublishedReport({ report }: { report: ReportDetail }) {
             )}
           </Block>
           <div className="flex flex-wrap gap-2 text-xs">
-            {p.stored === true && <StatusBadge tone="good">Marked as published</StatusBadge>}
+            {p.stored === true && !mismatch && p.live === true && <StatusBadge tone="good">{p.confirmed === true ? 'Marked as published (not verified)' : 'Marked as published'}</StatusBadge>}
             {p.ladder_found === true && <Badge>part of a keyword ladder</Badge>}
             {str(p.store_error) && <StatusBadge tone="critical">Not stored: {str(p.store_error)}</StatusBadge>}
           </div>

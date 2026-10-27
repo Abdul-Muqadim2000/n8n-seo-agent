@@ -62,6 +62,8 @@ export interface ContentLogRow extends DtRow {
   ladder_id: string; request_id: string; started_at: string; status: string; published_url: string; published_at: string; week: string;
   /** R111 (2026-10-16): for status `not_ready` (the last quality round failed), the QA reasons, '; '-joined */
   qa_reasons?: string;
+  /** 2026-10-27: why the page was marked published although the live page did not match the draft (the owner confirmed it); '' otherwise */
+  publish_note?: string;
 }
 export interface TrendRow extends DtRow {
   site_id: string; domain: string; keyword: string; checked_at: string; period_end: string; direction: string; change_pct: number;

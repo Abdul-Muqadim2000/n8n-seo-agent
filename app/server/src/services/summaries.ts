@@ -156,6 +156,9 @@ export function summarize(stage: string, p: P): Summary {
     case 'published':
       put('url', str(p.published_url));
       put('live', typeof p.live === 'boolean' ? p.live : null);
+      // 2026-10-27: false when the live page did not match the draft and nothing was marked (older reports: null)
+      put('recorded', typeof p.recorded === 'boolean' ? p.recorded : null);
+      put('verify', str(p.verify) || null);
       put('passed', num(p.passed));
       put('failed', len(p.failed) ?? num(p.failed));
       put('summary', str(p.summary));

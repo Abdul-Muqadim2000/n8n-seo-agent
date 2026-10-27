@@ -108,7 +108,10 @@ LOG_COLS = [('site_id', 'string'), ('domain', 'string'), ('keyword', 'string'), 
             ('request_id', 'string'), ('started_at', 'string'), ('status', 'string'), ('published_url', 'string'), ('published_at', 'string'), ('week', 'string'),
             # R111 (2026-10-16, re-rating 2026-10-15): a page whose FINAL quality round failed is stored `status: 'not_ready'` (a draft to fix
             # and run again, never "publish it") and carries the last round's reasons here, '; '-joined (Content_Log_Row.js)
-            ('qa_reasons', 'string')]
+            ('qa_reasons', 'string'),
+            # 2026-10-27 (techand.ai on production): why a page was marked published although the live page did not match the draft (the
+            # owner confirmed it after the warning of "I published it", Publish_Check.js / _publish_verify.js); '' on every verified row
+            ('publish_note', 'string')]
 TRENDS_COLS = [('site_id', 'string'), ('domain', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('period_end', 'string'), ('direction', 'string'), ('change_pct', 'number'), ('peak_date', 'string'),
                ('latest', 'number'), ('average', 'number'), ('rising', 'string'), ('top', 'string')]
 CADENCE_COLS = [('site_id', 'string'), ('domain', 'string'), ('pages_per_week', 'number'), ('status', 'string'), ('updated_at', 'string'), ('request_id', 'string')]

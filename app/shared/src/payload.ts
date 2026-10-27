@@ -196,7 +196,14 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
 
     case 'published':
       // exact key after the fuzzy-matched head (no pick() word matches "content request id"); the engine finds the draft by it first
-      return { ...head('published', input.keyword, s?.country ?? '', dom, d), published_url: input.publishedUrl, ...(input.contentRequestId ? { content_request_id: input.contentRequestId } : {}) };
+      // 2026-10-27: `confirm_mismatch` only after the owner read the check's warning (exact key, after the head; the server adds the draft's own
+      // title and main heading, `draft_title` / `draft_h1`, from its report)
+      return {
+        ...head('published', input.keyword, s?.country ?? '', dom, d),
+        published_url: input.publishedUrl,
+        ...(input.contentRequestId ? { content_request_id: input.contentRequestId } : {}),
+        ...(input.confirmMismatch ? { confirm_mismatch: true } : {}),
+      };
 
     case 'checkin':
       return {

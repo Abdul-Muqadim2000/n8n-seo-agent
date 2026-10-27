@@ -87,6 +87,26 @@ export async function aiPanelForQuote(domain: string): Promise<AiRunPanel | null
 }
 export const etaFor = (input: RunInput): number => estimateRunMinutes(input.mode, input as unknown as Record<string, unknown>);
 
+/**
+ * 2026-10-27: the title and main heading of the page that was written, read from its report (the newest content report of this website
+ * with the engine request id the person picked, else with the keyword typed), for "I published it". Null when no report carries them.
+ */
+export async function draftMeta(orgId: string, siteId: string, requestId: string, keyword: string): Promise<{ title: string; h1: string } | null> {
+  const R = schema.reports;
+  const byId = /^[A-Za-z0-9:_.-]{1,120}$/.test(requestId || '')
+    ? sql`(${R.requestId} = ${requestId} or ${R.payload}->>'request_id' = ${requestId})`
+    : null;
+  const kw = String(keyword || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const byKw = kw ? sql`lower(${R.payload}->>'keyword') = ${kw}` : null;
+  const match = byId ?? byKw;
+  if (!match) return null;
+  const row = await db.query.reports.findFirst({ where: and(eq(R.orgId, orgId), eq(R.siteId, siteId), eq(R.stage, 'content'), match), orderBy: desc(R.receivedAt) });
+  const meta = row?.payload && typeof row.payload.meta === 'object' && row.payload.meta ? (row.payload.meta as Record<string, unknown>) : {};
+  const t = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 300) : '');
+  const title = t(meta.title), h1 = t(meta.h1);
+  return title || h1 ? { title, h1 } : null;
+}
+
 export function runTitle(input: RunInput, site: SiteRow | null): string {
   const dom = site?.domain;
   switch (input.mode) {
@@ -255,6 +275,13 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   if (input.mode === 'ai_visibility' && site) {
     const qp = await aiPanelForQuote(site.domain);
     if (qp) body.panel_quote = aiPanelQuoteBody(aiOnDemandRunCost(qp), qp.panel);
+  }
+  // 2026-10-27 (techand.ai on production): the engine checks that the live page IS the page that was written; the draft's own title and
+  // main heading (from its report) are one way it recognises it when the person edited the keyword out of the title
+  if (input.mode === 'published' && site) {
+    const dm = await draftMeta(org.id, site.id, input.contentRequestId, input.keyword).catch(() => null);
+    if (dm?.title) body.draft_title = dm.title;
+    if (dm?.h1) body.draft_h1 = dm.h1;
   }
   if (input.mode === 'keyword' && input.ladder && site) {
     // the ladder's links and, since P2-7, the word count its verdict set for this page (the engine clamps the brief to `ladder_words`)

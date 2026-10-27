@@ -1,5 +1,5 @@
 import { PRICES } from '@/lib/prices';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type DefaultValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
@@ -12,7 +12,7 @@ import { fmtBytes, fmtDay } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
-import { ChoiceCard, Field, Select } from '@/components/ui/field';
+import { Checkbox, ChoiceCard, Field, Select } from '@/components/ui/field';
 import { SwitchRow } from '@/components/ui/tabs';
 import { IconTile } from '@/components/insight';
 import { estimateCost, estimateEta } from '../estimate';
@@ -189,13 +189,27 @@ export function PublishedForm({ initialSiteId, prefill }: ToolFormProps) {
       return s && x.publishedUrl && /^https?:\/\//i.test(x.publishedUrl) && !urlOnDomain(x.publishedUrl, s.domain) ? { publishedUrl: `Must be a page on ${s.domain}` } : {};
     }),
     mode: 'onTouched',
-    defaultValues: withPrefill<DefaultValues<PIn>>({ mode: 'published', siteId: initialSiteId ?? '', keyword: '', publishedUrl: '', contentRequestId: '', emailCopy: false }, prefill),
+    defaultValues: withPrefill<DefaultValues<PIn>>({ mode: 'published', siteId: initialSiteId ?? '', keyword: '', publishedUrl: '', contentRequestId: '', confirmMismatch: false, emailCopy: false }, prefill),
   });
   const { onSubmit, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
   useSyncSiteParam(v.siteId);
+  // 2026-10-27: opened from a check that found the live page did not match the page that was written ("It is the right page, mark it
+  // published"): the warning stays in view and needs a tick; a different address is a new check, so the confirmation is dropped
+  const confirmedUrl = useRef(prefill?.confirmMismatch === true ? String(prefill.publishedUrl ?? '') : '');
+  const [ack, setAck] = useState(false);
+  const confirming = !!v.confirmMismatch && !!confirmedUrl.current && (v.publishedUrl ?? '').trim() === confirmedUrl.current.trim();
+  useEffect(() => {
+    if (v.confirmMismatch && !confirming) form.setValue('confirmMismatch', false, { shouldDirty: true });
+  }, [v.confirmMismatch, confirming, form]);
+  const pickOther = () => {
+    confirmedUrl.current = '';
+    setAck(false);
+    form.setValue('confirmMismatch', false, { shouldDirty: true });
+    form.setValue('publishedUrl', '', { shouldDirty: true });
+  };
   // 2026-10-23 (techand.ai on production): the pages written for this website that are not live yet, so the report reaches the right
   // draft (by the engine request id that wrote it) instead of depending on the keyword being typed exactly as stored
   const content = useSiteData(org.id, v.siteId ?? '', 'content', undefined, { enabled: !!site?.verifiedAt });
@@ -219,7 +233,32 @@ export function PublishedForm({ initialSiteId, prefill }: ToolFormProps) {
     if (!v.publishedUrl && d.existingPageUrl) form.setValue('publishedUrl', d.existingPageUrl, { shouldDirty: true });
   };
   return (
-    <ToolShell mode="published" site={site} cost={0} eta={estimateEta('published', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check the page" blocked={noVerified(sites)}>
+    <ToolShell
+      mode="published"
+      site={site}
+      cost={0}
+      eta={estimateEta('published', v)}
+      emailCopy={!!v.emailCopy}
+      onSubmit={onSubmit}
+      pending={pending}
+      error={error}
+      submitLabel={confirming ? 'Mark it published' : 'Check the page'}
+      blocked={noVerified(sites) ?? (confirming && !ack ? 'Tick the box in the warning above to mark it published anyway.' : undefined)}
+    >
+      {confirming && (
+        <Callout tone="warning" title="This page did not match the page that was written">
+          <p>
+            The last check of {v.publishedUrl} found that it did not match the page written for "{v.keyword}" (or the update was not on it yet), so nothing was marked published. If you are sure it is the right page, it is marked published and
+            tracked, and shown as not verified in your content list.
+          </p>
+          <div className="mt-2">
+            <Button type="button" size="sm" variant="secondary" onClick={pickOther}>
+              Use the right address
+            </Button>
+          </div>
+          <Checkbox className="mt-3" checked={ack} onChange={(ev) => setAck(ev.target.checked)} label="It is the right page, mark it published anyway" />
+        </Callout>
+      )}
       <FormCard
         title="The page you published"
         description="We fetch it live, check what Google will see, mark it published (ladder and content log) and start tracking its position."
