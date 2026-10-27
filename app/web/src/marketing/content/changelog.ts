@@ -50,6 +50,7 @@ export const changelog: ChangelogEntry[] = [
       'Your market, checked before you start: a keyword about another country, a run for a market your website does not target, or weekly checks still measuring an old country are flagged in plain words, and you choose to accept the correction or continue anyway (your choice is recorded)',
       'Starting a suggested keyword now asks first: you see that it adds a new keyword ladder, writes its first page now, what that costs in credits and which of your ladders it overlaps, and you can plan it without a page, add the keyword to a ladder you already have, or cancel. The same check catches a page your website already has, a keyword watched twice, weekly pages that would write nothing, settings your credits cannot pay for, and a publishing or outreach connection of another website',
       'Your AI questions now follow the keywords you work on, in your own market: a new keyword gets its questions the week it starts, questions about topics you left are retired with their history kept, the daily check can ask only the questions about your keywords for fewer credits, and trends compare the questions asked both weeks',
+      'Written pages are always whole: every page is checked to the last line before it reaches you. If the writing stops part way, it is written again, and an edit that stops part way never replaces your complete page. A page cut off at the end is named as such and never marked ready to publish',
     ],
     features: ['guided-setup', 'content', 'ai-visibility'],
     labels: ['Learning'],

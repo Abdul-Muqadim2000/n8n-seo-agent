@@ -181,6 +181,7 @@ def count_chain(wfobj, agents=None):
             for s in succ:
                 _link(conns, af, s)
             table.append({'node': ag, 'model': model, 'model_node': mn, 'max_tokens': int(o.get('maxTokensToSample') or 0),
+                          'think_model': __import__('llm_limits').cost_think_by_node(mn),   # LLM-LIMITS (2026-10-27): the ceiling is room, the price models the thinking
                           'effort': o.get('effort') or '', 'streaming': bool(o.get('streaming')),
                           'template_chars': len(txt), 'input': fed, 'branch': branch, 'ref': ref,
                           'fields': _roots(re.findall(r"\$json\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)", txt)),

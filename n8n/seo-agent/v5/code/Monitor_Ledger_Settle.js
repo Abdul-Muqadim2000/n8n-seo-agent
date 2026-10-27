@@ -1,3 +1,4 @@
+/*__COMPLETE__*/
 // R9 (2026-10-13): settles this monitor run's seo_run_ledger reservation. `dfs_usd` is the DataForSEO cost the run really measured where it
 // knows it: the monitors add up the `cost` of every DataForSEO task they sent (AI Metrics / Pulse Metrics / Growth Metrics / Parse Backlinks
 // all carry it as `cost_usd`). A run that measures nothing says so, so the figure is never silently invented.
@@ -81,9 +82,14 @@ const __countOf = (n) => { let sum = 0, k = 0; for (const j of (__jsonOf(n) || [
 // a Code node cannot read that node's data (it rides `ai_languageModel`, not `main`), but `$node[…].runIndex` is the index of its last run.
 const __modelRuns = (n) => { try { if (!n || typeof $node === 'undefined') return 0; const r = Number($node[n].runIndex); return Number.isFinite(r) && r >= 0 ? r + 1 : 0; } catch (e) { return 0; } };
 const __costCalls = [];
+// LLM-LIMITS (2026-10-27): an answer that stopped before its end (its JSON cut off) or that could not be read even after n8n's one retry is
+// never a silent empty answer: every one is named on the row's basis line, first, so ops see it (CK.answer, v5/code/_complete.js)
+const __llmCut = [];
 for (const c of AI_CALLS) {
   const answers = __jsonOf(c.node);
   if (!answers || !answers.length) continue;   // this agent did not run in this execution
+  { let bad = 0, why = ''; for (const a of answers) { const k = CK.answer(a, 'json'); if (!k.complete) { bad++; why = why || k.reason; } }
+    if (bad) __llmCut.push(c.node + ' ' + bad + ' of ' + answers.length + ' (' + why + ')'); }
   // an n8n agent answers once per input item, and these are fed one job per site — plus any retry its model node recorded (R57)
   const __answered = answers.length, __runs = __modelRuns(c.model_node);
   const calls = Math.max(__answered, __runs);
@@ -106,7 +112,7 @@ for (const c of AI_CALLS) {
     if (p.n > 0 && p.n === t.n && p.sum > 0 && t.sum > p.sum && (!cap || p.n <= cap))
       counted = { prompt_tokens: p.sum, total_tokens: t.sum, rounds: p.n, source: 'Anthropic /v1/messages/count_tokens' };
   }
-  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, think_model: c.think_model, effort: c.effort, streaming: c.streaming,
     prompt_chars, output_chars, counted, calls, retries: Math.max(0, calls - __answered) });
 }
 // the same per-model correction factors the main workflow prices with, so one engine reports one price (seo_cache `cost:factor:claude`,
@@ -150,4 +156,4 @@ return [{ json: { run_id: String($execution.id), mode: String(row.mode || ''), s
   dfs_usd: +Number(dfs_usd).toFixed(4), dfs_measured: dfs.measured, dfs_est_usd: +Number(row.dfs_est_usd || 0).toFixed(4),
   // B-A5: what the account said about THIS run, and which figure the row therefore carries
   settled_at, dfs_balance_end: endBalance, dfs_source: dfsAtt.source, dfs_run: dfsAtt, dfs_tasks_usd: +Number(taskUsd).toFixed(4),
-  measured_usd: split.measured_usd, estimated_usd: split.estimated_usd, cost_basis: split.cost_basis } }];
+  measured_usd: split.measured_usd, estimated_usd: split.estimated_usd, cost_basis: (__llmCut.length ? 'Claude answer incomplete: ' + __llmCut.join('; ') + '. ' : '') + split.cost_basis } }];

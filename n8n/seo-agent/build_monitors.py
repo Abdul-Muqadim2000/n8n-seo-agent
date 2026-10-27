@@ -11,6 +11,7 @@ import env_settings as _env   # B-F5 (2026-10-15): a build with no n8n/.env must
 _env.require_settings('build_monitors.py')
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry gate, one shape for every DataForSEO call
+import llm_limits   # LLM-LIMITS (2026-10-27)
 import monitor_cost # A9 (2026-10-16, F6): the count_tokens answer expression, and the callback that waits for the settle (R115)
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_upsert_params_keys,
                            SITES_TABLE, SITES_COLS, LADDER_TABLE, LADDER_COLS, LOG_TABLE, LOG_COLS, PROFILE_TABLE, PROFILE_COLS, CASE_TABLE, CASE_COLS,
@@ -105,6 +106,7 @@ class WF:
     def agent(self, name, prompt, schema, pos, max_tokens=8192, model=('claude-sonnet-5-5', 'Claude Sonnet 5.5')):   # v4.13: a cheaper model (no extended thinking) for short classification
         self.node(name, '@n8n/n8n-nodes-langchain.agent', 3.1, {'promptType': 'define', 'text': '=' + rd('prompts/' + prompt), 'hasOutputParser': True, 'options': {}}, pos, retryOnFail=True, maxTries=2, waitBetweenTries=3000, onError='continueRegularOutput')
         opts = {'maxTokensToSample': max_tokens, 'thinking': True, 'thinkingMode': 'adaptive', 'effort': 'low'} if 'sonnet' in model[0] or 'opus' in model[0] else {'maxTokensToSample': max_tokens}
+        opts = llm_limits.options_by_node('Claude — ' + name)   # LLM-LIMITS (2026-10-27): the one table of ceilings, thinking budgets and streaming (llm_limits.py)
         self.node('Claude — ' + name, '@n8n/n8n-nodes-langchain.lmChatAnthropic', 1.6, {'model': {'__rl': True, 'mode': 'list', 'value': model[0], 'cachedResultName': model[1]}, 'options': opts}, [pos[0] - 100, pos[1] + 200], credentials=ANTHROPIC)
         self.node('Parser — ' + name, '@n8n/n8n-nodes-langchain.outputParserStructured', 1.3, {'schemaType': 'manual', 'inputSchema': json.dumps(schema)}, [pos[0] + 120, pos[1] + 200])
         self.C['Claude — ' + name] = {'ai_languageModel': [[{'node': name, 'type': 'ai_languageModel', 'index': 0}]]}
@@ -183,6 +185,7 @@ class WF:
                 self.link(ag, set_n); self.chain(set_n, cp, ca, af)
                 for s in succ: self.link(af, s)
                 table.append({'node': ag, 'model': model, 'model_node': mn, 'max_tokens': int(o.get('maxTokensToSample') or 0),   # R57: its runs price a retry
+                              'think_model': llm_limits.cost_think_by_node(mn),   # LLM-LIMITS: the ceiling is room, the price models the thinking
                               'effort': o.get('effort') or '', 'streaming': bool(o.get('streaming')),
                               'template_chars': len(txt), 'input': fed, 'branch': branch, 'ref': ref,
                               'fields': _roots(re.findall(r"\$json\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)", txt)),
