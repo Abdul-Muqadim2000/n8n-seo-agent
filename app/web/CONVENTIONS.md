@@ -39,6 +39,9 @@ state that asks for something, add or reuse a guide in the same change.
   `minutes`, numbered `steps` (body, `copy` values, `link`, `note`, `warn`, per-provider `choices`), `done`, `trouble`, `related`,
   `keywords`. Bodies use a tiny markup — `**click this**`, `` `type this` ``, `[label](https://…)` — and `{{placeholders}}` filled
   from the caller's values (each declared in `vars` with an `example`, so a guide always reads sensibly).
+- **A change on the client's own website is a site task, not only a guide** (`docs/SITE_TASKS.md`): if the app can check it (a file, a
+  robots.txt rule, a redirect, a tag), add a kind to `shared/src/site-tasks.ts` with its check in `server/src/services/siteTasks.ts`, so it
+  shows on the Pipeline as to do / done, gets "I've done it, check now" and is re-checked daily. A guide alone leaves the client guessing.
 - Triggers: `GuideButton` from `@/components/guide` — `variant="chip"` next to a heading, a callout (`action=`) or an empty state,
   `variant="link"` in a `Field labelAction`, `variant="icon"` where there is no room. Pass the website's real values
   (`vars={{ domain: site.domain, … }}`) and, when the app can finish the job, `finish={{ label: 'Check now', onClick }}`.

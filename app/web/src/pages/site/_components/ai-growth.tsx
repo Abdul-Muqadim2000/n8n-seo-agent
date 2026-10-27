@@ -6,6 +6,7 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CheckCircle2, ChevronDown, FileCheck2, Globe, Library, MailPlus, Megaphone, PenSquare, Rocket, Send, ShieldCheck, Target } from 'lucide-react';
 import { GuideButton } from '@/components/guide';
+import { SiteTaskRow, useSiteTasks } from '@/components/site/SiteTasks';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import type { AiEarnedPage, AiGrowth, AiPageStat, AiTargetStat, IndexNowCheck } from '@seo/shared';
 import { api, errorMessage } from '@/lib/api';
@@ -77,7 +78,7 @@ export function AiGrowthSection({ growth }: { growth: AiGrowth | null }) {
         <FigureTile icon={<Megaphone />} label="Pages citing others, not you" value={g.earned.filter((e) => e.kind !== 'competitor' && e.mentionsUs !== true).length} hint={`${new Set(g.earned.filter((e) => e.drafted && e.kind !== 'competitor').map((e) => e.host)).size} site(s) with an outreach draft`} />
         <FigureTile icon={<PenSquare />} label="AI pages this month" value={`${g.writtenThisMonth} / ${g.pagesPerMonth}`} hint={`${g.targets.filter((t) => t.status === 'queued').length} question(s) queued`} />
       </div>
-      {!g.submitted.indexnow.verified && g.submitted.indexnow.key && <IndexNowSetup keyUrl={g.submitted.indexnow.keyUrl} k={g.submitted.indexnow.key} />}
+      {g.submitted.indexnow.key && <IndexNowStep keyUrl={g.submitted.indexnow.keyUrl} k={g.submitted.indexnow.key} weeklyFound={g.submitted.indexnow.verified} />}
       <EarnedPanel earned={g.earned} />
       <TargetsPanel targets={g.targets} perMonth={g.pagesPerMonth} />
       <PagesPanel pages={g.pages} />
@@ -97,6 +98,32 @@ export function AiGrowthSection({ growth }: { growth: AiGrowth | null }) {
         </Panel>
       )}
     </section>
+  );
+}
+
+/**
+ * Site tasks (app/docs/SITE_TASKS.md): the IndexNow file is a step on the website like the Pipeline's, with the same stored check. A server
+ * from before site tasks (no tasks endpoint) keeps the older callout below.
+ */
+function IndexNowStep({ keyUrl, k, weeklyFound }: { keyUrl: string; k: string; weeklyFound: boolean }) {
+  const tasks = useSiteTasks();
+  const task = tasks.data?.find((t) => t.key === 'indexnow');
+  // still loading: nothing yet; an older server, an error or a query that cannot run: the callout from before site tasks
+  if (tasks.isPending && tasks.fetchStatus !== 'idle') return null;
+  if (!task) return weeklyFound ? null : <IndexNowSetup keyUrl={keyUrl} k={k} />;
+  // done and the weekly run agrees: nothing to say; done by our check before the weekly run saw it: say so once
+  if (task.state === 'done' && weeklyFound) return null;
+  if (task.state === 'done')
+    return (
+      <Callout tone="good" title="IndexNow is ready">
+        {task.lastCheck?.message ?? 'The file is in place.'} From the next AI growth run every new or updated page is sent through IndexNow too.
+      </Callout>
+    );
+  if (task.state === 'skipped') return null;
+  return (
+    <ul className="overflow-hidden rounded-lg border border-line">
+      <SiteTaskRow task={task} />
+    </ul>
   );
 }
 
@@ -121,7 +148,7 @@ function IndexNowSetup({ keyUrl, k }: { keyUrl: string; k: string }) {
   return (
     <Callout tone="info" title="One file to add: IndexNow">
       <p>
-        Put a file named <code className="rounded bg-surface-2 px-1">{file}</code> containing only <code className="rounded bg-surface-2 px-1">{k}</code> at <span className="break-all">{keyUrl}</span>. From then on every new or updated page reaches Bing (ChatGPT search, Copilot), Yandex, Naver and the other IndexNow engines the same week.
+        Put a file named <code className="rounded bg-surface-2 px-1">{file}</code> containing only <code className="rounded bg-surface-2 px-1">{k}</code> at <span className="break-all">{keyUrl}</span>. From then on every new or updated page reaches Bing (and Copilot), Yandex, Naver and the other IndexNow engines the same week.
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         <CopyButton text={k} label="Copy the key" />

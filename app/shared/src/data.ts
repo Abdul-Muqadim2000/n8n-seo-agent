@@ -1064,6 +1064,8 @@ export interface Recommendation {
   /** B3 (pre-launch run 2026-10-21): this website's own values for the recommendation's "Show me how" guide (the IndexNow key, its file
    *  and its address), so the guide never shows its example values where the real ones exist */
   guideVars?: Record<string, string>;
+  /** site tasks (2026-10-28): the step on the client's website this recommendation is (its "I've done it, check now" button) */
+  taskKey?: string;
   /** REP 3.3 (benchmark pass 2026-10-14): what this is worth and why it sits where it does in the one queue (`queue.ts`).
    * Absent only on rows written before the queue existed; a reader must treat a missing score as "not ranked". */
   score?: RecommendationScore;
@@ -1206,6 +1208,8 @@ export interface PipelineData {
   autopilot?: PipelineAutopilot;
   /** P1 (2026-10-20): is the website ready for a written page (author profile + business facts, shared/src/readiness.ts) */
   readiness?: import('./readiness').ContentReadiness | null;
+  /** site tasks (2026-10-28, app/docs/SITE_TASKS.md): the steps on the client's own website, to do, done or skipped (older servers: absent) */
+  siteTasks?: import('./site-tasks').SiteTask[];
 }
 
 /** What the autopilot does for the website this cycle (keyword-first, plan §5.5). */
@@ -1356,7 +1360,9 @@ export interface NeedsYouItem {
     /** AI-FOCUS (2026-10-27): the AI question panel and the keywords the client works on disagree, or a ladder has no room in the panel */
     | 'ai_panel'
     /** H3 (2026-10-28): a written page has questions only the client can answer (ranked; the page is publishable without them) */
-    | 'questions';
+    | 'questions'
+    /** site tasks (2026-10-28, app/docs/SITE_TASKS.md): a step on the client's own website we check ourselves (IndexNow file, robots.txt, a redirect) */
+    | 'site_task';
   severity: 'warning' | 'info';
   title: string;
   detail: string;
@@ -1365,6 +1371,8 @@ export interface NeedsYouItem {
   ladderId?: string;
   /** approve items: the page the "Write it" dialog starts (with its ladder fields) */
   writeNow?: QueueItem;
+  /** site_task items: this website's own values for the item's guide (the IndexNow key, the old address and its redirect) */
+  guideVars?: Record<string, string>;
 }
 
 export interface ThisWeekItem {

@@ -1,4 +1,4 @@
-import type { CreditPack, FactAnswers, PageAnswer, PageCheck } from '@seo/shared';
+import type { CreditPack, FactAnswers, PageAnswer, PageCheck, SiteTaskCheck, SiteTaskKind } from '@seo/shared';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
@@ -1633,6 +1633,39 @@ export const pageReviews = pgTable(
 );
 
 /**
+ * Site tasks (2026-10-28, app/docs/SITE_TASKS.md): a step only the client can take on their own website (the IndexNow file, robots.txt
+ * for the AI search crawlers, a redirect of a broken page other sites link to), one row per website and step. The row keeps what the
+ * step's check needs (`payload`), the app's own last check of it, when a check last found it done, and a skip. Whether it is done is
+ * decided at read time with the engine's newest reading (shared/src/site-tasks.ts), so nothing here is a copy of engine state.
+ */
+export const siteTasks = pgTable(
+  'site_tasks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    /** 'indexnow' | 'ai_crawlers' | 'redirect:<host/path>' */
+    taskKey: text('task_key').notNull(),
+    kind: text('kind').$type<SiteTaskKind>().notNull(),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+    lastCheck: jsonb('last_check').$type<SiteTaskCheck>(),
+    lastCheckAt: ts('last_check_at'),
+    doneAt: ts('done_at'),
+    /** the daily check missed a done step once: it looks again an hour later, and only a second miss reopens it (lost = two misses) */
+    missAt: ts('miss_at'),
+    skippedAt: ts('skipped_at'),
+    skippedBy: uuid('skipped_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('site_tasks_site_key_idx').on(t.siteId, t.taskKey), index('site_tasks_org_idx').on(t.orgId), index('site_tasks_due_idx').on(t.lastCheckAt)],
+);
+
+/**
  * D3: the one free keyword research of a website at setup. Keyed by the DOMAIN, not the website row: deleting a website and adding it
  * again, or adding it in another company, never earns a second free research.
  */
@@ -1709,3 +1742,4 @@ export type FileRow = typeof files.$inferSelect;
 export type ReportShareRow = typeof reportShares.$inferSelect;
 export type KeywordCheckRow = typeof keywordChecks.$inferSelect;
 export type ReportDeliveryRow = typeof reportDeliveries.$inferSelect;
+export type SiteTaskRow = typeof siteTasks.$inferSelect;

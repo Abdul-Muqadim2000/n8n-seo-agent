@@ -143,7 +143,8 @@ export const RULE_SCORES: Record<string, { impact: number; effort: EffortBand; b
   'bl:gsc-import': { impact: 2, effort: 'minutes', basis: "Google's own sample of your links, which its API will not hand over" },
   // AI
   'ai:outreach': { impact: 6, effort: 'hour', basis: 'the pages AI answers already rely on, which do not name you' },
-  'ai:indexnow': { impact: 4, effort: 'minutes', basis: 'one file that gets every new page to Bing and ChatGPT search in the same week' },
+  'ai:indexnow': { impact: 4, effort: 'minutes', basis: 'one file that gets every new page to Bing and Copilot in the same week' },
+  'ai:crawlers': { impact: 7, effort: 'minutes', basis: 'an AI search crawler turned away by robots.txt cannot read, name or cite any page it is kept from' },
   'ai:gap': { impact: 4, effort: 'session', basis: 'a buyer question AI answers without you' },
   // content and cadence
   'content:cadence': { impact: 3, effort: 'minutes', basis: 'no pages are scheduled, so nothing new is written' },

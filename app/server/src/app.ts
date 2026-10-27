@@ -15,6 +15,7 @@ import { apiV1Routes } from './routes/apiV1';
 import { integrationRoutes } from './routes/integrations';
 import { cmsRoutes } from './routes/cms';
 import { pageReviewRoutes } from './routes/pageReview';
+import { siteTaskRoutes } from './routes/siteTasks';
 import { agencyRoutes } from './routes/agency';
 import { hostGate } from './services/portalHosts';
 import { portalIndexHtml } from './services/portalShell';
@@ -172,6 +173,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(integrationRoutes);
   await app.register(cmsRoutes);
   await app.register(pageReviewRoutes);
+  await app.register(siteTaskRoutes);
   await app.register(agencyRoutes);
 
   // the built React app (production image): static files, and index.html for every client-side route

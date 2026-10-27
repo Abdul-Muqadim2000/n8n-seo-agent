@@ -115,6 +115,9 @@ const V = {
   indexNowKey: { key: 'indexNowKey', label: 'Your IndexNow key', example: 'e474f67e21841570c3de6d7624391652' },
   indexNowFile: { key: 'indexNowFile', label: 'The file name', example: 'e474f67e21841570c3de6d7624391652.txt' },
   indexNowUrl: { key: 'indexNowUrl', label: 'Where the file goes', example: 'https://your-domain.com/e474f67e21841570c3de6d7624391652.txt' },
+  // site tasks (2026-10-28): a broken page other websites link to, and where it should go
+  brokenUrl: { key: 'brokenUrl', label: 'The old address', example: 'https://your-domain.com/old-page' },
+  redirectTo: { key: 'redirectTo', label: 'Where it should go', example: 'https://your-domain.com/new-page' },
   // the weekly autopilot: each example reads as a sentence on its own, because the searchable catalogue opens a guide with no values
   weekday: { key: 'weekday', label: 'Your weekday', example: 'the weekday you finished setup' },
   timezone: { key: 'timezone', label: 'Your time zone', example: "your website's time zone" },
@@ -442,7 +445,7 @@ export const GUIDES = [
     id: 'indexnow-key-file',
     area: 'website',
     title: 'Add the IndexNow key file to your site',
-    why: 'One small text file, once. After it, every new or changed page is announced to Bing (and so to Copilot and ChatGPT search), plus Yandex, Naver and Seznam, the same week instead of whenever a crawler happens by.',
+    why: 'One small text file, once. After it, every new or changed page is announced to Bing (and so to Copilot), plus Yandex, Naver and Seznam, the same week instead of whenever a crawler happens by.',
     where: 'Your website\'s files',
     who: 'Whoever can put a file at the root of the site',
     minutes: 10,
@@ -473,9 +476,9 @@ export const GUIDES = [
         body: 'You should see the key as plain text, over https, with no redirect and no page design around it.',
         warn: 'A "404 not found", a login screen or your site\'s styled 404 page all mean the file is not at the root yet.',
       },
-      { title: 'Press "Check the file" here', body: 'We fetch it and compare it with the key. From then on the weekly AI growth run submits your new and updated pages automatically.' },
+      { title: 'Press "I\'ve done it, check now"', body: 'It is on the Pipeline under Steps on your website. We fetch the file and compare it with the key, and the step turns Done. From then on the weekly AI growth run submits your new and updated pages automatically. We also look again every day, so if the file disappears later the step comes back as to do.' },
     ],
-    done: 'The panel says IndexNow is ready, and the next weekly run reports how many pages it sent.',
+    done: 'The step shows Done on the Pipeline, and the next weekly run reports how many pages it sent.',
     trouble: [
       { q: 'The browser downloads the file instead of showing it', a: 'That is fine: the content is what matters, not how the browser chooses to show it.' },
       { q: 'I get my site\'s 404 page', a: 'The file is in a subfolder. The address must have nothing between the domain and the file name.' },
@@ -522,15 +525,55 @@ export const GUIDES = [
         title: 'Optional: add an llms.txt',
         body: 'A plain-text file at the root listing your best pages with one line each about what they answer. It is not a standard the engines promise to follow, and it is minutes of work: a clean map of your site for anything that reads it.',
       },
-      { title: 'Check it again', body: 'The weekly run re-checks every crawler, robots.txt and the homepage test, so the next report tells you whether the door is open.' },
+      { title: 'Press "I\'ve done it, check now"', body: 'It is on the Pipeline under Steps on your website. We read your robots.txt with the same rules as the weekly check, and the step turns Done once every AI search crawler may read your pages. The weekly run also re-checks the firewall test, so the next report tells you whether the door is open there too.' },
     ],
-    done: 'Every crawler you chose shows as allowed, and the homepage test returns 200 for each of them.',
+    done: 'The step shows Done on the Pipeline, and every crawler you chose shows as allowed on the AI visibility page.',
     trouble: [
       { q: 'We have no robots.txt at all', a: 'Then nothing is blocked by it. Adding one is still worth it: it is where your sitemap is announced and where these rules will live when you need them.' },
       { q: 'A crawler is allowed but still turned away', a: 'That is the CDN or firewall, not robots.txt. The status in the homepage test (403, 429 or a challenge page) tells your host which rule to look for.' },
     ],
     related: ['indexnow-key-file', 'fix-pack'],
     keywords: ['robots.txt', 'llms.txt', 'gptbot', 'crawler', 'blocked', 'cloudflare', 'ai'],
+  },
+  {
+    id: 'redirect-broken-page',
+    area: 'website',
+    title: 'Redirect a broken page that other websites link to',
+    why: 'Links from other websites are one of the strongest things a page can have. When the page they point to no longer opens, that value is lost. A permanent redirect hands it to the page that replaced it.',
+    where: 'Your website\'s redirect settings',
+    who: 'Whoever manages your website or its hosting',
+    minutes: 10,
+    vars: [V.domain, V.brokenUrl, V.redirectTo],
+    steps: [
+      {
+        title: 'Add a permanent (301) redirect',
+        body: 'From the old address to the page that covers the same thing today. Use a 301 (or 308), not a 302: a temporary redirect tells search engines the old page is coming back.',
+        copy: [
+          { label: 'From', value: '{{brokenUrl}}' },
+          { label: 'To', value: '{{redirectTo}}' },
+        ],
+        choices: [
+          { label: 'WordPress', body: 'A redirect plugin (Redirection, Rank Math or Yoast Premium) adds it in a minute: paste the old path as the source and the new address as the target, type 301.' },
+          { label: 'Shopify', body: 'Online Store > Navigation > URL redirects > Create URL redirect. Shopify redirects are permanent.' },
+          { label: 'Webflow', body: 'Site settings > Publishing > 301 redirects. Add the old path and the new path, then publish the site.' },
+          { label: 'Wix / Squarespace', body: 'Wix: SEO > URL redirect manager. Squarespace: Settings > Developer tools > URL mappings, one line `/old-path -> /new-path 301`.' },
+          { label: 'Apache / nginx / Next.js', body: 'Apache: `Redirect 301 /old-path https://{{domain}}/new-path` in `.htaccess`. nginx: a `return 301` in a `location` block. Next.js: `redirects()` in `next.config.js` with `permanent: true`.' },
+        ],
+      },
+      {
+        title: 'Open the old address in a browser',
+        body: 'It should land on the new page straight away.',
+        warn: 'If the new page is not the right match, pick the closest page that covers the same topic. Sending every old address to the homepage is treated as a broken page by Google.',
+      },
+      { title: 'Press "I\'ve done it, check now"', body: 'It is on the Pipeline under Steps on your website. We open the old address, follow the redirect and check that it is permanent and lands on a page that opens.' },
+    ],
+    done: 'The step shows Done on the Pipeline. The next backlink report no longer lists the page as broken.',
+    trouble: [
+      { q: 'The check says the redirect is temporary', a: 'Your redirect answers 302 or 307. Change its type to 301 (sometimes called "permanent") and check again.' },
+      { q: 'We do not want to redirect this page', a: 'Press Skip. The step moves out of your to-do list and you can bring it back later.' },
+    ],
+    related: ['fix-pack', 'publish-page'],
+    keywords: ['redirect', '301', 'broken link', '404', 'backlinks', 'reclaim'],
   },
   {
     id: 'publish-page',
@@ -2733,6 +2776,7 @@ export const GUIDE_FOR_RECOMMENDATION: Record<string, GuideId> = {
   'setup:profile': 'business-profile',
   'setup:checkin': 'search-console-checkin',
   'ai:indexnow': 'indexnow-key-file',
+  'ai:crawlers': 'ai-crawler-access',   // site tasks (2026-10-28)
   'links:mailbox': 'mailbox-connect',
   'bl:gsc-import': 'search-console-links-export',
   // keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.3)
@@ -2745,6 +2789,7 @@ export const GUIDE_FOR_RECOMMENDATION: Record<string, GuideId> = {
 const GUIDE_FOR_RECOMMENDATION_PREFIX: [prefix: string, id: GuideId][] = [
   ['content:fix:', 'page-not-ready'],
   ['content:publish:', 'publish-page'],
+  ['bl:reclaim:', 'redirect-broken-page'],   // site tasks (2026-10-28)
 ];
 
 /** The guide of a recommendation, by its exact id or its prefix; undefined when it asks for nothing outside the app. */
