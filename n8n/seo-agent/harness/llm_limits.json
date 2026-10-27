@@ -1,0 +1,475 @@
+{
+ "limits": [
+  {
+   "cost_think": "seen",
+   "effort": "low",
+   "head": 24000,
+   "kind": "outreach e-mails (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 AI Outreach Writer",
+   "old": {
+    "max": 6000,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_AI_Growth.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "low",
+   "head": 24000,
+   "kind": "report brief (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 AI Brief",
+   "old": {
+    "max": 8192,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_AI_Visibility.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "low",
+   "head": 24000,
+   "kind": "answer analysis (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Answer Analyst",
+   "old": {
+    "max": 8192,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_AI_Visibility.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "low",
+   "head": 24000,
+   "kind": "question panel (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Prompt Writer",
+   "old": {
+    "max": 8192,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_AI_Visibility.json"
+  },
+  {
+   "cost_think": 0,
+   "effort": "",
+   "head": 3000,
+   "kind": "sentiment labels (JSON)",
+   "max": 4000,
+   "model": "claude-haiku-4-5-20251001",
+   "node": "Claude \u2014 Sentiment Reader",
+   "old": {
+    "max": 4000,
+    "stream": false,
+    "think": 0
+   },
+   "stream": false,
+   "think": 0,
+   "workflow": "SEO_Agent_AI_Visibility.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "low",
+   "head": 24000,
+   "kind": "link analysis (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Link Analyst",
+   "old": {
+    "max": 8192,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_Backlink_Monitor.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "low",
+   "head": 24000,
+   "kind": "outreach e-mails (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Outreach Writer",
+   "old": {
+    "max": 8192,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_Backlink_Monitor.json"
+  },
+  {
+   "cost_think": 0,
+   "effort": "",
+   "head": 600,
+   "kind": "topic fit (short JSON / text; the check answers within 45 s)",
+   "max": 1200,
+   "model": "claude-haiku-4-5-20251001",
+   "node": "Claude \u2014 Keyword Fit",
+   "old": {
+    "max": 1200,
+    "stream": false,
+    "think": 0
+   },
+   "stream": false,
+   "think": 0,
+   "workflow": "SEO_Agent_Keyword_Check.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "low",
+   "head": 24000,
+   "kind": "outreach sequences (JSON, up to 10 x 3 e-mails)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Outreach Sequence Writer",
+   "old": {
+    "max": 16000,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_Link_Builder.json"
+  },
+  {
+   "cost_think": 0,
+   "effort": "",
+   "head": 1200,
+   "kind": "reply class + suggested answer (JSON)",
+   "max": 1500,
+   "model": "claude-haiku-4-5-20251001",
+   "node": "Claude \u2014 Reply Reader",
+   "old": {
+    "max": 1500,
+    "stream": false,
+    "think": 0
+   },
+   "stream": false,
+   "think": 0,
+   "workflow": "SEO_Agent_Reply_Reader.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "low",
+   "head": 24000,
+   "kind": "report brief (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Site Brief",
+   "old": {
+    "max": 8192,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_Site_Tracker.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "medium",
+   "head": 24000,
+   "kind": "keyword seeds (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Anthropic Chat Model",
+   "old": {
+    "max": 16384,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_v4.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "medium",
+   "head": 24000,
+   "kind": "analysis (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Competitor Analyzer",
+   "old": {
+    "max": 16384,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_v4.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "medium",
+   "head": 24000,
+   "kind": "content review (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Content Reviewer",
+   "old": {
+    "max": 16384,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_v4.json"
+  },
+  {
+   "cost_think": 3277,
+   "effort": "medium",
+   "head": 32000,
+   "kind": "page (Markdown, up to 2,400 words + tables, links, meta lines)",
+   "max": 128000,
+   "model": "claude-opus-5-5",
+   "node": "Claude \u2014 Copywriter",
+   "old": {
+    "max": 32768,
+    "stream": true,
+    "think": null
+   },
+   "stream": true,
+   "think": 64000,
+   "workflow": "SEO_Agent_v4.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "medium",
+   "head": 24000,
+   "kind": "editorial review (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Critic",
+   "old": {
+    "max": 16384,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_v4.json"
+  },
+  {
+   "cost_think": 3277,
+   "effort": "medium",
+   "head": 32000,
+   "kind": "page (the complete corrected Markdown)",
+   "max": 128000,
+   "model": "claude-opus-5-5",
+   "node": "Claude \u2014 Editor",
+   "old": {
+    "max": 32768,
+    "stream": true,
+    "think": null
+   },
+   "stream": true,
+   "think": 64000,
+   "workflow": "SEO_Agent_v4.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "low",
+   "head": 24000,
+   "kind": "keyword labels (JSON, 80 a chunk)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Keyword Relevance",
+   "old": {
+    "max": 16384,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_v4.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "low",
+   "head": 24000,
+   "kind": "keyword labels (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Ladder Relevance",
+   "old": {
+    "max": 16384,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_v4.json"
+  },
+  {
+   "cost_think": 0,
+   "effort": "",
+   "head": 3000,
+   "kind": "site description (JSON)",
+   "max": 4096,
+   "model": "claude-haiku-4-5-20251001",
+   "node": "Claude \u2014 Site Describer",
+   "old": {
+    "max": 4096,
+    "stream": false,
+    "think": 0
+   },
+   "stream": false,
+   "think": 0,
+   "workflow": "SEO_Agent_v4.json"
+  },
+  {
+   "cost_think": 2458,
+   "effort": "medium",
+   "head": 32000,
+   "kind": "brief (JSON: outline, questions, evidence plan, terms)",
+   "max": 128000,
+   "model": "claude-opus-5-5",
+   "node": "Claude \u2014 Strategy Brief",
+   "old": {
+    "max": 24576,
+    "stream": true,
+    "think": null
+   },
+   "stream": true,
+   "think": 64000,
+   "workflow": "SEO_Agent_v4.json"
+  },
+  {
+   "cost_think": "seen",
+   "effort": "medium",
+   "head": 24000,
+   "kind": "verdict (JSON)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Verdict Chat Model",
+   "old": {
+    "max": 16384,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_v4.json"
+  }
+ ],
+ "model_max": {
+  "claude-haiku-4-5-20251001": 64000,
+  "claude-opus-5-5": 128000,
+  "claude-sonnet-5-5": 128000
+ },
+ "nonstream_max": 21333,
+ "seen": [
+  [
+   "SEO_Agent_AI_Growth.json",
+   "Claude \u2014 AI Outreach Writer"
+  ],
+  [
+   "SEO_Agent_AI_Visibility.json",
+   "Claude \u2014 Prompt Writer"
+  ],
+  [
+   "SEO_Agent_AI_Visibility.json",
+   "Claude \u2014 Answer Analyst"
+  ],
+  [
+   "SEO_Agent_AI_Visibility.json",
+   "Claude \u2014 Sentiment Reader"
+  ],
+  [
+   "SEO_Agent_AI_Visibility.json",
+   "Claude \u2014 AI Brief"
+  ],
+  [
+   "SEO_Agent_Backlink_Monitor.json",
+   "Claude \u2014 Link Analyst"
+  ],
+  [
+   "SEO_Agent_Backlink_Monitor.json",
+   "Claude \u2014 Outreach Writer"
+  ],
+  [
+   "SEO_Agent_Keyword_Check.json",
+   "Claude \u2014 Keyword Fit"
+  ],
+  [
+   "SEO_Agent_Link_Builder.json",
+   "Claude \u2014 Outreach Sequence Writer"
+  ],
+  [
+   "SEO_Agent_Reply_Reader.json",
+   "Claude \u2014 Reply Reader"
+  ],
+  [
+   "SEO_Agent_Site_Tracker.json",
+   "Claude \u2014 Site Brief"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Anthropic Chat Model"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Verdict Chat Model"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Claude \u2014 Competitor Analyzer"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Claude \u2014 Strategy Brief"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Claude \u2014 Copywriter"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Claude \u2014 Editor"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Claude \u2014 Content Reviewer"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Claude \u2014 Site Describer"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Claude \u2014 Keyword Relevance"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Claude \u2014 Critic"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Claude \u2014 Ladder Relevance"
+  ]
+ ],
+ "self_test_cases": 8
+}

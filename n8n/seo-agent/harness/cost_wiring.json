@@ -18,11 +18,13 @@
    "from": [],
    "input": "Route Mode",
    "loop": false,
-   "max_tokens": 16384,
+   "max_tokens": 128000,
    "model": "claude-sonnet-5-5",
+   "model_node": "Anthropic Chat Model",
    "node": "Keyword Seeds",
-   "streaming": false,
-   "template_chars": 1913
+   "streaming": true,
+   "template_chars": 1913,
+   "think_model": "seen"
   },
   {
    "count_answer": "Count Answer (Competitor Analyzer)",
@@ -52,11 +54,13 @@
    "from": [],
    "input": "Collect Facts",
    "loop": false,
-   "max_tokens": 16384,
+   "max_tokens": 128000,
    "model": "claude-sonnet-5-5",
+   "model_node": "Claude \u2014 Competitor Analyzer",
    "node": "Competitor Analyzer",
-   "streaming": false,
-   "template_chars": 4953
+   "streaming": true,
+   "template_chars": 4953,
+   "think_model": "seen"
   },
   {
    "count_answer": "Count Answer (Content Reviewer)",
@@ -74,11 +78,13 @@
    "from": [],
    "input": "Build Content Prompt",
    "loop": false,
-   "max_tokens": 16384,
+   "max_tokens": 128000,
    "model": "claude-sonnet-5-5",
+   "model_node": "Claude \u2014 Content Reviewer",
    "node": "Content Reviewer",
-   "streaming": false,
-   "template_chars": 2388
+   "streaming": true,
+   "template_chars": 2388,
+   "think_model": "seen"
   },
   {
    "count_answer": "Count Answer (Copywriter)",
@@ -114,11 +120,13 @@
    "from": [],
    "input": "Parse Brief",
    "loop": false,
-   "max_tokens": 32768,
+   "max_tokens": 128000,
    "model": "claude-opus-5-5",
+   "model_node": "Claude \u2014 Copywriter",
    "node": "Copywriter",
    "streaming": true,
-   "template_chars": 11251
+   "template_chars": 11251,
+   "think_model": 3277
   },
   {
    "count_answer": "Count Answer (Critic)",
@@ -197,11 +205,13 @@
    ],
    "input": "Copywriter",
    "loop": false,
-   "max_tokens": 16384,
+   "max_tokens": 128000,
    "model": "claude-sonnet-5-5",
+   "model_node": "Claude \u2014 Critic",
    "node": "Critic",
-   "streaming": false,
-   "template_chars": 6212
+   "streaming": true,
+   "template_chars": 6212,
+   "think_model": "seen"
   },
   {
    "count_answer": "Count Answer (Editor)",
@@ -226,11 +236,13 @@
    "from": [],
    "input": "Needs Revision?",
    "loop": true,
-   "max_tokens": 32768,
+   "max_tokens": 128000,
    "model": "claude-opus-5-5",
+   "model_node": "Claude \u2014 Editor",
    "node": "Editor",
    "streaming": true,
-   "template_chars": 7596
+   "template_chars": 7596,
+   "think_model": 3277
   },
   {
    "count_answer": "Count Answer (Keyword Relevance)",
@@ -253,11 +265,13 @@
    "from": [],
    "input": "Relevance Chunks",
    "loop": false,
-   "max_tokens": 16384,
+   "max_tokens": 128000,
    "model": "claude-sonnet-5-5",
+   "model_node": "Claude \u2014 Keyword Relevance",
    "node": "Keyword Relevance",
-   "streaming": false,
-   "template_chars": 3052
+   "streaming": true,
+   "template_chars": 3052,
+   "think_model": "seen"
   },
   {
    "count_answer": "Count Answer (Ladder Keyword Relevance)",
@@ -280,11 +294,13 @@
    "from": [],
    "input": "Ladder Relevance Chunks",
    "loop": false,
-   "max_tokens": 16384,
+   "max_tokens": 128000,
    "model": "claude-sonnet-5-5",
+   "model_node": "Claude \u2014 Ladder Relevance",
    "node": "Ladder Keyword Relevance",
-   "streaming": false,
-   "template_chars": 3052
+   "streaming": true,
+   "template_chars": 3052,
+   "think_model": "seen"
   },
   {
    "count_answer": "Count Answer (Site Describer)",
@@ -304,9 +320,11 @@
    "loop": false,
    "max_tokens": 4096,
    "model": "claude-haiku-4-5-20251001",
+   "model_node": "Claude \u2014 Site Describer",
    "node": "Site Describer",
    "streaming": false,
-   "template_chars": 1881
+   "template_chars": 1881,
+   "think_model": 0
   },
   {
    "count_answer": "Count Answer (Strategy Brief)",
@@ -360,11 +378,13 @@
    "from": [],
    "input": "Brief Context",
    "loop": false,
-   "max_tokens": 24576,
+   "max_tokens": 128000,
    "model": "claude-opus-5-5",
+   "model_node": "Claude \u2014 Strategy Brief",
    "node": "Strategy Brief",
    "streaming": true,
-   "template_chars": 13684
+   "template_chars": 13684,
+   "think_model": 2458
   },
   {
    "count_answer": "Count Answer (Verdict Agent)",
@@ -393,11 +413,13 @@
    "from": [],
    "input": "Merge Keyword Data",
    "loop": false,
-   "max_tokens": 16384,
+   "max_tokens": 128000,
    "model": "claude-sonnet-5-5",
+   "model_node": "Verdict Chat Model",
    "node": "Verdict Agent",
-   "streaming": false,
-   "template_chars": 6229
+   "streaming": true,
+   "template_chars": 6229,
+   "think_model": "seen"
   }
  ],
  "calibrate": {
