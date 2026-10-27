@@ -85,8 +85,18 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // emits is on the host the site really serves; with no model yet the bare domain keeps today's behaviour.
   const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };
   // G6: the state of this site's split run, and what this execution is for it
-  const st = AIP.stateOf(cache, s.site_id);
-  const verdict = AIP.stateVerdict(st, iso, continuing);
+  let st = AIP.stateOf(cache, s.site_id);
+  let verdict = AIP.stateVerdict(st, iso, continuing);
+  // 2026-10-27 (production 2026-10-25, devaicon.com): a run stopped `failed_store` is checked against the table on every later start (the
+  // weekly cycle, a catch-up, an on-demand check, the pulse's resume): Load AI Run Answers holds its stored rows. Every lost answer stored ->
+  // the run continues; some truly missing -> it continues ONCE with them counted as could not be read (never asked or paid again); a
+  // second storage failure in one run stays blocked (AIP.healStore)
+  let storeHeal = null;
+  if (verdict === 'blocked' && st && String(st.status) === 'failed_store' && (!continuing || continuing === String(st.run_id))) {
+    storeHeal = AIP.healStore(st, runRows, iso);
+    if (storeHeal && storeHeal.ok) { st = storeHeal.state; verdict = continuing ? 'continue' : 'resume'; }
+    else if (storeHeal) st = { ...st, stop_reason: String(st.stop_reason || st.status) + ' Checked again ' + iso.slice(0, 16).replace('T', ' ') + ' UTC: ' + storeHeal.why + '.' };
+  }
   if (continuing && verdict !== 'continue') { skipped.push({ domain: s.domain, why: 'nothing to continue: run ' + continuing + ' is ' + (st && st.run_id === continuing ? st.status : 'not the open run') }); return null; }
   if (verdict === 'busy') { tell(s, st, 'busy'); skipped.push({ domain: s.domain, why: 'run ' + st.run_id + ' is still being asked (chunk ' + (st.chunk || 1) + ', ' + (st.asked || 0) + ' of ' + (st.total || '?') + ' requests, updated ' + String(st.updated_at || '').slice(0, 16) + ' UTC); it continues by itself' }); return null; }
   // F2 (E1): a STOPPED run (its answers were not stored, or it reached its money ceiling) blocks this site's weekly run until it is older than
@@ -105,7 +115,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
       why: 'already measured: run ' + st.run_id + ' finished ' + String(doneHit.finished_at || '').slice(0, 16).replace('T', ' ') + ' UTC' + (doneHit.why === 'same_cycle' ? ' for this cycle (' + doneHit.cycle_key + '); this start is a retry of the same job' : ', less than ' + AIP.LIMITS.done_fresh_hours + ' hours ago')
         + '; its stored week stands, nothing was asked again and nothing was charged (rerun_today: true on the start asks again on purpose)' });
     return null; }
-  if (verdict === 'resume') tell(s, st, 'resume');
+  if (verdict === 'resume' && !(storeHeal && storeHeal.ok)) tell(s, st, 'resume');
   const going = verdict === 'continue' || verdict === 'resume';
   const MONTHLY = AIP.monthlyOf(s.settings.claude_weekly);   // W2-E3: Claude every weekly run when the owner asks for it ('ai_claude_weekly'), else the month's full run only
   const mineAll = promptRows.filter(p => p.site_id === s.site_id && !LIVE.has(String(p.status || 'active')) && p.prompt);
@@ -210,7 +220,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const committed = going ? Math.max(Number(st.spent_dfs_usd) || 0, Number(st.committed_dfs_usd) || 0) : 0;
   let stop = null;
   if (going && (legacyShort || (lostNow.length && (lostParts >= 1 || st.save_failed))))
-    stop = { status: 'failed_store', lost: legacyShort ? Math.max(0, Number(st.asked) - storedKeys.size) : lostNow.length,
+    stop = { status: 'failed_store', lost: legacyShort ? Math.max(0, Number(st.asked) - storedKeys.size) : lostNow.length, lost_keys: legacyShort ? null : AIP.packKeys(lostNow),
       reason: (legacyShort ? (Number(st.asked) - storedKeys.size) + ' of the ' + st.asked + ' requests its earlier parts asked have no stored answer' : lostNow.length + ' request(s) of part ' + ((st.pending || {}).chunk || st.chunk) + ' were paid for but their answers were never stored, and this has happened before in this run')
         + '. They are not asked again (that would pay twice); the run is stopped, and nothing more is asked for this website this week. Check the Data Table size and the execution of the part named in the state row, then clear ai_run:' + s.site_id + ' to let a new run start.' };
   else if (going && reqLeft > 0 && committed >= ceiling)
@@ -237,6 +247,11 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
     unavailable: going ? runRows.filter(r => r.run_id === run_id && r.error).length : 0 };
   if (chunk.unavailable) chunk.unavailable_note = chunk.unavailable + ' request(s) of this run could not be read in its earlier part(s), even when sent again; they are not asked again and the week counts the answers that came back';
   if (chunk.lost_total) chunk.lost_note = chunk.lost_total + ' request(s) of this run were paid for in a part that stopped before its answers were stored (the execution\'s time limit, a restart); they are not asked again (that would pay twice) and the week counts the answers that were stored';
+  // 2026-10-27: a run that continued after a failed_store stop says so, and the report (unavailable_note is what AI Report prints) names
+  // what was lost with the answers that could not be read
+  if (storeHeal && storeHeal.ok) Object.assign(chunk, { store_heal: { found: storeHeal.found, missing: storeHeal.missing, at: iso }, store_heal_note: storeHeal.note });
+  else if (going && st.store_heal_note) chunk.store_heal_note = String(st.store_heal_note);
+  if (chunk.lost_total || chunk.store_heal_note) chunk.unavailable_note = [chunk.unavailable_note, chunk.lost_total ? chunk.lost_total + ' answer(s) of this run were paid for but never stored; they are not asked again and the week counts the answers that were stored.' : '', chunk.store_heal_note || ''].filter(Boolean).join(' ');
   if (chunk.unanalysed) chunk.unanalysed_note = chunk.unanalysed + ' answer(s) of this run were stored by a part that stopped before the Answer Analyst read them; the run\'s last part has the Answer Analyst read them from their stored text (as many as its analyst budget allows; an answer stored before the full text was kept keeps the parser\'s reading)';   // W2-E1
   if (stop) { Object.assign(chunk, { size: 0, size_time: 0, final_expected: null, stop: true }); }   // F2: nothing is asked; the ledger key is the job's own (null is not a part)
   // pages that must stay fetchable for AI: the ones AI cited last time and the keyword-ladder pages (checked against robots.txt per AI bot)

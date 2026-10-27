@@ -77,10 +77,14 @@ module.exports = async (ctx) => {
       }
       cache = r.h && r.h.state_row ? [r.h.state_row] : cache;
       trigger = r.h && r.h.next ? r.h.next : { domain: 'techand.ai', site_id: 'site_techand-ai' };   // a later start of the tracker (a retry of the cycle job, a catch-up, the pulse's resume)
-      if (k > 1) check('start ' + k + ' after the stop asks NOTHING and says why', r.paid.length === 0 && r.plan.nothing_to_do && /was stopped/.test(r.plan.reason), r.plan.reason || JSON.stringify(r.plan.chunk));
+      // 2026-10-27 (STOREHEAL): a failed_store run is no longer blocked for 6 days - the next start reads the table and, with the lost answers
+      // truly missing, continues ONCE (new keys only; the lost ones counted as could not be read). Its save fails again: a second storage
+      // failure in one run keeps it stopped, and every later start asks nothing.
+      if (k === 2) check('start 2 continues the run once: it asks only keys part 1 never sent, and its failed save stops the run for good', r.paid.length > 0 && r.paid.every(x => !first.paid.includes(x)) && r.plan.chunk && r.plan.chunk.store_heal && r.plan.chunk.store_heal.missing === first.paid.length && r.h && JSON.parse(r.h.state_row.value).status === 'failed_store' && /stays stopped/.test(JSON.parse(r.h.state_row.value).stop_reason), JSON.stringify(r.plan.reason || (r.plan.chunk || {}).store_heal));
+      if (k > 2) check('start ' + k + ' after the second stop asks NOTHING and says why', r.paid.length === 0 && r.plan.nothing_to_do && /was stopped/.test(r.plan.reason), r.plan.reason || JSON.stringify(r.plan.chunk));
     }
     const twice = paidAll.length - new Set(paidAll).size;
-    check('4 starts: ' + paidAll.length + ' keys paid, every one once (the old code paid the first 600 in every part until the run expired)', twice === 0 && paidAll.length === first.paid.length && paidAll.length > 0, paidAll.length + ' paid, ' + twice + ' twice');
+    check('4 starts: ' + paidAll.length + ' keys paid, every one once (the old code paid the first 600 in every part until the run expired)', twice === 0 && paidAll.length > first.paid.length && paidAll.length > 0, paidAll.length + ' paid, ' + twice + ' twice');
   });
 
   // ===================================================================================================================================

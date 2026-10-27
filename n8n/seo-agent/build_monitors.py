@@ -420,6 +420,14 @@ A.code('Apply Analysis', 'Apply_Analysis.js', at(27, 0)); A.iff('Any Answer Rows
 # written back over the rows it changed (Update AI Answers, upsert on run_id + prompt_id + engine). A part that dies in the analyst keeps them.
 A.code('AI Answer Rows', 'AI_Answer_Rows.js', at(23, 1)); A.iff('Any Raw Answers?', '{{ !$json.skip }}', at(23, 2))
 A.node('Save AI Answers', DT_TYPE, DT_VERSION, dt_insert_params(AI_ANSWERS_TABLE, AI_ANSWERS_COLS), at(24, 2), onError='continueRegularOutput')
+# 2026-10-27 (production 2026-10-25, devaicon.com): a stored answer is one the table handed back with its id - not one whose `error` column is
+# empty (that column holds DataForSEO's message for an answer the gate could not read; three such stored rows stopped a run `failed_store`).
+# When the save did not hand back every answer, the run's rows are read back (one read per site whose save looked short, by site AND run) and
+# only the truly missing ones are inserted once more; the hand-off stops the run only for answers still missing after that.
+A.code('AI Save Check', 'AI_Save_Check.js', at(25, 3)); A.iff('Any Save Gap?', '{{ !$json.skip }}', at(26, 3))
+A.node('Reread AI Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [('site_id', 'eq', '={{ $json.site_id }}'), ('run_id', 'eq', '={{ $json.run_id }}')]), at(27, 3), alwaysOutputData=True, onError='continueRegularOutput')
+A.code('AI Save Retry Rows', 'AI_Save_Retry_Rows.js', at(28, 3)); A.iff('Any Save Retry?', '{{ !$json.skip }}', at(29, 3))
+A.node('Retry Save AI Answers', DT_TYPE, DT_VERSION, dt_insert_params(AI_ANSWERS_TABLE, AI_ANSWERS_COLS), at(30, 3), onError='continueRegularOutput')
 A.code('AI Analysed Rows', 'AI_Analysed_Rows.js', at(28, 1))
 A.node('Update AI Answers', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_ANSWERS_TABLE, AI_ANSWERS_COLS, ['run_id', 'prompt_id', 'engine']), at(29, -1), onError='continueRegularOutput')
 # F2 (2026-10-23, ENGINE_AUDIT.md E1): nothing is paid before the run's state row records the keys this part is about to send (and is read back)
@@ -500,7 +508,9 @@ A.chain('AI Asking State', 'Any Asking State?'); A.link('Any Asking State?', 'Sa
 A.chain('AI Requests Go', 'Go AI Requests?'); A.link('Go AI Requests?', 'Run AI Requests', 0); A.link('Go AI Requests?', 'AI Chunk Handoff', 1)
 A.ai_retry_gate(at(22, 1), 'Parse AI Answers')   # D19: task errors inside an HTTP 200 are re-sent once, then merged back in order
 # F2 (E11): Parse -> store -> analyse -> write back what the analyst changed -> hand off
-A.chain('Parse AI Answers', 'AI Answer Rows', 'Any Raw Answers?'); A.link('Any Raw Answers?', 'Save AI Answers', 0); A.link('Any Raw Answers?', 'Analyst Jobs', 1); A.link('Save AI Answers', 'Analyst Jobs')
+A.chain('Parse AI Answers', 'AI Answer Rows', 'Any Raw Answers?'); A.link('Any Raw Answers?', 'Save AI Answers', 0); A.link('Any Raw Answers?', 'Analyst Jobs', 1)
+A.chain('Save AI Answers', 'AI Save Check', 'Any Save Gap?'); A.link('Any Save Gap?', 'Reread AI Answers', 0); A.link('Any Save Gap?', 'Analyst Jobs', 1)   # 2026-10-27: a short save is read back and retried once
+A.chain('Reread AI Answers', 'AI Save Retry Rows', 'Any Save Retry?'); A.link('Any Save Retry?', 'Retry Save AI Answers', 0); A.link('Any Save Retry?', 'Analyst Jobs', 1); A.link('Retry Save AI Answers', 'Analyst Jobs')
 A.chain('Analyst Jobs', 'Any Analyst Jobs?'); A.link('Any Analyst Jobs?', 'Answer Analyst', 0); A.link('Any Analyst Jobs?', 'Apply Analysis', 1); A.link('Answer Analyst', 'Apply Analysis')
 A.chain('Apply Analysis', 'AI Analysed Rows', 'Any Answer Rows?'); A.link('Any Answer Rows?', 'Update AI Answers', 0); A.link('Any Answer Rows?', 'AI Chunk Handoff', 1); A.link('Update AI Answers', 'AI Chunk Handoff')
 A.chain('AI Chunk Handoff', 'Run State Rows', 'Any Run State?'); A.link('Any Run State?', 'Save Run State', 0); A.link('Any Run State?', 'Run Alert Rows', 1); A.link('Save Run State', 'Run Alert Rows')

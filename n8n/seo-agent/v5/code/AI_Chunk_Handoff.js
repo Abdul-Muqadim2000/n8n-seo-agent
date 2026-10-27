@@ -15,6 +15,12 @@
 //  * a plan that arrived stopped (a lost part seen twice, or the money ceiling) is written as stopped;
 //  * after this part's money the run's ceiling is checked again; a run at its ceiling with questions left stops (`stopped_ceiling`);
 //  * a part whose record could not be saved (AI Requests Go) asked nothing; it is alerted and left for the resume.
+// 2026-10-27 (production 2026-10-25, devaicon.com): a saved answer is one *Save AI Answers* handed back WITH its `id` (n8n 2.41's Data Table
+// insert writes a call's rows in one transaction and returns each with its id, or fails them all). The old count read the row's `error`
+// - a COLUMN that holds DataForSEO's message for an answer the gate could not read - as a failed save, so 3 stored "Internal SE Server
+// Error." answers stopped a run whose 59 rows were all in the table. A part whose save looked short now reads the run's rows back
+// (*AI Save Check* -> *Reread AI Answers*) and inserts the truly missing ones once more (*AI Save Retry Rows* -> *Retry Save AI Answers*)
+// before it may stop; only keys still missing after that are `failed_store`, recorded as `lost_keys` so the next start can check them again.
 // Every stop carries an ops alert row (`alerts`, exact seo_ops_alerts columns; recorded before anything is sent and delivered by this
 // execution's own alert sweep) and, for an on-demand run, a `rejected` notice to its caller. The state row carries what the next part
 // needs: every key sent (`asked_keys`), no `pending` (this part reached its hand-off), the part's wall time and the seconds per request it
@@ -24,7 +30,12 @@ const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do &
 let go = {}; try { go = ($('AI Requests Go').first() || {}).json || {}; } catch (e) { go = {}; }
 const notRecorded = new Set(Array.isArray(go.not_recorded) ? go.not_recorded : []);
 let sentRows = [], savedRows = [], saveRan = false; try { sentRows = $('AI Answer Rows').all().map(i => i.json).filter(r => r && !r.skip && r.engine); } catch (e) {}
-try { savedRows = $('Save AI Answers').all().map(i => i.json || {}); saveRan = true; } catch (e) { saveRan = false; }
+let saveItems = []; try { saveItems = $('Save AI Answers').all(); savedRows = saveItems.map(i => i.json || {}); saveRan = true; } catch (e) { saveRan = false; }
+// what the re-read and the one retry of this part found (each node runs only when the save looked short)
+const rd = (n) => { try { return $(n).all().map(i => i.json || {}); } catch (e) { return []; } };
+const rereadRows = rd('Reread AI Answers'), retriedRows = rd('Retry Save AI Answers');
+// the insert's own error (n8n puts it on the ITEM; a hand-built item may carry it as an object on json) - never the `error` column's text
+const errText = (it) => { const e = (it && it.error) || (it && it.json && it.json.error && typeof it.json.error === 'object' ? it.json.error : null); return e ? String(e.message || e.description || e).slice(0, 160) : ''; };
 let asking = []; try { asking = $('AI Asking State').all().map(i => i.json).filter(r => r && r.key && !r.skip); } catch (e) {}
 const askedAt = (site_id) => { const r = asking.find(x => x.site_id === site_id); const v = r ? AIP.stateOf([r], site_id) : null; return v && v.pending ? Date.parse(v.pending.at) || 0 : 0; };
 let reqItems = []; try { reqItems = $('AI Requests').all().map(i => i.json).filter(r => r && r.engine && !r.skip && !/^(market|index)/.test(String(r.prompt_id))); } catch (e) {}
@@ -58,8 +69,9 @@ for (const p of plans) {
   const now0 = Date.now();
   // F2: what this part sent, what it stored, and whether the run must stop
   const sentHere = sentRows.filter(r => r.site_id === p.site_id).length;
-  const okSaved = savedRows.filter(r => r && !r.error);
-  const savedHere = okSaved.some(r => r.site_id) ? okSaved.filter(r => r.site_id === p.site_id).length : (sentRows.length && okSaved.length >= sentRows.length ? sentHere : 0);
+  // stored = handed back by the table with an id (the first save, the re-read or the retry), whatever its `error` column says
+  const chk = AIP.storeCheck({ site_id: p.site_id, run_id: p.run_id, sent: sentRows, saved: saveRan ? savedRows : [], reread: rereadRows, retried: retriedRows });
+  const savedHere = chk.stored;
   const keysHere = reqItems.filter(r => r.site_id === p.site_id).map(r => AIP.reqKey(r.prompt_id, r.engine));
   const prevState = p.state_before || {};
   const sentAll = AIP.unpackKeys(prevState.asked_keys); for (const k of keysHere) sentAll.add(k);
@@ -70,10 +82,15 @@ for (const p of plans) {
     out.push({ json: { site_id: p.site_id, domain: p.domain, final: false, state_row: null, next: null, alerts, notices, note: 'part ' + p.chunk.no + ' of run ' + p.run_id + ' asked nothing: its record could not be saved', cost_usd: 0 } });
     continue;
   }
-  const saveErr = (savedRows.find(r => r && r.error) || {}).error;
-  if (!stop && sentHere > 0 && (!saveRan || savedHere < sentHere))
-    stop = { status: 'failed_store', lost: sentHere - savedHere, reason: (sentHere - savedHere) + ' of the ' + sentHere + ' answers of part ' + p.chunk.no + ' could not be stored (seo_ai_answers'
-      + (saveErr ? ': ' + String(saveErr.message || saveErr).slice(0, 160) : '') + '). They were paid for and are not asked again (that would pay twice); the run is stopped. Check the Data Table size (N8N_DATA_TABLES_MAX_SIZE_BYTES), then clear ai_run:' + p.site_id + ' to let a new run start.' };
+  const saveErr = [...saveItems, ...(() => { try { return $('Retry Save AI Answers').all(); } catch (e) { return []; } })()].map(errText).find(Boolean) || '';
+  const healsBefore = Number(prevState.store_heals) || 0;
+  if (!stop && sentHere > 0 && chk.missing.length)
+    stop = { status: 'failed_store', lost: chk.missing.length, lost_keys: AIP.packKeys(chk.missing),
+      reason: chk.missing.length + ' of the ' + sentHere + ' answers of part ' + p.chunk.no + ' could not be stored in seo_ai_answers' + (saveErr ? ' (' + saveErr + ')' : (saveRan ? '' : ' (the save did not run)'))
+        + ', even after the table was read back and the missing rows were inserted once more' + (chk.recovered ? ' (' + chk.recovered + ' others were found or saved on that second try)' : '')
+        + '. They were paid for and are never asked again (that would pay twice), so the run is paused. '
+        + (healsBefore >= 1 ? 'This run already continued once after a storage failure, so it stays stopped: check the Data Table (its size, N8N_DATA_TABLES_MAX_SIZE_BYTES, and the execution named in the state row), then clear ai_run:' + p.site_id + '.'
+          : 'The next start of the tracker (the weekly cycle, a catch-up or the morning AI Pulse) reads the table again: if the answers are there the run continues; if they are still missing it continues once with them counted as could not be read. Nobody has to clear ai_run:' + p.site_id + '.') };
   // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §15, split jobs): a run of a website's weekly cycle keeps its cycle in its state and in the start
   // of its next execution, so that execution is a cycle run of the SAME cycle (trigger, key, job, monthly, due time) and only the run's last
   // execution settles `cycle:<cycle_key>:ai_visibility`; every earlier part is `…:part<n>` (Monitor_Ledger_Row).
@@ -94,6 +111,10 @@ for (const p of plans) {
     asked: Number(ci.done_before || 0) + asked_now, total: Number(ci.total) || p.chunk.total_est, left,
     unavailable: Number(((p.state_before || {}).unavailable) || 0) + failed + Number(p.chunk.lost_now || 0),
     lost: Number(p.chunk.lost_total || 0) + (stop && stop.status === 'failed_store' ? Number(stop.lost) || 0 : 0), lost_parts: Number(p.chunk.lost_parts || 0),
+    // 2026-10-27: the keys a failed_store stop lost (the next start checks the table for them), how often this run continued after a storage
+    // failure (a second one keeps it stopped), the last heal and what this part found only on its re-read / retry
+    lost_keys: stop && stop.status === 'failed_store' ? (stop.lost_keys || null) : null, store_heals: healsBefore, store_heal: prevState.store_heal || null, store_heal_note: prevState.store_heal_note || '',
+    save_rechecked: chk.recovered || 0,
     halve_next: false, last_size: Number(p.chunk.size) || null, chunk_wall_s: wall_s, sec_per_request: spr,
     spent_dfs_usd: spentDfs, committed_dfs_usd: spentDfs, spent_ai_usd: +(Number(sb.ai || 0) + aiEst).toFixed(4),
     asked_keys: AIP.packKeys(sentAll), pending: null,
@@ -101,6 +122,9 @@ for (const p of plans) {
   if (stop) {
     alerts.push(alertRow(p, stop.status, 'AI visibility run ' + p.run_id + ' (' + p.domain + ') was STOPPED: ' + stop.reason, 'critical'));
     const n = callerNotice(p, 'The AI visibility check of ' + p.domain + ' stopped before it finished: ' + stop.reason.split('. ')[0] + '. Nothing more is charged for it; the team has been alerted.'); if (n) notices.push(n);
+  } else if (p.chunk.store_heal) {
+    const hl = p.chunk.store_heal;
+    alerts.push(alertRow(p, 'store_healed', 'AI visibility run ' + p.run_id + ' (' + p.domain + ') was stopped as failed_store and has CONTINUED by itself: ' + (p.chunk.store_heal_note || '') + (hl.missing ? ' A second storage failure in this run will keep it stopped.' : ''), hl.missing ? 'high' : 'medium'));
   } else if (p.chunk.lost_now) {
     alerts.push(alertRow(p, 'lost_part', 'AI visibility run ' + p.run_id + ' (' + p.domain + '): ' + p.chunk.lost_now + ' request(s) of an earlier part were paid for but never stored (the part stopped before its save: the 60-minute limit or a restart). They are not asked again; this part was halved (' + p.chunk.size + ' requests). A second loss stops the run.', 'high'));
   }
