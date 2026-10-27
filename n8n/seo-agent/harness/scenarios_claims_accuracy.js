@@ -41,8 +41,16 @@ module.exports = async (ctx) => {
     // CT-FIX (2026-10-22): the independent review's synthetic cases (source "independent review ...") are hold-out as a group: they were
     // written by the reviewer before the fix and are never tuned on
     // CT-FIX2 (2026-10-22): the 20 sentences of the fresh live page (exec 159, source "live page 2026-10-22") are hold-out as a group too
-    const wrongHold = SET.cases.filter(c => !!c.holdout !== (/^independent review|^live page 2026-10-22/.test(c.source) || crypto.createHash('sha1').update(c.sentence + c.site, 'utf8').digest()[0] % 10 < 3));
-    check('CLACC set: the hold-out mark is sha1(sentence + site)[0] % 10 < 3 on every case, and every independent-review and live-page case is hold-out', !wrongHold.length, wrongHold.map(c => c.id).join(', '));
+    // H2 (2026-10-27): the 34 production sentences (source "production pages 2026-10-27") are DEV as a group: the fix was tuned on them, so
+    // the clean measurement stays the older hold-out
+    const PROD = /^production pages 2026-10-27/;
+    const wrongHold = SET.cases.filter(c => !!c.holdout !== (PROD.test(c.source) ? false : (/^independent review|^live page 2026-10-22/.test(c.source) || crypto.createHash('sha1').update(c.sentence + c.site, 'utf8').digest()[0] % 10 < 3)));
+    check('CLACC set: the hold-out mark is sha1(sentence + site)[0] % 10 < 3 on every case, every independent-review and live-page case is hold-out, every production case is dev', !wrongHold.length, wrongHold.map(c => c.id).join(', '));
+    const prod = SET.cases.filter(c => PROD.test(c.source));
+    const cls = {}; for (const c of prod) cls[c.prod_class] = (cls[c.prod_class] || 0) + 1;
+    const LBL = { true_on_file: 'supported_claim', true_on_site: 'supported_claim', generic_advice: 'not_a_claim', cta: 'not_a_claim', invented: 'unsupported_claim' };
+    check('CLACC set (H2): the production group holds the 34 sentences R1 classified (true on file 4, true on the site 7, generic advice 9, call to action 4, invented 10), each label following its class',
+      prod.length === 34 && cls.true_on_file === 4 && cls.true_on_site === 7 && cls.generic_advice === 9 && cls.cta === 4 && cls.invented === 10 && prod.every(c => LBL[c.prod_class] === c.label), JSON.stringify(cls));
     const live = SET.cases.filter(c => /^live page 2026-10-22/.test(c.source));
     check('CLACC set (CT-FIX2): the live page group holds its 7 flagged, 3 missed and 10 other sentences, each read inside its real section or as a caption', live.length === 20
       && live.every(c => c.caption || (c.section && c.section.includes(c.sentence))) && live.filter(c => c.label === 'unsupported_claim').length === 7, live.length);
@@ -71,6 +79,16 @@ module.exports = async (ctx) => {
         + '% | the bars are a measured gate that fails today: ' + known + ' known failures in CLAIMS_BASELINE.md, ratcheted');
     }
     note('CLACC: the kit and the Content QA node disagree on ' + r.path_disagreements.length + ' case(s)' + (r.path_disagreements.length ? ': ' + r.path_disagreements.join(' ') : ''));
+    // H2 (2026-10-27): the production group on its own. Before the fix the kit flagged 33 of the 34 (10 invented, and 10 true, 9 advice,
+    // 4 calls to action: precision 30.3%); the bars below hold what the fix reached, per path
+    for (const p of ['kit', 'qa']) {
+      const rows = r[p].rows.filter(x => PROD.test((SET.cases.find(c => c.id === x.id) || {}).source || ''));
+      const inv = rows.filter(x => x.label === 'unsupported_claim'), adv = rows.filter(x => x.label === 'not_a_claim'), tru = rows.filter(x => x.label === 'supported_claim');
+      const flagged = rows.filter(x => x.flagged).length, tp = inv.filter(x => x.flagged).length;
+      note('CLACC ' + p + ' production group (34): ' + flagged + ' flagged, ' + tp + ' of ' + inv.length + ' invented, precision ' + (flagged ? Math.round(1000 * tp / flagged) / 10 : null) + '%, false flags: true ' + tru.filter(x => x.flagged).length + ' of ' + tru.length + ', advice / call to action ' + adv.filter(x => x.flagged).length + ' of ' + adv.length);
+      check('CLACC ' + p + ' production group (H2): every invented statement is still flagged, no generic advice or call to action is, and at most 4 of the 11 true statements are',
+        tp === inv.length && !adv.some(x => x.flagged) && tru.filter(x => x.flagged).length <= 4, rows.filter(x => (x.label === 'unsupported_claim') !== x.flagged).map(x => x.id).join(' '));
+    }
     reset();
   });
 };

@@ -1022,6 +1022,10 @@
               {
                 "name": "declared_services",
                 "type": "string"
+              },
+              {
+                "name": "fact_answers_json",
+                "type": "string"
               }
             ]
           },
@@ -1176,6 +1180,10 @@
               },
               {
                 "name": "style_notes",
+                "type": "string"
+              },
+              {
+                "name": "style_legal_name",
                 "type": "string"
               },
               {

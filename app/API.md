@@ -874,6 +874,43 @@ Connections belong to one verified website; secrets are sealed under `MAILBOX_KE
   the engine's `published` run starts.
 - Pipeline: a `publish` Needs-you item says when a draft is already in the CMS and, with a connection, its action is `{ label, reportId }`.
 
+## Page review: questions, business details, the editor, the final version, approval (H3, 2026-10-28; `shared/src/page-review.ts`, `server/src/services/pageReview.ts`)
+For a written page (a `content` report that carries the page; anything else is 404, as is another company's report). Every write answers the
+whole `PageReviewView` (`delivery` with the plain-words headline and the grade of the delivered page, the ranked `questions` with `stored` = the
+website already has that fact, `answers`, `delivered`, `clientVersion`, `finalize` with its `quote` and `needed` / `reason`, `approval`, `publish`,
+`stage`, `isFinal`, `finalOf`). A final version is a new report with `finalized_from` = the delivered report; both share one review row
+(table `page_reviews`, migration 0023). Answers on a final version are kept under `<final report id>/<question id>`.
+- `GET /api/orgs/:orgId/reports/:reportId/review` (viewer) → `PageReviewView`. A finalize run with no answer after 15 minutes is failed here (not charged).
+- `PUT …/review/answers` (member, 60/min) `{ answers: [{ questionId, decision: 'yes'|'edit'|'remove'|'general'|'answer'|'skip', text? }] }`. Each
+  answer is checked with `answerProblem` (400 `validation`, per question, when none could be saved). Every answer but `skip` is also stored as a
+  business fact of the website (`sites.fact_answers[fact_key]`, `factOf`), and a tracked verified website gets them at once through Site Admin
+  `facts` (`{ action: 'facts', domain, site_id, business_facts, fact_answers: { key: { decision, text } } }`; a failure is logged, the save stands).
+  Audited `page.answered`.
+- `POST …/review/accept-prefilled` (member) — every open question with a suggestion answered with it (`prefilledAnswer`: a claim kept, a text
+  question answered with the suggestion); 400 when none has one.
+- `PUT …/review/version` (member, 2 MB) `{ markdown }` — the client's own version: sanitised (`sanitizeMarkdown`: no raw HTML, scripts or unsafe
+  link targets), saved with who / when, then checked for free by the engine's Publish Check (`clientVersion.check`, `ran: false` with a note when
+  it could not run). Audited `page.edited`. `DELETE …/review/version` goes back to the delivered version (`page.edit_reverted`).
+- `POST …/review/finalize` (member, 6/min) `{}` — the final version. 409 `finalize_not_needed` when no answer that changes the page and no client
+  version is newer than the last final version, 409 `finalize_running` while one is being made, 402 / 429 like any run (credits, budget, platform
+  capacity). Creates a run `mode: 'finalize'` (quoted from the `finalize` row of the cost table), answers at once with `finalize.status: 'running'`,
+  then calls the engine (`POST N8N_FINALIZE_PATH`, default `/webhook/seo-page-finalize`, body `FinalizeBody`, 5-minute timeout). On its 200 answer
+  the final version is stored as a new `content` report (`finalReportPayload`: the page package with the final Markdown, its safe HTML, the
+  engine's status, grade and remaining questions, its own cost in `run_ledger`), the run completes with the engine's cost (charged up to the
+  quote by the cost sync) and the client version is cleared (it is part of the final version). Any other answer fails the run (not charged).
+- `POST …/review/approve` (member) `{ versionReportId? }` — records who approved which version (default: the final version when there is one,
+  else the delivered page) and audits `page.approved`. 409 `not_ready` for a page that is not ready (its first blocking reason) or that the CMS
+  rule refuses. Publishing then goes through the CMS routes above or "I published it" on the approved report, unchanged.
+- `GET /api/orgs/:orgId/sites/:siteId/facts` (viewer) → `{ facts: FactAnswers }` (Website settings > Business details).
+- `PUT /api/orgs/:orgId/sites/:siteId/facts/:factKey` (member) `{ decision: 'yes'|'edit'|'answer'|'remove'|'general', text? }` → `{ facts }`;
+  `DELETE …/facts/:factKey` → `{ facts }` (404 when not stored). Synced to the engine as above; audited `facts.changed`.
+- Every page run the app starts carries the stored facts after `business` and `business_facts`: `business_facts_kv` (key → text) and
+  `stored_fact_keys` (every decided key: the engine never asks them again), and, for a page with an existing address, `existing_page_ours` (true when
+  that address is a published page of the engine's content log).
+- Pipeline: a `questions` Needs-you item per written page with open questions (not approved or published, the newest page of a keyword, at most 5,
+  most impactful first), action `{ label: 'Answer them', reportId }`. Content board: each `ContentItem` of a page with a report carries `review:
+  PageReviewSummary` (`stage`, `label`, `questions`, `answered`, `grade`).
+
 ## Agencies and the client portal (G5, `app/docs/WHITE_LABEL.md`, `shared/src/agency.ts`)
 A **client workspace** is an ordinary company with `kind: 'client'` and its agency as parent; every route of a company works on it.
 Roles there come from the agency (owners / admins: every client; members / viewers: clients they were assigned to) and from the

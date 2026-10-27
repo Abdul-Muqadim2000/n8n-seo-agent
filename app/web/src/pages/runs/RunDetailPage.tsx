@@ -14,7 +14,7 @@ import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { KeyValue, PageHeader } from '@/components/ui/misc';
 import { ReportView } from '@/components/reports/ReportView';
 import { ReportSummaryLine } from '@/components/reports/ReportSummaryLine';
-import { ModeIcon, StageGlyph, stageLabel } from '@/components/reports/meta';
+import { ModeIcon, modeTitle, StageGlyph, stageLabel } from '@/components/reports/meta';
 import { fmtMinutes, inputRows, isActive, minutesBetween, retryPrefill, RUN_CREDIT_STATE_LABEL, RUN_CREDITS_TIP, runCreditsFigure, RunChip, RunProgress, useNow } from '@/components/reports/run';
 
 /** "Quoted 12 credits · charged 9 credits", "Not charged: it failed", "Quoted 12 credits · held while it runs", "Free" */
@@ -117,7 +117,7 @@ export default function RunDetailPage() {
         eyebrow={
           <span className="inline-flex items-center gap-1.5">
             <ModeIcon mode={run.mode} className="size-3.5" />
-            {info?.title ?? run.mode}
+            {modeTitle(run.mode)}
           </span>
         }
         title={run.title}

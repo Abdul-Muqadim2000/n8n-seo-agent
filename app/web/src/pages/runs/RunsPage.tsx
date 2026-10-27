@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/field';
 import { Meter, PageHeader } from '@/components/ui/misc';
-import { ModeGlyph } from '@/components/reports/meta';
+import { ModeGlyph, modeTitle } from '@/components/reports/meta';
 import { CostLine, fmtMinutes, isActive, minutesBetween, RunChip, useNow } from '@/components/reports/run';
 
 const PAGE_SIZE = 25;
@@ -253,7 +253,7 @@ function RunRow({ run, now }: { run: Run; now: number }) {
               {run.title}
             </Link>
             <p className="truncate text-xs text-ink-3">
-              {MODES[run.mode]?.title ?? run.mode}
+              {modeTitle(run.mode)}
               <span className="md:hidden">{run.siteDomain ? ` · ${run.siteDomain}` : ''}</span>
               <span className="sm:hidden"> · {fmtAgo(run.createdAt)}</span>
             </p>

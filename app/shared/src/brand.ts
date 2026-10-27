@@ -74,3 +74,23 @@ export function sharedBrand(o: { orgName?: unknown; businessName?: unknown; logo
   const name = trim(o.businessName) || trim(o.orgName);
   return { name, logoUrl: brandLogoUrl(o.logoUrl), initials: brandInitials(name) };
 }
+
+/**
+ * H2 (2026-10-27): the brand customers know and the registered legal name are two values. One profile stored
+ * "Nova& (legal name: Novaand systems LLC)" in the single "how your brand name is written" field; every title and heading then carried
+ * the parenthesis and the brand check flagged the legal name. A value written that way (or as "X (Y LLC)", "X, legal name: Y") is read
+ * as the two; a legal name given on its own wins. The engine reads stored rows with the same rule (`ST.splitBrand`,
+ * n8n/seo-agent/v5/code/_style_guide.js).
+ */
+const LEGAL_LEAD = /^(.+?)\s*[(\[,;-]\s*(?:legal(?:ly)?(?: name)?|registered(?: name| as)?|company name|trading as|t\/a)\s*[:=-]?\s*([^)\]]+?)\s*[)\]]?\s*$/i;
+const LEGAL_SUFFIX =
+  /\b(?:llc|l\.l\.c\.|ltd|limited|inc|incorporated|gmbh|plc|fz-?llc|fze|fzco|pjsc|psc|wll|w\.l\.l\.|s\.?a\.?r?\.?l?|bv|b\.v\.|pty|pvt|private limited|co\.?)\.?$/i;
+export function splitBrandForm(value: unknown, legal?: unknown): { brandForm: string; legalName: string } {
+  const t = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
+  const given = typeof legal === 'string' ? legal.trim().replace(/\s+/g, ' ') : '';
+  let m = t.match(LEGAL_LEAD);
+  if (m && m[1]!.trim() && m[2]!.trim()) return { brandForm: m[1]!.trim(), legalName: given || m[2]!.trim() };
+  m = t.match(/^(.+?)\s*\(\s*([^()]{3,120}?)\s*\)\s*$/);
+  if (m && LEGAL_SUFFIX.test(m[2]!.trim())) return { brandForm: m[1]!.trim(), legalName: given || m[2]!.trim() };
+  return { brandForm: t, legalName: given };
+}

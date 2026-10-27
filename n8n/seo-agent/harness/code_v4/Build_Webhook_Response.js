@@ -41,7 +41,9 @@ return [{
     // R11 (2026-10-13): the app shows the last quality round's verdict, not a count of warnings
     qa_publishable: d.qa_publishable == null ? null : !!d.qa_publishable,
     qa_not_ready: !!d.qa_not_ready, qa_label: d.qa_label || null, qa_reasons: d.qa_reasons || [], qa_quality: d.qa_quality || null,
-    qa_next_step: d.qa_next_step || null, qa_owner_edits: d.qa_owner_edits || [],   // 2026-10-21: what to edit by hand (the app's Needs-you can say it instead of "run it again")
+    qa_next_step: d.qa_next_step || null, qa_owner_edits: d.qa_owner_edits || [],
+    qa_delivery_status: d.qa_delivery_status || null, qa_client_questions: d.qa_client_questions || [], qa_grade: d.qa_grade || null,   // H1 (2026-10-27): for the app's approval and questions (H3)
+    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],   // 2026-10-21: what to edit by hand (the app's Needs-you can say it instead of "run it again")
     run_ledger: d.run_ledger || null,
     dfs_tasks: (d.run_ledger || {}).dataforseo_tasks ?? null,
     markdown: d.article_markdown || d.page_markdown || null,

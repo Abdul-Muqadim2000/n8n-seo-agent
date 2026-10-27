@@ -1604,7 +1604,8 @@ await guard('pipeline', async () => {
   const logRows12 = [{ json: { site_id: SITE, domain: D, keyword: 'wms uae', source: 'trend', page_type: 'Guide', existing_page_url: '', rung: 0, ladder_id: '', request_id: 'cad_old', started_at: '2026-09-15T10:00:00.000Z', status: 'written', published_url: '', published_at: '', week: '2026-09-15' } }];   // R1 (2026-10-13): a page that waits says `written`, which the frozen v4.7 copy counts too
   // R15 (2026-10-13): the ladder page's planned URL (`ladder_target_url`) is new in the spawn body and is checked on its own below, so the
   // P1 (2026-10-20): so are the stored business facts and call to action (with the empty `business` / `customers` sent before them), checked in KF3
-  const projBody = (b) => { if (!b || typeof b !== 'object') return b; const { ladder_target_url: _planned, business: _b, customers: _c, business_facts: _f, cta: _cta, ...rest } = b; return rest; };
+  // H3 (2026-10-28): so are the client's stored answers and whether the page refreshed is ours (business_facts_kv, stored_fact_keys, existing_page_ours), checked in FIN9
+  const projBody = (b) => { if (!b || typeof b !== 'object') return b; const { ladder_target_url: _planned, business: _b, customers: _c, business_facts: _f, cta: _cta, business_facts_kv: _kv, stored_fact_keys: _sk, existing_page_ours: _own, ...rest } = b; return rest; };
   const proj = (items) => items.filter(x => !x.json.nothing_to_do).map(x => { const j = x.json; return { keyword: j.keyword, source: j.source, page_type: j.page_type, existing: j.existing_page_url, ladder_id: j.ladder_id, rung: j.rung, page_no: j.page_no, why: j.why, request_id: j.request_id, pages: j.pages_per_week, upcoming: j.upcoming, dry_run: j.dry_run, body: projBody(j.body) }; });   // R1 (2026-10-13): pending_publish is compared on its own below — v4.7 listed every `started` row, R1 only the pages the content log says were `written`
   check('R15: a ladder page the cadence spawns carries the URL its ladder row planned, so the page keeps that slug', pml.picks.every(x => x.body.ladder_target_url === slug(x.keyword)) && pml.picks.length > 0, JSON.stringify(pml.picks.map(x => [x.keyword, x.body.ladder_target_url])));
   // keyword-first (2026-10-19): v4.7 wrote striking-distance and trend posts on its own, which is full autopilot (level 3) now; the
@@ -9292,9 +9293,11 @@ await guard('r21-r20-r25-r27-r22-editor', async () => {
   check('R22 (editor half): a draft on target gets no cut instruction, and the editor is not asked to shorten a page that is the right length',
     CLEAN68.content_qa.length_instruction === '' && CLEAN68.content_qa.over_words === 0, JSON.stringify({ w: CLEAN68.content_qa.main_content_words, t: CLEAN68.content_qa.target_word_count }));
   const EP68 = src68('Editor.prompt.txt');
-  check('R22 (editor half): the editor prompt prints that instruction as the first thing to do and has its own entry for an over-long draft — it used to be one line in a list of up to twenty warnings',
-    /THE FIRST THING TO DO/.test(EP68) && /content_qa\.length_instruction/.test(EP68) && EP68.indexOf('THE FIRST THING TO DO') < EP68.indexOf('PROBLEMS TO FIX')
-    && /- "Main content is too long": take the named number of words out/.test(EP68) && /over the target by more than 10% is a failed round/.test(EP68), EP68.slice(0, 200));
+  // H1 (2026-10-27, build section 151): the cut is now a per-section instruction from PF.plan ("Cut about N words", the page-level note
+  // first), and the length is judged as a band; the old full-page "THE FIRST THING TO DO ... within 10%" prompt is gone
+  check('R22 (editor half): the editor prompt prints the length note first and has its own entry for a section told to cut, and no "within 10%" rule',
+    /edit_job \|\| \{\}\)\.length_note/.test(EP68) && /- "Cut about N words": take out repetition/.test(EP68) && !/within 10%/.test(EP68)
+    && EP68.indexOf('length_note') < EP68.indexOf('\nSECTIONS TO EDIT\n'), EP68.slice(0, 200));
 
   // ---------- 4. R27: the show is quoted from its own description, and a 29% show is not offered ----------
   const PC68 = async (input) => (await run('_podcast', [{ json: input }]))[0].json;
@@ -9634,7 +9637,8 @@ await guard('R17 R28 R29 ledger order, money and secrets', async () => {
     JSON.stringify(LW.assess.settle_values));
 
   // ---------- 4. R17: what the build proved about every scheduled workflow ----------
-  const MON = Object.keys(LO.monitors).filter(w => !/AI Repeat Pilot/.test(w)).sort();   // W2-E2 (2026-10-23): the AI Repeat Pilot keeps a ledger row too, but it is on demand only (never scheduled) - its own scenario W2E2-PILOT
+  const MON = Object.keys(LO.monitors).filter(w => !/AI Repeat Pilot|Page Finalize/.test(w)).sort();   // H3 (2026-10-28): the Page Finalize is on demand and synchronous like the pilot (own scenario FIN1)
+    // W2-E2 (2026-10-23): the AI Repeat Pilot keeps a ledger row too, but it is on demand only (never scheduled) - its own scenario W2E2-PILOT
   // R32 (2026-10-14, section 59): Page Watch joined them — free today (25 plain GETs), and the one workflow the guard and the day's
   // reconciliation could not see at all.
   check('R17: all ten scheduled workflows are covered — the AI Visibility Tracker, the AI Pulse, AI Growth, the Backlink Monitor, the Audit Scheduler, the Link Builder, the Rank Tracker, the Site Tracker, the Content Cadence and Page Watch',
@@ -10115,7 +10119,8 @@ await guard('R31 R32 R33 the money a run reports is the money that happened', as
     mixedRow.est_usd === 0.05 && mixedRow.dfs_est_usd === 0.05 && /1 free-only site\(s\)/.test(mixedRow.cost_basis), JSON.stringify(mixedRow));
 
   // ---------- 4. what the build proved about the schedules (the three "also seen" items of the live check) ----------
-  const MON69 = Object.keys(CT.monitors).filter(w => !/Reply Reader|AI Repeat Pilot/.test(w)).sort();   // W2-E2: the on-demand pilot is not a schedule   // W3-F: the Reply Reader calls no DataForSEO, so its two balance probes are no-ops (own scenario S177)
+  const MON69 = Object.keys(CT.monitors).filter(w => !/Reply Reader|AI Repeat Pilot|Page Finalize/.test(w)).sort();   // H3: the Page Finalize calls no DataForSEO either (FIN1)
+    // W2-E2: the on-demand pilot is not a schedule   // W3-F: the Reply Reader calls no DataForSEO, so its two balance probes are no-ops (own scenario S177)
   check('R32: all ten scheduled workflows take the free `appendix/user_data` reading on their own ledger chain — until now only main-workflow runs did, so the monitors (where most of the DataForSEO money goes) reconciled against nothing',
     MON69.length === 10 && MON69.every(w => CT.monitors[w].balance === 'DFS Balance (' + CT.monitors[w].tag + ')'),
     JSON.stringify(MON69.map(w => CT.monitors[w].balance)));
@@ -10761,7 +10766,8 @@ await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrenc
     && first74.next_attempt_at > new Date().toISOString() && eq(Object.keys(first74), TC74.OPS_ALERTS), JSON.stringify(Object.keys(first74)));
 
   // ---------- 8. the wiring: every scheduled workflow sweeps, and the Page Watch records its own delivery ----------
-  const MON74 = Object.keys(WIRE74.monitors).filter(w => !/AI Repeat Pilot/.test(w)).sort();   // W2-E2 (2026-10-23): the AI Repeat Pilot keeps a ledger row too, but it is on demand only (never scheduled) - its own scenario W2E2-PILOT
+  const MON74 = Object.keys(WIRE74.monitors).filter(w => !/AI Repeat Pilot|Page Finalize/.test(w)).sort();   // H3: the Page Finalize is on demand (FIN1)
+    // W2-E2 (2026-10-23): the AI Repeat Pilot keeps a ledger row too, but it is on demand only (never scheduled) - its own scenario W2E2-PILOT
   check('B-A7: all ten scheduled workflows end by sweeping the alerts nobody has — that is the retry\'s schedule: Page Watch daily at 05:45, the AI Pulse daily at 06:30, the weekly jobs and the monthly audit in each website\'s own cycle (2026-10-19; it was six on Monday morning and the audit on the 1st)',
     MON74.length === 11 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch', 'Reply Reader']   // W3-F
       .every(n => MON74.some(m => m.endsWith(n))), JSON.stringify(MON74));
@@ -12642,7 +12648,7 @@ await guard('B-F1 the Sonnet half, and B-A11 three nodes that advised from what 
   const gapRows = Object.entries(CC86).filter(([, r]) => !r.counted);
   // R82 (2026-10-16, agent A9, build section 104): Site Brief is counted now — nineteen counted, three left (the Reply Reader, the Keyword Check's two)
   check('B-F1 / B-C2 / R82: every Claude agent in every generated workflow is either counted on its main path or carries the reason it is not — eleven were counted here, seven more by B-C2, Site Brief by R82, the Reply Reader by W3-F, two are left',
-    Object.keys(CC86).length === 23 && Object.values(CC86).filter(r => r.counted).length === 21   // W2-E2 (2026-10-23): + the Sentiment Reader, counted on its main path
+    Object.keys(CC86).length === 24 && Object.values(CC86).filter(r => r.counted).length === 22   // W2-E2 (2026-10-23): + the Sentiment Reader, counted on its main path; H3 (2026-10-28): + the Page Finalize's section editor
     && gapRows.length === 2 && gapRows.every(([, r]) => /^NOT counted/.test(r.why_not) && /Proved by _b84_checks/.test(r.why_not)),
     JSON.stringify({ total: Object.keys(CC86).length, counted: Object.values(CC86).filter(r => r.counted).length, gap: gapRows.map(([k]) => k) }));
   check('B-F1: and nothing in the main workflow — the one this pass covered — was left behind',
@@ -14097,7 +14103,7 @@ await guard('B-C2 a monitor settles what it measured, not what it reserved', asy
   console.log('   still on the reservation ->', JSON.stringify(gap94.map(([k]) => k)));
   // R82 (2026-10-16, agent A9): Site Brief left this list — nineteen counted, three left in two workflows, each workflow with its own reason
   check('B-C2 / R82: nineteen of the engine\'s twenty-two Claude agents are counted; the three that are not are named, and the two workflows they sit in give different reasons',
-    Object.values(CC94).filter(r => r.counted).length === 21 && gap94.length === 2   // W2-E2: + the Sentiment Reader. W3-F: the Reply Reader is counted - only the Keyword Check's two are left
+    Object.values(CC94).filter(r => r.counted).length === 22 && gap94.length === 2   // W2-E2: + the Sentiment Reader. W3-F: the Reply Reader is counted - only the Keyword Check's two are left
     && new Set(gap94.map(([k]) => k.split(' / ')[0])).size === 1
     && new Set(gap94.map(([, r]) => r.why_not)).size === 1, JSON.stringify(gap94.map(([k, r]) => [k, r.why_not.slice(0, 40)])));
   check('B-C2 / W3-F: the Reply Reader left the gap - it has a run-ledger row to count into, and its Haiku call is counted on the main path',
@@ -16000,7 +16006,8 @@ await guard('S115 R116 R96 — a refused on-demand monitor tells its caller, and
     sched.run_refused === true && quiet.skip === true, JSON.stringify(quiet));
   // ---------- the wiring of all ten: the refusal ends at its own callback, never at the balance read or the settle ----------
   const W = require('./alert_retry_wiring.json');
-  const MON = Object.keys(W.monitors).filter(w => !/Reply Reader|AI Repeat Pilot/.test(w)).sort();   // W2-E2: the on-demand pilot has its own scenario. W3-F: the Reply Reader's gate is off (a caller is waiting) - own scenario S177
+  const MON = Object.keys(W.monitors).filter(w => !/Reply Reader|AI Repeat Pilot|Page Finalize/.test(w)).sort();   // H3: the Page Finalize's gate is off like the Reply Reader's (a caller is waiting, FIN1)
+    // W2-E2: the on-demand pilot has its own scenario. W3-F: the Reply Reader's gate is off (a caller is waiting) - own scenario S177
   const bad = MON.filter(w => { const g = W.monitors[w].guard || {}; const p = g.refusal_path;
     return !Array.isArray(p) || !p.includes(g.notice) || !p.includes(g.post) || p.some(n => /^DFS Balance|^Load Run Ledger|^Ledger Settle|^Settle Run Ledger|^Ensure Ops Alerts/.test(n)) || g.post_max_tries !== 3; });
   console.log('   refusal path (BL) ->', JSON.stringify((W.monitors['SEO Agent — Backlink Monitor'].guard || {}).refusal_path));
@@ -19712,5 +19719,8 @@ await require('./scenarios_storeheal')({ H, run, mock, store, guard, reset, begi
 await require('./scenarios_market')({ H, run, mock, store, guard, reset, begin });   // MK1-MK4 (MKT 2026-10-27, docs/mismatch-audit-2026-10-27/AUDIT.md M2 / M4): Site Admin market, the fit gate's market, discovery and ladder pool
 await require('./scenarios_aifocus')({ H, run, mock, store, guard, reset, begin });   // AIFOCUS-1..8 (AI-FOCUS 2026-10-27, docs/ai-panel-focus-2026-10-27): the AI question panel follows the client's focus - the labelled set (precision / recall / on-focus / market / owner), the 12-week timeline, devaicon.com through the real nodes, the pulse scope, Site Admin accept / retire, the money, the matched trend, one kit
 await require('./scenarios_llmlimits')({ H, run, mock, store, guard, reset, begin });   // LL1-LL8 (LLM-LIMITS 2026-10-27, techand.ai exec 2195): every Claude node has room for its thinking and its whole answer (lint broken on purpose), the completeness kit on page / e-mail / JSON, the Copywriter and Editor guards on the production replay, Content QA's cut-off reason, the wiring and the cost
+await require('./scenarios_pagefix')({ H, run, mock, store, guard, reset, begin });   // PFX1-PFX8 (H1 2026-10-27, docs/content-quality-2026-10-27/R1, R2): the page pipeline on the four production page runs - one contract, deterministic fixes, one score and keep-best, section edits, real sources, blocking vs advisory, the delivered grade, the client questions
+await require('./scenarios_h2')({ H, run, mock, store, guard, reset, begin });   // H2-1..H2-5 (H2 2026-10-27, docs/content-quality-2026-10-27/R1_PIPELINE_ANALYSIS.md): the claim check's neutral rewrites, the services page read, a ladder's new page kept new, the brand and the legal name, the ladder never planning onto another keyword's page
+await require('./scenarios_finalize')({ H, run, mock, store, guard, reset, begin });   // FIN1-FIN9 (H3 2026-10-28, the page review): the Page Finalize workflow (every decision, no editor needed, a cut editor answer, the client's own words, a claim the editor added, bad requests) and the client's stored answers reaching every later page run
 H.report();
 })();

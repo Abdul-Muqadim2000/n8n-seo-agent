@@ -104,6 +104,28 @@ export async function publishCheckCall(body: Record<string, unknown>, orgId: str
   return { kind: 'answered', status: res.status, json: json && typeof json === 'object' && !Array.isArray(json) ? json : {}, error: null };
 }
 
+/**
+ * H3 (2026-10-28): the final version of a written page (SEOagentFinalize, POST /webhook/seo-page-finalize, synchronous): only the sections the
+ * client's answers change are rewritten, then the whole page is checked. Costs a model call or two; the answer reports it (`cost`).
+ */
+export async function finalizeCall(body: Record<string, unknown>, orgId: string, timeoutMs: number): Promise<AssessCallResult> {
+  if (!config.n8n.webhookKey) return { kind: 'unreachable', status: 0, json: {}, error: 'The SEO engine is not configured (SEO_API_KEY missing)' };
+  let res: Response;
+  try {
+    res = await fetch(config.n8n.baseUrl + config.n8n.finalizePath, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': config.n8n.webhookKey, 'x-forwarded-for': `app:${orgId}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    const e = err as Error;
+    return { kind: e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'timeout' : 'unreachable', status: 0, json: {}, error: String(e?.message || err) };
+  }
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  return { kind: 'answered', status: res.status, json: json && typeof json === 'object' && !Array.isArray(json) ? json : {}, error: null };
+}
+
 export interface AdminCallResult {
   ok: boolean;
   action: string;

@@ -23,6 +23,7 @@ import {
   readinessPage,
   safeJson,
   splitList,
+  splitBrandForm,
   type AiAccess,
   type AiData,
   type AiDailyRow,
@@ -701,8 +702,9 @@ export function profileFromRow(r: ProfileRow | null | undefined): ProfileFields 
     logoUrl: s(r.logo_url),
     // G31: the stored style guide. The variant is stored as free text by the engine, so anything else reads as "follow your market".
     style: {
-      brandForm: s(r.style_brand_form),
-      brandWrong: splitList(r.style_brand_wrong),
+      // H2 (2026-10-27): a brand stored as "Nova& (legal name: Novaand systems LLC)" is read as the brand and the legal name
+      ...splitBrandForm(s(r.style_brand_form), s(r.style_legal_name)),
+      brandWrong: splitList(r.style_brand_wrong).filter((x) => !/^(?:spelling|tone|avoid|words to avoid|notes?|legal(?: name)?)\s*:/i.test(x)),   // H2: another field typed into this one is not a spelling of the name
       spelling: /brit/i.test(s(r.style_spelling)) ? 'British English' : /amer/i.test(s(r.style_spelling)) ? 'American English' : '',
       avoid: splitList(r.style_avoid),
       tone: s(r.style_tone),
@@ -723,6 +725,12 @@ export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentDa
     reportsList(org.id, { siteId: site.id, stages: ['content'], limit: 40 }),
   ]);
   const profile = profileFromRow(profiles[0]);
+  // H3 (2026-10-28): where each written page's review stands (questions, final version, approval, publishing); never fails the board
+  const reviews = await import('./pageReview').then((m) => m.siteReviews(org.id, site)).catch(() => null);
+  const reviewOf = (r: ContentLogRow) => {
+    const page = reviews?.pageFor(r);
+    return page && reviews ? { review: reviews.summaryOf(page, r) } : {};
+  };
   return {
     items: log.map((r) => ({
       keyword: s(r.keyword),
@@ -741,6 +749,7 @@ export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentDa
       qaReasons: s(r.qa_reasons),
       // 2026-10-27: marked published on the owner's word after the check's warning (the live page did not match the draft)
       publishNote: s(r.publish_note),
+      ...reviewOf(r),
     })),
     cadence: cadence[0] ? { pagesPerWeek: n(cadence[0].pages_per_week), status: s(cadence[0].status) } : null,
     caseStudies: cases.map((c) => ({

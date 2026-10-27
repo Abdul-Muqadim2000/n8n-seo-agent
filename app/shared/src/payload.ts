@@ -8,6 +8,7 @@
 
 import { GOALS, PAGE_TYPES } from './constants';
 import type { MonitorSettings, RunInput } from './schemas';
+import { factsForEngine, type FactAnswers } from './page-review';
 
 export interface SiteContext {
   domain: string;
@@ -24,6 +25,8 @@ export interface SiteContext {
   /** keyword-first: the website's IANA time zone ('' = the engine's) and what it sells */
   timezone?: string;
   services?: string[];
+  /** H3 (2026-10-28): the business facts answered on written pages (sites.fact_answers), sent with every page run */
+  factAnswers?: FactAnswers;
 }
 
 export interface Delivery {
@@ -95,6 +98,17 @@ export function aiPanelQuoteBody(q: { dfs: number; ai: number }, panel: number):
   return { dfs_usd: r4(q.dfs), ai_usd: r4(q.ai), panel: Math.round(panel) };
 }
 
+/**
+ * H3 (2026-10-28): the business facts the client answered on earlier pages, for every run that writes a page. Exact keys, always AFTER
+ * `business` and `business_facts` (the fuzzy `pick` returns the first key containing a word): the stored facts as key -> text, and every
+ * key decided, so the engine never asks a stored question again. Nothing when the website has none.
+ */
+export function factsBody(s: Pick<SiteContext, 'factAnswers'> | null | undefined): Body {
+  if (!s?.factAnswers || !Object.keys(s.factAnswers).length) return {};
+  const f = factsForEngine(s.factAnswers);
+  return { business_facts_kv: f.business_facts_kv, stored_fact_keys: f.stored_fact_keys };
+}
+
 /** The fixed head every body starts with (see the note above). */
 function head(mode: string, keyword: string, country: string, domain: string, d: Delivery, business = '', customers = ''): Body {
   return { mode, keyword, country, domain, email: d.email, callback_url: d.callbackUrl, business, customers };
@@ -117,6 +131,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         video_url: input.videoUrl || undefined,
         video_transcript: input.videoUrl ? input.videoTranscript : undefined,
         business_facts: input.businessFacts || s?.businessFacts || '',
+        ...factsBody(s),
         cta: input.cta || s?.cta || '',
         tone: input.tone,
         goal: goalLabel(input.goal),
@@ -170,6 +185,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
       return {
         ...head('ladder', input.keyword, input.country, dom, d, input.business || s?.business || '', input.customers || s?.customers || ''),
         business_facts: input.businessFacts || s?.businessFacts || '',
+        ...factsBody(s),
         goal: goalLabel(input.goal),
         tone: input.tone,
         cta: input.cta || s?.cta || '',
@@ -233,6 +249,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
           quote: input.quote,
           quote_by: input.quoteBy,
         },
+        ...factsBody(s),
       };
 
     case 'profile':
@@ -268,6 +285,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         // G31: the house style, stored on the same profile row (style_*), applied in the writing prompts and checked before delivery
         style: {
           brand_form: input.style.brandForm,
+          legal_name: input.style.legalName,   // H2 (2026-10-27): stored apart from the brand (seo_profiles.style_legal_name)
           brand_wrong: input.style.brandWrong,
           spelling: input.style.spelling,
           avoid: input.style.avoid,

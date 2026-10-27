@@ -154,6 +154,23 @@
    "workflow": "SEO_Agent_Link_Builder.json"
   },
   {
+   "cost_think": "seen",
+   "effort": "low",
+   "head": 24000,
+   "kind": "rewritten sections (JSON: a few page sections in Markdown)",
+   "max": 128000,
+   "model": "claude-sonnet-5-5",
+   "node": "Claude \u2014 Finalize Editor",
+   "old": {
+    "max": 0,
+    "stream": false,
+    "think": null
+   },
+   "stream": true,
+   "think": 48000,
+   "workflow": "SEO_Agent_Page_Finalize.json"
+  },
+  {
    "cost_think": 0,
    "effort": "",
    "head": 1200,
@@ -417,6 +434,10 @@
   [
    "SEO_Agent_Link_Builder.json",
    "Claude \u2014 Outreach Sequence Writer"
+  ],
+  [
+   "SEO_Agent_Page_Finalize.json",
+   "Claude \u2014 Finalize Editor"
   ],
   [
    "SEO_Agent_Reply_Reader.json",

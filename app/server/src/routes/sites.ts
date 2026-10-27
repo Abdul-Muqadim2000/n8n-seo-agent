@@ -372,7 +372,7 @@ export async function siteRoutes(app: FastifyInstance) {
     // D1 (2026-10-21): only when the request itself carries the facts (a GA4 ID or keyword save never clears them in the engine)
     const factsSent = !!req.body && typeof req.body === 'object' && Object.hasOwn(req.body, 'businessFacts');
     if (factsSent && body.businessFacts !== undefined && s.businessFacts !== site.businessFacts && s.verifiedAt && ['active', 'paused'].includes(s.trackingStatus))
-      await siteAdmin({ action: 'facts', domain: s.domain, site_id: n8nSiteId(s.domain), business_facts: s.businessFacts.slice(0, 2000), request_id: `app-facts-${s.id}-${Date.now().toString(36)}` }).catch((err) =>
+      await siteAdmin({ action: 'facts', domain: s.domain, site_id: n8nSiteId(s.domain), business_facts: s.businessFacts.slice(0, 2000), fact_answers: Object.fromEntries(Object.entries(s.factAnswers ?? {}).map(([k, f]) => [k, { decision: f.decision, text: f.text }])), request_id: `app-facts-${s.id}-${Date.now().toString(36)}` }).catch((err) =>
         req.log.warn({ site: s.domain, err: String((err as Error)?.message ?? err) }, 'business facts not sent to the engine'),
       );
     return toSite(s);

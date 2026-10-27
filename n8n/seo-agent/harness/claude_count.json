@@ -49,6 +49,11 @@
   "model": "claude-sonnet-5-5",
   "why_not": ""
  },
+ "SEO_Agent_Page_Finalize.json / Finalize Editor": {
+  "counted": true,
+  "model": "claude-sonnet-5-5",
+  "why_not": ""
+ },
  "SEO_Agent_Reply_Reader.json / Reply Reader": {
   "counted": true,
   "model": "claude-haiku-4-5-20251001",

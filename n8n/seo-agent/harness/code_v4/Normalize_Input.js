@@ -1,3 +1,42 @@
+// ---- FA: the client's answers to the questions on written pages, kept once per website (H3, 2026-10-28; inlined through the FACT_ANSWERS marker) ----
+// The page pipeline (H1, v5/code/_page_fix.js PF.questions) asks the client about every statement nothing on file supports, keyed by a
+// business-fact key (`fact_key`, e.g. "credential.microsoft_partner"). The app stores each answer ONCE on the website (app: sites.fact_answers;
+// engine: seo_sites.fact_answers_json, written by Site Admin `facts`) and every later page run carries:
+//   business_facts_kv   fact_key -> the text the client confirmed or wrote (decisions yes / edit / answer): the claim check reads it as on file
+//   stored_fact_keys    every key the client decided, including remove and general: PF.questions never asks it again
+// The same rule as the app's factsForEngine (app/shared/src/page-review.ts): the two must change together.
+// Pure: no clock, no network, no URL constructor, no Object.defineProperty, no structuredClone (n8n sandbox rules).
+const FA = (() => {
+  const KEY = /^[\p{L}\p{N}_.&-]{1,80}$/u;
+  const DECISIONS = ['yes', 'edit', 'answer', 'remove', 'general'];
+  const TEXT_MAX = 600, KV_MAX = 200, KEYS_MAX = 400;
+  const S = (v) => String(v == null ? '' : v);
+  const clean = (t) => S(t).replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+  const asObj = (raw) => { let o = raw; if (typeof o === 'string') { try { o = JSON.parse(o || '{}'); } catch (e) { o = null; } }
+    return o && typeof o === 'object' && !Array.isArray(o) ? o : null; };
+  // { key: { decision, text } } from the stored JSON (or an object); entries with a bad key or decision are dropped and counted
+  const parse = (raw) => { const o = asObj(raw); const answers = {}; let dropped = 0; if (!o) return { answers, dropped };
+    for (const [k, v] of Object.entries(o).slice(0, KEYS_MAX)) {
+      const decision = v && typeof v === 'object' ? S(v.decision).toLowerCase() : 'yes';
+      const text = clean(v && typeof v === 'object' ? v.text : v).slice(0, TEXT_MAX);
+      if (!KEY.test(k) || !DECISIONS.includes(decision) || ((decision === 'yes' || decision === 'edit' || decision === 'answer') && !text)) { dropped++; continue; }
+      answers[k] = { decision, text: decision === 'remove' || decision === 'general' ? '' : text }; }
+    return { answers, dropped }; };
+  // the facts a page may state, and every decided key
+  const kv = (answers) => { const out = {}; for (const [k, v] of Object.entries(answers || {})) if (v && v.text && (v.decision === 'yes' || v.decision === 'edit' || v.decision === 'answer')) out[k] = v.text; return out; };
+  const keys = (answers) => Object.keys(answers || {}).filter(k => KEY.test(k)).sort().slice(0, KEYS_MAX);
+  // what a request carries (Normalize Input): validated and capped; a malformed value is an empty one, never an error for the whole run
+  const kvIn = (raw) => { const o = asObj(raw); const out = {}; if (!o) return out; let n = 0;
+    for (const [k, v] of Object.entries(o)) { if (n >= KV_MAX) break; const t = clean(v).slice(0, TEXT_MAX); if (!KEY.test(k) || !t || typeof v === 'object') continue; out[k] = t; n++; }
+    return out; };
+  const keysIn = (raw) => { const a = Array.isArray(raw) ? raw : typeof raw === 'string' && raw.trim() ? raw.split(/[,\n]/) : [];
+    return [...new Set(a.map(x => clean(x)).filter(k => KEY.test(k)))].slice(0, KEYS_MAX); };
+  // the two fields a page run spawned from a stored website row carries
+  const forRun = (siteRow) => { const a = parse(siteRow && siteRow.fact_answers_json).answers; return { business_facts_kv: kv(a), stored_fact_keys: keys(a) }; };
+  // the stored facts as text, one per line, for the claim corpus
+  const text = (kvObj) => Object.values(kvObj || {}).map(clean).filter(Boolean).join('\n');
+  return { KEY, DECISIONS, TEXT_MAX, parse, kv, keys, kvIn, keysIn, forRun, text, clean };
+})();
 // ---- the page type, as one of the options the form offers (D10, 2026-10-12; the builders inline this file where a node asks for the PAGE_TYPE kit) ----
 // The verdict and the keyword screen answer in free text: the live page of execution 365 was planned as "Service Page (ERP implementation
 // UAE) with built-in vendor-neutral comparison, cost and compliance sections". That sentence then travelled as the page type into the brief
@@ -46,7 +85,7 @@ const CONFIG = {
   brand: "Alaventra",   // from n8n/.env (SEO_BRAND) at build time; shown on reports and e-mails
   crawl_max_pages: 200,             // DataForSEO on-page crawl size (also used when reading crawled pages)
   crawl_js: false,                  // true = render JavaScript during the crawl (slower, costs more)
-  qa_max_rounds: 2,   // one editor pass: live tests showed a second pass inflates length without raising the score                 // how many times the Editor may revise content that fails QA
+  qa_max_rounds: 5,   // H1 (2026-10-27): the Copywriter's draft + up to 3 section-targeted edits + the final check (Page Candidates keeps the best draft; a full-page second pass inflated length, a section edit cannot)                 // how many times the Editor may revise content that fails QA
   default_country: 'United States',
   ai_budget_usd: 15,                // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 from 2026-10-02, 15 since 2026-10-15 at the owner's request (cost is not the constraint, the result is) — the Anthropic Console workspace limit is the hard cap
   ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap
@@ -204,7 +243,11 @@ const pageType0 = String(pick(p2, 'page', 'type') || '').trim();
 const pageType = mode === 'case_study' ? 'Case Study' : PT.of(pageType0, 'Service Page');
 const page_notes = PT.notes(pageType0, pageType);   // the sentence itself, for the brief (strategy_brief.txt prints it)
 const page_type_note = (pageType0 && !PT.TYPES.includes(pageType0)) ? 'The page type "' + pageType0.slice(0, 120) + '" is not one of the page types we write, so it was read as "' + pageType + '"' + (page_notes ? ' and the rest kept as a note for the brief' : '') + '.' : '';
-const business_facts = String(pick(p2, 'facts') || p2.business_facts || '').trim().slice(0, 2000);
+const business_facts = String((() => { const v = pick(p2, 'facts'); return typeof v === 'string' ? v : ''; })() || (typeof p2.business_facts === 'string' ? p2.business_facts : '') || '').trim().slice(0, 2000);   // H3: never the business_facts_kv object
+// H3 (2026-10-28, build section 152): the client's stored answers (exact keys; FA validates and caps them; a malformed value is an empty one)
+const business_facts_kv = FA.kvIn(p2.business_facts_kv);
+const stored_fact_keys = FA.keysIn(p2.stored_fact_keys);
+const existing_page_ours = p2.existing_page_ours === true || String(p2.existing_page_ours == null ? '' : p2.existing_page_ours).toLowerCase() === 'true';
 const cta = String(pick(p2, 'call', 'action') || p2.cta || '').trim().slice(0, 200);
 const tone = String(pick(p2, 'tone') || '').trim();
 const goalRaw = String(pick(p2, 'goal') || '').toLowerCase();
@@ -244,7 +287,9 @@ const profile_input = {
   author_same_as: authorLinks.filter(u => u !== authorUrl).join(' '), author_knows_about: asArray(A.knows_about || lab('Topics the author knows best')).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),
   reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400),
   // G31 (2026-10-13): how this customer writes. The spelling variant is empty unless they chose one, and then it beats the market default.
-  style_brand_form: s0(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written'), 160),
+  // H2 (2026-10-27): "Nova& (legal name: Novaand systems LLC)" is two values: the brand customers see, and the legal name for legal statements
+  style_brand_form: s0(String(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written') || '').replace(/\s*[(\[,;]\s*(?:legal(?:ly)?(?: name)?|registered(?: name| as)?|company name|trading as)\s*[:=-]?\s*[^)\]]*[)\]]?\s*$/i, ''), 160),
+  style_legal_name: s0(STY.legal_name || STY.legalName || p2.style_legal_name || lab('Legal name (optional)') || ((String(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written') || '').match(/[(\[,;]\s*(?:legal(?:ly)?(?: name)?|registered(?: name| as)?|company name|trading as)\s*[:=-]?\s*([^)\]]+?)\s*[)\]]?\s*$/i) || [])[1] || ''), 160),
   style_brand_wrong: asArray(STY.brand_wrong || STY.brandWrong || p2.style_brand_wrong).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),
   style_spelling: s0(STY.spelling || p2.style_spelling || lab('Spelling'), 40),
   style_avoid: asArray(STY.avoid || STY.avoid_words || STY.avoidWords || p2.style_avoid || lab('Words to avoid')).map(x => s0(x, 60)).filter(Boolean).slice(0, 40).join(', '),
@@ -315,7 +360,7 @@ const atList = (v) => (Array.isArray(v) ? v : String(v || '').split(/\s*\|\s*|\n
 const ai_target = AT && String(AT.question || '').trim().length >= 8 ? { question: String(AT.question).trim().slice(0, 300), kind: AT.kind === 'refresh' ? 'refresh' : 'answer', target_id: String(AT.target_id || '').slice(0, 120),
   fanout: atList(AT.fanout).slice(0, 8).map(x => x.slice(0, 200)), competitors: atList(AT.competitors).slice(0, 8).map(x => x.slice(0, 80)),
   sources: (Array.isArray(AT.sources) ? AT.sources : []).filter(x => x && (x.u || x.url)).slice(0, 6).map(x => ({ url: String(x.u || x.url).slice(0, 300), title: String(x.t || x.title || '').slice(0, 140) })) } : null;
-let existing_page_url = String(pick(p2, 'existing') || '').trim();
+let existing_page_url = String((() => { const k = Object.keys(p2 || {}).find(k => k !== 'existing_page_ours' && k.toLowerCase().replace(/[\s_-]+/g, ' ').includes('existing')); const v = k ? p2[k] : ''; return typeof v === 'string' ? v : ''; })()).trim();   // H3: never the existing_page_ours flag
 if (existing_page_url && !/^https?:\/\//i.test(existing_page_url)) existing_page_url = 'https://' + existing_page_url.replace(/^\/+/, '');
 if (existing_page_url && domain && cleanDomain(existing_page_url) !== domain) throw new Error('The existing page URL must be on ' + domain);
 
@@ -390,11 +435,14 @@ return [{
     page_type: pageType,
     page_notes,
     page_type_note,
-    business_facts,
+    business_facts: (mode === 'track' || !Object.keys(business_facts_kv).length) ? business_facts : (business_facts + '\n' + FA.text(Object.fromEntries(Object.entries(business_facts_kv).filter(([, v]) => !business_facts.includes(v))))).trim().slice(0, 5000),   // H3: a page run may state what the client confirmed
+    business_facts_kv,
+    stored_fact_keys,
     cta,
     tone,
     goal,
     existing_page_url,
+    existing_page_ours: existing_page_ours && !!existing_page_url,
     country: c ? countryName : null,
     country_iso: c ? c.iso : null,
     location_code: c ? c.code : null,

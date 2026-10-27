@@ -198,6 +198,7 @@ const PROFILE_LABELS: Record<string, string> = {
   reviewer_job_title: 'Reviewer job title',
   reviewer_url: 'Reviewer page',
   style_brand_form: 'Brand name is written',
+  style_legal_name: 'Legal name',
   style_brand_wrong: 'Other spellings to catch',
   style_spelling: 'Spelling',
   style_avoid: 'Words to avoid',

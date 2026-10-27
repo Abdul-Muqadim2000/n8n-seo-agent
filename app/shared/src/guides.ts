@@ -2168,7 +2168,7 @@ export const GUIDES = [
       },
       {
         title: 'Pages arrive as drafts for you to publish',
-        body: '**We:** research, write, edit and check every page, then deliver it as a report with the page ready to copy (HTML and Markdown). **You:** check it, fill in anything in [brackets] in your downloaded copy, put it on your website, then press **I published this page** on its report with its address. **It leads to:** we check the page live and start tracking its position.',
+        body: '**We:** research, write, edit and check every page, then deliver it as a report with the page ready to copy (HTML and Markdown). **You:** check it, change anything you like in the editor on its report, put it on your website, then press **I published this page** on its report with its address. **It leads to:** we check the page live and start tracking its position.',
         warn: 'A page marked **Not ready to publish** did not pass the quality check. Finish it first: the guide for that page explains each reason.',
       },
       {
@@ -2492,8 +2492,8 @@ export const GUIDES = [
         body: 'Most of these come from what we do not know about you. A filled **author profile** and **business facts** let pages be published as they are, which is why the first page of a keyword waits for both.',
       },
       {
-        title: 'Finish it in your own copy',
-        body: 'There is no editor in Alaventra: download the draft from its report (the **Word** or **HTML** file) and make the edits there. Fill in or delete each bracket, as the report says for each one. You do not need a new run for these edits: a new run writes a whole new page and is charged again.',
+        title: 'Finish it in the editor',
+        body: 'Press **Edit the page** on the draft\'s report: change any heading, paragraph, list, link or table, see the result as you type, and save it as your version. We check your version again and list anything still blocking. You can also download the **Word** or **HTML** file and finish it there. You do not need a new run for these edits: a new run writes a whole new page and is charged again.',
         warn: 'Sending a page that is not ready to your website from Alaventra is refused: finish it first.',
       },
       {
@@ -2503,13 +2503,53 @@ export const GUIDES = [
     ],
     done: 'The page is live on {{domain}} with no brackets left, and its report shows it as published.',
     trouble: [
-      { q: 'I filled everything in and it is still not ready', a: 'The report judges the copy it delivered, not your later edits, so it keeps saying "needs your edits" until you report the live page. Publish it and press **I published this page**: the draft then shows as published, and the check lists anything still left on the live page. A new run is only worth it when the topic itself was wrong, and it is charged as a new page.' },
-      { q: 'I cannot find where to edit the draft', a: 'The edits are made in your own copy, not in Alaventra: download the **Word** or **HTML** file from the draft\'s report, edit it, and publish it on your website the way you publish any page.' },
+      { q: 'I filled everything in and it is still not ready', a: 'Edits made in the editor here are checked again as soon as you save them, and the report lists what is still blocking. Edits made in a downloaded copy are not seen until the page is live: publish it and press **I published this page**, and the check lists anything still left on the live page. A new run is only worth it when the topic itself was wrong, and it is charged as a new page.' },
+      { q: 'I cannot find where to edit the draft', a: 'Open the draft\'s report and press **Edit the page**. If you prefer your own tools, download the **Word** or **HTML** file from the same report, edit it, and publish it on your website the way you publish any page.' },
       { q: 'I already published it with a different title or keyword', a: 'That is fine. Start from **I published this page** on the draft\'s report, or choose the page under **Which page did you publish?** in the form: the draft is matched by the run that wrote it, not by the words you type.' },
       { q: 'The topic itself is wrong', a: 'Press **Not what I wanted** on the report instead, and skip the keyword in the next **Coming up** plan.' },
     ],
     related: ['business-profile', 'business-facts', 'publish-page', 'not-what-i-wanted'],
     keywords: ['not ready', 'quality check', 'draft', 'placeholders', 'brackets', 'confirm', 'author', 'facts', 'edit', 'word file', 'published', 'report the address'],
+  },
+  {
+    id: 'page-questions',
+    area: 'autopilot',
+    title: 'Answer the questions on a written page',
+    why: 'Where we could not check a detail about your business, the page says it in general words so it is safe to publish. Your answers put the specific detail back, and each answer is kept in your business details, so later pages never ask it again.',
+    where: 'The page\'s report (Questions only you can answer), and Pipeline > Needs you',
+    minutes: 5,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Start with the highlighted ones',
+        body: 'The questions are ranked by how much they improve the page. The first three are highlighted; the rest are optional. The page can be published without any answer.',
+      },
+      {
+        title: 'Read the sentence in context',
+        body: 'Each question shows the specific sentence we would like to write and what the page says now instead. Where your website or your business details already say something close, it is shown as a suggestion with where it came from.',
+      },
+      {
+        title: 'Choose one answer',
+        body: '**Yes, keep it** puts the specific sentence in. **Edit it** lets you write it your way. **Remove it** takes the sentence out. **Leave it general** keeps the general words and is remembered, so the question does not come back. **Not now** leaves it open.',
+        note: '**Accept all suggestions** answers every question that has a suggestion in one click. You can change any answer afterwards.',
+      },
+      {
+        title: 'Make the final version',
+        body: 'Press **Make the final version**. Only the parts of the page your answers change are rewritten, then the whole page is checked again. The price is shown before it starts.',
+      },
+      {
+        title: 'Approve and publish',
+        body: 'Read the final version, change anything you like in the editor, then press **Approve and publish**: send it to your website, or publish it yourself on {{domain}} and press **I published this page** so we check it live.',
+      },
+    ],
+    done: 'The report shows "Ready to publish, waiting for your OK" or the page as published, and your answers are listed under Website settings > Business details.',
+    trouble: [
+      { q: 'A question asks about something that is not true', a: 'Choose **Remove it** (the sentence goes) or **Leave it general** (the general words stay). Both are remembered for later pages.' },
+      { q: 'I answered the wrong way', a: 'Change the answer on the report before you make the final version, or change the stored detail under Website settings > Business details for later pages.' },
+      { q: 'Do I have to answer before publishing?', a: 'No. Unanswered questions never block a page: it is publishable in its general wording.' },
+    ],
+    related: ['business-facts', 'page-not-ready', 'publish-page'],
+    keywords: ['questions', 'answers', 'business details', 'facts', 'final version', 'approve', 'claims', 'leave it general'],
   },
   {
     id: 'not-what-i-wanted',

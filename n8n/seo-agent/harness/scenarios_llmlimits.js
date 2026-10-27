@@ -44,7 +44,7 @@ module.exports = async (ctx) => {
       for (const n of (wf(f).nodes || [])) { if (n.type !== '@n8n/n8n-nodes-langchain.lmChatAnthropic') continue;
         seen.push(f + '|' + n.name); const L = decl.get(f + '|' + n.name); const why = lint(L, n); if (why.length) bad.push([f, n.name, why]); } }
     console.log('   Claude nodes ->', seen.length, 'declared', decl.size);
-    check('every Claude node (22) across the generated workflows is declared and passes the rule', seen.length === 22 && decl.size === 22 && !bad.length && seen.every(k => decl.has(k)), J(bad));
+    check('every Claude node (23, H3 added the Page Finalize\'s section editor) across the generated workflows is declared and passes the rule', seen.length === 23 && decl.size === 23 && !bad.length && seen.every(k => decl.has(k)), J(bad));
     const page = ['Claude — Copywriter', 'Claude — Editor', 'Claude — Strategy Brief'].map(n => decl.get('SEO_Agent_v4.json|' + n));
     check('the page / brief writers get the model maximum (128,000) with 64,000 for thinking and 32,000 for the page, streaming, effort unchanged (medium)',
       page.every(L => L.max === 128000 && L.think === 64000 && L.head === 32000 && L.stream && L.effort === 'medium' && L.model === 'claude-opus-5-5'), J(page));
@@ -184,8 +184,9 @@ module.exports = async (ctx) => {
     const outs = (n) => ((C[n] || {}).main || []).map(l => (l || []).map(t => t.node));
     check('After Count (Copywriter) -> Draft Check (Copywriter) -> Draft Complete? (Copywriter) -> [Critic] / [Copywriter]',
       J(outs('After Count (Copywriter)')) === J([['Draft Check (Copywriter)']]) && J(outs('Draft Check (Copywriter)')) === J([['Draft Complete? (Copywriter)']]) && J(outs('Draft Complete? (Copywriter)')) === J([['Critic'], ['Copywriter']]), J([outs('After Count (Copywriter)'), outs('Draft Complete? (Copywriter)')]));
-    check('After Count (Editor) -> Edit Check (Editor) -> Edit Complete? (Editor) -> [Promise Candidates] / [Editor]',
-      J(outs('After Count (Editor)')) === J([['Edit Check (Editor)']]) && J(outs('Edit Check (Editor)')) === J([['Edit Complete? (Editor)']]) && J(outs('Edit Complete? (Editor)')) === J([['Promise Candidates'], ['Editor']]), J(outs('Edit Complete? (Editor)')));
+    // H1 (2026-10-27, build section 151): a complete edit goes through Page Fix (the deterministic fixes) before Promise Candidates
+    check('After Count (Editor) -> Edit Check (Editor) -> Edit Complete? (Editor) -> [Page Fix -> Promise Candidates] / [Editor]',
+      J(outs('After Count (Editor)')) === J([['Edit Check (Editor)']]) && J(outs('Edit Check (Editor)')) === J([['Edit Complete? (Editor)']]) && J(outs('Edit Complete? (Editor)')) === J([['Page Fix'], ['Editor']]) && J(outs('Page Fix')) === J([['Promise Candidates']]), J(outs('Edit Complete? (Editor)')));
     const cond = (n) => N[n].parameters.conditions.conditions[0].leftValue;
     check('both IFs route on the check\'s own retry flag (a kept draft goes on, a retry goes back)', cond('Draft Complete? (Copywriter)') === '={{ !($json.llm_check && $json.llm_check.retry) }}' && cond('Edit Complete? (Editor)') === cond('Draft Complete? (Copywriter)'), cond('Edit Complete? (Editor)'));
     check('the run ledger\'s basis line names a cut answer first (ops see it on the row)', /Claude answer cut short: /.test(N['Run Ledger Settle'].parameters.jsCode) && /__llmNote \+ \(dfs_day/.test(N['Run Ledger Settle'].parameters.jsCode));

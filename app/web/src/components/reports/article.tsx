@@ -27,7 +27,7 @@ function readTokens(): Tokens {
 }
 
 /** The app's colour tokens, re-read when the theme attribute or the OS colour scheme changes (the iframe cannot see CSS variables). */
-function useThemeTokens(): Tokens {
+export function useThemeTokens(): Tokens {
   const [tokens, setTokens] = useState<Tokens>(readTokens);
   useEffect(() => {
     const update = () => setTokens(readTokens());
@@ -120,7 +120,7 @@ function prepareBody(html: string): string {
   return doc.body.innerHTML;
 }
 
-function srcDoc(body: string, t: Tokens): string {
+export function srcDoc(body: string, t: Tokens): string {
   const css = `
 :root{color-scheme:${t.dark ? 'dark' : 'light'}}
 *{box-sizing:border-box}

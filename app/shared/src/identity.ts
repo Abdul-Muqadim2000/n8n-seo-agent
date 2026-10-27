@@ -603,6 +603,13 @@ export const AUDIT_ACTIONS = {
   'cms.connected': { label: 'Connected a CMS', category: 'integrations' },
   'cms.changed': { label: 'Changed a CMS connection', category: 'integrations' },
   'cms.removed': { label: 'Removed a CMS connection', category: 'integrations' },
+  // H3 (2026-10-28): the review of a written page and the business details its answers fill
+  'page.answered': { label: 'Answered questions on a written page', category: 'websites' },
+  'page.edited': { label: 'Edited a written page in the app', category: 'websites' },
+  'page.edit_reverted': { label: 'Went back to the delivered version of a page', category: 'websites' },
+  'page.finalize_started': { label: 'Asked for the final version of a page', category: 'websites' },
+  'page.approved': { label: 'Approved a page for publishing', category: 'websites' },
+  'facts.changed': { label: 'Changed the business details', category: 'websites' },
   'crawler.push_key_created': { label: 'Made a crawler log push key', category: 'integrations' },
   'crawler.push_key_revoked': { label: 'Switched crawler log pushes off', category: 'integrations' },
   'crawler.log_uploaded': { label: 'Uploaded a server log', category: 'integrations' },

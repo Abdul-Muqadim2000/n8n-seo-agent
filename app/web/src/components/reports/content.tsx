@@ -11,7 +11,8 @@ import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { CountUp, HeroStat, Stagger } from '@/components/insight';
 import { absolutePageUrl, ArticleViewer, findPlaceholders } from './article';
 import { CmsPublishPanel } from './CmsPublish';
-import { draftNextStep, ownerEdits } from '@seo/shared';
+import { deliveryOf, draftNextStep, ownerEdits } from '@seo/shared';
+import { DeliveryCallout, PageReview } from './review/ReviewPanels';
 import { Block, Bullets, Chips, Facts, has, CreditsCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
 import { keywordPrefill } from './meta';
 import { ChartTitle, ReportHero, ScoreMark, TickGrid, WordValue } from './visuals';
@@ -68,6 +69,10 @@ export function ContentReport({ report }: { report: ReportDetail }) {
   const words = num(meta.word_count);
   const contentScore = num(meta.content_score);
   const avoid = verdict.toUpperCase() === 'AVOID';
+  // H3 (2026-10-28): a page written since H1 says what the client receives (ready / ready with questions / not ready) and its grade is
+  // measured on the DELIVERED page. Older reports keep the finish-by-hand path below.
+  const hasDelivery = !!html && !!(str(p.qa_delivery_status) || str(meta.delivery_status) || str(quality.delivery_status));
+  const delivery = useMemo(() => deliveryOf(p), [p]);
 
   // Pre-launch run 2026-10-21 (B1): a page the quality check refused is a draft to finish by hand, never a page to publish as it is. It
   // offers no "Send it now", its content score is not the headline, and its next step is the engine's own
@@ -78,7 +83,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
   // say so (B1 had removed the button while this page still told them to use it). The draft is finished OUTSIDE the app, so the button
   // is back on it too, second to the edits: the live check reads the published page and names any bracket still on it. It carries the
   // draft's keyword and the engine request id that wrote it, so the check marks this draft published, whatever is typed.
-  const publishLink = html && can('member') && (
+  const publishLinkEl = html && can('member') && (
     <ButtonLink
       to={paths.tool(org.id, 'published', {
         siteId: report.siteId,
@@ -94,6 +99,13 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       icon={<Rocket className="size-4" />}
     >
       I published this page
+    </ButtonLink>
+  );
+  // with the delivered status, publishing follows the approval (the review's last card); the hero leads to the questions instead
+  const publishLink = hasDelivery ? null : publishLinkEl;
+  const questionsLink = hasDelivery && delivery.questionCount > 0 && (
+    <ButtonLink to="#questions" variant="primary" size="sm" icon={<ListChecks className="size-4" />}>
+      Answer {delivery.questionCount} {delivery.questionCount === 1 ? 'question' : 'questions'}
     </ButtonLink>
   );
   const writeLink = !html && can('member') && keyword && !avoid && (
@@ -120,10 +132,18 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         eyebrow={eyebrowExtra ? <span className="normal-case">{eyebrowExtra}</span> : undefined}
-        title={html ? (notReady ? <>The draft for "{keyword || 'this keyword'}" needs your edits before you publish it</> : <>The page for "{keyword || 'this keyword'}" is written</>) : verdict ? <>{verdictLabel(verdict)}: "{keyword || 'Keyword'}"</> : keyword || 'Keyword'}
+        title={hasDelivery ? <>"{keyword || 'Your page'}": {delivery.headline}</> : html ? (notReady ? <>The draft for "{keyword || 'this keyword'}" needs your edits before you publish it</> : <>The page for "{keyword || 'this keyword'}" is written</>) : verdict ? <>{verdictLabel(verdict)}: "{keyword || 'Keyword'}"</> : keyword || 'Keyword'}
         description={details.length ? details.join(' · ') : undefined}
         aside={
-          html && notReady ? (
+          hasDelivery ? (
+            <ScoreMark
+              score={delivery.grade}
+              label="Grade of the page you receive"
+              status={delivery.status === 'not_ready' ? 'Not ready' : delivery.status === 'unknown' ? 'Not checked' : 'Ready to publish'}
+              statusTone={delivery.status === 'not_ready' ? 'critical' : delivery.status === 'unknown' ? 'warning' : 'good'}
+              caption={delivery.firstDraftReview != null ? `Measured after every fix. The first draft, before any fix, was rated ${delivery.firstDraftReview}/100.` : 'Measured on the page you receive, after every fix.'}
+            />
+          ) : html && notReady ? (
             <ScoreMark
               score={null}
               label="Quality check"
@@ -144,7 +164,9 @@ export function ContentReport({ report }: { report: ReportDetail }) {
           ) : undefined
         }
         actions={
-          publishLink || writeLink ? (
+          questionsLink ? (
+            questionsLink
+          ) : hasDelivery ? undefined : publishLink || writeLink ? (
             <>
               {publishLink}
               {writeLink}
@@ -263,7 +285,9 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       )}
 
       {/* R11: the page is here to finish by hand, not to publish as it is, said before the SEO checks and the page itself */}
-      {html && notReady && (
+      {hasDelivery && <DeliveryCallout delivery={delivery} />}
+
+      {html && notReady && !hasDelivery && (
         <Callout
           tone="critical"
           title={qaLabel || 'This page did not pass the quality check and is not ready to publish'}
@@ -298,13 +322,26 @@ export function ContentReport({ report }: { report: ReportDetail }) {
 
       {/* G2: send the page to the website's CMS, drafts by default, live only for owners and admins, never a page the checks refuse */}
       {/* G5: publishing is the agency's act, never a client person's (their portal has Approvals) */}
-      {html && report.siteId && can('viewer') && <CmsPublishPanel report={report} />}
+      {html && report.siteId && can('viewer') && !hasDelivery && <CmsPublishPanel report={report} />}
+      {/* H3: questions, the client's own edits, the final version, then approve and publish */}
+      {hasDelivery && report.siteId && (
+        <PageReview
+          report={report}
+          publishLink={publishLinkEl || undefined}
+          fallback={
+            <>
+              {can('viewer') && <CmsPublishPanel report={report} />}
+              {publishLinkEl && <div className="flex flex-wrap gap-2">{publishLinkEl}</div>}
+            </>
+          }
+        />
+      )}
 
       {html ? (
         <Block
           title="The page"
           icon={<FileText />}
-          description={[words != null ? `${words.toLocaleString()} words` : '', str(meta.page_type), contentScore != null ? `content score ${contentScore}/100${notReady ? ', but the quality check did not pass' : ''}` : ''].filter(Boolean).join(' · ')}
+          description={[words != null ? `${words.toLocaleString()} words` : '', str(meta.page_type), hasDelivery ? (delivery.grade != null ? `grade ${delivery.grade}/100` : '') : contentScore != null ? `content score ${contentScore}/100${notReady ? ', but the quality check did not pass' : ''}` : ''].filter(Boolean).join(' · ')}
         >
           <ArticleViewer html={html} markdown={markdown} meta={meta} files={report.files} slug={slug} />
         </Block>

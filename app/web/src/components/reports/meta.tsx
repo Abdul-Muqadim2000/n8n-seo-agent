@@ -122,7 +122,8 @@ export const stageLabel = (stage: string, report?: ReportLike) => {
   if (report && stage === 'content' && report.summary?.hasPage === false) return isVerdictOnly(report) ? 'Keyword verdict' : 'Keyword report';
   return STAGE_LABELS[stage] ?? stage.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 };
-export const modeTitle = (mode: string) => (isModeId(mode) ? MODES[mode].title : mode);
+/** H3 (2026-10-28): a `finalize` run (the final version of a written page) is not a tool form, so it has no MODES entry */
+export const modeTitle = (mode: string) => (isModeId(mode) ? MODES[mode].title : mode === 'finalize' ? 'Final version of a page' : mode);
 
 /** Page types the engine writes in reports ("Location Page", "Comparison Page", "Guide-style Service Page (...)") mapped to the form's options. */
 export function normalizePageType(v: unknown): PageType {

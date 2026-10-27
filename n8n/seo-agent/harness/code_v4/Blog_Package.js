@@ -860,6 +860,7 @@ const meta = { title, h1: h1 || title, slug, suggested_url: plannedPageUrl || (d
   page_type: d.recommended_page || '', language: d.language_name || 'English', country: d.country || '', domain: dom, word_count: words, content_score, content_score_withheld, quality_checked: qa_checked, qa_summary: d.qa_summary || '',
   // R11 (2026-10-13): the package says whether this page may be published as it is, with the last quality round's counts and reasons
   publishable: d.qa_publishable == null ? null : !!d.qa_publishable, quality: d.qa_quality || null,
+  delivery_status: d.qa_delivery_status || null, client_questions: d.qa_client_questions || [], grade: d.qa_grade || null,   // H1 (2026-10-27)
   lineage, quality_notes: lineage.map(l => l.figure + ': ' + LN.note(l)),
   headings, internal_links: links.filter(l => isInternal(l.url)), external_links: links.filter(l => !isInternal(l.url)), schema_blocks: schema.map(b => ({ type: b.type || ((b.json || {})['@type']) || '', json: b.json || b })),
   images, featured_image: heroImg || images[0] || null, open_graph: { 'og:title': title, 'og:description': description, 'og:image': (heroImg || images[0] || {}).path || '', 'og:image:width': (heroImg || images[0] || {}).width || 1200, 'og:image:height': (heroImg || images[0] || {}).height || 675, 'twitter:card': 'summary_large_image' },

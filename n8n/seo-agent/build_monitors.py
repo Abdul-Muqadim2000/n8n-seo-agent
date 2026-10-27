@@ -1137,6 +1137,54 @@ RR.sticky("""## SEO Agent — Reply Reader (v4.13, LINK_BUILDER_SPEC.md §2)
 `POST /webhook/seo-reply-read` (header X-API-Key, credential **SEO API Key**), synchronous. Body: `{ domain, prospect_domain, page_url?, business, signer, facts?, our_subject, our_body, reply_from, reply_subject, reply_text }`. The web app calls it for every reply a person wrote (bounces and automatic replies are sorted by headers in the app). Pages on the prospect's site named in the reply (and the page we pitched) are fetched and checked for our link at once. **Claude Haiku 4.5** (≈ $0.001): class (says_linked / interested / question / wants_payment / link_swap / not_now / declined / unsubscribe / wrong_person / out_of_office / other), one-line summary, return date, referred contact, suggested answer. An opt-out is never missed (rule fallback).""", [-40, -360], 900, 220, 6)
 RR.write('SEO_Agent_Reply_Reader.json')
 
+# =============================================================================
+# 6b. PAGE FINALIZE (H3, 2026-10-28, docs/content-quality-2026-10-27): "Make the final version". The app sends a page the engine delivered (or
+#     the client's own edited version of it) with the client's answers to its questions; the engine applies every answer it can by swapping a
+#     sentence, works the rest into ONLY the sections concerned (one Claude Sonnet call, section in / section out), runs the content gate (the
+#     content run's own Content QA + Originality Check code, asserted byte-identical, as the Publish Check does) and answers the final page
+#     (synchronous; POST /webhook/seo-page-finalize, header X-API-Key). No research, no new page, no Data Table row but its run-ledger row.
+# =============================================================================
+_FIN_MAIN = {n['name']: n['parameters'].get('jsCode', '') for n in MAIN_WF['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+assert _FIN_MAIN.get('Content QA') and _FIN_MAIN.get('Originality Check'), 'H3: the main workflow has no Content QA / Originality Check to reuse'
+assert "$('Parse Brief').first().json" in _FIN_MAIN['Content QA'], 'H3: Content QA no longer reads its context from Parse Brief - the finalize check would pass it nothing'
+_FIN_KITS = {'/*__PAGE_FIX__*/': rd('code/_page_fix.js').rstrip('\n'), '/*__FACT_ANSWERS__*/': rd('code/_fact_answers.js').rstrip('\n'), '/*__COST_CAL__*/': rd('code/_cost_cal.js').rstrip('\n')}
+def _fin(f):
+    s = rd('code/' + f)
+    for k, v in _FIN_KITS.items(): s = s.replace(k, v)
+    assert '/*__' not in s.split('\n', 1)[0] and not any(k in s for k in _FIN_KITS), 'H3: a kit marker is left in ' + f
+    return s
+for _bad in ('—', '–', '“', '”', '…'):
+    for _f in ('code/Finalize_Parse_Brief.js', 'code/Finalize_Apply.js', 'code/Finalize_Merge.js', 'code/Finalize_Verdict.js', 'code/_fact_answers.js', 'prompts/finalize_editor.txt'):
+        assert _bad not in rd(_f), 'H3: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f
+FN = WF('SEOagentFinalize', 'SEO Agent — Page Finalize', 'finalize', 300, code_prefix='Finalize__')
+FN.node('Finalize Webhook', 'n8n-nodes-base.webhook', 2, {'httpMethod': 'POST', 'path': 'seo-page-finalize', 'authentication': 'headerAuth', 'responseMode': 'responseNode', 'options': {}}, at(0, 0), webhookId=str(uuid.uuid5(NS, 'finalize:webhook')), credentials=API_KEY_CRED)
+FN.code('Parse Brief', _fin('Finalize_Parse_Brief.js'), at(1, 0)); FN.iff('Finalize OK?', '{{ $json.ok }}', at(2, 0))
+FN.code('Finalize Plan', '// H3: the request that passed the check - the run ledger reserves its row here, before the model call\nreturn $input.all();', at(3, 0))
+FN.code('Finalize Apply', _fin('Finalize_Apply.js'), at(4, 0)); FN.iff('Needs Editor?', '{{ $json.needs_editor === true }}', at(5, 0))
+FN.agent('Finalize Editor', 'finalize_editor.txt', {'type': 'object', 'properties': {'sections': {'type': 'array', 'items': {'type': 'object', 'properties': {'id': {'type': 'string'}, 'text': {'type': 'string'}}, 'required': ['id', 'text']}}}, 'required': ['sections']},
+    at(6, -1), model=('claude-sonnet-5-5', 'Claude Sonnet 5.5'))
+FN.code('Finalize Merge', _fin('Finalize_Merge.js'), at(7, 0))
+FN.code('Content QA', _FIN_MAIN['Content QA'], at(8, 0)); FN.code('Originality Check', _FIN_MAIN['Originality Check'], at(9, 0))
+FN.code('Finalize Verdict', _fin('Finalize_Verdict.js'), at(10, 0))
+FN.node('Respond Finalize', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': '={{ JSON.stringify($json.body) }}', 'options': {'responseCode': 200}}, at(11, 0))
+FN.node('Respond Finalize Bad Request', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: false, error: $json.error, errors: $json.errors, writes: 'none' }) }}", 'options': {'responseCode': 400}}, at(3, 2))
+FN.chain('Finalize Webhook', 'Parse Brief', 'Finalize OK?'); FN.link('Finalize OK?', 'Finalize Plan', 0); FN.link('Finalize OK?', 'Respond Finalize Bad Request', 1)
+FN.chain('Finalize Plan', 'Finalize Apply', 'Needs Editor?'); FN.link('Needs Editor?', 'Finalize Editor', 0); FN.link('Needs Editor?', 'Finalize Merge', 1)
+FN.link('Finalize Editor', 'Finalize Merge')
+FN.chain('Finalize Merge', 'Content QA', 'Originality Check', 'Finalize Verdict', 'Respond Finalize')
+# the same reservation and settle as the Reply Reader: on the main path behind the request check, before the model call; the app waits for the
+# answer, so what else is running never refuses it (no_gate); no DataForSEO here (no_dfs)
+FN.run_ledger('page_finalize', 'Finalize', 'Finalize Plan', ['Finalize Verdict'], at(12, 4))
+LEDGER_WIRING[FN.name]['no_gate'] = True; LEDGER_WIRING[FN.name]['no_dfs'] = True
+_fc = {n['name']: n['parameters'].get('jsCode', '') for n in FN.N if n['type'] == 'n8n-nodes-base.code'}
+assert _fc['Content QA'] == _FIN_MAIN['Content QA'] and _fc['Originality Check'] == _FIN_MAIN['Originality Check'], 'H3: the finalize check runs a different gate from the content run'
+assert 'qa_max_rounds: 1' in _fc['Parse Brief'] and "writes: 'none'" in _fc['Finalize Verdict'] and 'const FA = (() => {' in _fc['Parse Brief'] and 'const PF = (() => {' in _fc['Finalize Apply'] and 'const CC = (() =>' in _fc['Finalize Verdict'], 'H3: a finalize node lost its kit or its contract'
+assert not [n for n in FN.N if 'dataforseo.com' in str((n.get('parameters') or {}).get('url') or '')], 'H3: the finalize workflow must buy no search data'
+FN.sticky("""## SEO Agent — Page Finalize (H3, 2026-10-28)
+`POST /webhook/seo-page-finalize` (header X-API-Key, credential **SEO API Key**), synchronous. Body (app/shared/src/page-review.ts FinalizeBody): `{ mode: 'finalize', request_id, domain, site_id, keyword, country, page_type, markdown, delivered_markdown, client_edited, meta: { title, meta_description, slug, h1 }, answers: [{ id, fact_key, source, decision: yes|edit|remove|general|answer|skip, text, question, original, neutral, in_page, section }], business_facts, business_facts_kv, stored_fact_keys }`.
+**Parse Brief** checks the request (400 with the reasons) and builds the content gate's context: the business facts + the stored answers + this request's confirmed texts + every sentence the client wrote are on file. **Finalize Apply** swaps sentences (yes / edit / remove) and plans an edit only for the sections a fact must be worked into; **Finalize Editor** (Claude Sonnet) rewrites only those sections; **Finalize Merge** keeps a section only when it holds every confirmed sentence and every sentence the client wrote. **Content QA** + **Originality Check** are the content run's own code. **Finalize Verdict** answers `{ ok, markdown, applied, sections_rewritten, changes, delivery_status, delivery, client_questions, grade, cost, writes: 'none' }`: a statement the editor added that nothing supports is taken back by the system and asked; nothing the client wrote is ever changed.""", at(0, 4), 1100, 260)
+FN.write('SEO_Agent_Page_Finalize.json')
+
 # R9: the monitors' ledger wiring goes into the same harness file the main workflow's wiring uses (S36 / S57)
 _lw9 = os.path.join(HERE, 'harness', 'ledger_wiring.json')
 _lwj = json.load(open(_lw9)) if os.path.exists(_lw9) else {}

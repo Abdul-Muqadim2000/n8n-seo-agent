@@ -82,6 +82,22 @@ const cases: Case[] = [
     expect: { existing_page_url: 'https://www.northwind-erp.com/erp-implementation/', run_page_check: true },
   },
   {
+    // H3 (2026-10-28): the business facts answered on earlier pages travel with every page run (business_facts_kv, stored_fact_keys, after
+    // `business` and `business_facts` so the fuzzy pick still finds those two), and the server marks an existing page the engine wrote itself
+    name: 'keyword refresh with stored business facts (H3)',
+    mode: 'keyword',
+    input: { siteId: SITE_ID, keyword: 'erp implementation dubai', country: 'United Arab Emirates', existingPageUrl: 'https://www.northwind-erp.com/insights/erp-implementation/' },
+    site: {
+      ...site,
+      factAnswers: {
+        'credential.microsoft_partner': { decision: 'yes', text: 'Northwind is a Microsoft Solutions Partner.', question: 'Is this true?', category: 'credential', at: '2026-10-28T08:00:00.000Z', by: null, reportId: null },
+        'service.fixed_price_scoping': { decision: 'general', text: '', question: 'Do you offer fixed-price scoping?', category: 'service', at: '2026-10-28T08:00:00.000Z', by: null, reportId: null },
+      },
+    },
+    extra: { existing_page_ours: true },
+    expect: { mode: 'keyword', business: site.business, audience: site.customers, cta: site.cta, existing_page_url: 'https://www.northwind-erp.com/insights/erp-implementation/', include_content: true },
+  },
+  {
     name: 'keyword: ladder page from the pipeline (write now)',
     mode: 'keyword',
     input: { siteId: SITE_ID, keyword: 'uae e invoicing requirements', country: 'United Arab Emirates', pageType: 'Guide', ladder: { id: 'lad_test123', rung: 1, head: 'e invoicing in uae', pageNo: 2 } },
@@ -236,11 +252,11 @@ const cases: Case[] = [
       openingHours: 'Mo-Fr 09:00-18:00',
       serviceAreas: ['Dubai', 'Abu Dhabi'],
       // G31: the house style is stored on the same profile row
-      style: { brandForm: 'Northwind ERP', brandWrong: ['NorthWind'], spelling: 'British English', avoid: ['cutting-edge', 'synergy'], tone: 'plain and direct, no hype', notes: 'Write dates as 14 March 2026.' },
+      style: { brandForm: 'Northwind ERP', legalName: 'Northwind Trading FZ-LLC', brandWrong: ['NorthWind'], spelling: 'British English', avoid: ['cutting-edge', 'synergy'], tone: 'plain and direct, no hype', notes: 'Write dates as 14 March 2026.' },
     },
     site,
     mail: false,
-    expect: { mode: 'profile', email: '', 'profile_input.author_name': 'Sara Khan', 'profile_input.public_email': 'hello@northwind-erp.com', 'profile_input.city': 'Dubai', 'profile_input.country_code': 'AE', 'profile_input.reviewer_name': 'Omar Ali', 'profile_input.author_same_as': 'https://www.linkedin.com/in/sara-khan/', 'profile_input.service_areas': 'Dubai, Abu Dhabi', 'profile_input.style_brand_form': 'Northwind ERP', 'profile_input.style_brand_wrong': 'NorthWind', 'profile_input.style_spelling': 'British English', 'profile_input.style_avoid': 'cutting-edge, synergy', 'profile_input.style_tone': 'plain and direct, no hype' },
+    expect: { mode: 'profile', email: '', 'profile_input.author_name': 'Sara Khan', 'profile_input.public_email': 'hello@northwind-erp.com', 'profile_input.city': 'Dubai', 'profile_input.country_code': 'AE', 'profile_input.reviewer_name': 'Omar Ali', 'profile_input.author_same_as': 'https://www.linkedin.com/in/sara-khan/', 'profile_input.service_areas': 'Dubai, Abu Dhabi', 'profile_input.style_brand_form': 'Northwind ERP', 'profile_input.style_legal_name': 'Northwind Trading FZ-LLC', 'profile_input.style_brand_wrong': 'NorthWind', 'profile_input.style_spelling': 'British English', 'profile_input.style_avoid': 'cutting-edge, synergy', 'profile_input.style_tone': 'plain and direct, no hype' },
   },
   {
     name: 'ai visibility with topics',

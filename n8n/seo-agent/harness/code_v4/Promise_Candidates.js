@@ -466,7 +466,7 @@ const CL = (() => {
           if (kind === 'credential' && /\d/.test(key)) return true;   // the same number on the site's own pages: "20+ Years"
           const hit = W.filter(w => c.w.has(w)).length; return W.length ? hit / W.length >= 0.5 : false;
         });
-        if (!supported) out.flags.push({ kind, trigger: trig, sentence: s });   // CT-FIX: the whole sentence (Content QA finds and wraps it); a display cut is the reader's
+        if (!supported) out.flags.push({ kind, trigger: trig, sentence: s, rewrite: neutral(s, { kind, corpus, business: names[0] }) });   // CT-FIX: the whole sentence (Content QA finds and wraps it); a display cut is the reader's
       }
       prevLine = L;
     }
@@ -552,12 +552,29 @@ const CL = (() => {
   const NARR_VERB = /^(?:we|we['’]ll)\s+(?:will\s+)?(?:cover|explain|walk (?:you )?through|look at|outline|list|compare|answer|explore|discuss|break down|summari[sz]e|unpack|examine|describe|go through|show you)\s+(?:the|these|this|what|how|why|when|which|each|every|\d+|both|all)\b/i;
   const EXAMPLE_RE = /^(?:say|suppose|imagine|assume|picture|let['’]?s say|for (?:example|instance), (?:say|suppose|imagine|if))\b/i;
   const ADVICE_WE = /^(?:we|we['’]d)\s+(?:would\s+|always\s+|strongly\s+)?(?:recommend|suggest|advise|encourage|urge)\b/i;
-  const CTA_START = /^(?:book|call|contact|talk|email|e-mail|schedule|get in touch|arrange|request|get a|get your|get started|share|send|ask|tell us|reach|start|join|sign up|try|download|visit|speak|let['’]s|fill in|message|claim|see how|find out|learn more|ready to|read|see|explore|discover|check out|browse|compare)\b/i;
+  const CTA_START = /^(?:book|call|contact|talk|email|e-mail|schedule|get in[- ]touch|arrange|request|get a|get your|get started|share|send|ask|tell us|reach|start|join|sign up|try|download|visit|speak|let['’]s|fill in|message|claim|see how|find out|learn more|ready to|read|see|explore|discover|check out|browse|compare)\b/i;
   // CT-FIX2 (live page 2026-10-22, D2): "To test one use case first, [book a discovery call]" is an invitation behind a purpose clause
   const PURPOSE_LEAD = /^(?:to|if you (?:want|need|would like) to|when you are ready to|for)\s+[^,]{3,80},\s+/i;
   const CTA_HEAD = /\b(?:next steps?|get started|getting started with us|contact|talk to|book|ready to|let['’]s talk|work with us|request|speak to|get in touch|start (?:your|a|with))\b/i;
-  const CTA_FOLLOW = /\b(?:reply|replies|respond|responds|get back to you|call you back|be in touch|contact you|review (?:it|them|your|the details)|send (?:you )?(?:a |the )?(?:written )?(?:plan|proposal|summary|recommendation|outline|next steps)|prepare a (?:fixed-scope |short )?(?:proposal|plan)|set up a call|arrange a call)\b/i;
+  const CTA_FOLLOW = /\b(?:reply|replies|respond|responds|get back to you|call you back|be in touch|contact you|review (?:it|them|your|the details)|(?:confirm|check|tell you) (?:whether|which|if)|send (?:you )?(?:a |the )?(?:written )?(?:plan|proposal|summary|recommendation|outline|next steps)|prepare a (?:fixed-scope |short )?(?:proposal|plan)|set up a call|arrange a call)\b/i;
   const CTA_TERMS = /\b(?:quotes?|quoted|price[sd]?|pricing|fees?|cost|guarantee\w*|refund\w*|money[- ]back|warrant\w*|discount\w*)\b|(?:aed|usd|eur|gbp|sar|\$|€|£)\s?\d/i;
+  // ---- H2 (2026-10-27, R1_PIPELINE_ANALYSIS.md: the four production pages 949 / 2195 / 2552 / 2575) ----
+  // Of 33 sentences flagged as unsupported statements about the client, 9 were generic advice to the reader and 4 calls to action. The
+  // shapes the rules read as commitments, and are not:
+  //   * an instruction to the reader, also as a list item under "We use five steps:" ("Inventory every customisation ...", "Map each
+  //     report ...", "Run a parallel close ...") or after a short label ("AED and multi-currency. Ask how ...");
+  //   * a buyer checklist item ("Why it matters: ... What to ask: ...") and an item of a readiness checklist ("One controls engineer and
+  //     one data owner are named to own the pilot." under "Is your plant ready? A readiness checklist");
+  //   * an invitation whose only promise is the conversation itself ("Book a consultation and we will test your shortlist against these
+  //     criteria"), "Get in-touch" written with a hyphen, and "We will confirm whether ..." in the closing section.
+  // An imperative under a lead-in that lists what the business delivers ("Our engagement includes:") is still read as a commitment.
+  const IMPER = /^(?:inventory|classify|map|cleanse|clean up|run|check|ask|confirm|test|review|agree|define|document|set|plan|choose|pick|list|compare|budget|train|measure|start|keep|make|use|write|build|decide|identify|assess|validate|verify|prepare|involve|name|assign|segment|fit|skip|shortlist|avoid|limit|track|record|collect|export|archive|retire|replace|rebuild|reconcile|complete|schedule|estimate|secure|protect|align|prioriti[sz]e|score|rank|interview|gather|capture|label|monitor|log|weigh|insist on|require|treat|give|separate|apply|bring|move|freeze|lock|switch|upgrade|migrate|connect|integrate|expect|look for|watch|note|read|tie|link|cut|drop|add|remove|split|group|sort|count)\s+(?:every|each|all|the|a|an|your|our|one|two|three|four|five|six|how|whether|what|which|who|when|where|any|this|these|those|it|them|only|no|master|data|for|on|in|with|at|up|down|out|off|vendors|partners|reports|systems|users|staff|people|teams?|both|several|key|critical|current|existing|legacy|old|new)\b/i;
+  const LABEL_LEAD = /^[A-Z][^.:!?]{1,50}[.:]\s+(?=[A-Z])/;   // "AED and multi-currency. Ask how ..." -> "Ask how ..."
+  const CHECK_ITEM = /\b(?:what to ask|why it matters|what to check|questions? to ask|ask (?:how|whether|which|who|what|if|for|about))\b/i;
+  const CHECKLIST_HEAD = /\b(?:checklist|check before|is your [^?]{1,40} ready|are you ready|readiness (?:check|test|questions)|self[- ]check|questions to ask|what to ask|before you (?:choose|buy|sign|start|shortlist|commit))\b/i;
+  const INVITE_AND = /^(?:book|request|schedule|arrange|get in[- ]touch|contact|call|talk to|speak to|ask for|start with)\b[^.]{0,80}?\b(?:consultation|call|meeting|session|demo|review|assessment|chat|conversation)\b[^.]{0,40}?\b(?:and|then|so)\s+(?:we|our team)(?:\s+will|['’]ll)?\s+(?:review|test|check|confirm|assess|discuss|answer|walk you through|look at|go through|map|compare)\b/i;
+  const TIME_TERM = /\b(?:within|in under|in less than)\s+\d|\b\d+\s*(?:hours?|days?|weeks?|months?|business days|working days)\b/i;
+  const STANCE_VERB = /^(?:say|says|believe|think|feel|know|mean|tell|note|see|find|prefer|like|love|value|care|treat|consider|admit|agree|disagree)\b/i;
   const COMMIT_VERB = /\b(?:test|tests|build|builds|design|designs|deliver|delivers|provide|provides|offer|offers|document|documents|train|trains|run|runs|give|gives|hand|hands|include|includes|cover|covers|stop|stops|tell|tells|guarantee|guarantees|commit|commits|charge|charges|bill|bills|invoice|invoices|quote|quotes|set up|sets up|assign|assigns|monitor|monitors|support|supports|manage|manages|handle|handles|migrate|migrates|implement|implements|deploy|deploys|integrate|integrates|review|reviews|audit|audits|write|writes|create|creates|produce|produces|prepare|prepares|assess|assesses|track|tracks|measure|measures|refund|refunds|promise|promises|ensure|ensures|keep|keeps|work|works|serve|serves|start|starts|begin|begins|complete|completes|respond|responds|reply|replies|host|hosts|maintain|maintains|operate|operates|resell|resells|sell|sells|license|licenses|certif(?:y|ies)|has|have|had|is|are|was|were|holds?|employs?|costs?|takes?|lasts?|comes?|wins?|won)\b/;
   const OFFER_RE = /\b(?:you|your (?:team|teams|staff|people|users|admins|organisation|organization|business|company))\s+(?:will\s+|['’]ll\s+|also\s+|then\s+|always\s+)?(?:receive|receives|get|gets|keep|keeps|walk away with|leave with|are given|are handed|can expect|will have)\b|\b(?:business users|users|admins|makers)\s+(?:will\s+)?(?:get|gets|receive)\b/i;
   const TRAIN_RE = /^(?:admins|makers|(?:business )?users|staff|employees|your (?:team|staff|admins|users|people))\s+(?:learn|are trained|get trained|receive training)\b/i;
@@ -567,7 +584,7 @@ const CL = (() => {
   const BILL_RE = /\b(?:quote|quotes|quoted|invoice\w*|billed|billing|line item|separate line|fees?|payment|deposit|retainer|hourly|day rate|licen[cs]es? (?:sit|are|is)|charged?)\b/i;
   const LEAD_HEAD = /\b(?:what you get|you get|you receive|deliverables?|includes?|included|what (?:we|\S+) (?:deliver|delivers|does|do|handles?|offers?|covers?|provides?)|our (?:services|engagement|approach|offer|packages?|scope))\b/i;
   // words that say nothing on their own about what is promised: they never count for or against support
-  const GENERIC = new Set('you your receive get gets keep give gives offer provide include includes cover covers phase stage step engagement service then also each every well real live new own way part make makes work business client clients team teams solution solutions reason scope sometimes have has more than over typical typically'.split(' ').map(stem));
+  const GENERIC = new Set('you your receive get gets keep give gives offer provide include includes cover covers phase stage step engagement service then also each every well real live new own way part make makes work business client clients team teams solution solutions reason scope sometimes have has more than over typical typically either before after'.split(' ').map(stem));
   // a name that is only part of a fuller name of the business names something else ("peppol" is the network, "OpenPeppol" the
   // organisation): only the full names are a subject
   const fullNames = (list) => { const ns = (list || []).map(n => String(n || '').trim()).filter(n => n.length >= 3); const k = (n) => norm(String(n).replace(/&/g, 'and')).replace(/ /g, '');
@@ -582,6 +599,8 @@ const CL = (() => {
     const NAME_RE = NAMES ? new RegExp('(?:' + NAMES + ')', 'i') : null;
     const NAME_VERB = NAMES ? new RegExp('(?:' + NAMES + ')(?:[\'’]s)?(?:\\s+(?:also|then|now|always|typically|usually|will|can|has|have))*\\s+' + COMMIT_VERB.source.slice(2), 'i') : null;
     const NAME_BY = NAMES ? new RegExp('\\b(?:with|from|by|at)\\s+(?:' + NAMES + ')', 'i') : null;
+    // H2 (2026-10-27, exec 2195): "Nova& explains which edition suits UAE firms." says what the page explains, like "in this guide we cover ..."
+    const NAME_NARR = NAMES ? new RegExp('^(?:' + NAMES + ')(?:\\s*\\([^)]*\\))?\\s+(?:explains|describes|outlines|shows|covers|compares|walks you through|sets out|answers)\\s+(?:which|how|what|why|when|whether|the|each|every)\\b', 'i') : null;
     const WE_SUBJ = /(?:^|[,;:]\s*|\b(?:and|but|so|then|that|because|where|when|if|once|after|before|until|while|which|or)\s+)(?:we|we['’](?:ll|re|ve|d))\s+(?!recommend|suggest|advise|encourage|urge)\S/i;
     const OUR_SUBJ = /(?:^|\b(?:and|but|so|then|because|while)\s+|[;:]\s*)our\s+\S+(?:\s+\S+){0,5}?\s+(?:is|are|was|were|has|have|will|can|also|costs?|starts?|takes?|includes?|covers?|runs?|lets?|helps?|handles?|monitors?|provides?|delivers?|offers?|works?|holds?|builds?|designs?|comes?|begins?|ends?|means?|gives?|charges?|bills?|supports?|serves?|keeps?|treats?|does|did|consists?)\b/i;
     const WITH_US = /\b(?:with|from|by)\s+us\b/i;
@@ -602,16 +621,37 @@ const CL = (() => {
     const csents = String(corpus || '').split(/(?<=[.!?])\s+|\n+/).map(s => canon(s)).filter(s => s.trim());
     const cs = []; for (let i = 0; i < csents.length; i++) { const one = csents[i]; const two = i + 1 < csents.length ? one + ' ' + csents[i + 1] : one;
       for (const x of (two === one ? [one] : [one, two])) { const w = new Set(words(x, nameWords)); if (w.size) cs.push({ w, low: x.toLowerCase() }); } }
+    // H2 (2026-10-27, exec 949): a site's own page states one phase as a paragraph of short sentences ("We at Nova& begin with business
+    // discovery ... translated into business requirements ... through gap-fit analysis ... with an ROI assessment"), and a page sentence
+    // that names the phase sums it up; no single sentence of the paragraph carries half of it. A whole paragraph (one line of the text on
+    // file, at most 1,200 characters) counts too, with a higher bar: 65% of the content words and at least three of them.
+    const PARA_MIN = 0.65;
+    const cpara = String(corpus || '').split(/\n+/).map(x => canon(x)).filter(x => x.length <= 1200 && (x.match(/[.!?](?:\s|$)/g) || []).length >= 2)
+      .map(x => ({ w: new Set(words(x, nameWords)), low: x.toLowerCase() })).filter(x => x.w.size);
     const support = (plain, english) => {
       const c0 = canon(english || plain);
       const W = [...new Set(words(c0, nameWords))].filter(w => !GENERIC.has(w));
       const nums = numsOf(c0);
       const numsOk = nums.every(n => cnums.has(n) || (/ /.test(n) && cnorm.includes(n.split(' ')[0] + ' ' + n.split(' ')[1].slice(0, 4))));
       const strong = [...new Set((c0.match(STRONG) || []).map(x => x.toLowerCase()))];
-      let best = 0;
+      let best = 0, para = 0;
       for (const c of cs) { const r = W.length ? W.filter(w => c.w.has(w)).length / W.length : 0; if (r > best && strong.every(q => c.low.includes(q))) best = r; }
-      return { W, best, numsOk, ok: numsOk && W.length > 0 && best >= 0.5 };
+      if (W.length >= 3) for (const c of cpara) { const r = W.filter(w => c.w.has(w)).length / W.length; if (r > para && strong.every(q => c.low.includes(q))) para = r; }
+      const byPara = best < 0.5 && para >= PARA_MIN;
+      return { W, best: byPara ? para : best, numsOk, ok: numsOk && W.length > 0 && (best >= 0.5 || byPara), ...(byPara ? { paragraph: true } : {}) };
     };
+    // H2 (2026-10-27, execs 949 / 2552 / 2575): "We work from Faisalabad as well as Ajman, so site visits ... are practical" and "We are a
+    // Microsoft partner, so weigh our view of SAP with that in mind" state one fact on file and draw a consequence from it. The fact is
+    // what is held against the file; the consequence is read only when it is itself a term (a price, a guarantee, a number not on file)
+    // or a commitment in the business's own voice ("..., so we deliver it in 4 weeks"); a stance ("so we also say where ...") is not. Only a
+    // head in the business's own voice (we / our / its name) is split, and a consequence that limits or ranks ("only", "first") is read whole.
+    const SO_RE = /^(.{8,}?),\s+so\s+(.{6,})$/i; const STRONG_ONE = new RegExp(STRONG.source, 'i');
+    const supportSo = (plain) => { const sp = supportJoined(plain); if (sp.ok) return sp; const m = plain.match(SO_RE); if (!m) return sp;
+      const tail = m[2]; const tn = numsOf(tail); const hb = bizSubject(m[1]);
+      if (!hb || hb === 'with' || STRONG_ONE.test(tail.replace(/\bnot (?:always )?(?:the|a)\s+(?:best|first|only|right)\b/gi, ' ')) || CTA_TERMS.test(tail) || TIME_TERM.test(canon(tail)) || !tn.every(n => cnums.has(n))) return sp;
+      const tw = tail.match(/^(?:we|we['’]ll|our team)\s+(?:(?:also|then|always|will|can|usually|typically)\s+)*(\S+)/i);
+      if (tw && !STANCE_VERB.test(tw[1]) && !supportJoined(tail).ok) return sp;
+      const hs = supportJoined(m[1]); return hs.ok ? { ...hs, so_split: true } : sp; };
     // CT-FIX2 (live page 2026-10-22, D1): "We serve enterprises across the UAE and the GCC and bring 20+ years of industry experience" joins
     // two facts that sit in two places on file; each half is held against the facts on its own, and the sentence is supported when both are
     const JOIN_RE = /,?\s+and\s+(?=(?:we\s+|also\s+)?(?:bring|brings|have|has|hold|holds|serve|serves|offer|offers|deliver|delivers|run|runs|work|works|employ|employs|support|supports|operate|operates)\b)/i;
@@ -674,7 +714,7 @@ const CL = (() => {
             if (sp.ok && en.terms >= 2) { if (opts.collect) addCand({ sentence: full, plain: plain0, why: 'ar-' + why, rule_flag: false, support: Math.round(100 * sp.best), kind: 'process', where: it.kind, facts: topFacts(en.text) }); continue; }
             const ek = en.text;
             const akind = /guarantee|refund/.test(ek) ? 'guarantee' : /fee|cost|price|aed|discount|free/.test(ek) ? 'pricing' : /certif/.test(ek) ? 'credential' : /weeks|days|months/.test(ek) ? 'timeline' : why === 'offer' ? 'deliverable' : 'process';
-            out.flags.push({ kind: akind, sentence: full, support: Math.round(100 * sp.best), where: it.kind });
+            out.flags.push({ kind: akind, sentence: full, support: Math.round(100 * sp.best), where: it.kind, rewrite: neutral(full, { kind: akind, corpus, business: names[0] }) });
             if (opts.collect) addCand({ sentence: full, plain: plain0, why: 'ar-' + why, rule_flag: true, support: Math.round(100 * sp.best), kind: akind, where: it.kind, facts: topFacts(en.text) });
             continue;
           }
@@ -688,6 +728,14 @@ const CL = (() => {
           const pc = plain.replace(PURPOSE_LEAD, '');   // CT-FIX2 (D2): "To test one use case first, [book a call]" is the invitation itself
           if (cta && (CTA_START.test(pc) || CTA_FOLLOW.test(pc)) && !CTA_TERMS.test(pc)) { lastBill = false; continue; }   // the call to action invites a conversation; a price or a guarantee in it is still a term
           if (CTA_START.test(pc) && !/\b(?:and|then)\s+(?:we|our team)\b/i.test(pc) && !CTA_TERMS.test(pc)) { lastBill = false; continue; }   // an imperative on its own is advice or an invitation
+          // H2 (2026-10-27): advice to the reader, a buyer or readiness checklist item, an invitation to the conversation on file, the page's
+          // own narration in the business's name (see IMPER above); an imperative under a lead-in that lists deliverables is still read
+          const pcl = (it.kind === 'li' || it.kind === 'table') ? pc.replace(LABEL_LEAD, '') : pc;
+          const bizLead = it.kind === 'li' && !!it.lead && LEAD_HEAD.test(it.lead);
+          if (!bizLead && !CTA_TERMS.test(pc) && !/\b(?:and|then)\s+(?:we|our team)\b/i.test(pcl) && (IMPER.test(pc) || IMPER.test(pcl) || CTA_START.test(pcl))) { lastBill = false; continue; }
+          if (it.kind === 'li' && !bizLead && !bizSubject(plain) && (CHECK_ITEM.test(plain) || G.heads.some(hd => CHECKLIST_HEAD.test(hd)))) { lastBill = false; continue; }
+          if (INVITE_AND.test(pc) && !CTA_TERMS.test(pc) && !TIME_TERM.test(canon(pc))) { lastBill = false; continue; }
+          if (NAME_NARR && NAME_NARR.test(pc)) { lastBill = false; continue; }
           let why = null; const subj = bizSubject(plain);
           if (subj) why = subj;
           else if (phaseSubject(plain)) why = 'phase';   // CT-FIX2 (D3): a phase on file as the subject is the business speaking
@@ -707,7 +755,7 @@ const CL = (() => {
           }
           out.checked++;
           const lab = why === 'list' && s.match(/^\s*\*\*([^*]{3,60}?):?\*\*:?\s+\S/);   // "**AI strategy:** candidate use cases ...": the label is the service the lead-in commits to
-          const sp0 = supportJoined(plain); const sp = (!sp0.ok && lab && support(lab[1]).ok) ? support(lab[1]) : sp0;
+          const sp0 = supportSo(plain); const sp = (!sp0.ok && lab && support(lab[1]).ok) ? support(lab[1]) : sp0;
           if (opts.trace) out.trace = (out.trace || []).concat([{ s: plain.slice(0, 90), why, W: sp.W, best: Math.round(100 * sp.best), numsOk: sp.numsOk }]);
           if (sp.ok || !sp.W.length) { if (opts.collect) addCand({ sentence: full, plain, why, rule_flag: false, support: Math.round(100 * sp.best), kind: 'process', where: it.kind, facts: topFacts(plain) }); continue; }   // nothing but generic words: nothing to hold against the facts
           const kind = /\b(?:charg|bill|fee|price|pricing|quote|invoice|payment|licen[cs]es? (?:sit|are)|separate line|cost|free|discount)/i.test(plain) ? 'pricing'
@@ -717,7 +765,7 @@ const CL = (() => {
                   : /\b(?:stop|only|not|never|scope|covers|includes)\b/i.test(plain) ? 'scope'
                     : (why === 'offer' || why === 'phase' || why === 'list' || why === 'passive' || /\b(?:deliver|provide|runbook|pack|report|dashboard|document)/i.test(plain)) ? 'deliverable' : 'process';
           // E-CLAIM / CT-FIX: the WHOLE sentence is returned (Content QA finds and wraps it in the copy); a display cut belongs to the reader
-          out.flags.push({ kind, sentence: full, support: Math.round(100 * sp.best), where: it.kind });
+          out.flags.push({ kind, sentence: full, support: Math.round(100 * sp.best), where: it.kind, rewrite: neutral(full, { kind, corpus, business: names[0] }) });   // H2: what to do with it (additive)
           if (opts.collect) addCand({ sentence: full, plain, why, rule_flag: true, support: Math.round(100 * sp.best), kind, where: it.kind, facts: topFacts(plain) });
         }
       }
@@ -732,7 +780,66 @@ const CL = (() => {
     if (!nums.every(n => fn.has(n))) return false;
     const W = [...new Set(words(c0, []))].filter(w => !GENERIC.has(w)); if (!W.length) return true;
     const F = new Set(words(canon(fact), [])); return W.filter(w => F.has(w)).length / W.length >= 0.4; };
-  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm, backs };
+  // ---- H2 (2026-10-27): what to do with a flagged sentence (R1 §3.3 and recommendation 3 / 9) ----
+  // CL.neutral(sentence, { kind, corpus, business }) -> { action, neutral, needs_client_fact, question, suggestion, why }. Deterministic,
+  // no model. Three outcomes:
+  //   * reword: a method or step written in the business's voice keeps its value as advice to the reader, so it is rewritten without the
+  //     business as subject ("We use five steps:" -> "A five-step approach works well:", "In those projects, we check that every VAT
+  //     code ..." -> "Check that every VAT code ...", "As an ISO 27001 certified team, we give each AI service ..." -> "Give each AI
+  //     service ..."); needs_client_fact false;
+  //   * delete: a stance in the business's name with nothing to keep ("When Business Central is enough, we say so"); false as well;
+  //   * ask: a deliverable, term, price, time, guarantee, credential, location or number only the client can confirm. `question` is the
+  //     plain question to put to the client and `suggestion` the closest thing their own site and facts on file already say (empty when
+  //     nothing is close), so the answer can start from it. needs_client_fact true.
+  const NEUTRAL_KEEP = /^(?:are|is|was|were|have|has|had|hold|holds|employ|employs|serve|serves|work|works|bring|brings|deliver|delivers|offer|offers|provide|provides|charge|charges|guarantee|guarantees|promise|promises|send|sends|give you|hand)\b/i;
+  const NEUTRAL_STANCE = /^(?:say|says|believe|think|feel|know|mean|tell|note|admit|agree|disagree)\b/i;
+  const capFirst = (x) => x ? x.charAt(0).toUpperCase() + x.slice(1) : x;
+  function neutral(sentence, o = {}) {
+    const raw = String(sentence || '').replace(/^\[(?:Confirm|Owner)[^:]*:\s*/i, '').replace(/\]$/, '');
+    const s0 = raw.replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim();
+    const biz = String(o.business || '').trim() || 'the business';
+    const kind = String(o.kind || '');
+    const out = { action: 'ask', neutral: '', needs_client_fact: true, question: '', suggestion: '', why: '' };
+    if (!s0) return out;
+    // the closest statement the business already makes about itself (its own pages, facts, profile)
+    const W = [...new Set(words(canon(s0), []))].filter(w => !GENERIC.has(w));
+    let best = 0, bestS = '';
+    if (W.length) for (const c of String(o.corpus || '').split(/(?<=[.!?])\s+|\n+/)) { const t = c.trim(); if (t.length < 20 || t.length > 400) continue;
+      const cw = new Set(words(canon(t), [])); const r = W.filter(w => cw.has(w)).length / W.length; if (r > best) { best = r; bestS = t; } }
+    const suggestion = best >= 0.25 ? bestS.slice(0, 300) : '';
+    let s = s0.replace(/^(?:in (?:those|these|our|such|all|most) (?:projects|engagements|cases|implementations|rollouts),?\s+|in practice,?\s+|as an? [^,]{3,60},\s+|before [^,]{3,60},\s+)/i, '');
+    // what is left once the lead is gone decides: "As an ISO 27001 certified team, we give ..." keeps only the method
+    const nums = numsOf(canon(s)).filter(n => !/^365$/.test(n));
+    const termy = CTA_TERMS.test(s) || TIME_TERM.test(canon(s)) || nums.length > 0 || OFFER_RE.test(s);
+    const kindNow = /\b(?:guarantee|warrant|refund)/i.test(s) ? 'guarantee' : /\b(?:certified|certif|accredit|partner|iso)\b/i.test(s) ? 'credential' : (kind === 'credential' || kind === 'guarantee') ? 'process' : kind;
+    const ownWork = /\b(?:consultations?|engagements?|our clients|with clients|client projects|projects we)\b/i;   // "We use this self-check in first consultations": the business's own practice, only it can say
+    if (/\b(?:we|our team)\s+(?:(?:also|will|always|simply)\s+)*(?:say so|tell you so|say where|admit|believe|think|feel)\b/i.test(s0) && !termy) {
+      out.action = 'delete'; out.needs_client_fact = false; out.why = 'a stance in the business\'s name that adds nothing the reader can use; delete it'; return out; }
+    // "We use five steps:" -> "A five-step approach works well:"
+    let m = s.match(/^(?:we|our team)\s+(?:use|follow|run|apply)\s+(?:a\s+)?([a-z0-9]+)[- ](?:steps?|stages?|phases?|checks?|questions?)\b\s*(.*)$/i);
+    if (m && !termy) { const tail = m[2].replace(/^[:.]\s*/, '');
+      out.neutral = 'A ' + m[1].toLowerCase() + '-step approach works well' + (tail ? ': ' + tail : ':'); out.action = 'reword'; out.needs_client_fact = false; out.why = 'a method, rewritten as advice to the reader'; return out; }
+    m = s.match(/^(?:we|we['’]ll|our team)\s+((?:(?:also|then|always|first|will|can|usually|typically|carefully|still)\s+)*)([a-z-]+)\b\s*(.*)$/i);
+    if (m && NEUTRAL_STANCE.test(m[2]) && !termy) { out.action = 'delete'; out.needs_client_fact = false; out.why = 'a stance in the business\'s name that adds nothing the reader can use; delete it'; return out; }
+    if (m && !termy && !ownWork.test(m[3]) && !NEUTRAL_KEEP.test(m[2]) && !['guarantee', 'credential'].includes(kindNow) && m[3].length >= 8) {
+      const verb = m[2].toLowerCase().replace(/^(\w+?)(?:ies)$/, '$1y');
+      const rest = m[3].replace(/,?\s+and\s+(?:we|our team)\s+(?:also\s+|then\s+|will\s+)*/gi, ', and ').replace(/\bour\b/gi, 'your').replace(/\bus\b/g, 'your team');
+      out.neutral = capFirst(verb) + ' ' + rest.replace(/\s+$/, ''); if (!/[.!?:]$/.test(out.neutral)) out.neutral += '.';
+      out.action = 'reword'; out.needs_client_fact = false; out.why = 'a method or step, rewritten as advice to the reader'; return out; }
+    // everything else needs the client: a question with the closest fact on file
+    const q = s0.length > 140 ? s0.slice(0, 137).replace(/\s+\S*$/, '') + ' ...' : s0;
+    const Q = { pricing: 'What does ' + biz + ' charge for this, and may the page say it?',
+      guarantee: 'Does ' + biz + ' offer this guarantee in writing, and may the page say it?',
+      timeline: 'How long does this take with ' + biz + ', and may the page give that time?',
+      credential: 'Which certification or partner status does ' + biz + ' hold for this, and may the page name it?',
+      deliverable: 'What does a client of ' + biz + ' receive at this step?',
+      scope: 'Does ' + biz + ' do this, and is it part of every engagement?' };
+    out.question = (Q[kindNow] || 'Is this true for ' + biz + '?') + ' The page says: "' + q + '"';
+    out.suggestion = suggestion;
+    out.why = suggestion ? 'only the client can confirm it; the closest thing on file is offered as a starting point' : 'only the client can confirm it; nothing on file is close';
+    return out;
+  }
+  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm, backs, neutral };
 })();
 // ---- promise judge kit (CT-FIX2, 2026-10-22; inlined by build_v4.py section 148): the second reader of the promise check ----
 // The rule-based check (CL.commitments, _claims.js) scored 100% / 88% recall offline and then, on the first fresh live page (exec 159),
@@ -759,9 +866,12 @@ const PJ = (() => {
   const ownText = (prev, siteModel) => {
     const P = prev || {}; const SMx = siteModel || (P.site_model && typeof P.site_model === 'object' ? P.site_model : null) || {};
     const vals = (o) => (o && typeof o === 'object') ? Object.values(o).map(v => (v && typeof v === 'object') ? vals(v) : String(v == null ? '' : v)).join(' ') : String(o || '');
-    return [P.business, P.business_facts, P.case_facts_text, SMx.business_facts, SMx.accreditation, vals(SMx.services), vals(SMx.nap),
-      vals(P.site_profile), vals(P.author), vals(P.reviewer), ...(P.client_pages || []).map(p => p && p.text), P.existing_page_text,
-      P.existing_page_facts_text, vals(P.client_signals), P.proof_context, vals(P.proof_library), P.cta, SMx.cta].filter(Boolean).map(String).join('\n');
+    // H3 (2026-10-28): the facts the client confirmed or wrote in answer to an earlier page's questions (business_facts_kv) are on file too
+    return [P.business, P.business_facts, (P.business_facts_kv && typeof P.business_facts_kv === 'object') ? vals(P.business_facts_kv) : '', P.case_facts_text, SMx.business_facts, SMx.accreditation, vals(SMx.services), vals(SMx.nap),
+      vals(P.site_profile), vals(P.author), vals(P.reviewer), ...(P.client_pages || []).map(p => p && p.text),
+      // H1 / H2 (2026-10-27): on a refresh of a page the system itself wrote (`existing_page_ours`, set by the caller from the content log),
+      // that page's text is our own earlier draft, not the client's word, and never supports a claim about the business
+      P.existing_page_ours ? '' : P.existing_page_text, P.existing_page_ours ? '' : P.existing_page_facts_text, vals(P.client_signals), P.proof_context, vals(P.proof_library), P.cta, SMx.cta].filter(Boolean).map(String).join('\n');
   };
   // the captions and alt texts the brief planned for the page's images: shown on the page next to the copy
   const captionsOf = (brief) => ((brief || {}).image_suggestions || []).flatMap(im => [im && im.caption]).map(x => String(x || '').trim()).filter(x => x.length >= 12);

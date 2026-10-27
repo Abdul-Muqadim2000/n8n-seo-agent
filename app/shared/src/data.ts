@@ -287,6 +287,8 @@ export interface ContentItem {
   /** 2026-10-27: why a page was marked published although the live page did not match the draft (the owner confirmed it after the
    *  warning); empty on every verified row */
   publishNote?: string;
+  /** H3 (2026-10-28): where the page's review stands (questions, final version, approval, publishing); absent before the page has a report */
+  review?: import('./page-review').PageReviewSummary;
 }
 
 export interface CaseStudy {
@@ -1352,7 +1354,9 @@ export interface NeedsYouItem {
    * P1: `profile` (the author profile and the business facts the first page waits for, or that first page ready to write) */
   kind: 'publish' | 'approve' | 'overlap' | 'duplicate' | 'failed' | 'connection' | 'pileup' | 'keyword' | 'proposal' | 'recheck' | 'level' | 'profile'
     /** AI-FOCUS (2026-10-27): the AI question panel and the keywords the client works on disagree, or a ladder has no room in the panel */
-    | 'ai_panel';
+    | 'ai_panel'
+    /** H3 (2026-10-28): a written page has questions only the client can answer (ranked; the page is publishable without them) */
+    | 'questions';
   severity: 'warning' | 'info';
   title: string;
   detail: string;

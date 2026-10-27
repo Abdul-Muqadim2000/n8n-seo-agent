@@ -510,6 +510,62 @@
     "severity"
    ]
   },
+  "SEO Agent \u2014 Page Finalize": {
+   "guard": {
+    "gate": "After Run Ledger (Finalize)",
+    "if": "Run Allowed? (Finalize)",
+    "kit": "RG",
+    "load": "Load Open Runs (Finalize)",
+    "notice": "Refusal Notice (Finalize)",
+    "post": "Post Refusal (Finalize)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Finalize)",
+     "Refusal Notice (Finalize)",
+     "Refuse Run Ledger (Finalize)",
+     "Tell Caller (Finalize)?"
+    ],
+    "refuse": "Refuse Run Ledger (Finalize)",
+    "tell": "Tell Caller (Finalize)?"
+   },
+   "if_outputs": [
+    [
+     "Finalize Apply"
+    ],
+    [
+     "Refuse Run Ledger (Finalize)"
+    ]
+   ],
+   "refuse_values": [
+    "cost_basis",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_at",
+    "settled_usd",
+    "status"
+   ],
+   "retry": {
+    "from": "Settle Run Ledger (Finalize)",
+    "gate": "Any Alert Retry (Finalize)?",
+    "load": "Load Open Alerts (Finalize)",
+    "plan": "Alert Retry Plan (Finalize)",
+    "post": "Post Alert Retry (Finalize)",
+    "result": "Alert Retry Result (Finalize)",
+    "save": "Save Alert Retry (Finalize)",
+    "table": "seo_ops_alerts"
+   },
+   "writes": [
+    "attempt_log",
+    "attempts",
+    "channels",
+    "delivered",
+    "last_attempt_at",
+    "next_attempt_at",
+    "notes",
+    "severity"
+   ]
+  },
   "SEO Agent \u2014 Page Watch": {
    "guard": {
     "gate": "After Run Ledger (Watch)",

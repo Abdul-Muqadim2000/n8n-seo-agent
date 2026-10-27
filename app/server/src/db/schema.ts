@@ -1,4 +1,4 @@
-import type { CreditPack } from '@seo/shared';
+import type { CreditPack, FactAnswers, PageAnswer, PageCheck } from '@seo/shared';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
@@ -495,6 +495,9 @@ export const sites = pgTable(
     /** MKT (0022, mismatch audit 2026-10-27 §2.2): the ids of standing warnings a person answered with "Continue anyway" (engine market,
      *  ladder market, description vs country). An id embeds the facts it is about, so a later change of either side warns again. */
     acknowledgedWarnings: jsonb('acknowledged_warnings').$type<string[]>().notNull().default([]),
+    /** H3 (0023, 2026-10-28): the business facts the client confirmed, wrote or declined on a written page, keyed by the engine's fact_key
+     *  (shared/src/page-review.ts FactAnswer). Every later page run carries them (business_facts_kv / stored_fact_keys) and never asks them again. */
+    factAnswers: jsonb('fact_answers').$type<FactAnswers>().notNull().default({}),
     createdAt: created(),
     updatedAt: ts('updated_at').defaultNow().notNull(),
   },
@@ -1590,6 +1593,46 @@ export const contentFeedback = pgTable(
 );
 
 /**
+ * H3 (0023, 2026-10-28): the review of one delivered page (stage `content` report): the client's answers to its questions, the client's own
+ * edited version (sanitised Markdown) and its free check, the final version made from them (a `finalize` run and its report) and the
+ * approval. One row per delivered page; a final version's report shares its original's row (`final_report_id`).
+ */
+export const pageReviews = pgTable(
+  'page_reviews',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id').references(() => sites.id, { onDelete: 'set null' }),
+    reportId: uuid('report_id')
+      .notNull()
+      .references(() => reports.id, { onDelete: 'cascade' }),
+    /** question id -> the client's answer */
+    answers: jsonb('answers').$type<Record<string, PageAnswer>>().notNull().default({}),
+    clientMarkdown: text('client_markdown'),
+    clientSavedAt: ts('client_saved_at'),
+    clientSavedBy: uuid('client_saved_by').references(() => users.id, { onDelete: 'set null' }),
+    clientCheck: jsonb('client_check').$type<PageCheck>(),
+    finalRunId: uuid('final_run_id').references(() => runs.id, { onDelete: 'set null' }),
+    finalReportId: uuid('final_report_id').references(() => reports.id, { onDelete: 'set null' }),
+    finalError: text('final_error'),
+    finalStartedAt: ts('final_started_at'),
+    approvedAt: ts('approved_at'),
+    approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
+    approvedReportId: uuid('approved_report_id').references(() => reports.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('page_reviews_report_idx').on(t.reportId),
+    index('page_reviews_org_idx').on(t.orgId, t.updatedAt),
+    index('page_reviews_site_idx').on(t.siteId),
+    index('page_reviews_final_idx').on(t.finalReportId),
+  ],
+);
+
+/**
  * D3: the one free keyword research of a website at setup. Keyed by the DOMAIN, not the website row: deleting a website and adding it
  * again, or adding it in another company, never earns a second free research.
  */
@@ -1632,6 +1675,7 @@ export const ladderRechecks = pgTable(
 export type KeywordProposalRow = typeof keywordProposals.$inferSelect;
 export type CyclePreviewRow = typeof cyclePreviews.$inferSelect;
 export type ContentFeedbackRow = typeof contentFeedback.$inferSelect;
+export type PageReviewRow = typeof pageReviews.$inferSelect;
 export type LadderRecheckRow = typeof ladderRechecks.$inferSelect;
 
 export type CreditEntryRow = typeof creditLedger.$inferSelect;

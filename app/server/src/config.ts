@@ -40,6 +40,7 @@ const Env = z.object({
   N8N_REPLY_PATH: str('/webhook/seo-reply-read'),
   /** B3-7: the Publish Check (SEOagentPubCheck): the deterministic half of the content gate over a supplied page, synchronous, free */
   N8N_PUBLISH_CHECK_PATH: str('/webhook/seo-publish-check'),
+  N8N_FINALIZE_PATH: str('/webhook/seo-page-finalize'),   // H3 (2026-10-28): the final version of a written page (SEOagentFinalize)
   /** v4.13: 32 bytes (64 hex or base64) that encrypt mailbox passwords; without it no mailbox can be connected */
   MAILBOX_KEY: str(''),
   /** G1: 32 bytes (64 hex or base64) that seal authenticator-app secrets and OIDC client secrets; empty = MAILBOX_KEY is used */
@@ -188,6 +189,7 @@ export const config = {
     aiPilotPath: e.N8N_AI_PILOT_PATH,
     replyPath: e.N8N_REPLY_PATH,
     publishCheckPath: e.N8N_PUBLISH_CHECK_PATH,
+    finalizePath: e.N8N_FINALIZE_PATH,
     projectId: e.N8N_PROJECT_ID,
   },
   callbackBaseUrl: e.CALLBACK_BASE_URL,

@@ -119,6 +119,8 @@ const existing = pages.find(p => p.kind === 'existing');
 // THAT URL — run 444 recommended a second page for "uae e invoicing penalties" although the site's own page had been live since August.
 const matchedReq = reqs.find(r => r && r.kind === 'existing' && r.existing_page && r.existing_page.url) || null;
 const inventoryPage = (!(ctx.existing_page && ctx.existing_page.url) && matchedReq) ? matchedReq.existing_page : null;
+// H2 (2026-10-27, exec 2575): the ladder planned a new page, so a page the sitemap matched is not this run's page to rewrite
+const ignoredReq = reqs.find(r => r && r.ignored_existing && r.ignored_existing.url) || null;
 const all = pages.map(p => p.text).join('\n');
 const uniq = (a) => [...new Set((a || []).map(s => s.trim()))];
 const client_signals = {
@@ -130,5 +132,6 @@ const client_signals = {
   locations: uniq(all.match(/\b(Dubai|Abu Dhabi|Sharjah|Riyadh|Jeddah|London|Manchester|New York|Toronto|Sydney|Singapore|Karachi|Lahore|Islamabad|Mumbai|Delhi|Bangalore|Berlin|Paris|Madrid|Amsterdam)\b/g)).slice(0, 5)
 };
 return [{ json: { ...ctx, ...(inventoryPage ? { existing_page: inventoryPage, existing_page_url: ctx.existing_page_url || inventoryPage.url } : {}),
+  ...(ignoredReq ? { existing_page: null, existing_page_ignored: ignoredReq.ignored_existing } : {}),
   client_pages: pages, client_pages_read: pages.length, existing_page_text: existing ? existing.text : '', existing_page_tables: existingDigest ? existingDigest.tables_block : '', existing_page_digest: existingDigest,
   existing_page_facts_text: existingDigest ? existingDigest.facts_text : '', client_signals } }];
