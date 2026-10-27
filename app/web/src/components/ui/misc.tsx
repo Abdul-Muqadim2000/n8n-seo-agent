@@ -98,11 +98,12 @@ export function scoreTone(score: number | null | undefined): 'good' | 'warning' 
   return 'critical';
 }
 
-export function CopyButton({ text, label = 'Copy', className }: { text: string; label?: string; className?: string }) {
+export function CopyButton({ text, label = 'Copy', className, ariaLabel }: { text: string; label?: string; className?: string; ariaLabel?: string }) {
   const [done, setDone] = useState(false);
   return (
     <button
       type="button"
+      aria-label={ariaLabel}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);

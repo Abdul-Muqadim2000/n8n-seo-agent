@@ -229,7 +229,7 @@ W2-A (2026-10-23, `n8n/seo-agent/docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.m
 \| any, threshold_points, enabled }`, `aiAlertRulesSchema` in `shared/src/ai-trends.ts`), sent as `ai_claude_weekly`, `ai_pulse_engines`,
 `ai_persona_context`, `ai_fanout_check`, `ai_sov_set`, `ai_alert_rules_json`. `action: "ai_prompts"` questions (add and edit) take an
 optional `keyword` (the CSV import's keyword column).
-| POST | /api/orgs/:orgId/sites/:siteId/ai/indexnow/check | (member, verified site; 20 / 10 min) | `IndexNowCheck` — fetches the site's IndexNow key file (from the latest AI growth run; own host, https) and says whether it is in place |
+| POST | /api/orgs/:orgId/sites/:siteId/ai/indexnow/check | (member, verified site; 20 / 10 min) | `IndexNowCheck` — fetches the site's IndexNow key file (from the latest AI growth run; own host, https) and says whether it is in place. Since 2026-10-28 a member's check is the `indexnow` site task's check (stored, audited); a viewer's answer is not stored |
 | POST | /api/orgs/:orgId/sites/:siteId/ai/import | `aiImportSchema` `{ csv, fileName?, source?: '' \| 'bing_ai' \| 'gsc_ai', periodEnd?: 'YYYY-MM-DD', dateOrder?: '' \| 'dmy' \| 'mdy' }` (member, verified site; 16 MB, 20 an hour) — W2-A (2026-10-23): a Bing Webmaster Tools AI Performance export or a Search Console Performance export (Queries / Pages / Dates) filtered to AI features, parsed by `shared/src/ai-import.ts` (columns matched by name; the exact headers are documented there as assumptions), stored in the n8n Data Table `seo_ai_imports` (created with the contract's columns when missing). R-A4: an upsert by site + source + day + url + query in two phases: the new rows go in under a new `import_id` (a failed insert takes only those out again, earlier uploads untouched), then earlier uploads' rows with the same key are removed (`replaced` counts them), so a pages file and a queries file of the same days both stay. R-A5: numeric dates are read day-first or month-first by the whole column, an ambiguous file is refused unless `dateOrder` says which, every day is checked against the calendar, and a file without dates needs `periodEnd` (never today). A file whose page URLs are for another website is a 400 naming it; a file without pages answers its `topQueries` for the owner to check; audit `site.ai_import` (with `replaced`) | `AiImportSummary` |
 | POST | /api/orgs/:orgId/sites/:siteId/ai/prompts/delete | `{ ids: string[] }` (admin, verified site; 1–500 ids; 30 / 10 min) — W2-A: deletes questions from the AI panel; only rows of this domain, by domain AND id; stored answers keep their history. R-A7: the row is kept as a tombstone (`status: 'off'`, `origin: 'deleted'`) so the engine's panel writer never writes or asks it again; the app hides tombstones everywhere, and adding the same question as the owner's own brings it back. Audit `site.ai_prompts_deleted` with the count and ids, written even when some writes failed (R-A16: then a 502 says how many were done) | `{ ok, deleted }` |
 | POST | /api/orgs/:orgId/sites/:siteId/backlinks/import | `linkImportSchema` `{ csv, fileName? }` (member, verified site; 16 MB, 20 an hour) — v4.10: a Search Console Links export (Latest links / More sample links / Top linking sites) or another tool's backlink CSV, parsed by `shared/src/link-import.ts` into `seo_link_imports` (the same kind replaces the previous upload); 400 with a plain message when the file holds no links to the site | `LinkImportSummary` |
@@ -873,6 +873,28 @@ Connections belong to one verified website; secrets are sealed under `MAILBOX_KE
 - `POST /api/orgs/:orgId/reports/:reportId/cms/refresh` (member) `{ connectionId }` — asks the CMS whether the item is live now; the first time it is,
   the engine's `published` run starts.
 - Pipeline: a `publish` Needs-you item says when a draft is already in the CMS and, with a connection, its action is `{ label, reportId }`.
+
+## Site tasks: steps on the client's own website (2026-10-28; `shared/src/site-tasks.ts`, `server/src/services/siteTasks.ts`, `docs/SITE_TASKS.md`)
+The changes only the client can make on their website, each with a check the app runs itself (own host and `www.`, https, SSRF guard):
+`indexnow` (the key file answers 200 with only the key), `ai_crawlers` (robots.txt, read with the engine's own matcher, lets every AI answer
+crawler the engine found blocked read `/` and the key pages; 404 = allowed, 5xx = not done), `redirect:<host/path>` (the broken page another
+site links to answers a permanent 301 / 308 to a page of the site that answers 200, or answers 200 itself; a 302 / 307 is not done; read
+from the latest FULL backlink report only, and our own fetch beats the index unless the index is more than a week newer). A step's
+state (`todo` / `done` / `skipped`, `reopened`) is decided by the **newest reading**: the engine's weekly / monthly run or the app's own check
+(`by`: `you`, `daily`, `weekly`, `monthly`). Rows in `site_tasks` (migration 0024) keep the values a check needs, the app's last check, when it
+was last done and a skip; a website with no row still shows its steps (derived from the engine's data). Verified websites only (403 otherwise).
+- `GET /api/orgs/:orgId/sites/:siteId/tasks` (viewer) → `{ tasks: SiteTask[] }` (to do first, important ones first; then done; then skipped).
+  Also in `GET …/data/pipeline` as `siteTasks`, and every step to do is a Needs-you item (`kind: 'site_task'`, id `task:<key>`).
+- `POST …/tasks/check` (member, 30 / 10 min per person) `{ key }` → `{ task }`: runs the step's check now, stores it (`by: 'you'`, `who`),
+  audit `site_task.checked` (outcome failure when not done). 404 for a key the website does not have, 400 for a skipped step, 503
+  `site_unreachable` when the website did not answer at all (nothing is recorded).
+- `POST …/tasks/skip` / `POST …/tasks/restore` (member) `{ key }` → `{ task }`; audit `site_task.skipped` / `site_task.restored`.
+- Recommendations: `ai:indexnow` and `bl:reclaim:*` are left out once their step is done or skipped and carry `taskKey` while open;
+  `ai:crawlers` is new (a blocked AI answer crawler).
+- Background (`SITE_TASK_JOBS`, default on, every 30 minutes): stores the steps of up to 5 tracked websites a tick that nobody opened in a
+  day (and on every `ai_growth` / `ai_visibility` / `backlinks` callback), then checks up to 60 stored steps whose last check is a day old.
+  A website that does not answer changes nothing; a done step found missing is looked at again an hour later and reopened only on the
+  second miss.
 
 ## Page review: questions, business details, the editor, the final version, approval (H3, 2026-10-28; `shared/src/page-review.ts`, `server/src/services/pageReview.ts`)
 For a written page (a `content` report that carries the page; anything else is 404, as is another company's report). Every write answers the

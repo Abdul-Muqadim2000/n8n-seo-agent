@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { queueOrder } from '@seo/shared';
+import { queueOrder, type SiteTask } from '@seo/shared';
 import type { SiteRow } from '../src/db/schema';
 import { actionFromApiBody, recommend, type SiteBundle } from '../src/services/recommendations';
 
@@ -167,6 +167,29 @@ describe('AI growth owner steps (v4.12)', () => {
     (g.earned as { status: string }[])[0].status = 'contacted';
     const r = recommend(site, withGrowth(g));
     expect(r.some((x) => x.id === 'ai:indexnow' || x.id === 'ai:outreach')).toBe(false);
+  });
+  // site tasks (2026-10-28, app/docs/SITE_TASKS.md): a step done on the website (by our own check, before the weekly run saw it) or skipped is
+  // not recommended again; an open one carries its key for the "I've done it, check now" button; a blocked AI search crawler is recommended
+  const task = (key: string, state: 'todo' | 'done' | 'skipped', o: Partial<SiteTask> = {}): SiteTask => ({ key, kind: key === 'indexnow' ? 'indexnow' : key === 'ai_crawlers' ? 'ai_crawlers' : 'redirect', state, reopened: false, doneAt: null, lastCheck: null, severity: 'info', title: 't', detail: 'd', values: [], guide: 'g', guideVars: {}, skipped: null, ...o });
+  it('site tasks: done or skipped steps are not recommended, open ones carry their key', () => {
+    expect(recommend(site, withGrowth(growth()), [task('indexnow', 'done')]).some((x) => x.id === 'ai:indexnow')).toBe(false);
+    expect(recommend(site, withGrowth(growth()), [task('indexnow', 'skipped')]).some((x) => x.id === 'ai:indexnow')).toBe(false);
+    expect(recommend(site, withGrowth(growth()), [task('indexnow', 'todo')]).find((x) => x.id === 'ai:indexnow')?.taskKey).toBe('indexnow');
+    // old callers (no tasks given) keep today's behaviour
+    expect(recommend(site, withGrowth(growth())).find((x) => x.id === 'ai:indexnow')?.taskKey).toBe('indexnow');
+  });
+  it('site tasks: a blocked AI search crawler is a recommendation; Googlebot makes it high priority', () => {
+    const crawl = task('ai_crawlers', 'todo', { title: 'Let AI search crawlers read your website', severity: 'warning', values: [{ label: 'The file to edit', value: 'x' }, { label: 'Rule that blocks Googlebot', value: 'Disallow: /' }] });
+    const r = recommend(site, bundle(), [crawl]).find((x) => x.id === 'ai:crawlers')!;
+    expect(r).toMatchObject({ taskKey: 'ai_crawlers', priority: 'high', evidence: 'Googlebot: Disallow: /' });
+    expect(recommend(site, bundle(), [{ ...crawl, state: 'done' }]).some((x) => x.id === 'ai:crawlers')).toBe(false);
+  });
+  it('site tasks: a redirect done on the website leaves the backlink recommendations', () => {
+    const b = bundle();
+    const report = { receivedAt: '', alerts: [], gap: [], spammy: [], disavowFileId: null, prospectsCsvFileId: null, mentions: [], atRisk: [], drEnabled: false, reclaim: [{ brokenUrl: 'https://northwind-erp.com/old', status: 404, links: 3, domains: ['a.com'], redirectTo: 'https://northwind-erp.com/new' }] };
+    const x = bundle({ backlinks: { ...b.backlinks, report } });
+    expect(recommend(site, x, [task('redirect:northwind-erp.com/old', 'todo')]).find((r) => r.id.startsWith('bl:reclaim:'))?.taskKey).toBe('redirect:northwind-erp.com/old');
+    expect(recommend(site, x, [task('redirect:northwind-erp.com/old', 'done')]).some((r) => r.id.startsWith('bl:reclaim:'))).toBe(false);
   });
 });
 

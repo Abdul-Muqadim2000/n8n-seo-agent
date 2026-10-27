@@ -120,6 +120,9 @@ export async function dataRoutes(app: FastifyInstance) {
   });
   app.get('/api/orgs/:orgId/sites/:siteId/recommendations', async (req) => {
     const a = await portal(req);
-    return shown(a.role, recommend(a.site, await loadBundle(a.org, a.site)));
+    const x = await loadBundle(a.org, a.site);
+    // site tasks: a step done or skipped on the website is not recommended again; open ones carry their check button
+    const tasks = a.site.verifiedAt ? await import('../services/siteTasks').then((m) => m.siteTasksOf(a.org, a.site, req.log)).catch(() => undefined) : undefined;
+    return shown(a.role, recommend(a.site, x, tasks));
   });
 }

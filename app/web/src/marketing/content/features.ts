@@ -1000,6 +1000,8 @@ export const features: Feature[] = [
       'Tick the steps off as you go. Close it, come back tomorrow, and it opens where you stopped',
       'Send the whole guide to the colleague who has to do it, values filled in, with no account needed at their end',
       'Each one ends with how to tell it worked, what to try when it did not, and the button in Alaventra that checks',
+      'Steps on your website, ticked off for you: the IndexNow file, letting the AI search crawlers read your pages, and redirecting a broken page that other websites link to. Each shows as to do until it is in place, and "I\'ve done it, check now" checks your website at once',
+      'We look again every day on our own, so a step you finish without telling us turns Done by itself, and a step that comes undone (a file removed, a rule put back) returns to your list',
     ],
     steps: [
       { title: 'Alaventra asks for one thing', body: 'A permission, a record or a file, with the reason it is needed and what it makes possible next.' },
@@ -1008,7 +1010,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 69, label: 'guides, one for each thing we ask of you' },
+      { value: 70, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],

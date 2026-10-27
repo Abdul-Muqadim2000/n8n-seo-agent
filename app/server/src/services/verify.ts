@@ -1,5 +1,6 @@
 import { promises as dns } from 'node:dns';
 import { request } from 'node:https';
+import { isIP } from 'node:net';
 import { cleanDomain, domainOk, VERIFICATION_META_NAME, VERIFICATION_TXT_PREFIX, type VerificationMethod } from '@seo/shared';
 import { publicLookup } from '../lib/netGuard';
 
@@ -39,12 +40,29 @@ function getOnce(url: string, maxBytes: number): Promise<{ status: number; locat
   });
 }
 
+/**
+ * The host of a public https address, or null. Parsed the way Node itself parses it for the request: a regex reads `good.com` in
+ * `https://good.com:x@10.0.0.5/` while the request goes to 10.0.0.5 (and Node skips the guarded DNS lookup for an IP), so an address with a
+ * user name or password, or an IP literal, is refused outright (site tasks, 2026-10-28: a client's own Location header reaches here).
+ */
+export function publicHttpsHost(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== 'https:' || u.username || u.password) return null;
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  if (!host || isIP(host)) return null;
+  return domainOk(cleanDomain(host)) ? host : null;
+}
+
 /** HTTPS GET with manual redirects (https only, public hosts only, at most 4 hops) and a size cap. */
 export async function fetchPublicText(url: string, maxBytes = 512 * 1024, hops = 4): Promise<{ status: number; text: string; finalUrl: string } | null> {
   let current = url;
   for (let i = 0; i <= hops; i++) {
-    const host = current.match(/^https:\/\/([^/?#:]+)/i)?.[1];
-    if (!host || !domainOk(cleanDomain(host))) return null;
+    if (!publicHttpsHost(current)) return null;
     const r = await getOnce(current, maxBytes);
     if (r.location) {
       current = new URL(r.location, current).toString();
@@ -53,6 +71,13 @@ export async function fetchPublicText(url: string, maxBytes = 512 * 1024, hops =
     return { status: r.status, text: r.text, finalUrl: current };
   }
   return null;
+}
+
+/** One HTTPS GET with no redirect followed (site tasks: a redirect check must see a 301 apart from a 302); public hosts only. */
+export async function fetchPublicOnce(url: string, maxBytes = 64 * 1024): Promise<{ status: number; location: string | null; text: string } | null> {
+  if (!publicHttpsHost(url)) return null;
+  const r = await getOnce(url, maxBytes);
+  return { ...r, location: r.location ? new URL(r.location, url).toString() : null };
 }
 
 export async function verifyDns(domain: string, token: string): Promise<VerifyOutcome> {

@@ -34,6 +34,8 @@ import {
   ruleScoreFor,
   scoreOf,
   type ScoreInput,
+  redirectTaskKey,
+  type SiteTask,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { aiData, alertsData, backlinksData, contentData, gscNow, previousOfType, rankingsData, searchData, settingsData, technicalData } from './data';
@@ -130,7 +132,12 @@ const CTR_AT = { top3: 0.27, page1: 0.1, healthy: 0.05 };
 /** 28 Search Console days scaled to a month, so every impact in the queue is "clicks a month". */
 const TO_MONTH = 30 / 28;
 
-export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
+/**
+ * `tasks`: the website's steps on its own site (services/siteTasks.ts). Given, a step that is done or skipped is not recommended again,
+ * the open ones carry their key (the "I've done it, check now" button) and a blocked AI search crawler is recommended too.
+ */
+export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTask[]): Recommendation[] {
+  const taskOpen = (key: string) => !tasks || tasks.some((t) => t.key === key && t.state === 'todo');
   const out: Recommendation[] = [];
   // REP 3.3: every item carries what it is worth. Where the caller measured a quantity it passes one; where it did not, the visible
   // rule table in `queue.ts` answers for the whole family; where neither can, the item says "not ranked" with the reason and drops
@@ -172,8 +179,12 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
     add({ id: 'setup:ai', category: 'ai', priority: 'medium', title: 'Take an AI-visibility baseline', detail: 'See whether ChatGPT, Perplexity, Gemini, Claude and Google AI name your company for the questions your buyers ask.', action: { label: 'Check AI visibility', mode: 'ai_visibility' } });
   // v4.12 (AI_GROWTH_SPEC.md): the AI growth loop's two owner steps, the IndexNow key file, and the outreach drafts to send
   const g = x.ai.growth;
-  if (g && !g.submitted.indexnow.verified && g.submitted.indexnow.key)
-    add({ id: 'ai:indexnow', category: 'ai', priority: 'medium', title: 'Add one small file so new pages reach Bing the same week', detail: `Put ${g.submitted.indexnow.key}.txt (it contains only that key) at the root of ${site.domain}. From then on the weekly AI growth run sends every new or updated page to Bing (ChatGPT search, Copilot), Yandex, Naver and the other IndexNow engines.`, evidence: g.submitted.indexnow.keyUrl, action: { label: 'Get the file', page: 'ai' }, guideVars: { indexNowKey: g.submitted.indexnow.key, indexNowFile: `${g.submitted.indexnow.key}.txt`, indexNowUrl: g.submitted.indexnow.keyUrl } });
+  if (g && !g.submitted.indexnow.verified && g.submitted.indexnow.key && taskOpen('indexnow'))
+    add({ id: 'ai:indexnow', taskKey: 'indexnow', category: 'ai', priority: 'medium', title: 'Add one small file so new pages reach Bing the same week', detail: `Put ${g.submitted.indexnow.key}.txt (it contains only that key) at the root of ${site.domain}. From then on the weekly AI growth run sends every new or updated page to Bing (and Copilot), Yandex, Naver and the other IndexNow engines.`, evidence: g.submitted.indexnow.keyUrl, action: { label: 'Get the file', page: 'ai' }, guideVars: { indexNowKey: g.submitted.indexnow.key, indexNowFile: `${g.submitted.indexnow.key}.txt`, indexNowUrl: g.submitted.indexnow.keyUrl } });
+  // site tasks: an AI search crawler robots.txt turns away (the engine's weekly reading, or a check of ours since)
+  const crawlers = tasks?.find((t) => t.key === 'ai_crawlers' && t.state === 'todo');
+  if (crawlers)
+    add({ id: 'ai:crawlers', taskKey: 'ai_crawlers', category: 'ai', priority: crawlers.severity === 'warning' ? 'high' : 'medium', title: crawlers.title, detail: crawlers.detail, evidence: crawlers.values.slice(1).map((v) => `${v.label.replace(/^Rule that blocks /, '')}: ${v.value}`).join(' · '), action: { label: 'See crawler access', page: 'ai' } });
   const ready = g ? g.earned.filter((e) => e.drafted && e.kind !== 'competitor' && e.mentionsUs !== true && (!e.status || e.status === 'new')) : [];
   const readyHosts = [...new Set(ready.map((e) => e.host))];
   if (readyHosts.length)
@@ -358,8 +369,8 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       effort: 'hour',
       basis: `authority ${l.domainRank} in the backlink index, and our own two checks of the page agree it is gone`,
     });
-  for (const r of (bl.report?.reclaim ?? []).slice(0, 2))
-    add({ id: `bl:reclaim:${r.brokenUrl}`, category: 'backlinks', priority: 'medium', title: `Redirect ${r.brokenUrl.replace(/^https?:\/\/[^/]+/, '') || '/'}: ${r.links} link(s) point to a broken page`, detail: `A 301 redirect to ${r.redirectTo.replace(/^https?:\/\/[^/]+/, '') || '/'} keeps the value of those links.`, evidence: r.domains.slice(0, 3).join(', '), action: { label: 'Open backlinks', page: 'backlinks' } });
+  for (const r of (bl.report?.reclaim ?? []).filter((r) => taskOpen(redirectTaskKey(r.brokenUrl))).slice(0, 2))
+    add({ id: `bl:reclaim:${r.brokenUrl}`, taskKey: redirectTaskKey(r.brokenUrl), guideVars: { brokenUrl: r.brokenUrl, redirectTo: r.redirectTo }, category: 'backlinks', priority: 'medium', title: `Redirect ${r.brokenUrl.replace(/^https?:\/\/[^/]+/, '') || '/'}: ${r.links} link(s) point to a broken page`, detail: `A 301 redirect to ${r.redirectTo.replace(/^https?:\/\/[^/]+/, '') || '/'} keeps the value of those links.`, evidence: r.domains.slice(0, 3).join(', '), action: { label: 'Open backlinks', page: 'backlinks' } });
   if (lastBl && lastBl.spammyNew > 2)
     add({ id: 'bl:spam', category: 'backlinks', priority: 'low', title: `${lastBl.spammyNew} new spammy link(s): nothing to do unless they keep coming`, detail: 'Google ignores most link spam on its own; disavow only after a manual action or for a paid-link pattern you did not create.', action: { label: 'Review links', page: 'backlinks' } });
   const missingLists = (bl.latest?.lists ?? []).filter((l) => !l.named && l.competitors.length);
@@ -427,7 +438,12 @@ export function overviewContentCounts(items: readonly Pick<ContentItem, 'status'
 export const overviewReports = <R extends { stage: string }>(reports: readonly R[], limit = 6): R[] => reports.filter((r) => r.stage !== 'cycle_preview').slice(0, limit);
 
 export async function overviewData(org: OrgRow, site: SiteRow): Promise<OverviewData> {
-  const [x, recent] = await Promise.all([loadBundle(org, site), reportsList(org.id, { siteId: site.id, limit: 12 })]);
+  const [x, recent, tasks] = await Promise.all([
+    loadBundle(org, site),
+    reportsList(org.id, { siteId: site.id, limit: 12 }),
+    // site tasks: the Overview's top recommendations agree with the Recommendations page (undefined when they cannot be read)
+    site.verifiedAt ? import('./siteTasks').then((m) => m.siteTasksOf(org, site)).catch(() => undefined) : Promise.resolve(undefined),
+  ]);
   // B13 (pre-launch run 2026-10-21): the "Coming up" plan is the Pipeline's preview of the next run, not a result: it filled the top of
   // "Latest reports" twice a week. It stays under Reports and on the Pipeline.
   const reports = overviewReports(recent);
@@ -510,7 +526,7 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
       caseStudies: x.content.caseStudies.length,
     }),
     alerts: { open: x.alerts.alerts.filter((a) => a.status !== 'resolved' && a.status !== 'closed').length, checkinDue: x.alerts.checkinDue },
-    recommendations: recommend(site, x).slice(0, 6),
+    recommendations: recommend(site, x, tasks).slice(0, 6),
     reports,
   };
 }

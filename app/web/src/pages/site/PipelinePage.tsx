@@ -26,6 +26,7 @@ import { GuideButton } from '@/components/guide';
 import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
 import { autopilotGuideVars } from '@/lib/guide-vars';
 import { SiteWarnings } from '@/components/warnings/SiteWarnings';
+import { SiteTasksPanel } from '@/components/site/SiteTasks';
 
 // The website's Pipeline (PIPELINE_FEATURE_SPEC.md §4.1): this week's runs, what needs the person, one card per keyword ladder,
 // the always-on part (opportunity posts, monitoring, the weekly capacity), how a ladder works, the next four weeks and what ran.
@@ -152,6 +153,9 @@ export default function PipelinePage() {
           <NeedsYou items={needs} onWrite={setWriting} />
           <ThisWeek data={d} />
         </div>
+
+        {/* site tasks (app/docs/SITE_TASKS.md): the steps on the website itself, to do highlighted, done ticked */}
+        <SiteTasksPanel tasks={d.siteTasks} />
 
         <KeywordProposals />
 

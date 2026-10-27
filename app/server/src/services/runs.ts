@@ -803,6 +803,8 @@ export async function ingestCallback(
   // is checked again when it was planned long ago); a won or finished ladder makes room for the next keyword. None of it may lose the
   // callback just stored, so each is logged and swallowed.
   if (site?.verifiedAt) void afterCallback(org, site, stage, payload, reportId).catch((err) => deliveryLog.error({ err: String(err), stage }, 'keyword-first follow-up failed'));
+  // site tasks (app/docs/SITE_TASKS.md): new engine readings of the website's steps (IndexNow file, AI crawlers, broken pages) are stored
+  if (site?.verifiedAt) void import('./siteTasks').then((m) => (m.SITE_TASK_STAGES.has(stage) ? m.afterSiteTaskCallback(org, site, { warn: deliveryLog.error }) : undefined)).catch((err) => deliveryLog.error({ err: String(err), stage }, 'site tasks could not be stored'));
   return { reportId, runId: run?.id ?? null, stage, ...(ladderWon !== undefined ? { ladderWon } : {}), ...(prefsApplied !== undefined ? { prefsApplied } : {}) };
 }
 

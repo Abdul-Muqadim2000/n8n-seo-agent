@@ -118,7 +118,7 @@ import { api, ApiRequestError, directCredentials, directUrl } from './api';
 
 // One hook per endpoint (API.md). Query keys: ['me'], ['org', orgId, ...], ['site', siteId, ...].
 
-const noRetryOn4xx = (count: number, err: unknown) => !(err instanceof ApiRequestError && err.status >= 400 && err.status < 500) && count < 2;
+export const noRetryOn4xx = (count: number, err: unknown) => !(err instanceof ApiRequestError && err.status >= 400 && err.status < 500) && count < 2;
 
 export const qk = {
   me: ['me'] as const,

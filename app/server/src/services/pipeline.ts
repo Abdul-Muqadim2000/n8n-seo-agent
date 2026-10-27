@@ -72,6 +72,8 @@ import { profileNeedsYou } from './readiness';
 import { aiPanelNeedsYou } from '@seo/shared';
 import { buildLadders, draftQa, ladderAppSources, ladderNeedsYou, ladderReports, sortNeedsYou, type LadderBuild, type LadderSchedule, type SiteRun, type WaitingPage } from './ladders';
 import { loadBundle, recommend, type SiteBundle } from './recommendations';
+import { siteTasksOf } from './siteTasks';
+import type { SiteTask } from '@seo/shared';
 import { gscNow } from './data';
 import { latestReport, monthSpend, reportsList } from './runs';
 
@@ -282,6 +284,21 @@ function connectionNeeds(site: SiteRow, x: SiteBundle, status: PipelineData['tra
       action: { label: 'Connect', page },
     });
   return out;
+}
+
+/** Site tasks still to do, as Needs-you items: the button opens the step in "Steps on your website", where it is checked. */
+export function siteTaskNeedsYou(tasks: readonly SiteTask[]): NeedsYouItem[] {
+  return tasks
+    .filter((t) => t.state === 'todo')
+    .map((t) => ({
+      id: `task:${t.key}`,
+      kind: 'site_task' as const,
+      severity: t.severity,
+      title: t.reopened ? `${t.title} (needed again)` : t.title,
+      detail: t.reopened && t.lastCheck ? `${t.detail} It was done before, but the latest check says: ${t.lastCheck.message}` : t.detail,
+      action: { label: 'Open the step', page: 'pipeline' },
+      guideVars: t.guideVars,
+    }));
 }
 
 /**
@@ -587,6 +604,9 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   const creditsUsed = used ? Math.round((used.autopilot + used.onDemand) * 100) / 100 : 0;
   const ownRuns = activeRuns(app.runs);
   const verified = !!site.verifiedAt;
+  // site tasks (app/docs/SITE_TASKS.md): the steps on the website itself, done or to do (a failure to read them never fails the Pipeline)
+  // undefined (not []) when they cannot be read: recommend() then keeps its own rules instead of reading "nothing left to do"
+  const siteTasks: SiteTask[] | undefined = verified ? await siteTasksOf(org, site).catch(() => undefined) : undefined;
   const engineTracked = x.settings.tracking.tracked && x.settings.tracking.status !== 'paused';
   const status: PipelineData['tracking']['status'] = site.trackingStatus === 'paused' || x.settings.tracking.status === 'paused' ? 'paused' : site.trackingStatus === 'active' || engineTracked ? 'active' : 'not_started';
   const active = status === 'active';
@@ -806,7 +826,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   const cp = cadenceReport?.payload as { upcoming?: { keyword: string; source: string; why: string }[]; paused_reason?: string; waiting_publish?: number; max_waiting?: number } | undefined;
 
   // ---------- the growth loop ----------
-  const recs = recommend(site, x);
+  const recs = recommend(site, x, siteTasks);
   const high = recs.filter((r) => r.priority === 'high').length;
   const ladderPages = x.rankings.ladders.reduce((t, l) => t + l.pages, 0);
   const ladderPublished = x.rankings.ladders.reduce((t, l) => t + l.published, 0);
@@ -904,7 +924,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   // AI-FOCUS (2026-10-27): the AI question panel's own decisions for the owner (most questions off the keywords they work on; a ladder the panel
   // has no room for, with the price of a bigger panel) - the same warnings as the website's banner, where Accept and "Keep these questions" are
   const aiPanelItems = await import('./consistency').then((m) => m.standingWarnings(org, site)).then((r) => aiPanelNeedsYou(r.warnings)).catch(() => [] as NeedsYouItem[]);
-  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...profileItems, ...autopilotItems, ...failedRuns(app.runs), ...refusedPlans(recentReports), ...ladderNeedsYou(build, await settingsRow()), ...aiPanelItems]);
+  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...profileItems, ...autopilotItems, ...failedRuns(app.runs), ...refusedPlans(recentReports), ...ladderNeedsYou(build, await settingsRow()), ...aiPanelItems, ...siteTaskNeedsYou(siteTasks ?? [])]);
   const thisWeek = thisWeekItems({ automations, calendar, running: runningHere, queue, plan: week0, x, build, tz, cycles });
   const autopilot: PipelineAutopilot = {
     level: week0.level,
@@ -959,6 +979,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     autopilot,
     // P1: is the website ready for a written page (the author profile and the business facts), and what is missing
     readiness,
+    siteTasks: siteTasks ?? [],
   };
   // G12 / G29: the rows the ladder detail marks its charts and states its lineage from (already read for the pipeline)
   return { data, ladders: build, rows: { logs, queries, audits: x.technical.audits } };

@@ -51,6 +51,8 @@ const Env = z.object({
   SSO_ALLOW_PRIVATE_HOSTS: bool(false),
   /** v4.13: the sender and inbox jobs (off in tests or on a second server) */
   LINK_BUILDER_JOBS: bool(true),
+  /** site tasks (app/docs/SITE_TASKS.md): the daily check of the steps on clients' websites */
+  SITE_TASK_JOBS: bool(true),
   /** L1: check the recipient's domain for a mail server before the first e-mail; false only for a local mail test with made-up domains */
   OUTREACH_MX_CHECK: bool(true),
   /** G2: a CMS on localhost / a private address (a local WordPress in development). Ignored in production. */
@@ -253,6 +255,7 @@ export const config = {
     redirectUri: `${e.APP_URL}/api/mailbox-oauth/callback`,
   },
   linkBuilderJobs: e.LINK_BUILDER_JOBS,
+  siteTaskJobs: e.SITE_TASK_JOBS,
   crawlers: {
     jobs: e.CRAWLER_JOBS,
     spoolDir: e.LOG_SPOOL_DIR || join(tmpdir(), 'alaventra-logs'),

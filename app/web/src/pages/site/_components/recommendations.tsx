@@ -1,5 +1,6 @@
 // Recommendations: the category of each, the order, the button that carries one out, and the list row (InsightItem) used on the
 // Recommendations page; the Overview builds its top-5 rows from the same parts.
+import { SiteTaskCheckButton } from '@/components/site/SiteTasks';
 import type { ReactNode } from 'react';
 import { Activity, ArrowRight, Bot, ExternalLink as ExternalIcon, Gauge, Link2, PenSquare, Settings, TrendingUp } from 'lucide-react';
 import { MODES, queueOrder, scoreNote, type Priority, type Recommendation, type RecommendationAction, type RecommendationCategory } from '@seo/shared';
@@ -133,8 +134,10 @@ export function RecommendationItem({ rec, siteId }: { rec: Recommendation; siteI
       detail={rec.evidence ? <span className="text-[13px] leading-relaxed [overflow-wrap:anywhere]">{rec.detail}</span> : undefined}
       detailLabel="Why it matters"
       action={
-        rec.action || guide || siteId ? (
+        rec.action || guide || siteId || rec.taskKey ? (
           <div className="flex flex-col items-stretch gap-1.5">
+            {/* site tasks: a step on the website is checked here as on the Pipeline */}
+            {rec.taskKey && <SiteTaskCheckButton taskKey={rec.taskKey} />}
             {rec.action && <RecommendationButton action={rec.action} />}
             {guide && <GuideHelp id={guide} extra={rec.guideVars} />}
             {/* G4: the work item in the company's tracker (only once one is connected; setup items are ours to finish, not a ticket) */}
@@ -164,8 +167,9 @@ export function RecommendationRows({ recs }: { recs: readonly Recommendation[] }
             </div>
             <p className="mt-1 line-clamp-2 text-sm font-medium leading-snug text-ink">{rec.title}</p>
             {rec.evidence ? <p className="mt-0.5 truncate text-xs text-ink-3 tabular">{rec.evidence}</p> : <p className="mt-0.5 line-clamp-1 text-xs text-ink-3">{rec.detail}</p>}
-            {(rec.action || guide) && (
+            {(rec.action || guide || rec.taskKey) && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
+                {rec.taskKey && <SiteTaskCheckButton taskKey={rec.taskKey} label="Done? Check now" />}
                 {rec.action && <RecommendationButton action={rec.action} />}
                 {guide && <GuideHelp id={guide} extra={rec.guideVars} />}
               </div>

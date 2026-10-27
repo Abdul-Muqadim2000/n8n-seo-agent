@@ -18,6 +18,7 @@ import {
   type Warning,
   safeJson,
   updateSiteSchema,
+  roleAtLeast,
   VERIFICATION_META_NAME,
   VERIFICATION_TXT_PREFIX,
   verifySiteSchema,
@@ -49,6 +50,7 @@ import { assertGa4ForDomain, findGscProperty, gscOwnerCheck, listGa4Properties }
 import { assertEngineIdFree, ENGINE_ID_TAKEN } from '../services/engineSite';
 import { routeSiteToApp } from '../services/runs';
 import { fetchPublicText, verify } from '../services/verify';
+import { checkIndexnowStep } from '../services/siteTasks';
 import { deleteAiPrompts, importAiReport } from '../services/aiWave2';
 import { aiPilotState, startAiPilot } from '../services/aiPilot';
 
@@ -424,8 +426,15 @@ export async function siteRoutes(app: FastifyInstance) {
   // every Monday); this answers at once after the owner uploads the file. Only the site's own host, https, a few bytes.
   app.post('/api/orgs/:orgId/sites/:siteId/ai/indexnow/check', { config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } }, async (req): Promise<IndexNowCheck> => {
     const p = req.params as P;
-    const { site } = await siteAccess(req, p.orgId, p.siteId);
+    const a = await siteAccess(req, p.orgId, p.siteId);
+    const { site } = a;
     requireVerified(site);
+    // site tasks (2026-10-28, app/docs/SITE_TASKS.md): a member's check is the IndexNow step's "check now", stored and audited; the answer keeps
+    // this route's shape for pages opened before the deploy. A viewer still gets the answer, nothing is stored.
+    if (roleAtLeast(a.role, 'member')) {
+      const t = await checkIndexnowStep(a, req);
+      if (t) return { verified: t.verified, keyUrl: t.keyUrl, status: t.verified ? 200 : 0, message: t.verified ? 'The file is in place: from the next AI growth run every new or updated page is sent through IndexNow too.' : t.message };
+    }
     const g = (await siteRows<AiGrowthRow>('aiGrowth', site.domain, { sortBy: 'checked_at:desc', max: 1 }))[0];
     const keyUrl = String(safeJson<Record<string, Record<string, unknown>>>(g?.submitted_json ?? '', {}).indexnow?.key_url ?? '');
     const m = keyUrl.match(/^https:\/\/([^/]+)\/([a-f0-9]{32})\.txt$/);

@@ -279,6 +279,7 @@ export function InsightItem({
   clampTitle,
   actionPosition = 'below',
   className,
+  id,
 }: {
   tone?: IconTileTone;
   icon?: ReactNode;
@@ -294,12 +295,14 @@ export function InsightItem({
   /** `side`: the action sits to the right from `md` up (full-width lists); `below`: under the text (narrow cards) */
   actionPosition?: 'below' | 'side';
   className?: string;
+  /** an anchor for links to this one item (e.g. a Needs-you button scrolling to its step) */
+  id?: string;
 }) {
   const side = actionPosition === 'side';
   const [open, setOpen] = useState(false);
   const did = useId();
   return (
-    <li className={cn('flex items-start gap-3 px-5 py-3.5 transition-colors duration-150 ease-brand hover:bg-surface-2/50', className)}>
+    <li id={id} className={cn('flex items-start gap-3 px-5 py-3.5 transition-colors duration-150 ease-brand hover:bg-surface-2/50', className)}>
       <IconTile tone={tone} size="sm" className="mt-0.5">
         {icon ?? ITEM_ICON[tone] ?? <Info />}
       </IconTile>

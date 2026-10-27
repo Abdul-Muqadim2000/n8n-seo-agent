@@ -20,6 +20,7 @@ import {
   Inbox,
   Info,
   Layers,
+  ListChecks,
   ListOrdered,
   Loader2,
   PenSquare,
@@ -47,6 +48,7 @@ import { guideForNeedsYou } from '@seo/shared/guide-links';
 import { GuideButton } from '@/components/guide';
 import { autopilotGuideVars } from '@/lib/guide-vars';
 import { modeTitle } from '@/components/reports/meta';
+import { siteTaskAnchor } from '@/components/site/SiteTasks';
 
 // ---------- this week ----------
 /** Older servers: the coming week from the automations' next run times. */
@@ -183,6 +185,7 @@ const KIND_ICON: Record<NeedsYouItem['kind'], ReactNode> = {
   profile: <UserRound className="size-4" />,
   ai_panel: <MessageSquareText className="size-4" />,   // AI-FOCUS (2026-10-27): the AI questions and the keywords you work on
   questions: <CircleHelp className="size-4" />,   // H3 (2026-10-28): questions only you can answer on a written page
+  site_task: <ListChecks className="size-4" />,   // site tasks (2026-10-28): a step on your own website, checked by us
 };
 
 /** Older servers: the pages waiting to be published. */
@@ -207,9 +210,11 @@ export function needsYouOf(data: PipelineData): NeedsYouItem[] {
 function useNeedsYouHref() {
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
-  return (a: NonNullable<NeedsYouItem['action']>, kind?: NeedsYouItem['kind']): string | null => {
+  return (a: NonNullable<NeedsYouItem['action']>, kind?: NeedsYouItem['kind'], id?: string): string | null => {
     // a keyword proposal is decided on this page, in its own card
     if (kind === 'proposal') return '#keyword-proposals';
+    // a step on the website is checked in "Steps on your website", below
+    if (kind === 'site_task') return id?.startsWith('task:') ? `#${siteTaskAnchor(id.slice(5))}` : '#site-tasks';
     if (a.ladderId) return paths.ladder(org.id, site.id, a.ladderId);
     if (a.runId) return paths.run(org.id, a.runId);
     // G2: the page's report, where it is sent to the CMS
@@ -225,7 +230,7 @@ function useNeedsYouHref() {
 function NeedsYouAction({ it, primary, onWrite, variant }: { it: NeedsYouItem; primary: boolean; onWrite?: (i: WriteNowItem) => void; variant?: 'primary' | 'secondary' }) {
   const { can } = useOrgCtx();
   const to = useNeedsYouHref();
-  const href = it.action ? to(it.action, it.kind) : null;
+  const href = it.action ? to(it.action, it.kind, it.id) : null;
   // a Manual ladder's next page: "Write it" opens the Write now dialog with the ladder fields
   const write = it.writeNow && onWrite && can('member') ? it.writeNow : null;
   const v = variant ?? (primary ? 'primary' : 'secondary');
@@ -295,7 +300,7 @@ export function NeedsYou({ items, onWrite }: { items: NeedsYouItem[]; onWrite?: 
                   <span className="flex flex-wrap items-center gap-1.5">
                     <NeedsYouAction it={it} primary={primary} onWrite={onWrite} />
                     {/* every ask carries the guide that explains it (CONVENTIONS.md, Setup guides) */}
-                    <GuideButton id={guideForNeedsYou(it)} vars={vars} variant="icon" label={`How this works: ${it.title}`} />
+                    <GuideButton id={guideForNeedsYou(it)} vars={it.guideVars ? { ...vars, ...it.guideVars } : vars} variant="icon" label={`How this works: ${it.title}`} />
                   </span>
                 }
                 actionPosition="side"

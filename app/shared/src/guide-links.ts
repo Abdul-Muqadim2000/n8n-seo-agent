@@ -22,6 +22,7 @@ export const GUIDE_FOR_NEEDS_YOU_KIND: Record<NeedsYouItem['kind'], GuideId> = {
   profile: 'business-profile',   // P1: the author profile and the business facts the first page waits for
   ai_panel: 'ai-panel-focus',   // AI-FOCUS (2026-10-27): the AI questions follow the keywords you work on
   questions: 'page-questions',   // H3 (2026-10-28): questions on a written page; each answer is kept in the business details
+  site_task: 'indexnow-key-file',   // site tasks (2026-10-28): refined by the item's id below
 };
 
 /** The guide that answers one Needs-you item: its kind's, refined by what the id says (a refused plan, a draft to fix, an announcement). */
@@ -33,6 +34,9 @@ export function guideForNeedsYou(item: Pick<NeedsYouItem, 'id' | 'kind' | 'sever
   if (id === 'profile:write-first') return 'coming-up-plan';
   if (id === 'connection:gsc') return 'search-console-access';
   if (id === 'connection:tracking') return 'your-journey';
+  // site tasks: one guide per kind of step on the website (ids task:indexnow, task:ai_crawlers, task:redirect:<address>)
+  if (id === 'task:ai_crawlers') return 'ai-crawler-access';
+  if (id.startsWith('task:redirect:')) return 'redirect-broken-page';
   // a level-3 announcement is a warning (it starts on its own); a suggestion at levels 1-2 waits and is info
   if (item.kind === 'proposal' && item.severity === 'warning') return 'keyword-announcements';
   return GUIDE_FOR_NEEDS_YOU_KIND[item.kind] ?? 'your-journey';

@@ -12,6 +12,7 @@ import { deliveryTick, retryTick } from './services/reportDelivery';
 import { expireStaleRuns } from './services/runs';
 import { startPortalJobs } from './services/portalHosts';
 import { webhookTick } from './services/webhooks';
+import { siteTaskTick } from './services/siteTasks';
 import { exportTick } from './services/exports';
 import { startCostSync } from './services/admin/costSync';
 import { alignExistingCompanies, startCreditGuard } from './services/billing';
@@ -73,6 +74,8 @@ async function main() {
   const crawlerTimers = startCrawlerJobs(app.log);
   // G5: verified portal hosts re-checked (lapse after repeated failures); PORTAL_JOBS=false stops it
   const stopPortalJobs = startPortalJobs(app.log);
+  // site tasks (app/docs/SITE_TASKS.md): every 30 minutes the steps on clients' websites whose last check is a day old; SITE_TASK_JOBS=false stops it
+  const siteTaskTimer = config.siteTaskJobs ? setInterval(() => void siteTaskTick(app.log).catch((err) => app.log.warn({ err: String(err) }, 'site task check failed')), 30 * 60 * 1000) : null;
   // admin panel: what every run cost (engine ledger -> cost_events) and the credits it used, every 10 minutes; ADMIN_COST_SYNC=false stops it
   const stopCostSync = config.admin.costSync ? startCostSync(app.log) : () => undefined;
   // credits (app/docs/CREDITS.md): plan credits, expiry, pausing / resuming schedules, low-balance notices
@@ -84,6 +87,7 @@ async function main() {
     stopCreditGuard();
     for (const t of crawlerTimers) clearInterval(t);
     stopPortalJobs();
+    if (siteTaskTimer) clearInterval(siteTaskTimer);
     for (const t of lbTimers) clearInterval(t);
     stopProposals();
     clearInterval(deliveryTimer);
