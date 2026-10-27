@@ -46,6 +46,7 @@ export const changelog: ChangelogEntry[] = [
       'Chapters you can click to jump straight to a step, subtitles in every video and the full transcript to read beside it',
       'Search the course, or filter it by series, by level, by who it is for (business owners, marketers or agencies)',
       'Next and previous through the whole course, and the rest of the series beside every tutorial',
+      'Your market, checked before you start: a keyword about another country, a run for a market your website does not target, or weekly checks still measuring an old country are flagged in plain words, and you choose to accept the correction or continue anyway (your choice is recorded)',
     ],
     features: ['guided-setup'],
     labels: ['Learning'],

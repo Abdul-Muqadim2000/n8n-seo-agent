@@ -47,12 +47,12 @@ export function DescribeForm({ initialSiteId, prefill }: ToolFormProps) {
     mode: 'onTouched',
     defaultValues: withPrefill<DefaultValues<DeIn>>({ mode: 'describe', siteId: initialSiteId ?? '', emailCopy: false }, prefill),
   });
-  const { onSubmit, pending, error } = useRunSubmit(form);
+  const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   useSyncSiteParam(v.siteId);
   return (
-    <ToolShell mode="describe" site={site} cost={estimateCost('describe', v)} eta={estimateEta('describe', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Describe my website" blocked={noVerified(sites)}>
+    <ToolShell onAccept={onAccept} values={v} mode="describe" site={site} cost={estimateCost('describe', v)} eta={estimateEta('describe', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Describe my website" blocked={noVerified(sites)}>
       <FormCard title="Website" description="We read the homepage and return what the business does, for whom, its offers and proof, plus seed keywords. Keyword runs reuse it for 30 days.">
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(form.formState.errors.siteId)} />
         <CheckList items={['One-line summary and description', 'Products and services', 'Target audience', 'What sets you apart', 'Suggested title and meta description', '8-10 seed keywords']} />
@@ -75,7 +75,7 @@ export function AuditForm({ initialSiteId, prefill }: ToolFormProps) {
     mode: 'onTouched',
     defaultValues: withPrefill<DefaultValues<AIn>>({ mode: 'audit', siteId: initialSiteId ?? '', country: sd.country, reportType: 'site_audit', crawlPages: 200, crawlJs: false, competitors: sd.competitors, emailCopy: true }, prefill),
   });
-  const { onSubmit, pending, error } = useRunSubmit(form);
+  const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
@@ -94,7 +94,7 @@ export function AuditForm({ initialSiteId, prefill }: ToolFormProps) {
   const full = v.reportType === 'full';
 
   return (
-    <ToolShell
+    <ToolShell onAccept={onAccept} values={v}
       mode="audit"
       site={site}
       cost={estimateCost('audit', v)}
@@ -191,7 +191,7 @@ export function PublishedForm({ initialSiteId, prefill }: ToolFormProps) {
     mode: 'onTouched',
     defaultValues: withPrefill<DefaultValues<PIn>>({ mode: 'published', siteId: initialSiteId ?? '', keyword: '', publishedUrl: '', contentRequestId: '', emailCopy: false }, prefill),
   });
-  const { onSubmit, pending, error } = useRunSubmit(form);
+  const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
@@ -219,7 +219,7 @@ export function PublishedForm({ initialSiteId, prefill }: ToolFormProps) {
     if (!v.publishedUrl && d.existingPageUrl) form.setValue('publishedUrl', d.existingPageUrl, { shouldDirty: true });
   };
   return (
-    <ToolShell mode="published" site={site} cost={0} eta={estimateEta('published', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check the page" blocked={noVerified(sites)}>
+    <ToolShell onAccept={onAccept} values={v} mode="published" site={site} cost={0} eta={estimateEta('published', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check the page" blocked={noVerified(sites)}>
       <FormCard
         title="The page you published"
         description="We fetch it live, check what Google will see, mark it published (ladder and content log) and start tracking its position."
@@ -276,7 +276,7 @@ export function CheckinForm({ initialSiteId, prefill }: ToolFormProps) {
     mode: 'onTouched',
     defaultValues: withPrefill<DefaultValues<CIn>>({ mode: 'checkin', siteId: initialSiteId ?? '', manualAction: false, securityIssue: false, notes: '', pagesCsv: '', emailCopy: false }, prefill),
   });
-  const { onSubmit, pending, error } = useRunSubmit(form);
+  const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
@@ -313,7 +313,7 @@ export function CheckinForm({ initialSiteId, prefill }: ToolFormProps) {
   );
 
   return (
-    <ToolShell mode="checkin" site={site} cost={0} eta={estimateEta('checkin', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Record the check-in" blocked={noVerified(sites)}>
+    <ToolShell onAccept={onAccept} values={v} mode="checkin" site={site} cost={0} eta={estimateEta('checkin', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Record the check-in" blocked={noVerified(sites)}>
       <FormCard
         title="This month in Search Console"
         description="Two things the Search Console API cannot see. Takes two minutes once a month; the weekly report reminds you."

@@ -23,6 +23,7 @@ import { CATEGORY_META, RecommendationButton, sortRecommendations } from './_com
 import { ReportList } from './_components/reports';
 
 import { ComingUpSummary } from './_components/pipeline/coming-up';
+import { SiteWarnings } from '@/components/warnings/SiteWarnings';
 
 export default function OverviewPage() {
   const { org, site } = useSitePage();
@@ -35,6 +36,9 @@ export default function OverviewPage() {
         description={`How ${site.domain} is doing in Google, in AI answers and across the web, and what to do next.`}
         actions={<RunAnalysisMenu />}
       />
+      <div className="mb-6 empty:hidden">
+        <SiteWarnings />
+      </div>
       <DataGate q={q} skeleton={<OverviewSkeleton />}>
         {(d) => <Overview d={d} refetching={q.isFetching} />}
       </DataGate>

@@ -29,7 +29,7 @@ export function VerdictForm({ initialSiteId, prefill }: ToolFormProps) {
     mode: 'onTouched',
     defaultValues: withPrefill<DefaultValues<VIn>>({ mode: 'verdict', siteId: initialSiteId, keyword: '', country: sd.country, business: '', emailCopy: true }, prefill),
   });
-  const { onSubmit, pending, error } = useRunSubmit(form);
+  const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
@@ -37,7 +37,7 @@ export function VerdictForm({ initialSiteId, prefill }: ToolFormProps) {
   useSiteChange(v.siteId, (s) => setPristine(form, 'country', siteDefaults(s).country));
 
   return (
-    <ToolShell mode="verdict" site={site} cost={estimateCost('verdict', v)} eta={estimateEta('verdict', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Get the verdict">
+    <ToolShell onAccept={onAccept} values={v} mode="verdict" site={site} cost={estimateCost('verdict', v)} eta={estimateEta('verdict', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Get the verdict">
       <FormCard title="Keyword" description="We read the top 10 Google results, pull volume, difficulty and trend, and judge whether a page can win.">
         <SiteField optional value={v.siteId} onChange={(id) => form.setValue('siteId', id, { shouldDirty: true, shouldValidate: form.formState.isSubmitted })} error={errMsg(e.siteId)} />
         <TextField label="Keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. erp implementation services" hint="One search phrase, the way a buyer would type it into Google." />
@@ -106,7 +106,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
     mode: 'onTouched',
     defaultValues: defaults,
   });
-  const { onSubmit, pending, error } = useRunSubmit(form);
+  const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
@@ -125,7 +125,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
   const extras = [v.receiveReport && 'Keyword report: competitors, verdict, keyword data', v.receiveContent && 'The finished page, QA-checked'].filter((x): x is string => !!x);
 
   return (
-    <ToolShell
+    <ToolShell onAccept={onAccept}
       mode="keyword"
       site={site}
       cost={estimateCost('keyword', v)}
@@ -136,7 +136,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
       pending={pending}
       error={error}
       submitLabel={v.receiveContent ? 'Write the page' : 'Get the keyword report'}
-      values={{ keyword: v.keyword, existingPageUrl: v.existingPageUrl, receiveContent: v.receiveContent, ladder: v.ladder }}
+      values={v}
       onUsePlan={(plan) => {
         form.setValue('existingPageUrl', plan.existingPageUrl, { shouldDirty: true, shouldValidate: form.formState.isSubmitted });
         const type = PAGE_TYPES.find((t) => t.value === plan.pageType)?.value;
@@ -314,7 +314,7 @@ export function DiscoverForm({ initialSiteId, prefill }: ToolFormProps) {
       prefill,
     ),
   });
-  const { onSubmit, pending, error } = useRunSubmit(form);
+  const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
@@ -341,7 +341,7 @@ export function DiscoverForm({ initialSiteId, prefill }: ToolFormProps) {
   ].filter((x): x is string => !!x);
 
   return (
-    <ToolShell mode="discover" site={site} cost={estimateCost('discover', v)} eta={estimateEta('discover', v)} emailCopy={!!v.emailCopy} extras={extras} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Find keywords">
+    <ToolShell onAccept={onAccept} values={v} mode="discover" site={site} cost={estimateCost('discover', v)} eta={estimateEta('discover', v)} emailCopy={!!v.emailCopy} extras={extras} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Find keywords">
       <FormCard title="Your business" description="What you sell, to whom and where." info="About 600 keywords from several sources are scored, reviewed by AI for relevance, grouped into topics and checked live on Google.">
         <SiteField optional value={v.siteId} onChange={(id) => form.setValue('siteId', id, { shouldDirty: true, shouldValidate: form.formState.isSubmitted })} error={errMsg(e.siteId)} />
         <TextAreaField

@@ -1,4 +1,4 @@
-import type { ApiError, StepUpMethod } from '@seo/shared';
+import type { ApiError, StepUpMethod, Warning } from '@seo/shared';
 
 export class ApiRequestError extends Error {
   constructor(
@@ -26,6 +26,25 @@ export function setStepUpHandler(h: StepUpHandler | null) {
 }
 
 /**
+ * MKT (2026-10-27, mismatch audit §2.2): a request answered `409 confirm_needed` (the server's warnings: a run for another country, a
+ * keyword about another market, a likely duplicate...) opens one dialog (ConfirmProvider). For each warning the person chooses Accept
+ * (the correction: fields merged into the request, or a call made first) or Continue anyway (its id joins `acknowledge`); the request is
+ * then sent again. Cancel, or no handler, and the 409 reaches the caller as usual.
+ */
+export type ConfirmAnswer = { acknowledge: string[]; set: Record<string, unknown> } | null;
+type ConfirmHandler = (warnings: Warning[], needsAcknowledge: string[]) => Promise<ConfirmAnswer>;
+let confirmHandler: ConfirmHandler | null = null;
+export function setConfirmHandler(h: ConfirmHandler | null) {
+  confirmHandler = h;
+}
+/** The request again with the person's answers: the accepted fields and every acknowledged id (earlier ones kept). */
+export function resendBody(body: unknown, answer: NonNullable<ConfirmAnswer>): Record<string, unknown> {
+  const b = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+  const before = Array.isArray(b.acknowledge) ? (b.acknowledge as unknown[]).map(String) : [];
+  return { ...b, ...answer.set, acknowledge: [...new Set([...before, ...answer.acknowledge])] };
+}
+
+/**
  * deploy/gcp: the API server's own origin when this front end is served from another host of the same site (Vercel), e.g.
  * https://api.alaventra.com (build-time VITE_API_ORIGIN). Everything else goes through this host's /api proxy; requests that may be
  * large or slow (log uploads, backlink CSVs, warehouse exports) go to the API directly, because a proxy in front has body-size and
@@ -41,7 +60,10 @@ export const directUrl = (path: string) => (API_ORIGIN ? API_ORIGIN + path : pat
 export const directCredentials = (): RequestCredentials => (API_ORIGIN ? 'include' : 'same-origin');
 
 /** JSON fetch against the app server. Mutations carry X-Requested-With (the server's CSRF guard). `direct`: see API_ORIGIN. */
-export async function api<T>(path: string, opts: { method?: Method; body?: unknown; signal?: AbortSignal; noStepUp?: boolean; direct?: boolean } = {}): Promise<T> {
+export async function api<T>(
+  path: string,
+  opts: { method?: Method; body?: unknown; signal?: AbortSignal; noStepUp?: boolean; direct?: boolean; /** MKT: answer a 409 confirm_needed here, never in the dialog */ noConfirm?: boolean; confirmDepth?: number } = {},
+): Promise<T> {
   const method = opts.method ?? 'GET';
   const headers: Record<string, string> = { accept: 'application/json' };
   if (method !== 'GET') headers['x-requested-with'] = 'fetch';
@@ -71,6 +93,13 @@ export async function api<T>(path: string, opts: { method?: Method; body?: unkno
     if (res.status === 403 && e.code === 'reauth_required' && stepUpHandler && !opts.noStepUp) {
       const confirmed = await stepUpHandler(Array.isArray(e.methods) ? (e.methods as StepUpMethod[]) : ['password']);
       if (confirmed) return api<T>(path, { ...opts, noStepUp: true });
+    }
+    // MKT: the server's warnings, answered in the dialog, then the same request again (at most three rounds: an Accept can surface a new warning)
+    const bodyOk = opts.body === undefined || (!!opts.body && typeof opts.body === 'object' && !Array.isArray(opts.body));
+    if (res.status === 409 && e.code === 'confirm_needed' && confirmHandler && !opts.noConfirm && method !== 'GET' && bodyOk && (opts.confirmDepth ?? 0) < 3) {
+      const warnings = (Array.isArray(e.warnings) ? e.warnings : Array.isArray(e.notices) ? e.notices : []) as Warning[];
+      const answer = await confirmHandler(warnings, Array.isArray(e.needsAcknowledge) ? (e.needsAcknowledge as string[]) : []);
+      if (answer) return api<T>(path, { ...opts, body: resendBody(opts.body, answer), confirmDepth: (opts.confirmDepth ?? 0) + 1 });
     }
     throw new ApiRequestError(res.status, errorText(e.error, res.status), e.fields ?? {}, e.code, e);
   }
