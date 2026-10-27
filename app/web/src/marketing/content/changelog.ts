@@ -47,6 +47,7 @@ export const changelog: ChangelogEntry[] = [
       'Search the course, or filter it by series, by level, by who it is for (business owners, marketers or agencies)',
       'Next and previous through the whole course, and the rest of the series beside every tutorial',
       'When you tell us a page is published, we now check that the live page is the page we wrote before marking it: a wrong address or an update not yet live gets a warning showing what we found, and you can send the right address or confirm it is the right page',
+      'Your market, checked before you start: a keyword about another country, a run for a market your website does not target, or weekly checks still measuring an old country are flagged in plain words, and you choose to accept the correction or continue anyway (your choice is recorded)',
     ],
     features: ['guided-setup', 'content'],
     labels: ['Learning'],

@@ -36,6 +36,7 @@ import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { qk, useDeleteSite, useSiteAdmin, useSiteData, useStartRun, useUpdateSite } from '@/lib/queries';
 import { fmtAgo, fmtDate } from '@/lib/utils';
+import { SiteWarnings } from '@/components/warnings/SiteWarnings';
 
 const TABS = [
   { id: 'business', label: 'Business details', description: 'What the engine knows about your business. Every page, report and AI-visibility question starts here.' },
@@ -64,6 +65,9 @@ export default function SiteSettingsPage() {
   return (
     <div>
       <PageHeader icon={<Settings />} title="Website settings" description={current.description} />
+      <div className="mb-6 empty:hidden">
+        <SiteWarnings />
+      </div>
       <LinkTabs className="mb-6" items={tabs.map((t) => ({ to: paths.site(org.id, site.id, `settings/${t.id}`), label: t.label }))} />
       {!admin && (
         <Callout tone="info" className="mb-6">

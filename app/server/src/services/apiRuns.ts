@@ -8,9 +8,8 @@ import {
   MODES,
   MODE_IDS,
   modeCostUsd,
-  NOTICE_MODES,
+  needsAcknowledge,
   parseRunInput,
-  pipelineNotices,
   RUN_SCHEMAS,
   roleAtLeast,
   type ApiScope,
@@ -27,8 +26,8 @@ import { db, schema } from '../db';
 import { eq } from 'drizzle-orm';
 import { badRequest, HttpError, validationError } from '../lib/errors';
 import { getRun, requireScope, siteOf, toRunV1, type V1Ctx } from './apiV1';
-import { pipelineData } from './pipeline';
 import { createRunWithMeta, estimateCost, findIdempotentRun } from './runs';
+import { confirmNeeded, runWarnings } from './consistency';
 import { creatorMembership } from './apiKeys';
 import { audit } from './audit';
 import { engineCostTable } from './engineCost';
@@ -106,9 +105,8 @@ export function formBodyOf(body: unknown): Record<string, unknown> {
   return websiteId !== undefined && rest.siteId === undefined ? { ...rest, siteId: websiteId } : rest;
 }
 
-/** Warnings the form asks a person to tick before starting, that this caller has not acknowledged by id. */
-export const unconfirmed = (notices: readonly PipelineNotice[], acknowledged: readonly string[]): PipelineNotice[] =>
-  notices.filter((n) => n.tone === 'warning' && n.confirm && !acknowledged.includes(n.id));
+/** Warnings the form asks a person to tick before starting, that this caller has not acknowledged by id (the shared rule). */
+export const unconfirmed = <W extends PipelineNotice>(notices: readonly W[], acknowledged: readonly string[]): W[] => needsAcknowledge(notices, acknowledged);
 
 export interface StartAnswer {
   status: 200 | 201;
@@ -140,11 +138,8 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
   const estimate = await estimateCost(input, site);   // A2: an AI visibility run is quoted from the website's own panel
   // credits (app/docs/CREDITS.md): the caller reads the quote, never the provider estimate behind it
   const quoted = quoteCredits(estimate, await settingsRow());
-  let notices: PipelineNotice[] = [];
-  if (site?.verifiedAt && NOTICE_MODES.includes(input.mode)) {
-    const data = await pipelineData(ctx.org, site).catch(() => null);
-    notices = pipelineNotices(input.mode, input as never, data, { costLabel: estimate > 0 ? formatCredits(quoted) : undefined });
-  }
+  // MKT (2026-10-27): the forms' duplicate warnings and the market checks (shared consistency.ts), the same list createRunWithMeta enforces
+  const notices = await runWarnings(ctx.org, site, input, { costLabel: estimate > 0 ? formatCredits(quoted) : undefined });
   const open = unconfirmed(notices, extras.data.acknowledge);
 
   if (extras.data.dryRun) {
@@ -165,16 +160,9 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
   }
   // a repeat with the same key is answered from the run itself, even when its warnings would now be different
   const idem = idempotencyKey ? { key: idempotencyKey, hash: requestHash(input, extras.data.acknowledge) } : null;
-  if (open.length && !(idem && (await findIdempotentRun(ctx.org.id, idem.key))))
-    throw new HttpError(
-      409,
-      `This looks like a duplicate of work already planned or running. Read the notices, then send their ids in "acknowledge" to start it anyway.`,
-      'confirm_needed',
-      undefined,
-      { notices, needsAcknowledge: open.map((n) => n.id) },
-    );
+  if (open.length && !(idem && (await findIdempotentRun(ctx.org.id, idem.key)))) throw confirmNeeded(notices, open);
 
-  const { run, replayed } = await createRunWithMeta(actor, input, { apiKeyId: ctx.key?.id ?? null, idempotency: idem });
+  const { run, replayed } = await createRunWithMeta(actor, input, { apiKeyId: ctx.key?.id ?? null, idempotency: idem, acknowledge: extras.data.acknowledge, warnings: notices, req: ctx.req ?? null });
   const full = await getRun(ctx, run.id);
   // G1's audit log: an analysis started through the API (REST or MCP), named with the key that started it
   if (!replayed)

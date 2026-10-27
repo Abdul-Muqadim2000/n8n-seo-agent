@@ -18,6 +18,7 @@ import { isUuid, orgAccess, requireVerified, siteAccess } from '../auth/access';
 import { notFound, parse } from '../lib/errors';
 import { audit } from '../services/audit';
 import { approveProposal, listProposals, skipProposal, swapProposal } from '../services/autoStart';
+import { takeAcknowledge } from '../services/consistency';
 import { decideComingUp, loadComingUp } from '../services/comingUp';
 import { loadSiteCycle, setCycleWeekday } from '../services/cycles';
 import { rejectPage } from '../services/autopilot';
@@ -80,7 +81,7 @@ export async function autopilotRoutes(app: FastifyInstance) {
     const p = req.params as P;
     const a = await siteAccess(req, p.orgId, p.siteId, 'member');
     requireVerified(a.site);
-    const r = await approveProposal(a, proposalId(req));
+    const r = await approveProposal(a, proposalId(req), undefined, { acknowledge: takeAcknowledge(req.body).acknowledge, req });
     await audit(req, a.org.id, { action: 'site.keyword_proposal_decided', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { keyword: r.proposal.keyword, decision: 'approve', runId: r.run.id } });
     return { proposal: r.proposal, runId: r.run.id };
   });
@@ -99,7 +100,7 @@ export async function autopilotRoutes(app: FastifyInstance) {
     const a = await siteAccess(req, p.orgId, p.siteId, 'member');
     requireVerified(a.site);
     const { keyword } = parse(proposalSwapSchema, req.body);
-    const r = await swapProposal(a, proposalId(req), keyword);
+    const r = await swapProposal(a, proposalId(req), keyword, undefined, { acknowledge: takeAcknowledge(req.body).acknowledge, req });
     await audit(req, a.org.id, { action: 'site.keyword_proposal_decided', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { keyword: r.proposal.keyword, decision: 'swap', swappedFor: keyword, runId: r.run.id } });
     return { proposal: r.proposal, runId: r.run.id };
   });

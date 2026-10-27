@@ -219,6 +219,25 @@ describe('MCP run tools', () => {
     expect(st.created[0]!.opts).toMatchObject({ idempotency: { key: 'mcp-1' } });
   });
 
+  // MKT (2026-10-27, mismatch audit §2): the market checks travel the same path as the duplicate warnings, for REST and MCP alike
+  it('a run for another country than the website\'s (M1) and a keyword of another market (M4): 409 with code, severity and Accept; acknowledged ids reach the run path', async () => {
+    const body = { mode: 'verdict', websiteId: SITE_A, keyword: 'erp software dubai', country: 'Germany' };
+    const r = await post(RUN_KEY, body);
+    expect([r.statusCode, r.json().code]).toEqual([409, 'confirm_needed']);
+    expect(r.json().needsAcknowledge).toEqual(['market.run_country:DE:US', 'market.keyword_place:erp software dubai:DE']);
+    expect(r.json().warnings[0]).toMatchObject({ code: 'market.run_country', severity: 'market', accept: { label: 'Use United States', change: { kind: 'fields', set: { country: 'United States' } } } });
+    expect(r.json().warnings[0].message).toContain('Germany');
+    const ids = r.json().needsAcknowledge as string[];
+    const ok = await post(RUN_KEY, { ...body, acknowledge: ids });
+    expect(ok.statusCode).toBe(201);
+    expect(st.created[0]!.opts).toMatchObject({ acknowledge: ids });
+    // MCP: the assistant reads the same warnings and their Accept
+    const refused = (await mcp(RUN_KEY, 'tools/call', { name: 'start_run', arguments: { input: { ...body, keyword: 'erp software' } } })).json();
+    expect(refused.result.structuredContent).toMatchObject({ code: 'confirm_needed', needsAcknowledge: ['market.run_country:DE:US'] });
+    const accepted = (await mcp(RUN_KEY, 'tools/call', { name: 'start_run', arguments: { input: { ...body, keyword: 'erp software', country: 'United States' } } })).json();
+    expect(accepted.result.isError).toBe(false);
+  });
+
   it('preview_run is a dry run', async () => {
     const r = (await mcp(RUN_KEY, 'tools/call', { name: 'preview_run', arguments: { input: audit } })).json();
     expect(r.result.structuredContent).toMatchObject({ dryRun: true, estimate: { credits: 8 } });

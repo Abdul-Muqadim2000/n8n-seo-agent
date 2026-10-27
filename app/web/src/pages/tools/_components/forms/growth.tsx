@@ -44,7 +44,7 @@ export function LadderForm({ initialSiteId, prefill }: ToolFormProps) {
       prefill,
     ),
   });
-  const { onSubmit, pending, error } = useRunSubmit(form);
+  const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
@@ -58,7 +58,7 @@ export function LadderForm({ initialSiteId, prefill }: ToolFormProps) {
   const pagesNow = v.pagesNow ?? 1;
 
   return (
-    <ToolShell
+    <ToolShell onAccept={onAccept}
       mode="ladder"
       site={site}
       cost={estimateCost('ladder', v)}
@@ -69,7 +69,7 @@ export function LadderForm({ initialSiteId, prefill }: ToolFormProps) {
       pending={pending}
       error={error}
       submitLabel="Build the ladder"
-      values={{ keyword: v.keyword }}
+      values={v}
       blocked={blockedWithout(sites.some((s) => s.verifiedAt))}
     >
       <FormCard title="The keyword to win" description="A head term you cannot rank for yet." info="The ladder starts with winnable long-tail pages and climbs to it, with a feasibility verdict, link map and timeline.">
@@ -146,7 +146,7 @@ export function CaseStudyForm({ initialSiteId, prefill }: ToolFormProps) {
       prefill,
     ),
   });
-  const { onSubmit, pending, error } = useRunSubmit(form);
+  const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
@@ -155,7 +155,7 @@ export function CaseStudyForm({ initialSiteId, prefill }: ToolFormProps) {
   const hasNumbers = /\d/.test(v.results ?? '');
 
   return (
-    <ToolShell
+    <ToolShell onAccept={onAccept} values={v}
       mode="case_study"
       site={site}
       cost={estimateCost('case_study', v)}
@@ -260,7 +260,7 @@ export function AiVisibilityForm({ initialSiteId, prefill }: ToolFormProps) {
     mode: 'onTouched',
     defaultValues: withPrefill<DefaultValues<AiIn>>({ mode: 'ai_visibility', siteId: initialSiteId ?? '', country: sd.country, topics: [], competitors: sd.competitors, emailCopy: true }, prefill),
   });
-  const { onSubmit, pending, error } = useRunSubmit(form);
+  const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
@@ -276,7 +276,7 @@ export function AiVisibilityForm({ initialSiteId, prefill }: ToolFormProps) {
   const panel = settings.data ? aiRunPanelOf(settings.data.monitors) : null;
 
   return (
-    <ToolShell mode="ai_visibility" site={site} cost={estimateCost('ai_visibility', panel ? { ...v, [AI_PANEL_VALUE]: panel } : v)} eta={estimateEta('ai_visibility', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check AI visibility" blocked={blockedWithout(sites.some((s) => s.verifiedAt))}>
+    <ToolShell onAccept={onAccept} values={v} mode="ai_visibility" site={site} cost={estimateCost('ai_visibility', panel ? { ...v, [AI_PANEL_VALUE]: panel } : v)} eta={estimateEta('ai_visibility', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check AI visibility" blocked={blockedWithout(sites.some((s) => s.verifiedAt))}>
       <FormCard
         title="Website and market"
         description="Buyer questions for your market, asked to every assistant below."
@@ -330,7 +330,7 @@ export function BacklinksForm({ initialSiteId, prefill }: ToolFormProps) {
     mode: 'onTouched',
     defaultValues: withPrefill<DefaultValues<BIn>>({ mode: 'backlinks', siteId: initialSiteId ?? '', country: sd.country, competitors: sd.competitors, freeOnly: false, emailCopy: true }, prefill),
   });
-  const { onSubmit, pending, error } = useRunSubmit(form);
+  const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
   const v = form.watch();
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
@@ -342,7 +342,7 @@ export function BacklinksForm({ initialSiteId, prefill }: ToolFormProps) {
   });
 
   return (
-    <ToolShell mode="backlinks" site={site} cost={estimateCost('backlinks', v)} eta={estimateEta('backlinks', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check backlinks" blocked={blockedWithout(sites.some((s) => s.verifiedAt))}>
+    <ToolShell onAccept={onAccept} values={v} mode="backlinks" site={site} cost={estimateCost('backlinks', v)} eta={estimateEta('backlinks', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check backlinks" blocked={blockedWithout(sites.some((s) => s.verifiedAt))}>
       <FormCard
         title="Website"
         description="Every link source merged, each important link checked on its page."

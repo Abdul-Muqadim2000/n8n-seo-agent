@@ -76,7 +76,9 @@ export async function startResearch(a: OrgAccess & { site: SiteRow }, now = Date
   if (!site.business.trim() && !site.services.length)
     throw new HttpError(400, 'Tell us what you sell first (the business step), so the research looks for the right keywords.', 'validation', { business: 'Describe your business' });
   const [rec, run] = await Promise.all([recommendedKeywords(a.org, site, now), latestDiscover(site.id)]);
-  const status = researchStatusOf(run, rec, now);
+  // MKT (2026-10-27, mismatch audit M6): research done for another country than the website's main country is not "ready" for it
+  const status0 = researchStatusOf(run, rec, now);
+  const status = status0 === 'ready' && rec.country && rec.country !== site.country ? 'none' : status0;
   if (status === 'running') return { status, runId: run!.id, startedAt: run!.createdAt.toISOString(), free: run!.input?.freeResearch === true, started: false };
   if (status === 'ready') return { status, runId: null, startedAt: null, free: false, started: false };
   const input = inputOf(site);

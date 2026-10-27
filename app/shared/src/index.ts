@@ -49,4 +49,6 @@ export * from './cycle-clock'; // the per-website cycle's clock (v5/code/_cycle.
 export * from './fit-gate';  // the engine's fit gate (v5/code/_fit_gate.js), generated from the kit by build_v4.py (KW-PARITY), the same code
 export * from './cycles';    // the per-website 7-day cycle and keyword-first autopilot contract (SCHEDULING_KEYWORDS_PLAN.md §14)
 export * from './readiness';   // P1 (2026-10-20): author profile + business facts before a written page (the engine's v5/code/_readiness.js)
+export * from './markets';   // MKT (2026-10-27): which market a website, a keyword or a text points to (the engine's gazetteer)
+export * from './consistency';   // MKT (2026-10-27): the one mismatch mechanism: warnings, Accept, Continue anyway (AUDIT.md §2)
 export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run

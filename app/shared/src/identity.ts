@@ -528,6 +528,10 @@ export const AUDIT_ACTIONS = {
   'site.admin.prospect': { label: 'Changed a link prospect', category: 'websites' },
   'site.admin.ai_prompts': { label: 'Changed the AI question panel', category: 'websites' },
   'site.admin.content_groups': { label: 'Changed the content groups', category: 'websites' },
+  // MKT (2026-10-27, AUDIT.md §2): a warning the person (or an API caller) went past with Continue anyway, and the market fixes
+  'warning.overridden': { label: 'Continued past a warning', category: 'websites' },
+  'site.market_synced': { label: 'Moved the weekly checks to the website\'s main country', category: 'websites' },
+  'site.ladder_market_moved': { label: 'Moved a keyword ladder to the website\'s main country', category: 'websites' },
   // W2-A (2026-10-23): AI visibility wave 2
   'site.ai_prompts_deleted': { label: 'Deleted questions from the AI question panel', category: 'websites' },
   'site.ai_import': { label: 'Uploaded an AI report export (Bing or Search Console)', category: 'data' },

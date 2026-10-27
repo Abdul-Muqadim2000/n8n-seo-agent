@@ -2,10 +2,12 @@ import { useEffect, useId, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
-import { cleanDomain, COUNTRIES, MONITOR_COSTS, trackInput, type MonitorSettings, type Site } from '@seo/shared';
+import { cleanDomain, MONITOR_COSTS, trackInput, type MonitorSettings, type Site } from '@seo/shared';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
-import { ChoiceCard, Field, Input, Select } from '@/components/ui/field';
+import { ChoiceCard, Field, Input } from '@/components/ui/field';
+import { Link } from 'react-router';
+import { paths } from '@/lib/paths';
 import { TagInput } from '@/components/ui/tag-input';
 import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
@@ -104,17 +106,17 @@ export function TrackingForm({
   return (
     <form id={formId} onSubmit={submit} noValidate className="space-y-6">
       <fieldset disabled={readOnly} className="min-w-0 space-y-5">
+        {/* MKT (2026-10-27, mismatch audit M1): the website owns its country. Tracking with another country moved every weekly check of
+            devaicon.com to the UAE while its settings said Pakistan, so the country is shown here, not chosen: it changes in Business details. */}
         {showCountry && (
-          <Field label="Country" hint="Rankings and trends are checked for this country." error={errors.country?.message}>
+          <Field label="Country" hint="Rankings, trends and AI answers are checked for your website's main country." error={errors.country?.message}>
             {(p) => (
-              <Select {...p} {...register('country')}>
-                <option value="">Choose a country</option>
-                {COUNTRIES.map((c) => (
-                  <option key={c.iso} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
+              <p id={p.id} className="text-sm text-ink">
+                <span className="font-medium">{watch('country') || 'No main country yet'}</span>{' '}
+                <Link to={paths.site(site.orgId, site.id, 'settings/business')} className="text-accent-text hover:underline transition-colors duration-150 ease-brand">
+                  Change it in Business details
+                </Link>
+              </p>
             )}
           </Field>
         )}
