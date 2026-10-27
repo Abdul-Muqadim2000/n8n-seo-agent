@@ -2,6 +2,7 @@
 export { Reveal, useInView } from './Reveal';
 export { Container, Eyebrow, Section, SectionHeading, useSectionTone, type SectionTone } from './Section';
 export { CtaBand, onInkOutline } from './CtaBand';
+export { SearchKinds, SearchKindChips } from './SearchKinds';
 export { FeatureCard, IconTile } from './FeatureCard';
 export { FactGrid, Stat } from './FactGrid';
 export { Faq } from './Faq';

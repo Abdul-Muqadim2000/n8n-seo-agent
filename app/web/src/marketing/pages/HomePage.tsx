@@ -19,6 +19,7 @@ import {
   LOOP_STEPS,
   Photo,
   Reveal,
+  SearchKinds,
   Section,
   SectionHeading,
 } from '../components';
@@ -113,7 +114,15 @@ const ENTERPRISE = [
 const FAQS: FaqItem[] = [
   {
     q: 'What does SEO actually do for my business?',
-    a: 'SEO gets your website shown when people search Google (or ask ChatGPT) for what you sell. Those visitors are already looking for something like yours, and you do not pay for every click the way you do with ads. Alaventra does the work that gets you there: finding the right searches, writing the pages, fixing the site and tracking the results.',
+    a: 'SEO gets your website shown when people search Google for what you sell, and AEO and GEO get you into the answers Google and ChatGPT write. Those visitors are already looking for something like yours, and you do not pay for every click the way you do with ads. Alaventra does the work that gets you there: finding the right searches, writing the pages, fixing the site, getting you named in AI answers and tracking the results.',
+  },
+  {
+    q: 'What are AEO and GEO, and do I need them?',
+    a: 'AEO (answer engine optimization) is being the answer Google shows above its results: AI Overviews, AI Mode, featured snippets and "People also ask". GEO (generative engine optimization) is being named and cited when people ask ChatGPT, Gemini, Perplexity, Claude or Copilot. Both now sit between your buyers and your website, so if you sell to people who search, you need both next to SEO.',
+  },
+  {
+    q: 'Do I need separate tools for SEO, AEO and GEO?',
+    a: 'No. Alaventra does all three from the same research, the same pages and the same weekly report. Every plan covers SEO and reads the answers Google shows above its results. The AI assistant checks, the daily AI Pulse and the weekly AI growth work are on the Growth plan.',
   },
   {
     q: 'How fast will I see results?',
@@ -198,11 +207,11 @@ function Hero() {
         <div className="mx-auto max-w-5xl text-center">
           <div className="animate-fade-up" style={{ animationDelay: '0ms' }}>
             <Link
-              to="/platform/ai-visibility"
+              to="#seo-aeo-geo"
               className="mk-tap group inline-flex max-w-full items-center gap-2.5 rounded-full border border-line bg-surface py-1 pl-1 pr-3.5 text-[13px] text-ink-2 shadow-card transition-[border-color,color] duration-200 ease-brand hover:border-accent hover:text-ink"
             >
-              <span className="rounded-full bg-accent-soft px-2 py-0.5 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-accent-text">New</span>
-              <span className="truncate">AI Pulse: daily AI-answer checks that alert only on real changes</span>
+              <span className="rounded-full bg-accent-soft px-2 py-0.5 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-accent-text">SEO · AEO · GEO</span>
+              <span className="truncate">Google, its AI answers and ChatGPT, from one platform</span>
               <ArrowRight className="size-3.5 shrink-0 text-ink-3 transition-transform duration-200 ease-brand group-hover:translate-x-0.5 group-hover:text-accent-text" aria-hidden />
             </Link>
           </div>
@@ -213,7 +222,7 @@ function Hero() {
           </div>
           <div className="animate-fade-up" style={{ animationDelay: '140ms' }}>
             <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl">
-              Alaventra is SEO that runs itself. It finds what your buyers search on Google and ask ChatGPT, writes pages for the keywords you choose, fixes what holds your site back, and shows you every week that more people are finding you.
+              Alaventra runs your SEO, AEO and GEO in one place. It finds what your buyers search on Google and ask ChatGPT, writes pages for the keywords you choose, fixes what holds your site back, gets you named in AI answers and shows you every week that more people are finding you.
             </p>
           </div>
           <div className="mt-9 flex flex-wrap justify-center gap-3 animate-fade-up" style={{ animationDelay: '210ms' }}>
@@ -355,9 +364,9 @@ function WhyAlaventra() {
 
       {/* the same five jobs, by hand and with Alaventra */}
       <Reveal className="mt-20 sm:mt-24">
-        <h3 className="max-w-2xl font-display text-2xl font-semibold tracking-[-0.01em] text-balance text-ink sm:text-[1.75rem]">SEO is five jobs, every week. Here is who does them.</h3>
+        <h3 className="max-w-2xl font-display text-2xl font-semibold tracking-[-0.01em] text-balance text-ink sm:text-[1.75rem]">Search is five jobs, every week. Here is who does them.</h3>
       </Reveal>
-      <div className="mt-8 overflow-hidden rounded-2xl border border-line" role="table" aria-label="SEO by hand compared with Alaventra">
+      <div className="mt-8 overflow-hidden rounded-2xl border border-line" role="table" aria-label="Search work by hand compared with Alaventra">
         <div role="row" className="hidden grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1.15fr)] border-b border-line bg-page md:grid">
           <span role="columnheader" className="px-6 py-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">The job</span>
           <span role="columnheader" className="px-6 py-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">Doing it by hand</span>
@@ -463,7 +472,7 @@ function CapabilityGrid() {
   return (
     <Section tone="page" id="platform" bordered>
       <div className="flex flex-wrap items-end justify-between gap-6">
-        <SectionHeading eyebrow={`Platform · ${CapabilityCount} capabilities`} title="Everything SEO takes. One place." lead="Each part works on its own. Together they run your SEO every week, from finding what people search for to the weekly report." />
+        <SectionHeading eyebrow={`Platform · ${CapabilityCount} capabilities`} title="Everything SEO, AEO and GEO take. One place." lead="Each part works on its own. Together they run your search every week, from finding what people search for and ask AI to the weekly report." />
         <Reveal>
           <ArrowLink to="/platform">Explore the platform</ArrowLink>
         </Reveal>
@@ -512,7 +521,7 @@ function AiSpotlight() {
       <div className="grid grid-cols-1 items-center gap-14 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16">
         <div>
           <SectionHeading
-            eyebrow="AI search visibility"
+            eyebrow="GEO: AI search visibility"
             title="Find out if ChatGPT recommends you, and fix it when it doesn't."
             lead="More and more buyers ask an AI assistant for a shortlist before they ever search. Alaventra asks the same questions every day and shows where you are named, linked or missing."
           />
@@ -735,14 +744,15 @@ function FaqSection() {
 
 export default function HomePage() {
   useSeo({
-    title: 'Get found on Google and ChatGPT: SEO that runs itself',
-    description: 'You built the product; Alaventra brings the traffic. It finds what your buyers search for, writes pages for the keywords you choose, fixes your site and tracks Google and AI answers every week.',
+    title: 'SEO, AEO and GEO platform: get found on Google and in AI answers',
+    description: 'One platform for SEO, AEO and GEO. Alaventra finds what buyers search and ask AI, writes the pages, fixes your site and tracks Google and AI answers every week.',
     path: '/',
   });
   return (
     <>
       <Hero />
       <WhyAlaventra />
+      <SearchKinds tone="page" />
       <Timeline />
       <CapabilityGrid />
       <LoopBand />

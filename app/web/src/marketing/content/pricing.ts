@@ -30,7 +30,7 @@ export const pricingTiers: PricingTier[] = [
     period: 'per month',
     monthly: 39, // keep equal to `price`
     monthlyCredits: 780, // = monthly price ÷ $0.05
-    description: 'One website, the whole loop: research, a page a week for the keywords you choose, monthly audits and the weekly report.',
+    description: 'One website, with SEO and the answers Google shows above its results: research, a page a week for the keywords you choose, monthly audits and the weekly report.',
     // ?plan= is ignored by the sign-up page today; it records which plan the visitor came from
     cta: { label: 'Start free', to: '/signup?plan=starter' },
     features: [
@@ -54,7 +54,7 @@ export const pricingTiers: PricingTier[] = [
     period: 'per month',
     monthly: 299, // keep equal to `price`
     monthlyCredits: 5980, // = monthly price ÷ $0.05
-    description: 'Everything the engine does, on up to three websites, including AI answers and backlinks.',
+    description: 'SEO, AEO and GEO on up to three websites: everything in Starter, plus ChatGPT and the other AI assistants, and backlinks.',
     cta: { label: 'Start free', to: '/signup?plan=growth' },
     highlighted: true,
     includesPrevious: 'Everything in Starter, plus:',

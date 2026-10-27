@@ -2,15 +2,16 @@ import { useEffect, useRef } from 'react';
 import { ArrowRight, Check } from 'lucide-react';
 import { ButtonLink } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Container, CtaBand, Eyebrow, GrowthLoopDiagram, IconTile, IntegrationMarquee, LOOP_STEPS, Reveal, Section, SectionHeading } from '../components';
+import { Container, CtaBand, Eyebrow, GrowthLoopDiagram, IconTile, IntegrationMarquee, LOOP_STEPS, Reveal, SearchKindChips, SearchKinds, Section, SectionHeading } from '../components';
 import { CapabilityMap } from '../components/platform/CapabilityMap';
 import { CapabilityScreen, isWideScreen } from '../components/platform/CapabilityScreen';
 import { ArrowLink, jumpTo, lowerFirst, useScrollSpy } from '../components/platform/kit';
 import { LearnLink } from '../components/tutorials/LearnLink';
 import { CapabilityCount, capabilityCount, featureBySlug, features, type Feature } from '../content/features';
+import { featureSearchKinds } from '../content/search-kinds';
 import { useSeo } from '../useSeo';
 
-const HERO_FACTS = [`${features.length} capabilities`, 'Pages only for keywords you choose', 'Auto or Manual for every step', 'Price shown before every run'];
+const HERO_FACTS = ['SEO, AEO and GEO', `${features.length} capabilities`, 'Pages only for keywords you choose', 'Auto or Manual for every step', 'Price shown before every run'];
 
 /** which capabilities carry each step of the weekly loop */
 const LOOP_MAP: Record<string, string[]> = {
@@ -110,7 +111,7 @@ function Hero() {
               {CapabilityCount} capabilities. One system.
             </h1>
             <p className="mt-6 max-w-xl animate-fade-up text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl" style={{ animationDelay: '140ms' }}>
-              Research, keyword ladders, content, audits, tracking, AI search visibility, backlinks and link building. Each is strong on its own, and together they make one weekly loop your team can trust.
+              SEO for Google's results, AEO for the answers Google shows above them and GEO for ChatGPT and the other AI assistants. Research, keyword ladders, content, audits, tracking, AI search visibility, backlinks and link building, each strong on its own and together one weekly loop your team can trust.
             </p>
             <div className="mt-9 flex animate-fade-up flex-wrap gap-3" style={{ animationDelay: '210ms' }}>
               <ButtonLink to="/signup" size="lg" className="group">
@@ -234,6 +235,7 @@ function CapabilitySection({ feature: f, index }: { feature: Feature; index: num
         <IconTile icon={f.icon} />
         <Eyebrow>{f.name}</Eyebrow>
       </Reveal>
+      <SearchKindChips ids={featureSearchKinds[f.slug]} className="mt-4" />
       <Reveal index={1}>
         <h2 id={titleId} className="mt-6 max-w-xl font-display text-[1.75rem] font-semibold leading-[1.15] tracking-[-0.01em] text-balance text-ink sm:text-[2.125rem]">
           {f.tagline}
@@ -368,13 +370,17 @@ export default function PlatformPage() {
   useSeo({
     title: 'Platform',
     // a summary (search results show ~160 characters); the count follows the registry
-    description: `${CapabilityCount} capabilities, one weekly SEO loop: research, ladders, content, audits, tracking, AI search, backlinks and link building, with your team in control.`,
+    description: `SEO, AEO and GEO in ${CapabilityCount} capabilities and one weekly loop: research, content, audits, tracking, AI search visibility, backlinks and link building.`,
     path: '/platform',
   });
   const active = useScrollSpy(features.map((f) => f.slug));
   return (
     <>
       <Hero />
+      <SearchKinds
+        title="SEO, AEO and GEO, in one system."
+        lead="Each capability below works on one or more of the three kinds of search, marked beside its name. They share one keyword list, one set of pages and one weekly report, so nothing is bought or checked twice."
+      />
       {/* the capability bar stays under the header only while the capability sections are on screen */}
       <div>
         <CapabilityNav active={active} />
@@ -384,7 +390,7 @@ export default function PlatformPage() {
       </div>
       <LoopSection />
       <Integrations />
-      <CtaBand title="One platform for the whole loop." />
+      <CtaBand title="One platform for SEO, AEO and GEO." />
     </>
   );
 }

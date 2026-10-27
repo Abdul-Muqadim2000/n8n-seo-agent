@@ -3,10 +3,11 @@ import { useParams } from 'react-router';
 import { ArrowRight, Check } from 'lucide-react';
 import { ButtonLink } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Container, CtaBand, Eyebrow, FactGrid, Faq, FeatureCard, FeatureVisual, IconTile, MarketingNotFound, Photo, Reveal, Section, SectionHeading } from '../components';
+import { Container, CtaBand, Eyebrow, FactGrid, Faq, FeatureCard, FeatureVisual, IconTile, MarketingNotFound, Photo, Reveal, SearchKindChips, Section, SectionHeading } from '../components';
 import { CapabilityScreen, isWideScreen } from '../components/platform/CapabilityScreen';
 import { ArrowLink, Breadcrumbs, PrevNext, StepRail } from '../components/platform/kit';
 import { capabilityCount, featureBySlug, features, relatedFeatures, type Fact, type Feature } from '../content/features';
+import { featureSearchKinds } from '../content/search-kinds';
 import { useSeo } from '../useSeo';
 
 const factText = (f: Fact) => `${f.prefix ?? ''}${typeof f.value === 'number' ? f.value.toLocaleString('en-US') : f.value}${f.suffix ?? ''} ${f.label}`;
@@ -34,6 +35,7 @@ function Hero({ feature: f }: { feature: Feature }) {
                 Capability {String(features.indexOf(f) + 1).padStart(2, '0')} / {features.length}
               </Eyebrow>
             </div>
+            <SearchKindChips ids={featureSearchKinds[f.slug]} className="mt-5 animate-fade-up" />
             <h1
               className="mt-6 animate-fade-up font-display text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.02em] text-balance text-ink sm:text-5xl lg:text-[3.5rem]"
               style={{ animationDelay: '70ms' }}

@@ -29,7 +29,7 @@ export const solutions: Solution[] = [
     slug: 'agencies',
     name: 'Alaventra for agencies',
     shortName: 'Agencies',
-    tagline: 'Run SEO for every client from one account, with verified access and credits tracked per client.',
+    tagline: 'Run SEO, AEO and GEO for every client from one account, with verified access and credits tracked per client.',
     summary:
       'Give every client their own workspace, website verification, team and credits. Alaventra runs the weekly loop for each website and turns the work into reports you can send as they are.',
     icon: Briefcase,

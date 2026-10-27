@@ -616,6 +616,10 @@ export const features: Feature[] = [
     ],
     faqs: [
       {
+        q: 'Is this what people call GEO or AEO?',
+        a: 'Yes, the measuring half of both. GEO (generative engine optimization) is being named and cited by ChatGPT, Gemini, Perplexity, Claude and Copilot; AEO (answer engine optimization) is being the answer in Google\'s AI Overviews and AI Mode. AI visibility measures both on the same questions, and AI growth does the work that moves them.',
+      },
+      {
         q: 'Why ranges instead of one number?',
         a: 'AI answers vary from one ask to the next. Alaventra asks repeatedly and shows each rate with a 95% range, so you can tell a real change from noise.',
       },
@@ -648,7 +652,7 @@ export const features: Feature[] = [
     slug: 'ai-growth',
     name: 'AI growth',
     shortName: 'AI growth',
-    tagline: 'The weekly work that gets you named and cited in AI answers.',
+    tagline: 'The weekly GEO and AEO work that gets you named and cited in AI answers.',
     summary:
       'Measuring AI visibility tells you where you stand; AI growth acts on it every week. New and updated pages go to Bing and IndexNow, your key pages are checked for what AI assistants need in order to quote them, the questions you lose become suggested pages to write or refresh, and the exact pages AI cites without naming you become pitches.',
     icon: Rocket,
