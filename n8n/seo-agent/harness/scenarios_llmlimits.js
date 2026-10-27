@@ -184,8 +184,9 @@ module.exports = async (ctx) => {
     const outs = (n) => ((C[n] || {}).main || []).map(l => (l || []).map(t => t.node));
     check('After Count (Copywriter) -> Draft Check (Copywriter) -> Draft Complete? (Copywriter) -> [Critic] / [Copywriter]',
       J(outs('After Count (Copywriter)')) === J([['Draft Check (Copywriter)']]) && J(outs('Draft Check (Copywriter)')) === J([['Draft Complete? (Copywriter)']]) && J(outs('Draft Complete? (Copywriter)')) === J([['Critic'], ['Copywriter']]), J([outs('After Count (Copywriter)'), outs('Draft Complete? (Copywriter)')]));
-    check('After Count (Editor) -> Edit Check (Editor) -> Edit Complete? (Editor) -> [Promise Candidates] / [Editor]',
-      J(outs('After Count (Editor)')) === J([['Edit Check (Editor)']]) && J(outs('Edit Check (Editor)')) === J([['Edit Complete? (Editor)']]) && J(outs('Edit Complete? (Editor)')) === J([['Promise Candidates'], ['Editor']]), J(outs('Edit Complete? (Editor)')));
+    // H1 (2026-10-27, build section 151): a complete edit goes through Page Fix (the deterministic fixes) before Promise Candidates
+    check('After Count (Editor) -> Edit Check (Editor) -> Edit Complete? (Editor) -> [Page Fix -> Promise Candidates] / [Editor]',
+      J(outs('After Count (Editor)')) === J([['Edit Check (Editor)']]) && J(outs('Edit Check (Editor)')) === J([['Edit Complete? (Editor)']]) && J(outs('Edit Complete? (Editor)')) === J([['Page Fix'], ['Editor']]) && J(outs('Page Fix')) === J([['Promise Candidates']]), J(outs('Edit Complete? (Editor)')));
     const cond = (n) => N[n].parameters.conditions.conditions[0].leftValue;
     check('both IFs route on the check\'s own retry flag (a kept draft goes on, a retry goes back)', cond('Draft Complete? (Copywriter)') === '={{ !($json.llm_check && $json.llm_check.retry) }}' && cond('Edit Complete? (Editor)') === cond('Draft Complete? (Copywriter)'), cond('Edit Complete? (Editor)'));
     check('the run ledger\'s basis line names a cut answer first (ops see it on the row)', /Claude answer cut short: /.test(N['Run Ledger Settle'].parameters.jsCode) && /__llmNote \+ \(dfs_day/.test(N['Run Ledger Settle'].parameters.jsCode));

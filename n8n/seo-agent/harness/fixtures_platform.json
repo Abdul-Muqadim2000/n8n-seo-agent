@@ -902,6 +902,7 @@
       "logo_url": "",
       "style": {
         "brand_form": "Northwind ERP",
+        "legal_name": "Northwind Trading FZ-LLC",
         "brand_wrong": [
           "NorthWind"
         ],
@@ -925,6 +926,7 @@
       "profile_input.author_same_as": "https://www.linkedin.com/in/sara-khan/",
       "profile_input.service_areas": "Dubai, Abu Dhabi",
       "profile_input.style_brand_form": "Northwind ERP",
+      "profile_input.style_legal_name": "Northwind Trading FZ-LLC",
       "profile_input.style_brand_wrong": "NorthWind",
       "profile_input.style_spelling": "British English",
       "profile_input.style_avoid": "cutting-edge, synergy",

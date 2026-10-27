@@ -46,15 +46,35 @@ const ST = (() => {
     return out.slice(0, 16);
   }
 
+  // H2 (2026-10-27, R1 §3.5): one field held two names. novaand-demo.com stored "Nova& (legal name: Novaand systems LLC)", the prompts were told
+  // to write that exact text everywhere, so the title and every heading carried "(legal name: ...)", and the brand check then flagged
+  // "Novaand" inside the legal name the business itself wrote. The brand (the name customers know, used in titles, headings and prose)
+  // and the legal name (only where a legal statement needs it) are two values now: `style_legal_name` on the profile row, and a stored
+  // value written the old way is read as the two ("X (legal name: Y)", "X (Y LLC)", "X, legal name: Y").
+  const LEGAL_SUFFIX = /\b(?:llc|l\.l\.c\.|ltd|limited|inc|incorporated|gmbh|plc|fz-?llc|fze|fzco|pjsc|psc|wll|w\.l\.l\.|s\.?a\.?r?\.?l?|bv|b\.v\.|pty|pvt|private limited|co\.?)\.?$/i;
+  function splitBrand(v) {
+    const t = S(v); if (!t) return { display: '', legal: '' };
+    let m = t.match(/^(.+?)\s*[(\[,;-]\s*(?:legal(?:ly)?(?: name)?|registered(?: name| as)?|company name|trading as|t\/a)\s*[:=-]?\s*([^)\]]+?)\s*[)\]]?\s*$/i);
+    if (m && S(m[1]) && S(m[2])) return { display: S(m[1]), legal: S(m[2]) };
+    m = t.match(/^(.+?)\s*\(\s*([^()]{3,120}?)\s*\)\s*$/);
+    if (m && LEGAL_SUFFIX.test(S(m[2]))) return { display: S(m[1]), legal: S(m[2]) };
+    return { display: t, legal: '' };
+  }
+  // a wrong form that is really another field written into this one ("Spelling: British English") is not a brand form
+  const FIELD_LEAK = /^(?:spelling|tone|avoid|words to avoid|notes?|other rules|brand(?: name)?|legal(?: name)?|style)\s*:/i;
+
   function from(row, o = {}) {
     const r = row || {};
-    const brand_form = S(r.style_brand_form) || S(o.brand_form);
+    const split = splitBrand(S(r.style_brand_form) || S(o.brand_form));
+    const brand_form = split.display;
+    const legal_name = S(r.style_legal_name) || split.legal;
     const raw = S(r.style_spelling);
     const spelling = /brit|en.?gb|\bgb\b|\buk\b/i.test(raw) ? 'British English' : /amer|en.?us|\bus\b/i.test(raw) ? 'American English' : '';
     const avoid = list(r.style_avoid).slice(0, 40);
     const tone = S(r.style_tone);
     const notes = S(r.style_notes);
-    const g = { on_file: !!(brand_form || spelling || avoid.length || tone || notes), brand_form, brand_wrong: list(r.style_brand_wrong).slice(0, 12),
+    const g = { on_file: !!(brand_form || spelling || avoid.length || tone || notes), brand_form, legal_name,
+      brand_wrong: list(r.style_brand_wrong).filter(x => !FIELD_LEAK.test(x) && x.toLowerCase() !== legal_name.toLowerCase()).slice(0, 12),
       spelling, spelling_effective: spelling || S(o.spelling), spelling_source: spelling ? 'the style guide' : (S(o.spelling) ? 'the market this page targets' : ''),
       avoid, tone, tone_effective: tone || S(o.tone), notes };
     g.wrong_forms = wrongForms(brand_form, g.brand_wrong);
@@ -69,6 +89,7 @@ const ST = (() => {
     const parts = [];
     if (x.brand_form) parts.push('Write the business name exactly as "' + x.brand_form + '" everywhere, including headings, the title and the meta description'
       + ((x.wrong_forms || []).length ? ' — never ' + x.wrong_forms.map(w => '"' + w + '"').join(' or ') : '') + '.');
+    if (x.brand_form && x.legal_name) parts.push('The registered legal name is "' + x.legal_name + '". Use it only where a legal statement needs it (for example the company\'s legal details or terms), never in the title, a heading, the meta description or ordinary sentences, and never in brackets after "' + x.brand_form + '".');
     if (x.spelling_effective) parts.push('Use ' + x.spelling_effective + ' spelling throughout (' + (x.spelling_source || 'house style') + ').');
     if ((x.avoid || []).length) parts.push('Never use these words or phrases: ' + x.avoid.map(w => '"' + w + '"').join(', ') + '.');
     if (x.tone) parts.push('Tone: ' + x.tone + '.');
@@ -94,9 +115,14 @@ const ST = (() => {
     return out;
   };
 
+  // the text with the legal name (and a "(legal name: ...)" note) blanked out: a wrong form found INSIDE the business's own legal name
+  // ("Novaand" in "Novaand systems LLC") is not a misspelling of the brand
+  const maskLegal = (text, g) => { let t = String(text || '').replace(/\(\s*(?:legal(?:ly)?(?: name)?|registered(?: name| as)?)\s*[:=-]?[^)]*\)/gi, (m) => ' '.repeat(m.length));
+    const ln = S((g || {}).legal_name); if (ln) t = t.replace(new RegExp(esc(ln).replace(/\s+/g, '[\\s\\u00a0]+'), 'gi'), (m) => ' '.repeat(m.length));
+    return t; };
   function check(md, guide) {
     const g = guide || {};
-    const text = scrub(md);
+    const text = maskLegal(scrub(md), g);
     const res = { on_file: !!g.on_file, brand: [], spelling: { variant: g.spelling_effective || '', checked: false, wrong: [], count: 0 },
       avoid: [], tone: { exclamations: 0 }, errors: [], notes: [] };
     if (!g.on_file) return res;
@@ -114,6 +140,10 @@ const ST = (() => {
         }
       }
       for (const h of hits(text, g.brand_form)) if (h.text !== g.brand_form) byForm.set(h.text, (byForm.get(h.text) || 0) + 1);
+      // H2: the legal name in the title, a heading or the meta description (advice: it belongs in legal statements only)
+      const legalIn = String(md || '').split('\n').filter(l => /^(?:#{1,6}\s|Title:|Meta Description:)/i.test(l.trim()) && ((g.legal_name && l.toLowerCase().includes(g.legal_name.toLowerCase())) || /\(\s*legal(?: name)?\s*:/i.test(l)));
+      res.legal_in_headings = legalIn.length;
+      if (legalIn.length) res.notes.push('Legal name: ' + legalIn.length + ' title / heading line(s) carry the legal name' + (g.legal_name ? ' "' + g.legal_name + '"' : '') + '; write "' + g.brand_form + '" there and keep the legal name for legal statements.');
       res.brand = [...byForm.entries()].map(([found, count]) => ({ found, count })).sort((a, b) => b.count - a.count);
       const total = res.brand.reduce((s, x) => s + x.count, 0);
       if (total) res.errors.push('Brand name: ' + res.brand.map(b => '"' + b.found + '" (' + b.count + ')').join(', ')
@@ -150,7 +180,7 @@ const ST = (() => {
     return res;
   }
 
-  return { from, block, check, wrongForms, scrub, VARIANTS, PAIRS };
+  return { from, block, check, wrongForms, scrub, splitBrand, maskLegal, VARIANTS, PAIRS };
 })();
 // Restores the profile after the Data Table step and reports what it gives every page: the author box and Person schema (E-E-A-T),
 // the LocalBusiness / NAP block for local pages, and what is still missing.
@@ -566,7 +596,7 @@ const missE = eeat.filter(x => !x.ok).map(x => x.item.toLowerCase() + (x.hint ? 
 const style_guide = ST.from(r, {});   // G31: what is on file about how they write
 const summary = (stored ? (existed ? 'Profile updated' : 'Profile saved') : 'Profile NOT saved (' + store_error + ')') + ' for ' + d.domain + '. Author / E-E-A-T ' + score(eeat) + '% complete, local details ' + score(local) + '% complete. Every new page for this site now carries ' + (has('author_name') ? 'the byline, author box and Person schema for ' + r.author_name : 'author placeholders (no author yet)') + (has('reviewer_name') ? ', reviewed by ' + r.reviewer_name : '') + (has('street_address') && has('phone') ? '; local pages get the verified address block and LocalBusiness schema' : '') + '.';
 const style_line = style_guide.on_file
-  ? 'House style on file: ' + [style_guide.brand_form ? 'the name written "' + style_guide.brand_form + '"' : '', style_guide.spelling ? style_guide.spelling + ' spelling' : '', style_guide.avoid.length ? style_guide.avoid.length + ' word(s) to avoid' : '', style_guide.tone ? 'tone "' + style_guide.tone + '"' : ''].filter(Boolean).join(', ') + '. Every new page follows it and the quality check reports a draft that breaks it.'
+  ? 'House style on file: ' + [style_guide.brand_form ? 'the name written "' + style_guide.brand_form + '"' + (style_guide.legal_name ? ' (legal name "' + style_guide.legal_name + '" kept for legal statements)' : '') : '', style_guide.spelling ? style_guide.spelling + ' spelling' : '', style_guide.avoid.length ? style_guide.avoid.length + ' word(s) to avoid' : '', style_guide.tone ? 'tone "' + style_guide.tone + '"' : ''].filter(Boolean).join(', ') + '. Every new page follows it and the quality check reports a draft that breaks it.'
   : 'No style guide on file yet: how your name is written, the spelling variant, words to avoid and the tone. Fill it in once and every page follows it.';
 const plain = summary + '\n\n' + style_line + (missE.length ? '\n\nStill missing for E-E-A-T: ' + missE.join('; ') + '.' : '') + (missL.length ? '\nStill missing for local pages: ' + missL.join('; ') + '.' : '') + '\n\nSend the form again to change anything (empty fields keep what is stored, "-" clears a field).';
 return [{ json: { ...d, site_id: r.site_id, profile: Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'request_id')), changed, existed, eeat_checklist: eeat, local_checklist: local,

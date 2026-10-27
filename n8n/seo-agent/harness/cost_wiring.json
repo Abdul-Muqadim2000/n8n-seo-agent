@@ -106,6 +106,7 @@
     "goal",
     "keyword",
     "language_name",
+    "page_contract",
     "page_type",
     "pricing_facts",
     "proof_context",
@@ -125,7 +126,7 @@
    "model_node": "Claude \u2014 Copywriter",
    "node": "Copywriter",
    "streaming": true,
-   "template_chars": 11251,
+   "template_chars": 11214,
    "think_model": 3277
   },
   {
@@ -196,6 +197,10 @@
     ],
     [
      "Parse Brief",
+     "page_contract"
+    ],
+    [
+     "Parse Brief",
      "page_type"
     ],
     [
@@ -210,7 +215,7 @@
    "model_node": "Claude \u2014 Critic",
    "node": "Critic",
    "streaming": true,
-   "template_chars": 6212,
+   "template_chars": 6737,
    "think_model": "seen"
   },
   {
@@ -219,16 +224,14 @@
    "count_rounds": 1,
    "effort": "medium",
    "fields": [
+    "business_facts",
+    "case_facts_text",
     "content_brief",
-    "content_qa.length_instruction",
-    "content_qa.main_content_words",
-    "content_qa.missing_terms",
-    "content_qa.target_word_count",
-    "content_qa.warnings",
-    "critique",
     "keyword",
     "language_name",
-    "output",
+    "page_contract",
+    "page_fix",
+    "page_type",
     "pricing_facts",
     "spelling",
     "timeline_facts"
@@ -241,7 +244,7 @@
    "model_node": "Claude \u2014 Editor",
    "node": "Editor",
    "streaming": true,
-   "template_chars": 7596,
+   "template_chars": 4854,
    "think_model": 3277
   },
   {
@@ -358,6 +361,7 @@
     "ladder_links",
     "ladder_rung",
     "language_name",
+    "page_contract",
     "page_notes",
     "page_type",
     "planned_link_targets",
@@ -383,7 +387,7 @@
    "model_node": "Claude \u2014 Strategy Brief",
    "node": "Strategy Brief",
    "streaming": true,
-   "template_chars": 13684,
+   "template_chars": 14487,
    "think_model": 2458
   },
   {

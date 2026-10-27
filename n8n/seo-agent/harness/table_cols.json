@@ -672,6 +672,7 @@
   "style_avoid",
   "style_tone",
   "style_notes",
+  "style_legal_name",
   "updated_at",
   "request_id"
  ]

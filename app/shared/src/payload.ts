@@ -268,6 +268,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         // G31: the house style, stored on the same profile row (style_*), applied in the writing prompts and checked before delivery
         style: {
           brand_form: input.style.brandForm,
+          legal_name: input.style.legalName,   // H2 (2026-10-27): stored apart from the brand (seo_profiles.style_legal_name)
           brand_wrong: input.style.brandWrong,
           spelling: input.style.spelling,
           avoid: input.style.avoid,

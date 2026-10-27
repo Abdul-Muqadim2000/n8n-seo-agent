@@ -395,6 +395,36 @@ Object.assign(top, { exists: !!headExisting, target_url: headExisting ? headExis
   existing_confidence: headExisting && headExisting.confidence != null ? headExisting.confidence : null, existing_evidence: headExisting ? (headExisting.evidence || '') : '',
   may_overlap: !headExisting && mayOverlapLP.has(head) ? mayOverlapLP.get(head) : null });   // K8: a weak candidate is named, never planned over
 
+// ---- H2 (2026-10-27, R1_PIPELINE_ANALYSIS.md §2.4, exec 2575): a planned page never lands on another keyword's page ----
+// The "erp & crm software" ladder planned its rung page "erp systems in uae" as a refresh of /insights/is-microsoft-dynamics-365-an-erp-system,
+// the page published three days earlier for "is microsoft dynamics 365 an erp system" (another ladder): the title matched three of three words.
+// The run rewrote that page for a different search, so publishing it would have replaced a live page that ranks for something else. A URL that
+// is already the published page or the planned page of ANOTHER keyword of the site (any other ladder's row, the content log) is never this
+// plan's page to improve: the keyword gets a new page of its own, and the plan says which page it left alone and why. The same keyword (or the
+// same words, or a supporting keyword of that page) may still improve it.
+const target_guard = [];
+{ const ukeyT = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const lowT = (x) => String(x || '').toLowerCase().trim();
+  const wkT = (kw) => [...new Set(lowT(kw).split(/[^a-z0-9]+/).filter(t => t && !['in', 'the', 'a', 'an', 'of', 'for', 'to', 'on', 'at', 'and', 'with', 'by', 'from'].includes(t)).map(t => t.length > 3 ? t.replace(/ies$/, 'y').replace(/([^s])s$/, '$1') : t))].sort().join(' ');
+  const sameT = (a, b) => { a = lowT(a); b = lowT(b); return !!a && !!b && (a === b || (!!wkT(a) && wkT(a) === wkT(b))); };
+  const owned = new Map();
+  const own = (url, keyword, by) => { const k = ukeyT(url); const kw = lowT(keyword); if (!k || !kw || k === ukeyT(homeUrl)) return; if (!owned.has(k)) owned.set(k, []); owned.get(k).push({ url: String(url), keyword: kw, by }); };
+  for (const r of others) { if (/^(?:deleted|archived|removed)$/i.test(String(r.status || ''))) continue;
+    own(r.target_url, r.keyword, 'your keyword ladder "' + String(r.head_keyword || r.keyword) + '", ' + (/published|live|won|ranking/i.test(String(r.status || '')) ? 'published' : 'planned')); }
+  for (const r of rowsOf('Load Content Log (Ladder)')) { if (reachDomain(r.domain) !== reachDomain(domain) || (r.ladder_id && String(r.ladder_id) === ladderId)) continue;
+    if (r.published_url) own(r.published_url, r.keyword, 'a page published for it'); else if (r.existing_page_url) own(r.existing_page_url, r.keyword, 'a page written for it'); }
+  const guardT = (p, label) => { if (!p || !p.exists || !p.target_url) return; const os = owned.get(ukeyT(p.target_url)); if (!os) return;
+    const mine = [p.keyword, ...(p.supporting || [])]; if (os.some(o => mine.some(k => sameT(k, o.keyword)))) return;
+    const o = os[0]; const was = p.target_url; const nu = plannedUrl(p.keyword);
+    if (ukeyT(nu) === ukeyT(was)) return;
+    Object.assign(p, { exists: false, target_url: nu, existing_source: null, status: 'new', existing_confidence: null, existing_evidence: '',
+      not_overwritten: { url: was, keyword: o.keyword, owner: o.by } });
+    target_guard.push({ keyword: p.keyword, page: label, planned_url: nu, left_alone: was, owner_keyword: o.keyword, owner: o.by,
+      note: '"' + p.keyword + '" gets a new page (' + nu + ') instead of a refresh of ' + was + ': that page is already the page for "' + o.keyword + '" (' + o.by + '), and rewriting it for another search would replace it' }); };
+  guardT(top, 'main page');
+  for (const r of rungs) for (const pg of r.pages) guardT(pg, 'rung ' + r.rung + ' page');
+}
+
 // ---- feasibility of the destination (alternatives before any page is dropped) ----
 const status = difficulty_for_you === 'not_realistic' ? 'unrealistic' : difficulty_for_you === 'very_hard' ? 'stretch' : 'winnable';
 const altPool = [...(base.verdict_changes || []).filter(s => /["“”]/.test(String(s))), ...(base.secondary_keywords || [])].slice(0, 4);
@@ -893,6 +923,7 @@ if (planned && plan_type !== 'direct' && !rungPages.length) notes.push('No suppo
 else if (planned && plan_type === 'short' && rungPages.length < 3) notes.push('Only ' + rungPages.length + ' supporting page(s) could be planned before the main page.');
 if (offTopic.length) notes.push(offTopic.length + ' keyword(s) were left out because they are not on this ladder\'s topic ("' + head + '"): ' + offTopic.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason.replace(/^it is not on this ladder's topic: /, '') + ')').join(', ') + (offTopic.length > 6 ? ' and ' + (offTopic.length - 6) + ' more' : '') + '.');
 if (excluded.length) notes.push(excluded.length + ' keyword(s) already belong to other ladders of this site and were left out (one search, one page): ' + excluded.slice(0, 6).map(x => '"' + x.keyword + '" (ladder "' + x.head + '")').join(', ') + (excluded.length > 6 ? ' and ' + (excluded.length - 6) + ' more' : '') + '.');
+for (const t of target_guard) notes.push(t.note + '.');   // H2 (exec 2575): another keyword's page is never refreshed for this one
 // F-A1: one keyword, one page; the limits; and the keywords whose results pages sell what this business does not
 if (planned && (one_page.moved.length || one_page.left_out.length)) notes.push('One keyword, one page: '
   + [...one_page.moved.map(m => '"' + m.keyword + '" moved from its ' + m.from + ' to ' + m.to + ' (' + m.why + ')'),
@@ -914,7 +945,7 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   chance: planned ? plan.chance : null, chance_text: planned ? reachChanceText(plan) : '', base_rate: REACH_BASE_RATE, refused_keywords: poolRefused.slice(0, 40),
   reach_info: { reach: reachInfo.reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },   // B2-1: the SITE-wide measurement; `reach` above is what this topic was measured against
   pile_up,   // R42
-  limits, held, one_page, not_sold_keywords: notSold.slice(0, 20),   // F-A1 A-12 / A-8 / A-11
+  limits, held, one_page, target_guard, not_sold_keywords: notSold.slice(0, 20),   // F-A1 A-12 / A-8 / A-11; H2: target_guard
   topic_authority,   // B2-1: what this site already wins on THIS topic, what it already has written about it, and which reach the plan used
   serp_clusters: SERP_CL,   // B2-4: the results pages this run read, the groups they made, what could not be compared and what it cost
   serp_cluster_rungs: clusterRungs.slice(0, 12), serp_diversity,   // B2-5: how many different sites own the destination's results page, and the stated adjustment

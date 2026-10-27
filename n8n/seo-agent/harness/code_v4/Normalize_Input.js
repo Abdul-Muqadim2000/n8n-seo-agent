@@ -46,7 +46,7 @@ const CONFIG = {
   brand: "Alaventra",   // from n8n/.env (SEO_BRAND) at build time; shown on reports and e-mails
   crawl_max_pages: 200,             // DataForSEO on-page crawl size (also used when reading crawled pages)
   crawl_js: false,                  // true = render JavaScript during the crawl (slower, costs more)
-  qa_max_rounds: 2,   // one editor pass: live tests showed a second pass inflates length without raising the score                 // how many times the Editor may revise content that fails QA
+  qa_max_rounds: 5,   // H1 (2026-10-27): the Copywriter's draft + up to 3 section-targeted edits + the final check (Page Candidates keeps the best draft; a full-page second pass inflated length, a section edit cannot)                 // how many times the Editor may revise content that fails QA
   default_country: 'United States',
   ai_budget_usd: 15,                // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 from 2026-10-02, 15 since 2026-10-15 at the owner's request (cost is not the constraint, the result is) — the Anthropic Console workspace limit is the hard cap
   ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap
@@ -244,7 +244,9 @@ const profile_input = {
   author_same_as: authorLinks.filter(u => u !== authorUrl).join(' '), author_knows_about: asArray(A.knows_about || lab('Topics the author knows best')).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),
   reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400),
   // G31 (2026-10-13): how this customer writes. The spelling variant is empty unless they chose one, and then it beats the market default.
-  style_brand_form: s0(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written'), 160),
+  // H2 (2026-10-27): "Nova& (legal name: Novaand systems LLC)" is two values: the brand customers see, and the legal name for legal statements
+  style_brand_form: s0(String(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written') || '').replace(/\s*[(\[,;]\s*(?:legal(?:ly)?(?: name)?|registered(?: name| as)?|company name|trading as)\s*[:=-]?\s*[^)\]]*[)\]]?\s*$/i, ''), 160),
+  style_legal_name: s0(STY.legal_name || STY.legalName || p2.style_legal_name || lab('Legal name (optional)') || ((String(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written') || '').match(/[(\[,;]\s*(?:legal(?:ly)?(?: name)?|registered(?: name| as)?|company name|trading as)\s*[:=-]?\s*([^)\]]+?)\s*[)\]]?\s*$/i) || [])[1] || ''), 160),
   style_brand_wrong: asArray(STY.brand_wrong || STY.brandWrong || p2.style_brand_wrong).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),
   style_spelling: s0(STY.spelling || p2.style_spelling || lab('Spelling'), 40),
   style_avoid: asArray(STY.avoid || STY.avoid_words || STY.avoidWords || p2.style_avoid || lab('Words to avoid')).map(x => s0(x, 60)).filter(Boolean).slice(0, 40).join(', '),

@@ -13,11 +13,13 @@ Allowed external facts: {{ ($('Parse Brief').first().json.content_brief.evidence
 Client facts (true, may be stated): {{ [...($('Parse Brief').first().json.content_brief.client_facts || []), $('Parse Brief').first().json.business_facts || '', $('Parse Brief').first().json.case_facts_text || ''].filter(Boolean).join(' | ') || 'none' }}
 Facts from the client's own website ({{ (($('Parse Brief').first().json.site_description || {}).pages_read || []).length || 1 }} page(s) read — its services, sections and headings; all of this is true and may be stated): {{ ((($('Parse Brief').first().json.site_description || {}).site_facts) || ($('Parse Brief').first().json.site_description || {}).products_or_services || []).join(' · ') || 'none read' }}
 
+{{ ($('Parse Brief').first().json.page_contract || {}).text || '' }}
+
 QUALITY BAR
 1. Specificity: examples, numbers with linked sources, decision rules, steps — not generic advice.
 2. Originality and information gain: every information-gain item is covered fully; the page says something competitors do not.
 3. Audience fit: speaks to the stated audience and answers their objections.
-4. Trust: no unsupported claims or invented numbers; external numbers carry a source link; client facts are used correctly; placeholders only where facts are missing. Anything that appears in the client facts or in the facts from the client's own website above is TRUE: never call it invented, made up or unsupported, whatever wording the draft uses for it. For anything else that cannot be checked, the word is "unverified" — say what would verify it (a source link or a bracketed placeholder); never "invented".
+4. Trust: no unsupported claims or invented numbers; external numbers carry a source link; client facts are used correctly; no bracket of any kind in the page (a missing fact is written around, never left as [Price] or [Confirm: ...]). Anything that appears in the client facts or in the facts from the client's own website above is TRUE: never call it invented, made up or unsupported, whatever wording the draft uses for it. For anything else that cannot be checked, the word is "unverified" — say what would verify it (a source link) or how to say it without the claim; never "invented", and never suggest a bracket or a placeholder as the fix.
 5. Readability and voice: plain words, varied sentence length, active voice, no filler, none of the banned phrases (delve, unlock, seamless, robust, leverage, cutting-edge, game-changer, elevate, empower, crucial, paramount, realm, embark, foster, streamline, synergy, holistic, best-in-class, world-class, state-of-the-art, top-notch, one-stop shop, "in today's fast-paced world", "ever-evolving", "it's important to note", "in conclusion", "when it comes to", "a wide range of").
 6. Search fit: matches the intent, at least three headings phrased as the questions buyers ask and answered directly in the 40-60 words under them (no "Frequently Asked Questions" block and no Q1:/A1: list — Google stopped showing FAQ rich results in May 2026), terms used naturally, primary keyword placed correctly without stuffing, internal links only to allowed URLs and never to a page that is not published yet.
 7. Structure: follows the outline order and target lengths, comparison table present, CTA last, meta title ≤60 and description 120-155 characters.
@@ -40,8 +42,8 @@ Return ONLY valid JSON (no markdown, no backticks):
   "strengths": ["2-4 specific strengths"],
   "problems": [{ "severity": "high | medium | low", "location": "quoted text or heading (max 15 words)", "issue": "what is wrong", "fix": "exactly what to write or change" }],
   "banned_phrases_found": ["phrases from the banned list that appear"],
-  "unsupported_claims": ["quoted claims with numbers or superlatives that have no source, no placeholder and no match in the client facts or the website facts above — these are unverified, not invented"],
+  "unsupported_claims": ["quoted claims with numbers or superlatives that have no source and no match in the client facts or the website facts above — these are unverified, not invented"],
   "missing_brief_items": ["outline sections, information-gain items, snippet targets or terms that are missing"],
   "revision_instructions": "Numbered, specific instructions the editor can apply without re-reading this review (max 12 items)"
 }
-List at most 12 problems, most damaging first. Score 85+ only if you would publish it under your own name.
+List at most 12 problems, most damaging first. Every fix you give follows THE PAGE CONTRACT above: never ask for a process, steps, a deliverable or a stance in the business's voice that the client facts do not state (ask for it as advice to the reader instead), never ask the page to grow past its length band, and say "advice" for anything that is not about facts, trust or the law. Score 85+ only if you would publish it under your own name.

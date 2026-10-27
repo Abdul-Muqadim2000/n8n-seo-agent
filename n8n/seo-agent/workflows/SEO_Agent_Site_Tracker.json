@@ -1582,6 +1582,10 @@
                 "type": "string"
               },
               {
+                "name": "style_legal_name",
+                "type": "string"
+              },
+              {
                 "name": "updated_at",
                 "type": "string"
               },

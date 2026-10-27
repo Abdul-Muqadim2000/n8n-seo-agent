@@ -54,14 +54,14 @@ describe('buildN8nPayload', () => {
   // G31: the style guide travels with the profile, and a style guide on its own is a valid profile submission
   it('profile: the style guide is sent with the profile and defaults to empty', () => {
     const empty = RUN_SCHEMAS.profile.parse({ mode: 'profile', siteId: SITE_ID, ...minimal.profile });
-    expect(empty.style).toEqual({ brandForm: '', brandWrong: [], spelling: '', avoid: [], tone: '', notes: '' });
+    expect(empty.style).toEqual({ brandForm: '', legalName: '', brandWrong: [], spelling: '', avoid: [], tone: '', notes: '' });
     const p = RUN_SCHEMAS.profile.parse({
       mode: 'profile',
       siteId: SITE_ID,
-      style: { brandForm: 'Tech&', brandWrong: ['Tech & Co'], spelling: 'British English', avoid: ['turnkey'], tone: 'plain and direct' },
+      style: { brandForm: 'Nova&', legalName: 'Novaand Systems LLC', brandWrong: ['Nova & Co'], spelling: 'British English', avoid: ['turnkey'], tone: 'plain and direct' },
     });
     const b = buildN8nPayload(p, site, delivery);
-    expect(b.style).toEqual({ brand_form: 'Tech&', brand_wrong: ['Tech & Co'], spelling: 'British English', avoid: ['turnkey'], tone: 'plain and direct', notes: '' });
+    expect(b.style).toEqual({ brand_form: 'Nova&', legal_name: 'Novaand Systems LLC', brand_wrong: ['Nova & Co'], spelling: 'British English', avoid: ['turnkey'], tone: 'plain and direct', notes: '' });
   });
 
   it('profile: an unknown spelling variant is refused, and an empty profile is still refused', () => {

@@ -236,11 +236,11 @@ const cases: Case[] = [
       openingHours: 'Mo-Fr 09:00-18:00',
       serviceAreas: ['Dubai', 'Abu Dhabi'],
       // G31: the house style is stored on the same profile row
-      style: { brandForm: 'Northwind ERP', brandWrong: ['NorthWind'], spelling: 'British English', avoid: ['cutting-edge', 'synergy'], tone: 'plain and direct, no hype', notes: 'Write dates as 14 March 2026.' },
+      style: { brandForm: 'Northwind ERP', legalName: 'Northwind Trading FZ-LLC', brandWrong: ['NorthWind'], spelling: 'British English', avoid: ['cutting-edge', 'synergy'], tone: 'plain and direct, no hype', notes: 'Write dates as 14 March 2026.' },
     },
     site,
     mail: false,
-    expect: { mode: 'profile', email: '', 'profile_input.author_name': 'Sara Khan', 'profile_input.public_email': 'hello@northwind-erp.com', 'profile_input.city': 'Dubai', 'profile_input.country_code': 'AE', 'profile_input.reviewer_name': 'Omar Ali', 'profile_input.author_same_as': 'https://www.linkedin.com/in/sara-khan/', 'profile_input.service_areas': 'Dubai, Abu Dhabi', 'profile_input.style_brand_form': 'Northwind ERP', 'profile_input.style_brand_wrong': 'NorthWind', 'profile_input.style_spelling': 'British English', 'profile_input.style_avoid': 'cutting-edge, synergy', 'profile_input.style_tone': 'plain and direct, no hype' },
+    expect: { mode: 'profile', email: '', 'profile_input.author_name': 'Sara Khan', 'profile_input.public_email': 'hello@northwind-erp.com', 'profile_input.city': 'Dubai', 'profile_input.country_code': 'AE', 'profile_input.reviewer_name': 'Omar Ali', 'profile_input.author_same_as': 'https://www.linkedin.com/in/sara-khan/', 'profile_input.service_areas': 'Dubai, Abu Dhabi', 'profile_input.style_brand_form': 'Northwind ERP', 'profile_input.style_legal_name': 'Northwind Trading FZ-LLC', 'profile_input.style_brand_wrong': 'NorthWind', 'profile_input.style_spelling': 'British English', 'profile_input.style_avoid': 'cutting-edge, synergy', 'profile_input.style_tone': 'plain and direct, no hype' },
   },
   {
     name: 'ai visibility with topics',

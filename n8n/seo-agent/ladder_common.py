@@ -156,6 +156,9 @@ PROFILE_COLS = [('site_id', 'string'), ('domain', 'string'), ('business_name', '
                 # Read by Brief Context into every writing prompt (v5/code/_style_guide.js) and checked by Content QA.
                 ('style_brand_form', 'string'), ('style_brand_wrong', 'string'), ('style_spelling', 'string'),
                 ('style_avoid', 'string'), ('style_tone', 'string'), ('style_notes', 'string'),
+                # H2 (2026-10-27): the registered legal name, kept apart from the brand's written form (used only in legal statements);
+                # a style_brand_form stored as "X (legal name: Y)" is read as the two. Run sync_tables.py after deploying.
+                ('style_legal_name', 'string'),
                 ('updated_at', 'string'), ('request_id', 'string')]
 CASE_COLS = [('case_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('keyword', 'string'), ('title', 'string'), ('client_name', 'string'), ('client_public', 'boolean'), ('industry', 'string'),
              ('location', 'string'), ('service', 'string'), ('challenge', 'string'), ('solution', 'string'), ('timeline', 'string'), ('results', 'string'), ('quote', 'string'), ('quote_by', 'string'),

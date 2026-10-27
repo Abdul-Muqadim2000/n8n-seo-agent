@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { toast } from 'sonner';
 import { BadgeCheck, Building2, CheckCircle2, Circle, MapPin, UserRound } from 'lucide-react';
-import { COUNTRIES, PROFILE_CHECKS, profileFields, type ProfileFields, type ProfileLike, type ProfileReadiness, type Run } from '@seo/shared';
+import { COUNTRIES, PROFILE_CHECKS, profileFields, splitBrandForm, type ProfileFields, type ProfileLike, type ProfileReadiness, type Run } from '@seo/shared';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
@@ -57,7 +57,8 @@ export function completeProfile(p: ProfileFields | null | undefined): ProfileFie
     mapUrl: str(p.mapUrl),
     logoUrl: str(p.logoUrl),
     style: {
-      brandForm: str(p.style?.brandForm),
+      // H2 (2026-10-27): a name saved the old way, "Nova& (legal name: Novaand systems LLC)", opens as the two fields
+      ...splitBrandForm(str(p.style?.brandForm), str(p.style?.legalName)),
       brandWrong: list(p.style?.brandWrong),
       spelling: p.style?.spelling === 'British English' || p.style?.spelling === 'American English' ? p.style.spelling : '',
       avoid: list(p.style?.avoid),
@@ -378,12 +379,20 @@ export function ProfileForm({
         guide={<GuideButton id="style-guide" label="How to fill this in" />}
       >
         <Field
-          label="How your brand name is written"
+          label="Brand name (in titles, headings and text)"
           optional
-          hint="Exactly as it must appear, for example Northwind & Co, never &quot;Northwind and Co&quot; or &quot;northwindco&quot;."
+          hint="The short name your customers know, written exactly as it must appear, for example Northwind & Co, never &quot;Northwind and Co&quot; or &quot;northwindco&quot;. Put only the brand here, not the registered company name."
           error={errors.style?.brandForm?.message}
         >
           {(p) => <Input {...p} placeholder="Northwind & Co" {...register('style.brandForm')} />}
+        </Field>
+        <Field
+          label="Legal name"
+          optional
+          hint="The registered company name, for example Northwind Trading FZ-LLC. We use it only where a legal statement needs it, never in titles, headings or ordinary sentences."
+          error={errors.style?.legalName?.message}
+        >
+          {(p) => <Input {...p} placeholder="Northwind Trading FZ-LLC" {...register('style.legalName')} />}
         </Field>
         <Controller
           control={control}

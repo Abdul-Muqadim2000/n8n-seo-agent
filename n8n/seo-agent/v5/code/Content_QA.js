@@ -444,7 +444,7 @@ const mdBeforeClaims = md;   // E-CLAIM reads the copy before §9d's marks (a ma
   for (const f of BC.flags.slice(0, 8)) {
     const at = md.indexOf(f.sentence); const marked = at >= 0 && business_claims.filter(x => x.marked).length < 6;
     if (marked) md = md.slice(0, at) + '[Confirm: ' + f.sentence + ']' + md.slice(at + f.sentence.length);
-    business_claims.push({ kind: f.kind, trigger: f.trigger, sentence: f.sentence, marked });
+    business_claims.push({ kind: f.kind, trigger: f.trigger, sentence: f.sentence, marked, rewrite: f.rewrite || CL.neutral(f.sentence, { kind: f.kind, corpus: OWN_TEXT, business: bizNames[0] }) });   // H2 / H1: what to do with it (reword / delete / ask), for the page pipeline and the client questions
   }
   if (business_claims.some(x => x.marked)) fixes.push('Marked ' + business_claims.filter(x => x.marked).length + ' statement(s) about the business that nothing on file supports as [Confirm: ...] for the owner');
 }
@@ -489,7 +489,8 @@ let promise_check = { method: 'rules', model: null, candidates: 0, judged: 0, ov
   for (const f of final.slice(0, 15)) {
     const at = f.where === 'caption' ? -1 : md.indexOf(f.sentence); const marked = at >= 0 && !/[\[\]]/.test(f.sentence);   // a sentence holding a link is listed, never wrapped (no nested bracket); a caption is not in the copy
     if (marked) md = md.slice(0, at) + '[Confirm: ' + f.sentence + ']' + md.slice(at + f.sentence.length);
-    business_promises.push({ kind: f.kind, sentence: f.sentence, marked, support_pct: f.support, where: f.where === 'caption' ? 'image caption' : undefined, reason: f.reason || undefined, checked_by: f.by });
+    business_promises.push({ kind: f.kind, sentence: f.sentence, marked, support_pct: f.support, where: f.where === 'caption' ? 'image caption' : undefined, reason: f.reason || undefined, checked_by: f.by,
+      rewrite: f.rewrite || CL.neutral(f.sentence, { kind: f.kind, corpus: OWN_TEXT, business: bizNames[0] }) });   // H2 / H1: reword / delete / ask, the neutral wording and the client question
   }
   if (business_promises.length) fixes.push('Marked ' + business_promises.filter(x => x.marked).length + ' promise(s) made in the business\'s name that nothing on file supports (deliverables, process steps, terms) as [Confirm: ...] for the owner');
 }

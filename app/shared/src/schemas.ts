@@ -412,13 +412,15 @@ export const profileFields = z.object({
   style: z
     .object({
       brandForm: opt(160),
+      // H2 (2026-10-27): the registered legal name, used only in legal statements (never in titles or headings)
+      legalName: opt(160),
       brandWrong: stringList(12, 80),
       spelling: z.enum(['', 'British English', 'American English']).default(''),
       avoid: stringList(40, 60),
       tone: opt(300),
       notes: opt(600),
     })
-    .default({ brandForm: '', brandWrong: [], spelling: '', avoid: [], tone: '', notes: '' }),
+    .default({ brandForm: '', legalName: '', brandWrong: [], spelling: '', avoid: [], tone: '', notes: '' }),
 });
 export type ProfileFields = z.output<typeof profileFields>;
 

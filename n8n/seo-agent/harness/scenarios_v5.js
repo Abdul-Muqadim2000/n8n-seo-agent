@@ -9292,9 +9292,11 @@ await guard('r21-r20-r25-r27-r22-editor', async () => {
   check('R22 (editor half): a draft on target gets no cut instruction, and the editor is not asked to shorten a page that is the right length',
     CLEAN68.content_qa.length_instruction === '' && CLEAN68.content_qa.over_words === 0, JSON.stringify({ w: CLEAN68.content_qa.main_content_words, t: CLEAN68.content_qa.target_word_count }));
   const EP68 = src68('Editor.prompt.txt');
-  check('R22 (editor half): the editor prompt prints that instruction as the first thing to do and has its own entry for an over-long draft — it used to be one line in a list of up to twenty warnings',
-    /THE FIRST THING TO DO/.test(EP68) && /content_qa\.length_instruction/.test(EP68) && EP68.indexOf('THE FIRST THING TO DO') < EP68.indexOf('PROBLEMS TO FIX')
-    && /- "Main content is too long": take the named number of words out/.test(EP68) && /over the target by more than 10% is a failed round/.test(EP68), EP68.slice(0, 200));
+  // H1 (2026-10-27, build section 151): the cut is now a per-section instruction from PF.plan ("Cut about N words", the page-level note
+  // first), and the length is judged as a band; the old full-page "THE FIRST THING TO DO ... within 10%" prompt is gone
+  check('R22 (editor half): the editor prompt prints the length note first and has its own entry for a section told to cut, and no "within 10%" rule',
+    /edit_job \|\| \{\}\)\.length_note/.test(EP68) && /- "Cut about N words": take out repetition/.test(EP68) && !/within 10%/.test(EP68)
+    && EP68.indexOf('length_note') < EP68.indexOf('\nSECTIONS TO EDIT\n'), EP68.slice(0, 200));
 
   // ---------- 4. R27: the show is quoted from its own description, and a 29% show is not offered ----------
   const PC68 = async (input) => (await run('_podcast', [{ json: input }]))[0].json;
@@ -19712,5 +19714,7 @@ await require('./scenarios_storeheal')({ H, run, mock, store, guard, reset, begi
 await require('./scenarios_market')({ H, run, mock, store, guard, reset, begin });   // MK1-MK4 (MKT 2026-10-27, docs/mismatch-audit-2026-10-27/AUDIT.md M2 / M4): Site Admin market, the fit gate's market, discovery and ladder pool
 await require('./scenarios_aifocus')({ H, run, mock, store, guard, reset, begin });   // AIFOCUS-1..8 (AI-FOCUS 2026-10-27, docs/ai-panel-focus-2026-10-27): the AI question panel follows the client's focus - the labelled set (precision / recall / on-focus / market / owner), the 12-week timeline, devaicon.com through the real nodes, the pulse scope, Site Admin accept / retire, the money, the matched trend, one kit
 await require('./scenarios_llmlimits')({ H, run, mock, store, guard, reset, begin });   // LL1-LL8 (LLM-LIMITS 2026-10-27, techand.ai exec 2195): every Claude node has room for its thinking and its whole answer (lint broken on purpose), the completeness kit on page / e-mail / JSON, the Copywriter and Editor guards on the production replay, Content QA's cut-off reason, the wiring and the cost
+await require('./scenarios_pagefix')({ H, run, mock, store, guard, reset, begin });   // PFX1-PFX8 (H1 2026-10-27, docs/content-quality-2026-10-27/R1, R2): the page pipeline on the four production page runs - one contract, deterministic fixes, one score and keep-best, section edits, real sources, blocking vs advisory, the delivered grade, the client questions
+await require('./scenarios_h2')({ H, run, mock, store, guard, reset, begin });   // H2-1..H2-5 (H2 2026-10-27, docs/content-quality-2026-10-27/R1_PIPELINE_ANALYSIS.md): the claim check's neutral rewrites, the services page read, a ladder's new page kept new, the brand and the legal name, the ladder never planning onto another keyword's page
 H.report();
 })();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { brandInitials, brandLogoUrl, sharedBrand } from './brand';
+import { brandInitials, brandLogoUrl, sharedBrand, splitBrandForm } from './brand';
 import { shareCaveat } from './share';
 import { deliveryDecision } from './report-delivery';
 
@@ -104,5 +104,23 @@ describe('shareCaveat, a shared report says what the run said about itself', () 
   it('says nothing about the company\'s own delivery settings, they are not about this report', () => {
     for (const code of ['delivery_off', 'no_channel', 'stage_not_chosen', 'already_delivered', 'something_new'])
       expect(shareCaveat({ deliver: false, reason: 'x', code })).toBeNull();
+  });
+});
+
+// H2 (2026-10-27): the brand and the legal name are two fields; a value stored the old way in one field is read as the two
+describe('splitBrandForm, the brand customers see and the legal name for legal statements', () => {
+  it('reads the stored techand.ai value as the two names', () => {
+    expect(splitBrandForm('Nova& (legal name: Novaand systems LLC)')).toEqual({ brandForm: 'Nova&', legalName: 'Novaand systems LLC' });
+    expect(splitBrandForm('Nova& (Novaand systems LLC)')).toEqual({ brandForm: 'Nova&', legalName: 'Novaand systems LLC' });
+    expect(splitBrandForm('Northwind & Co, legal name: Northwind Trading FZ-LLC')).toEqual({ brandForm: 'Northwind & Co', legalName: 'Northwind Trading FZ-LLC' });
+    expect(splitBrandForm('Acme [registered as Acme Holdings Ltd]')).toEqual({ brandForm: 'Acme', legalName: 'Acme Holdings Ltd' });
+  });
+  it('leaves an ordinary brand alone and keeps a legal name given on its own', () => {
+    expect(splitBrandForm('Nova&')).toEqual({ brandForm: 'Nova&', legalName: '' });
+    expect(splitBrandForm('Northwind & Co')).toEqual({ brandForm: 'Northwind & Co', legalName: '' });
+    expect(splitBrandForm('Acme (Dubai)')).toEqual({ brandForm: 'Acme (Dubai)', legalName: '' });
+    expect(splitBrandForm('Nova&', 'Novaand Systems LLC')).toEqual({ brandForm: 'Nova&', legalName: 'Novaand Systems LLC' });
+    expect(splitBrandForm('Nova& (legal name: Old LLC)', 'Novaand Systems LLC')).toEqual({ brandForm: 'Nova&', legalName: 'Novaand Systems LLC' });
+    expect(splitBrandForm(undefined)).toEqual({ brandForm: '', legalName: '' });
   });
 });

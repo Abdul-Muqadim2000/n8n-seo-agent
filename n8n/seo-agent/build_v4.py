@@ -2791,9 +2791,11 @@ for _n35 in ('Content QA', 'Brief Context'):
 assert "$('Site Model').first().json.site_model" in code('Content QA') and 'placeholder_count > PH_MAX' in code('Content QA'), 'Content QA: D10 gate missing'
 assert 'angle_rules' in code('Brief Context') and 'pricing_facts' in code('Brief Context'), 'Brief Context: angle facts missing'
 assert "{{ $json.angle_rules || '' }}" in nodes['Strategy Brief']['parameters']['text'], 'the brief prompt does not carry the angle rules'
-assert 'at most 5 bracketed placeholders' in nodes['Strategy Brief']['parameters']['text']
-assert 'At most 5 placeholders in the whole page' in nodes['Copywriter']['parameters']['text']
-assert 'Too many placeholders to publish' in nodes['Editor']['parameters']['text']
+# H1 (2026-10-27, section 151): D10's "at most 5 placeholders" became the page contract's "no brackets at all" (a missing fact is written
+# around, and what only the client knows is a question in the report, never a bracket in the page)
+assert 'with no square brackets anywhere in it' in nodes['Strategy Brief']['parameters']['text']
+assert 'Never write a square-bracket placeholder or note of any kind' in nodes['Copywriter']['parameters']['text']
+assert 'No brackets of any kind in your answer' in nodes['Editor']['parameters']['text']
 # harness shim (S41): the page-type kit as a runnable script, one item in -> one answer out
 os.makedirs(OUT_CODE, exist_ok=True)
 open(os.path.join(OUT_CODE, '_page_type.js'), 'w').write("// harness shim (written by build_v4.py section 35): the page type kit - { page_type?, default? } -> the fixed option and the free text kept as notes\n" + PAGE_TYPE_SRC +
@@ -4826,6 +4828,25 @@ assert "ST.check(md, style_guide)" in code('Content QA') and 'ST.from(P,' in cod
 assert 'style_brand_form' in code('Profile Row') and 'style_brand_form' in code('Normalize Input'), 'the style guide is not stored (G31)'
 log('A style guide that is stored, used and checked (2026-10-13, FIX_PLAN G31): the brand\'s written form ("Tech&"), extra wrong forms, the spelling variant, the words to avoid, the tone and any further rule live on the site\'s business profile row (seo_profiles.style_*, filled through the profile form / API `style`), so every run that already loads the profile carries them at no extra cost; v5/code/_style_guide.js (ST) turns the row into the HOUSE STYLE paragraph the Strategy Brief, Copywriter and Editor prompts print and overrides the market-derived spelling and the requested tone, and Content QA checks it mechanically — the brand\'s own name written wrongly is a quality warning the editor must fix, while the spelling variant, the words to avoid and exclamation marks against a stated tone are advice printed in the report and the package (meta.json) that can never on its own make a page "not ready"')
 
+# 51b. H2 (2026-10-27, R1_PIPELINE_ANALYSIS.md §3.5): the brand and the legal name are two values. techand.ai stored
+#     "Nova& (legal name: Novaand systems LLC)" as the brand's written form, the prompts wrote that text in the title and every heading, and
+#     the brand check flagged "Techand" inside the legal name. New profile column `style_legal_name` (ladder_common.py, sync_tables.py on
+#     deploy); a value sent the old way is split at intake, a stored one is split when read (ST.from, v5/code/_style_guide.js).
+insert_fields('Page Profile', 'How your brand name is written', [
+    {'fieldLabel': 'Legal name (optional)', 'placeholder': 'the registered company name, e.g. Novaand Systems LLC: used only in legal statements, never in titles or headings'}])
+patch('Normalize Input', "  style_brand_form: s0(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written'), 160),\n",
+      "  // H2 (2026-10-27): \"Nova& (legal name: Novaand systems LLC)\" is two values: the brand customers see, and the legal name for legal statements\n"
+      "  style_brand_form: s0(String(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written') || '').replace(/\\s*[(\\[,;]\\s*(?:legal(?:ly)?(?: name)?|registered(?: name| as)?|company name|trading as)\\s*[:=-]?\\s*[^)\\]]*[)\\]]?\\s*$/i, ''), 160),\n"
+      "  style_legal_name: s0(STY.legal_name || STY.legalName || p2.style_legal_name || lab('Legal name (optional)') || ((String(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written') || '').match(/[(\\[,;]\\s*(?:legal(?:ly)?(?: name)?|registered(?: name| as)?|company name|trading as)\\s*[:=-]?\\s*([^)\\]]+?)\\s*[)\\]]?\\s*$/i) || [])[1] || ''), 160),\n")
+patch('Profile Row', "'style_brand_form', 'style_brand_wrong',", "'style_brand_form', 'style_legal_name', 'style_brand_wrong',")
+patch('Profile Delivery', "style_guide.brand_form ? 'the name written \"' + style_guide.brand_form + '\"' : '',",
+      "style_guide.brand_form ? 'the name written \"' + style_guide.brand_form + '\"' + (style_guide.legal_name ? ' (legal name \"' + style_guide.legal_name + '\" kept for legal statements)' : '') : '',")
+patch('Build Word File', "    if (sg && sg.spelling_effective) sgRows.push(['Spelling',",
+      "    if (sg && sg.legal_name) sgRows.push(['Legal name', esc(sg.legal_name) + ' <span class=\"small\">(legal statements only, never in titles or headings)</span>']);\n"
+      "    if (sg && sg.spelling_effective) sgRows.push(['Spelling',")
+assert 'style_legal_name' in code('Normalize Input') and 'style_legal_name' in code('Profile Row') and 'splitBrand' in STYLE_SRC, 'H2: the legal name is not stored apart from the brand'
+log('The brand and the legal name are two values (2026-10-27, H2, R1 §3.5): novaand-demo.com stored "Nova& (legal name: Novaand systems LLC)" as its written brand, every title and heading carried the parenthesis and the brand check flagged "Techand" inside the legal name. New profile field and column style_legal_name; a value written the old way is split at intake (Normalize Input) and when read (ST.from); the house style tells the writers to use the brand in titles, headings and prose and the legal name only in legal statements; the brand check masks the legal name before it looks for wrong forms, and a title or heading that carries the legal name is a style note')
+
 # 52. THE LAST FOUR LINK-BUILDER GAPS (2026-10-13, system review FIX_PLAN.md L4 / L5 / L6 / L7)
 #     * L5 two more free sources. **Podcast guest opportunities**: a free podcast directory is searched for the site's topics once a
 #       month, every show's RSS feed is read (the feed's <link> is the only place that names the show's OWN website), that website is
@@ -4996,7 +5017,8 @@ assert 'placeholder_note' in code('Content QA') and 'masked figure(s) still in t
 assert 'placeholder_count > PH_MAX' in code('Content QA') and 'const too_many_placeholders' in code('Content QA'), 'R25: the R11 delivery gate was loosened'
 assert 'length_instruction' in code('Content QA') and "'CUT ' + cut_words" in code('Content QA'), 'R22: Content QA does not state the cut'
 _ED58 = nodes['Editor']['parameters']['text']
-assert 'content_qa.length_instruction' in _ED58 and 'THE FIRST THING TO DO' in _ED58 and '"Main content is too long"' in _ED58, 'R22: the editor is not told to cut, only warned'
+# H1 (2026-10-27, section 151): R22's cut is now a per-section instruction ("Cut about N words") from PF.plan, and the length a band
+assert 'edit_job || {}).length_note' in _ED58 and '"Cut about N words"' in _ED58, 'R22: the editor is not told to cut, only warned'
 # R25: a page that is otherwise deliverable still says which figures are masked
 patch('Build Word File', """    ...(qa.not_ready ? [['Why it is not ready', '<span class="bad">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first""",
       """    ...(qa.not_ready ? [['Why it is not ready', '<span class="bad">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first
@@ -12543,6 +12565,170 @@ assert not any('/*__COMPLETE__*/' in n['parameters'].get('jsCode', '') for n in 
 open(os.path.join(OUT_CODE, '_complete.js'), 'w').write("// harness shim (written by build_v4.py section 150): the completeness kit, { fn, args } -> { r }\n" + COMPLETE_SRC150
     + "\nreturn $input.all().map(i => ({ json: { r: CK[i.json.fn].apply(null, i.json.args || []) } }));\n")
 log('No half pages (LLM-LIMITS, 2026-10-27): every Claude node of every workflow is in one table (llm_limits.py) with a thinking budget, output headroom and a ceiling of the model maximum (128,000, streaming) that holds both, checked by a build-time lint; the Copywriter and the Editor are followed by a completeness check (v5/code/_complete.js) that writes / edits once more when an answer stops mid-way, stops the run cleanly when the Copywriter is cut twice and keeps the complete earlier page when the Editor is; Content QA names a cut page as its own reason and never marks it publishable; the cost table prices the thinking it always did (think_model), the retry through the model node\'s runs')
+
+# =============================================================================
+# 151. THE PAGE PIPELINE NEVER DELIVERS A WORSE DRAFT, FIXES BY ITSELF BEFORE IT ASKS, CITES ONLY WHAT IT READ, AND SAYS WHAT THE CLIENT
+#      RECEIVES (H1, 2026-10-27, docs/content-quality-2026-10-27/R1_PIPELINE_ANALYSIS.md and R2_MARKET_RESEARCH.md)
+#      Production: the four page runs of 2026-10-22..26 (n8n executions 949, 2195, 2552, 2575) were all delivered "not ready to publish".
+#      The one full-page Editor pass made 3 of the 4 pages worse (2195 and 2552 delivered half a page while the complete Copywriter draft
+#      sat in the same execution; 949's complete edit lost the keyword placement, 4 points of coverage and two links to guessed 404s, and
+#      gained 6 promises), 52% of the final reasons were things the system could fix itself, 39% were over-strict rules, 9% needed the
+#      client, and the PDF printed the Critic's grade of the FIRST draft. R2: no leading tool blocks on SEO metrics; facts, trust and law do.
+#      * A. One contract (v5/code/_page_fix.js PF.contract): the length is a band, there are no brackets in a page, the business is
+#           described only with what is on file, methods are advice to the reader, page-type targets; *Brief Context* puts it on the
+#           brief item (`page_contract`) and the Strategy Brief, Copywriter, Critic and Editor prompts print the same text. The Brief stops
+#           planning bracketed author prompts, first-person experience notes and CTAs that name deliverables; what only the client knows
+#           goes to its new `questions_for_client` list.
+#      * B. *Page Fix* in front of every quality check: the deterministic fixes (keyword in title / H1 / introduction, meta lengths, slug,
+#           Quick answer position, snippet question headings, internal links, brand form, no brackets: the sentence that needed one goes
+#           and the question is recorded).
+#      * C. *Page Candidates* after every quality check: dead links replaced or unlinked, ONE score for every candidate (hard blockers,
+#           soft blockers, advisory distance), the best kept (an edit that is worse, or loses the CTA / Quick answer / sections / a third
+#           of its length, is set aside), then either another SECTION-TARGETED edit (at most 3 rounds, stop when a round improves nothing)
+#           or the final version (the system's own neutral rewrite of every soft blocker) checked once more in full; after that check, the
+#           delivered status (ready / ready_with_questions / not_ready), the grade of the delivered page and the client questions.
+#      * D. Real sources before an edit: *Page Source Plan* -> SearXNG -> *Page Source Candidates* -> *Fetch Page Sources* -> *Verified
+#           Sources* keeps pages that answer and state the figure / the claim; the Editor may cite only those and the evidence plan, and
+#           *Edit Check (Editor)* unlinks any other new external link.
+#      * E. *Edit Check (Editor)* merges the Editor's section blocks into the page it was given; every other byte is kept.
+# =============================================================================
+PAGE_FIX_SRC151 = _rd0('code/_page_fix.js').rstrip('\n')
+assert 'const PF = (() => {' in PAGE_FIX_SRC151
+_kit151 = lambda s: (s.replace('/*__PAGE_FIX__*/', PAGE_FIX_SRC151).replace('/*__COVERAGE__*/', COVERAGE_SRC)
+                     .replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__OUTBOUND__*/', OUTBOUND_SRC))
+for _bad151 in ('—', '–', '“', '”', '…'):
+    for _f151 in ('code/_page_fix.js', 'code/Page_Fix.js', 'code/Page_Candidates.js', 'code/Page_Source_Plan.js', 'code/Page_Verified_Sources.js', 'prompts/editor.txt'):
+        assert _bad151 not in _rd0(_f151), 'H1: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f151
+
+# ---------- A. the contract on the brief item, printed by every writer prompt ----------
+setcode('Brief Context', PAGE_FIX_SRC151 + '\n' + code('Brief Context'))
+patch('Brief Context', "return [{ json: { ...d, style_guide,", "return [{ json: { ...d, page_contract: PF.contract({ ...d, site_profile, page_role }), style_guide,")
+for _p151 in ('Strategy Brief', 'Copywriter', 'Editor'):
+    assert "($json.page_contract || {}).text" in nodes[_p151]['parameters']['text'], 'H1: the ' + _p151 + ' prompt does not print the page contract'
+assert "$('Parse Brief').first().json.page_contract || {}).text" in nodes['Critic']['parameters']['text'], 'H1: the Critic does not print the page contract'
+_sb151 = get_schema('Parser — Strategy Brief')
+_sb151['properties']['questions_for_client'] = {'type': 'array', 'items': {'type': 'string'}, 'description': 'questions only the client can answer that would make the page stronger (0-5)'}
+set_schema('Parser — Strategy Brief', _sb151)
+assert 'Keep every bracketed [Author insight' not in nodes['Editor']['parameters']['text'] and '[Author insight: ...] line(s)' not in nodes['Editor']['parameters']['text']
+assert 'else a bracketed prompt for the author' not in nodes['Strategy Brief']['parameters']['text'], 'H1: the brief still plans bracketed author prompts'
+assert "in the business's voice (\"In our projects" not in nodes['Copywriter']['parameters']['text'], 'H1: the copywriter is still told to write experience in the business\'s voice'
+assert 'within 10%' not in nodes['Editor']['parameters']['text'] and 'within 10% of' not in nodes['Copywriter']['parameters']['text'], 'H1: a writer prompt still judges length within 10% of a number'
+
+# ---------- B. the deterministic fixes in front of every quality check ----------
+_pc151 = pos('Promise Candidates')
+add_node('Page Fix', 'n8n-nodes-base.code', 2, {'jsCode': _kit151(_rd0('code/Page_Fix.js'))}, [_pc151[0] - 220, _pc151[1] - 160])
+assert any(t['node'] == 'Promise Candidates' for l in conns['Refresh Sources']['main'] for t in l), 'H1: Refresh Sources no longer feeds Promise Candidates'
+assert [t['node'] for t in conns['Edit Complete? (Editor)']['main'][0]] == ['Promise Candidates'], 'H1: the edit no longer goes to Promise Candidates'
+disconnect('Refresh Sources', 'Promise Candidates'); disconnect('Edit Complete? (Editor)', 'Promise Candidates')
+connect('Refresh Sources', 'Page Fix'); connect('Edit Complete? (Editor)', 'Page Fix', 0); connect('Page Fix', 'Promise Candidates')
+
+# ---------- C. one score for every candidate, the best kept, then edit / finalise / deliver ----------
+_oc151 = pos('Originality Check')
+add_node('Page Candidates', 'n8n-nodes-base.code', 2, {'jsCode': _kit151(_rd0('code/Page_Candidates.js'))}, [_oc151[0] + 110, _oc151[1] + 200])
+assert [t['node'] for l in conns['Originality Check']['main'] for t in l] == ['Needs Revision?'], 'H1: Originality Check no longer leads to Needs Revision?'
+disconnect('Originality Check', 'Needs Revision?'); connect('Originality Check', 'Page Candidates'); connect('Page Candidates', 'Needs Revision?')
+_nr151 = nodes['Needs Revision?']['parameters']['conditions']['conditions'][0]
+assert _nr151['leftValue'].startswith('={{ $json.content_qa.passed === false'), 'H1: the Needs Revision? condition moved'
+_nr151['leftValue'] = "={{ !!($json.page_fix && $json.page_fix.next === 'edit') }}"
+assert [t['node'] for t in conns['Needs Revision?']['main'][1]] == ['Build Word File'] and [t['node'] for t in conns['Needs Revision?']['main'][0]] == ['Editor'], 'H1: Needs Revision? routes changed'
+_nrp151 = pos('Needs Revision?')
+if_node('Finalize Page?', "{{ !!($json.page_fix && $json.page_fix.next === 'finalize') }}", [_nrp151[0] + 200, _nrp151[1] + 220])
+disconnect('Needs Revision?', 'Build Word File')
+connect('Needs Revision?', 'Finalize Page?', 1); connect('Finalize Page?', 'Page Fix', 0); connect('Finalize Page?', 'Build Word File', 1)
+
+# ---------- D. real sources before an edit (free: the stack's own SearXNG, then a direct read of each page) ----------
+disconnect('Needs Revision?', 'Editor')
+_x151, _y151 = _nrp151[0] + 40, _nrp151[1] - 420
+add_node('Page Source Plan', 'n8n-nodes-base.code', 2, {'jsCode': _kit151(_rd0('code/Page_Source_Plan.js'))}, [_x151, _y151])
+if_node('Any Page Sources?', "{{ !$json.skip }}", [_x151 + 180, _y151])
+add_node('Search Page Sources', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'Accept', 'value': 'application/json'}, {'name': 'User-Agent', 'value': 'SEO-Agent-Sources/1.0'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 1000}}, 'timeout': 20000}},
+    [_x151 + 360, _y151 - 80], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
+add_node('Page Source Candidates', 'n8n-nodes-base.code', 2, {'jsCode': _kit151(_rd0('code/Page_Source_Candidates.js'))}, [_x151 + 540, _y151 - 80])
+if_node('Any Source Pages?', "{{ !$json.skip }}", [_x151 + 720, _y151 - 80])
+_fps151 = copy.deepcopy(nodes['Fetch Outbound Links']); _fps151['name'] = 'Fetch Page Sources'; _fps151['id'] = nid('Fetch Page Sources'); _fps151['position'] = [_x151 + 900, _y151 - 160]
+_fps151['alwaysOutputData'] = True
+nodes['Fetch Page Sources'] = _fps151
+add_node('Verified Sources', 'n8n-nodes-base.code', 2, {'jsCode': _kit151(_rd0('code/Page_Verified_Sources.js'))}, [_x151 + 1080, _y151])
+connect('Needs Revision?', 'Page Source Plan', 0); connect('Page Source Plan', 'Any Page Sources?')
+connect('Any Page Sources?', 'Search Page Sources', 0); connect('Any Page Sources?', 'Verified Sources', 1)
+connect('Search Page Sources', 'Page Source Candidates'); connect('Page Source Candidates', 'Any Source Pages?')
+connect('Any Source Pages?', 'Fetch Page Sources', 0); connect('Any Source Pages?', 'Verified Sources', 1)
+connect('Fetch Page Sources', 'Verified Sources'); connect('Verified Sources', 'Editor')
+for _k151 in ('retryOnFail', 'maxTries', 'waitBetweenTries'):
+    assert nodes['Fetch Page Sources'].get(_k151) and nodes['Search Page Sources'].get(_k151), 'H1: a source fetch lost the retry rule (' + _k151 + ')'
+assert 'searxng:8080' in code('Page Source Plan'), 'H1: the source search is not the stack\'s own SearXNG'
+# the Editor's counted prompt (section 62) is rendered against the node that now feeds it
+_pce151 = next(a for a in nodes['Prompt For Count (Editor)']['parameters']['assignments']['assignments'] if a['name'] == '__prompt')
+assert "$('Needs Revision?').first().json" in _pce151['value'], 'H1: the Editor\'s counted prompt no longer reads Needs Revision?'
+_pce151['value'] = _pce151['value'].replace("$('Needs Revision?').first().json", "$('Verified Sources').first().json")
+assert "Needs Revision?" not in _pce151['value'] and "page_fix || {}).edit_job" in _pce151['value'], 'H1: the counted Editor prompt is not the section prompt'
+assert sorted({s for s, o in conns.items() for l in (o.get('main') or []) for t in (l or []) if t['node'] == 'Editor'}) == ['Edit Complete? (Editor)', 'Verified Sources'], 'H1: the Editor has an unexpected input'
+
+# ---------- E. the edit check merges sections; the quality check reads this pipeline's state ----------
+setcode('Edit Check (Editor)', _kit151(code('Edit Check (Editor)')))
+assert 'const PF = (() => {' in code('Edit Check (Editor)') and 'PF.merge(before, job, answer' in code('Edit Check (Editor)'), 'H1: the edit check does not merge sections'
+patch('Content QA', "const round = ($runIndex || 0) + 1;\n",
+      "const round = ($runIndex || 0) + 1;\n"
+      "// H1 (2026-10-27, section 151): this pipeline's state (Page Fix carries it into the round): the editing rounds done, the sources the\n"
+      "// source step verified, and whether this round is the final check (then nothing is restored from the round before: the final version\n"
+      "// is the best draft with the unsupported statements rewritten or removed on purpose)\n"
+      "const __PFS = round > 1 ? (() => { try { const j = $('Page Fix').first().json || {}; return j.page_fix && typeof j.page_fix === 'object' ? j.page_fix : null; } catch (e) { return null; } })() : null;\n"
+      "const __PRV = () => { if (__PFS && __PFS.came_from === 'finalize') return null; try { const v = $('Verified Sources').first().json; if (v && typeof v.output === 'string') return v; } catch (e) {} try { return $('Needs Revision?').first().json || null; } catch (e) { return null; } };\n"
+      "const __VS = (__PFS && Array.isArray(__PFS.sources)) ? __PFS.sources.filter(v => v && v.url) : [];\n")
+patch('Content QA', "  let PRV = null; try { PRV = $('Needs Revision?').first().json || null; } catch (e) { PRV = null; }", "  let PRV = __PRV();   // H1: the page the editor was given (Verified Sources), else Needs Revision?")
+patch('Content QA', "    const PRVQ = (() => { try { return (($('Needs Revision?').first().json || {}).content_qa) || {}; } catch (e) { return {}; } })();", "    const PRVQ = ((__PRV() || {}).content_qa) || {};   // H1")
+patch('Content QA', "(brief.evidence_plan || []).forEach(e => addSrc(e && e.source_url, e && e.fact));",
+      "(brief.evidence_plan || []).forEach(e => addSrc(e && e.source_url, e && e.fact));\n__VS.forEach(v => addSrc(v.url, v.text || v.evidence));   // H1: a page the source step fetched today and verified")
+patch('Content QA', "const allowedSources = new Set(((brief.evidence_plan || []).map(e => String(e.source_url || '').toLowerCase())).concat((prev.facts || []).map(f => String(f.url || '').toLowerCase())));",
+      "const allowedSources = new Set(((brief.evidence_plan || []).map(e => String(e.source_url || '').toLowerCase())).concat((prev.facts || []).map(f => String(f.url || '').toLowerCase())).concat(__VS.map(v => String(v.url || '').toLowerCase())));   // H1: + the verified sources")
+patch('Content QA', "const editor_rounds = Math.max(0, round - 1);", "const editor_rounds = __PFS && Number.isFinite(Number(__PFS.edits)) ? Number(__PFS.edits) : Math.max(0, round - 1);   // H1: the final check is a round with no editor call")
+assert "$('Needs Revision?')" not in code('Content QA').replace("try { return $('Needs Revision?').first().json || null; }", ''), 'H1: Content QA still reads Needs Revision? directly'
+patch('Normalize Input', "  qa_max_rounds: 2,   // one editor pass: live tests showed a second pass inflates length without raising the score",
+      "  qa_max_rounds: 5,   // H1 (2026-10-27): the Copywriter's draft + up to 3 section-targeted edits + the final check (Page Candidates keeps the best draft; a full-page second pass inflated length, a section edit cannot)")
+
+# ---------- F. what the client receives: the status, the questions and the grade of the delivered page, everywhere ----------
+patch('Build Word File', "    qa_next_step: (qa.quality || {}).next_step || '', qa_owner_edits: (qa.quality || {}).owner_edits || [], qa_page_url: qa.page_url || '', ladder_links: d.ladder_links || [],",
+      "    qa_next_step: (qa.quality || {}).next_step || '', qa_owner_edits: (qa.quality || {}).owner_edits || [], qa_page_url: qa.page_url || '', ladder_links: d.ladder_links || [],\n"
+      "    // H1 (2026-10-27): ready | ready_with_questions | not_ready, the optional client questions and the grade of THIS page (not of the first draft)\n"
+      "    qa_delivery_status: qa.delivery_status || (qa.passed == null ? '' : qa.passed ? 'ready' : 'not_ready'), qa_client_questions: qa.client_questions || [], qa_grade: (qa.delivery || {}).grade || null,\n"
+      "    qa_blocking: (qa.delivery || {}).blocking || [], qa_advisory: (qa.delivery || {}).advisory || [],")
+patch('Build Word File', "parts.push(h2('Editorial Review') + kv([['Score', (d.critique.score != null ? d.critique.score + '/100' : 'N/A') + ' — ' + esc(d.critique.verdict || '')]]) + ((d.critique.strengths || []).length ? '<h3>Strengths</h3>' + ul(d.critique.strengths) : '') + ((d.critique.problems || []).length ? '<h3>Issues raised (addressed by the editor)</h3>'",
+      "parts.push(h2('Review of the first draft') + kv([...(qa.delivery && qa.delivery.grade ? [['Page you receive', esc(qa.delivery.label || '') + (qa.delivery.grade.score != null ? ' (content score ' + qa.delivery.grade.score + '/100, measured on this page after every fix)' : '')]] : []), ['First draft review score', (d.critique.score != null ? d.critique.score + '/100' : 'N/A') + ': ' + esc(d.critique.verdict || '') + (qa.delivery ? ' (the reviewer read the first draft, before the fixes; it does not grade the page you receive)' : '')]]) + ((d.critique.strengths || []).length ? '<h3>Strengths</h3>' + ul(d.critique.strengths) : '') + ((d.critique.problems || []).length ? '<h3>Issues the review raised on the first draft</h3>'")
+patch('Build Webhook Response', "    qa_next_step: d.qa_next_step || null, qa_owner_edits: d.qa_owner_edits || [],",
+      "    qa_next_step: d.qa_next_step || null, qa_owner_edits: d.qa_owner_edits || [],\n"
+      "    qa_delivery_status: d.qa_delivery_status || null, qa_client_questions: d.qa_client_questions || [], qa_grade: d.qa_grade || null,   // H1 (2026-10-27): for the app's approval and questions (H3)\n"
+      "    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],")
+patch('Blog Package', "  publishable: d.qa_publishable == null ? null : !!d.qa_publishable, quality: d.qa_quality || null,",
+      "  publishable: d.qa_publishable == null ? null : !!d.qa_publishable, quality: d.qa_quality || null,\n"
+      "  delivery_status: d.qa_delivery_status || null, client_questions: d.qa_client_questions || [], grade: d.qa_grade || null,   // H1 (2026-10-27)")
+for _n151 in ('Page Fix', 'Page Candidates', 'Page Source Plan', 'Page Source Candidates', 'Verified Sources', 'Edit Check (Editor)', 'Brief Context'):
+    _c151 = code(_n151)
+    assert 'const PF = (() => {' in _c151 and not any(m in _c151.replace(COVERAGE_SRC, '') for m in ('/*__PAGE_FIX__*/', '/*__COVERAGE__*/', '/*__SOURCES__*/', '/*__OUTBOUND__*/')), 'H1: kit missing or marker left in ' + _n151   # the coverage kit names its own marker in its header
+assert not any('/*__PAGE_FIX__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'H1: PAGE_FIX marker left'
+assert _loops76('Editor'), 'H1: the Editor no longer loops'
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+
+# ---------- G. the harness: the kit as a runnable shim, and the wiring ----------
+open(os.path.join(OUT_CODE, '_page_fix.js'), 'w').write("// harness shim (written by build_v4.py section 151): the page pipeline kit, { fn, args } -> { r }\n" + COVERAGE_SRC + '\n' + PAGE_FIX_SRC151
+    + "\nreturn $input.all().map(i => { const j = i.json || {}; const a = (j.args || []).slice(); if (j.with_term_re) a[1] = { ...(a[1] || {}), termRe: CVG.termRe }; return { json: { r: PF[j.fn].apply(null, a) } }; });\n")
+if os.path.isdir(os.path.join(HERE0, 'harness')):
+    _chain151 = ('Refresh Sources', 'Page Fix', 'Promise Candidates', 'Originality Check', 'Page Candidates', 'Needs Revision?', 'Finalize Page?', 'Page Source Plan', 'Any Page Sources?',
+                 'Search Page Sources', 'Page Source Candidates', 'Any Source Pages?', 'Fetch Page Sources', 'Verified Sources', 'Editor', 'Edit Complete? (Editor)')
+    json.dump({'connections': {k: [[t['node'] for t in (l or [])] for l in conns[k]['main']] for k in _chain151 if k in conns},
+               'needs_revision': _nr151['leftValue'], 'finalize': nodes['Finalize Page?']['parameters']['conditions']['conditions'][0]['leftValue'],
+               'editor_count_prompt_reads': 'Verified Sources' if "$('Verified Sources')" in _pce151['value'] else '',
+               'qa_max_rounds': 5, 'http': {n: {k: nodes[n].get(k) for k in ('retryOnFail', 'maxTries', 'waitBetweenTries', 'onError')} for n in ('Search Page Sources', 'Fetch Page Sources')},
+               'prompts': {p: nodes[p]['parameters']['text'] for p in ('Strategy Brief', 'Copywriter', 'Critic', 'Editor')}},
+              open(os.path.join(HERE0, 'harness', 'page_fix_wiring.json'), 'w'), indent=1)
+sticky("""### The page pipeline (H1, 2026-10-27)
+**Page Fix** (before every check): keyword in title / H1 / introduction, meta lengths, slug, Quick answer up, snippet headings, internal links, brand form, **no brackets** (the sentence goes, the question is kept for the client).
+**Page Candidates** (after every check): dead links fixed, ONE score for every draft (hard blockers > soft blockers > advisory), **the best draft is kept**; then a **section-targeted edit** (at most 3, stop when nothing improves) or the **final version** (the system's own neutral rewrite) checked once more; then **ready / ready_with_questions / not_ready**, the grade of the delivered page, the client questions.
+**Sources**: Page Source Plan -> SearXNG -> Fetch Page Sources -> **Verified Sources** (answers + states the figure); the Editor cites only those.""", _x151 - 40, _y151 - 260, 980, 200, 5)
+log('The page pipeline never delivers a worse draft (H1, 2026-10-27, docs/content-quality-2026-10-27/R1, R2): one contract for length (a band), brackets (none) and claims in the brief, copywriter, critic and editor prompts (PF.contract on the brief item; the brief lists questions_for_client instead of bracketed prompts); Page Fix applies the deterministic fixes before every quality check; Page Candidates scores every draft by one rule (hard blockers, soft blockers, advisory distance), keeps the best, plans a section-targeted edit (at most 3 rounds, stopping when a round improves nothing) or the final version with the system\'s own neutral rewrite, and after the last full check delivers ready / ready_with_questions / not_ready with the grade of the delivered page and the client questions; the Editor edits only the sections with a problem (Edit Check merges the blocks, every other byte kept) and may cite only pages the new source step (SearXNG, then a direct read) verified')
 
 # =============================================================================
 # 9. WRITE
