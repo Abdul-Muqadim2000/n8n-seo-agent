@@ -79,7 +79,8 @@ describe('AI search crawlers', () => {
     const stored = row({ key: 'ai_crawlers', kind: 'ai_crawlers', payload: { bots: [{ bot: 'PerplexityBot', owner: 'Perplexity', rule: 'Disallow: /', paths: ['/'] }] } });
     const [t] = deriveSiteTasks(access([{ bot: 'PerplexityBot', allowed: true }], '2026-11-01T19:43:00.000Z'), [stored]);
     expect(t).toMatchObject({ state: 'done', lastCheck: { by: 'weekly' } });
-    expect(t.detail).toContain('PerplexityBot');
+    // a done step says what is true now, not the problem it was
+    expect(t.detail).toBe('Your robots.txt lets PerplexityBot read your pages, so AI assistants can name and cite them.');
   });
   it('an all-clear reading older than the step says nothing about it', () => {
     const stored = row({ key: 'ai_crawlers', kind: 'ai_crawlers', createdAt: '2026-10-30T00:00:00.000Z', payload: { bots: [{ bot: 'PerplexityBot', owner: 'Perplexity', rule: 'Disallow: /', paths: ['/'] }] } });

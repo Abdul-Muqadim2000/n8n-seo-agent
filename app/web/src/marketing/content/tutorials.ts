@@ -660,6 +660,23 @@ export const tutorialSeries: TutorialSeries[] = [
           'Check the next four weeks and the recent automatic runs',
         ],
       },
+      {
+        id: '5.9',
+        slug: 'tick-off-the-steps-on-your-website',
+        title: 'Tick off the steps on your website',
+        summary: 'Find the changes only you can make on your own website, copy what to add, open the guide, check it at once, and skip the ones you do not need. We also check every day on our own.',
+        level: 'Beginner',
+        audience: ['owner', 'marketer'],
+        minutes: 1,
+        start: '/o/<company>/sites/<website>/pipeline',
+        chapters: [
+          'Find the steps in Needs you',
+          'Copy what to add, or open Show me how',
+          'Check it now',
+          'See what done looks like',
+          'Skip a step and bring it back',
+        ],
+      },
     ],
   },
   {

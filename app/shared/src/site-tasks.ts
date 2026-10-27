@@ -157,6 +157,18 @@ function redirectDrafts(r: SiteTaskInputs['reclaim'], stored: StoredSiteTask[]):
 
 const fmtBots = (bots: { bot: string; owner: string }[]) => bots.map((b) => (b.owner && b.owner !== b.bot ? `${b.bot}, used by ${b.owner}` : b.bot)).join('; ');
 
+/** What a done step says: what is true now, never the problem it was (2026-10-28, seen while filming the tutorial). */
+function doneDetail(d: Draft, domain: string): string {
+  const p = d.payload;
+  if (d.kind === 'indexnow') return `The file is in place on ${domain}. New and updated pages are announced to Bing, Copilot and the other IndexNow search engines the same week.`;
+  if (d.kind === 'ai_crawlers') {
+    const bots = ((p.bots as { bot: string }[]) ?? []).map((b) => b.bot);
+    return `Your robots.txt lets ${bots.join(', ')} read your pages, so AI assistants can name and cite them.`;
+  }
+  const links = Number(p.links) || 0;
+  return `${pathOfUrl(str(p.brokenUrl))} now leads to a page that opens, so the ${links} link${links === 1 ? '' : 's'} from other websites keep${links === 1 ? 's' : ''} their value.`;
+}
+
 function present(d: Draft, domain: string): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
   const p = d.payload;
   if (d.kind === 'indexnow') {
@@ -233,6 +245,7 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
       lastCheck: decided,
       severity: state === 'todo' && (reopened || searchBlocked) ? 'warning' : 'info',
       ...shown,
+      detail: state === 'done' ? doneDetail(d, inputs.domain) : shown.detail,
       guideVars: { domain: inputs.domain, ...shown.guideVars },
       skipped: s?.skippedAt ? { at: s.skippedAt, who: s.skippedBy ?? '' } : null,
     };
