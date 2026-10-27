@@ -11,6 +11,7 @@ import {
   linkImportSchema,
   siteAdminMonitorsBody,
   parseLinkImport,
+  importTargetHosts,
   n8nSiteId,
   countryOf,
   LADDER_ID_RE,
@@ -42,7 +43,7 @@ import type { SiteRow } from '../db/schema';
 import { randomToken } from '../lib/crypto';
 import { badRequest, conflict, HttpError, notFound, parse } from '../lib/errors';
 import { deleteRows, ensureTable, insertRows, invalidateSite, siteAdmin, siteRows, updateRows } from '../n8n/client';
-import { acknowledgeOnSite, checkWrite, consistencySite, ladderMarkets, recordOverride, siteApiOf, standingWarnings, takeAcknowledge } from '../services/consistency';
+import { acknowledgeOnSite, checkIntegration, checkSettings, checkWrite, consistencySite, ladderMarkets, recordOverride, redirectTarget, siteApiOf, standingWarnings, takeAcknowledge } from '../services/consistency';
 import { invalidateForecast } from '../services/billing';
 import { assertGa4ForDomain, findGscProperty, gscOwnerCheck, listGa4Properties } from '../services/google';
 import { assertEngineIdFree, ENGINE_ID_TAKEN } from '../services/engineSite';
@@ -285,7 +286,9 @@ export async function siteRoutes(app: FastifyInstance) {
     const { acknowledge } = takeAcknowledge(req.body);
     const body = parse(createSiteSchema, req.body);
     // MKT (2026-10-27, mismatch audit M5): a description about other markets than the main country is said before the website is added
-    const chk = checkWrite('site_update', body as unknown as Record<string, unknown>, { site: null }, acknowledge);
+    // MKT I7: and an address that sends every visitor to another domain (one request, followed redirects; unreachable = not judged)
+    const redirectTo = await redirectTarget(body.domain);
+    const chk = checkWrite('site_update', body as unknown as Record<string, unknown>, { site: null, redirectTo }, acknowledge);
     const mine = await db.query.sites.findFirst({ where: and(eq(schema.sites.orgId, a.org.id), eq(schema.sites.domain, body.domain)) });
     if (mine) throw conflict(`${body.domain} is already one of your websites.`, 'site_exists');
     if (await verifiedElsewhere(body.domain, a.org.id))
@@ -495,7 +498,7 @@ export async function siteRoutes(app: FastifyInstance) {
   // replaces the previous one; the Backlink Monitor merges it into its ledger on the next run and checks the pages itself.
   app.post('/api/orgs/:orgId/sites/:siteId/backlinks/import', { bodyLimit: 16 * 1024 * 1024, config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async (req): Promise<LinkImportSummary> => {
     const p = req.params as P;
-    const { site } = await siteAccess(req, p.orgId, p.siteId, 'member');
+    const { site, org } = await siteAccess(req, p.orgId, p.siteId, 'member');
     requireVerified(site);
     const input = parse(linkImportSchema, req.body);
     let parsed;
@@ -504,6 +507,8 @@ export async function siteRoutes(app: FastifyInstance) {
     } catch (err) {
       throw badRequest((err as Error).message);
     }
+    // MKT I3 (2026-10-27): a file whose "linked to" column is another website's would credit its links to this one
+    await checkIntegration(req, { org, site }, { kind: 'link_import', targets: importTargetHosts(input.csv) });
     const now = new Date().toISOString();
     const importId = `imp_${Date.now().toString(36)}`;
     const siteId = n8nSiteId(site.domain);
@@ -572,10 +577,15 @@ export async function siteRoutes(app: FastifyInstance) {
   // ---------- Site Admin (n8n) ----------
   app.post('/api/orgs/:orgId/sites/:siteId/admin', async (req): Promise<AdminResult> => {
     const p = req.params as P;
-    const { site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    const { site, org, role } = await siteAccess(req, p.orgId, p.siteId, 'admin');
     requireVerified(site);
     const { acknowledge } = takeAcknowledge(req.body);
     const a = parse(adminActionSchema, req.body);
+    // MKT (2026-10-27, mismatch audit S1 / S2 / S7 / C1): weekly pages that will write nothing, more than the waiting limit lets through,
+    // switched off under a ladder that still has pages, or schedules the credits cannot pay for. M7: the own market added as an extra one.
+    if (a.action === 'cadence')
+      await checkSettings(req, { org, site, role }, { setting: 'cadence', pagesPerWeek: a.pagesPerWeek }, { schedule: { blogsPerWeek: a.pagesPerWeek }, revert: { pagesPerWeek: site.blogsPerWeek ?? 0 } });
+    if (a.action === 'monitors') await checkSettings(req, { org, site, role }, { setting: 'monitors', aiMarkets: a.monitors.aiMarkets }, { schedule: { monitors: a.monitors } });
     // MKT (2026-10-27, mismatch audit M7): a question added to the AI panel that asks about another market than the website's
     if (a.action === 'ai_prompts' && a.add.length) {
       const chk = checkWrite('ai_questions', { add: a.add }, { site: consistencySite(site), siteApi: siteApiOf(site) }, [...acknowledge, ...(site.acknowledgedWarnings ?? [])]);

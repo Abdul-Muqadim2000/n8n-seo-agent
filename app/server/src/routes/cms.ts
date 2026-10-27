@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { checkIntegration, takeAcknowledge } from '../services/consistency';
 import { orgAccess, siteAccess } from '../auth/access';
 import { audit } from '../services/audit';
 import {
@@ -33,7 +34,11 @@ export async function cmsRoutes(app: FastifyInstance) {
   app.post('/api/orgs/:orgId/sites/:siteId/cms/connections', { config: perUser(10) }, async (req) => {
     const p = req.params as P;
     const a = await siteAccess(req, p.orgId, p.siteId, 'admin');
-    const r = await createConnection(a, req.body, req.log);
+    // MKT I1 (2026-10-27): a connection that publishes to another domain is said before it is saved
+    const { rest } = takeAcknowledge(req.body);
+    const b = (rest ?? {}) as Record<string, unknown>;
+    await checkIntegration(req, a, { kind: 'cms', platform: String(b.kind ?? ''), baseUrl: String(b.baseUrl ?? ''), publicUrlTemplate: String(b.publicUrlTemplate ?? '') });
+    const r = await createConnection(a, rest, req.log);
     await audit(req, a.org.id, { action: 'cms.connected', target: { type: 'cms_connection', id: r.connection.id, label: r.connection.label }, details: { siteId: a.site.id, kind: r.connection.kind } });
     return r;
   });
@@ -41,7 +46,10 @@ export async function cmsRoutes(app: FastifyInstance) {
   app.patch('/api/orgs/:orgId/sites/:siteId/cms/connections/:connectionId', { config: perUser(30) }, async (req) => {
     const p = req.params as P;
     const a = await siteAccess(req, p.orgId, p.siteId, 'admin');
-    const r = await updateConnection(a, p.connectionId, req.body, req.log);
+    const { rest } = takeAcknowledge(req.body);
+    const b = (rest ?? {}) as Record<string, unknown>;
+    if (typeof b.publicUrlTemplate === 'string') await checkIntegration(req, a, { kind: 'cms', publicUrlTemplate: b.publicUrlTemplate });
+    const r = await updateConnection(a, p.connectionId, rest, req.log);
     await audit(req, a.org.id, { action: 'cms.changed', target: { type: 'cms_connection', id: r.id, label: r.label }, details: { siteId: a.site.id, fields: Object.keys((req.body ?? {}) as object).filter((k) => k !== 'secret') } });
     return r;
   });

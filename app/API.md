@@ -194,6 +194,22 @@ refresh) never continues past one: the proposal waits for the client with the wa
 (M6), `ai.question_place` (M7), `lang.script` (M8) and `pipeline.*` (the forms' duplicate warnings, ids unchanged). A site `PATCH` that
 changes the main country of a tracked website moves the engine at once (Site Admin `market`).
 
+The remaining cases (2026-10-27, `shared/src/consistency-more.ts`, same registry, same 409). Runs: `money.new_ladder` (D1: proposal approve
+and swap always ask first, with the quote, the ladders it joins and the one it overlaps; Accept sends `ladderMode: "manual"`, which the
+approve / swap routes take, members included; never asked of a level-3 automatic start), `money.same_family` (D2: both ladders about ERP,
+e-invoicing, CRM or VAT; Accept is a `call` with `instead: true` to `POST .../ladders/:ladderId/keywords`: the call replaces the request,
+which is not sent again, and closes the waiting suggestion), `money.page_exists` (D3: a live page of the website already answers the keyword),
+`data.page_owned` (D5), `money.watch_dup` (D7, `track`), `pipeline.manual_pages_now` (S6), `content.not_ready` (S8), `data.run_business`
+(B1, information), `market.profile_address` (M5, information, `profile`). `POST .../ladders/:ladderId/keywords` (D4): `money.ladder_add_overlap`,
+`money.ladder_add_fit`, `money.page_exists`, M4, M8. Settings (`acknowledge` in the body): `POST .../admin` `cadence`
+(`pipeline.ladders_stop` S7, `pipeline.writes_nothing` S1, `pipeline.over_pileup` S2, `money.credits_runway` C1) and `monitors`
+(`ai.extra_market_same` M7, C1), `PATCH .../automation` (`pipeline.limit_below_active` S3, `pipeline.level3_manual` /
+`pipeline.level_drop_system` S4, C1 on a level change), `PATCH .../ladders/:ladderId` (`pipeline.ladder_queued` S5). C1 fires when credits
+are enforced and the change leaves under 14 days of credits. Integrations: CMS connection create / `publicUrlTemplate` update
+(`data.cms_domain` I1), link-building settings with a new `mailboxId` (`data.mailbox_domain` I2), `POST .../backlinks/import`
+(`data.import_other_site` I3), `POST /api/orgs/:orgId/sites` (`data.domain_redirects` I7: one request to `https://<domain>/`, redirects
+followed, 5 s; an unreachable address is not judged).
+
 **The AI question panel (G6, 2026-10-18; `n8n/seo-agent/AI_VISIBILITY_SPEC.md` §10).** `action: "ai_prompts"` manages up to 500 questions:
 `add` (≤ 500: a question as text, or `{ prompt, persona, cluster, stage: awareness|consideration|decision, market: "SA-en", pinned }` —
 what the panel manager's CSV import sends, parsed and checked in the browser by `parseAiPanelCsv`), `edit` (`[{ promptId, prompt?,

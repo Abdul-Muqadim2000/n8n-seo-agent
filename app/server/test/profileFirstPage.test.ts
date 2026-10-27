@@ -196,7 +196,8 @@ describe('the first page waits for the author profile and the business facts (re
     expect([(run.input as Record<string, unknown>).pagesHeld, run.estimatedCostUsd]).toEqual(['manual', planOnly]);
     // no mode asked for: the website's default decides, as the engine's does (Ladder_Plan.js ownMode)
     t.tables.ladderSettings = [{ ladder_id: '_site', site_id: n8nSiteId('manual-p1.com'), domain: 'manual-p1.com', mode: 'manual' }];
-    const r2 = await u.c.post(`/api/orgs/${org.id}/runs`, { mode: 'ladder', siteId: site.id, keyword: 'crm advisory', country: 'United States', pagesNow: 1 });
+    // MKT S6 (2026-10-27): pages asked for while new ladders are Manual is said first; continuing starts it Manual, quoted for the plan alone
+    const r2 = await u.c.post(`/api/orgs/${org.id}/runs`, { mode: 'ladder', siteId: site.id, keyword: 'crm advisory', country: 'United States', pagesNow: 1, acknowledge: ['pipeline.manual_pages_now:crm advisory'] });
     const run2 = (await db.query.runs.findFirst({ where: eq(schema.runs.id, r2.body.id) }))!;
     expect([(run2.input as Record<string, unknown>).pagesHeld, run2.estimatedCostUsd]).toEqual(['manual', planOnly]);
     t.tables.ladderSettings = [];

@@ -23,7 +23,7 @@ import {
   type Warning,
 } from '@seo/shared';
 import { openWarnings, Warnings } from '@/components/warnings/Warnings';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { api, ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useBilling, useProviders, useSiteData } from '@/lib/queries';
 import { paths } from '@/lib/paths';
@@ -321,6 +321,7 @@ export function PipelineNotices({
   siteId: string;
 }) {
   const { org } = useOrgCtx();
+  const navigate = useNavigate();
   const linkFor = (n: PipelineNotice) =>
     n.link?.runId
       ? paths.run(org.id, n.link.runId)
@@ -334,6 +335,15 @@ export function PipelineNotices({
   const accept = (w: PipelineNotice & { accept?: Warning['accept'] }) => {
     const c = w.accept?.change;
     if (c?.kind === 'fields' && onAccept) onAccept(c.set);
+    // MKT (more cases): a correction made on another page ("Add them first") or by a call ("Add it to your ladder instead")
+    else if (c?.kind === 'link') navigate(c.tool ? paths.tool(org.id, c.tool, { siteId }) : paths.site(org.id, siteId, c.sitePage ?? 'overview'));
+    else if (c?.kind === 'call')
+      void api(c.path, { method: c.method, body: c.body ?? {}, noConfirm: true })
+        .then(() => {
+          toast.success(`Done: ${(w.accept?.label ?? '').replace(/ instead$/, '')}.`);
+          if (c.instead) navigate(paths.site(org.id, siteId, 'pipeline'));
+        })
+        .catch((e) => toast.error('That did not work', { description: errorMessage(e) }));
     else if (w.usePlan && onUsePlan) onUsePlan(w.usePlan);
   };
   return (
@@ -341,7 +351,7 @@ export function PipelineNotices({
       warnings={notices}
       acked={acked}
       onToggle={onToggle}
-      onAccept={onAccept || onUsePlan ? accept : undefined}
+      onAccept={onAccept || onUsePlan || notices.some((n) => ['link', 'call'].includes((n as Warning).accept?.change.kind ?? '')) ? accept : undefined}
       linkFor={linkFor}
       renderLink={(to, label) => (
         <Link to={to} className="text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">

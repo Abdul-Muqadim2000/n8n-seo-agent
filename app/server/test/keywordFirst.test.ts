@@ -488,7 +488,10 @@ describe('keyword proposals', () => {
     expect(t.starts.filter((b) => b.mode === 'ladder')).toEqual([]);
     // approve: starts now as the client's pick
     t.assess = { difficulty_for_you: 'easy', fit: 2 };
-    const ap = await co.c.post(`${base(co, s.id)}/keyword-proposals/${list.pending[0].id}/approve`);
+    // MKT D1 (2026-10-27): the first click asks (a new ladder, its page now, the quote); the answer starts it
+    const ask = await co.c.post(`${base(co, s.id)}/keyword-proposals/${list.pending[0].id}/approve`);
+    expect([ask.status, ask.body.warnings[0].code]).toEqual([409, 'money.new_ladder']);
+    const ap = await co.c.post(`${base(co, s.id)}/keyword-proposals/${list.pending[0].id}/approve`, { acknowledge: ask.body.needsAcknowledge });
     expect(ap.body.proposal).toMatchObject({ keyword: 'crm migration', status: 'approved', decidedBy: 'suggest@kf.test' });
     expect(t.starts.at(-1)).toMatchObject({ mode: 'ladder', keyword: 'crm migration', chosen_by: 'client_picked' });
     // a viewer cannot decide

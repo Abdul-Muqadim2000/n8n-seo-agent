@@ -98,7 +98,8 @@ describe('M1 a run sent with another country than the website\'s', () => {
 
   it('the same country, a profile run (its country is the address) and no website are clean', () => {
     expect(codes(consistencyWarnings('run', { mode: 'audit', country: 'Pakistan' }, ctx()))).toEqual([]);
-    expect(codes(consistencyWarnings('run', { mode: 'profile', country: 'United Arab Emirates' }, ctx()))).toEqual([]);
+    // a profile run's country is its address: never M1 (M5's address note is information only, consistency-more.ts)
+    expect(codes(consistencyWarnings('run', { mode: 'profile', country: 'United Arab Emirates' }, ctx()))).not.toContain('market.run_country');
     expect(codes(consistencyWarnings('run', { mode: 'verdict', keyword: 'erp', country: 'Germany' }, ctx({ site: null })))).toEqual([]);
   });
 });

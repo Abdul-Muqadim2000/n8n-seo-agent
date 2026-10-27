@@ -94,6 +94,22 @@ export function importDate(v: string): string {
 }
 
 /**
+ * MKT I3 (2026-10-27, mismatch audit): the hosts of the file's own "linked TO" column (target, URL to, destination, linked page), whoever's
+ * website they are. parseLinkImport keeps a row with an empty target when that column is another website's, so a file exported for
+ * another site would credit its links to this one; the server warns before loading it. [] when the file has no such column.
+ */
+export function importTargetHosts(text: string): string[] {
+  const grid = parseCsv(text);
+  if (grid.length < 2) return [];
+  const i = grid[0]!.findIndex((h) => /target|url to|to url|destination|linked page/.test(h.trim().toLowerCase()));
+  if (i < 0) return [];
+  return grid
+    .slice(1, 501)
+    .map((r) => hostOf((r[i] ?? '').trim()))
+    .filter(Boolean);
+}
+
+/**
  * Reads an uploaded link list for `domain` (the site's bare domain). Throws an Error with a message for the person when the file is not a
  * list of links to the site (e.g. the "Top linked pages" table, which lists only your own pages).
  */

@@ -30,6 +30,7 @@ export {
   fitMarket,
   fitDropPlaces,
   fitArabic,
+  FIT_FAMILIES,
 } from './fit-gate.generated.js';
 
 export type {

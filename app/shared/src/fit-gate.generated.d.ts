@@ -133,6 +133,9 @@ export declare const fitPlaces: (s: unknown) => FitPlace[];
 export declare const fitMarket: (s: unknown, iso: string) => FitMarketResult;
 export declare const fitDropPlaces: (keyword: unknown, words: string[]) => string;
 export declare const fitArabic: (s: unknown) => { text: string; read: boolean; unread: string[] };
+/** MKT D2 (2026-10-27, mismatch audit): the product families the gate knows (ERP, e-invoicing, CRM, VAT, AI, IT); `cat` = a product
+ *  category, `wide` = a family as wide as its word. The app tells two ladders of one family apart from two ladders of one business. */
+export declare const FIT_FAMILIES: readonly { re: RegExp; anchors: string[]; words: string[]; cat?: boolean; svc?: string[]; wide?: string[]; subj?: string[] }[];
 export declare const FITR: {
   ctx(o?: Record<string, unknown>): FitContext;
   rungs<T>(rows: T[], ctx?: FitContext, opts?: { keyword?: (row: T) => unknown; live?: (row: T) => boolean; serpFor?: (keyword: string, row: T) => string[] | null | undefined; where?: string }): {

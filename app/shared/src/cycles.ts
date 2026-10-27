@@ -346,6 +346,8 @@ export interface KeywordProposalView {
   months: string;
   /** about this many credits a page */
   creditsPerPage: number;
+  /** MKT D1 (2026-10-27): about this many credits to start it (plan the ladder and write its first page now); absent on older servers */
+  startCredits?: number;
   /** the run that started its ladder, once started */
   runId: string | null;
   /** the keyword typed instead (swap) */

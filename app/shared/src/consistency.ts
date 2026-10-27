@@ -2,6 +2,7 @@ import type { ModeId } from './constants';
 import type { PipelineData } from './data';
 import { cycleNorm } from './cycles';
 import { pipelineNotices, type NoticeFormat, type NoticeInput, type PipelineNotice } from './pipeline-notices';
+import { EARLY_CHECKS, MORE_CHECKS, type CreditsCtx, type LivePage, type StartCtx } from './consistency-more';
 import {
   countryOf,
   countryOfCode,
@@ -36,8 +37,9 @@ export type WarningSeverity = 'money' | 'market' | 'data' | 'cosmetic';
 export type WarningChange =
   /** rewrite the request's fields and send it again */
   | { kind: 'fields'; set: Record<string, unknown> }
-  /** a call to make first (path is the app API's, absolute), then send the request again */
-  | { kind: 'call'; method: 'POST' | 'PATCH'; path: string; body?: Record<string, unknown> }
+  /** a call to make first (path is the app API's, absolute), then send the request again; `instead`: the call replaces the request
+   *  (it is not sent again, e.g. "add the keyword to your ladder" in place of "start a second ladder") */
+  | { kind: 'call'; method: 'POST' | 'PATCH'; path: string; body?: Record<string, unknown>; instead?: boolean }
   /** a page of the app where the person makes the correction (a tool form, a settings page) */
   | { kind: 'link'; tool?: ModeId; sitePage?: string };
 
@@ -52,7 +54,18 @@ export interface Warning extends PipelineNotice {
 }
 
 /** Where a check can run: a run start, the paid keyword check, a website save, the website's standing state, AI question edits. */
-export type ConsistencyAction = 'run' | 'keyword_check' | 'site_update' | 'site_standing' | 'ai_questions';
+export type ConsistencyAction =
+  | 'run'
+  | 'keyword_check'
+  | 'site_update'
+  | 'site_standing'
+  | 'ai_questions'
+  /** D4: "Add to my ladder" (input: keyword, ladderId) */
+  | 'ladder_add'
+  /** S1-S7, C1, M7: a pipeline or monitor setting saved (input: `setting` and the new values, consistency-more.ts SettingsInput) */
+  | 'settings'
+  /** I1-I3: a CMS connection, an outreach mailbox, a backlinks file (input: `kind` and its values) */
+  | 'integration';
 
 export interface ConsistencySite {
   domain: string;
@@ -63,6 +76,8 @@ export interface ConsistencySite {
   services?: readonly string[];
   cta?: string;
   timezone?: string;
+  /** D4: the competitors the website named (their brands are not a page of ours) */
+  competitors?: readonly string[];
 }
 
 export interface ConsistencyCtx {
@@ -83,6 +98,14 @@ export interface ConsistencyCtx {
   /** the pipeline data the forms' duplicate warnings read */
   pipeline?: PipelineData | null;
   pipelineOpts?: { now?: Date; fmt?: NoticeFormat; costLabel?: string };
+  /** the more cases (consistency-more.ts): how a start came in and its quote, the live pages, credits, integrations */
+  start?: StartCtx;
+  livePages?: readonly LivePage[];
+  credits?: CreditsCtx | null;
+  /** I7: where the website's address sends visitors (another registrable domain), '' or absent when it does not */
+  redirectTo?: string;
+  /** I2: the company's other websites */
+  companyDomains?: readonly string[];
 }
 
 export interface ConsistencyCheck {
@@ -111,7 +134,7 @@ function warning(w: Omit<Warning, 'message' | 'tone'> & { tone?: Warning['tone']
 
 /** The keywords an action is about (a run's keyword, the keywords to watch, the keyword checked). */
 function keywordsOf(action: ConsistencyAction, input: Record<string, unknown>): { keyword: string; field: 'keyword' | 'keywords' }[] {
-  if (action === 'keyword_check') return str(input.keyword).trim() ? [{ keyword: str(input.keyword).trim(), field: 'keyword' }] : [];
+  if (action === 'keyword_check' || action === 'ladder_add') return str(input.keyword).trim() ? [{ keyword: str(input.keyword).trim(), field: 'keyword' }] : [];
   if (action !== 'run') return [];
   const mode = str(input.mode);
   if ((mode === 'keyword' || mode === 'ladder' || mode === 'verdict') && str(input.keyword).trim()) return [{ keyword: str(input.keyword).trim(), field: 'keyword' }];
@@ -178,7 +201,7 @@ const RUN_COUNTRY: ConsistencyCheck = {
 const KEYWORD_PLACE: ConsistencyCheck = {
   code: 'market.keyword_place',
   severity: 'market',
-  on: ['run', 'keyword_check'],
+  on: ['run', 'keyword_check', 'ladder_add'],
   run: (action, input, ctx) => {
     const market = marketOf(input, ctx);
     if (!market) return [];
@@ -216,7 +239,7 @@ const KEYWORD_PLACE: ConsistencyCheck = {
 const KEYWORD_SCRIPT: ConsistencyCheck = {
   code: 'lang.script',
   severity: 'data',
-  on: ['run', 'keyword_check'],
+  on: ['run', 'keyword_check', 'ladder_add'],
   run: (action, input, ctx) => {
     const market = marketOf(input, ctx);
     if (!market) return [];
@@ -499,6 +522,7 @@ const AI_QUESTION_PLACE: ConsistencyCheck = {
 
 /** Every check, in the order the warnings are shown. A new case is one more entry here. */
 export const CONSISTENCY_CHECKS: readonly ConsistencyCheck[] = [
+  ...EARLY_CHECKS,
   RUN_COUNTRY,
   KEYWORD_PLACE,
   KEYWORD_SCRIPT,
@@ -510,6 +534,7 @@ export const CONSISTENCY_CHECKS: readonly ConsistencyCheck[] = [
   AI_QUESTION_PLACE,
   OTHER_SIGNALS,
   PIPELINE,
+  ...MORE_CHECKS,
 ];
 
 /** The warnings an action raises, warnings before information. */
