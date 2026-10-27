@@ -33,6 +33,8 @@ vi.mock('../src/services/audit', () => ({ audit: vi.fn(async (_r: unknown, _o: u
 vi.mock('../src/services/billing', () => ({ invalidateForecast: vi.fn() }));
 vi.mock('../src/services/pipeline', () => ({
   ladderCards: vi.fn(async () => [{ id: 'lad_mine', head: 'e invoicing in uae', mode: 'manual', status: 'planning', priority: 1 }]),
+  // MKT (2026-10-27): the settings checks read the pipeline; none here, so nothing is judged (the routes' own behaviour is under test)
+  pipelineData: vi.fn(async () => null),
 }));
 
 const { ladderRoutes } = await import('../src/routes/ladders');

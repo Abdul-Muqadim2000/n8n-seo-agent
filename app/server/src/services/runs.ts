@@ -161,8 +161,11 @@ export { monthSpend, monthStart } from './spend';
  * What a role may ask for: a new ladder's Auto / Manual and its place in the order (`ladderPrefs`) are ladder settings, so admins
  * only, a member's choices are dropped and the website's defaults apply, as for any ladder.
  */
-export function inputForRole(input: RunInput, role: Role): RunInput {
-  if (input.mode === 'ladder' && (input.ladderPrefs || input.ladderMode) && !roleAtLeast(role, 'admin')) return { ...input, ladderPrefs: undefined, ladderMode: undefined };
+export function inputForRole(input: RunInput, role: Role, opts: { planOnly?: boolean } = {}): RunInput {
+  if (input.mode === 'ladder' && (input.ladderPrefs || input.ladderMode) && !roleAtLeast(role, 'admin'))
+    // MKT D1 (2026-10-27): a member who approves a keyword suggestion may start it Manual ("Plan it without writing a page", the safe Accept
+    // of the new-ladder warning): it writes and charges less, never more. Any other start mode stays an admin's ladder setting.
+    return { ...input, ladderPrefs: undefined, ladderMode: opts.planOnly && input.ladderMode === 'manual' && !input.ladderPrefs ? 'manual' : undefined };
   return input;
 }
 
@@ -255,7 +258,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   if (site && input.mode === 'track' && input.ga4PropertyId) await assertGa4ForDomain(input.ga4PropertyId, site.domain);
   if (site && input.mode === 'published' && !urlOnDomain(input.publishedUrl, site.domain))
     throw badRequest(`The published page must be on ${site.domain}`, { publishedUrl: `Must be a page on ${site.domain}` });
-  input = ladderChoice(inputForRole(input, a.role), auto);
+  input = ladderChoice(inputForRole(input, a.role, { planOnly: !!opts.proposalId }), auto);
 
   // a typed keyword that is a planned page of one of the website's ladders is written as that ladder page (linked to the ladder,
   // tracked, marked "writing" so the Content Cadence moves on), exactly like "Write now" on the Pipeline page
@@ -279,7 +282,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   // audit log). An automatic start sends no acknowledgement, so it stops here and its caller turns it into a "Needs you" item. A repeat of a
   // request with the same Idempotency-Key is answered from its run, whatever the warnings say now.
   const replay = opts.idempotency ? await findIdempotentRun(org.id, opts.idempotency.key).catch(() => null) : null;
-  const warnings = replay ? [] : (opts.warnings ?? (await runWarnings(org, site, input)));
+  const warnings = replay ? [] : (opts.warnings ?? (await runWarnings(org, site, input, { proposal: !!opts.proposalId, auto, role: a.role })));
   const overridden = replay ? { ids: [] as string[], codes: [] as string[] } : assertConsistent(warnings, auto ? [] : (opts.acknowledge ?? []));
   const estimated = await estimateCost(input, site);
   // the website's first tracking, kept on every re-save: the anchor of its weekly cycle (the engine accepts it within the last 6 days)

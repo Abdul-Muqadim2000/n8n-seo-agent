@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { checkIntegration } from '../services/consistency';
 import { audit } from '../services/audit';
 import type { FastifyInstance } from 'fastify';
 import {
@@ -214,7 +215,12 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
     const p = req.params as P; const { org, site, role } = await siteAccess(req, p.orgId, p.siteId, 'admin');
     const b = parse(linkSettingsSchema, req.body);
     if (b.mode === 'auto' && role !== 'owner') throw forbidden('Only the owner can let pitches go out without approval.');
-    if (b.mailboxId) { const mb = await db.query.mailboxes.findFirst({ where: and(eq(schema.mailboxes.id, b.mailboxId), eq(schema.mailboxes.orgId, org.id)) }); if (!mb) throw notFound('Mailbox not found'); }
+    if (b.mailboxId) {
+      const mb = await db.query.mailboxes.findFirst({ where: and(eq(schema.mailboxes.id, b.mailboxId), eq(schema.mailboxes.orgId, org.id)) });
+      if (!mb) throw notFound('Mailbox not found');
+      // MKT I2 (2026-10-27): outreach for this website sent from an address of another website
+      if (mb.id !== site.linkSettings?.mailboxId) await checkIntegration(req, { org, site }, { kind: 'mailbox', address: mb.fromEmail });
+    }
     const next = { ...site.linkSettings, ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined)) };
     await db.update(schema.sites).set({ linkSettings: next, updatedAt: new Date() }).where(eq(schema.sites.id, site.id));
     return linkSettingsOf({ ...site, linkSettings: next });

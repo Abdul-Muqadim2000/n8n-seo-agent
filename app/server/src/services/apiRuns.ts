@@ -139,7 +139,7 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
   // credits (app/docs/CREDITS.md): the caller reads the quote, never the provider estimate behind it
   const quoted = quoteCredits(estimate, await settingsRow());
   // MKT (2026-10-27): the forms' duplicate warnings and the market checks (shared consistency.ts), the same list createRunWithMeta enforces
-  const notices = await runWarnings(ctx.org, site, input, { costLabel: estimate > 0 ? formatCredits(quoted) : undefined });
+  const notices = await runWarnings(ctx.org, site, input, { costLabel: estimate > 0 ? formatCredits(quoted) : undefined, role: actor.role });
   const open = unconfirmed(notices, extras.data.acknowledge);
 
   if (extras.data.dryRun) {

@@ -239,7 +239,10 @@ describe('3. a proposal whose ladder run failed', () => {
     const id = (await co.c.get(`${base(co, s.id)}/keyword-proposals`)).body.pending[0].id;
     t.startOk = false;
     t.startStatus = 400;
-    const ap = await co.c.post(`${base(co, s.id)}/keyword-proposals/${id}/approve`);
+    // MKT D1 (2026-10-27): the first click asks (a new ladder, its page now, the quote); the answer starts it
+    const ask = await co.c.post(`${base(co, s.id)}/keyword-proposals/${id}/approve`);
+    expect([ask.status, ask.body.needsAcknowledge]).toEqual([409, ['money.new_ladder:crm consulting']]);
+    const ap = await co.c.post(`${base(co, s.id)}/keyword-proposals/${id}/approve`, { acknowledge: ask.body.needsAcknowledge });
     expect(ap.status).toBe(200);
     expect(ap.body.proposal).toMatchObject({ keyword: 'crm consulting', status: 'failed' });
     expect(ap.body.proposal.note).toMatch(/did not start.*can be proposed again/);
@@ -371,7 +374,7 @@ describe('8. onboarding, source, proposal details', () => {
   it('b: a keyword run keeps where the suggestion came from on the content log; the engine is not sent a field it does not read', async () => {
     const co = await company('ps-src@ps.test', 'Src Co');
     const s = await site(co.org.id, 'src-ps.com');
-    const r = await co.c.post(`/api/orgs/${co.org.id}/runs`, { mode: 'keyword', siteId: s.id, keyword: 'best crm consultants dubai', country: 'United States', source: 'ai_answer', acknowledge: ['market.keyword_place:best crm consultants dubai:US'] });
+    const r = await co.c.post(`/api/orgs/${co.org.id}/runs`, { mode: 'keyword', siteId: s.id, keyword: 'best crm consultants dubai', country: 'United States', source: 'ai_answer', acknowledge: ['market.keyword_place:best crm consultants dubai:US', 'content.not_ready:author_name,author_job_title,author_bio,business_facts'] });
     expect(r.status).toBe(200);
     expect(t.tables.contentLog.find((x) => x.domain === 'src-ps.com')).toMatchObject({ keyword: 'best crm consultants dubai', source: 'ai_answer' });
     expect('source' in t.starts.at(-1)!).toBe(false);

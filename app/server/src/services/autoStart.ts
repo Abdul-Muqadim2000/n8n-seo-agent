@@ -173,6 +173,8 @@ export function proposalDecision(s: ProposalState): ProposalDecision {
 // ---------------- the store ----------------
 
 /** The price of one ladder page in credits, about (the engine's own calibrated figure when known). */
+/** MKT D1: the price of starting a suggested ladder, about (the plan and its first page, written now), the engine's calibrated figure. */
+export const startCredits = (): number => creditsOfUsd(estimateRunCost('ladder', { pagesNow: 1 }, cachedCalibration()));
 export const creditsPerPage = (): number => creditsOfUsd(estimateRunCost('keyword', { receiveContent: true, receiveReport: true }, cachedCalibration()));
 
 export function toProposal(r: KeywordProposalRow, decidedByEmail: string | null = null): KeywordProposalView {
@@ -194,6 +196,7 @@ export function toProposal(r: KeywordProposalRow, decidedByEmail: string | null 
     planType: typeof d.planType === 'string' ? d.planType : null,
     months: typeof d.months === 'string' ? d.months : '',
     creditsPerPage: creditsPerPage(),
+    startCredits: startCredits(),
     runId: r.runId,
     swappedFor: r.swappedFor,
     note: r.note,
@@ -339,7 +342,7 @@ const defaultDeps: ProposalDeps = {
   announce,
 };
 
-const ladderBody = (site: SiteRow, keyword: string, chosenBy: 'client_typed' | 'client_picked' | 'system_announced') =>
+const ladderBody = (site: SiteRow, keyword: string, chosenBy: 'client_typed' | 'client_picked' | 'system_announced', ladderMode?: 'manual') =>
   ladderInput.safeParse({
     mode: 'ladder',
     siteId: site.id,
@@ -354,6 +357,8 @@ const ladderBody = (site: SiteRow, keyword: string, chosenBy: 'client_typed' | '
     pagesNow: 1,
     chosenBy,
     emailCopy: false,
+    // MKT D1 (2026-10-27): "Plan it without writing a page", the safe Accept of the new-ladder confirmation
+    ...(ladderMode ? { ladderMode } : {}),
   });
 
 const levelOfSite = (site: Pick<SiteRow, 'autopilotLevel'>): AutopilotLevel => (site.autopilotLevel === 1 || site.autopilotLevel === 3 ? site.autopilotLevel : DEFAULT_AUTOPILOT_LEVEL);
@@ -548,10 +553,10 @@ export async function approveProposal(
   id: string,
   deps: Pick<ProposalDeps, 'start'> = defaultDeps,
   /** MKT: the warning ids the person answered with "Continue anyway", and the request (audit) */
-  ack: { acknowledge?: string[]; req?: FastifyRequest | null } = {},
+  ack: { acknowledge?: string[]; req?: FastifyRequest | null; /** MKT D1: start it Manual (plan only) */ ladderMode?: 'manual' } = {},
 ): Promise<{ proposal: KeywordProposalView; run: RunRow }> {
   const p = await proposalOf(a.site, id);
-  const parsed = ladderBody(a.site, p.keyword, 'client_picked');
+  const parsed = ladderBody(a.site, p.keyword, 'client_picked', ack.ladderMode);
   if (!parsed.success) throw badRequest("The website's details are incomplete: fill them in its settings first");
   const c = await claim(p.id, a.site.id);
   if (!c) throw conflict('This proposal was decided a moment ago.', 'proposal_decided');
@@ -568,6 +573,19 @@ export async function approveProposal(
     await release(p.id);
     throw err;
   }
+}
+
+/**
+ * MKT D2 (2026-10-27): the suggestion's keyword was added as a page of an existing ladder (the "same product" warning's Accept) instead of
+ * starting a ladder of its own: the waiting suggestion is closed as decided (never proposed again), saying where the keyword went.
+ */
+export async function closeProposalsAdded(siteId: string, keyword: string, _ladderId: string, userId: string): Promise<number> {
+  const done = await db
+    .update(schema.keywordProposals)
+    .set({ status: 'skipped', decidedAt: new Date(), decidedBy: userId, note: "Added as a page of your existing keyword ladder instead of a new ladder." })
+    .where(and(eq(schema.keywordProposals.siteId, siteId), eq(schema.keywordProposals.status, 'pending'), eq(schema.keywordProposals.keywordNorm, cycleNorm(keyword))))
+    .returning({ id: schema.keywordProposals.id });
+  return done.length;
 }
 
 /** Skip: never proposed again for this website; the next one is proposed. */
@@ -590,7 +608,7 @@ export async function swapProposal(
   id: string,
   keyword: string,
   deps: Pick<ProposalDeps, 'start'> & { check?: typeof assessKeyword } = defaultDeps,
-  ack: { acknowledge?: string[]; req?: FastifyRequest | null } = {},
+  ack: { acknowledge?: string[]; req?: FastifyRequest | null; /** MKT D1: start it Manual (plan only) */ ladderMode?: 'manual' } = {},
 ): Promise<{ proposal: KeywordProposalView; run: RunRow }> {
   const p = await proposalOf(a.site, id);
   const k = keyword.trim();
@@ -605,7 +623,7 @@ export async function swapProposal(
       undefined,
       { check },
     );
-  const parsed = ladderBody(a.site, k, 'client_typed');
+  const parsed = ladderBody(a.site, k, 'client_typed', ack.ladderMode);
   if (!parsed.success) throw badRequest("The website's details are incomplete: fill them in its settings first");
   const c = await claim(p.id, a.site.id);
   if (!c) throw conflict('This proposal was decided a moment ago.', 'proposal_decided');
