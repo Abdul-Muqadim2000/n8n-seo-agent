@@ -49,12 +49,20 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <AlertTriangle className="size-5 text-warning-text" aria-hidden /> Check this first
           </span>
         }
-        description="This does not match what we know about your website. Accept the correction, or continue anyway: your choice is recorded."
+        description={warnings ? dialogDescription(warnings) : undefined}
       >
         {warnings && <ConfirmBody warnings={warnings} onDone={close} />}
       </Dialog>
     </>
   );
+}
+
+/** What the dialog says above the warnings: nothing has happened yet; a money warning (a start that spends credits) says so first. */
+export function dialogDescription(warnings: readonly Warning[]): string {
+  const money = warnings.some((w) => w.tone === 'warning' && w.severity === 'money');
+  return money
+    ? 'Nothing has started yet. Read what this would do and what it costs, then accept the safer choice, continue anyway, or cancel. Your choice is recorded.'
+    : 'Nothing has started or changed yet. This does not match what we know about your website: accept the correction, or continue anyway. Your choice is recorded.';
 }
 
 /** The dialog's content: every warning with Accept / Continue anyway, then Cancel / Continue. Exported for tests. */
@@ -86,6 +94,8 @@ export function ConfirmBody({ warnings, onDone }: { warnings: Warning[]; onDone:
     setBusy(w.id);
     try {
       await api(c.path, { method: c.method, body: c.body ?? {}, noConfirm: true });
+      // MKT D2: this correction replaces the request (the keyword joins the existing ladder): the request is not sent at all
+      if (c.instead) return onDone({ instead: `Done: ${w.accept!.label.replace(/ instead$/, '')}. Nothing new was started.` });
       setAccepted((a) => [...a, w.id]);
     } catch (e) {
       setError(errorMessage(e));
@@ -106,7 +116,8 @@ export function ConfirmBody({ warnings, onDone }: { warnings: Warning[]; onDone:
       />
       {error && <p className="text-sm text-critical-text">{error}</p>}
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button variant="ghost" onClick={() => onDone(null)}>
+        {/* the safe default (D1): nothing starts or changes unless the person chooses to; Cancel has the focus */}
+        <Button variant="ghost" autoFocus onClick={() => onDone(null)}>
           Cancel
         </Button>
         <Button disabled={open.length > 0 || !!busy} onClick={() => onDone({ acknowledge: acked.filter((id) => !accepted.includes(id)), set })}>

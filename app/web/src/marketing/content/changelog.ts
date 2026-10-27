@@ -48,6 +48,7 @@ export const changelog: ChangelogEntry[] = [
       'Next and previous through the whole course, and the rest of the series beside every tutorial',
       'When you tell us a page is published, we now check that the live page is the page we wrote before marking it: a wrong address or an update not yet live gets a warning showing what we found, and you can send the right address or confirm it is the right page',
       'Your market, checked before you start: a keyword about another country, a run for a market your website does not target, or weekly checks still measuring an old country are flagged in plain words, and you choose to accept the correction or continue anyway (your choice is recorded)',
+      'Starting a suggested keyword now asks first: you see that it adds a new keyword ladder, writes its first page now, what that costs in credits and which of your ladders it overlaps, and you can plan it without a page, add the keyword to a ladder you already have, or cancel. The same check catches a page your website already has, a keyword watched twice, weekly pages that would write nothing, settings your credits cannot pay for, and a publishing or outreach connection of another website',
     ],
     features: ['guided-setup', 'content'],
     labels: ['Learning'],

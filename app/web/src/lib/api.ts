@@ -31,14 +31,20 @@ export function setStepUpHandler(h: StepUpHandler | null) {
  * (the correction: fields merged into the request, or a call made first) or Continue anyway (its id joins `acknowledge`); the request is
  * then sent again. Cancel, or no handler, and the 409 reaches the caller as usual.
  */
-export type ConfirmAnswer = { acknowledge: string[]; set: Record<string, unknown> } | null;
+export type ConfirmAnswer =
+  | { acknowledge: string[]; set: Record<string, unknown> }
+  /** an Accept that replaced the request (e.g. the keyword was added to an existing ladder instead of starting a new one): what was done */
+  | { instead: string }
+  | null;
+/** The error a caller gets when an Accept in the dialog replaced its request: nothing it asked for was sent, the correction was made. */
+export const DONE_INSTEAD = 'done_instead';
 type ConfirmHandler = (warnings: Warning[], needsAcknowledge: string[]) => Promise<ConfirmAnswer>;
 let confirmHandler: ConfirmHandler | null = null;
 export function setConfirmHandler(h: ConfirmHandler | null) {
   confirmHandler = h;
 }
 /** The request again with the person's answers: the accepted fields and every acknowledged id (earlier ones kept). */
-export function resendBody(body: unknown, answer: NonNullable<ConfirmAnswer>): Record<string, unknown> {
+export function resendBody(body: unknown, answer: { acknowledge: string[]; set: Record<string, unknown> }): Record<string, unknown> {
   const b = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
   const before = Array.isArray(b.acknowledge) ? (b.acknowledge as unknown[]).map(String) : [];
   return { ...b, ...answer.set, acknowledge: [...new Set([...before, ...answer.acknowledge])] };
@@ -99,6 +105,7 @@ export async function api<T>(
     if (res.status === 409 && e.code === 'confirm_needed' && confirmHandler && !opts.noConfirm && method !== 'GET' && bodyOk && (opts.confirmDepth ?? 0) < 3) {
       const warnings = (Array.isArray(e.warnings) ? e.warnings : Array.isArray(e.notices) ? e.notices : []) as Warning[];
       const answer = await confirmHandler(warnings, Array.isArray(e.needsAcknowledge) ? (e.needsAcknowledge as string[]) : []);
+      if (answer && 'instead' in answer) throw new ApiRequestError(409, answer.instead, {}, DONE_INSTEAD, { instead: true });
       if (answer) return api<T>(path, { ...opts, body: resendBody(opts.body, answer), confirmDepth: (opts.confirmDepth ?? 0) + 1 });
     }
     throw new ApiRequestError(res.status, errorText(e.error, res.status), e.fields ?? {}, e.code, e);
