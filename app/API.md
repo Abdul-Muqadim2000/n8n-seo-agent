@@ -173,6 +173,42 @@ up to 30 × 2-80 characters), `cycleWeekday` (0 Sunday - 6, `null` = the weekday
 | POST | /api/orgs/:orgId/sites/:siteId/verify | `verifySiteSchema` (admin) | `VerifyResult`; 409 `engine_id_taken` (as above; a unique index on verified websites settles two verifications at the same moment) |
 | GET | /api/orgs/:orgId/sites/:siteId/google | | `GoogleConnection` |
 | POST | /api/orgs/:orgId/sites/:siteId/admin | `adminActionSchema` (admin, verified site) | `AdminResult` |
+| GET | /api/orgs/:orgId/sites/:siteId/consistency | (viewer) | `{ warnings: Warning[], acknowledged: Warning[] }`: the website's standing warnings (see "Warnings" below) |
+| POST | /api/orgs/:orgId/sites/:siteId/consistency/acknowledge | `{ acknowledge: string[] }` (admin) | `{ acknowledged }`: "Continue anyway" on standing warnings, stored on the website (`sites.acknowledged_warnings`), audit `warning.overridden`; 400 when no id is an open warning |
+| POST | /api/orgs/:orgId/sites/:siteId/market/sync | (admin, verified; 10 / 10 min) | `{ ok, country }`: the engine measures the website in its main country (Site Admin `market`: `seo_sites` country / location_code / language_code; rank history and past rows stay). 409 `not_tracked` before the first tracking. Audit `site.market_synced` |
+| POST | /api/orgs/:orgId/sites/:siteId/ladders/:ladderId/market | (admin, verified; 20 / 10 min) | `{ ok, country }`: the ladder's rows move to the website's main country (history stays). Audit `site.ladder_market_moved` |
+
+**Warnings: Accept or Continue anyway (MKT 2026-10-27, `n8n/seo-agent/docs/mismatch-audit-2026-10-27/AUDIT.md` §2, `shared/src/consistency.ts`).**
+One registry of checks (`CONSISTENCY_CHECKS`) produces `Warning { id, code, severity: money|market|data|cosmetic, tone, title, body,
+message, short, confirm?, accept?: { label, change } }`; `change` is `{ kind: 'fields', set }` (resend the request with these fields),
+`{ kind: 'call', method, path, body? }` (make this call, then resend) or `{ kind: 'link', tool?, sitePage? }` (the page where the person
+corrects it). A write that raises a warning with a `confirm` answers **409 `confirm_needed`** `{ notices, warnings (the same list),
+needsAcknowledge }` until each id is either corrected or sent back in `acknowledge` (any body; never a form field). Acknowledged ids are
+stored on the run (`input.acknowledged`) or the website, with an audit row `warning.overridden` (codes, ids, values). Where it runs:
+every run start (`createRunWithMeta`: the app's `POST /api/orgs/:orgId/runs`, `/api/v1/runs`, MCP `start_run`, proposal approve / swap,
+onboarding), `POST .../keywords/assess` (before the paid check), `POST /api/orgs/:orgId/sites` and the site `PATCH` (the description's
+markets), `POST .../admin` `ai_prompts` `add` (questions about another market). An automatic start (a level-3 announcement, a research
+refresh) never continues past one: the proposal waits for the client with the warning's title as its note. Codes today:
+`market.run_country` (M1), `market.engine_drift` / `market.country_change` (M2), `market.ladder_country` (M3), `market.keyword_place` /
+`market.keyword_unsupported` (M4), `market.business_text` / `market.domain_ending` / `market.timezone` (M5), `market.research_country`
+(M6), `ai.question_place` (M7), `lang.script` (M8) and `pipeline.*` (the forms' duplicate warnings, ids unchanged). A site `PATCH` that
+changes the main country of a tracked website moves the engine at once (Site Admin `market`).
+
+The remaining cases (2026-10-27, `shared/src/consistency-more.ts`, same registry, same 409). Runs: `money.new_ladder` (D1: proposal approve
+and swap always ask first, with the quote, the ladders it joins and the one it overlaps; Accept sends `ladderMode: "manual"`, which the
+approve / swap routes take, members included; never asked of a level-3 automatic start), `money.same_family` (D2: both ladders about ERP,
+e-invoicing, CRM or VAT; Accept is a `call` with `instead: true` to `POST .../ladders/:ladderId/keywords`: the call replaces the request,
+which is not sent again, and closes the waiting suggestion), `money.page_exists` (D3: a live page of the website already answers the keyword),
+`data.page_owned` (D5), `money.watch_dup` (D7, `track`), `pipeline.manual_pages_now` (S6), `content.not_ready` (S8), `data.run_business`
+(B1, information), `market.profile_address` (M5, information, `profile`). `POST .../ladders/:ladderId/keywords` (D4): `money.ladder_add_overlap`,
+`money.ladder_add_fit`, `money.page_exists`, M4, M8. Settings (`acknowledge` in the body): `POST .../admin` `cadence`
+(`pipeline.ladders_stop` S7, `pipeline.writes_nothing` S1, `pipeline.over_pileup` S2, `money.credits_runway` C1) and `monitors`
+(`ai.extra_market_same` M7, C1), `PATCH .../automation` (`pipeline.limit_below_active` S3, `pipeline.level3_manual` /
+`pipeline.level_drop_system` S4, C1 on a level change), `PATCH .../ladders/:ladderId` (`pipeline.ladder_queued` S5). C1 fires when credits
+are enforced and the change leaves under 14 days of credits. Integrations: CMS connection create / `publicUrlTemplate` update
+(`data.cms_domain` I1), link-building settings with a new `mailboxId` (`data.mailbox_domain` I2), `POST .../backlinks/import`
+(`data.import_other_site` I3), `POST /api/orgs/:orgId/sites` (`data.domain_redirects` I7: one request to `https://<domain>/`, redirects
+followed, 5 s; an unreachable address is not judged).
 
 **The AI question panel (G6, 2026-10-18; `n8n/seo-agent/AI_VISIBILITY_SPEC.md` §10).** `action: "ai_prompts"` manages up to 500 questions:
 `add` (≤ 500: a question as text, or `{ prompt, persona, cluster, stage: awareness|consideration|decision, market: "SA-en", pinned }` —
@@ -307,7 +343,7 @@ Pitches go out from the company's own mailbox, after a person approves them (or 
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET | /api/orgs/:orgId/sites/:siteId/keywords/recommended | (everyone) | `RecommendedKeywords`: the keywords of the website's latest `keyword_strategy` report (`start_with`, `priority`, `quick_wins`, Now / Next topics of `content_plan`), one per search, best first (easy, reachable, not rated, hard, very hard, not realistic; then the research's order; those a ladder covers last), each with `difficultyForYou`, `planType`, `months`, `label`, `why`, `overlaps` (ladders that cover the search); `stale` after 90 days; `reportId: null` when there is none. Free |
-| POST | /api/orgs/:orgId/sites/:siteId/keywords/assess | `keywordAssessSchema`: `{ keyword (2-100), country? }` (member) | `KeywordCheck` (`result`: `KeywordAssessment` — volume, kd, position, reach, `difficultyForYou`, `planType` incl. `none`, `months`, `fit` 0/1/2/null, `navigational`, `alternatives`, `label`; `cached`, `costUsd`) |
+| POST | /api/orgs/:orgId/sites/:siteId/keywords/assess | `keywordAssessSchema`: `{ keyword (2-100), country? }` + `acknowledge?` (member; 409 `confirm_needed` for a keyword of another market, another country or another script, before the paid check) | `KeywordCheck` (`result`: `KeywordAssessment` — volume, kd, position, reach, `difficultyForYou`, `planType` incl. `none`, `months`, `fit` 0/1/2/null, `navigational`, `alternatives`, `label`; `cached`, `costUsd`) |
 
 The keyword check calls n8n's Keyword Check (`POST {N8N_BASE_URL}/webhook/seo-keyword-assess`, `X-API-Key`, `X-Forwarded-For: app:<company>`,
 45 s timeout; body `{ keyword, country (default: the website's), domain, business (the website's, when set), services (its case
@@ -708,7 +744,7 @@ the company lock, before the budget, so two concurrent repeats cannot both start
 | 402 / 429 | `credits` / `budget` / `platform_capacity` / `rate_limited` | |
 | 403 | `scope_missing`, `key_owner_gone`, `website_unverified` (`forbidden`) | |
 | 404 | the website is not this company's | |
-| 409 | `confirm_needed` | `{ notices: PipelineNotice[], needsAcknowledge: string[] }` |
+| 409 | `confirm_needed` | `{ notices: Warning[], warnings: Warning[], needsAcknowledge: string[] }` (the duplicate warnings and the market checks, "Warnings" above) |
 | 422 | `idempotency_mismatch` | |
 
 The run row exists even when the engine refuses at the door (status `failed` with the engine's sentence), exactly as in the app; poll

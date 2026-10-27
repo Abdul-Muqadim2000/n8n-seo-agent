@@ -3,6 +3,7 @@ import { keywordAssessSchema, type KeywordCheck, type RecommendedKeywords } from
 import { requireVerified, siteAccess } from '../auth/access';
 import { parse } from '../lib/errors';
 import { assessKeyword } from '../services/keywordChecks';
+import { takeAcknowledge } from '../services/consistency';
 import { recommendedWithStatus } from '../services/research';
 
 type P = { orgId: string; siteId: string };
@@ -17,8 +18,10 @@ export async function keywordRoutes(app: FastifyInstance) {
     const p = req.params as P;
     const a = await siteAccess(req, p.orgId, p.siteId, 'member');
     requireVerified(a.site);
-    const body = parse(keywordAssessSchema, req.body);
-    return assessKeyword(a, body);
+    // MKT (2026-10-27): the warning ids answered with "Continue anyway" travel beside the keyword
+    const { acknowledge, rest } = takeAcknowledge(req.body);
+    const body = parse(keywordAssessSchema, rest);
+    return assessKeyword(a, body, { acknowledge, req });
   });
 
   app.get('/api/orgs/:orgId/sites/:siteId/keywords/recommended', async (req): Promise<RecommendedKeywords> => {

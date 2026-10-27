@@ -1,3 +1,5 @@
+import { checkWrite, consistencySite, recordOverride, siteApiOf } from './consistency';
+import type { FastifyRequest } from 'fastify';
 import { createHash } from 'node:crypto';
 import {
   COUNTRY_NAMES,
@@ -159,7 +161,11 @@ async function siteServices(domain: string): Promise<string[]> {
  * POST .../keywords/assess: the stored answer of the last few hours, same rules and context (free), else one paid check. `automatic`: the system asked for it (the
  * queued-ladder re-check), on the owner's behalf: it is the website's autopilot spend, never the person's on-demand spend (costSync).
  */
-export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>, input: KeywordAssessInput, opts: { automatic?: boolean } = {}): Promise<KeywordCheck> {
+export async function assessKeyword(
+  a: Pick<SiteAccess, 'org' | 'site' | 'user'>,
+  input: KeywordAssessInput,
+  opts: { automatic?: boolean; /** MKT: warning ids answered with "Continue anyway" */ acknowledge?: string[]; req?: FastifyRequest | null } = {},
+): Promise<KeywordCheck> {
   const { org, site, user } = a;
   requireVerified(site);
   if (org.disabled) throw forbidden('This company is disabled. Contact the platform administrator.');
@@ -167,6 +173,14 @@ export async function assessKeyword(a: Pick<SiteAccess, 'org' | 'site' | 'user'>
   const country = input.country ?? ((COUNTRY_NAMES as readonly string[]).includes(site.country) ? site.country : '');
   if (!country) throw badRequest('Choose the country to check it in', { country: 'Choose a country' });
   const keyword = input.keyword;
+  // MKT (2026-10-27, mismatch audit M1 / M4 / M8): a keyword of another market, a check in another country, a keyword in another script
+  // are said BEFORE the paid check (free, deterministic); the person accepts the correction or continues anyway. The system's own
+  // re-check of a queued ladder (automatic) checks a keyword already chosen, so it is not asked again.
+  if (!opts.automatic) {
+    const { ids, codes } = checkWrite('keyword_check', { keyword, country }, { site: consistencySite(site), siteApi: siteApiOf(site) }, opts.acknowledge ?? []);
+    if (ids.length)
+      await recordOverride(opts.req ?? null, org.id, { codes, ids, target: { type: 'site', id: site.id, label: site.domain }, what: 'keyword_check', actor: { type: 'user', userId: user.id, label: user.email }, values: { keyword, country } });
+  }
 
   // what the website sells: the client's own words ("What do you sell?") first, then its case studies; read before the stored answer is
   // considered, because a stored answer counts only for the same context (KW-APP D6)

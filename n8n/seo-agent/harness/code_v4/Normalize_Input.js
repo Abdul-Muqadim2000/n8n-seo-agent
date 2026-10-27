@@ -213,6 +213,9 @@ const track_keywords = asArray(pick(p2, 'terms to track') || p2.keywords || p2.t
 const ga4_property_id = String(pick(p2, 'ga4') || '').replace(/^properties\//, '').replace(/[^0-9]/g, '').slice(0, 16);
 const published_url = String(pick(p2, 'published', 'url') || p2.published_url || p2.url || '').trim();
 const content_request_id = String(p2.content_request_id || '').trim();
+const confirm_mismatch = p2.confirm_mismatch === true || String(p2.confirm_mismatch || '').toLowerCase() === 'true';
+const draft_title = String(p2.draft_title || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+const draft_h1 = String(p2.draft_h1 || '').replace(/\s+/g, ' ').trim().slice(0, 300);
 const blogs_per_week = Math.min(3, Math.max(0, parseInt(String(pick(p2, 'posts per week') || p2.blogs_per_week || '0'), 10) || 0));
 const yes = (v) => /^(y|true|1)/i.test(String(v == null ? '' : v).trim());
 const checkin_manual_action = yes(pick(p2, 'manual action') || p2.manual_action);
@@ -278,6 +281,8 @@ if (MI.ai_markets !== undefined) monitor_input.ai_markets = asArray(MI.ai_market
 if (MI.ai_pulse_mode !== undefined) monitor_input.ai_pulse_mode = ['sample', 'full'].includes(String(MI.ai_pulse_mode).toLowerCase()) ? String(MI.ai_pulse_mode).toLowerCase() : '';
 if (MI.ai_pulse_per_week !== undefined) monitor_input.ai_pulse_per_week = parseInt(MI.ai_pulse_per_week, 10) >= 1 ? Math.min(6, parseInt(MI.ai_pulse_per_week, 10)) : '';
 if (MI.ai_pages_month !== undefined) monitor_input.ai_pages_month = Math.min(8, Math.max(0, parseInt(MI.ai_pages_month, 10) || 0));   // v4.12: AI answer / refresh pages a month
+if (MI.ai_pulse_scope !== undefined) monitor_input.ai_pulse_scope = ['focus', 'all'].includes(String(MI.ai_pulse_scope).toLowerCase()) ? String(MI.ai_pulse_scope).toLowerCase() : '';   // AI-FOCUS (2026-10-27): what the daily pulse asks
+if (MI.ai_focus_mode !== undefined) monitor_input.ai_focus_mode = String(MI.ai_focus_mode).toLowerCase() === 'off' ? 'off' : '';   // AI-FOCUS: 'off' = the panel never moves by itself
 if (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));
 if (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');
 // W2-FIX (2026-10-23, section 149): the owner's W2-E3 AI options reach "Track my site" too (only Site Admin `monitors` could set them before)
@@ -425,6 +430,9 @@ return [{
     case_id,
     local_area,
     video,
+    confirm_mismatch,
+    draft_title,
+    draft_h1,
     pipeline_source: String(p2.pipeline_source || ''),
     chosen_by: KF_CHOSEN,
     ladder_mode: KF_LADDER_MODE,

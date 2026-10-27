@@ -321,7 +321,7 @@ module.exports = async (ctx) => {
       Q('Which ERP rollout risks should a CFO plan for in the first year?', 'erp rollout risks', { kind: 'problem', stage: 'awareness', cluster: 'erp implementation', origin: 'paa' }) ] } } }]);
     const rows = (await run('Prompt Rows', [{ json: {} }])).map(i => i.json).filter(r => !r.skip);
     const fresh = rows.filter(r => !plan.prompts.some(q => q.prompt_id === r.prompt_id));
-    const PRC = ['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at', 'persona', 'market', 'pinned', 'fit_note', 'keyword_source'];   // F2 (E9): + keyword_source
+    const PRC = ['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at', 'persona', 'market', 'pinned', 'fit_note', 'keyword_source', 'focus_topic', 'focus_source', 'focus_state', 'focus_seen_at', 'retired_at', 'retire_reason'];   // F2 (E9): + keyword_source; AI-FOCUS (2026-10-27): + the six focus columns
     check('every row has exactly the table\'s columns (the save node maps every field it is given)', rows.every(r => Object.keys(r).length === PRC.length && PRC.every(c => c in r)), JSON.stringify(rows.map(r => Object.keys(r).filter(k => !PRC.includes(k)))));
     check('the repeat in other words is dropped (one of the two "shortlist" questions is stored)', fresh.filter(r => /shortlist/.test(r.prompt)).length === 1, JSON.stringify(fresh.map(r => r.prompt.slice(0, 40))));
     const ref = fresh.filter(r => r.status === 'refused');
@@ -363,7 +363,7 @@ module.exports = async (ctx) => {
     check('new wording is a NEW question (new id, active) and the old one is switched off — no trend compares two questions', by('p_reword').status === 'off' && reworded && reworded.prompt_id !== 'p_reword' && reworded.status === 'active' && reworded.cluster === 'e-invoicing', JSON.stringify([by('p_reword').status, reworded && reworded.prompt_id]));
     check('switch off; switch on a refused question — it becomes the owner\'s own and says so', by('p_off').status === 'off' && by('p_refused').status === 'active' && by('p_refused').source === 'custom' && /switched on by the owner/.test(by('p_refused').fit_note), JSON.stringify([by('p_off').status, by('p_refused')]));
     check('unpin', by('p_pinned').pinned === false, JSON.stringify(by('p_pinned')));
-    check('every row: exact seo_ai_prompts columns', rows.every(r => Object.keys(r).length === 20), JSON.stringify(Object.keys(rows[0])));
+    check('every row: exact seo_ai_prompts columns', rows.every(r => Object.keys(r).length === 26),   /* AI-FOCUS (2026-10-27): + the six focus columns */ JSON.stringify(Object.keys(rows[0])));
     // the weekly plan puts a pinned question first
     loadWeekly({ monitors: { ai_prompts_max: 5 }, prompts: [...W['Load AI Prompts'].slice(0, 6), { ...W['Load AI Prompts'][6], pinned: true }] });
     const p = (await run('AI Plan', [{ json: {} }]))[0].json;

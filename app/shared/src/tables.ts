@@ -62,6 +62,8 @@ export interface ContentLogRow extends DtRow {
   ladder_id: string; request_id: string; started_at: string; status: string; published_url: string; published_at: string; week: string;
   /** R111 (2026-10-16): for status `not_ready` (the last quality round failed), the QA reasons, '; '-joined */
   qa_reasons?: string;
+  /** 2026-10-27: why the page was marked published although the live page did not match the draft (the owner confirmed it); '' otherwise */
+  publish_note?: string;
 }
 export interface TrendRow extends DtRow {
   site_id: string; domain: string; keyword: string; checked_at: string; period_end: string; direction: string; change_pct: number;
@@ -116,6 +118,8 @@ export interface MonitorsRow extends DtRow {
   link_builder: boolean | null;
   /** G6 (2026-10-18): buyer roles and extra markets (CC-lang) the panel covers; the pulse's sampling ('' auto | sample | full) and mornings a week (empty = auto) */
   ai_personas?: string; ai_markets?: string; ai_pulse_mode?: string; ai_pulse_per_week?: number | null;
+  /** AI-FOCUS (2026-10-27): what the daily pulse asks (focus | all | '' = all) and whether the questions follow the focus ('off' | '') */
+  ai_pulse_scope?: string; ai_focus_mode?: string;
   /** W2 (WAVE2_CONTRACTS.md §4; absent before the engine adds them): weekly Claude, pulse engines, persona context, fan-out check N, share-of-voice set, owner alert rules (JSON) */
   ai_claude_weekly?: boolean | null; ai_pulse_engines?: string; ai_persona_context?: boolean | null; ai_fanout_check?: number | null; ai_sov_set?: string; ai_alert_rules_json?: string;
   /** W2-E3: the monthly market trend (empty = off) */
@@ -130,6 +134,8 @@ export interface AiPromptRow extends DtRow {
   persona?: string; market?: string; pinned?: boolean | null; fit_note?: string;
   /** W2 §3: the run that last asked it, when, how often in 28 days, the run whose gate refused it; F2: where the keyword came from */
   last_asked_run?: string; last_asked_at?: string; asked_n_28d?: number | null; refused_at_run?: string; keyword_source?: string;
+  /** AI-FOCUS (2026-10-27): the focus topic it measures, where it came from, its state, when last in focus; when and why it was retired */
+  focus_topic?: string; focus_source?: string; focus_state?: string; focus_seen_at?: string; retired_at?: string; retire_reason?: string;
 }
 /**
  * R-A7 (review 2026-10-23): the `origin` of a question the owner deleted. Its row stays as a tombstone with status `off`, so the engine

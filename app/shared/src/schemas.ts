@@ -137,6 +137,11 @@ export const monitorSettingsSchema = z.object({
   aiAlertRules: aiAlertRulesSchema.optional(),
   /** W2-E3: the monthly market trend from the AI-answer database (3 tasks on the month's full run, about $0.33 a month; ChatGPT data is US-English only) */
   aiDemandMarket: z.boolean().optional(),
+  /** AI-FOCUS (2026-10-27): what the daily pulse asks: 'focus' (the questions about the keywords you work on, and the pinned ones) or 'all' (the
+   * whole panel). Optional with no default: a body that does not set it changes nothing (a new website starts at 'focus' in the engine) */
+  aiPulseScope: z.enum(['focus', 'all']).optional(),
+  /** AI-FOCUS: 'auto' = the questions follow your keyword ladders, pages and services; 'off' = they never change by themselves */
+  aiFocusMode: z.enum(['auto', 'off']).optional(),
 });
 export type MonitorSettings = z.output<typeof monitorSettingsSchema>;
 
@@ -337,6 +342,9 @@ export const publishedInput = z.object({
     .max(120)
     .regex(/^[A-Za-z0-9:_.-]*$/, 'Not a valid draft id')
     .default(''),
+  /** 2026-10-27: the owner read the check's warning (the live page did not match the draft) and says it is the right page: the engine then
+   *  records it published, not verified, with the reason kept. Never accepted for an address that is another keyword's published page. */
+  confirmMismatch: z.boolean().default(false),
   emailCopy: z.boolean().default(false),
 });
 
@@ -582,6 +590,9 @@ export const adminActionSchema = z.discriminatedUnion('action', [
     pin: z.array(z.string().trim().min(1).max(300)).max(AI_PROMPTS_MAX).default([]),
     unpin: z.array(z.string().trim().min(1).max(300)).max(AI_PROMPTS_MAX).default([]),
     edit: z.array(aiQuestionEditSchema).max(AI_PROMPTS_MAX).default([]),
+    /** AI-FOCUS (2026-10-27): start asking questions the engine proposed, and retire questions (kept with their history, never asked) */
+    accept: z.array(z.string().trim().min(1).max(300)).max(AI_PROMPTS_MAX).default([]),
+    retire: z.array(z.string().trim().min(1).max(300)).max(AI_PROMPTS_MAX).default([]),
   }),
 ]);
 export type AdminAction = z.output<typeof adminActionSchema>;

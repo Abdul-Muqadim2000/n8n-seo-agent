@@ -416,7 +416,7 @@ export default function HowItWorksPage() {
   useSeo({
     title: 'How it works',
     description:
-      'How Alaventra runs your SEO: connect your site, choose the keywords you want, climb with ladders and the content engine, publish and verify, then track and learn every week from the day you sign up, with three autopilot levels and the plan shown two days ahead.',
+      'How Alaventra runs your SEO, AEO and GEO: connect your site, choose the keywords you want, climb with ladders and the content engine, publish and verify, then track and learn every week from the day you sign up, with three autopilot levels and the plan shown two days ahead.',
     path: '/how-it-works',
   });
   return (

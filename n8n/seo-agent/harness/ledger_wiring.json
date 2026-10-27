@@ -509,11 +509,13 @@
       "country",
       "domain",
       "existing",
+      "focus_topics",
       "has_brand_prompt",
       "language",
       "market_questions",
       "paa_questions",
       "persona",
+      "place_rule",
       "search_questions",
       "shopping",
       "shopping_why",
@@ -528,7 +530,7 @@
      "node": "Prompt Writer",
      "ref": "$('Any Prompt Jobs?').item.json",
      "streaming": false,
-     "template_chars": 4894
+     "template_chars": 5304
     },
     {
      "after": [

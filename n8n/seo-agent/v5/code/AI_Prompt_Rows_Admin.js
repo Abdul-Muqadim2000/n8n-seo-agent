@@ -17,7 +17,9 @@ const mkt = (x) => { const mm = String(x || '').trim().replace(/[_\s]+/g, '-').m
 const vol = (v) => v === undefined || v === '' || v == null ? null : v;
 const pinOf = (v) => v === true || String(v) === 'true';
 const COLS = (r) => ({ prompt_id: r.prompt_id, site_id: r.site_id, domain: r.domain || a.domain || '', prompt: r.prompt, kind: r.kind || 'custom', topic: r.topic || '', keyword: r.keyword || '', source: r.source || 'custom', status: r.status || 'active', created_at: r.created_at || a.updated_at,
-  stage: r.stage || '', cluster: r.cluster || '', volume: vol(r.volume), origin: r.origin || '', updated_at: a.updated_at, persona: String(r.persona || ''), market: String(r.market || ''), pinned: pinOf(r.pinned), fit_note: String(r.fit_note || ''), keyword_source: AIP.KEYWORD_SOURCES.includes(r.keyword_source) ? r.keyword_source : '' });
+  stage: r.stage || '', cluster: r.cluster || '', volume: vol(r.volume), origin: r.origin || '', updated_at: a.updated_at, persona: String(r.persona || ''), market: String(r.market || ''), pinned: pinOf(r.pinned), fit_note: String(r.fit_note || ''), keyword_source: AIP.KEYWORD_SOURCES.includes(r.keyword_source) ? r.keyword_source : '',
+  // AI-FOCUS (2026-10-27): the focus fields as stored (a change by the owner keeps them), and a retirement's date and reason
+  focus_topic: String(r.focus_topic || ''), focus_source: String(r.focus_source || ''), focus_state: String(r.focus_state || ''), focus_seen_at: String(r.focus_seen_at || ''), retired_at: String(r.retired_at || ''), retire_reason: String(r.retire_reason || '') });
 const out = new Map();   // one row per prompt id (the last change wins)
 // a stored row that IS this question keeps its id (a legacy p_ id included); only a question new to the site gets AIP.promptId
 const idFor = (prompt) => { const old = AIP.findStored(rows, a.site_id, prompt) || [...out.values()].find(r => norm(r.prompt) === norm(prompt)); return old ? old.prompt_id : AIP.promptId(a.site_id, prompt); };
@@ -43,5 +45,8 @@ for (const x of (a.off_prompts || [])) for (const r of find(x)) put({ ...cur(r),
 for (const x of (a.on_prompts || [])) for (const r of find(x)) { const c = cur(r); const was = String(c.status) === 'refused';
   put({ ...c, status: 'active', source: was ? 'custom' : c.source, fit_note: was ? 'switched on by the owner over the keyword rule: ' + String(c.fit_note || '') : c.fit_note }); }
 for (const x of (a.pin_prompts || [])) for (const r of find(x)) put({ ...cur(r), pinned: true });
+// AI-FOCUS: Accept = a proposed question starts being asked (it stays the engine's: its topic and source are kept); Retire = kept with its history, never asked
+for (const x of (a.accept_prompts || [])) for (const r of find(x)) { const c = cur(r); if (['proposed', 'off', 'retired'].includes(String(c.status))) put({ ...c, status: 'active', retired_at: '', retire_reason: '' }); }
+for (const x of (a.retire_prompts || [])) for (const r of find(x)) put({ ...cur(r), status: 'retired', retired_at: a.updated_at, retire_reason: 'retired by you', focus_state: 'out' });
 for (const x of (a.unpin_prompts || [])) for (const r of find(x)) put({ ...cur(r), pinned: false });
 return out.size ? [...out.values()].map(r => ({ json: r })) : [{ json: { skip: true } }];

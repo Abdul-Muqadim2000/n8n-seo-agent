@@ -59,7 +59,9 @@ const winnableFor = (diff, kd) => R ? (diff === 'easy' || diff === 'reachable') 
 // other companies (seo_cache ai_brands:, when the cache was read), and the seeds / services as protected words
 let cacheRows = []; try { cacheRows = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRows = []; }
 const fitCtx = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: ((base.research || {}).competitor_domains || []).filter(d => !(base.competitors || []).includes(d)),
-  brands: fitLearnedBrands(cacheRows), protect: [...(base.seeds || []), ...(base.services || []), String(base.business || '').slice(0, 400)] };
+  brands: fitLearnedBrands(cacheRows), protect: [...(base.seeds || []), ...(base.services || []), String(base.business || '').slice(0, 400)],
+  // MKT (2026-10-27, AUDIT M4): suggestions are for the website's own market; a keyword that names only other places is refused with its reason
+  market: (() => { try { return String($('Normalize Input').first().json.country_iso || base.country_iso || ''); } catch (e) { return String(base.country_iso || ''); } })() };
 // 2026-10-12 (FIX_PLAN D11): a keyword a live page of the site already answers is labelled `covered_by` (page inventory seo_pages +
 // this run's sitemap, SM.matchPage) instead of being recommended as a new page — writing a second page for the same search splits the
 // signals. The keyword stays in the list, so the owner can see it and refresh the page that exists.

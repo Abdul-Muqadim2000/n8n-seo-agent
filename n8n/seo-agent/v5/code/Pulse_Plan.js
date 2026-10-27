@@ -26,6 +26,7 @@
 /*__COUNTRIES__*/
 /*__FIT_GATE__*/
 /*__AI_PANEL__*/
+/*__AI_FOCUS__*/
 /*__AI_ENTITIES__*/
 const CONFIG = { pulse_engines: ['chatgpt', 'gemini', 'ai_mode', 'copilot'],   // v4.12: + Copilot ($0.002) when the site chose it
   max_sites_per_run: 15, baseline_days: 7, max_parts: 200 };
@@ -62,7 +63,12 @@ for (const s of todo) {
   const localToday = ST.dayKey(now, tz);
   if (scheduledMorning && ST.weekdayOfDate(localToday) === cw) { cycleDay.push({ domain: s.domain, weekday: cw, tz, has_cycle: cw0 != null,
     why: 'today (' + ST.dayName(cw) + ', ' + localToday + ' in ' + tz + ') is ' + (cw0 != null ? 'its weekly cycle day' : 'Monday, the weekly day of a website with no cycle yet') + ': its weekly AI visibility run asks the same engines' }); continue; }
-  const storedQ = promptRows.filter(p => p.site_id === s.site_id && !['off', 'refused'].includes(String(p.status || 'active')) && p.prompt && p.kind !== 'brand');   // G6: a refused question is stored, never asked
+  // AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27 §4.7): a retired question and one waiting for the owner are not asked either; with the pulse
+  // scope 'focus' the morning asks only the questions of the ladders and pages the client works on (focus_state 'active', stamped by the weekly run)
+  // and the pinned ones - the services core and a watched keyword are measured by the weekly run. 'all' asks the whole panel as before.
+  const scope = AIF.scopeOf(s.settings.pulse_scope);
+  const panelAll = promptRows.filter(p => p.site_id === s.site_id && !['off', 'refused', 'retired', 'proposed'].includes(String(p.status || 'active')) && p.prompt && p.kind !== 'brand');
+  const storedQ = panelAll.filter(p => AIF.pulseKeeps(p, scope));   // G6: a refused question is stored, never asked
   // B-G1: the same gate the weekly AI Plan runs, over the same stored rows, with the same context — three read paths, one rule.
   const prevQ = visRows.filter(v => v.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
   const rivals0 = prevQ ? (parse(prevQ.competitors_json, []) || []).filter(c => c && c.domain && c.auto && (c.mentions || 0) >= 2 && /\./.test(c.domain)).map(c => c.domain) : [];
@@ -95,10 +101,10 @@ for (const s of todo) {
   const pw = AIP.pulsePerWeek({ asked: panel.length, weekly_engines: weeklyEngines, pulse_engines: engines.length, cluster_size: medianCluster, mode: s.settings.pulse_mode, per_week: s.settings.pulse_per_week });
   const sm = pw.per_week >= 6 ? { asked: panel, strata: clusterSizes.length, covered: clusterSizes.length, per_week: 6, extra: 0 } : AIP.pulseSample(panel, { per_week: pw.per_week, day: AIP.pulseDay(localToday, cw) });
   const prompts = sm.asked.map(({ slot, stratum, top_up, ...q }) => q);
-  const sample = { mode: pw.per_week >= 6 ? 'full' : 'sample', setting: s.settings.pulse_mode || 'auto', per_week: pw.per_week, panel: panel.length, asked: prompts.length, strata: sm.strata, covered: sm.covered, top_ups: sm.extra,
+  const sample = { mode: pw.per_week >= 6 ? 'full' : 'sample', scope, scope_left_out: panelAll.length - storedQ.length, setting: s.settings.pulse_mode || 'auto', per_week: pw.per_week, panel: panel.length, asked: prompts.length, strata: sm.strata, covered: sm.covered, top_ups: sm.extra,
     half_width: { headline: pw.headline, cluster: pw.cluster, cluster_size: medianCluster }, capped: !!pw.capped, why: pw.why,
-    note: pw.per_week >= 6 ? 'all ' + panel.length + ' questions, as every morning' : prompts.length + ' of the ' + panel.length + ' questions this morning (a rotating sample: every question ' + pw.per_week + ' morning' + (pw.per_week === 1 ? '' : 's') + ' a week, all ' + sm.strata + ' topic x buyer groups every morning)' };
-  const costModel = AIP.cost({ panel: panel.length + 1, engines: s.settings.engines, pulse: true, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week, cluster_size: medianCluster,
+    note: (pw.per_week >= 6 ? 'all ' + panel.length + ' questions, as every morning' : prompts.length + ' of the ' + panel.length + ' questions this morning (a rotating sample: every question ' + pw.per_week + ' morning' + (pw.per_week === 1 ? '' : 's') + ' a week, all ' + sm.strata + ' topic x buyer groups every morning)') + (scope === 'focus' && panelAll.length > storedQ.length ? '; only the questions about the keywords you work on (' + (panelAll.length - storedQ.length) + ' other question' + (panelAll.length - storedQ.length === 1 ? ' is' : 's are') + ' asked in the weekly check)' : '') };
+  const costModel = AIP.cost({ panel: Math.max(panel.length, Math.min(panelAll.length, s.settings.prompts_max)) + 1, pulse_questions: scope === 'focus' ? panel.length : null, engines: s.settings.engines, pulse: true, pulse_mode: s.settings.pulse_mode, pulse_per_week: s.settings.pulse_per_week, cluster_size: medianCluster,
     claude_weekly: s.settings.claude_weekly, pulse_engines: s.settings.pulse_engines_raw });   // W2-E3: the owner's engine options
   const pulse_est = +(prompts.length * engines.reduce((t, e) => t + (AIP.PRICE[e] || 0), 0)).toFixed(4);
   // F-ENG: the per-execution request budget - a website that would take this execution past one morning's limit starts the next part

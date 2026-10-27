@@ -203,6 +203,28 @@
     ]
    ]
   },
+  "AI Save Check": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Save Gap?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "AI Save Retry Rows": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Any Save Retry?",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "AI Vis Rows": {
    "main": [
     [
@@ -763,6 +785,42 @@
      {
       "index": 0,
       "node": "Run Alert Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Save Gap?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Reread AI Answers",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Analyst Jobs",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Any Save Retry?": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Retry Save AI Answers",
+      "type": "main"
+     }
+    ],
+    [
+     {
+      "index": 0,
+      "node": "Analyst Jobs",
       "type": "main"
      }
     ]
@@ -1422,6 +1480,17 @@
     ]
    ]
   },
+  "Load Ladder Settings (AI)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Plan",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Load Ladders": {
    "main": [
     [
@@ -1526,7 +1595,7 @@
     [
      {
       "index": 0,
-      "node": "AI Plan",
+      "node": "Load Ladder Settings (AI)",
       "type": "main"
      }
     ]
@@ -1880,12 +1949,34 @@
     ]
    ]
   },
+  "Reread AI Answers": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "AI Save Retry Rows",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Reserve Run Ledger (AI)": {
    "main": [
     [
      {
       "index": 0,
       "node": "After Run Ledger (AI)",
+      "type": "main"
+     }
+    ]
+   ]
+  },
+  "Retry Save AI Answers": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Analyst Jobs",
       "type": "main"
      }
     ]
@@ -2068,7 +2159,7 @@
     [
      {
       "index": 0,
-      "node": "Analyst Jobs",
+      "node": "AI Save Check",
       "type": "main"
      }
     ]
@@ -2580,6 +2671,15 @@
     }
    ]
   },
+  "Load Ladder Settings (AI)": {
+   "conditions": [
+    {
+     "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+     "keyName": "site_id",
+     "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+    }
+   ]
+  },
   "Load Ladders": null,
   "Load Link Prospects": {
    "conditions": [
@@ -2704,7 +2804,22 @@
     }
    ]
   },
+  "Reread AI Answers": {
+   "conditions": [
+    {
+     "condition": "eq",
+     "keyName": "site_id",
+     "keyValue": "={{ $json.site_id }}"
+    },
+    {
+     "condition": "eq",
+     "keyName": "run_id",
+     "keyValue": "={{ $json.run_id }}"
+    }
+   ]
+  },
   "Reserve Run Ledger (AI)": null,
+  "Retry Save AI Answers": null,
   "Save AI Answers": null,
   "Save AI Cache": {
    "conditions": [

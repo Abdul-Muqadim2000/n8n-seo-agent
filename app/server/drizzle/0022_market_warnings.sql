@@ -1,0 +1,1 @@
+ALTER TABLE "sites" ADD COLUMN "acknowledged_warnings" jsonb DEFAULT '[]'::jsonb NOT NULL;

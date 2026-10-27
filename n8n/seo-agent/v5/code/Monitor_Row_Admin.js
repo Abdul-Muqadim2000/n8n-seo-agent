@@ -35,5 +35,8 @@ Object.assign(__row, { ai_claude_weekly: b('ai_claude_weekly', false),
   ai_persona_context: b('ai_persona_context', false),
   ai_fanout_check: m.ai_fanout_check !== undefined && m.ai_fanout_check !== null ? (m.ai_fanout_check === '' ? null : Math.min(200, Math.max(0, parseInt(m.ai_fanout_check, 10) || 0))) : __num(old.ai_fanout_check),
   ai_demand_market: b('ai_demand_market', false) });
+// AI-FOCUS (2026-10-27): what the daily pulse asks (focus | all) and whether the panel follows the client's focus (off | '' = on) - kept as stored unless given
+Object.assign(__row, { ai_pulse_scope: has('ai_pulse_scope') ? (['focus', 'all'].includes(String(m.ai_pulse_scope).toLowerCase()) ? String(m.ai_pulse_scope).toLowerCase() : String(old.ai_pulse_scope || '')) : String(old.ai_pulse_scope || (old.site_id ? '' : 'focus')),
+  ai_focus_mode: has('ai_focus_mode') ? (String(m.ai_focus_mode).toLowerCase() === 'off' ? 'off' : '') : String(old.ai_focus_mode || '') });
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

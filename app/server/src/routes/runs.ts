@@ -9,6 +9,7 @@ import type { FileRow } from '../db/schema';
 import { HttpError, notFound, validationError } from '../lib/errors';
 import { deliverReport } from '../services/reportDelivery';
 import { createRun, creditsForRuns, filesFor, getRunOrThrow, reportCredits, reportsList, runJoinedResult, toReport, toRun } from '../services/runs';
+import { takeAcknowledge } from '../services/consistency';
 import { createShare, listShares, markOpened, revokeShare, sharedFile, sharedReport, shareByToken } from '../services/shareLinks';
 import { payloadFor } from '../services/brandOf';
 import { portalFile, portalFiles, shareFile } from '../services/portalDocs';
@@ -53,9 +54,11 @@ async function runWithNames(runId: string): Promise<Run | null> {
 export async function runRoutes(app: FastifyInstance) {
   app.post('/api/orgs/:orgId/runs', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
     const a = await orgAccess(req, (req.params as P).orgId, 'member');
-    const parsed = parseRunInput(req.body);
+    // MKT (2026-10-27): the warning ids the person answered with "Continue anyway" travel beside the form (never a form field)
+    const { acknowledge, rest } = takeAcknowledge(req.body);
+    const parsed = parseRunInput(rest);
     if (!parsed.success) throw validationError(parsed.error);
-    const run = await createRun(a, parsed.data);
+    const run = await createRun(a, parsed.data, { acknowledge, req });
     return (await runWithNames(run.id))!;
   });
 

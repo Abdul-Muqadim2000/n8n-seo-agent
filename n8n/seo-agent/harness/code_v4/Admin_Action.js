@@ -1,5 +1,7 @@
 // Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)
 // | facts (business_facts, the client's own facts about the business, stored on seo_sites; P1 2026-10-20)
+// | market (country: name or ISO-2 of the main workflow's COUNTRIES; MKT 2026-10-27, AUDIT M2): the market every weekly job measures the website
+//   in (seo_sites country / location_code / language_code). Rank history and past rows stay as they are: the next checks start a new baseline.
 // | prospect (prospect_domain + status contacted / replied / won / rejected / ignored / new, note, contact_email; replied: v4.13) | ai_prompts (add custom questions, switch some off) — by site_id or domain.
 // The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).
 // ---- W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): measurement a statistician would sign (inlined by build_monitors.py) ----
@@ -313,13 +315,40 @@ const AVX = (() => {
 
   return { Z, t975, wilsonN, prop, ratio, boot, binom, rng, hash, ci, packUnits, unpackUnits, pulseUnits, history, sov, impact, validateRules, evalRules, METRICS, SCOPES, pilot, zOfP, nCdf, parse, run };
 })();
+// ---- countries: copied from the main workflow's Normalize Input by build_site_tracker.py (MKT 2026-10-27: Site Admin `market`) ----
+const COUNTRIES = {
+  'United States':        { code: 2840, iso: 'US', lang: 'en', language: 'English', spelling: 'American English',   currency: 'USD' },
+  'United Kingdom':       { code: 2826, iso: 'GB', lang: 'en', language: 'English', spelling: 'British English',    currency: 'GBP' },
+  'Canada':               { code: 2124, iso: 'CA', lang: 'en', language: 'English', spelling: 'Canadian English',   currency: 'CAD' },
+  'Australia':            { code: 2036, iso: 'AU', lang: 'en', language: 'English', spelling: 'Australian English', currency: 'AUD' },
+  'New Zealand':          { code: 2554, iso: 'NZ', lang: 'en', language: 'English', spelling: 'British English',    currency: 'NZD' },
+  'Ireland':              { code: 2372, iso: 'IE', lang: 'en', language: 'English', spelling: 'British English',    currency: 'EUR' },
+  'Pakistan':             { code: 2586, iso: 'PK', lang: 'en', language: 'English', spelling: 'British English',    currency: 'PKR' },
+  'India':                { code: 2356, iso: 'IN', lang: 'en', language: 'English', spelling: 'British English',    currency: 'INR' },
+  'United Arab Emirates': { code: 2784, iso: 'AE', lang: 'en', language: 'English', spelling: 'British English',    currency: 'AED' },
+  'Saudi Arabia':         { code: 2682, iso: 'SA', lang: 'en', language: 'English', spelling: 'British English',    currency: 'SAR' },
+  'Singapore':            { code: 2702, iso: 'SG', lang: 'en', language: 'English', spelling: 'British English',    currency: 'SGD' },
+  'South Africa':         { code: 2710, iso: 'ZA', lang: 'en', language: 'English', spelling: 'British English',    currency: 'ZAR' },
+  'Germany':              { code: 2276, iso: 'DE', lang: 'de', language: 'German',  spelling: 'German',             currency: 'EUR' },
+  'France':               { code: 2250, iso: 'FR', lang: 'fr', language: 'French',  spelling: 'French',             currency: 'EUR' },
+  'Spain':                { code: 2724, iso: 'ES', lang: 'es', language: 'Spanish', spelling: 'European Spanish',   currency: 'EUR' },
+  'Italy':                { code: 2380, iso: 'IT', lang: 'it', language: 'Italian', spelling: 'Italian',            currency: 'EUR' },
+  'Netherlands':          { code: 2528, iso: 'NL', lang: 'nl', language: 'Dutch',   spelling: 'Dutch',              currency: 'EUR' },
+  'Brazil':               { code: 2076, iso: 'BR', lang: 'pt', language: 'Portuguese', spelling: 'Brazilian Portuguese', currency: 'BRL' },
+  'Mexico':               { code: 2484, iso: 'MX', lang: 'es', language: 'Spanish', spelling: 'Mexican Spanish',    currency: 'MXN' }
+};
 let t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }
 if (t.body && typeof t.body === 'object') t = { ...t, ...t.body };
 const action = String(t.action || '').toLowerCase();
 const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
 const domain = normD(t.domain) || String(t.site_id || '').replace(/^site_/, '').replace(/-/g, '.');
 const site_id = String(t.site_id || '').trim() || (normD(t.domain) ? 'site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-') : '');
-if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups', 'facts'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts, content_groups or facts');
+if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups', 'facts', 'market'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts, content_groups, facts or market');
+// MKT (2026-10-27): the website's market, read from the same COUNTRIES table Normalize Input uses (never a code the caller sends)
+const countryRaw = String(t.country == null ? '' : t.country).trim();
+const marketName = countryRaw ? (Object.keys(COUNTRIES).find(n => n.toLowerCase() === countryRaw.toLowerCase()) || Object.keys(COUNTRIES).find(n => String(COUNTRIES[n].iso).toUpperCase() === countryRaw.toUpperCase()) || '') : '';
+if (action === 'market' && !marketName) throw new Error('country (one of ' + Object.keys(COUNTRIES).join(', ') + ', or its ISO-2 code) is required for action market');
+const market = marketName ? { country: marketName, location_code: Number(COUNTRIES[marketName].code), language_code: String(COUNTRIES[marketName].lang || 'en'), country_iso: String(COUNTRIES[marketName].iso) } : { country: '', location_code: 0, language_code: '', country_iso: '' };
 // P1 (2026-10-20): the business facts the client saved in the app, so the Content Cadence and the readiness rule (v5/code/_readiness.js) read them
 if (action === 'facts' && t.business_facts == null) throw new Error('business_facts (text; an empty text clears them) is required for action facts');
 const business_facts = String(t.business_facts == null ? '' : t.business_facts).trim().slice(0, 2000);
@@ -342,8 +371,11 @@ const off_prompts = (Array.isArray(t.remove) ? t.remove : []).map(x => String(x)
 const on_prompts = (Array.isArray(t.enable) ? t.enable : []).map(x => String(x).trim()).filter(Boolean).slice(0, 500);
 const pin_prompts = (Array.isArray(t.pin) ? t.pin : []).map(x => String(x).trim()).filter(Boolean).slice(0, 500);
 const unpin_prompts = (Array.isArray(t.unpin) ? t.unpin : []).map(x => String(x).trim()).filter(Boolean).slice(0, 500);
+// AI-FOCUS (2026-10-27): accept (a question the engine proposed starts being asked) and retire (the owner retires a question: kept with its history, never asked)
+const accept_prompts = (Array.isArray(t.accept) ? t.accept : []).map(x => String(x).trim()).filter(Boolean).slice(0, 500);
+const retire_prompts = (Array.isArray(t.retire) ? t.retire : []).map(x => String(x).trim()).filter(Boolean).slice(0, 500);
 const edit_prompts = (Array.isArray(t.edit) ? t.edit : []).filter(x => x && typeof x === 'object' && String(x.prompt_id || '').trim()).map(x => ({ prompt_id: String(x.prompt_id).trim(), ...asQ(x), prompt: S6(x.prompt, 300), pinned: x.pinned === undefined ? undefined : (x.pinned === true || String(x.pinned) === 'true') })).slice(0, 500);
-if (action === 'ai_prompts' && !add_prompts.length && !off_prompts.length && !on_prompts.length && !pin_prompts.length && !unpin_prompts.length && !edit_prompts.length) throw new Error('add (questions to track), edit, remove, enable, pin or unpin (prompt ids or texts) is required for action ai_prompts');
+if (action === 'ai_prompts' && !add_prompts.length && !off_prompts.length && !on_prompts.length && !pin_prompts.length && !unpin_prompts.length && !edit_prompts.length && !accept_prompts.length && !retire_prompts.length) throw new Error('add (questions to track), edit, remove, enable, pin, unpin, accept or retire (prompt ids or texts) is required for action ai_prompts');
 // B7-5 (W3-D): content_groups = [{ name, pattern }] -- a regular expression per group over the page path (case-insensitive); [] clears them
 const rawGroups = Array.isArray(t.content_groups) ? t.content_groups : (Array.isArray(t.groups) ? t.groups : null);
 if (action === 'content_groups' && !rawGroups) throw new Error('content_groups (a list of { name, pattern }; an empty list clears the groups) is required for action content_groups');
@@ -357,4 +389,4 @@ const monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (
   if (raw !== undefined && raw !== null) { delete monitors.ai_alert_rules; monitors.ai_alert_rules_json = (raw === '' || (Array.isArray(raw) && !raw.length)) ? '' : JSON.stringify(AVX.validateRules(typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (e) { throw new Error('ai_alert_rules_json is not valid JSON'); } })() : raw)); }
   if (monitors.ai_sov_set !== undefined && monitors.ai_sov_set !== null) monitors.ai_sov_set = (Array.isArray(monitors.ai_sov_set) ? monitors.ai_sov_set : String(monitors.ai_sov_set).split(/[\n,;]+/)).map(x => String(x).trim()).filter(Boolean)
     .map(x => /\./.test(x) ? normD(x) : x.slice(0, 60)).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 20).join(', '); }
-return [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, monitors, content_groups_json, business_facts, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];
+return [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, accept_prompts, retire_prompts, monitors, content_groups_json, business_facts, market_country: market.country, market_location_code: market.location_code, market_language_code: market.language_code, market_iso: market.country_iso, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];

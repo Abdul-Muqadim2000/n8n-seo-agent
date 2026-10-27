@@ -69,6 +69,7 @@ import { scheduleState } from './delivery';
 import { annotatePublishNeeds } from './cms/service';
 import { CADENCE, simulateCadence, type CadenceWeek } from './cadence';
 import { profileNeedsYou } from './readiness';
+import { aiPanelNeedsYou } from '@seo/shared';
 import { buildLadders, draftQa, ladderAppSources, ladderNeedsYou, ladderReports, sortNeedsYou, type LadderBuild, type LadderSchedule, type SiteRun, type WaitingPage } from './ladders';
 import { loadBundle, recommend, type SiteBundle } from './recommendations';
 import { gscNow } from './data';
@@ -897,7 +898,10 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   });
   // P1: the profile and the facts the first page waits for, or (once both are on file) a first page that can be written at once
   const profileItems = profileNeedsYou({ readiness, plan: week0, anyWritten: logs.length > 0, priced: (q) => priced(q) });
-  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...profileItems, ...autopilotItems, ...failedRuns(app.runs), ...refusedPlans(recentReports), ...ladderNeedsYou(build, await settingsRow())]);
+  // AI-FOCUS (2026-10-27): the AI question panel's own decisions for the owner (most questions off the keywords they work on; a ladder the panel
+  // has no room for, with the price of a bigger panel) - the same warnings as the website's banner, where Accept and "Keep these questions" are
+  const aiPanelItems = await import('./consistency').then((m) => m.standingWarnings(org, site)).then((r) => aiPanelNeedsYou(r.warnings)).catch(() => [] as NeedsYouItem[]);
+  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...profileItems, ...autopilotItems, ...failedRuns(app.runs), ...refusedPlans(recentReports), ...ladderNeedsYou(build, await settingsRow()), ...aiPanelItems]);
   const thisWeek = thisWeekItems({ automations, calendar, running: runningHere, queue, plan: week0, x, build, tz, cycles });
   const autopilot: PipelineAutopilot = {
     level: week0.level,

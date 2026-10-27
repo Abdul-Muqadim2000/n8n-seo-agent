@@ -492,6 +492,9 @@ export const sites = pgTable(
      *  level is raised again) */
     autopilotDroppedAt: ts('autopilot_dropped_at'),
     autopilotDroppedFrom: integer('autopilot_dropped_from'),
+    /** MKT (0022, mismatch audit 2026-10-27 §2.2): the ids of standing warnings a person answered with "Continue anyway" (engine market,
+     *  ladder market, description vs country). An id embeds the facts it is about, so a later change of either side warns again. */
+    acknowledgedWarnings: jsonb('acknowledged_warnings').$type<string[]>().notNull().default([]),
     createdAt: created(),
     updatedAt: ts('updated_at').defaultNow().notNull(),
   },

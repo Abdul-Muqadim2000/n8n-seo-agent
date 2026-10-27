@@ -181,7 +181,13 @@
   "last_asked_run",
   "last_asked_at",
   "asked_n_28d",
-  "refused_at_run"
+  "refused_at_run",
+  "focus_topic",
+  "focus_source",
+  "focus_state",
+  "focus_seen_at",
+  "retired_at",
+  "retire_reason"
  ],
  "MONITORS": [
   "site_id",
@@ -212,7 +218,9 @@
   "ai_pulse_engines",
   "ai_persona_context",
   "ai_fanout_check",
-  "ai_demand_market"
+  "ai_demand_market",
+  "ai_pulse_scope",
+  "ai_focus_mode"
  ],
  "AI_VIS": [
   "site_id",
@@ -483,7 +491,8 @@
   "published_url",
   "published_at",
   "week",
-  "qa_reasons"
+  "qa_reasons",
+  "publish_note"
  ],
  "LADDER": [
   "ladder_id",

@@ -12,27 +12,29 @@ export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
 // Option lists mirror the n8n form pages and Normalize Input (n8n/seo-agent/v5 + build_v4.py), so every value the app sends
 // is one the workflow already understands. Change them together.
+// MKT (2026-10-27): `code` is the engine's location code (DataForSEO, 2000 + ISO numeric) and `lang` the language its checks read, both copied
+// from Normalize Input's COUNTRIES; markets.test.ts compares them with the engine's table, so a drift fails the tests.
 
 export const COUNTRIES = [
-  { name: 'United States', iso: 'US' },
-  { name: 'United Kingdom', iso: 'GB' },
-  { name: 'Canada', iso: 'CA' },
-  { name: 'Australia', iso: 'AU' },
-  { name: 'New Zealand', iso: 'NZ' },
-  { name: 'Ireland', iso: 'IE' },
-  { name: 'Pakistan', iso: 'PK' },
-  { name: 'India', iso: 'IN' },
-  { name: 'United Arab Emirates', iso: 'AE' },
-  { name: 'Saudi Arabia', iso: 'SA' },
-  { name: 'Singapore', iso: 'SG' },
-  { name: 'South Africa', iso: 'ZA' },
-  { name: 'Germany', iso: 'DE' },
-  { name: 'France', iso: 'FR' },
-  { name: 'Spain', iso: 'ES' },
-  { name: 'Italy', iso: 'IT' },
-  { name: 'Netherlands', iso: 'NL' },
-  { name: 'Brazil', iso: 'BR' },
-  { name: 'Mexico', iso: 'MX' },
+  { name: 'United States', iso: 'US', code: 2840, lang: 'en' },
+  { name: 'United Kingdom', iso: 'GB', code: 2826, lang: 'en' },
+  { name: 'Canada', iso: 'CA', code: 2124, lang: 'en' },
+  { name: 'Australia', iso: 'AU', code: 2036, lang: 'en' },
+  { name: 'New Zealand', iso: 'NZ', code: 2554, lang: 'en' },
+  { name: 'Ireland', iso: 'IE', code: 2372, lang: 'en' },
+  { name: 'Pakistan', iso: 'PK', code: 2586, lang: 'en' },
+  { name: 'India', iso: 'IN', code: 2356, lang: 'en' },
+  { name: 'United Arab Emirates', iso: 'AE', code: 2784, lang: 'en' },
+  { name: 'Saudi Arabia', iso: 'SA', code: 2682, lang: 'en' },
+  { name: 'Singapore', iso: 'SG', code: 2702, lang: 'en' },
+  { name: 'South Africa', iso: 'ZA', code: 2710, lang: 'en' },
+  { name: 'Germany', iso: 'DE', code: 2276, lang: 'de' },
+  { name: 'France', iso: 'FR', code: 2250, lang: 'fr' },
+  { name: 'Spain', iso: 'ES', code: 2724, lang: 'es' },
+  { name: 'Italy', iso: 'IT', code: 2380, lang: 'it' },
+  { name: 'Netherlands', iso: 'NL', code: 2528, lang: 'nl' },
+  { name: 'Brazil', iso: 'BR', code: 2076, lang: 'pt' },
+  { name: 'Mexico', iso: 'MX', code: 2484, lang: 'es' },
 ] as const;
 export type CountryName = (typeof COUNTRIES)[number]['name'];
 export const COUNTRY_NAMES = COUNTRIES.map((c) => c.name) as unknown as [CountryName, ...CountryName[]];

@@ -170,6 +170,69 @@ const fitArabic = (s) => {
   }
   return { text: out.join(' ').replace(/\s+/g, ' ').trim(), read: true, unread };
 };
+// ---- MKT (2026-10-27, docs/mismatch-audit-2026-10-27/AUDIT.md §2.4, M4 / M5 / M7): WHERE a keyword or a text points ----
+// FIT_GEO above says only "this word is a place", so "ai automation solutions gcc" for a Pakistan website passed as "in your market". The
+// gazetteer attaches countries (ISO-2) to the place words: a country, its people, its capital and largest cities; a region is the set of its
+// countries. One table for the engine (fitGate's `ctx.market`) and the app (shared/src/markets.ts imports it through fit-gate.generated.js).
+// Never the bare word "us"; demonyms that are also languages (german, french, spanish, italian, dutch, english) are not places
+// ("spanish translation services" is not about Spain); "online", "near me", "global", "worldwide" are not places.
+const FIT_PLACES_SRC = [
+  ['AE', 'uae|united arab emirates|emirates|emirati|dubai|abu dhabi|sharjah|ajman|fujairah|ras al khaimah|umm al quwain|al ain'],
+  ['SA', 'saudi|saudi arabia|ksa|riyadh|jeddah|dammam|khobar|al khobar|mecca|makkah|medina|madinah'],
+  ['PK', 'pakistan|pakistani|lahore|karachi|islamabad|rawalpindi|faisalabad|multan|peshawar|quetta|sialkot|gujranwala'],
+  ['IN', 'india|indian|delhi|new delhi|mumbai|bangalore|bengaluru|chennai|pune|kolkata|ahmedabad|noida|gurgaon|gurugram'],
+  ['IN PK', 'hyderabad'],
+  ['GB', 'uk|united kingdom|britain|great britain|british|england|scotland|wales|london|manchester|birmingham|leeds|glasgow|edinburgh'],
+  ['US', 'usa|united states|united states of america|new york|nyc|california|texas|florida|chicago|los angeles|san francisco|houston|seattle|boston'],
+  ['CA', 'canada|canadian|ottawa|toronto|montreal|vancouver|calgary'],
+  ['AU', 'australia|australian|canberra|sydney|melbourne|brisbane'],
+  ['NZ', 'new zealand|wellington|auckland|christchurch'],
+  ['IE', 'ireland|irish|dublin|galway|limerick'],
+  ['SG', 'singapore|singaporean'],
+  ['ZA', 'south africa|south african|pretoria|johannesburg|cape town|durban'],
+  ['DE', 'germany|deutschland|berlin|hamburg|munich|cologne|frankfurt'],
+  ['FR', 'france|paris|marseille|lyon'],
+  ['ES', 'spain|madrid|barcelona|valencia|seville'],
+  ['IT', 'italy|rome|milan|naples|turin'],
+  ['NL', 'netherlands|holland|amsterdam|rotterdam|the hague|utrecht'],
+  ['BR', 'brazil|brazilian|brasilia|sao paulo|rio de janeiro'],
+  ['MX', 'mexico|mexican|mexico city|guadalajara|monterrey'],
+  // markets the product cannot measure (not in the COUNTRIES table): a keyword about them is flagged, and their rankings cannot be tracked
+  ['QA', 'qatar|qatari|doha'], ['OM', 'oman|omani|muscat'], ['BH', 'bahrain|bahraini|manama'], ['KW', 'kuwait|kuwaiti'],
+  ['EG', 'egypt|egyptian|cairo|alexandria'], ['JO', 'jordan|amman'], ['LB', 'lebanon|beirut'], ['TR', 'turkiye|istanbul|ankara'],
+  ['CN', 'china|beijing|shanghai|shenzhen'], ['JP', 'japan|tokyo|osaka'], ['MY', 'malaysia|kuala lumpur'], ['ID', 'indonesia|jakarta'],
+  ['PH', 'philippines|manila'], ['NG', 'nigeria|lagos|abuja'], ['KE', 'kenya|nairobi'], ['BD', 'bangladesh|dhaka'], ['LK', 'sri lanka|colombo'],
+  ['NP', 'nepal|kathmandu'], ['AF', 'afghanistan|kabul'],
+  // regions: the set of their countries ("gcc" is fine for a UAE website, not for a Pakistan one)
+  ['AE SA QA OM BH KW', 'gcc|gcc countries|gulf|gulf countries|gulf region|arabian gulf|persian gulf|khaleej'],
+  ['AE SA QA OM BH KW EG JO LB', 'middle east|mena|arab world|arab countries'],
+  ['DE FR ES IT NL IE GB', 'europe|european|eu|european union'],
+  ['US CA', 'north america'], ['BR MX', 'latin america|latam'], ['IN PK BD LK NP', 'south asia']];
+const FIT_PLACES = FIT_PLACES_SRC.flatMap(([iso, ws]) => ws.split('|').map(w => ({ word: w, iso: iso.split(' '), region: iso.split(' ').length > 2 || iso === 'US CA' || iso === 'BR MX' })))
+  .sort((a, b) => b.word.split(' ').length - a.word.split(' ').length || b.word.length - a.word.length);
+// a one-word place is neutral for the topic rules, like the places FIT_GEO already held ("ai automation lahore" is about automation)
+for (const p of FIT_PLACES) if (p.word.indexOf(' ') < 0) FIT_GEO.add(p.word);
+// the comparable form of a text: Arabic read through the glossary, NFKC, lower case, dots dropped (u.a.e -> uae), every other mark a space
+const fitPlaceText = (s) => { const raw = String(s || ''); const AR = fitArabic(raw);
+  return ' ' + fitLow((AR.read ? AR.text + ' ' : '') + raw).replace(/\./g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim() + ' '; };
+// every place a text names, longest phrase first (each word read once): [{ word, iso: [..], region }], in the order found
+const fitPlaces = (s) => { let t = fitPlaceText(s); const out = [];
+  for (const p of FIT_PLACES) { const k = ' ' + p.word + ' '; let i = t.indexOf(k);
+    while (i >= 0) { out.push({ word: p.word, iso: p.iso.slice(), region: p.region, at: i }); t = t.slice(0, i) + ' | ' + t.slice(i + k.length - 1); i = t.indexOf(k); } }
+  return out.sort((a, b) => a.at - b.at).map(({ word, iso, region }) => ({ word, iso, region })); };
+// the keyword without the given place words (and the "in" / "for" left dangling): "ai automation solutions gcc" -> "ai automation solutions"
+const FIT_PLACE_GLUE = /^(in|for|across|at|of|the|and|near|from|within|around|throughout|to)$/;
+const fitDropPlaces = (keyword, words) => { if (FIT_AR.test(String(keyword || ''))) return '';
+  let t = fitPlaceText(keyword); for (const w of (words || [])) t = t.split(' ' + w + ' ').join(' | ');
+  const parts = t.split('|').map(x => x.trim().split(' ').filter(Boolean));
+  for (const p of parts) { while (p.length && FIT_PLACE_GLUE.test(p[p.length - 1])) p.pop(); while (p.length && FIT_PLACE_GLUE.test(p[0])) p.shift(); }
+  return parts.map(p => p.join(' ')).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(); };
+// does a text point to the market `iso`? ok = it names no place, or at least one place that includes the market
+//   { ok, iso, places, inside: [words], outside: [words], without: the text with the outside words dropped ('' when it cannot be said) }
+const fitMarket = (s, iso) => { const m = String(iso || '').toUpperCase(); const places = fitPlaces(s);
+  const inside = places.filter(p => p.iso.includes(m)).map(p => p.word), outside = places.filter(p => !p.iso.includes(m)).map(p => p.word);
+  const ok = !m || !places.length || inside.length > 0;
+  return { ok, iso: m, places, inside, outside, without: ok ? String(s || '').trim() : fitDropPlaces(s, outside) }; };
 // ---- KW-GATE: what the client DECLARED it sells, widened by a small category tree, and the products of OTHER vendors ----
 // A category search of what the client sells is in topic ("erp software uae" for a Business Central partner, "peppol uae" for an e-invoicing
 // firm, "vat registration uae" next to e-invoicing compliance, "it company dubai" for an IT firm). A family is declared only by the client's
@@ -311,7 +374,8 @@ function fitTopic(keyword, topics, ctx) {
   if (unread.size && own.some(t => !unread.has(t) && matchOwn(t))) own = own.filter(t => !unread.has(t));
   if (!own.length) {
     const cats = [...new Set(toks.filter(t => (FIT_GENERIC.has(t) && !FIT_WIDE.has(t) && matches(t)) || decl.anchors.has(t)))];   // B-3: a wide word never stands for a category
-    const hasPlace = toks.some(FIT_REAL_GEO);
+    // MKT (2026-10-27): with the website's market given, only a place IN that market is "your market" ("erp software gcc" for a Pakistan site is not)
+    const hasPlace = o.market ? fitMarket(keyword, o.market).inside.length > 0 : toks.some(FIT_REAL_GEO);
     if (cats.length >= 2 || (cats.length >= 1 && hasPlace)) return { ok: true, reason: '', detail: 'a category you sell (' + cats.join(', ') + ')' + (hasPlace ? ' in your market' : ''), share: 1 };
     // KW-GATE (review 13): "it company dubai" for an IT firm, "best ai companies uae" for an AI consultancy: a two-letter category the client
     // declared, with a word naming a seller. "ai", "ai uae", "ai online", "best ai apps" carry no seller and stay too broad.
@@ -478,6 +542,14 @@ function fitGate(keyword, ctx) {
   }
   // 2. the search data says navigational
   if (String(ctx.intent || '').toLowerCase() === 'navigational') return { ok: false, reason: 'navigational', detail: 'the search data classifies it as navigational (people look for one particular website)' };
+  // 2b. MKT (2026-10-27, AUDIT M4): with the website's market given (ctx.market, ISO-2), a keyword that names only places outside it is a
+  //     search of another market ("ai automation solutions gcc" for a Pakistan website). The keyword the client chose itself (ctx.protect,
+  //     the whole keyword) is never refused here: the app asked them first, and they decided.
+  if (ctx.market) {
+    const mk = fitMarket(String(keyword || ''), ctx.market);
+    const chosen = (ctx.protect || []).some(p => fitLow(p).replace(/\s+/g, ' ').trim() === fitLow(keyword).replace(/\s+/g, ' ').trim());
+    if (!mk.ok && !chosen) return res({ ok: false, reason: 'other market', detail: 'a search about ' + fitAnd(mk.outside.map(w => '"' + w + '"')) + ', outside the market this website is measured in (' + mk.iso + ')' });
+  }
   // 3. a public body or an identity document: "ministry of finance", "federal tax authority" (no content / buying word), "fta", "emaratax uae",
   //    "emirates id status" (the body alone, or with a portal / status word); "zatca e invoicing" and "fta vat registration" are topics and stay
   const govWord = (' ' + kw + ' ').match(FIT_GOV_WORDS);
@@ -1191,7 +1263,9 @@ const declared_services = (() => { const out = [];
   out.push(...declListE4((base.site_model || {}).declared_services));
   return [...new Set(out.map(x => String(x == null ? '' : x).replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2))].slice(0, 30); })();
 const fitCtx = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: [...new Set((base.competitors_summary || []).map(c => String(c.domain || '')).filter(Boolean))],
-  brands: fitLearnedBrands(cacheRows), protect: [head, ...(sd0.products_or_services || []), ...(base.services || []), ...declared_services, String(base.business || sd0.business_description || '').slice(0, 400)] };
+  brands: fitLearnedBrands(cacheRows), protect: [head, ...(sd0.products_or_services || []), ...(base.services || []), ...declared_services, String(base.business || sd0.business_description || '').slice(0, 400)],
+  // MKT (2026-10-27, AUDIT M4): the rungs stay in the website's market, unless the client chose a main keyword of another market (then its own places are the point)
+  market: (() => { let m = ''; try { m = String($('Normalize Input').first().json.country_iso || base.country_iso || ''); } catch (e) { m = String(base.country_iso || ''); } return m && fitMarket(head, m).ok ? m : ''; })() };
 const refused = [];
 const candidates = all.filter(e => e.intent !== 'navigational' && !sameAsHead(e.keyword)).filter(e => {
   const g = fitGate(e.keyword, { ...fitCtx, intent: e.intent });

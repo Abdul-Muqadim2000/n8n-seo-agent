@@ -25,6 +25,12 @@ export {
   fitLearnedBrands,
   fitBrandList,
   FITR,
+  FIT_PLACES,
+  fitPlaces,
+  fitMarket,
+  fitDropPlaces,
+  fitArabic,
+  FIT_FAMILIES,
 } from './fit-gate.generated.js';
 
 export type {
@@ -36,4 +42,6 @@ export type {
   TopicEvidence,
   StoredFit,
   FitSetAside,
+  FitPlace,
+  FitMarketResult,
 } from './fit-gate.generated.js';

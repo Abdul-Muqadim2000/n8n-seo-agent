@@ -7,6 +7,7 @@
 // question box, read from the results page) and what up to three competitors' homepages say they sell (topic ideas, never names). With no
 // personas on file a panel over 50 questions is written for four generic buyer roles, so it is still segmented; the owner sets real ones.
 /*__AI_PANEL__*/
+/*__AI_FOCUS__*/
 /*__AI_ANSWER_DATA__*/
 /*__COUNTRIES__*/
 const plans = $('AI Plan').all().map(i => i.json).filter(p => p.need_prompts && !p.nothing_to_do);
@@ -37,7 +38,15 @@ let pagesAll = []; try { pagesAll = $('Load Pages (AI)').all().map(i => i.json).
 const out = [];
 for (const p of plans) {
   const shop = AAD.sellsProducts(p, pagesAll.filter(r => r.site_id === p.site_id));
-  const markets = (p.markets && p.markets.length ? p.markets : [p.own_market || 'US-en']);
+  // AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27 §5 step 4): with the focus model on, every job carries the TOPICS it writes for and how many
+  // each (the reconcile's quotas, handed out over the market x buyer-role cells below), the topics' phrases as sub-topics, and the place rule: only
+  // places in the cell's country. The writer can no longer spread one onboarding keyword over the whole panel, or name Dubai for a Pakistan website.
+  const fw = (p.focus && Array.isArray(p.focus.write)) ? p.focus.write.filter(w => w && Number(w.count) > 0).map(w => ({ ...w, left: Number(w.count) })) : [];
+  const takeTopics = (n) => { const got = []; let k = n;
+    for (const w of fw) { if (k <= 0) break; if (w.left <= 0) continue; const t = Math.min(w.left, k); w.left -= t; k -= t; got.push({ label: w.label, count: t, source: w.source || '', state: w.state || '', terms: (w.terms || []).slice(0, 6) }); }
+    return got; };
+  const placeRule = (cc) => { const nm = COUNTRY(cc) || ''; const cities = AIF.citiesOf(cc); return nm ? 'Name only places in ' + nm + (cities.length ? ' (its cities, for example ' + cities.join(', ') + ')' : '') + ', and only where a buyer would name a place; never another country or region.' : ''; };
+  const markets = fw.length && Array.isArray(p.focus.write_markets) && p.focus.write_markets.length ? p.focus.write_markets.filter(m => (p.markets || []).includes(m) || m === p.own_market) : (p.markets && p.markets.length ? p.markets : [p.own_market || 'US-en']);   // AI-FOCUS: written in the website's markets only
   const personas = (p.personas && p.personas.length) ? p.personas : (Number(p.prompts_max) > 50 ? DEFAULT_PERSONAS : ['']);
   const cells = []; for (const m of markets) for (const pe of personas) cells.push({ market: m, persona: pe });
   // what each cell already has, and its fair share of the panel: the cells furthest below their share get the new questions first
@@ -53,9 +62,14 @@ for (const p of plans) {
     const [cc, lang] = String(c.market || '').split('-');
     for (let n = c.want; n > 0 && out.length < AIP.LIMITS.writer_jobs_per_run; n -= AIP.LIMITS.writer_batch) {
       const count = Math.min(AIP.LIMITS.writer_batch, n);
+      const brandHere = first && !p.prompts.some(x => x.kind === 'brand');
+      const ft = fw.length ? takeTopics(count - (brandHere ? 1 : 0)) : [];   // AI-FOCUS: the topics this job writes for (the brand question counts in the first job)
+      if (fw.length && !ft.length && !brandHere) continue;
       out.push({ json: { site_id: p.site_id, domain: p.domain, business_name: p.business_name || p.domain, business_type: p.business_type || '', country: COUNTRY(cc) || p.country || '', city: (c.market === p.own_market ? p.city : '') || '',
-        market: c.market, language: LANG[lang] || lang || 'English', persona: c.persona, clusters,
-        topics: p.topics, count, existing: p.prompts.filter(q => (q.market || p.own_market) === c.market).map(x => x.prompt).slice(0, 80), has_brand_prompt: !first || p.prompts.some(x => x.kind === 'brand'), site_text: first ? textOf(p.site_id) : textOf(p.site_id).slice(0, 1500),
+        market: c.market, language: LANG[lang] || lang || 'English', persona: c.persona, clusters: ft.length ? ft.map(x => x.label) : clusters,
+        topics: ft.length ? [...new Set(ft.flatMap(x => [x.label, ...x.terms]))].slice(0, 8) : p.topics,
+        ...(fw.length ? { focus_topics: ft, focus_topic: ft.length === 1 ? ft[0].label : '', place_rule: placeRule(cc), propose: !!(p.focus && p.focus.propose_only) } : {}),
+        count: fw.length ? ft.reduce((t, x) => t + x.count, 0) + (brandHere ? 1 : 0) : count, existing: p.prompts.filter(q => (q.market || p.own_market) === c.market).map(x => x.prompt).slice(0, 80), has_brand_prompt: !first || p.prompts.some(x => x.kind === 'brand'), site_text: first ? textOf(p.site_id) : textOf(p.site_id).slice(0, 1500),
         market_questions: discovered(p.site_id).map(x => x.question + ' (' + x.volume + '/mo' + (x.brands.length ? '; AI names ' + x.brands.join(', ') : '') + ')'),
         search_questions: (p.gsc_questions || []).map(x => x.query + ' (' + x.impressions + ' impressions)'),
         paa_questions: paaOf(p.site_id, c.market), competitor_offers, ...(shop.sells ? { shopping: true, shopping_why: shop.why } : {}) } });   // W2-E1

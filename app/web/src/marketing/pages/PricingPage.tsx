@@ -205,7 +205,7 @@ function Plans({ billing, setBilling }: { billing: Billing; setBilling: (b: Bill
         align="center"
         eyebrow="Pricing"
         title="Start small. Grow when it works."
-        lead="Setting up is free. Every plan writes the pages for you, and every analysis shows its price in credits before it starts."
+        lead="Setting up is free. Every plan covers SEO and the answers Google shows above its results, Growth adds GEO for ChatGPT and the other AI assistants, and every analysis shows its price in credits before it starts."
         containerClassName="pb-12 sm:pb-14"
       >
         {/* no annual discount today (annualDiscount 0): the switch would change nothing, so it is not shown */}
@@ -602,7 +602,7 @@ function Costs() {
             id="costs-title"
             eyebrow="Credits well spent"
             title="You see the price before any work starts."
-            lead="Research, writing and AI answer checks are the parts of SEO that use credits. Alaventra prices them up front, checks them against your limits and never charges twice for a result that cannot have changed."
+            lead="Research, writing and AI answer checks are the parts of the work that use credits. Alaventra prices them up front, checks them against your limits and never charges twice for a result that cannot have changed."
           />
           <ul className="mt-10 space-y-6">
             {costControls.map((c, i) => (
@@ -644,7 +644,7 @@ function PricingFaq() {
 }
 
 export default function PricingPage() {
-  useSeo({ title: 'Pricing', description: 'Alaventra plans for one website to a whole portfolio, paid in credits. Every analysis shows its price before it starts and never uses more.', path: '/pricing' });
+  useSeo({ title: 'Pricing', description: 'Alaventra plans for SEO, AEO and GEO, from one website to a whole portfolio, paid in credits. Every analysis shows its price before it starts and never uses more.', path: '/pricing' });
   const [billing, setBilling] = useState<Billing>('monthly');
   return (
     <>
@@ -656,7 +656,7 @@ export default function PricingPage() {
       <PricingFaq />
       <CtaBand
         className="pt-20 sm:pt-28"
-        title="Running SEO for many companies?"
+        title="Running SEO, AEO and GEO for many companies?"
         lead="Enterprise brings multi-company workspaces, credits and limits per company, alert watching and onboarding with your team."
         primary={{ label: 'Talk to sales', to: '/contact?topic=sales' }}
         secondary={{ label: 'Start free', to: '/signup' }}

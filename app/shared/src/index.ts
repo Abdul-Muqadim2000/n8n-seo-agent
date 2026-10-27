@@ -12,6 +12,7 @@ export * from './profile';
 export * from './cost';
 export * from './estimate';
 export * from './pipeline-notices';
+export * from './publish-verify';   // 2026-10-27: "I published it" warns when the live page is not the page that was written
 export * from './ladders';
 export * from './keywords';
 export * from './link-import';
@@ -27,6 +28,7 @@ export * from './brand';
 export * from './queue';
 export * from './report-delivery';
 export * from './ai-visibility';
+export * from './ai-focus';   // AI-FOCUS (2026-10-27): the AI panel follows the client's focus (the engine's kit _ai_focus.js, generated) + its two warnings
 export * from './ai-panel';   // G6 (2026-10-18): the AI question panel at scale, the one cost formula (estimateAiPanelCost), mirrored from the engine
 export * from './ai-detail';   // W2-A (2026-10-23): readers of the engine's wave-2 answer and visibility columns (WAVE2_CONTRACTS.md §1-§2)
 export * from './ai-trends';   // W2-A: the page filter, trend lines with breaks, owner alert rules, the open-run note
@@ -48,4 +50,7 @@ export * from './cycle-clock'; // the per-website cycle's clock (v5/code/_cycle.
 export * from './fit-gate';  // the engine's fit gate (v5/code/_fit_gate.js), generated from the kit by build_v4.py (KW-PARITY), the same code
 export * from './cycles';    // the per-website 7-day cycle and keyword-first autopilot contract (SCHEDULING_KEYWORDS_PLAN.md §14)
 export * from './readiness';   // P1 (2026-10-20): author profile + business facts before a written page (the engine's v5/code/_readiness.js)
+export * from './markets';   // MKT (2026-10-27): which market a website, a keyword or a text points to (the engine's gazetteer)
+export * from './consistency';   // MKT (2026-10-27): the one mismatch mechanism: warnings, Accept, Continue anyway (AUDIT.md §2)
+export * from './consistency-more';   // MKT (2026-10-27): the remaining cases (D1-D7, S1-S8, C1, I1-I3, I7, B1) of the same registry
 export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run

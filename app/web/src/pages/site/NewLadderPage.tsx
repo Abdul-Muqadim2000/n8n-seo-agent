@@ -232,11 +232,13 @@ function StartResearchButton({ label = 'Find keywords for me', variant = 'second
 }
 
 function Recommended({ recommended, preset, onChoose, onCheckOwn }: { recommended: ReturnType<typeof useRecommendedKeywords>; preset: string | null; onChoose: (k: ChosenKeyword) => void; onCheckOwn: () => void }) {
-  const { can } = useOrgCtx();
+  const { can, org } = useOrgCtx();
   const { site } = useSiteCtx();
   const [nothingToPick, setNothingToPick] = useState(false);
   const r: RecommendedKeywords | undefined = recommended.data;
-  const country = r?.country ?? (isCountry(site.country) ? site.country : '');
+  // MKT (2026-10-27, mismatch audit M6): a ladder always runs in the website's main country, never in the country an old research was done for
+  const country = isCountry(site.country) ? site.country : (r?.country ?? '');
+  const otherMarket = !!r?.country && isCountry(site.country) && r.country !== site.country;
   const list = useMemo(() => {
     const all = r?.keywords ?? [];
     const first = all.find((k) => k.keyword === preset);
@@ -297,6 +299,18 @@ function Recommended({ recommended, preset, onChoose, onCheckOwn }: { recommende
 
   return (
     <div className="space-y-4">
+      {otherMarket && (
+        <Callout tone="warning" title={`These suggestions were researched for ${r.country}`}>
+          <p>
+            Your main country is {site.country}, so their search volumes and chances are for the wrong country. A ladder you start here runs in {site.country}.
+          </p>
+          <div className="mt-2">
+            <ButtonLink to={paths.tool(org.id, 'discover', { siteId: site.id })} variant="secondary" size="sm">
+              Find fresh keywords for {site.country}
+            </ButtonLink>
+          </div>
+        </Callout>
+      )}
       {r.stale && (
         <Callout tone="warning" title="These suggestions are getting old" action={<StartResearchButton label="Find fresh keywords" />}>
           They come from your keyword research of {fmtDate(r.receivedAt)}. Searches and your website have changed since, so fresh research gives better suggestions.

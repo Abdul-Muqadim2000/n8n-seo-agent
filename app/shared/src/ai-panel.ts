@@ -127,7 +127,7 @@ export interface AiPanelCost {
 }
 
 /** The one AI-panel cost formula (AIP.cost). Every figure in US dollars. W2-E3: + the owner's engine and coverage options. */
-export function estimateAiPanelCost(o: { panel?: number; engines?: readonly string[]; pulse?: boolean; pulseMode?: AiPulseMode | string; pulsePerWeek?: number | null; clusterSize?: number } & AiPanelOptions = {}): AiPanelCost {
+export function estimateAiPanelCost(o: { panel?: number; engines?: readonly string[]; pulse?: boolean; pulseMode?: AiPulseMode | string; pulsePerWeek?: number | null; clusterSize?: number; pulseQuestions?: number | null } & AiPanelOptions = {}): AiPanelCost {
   const L = AI_PANEL_LIMITS, F = AI_PANEL_FIXED, P = AI_PANEL_PRICE as Record<string, number>;
   const panel = clamp(Math.round(n0(o.panel)) || L.default_new, L.min, L.max);
   const engines = [...new Set((o.engines && o.engines.length ? o.engines : AI_PANEL_DEFAULT_ENGINES).filter((e) => P[e] != null))] as AiPanelEngine[];
@@ -158,7 +158,9 @@ export function estimateAiPanelCost(o: { panel?: number; engines?: readonly stri
   const on = o.pulse !== false && pE.length > 0;
   const pw: AiPulsePlan = on ? aiPulsePerWeek({ asked, weeklyEngines: wE.length, pulseEngines: pE.length, clusterSize: o.clusterSize, mode: o.pulseMode, perWeek: o.pulsePerWeek })
     : { perWeek: 0, headline: aiHalfWidth(answers), cluster: aiHalfWidth(Math.min(asked, n0(o.clusterSize) || L.cluster_size_guess) * wE.length), capped: false, why: on ? '' : 'the daily pulse is off' };
-  const qDay = on ? Math.min(asked, Math.ceil((asked * pw.perWeek) / F.pulse_days)) : 0;
+  // AI-FOCUS (2026-10-27): the pulse scope 'focus' asks only `pulseQuestions` of the panel (AIP.cost's pulse_questions); absent = the whole panel
+  const pulseQ = o.pulseQuestions == null || !Number.isFinite(Number(o.pulseQuestions)) ? asked : clamp(Math.round(n0(o.pulseQuestions)), 0, asked);
+  const qDay = on ? Math.min(pulseQ, Math.ceil((pulseQ * pw.perWeek) / F.pulse_days)) : 0;
   const pulseDay: AiMoney = { dfs: r4(qDay * sum(pE)), ai: 0, usd: 0 }; pulseDay.usd = pulseDay.dfs;
   const W = F.weeks_per_month;
   const month = { weekly: r2(W * weekly.usd), fullExtra: r2(extra.usd), pulse: r2(W * F.pulse_days * pulseDay.usd), total: 0 };

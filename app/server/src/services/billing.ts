@@ -108,6 +108,43 @@ export function siteAutopilotRows(
   });
 }
 
+/** A change of one website's schedule settings (C1): pages a week, the autopilot level, monitor switches. */
+export interface ScheduleChange {
+  blogsPerWeek?: number;
+  autopilotLevel?: AutopilotLevel;
+  monitors?: Partial<MonitorSettings>;
+}
+
+/**
+ * MKT C1 (2026-10-27, mismatch audit): the company's daily credit use now and with one website's schedules changed, from the same rows as
+ * the Credits page (siteAutopilotRows, creditState). null when credits are not enforced for the company.
+ */
+export async function creditRunway(
+  org: Pick<OrgRow, 'id' | 'creditsEnforced' | 'creditLimits'>,
+  site: SiteRow,
+  change: ScheduleChange,
+): Promise<{ enforced: boolean; available: number; dailyBefore: number; dailyAfter: number } | null> {
+  if (!org.creditsEnforced) return null;
+  const [mon, ladders, settings] = await Promise.all([
+    siteRows<MonitorsRow>('monitors', site.domain, { max: 5 }),
+    siteRows<LadderRow>('ladders', site.domain, { max: 2000 }),
+    siteRows<LadderSettingsRow>('ladderSettings', site.domain, { max: 500 }),
+  ]);
+  const level = (change.autopilotLevel ?? (site.autopilotLevel === 1 || site.autopilotLevel === 3 ? site.autopilotLevel : 2)) as AutopilotLevel;
+  const monitors = completeMonitors({ ...(monitorsFromRow(mon[0] ?? undefined) ?? {}), ...(change.monitors ?? {}) });
+  const afterUsd = autopilotRows(monitors, change.blogsPerWeek ?? site.blogsPerWeek ?? 0, {
+    level,
+    writing: chosenLadderWriting(ladders, settings, level),
+    ranking: ladders.some((l) => String(l.ladder_id || '').trim() !== ''),
+  }).reduce((t, r) => t + r.usd, 0);
+  const sites = await siteForecasts(org.id, { fresh: true });
+  const before = await creditState(db, org, { sites });
+  const mine = sites.find((x) => x.siteId === site.id);
+  // a website paused by a person forecasts nothing, with or without the change
+  const after = mine && !(mine.paused && !mine.pausedForCredits) ? await creditState(db, org, { sites: sites.map((x) => (x.siteId === site.id ? { ...x, usd: afterUsd } : x)) }) : before;
+  return { enforced: true, available: before.available, dailyBefore: before.dailyBurn, dailyAfter: after.dailyBurn };
+}
+
 /** The tracked, verified websites of a company and what their schedules use a month. */
 export async function siteForecasts(orgId: string, opts: { fresh?: boolean } = {}): Promise<SiteForecast[]> {
   const hit = forecastCache.get(orgId);

@@ -174,7 +174,10 @@ describe('keyword check', () => {
     // another country, or older than 6 hours: a new check
     st.checks[0].createdAt = new Date(Date.now() - 7 * 3600_000);
     expect((await assess({ keyword: 'e invoicing software uae' })).json().cached).toBe(false);
-    expect((await assess({ keyword: 'e invoicing software uae', country: 'Saudi Arabia' })).json().cached).toBe(false);
+    // MKT (2026-10-27): another country than the website's, and a keyword about the UAE checked in Saudi Arabia, are asked first (409), then go ahead when acknowledged
+    expect((await assess({ keyword: 'e invoicing software uae', country: 'Saudi Arabia' })).statusCode).toBe(409);
+    expect(st.calls).toHaveLength(1);
+    expect((await assess({ keyword: 'e invoicing software uae', country: 'Saudi Arabia', acknowledge: ['market.run_country:SA:AE', 'market.keyword_place:e invoicing software uae:SA'] })).json().cached).toBe(false);
     expect(st.calls).toHaveLength(2);
     // the new check carries the stamp it was made with, so the next ask reuses it
     expect(st.checks.at(-1)).toMatchObject(stampNow());

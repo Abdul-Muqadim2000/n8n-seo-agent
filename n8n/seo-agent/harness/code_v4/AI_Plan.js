@@ -168,6 +168,11 @@ function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' 
     // W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §4): the owner's engine and coverage options, every one off / empty by default (cost and behaviour unchanged)
     Object.assign(settings, { claude_weekly: flag(m.ai_claude_weekly, false), pulse_engines_raw: String(m.ai_pulse_engines || '').trim(), persona_context: flag(m.ai_persona_context, false),
       fanout_check: Number.isFinite(Number(m.ai_fanout_check)) && Number(m.ai_fanout_check) > 0 ? Math.min(200, Math.round(Number(m.ai_fanout_check))) : 0, demand_market: flag(m.ai_demand_market, false) });
+    // AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27 §4.7): what the daily pulse asks - 'focus' (the questions of the ladders and pages the client
+    // works on, and the pinned ones) or 'all'. A site with NO seo_monitors row starts at 'focus'; a stored row whose field is empty keeps 'all', so a
+    // release never changes what an existing site measures or pays. ai_focus_mode 'off' keeps the panel as it is (no automatic additions or retirements).
+    Object.assign(settings, { pulse_scope: String(m.ai_pulse_scope || '').toLowerCase().trim() === 'focus' || (!m.site_id && !String(m.ai_pulse_scope || '').trim()) ? 'focus' : 'all',
+      focus_mode: String(m.ai_focus_mode || '').toLowerCase().trim() === 'off' ? 'off' : 'auto' });
     const o = { ...s, business_name: nameOf(s, p), settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '',
       region: p.region || '', country_code: p.country_code || '', public_email: p.public_email || '', price_range: p.price_range || '', service_areas: p.service_areas || '', opening_hours: p.opening_hours || '' } };
     if (on_demand) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }
@@ -416,7 +421,8 @@ const AIP = (() => {
   const stateOf = (cacheRows, site_id) => { const r = (cacheRows || []).find(c => c && c.key === stateKey(site_id)); return r ? parse(r.value, null) : null; };
   /** what to do with a stored state at `now`: 'continue' (this is its next chunk), 'resume' (silent too long: pick it up), 'busy' (a chunk
    *  is running right now), 'blocked' (F2: the run was STOPPED — its answers were not stored or it reached its money ceiling — and nothing
-   *  of this site's weekly run is asked again until a human clears the row or the run is older than resume_days), 'closed' (finished, or
+   *  of this site's weekly run is asked again until a human clears the row or the run is older than resume_days; a `failed_store` stop is
+   *  checked again by every later start, see healStore), 'closed' (finished, or
    *  too old to resume) */
   const STOPPED = ['failed_store', 'stopped_ceiling', 'stopped'];
   const stateVerdict = (st, nowIso, continuing) => {
@@ -475,6 +481,49 @@ const AIP = (() => {
   const baseState = (p) => { const c = p.cycle && p.cycle.key ? { key: p.cycle.key, date: p.cycle.date || '', job: p.cycle.job || 'ai_visibility', monthly: !!p.cycle.monthly, scheduled_for: p.cycle.scheduled_for || '', request_id: p.cycle.request_id || p.request_id || '', label: p.cycle.label || '' } : null;
     return { run_id: p.run_id, run_kind: p.run_kind, on_demand: !!p.on_demand, full_due: !!p.full_due, request_id: p.request_id || '', email: p.email || '', callback_url: p.callback_url || '', cycle: c,
       site_id: p.site_id, domain: p.domain, started_at: p.checked_at, ceiling_dfs_usd: n0(p.ceiling_dfs_usd) || null }; };
+
+  // ---- 6b'. a store that only LOOKED failed heals itself (2026-10-27, production 2026-10-25: devaicon.com, run ai_20261025_devaicon-com) -----
+  // The hand-off counted an answer as "not stored" when the row *Save AI Answers* returned carried a non-empty `error` - but `error` is a
+  // COLUMN of seo_ai_answers: an answer the in-200 gate could not read is stored WITH its DataForSEO message ("Internal SE Server Error.").
+  // Three such rows (stored, ids and all) were read as three failed saves and the run stopped `failed_store`, blocking the site for 6 days.
+  // n8n 2.41's Data Table insert writes every row of a call in ONE transaction and returns each row with its `id`, or fails them all; so a
+  // row is stored exactly when the table handed it back with an id (storedRow), never judged by its `error` column. Before a part declares
+  // `failed_store` it reads the run's rows back and inserts the truly missing ones once more (storeCheck); a run already stopped
+  // `failed_store` is checked again by every later start of the tracker and by the pulse's resume (healStore / storeHealDue): if every lost
+  // answer is in the table the run simply continues; if some are truly missing it continues ONCE with them counted as could-not-be-read
+  // (never asked again, never paid again); a second storage failure in the same run keeps it stopped for a person.
+  const storedRow = (j) => !!(j && typeof j === 'object' && S(j.id) !== '' && S(j.prompt_id) && S(j.engine));
+  /** what one part sent and what the table holds of it: { sent, stored, missing: [keys], recovered: n (found on the re-read or the retry) } */
+  const storeCheck = (o) => { const x = o || {}; const mine = (r) => r && S(r.site_id) === S(x.site_id) && (!x.run_id || !S(r.run_id) || S(r.run_id) === S(x.run_id));
+    const sent = new Set((x.sent || []).filter(mine).map(r => reqKey(r.prompt_id, r.engine)));
+    const first = new Set((x.saved || []).filter(r => mine(r) && storedRow(r)).map(r => reqKey(r.prompt_id, r.engine)));
+    const later = new Set([...(x.reread || []), ...(x.retried || [])].filter(r => mine(r) && storedRow(r)).map(r => reqKey(r.prompt_id, r.engine)));
+    const missing = [...sent].filter(k => !first.has(k) && !later.has(k));
+    return { sent: sent.size, stored: sent.size - missing.length, missing, recovered: [...sent].filter(k => !first.has(k) && later.has(k)).length }; };
+  /** a `failed_store` state checked against the run's stored rows: null (not such a state), { ok: true, state, found, missing, note } (the
+   *  run continues), or { ok: false, found, missing, why } (it stays stopped) */
+  const healStore = (st, rows, nowIso) => {
+    if (!st || !st.run_id || S(st.status) !== 'failed_store') return null;
+    const stored = new Set((rows || []).filter(r => r && S(r.run_id) === S(st.run_id) && r.prompt_id && r.engine).map(r => reqKey(r.prompt_id, r.engine)));
+    const explicit = Object.keys(parse(st.lost_keys, {}) || {}).length > 0;
+    if (!explicit && !st.asked_keys) return { ok: false, found: 0, missing: n0(st.lost), why: 'the stopped run recorded neither the answers it lost nor the requests it sent, so the table cannot be checked for them' };
+    const lostK = explicit ? unpackKeys(st.lost_keys) : new Set([...unpackKeys(st.asked_keys)].filter(k => !stored.has(k)));
+    const missing = [...lostK].filter(k => !stored.has(k));
+    const found = explicit ? lostK.size - missing.length : Math.max(0, n0(st.lost) - missing.length);
+    const heals = n0(st.store_heals);
+    if (missing.length && heals >= 1) return { ok: false, found, missing: missing.length, why: 'this run already continued once after answers it paid for were not stored, and ' + missing.length + ' answer(s) are missing again: a second storage failure in one run keeps it stopped' };
+    const when = S(st.updated_at).slice(0, 16).replace('T', ' ');
+    const note = missing.length
+      ? 'Run ' + st.run_id + ' was stopped' + (when ? ' at ' + when + ' UTC' : '') + ' because answers it had paid for were not stored. Read again, ' + found + ' of them are stored and ' + missing.length + ' are still missing: those ' + missing.length + ' were paid for once, are never asked again and count as could not be read; the run continued with the answers it has.'
+      : 'Run ' + st.run_id + ' was stopped' + (when ? ' at ' + when + ' UTC' : '') + ' because ' + (found || n0(st.lost)) + ' answer(s) looked unstored. Read again, every one of them is in the table (the save had reported them as failed), so the run continued from its stored answers. Nothing was asked or paid for again.';
+    const state = { ...st, status: 'running', stop_reason: '', lost: explicit ? Math.max(0, n0(st.lost) - found) : missing.length, lost_keys: null, pending: null,
+      store_heals: heals + (missing.length ? 1 : 0), store_heal: { at: S(nowIso), found, missing: missing.length, stopped_at: S(st.updated_at), reason: S(st.stop_reason).slice(0, 300) }, store_heal_note: note };
+    return { ok: true, state, found, missing: missing.length, note }; };
+  /** the pulse's resume: a `failed_store` run (inside resume_days) whose answers can be checked is started again so the tracker checks them */
+  const storeHealDue = (st, nowIso) => { if (!st || !st.run_id || S(st.status) !== 'failed_store') return false;
+    const now = Date.parse(nowIso) || Date.now(), started = Date.parse(st.started_at) || 0;
+    if (started && now - started > LIMITS.resume_days * 864e5) return false;
+    return !!(Object.keys(parse(st.lost_keys, {}) || {}).length || st.asked_keys); };
 
   // ---- 6c. a part sized by TIME, not only by count (F2, 2026-10-23: ENGINE_AUDIT.md E11) ----------------------------------------------
   // A 600-request part at ~40-60 s per batch of 10 (Run AI Requests: batch 10, 200 ms apart) is 40-60 minutes BEFORE the retries and the
@@ -591,7 +640,8 @@ const AIP = (() => {
   /** the Answer Analyst jobs one weekly run may start (it reads the answers that matter, 12 a job; more for a bigger panel, never past 60) */
   const analystCap = (panel) => Math.min(FIXED.analyst_cap_max, FIXED.analyst_cap_base + Math.floor(n0(panel) / 25));
   /** o: { panel, engines, pulse (bool), pulse_mode ('auto'|'sample'|'full'), pulse_per_week, cluster_size, and the W2-E3 options claude_weekly,
-   *  pulse_engines, persona_context + personas (the number of buyer roles), fanout_check, demand_market }. Every figure is in US dollars;
+   *  pulse_engines, persona_context + personas (the number of buyer roles), fanout_check, demand_market; AI-FOCUS: pulse_questions, the questions the
+   *  pulse asks when its scope is the focus }. Every figure is in US dollars;
    *  `run` is what one execution chain of the weekly tracker spends (weekly / the month's full run), `pulse_day` one pulse morning,
    *  `month` the site's month (4.33 weekly runs + the full run's extra + 26 pulse mornings); `options` what each option adds. */
   const cost = (o) => {
@@ -613,7 +663,10 @@ const AIP = (() => {
     const full = { dfs: r4(weekly.dfs + extra.dfs), ai: r4(weekly.ai + extra.ai) }; full.usd = r4(full.dfs + full.ai);
     const on = x.pulse !== false && pE.length > 0;
     const pw = on ? pulsePerWeek({ asked, weekly_engines: wE.length, pulse_engines: pE.length, cluster_size: x.cluster_size, mode: x.pulse_mode, per_week: x.pulse_per_week }) : { per_week: 0, headline: halfWidth(answers), cluster: halfWidth(Math.min(asked, n0(x.cluster_size) || LIMITS.cluster_size_guess) * wE.length), capped: false, why: on ? '' : 'the daily pulse is off' };
-    const qDay = on ? Math.min(asked, Math.ceil(asked * pw.per_week / FIXED.pulse_days)) : 0;
+    // AI-FOCUS (2026-10-27): with the pulse scope 'focus' the pulse asks only `pulse_questions` of the panel (the questions of the topics the client
+    // works on); null / absent = the whole panel, exactly as before (every golden case without it is unchanged)
+    const pq = x.pulse_questions == null || x.pulse_questions === '' || !Number.isFinite(Number(x.pulse_questions)) ? asked : clamp(Math.round(n0(x.pulse_questions)), 0, asked);
+    const qDay = on ? Math.min(pq, Math.ceil(pq * pw.per_week / FIXED.pulse_days)) : 0;
     const pulse_day = { dfs: r4(qDay * sumPrice(pE)), ai: 0 }; pulse_day.usd = pulse_day.dfs;
     const W = FIXED.weeks_per_month;
     const month = { weekly: r2(W * weekly.usd), full_extra: r2(extra.usd), pulse: r2(W * FIXED.pulse_days * pulse_day.usd) };
@@ -631,6 +684,7 @@ const AIP = (() => {
   return { LIMITS, panelSize, normMarket, locationOf, listOf, marketsOf, personasOf, stageOf, stems, jaccard, sameAsk, dedupe, stratumOf, pulseDay, halfWidth,
     pulsePerWeek, pulseSample, reqKey, slice, stateKey, stateOf, stateVerdict, stateRow, doneRun, panelIds, panelHash, overlap, hash,
     MARKETS_MAX, normQ, hash64, promptId, findStored, keywordOf, KEYWORD_SOURCES, STOPPED, ENG_CODE, packKeys, unpackKeys, CEILING, runCeiling, ceilingLeft, keysUsd, baseState,
+    storedRow, storeCheck, healStore, storeHealDue,
     TIME, secPerRequest, chunkPlan, servicesOfRow, fitInput,
     PRICE, PRICE_BASIS, ENGINES, DEFAULT_ENGINES, MONTHLY_ENGINES, PULSE_ENGINES, FIXED, analystCap, cost, sentimentOf,
     XPRICE, PERSONA, FANOUT_MAX, DEMAND_TASKS, PULSE_ALLOWED, pulseEnginesOf, monthlyOf, optionsOf, extraSeconds };
@@ -1185,6 +1239,69 @@ const fitArabic = (s) => {
   }
   return { text: out.join(' ').replace(/\s+/g, ' ').trim(), read: true, unread };
 };
+// ---- MKT (2026-10-27, docs/mismatch-audit-2026-10-27/AUDIT.md §2.4, M4 / M5 / M7): WHERE a keyword or a text points ----
+// FIT_GEO above says only "this word is a place", so "ai automation solutions gcc" for a Pakistan website passed as "in your market". The
+// gazetteer attaches countries (ISO-2) to the place words: a country, its people, its capital and largest cities; a region is the set of its
+// countries. One table for the engine (fitGate's `ctx.market`) and the app (shared/src/markets.ts imports it through fit-gate.generated.js).
+// Never the bare word "us"; demonyms that are also languages (german, french, spanish, italian, dutch, english) are not places
+// ("spanish translation services" is not about Spain); "online", "near me", "global", "worldwide" are not places.
+const FIT_PLACES_SRC = [
+  ['AE', 'uae|united arab emirates|emirates|emirati|dubai|abu dhabi|sharjah|ajman|fujairah|ras al khaimah|umm al quwain|al ain'],
+  ['SA', 'saudi|saudi arabia|ksa|riyadh|jeddah|dammam|khobar|al khobar|mecca|makkah|medina|madinah'],
+  ['PK', 'pakistan|pakistani|lahore|karachi|islamabad|rawalpindi|faisalabad|multan|peshawar|quetta|sialkot|gujranwala'],
+  ['IN', 'india|indian|delhi|new delhi|mumbai|bangalore|bengaluru|chennai|pune|kolkata|ahmedabad|noida|gurgaon|gurugram'],
+  ['IN PK', 'hyderabad'],
+  ['GB', 'uk|united kingdom|britain|great britain|british|england|scotland|wales|london|manchester|birmingham|leeds|glasgow|edinburgh'],
+  ['US', 'usa|united states|united states of america|new york|nyc|california|texas|florida|chicago|los angeles|san francisco|houston|seattle|boston'],
+  ['CA', 'canada|canadian|ottawa|toronto|montreal|vancouver|calgary'],
+  ['AU', 'australia|australian|canberra|sydney|melbourne|brisbane'],
+  ['NZ', 'new zealand|wellington|auckland|christchurch'],
+  ['IE', 'ireland|irish|dublin|galway|limerick'],
+  ['SG', 'singapore|singaporean'],
+  ['ZA', 'south africa|south african|pretoria|johannesburg|cape town|durban'],
+  ['DE', 'germany|deutschland|berlin|hamburg|munich|cologne|frankfurt'],
+  ['FR', 'france|paris|marseille|lyon'],
+  ['ES', 'spain|madrid|barcelona|valencia|seville'],
+  ['IT', 'italy|rome|milan|naples|turin'],
+  ['NL', 'netherlands|holland|amsterdam|rotterdam|the hague|utrecht'],
+  ['BR', 'brazil|brazilian|brasilia|sao paulo|rio de janeiro'],
+  ['MX', 'mexico|mexican|mexico city|guadalajara|monterrey'],
+  // markets the product cannot measure (not in the COUNTRIES table): a keyword about them is flagged, and their rankings cannot be tracked
+  ['QA', 'qatar|qatari|doha'], ['OM', 'oman|omani|muscat'], ['BH', 'bahrain|bahraini|manama'], ['KW', 'kuwait|kuwaiti'],
+  ['EG', 'egypt|egyptian|cairo|alexandria'], ['JO', 'jordan|amman'], ['LB', 'lebanon|beirut'], ['TR', 'turkiye|istanbul|ankara'],
+  ['CN', 'china|beijing|shanghai|shenzhen'], ['JP', 'japan|tokyo|osaka'], ['MY', 'malaysia|kuala lumpur'], ['ID', 'indonesia|jakarta'],
+  ['PH', 'philippines|manila'], ['NG', 'nigeria|lagos|abuja'], ['KE', 'kenya|nairobi'], ['BD', 'bangladesh|dhaka'], ['LK', 'sri lanka|colombo'],
+  ['NP', 'nepal|kathmandu'], ['AF', 'afghanistan|kabul'],
+  // regions: the set of their countries ("gcc" is fine for a UAE website, not for a Pakistan one)
+  ['AE SA QA OM BH KW', 'gcc|gcc countries|gulf|gulf countries|gulf region|arabian gulf|persian gulf|khaleej'],
+  ['AE SA QA OM BH KW EG JO LB', 'middle east|mena|arab world|arab countries'],
+  ['DE FR ES IT NL IE GB', 'europe|european|eu|european union'],
+  ['US CA', 'north america'], ['BR MX', 'latin america|latam'], ['IN PK BD LK NP', 'south asia']];
+const FIT_PLACES = FIT_PLACES_SRC.flatMap(([iso, ws]) => ws.split('|').map(w => ({ word: w, iso: iso.split(' '), region: iso.split(' ').length > 2 || iso === 'US CA' || iso === 'BR MX' })))
+  .sort((a, b) => b.word.split(' ').length - a.word.split(' ').length || b.word.length - a.word.length);
+// a one-word place is neutral for the topic rules, like the places FIT_GEO already held ("ai automation lahore" is about automation)
+for (const p of FIT_PLACES) if (p.word.indexOf(' ') < 0) FIT_GEO.add(p.word);
+// the comparable form of a text: Arabic read through the glossary, NFKC, lower case, dots dropped (u.a.e -> uae), every other mark a space
+const fitPlaceText = (s) => { const raw = String(s || ''); const AR = fitArabic(raw);
+  return ' ' + fitLow((AR.read ? AR.text + ' ' : '') + raw).replace(/\./g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim() + ' '; };
+// every place a text names, longest phrase first (each word read once): [{ word, iso: [..], region }], in the order found
+const fitPlaces = (s) => { let t = fitPlaceText(s); const out = [];
+  for (const p of FIT_PLACES) { const k = ' ' + p.word + ' '; let i = t.indexOf(k);
+    while (i >= 0) { out.push({ word: p.word, iso: p.iso.slice(), region: p.region, at: i }); t = t.slice(0, i) + ' | ' + t.slice(i + k.length - 1); i = t.indexOf(k); } }
+  return out.sort((a, b) => a.at - b.at).map(({ word, iso, region }) => ({ word, iso, region })); };
+// the keyword without the given place words (and the "in" / "for" left dangling): "ai automation solutions gcc" -> "ai automation solutions"
+const FIT_PLACE_GLUE = /^(in|for|across|at|of|the|and|near|from|within|around|throughout|to)$/;
+const fitDropPlaces = (keyword, words) => { if (FIT_AR.test(String(keyword || ''))) return '';
+  let t = fitPlaceText(keyword); for (const w of (words || [])) t = t.split(' ' + w + ' ').join(' | ');
+  const parts = t.split('|').map(x => x.trim().split(' ').filter(Boolean));
+  for (const p of parts) { while (p.length && FIT_PLACE_GLUE.test(p[p.length - 1])) p.pop(); while (p.length && FIT_PLACE_GLUE.test(p[0])) p.shift(); }
+  return parts.map(p => p.join(' ')).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(); };
+// does a text point to the market `iso`? ok = it names no place, or at least one place that includes the market
+//   { ok, iso, places, inside: [words], outside: [words], without: the text with the outside words dropped ('' when it cannot be said) }
+const fitMarket = (s, iso) => { const m = String(iso || '').toUpperCase(); const places = fitPlaces(s);
+  const inside = places.filter(p => p.iso.includes(m)).map(p => p.word), outside = places.filter(p => !p.iso.includes(m)).map(p => p.word);
+  const ok = !m || !places.length || inside.length > 0;
+  return { ok, iso: m, places, inside, outside, without: ok ? String(s || '').trim() : fitDropPlaces(s, outside) }; };
 // ---- KW-GATE: what the client DECLARED it sells, widened by a small category tree, and the products of OTHER vendors ----
 // A category search of what the client sells is in topic ("erp software uae" for a Business Central partner, "peppol uae" for an e-invoicing
 // firm, "vat registration uae" next to e-invoicing compliance, "it company dubai" for an IT firm). A family is declared only by the client's
@@ -1326,7 +1443,8 @@ function fitTopic(keyword, topics, ctx) {
   if (unread.size && own.some(t => !unread.has(t) && matchOwn(t))) own = own.filter(t => !unread.has(t));
   if (!own.length) {
     const cats = [...new Set(toks.filter(t => (FIT_GENERIC.has(t) && !FIT_WIDE.has(t) && matches(t)) || decl.anchors.has(t)))];   // B-3: a wide word never stands for a category
-    const hasPlace = toks.some(FIT_REAL_GEO);
+    // MKT (2026-10-27): with the website's market given, only a place IN that market is "your market" ("erp software gcc" for a Pakistan site is not)
+    const hasPlace = o.market ? fitMarket(keyword, o.market).inside.length > 0 : toks.some(FIT_REAL_GEO);
     if (cats.length >= 2 || (cats.length >= 1 && hasPlace)) return { ok: true, reason: '', detail: 'a category you sell (' + cats.join(', ') + ')' + (hasPlace ? ' in your market' : ''), share: 1 };
     // KW-GATE (review 13): "it company dubai" for an IT firm, "best ai companies uae" for an AI consultancy: a two-letter category the client
     // declared, with a word naming a seller. "ai", "ai uae", "ai online", "best ai apps" carry no seller and stay too broad.
@@ -1493,6 +1611,14 @@ function fitGate(keyword, ctx) {
   }
   // 2. the search data says navigational
   if (String(ctx.intent || '').toLowerCase() === 'navigational') return { ok: false, reason: 'navigational', detail: 'the search data classifies it as navigational (people look for one particular website)' };
+  // 2b. MKT (2026-10-27, AUDIT M4): with the website's market given (ctx.market, ISO-2), a keyword that names only places outside it is a
+  //     search of another market ("ai automation solutions gcc" for a Pakistan website). The keyword the client chose itself (ctx.protect,
+  //     the whole keyword) is never refused here: the app asked them first, and they decided.
+  if (ctx.market) {
+    const mk = fitMarket(String(keyword || ''), ctx.market);
+    const chosen = (ctx.protect || []).some(p => fitLow(p).replace(/\s+/g, ' ').trim() === fitLow(keyword).replace(/\s+/g, ' ').trim());
+    if (!mk.ok && !chosen) return res({ ok: false, reason: 'other market', detail: 'a search about ' + fitAnd(mk.outside.map(w => '"' + w + '"')) + ', outside the market this website is measured in (' + mk.iso + ')' });
+  }
   // 3. a public body or an identity document: "ministry of finance", "federal tax authority" (no content / buying word), "fta", "emaratax uae",
   //    "emirates id status" (the body alone, or with a portal / status word); "zatca e invoicing" and "fta vat registration" are topics and stay
   const govWord = (' ' + kw + ' ').match(FIT_GOV_WORDS);
@@ -1687,6 +1813,305 @@ const FITR = {
       + '. A page that is already written is kept and only flagged.';
   }
 };
+// ---- AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27/RESEARCH_AND_DESIGN.md §4-§5): the AI question panel follows the client's focus ----
+// devaicon.com (Pakistan) typed "open edx provider" once at onboarding and then worked only on a keyword ladder about AI automation; its 10-question
+// panel, written on the setup day before the ladder existed, kept asking about Open edX in the UAE every week and every pulse morning, because a full
+// panel was never revisited, nothing retired a question when the focus moved, the declared services were never a topic and stored questions kept their
+// stale market. This kit is the one deterministic rule (no Claude, no network; inlined by build_monitors.py into AI Plan, Prompt Jobs, Prompt Rows,
+// Pulse Plan and AI Metrics, and written for the app as app/shared/src/ai-focus.generated.js):
+//   focusOf    the client's focus topics, weighted: active ladders (3), recently written / published pages (2), declared services (1, the stable core),
+//              tracked keywords (1, or a 'watch' of at most one kept question when nothing has touched them for 28 days), always in the website's
+//              own market (other markets' place words are taken out of a topic phrase; the market itself is decided elsewhere, M4 / M2);
+//   quotas     how many questions each topic gets inside the panel size the client pays for (brand 1, a core of at least 30% with the brand, at least
+//              2 a topic so each is a readable segment, at most (N-1)/2 topics; the topics that do not fit are listed with the size that would fit them);
+//   reconcile  what the weekly run does with the stored panel: keep, write (per topic), retire (history kept: status `retired`, never deleted), and
+//              what it must ASK the owner instead of doing (the owner's own and pinned questions, questions of another market, a bigger panel).
+//              Additions land the week a ladder starts (the page needs a "before"); retirements wait for the month's full run and 28 days out of
+//              focus, except on a panel that has no trend yet (provisional: fewer than 4 measured weeks) and the questions of a deleted ladder;
+//   matched    the change computed only on the questions asked in both weeks (a panel that moved still has a trend), per-topic overlap.
+// Sandbox rules (n8n 2.x Code node, memory note 2026-10-25): no URL constructor, no structured clone, no property definitions or prototype changes.
+const AIF = (() => {
+  const CFG = { core_share: 0.3, min_per_topic: 2, watch_max: 1, watch_total: 2, grace_days: 28, paused_days: 56, page_days: 180, watch_days: 28, merge: 0.5,
+    provisional_weeks: 4, new_days: 8, seen_refresh_days: 6, core_topics_max: 2 };
+  const W = { ladder: 3, page: 2, service: 1, keyword: 1, watch: 0.5, maintain: 1, paused: 1 };
+  const S = (v) => String(v == null ? '' : v).trim();
+  const low = (v) => S(v).toLowerCase().replace(/\s+/g, ' ');
+  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const t = (iso) => { const x = Date.parse(S(iso)); return Number.isFinite(x) ? x : 0; };
+  const daysBetween = (a, b) => (t(b) && t(a) ? (t(b) - t(a)) / 864e5 : 0);
+  const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[\n,;|]+/)).map(S).filter(Boolean);
+  const arr = (v) => { if (Array.isArray(v)) return v; const s = S(v); if (!s) return []; if (s[0] === '[') { try { const x = JSON.parse(s); return Array.isArray(x) ? x : []; } catch (e) { return []; } } return listOf(s); };
+  const pin = (p) => p && (p.pinned === true || S(p.pinned) === 'true');
+  const ownerQ = (p) => p && (S(p.source) === 'custom' || pin(p));
+  // the fit gate's place helpers when the node inlines it (every engine node that calls AIF does; the app's generated module imports them)
+  const G = {
+    places: typeof fitPlaces === 'function' ? fitPlaces : null,
+    drop: typeof fitDropPlaces === 'function' ? fitDropPlaces : null,
+    market: typeof fitMarket === 'function' ? fitMarket : null,
+    evidence: typeof fitEvidence === 'function' ? fitEvidence : null };
+
+  // ---- 1. words: a topic's content words (places, question words and seller words out), five-letter stems --------------------------------
+  const GENERIC = new Set(('a an and are as at be best by can do does for from get has have how i if in into is me my of on or our should the their them '
+    + 'there these this to top us we what when where which who why will with you your vs versus near cheap cheapest cost costs price prices pricing quote '
+    + 'solution solutions service services company companies provider providers firm firms agency agencies partner partners vendor vendors list guide '
+    + 'options option about need needs want looking help good great right local online').split(' '));
+  const placeFree = (s) => { const x = low(s); if (!x) return ''; if (!G.places || !G.drop) return x; const ps = G.places(x).map(p => p.word); return ps.length ? (G.drop(x, ps) || x) : x; };
+  const stem = (w) => (w.length >= 5 ? w.slice(0, 5) : w);
+  const words = (s) => [...new Set(placeFree(s).replace(/[^\p{L}\p{N}\s]+/gu, ' ').split(/\s+/).filter(w => w && !GENERIC.has(w) && (w.length >= 2 || /\d/.test(w))).map(stem))];
+  const jac = (a, b) => { const A = new Set(a), B = new Set(b); if (!A.size || !B.size) return 0; let i = 0; for (const x of A) if (B.has(x)) i++; return i / (A.size + B.size - i); };
+  /** two phrases are one topic: content-word Jaccard >= 0.5 after places and seller words are taken out ("ai automation solutions gcc" = "ai automation") */
+  const sameTopic = (a, b) => jac(words(a), words(b)) >= CFG.merge;
+  /** how well a question's words carry one of a topic's phrases: the share of the phrase's words it carries (all of a two-word phrase, 2 of 3 …) */
+  const carries = (qw, phrase) => { const T = words(phrase); if (!T.length) return 0; const Q = new Set(qw); const hit = T.filter(x => Q.has(x)).length;
+    const need = T.length <= 2 ? T.length : Math.ceil(T.length * 2 / 3); return hit >= need ? hit / T.length : 0; };
+  /** the topic phrase in the website's market: other markets' place words taken out ("ai automation solutions gcc" for Pakistan -> "ai automation solutions") */
+  const inMarket = (phrase, iso) => { const x = low(phrase); if (!iso || !G.market) return x; const m = G.market(x, iso); return m.ok ? x : (low(m.without) || x); };
+
+  // ---- 2. the focus model ------------------------------------------------------------------------------------------------------------------
+  const LIVE_LADDER = ['active', 'queued', 'writing', 'climbing', 'stuck', ''];
+  /** o: { ladders (seo_ladders rows, already through the read-path gate), settings (seo_ladder_settings rows), content_log, keywords (tracked),
+   *  services (DECLARED only), gsc ([{query, impressions}] of the last 28 days), iso (the website's own country), now, out(keyword) -> null | reason }
+   *  -> { topics: [{ id, label, state, weight, source, refs, terms, since, chosen_by, why }], out: [{ label, reason }], iso } */
+  const focusOf = (o) => {
+    const x = o || {}; const now = S(x.now) || new Date().toISOString(); const iso = S(x.iso).toUpperCase();
+    const topics = []; const out = [];
+    const add = (tp) => { const same = topics.find(z => z.state !== 'out' && sameTopic(z.label, tp.label));
+      if (same && (tp.source === 'page' || tp.source === 'keyword' || same.source === tp.source && tp.source !== 'ladder')) {   // a page or a tracked keyword of a topic already there joins it
+        same.terms = [...new Set([...same.terms, ...tp.terms])]; same.refs = [...new Set([...same.refs, ...tp.refs])]; if (tp.source === 'page') same.pages = (same.pages || 0) + 1; return same; }
+      if (same && tp.source === 'ladder' && same.source === 'ladder') { same.terms = [...new Set([...same.terms, ...tp.terms])]; same.refs = [...new Set([...same.refs, ...tp.refs])];
+        const rank = { active: 4, maintain: 3, paused: 2 }; if ((rank[tp.state] || 0) > (rank[same.state] || 0)) { same.state = tp.state; same.weight = tp.weight; } return same; }
+      topics.push(tp); return tp; };
+    // ladders: one topic per head term (rows of one ladder grouped), state from seo_ladder_settings
+    const setOf = new Map((x.settings || []).filter(r => r && S(r.ladder_id) && S(r.ladder_id) !== '_site').map(r => [S(r.ladder_id), r]));
+    const byL = new Map(); for (const r of (x.ladders || [])) { if (!r || !S(r.head_keyword)) continue; const id = S(r.ladder_id) || 'head:' + low(r.head_keyword); const g = byL.get(id) || { id, head: low(r.head_keyword), rows: [] }; g.rows.push(r); byL.set(id, g); }
+    for (const g of byL.values()) {
+      const st0 = setOf.get(g.id) || {}; const st = low(st0.status);
+      if (st === 'archived') continue;   // archived = the client left it: its questions leave focus
+      const state = st === 'paused' ? 'paused' : st === 'won' ? 'maintain' : 'active';
+      const label = inMarket(g.head, iso);
+      const since = S(st0.updated_at) || S(st0.created_at) || S((g.rows[0] || {}).start_date) || '';
+      const started = S(st0.created_at) || S((g.rows.slice().sort((a, b) => S(a.start_date).localeCompare(S(b.start_date)))[0] || {}).start_date);
+      add({ id: 'ladder:' + g.id, label, state, weight: W[state === 'active' ? 'ladder' : state], source: 'ladder', refs: [g.id], chosen_by: S(st0.chosen_by || (g.rows[0] || {}).chosen_by) || 'client_typed',
+        terms: [...new Set([label, ...g.rows.filter(r => Number(r.rung) !== 4).map(r => inMarket(r.keyword, iso)).filter(Boolean)])].slice(0, 12), since, started_at: started, priority: n0(st0.priority) || 99,
+        why: state === 'active' ? 'your keyword ladder "' + label + '"' : state === 'paused' ? 'your paused keyword ladder "' + label + '"' : 'your won keyword ladder "' + label + '" (kept as a watch on the position)' });
+    }
+    // pages written or published in the last 180 days whose keyword is not a ladder head (a ladder page is already its ladder's topic)
+    for (const r of (x.content_log || [])) { if (!r || !S(r.keyword)) continue; const stt = low(r.status); if (!['written', 'published'].includes(stt)) continue;
+      const when = S(r.published_at) || S(r.started_at); if (when && daysBetween(when, now) > CFG.page_days) continue;
+      const label = inMarket(r.keyword, iso);
+      add({ id: 'page:' + label, label, state: 'active', weight: W.page, source: 'page', refs: [S(r.published_url) || label], terms: [label], since: when, started_at: when, priority: 50, chosen_by: 'client_typed',
+        why: 'your page "' + label + '"' }); }
+    // declared services: the stable core (top 2 by Search Console impressions of matching searches, else the declared order)
+    const gsc = (x.gsc || []).filter(q => q && S(q.query) && n0(q.impressions) > 0);
+    const svc = [...new Set((x.services || []).map(low).filter(Boolean))];
+    const impOf = (label) => gsc.filter(q => carries(words(q.query), label) > 0).reduce((s, q) => s + n0(q.impressions), 0);
+    const svcRank = svc.map((l, i) => ({ l, i, imp: impOf(l) })).sort((a, b) => b.imp - a.imp || a.i - b.i);
+    for (const s of svcRank) { if (topics.some(z => sameTopic(z.label, s.l))) continue;
+      add({ id: 'service:' + s.l, label: s.l, state: 'core', weight: W.service, source: 'service', refs: [], terms: [s.l], since: '', started_at: '', priority: 80 + s.i, chosen_by: 'client_typed', impressions: s.imp,
+        why: 'a service you listed ("' + s.l + '")' }); }
+    // tracked keywords: with a ladder or a page they are that topic; with Search Console impressions they are a topic; else a watch
+    const activeOther = () => topics.some(z => z.state === 'active');
+    for (const k0 of [...new Set((x.keywords || []).map(low).filter(Boolean))]) {
+      const why = typeof x.out === 'function' ? x.out(k0) : null;
+      if (why) { out.push({ label: k0, reason: S(why), source: 'keyword' }); continue; }
+      const label = inMarket(k0, iso);
+      const home = topics.find(z => z.state !== 'core' && sameTopic(z.label, label));
+      if (home) { home.terms = [...new Set([...home.terms, label])]; continue; }
+      const imp = gsc.filter(q => carries(words(q.query), label) > 0).reduce((s, q) => s + n0(q.impressions), 0);
+      const ev = G.evidence && svc.length ? G.evidence(label, svc, { services: svc }) : null;
+      if (ev && ev.verdict === 'out') { out.push({ label, reason: 'not part of the services you listed (' + S(ev.detail).slice(0, 160) + ')', source: 'keyword' }); continue; }
+      if (imp > 0 || !activeOther()) add({ id: 'keyword:' + label, label, state: 'active', weight: W.keyword, source: 'keyword', refs: [], terms: [label], since: '', started_at: '', priority: 60, chosen_by: 'client_typed', impressions: imp,
+        why: imp > 0 ? 'a keyword you track, with ' + imp + ' Search Console impressions' : 'a keyword you track' });
+      else add({ id: 'keyword:' + label, label, state: 'watch', weight: W.watch, source: 'keyword', refs: [], terms: [label], since: '', started_at: '', priority: 90, chosen_by: 'client_typed',
+        why: 'a keyword you track with no keyword ladder, no page and no Search Console impressions in 28 days: kept as a weekly watch' });
+    }
+    // a tracked keyword that became a watch BEFORE a later ladder appeared stays a watch; one added while nothing else was active is re-judged
+    if (activeOther()) for (const z of topics) if (z.source === 'keyword' && z.state === 'active' && !(n0(z.impressions) > 0) && topics.some(y => y !== z && y.state === 'active' && y.source !== 'keyword')) {
+      z.state = 'watch'; z.weight = W.watch; z.why = 'a keyword you track with no keyword ladder, no page and no Search Console impressions in 28 days: kept as a weekly watch'; }
+    return { topics, out, iso };
+  };
+
+  // ---- 3. which topic a stored question measures --------------------------------------------------------------------------------------------
+  const qWords = (p) => words([S(p.keyword), S(p.cluster), S(p.topic), S(p.focus_topic)].filter(Boolean).join(' ') || S(p.prompt));
+  /** the topic a question belongs to (best match over the topic's phrases), or null */
+  const topicOf = (p, topics) => { const qw = qWords(p); let best = null, score = 0;
+    for (const z of (topics || [])) { const sc = Math.max(0, ...z.terms.map(ph => carries(qw, ph))); const tie = sc === score && best && (z.weight || 0) > (best.weight || 0);
+      if (sc > score || tie) { best = z; score = sc; } }
+    if (!best) { const fs = S(p.focus_source); const id = fs.indexOf('ladder:') === 0 ? 'ladder:' + fs.slice(7) : ''; if (id) best = (topics || []).find(z => z.id === id) || null; }
+    return best; };
+
+  // ---- 4. quotas ------------------------------------------------------------------------------------------------------------------------------
+  /** N = the panel size (brand included). have: Map(topic id -> questions it keeps now). owner: the owner's own / pinned questions that match no topic.
+   *  -> { quota: Map(id -> n), measured: [ids], not_measured: [{ id, label, need }], core_n, raise_to } */
+  const quotas = (N, topics, have, ownerFree) => {
+    const H = have || new Map(); const hv = (id) => n0(H.get(id));
+    let slots = Math.max(0, Math.round(n0(N)) - 1 - n0(ownerFree));
+    const quota = new Map(); const measured = []; const not_measured = [];
+    const T = (st) => (topics || []).filter(z => z.state === st);
+    // watch: keep at most one existing question each (never written new), at most two watches
+    let wl = CFG.watch_total; for (const z of T('watch')) { const k = Math.min(CFG.watch_max, hv(z.id), wl, slots); quota.set(z.id, k); wl -= k; slots -= k; }
+    // paused: keep what it has (weekly only, nothing new); won: 2 kept as a watch on the position
+    for (const z of T('paused')) { const k = Math.min(hv(z.id), slots); quota.set(z.id, k); slots -= k; if (k) measured.push(z.id); }
+    for (const z of T('maintain')) { const k = Math.min(CFG.min_per_topic, hv(z.id), slots); quota.set(z.id, k); slots -= k; if (k) measured.push(z.id); }
+    const cap = Math.max(1, Math.floor((Math.round(n0(N)) - 1) / 2) - measured.length);
+    const act = T('active').slice().sort((a, b) => hv(b.id) - hv(a.id) || (a.priority || 99) - (b.priority || 99) || S(b.started_at).localeCompare(S(a.started_at)));
+    const core = T('core');
+    // the stable core: at least 30% of the panel with the brand question (2 when the panel is 8 or more), in at most two service topics;
+    // with nothing active (the setup day) the services are the whole panel
+    let coreN = core.length ? (act.length ? Math.max(Math.ceil(CFG.core_share * n0(N)) - 1, n0(N) >= 8 ? 2 : 1) : slots) : 0;
+    coreN = Math.min(coreN, slots);
+    const nCore = core.length && coreN ? Math.max(1, Math.min(core.length, act.length ? CFG.core_topics_max : cap, Math.floor(coreN / CFG.min_per_topic) || 1)) : 0;
+    const coreTopics = core.slice(0, nCore);
+    if (coreTopics.length) { const base = Math.floor(coreN / coreTopics.length); let rem = coreN - base * coreTopics.length;
+      for (const z of coreTopics) { quota.set(z.id, base + (rem > 0 ? 1 : 0)); rem--; measured.push(z.id); } slots -= coreN; }
+    for (const z of core) if (!quota.has(z.id)) quota.set(z.id, 0);
+    // the active topics that fit: each at least 2, at most `room` topics, and only as many as the slots left after the core allow
+    const room = Math.max(0, cap - nCore);
+    const fit = act.slice(0, Math.max(0, Math.min(room, Math.floor(Math.max(0, slots) / CFG.min_per_topic))));
+    // the rest by weight, largest remainder, at least 2 each
+    if (fit.length) { const left = slots; const wsum = fit.reduce((s, z) => s + (z.weight || 1), 0);
+      const raw = fit.map(z => ({ z, q: Math.max(CFG.min_per_topic, left * (z.weight || 1) / wsum) }));
+      let got = raw.map(r => ({ z: r.z, n: Math.max(CFG.min_per_topic, Math.floor(r.q)), f: r.q - Math.floor(r.q) }));
+      let over = got.reduce((s, r) => s + r.n, 0) - left;
+      while (over > 0) { const r = got.filter(g => g.n > CFG.min_per_topic).sort((a, b) => a.f - b.f || (a.z.weight || 1) - (b.z.weight || 1))[0]; if (!r) break; r.n--; over--; }
+      let under = left - got.reduce((s, r) => s + r.n, 0);
+      for (const r of got.slice().sort((a, b) => b.f - a.f || (b.z.weight || 1) - (a.z.weight || 1))) { if (under <= 0) break; r.n++; under--; }
+      while (under > 0) { got[0].n++; under--; }
+      for (const r of got) { quota.set(r.z.id, r.n); measured.push(r.z.id); slots -= r.n; } }
+    for (const z of act) if (!quota.has(z.id)) { quota.set(z.id, 0); not_measured.push({ id: z.id, label: z.label, need: CFG.min_per_topic }); }
+    const raise_to = not_measured.length ? Math.round(n0(N)) + CFG.min_per_topic * not_measured.length : 0;
+    return { quota, measured, not_measured, core_n: coreN, raise_to };
+  };
+
+  // ---- 5. reconcile: keep, write, retire, ask -------------------------------------------------------------------------------------------------
+  /** o: { stored (the site's seo_ai_prompts rows, every status), focus (focusOf), N (panel size), now, full (the month's full run),
+   *  weeks (measured weekly rows on file), own_market ('PK-en'), markets (the markets the owner set), ladder_ids (the ladders that still exist) }
+   *  -> { keep, retire: [{ prompt_id, reason, topic }], write: [{ topic_id, label, state, source, count, terms, reason }], updates: [{ prompt_id, focus_topic,
+   *  focus_source, focus_state, focus_seen_at }], owner_off_focus, market_drift, not_measured, raise_to, provisional, events, summary } */
+  const reconcile = (o) => {
+    const x = o || {}; const now = S(x.now) || new Date().toISOString(); const N = Math.round(n0(x.N)) || 10;
+    const topics = ((x.focus || {}).topics || []);
+    const provisional = n0(x.weeks) < CFG.provisional_weeks;
+    const own = S(x.own_market); const okMarkets = new Set([own, ...(x.markets || []).map(S)].filter(Boolean).map(m => m.toUpperCase()));
+    const mkOk = (p) => { const m = S(p.market).toUpperCase(); return !m || okMarkets.has(m) || (own && m.split('-')[0] === own.toUpperCase().split('-')[0] && !m.split('-')[1]); };
+    const ladderIds = new Set((x.ladder_ids || []).map(S));
+    const live = (x.stored || []).filter(p => p && S(p.prompt) && !['off', 'refused', 'retired', 'proposed'].includes(low(p.status || 'active')));
+    const brand = live.filter(p => S(p.kind) === 'brand');
+    const qs = live.filter(p => S(p.kind) !== 'brand');
+    const retire = [], updates = [], owner_off_focus = [], market_drift = [];
+    const of = new Map(); const have = new Map(); let ownerFree = 0; const keptAuto = new Map();
+    // focus_seen_at: while a question is in focus, when it was last seen in focus (refreshed weekly); once it is out, when it was first found out
+    // of focus (a question stored before this rule starts its 28 days the first time it is judged, so a release retires nothing by itself)
+    const stamp = (p, z) => { const fresh = z && z.state !== 'out'; const seen = fresh ? (daysBetween(S(p.focus_seen_at), now) >= CFG.seen_refresh_days || !S(p.focus_seen_at) ? now : S(p.focus_seen_at)) : (S(p.focus_state) === 'out' && S(p.focus_seen_at) ? S(p.focus_seen_at) : now);
+      const u = { prompt_id: S(p.prompt_id), focus_topic: z ? z.label : '', focus_source: z ? (z.source === 'ladder' ? 'ladder:' + (z.refs[0] || '') : z.source) : S(p.focus_source), focus_state: z ? z.state : 'out', focus_seen_at: seen };
+      if (u.focus_topic !== S(p.focus_topic) || u.focus_source !== S(p.focus_source) || u.focus_state !== S(p.focus_state) || u.focus_seen_at !== S(p.focus_seen_at)) updates.push(u); };
+    // the whole automatic panel written for another market (the website's country changed, devaicon.com: UAE questions on a Pakistan website) on a
+    // panel with no trend yet is replaced at once; a panel that also asks in the website's own market keeps its other markets for the owner to judge
+    const autoQ = qs.filter(p => !ownerQ(p)); const allElsewhere = autoQ.length > 0 && autoQ.every(p => !mkOk(p));
+    for (const p of qs) {
+      const z = topicOf(p, topics); of.set(S(p.prompt_id), z);
+      if (ownerQ(p)) { if (z && z.state !== 'out') have.set(z.id, n0(have.get(z.id)) + 1); else { ownerFree++; if (topics.length) owner_off_focus.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), why: 'it asks about something none of your keyword ladders, pages or services cover' }); }
+        stamp(p, z); continue; }
+      // an automatic question
+      const fs = S(p.focus_source); const lid = fs.indexOf('ladder:') === 0 ? fs.slice(7) : '';
+      const deleted = !!(lid && !ladderIds.has(lid) && (!z || z.source !== 'ladder' || z.refs.indexOf(lid) < 0));
+      const wrongMarket = !mkOk(p);
+      const outDays = S(p.focus_state) === 'out' && S(p.focus_seen_at) ? daysBetween(S(p.focus_seen_at), now) : 0;   // out of focus since it was first found so
+      const offFocus = !z || deleted;
+      if (wrongMarket) {
+        if (provisional && allElsewhere) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'asked in ' + S(p.market) + ', not in your market (' + own + ')', topic: z ? z.label : '' }); continue; }
+        market_drift.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), market: S(p.market) });
+      }
+      if (offFocus) {
+        const why = deleted ? 'its keyword ladder was deleted' : 'it is about something you no longer work on (no keyword ladder, page, service or tracked keyword covers it)';
+        if ((x.full && (deleted || outDays >= CFG.grace_days))) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: why, topic: S(p.focus_topic) }); continue; }
+        stamp(p, null); continue; }
+      if (z.state === 'paused' && x.full && daysBetween(z.since, now) >= CFG.paused_days) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'its keyword ladder has been paused for more than ' + CFG.paused_days + ' days', topic: z.label }); continue; }
+      if (!wrongMarket) { have.set(z.id, n0(have.get(z.id)) + 1); const l = keptAuto.get(z.id) || []; l.push(p); keptAuto.set(z.id, l); }
+      stamp(p, z);
+    }
+    const Q = quotas(N, topics, have, ownerFree);
+    // over-quota questions: a watch keeps one, a won ladder two (extras retire on the full run, or now while the panel has no trend)
+    const freeNow = () => N - Math.max(1, brand.length) - qs.length + retire.length;   // the brand question's place is kept (written with the first job when missing)
+    for (const z of topics) { const l = (keptAuto.get(z.id) || []).slice().sort((a, b) => S(a.created_at).localeCompare(S(b.created_at)));
+      const q = n0(Q.quota.get(z.id)); const ownN = n0(have.get(z.id)) - l.length;
+      if ((z.state === 'watch' || z.state === 'maintain') && l.length + ownN > q && (provisional || x.full))
+        for (const p of l.slice(Math.max(0, q - ownN))) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: z.state === 'watch' ? 'a keyword you only watch keeps one question' : 'a won keyword ladder keeps two questions', topic: z.label });
+          have.set(z.id, n0(have.get(z.id)) - 1); } }
+    // what each measured topic still needs; a topic the client chose that has NO question yet (a new ladder) takes room from over-quota topics at once
+    const write = []; let free = Math.max(0, freeNow());
+    const need = (z) => Math.max(0, n0(Q.quota.get(z.id)) - n0(have.get(z.id)));
+    const order = topics.filter(z => Q.measured.includes(z.id) && ['active', 'core', 'maintain'].includes(z.state)).sort((a, b) => (n0(have.get(a.id)) - n0(have.get(b.id))) || (b.weight || 1) - (a.weight || 1));
+    for (const z of order) {
+      let k = need(z); if (!k) continue;
+      // a NEW ladder (started in the last 8 days: the week it starts, under its 2 questions) may take room from over-quota questions at once: its page needs a
+      // "before"; an older topic waits for free room (the month's retirements), so a settled panel never churns
+      const fresh = z.state === 'active' && z.source !== 'service' && !!z.started_at && daysBetween(z.started_at, now) <= CFG.new_days && n0(have.get(z.id)) < CFG.min_per_topic;
+      const isNew = fresh || !n0(have.get(z.id));
+      let take = Math.min(k, free); free -= take;
+      if (take < k && fresh) {   // swap: over-quota automatic questions of other topics make room (largest surplus first, newest question first)
+        let short = Math.min(k, CFG.min_per_topic) - take;
+        while (short > 0) { const donor = topics.filter(y => y !== z && n0(have.get(y.id)) > n0(Q.quota.get(y.id)) && (keptAuto.get(y.id) || []).some(p => !retire.some(r => r.prompt_id === S(p.prompt_id))))
+            .sort((a, b) => (n0(have.get(b.id)) - n0(Q.quota.get(b.id))) - (n0(have.get(a.id)) - n0(Q.quota.get(a.id))))[0];
+          if (!donor) break; const p = (keptAuto.get(donor.id) || []).filter(q => !retire.some(r => r.prompt_id === S(q.prompt_id))).sort((a, b) => S(b.created_at).localeCompare(S(a.created_at)))[0];
+          retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'made room for "' + z.label + '" inside your panel size', topic: donor.label, swap: true });
+          have.set(donor.id, n0(have.get(donor.id)) - 1); take++; short--; } }
+      if (take > 0) { write.push({ topic_id: z.id, label: z.label, state: z.state, source: z.source === 'ladder' ? 'ladder:' + (z.refs[0] || '') : z.source, count: take, terms: z.terms.slice(0, 8),
+        chosen_by: z.chosen_by || '', reason: isNew ? 'new: ' + z.why : 'below its share: ' + z.why, fresh }); have.set(z.id, n0(have.get(z.id)) + take); }
+    }
+    // room the quotas did not use (a topic over its share keeps its questions): the panel the client pays for is filled, by weight
+    const fillers = order.filter(z => z.state === 'active' || z.state === 'core');
+    for (let i = 0; free > 0 && fillers.length && i < 10000; i++) { const z = fillers[i % fillers.length]; let w = write.find(y => y.topic_id === z.id);
+      if (!w) { w = { topic_id: z.id, label: z.label, state: z.state, source: z.source === 'ladder' ? 'ladder:' + (z.refs[0] || '') : z.source, count: 0, terms: z.terms.slice(0, 8), chosen_by: z.chosen_by || '', reason: 'free room in your panel: ' + z.why, fresh: false }; write.push(w); }
+      w.count++; free--; have.set(z.id, n0(have.get(z.id)) + 1); }
+    // as before the focus rule: a settled panel is topped up only when 2 or more questions are missing (not every week for one)
+    if (!retire.length && !write.some(w => w.fresh) && write.reduce((t, w) => t + w.count, 0) < 2) write.length = 0;
+    const kept = qs.filter(p => !retire.some(r => r.prompt_id === S(p.prompt_id)));
+    const events = [];
+    const byTopic = (list) => { const m = new Map(); for (const r of list) { const k = S(r.topic || r.label) || 'other'; m.set(k, n0(m.get(k)) + n0(r.count || 1)); } return [...m.entries()].map(([topic, n]) => ({ topic, n })); };
+    const added = byTopic(write.map(w => ({ topic: w.label, count: w.count }))), gone = byTopic(retire);
+    if (added.length || gone.length) events.push({ at: now, added, retired: gone, reason: provisional ? 'your AI questions now follow your keywords (the panel had no trend yet)' : x.full ? 'the month\'s review of your AI questions' : 'a new keyword ladder was added to your AI questions' });
+    const summary = (() => { const a = write.reduce((s, w) => s + w.count, 0); const parts = [];
+      if (a) parts.push(a + ' question' + (a === 1 ? '' : 's') + ' added for ' + [...new Set(write.map(w => '"' + w.label + '"'))].join(', '));
+      if (retire.length) parts.push(retire.length + ' retired (' + [...new Set(retire.map(r => r.reason))].slice(0, 2).join('; ') + '; their history is kept)');
+      return parts.length ? 'Your AI questions now follow your keywords: ' + parts.join(', ') + '. Trends restart for the topics that changed.' : ''; })();
+    return { keep: kept.map(p => S(p.prompt_id)), retire, write, updates, owner_off_focus, market_drift, not_measured: Q.not_measured, raise_to: Q.raise_to, quota: [...Q.quota.entries()].map(([id, n]) => ({ id, n, have: n0(have.get(id)) })),
+      provisional, events, summary, topic_of: [...of.entries()].map(([id, z]) => ({ prompt_id: id, topic: z ? z.label : '', state: z ? z.state : 'out' })) };
+  };
+
+  // ---- 6. the pulse asks the focus ------------------------------------------------------------------------------------------------------------
+  /** pulse scope: 'focus' asks the questions of active topics and the pinned ones (a row the weekly run has not stamped yet is asked);
+   *  'all' (the default of a site that existed before this release) asks the whole panel as before */
+  const scopeOf = (v) => (low(v) === 'focus' ? 'focus' : 'all');
+  const pulseKeeps = (p, scope) => scopeOf(scope) !== 'focus' || pin(p) || !S(p.focus_state) || S(p.focus_state) === 'active';
+
+  // ---- 7. a trend that survives a moving panel ------------------------------------------------------------------------------------------------
+  /** the change on the questions asked in both weeks: units [{prompt_id, engine, named}] now and before (weekly answers only, same engines) */
+  const matched = (nowU, prevU, o) => { const opt = o || {}; const minQ = n0(opt.min_questions) || 6, minN = n0(opt.min_answers) || 12;
+    const A = (nowU || []).filter(u => u && u.answered !== false && !u.pulse), B = (prevU || []).filter(u => u && u.answered !== false && !u.pulse);
+    const eng = new Set(B.map(u => S(u.engine))); const qa = new Set(A.map(u => S(u.prompt_id))); const common = new Set([...new Set(B.map(u => S(u.prompt_id)))].filter(id => qa.has(id)));
+    const a = A.filter(u => common.has(S(u.prompt_id)) && eng.has(S(u.engine))), b = B.filter(u => common.has(S(u.prompt_id)) && new Set(A.map(z => S(z.engine))).has(S(u.engine)));
+    const k1 = a.filter(u => u.named).length, n1 = a.length, k0 = b.filter(u => u.named).length, n0_ = b.length;
+    const ok = common.size >= minQ && n1 >= minN && n0_ >= minN;
+    const r1 = n1 ? Math.round(1000 * k1 / n1) / 10 : null, r0 = n0_ ? Math.round(1000 * k0 / n0_) / 10 : null;
+    let z = null; if (ok) { const p = (k1 + k0) / (n1 + n0_); const se = Math.sqrt(p * (1 - p) * (1 / n1 + 1 / n0_)); z = se > 0 ? Math.round(100 * ((k1 / n1) - (k0 / n0_)) / se) / 100 : 0; }
+    return { available: ok, questions: common.size, n: n1, k: k1, n_before: n0_, k_before: k0, rate: r1, rate_before: r0, delta: ok ? Math.round(10 * (r1 - r0)) / 10 : null, z, significant: ok ? Math.abs(z) >= 1.96 : null,
+      label: ok ? 'on the ' + common.size + ' questions asked both weeks (' + n1 + ' answers now, ' + n0_ + ' before)' : (common.size < minQ ? 'fewer than ' + minQ + ' questions were asked both weeks (' + common.size + ')' : 'too few answers on the questions asked both weeks (' + n1 + ' now, ' + n0_ + ' before; ' + minN + ' needed on each side)') }; };
+  /** a topic's own overlap between two weeks (its question ids): its segment is compared when 80% of its earlier questions are still asked */
+  const topicOverlap = (nowIds, prevIds) => { const A = new Set((nowIds || []).map(S)), B = [...new Set((prevIds || []).map(S))]; if (!B.length || !A.size) return { share: null, same: null, common: 0 };
+    const c = B.filter(id => A.has(id)).length; const share = c / Math.max(A.size, B.length); return { share: Math.round(1000 * share) / 1000, same: share >= 0.8, common: c }; };
+
+  // ---- 8. the writer's place rule: the cities a question may name ------------------------------------------------------------------------------
+  const CITIES = { AE: ['Dubai', 'Abu Dhabi', 'Sharjah'], SA: ['Riyadh', 'Jeddah', 'Dammam'], PK: ['Karachi', 'Lahore', 'Islamabad'], IN: ['Mumbai', 'Delhi', 'Bengaluru'], GB: ['London', 'Manchester', 'Birmingham'],
+    US: ['New York', 'Los Angeles', 'Chicago'], CA: ['Toronto', 'Vancouver', 'Montreal'], AU: ['Sydney', 'Melbourne', 'Brisbane'], NZ: ['Auckland', 'Wellington', 'Christchurch'], IE: ['Dublin', 'Cork', 'Galway'],
+    SG: ['Singapore'], ZA: ['Johannesburg', 'Cape Town', 'Durban'], DE: ['Berlin', 'Munich', 'Hamburg'], AT: ['Vienna', 'Graz', 'Salzburg'], FR: ['Paris', 'Lyon', 'Marseille'], ES: ['Madrid', 'Barcelona', 'Valencia'],
+    IT: ['Milan', 'Rome', 'Turin'], NL: ['Amsterdam', 'Rotterdam', 'Utrecht'], BR: ['Sao Paulo', 'Rio de Janeiro', 'Brasilia'], MX: ['Mexico City', 'Guadalajara', 'Monterrey'] };
+  const citiesOf = (iso) => (CITIES[S(iso).toUpperCase()] || []).slice();
+  /** a written question that names a place outside its market: the place words, or [] (the M7 rule, applied to what the writer wrote) */
+  const placesOutside = (text, iso) => { if (!G.market || !S(iso)) return []; const m = G.market(text, iso); return m.ok ? [] : m.outside; };
+
+  return { CFG, W, words, stem, sameTopic, carries, inMarket, focusOf, topicOf, quotas, reconcile, scopeOf, pulseKeeps, matched, topicOverlap, citiesOf, placesOutside, ownerQ };
+})();
 // ---- AI entities (F1a, 2026-10-23; docs/ai-visibility-2026-10-23/ENGINE_AUDIT.md E3 E4 E5 E8 E10 E16, PROD_STATE.md section 5) ----
 // WHO an AI answer names, as ONE entity per business, and in which ROLE. Inlined by build_monitors.py (the AI_ENTITIES placeholder) into
 // Parse AI Answers (weekly and pulse), Apply Analysis, Analyst Jobs, AI Cache Rows, Prompt Rows, AI Plan and Pulse Plan.
@@ -2365,6 +2790,13 @@ const AIX = (() => {
   return { optionsOf, fanoutOf, normQuery, citedRow, fanoutTop, serpBody, fanoutRequests, targetPage, gscOf, fanoutGap, personaMessage, personaQuestions, personaRequests, llmText, twoProp, verdictOf, signP, pairedOf, bootMean, MINQ, personaEffect,
     platformOf, demandRequests, marketOf, mentionItems, demand, imports, extraKey, extrasRecorded, execIds, notes, promptState, reportHtml, callbackFields, personaEffectRows, diffCi, wilson, PERSONA_MODEL, US_NOTE, MIN };
 })();
+// AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27/RESEARCH_AND_DESIGN.md §4): the panel's topics are the client's focus (AIF.focusOf: active
+// ladders, recent pages, declared services, tracked keywords; a keyword nobody works on drops to one weekly watch question) in the website's own
+// market, and every first part of a weekly run reconciles the stored panel with it (AIF.reconcile): the questions a topic needs are written inside
+// the panel size the client pays for (a new ladder's the week it starts), the questions of a topic the client left are RETIRED (status `retired`,
+// history kept) on the month's full run after 28 days out of focus (at once on a panel with no trend yet, and for a deleted ladder at the next
+// full run), and what must be the owner's decision (their own and pinned questions, another market, a bigger panel) travels as `focus` for
+// the report and the app. `ai_focus_mode: off` keeps the old rule (write only when 2+ questions are missing, topics as before).
 const CONFIG = { max_sites_per_run: 15, max_topics: 8, monthly_engines: ['claude'],   // v4.9: Gemini moved to the weekly set (the real gemini.google.com answer costs $0.004 through the scraper)
   gsc_questions: 15, pulse_days: 7 };
 const { list, on_demand, want, total, cycle, cycle_why } = monitorSites('ai');
@@ -2375,7 +2807,8 @@ const promptRows = rowsOf('Load AI Prompts'), visRows = rowsOf('Load AI Visibili
 // ASKED, and asking it again in every later execution would never let a run end (a failed task is billed nothing; the report names it).
 let runRows = []; try { runRows = $('Load AI Run Answers').all().map(i => i.json).filter(r => r && r.run_id && r.prompt_id && r.engine); } catch (e) {}
 const continuing = String(trigger.continue_run || '').trim();   // G6: set when the previous chunk started this execution
-const LIVE = new Set(['off', 'refused']);   // G6: a question switched off by the owner or refused by the fit gate is never asked
+const LIVE = new Set(['off', 'refused', 'retired', 'proposed']);   // G6: a question switched off by the owner or refused by the fit gate is never asked; AI-FOCUS: nor a retired one, nor one the owner has not accepted yet
+const settingsAll = rowsOf('Load Ladder Settings (AI)'), logAll = rowsOf('Load Content Log (AI)');   // AI-FOCUS: each ladder's status, and the pages written / published
 const now = new Date(); const iso = now.toISOString(); const month = iso.slice(0, 7);
 const parse = (t, d) => { try { const v = JSON.parse(t || ''); return v == null ? d : v; } catch (e) { return d; } };
 const isoOf = (code) => { const c = Object.values(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(x => Number(x.code) === Number(code)); return c ? String(c.iso || '').toUpperCase() : ''; };
@@ -2413,8 +2846,18 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // emits is on the host the site really serves; with no model yet the bare domain keeps today's behaviour.
   const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };
   // G6: the state of this site's split run, and what this execution is for it
-  const st = AIP.stateOf(cache, s.site_id);
-  const verdict = AIP.stateVerdict(st, iso, continuing);
+  let st = AIP.stateOf(cache, s.site_id);
+  let verdict = AIP.stateVerdict(st, iso, continuing);
+  // 2026-10-27 (production 2026-10-25, devaicon.com): a run stopped `failed_store` is checked against the table on every later start (the
+  // weekly cycle, a catch-up, an on-demand check, the pulse's resume): Load AI Run Answers holds its stored rows. Every lost answer stored ->
+  // the run continues; some truly missing -> it continues ONCE with them counted as could not be read (never asked or paid again); a
+  // second storage failure in one run stays blocked (AIP.healStore)
+  let storeHeal = null;
+  if (verdict === 'blocked' && st && String(st.status) === 'failed_store' && (!continuing || continuing === String(st.run_id))) {
+    storeHeal = AIP.healStore(st, runRows, iso);
+    if (storeHeal && storeHeal.ok) { st = storeHeal.state; verdict = continuing ? 'continue' : 'resume'; }
+    else if (storeHeal) st = { ...st, stop_reason: String(st.stop_reason || st.status) + ' Checked again ' + iso.slice(0, 16).replace('T', ' ') + ' UTC: ' + storeHeal.why + '.' };
+  }
   if (continuing && verdict !== 'continue') { skipped.push({ domain: s.domain, why: 'nothing to continue: run ' + continuing + ' is ' + (st && st.run_id === continuing ? st.status : 'not the open run') }); return null; }
   if (verdict === 'busy') { tell(s, st, 'busy'); skipped.push({ domain: s.domain, why: 'run ' + st.run_id + ' is still being asked (chunk ' + (st.chunk || 1) + ', ' + (st.asked || 0) + ' of ' + (st.total || '?') + ' requests, updated ' + String(st.updated_at || '').slice(0, 16) + ' UTC); it continues by itself' }); return null; }
   // F2 (E1): a STOPPED run (its answers were not stored, or it reached its money ceiling) blocks this site's weekly run until it is older than
@@ -2433,7 +2876,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
       why: 'already measured: run ' + st.run_id + ' finished ' + String(doneHit.finished_at || '').slice(0, 16).replace('T', ' ') + ' UTC' + (doneHit.why === 'same_cycle' ? ' for this cycle (' + doneHit.cycle_key + '); this start is a retry of the same job' : ', less than ' + AIP.LIMITS.done_fresh_hours + ' hours ago')
         + '; its stored week stands, nothing was asked again and nothing was charged (rerun_today: true on the start asks again on purpose)' });
     return null; }
-  if (verdict === 'resume') tell(s, st, 'resume');
+  if (verdict === 'resume' && !(storeHeal && storeHeal.ok)) tell(s, st, 'resume');
   const going = verdict === 'continue' || verdict === 'resume';
   const MONTHLY = AIP.monthlyOf(s.settings.claude_weekly);   // W2-E3: Claude every weekly run when the owner asks for it ('ai_claude_weekly'), else the month's full run only
   const mineAll = promptRows.filter(p => p.site_id === s.site_id && !LIVE.has(String(p.status || 'active')) && p.prompt);
@@ -2462,7 +2905,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
     .sort((a, b) => ((pin(b.p) ? 1 : 0) - (pin(a.p) ? 1 : 0)) || a.i - b.i).map(x => x.p);
   const set_aside = [...fit.set_aside, ...fitQ.set_aside];
   const custom = mine.filter(p => p.source === 'custom' || pin(p)), auto = mine.filter(p => p.source !== 'custom' && !pin(p));
-  const topics =[...new Set([...asked, ...lrows.map(l => String(l.head_keyword || '').toLowerCase().trim()), ...(s.keywords || []), ...lrows.filter(l => Number(l.rung) !== 4).map(l => String(l.keyword || '').toLowerCase().trim())].filter(Boolean))].slice(0, CONFIG.max_topics);
+  const topics0 =[...new Set([...asked, ...lrows.map(l => String(l.head_keyword || '').toLowerCase().trim()), ...(s.keywords || []), ...lrows.filter(l => Number(l.rung) !== 4).map(l => String(l.keyword || '').toLowerCase().trim())].filter(Boolean))].slice(0, CONFIG.max_topics);
   // full run = the first run of the month (or any on-demand run): every engine + the brand question + discovery + the market-wide index
   const isFull = (v) => String(v.run_kind || '') === 'full' || String(v.run_kind || '') === 'on_demand' || (!v.run_kind && (() => { const e = parse(v.engines_json, {}); return ['gemini', 'claude'].some(k => e[k] && Number(e[k].asked) > 0 && !e[k].carried); })());
   const lastFull = mineVis.find(isFull) || null;
@@ -2471,21 +2914,48 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // the cycle this run belongs to: this start's own (a cycle job, or a continuation that carries it), else the one the split run was started for
   const runCycle = cycle || (going && st && st.cycle && st.cycle.key ? st.cycle : null);
   const carried = lastFull ? { checked_at: lastFull.checked_at, engines: parse(lastFull.engines_json, {}) } : null;
+  const ownMarket = AIP.normMarket(isoOf(Number(s.location_code) || 2840) + '-' + (s.language_code || 'en')) || 'US-en';
+  // ---- AI-FOCUS: the client's focus and the reconcile of the stored panel with it (a pure diff: nothing here is paid) ----
+  const focusOff = String(s.settings.focus_mode || '') === 'off';
+  const parseList = (v) => { const x = parse(v, null); return Array.isArray(x) ? x.map(String) : listOf(v); };
+  const declared = [...new Set([...asked, ...parseList(s.declared_services)].map(x => String(x).trim()).filter(Boolean))].slice(0, 20);   // what the client SAID it sells (never the crawl's guesses)
+  const since28 = new Date(now.getTime() - 28 * 864e5).toISOString();
+  const gsc28 = queries.filter(q => q.site_id === s.site_id && q.query && String(q.checked_at || q.period_end || '') >= since28.slice(0, 10)).map(q => ({ query: String(q.query), impressions: Number(q.impressions) || 0 }));
+  const outCtx = FITR.ctx({ ...fit_input, keywords: [] });   // a tracked keyword is judged as a topic (it is no longer protected by being tracked)
+  const focus = AIF.focusOf({ ladders: lrows, settings: settingsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain), content_log: logAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain),
+    keywords: s.keywords || [], services: declared, gsc: gsc28, iso: isoOf(Number(s.location_code) || 2840), now: iso,
+    out: (k) => { const g = fitGate(k, outCtx); return g.ok ? null : (g.detail || g.reason); } });
+  const rec = (going || focusOff || !focus.topics.length) ? null : AIF.reconcile({ stored: promptRows.filter(p => p.site_id === s.site_id), focus, N: s.settings.prompts_max, now: iso, full: full_due,
+    weeks: mineVis.length, own_market: ownMarket, markets: s.settings.markets.map(m => AIP.normMarket(m)).filter(Boolean), ladder_ids: [...new Set(lrowsAll.map(l => String(l.ladder_id || '')).filter(Boolean))] });
+  const retiring = new Set(rec ? rec.retire.map(r => r.prompt_id) : []);
+  const autoNow = auto.filter(p => !retiring.has(p.prompt_id));
+  const focusUpd = new Map(rec ? rec.updates.map(u => [u.prompt_id, u]) : []);
   const room = Math.max(0, s.settings.prompts_max - custom.length);
-  const deficit = Math.max(0, room - auto.length);
+  const deficit = Math.max(0, room - autoNow.length);
   // G6: questions are written in the FIRST chunk of a run only (a continuation asks the panel the first chunk stored); the Prompt Writer
   // writes at most writer_batch x writer_jobs_per_run in one run, so a new 500-question panel is written in one week
-  const need = going ? 0 : Math.min(AIP.LIMITS.writer_batch * AIP.LIMITS.writer_jobs_per_run, (!auto.length || deficit >= 2) ? deficit : 0);   // top up only when 2+ questions are missing (not every week for one)
-  const ownMarket = AIP.normMarket(isoOf(Number(s.location_code) || 2840) + '-' + (s.language_code || 'en')) || 'US-en';
+  // AI-FOCUS: with the focus model on, what is written is what each topic needs (rec.write), plus the brand question when there is none
+  const noBrand = !mineAll.some(p => p.kind === 'brand');
+  const focusNeed = rec ? rec.write.reduce((t, w) => t + w.count, 0) + (noBrand && rec.write.length ? 1 : 0) : 0;
+  const need = going ? 0 : Math.min(AIP.LIMITS.writer_batch * AIP.LIMITS.writer_jobs_per_run, rec ? focusNeed : ((!auto.length || deficit >= 2) ? deficit : 0));   // top up only when 2+ questions are missing (not every week for one)
   // the markets the panel covers: the site's own, the ones in its settings, and any market a stored question names (an imported question keeps its market)
-  const markets = AIP.marketsOf({ country_iso: isoOf(Number(s.location_code) || 2840), language_code: s.language_code || 'en', ai_markets: [...s.settings.markets, ...mineAll.map(p => p.market).filter(Boolean)] });
+  // AI-FOCUS (§4.5): a question RETIRED this run no longer adds its market (devaicon's UAE questions kept the UAE in its markets after its country
+  // became Pakistan; on a panel with no trend yet they retire at once). A kept question of another market is still asked in it, and named for
+  // the owner (`focus.market_drift`, the M7 market rewrite they Accept), so an imported multi-market panel never moves without the owner.
+  const markets = AIP.marketsOf({ country_iso: isoOf(Number(s.location_code) || 2840), language_code: s.language_code || 'en', ai_markets: [...s.settings.markets, ...mineAll.filter(p => !retiring.has(p.prompt_id) && !(rec && p.kind === 'brand')).map(p => p.market).filter(Boolean)] });   // AI-FOCUS: nor the brand question's (asked in the website's market)
+  // AI-FOCUS: the writer's and the discovery's topics are the focus (active topics by weight, then the core), never a keyword nobody works on
+  const focusLabels = [...focus.topics.filter(z => z.state === 'active').sort((a, b) => (b.weight || 0) - (a.weight || 0)), ...focus.topics.filter(z => z.state === 'core' || z.state === 'maintain')].map(z => z.label);
+  const activeTerms = focus.topics.filter(z => z.state === 'active').flatMap(z => z.terms || []);   // a ladder's rungs and merged pages are its own phrases
+  const topics = (!focusOff && focusLabels.length) ? [...new Set([...asked, ...focusLabels.slice(0, 2), ...activeTerms, ...focusLabels.slice(2)])].slice(0, CONFIG.max_topics) : topics0;
   const markets_map = Object.fromEntries(markets.map(m => { const [cc, lang] = m.split('-'); return [m, { location_code: m === ownMarket ? (Number(s.location_code) || 2840) : codeOfIso(cc), language_code: lang || 'en', country_iso: cc }]; }).filter(([, v]) => v.location_code));
   const personas = AIP.personasOf({ ai_personas: s.settings.personas });
-  const prompts = [...custom, ...auto].slice(0, s.settings.prompts_max).map(p => ({ prompt_id: p.prompt_id, prompt: p.prompt, kind: p.kind || 'custom', topic: p.topic || '', keyword: p.keyword || '', source: p.source || 'auto',
+  const prompts = [...custom, ...autoNow].slice(0, s.settings.prompts_max).map(p => ({ prompt_id: p.prompt_id, prompt: p.prompt, kind: p.kind || 'custom', topic: p.topic || '', keyword: p.keyword || '', source: p.source || 'auto',
     stage: p.stage || '', cluster: p.cluster || p.topic || '', volume: p.volume === '' || p.volume == null ? null : Number(p.volume), origin: p.origin || (p.source === 'custom' ? 'custom' : 'writer'), created_at: p.created_at || '',
     persona: String(p.persona || '').trim(), market: markets_map[AIP.normMarket(p.market)] ? AIP.normMarket(p.market) : ownMarket, pinned: pin(p),
     // F2 (E20 / E22 / E9): what the stored row says, carried so a re-upsert never blanks it; a market past the cap is asked in the own market and says so
-    market_stored: String(p.market || ''), market_fallback: !!(AIP.normMarket(p.market) && !markets_map[AIP.normMarket(p.market)]), fit_note: String(p.fit_note || ''), keyword_source: String(p.keyword_source || '') }));
+    market_stored: String(p.market || ''), market_fallback: !!(AIP.normMarket(p.market) && !markets_map[AIP.normMarket(p.market)]), fit_note: String(p.fit_note || ''), keyword_source: String(p.keyword_source || ''),
+    // AI-FOCUS: the topic it measures (as reconciled this run, else as stored), so Prompt Rows re-stores it when it moved and the pulse asks the focus
+    ...(() => { const u = focusUpd.get(p.prompt_id); return { focus_topic: u ? u.focus_topic : String(p.focus_topic || ''), focus_source: u ? u.focus_source : String(p.focus_source || ''), focus_state: u ? u.focus_state : String(p.focus_state || ''), focus_seen_at: u ? u.focus_seen_at : String(p.focus_seen_at || ''), focus_moved: !!u }; })() }));
   // search volumes: questions without one (new) every week; all of them on the month's full run (AI Keyword Data, $0.0001 a keyword)
   const volume_keywords = [...new Set(prompts.filter(p => p.kind !== 'brand' && p.keyword && (full_due || p.volume === null || Number.isNaN(p.volume))).map(p => String(p.keyword).toLowerCase().trim()).filter(k => k.length >= 3 && k.length <= 120))].slice(0, 100);
   // real questions people search (Search Console, last weeks): long or question-shaped queries are the closest thing to an AI prompt
@@ -2538,7 +3008,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const committed = going ? Math.max(Number(st.spent_dfs_usd) || 0, Number(st.committed_dfs_usd) || 0) : 0;
   let stop = null;
   if (going && (legacyShort || (lostNow.length && (lostParts >= 1 || st.save_failed))))
-    stop = { status: 'failed_store', lost: legacyShort ? Math.max(0, Number(st.asked) - storedKeys.size) : lostNow.length,
+    stop = { status: 'failed_store', lost: legacyShort ? Math.max(0, Number(st.asked) - storedKeys.size) : lostNow.length, lost_keys: legacyShort ? null : AIP.packKeys(lostNow),
       reason: (legacyShort ? (Number(st.asked) - storedKeys.size) + ' of the ' + st.asked + ' requests its earlier parts asked have no stored answer' : lostNow.length + ' request(s) of part ' + ((st.pending || {}).chunk || st.chunk) + ' were paid for but their answers were never stored, and this has happened before in this run')
         + '. They are not asked again (that would pay twice); the run is stopped, and nothing more is asked for this website this week. Check the Data Table size and the execution of the part named in the state row, then clear ai_run:' + s.site_id + ' to let a new run start.' };
   else if (going && reqLeft > 0 && committed >= ceiling)
@@ -2565,6 +3035,11 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
     unavailable: going ? runRows.filter(r => r.run_id === run_id && r.error).length : 0 };
   if (chunk.unavailable) chunk.unavailable_note = chunk.unavailable + ' request(s) of this run could not be read in its earlier part(s), even when sent again; they are not asked again and the week counts the answers that came back';
   if (chunk.lost_total) chunk.lost_note = chunk.lost_total + ' request(s) of this run were paid for in a part that stopped before its answers were stored (the execution\'s time limit, a restart); they are not asked again (that would pay twice) and the week counts the answers that were stored';
+  // 2026-10-27: a run that continued after a failed_store stop says so, and the report (unavailable_note is what AI Report prints) names
+  // what was lost with the answers that could not be read
+  if (storeHeal && storeHeal.ok) Object.assign(chunk, { store_heal: { found: storeHeal.found, missing: storeHeal.missing, at: iso }, store_heal_note: storeHeal.note });
+  else if (going && st.store_heal_note) chunk.store_heal_note = String(st.store_heal_note);
+  if (chunk.lost_total || chunk.store_heal_note) chunk.unavailable_note = [chunk.unavailable_note, chunk.lost_total ? chunk.lost_total + ' answer(s) of this run were paid for but never stored; they are not asked again and the week counts the answers that were stored.' : '', chunk.store_heal_note || ''].filter(Boolean).join(' ');
   if (chunk.unanalysed) chunk.unanalysed_note = chunk.unanalysed + ' answer(s) of this run were stored by a part that stopped before the Answer Analyst read them; the run\'s last part has the Answer Analyst read them from their stored text (as many as its analyst budget allows; an answer stored before the full text was kept keeps the parser\'s reading)';   // W2-E1
   if (stop) { Object.assign(chunk, { size: 0, size_time: 0, final_expected: null, stop: true }); }   // F2: nothing is asked; the ledger key is the job's own (null is not a part)
   // pages that must stay fetchable for AI: the ones AI cited last time and the keyword-ladder pages (checked against robots.txt per AI bot)
@@ -2589,7 +3064,15 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
     prompts: stop ? [] : prompts, full_due, run_kind: runKind, monthly_engines: MONTHLY.filter(e => s.settings.engines.includes(e)), carried,
     // W2-E3: the owner's coverage options (the run's last part asks the fan-out check, the persona test and the demand trend with them)
     options: AIX.optionsOf(s.settings), persona_roles: personas, cost_options: costNow.options,
-    need_prompts: !stop && need > 0, prompts_needed: stop ? 0 : need, need_site_text: !stop && need > 0 && !topics.length && !s.business_name, gsc_questions,
+    need_prompts: !stop && need > 0, prompts_needed: stop ? 0 : need,
+    // AI-FOCUS: the focus, what this run writes per topic and retires (Prompt Jobs / Prompt Rows), and what the owner must decide (the report, the app)
+    focus: (() => { if (focusOff) return { mode: 'off', topics: [], note: 'your AI questions do not follow your keywords (switched off in the settings)' };
+      const tp = focus.topics.map(z => ({ id: z.id, label: z.label, state: z.state, source: z.source, weight: z.weight, why: z.why, refs: z.refs.slice(0, 4) }));
+      return { mode: 'auto', topics: tp, out: focus.out, propose_only: trigger.propose_only === true || String(trigger.propose_only) === 'true',
+        write: stop || !rec ? [] : rec.write, retire: stop || !rec ? [] : rec.retire, updates: stop || !rec ? [] : rec.updates, owner_off_focus: rec ? rec.owner_off_focus : [], market_drift: rec ? rec.market_drift : [],
+        not_measured: rec ? rec.not_measured : [], raise_to: rec ? rec.raise_to : 0, provisional: rec ? rec.provisional : false, events: stop || !rec ? [] : rec.events, summary: stop || !rec ? '' : rec.summary,
+        quota: rec ? rec.quota : [], own_market: ownMarket, country_iso: isoOf(Number(s.location_code) || 2840),
+        write_markets: [...new Set([ownMarket, ...s.settings.markets.map(m => AIP.normMarket(m)).filter(Boolean)])] }; })(),   /* new questions are written in the website's market and the extra ones the owner set, never a drifted one */ need_site_text: !stop && need > 0 && !topics.length && !s.business_name, gsc_questions,
     // G6: discovery runs in a run's first execution (it feeds the Prompt Writer); the database views, GA4 and the crawler check in its last
     discovery_due: !going && !!topics.length && (full_due || need > 0), volume_keywords: going ? [] : volume_keywords, index_due: full_due,
     market_due: !!topics.length && (runCycle ? (going ? !!st.full_due : cycle.monthly) : (!prev || String(prev.market_month || '') !== month)), market_keyword: topics[0] || '',

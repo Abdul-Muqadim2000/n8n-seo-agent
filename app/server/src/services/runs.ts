@@ -56,6 +56,9 @@ import { suspendedError } from '../auth/session';
 import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
 import { siteReadiness } from './readiness';
 import { siteAutomation } from './ladders';
+import { assertConsistent, recordOverride, runWarnings } from './consistency';
+import type { FastifyRequest } from 'fastify';
+import type { Warning } from '@seo/shared';
 
 /**
  * R100: what the engine will reserve for this request, its own rolling figures (`engineCostTable`), the shipped table only when
@@ -86,6 +89,26 @@ export async function aiPanelForQuote(domain: string): Promise<AiRunPanel | null
   }
 }
 export const etaFor = (input: RunInput): number => estimateRunMinutes(input.mode, input as unknown as Record<string, unknown>);
+
+/**
+ * 2026-10-27: the title and main heading of the page that was written, read from its report (the newest content report of this website
+ * with the engine request id the person picked, else with the keyword typed), for "I published it". Null when no report carries them.
+ */
+export async function draftMeta(orgId: string, siteId: string, requestId: string, keyword: string): Promise<{ title: string; h1: string } | null> {
+  const R = schema.reports;
+  const byId = /^[A-Za-z0-9:_.-]{1,120}$/.test(requestId || '')
+    ? sql`(${R.requestId} = ${requestId} or ${R.payload}->>'request_id' = ${requestId})`
+    : null;
+  const kw = String(keyword || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const byKw = kw ? sql`lower(${R.payload}->>'keyword') = ${kw}` : null;
+  const match = byId ?? byKw;
+  if (!match) return null;
+  const row = await db.query.reports.findFirst({ where: and(eq(R.orgId, orgId), eq(R.siteId, siteId), eq(R.stage, 'content'), match), orderBy: desc(R.receivedAt) });
+  const meta = row?.payload && typeof row.payload.meta === 'object' && row.payload.meta ? (row.payload.meta as Record<string, unknown>) : {};
+  const t = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 300) : '');
+  const title = t(meta.title), h1 = t(meta.h1);
+  return title || h1 ? { title, h1 } : null;
+}
 
 export function runTitle(input: RunInput, site: SiteRow | null): string {
   const dom = site?.domain;
@@ -138,8 +161,11 @@ export { monthSpend, monthStart } from './spend';
  * What a role may ask for: a new ladder's Auto / Manual and its place in the order (`ladderPrefs`) are ladder settings, so admins
  * only, a member's choices are dropped and the website's defaults apply, as for any ladder.
  */
-export function inputForRole(input: RunInput, role: Role): RunInput {
-  if (input.mode === 'ladder' && (input.ladderPrefs || input.ladderMode) && !roleAtLeast(role, 'admin')) return { ...input, ladderPrefs: undefined, ladderMode: undefined };
+export function inputForRole(input: RunInput, role: Role, opts: { planOnly?: boolean } = {}): RunInput {
+  if (input.mode === 'ladder' && (input.ladderPrefs || input.ladderMode) && !roleAtLeast(role, 'admin'))
+    // MKT D1 (2026-10-27): a member who approves a keyword suggestion may start it Manual ("Plan it without writing a page", the safe Accept
+    // of the new-ladder warning): it writes and charges less, never more. Any other start mode stays an admin's ladder setting.
+    return { ...input, ladderPrefs: undefined, ladderMode: opts.planOnly && input.ladderMode === 'manual' && !input.ladderPrefs ? 'manual' : undefined };
   return input;
 }
 
@@ -175,6 +201,15 @@ export interface CreateRunOptions {
    * Only services/research.ts passes it, after claiming the domain's grant.
    */
   free?: boolean;
+  /**
+   * MKT (2026-10-27, mismatch audit §2.2): the warning ids the caller answered with "Continue anyway" (the form's ticks, the API's
+   * `acknowledge`). Every start is checked here, whatever path it came by; an unanswered warning is a 409 `confirm_needed`.
+   */
+  acknowledge?: string[];
+  /** the warnings the caller already computed for this exact input (the API's dry run); recomputed when absent */
+  warnings?: Warning[];
+  /** the request, for the audit row of a "Continue anyway" */
+  req?: FastifyRequest | null;
 }
 
 /** G4: the run an Idempotency-Key named in the last 24 hours, if any. */
@@ -223,7 +258,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   if (site && input.mode === 'track' && input.ga4PropertyId) await assertGa4ForDomain(input.ga4PropertyId, site.domain);
   if (site && input.mode === 'published' && !urlOnDomain(input.publishedUrl, site.domain))
     throw badRequest(`The published page must be on ${site.domain}`, { publishedUrl: `Must be a page on ${site.domain}` });
-  input = ladderChoice(inputForRole(input, a.role), auto);
+  input = ladderChoice(inputForRole(input, a.role, { planOnly: !!opts.proposalId }), auto);
 
   // a typed keyword that is a planned page of one of the website's ladders is written as that ladder page (linked to the ladder,
   // tracked, marked "writing" so the Content Cadence moves on), exactly like "Write now" on the Pipeline page
@@ -242,6 +277,13 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     const held = site && !manual ? await siteReadiness(site) : null;
     input = { ...input, pagesHeld: manual ? 'manual' : held && !held.ready ? 'profile' : undefined };
   }
+  // MKT (2026-10-27): the one mismatch mechanism. The forms' duplicate warnings and the market checks hold the start until every warning is
+  // answered: accepted (the caller resends the corrected request) or acknowledged by id ("Continue anyway", recorded on the run and in the
+  // audit log). An automatic start sends no acknowledgement, so it stops here and its caller turns it into a "Needs you" item. A repeat of a
+  // request with the same Idempotency-Key is answered from its run, whatever the warnings say now.
+  const replay = opts.idempotency ? await findIdempotentRun(org.id, opts.idempotency.key).catch(() => null) : null;
+  const warnings = replay ? [] : (opts.warnings ?? (await runWarnings(org, site, input, { proposal: !!opts.proposalId, auto, role: a.role })));
+  const overridden = replay ? { ids: [] as string[], codes: [] as string[] } : assertConsistent(warnings, auto ? [] : (opts.acknowledge ?? []));
   const estimated = await estimateCost(input, site);
   // the website's first tracking, kept on every re-save: the anchor of its weekly cycle (the engine accepts it within the last 6 days)
   const trackingStartedAt = site && input.mode === 'track' ? (site.trackingStartedAt ?? new Date()) : null;
@@ -255,6 +297,13 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   if (input.mode === 'ai_visibility' && site) {
     const qp = await aiPanelForQuote(site.domain);
     if (qp) body.panel_quote = aiPanelQuoteBody(aiOnDemandRunCost(qp), qp.panel);
+  }
+  // 2026-10-27 (techand.ai on production): the engine checks that the live page IS the page that was written; the draft's own title and
+  // main heading (from its report) are one way it recognises it when the person edited the keyword out of the title
+  if (input.mode === 'published' && site) {
+    const dm = await draftMeta(org.id, site.id, input.contentRequestId, input.keyword).catch(() => null);
+    if (dm?.title) body.draft_title = dm.title;
+    if (dm?.h1) body.draft_h1 = dm.h1;
   }
   if (input.mode === 'keyword' && input.ladder && site) {
     // the ladder's links and, since P2-7, the word count its verdict set for this page (the engine clamps the brief to `ladder_words`)
@@ -297,7 +346,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
         mode: input.mode,
         title: auto && input.mode === 'ladder' ? `Started automatically: ${input.keyword}` : auto && input.mode === 'discover' ? `Keyword research refresh${site ? ` · ${site.domain}` : ''}` : runTitle(input, site),
         status: 'submitting',
-        input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}), ...(opts.proposalId ? { proposalId: opts.proposalId } : {}), ...(opts.free ? { freeResearch: true } : {}) } as unknown as Record<string, unknown>,
+        input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}), ...(opts.proposalId ? { proposalId: opts.proposalId } : {}), ...(opts.free ? { freeResearch: true } : {}), ...(overridden.ids.length ? { acknowledged: overridden.ids } : {}) } as unknown as Record<string, unknown>,
         estimatedCostUsd: estimated,
         // a free run is quoted 0 (the cost sync caps every charge of a run at its quote), so it is never charged. D3 (2026-10-21): a quote of
         // 0 is stored as 0, not as "no quote" (null is left for runs from before credits), so any work a 0-quoted run starts is capped too
@@ -312,6 +361,16 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   });
   if (created.replayed) return { run: created.row, replayed: true, engineStatus: null };
   const run = created.row;
+  // MKT: every "Continue anyway" is in the audit log, with the codes and the values it went past
+  if (overridden.ids.length)
+    await recordOverride(opts.req ?? null, org.id, {
+      codes: overridden.codes,
+      ids: overridden.ids,
+      target: { type: 'run', id: run.id, label: run.title },
+      what: `run:${input.mode}`,
+      actor: { type: 'user', userId: user.id, label: user.email },
+      values: { mode: input.mode, ...('country' in input && input.country ? { country: input.country } : {}), ...('keyword' in input && input.keyword ? { keyword: input.keyword } : {}), via: opts.apiKeyId ? 'api_key' : 'app' },
+    });
 
   const res = await startRun(body, org.id);
   if (!res.ok) {

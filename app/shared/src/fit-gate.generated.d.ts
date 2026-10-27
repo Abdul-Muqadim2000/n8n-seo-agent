@@ -2,7 +2,26 @@
 // KW-PARITY (2026-10-21): the engine's keyword fit gate, byte for byte, as an ES module for the app (fit-gate.ts wraps it with types).
 // Change the kit and run `python3 build_v4.py`; app/shared/src/fit-gate.parity.test.ts fails while this file is stale.
 
-export type FitReason = 'own brand' | 'navigational' | 'government' | 'portal' | 'job search' | 'other brand' | 'off topic' | 'too broad' | 'empty';
+export type FitReason = 'own brand' | 'navigational' | 'government' | 'portal' | 'job search' | 'other brand' | 'off topic' | 'too broad' | 'other market' | 'empty';
+
+/** MKT (2026-10-27): a place word of the gazetteer and the countries (ISO-2) it stands for; a region stands for several */
+export interface FitPlace {
+  word: string;
+  iso: string[];
+  region: boolean;
+}
+
+export interface FitMarketResult {
+  /** true when the text names no place, or at least one place that includes the market */
+  ok: boolean;
+  iso: string;
+  places: FitPlace[];
+  /** the place words inside / outside the market */
+  inside: string[];
+  outside: string[];
+  /** the text without the outside place words ('' when it cannot be said, e.g. an Arabic keyword) */
+  without: string;
+}
 
 export interface FitResult {
   ok: boolean;
@@ -50,6 +69,8 @@ export interface FitContext {
   relevance?: (keyword: string) => { ok?: boolean; reason?: string; detail?: string } | null | undefined;
   /** fitStored: the row's page is already written */
   written?: boolean;
+  /** MKT (2026-10-27): the website's market (ISO-2); a keyword naming only places outside it is refused as 'other market' */
+  market?: string;
 }
 
 export interface TopicResult {
@@ -107,6 +128,14 @@ export declare const fitLabels: (domain: unknown, protect?: string[]) => string[
 export declare const fitOwnLabels: (domain: unknown, toks?: string[], protect?: string[]) => string[];
 export declare const fitLearnedBrands: (rows: unknown[]) => Record<string, string>;
 export declare const fitBrandList: (ctx: FitContext, protect?: string[]) => string;
+export declare const FIT_PLACES: readonly FitPlace[];
+export declare const fitPlaces: (s: unknown) => FitPlace[];
+export declare const fitMarket: (s: unknown, iso: string) => FitMarketResult;
+export declare const fitDropPlaces: (keyword: unknown, words: string[]) => string;
+export declare const fitArabic: (s: unknown) => { text: string; read: boolean; unread: string[] };
+/** MKT D2 (2026-10-27, mismatch audit): the product families the gate knows (ERP, e-invoicing, CRM, VAT, AI, IT); `cat` = a product
+ *  category, `wide` = a family as wide as its word. The app tells two ladders of one family apart from two ladders of one business. */
+export declare const FIT_FAMILIES: readonly { re: RegExp; anchors: string[]; words: string[]; cat?: boolean; svc?: string[]; wide?: string[]; subj?: string[] }[];
 export declare const FITR: {
   ctx(o?: Record<string, unknown>): FitContext;
   rungs<T>(rows: T[], ctx?: FitContext, opts?: { keyword?: (row: T) => unknown; live?: (row: T) => boolean; serpFor?: (keyword: string, row: T) => string[] | null | undefined; where?: string }): {

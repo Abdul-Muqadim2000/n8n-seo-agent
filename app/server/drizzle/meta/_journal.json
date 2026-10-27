@@ -155,6 +155,13 @@
       "when": 1792688937835,
       "tag": "0021_gsc_live_check",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793098514389,
+      "tag": "0022_market_warnings",
+      "breakpoints": true
     }
   ]
 }

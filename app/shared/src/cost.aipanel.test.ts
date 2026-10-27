@@ -37,6 +37,23 @@ describe('estimateAiPanelCost, the engine\'s golden cases', () => {
   }
 });
 
+// AI-FOCUS (2026-10-27): the pulse scope 'focus' asks only the questions of the topics the client works on (`cases_scope`, AIP.cost's pulse_questions)
+describe('the pulse scope, the engine\'s golden cases', () => {
+  const SC = (AI_PANEL_COST_CASES as unknown as { cases_scope?: { input: In & { pulse_questions?: number }; expect: unknown }[] }).cases_scope ?? [];
+  it('has the scope cases', () => expect(SC.length).toBeGreaterThan(5));
+  for (const cs of SC) {
+    const i = cs.input;
+    it(`panel ${i.panel}, the pulse asks ${i.pulse_questions}`, () => {
+      const c = estimateAiPanelCost({ panel: i.panel, engines: i.engines, pulse: i.pulse, pulseMode: i.pulse_mode, pulsePerWeek: i.pulse_per_week, clusterSize: i.cluster_size, pulseQuestions: i.pulse_questions });
+      expect(asEngine(c)).toEqual(cs.expect);
+    });
+  }
+  it('devaicon.com: 10 questions, the pulse on the 7 of its ladder costs less than the whole panel', () => {
+    expect(estimateAiPanelCost({ panel: 10, pulseQuestions: 7 }).month.total).toBe(4.72);
+    expect(estimateAiPanelCost({ panel: 10 }).month.total).toBe(5.35);
+  });
+});
+
 describe('the panel limits', () => {
   it('a new site starts at 50, an empty stored size keeps 20, a stored size is kept within 3-500', () => {
     expect(aiPanelSize(null)).toBe(50);

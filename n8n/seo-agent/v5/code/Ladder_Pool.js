@@ -102,7 +102,9 @@ const declared_services = (() => { const out = [];
   out.push(...declListE4((base.site_model || {}).declared_services));
   return [...new Set(out.map(x => String(x == null ? '' : x).replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2))].slice(0, 30); })();
 const fitCtx = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: [...new Set((base.competitors_summary || []).map(c => String(c.domain || '')).filter(Boolean))],
-  brands: fitLearnedBrands(cacheRows), protect: [head, ...(sd0.products_or_services || []), ...(base.services || []), ...declared_services, String(base.business || sd0.business_description || '').slice(0, 400)] };
+  brands: fitLearnedBrands(cacheRows), protect: [head, ...(sd0.products_or_services || []), ...(base.services || []), ...declared_services, String(base.business || sd0.business_description || '').slice(0, 400)],
+  // MKT (2026-10-27, AUDIT M4): the rungs stay in the website's market, unless the client chose a main keyword of another market (then its own places are the point)
+  market: (() => { let m = ''; try { m = String($('Normalize Input').first().json.country_iso || base.country_iso || ''); } catch (e) { m = String(base.country_iso || ''); } return m && fitMarket(head, m).ok ? m : ''; })() };
 const refused = [];
 const candidates = all.filter(e => e.intent !== 'navigational' && !sameAsHead(e.keyword)).filter(e => {
   const g = fitGate(e.keyword, { ...fitCtx, intent: e.intent });

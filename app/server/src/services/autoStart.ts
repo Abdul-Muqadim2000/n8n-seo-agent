@@ -1,3 +1,4 @@
+import type { FastifyRequest } from 'fastify';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
 import {
   CHANCE_WORDS,
@@ -23,6 +24,8 @@ import {
   type PipelineData,
   type RecommendedKeyword,
   type RecommendedKeywords,
+  isoOfCountry,
+  marketMismatch,
 } from '@seo/shared';
 import type { OrgAccess } from '../auth/access';
 import { config } from '../config';
@@ -39,6 +42,7 @@ import { assessKeyword, recommendedKeywords } from './keywordChecks';
 import { pipelineData } from './pipeline';
 import { baseUrlFor, senderFor } from './portalMail';
 import { createRun } from './runs';
+import { firstOpenTitle, isConfirmNeeded } from './consistency';
 import { ownerOf } from './companyOwner';
 
 // The next keyword, proposed by the system (SCHEDULING_KEYWORDS_PLAN.md §5.6 / §5.7, owner decisions D5 / D13 / D14 / D15). "Choose
@@ -115,6 +119,8 @@ export interface ProposalState {
   paused: boolean;
   /** topic fit of keywords the website checked recently (normalised keyword -> 0 / 1 / 2 / null) */
   fitOf: Map<string, number | null>;
+  /** MKT (2026-10-27, mismatch audit M4 / M6): the website's main country (a country name); absent = not judged */
+  country?: string;
 }
 
 export type ProposalDecision =
@@ -137,6 +143,11 @@ export function proposalDecision(s: ProposalState): ProposalDecision {
   if (active >= s.maxActive) return none(`${plural(active, 'Auto ladder')} with pages to write (the limit is ${s.maxActive})`);
   const occasion: 'room' | 'won' | 'done' = s.cards.some((c) => c.status === 'won') ? 'won' : s.cards.some((c) => c.mode === 'auto' && c.counts.planned === 0 && c.status !== 'paused') ? 'done' : 'room';
   const r = s.recommended;
+  const iso = isoOfCountry(s.country);
+  // MKT (M6): suggestions researched for another country than the website's main country are measured for the wrong market: nothing is
+  // proposed from them. Level 3 refreshes the research (in the website's own country); levels 1-2 wait for the client
+  const otherMarket = !!iso && !!r.reportId && !!r.country && isoOfCountry(r.country) !== '' && isoOfCountry(r.country) !== iso;
+  if (otherMarket) return s.level === 3 ? { action: 'research', why: `the keyword research was done for ${r.country}, not for ${s.country}` } : none(`the keyword research was done for ${r.country}, not for ${s.country}`);
   const stale = !r.reportId || r.ageDays == null || r.ageDays > RECOMMENDATIONS_MAX_AGE_DAYS;
   // a research refresh is autopilot spend: only at full autopilot (it is in level 3's forecast); levels 1-2 are offered it as a recommendation
   if (stale) return s.level === 3 ? { action: 'research', why: !r.reportId ? 'no keyword research yet' : `the keyword research is older than ${RECOMMENDATIONS_MAX_AGE_DAYS} days` } : none(!r.reportId ? 'no keyword research for this website yet' : `the keyword research is older than ${RECOMMENDATIONS_MAX_AGE_DAYS} days`);
@@ -149,9 +160,10 @@ export function proposalDecision(s: ProposalState): ProposalDecision {
       !ladderOverlapsOf(k.keyword, s.ladders).length &&
       !heads.some((h) => keywordsOverlap(h, k.keyword)) &&
       s.fitOf.get(normKeyword(k.keyword)) !== 0 &&
+      !(iso && marketMismatch(k.keyword, iso)) &&   // MKT (M4): never propose a keyword about another market ("... gcc" for a Pakistan website)
       !before.has(cycleNorm(k.keyword)),
   );
-  if (!pick) return none('no recommended keyword is easy or reachable for the website, on its topic and free of overlaps');
+  if (!pick) return none('no recommended keyword is easy or reachable for the website, on its topic, in its market and free of overlaps');
   const why =
     (occasion === 'won' ? 'Your ladder reached the top 3, so there is room for the next keyword. ' : occasion === 'done' ? 'Your ladder has no pages left to write, so there is room for the next keyword. ' : '') +
     (pick.why ? `${pick.why.replace(/\.$/, '')}.` : `${CHANCE_WORDS[pick.difficultyForYou ?? ''] ?? 'Within reach'} for your website.`);
@@ -161,6 +173,8 @@ export function proposalDecision(s: ProposalState): ProposalDecision {
 // ---------------- the store ----------------
 
 /** The price of one ladder page in credits, about (the engine's own calibrated figure when known). */
+/** MKT D1: the price of starting a suggested ladder, about (the plan and its first page, written now), the engine's calibrated figure. */
+export const startCredits = (): number => creditsOfUsd(estimateRunCost('ladder', { pagesNow: 1 }, cachedCalibration()));
 export const creditsPerPage = (): number => creditsOfUsd(estimateRunCost('keyword', { receiveContent: true, receiveReport: true }, cachedCalibration()));
 
 export function toProposal(r: KeywordProposalRow, decidedByEmail: string | null = null): KeywordProposalView {
@@ -182,6 +196,7 @@ export function toProposal(r: KeywordProposalRow, decidedByEmail: string | null 
     planType: typeof d.planType === 'string' ? d.planType : null,
     months: typeof d.months === 'string' ? d.months : '',
     creditsPerPage: creditsPerPage(),
+    startCredits: startCredits(),
     runId: r.runId,
     swappedFor: r.swappedFor,
     note: r.note,
@@ -327,7 +342,7 @@ const defaultDeps: ProposalDeps = {
   announce,
 };
 
-const ladderBody = (site: SiteRow, keyword: string, chosenBy: 'client_typed' | 'client_picked' | 'system_announced') =>
+const ladderBody = (site: SiteRow, keyword: string, chosenBy: 'client_typed' | 'client_picked' | 'system_announced', ladderMode?: 'manual') =>
   ladderInput.safeParse({
     mode: 'ladder',
     siteId: site.id,
@@ -342,6 +357,8 @@ const ladderBody = (site: SiteRow, keyword: string, chosenBy: 'client_typed' | '
     pagesNow: 1,
     chosenBy,
     emailCopy: false,
+    // MKT D1 (2026-10-27): "Plan it without writing a page", the safe Accept of the new-ladder confirmation
+    ...(ladderMode ? { ladderMode } : {}),
   });
 
 const levelOfSite = (site: Pick<SiteRow, 'autopilotLevel'>): AutopilotLevel => (site.autopilotLevel === 1 || site.autopilotLevel === 3 ? site.autopilotLevel : DEFAULT_AUTOPILOT_LEVEL);
@@ -370,6 +387,7 @@ export async function proposeForSite(org: OrgRow, site: SiteRow, deps: ProposalD
     researchRunning: data.activeRuns.some((r) => r.mode === 'discover'),
     paused: data.tracking.status === 'paused',
     fitOf,
+    country: site.country,
   });
   if (decision.action === 'none') return { proposalId: null, keyword: null, reason: decision.why };
   if (decision.action === 'research') {
@@ -384,6 +402,7 @@ export async function proposeForSite(org: OrgRow, site: SiteRow, deps: ProposalD
       return { proposalId: null, keyword: null, reason: `${decision.why}: research started`, researchRunId: run.id };
     } catch (err) {
       if (err instanceof HttpError && (err.statusCode === 402 || err.statusCode === 429)) return { proposalId: null, keyword: null, reason: `${decision.why}; the research could not start (${err.statusCode === 402 ? 'no credits left' : 'limit reached'})` };
+      if (isConfirmNeeded(err)) return { proposalId: null, keyword: null, reason: `${decision.why}; the research waits for you (${firstOpenTitle(err)})` };
       throw err;
     }
   }
@@ -466,6 +485,9 @@ export async function startDueProposals(log: Log, deps: ProposalDeps = defaultDe
         log.info({ site: site.domain, keyword: p.keyword, run: run.id }, 'announced keyword started');
       } catch (err) {
         if (err instanceof HttpError && (err.statusCode === 402 || err.statusCode === 429)) await release(p.id, { note: err.statusCode === 402 ? 'Waiting: no credits left for it' : 'Waiting: a limit was reached' });
+        // MKT (2026-10-27, mismatch audit §2.2): an automatic start never continues past a warning. The announcement stops (no start
+        // time) and waits for the client as a suggestion on Needs you, with the warning's own words; their approve sees the warning.
+        else if (isConfirmNeeded(err)) await release(p.id, { startAt: null, note: `Waiting for you: ${firstOpenTitle(err) || 'a warning needs your answer'}` });
         else {
           await release(p.id);
           throw err;
@@ -526,14 +548,20 @@ async function proposalOf(site: SiteRow, id: string): Promise<KeywordProposalRow
 }
 
 /** Approve: start it now, as the client's own pick. */
-export async function approveProposal(a: OrgAccess & { site: SiteRow }, id: string, deps: Pick<ProposalDeps, 'start'> = defaultDeps): Promise<{ proposal: KeywordProposalView; run: RunRow }> {
+export async function approveProposal(
+  a: OrgAccess & { site: SiteRow },
+  id: string,
+  deps: Pick<ProposalDeps, 'start'> = defaultDeps,
+  /** MKT: the warning ids the person answered with "Continue anyway", and the request (audit) */
+  ack: { acknowledge?: string[]; req?: FastifyRequest | null; /** MKT D1: start it Manual (plan only) */ ladderMode?: 'manual' } = {},
+): Promise<{ proposal: KeywordProposalView; run: RunRow }> {
   const p = await proposalOf(a.site, id);
-  const parsed = ladderBody(a.site, p.keyword, 'client_picked');
+  const parsed = ladderBody(a.site, p.keyword, 'client_picked', ack.ladderMode);
   if (!parsed.success) throw badRequest("The website's details are incomplete: fill them in its settings first");
   const c = await claim(p.id, a.site.id);
   if (!c) throw conflict('This proposal was decided a moment ago.', 'proposal_decided');
   try {
-    const run = await deps.start(a, parsed.data, { proposalId: p.id });
+    const run = await deps.start(a, parsed.data, { proposalId: p.id, acknowledge: ack.acknowledge, req: ack.req });
     // a run the engine did not take is a failure, not a decision: the proposal says why, and the keyword can be proposed again
     const [row] = await db
       .update(schema.keywordProposals)
@@ -545,6 +573,19 @@ export async function approveProposal(a: OrgAccess & { site: SiteRow }, id: stri
     await release(p.id);
     throw err;
   }
+}
+
+/**
+ * MKT D2 (2026-10-27): the suggestion's keyword was added as a page of an existing ladder (the "same product" warning's Accept) instead of
+ * starting a ladder of its own: the waiting suggestion is closed as decided (never proposed again), saying where the keyword went.
+ */
+export async function closeProposalsAdded(siteId: string, keyword: string, _ladderId: string, userId: string): Promise<number> {
+  const done = await db
+    .update(schema.keywordProposals)
+    .set({ status: 'skipped', decidedAt: new Date(), decidedBy: userId, note: "Added as a page of your existing keyword ladder instead of a new ladder." })
+    .where(and(eq(schema.keywordProposals.siteId, siteId), eq(schema.keywordProposals.status, 'pending'), eq(schema.keywordProposals.keywordNorm, cycleNorm(keyword))))
+    .returning({ id: schema.keywordProposals.id });
+  return done.length;
 }
 
 /** Skip: never proposed again for this website; the next one is proposed. */
@@ -562,11 +603,17 @@ export async function skipProposal(a: OrgAccess & { site: SiteRow }, id: string,
 }
 
 /** Swap: the client types a different keyword; it is checked first (a keyword check), then started as the client's own. */
-export async function swapProposal(a: OrgAccess & { site: SiteRow }, id: string, keyword: string, deps: Pick<ProposalDeps, 'start'> & { check?: typeof assessKeyword } = defaultDeps): Promise<{ proposal: KeywordProposalView; run: RunRow }> {
+export async function swapProposal(
+  a: OrgAccess & { site: SiteRow },
+  id: string,
+  keyword: string,
+  deps: Pick<ProposalDeps, 'start'> & { check?: typeof assessKeyword } = defaultDeps,
+  ack: { acknowledge?: string[]; req?: FastifyRequest | null; /** MKT D1: start it Manual (plan only) */ ladderMode?: 'manual' } = {},
+): Promise<{ proposal: KeywordProposalView; run: RunRow }> {
   const p = await proposalOf(a.site, id);
   const k = keyword.trim();
   if (k.length < 2 || k.length > 100) throw badRequest('Use 2-100 characters', { keyword: 'Use 2-100 characters' });
-  const check = await (deps.check ?? assessKeyword)(a, { keyword: k });
+  const check = await (deps.check ?? assessKeyword)(a, { keyword: k }, { acknowledge: ack.acknowledge, req: ack.req });
   const res = check.result;
   if (res.difficultyForYou === 'not_realistic' || res.fit === 0)
     throw new HttpError(
@@ -576,12 +623,12 @@ export async function swapProposal(a: OrgAccess & { site: SiteRow }, id: string,
       undefined,
       { check },
     );
-  const parsed = ladderBody(a.site, k, 'client_typed');
+  const parsed = ladderBody(a.site, k, 'client_typed', ack.ladderMode);
   if (!parsed.success) throw badRequest("The website's details are incomplete: fill them in its settings first");
   const c = await claim(p.id, a.site.id);
   if (!c) throw conflict('This proposal was decided a moment ago.', 'proposal_decided');
   try {
-    const run = await deps.start(a, parsed.data, { proposalId: p.id });
+    const run = await deps.start(a, parsed.data, { proposalId: p.id, acknowledge: ack.acknowledge, req: ack.req });
     const [row] = await db
       .update(schema.keywordProposals)
       .set(run.status === 'failed' ? { status: 'failed', swappedFor: k, runId: run.id, decidedAt: new Date(), decidedBy: a.user.id, note: failedNote(run) } : { status: 'swapped', swappedFor: k, runId: run.id, decidedAt: new Date(), decidedBy: a.user.id, note: '' })

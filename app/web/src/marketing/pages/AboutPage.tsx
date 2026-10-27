@@ -51,7 +51,7 @@ const PRINCIPLES: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Sparkles,
     title: 'Built for the AI-search era',
-    body: `Buyers ask AI assistants for a shortlist before they search. Alaventra tracks ${aiEngines.length} AI engines and answer surfaces next to Google, and checks that AI crawlers can read your site.`,
+    body: `Buyers ask AI assistants for a shortlist before they search. Alaventra works on AEO and GEO next to SEO: it tracks ${aiEngines.length} AI engines and answer surfaces next to Google, does the weekly work that gets you named in them and checks that AI crawlers can read your site.`,
   },
 ];
 
@@ -96,8 +96,8 @@ function Mission() {
           <SectionHeading
             id="mission-title"
             eyebrow="Our mission"
-            title="SEO that runs itself, measured by what is real."
-            lead="Most SEO tools report what an index or a model claims. We would rather check. Alaventra measures the things that decide whether a number can be trusted, and says so when it cannot."
+            title="SEO, AEO and GEO that run themselves, measured by what is real."
+            lead="Most search tools report what an index or a model claims. We would rather check. Alaventra measures the things that decide whether a number can be trusted, and says so when it cannot."
           />
         </div>
         <ul className="grid gap-4 sm:grid-cols-2">
@@ -242,7 +242,7 @@ export default function AboutPage() {
   useSeo({
     title: 'About',
     description:
-      'Alaventra helps your business rank in search and get recommended by AI: one weekly loop for research, content, audits, AI search visibility and backlinks, with your team in control and only real changes reported.',
+      'Alaventra helps your business rank in search and get recommended by AI: one weekly loop for SEO, AEO and GEO, with your team in control and only real changes reported.',
     path: '/about',
   });
   return (
@@ -250,7 +250,7 @@ export default function AboutPage() {
       <PageHero
         eyebrow="About Alaventra"
         title="Rank in search. Get recommended by AI."
-        lead="We build the system that runs SEO as a weekly loop (research, content, audits, AI answers and backlinks) so teams spend their time on the decisions that need a person."
+        lead="We build the system that runs SEO, AEO and GEO as one weekly loop (research, content, audits, AI answers and backlinks) so teams spend their time on the decisions that need a person."
         actions={
           <>
             <ButtonLink to="/platform" size="lg">

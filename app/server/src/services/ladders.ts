@@ -716,7 +716,7 @@ function nextStep(
 /** the same words: "e invoicing in uae" and "UAE e-invoicing" */
 const sameSearch = (a: string, b: string) => keywordTokens(a).sort().join(' ') === keywordTokens(b).sort().join(' ');
 
-const KIND_RANK: Record<NeedsYouItem['kind'], number> = { connection: 0, keyword: 1, profile: 1.5, proposal: 2, level: 3, recheck: 4, pileup: 5, publish: 6, failed: 7, duplicate: 8, overlap: 9, approve: 10 };
+const KIND_RANK: Record<NeedsYouItem['kind'], number> = { connection: 0, keyword: 1, profile: 1.5, proposal: 2, level: 3, recheck: 4, pileup: 5, publish: 6, failed: 7, duplicate: 8, overlap: 9, approve: 10, ai_panel: 11 };   // AI-FOCUS: the AI panel's decisions come after the pages
 
 /** Most urgent first: warnings, then by kind. */
 export function sortNeedsYou(items: NeedsYouItem[]): NeedsYouItem[] {

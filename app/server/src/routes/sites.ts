@@ -11,7 +11,11 @@ import {
   linkImportSchema,
   siteAdminMonitorsBody,
   parseLinkImport,
+  importTargetHosts,
   n8nSiteId,
+  countryOf,
+  LADDER_ID_RE,
+  type Warning,
   safeJson,
   updateSiteSchema,
   VERIFICATION_META_NAME,
@@ -38,7 +42,8 @@ import { db, schema } from '../db';
 import type { SiteRow } from '../db/schema';
 import { randomToken } from '../lib/crypto';
 import { badRequest, conflict, HttpError, notFound, parse } from '../lib/errors';
-import { deleteRows, ensureTable, insertRows, invalidateSite, siteAdmin, siteRows } from '../n8n/client';
+import { deleteRows, ensureTable, insertRows, invalidateSite, siteAdmin, siteRows, updateRows } from '../n8n/client';
+import { acknowledgeOnSite, checkIntegration, checkSettings, checkWrite, consistencySite, ladderMarkets, recordOverride, redirectTarget, siteApiOf, standingWarnings, takeAcknowledge } from '../services/consistency';
 import { invalidateForecast } from '../services/billing';
 import { assertGa4ForDomain, findGscProperty, gscOwnerCheck, listGa4Properties } from '../services/google';
 import { assertEngineIdFree, ENGINE_ID_TAKEN } from '../services/engineSite';
@@ -186,8 +191,8 @@ export function adminAuditDetails(a: AdminAction, affected: number | null | unde
   const base = { affected: affected ?? null };
   switch (a.action) {
     case 'ai_prompts':
-      return { ...base, added: a.add.length, edited: a.edit.length, removed: a.remove.length, enabled: a.enable.length, pinned: a.pin.length, unpinned: a.unpin.length,
-        ids: [...a.edit.map((e) => e.promptId), ...a.remove, ...a.enable, ...a.pin, ...a.unpin].slice(0, 20) };
+      return { ...base, added: a.add.length, edited: a.edit.length, removed: a.remove.length, enabled: a.enable.length, pinned: a.pin.length, unpinned: a.unpin.length, accepted: (a.accept ?? []).length, retired: (a.retire ?? []).length,
+        ids: [...a.edit.map((e) => e.promptId), ...a.remove, ...a.enable, ...a.pin, ...a.unpin, ...(a.accept ?? []), ...(a.retire ?? [])].slice(0, 20) };
     case 'monitors': {
       const m = a.monitors as Record<string, unknown>;
       const changed = Object.keys(m).filter((k) => m[k] !== undefined);
@@ -208,7 +213,67 @@ export function adminAuditDetails(a: AdminAction, affected: number | null | unde
   }
 }
 
+/**
+ * MKT (2026-10-27, mismatch audit M2): the engine measures the website in its main country. Site Admin `market` updates the engine's site
+ * row (country, location code, language) from the engine's own COUNTRIES table; nothing else changes (rank history and past rows keep the
+ * market they were measured in, the next weekly check starts a new baseline). True when the engine row was updated.
+ */
+export async function syncMarket(site: SiteRow, req: FastifyRequest | null): Promise<boolean> {
+  const c = countryOf(site.country);
+  if (!c) throw badRequest('The website has no main country to measure in', { country: 'Choose a country' });
+  const r = await siteAdmin({ action: 'market', domain: site.domain, site_id: n8nSiteId(site.domain), country: c.name, request_id: `app-market-${site.id}-${Date.now().toString(36)}` });
+  if (!r.ok) throw new HttpError(502, r.error || 'The SEO engine could not change the market.', 'admin_failed');
+  invalidateSite(site.domain);
+  if (!r.affected) return false;
+  await audit(req, site.orgId, { action: 'site.market_synced', target: { type: 'site', id: site.id, label: site.domain }, details: { country: c.name, locationCode: c.code } });
+  return true;
+}
+
 export async function siteRoutes(app: FastifyInstance) {
+  // ---------- MKT (2026-10-27): the website's standing warnings and their two answers ----------
+  app.get('/api/orgs/:orgId/sites/:siteId/consistency', async (req): Promise<{ warnings: Warning[]; acknowledged: Warning[] }> => {
+    const p = req.params as P;
+    const a = await siteAccess(req, p.orgId, p.siteId, 'viewer');
+    return standingWarnings(a.org, a.site);
+  });
+
+  // "Continue anyway" on a standing warning: kept quiet on the website until the facts in its id change
+  app.post('/api/orgs/:orgId/sites/:siteId/consistency/acknowledge', async (req): Promise<{ acknowledged: string[] }> => {
+    const p = req.params as P;
+    const a = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    const { acknowledge } = takeAcknowledge(req.body);
+    const { warnings } = await standingWarnings(a.org, a.site);
+    const hit = warnings.filter((w) => w.tone === 'warning' && acknowledge.includes(w.id));
+    if (!hit.length) throw badRequest('None of these warnings is open on this website any more', { acknowledge: 'Unknown warning' });
+    const all = await acknowledgeOnSite(a.site, hit.map((w) => w.id));
+    await recordOverride(req, a.org.id, { ids: hit.map((w) => w.id), codes: [...new Set(hit.map((w) => w.code))], target: { type: 'site', id: a.site.id, label: a.site.domain }, what: 'site.standing' });
+    return { acknowledged: all };
+  });
+
+  // Accept on "Your weekly checks still measure <country>": the engine measures the website's main country from now on
+  app.post('/api/orgs/:orgId/sites/:siteId/market/sync', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, async (req): Promise<{ ok: true; country: string }> => {
+    const p = req.params as P;
+    const { site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    requireVerified(site);
+    if (!(await syncMarket(site, req))) throw new HttpError(409, 'The SEO engine does not track this website yet: start weekly tracking first (it measures your main country).', 'not_tracked');
+    return { ok: true, country: site.country };
+  });
+
+  // Accept on "Your ladder ... is tracked in <country>": the ladder's rows move to the website's main country (history stays)
+  app.post('/api/orgs/:orgId/sites/:siteId/ladders/:ladderId/market', { config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } }, async (req): Promise<{ ok: true; country: string }> => {
+    const p = req.params as P & { ladderId: string };
+    const { site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    requireVerified(site);
+    if (!LADDER_ID_RE.test(String(p.ladderId ?? ''))) throw notFound('Ladder not found');
+    const c = countryOf(site.country);
+    if (!c) throw badRequest('The website has no main country to measure in', { country: 'Choose a country' });
+    const ok = await updateRows('ladders', [{ columnName: 'ladder_id', condition: 'eq', value: p.ladderId }, { columnName: 'domain', condition: 'eq', value: site.domain }], { country: c.name, location_code: c.code, language_code: c.lang });
+    if (!ok) throw new HttpError(502, 'The SEO engine could not move the ladder.', 'admin_failed');
+    invalidateSite(site.domain);
+    await audit(req, site.orgId, { action: 'site.ladder_market_moved', target: { type: 'site', id: site.id, label: site.domain }, details: { ladderId: p.ladderId, country: c.name } });
+    return { ok: true, country: c.name };
+  });
+
   // G5: the client portal lists the workspace's websites
   app.get('/api/orgs/:orgId/sites', async (req) => {
     const a = await orgAccess(req, (req.params as P).orgId, 'client_viewer');
@@ -218,7 +283,12 @@ export async function siteRoutes(app: FastifyInstance) {
 
   app.post('/api/orgs/:orgId/sites', async (req) => {
     const a = await orgAccess(req, (req.params as P).orgId, 'admin');
+    const { acknowledge } = takeAcknowledge(req.body);
     const body = parse(createSiteSchema, req.body);
+    // MKT (2026-10-27, mismatch audit M5): a description about other markets than the main country is said before the website is added
+    // MKT I7: and an address that sends every visitor to another domain (one request, followed redirects; unreachable = not judged)
+    const redirectTo = await redirectTarget(body.domain);
+    const chk = checkWrite('site_update', body as unknown as Record<string, unknown>, { site: null, redirectTo }, acknowledge);
     const mine = await db.query.sites.findFirst({ where: and(eq(schema.sites.orgId, a.org.id), eq(schema.sites.domain, body.domain)) });
     if (mine) throw conflict(`${body.domain} is already one of your websites.`, 'site_exists');
     if (await verifiedElsewhere(body.domain, a.org.id))
@@ -241,10 +311,12 @@ export async function siteRoutes(app: FastifyInstance) {
         brandNames: body.brandNames,
         ...(body.services ? { services: body.services } : {}),
         ...(body.timezone ? { timezone: body.timezone } : {}),
+        ...(chk.ids.length ? { acknowledgedWarnings: chk.ids } : {}),
         verificationToken: randomToken(18),
       })
       .returning();
     await audit(req, a.org.id, { action: 'site.added', target: { type: 'site', id: site.id, label: site.domain } });
+    await recordOverride(req, a.org.id, { ...chk, target: { type: 'site', id: site.id, label: site.domain }, what: 'site.added', values: { country: site.country } });
     return toSite(site);
   });
 
@@ -257,17 +329,43 @@ export async function siteRoutes(app: FastifyInstance) {
   app.patch('/api/orgs/:orgId/sites/:siteId', async (req) => {
     const p = req.params as P;
     const { site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    const { acknowledge } = takeAcknowledge(req.body);
     const body = parse(updateSiteSchema, req.body);
+    // MKT (2026-10-27, mismatch audit M2 / M5): what the save changes about the website's market, before it is saved. A description about
+    // other markets than the main country needs an answer (Accept: that country; Continue anyway: kept quiet on the website until the facts
+    // change); a new main country of a tracked website is announced with what moves and what stays.
+    const isTracked = !!site.verifiedAt && ['active', 'paused'].includes(site.trackingStatus);
+    const marketFields = (['country', 'business', 'customers', 'businessFacts', 'services', 'cta'] as const).some((k) => body[k] !== undefined);
+    const countryChanged = !!body.country && countryOf(body.country)?.iso !== countryOf(site.country)?.iso;
+    const chk = marketFields
+      ? checkWrite(
+          'site_update',
+          body as unknown as Record<string, unknown>,
+          { site: consistencySite(site), siteApi: siteApiOf(site), tracked: isTracked, ladders: countryChanged && isTracked ? await ladderMarkets(site.domain) : [] },
+          [...acknowledge, ...(site.acknowledgedWarnings ?? [])],
+        )
+      : { warnings: [] as Warning[], ids: [] as string[], codes: [] as string[] };
+    const newIds = chk.ids.filter((id) => !(site.acknowledgedWarnings ?? []).includes(id));
     if (body.ga4PropertyId) {
       requireVerified(site);
       await assertGa4ForDomain(body.ga4PropertyId, site.domain);
     }
     const patch = Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined));
-    const [s] = await db
+    let [s] = await db
       .update(schema.sites)
-      .set({ ...patch, updatedAt: new Date() })
+      .set({ ...patch, ...(newIds.length ? { acknowledgedWarnings: [...new Set([...(site.acknowledgedWarnings ?? []), ...newIds])] } : {}), updatedAt: new Date() })
       .where(eq(schema.sites.id, site.id))
       .returning();
+    if (newIds.length) await recordOverride(req, s.orgId, { ids: newIds, codes: chk.codes, target: { type: 'site', id: s.id, label: s.domain }, what: 'site.updated', values: { country: s.country } });
+    // MKT (M2): a new main country moves every weekly check of a tracked website at once (Site Admin `market`). Rank history and past
+    // rows stay; a failure is logged and the save stands (the website pages then offer "Measure in <country>").
+    if (countryChanged && isTracked) {
+      const synced = await syncMarket(s, req).catch((err) => {
+        req.log.warn({ site: s.domain, err: String((err as Error)?.message ?? err) }, 'market not sent to the engine');
+        return false;
+      });
+      if (synced) s = (await db.query.sites.findFirst({ where: eq(schema.sites.id, s.id) })) ?? s;
+    }
     // P1 (2026-10-20, rehearsal §4 item 1): the engine writes no page before the business facts are on ITS site row (the Content Cadence
     // reads them there, and the weekly pages carry them). Changed facts of a tracked website go to the engine at once (Site Admin `facts`);
     // a website the engine does not track yet gets them with "Track my site". A failure is logged, the save stands: the next track re-sends.
@@ -400,7 +498,7 @@ export async function siteRoutes(app: FastifyInstance) {
   // replaces the previous one; the Backlink Monitor merges it into its ledger on the next run and checks the pages itself.
   app.post('/api/orgs/:orgId/sites/:siteId/backlinks/import', { bodyLimit: 16 * 1024 * 1024, config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async (req): Promise<LinkImportSummary> => {
     const p = req.params as P;
-    const { site } = await siteAccess(req, p.orgId, p.siteId, 'member');
+    const { site, org } = await siteAccess(req, p.orgId, p.siteId, 'member');
     requireVerified(site);
     const input = parse(linkImportSchema, req.body);
     let parsed;
@@ -409,6 +507,8 @@ export async function siteRoutes(app: FastifyInstance) {
     } catch (err) {
       throw badRequest((err as Error).message);
     }
+    // MKT I3 (2026-10-27): a file whose "linked to" column is another website's would credit its links to this one
+    await checkIntegration(req, { org, site }, { kind: 'link_import', targets: importTargetHosts(input.csv) });
     const now = new Date().toISOString();
     const importId = `imp_${Date.now().toString(36)}`;
     const siteId = n8nSiteId(site.domain);
@@ -477,9 +577,20 @@ export async function siteRoutes(app: FastifyInstance) {
   // ---------- Site Admin (n8n) ----------
   app.post('/api/orgs/:orgId/sites/:siteId/admin', async (req): Promise<AdminResult> => {
     const p = req.params as P;
-    const { site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    const { site, org, role } = await siteAccess(req, p.orgId, p.siteId, 'admin');
     requireVerified(site);
+    const { acknowledge } = takeAcknowledge(req.body);
     const a = parse(adminActionSchema, req.body);
+    // MKT (2026-10-27, mismatch audit S1 / S2 / S7 / C1): weekly pages that will write nothing, more than the waiting limit lets through,
+    // switched off under a ladder that still has pages, or schedules the credits cannot pay for. M7: the own market added as an extra one.
+    if (a.action === 'cadence')
+      await checkSettings(req, { org, site, role }, { setting: 'cadence', pagesPerWeek: a.pagesPerWeek }, { schedule: { blogsPerWeek: a.pagesPerWeek }, revert: { pagesPerWeek: site.blogsPerWeek ?? 0 } });
+    if (a.action === 'monitors') await checkSettings(req, { org, site, role }, { setting: 'monitors', aiMarkets: a.monitors.aiMarkets }, { schedule: { monitors: a.monitors } });
+    // MKT (2026-10-27, mismatch audit M7): a question added to the AI panel that asks about another market than the website's
+    if (a.action === 'ai_prompts' && a.add.length) {
+      const chk = checkWrite('ai_questions', { add: a.add }, { site: consistencySite(site), siteApi: siteApiOf(site) }, [...acknowledge, ...(site.acknowledgedWarnings ?? [])]);
+      await recordOverride(req, site.orgId, { ids: chk.ids, codes: chk.codes, target: { type: 'site', id: site.id, label: site.domain }, what: 'ai_questions', values: { added: a.add.length } });
+    }
     const base = { domain: site.domain, site_id: n8nSiteId(site.domain), request_id: `app-${a.action}-${Date.now().toString(36)}` };
     let body: Record<string, unknown>;
     switch (a.action) {
@@ -503,7 +614,7 @@ export async function siteRoutes(app: FastifyInstance) {
         break;
       case 'ai_prompts':
         // G6 (2026-10-18): the panel manager, the engine's field names (AI_Prompt_Rows_Admin.js)
-        body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove, enable: a.enable, pin: a.pin, unpin: a.unpin,
+        body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove, enable: a.enable, pin: a.pin, unpin: a.unpin, accept: a.accept, retire: a.retire,   // AI-FOCUS: accept / retire
           edit: a.edit.map((e) => ({ prompt_id: e.promptId, ...(e.prompt ? { prompt: e.prompt } : {}), ...(e.keyword ? { keyword: e.keyword } : {}), ...(e.persona !== undefined ? { persona: e.persona } : {}), ...(e.cluster !== undefined ? { cluster: e.cluster } : {}),
             ...(e.stage ? { stage: e.stage } : {}), ...(e.market ? { market: e.market } : {}), ...(e.pinned !== undefined ? { pinned: e.pinned } : {}) })) };
         break;

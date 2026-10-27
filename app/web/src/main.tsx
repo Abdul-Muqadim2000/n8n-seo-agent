@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/overlay';
 import { GuideProvider } from '@/components/guide';
 import { StepUpProvider } from '@/components/identity/StepUpProvider';
+import { ConfirmProvider } from '@/components/warnings/ConfirmProvider';
 import { ThemeProvider } from '@/lib/theme';
 import { PortalHostBrand } from '@/lib/portal';
 import { router } from './router';
@@ -30,7 +31,9 @@ createRoot(document.getElementById('root')!).render(
         <TooltipProvider>
           <GuideProvider>
             <StepUpProvider>
-              <RouterProvider router={router} />
+              <ConfirmProvider>
+                <RouterProvider router={router} />
+              </ConfirmProvider>
             </StepUpProvider>
           </GuideProvider>
           <Toaster position="bottom-right" toastOptions={{ className: '!bg-surface !text-ink !border-line' }} />

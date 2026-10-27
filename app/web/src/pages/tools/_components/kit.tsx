@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEventHandler, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type BaseSyntheticEvent, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import type { FieldValues, Path, UseFormRegisterReturn, UseFormReturn } from 'react-hook-form';
@@ -13,15 +13,17 @@ import {
   MODES,
   NOTICE_MODES,
   PAGE_TYPES,
-  pipelineNotices,
+  consistencyWarnings,
   TONES,
   type ModeId,
   type NoticeFormat,
   type NoticeInput,
   type PipelineNotice,
   type Site,
+  type Warning,
 } from '@seo/shared';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { openWarnings, Warnings } from '@/components/warnings/Warnings';
+import { api, ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useBilling, useProviders, useSiteData } from '@/lib/queries';
 import { paths } from '@/lib/paths';
@@ -111,9 +113,11 @@ export function useRunSubmit<TIn extends FieldValues, TOut>(form: UseFormReturn<
   const start = useStartRun(org.id);
   const navigate = useNavigate();
   const [error, setError] = useState<unknown>(null);
-  const onSubmit = form.handleSubmit((values) => {
+  // MKT (2026-10-27): `acknowledge` = the warnings the person ticked ("... anyway"); the server checks the same warnings and records them
+  const onSubmit = (e?: BaseSyntheticEvent, acknowledge: string[] = []) =>
+    form.handleSubmit((values) => {
     setError(null);
-    start.mutate(values, {
+    start.mutate(acknowledge.length ? { ...(values as object), acknowledge } : values, {
       onSuccess: (run) => {
         if (run.status === 'failed') toast.error('The SEO engine did not accept this run', { description: run.error ?? undefined });
         else toast.success('Run started', { description: `${run.title}. Results appear on the run page as they arrive.` });
@@ -132,8 +136,13 @@ export function useRunSubmit<TIn extends FieldValues, TOut>(form: UseFormReturn<
         } else setError(e);
       },
     });
-  });
-  return { onSubmit, pending: start.isPending, error };
+  })(e);
+  // Accept on a warning: its correction is written into the form (only fields the form has)
+  const onAccept = (set: Record<string, unknown>) => {
+    const known = Object.keys(form.getValues());
+    for (const [k, v] of Object.entries(set)) if (known.includes(k)) form.setValue(k as Path<TIn>, v as never, { shouldDirty: true, shouldValidate: form.formState.isSubmitted });
+  };
+  return { onSubmit, onAccept, pending: start.isPending, error };
 }
 
 export function SubmitError({ error, siteId }: { error: unknown; siteId?: string | null }) {
@@ -250,16 +259,19 @@ export interface ShellProps {
   emailCopy: boolean;
   /** extra deliverables chosen in the form ("plus a full SEO report") */
   extras?: string[];
-  onSubmit: FormEventHandler<HTMLFormElement>;
+  /** the form's submit; ToolShell hands it the warning ids the person ticked */
+  onSubmit: (e?: FormEvent<HTMLFormElement>, acknowledge?: string[]) => unknown;
   pending: boolean;
   error: unknown;
   submitLabel?: string;
   /** a reason the run cannot start (shown instead of enabling the button) */
   blocked?: ReactNode;
-  /** the form values the pipeline notices compare (keyword, existing page, ...) */
-  values?: NoticeInput;
+  /** the form values the warnings compare (keyword, country, existing page, keywords to watch ...) */
+  values?: NoticeInput & Record<string, unknown>;
   /** applies the pipeline's own plan for a keyword (existing page to improve) to the form */
   onUsePlan?: (plan: NonNullable<PipelineNotice['usePlan']>) => void;
+  /** MKT: Accept on a warning, its correction written into the form (useRunSubmit's onAccept) */
+  onAccept?: (set: Record<string, unknown>) => void;
   children: ReactNode;
 }
 
@@ -270,59 +282,83 @@ const NOTICE_FORMAT: NoticeFormat = {
 };
 
 /**
- * What this run means for the website's automatic pipeline (shared/src/pipeline-notices.ts): the schedule already does it, it is
- * running right now, or the page / ladder already exists. Likely duplicates need a tick before the run starts.
+ * What this run means, before it starts (shared/src/consistency.ts, the list the server enforces): what it means for the website's
+ * automatic pipeline (the schedule already does it, it is running right now, the page or ladder already exists) and whether it fits the
+ * website's market (another country, a keyword about another place or in another script). A warning needs Accept or a tick.
  */
-export function usePipelineNotices(mode: ModeId, site: Site | null, values: NoticeInput, cost: number) {
+export function usePipelineNotices(mode: ModeId, site: Site | null, values: NoticeInput & Record<string, unknown>, cost: number) {
   const { org } = useOrgCtx();
   const on = NOTICE_MODES.includes(mode) && !!site?.verifiedAt;
   const q = useSiteData(org.id, site?.id ?? '', 'pipeline', undefined, { enabled: on, staleTime: 30_000 });
   // another website's data while this one loads would warn about the wrong pages
   const data = on && !q.isPlaceholderData ? q.data : undefined;
-  const notices = pipelineNotices(mode, values, data, { fmt: NOTICE_FORMAT, costLabel: cost > 0 ? quoteLabel(cost) : undefined });
+  const notices: Warning[] = consistencyWarnings('run', { ...values, mode }, {
+    site: site ? { domain: site.domain, country: site.country, business: site.business, customers: site.customers, businessFacts: site.businessFacts, services: site.services, cta: site.cta, timezone: site.timezone } : null,
+    siteApi: site ? `/api/orgs/${org.id}/sites/${site.id}` : undefined,
+    pipeline: data,
+    pipelineOpts: { fmt: NOTICE_FORMAT, costLabel: cost > 0 ? quoteLabel(cost) : undefined },
+  });
   const [acked, setAcked] = useState<string[]>([]);
-  const unconfirmed = notices.filter((n) => n.confirm && !acked.includes(n.id));
+  const unconfirmed = openWarnings(notices, acked);
   const toggle = (id: string, on: boolean) => setAcked((a) => (on ? [...a, id] : a.filter((x) => x !== id)));
-  return { notices, acked, toggle, unconfirmed };
+  return { notices, acked: acked.filter((id) => notices.some((n) => n.id === id)), toggle, unconfirmed };
 }
 
-export function PipelineNotices({ notices, acked, onToggle, onUsePlan, siteId }: { notices: PipelineNotice[]; acked: string[]; onToggle: (id: string, on: boolean) => void; onUsePlan?: ShellProps['onUsePlan']; siteId: string }) {
+/** The tool forms' warnings: the shared Warnings component with the company's links and the form's Accept. */
+export function PipelineNotices({
+  notices,
+  acked,
+  onToggle,
+  onUsePlan,
+  onAccept,
+  siteId,
+}: {
+  notices: PipelineNotice[];
+  acked: string[];
+  onToggle: (id: string, on: boolean) => void;
+  onUsePlan?: ShellProps['onUsePlan'];
+  onAccept?: ShellProps['onAccept'];
+  siteId: string;
+}) {
   const { org } = useOrgCtx();
-  if (!notices.length) return null;
+  const navigate = useNavigate();
+  const linkFor = (n: PipelineNotice) =>
+    n.link?.runId
+      ? paths.run(org.id, n.link.runId)
+      : n.link?.reportId
+        ? paths.report(org.id, n.link.reportId)
+        : n.link?.ladderId
+          ? paths.ladder(org.id, siteId, n.link.ladderId)
+          : n.link?.page
+            ? paths.site(org.id, siteId, n.link.page)
+            : null;
+  const accept = (w: PipelineNotice & { accept?: Warning['accept'] }) => {
+    const c = w.accept?.change;
+    if (c?.kind === 'fields' && onAccept) onAccept(c.set);
+    // MKT (more cases): a correction made on another page ("Add them first") or by a call ("Add it to your ladder instead")
+    else if (c?.kind === 'link') navigate(c.tool ? paths.tool(org.id, c.tool, { siteId }) : paths.site(org.id, siteId, c.sitePage ?? 'overview'));
+    else if (c?.kind === 'call')
+      void api(c.path, { method: c.method, body: c.body ?? {}, noConfirm: true })
+        .then(() => {
+          toast.success(`Done: ${(w.accept?.label ?? '').replace(/ instead$/, '')}.`);
+          if (c.instead) navigate(paths.site(org.id, siteId, 'pipeline'));
+        })
+        .catch((e) => toast.error('That did not work', { description: errorMessage(e) }));
+    else if (w.usePlan && onUsePlan) onUsePlan(w.usePlan);
+  };
   return (
-    <div className="space-y-3" aria-live="polite">
-      {notices.map((n) => {
-        const to = n.link?.runId
-          ? paths.run(org.id, n.link.runId)
-          : n.link?.reportId
-            ? paths.report(org.id, n.link.reportId)
-            : n.link?.ladderId
-              ? paths.ladder(org.id, siteId, n.link.ladderId)
-              : n.link?.page
-                ? paths.site(org.id, siteId, n.link.page)
-                : null;
-        return (
-          <Callout key={n.id} tone={n.tone} title={n.title}>
-            <p>{n.body}</p>
-            {(to || (n.usePlan && onUsePlan)) && (
-              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                {n.usePlan && onUsePlan && (
-                  <Button type="button" size="sm" variant="secondary" onClick={() => onUsePlan(n.usePlan!)}>
-                    {n.usePlan.label}
-                  </Button>
-                )}
-                {to && n.link && (
-                  <Link to={to} className="text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
-                    {n.link.label}
-                  </Link>
-                )}
-              </div>
-            )}
-            {n.confirm && <Checkbox className="mt-3" checked={acked.includes(n.id)} onChange={(e) => onToggle(n.id, e.target.checked)} label={n.confirm} />}
-          </Callout>
-        );
-      })}
-    </div>
+    <Warnings
+      warnings={notices}
+      acked={acked}
+      onToggle={onToggle}
+      onAccept={onAccept || onUsePlan || notices.some((n) => ['link', 'call'].includes((n as Warning).accept?.change.kind ?? '')) ? accept : undefined}
+      linkFor={linkFor}
+      renderLink={(to, label) => (
+        <Link to={to} className="text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
+          {label}
+        </Link>
+      )}
+    />
   );
 }
 
@@ -444,13 +480,13 @@ function CreditsMeter({ cost }: { cost: number }) {
 }
 
 /** The form with its sticky summary (right column on desktop, a bar at the bottom on phones). */
-export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSubmit, pending, error, submitLabel = 'Start the run', blocked: blockedBy, values = {}, onUsePlan, children }: ShellProps) {
+export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSubmit, pending, error, submitLabel = 'Start the run', blocked: blockedBy, values = {}, onUsePlan, onAccept, children }: ShellProps) {
   const { org, can, me } = useOrgCtx();
   const providers = useProviders();
   const showEmail = emailCopy && !!providers.data?.engineEmails;
   const readOnly = !can('member');
   const pipe = usePipelineNotices(mode, site, values, cost);
-  const blocked = blockedBy ?? (pipe.unconfirmed.length ? 'Tick the box in the warning above to start anyway.' : undefined);
+  const blocked = blockedBy ?? (pipe.unconfirmed.length ? 'Accept the correction in the warning above, or tick its box to start anyway.' : undefined);
   const disabled = readOnly || !!blocked;
   const info = MODES[mode];
   const summary = (withButton: boolean) => (
@@ -520,13 +556,13 @@ export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSub
     </Card>
   );
   return (
-    <form onSubmit={onSubmit} noValidate className="pb-24 lg:pb-0">
+    <form onSubmit={(e) => onSubmit(e, pipe.acked)} noValidate className="pb-24 lg:pb-0">
       <fieldset disabled={readOnly} className="m-0 min-w-0 border-0 p-0">
         <ToolIntro mode={mode} cost={cost} eta={eta} extras={extras} />
         <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <Stagger className="min-w-0 space-y-5 [counter-reset:formcard]">
             <SubmitError error={error} siteId={site?.id} />
-            {site && <PipelineNotices notices={pipe.notices} acked={pipe.acked} onToggle={pipe.toggle} onUsePlan={onUsePlan} siteId={site.id} />}
+            {site && <PipelineNotices notices={pipe.notices} acked={pipe.acked} onToggle={pipe.toggle} onUsePlan={onUsePlan} onAccept={onAccept} siteId={site.id} />}
             {children}
             <div className="lg:hidden">{summary(false)}</div>
           </Stagger>

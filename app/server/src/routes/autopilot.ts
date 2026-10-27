@@ -18,6 +18,7 @@ import { isUuid, orgAccess, requireVerified, siteAccess } from '../auth/access';
 import { notFound, parse } from '../lib/errors';
 import { audit } from '../services/audit';
 import { approveProposal, listProposals, skipProposal, swapProposal } from '../services/autoStart';
+import { takeAcknowledge } from '../services/consistency';
 import { decideComingUp, loadComingUp } from '../services/comingUp';
 import { loadSiteCycle, setCycleWeekday } from '../services/cycles';
 import { rejectPage } from '../services/autopilot';
@@ -70,6 +71,12 @@ export async function autopilotRoutes(app: FastifyInstance) {
     return listProposals(a.site);
   });
 
+  // MKT D1 (2026-10-27): the new-ladder confirmation's Accept sends `ladderMode: 'manual'` (plan it, write no page); nothing else is taken
+  const manualOf = (body: unknown): 'manual' | undefined => ((body as { ladderMode?: unknown } | null)?.ladderMode === 'manual' ? 'manual' : undefined);
+  const ackDetails = (run: { input: unknown }) => {
+    const i = (run.input ?? {}) as { acknowledged?: unknown; ladderMode?: unknown };
+    return { ...(Array.isArray(i.acknowledged) && i.acknowledged.length ? { acknowledged: i.acknowledged } : {}), ...(i.ladderMode === 'manual' ? { planOnly: true } : {}) };
+  };
   const proposalId = (req: { params: unknown }) => {
     const id = String((req.params as P).id ?? '');
     if (!isUuid(id)) throw notFound('Proposal not found');
@@ -80,8 +87,8 @@ export async function autopilotRoutes(app: FastifyInstance) {
     const p = req.params as P;
     const a = await siteAccess(req, p.orgId, p.siteId, 'member');
     requireVerified(a.site);
-    const r = await approveProposal(a, proposalId(req));
-    await audit(req, a.org.id, { action: 'site.keyword_proposal_decided', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { keyword: r.proposal.keyword, decision: 'approve', runId: r.run.id } });
+    const r = await approveProposal(a, proposalId(req), undefined, { acknowledge: takeAcknowledge(req.body).acknowledge, req, ladderMode: manualOf(req.body) });
+    await audit(req, a.org.id, { action: 'site.keyword_proposal_decided', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { keyword: r.proposal.keyword, decision: 'approve', runId: r.run.id, ...ackDetails(r.run) } });
     return { proposal: r.proposal, runId: r.run.id };
   });
 
@@ -99,8 +106,8 @@ export async function autopilotRoutes(app: FastifyInstance) {
     const a = await siteAccess(req, p.orgId, p.siteId, 'member');
     requireVerified(a.site);
     const { keyword } = parse(proposalSwapSchema, req.body);
-    const r = await swapProposal(a, proposalId(req), keyword);
-    await audit(req, a.org.id, { action: 'site.keyword_proposal_decided', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { keyword: r.proposal.keyword, decision: 'swap', swappedFor: keyword, runId: r.run.id } });
+    const r = await swapProposal(a, proposalId(req), keyword, undefined, { acknowledge: takeAcknowledge(req.body).acknowledge, req, ladderMode: manualOf(req.body) });
+    await audit(req, a.org.id, { action: 'site.keyword_proposal_decided', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { keyword: r.proposal.keyword, decision: 'swap', swappedFor: keyword, runId: r.run.id, ...ackDetails(r.run) } });
     return { proposal: r.proposal, runId: r.run.id };
   });
 

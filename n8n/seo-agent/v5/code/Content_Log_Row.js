@@ -56,5 +56,6 @@ return [{ json: {
   published_url: String((prior && prior.published_url) || ''),
   published_at: String((prior && prior.published_at) || ''),
   week: sameRun ? String(prior.week || now.slice(0, 10)) : now.slice(0, 10),
-  qa_reasons: notReady ? reasons.join('; ').slice(0, 1500) : ''
+  qa_reasons: notReady ? reasons.join('; ').slice(0, 1500) : '',
+  publish_note: ''   // 2026-10-27: a page written again waits again, so a note about how its earlier version was marked published no longer applies
 } }];

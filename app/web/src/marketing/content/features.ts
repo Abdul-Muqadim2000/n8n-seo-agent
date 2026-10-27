@@ -223,7 +223,7 @@ export const features: Feature[] = [
         q: 'What do I see when I set up a website?',
         a: 'One question: "What would a customer type into Google to find a business like yours?" Type up to three ideas and each is checked, or take our suggestions. Each one shows your chances in plain words ("Good chance", "Takes a few months" or "Hard for your website now"), about how many people search it a month, why we suggest it, the plan (how many pages over how many months) and about how many credits a page. Pick one, or choose later: until you do, the checks run and nothing is written.',
       },
-      { q: 'Which markets are covered?', a: 'You choose the country for each run; volumes and results come from that market.' },
+      { q: 'Which markets are covered?', a: 'Your website\'s main country sets the market for every run and every weekly check, and volumes and results come from that market. A run for another country, or a keyword about another place, is flagged first: accept the correction or continue anyway.' },
       {
         q: 'How does my own Search Console data change the research?',
         a: 'Once your website is connected, the searches it already gets impressions for are the starting point: the ones no page of yours answers become new page ideas, and the ones you rank between eighth and twentieth for become pages to strengthen. Where a search is already measured on your site, the traffic estimate is calibrated against your real impressions and clicks and labelled as measured; everywhere else it is labelled as modelled.',
@@ -573,6 +573,7 @@ export const features: Feature[] = [
       'A panel of up to 500 buyer questions, written for each buyer role and market from real AI-answer data, Google\'s "People also ask", your Search Console queries and your competitors\' topics, every one checked so it never names another company or a government service',
       'Rates per topic, buyer role, market and engine, each with its 95% range, and "too few answers" where a group has not been asked enough to say',
       'Import your own question list as CSV, pin the questions that matter, edit, re-word or switch any question off',
+      'Your questions follow the keywords you work on: a new keyword gets its questions the week it starts, topics you left are retired with their history kept, your own questions are never changed, and a bigger panel is always your choice',
       'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews, with Microsoft Copilot and the ChatGPT and Gemini APIs on request',
       'A big panel is asked in full every week and as a rotating sample every morning, so every topic and buyer role is in every daily reading, and the credits it uses a month and the precision it buys are shown before you save',
       'Mention rate, citation rate and share of voice against competitors, with 95% ranges',
@@ -616,6 +617,10 @@ export const features: Feature[] = [
     ],
     faqs: [
       {
+        q: 'Is this what people call GEO or AEO?',
+        a: 'Yes, the measuring half of both. GEO (generative engine optimization) is being named and cited by ChatGPT, Gemini, Perplexity, Claude and Copilot; AEO (answer engine optimization) is being the answer in Google\'s AI Overviews and AI Mode. AI visibility measures both on the same questions, and AI growth does the work that moves them.',
+      },
+      {
         q: 'Why ranges instead of one number?',
         a: 'AI answers vary from one ask to the next. Alaventra asks repeatedly and shows each rate with a 95% range, so you can tell a real change from noise.',
       },
@@ -648,7 +653,7 @@ export const features: Feature[] = [
     slug: 'ai-growth',
     name: 'AI growth',
     shortName: 'AI growth',
-    tagline: 'The weekly work that gets you named and cited in AI answers.',
+    tagline: 'The weekly GEO and AEO work that gets you named and cited in AI answers.',
     summary:
       'Measuring AI visibility tells you where you stand; AI growth acts on it every week. New and updated pages go to Bing and IndexNow, your key pages are checked for what AI assistants need in order to quote them, the questions you lose become suggested pages to write or refresh, and the exact pages AI cites without naming you become pitches.',
     icon: Rocket,
@@ -991,7 +996,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 67, label: 'guides, one for each thing we ask of you' },
+      { value: 68, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],

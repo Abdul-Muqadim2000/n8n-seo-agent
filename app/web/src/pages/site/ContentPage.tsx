@@ -403,6 +403,9 @@ function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; r
             Did not pass the quality check, so it is not ready to publish{reasons.length ? `: ${reasons.slice(0, 2).join('; ')}` : ''}. {DRAFT_BY_HAND}.
           </p>
         )}
+        {liveNow && item.publishNote && (
+          <p className="text-warning-text [overflow-wrap:anywhere]">Not verified: {item.publishNote.replace(/^Marked published by you after a warning: /, 'marked published on your word, ')}.</p>
+        )}
         {item.publishedUrl && (
           <a href={item.publishedUrl} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 truncate text-accent-text hover:underline transition-colors duration-150 ease-brand">
             {urlPath(item.publishedUrl)}

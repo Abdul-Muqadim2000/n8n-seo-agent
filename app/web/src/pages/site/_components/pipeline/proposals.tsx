@@ -12,7 +12,7 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, DONE_INSTEAD, errorMessage } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { PRICES } from '@/lib/prices';
@@ -79,6 +79,16 @@ export function KeywordProposals() {
   );
 }
 
+/**
+ * MKT D1 (2026-10-27): what the person reads when a start did not happen. Cancel in the "Check this first" dialog is the safe choice, not
+ * an error; an Accept that added the keyword to an existing ladder is a success; anything else is the server's own reason.
+ */
+export function notStarted(e: unknown): void {
+  if (e instanceof ApiRequestError && e.code === DONE_INSTEAD) toast.success(e.message);
+  else if (e instanceof ApiRequestError && e.code === 'confirm_needed') toast.info('Nothing was started', { description: 'The keyword still waits here for your decision.' });
+  else toast.error('It did not start', { description: errorMessage(e) });
+}
+
 function ProposalCard({ p }: { p: KeywordProposalView }) {
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
@@ -95,7 +105,7 @@ function ProposalCard({ p }: { p: KeywordProposalView }) {
           toast.success(`Planning your keyword "${p.keyword}"`, { description: 'Its plan shows here in about 5 to 10 minutes; the first page follows.' });
           if (r.runId) navigate(paths.run(org.id, r.runId));
         },
-        onError: (e) => toast.error('It did not start', { description: errorMessage(e) }),
+        onError: (e) => notStarted(e),
       },
     );
   const skip = () =>
@@ -119,6 +129,12 @@ function ProposalCard({ p }: { p: KeywordProposalView }) {
             <span>
               Starts on <span className="font-semibold">{fmtStart(p.startAt)}</span> ({countdown(p.startAt)}) unless you change it.
             </span>
+          </p>
+        )}
+        {/* MKT D1: what starting it means, before the click (the server asks again with the full quote and the overlap) */}
+        {can('member') && (
+          <p className="mt-3 text-[13px] leading-snug text-ink-2">
+            Starting it adds a new keyword ladder: we plan it and write its first page now{p.startCredits ? `, about ${p.startCredits} credits` : ''}. We ask you to confirm before anything starts.
           </p>
         )}
         {p.note && <p className="mt-2 text-xs text-ink-3">{p.note}</p>}
@@ -172,6 +188,9 @@ function SwapDialog({ p, onClose }: { p: KeywordProposalView; onClose: () => voi
           if (e instanceof ApiRequestError && e.code === 'keyword_not_suitable') {
             setError(e.message);
             setCheck((e.data.check as KeywordCheck | undefined) ?? null);
+          } else if (e instanceof ApiRequestError && (e.code === DONE_INSTEAD || e.code === 'confirm_needed')) {
+            notStarted(e);
+            if (e.code === DONE_INSTEAD) onClose();
           } else setError(errorMessage(e));
         },
       },

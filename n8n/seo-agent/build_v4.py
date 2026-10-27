@@ -767,7 +767,7 @@ COMPETITORS_SRC = _rd0('code/_competitors.js').rstrip('\n')   # 2026-10-21 (KW-C
 RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
 SERP_CACHE_SRC = _rd0('code/_serp_cache.js').rstrip('\n')   # KW-SERP (RV-12, 2026-10-21): one results-page reading per search and day, shared by every path (section 145)
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__LADDER_DUP__*/', _rd0('code/_ladder_dup.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n'))   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__LADDER_DUP__*/', _rd0('code/_ladder_dup.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__PUBLISH_VERIFY__*/', _rd0('code/_publish_verify.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n'))   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -1342,6 +1342,10 @@ patch('Normalize Input', "const pagesRaw = parseInt(", "const published_url = St
 patch('Normalize Input', "if (mode === 'track' && !deliverable) throw new Error('Please add your email — the weekly tracking report is sent by email.');",
       "if (mode === 'track' && !deliverable) throw new Error('Please add your email — the weekly tracking report is sent by email.');\nif (mode === 'published' && !domain) throw new Error('Website Domain is required.');\nif (mode === 'published' && !/^https?:\\/\\/\\S+$/i.test(published_url)) throw new Error('Please enter the full URL of the published page (https://...).');\nif (mode === 'published') { const __m = published_url.match(/^https?:\\/\\/(?:[^@\\/?#]*@)?([^\\/?#:]+)/i); const __h = __m ? __m[1].toLowerCase().replace(/^www\\./, '') : ''; if (!(__h === domain || __h.endsWith('.' + domain))) throw new Error('The published URL must be on ' + domain + '.'); }\nif (mode === 'published' && !keyword && !content_request_id) throw new Error('Please enter the keyword of the page (as in the e-mail) or the content request id.');")
 patch('Normalize Input', "    track_keywords,\n    ga4_property_id,\n", "    track_keywords,\n    ga4_property_id,\n    blogs_per_week,\n    published_url,\n    content_request_id,\n")
+# 2026-10-27 (techand.ai on production): "I published it" checks that the live page IS the draft. The app sends the draft's own title and
+# main heading (from its report) and, after the owner read the warning, `confirm_mismatch: true`. Exact keys (no pick(): "title" is too common).
+patch('Normalize Input', "const content_request_id = String(p2.content_request_id || '').trim();\n", "const content_request_id = String(p2.content_request_id || '').trim();\nconst confirm_mismatch = p2.confirm_mismatch === true || String(p2.confirm_mismatch || '').toLowerCase() === 'true';\nconst draft_title = String(p2.draft_title || '').replace(/\\s+/g, ' ').trim().slice(0, 300);\nconst draft_h1 = String(p2.draft_h1 || '').replace(/\\s+/g, ' ').trim().slice(0, 300);\n")
+patch('Normalize Input', "    published_url,\n    content_request_id,\n", "    published_url,\n    content_request_id,\n    confirm_mismatch,\n    draft_title,\n    draft_h1,\n")
 nodes['Route Mode']['parameters']['rules']['values'].append({'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3}, 'conditions': [{'id': nid('Route Mode:published'), 'leftValue': "={{ $json.mode === 'published' }}", 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'}, 'renameOutput': True, 'outputKey': 'published'})
 conns['Route Mode']['main'].insert(6, [{'node': 'Ensure Log Table (Published)', 'type': 'main', 'index': 0}])
 PX, PY = TX, TY + 420
@@ -1802,6 +1806,8 @@ if (MI.ai_markets !== undefined) monitor_input.ai_markets = asArray(MI.ai_market
 if (MI.ai_pulse_mode !== undefined) monitor_input.ai_pulse_mode = ['sample', 'full'].includes(String(MI.ai_pulse_mode).toLowerCase()) ? String(MI.ai_pulse_mode).toLowerCase() : '';
 if (MI.ai_pulse_per_week !== undefined) monitor_input.ai_pulse_per_week = parseInt(MI.ai_pulse_per_week, 10) >= 1 ? Math.min(6, parseInt(MI.ai_pulse_per_week, 10)) : '';
 if (MI.ai_pages_month !== undefined) monitor_input.ai_pages_month = Math.min(8, Math.max(0, parseInt(MI.ai_pages_month, 10) || 0));   // v4.12: AI answer / refresh pages a month
+if (MI.ai_pulse_scope !== undefined) monitor_input.ai_pulse_scope = ['focus', 'all'].includes(String(MI.ai_pulse_scope).toLowerCase()) ? String(MI.ai_pulse_scope).toLowerCase() : '';   // AI-FOCUS (2026-10-27): what the daily pulse asks
+if (MI.ai_focus_mode !== undefined) monitor_input.ai_focus_mode = String(MI.ai_focus_mode).toLowerCase() === 'off' ? 'off' : '';   // AI-FOCUS: 'off' = the panel never moves by itself
 if (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));
 if (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');
 const topics = asArray(p2.topics || lab('Main services or products (optional)')).map(x => String(x).trim().toLowerCase()).filter(x => x.length >= 3).slice(0, 6);
@@ -2155,6 +2161,9 @@ log('Pipeline phase 3 (v4.8): the site\'s reach (75th-percentile difficulty of i
 # =============================================================================
 assert 'function publishedRows(' in code('Publish Check'), 'Publish Check: published-page rows not inlined'
 assert not any('/*__PUBLISH_ROWS__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'publish-rows placeholder left'
+assert not any('/*__PUBLISH_VERIFY__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'publish-verify placeholder left'
+assert 'function verifyPublished(' in code('Publish Check') and 'live: recorded_live' in code('Publish Check'), \
+    '2026-10-27: Publish Check records a page as published without checking that the live page is the draft (v5/code/_publish_verify.js)'
 log('Publish detection (v4.8, pipeline phase 4): the Site Tracker reads each site\'s sitemap (index + up to 5 child sitemaps) when pages are written but not published (content log "started" within 120 days, ladder rows "writing"), matches them by planned slug, then by <title> / first <h1> (at most 15 page fetches per site and week), and marks them published in seo_content_log / seo_ladders (and seo_case_studies) with the same row builder as "I published a page" (v5/code/_publish_rows.js); callback field detected_published and a report section')
 
 
@@ -2458,6 +2467,9 @@ open(os.path.join(OUT_CODE, '_serp_obs.js'), 'w').write("// harness shim (writte
 # it was a hand-written port that fell behind the kit. app/shared/src/fit-gate.parity.test.ts fails while the generated file is stale.
 import fit_gate_app
 fit_gate_app.write_app_files(FIT_GATE_SRC)
+# AI-FOCUS (2026-10-27): the app's AI panel focus rule is the kit itself (app/shared/src/ai-focus.generated.js + .d.ts, committed)
+import ai_focus_app
+ai_focus_app.write_app_files(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'v5', 'code', '_ai_focus.js'), encoding='utf-8').read())
 log('System review fixes (2026-10-11, FIX_PLAN D4 / D8 / D16 / D26 / G3): one shared keyword fit gate (navigational, government / portal, other brands — competitor and results-page domain labels, learned AI brand names, SERP dominance; v5/code/_fit_gate.js) in Analyze Keywords, Rank Keywords, Ladder Pool, Ladder Plan and Brief Context with a reason per refusal (site_keywords.refused, keyword_strategy.refused, ladder refused_keywords); the relevance prompt is told the brands; the Rank Tracker\'s next step follows the ladder state (write / publish / rungs / improve); an AI Overview is a timed observation ("seen in the check at …", "seen in N of M checks"; v5/code/_serp_obs.js) in the digest, the verdict rules, the keyword report, the keyword strategy and the ladder report; the 2025 Ahrefs base rate (1.74% / 40.8%) with an uncalibrated chance band per plan (_reach.js, app mirror)')
 
 # =============================================================================
@@ -7232,7 +7244,7 @@ import state_lint as _sl74
 
 # ---------- the case study is marked live only when something proved it (A3) ----------
 _mcs74 = pos('Mark Case Study Published')
-if_node('Page Live? (Published)', "{{ $('Publish Check').first().json.live }}", [_mcs74[0] - 170, _mcs74[1]])
+if_node('Page Live? (Published)', "{{ $('Publish Check').first().json.live && $('Publish Check').first().json.recorded_live }}", [_mcs74[0] - 170, _mcs74[1]])   # 2026-10-27: live AND shown to be the draft (or confirmed by the owner)
 disconnect('Save Published (Log)', 'Mark Case Study Published')
 connect('Save Published (Log)', 'Page Live? (Published)')
 connect('Page Live? (Published)', 'Mark Case Study Published', 0)

@@ -2762,5 +2762,367 @@ export const AI_PANEL_COST_CASES = {
     }
    }
   }
+ ],
+ "cases_scope": [
+  {
+   "input": {
+    "panel": 10,
+    "pulse_questions": 7
+   },
+   "expect": {
+    "panel": 10,
+    "asked": 9,
+    "per_week": 6,
+    "pulse_questions_day": 7,
+    "executions": 1,
+    "analyst_jobs": 2,
+    "requests": {
+     "weekly": 45,
+     "full": 60,
+     "pulse_day": 21
+    },
+    "run": {
+     "weekly": {
+      "dfs": 0.18,
+      "ai": 0.17,
+      "usd": 0.35
+     },
+     "full": {
+      "dfs": 0.9,
+      "ai": 0.47,
+      "usd": 1.37
+     }
+    },
+    "full_extra": {
+     "dfs": 0.72,
+     "ai": 0.3,
+     "usd": 1.02
+    },
+    "pulse_day": {
+     "dfs": 0.084,
+     "ai": 0,
+     "usd": 0.084
+    },
+    "month": {
+     "weekly": 1.52,
+     "full_extra": 1.02,
+     "pulse": 2.18,
+     "total": 4.72
+    },
+    "half_width": {
+     "headline": 6.7,
+     "cluster": 6.7
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 10,
+    "pulse_questions": 0
+   },
+   "expect": {
+    "panel": 10,
+    "asked": 9,
+    "per_week": 6,
+    "pulse_questions_day": 0,
+    "executions": 1,
+    "analyst_jobs": 2,
+    "requests": {
+     "weekly": 45,
+     "full": 60,
+     "pulse_day": 0
+    },
+    "run": {
+     "weekly": {
+      "dfs": 0.18,
+      "ai": 0.17,
+      "usd": 0.35
+     },
+     "full": {
+      "dfs": 0.9,
+      "ai": 0.47,
+      "usd": 1.37
+     }
+    },
+    "full_extra": {
+     "dfs": 0.72,
+     "ai": 0.3,
+     "usd": 1.02
+    },
+    "pulse_day": {
+     "dfs": 0,
+     "ai": 0,
+     "usd": 0
+    },
+    "month": {
+     "weekly": 1.52,
+     "full_extra": 1.02,
+     "pulse": 0,
+     "total": 2.54
+    },
+    "half_width": {
+     "headline": 6.7,
+     "cluster": 6.7
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 10,
+    "pulse_questions": 99
+   },
+   "expect": {
+    "panel": 10,
+    "asked": 9,
+    "per_week": 6,
+    "pulse_questions_day": 9,
+    "executions": 1,
+    "analyst_jobs": 2,
+    "requests": {
+     "weekly": 45,
+     "full": 60,
+     "pulse_day": 27
+    },
+    "run": {
+     "weekly": {
+      "dfs": 0.18,
+      "ai": 0.17,
+      "usd": 0.35
+     },
+     "full": {
+      "dfs": 0.9,
+      "ai": 0.47,
+      "usd": 1.37
+     }
+    },
+    "full_extra": {
+     "dfs": 0.72,
+     "ai": 0.3,
+     "usd": 1.02
+    },
+    "pulse_day": {
+     "dfs": 0.108,
+     "ai": 0,
+     "usd": 0.108
+    },
+    "month": {
+     "weekly": 1.52,
+     "full_extra": 1.02,
+     "pulse": 2.81,
+     "total": 5.35
+    },
+    "half_width": {
+     "headline": 6.7,
+     "cluster": 6.7
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 8,
+    "pulse_questions": 5
+   },
+   "expect": {
+    "panel": 8,
+    "asked": 7,
+    "per_week": 6,
+    "pulse_questions_day": 5,
+    "executions": 1,
+    "analyst_jobs": 2,
+    "requests": {
+     "weekly": 35,
+     "full": 48,
+     "pulse_day": 15
+    },
+    "run": {
+     "weekly": {
+      "dfs": 0.14,
+      "ai": 0.15,
+      "usd": 0.29
+     },
+     "full": {
+      "dfs": 0.81,
+      "ai": 0.45,
+      "usd": 1.26
+     }
+    },
+    "full_extra": {
+     "dfs": 0.67,
+     "ai": 0.3,
+     "usd": 0.97
+    },
+    "pulse_day": {
+     "dfs": 0.06,
+     "ai": 0,
+     "usd": 0.06
+    },
+    "month": {
+     "weekly": 1.26,
+     "full_extra": 0.97,
+     "pulse": 1.56,
+     "total": 3.79
+    },
+    "half_width": {
+     "headline": 7.6,
+     "cluster": 7.6
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 20,
+    "pulse_questions": 12,
+    "pulse_mode": "sample",
+    "pulse_per_week": 2
+   },
+   "expect": {
+    "panel": 20,
+    "asked": 19,
+    "per_week": 2,
+    "pulse_questions_day": 4,
+    "executions": 1,
+    "analyst_jobs": 3,
+    "requests": {
+     "weekly": 95,
+     "full": 120,
+     "pulse_day": 12
+    },
+    "run": {
+     "weekly": {
+      "dfs": 0.38,
+      "ai": 0.19,
+      "usd": 0.57
+     },
+     "full": {
+      "dfs": 1.35,
+      "ai": 0.49,
+      "usd": 1.84
+     }
+    },
+    "full_extra": {
+     "dfs": 0.97,
+     "ai": 0.3,
+     "usd": 1.27
+    },
+    "pulse_day": {
+     "dfs": 0.048,
+     "ai": 0,
+     "usd": 0.048
+    },
+    "month": {
+     "weekly": 2.47,
+     "full_extra": 1.27,
+     "pulse": 1.25,
+     "total": 4.99
+    },
+    "half_width": {
+     "headline": 6.7,
+     "cluster": 8.4
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 100,
+    "pulse_questions": 40
+   },
+   "expect": {
+    "panel": 100,
+    "asked": 99,
+    "per_week": 3,
+    "pulse_questions_day": 20,
+    "executions": 1,
+    "analyst_jobs": 15,
+    "requests": {
+     "weekly": 495,
+     "full": 600,
+     "pulse_day": 60
+    },
+    "run": {
+     "weekly": {
+      "dfs": 1.98,
+      "ai": 0.59,
+      "usd": 2.57
+     },
+     "full": {
+      "dfs": 4.95,
+      "ai": 0.89,
+      "usd": 5.84
+     }
+    },
+    "full_extra": {
+     "dfs": 2.97,
+     "ai": 0.3,
+     "usd": 3.27
+    },
+    "pulse_day": {
+     "dfs": 0.24,
+     "ai": 0,
+     "usd": 0.24
+    },
+    "month": {
+     "weekly": 11.13,
+     "full_extra": 3.27,
+     "pulse": 6.24,
+     "total": 20.64
+    },
+    "half_width": {
+     "headline": 2.6,
+     "cluster": 7.5
+    }
+   }
+  },
+  {
+   "input": {
+    "panel": 12,
+    "pulse_questions": 6,
+    "pulse": false
+   },
+   "expect": {
+    "panel": 12,
+    "asked": 11,
+    "per_week": 0,
+    "pulse_questions_day": 0,
+    "executions": 1,
+    "analyst_jobs": 2,
+    "requests": {
+     "weekly": 55,
+     "full": 72,
+     "pulse_day": 0
+    },
+    "run": {
+     "weekly": {
+      "dfs": 0.22,
+      "ai": 0.17,
+      "usd": 0.39
+     },
+     "full": {
+      "dfs": 0.99,
+      "ai": 0.47,
+      "usd": 1.46
+     }
+    },
+    "full_extra": {
+     "dfs": 0.77,
+     "ai": 0.3,
+     "usd": 1.07
+    },
+    "pulse_day": {
+     "dfs": 0,
+     "ai": 0,
+     "usd": 0
+    },
+    "month": {
+     "weekly": 1.69,
+     "full_extra": 1.07,
+     "pulse": 0,
+     "total": 2.76
+    },
+    "half_width": {
+     "headline": 12.8,
+     "cluster": 12.8
+    }
+   }
+  }
  ]
 } as const;

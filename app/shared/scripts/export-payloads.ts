@@ -198,6 +198,15 @@ const cases: Case[] = [
     expect: { mode: 'published', keyword: 'uae e invoicing penalties', published_url: 'https://www.northwind-erp.com/blog/uae-e-invoicing-penalties/', content_request_id: '4127' },
   },
   {
+    // 2026-10-27: re-sent after the check's warning ("It is the right page, mark it published"): confirm_mismatch reaches Publish Check
+    name: 'published, confirmed after the warning',
+    mode: 'published',
+    input: { siteId: SITE_ID, keyword: 'uae e invoicing penalties', publishedUrl: 'https://www.northwind-erp.com/blog/uae-e-invoicing-penalties/', contentRequestId: '4127', confirmMismatch: true },
+    site,
+    mail: false,
+    expect: { mode: 'published', keyword: 'uae e invoicing penalties', content_request_id: '4127', confirm_mismatch: true },
+  },
+  {
     name: 'checkin',
     mode: 'checkin',
     input: { siteId: SITE_ID, manualAction: false, securityIssue: true, notes: 'Hacked content warning on /promo/' },
