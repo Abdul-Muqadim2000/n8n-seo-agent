@@ -748,4 +748,4 @@ const FITR = {
   }
 };
 
-export { fitGate, fitTopic, fitEvidence, fitStored, fitStoredLive, fitTokens, fitHost, fitLabels, fitOwnLabels, fitLearnedBrands, fitBrandList, FITR, FIT_PLACES, fitPlaces, fitMarket, fitDropPlaces, fitArabic };
+export { fitGate, fitTopic, fitEvidence, fitStored, fitStoredLive, fitTokens, fitHost, fitLabels, fitOwnLabels, fitLearnedBrands, fitBrandList, FITR, FIT_PLACES, fitPlaces, fitMarket, fitDropPlaces, fitArabic, FIT_FAMILIES };
