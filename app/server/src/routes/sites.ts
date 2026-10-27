@@ -191,8 +191,8 @@ export function adminAuditDetails(a: AdminAction, affected: number | null | unde
   const base = { affected: affected ?? null };
   switch (a.action) {
     case 'ai_prompts':
-      return { ...base, added: a.add.length, edited: a.edit.length, removed: a.remove.length, enabled: a.enable.length, pinned: a.pin.length, unpinned: a.unpin.length,
-        ids: [...a.edit.map((e) => e.promptId), ...a.remove, ...a.enable, ...a.pin, ...a.unpin].slice(0, 20) };
+      return { ...base, added: a.add.length, edited: a.edit.length, removed: a.remove.length, enabled: a.enable.length, pinned: a.pin.length, unpinned: a.unpin.length, accepted: (a.accept ?? []).length, retired: (a.retire ?? []).length,
+        ids: [...a.edit.map((e) => e.promptId), ...a.remove, ...a.enable, ...a.pin, ...a.unpin, ...(a.accept ?? []), ...(a.retire ?? [])].slice(0, 20) };
     case 'monitors': {
       const m = a.monitors as Record<string, unknown>;
       const changed = Object.keys(m).filter((k) => m[k] !== undefined);
@@ -614,7 +614,7 @@ export async function siteRoutes(app: FastifyInstance) {
         break;
       case 'ai_prompts':
         // G6 (2026-10-18): the panel manager, the engine's field names (AI_Prompt_Rows_Admin.js)
-        body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove, enable: a.enable, pin: a.pin, unpin: a.unpin,
+        body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove, enable: a.enable, pin: a.pin, unpin: a.unpin, accept: a.accept, retire: a.retire,   // AI-FOCUS: accept / retire
           edit: a.edit.map((e) => ({ prompt_id: e.promptId, ...(e.prompt ? { prompt: e.prompt } : {}), ...(e.keyword ? { keyword: e.keyword } : {}), ...(e.persona !== undefined ? { persona: e.persona } : {}), ...(e.cluster !== undefined ? { cluster: e.cluster } : {}),
             ...(e.stage ? { stage: e.stage } : {}), ...(e.market ? { market: e.market } : {}), ...(e.pinned !== undefined ? { pinned: e.pinned } : {}) })) };
         break;

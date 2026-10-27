@@ -28,6 +28,7 @@ export * from './brand';
 export * from './queue';
 export * from './report-delivery';
 export * from './ai-visibility';
+export * from './ai-focus';   // AI-FOCUS (2026-10-27): the AI panel follows the client's focus (the engine's kit _ai_focus.js, generated) + its two warnings
 export * from './ai-panel';   // G6 (2026-10-18): the AI question panel at scale, the one cost formula (estimateAiPanelCost), mirrored from the engine
 export * from './ai-detail';   // W2-A (2026-10-23): readers of the engine's wave-2 answer and visibility columns (WAVE2_CONTRACTS.md §1-§2)
 export * from './ai-trends';   // W2-A: the page filter, trend lines with breaks, owner alert rules, the open-run note

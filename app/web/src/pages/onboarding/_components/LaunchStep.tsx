@@ -262,6 +262,14 @@ export function LaunchStep() {
           </Row>
           <Row label="Monitors" step="tracking" go={go}>
             <span className="block">AI visibility: {m.aiVisibility ? `on · ${m.aiPromptsMax} questions · ${engines.join(', ') || 'no engines'}${m.aiPulse ? ' · daily pulse' : ''}` : 'off'}</span>
+            {/* AI-FOCUS (2026-10-27): what the questions will be about */}
+            {m.aiVisibility && (
+              <span className="block text-ink-3">
+                {(m.aiFocusMode ?? 'auto') === 'off'
+                  ? 'Your AI questions stay as they are written.'
+                  : 'Your AI questions are about the services you listed and the keywords you work on, and follow them when you start a keyword or publish a page.'}
+              </span>
+            )}
             <span className="block">Backlink monitor: {m.backlinks ? 'on' : 'off'}</span>
             <span className="block">
               Monthly audit: {m.auditMonthly ? `on · up to ${m.auditJs ? Math.min(m.auditPages, JS_MAX_PAGES) : m.auditPages} pages${m.auditJs ? ' with JavaScript' : ''}` : 'off'}

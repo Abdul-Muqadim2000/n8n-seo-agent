@@ -184,7 +184,11 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  # W2-E3 (2026-10-23, docs/ai-visibility-2026-10-23/WAVE2_CONTRACTS.md §4): Claude weekly (empty = monthly), the pulse's engines
                  # (comma list, empty = the default four), the persona test on the ChatGPT API (empty = off), the fan-out searches checked a week
                  # (empty / 0 = off), and the monthly market trend from the AI-answer database (empty = off; an addition to the contract)
-                 ('ai_claude_weekly', 'boolean'), ('ai_pulse_engines', 'string'), ('ai_persona_context', 'boolean'), ('ai_fanout_check', 'number'), ('ai_demand_market', 'boolean')]
+                 ('ai_claude_weekly', 'boolean'), ('ai_pulse_engines', 'string'), ('ai_persona_context', 'boolean'), ('ai_fanout_check', 'number'), ('ai_demand_market', 'boolean'),
+                 # AI-FOCUS (2026-10-27): what the daily pulse asks ('focus' = the questions of the ladders and pages the client works on + the pinned
+                 # ones; 'all' or empty = the whole panel, the default of every site stored before the release) and whether the panel follows the
+                 # client's focus ('off' = never added to or retired automatically; empty = on). Run sync_tables.py after deploying.
+                 ('ai_pulse_scope', 'string'), ('ai_focus_mode', 'string')]
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
                    # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
@@ -195,7 +199,12 @@ AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 's
                    ('keyword_source', 'string'),
                    # W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §3): the question's asked state, written by the weekly run's last part: the run that
                    # last asked it and when, how many weekly runs + pulse mornings asked it in 28 days, and the run whose fit gate refused it
-                   ('last_asked_run', 'string'), ('last_asked_at', 'string'), ('asked_n_28d', 'number'), ('refused_at_run', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
+                   ('last_asked_run', 'string'), ('last_asked_at', 'string'), ('asked_n_28d', 'number'), ('refused_at_run', 'string'),
+                   # AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27 §5 step 8): the client's focus topic the question measures (a ladder head, a page,
+                   # a declared service, a tracked keyword), where it came from (ladder:<id> | page | service | keyword | brand), its state (active | core |
+                   # maintain | paused | watch | out), when it was last in focus, and for status `retired` (a topic the client left; history kept) when
+                   # and why. Status may now also be `proposed` (written, not asked until the owner accepts it). Run sync_tables.py after deploying.
+                   ('focus_topic', 'string'), ('focus_source', 'string'), ('focus_state', 'string'), ('focus_seen_at', 'string'), ('retired_at', 'string'), ('retire_reason', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
 AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompt_id', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('engine', 'string'),
                    ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string'),
                    ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string'),

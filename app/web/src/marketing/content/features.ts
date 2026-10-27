@@ -573,6 +573,7 @@ export const features: Feature[] = [
       'A panel of up to 500 buyer questions, written for each buyer role and market from real AI-answer data, Google\'s "People also ask", your Search Console queries and your competitors\' topics, every one checked so it never names another company or a government service',
       'Rates per topic, buyer role, market and engine, each with its 95% range, and "too few answers" where a group has not been asked enough to say',
       'Import your own question list as CSV, pin the questions that matter, edit, re-word or switch any question off',
+      'Your questions follow the keywords you work on: a new keyword gets its questions the week it starts, topics you left are retired with their history kept, your own questions are never changed, and a bigger panel is always your choice',
       'ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews, with Microsoft Copilot and the ChatGPT and Gemini APIs on request',
       'A big panel is asked in full every week and as a rotating sample every morning, so every topic and buyer role is in every daily reading, and the credits it uses a month and the precision it buys are shown before you save',
       'Mention rate, citation rate and share of voice against competitors, with 95% ranges',
@@ -995,7 +996,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 67, label: 'guides, one for each thing we ask of you' },
+      { value: 68, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],

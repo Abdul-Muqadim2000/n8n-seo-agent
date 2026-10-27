@@ -1204,6 +1204,29 @@ export const GUIDES = [
     related: ['ai-buyer-roles', 'ai-markets'],
     keywords: ['csv', 'import', 'questions', 'prompts', 'upload', 'spreadsheet', 'ai visibility'],
   },
+  // AI-FOCUS (2026-10-27): the AI questions follow the keywords the client works on
+  {
+    id: 'ai-panel-focus',
+    area: 'business',
+    title: 'Keep your AI questions on the keywords you work on',
+    why: 'Your AI visibility is only useful when the questions ask about what you sell now. When you start a keyword, publish a page or stop working on a topic, your questions follow, so the figures show how you do on the work you are doing.',
+    where: 'AI visibility > Your question panel, and the notice at the top of your website pages',
+    minutes: 5,
+    steps: [
+      { title: 'See what each question is about', body: 'In **Your question panel** every question shows the keyword, page or service it measures. **Proposed** questions wait for your yes; **Retired** questions are kept with their history and are no longer asked.' },
+      { title: 'When most questions are about something else', body: 'A notice says so and names what your keywords are about. **Ask about it instead** retires those questions (their history stays) and the next weekly AI check writes new ones in their place, at the same price. **Keep these questions** leaves them as they are.' },
+      { title: 'When a keyword has no questions yet', body: 'Each topic needs at least 2 questions to show a trend. If your panel is full, a notice offers a bigger panel with its price a month. Nothing changes until you choose it.' },
+      { title: 'Your own questions stay yours', body: 'Questions you added or pinned are never changed or retired for you. If one is about something you no longer work on, you are told and you decide.' },
+      { title: 'Daily checks on what you work on', body: 'In **Website settings > Tracking & monitors > AI visibility**, the daily check can ask only the questions about your keywords in progress. The questions about your services are still asked in the weekly check, and the daily check costs less.' },
+    ],
+    done: 'Your question panel groups the questions by keyword, page and service, and the weekly AI report says what changed in your questions and why.',
+    trouble: [
+      { q: 'A new keyword got no questions this week', a: 'Your panel is full and the other topics have no question to spare. Choose the bigger panel in the notice, or retire questions you no longer need.' },
+      { q: 'I want the questions to stay exactly as they are', a: 'In the AI visibility settings, switch off **Follow my keywords**. Nothing is then added or retired for you.' },
+    ],
+    related: ['ai-panel-import', 'ai-markets'],
+    keywords: ['ai visibility', 'questions', 'panel', 'focus', 'keywords', 'retired', 'proposed', 'pulse'],
+  },
   {
     id: 'ai-report-import',
     area: 'business',

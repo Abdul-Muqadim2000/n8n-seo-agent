@@ -1208,6 +1208,9 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
       ...(p.last_asked_at ? { lastAskedAt: s(p.last_asked_at), lastAskedRun: s(p.last_asked_run) } : {}),
       ...(p.asked_n_28d != null && (p.asked_n_28d as unknown) !== '' ? { askedN28d: nn(p.asked_n_28d) } : {}),
       ...(p.refused_at_run ? { refusedAtRun: s(p.refused_at_run) } : {}),
+      // AI-FOCUS (2026-10-27): what it measures, and a retirement's date and reason (absent on rows from before the focus rule)
+      ...(p.focus_topic ? { focusTopic: s(p.focus_topic), focusState: s(p.focus_state) } : {}),
+      ...(p.retired_at ? { retiredAt: s(p.retired_at), retireReason: s(p.retire_reason) } : {}),
     })),
     // G6 (2026-10-18): the latest run's segments (compact in the row, expanded with their ranges here) and the panel it asked
     segments: last ? aiSegmentsFromJson(s(last.segments_json)) : null,
@@ -1656,6 +1659,9 @@ export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & 
     ...(r.ai_sov_set != null && s(r.ai_sov_set).trim() ? { aiSovSet: splitList(r.ai_sov_set) } : {}),
     ...(r.ai_alert_rules_json != null && s(r.ai_alert_rules_json).trim() ? { aiAlertRules: aiAlertRulesOf(r.ai_alert_rules_json) } : {}),
     ...(r.ai_demand_market != null && (r.ai_demand_market as unknown) !== '' ? { aiDemandMarket: b(r.ai_demand_market) } : {}),   // W2-FIX
+    // AI-FOCUS (2026-10-27): a stored row with no scope asks the whole panel (the engine's rule for a site from before the release)
+    aiPulseScope: (s(r.ai_pulse_scope) === 'focus' ? 'focus' : 'all') as MonitorSettings['aiPulseScope'],
+    aiFocusMode: (s(r.ai_focus_mode) === 'off' ? 'off' : 'auto') as MonitorSettings['aiFocusMode'],
     competitors: splitList(r.competitors),
     updatedAt: s(r.updated_at),
   };

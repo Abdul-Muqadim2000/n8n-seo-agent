@@ -1,0 +1,168 @@
+{
+  "about": "AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27/RESEARCH_AND_DESIGN.md §7.1): labelled cases for the AI question panel's focus rule (v5/code/_ai_focus.js). Each case is a website's state and the expected result, written from the report's descriptions of devaicon.com and techand.ai (production facts of 2026-10-23..27) and four synthetic sites; the question set is labelled on_focus by a person reading the website's ladders, pages and services, not by the code under test. Targets: topic precision >= 95%, recall >= 90%, questions on focus >= 95%, 0 written questions outside the website's market, 0 automatic changes to the owner's own or pinned questions.",
+  "now": "2026-10-27T10:00:00Z",
+  "cases": [
+    {
+      "id": "devaicon",
+      "why": "production: Pakistan, a ladder about AI automation and a published page about it; the only tracked keyword (open edx provider, typed at onboarding) abandoned; 9 Open edX questions written in the UAE on the setup day",
+      "domain": "devaicon.com", "iso": "PK", "own_market": "PK-en", "N": 10, "weeks": 1, "full": false,
+      "ladders": [
+        { "ladder_id": "lad_dev1", "head_keyword": "ai automation solutions gcc", "rung": 4, "keyword": "ai automation solutions gcc", "start_date": "2026-10-26" },
+        { "ladder_id": "lad_dev1", "head_keyword": "ai automation solutions gcc", "rung": 1, "keyword": "ai automation for small business" },
+        { "ladder_id": "lad_dev1", "head_keyword": "ai automation solutions gcc", "rung": 2, "keyword": "ai process automation company" }
+      ],
+      "settings": [{ "ladder_id": "lad_dev1", "status": "active", "chosen_by": "client_typed", "created_at": "2026-10-26T08:00:00Z" }],
+      "content_log": [{ "keyword": "ai in industrial automation", "status": "published", "published_at": "2026-10-26T12:00:00Z" }],
+      "keywords": ["open edx provider"],
+      "services": ["AI workflow automation", "AI agents", "Custom software development"],
+      "stored": "devaicon_open_edx",
+      "expect": {
+        "topics": [
+          { "label": "ai automation solutions", "state": "active" },
+          { "label": "ai agents", "state": "core" },
+          { "label": "custom software development", "state": "core" },
+          { "label": "open edx provider", "state": "watch" }
+        ],
+        "retire": 9, "write_min": 9, "write_topic_first": "ai automation solutions", "not_measured": 0
+      }
+    },
+    {
+      "id": "techand",
+      "why": "production: UAE, eight keyword ladders (Dynamics 365 / ERP / e-invoicing / Azure / AI and IT consulting), 8 stored questions on e-invoicing, Peppol and ERP implementation; a stable site must barely move",
+      "domain": "techand.ai", "iso": "AE", "own_market": "AE-en", "N": 12, "weeks": 10, "full": true,
+      "ladders": "g6_live",
+      "settings": [],
+      "content_log": [],
+      "keywords": ["e invoicing software uae", "erp implementation dubai", "peppol uae"],
+      "services": ["Dynamics 365 Business Central", "E-invoicing", "Azure cloud migration"],
+      "stored": "g6_live",
+      "expect": {
+        "topics": [
+          { "label": "e invoicing in uae", "state": "active" },
+          { "label": "peppol uae", "state": "active" },
+          { "label": "erp software uae", "state": "active" },
+          { "label": "dynamics 365 partner uae", "state": "active" },
+          { "label": "erp implementation dubai", "state": "active" },
+          { "label": "azure cloud migration dubai", "state": "active" },
+          { "label": "ai consulting dubai", "state": "active" },
+          { "label": "it consulting dubai", "state": "active" }
+        ],
+        "retire": 0, "kept_all": true
+      }
+    },
+    {
+      "id": "synthetic_a",
+      "why": "UAE e-invoicing provider: its Peppol ladder was deleted mid-timeline; one owner-pinned question on the deleted topic must stay untouched and be named for the owner",
+      "domain": "invoicely-a.ae", "iso": "AE", "own_market": "AE-en", "N": 10, "weeks": 12, "full": true,
+      "ladders": [{ "ladder_id": "lad_a1", "head_keyword": "e invoicing uae", "rung": 4, "keyword": "e invoicing uae", "start_date": "2026-08-01" }],
+      "settings": [{ "ladder_id": "lad_a1", "status": "active", "created_at": "2026-08-01T00:00:00Z" }],
+      "content_log": [],
+      "keywords": [],
+      "services": ["E-invoicing software"],
+      "stored": [
+        { "prompt_id": "a_b", "kind": "brand", "prompt": "What is Invoicely and what does it offer?", "source": "auto", "status": "active", "market": "AE-en" },
+        { "prompt_id": "a_1", "kind": "recommend", "prompt": "Which e-invoicing providers in the UAE are accredited?", "keyword": "e invoicing providers uae", "cluster": "e invoicing uae", "source": "auto", "status": "active", "market": "AE-en", "created_at": "2026-08-02T00:00:00Z", "focus_source": "ladder:lad_a1", "focus_seen_at": "2026-10-20T00:00:00Z" },
+        { "prompt_id": "a_2", "kind": "cost", "prompt": "How much does e-invoicing software cost for a small UAE company?", "keyword": "e invoicing software cost uae", "cluster": "e invoicing uae", "source": "auto", "status": "active", "market": "AE-en", "created_at": "2026-08-02T00:00:00Z", "focus_source": "ladder:lad_a1", "focus_seen_at": "2026-10-20T00:00:00Z" },
+        { "prompt_id": "a_3", "kind": "problem", "prompt": "What do UAE companies need to do before e-invoicing becomes mandatory?", "keyword": "uae e invoicing mandate", "cluster": "e invoicing uae", "source": "auto", "status": "active", "market": "AE-en", "created_at": "2026-08-02T00:00:00Z", "focus_source": "ladder:lad_a1", "focus_seen_at": "2026-10-20T00:00:00Z" },
+        { "prompt_id": "a_4", "kind": "choose", "prompt": "How do I choose an e-invoicing partner in Dubai?", "keyword": "e invoicing partner dubai", "cluster": "e invoicing uae", "source": "auto", "status": "active", "market": "AE-en", "created_at": "2026-08-02T00:00:00Z", "focus_source": "ladder:lad_a1", "focus_seen_at": "2026-10-20T00:00:00Z" },
+        { "prompt_id": "a_5", "kind": "recommend", "prompt": "Which Peppol access point providers serve the UAE?", "keyword": "peppol access point uae", "cluster": "peppol access point", "source": "auto", "status": "active", "market": "AE-en", "created_at": "2026-08-20T00:00:00Z", "focus_source": "ladder:lad_a2", "focus_seen_at": "2026-10-13T00:00:00Z" },
+        { "prompt_id": "a_6", "kind": "compare", "prompt": "Peppol access point or a direct connection: which is better for a UAE exporter?", "keyword": "peppol access point vs direct", "cluster": "peppol access point", "source": "auto", "status": "active", "market": "AE-en", "created_at": "2026-08-20T00:00:00Z", "focus_source": "ladder:lad_a2", "focus_seen_at": "2026-10-13T00:00:00Z" },
+        { "prompt_id": "a_7", "kind": "cost", "prompt": "What does a Peppol access point cost in the UAE?", "keyword": "peppol access point cost", "cluster": "peppol access point", "source": "auto", "status": "active", "market": "AE-en", "created_at": "2026-08-20T00:00:00Z", "focus_source": "ladder:lad_a2", "focus_seen_at": "2026-10-13T00:00:00Z" },
+        { "prompt_id": "a_8", "kind": "custom", "prompt": "Which Peppol access point do UAE banks recommend?", "keyword": "peppol access point banks", "cluster": "peppol access point", "source": "custom", "pinned": true, "status": "active", "market": "AE-en", "created_at": "2026-08-21T00:00:00Z" }
+      ],
+      "expect": {
+        "topics": [{ "label": "e invoicing uae", "state": "active" }],
+        "retire": 3, "retire_ids": ["a_5", "a_6", "a_7"], "owner_off_focus": ["a_8"], "retire_not_full": 0
+      }
+    },
+    {
+      "id": "synthetic_b",
+      "why": "German online shop (DE-de, extra market AT-de) with a ladder on one product family; then its country changes to Austria: the German questions are named for the owner (market rewrite), never retired by themselves",
+      "domain": "kaffee-b.de", "iso": "DE", "own_market": "DE-de", "markets": ["AT-de"], "N": 8, "weeks": 6, "full": false,
+      "ladders": [{ "ladder_id": "lad_b1", "head_keyword": "kaffeevollautomat kaufen", "rung": 4, "keyword": "kaffeevollautomat kaufen", "start_date": "2026-09-01" }],
+      "settings": [{ "ladder_id": "lad_b1", "status": "active", "created_at": "2026-09-01T00:00:00Z" }],
+      "content_log": [],
+      "keywords": [],
+      "services": ["Kaffeevollautomaten", "Siebträgermaschinen"],
+      "stored": [
+        { "prompt_id": "b_b", "kind": "brand", "prompt": "Was ist kaffee-b.de und was bietet es an?", "source": "auto", "status": "active", "market": "DE-de" },
+        { "prompt_id": "b_1", "kind": "shopping", "prompt": "Welcher Kaffeevollautomat unter 800 Euro ist der beste für eine Familie?", "keyword": "kaffeevollautomat kaufen", "cluster": "kaffeevollautomat kaufen", "source": "auto", "status": "active", "market": "DE-de", "created_at": "2026-09-02T00:00:00Z" },
+        { "prompt_id": "b_2", "kind": "compare", "prompt": "Kaffeevollautomat oder Kapselmaschine: was lohnt sich mehr?", "keyword": "kaffeevollautomat vergleich", "cluster": "kaffeevollautomat kaufen", "source": "auto", "status": "active", "market": "DE-de", "created_at": "2026-09-02T00:00:00Z" },
+        { "prompt_id": "b_3", "kind": "recommend", "prompt": "Wo kaufe ich einen Kaffeevollautomaten mit guter Beratung in Deutschland?", "keyword": "kaffeevollautomat kaufen beratung", "cluster": "kaffeevollautomat kaufen", "source": "auto", "status": "active", "market": "DE-de", "created_at": "2026-09-02T00:00:00Z" },
+        { "prompt_id": "b_4", "kind": "shopping", "prompt": "Welcher Kaffeevollautomat ist in Österreich am beliebtesten?", "keyword": "kaffeevollautomat österreich", "cluster": "kaffeevollautomat kaufen", "source": "auto", "status": "active", "market": "AT-de", "created_at": "2026-09-02T00:00:00Z" }
+      ],
+      "country_change": { "iso": "AT", "own_market": "AT-de", "markets": [], "expect_market_drift": 3, "expect_retire": 0 },
+      "expect": {
+        "topics": [{ "label": "kaffeevollautomat kaufen", "state": "active" }, { "label": "siebträgermaschinen", "state": "core" }],
+        "retire": 0
+      }
+    },
+    {
+      "id": "synthetic_c",
+      "why": "a new website (setup day, no ladder) with 3 declared services and a tracked keyword that is a competitor's brand: the panel is brand + services, the competitor keyword is out with its reason",
+      "domain": "payroll-c.ae", "iso": "AE", "own_market": "AE-en", "N": 8, "weeks": 0, "full": true,
+      "competitors": ["bayzat.com"],
+      "ladders": [], "settings": [], "content_log": [],
+      "keywords": ["bayzat"],
+      "services": ["Payroll software", "HR consulting", "Time tracking app"],
+      "stored": [],
+      "expect": {
+        "topics": [{ "label": "payroll software", "state": "core" }, { "label": "hr consulting", "state": "core" }, { "label": "time tracking app", "state": "core" }],
+        "out": ["bayzat"], "write_total": 7, "retire": 0
+      }
+    },
+    {
+      "id": "synthetic_d",
+      "why": "five keyword ladders on a panel of 10: the topic cap, a swap for a new ladder inside the panel, and the bigger panel the last ladder would need",
+      "domain": "multi-d.co.uk", "iso": "GB", "own_market": "GB-en", "N": 10, "weeks": 8, "full": false,
+      "ladders": [
+        { "ladder_id": "lad_d1", "head_keyword": "accounting software uk", "rung": 4, "keyword": "accounting software uk", "start_date": "2026-07-01" },
+        { "ladder_id": "lad_d2", "head_keyword": "payroll outsourcing london", "rung": 4, "keyword": "payroll outsourcing london", "start_date": "2026-07-15" },
+        { "ladder_id": "lad_d3", "head_keyword": "vat returns service", "rung": 4, "keyword": "vat returns service", "start_date": "2026-08-01" },
+        { "ladder_id": "lad_d4", "head_keyword": "bookkeeping for startups", "rung": 4, "keyword": "bookkeeping for startups", "start_date": "2026-10-20" },
+        { "ladder_id": "lad_d5", "head_keyword": "cloud cfo services", "rung": 4, "keyword": "cloud cfo services", "start_date": "2026-10-21" }
+      ],
+      "settings": [
+        { "ladder_id": "lad_d1", "status": "active", "priority": 1, "created_at": "2026-07-01T00:00:00Z" }, { "ladder_id": "lad_d2", "status": "active", "priority": 2, "created_at": "2026-07-15T00:00:00Z" },
+        { "ladder_id": "lad_d3", "status": "active", "priority": 3, "created_at": "2026-08-01T00:00:00Z" }, { "ladder_id": "lad_d4", "status": "active", "priority": 4, "created_at": "2026-10-20T00:00:00Z" },
+        { "ladder_id": "lad_d5", "status": "active", "priority": 5, "created_at": "2026-10-21T00:00:00Z" }
+      ],
+      "content_log": [], "keywords": [], "services": [],
+      "stored": "synthetic_d",
+      "expect": {
+        "topics": [
+          { "label": "accounting software uk", "state": "active" }, { "label": "payroll outsourcing london", "state": "active" }, { "label": "vat returns service", "state": "active" },
+          { "label": "bookkeeping for startups", "state": "active" }, { "label": "cloud cfo services", "state": "active" }
+        ],
+        "not_measured": ["cloud cfo services"], "raise_to": 12, "write": { "bookkeeping for startups": 2 }, "swap": 2
+      }
+    }
+  ],
+  "questions": [
+    { "case": "devaicon", "prompt": "Which companies in Pakistan offer AI automation solutions for mid-sized businesses?", "keyword": "ai automation solutions pakistan", "on_focus": true },
+    { "case": "devaicon", "prompt": "How much does an AI automation project cost for a company in Pakistan?", "keyword": "ai automation cost", "on_focus": true },
+    { "case": "devaicon", "prompt": "Who are the best providers of AI for industrial automation in Pakistan?", "keyword": "ai industrial automation providers", "on_focus": true },
+    { "case": "devaicon", "prompt": "How can factories in Lahore use AI to cut machine downtime?", "keyword": "ai industrial automation factories", "on_focus": true },
+    { "case": "devaicon", "prompt": "Which firms in Pakistan build AI agents that automate back-office work?", "keyword": "ai agents back office", "on_focus": true },
+    { "case": "devaicon", "prompt": "Which custom software development companies in Karachi build business apps?", "keyword": "custom software development karachi", "on_focus": true },
+    { "case": "devaicon", "prompt": "Which Open edX providers in the UAE host and customise courses?", "keyword": "open edx provider uae", "on_focus": false },
+    { "case": "devaicon", "prompt": "How much does Open edX hosting cost a university?", "keyword": "open edx hosting cost", "on_focus": false },
+    { "case": "devaicon", "prompt": "What is the best LMS platform for universities in Dubai?", "keyword": "lms platform universities", "on_focus": false },
+    { "case": "techand", "prompt": "Which companies are accredited service providers for e-invoicing in the UAE?", "keyword": "accredited e-invoicing provider uae", "on_focus": true },
+    { "case": "techand", "prompt": "What are the best e-invoicing software options in the UAE for a mid-sized company?", "keyword": "best e-invoicing software uae", "on_focus": true },
+    { "case": "techand", "prompt": "How does Peppol work in the UAE, and do I need an accredited provider?", "keyword": "peppol uae how it works", "on_focus": true },
+    { "case": "techand", "prompt": "How do I choose an ERP implementation partner in Dubai?", "keyword": "erp implementation partner dubai", "on_focus": true },
+    { "case": "techand", "prompt": "Which Dynamics 365 partner in the UAE should a distributor choose?", "keyword": "dynamics 365 partner uae", "on_focus": true },
+    { "case": "techand", "prompt": "How do companies in Dubai plan an Azure cloud migration?", "keyword": "azure cloud migration dubai", "on_focus": true },
+    { "case": "techand", "prompt": "Which IT consulting companies in Dubai help mid-sized firms?", "keyword": "it consulting dubai", "on_focus": true },
+    { "case": "techand", "prompt": "Which Shopify agencies in Dubai build online stores?", "keyword": "shopify agency dubai", "on_focus": false },
+    { "case": "techand", "prompt": "What is the best digital marketing agency in Abu Dhabi?", "keyword": "digital marketing agency abu dhabi", "on_focus": false },
+    { "case": "synthetic_a", "prompt": "Which Peppol access point providers serve the UAE?", "keyword": "peppol access point uae", "on_focus": false },
+    { "case": "synthetic_a", "prompt": "How much does e-invoicing software cost for a small UAE company?", "keyword": "e invoicing software cost uae", "on_focus": true },
+    { "case": "synthetic_c", "prompt": "Which payroll software do UAE companies with 50 staff use?", "keyword": "payroll software uae", "on_focus": true },
+    { "case": "synthetic_c", "prompt": "Which HR consulting firms in Dubai help with labour law?", "keyword": "hr consulting dubai", "on_focus": true },
+    { "case": "synthetic_c", "prompt": "Is Bayzat good for payroll in the UAE?", "keyword": "bayzat", "on_focus": false },
+    { "case": "synthetic_d", "prompt": "Which bookkeeping firms in the UK specialise in startups?", "keyword": "bookkeeping for startups", "on_focus": true },
+    { "case": "synthetic_d", "prompt": "Which mortgage brokers in London are best for first-time buyers?", "keyword": "mortgage broker london", "on_focus": false }
+  ]
+}

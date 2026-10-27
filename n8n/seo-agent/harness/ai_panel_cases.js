@@ -32,12 +32,18 @@ const optionInputs = [
   { panel: 200, engines: ALL, claude_weekly: true, persona_context: true, personas: 4, fanout_check: 100 },
 ];
 const pickO = (c) => ({ ...pick(c), options: c.options });
+// AI-FOCUS (2026-10-27): the pulse scope 'focus' asks only `pulse_questions` of the panel. Their own list, `cases_scope` (the older lists stay as they were)
+const scopeInputs = [
+  { panel: 10, pulse_questions: 7 }, { panel: 10, pulse_questions: 0 }, { panel: 10, pulse_questions: 99 }, { panel: 8, pulse_questions: 5 },
+  { panel: 20, pulse_questions: 12, pulse_mode: 'sample', pulse_per_week: 2 }, { panel: 100, pulse_questions: 40 }, { panel: 12, pulse_questions: 6, pulse: false },
+];
+const cases_scope = scopeInputs.map(i => ({ input: i, expect: pick(AIP.cost(i)) }));
 const cases_options = optionInputs.map(i => ({ input: i, expect: pickO(AIP.cost(i)) }));
 const out = { generated: 'harness/ai_panel_cases.js from AIP.cost (v5/code/_ai_panel.js)', prices: AIP.PRICE, pulse_engines: AIP.PULSE_ENGINES, default_engines: AIP.DEFAULT_ENGINES, monthly_engines: AIP.MONTHLY_ENGINES,
   fixed: AIP.FIXED, limits: { min: AIP.LIMITS.min, max: AIP.LIMITS.max, default_new: AIP.LIMITS.default_new, default_stored: AIP.LIMITS.default_stored, chunk_requests: AIP.LIMITS.chunk_requests, pulse_max_requests: AIP.LIMITS.pulse_max_requests,
     full_pulse_max_panel: AIP.LIMITS.full_pulse_max_panel, target_headline: AIP.LIMITS.target_headline, target_cluster: AIP.LIMITS.target_cluster, cluster_size_guess: AIP.LIMITS.cluster_size_guess, max_run_usd: AIP.LIMITS.max_run_usd }, cases,
   // W2-E3: the option prices and constants the app mirror (app/shared/src/ai-panel.ts) must carry, and the option cases
-  extra_prices: AIP.XPRICE, persona: AIP.PERSONA, fanout_max: AIP.FANOUT_MAX, demand_tasks: AIP.DEMAND_TASKS, pulse_allowed: AIP.PULSE_ALLOWED, cases_options };
+  extra_prices: AIP.XPRICE, persona: AIP.PERSONA, fanout_max: AIP.FANOUT_MAX, demand_tasks: AIP.DEMAND_TASKS, pulse_allowed: AIP.PULSE_ALLOWED, cases_options, cases_scope };
 const dest = process.argv[2] || path.join(__dirname, '..', 'v5', 'data', 'ai_panel_cost_cases.json');
 fs.writeFileSync(dest, JSON.stringify(out, null, 1) + '\n');
 console.log('wrote', dest, cases.length, 'cases +', cases_options.length, 'option cases');

@@ -689,7 +689,9 @@ export interface AiData {
   /** G6: persona (buyer role), market (CC-lang), pinned, and the fit gate's sentence for a refused question */
   prompts: { promptId: string; prompt: string; kind: string; topic: string; keyword: string; source: string; status: string; createdAt: string; stage: string; cluster: string; volume: number | null; origin: string; persona: string; market: string; pinned: boolean; fitNote: string;
     /** W2 §3 (the engine's own record, absent on older rows): when it was last asked, by which run, how often in 28 days, the run whose gate refused it */
-    lastAskedAt?: string; lastAskedRun?: string; askedN28d?: number | null; refusedAtRun?: string }[];
+    lastAskedAt?: string; lastAskedRun?: string; askedN28d?: number | null; refusedAtRun?: string;
+    /** AI-FOCUS (2026-10-27): the keyword, page or service it measures and that topic's state; for a retired question, when and why */
+    focusTopic?: string; focusState?: string; retiredAt?: string; retireReason?: string }[];
   /** G6 (2026-10-18): the latest run's rates per engine / cluster / buyer role / market / stage, and the panel it asked */
   segments: AiSegments | null;
   panel: AiPanelInfo | null;
@@ -1348,7 +1350,9 @@ export interface NeedsYouItem {
   /** keyword-first: `keyword` (choose your first / next keyword), `proposal` (a keyword we propose or announced), `recheck` (a queued
    * ladder whose keyword fell when it became active), `level` (the autopilot level: dropped after rejections, or a nudge to raise it);
    * P1: `profile` (the author profile and the business facts the first page waits for, or that first page ready to write) */
-  kind: 'publish' | 'approve' | 'overlap' | 'duplicate' | 'failed' | 'connection' | 'pileup' | 'keyword' | 'proposal' | 'recheck' | 'level' | 'profile';
+  kind: 'publish' | 'approve' | 'overlap' | 'duplicate' | 'failed' | 'connection' | 'pileup' | 'keyword' | 'proposal' | 'recheck' | 'level' | 'profile'
+    /** AI-FOCUS (2026-10-27): the AI question panel and the keywords the client works on disagree, or a ladder has no room in the panel */
+    | 'ai_panel';
   severity: 'warning' | 'info';
   title: string;
   detail: string;

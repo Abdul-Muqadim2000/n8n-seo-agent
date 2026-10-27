@@ -76,6 +76,10 @@ return metrics.map((m, i) => {
   const chg = (key, first) => !m.previous ? first : M.delta_not_compared ? nc
     : (T_[key] && T_[key].delta != null) ? dpts(T_[key].delta) + verdict(T_[key])
     : (d[key] != null ? dpts(d[key]) + ' (not tested)' : nc);
+  // AI-FOCUS (2026-10-27): what changed in the questions this run and why, and what the owner is asked to decide about them
+  { const F = m.focus || {}; if (F.summary) html += p_('<b>Your questions.</b> ' + esc(F.summary), true);
+    if ((F.not_measured || []).length) html += p_('Not measured yet: ' + esc(F.not_measured.map(x => '"' + x.label + '"').join(', ')) + '. Your panel holds ' + n(m.prompts_max) + ' questions; ' + n(F.raise_to) + ' would cover ' + (F.not_measured.length === 1 ? 'it' : 'them') + ' too (you choose this in the AI visibility settings).');
+    if ((F.owner_off_focus || []).length) html += p_(n(F.owner_off_focus.length) + ' of your own question' + (F.owner_off_focus.length === 1 ? ' is' : 's are') + ' about something none of your keywords, pages or services cover. They are kept as you set them; switch them off in the app if you no longer need them.'); }
   if (M.delta_not_compared) html += p_('<b>These figures are not compared with the last check.</b> ' + esc(String(M.delta_not_compared).replace(/^Not compared with [0-9-]+: /, '')) + ' The figures below are this run\'s own measurement.', true);
   const cci = M.citation_ci || [0, 0], sci = M.sov_ci || [0, 0];
   // F1b (2026-10-23, E7): "Named in" counts the answers that NAME you in their text; an answer that only links a page is in "Your pages cited"
