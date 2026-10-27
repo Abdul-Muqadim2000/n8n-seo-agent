@@ -337,6 +337,9 @@ export const publishedInput = z.object({
     .max(120)
     .regex(/^[A-Za-z0-9:_.-]*$/, 'Not a valid draft id')
     .default(''),
+  /** 2026-10-27: the owner read the check's warning (the live page did not match the draft) and says it is the right page: the engine then
+   *  records it published, not verified, with the reason kept. Never accepted for an address that is another keyword's published page. */
+  confirmMismatch: z.boolean().default(false),
   emailCopy: z.boolean().default(false),
 });
 

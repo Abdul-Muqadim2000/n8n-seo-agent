@@ -284,6 +284,9 @@ export interface ContentItem {
   existingPageUrl: string;
   /** R111: why a `not_ready` draft failed its last quality round ('; '-joined by the engine); empty on every other row */
   qaReasons?: string;
+  /** 2026-10-27: why a page was marked published although the live page did not match the draft (the owner confirmed it after the
+   *  warning); empty on every verified row */
+  publishNote?: string;
 }
 
 export interface CaseStudy {

@@ -13,9 +13,9 @@ module.exports = async (ctx) => {
   const DRAFT = { site_id: 'site_techand-ai', domain: 'techand.ai', keyword: 'ai consulting services dubai', source: 'keyword', page_type: 'Blog post', existing_page_url: '', rung: 0, ladder_id: '', request_id: '4127', started_at: '2026-10-22T09:00:00.000Z', status: 'not_ready', published_url: '', published_at: '', week: '2026-10-19' };
   const OTHER = { ...DRAFT, keyword: 'ai consulting dubai', request_id: '3999', status: 'written', page_type: 'Guide' };
   const page = (article, o = {}) => ({ statusCode: 200, statusMessage: 'OK', headers: { 'content-type': 'text/html; charset=utf-8' },
-    data: '<!DOCTYPE html><html><head><title>AI Consulting Services Dubai | Tech&amp;</title><meta name="description" content="How AI consulting services in Dubai are scoped, priced and delivered, with a checklist for UAE companies.">'
+    data: '<!DOCTYPE html><html><head><title>' + (o.title || 'AI Consulting Services Dubai') + ' | Tech&amp;</title><meta name="description" content="How AI consulting services in Dubai are scoped, priced and delivered, with a checklist for UAE companies.">'
       + '<link rel="canonical" href="' + URL1 + '"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"AI consulting services Dubai","author":{"@type":"Person","name":"Sara Khan"},"datePublished":"2026-10-22"}</script></head>'
-      + '<body><nav>Home Services [Menu]</nav>' + (o.noArticle ? '' : '<article>') + '<h1>AI consulting services Dubai</h1><p class="byline">By Sara Khan, updated 22 Oct 2026</p>' + article
+      + '<body><nav>Home Services [Menu]</nav>' + (o.noArticle ? '' : '<article>') + '<h1>' + (o.h1 || o.title || 'AI consulting services Dubai') + '</h1><p class="byline">By Sara Khan, updated 22 Oct 2026</p>' + article
       + Array.from({ length: 700 }, (_, i) => 'word' + (i % 40)).join(' ') + (o.noArticle ? '' : '</article>') + '<footer>' + (o.footer || 'Contact [email&#160;protected]') + '</footer></body></html>' });
   const publishCheck = async (body, html) => {
     reset();
@@ -49,7 +49,7 @@ module.exports = async (ctx) => {
       reset();
       await run('Normalize Input', { body: { mode: 'published', domain: 'techand.ai', callback_url: 'https://hooks.example.com/x', request_id: 'pub-78', ...body } });
       mock('Load Content Log (Published)', logs.map(json => ({ json }))); mock('Load Ladders (Published)', ladders.map(json => ({ json }))); mock('Load Query History (Published)', [{ json: {} }]);
-      mock('Fetch Published Page', html || page('<p>Dynamics 365 is a family of business applications.</p>'));
+      mock('Fetch Published Page', html || page('<p>Dynamics 365 is a family of business applications.</p>', { title: 'Is Microsoft Dynamics 365 an ERP System? UAE Buyers Guide' }));   // 2026-10-27: the live page is the draft (its keyword in the title)
       return (await run('Publish Check', [{ json: {} }]))[0].json;
     };
     const c = await runIt({ keyword: 'microsoft dynamics 365 erp system', content_request_id: '1240', url: LURL }, [HEAD, NEAR, RUNG], [LOG]);
@@ -59,7 +59,7 @@ module.exports = async (ctx) => {
     check('no other rung (head term, near match) is touched', c.ladder_row && c.ladder_row.keyword !== HEAD.keyword && c.ladder_row.keyword !== NEAR.keyword, J(c.ladder_row));
     const other = await runIt({ keyword: 'microsoft dynamics 365 erp system', content_request_id: '1240', url: LURL }, [{ ...RUNG, ladder_id: 'lad_other' }, HEAD], [LOG]);
     check('a rung of the same keyword in another ladder is still found by keyword when the id does not match', other.ladder_found === true && other.ladder_row && other.ladder_row.keyword === RUNG.keyword, J(other.ladder_row));
-    const typed = await runIt({ keyword: 'dynamics 365 erp system', url: 'https://www.techand.ai/dynamics-365-erp-system' }, [HEAD, RUNG], []);
+    const typed = await runIt({ keyword: 'dynamics 365 erp system', url: 'https://www.techand.ai/dynamics-365-erp-system' }, [HEAD, RUNG], [], page('<p>Dynamics 365 is a family of business applications.</p>', { title: 'Dynamics 365 ERP System for UAE Companies' }));
     check('without a draft the typed keyword still decides (older path unchanged)', typed.ladder_found === true && typed.ladder_row && typed.ladder_row.keyword === HEAD.keyword, J(typed.ladder_row));
     const down = await runIt({ keyword: 'microsoft dynamics 365 erp system', content_request_id: '1240', url: LURL }, [RUNG], [LOG],
       { statusCode: 404, statusMessage: 'Not Found', headers: { 'content-type': 'text/html' }, data: '<html><body>Not found</body></html>' });

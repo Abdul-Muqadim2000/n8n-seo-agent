@@ -483,7 +483,8 @@
   "published_url",
   "published_at",
   "week",
-  "qa_reasons"
+  "qa_reasons",
+  "publish_note"
  ],
  "LADDER": [
   "ladder_id",

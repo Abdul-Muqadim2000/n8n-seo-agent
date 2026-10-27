@@ -118,6 +118,8 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
       break;
     case 'published':
       if (typeof v(s, 'live') === 'boolean') badge = <StatusBadge tone={v(s, 'live') ? 'good' : 'critical'}>{v(s, 'live') ? 'Live' : 'Not reachable'}</StatusBadge>;
+      // 2026-10-27: the page answered but was not the page that was written, so nothing was marked published
+      if (v(s, 'live') === true && v(s, 'recorded') === false) badge = <StatusBadge tone="warning">Not marked: check the address</StatusBadge>;
       parts.push(nm(s, 'passed') != null && `${nm(s, 'passed')} checks passed`, nm(s, 'failed') ? `${nm(s, 'failed')} to fix` : null);
       break;
     case 'profile':

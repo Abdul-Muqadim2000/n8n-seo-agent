@@ -34,7 +34,7 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
-    date: '2026-10-24',
+    date: '2026-10-27',
     version: '4.4',
     title: 'Video tutorials',
     summary:
@@ -46,8 +46,9 @@ export const changelog: ChangelogEntry[] = [
       'Chapters you can click to jump straight to a step, subtitles in every video and the full transcript to read beside it',
       'Search the course, or filter it by series, by level, by who it is for (business owners, marketers or agencies)',
       'Next and previous through the whole course, and the rest of the series beside every tutorial',
+      'When you tell us a page is published, we now check that the live page is the page we wrote before marking it: a wrong address or an update not yet live gets a warning showing what we found, and you can send the right address or confirm it is the right page',
     ],
-    features: ['guided-setup'],
+    features: ['guided-setup', 'content'],
     labels: ['Learning'],
   },
   {
