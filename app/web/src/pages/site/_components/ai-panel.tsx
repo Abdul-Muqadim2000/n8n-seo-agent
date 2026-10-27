@@ -134,14 +134,17 @@ export function SegmentsSection({ segments, panel }: { segments: AiSegments | nu
 
 // ---------------- the panel manager ----------------
 
-const isTracked = (p: Prompt) => !['off', 'refused'].includes(p.status || 'active');
+const isTracked = (p: Prompt) => !['off', 'refused', 'retired', 'proposed'].includes(p.status || 'active');   // AI-FOCUS: a retired or proposed question is not asked
 /** the owner's own questions (theirs or pinned): asked before the automatic ones, so only these can be crowded out by the panel size */
 const isOwn = (p: Prompt) => p.source === 'custom' || p.pinned;
-type StatusFilter = 'tracked' | 'over' | 'pinned' | 'refused' | 'off' | 'all';
+type StatusFilter = 'tracked' | 'over' | 'pinned' | 'proposed' | 'refused' | 'retired' | 'off' | 'all';   // AI-FOCUS: + proposed, retired
 // W2-E1: 'shopping' is a stage for sites that sell products
 /** R-A19: one bulk change takes at most this many questions (the server's schemas refuse more) */
 const BULK_MAX = 500;
 const STAGES = ['awareness', 'consideration', 'decision', 'shopping'] as const;
+
+/** AI-FOCUS: what a question's topic is, in the customer's words */
+const focusSourceLabel = (state?: string) => (state === 'core' ? 'your service' : state === 'watch' ? 'a keyword you watch' : state === 'maintain' ? 'a keyword you won' : state === 'paused' ? 'a paused keyword' : state === 'out' ? 'an earlier topic' : 'your keyword');
 
 function originLabel(p: Prompt): string {
   if (p.source === 'custom' || p.origin === 'custom') return 'You';
@@ -202,7 +205,7 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
   const send = (body: Record<string, unknown>, ok: string, id?: string) => {
     if (id) setPendingId(id);
     admin.mutate(
-      { action: 'ai_prompts', add: [], remove: [], enable: [], pin: [], unpin: [], edit: [], ...body },
+      { action: 'ai_prompts', add: [], remove: [], enable: [], pin: [], unpin: [], edit: [], accept: [], retire: [], ...body },
       {
         onSuccess: (r) => (r.ok ? toast.success(ok) : toast.error(r.error ?? 'The change was not saved')),
         onError: (e) => toast.error(errorMessage(e)),
@@ -248,7 +251,8 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
               p.prompt
             )}
           </p>
-          <p className="mt-0.5 text-xs text-ink-3">{[p.cluster || p.topic, p.stage && titleCase(p.stage)].filter(Boolean).join(' · ')}</p>
+          <p className="mt-0.5 text-xs text-ink-3">{[p.focusTopic ? `About ${focusSourceLabel(p.focusState)}: ${p.focusTopic}` : p.cluster || p.topic, p.stage && titleCase(p.stage)].filter(Boolean).join(' · ')}</p>
+          {p.status === 'retired' && <p className="mt-1 text-xs text-ink-3">Retired{p.retiredAt ? ` ${fmtDate(p.retiredAt)}` : ''}{p.retireReason ? `: ${p.retireReason}` : ''}. Its history is kept.</p>}
           {p.fitNote && <p className={cn('mt-1 text-xs', p.status === 'refused' ? 'text-serious-text' : 'text-ink-3')}>{p.fitNote}</p>}
         </div>
       ),
@@ -260,7 +264,7 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
     { key: 'result', header: engine ? `On ${engineLabel(engine)}` : 'Latest run', sortValue: (p) => resultOf.get(p.promptId) ?? '', cell: (p) => resultBadge(resultOf.get(p.promptId)) },
     { key: 'status', header: 'Status', sortValue: (p) => (isTracked(p) ? (isAsked(p) ? 0 : 1) : p.status === 'refused' ? 2 : 3), cell: (p) => (
       <span className="inline-flex flex-col items-start gap-0.5">
-        {isTracked(p) ? (isAsked(p) ? <StatusBadge tone="good">Tracked</StatusBadge> : <StatusBadge tone="warning">Not asked: over your panel size</StatusBadge>) : p.status === 'refused' ? <StatusBadge tone="warning">Refused</StatusBadge> : <Badge icon={<Power className="size-3" aria-hidden />}>Off</Badge>}
+        {isTracked(p) ? (isAsked(p) ? <StatusBadge tone="good">Tracked</StatusBadge> : <StatusBadge tone="warning">Not asked: over your panel size</StatusBadge>) : p.status === 'refused' ? <StatusBadge tone="warning">Refused</StatusBadge> : p.status === 'proposed' ? <StatusBadge tone="accent">Proposed</StatusBadge> : p.status === 'retired' ? <StatusBadge tone="neutral">Retired</StatusBadge> : <Badge icon={<Power className="size-3" aria-hidden />}>Off</Badge>}
         {/* W2 §3: the engine's own record when stored (else the cut above is the app's mirror of the engine's) */}
         {p.lastAskedAt ? <span className="text-[11px] text-ink-3" title={fmtDate(p.lastAskedAt)}>asked {fmtAgo(p.lastAskedAt)}{p.askedN28d != null ? ` · ${p.askedN28d}x in 28 days` : ''}</span> : null}
       </span>
@@ -281,6 +285,9 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
               <Button size="sm" variant="ghost" aria-label={'Edit: ' + p.prompt} onClick={() => setEditing(p)}>
                 <Pencil className="size-4" aria-hidden />
               </Button>
+              {p.status === 'proposed' && (
+                <Button size="sm" variant="ghost" loading={pendingId === p.promptId + ':accept'} onClick={() => send({ accept: [p.promptId] }, 'Question added: it is asked from the next check', p.promptId + ':accept')}>Accept</Button>
+              )}
               {isTracked(p) ? (
                 <Button size="sm" variant="ghost" loading={pendingId === p.promptId + ':off'} onClick={() => send({ remove: [p.promptId] }, 'Question switched off', p.promptId + ':off')}>Switch off</Button>
               ) : (
@@ -306,7 +313,9 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
             { value: 'tracked', label: 'Tracked', count: askedCount },
             ...(over.length ? [{ value: 'over' as const, label: 'Not asked', count: over.length }] : []),
             { value: 'pinned', label: 'Pinned', count: tracked.filter((p) => p.pinned).length },
+            ...(prompts.some((p) => p.status === 'proposed') ? [{ value: 'proposed' as const, label: 'Proposed', count: prompts.filter((p) => p.status === 'proposed').length }] : []),
             { value: 'refused', label: 'Refused', count: refused.length },
+            ...(prompts.some((p) => p.status === 'retired') ? [{ value: 'retired' as const, label: 'Retired', count: prompts.filter((p) => p.status === 'retired').length }] : []),
             { value: 'off', label: 'Off', count: prompts.filter((p) => p.status === 'off').length },
             { value: 'all', label: 'All', count: prompts.length },
           ]}

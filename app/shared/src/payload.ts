@@ -64,6 +64,9 @@ export function monitorsBody(m: Partial<MonitorSettings>): Body {
   if (m.aiSovSet !== undefined) out.ai_sov_set = m.aiSovSet.join(', ');
   if (m.aiAlertRules !== undefined) out.ai_alert_rules_json = JSON.stringify(m.aiAlertRules);
   if (m.aiDemandMarket !== undefined) out.ai_demand_market = m.aiDemandMarket;
+  // AI-FOCUS (2026-10-27): the pulse scope and whether the questions follow the focus ('' = on)
+  if (m.aiPulseScope !== undefined) out.ai_pulse_scope = m.aiPulseScope;
+  if (m.aiFocusMode !== undefined) out.ai_focus_mode = m.aiFocusMode === 'off' ? 'off' : '';
   return out;
 }
 

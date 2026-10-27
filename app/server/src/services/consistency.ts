@@ -98,6 +98,8 @@ export async function standingCtx(org: OrgRow, site: SiteRow): Promise<Consisten
     ladders,
     research: research ? { country: countryOf(String(research.payload.country ?? ''))?.name ?? null } : null,
     aiPrompts: prompts.filter((p) => p.source === 'custom' || p.source === 'auto' || !p.source).map((p) => ({ promptId: p.prompt_id, prompt: p.prompt, market: p.market, status: p.status })),
+    // AI-FOCUS (2026-10-27): what the AI panel's two focus warnings read (ladders with status, pages, services, keywords, the panel size and its price)
+    aiFocus: tracked(site) ? await import('./aiFocus').then((m) => m.aiFocusCtx(site, prompts, engine)).catch(() => null) : null,
   };
 }
 

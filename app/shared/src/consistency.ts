@@ -1,5 +1,6 @@
 import type { ModeId } from './constants';
 import type { PipelineData } from './data';
+import { AI_LADDER_NOT_MEASURED, AI_PANEL_OFF_FOCUS, type AiFocusContext } from './ai-focus';
 import { cycleNorm } from './cycles';
 import { pipelineNotices, type NoticeFormat, type NoticeInput, type PipelineNotice } from './pipeline-notices';
 import {
@@ -83,6 +84,8 @@ export interface ConsistencyCtx {
   /** the pipeline data the forms' duplicate warnings read */
   pipeline?: PipelineData | null;
   pipelineOpts?: { now?: Date; fmt?: NoticeFormat; costLabel?: string };
+  /** AI-FOCUS (2026-10-27): the AI panel's focus inputs (ai-focus.ts): ladders with status, services, tracked keywords, the stored questions */
+  aiFocus?: AiFocusContext | null;
 }
 
 export interface ConsistencyCheck {
@@ -510,6 +513,8 @@ export const CONSISTENCY_CHECKS: readonly ConsistencyCheck[] = [
   AI_QUESTION_PLACE,
   OTHER_SIGNALS,
   PIPELINE,
+  AI_PANEL_OFF_FOCUS,   // AI-FOCUS (2026-10-27)
+  AI_LADDER_NOT_MEASURED,   // AI-FOCUS (2026-10-27)
 ];
 
 /** The warnings an action raises, warnings before information. */

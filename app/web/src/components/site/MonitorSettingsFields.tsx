@@ -60,6 +60,9 @@ export function completeMonitors(m: Partial<MonitorSettings> | null | undefined)
     ...(m?.aiSovSet !== undefined ? { aiSovSet: m.aiSovSet } : {}),
     ...(m?.aiAlertRules !== undefined ? { aiAlertRules: m.aiAlertRules } : {}),
     ...(m?.aiDemandMarket !== undefined ? { aiDemandMarket: m.aiDemandMarket } : {}),
+    // AI-FOCUS (2026-10-27): what the daily check asks and whether the questions follow the keywords (kept only when stored or chosen here)
+    ...(m?.aiPulseScope !== undefined ? { aiPulseScope: m.aiPulseScope } : {}),
+    ...(m?.aiFocusMode !== undefined ? { aiFocusMode: m.aiFocusMode } : {}),
   };
 }
 
@@ -171,6 +174,24 @@ export function MonitorSettingsFields({
                 disabled={disabled || !AI_PULSE_ENGINES.some((e) => value.aiEngines.includes(e))}
                 onChange={(e) => set({ aiPulse: e.target.checked })}
               />
+              {/* AI-FOCUS (2026-10-27): the questions follow the keywords you work on, and the daily check can ask only those */}
+              <Checkbox
+                label="Follow my keywords"
+                description="Your AI questions follow the keywords you work on: when you start a keyword or publish a page, questions about it are added within your panel size, and questions about topics you left are retired (their history is kept). Questions you added or pinned are never changed. Nothing here costs more; a bigger panel is always your choice."
+                checked={(value.aiFocusMode ?? 'auto') !== 'off'}
+                disabled={disabled}
+                onChange={(e) => set({ aiFocusMode: e.target.checked ? 'auto' : 'off' })}
+              />
+              {value.aiPulse && (
+                <Field label="The daily check asks" hint="Questions about your services and keywords you only watch are still asked in the weekly check.">
+                  {(p) => (
+                    <Select {...p} value={value.aiPulseScope ?? 'all'} onChange={(e) => set({ aiPulseScope: e.target.value as 'focus' | 'all' })}>
+                      <option value="focus">Only the questions about the keywords I work on (costs less)</option>
+                      <option value="all">Every question in my panel</option>
+                    </Select>
+                  )}
+                </Field>
+              )}
               {value.aiPulse && value.aiPromptsMax > 50 && (
                 <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
                   <Field label="Pulse sampling">

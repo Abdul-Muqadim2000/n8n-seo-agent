@@ -14,6 +14,7 @@ import {
   Hand,
   KeyRound,
   Megaphone,
+  MessageSquareText,
   RotateCcw,
   Inbox,
   Info,
@@ -178,6 +179,7 @@ const KIND_ICON: Record<NeedsYouItem['kind'], ReactNode> = {
   recheck: <RotateCcw className="size-4" />,
   level: <Gauge className="size-4" />,
   profile: <UserRound className="size-4" />,
+  ai_panel: <MessageSquareText className="size-4" />,   // AI-FOCUS (2026-10-27): the AI questions and the keywords you work on
 };
 
 /** Older servers: the pages waiting to be published. */
