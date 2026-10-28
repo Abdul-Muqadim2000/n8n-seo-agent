@@ -1,6 +1,6 @@
 // H3 (2026-10-28): the screens' own pure helpers for the review of a written page (questions, the editor, the comparison). The rules that
 // the server shares (delivery status, answers, facts, safe Markdown) live in @seo/shared page-review.ts; these only shape what a screen shows.
-import { allowedDecisions, diffBlocks, parseBlocks, TOP_QUESTIONS, type AnswerDecision, type BlockKind, type PageAnswer, type PageBlock, type PageReviewView } from '@seo/shared';
+import { allowedDecisions, diffBlocks, parseBlocks, personLabel, TOP_QUESTIONS,type AnswerDecision, type BlockKind, type PageAnswer, type PageBlock, type PageReviewView } from '@seo/shared';
 
 export type ReviewQuestion = PageReviewView['questions'][number];
 
@@ -109,4 +109,10 @@ export function diffCounts(beforeMd: string, afterMd: string): { changed: number
     removed: d.filter((x) => x.kind === 'removed').length,
     same: d.filter((x) => x.kind === 'same').length,
   };
+}
+
+/** " by <name>" for a person a review names (approved, saved), or an empty string when nobody is recorded. A name or e-mail, never an id. */
+export function byPerson(view: Pick<PageReviewView, 'people'>, id: string | null | undefined): string {
+  const who = personLabel(view.people, id);
+  return who ? ` by ${who}` : '';
 }

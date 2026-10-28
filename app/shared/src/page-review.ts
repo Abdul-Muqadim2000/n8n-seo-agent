@@ -494,6 +494,41 @@ export interface PageReviewView {
   /** this report is itself a final version of `finalOf` */
   isFinal: boolean;
   finalOf: string | null;
+  /**
+   * who did what, by name: every user id this view carries (`approval.approvedBy`, `clientVersion.savedBy`, each answer's and stored
+   * fact's `by`) mapped to the person's name, else their e-mail, else "a team member". The UI prints names through `personLabel`,
+   * never a raw id.
+   */
+  people: Record<string, string>;
+}
+
+export const UNKNOWN_PERSON = 'a team member';
+
+/** The label for a user: the name, else the e-mail, else "a team member" (also for a deleted user). Never the id. */
+export function personDisplayName(u: { name?: string | null; email?: string | null } | null | undefined): string {
+  const name = (u?.name ?? '').trim();
+  if (name) return name;
+  const email = (u?.email ?? '').trim();
+  return email || UNKNOWN_PERSON;
+}
+
+/** The name to print for a user id of a review view; '' when there is no id (the caller then leaves "by …" out). */
+export function personLabel(people: Record<string, string> | null | undefined, id: string | null | undefined): string {
+  if (!id) return '';
+  return people?.[id] || UNKNOWN_PERSON;
+}
+
+/** Every user id a review view refers to (approved, saved, answered, stored facts), deduplicated. */
+export function reviewPersonIds(v: Pick<PageReviewView, 'approval' | 'clientVersion' | 'answers' | 'questions'>): string[] {
+  const ids = new Set<string>();
+  const add = (id: string | null | undefined) => {
+    if (typeof id === 'string' && id) ids.add(id);
+  };
+  add(v.approval?.approvedBy);
+  add(v.clientVersion?.savedBy);
+  for (const a of Object.values(v.answers ?? {})) add(a?.by);
+  for (const q of v.questions ?? []) add(q.stored?.by);
+  return [...ids];
 }
 
 /** The one rule for where a page stands. */
@@ -545,7 +580,22 @@ export function safeUrl(u: string): boolean {
 }
 
 const esc = (t: string) => s(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-function inline(t: string): string {
+
+/** An image the in-app preview may load: an absolute https address only (the preview frame's policy allows https images, nothing else). */
+export const previewableImage = (u: string): boolean => /^https:\/\/[^\s<>"'/]+/i.test(s(u).trim());
+
+/**
+ * How the in-app preview shows an image it may not load: a planned image not uploaded yet (a relative path such as "images/hero.webp",
+ * which inside the preview frame would resolve against the app's own address and be refused) or a plain-http one. A labelled box with
+ * the file name, the same as the delivered article's preview, never a broken image or a blocked request.
+ */
+function imagePlaceholder(url: string, alt: string): string {
+  const name = s(url).split(/[?#]/)[0]!.split('/').filter(Boolean).pop() || 'image';
+  const label = /^http:\/\//i.test(url) ? 'Image not shown (not a secure https address)' : 'Image to upload';
+  return `<span class="img-ph" role="img" aria-label="${esc(`${label}: ${alt || name}`)}"><span class="img-ph-label">${esc(label)}</span><span class="img-ph-name">${esc(name)}</span></span>`;
+}
+
+function inlineMd(t: string, preview = false): string {
   // links and images first (escaped pieces), then bold / italic / code on the escaped rest
   const parts: string[] = [];
   let rest = s(t);
@@ -556,6 +606,7 @@ function inline(t: string): string {
     parts.push(fmt(esc(rest.slice(0, m.index))));
     const [, bang, text, url, title] = m;
     if (!safeUrl(url!)) parts.push(fmt(esc(text!)));
+    else if (bang && preview && !previewableImage(url!)) parts.push(imagePlaceholder(url!, text!));
     else if (bang) parts.push(`<img src="${esc(url!)}" alt="${esc(text!)}"${title ? ` title="${esc(title)}"` : ''} loading="lazy">`);
     else parts.push(`<a href="${esc(url!)}"${/^https?:\/\//i.test(url!) ? ' rel="noopener noreferrer"' : ''}>${fmt(esc(text!))}</a>`);
     rest = rest.slice(m.index + m[0].length);
@@ -571,8 +622,14 @@ const fmt = (t: string) =>
 
 const META_LINE = /^(Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords)\s*:/i;
 
-/** Safe HTML of a page's Markdown (the editor preview and the final version's HTML). Everything is escaped; only our own tags come out. */
-export function renderMarkdown(md: string, opts: { skipMeta?: boolean } = {}): string {
+/**
+ * Safe HTML of a page's Markdown (the editor preview and the final version's HTML). Everything is escaped; only our own tags come out.
+ * `preview`: for the in-app preview frame, images load only from https addresses; any other image is a labelled box (imagePlaceholder).
+ * The final version's HTML keeps the page's own image paths.
+ */
+export function renderMarkdown(md: string, opts: { skipMeta?: boolean; preview?: boolean } = {}): string {
+  const preview = opts.preview === true;
+  const inline = (t: string) => inlineMd(t, preview);
   const out: string[] = [];
   let list: 'ul' | 'ol' | null = null;
   let table = false;

@@ -338,6 +338,30 @@ describe('approval', () => {
     const audits = await db.select().from(schema.auditEvents).where(and(eq(schema.auditEvents.orgId, s.org.id), eq(schema.auditEvents.action, 'page.approved')));
     expect(audits).toHaveLength(1);
   });
+  it('names the people behind every id the review returns (name, else e-mail, else "a team member"), never an id alone', async () => {
+    const s = await setup();
+    const [owner] = await db.update(schema.users).set({ name: 'Sara Haddad' }).where(eq(schema.users.email, `owner${seq}@page-review.test`)).returning();
+    await s.u.c.put(`${s.base}/answers`, { answers: [{ questionId: 'q1', decision: 'yes' }] });
+    const approved = view(await s.u.c.post(`${s.base}/approve`, {}));
+    expect(approved.approval!.approvedBy).toBe(owner!.id);
+    expect(approved.people[owner!.id]).toBe('Sara Haddad');
+    // a colleague without a name saved the client version; an answer was given by a person since deleted
+    const mail = `noname${seq}@page-review.test`;
+    await signUp(app, mail);
+    const [mate] = await db.update(schema.users).set({ name: '  ' }).where(eq(schema.users.email, mail)).returning();
+    const gone = '00000000-1111-4222-8333-444444444444';
+    const [row] = await db.select().from(schema.pageReviews).where(eq(schema.pageReviews.reportId, s.report.id));
+    await db
+      .update(schema.pageReviews)
+      .set({ clientMarkdown: MD, clientSavedAt: new Date(), clientSavedBy: mate!.id, answers: { ...row!.answers, q2: { questionId: 'q2', factKey: 'x.y', decision: 'general', text: '', at: new Date().toISOString(), by: gone } } })
+      .where(eq(schema.pageReviews.id, row!.id));
+    const v = view(await s.u.c.get(s.base));
+    expect(v.clientVersion!.savedBy).toBe(mate!.id);
+    expect(v.people).toEqual({ [owner!.id]: 'Sara Haddad', [mate!.id]: mail, [gone]: 'a team member' });
+    expect(v.answers.q1!.by).toBe(owner!.id);
+    // every *_by / by the view carries has a name
+    for (const id of [v.approval!.approvedBy, v.clientVersion!.savedBy, ...Object.values(v.answers).map((a) => a.by), ...v.questions.map((q) => q.stored?.by)]) if (id) expect(v.people[id]).toBeTruthy();
+  });
   it('reads where the page stands on the website from the content log (a live check) or the CMS', async () => {
     const s = await setup();
     t.log = [{ keyword: 'erp systems in uae', request_id: '2575', status: 'published', published_url: `https://www.${s.site.domain}/erp-systems-uae/`, published_at: '2026-10-28', publish_note: '' } as unknown as ContentLogRow];

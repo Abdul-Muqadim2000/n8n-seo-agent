@@ -26,7 +26,11 @@ import {
   prefilledAnswer,
   questionsOf,
   renderArticleHtml,
+  personDisplayName,
+  personLabel,
+  previewableImage,
   renderMarkdown,
+  reviewPersonIds,
   reviewStage,
   reviewSummaryOf,
   safeUrl,
@@ -332,6 +336,36 @@ describe('the editor: sanitising and safe HTML', () => {
     expect(safeUrl('JavaScript:alert(1)')).toBe(false);
     expect(safeUrl('#section')).toBe(true);
     expect(safeUrl('https://a.example/"onmouseover=')).toBe(false);
+  });
+  it('preview images: https only; a relative or http image is a labelled box, the final HTML keeps the path', () => {
+    const md = '![Hero](images/hero.webp "Hero")\n\n![Team](https://cdn.novaand-demo.com/t.jpg)\n\n![Old](http://novaand-demo.com/o.png?v=2)\n';
+    const pre = renderMarkdown(md, { preview: true });
+    expect(pre).toContain('<img src="https://cdn.novaand-demo.com/t.jpg" alt="Team" loading="lazy">');
+    expect(pre.match(/<img /g)).toHaveLength(1);
+    expect(pre).toContain('aria-label="Image to upload: Hero"');
+    expect(pre).toContain('<span class="img-ph-name">hero.webp</span>');
+    expect(pre).toContain('<span class="img-ph-name">o.png</span>');
+    expect(pre).toContain('Image not shown (not a secure https address)');
+    expect(renderMarkdown(md)).toContain('<img src="images/hero.webp" alt="Hero" title="Hero" loading="lazy">');
+    expect(previewableImage('https://a.example/x.png')).toBe(true);
+    expect(previewableImage('https:///x.png')).toBe(false);
+    expect(previewableImage('//a.example/x.png')).toBe(false);
+    expect(renderMarkdown('![<b>"x"</b>](images/<x>.png)', { preview: true })).not.toMatch(/<b>|<x>/);
+  });
+  it('people: name, else e-mail, else "a team member"; every id a review carries is collected', () => {
+    expect(personDisplayName({ name: ' Sara ', email: 's@x.example' })).toBe('Sara');
+    expect(personDisplayName({ name: '', email: 's@x.example' })).toBe('s@x.example');
+    expect(personDisplayName(null)).toBe('a team member');
+    expect(personLabel({ u1: 'Sara' }, 'u1')).toBe('Sara');
+    expect(personLabel({}, 'u2')).toBe('a team member');
+    expect(personLabel({}, null)).toBe('');
+    const ids = reviewPersonIds({
+      approval: { approvedAt: '', approvedBy: 'a', reportId: 'r' },
+      clientVersion: { markdown: '', savedAt: '', savedBy: 'b', check: null },
+      answers: { q1: { questionId: 'q1', factKey: 'k', decision: 'yes', text: '', at: '', by: 'c' }, q2: { questionId: 'q2', factKey: 'k', decision: 'yes', text: '', at: '', by: 'a' } },
+      questions: [{ stored: { decision: 'yes', text: '', question: '', category: '', at: '', by: 'd', reportId: null } }, { stored: null }] as never,
+    });
+    expect(ids.sort()).toEqual(['a', 'b', 'c', 'd']);
   });
   it('removes control characters and caps the length', () => {
     expect(sanitizeMarkdown('a\u0000b\u0007c\r\nd')).toBe('abc\nd');

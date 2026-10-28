@@ -26,7 +26,7 @@ import { useAcceptPrefilled, useApprovePage, useFinalizePage, usePageReview, use
 import { cn, fmtDateTime } from '@/lib/utils';
 import { CmsPublishPanel } from '../CmsPublish';
 import { Block } from '../kit';
-import { answeredCount, choicesFor, contextLines, currentChoice, groupQuestions, type ReviewQuestion } from './model';
+import { answeredCount, byPerson, choicesFor, contextLines, currentChoice, groupQuestions, type ReviewQuestion } from './model';
 
 const PageEditor = lazy(() => import('./PageEditor'));
 
@@ -306,7 +306,7 @@ function EditCard({ view }: { view: PageReviewView }) {
   return (
     <Block
       title="Change the page yourself"
-      description={cv ? `Your version, saved ${fmtDateTime(cv.savedAt)}${cv.savedBy ? ` by ${cv.savedBy}` : ''}. The final check runs on it.` : 'Edit any heading, paragraph, list, table or link. We check your version before you publish it.'}
+      description={cv ? `Your version, saved ${fmtDateTime(cv.savedAt)}${byPerson(view, cv.savedBy)}. The final check runs on it.` : 'Edit any heading, paragraph, list, table or link. We check your version before you publish it.'}
       icon={<PenLine />}
       actions={
         can('member') && !view.approval ? (
@@ -485,7 +485,7 @@ export function ApproveCard({ view, report, publishLink }: { view: PageReviewVie
           <p className="flex flex-wrap items-center gap-1.5 text-sm text-ink">
             <CheckCircle2 className="size-4 text-good-text" aria-hidden />
             Approved {fmtDateTime(approved.approvedAt)}
-            {approved.approvedBy ? ` by ${approved.approvedBy}` : ''}.
+            {byPerson(view, approved.approvedBy)}.
             {!approvedHere && (
               <a className="font-medium text-accent-text underline-offset-2 hover:underline" href={paths.report(org.id, approved.reportId)}>
                 Open the approved version
