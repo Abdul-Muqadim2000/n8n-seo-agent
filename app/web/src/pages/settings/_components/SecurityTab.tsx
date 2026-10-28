@@ -11,7 +11,7 @@ import { Field, Select } from '@/components/ui/field';
 import { Avatar } from '@/components/ui/misc';
 import { SwitchRow } from '@/components/ui/tabs';
 import { DataTable, type Column } from '@/components/ui/table';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useMembers, useSaveSecurityPolicy, useSecurityPolicy } from '@/lib/queries';
 import { RoleChip, SettingsCard } from './SettingsCard';
@@ -38,7 +38,7 @@ export function SecurityTab() {
   const submit = () =>
     save.mutate(draft, {
       onSuccess: () => toast.success('Security settings saved'),
-      onError: (e) => toast.error(errorMessage(e)),
+      onError: (e) => toastError(e),
     });
 
   return (

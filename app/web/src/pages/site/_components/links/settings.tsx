@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Mail, Search, Settings2, ShieldBan, UserCheck, Zap } from 'lucide-react';
 import type { LinkBuildingData } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { useRunLinkBuilder, useUpdateLinkSettings } from '@/lib/queries';
 import { fmtDate } from '@/lib/utils';
@@ -44,7 +44,7 @@ export function LinkSettingsCard({ d, onRun }: { d: LinkBuildingData; onRun?: ()
         ...(mode === 'auto' && maxN !== d.settings.autoDailyMax ? { autoDailyMax: maxN } : {}),
         ...((mailboxId || null) !== d.settings.mailboxId ? { mailboxId: mailboxId || null } : {}),
       },
-      { onSuccess: () => toast.success('Link building settings saved'), onError: (e) => toast.error(errorMessage(e)) },
+      { onSuccess: () => toast.success('Link building settings saved'), onError: (e) => toastError(e) },
     );
 
   return (
@@ -175,7 +175,7 @@ export function RunDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           toast.success('The Link Builder started: new opportunities appear here in a few minutes, and its report under Reports.');
           onOpenChange(false);
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   return (

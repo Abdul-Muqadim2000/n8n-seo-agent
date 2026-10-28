@@ -9,7 +9,7 @@ import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
 import { Stagger } from '@/components/insight';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { useSiteAdmin, useSiteData } from '@/lib/queries';
 import { AlwaysOn } from './_components/pipeline/always-on';
@@ -74,7 +74,7 @@ export default function PipelinePage() {
           toast.success(action === 'pause' ? 'Pipeline paused: no automatic runs until you resume' : 'Pipeline resumed');
           q.refetch();
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
 

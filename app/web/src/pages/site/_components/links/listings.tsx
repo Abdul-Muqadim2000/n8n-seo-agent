@@ -3,7 +3,7 @@
 import { toast } from 'sonner';
 import { ArrowRight, BarChart3, ClipboardList, CornerDownRight, ExternalLink as ExternalIcon, Undo2 } from 'lucide-react';
 import type { LinkBuildingData } from '@seo/shared';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useListingStatus } from '@/lib/queries';
 import { fmtDate } from '@/lib/utils';
 import { Collapsible, InsightItem, type IconTileTone } from '@/components/insight';
@@ -85,7 +85,7 @@ function ListingRow({ l }: { l: Listing }) {
   const member = can('member');
   const st = listingOf(l.status);
   const mark = (status: 'submitted' | 'listed' | 'ignored' | 'missing', done: string) =>
-    set.mutate({ listingId: l.id, status }, { onSuccess: () => toast.success(`${l.name}: ${done}`), onError: (e) => toast.error(errorMessage(e)) });
+    set.mutate({ listingId: l.id, status }, { onSuccess: () => toast.success(`${l.name}: ${done}`), onError: (e) => toastError(e) });
   const busy = (s: string) => set.isPending && set.variables?.status === s;
   const open = l.status === 'missing' || l.status === 'unknown';
   return (

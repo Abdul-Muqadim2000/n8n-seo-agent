@@ -30,7 +30,7 @@ import { Dialog } from '@/components/ui/overlay';
 import { DataTable, type Column } from '@/components/ui/table';
 import { LinkTabs } from '@/components/ui/tabs';
 import { GuideButton } from '@/components/guide';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { qk, useDeleteOrg, useMembers, useProviders, useTeamMutation, useUpdateOrg } from '@/lib/queries';
@@ -348,7 +348,7 @@ function TeamTab() {
       { userId: m.userId, role },
       {
         onSuccess: () => toast.success(`${m.name} is now ${ROLE_LABELS[role].toLowerCase()}`),
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
         onSettled: () => setPendingRole(null),
       },
     );
@@ -535,7 +535,7 @@ function TeamTab() {
                           size="sm"
                           loading={revoke.isPending && revoke.variables?.id === i.id}
                           onClick={() =>
-                            revoke.mutate({ id: i.id }, { onSuccess: () => toast.success(`Invitation for ${i.email} withdrawn`), onError: (e) => toast.error(errorMessage(e)) })
+                            revoke.mutate({ id: i.id }, { onSuccess: () => toast.success(`Invitation for ${i.email} withdrawn`), onError: (e) => toastError(e) })
                           }
                         >
                           Withdraw

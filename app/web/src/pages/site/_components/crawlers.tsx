@@ -13,7 +13,7 @@ import { Field, Input, Select } from '@/components/ui/field';
 import { CopyButton, Meter } from '@/components/ui/misc';
 import { Dialog } from '@/components/ui/overlay';
 import { DataTable, type Column } from '@/components/ui/table';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { useCrawlerSettings, useCreatePushKey, useDeleteCrawlerData, useRevokePushKey, useUploadLog } from '@/lib/queries';
 import { fmtAgo, fmtBytes, fmtDateTime } from '@/lib/utils';
 import { Panel } from './kit';
@@ -108,11 +108,11 @@ function PushKey({ d, orgId, siteId, domain, admin }: { d: CrawlerData; orgId: s
       </dl>
       {admin ? (
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" icon={<KeyRound className="size-3.5" />} loading={create.isPending} onClick={() => create.mutate(undefined, { onSuccess: setShown, onError: (e) => toast.error(errorMessage(e)) })}>
+          <Button size="sm" icon={<KeyRound className="size-3.5" />} loading={create.isPending} onClick={() => create.mutate(undefined, { onSuccess: setShown, onError: (e) => toastError(e) })}>
             {push.enabled ? 'Replace the key' : 'Create push key'}
           </Button>
           {push.enabled && (
-            <Button size="sm" variant="secondary" loading={revoke.isPending} onClick={() => revoke.mutate(undefined, { onSuccess: () => toast.success('Pushes are switched off'), onError: (e) => toast.error(errorMessage(e)) })}>
+            <Button size="sm" variant="secondary" loading={revoke.isPending} onClick={() => revoke.mutate(undefined, { onSuccess: () => toast.success('Pushes are switched off'), onError: (e) => toastError(e) })}>
               Switch pushes off
             </Button>
           )}
@@ -148,7 +148,7 @@ function Retention({ d, orgId, siteId, admin }: { d: CrawlerData; orgId: string;
           {...p}
           value={String(d.setup.retentionDays)}
           disabled={!admin || save.isPending}
-          onChange={(e) => save.mutate({ retentionDays: Number(e.target.value) }, { onSuccess: () => toast.success('Saved'), onError: (err) => toast.error(errorMessage(err)) })}
+          onChange={(e) => save.mutate({ retentionDays: Number(e.target.value) }, { onSuccess: () => toast.success('Saved'), onError: (err) => toastError(err) })}
         >
           {CRAWLER_LIMITS.retentionDays.map((v) => (
             <option key={v} value={v}>
@@ -185,7 +185,7 @@ function DeleteData({ orgId, siteId, domain }: { orgId: string; siteId: string; 
               variant="danger"
               loading={del.isPending}
               disabled={confirm.trim().toLowerCase() !== domain.toLowerCase()}
-              onClick={() => del.mutate(confirm, { onSuccess: () => (toast.success('Log data deleted'), setOpen(false), setConfirm('')), onError: (e) => toast.error(errorMessage(e)) })}
+              onClick={() => del.mutate(confirm, { onSuccess: () => (toast.success('Log data deleted'), setOpen(false), setConfirm('')), onError: (e) => toastError(e) })}
             >
               Delete
             </Button>

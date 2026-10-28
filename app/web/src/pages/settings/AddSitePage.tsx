@@ -2,14 +2,13 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { Activity, Building2, Globe, ListChecks, Lock, PlugZap, ShieldCheck } from 'lucide-react';
-import { cleanDomain, domainOk } from '@seo/shared';
-import { DomainClaimedCallout, SiteBusinessForm } from '@/components/site/SiteBusinessFields';
+import { cleanDomain, domainOk, type Site } from '@seo/shared';
+import { SiteBusinessForm, SiteCreateConflict, siteCreateConflict, type SiteFormValues } from '@/components/site/SiteBusinessFields';
 import { ButtonLink } from '@/components/ui/button';
 import { Card, CardBody } from '@/components/ui/card';
-import { Callout, EmptyState } from '@/components/ui/feedback';
+import { EmptyState } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
 import { IconTile, Stagger } from '@/components/insight';
-import { ApiRequestError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useCreateSite, useProviders } from '@/lib/queries';
@@ -62,20 +61,7 @@ export default function AddSitePage() {
                   toast.success(`${site.domain} added`, { description: 'Now confirm that it belongs to your company.' });
                   navigate(paths.site(org.id, site.id, 'settings/verification'));
                 }}
-                renderError={(e, v) => {
-                  if (!(e instanceof ApiRequestError) || e.status !== 409) return null;
-                  if (e.code === 'domain_claimed') return <DomainClaimedCallout domain={cleanDomain(v.domain)} />;
-                  const existing = sites.find((s) => s.domain === cleanDomain(v.domain));
-                  return (
-                    <Callout
-                      tone="warning"
-                      title="You already added this website"
-                      action={existing ? <ButtonLink size="sm" variant="secondary" to={paths.site(org.id, existing.id, 'settings/business')}>Open its settings</ButtonLink> : undefined}
-                    >
-                      {e.message}
-                    </Callout>
-                  );
-                }}
+                renderError={addSiteError(org.id, sites)}
               />
             </CardBody>
           </SettingsCard>
@@ -156,4 +142,23 @@ function AddSiteStepper({ google }: { google: boolean }) {
       </ol>
     </Card>
   );
+}
+
+/**
+ * The "Add a website" form's own message for a refused save: only a real duplicate (already yours, or verified by another company), with
+ * a way to the website you already have. Anything else (null) is the form's default; a cancelled "Check this first" never gets here.
+ */
+export function addSiteError(orgId: string, sites: readonly Site[]) {
+  return (e: unknown, v: SiteFormValues): ReactNode | null => {
+    if (!siteCreateConflict(e)) return null;
+    const domain = cleanDomain(v.domain);
+    const existing = sites.find((s) => s.domain === domain);
+    return (
+      <SiteCreateConflict
+        error={e}
+        domain={domain}
+        action={existing ? <ButtonLink size="sm" variant="secondary" to={paths.site(orgId, existing.id, 'settings/business')}>Open its settings</ButtonLink> : undefined}
+      />
+    );
+  };
 }

@@ -13,7 +13,7 @@ import { Callout, PageLoader } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/field';
 import { Avatar } from '@/components/ui/misc';
 import { applyServerErrors } from '@/components/site/helpers';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { useLogout, useMe, usePost, useProviders, useUpdateMe } from '@/lib/queries';
 import { fmtDate } from '@/lib/utils';
@@ -101,7 +101,7 @@ function EmailSection({ me }: { me: Me }) {
                     r.sent
                       ? toast.success(`A new link is on its way to ${me.user.email}`)
                       : toast.info('No e-mail was sent', { description: 'Your address may already be confirmed (reload the page), or e-mail is not set up on this server.' }),
-                  onError: (e) => toast.error(errorMessage(e)),
+                  onError: (e) => toastError(e),
                 })
               }
             >
@@ -278,7 +278,7 @@ function SignOutSection() {
           variant="secondary"
           icon={<LogOut className="size-4" />}
           loading={logout.isPending}
-          onClick={() => logout.mutate(undefined, { onSuccess: () => navigate('/login', { replace: true }), onError: (e) => toast.error(errorMessage(e)) })}
+          onClick={() => logout.mutate(undefined, { onSuccess: () => navigate('/login', { replace: true }), onError: (e) => toastError(e) })}
         >
           Sign out
         </Button>

@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { KeyRound, Mail, Pause, Pencil, Play, Plus, ShieldBan, ShieldCheck, Trash2, Wifi } from 'lucide-react';
 import type { DnsCheck, MailboxView, MailProviderInfo } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useAddSuppression, useDeleteMailbox, useDeleteSuppression, useMailboxAction, useMailboxes, useMailProviders, useStartMailboxOauth, useSuppressions, useTestMailbox, type MailboxTestResult, type Suppression } from '@/lib/queries';
 import { fmtAgo, fmtDate } from '@/lib/utils';
@@ -42,7 +42,7 @@ function ConnectOauth({ admin }: { admin: boolean }) {
     setGoing(id);
     start.mutate(
       { provider: id },
-      { onSuccess: (r) => { window.location.href = r.url; }, onError: (e) => { setGoing(''); toast.error(errorMessage(e)); } },
+      { onSuccess: (r) => { window.location.href = r.url; }, onError: (e) => { setGoing(''); toastError(e); } },
     );
   };
   return (
@@ -156,11 +156,11 @@ function MailboxCard({ m, admin, onEdit, onRemove }: { m: MailboxView; admin: bo
           if (r.ok) toast.success(`${m.fromEmail}: sending and reading replies work`);
           else toast.error(`${m.fromEmail}: the test failed`);
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   const toggle = (action: 'pause' | 'resume') =>
-    act.mutate({ id: m.id, action }, { onSuccess: () => toast.success(`${m.fromEmail} ${action === 'pause' ? 'paused' : 'resumed'}`), onError: (e) => toast.error(errorMessage(e)) });
+    act.mutate({ id: m.id, action }, { onSuccess: () => toast.success(`${m.fromEmail} ${action === 'pause' ? 'paused' : 'resumed'}`), onError: (e) => toastError(e) });
 
   return (
     <li className="rounded-xl border border-line bg-surface p-4">
@@ -298,7 +298,7 @@ function RemoveDialog({ m, onClose }: { m: MailboxView; onClose: () => void }) {
           toast.success(`${m.fromEmail} was removed`);
           onClose();
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   return (
@@ -359,7 +359,7 @@ function OptOutCard() {
             header: <span className="sr-only">Remove</span>,
             align: 'right' as const,
             cell: (r: Suppression) => (
-              <Button size="sm" variant="ghost" aria-label={`Remove ${r.hint} from the opt-out list`} loading={del.isPending && del.variables?.id === r.id} onClick={() => del.mutate({ id: r.id }, { onSuccess: () => toast.success('Removed from the opt-out list'), onError: (e) => toast.error(errorMessage(e)) })}>
+              <Button size="sm" variant="ghost" aria-label={`Remove ${r.hint} from the opt-out list`} loading={del.isPending && del.variables?.id === r.id} onClick={() => del.mutate({ id: r.id }, { onSuccess: () => toast.success('Removed from the opt-out list'), onError: (e) => toastError(e) })}>
                 Remove
               </Button>
             ),

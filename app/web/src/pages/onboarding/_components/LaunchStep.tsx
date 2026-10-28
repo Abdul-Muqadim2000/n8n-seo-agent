@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Callout, Skeleton } from '@/components/ui/feedback';
 import { IconTile } from '@/components/insight';
 import { GuideButton } from '@/components/guide';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, errorMessage, toastError, isConfirmCancelled } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { qk, useBilling, useGoogleConnection, useOnboardingStep, useSiteData, useStartRun, useUpdateAutomation } from '@/lib/queries';
 import { browserTimezone, siteWeekdayName, todayWeekdayName } from '@/lib/cycle-day';
@@ -106,7 +106,7 @@ export function LaunchStep() {
       }
       return true;
     } catch (e) {
-      toast.error(`The ${label} did not start`, { description: errorMessage(e) });
+      toastError(e, `The ${label} did not start`);
       return false;
     }
   };
@@ -122,7 +122,8 @@ export function LaunchStep() {
       try {
         await automation.mutateAsync(req.automation);
       } catch (e) {
-        toast.error('The autopilot level was not saved', { description: `${errorMessage(e)} Set it again in Website settings, Autopilot.` });
+        // a cancelled "Check this first" is the person's choice, not an error: the level stays as it was
+        if (!isConfirmCancelled(e)) toast.error('The autopilot level was not saved', { description: `${errorMessage(e)} Set it again in Website settings, Autopilot.` });
       }
       // the chosen keyword(s): one keyword ladder each; "Ask me before each page" writes nothing at start (the server's rule for Manual)
       const started: string[] = [];
@@ -139,7 +140,8 @@ export function LaunchStep() {
       });
       navigate(paths.site(org.id, site.id, 'pipeline'));
     } catch (e) {
-      setError(e);
+      // Cancel in "Check this first": nothing started, the step stays as it was, no error
+      if (!isConfirmCancelled(e)) setError(e);
     } finally {
       setBusy(null);
     }

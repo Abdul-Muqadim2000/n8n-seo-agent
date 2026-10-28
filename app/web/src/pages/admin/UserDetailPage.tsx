@@ -12,7 +12,7 @@ import { Avatar, KeyValue } from '@/components/ui/misc';
 import { type Column } from '@/components/ui/table';
 import { pageTitle } from '@/components/layout/Brand';
 import { useDocumentTitle } from '@/components/layout/useDocumentTitle';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useAdminRemoveMembership, useAdminRuns, useAdminSetMembership, useAdminUsers, useMe } from '@/lib/queries';
 import { fmtAgo, fmtDate, fmtDateTime } from '@/lib/utils';
 import { useAdminPeriod } from './AdminLayout';
@@ -95,7 +95,7 @@ export default function AdminUserDetailPage() {
             const role = e.target.value as AdminRole;
             setRole.mutate(
               { userId: user.id, orgId: c.id, role },
-              { onSuccess: () => toast.success(`${user.name} is now ${roleLabel(role)} in ${c.name}`), onError: (err) => toast.error(errorMessage(err)) },
+              { onSuccess: () => toast.success(`${user.name} is now ${roleLabel(role)} in ${c.name}`), onError: (err) => toastError(err) },
             );
           }}
         >

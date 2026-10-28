@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { CardBody, CardFooter } from '@/components/ui/card';
 import { Field, Input } from '@/components/ui/field';
 import { GuideButton } from '@/components/guide';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useConnectTracker, useDeleteIntegration, useTestIntegration } from '@/lib/integrations';
 import { fmtAgo } from '@/lib/utils';
@@ -72,7 +72,7 @@ function TrackerForm({ kind, onDone }: { kind: TrackerKind; onDone: () => void }
       onDone();
     } catch (e) {
       if (e instanceof ApiRequestError) setErrors(e.fields);
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   return (
@@ -135,7 +135,7 @@ export function TrackersCard({ data }: { data: IntegrationsOverview }) {
                         onClick={() =>
                           void test.mutateAsync(conn.id).then(
                             (r) => (r.ok ? toast.success(`${INTEGRATION_LABELS[kind]} answers`) : toast.error(r.error)),
-                            (e) => toast.error(errorMessage(e)),
+                            (e) => toastError(e),
                           )
                         }
                       >
@@ -152,7 +152,7 @@ export function TrackersCard({ data }: { data: IntegrationsOverview }) {
                           window.confirm(`Disconnect ${INTEGRATION_LABELS[kind]}? Tickets already made stay where they are.`) &&
                           void remove.mutateAsync(conn.id).then(
                             () => toast.success('Disconnected'),
-                            (e) => toast.error(errorMessage(e)),
+                            (e) => toastError(e),
                           )
                         }
                       >

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Send, Target, TrendingDown, TrendingUp, Trophy, Undo2, UserRound, Wrench, XCircle } from 'lucide-react';
 import { cmsKindLabel, DRAFT_BY_HAND, titleCase, type CaseStudy, type CmsItemView, type ContentData, type ContentItem, type Report } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { useCmsSiteState, useSiteAdmin, useSiteData } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
@@ -553,7 +553,7 @@ function UnpublishDialog({ item, onClose }: { item: ContentItem; onClose: () => 
                       onClose();
                     } else toast.error(r.error ?? 'The website admin workflow did not apply the change');
                   },
-                  onError: (e) => toast.error(errorMessage(e)),
+                  onError: (e) => toastError(e),
                 },
               )
             }

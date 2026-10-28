@@ -7,7 +7,7 @@ import { Callout } from '@/components/ui/feedback';
 import { Select, Textarea } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
 import { Segmented } from '@/components/ui/tabs';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useRevertVersion, useSaveVersion } from '@/lib/queries';
 import { cn } from '@/lib/utils';
@@ -81,7 +81,7 @@ export default function PageEditor({ view, onClose }: { view: PageReviewView; on
       setStatus('Saved. Your version is checked below.');
       toast.success('Your version is saved');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   const doRevert = async () => {
@@ -94,7 +94,7 @@ export default function PageEditor({ view, onClose }: { view: PageReviewView; on
       setConfirmRevert(false);
       setStatus('Back to the delivered version');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
 

@@ -2,7 +2,7 @@ import { Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { deliveryDecision, type ReportDetail } from '@seo/shared';
 import { Button } from '@/components/ui/button';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useDeliverReport } from '@/lib/queries';
 
@@ -29,7 +29,7 @@ export function SendReport({ report }: { report: Pick<ReportDetail, 'id' | 'stag
       if (res.delivered) toast.success('Sent');
       else toast.error(res.reason || 'Nothing was sent. Check Settings, then Report delivery.');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
 

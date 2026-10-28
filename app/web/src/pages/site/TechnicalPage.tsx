@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { BarChart3, BellRing, CheckCircle2, Circle, Eye, FileArchive, FileSearch, FileText, Gauge, ListChecks, Siren, Sparkles, TrendingUp } from 'lucide-react';
 import { foldMinor, minorFoldNote, titleCase, type AuditPoint, type Finding, type FindingStatus, type IndexCoverage, type PageWatch, type RecheckRequest, type TechnicalData } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
-import { api, errorMessage, fileUrl } from '@/lib/api';
+import { api, fileUrl, toastError } from '@/lib/api';
 import { qk, useSiteData } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
 import { BarsChart, ChartCard, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
@@ -691,7 +691,7 @@ function RecheckCell({ finding, auditId }: { finding: Finding; auditId: string }
       toast.success(r.message);
       void qc.invalidateQueries({ queryKey: qk.siteData(site.id, 'technical') });
     },
-    onError: (e) => toast.error(errorMessage(e)),
+    onError: (e) => toastError(e),
   });
   const state = asked?.state ?? finding.recheck?.state;
   if (state) {

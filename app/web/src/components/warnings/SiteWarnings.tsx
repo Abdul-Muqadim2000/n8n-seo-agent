@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Warning } from '@seo/shared';
-import { api, errorMessage } from '@/lib/api';
+import { api, toastError } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { qk } from '@/lib/queries';
@@ -35,7 +35,7 @@ export function SiteWarnings() {
       toast.success('Kept as it is', { description: 'Your choice is recorded. We warn again if the facts change.' });
       refresh();
     },
-    onError: (e) => toast.error(errorMessage(e)),
+    onError: (e) => toastError(e),
   });
   const accept = async (w: Warning) => {
     const c = w.accept?.change;
@@ -51,7 +51,7 @@ export function SiteWarnings() {
       toast.success(w.accept!.label, { description: 'Done. The next weekly checks use it.' });
       refresh();
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     } finally {
       setBusy(null);
     }

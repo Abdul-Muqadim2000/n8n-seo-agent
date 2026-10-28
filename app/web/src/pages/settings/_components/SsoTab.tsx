@@ -11,7 +11,7 @@ import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { Checkbox, ChoiceCard, Field, Input, Select, Textarea } from '@/components/ui/field';
 import { CopyButton } from '@/components/ui/misc';
 import { SwitchRow } from '@/components/ui/tabs';
-import { api, ApiRequestError, errorMessage } from '@/lib/api';
+import { api, ApiRequestError, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useSso, useSsoMutation } from '@/lib/queries';
 import { fmtDate, fmtDateTime } from '@/lib/utils';
@@ -76,12 +76,12 @@ function DomainsCard({ data }: { data: SsoOverview }) {
                         size="sm"
                         variant="secondary"
                         loading={verify.isPending && verify.variables === d.id}
-                        onClick={() => verify.mutate(d.id, { onSuccess: (r) => (r.verified ? toast.success(`${d.domain} verified`) : toast.info(r.message)), onError: (e) => toast.error(errorMessage(e)) })}
+                        onClick={() => verify.mutate(d.id, { onSuccess: (r) => (r.verified ? toast.success(`${d.domain} verified`) : toast.info(r.message)), onError: (e) => toastError(e) })}
                       >
                         Check now
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" aria-label={`Remove ${d.domain}`} onClick={() => window.confirm(`Remove ${d.domain}? Single sign-on stops for its addresses.`) && remove.mutate(d.id, { onError: (e) => toast.error(errorMessage(e)) })}>
+                    <Button size="sm" variant="ghost" aria-label={`Remove ${d.domain}`} onClick={() => window.confirm(`Remove ${d.domain}? Single sign-on stops for its addresses.`) && remove.mutate(d.id, { onError: (e) => toastError(e) })}>
                       <Trash2 />
                     </Button>
                   </span>
@@ -103,7 +103,7 @@ function DomainsCard({ data }: { data: SsoOverview }) {
           className="flex flex-col gap-2 sm:flex-row sm:items-end"
           onSubmit={(e) => {
             e.preventDefault();
-            add.mutate(domain, { onSuccess: () => setDomain(''), onError: (er) => toast.error(errorMessage(er)) });
+            add.mutate(domain, { onSuccess: () => setDomain(''), onError: (er) => toastError(er) });
           }}
         >
           <Field label="Add a domain" hint="The part after @ in your colleagues' addresses." className="min-w-0 flex-1">
@@ -146,7 +146,7 @@ function ConnectionCard({ data }: { data: SsoOverview }) {
       },
       onError: (e) => {
         if (e instanceof ApiRequestError) setFields(e.fields);
-        toast.error(errorMessage(e));
+        toastError(e);
       },
     });
   };
@@ -157,7 +157,7 @@ function ConnectionCard({ data }: { data: SsoOverview }) {
       window.location.assign(r.url);
     } catch (e) {
       setTesting(false);
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   const sp = data.sp;
@@ -250,7 +250,7 @@ function ConnectionCard({ data }: { data: SsoOverview }) {
       <CardFooter className="flex-wrap justify-between gap-2">
         <span className="flex gap-2">
           {c && (
-            <Button variant="ghost" onClick={() => window.confirm('Delete the single sign-on connection? Nobody can sign in through it any more.') && del.mutate(undefined, { onError: (e) => toast.error(errorMessage(e)) })}>
+            <Button variant="ghost" onClick={() => window.confirm('Delete the single sign-on connection? Nobody can sign in through it any more.') && del.mutate(undefined, { onError: (e) => toastError(e) })}>
               <Trash2 /> Delete
             </Button>
           )}
@@ -275,7 +275,7 @@ function SwitchesCard({ data }: { data: SsoOverview }) {
   const c = data.connection!;
   const verified = data.domains.filter((d) => d.verified).map((d) => d.domain);
   const sw = useSsoMutation(org.id, (b: { enabled?: boolean; enforced?: boolean }) => api(`/api/orgs/${org.id}/sso/connection`, { method: 'PATCH', body: b }));
-  const run = (b: { enabled?: boolean; enforced?: boolean }) => sw.mutate(b, { onError: (e) => toast.error(errorMessage(e)) });
+  const run = (b: { enabled?: boolean; enforced?: boolean }) => sw.mutate(b, { onError: (e) => toastError(e) });
   return (
     <SettingsCard icon={<ShieldCheck />} title="Sign-in rules" description={`Sign-in page: ${data.sp.loginUrl}`}>
       <CardBody className="divide-y divide-line">

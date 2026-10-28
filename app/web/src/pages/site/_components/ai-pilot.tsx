@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Repeat } from 'lucide-react';
 import type { AiPilotQuote } from '@seo/shared';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { quoteLabel } from '@/lib/credits';
 import { useAiPilot, useAiPilotStart } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
@@ -46,7 +46,7 @@ export function AiPilotPanel() {
         setConfirming(false);
         toast.success(confirm ? 'The pilot has started. Its result appears here when it finishes.' : 'Asking the engine for the price. It appears here shortly.');
       },
-      onError: (e) => { setConfirming(false); toast.error(errorMessage(e)); },
+      onError: (e) => { setConfirming(false); toastError(e); },
     });
 
   return (
