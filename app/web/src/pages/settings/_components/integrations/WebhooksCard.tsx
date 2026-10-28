@@ -21,7 +21,7 @@ import { Checkbox, Field, Input, Select } from '@/components/ui/field';
 import { CopyButton } from '@/components/ui/misc';
 import { DataTable, type Column } from '@/components/ui/table';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useCreateEndpoint, useDeleteEndpoint, useRedeliver, useRotateSecret, useTestEndpoint, useUpdateEndpoint } from '@/lib/integrations';
 import { fmtAgo } from '@/lib/utils';
@@ -80,7 +80,7 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
     } catch (e) {
       const f = (e as { fields?: Record<string, string> }).fields;
       if (f) setFields(f);
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   const act = async (p: Promise<unknown>, ok: string) => {
@@ -88,7 +88,7 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
       await p;
       toast.success(ok);
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   const runTest = async (ep: WebhookEndpointView) => {
@@ -97,7 +97,7 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
       if (r.ok) toast.success(`Test event delivered to ${ep.name}`);
       else toast.error(r.error || 'The test event was not delivered');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   const doRotate = async (ep: WebhookEndpointView) => {
@@ -106,7 +106,7 @@ export function WebhooksCard({ data }: { data: IntegrationsOverview }) {
       const r = await rotate.mutateAsync(ep.id);
       setFresh({ name: ep.name, secret: r.secret });
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   const siteName = (id: string) => sites.find((s) => s.id === id)?.domain ?? 'a removed website';

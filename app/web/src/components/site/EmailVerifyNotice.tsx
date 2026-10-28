@@ -2,7 +2,7 @@ import { toast } from 'sonner';
 import type { Me } from '@seo/shared';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { usePost, useProviders } from '@/lib/queries';
 
 /** Runs (tracking, audits, profile saves) need a confirmed e-mail address: says so and offers a new link. */
@@ -26,7 +26,7 @@ export function EmailVerifyNotice({ me, className, action = 'Tracking, audits an
                 r.sent
                   ? toast.success(`A new link is on its way to ${me.user.email}`)
                   : toast.info('No e-mail was sent', { description: 'Your address may already be confirmed (reload the page), or e-mail is not set up on this server.' }),
-              onError: (e) => toast.error(errorMessage(e)),
+              onError: (e) => toastError(e),
             })
           }
         >

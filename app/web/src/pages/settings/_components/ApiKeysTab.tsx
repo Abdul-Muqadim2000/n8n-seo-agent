@@ -9,7 +9,7 @@ import { Callout, EmptyState, ErrorState, Skeleton } from '@/components/ui/feedb
 import { Checkbox, Field, Input, Select } from '@/components/ui/field';
 import { CopyButton } from '@/components/ui/misc';
 import { DataTable, type Column } from '@/components/ui/table';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useApiKeys, useCreateApiKey, useRevokeApiKey } from '@/lib/queries';
 import { fmtAgo, fmtDate } from '@/lib/utils';
@@ -53,7 +53,7 @@ export function ApiKeysTab() {
       setFresh({ name: k.name, token: k.token });
       setName('');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   const doRevoke = async (k: ApiKeyView) => {
@@ -62,7 +62,7 @@ export function ApiKeysTab() {
       await revoke.mutateAsync(k.id);
       toast.success('Key revoked');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
 

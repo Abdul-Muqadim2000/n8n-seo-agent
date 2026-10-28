@@ -9,7 +9,7 @@ import { Callout } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
 import { IconTile } from '@/components/insight';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useCancelCreditRequest, useRequestCredits } from '@/lib/queries';
 import { fmtAgo, fmtDate } from '@/lib/utils';
@@ -102,7 +102,7 @@ export function BuyCreditsCard({ b, id }: { b: BillingOverview; id?: string }) {
                       variant="ghost"
                       size="sm"
                       loading={cancel.isPending && cancel.variables === r.id}
-                      onClick={() => cancel.mutate(r.id, { onSuccess: () => toast.success('Request cancelled'), onError: (e) => toast.error(errorMessage(e)) })}
+                      onClick={() => cancel.mutate(r.id, { onSuccess: () => toast.success('Request cancelled'), onError: (e) => toastError(e) })}
                       aria-label={`Cancel the request for ${formatCredits(r.credits)}`}
                     >
                       Cancel

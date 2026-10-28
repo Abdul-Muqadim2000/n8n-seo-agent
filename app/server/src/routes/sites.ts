@@ -287,16 +287,17 @@ export async function siteRoutes(app: FastifyInstance) {
     const a = await orgAccess(req, (req.params as P).orgId, 'admin');
     const { acknowledge } = takeAcknowledge(req.body);
     const body = parse(createSiteSchema, req.body);
-    // MKT (2026-10-27, mismatch audit M5): a description about other markets than the main country is said before the website is added
-    // MKT I7: and an address that sends every visitor to another domain (one request, followed redirects; unreachable = not judged)
-    const redirectTo = await redirectTarget(body.domain);
-    const chk = checkWrite('site_update', body as unknown as Record<string, unknown>, { site: null, redirectTo }, acknowledge);
+    // a website that cannot be added is said first: asking "check this first" about a duplicate, then refusing it, wastes the person's answer
     const mine = await db.query.sites.findFirst({ where: and(eq(schema.sites.orgId, a.org.id), eq(schema.sites.domain, body.domain)) });
     if (mine) throw conflict(`${body.domain} is already one of your websites.`, 'site_exists');
     if (await verifiedElsewhere(body.domain, a.org.id))
       throw conflict(`${body.domain} is already verified by another company on this platform. If it is yours, contact Alaventra support.`, 'domain_claimed');
     // one engine site id, one website: foo.co.uk is refused while foo-co.uk is verified or tracked (and the other way round)
     await assertEngineIdFree(body.domain);
+    // MKT (2026-10-27, mismatch audit M5): a description about other markets than the main country is said before the website is added
+    // MKT I7: and an address that sends every visitor to another domain (one request, followed redirects; unreachable = not judged)
+    const redirectTo = await redirectTarget(body.domain);
+    const chk = checkWrite('site_update', body as unknown as Record<string, unknown>, { site: null, redirectTo }, acknowledge);
     const [site] = await db
       .insert(schema.sites)
       .values({

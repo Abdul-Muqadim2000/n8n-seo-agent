@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { BellRing, Pencil, Plus, Trash2 } from 'lucide-react';
 import { AI_RULE_METRICS, AI_RULE_METRIC_LABEL, AI_RULE_UNIT, AI_RULES_MAX, aiAlertRuleSchema, aiRulePreview, aiRuleSentence, type AiAlertRule, type AiData, type AiRuleResult, type AiRuleRun } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
 import { fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -44,7 +44,7 @@ export function AlertRulesPanel({ d, engineNames }: { d: AiData; engineNames: Re
   const save = (rules: AiAlertRule[], msg: string) =>
     admin.mutate(
       { action: 'monitors', monitors: { aiAlertRules: rules } },
-      { onSuccess: (r) => (r.ok ? toast.success(msg) : toast.error(r.error ?? 'The rules were not saved')), onError: (e) => toast.error(errorMessage(e)) },
+      { onSuccess: (r) => (r.ok ? toast.success(msg) : toast.error(r.error ?? 'The rules were not saved')), onError: (e) => toastError(e) },
     );
 
   return (

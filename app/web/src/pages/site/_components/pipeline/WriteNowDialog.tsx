@@ -7,7 +7,7 @@ import { formatCredits } from '@/lib/credits';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { Dialog } from '@/components/ui/overlay';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useSiteData, useStartRun } from '@/lib/queries';
@@ -117,7 +117,7 @@ export function WriteNowDialog({ item, onClose, note }: { item: WriteNowItem; on
           toast.success('Writing started: the page arrives in about 10 minutes');
           navigate(paths.run(org.id, run.id));
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   return (

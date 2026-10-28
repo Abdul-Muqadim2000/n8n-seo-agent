@@ -23,7 +23,7 @@ import {
   type Warning,
 } from '@seo/shared';
 import { openWarnings, Warnings } from '@/components/warnings/Warnings';
-import { api, ApiRequestError, errorMessage } from '@/lib/api';
+import { api, ApiRequestError, errorMessage, isConfirmCancelled, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useBilling, useProviders, useSiteData } from '@/lib/queries';
 import { paths } from '@/lib/paths';
@@ -124,6 +124,8 @@ export function useRunSubmit<TIn extends FieldValues, TOut>(form: UseFormReturn<
         navigate(paths.run(org.id, run.id));
       },
       onError: (e) => {
+        // Cancel in "Check this first" (409 confirm_needed): nothing changed, the form keeps what was typed, no error
+        if (isConfirmCancelled(e)) return;
         if (e instanceof ApiRequestError && Object.keys(e.fields).length) {
           const known = Object.keys(form.getValues());
           let unmatched = false;
@@ -145,13 +147,18 @@ export function useRunSubmit<TIn extends FieldValues, TOut>(form: UseFormReturn<
   return { onSubmit, onAccept, pending: start.isPending, error };
 }
 
+/** Why a run did not start. Nothing when there is no error, or when the person cancelled "Check this first" (that is not an error). */
 export function SubmitError({ error, siteId }: { error: unknown; siteId?: string | null }) {
+  if (!error || isConfirmCancelled(error)) return null;
+  return <SubmitErrorCard error={error} siteId={siteId} />;
+}
+
+function SubmitErrorCard({ error, siteId }: { error: unknown; siteId?: string | null }) {
   const { org } = useOrgCtx();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (error) ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [error]);
-  if (!error) return null;
   let body: ReactNode = <Callout tone="critical" title="The run did not start">{errorMessage(error)}</Callout>;
   if (error instanceof ApiRequestError) {
     // credits (app/docs/CREDITS.md): a 402 is a credit refusal (not enough credits, kept for autopilot, over the on-demand limit) or
@@ -343,7 +350,7 @@ export function PipelineNotices({
           toast.success(`Done: ${(w.accept?.label ?? '').replace(/ instead$/, '')}.`);
           if (c.instead) navigate(paths.site(org.id, siteId, 'pipeline'));
         })
-        .catch((e) => toast.error('That did not work', { description: errorMessage(e) }));
+        .catch((e) => toastError(e, 'That did not work'));
     else if (w.usePlan && onUsePlan) onUsePlan(w.usePlan);
   };
   return (

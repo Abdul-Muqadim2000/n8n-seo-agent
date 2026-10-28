@@ -10,7 +10,7 @@ import { CardBody, CardFooter } from '@/components/ui/card';
 import { Callout, Skeleton } from '@/components/ui/feedback';
 import { Field, Input, Select } from '@/components/ui/field';
 import { CopyButton } from '@/components/ui/misc';
-import { api, errorMessage } from '@/lib/api';
+import { api, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { qk } from '@/lib/queries';
 import { fmtAgo, fmtDate } from '@/lib/utils';
@@ -36,7 +36,7 @@ export function ScimCard() {
       if (ok) toast.success(ok);
       await refresh();
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     } finally {
       setBusy(false);
     }

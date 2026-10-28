@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { ArrowUpDown, AtSign, BarChart3, BellRing, Bot, CalendarRange, CheckCircle2, Clock, Download, ExternalLink as ExternalIcon, FileText, FileUp, Globe, Link2, ListOrdered, Mail, Network, Plug, Quote, Send, ShieldAlert, Sparkles, Swords, Target, TriangleAlert, Trophy, Unlink, Wrench } from 'lucide-react';
 import { PROSPECT_STATUSES, compactNumber, titleCase, type BacklinkLink, type BacklinkRef, type BacklinksData, type Prospect, type ProspectStatus } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
-import { errorMessage, fileUrl } from '@/lib/api';
+import { fileUrl, toastError } from '@/lib/api';
 import { useLinkImport, useSiteAdmin, useSiteData } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
 import { BarsChart, ChartCard, ShareBars, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
@@ -363,7 +363,7 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
           toast.success(`${r.label}: ${r.rows} links from ${r.domains} sites saved. The next check reads them.`);
           onClose();
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   };
@@ -967,7 +967,7 @@ function ProspectDialog({ p, onClose }: { p: Prospect; onClose: () => void }) {
             onClose();
           } else toast.error(r.error ?? 'The prospect was not updated');
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   };

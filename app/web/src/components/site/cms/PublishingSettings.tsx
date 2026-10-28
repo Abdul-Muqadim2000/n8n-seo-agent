@@ -22,7 +22,7 @@ import { CopyButton, KeyValue } from '@/components/ui/misc';
 import { Dialog } from '@/components/ui/overlay';
 import { TagInput } from '@/components/ui/tag-input';
 import { SettingsCard } from '@/pages/settings/_components/SettingsCard';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, toastError } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { useCmsConnections, useCreateCmsConnection, useDeleteCmsConnection, useTestCmsConnection, useUpdateCmsConnection } from '@/lib/queries';
 import { fmtAgo } from '@/lib/utils';
@@ -100,7 +100,7 @@ function ConnectionCard({ c, admin }: { c: CmsConnectionView; admin: boolean }) 
       if (r.ok) toast.success('Connected', { description: r.message });
       else toast.error(r.message);
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   const remove = async () => {
@@ -109,7 +109,7 @@ function ConnectionCard({ c, admin }: { c: CmsConnectionView; admin: boolean }) 
       await del.mutateAsync(c.id);
       toast.success('Connection removed');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
 
@@ -183,7 +183,7 @@ function FieldMapping({ c, admin }: { c: CmsConnectionView; admin: boolean }) {
       await update.mutateAsync({ id: c.id, fieldMap: Object.fromEntries(Object.entries(map).filter(([, v]) => v)) });
       toast.success('Field mapping saved');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   return (
@@ -252,7 +252,7 @@ function EditDefaults({ c }: { c: CmsConnectionView }) {
       setOpen(false);
     } catch (e) {
       if (e instanceof ApiRequestError) setErrors(e.fields);
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   return (
@@ -322,7 +322,7 @@ function ConnectDialog({ onClose, onSecret }: { onClose: () => void; onSecret: (
       else if (t) toast.error(t.message);
     } catch (e) {
       if (e instanceof ApiRequestError) setErrors(e.fields);
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
 

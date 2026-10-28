@@ -12,7 +12,7 @@ import { Field, Input, Select } from '@/components/ui/field';
 import { PageHeader, scoreTone, StatTile } from '@/components/ui/misc';
 import { Dialog } from '@/components/ui/overlay';
 import { DataTable, type Column } from '@/components/ui/table';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { agencyOverviewCsvUrl, useAgencyOverview, useAssignStaff, useClients, useClientStaff, useCreateClient, useEnableAgency } from '@/lib/queries';
@@ -46,7 +46,7 @@ function AgencyIntro() {
           }
           action={
             org.kind === 'standard' && can('owner') ? (
-              <Button loading={enable.isPending} onClick={() => enable.mutate(undefined, { onSuccess: () => toast.success(`${org.name} is now an agency`), onError: (e) => toast.error(errorMessage(e)) })}>
+              <Button loading={enable.isPending} onClick={() => enable.mutate(undefined, { onSuccess: () => toast.success(`${org.name} is now an agency`), onError: (e) => toastError(e) })}>
                 Turn on agency mode
               </Button>
             ) : org.kind === 'standard' ? (
@@ -376,7 +376,7 @@ function StaffDialog({ client, onClose }: { client: AgencyClient | null; onClose
                     onChange={(e) =>
                       assign.mutate(
                         { userId: s.userId, role: (e.target.value || null) as 'admin' | 'member' | 'viewer' | null },
-                        { onSuccess: () => toast.success(`Access of ${s.name} updated`), onError: (err) => toast.error(errorMessage(err)) },
+                        { onSuccess: () => toast.success(`Access of ${s.name} updated`), onError: (err) => toastError(err) },
                       )
                     }
                     className="h-8 text-[13px]"

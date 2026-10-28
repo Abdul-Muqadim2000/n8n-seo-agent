@@ -9,7 +9,8 @@ import { Callout } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input, Select, Textarea } from '@/components/ui/field';
 import { TagInput } from '@/components/ui/tag-input';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { toast } from 'sonner';
+import { ApiRequestError, DONE_INSTEAD, errorMessage, isConfirmCancelled } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { applyServerErrors, asCountry, competitorValidator, errorText, guessCountry } from './helpers';
 
@@ -102,6 +103,7 @@ export function SiteBusinessForm({
     try {
       await onSubmit(values);
     } catch (e) {
+      if (!showSubmitError(e)) return;
       const onFields = applyServerErrors(e, setError);
       if (!onFields || (e as { status?: number }).status === 409) setErr(e);
     }
@@ -307,7 +309,7 @@ export function SiteBusinessForm({
         )}
       </fieldset>
 
-      {error != null && (renderError?.(error, form.getValues()) ?? <Callout tone="critical">{errorMessage(error)}</Callout>)}
+      {error != null && formErrorNode(error, form.getValues(), renderError)}
 
       {showSubmit && !readOnly && (
         <div className="flex justify-end">
@@ -317,6 +319,52 @@ export function SiteBusinessForm({
         </div>
       )}
     </form>
+  );
+}
+
+/**
+ * Whether a failed save is an error the form shows. Not when the person cancelled the "Check this first" dialog (409 `confirm_needed`:
+ * nothing was added or changed, the form keeps what they typed), nor when an Accept in it replaced the save (said in a toast).
+ */
+export function showSubmitError(e: unknown): boolean {
+  if (isConfirmCancelled(e)) return false;
+  if (e instanceof ApiRequestError && e.code === DONE_INSTEAD) {
+    toast.success(e.message);
+    return false;
+  }
+  return true;
+}
+
+/** What the form shows under its fields for a save it could not make: the screen's own message, else the error in plain words. */
+export function formErrorNode(e: unknown, values: SiteFormValues, renderError?: (e: unknown, values: SiteFormValues) => ReactNode | null): ReactNode {
+  return renderError?.(e, values) ?? <Callout tone="critical">{errorMessage(e)}</Callout>;
+}
+
+/**
+ * Why POST /sites refused a new website, when it is a duplicate: `exists` = already one of this company's websites (`site_exists`, or
+ * `conflict` when two saves raced), `claimed` = another company verified it (`domain_claimed`). Anything else (a 409 `confirm_needed`
+ * above all, which is a question, not a duplicate) is not a duplicate: null.
+ */
+export function siteCreateConflict(e: unknown): 'exists' | 'claimed' | null {
+  if (!(e instanceof ApiRequestError) || e.status !== 409) return null;
+  if (e.code === 'domain_claimed') return 'claimed';
+  if (e.code === 'site_exists' || e.code === 'conflict') return 'exists';
+  return null;
+}
+
+/**
+ * The duplicate message of "Add a website" and the onboarding Website step, in our words (never the server's text). Returns null for
+ * anything that is not a duplicate, so the form's default message shows. `action`: a way to the existing website, `hint`: what to do.
+ */
+export function SiteCreateConflict({ error, domain, action, hint }: { error: unknown; domain: string; action?: ReactNode; hint?: string }) {
+  const kind = siteCreateConflict(error);
+  if (kind === 'claimed') return <DomainClaimedCallout domain={domain} />;
+  if (kind !== 'exists') return null;
+  return (
+    <Callout tone="warning" title="You already added this website" action={action}>
+      {`${domain || 'This website'} is already one of your company's websites.`}
+      {hint ? ` ${hint}` : ''}
+    </Callout>
   );
 }
 

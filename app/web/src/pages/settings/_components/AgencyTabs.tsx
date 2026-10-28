@@ -22,7 +22,7 @@ import { Field, Input, Select } from '@/components/ui/field';
 import { CopyButton, ExternalLink } from '@/components/ui/misc';
 import { Dialog } from '@/components/ui/overlay';
 import { SwitchRow } from '@/components/ui/tabs';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useBranding, useCheckPortalMail, useClientSettings, usePortalDomainMutations, usePortalDomains, usePortalMail, useSaveBranding, useSavePortalMail } from '@/lib/queries';
 import { fmtAgo } from '@/lib/utils';
@@ -143,7 +143,7 @@ function AgencyBrandingTab() {
     const r = brandingSchema.safeParse(draft);
     if (!r.success) return setErrors(fieldErrors(r));
     setErrors({});
-    save.mutate(r.data, { onSuccess: () => toast.success('Branding saved'), onError: (e) => toast.error(errorMessage(e)) });
+    save.mutate(r.data, { onSuccess: () => toast.success('Branding saved'), onError: (e) => toastError(e) });
   };
   const name = draft.productName || org.name;
   return (
@@ -221,7 +221,7 @@ function ClientBrandingTab() {
     const r = clientBrandingSchema.safeParse(draft);
     if (!r.success) return setErrors(fieldErrors(r));
     setErrors({});
-    save.mutate(r.data, { onSuccess: () => toast.success('Branding saved'), onError: (e) => toast.error(errorMessage(e)) });
+    save.mutate(r.data, { onSuccess: () => toast.success('Branding saved'), onError: (e) => toastError(e) });
   };
   const accent = draft.accent || agencyBrand?.accent || '#2e4bff';
   return (
@@ -233,7 +233,7 @@ function ClientBrandingTab() {
             description="A page cannot be published live, and an outreach draft cannot be approved for sending, until the client's approver has approved it under Approvals."
             checked={org.clientApproval}
             disabled={!admin || settings.isPending}
-            onCheckedChange={(v) => settings.mutate({ clientApproval: v }, { onSuccess: () => toast.success(v ? 'Client approval is now required' : 'Client approval is no longer required'), onError: (e) => toast.error(errorMessage(e)) })}
+            onCheckedChange={(v) => settings.mutate({ clientApproval: v }, { onSuccess: () => toast.success(v ? 'Client approval is now required' : 'Client approval is no longer required'), onError: (e) => toastError(e) })}
           />
         </CardBody>
       </SettingsCard>
@@ -291,7 +291,7 @@ export function PortalDomainTab() {
         setHost('');
         toast.success(`${d.host} added: publish the two DNS records, then check`);
       },
-      onError: (e) => toast.error(errorMessage(e)),
+      onError: (e) => toastError(e),
     });
   return (
     <div className="max-w-4xl space-y-5">
@@ -321,7 +321,7 @@ export function PortalDomainTab() {
                     onClick={() =>
                       m.verify.mutate(d.id, {
                         onSuccess: (r) => (r.check.ok ? toast.success(`${d.host} is verified`) : toast.error(r.check.detail || 'Not verified yet')),
-                        onError: (e) => toast.error(errorMessage(e)),
+                        onError: (e) => toastError(e),
                       })
                     }
                   >
@@ -383,7 +383,7 @@ export function PortalDomainTab() {
                     toast.success(`${releasing.host} released`);
                     setReleasing(null);
                   },
-                  onError: (e) => toast.error(errorMessage(e)),
+                  onError: (e) => toastError(e),
                 })
               }
             >
@@ -432,7 +432,7 @@ export function ClientMailTab() {
   const v = q.data;
   const fc = v.fromCheck;
   const dirty = JSON.stringify(draft) !== JSON.stringify({ senderName: v.senderName, replyTo: v.replyTo, fromMailboxId: v.fromMailboxId, dkimSelector: v.dkimSelector });
-  const submit = () => save.mutate(draft, { onSuccess: () => toast.success('Client e-mail saved'), onError: (e) => toast.error(errorMessage(e)) });
+  const submit = () => save.mutate(draft, { onSuccess: () => toast.success('Client e-mail saved'), onError: (e) => toastError(e) });
   return (
     <div className="max-w-4xl space-y-5">
       <SettingsCard icon={<Mail />} title="Who your clients hear from" description="Invitations, password e-mails and scheduled reports to your clients." actions={<GuideButton id="portal-email-auth" vars={{ domain }} />}>
@@ -483,7 +483,7 @@ export function ClientMailTab() {
                 </ul>
               )}
               {admin && (
-                <Button size="sm" variant="secondary" loading={check.isPending} onClick={() => check.mutate(undefined, { onError: (e) => toast.error(errorMessage(e)) })}>
+                <Button size="sm" variant="secondary" loading={check.isPending} onClick={() => check.mutate(undefined, { onError: (e) => toastError(e) })}>
                   Check again
                 </Button>
               )}

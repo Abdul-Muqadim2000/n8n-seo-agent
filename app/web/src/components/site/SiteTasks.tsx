@@ -10,7 +10,7 @@ import { InsightItem } from '@/components/insight';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/misc';
-import { api, errorMessage } from '@/lib/api';
+import { api, toastError } from '@/lib/api';
 import { noRetryOn4xx } from '@/lib/queries';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { fmtDate } from '@/lib/utils';
@@ -50,7 +50,7 @@ function useTaskAction() {
       } else toast.success(action === 'skip' ? 'Skipped. You can bring it back below.' : 'Back on your to-do list');
       void qc.invalidateQueries({ queryKey: ['site', site.id] });
     },
-    onError: (e) => toast.error(errorMessage(e)),
+    onError: (e) => toastError(e),
   });
 }
 

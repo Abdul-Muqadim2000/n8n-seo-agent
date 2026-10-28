@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { type Column } from '@/components/ui/table';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { useAdminCostSync, useAdminOverview, useAdminRuns } from '@/lib/queries';
 import { useAdminPeriod } from './AdminLayout';
 import { AdminCard, AdminPageHeader, CostSplitCell, DailyCostChart, EstimatedTip, FlushTable, Money, Num, ProviderBillCard } from './_components/kit';
@@ -106,7 +106,7 @@ export default function AdminCostsPage() {
                   r.ok && r.ledgerReadable
                     ? toast.success(`Costs synced: ${r.ledgerRows.toLocaleString('en-US')} ledger rows read, ${r.debits} credit debits. ${r.note}`)
                     : toast.warning(r.note || 'The engine ledger could not be read; figures may be stale.'),
-                onError: (e) => toast.error(errorMessage(e)),
+                onError: (e) => toastError(e),
               })
             }
           >

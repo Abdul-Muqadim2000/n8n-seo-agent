@@ -11,7 +11,7 @@ import { Callout, Skeleton } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/field';
 import { CopyButton } from '@/components/ui/misc';
 import { Dialog } from '@/components/ui/overlay';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { useMfaStatus, usePasskeyOptions, usePasskeyRegister, usePasskeyRemove, useRegenerateRecoveryCodes, useTotpConfirm, useTotpDisable, useTotpStart } from '@/lib/queries';
 import { downloadText, fmtAgo, fmtDate } from '@/lib/utils';
 import { SettingsCard } from './SettingsCard';
@@ -74,10 +74,10 @@ function TotpRow({ s, onCodes }: { s: MfaStatus; onCodes: (c: string[]) => void 
   const start = useTotpStart();
   const disable = useTotpDisable();
   const [enrol, setEnrol] = useState<TotpEnrolment | null>(null);
-  const begin = () => start.mutate(undefined, { onSuccess: setEnrol, onError: (e) => toast.error(errorMessage(e)) });
+  const begin = () => start.mutate(undefined, { onSuccess: setEnrol, onError: (e) => toastError(e) });
   const remove = () => {
     if (!window.confirm('Remove the authenticator app? You will no longer be asked for its codes.')) return;
-    disable.mutate(undefined, { onSuccess: () => toast.success('Authenticator app removed'), onError: (e) => toast.error(errorMessage(e)) });
+    disable.mutate(undefined, { onSuccess: () => toast.success('Authenticator app removed'), onError: (e) => toastError(e) });
   };
   return (
     <Row
@@ -166,7 +166,7 @@ function PasskeysRow({ s, onCodes }: { s: MfaStatus; onCodes: (c: string[]) => v
       toast.success('Passkey added');
       if (r.newRecoveryCodes) onCodes(r.newRecoveryCodes);
     } catch (e) {
-      if (!(e instanceof Error && e.name === 'NotAllowedError')) toast.error(errorMessage(e));
+      if (!(e instanceof Error && e.name === 'NotAllowedError')) toastError(e);
     } finally {
       setBusy(false);
     }
@@ -204,7 +204,7 @@ function PasskeysRow({ s, onCodes }: { s: MfaStatus; onCodes: (c: string[]) => v
                   size="sm"
                   variant="ghost"
                   aria-label={`Remove ${k.name}`}
-                  onClick={() => window.confirm(`Remove "${k.name}"?`) && remove.mutate(k.id, { onSuccess: () => toast.success('Passkey removed'), onError: (e) => toast.error(errorMessage(e)) })}
+                  onClick={() => window.confirm(`Remove "${k.name}"?`) && remove.mutate(k.id, { onSuccess: () => toast.success('Passkey removed'), onError: (e) => toastError(e) })}
                 >
                   <Trash2 />
                 </Button>
@@ -235,7 +235,7 @@ function RecoveryRow({ s, onCodes }: { s: MfaStatus; onCodes: (c: string[]) => v
         loading={regen.isPending}
         onClick={() =>
           window.confirm('Make ten new codes? The old ones stop working.') &&
-          regen.mutate(undefined, { onSuccess: (r) => r.newRecoveryCodes && onCodes(r.newRecoveryCodes), onError: (e) => toast.error(errorMessage(e)) })
+          regen.mutate(undefined, { onSuccess: (r) => r.newRecoveryCodes && onCodes(r.newRecoveryCodes), onError: (e) => toastError(e) })
         }
       >
         New codes

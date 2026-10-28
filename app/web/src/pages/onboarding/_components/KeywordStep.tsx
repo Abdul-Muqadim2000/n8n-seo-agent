@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Callout, Spinner } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input } from '@/components/ui/field';
 import { IconTile } from '@/components/insight';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, errorMessage, isConfirmCancelled } from '@/lib/api';
 import { creditsLabel } from '@/lib/credits';
 import { siteWeekdayName, todayWeekdayName } from '@/lib/cycle-day';
 import { useEngineCal } from '@/lib/engine-cal';
@@ -59,6 +59,14 @@ const choiceOfCheck = (c: KeywordCheck): KeywordChoice => ({
 const choiceOfRec = (k: RecommendedKeyword): KeywordChoice => ({ keyword: k.keyword, volume: k.volume, difficultyForYou: k.difficultyForYou, planType: k.planType, months: k.months, why: k.why, note: k.note });
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
+/**
+ * The ideas after a check the person cancelled in "Check this first": the card being checked goes back to what it was (a re-check or an
+ * alternative put back in place of `prev`), a new idea is taken off the list; every other card is untouched. Exported for tests.
+ */
+export function undoIdeaCheck<T extends { keyword: string }>(list: readonly T[], keyword: string, prev?: T): T[] {
+  return prev ? list.map((i) => (same(i.keyword, keyword) ? prev : i)) : list.filter((i) => !same(i.keyword, keyword));
+}
+
 export function KeywordStep() {
   const { org, site, go } = useWizardSite();
   useEngineCal(org.id);
@@ -102,6 +110,7 @@ export function KeywordStep() {
   const setMode = (k: string, mode: KeywordPick['mode']) => setPicks((ps) => ps.map((p) => (same(p.keyword, k) ? { ...p, mode } : p)));
 
   const check = async (keyword: string, replace?: string) => {
+    const prev = replace ? ideas.find((i) => same(i.keyword, replace)) : undefined;
     setIdeas((list) => {
       const rest = replace ? list.map((i) => (same(i.keyword, replace) ? { keyword, state: 'checking' as const } : i)) : [...list, { keyword, state: 'checking' as const }];
       return rest;
@@ -110,6 +119,13 @@ export function KeywordStep() {
       const c = await assess.mutateAsync({ keyword });
       setIdeas((list) => list.map((i) => (same(i.keyword, keyword) ? { keyword, state: 'done', check: c } : i)));
     } catch (e) {
+      // Cancel in "Check this first" (409 confirm_needed): nothing was checked or charged; the cards are as they were, a new idea goes back
+      // in the box, and no error is shown
+      if (isConfirmCancelled(e)) {
+        setIdeas((list) => undoIdeaCheck(list, keyword, prev));
+        if (!replace) setText(keyword);
+        return;
+      }
       setIdeas((list) => list.map((i) => (same(i.keyword, keyword) ? { keyword, state: 'error', error: errorMessage(e) } : i)));
     }
   };

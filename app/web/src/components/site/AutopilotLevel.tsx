@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { ChoiceCard } from '@/components/ui/field';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { creditsLabel } from '@/lib/credits';
 import { fmtDate } from '@/lib/utils';
 import { useUpdateAutomation } from '@/lib/queries';
@@ -97,7 +97,7 @@ export function AutopilotLevelPicker({
           toast.success(`Autopilot level ${l}: ${AUTOPILOT_LEVELS.find((x) => x.level === l)!.label}`, { description: 'Your next weekly run uses it. Coming up shows what it means before anything is written.' });
           onSaved?.();
         },
-        onError: (e) => toast.error('The level was not saved', { description: errorMessage(e) }),
+        onError: (e) => toastError(e, 'The level was not saved'),
       },
     );
   const from = dropped ? (Math.min(3, Math.max(2, dropped.from)) as AutopilotLevel) : null;

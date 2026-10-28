@@ -10,7 +10,7 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { Menu, MenuItem, MenuLabel } from '@/components/ui/overlay';
 import { ActionCard, IconTile } from '@/components/insight';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, errorMessage, isConfirmCancelled } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { siteTimezone } from '@/lib/cycle-day';
 import { formatCredits } from '@/lib/credits';
@@ -261,11 +261,14 @@ function ComingUpRow({ item, closed, onWrite }: { item: ComingUpItem; closed: bo
           toast.success(
             decision === 'approve' ? `"${item.keyword}" will be written in this run` : scope === 'always' ? `We will not suggest "${item.keyword}" again` : `"${item.keyword}" is skipped this week`,
           ),
-        onError: (e) =>
-          toast.error(
-            e instanceof ApiRequestError && e.status === 409 ? 'This weekly run has already started' : 'The change was not saved',
-            { description: e instanceof ApiRequestError && e.status === 409 ? 'Its plan can no longer change. Decide on the next plan when it arrives, two days before the next run.' : errorMessage(e) },
-          ),
+        onError: (e) => {
+          // only `cycle_started` means the run began; a cancelled "Check this first" (409 confirm_needed) changed nothing and says so
+          if (isConfirmCancelled(e)) return void toast.info('Nothing was changed', { description: 'This keyword keeps its place in the plan.' });
+          const started = e instanceof ApiRequestError && e.code === 'cycle_started';
+          toast.error(started ? 'This weekly run has already started' : 'The change was not saved', {
+            description: started ? 'Its plan can no longer change. Decide on the next plan when it arrives, two days before the next run.' : errorMessage(e),
+          });
+        },
         onSettled: () => setPending(null),
       },
     );

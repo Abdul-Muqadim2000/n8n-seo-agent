@@ -4,7 +4,7 @@ import { ExternalLink, TicketPlus } from 'lucide-react';
 import { INTEGRATION_LABELS, ISSUE_STATE_LABELS, issueSourceKey, type IssueLinkView, type IssueState, type TrackerKind } from '@seo/shared';
 import { StatusBadge, type Tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { issueFor, useCreateIssue, useIssues, useRefreshIssues } from '@/lib/integrations';
 
@@ -49,7 +49,7 @@ export function TicketButton({ siteId, source, label = 'Create ticket' }: { site
       const r = await create.mutateAsync({ websiteId: siteId, kind, source });
       toast.success(r.existing ? `Already in ${INTEGRATION_LABELS[kind]}: ${r.issue.remoteKey}` : `Created ${r.issue.remoteKey} in ${INTEGRATION_LABELS[kind]}`);
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   if (trackers.length === 1)

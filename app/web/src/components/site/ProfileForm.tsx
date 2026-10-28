@@ -12,7 +12,7 @@ import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { IconTile, ScoreRing } from '@/components/insight';
 import { TagInput } from '@/components/ui/tag-input';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, isConfirmCancelled } from '@/lib/api';
 import { qk, useStartRun } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { applyServerErrors, asCountry, errorText, urlValidator } from './helpers';
@@ -205,6 +205,8 @@ export function ProfileForm({
     try {
       await onSubmit(v);
     } catch (e) {
+      // Cancel in "Check this first" (409 confirm_needed): nothing changed, the form keeps what was typed, no error
+      if (isConfirmCancelled(e)) return;
       if (!applyServerErrors(e, setError)) setErr(e);
     }
   });
