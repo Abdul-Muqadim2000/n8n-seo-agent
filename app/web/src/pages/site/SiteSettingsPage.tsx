@@ -356,7 +356,8 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
         <KeyValue
           items={[
             { label: 'Started', value: site.trackingStartedAt ? fmtDate(site.trackingStartedAt) : '-' },
-            { label: 'Last report', value: t.lastRunAt ? `${fmtAgo(t.lastRunAt)}${t.lastStatus ? ` · ${t.lastStatus}` : ''}` : 'None yet' },
+            // 2026-10-28: the engine's raw status ("gsc:ok ga4:off") is not shown: it predates the app's own checks and contradicted them
+            { label: 'Last report', value: t.lastRunAt ? fmtAgo(t.lastRunAt) : 'None yet' },
             { label: 'Search Console', value: gsc.connected ? (gsc.property ?? 'connected') : <span className="text-warning-text">not connected</span> },
             { label: 'GA4 property', value: t.ga4PropertyId || site.ga4PropertyId || <span className="text-ink-3">detected automatically</span> },
             { label: 'Keywords', value: t.keywords.length ? `${t.keywords.length} tracked` : <span className="text-ink-3">Search Console queries only</span> },

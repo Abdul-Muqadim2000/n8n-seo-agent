@@ -215,3 +215,44 @@ describe('A16: the low-visibility recommendation has a floor', () => {
     expect(JSON.stringify(r)).toMatch(/95% range/);
   });
 });
+
+// 2026-10-28 (devaicon.com on production): Recommendations told the client to "Run the first technical audit" while the autopilot was about to
+// run it (they ran it by hand three hours before the autopilot's own), and to connect GA4 they had connected on Verification & Google.
+describe('recommendations follow the autopilot and the GA4 rule', () => {
+  const active = { ...site, verifiedAt: new Date(), trackingStatus: 'active' } as unknown as SiteRow;
+  const fresh = (over: Partial<SiteBundle> = {}) => {
+    const b = bundle();
+    return bundle({ technical: { ...b.technical, audits: [] }, ai: { ...b.ai, runs: [] }, backlinks: { ...b.backlinks, snapshots: [] }, ...over });
+  };
+  const ids = (s: SiteRow, b: SiteBundle) => recommend(s, b).map((r) => r.id);
+  it('a first audit, AI baseline or backlink check the autopilot runs is listed as scheduled (bottom, low), never as a manual step', () => {
+    const r = recommend(active, fresh());
+    expect(r.filter((x) => ['setup:audit', 'setup:ai', 'setup:backlinks'].includes(x.id))).toEqual([]);
+    const audit = r.find((x) => x.id === 'auto:audit')!;
+    expect(audit).toMatchObject({ priority: 'low', title: 'Your first technical audit is scheduled', action: { label: 'See when it runs', page: 'pipeline' }, secondary: { label: 'Run it now', mode: 'audit' } });
+    expect(r.map((x) => x.id)).toEqual(expect.arrayContaining(['auto:audit', 'auto:ai', 'auto:backlinks']));
+    // after every item that asks the client for something
+    const lastTask = r.map((x) => x.id.startsWith('auto:')).lastIndexOf(false);
+    expect(r.findIndex((x) => x.id.startsWith('auto:'))).toBeGreaterThan(lastTask);
+  });
+  it('a monitor switched off, or the pipeline paused: the manual step is offered', () => {
+    const b = fresh();
+    const off = bundle({ ...b, settings: { ...b.settings, monitors: { auditMonthly: false, aiVisibility: false, backlinks: false } as never } });
+    expect(ids(active, off)).toEqual(expect.arrayContaining(['setup:audit', 'setup:ai', 'setup:backlinks']));
+    expect(ids({ ...active, trackingStatus: 'paused' } as SiteRow, fresh())).toEqual(expect.arrayContaining(['setup:audit', 'setup:ai', 'setup:backlinks']));
+  });
+  it('re-audit: with the monthly audit on, only past the monthly cycle\'s own reach (about 90 days)', () => {
+    const audit = (days: number) => [{ ...bundle().technical.audits[0], auditedAt: new Date(Date.now() - days * 864e5).toISOString() }];
+    const at = (days: number, s: SiteRow) => ids(s, bundle({ technical: { ...bundle().technical, audits: audit(days) } })).includes('tech:stale');
+    expect(at(90, active)).toBe(false);
+    expect(at(96, active)).toBe(true);
+    expect(at(50, site)).toBe(true);
+  });
+  it('GA4: a property confirmed after the report that said "off" is connected, not a step; a newer "off" report still asks', () => {
+    const b = bundle();
+    const snap = { receivedAt: '2026-10-25T19:59:03Z', gsc: { connected: true, property: 'sc-domain:northwind-erp.com' }, ga4: { connected: false, propertyId: null } } as never;
+    const withCheck = (at: string) => bundle({ search: { ...b.search, snapshot: snap }, settings: { ...b.settings, tracking: { ...b.settings.tracking, ga4LiveCheck: { at, connected: true, propertyId: '560460806' } } } });
+    expect(ids(active, withCheck('2026-10-26T15:29:43Z'))).not.toContain('setup:ga4');
+    expect(ids(active, withCheck('2026-10-24T00:00:00Z'))).toContain('setup:ga4');
+  });
+});

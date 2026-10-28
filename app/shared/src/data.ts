@@ -81,6 +81,8 @@ export interface TrackingConnection {
   reportsToThisApp: boolean;
   /** the app's live check of the service account's Search Console access (Verification & Google); null: never answered */
   gscLiveCheck?: GscLiveCheck | null;
+  /** 2026-10-28: the app's live check of the website's chosen GA4 property (Verification & Google, or a confirmed save); null: never */
+  ga4LiveCheck?: import('./gsc-connection').Ga4LiveCheck | null;
 }
 
 export interface GscTotals {
@@ -139,6 +141,8 @@ export interface TrackerSnapshot {
   ga4: {
     connected: boolean;
     propertyId: string | null;
+    /** why GA4 could not be read (2026-10-28; older rows: absent) */
+    error?: string | null;
     organic: { sessions: number; engaged: number; keyEvents: number; users: number } | null;
     organicPrev: { sessions: number; engaged: number; keyEvents: number; users: number } | null;
     total: { sessions: number; engaged: number; keyEvents: number; users: number } | null;
@@ -1073,6 +1077,10 @@ export interface Recommendation {
 
 export interface OverviewData {
   site: { domain: string; trackingStatus: string; verified: boolean };
+  /** 2026-10-28: what the weekly cycle runs on its own (shared autopilotRuns); older servers: absent */
+  autopilot?: import('./autopilot').AutopilotRuns;
+  /** 2026-10-28: GA4 by the shared rule (newer of the weekly report and the app's own check); older servers: absent */
+  ga4?: { connected: boolean; awaitingReport: boolean };
   search: {
     latest: MetricsPoint | null;
     series: { periodEnd: string; clicks: number; impressions: number; position: number; sessions: number }[];

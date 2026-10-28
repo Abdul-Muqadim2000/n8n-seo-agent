@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ArrowUpDown, BarChart3, CalendarRange, CheckCircle2, FileText, FlaskConical, Lightbulb, LineChart, Minus, MousePointerClick, PieChart, Search, Sparkles, Target, TrendingDown, TrendingUp, TriangleAlert, Users } from 'lucide-react';
-import { CHANGE_TEST_METHOD, CHANGE_VERDICT_TONES, compactNumber, gscConnectionState, titleCase, type Lineage, type MetricsPoint, type SearchData, type TrendPoint } from '@seo/shared';
+import { CHANGE_TEST_METHOD, CHANGE_VERDICT_TONES, compactNumber, ga4ConnectionState, gscConnectionState, titleCase, type Lineage, type MetricsPoint, type SearchData, type TrendPoint } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { useSiteData } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
@@ -83,6 +83,11 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
   });
   const gscOn = gsc.connected;
   const gaOn = S?.ga4.connected ?? M?.ga4Connected ?? false;
+  // 2026-10-28: connected by the shared rule (newer of the weekly report and the app's own check), apart from figures being in the report yet
+  const ga4 = ga4ConnectionState({
+    report: S ? { receivedAt: S.receivedAt, connected: S.ga4.connected, propertyId: S.ga4.propertyId, error: S.ga4.error ?? null } : M ? { receivedAt: M.checkedAt, connected: M.ga4Connected, propertyId: null } : null,
+    tracking: d.connection,
+  });
   const org1: Ga | null = S?.ga4.organic ?? (M ? { sessions: M.sessions, engaged: M.engagedSessions, keyEvents: M.keyEvents } : null);
   const org0: Ga | null = S?.ga4.organicPrev ?? (M ? { sessions: M.prevSessions, engaged: M.prevEngagedSessions, keyEvents: M.prevKeyEvents } : null);
   const share = S?.ga4.organicShare ?? M?.organicShare ?? null;
@@ -153,6 +158,8 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
             )}
             {gaOn ? (
               <HeroChip icon={<CheckCircle2 />}>Analytics{S?.ga4.propertyId || d.connection.ga4PropertyId ? ` · ${S?.ga4.propertyId ?? d.connection.ga4PropertyId}` : ''}</HeroChip>
+            ) : ga4.connected ? (
+              <HeroChip icon={<CheckCircle2 />}>Analytics connected · its figures arrive with the next weekly report</HeroChip>
             ) : (
               <HeroChip icon={<TriangleAlert />} to={page('settings/tracking')}>
                 Analytics is not connected. Choose a property

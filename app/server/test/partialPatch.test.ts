@@ -125,6 +125,80 @@ describe('a website PATCH changes only what it was sent (D1)', () => {
     expect(t.admin.filter((b) => b.action === 'facts')).toEqual([]);
   });
 
+  // 2026-10-28 (devaicon.com): the property chosen here reached the app only; the engine kept "GA4 off" in every weekly report
+  it('a GA4 property saved for a tracked website reaches the engine row (this domain and engine id only) and counts as confirmed now', async () => {
+    const { u, org } = await company();
+    const site = await trackedSite(org.id, 'ga4-sync.com');
+    const client = await import('../src/n8n/client');
+    const upd = vi.mocked(client.updateRows);
+    upd.mockClear();
+    expect((await u.c.patch(`/api/orgs/${org.id}/sites/${site.id}`, { ga4PropertyId: '560460806' })).status).toBe(200);
+    expect(upd).toHaveBeenCalledWith(
+      'sites',
+      [
+        { columnName: 'domain', condition: 'eq', value: 'ga4-sync.com' },
+        { columnName: 'site_id', condition: 'eq', value: 'site_ga4-sync-com' },
+      ],
+      { ga4_property_id: '560460806' },
+    );
+    const s = (await db.query.sites.findFirst({ where: eq(schema.sites.id, site.id) }))!;
+    expect(s.ga4Readable).toBe(true);
+    expect(Date.now() - s.ga4CheckedAt!.getTime()).toBeLessThan(60_000);
+    // cleared: the app's claim goes, the engine row is not emptied (it may have detected a property itself)
+    upd.mockClear();
+    expect((await u.c.patch(`/api/orgs/${org.id}/sites/${site.id}`, { ga4PropertyId: '' })).status).toBe(200);
+    expect(upd.mock.calls.filter((c) => c[0] === 'sites')).toEqual([]);
+    const c = (await db.query.sites.findFirst({ where: eq(schema.sites.id, site.id) }))!;
+    expect([c.ga4CheckedAt, c.ga4Readable]).toEqual([null, null]);
+  });
+
+  it('a read heals a website saved before the fix: an EMPTY engine row gets the app\'s GA4 id once, after Google confirms it again', async () => {
+    const { healGa4 } = await import('../src/services/engineSite');
+    const client = await import('../src/n8n/client');
+    const upd = vi.mocked(client.updateRows);
+    upd.mockClear();
+    const { org } = await company();
+    const row = await trackedSite(org.id, 'heal-ga4.com');
+    const site = { id: row.id, domain: 'heal-ga4.com', ga4PropertyId: '560460806', verifiedAt: new Date() };
+    healGa4(site, '');
+    healGa4(site, '');
+    // the engine holds a property (its own detection, or another id): never overwritten by a read
+    healGa4({ ...site, domain: 'own-ga4.com' }, '222');
+    healGa4({ ...site, domain: 'none-ga4.com', ga4PropertyId: '' }, '');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(upd.mock.calls.map((c) => [c[0], c[2]])).toEqual([['sites', { ga4_property_id: '560460806' }]]);
+    const s = (await db.query.sites.findFirst({ where: eq(schema.sites.id, row.id) }))!;
+    expect(s.ga4Readable).toBe(true);
+  });
+
+  it('a heal Google refuses ("not a property of this domain") sends nothing and records the refusal', async () => {
+    const { healGa4 } = await import('../src/services/engineSite');
+    const google = await import('../src/services/google');
+    const { badRequest } = await import('../src/lib/errors');
+    vi.mocked(google.assertGa4ForDomain).mockRejectedValueOnce(badRequest('GA4 property 9 is not one we can read', { ga4PropertyId: 'Not a property of refused-ga4.com' }));
+    const client = await import('../src/n8n/client');
+    const upd = vi.mocked(client.updateRows);
+    upd.mockClear();
+    const { org } = await company();
+    const row = await trackedSite(org.id, 'refused-ga4.com');
+    healGa4({ id: row.id, domain: 'refused-ga4.com', ga4PropertyId: '9', verifiedAt: new Date() }, '');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(upd).not.toHaveBeenCalled();
+    expect((await db.query.sites.findFirst({ where: eq(schema.sites.id, row.id) }))!.ga4Readable).toBe(false);
+  });
+
+  it('clearing the property clears the engine row only when it holds the id the app had sent', async () => {
+    const { u, org } = await company();
+    const site = await trackedSite(org.id, 'ga4-clear.com');
+    const client = await import('../src/n8n/client');
+    const upd = vi.mocked(client.updateRows);
+    await u.c.patch(`/api/orgs/${org.id}/sites/${site.id}`, { ga4PropertyId: '560460806' });
+    vi.mocked(client.siteRows).mockResolvedValueOnce([{ site_id: 'site_ga4-clear-com', domain: 'ga4-clear.com', ga4_property_id: '560460806' }] as never);
+    upd.mockClear();
+    await u.c.patch(`/api/orgs/${org.id}/sites/${site.id}`, { ga4PropertyId: '' });
+    expect(upd.mock.calls.filter((c) => c[0] === 'sites').map((c) => c[2])).toEqual([{ ga4_property_id: '' }]);
+  });
+
   it('the facts alone keep the business, customers, goal and tone, and reach the engine', async () => {
     const { u, org } = await company();
     const site = await trackedSite(org.id, 'facts-alone.com', { businessFacts: '' });
