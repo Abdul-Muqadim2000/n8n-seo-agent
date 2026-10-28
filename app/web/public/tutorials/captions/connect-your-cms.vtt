@@ -33,7 +33,7 @@ for any other website system.
 00:00:40.328 --> 00:00:42.623
 For WordPress, check your site address,
 
-00:00:42.673 --> 00:00:45.603
+00:00:42.673 --> 00:00:45.582
 then type your user name
 and an application password.
 
@@ -41,11 +41,11 @@ and an application password.
 Not sure where to find it? Show me how
 walks you through creating one in WordPress.
 
-00:00:54.286 --> 00:00:57.371
+00:00:54.286 --> 00:00:57.361
 Optionally, add the address
 pattern of a live page,
 
-00:00:57.421 --> 00:01:00.276
+00:00:57.411 --> 00:01:00.266
 so every published page
 can be checked and tracked.
 
@@ -65,28 +65,49 @@ the time of its last test.
 Click Test connection any
 time to check it again.
 
-00:01:17.110 --> 00:01:19.085
+00:01:17.135 --> 00:01:19.585
+If the site address is on another website,
+
+00:01:19.635 --> 00:01:22.210
+Check this first stops
+you before any test,
+
+00:01:22.260 --> 00:01:25.312
+because pages sent there would
+never appear on your website.
+
+00:01:26.231 --> 00:01:28.476
+Click Cancel, and fix the address.
+
+00:01:28.526 --> 00:01:32.299
+Tick the anyway box only if
+that website is really yours.
+
+00:01:33.268 --> 00:01:35.243
 With Webflow or Contentful,
 
-00:01:19.135 --> 00:01:23.499
+00:01:35.293 --> 00:01:39.657
 the first test also reads the
 fields your CMS uses for a page.
 
-00:01:24.483 --> 00:01:28.733
+00:01:40.641 --> 00:01:44.891
 Choose which field holds each part
 of the page, then click Save mapping.
 
-00:01:28.783 --> 00:01:30.228
+00:01:44.941 --> 00:01:46.386
 You only do this once.
 
-00:01:32.508 --> 00:01:38.318
-So, open Publishing and choose Connect a
-CMS, pick your CMS and paste its details,
+00:01:48.662 --> 00:01:52.912
+So, to recap: open Publishing
+and choose Connect a CMS,
 
-00:01:38.368 --> 00:01:41.360
-connect and test, and
-map the fields if asked.
+00:01:52.962 --> 00:01:57.582
+pick your CMS and paste its details,
+connect and test, check the address,
 
-00:01:42.354 --> 00:01:49.486
+00:01:57.632 --> 00:01:59.342
+and map the fields if asked.
+
+00:02:00.315 --> 00:02:07.447
 Your CMS is connected. Next, send a page
 to your CMS as a draft, in tutorial 6.6.
