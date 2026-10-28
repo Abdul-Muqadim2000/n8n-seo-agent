@@ -66,7 +66,7 @@ devaicon.com reported "Connect GA4" in Recommendations while GA4 was connected, 
 autopilot runs it. Both ours (verified on prod): the GA4 id saved in the app never reached the engine's `seo_sites` row, and setup
 recommendations ignored the autopilot. **Deployed 2026-10-28 ~10:23 UTC**: API on the VM at `0221f921` (backup `pg/2026-10-28/*T102249Z`,
 migration 0025 `sites.ga4_checked_at` / `ga4_readable`), web via PR #45 (main `003bb9cb`, merged together with another session's
-"Check this first" fix whose one server change in routes/sites.ts is NOT yet on the VM). Shared `ga4ConnectionState` (as GSC) and
+"Check this first" fix); the other session then deployed main `003bb9cb` to the VM at ~10:26 UTC (backup `*T102411Z`), which contains both. Shared `ga4ConnectionState` (as GSC) and
 `autopilotRuns`; GA4 id synced on save + healed on read (empty engine id only, after Google re-confirms); `auto:*` "scheduled" items last in
 the queue; raw engine status hidden. Client already OK: its 09:29 UTC report reads GA4 560460806 (it re-ran Track my site at 09:28).
 
