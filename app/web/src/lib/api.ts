@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import type { ApiError, StepUpMethod, Warning } from '@seo/shared';
 
 export class ApiRequestError extends Error {
@@ -43,6 +44,14 @@ let confirmHandler: ConfirmHandler | null = null;
 export function setConfirmHandler(h: ConfirmHandler | null) {
   confirmHandler = h;
 }
+/** What a 409 confirm_needed that was not answered says in the app (the dialog was cancelled): plain words, never the server's text. */
+export const CONFIRM_CANCELLED_TEXT = 'Nothing was started or changed. Check the warnings, then try again.';
+/**
+ * The person closed the "Check this first" dialog with Cancel (or no dialog could ask): nothing was sent again and nothing changed.
+ * A form keeps what the person typed and shows no error; a 409 confirm_needed is never "already exists".
+ */
+export const isConfirmCancelled = (e: unknown): e is ApiRequestError => e instanceof ApiRequestError && e.status === 409 && e.code === 'confirm_needed';
+
 /** The request again with the person's answers: the accepted fields and every acknowledged id (earlier ones kept). */
 export function resendBody(body: unknown, answer: { acknowledge: string[]; set: Record<string, unknown> }): Record<string, unknown> {
   const b = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
@@ -107,7 +116,11 @@ export async function api<T>(
       const answer = await confirmHandler(warnings, Array.isArray(e.needsAcknowledge) ? (e.needsAcknowledge as string[]) : []);
       if (answer && 'instead' in answer) throw new ApiRequestError(409, answer.instead, {}, DONE_INSTEAD, { instead: true });
       if (answer) return api<T>(path, { ...opts, body: resendBody(opts.body, answer), confirmDepth: (opts.confirmDepth ?? 0) + 1 });
+      // Cancel: nothing was sent again, nothing changed; the caller keeps its form as it was (isConfirmCancelled)
+      throw new ApiRequestError(409, CONFIRM_CANCELLED_TEXT, e.fields ?? {}, 'confirm_needed', { ...e, cancelled: true });
     }
+    // the server's own sentence for confirm_needed is written for API clients ("send their ids in acknowledge"): never shown in the app
+    if (res.status === 409 && e.code === 'confirm_needed') throw new ApiRequestError(409, CONFIRM_CANCELLED_TEXT, e.fields ?? {}, 'confirm_needed', e);
     throw new ApiRequestError(res.status, errorText(e.error, res.status), e.fields ?? {}, e.code, e);
   }
   return data as T;
@@ -128,6 +141,17 @@ export function errorText(error: unknown, status: number): string {
   const m = error && typeof error === 'object' ? (error as { message?: unknown }).message : undefined;
   if (typeof m === 'string' && m.trim()) return status >= 500 ? `${m} (${status}). Please try again in a moment.` : m;
   return status >= 500 ? `The server could not answer (${status}). Please try again in a moment.` : `Request failed (${status})`;
+}
+
+/**
+ * The error toast of a request that did not do what was asked. A cancelled "Check this first" (409 confirm_needed) is not an error:
+ * nothing changed and the person chose that, so nothing is shown. An Accept that replaced the request says what was done instead.
+ */
+export function toastError(e: unknown, title?: string): void {
+  if (isConfirmCancelled(e)) return;
+  if (e instanceof ApiRequestError && e.code === DONE_INSTEAD) return void toast.success(e.message);
+  if (title) toast.error(title, { description: errorMessage(e) });
+  else toast.error(errorMessage(e));
 }
 
 export function errorMessage(e: unknown): string {

@@ -11,7 +11,7 @@ import { ArrowDownRight, ArrowUpRight, FileUp, Layers, Pencil, Pin, PinOff, Plus
 import { AI_PANEL_LIMITS, AI_SEGMENT_MIN, aiAskedSet, aiPanelOverflow, compactNumber, estimateAiPanelCost, parseAiPanelCsvWithKeyword, titleCase, type AiData, type AiPanelCsvResult, type AiPanelInfo, type AiSegment, type AiSegments } from '@seo/shared';
 import { creditsLabel } from '@/lib/credits';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useAiPromptDelete, useSiteAdmin } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { Dialog } from '@/components/ui/overlay';
@@ -208,7 +208,7 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
       { action: 'ai_prompts', add: [], remove: [], enable: [], pin: [], unpin: [], edit: [], accept: [], retire: [], ...body },
       {
         onSuccess: (r) => (r.ok ? toast.success(ok) : toast.error(r.error ?? 'The change was not saved')),
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
         onSettled: () => setPendingId(null),
       },
     );
@@ -221,7 +221,7 @@ export function PanelManager({ prompts, results, suggestions, setting, engines: 
   const removeSelected = () =>
     del.mutate(ids, {
       onSuccess: (r) => { toast.success(`${r.deleted} question${r.deleted === 1 ? '' : 's'} deleted`); setSelected(new Set()); setConfirmDelete(false); },
-      onError: (e) => toast.error(errorMessage(e)),
+      onError: (e) => toastError(e),
     });
 
   const resultBadge = (v?: string) =>

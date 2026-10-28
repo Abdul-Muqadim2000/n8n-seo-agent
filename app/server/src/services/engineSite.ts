@@ -66,3 +66,84 @@ export async function assertEngineSiteIsOurs(site: Pick<SiteRow, 'domain'>, log?
   if (await foreignEngineDomain(site, { fresh: true, log }))
     throw new HttpError(409, 'This change was not saved: our engine has another website under the same name as this one. Contact support and we will sort it out.', 'engine_site_conflict');
 }
+
+// ---------------- the website's GA4 property, app -> engine (2026-10-28) ----------------
+// A property chosen on Verification & Google was saved in the app only: the engine kept "ga4:off" (devaicon.com), so the weekly report,
+// Recommendations and the Pipeline all said "not connected" while the panel said Connected. The chosen id is written to the engine's site
+// row (the Site Tracker reads `ga4_property_id` and keeps it when it detects nothing itself), scoped to this domain AND its own engine id.
+
+type Ga4Site = Pick<SiteRow, 'id' | 'domain' | 'ga4PropertyId' | 'verifiedAt'>;
+const bySite = (site: Pick<SiteRow, 'domain'>) => [
+  { columnName: 'domain', condition: 'eq' as const, value: site.domain },
+  { columnName: 'site_id', condition: 'eq' as const, value: n8nSiteId(site.domain) },
+];
+
+/** Writes the website's chosen GA4 property id to its engine site row (a save Google just confirmed). Never writes an empty id. */
+export async function syncGa4ToEngine(site: Pick<SiteRow, 'domain' | 'ga4PropertyId' | 'verifiedAt'>, log?: Logger): Promise<boolean> {
+  const id = String(site.ga4PropertyId || '').trim();
+  if (!site.verifiedAt || !/^\d{1,16}$/.test(id)) return false;
+  const { updateRows, invalidateSite } = await import('../n8n/client');
+  const ok = await updateRows('sites', bySite(site), { ga4_property_id: id }).catch((err) => {
+    warn(log, { site: site.domain, err: String((err as Error)?.message ?? err) }, 'GA4 property not sent to the engine');
+    return false;
+  });
+  if (ok) invalidateSite(site.domain);
+  return ok;
+}
+
+/**
+ * The property was cleared in the app: the engine row forgets it too, but only when it still holds the id the app had sent (a property the
+ * engine detected itself is its own, and stays).
+ */
+export async function clearGa4OnEngine(site: Pick<SiteRow, 'domain' | 'verifiedAt'>, previousId: string, log?: Logger): Promise<void> {
+  if (!site.verifiedAt || !previousId) return;
+  const { siteRows, updateRows, invalidateSite } = await import('../n8n/client');
+  try {
+    const row = (await siteRows<{ ga4_property_id?: string; site_id?: string }>('sites', site.domain, { max: 5, fresh: true })).find((r) => r.site_id === n8nSiteId(site.domain));
+    if (!row || String(row.ga4_property_id || '').replace(/^properties\//, '') !== previousId) return;
+    await updateRows('sites', bySite(site), { ga4_property_id: '' });
+    invalidateSite(site.domain);
+  } catch (err) {
+    warn(log, { site: site.domain, err: String((err as Error)?.message ?? err) }, 'GA4 property not cleared on the engine');
+  }
+}
+
+/** per website: the id the heal last handled and when; a success is not repeated for 6 hours, a failure is retried after 10 minutes */
+const healed = new Map<string, { id: string; at: number; ok: boolean }>();
+const HEAL_OK_MS = 6 * 3600_000;
+const HEAL_RETRY_MS = 10 * 60_000;
+
+/**
+ * A read of the website (Pipeline, Recommendations, Search) found its engine row WITHOUT a GA4 property while one is chosen in the app (every
+ * website saved before 2026-10-28). In the background: Google is asked again (the same check a save runs); confirmed, the id goes to the
+ * engine and the answer counts as the live check; refused ("not a property of this domain"), the live check says so; no answer, nothing.
+ * A property the engine row already holds (its own detection, or another id) is never overwritten here: only a person's save does that.
+ */
+export function healGa4(site: Ga4Site, engineGa4: string | null | undefined, log?: Logger): void {
+  const want = String(site.ga4PropertyId || '').trim();
+  const have = String(engineGa4 || '').trim();
+  if (!site.verifiedAt || !want || have) return;
+  const last = healed.get(site.domain);
+  const now = Date.now();
+  if (last && last.id === want && now - last.at < (last.ok ? HEAL_OK_MS : HEAL_RETRY_MS)) return;
+  healed.set(site.domain, { id: want, at: now, ok: true });
+  void (async () => {
+    const { assertGa4ForDomain } = await import('./google');
+    const { db, schema } = await import('../db');
+    const { eq } = await import('drizzle-orm');
+    try {
+      await assertGa4ForDomain(want, site.domain);
+    } catch (err) {
+      const refused = err instanceof HttpError && /^Not a property/.test(err.fields?.ga4PropertyId ?? '');
+      if (refused) await db.update(schema.sites).set({ ga4CheckedAt: new Date(), ga4Readable: false }).where(eq(schema.sites.id, site.id));
+      else healed.set(site.domain, { id: want, at: now, ok: false });
+      warn(log, { site: site.domain, err: String((err as Error)?.message ?? err) }, refused ? 'GA4 property refused by Google; not sent to the engine' : 'GA4 property could not be checked; not sent to the engine');
+      return;
+    }
+    await db.update(schema.sites).set({ ga4CheckedAt: new Date(), ga4Readable: true }).where(eq(schema.sites.id, site.id));
+    if (!(await syncGa4ToEngine(site, log))) healed.set(site.domain, { id: want, at: now, ok: false });
+  })().catch((err) => {
+    healed.set(site.domain, { id: want, at: now, ok: false });
+    warn(log, { site: site.domain, err: String((err as Error)?.message ?? err) }, 'GA4 heal failed');
+  });
+}

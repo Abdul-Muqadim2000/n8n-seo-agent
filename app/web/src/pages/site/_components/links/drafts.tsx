@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { CircleSlash, Clock, ExternalLink as ExternalIcon, FileText, Mail, MailCheck, Send, ShieldCheck, UserRound } from 'lucide-react';
 import { consentGate, footerLines, replySubject, type LinkBuildingData, type MailboxView, type OutreachDraft, type OutreachStep } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { useApproveOutreach, useDismissOutreach } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
@@ -111,7 +111,7 @@ function DraftCard({ x, d, onOpen }: { x: OutreachDraft; d: LinkBuildingData; on
   const notFit = () =>
     dismiss.mutate(
       { prospectDomain: x.prospectDomain, type: x.type },
-      { onSuccess: () => toast.success(`${x.prospectDomain}: marked not a fit`), onError: (e) => toast.error(errorMessage(e)) },
+      { onSuccess: () => toast.success(`${x.prospectDomain}: marked not a fit`), onError: (e) => toastError(e) },
     );
   return (
     <li className="flex min-w-0 flex-col rounded-xl border border-line bg-surface p-4 shadow-card transition-colors duration-150 ease-brand hover:border-line-strong">
@@ -276,7 +276,7 @@ function ApproveDialog({ x, d, onClose }: { x: OutreachDraft; d: LinkBuildingDat
         },
         onError: (e) => {
           setError(errorMessage(e));
-          toast.error(errorMessage(e));
+          toastError(e);
         },
       },
     );
@@ -289,7 +289,7 @@ function ApproveDialog({ x, d, onClose }: { x: OutreachDraft; d: LinkBuildingDat
           toast.success(`${x.prospectDomain}: marked not a fit`);
           onClose();
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
 

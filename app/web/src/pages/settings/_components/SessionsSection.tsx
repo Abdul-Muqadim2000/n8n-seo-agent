@@ -5,7 +5,7 @@ import { IconTile } from '@/components/insight';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/feedback';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useRevokeOtherSessions, useRevokeSession, useSessions } from '@/lib/queries';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import { SettingsCard } from './SettingsCard';
@@ -32,7 +32,7 @@ export function SessionsSection() {
             loading={others.isPending}
             onClick={() =>
               window.confirm(`Sign out ${otherCount} other device${otherCount === 1 ? '' : 's'}?`) &&
-              others.mutate(undefined, { onSuccess: (r) => toast.success(`${r.revoked} device${r.revoked === 1 ? '' : 's'} signed out`), onError: (e) => toast.error(errorMessage(e)) })
+              others.mutate(undefined, { onSuccess: (r) => toast.success(`${r.revoked} device${r.revoked === 1 ? '' : 's'} signed out`), onError: (e) => toastError(e) })
             }
           >
             <LogOut /> Sign out all others
@@ -72,7 +72,7 @@ export function SessionsSection() {
                     size="sm"
                     variant="ghost"
                     loading={revoke.isPending && revoke.variables === s.id}
-                    onClick={() => revoke.mutate(s.id, { onSuccess: () => toast.success(`${s.device} signed out`), onError: (e) => toast.error(errorMessage(e)) })}
+                    onClick={() => revoke.mutate(s.id, { onSuccess: () => toast.success(`${s.device} signed out`), onError: (e) => toastError(e) })}
                   >
                     Sign out
                   </Button>

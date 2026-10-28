@@ -36,7 +36,7 @@ import { Segmented, Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { DifficultyBadge, PlanBadge } from '@/components/site/keyword';
 import { isCountry } from '@/components/reports/meta';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, errorMessage, isConfirmCancelled } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useAssessKeyword, useBilling, useRecommendedKeywords, useSiteData, useStartResearch, useStartRun } from '@/lib/queries';
@@ -207,7 +207,7 @@ function StartResearchButton({ label = 'Find keywords for me', variant = 'second
           toast.success('Keyword research started', { description: 'Your suggestions appear here in about 10 minutes.' });
           void recommended.refetch();
         },
-        onError: setError,
+        onError: (e) => setError(isConfirmCancelled(e) ? null : e),
       },
     );
   const go = () => {
@@ -218,7 +218,7 @@ function StartResearchButton({ label = 'Find keywords for me', variant = 'second
         if (r.started || r.status === 'running') toast.success('Keyword research started', { description: 'Your suggestions appear here in about 2 minutes.' });
         void recommended.refetch();
       },
-      onError: (e) => (e instanceof ApiRequestError && e.code === 'research_not_free' ? paid() : setError(e)),
+      onError: (e) => (e instanceof ApiRequestError && e.code === 'research_not_free' ? paid() : setError(isConfirmCancelled(e) ? null : e)),
     });
   };
   return (
@@ -386,6 +386,7 @@ function CheckPanel({ initialKeyword, initialCountry, ladders, onChoose }: { ini
     const k = raw.trim().replace(/\s+/g, ' ');
     if (k.length < 2) return setFieldError('Enter a keyword of at least 2 characters');
     if (k.length > 100) return setFieldError('Keep the keyword under 100 characters');
+    const before = result;
     setKeyword(k);
     setFieldError(undefined);
     setResult(null);
@@ -394,6 +395,9 @@ function CheckPanel({ initialKeyword, initialCountry, ladders, onChoose }: { ini
       {
         onSuccess: setResult,
         onError: (e) => {
+          // Cancel in "Check this first": nothing was checked or charged, the card shows what it showed before (the typed keyword stays
+          // in the box), with no error
+          if (isConfirmCancelled(e)) return setResult(before);
           if (e instanceof ApiRequestError && e.fields.keyword) setFieldError(e.fields.keyword);
         },
       },
@@ -457,7 +461,13 @@ function CheckPanel({ initialKeyword, initialCountry, ladders, onChoose }: { ini
   );
 }
 
-function CheckError({ error }: { error: unknown }) {
+/** The keyword check's error card. A cancelled "Check this first" (409 confirm_needed) is not an error: nothing is shown. */
+export function CheckError({ error }: { error: unknown }) {
+  if (isConfirmCancelled(error)) return null;
+  return <CheckErrorCard error={error} />;
+}
+
+function CheckErrorCard({ error }: { error: unknown }) {
   const { org } = useOrgCtx();
   // credits (app/docs/CREDITS.md): a 402 names the rule that refused the check; the server's sentence is in credits
   if (error instanceof ApiRequestError && isCreditRefusal(error)) return <CreditRefusal orgId={org.id} error={error} />;
@@ -854,7 +864,7 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
           toast.success(`Planning your ladder "${chosen.keyword}"`, { description: 'It shows on the Pipeline in about 5-8 minutes; the first pages follow as reports.' });
           navigate(paths.site(org.id, site.id, 'pipeline'));
         },
-        onError: setError,
+        onError: (e) => setError(isConfirmCancelled(e) ? null : e),
       },
     );
   };

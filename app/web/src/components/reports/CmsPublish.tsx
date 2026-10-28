@@ -8,7 +8,7 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout, Skeleton } from '@/components/ui/feedback';
 import { Checkbox, Field, Select } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useCmsPublish, useCmsRefresh, useCmsReportState } from '@/lib/queries';
@@ -52,7 +52,7 @@ export function CmsPublishPanel({ report }: { report: ReportDetail }) {
       setConfirming(false);
       setTicked(false);
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   const check = async () => {
@@ -60,7 +60,7 @@ export function CmsPublishPanel({ report }: { report: ReportDetail }) {
     try {
       after(await refresh.mutateAsync(conn.id), live ? 'Live' : 'Checked');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
 

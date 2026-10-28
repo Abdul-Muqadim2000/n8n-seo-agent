@@ -207,6 +207,10 @@ export function queueOrder<T extends { id: string; score?: RecommendationScore }
     const va = a.score && a.score.ranked ? a.score.value : -1;
     const vb = b.score && b.score.ranked ? b.score.value : -1;
     if (va !== vb) return vb - va;
+    // 2026-10-28: a step the autopilot runs on its own (`auto:*`, shown as scheduled) asks nothing of the client: last of its band
+    const sa = a.id.startsWith('auto:') ? 1 : 0;
+    const sb = b.id.startsWith('auto:') ? 1 : 0;
+    if (sa !== sb) return sa - sb;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
 }

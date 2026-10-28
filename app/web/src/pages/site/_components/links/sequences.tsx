@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowDownLeft, ArrowUpRight, CircleSlash, MessageSquareReply, Pause, Pencil, Play, Reply, Send, Square, Trophy } from 'lucide-react';
 import { replySubject, type LinkBuildingData, type OutreachMessageView, type OutreachSequence, type OutreachStep } from '@seo/shared';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { useSequenceAction, useSequenceOutcome, useSequenceReply, useUpdateSequence } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate, fmtDateTime } from '@/lib/utils';
 import { Collapsible, IconTile } from '@/components/insight';
@@ -106,7 +106,7 @@ function SequenceRow({ q, onEdit, onStop }: { q: OutreachSequence; onEdit: () =>
   const run = (action: 'pause' | 'resume') =>
     act.mutate(
       { id: q.id, action },
-      { onSuccess: () => toast.success(`${q.prospectDomain}: ${action === 'pause' ? 'paused' : 'resumed'}`), onError: (e) => toast.error(errorMessage(e)) },
+      { onSuccess: () => toast.success(`${q.prospectDomain}: ${action === 'pause' ? 'paused' : 'resumed'}`), onError: (e) => toastError(e) },
     );
   return (
     <li className="px-5 py-4">
@@ -213,7 +213,7 @@ function EditDialog({ q, onClose }: { q: OutreachSequence; onClose: () => void }
         },
         onError: (e) => {
           setError(errorMessage(e));
-          toast.error(errorMessage(e));
+          toastError(e);
         },
       },
     );
@@ -283,7 +283,7 @@ function StopDialog({ q, onClose }: { q: OutreachSequence; onClose: () => void }
           toast.success(`${q.prospectDomain}: stopped`);
           onClose();
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   return (
@@ -352,12 +352,12 @@ function ReplyRow({ q, d }: { q: OutreachSequence; d: LinkBuildingData }) {
   const send = () =>
     reply.mutate(
       { id: q.id, body: answer.trim() },
-      { onSuccess: () => toast.success(`Answer sent to ${q.replyFrom || q.toEmail}`), onError: (e) => toast.error(errorMessage(e)) },
+      { onSuccess: () => toast.success(`Answer sent to ${q.replyFrom || q.toEmail}`), onError: (e) => toastError(e) },
     );
   const mark = (status: 'won' | 'rejected') =>
     outcome.mutate(
       { id: q.id, status },
-      { onSuccess: () => toast.success(`${q.prospectDomain}: ${status === 'won' ? 'marked won' : 'marked not a fit'}`), onError: (e) => toast.error(errorMessage(e)) },
+      { onSuccess: () => toast.success(`${q.prospectDomain}: ${status === 'won' ? 'marked won' : 'marked not a fit'}`), onError: (e) => toastError(e) },
     );
 
   return (

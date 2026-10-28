@@ -137,7 +137,7 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
               value={L && L.ga4Connected ? <CountUp value={L.sessions} format={compactNumber} /> : '-'}
               delta={L && L.ga4Connected ? <Delta value={pctChange(L.sessions, L.prevSessions)} /> : undefined}
               trend={L?.ga4Connected ? <Sparkline data={search} dataKey="sessions" /> : undefined}
-              hint={L ? (L.ga4Connected ? `${pct(L.organicShare, 0)} of all sessions · ${compactNumber(L.keyEvents)} key events` : 'Google Analytics is not connected') : 'From Google Analytics 4'}
+              hint={L ? (L.ga4Connected ? `${pct(L.organicShare, 0)} of all sessions · ${compactNumber(L.keyEvents)} key events` : d.ga4?.connected ? 'Connected: the figures arrive with the next weekly report' : 'Google Analytics is not connected') : 'From Google Analytics 4'}
               onClick={() => navigate(page('search'))}
             />
           </>
@@ -405,6 +405,16 @@ function PausedNotice({ d }: { d: OverviewData }) {
 }
 
 /** What is still missing for a complete picture, as a short checklist. */
+/** A checklist step the weekly autopilot does on its own: where to see when it runs (the Pipeline's This week). */
+function AutopilotLink() {
+  const { page } = useSitePage();
+  return (
+    <ButtonLink to={page('pipeline')} size="sm" variant="secondary">
+      See when it runs
+    </ButtonLink>
+  );
+}
+
 function SetupChecklist({ d }: { d: OverviewData }) {
   const { can, page } = useSitePage();
   const day = useCycleDay();
@@ -430,9 +440,28 @@ function SetupChecklist({ d }: { d: OverviewData }) {
         </div>
       ),
     },
-    { done: !!d.health.latest, title: 'Technical audit', icon: <Gauge />, detail: 'Crawl, health score and a fix pack.', action: <ToolButton mode="audit" size="sm">Run a technical audit</ToolButton> },
-    { done: !!d.ai.latest, title: 'AI visibility baseline', icon: <Bot />, detail: 'Are you named when buyers ask AI assistants?', action: <ToolButton mode="ai_visibility" size="sm">Run the check</ToolButton> },
-    { done: !!d.backlinks.latest, title: 'Backlink baseline', icon: <Link2 />, detail: 'Who links to you, lost links and link gaps.', action: <ToolButton mode="backlinks" size="sm">Run a backlink check</ToolButton> },
+    // 2026-10-28: a first run the weekly autopilot does on its own is shown as scheduled, never as a button to run it by hand
+    {
+      done: !!d.health.latest,
+      title: 'Technical audit',
+      icon: <Gauge />,
+      detail: d.autopilot?.audit ? 'Crawl, health score and a fix pack. Your autopilot runs it on its own; the result lands here.' : 'Crawl, health score and a fix pack.',
+      action: d.autopilot?.audit ? <AutopilotLink /> : <ToolButton mode="audit" size="sm">Run a technical audit</ToolButton>,
+    },
+    {
+      done: !!d.ai.latest,
+      title: 'AI visibility baseline',
+      icon: <Bot />,
+      detail: d.autopilot?.aiVisibility ? 'Are you named when buyers ask AI assistants? Your autopilot checks it on its own.' : 'Are you named when buyers ask AI assistants?',
+      action: d.autopilot?.aiVisibility ? <AutopilotLink /> : <ToolButton mode="ai_visibility" size="sm">Run the check</ToolButton>,
+    },
+    {
+      done: !!d.backlinks.latest,
+      title: 'Backlink baseline',
+      icon: <Link2 />,
+      detail: d.autopilot?.backlinks ? 'Who links to you, lost links and link gaps. Your autopilot checks it on its own.' : 'Who links to you, lost links and link gaps.',
+      action: d.autopilot?.backlinks ? <AutopilotLink /> : <ToolButton mode="backlinks" size="sm">Run a backlink check</ToolButton>,
+    },
     { done: d.rankings.ladders > 0, title: 'A keyword to rank for', icon: <Activity />, detail: 'A ladder of pages from winnable long-tail up to the head term.', action: <ToolButton mode="ladder" size="sm">Plan a keyword ladder</ToolButton> },
   ];
   const done = steps.filter((s) => s.done).length;

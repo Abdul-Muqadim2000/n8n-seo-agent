@@ -11,7 +11,7 @@ import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input } from '@/components/ui/field';
 import { KeyValue } from '@/components/ui/misc';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, isConfirmCancelled, toastError } from '@/lib/api';
 import { qk, useGoogleConnection, useUpdateSite } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { Ga4Steps, SearchConsoleSteps } from './ServiceAccountSteps';
@@ -178,7 +178,7 @@ function Ga4Picker({ orgId, site, conn, canEdit }: { orgId: string; site: Site; 
           toast.success('GA4 property saved');
           refresh();
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   };
@@ -246,7 +246,7 @@ function ManualGa4({ orgId, site, canEdit, compact }: { orgId: string; site: Sit
           toast.success(v ? 'GA4 property ID saved' : 'GA4 property ID cleared');
           refresh();
         },
-        onError: (e) => setErr(errorMessage(e)),
+        onError: (e) => setErr(isConfirmCancelled(e) ? null : errorMessage(e)),
       },
     );
   };

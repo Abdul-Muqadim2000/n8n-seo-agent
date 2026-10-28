@@ -32,7 +32,7 @@ import { TagInput } from '@/components/ui/tag-input';
 import { GuideButton } from '@/components/guide';
 import { AUTOPILOT_SCREEN_GUIDES } from '@seo/shared/guide-links';
 import { autopilotGuideVars } from '@/lib/guide-vars';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { qk, useDeleteSite, useSiteAdmin, useSiteData, useStartRun, useUpdateSite } from '@/lib/queries';
@@ -341,7 +341,7 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
                 description: paused ? `The next report arrives ${day.on}.` : 'No weekly reports, monitors or pages until you resume.',
               })
             : toast.error(r.error ?? 'The change was not applied'),
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   return (
@@ -356,7 +356,8 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
         <KeyValue
           items={[
             { label: 'Started', value: site.trackingStartedAt ? fmtDate(site.trackingStartedAt) : '-' },
-            { label: 'Last report', value: t.lastRunAt ? `${fmtAgo(t.lastRunAt)}${t.lastStatus ? ` · ${t.lastStatus}` : ''}` : 'None yet' },
+            // 2026-10-28: the engine's raw status ("gsc:ok ga4:off") is not shown: it predates the app's own checks and contradicted them
+            { label: 'Last report', value: t.lastRunAt ? fmtAgo(t.lastRunAt) : 'None yet' },
             { label: 'Search Console', value: gsc.connected ? (gsc.property ?? 'connected') : <span className="text-warning-text">not connected</span> },
             { label: 'GA4 property', value: t.ga4PropertyId || site.ga4PropertyId || <span className="text-ink-3">detected automatically</span> },
             { label: 'Keywords', value: t.keywords.length ? `${t.keywords.length} tracked` : <span className="text-ink-3">Search Console queries only</span> },
@@ -396,7 +397,7 @@ function CadenceCard({ current, status, admin }: { current: number; status: stri
           r.ok
             ? toast.success(n ? `${n} ${n === 1 ? 'page' : 'pages'} a week for your keyword, from your next weekly run` : 'Weekly pages turned off')
             : toast.error(r.error ?? 'The change was not applied'),
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   return (
@@ -468,7 +469,7 @@ function MonitorsCard({
       { action: 'monitors', monitors, competitors },
       {
         onSuccess: (r: AdminResult) => (r.ok ? toast.success('Monitor settings saved') : toast.error(r.error ?? 'The change was not applied')),
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   };
@@ -560,7 +561,7 @@ function ContentGroupsCard({ initial, admin }: { initial: ContentGroup[]; admin:
       { action: 'content_groups', contentGroups: kept.map((r) => ({ name: r.name.trim(), pattern: r.pattern.trim() })) },
       {
         onSuccess: (r: AdminResult) => (r.ok ? toast.success(kept.length ? 'Content groups saved: the next weekly report shows them' : 'Content groups cleared') : toast.error(r.error ?? 'The change was not applied')),
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   };

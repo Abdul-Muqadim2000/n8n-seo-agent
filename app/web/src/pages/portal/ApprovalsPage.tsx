@@ -10,7 +10,7 @@ import { Callout, EmptyState, ErrorState, Skeleton } from '@/components/ui/feedb
 import { Field, Select, Textarea } from '@/components/ui/field';
 import { PageHeader } from '@/components/ui/misc';
 import { Dialog } from '@/components/ui/overlay';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useApprovalCandidates, useApprovalMutations, useApprovals } from '@/lib/queries';
@@ -120,7 +120,7 @@ function ApprovalItem({ a, canDecide, staff }: { a: ApprovalView; canDecide: boo
           setChanges(false);
           setNote('');
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   return (
@@ -188,7 +188,7 @@ function ApprovalItem({ a, canDecide, staff }: { a: ApprovalView; canDecide: boo
           )}
           {staff && a.status === 'pending' && (
             <div className="border-t border-line pt-3">
-              <Button size="sm" variant="ghost" loading={m.withdraw.isPending} onClick={() => m.withdraw.mutate(a.id, { onSuccess: () => toast.success('Request withdrawn'), onError: (e) => toast.error(errorMessage(e)) })}>
+              <Button size="sm" variant="ghost" loading={m.withdraw.isPending} onClick={() => m.withdraw.mutate(a.id, { onSuccess: () => toast.success('Request withdrawn'), onError: (e) => toastError(e) })}>
                 Withdraw request
               </Button>
             </div>
@@ -232,7 +232,7 @@ function AskDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
               chosen &&
               m.request.mutate(
                 { kind: chosen.kind, itemId: chosen.itemId, siteId: chosen.siteId, title: chosen.title, note },
-                { onSuccess: () => (toast.success('Sent to the client'), close(false)), onError: (e) => toast.error(errorMessage(e)) },
+                { onSuccess: () => (toast.success('Sent to the client'), close(false)), onError: (e) => toastError(e) },
               )
             }
           >

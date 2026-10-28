@@ -47,7 +47,7 @@ import { deleteRows, ensureTable, insertRows, invalidateSite, siteAdmin, siteRow
 import { acknowledgeOnSite, checkIntegration, checkSettings, checkWrite, consistencySite, ladderMarkets, recordOverride, redirectTarget, siteApiOf, standingWarnings, takeAcknowledge } from '../services/consistency';
 import { invalidateForecast } from '../services/billing';
 import { assertGa4ForDomain, findGscProperty, gscOwnerCheck, listGa4Properties } from '../services/google';
-import { assertEngineIdFree, ENGINE_ID_TAKEN } from '../services/engineSite';
+import { assertEngineIdFree, clearGa4OnEngine, ENGINE_ID_TAKEN, syncGa4ToEngine } from '../services/engineSite';
 import { routeSiteToApp } from '../services/runs';
 import { fetchPublicText, verify } from '../services/verify';
 import { checkIndexnowStep } from '../services/siteTasks';
@@ -287,16 +287,17 @@ export async function siteRoutes(app: FastifyInstance) {
     const a = await orgAccess(req, (req.params as P).orgId, 'admin');
     const { acknowledge } = takeAcknowledge(req.body);
     const body = parse(createSiteSchema, req.body);
-    // MKT (2026-10-27, mismatch audit M5): a description about other markets than the main country is said before the website is added
-    // MKT I7: and an address that sends every visitor to another domain (one request, followed redirects; unreachable = not judged)
-    const redirectTo = await redirectTarget(body.domain);
-    const chk = checkWrite('site_update', body as unknown as Record<string, unknown>, { site: null, redirectTo }, acknowledge);
+    // a website that cannot be added is said first: asking "check this first" about a duplicate, then refusing it, wastes the person's answer
     const mine = await db.query.sites.findFirst({ where: and(eq(schema.sites.orgId, a.org.id), eq(schema.sites.domain, body.domain)) });
     if (mine) throw conflict(`${body.domain} is already one of your websites.`, 'site_exists');
     if (await verifiedElsewhere(body.domain, a.org.id))
       throw conflict(`${body.domain} is already verified by another company on this platform. If it is yours, contact Alaventra support.`, 'domain_claimed');
     // one engine site id, one website: foo.co.uk is refused while foo-co.uk is verified or tracked (and the other way round)
     await assertEngineIdFree(body.domain);
+    // MKT (2026-10-27, mismatch audit M5): a description about other markets than the main country is said before the website is added
+    // MKT I7: and an address that sends every visitor to another domain (one request, followed redirects; unreachable = not judged)
+    const redirectTo = await redirectTarget(body.domain);
+    const chk = checkWrite('site_update', body as unknown as Record<string, unknown>, { site: null, redirectTo }, acknowledge);
     const [site] = await db
       .insert(schema.sites)
       .values({
@@ -367,6 +368,21 @@ export async function siteRoutes(app: FastifyInstance) {
         return false;
       });
       if (synced) s = (await db.query.sites.findFirst({ where: eq(schema.sites.id, s.id) })) ?? s;
+    }
+    // 2026-10-28: a GA4 property saved here is one Google just confirmed for this domain (assertGa4ForDomain above): it counts as a live
+    // check (the newer of it and the weekly report decides everywhere, shared ga4ConnectionState) and goes to the engine's site row at once,
+    // which used to learn it only from a later "Track my site" (devaicon.com: "GA4 off" in every weekly report while the panel said Connected).
+    // Clearing it removes the app's claim only: the engine may still detect a property itself.
+    const ga4Sent = !!req.body && typeof req.body === 'object' && Object.hasOwn(req.body, 'ga4PropertyId');
+    if (ga4Sent && body.ga4PropertyId !== undefined) {
+      [s] = await db
+        .update(schema.sites)
+        .set(s.ga4PropertyId ? { ga4CheckedAt: new Date(), ga4Readable: true } : { ga4CheckedAt: null, ga4Readable: null })
+        .where(eq(schema.sites.id, s.id))
+        .returning();
+      if (s.ga4PropertyId) await syncGa4ToEngine(s, req.log);
+      // cleared: the engine forgets the id the app had sent (one it detected itself stays)
+      else if (site.ga4PropertyId) await clearGa4OnEngine(s, site.ga4PropertyId, req.log);
     }
     // P1 (2026-10-20, rehearsal §4 item 1): the engine writes no page before the business facts are on ITS site row (the Content Cadence
     // reads them there, and the weekly pages carry them). Changed facts of a tracked website go to the engine at once (Site Admin `facts`);
@@ -498,6 +514,8 @@ export async function siteRoutes(app: FastifyInstance) {
       // the service account sees every company's properties: only show the ones that measure this domain (and the chosen one)
       out.ga4.properties = ga4.value.filter((x) => x.matchesDomain || x.id === site.ga4PropertyId);
       out.ga4.connected = !!site.ga4PropertyId && ga4.value.some((x) => x.id === site.ga4PropertyId);
+      // Google answered for the chosen property: recorded like the Search Console check above (no property chosen: nothing to claim)
+      if (site.ga4PropertyId) await db.update(schema.sites).set({ ga4CheckedAt: new Date(), ga4Readable: out.ga4.connected }).where(eq(schema.sites.id, site.id));
     } else out.ga4.error = String((ga4.reason as Error)?.message ?? ga4.reason);
     return out;
   });

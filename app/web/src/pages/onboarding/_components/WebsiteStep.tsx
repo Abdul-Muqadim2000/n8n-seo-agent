@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { Globe, Plus } from 'lucide-react';
 import { cleanDomain, domainOk } from '@seo/shared';
 import { StatusBadge } from '@/components/ui/badge';
-import { Callout } from '@/components/ui/feedback';
 import { ChoiceCard } from '@/components/ui/field';
-import { DomainClaimedCallout, SiteBusinessForm } from '@/components/site/SiteBusinessFields';
-import { ApiRequestError } from '@/lib/api';
+import { SiteBusinessForm, SiteCreateConflict, siteCreateConflict, type SiteFormValues } from '@/components/site/SiteBusinessFields';
 import { useCreateSite } from '@/lib/queries';
 import { StepFrame } from './WizardShell';
 import { useWizard } from './wizard';
@@ -74,17 +72,14 @@ export function WebsiteStep() {
             const created = await create.mutateAsync(v);
             go('verify', created.id);
           }}
-          renderError={(e, v) => {
-            if (!(e instanceof ApiRequestError) || e.status !== 409) return null;
-            if (e.code === 'domain_claimed') return <DomainClaimedCallout domain={cleanDomain(v.domain)} />;
-            return (
-              <Callout tone="warning" title="You already added this website">
-                {e.message} Choose it in the list above to continue.
-              </Callout>
-            );
-          }}
+          renderError={websiteStepError}
         />
       )}
     </StepFrame>
   );
+}
+
+/** The onboarding Website step's message for a refused save: only a real duplicate, pointing at the list above; else the form's default. */
+export function websiteStepError(e: unknown, v: SiteFormValues) {
+  return siteCreateConflict(e) ? <SiteCreateConflict error={e} domain={cleanDomain(v.domain)} hint="Choose it in the list above to continue." /> : null;
 }

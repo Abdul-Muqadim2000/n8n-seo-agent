@@ -19,7 +19,7 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout, Skeleton } from '@/components/ui/feedback';
 import { Field, Textarea } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useAcceptPrefilled, useApprovePage, useFinalizePage, usePageReview, useReport, useSaveAnswers } from '@/lib/queries';
@@ -123,7 +123,7 @@ export function QuestionsPanel({ view, domain = '' }: { view: PageReviewView; do
       await accept.mutateAsync();
       toast.success('Suggestions accepted', { description: 'Each answer is kept in your business details for later pages.' });
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   return (
@@ -205,7 +205,7 @@ export function QuestionCard({ q, view, editable, highlight }: { q: ReviewQuesti
       setStatus('Saved');
     } catch (e) {
       setStatus('');
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   const choose = (d: AnswerDecision) => {
@@ -470,7 +470,7 @@ export function ApproveCard({ view, report, publishLink }: { view: PageReviewVie
       await approve.mutateAsync(target !== report.id ? { versionReportId: target } : {});
       toast.success('Approved', { description: 'Now publish it: send it to your website or tell us its address once it is live.' });
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   return (

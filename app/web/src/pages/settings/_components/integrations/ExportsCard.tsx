@@ -21,7 +21,7 @@ import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/field'
 import { Segmented } from '@/components/ui/tabs';
 import { DataTable, type Column } from '@/components/ui/table';
 import { GuideButton } from '@/components/guide';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useConnectExport, useDeleteIntegration, useRunExport, useTestIntegration, useUpdateExport } from '@/lib/integrations';
 import { fmtAgo, fmtDateTime } from '@/lib/utils';
@@ -69,7 +69,7 @@ function DestinationForm({ onDone }: { onDone: () => void }) {
       onDone();
     } catch (e) {
       if (e instanceof ApiRequestError) setErrors(e.fields);
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   return (
@@ -198,7 +198,7 @@ function Destination({ i, runs }: { i: IntegrationView; runs: ExportRunView[] })
       if (r.status === 'ok') toast.success(`Exported ${r.tables.reduce((n, t) => n + t.rows, 0).toLocaleString()} rows`);
       else toast.error(r.error || 'The export did not finish');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   return (
@@ -224,13 +224,13 @@ function Destination({ i, runs }: { i: IntegrationView; runs: ExportRunView[] })
           <Button size="sm" variant="secondary" icon={<Play />} loading={run.isPending} onClick={() => void go()}>
             Run now
           </Button>
-          <Button size="sm" variant="ghost" icon={<CheckCircle2 />} loading={test.isPending} onClick={() => void test.mutateAsync(i.id).then((r) => (r.ok ? toast.success('The destination answers') : toast.error(r.error)), (e) => toast.error(errorMessage(e)))}>
+          <Button size="sm" variant="ghost" icon={<CheckCircle2 />} loading={test.isPending} onClick={() => void test.mutateAsync(i.id).then((r) => (r.ok ? toast.success('The destination answers') : toast.error(r.error)), (e) => toastError(e))}>
             Test
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setEditing(!editing)}>
             Schedule
           </Button>
-          <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => window.confirm(`Remove ${i.name}? Files already exported stay where they are.`) && void remove.mutateAsync(i.id).then(() => toast.success('Removed'), (e) => toast.error(errorMessage(e)))}>
+          <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => window.confirm(`Remove ${i.name}? Files already exported stay where they are.`) && void remove.mutateAsync(i.id).then(() => toast.success('Removed'), (e) => toastError(e))}>
             Remove
           </Button>
         </div>
@@ -247,7 +247,7 @@ function Destination({ i, runs }: { i: IntegrationView; runs: ExportRunView[] })
                   toast.success('Schedule saved');
                   setEditing(false);
                 },
-                (e) => toast.error(errorMessage(e)),
+                (e) => toastError(e),
               )
             }
           >

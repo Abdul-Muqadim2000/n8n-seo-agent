@@ -1,6 +1,7 @@
 import {
   creditsFor,
   gscConnectionState,
+  ga4ConnectionState,
   aiAlertsOf,
   aiCompareInterim,
   aiEngineSetOf,
@@ -128,6 +129,7 @@ import { settingsRow } from './admin/settings';
 import { indexCoverage, recheckOf, watchView } from './pageWatch';
 import { aiChargeEntries, bucketAiCharges } from './runCredits';
 import { callbackUrl, latestReport, reportsList } from './runs';
+import { healGa4 } from './engineSite';
 
 // Dashboards: the n8n Data Tables of one domain (filtered server-side by `domain`), shaped for the client. JSON columns are parsed
 // here; the richer weekly reports (daily series, the question grid, the engine's own actions) come from the latest callback stored
@@ -172,14 +174,28 @@ export function gscLiveCheckOf(site: Pick<SiteRow, 'gscCheckedAt' | 'gscReadable
   return { at: site.gscCheckedAt.toISOString(), connected: site.gscReadable, property: site.gscReadable ? site.gscProperty || null : null };
 }
 
+/** The app's live check of the chosen GA4 property (2026-10-28), null when it never got an answer. */
+export function ga4LiveCheckOf(site: Pick<SiteRow, 'ga4CheckedAt' | 'ga4Readable' | 'ga4PropertyId'>): TrackingConnection['ga4LiveCheck'] {
+  if (!site.ga4CheckedAt || site.ga4Readable == null) return null;
+  return { at: site.ga4CheckedAt.toISOString(), connected: site.ga4Readable, propertyId: site.ga4Readable ? site.ga4PropertyId || null : null };
+}
+
+/** GA4 now: the newer of the latest weekly report and the app's live check (shared ga4ConnectionState), as gscNow for Search Console. */
+export function ga4Now(snapshot: Pick<TrackerSnapshot, 'receivedAt' | 'ga4'> | null | undefined, tracking: TrackingConnection | null | undefined) {
+  return ga4ConnectionState({ report: snapshot ? { receivedAt: snapshot.receivedAt, connected: snapshot.ga4.connected, propertyId: snapshot.ga4.propertyId, error: snapshot.ga4.error ?? null } : null, tracking });
+}
+
 /** Search Console now: the newer of the latest weekly report and the app's live check (shared gscConnectionState). */
 export function gscNow(snapshot: Pick<TrackerSnapshot, 'receivedAt' | 'gsc'> | null | undefined, tracking: TrackingConnection | null | undefined) {
   return gscConnectionState({ report: snapshot ? { receivedAt: snapshot.receivedAt, connected: snapshot.gsc.connected, property: snapshot.gsc.property } : null, tracking });
 }
 
 function connection(row: DtSiteRow | null, org: OrgRow, site: SiteRow): TrackingConnection {
+  // 2026-10-28: a GA4 property chosen in the app that the engine row does not carry yet is sent once, in the background
+  if (row) healGa4(site, row.ga4_property_id);
   return {
     gscLiveCheck: gscLiveCheckOf(site),
+    ga4LiveCheck: ga4LiveCheckOf(site),
     reportsToThisApp: !!row && row.callback_url === callbackUrl(org),
     tracked: !!row,
     status: row?.status ?? null,
@@ -328,6 +344,7 @@ export async function trackerSnapshot(org: OrgRow, site: SiteRow): Promise<Track
     ga4: {
       connected: b(a.connected),
       propertyId: s(a.property_id) || null,
+      error: s(a.error) || null,
       organic: ga4Block(o(a.organic).cur),
       organicPrev: ga4Block(o(a.organic).prev),
       total: ga4Block(o(a.total).cur),
@@ -408,6 +425,7 @@ export async function searchData(org: OrgRow, site: SiteRow): Promise<SearchData
   const conn = connection(siteRow, org, site);
   const gscState = gscNow(snapshot, conn);
   const gaOn = snapshot?.ga4.connected ?? !!ms[ms.length - 1]?.ga4_connected;
+  const ga4State = ga4Now(snapshot, conn);
   const period28 = cur ? lineagePeriod(cur.start, cur.end) : '';
   const lineageList: Lineage[] = [
     gscOn
@@ -423,7 +441,10 @@ export async function searchData(org: OrgRow, site: SiteRow): Promise<SearchData
         ),
     gaOn
       ? lineage('Organic sessions, engaged sessions and key events', 'ga4', { period: period28, sample: lineageSample(curSessions, 'organic sessions'), basis: 'measured' })
-      : lineageUnknown('Visits, engagement and key events', 'Google Analytics is not connected for this website'),
+      : lineageUnknown(
+          'Visits, engagement and key events',
+          ga4State.connected ? 'Google Analytics is connected; the measured figures arrive with the next tracking report' : 'Google Analytics is not connected for this website',
+        ),
     lineage('Weekly history', 'gsc', { period: lineagePeriod(from, to), sample: lineageSample(ms.length, ms.length === 1 ? 'weekly report' : 'weekly reports'), basis: 'measured', note: 'each point is a rolling 28-day total, not one week' }),
     lineage('Live Google position per tracked keyword', 'serp', {
       period: lineageAsOf(qs.find((q) => n(q.serp_position) >= 0)?.checked_at),

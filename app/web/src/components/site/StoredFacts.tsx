@@ -10,7 +10,7 @@ import { ErrorState, Skeleton } from '@/components/ui/feedback';
 import { Field, Select, Textarea } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
 import { IconTile } from '@/components/insight';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useDeleteFact, useSaveFact, useSiteFacts } from '@/lib/queries';
 import { fmtDate } from '@/lib/utils';
 
@@ -38,7 +38,7 @@ export function StoredFacts({ orgId, siteId, admin }: { orgId: string; siteId: s
       await del.mutateAsync(key);
       toast.success('Answer deleted', { description: 'A later page may ask about it again.' });
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   return (
@@ -104,7 +104,7 @@ function EditFact({ orgId, siteId, fact, onClose }: { orgId: string; siteId: str
       toast.success('Answer saved', { description: 'Later pages use it from now on.' });
       onClose();
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
   return (

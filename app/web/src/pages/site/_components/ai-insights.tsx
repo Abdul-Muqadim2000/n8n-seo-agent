@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { AtSign, Bot, Coins, Globe, Layers, Link2, MessageSquareQuote, PieChart, Plus, Scale, ShieldAlert, ShieldCheck, Target, Users } from 'lucide-react';
 import { AI_MIN_RATE_SAMPLES, compactNumber, formatPercent, titleCase, wilsonRange, type AiAccess, type AiGroup, type AiIndex, type AiPerception, type AiTraffic } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtDate } from '@/lib/utils';
@@ -357,7 +357,7 @@ export function DiscoveryPanel({ index, tracked }: { index: AiIndex | null; trac
       { action: 'ai_prompts', add: [q.length < 10 ? `${q}?` : q], remove: [] },
       {
         onSuccess: (r) => (r.ok ? (setAdded((a) => [...a, q]), toast.success('Question added. It is asked from the next run')) : toast.error(r.error ?? 'The question was not saved')),
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
         onSettled: () => setPending(null),
       },
     );

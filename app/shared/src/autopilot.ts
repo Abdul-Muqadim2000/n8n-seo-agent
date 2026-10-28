@@ -30,6 +30,23 @@ export interface AutopilotPlan {
 /** A keyword research refresh every 90 days at level 3: the discovery run, a month's share. */
 export const RESEARCH_REFRESH_DAYS = 90;
 
+/**
+ * What the autopilot runs on its own for a website (2026-10-28): the Pipeline's own rule (server services/pipeline.ts `base`): a verified
+ * website whose weekly tracking is on (not paused by a person, nor by the credit guard) with the monitor switched on (missing settings =
+ * the defaults, on). Recommendations and the Overview's checklist read it, so neither asks the client to run by hand what the weekly
+ * cycle does anyway (a client ran the first audit by hand three hours before the autopilot's own audit, because both screens said to).
+ */
+export interface AutopilotRuns {
+  audit: boolean;
+  aiVisibility: boolean;
+  backlinks: boolean;
+}
+
+export function autopilotRuns(site: { verified: boolean; trackingStatus: string }, m: Partial<Pick<MonitorSettings, 'aiVisibility' | 'backlinks' | 'auditMonthly'>> | null | undefined): AutopilotRuns {
+  const live = site.verified && site.trackingStatus === 'active';
+  return { audit: live && (m?.auditMonthly ?? true), aiVisibility: live && (m?.aiVisibility ?? true), backlinks: live && (m?.backlinks ?? true) };
+}
+
 export interface AutopilotRow {
   id: AutopilotRowId;
   label: string;

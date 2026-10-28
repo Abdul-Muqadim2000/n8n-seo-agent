@@ -464,6 +464,10 @@ export const sites = pgTable(
      *  to connect. `gsc_property` alone cannot say this: "Verify with Google" stores the owner's property there too. */
     gscCheckedAt: ts('gsc_checked_at'),
     gscReadable: boolean('gsc_readable'),
+    /** 2026-10-28: the app's own check of the chosen GA4 property (Verification & Google asking Google, or a save Google confirmed for
+     *  this domain), compared with the weekly report by the shared ga4ConnectionState like the Search Console pair above. */
+    ga4CheckedAt: ts('ga4_checked_at'),
+    ga4Readable: boolean('ga4_readable'),
     blogsPerWeek: integer('blogs_per_week').notNull().default(0),
     verificationToken: text('verification_token').notNull(),
     verifiedAt: ts('verified_at'),

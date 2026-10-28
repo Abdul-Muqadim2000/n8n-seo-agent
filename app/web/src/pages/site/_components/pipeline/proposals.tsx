@@ -12,7 +12,7 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
-import { ApiRequestError, DONE_INSTEAD, errorMessage } from '@/lib/api';
+import { ApiRequestError, DONE_INSTEAD, errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { PRICES } from '@/lib/prices';
@@ -114,7 +114,7 @@ function ProposalCard({ p }: { p: KeywordProposalView }) {
       {
         onSuccess: (r) =>
           toast.success(`We will not suggest "${p.keyword}" again`, { description: r.next ? `Next suggestion: "${r.next.keyword}".` : 'We tell you when we have another one.' }),
-        onError: (e) => toast.error('The change was not saved', { description: errorMessage(e) }),
+        onError: (e) => toastError(e, 'The change was not saved'),
       },
     );
   return (

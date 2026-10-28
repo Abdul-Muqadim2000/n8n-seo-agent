@@ -9,7 +9,7 @@ import { GuideButton } from '@/components/guide';
 import { SiteTaskRow, useSiteTasks } from '@/components/site/SiteTasks';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import type { AiEarnedPage, AiGrowth, AiPageStat, AiTargetStat, IndexNowCheck } from '@seo/shared';
-import { api, errorMessage } from '@/lib/api';
+import { api, toastError } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
 import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
@@ -137,7 +137,7 @@ function IndexNowSetup({ keyUrl, k }: { keyUrl: string; k: string }) {
       setResult(r);
       if (r.verified) toast.success('IndexNow is ready');
     },
-    onError: (e) => toast.error(errorMessage(e)),
+    onError: (e) => toastError(e),
   });
   if (result?.verified)
     return (
@@ -179,7 +179,7 @@ function EarnedPanel({ earned }: { earned: AiEarnedPage[] }) {
       { action: 'prospect', prospectDomain: e.host, type: 'ai_source', status },
       {
         onSuccess: (r) => (r.ok ? toast.success(`${e.host}: ${EARNED_STATUS[status].label.toLowerCase()}`) : toast.error(r.error ?? 'Not updated')),
-        onError: (err) => toast.error(errorMessage(err)),
+        onError: (err) => toastError(err),
       },
     );
   const rows = earned.filter((e) => e.kind !== 'competitor');

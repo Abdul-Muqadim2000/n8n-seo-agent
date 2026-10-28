@@ -15,7 +15,7 @@ import { Field, Input, Select } from '@/components/ui/field';
 import { Dialog, Menu, MenuItem, MenuSeparator } from '@/components/ui/overlay';
 import { type Column } from '@/components/ui/table';
 import { Switch } from '@/components/ui/tabs';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, errorMessage, toastError } from '@/lib/api';
 import { useAdminCompany, useAdminCompanyCredits, useAdminCreditRequests, useAdminDeleteCompany, useAdminRemoveMembership, useAdminSetMembership, useAdminSettings, useAdminUpdateCompany, useCancelAdminCreditRequest, useMe } from '@/lib/queries';
 import { fmtAgo, fmtDate, fmtDateTime } from '@/lib/utils';
 import { pageTitle } from '@/components/layout/Brand';
@@ -554,7 +554,7 @@ function InvoicesCard({ c }: { c: AdminCompanyDetail }) {
             onClick={() =>
               send.mutate(i.id, {
                 onSuccess: (r) => toast.success(`Invoice ${r.number} sent to ${r.emailedTo.join(', ')}`),
-                onError: (e) => toast.error(errorMessage(e)),
+                onError: (e) => toastError(e),
               })
             }
             aria-label={`Send invoice ${i.number} again`}
@@ -620,7 +620,7 @@ function MembersCard({ c }: { c: AdminCompanyDetail }) {
             const role = e.target.value as (typeof ADMIN_ROLES)[number];
             setRole.mutate(
               { userId: u.userId, orgId: c.id, role },
-              { onSuccess: () => toast.success(`${u.name} is now ${ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role}`), onError: (err) => toast.error(errorMessage(err)) },
+              { onSuccess: () => toast.success(`${u.name} is now ${ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role}`), onError: (err) => toastError(err) },
             );
           }}
         >

@@ -21,7 +21,7 @@ import { Checkbox, Field, Input, Select } from '@/components/ui/field';
 import { SwitchRow } from '@/components/ui/tabs';
 import { TagInput } from '@/components/ui/tag-input';
 import { DataTable, type Column } from '@/components/ui/table';
-import { errorMessage } from '@/lib/api';
+import { toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useDelivery, useSaveDelivery, useTestDelivery } from '@/lib/queries';
 import { fmtAgo } from '@/lib/utils';
@@ -65,7 +65,7 @@ export function DeliveryTab() {
       setSecret(undefined);
       toast.success('Report delivery saved');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
 
@@ -75,7 +75,7 @@ export function DeliveryTab() {
       if (res.delivered) toast.success('Test delivery sent');
       else toast.error(res.outcomes.map((o) => `${o.channel}: ${o.error}`).join(' · ') || 'Nothing was sent');
     } catch (e) {
-      toast.error(errorMessage(e));
+      toastError(e);
     }
   };
 

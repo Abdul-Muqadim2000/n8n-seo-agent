@@ -26,7 +26,7 @@ import {
 } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { DistributionBar, DistributionLegend, SEQ } from '@/components/insight';
-import { ApiRequestError, errorMessage } from '@/lib/api';
+import { ApiRequestError, toastError } from '@/lib/api';
 import { useAiImport, useAiImports } from '@/lib/queries';
 import { fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -413,7 +413,7 @@ export function AiReportsCard({ used = null }: { used?: AiImportsPanel | null } 
               .filter(Boolean)
               .join(' ') || undefined,
           }),
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   };

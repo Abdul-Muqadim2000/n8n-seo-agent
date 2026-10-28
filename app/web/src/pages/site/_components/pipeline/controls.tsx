@@ -14,7 +14,7 @@ import { Callout } from '@/components/ui/feedback';
 import { Field, Select } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
 import { Segmented, Switch } from '@/components/ui/tabs';
-import { errorMessage } from '@/lib/api';
+import { errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useDeleteLadder, useReorderLadders, useUpdateAutomation, useUpdateLadder } from '@/lib/queries';
@@ -45,7 +45,7 @@ export function LadderModeSwitch({ ladder, size = 'sm', className }: { ladder: P
       { ladderId: ladder.id, mode },
       {
         onSuccess: () => toast.success(mode === 'manual' ? `"${ladder.head}" is Manual: each page waits for your OK` : `"${ladder.head}" is Auto: its pages are written in your weekly run`),
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
         onSettled: () => setPending(null),
       },
     );
@@ -65,7 +65,7 @@ export function LadderPauseButton({ ladder, size = 'sm' }: { ladder: Pick<Ladder
       { ladderId: ladder.id, status: paused ? 'active' : 'paused' },
       {
         onSuccess: () => toast.success(paused ? `"${ladder.head}" resumed: back in its place in the order` : `"${ladder.head}" paused: no new pages, positions are still checked`),
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toastError(e),
       },
     );
   return (
@@ -87,7 +87,7 @@ export function LadderMoveButtons({ cards, index }: { cards: LadderCard[]; index
     ids.splice(to, 0, c.id);
     reorder.mutate(ids, {
       onSuccess: () => toast.success(`"${c.head}" is now number ${to + 1}`),
-      onError: (e) => toast.error(errorMessage(e)),
+      onError: (e) => toastError(e),
     });
   };
   const btn = 'size-8';
@@ -209,7 +209,7 @@ function PipelineSettingsDialog({ automation, autoStartEnabled, onClose }: { aut
         toast.success('Pipeline settings saved: your next weekly run uses them');
         onClose();
       },
-      onError: (e) => toast.error(errorMessage(e)),
+      onError: (e) => toastError(e),
     }),
   );
   const isDefault = (['defaultMode', 'maxActiveLadders', 'maxWaiting'] as const).every((k) => current[k] === DEFAULTS[k]);
