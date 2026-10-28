@@ -61,7 +61,16 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-28, Steps on your website: client site tasks — latest)
+## Status (2026-10-28 midday, GA4 + autopilot steps fix from a client report — latest)
+devaicon.com reported "Connect GA4" in Recommendations while GA4 was connected, and the first audit offered as a manual step though the
+autopilot runs it. Both ours (verified on prod): the GA4 id saved in the app never reached the engine's `seo_sites` row, and setup
+recommendations ignored the autopilot. **Deployed 2026-10-28 ~10:23 UTC**: API on the VM at `0221f921` (backup `pg/2026-10-28/*T102249Z`,
+migration 0025 `sites.ga4_checked_at` / `ga4_readable`), web via PR #45 (main `003bb9cb`, merged together with another session's
+"Check this first" fix); the other session then deployed main `003bb9cb` to the VM at ~10:26 UTC (backup `*T102411Z`), which contains both. Shared `ga4ConnectionState` (as GSC) and
+`autopilotRuns`; GA4 id synced on save + healed on read (empty engine id only, after Google re-confirms); `auto:*` "scheduled" items last in
+the queue; raw engine status hidden. Client already OK: its 09:29 UTC report reads GA4 560460806 (it re-ran Track my site at 09:28).
+
+## Status (2026-10-28, Steps on your website: client site tasks — previous)
 Owner asked: where does the platform tell a client to do something on their own site, let them say done, check it and mark it done?
 Nowhere as one flow (the IndexNow file was asked on the AI page only, its check was not saved; robots.txt blocks and broken-page
 redirects had no ask at all). **Built, reviewed, DEPLOYED 2026-10-27 ~22:05 UTC** (API on the VM at `80e94221`, web via PR #42 /
