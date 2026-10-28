@@ -900,7 +900,8 @@ was last done and a skip; a website with no row still shows its steps (derived f
 For a written page (a `content` report that carries the page; anything else is 404, as is another company's report). Every write answers the
 whole `PageReviewView` (`delivery` with the plain-words headline and the grade of the delivered page, the ranked `questions` with `stored` = the
 website already has that fact, `answers`, `delivered`, `clientVersion`, `finalize` with its `quote` and `needed` / `reason`, `approval`, `publish`,
-`stage`, `isFinal`, `finalOf`). A final version is a new report with `finalized_from` = the delivered report; both share one review row
+`stage`, `isFinal`, `finalOf`, and `people`: every user id the view carries (`approval.approvedBy`, `clientVersion.savedBy`, each answer's and
+stored fact's `by`) mapped to the person's name, else e-mail, else "a team member"; screens print names through `personLabel`, never an id). A final version is a new report with `finalized_from` = the delivered report; both share one review row
 (table `page_reviews`, migration 0023). Answers on a final version are kept under `<final report id>/<question id>`.
 - `GET /api/orgs/:orgId/reports/:reportId/review` (viewer) → `PageReviewView`. A finalize run with no answer after 15 minutes is failed here (not charged).
 - `PUT …/review/answers` (member, 60/min) `{ answers: [{ questionId, decision: 'yes'|'edit'|'remove'|'general'|'answer'|'skip', text? }] }`. Each

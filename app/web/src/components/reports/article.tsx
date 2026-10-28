@@ -157,7 +157,7 @@ summary{cursor:pointer;font-weight:600;color:${t.ink}}
 .byline,time{font-size:.9rem;color:${t['ink-3']}}
 mark.ph{background:${t['warning-soft']};color:${t['warning-text']};border-radius:4px;padding:0 .25em;font-weight:600}
 `;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src https: data:"><style>${css}</style></head><body><main>${body}</main></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src https: data:"><style>${css}</style></head><body><main>${body}</main></body></html>`;
 }
 
 function DownloadFor({ file, fallback }: { file: ReportFile | null; fallback: { name: string; text: string; mime: string } }) {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { deliveryOf, type PageReviewView, type ReviewStage } from '@seo/shared';
+import { deliveryOf, renderMarkdown, type PageReviewView, type ReviewStage } from '@seo/shared';
 import { GuideProvider } from '@/components/guide';
 import { TooltipProvider } from '@/components/ui/overlay';
 import { ReviewBody } from '@/components/reports/review/ReviewPanels';
@@ -10,6 +10,7 @@ import { Compare } from '@/components/reports/review/PageEditor';
 import {
   answeredCount,
   blocksToMarkdown,
+  byPerson,
   choicesFor,
   contextLines,
   currentChoice,
@@ -73,6 +74,7 @@ const baseView = (over: Partial<PageReviewView> = {}): PageReviewView => {
     stage: 'questions',
     isFinal: false,
     finalOf: null,
+    people: { 'u1': 'Owner' },
     ...over,
   };
 };
@@ -185,6 +187,43 @@ describe('review screens', () => {
     const t = text(render(<ReviewBody view={baseView({ approval: { approvedAt: '2026-10-28T10:00:00Z', approvedBy: 'Owner', reportId: 'rep-1' }, stage: 'approved' })} report={page} />));
     expect(t).toContain('Approved');
     expect(t).not.toContain('Approve and publish</button>');
+  });
+
+  it('who approved and who saved the client version are named, never shown as an internal id', () => {
+    const uid = '7f3c2a10-5b1e-4c9d-8e2f-0a1b2c3d4e5f';
+    const gone = '00000000-1111-4222-8333-444444444444';
+    const t = text(
+      render(
+        <ReviewBody
+          view={baseView({
+            approval: { approvedAt: '2026-10-28T10:00:00Z', approvedBy: uid, reportId: 'rep-1' },
+            clientVersion: { markdown: '# A\n\nText.\n', savedAt: '2026-10-28T09:00:00Z', savedBy: gone, check: null },
+            people: { [uid]: 'Sara Haddad', [gone]: 'a team member' },
+            stage: 'approved',
+          })}
+          report={page}
+        />,
+      ),
+    );
+    expect(t).toContain('by Sara Haddad');
+    expect(t).toMatch(/Your version, saved .* by a team member\./);
+    expect(t).not.toContain(uid);
+    expect(t).not.toContain(gone);
+    // an id the server did not name still never reaches the screen
+    expect(byPerson({ people: {} }, uid)).toBe(' by a team member');
+    expect(byPerson({ people: { [uid]: 'Sara Haddad' } }, null)).toBe('');
+  });
+
+  it('the editor preview shows https images and a labelled box for any other image (no blocked request, no script)', () => {
+    const md = '# Page\n\n![Hero](images/erp-hero.webp)\n\n![Team](https://cdn.novaand-demo.com/team.jpg)\n\n![Old](http://novaand-demo.com/old.png)\n\n![x](javascript:alert(1)) <img src=x onerror=alert(1)>\n';
+    const html = renderMarkdown(md, { preview: true });
+    expect(html).toContain('<img src="https://cdn.novaand-demo.com/team.jpg" alt="Team"');
+    expect(html).not.toMatch(/<img[^>]+src="(?!https:)/);
+    expect(html).toContain('<span class="img-ph-label">Image to upload</span><span class="img-ph-name">erp-hero.webp</span>');
+    expect(html).toContain('Image not shown (not a secure https address)');
+    expect(html).not.toMatch(/javascript:|onerror|<script/i);
+    // the final version's HTML keeps the page's own image paths
+    expect(renderMarkdown(md)).toContain('<img src="images/erp-hero.webp"');
   });
 
   it('the comparison names each change in words, not colour only', () => {

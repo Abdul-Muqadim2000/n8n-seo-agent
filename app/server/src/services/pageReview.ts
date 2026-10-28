@@ -22,9 +22,11 @@ import {
   PAGE_MARKDOWN_MAX,
   pageCheckOf,
   pageMarkdownWithMeta,
+  personDisplayName,
   plainWords,
   prefilledAnswer,
   questionsOf,
+  reviewPersonIds,
   reviewStage,
   reviewSummaryOf,
   sanitizeMarkdown,
@@ -220,7 +222,7 @@ export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewVie
   const bp = obj(base.payload);
   const bmeta = obj(bp.meta);
   const approvedReport = row?.approvedReportId ?? null;
-  return {
+  const view: Omit<PageReviewView, 'people'> = {
     reportId: viewed.id,
     siteId: viewed.siteId ?? l.original.siteId ?? null,
     keyword: str(payload.keyword) || str(obj(payload.meta).primary_keyword),
@@ -247,6 +249,22 @@ export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewVie
     isFinal,
     finalOf: isFinal ? l.original.id : null,
   };
+  return { ...view, people: await peopleOf(reviewPersonIds(view)) };
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The names behind the user ids a review carries (name, else e-mail, else "a team member" for a deleted user), so the page says
+ * "Approved by Sara" and never prints an internal id.
+ */
+export async function peopleOf(ids: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const valid = [...new Set(ids)].filter((id) => UUID_RE.test(id));
+  const users = valid.length ? await db.select({ id: schema.users.id, name: schema.users.name, email: schema.users.email }).from(schema.users).where(inArray(schema.users.id, valid)) : [];
+  const byId = new Map(users.map((u) => [u.id, u]));
+  for (const id of ids) out[id] = personDisplayName(byId.get(id) ?? null);
+  return out;
 }
 
 export async function getReview(a: OrgAccess, reportId: unknown): Promise<PageReviewView> {
