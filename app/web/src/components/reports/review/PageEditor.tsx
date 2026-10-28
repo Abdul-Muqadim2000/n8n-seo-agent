@@ -226,8 +226,8 @@ function BlockRow({ b, i, n, onText, onMove, onRemove, onAdd }: { b: EBlock; i: 
 
 function Preview({ md }: { md: string }) {
   const tokens = useThemeTokens();
-  const doc = useMemo(() => srcDoc(renderMarkdown(md), tokens), [md, tokens]);
-  return <iframe title="Preview of your version" sandbox="" srcDoc={doc} className="h-[70vh] min-h-[420px] w-full rounded-xl border border-line bg-surface lg:sticky lg:top-4" />;
+  const doc = useMemo(() => srcDoc(renderMarkdown(md, { preview: true }), tokens), [md, tokens]);
+  return <iframe title="Preview of your version" sandbox="" referrerPolicy="no-referrer" srcDoc={doc} className="h-[70vh] min-h-[420px] w-full rounded-xl border border-line bg-surface lg:sticky lg:top-4" />;
 }
 
 const DIFF_LABEL = { changed: 'Changed', added: 'Added', removed: 'Removed', same: 'Same' } as const;
