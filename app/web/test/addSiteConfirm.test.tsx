@@ -26,10 +26,10 @@ vi.mock('sonner', () => ({
 // A 409 confirm_needed is a question, not a duplicate: Cancel leaves the filled form with no error and nothing added; Continue anyway and
 // Accept send the save again; only site_exists / domain_claimed (and a raced `conflict`) show the duplicate message, in our words.
 
-const VALUES = { domain: 'devaicon.com', country: 'Pakistan', business: 'AI automation for companies in Dubai, Abu Dhabi and Riyadh' } as unknown as SiteFormValues;
+const VALUES = { domain: 'corvane-demo.com', country: 'Pakistan', business: 'AI automation for companies in Dubai, Abu Dhabi and Riyadh' } as unknown as SiteFormValues;
 const SERVER_TEXT = 'This does not match what we know about the website. Read the warnings: apply the correction they offer, or send their ids in "acknowledge" to go ahead anyway.';
 const warnings = (): Warning[] => consistencyWarnings('site_update', { ...VALUES }, { site: null });
-const SITES = [{ id: 's-1', domain: 'devaicon.com' }] as unknown as Site[];
+const SITES = [{ id: 's-1', domain: 'corvane-demo.com' }] as unknown as Site[];
 
 /** The two screens' form error rendering, as the form does it (SiteBusinessForm: showSubmitError, then formErrorNode). */
 const SCREENS = {
@@ -127,7 +127,7 @@ describe('adding a website whose description names another market', () => {
       expect(siteCreateConflict(e)).toBe('exists');
       const out = html(view(e));
       expect(out).toContain('You already added this website');
-      expect(out).toContain('devaicon.com is already one of your company&#x27;s websites.');
+      expect(out).toContain('corvane-demo.com is already one of your company&#x27;s websites.');
       expect(out).not.toContain('already one of your websites.');   // the server's sentence is not printed
     });
   }
@@ -161,7 +161,7 @@ describe('adding a website whose description names another market', () => {
 // 'send their ids in "acknowledge"'. A confirm_needed is answered in the dialog only; it is never an error message anywhere.
 describe('a keyword check that asks "Check this first"', () => {
   const CHECK_WARNINGS = (): Warning[] =>
-    consistencyWarnings('keyword_check', { keyword: 'ai automation services dubai', country: 'Pakistan' }, { site: { domain: 'devaicon.com', country: 'Pakistan', business: 'Software' } });
+    consistencyWarnings('keyword_check', { keyword: 'ai automation services dubai', country: 'Pakistan' }, { site: { domain: 'corvane-demo.com', country: 'Pakistan', business: 'Software' } });
   function stubCheck() {
     const sent: Record<string, unknown>[] = [];
     vi.stubGlobal('fetch', async (_url: string, init: { body?: string }) => {
