@@ -1181,6 +1181,32 @@ assert _fc['Content QA'] == _FIN_MAIN['Content QA'] and _fc['Originality Check']
 assert 'qa_max_rounds: 1' in _fc['Parse Brief'] and "writes: 'none'" in _fc['Finalize Verdict'] and 'const FA = (() => {' in _fc['Parse Brief'] and 'const PF = (() => {' in _fc['Finalize Apply'] and 'const CC = (() =>' in _fc['Finalize Verdict'], 'H3: a finalize node lost its kit or its contract'
 assert not [n for n in FN.N if 'dataforseo.com' in str((n.get('parameters') or {}).get('url') or '')], 'H3: the finalize workflow must buy no search data'
 assert 'kept_open:' in _fc['Finalize Verdict'] and 'duplicate_decision' in _fc['Parse Brief'] and 'length_band: LEN.band' in _fc['Parse Brief'], 'W0-B: the finalize lost the page-run context (page_run / duplicate_decision / the carried blockers)'
+# W0-G (2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 7, R4 D8, REVIEW_CODE M7): the final version's own PDF and Word file. Three
+# Finalize-only nodes after *Finalize Verdict*, which they read and never edit: *Final Version Document* prints the final page (a header with
+# its status, the grade of this version, the search description and the address, then the page), *Render Final PDF* sends it to Gotenberg
+# (the renderer every report uses; 30 s, 3 tries), *Attach Final Files* adds `files: { pdf, word, pdf_missing }` to the answer (the PDF only
+# when one came back). The answer goes out first, the ledger settles after it, as before. The app stores the files with the final version's
+# HTML / Markdown / meta.json and copies the first version's images (app/server/src/services/finalFiles.ts).
+for _bad in ('—', '–', '“', '”', '…'):
+    for _f in ('code/Finalize_Document.js', 'code/Finalize_Attach_Files.js'):
+        assert _bad not in rd(_f), 'W0-G: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f
+_fv_out = FN.C['Finalize Verdict']['main'][0]
+assert [t['node'] for t in _fv_out] == ['Respond Finalize', 'Load Cost Factors (Finalize)'], 'W0-G: Finalize Verdict no longer answers first and settles after: ' + str(_fv_out)
+FN.C['Finalize Verdict']['main'][0] = [t for t in _fv_out if t['node'] != 'Respond Finalize']
+_w0g_doc = rd('code/Finalize_Document.js')
+assert _w0g_doc.count('/*__LINEAGE__*/') == 1, 'W0-G: Final Version Document must carry the lineage kit marker once'
+FN.code('Final Version Document', _w0g_doc.replace('/*__LINEAGE__*/', rd('code/_lineage.js').rstrip('\n'), 1), at(11, 1))
+FN.iff('Has Final Document?', '{{ $json.final_doc === true }}', at(12, 1))
+FN.node('Render Final PDF', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': 'http://gotenberg:3000/forms/chromium/convert/html', 'sendBody': True, 'contentType': 'multipart-form-data',
+    'bodyParameters': {'parameters': [{'parameterType': 'formBinaryData', 'name': 'files', 'inputDataFieldName': 'html'}, {'name': 'paperWidth', 'value': '8.27'}, {'name': 'paperHeight', 'value': '11.69'}, {'name': 'marginTop', 'value': '0.6'}, {'name': 'marginBottom', 'value': '0.6'}, {'name': 'marginLeft', 'value': '0.6'}, {'name': 'marginRight', 'value': '0.6'}, {'name': 'printBackground', 'value': 'true'}]},
+    'options': {'timeout': 30000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'pdf'}}}}, at(13, 0), onError='continueRegularOutput', **retry_lint.RETRY)
+FN.code('Attach Final Files', _fin('Finalize_Attach_Files.js'), at(14, 1))
+FN.C['Finalize Verdict']['main'][0].insert(0, {'node': 'Final Version Document', 'type': 'main', 'index': 0})   # first: the answer leaves before the settle
+FN.link('Final Version Document', 'Has Final Document?'); FN.link('Has Final Document?', 'Render Final PDF', 0); FN.link('Has Final Document?', 'Attach Final Files', 1)
+FN.chain('Render Final PDF', 'Attach Final Files', 'Respond Finalize')
+_fc = {n['name']: n['parameters'].get('jsCode', '') for n in FN.N if n['type'] == 'n8n-nodes-base.code'}
+assert "$('Finalize Verdict').first().json" in _fc['Attach Final Files'] and 'getBinaryDataBuffer' in _fc['Attach Final Files'] and 'body.files' in _fc['Attach Final Files'], 'W0-G: Attach Final Files must read Finalize Verdict, the PDF bytes through the binary helper, and answer files'
+assert 'body.files' not in _fc['Finalize Verdict'], 'W0-G: the files are added after Finalize Verdict, never by it'
 FN.sticky("""## SEO Agent — Page Finalize (H3, 2026-10-28)
 `POST /webhook/seo-page-finalize` (header X-API-Key, credential **SEO API Key**), synchronous. Body (app/shared/src/page-review.ts FinalizeBody): `{ mode: 'finalize', request_id, domain, site_id, keyword, country, page_type, markdown, delivered_markdown, client_edited, meta: { title, meta_description, slug, h1 }, answers: [{ id, fact_key, source, decision: yes|edit|remove|general|answer|skip, text, question, original, neutral, in_page, section }], business_facts, business_facts_kv, stored_fact_keys, page_run: { the gating fields of the original report (qa_blocking, duplicate_targets, verdict, score, score_withheld, page_type, verdict_acknowledged, copied_passages, missing) + the page run's grading fields (length_band, coverage_target, terms, facts, sources_cited, style_guide, site_urls, serp_shapes, regulatory_facts) }, duplicate_decision: { choice: update | differs, url, reason } }` (W0-B: the page run's blockers this check cannot see stay open until they are gone or the client decides; without them the page is never ready).
 **Parse Brief** checks the request (400 with the reasons) and builds the content gate's context: the business facts + the stored answers + this request's confirmed texts + every sentence the client wrote are on file. **Finalize Apply** swaps sentences (yes / edit / remove) and plans an edit only for the sections a fact must be worked into; **Finalize Editor** (Claude Sonnet) rewrites only those sections; **Finalize Merge** keeps a section only when it holds every confirmed sentence and every sentence the client wrote. **Content QA** + **Originality Check** are the content run's own code. **Finalize Verdict** answers `{ ok, markdown, applied, sections_rewritten, changes, delivery_status, delivery, client_questions, grade, cost, writes: 'none' }`: a statement the editor added that nothing supports is taken back by the system and asked; nothing the client wrote is ever changed.""", at(0, 4), 1100, 260)
