@@ -226,7 +226,7 @@ if (round > 1) {
       const anchor = m[1], url = m[2]; const k = SRC.key(url); const host = SRC.host(url);
       const generic = GENERIC_ANCHOR.test(anchor.trim()); const prevSent = generic ? plainSent(sentOf(prevMd, m.index)) : '';
       if (reviewText && host && reviewText.includes(host.replace(/^www\./, '')) && /misattribut|vendor|not a (?:primary|reliable)|remove|drop/.test(reviewText)) continue;
-      if (!k || deadPrev.has(k) || (domain && (host === domain || host.endsWith('.' + domain)))) continue;
+      if (!k || deadPrev.has(k) || SRC.isRedirect(url) || (domain && (host === domain || host.endsWith('.' + domain)))) continue;   // FU-SV: never re-link a redirect
       if (!(evid.has(k) || OFFICIAL.test(host))) continue;
       if (md.includes('](' + url + ')')) continue;
       // the first place the anchor words stand in the body, outside a heading and outside any other link
@@ -258,8 +258,13 @@ if (prev.existing_page && prev.existing_page.url) allowed.add(normUrl(prev.exist
 if (domain) allowed.add(normUrl(siteUrlOf(domain, '/')));
 const removedLinks = [], plannedLinks = [], weakRepeats = []; const externalUrls = []; const weakSeen = new Map();
 let internalLinks = 0, externalLinks = 0, cleanedLinks = 0;
+// FU-SV (2026-10-29, page-quality BEFORE run K7): a search-engine redirect is never a citation. One that carries its target links the
+// target; an opaque one (google.com/goto?url=<token>, the Vertex AI grounding redirect) loses its link and keeps its words, so the
+// attribution stays and the figure it carried is checked like any other uncited figure (§9).
+const redirectsResolved = [], redirectsDropped = [];
 md = md.replace(/\[([^\[\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
-  let u = SRC.clean(url.trim()); if (u !== url.trim()) cleanedLinks++;
+  if (SRC.isRedirect(url.trim())) { const t = SRC.unwrap(url.trim()); if (!t) { redirectsDropped.push(url.trim()); return text; } redirectsResolved.push(t); }
+  let u = SRC.clean(url.trim()); if (u !== url.trim() && !SRC.isRedirect(url.trim())) cleanedLinks++;
   const isRelative = u.startsWith('/');
   if (isRelative) u = domain ? siteUrlOf(domain, u) : u;
   const host = u.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[\/?#]/)[0].toLowerCase();
@@ -273,6 +278,19 @@ md = md.replace(/\[([^\[\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
 if (removedLinks.length) fixes.push(`Removed ${removedLinks.length} link(s) to pages that do not exist on ${domain || 'the site'}: ` + removedLinks.slice(0, 4).join(', '));
 if (plannedLinks.length) fixes.push(`Removed ${plannedLinks.length} link(s) to pages that are planned but not published yet: ` + [...new Set(plannedLinks)].slice(0, 4).join(', ') + '. They are listed in the package as links to add once they are live');
 if (cleanedLinks) fixes.push(`Stripped tracking parameters (utm_*, srsltid, gclid, fbclid) from ${cleanedLinks} link(s)`);
+if (redirectsResolved.length) fixes.push(`Pointed ${redirectsResolved.length} link(s) that went through a search engine redirect at the page they lead to: ` + redirectsResolved.slice(0, 4).join(', '));
+if (redirectsDropped.length) fixes.push(`Removed ${redirectsDropped.length} link(s) that were search engine redirects with no page address in them, keeping their words. Cite the original page instead`);
+// FU-SV (2026-10-29, page-quality BEFORE run, 5 of 8 pages): the page is published on the client's own site, so the client's own facts are
+// never reported from the outside ("Its website states 20+ years of industry experience"). CL.voice (the claims kit) takes the frame away
+// and keeps the claim with the business as its subject ("Tech& has 20+ years ..."), BEFORE the claim checks below, which therefore read
+// the claim as a statement in the business's name (§9d). What it cannot rewrite safely is listed in content_qa.voice.flags for the editor.
+const VOICE = (() => {
+  const names = [...new Set([(prev.site_profile || {}).business_name, SITE_MODEL ? SM.name(SITE_MODEL) : '', ...((SITE_MODEL && Array.isArray(SITE_MODEL.brand_names)) ? SITE_MODEL.brand_names : []),
+    (prev.site_description || {}).business_name, domain ? String(domain).split('.')[0] : ''].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
+  const v = CL.voice(md, { names }); md = v.text;
+  if (v.fixed.length) fixes.push('Rewrote ' + v.fixed.length + ' line(s) that described the business from the outside ("its website states ...") as plain statements in its own name');
+  return { fixed: v.fixed.length, rewrites: v.fixed.slice(0, 8), flags: v.flags.slice(0, 8) };
+})();
 if (weakRepeats.length) fixes.push(`Unlinked ${weakRepeats.length} repeat citation(s) of a source with no independent authority (one per domain): ` + [...new Set(weakRepeats)].join(', '));
 // citations must point at sources the brief allowed (evidence plan) or at least be real-looking hosts
 const allowedSources = new Set(((brief.evidence_plan || []).map(e => String(e.source_url || '').toLowerCase())).concat((prev.facts || []).map(f => String(f.url || '').toLowerCase())));
@@ -1067,6 +1085,7 @@ return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { t
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, writer_notes, open_brackets, business_name: bizName, nap_source,
     placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections, length_band,   // CT-FIX2 (D8): the band judged against and its sample   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
     masked_amounts, flagged_amounts, sourced_amounts,   // B3-1 / B3-2: what the money mask removed, what it left for review, and what a cited source vouched for
+    source_redirects: { resolved: redirectsResolved.length, dropped: redirectsDropped.length }, voice: VOICE,   // FU-SV: redirect citations, the business's own voice
     outbound_links: externalUrls.map(e => ({ url: e.url, anchor: e.anchor, host: e.host, tier: e.tier })),   // A-14: every outbound link, for Outbound Link Check
     business_claims, business_promises, promise_check, carried_promises, claims_open, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19 / E-CLAIM
     verdict_exclusions, excluded_sections, protected_restored,   // A-18 / A-17

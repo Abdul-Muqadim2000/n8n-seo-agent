@@ -34,6 +34,7 @@ const seen = new Set(); const picked = []; let cited = 0;
 for (const m of raw.matchAll(/(!?)\[[^\[\]]*\]\((https?:\/\/[^)\s]+)\)/g)) {
   if (m[1]) continue;   // an image is not a citation
   const url = SRC.clean(m[2]); const h = SRC.host(url);
+  if (SRC.isRedirect(url)) continue;   // FU-SV: an opaque search-engine redirect is not a source we can re-read (Content QA unlinks it)
   if (!h || (domain && (h === domain || h.endsWith('.' + domain))) || SOCIAL.test(h)) continue;
   const [a, b] = bounds(raw, m.index, m[0].length);
   const body = raw.slice(a, b).replace(/\[[^\[\]]*\]\([^)]*\)/g, (x) => ' '.repeat(x.length));
