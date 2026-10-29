@@ -540,6 +540,8 @@ const IX = (() => {
     if (status >= 300 && status < 400) {
       const loc = S((r.headers || {}).location || (r.headers || {}).Location);
       const abs = /^\//.test(loc) && !/^\/\//.test(loc) ? 'https://' + hostOf(asked.url) + loc : loc;
+      // the same sitemap on the other host / with a slash (example.com -> www.example.com): read it there, once
+      if (safe(abs, site) && same(abs, asked.url) && safe(abs, site) !== safe(asked.url, site) && !asked.redirected_from) st.fetched = st.fetched.filter(x => x !== k);
       if (safe(abs, site)) { if (!sitemapQueue(st, abs, asked.from, site, { redirected_from: asked.url }) && !st.fetched.includes(key(abs)) && !st.next.some(x => same(x.url, abs))) st.errors.push({ url: asked.url, error: 'redirects to another sitemap that was not read (cap)' }); }
       else st.errors.push({ url: asked.url, error: 'redirects off the site (' + status + ')' });
       return st;
@@ -864,6 +866,8 @@ const IX = (() => {
       if (!cause && ENUM_FETCH[S(r.page_fetch_state)]) cause = ENUM_FETCH[S(r.page_fetch_state)];
       if (!cause && /^BLOCKED_BY_(META_TAG|HTTP_HEADER)$/.test(S(r.indexing_state))) cause = 'noindex';
       if (!cause && S(r.robots) === 'DISALLOWED') cause = 'robots';
+      // a redirect Google followed names its target as Google's canonical: that is a redirect, not a duplicate (X4: never a drop-out)
+      if (!cause && /^redirect/.test(covCause(r.coverage))) cause = covCause(r.coverage);
       if (!r.reused) {
         if (!cause && S(r.user_canonical) && !same(r.user_canonical, p.url)) cause = p.in_sitemap ? 'canonical_elsewhere' : 'alternate';
         if (!cause && S(r.google_canonical) && !(same(r.google_canonical, p.url) && hostOf(r.google_canonical) === hostOf(p.url))) cause = S(r.user_canonical) ? 'google_chose_other' : 'duplicate_no_canonical';

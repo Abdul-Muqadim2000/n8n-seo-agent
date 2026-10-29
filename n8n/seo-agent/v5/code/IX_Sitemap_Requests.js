@@ -26,7 +26,7 @@ if (ROUND === 1) {
 } else {
   for (const st of (prev || [])) for (const n of (st.next || [])) {
     if (!n.robots && !n.home && (st.urls || []).length >= IX.CFG.urls_max) continue;   // E10: the tree stops at the address cap
-    out.push({ json: { site_id: st.site_id, url: n.url, from: n.from, ...(n.robots ? { robots: true } : {}), ...(n.home ? { home: true } : {}) } });
+    out.push({ json: { site_id: st.site_id, url: n.url, from: n.from, ...(n.robots ? { robots: true } : {}), ...(n.home ? { home: true } : {}), ...(n.redirected_from ? { redirected_from: n.redirected_from } : {}) } });
   }
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no sitemap left to read in round ' + ROUND } }];
