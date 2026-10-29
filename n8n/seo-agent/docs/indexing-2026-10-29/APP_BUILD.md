@@ -212,3 +212,33 @@ engine tree linked beside it for the parity tests.
 | web build | ok | ok |
 
 Not run: the engine harness (no engine change here), the browser pass (no Docker), `app/scripts/smoke.py` (no dev stack).
+
+## Fix wave 3 (2026-10-30, after REVIEW_3.md)
+
+Branch `ix/app` from `7777e17d`, worktree `n8n_devaicon-ix-app`. Not deployed, not pushed. Commits `0409a89b` (shared + server; also holds
+the R5 note text in `indexing.ts`) and `33d0f773` (report renderer, API.md, SITE_TASKS.md). New test file
+`shared/src/indexing.fixwave3.test.ts` (14), new fixture `shared/src/__fixtures__/index-coverage-wave2.json` (a copy of the engine's
+`contract_rows_wave2.json`, written by IXW14 from the real nodes), new cases in `server/test/indexing.test.ts` (3) and
+`web/test/indexing.test.tsx` (1). Run against `7777e17d` first: shared 11 of 14 fail, server 2 of 3, web 1 of 1; the passing ones are
+guards (an own check that still finds the problem, the fixture equal to the engine's file, the reservation in the page view, a click that
+finds the noindex is recorded).
+
+| id | fixed how | test |
+|---|---|---|
+| R1 (= N3 / X7 app half) | `IndexPageRow.fix_failed_at` / `ask_google_at`; `indexPageOf` gives `fixFailedAt` (set, and not older than `fix_seen_at`; such a page is `site_fix`, never "fixed on your site"; a newer `fix_seen_at` is a later fix, waiting again). `indexingCauseReadings` counts `googleStillSees` / `googleStillSeesAt` among the open pages; the step's payload carries `googleStillSees`, its engine reading says "Google read N pages again after the change we saw on your website and still sees the problem", and `deriveSiteTasks` lets no reading that calls it done decide it (our own check, or an older engine reading kept on the row): to do, warning. The detail explains it in plain words (the website may show Google something different from what a browser sees, e.g. a noindex, a block or an error sent only to Google by a plugin, a CDN or a server rule) and points to the cause's guide, which gains the answer "Our check finds it fixed, but Google still sees the problem" (URL Inspection, Test live URL) on the 8 cause guides. Server: `googleStillSeesOutcome` turns an own check that finds it fixed (or fixed in part) into "not decided": the daily check records nothing (only `last_check_at` moves, so it no longer flips the step to Done every day) and a click answers 409 `google_still_sees`; an own check that still finds the problem is recorded as usual. | shared `R1` (7); server `fix wave 3` (3, incl. two daily ticks) |
+| R5 (app side) | `indexingNoteText` replaces an internal error up to the sentence the engine writes after it (or the end), so `TypeError x.y.` leaves nothing behind, and drops the engine's "The figures are from the last check." / "Nothing has been checked yet."; the screen says where the figures come from once (report header; the callout no longer repeats the note; "What needs doing (last check)"; the page's notice keeps its own "The figures below are from the check of <date>."). | shared `R5` (2); web `fix wave 3` |
+| R9 | `pageCanonicalOf`: `href=""` / `href=''` is no canonical (''), never a URL made of the page or the quotes. | shared `R9` |
+| X17 | The engine's wave 2 rows (fix_seen_at, fix_failed_at, ask_google + ask_google_at, redirect_error, the reservation run) plus a row with `sources: 'sitemap,final'` through `indexPageOf`, `buildIndexingData`, `indexingCauseReadings`, `deriveSiteTasks`; a parity case fails if the fixture drifts from the engine's file. The app's harness-made techand fixture was not regenerated: this worktree has no generated `harness/code_v4` (the build needs `n8n/.env`). | shared `X17` (4) |
+
+### Checks (Docker `node:22-bookworm-slim`, `TZ=UTC`, whole repo mounted)
+
+| | before (7777e17d, fix wave 2) | after |
+|---|---|---|
+| typecheck shared / server / web | clean | clean |
+| shared | 938 passed | **952 passed** (56 files) |
+| server | 1549 passed, 46 skipped | **1552 passed, 46 skipped** (77 files, 3 skipped) |
+| web | 274 passed | **275 passed** (28 files) |
+| web build | ok | ok |
+
+Not run: the engine harness (no engine change), the browser pass, `app/scripts/smoke.py`. Not done here: the engine half of R5 (keep the
+exception out of `why`), R2-R4, R6-R8 (engine), A17 (the Indexing tutorial; the guide's new answer and the step's new wording belong in it).
