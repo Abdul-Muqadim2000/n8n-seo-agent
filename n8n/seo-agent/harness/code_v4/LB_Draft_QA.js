@@ -964,9 +964,11 @@ const CL = (() => {
       const h = L.match(/^(#{1,6})\s+(.*)$/);
       if (h) { flushPara(); if (h[1].length <= 2 || !g) { g = { heads: [], items: [] }; groups.push(g); } g.heads.push(h[2]); headLead = h[2]; lastLead = null; g.items.push({ p: h[2], kind: 'head' }); continue; }
       if (!g) { g = { heads: [], items: [] }; groups.push(g); }
-      const meta = L.match(/^Meta Description:\s*(.*)$/i);
-      if (meta) { flushPara(); g.items.push({ p: meta[1], kind: 'meta' }); continue; }
-      if (!L || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Slug|Primary Keyword|Secondary Keywords):/i.test(L)) { flushPara(); if (!L) { /* a blank line keeps the lead-in for the list below it */ } continue; }
+      // W0-A (2026-10-29, page-quality PLAN Fix 1, R4 D1): the meta description is search-result copy written from the brief, not a
+      // statement on the page. Read as a claim, its call to action ("then book a consultation with ...") was wrapped, emptied and asked as a
+      // client question (production run 3299). It is skipped like the title and the slug; PF.meta (_page_fix.js) gives it one narrow field
+      // check (a price, a guarantee, a timeline or a number not on file is dropped) instead.
+      if (!L || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords)\s*:/i.test(L)) { flushPara(); if (!L) { /* a blank line keeps the lead-in for the list below it */ } continue; }
       if (/^\|/.test(L)) { flushPara(); if (/^\|[\s:|-]+\|?$/.test(L)) { const hd = g.items[g.items.length - 1]; if (hd && hd.kind === 'table') g.items.pop(); continue; }   // the header row is labels, not a statement
         g.items.push({ p: L.replace(/^\||\|$/g, '').split('|').map(x => x.trim()).filter(Boolean).join('; ') + '.', kind: 'table' }); continue; }
       if (/^(?:[-*]|\d+[.)])\s+/.test(L)) { const leadIn = para.length ? para.join(' ') : null; flushPara(); g.items.push({ p: L.replace(/^(?:[-*]|\d+[.)])\s+/, ''), kind: 'li', lead: leadIn && /:\s*$/.test(leadIn) ? leadIn : lastLead, head: headLead }); continue; }

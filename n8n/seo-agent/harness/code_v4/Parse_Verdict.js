@@ -1602,6 +1602,174 @@ if (LM21 && String(LM21.keyword || '').toLowerCase().trim() === String(prev.keyw
     now: { score: nowScore, checked_at: nowAt, ai_overview: nowAioRead ? nowAio : null, features: featsNow }, score_moved: moved, changed, text };
   verdict.reasons = [...(Array.isArray(verdict.reasons) ? verdict.reasons : []), text];
 }
+// ---- DUP: "the site already has a page aimed at this search", one rule (page-quality W0-D, 2026-10-29; PLAN §2.1, RE M7, R4 G4) ----
+// Inlined by build_v4.py into *Parse Verdict* (before the brief: a hit asks the client first) and *Originality Check* (after the copy:
+// the safety net it always was; the Page Finalize and the Publish Check copy that node's code). Before this the rule lived only in the
+// late check, so run 3299 paid for a brief, a copy and three editor rounds before it learned the site already had a page for the search.
+// The rule: the keyword's words (3+ characters) against each inventory page's title, H1 and address. A page carrying 75% or more of them
+// is a duplicate target. Since W0-D the share must ALSO hold WEIGHTED by how rare each word is on this site (a word every page carries, "dynamics"
+// or "365" on a Dynamics partner's site, says less than one only a page or two carry, "system" or "erp"), so a guide asking "is
+// microsoft dynamics 365 an erp system" is not the duplicate of a Business Central service page that shares the site's own product words
+// (owner priority 2026-10-29: the ranking guide of exec 949 must never be held or flagged by this rule), while "microsoft dynamics erp"
+// and "dynamics 365 erp system" are recognised as the guide's own searches. With every word equally rare (a small site) it is the old
+// unweighted share. No URL constructor (n8n sandbox), no defineProperty.
+//   targets(keyword, pages, opts) -> { targets, partial, self, keyword_words, basis }
+//     opts.skip   URLs never compared (the pages this run read and compares by text, the page being improved)
+//     opts.self   URLs of this run's own page (the ladder's planned address); with opts.self_aware a page at one of them is this run's own
+//                 page: listed in `self`, never a duplicate of itself
+//     opts.slug_self  (before the brief only) a page whose last address segment is the keyword's own slug is the keyword's own page too:
+//                 the run improves it (the verdict's existing page) rather than duplicating it. Not in the late check: there, an unread
+//                 page at the keyword's own address IS the clearest duplicate (harness CTF5)
+//     opts.ladder a page of a keyword ladder: a page that carries only PART of the keyword's weight is the ladder's planned neighbour
+//                 (the rung links up to it), listed in `partial` as advice; only a page carrying all of it is a duplicate target
+//     opts.max    targets kept (3)
+const DUP = (() => {
+  const S = (v) => String(v == null ? '' : v);
+  const SHARE = 75, MAX = 3;
+  // the tokenizer of SHG (_shingle.js), character for character, so the late check finds what it always found
+  const norm = (t) => S(t)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/https?:\/\/\S+|www\.\S+/g, ' ')
+    .replace(/[‘’ʼ]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-')
+    .toLowerCase().replace(/[^a-z0-9'\s]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = (t) => { const s = norm(t); return s ? s.split(' ') : []; };
+  const toks = (t) => new Set(words(t).filter(w => w.length > 2));
+  const keyOf = (u) => S(u).toLowerCase().replace(/[#?].*$/, '').replace(/\/+$/, '');
+  const pathKey = (u) => keyOf(u).replace(/^https?:\/\/[^\/]+/, '');
+  const slugOf = (u) => { const p = pathKey(u).split('/').filter(Boolean); return p.length ? p[p.length - 1].replace(/\.[a-z]{2,5}$/, '') : ''; };
+  const slugify = (k) => S(k).toLowerCase().replace(/[‘’ʼ']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  // the page's words: title + H1 + address (the address with its separators as spaces, exactly as the late check always read it)
+  const pageToks = (p) => toks(S(p && p.title) + ' ' + S(p && p.h1) + ' ' + S(p && p.url).replace(/[-_/]+/g, ' '));
+  const targets = (keyword, pages, opts) => {
+    const o = opts || {};
+    const kw = toks(keyword);
+    const out = { targets: [], partial: [], self: [], keyword_words: kw.size, basis: '' };
+    if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
+    const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
+    const sets = list.map(pageToks);
+    // how many of the site's pages carry each keyword word: the rarer, the more it says about a page
+    const N = sets.length;
+    const w = {};
+    for (const t of kw) { let df = 0; for (const s of sets) if (s.has(t)) df++; w[t] = Math.log((N + 1) / (df + 1)) + 1; }
+    const total = [...kw].reduce((a, t) => a + w[t], 0);
+    const skip = new Set([...(o.skip || [])].map(keyOf).filter(Boolean));
+    const selfP = new Set([...(o.self || [])].map(pathKey).filter(Boolean));
+    const kslug = slugify(keyword);
+    const max = Number(o.max) > 0 ? Number(o.max) : MAX;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i]; const k = keyOf(p.url);
+      if (!k || skip.has(k)) continue;
+      const set = sets[i]; if (!set.size) continue;
+      let hit = 0, hw = 0;
+      for (const t of kw) if (set.has(t)) { hit++; hw += w[t]; }
+      const plain = Math.round((hit / kw.size) * 100);
+      const share = Math.round((hw / total) * 100);
+      // both measures must reach the bar: the weighting only ever REMOVES a match the plain share made (a page that shares only the site's
+      // common words), it never adds one the late check did not make before
+      if (plain < SHARE || share < SHARE) continue;
+      const row = { url: S(p.url), title: S(p.title), keyword_words_shared_pct: plain, weighted_pct: share };
+      if (o.self_aware && ((selfP.size && selfP.has(pathKey(p.url))) || (o.slug_self && kslug && slugOf(p.url) === kslug))) { out.self.push(row); continue; }
+      if (o.ladder && hit < kw.size) { out.partial.push(row); continue; }
+      out.targets.push(row);
+      if (out.targets.length >= max) break;
+    }
+    out.basis = 'the keyword\'s ' + kw.size + ' word(s) of 3+ letters against the title, main heading and address of ' + N + ' page(s) of the site, '
+      + 'a page carrying ' + SHARE + '% or more of those words, and of their weight when each word counts by how few of the site\'s pages carry it, is aimed at the same search';
+    return out;
+  };
+  return { targets, words, slugify, slugOf, SHARE, MAX };
+})();
+
+// ---- W0-D (page-quality programme 2026-10-29, PLAN Fix 4 + §2.1, REVIEW_CODE H1 / M1 / M3, owner decisions D1 / D2 / D17) ----
+// Run 3299 wrote "ms 365 erp", a keyword this verdict scored 42 and called a poor use of effort, because the router stopped only on AVOID,
+// and the site already had pages for the same search, which the late duplicate check found only after the brief, the copy and three
+// editor rounds had been paid for. Now, BEFORE the brief, a page run is held for the client's OK when:
+//   * the verdict scored the keyword under 50 (a null score, NOT_CHECKED or withheld, is "not checked": never a hold, the reason printed);
+//   * or the site already has a page aimed at the same search (DUP.targets, the late check's own rule, moved before the brief).
+// Not held (the owner's priority: the pages that already rank are ladder pages, case studies and refreshes, and nothing here may stop them):
+//   * a case study (its keyword is the case name, so a search score says nothing), an AI answer page (`ai_target`: chosen for AI answers,
+//     often with no search volume), a refresh of an own page (`existing_page_url`), a page of a keyword ladder (the ladder checked its main
+//     keyword when it was planned; production exec 949, the guide that ranks, is one): no score hold;
+//   * a ladder page is still checked for a duplicate, but only a page carrying ALL of its words counts (the ladder's planned neighbour shares
+//     most of them on purpose), and never the keyword's own page (its slug, or the ladder's planned address);
+//   * a run started with `hold_ack` (the client chose "Write it anyway"): no hold, `verdict_acknowledged` true; the fit cap downstream stays.
+// Automatic runs (the cadence, a ladder's own page runs, the tracker, case-study spawns) are held in SHADOW mode first (D17: two cadence
+// cycles): `would_hold` and the reasons are logged in the run and reported in its callback, the page is written as before. Runs a person
+// started (the app, the form, the API) are asked ("Needs your OK"). A hold writes no brief, no copy and no edit: the run delivers the
+// verdict report with `hold: { score, reasons, alternatives }` on stage `content`, and its cost is what the verdict cost.
+const HOLD = (() => {
+  const CFG = { threshold: 50, automatic: 'shadow', recheck_days: 90 };   // D17: automatic -> 'enforce' after two cadence cycles of shadow logs (owner review of the first 20 holds, RE L4)
+  const S = (v) => String(v == null ? '' : v).trim();
+  const ip = S(prev.client_ip).toLowerCase();
+  const automatic = /^(cadence|ladder|tracker|casestudy|audit):/.test(ip);
+  const writes = prev.include_content === true && !prev.verdict_only && S(prev.mode || 'keyword') === 'keyword';
+  const ackRaw = prev.hold_ack;
+  const ack = ackRaw && typeof ackRaw === 'object' && !Array.isArray(ackRaw) ? ackRaw : (ackRaw === true ? {} : null);
+  const scoreRaw = EV56.withheld ? null : verdict.score;
+  const score = (scoreRaw === '' || scoreRaw == null || !Number.isFinite(Number(scoreRaw))) ? null : Math.round(Number(scoreRaw));
+  const caseStudy = !!(S(prev.case_id) || (prev.case_study && typeof prev.case_study === 'object' && Object.keys(prev.case_study).length) || /case stud/i.test(S(prev.page_type)));
+  const aiPage = !!(prev.ai_target && typeof prev.ai_target === 'object' && S(prev.ai_target.question));
+  const refresh = !!S(prev.existing_page_url);
+  const ladderPage = !!S(prev.ladder_id) && prev.ladder_rung != null && prev.ladder_rung !== '';
+  const exemptScore = caseStudy ? 'a case study: its keyword is the case name, so a search score says nothing about it'
+    : aiPage ? 'a page written to be cited in AI answers: chosen for the question, not for search volume'
+    : refresh ? 'a refresh of a page your website already has'
+    : ladderPage ? 'a page of your keyword ladder: the ladder checked its main keyword when it was planned' : '';
+  const exemptDup = caseStudy ? 'a case study' : aiPage ? 'a page written for an AI answer' : refresh ? 'a refresh of a page your website already has' : '';
+  // ---- the value gate ----
+  let valueHit = false; let notChecked = '';
+  if (score == null) notChecked = EV56.withheld ? 'the verdict could not score this keyword (' + (EV56.evidence.error || 'the live results could not be read') + '), so nothing was held for it'
+    : 'the verdict gave no score, so nothing was held for it';
+  else if (score < CFG.threshold && !exemptScore) valueHit = true;
+  // ---- the duplicate gate (the late check's rule, before the brief) ----
+  let MODEL = prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null;
+  if (!MODEL) { try { MODEL = ($('Site Model').first().json || {}).site_model || null; } catch (e) { MODEL = null; } }
+  const ownUrl = EXP ? EXP.url : '';
+  const dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage })
+    : { targets: [], partial: [], self: [], basis: MODEL ? '' : 'no page inventory of the website was available, so a duplicate could not be checked' };
+  const dupHit = !EXP && dup.targets.length > 0;   // a page the verdict already redirected the run to (existing_page) is improved, not duplicated
+  const would = writes && !ack && (valueHit || dupHit);
+  const mode = !writes ? 'off' : automatic ? CFG.automatic : 'enforce';
+  const kw = S(prev.keyword);
+  const reasons = [];
+  if (writes && valueHit) reasons.push('Our verdict scored "' + kw + '" ' + score + ' out of 100, under the ' + CFG.threshold + ' we write without asking'
+    + ((verdict.reasons || [])[0] ? ': ' + String(verdict.reasons[0]).replace(/\s+/g, ' ').slice(0, 260) : '.'));
+  if (writes && dupHit) reasons.push('Your website already has a page aimed at this search: ' + dup.targets.map(t => t.url).join(', ')
+    + '. A second page would compete with it for the same search; improving that page is usually the faster way up.');
+  // ---- what to do instead (up to three, each one click in the app) ----
+  const alternatives = [];
+  const seen = new Set();
+  const addAlt = (a) => { const k = a.kind + '|' + S(a.keyword).toLowerCase() + '|' + S(a.url).toLowerCase(); if (seen.has(k) || alternatives.length >= 3) return; seen.add(k); alternatives.push(a); };
+  if (writes && (valueHit || dupHit)) {
+    const improveUrl = (dup.targets[0] || {}).url || ((OWNV.related || [])[0] || {}).url || '';
+    if (improveUrl) addAlt({ kind: 'improve', label: 'Improve the existing page', url: improveUrl, keyword: kw,
+      why: dupHit ? 'your website already has this page for the search: a refresh keeps its address and what it has already earned' : 'your website has a page on this topic: strengthening it is cheaper than a new page' });
+    // the verdict's own re-target: a quoted search in its first changes ("such as 'Microsoft Dynamics 365 ERP implementation partner UAE'"),
+    // else its first secondary keyword the site does not already hold elsewhere
+    const quoted = (() => { for (const c of verdict_changes.slice(0, 3)) { const re = /(?:^|[\s(])['‘“"]([^'’”"]{8,90})['’”"](?=[\s.,;:)]|$)/g; let m;
+      while ((m = re.exec(String(c || '')))) { const q = m[1].trim(); if (q.split(/\s+/).length >= 2 && q.toLowerCase() !== kw.toLowerCase() && !/[.!?]$/.test(q)) return q; } } return ''; })();
+    const retarget = quoted || (OWNV.secondary || []).find(s => S(s) && S(s).toLowerCase() !== kw.toLowerCase()) || '';
+    if (retarget) addAlt({ kind: 'retarget', label: 'Use the recommended target', keyword: retarget, page_type: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
+      why: 'the verdict recommends this search instead of "' + kw + '"' });
+    const kc = OWNV.keyword_covered;
+    if (kc && S(kc.keyword) && S(kc.keyword).toLowerCase() !== kw.toLowerCase()) addAlt({ kind: 'rung', label: 'Write the planned page', keyword: S(kc.keyword), ladder_id: S(kc.ladder_id),
+      why: S(kc.note) || 'this search is already planned on your website' });
+  }
+  const hold = would ? { score, threshold: CFG.threshold, kinds: [valueHit ? 'score' : '', dupHit ? 'duplicate' : ''].filter(Boolean), reasons, alternatives,
+    duplicates: dupHit ? dup.targets : [], mode, held: mode === 'enforce',
+    rule: 'A page waits for your OK when our verdict scores its keyword under ' + CFG.threshold + ' out of 100, or when your website already has a page for the same search.',
+    next: mode === 'enforce' ? 'Nothing was written and only the check was charged. Choose "Write it anyway", use the recommended target, or improve the existing page.'
+      : 'Started automatically, so the page was written as before; this check only records what it would have asked you.' } : null;
+  return {
+    applies: writes, mode, would, held: would && mode === 'enforce', hold, ack: ack ? { score: Number.isFinite(Number(ack.score)) ? Number(ack.score) : null } : null,
+    exempt: writes ? [exemptScore && ('score: ' + exemptScore), exemptDup && ('duplicate: ' + exemptDup)].filter(Boolean).join('; ') : '',
+    not_checked: writes ? notChecked : '', duplicate_check: { checked: !!MODEL && !exemptDup, targets: dup.targets, partial: dup.partial, self: dup.self, basis: dup.basis },
+    recheck_days: CFG.recheck_days
+  };
+})();
 
 return [{
   json: {
@@ -1628,6 +1796,19 @@ return [{
     time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null),   // kept for the ladder and older readers: it is the MODEL's own number and every surface now says so
     time_to_rank: EV56.withheld ? null : TTR77,
     for_you: EV56.withheld ? null : FORYOU77,
-    reach_info: FORYOU77 ? { reach: RI77.reach, method: RI77.method, cached: !!RI77.cached, cached_at: RI77.cached_at || null, evidence_kept: !!RI77.ranked } : null
+    reach_info: FORYOU77 ? { reach: RI77.reach, method: RI77.method, cached: !!RI77.cached, cached_at: RI77.cached_at || null, evidence_kept: !!RI77.ranked } : null,
+    // W0-D: the hold before the brief (the router *Need Content?* reads verdict_hold; the callback carries hold / hold_shadow)
+    verdict_hold: HOLD.held,
+    would_hold: HOLD.would,
+    hold_mode: HOLD.mode,
+    hold_reason: HOLD.would ? HOLD.hold.reasons.join(' ') : '',
+    hold: HOLD.held ? HOLD.hold : null,
+    hold_shadow: (HOLD.would && !HOLD.held) ? HOLD.hold : null,
+    hold_exempt: HOLD.exempt,
+    hold_not_checked: HOLD.not_checked,
+    hold_ack: HOLD.ack,
+    hold_recheck_days: HOLD.recheck_days,
+    verdict_acknowledged: !!HOLD.ack,
+    duplicate_check: HOLD.applies ? HOLD.duplicate_check : null
   }
 }];

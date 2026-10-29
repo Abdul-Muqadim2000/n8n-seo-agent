@@ -110,6 +110,7 @@
     "page_type",
     "pricing_facts",
     "proof_context",
+    "regulatory",
     "role_writer",
     "site_description",
     "spelling",
@@ -118,7 +119,12 @@
     "verdict_exclusions",
     "video_context"
    ],
-   "from": [],
+   "from": [
+    [
+     "Collect Regulatory Facts",
+     "regulatory"
+    ]
+   ],
    "input": "Parse Brief",
    "loop": false,
    "max_tokens": 128000,
@@ -126,7 +132,7 @@
    "model_node": "Claude \u2014 Copywriter",
    "node": "Copywriter",
    "streaming": true,
-   "template_chars": 11214,
+   "template_chars": 11422,
    "think_model": 3277
   },
   {
@@ -367,6 +373,7 @@
     "planned_link_targets",
     "proof_context",
     "recommended_page",
+    "regulatory",
     "role_brief",
     "serp_features",
     "site_description",
@@ -379,7 +386,12 @@
     "verdict_score",
     "video_context"
    ],
-   "from": [],
+   "from": [
+    [
+     "Collect Regulatory Facts",
+     "regulatory"
+    ]
+   ],
    "input": "Brief Context",
    "loop": false,
    "max_tokens": 128000,
@@ -387,7 +399,7 @@
    "model_node": "Claude \u2014 Strategy Brief",
    "node": "Strategy Brief",
    "streaming": true,
-   "template_chars": 14487,
+   "template_chars": 14941,
    "think_model": 2458
   },
   {

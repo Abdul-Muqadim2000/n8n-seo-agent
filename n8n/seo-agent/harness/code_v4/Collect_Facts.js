@@ -286,7 +286,8 @@ const SRC = (() => {
 // 2026-10-11 (FIX_PLAN G4): the URL is stored without its tracking parameters (a Statista link kept `?srsltid=` live), the source's
 // quality is recorded (primary / research / press / vendor documentation / weak), and `text` keeps everything we actually read from the
 // source — the snippet plus its title — because Content QA later looks up every figure of the draft in exactly that text.
-const prev = $('Analyze Competitor Pages').first().json;
+const prev = (() => { const p = $('Analyze Competitor Pages').first().json; let r = null; try { r = $('Collect Regulatory Facts').first().json; } catch (e) { r = null; }
+  return (r && r.regulatory) ? { ...p, regulatory: r.regulatory, regulatory_facts: r.regulatory_facts || [], regulatory_sources: r.regulatory_sources || [] } : p; })();   // W0-F (section 154): the regulatory facts travel on from here
 // R18 (2026-10-14): the facts search gets the same gate as the keyword's SERP. When both attempts fail, "no statistics were found"
 // would be a lie — nothing was searched — so the run carries `facts_evidence.unavailable` instead.
 const factsStats = RT.one((() => { try { return $('Facts SERP').first().json; } catch (e) { return $input.first().json || {}; } })(),
@@ -313,6 +314,9 @@ facts.sort((a, b) => (b.authority === 'high') - (a.authority === 'high') || (b.y
 const weakSeen = new Set();
 const kept = facts.filter(f => { if (f.tier !== 'weak') return true; if (weakSeen.has(f.source)) return false; weakSeen.add(f.source); return true; });
 const known = new Set((prev.serp_features || {}).people_also_ask || []);
-return [{ json: { ...prev, facts: kept.slice(0, 10), facts_found: facts.length, facts_evidence,
+const regFacts = (prev.regulatory_sources || []).filter(f => f && f.url).map(f => ({ ...f, url: SRC.clean(f.url), tier: SRC.tier(f.url) }));   // W0-F: the official rules and dates, first
+const regKeys = new Set(regFacts.map(f => SRC.key(f.url)));
+const prevOut = { ...prev }; delete prevOut.regulatory_sources;
+return [{ json: { ...prevOut, facts: regFacts.concat(kept.filter(f => !regKeys.has(SRC.key(f.url))).slice(0, 10)), facts_found: facts.length, facts_evidence,
   facts_note: 'Search snippets with their source URL. A figure may be quoted only as written and only with its source link: every figure in the draft is looked up in this text, and one that is not here is marked [Confirm: …] for review.',
   extra_questions: paa.filter(q => !known.has(q)).slice(0, 8) } }];

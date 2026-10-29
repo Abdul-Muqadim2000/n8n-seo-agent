@@ -46,6 +46,7 @@ COVERAGE TARGET (read off the best page in these results, not an average — it 
 
 VERIFIED FACTS WITH SOURCES (the only external numbers the writer may cite)
 {{ ($json.facts_list || $json.facts || []).map(f => '- ' + f.claim + ' — ' + f.source + ' — ' + f.url).join('\n') || 'none found; the page carries no external number' }}
+{{ (() => { try { const r = $('Collect Regulatory Facts').first().json.regulatory; if (r && typeof r.digest === 'string') return r.digest ? r.digest + '\nPlan where each date above goes (the section and the sentence), with its source in evidence_plan.' : ''; } catch (e) {} const g = ($json.regulatory || {}).digest || ''; return g ? g + '\nPlan where each date above goes (the section and the sentence), with its source in evidence_plan.' : ''; })() }}
 
 REAL PAGES ON THE USER'S WEBSITE (the ONLY URLs you may use for internal links)
 {{ ($json.ladder_links || []).length ? 'KEYWORD LADDER: this page is rung ' + $json.ladder_rung + ' of a ladder of pages that climb towards "' + $json.ladder_head + '". The pages marked "ladder" in the list below belong to that ladder and are live: link to them with natural, descriptive anchors. Ladder pages that are not published yet are NOT in the list and must never be linked or invented' + (($json.planned_link_targets || []).length ? ' (' + ($json.planned_link_targets || []).map(l => '"' + (l.keyword || l.about || l.url) + '"').join(', ') + ' are still planned)' : '') + '.' : '' }}

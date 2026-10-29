@@ -30,6 +30,10 @@ return [{
     verdict: d.verdict,
     score: d.verdict_score,
     score_withheld: !!d.score_withheld,
+    ...(() => { let pv = {}; try { pv = $('Parse Verdict').first().json || {}; } catch (e) { pv = {}; }   // W0-D (section 153)
+      const g = (k) => (d[k] !== undefined ? d[k] : pv[k]);
+      return { hold: g('hold') || null, hold_shadow: g('hold_shadow') || null, verdict_acknowledged: g('verdict_acknowledged') === true,
+        hold_exempt: g('hold_exempt') || '', hold_not_checked: g('hold_not_checked') || '' }; })(),
     evidence: d.verdict_evidence || null,
     reasons: d.verdict_reasons || [],
     risks: d.verdict_risks || [],
