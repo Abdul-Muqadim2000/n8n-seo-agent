@@ -66,6 +66,8 @@ const WE_DO: Record<string, string> = {
   duplicate_page: 'We kept the text as it is.',
   brand: 'We corrected the forms we know; one is still unclear.',
   author_profile: 'We left the author box empty rather than invent it.',
+  weak_figure: 'We asked for the sentence to be rewritten without the number; this one is still there.',
+  review: 'A second read of the finished page quoted these words; we did not change them on our own.',
 };
 const YOU_DO: Record<string, string> = {
   cut_off: 'Ask us to write the page again: a new run is needed.',
@@ -81,6 +83,8 @@ const YOU_DO: Record<string, string> = {
   off_topic: 'Delete the section in the editor.',
   guarantee: 'Delete the guarantee in the editor.',
   testimonial: 'Delete the testimonial in the editor.',
+  weak_figure: 'Rewrite the sentence without the number in the editor, or cite an official body, a research house or major press that states it.',
+  review: 'Check the quoted words against a source you trust, then correct or remove them in the editor.',
 };
 
 export function deliveryHeadline(status: PageDeliveryStatus, questions: number, firstBlocking?: PageDeliveryItem | null): { headline: string; detail: string } {

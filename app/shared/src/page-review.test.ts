@@ -137,6 +137,16 @@ describe('the delivered status', () => {
     expect(deliveryHeadline('ready_with_questions', 1).headline).toBe('Ready, and stronger with your input (1 question)');
     expect(plainWords('a \u2014 b \u201Cc\u201D d\u2026')).toBe('a: b "c" d...');
   });
+  it('says what we did and what the client does for a weak-only figure and for the second read (W0-H)', () => {
+    const w = deliveryHeadline('not_ready', 0, { code: 'weak_figure', text: 'A figure whose only source has no independent authority (blog.example): "2.1% of the market"' });
+    expect(w.headline).toMatch(/^Not ready: a figure whose only source has no independent authority/);
+    expect(w.detail).toMatch(/rewrite the sentence without the number/);
+    const r = deliveryHeadline('not_ready', 0, { code: 'review', text: 'A second read of the page found a problem at "Dynamics 365 holds a 2.1% share": the figure rests on a blog' });
+    expect(r.headline).toMatch(/^Not ready: a second read of the page found a problem/);
+    expect(r.detail).toMatch(/A second read of the finished page quoted these words/);
+    expect(r.detail).toMatch(/check the quoted words against a source you trust/);
+    for (const h of [w, r]) expect(h.headline + h.detail).not.toMatch(/[\u2014\u2013\u201C\u201D\u2018\u2019\u2026]/);
+  });
 });
 
 describe('the client questions', () => {
