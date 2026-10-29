@@ -37,8 +37,9 @@ import {
   autopilotRuns,
   redirectTaskKey,
   type SiteTask,
-  INDEX_CAUSE_FINDING_WORDS,
+  findingAsksSameFix,
   INDEX_CAUSE_INFO,
+  INDEXING_SITEMAP_KEY,
   indexingCauseOfKey,
   indexPath,
   improveKeywordOf,
@@ -456,7 +457,10 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
 /**
  * Index coverage (2026-10-29): one recommendation per cause (`ix:<action>:<cause>`), each opening the Indexing page.
  * - A cause only the client can fix is its step on the website (`taskKey`): listed while the step is to do, and NOT listed when an audit
- *   finding already asks for the same fix (its `tech:*` item stays the one ask).
+ *   finding already asks for the same fix (its `tech:*` item stays the one ask; matched on the finding's key, never on any word of a
+ *   title, A24). The sitemap step (Search Console has no sitemap, or reports errors) is one too.
+ * - Pages where a manual "Request indexing" in Search Console is the right next step (the engine marks at most 5): one recommendation
+ *   with the guide, never automated (FIX_CONTRACT, X8).
  * - Pages Google read and left out get "Improve this page" (the Write-a-page form with the page's address: the click is the approval,
  *   normal credits); none while a Google core or spam update is rolling out.
  * - Nothing when the check is switched off or has not run.
@@ -468,11 +472,15 @@ export function indexingRecommendations(
   add: (r: Recommendation, score?: ScoreInput) => void,
 ): void {
   if (!ix || !ix.on || !ix.runAt) return;
-  const techTitles = out.filter((r) => r.id.startsWith('tech:')).map((r) => r.title);
+  const findingKeys = out.filter((r) => r.id.startsWith('tech:')).map((r) => r.id.slice('tech:'.length));
   for (const t of (tasks ?? []).filter((t) => t.kind === 'indexing' && t.state === 'todo')) {
+    if (t.key === INDEXING_SITEMAP_KEY) {
+      add({ id: 'ix:site_fix:sitemap', taskKey: t.key, category: 'technical', priority: 'medium', title: t.title, detail: t.detail, action: { label: 'See the step', page: 'pipeline' }, guideVars: t.guideVars });
+      continue;
+    }
     const cause = indexingCauseOfKey(t.key);
     if (!cause) continue;
-    if (techTitles.some((title) => INDEX_CAUSE_FINDING_WORDS[cause].test(title))) continue;
+    if (findingKeys.some((k) => findingAsksSameFix(cause, k))) continue;
     add({
       id: `ix:site_fix:${cause}`,
       taskKey: t.key,
@@ -483,6 +491,19 @@ export function indexingRecommendations(
       evidence: t.values.map((v) => indexPath(v.value)).slice(0, 3).join(' · ') || undefined,
       action: { label: 'See the pages', page: 'indexing' },
       guideVars: t.guideVars,
+    });
+  }
+  if (ix.askGoogle.length) {
+    const n = ix.askGoogle.length;
+    add({
+      id: 'ix:ask_google',
+      category: 'technical',
+      priority: 'low',
+      title: `Ask Google to read ${n === 1 ? 'this page' : `these ${n} pages`} again`,
+      detail: 'Search Console lets you ask Google to read a page again, a few pages a day. For these pages it is the right next step: new pages of yours that are not in search yet, pages you fixed, and important pages Google has not read. You do it in Search Console; we never do it for you, and Google still decides.',
+      evidence: ix.askGoogle.map((p) => indexPath(p.url)).slice(0, 5).join(' · '),
+      action: { label: 'See the pages', page: 'indexing' },
+      guideVars: { pageUrl: ix.askGoogle[0].url },
     });
   }
   for (const o of ix.other) {

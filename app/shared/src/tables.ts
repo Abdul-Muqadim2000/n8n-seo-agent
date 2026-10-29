@@ -360,6 +360,10 @@ export interface IndexPageRow extends DtRow {
   last_crawl: string; referring_count: number; google_sitemaps: number; inspect_at: string; fetch_at: string; http_status: number;
   final_url: string; noindex: string; page_canonical: string; words: number; title: string; indexed_since: string; dropped_at: string;
   checks: number; next_check_at: string; needs_person: boolean; link_from: string; merge_into: string; note: string; updated_at: string;
+  /** fix wave 1 (FIX_CONTRACT.md): ISO, our fetch saw the site-fix cause gone while Google's last inspection still shows it ('' = no) */
+  fix_seen_at?: string;
+  /** fix wave 1: a manual "Request indexing" in Search Console is the right next step (at most 5 a site a week, never automated) */
+  ask_google?: boolean | string;
 }
 /** One row per state / cause change of a page (insert only). */
 export interface IndexHistoryRow extends DtRow {
@@ -371,6 +375,9 @@ export interface IndexRunRow extends DtRow {
   excluded: number; unknown: number; errors: number; new_pages: number; new_indexed: number; inspected: number; reused: number;
   fetched: number; quota_cap: number; backlog_left: number; by_cause_json: string; by_action_json: string; dropped_json: string;
   freeze: boolean; freeze_reason: string; note: string;
+  /** contract change 2 (ENGINE_BUILD): Search Console's submitted sitemaps and our own sitemap read, as JSON
+   *  `{submitted, submitted_errors, submitted_warnings, pending, read, fetched, urls, capped, robots_status, errors[]}` (+ `complete` later) */
+  sitemaps_json?: string;
 }
 /** Google's own announcements (Search Status Dashboard, spam policies page); global, one row per event. */
 export interface GoogleEventRow extends DtRow {

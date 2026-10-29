@@ -901,11 +901,17 @@ Read only: the engine's daily index check (`SEOagentIndexCv1`, free, Google data
 `seo_index_history`, `seo_index_runs`, `seo_google_events` and `seo_update_impact`; the app reads them by the engine's site id (rows of
 another domain that shares the id are dropped). Viewer and up, verified websites only (403 otherwise), not in the client portal. A read
 that fails answers `status: 'unreadable'` with a sentence, never an error, and never touches another page.
-- `GET /api/orgs/:orgId/sites/:siteId/data/indexing` (120 / 10 min per person) → `IndexingData`: `status` (`ok` / `empty` / `unreadable`),
-  `settings` (`on`, `dailyCap`), `checkedAt`, `totals` and `lanes.new` / `lanes.existing` (`known`, `indexed`, `shouldBe` = known minus pages
-  left out on purpose, `needYou`, `checked`, `unknown`, `errors`; totals add `backlogLeft`, `daysToFinish`), `groups` (one per lane x action x
+- `GET /api/orgs/:orgId/sites/:siteId/data/indexing` (120 / 10 min per person) → `IndexingData`: `status` (`ok` / `empty` / `failed` = every
+  run so far could not read Search Console and no page is known / `unreadable`), `settings` (`on`, `dailyCap`), `checkedAt` (the newest run
+  that read the website), `notice` (what the newest run could not read, the engine's own sentence: `{ tone, title, text, failed, accessLost,
+  at }` or null), `sitemapPartial` (the newest run read the sitemap tree only in part), `askGoogle` (at most 5 pages the engine marked
+  `ask_google`: a manual "Request indexing" in Search Console is the next step; never one left out on purpose), `totals` and `lanes.new` /
+  `lanes.existing` (`known`, `indexed`, `shouldBe` = pages Google gave a reading of minus those left out on purpose, `needYou`, `checked`
+  (a failed check is not one), `unknown`, `errors`; totals add `backlogLeft` = existing pages not checked yet, `daysToFinish` at the
+  configured daily checks), groups' `action` adds `review` (left out for a reason Google does not document) and `retry` (the check failed;
+  never "In search"), and a group `cause` `fixed_on_site` (pages with `fix_seen_at`), `groups` (one per lane x action x
   cause: `label`, `meaning`, `weDo`, `youDo`, `guide`, `taskKey` for a site fix, the first 25 `pages`), `dropped`, `runs` (last 12), `events`
-  (last 12 of Google's), `rollingOut`, `freeze` (a core or spam update is rolling out: no rewrite is suggested), `impacts` (last 3), `capped`
+  (last 12 of Google's), `rollingOut`, `freeze` (the engine's newest run flag: no rewrite is suggested while it is on), `impacts` (last 3), `capped`
   (more than 5,000 page rows), `pagesRead`.
 - `GET …/data/indexing/pages?lane=new|existing&action=…&cause=…&dropped=1&page=1&pageSize=25` (240 / 10 min) → `{ status, items, total, page,
   pageSize }` (same order as the group: most impressions first).
@@ -913,12 +919,21 @@ that fails answers `status: 'unreadable'` with a sentence, never an error, and n
   coverage }] }` (newest first, 20 at most); 404 for an address of another website.
 - Steps on the website: kind `indexing`, key `indexing:<cause>` for each cause only the client can fix (`noindex`, `robots_blocked`,
   `server_error`, `access_denied`, `not_found`, `soft_404`, `canonical_elsewhere`, `redirect`, `not_in_sitemap`, `indexed_not_in_sitemap`); payload
-  `{ cause, urls (25 at most, most impressions first), total }`. The engine's reading (`by: 'index'`) is the newest time it read any listed page
-  with that cause; a step is done when the newest index run lists none of its pages any more, or when the app's own check (at most 10 of the
-  pages on the website's own host, the sitemap read once, robots.txt for a block, the `X-Robots-Tag` header through the safe fetcher's opt-in
-  header return) finds each fixed. A page that is already a `redirect:` step is left out of the list. The daily tick gives indexing steps at
-  most a third of its 60 checks, after the other kinds.
-- Recommendations `ix:<action>:<cause>`: a site fix while its step is to do (not when an audit finding already asks for the same fix), links
+  `{ cause, urls (25 at most, most impressions first), total, pending? }`, plus `indexing:sitemap` (`{ cause: 'sitemap', submitted, errors }`)
+  when Search Console lists no sitemap or reports errors (from `seo_index_runs.sitemaps_json`; ticked off by the daily index check only, its
+  "check now" answers 409 `engine_reads_it`). Fix wave 1 rules: the engine's reading (`by: 'index'`) is the newest time GOOGLE inspected a
+  listed page with that cause (never our weekly re-fetch); pages with `fix_seen_at` newer than Google's reading are waiting for Google, and
+  a step whose pages all are is done and never reopened by the older reading; each cause is read on its own, sorted by impressions, capped at
+  200, and a capped read never concludes "done"; the reading has an 8 s deadline. The app's own check (at most 10 pages on the website's own
+  host) counts a page fixed only on the exact positive signal for its cause (FIX_CONTRACT decision 3), trusts a sitemap's silence only when
+  the whole tree was read (a failed, HTML, cut, compressed or off-host sitemap makes it partial), and treats a firewall, a challenge page, an
+  off-site redirect, a robots.txt that is not a file, or a partial sitemap as "could not tell": nothing recorded, and a click answers 409
+  `site_unsure`. A page that is already a `redirect:` step is left out of the list, and a cause whose pages all are has no step at all. One
+  sitemap download per website per check round (30 min cache; a person's click reads it again). The daily tick reserves a third of its 60
+  checks for indexing steps; the other kinds take the rest.
+- Recommendations `ix:<action>:<cause>`: a site fix while its step is to do (not when an audit finding already asks for the same fix, matched on
+  the finding's key: `findingAsksSameFix`), `ix:site_fix:sitemap`, `ix:ask_google` (the pages to ask Google about, with the guide
+  `index-request-indexing`; never automated), links
   and duplicates with their counts, and pages Google read and left out with **Improve this page** (the Write-a-page form, `mode: 'keyword'`,
   prefilled with the page's address as `existingPageUrl`: the click is the approval, normal credits); none while `freeze`, none when the
   check is off.
@@ -926,7 +941,12 @@ that fails answers `status: 'unreadable'` with a sentence, never an error, and n
   `index_watch` / `index_daily_cap` (last in the body, only when set; empty in the engine = on, 300 a day).
 - Callback stage `index_coverage` (DESIGN.md §5; `status: 'complete'` is read as a finished report): stored as a scheduled report, free
   (0 credits), deliverable (company delivery can choose it), `report.ready`, plus `alert.raised` (`source: 'index_coverage'`) when pages dropped
-  out; it also refreshes the website's steps.
+  out; it also refreshes the website's steps. Delivery follows the same rule as the weekly site report (FIX_CONTRACT decision 10).
+- Missed fires: the daily schedule is in `SCHEDULES` (`INDEX_COVERAGE_SCHEDULE`, 05:15) for the platform delivery report, counted from the
+  first `seo_index_runs` row of any website (before that it is not measured). Deleting a website deletes its rows in `seo_index_pages`,
+  `seo_index_runs`, `seo_update_impact` and (by the engine site id) `seo_index_history`; `seo_google_events` is global and stays.
+- Rollback (X11): before reverting the API to a build without this feature, delete or skip the `site_tasks` rows with `kind = 'indexing'`
+  (an older build reads an unknown kind as a redirect step).
 
 ## Page review: questions, business details, the editor, the final version, approval (H3, 2026-10-28; `shared/src/page-review.ts`, `server/src/services/pageReview.ts`)
 For a written page (a `content` report that carries the page; anything else is 404, as is another company's report). Every write answers the

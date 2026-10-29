@@ -16,6 +16,7 @@ const t = vi.hoisted(() => ({
   runs: [] as Record<string, unknown>[],
   history: [] as Record<string, unknown>[],
   failIndex: false,
+  reads: [] as string[],
 }));
 vi.hoisted(() => {
   process.env.APP_URL = 'http://localhost:5173';
@@ -31,13 +32,22 @@ vi.hoisted(() => {
 vi.mock('../src/db', async () => (await import('./helpers/pg')).pgDbModule());
 vi.mock('../src/n8n/client', async (orig) => {
   const real = await orig<typeof import('../src/n8n/client')>();
-  type F = { columnName: string; value: unknown };
-  const match = (xs: Record<string, unknown>[], filters: F[] = []) => xs.filter((r) => filters.every((f) => String(r[f.columnName] ?? '') === String(f.value)));
-  const rows = vi.fn(async (table: string, q: { filters?: F[]; max?: number } = {}) => {
+  type F = { columnName: string; condition?: string; value: unknown };
+  // n8n's AND filters (eq / neq) and its sortBy, as the app uses them; rows come back in insertion order otherwise
+  const match = (xs: Record<string, unknown>[], filters: F[] = []) =>
+    xs.filter((r) => filters.every((f) => (f.condition === 'neq' ? String(r[f.columnName] ?? '') !== String(f.value) : String(r[f.columnName] ?? '') === String(f.value))));
+  const sorted = (xs: Record<string, unknown>[], sortBy?: string) => {
+    if (!sortBy) return xs;
+    const [col, dir] = sortBy.split(':');
+    const v = (r: Record<string, unknown>) => r[col] ?? '';
+    return [...xs].sort((a, b) => (v(a) === v(b) ? 0 : (v(a) > v(b) ? 1 : -1) * (dir === 'desc' ? -1 : 1)));
+  };
+  const rows = vi.fn(async (table: string, q: { filters?: F[]; max?: number; sortBy?: string } = {}) => {
     const index = ['indexPages', 'indexRuns', 'indexHistory', 'googleEvents', 'updateImpact'].includes(table);
     if (index && t.failIndex) throw new Error('n8n API /data-tables answered 502');
-    if (table === 'indexPages') return match(t.pages, q.filters).slice(0, q.max ?? 2000);
-    if (table === 'indexRuns') return match(t.runs, q.filters).slice(0, q.max ?? 2000);
+    t.reads.push(table);
+    if (table === 'indexPages') return sorted(match(t.pages, q.filters), q.sortBy).slice(0, q.max ?? 2000);
+    if (table === 'indexRuns') return sorted(match(t.runs, q.filters), q.sortBy).slice(0, q.max ?? 2000);
     if (table === 'indexHistory') return match(t.history, q.filters);
     if (table === 'googleEvents') return [{ event_id: 'core-2026-10', kind: 'core', status: 'rolling_out', title: 'October 2026 core update', started_at: '2026-10-20' }];
     return [];
@@ -97,6 +107,8 @@ beforeEach(() => {
   t.runs = [];
   t.history = [];
   t.failIndex = false;
+  t.reads = [];
+  svc.forgetSitemaps();
 });
 
 let seq = 0;
@@ -144,7 +156,8 @@ describe('the Indexing page reads', () => {
     expect(d.totals.known).toBe(4);
     expect(d.groups[0]).toMatchObject({ action: 'site_fix', cause: 'noindex', count: 2, taskKey: 'indexing:noindex' });
     expect(d.rollingOut?.title).toBe('October 2026 core update');
-    expect(d.freeze.on).toBe(true);
+    // A11: the freeze is the engine's newest run flag (false here), the events only give the banner its words
+    expect(d.freeze.on).toBe(false);
     expect(d.settings).toEqual({ on: true, dailyCap: 300 });
   });
 
@@ -263,7 +276,7 @@ describe('recommendations', () => {
   const run = (o: Partial<IndexingForRecs> = {}) => {
     const out: Recommendation[] = [];
     indexingRecommendations(
-      { on: true, runAt: '2026-10-28', freeze: { on: false, reason: '' }, siteFix: [], other: [{ action: 'quality', cause: 'crawled_not_indexed', total: 2 }, { action: 'links', cause: 'unknown_to_google', total: 3 }], quality: [{ url: 'https://novaand-demo.com/blog/peppol', title: 'Peppol in the UAE | Nova&', impressions28d: 12 }], ...o },
+      { on: true, runAt: '2026-10-28', freeze: { on: false, reason: '' }, siteFix: [], askGoogle: [], other: [{ action: 'quality', cause: 'crawled_not_indexed', total: 2 }, { action: 'links', cause: 'unknown_to_google', total: 3 }], quality: [{ url: 'https://novaand-demo.com/blog/peppol', title: 'Peppol in the UAE | Nova&', impressions28d: 12 }], ...o },
       [task('indexing:noindex', 'Remove noindex'), task('indexing:robots_blocked', 'Robots')],
       [{ id: 'tech:indexability|robots.txt blocks key pages', category: 'technical', priority: 'high', title: 'Fix: robots.txt blocks key pages', detail: '' }] as Recommendation[],
       (r) => out.push(r),
@@ -280,5 +293,151 @@ describe('recommendations', () => {
   it('no quality item while a Google update rolls out; nothing at all when the check is off', () => {
     expect(run({ freeze: { on: true, reason: 'core update' } }).some((r) => r.id.startsWith('ix:quality'))).toBe(false);
     expect(run({ on: false })).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------- fix wave 1 (REVIEW_APP.md / REVIEW_CROSS.md, FIX_CONTRACT.md)
+describe('fix wave 1: the own check only ticks a step off on the exact positive signal', () => {
+  const step = (cause: string, urls: string[]) => ({ cause, urls, total: urls.length });
+
+  it('A1: a page in a 7th child sitemap of an index we only read in part, still answering 403, is not done', async () => {
+    const d = 'novaand-probe.com';
+    const kids = Array.from({ length: 14 }, (_, i) => `https://${d}/s${i}.xml`);
+    t.web[`https://${d}/robots.txt`] = { status: 404, text: '' };
+    t.web[`https://${d}/sitemap.xml`] = { status: 200, text: `<sitemapindex>${kids.map((k) => `<sitemap><loc>${k}</loc></sitemap>`).join('')}</sitemapindex>` };
+    kids.forEach((k, i) => (t.web[k] = { status: 200, text: `<urlset><url><loc>https://${d}/page${i}</loc></url></urlset>` }));
+    t.web[`https://${d}/page13`] = { status: 403, text: 'forbidden' };
+    const out = await svc.runSiteTaskCheck(d, 'indexing', step('redirect', [`https://${d}/page13`]));
+    expect(out.ok).toBe(false);
+    expect(out.reached).toBe(false);
+  });
+
+  it('A1: a sitemap address that answers the app shell (HTML 200) is no sitemap: a page still 404 is not done', async () => {
+    const d = 'novaand-spa.com';
+    t.web[`https://${d}/robots.txt`] = { status: 404, text: '' };
+    t.web[`https://${d}/sitemap.xml`] = { status: 200, text: '<!doctype html><html><body><div id="root"></div></body></html>' };
+    t.web[`https://${d}/gone`] = { status: 404, text: 'nf' };
+    const out = await svc.runSiteTaskCheck(d, 'indexing', step('not_found', [`https://${d}/gone`]));
+    expect(out.ok).toBe(false);
+  });
+
+  it('A2: a server-error step whose page answers a 403 firewall to us is "could not tell", never done', async () => {
+    const d = 'novaand-waf.com';
+    t.web[`https://${d}/x`] = { status: 403, text: '<html><head><title>Attention Required! | Cloudflare</title></head></html>' };
+    const out = await svc.runSiteTaskCheck(d, 'indexing', step('server_error', [`https://${d}/x`]));
+    expect(out).toMatchObject({ ok: false, reached: false, unsure: true });
+  });
+
+  it('A2: a click that cannot tell records nothing (409) and the step keeps its state', async () => {
+    const s = await setup();
+    engine(s);
+    await tasksOf(s);
+    await settle();
+    t.web[s.url('/services')] = { status: 200, text: '<html><head><title>Just a moment...</title></head><body>cf-chl-bypass</body></html>' };
+    t.web[s.url('/about')] = { status: 200, text: '<html><head></head><body>ok</body></html>' };
+    const before = (await rowOf(s.site.id, 'indexing:noindex'))!.lastCheck;
+    const r = await s.u.c.post(`${s.base}/tasks/check`, { key: 'indexing:noindex' });
+    expect(r.status).toBe(409);
+    expect((await rowOf(s.site.id, 'indexing:noindex'))!.lastCheck).toEqual(before);
+  });
+
+  it('A16: a robots.txt that answers 403 to us is not "robots.txt lets Google read"', async () => {
+    const d = 'novaand-robots.com';
+    t.web[`https://${d}/robots.txt`] = { status: 403, text: 'Forbidden' };
+    const out = await svc.runSiteTaskCheck(d, 'indexing', step('robots_blocked', [`https://${d}/blog`]));
+    expect(out.ok).toBe(false);
+    expect(out.reached).toBe(false);
+  });
+
+  it('A27: every sitemap step of one website in one round reads the sitemap once', async () => {
+    const d = 'novaand-once.com';
+    t.web[`https://${d}/robots.txt`] = { status: 404, text: '' };
+    t.web[`https://${d}/sitemap.xml`] = { status: 200, text: `<urlset><url><loc>https://${d}/a</loc></url></urlset>` };
+    await svc.runSiteTaskCheck(d, 'indexing', step('not_in_sitemap', [`https://${d}/a`]));
+    await svc.runSiteTaskCheck(d, 'indexing', step('indexed_not_in_sitemap', [`https://${d}/a`]));
+    expect(t.fetched.filter((u) => u === `https://${d}/sitemap.xml`)).toHaveLength(1);
+  });
+
+  it('X5: the sitemap step is read by the daily index check only; a click says so and records nothing', async () => {
+    const s = await setup();
+    const runAt = new Date(Date.now() - 3_600_000).toISOString();
+    t.runs.push({ site_id: s.sid, domain: s.domain, run_at: runAt, known: 3, indexed: 3, inspected: 3, by_cause_json: '{}', sitemaps_json: JSON.stringify({ submitted: 0, submitted_errors: 0, read: 1, capped: false, errors: [] }) });
+    const step = (await tasksOf(s)).find((x) => x.key === 'indexing:sitemap')!;
+    expect(step).toMatchObject({ state: 'todo', title: 'Submit your sitemap in Search Console', guide: 'index-submit-sitemap' });
+    await settle();
+    const r = await s.u.c.post(`${s.base}/tasks/check`, { key: 'indexing:sitemap' });
+    expect(r.status).toBe(409);
+    // the next run reads a submitted sitemap with no errors: done
+    t.runs.push({ site_id: s.sid, domain: s.domain, run_at: new Date(Date.now() + 1000).toISOString(), known: 3, indexed: 3, inspected: 3, by_cause_json: '{}', sitemaps_json: JSON.stringify({ submitted: 1, submitted_errors: 0, read: 1 }) });
+    expect((await tasksOf(s)).find((x) => x.key === 'indexing:sitemap')!.state).toBe('done');
+  });
+});
+
+describe('fix wave 1: the engine reading behind the steps', () => {
+  it('A6: 1,600 rows of another cause read first never hide a cause and call its step done', async () => {
+    const s = await setup();
+    const runAt = new Date(Date.now() - 3_600_000).toISOString();
+    t.runs.push({ site_id: s.sid, domain: s.domain, run_at: runAt, known: 1630, indexed: 1600, inspected: 30, by_cause_json: JSON.stringify({ indexed_not_in_sitemap: 1600, noindex: 30 }) });
+    for (let i = 0; i < 1600; i++) t.pages.push({ site_id: s.sid, domain: s.domain, url: s.url(`/p${i}`), state: 'indexed', cause: 'indexed_not_in_sitemap', action: 'site_fix', inspect_at: runAt });
+    for (let i = 0; i < 30; i++) t.pages.push({ site_id: s.sid, domain: s.domain, url: s.url(`/n${i}`), state: 'not_indexed', cause: 'noindex', action: 'site_fix', inspect_at: runAt, impressions_28d: i });
+    await db.insert(schema.siteTasks).values({ orgId: s.org.id, siteId: s.site.id, taskKey: 'indexing:noindex', kind: 'indexing', payload: { cause: 'noindex', urls: [s.url('/n1')], total: 30 }, createdAt: new Date(Date.now() - 2 * DAY) });
+    const n = (await tasksOf(s)).find((x) => x.key === 'indexing:noindex')!;
+    expect(n.state).toBe('todo');
+    // the list is the most important pages (most impressions first)
+    expect(n.values[0].value).toBe(s.url('/n29'));
+  });
+
+  it('A15: Pipeline / Recommendations / Overview do not wait for a slow index read (deadline, then no index reading)', async () => {
+    const s = await setup();
+    engine(s);
+    const real = (await import('../src/n8n/client')).rows as unknown as { mockImplementationOnce: (f: () => Promise<unknown>) => void };
+    real.mockImplementationOnce(() => new Promise(() => undefined));
+    const t0 = Date.now();
+    const r = await s.u.c.get(`${s.base}/tasks`);
+    expect(r.status).toBe(200);
+    expect(Date.now() - t0).toBeLessThan(15_000);
+  });
+
+  it('A27: indexing steps get their share of a tick even when the other kinds fill the whole budget', async () => {
+    const s = await setup();
+    const now = new Date();
+    await db.update(schema.siteTasks).set({ lastCheckAt: now });
+    for (let i = 0; i < 6; i++) await db.insert(schema.siteTasks).values({ orgId: s.org.id, siteId: s.site.id, taskKey: `redirect:${s.domain}/r${i}`, kind: 'redirect', payload: { brokenUrl: s.url(`/r${i}`), redirectTo: s.url('/'), links: 1 }, createdAt: now });
+    await db.insert(schema.siteTasks).values({ orgId: s.org.id, siteId: s.site.id, taskKey: 'indexing:server_error', kind: 'indexing', payload: { cause: 'server_error', urls: [s.url('/x')], total: 1 }, createdAt: now });
+    await db.update(schema.siteTasks).set({ lastCheckAt: new Date(Date.now() - 9 * DAY) }).where(eq(schema.siteTasks.siteId, s.site.id));
+    t.web[s.url('/x')] = { status: 500, text: 'err' };
+    await svc.siteTaskTick(log, { sites: 0, checks: 3 });
+    const ix = (await rowOf(s.site.id, 'indexing:server_error'))!;
+    expect(ix.lastCheckAt!.getTime()).toBeGreaterThan(Date.now() - DAY);
+  });
+});
+
+describe('fix wave 1: the rest of the app', () => {
+  it('X16: deleting a website removes its rows in the index tables (history by the engine id; Google events stay)', async () => {
+    const client = await import('../src/n8n/client');
+    const del = client.deleteRows as unknown as { mock: { calls: [string, { columnName: string; value: string }[]][] }; mockClear: () => void };
+    del.mockClear();
+    const { clearIndexInEngine } = await import('../src/routes/sites');
+    expect(await clearIndexInEngine('novaand-demo.com', { warn: () => undefined } as never)).toEqual([]);
+    const calls = del.mock.calls.map(([table, f]) => `${table}:${f[0].columnName}=${f[0].value}`);
+    expect(calls).toEqual(['indexPages:domain=novaand-demo.com', 'indexRuns:domain=novaand-demo.com', 'updateImpact:domain=novaand-demo.com', 'indexHistory:site_id=site_novaand-demo-com']);
+  });
+
+  it('A24: "Fix redirect chains" does not hide "Replace redirecting addresses in your sitemap"; a sitemap redirect finding does', () => {
+    const task = (key: string): SiteTask => ({ key, kind: 'indexing', state: 'todo', reopened: false, doneAt: null, lastCheck: null, severity: 'info', title: 'Replace redirecting addresses in your sitemap', detail: '', values: [], guide: 'index-sitemap-redirects', guideVars: {}, skipped: null });
+    const ids = (tech: string) => {
+      const out: Recommendation[] = [];
+      indexingRecommendations({ on: true, runAt: '2026-10-28', freeze: { on: false, reason: '' }, siteFix: [], other: [], quality: [], askGoogle: [] }, [task('indexing:redirect')], [{ id: `tech:${tech}`, category: 'technical', priority: 'high', title: 'x', detail: '' }] as Recommendation[], (r) => out.push(r));
+      return out.map((r) => r.id);
+    };
+    expect(ids('crawlability|redirect chains on # pages')).toEqual(['ix:site_fix:redirect']);
+    expect(ids('sitemap|# redirected urls listed in the sitemap')).toEqual([]);
+  });
+
+  it('X8: pages to ask Google about are one recommendation with the guide, never a page left out on purpose', () => {
+    const out: Recommendation[] = [];
+    indexingRecommendations({ on: true, runAt: '2026-10-28', freeze: { on: false, reason: '' }, siteFix: [], other: [], quality: [], askGoogle: [{ url: 'https://novaand-demo.com/new', title: 'New' }] }, [], [], (r) => out.push(r));
+    expect(out[0]).toMatchObject({ id: 'ix:ask_google', title: 'Ask Google to read this page again', action: { page: 'indexing' } });
+    expect(out[0].detail).toContain('we never do it for you');
   });
 });

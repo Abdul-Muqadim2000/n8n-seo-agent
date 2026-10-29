@@ -27,16 +27,17 @@ vi.mock('node:https', () => ({
   },
 }));
 
-const { fetchPublicOnce, fetchPublicText, getOnce } = await import('../src/services/verify');
+const verify = await import('../src/services/verify');
+const { fetchPublicOnce, fetchPublicText } = verify;
 
 describe('getOnce: headers only when asked', () => {
   answers.set('https://novaand-demo.com/a', { status: 200, headers: { 'x-robots-tag': 'noindex', 'content-type': 'text/html' }, body: '<p>hi</p>' });
   answers.set('https://novaand-demo.com/old', { status: 301, headers: { location: '/a' } });
 
   it('an existing caller gets the same three fields, no headers key', async () => {
-    const r = await getOnce('https://novaand-demo.com/a', 1000);
-    expect(r).toEqual({ status: 200, location: null, text: '<p>hi</p>' });
-    expect('headers' in r).toBe(false);
+    const r = await fetchPublicText('https://novaand-demo.com/a', 1000);
+    expect(r).toEqual({ status: 200, text: '<p>hi</p>', finalUrl: 'https://novaand-demo.com/a' });
+    expect('headers' in (r ?? {})).toBe(false);
     const once = await fetchPublicOnce('https://novaand-demo.com/old');
     expect(once).toEqual({ status: 301, location: 'https://novaand-demo.com/a', text: '' });
     const text = await fetchPublicText('https://novaand-demo.com/old', 1000);
@@ -44,13 +45,24 @@ describe('getOnce: headers only when asked', () => {
   });
 
   it('with the option: the response headers, and the first hop status of a redirect chain', async () => {
-    const r = await getOnce('https://novaand-demo.com/a', 1000, { headers: true });
-    expect(r.headers?.['x-robots-tag']).toBe('noindex');
+    const r = await fetchPublicText('https://novaand-demo.com/a', 1000, 4, { headers: true });
+    expect(r?.headers?.['x-robots-tag']).toBe('noindex');
+    expect(r?.truncated).toBe(false);
     const text = await fetchPublicText('https://novaand-demo.com/old', 1000, 4, { headers: true });
     expect(text).toMatchObject({ status: 200, finalUrl: 'https://novaand-demo.com/a', firstStatus: 301 });
     expect(text?.headers?.['x-robots-tag']).toBe('noindex');
     const direct = await fetchPublicText('https://novaand-demo.com/a', 1000, 4, { headers: true });
     expect(direct?.firstStatus).toBe(0);
+  });
+
+  it('A22: the unguarded single GET is not exported (every caller goes through the host guard)', () => {
+    expect('getOnce' in verify).toBe(false);
+  });
+
+  it('with the option: a body cut at the size cap says so (a half-read sitemap is not a complete list)', async () => {
+    answers.set('https://novaand-demo.com/big.xml', { status: 200, headers: { 'content-type': 'application/xml' }, body: '<urlset>' + 'x'.repeat(5000) });
+    const r = await fetchPublicText('https://novaand-demo.com/big.xml', 1000, 4, { headers: true });
+    expect(r?.truncated).toBe(true);
   });
 
   it('the host guard still refuses before any request', async () => {

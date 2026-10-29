@@ -55,13 +55,15 @@ describe('the page figures (buildIndexingData)', () => {
   it('counts the pages that should be in search apart from those left out on purpose', () => {
     expect(d.status).toBe('ok');
     expect(d.totals.known).toBe(10);
-    expect(d.totals.shouldBe).toBe(9);
+    // A9: of the 9 pages Google gave a reading of, 8 should be in search (the archive is left out on purpose); the unchecked one is apart
+    expect(d.totals.shouldBe).toBe(8);
     expect(d.totals.indexed).toBe(2);
     expect(d.totals.needYou).toBe(5); // 2 site fixes, 1 quality, 2 links (one an unknown code)
     expect(d.totals.unknown).toBe(1);
     expect(d.lanes.new.known).toBe(2);
-    expect(d.totals.backlogLeft).toBe(600);
-    expect(d.totals.daysToFinish).toBe(2);
+    // A10: the existing pages still unchecked in the rows (1), at the configured 300 a day (not the engine's all-lanes count)
+    expect(d.totals.backlogLeft).toBe(1);
+    expect(d.totals.daysToFinish).toBe(1);
   });
 
   it('groups by lane, action and cause, site fixes first, most impressions first inside a group', () => {
@@ -81,10 +83,10 @@ describe('the page figures (buildIndexingData)', () => {
     expect(d.dropped[0].linkFrom).toEqual([{ url: U('/a'), title: 'A' }]);
   });
 
-  it('is empty before any check, and frozen while a core update rolls out', () => {
+  it('is empty before any check; frozen only when the engine\'s newest run says so (A11), the event gives the banner', () => {
     expect(buildIndexingData({ rows: [], runs: [], events: [], impacts: [], settings: { on: true, dailyCap: 300 } }).status).toBe('empty');
     const f = buildIndexingData({ rows, runs: [], events: [{ event_id: 'e1', kind: 'core', status: 'rolling_out', title: 'October 2026 core update', started_at: '2026-10-20' }], impacts: [], settings: { on: true, dailyCap: 300 } });
-    expect(f.freeze.on).toBe(true);
+    expect(f.freeze.on).toBe(false);
     expect(f.rollingOut?.title).toBe('October 2026 core update');
     expect(rollingOutEvent([googleEventOf({ event_id: 'p', kind: 'policy_doc', status: 'rolling_out' })])).toBeNull();
     expect(buildIndexingData({ rows, runs: [{ run_at: '2026-10-28', freeze: true, freeze_reason: 'Spam update' }], events: [], impacts: [], settings: { on: true, dailyCap: 300 } }).freeze).toEqual({ on: true, reason: 'Spam update' });
@@ -108,11 +110,11 @@ describe('the steps on the website (kind "indexing")', () => {
   ]);
   const inputs = (o: Partial<SiteTaskInputs> = {}): SiteTaskInputs => ({ domain: D, indexnow: null, access: null, reclaim: null, indexing: { runAt: '2026-10-28T07:00:00Z', causes: readings }, ...o });
 
-  it('groups only the site fixes, by cause, 25 addresses at most, most important first', () => {
+  it('groups only the site fixes, by cause, most important first (a few more than a step lists, A7)', () => {
     expect(readings.map((r) => r.cause).sort()).toEqual(['noindex', 'not_found']);
     const nx = readings.find((r) => r.cause === 'noindex')!;
     expect(nx.total).toBe(30);
-    expect(nx.urls).toHaveLength(INDEXING_TASK_MAX_URLS);
+    expect(nx.urls.length).toBeGreaterThan(INDEXING_TASK_MAX_URLS);
     expect(nx.urls[0]).toBe(U('/n29'));
     expect(nx.readAt).toBe('2026-10-24T06:00:00Z');
   });
@@ -191,12 +193,13 @@ describe("the app's own check of one page", () => {
     expect(headerNoindex(['googlebot: noindex'])).toBe(true);
     expect(headerNoindex('otherbot: noindex')).toBe(false);
     expect(indexingPageFixed('noindex', f({ xRobotsTag: 'noindex' }), true).fixed).toBe(false);
-    expect(indexingPageFixed('noindex', f({ text: '<meta name="robots" content="noindex">' }), true).why).toContain('robots meta tag');
+    expect(indexingPageFixed('noindex', f({ text: '<html><head><meta name="robots" content="noindex"></head></html>' }), true).why).toContain('robots meta tag');
     expect(indexingPageFixed('noindex', f(), true).fixed).toBe(true);
   });
-  it('not found: open, a permanent redirect, or out of the sitemap; a temporary redirect is not enough', () => {
+  it('not found: open again or a permanent redirect to a page that opens (FIX_CONTRACT 3); a temporary redirect is not enough', () => {
     expect(indexingPageFixed('not_found', f({ status: 404 }), true).fixed).toBe(false);
-    expect(indexingPageFixed('not_found', f({ status: 404 }), false).fixed).toBe(true);
+    // leaving the sitemap is Google's reading to confirm, not ours
+    expect(indexingPageFixed('not_found', f({ status: 404 }), false).fixed).toBe(false);
     expect(indexingPageFixed('not_found', f({ redirectStatus: 301, finalUrl: U('/new') }), true).fixed).toBe(true);
     expect(indexingPageFixed('not_found', f({ redirectStatus: 302, finalUrl: U('/new') }), true).fixed).toBe(false);
   });
@@ -204,14 +207,15 @@ describe("the app's own check of one page", () => {
     expect(indexingPageFixed('server_error', f({ status: 503 }), null).fixed).toBe(false);
     expect(indexingPageFixed('server_error', f(), null).fixed).toBe(true);
     expect(indexingPageFixed('access_denied', f({ status: 403 }), true).fixed).toBe(false);
-    expect(indexingPageFixed('access_denied', f({ status: 403 }), false).fixed).toBe(true);
+    expect(indexingPageFixed('access_denied', f({ status: 403 }), false).fixed).toBe(false);
+    expect(indexingPageFixed('access_denied', f(), true).fixed).toBe(true);
     expect(indexingPageFixed('soft_404', f({ status: 410 }), null).fixed).toBe(true);
     expect(indexingPageFixed('soft_404', f(), null).fixed).toBe(false);
-    expect(indexingPageFixed('soft_404', f({ text: `<p>${'word '.repeat(200)}</p>` }), null).fixed).toBe(true);
+    expect(indexingPageFixed('soft_404', f({ text: `<html><body><p>${'word '.repeat(200)}</p></body></html>` }), null).fixed).toBe(true);
     expect(indexingPageFixed('redirect', f({ redirectStatus: 301, finalUrl: U('/x') }), true).fixed).toBe(false);
     expect(indexingPageFixed('redirect', f({ redirectStatus: 301, finalUrl: U('/x') }), false).fixed).toBe(true);
-    expect(indexingPageFixed('canonical_elsewhere', f({ text: `<link rel="canonical" href="${U('/other')}">` }), true).fixed).toBe(false);
-    expect(indexingPageFixed('canonical_elsewhere', f({ text: '<link rel="canonical" href="/p/">' }), true).fixed).toBe(true);
+    expect(indexingPageFixed('canonical_elsewhere', f({ text: `<html><head><link rel="canonical" href="${U('/other')}"></head></html>` }), true).fixed).toBe(false);
+    expect(indexingPageFixed('canonical_elsewhere', f({ text: '<html><head><link rel="canonical" href="/p/"></head></html>' }), true).fixed).toBe(true);
     expect(indexingPageFixed('not_in_sitemap', f(), true).fixed).toBe(true);
     expect(indexingPageFixed('indexed_not_in_sitemap', f(), false).fixed).toBe(false);
   });

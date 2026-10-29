@@ -1,6 +1,7 @@
 import { gte } from 'drizzle-orm';
 import {
   SCHEDULES,
+  INDEX_COVERAGE_SCHEDULE,
   cycleOverdue,
   n8nSiteId,
   nextScheduledRun,
@@ -296,7 +297,8 @@ export interface DeliveryInput {
 
 /** The whole report, from facts only, no database, no n8n. */
 export function deliveryReport(input: DeliveryInput): DeliveryReport {
-  const automations = input.automations ?? SCHEDULES;
+  // X10: a schedule with no known start (no built-in `since`, no start read from the engine) is not measured at all, never "missed forever"
+  const automations = (input.automations ?? SCHEDULES).filter((a) => !a.sinceFromData || a.since || input.created?.[a.workflow]);
   const notes = [...(input.notes ?? [])];
   const weeks: DeliveryWeek[] = weeksBack(input.weeks, input.now).map((from) => {
     const to = new Date(from.getTime() + 7 * DAY_MS);
@@ -329,7 +331,15 @@ export async function loadDeliveryReport(now = new Date()): Promise<DeliveryRepo
   const execs: Record<string, ExecutionSummary[]> = {};
   const notes: string[] = [];
   const failedWorkflows: string[] = [];
-  const daily = SCHEDULES.filter((a) => a.schedule.kind !== 'cycle');
+  // X10: the daily index check is counted from its first run row (any website); before that it is not measured
+  const created: Record<string, string> = {};
+  try {
+    const first = (await rows<{ run_at?: string }>('indexRuns', { sortBy: 'run_at:asc', max: 1 }))[0];
+    if (first?.run_at && Number.isFinite(Date.parse(String(first.run_at)))) created[INDEX_COVERAGE_SCHEDULE.workflow] = String(first.run_at);
+  } catch {
+    /* not known: the schedule is left out (no start) */
+  }
+  const daily = SCHEDULES.filter((a) => a.schedule.kind !== 'cycle' && (!a.sinceFromData || a.since || created[a.workflow]));
   for (const wf of [...new Set(daily.map((a) => a.workflow))]) {
     try {
       const [ok, bad] = await Promise.all([executions(wf, 'success', 150), executions(wf, 'error', 50)]);
@@ -357,5 +367,5 @@ export async function loadDeliveryReport(now = new Date()): Promise<DeliveryRepo
   } catch {
     notes.push('The ops-alert table could not be read, so the alert delivery rate is unknown.');
   }
-  return deliveryReport({ now, weeks: WEEKS, runs: runRows.map((r) => ({ ...r, reportCount: Number(r.reportCount ?? 0) })), execs, alerts, timezone: config.n8nTimezone, notes, cycles });
+  return deliveryReport({ now, weeks: WEEKS, runs: runRows.map((r) => ({ ...r, reportCount: Number(r.reportCount ?? 0) })), execs, alerts, timezone: config.n8nTimezone, notes, cycles, created });
 }

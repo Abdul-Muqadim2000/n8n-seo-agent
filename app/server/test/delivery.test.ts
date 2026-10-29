@@ -191,13 +191,22 @@ describe('R103 delivery rate: schedules are counted from the day they existed, a
   const NOW = new Date('2026-10-15T19:14:00Z');
   const run103 = (createdAt: string) => run({ createdAt: new Date(createdAt), completedAt: new Date(createdAt) });
 
-  it('lists ten schedules: the nine automations and the daily Page Watch (05:45 every day)', () => {
-    expect(SCHEDULES).toHaveLength(10);
+  it('lists eleven schedules: the nine automations, the daily Page Watch (05:45) and the daily index check (05:15, X10)', () => {
+    expect(SCHEDULES).toHaveLength(11);
     expect(AUTOMATIONS).toHaveLength(9);
     const pw = SCHEDULES.find((s) => s.id === 'page_watch')!;
     expect(pw.workflow).toBe('SEOagentPageWch1');
     expect(pw.schedule).toEqual({ kind: 'daily', weekdays: [0, 1, 2, 3, 4, 5, 6], hour: 5, minute: 45 });
-    expect(SCHEDULES.every((s) => !!s.since)).toBe(true);
+    // the index check is counted from its first run row (read from the engine), never from a date written here
+    expect(SCHEDULES.every((s) => !!s.since || s.sinceFromData)).toBe(true);
+  });
+
+  it('X10: the daily index check is measured from its first run row, and not at all before one exists', () => {
+    const ix = SCHEDULES.find((s) => s.id === 'index_coverage')!;
+    const base = { now: NOW, weeks: 1, timezone: TZ, execs: {}, alerts: [], runs: [], automations: [ix] };
+    expect(deliveryReport(base).weeks[0].missed).toEqual([]);
+    const counted = deliveryReport({ ...base, created: { SEOagentIndexCv1: '2026-10-13T00:00:00.000Z' } });
+    expect(counted.weeks[0].missed.length).toBeGreaterThan(0);
   });
 
   it('week 2026-09-28: every schedule was created later, so 5 of 5 on-demand runs delivered read 100% (it read 26.3%)', () => {
