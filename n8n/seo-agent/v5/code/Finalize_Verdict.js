@@ -74,7 +74,9 @@ for (const b of (PG.qa_blocking || [])) {
 }
 // the request did not carry what stopped the page in its first check: this version cannot be called ready on that basis
 const NAMES = { qa_blocking: 'what stopped the page in its first check', duplicate_targets: 'the pages your website already has for this search' };
-if (!PR.blocks_known) carried.push({ code: 'not_checked', tier: 'hard', text: 'We could not read ' + (PR.gating_missing || ['qa_blocking']).map(k => NAMES[k] || k).join(' and ') + ', so this version cannot be called ready',
+// M3 (WAVE0_REVIEW 2026-10-30): a request from an app built before W0-B (no page_run at all, `PR.legacy`) is not blocked on this: Parse Brief
+// derived what it could and the rest makes the version "Needs work" below, never "Ready to publish"
+if (!PR.blocks_known && !PR.legacy) carried.push({ code: 'not_checked', tier: 'hard', text: 'We could not read ' + (PR.gating_missing || ['qa_blocking']).map(k => NAMES[k] || k).join(' and ') + ', so this version cannot be called ready',
   action: 'make the final version again from the page in your content list, so its first check travels with it' });
 finalCls.blocking = carried.concat(finalCls.blocking);
 finalCls.hard = finalCls.blocking.filter(x => x.tier === 'hard').reduce((s0, x) => s0 + (x.weight || 1), 0);
@@ -91,7 +93,7 @@ for (const x of del.blocking) { const c = carried.find(y => y.code === x.code &&
 if (dupOpen) { const others = [...new Set(del.blocking.filter(x => x.code !== 'duplicate_page').map(x => x.action).filter(Boolean))];
   del.next_step = PF.clean('Your website already has a page for this search (' + (dupOpen.urls[0] || 'see the first check') + '): rewrite this as an update of that page, which is a new page run that keeps its address, or tell us how this page differs and make the final version again.'
     + (others.length ? ' Also: ' + others.join('; ') + '.' : '')); }
-else if (!PR.blocks_known) del.next_step = PF.clean('We could not read the first check of this page, so this version is not called ready. Make the final version again from the page in your content list, so its first check travels with it.');
+else if (!PR.blocks_known && !PR.legacy) del.next_step = PF.clean('We could not read the first check of this page, so this version is not called ready. Make the final version again from the page in your content list, so its first check travels with it.');
 // W0-B: what this check could not measure because the page run's research did not travel with the page (pages written before it was kept)
 const NOT_CHECKED = { length_band: 'the length of the pages that rank for this search (the usual length for this kind of page was used)', terms: 'topic coverage against the pages that rank',
   facts: 'the figures against the sources the page was written from', style_guide: 'your style guide (the business name and spelling)', site_urls: 'the links to your own pages against your full list of pages' };
@@ -120,6 +122,17 @@ const grade = GR.cap({ score: score0, of: 100, breakdown: breakdown0,
   ...(decision && decision.choice === 'differs' ? { fit_cap: { kept: true, why: 'published as a separate page beside ' + (decision.pages[0] || 'a page for the same search') + ', with your reason recorded' } } : {}) },
   del.blocking, { w0c: GD, decision });
 Object.assign(del, GR.deliver(del, grade));
+// M3: the version of a legacy request is never "Ready to publish" (what only the first check could see is unknown), but it is not held back
+// either: "Needs work" with what to do, the grade not capped, nothing blocking. A page that is not ready for its own reasons stays so.
+if (PR.legacy && !PR.blocks_known && del.status !== 'not_ready') {
+  const item = { code: 'needs_work', dim: 'first_check', text: 'Not checked: whether your website already has a page for this search, passages copied from another page and dead links. Only the first check of this page could see them, and this request did not carry it',
+    action: 'Make the final version again from the page in your content list, so its first check travels with it' };
+  const was = del.status === 'needs_work';
+  del.needs_work = (del.needs_work || []).concat(item);
+  del.status = 'needs_work'; del.label = PF.clean(was ? S(del.label) + ', first check not read' : 'Needs work: first check not read');
+  del.next_step = PF.clean((was ? S(del.next_step).replace(/[.\s]+$/, '') + '. ' : 'Nothing stops you publishing this page, but ') + 'we could not read the first check of this page, so this version is not called ready. Make the final version again from the page in your content list, so its first check travels with it.');
+  grade.ready = false; grade.first_check = { read: false, unknown: PR.legacy_unknown || [] };
+}
 // the answer: the Markdown the caller sent, without the meta lines it did not send
 let out = md;
 if (!P.had_meta) { const lines = out.split('\n'); let i = 0; while (i < lines.length && (/^(Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords)\s*:/i.test(lines[i].trim()) || !lines[i].trim())) i++; out = lines.slice(i).join('\n'); }
@@ -134,7 +147,7 @@ const body = {
   meta: { title: S((d.meta || {}).title), meta_description: S((d.meta || {}).description), slug: S((d.meta || {}).slug),
     // W0-B (D2): published as an update of the website's page for this search: its address and slug
     ...(decision && decision.choice === 'update' ? { target_url: decision.url, slug: (decision.url.replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '').split('/').pop() || S((d.meta || {}).slug)) } : {}) },
-  decision, page_run: { received: !!PR.received, gating_missing: PR.gating_missing || [], grading_missing: PR.grading_missing || [], kept_open: carried.map(x => x.code), resolved },
+  decision, page_run: { received: !!PR.received, legacy: !!PR.legacy, gating_missing: PR.gating_missing || [], grading_missing: PR.grading_missing || [], kept_open: carried.map(x => x.code), resolved },
   applied: (FM.applied || []).map(a => ({ id: a.id, how: a.how, section: S(a.section) })), sections_rewritten: FM.sections_rewritten || [], changes: changes.slice(0, 60),
   delivery_status: del.status,
   delivery: { status: del.status, label: del.label, blocking: del.blocking, advisory: del.advisory, next_step: del.next_step, grade, ...(del.needs_work ? { needs_work: del.needs_work } : {}) },

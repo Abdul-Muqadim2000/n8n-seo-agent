@@ -155,7 +155,31 @@ module.exports = async (ctx) => {
     check('on a page that otherwise cites well, the weak-only compliance figure caps sources at 8 of 15', gs.breakdown.sources === 8 && gs.caps.some(c => c.dim === 'sources'), J({ b: gs.breakdown.sources, s: gs.items.sources.share }));
     const cls = await pf('classify', [{ outbound_links: [{ url: 'https://www.agency.example/blog/uae-einvoicing-fines', tier: 'weak' }, { url: 'https://mof.gov.ae/en/about-us/initiatives/einvoicing/', tier: 'primary' }], main_content_words: 300 }, mdW, { domain: 'novaand.example', keyword: 'erp uae' }]);
     check('and the same sentence is a soft blocker with a rewrite action (W0-H PF.classify weak_figure)', cls.blocking.some(b => b.code === 'weak_figure' && b.tier === 'soft' && /AED 5,000/.test(b.figure || b.text)), J(cls.blocking));
-    check('nothing to source (no figure, no citation) is full points, said so', (await gr('sources', ['# A\n\n## B\n\nPlain words only here.', CTX, SRC])).points === 15, '');
+    // M2 (WAVE0_REVIEW 2026-10-30): citing nothing is "not checked" (12 of 15), never full marks; a weak qualitative citation is never worse
+    // than citing nothing; an unsourced or weak-only figure still costs the share; a strong citation earns the rest
+    const sNone = await gr('sources', ['# A\n\n## B\n\nPlain words only here.', CTX, SRC]);
+    const sWeak = await gr('sources', ['# A\n\n## B\n\nPlain words only here. Read [a review of the partners](https://www.reviewsite.example/uae-erp-partners) before you choose.', CTX, SRC]);
+    const sStrong = await gr('sources', ['# A\n\n## B\n\nThe [Federal Tax Authority](https://tax.gov.ae/en/taxes/vat.aspx) explains the records a VAT-registered company keeps.', CTX, SRC]);
+    const sUns = await gr('sources', ['# A\n\n## B\n\nOver 4,500 companies in the country run an ERP today.', CTX, SRC]);
+    show('M2 sources', { none: [sNone.points, sNone.note], weak: [sWeak.points, sWeak.note], strong: sStrong.points, unsourced: sUns.points });
+    check('M2: nothing to source (no figure, no citation) is "not checked" at 12 of 15, said so, never full marks', sNone.points === 12 && sNone.not_checked === true && /not checked/.test(sNone.note), J(sNone));
+    check('M2: a page whose only citation is a review site (no figure) scores no lower than citing nothing, so deleting the link never pays', sWeak.units === 1 && sWeak.weak_cited === 1 && sWeak.points >= sNone.points, J(sWeak));
+    check('M2: a strong citation earns more than citing nothing; a figure with no source earns less', sStrong.points === 15 && sStrong.points > sNone.points && sUns.points < sNone.points && sUns.unsourced === 1, J([sStrong.points, sUns]));
+    const gW1 = await gr('local', [PARTS, '# A\n\n## B\n\nPlain words only here. Read [a review of the partners](https://www.reviewsite.example/uae-erp-partners) before you choose.', { ...CTX, prev: {} }, SRC]);
+    const cW1 = await gr('cap', [{ score: gW1.score, breakdown: gW1.breakdown }, [], { w0c: gW1 }]);
+    check('M2: such a page is not "Needs work: sources" (K3 of the BEFORE run)', !cW1.floors.failing.some(x => x.dim === 'sources'), J(cW1.floors));
+    // H1 (WAVE0_REVIEW 2026-10-30): a phone number, opening hours, a postcode or a street number is never an unsourced figure
+    const CTA = (line) => CLEAN.replace('Book a call and bring your current list of reports.', 'Book a call and bring your current list of reports. ' + line);
+    for (const [n, line] of [['an international phone number', 'Call the office on +971 50 123 4567, Monday to Friday.'], ['a local phone number', 'Call us on 04 123 4567 to book.'],
+      ['opening hours', 'We are open Monday to Friday, 0900-1800.'], ['an office, building and PO box', 'Visit Office 1203, Building 4, P.O. Box 123456, Dubai.'],
+      ['a street address with a ZIP code', 'Our US desk is at 4500 Main Street, Austin, TX 78701.']]) {
+      const g = await gr('local', [PARTS, CTA(line), { ...CTX, prev: {} }, SRC]); const c = await gr('cap', [{ score: g.score, breakdown: g.breakdown }, [], { w0c: g }]);
+      check('H1: the clean page with ' + n + ' in its call to action keeps its grade (' + base.score + ') and stays Ready', g.score === base.score && g.breakdown.sources === base.breakdown.sources && c.ready === true, J({ s: g.score, src: g.items.sources }));
+    }
+    const own = await gr('sources', ['## B\n\nMessage the team on 0501234567 for a demo.', { ...CTX, own_text: 'Phone: +971 50 123 4567' }, SRC]);
+    check('H1: the client\'s own number on file counts as theirs in another spelling (no country code, no spaces)', own.units === 0, J(own));
+    for (const [n, t] of [['a count after "call"', 'Our dialer lets a team call 1,200 customers a week.'], ['a market figure', 'Over 4,500 companies in the country run an ERP today.'], ['a range of counts', 'Between 1500 and 2000 firms use it.'], ['a figure after "Building"', 'Building 1,000 homes a year costs AED 5,000 per unit.']])
+      check('H1: still a figure to source: ' + n, (await gr('sources', ['## B\n\n' + t, CTX, SRC])).units === 1, t);
     check('a figure the business states about itself (on file) is not a sourcing question', (await gr('sources', ['## B\n\nWe have served 1,200 clients since 2005.', { ...CTX, own_text: 'We have served 1,200 clients.' }, SRC])).units === 0, '');
     check('a standard\'s number is not a figure', (await gr('sources', ['## B\n\nWe hold ISO 27001 certification for our hosting.', CTX, SRC])).units === 0, '');
   });
@@ -226,7 +250,11 @@ module.exports = async (ctx) => {
     check('pin 1: the final version grades <= 70 and is not ready (production: "Ready" at 100)', b1.grade.score <= 70 && b1.delivery_status === 'not_ready' && b1.content_score === b1.grade.score, J({ s: b1.grade.score, st: b1.delivery_status }));
     const r0 = await chain(clone(BODY)); const b0 = r0.body;
     versions.push({ v: '3336 final (as the app sent it)', score: b0.grade.score });
-    check('pin 1, exactly as the app sent it (old format, no page run): not ready, <= 59', b0.grade.score <= 59 && b0.delivery_status === 'not_ready', J({ s: b0.grade.score, st: b0.delivery_status }));
+    // M3 (WAVE0_REVIEW 2026-10-30): a request from an app built before W0-B is derived in Finalize Parse Brief, never "Ready" and no longer
+    // "not ready, 59" on every page; it still grades well below the 100 production printed
+    check('pin 1, exactly as the app sent it (old format, no page run): never "Ready", "Needs work" (first check not read and sources), never "95+"', b0.grade.display !== '95+' && b0.delivery_status === 'needs_work'
+      && b0.grade.floors.failing.some(x => x.dim === 'sources')
+      && !b0.grade.ready && (b0.delivery.needs_work || []).some(x => x.dim === 'first_check'), J({ s: b0.grade.score, st: b0.delivery_status }));
     const ack = { ...gatingOf(CB), qa_blocking: [], duplicate_targets: [], verdict_acknowledged: true };
     const r2 = await chain({ ...clone(BODY), page_run: ack }); const b2 = r2.body; pin2 = b2.grade;
     versions.push({ v: '3336 final (no blocker, acknowledged)', score: b2.grade.score });

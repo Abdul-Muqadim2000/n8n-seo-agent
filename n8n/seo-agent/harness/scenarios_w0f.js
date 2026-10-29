@@ -241,12 +241,21 @@ module.exports = async (ctx) => {
 
   // ---------- W0F9 the wiring the build proved ----------
   await guard('W0F9 wiring', async () => {
-    const SN = 'W0F9 (Fix 6, REVIEW_CODE M6) the brief and the writer print the block, read explicitly and inside a try/catch; the data passes the wording rule';
+    const SN = 'W0F9 (Fix 6, REVIEW_CODE M6; WAVE0_REVIEW L2) the brief and the writer print the block, read explicitly and inside a try/catch; the date-placement line only for a core topic; the data passes the wording rule';
     reset(); begin(SN); const check = mkCheck(SN);
     for (const f of ['Strategy_Brief.prompt.txt', 'Copywriter.prompt.txt']) {
       const p = path.join(CODE_DIR, f); const s = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
       check(f + ': reads $(\'Collect Regulatory Facts\') in a try/catch', /\$\('Collect Regulatory Facts'\)\.first\(\)\.json\.regulatory/.test(s) && /catch \(e\)/.test(s), s.length);
     }
+    // L2 (WAVE0_REVIEW 2026-10-30): the brief is asked to place each date only when a core topic exists; a context topic is mentioned once
+    // where it changes the reader's decision (the digest's own rule), so a guide like 949 is never pushed to place dates
+    { const bp = path.join(CODE_DIR, 'Strategy_Brief.prompt.txt'); const bs = fs.existsSync(bp) ? fs.readFileSync(bp, 'utf8') : '';
+      const blk = (bs.match(/\{\{ (\(\(\) => \{ const tail[\s\S]*?\}\)\(\)) \}\}/) || [])[1] || '';
+      const ev = (reg) => { try { return new Function('$', '$json', 'return ' + blk)((n) => ({ first: () => ({ json: { regulatory: reg } }) }), {}); } catch (e) { return 'ERR ' + e.message; } };
+      const ctxOnly = ev({ digest: 'REGULATORY FACTS: e-invoicing (context)', topics: [{ id: 'e-invoicing', relevance: 'context' }] });
+      const core = ev({ digest: 'REGULATORY FACTS: e-invoicing (core)', topics: [{ id: 'e-invoicing', relevance: 'core' }] });
+      check('L2: the brief\'s "Plan where each date above goes" line only when a core topic exists (a context topic gets the digest alone)', !!blk && ctxOnly === 'REGULATORY FACTS: e-invoicing (context)'
+        && /^REGULATORY FACTS: e-invoicing \(core\)\nPlan where each date above goes/.test(core) && ev({ digest: '', topics: [] }) === '', J({ ctxOnly, core: String(core).slice(0, 120) })); }
     const s = JSON.stringify(REGULATORS);
     check('regulators.json: no em dash, curly quote or ellipsis', !/—|–|“|”|…/.test(s));
     check('the UAE copy on file names the Ministry of Finance\'s texts and was checked', REGULATORS.markets.AE.topics['e-invoicing'].known.every(k => /^https:\/\/mof\.gov\.ae\//.test(k.url) && k.checked_on === '2026-10-29'));

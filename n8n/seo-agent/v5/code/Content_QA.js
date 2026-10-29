@@ -786,8 +786,15 @@ const length_pts = 15 * (1 - Math.min(1, Math.abs(mainWords - target) / target))
 // structure, sources and fit added, length advice only, one scale out of 100. Page Candidates / Finalize Verdict apply the blocker and
 // duplicate-page caps and the floors (GR.cap) where they know the blockers.
 const copy_score = Math.round(structure_pts + coverage_pts + readability_pts + specificity_pts + banned_pts + length_pts);
+// H1 (WAVE0_REVIEW 2026-10-30): the business's own phone and address on file (the business profile, else the site model's NAP) are the
+// client's own figures in the grade, never a sourcing question (the grade kit also knows a phone number, opening hours and an address by
+// their shape, so a page whose call to action gives the office number is not "Needs work: sources")
+const napOwn = (() => { let m = null; try { m = $('Site Model').first().json.site_model || null; } catch (e) { m = null; }
+  if (!m && prev.site_model && typeof prev.site_model === 'object') m = prev.site_model;
+  const n = m ? (SM.nap(m) || {}) : {}; const p0 = (prev.site_profile && typeof prev.site_profile === 'object') ? prev.site_profile : {}; const a0 = (p0.address && typeof p0.address === 'object') ? p0.address : {};
+  return [p0.phone, p0.street_address, a0.street, a0.postal_code, n.phone, n.street_address, n.postal_code].filter(x => typeof x === 'string' && x.trim()).join('\n'); })();
 const grade_detail = GR.local({ structure_frac: structuralChecks.filter(Boolean).length / structuralChecks.length, coverage_ratio, readability_pts, specificity_pts, clean_pts: banned_pts }, md,
-  { keyword: prev.keyword || '', brand_names: bizNames, domain, prev, own_text: [prev.business, prev.business_facts, prev.case_facts_text].filter(x => typeof x === 'string').join('\n') },
+  { keyword: prev.keyword || '', brand_names: bizNames, domain, prev, own_text: [prev.business, prev.business_facts, prev.case_facts_text, napOwn].filter(x => typeof x === 'string').join('\n') },
   { tier: SRC.tier, figures: SRC.figures });
 const content_score = grade_detail.score;
 
