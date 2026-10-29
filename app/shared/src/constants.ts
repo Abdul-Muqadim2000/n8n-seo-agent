@@ -605,7 +605,7 @@ export const PAGE_WATCH_SCHEDULE: ScheduleInfo = {
 export const INDEX_COVERAGE_SCHEDULE: ScheduleInfo = {
   id: 'index_coverage',
   title: 'Daily index check',
-  summary: 'Asks Google which of your pages it left out of search and why, new pages first, within Google\'s daily limit.',
+  summary: 'Reads from Search Console which of your pages Google left out of search and why, new pages first, within Google\'s daily limit.',
   cadence: 'Every day 05:15',
   schedule: { kind: 'daily', weekdays: [0, 1, 2, 3, 4, 5, 6], hour: 5, minute: 15 },
   workflow: 'SEOagentIndexCv1',

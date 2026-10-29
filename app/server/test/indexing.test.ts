@@ -441,3 +441,113 @@ describe('fix wave 1: the rest of the app', () => {
     expect(out[0].detail).toContain('we never do it for you');
   });
 });
+
+// ---------------------------------------------------------------- fix wave 2 (REVIEW_2.md, N-app-*)
+describe('fix wave 2: the engine reading behind the steps', () => {
+  it('N-app-2: a cause whose most-seen rows are all left out never closes its step; the step lists the pages to fix', async () => {
+    const s = await setup();
+    const runAt = new Date(Date.now() - 3_600_000).toISOString();
+    t.runs.push({ site_id: s.sid, domain: s.domain, run_at: runAt, known: 253, indexed: 0, inspected: 253, by_cause_json: JSON.stringify({ redirect: 253 }) });
+    for (let i = 0; i < 250; i++) t.pages.push({ site_id: s.sid, domain: s.domain, url: s.url(`/old${i}`), state: 'excluded', cause: 'redirect', action: 'leave_out', inspect_at: runAt, impressions_28d: 1000 + i });
+    for (let i = 0; i < 3; i++) t.pages.push({ site_id: s.sid, domain: s.domain, url: s.url(`/fix${i}`), state: 'excluded', cause: 'redirect', action: 'site_fix', inspect_at: runAt, impressions_28d: i });
+    await db.insert(schema.siteTasks).values({ orgId: s.org.id, siteId: s.site.id, taskKey: 'indexing:redirect', kind: 'indexing', payload: { cause: 'redirect', urls: [s.url('/fix0')], total: 3 }, createdAt: new Date(Date.now() - 2 * DAY) });
+    const step = (await tasksOf(s)).find((x) => x.key === 'indexing:redirect')!;
+    expect(step.state).toBe('todo');
+    expect(step.values.map((v) => v.value).sort()).toEqual([s.url('/fix0'), s.url('/fix1'), s.url('/fix2')]);
+    expect(step.lastCheck?.message ?? '').not.toMatch(/lists none/i);
+  });
+
+  it('N-app-4: an engine-only step stays done when the index read is late or fails, never back to "to do"', async () => {
+    const s = await setup();
+    const at1 = new Date(Date.now() - 2 * 3_600_000).toISOString();
+    t.runs.push({ site_id: s.sid, domain: s.domain, run_at: at1, known: 3, indexed: 3, inspected: 3, by_cause_json: '{}', sitemaps_json: JSON.stringify({ submitted: 0, submitted_errors: 0, read: 1 }) });
+    expect((await tasksOf(s)).find((x) => x.key === 'indexing:sitemap')!.state).toBe('todo');
+    await settle();
+    // the next day's run (after the step was stored) reads a submitted sitemap with no errors
+    t.runs.push({ site_id: s.sid, domain: s.domain, run_at: new Date(Date.now() + 1000).toISOString(), known: 3, indexed: 3, inspected: 3, by_cause_json: '{}', sitemaps_json: JSON.stringify({ submitted: 1, submitted_errors: 0, read: 1 }) });
+    expect((await tasksOf(s)).find((x) => x.key === 'indexing:sitemap')!.state).toBe('done');
+    t.failIndex = true;
+    const later = (await tasksOf(s)).find((x) => x.key === 'indexing:sitemap')!;
+    expect(later.state).toBe('done');
+    expect(later.lastCheck?.by).toBe('index');
+  });
+
+  it('N-app-4: a step fixed on the site, waiting for Google, stays done when the index read is missing', async () => {
+    const s = await setup();
+    const runAt = new Date(Date.now() - 3_600_000).toISOString();
+    t.runs.push({ site_id: s.sid, domain: s.domain, run_at: runAt, known: 1, indexed: 0, inspected: 1, by_cause_json: JSON.stringify({ noindex: 1 }), by_action_json: JSON.stringify({ wait: 1 }) });
+    // the engine re-inspected after it saw the fix (inspect_at after fix_seen_at): still waiting for Google (N-app-1)
+    t.pages.push({ site_id: s.sid, domain: s.domain, url: s.url('/s'), state: 'excluded', cause: 'noindex', action: 'wait', fix_seen_at: new Date(Date.now() - DAY).toISOString(), inspect_at: runAt });
+    await db.insert(schema.siteTasks).values({ orgId: s.org.id, siteId: s.site.id, taskKey: 'indexing:noindex', kind: 'indexing', payload: { cause: 'noindex', urls: [s.url('/s')], total: 1 }, createdAt: new Date(Date.now() - 3 * DAY) });
+    expect((await tasksOf(s)).find((x) => x.key === 'indexing:noindex')!.state).toBe('done');
+    t.failIndex = true;
+    expect((await tasksOf(s)).find((x) => x.key === 'indexing:noindex')!.state).toBe('done');
+  });
+});
+
+describe('fix wave 2: the own check', () => {
+  const step = (cause: string, urls: string[], total = urls.length) => ({ cause, urls, total });
+
+  it('N-app-3: robots.txt we could not read means the sitemap read is partial: "no longer in your sitemap" is never concluded', async () => {
+    const d = 'novaand-r403.com';
+    t.web[`https://${d}/robots.txt`] = { status: 403, text: 'Forbidden' };
+    t.web[`https://${d}/sitemap.xml`] = { status: 200, text: `<urlset><url><loc>https://${d}/a</loc></url></urlset>` };
+    t.web[`https://${d}/x`] = { status: 200, text: `<html><head><title>X</title><link rel="canonical" href="https://${d}/y"></head><body>x</body></html>` };
+    const out = await svc.runSiteTaskCheck(d, 'indexing', step('canonical_elsewhere', [`https://${d}/x`]));
+    expect(out.ok).toBe(false);
+    expect(out.reached).toBe(false);
+  });
+
+  it('N-app-10: a guessed /sitemap.xml that answers the app shell does not make the named sitemap partial', async () => {
+    const d = 'novaand-shell.com';
+    t.web[`https://${d}/robots.txt`] = { status: 200, text: `User-agent: *\nSitemap: https://${d}/maps/pages.xml\n`, headers: { 'content-type': 'text/plain' } };
+    t.web[`https://${d}/sitemap.xml`] = { status: 200, text: '<!doctype html><html><body><div id="root"></div></body></html>' };
+    t.web[`https://${d}/maps/pages.xml`] = { status: 200, text: `<urlset><url><loc>https://${d}/a</loc></url></urlset>` };
+    const out = await svc.runSiteTaskCheck(d, 'indexing', step('indexed_not_in_sitemap', [`https://${d}/b`]));
+    expect(out).toMatchObject({ ok: false, reached: true });
+    expect(out.message).toContain('not in your sitemap yet');
+  });
+
+  it('N-app-11: a robots.txt or a sitemap that redirects to another website is not trusted', async () => {
+    const d = 'novaand-hop.com';
+    t.web[`https://${d}/robots.txt`] = { status: 301, location: 'https://elsewhere-host.com/robots.txt' };
+    t.web['https://elsewhere-host.com/robots.txt'] = { status: 200, text: 'User-agent: *\nAllow: /\n', headers: { 'content-type': 'text/plain' } };
+    const robots = await svc.runSiteTaskCheck(d, 'indexing', step('robots_blocked', [`https://${d}/blog`]));
+    expect(robots).toMatchObject({ ok: false, reached: false });
+    const d2 = 'novaand-hop2.com';
+    t.web[`https://${d2}/robots.txt`] = { status: 404, text: '' };
+    t.web[`https://${d2}/sitemap.xml`] = { status: 301, location: 'https://elsewhere-host.com/sitemap.xml' };
+    t.web['https://elsewhere-host.com/sitemap.xml'] = { status: 200, text: `<urlset><url><loc>https://${d2}/a</loc></url></urlset>` };
+    const sm = await svc.runSiteTaskCheck(d2, 'indexing', step('not_in_sitemap', [`https://${d2}/b`]));
+    expect(sm.reached).toBe(false);
+  });
+
+  it('N-app-7: ten fixed pages of a 30-page step are "10 of 30", never done; a click says so and records nothing', async () => {
+    const d = 'novaand-many.com';
+    const urls = Array.from({ length: 25 }, (_, i) => `https://${d}/p${i}`);
+    for (const u of urls) t.web[u] = { status: 200, text: '<html><head><title>P</title></head><body>hi</body></html>' };
+    const out = await svc.runSiteTaskCheck(d, 'indexing', step('noindex', urls, 30));
+    expect(out).toMatchObject({ ok: false, reached: false, partial: true });
+    expect(out.message).toContain('10 of 30');
+    // every listed page checked: done
+    const all = await svc.runSiteTaskCheck(d, 'indexing', step('noindex', urls.slice(0, 4), 4));
+    expect(all.ok).toBe(true);
+  });
+
+  it('N-app-7: a click on a step we could check only in part answers 409 and keeps the step as it was', async () => {
+    const s = await setup();
+    const runAt = new Date(Date.now() - 3_600_000).toISOString();
+    t.runs.push({ site_id: s.sid, domain: s.domain, run_at: runAt, known: 30, indexed: 0, inspected: 30, by_cause_json: JSON.stringify({ noindex: 30 }) });
+    for (let i = 0; i < 30; i++) {
+      t.pages.push({ site_id: s.sid, domain: s.domain, url: s.url(`/n${i}`), state: 'excluded', cause: 'noindex', action: 'site_fix', inspect_at: runAt, impressions_28d: 100 - i });
+      t.web[s.url(`/n${i}`)] = { status: 200, text: '<html><head><title>N</title></head><body>n</body></html>' };
+    }
+    await tasksOf(s);
+    await settle();
+    const before = (await rowOf(s.site.id, 'indexing:noindex'))!.lastCheck;
+    const r = await s.u.c.post(`${s.base}/tasks/check`, { key: 'indexing:noindex' });
+    expect(r.status).toBe(409);
+    expect(JSON.stringify(r.body)).toContain('10 of 30');
+    expect((await rowOf(s.site.id, 'indexing:noindex'))!.lastCheck).toEqual(before);
+  });
+});

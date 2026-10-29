@@ -17,7 +17,7 @@ import {
 } from '@seo/shared';
 import { config } from '../config';
 import { db, schema } from '../db';
-import { executions, rows, type ExecutionSummary } from '../n8n/client';
+import { executionsSince, rows, type ExecutionSummary } from '../n8n/client';
 import { JOB_LABELS } from './cycles';
 
 // G21 (2026-10-13, system review FIX_PLAN G21; it depends on D25a and on R6): nothing measured whether what should have run did run,
@@ -340,14 +340,19 @@ export async function loadDeliveryReport(now = new Date()): Promise<DeliveryRepo
     /* not known: the schedule is left out (no start) */
   }
   const daily = SCHEDULES.filter((a) => a.schedule.kind !== 'cycle' && (!a.sinceFromData || a.since || created[a.workflow]));
+  const partly: string[] = [];
   for (const wf of [...new Set(daily.map((a) => a.workflow))]) {
     try {
-      const [ok, bad] = await Promise.all([executions(wf, 'success', 150), executions(wf, 'error', 50)]);
-      execs[wf] = [...ok, ...bad];
+      // N-app-5: every execution of the weeks shown, paged, not the newest 150: a workflow that runs one execution per website a day
+      // (the daily index check) would otherwise cover only the last few days and every older fire would read as missed
+      const [ok, bad] = await Promise.all([executionsSince(wf, 'success', from), executionsSince(wf, 'error', from)]);
+      execs[wf] = [...ok.list, ...bad.list];
+      if (!ok.complete || !bad.complete) partly.push(wf);
     } catch {
       failedWorkflows.push(wf);
     }
   }
+  if (partly.length) notes.push(`The engine's execution history was read only in part for ${partly.length} daily schedule${partly.length === 1 ? '' : 's'}, so a fire in the oldest days may show as missed.`);
   if (failedWorkflows.length) notes.push(`The engine did not answer for ${failedWorkflows.length} of ${new Set(daily.map((a) => a.workflow)).size} daily schedules, so their weeks are unmeasured rather than perfect.`);
   let cycles: DeliveryInput['cycles'] = null;
   try {

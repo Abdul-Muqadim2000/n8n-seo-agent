@@ -602,7 +602,7 @@ export const GUIDES = [
       },
       {
         title: 'Leave the rest to us',
-        body: 'Every day we ask Google about the pages it left out, new pages first and within Google\'s daily limit; each page is read again on its own schedule. We look again soon at the pages you fixed, and tell you when a page we saw in search drops out.',
+        body: 'Every day we read Search Console to see which pages Google left out, new pages first and within Google\'s daily limit; each page is read again on its own schedule. We look up Google\'s reading of the pages you fixed again within a day or two, and tell you when a page we saw in search drops out.',
       },
     ],
     done: 'The groups that need you get shorter, and the hero shows more of your pages in Google search.',
