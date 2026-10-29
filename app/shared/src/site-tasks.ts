@@ -200,11 +200,21 @@ function indexingDrafts(ix: SiteTaskInputs['indexing'], stored: StoredSiteTask[]
     const total = Math.max(0, c.total - hidden);
     handled.add(key);
     if (total > 0) {
+      // R1: Google read some of these pages again after a fix we saw and still sees the problem: its reading says so, and the payload
+      // carries it so the app's own check (a browser-like fetch) can never call the step done while it holds
+      const still = Math.min(total, Number(c.googleStillSees) || 0);
       out.push({
         key,
         kind: 'indexing',
-        engine: { at: c.readAt || ix!.runAt, ok: false, by: 'index', message: `Google's newest reading still lists ${total} page${total === 1 ? '' : 's'} with this problem.` },
-        payload: { cause: c.cause, urls: urls.slice(0, INDEXING_TASK_MAX_URLS), total, ...(c.pending ? { pending: c.pending } : {}) },
+        engine: {
+          at: c.readAt || ix!.runAt,
+          ok: false,
+          by: 'index',
+          message: still
+            ? `Google read ${still === 1 ? 'a page' : `${still} pages`} again after the change we saw on your website and still sees the problem.`
+            : `Google's newest reading still lists ${total} page${total === 1 ? '' : 's'} with this problem.`,
+        },
+        payload: { cause: c.cause, urls: urls.slice(0, INDEXING_TASK_MAX_URLS), total, ...(c.pending ? { pending: c.pending } : {}), ...(still ? { googleStillSees: still } : {}) },
       });
       continue;
     }
@@ -262,6 +272,8 @@ function storedDone(st: StoredSiteTask, runAt: string): Draft {
 }
 
 const isSitemapStep = (p: Record<string, unknown>) => str(p.cause) === 'sitemap';
+/** R1: how many of a step's pages Google read again after a fix we saw and still sees with the problem (0: none, or not an indexing step) */
+export const googleStillSees = (p: Record<string, unknown> | null | undefined): number => Math.max(0, Number(p?.googleStillSees) || 0);
 const indexingCauseOf = (p: Record<string, unknown>): IndexSiteFixCause => (indexingCauseOfKey(`indexing:${str(p.cause)}`) ?? 'noindex');
 
 /** A8: what a done indexing step says is true now, cause by cause (what we checked, never a promise about Google). */
@@ -326,6 +338,16 @@ function present(d: Draft, domain: string): Pick<SiteTask, 'title' | 'detail' | 
   }
 }
 
+/** R1: the step's words when Google read pages again after a fix we saw and still sees the problem (plain words, no promise). */
+export function googleStillSeesText(n: number): string {
+  const one = n === 1;
+  return (
+    `Google read ${one ? 'one of these pages' : `${n} of these pages`} again after the change we saw on your website, and still sees the problem when it reads ${one ? 'it' : 'them'}. ` +
+    'This can happen when your website shows Google something different from what a browser sees, for example a noindex, a block or an error sent only to Google by a plugin, a CDN or a server rule. ' +
+    'The guide shows how to see a page the way Google gets it. Our own check opens pages the way a browser does, so it cannot tick this step off; the daily index check does once Google reads the pages without the problem.'
+  );
+}
+
 function presentIndexing(p: Record<string, unknown>, domain: string): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
   if (isSitemapStep(p)) {
     const errors = Number(p.errors) || 0;
@@ -347,9 +369,10 @@ function presentIndexing(p: Record<string, unknown>, domain: string): Pick<SiteT
   const shown = urls.slice(0, 5);
   const more = total - shown.length;
   const pending = Number(p.pending) || 0;
+  const still = googleStillSees(p);
   return {
     title: info.taskTitle ?? info.label,
-    detail: `${info.meaning} ${info.youDo} ${total} page${total === 1 ? '' : 's'}${more > 0 ? `; the first ${shown.length} are below, every one is on the Indexing page` : ''}.${pending ? ` We already saw ${pending} more fixed on your site; ${pending === 1 ? 'it waits' : 'they wait'} for Google to read ${pending === 1 ? 'it' : 'them'} again.` : ''}`,
+    detail: `${info.meaning} ${info.youDo} ${total} page${total === 1 ? '' : 's'}${more > 0 ? `; the first ${shown.length} are below, every one is on the Indexing page` : ''}.${still ? ` ${googleStillSeesText(still)}` : ''}${pending ? ` We already saw ${pending} more fixed on your site; ${pending === 1 ? 'it waits' : 'they wait'} for Google to read ${pending === 1 ? 'it' : 'them'} again.` : ''}`,
     values: shown.map((u, i) => ({ label: `Page ${i + 1}`, value: u })),
     guide: info.guide ?? 'index-coverage',
     guideVars: { pageUrl: shown[0] ?? '', pagePath: shown[0] ? indexPath(shown[0]) : '' },
@@ -418,7 +441,10 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
     // "still broken" only wins over a reading of ours that is more than a week older than it
     const own = s?.lastCheck && !engineBy(s.lastCheck.by) ? s.lastCheck : null;
     const indexStale = d.kind === 'redirect' && !!own && !!d.engine && !d.engine.ok && Date.parse(d.engine.at) - Date.parse(own.at) < 7 * 864e5;
-    const decided = indexStale ? own : newest([d.engine, s?.lastCheck]);
+    // R1: Google still sees the problem after a fix we saw (the engine's `fix_failed_at`): a reading that calls the step done (ours,
+    // or an older reading of the engine kept on the row) cannot decide it while that holds; only Google's next reading can
+    const googleSees = googleStillSees(d.payload) > 0 && !!d.engine && !d.engine.ok;
+    const decided = indexStale ? own : googleSees ? newest([d.engine, s?.lastCheck?.ok ? null : s?.lastCheck]) : newest([d.engine, s?.lastCheck]);
     const lastDone = [s?.doneAt ?? null, d.engine?.ok ? d.engine.at : null, s?.lastCheck?.ok ? s.lastCheck.at : null].filter((x): x is string => !!x).sort().pop() ?? null;
     const done = !!decided?.ok;
     const reopened = !done && !!lastDone && !!decided && lastDone < decided.at;
@@ -435,7 +461,7 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
       reopened: state === 'todo' && reopened,
       doneAt: lastDone,
       lastCheck: decided,
-      severity: state === 'todo' && (reopened || searchBlocked) ? 'warning' : 'info',
+      severity: state === 'todo' && (reopened || searchBlocked || googleSees) ? 'warning' : 'info',
       ...shown,
       detail: state === 'done' ? doneDetail(d, inputs.domain) : shown.detail,
       guideVars: { domain: inputs.domain, ...shown.guideVars },

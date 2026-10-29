@@ -106,6 +106,12 @@ export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[
 const PREVIEW_DAYS = PREVIEW_HOURS_BEFORE / 24;
 const PROPOSAL_WAIT_DAYS = PROPOSAL_WAIT_HOURS / 24;
 
+/** R1 (Index coverage fix wave 3): Google still sees the problem after a fix our check saw, on every guide of a step only the client can fix */
+const GOOGLE_SEES_OTHER = {
+  q: 'Our check finds it fixed, but Google still sees the problem',
+  a: 'Your website may show Google something different from what a browser sees: a plugin, a CDN or a server rule can send a noindex, a block or an error only to Google\'s crawler. In Search Console, open **URL Inspection** for the page and press **Test live URL** to see the page the way Google gets it. Remove the rule that only Google gets; the step is ticked off once the daily index check finds Google reading the page without the problem.',
+} as const;
+
 const V = {
   domain: { key: 'domain', label: 'Your website', example: 'your-domain.com' },
   serviceAccount: { key: 'serviceAccount', label: 'The address that reads your Google data', example: 'reader@alaventra-seo.iam.gserviceaccount.com' },
@@ -645,6 +651,7 @@ export const GUIDES = [
     trouble: [
       { q: 'The setting is off but the check still finds noindex', a: 'A second source adds it: another plugin, the theme, or the server\'s X-Robots-Tag header. The check says which one it found.' },
       { q: 'We want this page out of search', a: 'Then remove it from your sitemap too, and press Skip on the step.' },
+      GOOGLE_SEES_OTHER,
     ],
     related: ['index-coverage', 'index-add-to-sitemap'],
     keywords: ['noindex', 'x-robots-tag', 'hide from search', 'discourage search engines', 'not indexed'],
@@ -677,7 +684,7 @@ export const GUIDES = [
       { title: 'Press "I\'ve done it, check now"', body: 'We read your robots.txt with Google\'s own matching rules and check the listed pages.' },
     ],
     done: 'The step shows Done, and the next daily index check no longer reports the pages as blocked.',
-    trouble: [{ q: 'The check still says blocked', a: 'A wider rule (such as `Disallow: /`) or a separate `User-agent: Googlebot` group still covers the page. The check names the rule it matched.' }],
+    trouble: [{ q: 'The check still says blocked', a: 'A wider rule (such as `Disallow: /`) or a separate `User-agent: Googlebot` group still covers the page. The check names the rule it matched.' }, GOOGLE_SEES_OTHER],
     related: ['index-coverage', 'ai-crawler-access'],
     keywords: ['robots.txt', 'disallow', 'blocked', 'googlebot', 'crawl'],
   },
@@ -761,6 +768,7 @@ export const GUIDES = [
       { title: 'Press "I\'ve done it, check now"', body: 'We read the pages and your sitemap on {{domain}} and tick the step off once they agree.' },
     ],
     done: 'The step shows Done once each page we checked either names itself as the main version or has left your sitemap.',
+    trouble: [GOOGLE_SEES_OTHER],
     related: ['index-coverage', 'index-add-to-sitemap'],
     keywords: ['canonical', 'duplicate', 'alternate page', 'sitemap'],
   },
@@ -788,6 +796,7 @@ export const GUIDES = [
       { title: 'Press "I\'ve done it, check now"', body: 'We open each address: done when it opens again or redirects permanently to a page of yours that opens. An address you only removed from your sitemap is ticked off by the daily index check once Google\'s reading no longer lists it.' },
     ],
     done: 'The step shows Done.',
+    trouble: [GOOGLE_SEES_OTHER],
     related: ['redirect-broken-page', 'index-coverage'],
     keywords: ['404', 'not found', 'broken page', 'redirect', 'sitemap'],
   },
@@ -813,6 +822,7 @@ export const GUIDES = [
       { title: 'Press "I\'ve done it, check now"', body: 'We open the pages: done when each has real text, or answers 404 or 410.' },
     ],
     done: 'The step shows Done.',
+    trouble: [GOOGLE_SEES_OTHER],
     related: ['index-fix-not-found', 'index-coverage'],
     keywords: ['soft 404', 'empty page', 'thin page', 'no content'],
   },
@@ -839,6 +849,7 @@ export const GUIDES = [
       { title: 'Press "I\'ve done it, check now"', body: 'We open the pages: done when none answers a server error.' },
     ],
     done: 'The step shows Done, and the next daily index check reads the pages normally.',
+    trouble: [GOOGLE_SEES_OTHER],
     related: ['index-coverage'],
     keywords: ['500', '503', 'server error', '5xx', 'hosting', 'firewall'],
   },
@@ -864,6 +875,7 @@ export const GUIDES = [
       { title: 'Press "I\'ve done it, check now"', body: 'We open the pages: done when each opens for everyone. For pages that stay private on purpose, remove them from your sitemap and press Skip.' },
     ],
     done: 'The step shows Done.',
+    trouble: [GOOGLE_SEES_OTHER],
     related: ['index-coverage'],
     keywords: ['401', '403', 'forbidden', 'login', 'access denied', 'members only'],
   },
@@ -916,6 +928,7 @@ export const GUIDES = [
       { title: 'Press "I\'ve done it, check now"', body: 'We open each address on {{domain}}: done when it ends on a page of yours that opens.' },
     ],
     done: 'The step shows Done, and the next daily index check reads the pages normally.',
+    trouble: [GOOGLE_SEES_OTHER],
     related: ['index-sitemap-redirects', 'index-coverage'],
     keywords: ['redirect loop', 'redirect chain', 'too many redirects', 'redirect error'],
   },

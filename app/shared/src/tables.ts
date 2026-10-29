@@ -364,6 +364,12 @@ export interface IndexPageRow extends DtRow {
   fix_seen_at?: string;
   /** fix wave 1: a manual "Request indexing" in Search Console is the right next step (at most 5 a site a week, never automated) */
   ask_google?: boolean | string;
+  /** fix wave 2 (ENGINE_BUILD.md, N3): ISO of Google's crawl AFTER a fix we saw that still showed the same cause ('' = no). The row is
+   *  `site_fix` again and its note says so; the engine clears it when its own read sees the problem again, Google's reason changes or the
+   *  page is indexed. While it is set the app's own fetch can never call the step done (R1): Google is shown something our fetch is not. */
+  fix_failed_at?: string;
+  /** fix wave 2 (N6): when the page was last newly marked `ask_google` (kept after the mark ends; engine-only, the app does not read it) */
+  ask_google_at?: string;
 }
 /** One row per state / cause change of a page (insert only). */
 export interface IndexHistoryRow extends DtRow {
