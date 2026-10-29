@@ -1,0 +1,336 @@
+{
+ "contract": "page-run context (PRC) v1, page-quality programme 2026-10-29 (PLAN §3.0 step 2, REVIEW_CODE H2). See harness/README.md \"PRC contract\".",
+ "source": "anonymised from production execution 3299 (a service page run, 2026-10-28): gating fields copied from its content callback exactly as stored; grading fields taken from the same run (Parse Brief, the final Page Candidates QA) in the shape Build Webhook Response will send them after W0-B. regulatory_facts is ILLUSTRATIVE (the step does not exist yet, Fix 6): the shape is the contract, the values are not facts to reuse.",
+ "gating": {
+  "qa_blocking": [
+   {
+    "code": "duplicate_page",
+    "text": "This website already has a page for the same search: https://www.novaand.example/dynamics-365-business-central-uae. Publish this text as an update of that page, or tell us how the new page differs",
+    "action": "publish it as an update of your existing page for this search, or tell us how the new page differs"
+   }
+  ],
+  "duplicate_targets": [
+   {
+    "url": "https://www.novaand.example/dynamics-365-business-central-uae",
+    "title": "Business Central ERP Solutions in UAE | Nova",
+    "keyword_words_shared_pct": 100
+   }
+  ],
+  "verdict": "GO_WITH_CHANGES",
+  "score": 42,
+  "score_withheld": false,
+  "page_type": "Service Page",
+  "verdict_acknowledged": false
+ },
+ "gating_paths_in_stored_payload": {
+  "qa_blocking": "payload.qa_blocking",
+  "duplicate_targets": "payload.meta.originality.duplicate_targets",
+  "verdict": "payload.verdict (a STRING: GO / GO_WITH_CHANGES / AVOID / NOT_CHECKED)",
+  "score": "payload.score (verdict score 0-100 or null)",
+  "score_withheld": "payload.score_withheld",
+  "page_type": "payload.meta.page_type",
+  "verdict_acknowledged": "NEW (W0-D): true only when the run was started with hold_ack; absent in every old report = false"
+ },
+ "grading": {
+  "length_band": {
+   "low": 900,
+   "high": 2400,
+   "source": "page_type",
+   "sample": 2,
+   "basis": "only 2 of the pages ranking for this run are service pages (3 are needed for a range), so the usual length for this kind of page is used: 900-2,400 words"
+  },
+  "coverage_target": {
+   "terms_total": 25,
+   "terms": [
+    "microsoft dynamics",
+    "dynamics ax",
+    "supply chain management",
+    "business central",
+    "erp systems",
+    "dynamics nav",
+    "erp system",
+    "dynamics gp",
+    "microsoft dynamics erp",
+    "microsoft dynamics nav",
+    "erp solution",
+    "finance and operations",
+    "human resources",
+    "microsoft dynamics gp",
+    "customer service",
+    "erp software",
+    "power bi",
+    "microsoft azure",
+    "business applications",
+    "management",
+    "operations",
+    "finance",
+    "cloud",
+    "products",
+    "sales"
+   ],
+   "best": {
+    "domain": "erpsoftwareblog.com",
+    "url": "https://erpsoftwareblog.com/software/",
+    "rank": 4,
+    "coverage_pct": 84,
+    "terms_used": 21,
+    "word_count": 455,
+    "sections": 6,
+    "kind": "service"
+   },
+   "page_kind": "service",
+   "type_match": true,
+   "measure": "presence",
+   "average_pct": 71,
+   "pages_compared": 6,
+   "target_pct": 84,
+   "subtopics": [
+    "Microsoft Dynamics NAV",
+    "Microsoft Dynamics SL",
+    "Microsoft Dynamics AX",
+    "Microsoft Dynamics 365 Finance",
+    "Microsoft Dynamics 365 Business Central",
+    "Find a Microsoft Dynamics ERP Software Expert"
+   ],
+   "subtopics_basis": "",
+   "basis": "the 6 competitor page(s) read for this keyword: erpsoftwareblog.com (position 4) uses 21 of the 25 terms they share (84%), against an average of 71% (a term counts once it appears); it is the best service page among them, the kind of page being written (2 of that kind read)"
+  },
+  "terms": [
+   {
+    "term": "microsoft dynamics",
+    "min_count": 4
+   },
+   {
+    "term": "business central",
+    "min_count": 6
+   },
+   {
+    "term": "supply chain management",
+    "min_count": 4
+   },
+   {
+    "term": "dynamics ax",
+    "min_count": 2
+   },
+   {
+    "term": "dynamics nav",
+    "min_count": 2
+   },
+   {
+    "term": "dynamics gp",
+    "min_count": 2
+   },
+   {
+    "term": "erp system",
+    "min_count": 2
+   },
+   {
+    "term": "microsoft dynamics erp",
+    "min_count": 1
+   },
+   {
+    "term": "erp solution",
+    "min_count": 1
+   },
+   {
+    "term": "erp software",
+    "min_count": 1
+   },
+   {
+    "term": "finance and operations",
+    "min_count": 2
+   },
+   {
+    "term": "human resources",
+    "min_count": 1
+   },
+   {
+    "term": "customer service",
+    "min_count": 1
+   },
+   {
+    "term": "power bi",
+    "min_count": 2
+   },
+   {
+    "term": "microsoft azure",
+    "min_count": 1
+   },
+   {
+    "term": "business applications",
+    "min_count": 2
+   },
+   {
+    "term": "reporting",
+    "min_count": 2
+   },
+   {
+    "term": "accounting",
+    "min_count": 1
+   },
+   {
+    "term": "planning",
+    "min_count": 2
+   },
+   {
+    "term": "cloud",
+    "min_count": 3
+   },
+   {
+    "term": "erp systems",
+    "min_count": 1
+   }
+  ],
+  "facts": [
+   {
+    "claim": "17 Oct 2026 — Compare Infor vs Microsoft Dynamics 365 ERP with normalized review data, scoring context, pricing signals, and risk notes.",
+    "source": "rfp.wiki",
+    "url": "https://www.rfp.wiki/erp/infor/microsoft-dynamics-365-erp",
+    "title": "Infor vs Microsoft Dynamics 365 ERP (2026) - RFP.wiki"
+   },
+   {
+    "claim": "Learn about the quality updates that are available in the May 2026 release of Microsoft Dynamics 365 Project Operations Integrated with ERP.",
+    "source": "learn.microsoft.com",
+    "url": "https://learn.microsoft.com/en-us/dynamics365/project-operations/whats-new/whats-new-may-2026-resource-based",
+    "title": "What's new May 2026 - Project Operations Integrated with ..."
+   },
+   {
+    "claim": "15 Aug 2026 — Dynamics 365 & ERP data depth ... Below is our full ranked list of the top Microsoft Dynamics 365 and ERP reporting consultants for 2026. Read more",
+    "source": "powerbiconsultingservices.com",
+    "url": "https://powerbiconsultingservices.com/top-microsoft-dynamics-365-erp-reporting-consultants/",
+    "title": "Top 10 Microsoft Dynamics 365 & ERP Reporting ..."
+   },
+   {
+    "claim": "As of 2026, 1,284 verified companies use Microsoft Dynamics ERP – across industries, company sizes, and geographies. This is real, verified data. Read more",
+    "source": "data.landbase.com",
+    "url": "https://data.landbase.com/technology/microsoft-dynamics-erp/",
+    "title": "Companies using Microsoft Dynamics ERP in 2026"
+   },
+   {
+    "claim": "23 Jan 2026 — The global Microsoft dynamics market is estimated to be valued at USD 14 Bn in 2026 and is expected to reach USD 40 Bn by 2033, exhibiting a ... Read more",
+    "source": "coherentmi.com",
+    "url": "https://www.coherentmi.com/industry-reports/microsoft-dynamics-market",
+    "title": "Microsoft Dynamics Market Size, Share and Forecast, 2026 ..."
+   }
+  ],
+  "sources_cited": [
+   {
+    "anchor": "May 2026 release of Microsoft Dynamics 365 Project Operations Integrated with ERP",
+    "url": "https://learn.microsoft.com/en-us/dynamics365/project-operations/whats-new/whats-new-may-2026-resource-based",
+    "host": "learn.microsoft.com",
+    "tier": "vendor"
+   },
+   {
+    "anchor": "Visionet",
+    "url": "https://www.visionet.com/article/choosing-microsoft-dynamics-365-erp-consulting-partner",
+    "host": "visionet.com",
+    "tier": "weak"
+   },
+   {
+    "anchor": "Landbase",
+    "url": "https://data.landbase.com/technology/microsoft-dynamics-erp/",
+    "host": "data.landbase.com",
+    "tier": "weak"
+   }
+  ],
+  "style_guide": {
+   "on_file": true,
+   "brand_form": "Nova&",
+   "legal_name": "Novaand systems LLC",
+   "brand_wrong": [
+    "Nova and",
+    "novaand",
+    "Novaand",
+    "Nova &",
+    "Nova N",
+    "Nova&.ai"
+   ],
+   "spelling": "British English",
+   "spelling_effective": "British English",
+   "spelling_source": "the style guide",
+   "avoid": [
+    "revolutionary",
+    "game-changing",
+    "cutting-edge",
+    "unlock",
+    "seamless",
+    "supercharge",
+    "leverage",
+    "synergy",
+    "world-class",
+    "best-in-class",
+    "delve",
+    "in today’s fast-paced world"
+   ],
+   "tone": "Plain, direct and professional. Focus on measurable business outcomes. No hype, no exclamation marks.",
+   "tone_effective": "Plain, direct and professional. Focus on measurable business outcomes. No hype, no exclamation marks.",
+   "notes": "Always write the brand as Nova& and never expand the ampersand. Refer to the company as “we”. Give concrete numbers only when sourced. Mention UAE or GCC context where relevant. Never invent client names or case studies.",
+   "wrong_forms": [
+    "Nova and",
+    "Novaand",
+    "Nova-and",
+    "Nova &",
+    "Nova N",
+    "Nova&.ai"
+   ],
+   "prompt_block": "HOUSE STYLE (the customer's own style guide — follow it exactly)\n- Write the business name exactly as \"Nova&\" everywhere, including headings, the title and the meta description — never \"Nova and\" or \"Novaand\" or \"Nova-and\" or \"Nova &\" or \"Nova N\" or \"Nova&.ai\".\n- The registered legal name is \"Novaand systems LLC\". Use it only where a legal statement needs it (for example the company's legal details or terms), never in the title, a heading, the meta description or ordinary sentences, and never in brackets after \"Nova&\".\n- Use British English spelling throughout (the style guide).\n- Never use these words or phrases: \"revolutionary\", \"game-changing\", \"cutting-edge\", \"unlock\", \"seamless\", \"supercharge\", \"leverage\", \"synergy\", \"world-class\", \"best-in-class\", \"delve\", \"in today’s fast-paced world\".\n- Tone: Plain, direct and professional. Focus on measurable business outcomes. No hype, no exclamation marks..\n- Always write the brand as Nova& and never expand the ampersand. Refer to the company as “we”. Give concrete numbers only when sourced. Mention UAE or GCC context where relevant. Never invent client names or case studies."
+  },
+  "site_urls": [
+   "https://www.novaand.example",
+   "https://www.novaand.example/whatwedo",
+   "https://www.novaand.example/capabilities",
+   "https://www.novaand.example/industries",
+   "https://www.novaand.example/whatwedo/assess-envision",
+   "https://www.novaand.example/whatwedo/build-implement",
+   "https://www.novaand.example/whatwedo/run-optimize",
+   "https://www.novaand.example/whatwedo/managed-services",
+   "https://www.novaand.example/whatwedo/global-rollouts",
+   "https://www.novaand.example/whatwedo/ai-automation",
+   "https://www.novaand.example/capabilities/business-applications",
+   "https://www.novaand.example/capabilities/cloud-services",
+   "https://www.novaand.example/capabilities/data",
+   "https://www.novaand.example/insights",
+   "https://www.novaand.example/whywith-novaand"
+  ],
+  "serp_shapes": {
+   "read": 6,
+   "counts": {
+    "Service or product page": 2,
+    "Other": 1,
+    "Comparison or list": 1,
+    "Guide or article": 2
+   },
+   "dominant": "",
+   "dominant_count": 2,
+   "dominant_share": 33,
+   "ours": "Service or product page",
+   "mismatch": false,
+   "text": "Google ranks a mix for this search (2 guide or article, 2 service or product page, 1 comparison or list, 1 other), so no page type is settled by the results."
+  },
+  "regulatory_facts": [
+   {
+    "illustrative": true,
+    "market": "AE",
+    "topic": "e-invoicing",
+    "date": "2026-10-30",
+    "obligation": "appoint an accredited service provider (phase 1)",
+    "subject": "businesses with revenue at or above the phase 1 threshold",
+    "threshold": "see the official decision",
+    "url": "https://mof.gov.ae/",
+    "paragraph": "",
+    "source_tier": 1,
+    "source_date": "",
+    "as_of": "2026-10-29",
+    "supersedes": "2026-07-31",
+    "status": "upcoming"
+   }
+  ],
+  "content_request_id": "3298"
+ },
+ "notes": [
+  "A missing GATING field can never produce Ready (Fix 2.3). Every gating field is present in every stored content report today, old ones included, so the app derives them from the ORIGINAL report payload (o.original), not o.base, and finalReportPayload copies them through.",
+  "A missing GRADING field is advice \"not checked: <field>\" and never blocks Ready. None of them is in a report delivered before W0-B ships; there is no seo_content_log fallback (LOG_COLS hold none of them).",
+  "3299 sent content_request_id \"\" (a form run): readers fall back to request_id.",
+  "serp_shapes here is KWI.serpPageTypes on the 6 competitor pages the run read; the content run does not carry its SERP top-10 organic list to Parse Brief today (W0-C adds it)."
+ ]
+}
