@@ -16,6 +16,8 @@ import {
   finalizeNeeded,
   finalReportPayload,
   keyCost,
+  metaDescriptionView,
+  cleanMetaDescription,
   n8nSiteId,
   NEEDS_YOU_QUESTION_PAGES,
   openQuestions,
@@ -229,7 +231,8 @@ export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewVie
     delivery,
     questions: questions.map((q) => ({ ...q, stored: storedFactFor(q, facts) })),
     answers,
-    delivered: { markdown: str(bp.markdown), title: str(bmeta.title), metaDescription: str(bmeta.meta_description), slug: str(bmeta.slug) },
+    // W0-A (2026-10-29): read-time repair of a report written before the meta fix ("Slug: ..." as its description): shown as missing
+    delivered: (() => { const md = metaDescriptionView(bmeta.meta_description); return { markdown: str(bp.markdown), title: str(bmeta.title), metaDescription: md.text, metaDescriptionNote: md.note, slug: str(bmeta.slug) }; })(),
     clientVersion: row?.clientMarkdown != null && row.clientSavedAt
       ? { markdown: row.clientMarkdown, savedAt: row.clientSavedAt.toISOString(), savedBy: row.clientSavedBy ?? null, check: row.clientCheck ?? null }
       : null,
@@ -382,7 +385,7 @@ async function checkVersion(orgId: string, l: Loaded, md: string, openCount: num
   if (words < 50) return pageCheckOf({ ran: false, note: 'The page is shorter than 50 words, so it was not checked.' }, openCount, at);
   const res = await publishCheckCall(
     {
-      markdown: pageMarkdownWithMeta(md, { title: str(meta.title), meta_description: str(meta.meta_description), slug: str(meta.slug) }),
+      markdown: pageMarkdownWithMeta(md, { title: str(meta.title), meta_description: cleanMetaDescription(meta.meta_description), slug: str(meta.slug) }),   // W0-A: never "Slug: ..."
       keyword,
       ...(l.site ? { domain: l.site.domain, country: l.site.country } : {}),
       ...(str(meta.page_type) ? { page_type: str(meta.page_type).slice(0, 60) } : {}),

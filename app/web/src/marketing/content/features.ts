@@ -341,6 +341,7 @@ export const features: Feature[] = [
       'Drafts by default: only an owner or admin publishes a page live, after confirming it; sending again updates the same post, never a second one',
       'A page that did not pass its quality check, or still holds a bracket left for you, cannot be sent to your CMS; the gaps are listed instead',
       'Links only to pages that are already live, with link text that reads like a title; pages still to come are listed as links to add later',
+      'A real search description on every page (the text under your title in search results), written from your brief or the page itself when the draft has none, and never naming a price, promise or number your business details and the page do not back',
       'Every figure looked up in the source the page cites, and a source without independent authority cited at most once',
       'A live check of the published page: schema, images, links and metadata',
       'One search, one page: a search a live page of yours already answers is written as a refresh of that page',

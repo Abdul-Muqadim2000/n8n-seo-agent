@@ -55,6 +55,9 @@ const call = FM.editor_ran ? CC.callCost({ node: 'Finalize Editor', model: 'clau
 const cost = { claude_usd: call ? call.usd : 0, dfs_usd: 0, estimated: !!call && !call.measured, model_calls: call ? 1 : 0, basis: call ? call.basis : 'no model call: every answer was applied without the editor' };
 const body = {
   ok: true, request_id: S(P.request_id), markdown: out,
+  // W0-A (PLAN Fix 1, acceptance f): the meta lines of the final version as the check read them (PF.meta rebuilt a broken description in
+  // Parse Brief), so the app stores this description instead of the one it sent
+  meta: { title: S((d.meta || {}).title), meta_description: S((d.meta || {}).description), slug: S((d.meta || {}).slug) },
   applied: (FM.applied || []).map(a => ({ id: a.id, how: a.how, section: S(a.section) })), sections_rewritten: FM.sections_rewritten || [], changes: changes.slice(0, 60),
   delivery_status: del.status,
   delivery: { status: del.status, label: del.label, blocking: del.blocking, advisory: del.advisory, next_step: del.next_step, grade },

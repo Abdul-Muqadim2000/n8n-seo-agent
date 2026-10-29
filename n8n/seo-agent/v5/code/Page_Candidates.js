@@ -52,7 +52,8 @@ const marksOf = (q) => ((q.business_promises || []).concat(q.business_claims || 
 // every statement about the business the check flagged in a draft that was (at some point) the best one: each becomes a client question
 const claimsIn = (q, page) => { const sp = PF.split(page); return ((q.business_promises || []).concat(q.business_claims || [])).filter(b => b && b.sentence).map(b => {
   const at = String(page).indexOf(b.sentence); const part = at >= 0 ? sp.parts.find(p => at >= p.start && at < p.end) : null;
-  return { sentence: String(b.sentence), kind: b.kind || 'process', rewrite: b.rewrite || null, section: part ? part.heading : '', where: part ? part.id : '', cta: !!part && part === sp.parts[sp.parts.length - 1] && part.id !== 's0', round }; }); };
+  // W0-A (PLAN Fix 1.6): a statement found in the head (the meta lines) says so, and PF.questions never asks the client about it
+  return { sentence: String(b.sentence), kind: b.kind || 'process', rewrite: b.rewrite || null, section: part ? part.heading : '', where: part ? part.id : (at >= 0 && at < sp.head.length) || b.where === 'meta' ? 'head' : '', cta: !!part && part === sp.parts[sp.parts.length - 1] && part.id !== 's0', round }; }); };
 const mergeClaims = (a, b) => { const k = (x) => x.sentence.toLowerCase().replace(/\s+/g, ' ').trim(); const m = new Map((a || []).map(x => [k(x), x])); for (const x of (b || [])) if (!m.has(k(x))) m.set(k(x), x); return [...m.values()]; };
 const claimsSeen0 = state0 ? state0.claims_seen || [] : [];
 const figsOf = (q) => (q.unverified_figures || []).map(f => String(f.figure)).concat((q.flagged_amounts || []).map(a => String(a.amount)));

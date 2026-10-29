@@ -151,8 +151,17 @@ if (!userGavePrices) {
 }
 
 // 4. Meta lines — and nothing else may sit between them and the H1 (models sometimes add "production notes")
-const metaOf = (label) => { const m = md.match(new RegExp('^' + label + ':\\s*(.+)$', 'im')); return m ? m[1].trim() : ''; };
+// W0-A (2026-10-29, page-quality PLAN Fix 1): `:\s*(.+)$` let \s* run over the line end, so an emptied "Meta Description:" read the NEXT line
+// ("Slug: ms-365-erp-uae", production run 3299) as its value. A field is read on its own line only: empty means empty.
+const metaOf = (label) => { const m = md.match(new RegExp('^' + label + ':[ \\t]*(.*)$', 'im')); return m ? m[1].trim() : ''; };
 const metaTitle = metaOf('Title'), metaDesc = metaOf('Meta Description');
+// W0-A: the meta description's field rule (the same rule as PF.metaProblem in _page_fix.js; harness S-META holds the two together): one line,
+// 70-155 characters, never a field label, no bracket. Page Fix rebuilds a description that breaks it before every check, so a failure here
+// is one the page pipeline could not repair: `meta_error`, a publish error in PF.classify (the Publish Check's own verdict does not read it)
+const META_FIELD_LABEL = /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords|URL|Page Type)\s*:/i;
+const metaDescProblem = !metaDesc ? 'is missing' : META_FIELD_LABEL.test(metaDesc) ? 'starts with a field label instead of a description' : /[\[\]]/.test(metaDesc) ? 'holds a bracket'
+  : metaDesc.length < 70 ? 'is under 70 characters' : metaDesc.length > 155 ? 'is over 155 characters' : '';
+const meta_error = metaDescProblem ? 'The meta description ' + metaDescProblem : '';
 // R15 (2026-10-13, re-rating §3.11): a ladder page keeps the URL its ladder row planned. Live, the row said
 // `…/service-industry-erp-software/` (the ladder's link map, the siblings' up-links and the Rank Tracker all use it) while the page was
 // delivered as `service-industry-erp-software-uae`, so publishing it would have left every stored link pointing at a URL that never exists.
@@ -758,7 +767,7 @@ if (placeholder_count > PH_MAX) warnings.push(`Too many placeholders to publish 
 
 // 15. Content score (0-100)
 // FIX_PLAN G2: an FAQ block is no longer one of the checks (no FAQ rich results since 2026-05-07); question headings answered directly are.
-const structuralChecks = [!!metaTitle && metaTitle.length <= 60, !!metaDesc && metaDesc.length <= 155, !!h1, h2s.length >= 4, !!qaMatch, answeredQuestions >= 3, /\|.*\|/.test(md), !/faq|frequently asked/i.test(lastH2), internalLinks > 0 || (prev.internal_link_candidates || []).filter(c => c && !c.planned).length <= 1, kwCount >= 3 && density <= 2];
+const structuralChecks = [!!metaTitle && metaTitle.length <= 60, !metaDescProblem, !!h1, h2s.length >= 4, !!qaMatch, answeredQuestions >= 3, /\|.*\|/.test(md), !/faq|frequently asked/i.test(lastH2), internalLinks > 0 || (prev.internal_link_candidates || []).filter(c => c && !c.planned).length <= 1, kwCount >= 3 && density <= 2];
 const structure_pts = 25 * structuralChecks.filter(Boolean).length / structuralChecks.length;
 // FIX_PLAN G33: the 25 coverage points are measured against the best competitor's coverage (clamped 60-90%), not against a silent 100%.
 // With no competitor page read, coverage_ratio is the plain share, exactly as before.
@@ -1065,7 +1074,7 @@ return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { t
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: plannedLinksQA.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role, anchor: anchorText(p) })),
-    answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, unverified_statistics: stats, unverified_figures,
+    answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, meta_error, unverified_statistics: stats, unverified_figures,
     trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct, position: read_position, basis: read_basis, band_line: read_band_line, note: read_note,
       band: RBAND.ok ? { low: RBAND.low, high: RBAND.high, median: RBAND.median, p25: RBAND.p25, p75: RBAND.p75, pages_measured: RBAND.pages_measured, pages: RBAND.pages, clamped: RBAND.clamped } : null,
       band_source: RBAND.ok ? 'competitor_pages' : 'fixed', advice_only: true },   // B3-4: the band and its basis; advice, never in `warnings`

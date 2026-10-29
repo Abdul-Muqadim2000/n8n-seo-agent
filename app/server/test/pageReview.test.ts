@@ -449,3 +449,49 @@ describe('pure rules', () => {
     expect(svc.setFact({}, 'proof x', { decision: 'general' }, null, 't')).toMatchObject({ error: 'Unknown business detail.' });
   });
 });
+
+// W0-A (2026-10-29, n8n/seo-agent/docs/page-quality-2026-10-29/PLAN.md Fix 1): production page 3299 stored "Slug: ms-365-erp-uae" as its
+// meta description (the engine's claim check emptied it and a reader took the next line); the app showed it and sent it back to finalize.
+describe('a broken meta description (W0-A)', () => {
+  const broken = () => payload({ meta: { ...(payload().meta as object), meta_description: 'Slug: erp-systems-uae' } });
+  const REBUILT = 'ERP systems in the UAE: how to choose between the main products, what to check for VAT and e-invoicing, and the questions to ask a partner.';
+  it('is repaired when the review is read: shown as missing, with what to do', async () => {
+    const s = await setup({ payload: broken() });
+    const v = view(await s.u.c.get(s.base));
+    expect(v.delivered.metaDescription).toBe('');
+    expect(v.delivered.metaDescriptionNote).toMatch(/^Missing\. Make the final version/);
+    const good = await setup();
+    const g = view(await good.u.c.get(good.base));
+    expect(g.delivered.metaDescription).toBe('How to choose an ERP system in the UAE.');   // short but the page's own: shown as it is
+    expect(g.delivered.metaDescriptionNote).toBe('');
+  });
+  it('is never sent back to the engine, and the final version keeps the description the engine wrote', async () => {
+    const s = await setup({ payload: broken() });
+    await s.u.c.put(`${s.base}/answers`, { answers: [{ questionId: 'q1', decision: 'yes' }] });
+    t.finalizeAnswer = {
+      kind: 'answered',
+      status: 200,
+      error: null,
+      json: {
+        ok: true,
+        request_id: 'x',
+        markdown: MD.replace('A sound selection starts with business discovery.', 'Before we recommend a product, we run business discovery in our Assess phase.'),
+        applied: [{ id: 'q1', how: 'kept_original', section: 's0' }],
+        sections_rewritten: [],
+        changes: [],
+        delivery_status: 'ready',
+        delivery: { status: 'ready', label: 'Ready to publish', blocking: [], advisory: [], next_step: '', grade: { score: 92 } },
+        client_questions: [],
+        grade: { score: 92 },
+        cost: { claude_usd: 0, dfs_usd: 0, estimated: false, model_calls: 0 },
+        meta: { title: 'ERP Systems in UAE: How to Choose', meta_description: REBUILT, slug: 'erp-systems-uae' },
+      },
+    };
+    await s.u.c.post(`${s.base}/finalize`, {});
+    const v = await waitFinal(s.u.c, s.base);
+    expect(v.finalize.status).toBe('done');
+    expect((t.finalize[0]!.meta as Record<string, unknown>).meta_description).toBe('');
+    const [rep] = await db.select().from(schema.reports).where(eq(schema.reports.id, v.finalize.reportId!));
+    expect(((rep!.payload as Record<string, unknown>).meta as Record<string, unknown>).meta_description).toBe(REBUILT);
+  });
+});

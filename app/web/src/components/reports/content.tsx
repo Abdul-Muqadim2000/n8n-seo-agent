@@ -11,7 +11,7 @@ import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { CountUp, HeroStat, Stagger } from '@/components/insight';
 import { absolutePageUrl, ArticleViewer, findPlaceholders } from './article';
 import { CmsPublishPanel } from './CmsPublish';
-import { deliveryOf, draftNextStep, ownerEdits } from '@seo/shared';
+import { cleanMetaDescription, deliveryOf, draftNextStep, ownerEdits } from '@seo/shared';
 import { DeliveryCallout, PageReview } from './review/ReviewPanels';
 import { Block, Bullets, Chips, Facts, has, CreditsCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
 import { keywordPrefill } from './meta';
@@ -374,7 +374,7 @@ function PageChecks({ html, meta, qa, qaOk, notReady, qaLabel, ledger }: { html:
   const placeholders = useMemo(() => findPlaceholders(`${html}\n${JSON.stringify(meta)}`), [html, meta]);
   const phCount = placeholders.reduce((s, x) => s + x.count, 0);
   const titleLen = num(meta.title_length) ?? (str(meta.title).length || null);
-  const descLen = num(meta.meta_description_length) ?? (str(meta.meta_description).length || null);
+  const descLen = cleanMetaDescription(meta.meta_description) ? (num(meta.meta_description_length) ?? (str(meta.meta_description).length || null)) : null;   // W0-A: "Slug: ..." is no description
   const internal = objs(meta.internal_links).length;
   const external = objs(meta.external_links).length;
   const schema = objs(meta.schema_blocks).length;
