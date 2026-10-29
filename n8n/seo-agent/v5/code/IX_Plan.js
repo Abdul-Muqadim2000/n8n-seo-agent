@@ -17,6 +17,14 @@
 // dispatch by the dispatch itself): it restarts the chain for the websites not done yet - a chain that broke on a crash, a time-out, an n8n
 // restart or a refused part goes on within the hour. A watch of another day does nothing. A chain part skips a website already done today
 // (N9: a second dispatch while a chain is in flight never reads a website twice).
+// Fix wave 3 (R2): every website part writes an ATTEMPT row (Index Attempt -> Save Index Attempt, an unfinished-run row: `sitemaps_json`
+// `{ reservation: true, attempt: true }`, nothing inspected) as soon as the run guard lets it in, BEFORE the sitemap rounds and Search
+// Analytics; the reservation and the final row replace it (same site_id + run_at). So a run that dies early (a Code node error in the sitemap
+// rounds, a runner task killed, the 3,600 s limit) is counted like one that died after its reservation: two unfinished runs today = left for
+// tomorrow (IX.CFG.gave_up_after), never restarted by each of the day's 30 watches. An attempt row is never the run before this one (E3).
+// Fix wave 3 (R8): a chain part whose website was already checked today BY ANOTHER CHAIN (the final row carries the other dispatch's id in
+// sitemaps_json.chain_id) stops its own chain there (`stop_chain`): two chains that met (a watch that started while a refused part was
+// waiting to restart) become one again instead of walking the same list side by side.
 /*__PAGE_WATCH__*/
 /*__INDEX_KIT__*/
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) { trigger = {}; }
@@ -37,6 +45,8 @@ const json = (v) => { if (v && typeof v === 'object') return v; try { return JSO
 const monOf = (s) => mons.find(x => S(x.site_id) === S(s.site_id)) || {};
 const live = (s) => !/^(paused|deleted|inactive)$/i.test(S(s.status));
 const isReservation = (r) => json(r.sitemaps_json).reservation === true;
+const isAttempt = (r) => json(r.sitemaps_json).attempt === true;   // R2: written at the start of a part, before anything else could fail
+const chainOf = (r) => S(json(r.sitemaps_json).chain_id);
 const todayOf = (sid) => runsOf(sid).filter(r => S(r.run_at).slice(0, 10) === today);
 const doneToday = (sid) => { const t = todayOf(sid); return t.some(r => !isReservation(r)) || t.filter(isReservation).length >= IX.CFG.gave_up_after; };
 const watch = trigger.ix_watch && typeof trigger.ix_watch === 'object' ? trigger.ix_watch : null;
@@ -66,7 +76,10 @@ if (!want && !chain) {
 const s = sites.find(x => normD(x.domain) === want || S(x.site_id) === want) || null;
 const why = !s ? 'no tracked website matches "' + want + '"' : (chain && !live(s)) ? normD(s.domain) + ' is paused' : (chain && !flag(monOf(s).index_watch, true)) ? 'the index watch of ' + normD(s.domain) + ' is off'
   : (chain && doneToday(S(s.site_id))) ? normD(s.domain) + ' was already checked today' : '';   // N9: a chain part never reads a website twice in a day
-if (why) return [{ json: { nothing_to_do: true, skip: true, reason: why, chain_part: chain ? (Number(chain.part) || 1) : 0 } }];
+// R8: the website was checked today by ANOTHER chain (its final row names another dispatch): that chain is alive and walks the same list, so this one stops
+const myChain = chain ? S(chain.dispatch_id) : '';
+const otherChain = !!(s && chain && myChain && todayOf(S(s.site_id)).some(r => !isReservation(r) && chainOf(r) && chainOf(r) !== myChain));
+if (why) return [{ json: { nothing_to_do: true, skip: true, reason: why + (otherChain ? ' by another chain of today: this chain stops here' : ''), chain_part: chain ? (Number(chain.part) || 1) : 0, ...(otherChain ? { stop_chain: true } : {}) } }];
 const m = monOf(s);
 const sid = S(s.site_id);
 const cap = IX.capOf(trigger.cap !== undefined && on_demand ? trigger.cap : m.index_daily_cap);
@@ -75,10 +88,10 @@ const todays = mine.filter(r => S(r.run_at).slice(0, 10) === today);
 const used_today = todays.reduce((t, r) => t + (Number(r.inspected) || 0), 0);
 const quota_hit = todays.some(r => /daily URL Inspection quota/i.test(S(r.note)));
 // E3: the run before this one, and whether it read the sitemap tree completely (a page first seen in a sitemap is `new` only after such a run)
-const prev = mine.find(r => S(r.run_at) < run_at) || null;
+const prev = mine.find(r => S(r.run_at) < run_at && !isAttempt(r)) || null;   // R2: an attempt row that never got further says nothing of the sitemap tree
 const pj = prev ? json(prev.sitemaps_json) : {};
 return [{ json: { site_id: sid, domain: normD(s.domain), canonical_host: S(s.canonical_host), gsc_property_hint: S(s.gsc_property),
   callback_url: S(trigger.callback_url) || S(s.callback_url), request_id: S(trigger.request_id) || S(s.request_id), cap, used_today, quota_hit, on_demand,
   index_watch: flag(m.index_watch, true), trigger: S(trigger.trigger), run_at,
   prev_complete: pj.complete === true, prev_complete_at: pj.complete === true ? S(prev.run_at) : '', home_host_prev: S(pj.home_host),
-  chain_part: chain ? (Number(chain.part) || 1) : 0 } }];
+  chain_part: chain ? (Number(chain.part) || 1) : 0, chain_id: myChain } }];

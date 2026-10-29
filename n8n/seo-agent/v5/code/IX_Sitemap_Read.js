@@ -19,11 +19,9 @@ let fetched = true; let res = []; try { res = $('Fetch Sitemaps ' + ROUND).all()
 // the files: this node's own input is the fetch node's output when it ran (one item per request, in order)
 const ins = (() => { try { return fetched ? $input.all() : []; } catch (e) { return []; } })();
 const helpers = (typeof this !== 'undefined' && this && this.helpers) ? this.helpers : null;
-const bodies = [];
-for (let i = 0; i < res.length; i++) {
-  const a = await IX.answerText(res[i] || {}, ins.length === res.length ? ins[i] : null, i, helpers, IX.CFG.sitemap_read_bytes);
-  bodies.push(a);
-}
+// R3 / R6 (fix wave 3): each answer is read when it is used and dropped after it, one at a time (wave 2 read every answer of the round
+// first and held all of them), and a file above IX.CFG.sitemap_read_bytes is not read at all (IX.answerText: the size is known first)
+const bodyOf = async (i) => IX.answerText(res[i] || {}, ins.length === res.length ? ins[i] : null, i, helpers, IX.CFG.sitemap_read_bytes);
 const hdr = (r, name) => { const h = (r && r.headers) || {}; const k = Object.keys(h).find(x => x.toLowerCase() === name); return k ? S(h[k]) : ''; };
 const locOf = (r, asked) => { const l = hdr(r, 'location'); return /^\//.test(l) && !/^\/\//.test(l) ? 'https://' + IX.hostOf(asked) + l : l; };
 let roots = new Map();
@@ -36,7 +34,8 @@ if (ROUND === 1) {
 const out = [];
 for (const s of sites) {
   let st = prev.find(x => x.site_id === s.site_id);
-  const mine = reqs.map((q, i) => ({ q, r: { ...(res[i] || {}), data: bodies[i] ? bodies[i].text : '' }, cut: !!(bodies[i] && bodies[i].cut) })).filter(x => x.q.site_id === s.site_id);
+  const mine = reqs.map((q, i) => ({ q, i })).filter(x => x.q.site_id === s.site_id);
+  const answer = async (x) => { const b = await bodyOf(x.i); return { r: { ...(res[x.i] || {}), data: b.text }, b }; };
   const asked = new Set(mine.map(x => IX.key(x.q.url) + (x.q.robots ? '#r' : x.q.home ? '#h' : '')));
   // N7: what was queued and not asked in this round stays queued
   const carry = st ? (st.next || []).filter(n => !asked.has(IX.key(n.url) + (n.robots ? '#r' : n.home ? '#h' : ''))) : [];
@@ -44,8 +43,9 @@ for (const s of sites) {
   const site = () => ({ ...s, home_host: st.home_host || S(s.home_host_prev) });
   try {
     // the home page first: the host decides how every sitemap address is stored
-    for (const { q, r } of mine.filter(x => x.q.home)) {
-      const status = n0(r.statusCode ?? r.status);
+    for (const x of mine.filter(x => x.q.home)) {
+      const q = x.q; const status = n0((res[x.i] || {}).statusCode ?? (res[x.i] || {}).status);
+      const r = status >= 200 && status < 300 ? (await answer(x)).r : (res[x.i] || {});
       if (status >= 300 && status < 400) {
         const to = IX.safe(locOf(r, q.url), s);
         if (to) { st.home_host = IX.hostOf(to); if (n0(st.home_hops) < 2 && to !== q.url) { st.home_hops = n0(st.home_hops) + 1; st.next.push({ url: to, from: 'home', home: true }); } }
@@ -54,7 +54,15 @@ for (const s of sites) {
         st.home_links = IX.homeLinks(S(r.data), q.url, site());
       }
     }
-    for (const { q, r, cut } of mine.filter(x => !x.q.home)) {
+    for (const x of mine.filter(x => !x.q.home)) {
+      const q = x.q; const r0 = res[x.i] || {}; const status0 = n0(r0.statusCode ?? r0.status);
+      // the address cap is reached: a sitemap answer is no longer read (nothing it holds could be kept), the tree is capped
+      if (!q.robots && (st.urls || []).length >= IX.CFG.urls_max) { const k = IX.key(q.url); st.fetched = st.fetched || []; if (!st.fetched.includes(k)) st.fetched.push(k); st.capped = true; continue; }
+      const a = status0 >= 200 && status0 < 300 ? await answer(x) : { r: r0, b: { text: '', cut: false } };
+      const r = a.r; const cut = !!a.b.cut;
+      // R6: a file above the read limit was not read: the sitemap is named with its reason and the tree is partial (never a crash, never "empty")
+      if (a.b.too_large) { const k = IX.key(q.url); st.fetched = st.fetched || []; if (!q.robots && !st.fetched.includes(k)) st.fetched.push(k);
+        st.errors = (st.errors || []).concat([{ url: q.url, error: 'larger than we read (' + Math.round(IX.CFG.sitemap_read_bytes / 1e6) + ' MB): not read' }]); continue; }
       if (q.robots) {
         const status = n0(r.statusCode ?? r.status);
         if (status >= 300 && status < 400 && n0(st.robots_hops) < 2) { const to = IX.safe(locOf(r, q.url), s); if (to) { st.robots_hops = n0(st.robots_hops) + 1; st.next.push({ url: to, from: 'robots_txt', robots: true }); continue; } }

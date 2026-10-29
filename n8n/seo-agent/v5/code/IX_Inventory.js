@@ -29,7 +29,7 @@ for (const s of sites) {
   const mineStored = stored.filter(r => r.site_id === s.site_id);
   if (!s.gsc_connected) {
     // E14: nothing is checked, nothing is called zero: the stored rows stand, the run says why
-    out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: false, no_access: true, why: S(s.gsc_error), pages: mineStored.map(slimStored), take: [], reuse: [] } });
+    out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: false, no_access: true, why: IX.plainWhy(s.gsc_error), why_detail: S(s.gsc_error_detail || s.gsc_error), pages: mineStored.map(slimStored), take: [], reuse: [] } });
     continue;
   }
   try {
@@ -68,6 +68,8 @@ for (const s of sites) {
         complete, left: (st.next || []).length, robots_status: st.robots_status || 0, home_host: S(site.home_host) },
       gsc_sitemaps: gscSitemaps, search: { read: saOk, rows: ev.rows, end: ev.end, truncated: ev.truncated, truncated_windows: ev.truncated_windows, why: saOk ? '' : saWhy },
       quota_stop, failed: false } });
-  } catch (e) { out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: true, why: 'inventory failed: ' + S(e && e.message).slice(0, 160), pages: mineStored.map(slimStored), take: [], reuse: [] } }); }
+  } catch (e) {
+    // R5 (fix wave 3): the client reads a plain reason; the exception stays in why_detail (ops: the execution, the run row's sitemaps_json.error_detail)
+    out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: true, why: IX.PLAIN_FAIL, why_detail: 'inventory failed: ' + S(e && e.message).slice(0, 160), pages: mineStored.map(slimStored), take: [], reuse: [] } }); }
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no website' } }];

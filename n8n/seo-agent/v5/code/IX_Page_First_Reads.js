@@ -20,8 +20,12 @@ for (let i = 0; i < fq.length; i++) {
   const st = n0(r.statusCode ?? r.status);
   const h = r.headers || {}; const headers = {};
   for (const k of Object.keys(h)) if (KEEP.includes(k.toLowerCase())) headers[k.toLowerCase()] = h[k];
-  const first = st ? { statusCode: st, headers, data: st >= 300 && st < 400 ? S(a.text).slice(0, 2000) : '' } : { error: r.error || 'no answer' };
-  const redirect = st >= 300 && st < 400;
-  out.push({ json: { i, site_id: q.site_id, url: q.url, page_url: q.page_url || q.url, first, ...(redirect ? {} : { f: IX.readFetch(q.url, { ...r, data: a.text, body: undefined }, null) }) } });
+  // R6 (fix wave 3): a page above the read limit was not read (IX.answerText knew its size first): it is "could not check", never a 200 with
+  // no body (that would read as a page with no noindex and no canonical, i.e. a fix seen or a cause made up)
+  const big = !!a.too_large && !(st >= 300 && st < 400);
+  const first = big ? { error: 'the page is larger than we read (' + Math.round(IX.CFG.page_read_bytes / 1e6) + ' MB): not read' }
+    : st ? { statusCode: st, headers, data: st >= 300 && st < 400 ? S(a.text).slice(0, 2000) : '' } : { error: r.error || 'no answer' };
+  const redirect = !big && st >= 300 && st < 400;
+  out.push({ json: { i, site_id: q.site_id, url: q.url, page_url: q.page_url || q.url, first, ...(redirect ? {} : { f: IX.readFetch(q.url, big ? first : { ...r, data: a.text, body: undefined }, null) }) } });
 }
 return out;
