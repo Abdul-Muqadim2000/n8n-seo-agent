@@ -42,7 +42,11 @@ for (const v of inv) {
     const ctx = { now, freeze: fr, sitemap_complete: smComplete, has_sitemap: (v.sitemap || {}).urls > 0, site };
     const robots = v.robots || {};
     const reserved = saved.some(r => r && !r.error && S(r.site_id) === v.site_id);
-    const rows = []; const dropped = []; const moves = (v.moves || []).slice(); const c = { inspected: 0, reused: 0, fetched: 0, errors: 0, quota: false, access: false, rate: 0, blocked: 0, moved: 0 };
+    const rows = []; const dropped = []; const c = { inspected: 0, reused: 0, fetched: 0, errors: 0, quota: false, access: false, rate: 0, blocked: 0, moved: 0 };
+    let movesLeft = IX.CFG.moves_max - (v.moves || []).length;
+    // the fields of a Google reading: a reading of an address that turned out to redirect says nothing about the address it redirects to (N1)
+    const READING = ['verdict', 'coverage', 'google_canonical', 'last_crawl', 'inspect_at', 'evidence', 'indexing_state', 'robots_state', 'page_fetch_state', 'crawled_as',
+      'user_canonical', 'referring_count', 'google_sitemaps'];
     for (const p of (v.pages || [])) {
       const k = IX.key(p.url); const prev = p._prev || null; const prevState = S(prev && prev.state);
       const fi = fresh.get(v.site_id + '|' + k) || null; const reuse = !fi && p._reuse ? p._reuse : null; const f = fetches.get(v.site_id + '|' + k) || null;
@@ -59,15 +63,18 @@ for (const v of inv) {
       }
       if (f) Object.assign(row, { fetch_at: nowIso, ...(f.ok && !f.blocked ? { http_status: f.http_status, final_url: f.final_url, noindex: f.noindex, page_canonical: f.page_canonical, words: f.words,
         title: S(f.title) || S(row.title) } : {}) });
-      // E4: the same page under another form of its address (slash, case, www): the row moves to the final address and is asked again tomorrow
+      // E4 / N1: the same page under another form of its address (slash, case, www): the row moves to where the redirect ENDS (the final URL
+      // wins; the `final` source keeps the sitemap's form mapped onto it, so tomorrow's merge does not move it back), gets a fresh plan
+      // (inspected on the next run) and keeps its history; the reading of the redirecting form is not kept as the page's reading
       const gMove = reading && /^page with redirect/i.test(S(reading.coverage)) && S(reading.google_canonical) && IX.same(reading.google_canonical, row.url) && IX.safe(reading.google_canonical, site) !== row.url ? IX.safe(reading.google_canonical, site) : '';
       const moveTo = (f && f.ok && !f.blocked && S(f.moved_to) && IX.safe(f.moved_to, site) !== row.url) ? IX.safe(f.moved_to, site) : gMove;
       let d = null; let moved = false;
-      if (moveTo && moves.length < IX.CFG.moves_max) {
-        moves.push({ site_id: v.site_id, from: row.url, to: moveTo, why: 'the address answers with a redirect to ' + moveTo + ' (the same page)' });
-        row._moved_from = row._moved_from || row.url; row.url = moveTo; moved = true; c.moved++;
-        row.next_check_at = new Date(now + IX.DAY).toISOString();
-        if (!prev) Object.assign(row, { state: 'unknown', cause: '', action: 'none' });   // the reading was of the old address: nothing is concluded from it
+      if (moveTo && movesLeft > 0) {
+        movesLeft--; row.url = moveTo; moved = true; c.moved++;
+        for (const kk of READING) row[kk] = prev ? p[kk] : (kk === 'referring_count' || kk === 'google_sitemaps' ? 0 : '');
+        if (!prev) Object.assign(row, { state: 'unknown', cause: '', action: 'none' });   // nothing is concluded from the old address's reading
+        row.sources = [...new Set(S(row.sources).split(',').filter(Boolean).concat(['final']))].join(',');
+        row.next_check_at = prev ? nowIso : '';   // a fresh plan: due on the next run (a page never read is planned as never inspected)
       } else if (fi && !fi.ok) {
         if (prevState && !/^(unknown|error)$/.test(prevState)) { row.next_check_at = new Date(now + IX.DAY).toISOString(); row._why = S(fi.not_checked); }
         else d = { state: 'error', cause: 'not_checked', action: 'none', merge_into: '' };
@@ -81,22 +88,32 @@ for (const v of inv) {
         if (reading) row.checks = (prev && S(prev.cause) === d.cause && S(prev.inspect_at)) ? n0(prev.checks) + 1 : 1;
         if (row.state === 'indexed') row.indexed_since = prevState === 'indexed' ? (S(prev.indexed_since) || nowIso) : nowIso; else row.indexed_since = '';
       } else if (!S(row.action)) row.action = 'none';
-      // X7: our read shows the step done while Google still shows the old reason -> wait for Google, re-checked within a day
+      // X7 / N3 / N4: the fix state of a page with a step on the client's site (IX.fixState holds THE SHARED RULE: fix_seen_at set = fixed on
+      // the site, waiting for Google, whatever inspect_at says; cleared when Google's reason changes, when our read sees the problem again, or
+      // when Google crawled the page after the fix and still reports it - then fix_failed_at, and the step is the client's again, with a note)
+      const fixBefore = S(row.fix_seen_at);
       const siteFix = row.action === 'site_fix' || (S(row.fix_seen_at) && row.action === 'wait');
       if (siteFix && !moved) {
         const allows = S(row.cause) === 'robots_blocked' ? IX.robotsAllows(robots.text, robots.status, IX.pathOf(row.url)) : null;
         const seen = IX.fixSeen(row, f, allows, ctx);
-        const sameCause = prev && S(prev.cause) === S(row.cause);
-        if (seen === true) row.fix_seen_at = (sameCause && S(prev.fix_seen_at)) ? S(prev.fix_seen_at) : nowIso;
-        else if (seen === false) row.fix_seen_at = '';
-        else row.fix_seen_at = sameCause ? S(prev.fix_seen_at) : '';
-        if (S(row.fix_seen_at)) row.action = 'wait'; else if (row.action === 'wait' && !d) row.action = 'site_fix';   // the fix was not seen again: the step is back
-      } else if (d || moved) row.fix_seen_at = '';
+        const sameCause = !!prev && S(prev.cause) === S(row.cause);
+        const fx = IX.fixState({ prev: sameCause ? prev : null, seen, fresh: reading || null, now_iso: nowIso });
+        row.fix_seen_at = fx.fix_seen_at; row.fix_failed_at = fx.fix_failed_at;
+        if (S(row.fix_seen_at)) row.action = 'wait'; else if (row.action === 'wait') row.action = 'site_fix';   // the fix was not seen again: the step is back
+      } else if (d || moved) { row.fix_seen_at = ''; row.fix_failed_at = ''; }
+      if (row.state === 'indexed') { row.fix_seen_at = ''; row.fix_failed_at = ''; if (row.action === 'wait' && !S(row.cause)) row.action = 'none'; }   // N4: nothing waits for an indexed page
       // X4: a drop-out is an indexed page Google now leaves out with something to do (never one left out on purpose, a move, or a wait)
       if (d && !moved && prevState === 'indexed' && (row.state === 'not_indexed' || row.state === 'excluded') && reading && !['leave_out', 'wait'].includes(row.action)) {
         row.dropped_at = nowIso; dropped.push({ url: row.url, at: nowIso, cause: row.cause });
       }
-      if (d || moved || S(row.fix_seen_at) !== S(prev && prev.fix_seen_at)) row.next_check_at = moved ? row.next_check_at : IX.nextCheck(row, ctx);
+      // N2: the next inspection moves only after a GOOGLE reading (an inspection, or the Site Tracker's reused one) - never on a day our own
+      // read alone re-diagnosed the page, or the date would slide forward on every read and the page would never be inspected again. A fix
+      // newly seen on the site only brings the next inspection forward (re-checked within a day), it never pushes it back.
+      if (!moved) {
+        if (reading && d) row.next_check_at = IX.nextCheck(row, ctx);
+        else if (d && fi && !fi.ok) row.next_check_at = IX.nextCheck(row, ctx);
+        else if (S(row.fix_seen_at) && S(row.fix_seen_at) !== fixBefore) { const nc = IX.nextCheck(row, ctx); if (!S(row.next_check_at) || Date.parse(nc) < Date.parse(row.next_check_at)) row.next_check_at = nc; }
+      }
       row.needs_person = ['site_fix', 'links', 'quality', 'duplicate'].includes(S(row.action)) && n0(row.checks) > IX.CFG.person_after;
       rows.push(row);
     }
@@ -109,16 +126,23 @@ for (const v of inv) {
     const upserts = [], history = [];
     for (const r of rows) {
       const o = IX.rowOut(r);
-      if (IX.changed(r._moved_from ? null : r._prev, o)) upserts.push(o);
+      const movedNet = !!r._prev && S(r._prev.url) !== o.url;
+      if (IX.changed(movedNet ? null : r._prev, o)) upserts.push(o);
       const pr = r._prev;
       if ((!pr && o.state !== 'unknown') || (pr && (S(pr.state) !== o.state || S(pr.cause) !== o.cause)))
         history.push({ site_id: o.site_id, url: o.url, at: nowIso, state: o.state, cause: o.cause, evidence: o.evidence, verdict: o.verdict, coverage: o.coverage });
     }
-    // E4 / X16: the old address of a moved row is deleted (its history follows it), long-gone and duplicate rows are pruned
-    const deletes = moves.map(m => ({ site_id: v.site_id, url: m.from })).concat((v.prune || []).map(p => ({ site_id: v.site_id, url: p.url })));
-    const history_moves = moves.map(m => ({ site_id: v.site_id, from: m.from, to: m.to }));
+    // E4 / N1 / X16 / N10: the NET moves (the stored address -> where the row is now; a row moved by the merge and back by the redirect did
+    // not move), each deleted only once its new row is saved (Index Delete Rows checks Save Index Pages); long-gone and duplicate rows are
+    // pruned; an address that is a row of this run is never deleted
+    const live = new Set(rows.map(r => r.url));
+    const netMoves = rows.filter(r => r._prev && S(r._prev.url) && S(r._prev.url) !== r.url).map(r => ({ site_id: v.site_id, from: S(r._prev.url), to: r.url }));
+    const deletes = netMoves.map(m => ({ site_id: v.site_id, url: m.from, why: 'move', keep: m.to }))
+      .concat((v.prune || []).map(x => ({ site_id: v.site_id, url: x.url, why: S(x.why) || 'gone', keep: S(x.keep) })))
+      .filter(x => x.url && !live.has(x.url));
+    const history_moves = netMoves.filter(m => !live.has(m.from));
     const all = rows.map(r => ({ url: r.url, state: S(r.state), cause: S(r.cause), action: S(r.action), lane: S(r.lane), needs_person: !!r.needs_person, note: S(r.note),
-      merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: !!r.ask_google }));
+      merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: !!r.ask_google, fix_failed_at: S(r.fix_failed_at) }));
     // X13: no same-day callback for news on the site's first run, nor for an update that started before the site was first checked
     const firstRun = !(v.pages || []).some(p => p._prev);
     const since = S(v.watch_since);

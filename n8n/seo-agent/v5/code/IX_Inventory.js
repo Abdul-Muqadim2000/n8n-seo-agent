@@ -16,7 +16,8 @@ const stored = rowsOf('Load Index Pages').filter(r => r.site_id && r.url);
 const inventory = rowsOf('Load Pages (Index)').filter(r => r.site_id && r.url);
 const watch = rowsOf('Load Page Watch (Index)').filter(r => r.site_id && r.url);
 const logs = rowsOf('Load Content Log (Index)');
-let smState = []; try { smState = $('Sitemap Read 3').all().map(i => i.json).filter(x => x && x.site_id); } catch (e) { smState = []; }
+// the sitemap tree as the LAST round left it (N7: IX.CFG.sitemap_rounds rounds; every round's node runs, a round with nothing to read passes it on)
+let smState = []; for (let r = IX.CFG.sitemap_rounds; r >= 1 && !smState.length; r--) { try { smState = $('Sitemap Read ' + r).all().map(i => i.json).filter(x => x && x.site_id); } catch (e) { smState = []; } }
 const grab = (n) => { try { return $(n).all().map(i => i.json); } catch (e) { return []; } };
 const saReqs = grab('Pages Query Requests').filter(q => q && !q.skip), saRes = grab('GSC Pages Query');
 const saReqs2 = grab('Pages Query More').filter(q => q && !q.skip), saRes2 = grab('GSC Pages Query 2');

@@ -1,6 +1,8 @@
 // Index coverage: the callback `index_coverage` (DESIGN §5) per website - sent on Mondays (the engine's own calendar), the same day when a page
 // dropped out of Google or a Google update started or finished (or its spam-policies page changed), and always to an on-demand caller. Quiet
 // days send nothing: the app reads the tables. Free: the run ledger settles $0 and the callback carries `cost: { usd: 0 }`.
+// Fix wave 2 (N12): a run that could not read the website carries `summary.failed: true`, `checked: false`, the note and `figures_from:
+// 'last_check'`, so a report built from it never shows the last check's figures as today's.
 /*__PAGE_WATCH__*/
 /*__INDEX_KIT__*/
 const S = (v) => String(v == null ? '' : v).trim();
@@ -26,7 +28,10 @@ for (const d of diag) {
   const summary = { known: sum.known, indexed: sum.indexed, not_indexed: sum.not_indexed, excluded: sum.excluded, unknown: sum.unknown, backlog_left: sum.unknown,
     new_pages: sum.new_pages, new_indexed: sum.new_indexed, by_action: sum.by_action, by_cause: sum.by_cause, dropped: (d.dropped || []).slice(0, IX.CFG.dropped_max),
     freeze: !!fr.freeze, freeze_reason: S(fr.reason), events,
-    impact: imp ? { event_title: S(imp.event_title), dropped: n0(imp.dropped), stable: n0(imp.stable), gained: n0(imp.gained) } : { event_title: '', dropped: 0, stable: 0, gained: 0 } };
+    impact: imp ? { event_title: S(imp.event_title), dropped: n0(imp.dropped), stable: n0(imp.stable), gained: n0(imp.gained) } : { event_title: '', dropped: 0, stable: 0, gained: 0 },
+    // N12 (fix wave 2): a run that could not read the website says so in the summary itself - the figures are the LAST check's, never today's
+    failed: !!d.failed, checked: !d.failed, note: d.failed ? ('We could not check this website today: ' + (S(d.why) || 'not checked').replace(/[.:]+$/, '') + '.' + (sum.known ? ' The figures are from the last check.' : ' Nothing has been checked yet.')) : S(run.note).slice(0, 1500),
+    figures_from: d.failed ? 'last_check' : 'today' };
   const md = IX.reportMarkdown({ domain: d.domain }, { ...sum, should_index: sum.should_index }, { ...run, quota_cap: d.cap }, { rows: d.all || [], dropped: d.dropped || [], events, freeze: fr, impact: imp, failed: !!d.failed, why: S(d.why) });   // E14: a site not checked says so, never "0 of 0"
   out.push({ json: { stage: 'index_coverage', status: 'complete', domain: S(d.domain), site_id: d.site_id, request_id: S(d.request_id), summary, report_markdown: md,
     cost: { usd: 0 }, callback_url: S(d.callback_url) } });

@@ -402,7 +402,12 @@ INDEX_PAGES_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string
                     ('needs_person', 'boolean'), ('link_from', 'string'), ('merge_into', 'string'), ('note', 'string'), ('updated_at', 'string'),
                     # fix wave 1 (docs/indexing-2026-10-29/FIX_CONTRACT.md): our own read saw the site fix while Google still shows the old reason
                     # (X7; ISO, '' = none), and "ask Google to read it" in Search Console (X8; at most 5 pages a site a week)
-                    ('fix_seen_at', 'string'), ('ask_google', 'boolean')]
+                    ('fix_seen_at', 'string'), ('ask_google', 'boolean'),
+                    # fix wave 2 (ENGINE_BUILD.md "Fix wave 2"): Google read the page AFTER the fix we saw and still reported the same cause
+                    # (N3; ISO of that crawl, '' = none; no new fix_seen_at until our read sees the problem again or Google's reason changes),
+                    # and when the page was last marked "ask Google to read it" (N6; kept after the mark ends, so at most 5 NEW marks a
+                    # site in any 7 days)
+                    ('fix_failed_at', 'string'), ('ask_google_at', 'string')]
 # seo_index_history: insert only, one row per state / cause change of a page
 INDEX_HISTORY_TABLE = 'seo_index_history'
 INDEX_HISTORY_COLS = [('site_id', 'string'), ('url', 'string'), ('at', 'string'), ('state', 'string'), ('cause', 'string'), ('evidence', 'string'), ('verdict', 'string'), ('coverage', 'string')]

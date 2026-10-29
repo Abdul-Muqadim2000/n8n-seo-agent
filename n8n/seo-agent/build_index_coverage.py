@@ -81,9 +81,13 @@ def google(method, url, interval=150):
          'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': interval}}, 'timeout': 60000, 'response': {'response': {'neverError': True}}}}
     if method == 'POST': p.update({'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}'})
     return p
-def text_get(url, follow=True, batch=5, interval=250, timeout=30000):
+def text_get(url, follow=True, batch=5, interval=250, timeout=30000, as_file=False):
+    # N7 / X2 (fix wave 2): `as_file` - the answer's body is written as a file (binary property `data`; the production instance keeps
+    # binaries on disk, N8N_DEFAULT_BINARY_DATA_MODE=filesystem), so no sitemap or page body is kept in the run's saved data; the Code node
+    # after the fetch reads it with this.helpers.getBinaryDataBuffer and passes on only what it found
     o = {'batching': {'batch': {'batchSize': batch, 'batchInterval': interval}}, 'timeout': timeout,
-         'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}
+         'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'file', 'outputPropertyName': 'data'} if as_file
+                      else {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}
     if not follow: o['redirect'] = {'redirect': {'followRedirects': False}}
     return {'method': 'GET', 'url': url, 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': UA},
             {'name': 'Accept', 'value': 'text/html,application/xhtml+xml,application/xml,text/xml,application/json,text/plain,*/*'}]}, 'options': o}
@@ -146,59 +150,68 @@ code('Pages Query Requests', rd('IX_Pages_Query_Requests.js'), at(36, 1)); iff('
 node('GSC Pages Query', 'n8n-nodes-base.httpRequest', 4.5, google('POST', '={{ $json.url }}'), at(38, 0), credentials=GOOGLE, **HTTP_X)
 code('Pages Query More', rd('IX_Pages_Query_More.js'), at(39, 1)); iff('Any Pages Query More?', '{{ !$json.skip }}', at(40, 1))
 node('GSC Pages Query 2', 'n8n-nodes-base.httpRequest', 4.5, google('POST', '={{ $json.url }}'), at(41, 0), credentials=GOOGLE, **HTTP_X)
-# ---- the sitemap tree, three rounds (no fetch follows a redirect: E11) ----
-for r in (1, 2, 3):
+# ---- the sitemap tree, ROUNDS rounds (no fetch follows a redirect: E11; N7: bounded batches, answers as files) ----
+ROUNDS = 7
+assert re.search(r'sitemap_rounds:\s*' + str(ROUNDS) + r'\b', IX_SRC), 'IX.CFG.sitemap_rounds must equal the rounds built here (Index Inventory reads the last one)'
+for r in range(1, ROUNDS + 1):
     x = 41 + (r - 1) * 4
     code('Sitemap Requests ' + str(r), rd('IX_Sitemap_Requests.js', round_no=r), at(x + 1, 3))
     iff('Any Sitemaps ' + str(r) + '?', '{{ !$json.skip }}', at(x + 2, 3))
-    node('Fetch Sitemaps ' + str(r), 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False), at(x + 3, 2), **HTTP_X)
+    node('Fetch Sitemaps ' + str(r), 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False, as_file=True), at(x + 3, 2), **HTTP_X)
     code('Sitemap Read ' + str(r), rd('IX_Sitemap_Read.js', round_no=r), at(x + 4, 3))
 # ---- inventory, the reservation, inspections, our own reads ----
-code('Index Inventory', rd('IX_Inventory.js'), at(54, 4))
-code('Index Reservation', rd('IX_Reservation.js'), at(55, 4)); iff('Any Reservation?', '{{ !$json.skip }}', at(56, 4))
-node('Save Index Reservation', DT_TYPE, DT_VERSION, dt_insert_params(INDEX_RUNS_TABLE, INDEX_RUNS_COLS), at(57, 3), **SAVE)
-code('Index Probe Requests', rd('IX_Probe_Requests.js'), at(58, 4)); iff('Any Probes?', '{{ !$json.skip }}', at(59, 4))
-node('Inspect URL (Probe)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL), at(60, 3), credentials=GOOGLE, **HTTP_X)
-code('Index Inspect Requests', rd('IX_Inspect_Requests.js'), at(61, 4)); iff('Any Inspections (Index)?', '{{ !$json.skip }}', at(62, 4))
-node('Inspect URL (Index)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL), at(63, 3), credentials=GOOGLE, **HTTP_X)
-code('Inspect Retry Requests', rd('IX_Inspect_Retry_Requests.js'), at(64, 4)); iff('Any Rate Retry?', '{{ !$json.skip }}', at(65, 4))
-node('Wait (Index Rate Limit)', 'n8n-nodes-base.wait', 1.1, {'amount': 61, 'unit': 'seconds'}, at(66, 3), webhookId=nid('Wait (Index Rate Limit):hook'), executeOnce=True)
-node('Inspect URL (Retry)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL, interval=400), at(67, 3), credentials=GOOGLE, **HTTP_X)
-code('Page Fetch Requests', rd('IX_Page_Fetch_Requests.js'), at(68, 4)); iff('Any Page Fetches?', '{{ !$json.skip }}', at(69, 4))
-node('Fetch Page (Index)', 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False, timeout=20000), at(70, 3), **HTTP_X)
-code('Fetch Hop Requests', rd('IX_Fetch_Hop_Requests.js'), at(71, 4)); iff('Any Hops?', '{{ !$json.skip }}', at(72, 4))
-node('Fetch Page (Final)', 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False, timeout=20000), at(73, 3), **HTTP_X)
-code('Page Signals', rd('IX_Page_Signals.js'), at(74, 4))
+code('Index Inventory', rd('IX_Inventory.js'), at(70, 4))
+code('Index Reservation', rd('IX_Reservation.js'), at(71, 4)); iff('Any Reservation?', '{{ !$json.skip }}', at(72, 4))
+node('Save Index Reservation', DT_TYPE, DT_VERSION, dt_insert_params(INDEX_RUNS_TABLE, INDEX_RUNS_COLS), at(73, 3), **SAVE)
+code('Index Probe Requests', rd('IX_Probe_Requests.js'), at(74, 4)); iff('Any Probes?', '{{ !$json.skip }}', at(75, 4))
+node('Inspect URL (Probe)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL), at(76, 3), credentials=GOOGLE, **HTTP_X)
+code('Index Inspect Requests', rd('IX_Inspect_Requests.js'), at(77, 4)); iff('Any Inspections (Index)?', '{{ !$json.skip }}', at(78, 4))
+node('Inspect URL (Index)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL), at(79, 3), credentials=GOOGLE, **HTTP_X)
+code('Inspect Retry Requests', rd('IX_Inspect_Retry_Requests.js'), at(80, 4)); iff('Any Rate Retry?', '{{ !$json.skip }}', at(81, 4))
+node('Wait (Index Rate Limit)', 'n8n-nodes-base.wait', 1.1, {'amount': 61, 'unit': 'seconds'}, at(82, 3), webhookId=nid('Wait (Index Rate Limit):hook'), executeOnce=True)
+node('Inspect URL (Retry)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL, interval=400), at(83, 3), credentials=GOOGLE, **HTTP_X)
+code('Page Fetch Requests', rd('IX_Page_Fetch_Requests.js'), at(84, 4)); iff('Any Page Fetches?', '{{ !$json.skip }}', at(85, 4))
+node('Fetch Page (Index)', 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False, timeout=20000, as_file=True), at(86, 3), **HTTP_X)
+code('Page First Reads', rd('IX_Page_First_Reads.js'), at(86, 5))   # X2: the first answers parsed here, no page body carried on
+code('Fetch Hop Requests', rd('IX_Fetch_Hop_Requests.js'), at(87, 4)); iff('Any Hops?', '{{ !$json.skip }}', at(88, 4))
+node('Fetch Page (Final)', 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False, timeout=20000, as_file=True), at(89, 3), **HTTP_X)
+code('Page Signals', rd('IX_Page_Signals.js'), at(90, 4))
 # ---- diagnosis, saves, moves, update impact, run rows, the next website, report ----
-code('Index Diagnose', rd('IX_Diagnose.js'), at(75, 5))
-code('Index Page Rows', rd('IX_Page_Rows.js'), at(76, 5)); iff('Any Index Rows?', '{{ !$json.skip }}', at(77, 5))
-node('Save Index Pages', DT_TYPE, DT_VERSION, dt_upsert_params_keys(INDEX_PAGES_TABLE, INDEX_PAGES_COLS, ['site_id', 'url']), at(78, 4), **SAVE)
-code('Index Delete Rows', rd('IX_Delete_Rows.js'), at(79, 5)); iff('Any Deletes?', '{{ !$json.skip }}', at(80, 5))
-node('Delete Index Pages', DT_TYPE, DT_VERSION, dt_delete_where_params(INDEX_PAGES_TABLE, [('site_id', 'eq', '={{ $json.site_id }}'), ('url', 'eq', '={{ $json.url }}')]), at(81, 4), **SAVE)
-code('Index History Moves', rd('IX_History_Moves.js'), at(82, 5)); iff('Any History Moves?', '{{ !$json.skip }}', at(83, 5))
-node('Move Index History', DT_TYPE, DT_VERSION, dt_update_params(INDEX_HISTORY_TABLE, INDEX_HISTORY_COLS, [('site_id', '={{ $json.site_id }}'), ('url', '={{ $json.from }}')], {'url': '={{ $json.to }}'}), at(84, 4), **SAVE)
-code('Index History Rows', rd('IX_History_Rows.js'), at(85, 5)); iff('Any History Rows?', '{{ !$json.skip }}', at(86, 5))
-node('Save Index History', DT_TYPE, DT_VERSION, dt_insert_params(INDEX_HISTORY_TABLE, INDEX_HISTORY_COLS), at(87, 4), **SAVE)
-code('Update Impact Requests', rd('IX_Impact_Requests.js'), at(88, 5)); iff('Any Impact Queries?', '{{ !$json.skip }}', at(89, 5))
-node('GSC Impact Query', 'n8n-nodes-base.httpRequest', 4.5, google('POST', '={{ $json.url }}'), at(90, 4), credentials=GOOGLE, **HTTP_X)
-code('Update Impact Rows', rd('IX_Impact_Rows.js'), at(91, 5)); iff('Any Update Impact?', '{{ !$json.skip }}', at(92, 5))
-node('Save Update Impact', DT_TYPE, DT_VERSION, dt_upsert_params_keys(UPDATE_IMPACT_TABLE, UPDATE_IMPACT_COLS, ['site_id', 'event_id']), at(93, 4), **SAVE)
-code('Index Run Rows', rd('IX_Run_Rows.js'), at(94, 5)); iff('Any Run Rows?', '{{ !$json.skip }}', at(95, 5))
+code('Index Diagnose', rd('IX_Diagnose.js'), at(91, 5))
+code('Index Page Rows', rd('IX_Page_Rows.js'), at(92, 5)); iff('Any Index Rows?', '{{ !$json.skip }}', at(93, 5))
+node('Save Index Pages', DT_TYPE, DT_VERSION, dt_upsert_params_keys(INDEX_PAGES_TABLE, INDEX_PAGES_COLS, ['site_id', 'url']), at(94, 4), **SAVE)
+code('Index Delete Rows', rd('IX_Delete_Rows.js'), at(95, 5)); iff('Any Deletes?', '{{ !$json.skip }}', at(96, 5))
+node('Delete Index Pages', DT_TYPE, DT_VERSION, dt_delete_where_params(INDEX_PAGES_TABLE, [('site_id', 'eq', '={{ $json.site_id }}'), ('url', 'eq', '={{ $json.url }}')]), at(97, 4), **SAVE)
+code('Index History Moves', rd('IX_History_Moves.js'), at(98, 5)); iff('Any History Moves?', '{{ !$json.skip }}', at(99, 5))
+node('Move Index History', DT_TYPE, DT_VERSION, dt_update_params(INDEX_HISTORY_TABLE, INDEX_HISTORY_COLS, [('site_id', '={{ $json.site_id }}'), ('url', '={{ $json.from }}')], {'url': '={{ $json.to }}'}), at(100, 4), **SAVE)
+code('Index History Rows', rd('IX_History_Rows.js'), at(101, 5)); iff('Any History Rows?', '{{ !$json.skip }}', at(102, 5))
+node('Save Index History', DT_TYPE, DT_VERSION, dt_insert_params(INDEX_HISTORY_TABLE, INDEX_HISTORY_COLS), at(103, 4), **SAVE)
+code('Update Impact Requests', rd('IX_Impact_Requests.js'), at(104, 5)); iff('Any Impact Queries?', '{{ !$json.skip }}', at(105, 5))
+node('GSC Impact Query', 'n8n-nodes-base.httpRequest', 4.5, google('POST', '={{ $json.url }}'), at(106, 4), credentials=GOOGLE, **HTTP_X)
+code('Update Impact Rows', rd('IX_Impact_Rows.js'), at(107, 5)); iff('Any Update Impact?', '{{ !$json.skip }}', at(108, 5))
+node('Save Update Impact', DT_TYPE, DT_VERSION, dt_upsert_params_keys(UPDATE_IMPACT_TABLE, UPDATE_IMPACT_COLS, ['site_id', 'event_id']), at(109, 4), **SAVE)
+code('Index Run Rows', rd('IX_Run_Rows.js'), at(110, 5)); iff('Any Run Rows?', '{{ !$json.skip }}', at(111, 5))
 # E6: the run row replaces this run's reservation (same site_id + run_at)
-node('Save Index Runs', DT_TYPE, DT_VERSION, dt_upsert_params_keys(INDEX_RUNS_TABLE, INDEX_RUNS_COLS, ['site_id', 'run_at']), at(96, 4), **SAVE)
-code('Next Index Part', rd('IX_Next_Part.js'), at(97, 5), executeOnce=True); iff('Any Next Part?', '{{ !$json.skip }}', at(98, 5))
-SELF('Start Next Index Part', at(99, 4))
-code('Index Report', rd('IX_Report.js'), at(100, 5))
-iff('Has Callback (Index)?', '{{ !!$json.callback_url }}', at(101, 5))
+node('Save Index Runs', DT_TYPE, DT_VERSION, dt_upsert_params_keys(INDEX_RUNS_TABLE, INDEX_RUNS_COLS, ['site_id', 'run_at']), at(112, 4), **SAVE)
+code('Next Index Part', rd('IX_Next_Part.js'), at(113, 5), executeOnce=True); iff('Any Next Part?', '{{ !$json.skip }}', at(114, 5))
+SELF('Start Next Index Part', at(115, 4))
+code('Index Report', rd('IX_Report.js'), at(116, 5))
+iff('Has Callback (Index)?', '{{ !!$json.callback_url }}', at(117, 5))
 node('POST Index Report', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json',
      'jsonBody': "={{ JSON.stringify({ stage: 'index_coverage', status: $json.status || 'complete', domain: $json.domain, site_id: $json.site_id, request_id: $json.request_id, "
                  "summary: $json.summary, report_markdown: $json.report_markdown, cost: $json.cost || { usd: 0 }, run_ledger: $json.run_ledger || null, "
                  "...($json.ran_late && $json.ran_late.late ? { ran_late: $json.ran_late } : {}) }) }}", 'options': {'timeout': 30000}},
-     at(102, 5), onError='continueRegularOutput')
+     at(118, 5), onError='continueRegularOutput')
 # X1: a website of today's chain refused by the run guard for capacity is started again five minutes later (wired after the ledger chain exists)
 code('Retry Index Part', rd('IX_Retry_Part.js'), at(20, 9), executeOnce=True); iff('Any Retry Part?', '{{ !$json.skip }}', at(21, 9))
-node('Wait (Index Part Retry)', 'n8n-nodes-base.wait', 1.1, {'amount': 5, 'unit': 'minutes'}, at(22, 9), webhookId=nid('Wait (Index Part Retry):hook'), executeOnce=True)
+# N5 (fix wave 2): the same wait serves a refused chain part (5 minutes) and a refused dispatch (the day's watch, 30 minutes)
+node('Wait (Index Part Retry)', 'n8n-nodes-base.wait', 1.1, {'amount': '={{ Number($json.wait_minutes) || 5 }}', 'unit': 'minutes'}, at(22, 9), webhookId=nid('Wait (Index Part Retry):hook'), executeOnce=True)
 SELF('Restart Index Part', at(23, 9))
+# N5 (fix wave 2): the day's watch - 50 minutes after a dispatch, the dispatch runs again (ix_watch) and restarts the chain for the websites not
+# done today (a chain broken by a crash, a time-out or a restart goes on). Wired after the settle, so the waiting execution holds no run-guard slot.
+code('Index Watch Plan', rd('IX_Watch_Plan.js'), at(20, 11), executeOnce=True); iff('Any Index Watch?', '{{ !$json.skip }}', at(21, 11))
+node('Wait (Index Watch)', 'n8n-nodes-base.wait', 1.1, {'amount': '={{ Number($json.wait_minutes) || 50 }}', 'unit': 'minutes'}, at(22, 11), webhookId=nid('Wait (Index Watch):hook'), executeOnce=True)
+SELF('Start Index Watch', at(23, 11))
 node('Note', 'n8n-nodes-base.stickyNote', 1, {'content': """## SEO Agent — Index Coverage (2026-10-29, fix wave 1)
 Every day at **05:15** (n8n's clock) and on demand (*Manual Run* `{ domain | site_id, callback_url?, request_id?, cap? }`). **Free**: Google's Search Console APIs (read-only) and plain GETs, no DataForSEO, no Claude; a $0 run-ledger row per execution.
 **One execution per website.** The 05:15 run (or the catch-up, or a Manual Run naming no website) is the *dispatch*: it reads Google's news, prunes history older than 400 days and starts the first website's own execution (`ix_chain`); each website saves its rows, then starts the next one - one at a time. Before its first URL Inspection a website writes its **reservation** (`seo_index_runs` row with the planned count), replaced by the final row, so no crash or replay can spend past the daily cap (`index_daily_cap`, default 300, 20-1,200).
@@ -224,16 +237,17 @@ def gate(req, cond, http, nxt):
 gate('Sitemaps List Requests', 'Any Sitemaps List?', 'GSC Sitemaps List', 'Pages Query Requests')
 gate('Pages Query Requests', 'Any Pages Query?', 'GSC Pages Query', 'Pages Query More')
 gate('Pages Query More', 'Any Pages Query More?', 'GSC Pages Query 2', 'Sitemap Requests 1')
-for r in (1, 2, 3):
+for r in range(1, ROUNDS + 1):
     gate('Sitemap Requests %d' % r, 'Any Sitemaps %d?' % r, 'Fetch Sitemaps %d' % r, 'Sitemap Read %d' % r)
-    link('Sitemap Read %d' % r, 'Sitemap Requests %d' % (r + 1) if r < 3 else 'Index Inventory')
+    link('Sitemap Read %d' % r, 'Sitemap Requests %d' % (r + 1) if r < ROUNDS else 'Index Inventory')
 link('Index Inventory', 'Index Reservation')
 gate('Index Reservation', 'Any Reservation?', 'Save Index Reservation', 'Index Probe Requests')
 gate('Index Probe Requests', 'Any Probes?', 'Inspect URL (Probe)', 'Index Inspect Requests')
 gate('Index Inspect Requests', 'Any Inspections (Index)?', 'Inspect URL (Index)', 'Inspect Retry Requests')
 chain('Inspect Retry Requests', 'Any Rate Retry?'); link('Any Rate Retry?', 'Wait (Index Rate Limit)', 0); link('Any Rate Retry?', 'Page Fetch Requests', 1)
 chain('Wait (Index Rate Limit)', 'Inspect URL (Retry)', 'Page Fetch Requests')
-gate('Page Fetch Requests', 'Any Page Fetches?', 'Fetch Page (Index)', 'Fetch Hop Requests')
+gate('Page Fetch Requests', 'Any Page Fetches?', 'Fetch Page (Index)', 'Page First Reads')
+link('Page First Reads', 'Fetch Hop Requests')
 gate('Fetch Hop Requests', 'Any Hops?', 'Fetch Page (Final)', 'Page Signals')
 link('Page Signals', 'Index Diagnose')
 link('Index Diagnose', 'Index Page Rows')
@@ -294,6 +308,11 @@ _ref = 'Refuse Run Ledger (' + TAG + ')'
 assert _ref in {n['name'] for n in N}, 'X1: no refusal node to hang the retry on'
 C[_ref]['main'][0].append({'node': 'Retry Index Part', 'type': 'main', 'index': 0})
 chain('Retry Index Part', 'Any Retry Part?'); link('Any Retry Part?', 'Wait (Index Part Retry)', 0); chain('Wait (Index Part Retry)', 'Restart Index Part')
+# N5: the watch hangs on the settle of the run (every path of the run ends there), as a second target beside the ops-alert sweep
+_settle = 'Settle Run Ledger (' + TAG + ')'
+assert _settle in {n['name'] for n in N}, 'N5: no settle node to hang the watch on'
+C[_settle]['main'][0].append({'node': 'Index Watch Plan', 'type': 'main', 'index': 0})
+chain('Index Watch Plan', 'Any Index Watch?'); link('Any Index Watch?', 'Wait (Index Watch)', 0); chain('Wait (Index Watch)', 'Start Index Watch')
 url_lint.check(wfobj, NAME)
 retry_lint.check(wfobj, NAME)
 retry_lint.check_in200(wfobj, NAME)
