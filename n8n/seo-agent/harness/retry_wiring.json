@@ -2825,6 +2825,17 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "GSC Pages Query 2",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 60000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "Fetch Sitemaps 1",
     "onError": "continueRegularOutput",
     "paid": false,
@@ -2870,6 +2881,17 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Inspect URL (Index)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 60000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Inspect URL (Retry)",
     "onError": "continueRegularOutput",
     "paid": false,
     "per_item": false,

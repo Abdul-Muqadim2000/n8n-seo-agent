@@ -974,7 +974,6 @@
    "settle": "Settle Run Ledger (Index)",
    "settle_from": [
     "Index Report",
-    "Nothing To Do (Index)",
     "Refuse Run Ledger (Index)"
    ],
    "settle_from_ends": []

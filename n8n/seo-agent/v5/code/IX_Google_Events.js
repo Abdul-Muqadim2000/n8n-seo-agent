@@ -31,6 +31,13 @@ const byId = new Map(stored.map(e => [S(e.event_id), e]));
 for (const r of rows) byId.set(r.event_id, { ...(byId.get(r.event_id) || {}), ...r });
 const events = [...byId.values()].sort((a, b) => S(b.started_at).localeCompare(S(a.started_at)));
 const fr = IX.freeze(events, now);
-return [{ json: { events, rows, started: ev.started, completed: ev.completed, policy_news: policy.news ? policy.row : null, freeze: fr,
+// fix wave 1 (X1): a website's own execution in today's chain does not read the feed again - the dispatch read it, saved what changed, and
+// handed today's news (what started / finished) to the chain; the freeze comes from the stored events
+let __t = {}; try { const t = $('Manual Run').first(); __t = (t && t.json) || {}; } catch (e) { __t = {}; }
+if (__t.body && typeof __t.body === 'object') __t = { ...__t, ...__t.body };
+const handed = __t.ix_chain && typeof __t.ix_chain === 'object' && !Array.isArray(feed) ? (__t.ix_chain.news || {}) : null;
+const started = handed ? (handed.started || []) : ev.started, completed = handed ? (handed.completed || []) : ev.completed;
+const policy_news = handed ? (handed.policy || null) : (policy.news ? policy.row : null);
+return [{ json: { events, rows, started, completed, policy_news, freeze: fr, news_handed: !!handed,
   feed_read: Array.isArray(feed), feed_why: Array.isArray(feed) ? '' : (feedWhy || 'not read'), feed_events: parsed.length,
   policy_read: !!policy.read, policy_why: policy.read ? '' : S(policy.why), policy_hash: S(policy.hash), policy_last_updated: S(policy.last_updated) } }];

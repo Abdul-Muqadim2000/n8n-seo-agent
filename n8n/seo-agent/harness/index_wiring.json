@@ -26,12 +26,36 @@
    ],
    []
   ],
+  "Any Deletes?": [
+   [
+    "Delete Index Pages"
+   ],
+   [
+    "Index History Moves"
+   ]
+  ],
+  "Any Dispatch?": [
+   [
+    "Start Index Part"
+   ],
+   [
+    "Index Report"
+   ]
+  ],
   "Any Event Rows?": [
    [
     "Save Google Events"
    ],
    [
-    "GSC Sites (Index)"
+    "Dispatch? (Index)"
+   ]
+  ],
+  "Any History Moves?": [
+   [
+    "Move Index History"
+   ],
+   [
+    "Index History Rows"
    ]
   ],
   "Any History Rows?": [
@@ -47,7 +71,7 @@
     "Fetch Page (Final)"
    ],
    [
-    "Index Diagnose"
+    "Page Signals"
    ]
   ],
   "Any Impact Queries?": [
@@ -63,7 +87,7 @@
     "Save Index Pages"
    ],
    [
-    "Index History Rows"
+    "Index Delete Rows"
    ]
   ],
   "Any Inspections (Index)?": [
@@ -71,7 +95,15 @@
     "Inspect URL (Index)"
    ],
    [
-    "Page Fetch Requests"
+    "Inspect Retry Requests"
+   ]
+  ],
+  "Any Next Part?": [
+   [
+    "Start Next Index Part"
+   ],
+   [
+    "Index Report"
    ]
   ],
   "Any Page Fetches?": [
@@ -82,12 +114,20 @@
     "Fetch Hop Requests"
    ]
   ],
+  "Any Pages Query More?": [
+   [
+    "GSC Pages Query 2"
+   ],
+   [
+    "Sitemap Requests 1"
+   ]
+  ],
   "Any Pages Query?": [
    [
     "GSC Pages Query"
    ],
    [
-    "Sitemap Requests 1"
+    "Pages Query More"
    ]
   ],
   "Any Probes?": [
@@ -98,12 +138,33 @@
     "Index Inspect Requests"
    ]
   ],
+  "Any Rate Retry?": [
+   [
+    "Wait (Index Rate Limit)"
+   ],
+   [
+    "Page Fetch Requests"
+   ]
+  ],
+  "Any Reservation?": [
+   [
+    "Save Index Reservation"
+   ],
+   [
+    "Index Probe Requests"
+   ]
+  ],
+  "Any Retry Part?": [
+   [
+    "Wait (Index Part Retry)"
+   ]
+  ],
   "Any Run Rows?": [
    [
     "Save Index Runs"
    ],
    [
-    "Index Report"
+    "Next Index Part"
    ]
   ],
   "Any Sitemaps 1?": [
@@ -174,6 +235,24 @@
     "Ensure Index Pages Table"
    ]
   ],
+  "Delete Index Pages": [
+   [
+    "Index History Moves"
+   ]
+  ],
+  "Dispatch Start": [
+   [
+    "Any Dispatch?"
+   ]
+  ],
+  "Dispatch? (Index)": [
+   [
+    "Prune Index History"
+   ],
+   [
+    "Site To Check? (Index)"
+   ]
+  ],
   "Ensure Google Events Table": [
    [
     "Ensure Update Impact Table"
@@ -221,7 +300,7 @@
   ],
   "Fetch Page (Final)": [
    [
-    "Index Diagnose"
+    "Page Signals"
    ]
   ],
   "Fetch Page (Index)": [
@@ -256,6 +335,11 @@
   ],
   "GSC Pages Query": [
    [
+    "Pages Query More"
+   ]
+  ],
+  "GSC Pages Query 2": [
+   [
     "Sitemap Requests 1"
    ]
   ],
@@ -284,9 +368,19 @@
     "POST Index Report"
    ]
   ],
+  "Index Delete Rows": [
+   [
+    "Any Deletes?"
+   ]
+  ],
   "Index Diagnose": [
    [
     "Index Page Rows"
+   ]
+  ],
+  "Index History Moves": [
+   [
+    "Any History Moves?"
    ]
   ],
   "Index History Rows": [
@@ -301,7 +395,7 @@
   ],
   "Index Inventory": [
    [
-    "Index Probe Requests"
+    "Index Reservation"
    ]
   ],
   "Index Page Rows": [
@@ -325,6 +419,11 @@
     "Ledger Join (Index)"
    ]
   ],
+  "Index Reservation": [
+   [
+    "Any Reservation?"
+   ]
+  ],
   "Index Run Rows": [
    [
     "Any Run Rows?"
@@ -335,14 +434,24 @@
     "Any Sites (Index)?"
    ]
   ],
+  "Inspect Retry Requests": [
+   [
+    "Any Rate Retry?"
+   ]
+  ],
   "Inspect URL (Index)": [
    [
-    "Page Fetch Requests"
+    "Inspect Retry Requests"
    ]
   ],
   "Inspect URL (Probe)": [
    [
     "Index Inspect Requests"
+   ]
+  ],
+  "Inspect URL (Retry)": [
+   [
+    "Page Fetch Requests"
    ]
   ],
   "Ledger Join (Index)": [
@@ -363,17 +472,17 @@
   ],
   "Load Content Log (Index)": [
    [
-    "Load Index Pages"
+    "Load Update Impact"
    ]
   ],
   "Load Google Events": [
    [
-    "Load Update Impact"
+    "Index Plan"
    ]
   ],
   "Load Index Pages": [
    [
-    "Load Index Runs"
+    "Load Pages (Index)"
    ]
   ],
   "Load Index Runs": [
@@ -383,7 +492,7 @@
   ],
   "Load Monitors (Index)": [
    [
-    "Load Pages (Index)"
+    "Load Index Runs"
    ]
   ],
   "Load Open Alerts (Index)": [
@@ -418,7 +527,7 @@
   ],
   "Load Update Impact": [
    [
-    "Index Plan"
+    "GSC Sites (Index)"
    ]
   ],
   "Manual Run": [
@@ -426,14 +535,34 @@
     "Ensure Index Pages Table"
    ]
   ],
+  "Move Index History": [
+   [
+    "Index History Rows"
+   ]
+  ],
+  "Next Index Part": [
+   [
+    "Any Next Part?"
+   ]
+  ],
   "Nothing To Do (Index)": [
    [
-    "DFS Balance End (Index)"
+    "Next Index Part"
    ]
   ],
   "Page Fetch Requests": [
    [
     "Any Page Fetches?"
+   ]
+  ],
+  "Page Signals": [
+   [
+    "Index Diagnose"
+   ]
+  ],
+  "Pages Query More": [
+   [
+    "Any Pages Query More?"
    ]
   ],
   "Pages Query Requests": [
@@ -446,6 +575,24 @@
     "Alert Retry Result (Index)"
    ]
   ],
+  "Prune Index History": [
+   [
+    "Prune Index Runs"
+   ]
+  ],
+  "Prune Index Runs": [
+   [
+    "Dispatch Start"
+   ]
+  ],
+  "Read Google News?": [
+   [
+    "Fetch Google Incidents"
+   ],
+   [
+    "Google Events"
+   ]
+  ],
   "Refusal Notice (Index)": [
    [
     "Tell Caller (Index)?"
@@ -453,7 +600,8 @@
   ],
   "Refuse Run Ledger (Index)": [
    [
-    "Refusal Notice (Index)"
+    "Refusal Notice (Index)",
+    "Retry Index Part"
    ]
   ],
   "Reserve Run Ledger (Index)": [
@@ -461,9 +609,14 @@
     "After Run Ledger (Index)"
    ]
   ],
+  "Retry Index Part": [
+   [
+    "Any Retry Part?"
+   ]
+  ],
   "Run Allowed? (Index)": [
    [
-    "Fetch Google Incidents"
+    "Read Google News?"
    ],
    [
     "Refuse Run Ledger (Index)"
@@ -476,7 +629,7 @@
   ],
   "Save Google Events": [
    [
-    "GSC Sites (Index)"
+    "Dispatch? (Index)"
    ]
   ],
   "Save Index History": [
@@ -486,12 +639,17 @@
   ],
   "Save Index Pages": [
    [
-    "Index History Rows"
+    "Index Delete Rows"
+   ]
+  ],
+  "Save Index Reservation": [
+   [
+    "Index Probe Requests"
    ]
   ],
   "Save Index Runs": [
    [
-    "Index Report"
+    "Next Index Part"
    ]
   ],
   "Save Update Impact": [
@@ -502,6 +660,14 @@
   "Settle Run Ledger (Index)": [
    [
     "Ensure Ops Alerts (Index)"
+   ]
+  ],
+  "Site To Check? (Index)": [
+   [
+    "Load Index Pages"
+   ],
+   [
+    "Nothing To Do (Index)"
    ]
   ],
   "Sitemap Read 1": [
@@ -539,6 +705,16 @@
     "Any Sitemaps List?"
    ]
   ],
+  "Start Index Part": [
+   [
+    "Index Report"
+   ]
+  ],
+  "Start Next Index Part": [
+   [
+    "Index Report"
+   ]
+  ],
   "Tell Caller (Index)?": [
    [
     "Post Refusal (Index)"
@@ -553,6 +729,16 @@
   "Update Impact Rows": [
    [
     "Any Update Impact?"
+   ]
+  ],
+  "Wait (Index Part Retry)": [
+   [
+    "Restart Index Part"
+   ]
+  ],
+  "Wait (Index Rate Limit)": [
+   [
+    "Inspect URL (Retry)"
    ]
   ]
  },
@@ -578,10 +764,12 @@
   "Fetch Spam Policies",
   "GSC Impact Query",
   "GSC Pages Query",
+  "GSC Pages Query 2",
   "GSC Sitemaps List",
   "GSC Sites (Index)",
   "Inspect URL (Index)",
   "Inspect URL (Probe)",
+  "Inspect URL (Retry)",
   "POST Index Report",
   "Post Alert Retry (Index)",
   "Post Refusal (Index)"
@@ -625,15 +813,23 @@
   "Alert Retry Plan (Index)",
   "Alert Retry Result (Index)",
   "Any Alert Retry (Index)?",
+  "Any Deletes?",
+  "Any Dispatch?",
   "Any Event Rows?",
+  "Any History Moves?",
   "Any History Rows?",
   "Any Hops?",
   "Any Impact Queries?",
   "Any Index Rows?",
   "Any Inspections (Index)?",
+  "Any Next Part?",
   "Any Page Fetches?",
+  "Any Pages Query More?",
   "Any Pages Query?",
   "Any Probes?",
+  "Any Rate Retry?",
+  "Any Reservation?",
+  "Any Retry Part?",
   "Any Run Rows?",
   "Any Sitemaps 1?",
   "Any Sitemaps 2?",
@@ -645,6 +841,9 @@
   "DFS Balance (Index)",
   "DFS Balance End (Index)",
   "Daily Schedule",
+  "Delete Index Pages",
+  "Dispatch Start",
+  "Dispatch? (Index)",
   "Ensure Google Events Table",
   "Ensure Index History Table",
   "Ensure Index Pages Table",
@@ -662,12 +861,15 @@
   "Fetch Spam Policies",
   "GSC Impact Query",
   "GSC Pages Query",
+  "GSC Pages Query 2",
   "GSC Sitemaps List",
   "GSC Sites (Index)",
   "Google Event Rows",
   "Google Events",
   "Has Callback (Index)?",
+  "Index Delete Rows",
   "Index Diagnose",
+  "Index History Moves",
   "Index History Rows",
   "Index Inspect Requests",
   "Index Inventory",
@@ -675,10 +877,13 @@
   "Index Plan",
   "Index Probe Requests",
   "Index Report",
+  "Index Reservation",
   "Index Run Rows",
   "Index Sites",
+  "Inspect Retry Requests",
   "Inspect URL (Index)",
   "Inspect URL (Probe)",
+  "Inspect URL (Retry)",
   "Ledger Join (Index)",
   "Ledger Settle (Index)",
   "Load Catch-up Records (Index)",
@@ -695,24 +900,35 @@
   "Load Sites (Index)",
   "Load Update Impact",
   "Manual Run",
+  "Move Index History",
+  "Next Index Part",
   "Nothing To Do (Index)",
   "POST Index Report",
   "Page Fetch Requests",
+  "Page Signals",
+  "Pages Query More",
   "Pages Query Requests",
   "Post Alert Retry (Index)",
   "Post Refusal (Index)",
+  "Prune Index History",
+  "Prune Index Runs",
+  "Read Google News?",
   "Refusal Notice (Index)",
   "Refuse Run Ledger (Index)",
   "Reserve Run Ledger (Index)",
+  "Restart Index Part",
+  "Retry Index Part",
   "Run Allowed? (Index)",
   "Run Ledger Row (Index)",
   "Save Alert Retry (Index)",
   "Save Google Events",
   "Save Index History",
   "Save Index Pages",
+  "Save Index Reservation",
   "Save Index Runs",
   "Save Update Impact",
   "Settle Run Ledger (Index)",
+  "Site To Check? (Index)",
   "Sitemap Read 1",
   "Sitemap Read 2",
   "Sitemap Read 3",
@@ -720,9 +936,13 @@
   "Sitemap Requests 2",
   "Sitemap Requests 3",
   "Sitemaps List Requests",
+  "Start Index Part",
+  "Start Next Index Part",
   "Tell Caller (Index)?",
   "Update Impact Requests",
-  "Update Impact Rows"
+  "Update Impact Rows",
+  "Wait (Index Part Retry)",
+  "Wait (Index Rate Limit)"
  ],
  "own_tables": [
   "seo_google_events",
@@ -775,7 +995,9 @@
   "link_from",
   "merge_into",
   "note",
-  "updated_at"
+  "updated_at",
+  "fix_seen_at",
+  "ask_google"
  ],
  "run_cols": [
   "site_id",
@@ -821,14 +1043,19 @@
   ],
   "seo_index_history": [
    "Ensure Index History Table",
+   "Move Index History",
+   "Prune Index History",
    "Save Index History"
   ],
   "seo_index_pages": [
+   "Delete Index Pages",
    "Ensure Index Pages Table",
    "Save Index Pages"
   ],
   "seo_index_runs": [
    "Ensure Index Runs Table",
+   "Prune Index Runs",
+   "Save Index Reservation",
    "Save Index Runs"
   ],
   "seo_ops_alerts": [

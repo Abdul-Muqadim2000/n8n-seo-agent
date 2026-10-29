@@ -27,8 +27,12 @@ module.exports = async (ctx) => {
   const POLICY = zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_index', 'spam_policies_2026-10-29.html.gz'))).toString('utf8');
   const WIRE = JSON.parse(fs.readFileSync(path.join(__dirname, 'index_wiring.json'), 'utf8'));
   const page = (o) => ({ site_id: SITE.site_id, domain: 'techand.ai', url: W + '/x', lane: 'existing', sources: 'sitemap', in_sitemap: true, state: 'unknown', checks: 0, ...o });
-  const dx = (p, reading, fetch, c) => IX.diagnose(p, reading, fetch, { now: NOW, watch_since: iso(NOW - 60 * DAY), sitemap_read: true, has_sitemap: true, ...(c || {}) });
+  const dx = (p, reading, fetch, c) => IX.diagnose(p, reading, fetch, { now: NOW, watch_since: iso(NOW - 60 * DAY), sitemap_complete: true, has_sitemap: true, ...(c || {}) });
   const R = (o) => IX.readInspection(insp(o));
+  // fix wave 1 (X3): page x day rows -> the four page-only windows Search Analytics now answers (each window ends lag_days before `now`)
+  const WIN = (rows, now) => { const w = { truncated: {} }; const ws = IX.saWindows(now); w.end = ws[0].end;
+    for (const x of ws) { const by = new Map(); for (const r of rows) { const d = r.keys[1]; if (d < x.start || d > x.end) continue; const e = by.get(r.keys[0]) || { keys: [r.keys[0]], clicks: 0, impressions: 0 }; e.clicks += r.clicks || 0; e.impressions += r.impressions || 0; by.set(r.keys[0], e); } w[x.days] = [...by.values()]; }
+    return w; };
 
   // =================================================================================================================================
   await guard('IX1 every cause of DESIGN §4', async () => {
@@ -76,6 +80,7 @@ module.exports = async (ctx) => {
     one('our fetch: a crawled-not-indexed page that answers 404 today is not found', { url: W + '/c2' }, IX.readInspection(crawl[1]), { ok: true, http_status: 404, final_url: '', noindex: '', page_canonical: '' }, ['not_found', 'site_fix', 'excluded']);
     one('our fetch: an unknown page with a noindex header', { url: W + '/u3' }, IX.readInspection(unk[1]), { ok: true, http_status: 200, final_url: '', noindex: 'header', page_canonical: '' }, ['noindex', 'site_fix', 'excluded']);
     one('our fetch: a discovered page that redirects elsewhere today', { url: W + '/d2' }, IX.readInspection(disc[1]), { ok: true, http_status: 200, final_url: W + '/new-home', noindex: '', page_canonical: '' }, ['redirect', 'site_fix', 'excluded']);
+    one('redirect_error (fix wave 1, E9: the enum REDIRECT_ERROR is the site\'s fix)', { url: W + '/loop', in_sitemap: false, sources: 'inventory' }, R({ pageFetchState: 'REDIRECT_ERROR', coverageState: 'Redirect error' }), null, ['redirect_error', 'site_fix', 'not_indexed']);
     one('our fetch never overrides a documented enum (robots stays robots)', { url: W + '/r3' }, R({ robotsTxtState: 'DISALLOWED' }), { ok: true, http_status: 404 }, ['robots_blocked', 'site_fix', 'excluded']);
     for (const [label, d, [cause, action, state]] of cases)
       check(label + ' -> ' + cause + ' / ' + action + ' / ' + state, d && d.cause === cause && d.action === action && d.state === state, J(d));
@@ -125,8 +130,9 @@ module.exports = async (ctx) => {
     check('a new page is next due on its next day (published 3.5 days ago -> day 7)', Math.abs((Date.parse(nn) - (NOW - 3.5 * DAY + 7 * DAY)) / DAY) < 0.01, nn);
     check('the lane: a page we published 10 days ago is new, the same page 40 days on is existing; on the first run nothing is new by sight',
       IX.laneOf({ sources: 'ours', published_at: iso(NOW - 10 * DAY) }, ctx) === 'new' && IX.laneOf({ sources: 'ours', published_at: iso(NOW - 40 * DAY) }, ctx) === 'existing'
-      && IX.laneOf({ sources: 'sitemap', in_sitemap: true, first_seen_at: iso(NOW) }, { now: NOW, watch_since: iso(NOW) }) === 'existing'
-      && IX.laneOf({ sources: 'sitemap', in_sitemap: true, first_seen_at: iso(NOW - DAY) }, { now: NOW, watch_since: iso(NOW - 20 * DAY) }) === 'new', '');
+      && IX.laneOf({ sources: 'sitemap', in_sitemap: true, first_seen_at: iso(NOW) }, { now: NOW }) === 'existing'
+      && IX.laneOf({ sources: 'sitemap', in_sitemap: true, first_seen_at: iso(NOW) }, { now: NOW, prev_complete: true, prev_complete_at: iso(NOW - DAY) }) === 'new'
+      && IX.laneOf({ sources: 'sitemap', in_sitemap: true, first_seen_at: iso(NOW - DAY), _prev: { lane: 'new' } }, { now: NOW }) === 'new', '');   // fix wave 1 (E3): new by sight only after a complete read
   });
 
   // =================================================================================================================================
@@ -141,12 +147,12 @@ module.exports = async (ctx) => {
       rows.push({ keys: [W + '/live', day], clicks: d < 28 ? 1 : 0, impressions: 3 });
       if (d >= 20) rows.push({ keys: ['https://techand.ai/lost', day], clicks: 0, impressions: 4 });
       if (d === 50) rows.push({ keys: ['https://other.com/x', day], clicks: 0, impressions: 9 }); }
-    const ev = IX.searchEvidence(rows, SITE, { now: NOW });
+    const ev = IX.searchEvidence(WIN(rows, NOW), SITE, { now: NOW });   // fix wave 1 (X3): page rows per window, no date dimension
     const live = ev.by.get(IX.key(W + '/live')), lost = ev.by.get(IX.key(W + '/lost'));
-    check('page x day rows: 28-day impressions and clicks, the last day with impressions, the 14-day loss; another host is dropped',
-      ev.end === '2026-10-26' && live.impr28 === 84 && live.clicks28 === 28 && live.last_at === '2026-10-26' && lost.impr28 === 4 * 8 && lost.impr14 === 0 && lost.impr_before > 0 && lost.last_at === '2026-10-06'
+    check('page rows per window: 28-day impressions and clicks, the first day of the newest window with impressions, the 14-day loss; another host is dropped',
+      ev.end === '2026-10-26' && live.impr28 === 84 && live.clicks28 === 28 && live.last_at === '2026-10-20' && lost.impr28 === 4 * 8 && lost.impr14 === 0 && lost.impr_before > 0 && lost.last_at === '2026-09-29'
       && !ev.by.get(IX.key('https://other.com/x')) && ev.by.size === 2, J({ end: ev.end, live, lost, size: ev.by.size }));
-    const m = IX.merge({ site: SITE, now: NOW, stored: [], inventory: [{ site_id: SITE.site_id, url: W + '/quiet', title: 'Quiet page' }], sitemap: { read: true, urls: [{ loc: W + '/live', lastmod: '' }, { loc: W + '/quiet', lastmod: '' }] },
+    const m = IX.merge({ site: SITE, now: NOW, stored: [], inventory: [{ site_id: SITE.site_id, url: W + '/quiet', title: 'Quiet page' }], sitemap: { read: true, complete: true, urls: [{ loc: W + '/live', lastmod: '' }, { loc: W + '/quiet', lastmod: '' }] },
       ours: [], search: { read: true, by: ev.by }, watch: [] });
     const get = (u) => m.pages.find(p => IX.same(p.url, u));
     check('impressions make a page indexed without a check (evidence: search, next check in 28 / 56 days); a page with none stays unknown',
@@ -314,45 +320,66 @@ module.exports = async (ctx) => {
   const saKeys = new Set(saRows.map(r => IX.key(r.keys[0])));
   const QUIET = IX.parseSitemap(G.sitemap.data).urls.map(u => IX.norm(u.loc, SITE)).filter(u => u && !saKeys.has(IX.key(u)) && !/\/whatwedo$/.test(u) && IX.pathOf(u) !== '/');   // sitemap pages with no impressions
   const answerFor = (url) => ANS.get(IX.key(url)) || insp({ coverageState: 'URL is unknown to Google', pageFetchState: 'PAGE_FETCH_STATE_UNSPECIFIED' });
+  // fix wave 1: the page x day fixture as Search Analytics now answers it - page rows of the window each request names
+  const saAnswer = (q, rows) => { const b = q.json.body || {}; const by = new Map(); for (const r of rows) { const d = r.keys[1]; if (d < b.startDate || d > b.endDate) continue;
+    const e = by.get(r.keys[0]) || { keys: [r.keys[0]], clicks: 0, impressions: 0 }; e.clicks += r.clicks || 0; e.impressions += r.impressions || 0; by.set(r.keys[0], e); } return { rows: [...by.values()] }; };
+  const HOME_HTML = '<html><body><nav><a href="/capabilities">Capabilities</a><a href="/about">About</a></nav><main><a href="https://www.techand.ai/insights/new-ours">New</a></main></body></html>';
   const e2e = async (o) => {
     const opt = o || {};
     reset();
-    mock('Load Sites (Index)', [{ json: SITE_ROW }]);
+    // fix wave 1 (X1): one website per execution - a part of today's chain unless the scenario asks for the dispatch or an on-demand run
+    if (opt.trigger !== null) mock('Manual Run', [{ json: opt.trigger || { trigger: 'ix_chain', site_id: SITE.site_id, parent_run_id: '1', ix_chain: { date: iso(Date.now()).slice(0, 10), started_at: iso(Date.now()), rest: [], part: 1, of: 1, attempt: 0, news: opt.chainNews || {} } } }]);
+    mock('Load Sites (Index)', [{ json: { ...SITE_ROW, ...(opt.siteRow || {}) } }]);
     mock('Load Monitors (Index)', [{ json: { site_id: SITE.site_id, index_watch: opt.watch === undefined ? '' : opt.watch, index_daily_cap: opt.cap === undefined ? '' : opt.cap } }]);
     mock('Load Index Runs', opt.runs ? opt.runs.map(r => ({ json: r })) : [{ json: {} }]);
     const plan = await run('Index Plan', [{ json: {} }]);
-    if (plan[0].json.nothing_to_do) return { plan };
-    mock('Load Google Events', [{ json: {} }]);
-    mock('Fetch Google Incidents', [{ json: { statusCode: 200, headers: {}, data: J(INCIDENTS) } }]);
-    mock('Fetch Spam Policies', [{ json: { statusCode: 200, headers: {}, data: POLICY } }]);
+    if (plan[0].json.nothing_to_do || plan[0].json.dispatch) return { plan };
+    mock('Load Google Events', (opt.storedEvents || [{}]).map(json => ({ json })));
+    if (opt.readFeed !== false) {
+      mock('Fetch Google Incidents', [{ json: { statusCode: 200, headers: {}, data: J(INCIDENTS) } }]);
+      mock('Fetch Spam Policies', [{ json: { statusCode: 200, headers: {}, data: POLICY } }]);
+    }
     await run('Google Events', [{ json: {} }]);
     if (opt.events) store['Google Events'] = [{ json: { ...store['Google Events'][0].json, ...opt.events } }];
-    const sites = await run('Index Sites', [{ json: { siteEntry: [{ siteUrl: 'sc-domain:techand.ai', permissionLevel: 'siteFullUser' }, { siteUrl: 'sc-domain:someone-else.com', permissionLevel: 'siteOwner' }] } }]);
+    const sites = await run('Index Sites', [{ json: { siteEntry: opt.siteEntry || [{ siteUrl: 'sc-domain:techand.ai', permissionLevel: 'siteFullUser' }, { siteUrl: 'sc-domain:someone-else.com', permissionLevel: 'siteOwner' }] } }]);
     await run('Sitemaps List Requests', [{ json: {} }]); mock('GSC Sitemaps List', [{ json: G.sitemaps }]);
-    await run('Pages Query Requests', [{ json: {} }]); mock('GSC Pages Query', [{ json: opt.saFail ? { error: { code: 500, message: 'backend error' } } : { rows: saRows } }]);
+    const sq = await run('Pages Query Requests', [{ json: {} }]);
+    if (!sq[0].json.skip) mock('GSC Pages Query', sq.map(q => ({ json: opt.saFail ? { error: { code: 500, message: 'backend error' } } : opt.saAnswer ? opt.saAnswer(q) : saAnswer(q, saRows) })));
+    const sq2 = await run('Pages Query More', [{ json: {} }]);
+    if (!sq2[0].json.skip) mock('GSC Pages Query 2', sq2.map(q => ({ json: opt.saAnswer2 ? opt.saAnswer2(q) : { rows: [] } })));
+    const smAnswer = opt.smAnswer || ((q) => q.json.home ? { statusCode: 200, headers: {}, data: HOME_HTML } : q.json.robots ? { statusCode: 200, headers: {}, data: opt.robots || 'User-agent: *\nAllow: /\nSitemap: https://www.techand.ai/sitemap.xml\n' } : (opt.smFail ? { statusCode: 503, headers: {}, data: '' } : G.sitemap));
     const r1 = await run('Sitemap Requests 1', [{ json: {} }]);
-    mock('Fetch Sitemaps 1', r1.map(q => ({ json: q.json.robots ? { statusCode: 200, headers: {}, data: 'User-agent: *\nAllow: /\nSitemap: https://www.techand.ai/sitemap.xml\n' } : (opt.smFail ? { statusCode: 503, headers: {}, data: '' } : G.sitemap) })));
+    mock('Fetch Sitemaps 1', r1.map(q => ({ json: smAnswer(q, 1) })));
     await run('Sitemap Read 1', [{ json: {} }]);
-    const r2 = await run('Sitemap Requests 2', [{ json: {} }]); if (!r2[0].json.skip) mock('Fetch Sitemaps 2', r2.map(() => ({ json: G.sitemap })));
+    const r2 = await run('Sitemap Requests 2', [{ json: {} }]); if (!r2[0].json.skip) mock('Fetch Sitemaps 2', r2.map(q => ({ json: smAnswer(q, 2) })));
     await run('Sitemap Read 2', [{ json: {} }]);
-    const r3 = await run('Sitemap Requests 3', [{ json: {} }]); if (!r3[0].json.skip) mock('Fetch Sitemaps 3', r3.map(() => ({ json: G.sitemap })));
+    const r3 = await run('Sitemap Requests 3', [{ json: {} }]); if (!r3[0].json.skip) mock('Fetch Sitemaps 3', r3.map(q => ({ json: smAnswer(q, 3) })));
     await run('Sitemap Read 3', [{ json: {} }]);
     mock('Load Index Pages', (opt.stored || [{}]).map(r => ({ json: r })));
     mock('Load Pages (Index)', [{ json: { site_id: SITE.site_id, url: W + '/capabilities', title: 'Capabilities | Tech&', source: 'sitemap' } }, { json: { site_id: SITE.site_id, url: 'https://techand.ai/old-gone-page', title: '', source: 'gsc', http_status: 404 } }]);
-    mock('Load Page Watch (Index)', [{ json: { site_id: SITE.site_id, url: W + '/whatwedo', inspect_at: iso(Date.now() - DAY), index_state: 'PASS', indexed: 'yes', coverage: 'Submitted and indexed', inspect_error: '' } }]);
+    mock('Load Page Watch (Index)', (opt.watchRows || [{ site_id: SITE.site_id, url: W + '/whatwedo', inspect_at: iso(Date.now() - DAY), index_state: 'PASS', indexed: 'yes', coverage: 'Submitted and indexed', inspect_error: '' }]).map(json => ({ json })));
     mock('Load Content Log (Index)', [{ json: { site_id: SITE.site_id, domain: 'techand.ai', status: 'published', published_url: W + '/insights/new-ours', published_at: iso(Date.now() - 4 * DAY) } }].concat((opt.log || []).map(json => ({ json }))));
     const inv = await run('Index Inventory', [{ json: {} }]);
+    const res = await run('Index Reservation', [{ json: {} }]);
+    mock('Save Index Reservation', opt.reserveFail ? [{ json: { error: 'table not reachable' } }] : res.filter(r => !r.json.skip).map((r, i) => ({ json: { id: 900 + i, ...r.json } })));
     const pr = await run('Index Probe Requests', [{ json: {} }]);
-    if (!pr[0].json.skip) mock('Inspect URL (Probe)', pr.map(q => ({ json: opt.quota ? { error: { code: 429, message: 'Quota exceeded for quota metric \'Default\'', status: 'RESOURCE_EXHAUSTED' } } : (opt.answer ? opt.answer(q.json.inspect_url) : answerFor(q.json.inspect_url)) })));
+    const quotaAns = { error: { code: 429, message: 'Quota exceeded for quota metric \'Default\' and limit \'Default per day per property\'', status: 'RESOURCE_EXHAUSTED' } };
+    const rateAns = { error: { code: 429, message: 'Quota exceeded for quota metric \'Default\' and limit \'Default per minute per property\'', status: 'RESOURCE_EXHAUSTED' } };
+    if (!pr[0].json.skip) mock('Inspect URL (Probe)', pr.map(q => ({ json: opt.quota ? quotaAns : opt.rate ? rateAns : (opt.answer ? opt.answer(q.json.inspect_url) : answerFor(q.json.inspect_url)) })));
     const ir = await run('Index Inspect Requests', [{ json: {} }]);
     if (!ir[0].json.skip) mock('Inspect URL (Index)', ir.map(q => ({ json: opt.answer ? opt.answer(q.json.inspect_url) : answerFor(q.json.inspect_url) })));
+    const rr = await run('Inspect Retry Requests', [{ json: {} }]);
+    if (!rr[0].json.skip) mock('Inspect URL (Retry)', rr.map(q => ({ json: opt.rateAgain ? rateAns : (opt.answer ? opt.answer(q.json.inspect_url) : answerFor(q.json.inspect_url)) })));
     const fr = await run('Page Fetch Requests', [{ json: {} }]);
-    if (!fr[0].json.skip) mock('Fetch Page (Index)', fr.map((q, i) => ({ json: opt.fetch200 || /unknown|insights\/new-ours/.test(q.json.url) || i % 3 === 0 ? { statusCode: 200, headers: { 'content-type': 'text/html' }, data: '<html><head><title>A page</title></head><body><main>' + 'words '.repeat(400) + '</main></body></html>' }
+    if (!fr[0].json.skip) mock('Fetch Page (Index)', fr.map((q, i) => ({ json: opt.fetchAnswer ? opt.fetchAnswer(q.json.url, i) : opt.fetch200 || /unknown|insights\/new-ours/.test(q.json.url) || i % 3 === 0 ? { statusCode: 200, headers: { 'content-type': 'text/html' }, data: '<html><head><title>A page</title></head><body><main>' + 'words '.repeat(400) + '</main></body></html>' }
       : i % 3 === 1 ? { statusCode: 301, headers: { location: W + '/somewhere-else' }, data: '' } : { statusCode: 404, headers: {}, data: 'nf' } })));
     const hr = await run('Fetch Hop Requests', [{ json: {} }]);
-    if (!hr[0].json.skip) mock('Fetch Page (Final)', hr.map(() => ({ json: { statusCode: 200, headers: {}, data: '<html><head><title>Elsewhere</title></head><body>x</body></html>' } })));
+    if (!hr[0].json.skip) mock('Fetch Page (Final)', hr.map((q) => ({ json: opt.hopAnswer ? opt.hopAnswer(q.json.url) : { statusCode: 200, headers: {}, data: '<html><head><title>Elsewhere</title></head><body>x</body></html>' } })));
+    await run('Page Signals', [{ json: {} }]);
     const dg = await run('Index Diagnose', [{ json: {} }]);
     const rows = await run('Index Page Rows', [{ json: {} }]);
+    const dels = await run('Index Delete Rows', [{ json: {} }]);
+    const hmoves = await run('Index History Moves', [{ json: {} }]);
     const hist = await run('Index History Rows', [{ json: {} }]);
     mock('Load Update Impact', [{ json: {} }]);
     const iq = await run('Update Impact Requests', [{ json: {} }]);
@@ -360,8 +387,9 @@ module.exports = async (ctx) => {
     await run('Update Impact Rows', [{ json: {} }]);
     const runRows = await run('Index Run Rows', [{ json: {} }]);
     if (opt.monday !== undefined) store['Index Diagnose'] = store['Index Diagnose'].map(i => ({ json: { ...i.json, monday: opt.monday, news_today: opt.news || 0 } }));
+    const next = await run('Next Index Part', [{ json: {} }]);
     const rep = await run('Index Report', [{ json: {} }]);
-    return { plan, sites, inv, pr, ir, fr, hr, dg, rows, hist, runRows, rep };
+    return { plan, sites, inv, res, pr, ir, rr, fr, hr, dg, rows, dels, hmoves, hist, runRows, next, rep, sq, sq2 };
   };
 
   await guard('IX8 techand.ai end to end', async () => {
