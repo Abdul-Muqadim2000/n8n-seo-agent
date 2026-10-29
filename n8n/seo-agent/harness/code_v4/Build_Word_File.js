@@ -1067,7 +1067,12 @@ if (wantContent) {
     ['Quick answer block', qa.answer_block_words ? qa.answer_block_words + ' words' : 'Missing'],
     ['Editing rounds', num(qa.round || d.qa_round || 1)],
     ['Schema generated', esc((qa.schema_types || []).join(', ') || 'None')],
-    ['Content score', qa.content_score != null ? '<b>' + qa.content_score + '/100</b>' + (qa.score_breakdown ? ' (structure ' + qa.score_breakdown.structure + '/25, topic coverage ' + qa.score_breakdown.coverage + '/25, readability ' + qa.score_breakdown.readability + '/15, specificity ' + qa.score_breakdown.specificity + '/10, clean language ' + qa.score_breakdown.clean_language + '/10, length ' + qa.score_breakdown.length + '/15)' : '') : 'N/A'],
+    ['Content score', (() => { const g = (qa.delivery && qa.delivery.grade && typeof qa.delivery.grade === 'object') ? qa.delivery.grade : null; const sc = g && g.score != null ? g.score : qa.content_score;   // W0-C (section 159): the grade the client sees
+      if (sc == null) return 'N/A'; const b = (g && g.breakdown) || qa.score_breakdown || {}; const M = (g && g.max) || (qa.grade_detail || {}).max || null; const shown = (g && g.display) || (Number(sc) >= 95 ? '95+' : String(sc));
+      if (!M) return '<b>' + esc(shown) + '/100</b>';
+      const fl = g && g.floors ? (g.floors.ok ? '' : ' · needs work: ' + g.floors.failing.map(x => x.label).join(', ')) : '';
+      return '<b>' + esc(shown) + '/100</b> (structure ' + b.structure + '/' + M.structure + ', topic coverage ' + b.coverage + '/' + M.coverage + ', readability ' + b.readability + '/' + M.readability + ', specificity ' + b.specificity + '/' + M.specificity
+        + ', plain language ' + b.clean_language + '/' + M.clean_language + ', sources ' + b.sources + '/' + M.sources + ', fit with the search ' + b.fit + '/' + M.fit + '; length is advice only)' + esc(fl); })()],
     ['Topic coverage', qa.coverage && qa.coverage.basis ? esc(qa.coverage.basis) + (qa.coverage.subtopics_missing && qa.coverage.subtopics_missing.length ? ' · subtopics still missing: ' + esc(qa.coverage.subtopics_missing.slice(0, 3).join('; ')) : '') : (qa.coverage_pct != null ? qa.coverage_pct + '% of the terms top-ranking pages share' : 'N/A')],
     ['Originality', qa.originality ? (qa.originality.passed === null ? 'Could not be checked: no competitor or own page text was available in this run'
       : (qa.originality.highest_pct != null ? qa.originality.highest_pct + '% of the page matches ' + esc(qa.originality.highest_source || 'another page') + ' word for word (limit ' + qa.originality.threshold_pct + '%' + (qa.originality.passed ? '' : ' — EXCEEDED') + ')' : 'No overlap found')
