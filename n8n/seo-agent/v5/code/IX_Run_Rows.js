@@ -11,12 +11,14 @@ const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const nowIso = new Date().toISOString();
 const grab = (n) => { try { return $(n).all().map(i => i.json); } catch (e) { return []; } };
 const diag = grab('Index Diagnose').filter(x => x && x.site_id);
+const plan0 = grab('Index Plan')[0] || {};   // R8: the dispatch this run belongs to (chain_id), so another chain can see it was here
 const out = [];
 for (const d of diag) {
   const sum = IX.summarize(d.all || [], {});
   const cnt = d.counts || {};
   const notes = [];
-  if (d.failed) notes.push('We could not check this website today: ' + (S(d.why) || 'not checked').replace(/[.:]+$/, '') + '.' + (sum.known ? ' The figures are from the last check.' : ' Nothing has been checked yet.'));
+  // R5 (fix wave 3): the reason in plain words (IX.plainWhy); the raw error is kept for ops in sitemaps_json.error_detail, never in the note
+  if (d.failed) notes.push('We could not check this website today: ' + IX.plainWhy(d.why).replace(/[.:]+$/, '') + '.' + (sum.known ? ' The figures are from the last check.' : ' Nothing has been checked yet.'));
   if (d.quota_stop) notes.push('Google\'s daily URL Inspection quota for this property was used up; inspections stopped for today and the rest are checked tomorrow.');
   if (!d.quota_stop && n0(cnt.rate)) notes.push('Google asked us to slow down (a per-minute limit, not the daily quota); ' + n0(cnt.rate) + ' page(s) were asked again a minute later or are checked on the next run.');
   if (d.access_lost) notes.push('Search Console refused access for some addresses of this property, so they were not checked.');
@@ -42,6 +44,7 @@ for (const d of diag) {
       submitted_warnings: Array.isArray(d.gsc_sitemaps) ? d.gsc_sitemaps.reduce((t, x) => t + n0(x.warnings), 0) : null,
       pending: Array.isArray(d.gsc_sitemaps) ? d.gsc_sitemaps.filter(x => x.pending).length : null,
       read: n0(sm.read), fetched: n0(sm.fetched), urls: n0(sm.urls), capped: !!sm.capped, complete: d.failed ? null : sm.complete === true, robots_status: n0(sm.robots_status),
-      home_host: S(sm.home_host), errors: (sm.errors || []).slice(0, 10), checked: !d.failed }) } });
+      home_host: S(sm.home_host), errors: (sm.errors || []).slice(0, 10), checked: !d.failed, chain_id: S(plan0.chain_id),
+      ...(S(d.why_detail) ? { error_detail: S(d.why_detail).slice(0, 300) } : {}) }) } });
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no website' } }];

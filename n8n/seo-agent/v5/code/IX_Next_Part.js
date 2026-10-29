@@ -6,6 +6,9 @@ let t = {}; try { const x = $('Manual Run').first(); t = (x && x.json) || {}; } 
 if (t.body && typeof t.body === 'object') t = { ...t, ...t.body };
 const ch = t.ix_chain && typeof t.ix_chain === 'object' ? t.ix_chain : null;
 if (!ch) return [{ json: { skip: true, reason: 'not part of a chain' } }];
+// R8 (fix wave 3): Index Plan found this website checked today by another chain of today: that chain goes on, this one stops
+let plan = {}; try { plan = $('Index Plan').first().json || {}; } catch (e) { plan = {}; }
+if (plan.stop_chain) return [{ json: { skip: true, reason: 'another chain of today is checking these websites: this chain stops (' + S(plan.reason) + ')' } }];
 const rest = Array.isArray(ch.rest) ? ch.rest.map(S).filter(Boolean) : [];
 if (!rest.length) return [{ json: { skip: true, reason: 'the last website of the chain (' + (Number(ch.part) || 1) + ' of ' + (Number(ch.of) || 1) + ')' } }];
 const age = Date.now() - (Date.parse(S(ch.started_at)) || Date.now());

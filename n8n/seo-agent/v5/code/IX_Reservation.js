@@ -21,6 +21,7 @@ for (const v of inv) {
     dropped_json: '[]', freeze: !!fr.freeze, freeze_reason: S(fr.reason),
     note: ('Today\'s check started at ' + at.slice(11, 16) + ' UTC and had not finished when this row was written; the figures are from before today\'s inspections. '
       + 'It holds today\'s ' + (v.take || []).length + ' planned inspection(s), so a repeat of the run stays inside the daily limit.').slice(0, 1500),
-    sitemaps_json: JSON.stringify({ reservation: true, complete: !!(v.sitemap || {}).complete, home_host: S((v.sitemap || {}).home_host) }) } });
+    // R2 (fix wave 3): Save Index Reservation UPSERTS on site_id + run_at, so this row replaces the run's attempt row (Index Attempt)
+    sitemaps_json: JSON.stringify({ reservation: true, complete: !!(v.sitemap || {}).complete, home_host: S((v.sitemap || {}).home_host), chain_id: S(s.chain_id) }) } });
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no website to inspect' } }];

@@ -3008,6 +3008,28 @@
     "retryOnFail": true,
     "timeout": 15000,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Index Start Alert (Before Settle)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Index Start Alert (After Settle)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Keyword Check": [

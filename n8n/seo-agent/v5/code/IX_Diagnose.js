@@ -33,7 +33,7 @@ for (const v of inv) {
     const all = (v.pages || []).map(r => ({ url: S(r.url), state: S(r.state) || 'unknown', cause: S(r.cause), action: S(r.action) || 'none', lane: S(r.lane), needs_person: r.needs_person === true || r.needs_person === 'true',
       note: S(r.note), merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: r.ask_google === true || r.ask_google === 'true' }));
     out.push({ json: { ...base, upserts: [], history: [], deletes: [], history_moves: [], all, dropped: [], counts: { inspected: 0, reused: 0, fetched: 0, errors: 0 }, failed: true,
-      why: S(v.why) || 'not checked', plan: {}, freeze: fr, news_today: 0 } });
+      why: IX.plainWhy(v.why), why_detail: S(v.why_detail), plan: {}, freeze: fr, news_today: 0 } });   // R5: plain words only; the raw error stays internal
     continue;
   }
   try {
@@ -99,7 +99,9 @@ for (const v of inv) {
         const sameCause = !!prev && S(prev.cause) === S(row.cause);
         const fx = IX.fixState({ prev: sameCause ? prev : null, seen, fresh: reading || null, now_iso: nowIso });
         row.fix_seen_at = fx.fix_seen_at; row.fix_failed_at = fx.fix_failed_at;
-        if (S(row.fix_seen_at)) row.action = 'wait'; else if (row.action === 'wait') row.action = 'site_fix';   // the fix was not seen again: the step is back
+        // R4 (fix wave 3): back to the client's step only when THIS run did not re-diagnose the page (wave 1's `&& !d`): a fixed page whose
+        // new Google reading is "new, not crawled yet" (wait_new, action wait) is waiting for Google, not a site step
+        if (S(row.fix_seen_at)) row.action = 'wait'; else if (row.action === 'wait' && !d) row.action = 'site_fix';   // the fix was not seen again: the step is back
       } else if (d || moved) { row.fix_seen_at = ''; row.fix_failed_at = ''; }
       if (row.state === 'indexed') { row.fix_seen_at = ''; row.fix_failed_at = ''; if (row.action === 'wait' && !S(row.cause)) row.action = 'none'; }   // N4: nothing waits for an indexed page
       // X4: a drop-out is an indexed page Google now leaves out with something to do (never one left out on purpose, a move, or a wait)
@@ -153,7 +155,7 @@ for (const v of inv) {
       reserved, ask_google: asked, first_run: firstRun, news_today, failed: false } });
   } catch (e) {
     out.push({ json: { ...base, upserts: [], history: [], deletes: [], history_moves: [], all: [], dropped: [], counts: { inspected: 0, reused: 0, fetched: 0, errors: 0 }, failed: true,
-      why: 'diagnosis failed: ' + S(e && e.message).slice(0, 160), plan: {}, freeze: fr, news_today: 0 } });
+      why: IX.PLAIN_FAIL, why_detail: 'diagnosis failed: ' + S(e && e.message).slice(0, 160), plan: {}, freeze: fr, news_today: 0 } });   // R5
   }
 }
 return out.length ? out.map(o => ({ json: { ...o.json, monday } })) : [{ json: { skip: true, reason: 'no website' } }];

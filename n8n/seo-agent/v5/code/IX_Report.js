@@ -30,9 +30,10 @@ for (const d of diag) {
     freeze: !!fr.freeze, freeze_reason: S(fr.reason), events,
     impact: imp ? { event_title: S(imp.event_title), dropped: n0(imp.dropped), stable: n0(imp.stable), gained: n0(imp.gained) } : { event_title: '', dropped: 0, stable: 0, gained: 0 },
     // N12 (fix wave 2): a run that could not read the website says so in the summary itself - the figures are the LAST check's, never today's
-    failed: !!d.failed, checked: !d.failed, note: d.failed ? ('We could not check this website today: ' + (S(d.why) || 'not checked').replace(/[.:]+$/, '') + '.' + (sum.known ? ' The figures are from the last check.' : ' Nothing has been checked yet.')) : S(run.note).slice(0, 1500),
+    // R5 (fix wave 3): the reason in plain words only (IX.plainWhy); the raw error never reaches the note
+    failed: !!d.failed, checked: !d.failed, note: d.failed ? ('We could not check this website today: ' + IX.plainWhy(d.why).replace(/[.:]+$/, '') + '.' + (sum.known ? ' The figures are from the last check.' : ' Nothing has been checked yet.')) : S(run.note).slice(0, 1500),
     figures_from: d.failed ? 'last_check' : 'today' };
-  const md = IX.reportMarkdown({ domain: d.domain }, { ...sum, should_index: sum.should_index }, { ...run, quota_cap: d.cap }, { rows: d.all || [], dropped: d.dropped || [], events, freeze: fr, impact: imp, failed: !!d.failed, why: S(d.why) });   // E14: a site not checked says so, never "0 of 0"
+  const md = IX.reportMarkdown({ domain: d.domain }, { ...sum, should_index: sum.should_index }, { ...run, quota_cap: d.cap }, { rows: d.all || [], dropped: d.dropped || [], events, freeze: fr, impact: imp, failed: !!d.failed, why: IX.plainWhy(d.why) });   // E14: a site not checked says so, never "0 of 0"
   out.push({ json: { stage: 'index_coverage', status: 'complete', domain: S(d.domain), site_id: d.site_id, request_id: S(d.request_id), summary, report_markdown: md,
     cost: { usd: 0 }, callback_url: S(d.callback_url) } });
 }

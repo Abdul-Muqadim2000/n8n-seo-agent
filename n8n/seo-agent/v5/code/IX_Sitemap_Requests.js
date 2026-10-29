@@ -6,6 +6,8 @@
 // N7 (fix wave 2): the sitemaps of one round are a BOUNDED batch (IX.sitemapBatch: 2 while nothing is known of their size, then sized by
 // what the sitemaps read so far held, at most 10), nothing is asked once the 5,000-address cap is reached, and the answers are files on
 // disk (the HTTP node writes them; Sitemap Read reads at most 8 MB of one), so no sitemap body is kept in the run's saved data.
+// R3 (fix wave 3): a queued child carries its depth in the tree (roots 0), so Sitemap Read knows when an index of indexes was read and the
+// next batch of unknown leaves is larger (IX.sitemapBatch); the rounds spent on indexes no longer leave a three-level tree partial.
 /*__PAGE_WATCH__*/
 /*__INDEX_KIT__*/
 const ROUND = __ROUND__;
@@ -34,7 +36,7 @@ if (ROUND === 1) {
       const hop = !!(n.robots || n.home);
       if (!hop) { if (room <= 0) continue; room--; }   // E10 / N7: the tree stops at the address cap, and a round reads a bounded batch
       out.push({ json: { site_id: st.site_id, url: n.url, from: n.from, ...(n.robots ? { robots: true } : {}), ...(n.home ? { home: true } : {}),
-        ...(n.redirected_from ? { redirected_from: n.redirected_from } : {}), ...(n.gsc ? { gsc: true } : {}) } });
+        ...(n.redirected_from ? { redirected_from: n.redirected_from } : {}), ...(n.gsc ? { gsc: true } : {}), ...(n.depth ? { depth: n.depth } : {}) } });
     }
   }
 }

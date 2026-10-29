@@ -17,7 +17,8 @@ const finals = new Map();
 for (let j = 0; j < hq.length; j++) {
   const r = (f2 || [])[j] || {};
   const a = await IX.answerText(r, f2 && ins.length === f2.length ? ins[j] : null, j, helpers, IX.CFG.page_read_bytes);
-  finals.set(hq[j].first_index, { ...r, data: a.text, body: undefined });
+  // R6 (fix wave 3): a final page above the read limit was not read: the hop counts as not read (no status), never as an empty 200
+  finals.set(hq[j].first_index, a.too_large ? { error: 'the page is larger than we read: not read' } : { ...r, data: a.text, body: undefined });
 }
 let out;
 if (firsts.length) {

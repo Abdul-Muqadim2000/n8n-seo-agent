@@ -17,6 +17,14 @@
 // dispatch by the dispatch itself): it restarts the chain for the websites not done yet - a chain that broke on a crash, a time-out, an n8n
 // restart or a refused part goes on within the hour. A watch of another day does nothing. A chain part skips a website already done today
 // (N9: a second dispatch while a chain is in flight never reads a website twice).
+// Fix wave 3 (R2): every website part writes an ATTEMPT row (Index Attempt -> Save Index Attempt, an unfinished-run row: `sitemaps_json`
+// `{ reservation: true, attempt: true }`, nothing inspected) as soon as the run guard lets it in, BEFORE the sitemap rounds and Search
+// Analytics; the reservation and the final row replace it (same site_id + run_at). So a run that dies early (a Code node error in the sitemap
+// rounds, a runner task killed, the 3,600 s limit) is counted like one that died after its reservation: two unfinished runs today = left for
+// tomorrow (IX.CFG.gave_up_after), never restarted by each of the day's 30 watches. An attempt row is never the run before this one (E3).
+// Fix wave 3 (R8): a chain part whose website was already checked today BY ANOTHER CHAIN (the final row carries the other dispatch's id in
+// sitemaps_json.chain_id) stops its own chain there (`stop_chain`): two chains that met (a watch that started while a refused part was
+// waiting to restart) become one again instead of walking the same list side by side.
 // ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13; system review FIX_PLAN.md) ----
 // G11: a monthly audit cannot see a page that went noindex on the 3rd. Every day the key pages are fetched raw and cheaply (one plain GET
 // each, no JavaScript, no paid API) and compared with what we stored: HTTP status, a redirect that appeared, `noindex`, the canonical, the
@@ -442,6 +450,9 @@ const IX = (() => {
     watch_minutes: 50, watch_refused_minutes: 30, watch_max: 30,   // N5: the day's chain is watched (every 50 minutes, so the waiting
                                                    //     dispatch stays inside the 3,600 s execution limit even if n8n counted the wait) until every website is done
     gave_up_after: 2,                              // N5: a website whose run of the day did not finish twice is left for tomorrow
+    // fix wave 3 (2026-10-30, ENGINE_BUILD.md "Fix wave 3")
+    sitemap_batch_deep: 8,                         // R3: unknown-size sitemaps read at once after an index of indexes was read (three-level trees)
+    run_max_minutes: 62,                           // R8: an unfinished run row younger than this may still be running (executionTimeout 3,600 s)
   };
   // ---- URLs: strict parsing (E11), canonical host, host-agnostic keys, own host only ----
   // A URL is read only when it is plain http(s)://host[:80|443]/path?query: no userinfo, no backslash, no whitespace, no IP literal, no bare
@@ -567,7 +578,7 @@ const IX = (() => {
       const abs = /^\//.test(loc) && !/^\/\//.test(loc) ? 'https://' + hostOf(asked.url) + loc : loc;
       // the same sitemap on the other host / with a slash (example.com -> www.example.com): read it there, once
       if (safe(abs, site) && same(abs, asked.url) && safe(abs, site) !== safe(asked.url, site) && !asked.redirected_from) st.fetched = st.fetched.filter(x => x !== k);
-      if (safe(abs, site)) { if (!sitemapQueue(st, abs, asked.from, site, { redirected_from: asked.url }) && !st.fetched.includes(key(abs)) && !st.next.some(x => same(x.url, abs))) st.errors.push({ url: asked.url, error: 'redirects to another sitemap that was not read (cap)' }); }
+      if (safe(abs, site)) { if (!sitemapQueue(st, abs, asked.from, site, { redirected_from: asked.url, ...(n0(asked.depth) ? { depth: n0(asked.depth) } : {}) }) && !st.fetched.includes(key(abs)) && !st.next.some(x => same(x.url, abs))) st.errors.push({ url: asked.url, error: 'redirects to another sitemap that was not read (cap)' }); }
       else st.errors.push({ url: asked.url, error: 'redirects off the site (' + status + ')' });
       return st;
     }
@@ -575,6 +586,9 @@ const IX = (() => {
     const doc = parseSitemap(body);
     if (doc.kind === 'unknown') { st.errors.push({ url: asked.url, error: 'not a sitemap (no urlset / sitemapindex)' }); return st; }
     st.read++; if (doc.kind === 'urlset') st.sets = n0(st.sets) + 1;
+    // R3 (fix wave 3): an index found BELOW the roots (an index of indexes) says the tree has a third level: its leaves are many and an
+    // index answer is a short list, so the first leaves are read in a larger batch (sitemapBatch) and the rounds are not used up by the indexes
+    if (doc.kind === 'index' && n0(asked.depth) >= 1) st.deep_index = true;
     const fromGsc = asked.from === 'gsc' || !!asked.gsc;
     const have = new Set(st.urls.map(x => key(x.loc)));
     for (const u of doc.urls) {
@@ -587,7 +601,7 @@ const IX = (() => {
     for (const c of doc.sitemaps) {
       if (!safe(c.loc, site)) continue;
       if (st.urls.length >= CFG.urls_max) { st.capped = true; break; }
-      sitemapQueue(st, c.loc, fromGsc ? 'gsc' : 'child', site, { lastmod: c.lastmod });
+      sitemapQueue(st, c.loc, fromGsc ? 'gsc' : 'child', site, { lastmod: c.lastmod, depth: n0(asked.depth) + 1 });
       if (st.capped_sitemaps) break;
     }
     return st;
@@ -599,20 +613,53 @@ const IX = (() => {
    * sitemap_batch_max, and nothing once the cap is reached. With the answers read as files (bodies on disk, not in the run's saved data) and
    * at most sitemap_read_bytes of one answer read, a tree of 49 children of 50,000 addresses costs one or two children, not all of them.
    */
+  // R3 (fix wave 3): the rounds spent on indexes do not count against the leaves. Wave 2 read 2 unknown sitemaps a round until the first
+  // urlset was read, so a root index -> 2 sub-indexes -> 46 leaves spent rounds 2 AND 3 at 2 and could read at most 42 leaves in 7 rounds
+  // (it was complete in wave 1). Once an index of indexes was read (st.deep_index), the first leaves are read sitemap_batch_deep at once;
+  // the memory stays bounded because Sitemap Read reads one answer at a time and refuses a file above sitemap_read_bytes (R6).
   const sitemapBatch = (st) => {
     const x = st || {}; const left = CFG.urls_max - (x.urls || []).length; if (left <= 0) return 0;
-    const sets = n0(x.sets); if (!sets) return CFG.sitemap_batch_first;
+    const sets = n0(x.sets); if (!sets) return x.deep_index ? CFG.sitemap_batch_deep : CFG.sitemap_batch_first;
     const avg = Math.max(1, (x.urls || []).length / sets);
     return Math.max(1, Math.min(CFG.sitemap_batch_max, Math.floor(left / avg)));
   };
-  /** N7 / X2: the text of a fetched answer - the JSON body (text response) or the file the HTTP node wrote (read here, at most `max` bytes). */
+  /**
+   * N7 / X2: the text of a fetched answer - the JSON body (text response) or the file the HTTP node wrote (read here, at most `max` bytes).
+   * R6 (fix wave 3): n8n has no way to read PART of a file from a Code node: the task runner's getBinaryDataBuffer sends the WHOLE file over
+   * its RPC as JSON (one array element per byte, ~10x the file in the runner's 512 MB), and a getBinaryStream cannot cross that RPC. So the
+   * size is known BEFORE reading - the binary's `bytes` (n8n 2.41 writes it on every stored file), its `fileSize` text, or the answer's
+   * Content-Length - and a file above `max` is NOT read: { text: '', cut: true, too_large: true, bytes }. The caller turns that into a clean
+   * partial reading (a sitemap tree that is not complete, a page that could not be checked), never a crash before the run's rows are saved.
+   * The download itself streams to disk (HTTP Request V3 `useStream` for file answers), so the n8n main process is not the limit either.
+   */
+  const sizeOf = (r, b) => {
+    const prettyBytes = (v) => { const m = S(v).match(/^([\d.]+)\s*(B|kB|KB|MB|GB)$/i); if (!m) return 0; const u = { b: 1, kb: 1e3, mb: 1e6, gb: 1e9 }[m[2].toLowerCase()]; return Math.round(Number(m[1]) * u) || 0; };
+    const h = (r && r.headers) || {}; const k = Object.keys(h).find(x => x.toLowerCase() === 'content-length');
+    return Math.max(n0(b && b.bytes), prettyBytes(b && b.fileSize), k ? n0(Array.isArray(h[k]) ? h[k][0] : h[k]) : 0);
+  };
   const answerText = async (r, item, i, helpers, max) => {
-    const t = (r && (r.body ?? r.data)); if (t != null && (typeof t === 'string' ? t !== '' : true)) return { text: typeof t === 'string' ? t : JSON.stringify(t), cut: false };
+    const t = (r && (r.body ?? r.data)); if (t != null && (typeof t === 'string' ? t !== '' : true)) { const x = typeof t === 'string' ? t : JSON.stringify(t); const cut = x.length > max; return { text: cut ? x.slice(0, max) : x, cut }; }
     const b = item && item.binary && (item.binary.data || Object.values(item.binary)[0]);
-    if (!b || !helpers || typeof helpers.getBinaryDataBuffer !== 'function') return { text: '', cut: false };
+    if (!b) return { text: '', cut: false };
+    const bytes = sizeOf(r, b);
+    if (bytes > max) return { text: '', cut: true, too_large: true, bytes };   // R6: never sent through the runner's RPC
+    if (!helpers || typeof helpers.getBinaryDataBuffer !== 'function') return { text: '', cut: false };
     const prop = item.binary.data ? 'data' : Object.keys(item.binary)[0];
-    try { const buf = await helpers.getBinaryDataBuffer(i, prop); const cut = buf.length > max; return { text: (cut ? buf.subarray(0, max) : buf).toString('utf8'), cut }; }
+    try { const buf = await helpers.getBinaryDataBuffer(i, prop); const cut = buf.length > max; return { text: (cut ? buf.subarray(0, max) : buf).toString('utf8'), cut, ...(cut ? { too_large: true, bytes: buf.length } : {}) }; }
     catch (e) { return { text: '', cut: false }; }
+  };
+  /**
+   * R5 (fix wave 3): the reason a website could not be checked, as the client reads it (the run row's note, the callback's summary.note, the
+   * report). Never a fragment of an internal error: the raw message stays in `why_detail` (the execution's data, and the run row's
+   * sitemaps_json.error_detail for ops). A reason this kit or the nodes wrote in plain words passes; anything that looks like an exception
+   * ("TypeError", "x.y is undefined", "failed:", a stack line, braces) becomes the plain sentence.
+   */
+  const PLAIN_FAIL = 'something went wrong on our side while reading it';
+  const plainWhy = (w) => {
+    const s = S(w).replace(/\s+/g, ' ');
+    if (!s) return 'not checked';
+    if (/failed:|\b[A-Z][a-z]+Error\b|\bexception\b|undefined|\bnull\b|\bNaN\b|is not a function|cannot read|\bat [\w$.<>]+ \(|[{}\[\]<>]|=>|\$\(|\bnode\b|\bstack\b/i.test(s)) return PLAIN_FAIL;
+    return s.slice(0, 200);
   };
   /**
    * E1 (FIX_CONTRACT decision 2): was the whole tree read? Only then is "not in the sitemap" a fact. Any sitemap that failed (an error, a
@@ -1515,7 +1562,7 @@ const IX = (() => {
     stateOf, ACTION, CAUSES, laneOf, anchorOf, noteOf, plan, inProperty, nextCheck, capOf, isGone, askGoogle, homeLinks, linkSuggestions, topicOf, kindOf, parseEvents,
     eventRows, policyText, policyEvent, POLICY_URL, freeze, impactWindows, impactDue, impactCompare, impactNote, PAGE_COLS, rowOut, rowSig, changed, summarize,
     reportMarkdown, groupNote, isoDay, DAY, merge, ts,
-    fixState, xRobotsNoindex, metaNoindex, sitemapBatch, answerText };
+    fixState, xRobotsNoindex, metaNoindex, sitemapBatch, answerText, sizeOf, plainWhy, PLAIN_FAIL };
 })();
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) { trigger = {}; }
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
@@ -1535,6 +1582,8 @@ const json = (v) => { if (v && typeof v === 'object') return v; try { return JSO
 const monOf = (s) => mons.find(x => S(x.site_id) === S(s.site_id)) || {};
 const live = (s) => !/^(paused|deleted|inactive)$/i.test(S(s.status));
 const isReservation = (r) => json(r.sitemaps_json).reservation === true;
+const isAttempt = (r) => json(r.sitemaps_json).attempt === true;   // R2: written at the start of a part, before anything else could fail
+const chainOf = (r) => S(json(r.sitemaps_json).chain_id);
 const todayOf = (sid) => runsOf(sid).filter(r => S(r.run_at).slice(0, 10) === today);
 const doneToday = (sid) => { const t = todayOf(sid); return t.some(r => !isReservation(r)) || t.filter(isReservation).length >= IX.CFG.gave_up_after; };
 const watch = trigger.ix_watch && typeof trigger.ix_watch === 'object' ? trigger.ix_watch : null;
@@ -1564,7 +1613,10 @@ if (!want && !chain) {
 const s = sites.find(x => normD(x.domain) === want || S(x.site_id) === want) || null;
 const why = !s ? 'no tracked website matches "' + want + '"' : (chain && !live(s)) ? normD(s.domain) + ' is paused' : (chain && !flag(monOf(s).index_watch, true)) ? 'the index watch of ' + normD(s.domain) + ' is off'
   : (chain && doneToday(S(s.site_id))) ? normD(s.domain) + ' was already checked today' : '';   // N9: a chain part never reads a website twice in a day
-if (why) return [{ json: { nothing_to_do: true, skip: true, reason: why, chain_part: chain ? (Number(chain.part) || 1) : 0 } }];
+// R8: the website was checked today by ANOTHER chain (its final row names another dispatch): that chain is alive and walks the same list, so this one stops
+const myChain = chain ? S(chain.dispatch_id) : '';
+const otherChain = !!(s && chain && myChain && todayOf(S(s.site_id)).some(r => !isReservation(r) && chainOf(r) && chainOf(r) !== myChain));
+if (why) return [{ json: { nothing_to_do: true, skip: true, reason: why + (otherChain ? ' by another chain of today: this chain stops here' : ''), chain_part: chain ? (Number(chain.part) || 1) : 0, ...(otherChain ? { stop_chain: true } : {}) } }];
 const m = monOf(s);
 const sid = S(s.site_id);
 const cap = IX.capOf(trigger.cap !== undefined && on_demand ? trigger.cap : m.index_daily_cap);
@@ -1573,10 +1625,10 @@ const todays = mine.filter(r => S(r.run_at).slice(0, 10) === today);
 const used_today = todays.reduce((t, r) => t + (Number(r.inspected) || 0), 0);
 const quota_hit = todays.some(r => /daily URL Inspection quota/i.test(S(r.note)));
 // E3: the run before this one, and whether it read the sitemap tree completely (a page first seen in a sitemap is `new` only after such a run)
-const prev = mine.find(r => S(r.run_at) < run_at) || null;
+const prev = mine.find(r => S(r.run_at) < run_at && !isAttempt(r)) || null;   // R2: an attempt row that never got further says nothing of the sitemap tree
 const pj = prev ? json(prev.sitemaps_json) : {};
 return [{ json: { site_id: sid, domain: normD(s.domain), canonical_host: S(s.canonical_host), gsc_property_hint: S(s.gsc_property),
   callback_url: S(trigger.callback_url) || S(s.callback_url), request_id: S(trigger.request_id) || S(s.request_id), cap, used_today, quota_hit, on_demand,
   index_watch: flag(m.index_watch, true), trigger: S(trigger.trigger), run_at,
   prev_complete: pj.complete === true, prev_complete_at: pj.complete === true ? S(prev.run_at) : '', home_host_prev: S(pj.home_host),
-  chain_part: chain ? (Number(chain.part) || 1) : 0 } }];
+  chain_part: chain ? (Number(chain.part) || 1) : 0, chain_id: myChain } }];

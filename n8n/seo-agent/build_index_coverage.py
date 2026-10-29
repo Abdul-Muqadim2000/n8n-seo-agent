@@ -26,7 +26,7 @@ from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_para
                            SITES_TABLE, MONITORS_TABLE, PAGES_TABLE, PAGE_WATCH_TABLE, LOG_TABLE,
                            INDEX_PAGES_TABLE, INDEX_PAGES_COLS, INDEX_HISTORY_TABLE, INDEX_HISTORY_COLS, INDEX_RUNS_TABLE, INDEX_RUNS_COLS,
                            GOOGLE_EVENTS_TABLE, GOOGLE_EVENTS_COLS, UPDATE_IMPACT_TABLE, UPDATE_IMPACT_COLS,
-                           RUN_LEDGER_TABLE, RUN_LEDGER_COLS, monitor_ledger_js, LEDGER_EST, ledger_mainline, OPS_ALERTS_TABLE)
+                           RUN_LEDGER_TABLE, RUN_LEDGER_COLS, monitor_ledger_js, LEDGER_EST, ledger_mainline, OPS_ALERTS_TABLE, OPS_ALERTS_COLS, ALERT_WEBHOOK_PLACEHOLDER)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
@@ -43,15 +43,22 @@ UA = 'Mozilla/5.0 (compatible; SEO-Agent/4.16; +index-coverage)'
 
 PW_SRC = read_v5('code/_page_watch.js').rstrip('\n')
 IX_SRC = read_v5('code/_index_kit.js').rstrip('\n')
+OA_SRC = read_v5('code/_ops_alert.js').rstrip('\n')
+AR_SRC = read_v5('code/_alert_retry.js').rstrip('\n')   # R7 (fix wave 3): a failed self-start raises an ops alert on the shared path
 TZ = engine_tz()
 rd = lambda f, **kw: _fill(read_v5('code/' + f), **kw)
 
 
-def _fill(src, round_no=None):
-    s = src.replace('/*__PAGE_WATCH__*/', PW_SRC).replace('/*__INDEX_KIT__*/', IX_SRC).replace('__ENGINE_TZ__', TZ)
+def _fill(src, round_no=None, start=None, sub=None):
+    s = src.replace('/*__PAGE_WATCH__*/', PW_SRC).replace('/*__INDEX_KIT__*/', IX_SRC).replace('/*__OPS_ALERT__*/', OA_SRC).replace('__ENGINE_TZ__', TZ)
     if round_no is not None:
         s = s.replace('__ROUND__', str(round_no))
-    for ph in ('/*__PAGE_WATCH__*/', '/*__INDEX_KIT__*/', '__ENGINE_TZ__', '__ROUND__'):
+    if start is not None:
+        s = s.replace('__START__', start)
+    for k_, v_ in (sub or {}).items():
+        s = s.replace(k_, v_)
+    s = s.replace('/*__ALERT_RETRY__*/', AR_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_PLACEHOLDER)
+    for ph in ('/*__PAGE_WATCH__*/', '/*__INDEX_KIT__*/', '/*__OPS_ALERT__*/', '/*__ALERT_RETRY__*/', '__ENGINE_TZ__', '__ROUND__', '__START__', '__G__', '__LB__', '__ALERT_WEBHOOK_URL__'):
         assert ph not in s, ph + ' left in a node of ' + NAME
     return s
 
@@ -139,6 +146,10 @@ SITE_LOADS = [('Load Index Pages', dt_get_all_where_params(INDEX_PAGES_TABLE, [(
               ('Load Update Impact', dt_get_all_where_params(UPDATE_IMPACT_TABLE, [('site_id', 'eq', SID)]))]
 for i, (nm, params) in enumerate(SITE_LOADS):
     node(nm, DT_TYPE, DT_VERSION, params, at(25 + i, 3), **LOAD)
+# R2 (fix wave 3): the run's ATTEMPT row, written once the run guard let the part in and before anything that can fail (sitemap rounds,
+# Search Analytics): a part that dies early is counted, so the day's watches cannot restart it 30 times (IX_Plan.js doneToday)
+code('Index Attempt', rd('IX_Attempt.js'), at(24, 3), executeOnce=True); iff('Any Attempt?', '{{ !$json.skip }}', at(24, 4))
+node('Save Index Attempt', DT_TYPE, DT_VERSION, dt_upsert_params_keys(INDEX_RUNS_TABLE, INDEX_RUNS_COLS, ['site_id', 'run_at']), at(25, 4), **SAVE)
 node('GSC Sites (Index)', 'n8n-nodes-base.httpRequest', 4.5, google('GET', 'https://www.googleapis.com/webmasters/v3/sites'), at(30, 1), credentials=GOOGLE, executeOnce=True, **HTTP_X)
 code('Index Sites', rd('IX_Sites.js'), at(31, 1))
 iff('Any Sites (Index)?', "{{ !$('Index Sites').first().json.skip }}", at(32, 1))
@@ -162,7 +173,8 @@ for r in range(1, ROUNDS + 1):
 # ---- inventory, the reservation, inspections, our own reads ----
 code('Index Inventory', rd('IX_Inventory.js'), at(70, 4))
 code('Index Reservation', rd('IX_Reservation.js'), at(71, 4)); iff('Any Reservation?', '{{ !$json.skip }}', at(72, 4))
-node('Save Index Reservation', DT_TYPE, DT_VERSION, dt_insert_params(INDEX_RUNS_TABLE, INDEX_RUNS_COLS), at(73, 3), **SAVE)
+# R2 (fix wave 3): an upsert on site_id + run_at - the reservation replaces this run's attempt row (Save Index Attempt), never a second row
+node('Save Index Reservation', DT_TYPE, DT_VERSION, dt_upsert_params_keys(INDEX_RUNS_TABLE, INDEX_RUNS_COLS, ['site_id', 'run_at']), at(73, 3), **SAVE)
 code('Index Probe Requests', rd('IX_Probe_Requests.js'), at(74, 4)); iff('Any Probes?', '{{ !$json.skip }}', at(75, 4))
 node('Inspect URL (Probe)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL), at(76, 3), credentials=GOOGLE, **HTTP_X)
 code('Index Inspect Requests', rd('IX_Inspect_Requests.js'), at(77, 4)); iff('Any Inspections (Index)?', '{{ !$json.skip }}', at(78, 4))
@@ -228,7 +240,8 @@ link('Any Event Rows?', 'Save Google Events', 0); link('Any Event Rows?', 'Dispa
 link('Dispatch? (Index)', 'Prune Index History', 0); link('Dispatch? (Index)', 'Site To Check? (Index)', 1)
 chain('Prune Index History', 'Prune Index Runs', 'Dispatch Start', 'Any Dispatch?')
 link('Any Dispatch?', 'Start Index Part', 0); link('Any Dispatch?', 'Index Report', 1); link('Start Index Part', 'Index Report')
-link('Site To Check? (Index)', SITE_LOADS[0][0], 0); link('Site To Check? (Index)', 'Nothing To Do (Index)', 1)
+link('Site To Check? (Index)', 'Index Attempt', 0); link('Site To Check? (Index)', 'Nothing To Do (Index)', 1)
+chain('Index Attempt', 'Any Attempt?'); link('Any Attempt?', 'Save Index Attempt', 0); link('Any Attempt?', SITE_LOADS[0][0], 1); link('Save Index Attempt', SITE_LOADS[0][0])
 chain(*[l[0] for l in SITE_LOADS], 'GSC Sites (Index)', 'Index Sites', 'Any Sites (Index)?')
 link('Any Sites (Index)?', 'Sitemaps List Requests', 0); link('Any Sites (Index)?', 'Nothing To Do (Index)', 1)
 link('Nothing To Do (Index)', 'Next Index Part')
@@ -313,6 +326,42 @@ _settle = 'Settle Run Ledger (' + TAG + ')'
 assert _settle in {n['name'] for n in N}, 'N5: no settle node to hang the watch on'
 C[_settle]['main'][0].append({'node': 'Index Watch Plan', 'type': 'main', 'index': 0})
 chain('Index Watch Plan', 'Any Index Watch?'); link('Any Index Watch?', 'Wait (Index Watch)', 0); chain('Wait (Index Watch)', 'Start Index Watch')
+# R7 (fix wave 3): every self-start is checked; a start n8n refused raises one ops alert (seo_ops_alerts, due at once: the retry sweep posts it)
+# Each start: the alerts of this workflow already on record (OA.plan dedupes a repeat) -> its check. Two delivery groups, as Page Watch does
+# (record first, post, settle the row from the POST's status code): the starts BEFORE the settle (the dispatch's first part, the chain's next
+# part) go on to Index Report on every branch, so the run still settles (R31); the starts AFTER it (a refused part restarted, the day's watch)
+# end at their own delivery.
+STARTS = [('Start Index Part', 'Part', 'Before Settle'), ('Start Next Index Part', 'Next', 'Before Settle'), ('Restart Index Part', 'Restart', 'After Settle'),
+          ('Start Index Watch', 'Watch', 'After Settle')]
+for i, (st_, lb_, g_) in enumerate(STARTS):
+    ld_, chk_ = 'Load Start Alerts (' + lb_ + ')', 'Index Start Alert (' + lb_ + ')'
+    node(ld_, DT_TYPE, DT_VERSION, dt_get_all_where_params(OPS_ALERTS_TABLE, [('workflow', 'eq', NAME)]), at(24 + i * 2, 13), **LOAD)
+    code(chk_, rd('IX_Start_Alert.js', start=st_, sub={'__LB__': lb_}), at(25 + i * 2, 13), executeOnce=True)
+    if g_ == 'Before Settle': C[st_]['main'][0] = [t for t in C[st_]['main'][0] if t['node'] != 'Index Report']   # through its check now
+    link(st_, ld_); link(ld_, chk_); link(chk_, 'Any Start Alert (' + g_ + ')?')
+for j, g_ in enumerate(('Before Settle', 'After Settle')):
+    y_ = 14 + j * 2; sub_ = {'__G__': g_}
+    iff('Any Start Alert (' + g_ + ')?', '{{ !$json.skip }}', at(32, y_))
+    node('Save Index Start Alert (' + g_ + ')', DT_TYPE, DT_VERSION, dt_upsert_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, 'alert_key'), at(33, y_ - 1), **SAVE)
+    code('Index Start Send (' + g_ + ')', rd('IX_Start_Send.js', sub=sub_), at(34, y_), executeOnce=True)
+    iff('Send Start Webhook? (' + g_ + ')', '{{ $json.send_webhook }}', at(35, y_))
+    node('Post Index Start Alert (' + g_ + ')', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.webhook_url }}', 'sendBody': True, 'specifyBody': 'json',
+         'jsonBody': '={{ JSON.stringify($json.webhook_body) }}', 'options': {'timeout': 15000, 'response': {'response': {'fullResponse': True, 'neverError': True}}}},
+         at(36, y_ - 1), onError='continueRegularOutput', **retry_lint.RETRY)
+    code('Index Start Delivery (' + g_ + ')', rd('IX_Start_Delivery.js', sub=sub_), at(37, y_), executeOnce=True)
+    iff('Any Start Delivery? (' + g_ + ')', '{{ !$json.skip }}', at(38, y_))
+    node('Save Index Start Delivery (' + g_ + ')', DT_TYPE, DT_VERSION, dt_update_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, [('alert_key', '={{ $json.alert_key }}')],
+        {'delivered': '={{ $json.delivered }}', 'channels': '={{ $json.channels }}', 'severity': '={{ $json.severity }}', 'attempts': '={{ $json.attempts }}',
+         'last_attempt_at': '={{ $json.last_attempt_at }}', 'next_attempt_at': '={{ $json.next_attempt_at }}', 'attempt_log': '={{ $json.attempt_log }}',
+         'notes': '={{ $json.notes }}'}), at(39, y_ - 1), **SAVE)
+    link('Any Start Alert (' + g_ + ')?', 'Save Index Start Alert (' + g_ + ')', 0)
+    chain('Save Index Start Alert (' + g_ + ')', 'Index Start Send (' + g_ + ')', 'Send Start Webhook? (' + g_ + ')')
+    link('Send Start Webhook? (' + g_ + ')', 'Post Index Start Alert (' + g_ + ')', 0)
+    chain('Post Index Start Alert (' + g_ + ')', 'Index Start Delivery (' + g_ + ')', 'Any Start Delivery? (' + g_ + ')')
+    link('Any Start Delivery? (' + g_ + ')', 'Save Index Start Delivery (' + g_ + ')', 0)
+    if g_ == 'Before Settle':   # every branch of the pre-settle group goes on to Index Report
+        for nd_, out_ in (('Any Start Alert (Before Settle)?', 1), ('Send Start Webhook? (Before Settle)', 1), ('Any Start Delivery? (Before Settle)', 1), ('Save Index Start Delivery (Before Settle)', 0)):
+            link(nd_, 'Index Report', out_)
 url_lint.check(wfobj, NAME)
 retry_lint.check(wfobj, NAME)
 retry_lint.check_in200(wfobj, NAME)

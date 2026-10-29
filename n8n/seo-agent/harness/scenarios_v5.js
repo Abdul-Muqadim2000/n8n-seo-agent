@@ -19727,5 +19727,6 @@ await require('./scenarios_replay')({ H, run, mock, store, guard, reset, begin }
 await require('./scenarios_index')({ H, run, mock, store, guard, reset, begin });   // IX1-IX12 (Index coverage, 2026-10-29, docs/indexing-2026-10-29/DESIGN.md): every cause, the plan and caps, evidence without quota, sitemaps / hosts / low value, link suggestions, Google events + freeze, update impact, techand.ai end to end, the callback rule, drop-outs / needs a person, Site Admin, the generated workflow
 await require('./scenarios_index_fix')({ H, run, mock, store, guard, reset, begin });   // IXF1-IXF12 (Index coverage fix wave 1, 2026-10-29, docs/indexing-2026-10-29/FIX_CONTRACT.md): one check per review finding (E1-E16, X1-X4, X7, X8, X13, X16), each failing on the reviewed code
 await require('./scenarios_index_fix2')({ H, run, mock, store, guard, reset, begin });   // IXW1-IXW14 (Index coverage fix wave 2, 2026-10-29, REVIEW_2.md N1-N13): multi-day runs through the generated nodes with a pinned clock, each failing on the integration head (3b0a8cab)
+await require('./scenarios_index_fix3')({ H, run, mock, store, guard, reset, begin });   // IXR2-IXR8 (Index coverage fix wave 3, 2026-10-30, REVIEW_3.md R2-R8): each scenario fails on ix/engine 7777e17d
 H.report();
 })();

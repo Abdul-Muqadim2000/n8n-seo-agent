@@ -287,3 +287,43 @@ waiting execution's wait in `executionTimeout` (the 50-minute wait is chosen so 
 
 **Result**: full harness on the host Node, **13844 passed, 0 failed** (integration head 13788; +56: IXW1-IXW14 with 46 checks, and the
 updated IX / IXF checks). Two builds of the same sources are byte-identical (the rebuild after the last source change left no diff).
+
+## Fix wave 3 (2026-10-30)
+
+Branch `ix/engine` at `7777e17d`. The engine findings of REVIEW_3.md: R2-R8 (R1 and R9 are the app's; R5 has an app half). Nothing deployed, no paid
+API, nothing pushed. Among the generated workflows only `workflows/SEO_Agent_Index_Coverage.json` changes (183 nodes, was 156); two builds are
+byte-identical. New `harness/scenarios_index_fix3.js` (IXR2-IXR8, 47 checks): run against `7777e17d`'s code_v4 and workflow
+(`CODE_DIR=<old>/code_v4 WF_FILE=<old>/SEO_Agent_Index_Coverage.json node scenarios_index_fix3.js`) it gives **6 passed, 41 failed** (every
+scenario fails; the 6 are controls: a 42-leaf tree, a small file still read, the inventory throwing, a page inspected, two chain cases that
+must go on). The reviewer's probes re-run on the new code: `sm_many.js` 46 / 44 / 42 nested leaves all complete (was 840 / 880 addresses,
+partial), flat 48 / 49 unchanged; `waitnew.js` day 0 `wait` (was `site_fix`).
+
+### Per finding
+| id | status | how | harness |
+|---|---|---|---|
+| R2 | fixed | New `Index Attempt` -> `Any Attempt?` -> `Save Index Attempt`, right after `Site To Check? (Index)` (after the run guard, before Search Console, the sitemap rounds and anything else that can fail): an unfinished-run row at the run's `site_id` + `run_at`, nothing inspected, `sitemaps_json` `{ reservation: true, attempt: true, chain_id }`. `Save Index Reservation` is now an **upsert** on `site_id + run_at` (was an insert), so the reservation replaces the attempt and the final row replaces both: still one row per run. `Index Plan`'s `doneToday` already counts unfinished rows: after `gave_up_after` (2) the website waits for tomorrow. An attempt row is never "the run before" (E3 lanes, `home_host_prev`). Alerts: the error workflow alerts each failed execution (it is another workflow and stays unchanged here; its 30-minute dedupe does not merge failures 50 minutes apart), so a website that always fails early now raises at most **2** alerts a day (was up to 30). | IXR2 (30 watches: 2 starts) |
+| R3 | fixed | `sitemapAccept` gives each queued child its depth; an index read at depth >= 1 (an index of indexes) sets `deep_index`, and `IX.sitemapBatch` then reads `sitemap_batch_deep` (8) unknown-size sitemaps instead of 2, so the rounds spent on indexes do not count against the leaves. The address cap (5,000), the 50-sitemap queue cap and the 10-a-round maximum are unchanged; a root index listed only in robots.txt is depth 0 (still 2 first). `Sitemap Read n` now reads one answer at a time (wave 2 read every answer of the round first and held them all) and reads no more answers once the address cap is reached. | IXR3 (2 x 46, 2 x 47, 3 x 45, 5 x 44, 2 x 42 leaves: complete, <= 10 a round); IXW7 unchanged |
+| R4 | fixed | `IX_Diagnose.js`: `else if (row.action === 'wait' && !d) row.action = 'site_fix'` (wave 1's guard restored): a fixed page whose new reading is `wait_new` stays `wait`. | IXR4 |
+| R5 (engine) | fixed | `why` is plain words only: an exception in `Index Inventory` / `Index Diagnose` becomes `IX.PLAIN_FAIL` ("something went wrong on our side while reading it"), Google's own error text in `Index Sites` becomes "Search Console did not answer our request for this website"; `IX.plainWhy` guards every place that writes the note (run row, `summary.note`, report). The raw text stays internal: `why_detail` on the Diagnose item, `gsc_error_detail` on the Index Sites item, and `sitemaps_json.error_detail` on the run row. The note no longer contains "inventory failed:" at all, so the app's `indexingNoteText` replacement becomes a no-op (the app half of R5, the duplicated "last check" sentence, is the app's). | IXR5 |
+| R6 | fixed (bounded; n8n gives no partial read) | Read from the n8n 2.41.4 image: the runner exposes `getBinaryDataBuffer` / `binaryToString` / `binaryToBuffer` (all whole-file, sent over the RPC as JSON) and `getBinaryStream` (a stream cannot cross the RPC), so a Code node cannot read the first N bytes. What it can do is know the size first: `IX.answerText` reads the binary's `bytes` (written by n8n on every stored file), its `fileSize` text, or the answer's `Content-Length`, and does **not** read a file above the limit (`sitemap_read_bytes` 8 MB, `page_read_bytes` 3 MB). A sitemap above the limit is named in `sitemaps_json.errors` ("larger than we read (8 MB): not read") and the tree is partial (wave 2 read its first 8 MB; that read is what could exhaust the runner); a page above the limit is "could not check" (never an empty 200, which would have read as a page with no noindex). The download itself streams to disk (HTTP Request V3 `useStream` for file answers). | IXR6 (the binary helper is never called above the limit) |
+| R7 | fixed | Each self-start (`Start Index Part`, `Start Next Index Part`, `Restart Index Part`, `Start Index Watch`) -> `Load Start Alerts (x)` (this workflow's rows of `seo_ops_alerts`) -> `Index Start Alert (x)`: on an `{ error }` answer one `OA.plan` row (workflow, node, message; a repeat within 30 minutes is the same row and is not re-sent), then the Page Watch pattern: `Save Index Start Alert` -> `Index Start Send` -> `Post Index Start Alert` (`neverError` + `fullResponse`, the shared retry rule) -> `Index Start Delivery` (`AR.posted`, written back; a failure is re-tried by the sweep that ends every scheduled run). Two groups: the starts before the settle go on to `Index Report` on every branch (R31: the run still settles), the two after it end at their own delivery. state_lint C3 is satisfied by the delivery node. | IXR7 |
+| R8 | fixed | Every chain part's rows carry the dispatch that started the chain (`sitemaps_json.chain_id`: attempt, reservation and final row). A chain part whose website was already checked today by ANOTHER chain (a final row with another non-empty `chain_id`) returns `stop_chain` and `Next Index Part` starts nothing: the two chains are one again. A website done by the same chain (a restarted part) or on demand (no `chain_id`) is skipped and the chain goes on (N9 unchanged). | IXR8 |
+
+### Contract changes for the app (all additive)
+1. **Attempt rows** in `seo_index_runs`: `sitemaps_json.reservation: true` and `attempt: true`, figures 0, `inspected` 0, note "Today's check started
+   at HH:MM UTC and had not finished when this row was written; the figures are from the last check." The app already treats any reservation
+   row as "the latest check had not finished" and never as a reading; the change it will see is that a run that died early now leaves such a
+   row (before it left none). Two unfinished rows today = the website waits for tomorrow.
+2. `sitemaps_json` gains `chain_id` (the dispatch's execution id, '' on demand) on every row of a chain part, and `error_detail` (internal, raw
+   error text, at most 300 characters) on a run that could not read the website. Neither is for display.
+3. A failed run's `note` / `summary.note` no longer contains "inventory failed:" / "diagnosis failed:" or any error text: "We could not check
+   this website today: something went wrong on our side while reading it. The figures are from the last check."
+4. `sitemaps_json.errors` may contain `{ url, error: 'larger than we read (8 MB): not read' }` (the tree is then `complete: false`).
+5. `seo_ops_alerts` may carry rows of workflow "SEO Agent — Index Coverage" with node `Start Index Part` / `Start Next Index Part` /
+   `Restart Index Part` / `Start Index Watch`.
+
+### Deploy notes (owner, not done here)
+No new table or column (`seo_ops_alerts` and `seo_index_runs` exist). `SEO_ALERT_WEBHOOK_URL` is substituted into the new `Index Start Send` /
+`Index Start Delivery` nodes by the same placeholder step as every other alert node (`apply_env.py` / `deploy_engine.py`).
+
+**Result**: full harness in Docker (`n8nio/n8n:2.41.4`), **13891 passed, 0 failed** (wave 2: 13844; +47 = IXR2-IXR8, no existing check changed).

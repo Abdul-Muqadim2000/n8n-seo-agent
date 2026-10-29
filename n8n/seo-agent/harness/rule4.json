@@ -9,8 +9,8 @@
    "subject": 3
   },
   "delivery": {
-   "pass": 19,
-   "subject": 19
+   "pass": 22,
+   "subject": 22
   },
   "promise": {
    "pass": 4,
@@ -251,6 +251,51 @@
     "ok": true,
     "opener": false,
     "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Index Coverage"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.posted("
+    ],
+    "node": "Index Start Delivery (After Settle)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Index Coverage"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.posted("
+    ],
+    "node": "Index Start Delivery (Before Settle)",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Index Coverage"
+   },
+   {
+    "fail": "",
+    "how": "follow the POST with a node that calls AR.posted( and writes the result back to seo_ops_alerts",
+    "node": "(workflow)",
+    "ok": true,
+    "opener": true,
+    "opens": [
+     "Index Start Alert (Next)",
+     "Index Start Alert (Part)",
+     "Index Start Alert (Restart)",
+     "Index Start Alert (Watch)"
+    ],
+    "settles": [
+     "Index Start Delivery (After Settle)",
+     "Index Start Delivery (Before Settle)"
+    ],
+    "why": "B-F3: Page Watch posted its digest and wrote nothing back, so every row it opened sat at `delivered: \"pending\"` for ever and the delivery rate could never be measured",
     "workflow": "SEO Agent \u2014 Index Coverage"
    },
    {

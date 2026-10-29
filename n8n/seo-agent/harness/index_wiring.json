@@ -26,6 +26,14 @@
    ],
    []
   ],
+  "Any Attempt?": [
+   [
+    "Save Index Attempt"
+   ],
+   [
+    "Load Index Pages"
+   ]
+  ],
   "Any Deletes?": [
    [
     "Delete Index Pages"
@@ -244,6 +252,32 @@
     "Nothing To Do (Index)"
    ]
   ],
+  "Any Start Alert (After Settle)?": [
+   [
+    "Save Index Start Alert (After Settle)"
+   ]
+  ],
+  "Any Start Alert (Before Settle)?": [
+   [
+    "Save Index Start Alert (Before Settle)"
+   ],
+   [
+    "Index Report"
+   ]
+  ],
+  "Any Start Delivery? (After Settle)": [
+   [
+    "Save Index Start Delivery (After Settle)"
+   ]
+  ],
+  "Any Start Delivery? (Before Settle)": [
+   [
+    "Save Index Start Delivery (Before Settle)"
+   ],
+   [
+    "Index Report"
+   ]
+  ],
   "Any Update Impact?": [
    [
     "Save Update Impact"
@@ -425,6 +459,11 @@
     "POST Index Report"
    ]
   ],
+  "Index Attempt": [
+   [
+    "Any Attempt?"
+   ]
+  ],
   "Index Delete Rows": [
    [
     "Any Deletes?"
@@ -489,6 +528,46 @@
   "Index Sites": [
    [
     "Any Sites (Index)?"
+   ]
+  ],
+  "Index Start Alert (Next)": [
+   [
+    "Any Start Alert (Before Settle)?"
+   ]
+  ],
+  "Index Start Alert (Part)": [
+   [
+    "Any Start Alert (Before Settle)?"
+   ]
+  ],
+  "Index Start Alert (Restart)": [
+   [
+    "Any Start Alert (After Settle)?"
+   ]
+  ],
+  "Index Start Alert (Watch)": [
+   [
+    "Any Start Alert (After Settle)?"
+   ]
+  ],
+  "Index Start Delivery (After Settle)": [
+   [
+    "Any Start Delivery? (After Settle)"
+   ]
+  ],
+  "Index Start Delivery (Before Settle)": [
+   [
+    "Any Start Delivery? (Before Settle)"
+   ]
+  ],
+  "Index Start Send (After Settle)": [
+   [
+    "Send Start Webhook? (After Settle)"
+   ]
+  ],
+  "Index Start Send (Before Settle)": [
+   [
+    "Send Start Webhook? (Before Settle)"
    ]
   ],
   "Index Watch Plan": [
@@ -587,6 +666,26 @@
     "Load Monitors (Index)"
    ]
   ],
+  "Load Start Alerts (Next)": [
+   [
+    "Index Start Alert (Next)"
+   ]
+  ],
+  "Load Start Alerts (Part)": [
+   [
+    "Index Start Alert (Part)"
+   ]
+  ],
+  "Load Start Alerts (Restart)": [
+   [
+    "Index Start Alert (Restart)"
+   ]
+  ],
+  "Load Start Alerts (Watch)": [
+   [
+    "Index Start Alert (Watch)"
+   ]
+  ],
   "Load Update Impact": [
    [
     "GSC Sites (Index)"
@@ -642,6 +741,16 @@
     "Alert Retry Result (Index)"
    ]
   ],
+  "Post Index Start Alert (After Settle)": [
+   [
+    "Index Start Delivery (After Settle)"
+   ]
+  ],
+  "Post Index Start Alert (Before Settle)": [
+   [
+    "Index Start Delivery (Before Settle)"
+   ]
+  ],
   "Prune Index History": [
    [
     "Prune Index Runs"
@@ -676,6 +785,11 @@
     "After Run Ledger (Index)"
    ]
   ],
+  "Restart Index Part": [
+   [
+    "Load Start Alerts (Restart)"
+   ]
+  ],
   "Retry Index Part": [
    [
     "Any Retry Part?"
@@ -699,6 +813,11 @@
     "Dispatch? (Index)"
    ]
   ],
+  "Save Index Attempt": [
+   [
+    "Load Index Pages"
+   ]
+  ],
   "Save Index History": [
    [
     "Update Impact Requests"
@@ -719,9 +838,37 @@
     "Next Index Part"
    ]
   ],
+  "Save Index Start Alert (After Settle)": [
+   [
+    "Index Start Send (After Settle)"
+   ]
+  ],
+  "Save Index Start Alert (Before Settle)": [
+   [
+    "Index Start Send (Before Settle)"
+   ]
+  ],
+  "Save Index Start Delivery (Before Settle)": [
+   [
+    "Index Report"
+   ]
+  ],
   "Save Update Impact": [
    [
     "Index Run Rows"
+   ]
+  ],
+  "Send Start Webhook? (After Settle)": [
+   [
+    "Post Index Start Alert (After Settle)"
+   ]
+  ],
+  "Send Start Webhook? (Before Settle)": [
+   [
+    "Post Index Start Alert (Before Settle)"
+   ],
+   [
+    "Index Report"
    ]
   ],
   "Settle Run Ledger (Index)": [
@@ -732,7 +879,7 @@
   ],
   "Site To Check? (Index)": [
    [
-    "Load Index Pages"
+    "Index Attempt"
    ],
    [
     "Nothing To Do (Index)"
@@ -815,12 +962,17 @@
   ],
   "Start Index Part": [
    [
-    "Index Report"
+    "Load Start Alerts (Part)"
+   ]
+  ],
+  "Start Index Watch": [
+   [
+    "Load Start Alerts (Watch)"
    ]
   ],
   "Start Next Index Part": [
    [
-    "Index Report"
+    "Load Start Alerts (Next)"
    ]
   ],
   "Tell Caller (Index)?": [
@@ -889,6 +1041,8 @@
   "Inspect URL (Retry)",
   "POST Index Report",
   "Post Alert Retry (Index)",
+  "Post Index Start Alert (After Settle)",
+  "Post Index Start Alert (Before Settle)",
   "Post Refusal (Index)"
  ],
  "file": "SEO_Agent_Index_Coverage.json",
@@ -930,6 +1084,7 @@
   "Alert Retry Plan (Index)",
   "Alert Retry Result (Index)",
   "Any Alert Retry (Index)?",
+  "Any Attempt?",
   "Any Deletes?",
   "Any Dispatch?",
   "Any Event Rows?",
@@ -958,6 +1113,10 @@
   "Any Sitemaps 7?",
   "Any Sitemaps List?",
   "Any Sites (Index)?",
+  "Any Start Alert (After Settle)?",
+  "Any Start Alert (Before Settle)?",
+  "Any Start Delivery? (After Settle)",
+  "Any Start Delivery? (Before Settle)",
   "Any Update Impact?",
   "Callback Ledger (Index)",
   "DFS Balance (Index)",
@@ -993,6 +1152,7 @@
   "Google Event Rows",
   "Google Events",
   "Has Callback (Index)?",
+  "Index Attempt",
   "Index Delete Rows",
   "Index Diagnose",
   "Index History Moves",
@@ -1006,6 +1166,14 @@
   "Index Reservation",
   "Index Run Rows",
   "Index Sites",
+  "Index Start Alert (Next)",
+  "Index Start Alert (Part)",
+  "Index Start Alert (Restart)",
+  "Index Start Alert (Watch)",
+  "Index Start Delivery (After Settle)",
+  "Index Start Delivery (Before Settle)",
+  "Index Start Send (After Settle)",
+  "Index Start Send (Before Settle)",
   "Index Watch Plan",
   "Inspect Retry Requests",
   "Inspect URL (Index)",
@@ -1025,6 +1193,10 @@
   "Load Pages (Index)",
   "Load Run Ledger (Index)",
   "Load Sites (Index)",
+  "Load Start Alerts (Next)",
+  "Load Start Alerts (Part)",
+  "Load Start Alerts (Restart)",
+  "Load Start Alerts (Watch)",
   "Load Update Impact",
   "Manual Run",
   "Move Index History",
@@ -1037,6 +1209,8 @@
   "Pages Query More",
   "Pages Query Requests",
   "Post Alert Retry (Index)",
+  "Post Index Start Alert (After Settle)",
+  "Post Index Start Alert (Before Settle)",
   "Post Refusal (Index)",
   "Prune Index History",
   "Prune Index Runs",
@@ -1050,11 +1224,18 @@
   "Run Ledger Row (Index)",
   "Save Alert Retry (Index)",
   "Save Google Events",
+  "Save Index Attempt",
   "Save Index History",
   "Save Index Pages",
   "Save Index Reservation",
   "Save Index Runs",
+  "Save Index Start Alert (After Settle)",
+  "Save Index Start Alert (Before Settle)",
+  "Save Index Start Delivery (After Settle)",
+  "Save Index Start Delivery (Before Settle)",
   "Save Update Impact",
+  "Send Start Webhook? (After Settle)",
+  "Send Start Webhook? (Before Settle)",
   "Settle Run Ledger (Index)",
   "Site To Check? (Index)",
   "Sitemap Read 1",
@@ -1195,12 +1376,17 @@
   "seo_index_runs": [
    "Ensure Index Runs Table",
    "Prune Index Runs",
+   "Save Index Attempt",
    "Save Index Reservation",
    "Save Index Runs"
   ],
   "seo_ops_alerts": [
    "Ensure Ops Alerts (Index)",
-   "Save Alert Retry (Index)"
+   "Save Alert Retry (Index)",
+   "Save Index Start Alert (After Settle)",
+   "Save Index Start Alert (Before Settle)",
+   "Save Index Start Delivery (After Settle)",
+   "Save Index Start Delivery (Before Settle)"
   ],
   "seo_run_ledger": [
    "Ensure Run Ledger (Index)",
