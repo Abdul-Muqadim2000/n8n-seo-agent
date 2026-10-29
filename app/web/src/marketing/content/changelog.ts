@@ -34,7 +34,7 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
-    date: '2026-10-28',
+    date: '2026-10-29',
     version: '4.4',
     title: 'Video tutorials',
     summary:
@@ -56,6 +56,7 @@ export const changelog: ChangelogEntry[] = [
       'Written pages arrive ready to publish more often: we fix what we can ourselves first (keyword placement, title and description length, links to your live pages, no brackets in the text), edit only the sections that need it and keep the best version we wrote, so an edit never makes your page worse. Figures are cited only from pages we read that day. Each page now says Ready to publish, Ready with optional questions, or Not ready with the exact reason, and its grade describes the page you receive. Anything we could not confirm about your business is written in general terms and asked as a question you can answer yes, edit or remove, saved for later pages',
       'Recommendations and your overview no longer ask you to run what your autopilot runs on its own (the first technical audit, the first AI check and backlink check now show as scheduled), and Google Analytics shows as connected as soon as you choose your property, instead of after the next weekly report',
       'Steps on your website, checked by us: the changes only you can make on your own site (the IndexNow file, letting AI search crawlers read your pages, redirecting a broken page other websites link to) are listed on your Pipeline, to do highlighted and done ticked. Press "I\'ve done it, check now" and we check your website at once; we also look every day, so a step finished quietly turns Done and a step undone comes back',
+      'Pages on a regulated topic carry the current local dates: when a page touches a rule in your market (UAE e-invoicing, VAT and corporate tax, with Saudi Arabia and Pakistan too), we read the government\'s own published text that day, use the newest decision when a date was moved, write a deadline that has passed as passed, and link the source. If no official text can be read, a date is used only when two independent sources agree, and the page says who reported it; otherwise it gives no date. If one of your own posts still shows an old date, we tell you',
     ],
     features: ['guided-setup', 'content', 'ai-visibility'],
     labels: ['Learning'],

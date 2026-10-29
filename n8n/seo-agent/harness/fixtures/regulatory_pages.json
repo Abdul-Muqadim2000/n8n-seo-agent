@@ -1,0 +1,31 @@
+{
+ "about": "W0F scenarios (build section 153, PLAN Fix 6). Short passages of public official texts as the reader returns them (UAE Ministry of Finance, read 2026-10-29: Ministerial Decision No. 244 of 2025 Article 5, its amendment No. 66 of 2026, the news item of 10 May 2026), with the line breaks a PDF read keeps; and SYNTHETIC secondary pages (example hosts on the secondary list, invented wording, no real firm's text) for the two-source tier. No client text.",
+ "md244": {
+  "url": "https://mof.gov.ae/wp-content/uploads/2025/09/Ministerial-Decision-No.-244-of-2025-on-the-Implementation-of-the-Electronic-Invoicing-System.pdf",
+  "page_text": "Title: Ministerial Decision No. 244 of 2025 on the Implementation of the Electronic Invoicing System\n\nURL Source: https://mof.gov.ae/wp-content/uploads/2025/09/Ministerial-Decision-No.-244-of-2025-on-the-Implementation-of-the-Electronic-Invoicing-System.pdf\n\nMarkdown Content:\nArticle 3 - Pilot Programme\n\n4. The Pilot Programme shall commence on 1 July 2026.\n\nArticle 5 - Mandatory Implementation\n\n1. The Electronic Invoicing System shall be implemented in the following phases:\n(a) A Person subject to the Electronic Invoicing System and whose Revenue is equal to or exceeds\nAED 50,000,000 shall appoint an Accredited Service Provider by 31 July 2026 and shall implement\nthe Electronic Invoicing System by 1 January 2027.\n(b) A Person subject to the Electronic Invoicing System and whose Revenue is less than AED\n50,000,000 shall appoint an Accredited Service Provider by 31 March 2027 and shall implement\nthe Electronic Invoicing System by 1 July 2027.\n(c) A Government Entity shall appoint an Accredited Service Provider by 31 March 2027 and shall\nimplement the Electronic Invoicing System by 1 October 2027.\n"
+ },
+ "md66": {
+  "url": "https://mof.gov.ae/wp-content/uploads/2026/05/Ministerial-Resolution-No.-66-of-2026-Amending-Certain-Provisions-of-Ministerial-Resolution-No.-244-of-2025-Regarding-the-Implementation-of-the-Electronic-Invoicing-System-En-20260514.pdf",
+  "page_text": "Title: Ministerial Decision No. (66) of 2026\n\nMarkdown Content:\nArticle One\n\nParagraph (a) of Clause (1) of Article (5) of Ministerial Decision No. 244 of 2025 referred to above, shall\nbe replaced by the following:\n\n(a) A Person subject to the Electronic Invoicing System and whose Revenue is equal to or exceeds\nAED 50,000,000 shall appoint an Accredited Service Provider by 30 October 2026 and shall\nimplement the Electronic Invoicing System by 1 January 2027.\n"
+ },
+ "mof_news": {
+  "url": "https://mof.gov.ae/en/news/ministry-of-finance-announces-targeted-amendments-to-einvoicing-system-decisions/",
+  "page_text": "Title: Ministry of Finance announces targeted amendments to eInvoicing system decisions\n\nPublished Time: 2026-05-10T09:00:00+04:00\n\nMarkdown Content:\nThe Ministry of Finance announced targeted amendments to the eInvoicing system decisions. The amendments extend the deadline for entities whose annual revenues exceed AED 50 million to appoint an accredited service provider from 31 July 2026 to 30 October 2026. Mandatory implementation remains due no later than 1 January 2027.\n"
+ },
+ "sa_official_unreadable": {
+  "url": "https://zatca.gov.sa/en/E-Invoicing/Introduction/Guidelines/Documents/wave-notice.pdf",
+  "page_text": ""
+ },
+ "sa_secondary_a": {
+  "url": "https://kpmg.com/xx/en/insights/sa-einvoicing-wave.html",
+  "page_text": "Title: Saudi Arabia: e-invoicing integration wave announced\n\nMarkdown Content:\nTaxpayers in the next integration wave whose revenue exceeds SAR 750,000 must integrate their e-invoicing solutions with the FATOORA platform by 31 March 2027, according to the authority's notice.\n"
+ },
+ "sa_secondary_b": {
+  "url": "https://www.deloitte.com/xx/en/services/tax/sa-einvoicing-wave.html",
+  "page_text": "Title: KSA e-invoicing: the next wave\n\nMarkdown Content:\nUnder the latest notice, businesses with revenue exceeding SAR 750,000 must integrate with FATOORA by 31 March 2027.\n"
+ },
+ "sa_secondary_stale": {
+  "url": "https://www.pwc.com/xx/en/tax/sa-einvoicing-old.html",
+  "page_text": "Title: KSA e-invoicing\n\nMarkdown Content:\nBusinesses with revenue exceeding SAR 750,000 must integrate with FATOORA by 31 December 2026.\n"
+ }
+}

@@ -1,0 +1,237 @@
+{
+ "version": 1,
+ "updated": "2026-10-29",
+ "about": "Regulatory facts step (page-quality programme 2026-10-29, PLAN Fix 6, build section 153). Market (ISO country) -> topics -> the official domains a date may come from, the words that make a page touch the topic, and what to search. A market or topic not listed here is never researched: the page then says nothing dated about it. `known` holds dated obligations a person read on the official text itself (url + paragraph quoted verbatim + checked_on); they are used only until `fresh_until`, and a later-dated official source read live always wins over them. Add a market or topic here, never in code (owner decision D4 for markets after AE, SA, PK).",
+ "secondary": {
+  "about": "Independent secondary sources for the second tier: when no official text can be read, two of these on different sites that state the same date are used, labelled in the page as reported by them. One alone is never used.",
+  "hosts": ["kpmg.com", "deloitte.com", "pwc.com", "pwc.ae", "ey.com", "bakermckenzie.com", "tamimi.com", "bsalaw.com", "pinsentmasons.com", "dentons.com", "clydeco.com", "dlapiper.com", "hfw.com", "nortonrosefulbright.com", "hadefpartners.com", "galadarilaw.com", "wam.ae", "spa.gov.sa", "app.com.pk", "reuters.com", "gulfnews.com", "khaleejtimes.com", "thenationalnews.com", "arabnews.com", "dawn.com", "tribune.com.pk"]
+ },
+ "markets": {
+  "AE": {
+   "name": "United Arab Emirates",
+   "utc_offset_hours": 4,
+   "official": ["mof.gov.ae", "tax.gov.ae", "u.ae", "uaelegislation.gov.ae"],
+   "topics": {
+    "e-invoicing": {
+     "label": "e-invoicing",
+     "search": "eInvoicing",
+     "triggers": ["e-invoic", "einvoic", "e invoic", "electronic invoic", "peppol", "accredited service provider"],
+     "official": ["mof.gov.ae", "tax.gov.ae"],
+     "fresh_until": "2027-01-31",
+     "known": [
+      {
+       "date": "2026-10-30",
+       "verb": "appoint",
+       "obligation": "appoint an Accredited Service Provider",
+       "subject": "A Person subject to the Electronic Invoicing System whose Revenue is equal to or exceeds AED 50,000,000 (phase 1)",
+       "subject_class": "ge:50000000",
+       "threshold": "revenue equal to or above AED 50,000,000 (AED 50 million)",
+       "url": "https://mof.gov.ae/wp-content/uploads/2026/05/Ministerial-Resolution-No.-66-of-2026-Amending-Certain-Provisions-of-Ministerial-Resolution-No.-244-of-2025-Regarding-the-Implementation-of-the-Electronic-Invoicing-System-En-20260514.pdf",
+       "paragraph": "(a) A Person subject to the Electronic Invoicing System and whose Revenue is equal to or exceeds AED 50,000,000 shall appoint an Accredited Service Provider by 30 October 2026 and shall implement the Electronic Invoicing System by 1 January 2027.",
+       "instrument": "Ministerial Decision No. 66 of 2026, replacing Article 5(1)(a) of Ministerial Decision No. 244 of 2025",
+       "source_date": "2026-05-10",
+       "supersedes": "2026-07-31",
+       "supersedes_url": "https://mof.gov.ae/wp-content/uploads/2025/09/Ministerial-Decision-No.-244-of-2025-on-the-Implementation-of-the-Electronic-Invoicing-System.pdf",
+       "announced_url": "https://mof.gov.ae/en/news/ministry-of-finance-announces-targeted-amendments-to-einvoicing-system-decisions/",
+       "checked_on": "2026-10-29"
+      },
+      {
+       "date": "2027-01-01",
+       "verb": "implement",
+       "obligation": "implement the Electronic Invoicing System",
+       "subject": "A Person subject to the Electronic Invoicing System whose Revenue is equal to or exceeds AED 50,000,000 (phase 1)",
+       "subject_class": "ge:50000000",
+       "threshold": "revenue equal to or above AED 50,000,000 (AED 50 million)",
+       "url": "https://mof.gov.ae/wp-content/uploads/2026/05/Ministerial-Resolution-No.-66-of-2026-Amending-Certain-Provisions-of-Ministerial-Resolution-No.-244-of-2025-Regarding-the-Implementation-of-the-Electronic-Invoicing-System-En-20260514.pdf",
+       "paragraph": "(a) A Person subject to the Electronic Invoicing System and whose Revenue is equal to or exceeds AED 50,000,000 shall appoint an Accredited Service Provider by 30 October 2026 and shall implement the Electronic Invoicing System by 1 January 2027.",
+       "instrument": "Ministerial Decision No. 66 of 2026 (the date is unchanged from Ministerial Decision No. 244 of 2025)",
+       "source_date": "2026-05-10",
+       "supersedes": "",
+       "checked_on": "2026-10-29"
+      },
+      {
+       "date": "2027-03-31",
+       "verb": "appoint",
+       "obligation": "appoint an Accredited Service Provider",
+       "subject": "A Person subject to the Electronic Invoicing System whose Revenue is less than AED 50,000,000 (phase 2)",
+       "subject_class": "lt:50000000",
+       "threshold": "revenue below AED 50,000,000 (AED 50 million)",
+       "url": "https://mof.gov.ae/wp-content/uploads/2025/09/Ministerial-Decision-No.-244-of-2025-on-the-Implementation-of-the-Electronic-Invoicing-System.pdf",
+       "paragraph": "(b) A Person subject to the Electronic Invoicing System and whose Revenue is less than AED 50,000,000 shall appoint an Accredited Service Provider by 31 March 2027 and shall implement the Electronic Invoicing System by 1 July 2027.",
+       "instrument": "Ministerial Decision No. 244 of 2025, Article 5(1)(b)",
+       "source_date": "2025-09-29",
+       "supersedes": "",
+       "checked_on": "2026-10-29"
+      },
+      {
+       "date": "2027-07-01",
+       "verb": "implement",
+       "obligation": "implement the Electronic Invoicing System",
+       "subject": "A Person subject to the Electronic Invoicing System whose Revenue is less than AED 50,000,000 (phase 2)",
+       "subject_class": "lt:50000000",
+       "threshold": "revenue below AED 50,000,000 (AED 50 million)",
+       "url": "https://mof.gov.ae/wp-content/uploads/2025/09/Ministerial-Decision-No.-244-of-2025-on-the-Implementation-of-the-Electronic-Invoicing-System.pdf",
+       "paragraph": "(b) A Person subject to the Electronic Invoicing System and whose Revenue is less than AED 50,000,000 shall appoint an Accredited Service Provider by 31 March 2027 and shall implement the Electronic Invoicing System by 1 July 2027.",
+       "instrument": "Ministerial Decision No. 244 of 2025, Article 5(1)(b)",
+       "source_date": "2025-09-29",
+       "supersedes": "",
+       "checked_on": "2026-10-29"
+      },
+      {
+       "date": "2027-03-31",
+       "verb": "appoint",
+       "obligation": "appoint an Accredited Service Provider",
+       "subject": "A Government Entity",
+       "subject_class": "gov",
+       "threshold": "",
+       "url": "https://mof.gov.ae/wp-content/uploads/2025/09/Ministerial-Decision-No.-244-of-2025-on-the-Implementation-of-the-Electronic-Invoicing-System.pdf",
+       "paragraph": "(c) A Government Entity shall appoint an Accredited Service Provider by 31 March 2027 and shall implement the Electronic Invoicing System by 1 October 2027.",
+       "instrument": "Ministerial Decision No. 244 of 2025, Article 5(1)(c)",
+       "source_date": "2025-09-29",
+       "supersedes": "",
+       "checked_on": "2026-10-29"
+      },
+      {
+       "date": "2027-10-01",
+       "verb": "implement",
+       "obligation": "implement the Electronic Invoicing System",
+       "subject": "A Government Entity",
+       "subject_class": "gov",
+       "threshold": "",
+       "url": "https://mof.gov.ae/wp-content/uploads/2025/09/Ministerial-Decision-No.-244-of-2025-on-the-Implementation-of-the-Electronic-Invoicing-System.pdf",
+       "paragraph": "(c) A Government Entity shall appoint an Accredited Service Provider by 31 March 2027 and shall implement the Electronic Invoicing System by 1 October 2027.",
+       "instrument": "Ministerial Decision No. 244 of 2025, Article 5(1)(c)",
+       "source_date": "2025-09-29",
+       "supersedes": "",
+       "checked_on": "2026-10-29"
+      },
+      {
+       "date": "2026-07-01",
+       "verb": "start",
+       "obligation": "implement the Electronic Invoicing System on a voluntary basis",
+       "subject": "Any Person",
+       "subject_class": "voluntary",
+       "threshold": "",
+       "url": "https://mof.gov.ae/wp-content/uploads/2025/09/Ministerial-Decision-No.-244-of-2025-on-the-Implementation-of-the-Electronic-Invoicing-System.pdf",
+       "paragraph": "Any Person may implement the Electronic Invoicing System on a voluntary basis as from 1 July 2026 and shall, in that case, comply with all the technical requirements established by the Ministry and the Authority for the use of the Electronic Invoicing System.",
+       "instrument": "Ministerial Decision No. 244 of 2025, Article 4",
+       "source_date": "2025-09-29",
+       "supersedes": "",
+       "checked_on": "2026-10-29"
+      }
+     ]
+    },
+    "vat": {
+     "label": "VAT",
+     "search": "VAT",
+     "triggers": ["vat", "value added tax"],
+     "official": ["tax.gov.ae", "mof.gov.ae"],
+     "fresh_until": "",
+     "known": []
+    },
+    "corporate-tax": {
+     "label": "corporate tax",
+     "search": "corporate tax",
+     "triggers": ["corporate tax", "corporate income tax", "ct registration", "transfer pricing"],
+     "official": ["tax.gov.ae", "mof.gov.ae"],
+     "fresh_until": "",
+     "known": []
+    },
+    "data-protection": {
+     "label": "personal data protection",
+     "search": "personal data protection law",
+     "triggers": ["data protection", "pdpl", "data residency", "data localisation", "data localization"],
+     "official": ["u.ae", "uaelegislation.gov.ae"],
+     "fresh_until": "",
+     "known": []
+    },
+    "payroll-labour": {
+     "label": "payroll and labour rules",
+     "search": "wage protection system",
+     "triggers": ["payroll", "wage protection", "wps", "emiratisation", "labour law", "labor law", "end of service"],
+     "official": ["mohre.gov.ae", "u.ae"],
+     "fresh_until": "",
+     "known": []
+    },
+    "aml": {
+     "label": "anti-money laundering rules",
+     "search": "anti-money laundering",
+     "triggers": ["anti-money laundering", "aml", "goaml", "kyc"],
+     "official": ["mof.gov.ae", "uaefiu.gov.ae", "centralbank.ae"],
+     "fresh_until": "",
+     "known": []
+    }
+   }
+  },
+  "SA": {
+   "name": "Saudi Arabia",
+   "utc_offset_hours": 3,
+   "official": ["zatca.gov.sa"],
+   "topics": {
+    "e-invoicing": {
+     "label": "e-invoicing (FATOORA)",
+     "search": "e-invoicing integration phase wave",
+     "triggers": ["e-invoic", "einvoic", "e invoic", "electronic invoic", "fatoora", "zatca integration"],
+     "official": ["zatca.gov.sa"],
+     "fresh_until": "",
+     "known": []
+    },
+    "vat": {
+     "label": "VAT",
+     "search": "VAT",
+     "triggers": ["vat", "value added tax"],
+     "official": ["zatca.gov.sa"],
+     "fresh_until": "",
+     "known": []
+    },
+    "zakat-income-tax": {
+     "label": "zakat and income tax",
+     "search": "zakat income tax",
+     "triggers": ["zakat", "income tax", "withholding tax"],
+     "official": ["zatca.gov.sa"],
+     "fresh_until": "",
+     "known": []
+    },
+    "data-protection": {
+     "label": "personal data protection",
+     "search": "personal data protection law",
+     "triggers": ["data protection", "pdpl", "data residency", "data localisation", "data localization"],
+     "official": ["sdaia.gov.sa"],
+     "fresh_until": "",
+     "known": []
+    }
+   }
+  },
+  "PK": {
+   "name": "Pakistan",
+   "utc_offset_hours": 5,
+   "official": ["fbr.gov.pk"],
+   "topics": {
+    "e-invoicing": {
+     "label": "e-invoicing and POS integration",
+     "search": "e-invoicing integration sales tax",
+     "triggers": ["e-invoic", "einvoic", "e invoic", "electronic invoic", "pos integration", "point of sale integration"],
+     "official": ["fbr.gov.pk"],
+     "fresh_until": "",
+     "known": []
+    },
+    "sales-tax": {
+     "label": "sales tax",
+     "search": "sales tax",
+     "triggers": ["sales tax", "gst", "federal excise"],
+     "official": ["fbr.gov.pk"],
+     "fresh_until": "",
+     "known": []
+    },
+    "income-tax": {
+     "label": "income tax",
+     "search": "income tax return",
+     "triggers": ["income tax", "withholding tax", "tax return"],
+     "official": ["fbr.gov.pk"],
+     "fresh_until": "",
+     "known": []
+    }
+   }
+  }
+ }
+}
