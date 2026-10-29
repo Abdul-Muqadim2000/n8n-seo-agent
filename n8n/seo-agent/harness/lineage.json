@@ -9,8 +9,8 @@
    "subject": 6
   },
   "lineage": {
-   "pass": 15,
-   "subject": 18
+   "pass": 16,
+   "subject": 19
   },
   "refusal": {
    "pass": 30,
@@ -739,6 +739,20 @@
     "lineage"
    ],
    "workflow": "SEO Agent \u2014 Link Builder"
+  },
+  "SEO Agent \u2014 Page Finalize / Final Version Document": {
+   "fails": [],
+   "lineage": {
+    "calls": true,
+    "kit": true,
+    "travels": true
+   },
+   "markup": 11,
+   "node": "Final Version Document",
+   "subject": [
+    "lineage"
+   ],
+   "workflow": "SEO Agent \u2014 Page Finalize"
   },
   "SEO Agent \u2014 Rank Tracker / SERP With Cache (Tracker)": {
    "fails": [],
