@@ -86,3 +86,25 @@ Listings on directories (bot walls make a reliable check impossible; the Link Bu
 e-mails (their proof is the link, found by the backlink monitor), audit fix-pack items (robots.txt / llms.txt / schema / redirects of the
 audit: the next audit re-checks them; a later version can turn each into a task with the same machinery), e-mail notices when a task
 flips.
+
+## 6. Kind `indexing` (Index coverage, 2026-10-29)
+
+Added with the Index coverage feature (`n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md` §6.2, `shared/src/indexing.ts`). One step per cause
+only the client can fix, key `indexing:<cause>` (noindex, robots.txt block, server error, login / 403, not found, empty page, a copy listed in
+the sitemap, a redirecting address in the sitemap, a page missing from the sitemap), listing up to 25 of its pages (most impressions first)
+and how many there are. Every rule above holds:
+
+- **Newest reading decides.** The engine's reading (`by: 'index'`, "Daily index check on ...") is the newest time its daily index run read
+  any listed page with that cause; a run after the step was stored that lists none of its pages any more reads it as done.
+- **Our own check** opens at most 10 of the listed pages on the website's own host through the safe fetcher (its opt-in header return reads
+  `X-Robots-Tag`; no existing caller changed), reads the sitemap once (robots.txt `Sitemap:` lines, else `/sitemap.xml`, an index followed
+  for 5 children) and robots.txt for a block with the shared matcher. Done only when every page it opened is fixed.
+- **Unreachable never records**: one listed page with no answer is "the website did not answer" (503 on a click, nothing stored daily).
+- 45 s cap (pages four at a time, the sitemap in parallel), one website at a time, paused websites skipped, two misses an hour apart reopen,
+  skip / restore audited, a guide per cause (`index-*` in `shared/src/guides.ts`).
+- **One page, one ask**: a broken page that is already a `redirect:` step (from the backlink report) is left out of the `not_found` list.
+- **Budget**: each tick checks the other kinds first; indexing steps get what is left, at most a third of the 60 checks.
+- The fall-through that read any unknown key or kind as a redirect is gone: `siteTaskKindOfKey`, `siteTaskPayload`, `present`, `doneDetail`
+  and `runSiteTaskCheck` are exhaustive switches (a kind added without its check does not compile; a stored row of an unknown kind reads
+  nothing and records nothing).
+

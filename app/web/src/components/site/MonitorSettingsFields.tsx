@@ -3,12 +3,14 @@ import { useCycleDay } from '@/lib/cycle-day';
 import { PRICES } from '@/lib/prices';
 import { creditsLabel, formatCredits, toCredits } from '@/lib/credits';
 import { useId, type ReactNode } from 'react';
-import { Bot, Gauge, Link2, Send, Wallet } from 'lucide-react';
+import { Bot, FileSearch, Gauge, Link2, Send, Wallet } from 'lucide-react';
 import {
   AI_ENGINES,
   AI_PROMPTS_MAX,
   AI_PULSE_ENGINES,
   CRAWL_PAGE_OPTIONS,
+  INDEX_DAILY_CAP,
+  INDEX_DAILY_CAP_OPTIONS,
   AI_PAGES_MAX,
   autopilotRows,
   aiPanelOptionsOf,
@@ -63,6 +65,9 @@ export function completeMonitors(m: Partial<MonitorSettings> | null | undefined)
     // AI-FOCUS (2026-10-27): what the daily check asks and whether the questions follow the keywords (kept only when stored or chosen here)
     ...(m?.aiPulseScope !== undefined ? { aiPulseScope: m.aiPulseScope } : {}),
     ...(m?.aiFocusMode !== undefined ? { aiFocusMode: m.aiFocusMode } : {}),
+    // Index coverage (2026-10-29): kept only when stored or chosen here (absent = the engine's default: on, 300 a day)
+    ...(m?.indexWatch !== undefined ? { indexWatch: m.indexWatch } : {}),
+    ...(m?.indexDailyCap !== undefined ? { indexDailyCap: m.indexDailyCap } : {}),
   };
 }
 
@@ -263,6 +268,33 @@ export function MonitorSettingsFields({
         checked={value.linkBuilder}
         onCheckedChange={(v) => set({ linkBuilder: v })}
         disabled={disabled}
+      />
+      </MonitorRow>
+
+      <MonitorRow icon={<FileSearch />} on={value.indexWatch ?? true}>
+      <SwitchRow
+        title="Indexing"
+        description="Every day we ask Google which of your pages it has in search and which it left out, with the reason and what to do. Free: it uses Google's data only. Needs Search Console connected."
+        checked={value.indexWatch ?? true}
+        onCheckedChange={(v) => set({ indexWatch: v })}
+        disabled={disabled}
+        extra={
+          (value.indexWatch ?? true) && (
+            <div className="mt-3">
+              <Field label="Pages checked with Google a day" hint="Google allows 2,000 a day for each website, shared by every tool you use. More finishes the first full check sooner; fewer leaves room for your other tools.">
+                {(p) => (
+                  <Select {...p} value={value.indexDailyCap ?? INDEX_DAILY_CAP.default} disabled={disabled} onChange={(e) => set({ indexDailyCap: Number(e.target.value) })}>
+                    {[...new Set([...INDEX_DAILY_CAP_OPTIONS, value.indexDailyCap ?? INDEX_DAILY_CAP.default])].sort((x, y) => x - y).map((c) => (
+                      <option key={c} value={c}>
+                        {c.toLocaleString('en-US')} a day{c === INDEX_DAILY_CAP.default ? ' (recommended)' : ''}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+            </div>
+          )
+        }
       />
       </MonitorRow>
 

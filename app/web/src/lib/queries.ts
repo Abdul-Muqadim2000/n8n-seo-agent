@@ -67,6 +67,9 @@ import type {
   CmsSiteState,
   CmsTestResultView,
   CrawlerData,
+  IndexHistoryEntry,
+  IndexingData,
+  IndexPagesPage,
   CrawlerSettingsInput,
   LogPushKeyCreated,
   LogUploadAccepted,
@@ -1513,3 +1516,42 @@ export function useDeleteFact(orgId: string, siteId: string) {
   });
 }
 
+// ---------- Index coverage (2026-10-29, app/API.md "Index coverage") ----------
+const indexingKey = (siteId: string) => [...qk.site(siteId), 'indexing'] as const;
+
+/** The Indexing page in one answer; `status: 'unreadable'` when the engine's data could not be read (the page says so). */
+export function useIndexing(orgId: string, siteId: string) {
+  return useQuery({
+    queryKey: indexingKey(siteId),
+    queryFn: () => api<IndexingData | { status: 'unreadable'; error: string }>(`/api/orgs/${orgId}/sites/${siteId}/data/indexing`),
+    placeholderData: keepPreviousData,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+}
+
+/** One page of a group's addresses (only when the group is opened past its first 25). */
+export function useIndexingPages(orgId: string, siteId: string, q: { lane: string; action: string; cause: string; page: number } | null) {
+  return useQuery({
+    queryKey: [...indexingKey(siteId), 'pages', q],
+    queryFn: () =>
+      api<IndexPagesPage & { status: 'ok' | 'unreadable' }>(
+        `/api/orgs/${orgId}/sites/${siteId}/data/indexing/pages?${new URLSearchParams({ lane: q!.lane, action: q!.action, cause: q!.cause, page: String(q!.page), pageSize: '25' })}`,
+      ),
+    enabled: !!q,
+    placeholderData: keepPreviousData,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+}
+
+/** What happened to one page over time (read when its row is opened). */
+export function useIndexingHistory(orgId: string, siteId: string, url: string | null) {
+  return useQuery({
+    queryKey: [...indexingKey(siteId), 'history', url],
+    queryFn: () => api<{ status: 'ok' | 'unreadable'; history: IndexHistoryEntry[] }>(`/api/orgs/${orgId}/sites/${siteId}/data/indexing/history?url=${encodeURIComponent(url!)}`),
+    enabled: !!url,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+}

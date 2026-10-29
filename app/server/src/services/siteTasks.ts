@@ -1,12 +1,24 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import {
   cleanDomain,
   deriveSiteTasks,
+  indexingCauseOfKey,
+  indexingCauseReadings,
+  indexingPageFixed,
+  INDEXING_CHECK_MAX_URLS,
+  INDEXING_FETCHES_PAGES,
+  INDEXING_NEEDS_SITEMAP,
+  isSitemapIndex,
+  n8nSiteId,
   robotsBlocked,
   safeJson,
+  samePageUrl,
+  sitemapLocs,
   siteTaskPayload,
   type AiGrowthRow,
+  type IndexPageRow,
+  type IndexRunRow,
   type AiVisibilityRow,
   type SiteTask,
   type SiteTaskCheck,
@@ -19,7 +31,7 @@ import { requireVerified, type SiteAccess } from '../auth/access';
 import { db, schema } from '../db';
 import type { OrgRow, SiteRow, SiteTaskRow } from '../db/schema';
 import { badRequest, HttpError, notFound } from '../lib/errors';
-import { siteRows } from '../n8n/client';
+import { rows as n8nRows, siteRows } from '../n8n/client';
 import { audit } from './audit';
 import { fetchPublicOnce, fetchPublicText } from './verify';
 
@@ -51,7 +63,7 @@ const s = (v: unknown) => (v == null ? '' : String(v));
  */
 export async function engineReadings(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow, 'id' | 'domain'>): Promise<SiteTaskInputs> {
   const d = site.domain;
-  const [growth, vis, full] = await Promise.all([
+  const [growth, vis, full, indexing] = await Promise.all([
     siteRows<AiGrowthRow>('aiGrowth', d, { sortBy: 'checked_at:desc', max: 1 }).catch(() => [] as AiGrowthRow[]),
     siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:desc', max: 10 }).catch(() => [] as AiVisibilityRow[]),
     db.query.reports.findFirst({
@@ -59,6 +71,7 @@ export async function engineReadings(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow
       orderBy: desc(schema.reports.receivedAt),
       columns: { payload: true, receivedAt: true },
     }),
+    indexingReading(d),
   ]);
   const g = growth[0];
   const inx = g ? ((safeJson<P>(s(g.submitted_json), {}).indexnow ?? {}) as P) : {};
@@ -87,7 +100,33 @@ export async function engineReadings(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow
     reclaim: rp && full
       ? { receivedAt: full.receivedAt.toISOString(), items: arrOf(rp.reclaim).map((r) => ({ brokenUrl: s(r.broken_url), redirectTo: s(r.redirect_to), links: Number(r.links) || 0, domains: Array.isArray(r.domains) ? r.domains.map(String) : [] })) }
       : null,
+    indexing,
   };
+}
+
+/** the most site-fix page rows one website's steps read (the steps list 25 pages a cause; the count beyond the cap says "at least") */
+const INDEXING_READ_MAX = 1500;
+
+/**
+ * Index coverage (2026-10-29): the engine's daily index check, as the steps need it: its newest run (when it read the website) and the
+ * pages only the client can fix, grouped by cause. Two small reads by the engine's site id (the table is keyed by it); rows of another
+ * domain that shares the id are dropped (engineIdCollides). A failure is null: a step already stored keeps its last state, nothing else
+ * changes, and the other steps still read.
+ */
+async function indexingReading(domain: string): Promise<SiteTaskInputs['indexing']> {
+  const sid = n8nSiteId(domain);
+  const mine = <T extends { domain?: string }>(xs: T[]) => xs.filter((r) => !r.domain || cleanDomain(r.domain) === cleanDomain(domain));
+  try {
+    const [runs, pages] = await Promise.all([
+      n8nRows<IndexRunRow>('indexRuns', { filters: [{ columnName: 'site_id', condition: 'eq', value: sid }], sortBy: 'run_at:desc', max: 1 }),
+      n8nRows<IndexPageRow>('indexPages', { filters: [{ columnName: 'site_id', condition: 'eq', value: sid }, { columnName: 'action', condition: 'eq', value: 'site_fix' }], max: INDEXING_READ_MAX }),
+    ]);
+    const run = mine(runs)[0];
+    if (!run?.run_at) return null;
+    return { runAt: String(run.run_at), causes: indexingCauseReadings(mine(pages)) };
+  } catch {
+    return null;
+  }
 }
 
 /** two payloads alike whatever their key order (Postgres jsonb stores keys in its own order) */
@@ -222,8 +261,118 @@ async function checkRedirect(domain: string, payload: Record<string, unknown>): 
   return { ok: false, reached: true, message: `The old address still answers ${first.status}.` };
 }
 
+/** A website's sitemap addresses, read once for a check: robots.txt `Sitemap:` lines, else /sitemap.xml; an index is followed for at most
+ *  5 child sitemaps. null: no sitemap could be read (a sitemap cause is then not decided by the app; the engine's reading decides). */
+async function sitemapUrls(domain: string): Promise<Set<string> | null> {
+  const d = cleanDomain(domain);
+  const robots = await fetchPublicText(`https://${d}/robots.txt`, 256 * 1024).catch(() => null);
+  const listed = robots && robots.status === 200 ? [...robots.text.matchAll(/^\s*sitemap:\s*(\S+)/gim)].map((m) => m[1].replace(/^http:\/\//i, 'https://')) : [];
+  const roots = [...new Set([...listed.filter((u) => onSite(u, d)).slice(0, 3), `https://${d}/sitemap.xml`])];
+  const out = new Set<string>();
+  let read = false;
+  // one round per level, each in parallel (the whole check must fit inside 45 s): the roots, then at most 5 child sitemaps of an index
+  const level = async (urls: string[]): Promise<string[]> => {
+    const answers = await Promise.all(urls.map((u) => fetchPublicText(u, 4 * 1024 * 1024).catch(() => null)));
+    const children: string[] = [];
+    for (const r of answers) {
+      if (!r || r.status !== 200) continue;
+      read = true;
+      const locs = sitemapLocs(r.text);
+      if (isSitemapIndex(r.text)) children.push(...locs.filter((u) => onSite(u, d)).map((u) => u.replace(/^http:\/\//i, 'https://')));
+      else for (const u of locs) out.add(u);
+    }
+    return children;
+  };
+  const children = await level(roots);
+  if (children.length) await level([...new Set(children)].slice(0, 5));
+  return read ? out : null;
+}
+
+/**
+ * Index coverage (2026-10-29): the app's own check of one indexing step. Opens at most 10 of its pages on the website's own host (the
+ * safe fetcher, https, public addresses, size cap; the headers only for X-Robots-Tag), reads the sitemap once where the cause needs it
+ * and robots.txt for a robots block. Done only when every page it opened is fixed. A page that did not answer means the website did not
+ * answer: nothing is recorded (the SITE_TASKS.md rule).
+ */
+async function checkIndexing(domain: string, payload: Record<string, unknown>): Promise<CheckOutcome> {
+  const cause = indexingCauseOfKey(`indexing:${str(payload.cause)}`);
+  const urls = (Array.isArray(payload.urls) ? payload.urls : []).map(String).map((u) => u.replace(/^http:\/\//i, 'https://')).filter((u) => /^https:\/\//i.test(u) && onSite(u, domain)).slice(0, INDEXING_CHECK_MAX_URLS);
+  if (!cause || !urls.length) return { ok: false, reached: true, message: 'None of the listed pages is on your website, so there is nothing we can check.' };
+  // the sitemap and the pages are read at the same time (one check must fit inside 45 s)
+  const sitemapRead = INDEXING_NEEDS_SITEMAP.has(cause) ? sitemapUrls(domain).catch(() => null) : Promise.resolve(null);
+  const pagesRead = INDEXING_FETCHES_PAGES.has(cause) ? fetchAllPages(urls) : Promise.resolve(null);
+  const [sitemap, answers] = await Promise.all([sitemapRead, pagesRead]);
+  if ((cause === 'not_in_sitemap' || cause === 'indexed_not_in_sitemap') && !sitemap) return { ok: false, reached: true, message: `We could not read a sitemap at https://${cleanDomain(domain)}/sitemap.xml or in your robots.txt.` };
+  const inSitemap = (u: string): boolean | null => (sitemap ? [...sitemap].some((x) => samePageUrl(x, u)) : null);
+  if (cause === 'robots_blocked') {
+    const url = `https://${cleanDomain(domain)}/robots.txt`;
+    const r = await fetchPublicText(url, 512 * 1024).catch(() => null);
+    if (!r) return { ok: false, reached: false, message: `We could not open ${url} (no answer from the website).` };
+    if (r.status >= 500) return { ok: false, reached: true, message: `robots.txt answers ${r.status}. Google reads a server error as "do not crawl anything".` };
+    const found = r.status >= 200 && r.status < 300 && !/<html/i.test(r.text.slice(0, 500));
+    const blocked = found ? robotsBlocked(r.text, ['Googlebot'], urls.map(shortPath)) : [];
+    if (!blocked.length) return { ok: true, reached: true, message: `robots.txt lets Google read ${urls.length === 1 ? 'the page' : `all ${urls.length} pages we checked`}.` };
+    return { ok: false, reached: true, message: `robots.txt still blocks Google from ${blocked.slice(0, 3).map((x) => `${x.path} (${x.rule})`).join('; ')}${blocked.length > 3 ? ` and ${blocked.length - 3} more` : ''}.` };
+  }
+  const results: { fixed: boolean; why: string }[] = [];
+  if (answers) {
+    const silent = urls.filter((_, i) => !answers[i]);
+    if (silent.length) return { ok: false, reached: false, message: `We could not open ${silent[0]}${silent.length > 1 ? ` and ${silent.length - 1} more` : ''} (no answer from the website).` };
+    urls.forEach((u, i) => results.push(indexingPageFixed(cause, answers[i]!, inSitemap(u))));
+  } else {
+    for (const u of urls) results.push(indexingPageFixed(cause, { url: u, status: 200, finalUrl: u, redirectStatus: 0, text: '' }, inSitemap(u)));
+  }
+  const left = results.filter((r) => !r.fixed);
+  const total = Number(payload.total) || urls.length;
+  const more = total > urls.length ? ` We opened the first ${urls.length} of ${total}; the daily index check reads the others.` : '';
+  if (!left.length) return { ok: true, reached: true, message: `${urls.length === 1 ? results[0].why : `All ${urls.length} pages we checked are fixed.`}${more}` };
+  return { ok: false, reached: true, message: `${left.length} of ${urls.length} still to fix: ${left.slice(0, 3).map((r) => r.why).join(' ')}${left.length > 3 ? ` And ${left.length - 3} more.` : ''}` };
+}
+
+/** The pages of a step, four at a time (ten pages at 10 s each must fit inside the 45 s cap of one check); a page with no answer is null. */
+async function fetchAllPages(urls: string[]): Promise<(Awaited<ReturnType<typeof fetchIndexPage>>)[]> {
+  const answers: Awaited<ReturnType<typeof fetchIndexPage>>[] = new Array(urls.length).fill(null);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(4, urls.length) }, async () => {
+      while (next < urls.length) {
+        const i = next++;
+        answers[i] = await fetchIndexPage(urls[i]);
+      }
+    }),
+  );
+  return answers;
+}
+
+/** One page of an indexing step, read the way the check needs it (status after redirects, the first hop's status, X-Robots-Tag). */
+async function fetchIndexPage(url: string): Promise<{ url: string; status: number; finalUrl: string; redirectStatus: number; text: string; xRobotsTag?: string | string[] } | null> {
+  const r = await fetchPublicText(url, 512 * 1024, 4, { headers: true }).catch(() => null);
+  if (!r) return null;
+  return { url, status: r.status, finalUrl: r.finalUrl, redirectStatus: r.firstStatus ?? 0, text: r.text, xRobotsTag: r.headers?.['x-robots-tag'] };
+}
+
+/** The one check of a step's kind. An exhaustive switch: a kind added without its check does not compile (it used to fall through to the
+ *  redirect check). */
+function checkOf(domain: string, kind: SiteTaskKind, payload: Record<string, unknown>): Promise<CheckOutcome> {
+  switch (kind) {
+    case 'indexnow':
+      return checkIndexnow(domain, payload);
+    case 'ai_crawlers':
+      return checkCrawlers(domain, payload);
+    case 'redirect':
+      return checkRedirect(domain, payload);
+    case 'indexing':
+      return checkIndexing(domain, payload);
+    default: {
+      const never: never = kind;
+      // a row of a kind this build does not know (written by a newer one): nothing is read and nothing recorded
+      return Promise.resolve({ ok: false, reached: false, message: `Unknown step ${String(never)}.` });
+    }
+  }
+}
+
 export function runSiteTaskCheck(domain: string, kind: SiteTaskKind, payload: Record<string, unknown>): Promise<CheckOutcome> {
-  const run = kind === 'indexnow' ? checkIndexnow(domain, payload) : kind === 'ai_crawlers' ? checkCrawlers(domain, payload) : checkRedirect(domain, payload);
+  const run = checkOf(domain, kind, payload);
   let timer: NodeJS.Timeout | undefined;
   const late = new Promise<CheckOutcome>((resolve) => {
     timer = setTimeout(() => resolve({ ok: false, reached: false, message: `${cleanDomain(domain)} took too long to answer.` }), CHECK_DEADLINE_MS);
@@ -389,21 +538,31 @@ async function tick(log: Log, opts: { sites?: number; checks?: number }): Promis
       log.warn({ err: String(err), site: site.id }, 'site tasks could not be read');
     }
   }
-  const due = await db
-    .select({ row: schema.siteTasks, domain: schema.sites.domain, siteId: schema.sites.id })
-    .from(schema.siteTasks)
-    .innerJoin(schema.sites, eq(schema.sites.id, schema.siteTasks.siteId))
-    .where(
-      and(
-        isNull(schema.siteTasks.skippedAt),
-        isNotNull(schema.sites.verifiedAt),
-        // a paused website is not read every day (its steps keep their last state)
-        eq(schema.sites.trackingStatus, 'active'),
-        or(isNull(schema.siteTasks.lastCheckAt), lt(schema.siteTasks.lastCheckAt, new Date(now - DAY))),
-      ),
-    )
-    .orderBy(sql`${schema.siteTasks.lastCheckAt} asc nulls first`, asc(schema.siteTasks.createdAt))
-    .limit(opts.checks ?? 60);
+  // Index coverage (2026-10-29): the tick's budget stays fair. The other kinds take their turn first; indexing steps (each opens up to ten
+  // pages) get what is left, at most a third of the budget, so a website with many indexing steps never starves the IndexNow, crawler and
+  // redirect checks of every other website.
+  const budget = opts.checks ?? 60;
+  const dueOf = (kinds: 'others' | 'indexing', limit: number) =>
+    limit <= 0
+      ? Promise.resolve([] as { row: SiteTaskRow; domain: string; siteId: string }[])
+      : db
+          .select({ row: schema.siteTasks, domain: schema.sites.domain, siteId: schema.sites.id })
+          .from(schema.siteTasks)
+          .innerJoin(schema.sites, eq(schema.sites.id, schema.siteTasks.siteId))
+          .where(
+            and(
+              isNull(schema.siteTasks.skippedAt),
+              isNotNull(schema.sites.verifiedAt),
+              // a paused website is not read every day (its steps keep their last state)
+              eq(schema.sites.trackingStatus, 'active'),
+              or(isNull(schema.siteTasks.lastCheckAt), lt(schema.siteTasks.lastCheckAt, new Date(now - DAY))),
+              kinds === 'indexing' ? eq(schema.siteTasks.kind, 'indexing') : ne(schema.siteTasks.kind, 'indexing'),
+            ),
+          )
+          .orderBy(sql`${schema.siteTasks.lastCheckAt} asc nulls first`, asc(schema.siteTasks.createdAt))
+          .limit(limit);
+  const others = await dueOf('others', budget);
+  const due = [...others, ...(await dueOf('indexing', Math.min(Math.ceil(budget / 3), budget - others.length)))];
   let checked = 0;
   for (const d of due) {
     if (inFlight.has(d.siteId)) continue;
@@ -421,7 +580,7 @@ async function tick(log: Log, opts: { sites?: number; checks?: number }): Promis
 }
 
 /** A callback that brings new engine readings (AI growth, AI visibility, backlinks): store the website's steps from them. */
-export const SITE_TASK_STAGES: ReadonlySet<string> = new Set(['ai_growth', 'ai_visibility', 'backlinks']);
+export const SITE_TASK_STAGES: ReadonlySet<string> = new Set(['ai_growth', 'ai_visibility', 'backlinks', 'index_coverage']);
 export async function afterSiteTaskCallback(org: OrgRow, site: SiteRow, log?: Log): Promise<void> {
   synced.set(site.id, Date.now());
   const st = await stateOf(org, site);
