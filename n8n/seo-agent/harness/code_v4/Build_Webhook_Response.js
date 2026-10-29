@@ -47,7 +47,7 @@ return [{
     qa_not_ready: !!d.qa_not_ready, qa_label: d.qa_label || null, qa_reasons: d.qa_reasons || [], qa_quality: d.qa_quality || null,
     qa_next_step: d.qa_next_step || null, qa_owner_edits: d.qa_owner_edits || [],
     qa_delivery_status: d.qa_delivery_status || null, qa_client_questions: d.qa_client_questions || [], qa_grade: d.qa_grade || null,   // H1 (2026-10-27): for the app's approval and questions (H3)
-    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],
+    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [], qa_second_read: d.qa_second_read || null,   // W0-H (section 158)
     ...(() => {   // W0-B (section 155): the page-run context's grading fields, so the final version is judged like the page run
       if (!(d.article_markdown || d.page_markdown)) return { page_run: null };
       let pb = {}, cq = {}; try { pb = $('Parse Brief').first().json || {}; } catch (e) { pb = {}; }

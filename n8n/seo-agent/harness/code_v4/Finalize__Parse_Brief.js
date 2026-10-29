@@ -47,6 +47,7 @@ const FA = (() => {
 //   PF.split / PF.join         a page as its head (meta lines) + sections (s0 = H1 and introduction, s1.. = each H2); lossless
 //   PF.fix(md, ctx)            the deterministic fixes, run before every quality check (no model, cannot invent anything)
 //   PF.classify(qa, md, ctx)   BLOCKING (facts, trust, legal, a cut page) vs ADVISORY (length, coverage, structure, style)
+//   PF.weakFigures / reviewed  W0-H (Fix 3b): a figure whose only source is weak, and the blind second read's problems, as soft blockers
 //   PF.score / PF.better       ONE comparison for every candidate draft: hard blockers, then soft blockers, then advisory distance
 //   PF.plan(md, cls, qa, ctx)  the section-targeted edit job: only the sections with a problem, each with its own problem list
 //   PF.parseSections / merge   the editor's answer (one block per section) merged into the page, every other byte kept
@@ -99,7 +100,7 @@ const PF = (() => {
       'CLAIMS: say what ' + biz + ' does, offers, has done, holds or guarantees only when the business facts, the author profile, the case studies or its own pages state it. Write methods, steps and checklists as advice to the reader ("a sound migration starts with an inventory of ..."), never as "we do" or "our process". The call to action invites the reader to get in touch the way the facts say; it never promises a deliverable, a timeline, a price or a result that is not on file.',
       'NEVER: invented testimonials, reviews, quotes, client names, results, guarantees, certifications, team details or numbers about the business. A figure about the world is quoted exactly as a cited source states it, and the source is a page this run read.',
       'PAGE TYPE (' + (S(p.page_type) || kind) + '): ' + PT_TARGETS[kind].text + '.',
-      'WHAT BLOCKS PUBLISHING: an unsupported statement about the business, a figure its source does not state, a bracket in the text, a dead link, a wrong brand name, copied text, a fake testimonial or guarantee, a page cut off before its end. Everything else (length, term coverage, headings, tables, readability) is advice.'
+      'WHAT BLOCKS PUBLISHING: an unsupported statement about the business, a figure its source does not state, a market, adoption, cost or compliance figure whose only source is a vendor or agency blog, a bracket in the text, a dead link, a wrong brand name, copied text, a fake testimonial or guarantee, a page cut off before its end. Everything else (length, term coverage, headings, tables, readability) is advice.'
     ];
     return { version: 1, band, kind, h2_range: PT_TARGETS[kind].h2, business: biz, length_text, text: rules.join('\n') };
   };
@@ -423,6 +424,43 @@ const PF = (() => {
       const quote = m[1].trim(); if (O && O.includes(quote.toLowerCase().slice(0, 60))) continue; out.push({ quote: quote.slice(0, 200), who: m[2], text: m[0] }); }
     return out; };
   const W = (s) => clean(S(s));
+  // W0-H (2026-10-29, page-quality PLAN Fix 3b, R4 G9 / G18, REVIEW_EVIDENCE H1): a market, adoption, cost or compliance figure whose ONLY
+  // source is a page with no independent authority (Content QA's tier "weak": a vendor's or agency's blog, a listicle, an unknown site).
+  // Run 3299 put two such figures live (a market share from an agency blog, a company count from a tracker) after the Critic called both
+  // high; they weighed 0.25 of advice. Each one is now a soft blocker: the editor gets "rewrite the sentence without the number" and, if
+  // the figure is still there at the end, the system's own neutral rewrite takes the sentence out. Only what the page links is judged: a
+  // sentence with one strong source (official, research house, major press, vendor documentation) is fine, and a link whose tier this run
+  // never measured is not guessed (advice beats a wrong block). A year, a small count ("3 steps") or a standard's number is not a figure.
+  const FIGURE = /(?:\b(?:AED|USD|SAR|QAR|KWD|BHD|OMR|EGP|PKR|INR|EUR|GBP|ZAR|Dhs?)\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:thousand|million|billion|trillion|mn|bn|k|m|b)\b)?|[$€£₹]\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:thousand|million|billion|trillion|mn|bn|k|m|b)\b)?|\b\d[\d,]*(?:\.\d+)?\s?(?:%|percent\b|per cent\b)|\b\d[\d,]*(?:\.\d+)?\s?(?:thousand|million|billion|trillion|mn|bn)\b|(?<!\b(?:ISO|IEC|EN|BS|SOC|PCI|IAS|IFRS|ASC|Article|Section|Law|Decree|No\.?)\s?(?:\/IEC\s?)?)\b\d{1,3}(?:,\d{3})+\b|(?<!\b(?:ISO|IEC|EN|BS|SOC|PCI|IAS|IFRS|ASC|Article|Section|Law|Decree|No\.?)\s?(?:\/IEC\s?)?)\b(?!(?:19|20)\d{2}\b)\d{4,}\b)/i;
+  const FIGURE_TOPIC = /\bmarket|\bshare\b|\bindustr|\brevenue|\bvalued?\b|\bworth\b|\bcagr\b|\bgrow|\bsize\b|\bforecast|\bspend|\bcompan(?:y|ies)\b|\bbusinesses\b|\borgani[sz]ations?\b|\bfirms?\b|\benterprises?\b|\bcustomers?\b|\busers?\b|\bclients?\b|\bsmes?\b|\badopt|\buse[sd]?\b|\busing\b|\bdeploy|\bimplement|\bcost|\bprice|\bpricing|\bfees?\b|\bbudget|\bsav(?:e|es|ed|ing|ings)\b|\broi\b|\binvest|\bfines?\b|\bpenalt|\bdeadline|\bmandat|\bvat\b|\btax|\bregulat|\blaws?\b|\blegal|\bcompl(?:y|ies|iance|iant)\b|\be-?invoic|\bthreshold|\brequire|\bauthorit|\bministry|\bdecree/i;
+  const weakFigures = (md, qa0, ctx) => {
+    const qa = qa0 || {}; const c = ctx || {}; const tiers = new Map();
+    for (const x of [].concat(qa.outbound_links || [], Array.isArray(qa.sources_cited) ? qa.sources_cited : [])) if (x && x.url && x.tier) tiers.set(keyOf(x.url), S(x.tier));
+    if (!tiers.size) return [];   // no tier measured for this draft (an older check): not judged here
+    const d = S(c.domain).replace(/^www\./, ''); const own = (h) => !!d && (h === d || h.endsWith('.' + d));
+    const sp = split(md); const body = S(md).slice(sp.head.length); const out = []; const seen = new Set();
+    for (const line of body.split('\n')) {
+      const l = line.trim(); if (!l || /^#{1,6}\s/.test(l) || /^\s*\|?\s*:?-{2,}/.test(l) || /^\[Image:/i.test(l)) continue;
+      for (const s of (/^\|/.test(l) ? [l] : sentencesOf(l))) {
+        const links = [...s.matchAll(/\[([^\[\]]+)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], host: hostOf(m[2]) })).filter(x => !own(x.host));
+        if (!links.length || !links.every(x => tiers.get(keyOf(x.url)) === 'weak')) continue;
+        const txt = plain(s); const f = txt.match(FIGURE); if (!f || !FIGURE_TOPIC.test(txt)) continue;
+        if (seen.has(s)) continue; seen.add(s);
+        out.push({ sentence: s, figure: f[0].trim(), hosts: [...new Set(links.map(x => x.host))] }); } }
+    return out; };
+  // W0-H: are these words on the page? Markdown, case, punctuation and spacing aside; a quote cut with "..." needs every piece it kept.
+  // A quote that cannot be found is not shown as a problem (REVIEW_EVIDENCE: the 3299 Critic called live links "not confirmed")
+  const normQ = (t) => S(t).replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`>#|]+/g, ' ').toLowerCase().replace(/[^\p{L}\p{N}%$&]+/gu, ' ').replace(/\s+/g, ' ').trim();
+  const onPage = (quote, md) => { const page = normQ(md); const parts = S(quote).split(/\.{3}|\u2026/).map(normQ).filter(x => x.length >= 8);
+    return parts.length > 0 && parts.every(x => page.includes(x)); };
+  // W0-H: one wording for a problem the second read found; the quoted words are what Finalize looks for to know whether it is still there
+  const reviewText = (r) => 'A second read of the page found a problem at "' + plain(S(r.location)).replace(/"/g, "'").slice(0, 140) + '": ' + plain(S(r.issue)).replace(/[.;:]+$/, '').slice(0, 260);
+  // add the second read's gating problems to a classification (enforce mode only; in shadow mode they are reported, never counted)
+  const reviewed = (cls, rr) => { const R = rr || {}; if (R.mode !== 'enforce' || !Array.isArray(R.gates) || !R.gates.length) return cls;
+    const have = new Set(cls.blocking.filter(b => b.code === 'review').map(b => b.location));
+    const add = R.gates.filter(g => g && g.location && !have.has(S(g.location))).map(g => ({ code: 'review', text: W(reviewText(g)), tier: 'soft', location: S(g.location), kind: S(g.kind) }));
+    const blocking = cls.blocking.concat(add);
+    return { ...cls, blocking, soft: blocking.filter(b => b.tier === 'soft').length }; };
   const classify = (qa0, md, ctx) => {
     const qa = qa0 || {}; const c = ctx || {}; const blocking = [], advisory = [];
     const B = (code, text, tier, extra) => blocking.push({ code, text: W(text), tier, ...(extra || {}) });
@@ -453,6 +491,11 @@ const PF = (() => {
     const guar = (qa.warnings || []).find(w => /^Contains a guarantee claim/.test(S(w)));
     if (guar) { const m = S(guar).match(/"([^"]{5,200})"/); B('guarantee', 'A guarantee nothing on file states' + (m ? ': "' + m[1] + '"' : ''), 'soft', { quote: m ? m[1] : '' }); }
     for (const t of testimonials(md, c.own_text)) B('testimonial', 'A testimonial nothing on file carries: "' + t.quote.slice(0, 100) + '" (' + t.who + ')', 'soft', { text: t.text });
+    // W0-H (Fix 3b): a market, adoption, cost or compliance figure whose only source has no independent authority (see weakFigures)
+    for (const w of weakFigures(md, qa, c)) B('weak_figure', 'A figure whose only source has no independent authority (' + w.hosts.join(', ') + '): "' + plain(w.sentence).slice(0, 160) + '"', 'soft', { sentence: w.sentence, figure: w.figure, hosts: w.hosts });
+    // W0-H (Fix 3b): what the blind second read of the delivered page found that a reader would be misled by (PF.reviewed adds them; a
+    // check that carries its own record of that read, as a later classify may, counts them the same way)
+    for (const r of (((qa.critic_reread || {}).mode === 'enforce' && (qa.critic_reread || {}).gates) || [])) B('review', reviewText(r), 'soft', { location: S(r.location), kind: S(r.kind) });
     // advisory: never blocks, weighted by how far the page is from its target
     const words0 = Number(qa.main_content_words) || 0; const LB = qa.length_band || null;
     const low = LB ? Number(LB.low) : Math.round((Number(qa.target_word_count) || 0) * 0.8), high = LB ? Number(LB.high) : Math.round((Number(qa.target_word_count) || 0) * 1.25);
@@ -509,6 +552,8 @@ const PF = (() => {
       else if (b.code === 'statistic') add(at(b.stat), 'The number "' + b.stat + '" has no source: cite one of the SOURCES YOU MAY CITE that states it, or rewrite the sentence without it', 2);
       else if (b.code === 'guarantee' && b.quote) add(at(b.quote.slice(0, 40)), 'Remove the guarantee or reword it so it promises nothing: "' + b.quote + '"', 2);
       else if (b.code === 'testimonial') add(at(b.text), 'Remove this testimonial: nothing on file says a client said it', 3);
+      // W0-H (Fix 3b): rewrite without the number (the reader keeps the point, not a figure nobody independent stands behind)
+      else if (b.code === 'weak_figure') add(at(b.sentence), 'The figure "' + b.figure + '" rests only on ' + (b.hosts || []).join(', ') + ', a source with no independent authority: rewrite the sentence without the number (keep the point it makes), or cite one of the SOURCES YOU MAY CITE that is an official body, a research house or major press and states it', 2);
       else if (b.code === 'copied') { const ps = ((qa.originality || {}).failing || {}).passages || []; for (const p of ps.slice(0, 3)) add(at(S(p.text).slice(0, 60)) || related(p.text), 'This passage repeats another page word for word; rewrite it in our own words, order and examples: "' + S(p.text).slice(0, 160) + '"', 3); }
     }
     const advCodes = new Set(cls.advisory.map(a => a.code));
@@ -601,6 +646,7 @@ const PF = (() => {
       else if (b.code === 'off_topic') md = take(b, deleteSection(md, b.heading));
       else if (b.code === 'guarantee' && b.quote) { const i = md.indexOf(b.quote.slice(0, 60)); if (i >= 0) md = take(b, { md: removeAt(md, i, Math.min(60, b.quote.length)), done: true }); }
       else if (b.code === 'testimonial') { const r = removeText(md, b.text); md = take(b, r); }
+      else if (b.code === 'weak_figure') { const i = md.indexOf(b.sentence); if (i >= 0) md = take(b, { md: removeAt(md, i, b.sentence.length), done: true }); }   // W0-H: the sentence goes with its number
     }
     // [Price] and other masks the quality check left go with their sentence too
     for (let g = 0; g < 40; g++) { const bs = bracketsIn(md); if (!bs.length) break; const b = bs[0]; md = removeAt(md, b.at, b.token.length); removed.push({ code: 'bracket', sentence: b.token, how: 'removed' }); }
@@ -759,7 +805,9 @@ const PF = (() => {
     meta: 'write a meta description of 120 to 155 characters that says what the page answers',
     claim: 'delete the statement or confirm it in your business facts', figure: 'take out the figure or cite the page that states it',
     statistic: 'take out the number or cite the page that states it', bracket: 'fill in or delete the bracket', dead_link: 'replace or remove the link',
-    off_topic: 'delete the section', guarantee: 'delete the guarantee', testimonial: 'delete the testimonial'
+    off_topic: 'delete the section', guarantee: 'delete the guarantee', testimonial: 'delete the testimonial',
+    weak_figure: 'rewrite the sentence without the number, or cite an official body, a research house or major press that states it',   // W0-H
+    review: 'correct or remove the words the second read quoted, or check them against a source you trust'   // W0-H
   };
   const deliver = (cls, opts) => {
     const o = opts || {};
@@ -783,6 +831,8 @@ const PF = (() => {
       if (b.code === 'off_topic') return new RegExp('^#{2,4}\\s+' + escRe(S(b.heading).replace(/^#+\s*/, '').trim()) + '\\s*$', 'm').test(t);
       if (b.code === 'guarantee') return !!b.quote && t.includes(b.quote.slice(0, 60));
       if (b.code === 'testimonial') return t.includes(S(b.text));
+      if (b.code === 'weak_figure') return t.includes(S(b.sentence));   // W0-H
+      if (b.code === 'review') return !b.location || onPage(b.location, t);   // W0-H: still there while its quoted words are
       return true; });
     const brand = cls.blocking.find(b => b.code === 'brand');
     return { ...cls, blocking: brand ? left.concat([brand]) : left, soft: left.filter(b => b.tier === 'soft').length }; };
@@ -803,7 +853,7 @@ const PF = (() => {
       internal_links: links, own_text: S(o.own_text || [p.business_facts, p.case_facts_text, p.proof_context].filter(Boolean).join(' ')), termRe: o.termRe || null,
       critique: o.critique || null, qa_marks: o.qa_marks || [], qa_figure_marks: o.qa_figure_marks || [] }; };
   return { EDIT_MAX, contract, bandOf, kindOf, split, join, span, removeAt, removeText, tidy, neutralSentence, bracketsIn, questionFor, fix, meta, metaProblem, fieldCheck, unmark, caseLike, brandHits, testimonials,
-    classify, score, protect, better, plan, parseSections, merge, unlinkDead, deleteSection, neutralize, questions, deliver, residual, ctxOf, ACTION, prefillOf, prefillProblem, neutralIn, factKey, clean, words, plain, hostOf, keyOf, overlap,
+    classify, weakFigures, reviewed, reviewText, onPage, score, protect, better, plan, parseSections, merge, unlinkDead, deleteSection, neutralize, questions, deliver, residual, ctxOf, ACTION, prefillOf, prefillProblem, neutralIn, factKey, clean, words, plain, hostOf, keyOf, overlap,
     anchorAt, slotOf, slotIn, appendedIn, sentencesOf };
 })();
 // H3 (2026-10-28, page review; docs/content-quality-2026-10-27): "Make the final version". `POST /webhook/seo-page-finalize` takes a page the

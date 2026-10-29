@@ -132,7 +132,7 @@
    "model_node": "Claude \u2014 Copywriter",
    "node": "Copywriter",
    "streaming": true,
-   "template_chars": 11422,
+   "template_chars": 12395,
    "think_model": 3277
   },
   {
@@ -399,7 +399,7 @@
    "model_node": "Claude \u2014 Strategy Brief",
    "node": "Strategy Brief",
    "streaming": true,
-   "template_chars": 15344,
+   "template_chars": 16155,
    "think_model": 2458
   },
   {
