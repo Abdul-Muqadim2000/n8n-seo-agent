@@ -9,6 +9,9 @@ import {
   cmsPage,
   cmsReadiness,
   deliveryOf,
+  DUPLICATE_DECISION_KEY,
+  duplicatePagesOf,
+  duplicateReasonProblem,
   factOf,
   FACT_DECISION_LABEL,
   FINALIZE_STALE_MINUTES,
@@ -40,6 +43,8 @@ import {
   type FactAnswers,
   type FinalizeResult,
   type NeedsYouItem,
+  type PageRunContext,
+  type DuplicateDecision,
   type PageAnswer,
   type PageReviewSummary,
   type PageReviewView,
@@ -90,10 +95,19 @@ export function answersFor(all: Record<string, PageAnswer> | null | undefined, o
   const out: Record<string, PageAnswer> = {};
   const prefix = `${reportId}/`;
   for (const [k, v] of Object.entries(all ?? {})) {
+    if (k.startsWith('@')) continue;   // W0-B: a decision of the whole review (DUPLICATE_DECISION_KEY), not an answer of one version
     if (reportId === originalId ? !k.includes('/') : k.startsWith(prefix)) out[reportId === originalId ? k : k.slice(prefix.length)] = v;
   }
   return out;
 }
+
+/** W0-B (owner decision D2): the client's answer to "this website already has a page for the same search", kept once for the whole review. */
+export function duplicateDecisionOf(all: Record<string, PageAnswer> | null | undefined): PageAnswer | null {
+  const a = (all ?? {})[DUPLICATE_DECISION_KEY];
+  return a && typeof a.text === 'string' && a.text.trim() ? a : null;
+}
+/** The decision as the engine reads it (FinalizeBody.duplicate_decision). */
+export const duplicateDecisionBody = (a: PageAnswer | null): DuplicateDecision | null => (a ? { choice: 'differs', reason: a.text } : null);
 
 interface Loaded {
   report: ReportRow;
@@ -216,7 +230,10 @@ export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewVie
     fin = { status: 'failed', stale: false };
   }
   const baseAnswers = answersFor(row?.answers, l.original.id, base.id);
-  const need = finalizeNeedOf({ answers: baseAnswers, clientMarkdown: row?.clientMarkdown ?? null, clientSavedAt: row?.clientSavedAt ?? null, since: row?.finalReportId ? (row.finalStartedAt ?? null) : null, status: fin.status });
+  const decision = duplicateDecisionOf(row?.answers);
+  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row?.clientMarkdown ?? null, clientSavedAt: row?.clientSavedAt ?? null, since: row?.finalReportId ? (row.finalStartedAt ?? null) : null, status: fin.status });
+  // W0-B (D2): the website's page this one duplicates, while that blocker is open on the delivered page, and what the client decided
+  const dupPages = duplicatePagesOf(obj(l.original.payload));
   const questions = questionsOf(payload);
   const open = openQuestions(questions, answers, facts);
   const publish = await publishState(a.org.id, l);
@@ -251,6 +268,13 @@ export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewVie
     stage: reviewStage({ delivery, openQuestions: open.length, finalize: { status: fin.status }, isFinal, approved: !!row?.approvedAt, publish: publish.status }),
     isFinal,
     finalOf: isFinal ? l.original.id : null,
+    duplicate: dupPages.length
+      ? {
+          pages: dupPages,
+          decision: decision ? { choice: 'differs', reason: decision.text, at: decision.at, by: decision.by ?? null } : null,
+          rewrite: { keyword: str(obj(l.original.payload).keyword) || str(obj(obj(l.original.payload).meta).primary_keyword), pageType: str(obj(obj(l.original.payload).meta).page_type), country: str(obj(l.original.payload).country) },
+        }
+      : null,
   };
   return { ...view, people: await peopleOf(reviewPersonIds(view)) };
 }
@@ -356,6 +380,36 @@ export async function putAnswers(a: OrgAccess, req: FastifyRequest | null, repor
   const parsed = answersSchema.safeParse(body ?? {});
   if (!parsed.success) throw validationError(parsed.error);
   return saveAnswers(a, req, await loadReview(a.org.id, reportId), parsed.data.answers, false);
+}
+
+/**
+ * W0-B (owner decision D2): "this website already has a page for the same search". The page is published only as an update of that page
+ * (the report offers a page run that rewrites it, quoted and charged as a page) or with the client's reason, recorded here, sent with the
+ * next final version and shown on it; the grade keeps its limit for fit. `choice: null` takes the reason back.
+ */
+export const decisionSchema = z.object({ choice: z.enum(['differs']).nullable(), reason: z.string().max(2000).optional() });
+
+export async function putDecision(a: OrgAccess, req: FastifyRequest | null, reportId: unknown, body: unknown): Promise<PageReviewView> {
+  const parsed = decisionSchema.safeParse(body ?? {});
+  if (!parsed.success) throw validationError(parsed.error);
+  const l = await loadReview(a.org.id, reportId);
+  if (l.row?.approvedAt) throw conflict('This page is approved: its decisions can no longer change.', 'approved');
+  const answers = { ...(l.row?.answers ?? {}) };
+  if (parsed.data.choice === null) {
+    if (!(DUPLICATE_DECISION_KEY in answers)) return reviewView(a, l);
+    delete answers[DUPLICATE_DECISION_KEY];
+  } else {
+    if (!duplicatePagesOf(obj(l.original.payload)).length) throw badRequest('This page has no other page of your website for the same search, so there is nothing to decide.');
+    const reason = plainWords(parsed.data.reason ?? '').replace(/\s+/g, ' ').trim();
+    const why = duplicateReasonProblem(reason);
+    if (why) throw badRequest(why);
+    answers[DUPLICATE_DECISION_KEY] = { questionId: DUPLICATE_DECISION_KEY, factKey: '', decision: 'answer', text: reason, at: new Date().toISOString(), by: a.user.id };
+  }
+  const row = await ensureRow(a.org.id, l);
+  const [saved] = await db.update(schema.pageReviews).set({ answers, updatedAt: new Date() }).where(eq(schema.pageReviews.id, row.id)).returning();
+  l.row = saved!;
+  await audit(req, a.org.id, { action: 'page.duplicate_decision', target: { type: 'report', id: l.original.id, label: str(obj(l.original.payload).keyword) || l.original.title }, details: { choice: parsed.data.choice ?? 'cleared' } });
+  return reviewView(a, l);
 }
 
 /** Every unanswered question that has a suggestion, answered with it in one click (a stored fact is not asked, so not answered). */
@@ -470,7 +524,8 @@ export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, re
   if (st.status === 'running') throw conflict('The final version is being made now. It appears here in a minute or two.', 'finalize_running');
   const base = baseOf(l);
   const baseAnswers = answersFor(row.answers, l.original.id, base.id);
-  const need = finalizeNeedOf({ answers: baseAnswers, clientMarkdown: row.clientMarkdown, clientSavedAt: row.clientSavedAt, since: row.finalReportId ? row.finalStartedAt : null, status: st.status });
+  const decision = duplicateDecisionOf(row.answers);
+  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row.clientMarkdown, clientSavedAt: row.clientSavedAt, since: row.finalReportId ? row.finalStartedAt : null, status: st.status });
   if (!need.needed) throw conflict(need.reason, 'finalize_not_needed');
   const quote = await finalizeQuote();
   const keyword = str(obj(base.payload).keyword) || str(obj(obj(base.payload).meta).primary_keyword);
@@ -516,6 +571,9 @@ export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, re
     answers: baseAnswers,
     businessFacts: l.site.businessFacts,
     facts: (l.site.factAnswers ?? {}) as FactAnswers,
+    // W0-B (PLAN Fix 2): the page run's blockers and research come from the ORIGINAL report, never the final version being improved
+    original: obj(l.original.payload),
+    duplicateDecision: decision && duplicatePagesOf(obj(l.original.payload)).length ? duplicateDecisionBody(decision) : null,
   }) };
   const work = runFinalize({ orgId: org.id, siteId: l.site.id, rowId: row.id, runId: run.id, base, original: l.original, requestId, body, log: req?.log ?? null });
   if (opts.wait) await work;
@@ -540,7 +598,7 @@ export async function runFinalize(o: { orgId: string; siteId: string; rowId: str
   const answeredIds = (Array.isArray(o.body.answers) ? o.body.answers : []).map((a) => str(obj(a).id)).filter(Boolean);
   const storedKeys = (Array.isArray(o.body.stored_fact_keys) ? o.body.stored_fact_keys : []).map((k) => String(k));
   const result = { ...outcome.result, client_questions: carryOpenQuestions(questionsOf(obj(o.base.payload)), outcome.result.client_questions ?? [], answeredIds, storedKeys) };
-  const payload = finalReportPayload(obj(o.base.payload), result, { originalReportId: o.original.id, requestId: o.requestId });
+  const payload = finalReportPayload(obj(o.base.payload), result, { originalReportId: o.original.id, requestId: o.requestId, pageRun: (o.body.page_run as PageRunContext | undefined) ?? null });
   const d = deliveryOf(payload);
   const cost = Number((payload.run_ledger as P).ai_usd) + Number((payload.run_ledger as P).dataforseo_usd);
   const keyword = str(payload.keyword) || str(obj(payload.meta).primary_keyword);

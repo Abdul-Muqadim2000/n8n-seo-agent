@@ -921,6 +921,23 @@ stored fact's `by`) mapped to the person's name, else e-mail, else "a team membe
   the final version is stored as a new `content` report (`finalReportPayload`: the page package with the final Markdown, its safe HTML, the
   engine's status, grade and remaining questions, its own cost in `run_ledger`), the run completes with the engine's cost (charged up to the
   quote by the cost sync) and the client version is cleared (it is part of the final version). Any other answer fails the run (not charged).
+  W0-B (2026-10-29, page-quality PLAN Fix 2): `FinalizeBody.page_run` is the page-run context of the ORIGINAL report (`pageRunOf`, never the
+  final version being improved): the gating fields `qa_blocking`, `duplicate_targets`, `verdict`, `score`, `score_withheld`, `page_type`,
+  `verdict_acknowledged`, `copied_passages`, `length_points` and `missing` (gating fields the stored report lacks; reports from before the
+  blocking list are read from their gate and originality check), plus the grading fields of the callback's `page_run` (`length_band`,
+  `coverage_target`, `terms`, `facts`, `sources_cited`, `style_guide`, `site_urls`, `serp_shapes`, `regulatory_facts`). The engine keeps every
+  page-run blocker it cannot measure again open (a duplicate page until the client decides, copied passages until they are gone), never calls a
+  page ready without the blocking fields, and lists a missing grading field as advice "Not checked". The final version stores the context as
+  `page_run_context` (a second finalize sends the same one) and the engine's `decision` as `finalize_decision`; an `update` decision sets
+  `meta.target_url` / `suggested_url` / `slug` to the page it replaces. `FinalizeBody.duplicate_decision` `{ choice: 'differs', reason }` is
+  the client's saved reason (below).
+- `PUT …/review/decision` (member, 30/min) `{ choice: 'differs' | null, reason? }` (W0-B, owner decision D2) — "this website already has a page
+  for the same search": the client's reason (20 to 600 characters, `duplicateReasonProblem`) for publishing this page beside that one, kept once
+  for the whole review (in `page_reviews.answers` under `@duplicate_page`, never shown as an answer) and sent with the next final version, which
+  then shows it and keeps the grade's limit for fit; `null` takes it back. 400 when the delivered page has no open duplicate-page blocker, 409
+  `approved` once the page is approved. Audited `page.duplicate_decision`. `PageReviewView.duplicate` is `{ pages, decision, rewrite }` while that
+  blocker is open (`rewrite`: the Write a page form's values for a page run that rewrites the existing page at its own address, quoted and
+  charged as a page), else `null`.
 - `POST …/review/approve` (member) `{ versionReportId? }` — records who approved which version (default: the final version when there is one,
   else the delivered page) and audits `page.approved`. 409 `not_ready` for a page that is not ready (its first blocking reason) or that the CMS
   rule refuses. Publishing then goes through the CMS routes above or "I published it" on the approved report, unchanged.

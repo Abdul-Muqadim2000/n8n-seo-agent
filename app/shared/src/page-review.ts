@@ -337,6 +337,124 @@ export interface FinalizeAnswer {
   section: string;
 }
 
+/**
+ * W0-B (2026-10-29, page-quality PLAN Fix 2, REVIEW_CODE H2, owner decision D2; n8n/seo-agent/harness/README.md "PRC contract"): the
+ * page-run context of a delivered page, sent with every finalize so the final version keeps the page run's blockers and is judged with
+ * its research. Finalize 3336 graded the final version of page 3299 against itself and dropped "this website already has a page for the
+ * same search": it said Ready at 100.
+ * Gating fields come from the ORIGINAL report (never the final version, whose blocking list is its own); reports delivered before the
+ * blocking list existed (2026-10-28) are read from what they carry: the gate the page passed or failed and the originality check's
+ * duplicate pages and copied passages. `missing` names a gating field the stored report does not have: without the blocking list or the
+ * duplicate check nothing can say the page is ready. Grading fields come from the callback's `page_run` (page runs from W0-B on); a
+ * missing one is advice "not checked" in the engine, never a block.
+ */
+export interface PageRunContext {
+  qa_blocking: PageDeliveryItem[] | null;
+  duplicate_targets: { url: string; title: string; keyword_words_shared_pct: number | null }[] | null;
+  verdict: string | null;
+  score: number | null;
+  score_withheld: boolean;
+  page_type: string;
+  verdict_acknowledged: boolean;
+  /** the passages the first check found repeated from another page (the copied-text blocker stays until none is left) */
+  copied_passages: string[];
+  /** the length points (of 15) the page run measured against the pages that rank, for reports without a length band */
+  length_points: number | null;
+  /** gating fields the stored report does not have */
+  missing: string[];
+  content_request_id: string;
+  [grading: string]: unknown;
+}
+
+const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts', 'regulatory_topics'] as const;
+
+/** The page-run context of a stored content payload (the original report; a final version keeps its own copy in `page_run_context`). */
+export function pageRunOf(payload: P | null | undefined): PageRunContext {
+  const p = payload ?? {};
+  const kept = obj(p.page_run_context);
+  if (Object.keys(kept).length && Array.isArray(kept.missing)) return kept as PageRunContext;
+  const meta = obj(p.meta);
+  const quality = obj(p.qa_quality ?? meta.quality);
+  const orig = meta.originality && typeof meta.originality === 'object' ? obj(meta.originality) : null;
+  const missing: string[] = [];
+  const dups = orig && Array.isArray(orig.duplicate_targets)
+    ? arr(orig.duplicate_targets)
+        .map(obj)
+        .map((d) => ({ url: s(d.url), title: s(d.title), keyword_words_shared_pct: num(d.keyword_words_shared_pct) }))
+        .filter((d) => /^https?:\/\//i.test(d.url))
+        .slice(0, 10)
+    : null;
+  if (!dups) missing.push('duplicate_targets');
+  // the passages a failing originality check found (the source it failed on, else every overlap over the threshold)
+  const threshold = num(orig?.threshold_pct) ?? 15;
+  const failing = obj(orig?.failing ?? orig?.worst);
+  const overlaps = arr(orig?.top_overlaps).map(obj);
+  const failingPages = orig?.passed === false ? (Object.keys(failing).length ? [failing] : overlaps.filter((o) => (num(o.overlap_pct) ?? 0) >= threshold)) : [];
+  const copied_passages = [...new Set(failingPages.flatMap((o) => arr(o.passages).map((x) => s(obj(x).text) || s(x)).filter((t) => t.split(/\s+/).length >= 6)))].slice(0, 20);
+  // the page run's blocking list; a report from before it existed (2026-10-28) is read from the gate it passed or failed and its
+  // originality check: the duplicate page and copied text are the blockers a final check cannot see again, everything else it measures again
+  const listed = Array.isArray(p.qa_blocking) ? p.qa_blocking : Array.isArray(quality.blocking) ? quality.blocking : null;
+  let qa_blocking: PageDeliveryItem[] | null = listed ? items(listed) : null;
+  const gated = typeof p.qa_not_ready === 'boolean' || typeof p.qa_publishable === 'boolean' || typeof quality.not_ready === 'boolean' || typeof meta.publishable === 'boolean';
+  if (!qa_blocking && gated && orig) {
+    qa_blocking = [];
+    if (dups && dups.length)
+      qa_blocking.push({ code: 'duplicate_page', text: `This website already has a page for the same search: ${dups.slice(0, 2).map((d) => d.url).join(', ')}. Publish this text as an update of that page, or tell us how the new page differs` });
+    if (orig.passed === false) qa_blocking.push({ code: 'copied', text: 'Part of the text repeats another page word for word' });
+  }
+  if (!qa_blocking) missing.push('qa_blocking');
+  const pr = obj(p.page_run);
+  const grading: P = {};
+  for (const k of PRC_GRADING) if (pr[k] !== undefined && pr[k] !== null) grading[k] = pr[k];
+  const g = obj(p.qa_grade ?? quality.grade ?? meta.grade);
+  return {
+    qa_blocking,
+    duplicate_targets: dups,
+    verdict: s(p.verdict) || null,
+    score: num(p.score),
+    score_withheld: p.score_withheld === true,
+    page_type: s(meta.page_type) || s(p.recommended_page),
+    verdict_acknowledged: p.verdict_acknowledged === true,
+    copied_passages,
+    length_points: num(obj(g.breakdown).length),
+    missing,
+    content_request_id: s(pr.content_request_id) || s(p.request_id),
+    ...grading,
+  };
+}
+
+/** The client's answer to "this website already has a page for the same search" (owner decision D2), sent with the finalize. */
+export interface DuplicateDecision {
+  choice: 'update' | 'differs';
+  /** update: the address of the page this text replaces (one the first check named) */
+  url?: string;
+  /** differs: how this page differs, in the client's words (recorded and shown; the fit limit stays in the grade) */
+  reason?: string;
+}
+/** Where the decision is kept on the review row (with the answers, under a key no question id can take). */
+export const DUPLICATE_DECISION_KEY = '@duplicate_page';
+export const DUPLICATE_REASON_MIN = 20;
+export const DUPLICATE_REASON_MAX = 600;
+/** '' when the reason can be sent, else what is wrong with it (the engine refuses the same). */
+export function duplicateReasonProblem(reason: string): string {
+  const t = plainWords(reason).replace(/\s+/g, ' ').trim();
+  if (t.length < DUPLICATE_REASON_MIN) return `Say in at least ${DUPLICATE_REASON_MIN} characters how this page differs from the one your website has.`;
+  if (t.length > DUPLICATE_REASON_MAX) return `Keep it under ${DUPLICATE_REASON_MAX} characters.`;
+  if (/[<>]/.test(t)) return 'Use plain text (no < or >).';
+  return '';
+}
+
+/** The website's page(s) a delivered page duplicates, while that blocker is open on it (the original's list, else the version's own). */
+export function duplicatePagesOf(payload: P | null | undefined): { url: string; title: string }[] {
+  const pr = pageRunOf(payload);
+  const open = (pr.qa_blocking ?? []).some((b) => b.code === 'duplicate_page');
+  if (!open) return [];
+  const fromTargets = (pr.duplicate_targets ?? []).map((d) => ({ url: d.url, title: d.title }));
+  if (fromTargets.length) return fromTargets.slice(0, 3);
+  const text = (pr.qa_blocking ?? []).find((b) => b.code === 'duplicate_page')?.text ?? '';
+  return [...new Set(text.match(/https?:\/\/[^\s,]+[^\s,.]/g) ?? [])].slice(0, 3).map((url) => ({ url, title: '' }));
+}
+
 export interface FinalizeBody {
   mode: 'finalize';
   request_id: string;
@@ -357,6 +475,10 @@ export interface FinalizeBody {
   stored_fact_keys: string[];
   /** the report the page came from (for the engine's log only) */
   content_request_id: string;
+  /** W0-B: the page-run context of the ORIGINAL report (its blockers travel to the final version) */
+  page_run: PageRunContext;
+  /** W0-B (D2): the client's answer to a duplicate-page blocker, when given */
+  duplicate_decision?: DuplicateDecision;
 }
 
 export function finalizeBody(o: {
@@ -370,6 +492,10 @@ export function finalizeBody(o: {
   answers: Record<string, PageAnswer>;
   businessFacts: string;
   facts: FactAnswers;
+  /** W0-B: the ORIGINAL report's payload (the page run's blockers and research); the base payload when this is the original */
+  original?: P;
+  /** W0-B (D2): the client's decision on a duplicate-page blocker */
+  duplicateDecision?: DuplicateDecision | null;
 }): FinalizeBody {
   const p = o.payload ?? {};
   const meta = obj(p.meta);
@@ -398,7 +524,9 @@ export function finalizeBody(o: {
     business_facts: o.businessFacts.slice(0, 2000),
     business_facts_kv: f.business_facts_kv,
     stored_fact_keys: f.stored_fact_keys,
-    content_request_id: s(p.request_id),
+    content_request_id: s(obj(o.original ?? p).request_id) || s(p.request_id),
+    page_run: pageRunOf(o.original ?? p),
+    ...(o.duplicateDecision ? { duplicate_decision: o.duplicateDecision } : {}),
   };
 }
 
@@ -420,7 +548,11 @@ export interface FinalizeResult {
   grade: P;
   cost: { claude_usd: number; dfs_usd: number; estimated: boolean; model_calls: number };
   /** W0-A (2026-10-29): the meta lines of the final version as the engine checked them (a broken description rebuilt); absent from older engines */
-  meta?: { title?: string; meta_description?: string; slug?: string };
+  meta?: { title?: string; meta_description?: string; slug?: string; target_url?: string };
+  /** W0-B (D2): the client's decision on a duplicate-page blocker, as the engine applied it (null when there was none) */
+  decision?: { code: string; choice: 'update' | 'differs'; url: string; reason: string; pages: string[] } | null;
+  /** W0-B: what the final check knew of the page run (missing fields, blockers kept open, blockers resolved) */
+  page_run?: { received: boolean; gating_missing: string[]; grading_missing: string[]; kept_open: string[]; resolved: string[] };
   error?: string;
 }
 
@@ -502,6 +634,17 @@ export interface PageReviewView {
   isFinal: boolean;
   finalOf: string | null;
   /**
+   * W0-B (owner decision D2): the website already has a page for the same search (the delivered page's open blocker). The page is published
+   * only as an update of that page (`rewrite`: the Write a page form's values for a page run that improves it at its own address) or with
+   * the client's reason (`decision`, sent with the next final version and shown on it). Null when there is no such page. Optional: older
+   * servers do not send it.
+   */
+  duplicate?: {
+    pages: { url: string; title: string }[];
+    decision: { choice: 'differs'; reason: string; at: string; by: string | null } | null;
+    rewrite: { keyword: string; pageType: string; country: string };
+  } | null;
+  /**
    * who did what, by name: every user id this view carries (`approval.approvedBy`, `clientVersion.savedBy`, each answer's and stored
    * fact's `by`) mapped to the person's name, else their e-mail, else "a team member". The UI prints names through `personLabel`,
    * never a raw id.
@@ -526,13 +669,14 @@ export function personLabel(people: Record<string, string> | null | undefined, i
 }
 
 /** Every user id a review view refers to (approved, saved, answered, stored facts), deduplicated. */
-export function reviewPersonIds(v: Pick<PageReviewView, 'approval' | 'clientVersion' | 'answers' | 'questions'>): string[] {
+export function reviewPersonIds(v: Pick<PageReviewView, 'approval' | 'clientVersion' | 'answers' | 'questions'> & Partial<Pick<PageReviewView, 'duplicate'>>): string[] {
   const ids = new Set<string>();
   const add = (id: string | null | undefined) => {
     if (typeof id === 'string' && id) ids.add(id);
   };
   add(v.approval?.approvedBy);
   add(v.clientVersion?.savedBy);
+  add(v.duplicate?.decision?.by);
   for (const a of Object.values(v.answers ?? {})) add(a?.by);
   for (const q of v.questions ?? []) add(q.stored?.by);
   return [...ids];
@@ -879,7 +1023,11 @@ const RUN_ONLY_KEYS = ['cost_usd', 'run_ledger', 'run_cost_estimate_usd', 'run_c
  * The final version's report payload: the delivered page's payload with the final Markdown, its safe HTML, the engine's delivered status,
  * grade and remaining questions, and its own cost.
  */
-export function finalReportPayload(original: P, result: Pick<FinalizeResult, 'markdown' | 'delivery_status' | 'delivery' | 'client_questions' | 'grade' | 'changes' | 'applied' | 'cost' | 'meta'>, o: { originalReportId: string; requestId: string }): P {
+export function finalReportPayload(
+  original: P,
+  result: Pick<FinalizeResult, 'markdown' | 'delivery_status' | 'delivery' | 'client_questions' | 'grade' | 'changes' | 'applied' | 'cost' | 'meta' | 'decision'>,
+  o: { originalReportId: string; requestId: string; pageRun?: PageRunContext | null },
+): P {
   const base: P = {};
   for (const [k, v] of Object.entries(original ?? {})) if (!RUN_ONLY_KEYS.includes(k)) base[k] = v;
   const meta = obj(original?.meta);
@@ -902,6 +1050,9 @@ export function finalReportPayload(original: P, result: Pick<FinalizeResult, 'ma
   // description that cannot be used is never carried onto the final version
   const finalDesc = usableMetaDescription(obj(result.meta).meta_description) || cleanMetaDescription(meta.meta_description);
   const descFields = finalDesc !== s(meta.meta_description) ? { meta_description: finalDesc, meta_description_length: finalDesc.length } : {};
+  // W0-B (D2): published as an update of the website's page for the same search: that page's address and slug
+  const target = s(obj(result.meta).target_url);
+  const targetFields = /^https?:\/\//i.test(target) ? { target_url: target, suggested_url: target, ...(s(obj(result.meta).slug) ? { slug: s(obj(result.meta).slug) } : {}) } : {};
   return {
     ...base,
     request_id: o.requestId,
@@ -920,8 +1071,11 @@ export function finalReportPayload(original: P, result: Pick<FinalizeResult, 'ma
     qa_reasons: reasons,
     qa_owner_edits: [],
     qa_quality: quality,
-    meta: { ...meta, ...descFields, word_count: words, publishable: ready, delivery_status: status, client_questions: questions, grade, quality, ...(score != null ? { content_score: score } : {}) },
+    meta: { ...meta, ...descFields, ...targetFields, word_count: words, publishable: ready, delivery_status: status, client_questions: questions, grade, quality, ...(score != null ? { content_score: score } : {}) },
     finalized_from: o.originalReportId,
+    // W0-B: the page-run context travels with the final version, so a second finalize (or one whose original is gone) keeps its blockers
+    page_run_context: o.pageRun ?? pageRunOf(original),
+    ...(result.decision ? { finalize_decision: result.decision } : {}),
     finalize_changes: arr(result.changes).slice(0, 60),
     finalize_applied: arr(result.applied).slice(0, 200),
     run_ledger: { dataforseo_usd: c.dfs, ai_usd: c.claude, ai_cost_estimated: c.estimated },
