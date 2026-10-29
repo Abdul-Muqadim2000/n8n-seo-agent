@@ -179,7 +179,7 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
       {d.askGoogle.length > 0 && <AskGooglePanel items={d.askGoogle} domain={domain} />}
 
       {d.dropped.length > 0 && (
-        <Panel icon={<TrendingDown />} iconTone="warning" title="Dropped out of Google search" description={`${pages(d.dropped.length)} that were in search before`} flush>
+        <Panel icon={<TrendingDown />} iconTone="warning" title="Dropped out of Google search" description={`${pages(d.dropped.length)} that ${d.dropped.length === 1 ? 'was' : 'were'} in search before`} flush>
           <ul className="divide-y divide-line border-t border-line">
             {d.dropped.map((p) => (
               <PageRow key={p.url} p={p} orgId={orgId} siteId={siteId} member={member} freeze={d.freeze.on} />
@@ -350,6 +350,8 @@ function PageRow({ p, orgId, siteId, member, freeze }: { p: IndexPage; orgId: st
   const facts = [
     p.checkedAt ? `checked ${fmtDay(p.checkedAt)}` : 'not checked yet',
     p.fixSeenAt ? `we saw it fixed on ${fmtDay(p.fixSeenAt)}` : null,
+    // R1 (final browser check): the row says it too, not only its details: Google read it again after the change we saw, problem still there
+    p.fixFailedAt ? `Google read it again on ${fmtDay(p.fixFailedAt)}, after the change we saw, and still sees the problem` : null,
     p.impressions28d ? `${n(p.impressions28d)} impressions in 28 days` : null,
     p.inSitemap ? 'in your sitemap' : 'not in your sitemap',
     p.needsPerson ? 'unchanged after 4 checks: worth a closer look' : null,

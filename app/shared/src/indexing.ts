@@ -679,6 +679,17 @@ function runSitemapsOf(v: unknown): IndexRunSitemaps | null {
   return { submitted: num('submitted'), submittedErrors: num('submitted_errors'), read: n(x.read), partial, checked: x.checked === true ? true : x.checked === false ? false : null, reservation: b(x.reservation) };
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** Final browser check (2026-10-30): a run's day in the words the page uses elsewhere ("29 Oct", "29 Oct, 08:40 UTC"), never an ISO
+ *  string in a client's sentence. UTC, so the server and every browser say the same day. */
+export function indexDayText(iso: string, withTime = false): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return 'an earlier day';
+  const d = new Date(t);
+  const day = `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  return withTime ? `${day}, ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')} UTC` : day;
+}
+
 /** The engine's sentence about a run that failed, in words a client can act on (an internal error message is never shown). */
 function runNoticeText(r: IndexRun): string {
   return indexingNoteText(r.note);
@@ -874,12 +885,12 @@ export function buildIndexingData(input: {
   const askGoogle = pages.filter((p) => p.askGoogle && p.action !== 'leave_out' && !(freeze.on && p.action === 'quality')).sort(byImportance).slice(0, 5);
   const checkedAt = good?.runAt || pages.map((p) => p.checkedAt).filter(Boolean).sort().pop() || null;
   const notice: IndexingData['notice'] = unfinished && !latest?.failed
-    ? { tone: 'info', title: 'The latest check had not finished', text: `The check that started ${unfinished.runAt.slice(0, 16).replace('T', ' ')} UTC had not finished when this page was read, so the figures are from the check before.`, failed: false, accessLost: false, at: unfinished.runAt }
+    ? { tone: 'info', title: 'The latest check had not finished', text: `The check that started ${indexDayText(unfinished.runAt, true)} had not finished when this page was read, so the figures are from the check before.`, failed: false, accessLost: false, at: unfinished.runAt }
     : latest?.failed
     ? {
         tone: 'warning',
         title: latest.accessLost ? 'Our last check could not read Search Console' : latest.sitemaps?.checked === false ? 'The last check did not read this website' : 'Our last check could not read this website',
-        text: `${runNoticeText(latest)}${good ? ` The figures below are from the check of ${good.runAt.slice(0, 10)}.` : ''}`,
+        text: `${runNoticeText(latest)}${good ? ` The figures below are from the check of ${indexDayText(good.runAt)}.` : ''}`,
         failed: true,
         accessLost: latest.accessLost,
         at: latest.runAt,

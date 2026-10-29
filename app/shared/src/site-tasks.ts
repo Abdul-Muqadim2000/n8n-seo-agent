@@ -229,7 +229,7 @@ function indexingDrafts(ix: SiteTaskInputs['indexing'], stored: StoredSiteTask[]
       out.push({
         key,
         kind: 'indexing',
-        engine: { at: c.pendingAt || ix!.runAt, ok: true, by: 'index', message: `Fixed on your site: we saw the change on ${c.pending === 1 ? 'the page' : `all ${c.pending} pages`}. Waiting for Google to read ${c.pending === 1 ? 'it' : 'them'} again.` },
+        engine: { at: c.pendingAt || ix!.runAt, ok: true, by: 'index', message: `Fixed on your site: we saw the change on ${c.pending === 1 ? 'the page' : c.pending === 2 ? 'both pages' : `all ${c.pending} pages`}. Waiting for Google to read ${c.pending === 1 ? 'it' : 'them'} again.` },
         payload: st?.payload ?? { cause: c.cause, urls: [], total: c.pending },
         pendingGoogle: true,
       });
@@ -372,7 +372,7 @@ function presentIndexing(p: Record<string, unknown>, domain: string): Pick<SiteT
   const still = googleStillSees(p);
   return {
     title: info.taskTitle ?? info.label,
-    detail: `${info.meaning} ${info.youDo} ${total} page${total === 1 ? '' : 's'}${more > 0 ? `; the first ${shown.length} are below, every one is on the Indexing page` : ''}.${still ? ` ${googleStillSeesText(still)}` : ''}${pending ? ` We already saw ${pending} more fixed on your site; ${pending === 1 ? 'it waits' : 'they wait'} for Google to read ${pending === 1 ? 'it' : 'them'} again.` : ''}`,
+    detail: `${info.meaning} ${info.youDo} ${total === 1 ? 'It concerns 1 page' : `It concerns ${total} pages`}${more > 0 ? `; the first ${shown.length} are below, every one is on the Indexing page` : ''}.${still ? ` ${googleStillSeesText(still)}` : ''}${pending ? ` We already saw ${pending} more fixed on your site; ${pending === 1 ? 'it waits' : 'they wait'} for Google to read ${pending === 1 ? 'it' : 'them'} again.` : ''}`,
     values: shown.map((u, i) => ({ label: `Page ${i + 1}`, value: u })),
     guide: info.guide ?? 'index-coverage',
     guideVars: { pageUrl: shown[0] ?? '', pagePath: shown[0] ? indexPath(shown[0]) : '' },

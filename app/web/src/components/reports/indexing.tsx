@@ -1,7 +1,7 @@
 // Index coverage (2026-10-29, n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md §5): the daily index check's report. Weekly on Mondays,
 // and the same day when a page drops out of Google search or a Google update starts or ends. Free (Google data only).
 import { ArrowRight, CalendarClock, FileSearch, ListChecks, TrendingDown } from 'lucide-react';
-import { INDEX_ACTION_INFO, INDEX_ACTIONS_NEED_YOU, INDEX_CAUSE_INFO, INDEX_CAUSES, indexInSearchLine, indexingNoteText, indexingReportFailed, indexPath, type IndexAction, type IndexCause, type ReportDetail } from '@seo/shared';
+import { INDEX_ACTION_INFO, INDEX_ACTIONS_NEED_YOU, INDEX_CAUSE_INFO, INDEX_CAUSES, indexDayText, indexInSearchLine, indexingNoteText, indexingReportFailed, indexPath, type IndexAction, type IndexCause, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -13,6 +13,9 @@ const isCause = (c: string): c is IndexCause => (INDEX_CAUSES as readonly string
 const fmt = (v: number | null) => (v == null ? '-' : v.toLocaleString('en-US'));
 /** A18: a cause in words; a code this build does not know is never printed raw */
 const causeLabel = (c: string) => (isCause(c) ? INDEX_CAUSE_INFO[c].label : 'A reason we do not recognise yet');
+/** final browser check: a day as the rest of the app writes it ("29 Oct"), never an ISO string; a status in words, never a raw code */
+const day = (v: unknown) => (str(v) ? indexDayText(str(v)) : '');
+const EVENT_STATUS: Record<string, string> = { rolling_out: 'rolling out', complete: 'finished', changed: 'policy page changed' };
 
 export function IndexCoverageReport({ report }: { report: ReportDetail }) {
   const { org } = useOrgCtx();
@@ -98,7 +101,7 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
                 tone="warning"
                 title={indexPath(str(d.url))}
                 description={str(d.cause) ? causeLabel(str(d.cause)) : 'Reason not known yet'}
-                meta={str(d.at) ? <span className="text-xs text-ink-3">{str(d.at).slice(0, 10)}</span> : undefined}
+                meta={str(d.at) ? <span className="text-xs text-ink-3">{day(d.at)}</span> : undefined}
               />
             ))}
           </ul>
@@ -134,9 +137,9 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
           <ul className="space-y-1.5 text-sm text-ink-2">
             {events.slice(0, 6).map((e) => (
               <li key={`${str(e.title)}-${str(e.started_at)}`}>
-                <span className="text-ink">{str(e.title)}</span> · {str(e.status) === 'rolling_out' ? 'rolling out' : str(e.status) === 'complete' ? 'finished' : str(e.status) || 'announced'}
-                {str(e.started_at) ? ` · from ${str(e.started_at).slice(0, 10)}` : ''}
-                {str(e.ended_at) ? ` to ${str(e.ended_at).slice(0, 10)}` : ''}
+                <span className="text-ink">{str(e.title)}</span> · {EVENT_STATUS[str(e.status)] ?? 'announced'}
+                {str(e.started_at) ? ` · from ${day(e.started_at)}` : ''}
+                {str(e.ended_at) ? ` to ${day(e.ended_at)}` : ''}
               </li>
             ))}
           </ul>

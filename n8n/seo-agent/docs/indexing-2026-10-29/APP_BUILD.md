@@ -242,3 +242,45 @@ finds the noindex is recorded).
 
 Not run: the engine harness (no engine change), the browser pass, `app/scripts/smoke.py`. Not done here: the engine half of R5 (keep the
 exception out of `why`), R2-R4, R6-R8 (engine), A17 (the Indexing tutorial; the guide's new answer and the step's new wording belong in it).
+
+## Final browser check (2026-10-30, before the production deploy)
+
+Branch `feature/indexing` from `97422c3c`, nothing deployed. `app/scripts/ix_indexing_fixture.ts` gained two states: `final` (fix waves 2
+and 3: two pages Google read again after the fix we saw and still sees with the noindex (`fix_failed_at`), a step fixed on the site and
+waiting for Google, six pages marked to ask Google about (five shown), the `indexing:sitemap` step from 2 sitemap errors, a newest run
+that could not check the website (`checked: false`, an internal error in its note), null positions in an update's impact, an update
+rolling out, a redirect error and an unclassified page) and `reserve` (the newest run is a reservation: a check not finished). In `final`
+it also writes the Steps on your website (through `deriveSiteTasks`), the Recommendations (through the server's
+`indexingRecommendations`) and two `index_coverage` reports (normal and failed). `ix_indexing_shots.mjs final` opens 10 views at 1440 and
+375, light and dark (40): the Indexing page in 6 states, the report and the failed report, the Pipeline's Steps on your website and the
+Recommendations, plus the details of a page Google still sees after the fix. Per view it records console errors, failed requests (every
+other read of those pages is answered from fixtures now: billing, portal context, consistency, settings, coming up, issues), overflow, the
+h1, unlabelled buttons and links, low-contrast text, cut-off text and the copy rule (em dash, curly quotes, ellipsis, "we submit" / "we ask
+Google" / "we change your site", indexing promises, internal names, raw codes, `undefined` / `NaN` / `null`).
+
+**Result:** 40 views, no console error, no failed request (non-GETs refused by the fixture server, none sent), no horizontal overflow,
+one h1 on every view ("Indexing", "Index coverage: novaand-demo.com", "Pipeline", "Recommendations"). The audit's contrast hits are the
+blue / ink hero (its colour sits on a layer the script does not read; checked by eye, readable in both themes); its "unlabelled" link is
+the logo (an image with alt text) and its "cut-off" texts are screen-reader-only spans and the user name: none is a defect. Screenshots
+in `shots/` as `<view>-<size>-<theme>-final.png` (desktop light and phone dark of every view, all four of the fix-wave page and of the
+steps, and `indexing-waves-details-desktop-light-final.png`).
+
+**Fixed (wording the screenshots showed wrong; tests fail on `97422c3c`):**
+
+| what | fix | test |
+|---|---|---|
+| Notices said "from the check of 2026-10-29" and "started 2026-10-29 08:40 UTC" | `indexDayText` (shared): "29 Oct", "29 Oct, 08:40 UTC", in UTC | shared `indexing.final.test.ts` (2) |
+| "1 page that were in search before" | "1 page that was" | web `final browser check` |
+| A page Google read again after the fix and still sees with the problem looked like any other "Left out" row (only its details said it) | its row says "Google read it again on <day>, after the change we saw, and still sees the problem" | web `final browser check` |
+| Step: "Fixed on your site: we saw the change on all 2 pages" | "both pages" | shared |
+| Step detail ended "... from these pages. 3 pages." | "It concerns 3 pages." (and "It concerns 1 page.") | shared |
+| Report: ISO days on drop-outs and updates; status "changed" (or any unknown code) printed raw | days in words; "policy page changed", unknown = "announced" | web `final browser check` |
+| Recommendations header: "Every next step the SEO engine sees" (internal name) | "Every next step we see" | browser audit (no "engine" on any view) |
+
+**Checks** (Docker `node:22-bookworm-slim`, `TZ=UTC`): typecheck shared / server / web clean; shared **960 passed** (57 files); server
+**1552 passed, 46 skipped**; web **277 passed** (28 files); web build ok. Not run: `app/scripts/smoke.py`, the engine harness (no engine
+change).
+
+**Left:** the "I've done it, check now" button stays on a step Google still sees after the fix (by design, R1: the click answers 409 with a
+plain explanation); the step's detail is long on a phone. The tutorials backlog row for these wording changes (7.11, 5.9, the
+Recommendations header) is still to add in the video-skills repo.

@@ -212,3 +212,25 @@ describe('fix wave 3: a failed run\'s report (R5)', () => {
     expect(t).toContain('In Google search (last check)');
   });
 });
+
+// Final browser check (2026-10-30, APP_BUILD.md "Final browser check"): wording the screenshots showed wrong
+describe('final browser check: wording', () => {
+  it('the page: "1 page that was", a page Google still sees after the fix says so on its row, days never as ISO strings', () => {
+    const fx = (r: Partial<IndexPageRow>[], runs: Record<string, unknown>[]) => buildIndexingData({ rows: r, runs, events: [], impacts: [], settings });
+    const failedFix = { url: U('/pricing'), lane: 'existing' as const, state: 'not_indexed', cause: 'noindex', action: 'site_fix', fix_failed_at: '2026-10-28T06:00:00Z', inspect_at: '2026-10-28T06:00:00Z', in_sitemap: true };
+    const good = { run_at: '2026-10-28T07:00:00Z', known: 7, inspected: 6, backlog_left: 1 };
+    const t = text(wrap(<Indexing d={fx([...rows, failedFix], [{ run_at: '2026-10-29T09:15:00Z', known: 7, sitemaps_json: JSON.stringify({ checked: false }), note: 'Search Console did not answer.' }, good])} {...props} member />));
+    expect(t).toContain('1 page that was in search before');
+    expect(t).not.toContain('1 page that were');
+    expect(t).toMatch(/Google read it again on 28 Oct(?: 2026)?, after the change we saw, and still sees the problem/);
+    expect(t).toContain('The figures below are from the check of 28 Oct.');
+    const r = text(wrap(<Indexing d={fx(rows, [{ run_at: '2026-10-29T08:40:00Z', sitemaps_json: JSON.stringify({ reservation: true }) }, good])} {...props} member />));
+    expect(r).toContain('The check that started 29 Oct, 08:40 UTC had not finished');
+    expect(`${t} ${r}`).not.toMatch(/20\d\d-\d\d-\d\d/);
+  });
+  it('the report: days in words and every update status in words (never a raw code)', () => {
+    const t = text(renderReport(report('index_coverage', { status: 'complete', summary: { known: 10, indexed: 5, not_indexed: 5, dropped: [{ url: U('/old'), at: '2026-10-27', cause: 'not_found' }], events: [{ title: 'Spam policies', kind: 'policy_doc', status: 'changed', started_at: '2026-10-14' }, { title: 'Something', kind: 'other', status: 'brand_new_status', started_at: '2026-10-10' }, { title: 'August 2026 core update', kind: 'core', status: 'complete', started_at: '2026-08-20', ended_at: '2026-09-04' }], impact: {} }, cost: { usd: 0 } })));
+    for (const s of ['27 Oct', 'Spam policies · policy page changed · from 14 Oct', 'Something · announced', 'August 2026 core update · finished · from 20 Aug to 4 Sep']) expect(t).toContain(s);
+    expect(t).not.toMatch(/20\d\d-\d\d-\d\d|brand_new_status/);
+  });
+});
