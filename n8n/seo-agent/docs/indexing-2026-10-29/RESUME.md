@@ -22,6 +22,12 @@ Engine ix/engine b7f1c201 + ad460974, app ix/app 85b24db5 + 763f8e0e + ff6bc5f0,
 Checks on the merge: harness **13788 passed, 0 failed**; typecheck clean; shared 921, server 1539 (+46 skipped), web 269, web build OK.
 Per-finding status: ENGINE_BUILD.md and APP_BUILD.md, "Fix wave 1" sections.
 
+## Fix wave 2: DONE (2026-10-30 night)
+REVIEW_2.md (30 fixed / 9 partly / 3 regressed + new N1-N13, N-app-1..12). Engine ix/engine 267fae9b..7c34ecce, app ix/app
+1c2e998b..e4fa46fa, merged 18746ebc + 64caa7a4, pushed. Checks in Docker: harness **13844 passed, 0 failed**; typecheck clean; shared 938,
+server 1549 (+46 skipped), web 274, web build OK. New engine columns fix_failed_at, ask_google_at; callback summary failed/checked/note/figures_from.
+Third review (REVIEW_3.md) running at save time: verify wave 2, hunt regressions. Next after it: fix what it confirms, then tutorial + docs, then ask the owner to deploy.
+
 ## (old) In progress at the first save (fix wave 1)
 - Engine fixer working in `…-ix-engine` on ix/engine (E1-E16, X1-X4, X7, X8, X13, X16). Will append "Fix wave 1" to ENGINE_BUILD.md and commit there.
 - App fixer working in `…-ix-app` on ix/app (A1-A27 except A17, X5, X6, X10, X14-X17). Will append "Fix wave 1" to APP_BUILD.md and commit there.
