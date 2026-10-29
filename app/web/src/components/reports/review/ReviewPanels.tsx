@@ -100,7 +100,7 @@ export function ReviewBody({ view, report, publishLink }: { view: PageReviewView
           <a className="font-medium text-accent-text underline-offset-2 hover:underline" href={paths.report(org.id, view.finalOf)}>
             its own report
           </a>
-          .
+          . The downloads on this page are this version&apos;s own files, not the first version&apos;s.
         </Callout>
       )}
       {view.duplicate && view.duplicate.pages.length > 0 && <DuplicateCard view={view} />}

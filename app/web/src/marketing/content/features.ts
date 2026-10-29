@@ -358,6 +358,7 @@ export const features: Feature[] = [
       'Edit the page yourself in the app, headings, paragraphs, lists, tables and links, with a preview, a comparison with the version we delivered, undo and a check before you publish',
       'One click to approve, then send it to your website or publish it yourself and we check it live',
       'A final version is checked with the same research as the first draft, and stays not ready while a problem from the first check is open, such as a page your website already has for the same search',
+      'Your final version comes with its own downloads: the page as a Word file and a PDF, as HTML and Markdown with its meta.json, and the images',
     ],
     steps: [
       { title: 'Decide', body: 'Before anything is written we check the keyword. If our verdict scores it under 50 out of 100, or your website already has a page for the same search, the page waits for your OK: write it anyway, use the search we recommend, or improve the page you have.' },

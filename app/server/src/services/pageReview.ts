@@ -60,6 +60,7 @@ import { assertCredits, siteForecasts } from './billing';
 import { assertBudget, assertPlatformCapacity, lockCompany } from './spend';
 import { audit } from './audit';
 import { emitRunsFailed } from './webhooks';
+import { finalVersionFiles, isImageRow, type StoredFileRow } from './finalFiles';
 
 // H3 (2026-10-28, n8n/seo-agent/docs/content-quality-2026-10-27): the review of a written page. The engine delivers the page with its
 // status (ready / ready with questions / not ready), the grade of the delivered page and every client question (H1). Here the client:
@@ -584,6 +585,10 @@ export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, re
 /** The engine call and what follows it: the final version's report, the run settled, the review linked; or the run failed (not charged). */
 export async function runFinalize(o: { orgId: string; siteId: string; rowId: string; runId: string; base: ReportRow; original: ReportRow; requestId: string; body: P; log: Log | null }): Promise<void> {
   let outcome: ReturnType<typeof interpretFinalize>;
+  const originalFilesP = originalImageRows(o.orgId, o.original.id).catch((err) => {
+    o.log?.warn({ err: String((err as Error)?.message ?? err) }, 'finalize: the first version\'s images could not be read');
+    return [] as StoredFileRow[];
+  });
   try {
     outcome = interpretFinalize(await finalizeCall(o.body, o.orgId, FINALIZE_TIMEOUT_MS));
   } catch (err) {
@@ -598,7 +603,11 @@ export async function runFinalize(o: { orgId: string; siteId: string; rowId: str
   const answeredIds = (Array.isArray(o.body.answers) ? o.body.answers : []).map((a) => str(obj(a).id)).filter(Boolean);
   const storedKeys = (Array.isArray(o.body.stored_fact_keys) ? o.body.stored_fact_keys : []).map((k) => String(k));
   const result = { ...outcome.result, client_questions: carryOpenQuestions(questionsOf(obj(o.base.payload)), outcome.result.client_questions ?? [], answeredIds, storedKeys) };
-  const payload = finalReportPayload(obj(o.base.payload), result, { originalReportId: o.original.id, requestId: o.requestId, pageRun: (o.body.page_run as PageRunContext | undefined) ?? null });
+  const payload0 = finalReportPayload(obj(o.base.payload), result, { originalReportId: o.original.id, requestId: o.requestId, pageRun: (o.body.page_run as PageRunContext | undefined) ?? null });
+  // W0-G (PLAN Fix 7): the final version's own downloads (its HTML / Markdown / meta.json, the PDF and Word file the engine printed, the
+  // first version's images, read before the engine call); a file that cannot be read never stops the final version from being stored
+  const originalFiles = await originalFilesP;
+  const { payload, files } = finalVersionFiles(payload0, obj(outcome.result as unknown).files, originalFiles);
   const d = deliveryOf(payload);
   const cost = Number((payload.run_ledger as P).ai_usd) + Number((payload.run_ledger as P).dataforseo_usd);
   const keyword = str(payload.keyword) || str(obj(payload.meta).primary_keyword);
@@ -632,11 +641,33 @@ export async function runFinalize(o: { orgId: string; siteId: string; rowId: str
         .where(eq(schema.runs.id, o.runId));
       // the client's version is now part of the final version: it is not applied twice
       await tx.update(schema.pageReviews).set({ finalReportId: rep!.id, finalError: null, clientMarkdown: null, clientSavedAt: null, clientSavedBy: null, clientCheck: null, updatedAt: new Date() }).where(eq(schema.pageReviews.id, o.rowId));
+      // W0-G: the final version's downloads, in the same transaction (the report never shows without its files) but behind a savepoint:
+      // files that cannot be stored are logged and never cost the client the final version itself
+      if (files.length)
+        await tx
+          .transaction(async (sp) => {
+            await sp.insert(schema.files).values(files.map((f) => ({ id: f.id, orgId: o.orgId, reportId: rep!.id, field: f.field, kind: f.kind, fileName: f.fileName, mimeType: f.mimeType, size: f.size, data: f.data })));
+          })
+          .catch((err) => o.log?.warn({ err: String((err as Error)?.message ?? err) }, 'finalize: the final version\'s files were not stored'));
     });
   } catch (err) {
     o.log?.error({ err: String((err as Error)?.message ?? err) }, 'finalize result not stored');
     await failFinalize(o.rowId, o.runId, 'The final version arrived but could not be saved. Nothing was charged; try again.');
   }
+}
+
+/** The original report's image rows with their bytes (W0-G): the final version gets copies of them. */
+async function originalImageRows(orgId: string, reportId: string): Promise<StoredFileRow[]> {
+  const head = await db
+    .select({ id: schema.files.id, field: schema.files.field, kind: schema.files.kind, fileName: schema.files.fileName, mimeType: schema.files.mimeType, size: schema.files.size })
+    .from(schema.files)
+    .where(and(eq(schema.files.orgId, orgId), eq(schema.files.reportId, reportId)));
+  const ids = head.filter((f) => isImageRow(f)).map((f) => f.id).slice(0, 12);
+  if (!ids.length) return [];
+  return db
+    .select({ id: schema.files.id, field: schema.files.field, kind: schema.files.kind, fileName: schema.files.fileName, mimeType: schema.files.mimeType, size: schema.files.size, data: schema.files.data })
+    .from(schema.files)
+    .where(and(eq(schema.files.orgId, orgId), inArray(schema.files.id, ids)));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
