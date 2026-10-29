@@ -145,11 +145,23 @@ async function readIndexing(domain: string): Promise<SiteTaskInputs['indexing']>
   const counted = INDEX_SITE_FIX_CAUSES.filter((c) => (good.byCause[c] ?? 0) > 0);
   // a run with no cause counts at all (an older row) is not trusted to say "none": every cause is read then
   const causes = Object.keys(good.byCause).length ? counted : [...INDEX_SITE_FIX_CAUSES];
+  // N-app-2: a cause's read takes only the rows a step is about: `site_fix` (to fix) and `wait` (fixed on the site, waiting for Google),
+  // never the pages of that cause left out on purpose, which could fill the capped read and hide every page to fix. The `wait` read is
+  // skipped when the run counted no page waiting at all.
+  const actions: ('site_fix' | 'wait')[] = Object.keys(good.byAction).length && !(good.byAction.wait > 0) ? ['site_fix'] : ['site_fix', 'wait'];
+  const plan = causes.flatMap((c) => actions.map((a) => ({ c, a })));
   const reads = await Promise.all(
-    causes.map((c) => n8nRows<IndexPageRow>('indexPages', { filters: [bySite, { columnName: 'cause', condition: 'eq', value: c }], sortBy: 'impressions_28d:desc', max: INDEXING_CAUSE_READ_MAX })),
+    plan.map(({ c, a }) =>
+      n8nRows<IndexPageRow>('indexPages', {
+        filters: [bySite, { columnName: 'cause', condition: 'eq', value: c }, { columnName: 'action', condition: 'eq', value: a }],
+        sortBy: 'impressions_28d:desc',
+        max: INDEXING_CAUSE_READ_MAX,
+      }),
+    ),
   );
-  const capped = new Set(causes.filter((_, i) => reads[i].length >= INDEXING_CAUSE_READ_MAX));
-  return { runAt: good.runAt, causes: indexingCauseReadings(mine(reads.flat()), { capped }), sitemap: indexingSitemapReading(runs) };
+  // a read that hit the cap makes its cause incomplete: never "none any more" or "all fixed" from it (A6)
+  const capped = new Set(plan.filter((_, i) => reads[i].length >= INDEXING_CAUSE_READ_MAX).map((x) => x.c));
+  return { runAt: good.runAt, causes: indexingCauseReadings(mine(reads.flat()), { capped, read: causes }), sitemap: indexingSitemapReading(runs) };
 }
 
 /** two payloads alike whatever their key order (Postgres jsonb stores keys in its own order) */
@@ -202,20 +214,44 @@ async function materialize(org: OrgRow, site: SiteRow, st: TaskState, log?: Log)
   const created: string[] = [];
   for (const t of st.tasks) {
     const p = siteTaskPayload(st.inputs, st.stored, t.key);
-    if (!p) continue;
     const row = byKey.get(t.key);
+    // N-app-4: the engine's index reading that decided an indexing step is kept on the row, so a late, failed or missing index read (the
+    // 8 s deadline, an n8n error, days without a good run) leaves the step in its last known state instead of falling back to "to do".
+    // `last_check_at` is not touched: it schedules the app's own daily check, which still runs.
+    const keep = engineIndexReading(t, row);
+    if (!p) {
+      if (row && keep) await db.update(schema.siteTasks).set({ lastCheck: keep, ...(keep.ok ? { doneAt: whenOf(keep.at) } : {}), updatedAt: new Date() }).where(eq(schema.siteTasks.id, row.id));
+      continue;
+    }
     if (!row) {
       const ins = await db
         .insert(schema.siteTasks)
-        .values({ orgId: org.id, siteId: site.id, taskKey: t.key, kind: p.kind, payload: p.payload })
+        .values({ orgId: org.id, siteId: site.id, taskKey: t.key, kind: p.kind, payload: p.payload, ...(keep ? { lastCheck: keep, ...(keep.ok ? { doneAt: whenOf(keep.at) } : {}) } : {}) })
         .onConflictDoNothing()
         .returning({ id: schema.siteTasks.id });
       if (ins.length) created.push(t.key);
-    } else if (t.state === 'todo' && !samePayload(row.payload, p.payload)) {
-      await db.update(schema.siteTasks).set({ payload: p.payload, updatedAt: new Date() }).where(eq(schema.siteTasks.id, row.id));
+      continue;
     }
+    const set: Partial<typeof schema.siteTasks.$inferInsert> = {};
+    if (t.state === 'todo' && !samePayload(row.payload, p.payload)) set.payload = p.payload;
+    if (keep) {
+      set.lastCheck = keep;
+      if (keep.ok) set.doneAt = whenOf(keep.at);
+    }
+    if (Object.keys(set).length) await db.update(schema.siteTasks).set({ ...set, updatedAt: new Date() }).where(eq(schema.siteTasks.id, row.id));
   }
   if (created.length) void checkSiteNow(site.id, log).catch((err) => log?.warn({ err: String(err), site: site.id }, 'site task first check failed'));
+}
+
+/** The engine's index reading that decided an indexing step, when the row does not hold it yet (null: nothing to keep). Only a reading
+ *  newer than the row's own, so an older engine reading never overwrites a newer check of the client's or of the app. */
+const whenOf = (iso: string): Date => (Number.isFinite(Date.parse(iso)) ? new Date(iso) : new Date());
+function engineIndexReading(t: SiteTask, row: SiteTaskRow | undefined): SiteTaskCheck | null {
+  const c = t.lastCheck;
+  if (t.kind !== 'indexing' || !c || c.by !== 'index') return null;
+  const had = row?.lastCheck ?? null;
+  if (had && (had.at > c.at || (had.at === c.at && had.ok === c.ok && had.by === c.by && had.message === c.message))) return null;
+  return c;
 }
 
 /** The website's steps, for the Pipeline, Recommendations, the Overview and the tasks endpoint. */
@@ -236,6 +272,9 @@ export interface CheckOutcome {
   unsure?: boolean;
   /** with reached false: only the engine's reading can decide this step (Search Console's own list of sitemaps) */
   engineOnly?: boolean;
+  /** with reached false (N-app-7): every page we opened is fixed, but the step lists more than we open; the engine's daily reading decides
+   *  the rest, so nothing is recorded (never a "done" for pages nobody checked, never a miss that reopens a step) */
+  partial?: boolean;
 }
 
 const hostOf = (url: string) => cleanDomain(url.match(/^https?:\/\/([^/?#:]+)/i)?.[1] ?? '');
@@ -325,11 +364,13 @@ export const forgetSitemaps = () => sitemapCache.clear();
  */
 async function readSitemap(d: string): Promise<SitemapRead | null> {
   const robots = await fetchPublicText(`https://${d}/robots.txt`, 256 * 1024, 4, { headers: true }).catch(() => null);
-  const listed = robots && robots.status === 200 && robotsFileState(robots.status, robots.text, String(robots.headers?.['content-type'] ?? '')) === 'rules'
-    ? [...robots.text.matchAll(/^\s*sitemap:\s*(\S+)/gim)].map((m) => m[1].replace(/^http:\/\//i, 'https://'))
-    : [];
+  // N-app-11: an answer that ended on another website (a redirect off the host) is not this website's robots.txt
+  const robotsState = robots && onSite(robots.finalUrl, d) ? robotsFileState(robots.status, robots.text, String(robots.headers?.['content-type'] ?? '')) : 'unreadable';
+  const listed = robots && robotsState === 'rules' ? [...robots.text.matchAll(/^\s*sitemap:\s*(\S+)/gim)].map((m) => m[1].replace(/^http:\/\//i, 'https://')) : [];
   const onSiteListed = [...new Set(listed.filter((u) => onSite(u, d)))];
-  let complete = onSiteListed.length === listed.length && onSiteListed.length <= SITEMAP_ROOTS;
+  // N-app-3: the list of sitemaps is known only from a robots.txt read as rules, or one that is not there (404 / 410); a robots.txt that
+  // answered a firewall, a login, a web page, a server error or nothing may name sitemaps we never saw, so /sitemap.xml alone is partial
+  let complete = (robotsState === 'rules' || robotsState === 'none') && onSiteListed.length === listed.length && onSiteListed.length <= SITEMAP_ROOTS;
   const fallback = `https://${d}/sitemap.xml`;
   const roots = [...new Set([...onSiteListed.slice(0, SITEMAP_ROOTS), fallback])];
   const out = new Set<string>();
@@ -342,9 +383,16 @@ async function readSitemap(d: string): Promise<SitemapRead | null> {
       const u = urls[i];
       // /sitemap.xml is only a guess when robots.txt names other sitemaps: its 404 then says nothing
       const guess = level === 0 && u === fallback && !onSiteListed.includes(fallback);
-      if (r && guess && (r.status === 404 || r.status === 410)) continue;
       const xml = r?.text ?? '';
-      if (!r || r.status !== 200 || r.truncated || /\.gz$/i.test(u) || !/<(urlset|sitemapindex)\b/i.test(xml.slice(0, 5000))) {
+      const isXml = /<(urlset|sitemapindex)\b/i.test(xml.slice(0, 5000));
+      // N-app-10: a guessed /sitemap.xml that is not there (404 / 410) or answers a web page (an app shell's 200) is no sitemap at all
+      if (r && guess && (r.status === 404 || r.status === 410 || (r.status === 200 && !isXml && !r.truncated))) continue;
+      // N-app-11: a sitemap that redirected to another website is not this website's list
+      if (r && !onSite(r.finalUrl || u, d)) {
+        complete = false;
+        continue;
+      }
+      if (!r || r.status !== 200 || r.truncated || /\.gz$/i.test(u) || !isXml) {
         complete = false;
         continue;
       }
@@ -392,6 +440,8 @@ async function checkIndexing(domain: string, payload: Record<string, unknown>, o
   const cause = indexingCauseOfKey(`indexing:${str(payload.cause)}`);
   const urls = (Array.isArray(payload.urls) ? payload.urls : []).map(String).map((u) => u.replace(/^http:\/\//i, 'https://')).filter((u) => /^https:\/\//i.test(u) && onSite(u, domain)).slice(0, INDEXING_CHECK_MAX_URLS);
   if (!cause) return { ok: false, reached: true, message: 'This step names no problem we know, so there is nothing we can check.' };
+  // N-app-7: how many pages the step lists in all (its `total`, at least the addresses it carries); our check opens at most 10 of them
+  const listedTotal = Math.max(Number(payload.total) || 0, (Array.isArray(payload.urls) ? payload.urls : []).length, urls.length);
   if (!urls.length) return { ok: false, reached: false, unsure: true, message: 'None of the listed pages is on your website, so there is nothing we can open; the daily index check reads them.' };
   // the sitemap and the pages are read at the same time (one check must fit inside 45 s)
   const sitemapRead = INDEXING_NEEDS_SITEMAP.has(cause) ? sitemapOf(domain, opts) : Promise.resolve(null);
@@ -403,11 +453,14 @@ async function checkIndexing(domain: string, payload: Record<string, unknown>, o
     const url = `https://${cleanDomain(domain)}/robots.txt`;
     const r = await fetchPublicText(url, 512 * 1024, 4, { headers: true }).catch(() => null);
     if (!r) return { ok: false, reached: false, message: `We could not open ${url} (no answer from the website).` };
+    // N-app-11: robots.txt that redirected to another website is not the file Google reads for this one
+    if (!onSite(r.finalUrl, domain)) return { ok: false, reached: false, unsure: true, message: `robots.txt sent us on to another website (${hostOf(r.finalUrl)}), so we could not read the rules Google gets.` };
     const state = robotsFileState(r.status, r.text, String(r.headers?.['content-type'] ?? ''));
     // A16: a robots.txt that answers a login, a firewall, a rate limit or an HTML page tells us nothing about what Google is served
     if (state === 'unreadable') return { ok: false, reached: false, unsure: true, message: `robots.txt answered ${r.status}${r.status === 200 ? ' with a web page instead of the file' : ''}, so we could not read the rules Google gets.` };
     if (state === 'server_error') return { ok: false, reached: true, message: `robots.txt answers ${r.status}. Google reads a server error as "do not crawl anything".` };
     const blocked = state === 'rules' ? robotsBlocked(r.text, ['Googlebot'], urls.map(shortPath)) : [];
+    if (!blocked.length && state === 'rules' && listedTotal > urls.length) return partialOutcome(urls.length, listedTotal, `robots.txt lets Google read the first ${urls.length} pages of ${listedTotal}.`);
     if (!blocked.length) return { ok: true, reached: true, message: state === 'none' ? 'There is no robots.txt rule left that blocks Google (the file answers 404).' : `robots.txt lets Google read ${urls.length === 1 ? 'the page' : `all ${urls.length} pages we checked`}.` };
     return { ok: false, reached: true, message: `robots.txt still blocks Google from ${blocked.slice(0, 3).map((x) => `${x.path} (${x.rule})`).join('; ')}${blocked.length > 3 ? ` and ${blocked.length - 3} more` : ''}.` };
   }
@@ -422,11 +475,22 @@ async function checkIndexing(domain: string, payload: Record<string, unknown>, o
   }
   const left = results.filter((r) => !r.fixed && !r.unknown);
   const unsure = results.filter((r) => r.unknown);
-  const total = Number(payload.total) || urls.length;
-  const more = total > urls.length ? ` We opened the first ${urls.length} of ${total}; the daily index check reads the others.` : '';
-  if (left.length) return { ok: false, reached: true, message: `${left.length} of ${urls.length} still to fix: ${left.slice(0, 3).map((r) => r.why).join(' ')}${left.length > 3 ? ` And ${left.length - 3} more.` : ''}` };
+  const of = listedTotal > urls.length ? ` (we opened ${urls.length} of the ${listedTotal} pages)` : '';
+  if (left.length) return { ok: false, reached: true, message: `${left.length} of ${urls.length} still to fix${of}: ${left.slice(0, 3).map((r) => r.why).join(' ')}${left.length > 3 ? ` And ${left.length - 3} more.` : ''}` };
   if (unsure.length) return { ok: false, reached: false, unsure: true, message: `We could not tell for ${unsure.length} of ${urls.length}: ${unsure[0].why}` };
-  return { ok: true, reached: true, message: `${urls.length === 1 ? results[0].why : `All ${urls.length} pages we checked are fixed.`}${more}` };
+  // N-app-7: the step is done only when every page it lists was checked; otherwise it says how far we got and stays as it is
+  if (listedTotal > urls.length) return partialOutcome(urls.length, listedTotal, `The first ${urls.length} pages of ${listedTotal} are fixed.`);
+  return { ok: true, reached: true, message: urls.length === 1 ? results[0].why : `All ${urls.length} pages are fixed.` };
+}
+
+/** N-app-7: we checked only part of a step's pages and every one of them is fixed. */
+function partialOutcome(checked: number, total: number, lead: string): CheckOutcome {
+  return {
+    ok: false,
+    reached: false,
+    partial: true,
+    message: `${lead} We opened ${checked} of ${total}; the daily index check reads the other ${total - checked} with Google and ticks this step off when none of them still has the problem.`,
+  };
 }
 
 /** The pages of a step, four at a time (ten pages at 10 s each must fit inside the 45 s cap of one check); a page with no answer is null. */
@@ -524,6 +588,7 @@ export async function checkSiteTask(a: SiteAccess, req: FastifyRequest, body: un
   }
   // the website did not answer at all: nothing is recorded (one bad minute must never reopen a done step), the person is asked to retry
   if (!out.reached && out.engineOnly) throw new HttpError(409, out.message, 'engine_reads_it');
+  if (!out.reached && out.partial) throw new HttpError(409, out.message, 'site_partial');
   if (!out.reached && out.unsure) throw new HttpError(409, `We could not confirm it just now, so nothing changed. ${out.message}`, 'site_unsure');
   if (!out.reached) throw new HttpError(503, `Your website did not answer just now, so nothing changed. Try again in a minute. (${out.message})`, 'site_unreachable');
   await recordCheck(row, out, 'you', a.user.name || a.user.email);

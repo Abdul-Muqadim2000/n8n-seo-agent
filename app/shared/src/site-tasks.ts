@@ -250,10 +250,15 @@ function indexingDrafts(ix: SiteTaskInputs['indexing'], stored: StoredSiteTask[]
   return out;
 }
 
-/** A stored step whose cause the newest run lists nowhere any more: done by that run, if it came after the step was stored. */
+/**
+ * A stored step whose cause the newest run lists nowhere any more: done by that run, if it came after the step was stored. Its sentence says
+ * only what the reading shows (fix wave 2, N-app-1 / N-app-2): the engine's rows hold no page of this cause left to fix on the website and
+ * none waiting for Google. It never claims Google's reading of the pages themselves.
+ */
+const INDEXING_NONE_LEFT = 'The daily index check lists no page with this problem left to fix on your website.';
 function storedDone(st: StoredSiteTask, runAt: string): Draft {
   const later = runAt > st.createdAt;
-  return { key: st.key, kind: 'indexing', engine: later ? { at: runAt, ok: true, by: 'index', message: 'Google\'s newest reading lists none of these pages with this problem any more.' } : null, payload: st.payload };
+  return { key: st.key, kind: 'indexing', engine: later ? { at: runAt, ok: true, by: 'index', message: INDEXING_NONE_LEFT } : null, payload: st.payload };
 }
 
 const isSitemapStep = (p: Record<string, unknown>) => str(p.cause) === 'sitemap';
@@ -293,8 +298,8 @@ function doneDetail(d: Draft, domain: string): string {
     case 'indexing': {
       if (isSitemapStep(p)) return 'Search Console lists your sitemap and reports no errors in it. The daily index check keeps reading it.';
       const what = INDEXING_DONE[indexingCauseOf(p)];
-      if (d.pendingGoogle) return `${what} We saw the change on your website; Google shows its older reading until it reads the pages again, usually within a few days, and the daily index check asks it soon.`;
-      if (d.engine?.ok && d.engine.by === 'index') return `Google's newest reading lists none of these pages with this problem any more. The daily index check keeps watching them.`;
+      if (d.pendingGoogle) return `${what} We saw the change on your website; Google shows its older reading until it reads the pages again, usually within a few days. The daily index check looks up Google's reading of them again within a day or two.`;
+      if (d.engine?.ok && d.engine.by === 'index') return `${INDEXING_NONE_LEFT} It keeps watching these pages.`;
       return `${what} The daily index check keeps watching them.`;
     }
     default: {

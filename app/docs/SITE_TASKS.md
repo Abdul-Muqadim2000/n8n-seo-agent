@@ -129,3 +129,19 @@ and how many there are. Every rule above holds:
 - **Rollback**: before reverting the API, delete or skip the `site_tasks` rows with `kind = 'indexing'` (an older build reads them as
   redirect steps).
 
+### Fix wave 2 (2026-10-29, `n8n/seo-agent/docs/indexing-2026-10-29/REVIEW_2.md`)
+
+- **`fix_seen_at` set = fixed on your site, waiting for Google**, whatever the order of `inspect_at` and `fix_seen_at` (the rule shared with
+  the engine; only the engine sets and clears it). The app never reopens a step from such rows, and a done step says only what the reading
+  shows ("The daily index check lists no page with this problem left to fix on your website"), never "Google's newest reading lists none".
+- **A cause's read takes only its `site_fix` and `wait` rows** (sorted by impressions, 200 each); pages of that cause left out on purpose can
+  no longer fill the read, and a cause whose read hit the cap is an incomplete reading, never a done.
+- **The engine's reading is kept on the row** (`last_check` with `by: 'index'`), so a late, failed or missing index read leaves an
+  engine-only step (`indexing:sitemap`, a step done by the engine) in its last known state; `last_check_at` still schedules the own check.
+- **The own check closes a step only when it opened every listed page**; with more than 10 it says "the first 10 of N are fixed", records
+  nothing daily and answers 409 `site_partial` on a click; the engine's reading decides the rest.
+- **Sitemap read**: complete only when robots.txt was read as rules or is not there (404 / 410); a guessed /sitemap.xml that answers a web
+  page is no sitemap (not a partial read); a robots.txt or sitemap that ended on another host is not trusted.
+- **X-Robots-Tag**: `max-snippet:-1, noindex` and the like are directives for every crawler; `otherbot: noindex` alone is not a noindex.
+  Relative and protocol-relative canonicals are resolved against the page address.
+

@@ -279,7 +279,7 @@ export const INDEX_CAUSE_INFO: Record<IndexCause, IndexCauseInfo> = {
 export const INDEX_FIXED_ON_SITE = {
   label: 'Fixed on your site, waiting for Google',
   meaning: 'We saw the change on your website. Google still shows its older reading until it reads the page again, usually within a few days.',
-  weDo: 'We ask Google about these pages again within a day or two, so the reason updates in days, not weeks.',
+  weDo: 'Our daily index check looks up Google\'s reading of these pages again within a day or two, so the reason updates in days, not weeks.',
   youDo: 'Nothing. For an important page you can also ask Google to read it again in Search Console.',
 } as const;
 
@@ -353,7 +353,8 @@ export interface IndexPage {
   inspectedAt: string;
   /** our own last fetch ('' = none) */
   fetchedAt: string;
-  /** FIX_CONTRACT `fix_seen_at`: our fetch saw the site-fix cause gone after Google's last inspection ('' = not fixed / not newer) */
+  /** FIX_CONTRACT `fix_seen_at`: our fetch saw the site-fix cause gone and Google has not confirmed it yet ('' = not fixed). Set and cleared
+   *  by the engine only; while set the page waits for Google, whatever the order of the inspection and the sighting (N4). */
   fixSeenAt: string;
   /** FIX_CONTRACT `ask_google`: a manual "Request indexing" in Search Console is the right next step (at most 5 a site a week) */
   askGoogle: boolean;
@@ -565,8 +566,13 @@ function displayAction(raw: string, c: IndexCause | 'other', st: IndexState): In
   return a;
 }
 
-/** Our fetch saw the fix after Google's last reading (the engine clears `fix_seen_at` when the problem is seen again). */
-const fixSeen = (fix: string, inspected: string): string => (fix && (!inspected || fix > inspected) ? fix : '');
+/**
+ * Fix wave 2 (N4 / N-app-1, the shared rule with the engine): a non-empty `fix_seen_at` means "fixed on your site, waiting for Google",
+ * whatever the order of `inspect_at` and `fix_seen_at`. The engine re-inspects such a page within a day or two while it keeps the first
+ * sighting, so Google's newer inspection is the normal case, not a sign the fix is gone. Only the engine sets and clears it: it clears it
+ * when Google reports the cause gone, or when Google crawled after the fix and still reports the cause (the row is then `site_fix` again).
+ */
+const fixSeen = (fix: string): string => fix.trim();
 
 export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const cause = s(r.cause);
@@ -574,7 +580,7 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const st: IndexState = isState(state) ? state : 'unknown';
   const c: IndexCause | 'other' = isCause(cause) ? cause : cause ? 'other' : state === 'indexed' ? 'indexed' : 'other';
   const linkFrom = json<P[]>(r.link_from, []);
-  const fixSeenAt = st === 'indexed' ? '' : fixSeen(s(r.fix_seen_at), s(r.inspect_at));
+  const fixSeenAt = st === 'indexed' ? '' : fixSeen(s(r.fix_seen_at));
   const action = displayAction(s(r.action), c, st);
   return {
     url: s(r.url),
@@ -665,9 +671,18 @@ function runSitemapsOf(v: unknown): IndexRunSitemaps | null {
 
 /** The engine's sentence about a run that failed, in words a client can act on (an internal error message is never shown). */
 function runNoticeText(r: IndexRun): string {
-  const t = r.note.replace(/\b(inventory|diagnosis|sitemap reading) failed:[^.]*\.?/gi, 'Something went wrong on our side while reading this website; we try again on the next daily check.').trim();
+  return indexingNoteText(r.note);
+}
+/** N-app-6: the engine's note about a check (a run row's or a report's), internal error text replaced; '' stays the default sentence. */
+export function indexingNoteText(note: unknown): string {
+  const t = s(note).slice(0, 1500).replace(/\b(inventory|diagnosis|sitemap reading) failed:[^.]*\.?/gi, 'Something went wrong on our side while reading this website; we try again on the next daily check.').trim();
   return t || 'This website could not be checked today.';
 }
+/** N-app-6 / N12: the index_coverage callback's summary says the run could not check the website (`failed: true` or `checked: false`). */
+export const indexingReportFailed = (summary: unknown): boolean => {
+  const m = summary && typeof summary === 'object' ? (summary as Record<string, unknown>) : {};
+  return m.failed === true || m.failed === 'true' || m.checked === false || m.checked === 'false';
+};
 
 export function googleEventOf(r: Partial<GoogleEventRow>): GoogleEvent {
   const kind = s(r.kind);
@@ -931,9 +946,14 @@ export interface IndexingCauseReading {
   complete: boolean;
 }
 
-/** The engine's rows of the site-fix causes grouped by cause (the input of the indexing steps). Rows of other actions are ignored. */
-export function indexingCauseReadings(rows: readonly Partial<IndexPageRow>[], opts: { capped?: ReadonlySet<string> } = {}): IndexingCauseReading[] {
+/**
+ * The engine's rows of the site-fix causes grouped by cause (the input of the indexing steps). Rows of other actions are ignored.
+ * `read`: the causes the caller read (N-app-2): each gets a reading even when its rows hold no open or pending page, so a cause whose read
+ * hit the cap is an INCOMPLETE reading (never "none any more") rather than no reading at all, which a stored step would read as done.
+ */
+export function indexingCauseReadings(rows: readonly Partial<IndexPageRow>[], opts: { capped?: ReadonlySet<string>; read?: readonly IndexSiteFixCause[] } = {}): IndexingCauseReading[] {
   const by = new Map<IndexSiteFixCause, { open: IndexPage[]; pending: IndexPage[] }>();
+  for (const c of opts.read ?? []) if (isSiteFixCause(c)) by.set(c, { open: [], pending: [] });
   for (const p of rows.map(indexPageOf)) {
     if (!isSiteFixCause(p.cause) || !p.url) continue;
     const isPending = !!p.fixSeenAt && p.action === 'wait';
@@ -971,20 +991,30 @@ export function metaNoindex(html: string): boolean {
   return false;
 }
 
-/** An `X-Robots-Tag` header value that keeps Google out (all agents, or googlebot). */
+/** Robots directives that take a value after a colon (`max-snippet: -1`), so their name is never read as a crawler's name (N-app-8). */
+const ROBOTS_VALUE_DIRECTIVES: ReadonlySet<string> = new Set(['max-snippet', 'max-image-preview', 'max-video-preview', 'unavailable_after']);
+
+/**
+ * An `X-Robots-Tag` header value that keeps Google out: `noindex` or `none` for every crawler, or for googlebot (N-app-8). A comma list is
+ * read left to right: `name: rule` starts a crawler's rules when `name` is not a directive (`max-snippet: -1, noindex` is two directives
+ * for every crawler; `otherbot: noindex` applies to otherbot only, and a header for another crawler alone is not a noindex). Each header
+ * line is read on its own.
+ */
 export function headerNoindex(value: string | string[] | undefined): boolean {
   const vals = Array.isArray(value) ? value : value ? [value] : [];
-  return vals.some((v) =>
-    s(v)
-      .split(',')
-      .map((x) => x.trim())
-      .some((part, i, all) => {
-        if (!/\b(noindex|none)\b/i.test(part)) return false;
-        // "otherbot: noindex" applies to another crawler only
-        const agent = part.match(/^([a-z0-9_-]+)\s*:/i)?.[1]?.toLowerCase() ?? (i > 0 ? all.slice(0, i).reverse().map((x) => x.match(/^([a-z0-9_-]+)\s*:/i)?.[1]?.toLowerCase()).find(Boolean) : undefined);
-        return !agent || agent === 'googlebot' || agent === 'noindex' || agent === 'none';
-      }),
-  );
+  return vals.some((v) => {
+    let agent: string | null = null;
+    for (const raw of s(v).split(',')) {
+      let part = raw.trim();
+      const m = part.match(/^([a-z0-9_.-]+)\s*:\s*(.*)$/i);
+      if (m && !ROBOTS_VALUE_DIRECTIVES.has(m[1].toLowerCase())) {
+        agent = m[1].toLowerCase();
+        part = m[2].trim();
+      }
+      if (/^(noindex|none)$/i.test(part) && (agent === null || agent === 'googlebot')) return true;
+    }
+    return false;
+  });
 }
 
 /** The page's `<link rel="canonical" href="…">`, resolved against the page address ('' when none). */
@@ -993,10 +1023,13 @@ export function pageCanonicalOf(html: string, pageUrl: string): string {
     const tag = m[0];
     if (!/\brel\s*=\s*["']?canonical["'\s>]/i.test(tag)) continue;
     const href = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1] ?? tag.match(/\bhref\s*=\s*([^\s>]+)/i)?.[1] ?? '';
-    if (!href) return '';
-    if (/^https?:\/\//i.test(href)) return href.trim();
-    const origin = s(pageUrl).match(/^https?:\/\/[^/]+/i)?.[0] ?? '';
-    return href.startsWith('/') ? origin + href.trim() : href.trim();
+    if (!href.trim()) return '';
+    // N-app-12: a relative (`a`, `../a`, `?q`) or protocol-relative (`//host/a`) canonical is resolved against the page's address
+    try {
+      return new URL(href.trim().replace(/&amp;/g, '&'), s(pageUrl)).href;
+    } catch {
+      return /^https?:\/\//i.test(href) ? href.trim() : '';
+    }
   }
   return '';
 }

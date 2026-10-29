@@ -98,7 +98,9 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
       break;
     case 'index_coverage':
       parts.push(
-        nm(s, 'known') != null && `${compactNumber(nm(s, 'indexed') ?? 0)} of ${compactNumber(nm(s, 'known'))} pages in Google search`,
+        // N-app-6: a run that could not check the website says so first; its figures are the last check's
+        s.failed === true ? 'could not check the website this time' : null,
+        nm(s, 'known') != null && `${compactNumber(nm(s, 'indexed') ?? 0)} of ${compactNumber(nm(s, 'known'))} pages in Google search${s.failed === true ? ' (last check)' : ''}`,
         nm(s, 'siteFixes') ? `${nm(s, 'siteFixes')} to fix on your website` : null,
         nm(s, 'dropped') ? `${nm(s, 'dropped')} dropped out` : null,
         nm(s, 'backlogLeft') ? `${compactNumber(nm(s, 'backlogLeft'))} not checked yet` : null,

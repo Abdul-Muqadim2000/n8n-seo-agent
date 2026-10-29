@@ -930,7 +930,11 @@ that fails answers `status: 'unreadable'` with a sentence, never an error, and n
   off-site redirect, a robots.txt that is not a file, or a partial sitemap as "could not tell": nothing recorded, and a click answers 409
   `site_unsure`. A page that is already a `redirect:` step is left out of the list, and a cause whose pages all are has no step at all. One
   sitemap download per website per check round (30 min cache; a person's click reads it again). The daily tick reserves a third of its 60
-  checks for indexing steps; the other kinds take the rest.
+  checks for indexing steps; the other kinds take the rest. Fix wave 2: a page with `fix_seen_at` set waits for Google whatever the order of
+  `inspect_at` and `fix_seen_at`; each cause is read as its `site_fix` and `wait` rows only; the engine's reading that decided a step is kept
+  on the row, so a late or failed index read never sends a step back to "to do"; a step with more pages than the 10 our check opens is
+  never done by it ("the first 10 of N are fixed", 409 `site_partial` on a click); robots.txt we could not read makes the sitemap read
+  partial; robots.txt or sitemaps that redirect to another host are not trusted.
 - Recommendations `ix:<action>:<cause>`: a site fix while its step is to do (not when an audit finding already asks for the same fix, matched on
   the finding's key: `findingAsksSameFix`), `ix:site_fix:sitemap`, `ix:ask_google` (the pages to ask Google about, with the guide
   `index-request-indexing`; never automated), links
@@ -941,9 +945,14 @@ that fails answers `status: 'unreadable'` with a sentence, never an error, and n
   `index_watch` / `index_daily_cap` (last in the body, only when set; empty in the engine = on, 300 a day).
 - Callback stage `index_coverage` (DESIGN.md §5; `status: 'complete'` is read as a finished report): stored as a scheduled report, free
   (0 credits), deliverable (company delivery can choose it), `report.ready`, plus `alert.raised` (`source: 'index_coverage'`) when pages dropped
-  out; it also refreshes the website's steps. Delivery follows the same rule as the weekly site report (FIX_CONTRACT decision 10).
+  out; it also refreshes the website's steps. Delivery follows the same rule as the weekly site report (FIX_CONTRACT decision 10). A run
+  that could not check the website sends `summary.failed: true` and / or `summary.checked: false` with `summary.note`: the report then says
+  "We could not check <domain> this time", shows the note (internal error text replaced) and labels any counts "(last check)"; the summary
+  line says "could not check the website this time".
 - Missed fires: the daily schedule is in `SCHEDULES` (`INDEX_COVERAGE_SCHEDULE`, 05:15) for the platform delivery report, counted from the
-  first `seo_index_runs` row of any website (before that it is not measured). Deleting a website deletes its rows in `seo_index_pages`,
+  first `seo_index_runs` row of any website (before that it is not measured). Only the schedule's own fires count (mode `trigger`), and the
+  execution history is paged by n8n's cursor back to the oldest week shown (fix wave 2), so one execution per website a day no longer hides
+  older fires. Deleting a website deletes its rows in `seo_index_pages`,
   `seo_index_runs`, `seo_update_impact` and (by the engine site id) `seo_index_history`; `seo_google_events` is global and stays.
 - Rollback (X11): before reverting the API to a build without this feature, delete or skip the `site_tasks` rows with `kind = 'indexing'`
   (an older build reads an unknown kind as a redirect step).

@@ -1,7 +1,7 @@
 // Index coverage (2026-10-29, n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md §5): the daily index check's report. Weekly on Mondays,
 // and the same day when a page drops out of Google search or a Google update starts or ends. Free (Google data only).
 import { ArrowRight, CalendarClock, FileSearch, ListChecks, TrendingDown } from 'lucide-react';
-import { INDEX_ACTION_INFO, INDEX_ACTIONS_NEED_YOU, INDEX_CAUSE_INFO, INDEX_CAUSES, indexInSearchLine, indexPath, type IndexAction, type IndexCause, type ReportDetail } from '@seo/shared';
+import { INDEX_ACTION_INFO, INDEX_ACTIONS_NEED_YOU, INDEX_CAUSE_INFO, INDEX_CAUSES, indexInSearchLine, indexingNoteText, indexingReportFailed, indexPath, type IndexAction, type IndexCause, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -37,33 +37,50 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
     .filter((x) => x.count > 0 && (!isCause(x.cause) || INDEX_ACTIONS_NEED_YOU.has(INDEX_CAUSE_INFO[x.cause].action)))
     .sort((a, b) => b.count - a.count);
   const siteLink = report.siteId ? `/o/${org.id}/sites/${report.siteId}/indexing` : null;
+  // N-app-6 / N12: a run that could not check the website. Its note says why; any figures are the last check's, never today's
+  const failed = indexingReportFailed(m);
+  const note = failed ? indexingNoteText(str(m.note) || str(m.why) || str(p.note)) : '';
+  const last = failed ? ' (last check)' : '';
+  const domain = str(p.domain) || 'your website';
   return (
     <Stagger className="space-y-5">
       <ReportHero
         report={report}
-        title={known ? indexInSearchLine({ indexed, shouldBe: checked - leftOut, known, notChecked }, str(p.domain) || 'your website') : 'Your index check has started'}
+        title={failed ? `We could not check ${domain} this time` : known ? indexInSearchLine({ indexed, shouldBe: checked - leftOut, known, notChecked }, domain) : 'Your index check has started'}
         description={
-          needYou
-            ? `${fmt(needYou)} page${needYou === 1 ? '' : 's'} need you. The Indexing page groups them by reason, with what to do for each.`
-            : 'Nothing needs you this time. We check again every day which pages Google left out.'
+          failed
+            ? `${note}${known ? ' The figures below are from the last check that read your website.' : ''}`
+            : needYou
+              ? `${fmt(needYou)} page${needYou === 1 ? '' : 's'} need you. The Indexing page groups them by reason, with what to do for each.`
+              : 'Nothing needs you this time. We check again every day which pages Google left out.'
         }
         aside={
-          dropped.length ? (
+          failed ? (
+            <StatusMark tone="warning" icon={<FileSearch />} title="Could not check" caption="Nothing was read from Google this time" />
+          ) : dropped.length ? (
             <StatusMark tone="warning" icon={<TrendingDown />} title={`${dropped.length} dropped out`} caption="Pages that were in Google search and are not any more" />
           ) : (
             <StatusMark tone="good" icon={<FileSearch />} title="No page dropped out" caption="Since the last report" />
           )
         }
         stats={
-          <>
-            <HeroStat label="In Google search" value={<CountUp value={indexed} format={(v) => fmt(v)} />} />
-            <HeroStat label="Need you" value={<CountUp value={needYou} format={(v) => fmt(v)} />} />
-            <HeroStat label="Not checked yet" value={<CountUp value={num(m.backlog_left) ?? 0} format={(v) => fmt(v)} />} info="Pages we have not asked Google about yet. We check a set number each day, new pages first." />
-            <HeroStat label="New pages in search" value={`${fmt(num(m.new_indexed))} of ${fmt(num(m.new_pages))}`} info="Pages from the last 30 days." />
-          </>
+          failed && !known ? undefined : (
+            <>
+              <HeroStat label={`In Google search${last}`} value={<CountUp value={indexed} format={(v) => fmt(v)} />} />
+              <HeroStat label={`Need you${last}`} value={<CountUp value={needYou} format={(v) => fmt(v)} />} />
+              <HeroStat label={`Not checked yet${last}`} value={<CountUp value={num(m.backlog_left) ?? 0} format={(v) => fmt(v)} />} info="Pages we have not looked up in Search Console yet. We check a set number each day, new pages first." />
+              <HeroStat label={`New pages in search${last}`} value={`${fmt(num(m.new_indexed))} of ${fmt(num(m.new_pages))}`} info="Pages from the last 30 days." />
+            </>
+          )
         }
         actions={siteLink ? <ButtonLink size="sm" variant="secondary" to={siteLink} icon={<ArrowRight className="size-4" />}>Open the Indexing page</ButtonLink> : undefined}
       />
+
+      {failed && (
+        <Callout tone="warning" title="This check could not read your website">
+          {note} {known ? 'The counts in this report are from the last check that did, so they may be out of date.' : 'There are no figures to show yet.'}
+        </Callout>
+      )}
 
       {m.freeze === true && (
         <Callout tone="info" title={rolling ? `${str(rolling.title)} is rolling out` : 'A Google update is rolling out'}>
@@ -87,7 +104,7 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
 
-      <Block title="What needs doing" icon={<ListChecks />} description="Counted by what to do, then by the reason Google gives.">
+      <Block title="What needs doing" icon={<ListChecks />} description={failed ? 'From the last check that read your website, counted by what to do, then by the reason Google gives.' : 'Counted by what to do, then by the reason Google gives.'}>
         <Facts
           items={(['site_fix', 'quality', 'duplicate', 'links', 'wait', 'leave_out'] as IndexAction[]).map((a) => ({ label: INDEX_ACTION_INFO[a].label, value: fmt(num(byAction[a]) ?? 0) }))}
           cols="sm:grid-cols-3"

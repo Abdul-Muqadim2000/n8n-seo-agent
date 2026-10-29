@@ -162,3 +162,53 @@ freeze, an unclassified group and a could-not-check group) and `indexing-{deskto
 Console yet); the earlier screenshots were re-taken from the same build.
 
 Commits on ix/app: `85b24db5` (shared + server), `763f8e0e` (page, report, marketing, engine contract), and this document.
+
+## Fix wave 2 (2026-10-29, after REVIEW_2.md)
+
+Branch `ix/app` from `3b0a8cab`, worktree `n8n_devaicon-ix-app`. Not deployed, not pushed. Commits `1c2e998b` (shared + server) and
+`c96c8a60` (web + docs). New test files: `shared/src/indexing.fixwave2.test.ts` (17), `server/test/deliveryPaging.test.ts` (2); new cases
+appended to `server/test/indexing.test.ts` (8) and `web/test/indexing.test.tsx` (5). Every new case was run against the code of `3b0a8cab`
+first and failed there (shared 11 of 17 fail; the other 6 are guards that already held: day 1 of N-app-1, the googlebot and other-bot
+header cases, the cleared `fix_seen_at`, a page in search, the reservation; server 10 of 10; web 5 of 5 plus the reworded A4 line).
+
+**The shared rule (with the engine, N4):** a non-empty `fix_seen_at` is "Fixed on your site, waiting for Google", whatever the order of
+`inspect_at` and `fix_seen_at`. Only the engine sets and clears it. The app never reopens a step from such rows, and never says "Google's
+newest reading lists none of these pages" (that sentence is gone; a step closed by the engine's rows says "The daily index check lists no
+page with this problem left to fix on your website", which is what the read shows).
+
+| id | fixed how | test |
+|---|---|---|
+| N-app-1 (= N4) | `indexPageOf`: `fixSeenAt` = the row's `fix_seen_at` whenever it is set (not for a page in search), never compared with `inspect_at`; the page is `wait`, in the "Fixed on your site, waiting for Google" group, and `indexingCauseReadings` counts it as pending, so the step is done with the pending sentence on day 0, day 1 and day 2 alike. | shared `N-app-1` (6) |
+| N-app-2 | Server: a cause is read as its `site_fix` rows and its `wait` rows (filter `action`, 200 each, `impressions_28d:desc`; the `wait` read is skipped when the run's `by_action_json` counts no `wait`). Shared: `indexingCauseReadings(rows, { read, capped })` gives every cause read a reading, so a capped cause with no open row is `complete: false` (the stored step keeps its state) instead of no reading (which read as done). | shared `N-app-2` (2); server `N-app-2: a cause whose most-seen rows are all left out` |
+| N-app-3 / A1 | `readSitemap`: complete only when robots.txt was read as rules or answered 404 / 410; a 403, an HTML page, a server error or no answer makes the read partial, so "/x is no longer in your sitemap" is never concluded from /sitemap.xml alone. | server `N-app-3` |
+| N-app-4 | `materialize` keeps the engine's index reading that decided an indexing step on the row (`last_check` with `by: 'index'`, `done_at` when ok; only when newer than the row's own reading; `last_check_at` untouched so the own daily check still runs). A null reading (8 s deadline, n8n error, days without a good run) then leaves `indexing:sitemap` and engine-done steps in their last known state. Recommendations follow the steps, so `ix:site_fix:sitemap` no longer comes back. | server `N-app-4` (2: the sitemap step, a pending step) |
+| N-app-5 / X10 | `executionsSince(workflow, status, since)` in the n8n client pages `/executions` by `nextCursor` (250 a page, 40 pages at most, `complete: false` past that, with a note in the report) until the oldest week shown; the delivery report uses it for every daily schedule instead of the newest 150 / 50. Only `trigger` executions count as fires (unchanged). On `3b0a8cab` the test's 9-website history showed 26 fires as missed. | server `deliveryPaging` (2) |
+| N-app-6 / A4 (+ engine N12) | `indexingReportFailed(summary)` (`failed: true` or `checked: false`) and `indexingNoteText(note)` (internal error text replaced) in shared. Report renderer: title "We could not check <domain> this time", the note, a warning callout, stats labelled "(last check)" or none when there are no figures, "What needs doing" says it is from the last check. Summary values carry `failed`; the summary line says "could not check the website this time". Page: eyebrow "Could not check <day>, last check <day>" and the need line names the check the figures come from. Reads `summary.note`, then `summary.why`, then `payload.note`. | web `N-app-6` (4) |
+| N-app-7 | `checkIndexing`: the step's total is `max(total, urls listed, urls opened)`; when it lists more than the 10 we open and all 10 are fixed, the outcome is `partial` ("The first 10 pages of 30 are fixed. We opened 10 of 30; the daily index check reads the other 20 with Google and ticks this step off when none of them still has the problem."): nothing recorded daily, 409 `site_partial` on a click. The robots step does the same. A miss says "(we opened 10 of the 30 pages)". | server `N-app-7` (2) |
+| N-app-8 | `headerNoindex` reads a comma list left to right: `name: rule` starts a crawler's rules only when `name` is not a value directive (`max-snippet`, `max-image-preview`, `max-video-preview`, `unavailable_after`); `noindex` / `none` counts for no crawler or googlebot; `bingbot: noindex` or `googlebot-news: noindex` alone is not a noindex; each header line is read on its own. | shared `N-app-8` (3) |
+| N-app-9 / X14 | Reworded: Tracking settings "Every day we read Search Console to see which of your pages Google left out of search ... each page is read again on its own schedule"; Indexing page "Every morning we read Search Console for the pages of ..." and "the daily check reads the others too, each page on its own schedule"; `INDEX_FIXED_ON_SITE.weDo` and the changelog line "we look up Google's reading of it again within a day or two"; Steps on your website "We check them for you and tick each one off when it is in place"; the pending done sentence; also `INDEX_COVERAGE_SCHEDULE.summary`, the `index-coverage` guide and the report's "Not checked yet" tip (same phrase). | shared `N-app-9` (2); web `N-app-9` (source scan) |
+| N-app-10 | A guessed /sitemap.xml that answers 200 with a web page (an app shell) is skipped like a 404, so it no longer makes the sitemap named in robots.txt partial. | server `N-app-10` |
+| N-app-11 | robots.txt and every sitemap must end on the website's own host (`finalUrl`); otherwise the sitemap read is partial, and the robots step answers "could not tell". | server `N-app-11` |
+| N-app-12 | `pageCanonicalOf` resolves the href with the WHATWG URL against the page address (relative, `../`, `?q`, protocol-relative, `&amp;`). | shared `N-app-12` (2) |
+| A6 | = N-app-2. | |
+| X17 | The contract fixture plus engine-fix-wave rows: two `fix_seen_at` rows (`inspect_at` equal to and after it), `ask_google`, a `redirect_error` row and a reservation run, through `buildIndexingData`, `indexingCauseReadings` and `deriveSiteTasks`. | shared `X17` (2) |
+
+Not changed: the engine half of N4 / N12 (the engine fixer's), A17 (tutorials). The steps' index reading now makes up to two reads per
+counted cause (one when the run counted no `wait`), still inside the 8 s deadline (A15).
+
+### Checks (host Node 22.11 on a copy of the tree; Docker did not answer `docker info`)
+
+Run with `NODE_OPTIONS=--experimental-require-module` (Node 22.11 needs the flag for `require()` of an ES module, which
+`@fastify/static` does; the Docker image's newer Node 22 has it on) and `TZ=UTC` (`web/test/creditsTab.test.tsx` formats a date in the
+host's time zone; it fails in PKT on the clean head too). `npm ci` in a scratch copy (the worktree's `node_modules` are Linux builds), the
+engine tree linked beside it for the parity tests.
+
+| | before (3b0a8cab, REVIEW_2) | after |
+|---|---|---|
+| typecheck shared / server / web | clean | clean |
+| shared | 921 passed | **938 passed** (55 files) |
+| server | 1539 passed, 46 skipped | **1549 passed, 46 skipped** (77 files, 3 skipped) |
+| web | 269 passed | **274 passed** (28 files) |
+| web build | ok | ok |
+
+Not run: the engine harness (no engine change here), the browser pass (no Docker), `app/scripts/smoke.py` (no dev stack).

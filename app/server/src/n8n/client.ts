@@ -525,6 +525,33 @@ export async function executions(workflowId: string, status: 'error' | 'success'
   return r.data ?? [];
 }
 
+/**
+ * Every execution of a workflow with a status that started at or after `since`, newest first, paged through n8n's cursor (N-app-5). A
+ * fixed "newest 150" read covers too few days of a workflow that runs many executions a day (the daily index check runs one per website
+ * plus retries), so older schedule fires read as missed. Stops at `maxPages` pages (the caller is told by `complete: false`).
+ */
+export async function executionsSince(
+  workflowId: string,
+  status: 'error' | 'success',
+  since: Date,
+  opts: { pageSize?: number; maxPages?: number } = {},
+): Promise<{ list: ExecutionSummary[]; complete: boolean }> {
+  const pageSize = Math.min(250, Math.max(1, opts.pageSize ?? 250));
+  const maxPages = Math.max(1, opts.maxPages ?? 40);
+  const out: ExecutionSummary[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < maxPages; page++) {
+    const q = `/executions?workflowId=${encodeURIComponent(workflowId)}&status=${status}&limit=${pageSize}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+    const r: { data?: ExecutionSummary[]; nextCursor?: string | null } = await api(q);
+    const data = r.data ?? [];
+    out.push(...data);
+    const oldest = data.length ? Date.parse(data[data.length - 1].startedAt) : NaN;
+    cursor = r.nextCursor ?? null;
+    if (!data.length || !cursor || (Number.isFinite(oldest) && oldest < since.getTime())) return { list: out.filter((e) => !(Date.parse(e.startedAt) < since.getTime())), complete: true };
+  }
+  return { list: out.filter((e) => !(Date.parse(e.startedAt) < since.getTime())), complete: false };
+}
+
 /** One execution with its data: the error and the request id the run carried (Normalize Input / API Entry / Manual Run). */
 export async function executionFailure(id: string): Promise<{ requestId: string | null; error: string; node: string | null }> {
   const d: { data?: { resultData?: { error?: { message?: string; node?: { name?: string } }; runData?: Record<string, { data?: { main?: { json?: Record<string, unknown> }[][] } }[]> } } } =

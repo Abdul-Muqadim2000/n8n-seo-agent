@@ -1,4 +1,4 @@
-import { STAGE_LABELS } from '@seo/shared';
+import { indexingReportFailed, STAGE_LABELS } from '@seo/shared';
 
 // Headline values per callback stage for lists and run cards (field names from the live callbacks of 2026-10-01/02).
 
@@ -210,6 +210,8 @@ export function summarize(stage: string, p: P): Summary {
       // Index coverage (2026-10-29, DESIGN.md §5): the daily index check's report (free)
       const m = obj(p.summary);
       const by = obj(m.by_action);
+      // N-app-6 / N12: a run that could not check the website says so; its figures are the last check's, never today's
+      if (indexingReportFailed(m)) put('failed', true);
       put('known', num(m.known));
       put('indexed', num(m.indexed));
       put('notIndexed', num(m.not_indexed));
