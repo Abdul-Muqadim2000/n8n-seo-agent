@@ -12437,7 +12437,12 @@ patch('Content QA', "const fixes = [];\nconst warnings = [];\n", r"""const fixes
 const warnings = [];
 // LLM-LIMITS (2026-10-27, section 150): a page that stops mid-way is its own failure, in plain words, and never publishable. The guards behind
 // the Copywriter and the Editor normally stop it before it reaches this node; this is the net under them, and it reads the page as delivered.
-const __cut = CK.text(md);
+// fu-finalize-toc (2026-10-30, K6): in the final version (Page Finalize: Parse Brief carries `finalize`) an end word for word the end of
+// the page the engine delivered was not written by this run, so it is not a cut; unless the page run itself found that page cut off (its
+// blocker travels in prc.gating.qa_blocking), then the end is read as it is. A page the client sent cut short is still cut off.
+const __cutFrom = (() => { const f = (prev && prev.finalize) || null; const qb = ((((prev || {}).prc || {}).gating || {}).qa_blocking) || [];
+  return f && !qb.some(b => b && b.code === 'cut_off') ? [f.delivered_markdown] : []; })();
+const __cut = CK.text(md, { unchanged_from: __cutFrom });
 const __llm_notes = (() => { const out = [];
   for (const nd of ['Draft Check (Copywriter)', 'Edit Check (Editor)']) for (let r = 0; r < 12; r++) { let a = null; try { a = $(nd).all(0, r); } catch (e) { break; } if (!a || !a.length) break;
     for (const i of a) { const k = i && i.json && i.json.llm_check; if (k && k.note && !out.includes(k.note)) out.push(k.note); } }

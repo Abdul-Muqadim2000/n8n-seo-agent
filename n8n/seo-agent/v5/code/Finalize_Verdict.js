@@ -35,7 +35,7 @@ for (const b of systemNew) {
   const r = b.code === 'claim' ? PF.neutralSentence(N.md, t, ctx.domain, b.rewrite) : (() => { const i = N.md.indexOf(b.code === 'guarantee' ? t.slice(0, 60) : t); return i < 0 ? { md: N.md, done: false } : { md: PF.removeAt(N.md, i, b.code === 'guarantee' ? Math.min(60, t.length) : t.length), done: true, how: 'removed' }; })();
   if (r.done) { N.md = r.md; N.removed.push({ code: b.code, sentence: t, kind: b.kind || '', how: r.how || 'removed', text: r.text || '', rewrite: b.rewrite || null }); } }
 N.md = PF.tidy(N.md);
-md = N.md;
+md = PF.toc(N.md, S(F.input_markdown)).md;   // fu-finalize-toc: the contents list follows the headings after the system's own rewrite
 const finalCls = PF.residual({ ...cls, blocking: judged }, md);
 // W0-B (2026-10-29, page-quality PLAN Fix 2, REVIEW_CODE H2 / M8, owner decision D2): the page run's blockers travel with the page. Finalize
 // 3336 dropped "this website already has a page for the same search" because this check never saw it and has no list of the website's

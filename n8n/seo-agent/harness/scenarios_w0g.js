@@ -108,7 +108,7 @@ module.exports = async (ctx) => {
     console.log('   W0-G 949 guide: markdown ' + mdWords + ' words, printed ' + docWords + ' words, ' + (art.match(/<h2/g) || []).length + ' H2, ' + (art.match(/<table/g) || []).length + ' tables, ' + (art.match(/<tr>/g) || []).length + ' table rows');
     check('every word of the page is printed (within 1%: Markdown marks and list numbers only)', Math.abs(docWords - mdWords) <= Math.ceil(mdWords * 0.01), docWords + ' vs ' + mdWords);
     const h2s = [...md.matchAll(/^##\s+(.+)$/gm)].map(m => m[1]);
-    check('every H2 of the guide is a heading of the document', h2s.length >= 6 && h2s.every(h => art.includes('<h2>') && visible(art).includes(visible(h.replace(/\*\*/g, '')))), J(h2s));
+    check('every H2 of the guide is a heading of the document', h2s.length >= 6 && h2s.every(h => /<h2[ >]/.test(art) && visible(art).includes(visible(h.replace(/\*\*/g, '')))), J(h2s));
     const tables = (md.match(/^\|[\s:|-]+\|?\s*$/gm) || []).length;
     check('every table of the guide is a table of the document, every row kept', (art.match(/<table/g) || []).length === tables && (art.match(/<tr>/g) || []).length === md.split('\n').filter(l => /^\s*\|/.test(l) && !/^\|[\s:|-]+\|?\s*$/.test(l.trim())).length, tables + ' tables');
     check('its search description and planned address are in the header; Ready to publish, grade 94', visible(html).includes(body.meta.meta_description) && visible(html).includes('/is-microsoft-dynamics-365-an-erp-system') && /Ready to publish/.test(visible(html)) && /Grade 94 of 100/.test(visible(html)));
@@ -128,7 +128,7 @@ module.exports = async (ctx) => {
     check('no script, no event handler, no javascript: link', !/<script/i.test(art) && !/<img/i.test(art) && !/onerror=/i.test(art.replace(/&lt;img[^&]*&gt;/g, '')) && !/href="javascript:/i.test(art), art.slice(0, 400));
     check('markup in the text is shown as text', art.includes('&lt;script&gt;alert(1)&lt;/script&gt;') && art.includes('&lt;b&gt;one&lt;/b&gt;'));
     check('http(s) and site links are links; the javascript: one is only its text', art.includes('<a href="https://example.org/x">a good one</a>') && art.includes('<a href="/contact">a page</a>') && /a bad link/.test(art) && !/<a [^>]*>a bad link/.test(art));
-    check('bold, italics, lists, the table and an image line', art.includes('<strong>bold</strong>') && art.includes('<em>soft</em>') && /<ul>[\s\S]*<li>/.test(art) && /<table>/.test(art) && art.includes('Image: Hero chart') && art.includes('<h2>Part &quot;one&quot; &amp; two</h2>'));
+    check('bold, italics, lists, the table and an image line', art.includes('<strong>bold</strong>') && art.includes('<em>soft</em>') && /<ul>[\s\S]*<li>/.test(art) && /<table>/.test(art) && art.includes('Image: Hero chart') && art.includes('<h2 id="part-one-two">Part &quot;one&quot; &amp; two</h2>'));   // fu-finalize-toc: an H2 carries the page package's id
     check('the files are named after the page slug', doc.json.final_file_base === 'a-page-final');
   });
 };
