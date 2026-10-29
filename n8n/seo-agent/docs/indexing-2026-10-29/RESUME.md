@@ -2,6 +2,20 @@
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
+## REMAINING CHECKLIST (owner asked for a reminder after one day, set 2026-10-30)
+Index coverage is built, reviewed, fixed and tested. Before clients see it:
+1. Browser check of the final Indexing page (fix waves 2 and 3 changed it; last browser pass was after wave 1): 375 / 1440, light / dark,
+   mocked states (fix seen, Google still sees it, ask Google, partial sitemap, could not check, update rolling out). ~30 min.
+2. Deploy (owner approval): backup, engine from feature/indexing (`deploy_engine.py --apply --create-missing`), pinned manual run
+   `{"domain":"techand.ai","cap":20}`, watch execution 50 min later, API on the VM, web via PR to main. Not on a Monday.
+3. Production-only checks: self-start per website, Wait nodes, file answers of the HTTP nodes; the first 05:15 run.
+4. After deploy: missed-run schedule entry; merge feature/indexing into feature/seo-agent-v4.5 (coordinate with the page-quality session).
+   Dry-run merge 2026-10-30: 3 conflicts (app/web/src/marketing/content/changelog.ts, features.ts, n8n/seo-agent/harness/scenarios_v5.js),
+   the rest auto-merges; rebuild the generated workflows after the merge (never hand-resolve generated JSON), rerun harness + app suites.
+   Merge into main: no conflicts (but main = Vercel auto-deploy: only after the API is on the VM).
+DO NOT merge into main or feature/seo-agent-v4.5 before step 2: main auto-deploys the web to clients, and v4.5 is what the other session deploys.
+Next feature after deploy (owner approved): opt-in full Search Console access for sitemap submission (~1 day). WordPress auto-fixes: paused.
+
 ## TUTORIALS: STOPPED by the owner 2026-10-30 (batched after the app revamp; see ~/Downloads/hiresuite-video-skills/alaventra/TUTORIALS_BACKLOG.md). The block below is history.
 
 ## SAVED 2026-10-30 (usage limit): tutorial in progress
