@@ -1,5 +1,6 @@
 /*__SHINGLE__*/
 /*__SITE_MODEL__*/
+/*__DUP_TARGETS__*/
 // Originality check (FIX_PLAN G5, 2026-10-13). Runs between *Content QA* and *Needs Revision?*, so a draft that repeats someone else's
 // words -- or our own page's -- never reaches the customer: the quality check fails, the editor is sent in with the passage named, and the
 // report says against which page and by how much.
@@ -64,20 +65,11 @@ const measured = sources.map((s, i) => {
 let MODEL = null;
 try { MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
 if (!MODEL && d.site_model && typeof d.site_model === 'object') MODEL = d.site_model;
-const kwToks = new Set(SHG.words(d.keyword).filter(w => w.length > 2));
+// W0-D (page-quality 2026-10-29): the rule is the kit DUP (v5/code/_dup_targets.js), the one *Parse Verdict* now applies BEFORE the
+// brief; this late check stays as the safety net. Two refinements, both only ever removing a match: a page that shares only the site's
+// common words is not a duplicate (the weighted share), and the ladder's planned address for this very page is never its own duplicate.
 const readKeys = new Set(sources.map(s => keyOf(s.url)).filter(Boolean));
-const duplicate_targets = [];
-if (MODEL && kwToks.size) {
-  for (const p of SM.pages(MODEL)) {
-    const k = keyOf(p.url); if (!k || readKeys.has(k) || k === improving) continue;
-    const toks = new Set(SHG.words(S(p.title) + ' ' + S(p.h1) + ' ' + S(p.url).replace(/[-_/]+/g, ' ')).filter(w => w.length > 2));
-    if (!toks.size) continue;
-    let hit = 0; for (const t of kwToks) if (toks.has(t)) hit++;
-    const share = Math.round((hit / kwToks.size) * 100);
-    if (share >= 75) duplicate_targets.push({ url: S(p.url), title: S(p.title), keyword_words_shared_pct: share });
-    if (duplicate_targets.length >= 3) break;
-  }
-}
+const duplicate_targets = MODEL ? DUP.targets(d.keyword, SM.pages(MODEL), { skip: [...readKeys, improving], self: [d.ladder_target_url || ''], self_aware: true }).targets : [];
 
 const worst = measured.filter(m => m.kind !== 'improved')[0] || null;
 const failing = worst && worst.overlap_pct > THRESHOLD ? worst : null;

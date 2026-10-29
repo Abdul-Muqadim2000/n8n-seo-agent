@@ -871,7 +871,8 @@ sv = get_schema('Parser — Verdict'); sv['properties'].update({'what_must_chang
 # The shared kits it needs are named by a marker each and inlined here in ONE pass, so a marker inside a kit is never expanded.
 PV_KITS = {'EXCLUSIONS': 'code/_exclusions.js', 'SITE_MODEL': 'code/_site_model.js', 'OWN_COVER': 'code/_own_cover.js',
            'REACH': 'code/_reach.js', 'KW_INPUTS': 'code/_kw_inputs.js', 'PAGE_TYPE': 'code/_page_type.js',
-           'PAGE_CLAIMS': 'code/_page_claims.js', 'VERDICT_OWN': 'code/_verdict_own.js', 'REMEASURE': 'code/_remeasure.js'}
+           'PAGE_CLAIMS': 'code/_page_claims.js', 'VERDICT_OWN': 'code/_verdict_own.js', 'REMEASURE': 'code/_remeasure.js',
+           'DUP_TARGETS': 'code/_dup_targets.js'}   # W0-D (2026-10-29, section 153): the duplicate rule before the brief
 def pv_source():
     src = _rd0('code/Parse_Verdict.js')
     for _k in PV_KITS:
@@ -12662,6 +12663,64 @@ patch('Spawn Page Runs', "  receive: ['Keyword Report', 'Page Content'], existin
 assert 'Load Content Log (Ladder)' in nodes, 'H3: the ladder flow has no content-log load to read our own pages from'
 assert "pick(p2, 'facts')" in code('Normalize Input') and 'business_facts_kv,' in code('Normalize Input') and 'stored_fact_keys,' in code('Normalize Input'), 'H3: Normalize Input lost the stored answers'
 log('The client\'s answers are kept once (H3, 2026-10-28, section 152): Normalize Input takes business_facts_kv and stored_fact_keys by their exact keys (the fuzzy picks for "facts" and "existing" skip them), a page run\'s business facts carry the confirmed answers, PJ.ownText reads them as on file and Page Candidates never asks a stored key; existing_page_ours is accepted and set by the Content Cadence and Spawn Page Runs from the content log; Site Admin facts stores fact_answers (seo_sites.fact_answers_json); the new synchronous workflow SEO Agent — Page Finalize (SEOagentFinalize, POST /webhook/seo-page-finalize) makes the final version of a delivered page from the answers')
+
+# =============================================================================
+# 153. ASK BEFORE WRITING A PAGE THE VERDICT SCORED UNDER 50, OR ONE THE WEBSITE ALREADY HAS (W0-D, page-quality programme 2026-10-29,
+#      docs/page-quality-2026-10-29/PLAN.md Fix 4 and §2.1 "Duplicate before the brief"; REVIEW_CODE H1 / M1 / M3; owner decisions D1 / D2 /
+#      D17). Run 3299 wrote "ms 365 erp", which its own verdict scored 42 ("a poor use of effort"), because *Verdict Router* stops only on
+#      AVOID, and learned only after the brief, the copy and three editor rounds that the website already had pages for the same search.
+#      * *Parse Verdict* (v5/code/Parse_Verdict.js, HOLD) decides `verdict_hold` before the brief: a score under 50 or a duplicate target
+#        (DUP, v5/code/_dup_targets.js: the late check's own rule, now also weighted by how rare each word is on the site, and blind to the
+#        keyword's own page). Exempt from the score hold: case studies, AI answer pages, refreshes of an own page, keyword-ladder pages (the
+#        ranking guide of exec 949 is one). A ladder page is held for a duplicate only by a page carrying ALL of its words. A null score is
+#        "not checked", never a hold. A run with `hold_ack` (the client's "Write it anyway") is not held and says `verdict_acknowledged`.
+#        Automatic runs (cadence, ladder spawns, tracker, case-study spawns) run in SHADOW mode (D17): `hold_shadow` is reported, the page is
+#        written as before. Runs a person started are asked.
+#      * *Need Content?* now reads `!!$json.include_content && !$json.verdict_hold`: a hold takes the report-only branch (no brief, no copy,
+#        no edit; the run ledger settles what the verdict really cost) and the callback keeps stage `content` with `hold` (M1: a new stage
+#        would leave the app's run open).
+#      * *Normalize Input* passes `hold_ack: { score }` through (exact key, after the fuzzy-matched head; app/shared/src/payload.ts).
+#      * *Build Webhook Response* carries `hold`, `hold_shadow` and `verdict_acknowledged` (the PRC gating field, harness/README.md).
+#      * *Content Log Row* writes `held` (M3); the Content Cadence and app/server/src/services/cadence.ts skip a held keyword for 90 days (D1).
+#      * *Originality Check* calls the same DUP kit, so the late safety net and the early check can never disagree about the rule.
+# =============================================================================
+DUP_SRC153 = _rd0('code/_dup_targets.js').rstrip('\n')
+assert DUP_SRC153.count('const DUP = (() => {') == 1, 'W0-D: _dup_targets.js must define DUP once'
+assert code('Originality Check').count('/*__DUP_TARGETS__*/') == 1, 'W0-D: Originality_Check.js must carry the /*__DUP_TARGETS__*/ marker once'
+setcode('Originality Check', code('Originality Check').replace('/*__DUP_TARGETS__*/', DUP_SRC153))
+assert 'DUP.targets(d.keyword, SM.pages(MODEL)' in code('Originality Check') and code('Originality Check').count('const DUP = (() => {') == 1, \
+    'W0-D: the late duplicate check no longer asks the DUP kit'
+_pv153 = code('Parse Verdict')
+for _k153 in ('const DUP = (() => {', 'const HOLD = (() => {', 'verdict_hold: HOLD.held', 'hold_shadow:', 'verdict_acknowledged: !!HOLD.ack',
+              "automatic: 'shadow'", 'threshold: 50', 'ladderPage ?', 'caseStudy ?', 'aiPage ?', 'refresh ?', 'score == null'):
+    assert _k153 in _pv153, 'W0-D: Parse Verdict lacks ' + _k153
+assert _pv153.count('const DUP = (() => {') == 1, 'W0-D: the DUP kit is inlined into Parse Verdict more than once'
+# the router: a hold takes the report-only branch, which already exists (verdict-only runs use it); the AVOID route is unchanged
+_nc153 = nodes['Need Content?']['parameters']['conditions']['conditions']
+assert len(_nc153) == 1 and _nc153[0]['leftValue'] == '={{ $json.include_content }}', 'W0-D: Need Content? changed under section 153: ' + str(_nc153)
+_nc153[0]['leftValue'] = '={{ !!$json.include_content && !$json.verdict_hold }}'
+assert [t['node'] for t in conns['Need Content?']['main'][0]] == ['Load Profile (Brief)'] and [t['node'] for t in conns['Need Content?']['main'][1]] == ['Build Word File'], \
+    'W0-D: Need Content? must send a page run to the brief and a held run (false) to the report-only delivery: ' + str(conns['Need Content?']['main'])
+assert [t['node'] for t in conns['Verdict Router']['main'][1]] == ['Need Content?'] and [t['node'] for t in conns['Ladder Mode?']['main'][1]] == ['Verdict Router'] \
+    and [t['node'] for t in conns['Parse Verdict']['main'][0]] == ['Ladder Mode?'], 'W0-D: Need Content? no longer reads Parse Verdict\'s own item (via Ladder Mode? and Verdict Router)'
+assert nodes['Verdict Router']['parameters']['conditions']['conditions'][0]['leftValue'] == "={{ $json.verdict === 'AVOID' && !$json.force_content }}", \
+    'W0-D: the AVOID route changed (it stays as it was; the hold is the new, earlier question)'
+# Normalize Input: the client's acknowledgement, by its exact key (no pick(): "hold_ack" holds none of the picked words)
+patch('Normalize Input', "    ai_target,\n    force_content: !!p2.force_content,",
+      "    ai_target,\n"
+      "    hold_ack: (p2.hold_ack && typeof p2.hold_ack === 'object' && !Array.isArray(p2.hold_ack)) ? { score: Number.isFinite(Number(p2.hold_ack.score)) && p2.hold_ack.score !== '' && p2.hold_ack.score != null ? Math.round(Number(p2.hold_ack.score)) : null } : (p2.hold_ack === true ? { score: null } : null),   // W0-D (section 153): the client chose \"Write it anyway\"\n"
+      "    force_content: !!p2.force_content,")
+# the callback: the hold, the shadow hold and the acknowledgement (PRC gating field `verdict_acknowledged`); read from the item, and from
+# *Parse Verdict* itself when an older path dropped them
+patch('Build Webhook Response', "    score_withheld: !!d.score_withheld,\n",
+      "    score_withheld: !!d.score_withheld,\n"
+      "    ...(() => { let pv = {}; try { pv = $('Parse Verdict').first().json || {}; } catch (e) { pv = {}; }   // W0-D (section 153)\n"
+      "      const g = (k) => (d[k] !== undefined ? d[k] : pv[k]);\n"
+      "      return { hold: g('hold') || null, hold_shadow: g('hold_shadow') || null, verdict_acknowledged: g('verdict_acknowledged') === true,\n"
+      "        hold_exempt: g('hold_exempt') || '', hold_not_checked: g('hold_not_checked') || '' }; })(),\n")
+assert "verdict_acknowledged: g('verdict_acknowledged') === true" in code('Build Webhook Response'), 'W0-D: the callback lost verdict_acknowledged'
+assert "'held'" in code('Content Log Row') and "$('Parse Verdict')" in code('Content Log Row'), 'W0-D: Content Log Row does not write a held run as held'
+log('Ask before writing (W0-D, 2026-10-29, section 153): Parse Verdict holds a page run for the client\'s OK before the brief when the verdict scored the keyword under 50 or the website already has a page for the search (the DUP kit, shared with the late Originality Check); case studies, AI answer pages, refreshes and keyword-ladder pages are not held for the score, a null score is never a hold, hold_ack ("Write it anyway") passes; automatic runs only log the hold (shadow mode, D17); Need Content? sends a hold to the report-only delivery, the callback keeps stage content with hold / hold_shadow / verdict_acknowledged, Content Log Row writes `held` and the cadence skips the keyword for 90 days')
 
 # =============================================================================
 # 9. WRITE

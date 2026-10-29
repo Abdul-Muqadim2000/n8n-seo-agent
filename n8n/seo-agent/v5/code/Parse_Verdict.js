@@ -135,6 +135,95 @@ if (EXP) {
 
 /*__VERDICT_OWN__*/
 /*__REMEASURE__*/
+/*__DUP_TARGETS__*/
+
+// ---- W0-D (page-quality programme 2026-10-29, PLAN Fix 4 + §2.1, REVIEW_CODE H1 / M1 / M3, owner decisions D1 / D2 / D17) ----
+// Run 3299 wrote "ms 365 erp", a keyword this verdict scored 42 and called a poor use of effort, because the router stopped only on AVOID,
+// and the site already had pages for the same search, which the late duplicate check found only after the brief, the copy and three
+// editor rounds had been paid for. Now, BEFORE the brief, a page run is held for the client's OK when:
+//   * the verdict scored the keyword under 50 (a null score, NOT_CHECKED or withheld, is "not checked": never a hold, the reason printed);
+//   * or the site already has a page aimed at the same search (DUP.targets, the late check's own rule, moved before the brief).
+// Not held (the owner's priority: the pages that already rank are ladder pages, case studies and refreshes, and nothing here may stop them):
+//   * a case study (its keyword is the case name, so a search score says nothing), an AI answer page (`ai_target`: chosen for AI answers,
+//     often with no search volume), a refresh of an own page (`existing_page_url`), a page of a keyword ladder (the ladder checked its main
+//     keyword when it was planned; production exec 949, the guide that ranks, is one): no score hold;
+//   * a ladder page is still checked for a duplicate, but only a page carrying ALL of its words counts (the ladder's planned neighbour shares
+//     most of them on purpose), and never the keyword's own page (its slug, or the ladder's planned address);
+//   * a run started with `hold_ack` (the client chose "Write it anyway"): no hold, `verdict_acknowledged` true; the fit cap downstream stays.
+// Automatic runs (the cadence, a ladder's own page runs, the tracker, case-study spawns) are held in SHADOW mode first (D17: two cadence
+// cycles): `would_hold` and the reasons are logged in the run and reported in its callback, the page is written as before. Runs a person
+// started (the app, the form, the API) are asked ("Needs your OK"). A hold writes no brief, no copy and no edit: the run delivers the
+// verdict report with `hold: { score, reasons, alternatives }` on stage `content`, and its cost is what the verdict cost.
+const HOLD = (() => {
+  const CFG = { threshold: 50, automatic: 'shadow', recheck_days: 90 };   // D17: automatic -> 'enforce' after two cadence cycles of shadow logs (owner review of the first 20 holds, RE L4)
+  const S = (v) => String(v == null ? '' : v).trim();
+  const ip = S(prev.client_ip).toLowerCase();
+  const automatic = /^(cadence|ladder|tracker|casestudy|audit):/.test(ip);
+  const writes = prev.include_content === true && !prev.verdict_only && S(prev.mode || 'keyword') === 'keyword';
+  const ackRaw = prev.hold_ack;
+  const ack = ackRaw && typeof ackRaw === 'object' && !Array.isArray(ackRaw) ? ackRaw : (ackRaw === true ? {} : null);
+  const scoreRaw = EV56.withheld ? null : verdict.score;
+  const score = (scoreRaw === '' || scoreRaw == null || !Number.isFinite(Number(scoreRaw))) ? null : Math.round(Number(scoreRaw));
+  const caseStudy = !!(S(prev.case_id) || (prev.case_study && typeof prev.case_study === 'object' && Object.keys(prev.case_study).length) || /case stud/i.test(S(prev.page_type)));
+  const aiPage = !!(prev.ai_target && typeof prev.ai_target === 'object' && S(prev.ai_target.question));
+  const refresh = !!S(prev.existing_page_url);
+  const ladderPage = !!S(prev.ladder_id) && prev.ladder_rung != null && prev.ladder_rung !== '';
+  const exemptScore = caseStudy ? 'a case study: its keyword is the case name, so a search score says nothing about it'
+    : aiPage ? 'a page written to be cited in AI answers: chosen for the question, not for search volume'
+    : refresh ? 'a refresh of a page your website already has'
+    : ladderPage ? 'a page of your keyword ladder: the ladder checked its main keyword when it was planned' : '';
+  const exemptDup = caseStudy ? 'a case study' : aiPage ? 'a page written for an AI answer' : refresh ? 'a refresh of a page your website already has' : '';
+  // ---- the value gate ----
+  let valueHit = false; let notChecked = '';
+  if (score == null) notChecked = EV56.withheld ? 'the verdict could not score this keyword (' + (EV56.evidence.error || 'the live results could not be read') + '), so nothing was held for it'
+    : 'the verdict gave no score, so nothing was held for it';
+  else if (score < CFG.threshold && !exemptScore) valueHit = true;
+  // ---- the duplicate gate (the late check's rule, before the brief) ----
+  let MODEL = prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null;
+  if (!MODEL) { try { MODEL = ($('Site Model').first().json || {}).site_model || null; } catch (e) { MODEL = null; } }
+  const ownUrl = EXP ? EXP.url : '';
+  const dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage })
+    : { targets: [], partial: [], self: [], basis: MODEL ? '' : 'no page inventory of the website was available, so a duplicate could not be checked' };
+  const dupHit = !EXP && dup.targets.length > 0;   // a page the verdict already redirected the run to (existing_page) is improved, not duplicated
+  const would = writes && !ack && (valueHit || dupHit);
+  const mode = !writes ? 'off' : automatic ? CFG.automatic : 'enforce';
+  const kw = S(prev.keyword);
+  const reasons = [];
+  if (writes && valueHit) reasons.push('Our verdict scored "' + kw + '" ' + score + ' out of 100, under the ' + CFG.threshold + ' we write without asking'
+    + ((verdict.reasons || [])[0] ? ': ' + String(verdict.reasons[0]).replace(/\s+/g, ' ').slice(0, 260) : '.'));
+  if (writes && dupHit) reasons.push('Your website already has a page aimed at this search: ' + dup.targets.map(t => t.url).join(', ')
+    + '. A second page would compete with it for the same search; improving that page is usually the faster way up.');
+  // ---- what to do instead (up to three, each one click in the app) ----
+  const alternatives = [];
+  const seen = new Set();
+  const addAlt = (a) => { const k = a.kind + '|' + S(a.keyword).toLowerCase() + '|' + S(a.url).toLowerCase(); if (seen.has(k) || alternatives.length >= 3) return; seen.add(k); alternatives.push(a); };
+  if (writes && (valueHit || dupHit)) {
+    const improveUrl = (dup.targets[0] || {}).url || ((OWNV.related || [])[0] || {}).url || '';
+    if (improveUrl) addAlt({ kind: 'improve', label: 'Improve the existing page', url: improveUrl, keyword: kw,
+      why: dupHit ? 'your website already has this page for the search: a refresh keeps its address and what it has already earned' : 'your website has a page on this topic: strengthening it is cheaper than a new page' });
+    // the verdict's own re-target: a quoted search in its first changes ("such as 'Microsoft Dynamics 365 ERP implementation partner UAE'"),
+    // else its first secondary keyword the site does not already hold elsewhere
+    const quoted = (() => { for (const c of verdict_changes.slice(0, 3)) { const re = /(?:^|[\s(])['‘“"]([^'’”"]{8,90})['’”"](?=[\s.,;:)]|$)/g; let m;
+      while ((m = re.exec(String(c || '')))) { const q = m[1].trim(); if (q.split(/\s+/).length >= 2 && q.toLowerCase() !== kw.toLowerCase() && !/[.!?]$/.test(q)) return q; } } return ''; })();
+    const retarget = quoted || (OWNV.secondary || []).find(s => S(s) && S(s).toLowerCase() !== kw.toLowerCase()) || '';
+    if (retarget) addAlt({ kind: 'retarget', label: 'Use the recommended target', keyword: retarget, page_type: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
+      why: 'the verdict recommends this search instead of "' + kw + '"' });
+    const kc = OWNV.keyword_covered;
+    if (kc && S(kc.keyword) && S(kc.keyword).toLowerCase() !== kw.toLowerCase()) addAlt({ kind: 'rung', label: 'Write the planned page', keyword: S(kc.keyword), ladder_id: S(kc.ladder_id),
+      why: S(kc.note) || 'this search is already planned on your website' });
+  }
+  const hold = would ? { score, threshold: CFG.threshold, kinds: [valueHit ? 'score' : '', dupHit ? 'duplicate' : ''].filter(Boolean), reasons, alternatives,
+    duplicates: dupHit ? dup.targets : [], mode, held: mode === 'enforce',
+    rule: 'A page waits for your OK when our verdict scores its keyword under ' + CFG.threshold + ' out of 100, or when your website already has a page for the same search.',
+    next: mode === 'enforce' ? 'Nothing was written and only the check was charged. Choose "Write it anyway", use the recommended target, or improve the existing page.'
+      : 'Started automatically, so the page was written as before; this check only records what it would have asked you.' } : null;
+  return {
+    applies: writes, mode, would, held: would && mode === 'enforce', hold, ack: ack ? { score: Number.isFinite(Number(ack.score)) ? Number(ack.score) : null } : null,
+    exempt: writes ? [exemptScore && ('score: ' + exemptScore), exemptDup && ('duplicate: ' + exemptDup)].filter(Boolean).join('; ') : '',
+    not_checked: writes ? notChecked : '', duplicate_check: { checked: !!MODEL && !exemptDup, targets: dup.targets, partial: dup.partial, self: dup.self, basis: dup.basis },
+    recheck_days: CFG.recheck_days
+  };
+})();
 
 return [{
   json: {
@@ -161,6 +250,19 @@ return [{
     time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null),   // kept for the ladder and older readers: it is the MODEL's own number and every surface now says so
     time_to_rank: EV56.withheld ? null : TTR77,
     for_you: EV56.withheld ? null : FORYOU77,
-    reach_info: FORYOU77 ? { reach: RI77.reach, method: RI77.method, cached: !!RI77.cached, cached_at: RI77.cached_at || null, evidence_kept: !!RI77.ranked } : null
+    reach_info: FORYOU77 ? { reach: RI77.reach, method: RI77.method, cached: !!RI77.cached, cached_at: RI77.cached_at || null, evidence_kept: !!RI77.ranked } : null,
+    // W0-D: the hold before the brief (the router *Need Content?* reads verdict_hold; the callback carries hold / hold_shadow)
+    verdict_hold: HOLD.held,
+    would_hold: HOLD.would,
+    hold_mode: HOLD.mode,
+    hold_reason: HOLD.would ? HOLD.hold.reasons.join(' ') : '',
+    hold: HOLD.held ? HOLD.hold : null,
+    hold_shadow: (HOLD.would && !HOLD.held) ? HOLD.hold : null,
+    hold_exempt: HOLD.exempt,
+    hold_not_checked: HOLD.not_checked,
+    hold_ack: HOLD.ack,
+    hold_recheck_days: HOLD.recheck_days,
+    verdict_acknowledged: !!HOLD.ack,
+    duplicate_check: HOLD.applies ? HOLD.duplicate_check : null
   }
 }];
