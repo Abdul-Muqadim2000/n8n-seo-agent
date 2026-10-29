@@ -10,6 +10,13 @@
 // The daily cap is the site's own (index_daily_cap, empty = 300, kept 20-1,200) minus what TODAY's runs of it already inspected or reserved
 // (seo_index_runs: every run writes its reservation row BEFORE inspecting, so a crashed or replayed run counts what it may have spent).
 // A run that hit Google's DAILY quota earlier today inspects nothing more today. Free: no paid API, no model.
+// Fix wave 2 (N5 / N9): which websites are DONE today is read from today's seo_index_runs rows: a final run row (not a reservation), or two
+// runs of the day that never finished (their reservations stand; the website is left for tomorrow, so one website that always crashes cannot
+// hold the chain). A website whose only row today is the reservation of a run that crashed is not done: the next dispatch takes it again
+// (inside the cap, which counts that reservation). The dispatch also runs as the day's WATCH (`ix_watch`, started 50 minutes after each
+// dispatch by the dispatch itself): it restarts the chain for the websites not done yet - a chain that broke on a crash, a time-out, an n8n
+// restart or a refused part goes on within the hour. A watch of another day does nothing. A chain part skips a website already done today
+// (N9: a second dispatch while a chain is in flight never reads a website twice).
 /*__PAGE_WATCH__*/
 /*__INDEX_KIT__*/
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) { trigger = {}; }
@@ -29,25 +36,36 @@ const runsOf = (sid) => runs.filter(r => S(r.site_id) === sid).sort((a, b) => S(
 const json = (v) => { if (v && typeof v === 'object') return v; try { return JSON.parse(S(v) || '{}') || {}; } catch (e) { return {}; } };
 const monOf = (s) => mons.find(x => S(x.site_id) === S(s.site_id)) || {};
 const live = (s) => !/^(paused|deleted|inactive)$/i.test(S(s.status));
+const isReservation = (r) => json(r.sitemaps_json).reservation === true;
+const todayOf = (sid) => runsOf(sid).filter(r => S(r.run_at).slice(0, 10) === today);
+const doneToday = (sid) => { const t = todayOf(sid); return t.some(r => !isReservation(r)) || t.filter(isReservation).length >= IX.CFG.gave_up_after; };
+const watch = trigger.ix_watch && typeof trigger.ix_watch === 'object' ? trigger.ix_watch : null;
 
 // ---- the dispatch: today's chain of websites ----
 if (!want && !chain) {
+  const wn = watch ? (Number(watch.n) || 0) : 0;
+  if (watch && S(watch.date) !== today) return [{ json: { nothing_to_do: true, skip: true, reason: 'the watch of ' + S(watch.date) + ' ends with its day; today\'s dispatch checks the websites', watch_n: wn } }];
   const seen = new Set(); const list = []; const served = [];
   for (const s of sites) {
     const d = normD(s.domain); if (!d || seen.has(d)) continue; seen.add(d);
     if (!live(s) || !flag(monOf(s).index_watch, true)) continue;
     const mine = runsOf(S(s.site_id));
-    if (mine.some(r => S(r.run_at).slice(0, 10) === today)) { served.push(d); continue; }   // checked (or reserved) today already: a replay adds nothing
-    list.push({ site_id: S(s.site_id), domain: d, last: S((mine[0] || {}).run_at) });
+    if (doneToday(S(s.site_id))) { served.push(d); continue; }   // N5: done today (a final row, or two runs that never finished): a replay adds nothing
+    list.push({ site_id: S(s.site_id), domain: d, last: S((mine.find(r => !isReservation(r)) || mine[0] || {}).run_at), retry: todayOf(S(s.site_id)).length > 0 });
   }
-  list.sort((a, b) => a.last.localeCompare(b.last) || a.domain.localeCompare(b.domain));   // oldest check first: a chain broken yesterday goes first today
-  if (!list.length) return [{ json: { nothing_to_do: true, skip: true, reason: served.length ? 'every tracked website with the index watch on was already checked today (' + served.length + ')' : 'no tracked website has the index watch on', sites: sites.length } }];
-  return [{ json: { dispatch: true, chain: list.map(x => x.site_id), domains: list.map(x => x.domain), served_today: served, run_at, trigger: S(trigger.trigger) } }];
+  // oldest check first (a chain broken yesterday goes first today); a website whose run of today did not finish goes last, and a watch
+  // starts the list one place further each time, so a website that always breaks the chain never holds the others back
+  list.sort((a, b) => (a.retry - b.retry) || a.last.localeCompare(b.last) || a.domain.localeCompare(b.domain));
+  const fresh = list.filter(x => !x.retry);
+  if (wn && fresh.length > 1) { const k = wn % fresh.length; fresh.push(...fresh.splice(0, k)); list.splice(0, fresh.length, ...fresh); }
+  if (!list.length) return [{ json: { nothing_to_do: true, skip: true, reason: served.length ? 'every tracked website with the index watch on was already checked today (' + served.length + ')' : 'no tracked website has the index watch on', sites: sites.length, watch_n: wn } }];
+  return [{ json: { dispatch: true, chain: list.map(x => x.site_id), domains: list.map(x => x.domain), served_today: served, run_at, trigger: S(trigger.trigger), today, watch_n: wn } }];
 }
 
 // ---- one website: a chain part or an on-demand run ----
 const s = sites.find(x => normD(x.domain) === want || S(x.site_id) === want) || null;
-const why = !s ? 'no tracked website matches "' + want + '"' : (chain && !live(s)) ? normD(s.domain) + ' is paused' : (chain && !flag(monOf(s).index_watch, true)) ? 'the index watch of ' + normD(s.domain) + ' is off' : '';
+const why = !s ? 'no tracked website matches "' + want + '"' : (chain && !live(s)) ? normD(s.domain) + ' is paused' : (chain && !flag(monOf(s).index_watch, true)) ? 'the index watch of ' + normD(s.domain) + ' is off'
+  : (chain && doneToday(S(s.site_id))) ? normD(s.domain) + ' was already checked today' : '';   // N9: a chain part never reads a website twice in a day
 if (why) return [{ json: { nothing_to_do: true, skip: true, reason: why, chain_part: chain ? (Number(chain.part) || 1) : 0 } }];
 const m = monOf(s);
 const sid = S(s.site_id);

@@ -69,11 +69,13 @@ module.exports = async (ctx) => {
     if (Array.isArray(rr) && !rr[0].json.skip) mock('Inspect URL (Retry)', rr.map(q => ({ json: opt.retry ? opt.retry(q.json.inspect_url) : ans(q) })));
     const fr = await run('Page Fetch Requests', [{ json: {} }]);
     if (!fr[0].json.skip) mock('Fetch Page (Index)', fr.map(q => ({ json: opt.fetch ? opt.fetch(q.json.url) : { statusCode: 200, headers: {}, data: HTML() } })));
+    if (!fr[0].json.skip) await TA(() => run('Page First Reads', store['Fetch Page (Index)']));   // fix wave 2 (X2): the first answers parsed right after the fetch
     const hr = await run('Fetch Hop Requests', [{ json: {} }]);
     if (!hr[0].json.skip) mock('Fetch Page (Final)', hr.map(q => ({ json: opt.hop ? opt.hop(q.json.url) : { statusCode: 200, headers: {}, data: HTML() } })));
-    const sig = await TA(() => run('Page Signals', [{ json: {} }]));
+    const sig = await TA(() => run('Page Signals', store['Fetch Page (Final)'] || [{ json: {} }]));
     const dg = await run('Index Diagnose', [{ json: {} }]);
     const rows = await run('Index Page Rows', [{ json: {} }]);
+    mock('Save Index Pages', opt.saveFail ? [{ json: { error: 'table not reachable' } }] : rows.filter(r => !r.json.skip).map(r => ({ json: r.json })));   // fix wave 2 (N1): the upsert answers with the rows it saved
     const dels = await TA(() => run('Index Delete Rows', [{ json: {} }]));
     const hist = await run('Index History Rows', [{ json: {} }]);
     mock('Load Update Impact', [{ json: {} }]);
@@ -219,7 +221,7 @@ module.exports = async (ctx) => {
     const reach = (a, b) => { const seen = new Set([a]), todo = [a]; while (todo.length) { const n = todo.pop(); if (n === b) return true; for (const t of outs(n)) if (!seen.has(t)) { seen.add(t); todo.push(t); } } return false; };
     check('wiring: Save Index Pages and Save Index Runs come before Start Next Index Part; the reservation before the first inspection', !!NODE('Start Next Index Part') && reach('Save Index Pages', 'Start Next Index Part') && reach('Save Index Runs', 'Start Next Index Part') && reach('Save Index Reservation', 'Inspect URL (Probe)'), J(outs('Save Index Runs')));
     const fetches = (WF.nodes || []).filter(n => /^Fetch (Sitemaps \d|Page \(Index\)|Page \(Final\))$/.test(n.name));
-    check('E11: no fetch of a sitemap or a page follows a redirect by itself (every hop is ours, re-checked)', fetches.length === 5 && fetches.every(n => ((n.parameters.options || {}).redirect || {}).redirect && n.parameters.options.redirect.redirect.followRedirects === false), J(fetches.map(n => [n.name, n.parameters.options.redirect])));
+    check('E11: no fetch of a sitemap or a page follows a redirect by itself (every hop is ours, re-checked)', fetches.length === IX.CFG.sitemap_rounds + 2 && fetches.every(n => ((n.parameters.options || {}).redirect || {}).redirect && n.parameters.options.redirect.redirect.followRedirects === false), J(fetches.map(n => [n.name, n.parameters.options.redirect])));
     check('run time bound: one website per execution at the highest cap (1,200 x ~2 s) stays inside the 3,600 s limit', IX.CFG.cap_max * 2 < (WF.settings || {}).executionTimeout && !!NODE('Dispatch Start'), J([IX.CFG.cap_max, (WF.settings || {}).executionTimeout]));
   });
 
@@ -337,6 +339,6 @@ module.exports = async (ctx) => {
     check('X16: the dispatch deletes history older than 400 days', !!pr && pr.parameters.operation === 'deleteRows' && /400/.test(J(pr.parameters.filters)), J(pr && pr.parameters));
     const m = T(() => IX.merge({ site: SITE, now: NOW, stored: [{ site_id: SITE.site_id, url: W + '/gone', state: 'excluded', cause: 'not_found', http_status: 404, in_sitemap: false, sources: 'inventory', first_seen_at: iso(NOW - 300 * DAY), updated_at: iso(NOW - 200 * DAY), inspect_at: iso(NOW - 200 * DAY) }],
       inventory: [], sitemap: { read: true, complete: true, urls: [{ loc: W + '/a', lastmod: '' }] }, ours: [], search: { read: true, by: new Map() }, watch: [] }));
-    check('X16: a 404 row in no source, untouched for 200 days, is pruned', J(m.prune) === J([{ site_id: SITE.site_id, url: W + '/gone' }]) && !(m.pages || []).some(p => /gone/.test(p.url)), J(m.prune));
+    check('X16: a 404 row in no source, untouched for 200 days, is pruned', J((m.prune || []).map(x => [x.site_id, x.url])) === J([[SITE.site_id, W + '/gone']]) && !(m.pages || []).some(p => /gone/.test(p.url)), J(m.prune));
   });
 };

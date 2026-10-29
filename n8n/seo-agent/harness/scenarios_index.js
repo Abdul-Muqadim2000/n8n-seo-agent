@@ -373,11 +373,13 @@ module.exports = async (ctx) => {
     const fr = await run('Page Fetch Requests', [{ json: {} }]);
     if (!fr[0].json.skip) mock('Fetch Page (Index)', fr.map((q, i) => ({ json: opt.fetchAnswer ? opt.fetchAnswer(q.json.url, i) : opt.fetch200 || /unknown|insights\/new-ours/.test(q.json.url) || i % 3 === 0 ? { statusCode: 200, headers: { 'content-type': 'text/html' }, data: '<html><head><title>A page</title></head><body><main>' + 'words '.repeat(400) + '</main></body></html>' }
       : i % 3 === 1 ? { statusCode: 301, headers: { location: W + '/somewhere-else' }, data: '' } : { statusCode: 404, headers: {}, data: 'nf' } })));
+    if (!fr[0].json.skip) await run('Page First Reads', store['Fetch Page (Index)']);   // fix wave 2 (X2): the first answers parsed right after the fetch
     const hr = await run('Fetch Hop Requests', [{ json: {} }]);
     if (!hr[0].json.skip) mock('Fetch Page (Final)', hr.map((q) => ({ json: opt.hopAnswer ? opt.hopAnswer(q.json.url) : { statusCode: 200, headers: {}, data: '<html><head><title>Elsewhere</title></head><body>x</body></html>' } })));
-    await run('Page Signals', [{ json: {} }]);
+    await run('Page Signals', store['Fetch Page (Final)'] || [{ json: {} }]);
     const dg = await run('Index Diagnose', [{ json: {} }]);
     const rows = await run('Index Page Rows', [{ json: {} }]);
+    mock('Save Index Pages', rows.filter(r => !r.json.skip).map(r => ({ json: r.json })));   // fix wave 2 (N1): the upsert answers with the rows it saved
     const dels = await run('Index Delete Rows', [{ json: {} }]);
     const hmoves = await run('Index History Moves', [{ json: {} }]);
     const hist = await run('Index History Rows', [{ json: {} }]);
@@ -428,7 +430,8 @@ module.exports = async (ctx) => {
     const rep = X.rep[0].json;
     H.save('index_coverage_techand.md', rep.report_markdown); H.save('index_coverage_techand_rows.json', X.rows.map(r => r.json));   // for eyeballing (OUT_DIR)
     const SHAPE = ['stage', 'status', 'domain', 'site_id', 'request_id', 'summary', 'report_markdown', 'cost', 'callback_url'];
-    const SUM = ['known', 'indexed', 'not_indexed', 'excluded', 'unknown', 'backlog_left', 'new_pages', 'new_indexed', 'by_action', 'by_cause', 'dropped', 'freeze', 'freeze_reason', 'events', 'impact'];
+    const SUM = ['known', 'indexed', 'not_indexed', 'excluded', 'unknown', 'backlog_left', 'new_pages', 'new_indexed', 'by_action', 'by_cause', 'dropped', 'freeze', 'freeze_reason', 'events', 'impact',
+      'failed', 'checked', 'note', 'figures_from'];   // fix wave 2 (N12): a run that could not read the site says so in the summary
     check('the callback on a Monday: stage index_coverage, the §5 shape, cost $0, the summary keys', X.rep.length === 1 && rep.stage === 'index_coverage' && rep.status === 'complete' && J(Object.keys(rep).sort()) === J(SHAPE.slice().sort())
       && J(Object.keys(rep.summary).sort()) === J(SUM.slice().sort()) && rep.cost.usd === 0 && rep.request_id === 'req-ix' && J(Object.keys(rep.summary.impact).sort()) === J(['dropped', 'event_title', 'gained', 'stable'])
       && rep.summary.events.every(e => J(Object.keys(e).sort()) === J(['ended_at', 'kind', 'started_at', 'status', 'title'])), J(rep));
@@ -445,9 +448,9 @@ module.exports = async (ctx) => {
     check('a quiet Tuesday: no callback (the app reads the tables)', T.rep.length === 1 && T.rep[0].json.skip === true, J(T.rep[0].json));
     const N = await e2e({ monday: false, news: 1 });
     check('a Google update started or finished today: the callback goes out', N.rep.length === 1 && N.rep[0].json.stage === 'index_coverage', J(N.rep[0].json));
-    const two = await e2e({ cap: 30, runs: [{ site_id: SITE.site_id, run_at: new Date().toISOString(), inspected: 25, note: '' }] });
+    const two = await e2e({ cap: 30, trigger: { domain: 'techand.ai' }, runs: [{ site_id: SITE.site_id, run_at: new Date().toISOString(), inspected: 25, note: '' }] });
     check('the second run of the day: 30 a day, 25 already spent -> at most 5 inspections', two.inv[0].json.plan.limit === 5 && (two.pr.filter(q => !q.json.skip).length + two.ir.filter(q => !q.json.skip).length) <= 5, J(two.inv[0].json.plan));
-    const qd = await e2e({ runs: [{ site_id: SITE.site_id, run_at: new Date().toISOString(), inspected: 2, note: 'Google\'s daily URL Inspection quota for this property was used up; inspections stopped for today.' }] });
+    const qd = await e2e({ trigger: { domain: 'techand.ai' }, runs: [{ site_id: SITE.site_id, run_at: new Date().toISOString(), inspected: 2, note: 'Google\'s daily URL Inspection quota for this property was used up; inspections stopped for today.' }] });
     check('a run after the quota was hit today inspects nothing', qd.pr[0].json.skip === true && qd.ir[0].json.skip === true, J([qd.pr[0].json, qd.inv[0].json.plan]));
     const Q = await e2e({ quota: true, monday: true });
     const qa = Q.dg[0].json;
