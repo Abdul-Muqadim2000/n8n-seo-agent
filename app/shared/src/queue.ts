@@ -157,6 +157,7 @@ export const RULE_SCORES: Record<string, { impact: number; effort: EffortBand; b
   'ix:quality': { impact: 3, effort: 'session', basis: 'a page Google read and left out; improving it is one page at a time, with your approval' },
   'ix:duplicate': { impact: 3, effort: 'session', basis: 'pages Google sees as copies of others' },
   'ix:links': { impact: 2.5, effort: 'hour', basis: 'pages Google has not found or read yet; links from your pages in search help it find them' },
+  'ix:ask_google': { impact: 1.5, effort: 'minutes', basis: 'a few important pages where asking Google to read them again in Search Console is the right next step' },
   // rankings
   'rank:next': { impact: 4, effort: 'session', basis: 'the next rung of a ladder that is already climbing' },
   'rank:drop': { impact: 4, effort: 'session', basis: 'a keyword that was ranking and no longer is' },

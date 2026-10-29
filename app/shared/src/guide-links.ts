@@ -37,6 +37,7 @@ export const INDEXING_GUIDE: Record<string, GuideId> = {
   server_error: 'index-fix-server-error',
   access_denied: 'index-fix-access-denied',
   redirect: 'index-sitemap-redirects',
+  sitemap: 'index-submit-sitemap',
 };
 
 /** The guide that answers one Needs-you item: its kind's, refined by what the id says (a refused plan, a draft to fix, an announcement). */

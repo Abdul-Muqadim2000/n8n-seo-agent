@@ -3,7 +3,18 @@
 // (services/siteTasks.ts, table site_tasks) and the engine's weekly / monthly readings arrive through the site's data. Done or to do is
 // decided by the NEWEST reading, whoever made it, so a file removed after it was confirmed reopens the task instead of staying ticked.
 import { AI_ANSWER_BOTS } from './robots';
-import { INDEX_BLOCKING_CAUSES, INDEX_CAUSE_INFO, INDEXING_TASK_MAX_URLS, indexingCauseOfKey, indexingTaskKey, indexPath, type IndexingCauseReading, type IndexSiteFixCause } from './indexing';
+import {
+  INDEX_BLOCKING_CAUSES,
+  INDEX_CAUSE_INFO,
+  INDEXING_SITEMAP_KEY,
+  INDEXING_TASK_MAX_URLS,
+  indexingCauseOfKey,
+  indexingTaskKey,
+  indexPath,
+  type IndexingCauseReading,
+  type IndexingSitemapReading,
+  type IndexSiteFixCause,
+} from './indexing';
 
 export type SiteTaskKind = 'indexnow' | 'ai_crawlers' | 'redirect' | 'indexing';
 export const SITE_TASK_KINDS: readonly SiteTaskKind[] = ['indexnow', 'ai_crawlers', 'redirect', 'indexing'];
@@ -56,7 +67,7 @@ export interface SiteTaskInputs {
   reclaim: { receivedAt: string; items: { brokenUrl: string; redirectTo: string; links: number; domains: string[] }[] } | null;
   /** Index coverage (2026-10-29): the engine's daily index check, its pages grouped by the cause only the client can fix (absent or null:
    *  the check has not run for this website, or could not be read; a step already stored keeps its last state then) */
-  indexing?: { runAt: string; causes: IndexingCauseReading[] } | null;
+  indexing?: { runAt: string; causes: IndexingCauseReading[]; sitemap?: IndexingSitemapReading | null } | null;
 }
 
 /** One stored row (services/siteTasks.ts), in the shape this rule reads. */
@@ -99,6 +110,8 @@ interface Draft {
   kind: SiteTaskKind;
   engine: SiteTaskCheck | null;
   payload: Record<string, unknown>;
+  /** indexing: done because our fetch saw every page fixed and Google has not read them again yet (FIX_CONTRACT `fix_seen_at`) */
+  pendingGoogle?: boolean;
 }
 
 function indexnowDraft(i: SiteTaskInputs['indexnow'], stored: StoredSiteTask | undefined): Draft | null {
@@ -164,39 +177,101 @@ function redirectDrafts(r: SiteTaskInputs['reclaim'], stored: StoredSiteTask[]):
 }
 
 /**
- * Index coverage (2026-10-29): one step per cause only the client can fix (`indexing:<cause>`), listing up to 25 of its pages (most
- * impressions first) and how many there are. The engine's reading of a cause is the newest time it read any of those pages with that
- * cause; when the newest run lists none of them any more (and it came after the step was stored), that run reads the step as done. Pages
- * other kinds already ask about (a broken page with links is a `redirect:` step) are left out of the list, so one page is never two asks.
+ * Index coverage (2026-10-29, fix wave 1): one step per cause only the client can fix (`indexing:<cause>`), listing up to 25 of its pages
+ * (most impressions first) and how many there are, plus the sitemap step (`indexing:sitemap`) when Search Console has no sitemap or
+ * reports errors in one. The rules:
+ * - The engine's reading of a cause is the newest time GOOGLE read one of its pages with that cause (A5), so the engine's weekly re-fetch of
+ *   a page never reopens a step our own check found fixed.
+ * - A page our fetch saw fixed after Google's last reading (`fix_seen_at`) is waiting for Google: when every page of a cause is, the step
+ *   is done ("fixed on your site, waiting for Google") and is never reopened by Google's older reading.
+ * - A cause read only in part (its read hit the cap, A6) never reads as done; a stored step keeps its last state.
+ * - One page, one ask: a page that is already a `redirect:` step is left out of the list; a cause whose pages are ALL such steps has no
+ *   step at all, never a "done" (A7).
+ * - A stored step whose cause the newest run lists nowhere any more is done by that run, if the run came after the step was stored.
  */
 function indexingDrafts(ix: SiteTaskInputs['indexing'], stored: StoredSiteTask[], skipUrls: ReadonlySet<string>): Draft[] {
   const out: Draft[] = [];
-  const live = new Set<string>();
+  const handled = new Set<string>();
   for (const c of ix?.causes ?? []) {
+    const key = indexingTaskKey(c.cause);
+    const st = stored.find((x) => x.key === key);
     const urls = c.urls.filter((u) => !skipUrls.has(redirectTaskKey(u)));
     const hidden = c.urls.length - urls.length;
     const total = Math.max(0, c.total - hidden);
-    if (!urls.length) continue;
-    const key = indexingTaskKey(c.cause);
-    live.add(key);
-    out.push({
-      key,
-      kind: 'indexing',
-      engine: { at: c.readAt || ix!.runAt, ok: false, by: 'index', message: `Google's newest reading still lists ${total} page${total === 1 ? '' : 's'} with this problem.` },
-      payload: { cause: c.cause, urls: urls.slice(0, INDEXING_TASK_MAX_URLS), total },
-    });
+    handled.add(key);
+    if (total > 0) {
+      out.push({
+        key,
+        kind: 'indexing',
+        engine: { at: c.readAt || ix!.runAt, ok: false, by: 'index', message: `Google's newest reading still lists ${total} page${total === 1 ? '' : 's'} with this problem.` },
+        payload: { cause: c.cause, urls: urls.slice(0, INDEXING_TASK_MAX_URLS), total, ...(c.pending ? { pending: c.pending } : {}) },
+      });
+      continue;
+    }
+    // every listed page is already another step's ask: no step of its own, and never a "done" (A7)
+    if (hidden > 0 && !c.pending) continue;
+    // read only in part: nothing is concluded (A6)
+    if (!c.complete) {
+      if (st) out.push({ key, kind: 'indexing', engine: null, payload: st.payload });
+      continue;
+    }
+    if (c.pending > 0) {
+      out.push({
+        key,
+        kind: 'indexing',
+        engine: { at: c.pendingAt || ix!.runAt, ok: true, by: 'index', message: `Fixed on your site: we saw the change on ${c.pending === 1 ? 'the page' : `all ${c.pending} pages`}. Waiting for Google to read ${c.pending === 1 ? 'it' : 'them'} again.` },
+        payload: st?.payload ?? { cause: c.cause, urls: [], total: c.pending },
+        pendingGoogle: true,
+      });
+    } else if (st) {
+      out.push(storedDone(st, ix!.runAt));
+    }
   }
-  for (const st of stored.filter((x) => x.kind === 'indexing' && !live.has(x.key))) {
-    const cause = indexingCauseOfKey(st.key);
-    if (!cause) continue;
-    // the newest index run lists none of its pages with this cause any more: done, if that run came after the step was stored
-    const later = !!ix && ix.runAt > st.createdAt;
-    out.push({ key: st.key, kind: 'indexing', engine: later ? { at: ix!.runAt, ok: true, by: 'index', message: 'Google\'s newest reading lists none of these pages with this problem any more.' } : null, payload: st.payload });
+  // the sitemap step (X5): Search Console has no sitemap, or reports errors in one
+  const sm = ix?.sitemap ?? null;
+  const smStored = stored.find((x) => x.key === INDEXING_SITEMAP_KEY);
+  if (sm && (sm.submitted === 0 || sm.errors > 0)) {
+    handled.add(INDEXING_SITEMAP_KEY);
+    out.push({
+      key: INDEXING_SITEMAP_KEY,
+      kind: 'indexing',
+      engine: { at: sm.at, ok: false, by: 'index', message: sm.submitted === 0 ? 'Search Console lists no sitemap for this website.' : `Search Console reports ${sm.errors} error${sm.errors === 1 ? '' : 's'} in your sitemap.` },
+      payload: { cause: 'sitemap', submitted: sm.submitted, errors: sm.errors },
+    });
+  } else if (smStored) {
+    handled.add(INDEXING_SITEMAP_KEY);
+    const later = !!sm && sm.at > smStored.createdAt;
+    out.push({ key: INDEXING_SITEMAP_KEY, kind: 'indexing', engine: later ? { at: sm!.at, ok: true, by: 'index', message: 'Search Console lists your sitemap and reports no errors in it.' } : null, payload: smStored.payload });
+  }
+  for (const st of stored.filter((x) => x.kind === 'indexing' && !handled.has(x.key))) {
+    if (!indexingCauseOfKey(st.key)) continue;
+    out.push(ix ? storedDone(st, ix.runAt) : { key: st.key, kind: 'indexing', engine: null, payload: st.payload });
   }
   return out;
 }
 
+/** A stored step whose cause the newest run lists nowhere any more: done by that run, if it came after the step was stored. */
+function storedDone(st: StoredSiteTask, runAt: string): Draft {
+  const later = runAt > st.createdAt;
+  return { key: st.key, kind: 'indexing', engine: later ? { at: runAt, ok: true, by: 'index', message: 'Google\'s newest reading lists none of these pages with this problem any more.' } : null, payload: st.payload };
+}
+
+const isSitemapStep = (p: Record<string, unknown>) => str(p.cause) === 'sitemap';
 const indexingCauseOf = (p: Record<string, unknown>): IndexSiteFixCause => (indexingCauseOfKey(`indexing:${str(p.cause)}`) ?? 'noindex');
+
+/** A8: what a done indexing step says is true now, cause by cause (what we checked, never a promise about Google). */
+const INDEXING_DONE: Record<IndexSiteFixCause, string> = {
+  noindex: 'These pages open without a noindex instruction, in the page or in your server\'s answer.',
+  robots_blocked: 'Your robots.txt lets Google read these pages.',
+  server_error: 'These pages answer normally (200).',
+  access_denied: 'These pages open for everyone (200).',
+  not_found: 'Each address opens a page again, or redirects permanently to a page of yours that opens.',
+  soft_404: 'These pages have real content now, or answer 404 as a page that is gone should.',
+  canonical_elsewhere: 'Your sitemap and these pages agree on the main version.',
+  redirect: 'Your sitemap no longer lists addresses that redirect.',
+  not_in_sitemap: 'Your sitemap lists these pages.',
+  indexed_not_in_sitemap: 'Your sitemap lists these pages.',
+};
 
 const fmtBots = (bots: { bot: string; owner: string }[]) => bots.map((b) => (b.owner && b.owner !== b.bot ? `${b.bot}, used by ${b.owner}` : b.bot)).join('; ');
 
@@ -215,8 +290,11 @@ function doneDetail(d: Draft, domain: string): string {
       return `${pathOfUrl(str(p.brokenUrl))} now leads to a page that opens, so the ${links} link${links === 1 ? '' : 's'} from other websites keep${links === 1 ? 's' : ''} their value.`;
     }
     case 'indexing': {
-      const cause = indexingCauseOf(p);
-      return `Fixed: ${INDEX_CAUSE_INFO[cause].label.toLowerCase()}. Google can now read and choose these pages; the daily index check keeps watching them.`;
+      if (isSitemapStep(p)) return 'Search Console lists your sitemap and reports no errors in it. The daily index check keeps reading it.';
+      const what = INDEXING_DONE[indexingCauseOf(p)];
+      if (d.pendingGoogle) return `${what} We saw the change on your website; Google shows its older reading until it reads the pages again, usually within a few days, and the daily index check asks it soon.`;
+      if (d.engine?.ok && d.engine.by === 'index') return `Google's newest reading lists none of these pages with this problem any more. The daily index check keeps watching them.`;
+      return `${what} The daily index check keeps watching them.`;
     }
     default: {
       const never: never = d.kind;
@@ -234,7 +312,7 @@ function present(d: Draft, domain: string): Pick<SiteTask, 'title' | 'detail' | 
     case 'redirect':
       return presentRedirect(d.payload);
     case 'indexing':
-      return presentIndexing(d.payload);
+      return presentIndexing(d.payload, domain);
     default: {
       const never: never = d.kind;
       throw new Error(`Unknown step kind ${String(never)}`);
@@ -242,16 +320,30 @@ function present(d: Draft, domain: string): Pick<SiteTask, 'title' | 'detail' | 
   }
 }
 
-function presentIndexing(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
+function presentIndexing(p: Record<string, unknown>, domain: string): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
+  if (isSitemapStep(p)) {
+    const errors = Number(p.errors) || 0;
+    const none = Number(p.submitted) === 0;
+    return {
+      title: none ? 'Submit your sitemap in Search Console' : 'Fix the errors Search Console reports in your sitemap',
+      detail: none
+        ? 'Search Console lists no sitemap for this website. Submitting it there is how Google learns which pages you want found, and Search Console then reports on it. Only someone with access to your Search Console can do it; the daily index check sees it the day after.'
+        : `Search Console reports ${errors} error${errors === 1 ? '' : 's'} in a sitemap you submitted, so Google may skip some of the pages in it. Search Console names each error; the daily index check sees the fix the day after it is resubmitted.`,
+      values: [{ label: 'Your sitemap', value: `https://${domain}/sitemap.xml` }],
+      guide: 'index-submit-sitemap',
+      guideVars: {},
+    };
+  }
   const cause = indexingCauseOf(p);
   const info = INDEX_CAUSE_INFO[cause];
   const urls = (Array.isArray(p.urls) ? p.urls : []).map(str).filter(Boolean);
   const total = Math.max(Number(p.total) || 0, urls.length);
   const shown = urls.slice(0, 5);
   const more = total - shown.length;
+  const pending = Number(p.pending) || 0;
   return {
     title: info.taskTitle ?? info.label,
-    detail: `${info.meaning} ${info.youDo} ${total} page${total === 1 ? '' : 's'}${more > 0 ? `; the first ${shown.length} are below, every one is on the Indexing page` : ''}.`,
+    detail: `${info.meaning} ${info.youDo} ${total} page${total === 1 ? '' : 's'}${more > 0 ? `; the first ${shown.length} are below, every one is on the Indexing page` : ''}.${pending ? ` We already saw ${pending} more fixed on your site; ${pending === 1 ? 'it waits' : 'they wait'} for Google to read ${pending === 1 ? 'it' : 'them'} again.` : ''}`,
     values: shown.map((u, i) => ({ label: `Page ${i + 1}`, value: u })),
     guide: info.guide ?? 'index-coverage',
     guideVars: { pageUrl: shown[0] ?? '', pagePath: shown[0] ? indexPath(shown[0]) : '' },
@@ -329,7 +421,7 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
     const searchBlocked =
       (d.kind === 'ai_crawlers' && ((d.payload.bots as { bot: string }[]) ?? []).some((b) => /^(googlebot|bingbot)$/i.test(b.bot))) ||
       // Index coverage: a step that keeps Google out of pages altogether (noindex, robots.txt, errors, a login) is important
-      (d.kind === 'indexing' && INDEX_BLOCKING_CAUSES.has(indexingCauseOf(d.payload)));
+      (d.kind === 'indexing' && !isSitemapStep(d.payload) && INDEX_BLOCKING_CAUSES.has(indexingCauseOf(d.payload)));
     return {
       key: d.key,
       kind: d.kind,
@@ -382,7 +474,7 @@ export function siteTaskKindOfKey(key: string): SiteTaskKind | null {
   if (key === 'indexnow') return 'indexnow';
   if (key === 'ai_crawlers') return 'ai_crawlers';
   if (key.startsWith('redirect:')) return 'redirect';
-  if (indexingCauseOfKey(key)) return 'indexing';
+  if (indexingCauseOfKey(key) || key === INDEXING_SITEMAP_KEY) return 'indexing';
   return null;
 }
 

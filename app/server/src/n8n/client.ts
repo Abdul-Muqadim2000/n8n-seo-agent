@@ -1,4 +1,4 @@
-import { TABLES, type TableKey } from '@seo/shared';
+import { n8nSiteId, TABLES, type TableKey } from '@seo/shared';
 import { config } from '../config';
 import { HttpError } from '../lib/errors';
 
@@ -272,8 +272,15 @@ export class ReadCache {
   }
 }
 
+/** A21: a table that was not there when the list was last read is not looked for again for this long (a table the engine has not created
+ *  yet, such as the index coverage tables before its first run, used to re-read the whole table list on every read). */
+const MISSING_TABLE_MS = 5 * 60_000;
+const missingTables = new Map<string, number>();
+
 async function tableId(name: string): Promise<string | null> {
-  if (!tableIds || Date.now() - tableIdsAt > 10 * 60_000 || !tableIds.has(name)) {
+  const fresh = !!tableIds && Date.now() - tableIdsAt <= 10 * 60_000;
+  if (fresh && !tableIds!.has(name) && Date.now() - (missingTables.get(name) ?? 0) < MISSING_TABLE_MS) return null;
+  if (!tableIds || !fresh || !tableIds.has(name)) {
     const m = new Map<string, string>();
     let cursor: string | null = null;
     do {
@@ -283,6 +290,8 @@ async function tableId(name: string): Promise<string | null> {
     } while (cursor);
     tableIds = m;
     tableIdsAt = Date.now();
+    if (m.has(name)) missingTables.delete(name);
+    else missingTables.set(name, Date.now());
   }
   return tableIds.get(name) ?? null;
 }
@@ -474,6 +483,7 @@ export async function ensureTable(table: TableKey, columns: readonly { name: str
     const t = (await res.json().catch(() => ({}))) as { id?: string };
     if (t.id) {
       if (tableIds) tableIds.set(name, t.id);
+      missingTables.delete(name);
       forgetTable(name);
       return t.id;
     }
@@ -482,6 +492,7 @@ export async function ensureTable(table: TableKey, columns: readonly { name: str
     throw new HttpError(502, `The SEO engine could not create the ${name} table (${res.status}${why ? `: ${why}` : ''})`);
   }
   tableIds = null;
+  missingTables.delete(name);
   const id = await tableId(name);
   if (!id) throw new HttpError(502, `The SEO engine could not create the ${name} table`);
   return id;
@@ -492,8 +503,11 @@ export function siteRows<T>(table: TableKey, domain: string, q: Omit<RowQuery, '
   return rows<T>(table, { ...q, filters: [{ columnName: 'domain', condition: 'eq', value: domain }, ...(q.extra ?? [])] });
 }
 
+/** Forgets the cached reads of one website: those filtered by its domain, and (A20) those filtered by the engine's site id, which is how
+ *  the index coverage tables are read. */
 export function invalidateSite(domain: string) {
-  for (const k of [...cache.keys()]) if (k.includes(JSON.stringify(domain))) cache.delete(k);
+  const tags = [JSON.stringify(domain), JSON.stringify(n8nSiteId(domain))];
+  for (const k of [...cache.keys()]) if (tags.some((t) => k.includes(t))) cache.delete(k);
 }
 
 export interface ExecutionSummary {

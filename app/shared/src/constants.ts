@@ -578,7 +578,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
  * website switches on (it has no report stage and no settings tab of its own), so it is not in `AUTOMATIONS`; it is a schedule all the
  * same, and a schedule that does not fire is a missed fire.
  */
-export type ScheduleId = AutomationId | 'page_watch';
+export type ScheduleId = AutomationId | 'page_watch' | 'index_coverage';
 export type ScheduleInfo = Omit<AutomationInfo, 'id'> & { id: ScheduleId };
 
 export const PAGE_WATCH_SCHEDULE: ScheduleInfo = {
@@ -593,7 +593,25 @@ export const PAGE_WATCH_SCHEDULE: ScheduleInfo = {
   since: '2026-10-13T06:16:00.000Z',
 };
 
-export const SCHEDULES: ScheduleInfo[] = [...AUTOMATIONS, PAGE_WATCH_SCHEDULE];
+/**
+ * Index coverage (2026-10-29, fix wave 1, X10): the daily index check (`SEOagentIndexCv1`, 05:15 in n8n's timezone, every day). Like Page
+ * Watch it is not an automation a website switches on in the Pipeline (on/off lives in the tracking settings, results on the Indexing
+ * page), but it is a schedule, and one that stops firing is a missed fire. It has NO built-in `since`: the delivery report counts it from
+ * the first `seo_index_runs` row of any website (services/delivery.ts), so nothing before the deploy counts as missed, and a schedule with
+ * no start at all is not measured.
+ */
+export const INDEX_COVERAGE_SCHEDULE: ScheduleInfo = {
+  id: 'index_coverage',
+  title: 'Daily index check',
+  summary: 'Asks Google which of your pages it left out of search and why, new pages first, within Google\'s daily limit.',
+  cadence: 'Every day 05:15',
+  schedule: { kind: 'daily', weekdays: [0, 1, 2, 3, 4, 5, 6], hour: 5, minute: 15 },
+  workflow: 'SEOagentIndexCv1',
+  stage: 'index_coverage',
+  settingsTab: 'tracking',
+};
+
+export const SCHEDULES: ScheduleInfo[] = [...AUTOMATIONS, PAGE_WATCH_SCHEDULE, INDEX_COVERAGE_SCHEDULE];
 
 /**
  * The next time a schedule runs after `from` (DST-safe, no libraries). `daily` / `weekly` / `monthly` fire on the engine's clock `tz`. A

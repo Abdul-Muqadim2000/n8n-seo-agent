@@ -24,6 +24,8 @@ export interface OnceAnswer {
   location: string | null;
   text: string;
   headers?: IncomingHttpHeaders;
+  /** with the option: the body was cut at `maxBytes` (a sitemap cut in half is not a complete list) */
+  truncated?: boolean;
 }
 
 /** Options of one request. `headers: true` adds the response headers to the answer (opt-in; nothing else changes). */
@@ -31,12 +33,14 @@ export interface FetchOpts {
   headers?: boolean;
 }
 
-/** One HTTPS GET (no redirect followed). Exported for its tests only: callers use fetchPublicText / fetchPublicOnce (the host guard). */
-export function getOnce(url: string, maxBytes: number, opts: FetchOpts = {}): Promise<OnceAnswer> {
+/** One HTTPS GET (no redirect followed). Module-private (A22): every caller goes through fetchPublicText / fetchPublicOnce, which apply the
+ *  host guard (https, public host, no credentials, no IP literal) before any request. */
+function getOnce(url: string, maxBytes: number, opts: FetchOpts = {}): Promise<OnceAnswer> {
   return new Promise((resolve, reject) => {
     const req = request(url, { method: 'GET', lookup: publicLookup as never, headers: { 'user-agent': 'SEO-Agent-Verifier/1.0', accept: 'text/html' }, timeout: 10000 }, (res) => {
       // opt-in only: an answer without the option has no `headers` key at all (its shape is unchanged for every existing caller)
-      const withHeaders = (a: Omit<OnceAnswer, 'headers'>): OnceAnswer => (opts.headers ? { ...a, headers: { ...res.headers } } : a);
+      let cut = false;
+      const withHeaders = (a: Omit<OnceAnswer, 'headers'>): OnceAnswer => (opts.headers ? { ...a, headers: { ...res.headers }, truncated: cut } : a);
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
         res.resume();
         return resolve(withHeaders({ status: res.statusCode, location: res.headers.location ?? null, text: '' }));
@@ -46,7 +50,10 @@ export function getOnce(url: string, maxBytes: number, opts: FetchOpts = {}): Pr
       res.on('data', (c: Buffer) => {
         size += c.length;
         if (size <= maxBytes) chunks.push(c);
-        else res.destroy();
+        else {
+          cut = true;
+          res.destroy();
+        }
       });
       res.on('end', () => resolve(withHeaders({ status: res.statusCode ?? 0, location: null, text: Buffer.concat(chunks).toString('utf8') })));
       res.on('close', () => resolve(withHeaders({ status: res.statusCode ?? 0, location: null, text: Buffer.concat(chunks).toString('utf8') })));
@@ -86,7 +93,7 @@ export async function fetchPublicText(
   maxBytes = 512 * 1024,
   hops = 4,
   opts: FetchOpts = {},
-): Promise<{ status: number; text: string; finalUrl: string; headers?: IncomingHttpHeaders; firstStatus?: number } | null> {
+): Promise<{ status: number; text: string; finalUrl: string; headers?: IncomingHttpHeaders; firstStatus?: number; truncated?: boolean } | null> {
   let current = url;
   let firstStatus = 0;
   for (let i = 0; i <= hops; i++) {
@@ -97,7 +104,7 @@ export async function fetchPublicText(
       current = new URL(r.location, current).toString();
       continue;
     }
-    return opts.headers ? { status: r.status, text: r.text, finalUrl: current, headers: r.headers ?? {}, firstStatus } : { status: r.status, text: r.text, finalUrl: current };
+    return opts.headers ? { status: r.status, text: r.text, finalUrl: current, headers: r.headers ?? {}, firstStatus, truncated: !!r.truncated } : { status: r.status, text: r.text, finalUrl: current };
   }
   return null;
 }
