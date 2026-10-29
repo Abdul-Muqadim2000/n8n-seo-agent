@@ -317,7 +317,7 @@ export const MODE_CATEGORIES: Record<ModeCategory, string> = {
 };
 
 /** Callback stages sent by scheduled workflows (no run started them from the app). */
-export const SCHEDULED_STAGES = ['site_tracker', 'rank_tracker', 'content_cadence', 'console_alert', 'ai_visibility', 'ai_pulse', 'ai_growth', 'backlinks', 'link_builder', 'site_audit'] as const;
+export const SCHEDULED_STAGES = ['site_tracker', 'rank_tracker', 'content_cadence', 'console_alert', 'ai_visibility', 'ai_pulse', 'ai_growth', 'backlinks', 'link_builder', 'site_audit', 'index_coverage'] as const;
 
 export const STAGE_LABELS: Record<string, string> = {
   site_description: 'Site description',
@@ -348,6 +348,9 @@ export const STAGE_LABELS: Record<string, string> = {
   // W2-FIX (2026-10-23): the AI repeat pilot, priced first (the price is a note, not a report), then its result
   ai_pilot_quote: 'AI repeat pilot price',
   ai_pilot: 'AI repeat pilot',
+  // Index coverage (2026-10-29): the daily index check's weekly report (and the same-day one when a page drops out or a Google update
+  // starts or ends); free, Google data only
+  index_coverage: 'Index coverage',
 };
 
 /** Monthly cost of the background monitors per site (HANDOVER.md §1, v4.6 reuse rules; AI visibility: estimateAiVisibilityCost, v4.9). */

@@ -896,6 +896,38 @@ was last done and a skip; a website with no row still shows its steps (derived f
   A website that does not answer changes nothing; a done step found missing is looked at again an hour later and reopened only on the
   second miss.
 
+## Index coverage: which pages Google left out, why, and what to do (2026-10-29; `shared/src/indexing.ts`, `server/src/services/indexing.ts`, `n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md`)
+Read only: the engine's daily index check (`SEOagentIndexCv1`, free, Google data only) writes the n8n Data Tables `seo_index_pages`,
+`seo_index_history`, `seo_index_runs`, `seo_google_events` and `seo_update_impact`; the app reads them by the engine's site id (rows of
+another domain that shares the id are dropped). Viewer and up, verified websites only (403 otherwise), not in the client portal. A read
+that fails answers `status: 'unreadable'` with a sentence, never an error, and never touches another page.
+- `GET /api/orgs/:orgId/sites/:siteId/data/indexing` (120 / 10 min per person) → `IndexingData`: `status` (`ok` / `empty` / `unreadable`),
+  `settings` (`on`, `dailyCap`), `checkedAt`, `totals` and `lanes.new` / `lanes.existing` (`known`, `indexed`, `shouldBe` = known minus pages
+  left out on purpose, `needYou`, `checked`, `unknown`, `errors`; totals add `backlogLeft`, `daysToFinish`), `groups` (one per lane x action x
+  cause: `label`, `meaning`, `weDo`, `youDo`, `guide`, `taskKey` for a site fix, the first 25 `pages`), `dropped`, `runs` (last 12), `events`
+  (last 12 of Google's), `rollingOut`, `freeze` (a core or spam update is rolling out: no rewrite is suggested), `impacts` (last 3), `capped`
+  (more than 5,000 page rows), `pagesRead`.
+- `GET …/data/indexing/pages?lane=new|existing&action=…&cause=…&dropped=1&page=1&pageSize=25` (240 / 10 min) → `{ status, items, total, page,
+  pageSize }` (same order as the group: most impressions first).
+- `GET …/data/indexing/history?url=<an address of this website>` (240 / 10 min) → `{ status, history: [{ at, state, cause, label, evidence,
+  coverage }] }` (newest first, 20 at most); 404 for an address of another website.
+- Steps on the website: kind `indexing`, key `indexing:<cause>` for each cause only the client can fix (`noindex`, `robots_blocked`,
+  `server_error`, `access_denied`, `not_found`, `soft_404`, `canonical_elsewhere`, `redirect`, `not_in_sitemap`, `indexed_not_in_sitemap`); payload
+  `{ cause, urls (25 at most, most impressions first), total }`. The engine's reading (`by: 'index'`) is the newest time it read any listed page
+  with that cause; a step is done when the newest index run lists none of its pages any more, or when the app's own check (at most 10 of the
+  pages on the website's own host, the sitemap read once, robots.txt for a block, the `X-Robots-Tag` header through the safe fetcher's opt-in
+  header return) finds each fixed. A page that is already a `redirect:` step is left out of the list. The daily tick gives indexing steps at
+  most a third of its 60 checks, after the other kinds.
+- Recommendations `ix:<action>:<cause>`: a site fix while its step is to do (not when an audit finding already asks for the same fix), links
+  and duplicates with their counts, and pages Google read and left out with **Improve this page** (the Write-a-page form, `mode: 'keyword'`,
+  prefilled with the page's address as `existingPageUrl`: the click is the approval, normal credits); none while `freeze`, none when the
+  check is off.
+- Settings: `indexWatch` (boolean) and `indexDailyCap` (20 to 1,200) in the website's monitor settings, sent to Site Admin `monitors` as
+  `index_watch` / `index_daily_cap` (last in the body, only when set; empty in the engine = on, 300 a day).
+- Callback stage `index_coverage` (DESIGN.md §5; `status: 'complete'` is read as a finished report): stored as a scheduled report, free
+  (0 credits), deliverable (company delivery can choose it), `report.ready`, plus `alert.raised` (`source: 'index_coverage'`) when pages dropped
+  out; it also refreshes the website's steps.
+
 ## Page review: questions, business details, the editor, the final version, approval (H3, 2026-10-28; `shared/src/page-review.ts`, `server/src/services/pageReview.ts`)
 For a written page (a `content` report that carries the page; anything else is 404, as is another company's report). Every write answers the
 whole `PageReviewView` (`delivery` with the plain-words headline and the grade of the delivered page, the ranked `questions` with `stored` = the

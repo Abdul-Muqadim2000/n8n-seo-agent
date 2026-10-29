@@ -70,6 +70,9 @@ export function monitorsBody(m: Partial<MonitorSettings>): Body {
   // AI-FOCUS (2026-10-27): the pulse scope and whether the questions follow the focus ('' = on)
   if (m.aiPulseScope !== undefined) out.ai_pulse_scope = m.aiPulseScope;
   if (m.aiFocusMode !== undefined) out.ai_focus_mode = m.aiFocusMode === 'off' ? 'off' : '';
+  // Index coverage (2026-10-29, DESIGN.md §2.6): last, only when set (an absent key keeps the engine's default: on, 300 a day)
+  if (m.indexWatch !== undefined) out.index_watch = m.indexWatch;
+  if (m.indexDailyCap !== undefined) out.index_daily_cap = m.indexDailyCap;
   return out;
 }
 

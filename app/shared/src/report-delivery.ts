@@ -207,6 +207,8 @@ const FINISHED_STATUSES = new Set(['completed', 'ok', 'success']);
 export function finishedStatus(stage: string, status: string): boolean {
   const s = (status || '').toLowerCase();
   if (!s || FINISHED_STATUSES.has(s)) return true;
+  // Index coverage (2026-10-29, DESIGN.md §5): its callback says `complete`; read as finished for that stage only (no other stage changes)
+  if (s === 'complete' && stage === 'index_coverage') return true;
   return s === 'progress' && REPORT_STAGES.has(stage) && !INTERIM_STAGES.has(stage);
 }
 

@@ -22,6 +22,7 @@ const siteDataPages: RouteObject[] = [
   { path: 'rankings', lazy: page(() => import('@/pages/site/RankingsPage')) },
   { path: 'content', lazy: page(() => import('@/pages/site/ContentPage')) },
   { path: 'technical', lazy: page(() => import('@/pages/site/TechnicalPage')) },
+  { path: 'indexing', lazy: page(() => import('@/pages/site/IndexingPage')) },
   { path: 'ai', lazy: page(() => import('@/pages/site/AiVisibilityPage')) },
   { path: 'crawlers', lazy: page(() => import('@/pages/site/CrawlersPage')) },
   { path: 'backlinks', lazy: page(() => import('@/pages/site/BacklinksPage')) },

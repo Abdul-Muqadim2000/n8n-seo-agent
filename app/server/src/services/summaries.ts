@@ -206,6 +206,23 @@ export function summarize(stage: string, p: P): Summary {
     case 'rejected':
       put('error', str(p.error));
       break;
+    case 'index_coverage': {
+      // Index coverage (2026-10-29, DESIGN.md §5): the daily index check's report (free)
+      const m = obj(p.summary);
+      const by = obj(m.by_action);
+      put('known', num(m.known));
+      put('indexed', num(m.indexed));
+      put('notIndexed', num(m.not_indexed));
+      put('backlogLeft', num(m.backlog_left));
+      put('newPages', num(m.new_pages));
+      put('newIndexed', num(m.new_indexed));
+      put('siteFixes', num(by.site_fix));
+      put('dropped', len(m.dropped));
+      if (m.freeze === true) put('freeze', true);
+      const ev = arr(m.events).map(obj).find((e) => e.status === 'rolling_out');
+      put('updateRollingOut', ev ? str(ev.title) : null);
+      break;
+    }
     case 'console_alert':
       put('kind', str(p.kind));
       put('severity', str(p.severity));

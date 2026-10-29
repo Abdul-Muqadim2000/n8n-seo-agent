@@ -3,11 +3,16 @@
 // (services/siteTasks.ts, table site_tasks) and the engine's weekly / monthly readings arrive through the site's data. Done or to do is
 // decided by the NEWEST reading, whoever made it, so a file removed after it was confirmed reopens the task instead of staying ticked.
 import { AI_ANSWER_BOTS } from './robots';
+import { INDEX_BLOCKING_CAUSES, INDEX_CAUSE_INFO, INDEXING_TASK_MAX_URLS, indexingCauseOfKey, indexingTaskKey, indexPath, type IndexingCauseReading, type IndexSiteFixCause } from './indexing';
 
-export type SiteTaskKind = 'indexnow' | 'ai_crawlers' | 'redirect';
+export type SiteTaskKind = 'indexnow' | 'ai_crawlers' | 'redirect' | 'indexing';
+export const SITE_TASK_KINDS: readonly SiteTaskKind[] = ['indexnow', 'ai_crawlers', 'redirect', 'indexing'];
 export type SiteTaskState = 'todo' | 'done' | 'skipped';
-/** who made a reading: the client's own "check now", the app's daily check, or the engine's weekly / monthly run */
-export type SiteTaskCheckBy = 'you' | 'daily' | 'weekly' | 'monthly';
+/** who made a reading: the client's own "check now", the app's daily check, the engine's weekly / monthly run, or the engine's daily
+ *  index check (Index coverage, 2026-10-29: Google's own inspection of the pages, read by the engine every day) */
+export type SiteTaskCheckBy = 'you' | 'daily' | 'weekly' | 'monthly' | 'index';
+/** a reading made by the engine (not by the app's own check) */
+const engineBy = (by: SiteTaskCheckBy) => by === 'weekly' || by === 'monthly' || by === 'index';
 
 export interface SiteTaskCheck {
   at: string;
@@ -49,6 +54,9 @@ export interface SiteTaskInputs {
   /** the latest FULL backlink report's broken pages that other sites link to (the weekly light watch does not look for broken pages,
    *  so its silence says nothing; the server passes only a full report) */
   reclaim: { receivedAt: string; items: { brokenUrl: string; redirectTo: string; links: number; domains: string[] }[] } | null;
+  /** Index coverage (2026-10-29): the engine's daily index check, its pages grouped by the cause only the client can fix (absent or null:
+   *  the check has not run for this website, or could not be read; a step already stored keeps its last state then) */
+  indexing?: { runAt: string; causes: IndexingCauseReading[] } | null;
 }
 
 /** One stored row (services/siteTasks.ts), in the shape this rule reads. */
@@ -155,50 +163,132 @@ function redirectDrafts(r: SiteTaskInputs['reclaim'], stored: StoredSiteTask[]):
   return out;
 }
 
+/**
+ * Index coverage (2026-10-29): one step per cause only the client can fix (`indexing:<cause>`), listing up to 25 of its pages (most
+ * impressions first) and how many there are. The engine's reading of a cause is the newest time it read any of those pages with that
+ * cause; when the newest run lists none of them any more (and it came after the step was stored), that run reads the step as done. Pages
+ * other kinds already ask about (a broken page with links is a `redirect:` step) are left out of the list, so one page is never two asks.
+ */
+function indexingDrafts(ix: SiteTaskInputs['indexing'], stored: StoredSiteTask[], skipUrls: ReadonlySet<string>): Draft[] {
+  const out: Draft[] = [];
+  const live = new Set<string>();
+  for (const c of ix?.causes ?? []) {
+    const urls = c.urls.filter((u) => !skipUrls.has(redirectTaskKey(u)));
+    const hidden = c.urls.length - urls.length;
+    const total = Math.max(0, c.total - hidden);
+    if (!urls.length) continue;
+    const key = indexingTaskKey(c.cause);
+    live.add(key);
+    out.push({
+      key,
+      kind: 'indexing',
+      engine: { at: c.readAt || ix!.runAt, ok: false, by: 'index', message: `Google's newest reading still lists ${total} page${total === 1 ? '' : 's'} with this problem.` },
+      payload: { cause: c.cause, urls: urls.slice(0, INDEXING_TASK_MAX_URLS), total },
+    });
+  }
+  for (const st of stored.filter((x) => x.kind === 'indexing' && !live.has(x.key))) {
+    const cause = indexingCauseOfKey(st.key);
+    if (!cause) continue;
+    // the newest index run lists none of its pages with this cause any more: done, if that run came after the step was stored
+    const later = !!ix && ix.runAt > st.createdAt;
+    out.push({ key: st.key, kind: 'indexing', engine: later ? { at: ix!.runAt, ok: true, by: 'index', message: 'Google\'s newest reading lists none of these pages with this problem any more.' } : null, payload: st.payload });
+  }
+  return out;
+}
+
+const indexingCauseOf = (p: Record<string, unknown>): IndexSiteFixCause => (indexingCauseOfKey(`indexing:${str(p.cause)}`) ?? 'noindex');
+
 const fmtBots = (bots: { bot: string; owner: string }[]) => bots.map((b) => (b.owner && b.owner !== b.bot ? `${b.bot}, used by ${b.owner}` : b.bot)).join('; ');
 
 /** What a done step says: what is true now, never the problem it was (2026-10-28, seen while filming the tutorial). */
 function doneDetail(d: Draft, domain: string): string {
   const p = d.payload;
-  if (d.kind === 'indexnow') return `The file is in place on ${domain}. New and updated pages are announced to Bing, Copilot and the other IndexNow search engines the same week.`;
-  if (d.kind === 'ai_crawlers') {
-    const bots = ((p.bots as { bot: string }[]) ?? []).map((b) => b.bot);
-    return `Your robots.txt lets ${bots.join(', ')} read your pages, so AI assistants can name and cite them.`;
+  switch (d.kind) {
+    case 'indexnow':
+      return `The file is in place on ${domain}. New and updated pages are announced to Bing, Copilot and the other IndexNow search engines the same week.`;
+    case 'ai_crawlers': {
+      const bots = ((p.bots as { bot: string }[]) ?? []).map((b) => b.bot);
+      return `Your robots.txt lets ${bots.join(', ')} read your pages, so AI assistants can name and cite them.`;
+    }
+    case 'redirect': {
+      const links = Number(p.links) || 0;
+      return `${pathOfUrl(str(p.brokenUrl))} now leads to a page that opens, so the ${links} link${links === 1 ? '' : 's'} from other websites keep${links === 1 ? 's' : ''} their value.`;
+    }
+    case 'indexing': {
+      const cause = indexingCauseOf(p);
+      return `Fixed: ${INDEX_CAUSE_INFO[cause].label.toLowerCase()}. Google can now read and choose these pages; the daily index check keeps watching them.`;
+    }
+    default: {
+      const never: never = d.kind;
+      return String(never);
+    }
   }
-  const links = Number(p.links) || 0;
-  return `${pathOfUrl(str(p.brokenUrl))} now leads to a page that opens, so the ${links} link${links === 1 ? '' : 's'} from other websites keep${links === 1 ? 's' : ''} their value.`;
 }
 
 function present(d: Draft, domain: string): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
-  const p = d.payload;
-  if (d.kind === 'indexnow') {
-    const key = str(p.key);
-    const keyUrl = str(p.keyUrl);
-    return {
-      title: 'Add the IndexNow file to your website',
-      detail: `One small text file at the root of ${domain}. Once it is there, every new or updated page is announced to Bing, Copilot and the other IndexNow search engines the same week.`,
-      values: [
-        { label: 'File name', value: `${key}.txt` },
-        { label: 'The only line inside it', value: key },
-        { label: 'Where it must answer', value: keyUrl },
-      ],
-      guide: 'indexnow-key-file',
-      guideVars: { indexNowKey: key, indexNowFile: `${key}.txt`, indexNowUrl: keyUrl },
-    };
+  switch (d.kind) {
+    case 'indexnow':
+      return presentIndexnow(d.payload, domain);
+    case 'ai_crawlers':
+      return presentCrawlers(d.payload, domain);
+    case 'redirect':
+      return presentRedirect(d.payload);
+    case 'indexing':
+      return presentIndexing(d.payload);
+    default: {
+      const never: never = d.kind;
+      throw new Error(`Unknown step kind ${String(never)}`);
+    }
   }
-  if (d.kind === 'ai_crawlers') {
-    const bots = (p.bots as { bot: string; owner: string; rule: string; paths: string[] }[]) ?? [];
-    return {
-      title: 'Let AI search crawlers read your website',
-      detail: `Your robots.txt turns away ${fmtBots(bots)}. An assistant cannot name or cite a page its crawler may not read.`,
-      values: [
-        { label: 'The file to edit', value: `https://${domain}/robots.txt` },
-        ...bots.slice(0, 4).map((b) => ({ label: `Rule that blocks ${b.bot}`, value: b.rule || 'Disallow: /' })),
-      ],
-      guide: 'ai-crawler-access',
-      guideVars: {},
-    };
-  }
+}
+
+function presentIndexing(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
+  const cause = indexingCauseOf(p);
+  const info = INDEX_CAUSE_INFO[cause];
+  const urls = (Array.isArray(p.urls) ? p.urls : []).map(str).filter(Boolean);
+  const total = Math.max(Number(p.total) || 0, urls.length);
+  const shown = urls.slice(0, 5);
+  const more = total - shown.length;
+  return {
+    title: info.taskTitle ?? info.label,
+    detail: `${info.meaning} ${info.youDo} ${total} page${total === 1 ? '' : 's'}${more > 0 ? `; the first ${shown.length} are below, every one is on the Indexing page` : ''}.`,
+    values: shown.map((u, i) => ({ label: `Page ${i + 1}`, value: u })),
+    guide: info.guide ?? 'index-coverage',
+    guideVars: { pageUrl: shown[0] ?? '', pagePath: shown[0] ? indexPath(shown[0]) : '' },
+  };
+}
+
+function presentIndexnow(p: Record<string, unknown>, domain: string): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
+  const key = str(p.key);
+  const keyUrl = str(p.keyUrl);
+  return {
+    title: 'Add the IndexNow file to your website',
+    detail: `One small text file at the root of ${domain}. Once it is there, every new or updated page is announced to Bing, Copilot and the other IndexNow search engines the same week.`,
+    values: [
+      { label: 'File name', value: `${key}.txt` },
+      { label: 'The only line inside it', value: key },
+      { label: 'Where it must answer', value: keyUrl },
+    ],
+    guide: 'indexnow-key-file',
+    guideVars: { indexNowKey: key, indexNowFile: `${key}.txt`, indexNowUrl: keyUrl },
+  };
+}
+
+function presentCrawlers(p: Record<string, unknown>, domain: string): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
+  const bots = (p.bots as { bot: string; owner: string; rule: string; paths: string[] }[]) ?? [];
+  return {
+    title: 'Let AI search crawlers read your website',
+    detail: `Your robots.txt turns away ${fmtBots(bots)}. An assistant cannot name or cite a page its crawler may not read.`,
+    values: [
+      { label: 'The file to edit', value: `https://${domain}/robots.txt` },
+      ...bots.slice(0, 4).map((b) => ({ label: `Rule that blocks ${b.bot}`, value: b.rule || 'Disallow: /' })),
+    ],
+    guide: 'ai-crawler-access',
+    guideVars: {},
+  };
+}
+
+function presentRedirect(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
   const broken = str(p.brokenUrl);
   const to = str(p.redirectTo);
   const links = Number(p.links) || 0;
@@ -220,14 +310,15 @@ function present(d: Draft, domain: string): Pick<SiteTask, 'title' | 'detail' | 
  */
 export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]): SiteTask[] {
   const byKey = new Map(stored.map((s) => [s.key, s]));
-  const drafts = [indexnowDraft(inputs.indexnow, byKey.get('indexnow')), crawlerDraft(inputs.access, byKey.get('ai_crawlers')), ...redirectDrafts(inputs.reclaim, stored)].filter(
+  const redirects = redirectDrafts(inputs.reclaim, stored);
+  const drafts = [indexnowDraft(inputs.indexnow, byKey.get('indexnow')), crawlerDraft(inputs.access, byKey.get('ai_crawlers')), ...redirects, ...indexingDrafts(inputs.indexing, stored, new Set(redirects.map((r) => r.key)))].filter(
     (d): d is Draft => !!d,
   );
   const out: SiteTask[] = drafts.map((d) => {
     const s = byKey.get(d.key);
     // a redirect's engine reading comes from a backlink index that lags by weeks; our own fetch of the address is the truth, so an index
     // "still broken" only wins over a reading of ours that is more than a week older than it
-    const own = s?.lastCheck && s.lastCheck.by !== 'weekly' && s.lastCheck.by !== 'monthly' ? s.lastCheck : null;
+    const own = s?.lastCheck && !engineBy(s.lastCheck.by) ? s.lastCheck : null;
     const indexStale = d.kind === 'redirect' && !!own && !!d.engine && !d.engine.ok && Date.parse(d.engine.at) - Date.parse(own.at) < 7 * 864e5;
     const decided = indexStale ? own : newest([d.engine, s?.lastCheck]);
     const lastDone = [s?.doneAt ?? null, d.engine?.ok ? d.engine.at : null, s?.lastCheck?.ok ? s.lastCheck.at : null].filter((x): x is string => !!x).sort().pop() ?? null;
@@ -235,7 +326,10 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
     const reopened = !done && !!lastDone && !!decided && lastDone < decided.at;
     const state: SiteTaskState = s?.skippedAt ? 'skipped' : done ? 'done' : 'todo';
     const shown = present(d, inputs.domain);
-    const searchBlocked = d.kind === 'ai_crawlers' && ((d.payload.bots as { bot: string }[]) ?? []).some((b) => /^(googlebot|bingbot)$/i.test(b.bot));
+    const searchBlocked =
+      (d.kind === 'ai_crawlers' && ((d.payload.bots as { bot: string }[]) ?? []).some((b) => /^(googlebot|bingbot)$/i.test(b.bot))) ||
+      // Index coverage: a step that keeps Google out of pages altogether (noindex, robots.txt, errors, a login) is important
+      (d.kind === 'indexing' && INDEX_BLOCKING_CAUSES.has(indexingCauseOf(d.payload)));
     return {
       key: d.key,
       kind: d.kind,
@@ -257,13 +351,39 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
 /** The payload a stored row keeps for one task (what its check needs), from the derived task. */
 export function siteTaskPayload(inputs: SiteTaskInputs, stored: StoredSiteTask[], key: string): { kind: SiteTaskKind; payload: Record<string, unknown> } | null {
   const byKey = new Map(stored.map((s) => [s.key, s]));
-  const d =
-    key === 'indexnow'
-      ? indexnowDraft(inputs.indexnow, byKey.get(key))
-      : key === 'ai_crawlers'
-        ? crawlerDraft(inputs.access, byKey.get(key))
-        : redirectDrafts(inputs.reclaim, stored).find((x) => x.key === key) ?? null;
+  const kind = siteTaskKindOfKey(key);
+  if (!kind) return null;
+  let d: Draft | null;
+  switch (kind) {
+    case 'indexnow':
+      d = indexnowDraft(inputs.indexnow, byKey.get(key));
+      break;
+    case 'ai_crawlers':
+      d = crawlerDraft(inputs.access, byKey.get(key));
+      break;
+    case 'redirect':
+      d = redirectDrafts(inputs.reclaim, stored).find((x) => x.key === key) ?? null;
+      break;
+    case 'indexing': {
+      const skip = new Set(redirectDrafts(inputs.reclaim, stored).map((r) => r.key));
+      d = indexingDrafts(inputs.indexing, stored, skip).find((x) => x.key === key) ?? null;
+      break;
+    }
+    default: {
+      const never: never = kind;
+      return never;
+    }
+  }
   return d ? { kind: d.kind, payload: d.payload } : null;
+}
+
+/** The kind a task key names (null: a key no kind makes, which is never treated as some other kind's step). */
+export function siteTaskKindOfKey(key: string): SiteTaskKind | null {
+  if (key === 'indexnow') return 'indexnow';
+  if (key === 'ai_crawlers') return 'ai_crawlers';
+  if (key.startsWith('redirect:')) return 'redirect';
+  if (indexingCauseOfKey(key)) return 'indexing';
+  return null;
 }
 
 /** "Checked 28 Oct by you", "Confirmed by the weekly AI growth run on 25 Oct": who read it and when, in words. */
@@ -271,5 +391,6 @@ export function siteTaskCheckLine(c: SiteTaskCheck, fmtDate: (iso: string) => st
   const when = fmtDate(c.at);
   if (c.by === 'you') return `Checked on ${when}${c.who ? ` by ${c.who}` : ''}`;
   if (c.by === 'daily') return `Checked automatically on ${when}`;
+  if (c.by === 'index') return `Daily index check on ${when}`;
   return `${c.by === 'weekly' ? 'Weekly' : 'Monthly'} check on ${when}`;
 }
