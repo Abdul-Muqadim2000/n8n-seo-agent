@@ -44,7 +44,7 @@ export const changelog: ChangelogEntry[] = [
       'Why each page was left out, in plain words, with the pages grouped by the reason so one fix covers the whole group',
       'What to do for each group: steps on your website that we then check for you, internal links to add, pages worth improving one at a time with your approval, and pages that are fine to leave out',
       'You hear when a page we saw in Google\'s index drops out of it, the day our check notices',
-      'A page you fixed shows as fixed while Google catches up, and we ask Google about it again within a day or two',
+      'A page you fixed shows as fixed while Google catches up, and we look up Google\'s reading of it again within a day or two',
       'A short list of the pages worth asking Google to read again in Search Console, which you do yourself in a few clicks',
       'A step on your website when Search Console has no sitemap for it, or reports errors in one',
       'Google\'s announced ranking updates followed for you: suggestions to change pages wait while an update rolls out, and after it finishes you see which of your pages lost, held or gained',

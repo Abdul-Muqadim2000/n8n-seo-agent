@@ -77,7 +77,7 @@ export function Indexing({ d, orgId, siteId, domain, member }: Props) {
         <EmptyState
           icon={<FileSearch />}
           title="Your first index check is on its way"
-          description={`Every morning we ask Google about the pages of ${domain}, new pages first, within Google's daily limit. The first results appear after the next daily check. It needs Search Console connected; if nothing shows after two days, check the connection.`}
+          description={`Every morning we read Search Console for the pages of ${domain}, new pages first, within Google's daily limit. The first results appear after the next daily check. It needs Search Console connected; if nothing shows after two days, check the connection.`}
           action={<GuideButton id="search-console-access" vars={{ domain }} label="Connect Search Console" />}
         />
         <SettingsCard d={d} orgId={orgId} siteId={siteId} />
@@ -110,7 +110,7 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
   const existing = d.lanes.existing;
   const rest = t.daysToFinish ? `, about ${t.daysToFinish} day${t.daysToFinish === 1 ? '' : 's'} to check the rest at ${n(d.settings.dailyCap)} a day` : '';
   // A4: a check that could not read Search Console never reads as "nothing needs you"
-  const needLine = d.notice?.failed ? 'The last check could not read Search Console, so this is the earlier reading.' : t.needYou ? `${pages(t.needYou)} need you.` : 'No page needs you right now.';
+  const needLine = d.notice?.failed ? `${d.notice.title}, so these figures are from ${d.checkedAt ? `the check of ${fmtDay(d.checkedAt)}` : 'an earlier check'}.` : t.needYou ? `${pages(t.needYou)} need you.` : 'No page needs you right now.';
   return (
     <Stagger className="space-y-6">
       {!d.settings.on && (
@@ -133,11 +133,11 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
         </Callout>
       )}
       {d.rollingOut && <UpdateBanner e={d.rollingOut} frozen={d.freeze.on} />}
-      {d.capped && <Callout tone="info">Your website has more pages than we show at once. The figures cover the first {n(d.pagesRead)}; the daily check covers every page.</Callout>}
+      {d.capped && <Callout tone="info">Your website has more pages than we show at once. The figures cover the first {n(d.pagesRead)}; the daily check reads the others too, each page on its own schedule.</Callout>}
 
       <SummaryHero
         tone="blue"
-        eyebrow={<HeroEyebrow tag="Index coverage">{d.checkedAt ? `Checked ${fmtDay(d.checkedAt)}` : 'Not checked yet'}</HeroEyebrow>}
+        eyebrow={<HeroEyebrow tag="Index coverage">{d.notice?.failed ? `Could not check ${fmtDay(d.notice.at)}${d.checkedAt ? `, last check ${fmtDay(d.checkedAt)}` : ''}` : d.checkedAt ? `Checked ${fmtDay(d.checkedAt)}` : 'Not checked yet'}</HeroEyebrow>}
         title={title}
         description={`${needLine} Existing pages checked: ${n(existing.checked)} of ${n(existing.known)}${rest}.`}
         aside={

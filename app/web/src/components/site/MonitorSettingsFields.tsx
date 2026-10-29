@@ -274,7 +274,7 @@ export function MonitorSettingsFields({
       <MonitorRow icon={<FileSearch />} on={value.indexWatch ?? true}>
       <SwitchRow
         title="Indexing"
-        description="Every day we ask Google which of your pages it has in search and which it left out, with the reason and what to do. Free: it uses Google's data only. Needs Search Console connected."
+        description="Every day we read Search Console to see which of your pages Google left out of search, with the reason and what to do; each page is read again on its own schedule. Free: it uses Google's data only. Needs Search Console connected."
         checked={value.indexWatch ?? true}
         onCheckedChange={(v) => set({ indexWatch: v })}
         disabled={disabled}

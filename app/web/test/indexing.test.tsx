@@ -125,7 +125,7 @@ describe('Indexing page, fix wave 1', () => {
     const withPages = buildIndexingData({ rows, runs: [{ run_at: '2026-10-29T09:00:00Z', note: 'Search Console refused access for this property, so pages were not checked.' }, { run_at: '2026-10-28T07:00:00Z', known: 7, inspected: 6 }], events: [], impacts: [], settings });
     const t2 = text(wrap(<Indexing d={withPages} {...props} member />));
     expect(t2).toContain('Our last check could not read Search Console');
-    expect(t2).toContain('The last check could not read Search Console, so this is the earlier reading.');
+    expect(t2).toContain('Our last check could not read Search Console, so these figures are from the check of');
   });
   it('fix seen on the site, pages to ask Google about, and a sitemap read only in part', () => {
     const d = buildIndexingData({
@@ -157,5 +157,46 @@ describe('index_coverage report, fix wave 1', () => {
     expect(t).not.toContain('brand new code');
     expect(t).not.toContain('unclassified');
     expect(t).toContain(INDEX_UNCLASSIFIED_LABEL);
+  });
+});
+
+// ---------------------------------------------------------------- fix wave 2 (REVIEW_2.md)
+describe('fix wave 2: a check that could not read the website (N-app-6 / N12)', () => {
+  const failedSummary = { failed: true, checked: false, note: 'Search Console refused access for this property, so pages were not checked.' };
+  it('the report says it could not check, shows the note, and marks any figures as the last check\'s', () => {
+    const t = text(renderReport(report('index_coverage', { status: 'complete', summary: { ...failedSummary, known: 40, indexed: 31, not_indexed: 6, backlog_left: 3, by_action: { site_fix: 2 }, by_cause: { noindex: 2 }, dropped: [], events: [], impact: {} }, cost: { usd: 0 } })));
+    expect(t).toContain('We could not check techand.ai this time');
+    expect(t).toContain('refused access');
+    expect(t).toContain('In Google search (last check)');
+    expect(t).toContain('from the last check that read your website');
+    expect(t).not.toContain('Google has 31 of');
+    expect(t).not.toContain('Nothing needs you this time');
+  });
+  it('a failed report with no figures at all shows no counts', () => {
+    const t = text(renderReport(report('index_coverage', { status: 'complete', summary: { ...failedSummary, dropped: [], events: [], impact: {} }, cost: { usd: 0 } })));
+    expect(t).toContain('We could not check techand.ai this time');
+    expect(t).toContain('There are no figures to show yet');
+    expect(t).not.toContain('In Google search');
+  });
+  it('an internal error text in the note is never shown', () => {
+    const t = text(renderReport(report('index_coverage', { status: 'complete', summary: { failed: true, note: 'diagnosis failed: TypeError x is undefined', dropped: [], events: [], impact: {} }, cost: { usd: 0 } })));
+    expect(t).not.toContain('TypeError');
+    expect(t).toContain('Something went wrong on our side');
+  });
+  it('the page: a newest run that did not read the website says "Could not check" over the earlier figures', () => {
+    const d = buildIndexingData({ rows, runs: [{ run_at: '2026-10-29T09:00:00Z', known: 7, note: 'The website did not answer.', sitemaps_json: JSON.stringify({ checked: false }) }, { run_at: '2026-10-28T07:00:00Z', known: 7, inspected: 6 }], events: [], impacts: [], settings });
+    const t = text(wrap(<Indexing d={d} {...props} member />));
+    expect(t).toContain('Could not check');
+    expect(t).toContain('last check');
+    expect(t).toContain('so these figures are from the check of');
+  });
+});
+
+describe('fix wave 2: copy (N-app-9)', () => {
+  it('no "we ask Google" and no "every page checked every day" in the app\'s strings', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), 'utf8');
+    const files = ['components/site/MonitorSettingsFields.tsx', 'pages/site/IndexingPage.tsx', 'components/site/SiteTasks.tsx', 'components/reports/indexing.tsx', 'marketing/content/changelog.ts'].map(src).join('\n');
+    expect(files).not.toMatch(/we ask google|asked google about|the daily check covers every page|we check each one ourselves, every day/i);
   });
 });
