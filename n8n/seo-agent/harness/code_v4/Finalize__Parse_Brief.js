@@ -740,6 +740,79 @@ if (b.stored_fact_keys != null && !Array.isArray(b.stored_fact_keys)) errors.pus
 const kv = FA.kvIn(b.business_facts_kv);
 const stored = FA.keysIn(b.stored_fact_keys);
 
+// W0-B (2026-10-29, page-quality PLAN Fix 2, REVIEW_CODE H2 / M8, owner decision D2): the PAGE-RUN CONTEXT (PRC, harness/README.md) of
+// the page this final version is made from. The final version of production page 3299 (finalize 3336) was graded against itself: no
+// facts, no terms, no length band, its own word count as the target, and the page run's blocker ("this website already has a page for the
+// same search") never reached it, so it came back "Ready" at 100. The app now sends `page_run`, derived from the ORIGINAL report:
+//   * gating fields (in every stored report): qa_blocking, duplicate_targets, verdict, score, score_withheld, page_type,
+//     verdict_acknowledged, plus copied_passages (the passages the first check found repeated from another page). The two that carry a
+//     block (qa_blocking, duplicate_targets) are required: without them nothing can say the page is ready. The others have the contract's
+//     defaults (null / false / '') and never block, so a page whose verdict was not stored (the ranking guide of exec 949) is not held back;
+//   * grading fields (page runs from W0-B on): length_band, coverage_target, terms, facts, sources_cited, style_guide, site_urls,
+//     serp_shapes, regulatory_facts (+ regulatory_topics), content_request_id. A missing one is advice "not checked", never a block.
+// `duplicate_decision` is the client's explicit answer to the duplicate-page blocker (D2): `update` of one of the pages the first check
+// named (the final version is then the new text of that page: its address and slug), or `differs` with the reason, which is recorded
+// and shown; the fit limit stays in the grade.
+const LIMP = { blockers: 40, dups: 10, passages: 20, terms: 80, facts: 40, sources: 30, urls: 300, reg: 40 };
+const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+const httpUrl = (u) => /^https?:\/\/[^\s<>"]+$/i.test(S(u).trim()) ? S(u).trim().slice(0, 600) : '';
+const pageKey = (u) => S(u).trim().toLowerCase().replace(/^https?:\/\/(?:www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+const PRC_BLOCK = ['qa_blocking', 'duplicate_targets'];
+const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts'];
+const pr = isObj(b.page_run) ? b.page_run : null;
+if (b.page_run != null && !pr) errors.push('page_run must be an object (the context of the page run the page came from)');
+const prc = (() => {
+  const g = pr || {};
+  const told = Array.isArray(g.missing) ? g.missing.map(x => S(x).trim()).filter(Boolean) : [];
+  const gating_missing = [];
+  const blk = Array.isArray(g.qa_blocking) && !told.includes('qa_blocking') ? g.qa_blocking.filter(isObj).slice(0, LIMP.blockers)
+    .map(x => ({ code: S(x.code).trim().slice(0, 40) || 'other', text: clean(x.text).slice(0, 600), action: clean(x.action).slice(0, 300),
+      ...(Array.isArray(x.urls) ? { urls: x.urls.map(httpUrl).filter(Boolean).slice(0, 5) } : {}) })) : null;
+  if (!blk) gating_missing.push('qa_blocking');
+  const dups = Array.isArray(g.duplicate_targets) && !told.includes('duplicate_targets') ? g.duplicate_targets.filter(isObj).map(x => ({ url: httpUrl(x.url), title: clean(x.title).slice(0, 200),
+    keyword_words_shared_pct: Number.isFinite(Number(x.keyword_words_shared_pct)) ? Number(x.keyword_words_shared_pct) : null })).filter(x => x.url).slice(0, LIMP.dups) : null;
+  if (!dups) gating_missing.push('duplicate_targets');
+  const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? null : Number(v);
+  const gating = { qa_blocking: blk || [], duplicate_targets: dups || [],
+    verdict: S(g.verdict).trim().toUpperCase().slice(0, 30) || null, score: num(g.score), score_withheld: g.score_withheld === true,
+    page_type: S(g.page_type).trim().slice(0, 60), verdict_acknowledged: g.verdict_acknowledged === true,
+    copied_passages: (Array.isArray(g.copied_passages) ? g.copied_passages : []).map(x => S(x).replace(/\s+/g, ' ').trim()).filter(x => x.split(' ').length >= 6).map(x => x.slice(0, 400)).slice(0, LIMP.passages) };
+  // the grading fields, each read only when it has the contract's shape
+  const lb = isObj(g.length_band) && Number(g.length_band.low) > 0 && Number(g.length_band.high) >= Number(g.length_band.low)
+    ? { low: Math.round(Number(g.length_band.low)), high: Math.round(Number(g.length_band.high)), source: S(g.length_band.source) || 'ranking_pages', sample: Number(g.length_band.sample) || 0,
+      basis: clean(g.length_band.basis).slice(0, 400), target: Number(g.length_band.target) > 0 ? Math.round(Number(g.length_band.target)) : null } : null;
+  const terms = Array.isArray(g.terms) ? g.terms.map(t => typeof t === 'string' ? { term: t } : (isObj(t) ? t : null)).filter(t => t && S(t.term).trim())
+    .map(t => ({ term: S(t.term).trim().toLowerCase().slice(0, 80), min_count: Math.max(1, Math.min(20, Number(t.min_count) || 1)) })).slice(0, LIMP.terms) : null;
+  const factsIn = Array.isArray(g.facts) ? g.facts.filter(isObj).map(f => ({ claim: S(f.claim).replace(/\s+/g, ' ').trim().slice(0, 600), source: S(f.source).trim().slice(0, 120),
+    url: httpUrl(f.url), title: S(f.title).replace(/\s+/g, ' ').trim().slice(0, 200), ...(f.regulatory ? { regulatory: true } : {}) })).filter(f => f.claim || f.url).slice(0, LIMP.facts) : null;
+  const cited = Array.isArray(g.sources_cited) ? g.sources_cited.filter(isObj).map(x => ({ anchor: S(x.anchor).replace(/\s+/g, ' ').trim().slice(0, 200), url: httpUrl(x.url),
+    host: S(x.host).trim().slice(0, 120), tier: x.tier == null ? null : (typeof x.tier === 'number' ? x.tier : S(x.tier).slice(0, 30)) })).filter(x => x.url).slice(0, LIMP.sources) : null;
+  const siteUrls = Array.isArray(g.site_urls) ? g.site_urls.map(httpUrl).filter(Boolean).slice(0, LIMP.urls) : null;
+  const regFacts = Array.isArray(g.regulatory_facts) ? g.regulatory_facts.filter(isObj).slice(0, LIMP.reg) : null;
+  const regTopics = Array.isArray(g.regulatory_topics) ? g.regulatory_topics.filter(isObj).map(t => ({ id: S(t.id).slice(0, 60), relevance: S(t.relevance).slice(0, 20) })).filter(t => t.id).slice(0, 12) : null;
+  const grading = { length_band: lb, coverage_target: isObj(g.coverage_target) ? g.coverage_target : null, terms, facts: factsIn, sources_cited: cited,
+    style_guide: isObj(g.style_guide) ? g.style_guide : null, site_urls: siteUrls, serp_shapes: isObj(g.serp_shapes) ? g.serp_shapes : null,
+    regulatory_facts: regFacts, regulatory_topics: regTopics };
+  const grading_missing = PRC_GRADING.filter(k => grading[k] == null);
+  return { received: !!pr, gating, gating_missing, blocks_known: gating_missing.length === 0, grading, grading_missing,
+    content_request_id: S(g.content_request_id || b.content_request_id).trim().slice(0, 120) };
+})();
+const dupUrls = [...new Set(prc.gating.duplicate_targets.map(d => d.url).concat(...prc.gating.qa_blocking.filter(x => x.code === 'duplicate_page').map(x => x.urls || [])))];
+let duplicate_decision = null;
+if (b.duplicate_decision != null) {
+  const dd = b.duplicate_decision;
+  if (!isObj(dd)) errors.push('duplicate_decision must be an object { choice: update | differs, url, reason }');
+  else {
+    const choice = S(dd.choice).trim().toLowerCase(); const url = httpUrl(dd.url); const reason = clean(dd.reason);
+    if (!['update', 'differs'].includes(choice)) errors.push('duplicate_decision.choice must be update or differs');
+    else if (choice === 'update' && !url) errors.push('duplicate_decision.url is required for update: the address of the page this text replaces');
+    else if (choice === 'update' && dupUrls.length && !dupUrls.some(u => pageKey(u) === pageKey(url))) errors.push('duplicate_decision.url must be one of the pages the first check found for this search: ' + dupUrls.slice(0, 3).join(', '));
+    else if (choice === 'differs' && (reason.length < 20 || reason.length > 600)) errors.push('duplicate_decision.reason must say in 20 to 600 characters how this page differs from the one your website has');
+    else if (choice === 'differs' && /[<>]/.test(reason)) errors.push('duplicate_decision.reason must be plain text (no < or >)');
+    else duplicate_decision = { choice, url: choice === 'update' ? url : '', reason: choice === 'differs' ? reason : '', applies: dupUrls.length > 0 };
+  }
+}
+
 // the answers: each one checked, a malformed one refuses the request (the client must not get a page that silently ignored an answer)
 let answers = [];
 if (b.answers != null && !Array.isArray(b.answers)) errors.push('answers must be an array');
@@ -790,7 +863,29 @@ const page = metaFix.md;
 const withoutMeta = page.split('\n').filter(l => !META.test(l.trim())).join('\n');
 const ownWords = withoutMeta.split(/\s+/).filter(Boolean).length;
 const ownLinks = [...page.matchAll(/\]\((https?:\/\/[^)\s]+)\)/g)].map(m => m[1]).filter(u => { const h = (u.match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i) || [])[1] || ''; const x = h.toLowerCase().replace(/^www\./, ''); return x === domain || x.endsWith('.' + domain); });
-const pageType = S(b.page_type).trim() || 'Blog Post / Guide';
+const pageType = S(b.page_type).trim() || prc.gating.page_type || 'Blog Post / Guide';
+
+// W0-B: the length the page is judged against is the page run's band (never the page's own word count, which gave 15 of 15 by
+// construction). A page written before the band was kept with it:
+//   * the grade takes the length points the page run itself measured on the delivered page against the pages that rank (`length_points`,
+//     from the original report's grade; Finalize Verdict puts them in), so the final version is neither flattered nor judged on a guess;
+//   * a page with no such grade either is held to the usual band for its kind of page (Parse Analysis' bands), with (about) full points
+//     anywhere inside it: a band read off no ranking page must not cut a long guide that ranks (the guide of exec 949 has 3,500 words);
+//   and the advice says the length of the pages that rank was not checked.
+const LEN = (() => {
+  const lb = prc.grading.length_band;
+  if (lb) { const mid = Math.round((lb.low + lb.high) / 200) * 100; const target = lb.target && lb.target >= lb.low && lb.target <= lb.high ? lb.target : Math.min(lb.high, Math.max(lb.low, mid));
+    return { target, band: { ok: lb.source === 'ranking_pages', source: lb.source, low: lb.low, high: lb.high, sample: lb.sample, basis: lb.basis, target_word_count: target }, from: 'page_run' }; }
+  const pts = pr && pr.length_points !== null && pr.length_points !== '' && Number.isFinite(Number(pr.length_points)) ? Math.max(0, Math.min(15, Number(pr.length_points))) : null;
+  if (pts != null) return { target: Math.max(1, ownWords), band: null, from: 'first_check', points: pts };
+  const pt = pageType.toLowerCase(); const isGuide = /blog|guide|article/.test(pt); const isHub = /pillar|hub/.test(pt); const isShort = /case stud|local/.test(pt);
+  const lo = isHub ? 1800 : isShort ? 800 : isGuide ? 1200 : 900, hi = isHub ? 3500 : isShort ? 1800 : isGuide ? 3000 : 2400;
+  const target = Math.min(hi, Math.max(lo, ownWords));
+  return { target, band: { ok: false, source: 'page_type', low: lo, high: hi, sample: 0, target_word_count: target,
+    basis: 'the usual length for this kind of page is used: ' + lo.toLocaleString('en-US') + '-' + hi.toLocaleString('en-US') + ' words (the length of the pages that rank was not kept with this page)' }, from: 'page_type' };
+})();
+const G = prc.grading;
+const siteUrls = [...new Set(ownLinks.concat(G.site_urls || []))];
 
 const ok = errors.length === 0;
 return [{ json: {
@@ -798,12 +893,19 @@ return [{ json: {
   output: page, critique: null, had_meta,
   keyword, domain, country: S(b.country).trim(), currency: '', page_type: pageType, page_role: 'standard', article_like: false,
   business: '', business_facts: businessFacts, case_facts_text: '', business_facts_kv: kv, stored_fact_keys: stored,
-  facts: [], term_model: [], coverage_target: null, competitors: [],
-  content_brief: { target_word_count: ownWords, outline: [], terms_to_use: [], evidence_plan: [], snippet_targets: [], secondary_keywords: [], questions_for_client: [] },
-  internal_link_candidates: ownLinks.map(u => ({ url: u })), site_urls: ownLinks, planned_link_targets: [], hub_pages: [],
-  existing_page: null, existing_page_ours: false, ladder_id: '', author: null, reviewer: null, site_profile: null, site_description: null, video: null, style_guide: null,
+  // W0-B: the page run's context (PRC grading fields) where the request carried it, else what the page itself holds
+  facts: G.facts || [], term_model: [], coverage_target: G.coverage_target || null, competitors: [],
+  content_brief: { target_word_count: LEN.target, outline: [], terms_to_use: G.terms || [], evidence_plan: (G.sources_cited || []).map(x => ({ source_url: x.url, claim: x.anchor, source: x.host })),
+    snippet_targets: [], secondary_keywords: [], questions_for_client: [] },
+  length_band: LEN.band, own_word_count: ownWords,
+  internal_link_candidates: ownLinks.map(u => ({ url: u })), site_urls: siteUrls, planned_link_targets: [], hub_pages: [],
+  existing_page: null, existing_page_ours: false, ladder_id: '', author: null, reviewer: null, site_profile: null, site_description: null, video: null, style_guide: G.style_guide || null,
+  serp_shapes: G.serp_shapes || null, regulatory: G.regulatory_facts ? { topics: G.regulatory_topics || [...new Set(G.regulatory_facts.map(f => S(f.topic)).filter(Boolean))].map(id => ({ id, relevance: 'core' })), facts: G.regulatory_facts } : null,
   ai_target: null, qa_max_rounds: 1, originality_max_overlap_pct: 15, client_pages: [],
-  request_id: S(b.request_id).slice(0, 120), content_request_id: S(b.content_request_id).slice(0, 120), site_id: S(b.site_id).slice(0, 120),
+  request_id: S(b.request_id).slice(0, 120), content_request_id: S(prc.content_request_id || b.content_request_id).slice(0, 120), site_id: S(b.site_id).slice(0, 120),
+  prc: { received: prc.received, gating: prc.gating, gating_missing: prc.gating_missing, blocks_known: prc.blocks_known, grading_missing: prc.grading_missing, length_from: LEN.from,
+    length_points: LEN.points == null ? null : LEN.points,
+    duplicate_urls: dupUrls, duplicate_decision },
   finalize: { answers, client_edited, client_sentences, delivered_markdown: delivered, input_markdown: markdown, answer_texts: answerTexts, stored_keys: stored,
     answered_keys: answers.filter(a => a.decision !== 'skip' && a.fact_key).map(a => a.fact_key),
     meta_fix: { how: metaFix.how, description: metaFix.description, problem: metaFix.problem, fixes: metaFix.fixes } }

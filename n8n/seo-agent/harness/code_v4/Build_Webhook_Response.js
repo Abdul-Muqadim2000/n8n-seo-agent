@@ -47,7 +47,28 @@ return [{
     qa_not_ready: !!d.qa_not_ready, qa_label: d.qa_label || null, qa_reasons: d.qa_reasons || [], qa_quality: d.qa_quality || null,
     qa_next_step: d.qa_next_step || null, qa_owner_edits: d.qa_owner_edits || [],
     qa_delivery_status: d.qa_delivery_status || null, qa_client_questions: d.qa_client_questions || [], qa_grade: d.qa_grade || null,   // H1 (2026-10-27): for the app's approval and questions (H3)
-    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],   // 2026-10-21: what to edit by hand (the app's Needs-you can say it instead of "run it again")
+    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],
+    ...(() => {   // W0-B (section 155): the page-run context's grading fields, so the final version is judged like the page run
+      if (!(d.article_markdown || d.page_markdown)) return { page_run: null };
+      let pb = {}, cq = {}; try { pb = $('Parse Brief').first().json || {}; } catch (e) { pb = {}; }
+      try { cq = ($('Page Candidates').first().json || {}).content_qa || {}; } catch (e) { cq = {}; }
+      const A = (v) => (Array.isArray(v) ? v : []); const T = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+      const br = pb.content_brief || {}; const lbq = cq.length_band || (pb.competitor_analysis || {}).length_band || pb.length_band || null;
+      const target = Number(br.target_word_count) > 0 ? Math.round(Number(br.target_word_count)) : (lbq && Number(lbq.target_word_count) > 0 ? Math.round(Number(lbq.target_word_count)) : null);
+      const length_band = lbq && Number(lbq.low) > 0 && Number(lbq.high) >= Number(lbq.low) ? { low: Number(lbq.low), high: Number(lbq.high), source: lbq.source || (lbq.ok ? 'ranking_pages' : 'page_type'), sample: Number(lbq.sample) || 0, basis: T(lbq.basis, 400), target } : null;
+      let reg = pb.regulatory || null; if (!reg) { try { reg = $('Collect Regulatory Facts').first().json.regulatory || null; } catch (e) { reg = null; } }
+      const regFacts = A(pb.regulatory_facts).length ? A(pb.regulatory_facts) : A((reg || {}).facts);
+      return { page_run: { prc: 1,
+        length_band,
+        coverage_target: pb.coverage_target && typeof pb.coverage_target === 'object' ? pb.coverage_target : null,
+        terms: A(br.terms_to_use).map(t => (typeof t === 'string' ? { term: t, min_count: 1 } : { term: T((t || {}).term, 80), min_count: Number((t || {}).min_count) || 1 })).filter(t => t.term).slice(0, 80),
+        facts: A(pb.facts).filter(f => f && typeof f === 'object').map(f => ({ claim: T(f.claim || f.text, 600), source: T(f.source, 120), url: T(f.url, 600), title: T(f.title, 200), ...(f.regulatory ? { regulatory: true } : {}) })).filter(f => f.claim || f.url).slice(0, 40),
+        sources_cited: A(cq.sources_cited).filter(x => x && x.url).map(x => ({ anchor: T(x.anchor, 200), url: T(x.url, 600), host: T(x.host, 120), tier: x.tier == null ? null : x.tier })).slice(0, 30),
+        style_guide: pb.style_guide && typeof pb.style_guide === 'object' ? pb.style_guide : { on_file: false },
+        site_urls: A(pb.site_urls).map(u => String(u || '')).filter(u => /^https?:\/\//i.test(u)).slice(0, 300),
+        serp_shapes: pb.serp_shapes || cq.serp_shapes || null,
+        regulatory_facts: regFacts.slice(0, 40), regulatory_topics: A((reg || {}).topics).map(t => ({ id: T((t || {}).id, 60), relevance: T((t || {}).relevance, 20) })).filter(t => t.id).slice(0, 12),
+        content_request_id: T(pb.content_request_id || d.request_id, 120) } }; })(),   // 2026-10-21: what to edit by hand (the app's Needs-you can say it instead of "run it again")
     run_ledger: d.run_ledger || null,
     dfs_tasks: (d.run_ledger || {}).dataforseo_tasks ?? null,
     markdown: d.article_markdown || d.page_markdown || null,
