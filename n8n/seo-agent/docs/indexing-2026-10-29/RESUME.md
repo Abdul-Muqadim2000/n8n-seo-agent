@@ -2,6 +2,8 @@
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
+## TUTORIALS: STOPPED by the owner 2026-10-30 (batched after the app revamp; see ~/Downloads/hiresuite-video-skills/alaventra/TUTORIALS_BACKLOG.md). The block below is history.
+
 ## SAVED 2026-10-30 (usage limit): tutorial in progress
 - Feature code: complete, all on `feature/indexing` @ 69f35d37 (pushed). Nothing deployed.
 - Tutorial (A17) agent was mid-way: demo checkout /Users/abdul.muqadim/n8n_devaicon-demo was moved to feature/indexing 69f35d37 (it was
