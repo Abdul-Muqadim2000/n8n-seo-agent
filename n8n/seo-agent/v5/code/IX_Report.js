@@ -27,7 +27,7 @@ for (const d of diag) {
     new_pages: sum.new_pages, new_indexed: sum.new_indexed, by_action: sum.by_action, by_cause: sum.by_cause, dropped: (d.dropped || []).slice(0, IX.CFG.dropped_max),
     freeze: !!fr.freeze, freeze_reason: S(fr.reason), events,
     impact: imp ? { event_title: S(imp.event_title), dropped: n0(imp.dropped), stable: n0(imp.stable), gained: n0(imp.gained) } : { event_title: '', dropped: 0, stable: 0, gained: 0 } };
-  const md = IX.reportMarkdown({ domain: d.domain }, { ...sum, should_index: sum.should_index }, { ...run, quota_cap: d.cap }, { rows: d.all || [], dropped: d.dropped || [], events, freeze: fr, impact: imp });
+  const md = IX.reportMarkdown({ domain: d.domain }, { ...sum, should_index: sum.should_index }, { ...run, quota_cap: d.cap }, { rows: d.all || [], dropped: d.dropped || [], events, freeze: fr, impact: imp, failed: !!d.failed, why: S(d.why) });   // E14: a site not checked says so, never "0 of 0"
   out.push({ json: { stage: 'index_coverage', status: 'complete', domain: S(d.domain), site_id: d.site_id, request_id: S(d.request_id), summary, report_markdown: md,
     cost: { usd: 0 }, callback_url: S(d.callback_url) } });
 }

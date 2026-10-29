@@ -22,7 +22,7 @@ import url_lint      # D15: no node builds a site URL by hand
 import retry_lint    # G1: one retry rule for every external HTTP node
 import monitor_cost  # R115: the callback waits for the settle and carries its figure
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params, dt_get_all_where_params,
-                           dt_upsert_params, dt_upsert_params_keys, dt_update_params, read_v5, engine_tz,
+                           dt_upsert_params, dt_upsert_params_keys, dt_update_params, dt_get_any_params, dt_delete_where_params, read_v5, engine_tz,
                            SITES_TABLE, MONITORS_TABLE, PAGES_TABLE, PAGE_WATCH_TABLE, LOG_TABLE,
                            INDEX_PAGES_TABLE, INDEX_PAGES_COLS, INDEX_HISTORY_TABLE, INDEX_HISTORY_COLS, INDEX_RUNS_TABLE, INDEX_RUNS_COLS,
                            GOOGLE_EVENTS_TABLE, GOOGLE_EVENTS_COLS, UPDATE_IMPACT_TABLE, UPDATE_IMPACT_COLS,
@@ -88,7 +88,7 @@ def text_get(url, follow=True, batch=5, interval=250, timeout=30000):
     return {'method': 'GET', 'url': url, 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': UA},
             {'name': 'Accept', 'value': 'text/html,application/xhtml+xml,application/xml,text/xml,application/json,text/plain,*/*'}]}, 'options': o}
 
-# ---- row 0: doors, own tables, loads, plan ----
+# ---- row 0: doors, own tables, the few loads the plan needs ----
 node('Daily Schedule', 'n8n-nodes-base.scheduleTrigger', 1.2, {'rule': {'interval': [{'field': 'days', 'daysInterval': 1, 'triggerAtHour': SCHEDULE['hour'], 'triggerAtMinute': SCHEDULE['minute']}]}}, at(0, 0))
 node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
 OWN = [('Ensure Index Pages Table', INDEX_PAGES_TABLE, INDEX_PAGES_COLS), ('Ensure Index History Table', INDEX_HISTORY_TABLE, INDEX_HISTORY_COLS),
@@ -97,101 +97,154 @@ OWN = [('Ensure Index Pages Table', INDEX_PAGES_TABLE, INDEX_PAGES_COLS), ('Ensu
 for i, (nm, t, cols) in enumerate(OWN):
     node(nm, DT_TYPE, DT_VERSION, dt_create_params(t, cols), at(1 + i, 0), onError='continueRegularOutput', executeOnce=True)
 LOADS = [('Load Sites (Index)', dt_get_all_params(SITES_TABLE)), ('Load Monitors (Index)', dt_get_all_params(MONITORS_TABLE)),
-         ('Load Pages (Index)', dt_get_all_params(PAGES_TABLE)), ('Load Page Watch (Index)', dt_get_all_params(PAGE_WATCH_TABLE)),
-         # our own pages: the content log's published rows (the ladder pages too - publish detection and "I published it" write both tables). seo_ladders
-         # is not read: its rows are keyword rungs, a read path the fit gate guards (gate_lint), and the content log already carries every published URL
-         ('Load Content Log (Index)', dt_get_where_params(LOG_TABLE, 'status', 'eq', 'published')),
-         ('Load Index Pages', dt_get_all_params(INDEX_PAGES_TABLE)),
-         # today's runs only (the cap is a day's): two days back covers every time zone
+         # today's runs only (the cap is a day's; the run before this one says whether it read the sitemap tree completely): two days back
          ('Load Index Runs', dt_get_all_where_params(INDEX_RUNS_TABLE, [('run_at', 'gte', '={{ new Date(Date.now() - 2 * 864e5).toISOString() }}')])),
-         ('Load Google Events', dt_get_all_params(GOOGLE_EVENTS_TABLE)), ('Load Update Impact', dt_get_all_params(UPDATE_IMPACT_TABLE))]
+         ('Load Google Events', dt_get_all_params(GOOGLE_EVENTS_TABLE))]
 for i, (nm, params) in enumerate(LOADS):
     node(nm, DT_TYPE, DT_VERSION, params, at(6 + i, 0), **LOAD)
 code('Index Plan', rd('IX_Plan.js'), at(16, 0))
-# ---- row 1: Google's news (once per run) ----
+# ---- row 1: Google's news - read by the dispatch and by an on-demand run; a chain part gets it from the dispatch ----
+iff('Read Google News?', "{{ !!($('Index Plan').first().json.dispatch || $('Index Plan').first().json.on_demand) }}", at(16, 1))
 node('Fetch Google Incidents', 'n8n-nodes-base.httpRequest', 4.5, text_get(INCIDENTS_URL, batch=1, interval=0), at(17, 1), executeOnce=True, **HTTP_X)
 node('Fetch Spam Policies', 'n8n-nodes-base.httpRequest', 4.5, text_get(POLICY_URL, batch=1, interval=0), at(18, 1), executeOnce=True, **HTTP_X)
-code('Google Events', rd('IX_Google_Events.js'), at(19, 1))
+code('Google Events', rd('IX_Google_Events.js'), at(19, 1), executeOnce=True)
 code('Google Event Rows', "// Index coverage: the seo_google_events rows that are new or changed (exact columns: the upsert maps every input field).\n"
      "const g = ($('Google Events').first() || {}).json || {};\nconst rows = g.rows || [];\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true, reason: 'no event changed' } }];\n", at(20, 1))
 iff('Any Event Rows?', '{{ !$json.skip }}', at(21, 1))
 node('Save Google Events', DT_TYPE, DT_VERSION, dt_upsert_params(GOOGLE_EVENTS_TABLE, GOOGLE_EVENTS_COLS, 'event_id'), at(22, 0), **SAVE)
-node('GSC Sites (Index)', 'n8n-nodes-base.httpRequest', 4.5, google('GET', 'https://www.googleapis.com/webmasters/v3/sites'), at(23, 1), credentials=GOOGLE, executeOnce=True, **HTTP_X)
-code('Index Sites', rd('IX_Sites.js'), at(24, 1))
-iff('Any Sites (Index)?', "{{ !$('Index Sites').first().json.skip }}", at(25, 1))
-node('Nothing To Do (Index)', 'n8n-nodes-base.noOp', 1, {}, at(26, 2))
-# ---- row 2: Search Console (submitted sitemaps, pages with impressions) ----
-code('Sitemaps List Requests', rd('IX_Sitemaps_List_Requests.js'), at(26, 1)); iff('Any Sitemaps List?', '{{ !$json.skip }}', at(27, 1))
-node('GSC Sitemaps List', 'n8n-nodes-base.httpRequest', 4.5, google('GET', '={{ $json.url }}'), at(28, 0), credentials=GOOGLE, **HTTP_X)
-code('Pages Query Requests', rd('IX_Pages_Query_Requests.js'), at(29, 1)); iff('Any Pages Query?', '{{ !$json.skip }}', at(30, 1))
-node('GSC Pages Query', 'n8n-nodes-base.httpRequest', 4.5, google('POST', '={{ $json.url }}'), at(31, 0), credentials=GOOGLE, **HTTP_X)
-# ---- row 3: the sitemap tree, three rounds ----
+# ---- the dispatch (X1): retention, then the first website's own execution ----
+iff('Dispatch? (Index)', "{{ !!$('Index Plan').first().json.dispatch }}", at(23, 1))
+CUT = lambda days: '={{ new Date(Date.now() - ' + str(days) + ' * 864e5).toISOString() }}'
+node('Prune Index History', DT_TYPE, DT_VERSION, dt_delete_where_params(INDEX_HISTORY_TABLE, [('at', 'lt', CUT(400))]), at(24, 0), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+node('Prune Index Runs', DT_TYPE, DT_VERSION, dt_delete_where_params(INDEX_RUNS_TABLE, [('run_at', 'lt', CUT(400))]), at(25, 0), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+code('Dispatch Start', rd('IX_Dispatch_Start.js'), at(26, 0), executeOnce=True)
+iff('Any Dispatch?', '{{ !$json.skip }}', at(27, 0))
+SELF = lambda name, pos: node(name, 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': WID},
+                                'mode': 'once', 'options': {'waitForSubWorkflow': False}}, pos, onError='continueRegularOutput', alwaysOutputData=True)
+SELF('Start Index Part', at(28, -1))
+# ---- one website: its own rows only (every load filtered by the site, server-side) ----
+iff('Site To Check? (Index)', "{{ !$('Index Plan').first().json.nothing_to_do && !!$('Index Plan').first().json.site_id }}", at(24, 2))
+SID = "={{ $('Index Plan').first().json.site_id }}"
+DOM = "={{ $('Index Plan').first().json.domain }}"
+SITE_LOADS = [('Load Index Pages', dt_get_all_where_params(INDEX_PAGES_TABLE, [('site_id', 'eq', SID)])),
+              ('Load Pages (Index)', dt_get_all_where_params(PAGES_TABLE, [('site_id', 'eq', SID)])),
+              ('Load Page Watch (Index)', dt_get_all_where_params(PAGE_WATCH_TABLE, [('site_id', 'eq', SID)])),
+              # our own pages: the content log's rows of this site (published ones are kept by the code). seo_ladders is not read: its rows are
+              # keyword rungs, a read path the fit gate guards (gate_lint), and the content log already carries every published URL
+              ('Load Content Log (Index)', dt_get_any_params(LOG_TABLE, [('site_id', SID), ('domain', DOM), ('domain', "={{ 'www.' + $('Index Plan').first().json.domain }}")])),
+              ('Load Update Impact', dt_get_all_where_params(UPDATE_IMPACT_TABLE, [('site_id', 'eq', SID)]))]
+for i, (nm, params) in enumerate(SITE_LOADS):
+    node(nm, DT_TYPE, DT_VERSION, params, at(25 + i, 3), **LOAD)
+node('GSC Sites (Index)', 'n8n-nodes-base.httpRequest', 4.5, google('GET', 'https://www.googleapis.com/webmasters/v3/sites'), at(30, 1), credentials=GOOGLE, executeOnce=True, **HTTP_X)
+code('Index Sites', rd('IX_Sites.js'), at(31, 1))
+iff('Any Sites (Index)?', "{{ !$('Index Sites').first().json.skip }}", at(32, 1))
+node('Nothing To Do (Index)', 'n8n-nodes-base.noOp', 1, {}, at(33, 2))
+# ---- Search Console (submitted sitemaps, pages with impressions: by page per window, a second page when the first was full) ----
+code('Sitemaps List Requests', rd('IX_Sitemaps_List_Requests.js'), at(33, 1)); iff('Any Sitemaps List?', '{{ !$json.skip }}', at(34, 1))
+node('GSC Sitemaps List', 'n8n-nodes-base.httpRequest', 4.5, google('GET', '={{ $json.url }}'), at(35, 0), credentials=GOOGLE, **HTTP_X)
+code('Pages Query Requests', rd('IX_Pages_Query_Requests.js'), at(36, 1)); iff('Any Pages Query?', '{{ !$json.skip }}', at(37, 1))
+node('GSC Pages Query', 'n8n-nodes-base.httpRequest', 4.5, google('POST', '={{ $json.url }}'), at(38, 0), credentials=GOOGLE, **HTTP_X)
+code('Pages Query More', rd('IX_Pages_Query_More.js'), at(39, 1)); iff('Any Pages Query More?', '{{ !$json.skip }}', at(40, 1))
+node('GSC Pages Query 2', 'n8n-nodes-base.httpRequest', 4.5, google('POST', '={{ $json.url }}'), at(41, 0), credentials=GOOGLE, **HTTP_X)
+# ---- the sitemap tree, three rounds (no fetch follows a redirect: E11) ----
 for r in (1, 2, 3):
-    x = 31 + (r - 1) * 4
+    x = 41 + (r - 1) * 4
     code('Sitemap Requests ' + str(r), rd('IX_Sitemap_Requests.js', round_no=r), at(x + 1, 3))
     iff('Any Sitemaps ' + str(r) + '?', '{{ !$json.skip }}', at(x + 2, 3))
-    node('Fetch Sitemaps ' + str(r), 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}'), at(x + 3, 2), **HTTP_X)
+    node('Fetch Sitemaps ' + str(r), 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False), at(x + 3, 2), **HTTP_X)
     code('Sitemap Read ' + str(r), rd('IX_Sitemap_Read.js', round_no=r), at(x + 4, 3))
-# ---- row 4: inventory, plan, inspections, our own reads ----
-code('Index Inventory', rd('IX_Inventory.js'), at(44, 4))
-code('Index Probe Requests', rd('IX_Probe_Requests.js'), at(45, 4)); iff('Any Probes?', '{{ !$json.skip }}', at(46, 4))
-node('Inspect URL (Probe)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL), at(47, 3), credentials=GOOGLE, **HTTP_X)
-code('Index Inspect Requests', rd('IX_Inspect_Requests.js'), at(48, 4)); iff('Any Inspections (Index)?', '{{ !$json.skip }}', at(49, 4))
-node('Inspect URL (Index)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL), at(50, 3), credentials=GOOGLE, **HTTP_X)
-code('Page Fetch Requests', rd('IX_Page_Fetch_Requests.js'), at(51, 4)); iff('Any Page Fetches?', '{{ !$json.skip }}', at(52, 4))
-node('Fetch Page (Index)', 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False, timeout=20000), at(53, 3), **HTTP_X)
-code('Fetch Hop Requests', rd('IX_Fetch_Hop_Requests.js'), at(54, 4)); iff('Any Hops?', '{{ !$json.skip }}', at(55, 4))
-node('Fetch Page (Final)', 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', timeout=20000), at(56, 3), **HTTP_X)
-# ---- row 5: diagnosis, saves, update impact, run rows, report ----
-code('Index Diagnose', rd('IX_Diagnose.js'), at(57, 5))
-code('Index Page Rows', rd('IX_Page_Rows.js'), at(58, 5)); iff('Any Index Rows?', '{{ !$json.skip }}', at(59, 5))
-node('Save Index Pages', DT_TYPE, DT_VERSION, dt_upsert_params_keys(INDEX_PAGES_TABLE, INDEX_PAGES_COLS, ['site_id', 'url']), at(60, 4), **SAVE)
-code('Index History Rows', rd('IX_History_Rows.js'), at(61, 5)); iff('Any History Rows?', '{{ !$json.skip }}', at(62, 5))
-node('Save Index History', DT_TYPE, DT_VERSION, dt_insert_params(INDEX_HISTORY_TABLE, INDEX_HISTORY_COLS), at(63, 4), **SAVE)
-code('Update Impact Requests', rd('IX_Impact_Requests.js'), at(64, 5)); iff('Any Impact Queries?', '{{ !$json.skip }}', at(65, 5))
-node('GSC Impact Query', 'n8n-nodes-base.httpRequest', 4.5, google('POST', '={{ $json.url }}'), at(66, 4), credentials=GOOGLE, **HTTP_X)
-code('Update Impact Rows', rd('IX_Impact_Rows.js'), at(67, 5)); iff('Any Update Impact?', '{{ !$json.skip }}', at(68, 5))
-node('Save Update Impact', DT_TYPE, DT_VERSION, dt_upsert_params_keys(UPDATE_IMPACT_TABLE, UPDATE_IMPACT_COLS, ['site_id', 'event_id']), at(69, 4), **SAVE)
-code('Index Run Rows', rd('IX_Run_Rows.js'), at(70, 5)); iff('Any Run Rows?', '{{ !$json.skip }}', at(71, 5))
-node('Save Index Runs', DT_TYPE, DT_VERSION, dt_insert_params(INDEX_RUNS_TABLE, INDEX_RUNS_COLS), at(72, 4), **SAVE)
-code('Index Report', rd('IX_Report.js'), at(73, 5))
-iff('Has Callback (Index)?', '{{ !!$json.callback_url }}', at(74, 5))
+# ---- inventory, the reservation, inspections, our own reads ----
+code('Index Inventory', rd('IX_Inventory.js'), at(54, 4))
+code('Index Reservation', rd('IX_Reservation.js'), at(55, 4)); iff('Any Reservation?', '{{ !$json.skip }}', at(56, 4))
+node('Save Index Reservation', DT_TYPE, DT_VERSION, dt_insert_params(INDEX_RUNS_TABLE, INDEX_RUNS_COLS), at(57, 3), **SAVE)
+code('Index Probe Requests', rd('IX_Probe_Requests.js'), at(58, 4)); iff('Any Probes?', '{{ !$json.skip }}', at(59, 4))
+node('Inspect URL (Probe)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL), at(60, 3), credentials=GOOGLE, **HTTP_X)
+code('Index Inspect Requests', rd('IX_Inspect_Requests.js'), at(61, 4)); iff('Any Inspections (Index)?', '{{ !$json.skip }}', at(62, 4))
+node('Inspect URL (Index)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL), at(63, 3), credentials=GOOGLE, **HTTP_X)
+code('Inspect Retry Requests', rd('IX_Inspect_Retry_Requests.js'), at(64, 4)); iff('Any Rate Retry?', '{{ !$json.skip }}', at(65, 4))
+node('Wait (Index Rate Limit)', 'n8n-nodes-base.wait', 1.1, {'amount': 61, 'unit': 'seconds'}, at(66, 3), webhookId=nid('Wait (Index Rate Limit):hook'), executeOnce=True)
+node('Inspect URL (Retry)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL, interval=400), at(67, 3), credentials=GOOGLE, **HTTP_X)
+code('Page Fetch Requests', rd('IX_Page_Fetch_Requests.js'), at(68, 4)); iff('Any Page Fetches?', '{{ !$json.skip }}', at(69, 4))
+node('Fetch Page (Index)', 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False, timeout=20000), at(70, 3), **HTTP_X)
+code('Fetch Hop Requests', rd('IX_Fetch_Hop_Requests.js'), at(71, 4)); iff('Any Hops?', '{{ !$json.skip }}', at(72, 4))
+node('Fetch Page (Final)', 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False, timeout=20000), at(73, 3), **HTTP_X)
+code('Page Signals', rd('IX_Page_Signals.js'), at(74, 4))
+# ---- diagnosis, saves, moves, update impact, run rows, the next website, report ----
+code('Index Diagnose', rd('IX_Diagnose.js'), at(75, 5))
+code('Index Page Rows', rd('IX_Page_Rows.js'), at(76, 5)); iff('Any Index Rows?', '{{ !$json.skip }}', at(77, 5))
+node('Save Index Pages', DT_TYPE, DT_VERSION, dt_upsert_params_keys(INDEX_PAGES_TABLE, INDEX_PAGES_COLS, ['site_id', 'url']), at(78, 4), **SAVE)
+code('Index Delete Rows', rd('IX_Delete_Rows.js'), at(79, 5)); iff('Any Deletes?', '{{ !$json.skip }}', at(80, 5))
+node('Delete Index Pages', DT_TYPE, DT_VERSION, dt_delete_where_params(INDEX_PAGES_TABLE, [('site_id', 'eq', '={{ $json.site_id }}'), ('url', 'eq', '={{ $json.url }}')]), at(81, 4), **SAVE)
+code('Index History Moves', rd('IX_History_Moves.js'), at(82, 5)); iff('Any History Moves?', '{{ !$json.skip }}', at(83, 5))
+node('Move Index History', DT_TYPE, DT_VERSION, dt_update_params(INDEX_HISTORY_TABLE, INDEX_HISTORY_COLS, [('site_id', '={{ $json.site_id }}'), ('url', '={{ $json.from }}')], {'url': '={{ $json.to }}'}), at(84, 4), **SAVE)
+code('Index History Rows', rd('IX_History_Rows.js'), at(85, 5)); iff('Any History Rows?', '{{ !$json.skip }}', at(86, 5))
+node('Save Index History', DT_TYPE, DT_VERSION, dt_insert_params(INDEX_HISTORY_TABLE, INDEX_HISTORY_COLS), at(87, 4), **SAVE)
+code('Update Impact Requests', rd('IX_Impact_Requests.js'), at(88, 5)); iff('Any Impact Queries?', '{{ !$json.skip }}', at(89, 5))
+node('GSC Impact Query', 'n8n-nodes-base.httpRequest', 4.5, google('POST', '={{ $json.url }}'), at(90, 4), credentials=GOOGLE, **HTTP_X)
+code('Update Impact Rows', rd('IX_Impact_Rows.js'), at(91, 5)); iff('Any Update Impact?', '{{ !$json.skip }}', at(92, 5))
+node('Save Update Impact', DT_TYPE, DT_VERSION, dt_upsert_params_keys(UPDATE_IMPACT_TABLE, UPDATE_IMPACT_COLS, ['site_id', 'event_id']), at(93, 4), **SAVE)
+code('Index Run Rows', rd('IX_Run_Rows.js'), at(94, 5)); iff('Any Run Rows?', '{{ !$json.skip }}', at(95, 5))
+# E6: the run row replaces this run's reservation (same site_id + run_at)
+node('Save Index Runs', DT_TYPE, DT_VERSION, dt_upsert_params_keys(INDEX_RUNS_TABLE, INDEX_RUNS_COLS, ['site_id', 'run_at']), at(96, 4), **SAVE)
+code('Next Index Part', rd('IX_Next_Part.js'), at(97, 5), executeOnce=True); iff('Any Next Part?', '{{ !$json.skip }}', at(98, 5))
+SELF('Start Next Index Part', at(99, 4))
+code('Index Report', rd('IX_Report.js'), at(100, 5))
+iff('Has Callback (Index)?', '{{ !!$json.callback_url }}', at(101, 5))
 node('POST Index Report', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json',
      'jsonBody': "={{ JSON.stringify({ stage: 'index_coverage', status: $json.status || 'complete', domain: $json.domain, site_id: $json.site_id, request_id: $json.request_id, "
                  "summary: $json.summary, report_markdown: $json.report_markdown, cost: $json.cost || { usd: 0 }, run_ledger: $json.run_ledger || null, "
                  "...($json.ran_late && $json.ran_late.late ? { ran_late: $json.ran_late } : {}) }) }}", 'options': {'timeout': 30000}},
-     at(75, 5), onError='continueRegularOutput')
-node('Note', 'n8n-nodes-base.stickyNote', 1, {'content': """## SEO Agent — Index Coverage (2026-10-29)
-Every day at **05:15** (n8n's clock) and on demand (*Manual Run* `{ domain | site_id, callback_url?, request_id?, cap? }`). **Free**: Google's Search Console APIs (read-only) and plain GETs, no DataForSEO, no Claude; a $0 run-ledger row.
-Per website with Search Console and `seo_monitors.index_watch` not off: the full sitemap tree, the submitted sitemaps, the pages with impressions (90 days), the Site Tracker's inventory and our own published pages -> **one cause per page** (DESIGN §4), its action (`site_fix`, `links`, `quality`, `duplicate`, `wait`, `leave_out`) and one plain sentence. **URL Inspection within a cap** (`index_daily_cap`, default 300 a day, 20-1,200; 2 probes first: a quota / access answer stops the site for the day; 150 ms apart); a Site Tracker reading of the last 3 days is reused; impressions in the last 28 days count as indexed without spending quota. Our own read (<= 60 pages a day) of the pages Google does not have.
-Google's **Search Status Dashboard** and the **spam-policies page** once a run (`seo_google_events`): a core / spam update rolling out freezes quality suggestions; 7 days after it finishes the site's pages are compared before / after (`seo_update_impact`).
+     at(102, 5), onError='continueRegularOutput')
+# X1: a website of today's chain refused by the run guard for capacity is started again five minutes later (wired after the ledger chain exists)
+code('Retry Index Part', rd('IX_Retry_Part.js'), at(20, 9), executeOnce=True); iff('Any Retry Part?', '{{ !$json.skip }}', at(21, 9))
+node('Wait (Index Part Retry)', 'n8n-nodes-base.wait', 1.1, {'amount': 5, 'unit': 'minutes'}, at(22, 9), webhookId=nid('Wait (Index Part Retry):hook'), executeOnce=True)
+SELF('Restart Index Part', at(23, 9))
+node('Note', 'n8n-nodes-base.stickyNote', 1, {'content': """## SEO Agent — Index Coverage (2026-10-29, fix wave 1)
+Every day at **05:15** (n8n's clock) and on demand (*Manual Run* `{ domain | site_id, callback_url?, request_id?, cap? }`). **Free**: Google's Search Console APIs (read-only) and plain GETs, no DataForSEO, no Claude; a $0 run-ledger row per execution.
+**One execution per website.** The 05:15 run (or the catch-up, or a Manual Run naming no website) is the *dispatch*: it reads Google's news, prunes history older than 400 days and starts the first website's own execution (`ix_chain`); each website saves its rows, then starts the next one - one at a time. Before its first URL Inspection a website writes its **reservation** (`seo_index_runs` row with the planned count), replaced by the final row, so no crash or replay can spend past the daily cap (`index_daily_cap`, default 300, 20-1,200).
+Per website: the sitemap tree (complete or not: only a complete read says "not in the sitemap"), the submitted sitemaps, Search Console pages (by page, four windows, paged), the inventory, our own pages -> **one cause per page** (DESIGN §4), its action and one sentence; Google's documented fields beat our own read; a bot wall is "could not check". `fix_seen_at` when our read sees the step done; `ask_google` on up to 5 pages a week.
 Writes only `seo_index_pages`, `seo_index_history`, `seo_index_runs`, `seo_google_events`, `seo_update_impact`. Callback `index_coverage` on Mondays, or the day a page drops out or an update starts / finishes. Never submits to Google, never changes a site, never says a page "will be indexed".""",
-     'height': 420, 'width': 1300, 'color': 5}, [16 * 220 - 40, -560])
+     'height': 460, 'width': 1300, 'color': 5}, [16 * 220 - 40, -600])
 
 # ---- wiring ----
 chain('Daily Schedule', OWN[0][0]); link('Manual Run', OWN[0][0])
-chain(*[o[0] for o in OWN], *[l[0] for l in LOADS], 'Index Plan', 'Fetch Google Incidents', 'Fetch Spam Policies', 'Google Events', 'Google Event Rows', 'Any Event Rows?')
-link('Any Event Rows?', 'Save Google Events', 0); link('Any Event Rows?', 'GSC Sites (Index)', 1); link('Save Google Events', 'GSC Sites (Index)')
-chain('GSC Sites (Index)', 'Index Sites', 'Any Sites (Index)?')
+chain(*[o[0] for o in OWN], *[l[0] for l in LOADS], 'Index Plan', 'Read Google News?')
+link('Read Google News?', 'Fetch Google Incidents', 0); link('Read Google News?', 'Google Events', 1)
+chain('Fetch Google Incidents', 'Fetch Spam Policies', 'Google Events', 'Google Event Rows', 'Any Event Rows?')
+link('Any Event Rows?', 'Save Google Events', 0); link('Any Event Rows?', 'Dispatch? (Index)', 1); link('Save Google Events', 'Dispatch? (Index)')
+link('Dispatch? (Index)', 'Prune Index History', 0); link('Dispatch? (Index)', 'Site To Check? (Index)', 1)
+chain('Prune Index History', 'Prune Index Runs', 'Dispatch Start', 'Any Dispatch?')
+link('Any Dispatch?', 'Start Index Part', 0); link('Any Dispatch?', 'Index Report', 1); link('Start Index Part', 'Index Report')
+link('Site To Check? (Index)', SITE_LOADS[0][0], 0); link('Site To Check? (Index)', 'Nothing To Do (Index)', 1)
+chain(*[l[0] for l in SITE_LOADS], 'GSC Sites (Index)', 'Index Sites', 'Any Sites (Index)?')
 link('Any Sites (Index)?', 'Sitemaps List Requests', 0); link('Any Sites (Index)?', 'Nothing To Do (Index)', 1)
+link('Nothing To Do (Index)', 'Next Index Part')
 def gate(req, cond, http, nxt):
     chain(req, cond); link(cond, http, 0); link(cond, nxt, 1); link(http, nxt)
 gate('Sitemaps List Requests', 'Any Sitemaps List?', 'GSC Sitemaps List', 'Pages Query Requests')
-gate('Pages Query Requests', 'Any Pages Query?', 'GSC Pages Query', 'Sitemap Requests 1')
+gate('Pages Query Requests', 'Any Pages Query?', 'GSC Pages Query', 'Pages Query More')
+gate('Pages Query More', 'Any Pages Query More?', 'GSC Pages Query 2', 'Sitemap Requests 1')
 for r in (1, 2, 3):
     gate('Sitemap Requests %d' % r, 'Any Sitemaps %d?' % r, 'Fetch Sitemaps %d' % r, 'Sitemap Read %d' % r)
     link('Sitemap Read %d' % r, 'Sitemap Requests %d' % (r + 1) if r < 3 else 'Index Inventory')
-link('Index Inventory', 'Index Probe Requests')
+link('Index Inventory', 'Index Reservation')
+gate('Index Reservation', 'Any Reservation?', 'Save Index Reservation', 'Index Probe Requests')
 gate('Index Probe Requests', 'Any Probes?', 'Inspect URL (Probe)', 'Index Inspect Requests')
-gate('Index Inspect Requests', 'Any Inspections (Index)?', 'Inspect URL (Index)', 'Page Fetch Requests')
+gate('Index Inspect Requests', 'Any Inspections (Index)?', 'Inspect URL (Index)', 'Inspect Retry Requests')
+chain('Inspect Retry Requests', 'Any Rate Retry?'); link('Any Rate Retry?', 'Wait (Index Rate Limit)', 0); link('Any Rate Retry?', 'Page Fetch Requests', 1)
+chain('Wait (Index Rate Limit)', 'Inspect URL (Retry)', 'Page Fetch Requests')
 gate('Page Fetch Requests', 'Any Page Fetches?', 'Fetch Page (Index)', 'Fetch Hop Requests')
-gate('Fetch Hop Requests', 'Any Hops?', 'Fetch Page (Final)', 'Index Diagnose')
+gate('Fetch Hop Requests', 'Any Hops?', 'Fetch Page (Final)', 'Page Signals')
+link('Page Signals', 'Index Diagnose')
 link('Index Diagnose', 'Index Page Rows')
-gate('Index Page Rows', 'Any Index Rows?', 'Save Index Pages', 'Index History Rows')
+gate('Index Page Rows', 'Any Index Rows?', 'Save Index Pages', 'Index Delete Rows')
+gate('Index Delete Rows', 'Any Deletes?', 'Delete Index Pages', 'Index History Moves')
+gate('Index History Moves', 'Any History Moves?', 'Move Index History', 'Index History Rows')
 gate('Index History Rows', 'Any History Rows?', 'Save Index History', 'Update Impact Requests')
 gate('Update Impact Requests', 'Any Impact Queries?', 'GSC Impact Query', 'Update Impact Rows')
 gate('Update Impact Rows', 'Any Update Impact?', 'Save Update Impact', 'Index Run Rows')
-gate('Index Run Rows', 'Any Run Rows?', 'Save Index Runs', 'Index Report')
+gate('Index Run Rows', 'Any Run Rows?', 'Save Index Runs', 'Next Index Part')
+gate('Next Index Part', 'Any Next Part?', 'Start Next Index Part', 'Index Report')
 chain('Index Report', 'Has Callback (Index)?'); link('Has Callback (Index)?', 'POST Index Report', 0)
 
 # the code nodes read each other by these names; a rename that misses one must fail here, not in production
@@ -199,7 +252,7 @@ _src = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] == 
 _names = {n['name'] for n in N}
 for _n, _s in _src.items():
     for _ref in re.findall(r"\$\('([^']+)'\)", _s):
-        assert _ref in _names or _ref.startswith('Sitemap Read ') or _ref.startswith('Sitemap Requests ') or _ref.startswith('Fetch Sitemaps '), _n + ' reads a node that does not exist: ' + _ref
+        assert _ref in _names or _ref == 'After Run Ledger (' + TAG + ')' or _ref.startswith('Sitemap Read ') or _ref.startswith('Sitemap Requests ') or _ref.startswith('Fetch Sitemaps '), _n + ' reads a node that does not exist: ' + _ref
 for _n in ('Index Plan', 'Google Events', 'Index Inventory', 'Index Diagnose', 'Index Report', 'Update Impact Rows', 'Index Run Rows', 'Index Probe Requests', 'Index Inspect Requests',
            'Page Fetch Requests', 'Update Impact Requests', 'Sitemap Requests 1', 'Sitemap Read 1'):
     assert 'const IX = (() => {' in _src[_n] and 'const PW = (() => {' in _src[_n], _n + ': the index kit or the page-watch kit is not inlined'
@@ -229,13 +282,18 @@ def ledger_nodes(plan, ends, pos):
     return {'mode': MODE, 'plan': plan, 'reserve': row, 'settle': 'Settle Run Ledger (' + TAG + ')', 'settle_from': list(ends), 'measured': '', 'est': LEDGER_EST[MODE],
             'resume': 'After Run Ledger (' + TAG + ')', 'no_dfs': True}
 
-WIRING = ledger_nodes('Index Plan', ['Index Report', 'Nothing To Do (Index)'], at(16, 7))
+WIRING = ledger_nodes('Index Plan', ['Index Report'], at(16, 7))
 wfobj = {'id': WID, 'name': NAME, 'active': False,
          'settings': {'executionOrder': 'v1', 'errorWorkflow': 'SEOagentErrHandl', 'executionTimeout': 3600, 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all'},
          'tags': [], 'nodes': N, 'connections': C}
 _declared = list(WIRING['settle_from'])
 ledger_mainline(wfobj, WIRING)
 monitor_cost.callback_after_settle(wfobj, WIRING, 'Has Callback (Index)?', 'POST Index Report', V5, _declared)
+# X1: the refusal of a chain part also tries the part again later (the refusal notice and its row are unchanged)
+_ref = 'Refuse Run Ledger (' + TAG + ')'
+assert _ref in {n['name'] for n in N}, 'X1: no refusal node to hang the retry on'
+C[_ref]['main'][0].append({'node': 'Retry Index Part', 'type': 'main', 'index': 0})
+chain('Retry Index Part', 'Any Retry Part?'); link('Any Retry Part?', 'Wait (Index Part Retry)', 0); chain('Wait (Index Part Retry)', 'Restart Index Part')
 url_lint.check(wfobj, NAME)
 retry_lint.check(wfobj, NAME)
 retry_lint.check_in200(wfobj, NAME)

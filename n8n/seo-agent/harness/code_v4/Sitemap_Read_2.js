@@ -1,6 +1,9 @@
 // Index coverage: what round 2 of the sitemap reading found, carried per website to the next round (urls, sitemaps read, the children
-// still to read, errors). robots.txt answers give the Sitemap: lines; a sitemap that failed is named with its reason and never turns the pages
-// it would have listed into "not in the sitemap" (`read` counts the documents that were really read).
+// still to read, errors). The home page's answer is read first: the host it ends on is the site's host when the site model has none (E5),
+// and its own links say which pages the home page and its menu point to (X8). robots.txt answers give the Sitemap: lines and Google's rules
+// (kept, at most 50 KB, for the "allow it in robots.txt" fix check, X7). A redirect is followed only to the site's own domain, by queueing
+// its target for the next round (E11). A sitemap that failed is named with its reason; whether the whole tree was read is decided after the
+// last round (IX.sitemapComplete, E1) and a partial tree never turns a page into "not in the sitemap".
 // ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13; system review FIX_PLAN.md) ----
 // G11: a monthly audit cannot see a page that went noindex on the 3rd. Every day the key pages are fetched raw and cheaply (one plain GET
 // each, no JavaScript, no paid API) and compared with what we stored: HTTP status, a redirect that appeared, `noindex`, the canonical, the
@@ -408,49 +411,83 @@ const IX = (() => {
     impact_after_days: 7, impact_window_max: 28, impact_window_min: 7, impact_recent_days: 60, impact_min_impr: 50,
     impact_refresh_days: 7, impact_z: 1.96, impact_rel: 0.2,
     links_max: 5, dropped_max: 20, impact_pages_max: 30,
+    // fix wave 1 (2026-10-29, docs/indexing-2026-10-29/FIX_CONTRACT.md)
+    google_fresh_days: 14,                         // E2: a Google crawl younger than this is never overruled by our own fetch
+    sa_rows: 25000, sa_max_rows: 50000,            // X3: Search Analytics page rows per request, and the hard stop per window (two pages)
+    sa_windows: [90, 28, 14, 7],                   // X3: one page-dimension query per window (no date dimension)
+    robots_max: 50000, home_links_max: 500,        // what the run keeps of robots.txt and of the home page's own links
+    moves_max: 500, prune_gone_days: 120, history_keep_days: 400,   // E4 URL moves, X16 retention
+    fix_recheck_days: 1, fix_slow_after_days: 7, fix_slow_recheck_days: 7,   // X7: a fix seen on the site is re-inspected within a day
+    ask_max: 5, ask_ours_days: 7,                  // X8: "ask Google to read it", at most 5 pages a site a week
+    rate_retry_max: 100,                           // E13: inspections answered with a per-minute limit, asked again after a minute
   };
-  // ---- URLs: canonical host, host-agnostic keys, own host only ----
-  const hostOf = (u) => { const m = S(u).match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase() : ''; };
+  // ---- URLs: strict parsing (E11), canonical host, host-agnostic keys, own host only ----
+  // A URL is read only when it is plain http(s)://host[:80|443]/path?query: no userinfo, no backslash, no whitespace, no IP literal, no bare
+  // name, no other port. Everything this workflow fetches is REBUILT from that parse ('https://' + host + path + query), so a string that a
+  // WHATWG parser would read differently (http://169.254.169.254\@site.com/) is refused instead of fetched.
+  const parseUrl = (u) => {
+    const s = S(u).replace(/#[\s\S]*$/, '');
+    if (!s || /[\\\s<>"`{}|^]/.test(s)) return null;
+    const m = s.match(/^(https?):\/\/([^\/?#]*)([^?#]*)(\?[^#]*)?$/i); if (!m) return null;
+    const auth = m[2]; if (!auth || /[@\\[\]]/.test(auth)) return null;
+    const hm = auth.match(/^([a-z0-9.-]+)(?::(\d{1,5}))?$/i); if (!hm) return null;
+    const host = hm[1].toLowerCase().replace(/\.$/, '');
+    if (hm[2] && hm[2] !== '80' && hm[2] !== '443') return null;
+    if (!/\./.test(host) || /^[.-]|\.\.|[.-]$/.test(host) || host === 'localhost' || /\.(?:localhost|local|internal|arpa)$/.test(host)) return null;
+    if (/^(?:0x[0-9a-f]+|\d+)(?:\.(?:0x[0-9a-f]+|\d+)){0,3}$/i.test(host)) return null;   // 127.0.0.1, 10.0.0.1, 169.254.169.254, 0x7f000001, 2130706433
+    return { scheme: m[1].toLowerCase(), host, path: m[3] || '/', query: m[4] && m[4] !== '?' ? m[4] : '' };
+  };
+  const hostOf = (u) => { const p = parseUrl(u); return p ? p.host : ''; };
   const bare = (h) => S(h).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#:].*$/, '');
-  const pathOf = (u) => { const m = S(u).match(/^https?:\/\/[^\/?#]*([^?#]*)/i); return (m && m[1]) || '/'; };
-  const queryOf = (u) => { const m = S(u).match(/^[^?#]*(\?[^#]*)/); return m && m[1] !== '?' ? m[1] : ''; };
+  const pathOf = (u) => { const p = parseUrl(u); if (p) return p.path; const m = S(u).match(/^https?:\/\/[^\/?#]*([^?#]*)/i); return (m && m[1]) || '/'; };
+  const queryOf = (u) => { const p = parseUrl(u); if (p) return p.query; const m = S(u).match(/^[^?#]*(\?[^#]*)/); return m && m[1] !== '?' ? m[1] : ''; };
   /** Host-agnostic identity: scheme, www, a trailing slash and the fragment do not make another page; the query does (a filter page is another page). */
   const key = (u) => {
-    const s = S(u); if (!/^https?:\/\//i.test(s)) return '';
-    const p = pathOf(s).replace(/\/+$/, '');
-    return (bare(hostOf(s)) + p + queryOf(s)).toLowerCase();
+    const x = parseUrl(decodeXml(u)); if (!x) return '';
+    return (bare(x.host) + x.path.replace(/\/+$/, '') + x.query).toLowerCase();
   };
   const same = (a, b) => !!key(a) && key(a) === key(b);
   const decodeXml = (t) => S(t).replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/, '$1').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").trim();
-  /** The host every URL we store uses: the site model's canonical host when it is the same site (www or bare), else the bare domain. */
-  const siteHost = (site) => {
-    const ch = S((site || {}).canonical_host).toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#:].*$/, '');
-    return ch && bare(ch) === bare((site || {}).domain) ? ch : bare((site || {}).domain);
-  };
-  const own = (u, site) => !!hostOf(u) && bare(hostOf(u)) === bare((site || {}).domain);
+  /**
+   * The host every URL we store and inspect uses (E5, FIX_CONTRACT decision 4): the site model's canonical host when it is the same site (www
+   * or bare); when that is empty, the host the home page really ends on after redirects (`home_host`, read by this run's first sitemap round
+   * and stored in the run's sitemaps_json); the bare domain only when neither is known.
+   */
+  const sameSiteHost = (h, site) => { const x = S(h).toLowerCase().replace(/^https?:\/\//, '').replace(/[\/?#:].*$/, ''); return x && bare(x) === bare((site || {}).domain) ? x : ''; };
+  const siteHost = (site) => sameSiteHost((site || {}).canonical_host, site) || sameSiteHost((site || {}).home_host, site) || bare((site || {}).domain);
+  const own = (u, site) => { const x = parseUrl(decodeXml(u)); return !!x && bare(x.host) === bare((site || {}).domain); };
+  /** A URL on the site's own domain, rebuilt from its strict parse on its OWN host (www or bare as given): the only form this workflow fetches. */
+  const safe = (u, site) => { const x = parseUrl(decodeXml(u)); return x && bare(x.host) === bare((site || {}).domain) ? 'https://' + x.host + x.path + x.query : ''; };
   /** The absolute URL on the site's canonical host, or '' for another host / not a page. Relative paths are resolved against the site. */
   const norm = (u, site) => {
     let s = decodeXml(u).replace(/#.*$/, '');
     if (!s) return '';
     if (/^\/\//.test(s)) s = 'https:' + s;
     if (/^\//.test(s)) s = 'https://' + siteHost(site) + s;
-    if (!/^https?:\/\//i.test(s) || !own(s, site)) return '';
-    const p = pathOf(s), q = queryOf(s);
-    if (ASSET.test(p)) return '';
-    return 'https://' + siteHost(site) + (p || '/') + q;
+    const x = parseUrl(s);
+    if (!x || bare(x.host) !== bare((site || {}).domain)) return '';
+    if (ASSET.test(x.path)) return '';
+    return 'https://' + siteHost(site) + x.path + x.query;
   };
   const ASSET = /\.(?:jpe?g|png|gif|webp|avif|svg|ico|bmp|css|js|mjs|json|xml|gz|zip|rar|7z|mp4|mov|webm|mp3|wav|woff2?|ttf|eot|txt|rss|atom)$/i;
   const depth = (u) => pathOf(u).split('/').filter(Boolean).length;
 
   // ---- low-value addresses: never forced into the index ----
+  // E15: a path segment named search / login / account / feed ... is a low-value page only as the FIRST segment (the site's own search, cart,
+  // account and feed), a tag / category / author / archive listing only in the first or second segment (/tag/x, /blog/tag/x), a date archive
+  // only at the top or under one section; /products/search/ (an enterprise-search product page) is a real page. A page the site lists in its
+  // sitemap, or one we wrote, is never low value: the site says it wants it found.
   const LOW_VALUE = [
-    /\/(?:tag|tags|category|categories|author|authors|archive|archives)(?:\/|$)/i,
-    /\/page\/\d+\/?$/i,
-    /\/(?:search|cart|basket|checkout|login|log-in|signin|sign-in|signup|sign-up|register|account|my-account|wp-admin|wp-login\.php|feed|rss)(?:\/|$)/i,
+    /^\/(?:[^\/]+\/)?(?:tag|tags|category|categories|author|authors|archive|archives)(?:\/|$)/i,
+    /^\/(?:[^\/]+\/)?page\/\d+\/?$/i,
+    /^\/(?:search|cart|basket|checkout|login|log-in|signin|sign-in|signup|sign-up|register|account|my-account|wp-admin|wp-login\.php|feed|rss)(?:\/|$|\?)/i,
     /[?&](?:s|q|search|query|filter|filters|sort|orderby|order|page|paged|replytocom|add-to-cart|utm_[a-z]+|fbclid|gclid|ref|sessionid|sid)=/i,
-    /\/\d{4}\/\d{2}\/?$/,   // date archives (/2025/03/)
+    /^\/(?:[^\/]+\/)?\d{4}\/\d{2}\/?$/,   // date archives (/2025/03/, /blog/2025/03/)
   ];
-  const isLowValue = (u) => LOW_VALUE.some(rx => rx.test(pathOf(u) + queryOf(u)));
+  const isLowValue = (u, p) => {
+    if (p && (p.in_sitemap === true || p.in_sitemap === 'true' || S(p.sources).split(',').includes('ours'))) return false;
+    return LOW_VALUE.some(rx => rx.test(pathOf(u) + queryOf(u)));
+  };
 
   // ---- sitemaps: robots.txt Sitemap lines, urlset + sitemapindex, caps ----
   const robotsSitemaps = (text) => (S(text).match(/^[ \t]*sitemap[ \t]*:[ \t]*(\S+)/gim) || []).map(l => l.replace(/^[ \t]*sitemap[ \t]*:[ \t]*/i, '').trim()).filter(Boolean);
@@ -475,18 +512,27 @@ const IX = (() => {
     }
     return isIndex ? { kind: 'index', urls: [], sitemaps: list } : { kind: 'urlset', urls: list, sitemaps: [] };
   };
-  /** The roots of one site's sitemap tree: robots.txt lines, /sitemap.xml and the sitemaps submitted in Search Console (own host only). */
+  /** The roots of one site's sitemap tree: robots.txt lines, /sitemap.xml and the sitemaps submitted in Search Console (own domain only, rebuilt). */
   const sitemapRoots = (site, robotsText, gscPaths) => {
     const seen = new Set(), out = [];
-    const add = (u, from) => { const s = decodeXml(u); if (!/^https?:\/\//i.test(s) || !own(s, site)) return; const k = key(s); if (seen.has(k)) return; seen.add(k); out.push({ url: s, from }); };
+    const add = (u, from) => { const s = safe(u, site); if (!s) return; const k = key(s); if (seen.has(k)) return; seen.add(k); out.push({ url: s, from }); };
     for (const u of robotsSitemaps(robotsText)) add(u, 'robots');
     add('https://' + siteHost(site) + '/sitemap.xml', 'default');
     for (const u of (gscPaths || [])) add(u, 'gsc');
     return out;
   };
+  /** Queue one more sitemap of the site (rebuilt, own domain only, never twice, never past sitemaps_max). */
+  const sitemapQueue = (st, url, from, site, extra) => {
+    const cu = safe(url, site); if (!cu) return false;
+    const ck = key(cu); if ((st.fetched || []).includes(ck) || (st.next || []).some(x => key(x.url) === ck)) return false;
+    if ((st.urls || []).length >= CFG.urls_max) { st.capped = true; return false; }   // E10: the tree stops at the address cap
+    if ((st.fetched || []).length + (st.next || []).length >= CFG.sitemaps_max) { st.capped_sitemaps = true; return false; }
+    st.next.push({ url: cu, from, ...(extra || {}) }); return true;
+  };
   /**
    * Accumulates one round of sitemap answers into the site's state. state: { fetched: [key], urls: [{loc, lastmod, gsc}], next: [], errors: [],
-   * gsc_keys: [key of the sitemaps submitted in Search Console], read: n }. Children of an index go to `next`, bounded by sitemaps_max.
+   * read: n }. Children of an index go to `next`, bounded by sitemaps_max, and no child is queued once the 5,000-address cap is reached (E10).
+   * The fetch never follows a redirect (E11): a 3xx to the site's own domain is queued as the next sitemap to read, anywhere else is an error.
    */
   const sitemapAccept = (state, asked, res, site) => {
     const st = state; const r = res || {};
@@ -494,6 +540,15 @@ const IX = (() => {
     st.fetched = st.fetched || []; st.urls = st.urls || []; st.next = st.next || []; st.errors = st.errors || []; st.read = n0(st.read);
     const k = key(asked.url); if (!st.fetched.includes(k)) st.fetched.push(k);
     if (/\.gz$/i.test(pathOf(asked.url))) { st.errors.push({ url: asked.url, error: 'compressed sitemap (.gz) not read' }); return st; }
+    if (status >= 300 && status < 400) {
+      const loc = S((r.headers || {}).location || (r.headers || {}).Location);
+      const abs = /^\//.test(loc) && !/^\/\//.test(loc) ? 'https://' + hostOf(asked.url) + loc : loc;
+      // the same sitemap on the other host / with a slash (example.com -> www.example.com): read it there, once
+      if (safe(abs, site) && same(abs, asked.url) && safe(abs, site) !== safe(asked.url, site) && !asked.redirected_from) st.fetched = st.fetched.filter(x => x !== k);
+      if (safe(abs, site)) { if (!sitemapQueue(st, abs, asked.from, site, { redirected_from: asked.url }) && !st.fetched.includes(key(abs)) && !st.next.some(x => same(x.url, abs))) st.errors.push({ url: asked.url, error: 'redirects to another sitemap that was not read (cap)' }); }
+      else st.errors.push({ url: asked.url, error: 'redirects off the site (' + status + ')' });
+      return st;
+    }
     if (!status || status >= 400 || !body) { if (asked.from !== 'default' || status !== 404) st.errors.push({ url: asked.url, error: status ? 'answered ' + status : S((r.error && (r.error.message || r.error)) || 'no answer').slice(0, 120) }); return st; }
     const doc = parseSitemap(body);
     if (doc.kind === 'unknown') { st.errors.push({ url: asked.url, error: 'not a sitemap (no urlset / sitemapindex)' }); return st; }
@@ -507,51 +562,103 @@ const IX = (() => {
       if (have.has(kk)) { if (fromGsc) { const x = st.urls.find(y => key(y.loc) === kk); if (x) x.gsc = true; } continue; }
       have.add(kk); st.urls.push({ loc, lastmod: u.lastmod, gsc: fromGsc });
     }
-    const queued = new Set(st.next.map(x => key(x.url)));
     for (const c of doc.sitemaps) {
-      const cu = decodeXml(c.loc); if (!/^https?:\/\//i.test(cu) || !own(cu, site)) continue;
-      const ck = key(cu); if (st.fetched.includes(ck) || queued.has(ck)) continue;
-      if (st.fetched.length + st.next.length >= CFG.sitemaps_max) { st.capped_sitemaps = true; break; }
-      queued.add(ck); st.next.push({ url: cu, from: fromGsc ? 'gsc' : 'child', lastmod: c.lastmod });
+      if (!safe(c.loc, site)) continue;
+      if (st.urls.length >= CFG.urls_max) { st.capped = true; break; }
+      sitemapQueue(st, c.loc, fromGsc ? 'gsc' : 'child', site, { lastmod: c.lastmod });
+      if (st.capped_sitemaps) break;
     }
     return st;
   };
+  /**
+   * E1 (FIX_CONTRACT decision 2): was the whole tree read? Only then is "not in the sitemap" a fact. Any sitemap that failed (an error, a
+   * compressed child, a redirect off the site), a cap that was hit, a child left unread after the last round, or a robots.txt that could not
+   * be read (no answer, 5xx, a redirect we could not follow) leaves the tree PARTIAL: a page not found keeps what was stored and no "add it to
+   * the sitemap" advice is given that day. A site with no sitemap at all (nothing read, /sitemap.xml 404, nothing listed) is complete-and-empty.
+   */
+  const sitemapComplete = (st) => {
+    const x = st || {}; const rs = n0(x.robots_status);
+    const robotsOk = rs === 404 || rs === 410 || (rs >= 200 && rs < 300);
+    return robotsOk && !(x.errors || []).length && !x.capped && !x.capped_sitemaps && !(x.next || []).length;
+  };
 
-  // ---- Search Console: what the [page, date] rows of the last 90 days say, per page ----
+  // ---- Search Console: what the page rows of four windows say, per page (X3, E8) ----
   const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
-  /** rows: Search Analytics rows with keys [page, date]. Windows are counted back from the newest day in the data (Search Console lags ~3 days). */
-  const searchEvidence = (rows, site, o) => {
-    const opts = o || {};
-    const list = (rows || []).filter(r => r && Array.isArray(r.keys) && r.keys.length >= 2);
-    let end = ''; for (const r of list) if (S(r.keys[1]) > end) end = S(r.keys[1]);
-    if (!end) end = opts.now ? isoDay(n0(opts.now) - CFG.lag_days * DAY) : '';
+  /** The windows Search Analytics is asked about (page dimension only, final data, ending lag_days back): [{ days, start, end }]. */
+  const saWindows = (now) => { const end = n0(now) - CFG.lag_days * DAY; return CFG.sa_windows.map(d => ({ days: d, start: isoDay(end - (d - 1) * DAY), end: isoDay(end) })); };
+  /**
+   * win: { 90: rows, 28: rows, 14: rows, 7: rows, truncated: { 90: bool, ... }, end } - Search Analytics rows with keys [page] per window (one
+   * row per page, `startRow` paging, at most sa_max_rows a window). A page Google cut from a TRUNCATED window is unknown there, never zero:
+   * its figure for that window is null and the merge keeps what was stored (E8). `last_at` is the first day of the newest window with
+   * impressions (a page with impressions in the last 7 days had them on or after that day) - there is no date dimension any more.
+   */
+  const searchEvidence = (win, site, o) => {
+    const W = win || {}; const opts = o || {};
+    const tr = W.truncated || {};
+    const end = S(W.end) || (opts.now ? isoDay(n0(opts.now) - CFG.lag_days * DAY) : '');
     const endMs = Date.parse(end + 'T00:00:00Z');
-    const since = (d) => Number.isFinite(endMs) ? isoDay(endMs - (d - 1) * DAY) : '';
-    const s28 = since(28), s14 = since(14), s7 = since(7);
-    const by = new Map();
-    for (const r of list) {
-      const loc = norm(r.keys[0], site); if (!loc) continue;
-      const k = key(loc); const d = S(r.keys[1]); const imp = n0(r.impressions), cl = n0(r.clicks);
-      const e = by.get(k) || { url: loc, impr28: 0, clicks28: 0, impr14: 0, impr7: 0, impr_before: 0, impr90: 0, last_at: '' };
-      e.impr90 += imp;
-      if (d >= s28) { e.impr28 += imp; e.clicks28 += cl; }
-      if (d >= s14) e.impr14 += imp; else e.impr_before += imp;
-      if (d >= s7) e.impr7 += imp;
-      if (imp > 0 && d > e.last_at) e.last_at = d;
-      by.set(k, e);
+    const first = (d) => Number.isFinite(endMs) ? isoDay(endMs - (d - 1) * DAY) : '';
+    const by = new Map(); let rows = 0;
+    const blank = (loc) => ({ url: loc, impr90: tr[90] ? null : 0, impr28: tr[28] ? null : 0, clicks28: tr[28] ? null : 0, impr14: tr[14] ? null : 0, impr7: tr[7] ? null : 0, impr_before: null, last_at: '' });
+    for (const d of CFG.sa_windows) {
+      for (const r of (W[d] || [])) {
+        if (!r || !Array.isArray(r.keys) || !r.keys.length) continue;
+        const loc = norm(r.keys[0], site); if (!loc) continue; rows++;
+        const k = key(loc); const e = by.get(k) || blank(loc);
+        const imp = n0(r.impressions);
+        if (d === 90) e.impr90 = n0(e.impr90) + imp;
+        if (d === 28) { e.impr28 = n0(e.impr28) + imp; e.clicks28 = n0(e.clicks28) + n0(r.clicks); }
+        if (d === 14) e.impr14 = n0(e.impr14) + imp;
+        if (d === 7) e.impr7 = n0(e.impr7) + imp;
+        by.set(k, e);
+      }
     }
-    return { by, end, rows: list.length, truncated: list.length >= n0(opts.row_limit || 25000) };
+    for (const e of by.values()) {
+      for (const d of CFG.sa_windows) if (e['impr' + d] == null && !tr[d]) e['impr' + d] = 0;
+      if (e.clicks28 == null && !tr[28]) e.clicks28 = 0;
+      e.impr_before = (e.impr90 != null && e.impr14 != null) ? Math.max(0, e.impr90 - e.impr14) : null;
+      const newest = [7, 14, 28, 90].find(d => n0(e['impr' + d]) > 0);
+      e.last_at = newest ? first(newest) : '';
+    }
+    const truncated = CFG.sa_windows.some(d => !!tr[d]);
+    return { by, end, rows, truncated, truncated_windows: CFG.sa_windows.filter(d => !!tr[d]) };
   };
 
   // ---- the URL Inspection answer: PW's reading plus the fields PW leaves out ----
   const readInspection = (res) => {
     const base = (typeof PW !== 'undefined') ? PW.inspection(res) : { ok: false, error: 'page-watch kit missing', error_kind: 'error' };
     const idx = (((res || {}).inspectionResult || {}).indexStatusResult) || {};
-    if (!base.ok) return { ...base, page_fetch_state: '', crawled_as: '', referring_count: 0, google_sitemaps: 0 };
+    if (!base.ok) {
+      const e = (res || {}).error; const code = n0(e && typeof e === 'object' ? (e.code || e.httpCode || (e.context && e.context.data && e.context.data.error && e.context.data.error.code)) : 0);
+      const msg = S(base.error);
+      let kind = S(base.error_kind) || 'error', why = S(base.not_checked);
+      // E5: a URL outside a URL-prefix property answers 403 "...the inspected URL is not part of this property": an access error, not a page fault
+      if (/not part of this property|do not own this site|not (?:a )?(?:verified )?owner/i.test(msg) || (kind === 'error' && code === 403)) { kind = 'access'; why = 'Search Console access does not cover this address (it is not part of the property): not checked.'; }
+      // E13: Google's per-minute limit is not the daily quota. Only an answer that names the day is the daily quota; any other 429 / quota
+      // answer is a rate limit (asked again after a minute; a second one in the same run is then taken as the day's quota)
+      if (kind === 'quota' || code === 429) {
+        if (/per\s*day|daily|per_day|perday|queries per day/i.test(msg)) { kind = 'quota'; why = 'Google\'s daily URL Inspection quota for this property is used up: not checked today.'; }
+        else { kind = 'rate'; why = 'Google asked us to slow down (a per-minute limit): not checked this time.'; }
+      }
+      return { ...base, error_kind: kind, not_checked: why, page_fetch_state: '', crawled_as: '', referring_count: 0, google_sitemaps: 0 };
+    }
     return { ...base, page_fetch_state: S(idx.pageFetchState), crawled_as: S(idx.crawledAs),
       referring_count: Array.isArray(idx.referringUrls) ? idx.referringUrls.length : 0,
       google_sitemaps: Array.isArray(idx.sitemap) ? idx.sitemap.length : 0,
       link: S(((res || {}).inspectionResult || {}).inspectionResultLink) };
+  };
+  /**
+   * Today's inspection answers by `site_id|key`: groups = [[requests, answers, isRetry], ...] in the order they were asked; a later answer
+   * replaces an earlier one (the retry after a per-minute limit). E13: a retry that is answered with the per-minute limit AGAIN is read as the
+   * day's quota (two strikes), so the site stops for the day and the note says why.
+   */
+  const readingsOf = (groups) => {
+    const m = new Map();
+    for (const g of (groups || [])) { const reqs = g[0] || [], res = g[1] || [], retry = !!g[2];
+      reqs.forEach((q, i) => { if (!q || q.skip) return; let r = readInspection(res[i] || {});
+        if (retry && !r.ok && r.error_kind === 'rate') r = { ...r, error_kind: 'quota', not_checked: 'Google\'s daily URL Inspection quota for this property is used up: not checked today.' };
+        m.set(S(q.site_id) + '|' + key(q.inspect_url), r); }); }
+    return m;
   };
   /** A Site Tracker reading of the same URL (seo_page_watch) within reuse_days, or null. It carries only verdict / coverage / canonical / crawl. */
   const reuseOf = (watch, now) => {
@@ -578,34 +685,107 @@ const IX = (() => {
     h = h.replace(/<(script|style|noscript|svg|template|nav|header|footer|form|iframe)\b[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ');
     return (h.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || []).length;
   };
+  // E2: what a bot wall or a challenge looks like from our side. Google's own crawler is not served these, so they say nothing about the page.
+  const CHALLENGE = /cf-chl|challenge-platform|cf_chl_opt|<title>\s*(?:just a moment|attention required|access denied|pardon our interruption|please wait|ddos-guard|security check)|_incapsula_resource|request unsuccessful\. incapsula|px-captcha|perimeterx|sucuri website firewall/i;
+  const CHALLENGE_WEAK = /captcha|are you a robot|verify you are (?:a )?human|akamai.{0,40}reference #/i;   // only on an error status (a contact form has a captcha too)
+  // a same-site redirect that only adds a language / country prefix (/ar/..., /en-us/...) answers where our server sits, not what Google sees
+  const LOCALE = /^\/[a-z]{2}(?:[-_][a-z]{2,4})?(?=\/|$)/i;
   /**
-   * first: the answer of a GET that did NOT follow redirects; final: the answer with redirects followed (only asked when `first` was a 3xx).
-   * -> { ok, http_status, final_url, noindex ('meta' | 'header' | ''), page_canonical, words, title, error }
+   * first: the answer of a GET that did NOT follow redirects; final: the answer of the one hop we follow ourselves (only asked when `first` was
+   * a 3xx to the site's own domain; E11: every hop is re-checked). -> { ok, blocked, block_reason, http_status, final_url, moved_to, noindex
+   * ('meta' | 'header' | ''), page_canonical, words, title, error }.
+   * E2 / FIX_CONTRACT decision 3: a 401 / 403 / 429 / 503, a challenge page or a geo / language redirect from OUR side is `blocked` (we could
+   * not read the page): never a cause and never a fix. `moved_to` is a same-site redirect that only changes the slash, the case or the www
+   * (E4): the same page under its final address, not "redirects elsewhere".
    */
   const readFetch = (url, first, final) => {
     const f = first || {}; const st1 = n0(f.statusCode ?? f.status);
-    if (!st1) return { ok: false, http_status: 0, final_url: '', noindex: '', page_canonical: '', words: 0, title: '', error: S((f.error && (f.error.message || f.error)) || 'no answer').slice(0, 160) };
-    const hdrs = f.headers || {}; const loc = S(hdrs.location || hdrs.Location);
-    let final_url = '';
-    if (st1 >= 300 && st1 < 400 && loc) {
-      const abs = /^https?:\/\//i.test(loc) ? loc : /^\/\//.test(loc) ? 'https:' + loc : /^\//.test(loc) ? (S(url).match(/^https?:\/\/[^\/?#]+/i) || [''])[0] + loc : loc;
-      if (!same(abs, url)) final_url = abs;   // a www / https / trailing-slash hop is the same page, not a redirect to another page
+    const none = { ok: false, blocked: false, block_reason: '', http_status: 0, final_url: '', moved_to: '', noindex: '', page_canonical: '', words: 0, title: '' };
+    if (!st1) return { ...none, error: S((f.error && (f.error.message || f.error)) || 'no answer').slice(0, 160) };
+    const hdr = (r, name) => { const h = (r && r.headers) || {}; const k = Object.keys(h).find(x => x.toLowerCase() === name); return k ? S(Array.isArray(h[k]) ? h[k].join(', ') : h[k]) : ''; };
+    const blocked = (why) => ({ ...none, ok: true, blocked: true, block_reason: why, http_status: st1, error: '' });
+    const wall = (r, st) => {
+      const body = S(r && (r.body ?? r.data)).slice(0, 20000);
+      if (/challenge/i.test(hdr(r, 'cf-mitigated'))) return 'a challenge page (' + st + ')';
+      if (st === 401 || st === 403 || st === 429 || st === 503) return 'the site turned our reader away (' + st + ')';
+      if (CHALLENGE.test(body) || (st >= 400 && CHALLENGE_WEAK.test(body))) return 'a challenge page (' + st + ')';
+      return '';
+    };
+    const w1 = wall(f, st1); if (w1) return blocked(w1);
+    let final_url = '', moved_to = '';
+    const host1 = hostOf(url);
+    if (st1 >= 300 && st1 < 400) {
+      const loc = hdr(f, 'location');
+      const abs = /^https?:\/\//i.test(loc) ? loc : /^\/\//.test(loc) ? 'https:' + loc : /^\//.test(loc) ? 'https://' + host1 + loc : loc;
+      const pa = parseUrl(abs), pu = parseUrl(url);
+      if (pa && pu && bare(pa.host) === bare(pu.host)) {
+        if (same(abs, url)) moved_to = 'https://' + pa.host + pa.path + pa.query;   // slash / case / www only: the same page
+        else if (LOCALE.test(pa.path) && !LOCALE.test(pu.path) && (pa.path.replace(LOCALE, '') || '/').replace(/\/+$/, '').toLowerCase() === pu.path.replace(/\/+$/, '').toLowerCase()) return blocked('a language or country redirect for our location');
+        else if (LOCALE.test(pa.path) && !LOCALE.test(pu.path) && /^\/[a-z]{2}(?:[-_][a-z]{2,4})?\/?$/i.test(pa.path) && pu.path !== '/') return blocked('a language or country redirect for our location');
+        else final_url = 'https://' + pa.host + pa.path + pa.query;
+      } else if (abs) final_url = pa ? 'https://' + pa.host + pa.path + pa.query : S(abs).slice(0, 500);
     }
-    const use = (st1 >= 300 && st1 < 400 && final && n0(final.statusCode ?? final.status)) ? final : f;
+    const fin = final && n0(final.statusCode ?? final.status) ? final : null;
+    const use = (st1 >= 300 && st1 < 400) ? fin : f;
+    if (st1 >= 300 && st1 < 400 && !use) return { ...none, ok: true, http_status: st1, final_url, moved_to, error: '' };   // the hop was not read (off site, or not asked)
+    const st2 = n0(use.statusCode ?? use.status);
+    if (use !== f) { const w2 = wall(use, st2); if (w2) return blocked(w2); }
+    if (use !== f && st2 >= 300 && st2 < 400) {   // a second redirect: we do not follow it; the page redirects (to where the chain points next)
+      const loc2 = hdr(use, 'location'); const p2 = parseUrl(/^\//.test(loc2) && !/^\/\//.test(loc2) ? 'https://' + hostOf(final_url || moved_to || url) + loc2 : loc2);
+      return { ...none, ok: true, http_status: st2, final_url: p2 ? 'https://' + p2.host + p2.path + p2.query : (final_url || moved_to), moved_to: '', error: '' };
+    }
     const sig = (typeof PW !== 'undefined') ? PW.signals(use) : { ok: false };
-    const status = n0(use.statusCode ?? use.status) || st1;
     const body = S(use.body ?? use.data);
-    const xr = (() => { const h = use.headers || {}; const k = Object.keys(h).find(x => x.toLowerCase() === 'x-robots-tag'); return k ? S(h[k]) : ''; })();
+    const xr = hdr(use, 'x-robots-tag');
     const noindex = sig.ok && sig.noindex ? (/\bnone\b|\bnoindex\b/i.test(xr) && !/\bnone\b|\bnoindex\b/i.test(S(sig.robots_meta)) ? 'header' : 'meta') : '';
-    return { ok: true, http_status: status, final_url, noindex,
-      page_canonical: S(sig.canonical).slice(0, 500), words: status >= 200 && status < 300 ? mainWords(body) : 0, title: S(sig.title).slice(0, 300), error: '' };
+    return { ok: true, blocked: false, block_reason: '', http_status: st2, final_url, moved_to, noindex,
+      page_canonical: S(sig.canonical).slice(0, 500), words: st2 >= 200 && st2 < 300 ? mainWords(body) : 0, title: S(sig.title).slice(0, 300), error: '' };
+  };
+  /** The next hop of a page read that answered a redirect: only to the site's own domain, rebuilt (E11). '' = not followed. */
+  const hopOf = (url, first, site) => {
+    const f = first || {}; const st = n0(f.statusCode ?? f.status); if (!(st >= 300 && st < 400)) return '';
+    const h = f.headers || {}; const k = Object.keys(h).find(x => x.toLowerCase() === 'location'); const loc = k ? S(h[k]) : '';
+    const abs = /^https?:\/\//i.test(loc) ? loc : /^\/\//.test(loc) ? 'https:' + loc : /^\//.test(loc) ? 'https://' + hostOf(url) + loc : '';
+    return safe(abs, site);
+  };
+  /** Googlebot's robots.txt rules (E-X7): may Google crawl this path? true / false, or null when robots.txt was not read as a real answer. */
+  const robotsAllows = (text, status, path) => {
+    const st = n0(status);
+    if (st === 404 || st === 410) return true;
+    if (!(st >= 200 && st < 300)) return null;
+    const lines = S(text).slice(0, CFG.robots_max).replace(/\r/g, '').split('\n').map(l => l.replace(/#.*$/, '').trim()).filter(Boolean);
+    const groups = []; let cur = null, lastUa = false;
+    for (const l of lines) {
+      const m = l.match(/^([a-z-]+)\s*:\s*(.*)$/i); if (!m) continue;
+      const f = m[1].toLowerCase(), v = m[2].trim();
+      if (f === 'user-agent') { if (!lastUa || !cur) { cur = { ua: [], rules: [] }; groups.push(cur); } cur.ua.push(v.toLowerCase()); lastUa = true; continue; }
+      lastUa = false;
+      if (!cur) continue;
+      if (f === 'allow' || f === 'disallow') cur.rules.push({ allow: f === 'allow', p: v });
+    }
+    const pick = groups.filter(g => g.ua.includes('googlebot'));
+    const rules = (pick.length ? pick : groups.filter(g => g.ua.includes('*'))).flatMap(g => g.rules).filter(r => r.p !== '' || !r.allow);
+    const P = S(path) || '/';
+    const match = (pat) => {   // Google's rules: '*' any run, '$' end; matched left to right without backtracking blow-ups (patterns are short)
+      if (pat === '') return false;
+      const parts = pat.replace(/\$$/, '').split('*'); const anchored = /\$$/.test(pat);
+      if (P.indexOf(parts[0]) !== 0) return false;
+      let i = parts[0].length;
+      for (let j = 1; j < parts.length; j++) { const at = P.indexOf(parts[j], i); if (at < 0) return false; i = at + parts[j].length; }
+      return anchored ? (parts.length === 1 ? P.length === i : P.endsWith(parts[parts.length - 1])) : true;
+    };
+    let best = null;
+    for (const r of rules) { if (r.p === '' ) continue; if (!match(r.p)) continue; const len = r.p.length; if (!best || len > best.len || (len === best.len && r.allow && !best.allow)) best = { len, allow: r.allow }; }
+    return best ? best.allow : true;
   };
 
   // ---- causes -> actions -> states ----
+  // E9: `redirect_error` (Google could not follow the redirect: a loop, a chain too long, a redirect to a bad address) is the site's fix, never
+  // "a redirect is normal" - there is no working final address to list. An addition to DESIGN §4 (ENGINE_BUILD.md "Fix wave 1").
   const ACTION = { indexed: 'none', indexed_not_in_sitemap: 'site_fix', wait_new: 'wait', unknown_to_google: 'links', not_in_sitemap: 'site_fix',
     discovered_not_crawled: 'links', crawled_not_indexed: 'quality', noindex: 'site_fix', noindex_intended: 'leave_out', robots_blocked: 'site_fix',
     robots_intended: 'leave_out', canonical_elsewhere: 'site_fix', alternate: 'leave_out', google_chose_other: 'duplicate', duplicate_no_canonical: 'duplicate',
-    not_found: 'site_fix', soft_404: 'site_fix', server_error: 'site_fix', access_denied: 'site_fix', redirect: 'site_fix', low_value: 'leave_out',
+    not_found: 'site_fix', soft_404: 'site_fix', server_error: 'site_fix', access_denied: 'site_fix', redirect: 'site_fix', redirect_error: 'site_fix', low_value: 'leave_out',
     not_checked: 'none', unclassified: 'none' };
   const CAUSES = Object.keys(ACTION);
   const EXCLUDED = ['noindex', 'noindex_intended', 'robots_blocked', 'robots_intended', 'canonical_elsewhere', 'alternate', 'google_chose_other',
@@ -623,7 +803,8 @@ const IX = (() => {
     if (/^alternate page with proper canonical/.test(s)) return 'alternate';
     if (/^duplicate, google chose different canonical/.test(s) || /^duplicate, submitted url not selected as canonical/.test(s)) return 'google_chose_other';
     if (/^duplicate without user-selected canonical/.test(s)) return 'duplicate_no_canonical';
-    if (/^page with redirect|^redirect error/.test(s)) return 'redirect';
+    if (/^redirect error/.test(s)) return 'redirect_error';
+    if (/^page with redirect/.test(s)) return 'redirect';
     if (/^not found \(404\)|^submitted url not found/.test(s)) return 'not_found';
     if (/soft 404/.test(s)) return 'soft_404';
     if (/^server error/.test(s)) return 'server_error';
@@ -633,35 +814,53 @@ const IX = (() => {
     return 'unclassified';
   };
   const ENUM_FETCH = { NOT_FOUND: 'not_found', SOFT_404: 'soft_404', SERVER_ERROR: 'server_error', ACCESS_DENIED: 'access_denied', ACCESS_FORBIDDEN: 'access_denied',
-    BLOCKED_4XX: 'access_denied', REDIRECT_ERROR: 'redirect', BLOCKED_ROBOTS_TXT: 'robots' };
+    BLOCKED_4XX: 'access_denied', REDIRECT_ERROR: 'redirect_error', BLOCKED_ROBOTS_TXT: 'robots' };
 
-  /** Lane of one page: `new` = a page we wrote, or one that appeared in the site's sitemap after we started watching it, in the last new_days. */
+  /**
+   * Lane of one page (E3, FIX_CONTRACT decision 5): `new` = a page we wrote (published in the last new_days), or one that first appeared in
+   * the sitemap AFTER a run that had read the site's sitemap tree completely (`prev_complete`) and whose lastmod is not older than that run.
+   * The first complete read of a site puts everything in `existing`; a page decided `existing` stays existing; a `new` page leaves the lane
+   * new_days after it was first seen.
+   */
   const laneOf = (p, ctx) => {
     const c = ctx || {}; const now = n0(c.now);
-    if (S((p._prev || {}).lane) === 'existing') return 'existing';
-    const anchor = anchorOf(p, c);
-    return anchor && now - anchor <= CFG.new_days * DAY ? 'new' : 'existing';
+    const pub = Date.parse(S(p.published_at));
+    if (Number.isFinite(pub) && S(p.sources).split(',').includes('ours') && now - pub <= CFG.new_days * DAY) return 'new';
+    const prevLane = S((p._prev || {}).lane);
+    if (prevLane === 'existing') return 'existing';
+    const fs = Date.parse(S(p.first_seen_at));
+    if (prevLane === 'new') return Number.isFinite(fs) && now - fs <= CFG.new_days * DAY ? 'new' : 'existing';
+    // first sight of the page (no stored row)
+    if (!p._prev && p.in_sitemap && c.prev_complete) {
+      const lm = Date.parse(S(p.sitemap_lastmod)); const since = Date.parse(S(c.prev_complete_at));
+      if (Number.isFinite(lm) && Number.isFinite(since) && lm < since - DAY) return 'existing';
+      return 'new';
+    }
+    return 'existing';
   };
-  const anchorOf = (p, c) => {
-    const pub = Date.parse(S(p.published_at)); if (Number.isFinite(pub) && (p.sources || '').indexOf('ours') >= 0) return pub;
-    const fs = Date.parse(S(p.first_seen_at)); const since = Date.parse(S((c || {}).watch_since));
-    // on the first run every page is "first seen today": only a page that appeared AFTER the site's first reading is new by sight
-    if (Number.isFinite(fs) && Number.isFinite(since) && isoDay(fs) > isoDay(since) && p.in_sitemap) return fs;
-    return 0;
+  const anchorOf = (p) => {
+    const pub = Date.parse(S(p.published_at)); if (Number.isFinite(pub) && S(p.sources).split(',').includes('ours')) return pub;
+    const fs = Date.parse(S(p.first_seen_at));
+    return S(p.lane) === 'new' && Number.isFinite(fs) ? fs : 0;
   };
 
   /**
    * One cause per page. Documented enum fields first (verdict, pageFetchState, indexingState, robotsTxtState, the canonicals), the coverageState
-   * string second (Google documents no values for it), our own fetch third - except that a hard fact our fetch saw TODAY (404 / 410, 5xx, 401 / 403,
-   * noindex, a redirect to another page) replaces a soft reason from an older crawl ("discovered", "crawled", "unknown").
+   * string second (Google documents no values for it), our own fetch third.
+   * E2 / FIX_CONTRACT decision 3: Google's documented fields win. Our fetch can only ADD a hard fact (404 / 410, 5xx, noindex, a redirect to
+   * another page, a canonical elsewhere) when Google's reading is vague (a soft reason) AND Google has not itself read the page lately (no
+   * successful fetch within google_fresh_days). A blocked fetch (bot wall, challenge, 401 / 403 / 429 / 503, geo redirect) is never read.
+   * E7: a reused Site Tracker reading carries no user canonical, so it is classified from Google's coverage words, never from the canonicals.
    * reading: readInspection / reuseOf / storedReading (or null); fetch: readFetch (or null); p: the merged page (in_sitemap, sources, lane, ...).
+   * ctx.sitemap_complete: the sitemap tree was read completely today (E1) - only then is "not in the sitemap" said.
    */
   const diagnose = (p, reading, fetch, ctx) => {
     const c = ctx || {}; const now = n0(c.now);
-    const srcs = S(p.sources); const ours = srcs.indexOf('ours') >= 0;
+    const srcs = S(p.sources); const ours = srcs.split(',').includes('ours');
     const hadImpr = !!S(p.last_impression_at) || n0(p.impressions_28d) > 0;
     const important = !!p.in_sitemap || ours || hadImpr;
-    const r = reading || null; const f = fetch && fetch.ok ? fetch : null;
+    const smKnown = c.sitemap_complete === true;
+    const r = reading || null; const f = fetch && fetch.ok && !fetch.blocked ? fetch : null;
     const out = (cause, extra) => ({ cause, action: actionOf(cause, p, r, f), state: stateOf(cause), merge_into: '', ...(extra || {}) });
     let cause = '';
     if (r && r.ok === false) return out('not_checked', { not_checked: S(r.not_checked) || 'the inspection failed' });
@@ -670,25 +869,36 @@ const IX = (() => {
       if (!cause && ENUM_FETCH[S(r.page_fetch_state)]) cause = ENUM_FETCH[S(r.page_fetch_state)];
       if (!cause && /^BLOCKED_BY_(META_TAG|HTTP_HEADER)$/.test(S(r.indexing_state))) cause = 'noindex';
       if (!cause && S(r.robots) === 'DISALLOWED') cause = 'robots';
-      if (!cause && S(r.user_canonical) && !same(r.user_canonical, p.url)) cause = p.in_sitemap ? 'canonical_elsewhere' : 'alternate';
-      if (!cause && S(r.google_canonical) && !(same(r.google_canonical, p.url) && hostOf(r.google_canonical) === hostOf(p.url))) cause = S(r.user_canonical) ? 'google_chose_other' : 'duplicate_no_canonical';
-      if (!cause) { const cc = covCause(r.coverage); cause = cc === 'unknown' ? (p.in_sitemap || ours ? 'unknown_to_google' : 'not_in_sitemap') : (cc || 'unclassified'); }
+      // a redirect Google followed names its target as Google's canonical: that is a redirect, not a duplicate (X4: never a drop-out)
+      if (!cause && /^redirect/.test(covCause(r.coverage))) cause = covCause(r.coverage);
+      if (!r.reused) {
+        if (!cause && S(r.user_canonical) && !same(r.user_canonical, p.url)) cause = p.in_sitemap ? 'canonical_elsewhere' : 'alternate';
+        if (!cause && S(r.google_canonical) && !(same(r.google_canonical, p.url) && hostOf(r.google_canonical) === hostOf(p.url))) cause = S(r.user_canonical) ? 'google_chose_other' : 'duplicate_no_canonical';
+      }
+      if (!cause) {
+        const cc = covCause(r.coverage);
+        cause = cc === 'unknown' ? ((p.in_sitemap || ours || !smKnown) ? 'unknown_to_google' : 'not_in_sitemap')
+          : (r.reused && cc === 'alternate' && p.in_sitemap) ? 'canonical_elsewhere' : (cc || 'unclassified');
+      }
+      if (cause === 'not_in_sitemap' && !smKnown) cause = 'unknown_to_google';
     }
-    // our fetch: third, or a hard fact of today over a soft reason of an older crawl
-    if (f && (!cause || SOFT.includes(cause))) {
+    // our fetch: third, and only a hard fact over a vague reading Google has not refreshed itself
+    const gRead = !!r && (S(r.page_fetch_state) === 'SUCCESSFUL' || (!S(r.page_fetch_state) && /^crawled/.test(normCov(r.coverage))) || S(r.verdict) === 'PASS');
+    const gFresh = gRead && ts(r.last_crawl) > 0 && now - ts(r.last_crawl) <= CFG.google_fresh_days * DAY;
+    if (f && (!cause || (SOFT.includes(cause) && !gFresh))) {
       const st = n0(f.http_status);
-      const hard = (st === 404 || st === 410) ? 'not_found' : st >= 500 ? 'server_error' : (st === 401 || st === 403) ? 'access_denied'
-        : S(f.final_url) ? 'redirect' : f.noindex ? 'noindex' : (S(f.page_canonical) && !same(f.page_canonical, p.url)) ? (p.in_sitemap ? 'canonical_elsewhere' : 'alternate') : '';
+      const hard = (st === 404 || st === 410) ? 'not_found' : (st >= 500 && st !== 503) ? 'server_error'
+        : S(f.final_url) ? 'redirect' : f.noindex ? 'noindex' : (S(f.page_canonical) && !same(f.page_canonical, p.url) && !same(f.page_canonical, f.moved_to)) ? (p.in_sitemap ? 'canonical_elsewhere' : 'alternate') : '';
       if (hard) cause = hard;
     }
     if (!cause) return null;   // nothing read: the caller keeps what was stored
     // what the client meant: a block on a page nobody lists, links to or found in Google is intended
     if (cause === 'noindex' && !important) cause = 'noindex_intended';
     if (cause === 'robots') cause = important ? 'robots_blocked' : 'robots_intended';
-    if (cause === 'indexed' && !p.in_sitemap && !isLowValue(p.url) && c.sitemap_read !== false && c.has_sitemap) cause = 'indexed_not_in_sitemap';
-    if (stateOf(cause) !== 'indexed' && isLowValue(p.url) && (SOFT.includes(cause) || cause === 'duplicate_no_canonical' || cause === 'google_chose_other')) cause = 'low_value';
+    if (cause === 'indexed' && !p.in_sitemap && !isLowValue(p.url, p) && smKnown && c.has_sitemap) cause = 'indexed_not_in_sitemap';
+    if (stateOf(cause) !== 'indexed' && isLowValue(p.url, p) && (SOFT.includes(cause) || cause === 'duplicate_no_canonical' || cause === 'google_chose_other')) cause = 'low_value';
     if ((cause === 'unknown_to_google' || cause === 'discovered_not_crawled') && p.lane === 'new') {
-      const a = anchorOf(p, c); if (a && now - a <= CFG.wait_days * DAY) cause = 'wait_new';
+      const a = anchorOf(p); if (a && now - a <= CFG.wait_days * DAY) cause = 'wait_new';
     }
     if (cause === 'indexed') cause = '';
     const merge_into = (cause === 'google_chose_other' || cause === 'duplicate_no_canonical') && r && S(r.google_canonical) ? S(r.google_canonical) : '';
@@ -698,6 +908,28 @@ const IX = (() => {
     if (cause === 'not_found') { const linked = r && n0(r.referring_count) > 0; return (p.in_sitemap || !!S(p.last_impression_at) || n0(p.impressions_28d) > 0 || linked) ? 'site_fix' : 'leave_out'; }
     if (cause === 'redirect') return p.in_sitemap ? 'site_fix' : 'leave_out';
     return ACTION[cause] || 'none';
+  };
+  /**
+   * X7 (FIX_CONTRACT `fix_seen_at`): does OUR read of the site today show that the page's site-fix cause is gone? true (the exact positive
+   * signal for that cause), false (the problem is still there), null (cannot tell: a blocked read, no read, or a cause our read cannot see).
+   * f: readFetch; robots: { allows } for robots_blocked; c.sitemap_complete for the "the sitemap no longer lists it" fixes.
+   */
+  const fixSeen = (row, f, robots, c) => {
+    const cause = S(row.cause); const x = c || {};
+    if (cause === 'robots_blocked') return robots == null ? null : !!robots;
+    if (cause === 'indexed_not_in_sitemap') return x.sitemap_complete === true ? !!row.in_sitemap : null;
+    const smGone = x.sitemap_complete === true && !row.in_sitemap;
+    if (!f || !f.ok || f.blocked) return (cause === 'canonical_elsewhere' || (cause === 'redirect' && S(row.action) === 'site_fix')) && smGone ? true : null;
+    const st = n0(f.http_status); const ok200 = st >= 200 && st < 300 && !S(f.final_url);
+    switch (cause) {
+      case 'noindex': return ok200 && !f.noindex && n0(f.words) > 0;
+      case 'server_error': case 'access_denied': return ok200;
+      case 'not_found': return ok200 || (st >= 200 && st < 300 && !!S(f.final_url) && own(f.final_url, x.site));
+      case 'canonical_elsewhere': return smGone || (ok200 && !!S(f.page_canonical) && same(f.page_canonical, row.url));
+      case 'redirect': return S(row.action) === 'site_fix' ? (smGone || ok200) : null;
+      case 'redirect_error': return ok200 || (st >= 200 && st < 300 && !!S(f.final_url));
+      default: return null;
+    }
   };
 
   // ---- the client sentence: what it means and what to do (plain words; never "will be indexed", never "guaranteed") ----
@@ -734,100 +966,142 @@ const IX = (() => {
       redirect: S(row.action) === 'site_fix'
         ? 'This address redirects' + (S(row.final_url) ? ' to ' + pathLabel(row.final_url) : '') + '. List the final address in your sitemap instead.'
         : 'This address redirects to another page. That is normal. Nothing to do.',
+      redirect_error: 'Google could not follow the redirect on this address (a loop, a chain that is too long, or a redirect to a broken address). Fix the redirect so it goes straight to a working page, or answer "not found" if the page is gone.',
       low_value: 'This is a listing, filter, search or account page that does not need to be in Google. Nothing to do.',
       not_checked: 'We could not check this page today' + (S(row._why) ? ' (' + S(row._why).replace(/[.:]+$/, '') + ')' : '') + '. We try again on the next run.',
       unclassified: 'Google gave a reason we do not recognise ("' + S(row.coverage).slice(0, 80) + '"). Check this address in Search Console.',
     };
     let s = Object.prototype.hasOwnProperty.call(T, cause) ? T[cause] : 'We have not checked this page yet.';
     if (S(row.state) === 'unknown') s = 'We have not checked this page with Google yet. It is in the queue.';
+    if (S(row.fix_seen_at) && S(row.action) === 'wait') s = 'Fixed on your site. Waiting for Google to read it again.';
     if (row.needs_person) s += ' We have checked it ' + CFG.person_after + ' times with no change, so it needs a person to look at it.';
     return s.replace(/[—–]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/…/g, '...');
   };
 
   // ---- every page we know for one website ----
+  const yes = (v) => v === true || v === 'true';
+  /** What a later step needs of the stored row (E10: the whole stored row is no longer carried twice), plus its fingerprint for `changed`. */
+  const slimPrev = (r) => ({ url: S(r.url), state: S(r.state), cause: S(r.cause), action: S(r.action), checks: n0(r.checks), inspect_at: S(r.inspect_at),
+    indexed_since: S(r.indexed_since), dropped_at: S(r.dropped_at), lane: S(r.lane), in_sitemap: yes(r.in_sitemap), first_seen_at: S(r.first_seen_at),
+    fix_seen_at: S(r.fix_seen_at), ask_google: yes(r.ask_google), next_check_at: S(r.next_check_at), sig: rowSig(r) });
   /**
-   * c: { site, now, stored (seo_index_pages rows), inventory (seo_pages rows), sitemap: { read, urls: [{loc, lastmod, gsc}] }, ours: [{url, published_at}],
-   * search: searchEvidence() result + { read }, watch: seo_page_watch rows }. A source that could not be read this run keeps what was stored (a
-   * failed sitemap read never turns pages into "not in the sitemap"; a failed Search Console read never erases impressions). The stored URL is
-   * the row's identity and is kept as it is. Pages with impressions in the last 28 days of data and no reading yet are indexed by that evidence
-   * (no quota spent); a stored "not indexed" reading older than the page's last impression is replaced by the same evidence.
+   * c: { site, now, stored (seo_index_pages rows), inventory (seo_pages rows), sitemap: { read, complete, urls: [{loc, lastmod, gsc}] },
+   * ours: [{url, published_at}], search: searchEvidence() result + { read }, watch: seo_page_watch rows, prev_complete, prev_complete_at }.
+   * - E1: `in_sitemap` is a fact only from a COMPLETE read of the tree; a page found in a partial read is in it, a page not found keeps what
+   *   was stored. A failed Search Console read never erases impressions, and neither does a truncated one for a page it cut (E8).
+   * - E4 / decision 4: the URL is the canonical host + the path as the sitemap lists it; a stored row on another form of the same address
+   *   (slash, case, the other host) MOVES to that form (`moves`: the caller deletes the old row and carries its history over).
+   * - E12 / X16: when the 6,000 cap is reached our own pages and the sitemap win over the rest (`capped`); a stored row no source names any
+   *   more, gone (404 / 410) and untouched for prune_gone_days is pruned (`prune`), only when the sitemap and Search Console were fully read.
+   * Pages with impressions in the last 28 days of data and no reading yet are indexed by that evidence (no quota spent); a stored "not
+   * indexed" reading older than the page's last impression is replaced by the same evidence.
    */
   const merge = (c) => {
     const site = c.site || {}; const now = n0(c.now); const nowIso = new Date(now).toISOString();
-    const pages = new Map(); const order = [];
-    // a stored row keeps its URL exactly (it is the row's key); every other source is put on the canonical host
-    const get = (u, asStored) => { const loc = asStored ? (own(u, site) ? S(u) : '') : norm(u, site); if (!loc) return null; const k = key(loc); let p = pages.get(k);
-      if (!p) { if (pages.size >= CFG.pages_max) return null; p = { url: loc, _src: new Set() }; pages.set(k, p); order.push(k); } return p; };
-    for (const r of (c.stored || [])) { if (!r || !S(r.url)) continue; const p = get(S(r.url), true); if (!p) continue; p._prev = r; p.url = S(r.url); }
-    const sm = c.sitemap || { read: false, urls: [] };
-    for (const o of (c.ours || [])) { const p = get(o.url); if (p) { p._src.add('ours'); if (S(o.published_at) && (!S(p._pub) || S(o.published_at) < S(p._pub))) p._pub = S(o.published_at); } }
-    for (const u of (sm.urls || [])) { const p = get(u.loc); if (!p) continue; p._src.add('sitemap'); if (u.gsc) p._src.add('gsc'); p._lastmod = S(u.lastmod) || S(p._lastmod); p._insm = true; }
-    const sr = c.search || { read: false, by: new Map() };
-    if (sr.by) for (const e of sr.by.values()) { if (!(e.impr90 > 0)) continue; const p = get(e.url); if (p) { p._src.add('search'); p._search = e; } }
-    for (const r of (c.inventory || [])) { if (!r || !S(r.url)) continue; const p = get(r.url); if (!p) continue; p._src.add('inventory'); p._inv = r; }
-    const watch = new Map(); for (const w of (c.watch || [])) if (w && S(w.url)) watch.set(key(w.url), w);
-    let since = ''; for (const r of (c.stored || [])) if (S(r.first_seen_at) && (!since || S(r.first_seen_at) < since)) since = S(r.first_seen_at);
-    const ctx = { now, watch_since: since || nowIso };
+    const sm = c.sitemap || { read: false, complete: false, urls: [] };
+    const smComplete = sm.complete === true; const smUrls = (sm.urls || []).length;
+    const sr = c.search || { read: false, by: new Map(), truncated: false };
+    const host = siteHost(site);
+    const storedBy = new Map();
+    for (const r of (c.stored || [])) { if (!r || !S(r.url) || !own(r.url, site)) continue; const k = key(r.url); if (k && !storedBy.has(k)) storedBy.set(k, r); }
+    const pages = new Map(); const order = []; let capped = false;
+    const get = (loc) => { if (!loc) return null; const k = key(loc); if (!k) return null; let p = pages.get(k);
+      if (!p) { if (pages.size >= CFG.pages_max) { capped = true; return null; } p = { url: loc, _src: new Set() }; pages.set(k, p); order.push(k); } return p; };
+    for (const o of (c.ours || [])) { const loc = norm(o.url, site); const p = get(loc); if (p) { p._src.add('ours'); p._ourLoc = p._ourLoc || loc; if (S(o.published_at) && (!S(p._pub) || S(o.published_at) < S(p._pub))) p._pub = S(o.published_at); } }
+    for (const u of (sm.urls || [])) { const loc = norm(u.loc, site); const p = get(loc); if (!p) continue; p._src.add('sitemap'); if (u.gsc) p._src.add('gsc'); p._lastmod = S(u.lastmod) || S(p._lastmod); p._insm = true; p._smLoc = p._smLoc || loc; }
+    if (sr.by) for (const e of sr.by.values()) { if (!(n0(e.impr90) > 0 || n0(e.impr28) > 0)) continue; const p = get(e.url); if (p) { p._src.add('search'); p._search = e; } }
+    for (const r of (c.inventory || [])) { if (!r || !S(r.url)) continue; const p = get(norm(r.url, site)); if (!p) continue; p._src.add('inventory'); p._inv = r; }
+    const watchBy = new Map(); for (const w of (c.watch || [])) if (w && S(w.url)) watchBy.set(key(w.url), w);
+    const prune = [];
+    for (const [k, r] of storedBy) {
+      if (pages.has(k)) continue;
+      const gone = n0(r.http_status) === 404 || n0(r.http_status) === 410;
+      const last = Math.max(ts(r.updated_at), ts(r.inspect_at), ts(r.fetch_at), ts(r.first_seen_at));
+      if (gone && smComplete && sr.read && !sr.truncated && last && now - last > CFG.prune_gone_days * DAY) { prune.push({ site_id: S(site.site_id), url: S(r.url) }); continue; }
+      if (pages.size >= CFG.pages_max) { capped = true; continue; }
+      pages.set(k, { url: S(r.url), _src: new Set() }); order.push(k);
+    }
+    const moves = [];
+    const ctx = { now, prev_complete: !!c.prev_complete, prev_complete_at: S(c.prev_complete_at) };
+    let since = ''; for (const r of storedBy.values()) if (S(r.first_seen_at) && (!since || S(r.first_seen_at) < since)) since = S(r.first_seen_at);
+    const ZERO = { impr90: 0, impr28: 0, clicks28: 0, impr14: 0, impr7: 0, impr_before: 0, last_at: '' };
     const out = [];
     for (const k of order) {
-      const p = pages.get(k); const prev = p._prev || {};
-      const src = new Set(p._src);
-      if (!sm.read) for (const x of ['sitemap', 'gsc']) if (S(prev.sources).split(',').includes(x)) src.add(x);
-      if (!sr.read && S(prev.sources).split(',').includes('search')) src.add('search');
-      const ev = sr.read ? (p._search || { impr28: 0, clicks28: 0, impr14: 0, impr7: 0, impr_before: 0, impr90: 0, last_at: '' }) : null;
+      const p = pages.get(k); const prev = storedBy.get(k) || null;
+      // the address: the sitemap's form, else the stored one on the canonical host, else what the first source gave
+      let url = p._smLoc || (prev ? (hostOf(prev.url) === host ? S(prev.url) : (norm(prev.url, site) || S(prev.url))) : '') || p._ourLoc || p.url;
+      if (prev && url !== S(prev.url)) { if (moves.length < CFG.moves_max) moves.push({ site_id: S(site.site_id), from: S(prev.url), to: url, why: p._smLoc ? 'the sitemap lists it as ' + url : 'the site\'s main host is ' + host }); else url = S(prev.url); }
+      const src = new Set(p._src); const pv = prev || {};
+      if (!smComplete && !p._insm) for (const x of ['sitemap', 'gsc']) if (S(pv.sources).split(',').includes(x)) src.add(x);
+      if ((!sr.read || (sr.truncated && !p._search)) && S(pv.sources).split(',').includes('search')) src.add('search');
+      const ev = sr.read ? (p._search || (sr.truncated ? null : ZERO)) : null;
+      const keep = (f, fallback) => (ev && ev[f] != null) ? ev[f] : fallback;
       const inv = p._inv || {};
-      const row = { ...prev, site_id: S(site.site_id), domain: bare(site.domain), url: p.url,
+      const row = { ...pv, site_id: S(site.site_id), domain: bare(site.domain), url,
         sources: ['sitemap', 'gsc', 'inventory', 'ours', 'search'].filter(x => src.has(x)).join(','),
-        in_sitemap: sm.read ? !!p._insm : (prev.in_sitemap === true || prev.in_sitemap === 'true'),
-        sitemap_lastmod: sm.read ? S(p._lastmod) : S(prev.sitemap_lastmod),
-        first_seen_at: S(prev.first_seen_at) || nowIso,
-        published_at: S(p._pub) || S(prev.published_at),
-        impressions_28d: ev ? ev.impr28 : n0(prev.impressions_28d), clicks_28d: ev ? ev.clicks28 : n0(prev.clicks_28d),
-        last_impression_at: ev ? S(ev.last_at) : S(prev.last_impression_at),
-        title: S(prev.title) || S(inv.title).slice(0, 300),
-        http_status: n0(prev.http_status) || (n0(inv.http_status) >= 400 ? n0(inv.http_status) : 0),
-        state: S(prev.state) || 'unknown', checks: n0(prev.checks),
-        _prev: p._prev || null, _search: ev, _impr7: ev ? ev.impr7 : 0, _watch: watch.get(key(p.url)) || null };
+        in_sitemap: p._insm ? true : smComplete ? false : yes(pv.in_sitemap),
+        sitemap_lastmod: p._insm ? S(p._lastmod) : smComplete ? '' : S(pv.sitemap_lastmod),
+        first_seen_at: S(pv.first_seen_at) || nowIso,
+        published_at: S(p._pub) || S(pv.published_at),
+        impressions_28d: keep('impr28', n0(pv.impressions_28d)), clicks_28d: keep('clicks28', n0(pv.clicks_28d)),
+        last_impression_at: ev ? (S(ev.last_at) || (CFG.sa_windows.some(d => ev['impr' + d] == null) ? S(pv.last_impression_at) : '')) : S(pv.last_impression_at),
+        title: S(pv.title) || S(inv.title).slice(0, 300),
+        http_status: n0(pv.http_status) || (n0(inv.http_status) >= 400 ? n0(inv.http_status) : 0),
+        state: S(pv.state) || 'unknown', checks: n0(pv.checks),
+        _prev: prev ? slimPrev(prev) : null, _moved_from: prev && url !== S(prev.url) ? S(prev.url) : '',
+        _search: ev, _impr7: ev && ev.impr7 != null ? ev.impr7 : 0, _watch: watchBy.get(k) || null };
       row.lane = laneOf(row, ctx);
+      // our own sitemap check settles the sitemap half of a cause without waiting for Google (a complete read only)
+      if (smComplete && row.in_sitemap && S(row.cause) === 'indexed_not_in_sitemap') Object.assign(row, { cause: '', action: 'none' });
+      if (smComplete && row.in_sitemap && S(row.cause) === 'not_in_sitemap') Object.assign(row, { cause: 'unknown_to_google', action: 'links' });
       // evidence without quota: impressions in the last 28 days of data and no newer inspection saying otherwise
-      if (ev && ev.impr28 > 0 && (row.state === 'unknown' || row.state === 'error' || (row.state !== 'indexed' && S(ev.last_at) > S(row.inspect_at).slice(0, 10)))) {
+      if (ev && n0(ev.impr28) > 0 && (row.state === 'unknown' || row.state === 'error' || (row.state !== 'indexed' && S(ev.last_at) > S(row.inspect_at).slice(0, 10)))) {
         row._search_flip = row.state !== 'unknown';
-        Object.assign(row, { state: 'indexed', evidence: 'search', cause: (!row.in_sitemap && sm.read && (sm.urls || []).length && !isLowValue(row.url)) ? 'indexed_not_in_sitemap' : '', action: '', dropped_at: S(prev.dropped_at) });
+        Object.assign(row, { state: 'indexed', evidence: 'search', cause: (!row.in_sitemap && smComplete && smUrls && !isLowValue(row.url, row)) ? 'indexed_not_in_sitemap' : '', action: '', dropped_at: S(pv.dropped_at), fix_seen_at: '' });
         row.action = ACTION[row.cause] || 'none';
-        row.indexed_since = S(prev.state) === 'indexed' ? (S(prev.indexed_since) || nowIso) : nowIso;
+        row.indexed_since = S(pv.state) === 'indexed' ? (S(pv.indexed_since) || nowIso) : nowIso;
         row.next_check_at = nextCheck(row, ctx);
         row._evidence_search = true;
       }
       out.push(row);
     }
-    return { pages: out, watch_since: ctx.watch_since, capped: pages.size >= CFG.pages_max };
+    return { pages: out, watch_since: since || nowIso, capped, moves, prune };
   };
 
   // ---- the plan: which pages to inspect today, inside the cap ----
   const capOf = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? Math.min(CFG.cap_max, Math.max(CFG.cap_min, n)) : CFG.cap_default; };
   const ts = (v) => { const t = Date.parse(S(v)); return Number.isFinite(t) ? t : 0; };
   const isGone = (p) => S(p.cause) === 'not_found' && (n0(p.http_status) === 404 || n0(p.http_status) === 410) && !p.in_sitemap;
+  /** E5: a URL-prefix property covers only the addresses under its prefix (scheme and host compared without case). '' / sc-domain: = all. */
+  const inProperty = (url, property) => {
+    const pr = S(property); if (!pr || /^sc-domain:/i.test(pr)) return true;
+    const a = parseUrl(url), b = parseUrl(pr); if (!a || !b || a.scheme !== b.scheme || a.host !== b.host) return false;
+    return b.path === '/' || (a.path + a.query).indexOf(b.path) === 0;
+  };
   /**
-   * pages: merged pages (with `_prev`, `_search`, `_reuse`); o: { cap, used_today, now, stop }. Order (DESIGN §3): 1 new pages on day 1/3/7/14/28,
-   * 2 indexed pages that lost every impression in the last 14 days, 3 never-inspected existing pages (sitemap first, then Search Console pages,
-   * shallower first, newer lastmod first), 4 not-indexed pages due a re-check, 5 indexed pages due a watch. Returns { take, limit, backlog_left, by_bucket }.
+   * pages: merged pages (with `_prev`, `_search`, `_reuse`); o: { cap, used_today, now, stop, property }. Order (DESIGN §3): 1 new pages on day
+   * 1/3/7/14/28, then (X7) pages whose fix we saw on the site, 2 indexed pages that lost every impression in the last 14 days, 3 never-inspected
+   * existing pages (sitemap first, then Search Console pages, shallower first, newer lastmod first), 4 not-indexed pages due a re-check,
+   * 5 indexed pages due a watch. Addresses outside a URL-prefix property are never asked (`outside`). Returns { take, limit, backlog_left, by_bucket }.
    */
   const plan = (pages, o) => {
     const opts = o || {}; const now = n0(opts.now);
     const limit = opts.stop ? 0 : Math.max(0, Math.min(capOf(opts.cap), CFG.quota_per_day) - n0(opts.used_today));
-    const due = [];
+    const due = []; let outside = 0;
     for (const p of (pages || [])) {
       if (p._reuse || isGone(p)) continue;
+      if (!inProperty(p.url, opts.property)) { outside++; continue; }
       const last = ts(p.inspect_at); const next = ts(p.next_check_at);
       const state = S(p.state) || 'unknown';
       const ev = p._search || null;
       let bucket = 0;
       if (p.lane === 'new' && state !== 'indexed') {
-        const a = anchorOf(p, opts); const age = a ? (now - a) / DAY : -1;
+        const a = anchorOf(p); const age = a ? (now - a) / DAY : -1;
         const m = CFG.new_schedule.filter(d => d <= age).pop();
         if (m !== undefined && last < a + m * DAY) bucket = 1;
       }
-      if (!bucket && state === 'indexed' && ev && opts.search_read !== false && ev.impr14 === 0 && ev.impr_before > 0 && now - last >= CFG.lost_recheck_days * DAY) bucket = 2;
+      if (!bucket && S(p.fix_seen_at) && (!next || next <= now)) bucket = 1.5;
+      if (!bucket && state === 'indexed' && ev && opts.search_read !== false && ev.impr14 === 0 && n0(ev.impr_before) > 0 && now - last >= CFG.lost_recheck_days * DAY) bucket = 2;
       if (!bucket && state === 'unknown' && !last) bucket = 3;
       if (!bucket && (state === 'not_indexed' || state === 'excluded' || state === 'error') && (!next || next <= now)) bucket = 4;
       if (!bucket && state === 'indexed' && (!next || next <= now)) bucket = 5;
@@ -839,25 +1113,64 @@ const IX = (() => {
       || (ts(a.p.next_check_at) - ts(b.p.next_check_at)) || S(a.p.url).localeCompare(S(b.p.url)));
     const take = due.slice(0, limit).map(d => ({ ...d.p, _bucket: d.bucket }));
     const taken = new Set(take.map(p => key(p.url)));
-    const backlog_left = (pages || []).filter(p => (S(p.state) || 'unknown') === 'unknown' && !p._reuse && !(p._search && p._search.impr28 > 0) && !taken.has(key(p.url))).length;
+    const backlog_left = (pages || []).filter(p => (S(p.state) || 'unknown') === 'unknown' && !p._reuse && !(p._search && n0(p._search.impr28) > 0) && !taken.has(key(p.url)) && inProperty(p.url, opts.property)).length;
     const by_bucket = {}; for (const d of due) by_bucket[d.bucket] = (by_bucket[d.bucket] || 0) + 1;
-    return { take, limit, due: due.length, backlog_left, by_bucket };
+    return { take, limit, due: due.length, backlog_left, by_bucket, outside };
   };
   /** When the planner may inspect the page again (DESIGN §3), from the row as it is after this run. */
   const nextCheck = (row, ctx) => {
     const c = ctx || {}; const now = n0(c.now); const st = S(row.state);
     const at = (d) => new Date(now + d * DAY).toISOString();
     if (isGone(row)) return '';
+    if (S(row.fix_seen_at)) return at(now - ts(row.fix_seen_at) < CFG.fix_slow_after_days * DAY ? CFG.fix_recheck_days : CFG.fix_slow_recheck_days);   // X7
     if (st === 'error') return at(1);
     if (st === 'indexed') return at(row._impr7 > 0 ? CFG.watch_quiet_days : CFG.watch_days);
     if (S(row.action) === 'leave_out') return at(CFG.leave_out_days);
     if (row.lane === 'new') {
-      const a = anchorOf(row, c); const age = a ? (now - a) / DAY : 0;
+      const a = anchorOf(row); const age = a ? (now - a) / DAY : 0;
       const m = CFG.new_schedule.find(d => d > age + 0.01);
       if (m !== undefined && a) return new Date(a + m * DAY).toISOString();
     }
     const k = Math.max(1, n0(row.checks));
     return at(CFG.recheck[Math.min(k, CFG.recheck.length) - 1]);
+  };
+  /**
+   * X8 (FIX_CONTRACT `ask_google`): at most ask_max pages a site a week where pressing "Request indexing" in Search Console is the right next
+   * step: pages whose fix we saw on the site, our own pages not indexed ask_ours_days after publishing, and important existing pages (in the
+   * sitemap and linked from the home page or its menu) Google has not crawled or does not know. Never a page left out on purpose, never a
+   * page waiting for quality work during an update. `reselect`: on the engine's Monday (or when none is marked) the five are chosen again;
+   * on other days a marked page keeps its mark while it still qualifies and nothing new is added.
+   */
+  const askGoogle = (rows, o) => {
+    const opts = o || {}; const now = n0(opts.now); const home = opts.home_keys || new Set(); const frz = !!(opts.freeze && opts.freeze.freeze);
+    const eligible = (r) => {
+      if (S(r.state) === 'indexed' || S(r.action) === 'leave_out' || S(r.action) === 'none' && !S(r.fix_seen_at)) return 0;
+      if (frz && S(r.action) === 'quality') return 0;
+      if (S(r.fix_seen_at)) return 3;
+      const pub = ts(r.published_at);
+      if (S(r.sources).split(',').includes('ours') && pub && now - pub >= CFG.ask_ours_days * DAY) return 2;
+      if (r.in_sitemap && home.has(key(r.url)) && ['discovered_not_crawled', 'unknown_to_google'].includes(S(r.cause))) return 1;
+      return 0;
+    };
+    const marked = (rows || []).filter(r => r._prev && r._prev.ask_google);
+    const reselect = !!opts.reselect || !marked.length;
+    let pick;
+    if (reselect) pick = (rows || []).map(r => ({ r, w: eligible(r) })).filter(x => x.w > 0)
+      .sort((a, b) => b.w - a.w || n0(b.r.impressions_28d) - n0(a.r.impressions_28d) || depth(a.r.url) - depth(b.r.url) || S(a.r.url).localeCompare(S(b.r.url))).slice(0, CFG.ask_max).map(x => x.r);
+    else pick = marked.filter(r => eligible(r) > 0).slice(0, CFG.ask_max);
+    const keys = new Set(pick.map(r => key(r.url)));
+    for (const r of (rows || [])) r.ask_google = keys.has(key(r.url));
+    return pick.length;
+  };
+  /** The home page's own links (E-X8 "linked from the home page or its menu"): the keys of the same-site addresses it links to, bounded. */
+  const homeLinks = (html, pageUrl, site) => {
+    const out = new Set(); const h = S(html).slice(0, 400000);
+    const rx = /<a\b[^>]*\bhref\s*=\s*["']([^"'#]+)["']/gi; let m;
+    while ((m = rx.exec(h)) && out.size < CFG.home_links_max) {
+      let u = m[1].trim(); if (/^\//.test(u) && !/^\/\//.test(u)) u = 'https://' + hostOf(pageUrl) + u;
+      const n = norm(u, site); if (n) out.add(key(n));
+    }
+    return [...out];
   };
 
   // ---- internal links for a page Google has not found / crawled: existing indexed pages on the same topic ----
@@ -891,6 +1204,9 @@ const IX = (() => {
   const eventRows = (parsed, stored, now) => {
     const nowIso = new Date(n0(now)).toISOString(); const by = new Map((stored || []).filter(e => e && S(e.event_id)).map(e => [S(e.event_id), e]));
     const rows = [], started = [], completed = [];
+    // X13: the first reading of the feed is a baseline (as the policy page's is): an update already rolling out, or one that finished
+    // recently, is stored but is not "news today" - otherwise every site gets a same-day callback on its first day
+    const baseline = !by.size;
     const fresh = (iso) => { const t = ts(iso); return t && n0(now) - t <= 2 * DAY; };
     for (const e of (parsed || [])) {
       const old = by.get(e.event_id);
@@ -898,7 +1214,7 @@ const IX = (() => {
         seen_at: old ? S(old.seen_at) || nowIso : nowIso, updated_at: nowIso };
       const changed = !old || EVENT_COLS.filter(k => k !== 'seen_at' && k !== 'updated_at').some(k => S(old[k]) !== S(row[k]));
       if (changed) rows.push(row);
-      if (e.kind === 'core' || e.kind === 'spam') {
+      if (!baseline && (e.kind === 'core' || e.kind === 'spam')) {
         if (e.status === 'rolling_out' && (!old || S(old.status) !== 'rolling_out')) started.push(row);
         if (e.status === 'complete' && ((old && S(old.status) === 'rolling_out') || (!old && fresh(e.ended_at)))) completed.push(row);
       }
@@ -987,7 +1303,8 @@ const IX = (() => {
       const z = (ai - bi) / Math.sqrt(ai + bi); const rel = (ai - bi) / Math.max(bi, 1);
       const segment = (z <= -CFG.impact_z && rel <= -CFG.impact_rel) ? 'dropped' : (z >= CFG.impact_z && rel >= CFG.impact_rel) ? 'gained' : 'stable';
       const ir = rowsBy.get(key(e.url)) || {};
-      out.push({ url: e.url, before_clicks: e.b.c, after_clicks: e.a.c, before_impr: bi, after_impr: ai, before_pos: +e.b.p.toFixed(1), after_pos: +e.a.p.toFixed(1),
+      // E16: a window with no impressions has no position ("no data"), never position 0
+    out.push({ url: e.url, before_clicks: e.b.c, after_clicks: e.a.c, before_impr: bi, after_impr: ai, before_pos: bi > 0 ? +e.b.p.toFixed(1) : null, after_pos: ai > 0 ? +e.a.p.toFixed(1) : null,
         segment, state: S(ir.state), cause: S(ir.cause), _d: ai - bi });
     }
     const order = { dropped: 0, gained: 1, stable: 2 };
@@ -1006,11 +1323,17 @@ const IX = (() => {
   const PAGE_COLS = ['site_id', 'domain', 'url', 'lane', 'sources', 'in_sitemap', 'sitemap_lastmod', 'first_seen_at', 'published_at', 'impressions_28d', 'clicks_28d',
     'last_impression_at', 'state', 'evidence', 'cause', 'action', 'verdict', 'coverage', 'indexing_state', 'robots_state', 'page_fetch_state', 'crawled_as',
     'google_canonical', 'user_canonical', 'last_crawl', 'referring_count', 'google_sitemaps', 'inspect_at', 'fetch_at', 'http_status', 'final_url', 'noindex',
-    'page_canonical', 'words', 'title', 'indexed_since', 'dropped_at', 'checks', 'next_check_at', 'needs_person', 'link_from', 'merge_into', 'note', 'updated_at'];
+    'page_canonical', 'words', 'title', 'indexed_since', 'dropped_at', 'checks', 'next_check_at', 'needs_person', 'link_from', 'merge_into', 'note', 'updated_at',
+    'fix_seen_at', 'ask_google'];   // fix wave 1 (FIX_CONTRACT.md): our fetch saw the site fix (X7), and "ask Google to read it" (X8)
   const NUM = ['impressions_28d', 'clicks_28d', 'referring_count', 'google_sitemaps', 'http_status', 'words', 'checks'];
-  const BOOL = ['in_sitemap', 'needs_person'];
-  const rowOut = (p) => { const o = {}; for (const k of PAGE_COLS) o[k] = NUM.includes(k) ? n0(p[k]) : BOOL.includes(k) ? (p[k] === true || p[k] === 'true') : S(p[k]); return o; };
-  const changed = (prev, row) => !prev || PAGE_COLS.some(k => k !== 'updated_at' && (NUM.includes(k) ? n0(prev[k]) !== n0(row[k]) : BOOL.includes(k) ? ((prev[k] === true || prev[k] === 'true') !== row[k]) : S(prev[k]) !== S(row[k])));
+  const BOOL = ['in_sitemap', 'needs_person', 'ask_google'];
+  const colVal = (p, k) => NUM.includes(k) ? n0(p[k]) : BOOL.includes(k) ? (p[k] === true || p[k] === 'true') : S(p[k]);
+  const rowOut = (p) => { const o = {}; for (const k of PAGE_COLS) o[k] = colVal(p, k); return o; };
+  /** A fingerprint of a row's stored columns (all but updated_at), as written: two FNV-1a passes, so an unchanged row is never written again. */
+  const rowSig = (r) => { const t = JSON.stringify(PAGE_COLS.filter(k => k !== 'updated_at').map(k => colVal(r || {}, k)));
+    return (typeof PW !== 'undefined') ? PW.hash(t) + PW.hash(t.length + '|' + t) : String(t.length) + t.slice(0, 64); };
+  /** prev: the stored row, or its slim copy carrying `sig` (merge); row: rowOut(). */
+  const changed = (prev, row) => !prev || (prev.sig ? prev.sig !== rowSig(row) : PAGE_COLS.some(k => k !== 'updated_at' && colVal(prev, k) !== colVal(row, k)));
 
   // ---- the run: the site's figures, the client's report ----
   const summarize = (rows, run) => {
@@ -1022,18 +1345,20 @@ const IX = (() => {
       needs_person: cnt(r => r.needs_person === true), should_index: cnt(r => r.action !== 'leave_out'), by_cause, by_action,
       backlog_left: n0((run || {}).backlog_left) };
   };
-  const ACTION_LABEL = { site_fix: 'Steps on your website', links: 'Help Google find these pages (internal links and sitemap)', quality: 'Pages Google read and left out',
+  const ACTION_LABEL = { fixed: 'Fixed on your site, waiting for Google', site_fix: 'Steps on your website', links: 'Help Google find these pages (internal links and sitemap)', quality: 'Pages Google read and left out',
     duplicate: 'Pages Google treats as copies', wait: 'New pages Google has not reached yet (normal)', leave_out: 'Left out on purpose or not needed (no action)', none: 'Not checked or not recognised' };
   const CAUSE_LABEL = { indexed_not_in_sitemap: 'In Google but missing from the sitemap', wait_new: 'New, not crawled yet', unknown_to_google: 'Unknown to Google',
     not_in_sitemap: 'Unknown to Google and missing from the sitemap', discovered_not_crawled: 'Found by Google, not crawled yet', crawled_not_indexed: 'Read by Google, not added',
     noindex: 'Marked noindex', noindex_intended: 'Marked noindex (intended)', robots_blocked: 'Blocked by robots.txt', robots_intended: 'Blocked by robots.txt (intended)',
     canonical_elsewhere: 'Sitemap lists a non-main address', alternate: 'Alternate address of another page', google_chose_other: 'Google chose another page as the main one',
     duplicate_no_canonical: 'Copy with no main version named', not_found: 'Not found (404 / 410)', soft_404: 'Looks empty to Google (soft 404)', server_error: 'Server error',
-    access_denied: 'Login or access blocked', redirect: 'Redirects elsewhere', low_value: 'Listing / filter / account page', not_checked: 'Could not be checked', unclassified: 'Reason not recognised' };
+    access_denied: 'Login or access blocked', redirect: 'Redirects elsewhere', redirect_error: 'Redirect error', low_value: 'Listing / filter / account page', not_checked: 'Could not be checked', unclassified: 'Reason not recognised' };
   // the sentence for a group of pages of one cause: the per-page details (which address, which status) go on the page lines, not in the sentence
   const GROUP = { google_chose_other: 'Google treats these pages as copies of other addresses and shows those instead. Merge the copies, make each page clearly different, or (when the other address is the same page on your other host) redirect one host to the other.',
     duplicate_no_canonical: 'Google sees these pages as copies of other pages. Point each one to its main version with a canonical tag, or make it clearly different.',
-    redirect: 'These addresses redirect. Your sitemap should list the final addresses instead.', server_error: 'Your server answered with an error when these pages were read. Check the server or the hosting.',
+    redirect: 'These addresses redirect. Your sitemap should list the final addresses instead.',
+    redirect_error: 'Google could not follow the redirects on these addresses (a loop, a chain that is too long, or a redirect to a broken address). Fix each redirect so it goes straight to a working page.',
+    server_error: 'Your server answered with an error when these pages were read. Check the server or the hosting.',
     access_denied: 'These pages ask for a login or turn visitors away, so Google cannot read them. Open them to everyone if you want them in Google.',
     noindex: 'These pages tell search engines not to index them. Remove the noindex if you want them in Google.',
     not_checked: 'We could not check these pages on the last try. We try again on the next run.', unclassified: 'Google gave a reason we do not recognise. Check these addresses in Search Console.' };
@@ -1045,20 +1370,23 @@ const IX = (() => {
     const should = n0(sum.should_index);
     L.push('# Index coverage: ' + S(site.domain));
     L.push('');
-    L.push('Google has **' + sum.indexed + ' of ' + sum.known + '** known pages in its index' + (should && should !== sum.known ? ' (' + sum.indexed + ' of the ' + should + ' that should be there)' : '') + '.');
+    // E14: a website that could not be checked is said to be not checked - never "0 of 0", never a measured zero
+    if (opts.failed) L.push('**We could not check this website today: ' + S(opts.why || 'not checked').replace(/[.:]+$/, '') + '.**' + (sum.known ? ' The figures below are from the last check.' : ' Nothing has been checked yet.'));
+    if (sum.known) L.push('Google has **' + sum.indexed + ' of ' + sum.known + '** known pages in its index' + (should && should !== sum.known ? ' (' + sum.indexed + ' of the ' + should + ' that should be there)' : '') + '.');
     if (sum.unknown) L.push(sum.unknown + ' page(s) are not checked yet; at up to ' + n0(run.quota_cap) + ' checks a day that takes about ' + Math.max(1, Math.ceil(sum.unknown / Math.max(1, n0(run.quota_cap)))) + ' more day(s).');
     if (sum.errors) L.push(sum.errors + ' page(s) could not be checked on the last try; they are tried again, never counted as missing.');
-    if (S(run.note)) L.push(S(run.note));
+    if (S(run.note) && !opts.failed) L.push(S(run.note));
     if (opts.freeze && opts.freeze.freeze) L.push('**' + opts.freeze.reason + '**');
     L.push('');
-    for (const a of ['site_fix', 'links', 'quality', 'duplicate', 'wait', 'none', 'leave_out']) {
-      const rows = (opts.rows || []).filter(r => r.action === a && (a !== 'none' || (S(r.cause) && r.state !== 'indexed')));
+    for (const a of ['site_fix', 'fixed', 'links', 'quality', 'duplicate', 'wait', 'none', 'leave_out']) {
+      // X7: a fix we saw on the site, waiting for Google to read it again, is its own group (not "new pages")
+      const rows = (opts.rows || []).filter(r => a === 'fixed' ? (r.action === 'wait' && S(r.fix_seen_at)) : r.action === a && !(a === 'wait' && S(r.fix_seen_at)) && (a !== 'none' || (S(r.cause) && r.state !== 'indexed')));
       if (!rows.length) continue;
       L.push('## ' + ACTION_LABEL[a] + ' (' + rows.length + ')');
       const causes = [...new Set(rows.map(r => r.cause))];
       for (const c of causes) {
         const cr = rows.filter(r => r.cause === c);
-        L.push('- **' + (CAUSE_LABEL[c] || c) + '** (' + cr.length + '): ' + groupNote(cr[0], { freeze: opts.freeze }));
+        L.push('- **' + (CAUSE_LABEL[c] || c) + '** (' + cr.length + '): ' + (a === 'fixed' ? 'Fixed on your site. Waiting for Google to read these pages again.' : groupNote(cr[0], { freeze: opts.freeze })));
         for (const r of cr.slice(0, 5)) L.push(lineOf(r));
         if (cr.length > 5) L.push('  - and ' + (cr.length - 5) + ' more');
       }
@@ -1071,39 +1399,55 @@ const IX = (() => {
     return L.join('\n').replace(/[—–]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/…/g, '...');
   };
 
-  return { CFG, key, same, norm, own, hostOf, bare, pathOf, depth, isLowValue, LOW_VALUE, robotsSitemaps, parseSitemap, sitemapRoots, sitemapAccept, searchEvidence,
-    readInspection, reuseOf, storedReading, readFetch, mainWords, diagnose, covCause, stateOf, ACTION, CAUSES, laneOf, anchorOf, noteOf, plan, nextCheck, capOf, isGone,
-    linkSuggestions, topicOf, kindOf, parseEvents, eventRows, policyText, policyEvent, POLICY_URL, freeze, impactWindows, impactDue, impactCompare, impactNote,
-    PAGE_COLS, rowOut, changed, summarize, reportMarkdown, groupNote, isoDay, DAY, merge };
+  return { CFG, key, same, norm, own, safe, parseUrl, siteHost, hostOf, bare, pathOf, depth, isLowValue, LOW_VALUE, robotsSitemaps, parseSitemap, sitemapRoots, sitemapAccept,
+    sitemapQueue, sitemapComplete, searchEvidence, saWindows, readInspection, readingsOf, reuseOf, storedReading, readFetch, hopOf, robotsAllows, mainWords, diagnose, fixSeen, covCause,
+    stateOf, ACTION, CAUSES, laneOf, anchorOf, noteOf, plan, inProperty, nextCheck, capOf, isGone, askGoogle, homeLinks, linkSuggestions, topicOf, kindOf, parseEvents,
+    eventRows, policyText, policyEvent, POLICY_URL, freeze, impactWindows, impactDue, impactCompare, impactNote, PAGE_COLS, rowOut, rowSig, changed, summarize,
+    reportMarkdown, groupNote, isoDay, DAY, merge, ts };
 })();
 const ROUND = 2;
 const S = (v) => String(v == null ? '' : v).trim();
+const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const sites = $('Index Sites').all().map(i => i.json).filter(s => s && s.site_id && s.gsc_connected);
 const prev = (() => { if (ROUND === 1) return []; try { return $('Sitemap Read ' + (ROUND - 1)).all().map(i => i.json).filter(x => x && x.site_id); } catch (e) { return []; } })();
 let reqs = []; try { reqs = $('Sitemap Requests ' + ROUND).all().map(i => i.json).filter(q => q && !q.skip); } catch (e) { reqs = []; }
 let res = []; try { res = $('Fetch Sitemaps ' + ROUND).all().map(i => i.json); } catch (e) { res = []; }
+const hdr = (r, name) => { const h = (r && r.headers) || {}; const k = Object.keys(h).find(x => x.toLowerCase() === name); return k ? S(h[k]) : ''; };
+const locOf = (r, asked) => { const l = hdr(r, 'location'); return /^\//.test(l) && !/^\/\//.test(l) ? 'https://' + IX.hostOf(asked) + l : l; };
 const out = [];
 for (const s of sites) {
   let st = prev.find(x => x.site_id === s.site_id);
-  st = st ? { ...st, next: [] } : { site_id: s.site_id, fetched: [], urls: [], next: [], errors: [], read: 0, robots_status: 0 };
+  st = st ? { ...st, next: [] } : { site_id: s.site_id, fetched: [], urls: [], next: [], errors: [], read: 0, robots_status: 0, robots_txt: '', home_host: '', home_links: [], home_hops: 0 };
+  const site = () => ({ ...s, home_host: st.home_host || S(s.home_host_prev) });
   try {
-    reqs.forEach((q, i) => {
-      if (q.site_id !== s.site_id) return;
-      const r = res[i] || {};
+    const mine = reqs.map((q, i) => ({ q, r: res[i] || {} })).filter(x => x.q.site_id === s.site_id);
+    // the home page first: the host decides how every sitemap address is stored
+    for (const { q, r } of mine.filter(x => x.q.home)) {
+      const status = n0(r.statusCode ?? r.status);
+      if (status >= 300 && status < 400) {
+        const to = IX.safe(locOf(r, q.url), s);
+        if (to) { st.home_host = IX.hostOf(to); if (n0(st.home_hops) < 2 && to !== q.url) { st.home_hops = n0(st.home_hops) + 1; st.next.push({ url: to, from: 'home', home: true }); } }
+      } else if (status >= 200 && status < 300) {
+        if (!st.home_host) st.home_host = IX.hostOf(q.url);
+        st.home_links = IX.homeLinks(S(r.body ?? r.data), q.url, site());
+      }
+    }
+    for (const { q, r } of mine.filter(x => !x.q.home)) {
       if (q.robots) {
-        const status = Number(r.statusCode ?? r.status) || 0; st.robots_status = status;
+        const status = n0(r.statusCode ?? r.status);
+        if (status >= 300 && status < 400 && n0(st.robots_hops) < 2) { const to = IX.safe(locOf(r, q.url), s); if (to) { st.robots_hops = n0(st.robots_hops) + 1; st.next.push({ url: to, from: 'robots_txt', robots: true }); continue; } }
+        st.robots_status = status;
         if (status >= 200 && status < 300) {
-          const fetched = new Set(st.fetched);
-          for (const u of IX.robotsSitemaps(S(r.body ?? r.data))) {
-            if (!IX.own(u, s) || fetched.has(IX.key(u)) || reqs.some(x => x.site_id === s.site_id && IX.same(x.url, u)) || st.next.some(x => IX.same(x.url, u))) continue;
-            if (st.fetched.length + st.next.length >= IX.CFG.sitemaps_max) { st.capped_sitemaps = true; break; }
-            st.next.push({ url: u, from: 'robots' });
+          const text = S(r.body ?? r.data).slice(0, IX.CFG.robots_max); st.robots_txt = text;
+          for (const u of IX.robotsSitemaps(text)) {
+            if (reqs.some(x => x.site_id === s.site_id && IX.same(x.url, u))) continue;
+            IX.sitemapQueue(st, u, 'robots', s);
           }
         }
-        return;
+        continue;
       }
-      st = IX.sitemapAccept(st, q, r, s);
-    });
+      st = IX.sitemapAccept(st, q, r, site());
+    }
   } catch (e) { st.errors = (st.errors || []).concat([{ url: '', error: 'sitemap reading failed: ' + S(e && e.message).slice(0, 120) }]); }
   st.errors = (st.errors || []).slice(0, 20);
   out.push({ json: st });

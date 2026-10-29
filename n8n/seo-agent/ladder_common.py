@@ -399,7 +399,10 @@ INDEX_PAGES_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string
                     ('google_canonical', 'string'), ('user_canonical', 'string'), ('last_crawl', 'string'), ('referring_count', 'number'), ('google_sitemaps', 'number'),
                     ('inspect_at', 'string'), ('fetch_at', 'string'), ('http_status', 'number'), ('final_url', 'string'), ('noindex', 'string'), ('page_canonical', 'string'),
                     ('words', 'number'), ('title', 'string'), ('indexed_since', 'string'), ('dropped_at', 'string'), ('checks', 'number'), ('next_check_at', 'string'),
-                    ('needs_person', 'boolean'), ('link_from', 'string'), ('merge_into', 'string'), ('note', 'string'), ('updated_at', 'string')]
+                    ('needs_person', 'boolean'), ('link_from', 'string'), ('merge_into', 'string'), ('note', 'string'), ('updated_at', 'string'),
+                    # fix wave 1 (docs/indexing-2026-10-29/FIX_CONTRACT.md): our own read saw the site fix while Google still shows the old reason
+                    # (X7; ISO, '' = none), and "ask Google to read it" in Search Console (X8; at most 5 pages a site a week)
+                    ('fix_seen_at', 'string'), ('ask_google', 'boolean')]
 # seo_index_history: insert only, one row per state / cause change of a page
 INDEX_HISTORY_TABLE = 'seo_index_history'
 INDEX_HISTORY_COLS = [('site_id', 'string'), ('url', 'string'), ('at', 'string'), ('state', 'string'), ('cause', 'string'), ('evidence', 'string'), ('verdict', 'string'), ('coverage', 'string')]

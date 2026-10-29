@@ -155,3 +155,75 @@ Plus the existing lints over all generated workflows (retry, in-200, gate pairs,
 3. A Google-side "Internal error" inspection answer is not retried within the run (as in the Site Tracker); it is re-checked the next day.
 4. Sitemap submission stays out (DESIGN §8): the `sitemaps_json` field lets the app ask the client to submit / fix it.
 5. Indexed pages that answer 404 today stay `indexed` (Google's state) until Google drops them; a "gone but still indexed" cause could be added later.
+
+## Fix wave 1 (2026-10-29)
+
+Branch `ix/engine`. Every engine finding of REVIEW_ENGINE.md (E1-E16) and the engine half of REVIEW_CROSS.md, against FIX_CONTRACT.md. Nothing
+deployed, no paid API, nothing pushed. Only `workflows/SEO_Agent_Index_Coverage.json` changes among the generated workflows (rebuilt from the
+same sources, every other file byte-identical to the integration head); the catch-up did not need to change.
+
+**Harness**: before 13255 passed, 0 failed (integration head). After **13788 passed, 0 failed** (+533: IXF1-IXF12 and the IX updates). New
+`harness/scenarios_index_fix.js` (IXF1-IXF12, 60 checks): run against the reviewed code they give **55 failed, 5 passed** (the 5 are controls:
+"an old crawl may still be overruled by our 404", "a second per-minute answer is the day's quota", a replay that the old daily sum already
+covered, a vacuous slim-row check, the old "discovered" lane result); on the fixed code 60 / 60 pass. IX1-IX12 were updated where the
+contract changed (the e2e helper now drives one website per execution, Search Analytics answers per window, a home page and a reservation).
+
+### Shape of the run (X1 / E6 / X2 / E10 / X19)
+* `Index Plan` has three ways in: **dispatch** (the 05:15 schedule, the catch-up, or a Manual Run naming no website): the tracked websites
+  with the watch on, oldest run first, minus those with a run row today; it reads Google's news once, prunes history / runs older than 400
+  days and starts the first website's own execution (`Start Index Part`, Execute Workflow of itself, `waitForSubWorkflow: false`). **Chain
+  part** (`ix_chain` + `site_id`): one website; after `Save Index Runs` it starts the next (`Next Index Part`, `parent_run_id` = itself).
+  **On demand** (`domain` / `site_id`): one website, callback always.
+* One website at a time (plus the dispatch's seconds = at most two executions): two parallel chains would hold two of the run guard's
+  three slots and push the AI Pulse / cycle jobs into refusals. A chain part refused for capacity (`same_mode`, `too_many_open`,
+  `heavy_busy`) is started again 5 minutes later (`Retry Index Part` -> `Wait (Index Part Retry)` -> `Restart Index Part`, at most 12 times);
+  a chain older than 20 h stops; tomorrow's dispatch takes the oldest-checked websites first.
+* **Reservation** (E6): after the inventory and before the first URL Inspection, `Index Reservation` -> `Save Index Reservation` inserts the
+  site's `seo_index_runs` row (`inspected` = planned count, the pre-run figures, a note "had not finished"). `Save Index Runs` now
+  **upserts on `site_id + run_at`**, replacing it. `Index Plan` sums `inspected` of today's rows, so a crash, a time-out, a catch-up replay or a
+  manual re-run can never spend past the cap. No saved reservation = no inspection (`Index Probe Requests`).
+* Per-site loads are filtered server-side by `site_id` (`Load Index Pages`, `Load Pages`, `Load Page Watch`, `Load Content Log`,
+  `Load Update Impact`); the dispatch loads none of them.
+* Payloads: `Page Signals` parses every page read into status / redirect / noindex / canonical / words / title; nothing after it carries a
+  body. Stored rows travel once (`_prev` is a slim copy + a column fingerprint used by `IX.changed`). The sitemap tree queues no child once
+  5,000 addresses are read. Bodies stay only in the HTTP nodes' own saved output (one website, <= 60 pages; `saveDataSuccessExecution` stays
+  `all` because the catch-up decides "fired" from the execution list).
+
+### Per finding
+| id | status | how | harness |
+|---|---|---|---|
+| E1 / A1 | fixed | `IX.sitemapComplete` (no error, no cap, no child left, robots.txt read); `merge`: a page found is in the sitemap, a page not found keeps its stored `in_sitemap` unless the read was complete; `diagnose` says `indexed_not_in_sitemap` / `not_in_sitemap` only on a complete read; `sitemaps_json.complete`; the run note says partial | IXF1 |
+| E2 | fixed | `readFetch` marks 401 / 403 / 429 / 503, challenge pages (title / cf-chl / incapsula / px markers; captcha words only on an error status) and language redirects as `blocked`; `diagnose` lets our read add a hard fact only over a soft reason when Google has no successful crawl in the last 14 days | IXF2 |
+| E3 | fixed | lane decided at first sight and kept: `new` = ours, or first seen in the sitemap after a run whose tree was complete (`prev_complete` from the previous run's `sitemaps_json`) and lastmod not older than that run | IXF3, IX2 |
+| E4 | fixed | the URL is the sitemap's form on the canonical host; a stored row on another form moves (`moves`: old row deleted by `Delete Index Pages`, history re-pointed by `Move Index History`); a same-site slash / case / www redirect (our read, or Google's "Page with redirect" to the same key) moves the row, re-inspects it tomorrow, never a drop-out or site step | IXF4 |
+| E5 | fixed | `siteHost`: canonical_host, else the home page's final host (round 1 asks the home page; stored as `sitemaps_json.home_host`, reused next run); `IX.inProperty` keeps URL-prefix properties to their prefix (run note counts the rest); "not part of this property" / 403 = `access` | IXF5 |
+| E6 | fixed | one execution per website + the reservation row (above) | IXF6 |
+| E7 | fixed | a reused reading (no user canonical) is classified from the coverage words; never `duplicate_no_canonical` from canonicals | IXF7 |
+| E8 / X3 | fixed | Search Analytics `dimensions: ['page']`, four windows (90 / 28 / 14 / 7 days, ending 3 days back), `startRow` 0 then 25,000 when full (`Pages Query More` / `GSC Pages Query 2`), hard stop 50,000 a window; a truncated window leaves the pages it cut at their stored figures; `last_impression_at` = first day of the newest window with impressions | IXF8, IX3 |
+| E9 | fixed | new cause `redirect_error` (enum `REDIRECT_ERROR`, coverage "Redirect error"): action `site_fix`, state `not_indexed`, its own sentence | IXF7, IX1 |
+| E10 | fixed | see "Shape of the run" | IXF1, IXF6 |
+| E11 | fixed | `IX.parseUrl` (no `\`, userinfo, whitespace, IP literal incl. hex / integer forms, other port, `localhost` / `.local` / `.internal`); everything fetched is rebuilt (`IX.safe`) on the site's own registrable domain; no HTTP node follows redirects (`Fetch Sitemaps n`, `Fetch Page (Index)`, `Fetch Page (Final)`); a hop is ours (`IX.hopOf`) and re-checked | IXF9, IXF6 |
+| E12 | fixed | at the 6,000 cap ours, then sitemap, Search Console, inventory, then stored-only rows; the run note says capped | IXF10 |
+| E13 | fixed | `readInspection`: a quota / 429 answer naming the day is `quota`, any other is `rate`; a rate answer never stops the site; its pages are asked again after `Wait (Index Rate Limit)` (61 s, 400 ms apart, at most 100); a second rate answer in the run is taken as the day's quota; the plan stops the day only on the note "daily URL Inspection quota" | IXF10 |
+| E14 | fixed | a site without access keeps its stored rows; the run row carries their figures, `inspected` 0 and the note "We could not check this website today: ..."; `sitemaps_json.checked: false`; the report never prints "0 of 0" | IXF10 |
+| E15 | fixed | search / login / account / feed ... only as the first path segment; tag / category / author / archive / page / date archives in the first or second; never for a page in the sitemap or ours | IXF7, IX4 |
+| E16 | fixed | `before_pos` / `after_pos` are `null` for a window with no impressions | IXF7 |
+| X1 | fixed | see "Shape of the run" | IXF6 |
+| X2 | fixed (bounded) | see "Shape of the run"; the HTTP nodes' own saved output still holds the pages read (one site, <= 60) | IXF6 |
+| X4 | fixed | a drop-out needs an indexed page now `not_indexed` / `excluded` with an action other than `leave_out` / `wait`, on a reading, not a move; Google's "Page with redirect" is read before the canonicals (a redirect target is not a duplicate) | IXF11 |
+| X7 | fixed | `fix_seen_at` per FIX_CONTRACT (exact positive signal per cause, `IX.fixSeen`; robots.txt evaluated for Googlebot by `IX.robotsAllows`); while set: action `wait`, note "Fixed on your site. Waiting for Google to read it again.", re-inspected after 1 day (7 days once it is a week old), planned right after the new lane; cleared when the cause changes or the problem is seen again; site-fix pages are read daily | IXF11 |
+| X8 | fixed | `ask_google` via `IX.askGoogle`: fix seen, our pages not indexed after 7 days, sitemap pages linked from the home page / menu that Google has not crawled or does not know; never `leave_out`, never `quality` during a freeze; chosen on the engine's Monday (or when none is marked), kept while eligible on other days; at most 5 | IXF11 |
+| X13 | fixed | the first reading of the dashboard feed is a baseline (no news); a site's first run and updates that started before its first run send no same-day callback | IXF12 |
+| X16 | fixed (engine half) | the dispatch deletes `seo_index_history` (`at`) and `seo_index_runs` (`run_at`) older than 400 days; stored rows gone (404 / 410), in no source and untouched for 120 days are pruned (only after a complete sitemap read and an untruncated Search Console read); duplicate rows of one address are pruned; the cap note (E12). Deleting a site's rows on site deletion is the app's | IXF12 |
+| X19 | fixed by X1 | one website per execution: a run holds one guard slot for one website's minutes, not the whole batch | - |
+
+### Contract details for the app (beyond FIX_CONTRACT.md)
+1. New cause **`redirect_error`** (action `site_fix`, state `not_indexed`; label "Redirect error").
+2. Action **`wait`** can carry a site-fix cause: rows with `fix_seen_at` set (group them as "Fixed on your site, waiting for Google").
+3. **Reservation rows** in `seo_index_runs`: written before inspecting, replaced by the final row (same `site_id` + `run_at`); a run that
+   crashed leaves it with the pre-run figures, its planned `inspected` and the note "...had not finished...". `sitemaps_json` then holds
+   `{ reservation: true, complete, home_host }`.
+4. `sitemaps_json` gains `complete` (true / false; `null` when not checked), `home_host` and `checked` (false = the site could not be checked:
+   `inspected` 0, figures from the last check, the note says why).
+5. `pages_json` positions (`before_pos`, `after_pos`) may be `null` = no data.
+6. A Manual Run with no website is now the dispatch (it skips websites already checked today); give `{ domain }` for one website.
