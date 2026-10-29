@@ -518,6 +518,10 @@ const PF = (() => {
       else if (b.code === 'weak_figure') add(at(b.sentence), 'The figure "' + b.figure + '" rests only on ' + (b.hosts || []).join(', ') + ', a source with no independent authority: rewrite the sentence without the number (keep the point it makes), or cite one of the SOURCES YOU MAY CITE that is an official body, a research house or major press and states it', 2);
       else if (b.code === 'copied') { const ps = ((qa.originality || {}).failing || {}).passages || []; for (const p of ps.slice(0, 3)) add(at(S(p.text).slice(0, 60)) || related(p.text), 'This passage repeats another page word for word; rewrite it in our own words, order and examples: "' + S(p.text).slice(0, 160) + '"', 3); }
     }
+    // FU-SV (merge 2026-10-30): a sentence Content QA could not put in the business's own voice by itself (content_qa.voice.flags, whole
+    // sentences such as "the company says it ...") goes to the editor as a problem of its section; advice to the editor, never a blocker
+    for (const v of ((qa.voice || {}).flags || []).slice(0, 6)) { const sv = S(v).trim(); if (sv.length < 12) continue;
+      add(at(sv), 'Say this in our own voice: keep the fact and drop the outside frame ("its website states", "the website says", "according to its site", "the company says"); write it with "we" / "our team" or as a plain statement with the business as the subject: "' + plain(sv).slice(0, 220) + '"', 1); }
     const advCodes = new Set(cls.advisory.map(a => a.code));
     // length: cut from the sections furthest over their outline target, or expand the thinnest, with a number for each
     const LB = cls.band; const w0 = cls.words; const outline = c.outline || [];

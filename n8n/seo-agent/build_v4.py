@@ -13156,7 +13156,8 @@ open(os.path.join(OUT_CODE, '_grade.js'), 'w').write("// harness shim (written b
 sticky("""### The grade (W0-C, 2026-10-29)
 **Content QA** grades the page on one scale out of 100: structure 20, coverage 15, readability 10, specificity 10, plain language 10, **sources 15**, **fit 20**, length advice only (repetition and list labels cost structure points). The old six parts decide the editor round, unchanged. **Page Candidates** / **Apply Second Read** cap it (a blocker: 59; a duplicate page: fit 30%) and apply the floors: under half in any part = **Needs work**, never Ready. Shown as 95+, never 100.""", pos('Page Candidates')[0] - 40, pos('Page Candidates')[1] + 420, 760, 180, 5)
 log('The grade counts what a reviewer counts (W0-C, 2026-10-29, section 159; PLAN Fix 3, REVIEW_CODE H3 / L1 / L5, REVIEW_EVIDENCE H2 / H3 / M1): Content QA grades on one scale out of 100 with the grade kit v5/code/_grade.js (structure 20 less repetition and list-label collisions, coverage 15, readability 10, specificity 10, plain language 10, sources 15 from the tier of what each cited sentence and figure rests on, fit 20 from the verdict and the duplicate page; length advice only) while the old six parts stay as copy_score for the editor round, unchanged; Page Candidates, Finalize Verdict and Apply Second Read cap it (an open blocker 59, an open duplicate or a page published beside it fit 30%) and apply the floors (under half in any part = "Needs work: <part>", delivery status needs_work, still publishable; the fit floor waived after "Write it anyway" and for ladder pages, case studies, AI pages and refreshes, shadow for automatic runs); shown as "95+"; Parse Analysis records the results page\'s shapes (serp_shapes, no points); the Word / PDF report prints the same grade')
-=======
+
+# =============================================================================
 # 170. A CLIENT-RENDERED WEBSITE IS READ AFTER ITS SCRIPTS RAN (FU-R1, page-quality programme 2026-10-29, BASELINE.md "Recurring defects":
 #      "Own site not read when it is client-rendered (0 own pages read)", K7 / K8 of the BEFORE run).
 #      The page run reads the client's own pages with the text reader (Read Client Pages) and one plain GET (Read Client Page HTML). A site
@@ -13234,6 +13235,37 @@ for _f170 in ('code/_client_render.js', 'code/Client_Render_Plan.js', 'code/Clie
 url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 log('A client-rendered website is read after its scripts ran (FU-R1, 2026-10-29, section 170; the BEFORE run read 0 of the site\'s own pages on K7 / K8): Client Render Plan renders a page of the run only when the text reader got under 200 characters and its HTML is a script shell on the run\'s own host (v5/code/_client_render.js), through the browser render the audit uses (Render Client Pages, Jina X-Engine browser, HTML); Client Render More reads the services / platform hub and the page closest to the search from the rendered homepage\'s links (Render More Client Pages), at most 3 renders a run; Collect Client Pages uses the rendered text and HTML, adds the homepage\'s links as internal link candidates when no sitemap was read, labels each rendered page read_via rendered and records client_render; a server-rendered site takes the skip branch and its output is unchanged')
+
+# =============================================================================
+# 171. THE FOLLOW-UP BRANCHES MEET WAVE 0 (merge of fu-sources-voice / fu-own-site-render / fu-finalize-toc, page-quality programme
+#      2026-10-30; their merge notes). Each branch was built on a base older than Wave 0, so the joins they could not make are made here:
+#      * the voice lines Content QA could not rewrite by itself (content_qa.voice.flags) become a section problem for the editor (PF.plan,
+#        v5/code/_page_fix.js); advice, never a blocker, so a page with none (the ranking guide 949) gets the same edit job as before;
+#      * the Finalize editor gets the three rules the page editor got (our own voice, no own byline, no search-engine redirect;
+#        v5/code/Finalize_Apply.js builds the prompt that v5/prompts/finalize_editor.txt prints);
+#      * W0-F's regulatory step reads a search-engine redirect as the page it leads to (REG.pick through SRC.unwrap, the source kit inlined
+#        in the two nodes that pick) and never makes an opaque one a regulatory source (Collect Facts drops it as Collect Facts drops its own).
+# =============================================================================
+for _n171 in ('Regulatory Candidates', 'Regulatory SERP Candidates'):
+    assert 'const SRC = (() => {' not in code(_n171), 'FU-merge: ' + _n171 + ' already carries the source kit'
+    setcode(_n171, SOURCES_SRC + '\n' + code(_n171))
+    assert code(_n171).count('const SRC = (() => {') == 1 and 'REG.pick(' in code(_n171), 'FU-merge: ' + _n171 + ' must inline the source kit once and pick through REG.pick'
+assert "const target = (u) => { const x = s(u).trim(); if (typeof SRC === 'undefined' || !SRC.isRedirect(x)) return x; return SRC.unwrap(x) || ''; };" in REG_SRC153 \
+    and 'const url = target(r && r.url);' in REG_SRC153, 'FU-merge: REG.pick does not read a redirect as its target'
+patch('Collect Facts', "const regFacts = (prev.regulatory_sources || []).filter(f => f && f.url).map(",
+      "const regFacts = (prev.regulatory_sources || []).filter(f => f && f.url && !(SRC.isRedirect(f.url) && !SRC.unwrap(f.url))).map(")   # FU-merge: an opaque redirect is never a regulatory source
+_pf171 = _rd0('code/_page_fix.js')
+assert "for (const v of ((qa.voice || {}).flags || []).slice(0, 6))" in _pf171 and "add(at(sv), 'Say this in our own voice:" in _pf171, 'FU-merge: PF.plan does not give the voice flags to the editor'
+_fa171 = _rd0('code/Finalize_Apply.js')
+for _k171 in ("'- Our own voice: the page is published on the business", "'- One byline: the system prints the author", "'- A source link is the page itself, never a search engine redirect"):
+    assert _k171 in _fa171, 'FU-merge: the Finalize editor prompt lacks ' + _k171
+_ed171 = _rd0('prompts/editor.txt')
+for _k171 in ('- Our own voice:', '- One byline:', '- A source link is the page itself, never a search engine redirect'):
+    assert _k171 in _ed171, 'FU-merge: the page editor prompt lacks ' + _k171
+for _f171 in ('code/_page_fix.js', 'code/Finalize_Apply.js', 'code/_regulatory.js'):
+    for _bad171 in ('\u2014', '\u2013', '\u201c', '\u201d', '\u2026'):
+        assert _bad171 not in _rd0(_f171), 'FU-merge: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f171
+log('The follow-up branches meet Wave 0 (2026-10-30, section 171): voice flags go to the editor as section problems, the Finalize editor carries the own-voice / one-byline / no-redirect rules, regulatory search results are read through a redirect to their target and an opaque redirect is never a regulatory source')
 
 # =============================================================================
 # 9. WRITE

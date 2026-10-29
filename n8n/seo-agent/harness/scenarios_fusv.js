@@ -185,4 +185,40 @@ module.exports = async (ctx) => {
     const v = CL.voice(G.live_markdown, { names: ['Nova&', 'novaand', 'Novaand systems LLC'] });
     check('the voice kit alone leaves the guide byte for byte', v.text === G.live_markdown && v.fixed.length === 0, J(v.fixed.slice(0, 3)));
   });
+
+  // ---------- FUSV7 the merge with Wave 0 (2026-10-30, build section 171): the voice flags reach the editor, the Finalize editor's rules ----------
+  await guard('FUSV7 merge with wave 0', async () => {
+    const SN = 'FUSV7 (2026-10-30, merge notes 1 and 2) a voice line Content QA could not rewrite goes to the editor as a problem of its section; the Finalize editor carries the three rules; the guide 949 gets the same edit job as before';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const pf = async (fn, args) => (await run('PF Kit', [{ json: { fn, args } }], { code: '_page_fix' }))[0].json.r;
+    const FLAG = 'The company says the team has finished more than one hundred projects in the region since it opened.';
+    const md = ['Title: ERP partners', 'Meta Description: How to pick an ERP partner in the UAE, with the questions to ask before you sign and what a good plan looks like.', 'Slug: erp-partners', '',
+      '# ERP partners in the UAE', '', 'An ERP partner sets up and supports the system your teams use every day.', '',
+      '## Our experience', '', 'We work with finance teams across the UAE. ' + FLAG, '', '## How to choose', '', 'Ask for references and a plan with dates.', ''].join('\n');
+    const ctx = { domain: 'novaand.example', keyword: 'erp partner uae', names: ['Nova&'] };
+    const qa0 = { main_content_words: 60, outbound_links: [] };
+    const cls = await pf('classify', [qa0, md, ctx]);
+    const withFlag = await pf('plan', [md, cls, { ...qa0, voice: { fixed: 0, rewrites: [], flags: [FLAG] } }, ctx]);
+    const probs = (withFlag.sections || []).flatMap(x => (x.problems || []).map(p => [x.heading, p]));
+    const vp = probs.filter(([, p]) => /^Say this in our own voice/.test(p));
+    check('the flagged line is one problem for the editor, in the section where it stands ("Our experience")', vp.length === 1 && /Our experience/.test(vp[0][0]) && vp[0][1].includes(FLAG.slice(0, 60)), J(probs));
+    check('it is advice, never a blocker (the page keeps its status)', !(cls.blocking || []).some(b => /voice/i.test(String(b.code || ''))), J((cls.blocking || []).map(b => b.code)));
+    check('the problem is in plain words (no em dash, curly quote or ellipsis character)', vp.every(([, p]) => !/[\u2014\u2013\u201c\u201d\u2026]/.test(p)), J(vp));
+    const none = await pf('plan', [md, cls, qa0, ctx]); const empty = await pf('plan', [md, cls, { ...qa0, voice: { fixed: 0, rewrites: [], flags: [] } }, ctx]);
+    check('no voice flags: the same edit job as without the field (nothing added)', J(none) === J(empty) && !J(none).includes('Say this in our own voice'), J(empty).slice(0, 400));
+    const short = await pf('plan', [md, cls, { ...qa0, voice: { flags: ['It says so.'] } }, ctx]);
+    check('a flag too short to place is not given to the editor', J(short) === J(none), J(short).slice(0, 300));
+    // the guide that ranks: its Content QA has no voice flag, so its edit job is exactly the one it had before the merge
+    const G = fx('ranking_guide_949.json'); const q = await guideQA(null); const c = q.content_qa || {};
+    const gctx = { domain: 'novaand.example', keyword: G.keyword, names: ['Nova&'] };
+    const gcls = await pf('classify', [c, G.live_markdown, gctx]);
+    const noVoice = { ...c }; delete noVoice.voice;
+    check('the guide 949: the same edit job with and without the voice field (no new problem)', J(await pf('plan', [G.live_markdown, gcls, c, gctx])) === J(await pf('plan', [G.live_markdown, gcls, noVoice, gctx])));
+    // the Finalize editor's prompt (built by Finalize Apply, printed by finalize_editor.txt) carries the page editor's three rules
+    const fa = fs.readFileSync(path.join(CODE_DIR, 'Finalize__Finalize_Apply.js'), 'utf8');
+    const ed = fs.readFileSync(path.join(CODE_DIR, 'Editor.prompt.txt'), 'utf8');
+    for (const [label, a, b] of [['our own voice', "'- Our own voice: the page is published on the business", '- Our own voice:'], ['one byline', "'- One byline: the system prints the author", '- One byline:'],
+      ['no search-engine redirect', "'- A source link is the page itself, never a search engine redirect", '- A source link is the page itself, never a search engine redirect']])
+      check('the Finalize editor and the page editor both carry the rule: ' + label, fa.includes(a) && ed.includes(b));
+  });
 };

@@ -204,6 +204,9 @@ const REG = (() => {
   // then up to OFFICIAL official pages (a dated upload path first: the newest decision), then up to SECONDARY independent secondary
   // sources on different sites (the second tier needs two that agree); then the client's own posts; at most MAX_READS pages in all.
   const OFFICIAL = 2, SECONDARY = 3, MAX_READS = 12;
+  // FU-SV (merge 2026-10-30): a search result that is a search-engine redirect is read as the page it leads to when the redirect carries
+  // it (the source kit's SRC.unwrap, inlined in the nodes that pick); an opaque one (google.com/goto?url=<token>) is never picked
+  const target = (u) => { const x = s(u).trim(); if (typeof SRC === 'undefined' || !SRC.isRedirect(x)) return x; return SRC.unwrap(x) || ''; };
   const pick = (plan, tasks, results, data, market) => {
     const P = plan || {}, out = [], seen = new Set(), hints = [];
     const add = (x) => { const k = urlKey(x.url); if (!k || seen.has(k) || out.length >= MAX_READS) return false; seen.add(k); out.push(x); return true; };
@@ -212,7 +215,7 @@ const REG = (() => {
       const offDomains = (t.official || []).concat((market || {}).official || []);
       const rows = [];
       (tasks || []).forEach((q, i) => { if (!q || q.topic !== t.id) return;
-        (Array.isArray(results[i]) ? results[i] : []).forEach((r, rank) => { const url = s(r && r.url); if (!/^https?:\/\//i.test(url)) return;
+        (Array.isArray(results[i]) ? results[i] : []).forEach((r, rank) => { const url = target(r && r.url); if (!/^https?:\/\//i.test(url)) return;
           rows.push({ url, title: clean(r.title).slice(0, 160), snippet: clean(r.content || r.description).slice(0, 300), host: host(url), kind: q.kind, rank }); }); });
       for (const r of rows) if (r.kind === 'amendment' && AMEND.test(r.title + ' ' + r.snippet) && hints.length < 4) hints.push({ topic: t.id, url: r.url, title: r.title });
       for (const k of (P.known_reads || []).filter(x => x.topic === t.id)) add({ read: true, topic: t.id, role: 'official', url: k.url, title: '', snippet: '', via: 'on file' });

@@ -252,4 +252,23 @@ module.exports = async (ctx) => {
     check('the UAE copy on file names the Ministry of Finance\'s texts and was checked', REGULATORS.markets.AE.topics['e-invoicing'].known.every(k => /^https:\/\/mof\.gov\.ae\//.test(k.url) && k.checked_on === '2026-10-29'));
     check('AE, SA, PK are on the map', ['AE', 'SA', 'PK'].every(k => REGULATORS.markets[k] && REGULATORS.markets[k].official.length));
   });
+
+  // ---------- W0F10 the merge with fu-sources-voice (2026-10-30, build section 171, merge note 4): a search-engine redirect is read as its page ----------
+  await guard('W0F10 redirects', async () => {
+    const SN = 'W0F10 (2026-10-30, merge note 4) the regulatory search answered with Google redirects: the official page they carry is read, an opaque one is never picked or cited';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const wrap = (u) => 'https://www.google.com/url?q=' + encodeURIComponent(u) + '&sa=U&ved=2ahUKEwiSynthetic';
+    const OPAQUE = 'https://google.com/goto?url=CAESagSyntheticTokenOnlyNoTargetInIt0123456789';
+    const acp = { ...acp3299(), keyword: 'e-invoicing deadline uae', started_at: '2027-02-15T08:00:00Z' };
+    const ans = (t) => t.kind === 'amendment' ? searx([[wrap(PAGES.mof_news.url), 'Ministry of Finance announces targeted amendments to eInvoicing system decisions', 'extend the deadline ... from 31 July 2026 to 30 October 2026'], [OPAQUE, 'eInvoicing deadline extended', '']])
+      : t.kind === 'deadline' ? searx([[OPAQUE, 'Ministerial Decision No. 244 of 2025', ''], [wrap(PAGES.md244.url), 'Ministerial Decision No. 244 of 2025', '']]) : searx([]);
+    const { c, cands } = await chain(acp, ans, readOf({}));
+    const urls = cands.filter(x => x.read).map(x => x.url);
+    check('the official decision and the news item are read at their own addresses (the redirect unwrapped)', urls.includes(PAGES.md244.url) && urls.includes(PAGES.mof_news.url), J(urls));
+    check('no search-engine address is read or kept as a source', !urls.some(u => /google\.com\/(?:url|goto)/.test(u)) && !(c.regulatory_sources || []).some(f => /google\.com/.test(f.url || '')), J(urls.concat((c.regulatory_sources || []).map(f => f.url))));
+    const P1 = (c.regulatory_facts || []).find(f => f.verb === 'appoint' && f.subject_class === 'ge:50000000');
+    check('the same facts as the plain addresses give (W0F3): appoint by 30 October 2026, superseding 31 July 2026, from the Ministry of Finance', P1 && P1.date === '2026-10-30' && P1.supersedes === '2026-07-31' && /mof\.gov\.ae/.test(P1.url), J(P1));
+    const cf = fs.readFileSync(path.join(CODE_DIR, 'Collect_Facts.js'), 'utf8');
+    check('Collect Facts never makes an opaque redirect a regulatory source', cf.includes('const regFacts = (prev.regulatory_sources || []).filter(f => f && f.url && !(SRC.isRedirect(f.url) && !SRC.unwrap(f.url))).map('));
+  });
 };

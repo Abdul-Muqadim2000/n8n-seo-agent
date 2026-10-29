@@ -101,6 +101,9 @@ module.exports = async (ctx) => {
     before('949 guide content score / breakdown', { content_score: qg.content_score, breakdown: qg.score_breakdown, words: qg.main_content_words, not_ready_reasons: (qg.not_ready_reasons || []).length });
     before('3299 service page content score (same QA, same context)', { content_score: qs.content_score, breakdown: qs.score_breakdown });
     check('the guide is scored (a number, not withheld)', typeof qg.content_score === 'number', J(qg).slice(0, 300));
+    // merge note 3 (2026-10-30): the score above is the guide's own text, not the 3299 draft read through Promise Candidates
+    check('the page graded is the guide itself (its word count, not the 3299 draft\'s)', Math.abs((qg.main_content_words || 0) - G.live_words) <= 0.15 * G.live_words && qg.main_content_words !== qs.main_content_words,
+      'graded ' + qg.main_content_words + ' words, guide ' + G.live_words + ', 3299 ' + qs.main_content_words);
     check('the guide that ranks does not score below the 3299 service page (owner priority: no gate may down-grade it)', qg.content_score >= qs.content_score,
       'guide ' + qg.content_score + ' vs 3299 ' + qs.content_score);
   });
