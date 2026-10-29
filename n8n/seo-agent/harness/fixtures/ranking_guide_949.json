@@ -1,0 +1,1501 @@
+{
+ "source": "The page that ranks (owner priority 2026-10-29): production execution 949 (the client site, ladder rung 2, Guide, keyword \"is microsoft dynamics 365 an erp system\", published 2026-10-22/23). live_markdown is the published page as served on 2026-10-27 (the public-page fixture publish_*_d365_erp_system.html in this folder) turned into the draft format, identity anonymised (Nova&, novaand.example); brief, site_model, critique and rounds are the page_pipeline_4runs.json records of the same run (excerpts). The verdict score of 949 is NOT stored anywhere in the repo.",
+ "execution": "949",
+ "keyword": "is microsoft dynamics 365 an erp system",
+ "page_type": "Guide",
+ "page_role": "standard",
+ "pipeline_source": "ladder",
+ "force_content": true,
+ "ladder_rung": 2,
+ "published_url": "https://www.novaand.example/insights/is-microsoft-dynamics-365-an-erp-system",
+ "ladder_target_url_at_run": "https://www.novaand.example/is-microsoft-dynamics-365-an-erp-system",
+ "verdict_score": null,
+ "outcome_28d": {
+  "read_at": "2026-10-29",
+  "impressions": 319,
+  "clicks": 0,
+  "avg_position": 33,
+  "queries": [
+   {
+    "query": "dynamics 365 erp",
+    "position": 26.5
+   },
+   {
+    "query": "microsoft dynamics 365 erp",
+    "position": 39.1
+   }
+  ],
+  "rank_tracker": [
+   {
+    "keyword": "dynamics 365 erp system",
+    "positions": [
+     46,
+     24,
+     12,
+     22
+    ]
+   },
+   {
+    "keyword": "is microsoft dynamics 365 an erp system",
+    "positions": [
+     28
+    ]
+   },
+   {
+    "keyword": "ms 365 erp",
+    "positions": [
+     30,
+     39
+    ]
+   }
+  ]
+ },
+ "live_markdown": "Title: Is Microsoft Dynamics 365 an ERP System? UAE Buyers Guide\nMeta Description: Is Microsoft Dynamics 365 an ERP system? Yes. See which apps are ERP or CRM, and whether Business Central or Finance & SCM fits your UAE company.\nSlug: is-microsoft-dynamics-365-an-erp-system\nPrimary Keyword: is microsoft dynamics 365 an erp system\n\n# Is Microsoft Dynamics 365 an ERP System? A Guide for UAE and GCC Buyers\n\nFinance and IT leaders in the UAE often ask: is Microsoft Dynamics 365 an ERP system, or a CRM sold under the same name? This guide maps each app and gives a decision rule. It also covers UAE VAT, e-invoicing and data residency.\n\n**Quick answer:** Yes. Microsoft Dynamics 365 is a family of cloud business applications, and several of them are ERP systems. Business Central is the ERP for small and mid-sized companies, while Dynamics 365 Finance and Dynamics 365 Supply Chain Management serve larger, multi-entity organisations. Other apps in the suite, such as Sales and Customer Service, are CRM, and they connect to the ERP apps through Microsoft's Power Platform.\n\n## Is Microsoft Dynamics 365 an ERP system?\n\nThe confusion comes from Microsoft's branding. Dynamics 365 is not a single product that you install. It is a family of apps that are sold and licensed separately. Some apps run finance and operations, and others manage your customers. A 2026 overview from [randgroup.com](https://www.randgroup.com/insights/microsoft/dynamics-365/is-dynamics-365-a-crm-or-erp/) puts it plainly: \"The short answer is: it is both.\"\n\nTwo product lines make up the ERP side, and both are enterprise resource planning systems in the full sense. Business Central is the packaged ERP for growing and mid-sized companies. Dynamics 365 Finance and Dynamics 365 Supply Chain Management (F&SCM) form the enterprise ERP pair. They are two apps, licensed separately and usually deployed together. Partners may also call the pair Finance and Operations or F&O. If a proposal uses a name you cannot place, ask the vendor to map it to a specific Microsoft app.\n\n### Does Microsoft Dynamics have ERP?\n\nYes. Microsoft's current ERP products are Business Central and F&SCM. They cover financial management, project management and core business processes such as purchasing and inventory. They succeed the older Dynamics NAV, GP and AX products and run in Microsoft's cloud, with Power BI reporting and Copilot available inside the apps.\n\nIn practice, you do not buy \"Dynamics 365\" as a whole. You choose the ERP app that matches your entities and processes. You then add CRM or platform tools only where they solve a measurable problem, such as a slow quote-to-cash cycle or manual month-end reporting.\n\n## Which Dynamics 365 apps are ERP and which are CRM?\n\nMicrosoft keeps its ERP and CRM apps separate, which is why one brand covers both. The table below maps each app to its role and the legacy product it succeeds. It draws on Microsoft Learn documentation for [Business Central](https://learn.microsoft.com/en-us/dynamics365/business-central/), [Finance](https://learn.microsoft.com/en-us/dynamics365/finance/), [Supply Chain Management](https://learn.microsoft.com/en-us/dynamics365/supply-chain/) and [Sales](https://learn.microsoft.com/en-us/dynamics365/sales/). Microsoft renames apps from time to time, so check current names before you sign.\n\n| App | ERP, CRM or both | What it runs | Succeeds |\n\n|---|---|---|---|\n\n| Business Central | ERP | Financial management, sales and purchasing, inventory, project management, basic manufacturing | Dynamics NAV; migration path from Dynamics GP |\n\n| Dynamics 365 Finance (part of F&SCM) | ERP | Multi-entity financial management, consolidation, budgeting | Microsoft Dynamics AX finance |\n\n| Dynamics 365 Supply Chain Management (part of F&SCM) | ERP | Manufacturing, warehousing, procurement, supply chain planning | Microsoft Dynamics AX trade, logistics and production |\n\n| Project Operations | Both | Project quotes, resourcing, time and expenses, project financials | Project Service Automation (Dynamics CRM era) |\n\n| Dynamics 365 Sales | CRM | Leads, opportunities, quotes, pipeline | Dynamics CRM |\n\n| Dynamics 365 Customer Service | CRM | Cases, service levels, knowledge articles | Dynamics CRM |\n\n| Dynamics 365 Field Service | CRM, connects to ERP for parts and billing | Work orders, scheduling, technician mobile app | Dynamics CRM |\n\n| Dynamics 365 Customer Insights | CRM | Marketing journeys, customer profiles, segments | Dynamics CRM marketing |\n\n### Is Dynamics 365 an ERP or a CRM?\n\nIt is both, delivered as separate apps. Business Central and F&SCM are the ERP apps for finance, inventory and operations. Sales, Customer Service, Field Service and Customer Insights are the CRM apps, which succeed Dynamics CRM. You license only the apps you need, and they share data through the Power Platform. Many UAE buyers therefore start with one ERP app and add Sales or Customer Service later.\n\n### Which Dynamics 365 products are ERP?\n\nThe ERP products are Dynamics 365 Business Central, Dynamics 365 Finance and Dynamics 365 Supply Chain Management. Project Operations covers project financials and sits between ERP and CRM. A proposal that names Finance and Operations means the F&SCM pair, not a third product.\n\n### The platform layer: Power Platform, Power BI, Copilot and Azure\n\nThese tools are neither ERP nor CRM on their own. They sit underneath or alongside the apps:\n\n1. Power Platform: low-code apps, workflows and connectors for steps the standard apps do not cover.\n\n1. Power BI: reporting on business data from ERP and CRM in one place.\n\n1. Copilot and Copilot Studio: AI assistance inside the apps and custom agents, which add automation capabilities to routine finance and service tasks.\n\n1. Azure: Microsoft's cloud, which hosts the apps.\n\n1. Microsoft 365: Outlook, Teams and Excel, connected to your ERP records.\n\nYou can see the [Dynamics 365 business applications we implement](/capabilities/business-applications) and how they fit together.\n\n## How did Dynamics AX, NAV, GP and Dynamics CRM become Dynamics 365?\n\nMicrosoft brought its separate ERP and CRM products under one cloud brand. This family line tells you where your current system is likely to land.\n\n### What happened to Dynamics AX, NAV and GP?\n\nMicrosoft Dynamics AX became Dynamics 365 Finance and Supply Chain Management. Dynamics NAV became Business Central. For Dynamics GP, Microsoft documents a migration path to Business Central, so many GP customers assess Business Central first. Dynamics CRM became the customer apps, including Sales, Customer Service and Field Service. Check support dates for your exact version on Microsoft's [lifecycle pages](https://learn.microsoft.com/en-us/lifecycle/), not in a partner's summary.\n\nThe cloud apps change how you run the system day to day:\n\n1. Microsoft publishes [release plans](https://learn.microsoft.com/en-us/dynamics365/release-plan/) for regular updates. These replace the large version upgrades that older on-premises systems needed.\n\n1. Copilot works inside the apps, for example to summarise records or draft replies. Test it on your own tasks before you count on time savings.\n\n1. Power BI and the Power Platform read the same data as the ERP, so finance has fewer exports to reconcile.\n\n1. Users work from Outlook, Teams and Excel rather than switching between separate tools.\n\n### What makes a legacy migration harder or easier\n\nCustomisations and reports cause most of the effort. Business Central and F&SCM use extensions rather than changes to the base code, so old modifications need rework. We use five steps:\n\n1. Inventory every customisation, integration and report, with its owner and how often people use it.\n\n1. Classify each item: replace it with a standard feature, rebuild it as an extension, or retire it.\n\n1. Map each report to a standard report or to Power BI, and retire reports nobody opens.\n\n1. Cleanse master data and agree how many years of history to bring across.\n\n1. Run a parallel close: complete one month-end in both systems and reconcile the trial balance, VAT figures and stock before cut-over.\n\nIllustrative example, not a client case: a distributor on a customised NAV system has a custom discount routine, a custom VAT report and two near-identical stock reports. The discount routine becomes a standard price list in Business Central. The VAT report is rebuilt as an extension. One stock report moves to Power BI and the other is retired. A parallel month-end then confirms the figures match before the old system is switched off.\n\nIn our projects, we deliver NAV and Dynamics GP migrations to Business Central and Microsoft Dynamics AX upgrades to F&SCM. Plan retraining too, because users have often relied on the old screens for years.\n\n## Business Central or Finance and Supply Chain Management: which fits your company?\n\nThis choice depends on your entity structure and process complexity, not on headcount alone. A trading group with modest headcount but many GCC entities may need more than a larger distributor trading from one UAE entity.\n\n### Which is better for a mid-size company: Business Central or Finance and Supply Chain Management?\n\nMost mid-size companies with a few legal entities and standard trading or light manufacturing processes fit Business Central. Choose F&SCM if you run many entities across countries, need advanced consolidation, or have complex manufacturing or warehousing. It also suits companies with a heavy regulatory reporting load.\n\nThe table compares both options on criteria you can check yourself. The dividing lines are our rule of thumb, not Microsoft limits.\n\n| Criterion | Business Central | Finance and Supply Chain Management | What to check in the UAE |\n\n|---|---|---|---|\n\n| Entity structure | A small number of legal entities | Many legal entities across countries | Count your mainland, free zone and GCC entities, including planned ones |\n\n| Consolidation and intercompany | Standard intercompany and consolidation | Advanced consolidation and intercompany at scale | How many manual journals your month-end consolidation needs today |\n\n| Manufacturing | Basic and light manufacturing | Complex and multi-site manufacturing | Whether you produce in more than one UAE or GCC site |\n\n| Warehousing | Few sites, standard picking | Multi-warehouse operations with advanced controls | Whether you hold stock in both free zone and mainland warehouses |\n\n| Regulatory reporting | Standard financial and VAT reporting | Heavier statutory and regulatory reporting | Reports your regulator expects beyond VAT, common in banking |\n\n| What it needs from you | A finance lead and modest IT support | A dedicated internal team and IT ownership | Whether you can release staff around VAT returns and year-end |\n\n| GCC rollout scope | Check each country on Microsoft's [country availability list](https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/compliance/apptest-countries-and-translations) | Staged multi-country rollouts | Which GCC countries and currencies come into scope, and when |\n\nThe UAE adds its own layer. Free zone and mainland operations often need separate legal entities, VAT treatment and bank accounts. GCC subsidiaries add further currencies and local tax rules.\n\n### A five-question self-check for UAE and GCC companies\n\n1. How many legal entities do you run across mainland, free zones and other GCC countries?\n\n1. Do you consolidate or trade between entities every month, and how much of that work is manual?\n\n1. How deep are your manufacturing and warehouse operations?\n\n1. What regulatory reporting do you carry beyond VAT?\n\n1. How much internal IT capacity can you commit, and how wide is your planned GCC rollout?\n\nOur rule of thumb: if you answer \"many\", \"complex\" or \"heavy\" to two or more questions, shortlist F&SCM. Otherwise, start with Business Central.\n\nScored example, for illustration: a group with two mainland entities and one free zone entity answers \"few\", \"light\", \"none\", \"VAT only\" and \"limited\". That is no heavy answers, so Business Central goes on the shortlist. Add a Saudi manufacturing subsidiary with its own warehouses, and two answers turn heavy: entities and manufacturing. F&SCM then joins the shortlist.\n\nBefore we recommend either product, we run business discovery, requirements gathering, a [gap-fit analysis and ROI assessment](/whatwedo/assess-envision) in our Assess and Envision phase.\n\n## What should UAE companies check before choosing Dynamics 365 ERP?\n\n### Is Dynamics 365 suitable for UAE VAT and multi-currency needs?\n\nYes, with checks. VAT set-up, multi-currency accounting and an AED base currency are standard ERP features. Microsoft documents localisation for [Finance](https://learn.microsoft.com/en-us/dynamics365/finance/). Business Central's UAE localisation status appears on its country availability list. E-invoicing needs a connector to an Accredited Service Provider, not custom ERP code.\n\nWhat is standard and what is not:\n\n1. Standard: VAT codes, VAT reporting, multi-currency, currency revaluation and bank reconciliation.\n\n1. Partner or provider connector: the link to your Accredited Service Provider for e-invoicing.\n\n1. Differs per app: Arabic interface and Arabic invoice layouts. Business Central's UAE localization and Arabic translation come from partner apps, while Finance prints UAE-layout sales invoices in two languages, the user's and the customer's ([UAE invoice layout](https://learn.microsoft.com/en-us/dynamics365/finance/localizations/mea/uae-sales-invoice-layout)).\n\nTake this checklist into every vendor meeting:\n\n1. VAT codes and returns. Ask how reverse charge and designated zone transactions map to the figures in your [Federal Tax Authority VAT](https://tax.gov.ae/en/taxes/vat.aspx) return.\n\n1. AED and multi-currency. Ask how AED base currency, revaluation and bank reconciliation are set up and tested for each GCC subsidiary.\n\n1. Arabic. Ask which apps produce Arabic invoices and offer an Arabic interface without custom work.\n\n1. Entity structure. Ask how the design models mainland, free zone and GCC entities and the transactions between them.\n\n### UAE e-invoicing and Peppol: what your ERP must do\n\nThe UAE model runs through providers accredited under the [Ministry of Finance e-invoicing framework](https://mof.gov.ae/en/about-us/initiatives/einvoicing/), which uses the [Peppol](https://peppol.org/about/) network. Your ERP does not report to the authority directly. It sends structured invoice data to an Accredited Service Provider. Check current phase dates on the Ministry of Finance site, not in vendor slides.\n\nAsk three questions:\n\n1. How does the ERP connect to the Accredited Service Provider?\n\n1. Who maintains the connector when Microsoft or the provider changes something?\n\n1. How do rejected invoices come back into the ERP for correction?\n\nWe deliver UAE e-invoicing (Peppol) and VAT compliance work alongside our Dynamics 365 projects. In those projects, we check that every VAT code feeds the correct return figure and test the provider connection end to end, including rejections.\n\n### Data residency, Azure regions and security\n\nMicrosoft lists its [Azure geographies](https://azure.microsoft.com/en-us/explore/global-infrastructure/geographies/), which include UAE regions. Business Central environments localized for the UAE are hosted in the UAE Azure geography; for other Dynamics 365 apps, ask Microsoft which region hosts your tenant. Banking and financial services clients should involve their compliance team early, as sector rules may restrict hosting choices. See our [security and data residency approach](/security).\n\n## How does Dynamics 365 compare with SAP S/4HANA, Oracle and NetSuite for GCC buyers?\n\n### How does Dynamics 365 compare with SAP S/4HANA?\n\nBoth are full ERP platforms used by large, regulated and multi-site organisations. For GCC buyers, the practical differences are fit with your Microsoft 365 and Azure estate, the product range from mid-size to enterprise, the customisation approach and local partner depth. Run the same scripted demos with each vendor before deciding.\n\nSAP S/4HANA, Oracle and NetSuite often share a shortlist with Dynamics 365. What separates them for your company:\n\n1. Microsoft fit: if you already run Microsoft 365 and Azure, Dynamics 365 shares the same identity, data and tools.\n\n1. Product range: Business Central covers mid-size needs and F&SCM covers enterprise ERP, so you can grow without changing vendor.\n\n1. Partner availability: check how many experienced consultants each product has in the UAE.\n\n1. Customisation approach: ask how each product keeps your changes intact through updates.\n\n1. AI: compare what Copilot and the alternatives actually do inside the apps.\n\n### Regulated banks and multi-site manufacturers: where each fits\n\nA regulated bank uses ERP for the back office: general ledger, procurement, fixed assets and financial reporting. ERP does not replace core banking. F&SCM fits banks that already run Microsoft 365 and Azure and want finance inside the same identity and security model. SAP S/4HANA may be stronger where the group parent has standardised on SAP, or where group auditors already rely on SAP-based controls.\n\nA multi-site manufacturer needs production, warehousing and planning across sites, which F&SCM covers. SAP may be stronger for large global manufacturers whose plants already run SAP, or whose industry processes are built around it. For a GCC manufacturer with a few plants and a Microsoft estate, F&SCM is worth testing first. Use your own bills of materials and routings in a scripted demo.\n\n### How to test our advice\n\nWe are a Microsoft partner, so weigh our view of SAP with that in mind. Ask us, and every partner, for a written fit rationale that ties each recommendation to your entities, processes and reports. If we recommend F&SCM, ask us why Business Central will not do. When Business Central, or no new ERP at all, is enough, we say so.\n\n### Questions to ask every ERP vendor on your shortlist\n\n1. How does your product connect to a UAE Accredited Service Provider, and who maintains that connector?\n\n1. Which consultants on your UAE team will work on our project?\n\n1. How are upgrades handled, and what happens to our customisations?\n\n1. Who owns support after go-live, and what response times apply?\n\n## What drives the cost and risk of a Dynamics 365 ERP project?\n\n### What affects the cost of a Dynamics 365 ERP implementation?\n\nCost depends on the apps and user types you license, the entities and processes in scope, and the data you migrate. Integrations, rebuilt reports, training and post-go-live support also add to it. Ask every partner to price these components separately, so you can compare proposals line by line.\n\n| Component | What drives it | Question to ask your partner |\n\n|---|---|---|\n\n| Licences | Product choice, user types and number of users | Which user types do our roles actually need? |\n\n| Implementation scope | Entities, processes and business processes redesigned | Which processes stay standard, and which change? |\n\n| Data migration | Years of history and data quality | How much history do you recommend migrating, and why? |\n\n| Integrations | Banks, e-invoicing provider, payroll, e-commerce, logistics | Which connectors are standard, and which are custom builds? |\n\n| Reporting | Number of Power BI and statutory reports | Which current reports become standard reports? |\n\n| Training and change | User numbers and how different the new screens are | Who trains our users, and how? |\n\n| Post-go-live support | Hours of cover, response times, scope | Who fixes issues during our first VAT return and year-end? |\n\n### Where ERP projects go wrong and how to avoid it\n\n1. Copying old customisations: you rebuild yesterday's workarounds and lose standard updates. Redesign against standard features first.\n\n1. Weak data cleansing: bad master data produces wrong VAT and stock figures from day one. Cleanse before you migrate.\n\n1. An under-resourced internal team: decisions stall. Release named owners from their day jobs.\n\n1. Late e-invoicing and VAT testing: invoices are rejected after go-live. Test with your provider before cut-over.\n\n1. No support owner: issues sit between the vendor and the partner. Agree support ownership before you sign.\n\n### You may not need ERP yet if...\n\n**Exit check: you may not need a new ERP yet if all of these are true.**\n\n1. You run one legal entity and plan no new entity or GCC expansion in the next 12 months.\n\n1. Fewer than about 10 people use your finance system (our rule of thumb).\n\n1. Your current system files VAT returns without manual adjustments and can connect to an Accredited Service Provider.\n\n1. Month-end closes on time without spreadsheets rebuilding the figures.\n\n1. Nobody can be released to own an ERP project in the next 12 months.\n\n**What to do instead:** confirm e-invoicing readiness in your current system, and add Power BI reporting on your existing data. Review the decision in 12 months or when you add an entity. If your busiest finance period is close, delay the start rather than disrupt your close.\n\n## How we assess your Dynamics 365 ERP fit\n\nOnce you have answered \"is Microsoft Dynamics 365 an ERP system?\", the real decision is which ERP app fits your company. Our assessment follows four steps:\n\n1. Assess and Envision: discovery, requirements, gap-fit analysis and an ROI assessment.\n\n1. Build and Implement: Dynamics 365, Power Platform and integrations, covered in [how we build and implement Dynamics 365](/whatwedo/build-implement).\n\n1. Run and Optimise: tuning processes and reports after go-live.\n\n1. Managed Services: [post-go-live managed services and 24/7 support](/whatwedo/managed-services).\n\nNova& (legal name: Novaand systems LLC) is a Microsoft partner based in a Dubai free zone, serving the UAE and GCC. We bring 20+ years of industry experience across sectors including banking and financial services, trading and manufacturing. We treat support ownership as part of the product decision. Your first VAT return, your first year-end and your first Microsoft update all fall after go-live, and someone has to own each of them.\n\nThis guide was written by our Microsoft Dynamics 365 and AI Consulting Team in Dubai, a group of Dynamics 365, Power Platform and AI consultants. It was reviewed by Reviewer Name.\n\n[Contact our Dubai team](/contact-us) to request a Dynamics 365 ERP fit consultation. We will confirm whether Business Central or Finance and Supply Chain Management suits your entities, processes, and UAE VAT and e-invoicing needs.\n\n**About the author: [Nova& Technical Team](/whywith-novaand)**, Microsoft Dynamics 365 and AI Consulting Team\n\nThe Nova& Technical Team is a group of Dynamics 365, Power Platform and AI consultants based in Dubai. We help UAE and GCC enterprises implement, migrate and automate ERP, CRM and AI systems with measurable business results.\n\nMicrosoft partner. 20+ years of industry experience across banking, public sector, retail, hospitality, manufacturing and more. Delivers Dynamics 365 Business Central, Finance & Operations, CRM, Power Platform and Copilot Studio projects across the UAE and GCC.\n\n[LinkedIn](https://www.linkedin.com/company/novaand.example/)\n\n#### Nova& Technical Team\n\nMicrosoft Dynamics 365 and AI Consulting Team\n\nDynamics 365ERPBusiness CentralFinance and Supply Chain ManagementCRMUAE\n",
+ "live_words": 3538,
+ "brief": {
+  "keyword": "is microsoft dynamics 365 an erp system",
+  "domain": "novaand.example",
+  "page_type": "Guide",
+  "page_role": "standard",
+  "country": "United Arab Emirates",
+  "language_name": "English",
+  "spelling": "British English",
+  "currency": "AED",
+  "business": "Microsoft Dynamics 365 consulting and implementation in the UAE and GCC: Business Central, Finance & Operations, CRM and Project Operations. We also do NAV, GP and AX migrations, post-go-live and managed support, Copilot Studio AI agents, Power Platform and Power BI, and UAE e-invoicing (Peppol) and VAT compliance.",
+  "business_facts": "Nova& (Novaand systems LLC) is a Microsoft partner based in a Dubai free zone. We serve the UAE and GCC, with 20+ years of industry experience. Services: Dynamics 365 Business Central (implementation, NAV/GP migration, post-go-live support), Dynamics 365 Finance & Operations (implementation and rollout, AX upgrade), Dynamics 365 Sales and CRM, Project Operations, AI and Copilot advisory, AI agents with Copilot Studio, Power Platform and analytics, Dynamics 365 cloud migration, and managed services. Content topics: UAE e-invoicing (Peppol), VAT compliance, Copilot productivity, GCC cloud regions. Contact is by consultation request, with 24/7 support.",
+  "case_facts_text": "",
+  "proof_context": "none recorded",
+  "ladder_id": "lad_mvjsa7995bsr",
+  "ladder_target_url": "https://www.novaand.example/is-microsoft-dynamics-365-an-erp-system",
+  "verdict_exclusions": [
+   {
+    "topic": "Oracle ERP naming",
+    "source": "verdict"
+   },
+   {
+    "topic": "Top 3 ERP systems",
+    "source": "verdict"
+   },
+   {
+    "topic": "Generic ERP definition",
+    "source": "verdict"
+   },
+   {
+    "topic": "QuickBooks comparison",
+    "source": "verdict"
+   },
+   {
+    "topic": "Dynamics SL upgrade",
+    "source": "verdict"
+   }
+  ],
+  "pricing_facts": false,
+  "timeline_facts": true,
+  "goal": "leads",
+  "cta": "Get in-touch with our Experts",
+  "mode": "keyword",
+  "article_like": true,
+  "existing_page": null,
+  "term_model": [
+   {
+    "term": "supply chain",
+    "docs": 6,
+    "avg_count": 5.3,
+    "words": 2
+   },
+   {
+    "term": "business processes",
+    "docs": 5,
+    "avg_count": 2.2,
+    "words": 2
+   },
+   {
+    "term": "supply chain management",
+    "docs": 5,
+    "avg_count": 2,
+    "words": 3
+   },
+   {
+    "term": "dynamics ax",
+    "docs": 4,
+    "avg_count": 4.5,
+    "words": 2
+   },
+   {
+    "term": "power platform",
+    "docs": 4,
+    "avg_count": 2.3,
+    "words": 2
+   },
+   {
+    "term": "project management",
+    "docs": 4,
+    "avg_count": 1.8,
+    "words": 2
+   },
+   {
+    "term": "financial management",
+    "docs": 4,
+    "avg_count": 1,
+    "words": 2
+   },
+   {
+    "term": "business central",
+    "docs": 3,
+    "avg_count": 4.7,
+    "words": 2
+   },
+   {
+    "term": "dynamics gp",
+    "docs": 3,
+    "avg_count": 4.3,
+    "words": 2
+   },
+   {
+    "term": "erp and crm",
+    "docs": 3,
+    "avg_count": 3,
+    "words": 3
+   },
+   {
+    "term": "finance and operations",
+    "docs": 3,
+    "avg_count": 3,
+    "words": 3
+   },
+   {
+    "term": "customer service",
+    "docs": 3,
+    "avg_count": 2.3,
+    "words": 2
+   },
+   {
+    "term": "microsoft dynamics ax",
+    "docs": 3,
+    "avg_count": 1.7,
+    "words": 3
+   },
+   {
+    "term": "power bi",
+    "docs": 3,
+    "avg_count": 1.7,
+    "words": 2
+   },
+   {
+    "term": "business applications",
+    "docs": 3,
+    "avg_count": 1.3,
+    "words": 2
+   },
+   {
+    "term": "enterprise erp",
+    "docs": 3,
+    "avg_count": 1.3,
+    "words": 2
+   },
+   {
+    "term": "enterprise resource",
+    "docs": 3,
+    "avg_count": 1,
+    "words": 2
+   },
+   {
+    "term": "automation capabilities",
+    "docs": 3,
+    "avg_count": 1,
+    "words": 2
+   },
+   {
+    "term": "business data",
+    "docs": 3,
+    "avg_count": 1,
+    "words": 2
+   },
+   {
+    "term": "management",
+    "docs": 6,
+    "avg_count": 8,
+    "words": 1
+   },
+   {
+    "term": "operations",
+    "docs": 6,
+    "avg_count": 6.7,
+    "words": 1
+   },
+   {
+    "term": "data",
+    "docs": 6,
+    "avg_count": 5.5,
+    "words": 1
+   },
+   {
+    "term": "platform",
+    "docs": 6,
+    "avg_count": 5.3,
+    "words": 1
+   },
+   {
+    "term": "cloud",
+    "docs": 6,
+    "avg_count": 5.3,
+    "words": 1
+   },
+   {
+    "term": "enterprise",
+    "docs": 6,
+    "avg_count": 4.2,
+    "words": 1
+   },
+   {
+    "term": "core",
+    "docs": 6,
+    "avg_count": 3.5,
+    "words": 1
+   },
+   {
+    "term": "users",
+    "docs": 6,
+    "avg_count": 3.2,
+    "words": 1
+   },
+   {
+    "term": "applications",
+    "docs": 6,
+    "avg_count": 3,
+    "words": 1
+   },
+   {
+    "term": "support",
+    "docs": 6,
+    "avg_count": 2.7,
+    "words": 1
+   },
+   {
+    "term": "insights",
+    "docs": 6,
+    "avg_count": 2.7,
+    "words": 1
+   },
+   {
+    "term": "financial",
+    "docs": 6,
+    "avg_count": 2.5,
+    "words": 1
+   }
+  ],
+  "coverage_target": {
+   "terms_total": 25,
+   "terms": [
+    "supply chain",
+    "business processes",
+    "supply chain management",
+    "dynamics ax",
+    "power platform",
+    "project management",
+    "financial management",
+    "business central",
+    "dynamics gp",
+    "erp and crm",
+    "finance and operations",
+    "customer service",
+    "microsoft dynamics ax",
+    "power bi",
+    "business applications",
+    "enterprise erp",
+    "enterprise resource",
+    "automation capabilities",
+    "business data",
+    "management",
+    "operations",
+    "data",
+    "platform",
+    "cloud",
+    "enterprise"
+   ],
+   "best": {
+    "domain": "iesgp.com",
+    "url": "https://www.iesgp.com/blog/different-versions-of-microsoft-dynamics",
+    "rank": 6,
+    "coverage_pct": 92,
+    "terms_used": 23,
+    "word_count": 2898,
+    "sections": 19,
+    "kind": "guide"
+   },
+   "page_kind": "guide",
+   "type_match": true,
+   "measure": "presence",
+   "average_pct": 69,
+   "pages_compared": 6,
+   "target_pct": 90,
+   "subtopics": [
+    "What Is Microsoft Dynamics? A Guide to Its Versions",
+    "Microsoft Dynamics AX",
+    "Microsoft Dynamics CRM",
+    "Customer Service",
+    "Microsoft Dynamics GP",
+    "Microsoft Dynamics NAV",
+    "Microsoft Dynamics 365",
+    "Business Central",
+    "Field Service",
+    "More Modules Within Microsoft Dynamics 365",
+    "Dynamics 365 Applications Overview",
+    "Benefits of Modern Dynamics 365 Applications"
+   ],
+   "subtopics_basis": "",
+   "basis": "the 6 competitor page(s) read for this keyword: iesgp.com (position 6) uses 23 of the 25 terms they share (92%), against an average of 69% (a term counts once it appears); it is the best guide or article among them, the kind of page being written (5 of that kind read)"
+  },
+  "qa_max_rounds": 5,
+  "length_band": {
+   "ok": true,
+   "source": "ranking_pages",
+   "low": 1800,
+   "high": 3000,
+   "median": 2898,
+   "p25": 1752,
+   "p75": 3223,
+   "target_word_count": 2900,
+   "sample": 5,
+   "kind": "guide",
+   "page_type_band": {
+    "low": 1200,
+    "high": 3000
+   },
+   "clamped": true,
+   "pages": [
+    {
+     "domain": "visionet.com",
+     "url": "https://www.visionet.com/article/what-is-a-microsoft-dynamics-365-erp-system-a-decision-makers-guide",
+     "rank": 1,
+     "words": 3223,
+     "kind": "guide"
+    },
+    {
+     "domain": "velosio.com",
+     "url": "https://www.velosio.com/blog/microsoft-dynamics-365-erp/",
+     "rank": 2,
+     "words": 4044,
+     "kind": "guide"
+    },
+    {
+     "domain": "dynatechconsultancy.com",
+     "url": "https://dynatechconsultancy.com/blog/erp-vs-crm-a-complete-guide-to-the-differences-features-benefits",
+     "rank": 3,
+     "words": 1674,
+     "kind": "guide"
+    },
+    {
+     "domain": "synoptek.com",
+     "url": "https://synoptek.com/insights/it-blogs/microsoft-dynamics365-for-finance-and-operation-vs-sap/",
+     "rank": 5,
+     "words": 1752,
+     "kind": "guide"
+    },
+    {
+     "domain": "iesgp.com",
+     "url": "https://www.iesgp.com/blog/different-versions-of-microsoft-dynamics",
+     "rank": 6,
+     "words": 2898,
+     "kind": "guide"
+    }
+   ],
+   "basis": "pages ranking for this run 1,800-3,000 words (5 guides or articles, middle half 1,752-3,223, median 2,898); kept inside the usual 1,200-3,000 words for this kind of page"
+  },
+  "competitor_analysis": {
+   "length_band": {
+    "ok": true,
+    "source": "ranking_pages",
+    "low": 1800,
+    "high": 3000,
+    "median": 2898,
+    "p25": 1752,
+    "p75": 3223,
+    "target_word_count": 2900,
+    "sample": 5,
+    "kind": "guide",
+    "page_type_band": {
+     "low": 1200,
+     "high": 3000
+    },
+    "clamped": true,
+    "pages": [
+     {
+      "domain": "visionet.com",
+      "url": "https://www.visionet.com/article/what-is-a-microsoft-dynamics-365-erp-system-a-decision-makers-guide",
+      "rank": 1,
+      "words": 3223,
+      "kind": "guide"
+     },
+     {
+      "domain": "velosio.com",
+      "url": "https://www.velosio.com/blog/microsoft-dynamics-365-erp/",
+      "rank": 2,
+      "words": 4044,
+      "kind": "guide"
+     },
+     {
+      "domain": "dynatechconsultancy.com",
+      "url": "https://dynatechconsultancy.com/blog/erp-vs-crm-a-complete-guide-to-the-differences-features-benefits",
+      "rank": 3,
+      "words": 1674,
+      "kind": "guide"
+     },
+     {
+      "domain": "synoptek.com",
+      "url": "https://synoptek.com/insights/it-blogs/microsoft-dynamics365-for-finance-and-operation-vs-sap/",
+      "rank": 5,
+      "words": 1752,
+      "kind": "guide"
+     },
+     {
+      "domain": "iesgp.com",
+      "url": "https://www.iesgp.com/blog/different-versions-of-microsoft-dynamics",
+      "rank": 6,
+      "words": 2898,
+      "kind": "guide"
+     }
+    ],
+    "basis": "pages ranking for this run 1,800-3,000 words (5 guides or articles, middle half 1,752-3,223, median 2,898); kept inside the usual 1,200-3,000 words for this kind of page"
+   }
+  },
+  "style_guide": {
+   "on_file": true,
+   "brand_form": "Nova& (legal name: Novaand systems LLC)",
+   "brand_wrong": [
+    "Nova and",
+    "NovaAnd",
+    "Novaand",
+    "Nova &",
+    "Tech N",
+    "Nova&.ai",
+    "Spelling: British English"
+   ],
+   "wrong_forms": [
+    "Nova and legal name Novaand systems LLC",
+    "NovaandlegalnameNovaandsystemsLLC",
+    "Nova-and-legal-name-Novaand-systems-LLC",
+    "Nova and",
+    "NovaAnd",
+    "Nova &",
+    "Tech N",
+    "Nova&.ai",
+    "Spelling: British English"
+   ],
+   "spelling_effective": "British English",
+   "avoid": [
+    "revolutionary",
+    "game-changing",
+    "cutting-edge",
+    "unlock",
+    "seamless",
+    "supercharge",
+    "leverage",
+    "synergy",
+    "world-class",
+    "best-in-class",
+    "delve",
+    "in today’s fast-paced world"
+   ],
+   "tone": "Plain, direct and professional. Focus on measurable business outcomes. No hype, no exclamation marks."
+  },
+  "site_profile": {
+   "business_name": "Nova&"
+  },
+  "site_description": {
+   "business_name": "",
+   "site_facts": []
+  },
+  "author": {
+   "name": "Nova& Technical Team",
+   "job_title": "Microsoft Dynamics 365 and AI Consulting Team",
+   "bio": "The Nova& Technical Team is a group of Dynamics 365, Power Platform and AI consultants based in Dubai. We help UAE and GCC enterprises implement, migrate and automate ERP, CRM and AI systems with meas"
+  },
+  "internal_link_candidates": [
+   {
+    "url": "https://www.novaand.example/",
+    "title": null,
+    "planned": null
+   },
+   {
+    "url": "https://www.novaand.example/whatwedo",
+    "title": null,
+    "planned": null
+   },
+   {
+    "url": "https://www.novaand.example/capabilities",
+    "title": null,
+    "planned": null
+   },
+   {
+    "url": "https://www.novaand.example/industries",
+    "title": null,
+    "planned": null
+   },
+   {
+    "url": "https://www.novaand.example/insights",
+    "title": null,
+    "planned": null
+   },
+   {
+    "url": "https://www.novaand.example/whywith-novaand",
+    "title": null,
+    "planned": null
+   },
+   {
+    "url": "https://www.novaand.example/contact-us",
+    "title": null,
+    "planned": null
+   },
+   {
+    "url": "https://www.novaand.example/security",
+    "title": null,
+    "planned": null
+   }
+  ],
+  "site_urls": [
+   "https://www.novaand.example",
+   "https://www.novaand.example/whatwedo",
+   "https://www.novaand.example/capabilities",
+   "https://www.novaand.example/industries",
+   "https://www.novaand.example/whatwedo/assess-shape",
+   "https://www.novaand.example/whatwedo/build-implement",
+   "https://www.novaand.example/whatwedo/run-optimize",
+   "https://www.novaand.example/whatwedo/managed-services",
+   "https://www.novaand.example/whatwedo/global-rollouts",
+   "https://www.novaand.example/whatwedo/ai-automation",
+   "https://www.novaand.example/capabilities/business-applications",
+   "https://www.novaand.example/capabilities/cloud-services",
+   "https://www.novaand.example/capabilities/data",
+   "https://www.novaand.example/insights",
+   "https://www.novaand.example/whywith-novaand",
+   "https://www.novaand.example/contact-us",
+   "https://www.novaand.example/privacy",
+   "https://www.novaand.example/security",
+   "https://www.novaand.example/cookies"
+  ],
+  "facts": [
+   {
+    "url": "https://data.landbase.com/technology/microsoft-dynamics-erp/",
+    "claim": "As of 2026, 1,284 verified companies use Microsoft Dynamics ERP – across industries, company sizes, and geographies. This is real, verified data. Read more"
+   },
+   {
+    "url": "https://www.randgroup.com/insights/microsoft/dynamics-365/is-dynamics-365-a-crm-or-erp/",
+    "claim": "6 May 2026 — The short answer is: it is both. Microsoft Dynamics 365 is a suite of business applications that includes both Customer Relationship Management ..."
+   },
+   {
+    "url": "https://www.6sense.com/tech/erp/microsoft-dynamics-market-share",
+    "claim": "Around the world in 2026, over 93,301 companies have started using Microsoft Dynamics as erp tool. Companies using Microsoft Dynamics for erp are majorly from ... Read more"
+   },
+   {
+    "url": "https://www.coherentmi.com/industry-reports/microsoft-dynamics-market",
+    "claim": "23 Jan 2026 — Microsoft also introduced dynamics 365. Microsoft capture 4.8% of the global CRM market and 2.1% of the ERP market by 2023, system-based ERP is ..."
+   },
+   {
+    "url": "https://www.visionet.com/en-GB/article/what-is-a-microsoft-dynamics-365-erp-system-a-decision-makers-guide-for-UK-organisations",
+    "claim": "27 Apr 2026 — Dynamics 365 includes dedicated ERP applications for finance, supply chain, and operations, as well as separate CRM applications for sales, ... Read more"
+   },
+   {
+    "url": "https://cetastech.com/blogs/global-erp-solutions-microsoft-dynamics-365/",
+    "claim": "22 May 2026 — Microsoft Dynamics 365 ERP is purpose-built for this challenge. According to Gartner, the global ERP software market reached USD 73 billion in ... Read more"
+   }
+  ],
+  "client_pages": [
+   {
+    "kind": "home",
+    "url": "https://www.novaand.example/",
+    "text": "Banking & Financial Services\nPublic Sector\nTourism & Hospitality\nTrading & Manufacturing\nRetail\nProfessional Services\nNon Profit\nBanking & Financial Services\nNova& serves banks and financial institutions across the UAE and GCC with secure and compliant digital platforms. Financial organizations manage complex operations every day. These include finance control, customer data, risk management, and regulatory reporting.\nLEARN MORE about Banking & Financial Services\nAI\nBusiness Applications\nCloud Services\nData\nAI\nAdvanced AI and automation solutions that enable intelligent workflows, predictive analytics, and transformative business outcomes across enterprise systems.\nMicrosoft Copilot for Microsoft 365Dynamics 365 CopilotAzure OpenAI ServiceCopilot StudioAI BuilderAzure AI ServicesIntelligent Document ProcessingPredictive Models\nLEARN MORE about AI\nAbout Nova& Learn about our mission and values#### Contact Get in touch with our team\nValue Driven Innovation through Automation\nNova& helps GCC enterprises move beyond the limits of traditional CRM & ERP software.\nRead More about Value Driven Innovation through AutomationTalk to Sales\nAgentic AI is Revolutionizing the Industries\nStop stru"
+   },
+   {
+    "kind": "related",
+    "url": "https://www.novaand.example/whatwedo",
+    "text": "What We Do\nWe guide your business through every step of technology growth\nAssess & Shape\nLearn more\nBuild & Implement\nLearn more\nRun & Optimize\nLearn more\nGlobal Rollouts\nLearn more\nManaged Services\nLearn more\nAI & Automation\nLearn more\nAssess & Shape\nOur Assess and Shape phase helps organizations define a clear path to digital transformation. We at Nova& begin with business discovery, understanding current processes, challenges, and opportunities. Insights from this stage are translated into business requirements, ensuring technology solutions align with strategic goals. Then through gap-fit analysis, we identify areas for improvement and tailor solutions to bridge gaps effectively. Plus, we demonstrate solutions and quantify benefits with an ROI assessment to guide investment decisions. This foundation supports the next steps in Build and Implement ensuring transformation delivers measurable business outcomes.\nOur Assess and Shape phase helps organizations define a clear path to digital transformation. We at Nova& begin with business discovery, understanding current processes, challenges, and opportunities. Insights from this stage are translated into business require"
+   }
+  ],
+  "content_brief": {
+   "h1": "Is Microsoft Dynamics 365 an ERP System? A Guide for UAE and GCC Buyers",
+   "meta_title": "Is Microsoft Dynamics 365 an ERP System? UAE Buyer's Guide",
+   "cta": "Get in-touch with our Experts: request a Dynamics 365 ERP fit consultation with our Dubai team to confirm whether Business Central or Finance and Supply Chain Management suits your entities, processes and UAE VAT and e-invoicing needs (link to https://www.novaand.example/contact-us). Place it after the UAE checklist section and again at the end of the page.",
+   "target_word_count": 2900,
+   "outline": [
+    {
+     "h2": "Is Microsoft Dynamics 365 an ERP system?",
+     "target_words": 280
+    },
+    {
+     "h2": "Which Dynamics 365 apps are ERP and which are CRM?",
+     "target_words": 420
+    },
+    {
+     "h2": "How did Dynamics AX, NAV, GP and Dynamics CRM become Dynamics 365?",
+     "target_words": 360
+    },
+    {
+     "h2": "Business Central or Finance and Supply Chain Management: which fits your company?",
+     "target_words": 480
+    },
+    {
+     "h2": "What should UAE companies check before choosing Dynamics 365 ERP?",
+     "target_words": 480
+    },
+    {
+     "h2": "How does Dynamics 365 compare with SAP S/4HANA, Oracle and NetSuite for GCC buyers?",
+     "target_words": 300
+    },
+    {
+     "h2": "What drives the cost and risk of a Dynamics 365 ERP project?",
+     "target_words": 380
+    },
+    {
+     "h2": "How we assess your Dynamics 365 ERP fit",
+     "target_words": 200
+    }
+   ],
+   "snippet_targets": [
+    {
+     "question": "Is Microsoft Dynamics 365 an ERP system?"
+    },
+    {
+     "question": "Does Microsoft Dynamics have ERP?"
+    },
+    {
+     "question": "Is Dynamics 365 an ERP or a CRM?"
+    },
+    {
+     "question": "Which Dynamics 365 products are ERP?"
+    },
+    {
+     "question": "Which is better for a mid-size company: Business Central or Finance and Supply Chain Management?"
+    },
+    {
+     "question": "Is Dynamics 365 suitable for UAE VAT and multi-currency needs?"
+    }
+   ],
+   "terms_to_use": [
+    {
+     "term": "Business Central",
+     "min_count": 10
+    },
+    {
+     "term": "supply chain management",
+     "min_count": 3
+    },
+    {
+     "term": "supply chain",
+     "min_count": 4
+    },
+    {
+     "term": "business processes",
+     "min_count": 2
+    },
+    {
+     "term": "Dynamics AX",
+     "min_count": 3
+    },
+    {
+     "term": "Microsoft Dynamics AX",
+     "min_count": 1
+    },
+    {
+     "term": "Dynamics GP",
+     "min_count": 2
+    },
+    {
+     "term": "Power Platform",
+     "min_count": 3
+    },
+    {
+     "term": "Power BI",
+     "min_count": 2
+    },
+    {
+     "term": "project management",
+     "min_count": 1
+    },
+    {
+     "term": "financial management",
+     "min_count": 2
+    },
+    {
+     "term": "ERP and CRM",
+     "min_count": 2
+    },
+    {
+     "term": "Finance and Operations",
+     "min_count": 2
+    },
+    {
+     "term": "customer service",
+     "min_count": 2
+    },
+    {
+     "term": "business applications",
+     "min_count": 2
+    },
+    {
+     "term": "enterprise ERP",
+     "min_count": 1
+    },
+    {
+     "term": "enterprise resource planning",
+     "min_count": 1
+    },
+    {
+     "term": "automation capabilities",
+     "min_count": 1
+    },
+    {
+     "term": "business data",
+     "min_count": 1
+    },
+    {
+     "term": "insights",
+     "min_count": 1
+    }
+   ],
+   "evidence_plan": [
+    {
+     "fact": "6 May 2026 — The short answer is: it is both. Microsoft Dynamics 365 is a suite of business applications that includes both Customer Relationship Management ... — randgroup.com",
+     "source_url": "https://www.randgroup.com/insights/microsoft/dynamics-365/is-dynamics-365-a-crm-or-erp/"
+    },
+    {
+     "fact": "27 Apr 2026 — Dynamics 365 includes dedicated ERP applications for finance, supply chain, and operations, as well as separate CRM applications for sales, ... — visionet.com",
+     "source_url": "https://www.visionet.com/en-GB/article/what-is-a-microsoft-dynamics-365-erp-system-a-decision-makers-guide-for-UK-organisations"
+    },
+    {
+     "fact": "23 Jan 2026 — Microsoft also introduced dynamics 365. Microsoft capture 4.8% of the global CRM market and 2.1% of the ERP market by 2023, system-based ERP is ... — coherentmi.com",
+     "source_url": "https://www.coherentmi.com/industry-reports/microsoft-dynamics-market"
+    },
+    {
+     "fact": "Around the world in 2026, over 93,301 companies have started using Microsoft Dynamics as erp tool. Companies using Microsoft Dynamics for erp are majorly from ... — 6sense.com",
+     "source_url": "https://www.6sense.com/tech/erp/microsoft-dynamics-market-share"
+    },
+    {
+     "fact": "23 Sep 2026 — Microsoft believes Dynamics 365 ERP is establishing competitive advantages thanks to its deployment of a comprehensive MCP server and new ... — msdynamicsworld.com",
+     "source_url": "https://msdynamicsworld.com/story/directions-enterprise-2026-partner-expertise-will-shape-microsoft-dynamics-365-erp-success"
+    }
+   ],
+   "internal_link_suggestions": [
+    {
+     "anchor": "Dynamics 365 business applications we implement",
+     "url": "https://www.novaand.example/capabilities/business-applications"
+    },
+    {
+     "anchor": "gap-fit analysis and ROI assessment",
+     "url": "https://www.novaand.example/whatwedo/assess-shape"
+    },
+    {
+     "anchor": "how we build and implement Dynamics 365",
+     "url": "https://www.novaand.example/whatwedo/build-implement"
+    },
+    {
+     "anchor": "post-go-live managed services and 24/7 support",
+     "url": "https://www.novaand.example/whatwedo/managed-services"
+    },
+    {
+     "anchor": "security and data residency approach",
+     "url": "https://www.novaand.example/security"
+    },
+    {
+     "anchor": "Get in-touch with our Experts",
+     "url": "https://www.novaand.example/contact-us"
+    }
+   ],
+   "client_facts": [
+    "Business name, written exactly: Nova& (legal name: Novaand systems LLC); otherwise refer to the company as 'we'.",
+    "Microsoft partner based in a Dubai free zone.",
+    "Serves the UAE and GCC.",
+    "20+ years of industry experience.",
+    "Services: Dynamics 365 Business Central (implementation, NAV/GP migration, post-go-live support); Dynamics 365 Finance & Operations (implementation and rollout, AX upgrade); Dynamics 365 Sales and CRM; Project Operations; AI and Copilot advisory; AI agents with Copilot Studio; Power Platform and analytics; Dynamics 365 cloud migration; managed services.",
+    "Delivers UAE e-invoicing (Peppol) and VAT compliance work; content topics include Copilot productivity and GCC cloud regions.",
+    "Delivery phases on the site: Assess & Shape (business discovery, requirements, gap-fit analysis, ROI assessment), Build & Implement, Run & Optimise, Global Rollouts, Managed Services, AI & Automation.",
+    "Sectors served include banking and financial services, public sector, tourism and hospitality, trading and manufacturing, retail, professional services and non-profit."
+   ],
+   "secondary_keywords": [
+    "Dynamics 365 ERP or CRM",
+    "Dynamics 365 ERP modules",
+    "Business Central vs Finance and Supply Chain Management",
+    "D365 ERP UAE",
+    "Dynamics 365 vs SAP S/4HANA",
+    "NAV GP AX migration to Dynamics 365",
+    "UAE e-invoicing Dynamics 365",
+    "Dynamics 365 VAT compliance UAE"
+   ]
+  }
+ },
+ "site_model": {
+  "site_model": {
+   "site_id": "site_novaand-demo-com",
+   "domain": "novaand.example",
+   "canonical_host": "www.novaand.example",
+   "host_source": "stored",
+   "home_url": "https://www.novaand.example/",
+   "business_name": "Nova&",
+   "name_source": "stored",
+   "logo_url": "https://www.novaand.example/novaand-logo.png",
+   "logo_source": "stored",
+   "nap": {
+    "business_name": "Nova&",
+    "street_address": "Office 1, Building A, a Dubai free zone",
+    "city": "Dubai",
+    "region": "Dubai",
+    "postal_code": "",
+    "country_code": "AE",
+    "phone": "+000 00 000 0000",
+    "public_email": "contact@novaand.example",
+    "price_range": "",
+    "source": "profile"
+   },
+   "services": [
+    "Microsoft Dynamics 365 consulting and implementation in the UAE and GCC: Busines",
+    "Finance & Operations",
+    "CRM and Project Operations. We also do NAV",
+    "GP and AX migrations",
+    "post-go-live and managed support",
+    "Copilot Studio AI agents",
+    "Power Platform and Power BI",
+    "and UAE e-invoicing (Peppol) and VAT compliance."
+   ],
+   "declared_services": [
+    "Microsoft Dynamics 365 consulting and implementation in the UAE and GCC: Busines",
+    "Finance & Operations",
+    "CRM and Project Operations. We also do NAV",
+    "GP and AX migrations",
+    "post-go-live and managed support",
+    "Copilot Studio AI agents",
+    "Power Platform and Power BI",
+    "and UAE e-invoicing (Peppol) and VAT compliance."
+   ],
+   "nav_pages": [
+    {
+     "url": "https://www.novaand.example/industries",
+     "title": "Industries",
+     "path": "/industries"
+    },
+    {
+     "url": "https://www.novaand.example/capabilities",
+     "title": "Capabilities",
+     "path": "/capabilities"
+    },
+    {
+     "url": "https://www.novaand.example/insights",
+     "title": "Insights",
+     "path": "/insights"
+    },
+    {
+     "url": "https://www.novaand.example/whatwedo",
+     "title": "What We Do",
+     "path": "/whatwedo"
+    },
+    {
+     "url": "https://www.novaand.example/whywith-novaand",
+     "title": "Why Tech",
+     "path": "/whywith-novaand"
+    },
+    {
+     "url": "https://www.novaand.example/contact-us",
+     "title": "Get Started",
+     "path": "/contact-us"
+    },
+    {
+     "url": "https://www.novaand.example/industries#bfsi",
+     "title": "Banking Financial Services",
+     "path": "/industries#bfsi"
+    },
+    {
+     "url": "https://www.novaand.example/industries#public-sector",
+     "title": "Public Sector",
+     "path": "/industries#public-sector"
+    },
+    {
+     "url": "https://www.novaand.example/industries#hospitality",
+     "title": "Tourism Hospitality",
+     "path": "/industries#hospitality"
+    },
+    {
+     "url": "https://www.novaand.example/industries#manufacturing",
+     "title": "Trading Manufacturing",
+     "path": "/industries#manufacturing"
+    },
+    {
+     "url": "https://www.novaand.example/industries#retail",
+     "title": "Retail",
+     "path": "/industries#retail"
+    },
+    {
+     "url": "https://www.novaand.example/industries#professional-services",
+     "title": "Professional Services",
+     "path": "/industries#professional-services"
+    }
+   ],
+   "pages": [
+    {
+     "url": "https://www.novaand.example",
+     "title": "Tech | Turning Technology into measurable Business Impact",
+     "h1": "Value Driven Innovation through Automation",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/whatwedo",
+     "title": "What We Do | Tech",
+     "h1": "What We Do",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/capabilities",
+     "title": "Capabilities | Tech",
+     "h1": "Tech Capabilities",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/industries",
+     "title": "Industries We Serve | Tech",
+     "h1": "Industries We Serve",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/whatwedo/assess-shape",
+     "title": "Assess Shape | What We Do | Tech",
+     "h1": "Assess Shape",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/whatwedo/build-implement",
+     "title": "Build Implement | What We Do | Tech",
+     "h1": "Build Implement",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/whatwedo/run-optimize",
+     "title": "Run Optimize | What We Do | Tech",
+     "h1": "Run Optimize",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/whatwedo/managed-services",
+     "title": "Managed Services | What We Do | Tech",
+     "h1": "Managed Services",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/whatwedo/global-rollouts",
+     "title": "Global Rollouts | What We Do | Tech",
+     "h1": "Global Rollouts",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/whatwedo/ai-automation",
+     "title": "AI Automation | What We Do | Tech",
+     "h1": "AI Automation",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/capabilities/business-applications",
+     "title": "Business Applications | Tech",
+     "h1": "Tech Capabilities",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/capabilities/cloud-services",
+     "title": "Cloud Services | Tech",
+     "h1": "Tech Capabilities",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/capabilities/data",
+     "title": "Data Analytics | Tech",
+     "h1": "Tech Capabilities",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/insights",
+     "title": "Insights | Tech",
+     "h1": "Insights",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/whywith-novaand",
+     "title": "Why Tech | Tech",
+     "h1": "About Tech",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/contact-us",
+     "title": "Contact Us | Tech",
+     "h1": "Contact Tech",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/privacy",
+     "title": "Privacy Policy | Tech",
+     "h1": "Privacy Policy",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/security",
+     "title": "Security Policy | Tech",
+     "h1": "Security Policy",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/cookies",
+     "title": "Cookie Policy | Tech",
+     "h1": "Cookie Policy",
+     "source": "sitemap"
+    },
+    {
+     "url": "https://www.novaand.example/insights/microsofts-saudi-arabia-east-datacenter-goes-live-in-november-2026-what-it-means-for-your-d365-roadmap",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://www.novaand.example/dynamics-365-project-operations-uae",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://www.novaand.example/dynamics-365-crm-uae",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://www.novaand.example/insights/the-financial-reporting-trap-why-d365-fo-users-still-reach-for-excel",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://www.novaand.example/insights/your-current-pdf-invoices-will-be-illegal-in-the-uae-by-2027-and-how-to-fix-it",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://www.novaand.example/insights/upgrading-your-erp-for-uae-peppol-pint-ae-compliance-a-technical-integration-guide",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://novaand.example/ai-copilot-advisory-uae",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://www.novaand.example/business-central-implementation-uae",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://www.novaand.example/business-central-post-go-live-support-uae",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://novaand.example/d365-finance-operations-implementation-rollout-uae",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://www.novaand.example/dynamics-365-business-central-uae",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://www.novaand.example/dynamics-365-cloud-migration-uae",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://novaand.example/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://novaand.example/dynamics-365-finance-and-operations-uae",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://novaand.example/insights/how-microsoft-dynamics-365-finance-operations-supports-uae-vat-compliance",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://www.novaand.example/insights/top-peppol-e-invoicing-software-features-every-uae-cfo-must-look-for",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://novaand.example/insights/how-microsoft-365-copilot-is-changing-business-productivity",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://www.novaand.example/dynamics-ax-to-d365-upgrade-uae",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://novaand.example/power-platform-analytics-uae",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    },
+    {
+     "url": "https://novaand.example/insights/autonomous-ai-customer-service",
+     "title": "",
+     "h1": "",
+     "source": "gsc"
+    }
+   ],
+   "business_facts": "Nova& (Novaand systems LLC) is a Microsoft partner based in a Dubai free zone. We serve the UAE and GCC, with 20+ years of industry experience. Services: Dynamics 365 Business Central (implementation, NAV/GP migration, post-go-live support), Dynamics 365 Finance & Operations (implementation and rollout, AX upgrade), Dynamics 365 Sales and CRM, Project Operations, AI and Copilot advisory, AI agents with Copilot Studio, Power Platform and analytics, Dynamics 365 cloud migration, and managed services. Content topics: UAE e-invoicing (Peppol), VAT compliance, Copilot productivity, GCC cloud regions. Contact is by consultation request, with 24/7 support.",
+   "cta": "Get in-touch with our Experts",
+   "brand_names": [
+    "Nova&"
+   ],
+   "competitors": [],
+   "accreditation": "",
+   "model_updated_at": "2026-10-22T16:58:43.788Z",
+   "sources": {
+    "profile": false,
+    "homepage_schema": false,
+    "gbp": false,
+    "app": false,
+    "html": false
+   }
+  }
+ },
+ "critique": {
+  "score": 66,
+  "verdict": "revise",
+  "unsupported_claims": [
+   "Microsoft ships regular updates, so you avoid large, disruptive version upgrades every few years (unverified: link Microsoft Learn release documentation)",
+   "Dynamics GP customers usually move to Business Central, because it is the closest fit (unverified: source or soften)",
+   "Dynamics 365 ERP apps support VAT set-up and multi-currency accounting, including AED (unverified: Microsoft Learn localisation link)",
+   "Copilot ... cuts time spent searching records and drafting routine replies (unverified)"
+  ],
+  "problems": [
+   {
+    "severity": "high",
+    "location": "[Exact Microsoft partner designation or specialisation]",
+    "issue": "Visible placeholders sit in the body. Others are in the byline: [Date], [Reviewer job title and Dynamics 365 credential]. Two [Author insight: ...] placeholders also break the flow. They would ship in a client-ready page.",
+    "fix": "Fill them from client input, or delete the sentences. Do not leave the designation line in. For the Author insight slots, ask the reviewer for real examples, or remove them."
+   },
+   {
+    "severity": "high",
+    "location": "Coherent Market Insights reports ... 6sense counts \"over 93,301 companies\"",
+    "issue": "Market figures rest only on weak vendor and agency domains. The coherentmi figure is a 2023 share that the draft presents as current context. The 6sense count is a tracker, not a market-share measure. Neither is primary or research-grade. These figures also do not help a UAE buyer's decision.",
+    "fix": "Drop the 6sense count. Either remove the 2.1% figure or replace it with Gartner, IDC or Microsoft documentation. If kept, label it as a 2023 estimate from a weak source."
+   },
+   {
+    "severity": "medium",
+    "location": "randgroup.com, visionet.com, msdynamicsworld.com quotes",
+    "issue": "These are three weak-domain blogs used for a simple definitional point. The visionet article is a UK guide. The MSDynamicsWorld MCP claim is vendor-spin and adds little for the audience.",
+    "fix": "Cite Microsoft Learn for what the apps are. Keep at most one of the blog quotes, and cut the MCP paragraph."
+   },
+   {
+    "severity": "high",
+    "location": "## How does Dynamics 365 compare with SAP S/4HANA, Oracle and NetSuite for GCC buyers?",
+    "issue": "The objection that Dynamics 365 may be too light for a regulated bank or multi-site manufacturer is only answered with generic bullets. There is no concrete evidence, no banking-specific scenario, and no honest statement of where SAP fits better. Partner-bias is also not addressed.",
+    "fix": "Add a short section for a regulated bank and a multi-site manufacturer. Say where F&SCM fits and where SAP may be stronger. Add a 'how to test our advice' note, for example that we will say so when Business Central or even no ERP is enough, plus a request for a written fit rationale."
+   },
+   {
+    "severity": "high",
+    "location": "Moving from NAV, GP or AX ... 'What makes a legacy migration harder or easier'",
+    "issue": "The objection that cloud migration breaks customisations and reports is only handled with a generic five-factor list. There is no concrete method such as extension re-write, report mapping, or a parallel run. The Author insight placeholder leaves the only specific point empty.",
+    "fix": "Add steps: inventory customisations, classify as standard, extension or retire, map reports to Power BI, run a parallel close. Add a short worked example."
+   },
+   {
+    "severity": "medium",
+    "location": "Dynamics 365 ERP apps support VAT set-up and multi-currency accounting, including AED.",
+    "issue": "The UAE VAT, Arabic and data residency claims are vague or deferred ('Confirm with Microsoft or your partner'). No Microsoft Learn source supports them. The objection 'without heavy custom work' is not answered. The Peppol claim also has no link to the official peppol.org or MoF source.",
+    "fix": "Cite Microsoft Learn for localisation and regions, with links. State what is standard and what needs a partner connector. Link the MoF e-invoicing page, not only the homepage. Link tax.gov.ae to a specific page."
+   },
+   {
+    "severity": "medium",
+    "location": "### You may not need ERP yet if...",
+    "issue": "The box is a single paragraph and its exit criteria are vague. They are not measurable, and they are placed under a cost/risk H2. The brief asks for honest exit criteria.",
+    "fix": "Make it a visible box with 4-5 checkable bullets, for example one entity, fewer than a set number of users, a current system that is compliant, and no change planned for 12 months. Add what to do instead, and suggest a lighter step."
+   },
+   {
+    "severity": "medium",
+    "location": "Dynamics 365 Field Service | CRM, connects to ERP ... Project Operations | Both",
+    "issue": "Table 'what it replaces' entries such as 'Dynamics CRM field add-ons, paper job sheets' and legacy-succession claims are unsourced. There is no 'legacy product it succeeds' column, which the brief required. Finance, Supply Chain and Business Central naming is tangled in the prose (Finance is listed separately in the table but as a pair elsewhere).",
+    "fix": "Add a 'Succeeds' column (AX, NAV, GP, Dynamics CRM). Cite Microsoft Learn for the lineage. Make the Finance/SCM licensing description consistent."
+   },
+   {
+    "severity": "medium",
+    "location": "Business Central: 'A few countries; confirm each with Microsoft or your partner'",
+    "issue": "The decision table is generic. Thresholds are not given, so 'a small number' and 'many' cannot be checked. The rule 'two or more' is arbitrary and untested, and it ignores the disclaimer that headcount matters little.",
+    "fix": "Add indicative thresholds clearly labelled as our rule of thumb, or note that they are from our project experience. Add a scored example, such as a trading group with 3 entities."
+   },
+   {
+    "severity": "low",
+    "location": "[Get in-touch with our Experts] ... appears twice",
+    "issue": "A CTA appears mid-article, before the comparison and cost sections. It is repeated at the end. Link text is awkward ('Get in-touch'). The meta description 'then ask Nova& (legal name: Novaand systems LLC)' is clumsy and may exceed 155 characters.",
+    "fix": "Keep only the final CTA, with plain link text. Count the meta description to 120-155 characters and rewrite: 'Is Microsoft Dynamics 365 an ERP system? Yes. See which apps are ERP or CRM and how to choose for UAE VAT and e-invoicing.' Check the title ≤60."
+   },
+   {
+    "severity": "low",
+    "location": "Internal links: /security, /capabilities/business-applications",
+    "issue": "Some internal link URLs may not be on the allowed list or published, and this cannot be checked from the draft.",
+    "fix": "Verify each internal URL against the allowed list. Remove any that are not published."
+   },
+   {
+    "severity": "low",
+    "location": "Several 'Microsoft ships regular updates... cuts time spent searching records'",
+    "issue": "Benefit claims about Copilot and updates are unsourced and generic.",
+    "fix": "Link to Microsoft Learn release-plan documentation, or soften the claims."
+   }
+  ]
+ },
+ "rounds_qa": [
+  {
+   "round": 1,
+   "warnings": [
+    "Main content is too long: 3534 words vs target 1800-3000 (the band of pages ranking for this run 1,800-3,000 words (5 guides or articles, middle half 1,752-3,223, median 2,898); kept inside the usual 1,200-3,000 words for this kind of page). Cut repetition and secondary detail, and do not add anything",
+    "Answer first: the Quick answer comes after 134 words of introduction. Move it up so the page answers its own question within the first 120 words under the H1",
+    "Editor review: \"[Exact Microsoft partner designation or specialisation]\": Visible placeholders sit in the body. Others are in the byline: [Date], [Reviewer job title and Dynamics 365 credential]. Two [Author insight: ...] placeholders also break the flow. They would ship in a client-ready page. Fix: Fill them from client input, or delete the sentences. Do not leave the designation line in. For the Author insight slots, ask the reviewer for real examples, or remove them.",
+    "Editor review: \"Coherent Market Insights reports ... 6sense counts \"over 93,301 companies\"\": Market figures rest only on weak vendor and agency domains. The coherentmi figure is a 2023 share that the draft presents as current context. The 6sense count is a tracker, not a market-share measure. Neither is primary or research-grade. These figures also do not help a UAE buyer's decision. Fix: Drop the 6sense count. Either remove the 2.1% figure or replace it with Gartner, IDC or Microsoft documentation. If kept, label it as a 2023 estimate from a weak source.",
+    "Editor review: \"randgroup.com, visionet.com, msdynamicsworld.com quotes\": These are three weak-domain blogs used for a simple definitional point. The visionet article is a UK guide. The MSDynamicsWorld MCP claim is vendor-spin and adds little for the audience. Fix: Cite Microsoft Learn for what the apps are. Keep at most one of the blog quotes, and cut the MCP paragraph.",
+    "Editor review: \"## How does Dynamics 365 compare with SAP S/4HANA, Oracle and NetSuite for GCC b\": The objection that Dynamics 365 may be too light for a regulated bank or multi-site manufacturer is only answered with generic bullets. There is no concrete evidence, no banking-specific scenario, and no honest statement of where SAP fits better. Partner-bias is also not addressed. Fix: Add a short section for a regulated bank and a multi-site manufacturer. Say where F&SCM fits and where SAP may be stronger. Add a 'how to test our advice' note, for example that we will say so when Business Central or even no ERP is enough, plus a request for a written fit rationale.",
+    "Editor review: \"Moving from NAV, GP or AX ... 'What makes a legacy migration harder or easier'\": The objection that cloud migration breaks customisations and reports is only handled with a generic five-factor list. There is no concrete method such as extension re-write, report mapping, or a parallel run. The Author insight placeholder leaves the only specific point empty. Fix: Add steps: inventory customisations, classify as standard, extension or retire, map reports to Power BI, run a parallel close. Add a short worked example.",
+    "Editor review: \"Dynamics 365 ERP apps support VAT set-up and multi-currency accounting, includin\": The UAE VAT, Arabic and data residency claims are vague or deferred ('Confirm with Microsoft or your partner'). No Microsoft Learn source supports them. The objection 'without heavy custom work' is not answered. The Peppol claim also has no link to the official peppol.org or MoF source. Fix: Cite Microsoft Learn for localisation and regions, with links. State what is standard and what needs a partner connector. Link the MoF e-invoicing page, not only the homepage. Link tax.gov.ae to a specific page.",
+    "Editor review: \"### You may not need ERP yet if...\": The box is a single paragraph and its exit criteria are vague. They are not measurable, and they are placed under a cost/risk H2. The brief asks for honest exit criteria. Fix: Make it a visible box with 4-5 checkable bullets, for example one entity, fewer than a set number of users, a current system that is compliant, and no change planned for 12 months. Add what to do instead, and suggest a lighter step.",
+    "Editor review: \"Dynamics 365 Field Service | CRM, connects to ERP ... Project Operations | Both\": Table 'what it replaces' entries such as 'Dynamics CRM field add-ons, paper job sheets' and legacy-succession claims are unsourced. There is no 'legacy product it succeeds' column, which the brief required. Finance, Supply Chain and Business Central naming is tangled in the prose (Finance is listed separately in the table but as a pair elsewhere). Fix: Add a 'Succeeds' column (AX, NAV, GP, Dynamics CRM). Cite Microsoft Learn for the lineage. Make the Finance/SCM licensing description consistent.",
+    "Brand name: \"Novaand\" (1) — this business writes its name \"Nova& (legal name: Novaand systems LLC)\". Correct every one."
+   ],
+   "main_content_words": 3534,
+   "length_band": {
+    "low": 1800,
+    "high": 3000,
+    "source": "ranking_pages",
+    "sample": 5,
+    "basis": "pages ranking for this run 1,800-3,000 words (5 guides or articles, middle half 1,752-3,223, median 2,898); kept inside the usual 1,200-3,000 words for this kind of page"
+   },
+   "target_word_count": 2900,
+   "coverage_pct": 93,
+   "coverage_target_pct": 90,
+   "missing_terms": [
+    "project management",
+    "financial management"
+   ],
+   "missing_subtopics": [
+    "What Is Microsoft Dynamics? A Guide to Its Versions"
+   ],
+   "content_score": 97,
+   "score_breakdown": {
+    "structure": 25,
+    "coverage": 25,
+    "readability": 15,
+    "specificity": 10,
+    "clean_language": 10,
+    "length": 12
+   },
+   "profile_placeholders": 0,
+   "excluded_sections": [],
+   "unverified_statistics": [],
+   "critic_score": 66,
+   "keyword_mentions": 4,
+   "h2_count": 8,
+   "business_promises": [
+    {
+     "kind": "process",
+     "sentence": "Before we recommend either product, we run business discovery, requirements gathering, a [gap-fit analysis and ROI assessment](https://www.novaand.example/whatwedo/assess-shape) in our Assess and Shape phase."
+    },
+    {
+     "kind": "deliverable",
+     "sentence": "AED and multi-currency. Why it matters: GCC subsidiaries trade in several currencies. What to ask: how AED base currency, revaluation and bank reconciliation are set up and tested."
+    },
+    {
+     "kind": "pricing",
+     "sentence": "In those projects, we check that every VAT code feeds the correct return figure."
+    },
+    {
+     "kind": "process",
+     "sentence": "We confirm that AED and GCC currencies revalue and reconcile correctly."
+    },
+    {
+     "kind": "deliverable",
+     "sentence": "We also test the provider connection end to end, including rejections."
+    },
+    {
+     "kind": "deliverable",
+     "sentence": "Run and Optimise: tuning processes and reports after go-live."
+    },
+    {
+     "kind": "process",
+     "sentence": "We will confirm whether Business Central or Finance and Supply Chain Management suits your entities, processes, and UAE VAT and e-invoicing needs."
+    }
+   ],
+   "business_claims": [],
+   "unverified_figures": [],
+   "flagged_amounts": [],
+   "link_check": {
+    "dead": []
+   },
+   "originality": {
+    "passed": true,
+    "duplicate_targets": []
+   },
+   "banned_phrases": [],
+   "placeholders": [
+    {
+     "token": "[Date]",
+     "count": 1
+    },
+    {
+     "token": "[Reviewer job title and Dynamics 365 credential]",
+     "count": 1
+    },
+    {
+     "token": "[Exact Microsoft partner designation or specialisation]",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "round": 2,
+   "warnings": [
+    "Main content is too long: 3481 words vs target 1800-3000 (the band of pages ranking for this run 1,800-3,000 words (5 guides or articles, middle half 1,752-3,223, median 2,898); kept inside the usual 1,200-3,000 words for this kind of page). Cut repetition and secondary detail, and do not add anything",
+    "Primary keyword not in the first 100 words",
+    "Primary keyword used only 2 time(s)",
+    "Unverified statistics that need a linked source or a [Statistic] marker: about 10 people",
+    "Topic coverage 89% against a target of 90% (iesgp.com covers 93%). Both are counted the same way (a term counts once it appears). These terms do not appear at all; work them in where they belong: business processes, project management, financial management",
+    "Subtopics the best competitor page covers and this draft does not: \"What Is Microsoft Dynamics? A Guide to Its Versions\", \"Benefits of Modern Dynamics 365 Applications\". Add each one where it belongs, under our own heading and in our own words",
+    "Brand name: \"Novaand\" (1) — this business writes its name \"Nova& (legal name: Novaand systems LLC)\". Correct every one.",
+    "Dead links (fetched in this run): https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/migration/migrate-dynamics-gp (answers 404; use https://learn.microsoft.com/en-us/dynamics365/business-central/ instead); https://mof.gov.ae/en/public-finance/tax/e-invoicing/ (answers 404; no live page in this run states it, so remove the link). Replace or remove each one: a page that links to a missing page is not ready to publish"
+   ],
+   "main_content_words": 3481,
+   "length_band": {
+    "low": 1800,
+    "high": 3000,
+    "source": "ranking_pages",
+    "sample": 5,
+    "basis": "pages ranking for this run 1,800-3,000 words (5 guides or articles, middle half 1,752-3,223, median 2,898); kept inside the usual 1,200-3,000 words for this kind of page"
+   },
+   "target_word_count": 2900,
+   "coverage_pct": 89,
+   "coverage_target_pct": 90,
+   "missing_terms": [
+    "business processes",
+    "project management",
+    "financial management"
+   ],
+   "missing_subtopics": [
+    "What Is Microsoft Dynamics? A Guide to Its Versions",
+    "Benefits of Modern Dynamics 365 Applications"
+   ],
+   "content_score": 94,
+   "score_breakdown": {
+    "structure": 23,
+    "coverage": 25,
+    "readability": 15,
+    "specificity": 10,
+    "clean_language": 10,
+    "length": 12
+   },
+   "profile_placeholders": 0,
+   "excluded_sections": [],
+   "unverified_statistics": [
+    "about 10 people"
+   ],
+   "critic_score": 66,
+   "keyword_mentions": 2,
+   "h2_count": 8,
+   "business_promises": [
+    {
+     "kind": "deliverable",
+     "sentence": "Inventory every customisation, integration and report, with its owner and how often people use it."
+    },
+    {
+     "kind": "deliverable",
+     "sentence": "Classify each item: replace it with a standard feature, rebuild it as an extension, or retire it."
+    },
+    {
+     "kind": "deliverable",
+     "sentence": "Map each report to a standard report or to Power BI, and retire reports nobody opens."
+    },
+    {
+     "kind": "deliverable",
+     "sentence": "Cleanse master data and agree how many years of history to bring across."
+    },
+    {
+     "kind": "timeline",
+     "sentence": "Run a parallel close: complete one month-end in both systems and reconcile the trial balance, VAT figures and stock before cut-over."
+    },
+    {
+     "kind": "process",
+     "sentence": "Before we recommend either product, we run business discovery, requirements gathering, a [gap-fit analysis and ROI assessment](https://www.novaand.example/whatwedo/assess-shape) in our Assess and Shape phase."
+    },
+    {
+     "kind": "deliverable",
+     "sentence": "AED and multi-currency. Ask how AED base currency, revaluation and bank reconciliation are set up and tested for each GCC subsidiary."
+    },
+    {
+     "kind": "pricing",
+     "sentence": "In those projects, we check that every VAT code feeds the correct return figure and test the provider connection end to end, including rejections."
+    },
+    {
+     "kind": "credential",
+     "sentence": "We are a Microsoft partner, so weigh our view of SAP with that in mind."
+    },
+    {
+     "kind": "process",
+     "sentence": "When Business Central, or no new ERP at all, is enough, we say so."
+    },
+    {
+     "kind": "deliverable",
+     "sentence": "Run and Optimise: tuning processes and reports after go-live."
+    },
+    {
+     "kind": "process",
+     "sentence": "We treat support ownership as part of the product decision."
+    },
+    {
+     "kind": "process",
+     "sentence": "We will confirm whether Business Central or Finance and Supply Chain Management suits your entities, processes, and UAE VAT and e-invoicing needs."
+    }
+   ],
+   "business_claims": [],
+   "unverified_figures": [],
+   "flagged_amounts": [],
+   "link_check": {
+    "dead": [
+     {
+      "url": "https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/migration/migrate-dynamics-gp",
+      "anchor": "migration path to Business Central",
+      "suggestion": "https://learn.microsoft.com/en-us/dynamics365/business-central/"
+     },
+     {
+      "url": "https://mof.gov.ae/en/public-finance/tax/e-invoicing/",
+      "anchor": "Ministry of Finance e-invoicing framework",
+      "suggestion": null
+     }
+    ]
+   },
+   "originality": {
+    "passed": true,
+    "duplicate_targets": []
+   },
+   "banned_phrases": [],
+   "placeholders": []
+  }
+ ]
+}

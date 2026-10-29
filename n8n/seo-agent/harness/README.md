@@ -103,3 +103,21 @@ no report delivered before that carries them, and `seo_content_log` holds none o
 | `regulatory_facts[]` | *Collect Regulatory Facts* (Fix 6, W0-F): `{date, obligation, subject, threshold, url, paragraph, source_tier, source_date, as_of, supersedes, status}`; the example entry is illustrative |
 | `content_request_id` | the run's request id (3299 sent `content_request_id: ""`, a form run: fall back to `request_id`) |
 
+## Replay fixtures (page-quality programme 2026-10-29, PLAN §3.0 step 4, REVIEW_CODE M9)
+
+`replay.js` replays recorded production node runs on the current generated code: `const R = require('./replay')(H); const fx =
+R.load('replay_3299.json.gz'); const r = await R.replay(fx, 'Content QA', 2);` mocks exactly the node runs the code read in production
+(by start time), runs the node on the recorded input and returns `{ out, first, recorded, recordedFirst }`. `opts.input` / `opts.mocks`
+change a part (`null` removes a mock). Scenario `scenarios_replay.js` (RPL1-RPL4) checks the fixtures are anonymised, replays every run
+and prints the BEFORE numbers Wave 0 changes.
+
+* `fixtures/replay_3299.json.gz`: page run 3299 ("ms 365 erp", Service Page, verdict 42): Page Fix, Content QA, Originality Check and
+  Page Candidates (3 rounds each), Blog Package, the nodes they read and the callback. On the code of 2026-10-29 every run reproduces
+  production except today's date in the schema.
+* `fixtures/replay_3336.json.gz`: the finalize of that page, with the app's request (old format) and the recorded Finalize Editor answer.
+* `fixtures/ranking_guide_949.json`: the guide that ranks (exec 949, ladder rung 2, 319 impressions in its first week, one query at #12):
+  the live page in the draft format, its brief, site model, critique and QA rounds, and its search outcome. Its verdict score is not
+  stored in the repo: a hold rule must not depend on it.
+* Anonymised for the public repo: brand Nova&, domain novaand.example (the domain label equals the brand, as on the real site, so brand
+  detection behaves the same), the client's own page prose cut to lines of 10 words or fewer (headings and slogans stay), competitor page
+  bodies removed, hook token, API key and company id replaced. Our generated drafts keep their text with the identity swapped.
