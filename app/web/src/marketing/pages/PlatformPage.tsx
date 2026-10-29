@@ -19,7 +19,7 @@ const LOOP_MAP: Record<string, string[]> = {
   Plan: ['keyword-ladders', 'autopilot'],
   Write: ['content'],
   Publish: ['content', 'ai-growth', 'link-building'],
-  Track: ['site-tracking', 'ai-visibility', 'backlinks', 'technical-audits', 'crawler-analytics'],
+  Track: ['site-tracking', 'ai-visibility', 'backlinks', 'technical-audits', 'index-coverage', 'crawler-analytics'],
   Learn: ['reports', 'report-delivery', 'integrations', 'autopilot'],
 };
 
