@@ -330,6 +330,7 @@ export const features: Feature[] = [
       'Every page goes through a writer, a critic and an editor, then an SEO check that measures it against the best page in the results and compares it, word for word, with the pages it was researched from and with your own. Pages carry real expertise signals (an author byline, an expert reviewer, your experience notes and schema) and arrive as a publish-ready package with their three images already made.',
     icon: PenLine,
     benefits: [
+      'Asked before writing: a page our verdict scores under 50 out of 100, or a search your website already has a page for, waits for your OK, and uses only the check',
       'Writer, critic and editor passes, then an SEO quality check',
       'E-E-A-T built in: author byline and box, expert reviewer, experience notes and schema',
       'Your house style, stored once and followed: how your name is written, British or American spelling, words to avoid and the tone. Your own name written the wrong way is corrected before delivery',
@@ -356,6 +357,7 @@ export const features: Feature[] = [
       'One click to approve, then send it to your website or publish it yourself and we check it live',
     ],
     steps: [
+      { title: 'Decide', body: 'Before anything is written we check the keyword. If our verdict scores it under 50 out of 100, or your website already has a page for the same search, the page waits for your OK: write it anyway, use the search we recommend, or improve the page you have.' },
       { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile, your case studies and your style guide.' },
       { title: 'Write and critique', body: 'A draft, a critic\'s review and an editor\'s pass that acts on it.' },
       { title: 'Check', body: 'SEO checks on every page, against a coverage target read off the best page in the results. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm. A page that repeats a competitor or one of your own pages goes back for a rewrite.' },
@@ -371,6 +373,10 @@ export const features: Feature[] = [
       {
         q: 'Will the pages read like generic AI text?',
         a: 'Each page is written from a brief built on your business profile, your experience notes and your case studies, then reviewed by a critic and an editor. Figures that cannot be verified are marked for you to confirm instead of being made up.',
+      },
+      {
+        q: 'Will you write a page for any keyword I give you?',
+        a: 'We check it first. When our verdict scores the keyword under 50 out of 100, or your website already has a page for the same search, the page waits for your OK instead of being written, and only the check is used. You can write it anyway, take the search we recommend, or improve the page you already have. Two pages for one search compete with each other, so improving the existing page is often the faster way up.',
       },
       {
         q: 'What if a page says something about us that you could not check?',
@@ -1010,7 +1016,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 70, label: 'guides, one for each thing we ask of you' },
+      { value: 71, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],

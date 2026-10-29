@@ -5,7 +5,8 @@ import { useForm, type DefaultValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import { ChevronDown, ChevronRight, Video } from 'lucide-react';
-import { PAGE_TYPES, RUN_SCHEMAS, urlOnDomain } from '@seo/shared';
+import { HOLD_COST_USD, HOLD_RULE, PAGE_TYPES, RUN_SCHEMAS, urlOnDomain } from '@seo/shared';
+import { quoteLabel } from '@/lib/credits';
 import { useOrgCtx } from '@/lib/context';
 import { Checkbox, ChoiceCard } from '@/components/ui/field';
 import { IconTile } from '@/components/insight';
@@ -88,6 +89,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
       checkPageExists: false,
       ladder: undefined,
       aiTarget: undefined,
+      holdAck: undefined,
       receiveReport: true,
       receiveContent: true,
       emailCopy: true,
@@ -136,6 +138,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
       pending={pending}
       error={error}
       submitLabel={v.receiveContent ? 'Write the page' : 'Get the keyword report'}
+      priceNote={v.receiveContent && !v.holdAck ? `If our check holds the keyword for your OK, only the check is used: about ${quoteLabel(HOLD_COST_USD)}.` : undefined}
       values={v}
       onUsePlan={(plan) => {
         form.setValue('existingPageUrl', plan.existingPageUrl, { shouldDirty: true, shouldValidate: form.formState.isSubmitted });
@@ -150,6 +153,13 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
           <Callout tone="info" title={`Part of the keyword ladder "${v.ladder.head || 'your ladder'}"`}>
             {v.ladder.rung === 4 ? 'The top page of the ladder' : `Rung ${v.ladder.rung}`}: the page links to the ladder's top page and a sibling, and the ladder marks it as written so the weekly cadence moves on.
           </Callout>
+        )}
+        {v.holdAck ? (
+          <Callout tone="info" title="Written anyway, as you chose">
+            Our check {v.holdAck.score != null ? `scored this keyword ${v.holdAck.score} out of 100` : 'asked for your OK on this keyword'}. The page is written as you asked, and its report says you chose it.
+          </Callout>
+        ) : (
+          v.receiveContent && <p className="text-[13px] leading-relaxed text-ink-3">{HOLD_RULE}</p>
         )}
         {v.aiTarget && (
           <Callout tone="info" title="Written to be the page AI cites">

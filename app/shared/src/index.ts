@@ -56,4 +56,5 @@ export * from './consistency';   // MKT (2026-10-27): the one mismatch mechanism
 export * from './consistency-more';   // MKT (2026-10-27): the remaining cases (D1-D7, S1-S8, C1, I1-I3, I7, B1) of the same registry
 export * from './robots';   // site tasks: the engine's robots.txt matcher (v5/code/_ai_access_kit.js), ported line for line
 export * from './site-tasks';   // site tasks (2026-10-28, app/docs/SITE_TASKS.md): steps on the client's own website, checked by us
+export * from './hold';   // W0-D (2026-10-29): a page held for the client's OK before writing (verdict under 50, or a page the website already has)
 export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run

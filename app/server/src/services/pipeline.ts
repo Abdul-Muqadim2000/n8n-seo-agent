@@ -1,6 +1,8 @@
 import {
   AUTOMATIONS,
   formatPercent,
+  HOLD_THRESHOLD,
+  holdTitle,
   normKeyword,
   AI_PROMPTS_DEFAULT,
   aiPulseQuestions,
@@ -330,6 +332,35 @@ export function refusedPlans(reports: Pick<Report, 'id' | 'runId' | 'stage' | 's
     });
   }
   return out.filter((x) => x.action?.runId).slice(0, 3);
+}
+
+/**
+ * W0-D (page-quality 2026-10-29): the pages the engine held for the client's OK in the last 30 days (a content report whose summary says
+ * `held`), newest first, one per keyword, and only while no later page run was started for the same keyword ("Write it anyway", another
+ * target, an improvement of the existing page all start one). The three choices are on the report itself.
+ */
+export function heldPages(reports: Pick<Report, 'id' | 'runId' | 'stage' | 'summary' | 'receivedAt'>[], runs: Pick<SiteRun, 'mode' | 'keyword' | 'createdAt' | 'status'>[], now = Date.now()): NeedsYouItem[] {
+  const out: NeedsYouItem[] = [];
+  const seen = new Set<string>();
+  for (const r of [...reports].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))) {
+    if (r.stage !== 'content' || r.summary.held !== true || now - Date.parse(r.receivedAt) > 30 * 864e5) continue;
+    const kw = typeof r.summary.keyword === 'string' ? r.summary.keyword : '';
+    const key = normKeyword(kw);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const later = runs.some((x) => x.mode === 'keyword' && normKeyword(x.keyword) === key && x.status !== 'failed' && Date.parse(x.createdAt) > Date.parse(r.receivedAt));
+    if (later) continue;
+    const score = typeof r.summary.holdScore === 'number' ? r.summary.holdScore : null;
+    out.push({
+      id: `hold:${r.id}`,
+      kind: 'hold',
+      severity: 'warning',
+      title: holdTitle(kw, { score, kinds: [...(score != null && score < HOLD_THRESHOLD ? (['score'] as const) : []), ...(r.summary.holdDuplicate === true ? (['duplicate'] as const) : [])] }),
+      detail: 'Nothing was written and only the check was used. Open the report to write it anyway, use the recommended target, or improve the page your website already has.',
+      action: { label: 'Choose what to do', reportId: r.id },
+    });
+  }
+  return out.slice(0, 5);
 }
 
 /** The website's runs that failed in the last 7 days and were not started again since (newest first). */
@@ -929,7 +960,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   // AI-FOCUS (2026-10-27): the AI question panel's own decisions for the owner (most questions off the keywords they work on; a ladder the panel
   // has no room for, with the price of a bigger panel) - the same warnings as the website's banner, where Accept and "Keep these questions" are
   const aiPanelItems = await import('./consistency').then((m) => m.standingWarnings(org, site)).then((r) => aiPanelNeedsYou(r.warnings)).catch(() => [] as NeedsYouItem[]);
-  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...profileItems, ...autopilotItems, ...failedRuns(app.runs), ...refusedPlans(recentReports), ...ladderNeedsYou(build, await settingsRow()), ...aiPanelItems, ...siteTaskNeedsYou(siteTasks ?? [])]);
+  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...profileItems, ...autopilotItems, ...failedRuns(app.runs), ...refusedPlans(recentReports), ...heldPages(recentReports, app.runs), ...ladderNeedsYou(build, await settingsRow()), ...aiPanelItems, ...siteTaskNeedsYou(siteTasks ?? [])]);
   const thisWeek = thisWeekItems({ automations, calendar, running: runningHere, queue, plan: week0, x, build, tz, cycles });
   const autopilot: PipelineAutopilot = {
     level: week0.level,

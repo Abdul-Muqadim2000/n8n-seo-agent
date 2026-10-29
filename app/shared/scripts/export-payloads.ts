@@ -106,6 +106,23 @@ const cases: Case[] = [
     expect: { mode: 'keyword', email: '', ladder_id: 'lad_test123', ladder_rung: 1, ladder_head: 'e invoicing in uae', force_content: true, include_content: true, page_type: 'Guide' },
   },
   {
+    // W0-D (2026-10-29): "Write it anyway" on a page the engine held for the client's OK; Normalize Input passes hold_ack through
+    name: 'keyword: written anyway after a hold (hold_ack)',
+    mode: 'keyword',
+    input: { siteId: SITE_ID, keyword: 'ms 365 erp', country: 'United Arab Emirates', pageType: 'Service Page', holdAck: { score: 42 } },
+    site,
+    mail: false,
+    expect: { mode: 'keyword', email: '', hold_ack: { score: 42 }, include_content: true, force_content: false, page_type: 'Service Page' },
+  },
+  {
+    name: 'keyword: a page run without an acknowledgement carries none',
+    mode: 'keyword',
+    input: { siteId: SITE_ID, keyword: 'ms 365 erp', country: 'United Arab Emirates', pageType: 'Service Page' },
+    site,
+    mail: false,
+    expect: { mode: 'keyword', hold_ack: null, include_content: true },
+  },
+  {
     name: 'discover with site + audit follow-up',
     mode: 'discover',
     // keyword-first (R-K6): research from the app never asks for a page on its own pick, whatever the form sent

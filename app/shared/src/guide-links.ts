@@ -23,6 +23,7 @@ export const GUIDE_FOR_NEEDS_YOU_KIND: Record<NeedsYouItem['kind'], GuideId> = {
   ai_panel: 'ai-panel-focus',   // AI-FOCUS (2026-10-27): the AI questions follow the keywords you work on
   questions: 'page-questions',   // H3 (2026-10-28): questions on a written page; each answer is kept in the business details
   site_task: 'indexnow-key-file',   // site tasks (2026-10-28): refined by the item's id below
+  hold: 'page-held',   // W0-D (2026-10-29): a page that waits for your OK before it is written
 };
 
 /** The guide that answers one Needs-you item: its kind's, refined by what the id says (a refused plan, a draft to fix, an announcement). */
