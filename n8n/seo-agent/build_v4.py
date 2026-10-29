@@ -12880,6 +12880,53 @@ open(os.path.join(OUT_CODE, '_regulatory_kit.js'), 'w', encoding='utf-8').write(
 log('Local regulatory facts are researched, dated and never stale (W0-F, 2026-10-29, section 154; PLAN Fix 6): v5/data/regulators.json maps each market (AE, SA, PK) to its regulated topics, official domains and, for UAE e-invoicing, the dated obligations read on the Ministry of Finance\'s own decisions (No. 244 of 2025 and its amendment No. 66 of 2026: phase 1 appoints a provider by 30 October 2026, superseding 31 July 2026, and goes live 1 January 2027); a page run searches the official sites (SearXNG, free; one gated DataForSEO search per topic only when SearXNG is down), reads the official text, an amendment search and two independent secondary sources, and Collect Regulatory Facts keeps the latest dated official source with what it supersedes, or two agreeing secondary sources, or says none could be confirmed; each fact carries its source, source date, as-of date and status (upcoming / passed / in force) on the day the page is written. The brief and the writer print a REGULATORY FACTS block, the official sources lead the run\'s verified facts, the client\'s own posts are checked for an old date, and Content QA records whether the page states the current dates (no score). Ledger lists reached: ' + ', '.join(_ledger153))
 
 # =============================================================================
+# 155. THE FINAL VERSION IS JUDGED WITH THE PAGE RUN'S CONTEXT (W0-B, page-quality programme 2026-10-29, docs/page-quality-2026-10-29/PLAN.md
+#      Fix 2 and §2.10; REVIEW_CODE H2 / M8; owner decision D2). Finalize 3336 graded the final version of page 3299 against itself (no facts,
+#      no terms, no length band, its own word count as the target) and never saw the page run's blocker, so it said "Ready" at 100.
+#      * *Build Webhook Response* now carries `page_run`, the GRADING fields of the page-run context (harness/README.md "PRC contract"):
+#        length_band (the final check's band, with the brief's target), coverage_target, terms, facts, sources_cited, style_guide, site_urls,
+#        serp_shapes (W0-C fills it), regulatory_facts / regulatory_topics (W0-F) and content_request_id. Read from *Parse Brief* and the
+#        last *Page Candidates* (the delivered page's final check), each inside try/catch; a run that wrote no page sends `page_run: null`.
+#        The GATING fields (qa_blocking, meta.originality.duplicate_targets, verdict, score, score_withheld, meta.page_type,
+#        verdict_acknowledged) were already in every callback: the app derives them from the stored ORIGINAL report for old and new reports.
+#      * The finalize side (SEO Agent — Page Finalize, build_monitors.py 6b) reads `page_run` + `duplicate_decision` in its Parse Brief and
+#        keeps every page-run blocker it cannot measure open in Finalize Verdict (v5/code/Finalize_Parse_Brief.js, Finalize_Verdict.js).
+# =============================================================================
+patch('Build Webhook Response', "    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],",
+      "    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],\n"
+      "    ...(() => {   // W0-B (section 155): the page-run context's grading fields, so the final version is judged like the page run\n"
+      "      if (!(d.article_markdown || d.page_markdown)) return { page_run: null };\n"
+      "      let pb = {}, cq = {}; try { pb = $('Parse Brief').first().json || {}; } catch (e) { pb = {}; }\n"
+      "      try { cq = ($('Page Candidates').first().json || {}).content_qa || {}; } catch (e) { cq = {}; }\n"
+      "      const A = (v) => (Array.isArray(v) ? v : []); const T = (v, n) => String(v == null ? '' : v).replace(/\\s+/g, ' ').trim().slice(0, n);\n"
+      "      const br = pb.content_brief || {}; const lbq = cq.length_band || (pb.competitor_analysis || {}).length_band || pb.length_band || null;\n"
+      "      const target = Number(br.target_word_count) > 0 ? Math.round(Number(br.target_word_count)) : (lbq && Number(lbq.target_word_count) > 0 ? Math.round(Number(lbq.target_word_count)) : null);\n"
+      "      const length_band = lbq && Number(lbq.low) > 0 && Number(lbq.high) >= Number(lbq.low) ? { low: Number(lbq.low), high: Number(lbq.high), source: lbq.source || (lbq.ok ? 'ranking_pages' : 'page_type'), sample: Number(lbq.sample) || 0, basis: T(lbq.basis, 400), target } : null;\n"
+      "      let reg = pb.regulatory || null; if (!reg) { try { reg = $('Collect Regulatory Facts').first().json.regulatory || null; } catch (e) { reg = null; } }\n"
+      "      const regFacts = A(pb.regulatory_facts).length ? A(pb.regulatory_facts) : A((reg || {}).facts);\n"
+      "      return { page_run: { prc: 1,\n"
+      "        length_band,\n"
+      "        coverage_target: pb.coverage_target && typeof pb.coverage_target === 'object' ? pb.coverage_target : null,\n"
+      "        terms: A(br.terms_to_use).map(t => (typeof t === 'string' ? { term: t, min_count: 1 } : { term: T((t || {}).term, 80), min_count: Number((t || {}).min_count) || 1 })).filter(t => t.term).slice(0, 80),\n"
+      "        facts: A(pb.facts).filter(f => f && typeof f === 'object').map(f => ({ claim: T(f.claim || f.text, 600), source: T(f.source, 120), url: T(f.url, 600), title: T(f.title, 200), ...(f.regulatory ? { regulatory: true } : {}) })).filter(f => f.claim || f.url).slice(0, 40),\n"
+      "        sources_cited: A(cq.sources_cited).filter(x => x && x.url).map(x => ({ anchor: T(x.anchor, 200), url: T(x.url, 600), host: T(x.host, 120), tier: x.tier == null ? null : x.tier })).slice(0, 30),\n"
+      "        style_guide: pb.style_guide && typeof pb.style_guide === 'object' ? pb.style_guide : { on_file: false },\n"
+      "        site_urls: A(pb.site_urls).map(u => String(u || '')).filter(u => /^https?:\\/\\//i.test(u)).slice(0, 300),\n"
+      "        serp_shapes: pb.serp_shapes || cq.serp_shapes || null,\n"
+      "        regulatory_facts: regFacts.slice(0, 40), regulatory_topics: A((reg || {}).topics).map(t => ({ id: T((t || {}).id, 60), relevance: T((t || {}).relevance, 20) })).filter(t => t.id).slice(0, 12),\n"
+      "        content_request_id: T(pb.content_request_id || d.request_id, 120) } }; })(),")
+_bwr155 = code('Build Webhook Response')
+for _k155 in ('page_run: { prc: 1,', 'length_band,', 'coverage_target:', 'terms:', 'facts:', 'sources_cited:', 'style_guide:', 'site_urls:', 'serp_shapes:', 'regulatory_facts:', 'content_request_id:',
+              "$('Parse Brief').first().json", "$('Page Candidates').first().json", 'return { page_run: null }'):
+    assert _k155 in _bwr155, 'W0-B: Build Webhook Response lacks ' + _k155
+assert _bwr155.count('page_run:') == 2, 'W0-B: Build Webhook Response sends page_run more than once'
+for _f155 in ('Finalize_Parse_Brief.js', 'Finalize_Verdict.js'):
+    for _k155 in ({'Finalize_Parse_Brief.js': ('b.page_run', 'duplicate_decision', "PRC_BLOCK = ['qa_blocking', 'duplicate_targets']", 'length_band: LEN.band', 'style_guide: G.style_guide'),
+                   'Finalize_Verdict.js': ("code === 'duplicate_page'", "code: 'not_checked'", 'PR.blocks_known', 'kept_open:', 'fit_cap')}[_f155]):
+        assert _k155 in _rd0('code/' + _f155), 'W0-B: ' + _f155 + ' lacks ' + _k155
+log('The final version is judged with the page run\'s context (W0-B, 2026-10-29, section 155; PLAN Fix 2, REVIEW_CODE H2 / M8, D2): every content callback carries page_run (length band with the brief\'s target, coverage target, terms, facts, sources cited, style guide, site URLs, SERP shapes, regulatory facts, content request id); Page Finalize reads it with the gating fields the app derives from the original report, keeps the page run\'s duplicate-page, copied-passage, dead-link and unknown blockers open until they are gone or the client decides (update of that page, or a recorded reason with the fit limit kept), and a request without the page run\'s blockers is never ready; a missing grading field is advice')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;
