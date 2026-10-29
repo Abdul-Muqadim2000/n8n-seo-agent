@@ -11,6 +11,8 @@
 //   - one-click approve, then publish (CMS or "I published it", with the live check).
 // This module is the one contract between the engine's callback, the server and the screens. Pure: no I/O, no clock unless passed.
 
+import { cleanMetaDescription, usableMetaDescription } from './meta-description';
+
 type P = Record<string, unknown>;
 const obj = (v: unknown): P => (v && typeof v === 'object' && !Array.isArray(v) ? (v as P) : {});
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
@@ -389,7 +391,9 @@ export function finalizeBody(o: {
     markdown: o.markdown,
     delivered_markdown: s(p.markdown),
     client_edited: o.clientEdited,
-    meta: { title: s(meta.title), meta_description: s(meta.meta_description), slug: s(meta.slug), h1: s(meta.h1) },
+    // W0-A (2026-10-29): a stored description that is a field label ("Slug: ..."), on two lines or under 70 characters is not sent back:
+    // the engine writes one from the page (PF.meta in the finalize's Parse Brief)
+    meta: { title: s(meta.title), meta_description: usableMetaDescription(meta.meta_description), slug: s(meta.slug), h1: s(meta.h1) },
     answers: ans,
     business_facts: o.businessFacts.slice(0, 2000),
     business_facts_kv: f.business_facts_kv,
@@ -415,6 +419,8 @@ export interface FinalizeResult {
   client_questions: P[];
   grade: P;
   cost: { claude_usd: number; dfs_usd: number; estimated: boolean; model_calls: number };
+  /** W0-A (2026-10-29): the meta lines of the final version as the engine checked them (a broken description rebuilt); absent from older engines */
+  meta?: { title?: string; meta_description?: string; slug?: string };
   error?: string;
 }
 
@@ -474,7 +480,8 @@ export interface PageReviewView {
   /** every question, ranked; `stored` = the website already has this fact (answered there, not asked again) */
   questions: (ClientQuestion & { stored: FactAnswer | null })[];
   answers: Record<string, PageAnswer>;
-  delivered: { markdown: string; title: string; metaDescription: string; slug: string };
+  /** metaDescriptionNote: W0-A (2026-10-29), set when the stored description cannot be used ("Slug: ...", too short): what the client is told */
+  delivered: { markdown: string; title: string; metaDescription: string; metaDescriptionNote: string; slug: string };
   clientVersion: { markdown: string; savedAt: string; savedBy: string | null; check: PageCheck | null } | null;
   finalize: {
     status: 'none' | 'running' | 'done' | 'failed';
@@ -872,7 +879,7 @@ const RUN_ONLY_KEYS = ['cost_usd', 'run_ledger', 'run_cost_estimate_usd', 'run_c
  * The final version's report payload: the delivered page's payload with the final Markdown, its safe HTML, the engine's delivered status,
  * grade and remaining questions, and its own cost.
  */
-export function finalReportPayload(original: P, result: Pick<FinalizeResult, 'markdown' | 'delivery_status' | 'delivery' | 'client_questions' | 'grade' | 'changes' | 'applied' | 'cost'>, o: { originalReportId: string; requestId: string }): P {
+export function finalReportPayload(original: P, result: Pick<FinalizeResult, 'markdown' | 'delivery_status' | 'delivery' | 'client_questions' | 'grade' | 'changes' | 'applied' | 'cost' | 'meta'>, o: { originalReportId: string; requestId: string }): P {
   const base: P = {};
   for (const [k, v] of Object.entries(original ?? {})) if (!RUN_ONLY_KEYS.includes(k)) base[k] = v;
   const meta = obj(original?.meta);
@@ -891,6 +898,10 @@ export function finalReportPayload(original: P, result: Pick<FinalizeResult, 'ma
   const words = md.replace(/\|/g, ' ').replace(/[#>*_`]/g, '').split(/\s+/).filter(Boolean).length;
   const c = finalizeCostUsd(result);
   const score = num(grade.score);
+  // W0-A (2026-10-29): the final version's description is the one the engine checked (rebuilt when the stored one was broken); a stored
+  // description that cannot be used is never carried onto the final version
+  const finalDesc = usableMetaDescription(obj(result.meta).meta_description) || cleanMetaDescription(meta.meta_description);
+  const descFields = finalDesc !== s(meta.meta_description) ? { meta_description: finalDesc, meta_description_length: finalDesc.length } : {};
   return {
     ...base,
     request_id: o.requestId,
@@ -909,7 +920,7 @@ export function finalReportPayload(original: P, result: Pick<FinalizeResult, 'ma
     qa_reasons: reasons,
     qa_owner_edits: [],
     qa_quality: quality,
-    meta: { ...meta, word_count: words, publishable: ready, delivery_status: status, client_questions: questions, grade, quality, ...(score != null ? { content_score: score } : {}) },
+    meta: { ...meta, ...descFields, word_count: words, publishable: ready, delivery_status: status, client_questions: questions, grade, quality, ...(score != null ? { content_score: score } : {}) },
     finalized_from: o.originalReportId,
     finalize_changes: arr(result.changes).slice(0, 60),
     finalize_applied: arr(result.applied).slice(0, 200),

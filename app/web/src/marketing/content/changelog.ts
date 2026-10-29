@@ -34,6 +34,17 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-29',
+    version: '4.5',
+    title: 'Written pages you can publish with confidence',
+    summary:
+      'Fixes to how written pages are checked and finished, so a page we call ready to publish is ready in every part, including what people see in search results.',
+    highlights: [
+      'Every written page has a real search description, the text under your title in search results: when a draft has none, a short one or a broken one, we write it from your brief or from the page\'s quick answer, and it never names a price, a promise or a number that your business details and the page do not back. A page whose description we cannot write is not marked ready to publish, and pages written earlier with a broken description get a new one when you make the final version',
+    ],
+    features: ['content'],
+  },
+  {
     date: '2026-10-28',
     version: '4.4',
     title: 'Video tutorials',

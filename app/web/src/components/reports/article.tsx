@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertTriangle, Braces, Download, Eye, FileCode, FileJson, FileText, Heading, Image as ImageIcon, Link2, ListChecks, Quote, Share2, Tags } from 'lucide-react';
 import type { ReportFile } from '@seo/shared';
-import { findOpenBrackets, isOpenBracket, placeholderRe } from '@seo/shared';
+import { findOpenBrackets, isOpenBracket, metaDescriptionView, placeholderRe } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { downloadText } from '@/lib/utils';
@@ -290,7 +290,10 @@ export function MetaPanel({ meta }: { meta: P }) {
         items={[
           { label: 'Title tag', value: <>{str(meta.title) || '-'} <span className="block text-xs">{lengthHint(num(meta.title_length) ?? (str(meta.title).length || null), 30, 60)}</span></> },
           { label: 'Main heading (H1)', value: str(meta.h1) || '-' },
-          { label: 'Meta description', value: <>{str(meta.meta_description) || '-'} <span className="block text-xs">{lengthHint(num(meta.meta_description_length) ?? (str(meta.meta_description).length || null), 120, 160)}</span></> },
+          // W0-A (2026-10-29): a report written before the meta fix may hold "Slug: ..." as its description: shown as missing, with what to do
+          { label: 'Meta description', value: (() => { const d = metaDescriptionView(meta.meta_description); return d.text
+            ? <>{d.text} <span className="block text-xs">{lengthHint(num(meta.meta_description_length) ?? d.text.length, 120, 160)}</span></>
+            : <>-<span className="block text-xs">{d.note}</span></>; })() },
           { label: 'URL slug', value: <code className="text-[13px]">{str(meta.slug) || '-'}</code> },
           ...(str(meta.suggested_url)
             ? [

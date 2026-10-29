@@ -69,7 +69,7 @@ const PAYLOAD_READY_Q = {
   domain: 'novaand-demo.com',
   markdown: '# ERP systems in the UAE\n\nA sound selection starts with business discovery.\n\n## How to choose\n\nCompare the options.\n',
   html: '<article><h1>ERP systems in the UAE</h1></article>',
-  meta: { title: 'ERP Systems in UAE', meta_description: 'How to choose an ERP system in the UAE.', slug: 'erp-systems-uae', h1: 'ERP systems in the UAE', primary_keyword: 'erp systems in uae', page_type: 'Service Page', schema_blocks: [{ type: 'Article', json: { '@type': 'Article', headline: 'x</script><script>alert(1)</script>' } }] },
+  meta: { title: 'ERP Systems in UAE', meta_description: 'How to choose an ERP system in the UAE: the options, the VAT and e-invoicing checks and the questions to ask.', slug: 'erp-systems-uae', h1: 'ERP systems in the UAE', primary_keyword: 'erp systems in uae', page_type: 'Service Page', schema_blocks: [{ type: 'Article', json: { '@type': 'Article', headline: 'x</script><script>alert(1)</script>' } }] },
   qa_delivery_status: 'ready_with_questions',
   qa_client_questions: [Q_BRACKET, Q_CLAIM, Q_BRIEF],
   qa_grade: { score: 91.4, of: 100, first_draft_review: 62 },
@@ -227,7 +227,7 @@ describe('the finalize request', () => {
   const body = finalizeBody({ requestId: 'app-fin-1', domain: 'novaand-demo.com', siteId: 'site_novaand-demo-com', payload: PAYLOAD_READY_Q, markdown: 'edited', clientEdited: true, questions: qs, answers, businessFacts: 'Microsoft partner', facts: {} });
   it('carries the version, the delivered text, the answers that change something and the stored facts', () => {
     expect(body).toMatchObject({ mode: 'finalize', request_id: 'app-fin-1', keyword: 'erp systems in uae', page_type: 'Service Page', markdown: 'edited', delivered_markdown: PAYLOAD_READY_Q.markdown, client_edited: true, content_request_id: '2575' });
-    expect(body.meta).toEqual({ title: 'ERP Systems in UAE', meta_description: 'How to choose an ERP system in the UAE.', slug: 'erp-systems-uae', h1: 'ERP systems in the UAE' });
+    expect(body.meta).toEqual({ title: 'ERP Systems in UAE', meta_description: 'How to choose an ERP system in the UAE: the options, the VAT and e-invoicing checks and the questions to ask.', slug: 'erp-systems-uae', h1: 'ERP systems in the UAE' });
     expect(body.answers.map((a) => [a.id, a.decision, a.text])).toEqual([
       ['q1', 'edit', 'We start every project with discovery.'],
       ['q3', 'answer', 'Microsoft Solutions Partner'],
