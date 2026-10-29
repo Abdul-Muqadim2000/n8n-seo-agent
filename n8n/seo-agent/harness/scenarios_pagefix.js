@@ -215,7 +215,9 @@ module.exports = async (ctx) => {
         check(id + ': an edit that changes nothing is not better: the editing stops and the final version is prepared', pc.page_fix.next === 'finalize' && /did not improve/.test(pc.page_fix.stop_reason), J(pc.page_fix.history));
       }
       check(id + ': the final version handed to the last check has no bracket and none of the round\'s unsupported statements', (await pf('bracketsIn', [pc.output])).length === 0
-        && (pc.page_fix.best.content_qa.business_promises || []).every(p => !pc.output.includes(p.sentence)), J(pc.page_fix.removed_final.map(r => [r.code, r.how])));
+        // W0-A (2026-10-29, page-quality PLAN Fix 1): a statement production flagged in the META DESCRIPTION (2195, 2575 round 2) is search-result
+        // copy, not a claim: no removal edits a meta line any more (PF.meta owns it), so it stays in the head and only the body ones must go
+        && (pc.page_fix.best.content_qa.business_promises || []).every(p => !pc.output.includes(p.sentence) || (/^Meta Description:.*$/m.exec(pc.output) || [''])[0].includes(p.sentence)), J(pc.page_fix.removed_final.map(r => [r.code, r.how])));
       const fin = await finalOf(id, pc, round);
       const q = fin.content_qa;
       verdicts[id] = { old: 'not_ready (' + FX[id].rounds[1].qa.warnings.length + ' warnings, critic ' + FX[id].critique.score + ')', status: q.delivery_status, label: q.quality_label, grade: q.delivery.grade.score,

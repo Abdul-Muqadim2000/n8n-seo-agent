@@ -10,7 +10,9 @@
 const item = $input.first(); const d = item.json || {};
 const md0 = String(d.page_markdown || '');
 if (!md0.trim()) return [item];
-const metaRe = /^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):\s*(.+)$/gim;
+// W0-A (2026-10-29, page-quality PLAN Fix 1): `:\s*(.+)$` ran over the line end, so an empty "Meta Description:" took the next line
+// ("Slug: ms-365-erp-uae") as the description and the Slug line was lost (production run 3299). Each field is read on its own line.
+const metaRe = /^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):[ \t]*(.*)$/gim;
 const metaLines = {}; let mm; while ((mm = metaRe.exec(md0)) !== null) metaLines[mm[1].toLowerCase()] = mm[2].trim();
 let md = md0.replace(metaRe, '').replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/gi, '').replace(/^\s*(Production Brief|Note|Editor's note):.*$/gim, '').replace(/[ \t]*\[(?:Image|Video)\s*:(?:[^\[\]\n]|\[[^\[\]\n]*\])*\][ \t]*/gi, '').replace(/\n{3,}/g, '\n\n').trim();
 md = md.replace(/\]\((https?:\/\/[^)\s]+)\)/g, (m, u) => '](' + SRC.clean(u) + ')');   // FIX_PLAN G4: utm_*, srsltid, gclid, fbclid never reach the published page
@@ -45,7 +47,7 @@ const cleanUrls = (x) => Array.isArray(x) ? x.map(cleanUrls) : (x && typeof x ==
 const schema = (Array.isArray(d.schema_blocks) ? d.schema_blocks : []).map(b => (b && b.json) ? { ...b, json: cleanUrls(b.json) } : cleanUrls(b));
 const title = metaLines.title || h1 || d.keyword || 'New page';
 const slug = (String(d.content_brief_slug || metaLines.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)) || 'page';
-const description = metaLines['meta description'] || '';
+const description = /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords|URL|Page Type)\s*:/i.test(metaLines['meta description'] || '') ? '' : (metaLines['meta description'] || '');   // W0-A: a field label is never a description
 const headings = [...md.matchAll(/^(#{2,3})\s+(.+)$/gm)].map(x => ({ level: x[1].length, text: x[2].trim() }));
 const links = [...md.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g)].map(x => ({ text: x[1], url: x[2] }));
 const dom = String(d.domain || '').toLowerCase();

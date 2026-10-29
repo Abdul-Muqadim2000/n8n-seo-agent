@@ -1,4 +1,5 @@
 /*__FACT_ANSWERS__*/
+/*__PAGE_FIX__*/
 // H3 (2026-10-28, page review; docs/content-quality-2026-10-27): "Make the final version". `POST /webhook/seo-page-finalize` takes a page the
 // engine already delivered (or the client's own edited version of it), the client's answers to the page's questions and the business facts,
 // and returns the final page: no new research, no new full write, only the affected sections touched. The request is the app's FinalizeBody
@@ -82,7 +83,11 @@ const businessFacts = [facts.slice(0, LIM.facts_chars), FA.text(kv), answerTexts
 // the page as a content run holds it: the meta lines above the H1 (from `meta` when the Markdown has none, removed again from the answer)
 const had_meta = markdown.split('\n').some(l => /^(Title|Meta Description|Slug)\s*:/i.test(l.trim()));
 const head = had_meta ? '' : [meta.title ? 'Title: ' + clean(meta.title) : '', meta.meta_description ? 'Meta Description: ' + clean(meta.meta_description) : '', meta.slug ? 'Slug: ' + clean(meta.slug) : ''].filter(Boolean).join('\n');
-const page = (head ? head + '\n\n' : '') + markdown.replace(/^\n+/, '');
+// W0-A (2026-10-29, page-quality PLAN Fix 1.4, REVIEW_CODE H4): the app sent back the stored meta description, and for production page
+// 3299 that was "Slug: ms-365-erp-uae" (finalize 3336). The final version never runs Page Fix, so the meta rule (PF.meta) runs here once
+// the head is built: a description that is missing, short or a field label is written from the page's Quick answer (or introduction)
+const metaFix = PF.meta((head ? head + '\n\n' : '') + markdown.replace(/^\n+/, ''), { keyword, own_text: businessFacts });
+const page = metaFix.md;
 const withoutMeta = page.split('\n').filter(l => !META.test(l.trim())).join('\n');
 const ownWords = withoutMeta.split(/\s+/).filter(Boolean).length;
 const ownLinks = [...page.matchAll(/\]\((https?:\/\/[^)\s]+)\)/g)].map(m => m[1]).filter(u => { const h = (u.match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i) || [])[1] || ''; const x = h.toLowerCase().replace(/^www\./, ''); return x === domain || x.endsWith('.' + domain); });
@@ -101,5 +106,6 @@ return [{ json: {
   ai_target: null, qa_max_rounds: 1, originality_max_overlap_pct: 15, client_pages: [],
   request_id: S(b.request_id).slice(0, 120), content_request_id: S(b.content_request_id).slice(0, 120), site_id: S(b.site_id).slice(0, 120),
   finalize: { answers, client_edited, client_sentences, delivered_markdown: delivered, input_markdown: markdown, answer_texts: answerTexts, stored_keys: stored,
-    answered_keys: answers.filter(a => a.decision !== 'skip' && a.fact_key).map(a => a.fact_key) }
+    answered_keys: answers.filter(a => a.decision !== 'skip' && a.fact_key).map(a => a.fact_key),
+    meta_fix: { how: metaFix.how, description: metaFix.description, problem: metaFix.problem, fixes: metaFix.fixes } }
 } }];
