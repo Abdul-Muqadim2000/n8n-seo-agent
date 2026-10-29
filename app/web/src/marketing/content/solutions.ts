@@ -84,7 +84,7 @@ export const solutions: Solution[] = [
       { feature: 'autopilot', title: 'A weekly cadence that runs itself', body: 'Pages a week for the keywords you choose, written with QA, the plan shown in "Coming up" two days ahead and a "Needs you" queue for approvals.' },
       { feature: 'keyword-ladders', title: 'Content with a destination', body: 'Keyword ladders climb to the head terms your business needs, one supporting page at a time.' },
       { feature: 'technical-audits', title: 'Audits with a fix pack', body: 'Monthly audits show what changed, and the fix pack goes straight to your developers.' },
-      { feature: 'index-coverage', title: 'Every page in Google, or a reason why not', body: 'Each day, the pages Google left out of its index, grouped by the reason, with the step for your developers and the pages that are fine to leave out.' },
+      { feature: 'index-coverage', title: 'Every page accounted for: in Google, or the reason why not', body: 'Each day, the pages Google left out of its index, grouped by the reason, with the step for your developers and the pages that are fine to leave out.' },
       { feature: 'site-tracking', title: 'One weekly view', body: 'Search Console, GA4 and Trends together, with striking-distance keywords called out.' },
       { feature: 'crawler-analytics', title: 'What the crawlers really did', body: 'Your server logs show which pages Google and the AI crawlers fetched, which they skipped and which "crawlers" were impostors.' },
       { feature: 'guided-setup', title: 'Nothing waits on a ticket', body: 'Every connection we ask for comes with its steps and your own values, and goes to IT or the agency as an e-mail when the job is theirs.' },

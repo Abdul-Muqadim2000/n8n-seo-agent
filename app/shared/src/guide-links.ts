@@ -37,6 +37,7 @@ export const INDEXING_GUIDE: Record<string, GuideId> = {
   server_error: 'index-fix-server-error',
   access_denied: 'index-fix-access-denied',
   redirect: 'index-sitemap-redirects',
+  redirect_error: 'index-fix-redirect-error',
   sitemap: 'index-submit-sitemap',
 };
 

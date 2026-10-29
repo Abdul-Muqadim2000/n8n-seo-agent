@@ -463,6 +463,8 @@ export interface AutomationInfo {
    * due before it is not a missed fire, the delivery rate counted 57 of its 72 "missed" fires before the workflow was even created.
    */
   since?: string;
+  /** X10: the start is read from the engine's data (`created` in the delivery report); without it the schedule is not measured */
+  sinceFromData?: boolean;
 }
 
 export const AUTOMATIONS: AutomationInfo[] = [
@@ -609,6 +611,7 @@ export const INDEX_COVERAGE_SCHEDULE: ScheduleInfo = {
   workflow: 'SEOagentIndexCv1',
   stage: 'index_coverage',
   settingsTab: 'tracking',
+  sinceFromData: true,
 };
 
 export const SCHEDULES: ScheduleInfo[] = [...AUTOMATIONS, PAGE_WATCH_SCHEDULE, INDEX_COVERAGE_SCHEDULE];

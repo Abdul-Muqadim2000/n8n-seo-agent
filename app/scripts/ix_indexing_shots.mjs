@@ -49,10 +49,14 @@ async function api(route) {
 const browser = await chromium.launch();
 const errs = [];
 const report = [];
-for (const [fx, tag] of [['indexing.json', ''], ['indexing-rolling.json', '-rolling']])
+// fix wave 1: `-fixwave` (fixed on site, ask Google, partial sitemap, a newest run that could not read Search Console, an update rolling
+// out) at every size and theme; `-failed` (no run could read Search Console yet) at 1440 light and 375 dark
+for (const [fx, tag] of [['indexing.json', ''], ['indexing-rolling.json', '-rolling'], ['indexing-fixwave.json', '-fixwave'], ['indexing-failed.json', '-failed']])
   for (const [size, vp] of Object.entries({ desktop: { width: 1440, height: 900 }, phone: { width: 375, height: 812 } }))
     for (const theme of ['light', 'dark']) {
-      if (tag && size === 'phone' && theme === 'dark') continue;
+      if (tag === '-rolling' && size === 'phone' && theme === 'dark') continue;
+      if (tag === '-failed' && ((size === 'desktop' && theme === 'dark') || (size === 'phone' && theme === 'light'))) continue;
+      if (!existsSync(join(FX, fx))) continue;
       fixture = fx;
       const ctx = await browser.newContext({ viewport: vp, colorScheme: theme, reducedMotion: 'reduce' });
       await ctx.addInitScript((t) => { try { localStorage.setItem('theme', t); } catch {} }, theme);

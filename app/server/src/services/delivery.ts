@@ -298,7 +298,7 @@ export interface DeliveryInput {
 /** The whole report, from facts only, no database, no n8n. */
 export function deliveryReport(input: DeliveryInput): DeliveryReport {
   // X10: a schedule with no known start (no built-in `since`, no start read from the engine) is not measured at all, never "missed forever"
-  const automations = (input.automations ?? SCHEDULES).filter((a) => a.since || input.created?.[a.workflow]);
+  const automations = (input.automations ?? SCHEDULES).filter((a) => !a.sinceFromData || a.since || input.created?.[a.workflow]);
   const notes = [...(input.notes ?? [])];
   const weeks: DeliveryWeek[] = weeksBack(input.weeks, input.now).map((from) => {
     const to = new Date(from.getTime() + 7 * DAY_MS);
@@ -339,7 +339,7 @@ export async function loadDeliveryReport(now = new Date()): Promise<DeliveryRepo
   } catch {
     /* not known: the schedule is left out (no start) */
   }
-  const daily = SCHEDULES.filter((a) => a.schedule.kind !== 'cycle' && (a.since || created[a.workflow]));
+  const daily = SCHEDULES.filter((a) => a.schedule.kind !== 'cycle' && (!a.sinceFromData || a.since || created[a.workflow]));
   for (const wf of [...new Set(daily.map((a) => a.workflow))]) {
     try {
       const [ok, bad] = await Promise.all([executions(wf, 'success', 150), executions(wf, 'error', 50)]);

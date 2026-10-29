@@ -103,8 +103,29 @@ and how many there are. Every rule above holds:
 - 45 s cap (pages four at a time, the sitemap in parallel), one website at a time, paused websites skipped, two misses an hour apart reopen,
   skip / restore audited, a guide per cause (`index-*` in `shared/src/guides.ts`).
 - **One page, one ask**: a broken page that is already a `redirect:` step (from the backlink report) is left out of the `not_found` list.
-- **Budget**: each tick checks the other kinds first; indexing steps get what is left, at most a third of the 60 checks.
+- **Budget**: see fix wave 1 below (a third of each tick is reserved for indexing steps).
 - The fall-through that read any unknown key or kind as a redirect is gone: `siteTaskKindOfKey`, `siteTaskPayload`, `present`, `doneDetail`
   and `runSiteTaskCheck` are exhaustive switches (a kind added without its check does not compile; a stored row of an unknown kind reads
   nothing and records nothing).
+
+### Fix wave 1 (2026-10-29, `n8n/seo-agent/docs/indexing-2026-10-29/FIX_CONTRACT.md`), binding for this kind
+
+- **The exact positive signal per cause** (FIX_CONTRACT decision 3): noindex = a 200 HTML page with no noindex in the header or the page;
+  server error / login = 200; not found = 200, or a 301 / 308 to a page of the same website that answers 200; canonical = the page names
+  itself, or a COMPLETE sitemap read no longer lists it; robots = a real robots.txt (a text file, or a 404) that allows the pages. Anything
+  else from our side (a 401 / 403 / 429 / 503 wall, a challenge page, a redirect to another website, a robots.txt that is a web page) is
+  **"could not tell"**: nothing recorded daily, 409 `site_unsure` on a click.
+- **A sitemap's silence counts only from a complete read** (every listed sitemap an XML list, read in full, children followed up to 12, none
+  on another host, none compressed); otherwise "not listed" is "could not tell". One download per website per check round.
+- **Google's reading is dated by Google's inspection**, never by the engine's weekly re-fetch, so a step our check found fixed is not
+  reopened by a stale reading. Pages the engine's own fetch saw fixed after Google's reading (`fix_seen_at`) make a step **done, waiting for
+  Google**, never reopened by the older reading.
+- **No conclusion from a capped read**: each cause is read on its own (200 rows, sorted by impressions); a capped cause never reads as done.
+- **One page, one ask**: a cause whose pages are all `redirect:` steps has no indexing step at all (never a "done").
+- **`indexing:sitemap`**: Search Console lists no sitemap, or reports errors (`seo_index_runs.sitemaps_json`); only the daily index check can
+  tick it off (Search Console's list is Google's), so its "check now" answers 409 `engine_reads_it` and the daily check records nothing.
+- **Done says what we checked** (per cause), never "Google can now read and choose these pages".
+- **Budget**: a third of each tick's checks is reserved for indexing steps; the other kinds take the rest.
+- **Rollback**: before reverting the API, delete or skip the `site_tasks` rows with `kind = 'indexing'` (an older build reads them as
+  redirect steps).
 

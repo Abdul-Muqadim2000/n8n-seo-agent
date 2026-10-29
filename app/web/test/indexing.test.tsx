@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
-import { buildIndexingData, type IndexPageRow } from '@seo/shared';
+import { buildIndexingData, INDEX_CAUSE_INFO, type IndexPageRow } from '@seo/shared';
 import { GuideProvider } from '@/components/guide';
 import { TooltipProvider } from '@/components/ui/overlay';
 import { ThemeProvider } from '@/lib/theme';
@@ -40,10 +40,11 @@ const rows: Partial<IndexPageRow>[] = [
   { url: U('/later'), lane: 'existing', state: 'unknown' },
 ];
 const settings = { on: true, dailyCap: 300 };
+const INDEX_UNCLASSIFIED_LABEL = INDEX_CAUSE_INFO.unclassified.label;
 const data = (o: { rolling?: boolean } = {}) =>
   buildIndexingData({
     rows,
-    runs: [{ run_at: '2026-10-28T07:00:00Z', backlog_left: 1, inspected: 6 }],
+    runs: [{ run_at: '2026-10-28T07:00:00Z', backlog_left: 1, inspected: 6, known: 7, freeze: !!o.rolling }],
     events: [o.rolling ? { event_id: 'c1', kind: 'core', status: 'rolling_out', title: 'October 2026 core update', started_at: '2026-10-20' } : { event_id: 'c0', kind: 'core', status: 'complete', title: 'August 2026 core update', started_at: '2026-08-20', ended_at: '2026-09-05', url: 'https://status.search.google.com/x' }],
     impacts: [{ event_id: 'c0', event_title: 'August 2026 core update', compared_at: '2026-09-12', dropped: 1, stable: 3, gained: 1, pages_json: JSON.stringify([{ url: U('/old'), before_clicks: 10, after_clicks: 1, state: 'dropped' }]) }],
     settings,
@@ -54,8 +55,8 @@ describe('Indexing page', () => {
   it('with data: hero, lanes, a group with its three sentences and its step, drop-outs, updates, settings', () => {
     const html = wrap(<Indexing d={data()} {...props} member />);
     const t = text(html);
-    expect(t).toContain('Google has 1 of your 6 pages that should be in search');
-    expect(t).toContain('Existing pages checked: 5 of 6, about 1 day to check the rest');
+    expect(t).toContain('Google has 1 of the 5 pages we checked that should be in search (1 not checked yet)');
+    expect(t).toContain('Existing pages checked: 5 of 6, about 1 day to check the rest at 300 a day');
     for (const s of ['New pages', 'Existing pages', 'Your page tells Google to leave it out', 'What it means', 'What we do', 'What you do', 'Open the step', '/services', 'Dropped out of Google search', '/old', 'Google updates', 'August 2026 core update', 'lost ground', 'Pages checked with Google a day', '300']) expect(t).toContain(s);
     expect(t).toContain('Improve this page');
     expect(html).toContain('/o/org-1/sites/site-1/pipeline#site-tasks');
@@ -99,7 +100,62 @@ describe('index_coverage report', () => {
         }),
       ),
     );
-    for (const s of ['Google has 31 of the 40 pages', '4 pages need you', '1 dropped out', '/pricing', 'Your page tells Google to leave it out', 'October 2026 core update is rolling out', 'The report as text']) expect(t).toContain(s);
+    for (const s of ['Google has 31 of the 37 pages we checked that should be in search (3 not checked yet)', '4 pages need you', '1 dropped out', '/pricing', 'Your page tells Google to leave it out', 'October 2026 core update is rolling out', 'The report as text']) expect(t).toContain(s);
     expect(t).not.toContain('NaN');
+  });
+});
+
+// ---------------------------------------------------------------- fix wave 1 (REVIEW_APP.md)
+describe('Indexing page, fix wave 1', () => {
+  const run = { run_at: '2026-10-29T09:00:00Z', known: 3, inspected: 3 };
+  it('A3: pages that could not be checked, or were left out for a reason Google does not explain, are never under "In search"', () => {
+    const d = buildIndexingData({ rows: [{ url: U('/'), state: 'indexed', action: 'none' }, { url: U('/a'), state: 'error', cause: 'not_checked', action: 'none' }, { url: U('/b'), state: 'not_indexed', cause: 'unclassified', action: 'none' }], runs: [run], events: [], impacts: [], settings });
+    const t = text(wrap(<Indexing d={d} {...props} member />));
+    const i = t.indexOf('Could not be checked');
+    expect(i).toBeGreaterThan(-1);
+    expect(t.slice(i, i + 60)).not.toContain('In search');
+    expect(t).toContain('Could not check, we try again');
+    expect(t).toContain('Check in Search Console');
+  });
+  it('A4: a run that could not read Search Console shows its note, never "No page needs you"', () => {
+    const d = buildIndexingData({ rows: [], runs: [{ run_at: '2026-10-29T09:00:00Z', note: 'Search Console refused access for this property, so pages were not checked.' }], events: [], impacts: [], settings });
+    const t = text(wrap(<Indexing d={d} {...props} member />));
+    expect(t).toContain('refused access');
+    expect(t).not.toContain('No page needs you right now');
+    const withPages = buildIndexingData({ rows, runs: [{ run_at: '2026-10-29T09:00:00Z', note: 'Search Console refused access for this property, so pages were not checked.' }, { run_at: '2026-10-28T07:00:00Z', known: 7, inspected: 6 }], events: [], impacts: [], settings });
+    const t2 = text(wrap(<Indexing d={withPages} {...props} member />));
+    expect(t2).toContain('Our last check could not read Search Console');
+    expect(t2).toContain('The last check could not read Search Console, so this is the earlier reading.');
+  });
+  it('fix seen on the site, pages to ask Google about, and a sitemap read only in part', () => {
+    const d = buildIndexingData({
+      rows: [
+        { url: U('/fixed'), state: 'not_indexed', cause: 'noindex', action: 'wait', inspect_at: '2026-10-20T06:00:00Z', fix_seen_at: '2026-10-29T06:00:00Z', ask_google: true },
+        { url: U('/new'), lane: 'new', state: 'not_indexed', cause: 'wait_new', action: 'wait', ask_google: true },
+      ],
+      runs: [{ ...run, sitemaps_json: JSON.stringify({ submitted: 1, read: 3, capped: false, errors: [{ url: U('/s2.xml'), error: '500' }] }) }],
+      events: [],
+      impacts: [],
+      settings,
+    });
+    const t = text(wrap(<Indexing d={d} {...props} member />));
+    for (const s of ['Fixed on your site, waiting for Google', 'Ask Google to read these pages again', 'We never do it for you', '/new', 'We could not read your whole sitemap']) expect(t).toContain(s);
+  });
+  it('A12: the pages that lost ground after an update are listed (by the engine\'s segment)', () => {
+    const d = buildIndexingData({ rows, runs: [run], events: [], impacts: [{ event_id: 'c0', event_title: 'August 2026 core update', compared_at: '2026-09-12', dropped: 1, pages_json: JSON.stringify([{ url: U('/lost'), segment: 'dropped', state: 'indexed', before_clicks: 10, after_clicks: 1 }]) }], settings });
+    const t = text(wrap(<Indexing d={d} {...props} member />));
+    expect(t).toContain('/lost');
+    expect(t).toContain('10 clicks before, 1 after');
+  });
+});
+
+describe('index_coverage report, fix wave 1', () => {
+  it('A18: lists only what needs the client, every reason in words', () => {
+    const t = text(renderReport(report('index_coverage', { status: 'complete', summary: { known: 10, indexed: 5, not_indexed: 3, excluded: 2, unknown: 0, by_action: { leave_out: 2, retry: 1 }, by_cause: { low_value: 2, not_checked: 1, unclassified: 1, brand_new_code: 1 }, dropped: [], events: [], impact: {} }, cost: { usd: 0 } })));
+    expect(t).not.toContain('Left out on purpose');
+    expect(t).not.toContain('Could not be checked');
+    expect(t).not.toContain('brand new code');
+    expect(t).not.toContain('unclassified');
+    expect(t).toContain(INDEX_UNCLASSIFIED_LABEL);
   });
 });

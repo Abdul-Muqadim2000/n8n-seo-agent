@@ -425,7 +425,7 @@ export const features: Feature[] = [
       'A pre-release check your build can call: the same page checks run against a staging address or a list of URLs and answer pass or fail, so a release never takes a page out of Google',
       'Mark a fix done and that one issue is re-checked the next morning, not at the next monthly audit',
       'The fix pack comes with a guide for putting each file where it belongs: robots.txt, llms.txt, redirects, schema and the internal links',
-      'Google\'s own view of every key page: indexed or not, the canonical Google chose, its last crawl, mobile usability and rich results',
+      'Google\'s own view of every key page: indexed or not, the canonical Google chose, its last crawl and rich results',
       'What crawlers see before JavaScript runs: your key pages read twice, so anything only a browser can see is named',
       'The same before-and-after comparison runs across the crawl, on up to 25 pages, not only on your key pages',
       'Hreflang checks for the language versions of your pages',
@@ -482,7 +482,7 @@ export const features: Feature[] = [
       },
       {
         q: 'How do you know whether Google has indexed a page?',
-        a: 'Alaventra asks Search Console\'s URL Inspection about your key pages: whether the page is in the index and why not, which canonical Google chose against the one your page names, when Google last crawled it, mobile usability and the rich results it detected. Google allows 2,000 of these a day per property, so the pages rotate with the oldest inspection first, and whatever a run did not reach is shown as not checked rather than assumed fine. For every page of your site, checked every day and grouped by the reason Google left it out, see Index coverage.',
+        a: 'Alaventra asks Search Console\'s URL Inspection about your key pages: whether the page is in the index and why not, which canonical Google chose against the one your page names, when Google last crawled it and the rich results it detected. Google allows 2,000 of these a day per property, so the pages rotate with the oldest inspection first, and whatever a run did not reach is shown as not checked rather than assumed fine. For every page of your site, grouped by the reason Google left it out, see Index coverage.',
       },
       {
         q: 'How is the fix list ordered?',
@@ -505,15 +505,16 @@ export const features: Feature[] = [
     slug: 'index-coverage',
     name: 'Index coverage',
     shortName: 'Indexing',
-    tagline: 'Which of your pages Google left out of its index, why, and what to do. Checked every day.',
+    tagline: 'Which of your pages Google left out of its index, why, and what to do. Looked at every day, each page on its own schedule.',
     summary:
-      'A page Google has left out of its index cannot rank. Every day Alaventra checks which of your pages Google left out, your older pages as well as the new ones we write, and groups them by the reason. Each group says what helps: a step on your website that we then check for you, internal links to add, a page worth improving with your approval, or nothing, because some pages are fine to leave out. It helps Google find and choose your pages, and it is free to run on your connected Search Console.',
+      'A page Google has left out of its index cannot rank. Every day Alaventra looks at which of your pages Google left out, your older pages as well as the new ones we write, and groups them by the reason. Each group says what helps: a step on your website that we then check for you, internal links to add, a page worth improving with your approval, or nothing, because some pages are fine to leave out. It helps Google find and choose your pages, and it is free to run on your connected Search Console.',
     icon: FileSearch,
     benefits: [
       'Every day, which of your pages Google has left out of its index: the pages you already had as well as the new ones we write for you',
       'Why each page was left out, in plain words, with the pages grouped by the reason so one fix covers the whole group',
       'What to do for each group: steps on your own website that we then check for you, internal links to add from pages Google already shows, pages worth improving one at a time with your approval, and pages that are fine to leave out',
-      'You hear when a page drops out of Google\'s index, the day we notice it',
+      'You hear when a page drops out of Google\'s index, the day our check notices it (each page is read again on its own schedule)',
+      'A page you fixed shows as fixed while Google catches up, and a short list of pages worth asking Google to read again in Search Console, which you do yourself',
       'Google\'s announced ranking updates followed for you: while one rolls out we hold back suggestions to change pages, and after it finishes you see which of your pages lost, held or gained, so you change pages only where there is evidence',
       'New pages and existing pages on their own tabs, each page with its last check and its history, and how long the rest of your site will take to check',
       'A page we could not check is shown as not checked, never as fine and never as left out',
@@ -521,7 +522,7 @@ export const features: Feature[] = [
     ],
     steps: [
       { title: 'Connect Search Console', body: 'Index coverage reads the Search Console you already connected. Nothing to install, and it uses no credits.' },
-      { title: 'Checked every day', body: 'Your pages are checked with Google a set at a time, new pages first, and every page keeps its history, so a page that drops out is noticed.' },
+      { title: 'Checked on a schedule', body: 'Your pages are checked with Google a set at a time, new pages first. Each page is read again on its own schedule and keeps its history, so a page that drops out is noticed.' },
       { title: 'Grouped by reason', body: 'The pages Google left out are grouped by the reason, each group with what it means, what we do and what you do.' },
       { title: 'Act where there is evidence', body: 'Make the steps on your website and we check them. Approve improvements one page at a time. After a Google update, review only the pages that lost.' },
     ],
@@ -1068,7 +1069,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 81, label: 'guides, one for each thing we ask of you' },
+      { value: 84, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],

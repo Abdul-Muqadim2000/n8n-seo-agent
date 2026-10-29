@@ -269,6 +269,7 @@ const INDEXING_DONE: Record<IndexSiteFixCause, string> = {
   soft_404: 'These pages have real content now, or answer 404 as a page that is gone should.',
   canonical_elsewhere: 'Your sitemap and these pages agree on the main version.',
   redirect: 'Your sitemap no longer lists addresses that redirect.',
+  redirect_error: 'Each address now ends on a page of yours that opens.',
   not_in_sitemap: 'Your sitemap lists these pages.',
   indexed_not_in_sitemap: 'Your sitemap lists these pages.',
 };

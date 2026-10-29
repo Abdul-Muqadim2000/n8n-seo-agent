@@ -140,7 +140,7 @@ async function readIndexing(domain: string): Promise<SiteTaskInputs['indexing']>
   const bySite = { columnName: 'site_id', condition: 'eq' as const, value: sid };
   const runs = mine(await n8nRows<IndexRunRow>('indexRuns', { filters: [bySite], sortBy: 'run_at:desc', max: 5 }));
   // the newest run that read the website (a run that could not read Search Console says nothing about any page)
-  const good = runs.map(indexRunOf).find((r) => r.runAt && !r.failed);
+  const good = runs.map(indexRunOf).find((r) => r.runAt && !r.failed && !r.reservation);
   if (!good) return null;
   const counted = INDEX_SITE_FIX_CAUSES.filter((c) => (good.byCause[c] ?? 0) > 0);
   // a run with no cause counts at all (an older row) is not trusted to say "none": every cause is read then

@@ -225,3 +225,37 @@ describe('A24 / A26 / X10', () => {
     expect(INDEX_COVERAGE_SCHEDULE.since).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------- the engine fix wave's contract (ENGINE_BUILD.md "Fix wave 1")
+describe('engine fix wave contract', () => {
+  it('redirect_error is a site fix with its step, its guide and its own check', () => {
+    expect(INDEX_CAUSE_INFO.redirect_error).toMatchObject({ action: 'site_fix', guide: 'index-fix-redirect-error' });
+    expect(guideById('index-fix-redirect-error')).toBeTruthy();
+    expect(guideForRecommendation('ix:site_fix:redirect_error')).toBe('index-fix-redirect-error');
+    expect(guideForRecommendation('ix:site_fix:redirect')).toBe('index-sitemap-redirects');
+    expect(indexingPageFixed('redirect_error', f({ redirectStatus: 301, finalUrl: U('/new') }), null).fixed).toBe(true);
+    expect(indexingPageFixed('redirect_error', f({ redirectStatus: 301, finalUrl: 'https://elsewhere.com/' }), null).fixed).toBe(false);
+    const t = deriveSiteTasks({ domain: D, indexnow: null, access: null, reclaim: null, indexing: { runAt: '2026-10-29T09:00:00Z', causes: indexingCauseReadings([page('/loop', { cause: 'redirect_error', action: 'site_fix', inspect_at: '2026-10-29T09:00:00Z' })]) } }, []);
+    expect(t[0]).toMatchObject({ key: 'indexing:redirect_error', title: 'Fix redirects Google cannot follow', severity: 'warning' });
+  });
+  it('a reservation row is never the latest reading; a run that did not check the site is not "checked"', () => {
+    const good = { run_at: '2026-10-28T09:00:00Z', known: 2, indexed: 1, inspected: 2 };
+    const reservation = { run_at: '2026-10-29T09:00:00Z', known: 2, indexed: 1, inspected: 5, note: "Today's check started at 09:00 UTC and had not finished when this row was written.", sitemaps_json: JSON.stringify({ reservation: true, complete: true }) };
+    const d = buildIndexingData({ rows: [page('/', { state: 'indexed', action: 'none' })], runs: [reservation, good], events: [], impacts: [], settings: S });
+    expect(d.checkedAt).toBe(good.run_at);
+    expect(d.runs.map((r) => r.runAt)).toEqual([good.run_at]);
+    expect(d.notice?.title).toBe('The latest check had not finished');
+    const skipped = { run_at: '2026-10-29T09:00:00Z', known: 2, indexed: 1, inspected: 0, note: 'Search Console refused access for this property, so pages were not checked.', sitemaps_json: JSON.stringify({ checked: false, complete: null }) };
+    const d2 = buildIndexingData({ rows: [page('/', { state: 'indexed', action: 'none' })], runs: [skipped, good], events: [], impacts: [], settings: S });
+    expect(d2.checkedAt).toBe(good.run_at);
+    expect(d2.notice?.failed).toBe(true);
+    expect(indexingSitemapReading([reservation])).toBeNull();
+  });
+  it('sitemaps_json `complete` decides the partial flag; null positions stay "no data"', () => {
+    const run = (sm: object) => buildIndexingData({ rows: [page('/a', { cause: 'noindex', action: 'site_fix' })], runs: [{ run_at: '2026-10-29T09:00:00Z', known: 1, inspected: 1, sitemaps_json: JSON.stringify(sm) }], events: [], impacts: [], settings: S }).sitemapPartial;
+    expect(run({ complete: false, errors: [] })).toBe(true);
+    expect(run({ complete: true, capped: true })).toBe(false);
+    const i = updateImpactOf({ event_id: 'e', pages_json: JSON.stringify([{ url: U('/a'), segment: 'stable', before_pos: null, after_pos: 0 }]) });
+    expect([i.rows[0].beforePosition, i.rows[0].afterPosition]).toEqual([null, null]);
+  });
+});

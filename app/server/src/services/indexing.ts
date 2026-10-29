@@ -58,7 +58,7 @@ export async function indexPageRows(domain: string, extra: F[] = [], max = INDEX
  * page not in search (capped), and the in-search pages missing from the sitemap. Without such a run the whole table is read as before.
  */
 async function pageView(domain: string, runs: IndexRunRow[]): Promise<{ rows: IndexPageRow[]; capped: boolean; indexedCounts?: { all: number; newLane: number } }> {
-  const good = runs.map(indexRunOf).sort((a, b) => (b.runAt > a.runAt ? 1 : -1)).find((r) => r.runAt && !r.failed);
+  const good = runs.map(indexRunOf).sort((a, b) => (b.runAt > a.runAt ? 1 : -1)).find((r) => r.runAt && !r.failed && !r.reservation);
   if (!good) {
     const all = await indexPageRows(domain);
     return { rows: all, capped: all.length >= INDEX_PAGES_MAX };
@@ -164,7 +164,8 @@ async function readForRecs(d: string): Promise<IndexingForRecs | null> {
     indexPageRows(d, [{ columnName: 'action', condition: 'eq', value: 'quality' }], 50).catch(() => [] as IndexPageRow[]),
     indexPageRows(d, [{ columnName: 'ask_google', condition: 'eq', value: true }], 10).catch(() => [] as IndexPageRow[]),
   ]);
-  const all = runs.map(indexRunOf).filter((r) => r.runAt).sort((a, b) => (b.runAt > a.runAt ? 1 : -1));
+  // a reservation row (a run that had not finished, or crashed) is never the latest reading
+  const all = runs.map(indexRunOf).filter((r) => r.runAt && !r.reservation).sort((a, b) => (b.runAt > a.runAt ? 1 : -1));
   // A11: the freeze is the engine's newest run's flag; the counts are the newest run that read the website (A4)
   const latest = all[0];
   const run = all.find((r) => !r.failed);

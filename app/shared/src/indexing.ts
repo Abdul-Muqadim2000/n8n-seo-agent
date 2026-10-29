@@ -35,6 +35,8 @@ export const INDEX_CAUSES = [
   'server_error',
   'access_denied',
   'redirect',
+  // engine fix wave 1 (E9): Google could not follow the redirect (a loop, a chain too long, a redirect to a bad address)
+  'redirect_error',
   'low_value',
   'not_checked',
   // engine addition (ENGINE_BUILD §7.1): Google gave a coverage reason the engine does not recognise
@@ -52,6 +54,7 @@ export const INDEX_SITE_FIX_CAUSES = [
   'soft_404',
   'canonical_elsewhere',
   'redirect',
+  'redirect_error',
   'not_in_sitemap',
   'indexed_not_in_sitemap',
 ] as const satisfies readonly IndexCause[];
@@ -59,7 +62,7 @@ export type IndexSiteFixCause = (typeof INDEX_SITE_FIX_CAUSES)[number];
 export const isSiteFixCause = (c: string): c is IndexSiteFixCause => (INDEX_SITE_FIX_CAUSES as readonly string[]).includes(c);
 
 /** Causes that stop Google reading pages at all: their step is shown as important. */
-export const INDEX_BLOCKING_CAUSES: ReadonlySet<IndexCause> = new Set(['noindex', 'robots_blocked', 'server_error', 'access_denied']);
+export const INDEX_BLOCKING_CAUSES: ReadonlySet<IndexCause> = new Set(['noindex', 'robots_blocked', 'server_error', 'access_denied', 'redirect_error']);
 
 export interface IndexCauseInfo {
   /** short name of the problem, sentence case */
@@ -239,6 +242,15 @@ export const INDEX_CAUSE_INFO: Record<IndexCause, IndexCauseInfo> = {
     guide: 'index-sitemap-redirects',
     taskTitle: 'Replace redirecting addresses in your sitemap',
   },
+  redirect_error: {
+    label: 'Google could not follow the redirect',
+    meaning: 'These addresses redirect in a way Google cannot follow: a loop, a chain of too many steps, or a redirect to an address that does not work. Google gives up and reads nothing.',
+    weDo: 'We open the addresses every day and tick this off when each one ends on a page of yours that opens.',
+    youDo: 'Make each redirect go straight to a working page, in one step. If the page is gone, let the address answer "not found" instead.',
+    action: 'site_fix',
+    guide: 'index-fix-redirect-error',
+    taskTitle: 'Fix redirects Google cannot follow',
+  },
   low_value: {
     label: 'Left out on purpose (archives, search and account pages)',
     meaning: 'Pages like tag archives, search results, carts and logins are normally kept out of search. Nothing is wrong.',
@@ -416,6 +428,8 @@ export interface IndexRun {
   accessLost: boolean;
   /** contract change 2: what Search Console lists as submitted and whether our own read of the sitemap tree was complete (null: not sent) */
   sitemaps: IndexRunSitemaps | null;
+  /** engine fix wave 1: the row a run writes BEFORE inspecting; the run's final row replaces it, a crashed run leaves it. Never a reading. */
+  reservation: boolean;
 }
 
 export interface IndexRunSitemaps {
@@ -427,6 +441,9 @@ export interface IndexRunSitemaps {
   read: number;
   /** the tree was not read completely (a sitemap failed, or a cap was hit): no "add it to / remove it from the sitemap" conclusion */
   partial: boolean;
+  /** engine fix wave 1: false = the website was not checked in this run (its figures are carried from the last check); null: not sent */
+  checked: boolean | null;
+  reservation: boolean;
 }
 
 export interface GoogleEvent {
@@ -602,6 +619,7 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
 }
 
 export function indexRunOf(r: Partial<IndexRunRow>): IndexRun {
+  const sm = runSitemapsOf(r.sitemaps_json);
   const dropped = json<P[]>(r.dropped_json, []);
   const counts = (v: unknown) => Object.fromEntries(Object.entries(json<P>(v, {})).map(([k, x]) => [k, n(x)]).filter(([, x]) => (x as number) > 0));
   return {
@@ -625,10 +643,12 @@ export function indexRunOf(r: Partial<IndexRunRow>): IndexRun {
     freeze: b(r.freeze),
     freezeReason: s(r.freeze_reason),
     note: s(r.note).slice(0, 1500),
-    // the engine writes a run row for a website it could not check at all: no page, no inspection, and a note that says why
-    failed: n(r.known) === 0 && n(r.inspected) === 0 && n(r.reused) === 0 && !!s(r.note).trim(),
+    // the engine writes a run row for a website it could not check at all: no page, no inspection, and a note that says why (fix wave 1:
+    // or `checked: false`, its figures carried from the last check)
+    failed: sm?.checked === false || (n(r.known) === 0 && n(r.inspected) === 0 && n(r.reused) === 0 && !!s(r.note).trim()),
     accessLost: /refused access|no access|not part of this property|permission/i.test(s(r.note)),
-    sitemaps: runSitemapsOf(r.sitemaps_json),
+    sitemaps: sm,
+    reservation: !!sm?.reservation,
   };
 }
 
@@ -640,7 +660,7 @@ function runSitemapsOf(v: unknown): IndexRunSitemaps | null {
   const errors = Array.isArray(x.errors) ? x.errors.length : n(x.errors);
   // an explicit flag from a newer engine wins; otherwise a failed sitemap or a cap means the tree was read only in part
   const partial = x.complete === false || x.partial === true ? true : x.complete === true ? false : b(x.capped) || errors > 0;
-  return { submitted: num('submitted'), submittedErrors: num('submitted_errors'), read: n(x.read), partial };
+  return { submitted: num('submitted'), submittedErrors: num('submitted_errors'), read: n(x.read), partial, checked: x.checked === true ? true : x.checked === false ? false : null, reservation: b(x.reservation) };
 }
 
 /** The engine's sentence about a run that failed, in words a client can act on (an internal error message is never shown). */
@@ -738,7 +758,10 @@ export function buildIndexingData(input: {
   indexedCounts?: { all: number; newLane: number };
 }): IndexingData {
   const pages = input.rows.map(indexPageOf).filter((p) => p.url);
-  const runs = [...input.runs].map(indexRunOf).filter((r) => r.runAt).sort((a, b) => (b.runAt > a.runAt ? 1 : -1)).slice(0, 12);
+  const allRuns = [...input.runs].map(indexRunOf).filter((r) => r.runAt).sort((a, b) => (b.runAt > a.runAt ? 1 : -1));
+  // engine fix wave 1: a reservation row is a run that had not finished (or crashed): never a reading, never the latest figures
+  const unfinished = allRuns[0]?.reservation ? allRuns[0] : null;
+  const runs = allRuns.filter((r) => !r.reservation).slice(0, 12);
   const events = [...input.events].map(googleEventOf).filter((e) => e.id).sort((a, b) => ((b.startedAt || '') > (a.startedAt || '') ? 1 : -1)).slice(0, 12);
   const impacts = [...input.impacts].map(updateImpactOf).filter((i) => i.eventId).sort((a, b) => (b.comparedAt > a.comparedAt ? 1 : -1)).slice(0, 3);
   const rolling = rollingOutEvent(events);
@@ -813,10 +836,12 @@ export function buildIndexingData(input: {
   // FIX_CONTRACT (X8): never a page left out on purpose, never a rewrite while an update rolls out
   const askGoogle = pages.filter((p) => p.askGoogle && p.action !== 'leave_out' && !(freeze.on && p.action === 'quality')).sort(byImportance).slice(0, 5);
   const checkedAt = good?.runAt || pages.map((p) => p.checkedAt).filter(Boolean).sort().pop() || null;
-  const notice: IndexingData['notice'] = latest?.failed
+  const notice: IndexingData['notice'] = unfinished && !latest?.failed
+    ? { tone: 'info', title: 'The latest check had not finished', text: `The check that started ${unfinished.runAt.slice(0, 16).replace('T', ' ')} UTC had not finished when this page was read, so the figures are from the check before.`, failed: false, accessLost: false, at: unfinished.runAt }
+    : latest?.failed
     ? {
         tone: 'warning',
-        title: latest.accessLost ? 'Our last check could not read Search Console' : 'Our last check could not read this website',
+        title: latest.accessLost ? 'Our last check could not read Search Console' : latest.sitemaps?.checked === false ? 'The last check did not read this website' : 'Our last check could not read this website',
         text: `${runNoticeText(latest)}${good ? ` The figures below are from the check of ${good.runAt.slice(0, 10)}.` : ''}`,
         failed: true,
         accessLost: latest.accessLost,
@@ -1110,6 +1135,13 @@ export function indexingPageFixed(cause: IndexSiteFixCause, f: IndexingFetch, in
       if (inSitemap === true) return { fixed: true, why: `${p} is in your sitemap.` };
       if (inSitemap === null) return unknown(`${p} was not in the part of your sitemap we could read; ${notListed}.`);
       return { fixed: false, why: `${p} is not in your sitemap yet.` };
+    case 'redirect_error':
+      // the engine's rule (`_index_kit.js`): the address ends on a page that opens; our fetcher follows at most 4 redirects, so a loop or a
+      // long chain reaches the server as "no answer" (could not tell, never a fix)
+      if (wall(f)) return walled();
+      if (offSite) return { fixed: false, why: `${p} redirects to another website (${hostOfUrl(f.finalUrl)}). Point it at a page of your own website.` };
+      if (realPage(f)) return { fixed: true, why: f.redirectStatus ? `${p} now redirects to ${indexPath(f.finalUrl)}, which opens.` : `${p} opens directly.` };
+      return { fixed: false, why: `${p} ends on an answer ${status}.` };
     case 'robots_blocked':
       // robots.txt is read once for every page by the server (it is not a property of one page's answer)
       return { fixed: true, why: `${p} opens.` };
@@ -1131,7 +1163,7 @@ export function robotsFileState(status: number, text: string, contentType = ''):
 /** Whether a cause's check needs the website's sitemap (read once per check). */
 export const INDEXING_NEEDS_SITEMAP: ReadonlySet<IndexSiteFixCause> = new Set(['not_in_sitemap', 'indexed_not_in_sitemap', 'canonical_elsewhere', 'redirect']);
 /** Whether a cause's check opens the pages themselves (the sitemap causes only read the sitemap). */
-export const INDEXING_FETCHES_PAGES: ReadonlySet<IndexSiteFixCause> = new Set(['noindex', 'server_error', 'access_denied', 'not_found', 'soft_404', 'redirect', 'canonical_elsewhere']);
+export const INDEXING_FETCHES_PAGES: ReadonlySet<IndexSiteFixCause> = new Set(['noindex', 'server_error', 'access_denied', 'not_found', 'soft_404', 'redirect', 'redirect_error', 'canonical_elsewhere']);
 
 // ---------------------------------------------------------------- recommendations
 
@@ -1172,8 +1204,8 @@ export interface IndexingSitemapReading {
 }
 /** The sitemap reading of the newest run that read Search Console's list (null: no such run, or the list could not be read). */
 export function indexingSitemapReading(runs: readonly Partial<IndexRunRow>[]): IndexingSitemapReading | null {
-  const r = [...runs].map(indexRunOf).filter((x) => x.runAt && !x.failed && x.sitemaps && x.sitemaps.submitted != null).sort((a, b) => (b.runAt > a.runAt ? 1 : -1))[0];
-  return r && r.sitemaps ? { at: r.runAt, submitted: r.sitemaps.submitted ?? 0, errors: r.sitemaps.submittedErrors ?? 0 } : null;
+  const r = [...runs].map(indexRunOf).filter((x) => x.runAt && !x.failed && !x.reservation && x.sitemaps && x.sitemaps.submitted != null).sort((a, b) => (b.runAt > a.runAt ? 1 : -1))[0];
+  return r && r.sitemaps && !r.reservation ? { at: r.runAt, submitted: r.sitemaps.submitted ?? 0, errors: r.sitemaps.submittedErrors ?? 0 } : null;
 }
 
 /**
@@ -1190,6 +1222,7 @@ export const INDEX_CAUSE_FINDING_RULES: Record<IndexSiteFixCause, readonly RegEx
   soft_404: [/soft[ -]?404/i],
   canonical_elsewhere: [/canonical/i, /sitemap/i],
   redirect: [/redirect/i, /sitemap/i],
+  redirect_error: [/redirect (loop|chain)|too many redirects/i],
   not_in_sitemap: [/(not|missing) (in|from) (the |your )?(xml )?sitemap|absent from (the |your )?sitemap/i],
   indexed_not_in_sitemap: [/(not|missing) (in|from) (the |your )?(xml )?sitemap|absent from (the |your )?sitemap/i],
 };

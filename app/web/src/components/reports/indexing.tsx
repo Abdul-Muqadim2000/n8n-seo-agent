@@ -1,7 +1,7 @@
 // Index coverage (2026-10-29, n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md §5): the daily index check's report. Weekly on Mondays,
 // and the same day when a page drops out of Google search or a Google update starts or ends. Free (Google data only).
 import { ArrowRight, CalendarClock, FileSearch, ListChecks, TrendingDown } from 'lucide-react';
-import { INDEX_ACTION_INFO, INDEX_CAUSE_INFO, INDEX_CAUSES, indexPath, type IndexAction, type IndexCause, type ReportDetail } from '@seo/shared';
+import { INDEX_ACTION_INFO, INDEX_ACTIONS_NEED_YOU, INDEX_CAUSE_INFO, INDEX_CAUSES, indexInSearchLine, indexPath, type IndexAction, type IndexCause, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -11,6 +11,8 @@ import { ReportHero, StatusMark } from './visuals';
 
 const isCause = (c: string): c is IndexCause => (INDEX_CAUSES as readonly string[]).includes(c);
 const fmt = (v: number | null) => (v == null ? '-' : v.toLocaleString('en-US'));
+/** A18: a cause in words; a code this build does not know is never printed raw */
+const causeLabel = (c: string) => (isCause(c) ? INDEX_CAUSE_INFO[c].label : 'A reason we do not recognise yet');
 
 export function IndexCoverageReport({ report }: { report: ReportDetail }) {
   const { org } = useOrgCtx();
@@ -20,25 +22,30 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
   const indexed = num(m.indexed) ?? 0;
   const byAction = obj(m.by_action);
   const byCause = obj(m.by_cause);
-  const needYou = (['site_fix', 'quality', 'duplicate', 'links'] as const).reduce((s, a) => s + (num(byAction[a]) ?? 0), 0);
+  const needYou = (['site_fix', 'quality', 'duplicate', 'links'] as const).reduce((s, a) => s + (num(byAction[a]) ?? 0), 0) + (num(byCause.unclassified) ?? 0);
+  // A9: the same headline as the Indexing page, from the pages Google gave a reading of (not every page we know)
+  const checked = indexed + (num(m.not_indexed) ?? 0) + (num(m.excluded) ?? 0);
+  const leftOut = Math.min(num(byAction.leave_out) ?? 0, Math.max(0, checked - indexed));
+  const notChecked = num(m.unknown) ?? num(m.backlog_left) ?? 0;
   const dropped = objs(m.dropped);
   const events = objs(m.events);
   const rolling = events.find((e) => str(e.status) === 'rolling_out');
   const impact = obj(m.impact);
+  // A18: only the reasons that ask something of the client (never pages left out on purpose, waiting, or not checked)
   const causes = Object.entries(byCause)
     .map(([c, v]) => ({ cause: c, count: num(v) ?? 0 }))
-    .filter((x) => x.count > 0 && x.cause !== 'indexed')
+    .filter((x) => x.count > 0 && (!isCause(x.cause) || INDEX_ACTIONS_NEED_YOU.has(INDEX_CAUSE_INFO[x.cause].action)))
     .sort((a, b) => b.count - a.count);
   const siteLink = report.siteId ? `/o/${org.id}/sites/${report.siteId}/indexing` : null;
   return (
     <Stagger className="space-y-5">
       <ReportHero
         report={report}
-        title={known ? `Google has ${fmt(indexed)} of the ${fmt(known)} pages we know on ${str(p.domain) || 'your website'}` : 'Your index check has started'}
+        title={known ? indexInSearchLine({ indexed, shouldBe: checked - leftOut, known, notChecked }, str(p.domain) || 'your website') : 'Your index check has started'}
         description={
           needYou
             ? `${fmt(needYou)} page${needYou === 1 ? '' : 's'} need you. The Indexing page groups them by reason, with what to do for each.`
-            : 'Nothing needs you this time. We keep checking every day.'
+            : 'Nothing needs you this time. We check again every day which pages Google left out.'
         }
         aside={
           dropped.length ? (
@@ -72,7 +79,7 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
                 key={str(d.url)}
                 tone="warning"
                 title={indexPath(str(d.url))}
-                description={isCause(str(d.cause)) ? INDEX_CAUSE_INFO[str(d.cause) as IndexCause].label : 'Reason not known yet'}
+                description={str(d.cause) ? causeLabel(str(d.cause)) : 'Reason not known yet'}
                 meta={str(d.at) ? <span className="text-xs text-ink-3">{str(d.at).slice(0, 10)}</span> : undefined}
               />
             ))}
@@ -89,7 +96,7 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
           <ul className="mt-4 space-y-1.5 text-sm text-ink-2">
             {causes.slice(0, 12).map((c) => (
               <li key={c.cause} className="flex justify-between gap-3">
-                <span>{isCause(c.cause) ? INDEX_CAUSE_INFO[c.cause].label : c.cause.replace(/_/g, ' ')}</span>
+                <span>{causeLabel(c.cause)}</span>
                 <span className="tabular text-ink">{fmt(c.count)}</span>
               </li>
             ))}

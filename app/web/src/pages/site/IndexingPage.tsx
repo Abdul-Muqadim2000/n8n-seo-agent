@@ -3,11 +3,12 @@
 // pages that dropped out; Google's own updates and what they did to this website. Read only: the engine's daily index check writes the
 // data; the client's fixes are "Steps on your website" (checked by us) and a rewrite is always the client's click.
 import { useState } from 'react';
-import { ArrowRight, CalendarClock, CheckCircle2, CircleDashed, FileSearch, History, Link2, ListChecks, Settings2, Sparkles, TrendingDown, TriangleAlert } from 'lucide-react';
+import { ArrowRight, CalendarClock, CheckCircle2, CircleDashed, FileSearch, History, Link2, ListChecks, MousePointerClick, SearchCheck, Settings2, Sparkles, TrendingDown, TriangleAlert } from 'lucide-react';
 import {
   INDEX_ACTION_INFO,
   INDEX_GROUP_PREVIEW,
   improveKeywordOf,
+  indexInSearchLine,
   type GoogleEvent,
   type IndexGroup,
   type IndexingData,
@@ -76,8 +77,22 @@ export function Indexing({ d, orgId, siteId, domain, member }: Props) {
         <EmptyState
           icon={<FileSearch />}
           title="Your first index check is on its way"
-          description={`Every day we ask Google about the pages of ${domain}, new pages first, within Google's daily limit. The first results appear after the next daily check. It needs Search Console connected.`}
+          description={`Every morning we ask Google about the pages of ${domain}, new pages first, within Google's daily limit. The first results appear after the next daily check. It needs Search Console connected; if nothing shows after two days, check the connection.`}
           action={<GuideButton id="search-console-access" vars={{ domain }} label="Connect Search Console" />}
+        />
+        <SettingsCard d={d} orgId={orgId} siteId={siteId} />
+      </Stagger>
+    );
+  }
+  // A4: every check so far could not read Search Console: say so, never "No page needs you"
+  if (d.status === 'failed') {
+    return (
+      <Stagger className="space-y-6">
+        <EmptyState
+          icon={<TriangleAlert />}
+          title={d.notice?.title ?? 'Our last check could not read this website'}
+          description={`${d.notice?.text ?? ''} No page of ${domain} has been checked yet.`}
+          action={<GuideButton id="search-console-access" vars={{ domain }} label="Check the Search Console connection" />}
         />
         <SettingsCard d={d} orgId={orgId} siteId={siteId} />
       </Stagger>
@@ -90,9 +105,12 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
   const t = d.totals;
   const firstFix = d.groups.find((g) => g.action === 'site_fix');
   const [lane, setLane] = useState<IndexLane>(d.lanes.new.needYou > 0 && d.lanes.existing.needYou === 0 ? 'new' : 'existing');
-  const title = t.shouldBe ? `Google has ${n(t.indexed)} of your ${pages(t.shouldBe)} that should be in search` : `We know ${pages(t.known)} of ${domain}`;
+  // A9: the same sentence as the report, from the pages Google gave a reading of
+  const title = indexInSearchLine({ indexed: t.indexed, shouldBe: t.shouldBe, known: t.known, notChecked: t.unknown + t.errors }, domain);
   const existing = d.lanes.existing;
-  const rest = t.daysToFinish ? `, about ${t.daysToFinish} day${t.daysToFinish === 1 ? '' : 's'} to check the rest` : '';
+  const rest = t.daysToFinish ? `, about ${t.daysToFinish} day${t.daysToFinish === 1 ? '' : 's'} to check the rest at ${n(d.settings.dailyCap)} a day` : '';
+  // A4: a check that could not read Search Console never reads as "nothing needs you"
+  const needLine = d.notice?.failed ? 'The last check could not read Search Console, so this is the earlier reading.' : t.needYou ? `${pages(t.needYou)} need you.` : 'No page needs you right now.';
   return (
     <Stagger className="space-y-6">
       {!d.settings.on && (
@@ -103,14 +121,25 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
           </ButtonLink>
         </Callout>
       )}
-      {d.rollingOut && <UpdateBanner e={d.rollingOut} />}
+      {d.notice && (
+        <Callout tone={d.notice.tone} title={d.notice.title}>
+          {d.notice.text}{' '}
+          {d.notice.accessLost && <GuideButton id="search-console-access" vars={{ domain }} label="Check the Search Console connection" />}
+        </Callout>
+      )}
+      {d.sitemapPartial && (
+        <Callout tone="info" title="We could not read your whole sitemap">
+          Part of your sitemap did not open for us, so nothing is ticked off today because a page is or is not listed in it. The other checks go on as usual.
+        </Callout>
+      )}
+      {d.rollingOut && <UpdateBanner e={d.rollingOut} frozen={d.freeze.on} />}
       {d.capped && <Callout tone="info">Your website has more pages than we show at once. The figures cover the first {n(d.pagesRead)}; the daily check covers every page.</Callout>}
 
       <SummaryHero
         tone="blue"
         eyebrow={<HeroEyebrow tag="Index coverage">{d.checkedAt ? `Checked ${fmtDay(d.checkedAt)}` : 'Not checked yet'}</HeroEyebrow>}
         title={title}
-        description={`${t.needYou ? `${pages(t.needYou)} need you.` : 'No page needs you right now.'} Existing pages checked: ${n(existing.checked)} of ${n(existing.known)}${rest}.`}
+        description={`${needLine} Existing pages checked: ${n(existing.checked)} of ${n(existing.known)}${rest}.`}
         aside={
           firstFix ? (
             <HeroNextStep title={firstFix.label} actions={<HeroLink to={`${paths.site(orgId, siteId, 'pipeline')}#site-tasks`}>Steps on your website</HeroLink>} />
@@ -147,6 +176,8 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
         ))}
       </Tabs>
 
+      {d.askGoogle.length > 0 && <AskGooglePanel items={d.askGoogle} domain={domain} />}
+
       {d.dropped.length > 0 && (
         <Panel icon={<TrendingDown />} iconTone="warning" title="Dropped out of Google search" description={`${pages(d.dropped.length)} that were in search before`} flush>
           <ul className="divide-y divide-line border-t border-line">
@@ -163,11 +194,39 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
   );
 }
 
-function UpdateBanner({ e }: { e: GoogleEvent }) {
+function UpdateBanner({ e, frozen }: { e: GoogleEvent; frozen: boolean }) {
   return (
     <Callout tone="info" title={`${e.title} is rolling out`}>
-      Google is changing how it ranks pages{e.startedAt ? ` (since ${fmtDay(e.startedAt)})` : ''}. Pages move around while it rolls out, so we hold back rewrite suggestions until it is over. We then compare your pages before and after.
+      Google is changing how it ranks pages{e.startedAt ? ` (since ${fmtDay(e.startedAt)})` : ''}. Pages move around while it rolls out
+      {frozen ? ', so we hold back rewrite suggestions until it is over' : ''}. We then compare your pages before and after.
     </Callout>
+  );
+}
+
+/** FIX_CONTRACT (X8): the few pages where asking Google to read them again in Search Console is the right next step. Never automated. */
+function AskGooglePanel({ items, domain }: { items: IndexPage[]; domain: string }) {
+  return (
+    <Panel
+      icon={<MousePointerClick />}
+      iconTone="blue"
+      title="Ask Google to read these pages again"
+      description="A few pages a day, by hand in Search Console. We never do it for you, and Google still decides."
+      actions={<GuideButton id="index-request-indexing" vars={{ domain, pageUrl: items[0]?.url ?? '' }} />}
+      flush
+    >
+      <ul className="divide-y divide-line border-t border-line">
+        {items.map((p) => (
+          <InsightItem
+            key={p.url}
+            tone="blue"
+            icon={<SearchCheck className="size-4" />}
+            title={<span className="break-all">{p.path}</span>}
+            titleAttr={p.title || p.url}
+            description={p.fixSeenAt ? 'fixed on your site, Google has not read it again yet' : p.lane === 'new' ? 'a new page Google has not put in search yet' : 'an important page Google has not read yet'}
+          />
+        ))}
+      </ul>
+    </Panel>
   );
 }
 
@@ -186,7 +245,9 @@ const ACTION_TONE: Record<IndexGroup['action'], 'warning' | 'blue' | 'good' | 'n
   quality: 'blue',
   duplicate: 'blue',
   links: 'blue',
+  review: 'warning',
   wait: 'neutral',
+  retry: 'neutral',
   leave_out: 'neutral',
   none: 'good',
 };
@@ -195,14 +256,16 @@ function GroupPanel({ g, orgId, siteId, domain, member, freeze }: { g: IndexGrou
   const [page, setPage] = useState(1);
   // a short list first (none for pages that need nothing), the whole group on request, paged by 25
   const [all, setAll] = useState(false);
-  const first = g.action === 'leave_out' || g.action === 'wait' || g.action === 'none' ? 0 : 5;
+  const first = g.action === 'leave_out' || g.action === 'wait' || g.action === 'retry' || g.action === 'none' ? 0 : 5;
   const more = all && g.count > INDEX_GROUP_PREVIEW;
   const q = useIndexingPages(orgId, siteId, more && page > 1 ? { lane: g.lane, action: g.action, cause: g.cause, page } : null);
-  const shown = !all ? g.pages.slice(0, first) : page > 1 && q.data?.status === 'ok' ? q.data.items : g.pages;
+  // A19: page 2 and on show their own rows only (never page 1's under a "Page 2" label while reading or after a failed read)
+  const pageRead = page > 1 ? (q.data?.status === 'ok' ? q.data.items : null) : g.pages;
+  const shown = !all ? g.pages.slice(0, first) : (pageRead ?? []);
   const last = Math.max(1, Math.ceil(g.count / INDEX_GROUP_PREVIEW));
   return (
     <Panel
-      icon={g.action === 'site_fix' ? <TriangleAlert /> : g.action === 'none' ? <CheckCircle2 /> : g.action === 'links' ? <Link2 /> : g.action === 'quality' ? <Sparkles /> : <CircleDashed />}
+      icon={g.action === 'site_fix' || g.action === 'review' ? <TriangleAlert /> : g.action === 'none' ? <CheckCircle2 /> : g.action === 'links' ? <Link2 /> : g.action === 'quality' ? <Sparkles /> : <CircleDashed />}
       iconTone={ACTION_TONE[g.action]}
       title={
         <span className="inline-flex flex-wrap items-center gap-2">
@@ -238,6 +301,9 @@ function GroupPanel({ g, orgId, siteId, domain, member, freeze }: { g: IndexGrou
         </div>
       </dl>
       {g.action === 'quality' && freeze && <p className="border-t border-line px-5 py-3 text-[13px] text-ink-2">A Google update is rolling out. Wait until it is over before you change these pages.</p>}
+      {all && page > 1 && !pageRead && (
+        <p className="border-t border-line px-5 py-3 text-[13px] text-ink-3">{q.isError || q.data?.status === 'unreadable' ? 'This page of the list could not be read just now.' : 'Reading this page of the list'}</p>
+      )}
       {shown.length > 0 && (
         <ul className="divide-y divide-line border-t border-line">
           {shown.map((p) => (
@@ -280,9 +346,10 @@ const STATE: Record<IndexPage['state'], { tone: Tone; label: string }> = {
 };
 
 function PageRow({ p, orgId, siteId, member, freeze }: { p: IndexPage; orgId: string; siteId: string; member: boolean; freeze: boolean }) {
-  const st = STATE[p.state];
+  const st = p.fixSeenAt ? { tone: 'good' as Tone, label: 'Fixed, waiting for Google' } : STATE[p.state];
   const facts = [
     p.checkedAt ? `checked ${fmtDay(p.checkedAt)}` : 'not checked yet',
+    p.fixSeenAt ? `we saw it fixed on ${fmtDay(p.fixSeenAt)}` : null,
     p.impressions28d ? `${n(p.impressions28d)} impressions in 28 days` : null,
     p.inSitemap ? 'in your sitemap' : 'not in your sitemap',
     p.needsPerson ? 'unchanged after 4 checks: worth a closer look' : null,
@@ -408,10 +475,10 @@ function UpdatesPanel({ events, impacts, rolling }: { events: GoogleEvent[]; imp
                 {i.before.from && i.after.to ? ` (${fmtDay(i.before.from)} to ${fmtDay(i.before.to)} against ${fmtDay(i.after.from)} to ${fmtDay(i.after.to)})` : ''}.
                 {i.note ? ` ${i.note}` : ''}
               </p>
-              {i.rows.filter((r) => r.state === 'dropped').length > 0 && (
+              {i.rows.filter((r) => r.segment === 'dropped').length > 0 && (
                 <ul className="mt-1 space-y-0.5">
                   {i.rows
-                    .filter((r) => r.state === 'dropped')
+                    .filter((r) => r.segment === 'dropped')
                     .slice(0, 8)
                     .map((r) => (
                       <li key={r.url} className="break-all">
