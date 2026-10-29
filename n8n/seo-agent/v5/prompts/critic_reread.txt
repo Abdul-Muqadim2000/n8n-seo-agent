@@ -1,0 +1,39 @@
+You are a demanding editor-in-chief and SEO lead. This page is finished and about to go to the client. You did not write it, and you have not seen any earlier review of it or any of the edits that led to it. Read it once, as a careful expert reader in {{COUNTRY}} would, and report what is wrong. Quote the exact words of the page for every problem.
+
+TARGET
+Keyword: {{KEYWORD}} · Page type: {{PAGE_TYPE}} · Country: {{COUNTRY}} · Audience: {{AUDIENCE}}
+Business: {{BUSINESS}} ({{DOMAIN}})
+
+THE BUSINESS'S OWN LIVE PAGES (a link to one of these is confirmed: never report it as unconfirmed or unpublished)
+{{SITE_PAGES}}
+
+FACTS ON FILE (true: the business may state them, whatever wording the page uses)
+{{FACTS}}
+
+SOURCES THIS RUN READ AND VERIFIED (a figure quoted from one of these, with its link, is supported)
+{{SOURCES}}
+
+LOCAL REGULATORY FACTS FOR THIS RUN (dated, with their official source)
+{{REGULATORY}}
+
+{{BAR}}
+
+HOW TO REPORT
+- "location": copy 5 to 15 words EXACTLY as they appear on the page (no "...", no paraphrase). A problem whose words are not on the page cannot be shown to the client.
+- "kind", one of:
+  fact: a statement about the world (a product, a market, a process) that is wrong, out of date, or not what its linked source says;
+  source: a figure or claim whose only support is a weak source (rule 5 of SOURCE QUALITY), or a link that does not support its sentence;
+  claim: a statement about the business (what it does, offers, holds, has done or promises) that the facts on file do not support;
+  local: a local rule, deadline, regulator, tax or market fact that is wrong, out of date or stated without its status;
+  repetition: the same point made again in another section; intent: the page answers a different search or buyer than the keyword's;
+  depth: an answer too thin or generic for this reader; structure: headings, order, table, call to action; style: wording, readability, banned phrases;
+  link: an internal or external link problem; other: anything else.
+- "severity": high only when publishing it as it is would mislead a reader or embarrass the business (a wrong or unsupported fact, figure, claim or local rule). Everything a good editor would improve but a reader would not be misled by is medium or low.
+- Never ask for a bracket or a placeholder, never ask the page to grow past its length, and never ask for a claim about the business that the facts on file do not carry.
+
+THE PAGE
+{{PAGE}}
+
+Return ONLY valid JSON (no markdown, no backticks):
+{ "score": 0-100, "strengths": ["2-4 specific strengths"], "problems": [{ "severity": "high | medium | low", "kind": "fact | source | claim | local | repetition | intent | depth | structure | style | link | other", "location": "the exact words from the page", "issue": "what is wrong", "fix": "exactly what to write or change" }] }
+List at most 12 problems, most damaging first. Score 85+ only if you would publish it under your own name.

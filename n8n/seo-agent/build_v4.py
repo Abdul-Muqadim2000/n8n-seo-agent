@@ -12962,6 +12962,123 @@ assert "part.text.replace(/\\s+$/, '') + '\\n\\n' + S(t).trim()" not in _rd0('co
 log('Answers go into the sentence they change and no slogan is offered as proof (W0-E, 2026-10-29, section 156; PLAN Fix 5, R4 D6 / G15, REVIEW_CODE M4 / L2): the Strategy Brief returns questions_for_client as { question, section, category } (strings still read); a suggested answer must be a sentence that answers the question\'s type (proof names a project or client with an outcome, or a number or a link; a credential names one), never chrome, a listing page or a slogan, the business facts first; a removed statement keeps its anchor and no guessed neutral sentence, and a "yes" goes back there only; each answer goes to its slot (call to action, the sentence naming the business, the decision section, the named section) with the sentence to rewrite named; an edit that only appends an answer is refused and nothing is appended: an unplaced answer is reported "not placed"; an old report\'s answer about the search description changes nothing in the body')
 
 # =============================================================================
+# 158. THE CAUSES THE GRADE NOW COUNTS ARE REMOVED, AND THE PAGE THE CLIENT RECEIVES IS READ ONCE MORE (W0-H, page-quality programme
+#      2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 3b, 2.4, 2.7, 2.8; R4 G9 / G12 / G13 / G14 / G18; REVIEW_EVIDENCE H1). Run 3299
+#      ("ms 365 erp") restated "Microsoft 365 is not an ERP" in six places, wrote "What is agentic ERP?" and "Which big companies use Dynamics
+#      365?" straight from People Also Ask, and published two market figures resting only on an agency blog and a tracker after the Critic
+#      had called both high; the Critic (66, the reviewer said 63) read the first draft once and gated nothing.
+#      * A. Prompts (v5/prompts/strategy_brief.txt, copywriter.txt): People Also Ask is evidence of what readers need, not the outline (only
+#        questions about the same reading of the search, whose answer adds something; a Guide up to 8, a Service / Location / Pricing page
+#        3-5, a Case Study none); a FAQ is a heading only when its answer is new to its section (a question that is the main search in other
+#        words may keep its heading, answered in new words); the keyword in the H1, the first sentence and the last section (an H2 only
+#        where a reader would phrase it so); each point has one home; a market, adoption, cost or compliance figure needs a strong source.
+#        PLAN 2.4 said "at most 4 question headings on a guide": the guide that ranks (exec 949, owner priority) carries 8 question H3s, each
+#        a different question, so the cap for a guide is 8 and the same-reading filter does the work. Built prompts asserted below.
+#      * B. PF.classify (v5/code/_page_fix.js): a market, adoption, cost or compliance figure whose ONLY linked source is weak (Content QA's
+#        tier) is a soft blocker "weak_figure": the editor rewrites the sentence without the number, else PF.neutralize takes the sentence
+#        out; Finalize re-measures it (Finalize_Verdict.js RECHECKED / TEXTUAL).
+#      * C. The second read: Finalize Page? (deliver) -> Second Read Plan -> Second Read? -> Second Read (Sonnet 5.5 over HTTP, the Messages
+#        API, structured JSON, measured usage) -> Apply Second Read -> Build Word File. Blind (no first-draft review, no history, no score),
+#        quotes verified on the page, high fact / source / claim / local problems are soft blockers (PF.reviewed) for runs a person started
+#        and reported advice in SHADOW mode for runs the system started (D17's rule); "not checked" on a refusal, a cut, a failure or an
+#        unreadable answer. Finalize keeps a "review" blocker open while its quoted words are on the page. Its cost joins the ledger.
+# =============================================================================
+_sbt158 = nodes['Strategy Brief']['parameters']['text']; _cwt158 = nodes['Copywriter']['parameters']['text']
+for _old158, _where158 in (('reuse the People Also Ask questions', _sbt158), ('each becomes its own question-style heading', _sbt158),
+                           ('Every question in the brief\'s "faqs" list becomes its own question-style heading', _cwt158),
+                           ('the first sentence, at least two H2s and the final section', _cwt158)):
+    assert _old158 not in _where158, 'W0-H: an old prompt instruction that creates padding or repetition is back: ' + _old158
+for _new158, _where158 in (('People Also Ask shows what readers need, it is not the outline', _sbt158), ('a Guide up to 8', _sbt158), ('a Case Study none', _sbt158),
+                           ('Each point has one home: give every claim, definition and list one owning section', _sbt158),
+                           ('when its answer says something that section does not already say', _cwt158), ('6b. Each point has one home', _cwt158),
+                           ('Use the primary keyword in the H1, the first sentence and the final section. An H2 may carry it', _cwt158),
+                           ('A market, adoption, cost or compliance figure needs an official, research or major-press source', _cwt158)):
+    assert _new158 in _where158, 'W0-H: the prompt rule is missing: ' + _new158
+PAGE_FIX_SRC158 = _rd0('code/_page_fix.js').rstrip('\n')
+for _k158 in ('const weakFigures = ', "B('weak_figure', ", "B('review', reviewText(r)", "else if (b.code === 'weak_figure') { const i = md.indexOf(b.sentence);", "if (b.code === 'review') return !b.location || onPage(b.location, t);", 'const reviewed = (cls, rr) =>'):
+    assert _k158 in PAGE_FIX_SRC158, 'W0-H: _page_fix.js lacks ' + _k158
+for _k158 in ("weak_figure: 'sentence'", "'bracket', 'weak_figure'])", "else if (code === 'review') { const q = "):
+    assert _k158 in _rd0('code/Finalize_Verdict.js'), 'W0-H: Finalize_Verdict.js lacks ' + _k158
+_crit158 = _rd0('prompts/critic.txt')
+_bar158 = _crit158[_crit158.index('QUALITY BAR'):_crit158.index('\nDRAFT\n')].strip()
+assert 'SOURCE QUALITY' in _bar158 and '{{' not in _bar158 and '$(' not in _bar158, 'W0-H: the Critic\'s quality bar is no longer plain text between QUALITY BAR and DRAFT'
+_tpl158 = _rd0('prompts/critic_reread.txt')
+for _k158 in ('{{BAR}}', '{{PAGE}}', '{{SITE_PAGES}}', '{{FACTS}}', '{{SOURCES}}', '{{REGULATORY}}'):
+    assert _tpl158.count(_k158) == 1, 'W0-H: critic_reread.txt needs ' + _k158 + ' exactly once'
+assert not re.search(r'\{\{\s*\$|\$json|\$\(', _tpl158), 'W0-H: critic_reread.txt is filled by RR.fill, not an n8n expression'
+RR_SRC158 = _rd0('code/_critic_reread.js').rstrip('\n')
+assert RR_SRC158.count("const TEMPLATE = /*__RR_TEMPLATE__*/'';") == 1 and RR_SRC158.count("const BAR = /*__RR_BAR__*/'';") == 1
+RR_SRC158 = RR_SRC158.replace("const TEMPLATE = /*__RR_TEMPLATE__*/'';", 'const TEMPLATE = ' + json.dumps(_tpl158) + ';').replace("const BAR = /*__RR_BAR__*/'';", 'const BAR = ' + json.dumps(_bar158) + ';')
+for _bad158 in ('—', '–', '“', '”', '…'):
+    for _f158 in ('code/_critic_reread.js', 'code/Second_Read_Plan.js', 'code/Apply_Second_Read.js'):
+        assert _bad158 not in _rd0(_f158), 'W0-H: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f158
+for _k158 in ("temperature", "tool_choice"):
+    assert _k158 not in RR_SRC158.split('const RR = (() => {', 1)[1], 'W0-H: Sonnet 5.5 refuses ' + _k158 + ' (400): the second read must not send it'
+_kit158 = lambda s: s.replace('/*__PAGE_FIX__*/', PAGE_FIX_SRC158).replace('/*__CRITIC_REREAD__*/', RR_SRC158)
+# ---------- C. the wiring: after the delivered page, before the report ----------
+assert [t['node'] for t in conns['Finalize Page?']['main'][1]] == ['Build Word File'], 'W0-H: Finalize Page? (deliver) no longer leads to Build Word File alone'
+_fp158 = pos('Finalize Page?')
+_x158, _y158 = _fp158[0] + 200, _fp158[1] + 260
+add_node('Second Read Plan', 'n8n-nodes-base.code', 2, {'jsCode': _kit158(_rd0('code/Second_Read_Plan.js'))}, [_x158, _y158])
+if_node('Second Read?', "{{ !($json.second_read || {}).skip }}", [_x158 + 180, _y158])
+add_node('Second Read', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'POST', 'url': 'https://api.anthropic.com/v1/messages',
+    'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'anthropicApi',
+    'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'anthropic-version', 'value': '2023-06-01'}]},
+    'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ $json.second_read.body }}',
+    'options': {'timeout': 300000}}, [_x158 + 360, _y158 - 80],
+    dict(credentials=dict(_ANTHROPIC_CRED62), onError='continueRegularOutput', alwaysOutputData=True, **_rl55.RETRY))
+add_node('Apply Second Read', 'n8n-nodes-base.code', 2, {'jsCode': _kit158(_rd0('code/Apply_Second_Read.js'))}, [_x158 + 540, _y158])
+disconnect('Finalize Page?', 'Build Word File')
+connect('Finalize Page?', 'Second Read Plan', 1); connect('Second Read Plan', 'Second Read?')
+connect('Second Read?', 'Second Read', 0); connect('Second Read?', 'Apply Second Read', 1)
+connect('Second Read', 'Apply Second Read'); connect('Apply Second Read', 'Build Word File')
+assert [t['node'] for t in conns['Finalize Page?']['main'][0]] == ['Page Fix'], 'W0-H: Finalize Page? (finalize) must still go back to Page Fix'
+for _n158 in ('Second Read Plan', 'Apply Second Read'):
+    _c158 = code(_n158)
+    assert 'const RR = (() => {' in _c158 and '/*__CRITIC_REREAD__*/' not in _c158 and '/*__PAGE_FIX__*/' not in _c158, 'W0-H: kit missing or marker left in ' + _n158
+assert 'const PF = (() => {' in code('Apply Second Read'), 'W0-H: Apply Second Read needs PF (onPage, reviewed, deliver)'
+# ---------- D. the money (measured), the ledger's AI steps, the callback ----------
+_SR_COST158 = """// W0-H (2026-10-29, section 158): the blind second read of the delivered page (Claude Sonnet 5.5 over HTTP, once a page run). Anthropic reports
+// the tokens of the answer (thinking included in output_tokens), so this call is MEASURED.
+{ let inT = 0, outT = 0, n = 0; let a = null; try { a = $('Second Read').all(); } catch (e) { a = null; }
+  for (const i of (a || [])) { const u = (i && i.json && i.json.usage) || null; if (u && (Number(u.input_tokens) || Number(u.output_tokens))) { inT += Number(u.input_tokens) || 0; outT += Number(u.output_tokens) || 0; n++; } }
+  if (n) __costCalls.push({ node: 'Second Read', model: 'claude-sonnet-5-5', max_tokens: 16000, effort: 'medium', streaming: false, prompt_chars: 0, output_chars: 0, usage: { promptTokens: inT, completionTokens: outT }, calls: n }); }
+"""
+_cost158 = [nm for nm in nodes if 'run_ledger.ai_cost = CC.runCost(__costCalls' in nodes[nm]['parameters'].get('jsCode', '')]
+assert {'Build Word File', 'Run Ledger Settle'} <= set(_cost158), _cost158
+for _n158 in _cost158:
+    assert code(_n158).count('run_ledger.ai_cost = CC.runCost(__costCalls') == 1, 'W0-H: ' + _n158 + ' prices its Claude calls in more than one place'
+    nodes[_n158]['parameters']['jsCode'] = code(_n158).replace('run_ledger.ai_cost = CC.runCost(__costCalls', _SR_COST158 + 'run_ledger.ai_cost = CC.runCost(__costCalls', 1)
+    assert "$('Second Read').all()" in code(_n158), _n158
+patch('Build Word File', "'Keyword Relevance', 'Critic'];", "'Keyword Relevance', 'Critic', 'Second Read'];")
+patch('Build Word File', "qa_blocking: (qa.delivery || {}).blocking || [], qa_advisory: (qa.delivery || {}).advisory || [],",
+      "qa_blocking: (qa.delivery || {}).blocking || [], qa_advisory: (qa.delivery || {}).advisory || [],\n"
+      "    qa_second_read: qa.critic_reread || null,   // W0-H (section 158): the blind second read of the delivered page (status, mode, what gated, what it would have gated in shadow mode, advice)")
+patch('Build Webhook Response', "qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],",
+      "qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [], qa_second_read: d.qa_second_read || null,   // W0-H (section 158)")
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+# ---------- E. the harness: the kit as a runnable shim, and the wiring ----------
+open(os.path.join(OUT_CODE, '_critic_reread.js'), 'w').write("// harness shim (written by build_v4.py section 158): the second-read kit and the page kit, { kit, fn, args } -> { r } ('__PF__' in args is the PF kit)\n"
+    + PAGE_FIX_SRC158 + '\n' + RR_SRC158
+    + "\nreturn $input.all().map(i => { const j = i.json || {}; const K = j.kit === 'PF' ? PF : RR; const a = (j.args || []).map(x => x === '__PF__' ? PF : x); return { json: { r: K[j.fn].apply(null, a) } }; });\n")
+if os.path.isdir(os.path.join(HERE0, 'harness')):
+    _chain158 = ('Finalize Page?', 'Second Read Plan', 'Second Read?', 'Second Read', 'Apply Second Read')
+    json.dump({'connections': {k: [[t['node'] for t in (l or [])] for l in conns[k]['main']] for k in _chain158 if k in conns},
+               'if': nodes['Second Read?']['parameters']['conditions']['conditions'][0]['leftValue'],
+               'http': {k: nodes['Second Read'].get(k) for k in ('retryOnFail', 'maxTries', 'waitBetweenTries', 'onError', 'alwaysOutputData', 'credentials')},
+               'http_params': nodes['Second Read']['parameters'],
+               'cost_in': sorted(_n for _n in _cost158 if "$('Second Read').all()" in code(_n)),
+               'ai_nodes_word': "'Critic', 'Second Read'];" in code('Build Word File'),
+               'callback': 'qa_second_read: d.qa_second_read || null' in code('Build Webhook Response'),
+               'prompts': {p: nodes[p]['parameters']['text'] for p in ('Strategy Brief', 'Copywriter', 'Critic')}},
+              open(os.path.join(HERE0, 'harness', 'second_read_wiring.json'), 'w'), indent=1)
+sticky("""### The second read (W0-H, 2026-10-29)
+**Second Read Plan** -> **Second Read** (Sonnet 5.5, blind: no earlier review, no edit history, no score) -> **Apply Second Read**: quotes checked on the page; a high fact / source / claim / local problem blocks for runs a person started, is reported only for runs the system started (shadow, D17); refused or unreadable = "not checked".""", _x158 - 40, _y158 - 260, 760, 180, 5)
+log('The causes the grade now counts are removed, and the page the client receives is read once more (W0-H, 2026-10-29, section 158; PLAN Fix 3b, R4 G9 / G12 / G13 / G14 / G18, REVIEW_EVIDENCE H1): the brief takes People Also Ask questions only about the same reading of the search (a Guide up to 8 so the ranking guide keeps its shape, a Service / Location / Pricing page 3-5, a Case Study none) and gives each point one home; the copywriter writes a FAQ heading only when its answer is new, the keyword in the H1, the first sentence and the last section (an H2 only where natural) and no market or compliance figure on a blog alone; PF.classify makes a market, adoption, cost or compliance figure whose only linked source is weak a soft blocker (rewrite without the number, else the system removes the sentence; Finalize re-measures it); a blind Sonnet 5.5 second read of the delivered page (measured cost, about $0.05) turns each high fact / source / claim / local problem whose quote is on the page into a soft blocker for runs a person started, reports it only for runs the system started (shadow mode, D17) and is "not checked" when refused, cut, failed or unreadable; the callback carries qa_second_read')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

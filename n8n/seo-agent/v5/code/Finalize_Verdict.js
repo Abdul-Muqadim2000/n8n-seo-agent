@@ -24,7 +24,7 @@ const cls = PF.classify(qa, md, ctx);
 // what was on the page before the editor touched it: the client's version with the deterministic answers applied, and the request itself
 const before = norm(S(A.output)) + ' ' + norm(S(F.input_markdown));
 const newText = (t) => { const n = norm(t); return !!n && !before.includes(n); };
-const TEXTUAL = { claim: 'sentence', figure: 'figure', statistic: 'stat', guarantee: 'quote', testimonial: 'text' };
+const TEXTUAL = { claim: 'sentence', figure: 'figure', statistic: 'stat', guarantee: 'quote', testimonial: 'text', weak_figure: 'sentence' };   // W0-H: a weak-only figure the editor wrote in this run is the system's to remove
 const judged = cls.blocking.filter(b => !TEXTUAL[b.code] || newText(b[TEXTUAL[b.code]]));
 const systemNew = judged.filter(b => b.tier === 'soft' && TEXTUAL[b.code]);
 // PF.neutralize's own last sweep removes every bracket left in the page; a bracket the client typed is shown, never silently deleted, so the
@@ -49,7 +49,7 @@ const finalCls = PF.residual({ ...cls, blocking: judged }, md);
 //   * and when the request did not carry the page run's blockers at all, nothing can say the page is ready.
 const PR = P.prc || {}; const PG = PR.gating || {}; const DEC = PR.duplicate_decision || null;
 const has0 = new Set(finalCls.blocking.map(x => x.code));
-const RECHECKED = new Set(['cut_off', 'meta', 'author_profile', 'claim', 'figure', 'statistic', 'guarantee', 'testimonial', 'bracket']);
+const RECHECKED = new Set(['cut_off', 'meta', 'author_profile', 'claim', 'figure', 'statistic', 'guarantee', 'testimonial', 'bracket', 'weak_figure']);   // W0-H: PF.classify measures weak-only figures again
 const carried = [], resolved = [];
 const urlIn = (t) => (S(t).match(/https?:\/\/[^\s"<>)]+/) || [''])[0].replace(/[.,;:]+$/, '');
 let dupOpen = null, decision = null;
@@ -67,6 +67,8 @@ for (const b of (PG.qa_blocking || [])) {
   else if (code === 'off_topic') { const h = (S(b.text).match(/"([^"]{3,200})"/) || [])[1] || ''; if (h && new RegExp('^#{2,4}\\s+' + h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'm').test(md)) keep({}); else resolved.push(code); }
   else if (code === 'brand') { if (P.style_guide) resolved.push(code + ':rechecked'); else keep({ text: S(b.text) + ' (found by the first check; your style guide did not travel with this page, so it is not checked again here)' }); }
   else if (RECHECKED.has(code)) resolved.push(code + ':rechecked');
+  // W0-H (Fix 3b): what the second read of the page run quoted stays open while those words are on the page, and is resolved once they are gone
+  else if (code === 'review') { const q = (S(b.text).match(/"([^"]{8,300})"/) || [])[1] || ''; if (q && PF.onPage(q, md)) keep({}); else resolved.push(code); }
   else keep({});
 }
 // the request did not carry what stopped the page in its first check: this version cannot be called ready on that basis
