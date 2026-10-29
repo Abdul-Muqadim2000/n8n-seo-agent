@@ -3,6 +3,7 @@ import type { FastifyRequest } from 'fastify';
 import {
   cleanDomain,
   deriveSiteTasks,
+  googleStillSees,
   indexingCauseOfKey,
   indexingCauseReadings,
   indexingPageFixed,
@@ -275,6 +276,9 @@ export interface CheckOutcome {
   /** with reached false (N-app-7): every page we opened is fixed, but the step lists more than we open; the engine's daily reading decides
    *  the rest, so nothing is recorded (never a "done" for pages nobody checked, never a miss that reopens a step) */
   partial?: boolean;
+  /** with reached false (R1): our fetch finds the step fixed, but Google read its pages again after a fix we saw and still sees the
+   *  problem (the engine's `fix_failed_at`): only Google's next reading can close it, so nothing is recorded (never a daily "done") */
+  googleSees?: boolean;
 }
 
 const hostOf = (url: string) => cleanDomain(url.match(/^https?:\/\/([^/?#:]+)/i)?.[1] ?? '');
@@ -483,6 +487,22 @@ async function checkIndexing(domain: string, payload: Record<string, unknown>, o
   return { ok: true, reached: true, message: urls.length === 1 ? results[0].why : `All ${urls.length} pages are fixed.` };
 }
 
+/**
+ * R1: a step whose pages Google read again after a fix we saw and still sees with the problem (a noindex, a block or an error sent only
+ * to Google's crawler) is never closed by our own fetch. A check that finds it fixed records nothing; one that finds the problem is kept
+ * as it is (it is still to do either way).
+ */
+function googleStillSeesOutcome(payload: Record<string, unknown>, out: CheckOutcome): CheckOutcome {
+  const n = googleStillSees(payload);
+  if (!n || !(out.ok || out.partial)) return out;
+  return {
+    ok: false,
+    reached: false,
+    googleSees: true,
+    message: `Your website looks fixed to us, but Google read ${n === 1 ? 'a page' : `${n} pages`} of this step again after the change we saw and still sees the problem, so this step stays open until Google reads ${n === 1 ? 'it' : 'them'} without it. Your website may show Google something different from what a browser sees; the guide shows how to see a page the way Google gets it.`,
+  };
+}
+
 /** N-app-7: we checked only part of a step's pages and every one of them is fixed. */
 function partialOutcome(checked: number, total: number, lead: string): CheckOutcome {
   return {
@@ -526,7 +546,7 @@ function checkOf(domain: string, kind: SiteTaskKind, payload: Record<string, unk
     case 'redirect':
       return checkRedirect(domain, payload);
     case 'indexing':
-      return checkIndexing(domain, payload, opts);
+      return checkIndexing(domain, payload, opts).then((out) => googleStillSeesOutcome(payload, out));
     default: {
       const never: never = kind;
       // a row of a kind this build does not know (written by a newer one): nothing is read and nothing recorded
@@ -588,6 +608,7 @@ export async function checkSiteTask(a: SiteAccess, req: FastifyRequest, body: un
   }
   // the website did not answer at all: nothing is recorded (one bad minute must never reopen a done step), the person is asked to retry
   if (!out.reached && out.engineOnly) throw new HttpError(409, out.message, 'engine_reads_it');
+  if (!out.reached && out.googleSees) throw new HttpError(409, out.message, 'google_still_sees');
   if (!out.reached && out.partial) throw new HttpError(409, out.message, 'site_partial');
   if (!out.reached && out.unsure) throw new HttpError(409, `We could not confirm it just now, so nothing changed. ${out.message}`, 'site_unsure');
   if (!out.reached) throw new HttpError(503, `Your website did not answer just now, so nothing changed. Try again in a minute. (${out.message})`, 'site_unreachable');

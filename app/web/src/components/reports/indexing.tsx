@@ -78,7 +78,8 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
 
       {failed && (
         <Callout tone="warning" title="This check could not read your website">
-          {note} {known ? 'The counts in this report are from the last check that did, so they may be out of date.' : 'There are no figures to show yet.'}
+          {/* R5: the note is in the header above, and so is where the figures come from: said once */}
+          {known ? 'Every count in this report may be out of date until a check reads your website again.' : 'There are no figures to show yet.'}
         </Callout>
       )}
 
@@ -104,7 +105,7 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
 
-      <Block title="What needs doing" icon={<ListChecks />} description={failed ? 'From the last check that read your website, counted by what to do, then by the reason Google gives.' : 'Counted by what to do, then by the reason Google gives.'}>
+      <Block title={`What needs doing${last}`} icon={<ListChecks />} description="Counted by what to do, then by the reason Google gives.">
         <Facts
           items={(['site_fix', 'quality', 'duplicate', 'links', 'wait', 'leave_out'] as IndexAction[]).map((a) => ({ label: INDEX_ACTION_INFO[a].label, value: fmt(num(byAction[a]) ?? 0) }))}
           cols="sm:grid-cols-3"

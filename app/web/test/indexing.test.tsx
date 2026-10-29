@@ -200,3 +200,15 @@ describe('fix wave 2: copy (N-app-9)', () => {
     expect(files).not.toMatch(/we ask google|asked google about|the daily check covers every page|we check each one ourselves, every day/i);
   });
 });
+
+// ---------------------------------------------------------------- fix wave 3 (REVIEW_3.md R5)
+describe('fix wave 3: a failed run\'s report (R5)', () => {
+  it('says "from the last check" once and never shows a fragment of an internal error', () => {
+    const note = 'We could not check this website today: inventory failed: TypeError x.y. The figures are from the last check.';
+    const t = text(renderReport(report('index_coverage', { status: 'complete', summary: { failed: true, checked: false, note, figures_from: 'last_check', known: 40, indexed: 31, not_indexed: 6, backlog_left: 3, by_action: { site_fix: 2 }, by_cause: { noindex: 2 }, dropped: [], events: [], impact: {} }, cost: { usd: 0 } })));
+    expect((t.match(/from the last check/gi) ?? []).length).toBe(1);
+    expect(t).not.toMatch(/TypeError|x\.y| y\. |failed:/);
+    expect(t).toContain('Something went wrong on our side');
+    expect(t).toContain('In Google search (last check)');
+  });
+});

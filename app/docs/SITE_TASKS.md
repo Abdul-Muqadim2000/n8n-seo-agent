@@ -145,3 +145,14 @@ and how many there are. Every rule above holds:
 - **X-Robots-Tag**: `max-snippet:-1, noindex` and the like are directives for every crawler; `otherbot: noindex` alone is not a noindex.
   Relative and protocol-relative canonicals are resolved against the page address.
 
+### Fix wave 3 (2026-10-30, `n8n/seo-agent/docs/indexing-2026-10-29/REVIEW_3.md`)
+
+- **Google still sees it after the client's fix** (engine `fix_failed_at`: Google crawled after a fix we saw and still reads the cause, so
+  the row is `site_fix` again): the step's payload carries `googleStillSees` (how many of its pages), the step is to do (warning) and says
+  in plain words that the website may show Google something different from what a browser sees, with the cause's guide (its new
+  "Our check finds it fixed, but Google still sees the problem" answer: URL Inspection, Test live URL). While it holds no reading that calls
+  the step done decides it (our own check, or an older engine reading kept on the row): the own check that finds it fixed records nothing
+  daily and answers 409 `google_still_sees` on a click; one that still finds the problem is recorded as usual. Only Google's next reading
+  (the engine clears `fix_failed_at`) closes it. A `fix_seen_at` newer than `fix_failed_at` is a later fix, waiting for Google again.
+- An empty canonical (`href=""`) is no canonical, never resolved to an address.
+

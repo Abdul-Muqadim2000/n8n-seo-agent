@@ -356,6 +356,9 @@ export interface IndexPage {
   /** FIX_CONTRACT `fix_seen_at`: our fetch saw the site-fix cause gone and Google has not confirmed it yet ('' = not fixed). Set and cleared
    *  by the engine only; while set the page waits for Google, whatever the order of the inspection and the sighting (N4). */
   fixSeenAt: string;
+  /** fix wave 2 (N3, R1): Google crawled the page after a fix we saw and still sees the same cause ('' = no). Such a page is `site_fix`
+   *  again, never "fixed on your site", and the app's own fetch cannot close its step: Google is shown something our fetch is not. */
+  fixFailedAt: string;
   /** FIX_CONTRACT `ask_google`: a manual "Request indexing" in Search Console is the right next step (at most 5 a site a week) */
   askGoogle: boolean;
 }
@@ -580,8 +583,14 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const st: IndexState = isState(state) ? state : 'unknown';
   const c: IndexCause | 'other' = isCause(cause) ? cause : cause ? 'other' : state === 'indexed' ? 'indexed' : 'other';
   const linkFrom = json<P[]>(r.link_from, []);
-  const fixSeenAt = st === 'indexed' ? '' : fixSeen(s(r.fix_seen_at));
-  const action = displayAction(s(r.action), c, st);
+  // R1: a fix Google did not take (`fix_failed_at`) wins over a sighting of the fix that is not newer than it (the engine clears
+  // `fix_failed_at` before it records a new sighting, so a newer `fix_seen_at` is a later fix, waiting for Google again)
+  const seen = st === 'indexed' ? '' : fixSeen(s(r.fix_seen_at));
+  const failedAt = st === 'indexed' ? '' : s(r.fix_failed_at).trim();
+  const fixFailedAt = failedAt && (!seen || failedAt >= seen) ? failedAt : '';
+  const fixSeenAt = fixFailedAt ? '' : seen;
+  const raw = displayAction(s(r.action), c, st);
+  const action = fixFailedAt && raw === 'wait' && isCause(c) && INDEX_CAUSE_INFO[c].action === 'site_fix' ? 'site_fix' : raw;
   return {
     url: s(r.url),
     path: indexPath(s(r.url)),
@@ -620,6 +629,7 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
     inspectedAt: s(r.inspect_at),
     fetchedAt: s(r.fetch_at),
     fixSeenAt,
+    fixFailedAt,
     askGoogle: b(r.ask_google) && st !== 'indexed',
   };
 }
@@ -673,9 +683,21 @@ function runSitemapsOf(v: unknown): IndexRunSitemaps | null {
 function runNoticeText(r: IndexRun): string {
   return indexingNoteText(r.note);
 }
+/** R5: the sentences the engine writes after a failed run's reason (the screen says where its figures come from, once) */
+const INDEX_ENGINE_TAIL = String.raw`(?:The figures are from the last check|Nothing has been checked yet)\.?`;
+const INDEX_INTERNAL_ERROR = new RegExp(String.raw`\b(?:inventory|diagnosis|sitemap reading) failed:[\s\S]*?(?=\s*${INDEX_ENGINE_TAIL}|$)`, 'gi');
+const INDEX_ENGINE_FIGURES = new RegExp(String.raw`\s*${INDEX_ENGINE_TAIL}`, 'gi');
 /** N-app-6: the engine's note about a check (a run row's or a report's), internal error text replaced; '' stays the default sentence. */
 export function indexingNoteText(note: unknown): string {
-  const t = s(note).slice(0, 1500).replace(/\b(inventory|diagnosis|sitemap reading) failed:[^.]*\.?/gi, 'Something went wrong on our side while reading this website; we try again on the next daily check.').trim();
+  const t = s(note)
+    .slice(0, 1500)
+    // R5: an internal error message can hold dots of its own (`TypeError x.y`), so the whole of it is replaced: up to the sentence the
+    // engine writes after it, or to the end of the note
+    .replace(INDEX_INTERNAL_ERROR, 'Something went wrong on our side while reading this website; we try again on the next daily check.')
+    // R5: the engine's own "from the last check" sentence is left to the screen, which says where the figures come from once
+    .replace(INDEX_ENGINE_FIGURES, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
   return t || 'This website could not be checked today.';
 }
 /** N-app-6 / N12: the index_coverage callback's summary says the run could not check the website (`failed: true` or `checked: false`). */
@@ -944,6 +966,11 @@ export interface IndexingCauseReading {
   pendingAt: string;
   /** false: the read of this cause hit its cap, so "none any more" or "all fixed" can never be concluded from it (A6) */
   complete: boolean;
+  /** R1: of the open pages, how many Google read again AFTER a fix we saw and still sees the problem (`fix_failed_at`); while any does,
+   *  the app's own fetch cannot close the step (absent: none) */
+  googleStillSees?: number;
+  /** the newest of those Google readings */
+  googleStillSeesAt?: string;
 }
 
 /**
@@ -963,6 +990,7 @@ export function indexingCauseReadings(rows: readonly Partial<IndexPageRow>[], op
     by.set(p.cause, g);
   }
   return [...by.entries()].map(([cause, g]) => {
+    const failed = g.open.filter((p) => p.fixFailedAt);
     const sorted = [...g.open].sort((a, b) => b.impressions28d - a.impressions28d || b.clicks28d - a.clicks28d || a.url.localeCompare(b.url));
     return {
       cause,
@@ -972,6 +1000,7 @@ export function indexingCauseReadings(rows: readonly Partial<IndexPageRow>[], op
       pending: g.pending.length,
       pendingAt: g.pending.map((p) => p.fixSeenAt).sort().pop() ?? '',
       complete: !opts.capped?.has(cause),
+      ...(failed.length ? { googleStillSees: failed.length, googleStillSeesAt: failed.map((p) => p.fixFailedAt).sort().pop() ?? '' } : {}),
     };
   });
 }
@@ -1022,7 +1051,8 @@ export function pageCanonicalOf(html: string, pageUrl: string): string {
   for (const m of s(html).slice(0, 200_000).matchAll(/<link\b[^>]*>/gi)) {
     const tag = m[0];
     if (!/\brel\s*=\s*["']?canonical["'\s>]/i.test(tag)) continue;
-    const href = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1] ?? tag.match(/\bhref\s*=\s*([^\s>]+)/i)?.[1] ?? '';
+    // R9: `href=""` (or `href=''`) is no canonical at all, never the page's own address or a path made of the quotes
+    const href = tag.match(/\bhref\s*=\s*["']([^"']*)["']/i)?.[1] ?? tag.match(/\bhref\s*=\s*([^\s>"']+)/i)?.[1] ?? '';
     if (!href.trim()) return '';
     // N-app-12: a relative (`a`, `../a`, `?q`) or protocol-relative (`//host/a`) canonical is resolved against the page's address
     try {

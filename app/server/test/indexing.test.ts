@@ -551,3 +551,70 @@ describe('fix wave 2: the own check', () => {
     expect((await rowOf(s.site.id, 'indexing:noindex'))!.lastCheck).toEqual(before);
   });
 });
+
+// ---------------------------------------------------------------- fix wave 3 (REVIEW_3.md)
+describe('fix wave 3: Google still sees it after the client\'s fix (R1)', () => {
+  // the engine's N3 row: Google crawled after the fix we saw and still reads noindex, so `fix_seen_at` is cleared, `fix_failed_at` set
+  // and the row is `site_fix` again; our own fetch (no noindex for a browser) must never close the step
+  async function googleOnlyNoindex() {
+    const s = await setup();
+    const runAt = new Date(Date.now() - 3_600_000).toISOString();
+    t.runs.push({ site_id: s.sid, domain: s.domain, run_at: runAt, known: 1, indexed: 0, inspected: 1, by_cause_json: JSON.stringify({ noindex: 1 }), by_action_json: JSON.stringify({ site_fix: 1 }) });
+    t.pages.push({
+      site_id: s.sid, domain: s.domain, url: s.url('/g'), state: 'excluded', cause: 'noindex', action: 'site_fix', inspect_at: runAt, fix_seen_at: '',
+      fix_failed_at: new Date(Date.now() - DAY).toISOString(), impressions_28d: 5,
+      note: 'Google read this page again on 2026-11-04, after the change we saw on your site, and still sees the same problem.',
+    });
+    t.web[s.url('/g')] = { status: 200, text: '<html><head><title>G</title></head><body>g</body></html>' };
+    return s;
+  }
+
+  it('the step stays to do (warning), explains it, and the own check records nothing, first check or daily', async () => {
+    const s = await googleOnlyNoindex();
+    const first = (await tasksOf(s)).find((x) => x.key === 'indexing:noindex')!;
+    expect(first).toMatchObject({ state: 'todo', severity: 'warning' });
+    expect(first.detail).toContain('different from what a browser sees');
+    expect(first.guide).toBe('index-remove-noindex');
+    await settle();
+    await settle();
+    // the first background check opened the page, found no noindex, and recorded nothing
+    const row = (await rowOf(s.site.id, 'indexing:noindex'))!;
+    expect(row.payload).toMatchObject({ googleStillSees: 1 });
+    expect(row.lastCheck?.ok ?? false).toBe(false);
+    expect(row.doneAt).toBeNull();
+    // the daily tick, two days running: still nothing recorded, still to do
+    for (let day = 0; day < 2; day++) {
+      // other tests' rows share the database: this one is made the most overdue and the tick's budget covers them all
+      await db.update(schema.siteTasks).set({ lastCheckAt: new Date(Date.now() - 400 * DAY), missAt: null }).where(eq(schema.siteTasks.id, row.id));
+      await svc.siteTaskTick(log, { sites: 0, checks: 600 });
+      const after = (await rowOf(s.site.id, 'indexing:noindex'))!;
+      expect(after.doneAt).toBeNull();
+      expect(after.lastCheck?.ok ?? false).toBe(false);
+      expect(after.lastCheckAt!.getTime()).toBeGreaterThan(Date.now() - DAY);
+      expect((await tasksOf(s)).find((x) => x.key === 'indexing:noindex')!.state).toBe('todo');
+    }
+  });
+
+  it('a click answers 409 google_still_sees with plain words and records nothing', async () => {
+    const s = await googleOnlyNoindex();
+    await tasksOf(s);
+    await settle();
+    const before = (await rowOf(s.site.id, 'indexing:noindex'))!;
+    const r = await s.u.c.post(`${s.base}/tasks/check`, { key: 'indexing:noindex' });
+    expect(r.status).toBe(409);
+    expect(JSON.stringify(r.body)).toContain('google_still_sees');
+    expect(JSON.stringify(r.body)).toContain('still sees the problem');
+    const after = (await rowOf(s.site.id, 'indexing:noindex'))!;
+    expect(after.lastCheck).toEqual(before.lastCheck);
+    expect(after.doneAt).toBeNull();
+  });
+
+  it('an own check that still finds the noindex is recorded as usual (to do either way)', async () => {
+    const s = await googleOnlyNoindex();
+    t.web[s.url('/g')] = { status: 200, text: '<html><head><meta name="robots" content="noindex"><title>G</title></head><body>g</body></html>' };
+    await tasksOf(s);
+    const r = await s.u.c.post(`${s.base}/tasks/check`, { key: 'indexing:noindex' });
+    expect(r.status).toBe(200);
+    expect((r.body as { task: SiteTask }).task).toMatchObject({ state: 'todo', lastCheck: { by: 'you', ok: false } });
+  });
+});
