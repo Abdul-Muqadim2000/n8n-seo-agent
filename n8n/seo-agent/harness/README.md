@@ -147,3 +147,14 @@ and keyword-ladder pages are not held for the score, a null score is never a hol
 own duplicate at any score, however it is started; production's two 2026-10-29 service pages for the guide's searches are recognised as
 overlapping it (shadow-logged); the late check finds what production found on 3299; *Content Log Row* writes `held`; the cadence skips a
 held keyword for 90 days and takes the next candidate (D1); the callback keeps stage `content` with `hold` and `verdict_acknowledged`.
+
+**W0-E, answers woven into their sentence (`scenarios_w0e.js`, W0E1-W0E8, 2026-10-29, PLAN Fix 5).** A suggested answer (`PF.prefillOf`) is a
+sentence of 6+ words with a verb, not a question, never reading-time / navigation chrome, a listing page or a slogan, and answers the
+question's type (proof: a project, client or sector with an outcome, or a number or a link; credential: a credential noun); business facts
+first. The brief's `questions_for_client` are `{question, section, category}` (build section 156; strings still read). A statement the system
+removes records its anchor (`PF.anchorAt`) and gets no guessed neutral wording; Finalize Apply puts a "yes" back at that anchor only, sends each
+answer to its slot (`PF.slotIn`: call to action, the sentence naming the business, the decision section, the named section) with the host
+sentence named, and ignores an old report's answer about the search description; Finalize Merge refuses an edit that only appended an answer
+(`PF.appendedIn`) and never appends one itself (`not_placed`, "tell us where"). Checked on 3299 (no slogan / question / chrome suggestions, q5's
+anchor), 3336 as recorded (slots, hosts, the recorded editor's appended edits refused) and in the new format, and on the 949 guide (untouched
+when nothing is answered; a call-to-action answer goes into its own call-to-action sentence).

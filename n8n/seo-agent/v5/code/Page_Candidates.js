@@ -67,15 +67,19 @@ if (came === 'finalize') {
   const allRemoved = (state0.removed_final || []).concat(lastRemoved);
   const brief = prev.content_brief || {};
   const seeds = removed.filter(r => r && r.question);
-  // the neutral wording each statement got from the system (a call to action that keeps only its link, H2's advice wording) or none (left out)
-  const viaNeutral = new Map(allRemoved.filter(r => r.code === 'claim' && (r.how === 'cta' || r.how === 'reworded')).map(r => [String(r.sentence), { how: r.how, text: r.text || '' }]));
-  const claimsAll = mergeClaims(claimsSeen0, claimsIn(qa, md)).map(c => viaNeutral.has(c.sentence) ? { ...c, how: viaNeutral.get(c.sentence).how, neutral: viaNeutral.get(c.sentence).text } : c);
+  // the neutral wording each statement got from the system (a call to action that keeps only its link, H2's advice wording) or none (left out).
+  // W0-E (PLAN Fix 5.3, R4 G15): a statement the system REMOVED has no neutral wording at all (never a guessed sentence elsewhere in the
+  // page), and carries the anchor where it stood, so a "yes" puts it back there
+  const viaNeutral = new Map(allRemoved.filter(r => r.code === 'claim' && (r.how === 'cta' || r.how === 'reworded' || r.how === 'removed')).map(r => [String(r.sentence), { how: r.how, text: r.how === 'removed' ? '' : r.text || '', anchor: r.anchor || null }]));
+  const claimsAll = mergeClaims(claimsSeen0, claimsIn(qa, md)).map(c => viaNeutral.has(c.sentence) ? { ...c, how: viaNeutral.get(c.sentence).how, neutral: viaNeutral.get(c.sentence).text, anchor: viaNeutral.get(c.sentence).anchor } : c);
   // what the client's own pages and stored facts already say (a question is prefilled from them), and the fact keys already answered
   const docs = [{ source: 'your business facts', text: [prev.business_facts, prev.case_facts_text].filter(Boolean).join('\n') },
     { source: 'your website', text: [].concat(((prev.site_description || {}).site_facts) || []).join('\n') },
     ...(prev.client_pages || []).map(p => ({ source: String((p && p.url) || 'your website'), text: String((p && p.text) || '').slice(0, 20000) }))];
   const stored = Array.isArray(prev.stored_fact_keys) ? prev.stored_fact_keys : (prev.business_facts_kv && typeof prev.business_facts_kv === 'object' ? Object.keys(prev.business_facts_kv) : []);
-  const qs = PF.questions({ claims: claimsAll, brief: Array.isArray(brief.questions_for_client) ? brief.questions_for_client : [], brackets: seeds, business: ctx.business, final_md: finalMd, docs, stored });
+  // W0-E (REVIEW_CODE M4): the brief's questions are { question, section, category } objects since section 156, plain strings before it
+  const briefQs = (Array.isArray(brief.questions_for_client) ? brief.questions_for_client : []).filter(q => q && (typeof q === 'string' || (typeof q === 'object' && q.question)));
+  const qs = PF.questions({ claims: claimsAll, brief: briefQs, brackets: seeds, business: ctx.business, names: ctx.names, final_md: finalMd, docs, stored });
   const del = PF.deliver(finalCls, { questions: qs });
   const ready = del.status !== 'not_ready';
   const deliveredFrom = (state0.best || {}).source || 'copywriter draft';

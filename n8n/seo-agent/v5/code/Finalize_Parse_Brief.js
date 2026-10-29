@@ -137,7 +137,12 @@ else {
     for (const f of ['question', 'original', 'neutral', 'section']) if (S(a[f]).length > LIM.short) errors.push('answers[' + i + '].' + f + ' is longer than ' + LIM.short + ' characters');
     const inPage = S(a.in_page).trim();
     answers.push({ id, fact_key: fk, source, decision, text: text.slice(0, LIM.text), question: clean(a.question).slice(0, LIM.short), original: clean(a.original).slice(0, LIM.short),
-      neutral: S(a.neutral).replace(/\s+/g, ' ').trim().slice(0, LIM.short), in_page: ['neutral', 'cta', 'left_out'].includes(inPage) ? inPage : 'left_out', section: clean(a.section).slice(0, 300) });
+      neutral: S(a.neutral).replace(/\s+/g, ' ').trim().slice(0, LIM.short), in_page: ['neutral', 'cta', 'left_out'].includes(inPage) ? inPage : 'left_out', section: clean(a.section).slice(0, 300),
+      // W0-E (PLAN Fix 5.1 / 5.3): the question's category and slot (where its answer belongs) and, for a statement the page run removed,
+      // its anchor (the sentence before / after it); all optional (older reports carry none)
+      category: clean(a.category).toLowerCase().replace(/[^a-z]/g, '').slice(0, 20), slot: ['cta', 'credential', 'proof', 'pricing', 'timeline', 'named'].includes(S(a.slot)) ? S(a.slot) : '',
+      anchor: a.anchor && typeof a.anchor === 'object' && !Array.isArray(a.anchor) ? { section: clean(a.anchor.section).slice(0, 300), before: S(a.anchor.before).replace(/\s+/g, ' ').trim().slice(0, 400),
+        after: S(a.anchor.after).replace(/\s+/g, ' ').trim().slice(0, 400), line_before: S(a.anchor.line_before).replace(/\s+/g, ' ').trim().slice(0, 400) } : null });
   });
 }
 
