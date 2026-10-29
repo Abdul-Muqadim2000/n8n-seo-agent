@@ -62,8 +62,17 @@ const PRC_BLOCK = ['qa_blocking', 'duplicate_targets'];
 const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts'];
 const pr = isObj(b.page_run) ? b.page_run : null;
 if (b.page_run != null && !pr) errors.push('page_run must be an object (the context of the page run the page came from)');
+// M3 (WAVE0_REVIEW 2026-10-30): a request with NO page_run at all comes from an app built before W0-B, so the engine can be deployed before
+// the app. Its gating fields are derived here from the original report as far as the request carries it: the page type, and the page the
+// report delivered (`delivered_markdown`, else this text), whose own blockers (a cut page, the meta, statements, figures, guarantees,
+// testimonials, brackets, weak-only figures) this check measures again on this version (Finalize Verdict's RECHECKED codes), so
+// qa_blocking starts empty and is known. What only the first check could see stays unknown: a page the website already has for the same
+// search, passages copied from another page, a dead link. That is not a blocker (it made every final version "not ready, 59" until the
+// app was deployed): the version is "Needs work: the first check was not read", with what to do, and never "Ready to publish" (W0B3).
+// A page_run that is sent but lacks a gating field is still a block: that app knows the contract.
+const legacy = b.page_run == null;
 const prc = (() => {
-  const g = pr || {};
+  const g = pr || (legacy ? { qa_blocking: [], page_type: S(b.page_type).trim() } : {});
   const told = Array.isArray(g.missing) ? g.missing.map(x => S(x).trim()).filter(Boolean) : [];
   const gating_missing = [];
   const blk = Array.isArray(g.qa_blocking) && !told.includes('qa_blocking') ? g.qa_blocking.filter(isObj).slice(0, LIMP.blockers)
@@ -95,7 +104,7 @@ const prc = (() => {
     style_guide: isObj(g.style_guide) ? g.style_guide : null, site_urls: siteUrls, serp_shapes: isObj(g.serp_shapes) ? g.serp_shapes : null,
     regulatory_facts: regFacts, regulatory_topics: regTopics };
   const grading_missing = PRC_GRADING.filter(k => grading[k] == null);
-  return { received: !!pr, gating, gating_missing, blocks_known: gating_missing.length === 0, grading, grading_missing,
+  return { received: !!pr, legacy, legacy_unknown: legacy ? ['duplicate_targets', 'copied_passages', 'dead_links'] : [], gating, gating_missing, blocks_known: gating_missing.length === 0, grading, grading_missing,
     content_request_id: S(g.content_request_id || b.content_request_id).trim().slice(0, 120) };
 })();
 const dupUrls = [...new Set(prc.gating.duplicate_targets.map(d => d.url).concat(...prc.gating.qa_blocking.filter(x => x.code === 'duplicate_page').map(x => x.urls || [])))];
@@ -209,7 +218,7 @@ return [{ json: {
   serp_shapes: G.serp_shapes || null, regulatory: G.regulatory_facts ? { topics: G.regulatory_topics || [...new Set(G.regulatory_facts.map(f => S(f.topic)).filter(Boolean))].map(id => ({ id, relevance: 'core' })), facts: G.regulatory_facts } : null,
   ai_target: null, qa_max_rounds: 1, originality_max_overlap_pct: 15, client_pages: [],
   request_id: S(b.request_id).slice(0, 120), content_request_id: S(prc.content_request_id || b.content_request_id).slice(0, 120), site_id: S(b.site_id).slice(0, 120),
-  prc: { received: prc.received, gating: prc.gating, gating_missing: prc.gating_missing, blocks_known: prc.blocks_known, grading_missing: prc.grading_missing, length_from: LEN.from,
+  prc: { received: prc.received, legacy: prc.legacy, legacy_unknown: prc.legacy_unknown, gating: prc.gating, gating_missing: prc.gating_missing, blocks_known: prc.blocks_known, grading_missing: prc.grading_missing, length_from: LEN.from,
     length_points: LEN.points == null ? null : LEN.points,
     duplicate_urls: dupUrls, duplicate_decision },
   finalize: { answers, client_edited, client_sentences, delivered_markdown: delivered, input_markdown: markdown, answer_texts: answerTexts, stored_keys: stored,

@@ -316,6 +316,12 @@ module.exports = async (ctx) => {
     const item = { output: md, content_qa: { ...qg, delivery: { status: 'ready', label: 'Ready to publish', blocking: [], advisory: [], client_questions: [], grade: { score: qg.content_score, of: 100, blocking: 0 }, next_step: '' } } };
     const plan = await rr('plan', [item, pb, {}]);
     check('as a ladder page (a run the system started), the guide is read in shadow mode', plan.skip === false && plan.mode === 'shadow', J({ skip: plan.skip, mode: plan.mode, reason: plan.reason }));
+    // M4 (WAVE0_REVIEW 2026-10-30): the same guide started from the app's ladder "Write now" (client_ip app:..., the ladder fields attached)
+    // is read in shadow mode too, until the owner has reviewed the first 20 second reads; a page that is not a ladder page stays enforced
+    const planApp = await rr('plan', [item, { ...pb, client_ip: 'app:company-1' }, {}]);
+    check('M4: started by a person from the app\'s ladder "Write now", the guide is still read in shadow mode', planApp.skip === false && planApp.mode === 'shadow', J({ mode: planApp.mode }));
+    const planKw = await rr('plan', [item, { ...pb, client_ip: 'app:company-1', ladder_id: '', ladder_rung: null }, {}]);
+    check('M4: the same page outside a ladder, started by a person, is enforced as before', planKw.skip === false && planKw.mode === 'enforce', J({ mode: planKw.mode }));
     // its own first-draft review, as if a person had started the run and the second read had said exactly that
     const KIND = (p) => /placeholder|bracket/i.test(p.issue) ? 'claim' : /figure|weak|source|blog|unsourced/i.test(p.issue + ' ' + p.location) ? 'source' : /objection|generic|no concrete|vague/i.test(p.issue) ? 'depth' : 'other';
     const probs = G.critique.problems.map(p => ({ severity: p.severity, kind: KIND(p), location: p.location, issue: p.issue, fix: p.fix }));

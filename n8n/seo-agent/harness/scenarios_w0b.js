@@ -102,13 +102,18 @@ module.exports = async (ctx) => {
 
   // ---------- W0B3 no page run at all: never ready ----------
   await guard('W0B3 no page run', async () => {
-    const SN = 'W0B3 (W0-B, PLAN Fix 2.3) the request 3336 actually sent (no page run): a missing gating field can never produce Ready';
+    const SN = 'W0B3 (W0-B, PLAN Fix 2.3; WAVE0_REVIEW M3) the request 3336 actually sent (no page run, an app built before W0-B): never Ready, "Needs work"; a page run that is sent without a gating field: not ready';
     begin(SN); const check = mkCheck(SN);
+    // M3 (WAVE0_REVIEW 2026-10-30): the request 3336 sent comes from an app built before W0-B (no page_run at all). The engine may be deployed
+    // before the app, so this is derived in Parse Brief: never "Ready", but "Needs work: first check not read" with what to do, not a
+    // blocker that made every final version "not ready, 59"
     const b = (await chain(clone(BODY))).body;
-    show('3336 final (no page run)', { status: b.delivery_status, blocking: codes(b.delivery.blocking), grade: b.grade.score });
-    check('not ready, with the reason in plain words and what to do', b.delivery_status === 'not_ready' && b.delivery.blocking[0].code === 'not_checked' && /could not read what stopped the page in its first check/.test(b.delivery.blocking[0].text)
-      && /make the final version again/.test(b.delivery.blocking[0].action), J(b.delivery.blocking[0]));
+    show('3336 final (no page run: an app built before W0-B)', { status: b.delivery_status, label: b.delivery.label, blocking: codes(b.delivery.blocking), grade: b.grade.score, needs_work: b.delivery.needs_work });
+    check('never "Ready to publish": "Needs work" because the first check was not read, with the reason in plain words and what to do', b.delivery_status === 'needs_work' && !b.grade.ready
+      && /first check not read/.test(b.delivery.label) && (b.delivery.needs_work || []).some(x => x.dim === 'first_check' && /already has a page for this search/.test(x.text) && /make the final version again/i.test(x.action)), J({ st: b.delivery_status, l: b.delivery.label, nw: b.delivery.needs_work }));
+    check('no "not checked" blocker and no 59 cap from it (the old app is not held back on every page)', !codes(b.delivery.blocking).includes('not_checked') && b.grade.score > 59 && b.page_run.legacy === true, J({ bl: codes(b.delivery.blocking), g: b.grade.score }));
     check('its next step says to make the final version again from the content list (not "finish it by hand")', /Make the final version again from the page in your content list/.test(b.delivery.next_step) && !/by hand/.test(b.delivery.next_step), b.delivery.next_step);
+    check('what the client reads is plain', !PLAIN.test(J(b.delivery)), '');
     const g1 = (await chain({ ...clone(BODY), page_run: { ...gatingOf(CB), qa_blocking: null } })).body;
     check('one blocking gating field missing (qa_blocking) is enough to stop Ready', g1.delivery_status === 'not_ready' && codes(g1.delivery.blocking).includes('not_checked'), J(codes(g1.delivery.blocking)));
     const g2 = (await chain({ ...clone(BODY), page_run: { ...gatingOf(CB), qa_blocking: [], duplicate_targets: [], missing: ['duplicate_targets'] } })).body;
@@ -203,7 +208,7 @@ module.exports = async (ctx) => {
 
   // ---------- W0B9 the guide that ranks (owner priority) ----------
   await guard('W0B9 ranking guide 949', async () => {
-    const SN = 'W0B9 (owner priority 2026-10-29) the published guide that ranks (exec 949) through the final version: never held back, never its own duplicate, a grade not below the 3299 service page\'s';
+    const SN = 'W0B9 (owner priority 2026-10-29) the published guide that ranks (exec 949) through the final version: never held back, never its own duplicate, a grade not below the 3299 service page\'s best (L1: a bar that can fail)';
     begin(SN); const check = mkCheck(SN);
     const gate = { qa_blocking: [], duplicate_targets: [], verdict: null, score: null, score_withheld: false, page_type: 'Guide', verdict_acknowledged: false, copied_passages: [], content_request_id: 'exec-949' };
     const body = { mode: 'finalize', request_id: 'app-fin-949', domain: 'novaand.example', site_id: 'site_novaand-example', keyword: G.keyword, country: 'United Arab Emirates', page_type: 'Guide',
@@ -220,12 +225,21 @@ module.exports = async (ctx) => {
       style_guide: clone(GRADING.style_guide), site_urls: clone(GRADING.site_urls), facts: [], terms: [], sources_cited: [] };
     const runs = [['old-format page run (no verdict score, no stored grade)', { ...body, page_run: gate }], ['new-format page run (its own band 1,800-3,000)', { ...body, page_run: NEWG }],
       ['old-format, without the live author box', { ...body, markdown: trimmed, delivered_markdown: trimmed, page_run: gate }], ['new-format, without the live author box', { ...body, markdown: trimmed, delivered_markdown: trimmed, page_run: NEWG }]];
-    const bar = Math.max(grade3336 ? grade3336.score : 0, grade3336new ? grade3336new.score : 0);
+    // L1 (WAVE0_REVIEW 2026-10-30): the bar was the 3336 final grade, itself capped at 59 by its blocker, so any page with any blocker met it.
+    // It is now the 3299 service page's final version with nothing blocking and its verdict acknowledged (W0C5's pin 2, 71 at W0-C), the
+    // highest that page reaches; a run whose only blocking point is the cut-off check on the live tag line (H2, fixed by the Finalize
+    // follow-up) is compared before that point's 59 cap, so the bar still bites on what the guide's text earns
+    const pin2 = (await chain({ ...clone(BODY), page_run: { ...gatingOf(CB), qa_blocking: [], duplicate_targets: [], verdict_acknowledged: true } })).body;
+    const bar = Math.max(pin2.grade.score, grade3336 ? grade3336.score : 0, grade3336new ? grade3336new.score : 0);
+    check('the bar is the 3299 page at its best (nothing blocking, verdict acknowledged), above the 59 any blocker caps to', bar > 59 && !pin2.delivery.blocking.length, J({ bar, st: pin2.delivery_status }));
+    const sumOf = (g) => Object.values((g || {}).breakdown || {}).reduce((t, x) => t + (Number(x) || 0), 0);
     for (const [n, req] of runs) {
       const b = (await chain(req)).body;
       show('949 guide final, ' + n, { status: b.delivery_status, blocking: codes(b.delivery.blocking), grade: b.grade.score, breakdown: b.grade.breakdown, kept_open: b.page_run.kept_open, s3336: [grade3336 && grade3336.score, grade3336new && grade3336new.score] });
       check(n + ': no W0-B gate fires (nothing carried, no "not checked" block, never its own duplicate)', b.page_run.kept_open.length === 0 && !codes(b.delivery.blocking).some(c => ['not_checked', 'duplicate_page', 'copied', 'dead_link', 'off_topic'].includes(c)) && !b.decision, J(b.delivery.blocking));
-      check(n + ': its grade is not below the 3299 service page\'s final version (' + bar + ')', typeof b.grade.score === 'number' && b.grade.score >= bar, J({ guide: b.grade.score, bar }));
+      const onlyCut = b.delivery.blocking.length > 0 && b.delivery.blocking.every(x => x.code === 'cut_off');
+      const earned = onlyCut ? sumOf(b.grade) : b.grade.score;
+      check(n + ': its grade' + (onlyCut ? ' before the cut-off cap' : '') + ' is not below the 3299 service page\'s best final version (' + bar + ')', typeof b.grade.score === 'number' && earned >= bar, J({ guide: b.grade.score, earned, bar }));
       if (/without the live author box/.test(n)) check(n + ': ready to publish (not held back)', b.delivery_status !== 'not_ready', J(b.delivery.blocking));
       else check(n + ': the only blocking point, if any, is the cut-off check on the live tag line ("' + tagLine.slice(0, 40) + '")', b.delivery.blocking.every(x => x.code === 'cut_off'), J(b.delivery.blocking));
     }
