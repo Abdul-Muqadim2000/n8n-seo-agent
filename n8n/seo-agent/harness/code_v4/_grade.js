@@ -12,8 +12,33 @@
 const SRC = (() => {
   const TRACK = /^(?:utm_[a-z0-9_]*|srsltid|gclid|gbraid|wbraid|dclid|fbclid|msclkid|yclid|twclid|ttclid|igshid|mc_cid|mc_eid|_hsenc|_hsmi|hsa_[a-z0-9_]*|s_kwcid|vero_id|oly_enc_id|cmpid|mkt_tok|spm|scid|ref_src|pk_campaign|pk_kwd|piwik_campaign|at_medium|at_campaign)$/i;
   const host = (u) => { const m = String(u == null ? '' : u).trim().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
+  // ---- FU-SV (2026-10-29, page-quality BEFORE run K7): a search-engine redirect is never a source ----
+  // One run's facts search answered 16 of its 19 results as Google redirects (https://google.com/goto?url=CAES..., an opaque token, domain
+  // "google.com", rated a high-authority source because it is Google), and all five citations of the delivered page pointed there.
+  // `isRedirect` knows the redirect forms (Google /url, /goto, /aclk, /imgres, the Vertex AI grounding redirect, Google News article
+  // tokens, Bing /ck/a); `unwrap` returns the real target when the redirect carries it (?q=https://..., ?url=https%3A..., Bing's
+  // u=a1<base64>), else ''. `clean` unwraps a redirect that carries its target, so every caller that cleans a link gets the real page; an
+  // opaque redirect is returned as it is, and the caller drops the link and keeps its words (`unredirect`). `tier` rates an opaque one weak.
+  const REDIR = /^https?:\/\/(?:[a-z0-9-]+\.)*(?:google\.[a-z]{2,3}(?:\.[a-z]{2})?\/(?:url|goto|aclk|search\/url|imgres)(?=[?\/#]|$)|vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/|news\.google\.com\/(?:rss\/)?(?:articles|read)\/|bing\.com\/ck\/a(?=[?\/#]|$))/i;
+  const isRedirect = (u) => REDIR.test(String(u == null ? '' : u).trim());
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const b64 = (t) => { let bits = 0, val = 0, out = ''; for (const ch of String(t).replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '')) {
+    const i = B64.indexOf(ch); if (i < 0) return ''; val = ((val << 6) | i) & 0xffffff; bits += 6; if (bits >= 8) { bits -= 8; out += String.fromCharCode((val >> bits) & 255); } } return out; };
+  const dec = (v) => { let x = String(v || ''); for (let i = 0; i < 3 && /%[0-9a-f]{2}/i.test(x); i++) { try { x = decodeURIComponent(x); } catch (e) { break; } } return x; };
+  const param = (s, names) => { const q = s.indexOf('?'); if (q < 0) return ''; const qs = s.slice(q + 1).replace(/#.*$/, '');
+    for (const n of names) for (const p of qs.split('&')) { const e = p.indexOf('='); if (e > 0 && p.slice(0, e).toLowerCase() === n) return p.slice(e + 1); } return ''; };
+  const unwrap = (u, depth) => {
+    const s = String(u == null ? '' : u).trim(); if (!isRedirect(s)) return s;
+    let t = '';
+    if (/bing\.com\/ck\/a/i.test(s)) { const v = dec(param(s, ['u'])); t = /^a1/.test(v) ? b64(v.slice(2)) : v; }
+    else if (!/vertexaisearch|news\.google|\/aclk/i.test(s)) t = dec(param(s, /\/imgres/i.test(s) ? ['imgrefurl'] : ['url', 'q', 'u']));
+    t = String(t || '').trim();
+    if (!/^https?:\/\/[^\s\/?#]+\.[^\s]*$/i.test(t) || /[\s<>"]/.test(t)) return '';
+    return isRedirect(t) ? ((depth || 0) < 2 ? unwrap(t, (depth || 0) + 1) : '') : t;
+  };
   const clean = (u) => {
-    const s = String(u == null ? '' : u).trim();
+    let s = String(u == null ? '' : u).trim();
+    if (isRedirect(s)) { const t = unwrap(s); if (!t) return s; s = t; }
     if (!s || s.indexOf('?') < 0) return s;
     const h = s.indexOf('#'); const frag = h >= 0 ? s.slice(h) : ''; const noFrag = h >= 0 ? s.slice(0, h) : s;
     const q = noFrag.indexOf('?'); if (q < 0) return noFrag + frag;
@@ -26,7 +51,8 @@ const SRC = (() => {
   const PRESS = /(^|\.)(reuters\.com|bloomberg\.com|bbc\.com|bbc\.co\.uk|nytimes\.com|wsj\.com|ft\.com|economist\.com|apnews\.com|cnbc\.com|theguardian\.com|forbes\.com|techcrunch\.com|zdnet\.com|arstechnica\.com|theregister\.com|gulfnews\.com|khaleejtimes\.com|thenationalnews\.com|arabianbusiness\.com|zawya\.com|bizjournals\.com)$/i;
   const VENDOR = /(^|\.)(microsoft\.com|oracle\.com|sap\.com|odoo\.com|zoho\.com|salesforce\.com|netsuite\.com|sage\.com|xero\.com|intuit\.com|quickbooks\.intuit\.com|google\.com|adobe\.com|aws\.amazon\.com|amazon\.com|ibm\.com|stripe\.com|shopify\.com|hubspot\.com|atlassian\.com|cloudflare\.com|mozilla\.org|developer\.mozilla\.org)$/i;
   const BLOGGY = /\/(?:blog|blogs|insights|resources|articles|news|post|posts|guides?)(?:\/|$)/i;
-  const tier = (u) => {
+  const tier = (u0) => {
+    const u = isRedirect(u0) ? unwrap(u0) : u0;   // FU-SV: a redirect is rated as its target; an opaque one has no host we can rate
     const h = host(u); if (!h) return 'weak';
     if (PRIMARY.test(h)) return 'primary';
     if (RESEARCH.test(h)) return 'research';
@@ -112,7 +138,21 @@ const SRC = (() => {
   // an excerpt the run read was cut short (a search snippet: "…", "...", "Read more"): a figure missing from it is "not in the excerpt
   // the run read", never "the source does not carry it" — the page itself was never read in full.
   const cutShort = (text) => /\.{3}|…|\bread more\b/i.test(String(text == null ? '' : text));
-  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, spelled, cutShort, FIG_RE };
+  // FU-SV: every link of a text (Markdown links and images, HTML anchors, autolinks, bare URLs) that is a search-engine redirect becomes
+  // its real target when the redirect carries it; an opaque one loses its link and keeps its words, so the attribution stays readable.
+  const unredirect = (text) => {
+    const resolved = [], dropped = [];
+    const fix = (u) => { const t = unwrap(u); if (t) { const c = clean(t); resolved.push({ from: u, to: c }); return c; } dropped.push(u); return ''; };
+    let t = String(text == null ? '' : text);
+    if (!/google\.|vertexaisearch|bing\.com/i.test(t)) return { text: t, resolved, dropped };
+    t = t.replace(/(!?)\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)((?:\s+"[^"]*")?)\)/g, (m, bang, a, u, ttl) => { if (!isRedirect(u)) return m; const r = fix(u); return r ? bang + '[' + a + '](' + r + ttl + ')' : (bang ? '' : a); });
+    t = t.replace(/<a\b([^>]*?)\bhref=(["'])(https?:\/\/[^"']+)\2([^>]*)>([\s\S]*?)<\/a>/gi, (m, pre, q, u0, post, inner) => { const u = u0.replace(/&amp;/g, '&'); if (!isRedirect(u)) return m; const r = fix(u); return r ? '<a' + pre + 'href=' + q + r.replace(/&/g, '&amp;') + q + post + '>' + inner + '</a>' : inner; });
+    t = t.replace(/<(https?:\/\/[^>\s]+)>/g, (m, u) => { if (!isRedirect(u)) return m; const r = fix(u); return r ? '<' + r + '>' : ''; });
+    t = t.replace(/(^|[\s(])(https?:\/\/[^\s)<>\]"']+)/g, (m, pre, u) => { if (!isRedirect(u)) return m; return pre + fix(u); });
+    if (dropped.length) t = t.replace(/[ \t]*\([ \t]*\)/g, '');
+    return { text: t, resolved, dropped };
+  };
+  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, spelled, cutShort, FIG_RE, isRedirect, unwrap, unredirect };
 })();
 // ---- grade kit (W0-C, page-quality programme 2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 3, 2.6, 2.9; REVIEW_CODE H3 / L1 / L5;
 // REVIEW_EVIDENCE H2 / H3 / M1; inlined through the GRADE marker into Content QA, Page Candidates, Apply Second Read and the Finalize
@@ -130,7 +170,13 @@ const SRC = (() => {
 //   clean language 10  today's filler-phrase check
 //   sources 15         share of the cited sentences and figures resting on an official body, a research house, major press or vendor
 //                      documentation; -1/3 of the part per market, adoption, cost or compliance figure whose only source is weak; such a
-//                      compliance figure caps sources at 8 of 15. Nothing to source (no figure, no citation) is full points, said so
+//                      compliance figure caps sources at 8 of 15. Nothing to source (no figure, no citation) is "not checked" at 12 of
+//                      15 (4/5): never full marks, so deleting a citation never pays (WAVE0_REVIEW M2). A sentence resting only on a weak
+//                      source with no market / cost / compliance figure counts half a strong one (none while such a figure rests only
+//                      on a weak source), and while nothing on the page is an
+//                      unsourced or weak-only figure the part never falls below "not checked": citing a vendor or agency page is never
+//                      worse than citing nothing. The digits of a phone number, opening hours, a postcode / PO box or a street, office
+//                      or floor number are contact details, never a figure to source (WAVE0_REVIEW H1)
 //   fit 20             half for the verdict (>= 50 full, 30-49 two fifths, < 30 none, no score full and "not checked"), half for no open
 //                      duplicate page. A verdict under 50 caps fit at 40%, also after "Write it anyway"; an open duplicate caps it at 30%.
 //                      The shapes of the results page are recorded (serp_shapes, Parse Analysis), no points yet
@@ -159,7 +205,7 @@ const GR = (() => {
   const LABEL = { structure: 'structure', coverage: 'topic coverage', readability: 'readability', specificity: 'specificity', clean_language: 'plain language', sources: 'sources', fit: 'fit with the search' };
   // caps as shares of their part (REVIEW_EVIDENCE M1): verdict under 50 -> fit 40%; open duplicate -> fit 30%; a statement made 4+ times ->
   // structure 50%; a weak-only compliance figure -> sources 8 of 15
-  const SHARE = { fit_verdict: 0.4, fit_duplicate: 0.3, structure_repeat: 0.5, sources_compliance: 8 / 15, weak_figure: 1 / 3, verdict_partial: 0.4 };
+  const SHARE = { fit_verdict: 0.4, fit_duplicate: 0.3, structure_repeat: 0.5, sources_compliance: 8 / 15, weak_figure: 1 / 3, verdict_partial: 0.4, sources_none: 0.8, weak_cite: 0.5 };
   const CFG = { sim: 0.6, min_words: 4, cluster: 3, cluster_cap: 4, blocker_cap: 59, verdict_bar: 50, display_top: 95, floor: 0.5 };
   const STOP = new Set(('the a an and or of for to in on with by at from about this that these those your our its it is are be how what which why when who you we they their them '
     + 'than then into over under more most can will does do not but any all one two also very just only such been being has have had was were each per may must should would '
@@ -258,6 +304,30 @@ const GR = (() => {
   const FIG_TOPIC = /\bmarket|\bshare\b|\bindustr|\brevenue|\bvalued?\b|\bworth\b|\bcagr\b|\bgrow|\bsize\b|\bforecast|\bspend|\bcompan(?:y|ies)\b|\bbusinesses\b|\borgani[sz]ations?\b|\bfirms?\b|\benterprises?\b|\bcustomers?\b|\busers?\b|\bclients?\b|\bsmes?\b|\badopt|\buse[sd]?\b|\busing\b|\bdeploy|\bimplement|\bcost|\bprice|\bpricing|\bfees?\b|\bbudget|\bsav(?:e|es|ed|ing|ings)\b|\broi\b|\binvest|\bfines?\b|\bpenalt|\bdeadline|\bmandat|\bvat\b|\btax|\bregulat|\blaws?\b|\blegal|\bcompl(?:y|ies|iance|iant)\b|\be-?invoic|\bthreshold|\brequire|\bauthorit|\bministry|\bdecree/i;
   const COMPLIANCE = /\bfines?\b|\bpenalt|\bdeadline|\bmandat|\bvat\b|\btax|\bregulat|\blaws?\b|\blegal|\bcompl(?:y|ies|iance|iant)\b|\be-?invoic|\bthreshold|\brequire|\bauthorit|\bministry|\bdecree/i;
   const STD = /\b(?:ISO|IEC|EN|BS|SOC|PCI|IAS|IFRS|ASC|Article|Section|Law|Decree|No\.?|Resolution|Circular|Decision)\s?(?:\/IEC)?$/i;
+  // H1 (WAVE0_REVIEW 2026-10-30): where a page states how to reach the business, its digits are contact details. BEFORE run K6 (the page
+  // both judges rated best) had one source unit, the last four digits of the phone number in its call to action, and graded sources 0 of 15:
+  // "Needs work: sources" on a guide that cites nothing it needs to. Every Local page carries a NAP block (v4.4), so every one would have.
+  // The spans below are phone numbers (an international prefix, or a phone word before a run of 7+ digits with separators or a leading 0),
+  // opening hours (0900-1800), a PO box / postcode / ZIP, and a street, office, suite, floor or building number. A figure inside one is
+  // not a sourcing question ("P.O. Box 123456" is cut into two sentences at "P.O.", so a capital "Box" with its number counts alone, as does a
+  // number in the local form 0X XXX XXXX). Each match must hold enough digits to be what it says (a phone 7+), so "call 1,200 customers" stays a figure.
+  const NAP_RES = [
+    [/(?:\+|\b00)\d{1,4}[\s.\-]?(?:\(\d{1,4}\)[\s.\-]?)?(?:\d{1,5}[\s.\-]?){1,5}\d{1,5}\b/g, 8],
+    [/\b(?:tel|telephone|phone|call(?:\s+us)?|mobile|whatsapp|fax|toll[\s\-]?free|landline|hotline)\b[^\n.]{0,30}?(?:\(\d{1,5}\)\s?|\b0)\d[\d\s.\-]{4,}\d/gi, 7],
+    [/\b(?:tel|telephone|phone|call(?:\s+us)?|mobile|whatsapp|fax|toll[\s\-]?free|landline|hotline)\b[^\n.]{0,30}?\b\d{2,5}(?:[\s.\-]\d{2,5}){1,4}\b/gi, 7],
+    [/\(\+?\d{1,5}\)\s?\d[\d\s.\-]{4,}\d/g, 7],
+    [/\b0\d{1,3}[\s.\-]\d{3,4}[\s.\-]?\d{3,4}\b/g, 8],
+    [/\bBox\s*[:#]?\s*\d[\d\-]{1,10}/g, 3],
+    [/\b(?:open(?:ing)?|hours|mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:rs|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b[^\n.]{0,40}?\b(?:[01]\d|2[0-3])[:.]?[0-5]\d\s*(?:-|to|until|till)\s*(?:[01]\d|2[0-3])[:.]?[0-5]\d\b/gi, 6],
+    [/\b0\d[:.]?[0-5]\d\s*(?:-|to|until|till)\s*(?:[01]\d|2[0-3])[:.]?[0-5]\d\b/gi, 6],
+    [/\b(?:p\.?\s?o\.?\s?box|post\s?box|postcode|post(?:al)?\s?code|zip(?:\s?code)?|pin\s?code)\s*[:#.]?\s*[A-Z]{0,2}\d[\d\s\-]{1,10}/gi, 2],
+    [/,\s*[A-Z]{2}\s\d{5}(?:-\d{4})?\b/g, 5],
+    [/\b(?:Office|Suite|Unit|Floor|Level|Building|Bldg|Tower|Villa|Shop|Flat|Apartment|Apt|Room|Plot|Block|Warehouse|Street|Road|Avenue)\s*(?:No\.?|Number|#)?\s*\d{1,6}[A-Za-z]?\b(?![,.]\d)/g, 1],
+    [/\b\d{1,6}[A-Za-z]?,?\s+(?:[A-Z][\w'\-]*\s+){0,4}(?:Street|St\.?|Road|Rd\.?|Avenue|Ave\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Highway|Hwy|Square)(?=[\s,.;]|$)/g, 1]
+  ];
+  const napSpans = (t) => { const out = []; const s = S(t);
+    for (const [re, minDigits] of NAP_RES) for (const m of s.matchAll(re)) if ((m[0].match(/\d/g) || []).length >= minDigits) out.push([m.index, m.index + m[0].length]);
+    return out; };
   const strongName = (name, tier) => { const n = S(name).replace(/^the\s+/i, '').replace(/[.,;:]+$/, '').trim(); if (!n) return false; if (OFFICIAL.test(n)) return true;
     if (typeof tier !== 'function') return false; const sq = n.toLowerCase().replace(/'s$/, '').replace(/[^a-z0-9]+/g, ''); return sq.length >= 2 && tier('https://' + sq + '.com/') !== 'weak'; };
   const sources = (md, ctx, opts) => {
@@ -268,10 +338,17 @@ const GR = (() => {
     const linkTier = (u) => { const h = hostOf(u); if (!h || own(h) || SOCIAL.test(h)) return null; return tier ? tier(u) : 'weak'; };
     const linksOf = (t) => [...S(t).matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
     const paraLinks = new Map(); for (const u of U) { const k = u.section + ':' + u.para; const ls = linksOf(u.text); if (ls.length) paraLinks.set(k, (paraLinks.get(k) || []).concat(ls)); }
-    const figureIn = (p) => { if (!figs) return null;
-      const f = (figs(p) || []).filter(x => x && !x.year && !STD.test(p.slice(Math.max(0, x.index - 16), x.index).trim()));
-      const left = f.filter(x => !(ownText && ownText.includes(S(x.raw).toLowerCase()))); return left.length ? left[0] : null; };
-    const list = []; let strong = 0, weakOnly = 0, weakCompliance = 0;
+    // H1: the client's own phone and address on file (own_text: Content QA adds the profile's and the site model's NAP) are theirs in any
+    // spelling: the run of digits a figure sits in (spaces, dots, dashes and brackets between them) equals one on file, or the two share
+    // their last 7 digits (a number written with and without its country code or trunk 0)
+    const ownRuns = [...S(c.own_text).matchAll(/\+?\d[\d\s.()\-]{2,}\d/g)].map(m => m[0].replace(/\D+/g, '')).filter(x => x.length >= 4);
+    const runAt = (p, x) => { let a = x.index, b = x.index + S(x.raw).length; while (a > 0 && /[\d\s.()+\-]/.test(p[a - 1])) a--; while (b < p.length && /[\d\s.()\-]/.test(p[b])) b++; return p.slice(a, b).replace(/\D+/g, ''); };
+    const ownNum = (p, x) => { if (!ownRuns.length) return false; const dg = runAt(p, x); return dg.length >= 4 && ownRuns.some(o => o === dg || (o.length >= 7 && dg.length >= 7 && o.slice(-7) === dg.slice(-7))); };
+    const figureIn = (p) => { if (!figs) return null; const nap = napSpans(p);
+      const f = (figs(p) || []).filter(x => x && !x.year && !STD.test(p.slice(Math.max(0, x.index - 16), x.index).trim())
+        && !nap.some(([a, b]) => x.index >= a && x.index < b));
+      const left = f.filter(x => !(ownText && ownText.includes(S(x.raw).toLowerCase())) && !ownNum(p, x)); return left.length ? left[0] : null; };
+    const list = []; let strong = 0, weakOnly = 0, weakCompliance = 0, weakCited = 0, unsourced = 0;
     for (const u of U) {
       const text = plain(u.text); if (!text) continue;
       const links = linksOf(u.text); const fig = figureIn(text);
@@ -282,17 +359,28 @@ const GR = (() => {
       const onlyWeak = !isStrong && ls.length > 0 && ls.every(x => x.tier === 'weak');
       const unit = { text: text.slice(0, 200), strong: isStrong, figure: fig ? S(fig.raw) : '', named: named.slice(0, 80), weak_only: false, compliance: false };
       if (fig && onlyWeak && FIG_TOPIC.test(text)) { unit.weak_only = true; weakOnly++; if (COMPLIANCE.test(text)) { unit.compliance = true; weakCompliance++; } }
+      // M2: a sentence that rests on a weak source (no market / cost / compliance figure of its own) is cited, only not by an authority: half a
+      // strong one. A figure resting on nothing at all is unsourced: no credit.
+      else if (!isStrong && (ls.length || named)) { unit.weak_cite = true; weakCited++; }
+      else if (!isStrong && fig) { unit.unsourced = true; unsourced++; }
       if (isStrong) strong++;
       list.push(unit);
     }
-    const n = list.length;
-    if (!n) return { units: 0, strong: 0, share: null, weak_only: 0, weak_compliance: 0, points: M.sources, capped: false,
-      note: 'Nothing to source: the page cites no outside page and states no figure that needs one', list: [] };
+    const n = list.length; const none = M.sources * SHARE.sources_none;
+    if (!n) return { units: 0, strong: 0, share: null, weak_only: 0, weak_compliance: 0, weak_cited: 0, unsourced: 0, points: r1(none), capped: false, not_checked: true,
+      note: 'Sources not checked: the page cites no outside page and states no figure that needs one (4 of 5 of the part: citing an official body, a research house, major press or vendor documentation earns the rest)', list: [] };
     const share = strong / n;
-    let pts = clamp(M.sources * share - M.sources * SHARE.weak_figure * weakOnly, 0, M.sources); let capped = false;
+    // the half credit holds while no market, cost or compliance figure rests only on a weak source: on a page that leans on weak sources for
+    // its figures (3336, the expert's 63), its other weak citations are the same problem and earn nothing (PLAN 5.2 pin 2 stays <= 72)
+    const half = weakOnly ? 0 : SHARE.weak_cite;
+    let pts = clamp(M.sources * (strong + half * weakCited) / n - M.sources * SHARE.weak_figure * weakOnly, 0, M.sources); let capped = false; let floored = false;
+    // M2: citing only weak pages is never worse than citing nothing, while no figure on the page is unsourced or weak-only (those cost the share)
+    if (!weakOnly && !unsourced && pts < none) { pts = none; floored = true; }
     if (weakCompliance && pts > M.sources * SHARE.sources_compliance) { pts = M.sources * SHARE.sources_compliance; capped = true; }
-    return { units: n, strong, share: Math.round(share * 100), weak_only: weakOnly, weak_compliance: weakCompliance, points: r1(pts), capped,
+    return { units: n, strong, share: Math.round(share * 100), weak_only: weakOnly, weak_compliance: weakCompliance, weak_cited: weakCited, unsourced, points: r1(pts), capped, floored,
       note: strong + ' of the ' + n + ' cited sentences and figures rest on an official body, a research house, major press or vendor documentation'
+        + (weakCited ? '; ' + weakCited + ' cite' + (weakCited === 1 ? 's' : '') + ' a page with no independent authority (' + (half ? 'half credit' : 'no credit while a figure rests only on such a page') + (floored ? ', and never less than citing nothing' : '') + ')' : '')
+        + (unsourced ? '; ' + unsourced + ' figure' + (unsourced === 1 ? ' has' : 's have') + ' no source' : '')
         + (weakOnly ? '; ' + weakOnly + ' market, cost or compliance figure' + (weakOnly === 1 ? ' rests' : 's rest') + ' only on a source with no independent authority' : ''),
       list: list.filter(x => !x.strong).slice(0, 8) };
   };
@@ -347,7 +435,7 @@ const GR = (() => {
     if (lab.count) notes.push('The same label introduces two different lists: ' + lab.collisions.map(x => '"' + x.lead + '"').join(', '));
     return { version: VERSION, score: DIMS.reduce((s, k) => s + breakdown[k], 0), of: 100, breakdown, max: M, caps,
       items: { repetition: { count: rep.count, worst: rep.worst, clusters: rep.clusters.slice(0, 5) }, list_labels: lab.collisions,
-        sources: { units: src.units, strong: src.strong, share: src.share, weak_only: src.weak_only, weak_compliance: src.weak_compliance, weak: src.list },
+        sources: { units: src.units, strong: src.strong, share: src.share, weak_only: src.weak_only, weak_compliance: src.weak_compliance, weak_cited: src.weak_cited, unsourced: src.unsourced, not_checked: !!src.not_checked, weak: src.list },
         fit: { verdict_score: F.verdict_score, band: fi.band, acknowledged: F.acknowledged, exempt: F.exempt, automatic: F.automatic, verdict_points: fi.verdict_points, duplicate_points: fi.duplicate_points } },
       notes: notes.map(clean) };
   };

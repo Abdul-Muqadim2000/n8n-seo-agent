@@ -132,7 +132,7 @@
    "model_node": "Claude \u2014 Copywriter",
    "node": "Copywriter",
    "streaming": true,
-   "template_chars": 12395,
+   "template_chars": 13480,
    "think_model": 3277
   },
   {
@@ -233,6 +233,7 @@
     "business_facts",
     "case_facts_text",
     "content_brief",
+    "content_qa",
     "keyword",
     "language_name",
     "page_contract",
@@ -250,7 +251,7 @@
    "model_node": "Claude \u2014 Editor",
    "node": "Editor",
    "streaming": true,
-   "template_chars": 4854,
+   "template_chars": 5839,
    "think_model": 3277
   },
   {
@@ -399,7 +400,7 @@
    "model_node": "Claude \u2014 Strategy Brief",
    "node": "Strategy Brief",
    "streaming": true,
-   "template_chars": 16155,
+   "template_chars": 16152,
    "think_model": 2458
   },
   {

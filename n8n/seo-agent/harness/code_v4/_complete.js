@@ -5,7 +5,9 @@
 // so the run replaced a complete 1,804-word page with 749 words and delivered half a page. Nothing in the answer says it was cut, so this
 // kit reads the answer itself, deterministically:
 //   CK.text(md)            a long text (page, brief, e-mail, report) ends cleanly: not mid-word / mid-sentence, markdown balanced,
-//                          no unfinished list item, table row or code block, no heading left without its text.
+//                          no unfinished list item, table row or code block, no heading left without its text. A trailing author
+//                          box is profile data (read on the text before it); opts.unchanged_from: an end word for word the source's is
+//                          not a cut (fu-finalize-toc, K6).
 //   CK.edit(before, after) an edit of a complete text is itself complete AND did not lose the end: under 75% of the input's main-text
 //                          words (40% when the edit was asked to cut) or two of its sections gone is a cut, not an edit.
 //   CK.json(raw)           a JSON answer parses completely; an answer that stops inside its JSON is `truncated`, never an empty answer.
@@ -50,18 +52,35 @@ const CK = (() => {
     return false; };
   // the contiguous list block that ends at index `end`
   const listBlock = (lines, end) => { const out = []; for (let i = end; i >= 0 && LIST.test(lines[i]); i--) out.unshift(lines[i]); return out; };
+  // fu-finalize-toc (2026-10-30, docs/page-quality-2026-10-29/BASELINE.md, K6): the author box the page package adds from the business
+  // profile ("---", "**About the author: ...**", the bio, the credentials line, the profile links) is profile data, not a model's answer, and
+  // its credentials line has no full stop ("ISO 27001 certified; 5 years, 100+ projects"): the final version of an unchanged page was called
+  // cut off on it. The end is read on the text before the box; the box itself only has to be balanced. -1 when the page has no box at its end.
+  const AUTHOR_BOX = /^(?:\*\*|__)?\s*About the author\b/i;
+  const authorBoxAt = (lines) => { let k = -1;
+    for (let i = lines.length - 1; i >= Math.max(0, lines.length - 12); i--) if (AUTHOR_BOX.test(lines[i].trim())) { k = i; break; }
+    if (k < 1 || lines.slice(k + 1).filter(l => l.trim()).length > 6) return -1;
+    let s = k - 1; while (s >= 0 && !lines[s].trim()) s--;
+    if (s >= 0 && /^(-{3,}|\*{3,}|_{3,})$/.test(lines[s].trim())) { s--; while (s >= 0 && !lines[s].trim()) s--; }
+    return s >= 0 ? s + 1 : -1; };
+  // the last three lines of text of a page, as it ends
+  const endOf = (md) => bodyLines(md).map(l => l.trim()).filter(Boolean).slice(-3).join('\n');
 
   const text = (md, opts) => {
     const o = opts || {};
     const minWords = o.min_words == null ? 0 : Number(o.min_words);
-    const lines = bodyLines(md);
+    const all = bodyLines(md);
     const reasons = [];
-    const body = lines.join('\n');
+    const body = all.join('\n');
     const n = words(body);
     if (!n) return { complete: false, cut_off: true, empty: true, words: 0, last_line: '', reasons: ['the answer is empty'] };
     if (minWords && n < minWords) reasons.push('the answer has ' + n + ' words, far below the ' + minWords + ' expected');
-    const fences = lines.filter(l => /^\s*(```|~~~)/.test(l)).length;
+    const fences = all.filter(l => /^\s*(```|~~~)/.test(l)).length;
     if (fences % 2) reasons.push('a code block is not closed');
+    const boxAt = fences % 2 ? -1 : authorBoxAt(all);
+    if (boxAt > 0) { const ub = unbalanced(all.slice(boxAt).join('\n')); if (ub) reasons.push('the author box stops mid-way (' + ub + ')'); }
+    const lines = boxAt > 0 ? all.slice(0, boxAt) : all;
+    const kept0 = minWords && n < minWords ? 1 : 0;
     const last = lines[lines.length - 1].trim();
     const lastPlain = last.replace(/[*_`]+$/g, '').trim();
     if (/^#{1,6}\s/.test(last)) reasons.push('the last heading has no text under it');
@@ -94,8 +113,15 @@ const CK = (() => {
       else if (!END_PUNCT.test(lastPlain) && !LINK_END.test(lastPlain)) reasons.push(/[,:;–—-]$/.test(lastPlain) || DANGLING.test(lastPlain)
         ? 'the last sentence stops mid-way' : 'the last sentence has no ending (it stops mid-word or mid-sentence)');
     }
+    // fu-finalize-toc (K6): an end that is word for word the end of the page this text was made from (opts.unchanged_from: in the final
+    // version, the page the engine delivered) was not written by this answer, so it cannot be where this answer was cut. A truly cut answer
+    // ends on other words than its source and is still caught; the caller passes no source when the source itself was found cut off.
+    const refs = (o.unchanged_from || []).map(r => String(r == null ? '' : r)).filter(r => r.trim());
+    const endWas = reasons.slice(kept0);
+    const same = endWas.length > 0 && refs.some(r => endOf(r) === endOf(md));
+    if (same) reasons.splice(kept0);
     const cut_off = reasons.length > 0;
-    return { complete: !cut_off, cut_off, empty: false, words: n, last_line: last.slice(-160), reasons };
+    return { complete: !cut_off, cut_off, empty: false, words: n, last_line: last.slice(-160), reasons, ...(same ? { unchanged_end: true, unchanged_end_reasons: endWas } : {}) };
   };
 
   const MAIN_STOP = /^#{1,3}\s+(?:faq|frequently asked questions|sources|references)\b/i;

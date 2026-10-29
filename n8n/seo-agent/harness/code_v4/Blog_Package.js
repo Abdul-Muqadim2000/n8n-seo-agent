@@ -11,8 +11,33 @@
 const SRC = (() => {
   const TRACK = /^(?:utm_[a-z0-9_]*|srsltid|gclid|gbraid|wbraid|dclid|fbclid|msclkid|yclid|twclid|ttclid|igshid|mc_cid|mc_eid|_hsenc|_hsmi|hsa_[a-z0-9_]*|s_kwcid|vero_id|oly_enc_id|cmpid|mkt_tok|spm|scid|ref_src|pk_campaign|pk_kwd|piwik_campaign|at_medium|at_campaign)$/i;
   const host = (u) => { const m = String(u == null ? '' : u).trim().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
+  // ---- FU-SV (2026-10-29, page-quality BEFORE run K7): a search-engine redirect is never a source ----
+  // One run's facts search answered 16 of its 19 results as Google redirects (https://google.com/goto?url=CAES..., an opaque token, domain
+  // "google.com", rated a high-authority source because it is Google), and all five citations of the delivered page pointed there.
+  // `isRedirect` knows the redirect forms (Google /url, /goto, /aclk, /imgres, the Vertex AI grounding redirect, Google News article
+  // tokens, Bing /ck/a); `unwrap` returns the real target when the redirect carries it (?q=https://..., ?url=https%3A..., Bing's
+  // u=a1<base64>), else ''. `clean` unwraps a redirect that carries its target, so every caller that cleans a link gets the real page; an
+  // opaque redirect is returned as it is, and the caller drops the link and keeps its words (`unredirect`). `tier` rates an opaque one weak.
+  const REDIR = /^https?:\/\/(?:[a-z0-9-]+\.)*(?:google\.[a-z]{2,3}(?:\.[a-z]{2})?\/(?:url|goto|aclk|search\/url|imgres)(?=[?\/#]|$)|vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/|news\.google\.com\/(?:rss\/)?(?:articles|read)\/|bing\.com\/ck\/a(?=[?\/#]|$))/i;
+  const isRedirect = (u) => REDIR.test(String(u == null ? '' : u).trim());
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const b64 = (t) => { let bits = 0, val = 0, out = ''; for (const ch of String(t).replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '')) {
+    const i = B64.indexOf(ch); if (i < 0) return ''; val = ((val << 6) | i) & 0xffffff; bits += 6; if (bits >= 8) { bits -= 8; out += String.fromCharCode((val >> bits) & 255); } } return out; };
+  const dec = (v) => { let x = String(v || ''); for (let i = 0; i < 3 && /%[0-9a-f]{2}/i.test(x); i++) { try { x = decodeURIComponent(x); } catch (e) { break; } } return x; };
+  const param = (s, names) => { const q = s.indexOf('?'); if (q < 0) return ''; const qs = s.slice(q + 1).replace(/#.*$/, '');
+    for (const n of names) for (const p of qs.split('&')) { const e = p.indexOf('='); if (e > 0 && p.slice(0, e).toLowerCase() === n) return p.slice(e + 1); } return ''; };
+  const unwrap = (u, depth) => {
+    const s = String(u == null ? '' : u).trim(); if (!isRedirect(s)) return s;
+    let t = '';
+    if (/bing\.com\/ck\/a/i.test(s)) { const v = dec(param(s, ['u'])); t = /^a1/.test(v) ? b64(v.slice(2)) : v; }
+    else if (!/vertexaisearch|news\.google|\/aclk/i.test(s)) t = dec(param(s, /\/imgres/i.test(s) ? ['imgrefurl'] : ['url', 'q', 'u']));
+    t = String(t || '').trim();
+    if (!/^https?:\/\/[^\s\/?#]+\.[^\s]*$/i.test(t) || /[\s<>"]/.test(t)) return '';
+    return isRedirect(t) ? ((depth || 0) < 2 ? unwrap(t, (depth || 0) + 1) : '') : t;
+  };
   const clean = (u) => {
-    const s = String(u == null ? '' : u).trim();
+    let s = String(u == null ? '' : u).trim();
+    if (isRedirect(s)) { const t = unwrap(s); if (!t) return s; s = t; }
     if (!s || s.indexOf('?') < 0) return s;
     const h = s.indexOf('#'); const frag = h >= 0 ? s.slice(h) : ''; const noFrag = h >= 0 ? s.slice(0, h) : s;
     const q = noFrag.indexOf('?'); if (q < 0) return noFrag + frag;
@@ -25,7 +50,8 @@ const SRC = (() => {
   const PRESS = /(^|\.)(reuters\.com|bloomberg\.com|bbc\.com|bbc\.co\.uk|nytimes\.com|wsj\.com|ft\.com|economist\.com|apnews\.com|cnbc\.com|theguardian\.com|forbes\.com|techcrunch\.com|zdnet\.com|arstechnica\.com|theregister\.com|gulfnews\.com|khaleejtimes\.com|thenationalnews\.com|arabianbusiness\.com|zawya\.com|bizjournals\.com)$/i;
   const VENDOR = /(^|\.)(microsoft\.com|oracle\.com|sap\.com|odoo\.com|zoho\.com|salesforce\.com|netsuite\.com|sage\.com|xero\.com|intuit\.com|quickbooks\.intuit\.com|google\.com|adobe\.com|aws\.amazon\.com|amazon\.com|ibm\.com|stripe\.com|shopify\.com|hubspot\.com|atlassian\.com|cloudflare\.com|mozilla\.org|developer\.mozilla\.org)$/i;
   const BLOGGY = /\/(?:blog|blogs|insights|resources|articles|news|post|posts|guides?)(?:\/|$)/i;
-  const tier = (u) => {
+  const tier = (u0) => {
+    const u = isRedirect(u0) ? unwrap(u0) : u0;   // FU-SV: a redirect is rated as its target; an opaque one has no host we can rate
     const h = host(u); if (!h) return 'weak';
     if (PRIMARY.test(h)) return 'primary';
     if (RESEARCH.test(h)) return 'research';
@@ -111,7 +137,21 @@ const SRC = (() => {
   // an excerpt the run read was cut short (a search snippet: "…", "...", "Read more"): a figure missing from it is "not in the excerpt
   // the run read", never "the source does not carry it" — the page itself was never read in full.
   const cutShort = (text) => /\.{3}|…|\bread more\b/i.test(String(text == null ? '' : text));
-  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, spelled, cutShort, FIG_RE };
+  // FU-SV: every link of a text (Markdown links and images, HTML anchors, autolinks, bare URLs) that is a search-engine redirect becomes
+  // its real target when the redirect carries it; an opaque one loses its link and keeps its words, so the attribution stays readable.
+  const unredirect = (text) => {
+    const resolved = [], dropped = [];
+    const fix = (u) => { const t = unwrap(u); if (t) { const c = clean(t); resolved.push({ from: u, to: c }); return c; } dropped.push(u); return ''; };
+    let t = String(text == null ? '' : text);
+    if (!/google\.|vertexaisearch|bing\.com/i.test(t)) return { text: t, resolved, dropped };
+    t = t.replace(/(!?)\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)((?:\s+"[^"]*")?)\)/g, (m, bang, a, u, ttl) => { if (!isRedirect(u)) return m; const r = fix(u); return r ? bang + '[' + a + '](' + r + ttl + ')' : (bang ? '' : a); });
+    t = t.replace(/<a\b([^>]*?)\bhref=(["'])(https?:\/\/[^"']+)\2([^>]*)>([\s\S]*?)<\/a>/gi, (m, pre, q, u0, post, inner) => { const u = u0.replace(/&amp;/g, '&'); if (!isRedirect(u)) return m; const r = fix(u); return r ? '<a' + pre + 'href=' + q + r.replace(/&/g, '&amp;') + q + post + '>' + inner + '</a>' : inner; });
+    t = t.replace(/<(https?:\/\/[^>\s]+)>/g, (m, u) => { if (!isRedirect(u)) return m; const r = fix(u); return r ? '<' + r + '>' : ''; });
+    t = t.replace(/(^|[\s(])(https?:\/\/[^\s)<>\]"']+)/g, (m, pre, u) => { if (!isRedirect(u)) return m; return pre + fix(u); });
+    if (dropped.length) t = t.replace(/[ \t]*\([ \t]*\)/g, '');
+    return { text: t, resolved, dropped };
+  };
+  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, spelled, cutShort, FIG_RE, isRedirect, unwrap, unredirect };
 })();
 // ---- anchor kit (D9, 2026-10-11; inlined through the __ANCHOR__ marker): the words a link to one of our own pages is written with.
 // Live, "Guides in this series" linked to "Facts erp" and "Erp software dubai" — a raw keyword string with one capital letter (exec 365).
@@ -651,10 +691,34 @@ if (!md0.trim()) return [item];
 const metaRe = /^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):[ \t]*(.*)$/gim;
 const metaLines = {}; let mm; while ((mm = metaRe.exec(md0)) !== null) metaLines[mm[1].toLowerCase()] = mm[2].trim();
 let md = md0.replace(metaRe, '').replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/gi, '').replace(/^\s*(Production Brief|Note|Editor's note):.*$/gim, '').replace(/[ \t]*\[(?:Image|Video)\s*:(?:[^\[\]\n]|\[[^\[\]\n]*\])*\][ \t]*/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+const __redir = SRC.unredirect(md); md = __redir.text;   // FU-SV (2026-10-29): a search-engine redirect never reaches the package: its target, or its words without the link
 md = md.replace(/\]\((https?:\/\/[^)\s]+)\)/g, (m, u) => '](' + SRC.clean(u) + ')');   // FIX_PLAN G4: utm_*, srsltid, gclid, fbclid never reach the published page
 const h1 = (md.match(/^#\s+(.+)$/m) || [])[1] || '';
 md = md.replace(/^#\s+.+$\n?/m, '').trim();
-const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// FU-SV (2026-10-29, page-quality BEFORE run, 3 of 8 pages): one byline. The package prints the structured byline under the H1 (author,
+// "Updated" date, reviewer) on every article and, with a profile on file, on every other page; the writer also wrote its own ("Written by
+// the ... Team and reviewed by ...", "This page was written by ... and reviewed by ...", "*By ... · Updated ...*"), so the page named its
+// author twice. A paragraph that is only such a line (up to 70 words, opening with it, naming the author, the reviewer, the business or
+// its team) is taken out when the structured byline will be printed; one naming a reviewer is taken out only when the byline names one.
+const byline_duplicates_removed = [];
+{
+  const AU0 = d.author || null, RV0 = d.reviewer || null;
+  const al0 = d.article_like != null ? !!d.article_like : /blog|guide|article|pillar|hub|case stud/.test(String(d.recommended_page || d.page_type || '').toLowerCase());
+  if (al0 || AU0) {
+    const OPEN = /^(?:(?:this|the|our)\s+(?:page|guide|article|post|piece|checklist|comparison|overview|explainer|content)\s+(?:was|is|has been)\s+)?(?:written|authored|prepared|produced|created|compiled)(?:\s+and\s+(?:reviewed|checked|fact[- ]checked|edited))?\s+by\b|^(?:(?:it|this (?:page|guide|article))\s+(?:was|has been)\s+)?(?:reviewed|fact[- ]checked|checked)\s+by\b|^by\s+[^.·]{2,120}·\s*(?:updated|published|last updated)\b/i;
+    const who = [AU0 && AU0.name, RV0 && RV0.name, (d.site_profile || {}).business_name].map(x => String(x || '').toLowerCase().trim()).filter(x => x.length >= 3);
+    md = md.split('\n').filter(line => {
+      const t = line.trim(); if (!t || /^(?:#|[-+]\s|\d+[.)]\s|\||>|!\[)/.test(t)) return true;
+      const p = t.replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim();
+      if (!OPEN.test(p) || p.split(' ').length > 70) return true;
+      const low = p.toLowerCase();
+      if (!(who.some(w => low.includes(w)) || /\b(?:our|team|consultants?|editors?|experts?)\b/.test(low))) return true;
+      if (/\b(?:reviewed|fact[- ]checked|checked)\s+by\b/.test(low) && !RV0) return true;   // the structured byline names no reviewer: keep the only mention
+      byline_duplicates_removed.push(p.slice(0, 200)); return false;
+    }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+}
+const esc =(s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const inline = (s) => { let t = esc(s); t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); t = t.replace(/\[([^\[\]]+)\]\(([^)]+)\)/g, (m, a, u) => '<a href="' + SRC.clean(u) + '">' + a + '</a>'); return t; };   // FIX_PLAN G4: no tracking parameters leave the package
 const anchorIds = new Map();   // H2 ids for the table of contents (unique, stable)
 const anchorOf = (h) => { if (anchorIds.has(h)) return anchorIds.get(h); let a = String(h).toLowerCase().replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'section'; let k = a, i = 2; while ([...anchorIds.values()].includes(k)) k = a + '-' + (i++); anchorIds.set(h, k); return k; };
@@ -679,7 +743,8 @@ function mdToHtml(text) {
   }
   closeList(); closeTable(); return out.join('\n');
 }
-const cleanUrls = (x) => Array.isArray(x) ? x.map(cleanUrls) : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, cleanUrls(v)])) : (typeof x === 'string' && /^https?:\/\//i.test(x) ? SRC.clean(x) : x);
+const opaqueRedirect = (v) => typeof v === 'string' && SRC.isRedirect(v) && !SRC.unwrap(v);   // FU-SV: no schema citation through a redirect
+const cleanUrls = (x) => Array.isArray(x) ? x.filter(v => !opaqueRedirect(v)).map(cleanUrls) : opaqueRedirect(x) ? '' : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, cleanUrls(v)])) : (typeof x === 'string' && /^https?:\/\//i.test(x) ? SRC.clean(x) : x);
 const schema = (Array.isArray(d.schema_blocks) ? d.schema_blocks : []).map(b => (b && b.json) ? { ...b, json: cleanUrls(b.json) } : cleanUrls(b));
 const title = metaLines.title || h1 || d.keyword || 'New page';
 const slug = (String(d.content_brief_slug || metaLines.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)) || 'page';

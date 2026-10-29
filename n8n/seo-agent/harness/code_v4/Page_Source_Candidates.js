@@ -11,8 +11,33 @@
 const SRC = (() => {
   const TRACK = /^(?:utm_[a-z0-9_]*|srsltid|gclid|gbraid|wbraid|dclid|fbclid|msclkid|yclid|twclid|ttclid|igshid|mc_cid|mc_eid|_hsenc|_hsmi|hsa_[a-z0-9_]*|s_kwcid|vero_id|oly_enc_id|cmpid|mkt_tok|spm|scid|ref_src|pk_campaign|pk_kwd|piwik_campaign|at_medium|at_campaign)$/i;
   const host = (u) => { const m = String(u == null ? '' : u).trim().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
+  // ---- FU-SV (2026-10-29, page-quality BEFORE run K7): a search-engine redirect is never a source ----
+  // One run's facts search answered 16 of its 19 results as Google redirects (https://google.com/goto?url=CAES..., an opaque token, domain
+  // "google.com", rated a high-authority source because it is Google), and all five citations of the delivered page pointed there.
+  // `isRedirect` knows the redirect forms (Google /url, /goto, /aclk, /imgres, the Vertex AI grounding redirect, Google News article
+  // tokens, Bing /ck/a); `unwrap` returns the real target when the redirect carries it (?q=https://..., ?url=https%3A..., Bing's
+  // u=a1<base64>), else ''. `clean` unwraps a redirect that carries its target, so every caller that cleans a link gets the real page; an
+  // opaque redirect is returned as it is, and the caller drops the link and keeps its words (`unredirect`). `tier` rates an opaque one weak.
+  const REDIR = /^https?:\/\/(?:[a-z0-9-]+\.)*(?:google\.[a-z]{2,3}(?:\.[a-z]{2})?\/(?:url|goto|aclk|search\/url|imgres)(?=[?\/#]|$)|vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/|news\.google\.com\/(?:rss\/)?(?:articles|read)\/|bing\.com\/ck\/a(?=[?\/#]|$))/i;
+  const isRedirect = (u) => REDIR.test(String(u == null ? '' : u).trim());
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const b64 = (t) => { let bits = 0, val = 0, out = ''; for (const ch of String(t).replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '')) {
+    const i = B64.indexOf(ch); if (i < 0) return ''; val = ((val << 6) | i) & 0xffffff; bits += 6; if (bits >= 8) { bits -= 8; out += String.fromCharCode((val >> bits) & 255); } } return out; };
+  const dec = (v) => { let x = String(v || ''); for (let i = 0; i < 3 && /%[0-9a-f]{2}/i.test(x); i++) { try { x = decodeURIComponent(x); } catch (e) { break; } } return x; };
+  const param = (s, names) => { const q = s.indexOf('?'); if (q < 0) return ''; const qs = s.slice(q + 1).replace(/#.*$/, '');
+    for (const n of names) for (const p of qs.split('&')) { const e = p.indexOf('='); if (e > 0 && p.slice(0, e).toLowerCase() === n) return p.slice(e + 1); } return ''; };
+  const unwrap = (u, depth) => {
+    const s = String(u == null ? '' : u).trim(); if (!isRedirect(s)) return s;
+    let t = '';
+    if (/bing\.com\/ck\/a/i.test(s)) { const v = dec(param(s, ['u'])); t = /^a1/.test(v) ? b64(v.slice(2)) : v; }
+    else if (!/vertexaisearch|news\.google|\/aclk/i.test(s)) t = dec(param(s, /\/imgres/i.test(s) ? ['imgrefurl'] : ['url', 'q', 'u']));
+    t = String(t || '').trim();
+    if (!/^https?:\/\/[^\s\/?#]+\.[^\s]*$/i.test(t) || /[\s<>"]/.test(t)) return '';
+    return isRedirect(t) ? ((depth || 0) < 2 ? unwrap(t, (depth || 0) + 1) : '') : t;
+  };
   const clean = (u) => {
-    const s = String(u == null ? '' : u).trim();
+    let s = String(u == null ? '' : u).trim();
+    if (isRedirect(s)) { const t = unwrap(s); if (!t) return s; s = t; }
     if (!s || s.indexOf('?') < 0) return s;
     const h = s.indexOf('#'); const frag = h >= 0 ? s.slice(h) : ''; const noFrag = h >= 0 ? s.slice(0, h) : s;
     const q = noFrag.indexOf('?'); if (q < 0) return noFrag + frag;
@@ -25,7 +50,8 @@ const SRC = (() => {
   const PRESS = /(^|\.)(reuters\.com|bloomberg\.com|bbc\.com|bbc\.co\.uk|nytimes\.com|wsj\.com|ft\.com|economist\.com|apnews\.com|cnbc\.com|theguardian\.com|forbes\.com|techcrunch\.com|zdnet\.com|arstechnica\.com|theregister\.com|gulfnews\.com|khaleejtimes\.com|thenationalnews\.com|arabianbusiness\.com|zawya\.com|bizjournals\.com)$/i;
   const VENDOR = /(^|\.)(microsoft\.com|oracle\.com|sap\.com|odoo\.com|zoho\.com|salesforce\.com|netsuite\.com|sage\.com|xero\.com|intuit\.com|quickbooks\.intuit\.com|google\.com|adobe\.com|aws\.amazon\.com|amazon\.com|ibm\.com|stripe\.com|shopify\.com|hubspot\.com|atlassian\.com|cloudflare\.com|mozilla\.org|developer\.mozilla\.org)$/i;
   const BLOGGY = /\/(?:blog|blogs|insights|resources|articles|news|post|posts|guides?)(?:\/|$)/i;
-  const tier = (u) => {
+  const tier = (u0) => {
+    const u = isRedirect(u0) ? unwrap(u0) : u0;   // FU-SV: a redirect is rated as its target; an opaque one has no host we can rate
     const h = host(u); if (!h) return 'weak';
     if (PRIMARY.test(h)) return 'primary';
     if (RESEARCH.test(h)) return 'research';
@@ -111,7 +137,21 @@ const SRC = (() => {
   // an excerpt the run read was cut short (a search snippet: "…", "...", "Read more"): a figure missing from it is "not in the excerpt
   // the run read", never "the source does not carry it" — the page itself was never read in full.
   const cutShort = (text) => /\.{3}|…|\bread more\b/i.test(String(text == null ? '' : text));
-  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, spelled, cutShort, FIG_RE };
+  // FU-SV: every link of a text (Markdown links and images, HTML anchors, autolinks, bare URLs) that is a search-engine redirect becomes
+  // its real target when the redirect carries it; an opaque one loses its link and keeps its words, so the attribution stays readable.
+  const unredirect = (text) => {
+    const resolved = [], dropped = [];
+    const fix = (u) => { const t = unwrap(u); if (t) { const c = clean(t); resolved.push({ from: u, to: c }); return c; } dropped.push(u); return ''; };
+    let t = String(text == null ? '' : text);
+    if (!/google\.|vertexaisearch|bing\.com/i.test(t)) return { text: t, resolved, dropped };
+    t = t.replace(/(!?)\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)((?:\s+"[^"]*")?)\)/g, (m, bang, a, u, ttl) => { if (!isRedirect(u)) return m; const r = fix(u); return r ? bang + '[' + a + '](' + r + ttl + ')' : (bang ? '' : a); });
+    t = t.replace(/<a\b([^>]*?)\bhref=(["'])(https?:\/\/[^"']+)\2([^>]*)>([\s\S]*?)<\/a>/gi, (m, pre, q, u0, post, inner) => { const u = u0.replace(/&amp;/g, '&'); if (!isRedirect(u)) return m; const r = fix(u); return r ? '<a' + pre + 'href=' + q + r.replace(/&/g, '&amp;') + q + post + '>' + inner + '</a>' : inner; });
+    t = t.replace(/<(https?:\/\/[^>\s]+)>/g, (m, u) => { if (!isRedirect(u)) return m; const r = fix(u); return r ? '<' + r + '>' : ''; });
+    t = t.replace(/(^|[\s(])(https?:\/\/[^\s)<>\]"']+)/g, (m, pre, u) => { if (!isRedirect(u)) return m; return pre + fix(u); });
+    if (dropped.length) t = t.replace(/[ \t]*\([ \t]*\)/g, '');
+    return { text: t, resolved, dropped };
+  };
+  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, spelled, cutShort, FIG_RE, isRedirect, unwrap, unredirect };
 })();
 // ---- PF: the page pipeline's one contract, its one score and its fixes (H1, 2026-10-27; inlined through the PAGE_FIX marker) ----
 // docs/content-quality-2026-10-27/R1_PIPELINE_ANALYSIS.md: the four production page runs (949, 2195, 2552, 2575) all came out "not ready
@@ -129,6 +169,7 @@ const SRC = (() => {
 //   PF.parseSections / merge   the editor's answer (one block per section) merged into the page, every other byte kept
 //   PF.neutralize(md, cls)     the system's own neutral rewrite of whatever a fact would be needed for (delete / unlink / neutral CTA)
 //   PF.deliver(...)            ready | ready_with_questions | not_ready, in plain customer words, with the client questions
+//   PF.toc(md, ref)            the linked contents list kept, and following its headings, through the final version (fu-finalize-toc)
 // Pure: no clock, no network, no n8n globals, no URL constructor, no Object.defineProperty, no structuredClone (n8n sandbox rules).
 const PF = (() => {
   const S = (v) => String(v == null ? '' : v);
@@ -632,6 +673,10 @@ const PF = (() => {
       else if (b.code === 'weak_figure') add(at(b.sentence), 'The figure "' + b.figure + '" rests only on ' + (b.hosts || []).join(', ') + ', a source with no independent authority: rewrite the sentence without the number (keep the point it makes), or cite one of the SOURCES YOU MAY CITE that is an official body, a research house or major press and states it', 2);
       else if (b.code === 'copied') { const ps = ((qa.originality || {}).failing || {}).passages || []; for (const p of ps.slice(0, 3)) add(at(S(p.text).slice(0, 60)) || related(p.text), 'This passage repeats another page word for word; rewrite it in our own words, order and examples: "' + S(p.text).slice(0, 160) + '"', 3); }
     }
+    // FU-SV (merge 2026-10-30): a sentence Content QA could not put in the business's own voice by itself (content_qa.voice.flags, whole
+    // sentences such as "the company says it ...") goes to the editor as a problem of its section; advice to the editor, never a blocker
+    for (const v of ((qa.voice || {}).flags || []).slice(0, 6)) { const sv = S(v).trim(); if (sv.length < 12) continue;
+      add(at(sv), 'Say this in our own voice: keep the fact and drop the outside frame ("its website states", "the website says", "according to its site", "the company says"); write it with "we" / "our team" or as a plain statement with the business as the subject: "' + plain(sv).slice(0, 220) + '"', 1); }
     const advCodes = new Set(cls.advisory.map(a => a.code));
     // length: cut from the sections furthest over their outline target, or expand the thinnest, with a number for each
     const LB = cls.band; const w0 = cls.words; const outline = c.outline || [];
@@ -928,9 +973,87 @@ const PF = (() => {
       planned_slug: !!(p.ladder_id && S(p.ladder_target_url).trim()), ai_target: !!(p.ai_target && p.ai_target.question), snippet_targets: b.snippet_targets || [], outline: b.outline || [],
       internal_links: links, own_text: S(o.own_text || [p.business_facts, p.case_facts_text, p.proof_context].filter(Boolean).join(' ')), termRe: o.termRe || null,
       critique: o.critique || null, qa_marks: o.qa_marks || [], qa_figure_marks: o.qa_figure_marks || [] }; };
+  // ---------- 9. the contents list (fu-finalize-toc, 2026-10-30, docs/page-quality-2026-10-29/BASELINE.md) ----------
+  // The page package (Blog Package) puts a linked contents list above the first H2: "**Contents**", then "1. [Heading](#heading-id)", the id
+  // being the H2's text as its anchorOf makes it (lower case, a-z0-9 runs joined by "-", cut at 60 characters, "-2" for a repeat). Finalize
+  // unlinked entries 2-8 of every linked contents list (3 of 3 finals). PF.toc(md, ref) keeps the list true to the page's headings:
+  //   * an entry whose link was lost gets it back from the reference page (the page the client sent);
+  //   * an entry follows its heading: a renamed heading (matched by its anchor, its text, or its place among the reference page's headings
+  //     of its level) renames its entry and its anchor; an entry whose section is gone is dropped and the list renumbered;
+  //   * a contents list the final version lost is put back above the first H2, as the reference page had it;
+  //   * a page with no linked contents list, here or in the reference page, is returned unchanged; an entry that never had a link is kept.
+  const TOC_LABEL = /^\s*(?:#{2,4}\s+)?(?:\*\*|__)?\s*(?:contents|table of contents|in this (?:guide|article|page|post)|on this page)\s*:?\s*(?:\*\*|__)?\s*:?\s*$/i;
+  const TOC_ITEM = /^(\s*)(\d{1,3}[.)]|[-*+])\s+(.+)$/;
+  const tocSlug = (h) => S(h).toLowerCase().replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'section';
+  const tocText = (h) => S(h).replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
+  const tocKey = (t) => plain(t).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const tocBlock = (lines) => {
+    for (let i = 0; i < lines.length; i++) {
+      const labelled = TOC_LABEL.test(lines[i]);
+      if (!labelled && !TOC_ITEM.test(lines[i])) continue;
+      let j = labelled ? i + 1 : i; if (labelled) while (j < lines.length && !lines[j].trim()) j++;
+      const items = []; let k = j;
+      for (; k < lines.length; k++) { const m = lines[k].match(TOC_ITEM); if (!m) break; const lk = m[3].match(/^\[([^\[\]]+)\]\(#([^)\s]*)\)(.*)$/);
+        items.push({ i: k, indent: m[1], marker: m[2], text: lk ? lk[1] : m[3], anchor: lk ? lk[2] : '', rest: lk ? lk[3] : '' }); }
+      const linked = items.filter(x => x.anchor).length;
+      if (labelled && items.length >= 2) return { label: i, start: j, end: k, items, linked };
+      if (!labelled && items.length >= 3 && linked >= Math.ceil(items.length * 0.6)) return { label: -1, start: j, end: k, items, linked };
+      if (!labelled && k > i) i = k - 1; }
+    return null; };
+  // the headings H2-H4 with the id the page package gives an H2 (one per heading text, "-2" for another heading with the same id)
+  const tocHeads = (lines, skip) => { const ids = new Map(); const used = []; const out = []; let fence = false;
+    lines.forEach((raw, i) => { const l = raw.trim(); if (/^(```|~~~)/.test(l)) { fence = !fence; return; } if (fence || skip(i) || TOC_LABEL.test(l)) return;
+      const m = l.match(/^(#{2,4})\s+(.+)$/); if (!m) return; const text = m[2].trim(); let id;
+      if (m[1].length === 2) { if (ids.has(text)) id = ids.get(text); else { const a = tocSlug(text); let k = a, n = 2; while (used.includes(k)) k = a + '-' + (n++); ids.set(text, k); used.push(k); id = k; } }
+      else id = tocSlug(text);
+      out.push({ i, level: m[1].length, text, id }); });
+    return out; };
+  const toc = (md, ref) => {
+    const src = S(md); const nl = src.includes('\r\n') ? '\r\n' : '\n'; let L = src.split(/\r?\n/); const rl = S(ref).split(/\r?\n/);
+    const log = { relinked: 0, renamed: 0, dropped: 0, restored: false };
+    const same = { md: src, changed: false, ...log };
+    const rb = S(ref).trim() ? tocBlock(rl) : null; let b = tocBlock(L);
+    if (!b) {
+      if (!rb || !rb.linked) return same;
+      const at = L.findIndex(l => /^##\s/.test(l.trim())); if (at < 0) return same;
+      const put = rl.slice(rb.label >= 0 ? rb.label : rb.start, rb.end);
+      L = L.slice(0, at).concat(at > 0 && L[at - 1].trim() ? [''] : [], put, [''], L.slice(at));
+      b = tocBlock(L); if (!b) return same; log.restored = true; }
+    if (!b.linked && !(rb && rb.linked)) return same;
+    const heads = tocHeads(L, (i) => i === b.label || (i >= b.start && i < b.end));
+    const rheads = rb ? tocHeads(rl, (i) => i === rb.label || (i >= rb.start && i < rb.end)) : [];
+    const claimed = new Set(); const kept = [];
+    for (const it of b.items) {
+      const rIt = rb ? (rb.items.find(x => x.anchor && it.anchor && x.anchor === it.anchor) || rb.items.find(x => x.anchor && tocKey(x.text) === tocKey(it.text))) : null;
+      const anchor = it.anchor || (rIt ? rIt.anchor : '');
+      if (!anchor) { kept.push({ it, line: L[it.i] }); continue; }
+      const rh = rheads.find(x => x.id === anchor) || rheads.find(x => tocKey(x.text) === tocKey(it.text)) || null;
+      let h = heads.find(x => !claimed.has(x.i) && x.id === anchor && (!rh || x.level === rh.level)) || heads.find(x => !claimed.has(x.i) && tocKey(x.text) === tocKey(it.text))
+        || (rh ? heads.find(x => !claimed.has(x.i) && tocKey(x.text) === tocKey(rh.text)) : null);
+      if (!h && rh) { const was = rheads.filter(x => x.level === rh.level); const now = heads.filter(x => x.level === rh.level); const p = was.indexOf(rh);
+        // renamed in place: as many headings of its level as before, and the one at its place is none of the reference page's headings
+        if (was.length === now.length && now[p] && !claimed.has(now[p].i) && !rheads.some(x => tocKey(x.text) === tocKey(now[p].text))) h = now[p]; }
+      if (!h) { log.dropped++; continue; }
+      claimed.add(h.i);
+      // the entry's words: the heading's when the entry repeated its heading (the package writes it so), else the client's own words
+      const mirror = tocKey(it.text) === tocKey(rh ? rh.text : h.text) || tocKey(it.text) === tocKey(h.text);
+      const words0 = mirror ? tocText(h.text) : it.text;
+      if (!it.anchor) log.relinked++; else if (it.anchor !== h.id || words0 !== it.text) log.renamed++;
+      kept.push({ it, line: it.indent + it.marker + ' [' + words0 + '](#' + h.id + ')' + it.rest }); }
+    // numbered entries counted again, level by level
+    const count = new Map();
+    const lines = kept.map(({ it, line }) => { const m = it.marker.match(/^(\d{1,3})([.)])$/); if (!m) return line;
+      const n = (count.get(it.indent) || 0) + 1; count.set(it.indent, n); return line.replace(/^(\s*)\d{1,3}([.)])/, '$1' + n + '$2'); });
+    let out;
+    if (lines.length) out = L.slice(0, b.start).concat(lines, L.slice(b.end));
+    else { const from = b.label >= 0 ? b.label : b.start; let to = b.end; while (to < L.length && !L[to].trim()) to++; out = L.slice(0, from).concat(L.slice(to)); }
+    const md2 = out.join(nl);
+    return { md: md2, changed: md2 !== src, ...log };
+  };
   return { EDIT_MAX, contract, bandOf, kindOf, split, join, span, removeAt, removeText, tidy, neutralSentence, bracketsIn, questionFor, fix, meta, metaProblem, fieldCheck, unmark, caseLike, brandHits, testimonials,
     classify, weakFigures, reviewed, reviewText, onPage, score, protect, better, plan, parseSections, merge, unlinkDead, deleteSection, neutralize, questions, deliver, residual, ctxOf, ACTION, prefillOf, prefillProblem, neutralIn, factKey, clean, words, plain, hostOf, keyOf, overlap,
-    anchorAt, slotOf, slotIn, appendedIn, sentencesOf };
+    anchorAt, slotOf, slotIn, appendedIn, sentencesOf,
+    toc, tocSlug };
 })();
 // H1 (2026-10-27): the pages worth fetching for each research task of *Page Source Plan*, read from the search answers (*Search Page
 // Sources*, one SearXNG answer per task, in the same order). Never the client's own site (a fact about the world is not sourced from the
@@ -946,8 +1069,8 @@ const out = []; const seen = new Set();
 tasks.forEach((t, i) => {
   const r = resps[i] || {};
   const results = Array.isArray(r.results) ? r.results : [];
-  const ok = results.map(x => ({ url: String((x && x.url) || ''), title: String((x && x.title) || ''), snippet: String((x && x.content) || '') }))
-    .filter(x => /^https?:\/\//i.test(x.url)).map(x => ({ ...x, host: PF.hostOf(x.url), tier: SRC.tier(x.url) }))
+  const ok = results.map(x => ({ url: SRC.clean(String((x && x.url) || '')), title: String((x && x.title) || ''), snippet: String((x && x.content) || '') }))   // FU-SV: a redirect is read as its target
+    .filter(x => /^https?:\/\//i.test(x.url) && !SRC.isRedirect(x.url)).map(x => ({ ...x, host: PF.hostOf(x.url), tier: SRC.tier(x.url) }))
     .filter(x => x.host && !(own && (x.host === own || x.host.endsWith('.' + own))) && !rivals.has(x.host) && !SOCIAL.test(x.host) && !/\.pdf($|\?)/i.test(x.url));
   const strong = ok.filter(x => x.tier !== 'weak'); const pick = (strong.length ? strong : ok.slice(0, 1)).slice(0, 3);
   for (const x of pick) { const k = PF.keyOf(x.url); if (seen.has(k) || out.length >= 12) continue; seen.add(k);

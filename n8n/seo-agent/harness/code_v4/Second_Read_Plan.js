@@ -13,8 +13,10 @@
 //   * a refused (stop_reason "refusal"), cut (max_tokens), failed or unparsable answer is "not checked", never a pass and never a block;
 //   * runs the system started by itself (the cadence, a ladder's own page runs, the tracker, case-study spawns) are read in SHADOW mode
 //     first, the rule of owner decision D17 for the holds: what would have blocked is logged and reported as advice, the status does not
-//     change. CFG.automatic moves to 'enforce' after two cadence cycles of shadow logs and the owner's review. Runs a person started (the
-//     app, the form, the API) are enforced. The page that ranks (exec 949, a ladder page) is therefore never held back by this read.
+//     change. CFG.automatic moves to 'enforce' after two cadence cycles of shadow logs and the owner's review. A page of the client's
+//     keyword ladder is read in shadow mode too, also when a person started it from the app (M4, WAVE0_REVIEW 2026-10-30). Other runs a
+//     person started (the app, the form, the API) are enforced. The page that ranks (exec 949, a ladder page) is therefore never held back
+//     by this read.
 // Its cost is MEASURED (Anthropic reports the tokens of the answer) and joins the run's Claude figure in the ledger.
 // Pure: no clock, no network, no n8n globals, no URL constructor, no Object.defineProperty, no structuredClone (n8n sandbox rules).
 const RR = (() => {
@@ -33,7 +35,12 @@ const RR = (() => {
           location: { type: 'string' }, issue: { type: 'string' }, fix: { type: 'string' } } } } } };
   const clean = (s) => S(s).replace(/\s*[\u2014\u2013]\s*/g, ': ').replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'").replace(/\u2026/g, '...').replace(/:\s*:/g, ':').trim();
   const list = (xs, n) => xs.filter(Boolean).slice(0, n);
-  const modeOf = (prev) => AUTOMATIC.test(S((prev || {}).client_ip).toLowerCase()) ? CFG.automatic : 'enforce';
+  // M4 (WAVE0_REVIEW 2026-10-30): a page of the client's keyword ladder is read in the same shadow mode wherever it was started (the app's
+  // ladder "Write now" sends client_ip app:..., not ladder:...), as the hold already exempts it by ladder_id + ladder_rung: the false-positive
+  // rate of this blind read is unmeasured, and the guide that ranks (exec 949) is a ladder page. It moves to enforce with the automatic runs,
+  // after the owner has reviewed the first 20 second reads (D17).
+  const ladderPage = (p) => !!S(p.ladder_id).trim() && p.ladder_rung != null && p.ladder_rung !== '';
+  const modeOf = (prev) => { const p = prev || {}; return AUTOMATIC.test(S(p.client_ip).toLowerCase()) || ladderPage(p) ? CFG.automatic : 'enforce'; };
   // what the reader is told about the website and the run, never what we think of the page
   const context = (prev, reg) => {
     const p = prev || {}; const b = p.content_brief || {}; const sd = p.site_description || {}; const sp = p.site_profile || {};

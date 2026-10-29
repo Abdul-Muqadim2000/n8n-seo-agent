@@ -15,6 +15,7 @@
 //   PF.parseSections / merge   the editor's answer (one block per section) merged into the page, every other byte kept
 //   PF.neutralize(md, cls)     the system's own neutral rewrite of whatever a fact would be needed for (delete / unlink / neutral CTA)
 //   PF.deliver(...)            ready | ready_with_questions | not_ready, in plain customer words, with the client questions
+//   PF.toc(md, ref)            the linked contents list kept, and following its headings, through the final version (fu-finalize-toc)
 // Pure: no clock, no network, no n8n globals, no URL constructor, no Object.defineProperty, no structuredClone (n8n sandbox rules).
 const PF = (() => {
   const S = (v) => String(v == null ? '' : v);
@@ -518,6 +519,10 @@ const PF = (() => {
       else if (b.code === 'weak_figure') add(at(b.sentence), 'The figure "' + b.figure + '" rests only on ' + (b.hosts || []).join(', ') + ', a source with no independent authority: rewrite the sentence without the number (keep the point it makes), or cite one of the SOURCES YOU MAY CITE that is an official body, a research house or major press and states it', 2);
       else if (b.code === 'copied') { const ps = ((qa.originality || {}).failing || {}).passages || []; for (const p of ps.slice(0, 3)) add(at(S(p.text).slice(0, 60)) || related(p.text), 'This passage repeats another page word for word; rewrite it in our own words, order and examples: "' + S(p.text).slice(0, 160) + '"', 3); }
     }
+    // FU-SV (merge 2026-10-30): a sentence Content QA could not put in the business's own voice by itself (content_qa.voice.flags, whole
+    // sentences such as "the company says it ...") goes to the editor as a problem of its section; advice to the editor, never a blocker
+    for (const v of ((qa.voice || {}).flags || []).slice(0, 6)) { const sv = S(v).trim(); if (sv.length < 12) continue;
+      add(at(sv), 'Say this in our own voice: keep the fact and drop the outside frame ("its website states", "the website says", "according to its site", "the company says"); write it with "we" / "our team" or as a plain statement with the business as the subject: "' + plain(sv).slice(0, 220) + '"', 1); }
     const advCodes = new Set(cls.advisory.map(a => a.code));
     // length: cut from the sections furthest over their outline target, or expand the thinnest, with a number for each
     const LB = cls.band; const w0 = cls.words; const outline = c.outline || [];
@@ -814,9 +819,87 @@ const PF = (() => {
       planned_slug: !!(p.ladder_id && S(p.ladder_target_url).trim()), ai_target: !!(p.ai_target && p.ai_target.question), snippet_targets: b.snippet_targets || [], outline: b.outline || [],
       internal_links: links, own_text: S(o.own_text || [p.business_facts, p.case_facts_text, p.proof_context].filter(Boolean).join(' ')), termRe: o.termRe || null,
       critique: o.critique || null, qa_marks: o.qa_marks || [], qa_figure_marks: o.qa_figure_marks || [] }; };
+  // ---------- 9. the contents list (fu-finalize-toc, 2026-10-30, docs/page-quality-2026-10-29/BASELINE.md) ----------
+  // The page package (Blog Package) puts a linked contents list above the first H2: "**Contents**", then "1. [Heading](#heading-id)", the id
+  // being the H2's text as its anchorOf makes it (lower case, a-z0-9 runs joined by "-", cut at 60 characters, "-2" for a repeat). Finalize
+  // unlinked entries 2-8 of every linked contents list (3 of 3 finals). PF.toc(md, ref) keeps the list true to the page's headings:
+  //   * an entry whose link was lost gets it back from the reference page (the page the client sent);
+  //   * an entry follows its heading: a renamed heading (matched by its anchor, its text, or its place among the reference page's headings
+  //     of its level) renames its entry and its anchor; an entry whose section is gone is dropped and the list renumbered;
+  //   * a contents list the final version lost is put back above the first H2, as the reference page had it;
+  //   * a page with no linked contents list, here or in the reference page, is returned unchanged; an entry that never had a link is kept.
+  const TOC_LABEL = /^\s*(?:#{2,4}\s+)?(?:\*\*|__)?\s*(?:contents|table of contents|in this (?:guide|article|page|post)|on this page)\s*:?\s*(?:\*\*|__)?\s*:?\s*$/i;
+  const TOC_ITEM = /^(\s*)(\d{1,3}[.)]|[-*+])\s+(.+)$/;
+  const tocSlug = (h) => S(h).toLowerCase().replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'section';
+  const tocText = (h) => S(h).replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
+  const tocKey = (t) => plain(t).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const tocBlock = (lines) => {
+    for (let i = 0; i < lines.length; i++) {
+      const labelled = TOC_LABEL.test(lines[i]);
+      if (!labelled && !TOC_ITEM.test(lines[i])) continue;
+      let j = labelled ? i + 1 : i; if (labelled) while (j < lines.length && !lines[j].trim()) j++;
+      const items = []; let k = j;
+      for (; k < lines.length; k++) { const m = lines[k].match(TOC_ITEM); if (!m) break; const lk = m[3].match(/^\[([^\[\]]+)\]\(#([^)\s]*)\)(.*)$/);
+        items.push({ i: k, indent: m[1], marker: m[2], text: lk ? lk[1] : m[3], anchor: lk ? lk[2] : '', rest: lk ? lk[3] : '' }); }
+      const linked = items.filter(x => x.anchor).length;
+      if (labelled && items.length >= 2) return { label: i, start: j, end: k, items, linked };
+      if (!labelled && items.length >= 3 && linked >= Math.ceil(items.length * 0.6)) return { label: -1, start: j, end: k, items, linked };
+      if (!labelled && k > i) i = k - 1; }
+    return null; };
+  // the headings H2-H4 with the id the page package gives an H2 (one per heading text, "-2" for another heading with the same id)
+  const tocHeads = (lines, skip) => { const ids = new Map(); const used = []; const out = []; let fence = false;
+    lines.forEach((raw, i) => { const l = raw.trim(); if (/^(```|~~~)/.test(l)) { fence = !fence; return; } if (fence || skip(i) || TOC_LABEL.test(l)) return;
+      const m = l.match(/^(#{2,4})\s+(.+)$/); if (!m) return; const text = m[2].trim(); let id;
+      if (m[1].length === 2) { if (ids.has(text)) id = ids.get(text); else { const a = tocSlug(text); let k = a, n = 2; while (used.includes(k)) k = a + '-' + (n++); ids.set(text, k); used.push(k); id = k; } }
+      else id = tocSlug(text);
+      out.push({ i, level: m[1].length, text, id }); });
+    return out; };
+  const toc = (md, ref) => {
+    const src = S(md); const nl = src.includes('\r\n') ? '\r\n' : '\n'; let L = src.split(/\r?\n/); const rl = S(ref).split(/\r?\n/);
+    const log = { relinked: 0, renamed: 0, dropped: 0, restored: false };
+    const same = { md: src, changed: false, ...log };
+    const rb = S(ref).trim() ? tocBlock(rl) : null; let b = tocBlock(L);
+    if (!b) {
+      if (!rb || !rb.linked) return same;
+      const at = L.findIndex(l => /^##\s/.test(l.trim())); if (at < 0) return same;
+      const put = rl.slice(rb.label >= 0 ? rb.label : rb.start, rb.end);
+      L = L.slice(0, at).concat(at > 0 && L[at - 1].trim() ? [''] : [], put, [''], L.slice(at));
+      b = tocBlock(L); if (!b) return same; log.restored = true; }
+    if (!b.linked && !(rb && rb.linked)) return same;
+    const heads = tocHeads(L, (i) => i === b.label || (i >= b.start && i < b.end));
+    const rheads = rb ? tocHeads(rl, (i) => i === rb.label || (i >= rb.start && i < rb.end)) : [];
+    const claimed = new Set(); const kept = [];
+    for (const it of b.items) {
+      const rIt = rb ? (rb.items.find(x => x.anchor && it.anchor && x.anchor === it.anchor) || rb.items.find(x => x.anchor && tocKey(x.text) === tocKey(it.text))) : null;
+      const anchor = it.anchor || (rIt ? rIt.anchor : '');
+      if (!anchor) { kept.push({ it, line: L[it.i] }); continue; }
+      const rh = rheads.find(x => x.id === anchor) || rheads.find(x => tocKey(x.text) === tocKey(it.text)) || null;
+      let h = heads.find(x => !claimed.has(x.i) && x.id === anchor && (!rh || x.level === rh.level)) || heads.find(x => !claimed.has(x.i) && tocKey(x.text) === tocKey(it.text))
+        || (rh ? heads.find(x => !claimed.has(x.i) && tocKey(x.text) === tocKey(rh.text)) : null);
+      if (!h && rh) { const was = rheads.filter(x => x.level === rh.level); const now = heads.filter(x => x.level === rh.level); const p = was.indexOf(rh);
+        // renamed in place: as many headings of its level as before, and the one at its place is none of the reference page's headings
+        if (was.length === now.length && now[p] && !claimed.has(now[p].i) && !rheads.some(x => tocKey(x.text) === tocKey(now[p].text))) h = now[p]; }
+      if (!h) { log.dropped++; continue; }
+      claimed.add(h.i);
+      // the entry's words: the heading's when the entry repeated its heading (the package writes it so), else the client's own words
+      const mirror = tocKey(it.text) === tocKey(rh ? rh.text : h.text) || tocKey(it.text) === tocKey(h.text);
+      const words0 = mirror ? tocText(h.text) : it.text;
+      if (!it.anchor) log.relinked++; else if (it.anchor !== h.id || words0 !== it.text) log.renamed++;
+      kept.push({ it, line: it.indent + it.marker + ' [' + words0 + '](#' + h.id + ')' + it.rest }); }
+    // numbered entries counted again, level by level
+    const count = new Map();
+    const lines = kept.map(({ it, line }) => { const m = it.marker.match(/^(\d{1,3})([.)])$/); if (!m) return line;
+      const n = (count.get(it.indent) || 0) + 1; count.set(it.indent, n); return line.replace(/^(\s*)\d{1,3}([.)])/, '$1' + n + '$2'); });
+    let out;
+    if (lines.length) out = L.slice(0, b.start).concat(lines, L.slice(b.end));
+    else { const from = b.label >= 0 ? b.label : b.start; let to = b.end; while (to < L.length && !L[to].trim()) to++; out = L.slice(0, from).concat(L.slice(to)); }
+    const md2 = out.join(nl);
+    return { md: md2, changed: md2 !== src, ...log };
+  };
   return { EDIT_MAX, contract, bandOf, kindOf, split, join, span, removeAt, removeText, tidy, neutralSentence, bracketsIn, questionFor, fix, meta, metaProblem, fieldCheck, unmark, caseLike, brandHits, testimonials,
     classify, weakFigures, reviewed, reviewText, onPage, score, protect, better, plan, parseSections, merge, unlinkDead, deleteSection, neutralize, questions, deliver, residual, ctxOf, ACTION, prefillOf, prefillProblem, neutralIn, factKey, clean, words, plain, hostOf, keyOf, overlap,
-    anchorAt, slotOf, slotIn, appendedIn, sentencesOf };
+    anchorAt, slotOf, slotIn, appendedIn, sentencesOf,
+    toc, tocSlug };
 })();
 // ---- RR: the blind second read of the delivered page (W0-H, 2026-10-29; inlined through the CRITIC_REREAD marker) ----
 // docs/page-quality-2026-10-29/PLAN.md Fix 3b (2.7, 2.8), REVIEW_EVIDENCE H1, R4 G14 / G18. Run 3299: the Critic (Sonnet) scored the first
@@ -833,8 +916,10 @@ const PF = (() => {
 //   * a refused (stop_reason "refusal"), cut (max_tokens), failed or unparsable answer is "not checked", never a pass and never a block;
 //   * runs the system started by itself (the cadence, a ladder's own page runs, the tracker, case-study spawns) are read in SHADOW mode
 //     first, the rule of owner decision D17 for the holds: what would have blocked is logged and reported as advice, the status does not
-//     change. CFG.automatic moves to 'enforce' after two cadence cycles of shadow logs and the owner's review. Runs a person started (the
-//     app, the form, the API) are enforced. The page that ranks (exec 949, a ladder page) is therefore never held back by this read.
+//     change. CFG.automatic moves to 'enforce' after two cadence cycles of shadow logs and the owner's review. A page of the client's
+//     keyword ladder is read in shadow mode too, also when a person started it from the app (M4, WAVE0_REVIEW 2026-10-30). Other runs a
+//     person started (the app, the form, the API) are enforced. The page that ranks (exec 949, a ladder page) is therefore never held back
+//     by this read.
 // Its cost is MEASURED (Anthropic reports the tokens of the answer) and joins the run's Claude figure in the ledger.
 // Pure: no clock, no network, no n8n globals, no URL constructor, no Object.defineProperty, no structuredClone (n8n sandbox rules).
 const RR = (() => {
@@ -853,7 +938,12 @@ const RR = (() => {
           location: { type: 'string' }, issue: { type: 'string' }, fix: { type: 'string' } } } } } };
   const clean = (s) => S(s).replace(/\s*[\u2014\u2013]\s*/g, ': ').replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'").replace(/\u2026/g, '...').replace(/:\s*:/g, ':').trim();
   const list = (xs, n) => xs.filter(Boolean).slice(0, n);
-  const modeOf = (prev) => AUTOMATIC.test(S((prev || {}).client_ip).toLowerCase()) ? CFG.automatic : 'enforce';
+  // M4 (WAVE0_REVIEW 2026-10-30): a page of the client's keyword ladder is read in the same shadow mode wherever it was started (the app's
+  // ladder "Write now" sends client_ip app:..., not ladder:...), as the hold already exempts it by ladder_id + ladder_rung: the false-positive
+  // rate of this blind read is unmeasured, and the guide that ranks (exec 949) is a ladder page. It moves to enforce with the automatic runs,
+  // after the owner has reviewed the first 20 second reads (D17).
+  const ladderPage = (p) => !!S(p.ladder_id).trim() && p.ladder_rung != null && p.ladder_rung !== '';
+  const modeOf = (prev) => { const p = prev || {}; return AUTOMATIC.test(S(p.client_ip).toLowerCase()) || ladderPage(p) ? CFG.automatic : 'enforce'; };
   // what the reader is told about the website and the run, never what we think of the page
   const context = (prev, reg) => {
     const p = prev || {}; const b = p.content_brief || {}; const sd = p.site_description || {}; const sp = p.site_profile || {};
