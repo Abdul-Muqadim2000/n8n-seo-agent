@@ -7,6 +7,7 @@ import {
   DUPLICATE_REASON_MAX,
   duplicateReasonProblem,
   formatCredits,
+  prefilledAnswer,
   REVIEW_STAGE_LABEL,
   REVIEW_STAGE_TONE,
   type AnswerDecision,
@@ -211,7 +212,8 @@ export function QuestionsPanel({ view, domain = '' }: { view: PageReviewView; do
   const accept = useAcceptPrefilled(org.id, view.reportId);
   const { top, optional, stored } = groupQuestions(view.questions);
   const { answered, total } = answeredCount(view);
-  const prefilled = [...top, ...optional].filter((x) => x.prefill && !view.answers[x.id]).length;
+  // W0-E: only yes / no questions are confirmed in one click; a question that needs the client's own words keeps its "Use this answer" button
+  const prefilled = [...top, ...optional].filter((x) => !!prefilledAnswer(x) && !view.answers[x.id]).length;
   const editable = can('member') && !view.approval;
   const acceptAll = async () => {
     try {

@@ -2607,11 +2607,11 @@ export const GUIDES = [
       {
         title: 'Choose one answer',
         body: '**Yes, keep it** puts the specific sentence in. **Edit it** lets you write it your way. **Remove it** takes the sentence out. **Leave it general** keeps the general words and is remembered, so the question does not come back. **Not now** leaves it open.',
-        note: '**Accept all suggestions** answers every question that has a suggestion in one click. You can change any answer afterwards.',
+        note: '**Accept all suggestions** confirms every yes-or-no question that has a suggestion in one click. Questions that need your own words, like a client result or a certification, are answered one by one. You can change any answer afterwards.',
       },
       {
         title: 'Make the final version',
-        body: 'Press **Make the final version**. Only the parts of the page your answers change are rewritten, then the whole page is checked again. The price is shown before it starts.',
+        body: 'Press **Make the final version**. Each answer is worked into the sentence it changes, never added as a loose line, and only those parts of the page are rewritten. Then the whole page is checked again. An answer that fits no sentence is listed as not placed, so you can tell us where it belongs. The price is shown before it starts.',
       },
       {
         title: 'Approve and publish',

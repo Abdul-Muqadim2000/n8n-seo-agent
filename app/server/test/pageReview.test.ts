@@ -211,13 +211,15 @@ describe('answering: saved per question, kept as business facts, never asked aga
     expect(keys.indexOf('business')).toBeLessThan(keys.indexOf('business_facts'));
     expect(keys.indexOf('business_facts')).toBeLessThan(keys.indexOf('business_facts_kv'));
   });
-  it('accept all suggestions answers every open question that has one', async () => {
+  it('accept all suggestions confirms every open yes / no question that has one, never a question that needs the client\'s own words (W0-E)', async () => {
     const s = await setup();
     const v = view(await s.u.c.post(`${s.base}/accept-prefilled`, {}));
     expect(v.answers.q1).toMatchObject({ decision: 'yes', fromPrefill: true });
-    expect(v.answers.q3).toMatchObject({ decision: 'answer', text: 'Microsoft Solutions Partner' });
+    expect(v.answers.q3).toBeUndefined();   // a text question with a suggestion: answered one by one (3299 stored a homepage slogan as proof)
     expect(v.answers.q2).toBeUndefined();
-    expect((await s.u.c.post(`${s.base}/accept-prefilled`, {})).status).toBe(400);   // nothing left with a suggestion
+    const again = await s.u.c.post(`${s.base}/accept-prefilled`, {});
+    expect(again.status).toBe(400);   // nothing left that one click may answer
+    expect(again.body.error ?? again.body.message).toMatch(/yes-or-no/);
   });
 });
 

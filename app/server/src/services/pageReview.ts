@@ -412,13 +412,13 @@ export async function putDecision(a: OrgAccess, req: FastifyRequest | null, repo
   return reviewView(a, l);
 }
 
-/** Every unanswered question that has a suggestion, answered with it in one click (a stored fact is not asked, so not answered). */
+/** Every unanswered yes-or-no question that has a suggestion, confirmed in one click (W0-E: a question that needs the client's own words is never answered with a suggestion; a stored fact is not asked, so not answered). */
 export async function acceptPrefilled(a: OrgAccess, req: FastifyRequest | null, reportId: unknown): Promise<PageReviewView> {
   const l = await loadReview(a.org.id, reportId);
   const questions = questionsOf(obj(l.report.payload));
   const open = openQuestions(questions, answersFor(l.row?.answers, l.original.id, l.report.id), (l.site?.factAnswers ?? {}) as FactAnswers);
   const input = open.map((q) => ({ q, p: prefilledAnswer(q) })).filter((x) => x.p).map((x) => ({ questionId: x.q.id, decision: x.p!.decision, text: x.p!.text }));
-  if (!input.length) throw badRequest('No open question has a suggestion to accept.');
+  if (!input.length) throw badRequest('No open yes-or-no question has a suggestion to accept. Questions that need your own words are answered one by one.');
   return saveAnswers(a, req, l, input, true);
 }
 
