@@ -90,6 +90,11 @@
     "Index Delete Rows"
    ]
   ],
+  "Any Index Watch?": [
+   [
+    "Wait (Index Watch)"
+   ]
+  ],
   "Any Inspections (Index)?": [
    [
     "Inspect URL (Index)"
@@ -111,7 +116,7 @@
     "Fetch Page (Index)"
    ],
    [
-    "Fetch Hop Requests"
+    "Page First Reads"
    ]
   ],
   "Any Pages Query More?": [
@@ -189,6 +194,38 @@
    ],
    [
     "Sitemap Read 3"
+   ]
+  ],
+  "Any Sitemaps 4?": [
+   [
+    "Fetch Sitemaps 4"
+   ],
+   [
+    "Sitemap Read 4"
+   ]
+  ],
+  "Any Sitemaps 5?": [
+   [
+    "Fetch Sitemaps 5"
+   ],
+   [
+    "Sitemap Read 5"
+   ]
+  ],
+  "Any Sitemaps 6?": [
+   [
+    "Fetch Sitemaps 6"
+   ],
+   [
+    "Sitemap Read 6"
+   ]
+  ],
+  "Any Sitemaps 7?": [
+   [
+    "Fetch Sitemaps 7"
+   ],
+   [
+    "Sitemap Read 7"
    ]
   ],
   "Any Sitemaps List?": [
@@ -305,7 +342,7 @@
   ],
   "Fetch Page (Index)": [
    [
-    "Fetch Hop Requests"
+    "Page First Reads"
    ]
   ],
   "Fetch Sitemaps 1": [
@@ -321,6 +358,26 @@
   "Fetch Sitemaps 3": [
    [
     "Sitemap Read 3"
+   ]
+  ],
+  "Fetch Sitemaps 4": [
+   [
+    "Sitemap Read 4"
+   ]
+  ],
+  "Fetch Sitemaps 5": [
+   [
+    "Sitemap Read 5"
+   ]
+  ],
+  "Fetch Sitemaps 6": [
+   [
+    "Sitemap Read 6"
+   ]
+  ],
+  "Fetch Sitemaps 7": [
+   [
+    "Sitemap Read 7"
    ]
   ],
   "Fetch Spam Policies": [
@@ -432,6 +489,11 @@
   "Index Sites": [
    [
     "Any Sites (Index)?"
+   ]
+  ],
+  "Index Watch Plan": [
+   [
+    "Any Index Watch?"
    ]
   ],
   "Inspect Retry Requests": [
@@ -555,6 +617,11 @@
     "Any Page Fetches?"
    ]
   ],
+  "Page First Reads": [
+   [
+    "Fetch Hop Requests"
+   ]
+  ],
   "Page Signals": [
    [
     "Index Diagnose"
@@ -659,7 +726,8 @@
   ],
   "Settle Run Ledger (Index)": [
    [
-    "Ensure Ops Alerts (Index)"
+    "Ensure Ops Alerts (Index)",
+    "Index Watch Plan"
    ]
   ],
   "Site To Check? (Index)": [
@@ -682,6 +750,26 @@
   ],
   "Sitemap Read 3": [
    [
+    "Sitemap Requests 4"
+   ]
+  ],
+  "Sitemap Read 4": [
+   [
+    "Sitemap Requests 5"
+   ]
+  ],
+  "Sitemap Read 5": [
+   [
+    "Sitemap Requests 6"
+   ]
+  ],
+  "Sitemap Read 6": [
+   [
+    "Sitemap Requests 7"
+   ]
+  ],
+  "Sitemap Read 7": [
+   [
     "Index Inventory"
    ]
   ],
@@ -698,6 +786,26 @@
   "Sitemap Requests 3": [
    [
     "Any Sitemaps 3?"
+   ]
+  ],
+  "Sitemap Requests 4": [
+   [
+    "Any Sitemaps 4?"
+   ]
+  ],
+  "Sitemap Requests 5": [
+   [
+    "Any Sitemaps 5?"
+   ]
+  ],
+  "Sitemap Requests 6": [
+   [
+    "Any Sitemaps 6?"
+   ]
+  ],
+  "Sitemap Requests 7": [
+   [
+    "Any Sitemaps 7?"
    ]
   ],
   "Sitemaps List Requests": [
@@ -740,6 +848,11 @@
    [
     "Inspect URL (Retry)"
    ]
+  ],
+  "Wait (Index Watch)": [
+   [
+    "Start Index Watch"
+   ]
   ]
  },
  "event_cols": [
@@ -761,6 +874,10 @@
   "Fetch Sitemaps 1",
   "Fetch Sitemaps 2",
   "Fetch Sitemaps 3",
+  "Fetch Sitemaps 4",
+  "Fetch Sitemaps 5",
+  "Fetch Sitemaps 6",
+  "Fetch Sitemaps 7",
   "Fetch Spam Policies",
   "GSC Impact Query",
   "GSC Pages Query",
@@ -821,6 +938,7 @@
   "Any Hops?",
   "Any Impact Queries?",
   "Any Index Rows?",
+  "Any Index Watch?",
   "Any Inspections (Index)?",
   "Any Next Part?",
   "Any Page Fetches?",
@@ -834,6 +952,10 @@
   "Any Sitemaps 1?",
   "Any Sitemaps 2?",
   "Any Sitemaps 3?",
+  "Any Sitemaps 4?",
+  "Any Sitemaps 5?",
+  "Any Sitemaps 6?",
+  "Any Sitemaps 7?",
   "Any Sitemaps List?",
   "Any Sites (Index)?",
   "Any Update Impact?",
@@ -858,6 +980,10 @@
   "Fetch Sitemaps 1",
   "Fetch Sitemaps 2",
   "Fetch Sitemaps 3",
+  "Fetch Sitemaps 4",
+  "Fetch Sitemaps 5",
+  "Fetch Sitemaps 6",
+  "Fetch Sitemaps 7",
   "Fetch Spam Policies",
   "GSC Impact Query",
   "GSC Pages Query",
@@ -880,6 +1006,7 @@
   "Index Reservation",
   "Index Run Rows",
   "Index Sites",
+  "Index Watch Plan",
   "Inspect Retry Requests",
   "Inspect URL (Index)",
   "Inspect URL (Probe)",
@@ -905,6 +1032,7 @@
   "Nothing To Do (Index)",
   "POST Index Report",
   "Page Fetch Requests",
+  "Page First Reads",
   "Page Signals",
   "Pages Query More",
   "Pages Query Requests",
@@ -932,17 +1060,27 @@
   "Sitemap Read 1",
   "Sitemap Read 2",
   "Sitemap Read 3",
+  "Sitemap Read 4",
+  "Sitemap Read 5",
+  "Sitemap Read 6",
+  "Sitemap Read 7",
   "Sitemap Requests 1",
   "Sitemap Requests 2",
   "Sitemap Requests 3",
+  "Sitemap Requests 4",
+  "Sitemap Requests 5",
+  "Sitemap Requests 6",
+  "Sitemap Requests 7",
   "Sitemaps List Requests",
   "Start Index Part",
+  "Start Index Watch",
   "Start Next Index Part",
   "Tell Caller (Index)?",
   "Update Impact Requests",
   "Update Impact Rows",
   "Wait (Index Part Retry)",
-  "Wait (Index Rate Limit)"
+  "Wait (Index Rate Limit)",
+  "Wait (Index Watch)"
  ],
  "own_tables": [
   "seo_google_events",
@@ -997,7 +1135,9 @@
   "note",
   "updated_at",
   "fix_seen_at",
-  "ask_google"
+  "ask_google",
+  "fix_failed_at",
+  "ask_google_at"
  ],
  "run_cols": [
   "site_id",

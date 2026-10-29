@@ -1,6 +1,10 @@
 // Index coverage (fix wave 1, FIX_CONTRACT.md decision 1 / X1): the dispatch starts today's chain - the FIRST website's own execution,
 // through this workflow's Manual Run, with the rest of the list and today's Google news (read once, here). Each website's execution saves its
-// rows and starts the next one (Next Index Part), so one website runs at a time and a time-out or crash loses one website, never the day.
+// rows and starts the next one (Next Index Part), so one website runs at a time.
+// Fix wave 2 (N5): a chain is only as long as its links - a time-out, a crash or an n8n restart in one website's execution stops the chain
+// there. What saves the day is the WATCH: 50 minutes after this dispatch (Index Watch Plan -> Wait (Index Watch)) the dispatch runs again as
+// `ix_watch` and restarts the chain for the websites with no finished run today (seo_index_runs); a refused dispatch is retried the same
+// way (Retry Index Part). A website whose run broke twice today waits for tomorrow.
 const S = (v) => String(v == null ? '' : v).trim();
 let plan = {}; try { plan = $('Index Plan').first().json || {}; } catch (e) { plan = {}; }
 let g = {}; try { g = $('Google Events').first().json || {}; } catch (e) { g = {}; }
