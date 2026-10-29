@@ -2,6 +2,17 @@
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
+## SAVED 2026-10-30 (usage limit): tutorial in progress
+- Feature code: complete, all on `feature/indexing` @ 69f35d37 (pushed). Nothing deployed.
+- Tutorial (A17) agent was mid-way: demo checkout /Users/abdul.muqadim/n8n_devaicon-demo was moved to feature/indexing 69f35d37 (it was
+  on tutorials-sync before; check `git -C /Users/abdul.muqadim/n8n_devaicon-demo log` / reflog to restore its demo-only changes if needed);
+  uncommitted edits in ~/Downloads/hiresuite-video-skills: `alaventra/alaventra-video/7-9-choose-what-is-checked-every-week_T/` (scenes.js,
+  screens.json): re-capturing 7.9 because the Tracking & monitors settings gained the Indexing card. The new Indexing tutorial is not
+  made yet. To resume: read the tutorial brief in this file's "Next steps" 3 + the memory notes alaventra-tutorial-videos /
+  tutorial-refilm-2026-10-28, look at `git status` in both repos, continue (do not restart finished films), then commit + push the
+  video-skills repo and the website tutorials page on feature/indexing.
+- After the tutorial: ask the owner to deploy (sequence in CURRENT STATE above).
+
 ## CURRENT STATE (2026-10-30) — read this block first
 - Fix waves 1-3 merged (wave 3: engine 72ef110e..98f462fc, app 0409a89b..95e32f0d; merges 59676b17, ab25cf1b). REVIEW_3's blockers R1/R2
   fixed with failing-then-passing checks. Docker checks on the merge: harness **13891 / 0**; typecheck clean; shared 952, server 1552
