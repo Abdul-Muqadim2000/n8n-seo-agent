@@ -10,9 +10,35 @@ const CONFIG = { existing_chars: 24000, other_chars: 6000, headings: 30, dates: 
 const ctx = $('Collect Site URLs').first().json;
 const reqs = $('Client Page Requests').all().map(i => i.json);
 // the Jina answers: read from their own node when the HTML read sits between (as wired); a direct feed keeps working (harness, older wiring)
+// FU-R1 (2026-10-29): the render chain (Client Render Plan -> Render Client Pages -> Client Render More -> Render More Client Pages) sits
+// between Read Client Page HTML and this node; when it ran, the HTML answers are read from their own node, not from this node's input
+let RPLAN = null; try { RPLAN = $('Client Render Plan').all().map(i => i.json || {}); } catch (e) { RPLAN = null; }
 let jina = null, htmlRes = [];
-try { jina = $('Read Client Pages').all().map(i => i.json); htmlRes = $input.all().map(i => i.json); } catch (e) { jina = null; }
+try { jina = $('Read Client Pages').all().map(i => i.json);
+  htmlRes = RPLAN ? (() => { try { return $('Read Client Page HTML').all().map(i => i.json); } catch (e) { return []; } })() : $input.all().map(i => i.json); } catch (e) { jina = null; }
 const res = jina || $input.all().map(i => i.json);
+// FU-R1: what the renderer read. A client-rendered site (a JavaScript app) answers the text reader with an empty page and the plain GET with a
+// script shell: those pages are read again after their scripts ran (Jina Reader, browser engine, the HTML Render Key Pages reads in the audit),
+// plus up to two pages the rendered homepage links to. Each rendered page is labelled `read_via: 'rendered'`, and `client_render` says what
+// was rendered, what was not and why. With no render (every server-rendered site) nothing here changes the output.
+const RENDER = (() => {
+  const out = { byIndex: {}, more: [], tried: [], home: null, more_plan: null };
+  if (!RPLAN || typeof CRK === 'undefined') return out;
+  const planned = RPLAN.filter(p => p && !p.skip && p.stage === 1);
+  if (!planned.length) return out;
+  let r1 = []; try { r1 = $('Render Client Pages').all().map(i => i.json || {}); } catch (e) { r1 = []; }
+  planned.forEach((p, k) => { const v = CRK.rendered(r1[k]); out.byIndex[p.index] = v;
+    out.tried.push({ url: p.url, kind: p.kind, stage: 1, rendered: !!v.ok, why: v.ok ? p.why : v.why });
+    if (v.ok && p.kind === 'home' && !out.home) out.home = { url: p.url, html: v.html }; });
+  let mp = []; try { mp = $('Client Render More').all().map(i => i.json || {}); } catch (e) { mp = []; }
+  let r2 = []; try { r2 = $('Render More Client Pages').all().map(i => i.json || {}); } catch (e) { r2 = []; }
+  const mpl = mp.filter(m => m && !m.skip);
+  if (!mpl.length && mp[0] && mp[0].more_plan) out.more_plan = mp[0].more_plan;
+  mpl.forEach((m, k) => { const v = CRK.rendered(r2[k]);
+    out.tried.push({ url: m.url, kind: m.kind, stage: 2, rendered: !!v.ok, why: v.ok ? m.why : v.why, ...(m.topic_match != null ? { topic_match: m.topic_match } : {}) });
+    if (v.ok) out.more.push({ url: m.url, kind: m.kind || 'related', raw: v.raw }); });
+  return out;
+})();
 const strip = (s) => String(s || '')
   .replace(/^(Title|URL Source|Markdown Content|Published Time):.*$/gm, '')
   .replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -105,14 +131,30 @@ const digestOf = (req, raw, text, html, given) => {
 let existingDigest = null;
 const pages = reqs.map((r, i) => {
   const j = res[i] || {};
-  const rawText = String(j.page_text || j.data || '');
-  const text = strip(rawText);
-  if (j.error || text.length < 200 || /just a moment|access denied|captcha/i.test(text.slice(0, 400))) return null;
+  let rawText = String(j.page_text || j.data || '');
+  let text = strip(rawText);
+  // FU-R1: the reader could not read it and the renderer could: the rendered page stands in (its text, and its HTML for the page's facts)
+  const rr = RENDER.byIndex[i]; const viaRender = !!(rr && rr.ok && (j.error || text.length < 200));
+  if (viaRender) { rawText = rr.raw; text = strip(rawText); }
+  if (!viaRender && (j.error || text.length < 200 || /just a moment|access denied|captcha/i.test(text.slice(0, 400)))) return null;
   const cap = r.kind === 'existing' ? CONFIG.existing_chars : CONFIG.other_chars;
   const h = htmlRes[i] || {};
-  if (r.kind === 'existing' && !existingDigest) existingDigest = digestOf(r, rawText, text, h.error ? '' : (h.page_html != null ? h.page_html : (h.data != null ? h.data : h.body)), Math.min(cap, text.length));
-  return { url: r.url, kind: r.kind, words: text.split(/\s+/).length, text: text.slice(0, cap) };
+  if (r.kind === 'existing' && !existingDigest) existingDigest = digestOf(r, rawText, text, viaRender ? rr.html : (h.error ? '' : (h.page_html != null ? h.page_html : (h.data != null ? h.data : h.body))), Math.min(cap, text.length));
+  return { url: r.url, kind: r.kind, words: text.split(/\s+/).length, text: text.slice(0, cap), ...(viaRender ? { read_via: 'rendered' } : {}) };
 }).filter(Boolean);
+// FU-R1: the pages the rendered homepage links to (the services page, the page closest to the search), read rendered too
+for (const m of RENDER.more) { const text = strip(m.raw); if (text.length < 200) continue;
+  pages.push({ url: m.url, kind: m.kind, words: text.split(/\s+/).length, text: text.slice(0, CONFIG.other_chars), read_via: 'rendered' }); }
+// FU-R1: a client-rendered site has no sitemap the run could read, so its own pages were unknown as link targets; the rendered homepage's
+// menu is that list (only when the sitemap gave nothing, so a site with a sitemap keeps exactly the candidates it had)
+const renderedLinks = (RENDER.home && !(ctx.site_urls || []).length) ? CRK.links(RENDER.home.html, RENDER.home.url, ctx.domain).slice(0, CRK.CONFIG.links_kept) : [];
+const linkCands = (() => { if (!renderedLinks.length) return null; const base = ctx.internal_link_candidates || [];
+  const have = new Set(base.map(c => String((c && c.url) || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '')));
+  return base.concat(renderedLinks.filter(l => !have.has(l.url.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '')))
+    .map(l => ({ url: l.url, path: l.path, ...(l.title ? { title: l.title } : {}), source: 'rendered homepage' }))); })();
+const clientRender = RENDER.tried.length ? { rendered: RENDER.tried.filter(t => t.rendered).length, tried: RENDER.tried.length, cap: CRK.CONFIG.max_pages,
+  pages: RENDER.tried, links_found: renderedLinks.length, ...(RENDER.more_plan ? { more: RENDER.more_plan } : {}),
+  method: 'read after the page\'s scripts ran (the reader\'s browser engine), because the plain reading of the page was an empty script shell' } : null;
 const existing = pages.find(p => p.kind === 'existing');
 // P2-5 (2026-10-12, Phase 2 live check §3): a page of the inventory that already answers this keyword (Client Page Requests -> SM.matchPage)
 // becomes this run's existing page, whether or not the fetch of it succeeded. The verdict, the brief, the schema and the report then improve
@@ -134,4 +176,5 @@ const client_signals = {
 return [{ json: { ...ctx, ...(inventoryPage ? { existing_page: inventoryPage, existing_page_url: ctx.existing_page_url || inventoryPage.url } : {}),
   ...(ignoredReq ? { existing_page: null, existing_page_ignored: ignoredReq.ignored_existing } : {}),
   client_pages: pages, client_pages_read: pages.length, existing_page_text: existing ? existing.text : '', existing_page_tables: existingDigest ? existingDigest.tables_block : '', existing_page_digest: existingDigest,
-  existing_page_facts_text: existingDigest ? existingDigest.facts_text : '', client_signals } }];
+  existing_page_facts_text: existingDigest ? existingDigest.facts_text : '', client_signals,
+  ...(linkCands ? { internal_link_candidates: linkCands } : {}), ...(clientRender ? { client_render: clientRender } : {}) } }];

@@ -12891,7 +12891,7 @@ log('Local regulatory facts are researched, dated and never stale (W0-F, 2026-10
 #        verdict_acknowledged) were already in every callback: the app derives them from the stored ORIGINAL report for old and new reports.
 #      * The finalize side (SEO Agent — Page Finalize, build_monitors.py 6b) reads `page_run` + `duplicate_decision` in its Parse Brief and
 #        keeps every page-run blocker it cannot measure open in Finalize Verdict (v5/code/Finalize_Parse_Brief.js, Finalize_Verdict.js).
-# =============================================================================
+# ======================================================================
 patch('Build Webhook Response', "    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],",
       "    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],\n"
       "    ...(() => {   // W0-B (section 155): the page-run context's grading fields, so the final version is judged like the page run\n"
@@ -13151,6 +13151,84 @@ open(os.path.join(OUT_CODE, '_grade.js'), 'w').write("// harness shim (written b
 sticky("""### The grade (W0-C, 2026-10-29)
 **Content QA** grades the page on one scale out of 100: structure 20, coverage 15, readability 10, specificity 10, plain language 10, **sources 15**, **fit 20**, length advice only (repetition and list labels cost structure points). The old six parts decide the editor round, unchanged. **Page Candidates** / **Apply Second Read** cap it (a blocker: 59; a duplicate page: fit 30%) and apply the floors: under half in any part = **Needs work**, never Ready. Shown as 95+, never 100.""", pos('Page Candidates')[0] - 40, pos('Page Candidates')[1] + 420, 760, 180, 5)
 log('The grade counts what a reviewer counts (W0-C, 2026-10-29, section 159; PLAN Fix 3, REVIEW_CODE H3 / L1 / L5, REVIEW_EVIDENCE H2 / H3 / M1): Content QA grades on one scale out of 100 with the grade kit v5/code/_grade.js (structure 20 less repetition and list-label collisions, coverage 15, readability 10, specificity 10, plain language 10, sources 15 from the tier of what each cited sentence and figure rests on, fit 20 from the verdict and the duplicate page; length advice only) while the old six parts stay as copy_score for the editor round, unchanged; Page Candidates, Finalize Verdict and Apply Second Read cap it (an open blocker 59, an open duplicate or a page published beside it fit 30%) and apply the floors (under half in any part = "Needs work: <part>", delivery status needs_work, still publishable; the fit floor waived after "Write it anyway" and for ladder pages, case studies, AI pages and refreshes, shadow for automatic runs); shown as "95+"; Parse Analysis records the results page\'s shapes (serp_shapes, no points); the Word / PDF report prints the same grade')
+=======
+# 170. A CLIENT-RENDERED WEBSITE IS READ AFTER ITS SCRIPTS RAN (FU-R1, page-quality programme 2026-10-29, BASELINE.md "Recurring defects":
+#      "Own site not read when it is client-rendered (0 own pages read)", K7 / K8 of the BEFORE run).
+#      The page run reads the client's own pages with the text reader (Read Client Pages) and one plain GET (Read Client Page HTML). A site
+#      written by JavaScript (a React app) answered the reader with an empty page and the GET with a script shell, and its "sitemap" was the
+#      same shell, so the run read 0 of the site's own pages: the brief had no services, no proof and no internal links from the real site.
+#      * Client Render Plan (v5/code/_client_render.js CRK.need): a page is rendered only when the reader's text is under 200 characters AND
+#        its HTML is a script shell (the link kit's js_shell rule, or an almost empty body loading a script bundle) on the run's own host. A
+#        server-rendered page is never rendered: the plan sends one skip item down the "nothing to render" branch and Collect Client Pages
+#        builds exactly the output it built before.
+#      * Render Client Pages: the renderer the audit already uses (Render Key Pages: Jina Reader, `X-Engine: browser`,
+#        `X-Return-Format: html`), at most CRK.CONFIG.max_pages (3) renders a run, X-Timeout 30, the G1 retry rule.
+#      * Client Render More: the rendered homepage's own links are the site's page list; the services / platform hub and the page closest to
+#        the search (half its words or more) are rendered next (Render More Client Pages), inside the same cap.
+#      * Collect Client Pages: a rendered page stands in for an empty reading (text, and its HTML for the page's facts), the linked pages are
+#        added, the homepage's links become internal link candidates when no sitemap was read, and every rendered page carries
+#        `read_via: 'rendered'`; `client_render` records what was rendered, what was not, and why (the run's evidence).
+#      Cost: Jina Reader tokens only (no DataForSEO, no Claude), 0 on a server-rendered site. Like Render Key Pages it asks for a fresh render
+#      (X-No-Cache): the reader's cached copy of an app is the empty shell this section exists to get past.
+# =============================================================================
+CRK_SRC170 = _rd0('code/_client_render.js').rstrip('\n')
+assert CRK_SRC170.count('const CRK = (() => {') == 1, 'FU-R1: _client_render.js must define CRK once'
+_KITS170 = LK_SRC54 + '\n' + CRK_SRC170 + '\n'
+assert [t['node'] for l in conns['Read Client Page HTML']['main'] for t in l] == ['Collect Client Pages'], 'FU-R1: Read Client Page HTML no longer feeds Collect Client Pages alone: ' + str(conns['Read Client Page HTML'])
+_rh170 = pos('Read Client Page HTML'); RX170, RY170 = _rh170[0], _rh170[1] + 220
+_RENDER_PARAMS170 = {
+    'url': '=https://r.jina.ai/{{ $json.url }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+    'sendHeaders': True, 'headerParameters': {'parameters': [
+        {'name': 'X-Return-Format', 'value': 'html'},   # the page after its scripts ran, with its links
+        {'name': 'X-Engine', 'value': 'browser'},
+        {'name': 'X-No-Cache', 'value': 'true'},
+        {'name': 'X-Timeout', 'value': '30'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 2500}}, 'timeout': 45000,
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}
+add_node('Client Render Plan', 'n8n-nodes-base.code', 2, {'jsCode': _KITS170 + rd('code/Client_Render_Plan.js')}, [RX170 + 220, RY170])
+if_node('Any Client Render?', '{{ !$json.skip }}', [RX170 + 440, RY170])
+add_node('Render Client Pages', 'n8n-nodes-base.httpRequest', 4.5, copy.deepcopy(_RENDER_PARAMS170), [RX170 + 660, RY170 + 160],
+         dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl54.RETRY))
+add_node('Client Render More', 'n8n-nodes-base.code', 2, {'jsCode': _KITS170 + rd('code/Client_Render_More.js')}, [RX170 + 880, RY170 + 160])
+if_node('Any More Client Render?', '{{ !$json.skip }}', [RX170 + 1100, RY170 + 160])
+add_node('Render More Client Pages', 'n8n-nodes-base.httpRequest', 4.5, copy.deepcopy(_RENDER_PARAMS170), [RX170 + 1320, RY170 + 320],
+         dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl54.RETRY))
+for _n170 in ('Render Client Pages', 'Render More Client Pages'):
+    nodes[_n170]['credentials'] = {'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}
+disconnect('Read Client Page HTML', 'Collect Client Pages')
+connect('Read Client Page HTML', 'Client Render Plan'); connect('Client Render Plan', 'Any Client Render?')
+connect('Any Client Render?', 'Render Client Pages', 0); connect('Any Client Render?', 'Collect Client Pages', 1)
+connect('Render Client Pages', 'Client Render More'); connect('Client Render More', 'Any More Client Render?')
+connect('Any More Client Render?', 'Render More Client Pages', 0); connect('Any More Client Render?', 'Collect Client Pages', 1)
+connect('Render More Client Pages', 'Collect Client Pages')
+setcode('Collect Client Pages', _KITS170 + code('Collect Client Pages'))
+
+# ---------- the proof, on the graph this build writes ----------
+_rev170 = {}
+for _s170, _o170 in conns.items():
+    for _l170 in (_o170.get('main') or []):
+        for _t170 in (_l170 or []): _rev170.setdefault(_t170['node'], set()).add(_s170)
+assert sorted(_rev170.get('Collect Client Pages', ())) == ['Any Client Render?', 'Any More Client Render?', 'Render More Client Pages'], ('FU-R1: unexpected inputs to Collect Client Pages', _rev170.get('Collect Client Pages'))
+assert [t['node'] for t in conns['Any Client Render?']['main'][0]] == ['Render Client Pages'] and [t['node'] for t in conns['Any Client Render?']['main'][1]] == ['Collect Client Pages'], 'FU-R1: the render branch is the wrong way round'
+assert [t['node'] for t in conns['Any More Client Render?']['main'][0]] == ['Render More Client Pages'] and [t['node'] for t in conns['Any More Client Render?']['main'][1]] == ['Collect Client Pages'], 'FU-R1: the second render branch is the wrong way round'
+for _n170 in ('Client Render Plan', 'Client Render More', 'Collect Client Pages'):
+    assert code(_n170).count('const LK = (() => {') == 1 and code(_n170).count('const CRK = (() => {') == 1, 'FU-R1: ' + _n170 + ' must inline the link kit and the render kit once'
+for _n170 in ('Render Client Pages', 'Render More Client Pages'):
+    _h170 = {p['name']: p['value'] for p in nodes[_n170]['parameters']['headerParameters']['parameters']}
+    assert _h170.get('X-Engine') == 'browser' and _h170.get('X-Return-Format') == 'html', 'FU-R1: ' + _n170 + ' is not the browser render'
+    assert not _rl54.weak(nodes[_n170]), 'FU-R1: ' + _n170 + ': the G1 retry rule is missing'
+    assert nodes[_n170]['parameters']['url'] == '=https://r.jina.ai/{{ $json.url }}', 'FU-R1: ' + _n170 + ' does not render the planned URL'
+# the reader decides first: a page read by the reader (200 characters) is never rendered, and the cap is the kit's
+assert 'CRK.need(reader[i], html[i], r.url, domain)' in code('Client Render Plan') and 'CRK.CONFIG.max_pages' in code('Client Render Plan'), 'FU-R1: the plan does not ask CRK.need under the cap'
+assert 'min_text_chars: 200' in CRK_SRC170 and 'max_pages: 3' in CRK_SRC170, 'FU-R1: the render threshold or the cap changed'
+assert "$('Read Client Pages').all()" in code('Collect Client Pages') and 'existing_page_digest' in code('Collect Client Pages'), 'FU-R1: Collect Client Pages lost the R38 reading'
+assert "read_via: 'rendered'" in code('Collect Client Pages') and 'client_render' in code('Collect Client Pages'), 'FU-R1: the rendered pages are not labelled'
+for _f170 in ('code/_client_render.js', 'code/Client_Render_Plan.js', 'code/Client_Render_More.js'):
+    for _bad170 in ('—', '–', '“', '”', '‘', '’', '…'):
+        assert _bad170 not in _rd0(_f170), 'FU-R1: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f170
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('A client-rendered website is read after its scripts ran (FU-R1, 2026-10-29, section 170; the BEFORE run read 0 of the site\'s own pages on K7 / K8): Client Render Plan renders a page of the run only when the text reader got under 200 characters and its HTML is a script shell on the run\'s own host (v5/code/_client_render.js), through the browser render the audit uses (Render Client Pages, Jina X-Engine browser, HTML); Client Render More reads the services / platform hub and the page closest to the search from the rendered homepage\'s links (Render More Client Pages), at most 3 renders a run; Collect Client Pages uses the rendered text and HTML, adds the homepage\'s links as internal link candidates when no sitemap was read, labels each rendered page read_via rendered and records client_render; a server-rendered site takes the skip branch and its output is unchanged')
 
 # =============================================================================
 # 9. WRITE
