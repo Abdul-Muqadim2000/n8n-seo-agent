@@ -34,7 +34,7 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
-    date: '2026-10-29',
+    date: '2026-10-30',
     version: '4.5',
     title: 'Written pages you can publish with confidence',
     summary:
@@ -51,6 +51,11 @@ export const changelog: ChangelogEntry[] = [
       'A market, adoption, cost or compliance figure that only a vendor or agency blog backs is rewritten without the number, or taken out if it cannot be, before you get the page',
       'The grade of a written page now measures what an expert reviewer looks for: besides structure, topic coverage, readability, specificity and plain language, it counts where the facts and figures come from, whether the search is worth a page of its own, and whether the page makes the same point again and again or gives two lists the same name. Length no longer earns points; it is advice only. A page that scores under half in any part is marked "Needs work" with what to improve, instead of "Ready to publish", and you can still approve and publish it. A top grade shows as 95+, never 100, and the Word and PDF files print the same grade',
       'Every written page is read once more, as finished, by a reviewer that has not seen the earlier drafts. A wrong or unsupported fact, figure, claim about your business or local rule that it quotes from the page keeps a page you asked for from being called ready to publish until it is fixed; on pages your autopilot writes it is shown as advice for now. Anything else it suggests is shown as advice, and when the read cannot be done the page says so instead of passing it',
+      'Every written page has one byline, from your business profile, with no second "Written by" line added in the text. The page speaks about your business directly, never "its website states" or "according to its website" as if someone else wrote it',
+      'Every source a page cites is the real page it points to: a search-engine redirect is followed to the page behind it and cited by that address, and a link we cannot follow to a real page is never cited',
+      'The final version of a page keeps its linked contents list: a renamed section renames its entry, a removed section drops out, and every entry still jumps to its section, also in the Word file and the PDF',
+      'Websites that load their text with scripts are now read after the page has loaded, so your services and your key pages are found when a page is written for you, even when your website\'s first response is nearly empty',
+      'A phone number, opening hours or an address in your call to action is no longer counted as a figure that needs a source, so it does not lower the grade of your page',
     ],
     features: ['content'],
   },
