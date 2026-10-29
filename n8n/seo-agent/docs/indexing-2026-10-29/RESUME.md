@@ -81,3 +81,18 @@ Third review (REVIEW_3.md) running at save time: verify wave 2, hunt regressions
 ## Owner decisions still open
 - Sitemap submission (needs read-write Search Console scope on the shared credential; guide promises read-only). Default: not built.
 - Versioned policy checklist with AI-drafted changes. Default: the watcher only alerts on a spam-policies page change.
+
+## OWNER DECISIONS 2026-10-30: the next builds after Index coverage is deployed
+1. **Safe auto-fixes on client pages** (YES): WordPress first; remove a wrong noindex, fix canonicals, add redirects; backup before every
+   change, one-click undo, the client approves each change (approval default). Needs new CMS-connector work (today it only creates /
+   updates articles by slug). Steps on your website stay the fallback for sites without a connection.
+2. **Search Console access level per website, chosen by the client** (YES, opt-in): an option to give the application FULL access to
+   Search Console so it does what Google allows an app to do itself, today: submit / resubmit the sitemap when none is submitted, it has
+   errors, or it changed (never an unchanged resubmit loop). Without full access the client gets the step with the guide (as now).
+   Needs: a separate credential / scope `https://www.googleapis.com/auth/webmasters` used only for this, the client granting Full user
+   to the service account (verify on a real account whether Full user or Owner is required: RESEARCH §A), the setup guide's "nothing is
+   ever changed" promise rewritten for the opt-in, marketing + tutorial updates.
+   Honest limit told to the owner: even with full access there is NO API for "Request indexing" and nothing can force indexing; the
+   Indexing API is for job postings / livestreams only and is never used. "Ask Google to read it" stays a guided client step.
+3. Automatic content rewrites: NO (scaled content abuse risk); "Improve this page" stays approval-only.
+4. AI-drafted versioned policy checklist: not chosen now (later, small).
