@@ -33,7 +33,21 @@ export const plainWords = (t: string): string =>
 // 1. The delivered status
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-export type PageDeliveryStatus = 'ready' | 'ready_with_questions' | 'not_ready' | 'unknown';
+/**
+ * W0-C (2026-10-29, page-quality PLAN Fix 3): `needs_work` = no blocking point, but a part of the grade (structure, coverage, readability,
+ * specificity, plain language, sources, fit with the search) is under half its points. Never "Ready to publish"; nothing stops the client
+ * from approving and publishing it (only `not_ready` does).
+ */
+export type PageDeliveryStatus = 'ready' | 'ready_with_questions' | 'needs_work' | 'not_ready' | 'unknown';
+const DELIVERY_STATUSES: readonly string[] = ['ready', 'ready_with_questions', 'needs_work', 'not_ready'];
+/** A delivered status a client may approve and publish (no blocking point). */
+export const publishableStatus = (st: PageDeliveryStatus): boolean => st === 'ready' || st === 'ready_with_questions' || st === 'needs_work';
+/** W0-C: the grade as shown: "95+" from 95 (we never claim a perfect page), the number below it. */
+export function gradeDisplay(score: number | null | undefined): string {
+  if (score == null || !Number.isFinite(score)) return '';
+  const n = Math.round(score);
+  return n >= 95 ? '95+' : String(n);
+}
 export interface PageDeliveryItem {
   code: string;
   text: string;
@@ -48,6 +62,10 @@ export interface PageDelivery {
   detail: string;
   /** the content grade of the DELIVERED page (0-100), never the first draft's */
   grade: number | null;
+  /** W0-C: the grade as shown ("95+" from 95; '' when there is none) */
+  gradeLabel: string;
+  /** W0-C: the parts under half their points (status `needs_work`), each with what to do; [] otherwise */
+  needsWork: PageDeliveryItem[];
   /** the reviewer's score of the first draft, kept apart (it does not describe the delivered page) */
   firstDraftReview: number | null;
   blocking: PageDeliveryItem[];
@@ -87,8 +105,15 @@ const YOU_DO: Record<string, string> = {
   review: 'Check the quoted words against a source you trust, then correct or remove them in the editor.',
 };
 
-export function deliveryHeadline(status: PageDeliveryStatus, questions: number, firstBlocking?: PageDeliveryItem | null): { headline: string; detail: string } {
+export function deliveryHeadline(status: PageDeliveryStatus, questions: number, firstBlocking?: PageDeliveryItem | null, needsWork?: PageDeliveryItem[]): { headline: string; detail: string } {
   const qs = `${questions} ${questions === 1 ? 'question' : 'questions'}`;
+  if (status === 'needs_work') {
+    const parts = (needsWork ?? []).map((x) => x.text.replace(/ scored .*$/, '').toLowerCase()).filter(Boolean);
+    return {
+      headline: `Needs work${parts.length ? `: ${parts.join(', ')}` : ''}`,
+      detail: 'Nothing stops you publishing it, but part of the page scored under half marks. Improve it in the editor and make the final version, or approve it as it is.',
+    };
+  }
   if (status === 'ready')
     return { headline: 'Ready to publish, waiting for your OK', detail: 'Every check passed on the page you receive. Read it, change anything you like, then approve it.' };
   if (status === 'ready_with_questions')
@@ -112,6 +137,21 @@ const items = (v: unknown): PageDeliveryItem[] =>
     .map((x) => ({ code: s(x.code) || 'other', text: plainWords(s(x.text)), ...(s(x.action) ? { action: plainWords(s(x.action)) } : {}) }))
     .filter((x) => x.text);
 
+/** W0-C: the parts of the grade under half their points (the engine's grade.floors.failing), each with what to do. */
+export function needsWorkOf(grade: unknown): PageDeliveryItem[] {
+  const fl = obj(obj(grade).floors);
+  return arr(fl.failing)
+    .map(obj)
+    .map((x) => {
+      const label = plainWords(s(x.label) || s(x.dim).replace(/_/g, ' '));
+      const pts = num(x.points), max = num(x.max);
+      const text = label ? `${label.charAt(0).toUpperCase()}${label.slice(1)} scored ${pts ?? 0} of ${max ?? 0}, under half its points` : '';
+      return { code: 'needs_work', text, ...(s(x.fix) ? { action: plainWords(s(x.fix)) } : {}) };
+    })
+    .filter((x) => x.text)
+    .slice(0, 7);
+}
+
 /** The delivered status of a page report (the content callback), with fallbacks for reports written before H1. */
 export function deliveryOf(payload: P | null | undefined): PageDelivery {
   const p = payload ?? {};
@@ -121,8 +161,8 @@ export function deliveryOf(payload: P | null | undefined): PageDelivery {
   const raw = s(p.qa_delivery_status) || s(meta.delivery_status) || s(quality.delivery_status) || s(del.status);
   const questions = questionsOf(p);
   let status: PageDeliveryStatus =
-    raw === 'ready' || raw === 'ready_with_questions' || raw === 'not_ready'
-      ? raw
+    DELIVERY_STATUSES.includes(raw)
+      ? (raw as PageDeliveryStatus)
       : p.qa_not_ready === true || quality.not_ready === true
         ? 'not_ready'
         : p.qa_publishable === true || meta.publishable === true || quality.publishable === true
@@ -134,17 +174,20 @@ export function deliveryOf(payload: P | null | undefined): PageDelivery {
   const advisory = items(p.qa_advisory ?? quality.advisory ?? del.advisory);
   const g = obj(p.qa_grade ?? meta.grade ?? quality.grade ?? del.grade);
   const grade = num(g.score) ?? (raw ? null : num(meta.content_score));
-  const h = deliveryHeadline(status, questions.length, blocking[0] ?? null);
+  const needsWork = status === 'needs_work' ? needsWorkOf(g) : [];
+  const h = deliveryHeadline(status, questions.length, blocking[0] ?? null, needsWork);
   return {
     status,
     headline: h.headline,
     detail: h.detail,
     grade: grade == null ? null : Math.round(grade),
+    gradeLabel: gradeDisplay(grade),
+    needsWork,
     firstDraftReview: num(g.first_draft_review),
     blocking,
     advisory,
     questionCount: questions.length,
-    nextStep: status === 'not_ready' ? plainWords(s(p.qa_next_step) || s(quality.next_step) || s(del.next_step)) : '',
+    nextStep: status === 'not_ready' || status === 'needs_work' ? plainWords(s(p.qa_next_step) || s(quality.next_step) || s(del.next_step)) : '',
     deliveredFrom: plainWords(s(del.delivered_from)),
   };
 }
@@ -605,9 +648,10 @@ export interface PageCheck {
 }
 
 /** Where a page stands, for the report and the content board. */
-export type ReviewStage = 'not_ready' | 'questions' | 'ready' | 'finalising' | 'final_ready' | 'approved' | 'sent_draft' | 'published' | 'live_verified';
+export type ReviewStage = 'not_ready' | 'needs_work' | 'questions' | 'ready' | 'finalising' | 'final_ready' | 'approved' | 'sent_draft' | 'published' | 'live_verified';
 export const REVIEW_STAGE_LABEL: Record<ReviewStage, string> = {
   not_ready: 'Not ready',
+  needs_work: 'Needs work, you can still publish it',
   questions: 'Ready, stronger with your input',
   ready: 'Ready, waiting for your OK',
   finalising: 'Making the final version',
@@ -619,6 +663,7 @@ export const REVIEW_STAGE_LABEL: Record<ReviewStage, string> = {
 };
 export const REVIEW_STAGE_TONE: Record<ReviewStage, 'critical' | 'warning' | 'info' | 'good'> = {
   not_ready: 'critical',
+  needs_work: 'warning',
   questions: 'info',
   ready: 'info',
   finalising: 'info',
@@ -731,6 +776,7 @@ export function reviewStage(o: {
   if (o.approved) return 'approved';
   if (o.finalize.status === 'running') return 'finalising';
   if (o.delivery.status === 'not_ready') return 'not_ready';
+  if (o.delivery.status === 'needs_work') return 'needs_work';   // W0-C: a part under half its points; approving it is still allowed
   if (o.isFinal || o.finalize.status === 'done') return 'final_ready';
   return o.openQuestions > 0 ? 'questions' : 'ready';
 }
@@ -1068,9 +1114,9 @@ export function finalReportPayload(
   const md = s(result.markdown);
   const del = obj(result.delivery);
   const statusRaw = s(result.delivery_status) || s(del.status);
-  const status: PageDeliveryStatus = statusRaw === 'ready' || statusRaw === 'ready_with_questions' || statusRaw === 'not_ready' ? statusRaw : 'unknown';
+  const status: PageDeliveryStatus = DELIVERY_STATUSES.includes(statusRaw) ? (statusRaw as PageDeliveryStatus) : 'unknown';
   const questions = arr(result.client_questions);
-  const ready = status === 'ready' || status === 'ready_with_questions';
+  const ready = publishableStatus(status);   // W0-C: "needs work" blocks nothing, so it is publishable like "ready"
   const blocking = items(del.blocking);
   // W0-E (2026-10-29, page-quality PLAN Fix 5.2): an answer the engine could not work into a sentence is never appended to the page; the
   // client is told it was not placed, so they can say where it belongs
@@ -1084,7 +1130,7 @@ export function finalReportPayload(
   const grade = obj(result.grade ?? del.grade);
   const label = plainWords(s(del.label)) || deliveryHeadline(status, questions.length, blocking[0] ?? null).headline;
   const reasons = ready ? [] : blocking.map((b) => b.text).slice(0, 8);
-  const quality = { ...obj(original?.qa_quality ?? meta.quality), passed: ready, publishable: ready, not_ready: !ready, label, reasons, delivery_status: status, client_questions: questions, blocking, advisory, grade, next_step: ready ? '' : s(del.next_step) };
+  const quality = { ...obj(original?.qa_quality ?? meta.quality), passed: ready, publishable: ready, not_ready: !ready, label, reasons, delivery_status: status, client_questions: questions, blocking, advisory, grade, next_step: ready && status !== 'needs_work' ? '' : s(del.next_step) };
   const words = md.replace(/\|/g, ' ').replace(/[#>*_`]/g, '').split(/\s+/).filter(Boolean).length;
   const c = finalizeCostUsd(result);
   const score = num(grade.score);
@@ -1105,7 +1151,7 @@ export function finalReportPayload(
     qa_grade: grade,
     qa_blocking: blocking,
     qa_advisory: advisory,
-    qa_next_step: ready ? '' : plainWords(s(del.next_step)),
+    qa_next_step: ready && status !== 'needs_work' ? '' : plainWords(s(del.next_step)),   // W0-C: what to improve on a page that needs work
     qa_publishable: ready,
     qa_not_ready: !ready,
     qa_passed: ready,

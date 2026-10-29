@@ -49,10 +49,20 @@ export function StageBadge({ stage }: { stage: ReviewStage }) {
 
 /** The delivered status, said first on the page report: the headline, what we did and what you do, the blocking points. */
 export function DeliveryCallout({ delivery }: { delivery: PageDelivery }) {
-  const tone = delivery.status === 'not_ready' ? 'critical' : delivery.status === 'unknown' ? 'warning' : delivery.status === 'ready' ? 'good' : 'info';
+  const tone = delivery.status === 'not_ready' ? 'critical' : delivery.status === 'unknown' || delivery.status === 'needs_work' ? 'warning' : delivery.status === 'ready' ? 'good' : 'info';
   return (
     <Callout tone={tone} title={delivery.headline}>
       <p className="[overflow-wrap:anywhere]">{delivery.detail}</p>
+      {delivery.status === 'needs_work' && delivery.needsWork.length > 0 && (
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
+          {delivery.needsWork.map((b, i) => (
+            <li key={`${i}-${b.code}`}>
+              {b.text}
+              {b.action ? <span className="text-ink-2"> What to do: {b.action}.</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
       {delivery.status === 'not_ready' && delivery.blocking.length > 0 && (
         <ul className="mt-1.5 list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
           {delivery.blocking.slice(0, 6).map((b, i) => (

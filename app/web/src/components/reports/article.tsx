@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertTriangle, Braces, Download, Eye, FileCode, FileJson, FileText, Heading, Image as ImageIcon, Link2, ListChecks, Quote, Share2, Tags } from 'lucide-react';
 import type { ReportFile } from '@seo/shared';
-import { findOpenBrackets, isOpenBracket, metaDescriptionView, placeholderRe } from '@seo/shared';
+import { findOpenBrackets, gradeDisplay, isOpenBracket, metaDescriptionView, placeholderRe } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { downloadText } from '@/lib/utils';
@@ -314,7 +314,7 @@ export function MetaPanel({ meta }: { meta: P }) {
         cols="sm:grid-cols-4"
         items={[
           { label: 'Words', value: num(meta.word_count)?.toLocaleString() ?? null },
-          { label: 'Content score', value: num(meta.content_score) != null ? `${num(meta.content_score)}/100` : null },
+          { label: 'Content score', value: num(meta.content_score) != null ? `${gradeDisplay(num(meta.content_score))}/100` : null },
           { label: 'Internal links', value: internal.length || null },
           { label: 'Sources cited', value: external.length || null },
         ]}

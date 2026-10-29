@@ -11,7 +11,7 @@ import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { CountUp, HeroStat, Stagger } from '@/components/insight';
 import { absolutePageUrl, ArticleViewer, findPlaceholders } from './article';
 import { CmsPublishPanel } from './CmsPublish';
-import { cleanMetaDescription, deliveryOf, draftNextStep, holdButtons, holdOf, holdTitle, ownerEdits, type HoldInfo } from '@seo/shared';
+import { cleanMetaDescription, deliveryOf, draftNextStep, gradeDisplay, holdButtons, holdOf, holdTitle, ownerEdits, type HoldInfo } from '@seo/shared';
 import { DeliveryCallout, PageReview } from './review/ReviewPanels';
 import { Block, Bullets, Chips, Facts, has, CreditsCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
 import { keywordPrefill } from './meta';
@@ -142,9 +142,10 @@ export function ContentReport({ report }: { report: ReportDetail }) {
           hasDelivery ? (
             <ScoreMark
               score={delivery.grade}
+              display={delivery.gradeLabel === '95+' ? '95+' : undefined}
               label="Grade of the page you receive"
-              status={delivery.status === 'not_ready' ? 'Not ready' : delivery.status === 'unknown' ? 'Not checked' : 'Ready to publish'}
-              statusTone={delivery.status === 'not_ready' ? 'critical' : delivery.status === 'unknown' ? 'warning' : 'good'}
+              status={delivery.status === 'not_ready' ? 'Not ready' : delivery.status === 'needs_work' ? 'Needs work' : delivery.status === 'unknown' ? 'Not checked' : 'Ready to publish'}
+              statusTone={delivery.status === 'not_ready' ? 'critical' : delivery.status === 'needs_work' || delivery.status === 'unknown' ? 'warning' : 'good'}
               caption={delivery.firstDraftReview != null ? `Measured after every fix. The first draft, before any fix, was rated ${delivery.firstDraftReview}/100.` : 'Measured on the page you receive, after every fix.'}
             />
           ) : html && notReady ? (
@@ -158,6 +159,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
           ) : html ? (
             <ScoreMark
               score={contentScore}
+              display={gradeDisplay(contentScore) === '95+' ? '95+' : undefined}
               label="Content score"
               status={notReady ? 'Not ready to publish' : qa ? (qaOk ? 'Quality check passed' : 'To review') : undefined}
               statusTone={notReady ? 'critical' : qa ? (qaOk ? 'good' : 'warning') : undefined}
@@ -352,7 +354,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
         <Block
           title="The page"
           icon={<FileText />}
-          description={[words != null ? `${words.toLocaleString()} words` : '', str(meta.page_type), hasDelivery ? (delivery.grade != null ? `grade ${delivery.grade}/100` : '') : contentScore != null ? `content score ${contentScore}/100${notReady ? ', but the quality check did not pass' : ''}` : ''].filter(Boolean).join(' · ')}
+          description={[words != null ? `${words.toLocaleString()} words` : '', str(meta.page_type), hasDelivery ? (delivery.grade != null ? `grade ${delivery.gradeLabel}/100` : '') : contentScore != null ? `content score ${gradeDisplay(contentScore)}/100${notReady ? ', but the quality check did not pass' : ''}` : ''].filter(Boolean).join(' · ')}
         >
           <ArticleViewer html={html} markdown={markdown} meta={meta} files={report.files} slug={slug} />
         </Block>

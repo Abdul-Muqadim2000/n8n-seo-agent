@@ -837,7 +837,7 @@ export async function questionNeedsYou(orgId: string, site: SiteRow): Promise<Ne
     if (k && seen.has(k)) continue;   // the newest page of a keyword only
     if (k) seen.add(k);
     const s = sr.summaryOf(r, logRowFor(logs, r.requestId ?? str(r.payload.request_id), keyword));
-    if (!['questions', 'final_ready'].includes(s.stage) || s.answered >= s.questions) continue;
+    if (!['questions', 'final_ready', 'needs_work'].includes(s.stage) || s.answered >= s.questions) continue;   // W0-C: a page that needs work still gets its questions asked
     const qs = questionsOf(r.payload);
     const top = qs.find((q) => !storedFactFor(q, site.factAnswers as FactAnswers));
     const open = s.questions - s.answered;
