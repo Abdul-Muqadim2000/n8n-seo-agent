@@ -1,0 +1,849 @@
+{
+ "callback": {
+  "body": "={{ JSON.stringify({ stage: 'index_coverage', status: $json.status || 'complete', domain: $json.domain, site_id: $json.site_id, request_id: $json.request_id, summary: $json.summary, report_markdown: $json.report_markdown, cost: $json.cost || { usd: 0 }, run_ledger: $json.run_ledger || null, ...($json.ran_late && $json.ran_late.late ? { ran_late: $json.ran_late } : {}) }) }}",
+  "has": "Has Callback (Index)?",
+  "post": "POST Index Report"
+ },
+ "connections": {
+  "After Run Ledger (Index)": [
+   [
+    "Run Allowed? (Index)"
+   ]
+  ],
+  "Alert Retry Plan (Index)": [
+   [
+    "Any Alert Retry (Index)?"
+   ]
+  ],
+  "Alert Retry Result (Index)": [
+   [
+    "Save Alert Retry (Index)"
+   ]
+  ],
+  "Any Alert Retry (Index)?": [
+   [
+    "Post Alert Retry (Index)"
+   ],
+   []
+  ],
+  "Any Event Rows?": [
+   [
+    "Save Google Events"
+   ],
+   [
+    "GSC Sites (Index)"
+   ]
+  ],
+  "Any History Rows?": [
+   [
+    "Save Index History"
+   ],
+   [
+    "Update Impact Requests"
+   ]
+  ],
+  "Any Hops?": [
+   [
+    "Fetch Page (Final)"
+   ],
+   [
+    "Index Diagnose"
+   ]
+  ],
+  "Any Impact Queries?": [
+   [
+    "GSC Impact Query"
+   ],
+   [
+    "Update Impact Rows"
+   ]
+  ],
+  "Any Index Rows?": [
+   [
+    "Save Index Pages"
+   ],
+   [
+    "Index History Rows"
+   ]
+  ],
+  "Any Inspections (Index)?": [
+   [
+    "Inspect URL (Index)"
+   ],
+   [
+    "Page Fetch Requests"
+   ]
+  ],
+  "Any Page Fetches?": [
+   [
+    "Fetch Page (Index)"
+   ],
+   [
+    "Fetch Hop Requests"
+   ]
+  ],
+  "Any Pages Query?": [
+   [
+    "GSC Pages Query"
+   ],
+   [
+    "Sitemap Requests 1"
+   ]
+  ],
+  "Any Probes?": [
+   [
+    "Inspect URL (Probe)"
+   ],
+   [
+    "Index Inspect Requests"
+   ]
+  ],
+  "Any Run Rows?": [
+   [
+    "Save Index Runs"
+   ],
+   [
+    "Index Report"
+   ]
+  ],
+  "Any Sitemaps 1?": [
+   [
+    "Fetch Sitemaps 1"
+   ],
+   [
+    "Sitemap Read 1"
+   ]
+  ],
+  "Any Sitemaps 2?": [
+   [
+    "Fetch Sitemaps 2"
+   ],
+   [
+    "Sitemap Read 2"
+   ]
+  ],
+  "Any Sitemaps 3?": [
+   [
+    "Fetch Sitemaps 3"
+   ],
+   [
+    "Sitemap Read 3"
+   ]
+  ],
+  "Any Sitemaps List?": [
+   [
+    "GSC Sitemaps List"
+   ],
+   [
+    "Pages Query Requests"
+   ]
+  ],
+  "Any Sites (Index)?": [
+   [
+    "Sitemaps List Requests"
+   ],
+   [
+    "Nothing To Do (Index)"
+   ]
+  ],
+  "Any Update Impact?": [
+   [
+    "Save Update Impact"
+   ],
+   [
+    "Index Run Rows"
+   ]
+  ],
+  "Callback Ledger (Index)": [
+   [
+    "Has Callback (Index)?"
+   ]
+  ],
+  "DFS Balance (Index)": [
+   [
+    "Load Open Runs (Index)"
+   ]
+  ],
+  "DFS Balance End (Index)": [
+   [
+    "Load Run Ledger (Index)"
+   ]
+  ],
+  "Daily Schedule": [
+   [
+    "Ensure Index Pages Table"
+   ]
+  ],
+  "Ensure Google Events Table": [
+   [
+    "Ensure Update Impact Table"
+   ]
+  ],
+  "Ensure Index History Table": [
+   [
+    "Ensure Index Runs Table"
+   ]
+  ],
+  "Ensure Index Pages Table": [
+   [
+    "Ensure Index History Table"
+   ]
+  ],
+  "Ensure Index Runs Table": [
+   [
+    "Ensure Google Events Table"
+   ]
+  ],
+  "Ensure Ops Alerts (Index)": [
+   [
+    "Load Open Alerts (Index)"
+   ]
+  ],
+  "Ensure Run Ledger (Index)": [
+   [
+    "DFS Balance (Index)"
+   ]
+  ],
+  "Ensure Update Impact Table": [
+   [
+    "Load Sites (Index)"
+   ]
+  ],
+  "Fetch Google Incidents": [
+   [
+    "Fetch Spam Policies"
+   ]
+  ],
+  "Fetch Hop Requests": [
+   [
+    "Any Hops?"
+   ]
+  ],
+  "Fetch Page (Final)": [
+   [
+    "Index Diagnose"
+   ]
+  ],
+  "Fetch Page (Index)": [
+   [
+    "Fetch Hop Requests"
+   ]
+  ],
+  "Fetch Sitemaps 1": [
+   [
+    "Sitemap Read 1"
+   ]
+  ],
+  "Fetch Sitemaps 2": [
+   [
+    "Sitemap Read 2"
+   ]
+  ],
+  "Fetch Sitemaps 3": [
+   [
+    "Sitemap Read 3"
+   ]
+  ],
+  "Fetch Spam Policies": [
+   [
+    "Google Events"
+   ]
+  ],
+  "GSC Impact Query": [
+   [
+    "Update Impact Rows"
+   ]
+  ],
+  "GSC Pages Query": [
+   [
+    "Sitemap Requests 1"
+   ]
+  ],
+  "GSC Sitemaps List": [
+   [
+    "Pages Query Requests"
+   ]
+  ],
+  "GSC Sites (Index)": [
+   [
+    "Index Sites"
+   ]
+  ],
+  "Google Event Rows": [
+   [
+    "Any Event Rows?"
+   ]
+  ],
+  "Google Events": [
+   [
+    "Google Event Rows"
+   ]
+  ],
+  "Has Callback (Index)?": [
+   [
+    "POST Index Report"
+   ]
+  ],
+  "Index Diagnose": [
+   [
+    "Index Page Rows"
+   ]
+  ],
+  "Index History Rows": [
+   [
+    "Any History Rows?"
+   ]
+  ],
+  "Index Inspect Requests": [
+   [
+    "Any Inspections (Index)?"
+   ]
+  ],
+  "Index Inventory": [
+   [
+    "Index Probe Requests"
+   ]
+  ],
+  "Index Page Rows": [
+   [
+    "Any Index Rows?"
+   ]
+  ],
+  "Index Plan": [
+   [
+    "Ensure Run Ledger (Index)"
+   ]
+  ],
+  "Index Probe Requests": [
+   [
+    "Any Probes?"
+   ]
+  ],
+  "Index Report": [
+   [
+    "DFS Balance End (Index)",
+    "Ledger Join (Index)"
+   ]
+  ],
+  "Index Run Rows": [
+   [
+    "Any Run Rows?"
+   ]
+  ],
+  "Index Sites": [
+   [
+    "Any Sites (Index)?"
+   ]
+  ],
+  "Inspect URL (Index)": [
+   [
+    "Page Fetch Requests"
+   ]
+  ],
+  "Inspect URL (Probe)": [
+   [
+    "Index Inspect Requests"
+   ]
+  ],
+  "Ledger Join (Index)": [
+   [
+    "Callback Ledger (Index)"
+   ]
+  ],
+  "Ledger Settle (Index)": [
+   [
+    "Settle Run Ledger (Index)",
+    "Ledger Join (Index)"
+   ]
+  ],
+  "Load Catch-up Records (Index)": [
+   [
+    "Run Ledger Row (Index)"
+   ]
+  ],
+  "Load Content Log (Index)": [
+   [
+    "Load Index Pages"
+   ]
+  ],
+  "Load Google Events": [
+   [
+    "Load Update Impact"
+   ]
+  ],
+  "Load Index Pages": [
+   [
+    "Load Index Runs"
+   ]
+  ],
+  "Load Index Runs": [
+   [
+    "Load Google Events"
+   ]
+  ],
+  "Load Monitors (Index)": [
+   [
+    "Load Pages (Index)"
+   ]
+  ],
+  "Load Open Alerts (Index)": [
+   [
+    "Alert Retry Plan (Index)"
+   ]
+  ],
+  "Load Open Runs (Index)": [
+   [
+    "Load Catch-up Records (Index)"
+   ]
+  ],
+  "Load Page Watch (Index)": [
+   [
+    "Load Content Log (Index)"
+   ]
+  ],
+  "Load Pages (Index)": [
+   [
+    "Load Page Watch (Index)"
+   ]
+  ],
+  "Load Run Ledger (Index)": [
+   [
+    "Ledger Settle (Index)"
+   ]
+  ],
+  "Load Sites (Index)": [
+   [
+    "Load Monitors (Index)"
+   ]
+  ],
+  "Load Update Impact": [
+   [
+    "Index Plan"
+   ]
+  ],
+  "Manual Run": [
+   [
+    "Ensure Index Pages Table"
+   ]
+  ],
+  "Nothing To Do (Index)": [
+   [
+    "DFS Balance End (Index)"
+   ]
+  ],
+  "Page Fetch Requests": [
+   [
+    "Any Page Fetches?"
+   ]
+  ],
+  "Pages Query Requests": [
+   [
+    "Any Pages Query?"
+   ]
+  ],
+  "Post Alert Retry (Index)": [
+   [
+    "Alert Retry Result (Index)"
+   ]
+  ],
+  "Refusal Notice (Index)": [
+   [
+    "Tell Caller (Index)?"
+   ]
+  ],
+  "Refuse Run Ledger (Index)": [
+   [
+    "Refusal Notice (Index)"
+   ]
+  ],
+  "Reserve Run Ledger (Index)": [
+   [
+    "After Run Ledger (Index)"
+   ]
+  ],
+  "Run Allowed? (Index)": [
+   [
+    "Fetch Google Incidents"
+   ],
+   [
+    "Refuse Run Ledger (Index)"
+   ]
+  ],
+  "Run Ledger Row (Index)": [
+   [
+    "Reserve Run Ledger (Index)"
+   ]
+  ],
+  "Save Google Events": [
+   [
+    "GSC Sites (Index)"
+   ]
+  ],
+  "Save Index History": [
+   [
+    "Update Impact Requests"
+   ]
+  ],
+  "Save Index Pages": [
+   [
+    "Index History Rows"
+   ]
+  ],
+  "Save Index Runs": [
+   [
+    "Index Report"
+   ]
+  ],
+  "Save Update Impact": [
+   [
+    "Index Run Rows"
+   ]
+  ],
+  "Settle Run Ledger (Index)": [
+   [
+    "Ensure Ops Alerts (Index)"
+   ]
+  ],
+  "Sitemap Read 1": [
+   [
+    "Sitemap Requests 2"
+   ]
+  ],
+  "Sitemap Read 2": [
+   [
+    "Sitemap Requests 3"
+   ]
+  ],
+  "Sitemap Read 3": [
+   [
+    "Index Inventory"
+   ]
+  ],
+  "Sitemap Requests 1": [
+   [
+    "Any Sitemaps 1?"
+   ]
+  ],
+  "Sitemap Requests 2": [
+   [
+    "Any Sitemaps 2?"
+   ]
+  ],
+  "Sitemap Requests 3": [
+   [
+    "Any Sitemaps 3?"
+   ]
+  ],
+  "Sitemaps List Requests": [
+   [
+    "Any Sitemaps List?"
+   ]
+  ],
+  "Tell Caller (Index)?": [
+   [
+    "Post Refusal (Index)"
+   ],
+   []
+  ],
+  "Update Impact Requests": [
+   [
+    "Any Impact Queries?"
+   ]
+  ],
+  "Update Impact Rows": [
+   [
+    "Any Update Impact?"
+   ]
+  ]
+ },
+ "event_cols": [
+  "event_id",
+  "source",
+  "kind",
+  "title",
+  "started_at",
+  "ended_at",
+  "status",
+  "url",
+  "seen_at",
+  "updated_at"
+ ],
+ "external": [
+  "Fetch Google Incidents",
+  "Fetch Page (Final)",
+  "Fetch Page (Index)",
+  "Fetch Sitemaps 1",
+  "Fetch Sitemaps 2",
+  "Fetch Sitemaps 3",
+  "Fetch Spam Policies",
+  "GSC Impact Query",
+  "GSC Pages Query",
+  "GSC Sitemaps List",
+  "GSC Sites (Index)",
+  "Inspect URL (Index)",
+  "Inspect URL (Probe)",
+  "POST Index Report",
+  "Post Alert Retry (Index)",
+  "Post Refusal (Index)"
+ ],
+ "file": "SEO_Agent_Index_Coverage.json",
+ "history_cols": [
+  "site_id",
+  "url",
+  "at",
+  "state",
+  "cause",
+  "evidence",
+  "verdict",
+  "coverage"
+ ],
+ "impact_cols": [
+  "site_id",
+  "domain",
+  "event_id",
+  "event_title",
+  "compared_at",
+  "before_from",
+  "before_to",
+  "after_from",
+  "after_to",
+  "pages",
+  "dropped",
+  "stable",
+  "gained",
+  "pages_json",
+  "note"
+ ],
+ "inspect_batch": {
+  "batchInterval": 150,
+  "batchSize": 1
+ },
+ "mode": "index_coverage",
+ "name": "SEO Agent \u2014 Index Coverage",
+ "nodes": [
+  "After Run Ledger (Index)",
+  "Alert Retry Plan (Index)",
+  "Alert Retry Result (Index)",
+  "Any Alert Retry (Index)?",
+  "Any Event Rows?",
+  "Any History Rows?",
+  "Any Hops?",
+  "Any Impact Queries?",
+  "Any Index Rows?",
+  "Any Inspections (Index)?",
+  "Any Page Fetches?",
+  "Any Pages Query?",
+  "Any Probes?",
+  "Any Run Rows?",
+  "Any Sitemaps 1?",
+  "Any Sitemaps 2?",
+  "Any Sitemaps 3?",
+  "Any Sitemaps List?",
+  "Any Sites (Index)?",
+  "Any Update Impact?",
+  "Callback Ledger (Index)",
+  "DFS Balance (Index)",
+  "DFS Balance End (Index)",
+  "Daily Schedule",
+  "Ensure Google Events Table",
+  "Ensure Index History Table",
+  "Ensure Index Pages Table",
+  "Ensure Index Runs Table",
+  "Ensure Ops Alerts (Index)",
+  "Ensure Run Ledger (Index)",
+  "Ensure Update Impact Table",
+  "Fetch Google Incidents",
+  "Fetch Hop Requests",
+  "Fetch Page (Final)",
+  "Fetch Page (Index)",
+  "Fetch Sitemaps 1",
+  "Fetch Sitemaps 2",
+  "Fetch Sitemaps 3",
+  "Fetch Spam Policies",
+  "GSC Impact Query",
+  "GSC Pages Query",
+  "GSC Sitemaps List",
+  "GSC Sites (Index)",
+  "Google Event Rows",
+  "Google Events",
+  "Has Callback (Index)?",
+  "Index Diagnose",
+  "Index History Rows",
+  "Index Inspect Requests",
+  "Index Inventory",
+  "Index Page Rows",
+  "Index Plan",
+  "Index Probe Requests",
+  "Index Report",
+  "Index Run Rows",
+  "Index Sites",
+  "Inspect URL (Index)",
+  "Inspect URL (Probe)",
+  "Ledger Join (Index)",
+  "Ledger Settle (Index)",
+  "Load Catch-up Records (Index)",
+  "Load Content Log (Index)",
+  "Load Google Events",
+  "Load Index Pages",
+  "Load Index Runs",
+  "Load Monitors (Index)",
+  "Load Open Alerts (Index)",
+  "Load Open Runs (Index)",
+  "Load Page Watch (Index)",
+  "Load Pages (Index)",
+  "Load Run Ledger (Index)",
+  "Load Sites (Index)",
+  "Load Update Impact",
+  "Manual Run",
+  "Nothing To Do (Index)",
+  "POST Index Report",
+  "Page Fetch Requests",
+  "Pages Query Requests",
+  "Post Alert Retry (Index)",
+  "Post Refusal (Index)",
+  "Refusal Notice (Index)",
+  "Refuse Run Ledger (Index)",
+  "Reserve Run Ledger (Index)",
+  "Run Allowed? (Index)",
+  "Run Ledger Row (Index)",
+  "Save Alert Retry (Index)",
+  "Save Google Events",
+  "Save Index History",
+  "Save Index Pages",
+  "Save Index Runs",
+  "Save Update Impact",
+  "Settle Run Ledger (Index)",
+  "Sitemap Read 1",
+  "Sitemap Read 2",
+  "Sitemap Read 3",
+  "Sitemap Requests 1",
+  "Sitemap Requests 2",
+  "Sitemap Requests 3",
+  "Sitemaps List Requests",
+  "Tell Caller (Index)?",
+  "Update Impact Requests",
+  "Update Impact Rows"
+ ],
+ "own_tables": [
+  "seo_google_events",
+  "seo_index_history",
+  "seo_index_pages",
+  "seo_index_runs",
+  "seo_update_impact"
+ ],
+ "page_cols": [
+  "site_id",
+  "domain",
+  "url",
+  "lane",
+  "sources",
+  "in_sitemap",
+  "sitemap_lastmod",
+  "first_seen_at",
+  "published_at",
+  "impressions_28d",
+  "clicks_28d",
+  "last_impression_at",
+  "state",
+  "evidence",
+  "cause",
+  "action",
+  "verdict",
+  "coverage",
+  "indexing_state",
+  "robots_state",
+  "page_fetch_state",
+  "crawled_as",
+  "google_canonical",
+  "user_canonical",
+  "last_crawl",
+  "referring_count",
+  "google_sitemaps",
+  "inspect_at",
+  "fetch_at",
+  "http_status",
+  "final_url",
+  "noindex",
+  "page_canonical",
+  "words",
+  "title",
+  "indexed_since",
+  "dropped_at",
+  "checks",
+  "next_check_at",
+  "needs_person",
+  "link_from",
+  "merge_into",
+  "note",
+  "updated_at"
+ ],
+ "run_cols": [
+  "site_id",
+  "domain",
+  "run_at",
+  "request_id",
+  "known",
+  "indexed",
+  "not_indexed",
+  "excluded",
+  "unknown",
+  "errors",
+  "new_pages",
+  "new_indexed",
+  "inspected",
+  "reused",
+  "fetched",
+  "quota_cap",
+  "backlog_left",
+  "by_cause_json",
+  "by_action_json",
+  "dropped_json",
+  "freeze",
+  "freeze_reason",
+  "note",
+  "sitemaps_json"
+ ],
+ "schedule": {
+  "every": "day",
+  "hour": 5,
+  "minute": 15
+ },
+ "shared_tables": [
+  "seo_ops_alerts",
+  "seo_run_ledger"
+ ],
+ "tz": "America/New_York",
+ "workflow": "SEOagentIndexCv1",
+ "writes": {
+  "seo_google_events": [
+   "Ensure Google Events Table",
+   "Save Google Events"
+  ],
+  "seo_index_history": [
+   "Ensure Index History Table",
+   "Save Index History"
+  ],
+  "seo_index_pages": [
+   "Ensure Index Pages Table",
+   "Save Index Pages"
+  ],
+  "seo_index_runs": [
+   "Ensure Index Runs Table",
+   "Save Index Runs"
+  ],
+  "seo_ops_alerts": [
+   "Ensure Ops Alerts (Index)",
+   "Save Alert Retry (Index)"
+  ],
+  "seo_run_ledger": [
+   "Ensure Run Ledger (Index)",
+   "Refuse Run Ledger (Index)",
+   "Reserve Run Ledger (Index)",
+   "Settle Run Ledger (Index)"
+  ],
+  "seo_update_impact": [
+   "Ensure Update Impact Table",
+   "Save Update Impact"
+  ]
+ }
+}

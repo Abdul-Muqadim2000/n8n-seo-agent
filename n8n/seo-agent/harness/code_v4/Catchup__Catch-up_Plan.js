@@ -459,7 +459,7 @@ const RG = (() => {
 
   return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, sameSite, STALE_HOURS, MAX_OPEN };
 })();
-const SCHEDULES = [{"id": "SEOagentAIPulse1", "label": "AI Pulse", "mode": "ai_pulse", "cron": "30 6 * * *", "kind": "daily", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": false}, {"id": "SEOagentPageWch1", "label": "Page Watch", "mode": "page_watch", "cron": "45 5 * * *", "kind": "daily", "tz": "America/New_York", "entry_node": "Watch Run", "dry_run_ok": false}];
+const SCHEDULES = [{"id": "SEOagentAIPulse1", "label": "AI Pulse", "mode": "ai_pulse", "cron": "30 6 * * *", "kind": "daily", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": false}, {"id": "SEOagentIndexCv1", "label": "Index Coverage", "mode": "index_coverage", "cron": "15 5 * * *", "kind": "daily", "tz": "America/New_York", "entry_node": "Manual Run", "dry_run_ok": false}, {"id": "SEOagentPageWch1", "label": "Page Watch", "mode": "page_watch", "cron": "45 5 * * *", "kind": "daily", "tz": "America/New_York", "entry_node": "Watch Run", "dry_run_ok": false}];
 const TZ = 'America/New_York';
 const CONFIG = {"next_gap_hours": {"daily": 2, "weekly": 12, "monthly": 48}, "grace_minutes": 1, "fired_slack_minutes": 5, "late_minutes": 30, "max_starts": 2, "max_attempts": 3, "refusal_minutes": 20, "confirm_minutes": 10, "stale_plan_minutes": 10, "count_on_demand": false};
 const LIMIT = 250;

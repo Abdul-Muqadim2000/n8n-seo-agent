@@ -83,7 +83,8 @@
  },
  "daily_crons": [
   "SEOagentAIPulse1",
-  "SEOagentPageWch1"
+  "SEOagentPageWch1",
+  "SEOagentIndexCv1"
  ],
  "default_tz": "America/New_York",
  "dispatcher_watchdog": {
@@ -107,6 +108,7 @@
  ],
  "published": [
   "SEOagentAIPulse1",
+  "SEOagentIndexCv1",
   "SEOagentPageWch1"
  ],
  "record_then_start": true,
@@ -120,6 +122,18 @@
    "label": "AI Pulse",
    "mode": "ai_pulse",
    "name": "SEO Agent \u2014 AI Pulse",
+   "trigger_node": "Daily Schedule",
+   "tz": "America/New_York"
+  },
+  {
+   "cron": "15 5 * * *",
+   "dry_run_ok": false,
+   "entry_node": "Manual Run",
+   "id": "SEOagentIndexCv1",
+   "kind": "daily",
+   "label": "Index Coverage",
+   "mode": "index_coverage",
+   "name": "SEO Agent \u2014 Index Coverage",
    "trigger_node": "Daily Schedule",
    "tz": "America/New_York"
   },
