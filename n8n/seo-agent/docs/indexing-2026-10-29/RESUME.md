@@ -1,4 +1,4 @@
-# Index coverage: RESUME (state saved 2026-10-29 13:47 UTC)
+# Index coverage: RESUME (state saved 2026-10-29 13:47 UTC, updated 2026-10-29 evening)
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
@@ -17,7 +17,12 @@ Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Con
 3. Reviews: REVIEW_ENGINE.md (E1-E16), REVIEW_APP.md (A1-A27), REVIEW_CROSS.md (X1-X20 + deploy sequence + rollback). FIX_CONTRACT.md
    (decisions + new columns `fix_seen_at`, `ask_google`). Commit 3abcbcd3.
 
-## In progress at save time (fix wave 1)
+## Fix wave 1: DONE (2026-10-29 evening)
+Engine ix/engine b7f1c201 + ad460974, app ix/app 85b24db5 + 763f8e0e + ff6bc5f0, merged into feature/indexing (c59c8a07, 03ac9fa2), pushed.
+Checks on the merge: harness **13788 passed, 0 failed**; typecheck clean; shared 921, server 1539 (+46 skipped), web 269, web build OK.
+Per-finding status: ENGINE_BUILD.md and APP_BUILD.md, "Fix wave 1" sections.
+
+## (old) In progress at the first save (fix wave 1)
 - Engine fixer working in `…-ix-engine` on ix/engine (E1-E16, X1-X4, X7, X8, X13, X16). Will append "Fix wave 1" to ENGINE_BUILD.md and commit there.
 - App fixer working in `…-ix-app` on ix/app (A1-A27 except A17, X5, X6, X10, X14-X17). Will append "Fix wave 1" to APP_BUILD.md and commit there.
 - If a session ended mid-way: check `git -C <worktree> log --oneline feature/indexing..HEAD` and `git status` in each worktree. Uncommitted
